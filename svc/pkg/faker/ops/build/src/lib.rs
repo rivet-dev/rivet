@@ -5,8 +5,6 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<faker::build::Request>,
 ) -> GlobalResult<faker::build::Response> {
-	let game_id = unwrap_ref!(ctx.game_id).as_uuid();
-
 	// Determine image name
 	//
 	// These are built in `bin/runtime_docker_builds/`
@@ -20,7 +18,8 @@ async fn handle(
 	};
 
 	let create_res = op!([ctx] build_create {
-		game_id: Some(game_id.into()),
+		game_id: ctx.game_id,
+		env_id: ctx.env_id,
 		display_name: util::faker::display_name(),
 		default_build_kind: Some(build_kind.into()),
 		..Default::default()

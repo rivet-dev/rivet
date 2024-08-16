@@ -5,9 +5,10 @@ imports:
 
 service:
   auth: true
-  base-path: /games/{game_id}/servers
+  base-path: /games/{game_id}/environments/{environment_id}/servers
   path-parameters:
     game_id: uuid
+    environment_id: uuid
   endpoints:
     getServerLogs:
       path: /{server_id}/logs

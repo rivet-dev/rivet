@@ -35,6 +35,9 @@ define_router! {
 			prefix: "cloud",
 		},
 		{
+			path: api_games::route::Router,
+		},
+		{
 			path: api_group::route::Router,
 			prefix: "group",
 		},

@@ -13,7 +13,7 @@ async fn server_get(ctx: TestCtx) {
 	})
 	.await
 	.unwrap();
-	let game_id = game_res.game_id.unwrap();
+	let env_id = game_res.prod_env_id.unwrap();
 
 	// Pick an existing cluster
 	let cluster_id = ctx
@@ -26,7 +26,7 @@ async fn server_get(ctx: TestCtx) {
 		.to_owned();
 
 	let build_res: backend::pkg::faker::build::Response = op!([ctx] faker_build {
-		game_id: Some(game_id),
+		env_id: Some(env_id),
 		image: backend::faker::Image::DsEcho as i32,
 	})
 	.await
@@ -58,7 +58,7 @@ async fn server_get(ctx: TestCtx) {
 	.collect();
 
 	let server = op!([ctx] ds_server_create {
-		game_id: Some(game_id),
+		env_id: Some(env_id),
 		cluster_id: Some(cluster_id.into()),
 		datacenter_id: faker_region.region_id,
 		resources: Some(proto::backend::ds::ServerResources { cpu_millicores: 100, memory_mib: 200 }),

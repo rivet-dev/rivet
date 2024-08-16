@@ -27,7 +27,7 @@ pub async fn get(
 		build_ids: vec![build_id.into()],
 	})
 	.await?;
-	let build = unwrap!(builds_res.builds.first(), BUILDS_BUILD_NOT_FOUND);
+	let build = unwrap_with!(builds_res.builds.first(), BUILDS_BUILD_NOT_FOUND);
 	ensure_with!(
 		unwrap!(build.env_id).as_uuid() == env_id,
 		BUILDS_BUILD_NOT_FOUND

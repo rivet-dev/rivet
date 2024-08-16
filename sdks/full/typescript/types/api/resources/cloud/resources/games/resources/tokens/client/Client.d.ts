@@ -39,22 +39,5 @@ export declare class Tokens {
      *     await client.cloud.games.tokens.createCloudToken("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
      */
     createCloudToken(gameId: string, requestOptions?: Tokens.RequestOptions): Promise<Rivet.cloud.games.CreateCloudTokenResponse>;
-    /**
-     * Creates a new game service token.
-     *
-     * @param {string} gameId
-     * @param {Tokens.RequestOptions} requestOptions - Request-specific configuration.
-     *
-     * @throws {@link Rivet.InternalError}
-     * @throws {@link Rivet.RateLimitError}
-     * @throws {@link Rivet.ForbiddenError}
-     * @throws {@link Rivet.UnauthorizedError}
-     * @throws {@link Rivet.NotFoundError}
-     * @throws {@link Rivet.BadRequestError}
-     *
-     * @example
-     *     await client.cloud.games.tokens.createServiceToken("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
-     */
-    createServiceToken(gameId: string, requestOptions?: Tokens.RequestOptions): Promise<Rivet.cloud.games.CreateCloudTokenResponse>;
     protected _getAuthorizationHeader(): Promise<string | undefined>;
 }

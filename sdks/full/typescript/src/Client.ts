@@ -12,6 +12,7 @@ import { Kv } from "./api/resources/kv/client/Client";
 import { Provision } from "./api/resources/provision/client/Client";
 import { Servers } from "./api/resources/servers/client/Client";
 import { Auth } from "./api/resources/auth/client/Client";
+import { Games } from "./api/resources/games/client/Client";
 import { Job } from "./api/resources/job/client/Client";
 import { Matchmaker } from "./api/resources/matchmaker/client/Client";
 import { Portal } from "./api/resources/portal/client/Client";
@@ -82,6 +83,12 @@ export class RivetClient {
 
     public get auth(): Auth {
         return (this._auth ??= new Auth(this._options));
+    }
+
+    protected _games: Games | undefined;
+
+    public get games(): Games {
+        return (this._games ??= new Games(this._options));
     }
 
     protected _job: Job | undefined;

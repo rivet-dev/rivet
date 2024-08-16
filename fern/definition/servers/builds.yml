@@ -7,9 +7,10 @@ imports:
 
 service:
   auth: true
-  base-path: /games/{game_id}/builds
+  base-path: /games/{game_id}/environments/{environment_id}/builds
   path-parameters:
     game_id: uuid
+    environment_id: uuid
   endpoints:
     getBuild:
       path: /{build_id}

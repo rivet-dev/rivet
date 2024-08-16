@@ -13,8 +13,6 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct ServersServer {
-    #[serde(rename = "arguments", skip_serializing_if = "Option::is_none")]
-    pub arguments: Option<Vec<String>>,
     #[serde(rename = "cluster")]
     pub cluster: uuid::Uuid,
     #[serde(rename = "created_at")]
@@ -23,21 +21,18 @@ pub struct ServersServer {
     pub datacenter: uuid::Uuid,
     #[serde(rename = "destroyed_at", skip_serializing_if = "Option::is_none")]
     pub destroyed_at: Option<i64>,
-    #[serde(rename = "environment", skip_serializing_if = "Option::is_none")]
-    pub environment: Option<::std::collections::HashMap<String, String>>,
-    #[serde(rename = "game")]
-    pub game: uuid::Uuid,
+    #[serde(rename = "environment")]
+    pub environment: uuid::Uuid,
     #[serde(rename = "id")]
     pub id: uuid::Uuid,
-    #[serde(rename = "image")]
-    pub image: uuid::Uuid,
-    /// The duration to wait for in milliseconds before killing the server. This should be set to a safe default, and can be overridden during a DELETE request if needed.
-    #[serde(rename = "kill_timeout", skip_serializing_if = "Option::is_none")]
-    pub kill_timeout: Option<i64>,
+    #[serde(rename = "lifecycle")]
+    pub lifecycle: Box<crate::models::ServersLifecycle>,
     #[serde(rename = "network")]
     pub network: Box<crate::models::ServersNetwork>,
     #[serde(rename = "resources")]
     pub resources: Box<crate::models::ServersResources>,
+    #[serde(rename = "runtime")]
+    pub runtime: Box<crate::models::ServersRuntime>,
     #[serde(rename = "started_at", skip_serializing_if = "Option::is_none")]
     pub started_at: Option<i64>,
     #[serde(rename = "tags", deserialize_with = "Option::deserialize")]
@@ -45,20 +40,18 @@ pub struct ServersServer {
 }
 
 impl ServersServer {
-    pub fn new(cluster: uuid::Uuid, created_at: i64, datacenter: uuid::Uuid, game: uuid::Uuid, id: uuid::Uuid, image: uuid::Uuid, network: crate::models::ServersNetwork, resources: crate::models::ServersResources, tags: Option<serde_json::Value>) -> ServersServer {
+    pub fn new(cluster: uuid::Uuid, created_at: i64, datacenter: uuid::Uuid, environment: uuid::Uuid, id: uuid::Uuid, lifecycle: crate::models::ServersLifecycle, network: crate::models::ServersNetwork, resources: crate::models::ServersResources, runtime: crate::models::ServersRuntime, tags: Option<serde_json::Value>) -> ServersServer {
         ServersServer {
-            arguments: None,
             cluster,
             created_at,
             datacenter,
             destroyed_at: None,
-            environment: None,
-            game,
+            environment,
             id,
-            image,
-            kill_timeout: None,
+            lifecycle: Box::new(lifecycle),
             network: Box::new(network),
             resources: Box::new(resources),
+            runtime: Box::new(runtime),
             started_at: None,
             tags,
         }

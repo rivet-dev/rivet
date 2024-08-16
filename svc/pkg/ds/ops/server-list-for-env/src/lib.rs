@@ -1,10 +1,10 @@
 use proto::backend::pkg::*;
 use rivet_operation::prelude::*;
 
-#[operation(name = "server-list-for-game")]
+#[operation(name = "server-list-for-env")]
 async fn handle(
-	ctx: OperationContext<dynamic_servers::server_list_for_game::Request>,
-) -> GlobalResult<dynamic_servers::server_list_for_game::Response> {
+	ctx: OperationContext<dynamic_servers::server_list_for_env::Request>,
+) -> GlobalResult<dynamic_servers::server_list_for_env::Response> {
 	let env_id = unwrap_ref!(ctx.env_id).as_uuid();
 
 	let server_ids = sql_fetch_all!(
@@ -27,5 +27,5 @@ async fn handle(
 	.map(|(id,)| common::Uuid::from(id))
 	.collect::<Vec<_>>();
 
-	Ok(dynamic_servers::server_list_for_game::Response { server_ids })
+	Ok(dynamic_servers::server_list_for_env::Response { server_ids })
 }

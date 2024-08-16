@@ -36,12 +36,12 @@ func NewClient(opts ...core.ClientOption) *Client {
 }
 
 // Lists all builds of the game associated with the token used. Can be filtered by tags in the query string.
-func (c *Client) GetBuild(ctx context.Context, gameId uuid.UUID, buildId uuid.UUID, request *servers.GetBuildRequest) (*servers.GetBuildResponse, error) {
+func (c *Client) GetBuild(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, buildId uuid.UUID, request *servers.GetBuildRequest) (*servers.GetBuildResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/builds/%v", gameId, buildId)
+	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/environments/%v/builds/%v", gameId, environmentId, buildId)
 
 	queryParams := make(url.Values)
 	if request.TagsJson != nil {
@@ -125,12 +125,12 @@ func (c *Client) GetBuild(ctx context.Context, gameId uuid.UUID, buildId uuid.UU
 }
 
 // Lists all builds of the game associated with the token used. Can be filtered by tags in the query string.
-func (c *Client) ListBuilds(ctx context.Context, gameId uuid.UUID, request *servers.ListBuildsRequest) (*servers.ListBuildsResponse, error) {
+func (c *Client) ListBuilds(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, request *servers.ListBuildsRequest) (*servers.ListBuildsResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/builds", gameId)
+	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/environments/%v/builds", gameId, environmentId)
 
 	queryParams := make(url.Values)
 	if request.TagsJson != nil {
@@ -213,12 +213,12 @@ func (c *Client) ListBuilds(ctx context.Context, gameId uuid.UUID, request *serv
 	return response, nil
 }
 
-func (c *Client) PatchTags(ctx context.Context, gameId uuid.UUID, buildId uuid.UUID, request *servers.PatchBuildTagsRequest) (*servers.PatchBuildTagsResponse, error) {
+func (c *Client) PatchTags(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, buildId uuid.UUID, request *servers.PatchBuildTagsRequest) (*servers.PatchBuildTagsResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/builds/%v/tags", gameId, buildId)
+	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/environments/%v/builds/%v/tags", gameId, environmentId, buildId)
 
 	errorDecoder := func(statusCode int, body io.Reader) error {
 		raw, err := io.ReadAll(body)
@@ -292,12 +292,12 @@ func (c *Client) PatchTags(ctx context.Context, gameId uuid.UUID, buildId uuid.U
 }
 
 // Creates a new game build for the given game.
-func (c *Client) PrepareBuild(ctx context.Context, gameId uuid.UUID, request *servers.CreateBuildRequest) (*servers.CreateBuildResponse, error) {
+func (c *Client) PrepareBuild(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, request *servers.CreateBuildRequest) (*servers.CreateBuildResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/builds/prepare", gameId)
+	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/environments/%v/builds/prepare", gameId, environmentId)
 
 	errorDecoder := func(statusCode int, body io.Reader) error {
 		raw, err := io.ReadAll(body)
@@ -371,12 +371,12 @@ func (c *Client) PrepareBuild(ctx context.Context, gameId uuid.UUID, request *se
 }
 
 // Marks an upload as complete.
-func (c *Client) CompleteBuild(ctx context.Context, gameId uuid.UUID, buildId uuid.UUID) error {
+func (c *Client) CompleteBuild(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, buildId uuid.UUID) error {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/builds/%v/complete", gameId, buildId)
+	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/environments/%v/builds/%v/complete", gameId, environmentId, buildId)
 
 	errorDecoder := func(statusCode int, body io.Reader) error {
 		raw, err := io.ReadAll(body)

@@ -57,7 +57,6 @@ cloud-device-link-create = { path = "../../pkg/cloud/ops/device-link-create" }
 cloud-game-config-create = { path = "../../pkg/cloud/ops/game-config-create" }
 cloud-game-config-get = { path = "../../pkg/cloud/ops/game-config-get" }
 cloud-game-token-create = { path = "../../pkg/cloud/ops/game-token-create" }
-cloud-service-game-token-create = { path = "../../pkg/cloud/ops/game-service-token-create" }
 cloud-namespace-create = { path = "../../pkg/cloud/ops/namespace-create" }
 cloud-namespace-get = { path = "../../pkg/cloud/ops/namespace-get" }
 cloud-namespace-token-development-create = { path = "../../pkg/cloud/ops/namespace-token-development-create" }

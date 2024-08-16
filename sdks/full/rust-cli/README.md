@@ -82,7 +82,6 @@ Class | Method | HTTP request | Description
 *CloudGamesNamespacesLogsApi* | [**cloud_games_namespaces_logs_get_namespace_lobby**](docs/CloudGamesNamespacesLogsApi.md#cloud_games_namespaces_logs_get_namespace_lobby) | **GET** /cloud/games/{game_id}/namespaces/{namespace_id}/logs/lobbies/{lobby_id} | 
 *CloudGamesNamespacesLogsApi* | [**cloud_games_namespaces_logs_list_namespace_lobbies**](docs/CloudGamesNamespacesLogsApi.md#cloud_games_namespaces_logs_list_namespace_lobbies) | **GET** /cloud/games/{game_id}/namespaces/{namespace_id}/logs/lobbies | 
 *CloudGamesTokensApi* | [**cloud_games_tokens_create_cloud_token**](docs/CloudGamesTokensApi.md#cloud_games_tokens_create_cloud_token) | **POST** /cloud/games/{game_id}/tokens/cloud | 
-*CloudGamesTokensApi* | [**cloud_games_tokens_create_service_token**](docs/CloudGamesTokensApi.md#cloud_games_tokens_create_service_token) | **POST** /cloud/games/{game_id}/tokens/service | 
 *CloudGamesVersionsApi* | [**cloud_games_versions_create_game_version**](docs/CloudGamesVersionsApi.md#cloud_games_versions_create_game_version) | **POST** /cloud/games/{game_id}/versions | 
 *CloudGamesVersionsApi* | [**cloud_games_versions_get_game_version_by_id**](docs/CloudGamesVersionsApi.md#cloud_games_versions_get_game_version_by_id) | **GET** /cloud/games/{game_id}/versions/{version_id} | 
 *CloudGamesVersionsApi* | [**cloud_games_versions_reserve_version_name**](docs/CloudGamesVersionsApi.md#cloud_games_versions_reserve_version_name) | **POST** /cloud/games/{game_id}/versions/reserve-name | 
@@ -91,6 +90,7 @@ Class | Method | HTTP request | Description
 *CloudLogsApi* | [**cloud_logs_get_ray_perf_logs**](docs/CloudLogsApi.md#cloud_logs_get_ray_perf_logs) | **GET** /cloud/rays/{ray_id}/perf | 
 *CloudTiersApi* | [**cloud_tiers_get_region_tiers**](docs/CloudTiersApi.md#cloud_tiers_get_region_tiers) | **GET** /cloud/region-tiers | 
 *CloudUploadsApi* | [**cloud_uploads_complete_upload**](docs/CloudUploadsApi.md#cloud_uploads_complete_upload) | **POST** /cloud/uploads/{upload_id}/complete | 
+*GamesEnvironmentsTokensApi* | [**games_environments_tokens_create_service_token**](docs/GamesEnvironmentsTokensApi.md#games_environments_tokens_create_service_token) | **POST** /games/{game_id}/environments/{environment_id}/tokens/service | 
 *GroupApi* | [**group_ban_identity**](docs/GroupApi.md#group_ban_identity) | **POST** /group/groups/{group_id}/bans/{identity_id} | 
 *GroupApi* | [**group_complete_avatar_upload**](docs/GroupApi.md#group_complete_avatar_upload) | **POST** /group/groups/{group_id}/avatar-upload/{upload_id}/complete | 
 *GroupApi* | [**group_create**](docs/GroupApi.md#group_create) | **POST** /group/groups | 
@@ -167,16 +167,16 @@ Class | Method | HTTP request | Description
 *PortalGamesApi* | [**portal_games_get_game_profile**](docs/PortalGamesApi.md#portal_games_get_game_profile) | **GET** /portal/games/{game_name_id}/profile | 
 *ProvisionDatacentersApi* | [**provision_datacenters_get_tls**](docs/ProvisionDatacentersApi.md#provision_datacenters_get_tls) | **GET** /datacenters/{datacenter_id}/tls | 
 *ProvisionServersApi* | [**provision_servers_get_info**](docs/ProvisionServersApi.md#provision_servers_get_info) | **GET** /servers/{ip} | 
-*ServersApi* | [**servers_create**](docs/ServersApi.md#servers_create) | **POST** /games/{game_id}/servers | 
-*ServersApi* | [**servers_destroy**](docs/ServersApi.md#servers_destroy) | **DELETE** /games/{game_id}/servers/{server_id} | 
-*ServersApi* | [**servers_get**](docs/ServersApi.md#servers_get) | **GET** /games/{game_id}/servers/{server_id} | 
-*ServersApi* | [**servers_list**](docs/ServersApi.md#servers_list) | **GET** /games/{game_id}/servers | 
-*ServersBuildsApi* | [**servers_builds_complete_build**](docs/ServersBuildsApi.md#servers_builds_complete_build) | **POST** /games/{game_id}/builds/{build_id}/complete | 
-*ServersBuildsApi* | [**servers_builds_get_build**](docs/ServersBuildsApi.md#servers_builds_get_build) | **GET** /games/{game_id}/builds/{build_id} | 
-*ServersBuildsApi* | [**servers_builds_list_builds**](docs/ServersBuildsApi.md#servers_builds_list_builds) | **GET** /games/{game_id}/builds | 
-*ServersBuildsApi* | [**servers_builds_patch_tags**](docs/ServersBuildsApi.md#servers_builds_patch_tags) | **PATCH** /games/{game_id}/builds/{build_id}/tags | 
-*ServersBuildsApi* | [**servers_builds_prepare_build**](docs/ServersBuildsApi.md#servers_builds_prepare_build) | **POST** /games/{game_id}/builds/prepare | 
-*ServersLogsApi* | [**servers_logs_get_server_logs**](docs/ServersLogsApi.md#servers_logs_get_server_logs) | **GET** /games/{game_id}/servers/{server_id}/logs | 
+*ServersApi* | [**servers_create**](docs/ServersApi.md#servers_create) | **POST** /games/{game_id}/environments/{environment_id}/servers | 
+*ServersApi* | [**servers_destroy**](docs/ServersApi.md#servers_destroy) | **DELETE** /games/{game_id}/environments/{environment_id}/servers/{server_id} | 
+*ServersApi* | [**servers_get**](docs/ServersApi.md#servers_get) | **GET** /games/{game_id}/environments/{environment_id}/servers/{server_id} | 
+*ServersApi* | [**servers_list**](docs/ServersApi.md#servers_list) | **GET** /games/{game_id}/environments/{environment_id}/servers | 
+*ServersBuildsApi* | [**servers_builds_complete_build**](docs/ServersBuildsApi.md#servers_builds_complete_build) | **POST** /games/{game_id}/environments/{environment_id}/builds/{build_id}/complete | 
+*ServersBuildsApi* | [**servers_builds_get_build**](docs/ServersBuildsApi.md#servers_builds_get_build) | **GET** /games/{game_id}/environments/{environment_id}/builds/{build_id} | 
+*ServersBuildsApi* | [**servers_builds_list_builds**](docs/ServersBuildsApi.md#servers_builds_list_builds) | **GET** /games/{game_id}/environments/{environment_id}/builds | 
+*ServersBuildsApi* | [**servers_builds_patch_tags**](docs/ServersBuildsApi.md#servers_builds_patch_tags) | **PATCH** /games/{game_id}/environments/{environment_id}/builds/{build_id}/tags | 
+*ServersBuildsApi* | [**servers_builds_prepare_build**](docs/ServersBuildsApi.md#servers_builds_prepare_build) | **POST** /games/{game_id}/environments/{environment_id}/builds/prepare | 
+*ServersLogsApi* | [**servers_logs_get_server_logs**](docs/ServersLogsApi.md#servers_logs_get_server_logs) | **GET** /games/{game_id}/environments/{environment_id}/servers/{server_id}/logs | 
 
 
 ## Documentation For Models
@@ -248,7 +248,6 @@ Class | Method | HTTP request | Description
  - [CloudGamesCreateGameResponse](docs/CloudGamesCreateGameResponse.md)
  - [CloudGamesCreateGameVersionRequest](docs/CloudGamesCreateGameVersionRequest.md)
  - [CloudGamesCreateGameVersionResponse](docs/CloudGamesCreateGameVersionResponse.md)
- - [CloudGamesCreateServiceTokenResponse](docs/CloudGamesCreateServiceTokenResponse.md)
  - [CloudGamesDeleteMatchmakerLobbyResponse](docs/CloudGamesDeleteMatchmakerLobbyResponse.md)
  - [CloudGamesExportLobbyLogsRequest](docs/CloudGamesExportLobbyLogsRequest.md)
  - [CloudGamesExportLobbyLogsResponse](docs/CloudGamesExportLobbyLogsResponse.md)
@@ -373,6 +372,7 @@ Class | Method | HTTP request | Description
  - [GameStatSortingMethod](docs/GameStatSortingMethod.md)
  - [GameStatSummary](docs/GameStatSummary.md)
  - [GameSummary](docs/GameSummary.md)
+ - [GamesEnvironmentsCreateServiceTokenResponse](docs/GamesEnvironmentsCreateServiceTokenResponse.md)
  - [GeoCoord](docs/GeoCoord.md)
  - [GeoDistance](docs/GeoDistance.md)
  - [GlobalEventNotification](docs/GlobalEventNotification.md)
@@ -494,9 +494,11 @@ Class | Method | HTTP request | Description
  - [ServersCreateServerPortRequest](docs/ServersCreateServerPortRequest.md)
  - [ServersCreateServerRequest](docs/ServersCreateServerRequest.md)
  - [ServersCreateServerResponse](docs/ServersCreateServerResponse.md)
+ - [ServersCreateServerRuntimeRequest](docs/ServersCreateServerRuntimeRequest.md)
  - [ServersGetBuildResponse](docs/ServersGetBuildResponse.md)
  - [ServersGetServerLogsResponse](docs/ServersGetServerLogsResponse.md)
  - [ServersGetServerResponse](docs/ServersGetServerResponse.md)
+ - [ServersLifecycle](docs/ServersLifecycle.md)
  - [ServersListBuildsResponse](docs/ServersListBuildsResponse.md)
  - [ServersListServersResponse](docs/ServersListServersResponse.md)
  - [ServersLogStream](docs/ServersLogStream.md)
@@ -507,6 +509,7 @@ Class | Method | HTTP request | Description
  - [ServersPortProtocol](docs/ServersPortProtocol.md)
  - [ServersPortRouting](docs/ServersPortRouting.md)
  - [ServersResources](docs/ServersResources.md)
+ - [ServersRuntime](docs/ServersRuntime.md)
  - [ServersServer](docs/ServersServer.md)
  - [UploadPrepareFile](docs/UploadPrepareFile.md)
  - [UploadPresignedRequest](docs/UploadPresignedRequest.md)

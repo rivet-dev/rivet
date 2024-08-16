@@ -14,6 +14,9 @@ message Request {
 
 message Response {
 	rivet.common.Uuid game_id = 1;
+	
+	// Prod env id.
+	rivet.common.Uuid prod_env_id = 4;
 
 	// The first namespace will always be prod.
 	repeated rivet.common.Uuid namespace_ids = 2;

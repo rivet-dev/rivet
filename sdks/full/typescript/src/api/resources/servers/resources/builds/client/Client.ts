@@ -33,6 +33,7 @@ export class Builds {
      * Lists all builds of the game associated with the token used. Can be filtered by tags in the query string.
      *
      * @param {string} gameId
+     * @param {string} environmentId
      * @param {string} buildId
      * @param {Rivet.servers.GetBuildRequest} request
      * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
@@ -45,13 +46,14 @@ export class Builds {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.servers.builds.getBuild("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *     await client.servers.builds.getBuild("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
      *         tagsJson: "string",
      *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
      *     })
      */
     public async getBuild(
         gameId: string,
+        environmentId: string,
         buildId: string,
         request: Rivet.servers.GetBuildRequest = {},
         requestOptions?: Builds.RequestOptions
@@ -69,7 +71,9 @@ export class Builds {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/builds/${encodeURIComponent(buildId)}`
+                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(
+                    environmentId
+                )}/builds/${encodeURIComponent(buildId)}`
             ),
             method: "GET",
             headers: {
@@ -181,6 +185,7 @@ export class Builds {
      * Lists all builds of the game associated with the token used. Can be filtered by tags in the query string.
      *
      * @param {string} gameId
+     * @param {string} environmentId
      * @param {Rivet.servers.ListBuildsRequest} request
      * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
      *
@@ -192,13 +197,14 @@ export class Builds {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.servers.builds.listBuilds("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *     await client.servers.builds.listBuilds("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
      *         tagsJson: "string",
      *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
      *     })
      */
     public async listBuilds(
         gameId: string,
+        environmentId: string,
         request: Rivet.servers.ListBuildsRequest = {},
         requestOptions?: Builds.RequestOptions
     ): Promise<Rivet.servers.ListBuildsResponse> {
@@ -215,7 +221,7 @@ export class Builds {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/builds`
+                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(environmentId)}/builds`
             ),
             method: "GET",
             headers: {
@@ -325,6 +331,7 @@ export class Builds {
 
     /**
      * @param {string} gameId
+     * @param {string} environmentId
      * @param {string} buildId
      * @param {Rivet.servers.PatchBuildTagsRequest} request
      * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
@@ -337,7 +344,7 @@ export class Builds {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.servers.builds.patchTags("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *     await client.servers.builds.patchTags("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
      *         tags: {
      *             "key": "value"
      *         },
@@ -346,6 +353,7 @@ export class Builds {
      */
     public async patchTags(
         gameId: string,
+        environmentId: string,
         buildId: string,
         request: Rivet.servers.PatchBuildTagsRequest,
         requestOptions?: Builds.RequestOptions
@@ -353,7 +361,9 @@ export class Builds {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/builds/${encodeURIComponent(buildId)}/tags`
+                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(
+                    environmentId
+                )}/builds/${encodeURIComponent(buildId)}/tags`
             ),
             method: "PATCH",
             headers: {
@@ -465,6 +475,7 @@ export class Builds {
      * Creates a new game build for the given game.
      *
      * @param {string} gameId
+     * @param {string} environmentId
      * @param {Rivet.servers.CreateBuildRequest} request
      * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
      *
@@ -476,7 +487,7 @@ export class Builds {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.servers.builds.prepareBuild("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *     await client.servers.builds.prepareBuild("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
      *         name: "string",
      *         imageTag: "string",
      *         imageFile: {},
@@ -487,13 +498,14 @@ export class Builds {
      */
     public async prepareBuild(
         gameId: string,
+        environmentId: string,
         request: Rivet.servers.CreateBuildRequest,
         requestOptions?: Builds.RequestOptions
     ): Promise<Rivet.servers.CreateBuildResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/builds/prepare`
+                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(environmentId)}/builds/prepare`
             ),
             method: "POST",
             headers: {
@@ -605,6 +617,7 @@ export class Builds {
      * Marks an upload as complete.
      *
      * @param {string} gameId
+     * @param {string} environmentId
      * @param {string} buildId
      * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
      *
@@ -616,13 +629,20 @@ export class Builds {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.servers.builds.completeBuild("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
+     *     await client.servers.builds.completeBuild("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
      */
-    public async completeBuild(gameId: string, buildId: string, requestOptions?: Builds.RequestOptions): Promise<void> {
+    public async completeBuild(
+        gameId: string,
+        environmentId: string,
+        buildId: string,
+        requestOptions?: Builds.RequestOptions
+    ): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/builds/${encodeURIComponent(buildId)}/complete`
+                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(
+                    environmentId
+                )}/builds/${encodeURIComponent(buildId)}/complete`
             ),
             method: "POST",
             headers: {

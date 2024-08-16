@@ -30,12 +30,12 @@ pub enum ServersLogsGetServerLogsError {
 
 
 /// Returns the logs for a given server.
-pub async fn servers_logs_get_server_logs(configuration: &configuration::Configuration, game_id: &str, server_id: &str, stream: crate::models::ServersLogStream, game: Option<&str>, watch_index: Option<&str>) -> Result<crate::models::ServersGetServerLogsResponse, Error<ServersLogsGetServerLogsError>> {
+pub async fn servers_logs_get_server_logs(configuration: &configuration::Configuration, game_id: &str, environment_id: &str, server_id: &str, stream: crate::models::ServersLogStream, game: Option<&str>, watch_index: Option<&str>) -> Result<crate::models::ServersGetServerLogsResponse, Error<ServersLogsGetServerLogsError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/servers/{server_id}/logs", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), server_id=crate::apis::urlencode(server_id));
+    let local_var_uri_str = format!("{}/games/{game_id}/environments/{environment_id}/servers/{server_id}/logs", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), environment_id=crate::apis::urlencode(environment_id), server_id=crate::apis::urlencode(server_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     local_var_req_builder = local_var_req_builder.query(&[("stream", &stream.to_string())]);

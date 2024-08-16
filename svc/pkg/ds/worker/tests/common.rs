@@ -27,7 +27,7 @@
 // 		.unwrap();
 
 // 		let build_res = op!([ctx] faker_build {
-// 			game_id: game_res.game_id,
+// 			env_id: game_res.prod_env_id,
 // 			image: backend::faker::Image::MmLobbyEcho as i32,
 // 		})
 // 		.await
@@ -39,7 +39,7 @@
 // 		let host_port_udp = rand::thread_rng().gen_range(26000..27000);
 
 // 		let game_version_res = op!([ctx] faker_game_version {
-// 			game_id: game_res.game_id,
+// 			env_id: game_res.prod_env_id,
 // 			override_lobby_groups: Some(faker::game_version::request::OverrideLobbyGroups {
 // 				lobby_groups: vec![backend::matchmaker::LobbyGroup {
 // 					name_id: "test-1".into(),
@@ -211,7 +211,7 @@
 // 			.lobby_groups;
 
 // 		let ns_create_res = op!([ctx] faker_game_namespace {
-// 			game_id: game_res.game_id,
+// 			env_id: game_res.prod_env_id,
 // 			version_id: game_version_res.version_id,
 // 			override_name_id: "prod".to_owned(),
 // 			..Default::default()

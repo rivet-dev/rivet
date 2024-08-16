@@ -45,12 +45,12 @@ func NewClient(opts ...core.ClientOption) *Client {
 // Gets a dynamic server.
 //
 // The id of the server to destroy
-func (c *Client) Get(ctx context.Context, gameId uuid.UUID, serverId uuid.UUID) (*servers.GetServerResponse, error) {
+func (c *Client) Get(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, serverId uuid.UUID) (*servers.GetServerResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/servers/%v", gameId, serverId)
+	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/environments/%v/servers/%v", gameId, environmentId, serverId)
 
 	errorDecoder := func(statusCode int, body io.Reader) error {
 		raw, err := io.ReadAll(body)
@@ -123,12 +123,12 @@ func (c *Client) Get(ctx context.Context, gameId uuid.UUID, serverId uuid.UUID) 
 }
 
 // Lists all servers associated with the token used. Can be filtered by tags in the query string.
-func (c *Client) List(ctx context.Context, gameId uuid.UUID, request *servers.GetServersRequest) (*servers.ListServersResponse, error) {
+func (c *Client) List(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, request *servers.GetServersRequest) (*servers.ListServersResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/servers", gameId)
+	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/environments/%v/servers", gameId, environmentId)
 
 	queryParams := make(url.Values)
 	if request.TagsJson != nil {
@@ -212,12 +212,12 @@ func (c *Client) List(ctx context.Context, gameId uuid.UUID, request *servers.Ge
 }
 
 // Create a new dynamic server.
-func (c *Client) Create(ctx context.Context, gameId uuid.UUID, request *servers.CreateServerRequest) (*servers.CreateServerResponse, error) {
+func (c *Client) Create(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, request *servers.CreateServerRequest) (*servers.CreateServerResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/servers", gameId)
+	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/environments/%v/servers", gameId, environmentId)
 
 	errorDecoder := func(statusCode int, body io.Reader) error {
 		raw, err := io.ReadAll(body)
@@ -293,12 +293,12 @@ func (c *Client) Create(ctx context.Context, gameId uuid.UUID, request *servers.
 // Destroy a dynamic server.
 //
 // The id of the server to destroy
-func (c *Client) Destroy(ctx context.Context, gameId uuid.UUID, serverId uuid.UUID, request *servers.DestroyServerRequest) (*servers.DestroyServerResponse, error) {
+func (c *Client) Destroy(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, serverId uuid.UUID, request *servers.DestroyServerRequest) (*servers.DestroyServerResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/servers/%v", gameId, serverId)
+	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/environments/%v/servers/%v", gameId, environmentId, serverId)
 
 	queryParams := make(url.Values)
 	if request.OverrideKillTimeout != nil {

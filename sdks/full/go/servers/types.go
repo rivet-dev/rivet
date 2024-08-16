@@ -157,6 +157,36 @@ func (h *HostRouting) String() string {
 	return fmt.Sprintf("%#v", h)
 }
 
+type Lifecycle struct {
+	// The duration to wait for in milliseconds before killing the server. This should be set to a safe default, and can be overridden during a DELETE request if needed.
+	KillTimeout *int64 `json:"kill_timeout,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (l *Lifecycle) UnmarshalJSON(data []byte) error {
+	type unmarshaler Lifecycle
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*l = Lifecycle(value)
+	l._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (l *Lifecycle) String() string {
+	if len(l._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(l._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(l); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", l)
+}
+
 type Network struct {
 	Mode  *NetworkMode     `json:"mode,omitempty"`
 	Ports map[string]*Port `json:"ports,omitempty"`
@@ -337,22 +367,50 @@ func (r *Resources) String() string {
 	return fmt.Sprintf("%#v", r)
 }
 
-type Server struct {
-	Id          uuid.UUID         `json:"id"`
-	Game        uuid.UUID         `json:"game"`
-	Datacenter  uuid.UUID         `json:"datacenter"`
-	Cluster     uuid.UUID         `json:"cluster"`
-	Tags        interface{}       `json:"tags,omitempty"`
+type Runtime struct {
 	Image       uuid.UUID         `json:"image"`
 	Arguments   []string          `json:"arguments,omitempty"`
 	Environment map[string]string `json:"environment,omitempty"`
-	Network     *Network          `json:"network,omitempty"`
-	Resources   *Resources        `json:"resources,omitempty"`
-	// The duration to wait for in milliseconds before killing the server. This should be set to a safe default, and can be overridden during a DELETE request if needed.
-	KillTimeout *int64 `json:"kill_timeout,omitempty"`
-	CreatedAt   int64  `json:"created_at"`
-	StartedAt   *int64 `json:"started_at,omitempty"`
-	DestroyedAt *int64 `json:"destroyed_at,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *Runtime) UnmarshalJSON(data []byte) error {
+	type unmarshaler Runtime
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = Runtime(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *Runtime) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
+}
+
+type Server struct {
+	Id          uuid.UUID   `json:"id"`
+	Environment uuid.UUID   `json:"environment"`
+	Datacenter  uuid.UUID   `json:"datacenter"`
+	Cluster     uuid.UUID   `json:"cluster"`
+	Tags        interface{} `json:"tags,omitempty"`
+	Runtime     *Runtime    `json:"runtime,omitempty"`
+	Network     *Network    `json:"network,omitempty"`
+	Resources   *Resources  `json:"resources,omitempty"`
+	Lifecycle   *Lifecycle  `json:"lifecycle,omitempty"`
+	CreatedAt   int64       `json:"created_at"`
+	StartedAt   *int64      `json:"started_at,omitempty"`
+	DestroyedAt *int64      `json:"destroyed_at,omitempty"`
 
 	_rawJSON json.RawMessage
 }
@@ -430,6 +488,37 @@ func (c *CreateServerPortRequest) UnmarshalJSON(data []byte) error {
 }
 
 func (c *CreateServerPortRequest) String() string {
+	if len(c._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(c._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(c); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", c)
+}
+
+type CreateServerRuntimeRequest struct {
+	Image       uuid.UUID         `json:"image"`
+	Arguments   []string          `json:"arguments,omitempty"`
+	Environment map[string]string `json:"environment,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (c *CreateServerRuntimeRequest) UnmarshalJSON(data []byte) error {
+	type unmarshaler CreateServerRuntimeRequest
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*c = CreateServerRuntimeRequest(value)
+	c._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (c *CreateServerRuntimeRequest) String() string {
 	if len(c._rawJSON) > 0 {
 		if value, err := core.StringifyJSON(c._rawJSON); err == nil {
 			return value

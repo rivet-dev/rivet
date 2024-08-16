@@ -1,0 +1,70 @@
+[package]
+name = "api-games"
+version = "0.0.1"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+edition = "2021"
+license = "Apache-2.0"
+
+[dependencies]
+api-helper = { path = "../../../lib/api-helper/build" }
+chirp-client = { path = "../../../lib/chirp/client" }
+rivet-operation = { path = "../../../lib/operation/core" }
+chrono = "0.4"
+http = "0.2"
+hyper = { version = "0.14", features = ["server", "http1", "stream", "tcp"] }
+lazy_static = "1.4"
+rivet-api = { path = "../../../sdks/full/rust" }
+rivet-cache = { path = "../../../lib/cache/build" }
+rivet-claims = { path = "../../../lib/claims" }
+rivet-health-checks = { path = "../../../lib/health-checks" }
+rivet-convert = { path = "../../../lib/convert" }
+rivet-pools = { path = "../../../lib/pools" }
+s3-util = { path = "../../../lib/s3-util" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+base64 = "0.13"
+tokio = { version = "1.29" }
+tracing = "0.1"
+tracing-futures = "0.2"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+url = "2.2.2"
+util-team = { package = "rivet-util-team", path = "../../pkg/team/util" }
+uuid = { version = "1", features = ["v4"] }
+
+build-create = { path = "../../pkg/build/ops/create" }
+build-get = { path = "../../pkg/build/ops/get" }
+build-list-for-env = { path = "../../pkg/build/ops/list-for-env" }
+cluster = { path = "../../pkg/cluster" }
+build = { path = "../../pkg/build" }
+ds-log-read = { path = "../../pkg/ds-log/ops/read" }
+ds-server-create = { path = "../../pkg/ds/ops/server-create" }
+ds-server-delete = { path = "../../pkg/ds/ops/server-delete" }
+ds-server-get = { path = "../../pkg/ds/ops/server-get" }
+ds-server-list-for-env = { path = "../../pkg/ds/ops/server-list-for-env" }
+game-get = { path = "../../pkg/game/ops/get" }
+game-namespace-get = { path = "../../pkg/game/ops/namespace-get" }
+game-version-get = { path = "../../pkg/game/ops/version-get" }
+team-get = { path = "../../pkg/team/ops/get" }
+token-revoke = { path = "../../pkg/token/ops/revoke" }
+token-create = { path = "../../pkg/token/ops/create" }
+upload-complete = { path = "../../pkg/upload/ops/complete" }
+upload-get = { path = "../../pkg/upload/ops/get" }
+user-get = { path = "../../pkg/user/ops/get" }
+user-identity-get = { path = "../../pkg/user-identity/ops/get" }
+user-team-list = { path = "../../pkg/user/ops/team-list" }
+
+[dev-dependencies]
+rivet-connection = { path = "../../../lib/connection" }
+reqwest = "0.11"
+
+cdn-namespace-domain-create = { path = "../../pkg/cdn/ops/namespace-domain-create" }
+cloud-namespace-token-development-create = { path = "../../pkg/cloud/ops/namespace-token-development-create" }
+cloud-namespace-token-public-create = { path = "../../pkg/cloud/ops/namespace-token-public-create" }
+cloud-service-env-token-create = { path = "../../pkg/cloud/ops/env-service-token-create" }
+faker-build = { path = "../../pkg/faker/ops/build" }
+faker-game = { path = "../../pkg/faker/ops/game" }
+faker-game-namespace = { path = "../../pkg/faker/ops/game-namespace" }
+faker-game-version = { path = "../../pkg/faker/ops/game-version" }
+faker-region = { path = "../../pkg/faker/ops/region" }
+game-get = { path = "../../pkg/game/ops/get" }
+region-get = { path = "../../pkg/region/ops/get" }

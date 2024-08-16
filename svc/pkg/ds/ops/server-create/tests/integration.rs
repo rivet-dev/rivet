@@ -17,7 +17,7 @@ async fn create(ctx: TestCtx) {
 	})
 	.await
 	.unwrap();
-	let game_id = game_res.game_id.unwrap();
+	let env_id = game_res.prod_env_id.unwrap();
 
 	// Create token
 	let token_res = op!([ctx] token_create {
@@ -27,14 +27,14 @@ async fn create(ctx: TestCtx) {
 		issuer: "test".to_owned(),
 		kind: Some(token::create::request::Kind::New(
 			token::create::request::KindNew { entitlements: vec![proto::claims::Entitlement {
-				kind: Some(proto::claims::entitlement::Kind::GameService(
-					proto::claims::entitlement::GameService {
-						game_id: Some(game_id),
+				kind: Some(proto::claims::entitlement::Kind::EnvService(
+					proto::claims::entitlement::EnvService {
+						env_id: game_res.env_id.clone(),
 					}
 				)),
 			}]},
 		)),
-		label: Some("game_service".to_owned()),
+		label: Some("env".to_owned()),
 		..Default::default()
 	})
 	.await
@@ -68,7 +68,7 @@ async fn create(ctx: TestCtx) {
 		.to_owned();
 
 	let build_res: backend::pkg::faker::build::Response = op!([ctx] faker_build {
-		game_id: Some(game_id),
+		env_id: Some(env_id),
 		image: backend::faker::Image::DsEcho as i32,
 	})
 	.await
@@ -100,7 +100,7 @@ async fn create(ctx: TestCtx) {
 	.collect();
 
 	let server = op!([ctx] ds_server_create {
-		game_id: Some(game_id),
+		env_id: Some(env_id),
 		cluster_id: Some(cluster_id.into()),
 		datacenter_id: faker_region.region_id,
 		resources: Some(proto::backend::ds::ServerResources { cpu_millicores: 100, memory_mib: 200 }),
@@ -153,5 +153,5 @@ async fn create(ctx: TestCtx) {
 	let res_text = res.text().await.unwrap();
 	assert_eq!(random_body, res_text, "echoed wrong response");
 
-	// assert_eq!(game_res.game_id.unwrap(), server.game_id.unwrap().as_uuid());
+	// assert_eq!(game_res.prod_env_id.unwrap(), server.env_id.unwrap().as_uuid());
 }

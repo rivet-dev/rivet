@@ -1,0 +1,7 @@
+[service]
+name = "api-games"
+
+[runtime]
+kind = "rust"
+
+[api-routes]

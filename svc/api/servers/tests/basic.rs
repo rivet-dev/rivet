@@ -7,9 +7,11 @@ static GLOBAL_INIT: Once = Once::new();
 
 struct Ctx {
 	pub op_ctx: OperationContext<()>,
-	pub ns_auth_token: String,
+	pub service_token: String,
 	pub game_id: Uuid,
+	pub env_id: Uuid,
 	pub game_id_str: String,
+	pub env_id_str: String,
 	pub datacenter_id: Uuid,
 	pub image_id: Uuid,
 }
@@ -46,14 +48,16 @@ impl Ctx {
 		);
 
 		let (datacenter_id, primary_datacenter_name_id) = Self::setup_datacenter(&op_ctx).await?;
-		let (game_id, image_id) = Self::setup_game(&op_ctx, datacenter_id).await?;
-		let ns_auth_token = Self::setup_public_token(&op_ctx, game_id).await?;
+		let (game_id, env_id, image_id) = Self::setup_game(&op_ctx, datacenter_id).await?;
+		let service_token = Self::setup_token(&op_ctx, game_id).await?;
 
 		Ok(Ctx {
 			op_ctx,
-			ns_auth_token,
+			service_token,
 			game_id,
+			env_id,
 			game_id_str: game_id.to_string(),
+			env_id_str: env_id.to_string(),
 			datacenter_id,
 			image_id,
 		})
@@ -110,30 +114,29 @@ impl Ctx {
 	pub async fn setup_game(
 		ctx: &OperationContext<()>,
 		region_id: Uuid,
-	) -> GlobalResult<(Uuid, Uuid)> {
+	) -> GlobalResult<(Uuid, Uuid, Uuid)> {
 		let game_res = op!([ctx] faker_game {
 			..Default::default()
 		})
 		.await?;
 		let game_id = unwrap!(game_res.game_id);
+		let env_id = unwrap!(game_res.prod_env_id);
 
 		let build_res = op!([ctx] faker_build {
-			game_id: Some(game_id),
+			env_id: Some(env_id.clone()),
 			image: proto::backend::faker::Image::DsEcho as i32,
 		})
 		.await?;
 
 		Ok((
 			unwrap!(game_res.game_id).as_uuid(),
+			unwrap!(game_res.prod_env_id).as_uuid(),
 			unwrap!(build_res.build_id).as_uuid(),
 		))
 	}
 
-	pub async fn setup_public_token(
-		ctx: &OperationContext<()>,
-		game_id: Uuid,
-	) -> GlobalResult<String> {
-		let token_res = op!([ctx] cloud_service_game_token_create {
+	pub async fn setup_token(ctx: &OperationContext<()>, game_id: Uuid) -> GlobalResult<String> {
+		let token_res = op!([ctx] cloud_service_env_token_create {
 			game_id: Some(game_id.into()),
 		})
 		.await?;
@@ -146,18 +149,20 @@ impl Ctx {
 async fn create_http() -> GlobalResult<()> {
 	let ctx = Ctx::init().await?;
 
-	let ctx_config = ctx.config(ctx.ns_auth_token.clone())?;
+	let ctx_config = ctx.config(ctx.service_token.clone())?;
 
 	servers_api::servers_create(
 		&ctx_config,
 		&ctx.game_id_str,
+		&ctx.env_id_str,
 		models::ServersCreateServerRequest {
-			arguments: None,
 			datacenter: ctx.datacenter_id,
-			environment: Some(HashMap::new()),
-			image: ctx.image_id,
-			kill_timeout: Some(0),
 			tags: None,
+			runtime: Box::new(models::ServersCreateServerRuntimeRequest {
+				image: ctx.image_id,
+				environment: Some(HashMap::new()),
+				arguments: None,
+			}),
 			network: Box::new(models::ServersCreateServerNetworkRequest {
 				mode: Some(models::ServersNetworkMode::Bridge),
 				ports: vec![(
@@ -175,6 +180,9 @@ async fn create_http() -> GlobalResult<()> {
 				.into_iter()
 				.collect(),
 			}),
+			lifecycle: Some(Box::new(models::ServersLifecycle {
+				kill_timeout: Some(0),
+			})),
 			resources: Box::new(models::ServersResources {
 				cpu: 100,
 				memory: 200,
@@ -190,18 +198,23 @@ async fn create_http() -> GlobalResult<()> {
 async fn list_builds_with_tags() -> GlobalResult<()> {
 	let ctx = Ctx::init().await?;
 
-	let ctx_config = ctx.config(ctx.ns_auth_token.clone())?;
+	let ctx_config = ctx.config(ctx.service_token.clone())?;
 
 	servers_api::servers_create(
 		&ctx_config,
 		&ctx.game_id_str,
+		&ctx.env_id_str,
 		models::ServersCreateServerRequest {
-			arguments: None,
 			datacenter: ctx.datacenter_id,
-			environment: Some(HashMap::new()),
-			image: ctx.image_id,
-			kill_timeout: Some(0),
 			tags: None,
+			runtime: Box::new(models::ServersCreateServerRuntimeRequest {
+				image: ctx.image_id,
+				arguments: None,
+				environment: Some(HashMap::new()),
+			}),
+			lifecycle: Some(Box::new(models::ServersLifecycle {
+				kill_timeout: Some(0),
+			})),
 			network: Box::new(models::ServersCreateServerNetworkRequest {
 				mode: Some(models::ServersNetworkMode::Bridge),
 				ports: vec![(

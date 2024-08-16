@@ -861,14 +861,6 @@ components:
       required:
       - version_id
       type: object
-    CloudGamesCreateServiceTokenResponse:
-      properties:
-        token:
-          description: A JSON Web Token.
-          type: string
-      required:
-      - token
-      type: object
     CloudGamesDeleteMatchmakerLobbyResponse:
       properties:
         did_remove:
@@ -2928,6 +2920,14 @@ components:
       - developer
       - total_player_count
       type: object
+    GamesEnvironmentsCreateServiceTokenResponse:
+      properties:
+        token:
+          description: A JSON Web Token.
+          type: string
+      required:
+      - token
+      type: object
     GeoCoord:
       description: Geographical coordinates for a location on Planet Earth.
       properties:
@@ -4495,39 +4495,22 @@ components:
       type: object
     ServersCreateServerRequest:
       properties:
-        arguments:
-          items:
-            type: string
-          type: array
         datacenter:
           format: uuid
           type: string
-        environment:
-          additionalProperties:
-            type: string
-          type: object
-        image:
-          format: uuid
-          type: string
-        kill_timeout:
-          description: The duration to wait for in milliseconds before killing the
-            server. This should be set to a safe default, and can be overridden during
-            a DELETE request if needed.
-          format: int64
-          type: integer
+        lifecycle:
+          $ref: '#/components/schemas/ServersLifecycle'
         network:
           $ref: '#/components/schemas/ServersCreateServerNetworkRequest'
         resources:
           $ref: '#/components/schemas/ServersResources'
+        runtime:
+          $ref: '#/components/schemas/ServersCreateServerRuntimeRequest'
         tags: {}
-        webhook_url:
-          description: A url to send to which events from the server running will
-            be sent
-          type: string
       required:
       - datacenter
       - tags
-      - image
+      - runtime
       - network
       - resources
       type: object
@@ -4538,6 +4521,22 @@ components:
           description: The server that was created
       required:
       - server
+      type: object
+    ServersCreateServerRuntimeRequest:
+      properties:
+        arguments:
+          items:
+            type: string
+          type: array
+        environment:
+          additionalProperties:
+            type: string
+          type: object
+        image:
+          format: uuid
+          type: string
+      required:
+      - image
       type: object
     ServersDestroyServerResponse:
       properties: {}
@@ -4580,6 +4579,15 @@ components:
       type: object
     ServersHostRouting:
       properties: {}
+      type: object
+    ServersLifecycle:
+      properties:
+        kill_timeout:
+          description: The duration to wait for in milliseconds before killing the
+            server. This should be set to a safe default, and can be overridden during
+            a DELETE request if needed.
+          format: int64
+          type: integer
       type: object
     ServersListBuildsResponse:
       properties:
@@ -4684,12 +4692,24 @@ components:
       - cpu
       - memory
       type: object
-    ServersServer:
+    ServersRuntime:
       properties:
         arguments:
           items:
             type: string
           type: array
+        environment:
+          additionalProperties:
+            type: string
+          type: object
+        image:
+          format: uuid
+          type: string
+      required:
+      - image
+      type: object
+    ServersServer:
+      properties:
         cluster:
           format: uuid
           type: string
@@ -4703,41 +4723,33 @@ components:
           format: int64
           type: integer
         environment:
-          additionalProperties:
-            type: string
-          type: object
-        game:
           format: uuid
           type: string
         id:
           format: uuid
           type: string
-        image:
-          format: uuid
-          type: string
-        kill_timeout:
-          description: The duration to wait for in milliseconds before killing the
-            server. This should be set to a safe default, and can be overridden during
-            a DELETE request if needed.
-          format: int64
-          type: integer
+        lifecycle:
+          $ref: '#/components/schemas/ServersLifecycle'
         network:
           $ref: '#/components/schemas/ServersNetwork'
         resources:
           $ref: '#/components/schemas/ServersResources'
+        runtime:
+          $ref: '#/components/schemas/ServersRuntime'
         started_at:
           format: int64
           type: integer
         tags: {}
       required:
       - id
-      - game
+      - environment
       - datacenter
       - cluster
       - tags
-      - image
+      - runtime
       - network
       - resources
+      - lifecycle
       - created_at
       type: object
     Timestamp:
@@ -8357,63 +8369,6 @@ paths:
       security: *id001
       tags:
       - CloudGamesTokens
-  /cloud/games/{game_id}/tokens/service:
-    post:
-      description: Creates a new game service token.
-      operationId: cloud_games_tokens_createServiceToken
-      parameters:
-      - in: path
-        name: game_id
-        required: true
-        schema:
-          format: uuid
-          type: string
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CloudGamesCreateCloudTokenResponse'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '408':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '429':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '500':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-      security: *id001
-      tags:
-      - CloudGamesTokens
   /cloud/games/{game_id}/versions:
     post:
       description: Creates a new game version.
@@ -8936,7 +8891,7 @@ paths:
       security: *id001
       tags:
       - ProvisionDatacenters
-  /games/{game_id}/builds:
+  /games/{game_id}/environments/{environment_id}/builds:
     get:
       description: Lists all builds of the game associated with the token used. Can
         be filtered by tags in the query string.
@@ -8944,6 +8899,12 @@ paths:
       parameters:
       - in: path
         name: game_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: environment_id
         required: true
         schema:
           format: uuid
@@ -9005,13 +8966,19 @@ paths:
       security: *id001
       tags:
       - ServersBuilds
-  /games/{game_id}/builds/prepare:
+  /games/{game_id}/environments/{environment_id}/builds/prepare:
     post:
       description: Creates a new game build for the given game.
       operationId: servers_builds_prepareBuild
       parameters:
       - in: path
         name: game_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: environment_id
         required: true
         schema:
           format: uuid
@@ -9068,7 +9035,7 @@ paths:
       security: *id001
       tags:
       - ServersBuilds
-  /games/{game_id}/builds/{build_id}:
+  /games/{game_id}/environments/{environment_id}/builds/{build_id}:
     get:
       description: Lists all builds of the game associated with the token used. Can
         be filtered by tags in the query string.
@@ -9076,6 +9043,12 @@ paths:
       parameters:
       - in: path
         name: game_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: environment_id
         required: true
         schema:
           format: uuid
@@ -9143,13 +9116,19 @@ paths:
       security: *id001
       tags:
       - ServersBuilds
-  /games/{game_id}/builds/{build_id}/complete:
+  /games/{game_id}/environments/{environment_id}/builds/{build_id}/complete:
     post:
       description: Marks an upload as complete.
       operationId: servers_builds_completeBuild
       parameters:
       - in: path
         name: game_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: environment_id
         required: true
         schema:
           format: uuid
@@ -9202,12 +9181,18 @@ paths:
       security: *id001
       tags:
       - ServersBuilds
-  /games/{game_id}/builds/{build_id}/tags:
+  /games/{game_id}/environments/{environment_id}/builds/{build_id}/tags:
     patch:
       operationId: servers_builds_patchTags
       parameters:
       - in: path
         name: game_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: environment_id
         required: true
         schema:
           format: uuid
@@ -9270,7 +9255,7 @@ paths:
       security: *id001
       tags:
       - ServersBuilds
-  /games/{game_id}/servers:
+  /games/{game_id}/environments/{environment_id}/servers:
     get:
       description: Lists all servers associated with the token used. Can be filtered
         by tags in the query string.
@@ -9278,6 +9263,12 @@ paths:
       parameters:
       - in: path
         name: game_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: environment_id
         required: true
         schema:
           format: uuid
@@ -9349,6 +9340,12 @@ paths:
         schema:
           format: uuid
           type: string
+      - in: path
+        name: environment_id
+        required: true
+        schema:
+          format: uuid
+          type: string
       requestBody:
         content:
           application/json:
@@ -9401,13 +9398,19 @@ paths:
       security: *id001
       tags:
       - Servers
-  /games/{game_id}/servers/{server_id}:
+  /games/{game_id}/environments/{environment_id}/servers/{server_id}:
     delete:
       description: Destroy a dynamic server.
       operationId: servers_destroy
       parameters:
       - in: path
         name: game_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: environment_id
         required: true
         schema:
           format: uuid
@@ -9484,6 +9487,12 @@ paths:
         schema:
           format: uuid
           type: string
+      - in: path
+        name: environment_id
+        required: true
+        schema:
+          format: uuid
+          type: string
       - description: The id of the server to destroy
         in: path
         name: server_id
@@ -9537,13 +9546,19 @@ paths:
       security: *id001
       tags:
       - Servers
-  /games/{game_id}/servers/{server_id}/logs:
+  /games/{game_id}/environments/{environment_id}/servers/{server_id}/logs:
     get:
       description: Returns the logs for a given server.
       operationId: servers_logs_getServerLogs
       parameters:
       - in: path
         name: game_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: environment_id
         required: true
         schema:
           format: uuid
@@ -9617,6 +9632,69 @@ paths:
       security: *id001
       tags:
       - ServersLogs
+  /games/{game_id}/environments/{environment_id}/tokens/service:
+    post:
+      description: Creates a new environment service token.
+      operationId: games_environments_tokens_createServiceToken
+      parameters:
+      - in: path
+        name: game_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: environment_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GamesEnvironmentsCreateServiceTokenResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      tags:
+      - GamesEnvironmentsTokens
   /group/groups:
     get:
       description: Returns a list of suggested groups.

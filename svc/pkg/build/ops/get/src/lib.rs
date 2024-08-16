@@ -7,7 +7,8 @@ use serde_json::Value;
 #[derive(sqlx::FromRow)]
 struct BuildRow {
 	build_id: Uuid,
-	game_id: Uuid,
+	game_id: Option<Uuid>,
+	env_id: Option<Uuid>,
 	upload_id: Uuid,
 	display_name: String,
 	image_tag: String,
@@ -31,6 +32,7 @@ async fn handle(ctx: OperationContext<build::get::Request>) -> GlobalResult<buil
 		SELECT
 			build_id,
 			game_id,
+			env_id,
 			upload_id,
 			display_name,
 			image_tag,
@@ -50,7 +52,8 @@ async fn handle(ctx: OperationContext<build::get::Request>) -> GlobalResult<buil
 	.map(|build| {
 		Ok(backend::build::Build {
 			build_id: Some(build.build_id.into()),
-			game_id: Some(build.game_id.into()),
+			game_id: build.game_id.map(|x| x.into()),
+			env_id: build.env_id.map(|x| x.into()),
 			upload_id: Some(build.upload_id.into()),
 			display_name: build.display_name.clone(),
 			image_tag: build.image_tag.clone(),

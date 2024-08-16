@@ -5,9 +5,10 @@ imports:
 
 service:
   auth: true
-  base-path: /games/{game_id}/servers
+  base-path: /games/{game_id}/environments/{environment_id}/servers
   path-parameters:
     game_id: uuid
+    environment_id: uuid
   endpoints:
     get:
       path: /{server_id}
@@ -68,17 +69,16 @@ types:
     properties:
       datacenter: uuid
       tags: unknown
+      runtime: CreateServerRuntimeRequest
+      network: CreateServerNetworkRequest
+      resources: commons.Resources
+      lifecycle: optional<commons.Lifecycle>
+
+  CreateServerRuntimeRequest:
+    properties:
       image: uuid
       arguments: optional<list<string>>
       environment: optional<map<string, string>>
-      network: CreateServerNetworkRequest
-      resources: commons.Resources
-      kill_timeout:
-        docs: >-
-          The duration to wait for in milliseconds before killing the server.
-          This should be set to a safe default, and can be overridden during a
-          DELETE request if needed.
-        type: optional<long>
 
   CreateServerNetworkRequest:
     properties:

@@ -10,6 +10,7 @@ export * as captcha from "./captcha";
 export * as common from "./common";
 export * from "./common/types";
 export * as game from "./game";
+export * as games from "./games";
 export * as geo from "./geo";
 export * as matchmaker from "./matchmaker";
 export * as portal from "./portal";

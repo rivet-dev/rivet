@@ -27,22 +27,3 @@ pub async fn create_cloud_token(
 	})
 }
 
-// MARK: POST /games/{}/tokens/service
-pub async fn create_service_token(
-	ctx: Ctx<Auth>,
-	game_id: Uuid,
-	_body: serde_json::Value,
-) -> GlobalResult<models::CloudGamesCreateServiceTokenResponse> {
-	ctx.auth()
-		.check_game_write_or_admin(ctx.op_ctx(), game_id)
-		.await?;
-
-	let token_res = op!([ctx] cloud_service_game_token_create {
-		game_id: Some(game_id.into()),
-	})
-	.await?;
-
-	Ok(models::CloudGamesCreateServiceTokenResponse {
-		token: token_res.token,
-	})
-}

@@ -78,13 +78,13 @@ pub async fn create(
 		cluster_id: Some(cluster_id.into()),
 		tags: tags,
 		resources: Some((*body.resources).api_into()),
-		kill_timeout_ms: body.kill_timeout.unwrap_or_default(),
-		image_id: Some(body.image.into()),
-		args: body.arguments.unwrap_or_default(),
+		kill_timeout_ms: body.lifecycle.as_ref().and_then(|x| x.kill_timeout).unwrap_or_default(),
+		image_id: Some(body.runtime.image.into()),
+		args: body.runtime.arguments.unwrap_or_default(),
 		network_mode: backend::ds::NetworkMode::api_from(
 			body.network.mode.unwrap_or_default(),
 		) as i32,
-		environment: body.environment.unwrap_or_default(),
+		environment: body.runtime.environment.unwrap_or_default(),
 		network_ports: unwrap!(body.network
 			.ports
 			.into_iter()
@@ -143,7 +143,7 @@ pub async fn destroy(
 		.check_game(ctx.op_ctx(), game_id, env_id, true)
 		.await?;
 
-	assert::server_for_game(&ctx, server_id, game_id).await?;
+	assert::server_for_env(&ctx, server_id, game_id, env_id).await?;
 
 	op!([ctx] ds_server_delete {
 		server_id: Some(server_id.into()),
@@ -171,8 +171,8 @@ pub async fn list_servers(
 		.check_game(ctx.op_ctx(), game_id, env_id, true)
 		.await?;
 
-	let list_res = op!([ctx] ds_server_list_for_game {
-		game_id: Some(game_id.into()),
+	let list_res = op!([ctx] ds_server_list_for_env {
+		env_id: Some(env_id.into()),
 		tags: query.tags_json.as_deref().map_or(Ok(HashMap::new()), serde_json::from_str)?,
 	})
 	.await?;

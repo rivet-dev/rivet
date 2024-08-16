@@ -7,24 +7,32 @@ types:
   Server:
     properties:
       id: uuid
-      game: uuid
+      environment: uuid
       datacenter: uuid
       cluster: uuid
       tags: unknown
+      runtime: Runtime
+      network: Network
+      resources: Resources
+      lifecycle: Lifecycle
+      created_at: long
+      started_at: optional<long>
+      destroyed_at: optional<long>
+
+  Runtime:
+    properties:
       image: uuid
       arguments: optional<list<string>>
       environment: optional<map<string, string>>
-      network: Network
-      resources: Resources
+
+  Lifecycle:
+    properties:
       kill_timeout:
         docs: >-
           The duration to wait for in milliseconds before killing the server.
           This should be set to a safe default, and can be overridden during a
           DELETE request if needed.
         type: optional<long>
-      created_at: long
-      started_at: optional<long>
-      destroyed_at: optional<long>
 
   Resources:
     properties:

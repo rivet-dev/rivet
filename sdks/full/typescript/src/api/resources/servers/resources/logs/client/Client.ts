@@ -33,6 +33,7 @@ export class Logs {
      * Returns the logs for a given server.
      *
      * @param {string} gameId
+     * @param {string} environmentId
      * @param {string} serverId
      * @param {Rivet.servers.GetServerLogsRequest} request
      * @param {Logs.RequestOptions} requestOptions - Request-specific configuration.
@@ -45,7 +46,7 @@ export class Logs {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.servers.logs.getServerLogs("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *     await client.servers.logs.getServerLogs("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
      *         stream: Rivet.servers.LogStream.StdOut,
      *         game: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
      *         watchIndex: "string"
@@ -53,6 +54,7 @@ export class Logs {
      */
     public async getServerLogs(
         gameId: string,
+        environmentId: string,
         serverId: string,
         request: Rivet.servers.GetServerLogsRequest,
         requestOptions?: Logs.RequestOptions
@@ -71,7 +73,9 @@ export class Logs {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/servers/${encodeURIComponent(serverId)}/logs`
+                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(
+                    environmentId
+                )}/servers/${encodeURIComponent(serverId)}/logs`
             ),
             method: "GET",
             headers: {

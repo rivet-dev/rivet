@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+service:
+  auth: true
+  base-path: /games/{game_id}/environments/{environment_id}
+  path-parameters:
+    game_id: uuid
+    environment_id: uuid
+  endpoints:
+    createServiceToken:
+      path: /tokens/service
+      method: POST
+      docs: Creates a new environment service token.
+      response: CreateServiceTokenResponse
+
+types:
+  CreateServiceTokenResponse:
+    properties:
+      token:
+        docs: |-
+          A JSON Web Token.
+        type: string

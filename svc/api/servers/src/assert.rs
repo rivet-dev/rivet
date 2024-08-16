@@ -6,7 +6,12 @@ use rivet_operation::prelude::*;
 use crate::auth::Auth;
 
 /// Validates that a server belongs to the given game ID.
-pub async fn server_for_game(ctx: &Ctx<Auth>, server_id: Uuid, game_id: Uuid) -> GlobalResult<()> {
+pub async fn server_for_env(
+	ctx: &Ctx<Auth>,
+	server_id: Uuid,
+	game_id: Uuid,
+	env_id: Uuid,
+) -> GlobalResult<()> {
 	let get_res = op!([ctx] ds_server_get {
 		server_ids: vec![server_id.into()],
 	})
@@ -15,7 +20,7 @@ pub async fn server_for_game(ctx: &Ctx<Auth>, server_id: Uuid, game_id: Uuid) ->
 
 	// Validate token can access server
 	ensure_with!(
-		unwrap!(server.game_id).as_uuid() == game_id,
+		unwrap!(server.env_id).as_uuid() == env_id,
 		SERVERS_SERVER_NOT_FOUND
 	);
 

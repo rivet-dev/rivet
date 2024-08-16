@@ -64,6 +64,7 @@ async fn handle(
 
 	Ok(faker::game::Response {
 		game_id: game_create_res.game_id,
+		prod_env_id: namespace_ids.first().cloned(),
 		namespace_ids,
 		version_ids,
 	})

@@ -25,6 +25,7 @@ api-admin = { path = "../admin" }
 api-auth = { path = "../auth" }
 api-cf-verification = { path = "../cf-verification" }
 api-cloud = { path = "../cloud" }
+api-games = { path = "../games" }
 api-group = { path = "../group" }
 api-identity = { path = "../identity" }
 api-job = { path = "../job" }

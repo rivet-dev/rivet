@@ -84,7 +84,6 @@ docs/CloudGamesCreateGameRequest.md
 docs/CloudGamesCreateGameResponse.md
 docs/CloudGamesCreateGameVersionRequest.md
 docs/CloudGamesCreateGameVersionResponse.md
-docs/CloudGamesCreateServiceTokenResponse.md
 docs/CloudGamesDeleteMatchmakerLobbyResponse.md
 docs/CloudGamesExportLobbyLogsRequest.md
 docs/CloudGamesExportLobbyLogsResponse.md
@@ -219,6 +218,8 @@ docs/GameStatFormatMethod.md
 docs/GameStatSortingMethod.md
 docs/GameStatSummary.md
 docs/GameSummary.md
+docs/GamesEnvironmentsCreateServiceTokenResponse.md
+docs/GamesEnvironmentsTokensApi.md
 docs/GeoCoord.md
 docs/GeoDistance.md
 docs/GlobalEventNotification.md
@@ -357,9 +358,11 @@ docs/ServersCreateServerNetworkRequest.md
 docs/ServersCreateServerPortRequest.md
 docs/ServersCreateServerRequest.md
 docs/ServersCreateServerResponse.md
+docs/ServersCreateServerRuntimeRequest.md
 docs/ServersGetBuildResponse.md
 docs/ServersGetServerLogsResponse.md
 docs/ServersGetServerResponse.md
+docs/ServersLifecycle.md
 docs/ServersListBuildsResponse.md
 docs/ServersListServersResponse.md
 docs/ServersLogStream.md
@@ -371,6 +374,7 @@ docs/ServersPort.md
 docs/ServersPortProtocol.md
 docs/ServersPortRouting.md
 docs/ServersResources.md
+docs/ServersRuntime.md
 docs/ServersServer.md
 docs/UploadPrepareFile.md
 docs/UploadPresignedRequest.md
@@ -402,6 +406,7 @@ src/apis/cloud_logs_api.rs
 src/apis/cloud_tiers_api.rs
 src/apis/cloud_uploads_api.rs
 src/apis/configuration.rs
+src/apis/games_environments_tokens_api.rs
 src/apis/group_api.rs
 src/apis/group_invites_api.rs
 src/apis/group_join_requests_api.rs
@@ -489,7 +494,6 @@ src/models/cloud_games_create_game_request.rs
 src/models/cloud_games_create_game_response.rs
 src/models/cloud_games_create_game_version_request.rs
 src/models/cloud_games_create_game_version_response.rs
-src/models/cloud_games_create_service_token_response.rs
 src/models/cloud_games_delete_matchmaker_lobby_response.rs
 src/models/cloud_games_export_lobby_logs_request.rs
 src/models/cloud_games_export_lobby_logs_response.rs
@@ -614,6 +618,7 @@ src/models/game_stat_format_method.rs
 src/models/game_stat_sorting_method.rs
 src/models/game_stat_summary.rs
 src/models/game_summary.rs
+src/models/games_environments_create_service_token_response.rs
 src/models/geo_coord.rs
 src/models/geo_distance.rs
 src/models/global_event_notification.rs
@@ -736,9 +741,11 @@ src/models/servers_create_server_network_request.rs
 src/models/servers_create_server_port_request.rs
 src/models/servers_create_server_request.rs
 src/models/servers_create_server_response.rs
+src/models/servers_create_server_runtime_request.rs
 src/models/servers_get_build_response.rs
 src/models/servers_get_server_logs_response.rs
 src/models/servers_get_server_response.rs
+src/models/servers_lifecycle.rs
 src/models/servers_list_builds_response.rs
 src/models/servers_list_servers_response.rs
 src/models/servers_log_stream.rs
@@ -749,6 +756,7 @@ src/models/servers_port.rs
 src/models/servers_port_protocol.rs
 src/models/servers_port_routing.rs
 src/models/servers_resources.rs
+src/models/servers_runtime.rs
 src/models/servers_server.rs
 src/models/upload_prepare_file.rs
 src/models/upload_presigned_request.rs

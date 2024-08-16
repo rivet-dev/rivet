@@ -10,17 +10,12 @@ import (
 )
 
 type CreateServerRequest struct {
-	Datacenter  uuid.UUID                   `json:"datacenter"`
-	Tags        interface{}                 `json:"tags,omitempty"`
-	Image       uuid.UUID                   `json:"image"`
-	Arguments   []string                    `json:"arguments,omitempty"`
-	Environment map[string]string           `json:"environment,omitempty"`
-	Network     *CreateServerNetworkRequest `json:"network,omitempty"`
-	Resources   *Resources                  `json:"resources,omitempty"`
-	// The duration to wait for in milliseconds before killing the server. This should be set to a safe default, and can be overridden during a DELETE request if needed.
-	KillTimeout *int64 `json:"kill_timeout,omitempty"`
-	// A url to send to which events from the server running will be sent
-	WebhookUrl *string `json:"webhook_url,omitempty"`
+	Datacenter uuid.UUID                   `json:"datacenter"`
+	Tags       interface{}                 `json:"tags,omitempty"`
+	Runtime    *CreateServerRuntimeRequest `json:"runtime,omitempty"`
+	Network    *CreateServerNetworkRequest `json:"network,omitempty"`
+	Resources  *Resources                  `json:"resources,omitempty"`
+	Lifecycle  *Lifecycle                  `json:"lifecycle,omitempty"`
 
 	_rawJSON json.RawMessage
 }

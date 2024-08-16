@@ -13,18 +13,18 @@ impl ApiTryFrom<backend::ds::Server> for models::ServersServer {
 	fn api_try_from(value: backend::ds::Server) -> GlobalResult<models::ServersServer> {
 		Ok(models::ServersServer {
 			id: unwrap!(value.server_id).as_uuid(),
+			environment: unwrap!(value.env_id).as_uuid(),
+			datacenter: unwrap!(value.datacenter_id).as_uuid(),
 			cluster: unwrap!(value.cluster_id).as_uuid(),
 			created_at: value.create_ts,
 			started_at: value.start_ts,
-			datacenter: unwrap!(value.datacenter_id).as_uuid(),
 			destroyed_at: value.destroy_ts,
-			game: unwrap!(value.game_id).as_uuid(),
-			kill_timeout: Some(value.kill_timeout_ms),
 			tags: Some(to_value(value.tags).unwrap()),
-			resources: Box::new(unwrap!(value.resources).api_into()),
-			arguments: Some(value.args),
-			environment: Some(value.environment),
-			image: unwrap!(value.image_id).as_uuid(),
+			runtime: Box::new(models::ServersRuntime {
+				image: unwrap!(value.image_id).as_uuid(),
+				arguments: Some(value.args),
+				environment: Some(value.environment),
+			}),
 			network: Box::new(models::ServersNetwork {
 				mode: Some(
 					unwrap!(backend::ds::NetworkMode::from_i32(value.network_mode)).api_into(),
@@ -35,6 +35,10 @@ impl ApiTryFrom<backend::ds::Server> for models::ServersServer {
 					.map(|(s, p)| Ok((s, p.api_try_into()?)))
 					.collect::<GlobalResult<HashMap<_, _>>>()?,
 			}),
+			lifecycle: Box::new(models::ServersLifecycle {
+				kill_timeout: Some(value.kill_timeout_ms),
+			}),
+			resources: Box::new(unwrap!(value.resources).api_into()),
 		})
 	}
 }

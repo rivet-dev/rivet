@@ -11,7 +11,7 @@ async fn print_test_data(ctx: TestCtx) {
 	})
 	.await
 	.unwrap();
-	let game_id = game_res.game_id.unwrap();
+	let env_id = game_res.prod_env_id.unwrap();
 
 	let user_res = op!([ctx] faker_user {
 		..Default::default()
@@ -46,7 +46,7 @@ async fn print_test_data(ctx: TestCtx) {
 		.to_owned();
 
 	let build_res: backend::pkg::faker::build::Response = op!([ctx] faker_build {
-		game_id: Some(game_id),
+		env_id: Some(env_id),
 		image: backend::faker::Image::DsEcho as i32,
 	})
 	.await
@@ -60,14 +60,14 @@ async fn print_test_data(ctx: TestCtx) {
 		issuer: "test".to_owned(),
 		kind: Some(token::create::request::Kind::New(
 			token::create::request::KindNew { entitlements: vec![proto::claims::Entitlement {
-				kind: Some(proto::claims::entitlement::Kind::GameService(
-					proto::claims::entitlement::GameService {
-						game_id: Some(game_id),
+				kind: Some(proto::claims::entitlement::Kind::EnvService(
+					proto::claims::entitlement::EnvService {
+						env_id: game_res.env_id.clone(),
 					}
 				)),
 			}]},
 		)),
-		label: Some("game_service".to_owned()),
+		label: Some("env".to_owned()),
 		..Default::default()
 	})
 	.await
@@ -83,7 +83,7 @@ async fn print_test_data(ctx: TestCtx) {
 			token::create::request::KindNew { entitlements: vec![proto::claims::Entitlement {
 				kind: Some(proto::claims::entitlement::Kind::GameCloud(
 					proto::claims::entitlement::GameCloud {
-						game_id: Some(game_id),
+						env_id: game_res.env_id.clone(),
 					}
 				)),
 			},proto::claims::Entitlement {
@@ -115,19 +115,20 @@ async fn print_test_data(ctx: TestCtx) {
 				)),
 			}]},
 		)),
-		label: Some("game_service".to_owned()),
+		label: Some("env".to_owned()),
 		..Default::default()
 	})
 	.await
 	.unwrap();
 
 	tracing::info!(
-		?game_id,
+		?env_id,
 		?datacenter_id,
 		service_token = ?token_res.token.clone().unwrap().token,
 		cloud_token = ?cloud_token_res.token.clone().unwrap().token,
 		invalid_token = ?invalid_token.token.clone().unwrap().token,
 		build_id = ?build_res.build_id.unwrap(),
+		env_id = ?env_id,
 		"test data");
 	//
 	// let runtime = Some(
@@ -161,10 +162,10 @@ async fn print_test_data(ctx: TestCtx) {
 	//
 	// let faker_region = op!([ctx] faker_region {}).await.unwrap();
 	//
-	// tracing::info!(?game_id);
+	// tracing::info!(?env_id);
 	//
 	// let server = op!([ctx] ds_server_create {
-	// 	game_id: Some(game_id),
+	// 	env_id: Some(env_id),
 	// 	cluster_id: Some(cluster_id),
 	// 	datacenter_id: faker_region.region_id,
 	// 	resources: Some(proto::backend::ds::ServerResources { cpu_millicores: 100, memory_mib: 200 }),
@@ -212,5 +213,5 @@ async fn print_test_data(ctx: TestCtx) {
 	// let res_text = res.text().await.unwrap();
 	// assert_eq!(random_body, res_text, "echoed wrong response");
 	//
-	// assert_eq!(game_res.game_id.unwrap(), server.game_id.unwrap().as_uuid());
+	// assert_eq!(game_res.env_id.unwrap(), server.prod_env_id.unwrap().as_uuid());
 }

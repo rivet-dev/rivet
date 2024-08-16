@@ -29,7 +29,7 @@ pub async fn get_logs(
 		.await?;
 
 	// Validate server belongs to game
-	assert::server_for_game(&ctx, server_id, game_id).await?;
+	assert::server_for_env(&ctx, server_id, game_id, env_id).await?;
 
 	// Determine stream type
 	let stream_type = match query.stream {

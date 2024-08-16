@@ -12,15 +12,15 @@
 
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
-pub struct CloudGamesCreateServiceTokenResponse {
+pub struct GamesEnvironmentsCreateServiceTokenResponse {
     /// A JSON Web Token.
     #[serde(rename = "token")]
     pub token: String,
 }
 
-impl CloudGamesCreateServiceTokenResponse {
-    pub fn new(token: String) -> CloudGamesCreateServiceTokenResponse {
-        CloudGamesCreateServiceTokenResponse {
+impl GamesEnvironmentsCreateServiceTokenResponse {
+    pub fn new(token: String) -> GamesEnvironmentsCreateServiceTokenResponse {
+        GamesEnvironmentsCreateServiceTokenResponse {
             token,
         }
     }

@@ -8,6 +8,7 @@ import "google/protobuf/empty.proto";
 
 message Request {
 	optional rivet.common.Uuid game_id = 1;
+	optional rivet.common.Uuid env_id = 4;
 	rivet.backend.faker.Image image = 2;
 	optional string fs_path = 3;
 }

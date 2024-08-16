@@ -3,9 +3,7 @@
 package games
 
 import (
-	json "encoding/json"
 	fmt "fmt"
-	core "sdk/core"
 )
 
 type GetGameByIdRequest struct {
@@ -64,34 +62,4 @@ func NewBuildKindFromString(s string) (BuildKind, error) {
 
 func (b BuildKind) Ptr() *BuildKind {
 	return &b
-}
-
-type CreateServiceTokenResponse struct {
-	// A JSON Web Token.
-	Token string `json:"token"`
-
-	_rawJSON json.RawMessage
-}
-
-func (c *CreateServiceTokenResponse) UnmarshalJSON(data []byte) error {
-	type unmarshaler CreateServiceTokenResponse
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*c = CreateServiceTokenResponse(value)
-	c._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (c *CreateServiceTokenResponse) String() string {
-	if len(c._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(c._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(c); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", c)
 }

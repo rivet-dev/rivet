@@ -8,6 +8,7 @@ import (
 	authclient "sdk/auth/client"
 	cloudclient "sdk/cloud/client"
 	core "sdk/core"
+	gamesclient "sdk/games/client"
 	groupclient "sdk/group/client"
 	identityclient "sdk/identity/client"
 	jobclient "sdk/job/client"
@@ -31,6 +32,7 @@ type Client struct {
 	Provision  *provisionclient.Client
 	Servers    *serversclient.Client
 	Auth       *authclient.Client
+	Games      *gamesclient.Client
 	Job        *jobclient.Client
 	Matchmaker *matchmakerclient.Client
 	Portal     *portalclient.Client
@@ -53,6 +55,7 @@ func NewClient(opts ...core.ClientOption) *Client {
 		Provision:  provisionclient.NewClient(opts...),
 		Servers:    serversclient.NewClient(opts...),
 		Auth:       authclient.NewClient(opts...),
+		Games:      gamesclient.NewClient(opts...),
 		Job:        jobclient.NewClient(opts...),
 		Matchmaker: matchmakerclient.NewClient(opts...),
 		Portal:     portalclient.NewClient(opts...),

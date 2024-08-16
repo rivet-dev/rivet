@@ -35,6 +35,7 @@ export class Servers {
      * Gets a dynamic server.
      *
      * @param {string} gameId
+     * @param {string} environmentId
      * @param {string} serverId - The id of the server to destroy
      * @param {Servers.RequestOptions} requestOptions - Request-specific configuration.
      *
@@ -46,17 +47,20 @@ export class Servers {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.servers.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
+     *     await client.servers.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
      */
     public async get(
         gameId: string,
+        environmentId: string,
         serverId: string,
         requestOptions?: Servers.RequestOptions
     ): Promise<Rivet.servers.GetServerResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/servers/${encodeURIComponent(serverId)}`
+                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(
+                    environmentId
+                )}/servers/${encodeURIComponent(serverId)}`
             ),
             method: "GET",
             headers: {
@@ -167,6 +171,7 @@ export class Servers {
      * Lists all servers associated with the token used. Can be filtered by tags in the query string.
      *
      * @param {string} gameId
+     * @param {string} environmentId
      * @param {Rivet.servers.GetServersRequest} request
      * @param {Servers.RequestOptions} requestOptions - Request-specific configuration.
      *
@@ -178,13 +183,14 @@ export class Servers {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.servers.list("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *     await client.servers.list("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
      *         tagsJson: "string",
      *         game: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
      *     })
      */
     public async list(
         gameId: string,
+        environmentId: string,
         request: Rivet.servers.GetServersRequest = {},
         requestOptions?: Servers.RequestOptions
     ): Promise<Rivet.servers.ListServersResponse> {
@@ -201,7 +207,7 @@ export class Servers {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/servers`
+                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(environmentId)}/servers`
             ),
             method: "GET",
             headers: {
@@ -313,6 +319,7 @@ export class Servers {
      * Create a new dynamic server.
      *
      * @param {string} gameId
+     * @param {string} environmentId
      * @param {Rivet.servers.CreateServerRequest} request
      * @param {Servers.RequestOptions} requestOptions - Request-specific configuration.
      *
@@ -324,31 +331,27 @@ export class Servers {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.servers.create("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *     await client.servers.create("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
      *         datacenter: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
      *         tags: {
      *             "key": "value"
      *         },
-     *         image: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
-     *         arguments: ["string"],
-     *         environment: {
-     *             "string": "string"
-     *         },
+     *         runtime: {},
      *         network: {},
      *         resources: {},
-     *         killTimeout: 1000000,
-     *         webhookUrl: "string"
+     *         lifecycle: {}
      *     })
      */
     public async create(
         gameId: string,
+        environmentId: string,
         request: Rivet.servers.CreateServerRequest,
         requestOptions?: Servers.RequestOptions
     ): Promise<Rivet.servers.CreateServerResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/servers`
+                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(environmentId)}/servers`
             ),
             method: "POST",
             headers: {
@@ -460,6 +463,7 @@ export class Servers {
      * Destroy a dynamic server.
      *
      * @param {string} gameId
+     * @param {string} environmentId
      * @param {string} serverId - The id of the server to destroy
      * @param {Rivet.servers.DestroyServerRequest} request
      * @param {Servers.RequestOptions} requestOptions - Request-specific configuration.
@@ -472,12 +476,13 @@ export class Servers {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.servers.destroy("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *     await client.servers.destroy("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
      *         overrideKillTimeout: 1000000
      *     })
      */
     public async destroy(
         gameId: string,
+        environmentId: string,
         serverId: string,
         request: Rivet.servers.DestroyServerRequest = {},
         requestOptions?: Servers.RequestOptions
@@ -491,7 +496,9 @@ export class Servers {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/servers/${encodeURIComponent(serverId)}`
+                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(
+                    environmentId
+                )}/servers/${encodeURIComponent(serverId)}`
             ),
             method: "DELETE",
             headers: {
