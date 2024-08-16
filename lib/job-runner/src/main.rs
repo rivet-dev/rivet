@@ -23,12 +23,19 @@ const MAX_PREVIEW_LINES: usize = 128;
 
 fn main() -> anyhow::Result<()> {
 	let nomad_alloc_dir = std::env::var("NOMAD_ALLOC_DIR").context("NOMAD_ALLOC_DIR")?;
-	let job_run_id = std::env::var("NOMAD_META_job_run_id").context("NOMAD_META_job_run_id")?;
 	let nomad_task_name = std::env::var("NOMAD_TASK_NAME").context("NOMAD_TASK_NAME")?;
 	let root_user_enabled = std::env::var("NOMAD_META_root_user_enabled")
 		.context("NOMAD_META_root_user_enabled")?
 		== "1";
-	let runner = std::env::var("NOMAD_META_runner").unwrap_or("job_run".to_string());
+
+	let manager = match std::env::var("NOMAD_META_manager").ok() {
+		Some(x) if x == "dynamic_servers" => job_runner::Manager::DynamicServers {
+			server_id: std::env::var("NOMAD_META_server_id").context("NOMAD_META_server_id")?,
+		},
+		_ => job_runner::Manager::JobRun {
+			run_id: std::env::var("NOMAD_META_job_run_id").context("NOMAD_META_job_run_id")?,
+		},
+	};
 
 	let (shutdown_tx, shutdown_rx) = mpsc::sync_channel(1);
 
@@ -38,9 +45,8 @@ fn main() -> anyhow::Result<()> {
 	let log_shipper = log_shipper::LogShipper {
 		shutdown_rx,
 		msg_rx,
-		job_run_id,
 		nomad_task_name,
-		runner,
+		manager,
 	};
 	let log_shipper_thread = log_shipper.spawn();
 

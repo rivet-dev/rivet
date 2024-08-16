@@ -68,20 +68,12 @@ resource "helm_release" "vector" {
 				vector_metrics = {
 					type = "internal_metrics"
 				}
+
 				vector_logs = {
 					type = "internal_logs"
 				}
 			}
 			transforms = {
-				job_run = {
-					type = "filter"
-					inputs = ["vector", "tcp_json"]
-					condition = {
-						type = "vrl"
-						source = ".source == \"job_run\""
-					}
-				}
-
 				dynamic_servers = {
 					type = "filter"
 					inputs = ["vector", "tcp_json"]
@@ -91,13 +83,13 @@ resource "helm_release" "vector" {
 					}
 				}
 
-				ds_fix_id = {
-					type = "remap"
-					inputs = ["dynamic_servers"]
-					source = <<-EOF
-						.server_id = .run_id
-						del(.run_id)
-					EOF
+				job_run = {
+					type = "filter"
+					inputs = ["vector", "tcp_json"]
+					condition = {
+						type = "vrl"
+						source = ".source == \"job_run\""
+					}
 				}
 
 				backend_worker = {
@@ -116,13 +108,13 @@ resource "helm_release" "vector" {
 					address = "0.0.0.0:9598"
 				}
 
-				clickhouse_job_run_logs = {
+				clickhouse_ds_logs = {
 					type = "clickhouse"
-					inputs = ["job_run"]
+					inputs = ["dynamic_servers"]
 					compression = "gzip"
-					database = "db_job_log"
+					database = "db_ds_log"
 					endpoint = "https://${var.clickhouse_host}:${var.clickhouse_port_https}"
-					table = "run_logs"
+					table = "server_logs"
 					auth = {
 						strategy = "basic"
 						user = "vector"
@@ -138,13 +130,13 @@ resource "helm_release" "vector" {
 					}
 				}
 
-				clickhouse_ds_logs = {
+				clickhouse_job_run_logs = {
 					type = "clickhouse"
-					inputs = ["ds_fix_id"]
+					inputs = ["job_run"]
 					compression = "gzip"
-					database = "db_ds_log"
+					database = "db_job_log"
 					endpoint = "https://${var.clickhouse_host}:${var.clickhouse_port_https}"
-					table = "server_logs"
+					table = "run_logs"
 					auth = {
 						strategy = "basic"
 						user = "vector"

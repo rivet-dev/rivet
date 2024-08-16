@@ -7,7 +7,7 @@ use serde::Deserialize;
 use crate::util::NEW_NOMAD_CONFIG;
 
 // TODO:
-const TRAEFIK_GRACE_PERIOD: Duration = Duration::from_secs(3);
+const TRAEFIK_GRACE_PERIOD: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]

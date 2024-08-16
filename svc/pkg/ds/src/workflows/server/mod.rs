@@ -600,9 +600,9 @@ async fn submit_job(ctx: &ActivityCtx, input: &SubmitJobInput) -> GlobalResult<S
 				"vector_socket_addr".into(),
 				"image_artifact_url".into(),
 				"root_user_enabled".into(),
-				"runner".into(),
+				"manager".into(),
 				"user_env".into(),
-				"job_run_id".into(),
+				"server_id".into(),
 			]),
 			meta_optional: Some(vec!["rivet_test_id".into()]),
 		})),
@@ -1022,7 +1022,7 @@ async fn dispatch_job(ctx: &ActivityCtx, input: &DispatchJobInput) -> GlobalResu
 			value: "0".into(),
 		},
 		backend::job::Parameter {
-			key: "runner".into(),
+			key: "manager".into(),
 			value: "dynamic_servers".into(),
 		},
 		backend::job::Parameter {
@@ -1040,7 +1040,7 @@ async fn dispatch_job(ctx: &ActivityCtx, input: &DispatchJobInput) -> GlobalResu
 	.into_iter()
 	.collect::<Vec<_>>();
 
-	let job_params = vec![("job_run_id".to_string(), input.server_id.to_string())];
+	let job_params = vec![("server_id".to_string(), input.server_id.to_string())];
 
 	// MARK: Dispatch job
 	let dispatch_res = nomad_client::apis::jobs_api::post_job_dispatch(

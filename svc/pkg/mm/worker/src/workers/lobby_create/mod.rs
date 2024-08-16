@@ -736,7 +736,7 @@ async fn create_docker_job(
 				value: if mm_game_config.root_user_enabled { "1" } else { "0" }.into()
 			},
 			backend::job::Parameter {
-				key: "runner".into(),
+				key: "manager".into(),
 				value: "job_run".into()
 			},
 		].into_iter()

@@ -34,9 +34,8 @@ pub struct LogShipper {
 	/// trying to send to this channel.
 	pub msg_rx: mpsc::Receiver<ReceivedMessage>,
 
-	pub job_run_id: String,
 	pub nomad_task_name: String,
-	pub runner: String,
+	pub manager: crate::Manager,
 }
 
 impl LogShipper {
@@ -89,13 +88,21 @@ impl LogShipper {
 		println!("Log shipper connected");
 
 		while let Result::Ok(message) = self.msg_rx.recv() {
-			let vector_message = VectorMessage {
-				source: self.runner.as_str(),
-				run_id: self.job_run_id.as_str(),
-				task: self.nomad_task_name.as_str(),
-				stream_type: message.stream_type as u8,
-				ts: message.ts,
-				message: message.message.as_str(),
+			let vector_message = match &self.manager {
+				crate::Manager::DynamicServers { server_id } => VectorMessage::DynamicServers {
+					server_id: server_id.as_str(),
+					task: self.nomad_task_name.as_str(),
+					stream_type: message.stream_type as u8,
+					ts: message.ts,
+					message: message.message.as_str(),
+				},
+				crate::Manager::JobRun { run_id } => VectorMessage::JobRun {
+					run_id: run_id.as_str(),
+					task: self.nomad_task_name.as_str(),
+					stream_type: message.stream_type as u8,
+					ts: message.ts,
+					message: message.message.as_str(),
+				},
 			};
 
 			serde_json::to_writer(&mut stream, &vector_message)?;
@@ -110,11 +117,22 @@ impl LogShipper {
 
 /// Vector-compatible message format
 #[derive(Serialize)]
-struct VectorMessage<'a> {
-	source: &'a str,
-	run_id: &'a str,
-	task: &'a str,
-	stream_type: u8,
-	ts: u64,
-	message: &'a str,
+#[serde(tag = "source")]
+enum VectorMessage<'a> {
+	#[serde(rename = "dynamic_servers")]
+	DynamicServers {
+		server_id: &'a str,
+		task: &'a str,
+		stream_type: u8,
+		ts: u64,
+		message: &'a str,
+	},
+	#[serde(rename = "job_run")]
+	JobRun {
+		run_id: &'a str,
+		task: &'a str,
+		stream_type: u8,
+		ts: u64,
+		message: &'a str,
+	},
 }
