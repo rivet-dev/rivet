@@ -4,7 +4,6 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**connectable_at** | Option<**i64**> |  | [optional]
 **created_at** | **i64** |  | 
 **datacenter** | [**uuid::Uuid**](uuid::Uuid.md) |  | 
 **destroyed_at** | Option<**i64**> |  | [optional]

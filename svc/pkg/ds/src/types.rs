@@ -96,8 +96,10 @@ impl ApiTryFrom<Server> for models::ServersServer {
 			environment: value.env_id,
 			datacenter: value.datacenter_id,
 			created_at: value.create_ts,
-			started_at: value.start_ts,
-			connectable_at: value.connectable_ts,
+			// `started_at` -> `connectable_ts` is intentional. We don't expose the internal
+			// workings of DS to the API, so we need to return the timestamp at which the serer can
+			// actually do anything useful.
+			started_at: value.connectable_ts,
 			destroyed_at: value.destroy_ts,
 			tags: Some(serde_json::to_value(value.tags)?),
 			runtime: Box::new(models::ServersRuntime {

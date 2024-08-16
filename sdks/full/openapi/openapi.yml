@@ -14423,9 +14423,6 @@ components:
         started_at:
           type: integer
           format: int64
-        connectable_at:
-          type: integer
-          format: int64
         destroyed_at:
           type: integer
           format: int64

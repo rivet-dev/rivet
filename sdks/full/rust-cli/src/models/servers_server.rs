@@ -13,8 +13,6 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct ServersServer {
-    #[serde(rename = "connectable_at", skip_serializing_if = "Option::is_none")]
-    pub connectable_at: Option<i64>,
     #[serde(rename = "created_at")]
     pub created_at: i64,
     #[serde(rename = "datacenter")]
@@ -42,7 +40,6 @@ pub struct ServersServer {
 impl ServersServer {
     pub fn new(created_at: i64, datacenter: uuid::Uuid, environment: uuid::Uuid, id: uuid::Uuid, lifecycle: crate::models::ServersLifecycle, network: crate::models::ServersNetwork, resources: crate::models::ServersResources, runtime: crate::models::ServersRuntime, tags: Option<serde_json::Value>) -> ServersServer {
         ServersServer {
-            connectable_at: None,
             created_at,
             datacenter,
             destroyed_at: None,
