@@ -45,6 +45,7 @@ game-get = { path = "../../pkg/game/ops/get" }
 game-namespace-get = { path = "../../pkg/game/ops/namespace-get" }
 game-version-get = { path = "../../pkg/game/ops/version-get" }
 team-get = { path = "../../pkg/team/ops/get" }
+token-create = { path = "../../pkg/token/ops/create" }
 token-revoke = { path = "../../pkg/token/ops/revoke" }
 upload-complete = { path = "../../pkg/upload/ops/complete" }
 upload-get = { path = "../../pkg/upload/ops/get" }
@@ -59,7 +60,6 @@ reqwest = "0.11"
 cdn-namespace-domain-create = { path = "../../pkg/cdn/ops/namespace-domain-create" }
 cloud-namespace-token-development-create = { path = "../../pkg/cloud/ops/namespace-token-development-create" }
 cloud-namespace-token-public-create = { path = "../../pkg/cloud/ops/namespace-token-public-create" }
-cloud-service-env-token-create = { path = "../../pkg/cloud/ops/env-service-token-create" }
 faker-build = { path = "../../pkg/faker/ops/build" }
 faker-game = { path = "../../pkg/faker/ops/game" }
 faker-game-namespace = { path = "../../pkg/faker/ops/game-namespace" }

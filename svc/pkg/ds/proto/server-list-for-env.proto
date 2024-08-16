@@ -8,6 +8,8 @@ import "proto/backend/ds.proto";
 message Request {
 	rivet.common.Uuid env_id = 1;
 	map<string, string> tags = 2; // JSON
+	bool include_destroyed = 3;
+	optional rivet.common.Uuid cursor = 4; 
 }
 
 message Response {

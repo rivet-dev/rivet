@@ -47,8 +47,7 @@ export class Builds {
      *
      * @example
      *     await client.servers.builds.getBuild("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         tagsJson: "string",
-     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
+     *         tagsJson: "string"
      *     })
      */
     public async getBuild(
@@ -58,14 +57,10 @@ export class Builds {
         request: Rivet.servers.GetBuildRequest = {},
         requestOptions?: Builds.RequestOptions
     ): Promise<Rivet.servers.GetBuildResponse> {
-        const { tagsJson, gameId: gameId_ } = request;
+        const { tagsJson } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
         if (tagsJson != null) {
             _queryParams["tags_json"] = tagsJson;
-        }
-
-        if (gameId_ != null) {
-            _queryParams["game_id"] = gameId_;
         }
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
@@ -198,8 +193,7 @@ export class Builds {
      *
      * @example
      *     await client.servers.builds.listBuilds("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         tagsJson: "string",
-     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
+     *         tagsJson: "string"
      *     })
      */
     public async listBuilds(
@@ -208,14 +202,10 @@ export class Builds {
         request: Rivet.servers.ListBuildsRequest = {},
         requestOptions?: Builds.RequestOptions
     ): Promise<Rivet.servers.ListBuildsResponse> {
-        const { tagsJson, gameId: gameId_ } = request;
+        const { tagsJson } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
         if (tagsJson != null) {
             _queryParams["tags_json"] = tagsJson;
-        }
-
-        if (gameId_ != null) {
-            _queryParams["game_id"] = gameId_;
         }
 
         const _response = await (this._options.fetcher ?? core.fetcher)({

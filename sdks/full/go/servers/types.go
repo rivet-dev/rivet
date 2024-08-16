@@ -16,8 +16,9 @@ type DestroyServerRequest struct {
 }
 
 type GetServersRequest struct {
-	TagsJson *string    `json:"-"`
-	Game     *uuid.UUID `json:"-"`
+	TagsJson         *string    `json:"-"`
+	IncludeDestroyed *bool      `json:"-"`
+	Cursor           *uuid.UUID `json:"-"`
 }
 
 type BuildCompression string

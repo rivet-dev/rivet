@@ -24,7 +24,6 @@ service:
         name: GetBuildRequest
         query-parameters:
           tags_json: optional<string>
-          game_id: optional<uuid>
       response: GetBuildResponse
 
     listBuilds:
@@ -37,7 +36,6 @@ service:
         name: ListBuildsRequest
         query-parameters:
           tags_json: optional<string>
-          game_id: optional<uuid>
       response: ListBuildsResponse
 
     patchTags:

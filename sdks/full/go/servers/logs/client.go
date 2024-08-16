@@ -45,9 +45,6 @@ func (c *Client) GetServerLogs(ctx context.Context, gameId uuid.UUID, environmen
 
 	queryParams := make(url.Values)
 	queryParams.Add("stream", fmt.Sprintf("%v", request.Stream))
-	if request.Game != nil {
-		queryParams.Add("game", fmt.Sprintf("%v", *request.Game))
-	}
 	if request.WatchIndex != nil {
 		queryParams.Add("watch_index", fmt.Sprintf("%v", *request.WatchIndex))
 	}

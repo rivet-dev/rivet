@@ -166,7 +166,7 @@ pub async fn servers_get(configuration: &configuration::Configuration, game_id: 
 }
 
 /// Lists all servers associated with the token used. Can be filtered by tags in the query string.
-pub async fn servers_list(configuration: &configuration::Configuration, game_id: &str, environment_id: &str, tags_json: Option<&str>, game: Option<&str>) -> Result<crate::models::ServersListServersResponse, Error<ServersListError>> {
+pub async fn servers_list(configuration: &configuration::Configuration, game_id: &str, environment_id: &str, tags_json: Option<&str>, include_destroyed: Option<bool>, cursor: Option<&str>) -> Result<crate::models::ServersListServersResponse, Error<ServersListError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;
@@ -177,8 +177,11 @@ pub async fn servers_list(configuration: &configuration::Configuration, game_id:
     if let Some(ref local_var_str) = tags_json {
         local_var_req_builder = local_var_req_builder.query(&[("tags_json", &local_var_str.to_string())]);
     }
-    if let Some(ref local_var_str) = game {
-        local_var_req_builder = local_var_req_builder.query(&[("game", &local_var_str.to_string())]);
+    if let Some(ref local_var_str) = include_destroyed {
+        local_var_req_builder = local_var_req_builder.query(&[("include_destroyed", &local_var_str.to_string())]);
+    }
+    if let Some(ref local_var_str) = cursor {
+        local_var_req_builder = local_var_req_builder.query(&[("cursor", &local_var_str.to_string())]);
     }
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
         local_var_req_builder = local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());

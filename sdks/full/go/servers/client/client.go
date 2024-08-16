@@ -134,8 +134,11 @@ func (c *Client) List(ctx context.Context, gameId uuid.UUID, environmentId uuid.
 	if request.TagsJson != nil {
 		queryParams.Add("tags_json", fmt.Sprintf("%v", *request.TagsJson))
 	}
-	if request.Game != nil {
-		queryParams.Add("game", fmt.Sprintf("%v", *request.Game))
+	if request.IncludeDestroyed != nil {
+		queryParams.Add("include_destroyed", fmt.Sprintf("%v", *request.IncludeDestroyed))
+	}
+	if request.Cursor != nil {
+		queryParams.Add("cursor", fmt.Sprintf("%v", *request.Cursor))
 	}
 	if len(queryParams) > 0 {
 		endpointURL += "?" + queryParams.Encode()

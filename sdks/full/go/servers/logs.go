@@ -5,14 +5,12 @@ package servers
 import (
 	json "encoding/json"
 	fmt "fmt"
-	uuid "github.com/google/uuid"
 	sdk "sdk"
 	core "sdk/core"
 )
 
 type GetServerLogsRequest struct {
-	Stream LogStream  `json:"-"`
-	Game   *uuid.UUID `json:"-"`
+	Stream LogStream `json:"-"`
 	// A query parameter denoting the requests watch index.
 	WatchIndex *string `json:"-"`
 }

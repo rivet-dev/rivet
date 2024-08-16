@@ -47,9 +47,6 @@ func (c *Client) GetBuild(ctx context.Context, gameId uuid.UUID, environmentId u
 	if request.TagsJson != nil {
 		queryParams.Add("tags_json", fmt.Sprintf("%v", *request.TagsJson))
 	}
-	if request.GameId != nil {
-		queryParams.Add("game_id", fmt.Sprintf("%v", *request.GameId))
-	}
 	if len(queryParams) > 0 {
 		endpointURL += "?" + queryParams.Encode()
 	}
@@ -135,9 +132,6 @@ func (c *Client) ListBuilds(ctx context.Context, gameId uuid.UUID, environmentId
 	queryParams := make(url.Values)
 	if request.TagsJson != nil {
 		queryParams.Add("tags_json", fmt.Sprintf("%v", *request.TagsJson))
-	}
-	if request.GameId != nil {
-		queryParams.Add("game_id", fmt.Sprintf("%v", *request.GameId))
 	}
 	if len(queryParams) > 0 {
 		endpointURL += "?" + queryParams.Encode()

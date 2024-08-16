@@ -46,7 +46,7 @@ Name | Type | Description  | Required | Notes
 
 ## servers_builds_get_build
 
-> crate::models::ServersGetBuildResponse servers_builds_get_build(game_id, environment_id, build_id, tags_json, game_id2)
+> crate::models::ServersGetBuildResponse servers_builds_get_build(game_id, environment_id, build_id, tags_json)
 
 
 Lists all builds of the game associated with the token used. Can be filtered by tags in the query string.
@@ -60,7 +60,6 @@ Name | Type | Description  | Required | Notes
 **environment_id** | **uuid::Uuid** |  | [required] |
 **build_id** | **uuid::Uuid** |  | [required] |
 **tags_json** | Option<**String**> |  |  |
-**game_id2** | Option<**uuid::Uuid**> |  |  |
 
 ### Return type
 
@@ -80,7 +79,7 @@ Name | Type | Description  | Required | Notes
 
 ## servers_builds_list_builds
 
-> crate::models::ServersListBuildsResponse servers_builds_list_builds(game_id, environment_id, tags_json, game_id2)
+> crate::models::ServersListBuildsResponse servers_builds_list_builds(game_id, environment_id, tags_json)
 
 
 Lists all builds of the game associated with the token used. Can be filtered by tags in the query string.
@@ -93,7 +92,6 @@ Name | Type | Description  | Required | Notes
 **game_id** | **uuid::Uuid** |  | [required] |
 **environment_id** | **uuid::Uuid** |  | [required] |
 **tags_json** | Option<**String**> |  |  |
-**game_id2** | Option<**uuid::Uuid**> |  |  |
 
 ### Return type
 

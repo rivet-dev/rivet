@@ -30,7 +30,7 @@ pub enum ServersLogsGetServerLogsError {
 
 
 /// Returns the logs for a given server.
-pub async fn servers_logs_get_server_logs(configuration: &configuration::Configuration, game_id: &str, environment_id: &str, server_id: &str, stream: crate::models::ServersLogStream, game: Option<&str>, watch_index: Option<&str>) -> Result<crate::models::ServersGetServerLogsResponse, Error<ServersLogsGetServerLogsError>> {
+pub async fn servers_logs_get_server_logs(configuration: &configuration::Configuration, game_id: &str, environment_id: &str, server_id: &str, stream: crate::models::ServersLogStream, watch_index: Option<&str>) -> Result<crate::models::ServersGetServerLogsResponse, Error<ServersLogsGetServerLogsError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;
@@ -39,9 +39,6 @@ pub async fn servers_logs_get_server_logs(configuration: &configuration::Configu
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
     local_var_req_builder = local_var_req_builder.query(&[("stream", &stream.to_string())]);
-    if let Some(ref local_var_str) = game {
-        local_var_req_builder = local_var_req_builder.query(&[("game", &local_var_str.to_string())]);
-    }
     if let Some(ref local_var_str) = watch_index {
         local_var_req_builder = local_var_req_builder.query(&[("watch_index", &local_var_str.to_string())]);
     }

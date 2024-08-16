@@ -185,7 +185,8 @@ export class Servers {
      * @example
      *     await client.servers.list("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
      *         tagsJson: "string",
-     *         game: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
+     *         includeDestroyed: true,
+     *         cursor: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
      *     })
      */
     public async list(
@@ -194,14 +195,18 @@ export class Servers {
         request: Rivet.servers.GetServersRequest = {},
         requestOptions?: Servers.RequestOptions
     ): Promise<Rivet.servers.ListServersResponse> {
-        const { tagsJson, game } = request;
+        const { tagsJson, includeDestroyed, cursor } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
         if (tagsJson != null) {
             _queryParams["tags_json"] = tagsJson;
         }
 
-        if (game != null) {
-            _queryParams["game"] = game;
+        if (includeDestroyed != null) {
+            _queryParams["include_destroyed"] = includeDestroyed.toString();
+        }
+
+        if (cursor != null) {
+            _queryParams["cursor"] = cursor;
         }
 
         const _response = await (this._options.fetcher ?? core.fetcher)({

@@ -113,7 +113,7 @@ pub async fn servers_builds_complete_build(configuration: &configuration::Config
 }
 
 /// Lists all builds of the game associated with the token used. Can be filtered by tags in the query string.
-pub async fn servers_builds_get_build(configuration: &configuration::Configuration, game_id: &str, environment_id: &str, build_id: &str, tags_json: Option<&str>, game_id2: Option<&str>) -> Result<crate::models::ServersGetBuildResponse, Error<ServersBuildsGetBuildError>> {
+pub async fn servers_builds_get_build(configuration: &configuration::Configuration, game_id: &str, environment_id: &str, build_id: &str, tags_json: Option<&str>) -> Result<crate::models::ServersGetBuildResponse, Error<ServersBuildsGetBuildError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;
@@ -123,9 +123,6 @@ pub async fn servers_builds_get_build(configuration: &configuration::Configurati
 
     if let Some(ref local_var_str) = tags_json {
         local_var_req_builder = local_var_req_builder.query(&[("tags_json", &local_var_str.to_string())]);
-    }
-    if let Some(ref local_var_str) = game_id2 {
-        local_var_req_builder = local_var_req_builder.query(&[("game_id", &local_var_str.to_string())]);
     }
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
         local_var_req_builder = local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
@@ -150,7 +147,7 @@ pub async fn servers_builds_get_build(configuration: &configuration::Configurati
 }
 
 /// Lists all builds of the game associated with the token used. Can be filtered by tags in the query string.
-pub async fn servers_builds_list_builds(configuration: &configuration::Configuration, game_id: &str, environment_id: &str, tags_json: Option<&str>, game_id2: Option<&str>) -> Result<crate::models::ServersListBuildsResponse, Error<ServersBuildsListBuildsError>> {
+pub async fn servers_builds_list_builds(configuration: &configuration::Configuration, game_id: &str, environment_id: &str, tags_json: Option<&str>) -> Result<crate::models::ServersListBuildsResponse, Error<ServersBuildsListBuildsError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;
@@ -160,9 +157,6 @@ pub async fn servers_builds_list_builds(configuration: &configuration::Configura
 
     if let Some(ref local_var_str) = tags_json {
         local_var_req_builder = local_var_req_builder.query(&[("tags_json", &local_var_str.to_string())]);
-    }
-    if let Some(ref local_var_str) = game_id2 {
-        local_var_req_builder = local_var_req_builder.query(&[("game_id", &local_var_str.to_string())]);
     }
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
         local_var_req_builder = local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());

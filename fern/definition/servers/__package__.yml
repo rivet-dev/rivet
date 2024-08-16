@@ -30,7 +30,8 @@ service:
         name: GetServersRequest
         query-parameters:
           tags_json: optional<string>
-          game: optional<uuid>
+          include_destroyed: optional<boolean>
+          cursor: optional<uuid>
       response: ListServersResponse
 
     create:

@@ -110,7 +110,7 @@ Name | Type | Description  | Required | Notes
 
 ## servers_list
 
-> crate::models::ServersListServersResponse servers_list(game_id, environment_id, tags_json, game)
+> crate::models::ServersListServersResponse servers_list(game_id, environment_id, tags_json, include_destroyed, cursor)
 
 
 Lists all servers associated with the token used. Can be filtered by tags in the query string.
@@ -123,7 +123,8 @@ Name | Type | Description  | Required | Notes
 **game_id** | **uuid::Uuid** |  | [required] |
 **environment_id** | **uuid::Uuid** |  | [required] |
 **tags_json** | Option<**String**> |  |  |
-**game** | Option<**uuid::Uuid**> |  |  |
+**include_destroyed** | Option<**bool**> |  |  |
+**cursor** | Option<**uuid::Uuid**> |  |  |
 
 ### Return type
 

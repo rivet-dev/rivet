@@ -8914,12 +8914,6 @@ paths:
         required: false
         schema:
           type: string
-      - in: query
-        name: game_id
-        required: false
-        schema:
-          format: uuid
-          type: string
       responses:
         '200':
           content:
@@ -9063,12 +9057,6 @@ paths:
         name: tags_json
         required: false
         schema:
-          type: string
-      - in: query
-        name: game_id
-        required: false
-        schema:
-          format: uuid
           type: string
       responses:
         '200':
@@ -9279,7 +9267,12 @@ paths:
         schema:
           type: string
       - in: query
-        name: game
+        name: include_destroyed
+        required: false
+        schema:
+          type: boolean
+      - in: query
+        name: cursor
         required: false
         schema:
           format: uuid
@@ -9574,12 +9567,6 @@ paths:
         required: true
         schema:
           $ref: '#/components/schemas/ServersLogStream'
-      - in: query
-        name: game
-        required: false
-        schema:
-          format: uuid
-          type: string
       - description: A query parameter denoting the requests watch index.
         in: query
         name: watch_index

@@ -60,7 +60,6 @@ reqwest = "0.11"
 cdn-namespace-domain-create = { path = "../../pkg/cdn/ops/namespace-domain-create" }
 cloud-namespace-token-development-create = { path = "../../pkg/cloud/ops/namespace-token-development-create" }
 cloud-namespace-token-public-create = { path = "../../pkg/cloud/ops/namespace-token-public-create" }
-cloud-service-env-token-create = { path = "../../pkg/cloud/ops/env-service-token-create" }
 faker-build = { path = "../../pkg/faker/ops/build" }
 faker-game = { path = "../../pkg/faker/ops/game" }
 faker-game-namespace = { path = "../../pkg/faker/ops/game-namespace" }

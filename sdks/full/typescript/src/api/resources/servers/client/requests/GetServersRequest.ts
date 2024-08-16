@@ -6,10 +6,12 @@
  * @example
  *     {
  *         tagsJson: "string",
- *         game: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
+ *         includeDestroyed: true,
+ *         cursor: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
  *     }
  */
 export interface GetServersRequest {
     tagsJson?: string;
-    game?: string;
+    includeDestroyed?: boolean;
+    cursor?: string;
 }

@@ -158,6 +158,8 @@ pub async fn destroy(
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListQuery {
 	tags_json: Option<String>,
+	include_destroyed: Option<bool>,
+	cursor: Option<Uuid>,
 }
 
 pub async fn list_servers(
@@ -174,6 +176,8 @@ pub async fn list_servers(
 	let list_res = op!([ctx] ds_server_list_for_env {
 		env_id: Some(env_id.into()),
 		tags: query.tags_json.as_deref().map_or(Ok(HashMap::new()), serde_json::from_str)?,
+		include_destroyed: query.include_destroyed.unwrap_or(false),
+		cursor: query.cursor.map(|x| x.into()),
 	})
 	.await?;
 

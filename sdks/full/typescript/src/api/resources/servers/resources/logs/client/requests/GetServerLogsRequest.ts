@@ -8,13 +8,11 @@ import * as Rivet from "../../../../../../index";
  * @example
  *     {
  *         stream: Rivet.servers.LogStream.StdOut,
- *         game: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
  *         watchIndex: "string"
  *     }
  */
 export interface GetServerLogsRequest {
     stream: Rivet.servers.LogStream;
-    game?: string;
     /**
      * A query parameter denoting the requests watch index.
      */

@@ -48,7 +48,6 @@ export class Logs {
      * @example
      *     await client.servers.logs.getServerLogs("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
      *         stream: Rivet.servers.LogStream.StdOut,
-     *         game: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
      *         watchIndex: "string"
      *     })
      */
@@ -59,13 +58,9 @@ export class Logs {
         request: Rivet.servers.GetServerLogsRequest,
         requestOptions?: Logs.RequestOptions
     ): Promise<Rivet.servers.GetServerLogsResponse> {
-        const { stream, game, watchIndex } = request;
+        const { stream, watchIndex } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
         _queryParams["stream"] = stream;
-        if (game != null) {
-            _queryParams["game"] = game;
-        }
-
         if (watchIndex != null) {
             _queryParams["watch_index"] = watchIndex;
         }

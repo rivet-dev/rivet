@@ -1,7 +1,7 @@
-use std::{collections::HashMap, sync::Once};
-
+use proto::backend::pkg::*;
 use rivet_api::{apis::*, models};
 use rivet_operation::prelude::*;
+use std::{collections::HashMap, sync::Once};
 
 static GLOBAL_INIT: Once = Once::new();
 
@@ -47,9 +47,9 @@ impl Ctx {
 			(),
 		);
 
-		let (datacenter_id, primary_datacenter_name_id) = Self::setup_datacenter(&op_ctx).await?;
+		let (datacenter_id, _primary_datacenter_name_id) = Self::setup_datacenter(&op_ctx).await?;
 		let (game_id, env_id, image_id) = Self::setup_game(&op_ctx, datacenter_id).await?;
-		let service_token = Self::setup_token(&op_ctx, game_id).await?;
+		let service_token = Self::setup_token(&op_ctx, env_id).await?;
 
 		Ok(Ctx {
 			op_ctx,
@@ -135,13 +135,29 @@ impl Ctx {
 		))
 	}
 
-	pub async fn setup_token(ctx: &OperationContext<()>, game_id: Uuid) -> GlobalResult<String> {
-		let token_res = op!([ctx] cloud_service_env_token_create {
-			game_id: Some(game_id.into()),
+	pub async fn setup_token(ctx: &OperationContext<()>, env_id: Uuid) -> GlobalResult<String> {
+		let token_res = op!([ctx] token_create {
+			token_config: Some(token::create::request::TokenConfig {
+				ttl: util::duration::days(15 * 365)
+			}),
+			refresh_token_config: None,
+			issuer: "test".to_owned(),
+			client: None,
+			kind: Some(token::create::request::Kind::New(
+				token::create::request::KindNew { entitlements: vec![proto::claims::Entitlement {
+					kind: Some(proto::claims::entitlement::Kind::EnvService(
+						proto::claims::entitlement::EnvService {
+							env_id: Some(env_id.into()),
+						}
+					)),
+				}]},
+			)),
+			label: Some("env_svc".to_owned()),
+			..Default::default()
 		})
 		.await?;
 
-		Ok(token_res.token)
+		Ok(unwrap!(token_res.token).token.clone())
 	}
 }
 
