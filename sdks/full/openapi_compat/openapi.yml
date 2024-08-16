@@ -4538,6 +4538,20 @@ components:
       required:
       - build
       type: object
+    ServersDatacenter:
+      properties:
+        id:
+          format: uuid
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+      required:
+      - id
+      - slug
+      - name
+      type: object
     ServersDestroyServerResponse:
       properties: {}
       type: object
@@ -4598,6 +4612,15 @@ components:
           type: array
       required:
       - builds
+      type: object
+    ServersListDatacentersResponse:
+      properties:
+        datacenters:
+          items:
+            $ref: '#/components/schemas/ServersDatacenter'
+          type: array
+      required:
+      - datacenters
       type: object
     ServersListServersResponse:
       properties:
@@ -9243,6 +9266,68 @@ paths:
       security: *id001
       tags:
       - ServersBuilds
+  /games/{game_id}/environments/{environment_id}/datacenters:
+    get:
+      operationId: servers_datacenters_listDatacenters
+      parameters:
+      - in: path
+        name: game_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: environment_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServersListDatacentersResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      tags:
+      - ServersDatacenters
   /games/{game_id}/environments/{environment_id}/servers:
     get:
       description: Lists all servers associated with the token used. Can be filtered

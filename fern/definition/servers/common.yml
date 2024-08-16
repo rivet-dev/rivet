@@ -17,7 +17,6 @@ types:
       lifecycle: Lifecycle
       created_at: long
       started_at: optional<long>
-      connectable_at: optional<long>
       destroyed_at: optional<long>
 
   Runtime:
@@ -95,3 +94,9 @@ types:
       tags:
         docs: Tags of this build
         type: map<string, string>
+
+  Datacenter:
+    properties:
+      id: uuid
+      slug: string
+      name: string

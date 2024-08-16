@@ -4,6 +4,7 @@ use rivet_api::models;
 use uuid::Uuid;
 
 pub mod builds;
+pub mod dc;
 pub mod logs;
 pub mod servers;
 
@@ -23,6 +24,7 @@ pub async fn handle(
 define_router! {
 	cors: CorsConfigBuilder::hub().build(),
 	routes: {
+		// MARK: Servers
 		"games" / Uuid / "environments" / Uuid / "servers": {
 			GET: servers::list_servers(
 				query: servers::ListQuery,
@@ -39,12 +41,14 @@ define_router! {
 			),
 		},
 
+		// MARK: Logs
 		"games" / Uuid / "environments" / Uuid / "servers" / Uuid / "logs" : {
 			GET: logs::get_logs(
 				query: logs::GetServerLogsQuery,
 			),
 		},
 
+		// MARK: Builds
 		"games" / Uuid / "environments" / Uuid / "builds": {
 			GET: builds::list(
 				query: builds::GetQuery,
@@ -65,6 +69,11 @@ define_router! {
 
 		"games" / Uuid / "environments" / Uuid / "builds" / Uuid / "complete": {
 			POST: builds::complete_build(body: serde_json::Value),
+		},
+
+		// MARK: Datacenters
+		"games" / Uuid / "environments" / Uuid / "datacenters": {
+			GET: dc::list(),
 		},
 	},
 }

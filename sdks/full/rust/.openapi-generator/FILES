@@ -359,11 +359,14 @@ docs/ServersCreateServerPortRequest.md
 docs/ServersCreateServerRequest.md
 docs/ServersCreateServerResponse.md
 docs/ServersCreateServerRuntimeRequest.md
+docs/ServersDatacenter.md
+docs/ServersDatacentersApi.md
 docs/ServersGetBuildResponse.md
 docs/ServersGetServerLogsResponse.md
 docs/ServersGetServerResponse.md
 docs/ServersLifecycle.md
 docs/ServersListBuildsResponse.md
+docs/ServersListDatacentersResponse.md
 docs/ServersListServersResponse.md
 docs/ServersLogStream.md
 docs/ServersLogsApi.md
@@ -425,6 +428,7 @@ src/apis/provision_datacenters_api.rs
 src/apis/provision_servers_api.rs
 src/apis/servers_api.rs
 src/apis/servers_builds_api.rs
+src/apis/servers_datacenters_api.rs
 src/apis/servers_logs_api.rs
 src/lib.rs
 src/models/admin_clusters_build_delivery_method.rs
@@ -742,11 +746,13 @@ src/models/servers_create_server_port_request.rs
 src/models/servers_create_server_request.rs
 src/models/servers_create_server_response.rs
 src/models/servers_create_server_runtime_request.rs
+src/models/servers_datacenter.rs
 src/models/servers_get_build_response.rs
 src/models/servers_get_server_logs_response.rs
 src/models/servers_get_server_response.rs
 src/models/servers_lifecycle.rs
 src/models/servers_list_builds_response.rs
+src/models/servers_list_datacenters_response.rs
 src/models/servers_list_servers_response.rs
 src/models/servers_log_stream.rs
 src/models/servers_network.rs

@@ -9,6 +9,7 @@ import urlJoin from "url-join";
 import * as serializers from "../../../../serialization/index";
 import * as errors from "../../../../errors/index";
 import { Builds } from "../resources/builds/client/Client";
+import { Datacenters } from "../resources/datacenters/client/Client";
 import { Logs } from "../resources/logs/client/Client";
 
 export declare namespace Servers {
@@ -615,6 +616,12 @@ export class Servers {
 
     public get builds(): Builds {
         return (this._builds ??= new Builds(this._options));
+    }
+
+    protected _datacenters: Datacenters | undefined;
+
+    public get datacenters(): Datacenters {
+        return (this._datacenters ??= new Datacenters(this._options));
     }
 
     protected _logs: Logs | undefined;

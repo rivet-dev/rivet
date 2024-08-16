@@ -16,6 +16,7 @@ import (
 	core "sdk/core"
 	servers "sdk/servers"
 	builds "sdk/servers/builds"
+	datacenters "sdk/servers/datacenters"
 	logs "sdk/servers/logs"
 )
 
@@ -24,8 +25,9 @@ type Client struct {
 	caller  *core.Caller
 	header  http.Header
 
-	Builds *builds.Client
-	Logs   *logs.Client
+	Builds      *builds.Client
+	Datacenters *datacenters.Client
+	Logs        *logs.Client
 }
 
 func NewClient(opts ...core.ClientOption) *Client {
@@ -34,11 +36,12 @@ func NewClient(opts ...core.ClientOption) *Client {
 		opt(options)
 	}
 	return &Client{
-		baseURL: options.BaseURL,
-		caller:  core.NewCaller(options.HTTPClient),
-		header:  options.ToHeader(),
-		Builds:  builds.NewClient(opts...),
-		Logs:    logs.NewClient(opts...),
+		baseURL:     options.BaseURL,
+		caller:      core.NewCaller(options.HTTPClient),
+		header:      options.ToHeader(),
+		Builds:      builds.NewClient(opts...),
+		Datacenters: datacenters.NewClient(opts...),
+		Logs:        logs.NewClient(opts...),
 	}
 }
 

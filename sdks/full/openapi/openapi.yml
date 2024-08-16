@@ -9564,6 +9564,68 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
       security: *ref_0
+  /games/{game_id}/environments/{environment_id}/datacenters:
+    get:
+      operationId: servers_datacenters_listDatacenters
+      tags:
+        - ServersDatacenters
+      parameters:
+        - name: game_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: environment_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServersListDatacentersResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
   /games/{game_id}/environments/{environment_id}/servers/{server_id}/logs:
     get:
       description: Returns the logs for a given server.
@@ -14500,6 +14562,29 @@ components:
         - created_at
         - content_length
         - tags
+    ServersDatacenter:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        name:
+          type: string
+      required:
+        - id
+        - slug
+        - name
+    ServersListDatacentersResponse:
+      type: object
+      properties:
+        datacenters:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServersDatacenter'
+      required:
+        - datacenters
     ServersGetServerLogsResponse:
       type: object
       properties:

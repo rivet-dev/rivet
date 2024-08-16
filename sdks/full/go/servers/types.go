@@ -104,6 +104,37 @@ func (b *Build) String() string {
 	return fmt.Sprintf("%#v", b)
 }
 
+type Datacenter struct {
+	Id   uuid.UUID `json:"id"`
+	Slug string    `json:"slug"`
+	Name string    `json:"name"`
+
+	_rawJSON json.RawMessage
+}
+
+func (d *Datacenter) UnmarshalJSON(data []byte) error {
+	type unmarshaler Datacenter
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*d = Datacenter(value)
+	d._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (d *Datacenter) String() string {
+	if len(d._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(d._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(d); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", d)
+}
+
 type GameGuardRouting struct {
 	_rawJSON json.RawMessage
 }

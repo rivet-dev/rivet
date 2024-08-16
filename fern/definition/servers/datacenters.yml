@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../common.yml
+  localCommons: common.yml
+  uploadCommons: ../upload/common.yml
+
+service:
+  auth: true
+  base-path: /games/{game_id}/environments/{environment_id}/datacenters
+  path-parameters:
+    game_id: uuid
+    environment_id: uuid
+  endpoints:
+    listDatacenters:
+      path: ""
+      method: GET
+      request:
+        name: ListDatacentersRequest
+      response: ListDatacentersResponse
+
+types:
+  ListDatacentersResponse:
+    properties:
+      datacenters:
+        type: list<localCommons.Datacenter>
+
