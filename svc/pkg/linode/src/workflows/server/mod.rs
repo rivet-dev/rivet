@@ -33,7 +33,7 @@ pub async fn linode_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult
 		Ok(x) => x,
 		// If we cannot recover a provisioning error, send a failed signal and clean up resources
 		Err(err) => {
-			tracing::warn!(?err, "unrecoverable provision, cleaning up");
+			tracing::warn!("unrecoverable provision, cleaning up");
 
 			ctx.dispatch_workflow(cleanup::Input {
 				api_token: input.api_token.clone(),

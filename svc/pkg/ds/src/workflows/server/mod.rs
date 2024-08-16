@@ -77,6 +77,48 @@ pub struct Port {
 
 #[workflow]
 pub async fn ds_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
+	let res = setup(ctx, input).await;
+	match ctx.catch_unrecoverable(res)? {
+		Ok(_) => {}
+		// If we cannot recover a setup error, send a failed signal
+		Err(err) => {
+			tracing::warn!("unrecoverable setup");
+
+			// TODO: Cleanup
+
+			ctx.msg(
+				json!({
+					"server_id": input.server_id,
+				}),
+				CreateFailed {},
+			)
+			.await?;
+
+			// Throw the original error from the setup activities
+			return Err(err);
+		}
+	};
+
+	ctx.msg(
+		json!({
+			"server_id": input.server_id
+		}),
+		CreateComplete {},
+	)
+	.await?;
+
+	let destroy_sig = ctx.listen::<Destroy>().await?;
+
+	ctx.workflow(destroy::Input {
+		server_id: input.server_id,
+		override_kill_timeout_ms: destroy_sig.override_kill_timeout_ms,
+	})
+	.await?;
+
+	Ok(())
+}
+
+async fn setup(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
 	let (_, prereq) = ctx
 		.join((
 			InsertDbInput {
@@ -137,22 +179,6 @@ pub async fn ds_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()>
 	ctx.activity(UpdateDbInput {
 		server_id: input.server_id,
 		nomad_dispatched_job_id,
-	})
-	.await?;
-
-	ctx.msg(
-		json!({
-			"server_id": input.server_id
-		}),
-		CreateComplete {},
-	)
-	.await?;
-
-	let destroy_sig = ctx.listen::<Destroy>().await?;
-
-	ctx.workflow(destroy::Input {
-		server_id: input.server_id,
-		override_kill_timeout_ms: destroy_sig.override_kill_timeout_ms,
 	})
 	.await?;
 
@@ -1071,6 +1097,9 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<()>
 
 #[message("ds_server_create_complete")]
 pub struct CreateComplete {}
+
+#[message("ds_server_create_failed")]
+pub struct CreateFailed {}
 
 #[signal("ds_server_destroy")]
 pub struct Destroy {

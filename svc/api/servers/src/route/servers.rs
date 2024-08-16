@@ -72,8 +72,13 @@ pub async fn create(
 
 	let server_id = Uuid::new_v4();
 
-	let mut sub = ctx
+	let mut create_sub = ctx
 		.subscribe::<ds::workflows::server::CreateComplete>(&json!({
+			"server_id": server_id,
+		}))
+		.await?;
+	let mut fail_sub = ctx
+		.subscribe::<ds::workflows::server::CreateFailed>(&json!({
 			"server_id": server_id,
 		}))
 		.await?;
@@ -136,7 +141,13 @@ pub async fn create(
 	)
 	.await?;
 
-	sub.next().await?;
+	tokio::select! {
+		res = create_sub.next() => { res?; },
+		res = fail_sub.next() => {
+			res?;
+			bail_with!(SERVERS_SERVER_FAILED_TO_CREATE);
+		}
+	}
 
 	let servers_res = ctx
 		.op(ds::ops::server::get::Input {
