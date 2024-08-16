@@ -71,7 +71,7 @@ async fn worker(
 				[ctx, (Uuid,)]
 				"
 				UPDATE
-					db_dynamic_servers.server_nomad
+					db_ds.server_nomad
 				SET
 					nomad_alloc_state = $2
 				WHERE
@@ -104,14 +104,14 @@ async fn worker(
 						servers.server_id,
 						servers.start_ts
 					FROM
-						db_dynamic_servers.server_nomad
-						INNER JOIN db_dynamic_servers.servers ON servers.server_id = server_nomad.server_id
+						db_ds.server_nomad
+						INNER JOIN db_ds.servers ON servers.server_id = server_nomad.server_id
 					WHERE
 						nomad_dispatched_job_id = $1
 				),
 				_update_servers AS (
 					UPDATE
-						db_dynamic_servers.servers
+						db_ds.servers
 					SET
 						start_ts = $2
 					FROM
@@ -122,7 +122,7 @@ async fn worker(
 				),
 				_update_server_nomad AS (
 					UPDATE
-						db_dynamic_servers.server_nomad
+						db_ds.server_nomad
 					SET
 						nomad_alloc_state = $3
 					FROM
@@ -176,14 +176,14 @@ async fn worker(
 						servers.server_id,
 						servers.finish_ts
 					FROM
-						db_dynamic_servers.server_nomad
-						INNER JOIN db_dynamic_servers.servers ON servers.server_id = server_nomad.server_id
+						db_ds.server_nomad
+						INNER JOIN db_ds.servers ON servers.server_id = server_nomad.server_id
 					WHERE
 						nomad_dispatched_job_id = $1
 				),
 				_update_servers AS (
 					UPDATE
-						db_dynamic_servers.servers
+						db_ds.servers
 					SET
 						-- If the job stops immediately, the task state will never be "running" so we need to
 						-- make sure start_ts is set here as well
@@ -197,7 +197,7 @@ async fn worker(
 				),
 				_update_server_nomad AS (
 					UPDATE
-						db_dynamic_servers.server_nomad
+						db_ds.server_nomad
 					SET
 						nomad_alloc_state = $3
 					FROM

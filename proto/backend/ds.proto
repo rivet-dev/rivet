@@ -18,6 +18,7 @@ message Server {
     int64 kill_timeout_ms = 7;
     int64 create_ts = 9;
     optional int64 start_ts = 10;
+    optional int64 connectable_ts = 17;
     optional int64 destroy_ts = 11;
     rivet.common.Uuid image_id = 12;
     repeated string args = 13;

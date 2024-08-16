@@ -13,6 +13,7 @@ CREATE TABLE servers (
 	
 	create_ts INT NOT NULL,
 	start_ts INT,
+	connectable_ts INT,
 	stop_ts INT,
 	finish_ts INT,
 	cleanup_ts INT,
@@ -28,7 +29,6 @@ CREATE TABLE servers (
 	
 	INDEX (env_id)
 );
-
 
 CREATE TABLE docker_ports_protocol_game_guard (  
     server_id UUID NOT NULL REFERENCES servers,

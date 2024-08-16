@@ -95,8 +95,8 @@ async fn bind_with_retries(
 			"
 			SELECT EXISTS(
 				SELECT 1
-				FROM db_dynamic_servers.servers as r
-				JOIN db_dynamic_servers.docker_ports_protocol_game_guard as p
+				FROM db_ds.servers as r
+				JOIN db_ds.docker_ports_protocol_game_guard as p
 				ON r.server_id = p.server_id
 				WHERE
 					r.cleanup_ts IS NULL AND
@@ -183,7 +183,7 @@ pub async fn handle(
 				WITH
 					servers_cte AS (
 						INSERT INTO
-							db_dynamic_servers.servers (
+							db_ds.servers (
 								server_id,
 								env_id,
 								datacenter_id,
@@ -205,7 +205,7 @@ pub async fn handle(
 					),
 					docker_ports_host_cte AS (
 						INSERT INTO
-							db_dynamic_servers.docker_ports_host (
+							db_ds.docker_ports_host (
 								server_id,
 								port_name,
 								port_number
@@ -220,7 +220,7 @@ pub async fn handle(
 					),
 					docker_ports_protocol_game_guard_cte AS (
 						INSERT INTO
-							db_dynamic_servers.docker_ports_protocol_game_guard (
+							db_ds.docker_ports_protocol_game_guard (
 								server_id,
 								port_name,
 								port_number,
@@ -1292,7 +1292,7 @@ pub async fn handle(
 		[ctx]
 		"
 		INSERT INTO
-			db_dynamic_servers.server_nomad (server_id)
+			db_ds.server_nomad (server_id)
 		VALUES
 			($1)
 		",
@@ -1339,7 +1339,7 @@ pub async fn handle(
 		[ctx]
 		"
 		UPDATE
-			db_dynamic_servers.server_nomad
+			db_ds.server_nomad
 		SET
 			nomad_dispatched_job_id = $2
 		WHERE
@@ -1400,6 +1400,7 @@ pub async fn handle(
 			kill_timeout_ms: ctx.kill_timeout_ms,
 			create_ts,
 			start_ts: None,
+			connectable_ts: None,
 			destroy_ts: None,
 			args: ctx.args.clone(),
 			environment: ctx.environment.clone(),

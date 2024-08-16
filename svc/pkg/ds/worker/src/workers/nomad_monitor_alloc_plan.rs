@@ -2,8 +2,12 @@ use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
 use redis::AsyncCommands;
 use serde::Deserialize;
+use std::time::Duration;
 
 use crate::workers::NEW_NOMAD_CONFIG;
+
+// TODO:
+const TRAEFIK_GRACE_PERIOD: Duration = Duration::from_secs(3);
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -16,6 +20,7 @@ struct RunRow {
 	server_id: Uuid,
 	datacenter_id: Uuid,
 	stop_ts: Option<i64>,
+	connectable_ts: Option<i64>,
 	nomad_alloc_plan_ts: Option<i64>, // this was nomad_plan_ts
 }
 
@@ -92,10 +97,8 @@ async fn worker(
 		tracing::info!("no network returned");
 	}
 
-	// This works
-	tracing::info!(?ports, "found protsadf");
-
-	// {"timestamp":"2024-06-28T01:43:24.930496Z","level":"INFO","fields":{"message":"found protsadf","ports":"[Port { label: \"game_testing2\", source: 20202, target: 0, ip: \"10.0.50.97\" }]"},"target":"ds_worker::workers::nomad_monitor_alloc_plan","spans":[{"ray_id":"1c8bfa81-3c80-4a2c-ab7c-2655f6c6a665","req_id":"a44227ad-4f1a-44b8-b4d0-7746dd8a622e","worker_name":"monolith-worker--ds-nomad-monitor-alloc-plan","name":"handle_req"},{"name":"ds-nomad-monitor-alloc-plan","tick_index":0,"name":"handle"}]}
+	// Wait for Traefik to be ready
+	tokio::time::sleep(TRAEFIK_GRACE_PERIOD).await;
 
 	// Fetch the run
 	//
@@ -110,7 +113,6 @@ async fn worker(
 		nomad_node_vlan_ipv4: unwrap!(meta.remove("network-vlan-ipv4")),
 		ports: ports.clone(),
 	};
-	tokio::time::sleep(std::time::Duration::from_secs(3)).await;
 	let db_output = rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| {
 		let ctx = ctx.clone();
 		let now = ctx.ts();
@@ -171,11 +173,12 @@ async fn update_db(
 			servers.server_id,
 			servers.datacenter_id,
 			servers.stop_ts,
+			servers.connectable_ts,
 			server_nomad.nomad_alloc_plan_ts
 		FROM
-			db_dynamic_servers.server_nomad
+			db_ds.server_nomad
 		INNER JOIN
-			db_dynamic_servers.servers
+			db_ds.servers
 		ON
 			servers.server_id = server_nomad.server_id
 		WHERE
@@ -186,9 +189,6 @@ async fn update_db(
 		&job_id,
 	)
 	.await?;
-	tracing::info!(?job_id, "checking jobid");
-
-	tracing::info!(?run_row, "ayy event2a");
 
 	// Check if run found
 	let run_row = if let Some(run_row) = run_row {
@@ -199,7 +199,21 @@ async fn update_db(
 	};
 	let server_id = run_row.server_id;
 
-	tracing::info!("ayy event2b");
+	if run_row.connectable_ts.is_some() {
+		tracing::warn!("connectable ts already set");
+	} else {
+		sql_execute!(
+			[ctx, @tx tx]
+			"
+			UPDATE db_ds.servers
+			SET connectable_ts = $2
+			WHERE server_id = $1
+			",
+			server_id,
+			now,
+		)
+		.await?;
+	}
 
 	// Write run meta on first plan
 	if run_row.nomad_alloc_plan_ts.is_none() {
@@ -208,14 +222,14 @@ async fn update_db(
 			[ctx, @tx tx]
 			"
 			UPDATE
-				db_dynamic_servers.server_nomad
+				db_ds.server_nomad
 			SET
 				nomad_alloc_id = $2,
 				nomad_alloc_plan_ts = $3,
 				nomad_node_id = $4,
 				nomad_node_name = $5,
 				nomad_node_public_ipv4 = $6,
-				nomad_node_vlan_ipv4 = $7
+				nomad_node_vlan_ipv4 = $
 			WHERE
 				server_id = $1
 			",
@@ -238,7 +252,7 @@ async fn update_db(
 				[ctx, @tx tx]
 				"
 				INSERT INTO
-					db_dynamic_servers.internal_ports (
+					db_ds.internal_ports (
 						server_id,
 						nomad_label,
 						nomad_source,

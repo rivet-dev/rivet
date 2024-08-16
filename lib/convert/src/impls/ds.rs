@@ -17,7 +17,7 @@ impl ApiTryFrom<backend::ds::Server> for models::ServersServer {
 			datacenter: unwrap!(value.datacenter_id).as_uuid(),
 			cluster: unwrap!(value.cluster_id).as_uuid(),
 			created_at: value.create_ts,
-			started_at: value.start_ts,
+			started_at: value.connectable_ts,
 			destroyed_at: value.destroy_ts,
 			tags: Some(to_value(value.tags).unwrap()),
 			runtime: Box::new(models::ServersRuntime {

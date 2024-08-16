@@ -24,7 +24,7 @@ pub async fn handle(
 			let dynamic_server = sql_fetch_one!(
 				[ctx, UpdatedServer, @tx tx]
 				"
-				UPDATE db_dynamic_servers.servers
+				UPDATE db_ds.servers
 				SET delete_ts = $2
 				WHERE
 					server_id = $1
@@ -35,11 +35,11 @@ pub async fn handle(
 					server_nomad.nomad_dispatched_job_id,
 					server_nomad.nomad_alloc_id,
 				FROM
-					db_dynamic_servers.servers
+					db_ds.servers
 				JOIN
-					db_dynamic_servers.server_nomad
+					db_ds.server_nomad
 				ON
-					db_dynamic_servers.servers.server_id = db_dynamic_servers.server_nomad.server_id
+					db_ds.servers.server_id = db_ds.server_nomad.server_id
 				",
 				server_id,
 				ctx.ts(),

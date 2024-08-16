@@ -71,13 +71,13 @@ pub async fn build_ds(
 			docker_ports_protocol_game_guard.port_name,
 			docker_ports_protocol_game_guard.protocol
 		FROM
-			db_dynamic_servers.internal_ports
+			db_ds.internal_ports
 		JOIN
-			db_dynamic_servers.servers
+			db_ds.servers
 		ON
 			internal_ports.server_id = servers.server_id
 		JOIN
-			db_dynamic_servers.docker_ports_protocol_game_guard
+			db_ds.docker_ports_protocol_game_guard
 				ON
 					internal_ports.server_id = docker_ports_protocol_game_guard.server_id
 				AND

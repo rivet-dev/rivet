@@ -13,11 +13,11 @@ async fn handle(
 		"
 		WITH after_server AS (
 			SELECT create_ts, server_id
-			FROM db_dynamic_servers.servers
+			FROM db_ds.servers
 			WHERE server_id = $4
 		)
 		SELECT server_id
-		FROM db_dynamic_servers.servers
+		FROM db_ds.servers
 		WHERE
 			env_id = $1
 			AND tags @> $2

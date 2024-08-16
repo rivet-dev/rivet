@@ -15,6 +15,7 @@ struct Server {
 	kill_timeout_ms: i64,
 	create_ts: i64,
 	start_ts: Option<i64>,
+	connectable_ts: Option<i64>,
 	destroy_ts: Option<i64>,
 	image_id: Uuid,
 	args: Vec<String>,
@@ -84,13 +85,14 @@ pub async fn handle(
 				kill_timeout_ms,
 				create_ts,
 				start_ts,
+				connectable_ts,
 				destroy_ts,
 				image_id,
 				args,
 				network_mode,
 				environment
 			FROM
-				db_dynamic_servers.servers
+				db_ds.servers
 			WHERE
 				server_id = ANY($1)
 			",
@@ -106,7 +108,7 @@ pub async fn handle(
 				gg_port,
 				protocol
 			FROM
-				db_dynamic_servers.docker_ports_protocol_game_guard
+				db_ds.docker_ports_protocol_game_guard
 			WHERE
 				server_id = ANY($1)
 			",
@@ -121,7 +123,7 @@ pub async fn handle(
 				port_number,
 				protocol
 			FROM
-				db_dynamic_servers.docker_ports_host
+				db_ds.docker_ports_host
 			WHERE
 				server_id = ANY($1)
 			",
@@ -140,7 +142,7 @@ pub async fn handle(
 				nomad_node_vlan_ipv4,
 				nomad_alloc_plan_ts
 			FROM
-				db_dynamic_servers.server_nomad
+				db_ds.server_nomad
 			WHERE
 				server_id = ANY($1)
 			",
@@ -155,7 +157,7 @@ pub async fn handle(
 				nomad_ip,
 				nomad_source
 			FROM
-				db_dynamic_servers.internal_ports
+				db_ds.internal_ports
 			WHERE
 				server_id = ANY($1)
 			",
@@ -223,6 +225,7 @@ pub async fn handle(
 				network_ports: ports,
 				create_ts: server.create_ts,
 				start_ts: server.start_ts,
+				connectable_ts: server.connectable_ts,
 				destroy_ts: server.destroy_ts,
 			};
 

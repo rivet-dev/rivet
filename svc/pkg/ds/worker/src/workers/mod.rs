@@ -33,7 +33,7 @@ pub async fn webhook_call(
 	// 		SELECT
 	// 			server_id
 	// 		FROM
-	// 			db_dynamic_servers.server_nomad
+	// 			db_ds.server_nomad
 	// 		WHERE
 	// 			nomad_alloc_id = $1
 	// 		",
