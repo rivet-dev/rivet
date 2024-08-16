@@ -37,6 +37,9 @@ gen/docker/
 gen/tests/
 gen/k8s/
 
+# K3s
+volumes/
+
 # Rust
 lib/**/Cargo.lock
 !lib/bolt/Cargo.lock

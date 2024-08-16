@@ -12,7 +12,16 @@ locals {
 	repo_port = 5001
 }
 
+# Create directory for volumes mount
+resource "null_resource" "volumes_dir" {
+	provisioner "local-exec" {
+		command = "mkdir -p ${var.volumes_dir}"
+	}
+}
+
 resource "k3d_cluster" "main" {
+	depends_on = [ null_resource.volumes_dir ]
+
 	name = "rivet-${var.namespace}"
 	image = "docker.io/rancher/k3s:v1.29.6-k3s1"
 
@@ -42,6 +51,17 @@ resource "k3d_cluster" "main" {
 			source       = "/local"
 			destination  = "/local"
 			node_filters = ["server:0"]
+		}
+	}
+
+	# Links the internal PVC storage to a folder on the host so that it persists when the k3d cluster is
+	# re-created
+	dynamic "volume" {
+		for_each = var.k3d_use_local_repo ? [] : [0]
+		content {
+			source       = var.volumes_dir
+			destination  = "/var/lib/rancher/k3s/storage"
+			node_filters = ["all"]
 		}
 	}
 

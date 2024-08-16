@@ -766,6 +766,10 @@ impl ProjectContextData {
 		self.path.join("gen")
 	}
 
+	pub fn volumes_path(&self) -> PathBuf {
+		self.path.join("volumes")
+	}
+
 	pub fn tf_path(&self) -> PathBuf {
 		self.path.join("infra").join("tf")
 	}

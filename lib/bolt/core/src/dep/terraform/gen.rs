@@ -275,6 +275,10 @@ async fn vars(ctx: &ProjectContext) {
 		json!(ctx.cargo_target_dir().display().to_string()),
 	);
 	vars.insert(
+		"volumes_dir".into(),
+		json!(ctx.volumes_path().display().to_string()),
+	);
+	vars.insert(
 		"k3d_use_local_repo".into(),
 		json!(matches!(
 			&config.kubernetes.provider,

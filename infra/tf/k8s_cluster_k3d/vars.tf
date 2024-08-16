@@ -14,6 +14,10 @@ variable "cargo_target_dir" {
 	type = string
 }
 
+variable "volumes_dir" {
+	type = string
+}
+
 variable "api_http_port" {
 	type = number
 }
