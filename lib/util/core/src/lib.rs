@@ -1,6 +1,15 @@
+use std::{
+	collections::HashMap,
+	fmt,
+	hash::{Hash, Hasher},
+	ops::Deref,
+};
+
+use indexmap::IndexMap;
 use rand::Rng;
 pub use rivet_util_env as env;
 pub use rivet_util_macros as macros;
+use serde::{Deserialize, Serialize};
 use tokio::time::{Duration, Instant};
 
 pub mod billing;
@@ -27,64 +36,6 @@ pub mod watch {
 	///
 	/// See docs/infrastructure/TIMEOUTS.md for reasoning.
 	pub const DEFAULT_TIMEOUT: u64 = 40 * 1000;
-}
-
-#[cfg(feature = "serde")]
-pub mod serde {
-	use aws_smithy_types::Document;
-	use serde_json::Value;
-
-	#[derive(thiserror::Error, Debug)]
-	#[error("Number could not be decoded by serde_json")]
-	pub struct NumberDecodeError;
-
-	pub fn as_serde(value: &Document) -> Result<Value, NumberDecodeError> {
-		let val = match value {
-			Document::Object(map) => Value::Object(
-				map.iter()
-					.map(|(k, v)| Ok((k.clone(), as_serde(v)?)))
-					.collect::<Result<_, _>>()?,
-			),
-			Document::Array(arr) => {
-				Value::Array(arr.iter().map(as_serde).collect::<Result<_, _>>()?)
-			}
-			Document::Number(n) => match n {
-				aws_smithy_types::Number::PosInt(n) => Value::Number(Into::into(*n)),
-				aws_smithy_types::Number::NegInt(n) => Value::Number(Into::into(*n)),
-				aws_smithy_types::Number::Float(n) => {
-					Value::Number(serde_json::Number::from_f64(*n).ok_or(NumberDecodeError)?)
-				}
-			},
-			Document::String(s) => Value::String(s.clone()),
-			Document::Bool(b) => Value::Bool(*b),
-			Document::Null => Value::Null,
-		};
-
-		Ok(val)
-	}
-
-	pub fn as_smithy(value: Value) -> Document {
-		match value {
-			Value::Object(map) => {
-				Document::Object(map.into_iter().map(|(k, v)| (k, as_smithy(v))).collect())
-			}
-			Value::Array(arr) => Document::Array(arr.into_iter().map(as_smithy).collect()),
-			Value::Number(n) => {
-				if let Some(n) = n.as_i64() {
-					Document::Number(aws_smithy_types::Number::NegInt(n))
-				} else if let Some(n) = n.as_u64() {
-					Document::Number(aws_smithy_types::Number::PosInt(n))
-				} else if let Some(n) = n.as_f64() {
-					Document::Number(aws_smithy_types::Number::Float(n))
-				} else {
-					unreachable!()
-				}
-			}
-			Value::String(s) => Document::String(s),
-			Value::Bool(b) => Document::Bool(b),
-			Value::Null => Document::Null,
-		}
-	}
 }
 
 #[cfg(feature = "macros")]
@@ -150,7 +101,7 @@ impl Backoff {
 			sleep_until: Instant::now(),
 		}
 	}
-	
+
 	pub fn new_at(
 		max_exponent: usize,
 		max_retries: Option<usize>,
@@ -216,6 +167,60 @@ impl Backoff {
 impl Default for Backoff {
 	fn default() -> Backoff {
 		Backoff::new(5, Some(16), 1_000, 1_000)
+	}
+}
+
+/// Used in workflow activity inputs/outputs. Using this over BTreeMap is preferred because this does not
+/// reorder keys, providing faster insert and lookup.
+#[derive(Serialize, Deserialize)]
+pub struct HashableMap<K: Eq + Hash, V: Hash> {
+	map: IndexMap<K, V>,
+}
+
+impl<K: Eq + Hash, V: Hash> Deref for HashableMap<K, V> {
+	type Target = IndexMap<K, V>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.map
+	}
+}
+
+impl<K: Eq + Ord + Hash, V: Hash> Hash for HashableMap<K, V> {
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		let mut kv = Vec::from_iter(&self.map);
+		kv.sort_unstable_by(|a, b| a.0.cmp(b.0));
+		kv.hash(state);
+	}
+}
+
+impl<K: Eq + Hash + fmt::Debug, V: Hash + fmt::Debug> fmt::Debug for HashableMap<K, V> {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_map().entries(self.iter()).finish()
+	}
+}
+
+impl<K: Eq + Hash + Clone, V: Hash + Clone> Clone for HashableMap<K, V> {
+	fn clone(&self) -> Self {
+		HashableMap {
+			map: self.map.clone(),
+		}
+	}
+
+	fn clone_from(&mut self, other: &Self) {
+		self.map.clone_from(&other.map);
+	}
+}
+
+pub trait AsHashableExt<K: Eq + Hash, V: Hash> {
+	/// Converts the iterable to a `HashableMap` via cloning.
+	fn as_hashable(&self) -> HashableMap<K, V>;
+}
+
+impl<K: Eq + Clone + Hash, V: Clone + Hash> AsHashableExt<K, V> for HashMap<K, V> {
+	fn as_hashable(&self) -> HashableMap<K, V> {
+		HashableMap {
+			map: self.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+		}
 	}
 }
 

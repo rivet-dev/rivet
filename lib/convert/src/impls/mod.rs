@@ -12,7 +12,6 @@ pub mod group;
 pub mod identity;
 pub mod kv;
 pub mod portal;
-pub mod ds;
 pub mod user;
 
 impl ApiFrom<common::ValidationError> for new_models::ValidationError {

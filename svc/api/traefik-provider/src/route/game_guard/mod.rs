@@ -1,16 +1,8 @@
-use std::{
-	collections::hash_map::DefaultHasher,
-	hash::{Hash, Hasher},
-};
-
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use dynamic_servers::build_ds;
 use job::build_job;
-use proto::backend::{self, pkg::*};
-use redis::AsyncCommands;
 use rivet_operation::prelude::*;
 use serde::{Deserialize, Serialize};
-use url::Url;
 
 use crate::{auth::Auth, types};
 

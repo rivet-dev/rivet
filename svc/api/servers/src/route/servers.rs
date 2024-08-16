@@ -1,9 +1,9 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
-use proto::backend::{self, pkg::*};
 use rivet_api::models;
-use rivet_convert::{ApiFrom, ApiInto, ApiTryFrom, ApiTryInto};
+use rivet_convert::{ApiInto, ApiTryInto};
 use rivet_operation::prelude::*;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::collections::HashMap;
 
 use crate::{assert, auth::Auth};
@@ -21,20 +21,18 @@ pub async fn get(
 		.await?;
 
 	// Get the server
-	let get_res = op!([ctx] ds_server_get {
-		server_ids: vec![server_id.into()],
-	})
-	.await?;
-	let server = unwrap_with!(get_res.servers.first(), SERVERS_SERVER_NOT_FOUND).clone();
+	let servers_res = ctx
+		.op(ds::ops::server::get::Input {
+			server_ids: vec![server_id],
+		})
+		.await?;
+	let server = unwrap_with!(servers_res.servers.first(), SERVERS_SERVER_NOT_FOUND);
 
 	// Validate token can access server
-	ensure_with!(
-		unwrap!(server.env_id).as_uuid() == env_id && unwrap!(server.env_id).as_uuid() == env_id,
-		SERVERS_SERVER_NOT_FOUND
-	);
+	ensure_with!(server.env_id == env_id, SERVERS_SERVER_NOT_FOUND);
 
 	Ok(models::ServersGetServerResponse {
-		server: Box::new(models::ServersServer::api_try_from(server)?),
+		server: Box::new(server.clone().api_try_into()?),
 	})
 }
 
@@ -72,57 +70,83 @@ pub async fn create(
 
 	tracing::info!(?tags, "creating server with tags");
 
-	let server = op!([ctx] ds_server_create {
-		env_id: Some(env_id.into()),
-		datacenter_id: Some(body.datacenter.into()),
-		cluster_id: Some(cluster_id.into()),
-		tags: tags,
-		resources: Some((*body.resources).api_into()),
-		kill_timeout_ms: body.lifecycle.as_ref().and_then(|x| x.kill_timeout).unwrap_or_default(),
-		image_id: Some(body.runtime.build.into()),
-		args: body.runtime.arguments.unwrap_or_default(),
-		network_mode: backend::ds::NetworkMode::api_from(
-			body.network.mode.unwrap_or_default(),
-		) as i32,
-		environment: body.runtime.environment.unwrap_or_default(),
-		network_ports: unwrap!(body.network
-			.ports
-			.into_iter()
-			.map(|(s, p)| Ok((s, dynamic_servers::server_create::Port {
-				internal_port: p.internal_port,
-				routing: Some(if let Some(routing) = p.routing {
-					match *routing {
-						models::ServersPortRouting {
-							game_guard: Some(_),
-							host: None,
-						} => dynamic_servers::server_create::port::Routing::GameGuard(
-							backend::ds::GameGuardRouting {
-								protocol: backend::ds::GameGuardProtocol::api_from(p.protocol) as i32,
-							},
-						),
-						models::ServersPortRouting {
-							game_guard: None,
-							host: Some(_),
-						} => dynamic_servers::server_create::port::Routing::Host(backend::ds::HostRouting {
-							protocol: backend::ds::HostProtocol::api_try_from(p.protocol)? as i32,
-						}),
-						models::ServersPortRouting { .. } => {
-							bail_with!(SERVERS_MUST_SPECIFY_ROUTING_TYPE)
+	let server_id = Uuid::new_v4();
+
+	let mut sub = ctx
+		.subscribe::<ds::workflows::server::CreateComplete>(&json!({
+			"server_id": server_id,
+		}))
+		.await?;
+
+	ctx.dispatch_tagged_workflow(
+		&json!({
+			"server_id": server_id,
+		}),
+		ds::workflows::server::Input {
+			server_id,
+			env_id,
+			cluster_id,
+			datacenter_id: body.datacenter,
+			tags,
+			resources: (*body.resources).api_into(),
+			kill_timeout_ms: body
+				.lifecycle
+				.as_ref()
+				.and_then(|x| x.kill_timeout)
+				.unwrap_or_default(),
+			image_id: body.runtime.build,
+			args: body.runtime.arguments.unwrap_or_default(),
+			network_mode: body.network.mode.unwrap_or_default().api_into(),
+			environment: body.runtime.environment.unwrap_or_default(),
+			network_ports: unwrap!(body
+				.network
+				.ports
+				.into_iter()
+				.map(|(s, p)| Ok((
+					s,
+					ds::workflows::server::Port {
+						internal_port: p.internal_port,
+						routing: if let Some(routing) = p.routing {
+							match *routing {
+								models::ServersPortRouting {
+									game_guard: Some(_),
+									host: None,
+								} => ds::types::Routing::GameGuard {
+									protocol: p.protocol.api_into(),
+								},
+								models::ServersPortRouting {
+									game_guard: None,
+									host: Some(_),
+								} => ds::types::Routing::Host {
+									protocol: p.protocol.api_try_into()?,
+								},
+								models::ServersPortRouting { .. } => {
+									bail_with!(SERVERS_MUST_SPECIFY_ROUTING_TYPE)
+								}
+							}
+						} else {
+							ds::types::Routing::GameGuard {
+								protocol: p.protocol.api_into(),
+							}
 						}
 					}
-				} else {
-					dynamic_servers::server_create::port::Routing::GameGuard(backend::ds::GameGuardRouting {
-						protocol: backend::ds::GameGuardProtocol::api_from(p.protocol) as i32,
-					})
-				})
-			})))
-			.collect::<GlobalResult<HashMap<_, _>>>()),
-	})
-	.await?
-	.server;
+				)))
+				.collect::<GlobalResult<HashMap<_, _>>>()),
+		},
+	)
+	.await?;
+
+	sub.next().await?;
+
+	let servers_res = ctx
+		.op(ds::ops::server::get::Input {
+			server_ids: vec![server_id],
+		})
+		.await?;
+	let server = unwrap_with!(servers_res.servers.first(), SERVERS_SERVER_NOT_FOUND);
 
 	Ok(models::ServersCreateServerResponse {
-		server: Box::new(unwrap!(server).api_try_into()?),
+		server: Box::new(server.clone().api_try_into()?),
 	})
 }
 
@@ -145,13 +169,25 @@ pub async fn destroy(
 
 	assert::server_for_env(&ctx, server_id, game_id, env_id).await?;
 
-	op!([ctx] ds_server_delete {
-		server_id: Some(server_id.into()),
-		override_kill_timeout_ms: query.override_kill_timeout.unwrap_or_default(),
-	})
+	let mut sub = ctx
+		.subscribe::<ds::workflows::server::destroy::DestroyComplete>(&json!({
+			"server_id": server_id,
+		}))
+		.await?;
+
+	ctx.tagged_signal(
+		&json!({
+			"server_id": server_id,
+		}),
+		ds::workflows::server::Destroy {
+			override_kill_timeout_ms: query.override_kill_timeout.unwrap_or_default(),
+		},
+	)
 	.await?;
 
-	Ok(serde_json::json!({}))
+	sub.next().await?;
+
+	Ok(json!({}))
 }
 
 // MARK: GET /games/{}/environments/{}/servers
@@ -173,26 +209,28 @@ pub async fn list_servers(
 		.check_game(ctx.op_ctx(), game_id, env_id, true)
 		.await?;
 
-	let list_res = op!([ctx] ds_server_list_for_env {
-		env_id: Some(env_id.into()),
-		tags: query.tags_json.as_deref().map_or(Ok(HashMap::new()), serde_json::from_str)?,
-		include_destroyed: query.include_destroyed.unwrap_or(false),
-		cursor: query.cursor.map(|x| x.into()),
-	})
-	.await?;
+	let list_res = ctx
+		.op(ds::ops::server::list_for_env::Input {
+			env_id,
+			tags: query
+				.tags_json
+				.as_deref()
+				.map_or(Ok(HashMap::new()), serde_json::from_str)?,
+			include_destroyed: query.include_destroyed.unwrap_or(false),
+			cursor: query.cursor,
+		})
+		.await?;
 
-	let servers_res = op!([ctx] ds_server_get {
-		server_ids: list_res.server_ids.clone(),
-	})
-	.await?;
+	let servers_res = ctx
+		.op(ds::ops::server::get::Input {
+			server_ids: list_res.server_ids.clone(),
+		})
+		.await?;
 
 	let servers = servers_res
 		.servers
 		.into_iter()
-		.map(|server| {
-			let server = models::ServersServer::api_try_from(server)?;
-			Ok(server)
-		})
+		.map(ApiTryInto::api_try_into)
 		.collect::<GlobalResult<Vec<_>>>()?;
 
 	Ok(models::ServersListServersResponse { servers })

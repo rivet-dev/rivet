@@ -1,0 +1,73 @@
+[package]
+name = "ds"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+bit-vec = "0.6"
+chirp-client = { path = "../../../lib/chirp/client" }
+chirp-worker = { path = "../../../lib/chirp/worker" }
+chirp-workflow = { path = "../../../lib/chirp-workflow/core" }
+chrono = "0.4"
+cjson = "0.1"
+heck = "0.3"
+hex = "0.4"
+http = "0.2"
+lazy_static = "1.4.0"
+nomad-util = { path = "../../../lib/nomad-util" }
+rand = "0.8"
+regex = "1.10"
+reqwest = { version = "0.12", features = ["json"] }
+rivet-api = { path = "../../../sdks/full/rust" }
+rivet-convert = { path = "../../../lib/convert" }
+rivet-health-checks = { path = "../../../lib/health-checks" }
+rivet-metrics = { path = "../../../lib/metrics" }
+rivet-operation = { path = "../../../lib/operation/core" }
+rivet-runtime = { path = "../../../lib/runtime" }
+rivet-util = { path = "../../../lib/util/core" }
+s3-util = { path = "../../../lib/s3-util" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["preserve_order"] }
+sha2 = "0.10"
+strum = { version = "0.24", features = ["derive"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = [
+    "fmt",
+    "json",
+    "ansi",
+] }
+util-build = { package = "rivet-util-build", path = "../build/util" }
+util-job = { package = "rivet-util-job", path = "../job/util" }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+build-get = { path = "../build/ops/get" }
+cluster = { path = "../cluster" }
+ip-info = { path = "../ip/ops/info" }
+job-run-get = { path = "../job-run/ops/get" }
+mm-config-version-get = { path = "../mm-config/ops/version-get" }
+mm-lobby-get = { path = "../mm/ops/lobby-get" }
+mm-lobby-list-for-user-id = { path = "../mm/ops/lobby-list-for-user-id" }
+region-get = { path = "../region/ops/get" }
+tier-list = { path = "../tier/ops/list" }
+token-create = { path = "../token/ops/create" }
+upload-get = { path = "../upload/ops/get" }
+user-identity-get = { path = "../user-identity/ops/get" }
+
+[dependencies.sqlx]
+git = "https://github.com/rivet-gg/sqlx"
+rev = "08d6e61aa0572e7ec557abbedb72cebb96e1ac5b"
+default-features = false
+
+[dependencies.nomad_client]
+package = "nomad_client"
+git = "https://github.com/rivet-gg/nomad-client"
+rev = "abb66bf0c30c7ff5b0c695dae952481c33e538b5" # pragma: allowlist secret
+
+[dev-dependencies]
+cluster = { path = "../cluster" }
+faker-build = { path = "../faker/ops/build" }
+faker-game = { path = "../faker/ops/game" }
+faker-region = { path = "../faker/ops/region" }
+faker-user = { path = "../faker/ops/user" }
+game-get = { path = "../game/ops/get" }

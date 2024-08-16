@@ -431,18 +431,19 @@ func (r *Runtime) String() string {
 }
 
 type Server struct {
-	Id          uuid.UUID   `json:"id"`
-	Environment uuid.UUID   `json:"environment"`
-	Datacenter  uuid.UUID   `json:"datacenter"`
-	Cluster     uuid.UUID   `json:"cluster"`
-	Tags        interface{} `json:"tags,omitempty"`
-	Runtime     *Runtime    `json:"runtime,omitempty"`
-	Network     *Network    `json:"network,omitempty"`
-	Resources   *Resources  `json:"resources,omitempty"`
-	Lifecycle   *Lifecycle  `json:"lifecycle,omitempty"`
-	CreatedAt   int64       `json:"created_at"`
-	StartedAt   *int64      `json:"started_at,omitempty"`
-	DestroyedAt *int64      `json:"destroyed_at,omitempty"`
+	Id            uuid.UUID   `json:"id"`
+	Environment   uuid.UUID   `json:"environment"`
+	Datacenter    uuid.UUID   `json:"datacenter"`
+	Cluster       uuid.UUID   `json:"cluster"`
+	Tags          interface{} `json:"tags,omitempty"`
+	Runtime       *Runtime    `json:"runtime,omitempty"`
+	Network       *Network    `json:"network,omitempty"`
+	Resources     *Resources  `json:"resources,omitempty"`
+	Lifecycle     *Lifecycle  `json:"lifecycle,omitempty"`
+	CreatedAt     int64       `json:"created_at"`
+	StartedAt     *int64      `json:"started_at,omitempty"`
+	ConnectableAt *int64      `json:"connectable_at,omitempty"`
+	DestroyedAt   *int64      `json:"destroyed_at,omitempty"`
 
 	_rawJSON json.RawMessage
 }

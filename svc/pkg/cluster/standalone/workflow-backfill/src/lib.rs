@@ -179,8 +179,9 @@ pub async fn run_from_env() -> GlobalResult<()> {
 						.collect::<GlobalResult<Vec<_>>>()?
 				}),
 
-				"build_delivery_method":
-					TryInto::<cluster::types::BuildDeliveryMethod>::try_into(dc.build_delivery_method)?,
+				"build_delivery_method": unwrap!(
+					cluster::types::BuildDeliveryMethod::from_repr(dc.build_delivery_method.try_into()?)
+				),
 				"prebakes_enabled": false,
 			}))?;
 			wf.finalize();
@@ -223,7 +224,9 @@ pub async fn run_from_env() -> GlobalResult<()> {
 							.collect::<GlobalResult<Vec<_>>>()?
 					},
 
-					build_delivery_method: dc.build_delivery_method.try_into()?,
+					build_delivery_method: unwrap!(cluster::types::BuildDeliveryMethod::from_repr(
+						dc.build_delivery_method.try_into()?,
+					)),
 					prebakes_enabled: false,
 				},
 				serde_json::Value::Null,
@@ -739,7 +742,9 @@ pub async fn run_from_env() -> GlobalResult<()> {
 							.collect::<GlobalResult<Vec<_>>>()?
 					},
 
-					build_delivery_method: dc.build_delivery_method.try_into()?,
+					build_delivery_method: unwrap!(cluster::types::BuildDeliveryMethod::from_repr(
+						dc.build_delivery_method.try_into()?,
+					)),
 					prebakes_enabled: false,
 					create_ts: util::timestamp::now(),
 				},

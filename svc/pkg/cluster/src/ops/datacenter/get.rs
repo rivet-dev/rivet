@@ -67,7 +67,9 @@ impl TryFrom<DatacenterRow> for Datacenter {
 			{
 				build_delivery_method.0
 			} else {
-				value.build_delivery_method.try_into()?
+				unwrap!(BuildDeliveryMethod::from_repr(
+					value.build_delivery_method.try_into()?
+				))
 			},
 			prebakes_enabled: value.prebakes_enabled,
 		})

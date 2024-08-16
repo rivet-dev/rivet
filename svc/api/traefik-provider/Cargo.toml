@@ -33,12 +33,12 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
     "ansi",
 ] }
 url = "2.2.2"
-util-ds = { package = "rivet-util-ds", path = "../../pkg/ds/util" }
 util-cdn = { package = "rivet-util-cdn", path = "../../pkg/cdn/util" }
 util-job = { package = "rivet-util-job", path = "../../pkg/job/util" }
 uuid = { version = "1", features = ["v4"] }
 
 cluster = { path = "../../pkg/cluster" }
+ds = { path = "../../pkg/ds" }
 
 [dependencies.sqlx]
 git = "https://github.com/rivet-gg/sqlx"

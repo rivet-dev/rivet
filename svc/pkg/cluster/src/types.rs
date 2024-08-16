@@ -6,6 +6,7 @@ use std::{
 use chirp_workflow::prelude::*;
 use rivet_operation::prelude::proto::backend;
 use serde::{Deserialize, Serialize};
+use strum::FromRepr;
 
 #[derive(Debug, sqlx::FromRow)]
 pub struct Cluster {
@@ -138,23 +139,10 @@ pub struct PoolUpdate {
 	pub drain_timeout: Option<u64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+#[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
 pub enum BuildDeliveryMethod {
-	TrafficServer,
-	S3Direct,
-}
-
-// Backwards compatibility
-impl TryFrom<i64> for BuildDeliveryMethod {
-	type Error = GlobalError;
-
-	fn try_from(value: i64) -> GlobalResult<Self> {
-		match value {
-			0 => Ok(BuildDeliveryMethod::TrafficServer),
-			1 => Ok(BuildDeliveryMethod::S3Direct),
-			_ => bail!("unexpected BuildDeliveryMethod variant"),
-		}
-	}
+	TrafficServer = 0,
+	S3Direct = 1,
 }
 
 #[derive(Debug)]

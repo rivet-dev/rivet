@@ -108,3 +108,17 @@ the internal location.
 > **\*** Even if they did know about each other via atomics, there is no guarantee of consistency from
 > `buffer_unordered`. Preemptively incrementing the location ensures consistency regardless of the order or
 > completion time of the futures.
+
+## Hashmaps in activity inputs/outputs
+
+`std::collections::HashMap` does not implement `Hash`. To get around this, use `util::HashableMap`:
+
+```rust
+use util::AsHashableExt;
+
+ctx
+	.activity(MyActivityInput {
+		map: input.map.as_hashable(),
+	})
+	.await?;
+```

@@ -344,11 +344,7 @@ dependencies = [
  "cloud-namespace-token-development-create",
  "cloud-namespace-token-public-create",
  "cluster",
- "ds-log-read",
- "ds-server-create",
- "ds-server-delete",
- "ds-server-get",
- "ds-server-list-for-env",
+ "ds",
  "faker-build",
  "faker-game",
  "faker-game-namespace",
@@ -869,11 +865,9 @@ dependencies = [
  "cloud-namespace-token-development-create",
  "cloud-namespace-token-public-create",
  "cluster",
+ "ds",
+ "ds-log-export",
  "ds-log-read",
- "ds-server-create",
- "ds-server-delete",
- "ds-server-get",
- "ds-server-list-for-env",
  "faker-build",
  "faker-game",
  "faker-game-namespace",
@@ -973,6 +967,7 @@ dependencies = [
  "chirp-client",
  "chrono",
  "cluster",
+ "ds",
  "faker-cdn-site",
  "faker-game",
  "faker-game-namespace",
@@ -994,12 +989,11 @@ dependencies = [
  "rivet-pools",
  "rivet-route",
  "rivet-util-cdn",
- "rivet-util-ds",
  "rivet-util-job",
  "s3-util",
  "serde",
  "serde_json",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "thiserror",
  "tokio",
  "tracing",
@@ -1661,7 +1655,7 @@ dependencies = [
  "s3-util",
  "serde",
  "serde_json",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "ssh2",
  "strum 0.26.3",
  "token-create",
@@ -1683,7 +1677,7 @@ dependencies = [
  "reqwest 0.11.27",
  "rivet-operation",
  "rivet-util-build",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "upload-complete",
  "upload-get",
  "upload-prepare",
@@ -1702,7 +1696,7 @@ dependencies = [
  "rivet-connection",
  "rivet-operation",
  "rivet-pools",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "tokio",
  "tracing",
  "tracing-logfmt",
@@ -1722,7 +1716,7 @@ dependencies = [
  "faker-game",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -1735,7 +1729,7 @@ dependencies = [
  "faker-game",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -1748,7 +1742,7 @@ dependencies = [
  "faker-game",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -1821,7 +1815,7 @@ dependencies = [
  "prost 0.10.4",
  "rivet-operation",
  "rivet-util-captcha",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -1881,7 +1875,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -1893,7 +1887,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -1904,7 +1898,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -1918,7 +1912,7 @@ dependencies = [
  "game-resolve-namespace-id",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -1933,7 +1927,7 @@ dependencies = [
  "game-resolve-namespace-id",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -1947,7 +1941,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -1960,7 +1954,7 @@ dependencies = [
  "faker-game",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -1972,7 +1966,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -1984,7 +1978,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -1998,7 +1992,7 @@ dependencies = [
  "prost 0.10.4",
  "reqwest 0.11.27",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "upload-complete",
  "upload-get",
  "upload-prepare",
@@ -2014,7 +2008,7 @@ dependencies = [
  "faker-game",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -2027,7 +2021,7 @@ dependencies = [
  "faker-game",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -2040,7 +2034,7 @@ dependencies = [
  "faker-game-version",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -2069,7 +2063,7 @@ dependencies = [
  "itertools 0.10.5",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "unzip-n",
 ]
 
@@ -2108,7 +2102,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -2119,7 +2113,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -2130,7 +2124,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -2283,7 +2277,7 @@ dependencies = [
  "rivet-util",
  "serde",
  "serde_json",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "thiserror",
  "tokio",
  "tokio-util 0.7.11",
@@ -2402,7 +2396,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -2414,7 +2408,7 @@ dependencies = [
  "cloud-game-config-create",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -2426,7 +2420,7 @@ dependencies = [
  "faker-game",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "token-create",
 ]
 
@@ -2447,7 +2441,7 @@ dependencies = [
  "mm-config-namespace-create",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -2466,7 +2460,7 @@ dependencies = [
  "mm-config-namespace-get",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -2480,7 +2474,7 @@ dependencies = [
  "game-token-development-validate",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "token-create",
 ]
 
@@ -2495,7 +2489,7 @@ dependencies = [
  "prost 0.10.4",
  "rivet-claims",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "token-create",
 ]
 
@@ -2516,7 +2510,7 @@ dependencies = [
  "prost 0.10.4",
  "rivet-operation",
  "rivet-util-mm",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -2542,7 +2536,7 @@ dependencies = [
  "region-list",
  "rivet-operation",
  "rivet-util-mm",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -2601,8 +2595,9 @@ dependencies = [
  "rivet-runtime",
  "s3-util",
  "serde",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "ssh2",
+ "strum 0.24.1",
  "token-create",
  "tokio",
  "trust-dns-resolver",
@@ -2619,7 +2614,7 @@ dependencies = [
  "rivet-health-checks",
  "rivet-metrics",
  "rivet-runtime",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "tokio",
  "tracing",
  "tracing-logfmt",
@@ -2657,7 +2652,7 @@ dependencies = [
  "rivet-health-checks",
  "rivet-metrics",
  "rivet-runtime",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "tokio",
  "tracing",
  "tracing-logfmt",
@@ -2675,7 +2670,7 @@ dependencies = [
  "rivet-health-checks",
  "rivet-metrics",
  "rivet-runtime",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -2695,7 +2690,7 @@ dependencies = [
  "rivet-operation",
  "rivet-runtime",
  "serde",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "token-create",
  "tokio",
  "tracing",
@@ -2965,7 +2960,7 @@ dependencies = [
  "prost 0.10.4",
  "reqwest 0.11.27",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "upload-prepare",
 ]
 
@@ -2978,7 +2973,7 @@ dependencies = [
  "prost 0.10.4",
  "reqwest 0.11.27",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "upload-complete",
  "upload-get",
  "upload-prepare",
@@ -3049,7 +3044,7 @@ dependencies = [
  "rand",
  "rivet-operation",
  "serde_json",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -3092,6 +3087,61 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
+name = "ds"
+version = "0.0.1"
+dependencies = [
+ "bit-vec",
+ "build-get",
+ "chirp-client",
+ "chirp-worker",
+ "chirp-workflow",
+ "chrono",
+ "cjson",
+ "cluster",
+ "faker-build",
+ "faker-game",
+ "faker-region",
+ "faker-user",
+ "game-get",
+ "heck 0.3.3",
+ "hex",
+ "http 0.2.12",
+ "ip-info",
+ "job-run-get",
+ "lazy_static",
+ "mm-config-version-get",
+ "mm-lobby-get",
+ "mm-lobby-list-for-user-id",
+ "nomad-util",
+ "nomad_client",
+ "rand",
+ "regex",
+ "region-get",
+ "reqwest 0.12.5",
+ "rivet-api",
+ "rivet-convert",
+ "rivet-health-checks",
+ "rivet-metrics",
+ "rivet-operation",
+ "rivet-runtime",
+ "rivet-util",
+ "rivet-util-build",
+ "rivet-util-job",
+ "s3-util",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sqlx",
+ "strum 0.24.1",
+ "tier-list",
+ "token-create",
+ "tracing-subscriber",
+ "upload-get",
+ "user-identity-get",
+ "uuid",
+]
+
+[[package]]
 name = "ds-log-export"
 version = "0.0.1"
 dependencies = [
@@ -3100,7 +3150,7 @@ dependencies = [
  "reqwest 0.11.27",
  "rivet-operation",
  "serde",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "upload-complete",
  "upload-prepare",
 ]
@@ -3116,123 +3166,6 @@ dependencies = [
  "prost 0.10.4",
  "rivet-operation",
  "serde",
-]
-
-[[package]]
-name = "ds-server-create"
-version = "0.0.1"
-dependencies = [
- "bit-vec",
- "build-get",
- "chirp-client",
- "chirp-worker",
- "chirp-workflow",
- "cjson",
- "cluster",
- "faker-build",
- "faker-game",
- "faker-region",
- "faker-user",
- "game-get",
- "heck 0.3.3",
- "hex",
- "http 0.2.12",
- "ip-info",
- "lazy_static",
- "mm-lobby-list-for-user-id",
- "nomad-util",
- "nomad_client",
- "rand",
- "regex",
- "region-get",
- "reqwest 0.11.27",
- "rivet-api",
- "rivet-connection",
- "rivet-operation",
- "rivet-util",
- "rivet-util-build",
- "rivet-util-ds",
- "s3-util",
- "serde",
- "serde_json",
- "sha2",
- "sqlx 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "strum 0.24.1",
- "tier-list",
- "token-create",
- "tracing-subscriber",
- "upload-get",
- "user-identity-get",
- "uuid",
-]
-
-[[package]]
-name = "ds-server-delete"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "nomad-util",
- "nomad_client",
- "region-get",
- "reqwest 0.11.27",
- "rivet-operation",
- "rivet-util-job",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
-]
-
-[[package]]
-name = "ds-server-get"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "chirp-workflow",
- "cluster",
- "ds-server-create",
- "faker-build",
- "faker-game",
- "faker-region",
- "rivet-operation",
- "rivet-util-ds",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
-]
-
-[[package]]
-name = "ds-server-list-for-env"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "rivet-operation",
- "rivet-util-ds",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
-]
-
-[[package]]
-name = "ds-worker"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "chrono",
- "ds-server-get",
- "job-run-get",
- "lazy_static",
- "mm-config-version-get",
- "mm-lobby-get",
- "nomad-util",
- "nomad_client",
- "region-get",
- "reqwest 0.12.5",
- "rivet-api",
- "rivet-convert",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-runtime",
- "rivet-util-job",
- "serde",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
 ]
 
 [[package]]
@@ -3338,7 +3271,7 @@ dependencies = [
  "email-verification-create",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -3358,7 +3291,7 @@ dependencies = [
  "reqwest 0.11.27",
  "rivet-operation",
  "serde_json",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "upload-prepare",
 ]
 
@@ -3429,7 +3362,7 @@ dependencies = [
  "rivet-operation",
  "serde",
  "serde_json",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -3597,7 +3530,7 @@ dependencies = [
  "region-get",
  "region-list",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -3845,7 +3778,7 @@ dependencies = [
  "prost 0.10.4",
  "reqwest 0.11.27",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "upload-complete",
  "upload-get",
  "upload-prepare",
@@ -3864,7 +3797,7 @@ dependencies = [
  "prost 0.10.4",
  "rivet-operation",
  "rivet-util-team",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "team-get",
 ]
 
@@ -3878,7 +3811,7 @@ dependencies = [
  "game-create",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "upload-file-list",
  "upload-get",
 ]
@@ -3891,7 +3824,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -3903,7 +3836,7 @@ dependencies = [
  "faker-game",
  "faker-team",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -3916,7 +3849,7 @@ dependencies = [
  "prost 0.10.4",
  "reqwest 0.11.27",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "upload-complete",
  "upload-get",
  "upload-prepare",
@@ -3933,7 +3866,7 @@ dependencies = [
  "game-version-create",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -3947,7 +3880,7 @@ dependencies = [
  "game-version-create",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -3961,7 +3894,7 @@ dependencies = [
  "game-version-create",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -3975,7 +3908,7 @@ dependencies = [
  "game-namespace-get",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -4017,7 +3950,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -4034,7 +3967,7 @@ dependencies = [
  "prost 0.10.4",
  "region-list-for-game",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -4046,7 +3979,7 @@ dependencies = [
  "faker-game",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -4059,7 +3992,7 @@ dependencies = [
  "game-get",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -4073,7 +4006,7 @@ dependencies = [
  "game-version-create",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -4097,7 +4030,7 @@ dependencies = [
  "prost 0.10.4",
  "rivet-operation",
  "rivet-util-game-user",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "token-create",
 ]
 
@@ -4111,7 +4044,7 @@ dependencies = [
  "game-user-create",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -4126,7 +4059,7 @@ dependencies = [
  "game-user-link-get",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "token-create",
 ]
 
@@ -4141,7 +4074,7 @@ dependencies = [
  "game-user-link-create",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -4154,7 +4087,7 @@ dependencies = [
  "game-user-create",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -4170,7 +4103,7 @@ dependencies = [
  "game-version-create",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -4199,7 +4132,7 @@ dependencies = [
  "rivet-metrics",
  "rivet-runtime",
  "rivet-util-game-user",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "token-create",
  "token-exchange",
  "token-revoke",
@@ -4227,7 +4160,7 @@ dependencies = [
  "game-version-list",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -4240,7 +4173,7 @@ dependencies = [
  "game-version-create",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -4253,7 +4186,7 @@ dependencies = [
  "game-version-create",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -4822,7 +4755,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -4834,7 +4767,7 @@ dependencies = [
  "identity-config-namespace-create",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -4847,7 +4780,7 @@ dependencies = [
  "faker-game-version",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -4871,7 +4804,7 @@ dependencies = [
  "identity-config-version-get",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -4932,6 +4865,7 @@ checksum = "de3fc2e30ba82dd1b3911c8de1ffc143c74a914a14e99514d7637e3099df5ea0"
 dependencies = [
  "equivalent",
  "hashbrown 0.14.5",
+ "serde",
 ]
 
 [[package]]
@@ -4976,7 +4910,7 @@ dependencies = [
  "rivet-operation",
  "serde",
  "serde_json",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -5063,7 +4997,7 @@ dependencies = [
  "rivet-pools",
  "rivet-runtime",
  "serde_json",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "tokio",
  "tracing",
  "tracing-logfmt",
@@ -5114,7 +5048,7 @@ dependencies = [
  "prost 0.10.4",
  "rivet-operation",
  "rivet-util-job",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -5162,7 +5096,7 @@ dependencies = [
  "rustls 0.20.9",
  "serde",
  "sha2",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "token-create",
  "webpki 0.22.4",
  "webpki-roots 0.22.6",
@@ -5199,7 +5133,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -5211,7 +5145,7 @@ dependencies = [
  "kv-config-namespace-create",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -5224,7 +5158,7 @@ dependencies = [
  "faker-game-version",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -5248,7 +5182,7 @@ dependencies = [
  "kv-config-version-get",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -5259,7 +5193,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -5361,7 +5295,7 @@ dependencies = [
  "reqwest 0.11.27",
  "serde",
  "serde_json",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "ssh-key",
 ]
 
@@ -5381,7 +5315,7 @@ dependencies = [
  "rivet-runtime",
  "serde",
  "serde_json",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "tokio",
  "tracing",
  "tracing-logfmt",
@@ -5490,7 +5424,7 @@ dependencies = [
  "rivet-metrics",
  "rivet-operation",
  "rivet-runtime",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "tokio",
  "tracing",
  "tracing-logfmt",
@@ -5667,7 +5601,7 @@ dependencies = [
  "chirp-client",
  "chirp-worker",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -5677,7 +5611,7 @@ dependencies = [
  "chirp-client",
  "chirp-worker",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -5691,7 +5625,7 @@ dependencies = [
  "mm-config-version-get",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -5707,7 +5641,7 @@ dependencies = [
  "prost 0.10.4",
  "rivet-operation",
  "rivet-util-mm",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -5721,7 +5655,7 @@ dependencies = [
  "mm-config-version-get",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -5735,7 +5669,7 @@ dependencies = [
  "mm-config-namespace-get",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -5756,7 +5690,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -5768,7 +5702,7 @@ dependencies = [
  "mm-config-namespace-create",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -5785,7 +5719,7 @@ dependencies = [
  "prost 0.10.4",
  "rivet-operation",
  "rivet-util-mm",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -5809,7 +5743,7 @@ dependencies = [
  "rivet-util-job",
  "rivet-util-mm",
  "s3-util",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "tier-list",
  "upload-get",
 ]
@@ -5827,7 +5761,7 @@ dependencies = [
  "prost 0.10.4",
  "rivet-operation",
  "rivet-util-mm",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -5862,7 +5796,7 @@ dependencies = [
  "rivet-pools",
  "rivet-runtime",
  "rivet-util-mm",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "tokio",
  "tracing",
  "tracing-logfmt",
@@ -5911,7 +5845,7 @@ dependencies = [
  "chirp-worker",
  "faker-mm-lobby",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -5924,7 +5858,7 @@ dependencies = [
  "faker-mm-lobby",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -5937,7 +5871,7 @@ dependencies = [
  "faker-mm-lobby-row",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -5959,7 +5893,7 @@ dependencies = [
  "prost 0.10.4",
  "rivet-operation",
  "rivet-util-mm",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -5972,7 +5906,7 @@ dependencies = [
  "prost 0.10.4",
  "rivet-operation",
  "rivet-util-mm",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -5984,7 +5918,7 @@ dependencies = [
  "faker-mm-lobby",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -5997,7 +5931,7 @@ dependencies = [
  "prost 0.10.4",
  "rivet-operation",
  "rivet-util-mm",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -6017,7 +5951,7 @@ dependencies = [
  "prost 0.10.4",
  "rivet-operation",
  "rivet-util-mm",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -6030,7 +5964,7 @@ dependencies = [
  "prost 0.10.4",
  "rivet-operation",
  "rivet-util-mm",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -6043,7 +5977,7 @@ dependencies = [
  "prost 0.10.4",
  "rivet-operation",
  "rivet-util-mm",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -6055,7 +5989,7 @@ dependencies = [
  "faker-mm-lobby",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -6111,7 +6045,7 @@ dependencies = [
  "rivet-util-mm",
  "s3-util",
  "serde",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "team-get",
  "tier-list",
  "token-create",
@@ -6129,7 +6063,7 @@ dependencies = [
  "cf-custom-hostname-worker",
  "chirp-client",
  "cloud-worker",
- "ds-worker",
+ "ds",
  "external-worker",
  "game-user-worker",
  "job-log-worker",
@@ -7155,7 +7089,7 @@ dependencies = [
  "faker-region",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -7169,7 +7103,7 @@ dependencies = [
  "faker-region",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -7183,7 +7117,7 @@ dependencies = [
  "faker-region",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -7198,7 +7132,7 @@ dependencies = [
  "region-get",
  "region-list",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -7214,7 +7148,7 @@ dependencies = [
  "region-get",
  "region-list",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -7230,7 +7164,7 @@ dependencies = [
  "region-get",
  "region-list-for-game",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -7702,7 +7636,7 @@ dependencies = [
  "rand",
  "redis",
  "rivet-metrics",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "thiserror",
  "tokio",
  "tokio-util 0.7.11",
@@ -7786,12 +7720,11 @@ name = "rivet-util"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "aws-smithy-client 0.41.0",
- "aws-smithy-types 0.41.0",
  "bcrypt",
  "chrono",
  "futures-util",
  "global-error",
+ "indexmap 2.3.0",
  "ipnet",
  "lazy_static",
  "rand",
@@ -7825,26 +7758,6 @@ dependencies = [
 [[package]]
 name = "rivet-util-cdn"
 version = "0.1.0"
-
-[[package]]
-name = "rivet-util-ds"
-version = "0.1.0"
-dependencies = [
- "bit-vec",
- "chirp-client",
- "heck 0.3.3",
- "http 0.2.12",
- "ip-info",
- "mm-lobby-list-for-user-id",
- "region-get",
- "rivet-operation",
- "rivet-util",
- "serde",
- "serde_json",
- "strum 0.24.1",
- "user-identity-get",
- "uuid",
-]
 
 [[package]]
 name = "rivet-util-env"
@@ -8269,6 +8182,7 @@ version = "1.0.122"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "784b6203951c57ff748476b126ccb5e8e2959a5c19e5c617ab1956be3dbc68da"
 dependencies = [
+ "indexmap 2.3.0",
  "itoa 1.0.11",
  "memchr",
  "ryu",
@@ -8515,58 +8429,13 @@ dependencies = [
 [[package]]
 name = "sqlx"
 version = "0.7.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9a2ccff1a000a5a59cd33da541d9f2fdcd9e6e8229cc200565942bff36d0aaa"
-dependencies = [
- "sqlx-core 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "sqlx"
-version = "0.7.4"
 source = "git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b#08d6e61aa0572e7ec557abbedb72cebb96e1ac5b"
 dependencies = [
- "sqlx-core 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx-core",
  "sqlx-macros",
  "sqlx-mysql",
  "sqlx-postgres",
  "sqlx-sqlite",
-]
-
-[[package]]
-name = "sqlx-core"
-version = "0.7.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24ba59a9342a3d9bab6c56c118be528b27c9b60e490080e9711a04dccac83ef6"
-dependencies = [
- "ahash 0.8.11",
- "atoi",
- "byteorder",
- "bytes",
- "crc",
- "crossbeam-queue",
- "either",
- "event-listener",
- "futures-channel",
- "futures-core",
- "futures-intrusive",
- "futures-io",
- "futures-util",
- "hashlink",
- "hex",
- "indexmap 2.3.0",
- "log",
- "memchr",
- "once_cell",
- "paste",
- "percent-encoding",
- "serde",
- "sha2",
- "smallvec",
- "sqlformat",
- "thiserror",
- "tracing",
- "url",
 ]
 
 [[package]]
@@ -8619,7 +8488,7 @@ source = "git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72c
 dependencies = [
  "proc-macro2",
  "quote",
- "sqlx-core 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx-core",
  "sqlx-macros-core",
  "syn 1.0.109",
 ]
@@ -8639,7 +8508,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "sqlx-core 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx-core",
  "sqlx-mysql",
  "sqlx-postgres",
  "sqlx-sqlite",
@@ -8683,7 +8552,7 @@ dependencies = [
  "sha1",
  "sha2",
  "smallvec",
- "sqlx-core 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx-core",
  "stringprep",
  "thiserror",
  "tracing",
@@ -8723,7 +8592,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "smallvec",
- "sqlx-core 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx-core",
  "stringprep",
  "thiserror",
  "tracing",
@@ -8747,7 +8616,7 @@ dependencies = [
  "log",
  "percent-encoding",
  "serde",
- "sqlx-core 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx-core",
  "tracing",
  "url",
  "urlencoding",
@@ -8964,7 +8833,7 @@ dependencies = [
  "prost 0.10.4",
  "reqwest 0.11.27",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "upload-complete",
  "upload-get",
  "upload-prepare",
@@ -8978,7 +8847,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "upload-file-list",
  "upload-get",
 ]
@@ -8992,7 +8861,7 @@ dependencies = [
  "chrono",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -9005,7 +8874,7 @@ dependencies = [
  "rivet-health-checks",
  "rivet-metrics",
  "rivet-runtime",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "team-member-list",
  "team-user-ban-get",
 ]
@@ -9018,7 +8887,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -9029,7 +8898,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -9040,7 +8909,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -9051,7 +8920,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -9063,7 +8932,7 @@ dependencies = [
  "faker-team",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -9074,7 +8943,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -9085,7 +8954,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -9097,7 +8966,7 @@ dependencies = [
  "faker-team",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "team-get",
 ]
 
@@ -9111,7 +8980,7 @@ dependencies = [
  "prost 0.10.4",
  "regex",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -9122,7 +8991,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -9133,7 +9002,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -9190,7 +9059,7 @@ dependencies = [
  "rivet-operation",
  "rivet-pools",
  "rivet-runtime",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "team-get",
  "team-member-count",
  "tokio",
@@ -9325,7 +9194,7 @@ dependencies = [
  "prost 0.10.4",
  "rivet-claims",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -9337,7 +9206,7 @@ dependencies = [
  "chrono",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "token-create",
 ]
 
@@ -9350,7 +9219,7 @@ dependencies = [
  "chrono",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "token-create",
 ]
 
@@ -9363,7 +9232,7 @@ dependencies = [
  "chrono",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "token-create",
 ]
 
@@ -9922,7 +9791,7 @@ dependencies = [
  "reqwest 0.11.27",
  "rivet-operation",
  "s3-util",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "upload-get",
  "upload-prepare",
  "url",
@@ -9937,7 +9806,7 @@ dependencies = [
  "chrono",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -9949,7 +9818,7 @@ dependencies = [
  "chrono",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "upload-prepare",
 ]
 
@@ -9962,7 +9831,7 @@ dependencies = [
  "chrono",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "upload-prepare",
 ]
 
@@ -9978,7 +9847,7 @@ dependencies = [
  "reqwest 0.11.27",
  "rivet-operation",
  "s3-util",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "upload-complete",
  "upload-get",
 ]
@@ -9997,7 +9866,7 @@ dependencies = [
  "rivet-operation",
  "rivet-pools",
  "s3-util",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "tokio",
  "tracing",
  "tracing-logfmt",
@@ -10014,7 +9883,7 @@ dependencies = [
  "rivet-metrics",
  "rivet-runtime",
  "s3-util",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "upload-get",
  "upload-prepare",
 ]
@@ -10062,7 +9931,7 @@ dependencies = [
  "prost 0.10.4",
  "reqwest 0.11.27",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "upload-complete",
  "upload-get",
  "upload-prepare",
@@ -10107,7 +9976,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "user-follow-toggle",
 ]
 
@@ -10119,7 +9988,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "user-follow-toggle",
 ]
 
@@ -10131,7 +10000,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "user-follow-toggle",
 ]
 
@@ -10143,7 +10012,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "user-follow-toggle",
 ]
 
@@ -10155,7 +10024,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "user-follow-toggle",
 ]
 
@@ -10167,7 +10036,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -10191,7 +10060,7 @@ dependencies = [
  "prost 0.10.4",
  "rand",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "upload-file-list",
  "upload-get",
 ]
@@ -10217,7 +10086,7 @@ dependencies = [
  "faker-user",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "user-identity-create",
 ]
 
@@ -10230,7 +10099,7 @@ dependencies = [
  "faker-user",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "user-identity-create",
 ]
 
@@ -10242,7 +10111,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "user-follow-toggle",
 ]
 
@@ -10255,7 +10124,7 @@ dependencies = [
  "faker-user",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "user-identity-create",
  "user-identity-get",
 ]
@@ -10320,7 +10189,7 @@ dependencies = [
  "rivet-metrics",
  "rivet-runtime",
  "rivet-util-user-presence",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -10333,7 +10202,7 @@ dependencies = [
  "profanity-check",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "user-get",
 ]
 
@@ -10357,7 +10226,7 @@ dependencies = [
  "faker-user",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "user-identity-create",
 ]
 
@@ -10370,7 +10239,7 @@ dependencies = [
  "faker-user",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "user-identity-create",
 ]
 
@@ -10384,7 +10253,7 @@ dependencies = [
  "prost 0.10.4",
  "regex",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "user-identity-create",
 ]
 
@@ -10418,7 +10287,7 @@ dependencies = [
  "chirp-worker",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
 ]
 
 [[package]]
@@ -10430,7 +10299,7 @@ dependencies = [
  "faker-user",
  "prost 0.10.4",
  "rivet-operation",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "token-create",
 ]
 
@@ -10918,7 +10787,7 @@ dependencies = [
  "rivet-health-checks",
  "rivet-metrics",
  "rivet-runtime",
- "sqlx 0.7.4 (git+https://github.com/rivet-gg/sqlx?rev=08d6e61aa0572e7ec557abbedb72cebb96e1ac5b)",
+ "sqlx",
  "tokio",
  "tracing",
  "tracing-subscriber",

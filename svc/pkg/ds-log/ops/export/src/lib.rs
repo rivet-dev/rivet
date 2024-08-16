@@ -24,16 +24,12 @@ pub async fn handle(
 		.await?
 		.query(indoc!(
 			"
-			SELECT
-				message
-			FROM
-				db_ds_log.server_logs
+			SELECT message
+			FROM db_ds_log.server_logs
 			WHERE
-				server_id = ?
-				AND stream_type = ?
-			ORDER BY
-				ts
-			ASC
+				server_id = ? AND
+				stream_type = ?
+			ORDER BY ts ASC
 			"
 		))
 		.bind(server_id)

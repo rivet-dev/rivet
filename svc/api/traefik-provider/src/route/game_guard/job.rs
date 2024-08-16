@@ -3,11 +3,10 @@ use std::{
 	hash::{Hash, Hasher},
 };
 
-use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
+use api_helper::ctx::Ctx;
 use proto::backend::{self, pkg::*};
 use redis::AsyncCommands;
 use rivet_operation::prelude::*;
-use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::{auth::Auth, types};

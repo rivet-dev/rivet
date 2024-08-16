@@ -8,7 +8,6 @@ license = "Apache-2.0"
 [features]
 default = ["macros"]
 macros = []
-serde = []
 
 [dependencies]
 async-trait = "0.1"
@@ -17,6 +16,7 @@ chrono = "0.4"
 formatted-error = { path = "../../formatted-error", optional = true }
 futures-util = "0.3"
 global-error = { path = "../../global-error" }
+indexmap = { version = "2.0", features = ["serde"] }
 ipnet = { version = "2.7", features = ["serde"] }
 lazy_static = "1.4"
 rand = "0.8"
@@ -25,7 +25,7 @@ reqwest = "0.11"
 rivet-util-env = { path = "../env" }
 rivet-util-macros = { path = "../macros" }
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde_json = { version = "1.0" }
 thiserror = "1.0"
 tokio = { version = "1.29", default-features = false, features = [
     "time",
@@ -37,6 +37,3 @@ tokio = { version = "1.29", default-features = false, features = [
 ] }
 types-proto = { path = "../../types-proto/core" }
 uuid = { version = "1", features = ["v4", "serde"] }
-
-aws-smithy-client = "^0.41.0"
-aws-smithy-types = "^0.41.0"

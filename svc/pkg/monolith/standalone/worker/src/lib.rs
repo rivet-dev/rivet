@@ -1,9 +1,9 @@
 use rivet_operation::prelude::*;
 
 macro_rules! spawn_workers {
-	([$shared_client:ident, $pools:ident, $cache:ident, $join_set:ident] $($worker:ident),* $(,)?) => {
+	([$shared_client:ident, $pools:ident, $cache:ident, $join_set:ident] $($pkg:ident),* $(,)?) => {
 		$(
-			$worker::workers::spawn_workers(
+			$pkg::workers::spawn_workers(
 				$shared_client.clone(),
 				$pools.clone(),
 				$cache.clone(),
@@ -25,7 +25,7 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 		cdn_worker,
 		cf_custom_hostname_worker,
 		cloud_worker,
-		ds_worker,
+		ds,
 		external_worker,
 		game_user_worker,
 		job_log_worker,

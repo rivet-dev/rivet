@@ -91,19 +91,14 @@ async fn query_before_nts(
 	let mut entries_cursor = clickhouse
 		.query(&formatdoc!(
 			"
-			SELECT
-				ts,
-				message
-			FROM
-				db_ds_log.server_logs
+			SELECT ts, message
+			FROM db_ds_log.server_logs
 			WHERE
-				server_id = ?
-				AND stream_type = ?
-				AND ts < fromUnixTimestamp64Nano(?)
-			ORDER BY
-				ts {order_by}
-			LIMIT
-				?
+				server_id = ? AND
+				stream_type = ? AND
+				ts < fromUnixTimestamp64Nano(?)
+			ORDER BY ts {order_by}
+			LIMIT ?
 			"
 		))
 		.bind(run_id)
@@ -130,19 +125,14 @@ async fn query_after_nts(
 	let mut entries_cursor = clickhouse
 		.query(&formatdoc!(
 			"
-			SELECT
-				ts,
-				message
-			FROM
-				db_ds_log.server_logs
+			SELECT ts, message
+			FROM db_ds_log.server_logs
 			WHERE
-				server_id = ?
-				AND stream_type = ?
-				AND ts > fromUnixTimestamp64Nano(?)
-			ORDER BY
-				ts {order_by}
-			LIMIT
-				?
+				server_id = ? AND
+				stream_type = ? AND
+				ts > fromUnixTimestamp64Nano(?)
+			ORDER BY ts {order_by}
+			LIMIT ?
 			"
 		))
 		.bind(run_id)
@@ -170,20 +160,15 @@ async fn query_nts_range(
 	let mut entries_cursor = clickhouse
 		.query(&formatdoc!(
 			"
-			SELECT
-				ts,
-				message
-			FROM
-				db_ds_log.server_logs
+			SELECT ts, message
+			FROM db_ds_log.server_logs
 			WHERE
-				run_id = ?
-				AND stream_type = ?
-				AND ts > fromUnixTimestamp64Nano(?)
-				AND ts < fromUnixTimestamp64Nano(?)
-			ORDER BY
-				ts {order_by}
-			LIMIT
-				?
+				run_id = ? AND
+				stream_type = ? AND
+				ts > fromUnixTimestamp64Nano(?) AND
+				ts < fromUnixTimestamp64Nano(?)
+			ORDER BY ts {order_by}
+			LIMIT ?
 			"
 		))
 		.bind(run_id)

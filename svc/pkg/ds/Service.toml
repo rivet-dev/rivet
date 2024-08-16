@@ -1,0 +1,12 @@
+[service]
+name = "ds"
+
+[runtime]
+kind = "rust"
+
+[package]
+
+[databases]
+db-ds = {}
+
+[secrets]

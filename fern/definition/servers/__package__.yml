@@ -91,7 +91,7 @@ types:
       protocol: commons.PortProtocol
       internal_port: optional<integer>
       routing: optional<commons.PortRouting>
-  
+
   CreateServerResponse:
     properties:
       server:

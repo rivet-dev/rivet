@@ -135,7 +135,7 @@ pub struct DatacenterCreate {
 }
 join_signal!(Main, [GameLink, DatacenterCreate]);
 
-#[message("cluster-game-link-complete")]
+#[message("cluster_game_link_complete")]
 pub struct GameLinkComplete {}
 
 #[derive(Debug, Serialize, Deserialize, Hash)]

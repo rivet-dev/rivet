@@ -1,7 +1,0 @@
-[service]
-name = "ds-server-list-for-env"
-
-[runtime]
-kind = "rust"
-
-[operation]

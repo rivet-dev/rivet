@@ -3,13 +3,9 @@ use std::{
 	hash::{Hash, Hasher},
 };
 
-use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
-use proto::backend::{self, pkg::*};
-use redis::AsyncCommands;
+use api_helper::ctx::Ctx;
 use rivet_operation::prelude::*;
-use rivet_pools::prelude::*;
 use serde::{Deserialize, Serialize};
-use url::Url;
 
 use crate::{auth::Auth, types};
 
@@ -37,7 +33,7 @@ impl DynamicServer {
 	}
 
 	fn hostname(&self) -> GlobalResult<String> {
-		util_ds::build_ds_hostname(self.server_id, &self.port_name, self.datacenter_id)
+		ds::util::build_ds_hostname(self.server_id, &self.port_name, self.datacenter_id)
 	}
 }
 
@@ -48,7 +44,6 @@ pub async fn build_ds(
 ) -> GlobalResult<()> {
 	// TODO put in function, clean up
 	// TODO: remove cache for now
-	tracing::info!(?config, "config timeeee");
 
 	// let dynamic_servers: Option<Vec<DynamicServer>> = ctx
 	// 	.cache()
@@ -61,29 +56,25 @@ pub async fn build_ds(
 		[ctx, DynamicServer]
 		"
 		SELECT
-			servers.server_id,
-			servers.datacenter_id,
-			internal_ports.nomad_label AS label,
-			internal_ports.nomad_ip,
-			internal_ports.nomad_source,
-			docker_ports_protocol_game_guard.port_number,
-			docker_ports_protocol_game_guard.gg_port,
-			docker_ports_protocol_game_guard.port_name,
-			docker_ports_protocol_game_guard.protocol
-		FROM
-			db_ds.internal_ports
-		JOIN
-			db_ds.servers
+			s.server_id,
+			s.datacenter_id,
+			ip.nomad_label AS label,
+			ip.nomad_ip,
+			ip.nomad_source,
+			gg.port_number,
+			gg.gg_port,
+			gg.port_name,
+			gg.protocol
+		FROM db_ds.internal_ports AS ip
+		JOIN db_ds.servers AS s
+		ON ip.server_id = s.server_id
+		JOIN db_ds.docker_ports_protocol_game_guard AS gg
 		ON
-			internal_ports.server_id = servers.server_id
-		JOIN
-			db_ds.docker_ports_protocol_game_guard
-				ON
-					internal_ports.server_id = docker_ports_protocol_game_guard.server_id
-				AND
-					internal_ports.nomad_label = CONCAT('ds_', docker_ports_protocol_game_guard.port_name)
+			ip.server_id = gg.server_id AND
+			ip.nomad_label = CONCAT('ds_', gg.port_name)
 		WHERE
-			servers.datacenter_id = $1 AND servers.stop_ts IS NULL
+			s.datacenter_id = $1 AND
+			s.stop_ts IS NULL
 		",
 		dc_id
 	)
@@ -95,15 +86,8 @@ pub async fn build_ds(
 	// })
 	// .await?;
 
-	tracing::info!(?config, "config timeeee2");
-
-	// let dynamic_servers = unwrap!(dynamic_servers);
-	tracing::info!(?dynamic_servers, "ds0time");
-
 	// Process proxied ports
 	for dynamic_server in &dynamic_servers {
-		tracing::info!(?dynamic_server, "ds1time");
-
 		let server_id = dynamic_server.server_id;
 		let register_res = ds_register_proxied_port(server_id, dynamic_server, config);
 		match register_res {
@@ -113,8 +97,6 @@ pub async fn build_ds(
 			}
 		}
 	}
-
-	tracing::info!(?config, "config timeeee3");
 
 	config.http.middlewares.insert(
 		"ds-rate-limit".to_owned(),
@@ -153,16 +135,16 @@ fn ds_register_proxied_port(
 	proxied_port: &DynamicServer,
 	config: &mut types::TraefikConfigResponse,
 ) -> GlobalResult<()> {
-	let ingress_port = proxied_port.gg_port.clone();
+	let ingress_port = proxied_port.gg_port;
 	let target_nomad_port_label = proxied_port.label.clone();
 	let service_id = format!("ds-run:{}:{}", run_id, target_nomad_port_label);
-	let proxy_protocol = unwrap!(backend::ds::GameGuardProtocol::from_i32(
-		proxied_port.protocol as i32
+	let proxy_protocol = unwrap!(ds::types::GameGuardProtocol::from_repr(
+		proxied_port.protocol.try_into()?
 	));
 
 	// Insert the relevant service
 	match proxy_protocol {
-		backend::ds::GameGuardProtocol::Http | backend::ds::GameGuardProtocol::Https => {
+		ds::types::GameGuardProtocol::Http | ds::types::GameGuardProtocol::Https => {
 			config.http.services.insert(
 				service_id.clone(),
 				types::TraefikService {
@@ -179,7 +161,7 @@ fn ds_register_proxied_port(
 				},
 			);
 		}
-		backend::ds::GameGuardProtocol::Tcp | backend::ds::GameGuardProtocol::TcpTls => {
+		ds::types::GameGuardProtocol::Tcp | ds::types::GameGuardProtocol::TcpTls => {
 			config.tcp.services.insert(
 				service_id.clone(),
 				types::TraefikService {
@@ -196,7 +178,7 @@ fn ds_register_proxied_port(
 				},
 			);
 		}
-		backend::ds::GameGuardProtocol::Udp => {
+		ds::types::GameGuardProtocol::Udp => {
 			config.udp.services.insert(
 				service_id.clone(),
 				types::TraefikService {
@@ -217,7 +199,7 @@ fn ds_register_proxied_port(
 
 	// Insert the relevant router
 	match proxy_protocol {
-		backend::ds::GameGuardProtocol::Http => {
+		ds::types::GameGuardProtocol::Http => {
 			// Generate config
 			let middlewares = http_router_middlewares();
 			let rule = format_http_rule(proxied_port)?;
@@ -240,7 +222,7 @@ fn ds_register_proxied_port(
 				},
 			);
 		}
-		backend::ds::GameGuardProtocol::Https => {
+		ds::types::GameGuardProtocol::Https => {
 			// Generate config
 			let middlewares = http_router_middlewares();
 			let rule = format_http_rule(proxied_port)?;
@@ -263,7 +245,7 @@ fn ds_register_proxied_port(
 				},
 			);
 		}
-		backend::ds::GameGuardProtocol::Tcp => {
+		ds::types::GameGuardProtocol::Tcp => {
 			config.tcp.routers.insert(
 				format!("ds-run:{}:{}:tcp", run_id, target_nomad_port_label),
 				types::TraefikRouter {
@@ -276,7 +258,7 @@ fn ds_register_proxied_port(
 				},
 			);
 		}
-		backend::ds::GameGuardProtocol::TcpTls => {
+		ds::types::GameGuardProtocol::TcpTls => {
 			config.tcp.routers.insert(
 				format!("ds-run:{}:{}:tcp-tls", run_id, target_nomad_port_label),
 				types::TraefikRouter {
@@ -289,7 +271,7 @@ fn ds_register_proxied_port(
 				},
 			);
 		}
-		backend::ds::GameGuardProtocol::Udp => {
+		ds::types::GameGuardProtocol::Udp => {
 			config.udp.routers.insert(
 				format!("ds-run:{}:{}:udp", run_id, target_nomad_port_label),
 				types::TraefikRouter {

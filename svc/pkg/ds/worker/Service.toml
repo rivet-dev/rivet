@@ -1,8 +1,0 @@
-[service]
-name = "ds-worker"
-
-[runtime]
-kind = "rust"
-
-[consumer]
-

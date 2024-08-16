@@ -98,15 +98,11 @@ pub async fn list(
 		.builds
 		.iter()
 		.filter_map(|build| {
-			if let Some(upload) = uploads_res
+			uploads_res
 				.uploads
 				.iter()
 				.find(|u| u.upload_id == build.upload_id)
-			{
-				Some((build, upload))
-			} else {
-				None
-			}
+				.map(|upload| (build, upload))
 		})
 		.map(|(build, upload)| {
 			GlobalResult::Ok((

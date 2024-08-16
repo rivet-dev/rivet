@@ -41,7 +41,7 @@ pub(crate) async fn cluster_datacenter(ctx: &mut WorkflowCtx, input: &Input) -> 
 
 		pools: input.pools.clone(),
 
-		build_delivery_method: input.build_delivery_method.clone(),
+		build_delivery_method: input.build_delivery_method,
 		prebakes_enabled: input.prebakes_enabled,
 	})
 	.await?;

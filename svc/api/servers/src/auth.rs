@@ -2,7 +2,7 @@ use api_helper::{
 	auth::{ApiAuth, AuthRateLimitCtx},
 	util::{as_auth_expired, basic_rate_limit},
 };
-use proto::{backend, claims::Claims};
+use proto::claims::Claims;
 use rivet_claims::ClaimsDecode;
 use rivet_operation::prelude::*;
 

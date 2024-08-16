@@ -23,7 +23,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 cdn-worker = { path = "../../../cdn/worker" }
 cf-custom-hostname-worker = { path = "../../../cf-custom-hostname/worker" }
 cloud-worker = { path = "../../../cloud/worker" }
-ds-worker = { path = "../../../ds/worker" }
+ds = { path = "../../../ds" }
 external-worker = { path = "../../../external/worker" }
 game-user-worker = { path = "../../../game-user/worker" }
 job-log-worker = { path = "../../../job-log/worker" }

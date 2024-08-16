@@ -49,7 +49,10 @@ pub fn workflow(attr: TokenStream, item: TokenStream) -> TokenStream {
 		input_ident,
 		input_type,
 		output_type,
-	} = parse_trait_fn(&ctx_ty, "Workflow", &item_fn);
+	} = match parse_trait_fn(&ctx_ty, "Workflow", &item_fn) {
+		Ok(x) => x,
+		Err(err) => return err,
+	};
 
 	let struct_ident = Ident::new(&name, proc_macro2::Span::call_site());
 	let fn_name = item_fn.sig.ident.to_string();
@@ -97,7 +100,10 @@ pub fn activity(attr: TokenStream, item: TokenStream) -> TokenStream {
 		input_ident,
 		input_type,
 		output_type,
-	} = parse_trait_fn(&ctx_ty, "Activity", &item_fn);
+	} = match parse_trait_fn(&ctx_ty, "Activity", &item_fn) {
+		Ok(x) => x,
+		Err(err) => return err,
+	};
 
 	let struct_ident = Ident::new(&name, proc_macro2::Span::call_site());
 	let fn_name = item_fn.sig.ident.to_string();
@@ -165,7 +171,10 @@ pub fn operation(attr: TokenStream, item: TokenStream) -> TokenStream {
 		input_ident,
 		input_type,
 		output_type,
-	} = parse_trait_fn(&ctx_ty, "Operation", &item_fn);
+	} = match parse_trait_fn(&ctx_ty, "Operation", &item_fn) {
+		Ok(x) => x,
+		Err(err) => return err,
+	};
 
 	let struct_ident = Ident::new(&name, proc_macro2::Span::call_site());
 	let fn_name = item_fn.sig.ident.to_string();
@@ -207,10 +216,14 @@ struct TraitFnOutput {
 	output_type: syn::Type,
 }
 
-fn parse_trait_fn(ctx_ty: &syn::Type, trait_name: &str, item_fn: &syn::ItemFn) -> TraitFnOutput {
+fn parse_trait_fn(
+	ctx_ty: &syn::Type,
+	trait_name: &str,
+	item_fn: &syn::ItemFn,
+) -> Result<TraitFnOutput, TokenStream> {
 	// Check if is async
 	if item_fn.sig.asyncness.is_none() {
-		panic!("the async keyword is missing from the function declaration");
+		return Err(error(item_fn.sig.span(), "function must be async"));
 	}
 
 	let mut arg_names = vec![];
@@ -224,25 +237,30 @@ fn parse_trait_fn(ctx_ty: &syn::Type, trait_name: &str, item_fn: &syn::ItemFn) -
 					arg_names.push(arg_name);
 					arg_types.push((*arg.ty).clone());
 				}
-				_ => panic!("Unsupported input parameter pattern"),
+				_ => {
+					return Err(error(arg.pat.span(), "unsupported input parameter pattern"));
+				}
 			}
 		} else {
-			panic!("Unsupported input parameter type");
+			return Err(error(input.span(), "unsupported input parameter type"));
 		}
 	}
 
 	if arg_types.len() != 2 || &arg_types[0] != ctx_ty {
-		panic!(
-			"{} function must have exactly two parameters: ctx: {:?} and input: YourInputType",
-			trait_name,
-			ctx_ty.to_token_stream().to_string(),
-		);
+		return Err(error(
+			item_fn.sig.span(),
+			&format!(
+				"{} function must have exactly two parameters: ctx: {:?} and input: YourInputType",
+				trait_name,
+				ctx_ty.to_token_stream().to_string()
+			),
+		));
 	}
 
 	let input_type = if let syn::Type::Reference(syn::TypeReference { elem, .. }) = &arg_types[1] {
 		elem.clone()
 	} else {
-		panic!("Input type must be a reference");
+		return Err(error(arg_types[1].span(), "input type must be a reference"));
 	};
 
 	let output_type = match &item_fn.sig.output {
@@ -255,31 +273,49 @@ fn parse_trait_fn(ctx_ty: &syn::Type, trait_name: &str, item_fn: &syn::ItemFn) -
 							if let Some(GenericArgument::Type(ty)) = args.args.first() {
 								ty.clone()
 							} else {
-								panic!("Unsupported Result type");
+								return Err(error(args.span(), "unsupported Result type"));
 							}
 						}
-						_ => panic!("Unsupported Result type"),
+						_ => {
+							return Err(error(segment.arguments.span(), "unsupported Result type"))
+						}
 					}
 				} else {
-					panic!("{} function must return a GlobalResult type", trait_name,);
+					return Err(error(
+						path.span(),
+						&format!("{} function must return a GlobalResult type", trait_name),
+					));
 				}
 			}
-			_ => panic!("Unsupported output type"),
+			_ => return Err(error(ty.span(), "unsupported output type")),
 		},
-		_ => panic!("{} function must have a return type", trait_name),
+		_ => {
+			return Err(error(
+				item_fn.sig.output.span(),
+				&format!("{} function must have a return type", trait_name),
+			));
+		}
 	};
 
-	TraitFnOutput {
+	Ok(TraitFnOutput {
 		ctx_ident: Ident::new(&arg_names[0], proc_macro2::Span::call_site()),
 		input_ident: Ident::new(&arg_names[1], proc_macro2::Span::call_site()),
 		input_type,
 		output_type,
-	}
+	})
 }
 
 #[proc_macro_attribute]
 pub fn signal(attr: TokenStream, item: TokenStream) -> TokenStream {
 	let name = parse_macro_input!(attr as LitStr);
+	if !name
+		.value()
+		.chars()
+		.all(|c| c.is_alphanumeric() || c == '_')
+	{
+		return error(name.span(), "invalid signal name, must be [A-Za-z_]");
+	}
+
 	let item_struct = parse_macro_input!(item as ItemStruct);
 
 	let struct_ident = &item_struct.ident;
@@ -323,6 +359,14 @@ pub fn signal(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn message(attr: TokenStream, item: TokenStream) -> TokenStream {
 	let name = parse_macro_input!(attr as LitStr);
+	if !name
+		.value()
+		.chars()
+		.all(|c| c.is_alphanumeric() || c == '_')
+	{
+		return error(name.span(), "invalid message name, must be [A-Za-z_]");
+	}
+
 	let item_struct = parse_macro_input!(item as ItemStruct);
 
 	// If also a signal, don't derive serde traits
@@ -421,7 +465,7 @@ pub fn workflow_test(_attr: TokenStream, item: TokenStream) -> TokenStream {
 	result.into()
 }
 
-fn error(span: proc_macro2::Span, msg: &str) -> proc_macro::TokenStream {
+fn error(span: proc_macro2::Span, msg: &str) -> TokenStream {
 	syn::Error::new(span, msg).to_compile_error().into()
 }
 
