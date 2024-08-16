@@ -15,18 +15,18 @@
 pub struct ServersRuntime {
     #[serde(rename = "arguments", skip_serializing_if = "Option::is_none")]
     pub arguments: Option<Vec<String>>,
+    #[serde(rename = "build")]
+    pub build: uuid::Uuid,
     #[serde(rename = "environment", skip_serializing_if = "Option::is_none")]
     pub environment: Option<::std::collections::HashMap<String, String>>,
-    #[serde(rename = "image")]
-    pub image: uuid::Uuid,
 }
 
 impl ServersRuntime {
-    pub fn new(image: uuid::Uuid) -> ServersRuntime {
+    pub fn new(build: uuid::Uuid) -> ServersRuntime {
         ServersRuntime {
             arguments: None,
+            build,
             environment: None,
-            image,
         }
     }
 }

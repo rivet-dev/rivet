@@ -199,7 +199,7 @@ pub async fn handle(
 								environment
 							)
 						VALUES
-							($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+							($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 						RETURNING
 							1
 					),
@@ -214,7 +214,7 @@ pub async fn handle(
 							$1,
 							t.*
 						FROM
-							unnest($15, $16) AS t (port_name, port_number)
+							unnest($14, $15) AS t (port_name, port_number)
 						RETURNING
 							1
 					),
@@ -231,7 +231,7 @@ pub async fn handle(
 							$1,
 							t.*
 						FROM
-							unnest($17, $18, $19, $20) AS t (port_name, port_number, protocol)
+							unnest($16, $17, $18, $19) AS t (port_name, port_number, protocol)
 						RETURNING
 							1
 					)
@@ -246,17 +246,17 @@ pub async fn handle(
 				resources.cpu_millicores,
 				resources.memory_mib,
 				ctx.kill_timeout_ms,
-				create_ts, // 10
-				unwrap!(ctx.image_id).as_uuid(),
+				create_ts,
+				unwrap!(ctx.image_id).as_uuid(), // 10
 				&ctx.args,
 				ctx.network_mode,
 				serde_json::value::to_raw_value(&ctx.environment)?.to_string(),
-				host_unnest.port_names, // 15
-				host_unnest.port_numbers,
+				host_unnest.port_names,
+				host_unnest.port_numbers, // 15
 				game_guard_unnest.port_names,
 				game_guard_unnest.port_numbers,
 				game_guard_unnest.gg_ports,
-				game_guard_unnest.protocols, // 20
+				game_guard_unnest.protocols,
 			)
 			.await
 		}

@@ -77,7 +77,7 @@ types:
 
   CreateServerRuntimeRequest:
     properties:
-      image: uuid
+      build: uuid
       arguments: optional<list<string>>
       environment: optional<map<string, string>>
 

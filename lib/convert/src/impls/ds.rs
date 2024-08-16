@@ -21,7 +21,7 @@ impl ApiTryFrom<backend::ds::Server> for models::ServersServer {
 			destroyed_at: value.destroy_ts,
 			tags: Some(to_value(value.tags).unwrap()),
 			runtime: Box::new(models::ServersRuntime {
-				image: unwrap!(value.image_id).as_uuid(),
+				build: unwrap!(value.image_id).as_uuid(),
 				arguments: Some(value.args),
 				environment: Some(value.environment),
 			}),

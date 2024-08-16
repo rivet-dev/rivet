@@ -175,7 +175,7 @@ async fn create_http() -> GlobalResult<()> {
 			datacenter: ctx.datacenter_id,
 			tags: None,
 			runtime: Box::new(models::ServersCreateServerRuntimeRequest {
-				image: ctx.image_id,
+				build: ctx.image_id,
 				environment: Some(HashMap::new()),
 				arguments: None,
 			}),
@@ -224,7 +224,7 @@ async fn list_builds_with_tags() -> GlobalResult<()> {
 			datacenter: ctx.datacenter_id,
 			tags: None,
 			runtime: Box::new(models::ServersCreateServerRuntimeRequest {
-				image: ctx.image_id,
+				build: ctx.image_id,
 				arguments: None,
 				environment: Some(HashMap::new()),
 			}),

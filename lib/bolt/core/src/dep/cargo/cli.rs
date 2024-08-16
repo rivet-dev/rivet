@@ -176,10 +176,9 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 
 					FROM rust:1.80.0-slim AS rust
 
-					RUN apt-get update && apt-get install -y protobuf-compiler pkg-config libssl-dev g++ git
-
-					RUN apt-get install --yes libpq-dev wget
-					RUN wget https://github.com/mozilla/sccache/releases/download/v0.2.15/sccache-v0.2.15-x86_64-unknown-linux-musl.tar.gz \
+					RUN apt-get update \
+					    && apt-get install --yes protobuf-compiler pkg-config libssl-dev g++ git libpq-dev wget \
+					    && wget https://github.com/mozilla/sccache/releases/download/v0.2.15/sccache-v0.2.15-x86_64-unknown-linux-musl.tar.gz \
 						&& tar xzf sccache-v0.2.15-x86_64-unknown-linux-musl.tar.gz \
 						&& mv sccache-v0.2.15-x86_64-unknown-linux-musl/sccache /usr/local/bin/sccache \
 						&& chmod +x /usr/local/bin/sccache
@@ -191,13 +190,12 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 
 					# Build and copy all binaries from target directory into an empty image (it is not
 					# included in the output because of cache mount)
-					RUN chmod +x ./build_script.sh
 					RUN \
 						--mount=type=cache,target=/usr/local/cargo/git \
 						--mount=type=cache,target=/usr/local/cargo/registry \
 						--mount=type=cache,target=/usr/rivet/target \
 						--mount=type=cache,target=/usr/rivet/oss/target \
-						sh -c ./build_script.sh && mkdir /usr/bin/rivet && find target/{optimization} -maxdepth 1 -type f ! -name "*.*" -exec mv {{}} /usr/bin/rivet/ \;
+						chmod +x ./build_script.sh && sh -c ./build_script.sh && mkdir /usr/bin/rivet && find target/{optimization} -maxdepth 1 -type f ! -name "*.*" -exec mv {{}} /usr/bin/rivet/ \;
 					
 					# Create an empty image and copy binaries + test outputs to it (this is to minimize the
 					# size of the image)

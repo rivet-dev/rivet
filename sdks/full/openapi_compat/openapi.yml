@@ -4528,15 +4528,15 @@ components:
           items:
             type: string
           type: array
+        build:
+          format: uuid
+          type: string
         environment:
           additionalProperties:
             type: string
           type: object
-        image:
-          format: uuid
-          type: string
       required:
-      - image
+      - build
       type: object
     ServersDestroyServerResponse:
       properties: {}
@@ -4698,15 +4698,15 @@ components:
           items:
             type: string
           type: array
+        build:
+          format: uuid
+          type: string
         environment:
           additionalProperties:
             type: string
           type: object
-        image:
-          format: uuid
-          type: string
       required:
-      - image
+      - build
       type: object
     ServersServer:
       properties:

@@ -10802,7 +10802,7 @@ components:
     ServersCreateServerRuntimeRequest:
       type: object
       properties:
-        image:
+        build:
           type: string
           format: uuid
         arguments:
@@ -10814,7 +10814,7 @@ components:
           additionalProperties:
             type: string
       required:
-        - image
+        - build
     ServersCreateServerNetworkRequest:
       type: object
       properties:
@@ -14381,7 +14381,7 @@ components:
     ServersRuntime:
       type: object
       properties:
-        image:
+        build:
           type: string
           format: uuid
         arguments:
@@ -14393,7 +14393,7 @@ components:
           additionalProperties:
             type: string
       required:
-        - image
+        - build
     ServersLifecycle:
       type: object
       properties:

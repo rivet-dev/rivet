@@ -29,7 +29,7 @@ async fn create(ctx: TestCtx) {
 			token::create::request::KindNew { entitlements: vec![proto::claims::Entitlement {
 				kind: Some(proto::claims::entitlement::Kind::EnvService(
 					proto::claims::entitlement::EnvService {
-						env_id: game_res.env_id.clone(),
+						env_id: Some(env_id.clone())
 					}
 				)),
 			}]},

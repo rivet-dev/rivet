@@ -369,7 +369,7 @@ func (r *Resources) String() string {
 }
 
 type Runtime struct {
-	Image       uuid.UUID         `json:"image"`
+	Build       uuid.UUID         `json:"build"`
 	Arguments   []string          `json:"arguments,omitempty"`
 	Environment map[string]string `json:"environment,omitempty"`
 
@@ -501,7 +501,7 @@ func (c *CreateServerPortRequest) String() string {
 }
 
 type CreateServerRuntimeRequest struct {
-	Image       uuid.UUID         `json:"image"`
+	Build       uuid.UUID         `json:"build"`
 	Arguments   []string          `json:"arguments,omitempty"`
 	Environment map[string]string `json:"environment,omitempty"`
 

@@ -79,7 +79,7 @@ pub async fn create(
 		tags: tags,
 		resources: Some((*body.resources).api_into()),
 		kill_timeout_ms: body.lifecycle.as_ref().and_then(|x| x.kill_timeout).unwrap_or_default(),
-		image_id: Some(body.runtime.image.into()),
+		image_id: Some(body.runtime.build.into()),
 		args: body.runtime.arguments.unwrap_or_default(),
 		network_mode: backend::ds::NetworkMode::api_from(
 			body.network.mode.unwrap_or_default(),
