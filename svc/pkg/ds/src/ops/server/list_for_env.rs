@@ -29,20 +29,22 @@ pub async fn list_for_env(ctx: &OperationCtx, input: &Input) -> GlobalResult<Out
 		SELECT server_id
 		FROM db_ds.servers
 		WHERE
-			env_id = $1 AND 
-			tags @> $2 AND 
-			($3 OR destroy_ts IS NOT NULL) AND 
-			(
+			env_id = $1
+			AND tags @> $2
+			AND ($3 OR destroy_ts IS NULL)
+			AND (
 				$4 IS NULL OR
 				(create_ts, server_id) < (SELECT create_ts, server_id FROM after_server)
 			)
 		ORDER BY create_ts DESC, server_id DESC
-		LIMIT 64
+		LIMIT $5
 		",
 		input.env_id,
 		serde_json::to_value(&input.tags)?,
 		input.include_destroyed,
 		input.cursor,
+		// TODO: Add pagination when OpenGB lobbies no longer uses polling RVTEE-492
+		if input.include_destroyed { 64 } else { 10_000 },
 	)
 	.await?
 	.into_iter()

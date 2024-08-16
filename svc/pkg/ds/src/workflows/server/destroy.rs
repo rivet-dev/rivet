@@ -1,9 +1,14 @@
 use chirp_workflow::prelude::*;
 use futures_util::FutureExt;
 use serde_json::json;
-use tracing::Instrument;
 
 use crate::util::NEW_NOMAD_CONFIG;
+
+#[message("ds_server_destroy_started")]
+pub struct DestroyStarted {}
+
+#[message("ds_server_destroy_complete")]
+pub struct DestroyComplete {}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct Input {
@@ -19,11 +24,30 @@ pub(crate) async fn ds_server_destroy(ctx: &mut WorkflowCtx, input: &Input) -> G
 		})
 		.await?;
 
-	ctx.activity(DeleteJobInput {
-		job_id: dynamic_server.dispatched_job_id.clone(),
-		alloc_id: dynamic_server.alloc_id.clone(),
-	})
+	ctx.msg(
+		json!({
+			"server_id": input.server_id,
+		}),
+		DestroyStarted {},
+	)
 	.await?;
+
+	if let Some(job_id) = &dynamic_server.dispatched_job_id {
+		let delete_output = ctx
+			.activity(DeleteJobInput {
+				job_id: job_id.clone(),
+			})
+			.await?;
+
+		if delete_output.job_exists {
+			if let Some(alloc_id) = &dynamic_server.alloc_id {
+				ctx.activity(KillAllocInput {
+					alloc_id: alloc_id.clone(),
+				})
+				.await?;
+			}
+		}
+	}
 
 	ctx.msg(
 		json!({
@@ -45,8 +69,8 @@ struct UpdateDbInput {
 struct UpdateDbOutput {
 	server_id: Uuid,
 	datacenter_id: Uuid,
-	dispatched_job_id: String,
-	alloc_id: String,
+	dispatched_job_id: Option<String>,
+	alloc_id: Option<String>,
 }
 
 #[activity(UpdateDb)]
@@ -88,12 +112,16 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<Upd
 #[derive(Debug, Serialize, Deserialize, Hash)]
 struct DeleteJobInput {
 	job_id: String,
-	alloc_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct DeleteJobOutput {
+	job_exists: bool,
 }
 
 #[activity(DeleteJob)]
-async fn delete_job(ctx: &ActivityCtx, input: &DeleteJobInput) -> GlobalResult<()> {
-	// TODO: Handle 404 safely. See RIV-179
+async fn delete_job(ctx: &ActivityCtx, input: &DeleteJobInput) -> GlobalResult<DeleteJobOutput> {
+	// TODO: Handle 404 safely. See RVTEE-498
 	// Stop the job.
 	//
 	// Setting purge to false will change the behavior of the create poll
@@ -115,55 +143,49 @@ async fn delete_job(ctx: &ActivityCtx, input: &DeleteJobInput) -> GlobalResult<(
 	{
 		Ok(_) => {
 			tracing::info!("job stopped");
-
-			kill_allocation(input.alloc_id.clone())?;
+			Ok(DeleteJobOutput { job_exists: true })
 		}
 		Err(err) => {
 			tracing::warn!(?err, "error thrown while stopping job");
+			Ok(DeleteJobOutput { job_exists: false })
 		}
 	}
-
-	Ok(())
 }
 
-#[message("ds_server_destroy_complete")]
-pub struct DestroyComplete {}
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct KillAllocInput {
+	alloc_id: String,
+}
 
-/// Kills the allocation after 30 seconds
-///
-/// See `docs/packages/job/JOB_DRAINING_AND_KILL_TIMEOUTS.md`
-fn kill_allocation(alloc_id: String) -> GlobalResult<()> {
-	tokio::task::Builder::new()
-		.name("ds::workflows::server::destroy::kill_allocation")
-		.spawn(
-			async move {
-				tokio::time::sleep(util_job::JOB_STOP_TIMEOUT).await;
+#[activity(KillAlloc)]
+async fn kill_alloc(ctx: &ActivityCtx, input: &KillAllocInput) -> GlobalResult<()> {
+	// Kills the allocation after 30 seconds
+	//
+	// See `docs/packages/job/JOB_DRAINING_AND_KILL_TIMEOUTS.md`
 
-				tracing::info!(?alloc_id, "manually killing allocation");
+	// TODO: Move this to a workflow sleep RVTEE-497
+	tokio::time::sleep(util_job::JOB_STOP_TIMEOUT).await;
 
-				if let Err(err) = signal_allocation(
-					&NEW_NOMAD_CONFIG,
-					&alloc_id,
-					None,
-					Some(super::NOMAD_REGION),
-					None,
-					None,
-					Some(nomad_client_old::models::AllocSignalRequest {
-						task: None,
-						signal: Some("SIGKILL".to_string()),
-					}),
-				)
-				.await
-				{
-					tracing::warn!(
-						?err,
-						?alloc_id,
-						"error while trying to manually kill allocation"
-					);
-				}
-			}
-			.in_current_span(),
-		)?;
+	// TODO: Handle 404 safely. See RVTEE-498
+	if let Err(err) = signal_allocation(
+		&NEW_NOMAD_CONFIG,
+		&input.alloc_id,
+		None,
+		Some(super::NOMAD_REGION),
+		None,
+		None,
+		Some(nomad_client_old::models::AllocSignalRequest {
+			task: None,
+			signal: Some("SIGKILL".to_string()),
+		}),
+	)
+	.await
+	{
+		tracing::warn!(
+			?err,
+			"error while trying to manually kill allocation, ignoring"
+		);
+	}
 
 	Ok(())
 }

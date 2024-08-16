@@ -181,7 +181,7 @@ pub async fn destroy(
 	assert::server_for_env(&ctx, server_id, game_id, env_id).await?;
 
 	let mut sub = ctx
-		.subscribe::<ds::workflows::server::destroy::DestroyComplete>(&json!({
+		.subscribe::<ds::workflows::server::destroy::DestroyStarted>(&json!({
 			"server_id": server_id,
 		}))
 		.await?;
