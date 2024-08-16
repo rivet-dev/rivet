@@ -90,7 +90,7 @@ pub(crate) async fn create_dns_record(
 					cf::dns::DnsContent::TXT { .. } => "TXT",
 					cf::dns::DnsContent::SRV { .. } => "SRV",
 				};
-				let list_records_res = get_dns_record(cf_token, record_name, dns_type).await?;
+				let list_records_res = get_dns_record(cf_token, zone_id, record_name, dns_type).await?;
 
 				if let Some(record) = list_records_res {
 					delete_dns_record(client, zone_id, &record.id).await?;
@@ -142,17 +142,15 @@ pub(crate) async fn delete_dns_record(
 /// Fetches the dns record by name.
 async fn get_dns_record(
 	cf_token: &str,
+	zone_id: &str,
 	record_name: &str,
 	dns_type: &str,
 ) -> GlobalResult<Option<cf::dns::DnsRecord>> {
 	let list_records_res = reqwest::Client::new()
-		.get("https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records")
+		.get(format!("https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records"))
 		.bearer_auth(cf_token)
-		.query(&("name", &record_name))
-		.query(&("type", dns_type))
+		.query(&[("name", record_name), ("type", dns_type)])
 		.send()
-		.await?
-		.to_global_error()
 		.await?;
 
 	let status = list_records_res.status();

@@ -12,4 +12,5 @@ rivet-metrics = { path = "../../../../../lib/metrics" }
 rivet-runtime = { path = "../../../../../lib/runtime" }
 
 cluster = { path = "../../../cluster" }
+ds = { path = "../../../ds" }
 linode = { path = "../../../linode" }

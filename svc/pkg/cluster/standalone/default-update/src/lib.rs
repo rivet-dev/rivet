@@ -142,7 +142,7 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 	if cluster_res.clusters.is_empty() {
 		tracing::warn!("creating default cluster");
 
-		ctx.tagged_workflow(&json!({
+		ctx.dispatch_tagged_workflow(&json!({
 			"cluster_id": cluster_id,
 		}), cluster::workflows::cluster::Input {
 			cluster_id,

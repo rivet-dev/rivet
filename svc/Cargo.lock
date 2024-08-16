@@ -6094,6 +6094,7 @@ version = "0.0.1"
 dependencies = [
  "chirp-workflow",
  "cluster",
+ "ds",
  "linode",
  "rivet-health-checks",
  "rivet-metrics",

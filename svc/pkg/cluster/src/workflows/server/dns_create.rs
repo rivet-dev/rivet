@@ -102,7 +102,7 @@ async fn create_dns_record(
 	let cf_token = util::env::read_secret(&["cloudflare", "terraform", "auth_token"]).await?;
 	let client = cf_client(Some(&cf_token)).await?;
 
-	create_dns_record(
+	let record_id = create_dns_record(
 		&client,
 		&cf_token,
 		&input.zone_id,
@@ -112,22 +112,6 @@ async fn create_dns_record(
 		},
 	)
 	.await?;
-
-	let create_record_res = client
-		.request(&cf::dns::CreateDnsRecord {
-			zone_identifier: &input.zone_id,
-			params: cf::dns::CreateDnsRecordParams {
-				name: &input.record_name,
-				content: cf::dns::DnsContent::A {
-					content: input.public_ip,
-				},
-				proxied: Some(false),
-				ttl: Some(60),
-				priority: None,
-			},
-		})
-		.await?;
-	let record_id = create_record_res.result.id;
 
 	tracing::info!(%record_id, "created dns record");
 

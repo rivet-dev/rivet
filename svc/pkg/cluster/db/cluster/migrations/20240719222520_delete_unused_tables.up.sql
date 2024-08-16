@@ -1,2 +1,3 @@
 -- No longer needed
-RENAME TABLE servers_linode TO servers_linode_archive;
+ALTER TABLE servers_linode
+	RENAME TO servers_linode_archive;
