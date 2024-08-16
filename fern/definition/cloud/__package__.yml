@@ -37,6 +37,8 @@ types:
       main: string
       cdn: string
       job: string
+      # TODO: This is the legacy name, but changing this MIGHT break CLI 1.0
+      # clients. Need to check this.
       opengb: optional<string>
 
   BootstrapOrigins:

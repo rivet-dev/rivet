@@ -902,7 +902,7 @@ impl ServiceContextData {
 			let opengb_output = terraform::output::read_opengb(&project_ctx).await;
 
 			env.insert(
-				"CLOUDFLARE_OPENGB_DISPATCHER_NAMESPACE".into(),
+				"CLOUDFLARE_BACKEND_DISPATCHER_NAMESPACE".into(),
 				opengb_output.dispatcher_namespace_name.to_string(),
 			);
 		}
