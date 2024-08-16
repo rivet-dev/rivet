@@ -129,7 +129,9 @@ async fn print_test_data(ctx: TestCtx) {
 		invalid_token = ?invalid_token.token.clone().unwrap().token,
 		build_id = ?build_res.build_id.unwrap(),
 		env_id = ?env_id,
-		"test data");
+		"test data"
+	);
+
 	//
 	// let runtime = Some(
 	// 	proto::backend::pkg::dynamic_servers::server_create::request::Runtime::DockerRuntime(

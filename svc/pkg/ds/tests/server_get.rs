@@ -39,6 +39,7 @@ async fn server_get(ctx: TestCtx) {
 			"some_other_envkey_test".to_string(),
 			"4325234356".to_string(),
 		),
+		("HTTP_PORT".to_string(), "28234".to_string()),
 	]
 	.into_iter()
 	.collect();

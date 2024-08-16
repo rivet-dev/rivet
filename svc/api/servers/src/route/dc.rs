@@ -22,7 +22,7 @@ pub async fn list(
 		.await?;
 	let cluster_id = unwrap!(cluster_res.games.first()).cluster_id;
 
-	let mut cluster_dcs_res = ctx
+	let cluster_dcs_res = ctx
 		.op(cluster::ops::datacenter::list::Input {
 			cluster_ids: vec![cluster_id],
 		})

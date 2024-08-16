@@ -41,10 +41,10 @@ struct UpdateDbInput {
 
 #[derive(Debug, Serialize, Deserialize, Hash, sqlx::FromRow)]
 struct UpdateDbOutput {
-	ds_server_id: Uuid,
-	ds_datacenter_id: Uuid,
-	alloc_id: String,
+	server_id: Uuid,
+	datacenter_id: Uuid,
 	dispatched_job_id: String,
+	alloc_id: String,
 }
 
 #[activity(UpdateDb)]
@@ -58,19 +58,20 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<Upd
 			sql_fetch_one!(
 				[ctx, UpdateDbOutput, @tx tx]
 				"
-				UPDATE db_ds.servers
-				SET delete_ts = $2
-				WHERE
-					server_id = $1 AND
-					delete_ts IS NULL
-				RETURNING
-					server_id,
-					datacenter_id
-					server_nomad.nomad_dispatched_job_id,
-					server_nomad.nomad_alloc_id,
-				FROM db_ds.servers AS s
+				UPDATE db_ds.servers AS s1
+				SET destroy_ts = $2
+				FROM db_ds.servers AS s2
 				JOIN db_ds.server_nomad AS sn
-				ON s.server_id = sn.server_id
+				ON s2.server_id = sn.server_id
+				WHERE
+					s1.server_id = $1 AND
+					s1.server_id = s2.server_id AND
+					s2.destroy_ts IS NULL
+				RETURNING
+					s1.server_id,
+					s1.datacenter_id,
+					sn.nomad_dispatched_job_id AS dispatched_job_id,
+					sn.nomad_alloc_id AS alloc_id
 				",
 				server_id,
 				ctx.ts(),
@@ -112,8 +113,8 @@ async fn delete_job(ctx: &ActivityCtx, input: &DeleteJobInput) -> GlobalResult<(
 		Ok(_) => {
 			tracing::info!("job stopped");
 
-			// TODO: Manually kill the allocation after util_job::JOB_STOP_TIMEOUT
-			// task::spawn(async move {
+			// tokio::task::spawn(async move {
+
 			// });
 		}
 		Err(err) => {

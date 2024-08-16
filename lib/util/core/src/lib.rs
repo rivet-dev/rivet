@@ -173,21 +173,19 @@ impl Default for Backoff {
 /// Used in workflow activity inputs/outputs. Using this over BTreeMap is preferred because this does not
 /// reorder keys, providing faster insert and lookup.
 #[derive(Serialize, Deserialize)]
-pub struct HashableMap<K: Eq + Hash, V: Hash> {
-	map: IndexMap<K, V>,
-}
+pub struct HashableMap<K: Eq + Hash, V: Hash>(IndexMap<K, V>);
 
 impl<K: Eq + Hash, V: Hash> Deref for HashableMap<K, V> {
 	type Target = IndexMap<K, V>;
 
 	fn deref(&self) -> &Self::Target {
-		&self.map
+		&self.0
 	}
 }
 
 impl<K: Eq + Ord + Hash, V: Hash> Hash for HashableMap<K, V> {
 	fn hash<H: Hasher>(&self, state: &mut H) {
-		let mut kv = Vec::from_iter(&self.map);
+		let mut kv = Vec::from_iter(&self.0);
 		kv.sort_unstable_by(|a, b| a.0.cmp(b.0));
 		kv.hash(state);
 	}
@@ -201,13 +199,11 @@ impl<K: Eq + Hash + fmt::Debug, V: Hash + fmt::Debug> fmt::Debug for HashableMap
 
 impl<K: Eq + Hash + Clone, V: Hash + Clone> Clone for HashableMap<K, V> {
 	fn clone(&self) -> Self {
-		HashableMap {
-			map: self.map.clone(),
-		}
+		HashableMap(self.0.clone())
 	}
 
 	fn clone_from(&mut self, other: &Self) {
-		self.map.clone_from(&other.map);
+		self.0.clone_from(&other.0);
 	}
 }
 
@@ -218,9 +214,7 @@ pub trait AsHashableExt<K: Eq + Hash, V: Hash> {
 
 impl<K: Eq + Clone + Hash, V: Clone + Hash> AsHashableExt<K, V> for HashMap<K, V> {
 	fn as_hashable(&self) -> HashableMap<K, V> {
-		HashableMap {
-			map: self.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
-		}
+		HashableMap(self.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
 	}
 }
 
