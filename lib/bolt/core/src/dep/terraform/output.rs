@@ -60,7 +60,7 @@ pub struct InfraArtifacts {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct OpenGb {
+pub struct Backend {
 	pub dispatcher_namespace_name: TerraformOutputValue<String>,
 }
 
@@ -153,8 +153,8 @@ pub async fn read_infra_artifacts(ctx: &ProjectContext) -> InfraArtifacts {
 	read_plan::<InfraArtifacts>(ctx, "infra_artifacts").await
 }
 
-pub async fn read_opengb(ctx: &ProjectContext) -> OpenGb {
-	read_plan::<OpenGb>(ctx, "opengb").await
+pub async fn read_backend(ctx: &ProjectContext) -> Backend {
+	read_plan::<Backend>(ctx, "backend").await
 }
 
 /// Reads a Terraform plan's output and decodes in to type.

@@ -64,7 +64,7 @@ resource "cloudflare_origin_ca_certificate" "rivet_gg" {
 			"*.api.${var.domain_main}",
 			"api.${var.domain_main}",
 		],
-		var.opengb_enabled ? [
+		var.backend_enabled ? [
 			"*.backend.${var.domain_main}",
 		] : []
 	])

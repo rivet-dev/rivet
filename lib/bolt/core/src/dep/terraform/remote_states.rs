@@ -40,7 +40,7 @@ pub fn dependency_graph(ctx: &ProjectContext) -> HashMap<&'static str, Vec<Remot
 		"grafana" => vec![
 			RemoteStateBuilder::default().plan_id(crdb_plan).data_name("cockroachdb").build().unwrap(),
 		],
-		"opengb" => vec![
+		"backend" => vec![
 			RemoteStateBuilder::default().plan_id("dns").build().unwrap(),
 		],
 	}

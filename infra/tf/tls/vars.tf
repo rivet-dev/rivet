@@ -25,8 +25,8 @@ variable "prometheus_enabled" {
 	type = bool
 }
 
-# MARK: OpenGB
-variable "opengb_enabled" {
+# MARK: Backend
+variable "backend_enabled" {
 	type = bool
 }
 

@@ -230,10 +230,10 @@ async fn vars(ctx: &ProjectContext) {
 		json!(config.rivet.provisioning.is_some()),
 	);
 
-	// OpenGB
+	// Backend
 	vars.insert(
-		"opengb_enabled".into(),
-		json!(config.rivet.opengb.is_some()),
+		"backend_enabled".into(),
+		json!(config.rivet.backend.is_some()),
 	);
 
 	// Tunnels
@@ -324,7 +324,7 @@ async fn vars(ctx: &ProjectContext) {
 			"name": domain_main_api,
 		}));
 
-		// OpenGB
+		// Backend
 		extra_dns.push(json!({
 			"zone_name": "main",
 			"name": format!("*.backend.{domain_main}"),

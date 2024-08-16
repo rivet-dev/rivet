@@ -100,12 +100,12 @@ resource "helm_release" "vector" {
 					EOF
 				}
 
-				opengb_worker = {
+				backend_worker = {
 					type = "filter"
 					inputs = ["http_json"]
 					condition = {
 						type = "vrl"
-						source = ".path == \"/opengb\""
+						source = ".path == \"/backend\""
 					}
 				}
 			}
@@ -160,9 +160,9 @@ resource "helm_release" "vector" {
 					}
 				}
 
-				clickhouse_opengb_logs = {
+				clickhouse_backend_logs = {
 					type = "clickhouse"
-					inputs = ["opengb_worker"]
+					inputs = ["backend_worker"]
 					compression = "gzip"
 					database = "db_cf_log"
 					endpoint = "https://${var.clickhouse_host}:${var.clickhouse_port_https}"

@@ -214,11 +214,11 @@ impl ProjectContextData {
 			}
 		}
 
-		// MARK: OpenGB
-		if self.ns().rivet.opengb.is_some() {
+		// MARK: Backend
+		if self.ns().rivet.backend.is_some() {
 			assert!(
 				self.ns().dns.is_some(),
-				"must have DNS configured with for OpenGB"
+				"must have DNS configured with for backend"
 			);
 		}
 

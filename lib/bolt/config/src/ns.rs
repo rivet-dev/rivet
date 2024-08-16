@@ -536,7 +536,7 @@ pub struct Rivet {
 	#[serde(default)]
 	pub billing: Option<RivetBilling>,
 	#[serde(default)]
-	pub opengb: Option<RivetOpenGb>,
+	pub backend: Option<RivetBackend>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -549,7 +549,7 @@ pub struct Telemetry {
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 #[serde(deny_unknown_fields)]
-pub struct RivetOpenGb {}
+pub struct RivetBackend {}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]

@@ -41,8 +41,8 @@ variable "extra_dns" {
 	}))
 }
 
-# MARK: OpenGB
-variable "opengb_enabled" {
+# MARK: Backend
+variable "backend_enabled" {
 	type = bool
 }
 

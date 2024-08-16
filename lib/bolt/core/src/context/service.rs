@@ -897,13 +897,13 @@ impl ServiceContextData {
 			(*infra_artifacts_output.job_runner_binary_key).clone(),
 		);
 
-		// OpenGB
-		if project_ctx.ns().rivet.opengb.is_some() {
-			let opengb_output = terraform::output::read_opengb(&project_ctx).await;
+		// Backend
+		if project_ctx.ns().rivet.backend.is_some() {
+			let backend_output = terraform::output::read_backend(&project_ctx).await;
 
 			env.insert(
 				"CLOUDFLARE_BACKEND_DISPATCHER_NAMESPACE".into(),
-				opengb_output.dispatcher_namespace_name.to_string(),
+				backend_output.dispatcher_namespace_name.to_string(),
 			);
 		}
 

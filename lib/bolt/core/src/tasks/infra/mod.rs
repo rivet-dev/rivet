@@ -285,12 +285,12 @@ pub fn build_plan(
 		}
 	}
 
-	// OpenGB
-	if ctx.ns().rivet.opengb.is_some() {
+	// Backend
+	if ctx.ns().rivet.backend.is_some() {
 		plan.push(PlanStep {
-			name_id: "opengb",
+			name_id: "backend",
 			kind: PlanStepKind::Terraform {
-				plan_id: "opengb".into(),
+				plan_id: "backend".into(),
 				needs_destroy: true,
 			},
 		});
