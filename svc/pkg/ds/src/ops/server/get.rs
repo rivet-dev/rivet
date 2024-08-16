@@ -160,8 +160,10 @@ pub async fn get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
 		),
 	)?;
 
-	let servers = server_rows
-		.into_iter()
+	let servers = input
+		.server_ids
+		.iter()
+		.filter_map(|server_id| server_rows.iter().find(|x| x.server_id == *server_id))
 		.map(|server| {
 			let server_nomad = unwrap!(server_nomad_rows
 				.iter()
@@ -205,14 +207,14 @@ pub async fn get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
 				env_id: server.env_id,
 				datacenter_id: server.datacenter_id,
 				cluster_id: server.cluster_id,
-				tags: server.tags.0,
+				tags: server.tags.0.clone(),
 				resources: ServerResources {
 					cpu_millicores: server.resources_cpu_millicores.try_into()?,
 					memory_mib: server.resources_memory_mib.try_into()?,
 				},
 				kill_timeout_ms: server.kill_timeout_ms,
-				args: server.args,
-				environment: server.environment.0,
+				args: server.args.clone(),
+				environment: server.environment.0.clone(),
 				image_id: server.image_id,
 				network_mode: unwrap!(NetworkMode::from_repr(server.network_mode.try_into()?)),
 				network_ports: ports,

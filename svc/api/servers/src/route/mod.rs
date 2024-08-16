@@ -28,16 +28,38 @@ define_router! {
 		"games" / Uuid / "environments" / Uuid / "servers": {
 			GET: servers::list_servers(
 				query: servers::ListQuery,
+				rate_limit: {
+					buckets: [
+						{ count: 200, bucket: duration::minutes(1) },
+					],
+				},
 			),
 			POST: servers::create(
 				body: models::ServersCreateServerRequest,
+				rate_limit: {
+					buckets: [
+						{ count: 100, bucket: duration::minutes(1) },
+					],
+				},
 			),
 		},
 
 		"games" / Uuid / "environments" / Uuid / "servers" / Uuid: {
-			GET: servers::get(),
+			GET: servers::get(
+				rate_limit: {
+					buckets: [
+						{ count: 120, bucket: duration::minutes(1) },
+					],
+				},
+
+			),
 			DELETE: servers::destroy(
 				query: servers::DeleteQuery,
+				rate_limit: {
+					buckets: [
+						{ count: 200, bucket: duration::minutes(1) },
+					],
+				},
 			),
 		},
 
@@ -52,11 +74,22 @@ define_router! {
 		"games" / Uuid / "environments" / Uuid / "builds": {
 			GET: builds::list(
 				query: builds::GetQuery,
+				rate_limit: {
+					buckets: [
+						{ count: 200, bucket: duration::minutes(1) },
+					],
+				},
 			),
 		},
 
 		"games" / Uuid / "environments" / Uuid / "builds" / Uuid: {
-			GET: builds::get(),
+			GET: builds::get(
+				rate_limit: {
+					buckets: [
+						{ count: 100, bucket: duration::minutes(1) },
+					],
+				},
+			),
 		},
 
 		"games" / Uuid / "environments" / Uuid / "builds" / Uuid / "tags": {
@@ -73,7 +106,13 @@ define_router! {
 
 		// MARK: Datacenters
 		"games" / Uuid / "environments" / Uuid / "datacenters": {
-			GET: dc::list(),
+			GET: dc::list(
+				rate_limit: {
+					buckets: [
+						{ count: 100, bucket: duration::minutes(1) },
+					],
+				},
+			),
 		},
 	},
 }

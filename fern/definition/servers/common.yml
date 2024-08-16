@@ -9,7 +9,6 @@ types:
       id: uuid
       environment: uuid
       datacenter: uuid
-      cluster: uuid
       tags: unknown
       runtime: Runtime
       network: Network

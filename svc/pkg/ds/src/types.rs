@@ -95,7 +95,6 @@ impl ApiTryFrom<Server> for models::ServersServer {
 			id: value.server_id,
 			environment: value.env_id,
 			datacenter: value.datacenter_id,
-			cluster: value.cluster_id,
 			created_at: value.create_ts,
 			started_at: value.start_ts,
 			connectable_at: value.connectable_ts,

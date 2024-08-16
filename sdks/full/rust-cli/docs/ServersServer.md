@@ -4,7 +4,6 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**cluster** | [**uuid::Uuid**](uuid::Uuid.md) |  | 
 **connectable_at** | Option<**i64**> |  | [optional]
 **created_at** | **i64** |  | 
 **datacenter** | [**uuid::Uuid**](uuid::Uuid.md) |  | 

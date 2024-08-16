@@ -434,7 +434,6 @@ type Server struct {
 	Id            uuid.UUID   `json:"id"`
 	Environment   uuid.UUID   `json:"environment"`
 	Datacenter    uuid.UUID   `json:"datacenter"`
-	Cluster       uuid.UUID   `json:"cluster"`
 	Tags          interface{} `json:"tags,omitempty"`
 	Runtime       *Runtime    `json:"runtime,omitempty"`
 	Network       *Network    `json:"network,omitempty"`

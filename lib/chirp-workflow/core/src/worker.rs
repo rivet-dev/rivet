@@ -9,7 +9,7 @@ use crate::{
 	util,
 };
 
-const TICK_INTERVAL: Duration = Duration::from_secs(30);
+const TICK_INTERVAL: Duration = Duration::from_secs(5);
 
 /// Used to spawn a new thread that indefinitely polls the database for new workflows. Only pulls workflows
 /// that are registered in its registry. After pulling, the workflows are ran and their state is written to

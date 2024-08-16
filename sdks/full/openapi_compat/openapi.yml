@@ -4538,6 +4538,20 @@ components:
       required:
       - build
       type: object
+    ServersDatacenter:
+      properties:
+        id:
+          format: uuid
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+      required:
+      - id
+      - slug
+      - name
+      type: object
     ServersDestroyServerResponse:
       properties: {}
       type: object
@@ -4719,9 +4733,6 @@ components:
       type: object
     ServersServer:
       properties:
-        cluster:
-          format: uuid
-          type: string
         connectable_at:
           format: int64
           type: integer
@@ -4756,7 +4767,6 @@ components:
       - id
       - environment
       - datacenter
-      - cluster
       - tags
       - runtime
       - network
