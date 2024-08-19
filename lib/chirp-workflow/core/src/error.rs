@@ -131,28 +131,33 @@ pub enum WorkflowError {
 
 	#[error("duplicate registered workflow: {0}")]
 	DuplicateRegisteredWorkflow(String),
+
+	#[error("sleeping until {0}")]
+	Sleep(i64),
 }
 
 impl WorkflowError {
-	pub(crate) fn backoff(&self) -> Option<i64> {
-		if let WorkflowError::ActivityFailure(_, error_count) = self {
-			// NOTE: Max retry is handled in `WorkflowCtx::activity`
-			let mut backoff =
-				rivet_util::Backoff::new_at(8, None, RETRY_TIMEOUT_MS, 500, *error_count);
-			let next = backoff.step().expect("should not have max retry");
+	pub(crate) fn deadline_ts(&self) -> Option<i64> {
+		match self {
+			WorkflowError::ActivityFailure(_, error_count) => {
+				// NOTE: Max retry is handled in `WorkflowCtx::activity`
+				let mut backoff =
+					rivet_util::Backoff::new_at(8, None, RETRY_TIMEOUT_MS, 500, *error_count);
+				let next = backoff.step().expect("should not have max retry");
 
-			// Calculate timestamp based on the backoff
-			let duration_until = next.duration_since(Instant::now());
-			let deadline_ts = (SystemTime::now() + duration_until)
-				.duration_since(UNIX_EPOCH)
-				.unwrap_or_else(|err| unreachable!("time is broken: {}", err))
-				.as_millis()
-				.try_into()
-				.expect("doesn't fit in i64");
+				// Calculate timestamp based on the backoff
+				let duration_until = next.duration_since(Instant::now());
+				let deadline_ts = (SystemTime::now() + duration_until)
+					.duration_since(UNIX_EPOCH)
+					.unwrap_or_else(|err| unreachable!("time is broken: {}", err))
+					.as_millis()
+					.try_into()
+					.expect("doesn't fit in i64");
 
-			Some(deadline_ts)
-		} else {
-			None
+				Some(deadline_ts)
+			}
+			WorkflowError::Sleep(ts) => Some(*ts),
+			_ => None,
 		}
 	}
 
@@ -162,7 +167,8 @@ impl WorkflowError {
 			| WorkflowError::ActivityTimeout
 			| WorkflowError::OperationTimeout
 			| WorkflowError::NoSignalFound(_)
-			| WorkflowError::SubWorkflowIncomplete(_) => true,
+			| WorkflowError::SubWorkflowIncomplete(_)
+			| WorkflowError::Sleep(_) => true,
 			_ => false,
 		}
 	}

@@ -7,7 +7,7 @@ use crate::{
 	activity::ActivityId,
 	db::{
 		ActivityEventRow, LoopEventRow, MessageSendEventRow, PulledWorkflow, PulledWorkflowRow,
-		SignalEventRow, SignalSendEventRow, SubWorkflowEventRow,
+		SignalEventRow, SignalSendEventRow, SleepEventRow, SubWorkflowEventRow,
 	},
 	error::{WorkflowError, WorkflowResult},
 	util::Location,
@@ -24,6 +24,7 @@ pub enum Event {
 	MessageSend(MessageSendEvent),
 	SubWorkflow(SubWorkflowEvent),
 	Loop(LoopEvent),
+	Sleep(SleepEvent),
 	// Used as a placeholder for branching locations
 	Branch,
 }
@@ -37,6 +38,7 @@ impl std::fmt::Display for Event {
 			Event::MessageSend(message_send) => write!(f, "message send {:?}", message_send.name),
 			Event::SubWorkflow(sub_workflow) => write!(f, "sub workflow {:?}", sub_workflow.name),
 			Event::Loop(_) => write!(f, "loop"),
+			Event::Sleep(_) => write!(f, "sleep"),
 			Event::Branch => write!(f, "branch"),
 		}
 	}
@@ -175,6 +177,17 @@ impl TryFrom<LoopEventRow> for LoopEvent {
 	}
 }
 
+#[derive(Debug)]
+pub struct SleepEvent {}
+
+impl TryFrom<SleepEventRow> for SleepEvent {
+	type Error = WorkflowError;
+
+	fn try_from(_value: SleepEventRow) -> WorkflowResult<Self> {
+		Ok(SleepEvent {})
+	}
+}
+
 /// Takes all workflow events (each with their own location) and combines them via enum into a hashmap of the
 /// following structure:
 ///
@@ -196,6 +209,7 @@ pub fn combine_events(
 	msg_send_events: Vec<MessageSendEventRow>,
 	sub_workflow_events: Vec<SubWorkflowEventRow>,
 	loop_events: Vec<LoopEventRow>,
+	sleep_events: Vec<SleepEventRow>,
 ) -> WorkflowResult<Vec<PulledWorkflow>> {
 	// Map workflow rows by workflow id
 	let mut workflows_by_id = workflow_rows
@@ -207,77 +221,32 @@ pub fn combine_events(
 		})
 		.collect::<HashMap<_, _>>();
 
-	for event in activity_events {
-		let (_, ref mut events_by_location) = workflows_by_id
-			.get_mut(&event.workflow_id)
-			.expect("unreachable, workflow for event not found");
-		let (root_location, idx) = split_location(&event.location);
+	macro_rules! concat_events {
+		($events:expr, $variant:tt) => {
+			for event in $events {
+				// Get workflow entry
+				let (_, ref mut events_by_location) = workflows_by_id
+					.get_mut(&event.workflow_id)
+					.expect("unreachable, workflow for event not found");
 
-		events_by_location
-			.entry(root_location)
-			.or_default()
-			.push((idx, Event::Activity(event.try_into()?)));
+				// Split last index from the location list
+				let (root_location, idx) = split_location(&event.location);
+
+				events_by_location
+					.entry(root_location)
+					.or_default()
+					.push((idx, Event::$variant(event.try_into()?)));
+			}
+		};
 	}
 
-	for event in signal_events {
-		let (_, ref mut events_by_location) = workflows_by_id
-			.get_mut(&event.workflow_id)
-			.expect("unreachable, workflow for event not found");
-		let (root_location, idx) = split_location(&event.location);
-
-		events_by_location
-			.entry(root_location)
-			.or_default()
-			.push((idx, Event::Signal(event.try_into()?)));
-	}
-
-	for event in signal_send_events {
-		let (_, ref mut events_by_location) = workflows_by_id
-			.get_mut(&event.workflow_id)
-			.expect("unreachable, workflow for event not found");
-		let (root_location, idx) = split_location(&event.location);
-
-		events_by_location
-			.entry(root_location)
-			.or_default()
-			.push((idx, Event::SignalSend(event.try_into()?)));
-	}
-
-	for event in msg_send_events {
-		let (_, ref mut events_by_location) = workflows_by_id
-			.get_mut(&event.workflow_id)
-			.expect("unreachable, workflow for event not found");
-		let (root_location, idx) = split_location(&event.location);
-
-		events_by_location
-			.entry(root_location)
-			.or_default()
-			.push((idx, Event::MessageSend(event.try_into()?)));
-	}
-
-	for event in sub_workflow_events {
-		let (_, ref mut events_by_location) = workflows_by_id
-			.get_mut(&event.workflow_id)
-			.expect("unreachable, workflow for event not found");
-		let (root_location, idx) = split_location(&event.location);
-
-		events_by_location
-			.entry(root_location)
-			.or_default()
-			.push((idx, Event::SubWorkflow(event.try_into()?)));
-	}
-
-	for event in loop_events {
-		let (_, ref mut events_by_location) = workflows_by_id
-			.get_mut(&event.workflow_id)
-			.expect("unreachable, workflow for event not found");
-		let (root_location, idx) = split_location(&event.location);
-
-		events_by_location
-			.entry(root_location)
-			.or_default()
-			.push((idx, Event::Loop(event.try_into()?)));
-	}
+	concat_events!(activity_events, Activity);
+	concat_events!(signal_events, Signal);
+	concat_events!(signal_send_events, SignalSend);
+	concat_events!(msg_send_events, MessageSend);
+	concat_events!(sub_workflow_events, SubWorkflow);
+	concat_events!(loop_events, Loop);
+	concat_events!(sleep_events, Sleep);
 
 	let workflows = workflows_by_id
 		.into_values()

@@ -169,6 +169,15 @@ pub trait Database: Send {
 		output: Option<serde_json::Value>,
 		loop_location: Option<&[usize]>,
 	) -> WorkflowResult<()>;
+
+	/// Writes a workflow sleep event to history.
+	async fn commit_workflow_sleep_event(
+		&self,
+		from_workflow_id: Uuid,
+		location: &[usize],
+		util_ts: i64,
+		loop_location: Option<&[usize]>,
+	) -> WorkflowResult<()>;
 }
 
 #[derive(sqlx::FromRow)]
@@ -265,4 +274,10 @@ pub struct LoopEventRow {
 	pub location: Vec<i64>,
 	pub output: Option<serde_json::Value>,
 	pub iteration: i64,
+}
+
+#[derive(sqlx::FromRow)]
+pub struct SleepEventRow {
+	pub workflow_id: Uuid,
+	pub location: Vec<i64>,
 }

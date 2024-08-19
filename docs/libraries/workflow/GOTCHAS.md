@@ -122,3 +122,15 @@ ctx
 	})
 	.await?;
 ```
+
+## Nested options with serde
+
+Nested options do not serialize/deserialize consistently with serde.
+
+```rust
+Some(Some(1234)) -> "1234" -> Some(Some(1234))
+Some(None)		 -> "null" -> None
+None			 -> "null" -> None
+```
+
+Be careful when writing your struct definitions.

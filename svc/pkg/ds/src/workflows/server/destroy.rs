@@ -1,5 +1,3 @@
-use std::convert::TryInto;
-
 use chirp_workflow::prelude::*;
 use futures_util::FutureExt;
 use serde_json::json;
@@ -43,11 +41,15 @@ pub(crate) async fn ds_server_destroy(ctx: &mut WorkflowCtx, input: &Input) -> G
 
 		if delete_output.job_exists {
 			if let Some(alloc_id) = &dynamic_server.alloc_id {
-				ctx.activity(KillAllocInput {
-					alloc_id: alloc_id.clone(),
-					kill_timeout_ms: input
+				ctx.sleep(
+					input
 						.override_kill_timeout_ms
 						.unwrap_or(dynamic_server.kill_timeout_ms),
+				)
+				.await?;
+
+				ctx.activity(KillAllocInput {
+					alloc_id: alloc_id.clone(),
 				})
 				.await?;
 			}
@@ -162,21 +164,13 @@ async fn delete_job(ctx: &ActivityCtx, input: &DeleteJobInput) -> GlobalResult<D
 #[derive(Debug, Serialize, Deserialize, Hash)]
 struct KillAllocInput {
 	alloc_id: String,
-	kill_timeout_ms: i64,
 }
 
 /// Kills the server's allocation after 30 seconds
 ///
 /// See `docs/packages/job/JOB_DRAINING_AND_KILL_TIMEOUTS.md`
 #[activity(KillAlloc)]
-#[timeout = 45]
 async fn kill_alloc(ctx: &ActivityCtx, input: &KillAllocInput) -> GlobalResult<()> {
-	// TODO: Move this to a workflow sleep RVTEE-497
-	tokio::time::sleep(std::time::Duration::from_millis(
-		input.kill_timeout_ms.try_into()?,
-	))
-	.await;
-
 	// TODO: Handle 404 safely. See RVTEE-498
 	if let Err(err) = signal_allocation(
 		&NEW_NOMAD_CONFIG,

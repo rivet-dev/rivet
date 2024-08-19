@@ -18,8 +18,13 @@ use crate::{
 	metrics,
 	registry::RegistryHandle,
 	signal::Signal,
-	util::{self, GlobalErrorExt, Location},
+	util::{
+		self,
+		time::{DurationToMillis, TsToMillis},
+		GlobalErrorExt, Location,
+	},
 	workflow::{Workflow, WorkflowInput},
+	worker,
 };
 
 // Time to delay a workflow from retrying after an error
@@ -211,7 +216,7 @@ impl WorkflowCtx {
 			}
 			Err(err) => {
 				// Retry the workflow if its recoverable
-				let deadline_ts = if let Some(deadline_ts) = err.backoff() {
+				let deadline_ts = if let Some(deadline_ts) = err.deadline_ts() {
 					Some(deadline_ts)
 				} else if err.is_retryable() {
 					Some(rivet_util::timestamp::now() + RETRY_TIMEOUT_MS as i64)
@@ -1251,7 +1256,61 @@ impl WorkflowCtx {
 		Ok(output)
 	}
 
-	// TODO: sleep_for, sleep_until
+	pub async fn sleep<T: DurationToMillis>(&mut self, duration: T) -> GlobalResult<()> {
+		self.sleep_until(rivet_util::timestamp::now() + duration.to_millis()?)
+			.await
+	}
+
+	pub async fn sleep_until<T: TsToMillis>(&mut self, time: T) -> GlobalResult<()> {
+		let event = self.relevant_history().nth(self.location_idx);
+
+		// Slept before
+		if let Some(event) = event {
+			// Validate history is consistent
+			let Event::Sleep(_) = event else {
+				return Err(WorkflowError::HistoryDiverged(format!(
+					"expected {event} at {}, found sleep",
+					self.loc(),
+				)))
+				.map_err(GlobalError::raw);
+			};
+
+			tracing::debug!(name=%self.name, id=%self.workflow_id, "skipping replayed sleep");
+		}
+		// Sleep
+		else {
+			let ts = time.to_millis()?;
+
+			self.db
+				.commit_workflow_sleep_event(
+					self.workflow_id,
+					self.full_location().as_ref(),
+					ts,
+					self.loop_location(),
+				)
+				.await?;
+
+			let duration = ts - rivet_util::timestamp::now();
+			if duration < 0 {
+				// No-op
+				tracing::warn!("tried to sleep for a negative duration");
+			} else if duration < worker::TICK_INTERVAL.as_millis() as i64 + 1 {
+				tracing::info!(name=%self.name, id=%self.workflow_id, until_ts=%ts, "sleeping in memory");
+
+				// Sleep in memory if duration is shorter than the worker tick
+				tokio::time::sleep(std::time::Duration::from_millis(duration.try_into()?)).await;
+			} else {
+				tracing::info!(name=%self.name, id=%self.workflow_id, until_ts=%ts, "sleeping");
+
+				return Err(WorkflowError::Sleep(ts)).map_err(GlobalError::raw);
+			}
+		}
+
+		// Move to next event
+		self.location_idx += 1;
+
+		Ok(())
+	}
 }
 
 impl WorkflowCtx {

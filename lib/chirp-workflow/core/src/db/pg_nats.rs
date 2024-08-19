@@ -8,14 +8,14 @@ use uuid::Uuid;
 
 use super::{
 	ActivityEventRow, Database, LoopEventRow, MessageSendEventRow, PulledWorkflow,
-	PulledWorkflowRow, SignalEventRow, SignalRow, SignalSendEventRow, SubWorkflowEventRow,
-	WorkflowRow,
+	PulledWorkflowRow, SignalEventRow, SignalRow, SignalSendEventRow, SleepEventRow,
+	SubWorkflowEventRow, WorkflowRow,
 };
 use crate::{
 	activity::ActivityId,
 	error::{WorkflowError, WorkflowResult},
 	event::combine_events,
-	message,
+	message, worker,
 };
 
 /// Max amount of workflows pulled from the database with each call to `pull_workflows`.
@@ -152,74 +152,84 @@ impl Database for DatabasePgNats {
 		filter: &[&str],
 	) -> WorkflowResult<Vec<PulledWorkflow>> {
 		// Select all workflows that haven't started or that have a wake condition
-		let workflow_rows = sqlx::query_as::<_, PulledWorkflowRow>(indoc!(
-			"
-			WITH
-				pull_workflows AS (
-					UPDATE db_workflow.workflows AS w
-						-- Assign this node to this workflow
-					SET worker_instance_id = $1
-					WHERE
-						-- Filter
-						workflow_name = ANY($2) AND
-						-- Not already complete
-						output IS NULL AND
-						-- No assigned node (not running)
-						worker_instance_id IS NULL AND
-						-- Check for wake condition
-						(
-							-- Immediate
-							wake_immediate OR
-							-- After deadline
-							wake_deadline_ts IS NOT NULL OR
-							-- Signal exists
-							(
-								SELECT true
-								FROM db_workflow.signals AS s
-								WHERE
-									s.workflow_id = w.workflow_id AND
-									s.signal_name = ANY(w.wake_signals) AND
-									s.ack_ts IS NULL
-								LIMIT 1
-							) OR
-							-- Tagged signal exists
-							(
-								SELECT true
-								FROM db_workflow.tagged_signals AS s
-								WHERE
-									s.signal_name = ANY(w.wake_signals) AND
-									s.tags <@ w.tags AND
-									s.ack_ts IS NULL
-								LIMIT 1
-							) OR
-							-- Sub workflow completed
-							(
-								SELECT true
-								FROM db_workflow.workflows AS w2
-								WHERE
-									w2.workflow_id = w.wake_sub_workflow_id AND
-									output IS NOT NULL
-							)
+		let workflow_rows = self
+			.query(|| async {
+				sqlx::query_as::<_, PulledWorkflowRow>(indoc!(
+					"
+					WITH
+						pull_workflows AS (
+							UPDATE db_workflow.workflows AS w
+								-- Assign this node to this workflow
+							SET worker_instance_id = $1
+							WHERE
+								-- Filter
+								workflow_name = ANY($2) AND
+								-- Not already complete
+								output IS NULL AND
+								-- No assigned node (not running)
+								worker_instance_id IS NULL AND
+								-- Check for wake condition
+								(
+									-- Immediate
+									wake_immediate OR
+									-- After deadline
+									(
+										wake_deadline_ts IS NOT NULL AND
+										$3 > wake_deadline_ts - $4
+									) OR
+									-- Signal exists
+									(
+										SELECT true
+										FROM db_workflow.signals AS s
+										WHERE
+											s.workflow_id = w.workflow_id AND
+											s.signal_name = ANY(w.wake_signals) AND
+											s.ack_ts IS NULL
+										LIMIT 1
+									) OR
+									-- Tagged signal exists
+									(
+										SELECT true
+										FROM db_workflow.tagged_signals AS s
+										WHERE
+											s.signal_name = ANY(w.wake_signals) AND
+											s.tags <@ w.tags AND
+											s.ack_ts IS NULL
+										LIMIT 1
+									) OR
+									-- Sub workflow completed
+									(
+										SELECT true
+										FROM db_workflow.workflows AS w2
+										WHERE
+											w2.workflow_id = w.wake_sub_workflow_id AND
+											output IS NOT NULL
+									)
+								)
+							LIMIT $5
+							RETURNING workflow_id, workflow_name, create_ts, ray_id, input, wake_deadline_ts
+						),
+						-- Update last ping
+						worker_instance_update AS (
+							UPSERT INTO db_workflow.worker_instances (worker_instance_id, last_ping_ts)
+							VALUES ($1, $3)
+							RETURNING 1
 						)
-					LIMIT $4
-					RETURNING workflow_id, workflow_name, create_ts, ray_id, input, wake_deadline_ts
-				),
-				-- Update last ping
-				worker_instance_update AS (
-					UPSERT INTO db_workflow.worker_instances (worker_instance_id, last_ping_ts)
-					VALUES ($1, $3)
-					RETURNING 1
-				)
-			SELECT * FROM pull_workflows
-			",
-		))
-		.bind(worker_instance_id)
-		.bind(filter)
-		.bind(rivet_util::timestamp::now())
-		.bind(MAX_PULLED_WORKFLOWS)
-		.fetch_all(&mut *self.conn().await?)
-		.await
-		.map_err(WorkflowError::Sqlx)?;
+					SELECT * FROM pull_workflows
+					",
+				))
+				.bind(worker_instance_id)
+				.bind(filter)
+				.bind(rivet_util::timestamp::now())
+				// Add padding to the tick interval so that the workflow deadline is never passed before its pulled.
+				// The worker sleeps internally to handle this
+				.bind(worker::TICK_INTERVAL.as_millis() as i64 + 1)
+				.bind(MAX_PULLED_WORKFLOWS)
+				.fetch_all(&mut *self.conn().await?)
+				.await
+				.map_err(WorkflowError::Sqlx)
+			})
+			.await?;
 
 		if workflow_rows.is_empty() {
 			return Ok(Vec::new());
@@ -240,6 +250,7 @@ impl Database for DatabasePgNats {
 			msg_send_events,
 			sub_workflow_events,
 			loop_events,
+			sleep_events,
 		) = tokio::try_join!(
 			async {
 				sqlx::query_as::<_, ActivityEventRow>(indoc!(
@@ -347,6 +358,21 @@ impl Database for DatabasePgNats {
 				.await
 				.map_err(WorkflowError::Sqlx)
 			},
+			async {
+				sqlx::query_as::<_, SleepEventRow>(indoc!(
+					"
+					SELECT
+						workflow_id, location
+					FROM db_workflow.workflow_sleep_events
+					WHERE workflow_id = ANY($1) AND forgotten = FALSE
+					ORDER BY workflow_id, location ASC
+					",
+				))
+				.bind(&workflow_ids)
+				.fetch_all(&mut *self.conn().await?)
+				.await
+				.map_err(WorkflowError::Sqlx)
+			},
 		)?;
 
 		let workflows = combine_events(
@@ -357,6 +383,7 @@ impl Database for DatabasePgNats {
 			msg_send_events,
 			sub_workflow_events,
 			loop_events,
+			sleep_events,
 		)?;
 
 		Ok(workflows)
@@ -397,7 +424,6 @@ impl Database for DatabasePgNats {
 		wake_sub_workflow_id: Option<Uuid>,
 		error: &str,
 	) -> WorkflowResult<()> {
-		// TODO(RVT-3762): Should this compare `wake_deadline_ts` before setting it?
 		self.query(|| async {
 			sqlx::query(indoc!(
 				"
@@ -1012,6 +1038,36 @@ impl Database for DatabasePgNats {
 			tx.commit().await.map_err(WorkflowError::Sqlx)?;
 
 			Ok(())
+		})
+		.await?;
+
+		Ok(())
+	}
+
+	async fn commit_workflow_sleep_event(
+		&self,
+		from_workflow_id: Uuid,
+		location: &[usize],
+		until_ts: i64,
+		loop_location: Option<&[usize]>,
+	) -> WorkflowResult<()> {
+		self.query(|| async {
+			sqlx::query(indoc!(
+				"
+				INSERT INTO db_workflow.workflow_sleep_events(
+					workflow_id, location, until_ts, loop_location
+				)
+				VALUES($1, $2, $3, $4)
+				RETURNING 1
+				",
+			))
+			.bind(from_workflow_id)
+			.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
+			.bind(until_ts)
+			.bind(loop_location.map(|l| l.iter().map(|x| *x as i64).collect::<Vec<_>>()))
+			.execute(&mut *self.conn().await?)
+			.await
+			.map_err(WorkflowError::Sqlx)
 		})
 		.await?;
 
