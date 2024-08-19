@@ -91,7 +91,6 @@ async fn run_for_linode_account(
 		"
 		UPDATE db_linode.server_images
 		SET complete_ts = $2
-		FROM db_linode.server_images
 		WHERE
 			image_id = ANY($1) AND
 			complete_ts IS NULL
