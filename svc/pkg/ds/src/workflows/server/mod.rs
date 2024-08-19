@@ -1103,7 +1103,7 @@ pub struct CreateFailed {}
 
 #[signal("ds_server_destroy")]
 pub struct Destroy {
-	pub override_kill_timeout_ms: i64,
+	pub override_kill_timeout_ms: Option<i64>,
 }
 
 /// Choose which port to assign for a job's ingress port.

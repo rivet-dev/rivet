@@ -180,6 +180,19 @@ pub async fn destroy(
 
 	assert::server_for_env(&ctx, server_id, game_id, env_id).await?;
 
+	ensure_with!(
+		query.override_kill_timeout.unwrap_or(0) >= 0,
+		API_BAD_QUERY_PARAMETER,
+		parameter = "override_kill_timeout",
+		error = "must be positive"
+	);
+	ensure_with!(
+		query.override_kill_timeout.unwrap_or(0) < 2 * 60 * 60 * 1000,
+		API_BAD_QUERY_PARAMETER,
+		parameter = "override_kill_timeout",
+		error = "cannot be longer than 2 hours"
+	);
+
 	let mut sub = ctx
 		.subscribe::<ds::workflows::server::destroy::DestroyStarted>(&json!({
 			"server_id": server_id,
@@ -191,7 +204,7 @@ pub async fn destroy(
 			"server_id": server_id,
 		}),
 		ds::workflows::server::Destroy {
-			override_kill_timeout_ms: query.override_kill_timeout.unwrap_or_default(),
+			override_kill_timeout_ms: query.override_kill_timeout,
 		},
 	)
 	.await?;
