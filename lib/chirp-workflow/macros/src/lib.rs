@@ -487,7 +487,7 @@ fn parse_config(attrs: &[syn::Attribute]) -> syn::Result<Config> {
 		} else if ident == "timeout" {
 			config.timeout = syn::parse::<syn::LitInt>(name_value.value.to_token_stream().into())?
 				.base10_parse()?;
-		} else {
+		} else if ident != "doc" {
 			return Err(syn::Error::new(
 				ident.span(),
 				format!("Unknown config property `{ident}`"),
@@ -512,7 +512,7 @@ fn parse_msg_config(attrs: &[syn::Attribute]) -> syn::Result<MessageConfig> {
 		if ident == "tail_ttl" {
 			config.tail_ttl = syn::parse::<syn::LitInt>(name_value.value.to_token_stream().into())?
 				.base10_parse()?;
-		} else {
+		} else if ident != "doc" {
 			return Err(syn::Error::new(
 				ident.span(),
 				format!("Unknown config property `{ident}`"),
@@ -531,10 +531,12 @@ fn parse_empty_config(attrs: &[syn::Attribute]) -> syn::Result<()> {
 
 		let ident = name_value.path.require_ident()?;
 
-		return Err(syn::Error::new(
-			ident.span(),
-			format!("Unknown config property `{ident}`"),
-		));
+		if ident != "doc" {
+			return Err(syn::Error::new(
+				ident.span(),
+				format!("Unknown config property `{ident}`"),
+			));
+		}
 	}
 
 	Ok(())
