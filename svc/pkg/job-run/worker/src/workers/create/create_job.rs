@@ -369,11 +369,6 @@ mod tests {
 				}]),
 				..TaskGroup::new()
 			}]),
-			// Disables rescheduling in the event of a node drain
-			reschedule: Some(Box::new(ReschedulePolicy {
-				attempts: Some(0),
-				..ReschedulePolicy::new()
-			})),
 			..Job::new()
 		}
 	}

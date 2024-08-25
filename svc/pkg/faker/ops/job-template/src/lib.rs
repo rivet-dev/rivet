@@ -57,11 +57,6 @@ fn gen_job(
 			tasks: Some(vec![task]),
 			..TaskGroup::new()
 		}]),
-		// Disables rescheduling in the event of a node drain
-		reschedule: Some(Box::new(ReschedulePolicy {
-			attempts: Some(0),
-			..ReschedulePolicy::new()
-		})),
 		..Job::new()
 	})
 }
