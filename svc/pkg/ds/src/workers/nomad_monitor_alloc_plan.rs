@@ -18,18 +18,10 @@ struct PlanResult {
 #[derive(Debug, sqlx::FromRow)]
 struct RunRow {
 	server_id: Uuid,
+	datacenter_id: Uuid,
 	connectable_ts: Option<i64>,
 	nomad_alloc_plan_ts: Option<i64>, // this was nomad_plan_ts
 }
-
-// #[derive(Debug, sqlx::FromRow)]
-// struct ProxiedPort {
-// 	target_nomad_port_label: Option<String>,
-// 	ingress_port: i64,
-// 	ingress_hostnames: Vec<String>,
-// 	proxy_protocol: i64,
-// 	ssl_domain_mode: i64,
-// }
 
 #[derive(Clone)]
 struct RunData {
@@ -160,6 +152,7 @@ async fn update_db(
 		"
 		SELECT
 			s.server_id,
+			s.datacenter_id,
 			s.connectable_ts,
 			s.stop_ts,
 			sn.nomad_alloc_plan_ts
@@ -247,6 +240,13 @@ async fn update_db(
 				&port.ip,
 			)
 			.await?;
+		}
+
+		// Invalidate cache when ports are updated
+		if !ports.is_empty() {
+			ctx.cache()
+				.purge("servers_ports", [run_row.datacenter_id])
+				.await?;
 		}
 	}
 

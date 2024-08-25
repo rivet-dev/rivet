@@ -306,6 +306,13 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<()>
 	})
 	.await?;
 
+	// NOTE: This call is infallible because redis is infallible. If it was not, it would be put in its own
+	// workflow step
+	// Invalidate cache when new server is created
+	ctx.cache()
+		.purge("servers_ports", [input.datacenter_id])
+		.await?;
+
 	Ok(())
 }
 

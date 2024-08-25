@@ -74,7 +74,6 @@ struct UpdateDbInput {
 
 #[derive(Debug, Serialize, Deserialize, Hash, sqlx::FromRow)]
 struct UpdateDbOutput {
-	server_id: Uuid,
 	datacenter_id: Uuid,
 	kill_timeout_ms: i64,
 	dispatched_job_id: Option<String>,
@@ -84,7 +83,7 @@ struct UpdateDbOutput {
 #[activity(UpdateDb)]
 async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<UpdateDbOutput> {
 	// Run in transaction for internal retryability
-	rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| {
+	let db_output = rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| {
 		let ctx = ctx.clone();
 		let server_id = input.server_id;
 
@@ -102,7 +101,6 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<Upd
 					s1.server_id = s2.server_id AND
 					s2.destroy_ts IS NULL
 				RETURNING
-					s1.server_id,
 					s1.datacenter_id,
 					s1.kill_timeout_ms,
 					sn.nomad_dispatched_job_id AS dispatched_job_id,
@@ -115,7 +113,16 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<Upd
 		}
 		.boxed()
 	})
-	.await
+	.await?;
+
+	// NOTE: This call is infallible because redis is infallible. If it was not, it would be put in its own
+	// workflow step
+	// Invalidate cache when server is destroyed
+	ctx.cache()
+		.purge("servers_ports", [db_output.datacenter_id])
+		.await?;
+
+	Ok(db_output)
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]

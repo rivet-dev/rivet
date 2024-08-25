@@ -1,6 +1,3 @@
-
-CREATE INDEX ON servers (datacenter_id, stop_ts);
-
 CREATE INDEX ON server_nomad (nomad_dispatched_job_id) STORING (nomad_alloc_plan_ts);
 DROP INDEX server_nomad@server_nomad_nomad_dispatched_job_id_idx;
 
@@ -16,3 +13,5 @@ STORING (
 	nomad_node_vlan_ipv4
 );
 DROP INDEX server_nomad@server_nomad_nomad_dispatched_job_id_idx;
+
+CREATE INDEX ON servers (datacenter_id, stop_ts) STORING (kill_timeout_ms);

@@ -86,6 +86,8 @@ async fn worker(
 				}
 			};
 
+			tracing::info!("run pending");
+
 			crate::workers::webhook::call(ctx, alloc_id.to_string()).await?;
 
 			Ok(())

@@ -42,49 +42,43 @@ pub async fn build_ds(
 	dc_id: Uuid,
 	config: &mut types::TraefikConfigResponse,
 ) -> GlobalResult<()> {
-	// TODO put in function, clean up
-	// TODO: remove cache for now
+	let dynamic_servers = ctx
+		.cache()
+		.ttl(60)
+		.fetch_one_json("servers_ports", dc_id, |mut cache, dc_id| async move {
+			let rows = sql_fetch_all!(
+				[ctx, DynamicServer]
+				"
+				SELECT
+					s.server_id,
+					s.datacenter_id,
+					ip.nomad_label AS label,
+					ip.nomad_ip,
+					ip.nomad_source,
+					gg.port_number,
+					gg.gg_port,
+					gg.port_name,
+					gg.protocol
+				FROM db_ds.internal_ports AS ip
+				JOIN db_ds.servers AS s
+				ON ip.server_id = s.server_id
+				JOIN db_ds.docker_ports_protocol_game_guard AS gg
+				ON
+					ip.server_id = gg.server_id AND
+					ip.nomad_label = CONCAT('ds_', gg.port_name)
+				WHERE
+					s.datacenter_id = $1 AND
+					s.destroy_ts IS NULL
+				",
+				dc_id
+			)
+			.await?;
+			cache.resolve(&dc_id, rows);
 
-	// let dynamic_servers: Option<Vec<DynamicServer>> = ctx
-	// 	.cache()
-	// 	// TODO: Set this for longer, this should mean that no caching happens
-	// 	.ttl(1)
-	// 	.fetch_one_json("servers_ports", dc_id, |mut cache, dc_id| {
-	// 		let ctx = ctx.clone();
-	// 		async move {
-	let dynamic_servers = sql_fetch_all!(
-		[ctx, DynamicServer]
-		"
-		SELECT
-			s.server_id,
-			s.datacenter_id,
-			ip.nomad_label AS label,
-			ip.nomad_ip,
-			ip.nomad_source,
-			gg.port_number,
-			gg.gg_port,
-			gg.port_name,
-			gg.protocol
-		FROM db_ds.internal_ports AS ip
-		JOIN db_ds.servers AS s
-		ON ip.server_id = s.server_id
-		JOIN db_ds.docker_ports_protocol_game_guard AS gg
-		ON
-			ip.server_id = gg.server_id AND
-			ip.nomad_label = CONCAT('ds_', gg.port_name)
-		WHERE
-			s.datacenter_id = $1 AND
-			s.stop_ts IS NULL
-		",
-		dc_id
-	)
-	.await?;
-	// 		cache.resolve(&dc_id, rows);
-
-	// 		Ok(cache)
-	// 	}
-	// })
-	// .await?;
+			Ok(cache)
+		})
+		.await?
+		.unwrap_or_default();
 
 	// Process proxied ports
 	for dynamic_server in &dynamic_servers {
