@@ -178,13 +178,17 @@ impl TryFrom<LoopEventRow> for LoopEvent {
 }
 
 #[derive(Debug)]
-pub struct SleepEvent {}
+pub struct SleepEvent {
+	pub deadline_ts: i64,
+}
 
 impl TryFrom<SleepEventRow> for SleepEvent {
 	type Error = WorkflowError;
 
-	fn try_from(_value: SleepEventRow) -> WorkflowResult<Self> {
-		Ok(SleepEvent {})
+	fn try_from(value: SleepEventRow) -> WorkflowResult<Self> {
+		Ok(SleepEvent {
+			deadline_ts: value.deadline_ts,
+		})
 	}
 }
 

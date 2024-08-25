@@ -1279,9 +1279,9 @@ impl WorkflowCtx {
 		let event = self.relevant_history().nth(self.location_idx);
 
 		// Slept before
-		if let Some(event) = event {
+		let (deadline_ts, replay) = if let Some(event) = event {
 			// Validate history is consistent
-			let Event::Sleep(_) = event else {
+			let Event::Sleep(sleep) = event else {
 				return Err(WorkflowError::HistoryDiverged(format!(
 					"expected {event} at {}, found sleep",
 					self.loc(),
@@ -1289,35 +1289,42 @@ impl WorkflowCtx {
 				.map_err(GlobalError::raw);
 			};
 
-			tracing::debug!(name=%self.name, id=%self.workflow_id, "skipping replayed sleep");
+			tracing::debug!(name=%self.name, id=%self.workflow_id, "replaying sleep");
+
+			(sleep.deadline_ts, true)
 		}
 		// Sleep
 		else {
-			let ts = time.to_millis()?;
+			let deadline_ts = time.to_millis()?;
 
 			self.db
 				.commit_workflow_sleep_event(
 					self.workflow_id,
 					self.full_location().as_ref(),
-					ts,
+					deadline_ts,
 					self.loop_location(),
 				)
 				.await?;
 
-			let duration = ts - rivet_util::timestamp::now();
-			if duration < 0 {
-				// No-op
+			(deadline_ts, false)
+		};
+
+		let duration = deadline_ts.saturating_sub(rivet_util::timestamp::now());
+
+		// No-op
+		if duration < 0 {
+			if !replay {
 				tracing::warn!("tried to sleep for a negative duration");
-			} else if duration < worker::TICK_INTERVAL.as_millis() as i64 + 1 {
-				tracing::info!(name=%self.name, id=%self.workflow_id, until_ts=%ts, "sleeping in memory");
-
-				// Sleep in memory if duration is shorter than the worker tick
-				tokio::time::sleep(std::time::Duration::from_millis(duration.try_into()?)).await;
-			} else {
-				tracing::info!(name=%self.name, id=%self.workflow_id, until_ts=%ts, "sleeping");
-
-				return Err(WorkflowError::Sleep(ts)).map_err(GlobalError::raw);
 			}
+		} else if duration < worker::TICK_INTERVAL.as_millis() as i64 + 1 {
+			tracing::info!(name=%self.name, id=%self.workflow_id, %deadline_ts, "sleeping in memory");
+
+			// Sleep in memory if duration is shorter than the worker tick
+			tokio::time::sleep(std::time::Duration::from_millis(duration.try_into()?)).await;
+		} else {
+			tracing::info!(name=%self.name, id=%self.workflow_id, %deadline_ts, "sleeping");
+
+			return Err(WorkflowError::Sleep(deadline_ts)).map_err(GlobalError::raw);
 		}
 
 		// Move to next event

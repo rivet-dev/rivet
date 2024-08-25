@@ -344,10 +344,7 @@ struct WaitDiskReadyInput {
 }
 
 #[activity(WaitDiskReady)]
-async fn wait_disk_ready(
-	ctx: &ActivityCtx,
-	input: &WaitDiskReadyInput,
-) -> GlobalResult<()> {
+async fn wait_disk_ready(ctx: &ActivityCtx, input: &WaitDiskReadyInput) -> GlobalResult<()> {
 	// Build HTTP client
 	let client = client::Client::new(input.api_token.clone()).await?;
 

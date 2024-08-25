@@ -362,7 +362,7 @@ impl Database for DatabasePgNats {
 				sqlx::query_as::<_, SleepEventRow>(indoc!(
 					"
 					SELECT
-						workflow_id, location
+						workflow_id, location, deadline_ts
 					FROM db_workflow.workflow_sleep_events
 					WHERE workflow_id = ANY($1) AND forgotten = FALSE
 					ORDER BY workflow_id, location ASC
@@ -1048,14 +1048,14 @@ impl Database for DatabasePgNats {
 		&self,
 		from_workflow_id: Uuid,
 		location: &[usize],
-		until_ts: i64,
+		deadline_ts: i64,
 		loop_location: Option<&[usize]>,
 	) -> WorkflowResult<()> {
 		self.query(|| async {
 			sqlx::query(indoc!(
 				"
 				INSERT INTO db_workflow.workflow_sleep_events(
-					workflow_id, location, until_ts, loop_location
+					workflow_id, location, deadline_ts, loop_location
 				)
 				VALUES($1, $2, $3, $4)
 				RETURNING 1
@@ -1063,7 +1063,7 @@ impl Database for DatabasePgNats {
 			))
 			.bind(from_workflow_id)
 			.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
-			.bind(until_ts)
+			.bind(deadline_ts)
 			.bind(loop_location.map(|l| l.iter().map(|x| *x as i64).collect::<Vec<_>>()))
 			.execute(&mut *self.conn().await?)
 			.await

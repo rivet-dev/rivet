@@ -280,4 +280,5 @@ pub struct LoopEventRow {
 pub struct SleepEventRow {
 	pub workflow_id: Uuid,
 	pub location: Vec<i64>,
+	pub deadline_ts: i64,
 }

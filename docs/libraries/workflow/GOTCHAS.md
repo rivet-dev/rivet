@@ -134,3 +134,9 @@ None			 -> "null" -> None
 ```
 
 Be careful when writing your struct definitions.
+
+## Force waking a sleeping workflow
+
+When force waking a sleeping workflow by setting `wake_immediate = true`, know that if the workflow is
+currently on a `sleep` step it will go back to sleep if it has not reached its `wake_deadline` yet. For all
+other steps, the workflow will continue normally (usually just go back to sleep).

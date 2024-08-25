@@ -1,7 +1,7 @@
 CREATE TABLE workflow_sleep_events (
   workflow_id UUID NOT NULL REFERENCES workflows,
   location INT[] NOT NULL,
-  until_ts INT NOT NULL,
+  deadline_ts INT NOT NULL,
 
   loop_location INT[],
   forgotten BOOLEAN NOT NULL DEFAULT FALSE,
