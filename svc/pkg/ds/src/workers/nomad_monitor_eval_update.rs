@@ -27,11 +27,11 @@ async fn worker(
 ) -> GlobalResult<()> {
 	let payload_value = serde_json::from_str::<serde_json::Value>(&ctx.payload_json)?;
 
-	let job_id = unwrap!(unwrap!(payload_value.get("JobID"), "eval has no job id").as_str());
-	let eval_status_raw = unwrap!(unwrap!(payload_value.get("Status")).as_str());
-
 	// We can't decode this with serde, so manually deserialize the response
 	let eval_value = unwrap!(payload_value.get("Evaluation"));
+
+	let job_id = unwrap!(unwrap!(eval_value.get("JobID"), "eval has no job id").as_str());
+	let eval_status_raw = unwrap!(unwrap!(eval_value.get("Status")).as_str());
 
 	if !util_job::is_nomad_job_run(job_id) {
 		tracing::info!(%job_id, "disregarding event");

@@ -1,265 +1,146 @@
-// use std::collections::HashMap;
+use std::collections::HashMap;
 
-// use chirp_worker::prelude::*;
-// use proto::backend::{self, pkg::*};
+use chirp_workflow::prelude::*;
+use ds::types;
+use rivet_operation::prelude::proto::backend;
+use serde_json::json;
 
-// pub struct Setup {
-// 	pub namespace_id: Uuid,
-// 	pub lobby_group_id_bridge: Uuid,
-// 	pub lobby_group_id_host: Uuid,
-// 	pub region_id: Uuid,
-// 	pub region: backend::region::Region,
-// 	pub host_port_http: u16,
-// 	pub host_port_tcp: u16,
-// 	pub host_port_udp: u16,
-// }
+pub struct Setup {
+	pub env_id: Uuid,
+	pub cluster_id: Uuid,
+	pub datacenter_id: Uuid,
+	pub image_id: Uuid,
+}
 
-// impl Setup {
-// 	pub async fn init(ctx: &TestCtx) -> Self {
-// 		let region_res = op!([ctx] faker_region {}).await.unwrap();
-// 		let region_id = region_res.region_id.as_ref().unwrap().as_uuid();
+impl Setup {
+	pub async fn init(ctx: &TestCtx) -> Self {
+		let region_res = op!([ctx] faker_region {}).await.unwrap();
+		let region_id = region_res.region_id.as_ref().unwrap().as_uuid();
 
-// 		let game_res = op!([ctx] faker_game {
-// 			skip_namespaces_and_versions: true,
-// 			..Default::default()
-// 		})
-// 		.await
-// 		.unwrap();
+		let game_res = op!([ctx] faker_game {
+			..Default::default()
+		})
+		.await
+		.unwrap();
 
-// 		let build_res = op!([ctx] faker_build {
-// 			env_id: game_res.prod_env_id,
-// 			image: backend::faker::Image::MmLobbyEcho as i32,
-// 		})
-// 		.await
-// 		.unwrap();
+		let build_res = op!([ctx] faker_build {
+			env_id: game_res.prod_env_id,
+			image: backend::faker::Image::DsEcho as i32,
+		})
+		.await
+		.unwrap();
 
-// 		// Pick host ports to connect to
-// 		let host_port_http = rand::thread_rng().gen_range(26000..27000);
-// 		let host_port_tcp = rand::thread_rng().gen_range(26000..27000);
-// 		let host_port_udp = rand::thread_rng().gen_range(26000..27000);
+		// Pick an existing cluster
+		let cluster_id = ctx
+			.op(cluster::ops::list::Input {})
+			.await
+			.unwrap()
+			.cluster_ids
+			.first()
+			.unwrap()
+			.to_owned();
 
-// 		let game_version_res = op!([ctx] faker_game_version {
-// 			env_id: game_res.prod_env_id,
-// 			override_lobby_groups: Some(faker::game_version::request::OverrideLobbyGroups {
-// 				lobby_groups: vec![backend::matchmaker::LobbyGroup {
-// 					name_id: "test-1".into(),
+		Setup {
+			env_id: game_res.prod_env_id.unwrap().as_uuid(),
+			cluster_id,
+			datacenter_id: region_id,
+			image_id: build_res.build_id.unwrap().as_uuid(),
+		}
+	}
 
-// 					regions: vec![backend::matchmaker::lobby_group::Region {
-// 						region_id: Some(region_id.into()),
-// 						tier_name_id: util_ds::test::TIER_NAME_ID.to_owned(),
-// 						idle_lobbies: Some(backend::matchmaker::lobby_group::IdleLobbies {
-// 							min_idle_lobbies: 0,
-// 							// Don't auto-destroy lobbies from tests
-// 							max_idle_lobbies: 32,
-// 						}),
-// 					}],
-// 					max_players_normal: 8,
-// 					max_players_direct: 10,
-// 					max_players_party: 12,
-// 					listable: true,
-// 					taggable: false,
-// 					allow_dynamic_max_players: false,
+	/// Create bridge server
+	pub async fn create_bridge_server(&self, ctx: &TestCtx) -> Uuid {
+		self.create_server_inner(ctx, types::NetworkMode::Bridge)
+			.await
+	}
 
-// 					runtime: Some(backend::matchmaker::lobby_runtime::Docker {
-// 						build_id: build_res.build_id,
-// 						args: Vec::new(),
-// 						env_vars: vec![
-// 							backend::matchmaker::lobby_runtime::EnvVar {
-// 								key: "HELLO".into(),
-// 								value: "world".into(),
-// 							},
-// 						],
-// 						network_mode: backend::matchmaker::lobby_runtime::NetworkMode::Bridge as i32,
-// 						ports: vec![
-// 							backend::matchmaker::lobby_runtime::Port {
-// 								label: "test-http".into(),
-// 								target_port: Some(8001),
-// 								port_range: None,
-// 								proxy_protocol: backend::matchmaker::lobby_runtime::ProxyProtocol::Http as i32,
-// 								proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::GameGuard as i32,
-// 							},
-// 							backend::matchmaker::lobby_runtime::Port {
-// 								label: "test-tcp".into(),
-// 								target_port: Some(8002),
-// 								port_range: None,
-// 								proxy_protocol: backend::matchmaker::lobby_runtime::ProxyProtocol::Tcp as i32,
-// 								proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::GameGuard as i32,
-// 							},
-// 							backend::matchmaker::lobby_runtime::Port {
-// 								label: "test-udp".into(),
-// 								target_port: Some(8003),
-// 								port_range: None,
-// 								proxy_protocol: backend::matchmaker::lobby_runtime::ProxyProtocol::Udp as i32,
-// 								proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::GameGuard as i32,
-// 							},
-// 						],
+	/// Create host server
+	pub async fn create_host_server(&self, ctx: &TestCtx) -> Uuid {
+		self.create_server_inner(ctx, types::NetworkMode::Host)
+			.await
+	}
 
-// 					}.into()),
+	async fn create_server_inner(&self, ctx: &TestCtx, network_mode: types::NetworkMode) -> Uuid {
+		let env = vec![
+			("HTTP_PORT".to_string(), 8001.to_string()),
+			("TCP_PORT".to_string(), 8002.to_string()),
+			("UDP_PORT".to_string(), 8003.to_string()),
+		]
+		.into_iter()
+		.collect();
 
-// 					actions: None,
-// 				},
-// 				backend::matchmaker::LobbyGroup {
-// 					name_id: "test-2".into(),
+		let ports = vec![
+			(
+				"test-http".to_string(),
+				ds::workflows::server::Port {
+					internal_port: Some(8001),
+					routing: types::Routing::GameGuard {
+						protocol: types::GameGuardProtocol::Http,
+					},
+				},
+			),
+			(
+				"test-tcp".to_string(),
+				ds::workflows::server::Port {
+					internal_port: Some(8002),
+					routing: types::Routing::GameGuard {
+						protocol: types::GameGuardProtocol::Tcp,
+					},
+				},
+			),
+			(
+				"test-udp".to_string(),
+				ds::workflows::server::Port {
+					internal_port: Some(8003),
+					routing: types::Routing::GameGuard {
+						protocol: types::GameGuardProtocol::Udp,
+					},
+				},
+			),
+		]
+		// Collect into hashmap
+		.into_iter()
+		.collect();
 
-// 					regions: vec![backend::matchmaker::lobby_group::Region {
-// 						region_id: Some(region_id.into()),
-// 						tier_name_id: util_ds::test::TIER_NAME_ID.to_owned(),
-// 						idle_lobbies: Some(backend::matchmaker::lobby_group::IdleLobbies {
-// 							min_idle_lobbies: 0,
-// 							// See above
-// 							max_idle_lobbies: 32,
-// 						}),
-// 					}],
-// 					max_players_normal: 8,
-// 					max_players_direct: 10,
-// 					max_players_party: 12,
-// 					listable: true,
-// 					taggable: false,
-// 					allow_dynamic_max_players: false,
+		let server_id = Uuid::new_v4();
 
-// 					runtime: Some(backend::matchmaker::lobby_runtime::Docker {
-// 						build_id: build_res.build_id,
-// 						args: Vec::new(),
-// 						env_vars: vec![
-// 							backend::matchmaker::lobby_runtime::EnvVar {
-// 								key: "HELLO".into(),
-// 								value: "world".into(),
-// 							},
-// 							backend::matchmaker::lobby_runtime::EnvVar {
-// 								key: "HOST_PORT_HTTP".into(),
-// 								value: host_port_http.to_string(),
-// 							},
-// 							backend::matchmaker::lobby_runtime::EnvVar {
-// 								key: "HOST_PORT_TCP".into(),
-// 								value: host_port_tcp.to_string(),
-// 							},
-// 							backend::matchmaker::lobby_runtime::EnvVar {
-// 								key: "HOST_PORT_UDP".into(),
-// 								value: host_port_udp.to_string(),
-// 							},
-// 						],
-// 						network_mode: backend::matchmaker::lobby_runtime::NetworkMode::Host as i32,
-// 						ports: vec![
-// 							// Game Guard
-// 							backend::matchmaker::lobby_runtime::Port {
-// 								label: "test-http".into(),
-// 								target_port: Some(8001),
-// 								port_range: None,
-// 								proxy_protocol: backend::matchmaker::lobby_runtime::ProxyProtocol::Http as i32,
-// 								proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::GameGuard as i32,
-// 							},
-// 							backend::matchmaker::lobby_runtime::Port {
-// 								label: "test-tcp".into(),
-// 								target_port: Some(8002),
-// 								port_range: None,
-// 								proxy_protocol: backend::matchmaker::lobby_runtime::ProxyProtocol::Tcp as i32,
-// 								proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::GameGuard as i32,
-// 							},
-// 							backend::matchmaker::lobby_runtime::Port {
-// 								label: "test-udp".into(),
-// 								target_port: Some(8003),
-// 								port_range: None,
-// 								proxy_protocol: backend::matchmaker::lobby_runtime::ProxyProtocol::Udp as i32,
-// 								proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::GameGuard as i32,
-// 							},
+		let mut sub = ctx
+			.subscribe::<ds::workflows::server::CreateComplete>(&json!({
+				"server_id": server_id,
+			}))
+			.await
+			.unwrap();
 
-// 							// Host
-// 							backend::matchmaker::lobby_runtime::Port {
-// 								label: "test-range-tcp".into(),
-// 								target_port: None,
-// 								port_range: Some(backend::matchmaker::lobby_runtime::PortRange {
-// 									min: 26000,
-// 									max: 27000,
-// 								}),
-// 								proxy_protocol: backend::matchmaker::lobby_runtime::ProxyProtocol::Tcp as i32,
-// 								proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::None as i32,
-// 							},
-// 							backend::matchmaker::lobby_runtime::Port {
-// 								label: "test-range-udp".into(),
-// 								target_port: None,
-// 								port_range: Some(backend::matchmaker::lobby_runtime::PortRange {
-// 									min: 26000,
-// 									max: 27000,
-// 								}),
-// 								proxy_protocol: backend::matchmaker::lobby_runtime::ProxyProtocol::Udp as i32,
-// 								proxy_kind: backend::matchmaker::lobby_runtime::ProxyKind::None as i32,
-// 							},
-// 						],
+		ctx.dispatch_tagged_workflow(
+			&json!({
+				"server_id": server_id,
+			}),
+			ds::workflows::server::Input {
+				server_id,
+				env_id: self.env_id,
+				cluster_id: self.cluster_id,
+				datacenter_id: self.datacenter_id,
+				resources: ds::types::ServerResources {
+					cpu_millicores: 100,
+					memory_mib: 200,
+				},
+				kill_timeout_ms: 0,
+				tags: HashMap::new(),
+				args: Vec::new(),
+				environment: env,
+				image_id: self.image_id,
+				network_mode,
+				network_ports: ports,
+			},
+		)
+		.await
+		.unwrap();
 
-// 					}.into()),
+		sub.next().await.unwrap();
 
-// 					actions: None,
-// 				}],
-// 			}),
-// 			..Default::default()
-// 		})
-// 		.await
-// 		.unwrap();
+		// Sleep for 5 seconds
+		tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
-// 		let version_get_res = op!([ctx] mm_config_version_get {
-// 			version_ids: vec![game_version_res.version_id.unwrap()],
-// 		})
-// 		.await
-// 		.unwrap();
-// 		let lobby_groups = &version_get_res
-// 			.versions
-// 			.first()
-// 			.unwrap()
-// 			.config_meta
-// 			.as_ref()
-// 			.unwrap()
-// 			.lobby_groups;
-
-// 		let ns_create_res = op!([ctx] faker_game_namespace {
-// 			env_id: game_res.prod_env_id,
-// 			version_id: game_version_res.version_id,
-// 			override_name_id: "prod".to_owned(),
-// 			..Default::default()
-// 		})
-// 		.await
-// 		.unwrap();
-// 		let namespace_id = ns_create_res.namespace_id.unwrap().as_uuid();
-
-// 		Setup {
-// 			namespace_id,
-// 			lobby_group_id_bridge: lobby_groups[0].lobby_group_id.as_ref().unwrap().as_uuid(),
-// 			lobby_group_id_host: lobby_groups[1].lobby_group_id.as_ref().unwrap().as_uuid(),
-// 			region_id,
-// 			region: region_res.region.clone().unwrap(),
-// 			host_port_http,
-// 			host_port_tcp,
-// 			host_port_udp,
-// 		}
-// 	}
-
-// 	/// Create bridge lobby
-// 	pub async fn create_lobby(&self, ctx: &TestCtx) -> Uuid {
-// 		self.create_lobby_with_lgi(ctx, self.lobby_group_id_bridge)
-// 			.await
-// 	}
-
-// 	/// Create lobby with LGI
-// 	pub async fn create_lobby_with_lgi(&self, ctx: &TestCtx, lgi: Uuid) -> Uuid {
-// 		let lobby_id = Uuid::new_v4();
-// 		msg!([ctx] @notrace mm::msg::lobby_create(lobby_id) -> mm::msg::lobby_ready_complete(lobby_id) {
-// 			lobby_id: Some(lobby_id.into()),
-// 			namespace_id: Some(self.namespace_id.into()),
-// 			lobby_group_id: Some(lgi.into()),
-// 			region_id: Some(self.region_id.into()),
-// 			create_ray_id: None,
-// 			preemptively_created: false,
-
-// 			creator_user_id: None,
-// 			is_custom: false,
-// 			publicity: None,
-// 			lobby_config_json: None,
-// 			tags: HashMap::new(),
-// 			dynamic_max_players: None,
-// 			parameters: util::env::test_id_param(),
-// 		})
-// 		.await
-// 		.unwrap();
-
-// 		lobby_id
-// 	}
-// }
+		server_id
+	}
+}

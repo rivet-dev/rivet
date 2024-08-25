@@ -67,7 +67,7 @@ async fn undrain_node(ctx: &ActivityCtx, input: &UndrainNodeInput) -> GlobalResu
 	.await?;
 
 	if let Some(nomad_node_id) = nomad_node_id {
-		nodes_api::update_node_drain(
+		let res = nodes_api::update_node_drain(
 			&NOMAD_CONFIG,
 			&nomad_node_id,
 			models::NodeUpdateDrainRequest {
@@ -86,7 +86,19 @@ async fn undrain_node(ctx: &ActivityCtx, input: &UndrainNodeInput) -> GlobalResu
 			None,
 			None,
 		)
-		.await?;
+		.await;
+
+		// Catch "node not found" error
+		if let Err(nomad_client::apis::Error::ResponseError(
+			nomad_client::apis::ResponseContent { content, .. },
+		)) = res
+		{
+			if content == "node not found" {
+				tracing::warn!("node does not exist, not undraining");
+
+				return Ok(());
+			}
+		}
 
 		// Allow new matchmaker requests to the node running on this server
 		msg!([ctx] mm::msg::nomad_node_closed_set(&nomad_node_id) {

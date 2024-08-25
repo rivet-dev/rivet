@@ -79,7 +79,7 @@ async fn drain_node(ctx: &ActivityCtx, input: &DrainNodeInput) -> GlobalResult<b
 
 	if let Some(nomad_node_id) = nomad_node_id {
 		// Drain complete message is caught by `cluster-nomad-node-drain-complete`
-		nodes_api::update_node_drain(
+		let res = nodes_api::update_node_drain(
 			&NOMAD_CONFIG,
 			&nomad_node_id,
 			models::NodeUpdateDrainRequest {
@@ -102,7 +102,19 @@ async fn drain_node(ctx: &ActivityCtx, input: &DrainNodeInput) -> GlobalResult<b
 			None,
 			None,
 		)
-		.await?;
+		.await;
+
+		// Catch "node not found" error
+		if let Err(nomad_client::apis::Error::ResponseError(
+			nomad_client::apis::ResponseContent { content, .. },
+		)) = res
+		{
+			if content == "node not found" {
+				tracing::warn!("node does not exist, not draining");
+
+				return Ok(false);
+			}
+		}
 
 		// Prevent new matchmaker requests to the node running on this server
 		msg!([ctx] mm::msg::nomad_node_closed_set(&nomad_node_id) {

@@ -157,8 +157,7 @@ impl RequestConfig {
 		//
 		// Drop `keys` bc this is not the same as the keys list in `ctx`, so it should not be used
 		// again.
-		let mut ctx = GetterCtx::new(base_key.clone().into(), keys.to_vec());
-		drop(keys);
+		let mut ctx = GetterCtx::new(base_key.clone().into(), keys);
 
 		// Build keys to look up values in Redis
 		let redis_keys = ctx

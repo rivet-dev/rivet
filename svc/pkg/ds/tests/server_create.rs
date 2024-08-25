@@ -1,10 +1,7 @@
 use chirp_workflow::prelude::*;
 use ds::types;
 // use rivet_api::{apis::*, models};
-use rivet_operation::prelude::proto::{
-	self,
-	backend::{self, pkg::token},
-};
+use rivet_operation::prelude::proto::backend;
 use serde_json::json;
 
 #[workflow_test]
@@ -15,29 +12,6 @@ async fn server_create(ctx: TestCtx) {
 	.await
 	.unwrap();
 	let env_id = game_res.prod_env_id.unwrap();
-
-	// Create token
-	let token_res = op!([ctx] token_create {
-		token_config: Some(token::create::request::TokenConfig {
-			ttl: util::duration::days(90),
-		}),
-		issuer: "test".to_owned(),
-		kind: Some(token::create::request::Kind::New(
-			token::create::request::KindNew { entitlements: vec![proto::claims::Entitlement {
-				kind: Some(proto::claims::entitlement::Kind::EnvService(
-					proto::claims::entitlement::EnvService {
-						env_id: Some(env_id),
-					}
-				)),
-			}]},
-		)),
-		label: Some("env".to_owned()),
-		..Default::default()
-	})
-	.await
-	.unwrap();
-
-	tracing::info!("token_res for key: {:?}", token_res);
 
 	// Pick an existing cluster
 	let cluster_id = ctx
@@ -104,7 +78,6 @@ async fn server_create(ctx: TestCtx) {
 				memory_mib: 200,
 			},
 			kill_timeout_ms: 0,
-			// webhook_url: Some("https://rivettest.free.beeceptor.com".to_string()),
 			tags: vec![(String::from("test"), String::from("123"))]
 				.into_iter()
 				.collect(),
@@ -120,24 +93,27 @@ async fn server_create(ctx: TestCtx) {
 
 	sub.next().await.unwrap();
 
-	// TODO: Switch this
-	// let hostname = format!(
-	// 	"{}-{}.server.{}.rivet.run",
-	// 	server.server_id.unwrap(),
-	// 	"1234",
-	// 	faker_region.region_id.unwrap()
-	// );
-
-	let hostname = format!(
-		"{}-{}.lobby.{}.{}",
-		server_id,
-		"testing2",
-		faker_region.region_id.unwrap(),
-		util::env::domain_job().unwrap(),
-	);
-
 	// Async sleep for 5 seconds
-	tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+	tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+	let server = ctx
+		.op(ds::ops::server::get::Input {
+			server_ids: vec![server_id],
+		})
+		.await
+		.unwrap()
+		.servers
+		.into_iter()
+		.next()
+		.unwrap();
+
+	let hostname = server
+		.network_ports
+		.get("testing2")
+		.unwrap()
+		.public_hostname
+		.as_ref()
+		.expect("no public hostname");
 
 	// Echo body
 	let random_body = Uuid::new_v4().to_string();

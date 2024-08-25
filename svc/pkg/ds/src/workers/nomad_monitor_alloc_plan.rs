@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use chirp_worker::prelude::*;
-use rivet_operation::prelude::proto::backend::{self, pkg::*};
+use rivet_operation::prelude::proto::backend::pkg::*;
 use serde::Deserialize;
 
 use crate::util::NEW_NOMAD_CONFIG;
@@ -31,7 +31,15 @@ struct RunData {
 	nomad_node_name: String,
 	nomad_node_public_ipv4: String,
 	nomad_node_vlan_ipv4: String,
-	ports: Vec<backend::job::Port>,
+	ports: Vec<Port>,
+}
+
+#[derive(Clone, Debug)]
+struct Port {
+	label: String,
+	source: u32,
+	target: u32,
+	ip: String,
 }
 
 #[worker(name = "ds-nomad-monitor-alloc-plan")]
@@ -74,7 +82,7 @@ async fn worker(
 				for port in dynamic_ports {
 					// Don't share connect proxy ports
 					let label = unwrap_ref!(port.label);
-					ports.push(backend::job::Port {
+					ports.push(Port {
 						label: label.clone(),
 						source: *unwrap_ref!(port.value) as u32,
 						target: *unwrap_ref!(port.to) as u32,

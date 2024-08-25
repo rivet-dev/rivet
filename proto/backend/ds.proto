@@ -6,6 +6,8 @@ import "proto/common.proto";
 import "proto/backend/captcha.proto";
 import "proto/backend/region.proto";
 
+// TODO: Delete file after converting ds-log pkg to native ops
+
 message Server {
 	reserved 8;
 

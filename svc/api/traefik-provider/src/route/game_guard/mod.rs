@@ -27,13 +27,9 @@ pub async fn config(
 	let mut config = types::TraefikConfigResponse::default();
 
 	// Fetch configs and catch any errors
-	tracing::info!(?config, "traefik config ds");
-	tracing::info!("asdgaerwvsdfvasdf");
 
 	build_ds(&ctx, datacenter, &mut config).await?;
 	build_job(&ctx, datacenter, &mut config).await?;
-
-	tracing::info!(?config, "traefik config ds");
 
 	// tracing::info!(
 	// 	http_services = ?config.http.services.len(),

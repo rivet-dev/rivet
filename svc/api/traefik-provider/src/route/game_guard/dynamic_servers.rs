@@ -44,7 +44,7 @@ pub async fn build_ds(
 ) -> GlobalResult<()> {
 	let dynamic_servers = ctx
 		.cache()
-		.ttl(60)
+		.ttl(60_000)
 		.fetch_one_json("servers_ports", dc_id, |mut cache, dc_id| async move {
 			let rows = sql_fetch_all!(
 				[ctx, DynamicServer]
@@ -65,7 +65,7 @@ pub async fn build_ds(
 				JOIN db_ds.docker_ports_protocol_game_guard AS gg
 				ON
 					ip.server_id = gg.server_id AND
-					ip.nomad_label = CONCAT('ds_', gg.port_name)
+					ip.nomad_label = CONCAT('ds_', REPLACE(gg.port_name, '-', '_'))
 				WHERE
 					s.datacenter_id = $1 AND
 					s.destroy_ts IS NULL
@@ -115,8 +115,6 @@ pub async fn build_ds(
 			}),
 		},
 	);
-
-	tracing::info!(?config, "config timeeee");
 
 	// TODO: add middleware & services & ports
 	// TODO: same as jobs, watch out for namespaces
