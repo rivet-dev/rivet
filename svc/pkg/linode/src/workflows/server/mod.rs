@@ -154,8 +154,8 @@ async fn provision(
 	})
 	.await?;
 
-	let disks_res = ctx
-		.activity(CreateDisksInput {
+	let boot_disk_id = ctx
+		.activity(CreateBootDiskInput {
 			api_token: input.api_token.clone(),
 			image: input
 				.custom_image
@@ -166,13 +166,27 @@ async fn provision(
 			disk_size: create_instance_res.server_disk_size,
 		})
 		.await?;
-	let boot_disk_id = disks_res.boot_id;
+
+	ctx.activity(WaitDiskReadyInput {
+		api_token: input.api_token.clone(),
+		linode_id: create_instance_res.linode_id,
+		disk_id: boot_disk_id,
+	})
+	.await?;
+
+	let swap_disk_id = ctx
+		.activity(CreateSwapDiskInput {
+			api_token: input.api_token.clone(),
+			linode_id: create_instance_res.linode_id,
+		})
+		.await?;
 
 	ctx.activity(CreateInstanceConfigInput {
 		api_token: input.api_token.clone(),
 		vlan_ip: input.vlan_ip,
 		linode_id: create_instance_res.linode_id,
-		disks: disks_res,
+		boot_disk_id,
+		swap_disk_id,
 	})
 	.await?;
 
@@ -299,7 +313,7 @@ async fn wait_instance_ready(
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-struct CreateDisksInput {
+struct CreateBootDiskInput {
 	api_token: Option<String>,
 	image: String,
 	ssh_public_key: String,
@@ -307,33 +321,51 @@ struct CreateDisksInput {
 	disk_size: u64,
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
-struct CreateDisksOutput {
-	boot_id: u64,
-	swap_id: u64,
-}
-
-#[activity(CreateDisks)]
-async fn create_disks(
-	ctx: &ActivityCtx,
-	input: &CreateDisksInput,
-) -> GlobalResult<CreateDisksOutput> {
+#[activity(CreateBootDisk)]
+async fn create_boot_disk(ctx: &ActivityCtx, input: &CreateBootDiskInput) -> GlobalResult<u64> {
 	// Build HTTP client
 	let client = client::Client::new(input.api_token.clone()).await?;
 
-	let create_disks_res = api::create_disks(
+	api::create_boot_disk(
 		&client,
 		&input.ssh_public_key,
 		input.linode_id,
 		&input.image,
 		input.disk_size,
 	)
-	.await?;
+	.await
+}
 
-	Ok(CreateDisksOutput {
-		boot_id: create_disks_res.boot_id,
-		swap_id: create_disks_res.swap_id,
-	})
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct WaitDiskReadyInput {
+	api_token: Option<String>,
+	linode_id: u64,
+	disk_id: u64,
+}
+
+#[activity(WaitDiskReady)]
+async fn wait_disk_ready(
+	ctx: &ActivityCtx,
+	input: &WaitDiskReadyInput,
+) -> GlobalResult<()> {
+	// Build HTTP client
+	let client = client::Client::new(input.api_token.clone()).await?;
+
+	api::wait_disk_ready(&client, input.linode_id, input.disk_id).await
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct CreateSwapDiskInput {
+	api_token: Option<String>,
+	linode_id: u64,
+}
+
+#[activity(CreateSwapDisk)]
+async fn create_swap_disk(ctx: &ActivityCtx, input: &CreateSwapDiskInput) -> GlobalResult<u64> {
+	// Build HTTP client
+	let client = client::Client::new(input.api_token.clone()).await?;
+
+	api::create_swap_disk(&client, input.linode_id).await
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
@@ -341,7 +373,8 @@ struct CreateInstanceConfigInput {
 	api_token: Option<String>,
 	vlan_ip: Option<Ipv4Addr>,
 	linode_id: u64,
-	disks: CreateDisksOutput,
+	boot_disk_id: u64,
+	swap_disk_id: u64,
 }
 
 #[activity(CreateInstanceConfig)]
@@ -356,8 +389,8 @@ async fn create_instance_config(
 		&client,
 		input.vlan_ip.as_ref(),
 		input.linode_id,
-		input.disks.boot_id,
-		input.disks.swap_id,
+		input.boot_disk_id,
+		input.swap_disk_id,
 	)
 	.await
 }

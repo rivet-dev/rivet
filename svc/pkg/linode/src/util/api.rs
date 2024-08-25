@@ -107,18 +107,13 @@ pub struct CreateDiskResponse {
 	pub id: u64,
 }
 
-pub struct CreateDisksResponse {
-	pub boot_id: u64,
-	pub swap_id: u64,
-}
-
-pub async fn create_disks(
+pub async fn create_boot_disk(
 	client: &Client,
 	ssh_key: &str,
 	linode_id: u64,
 	image: &str,
 	server_disk_size: u64,
-) -> GlobalResult<CreateDisksResponse> {
+) -> GlobalResult<u64> {
 	tracing::info!("creating boot disk");
 
 	let boot_disk_res = client
@@ -134,8 +129,10 @@ pub async fn create_disks(
 		)
 		.await?;
 
-	wait_disk_ready(client, linode_id, boot_disk_res.id).await?;
+	Ok(boot_disk_res.id)
+}
 
+pub async fn create_swap_disk(client: &Client, linode_id: u64) -> GlobalResult<u64> {
 	tracing::info!("creating swap disk");
 
 	let swap_disk_res = client
@@ -149,10 +146,7 @@ pub async fn create_disks(
 		)
 		.await?;
 
-	Ok(CreateDisksResponse {
-		boot_id: boot_disk_res.id,
-		swap_id: swap_disk_res.id,
-	})
+	Ok(swap_disk_res.id)
 }
 
 pub async fn create_instance_config(

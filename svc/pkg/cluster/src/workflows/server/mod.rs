@@ -213,6 +213,15 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 		})
 		.await?;
 
+		// Scale to bring up a new server to take this server's place
+		ctx.tagged_signal(
+			&json!({
+				"datacenter_id": input.datacenter_id,
+			}),
+			crate::workflows::datacenter::Scale {},
+		)
+		.await?;
+
 		bail!("failed all attempts to provision server");
 	};
 

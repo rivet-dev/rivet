@@ -9,7 +9,6 @@
 // tainted server: a tainted server
 
 use std::{
-	cmp::Ordering,
 	collections::HashMap,
 	convert::{TryFrom, TryInto},
 	iter::{DoubleEndedIterator, Iterator},
@@ -278,13 +277,6 @@ async fn inner(
 		};
 
 		scale_servers(&ctx, tx, &mut actions, &servers, &pool_ctx).await?;
-
-		match pool_ctx.pool_type {
-			PoolType::Job => {
-				cleanup_tainted_job_servers(&ctx, tx, &mut actions, &servers, &pool_ctx).await?
-			}
-			_ => cleanup_tainted_servers(&ctx, tx, &mut actions, &servers, &pool_ctx).await?,
-		}
 	}
 
 	destroy_drained_servers(&ctx, tx, &mut actions, &servers).await?;
@@ -304,62 +296,92 @@ async fn scale_servers(
 		.filter(|server| server.pool_type == pctx.pool_type)
 		.filter(|server| !server.is_tainted);
 
-	let active_servers_in_pool = servers_in_pool
+	// Active servers may not be entirely installed. This is important as we cannot filter out servers that
+	// aren't installed or provisioned yet here.
+	let active_servers = servers_in_pool
 		.clone()
 		.filter(|server| matches!(server.drain_state, DrainState::None));
-	let active_count = active_servers_in_pool.clone().count();
+	let active_count = active_servers.clone().count();
 
 	tracing::info!(desired=%pctx.desired_count, active=%active_count, "comparing {:?}", pctx.pool_type);
 
-	match pctx.desired_count.cmp(&active_count) {
-		Ordering::Less => match pctx.pool_type {
-			PoolType::Job => {
-				scale_down_job_servers(ctx, tx, actions, pctx, active_servers_in_pool, active_count)
-					.await?
+	// Scale up
+	if pctx.desired_count > active_count {
+		scale_up_servers(ctx, tx, actions, pctx, servers_in_pool, active_count).await?;
+	}
+
+	// Scale down
+	match pctx.pool_type {
+		PoolType::Job => {
+			let (nomad_servers, without_nomad_servers) = active_servers
+				.clone()
+				.partition::<Vec<_>, _>(|server| server.has_nomad_node);
+
+			if pctx.desired_count < nomad_servers.len() {
+				scale_down_job_servers(
+					ctx,
+					tx,
+					actions,
+					pctx,
+					nomad_servers,
+					without_nomad_servers,
+				)
+				.await?;
 			}
-			PoolType::Gg => {
-				scale_down_gg_servers(ctx, tx, actions, pctx, active_servers_in_pool, active_count)
-					.await?
-			}
-			PoolType::Ats => {
-				scale_down_ats_servers(ctx, tx, actions, pctx, active_servers_in_pool, active_count)
-					.await?
-			}
-		},
-		Ordering::Greater => {
-			scale_up_servers(ctx, tx, actions, pctx, servers_in_pool, active_count).await?;
 		}
-		Ordering::Equal => {}
+		PoolType::Gg => {
+			let installed_servers = active_servers.filter(|server| server.is_installed);
+			let installed_count = installed_servers.clone().count();
+
+			if pctx.desired_count < installed_count {
+				scale_down_gg_servers(ctx, tx, actions, pctx, installed_servers, installed_count)
+					.await?;
+			}
+		}
+		PoolType::Ats => {
+			let installed_servers = active_servers.filter(|server| server.is_installed);
+			let installed_count = installed_servers.clone().count();
+
+			if pctx.desired_count < installed_count {
+				scale_down_ats_servers(ctx, tx, actions, pctx, installed_servers, installed_count)
+					.await?;
+			}
+		}
+	}
+
+	// Cleanup
+	match pctx.pool_type {
+		PoolType::Job => cleanup_tainted_job_servers(ctx, tx, actions, servers, pctx).await?,
+		_ => cleanup_tainted_servers(ctx, tx, actions, servers, pctx).await?,
 	}
 
 	Ok(())
 }
 
-async fn scale_down_job_servers<'a, I: Iterator<Item = &'a Server>>(
+async fn scale_down_job_servers(
 	ctx: &ActivityCtx,
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 	actions: &mut Vec<Action>,
 	pctx: &PoolCtx,
-	active_servers: I,
-	active_count: usize,
+	nomad_servers: Vec<&Server>,
+	without_nomad_servers: Vec<&Server>,
 ) -> GlobalResult<()> {
 	tracing::info!(
 		datacenter_id=?pctx.datacenter_id,
 		desired=%pctx.desired_count,
-		active=%active_count,
+		nomad_servers=%nomad_servers.len(),
 		"scaling down job"
 	);
 
-	let (nomad_servers, without_nomad_servers) =
-		active_servers.partition::<Vec<_>, _>(|server| server.has_nomad_node);
+	let diff = nomad_servers.len().saturating_sub(pctx.desired_count);
 
 	let destroy_count = match pctx.provider {
 		// Never destroy servers when scaling down with Linode, always drain
 		Provider::Linode => 0,
 		#[allow(unreachable_patterns)]
-		_ => (active_count - pctx.desired_count).min(without_nomad_servers.len()),
+		_ => diff.min(without_nomad_servers.len()),
 	};
-	let drain_count = active_count - pctx.desired_count - destroy_count;
+	let drain_count = diff - destroy_count;
 
 	// Destroy servers
 	if destroy_count != 0 {
@@ -394,23 +416,23 @@ async fn scale_down_gg_servers<'a, I: Iterator<Item = &'a Server> + DoubleEndedI
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 	actions: &mut Vec<Action>,
 	pctx: &PoolCtx,
-	active_servers: I,
-	active_count: usize,
+	installed_servers: I,
+	installed_count: usize,
 ) -> GlobalResult<()> {
 	tracing::info!(
 		datacenter_id=?pctx.datacenter_id,
 		desired=%pctx.desired_count,
-		active=%active_count,
+		installed=%installed_count,
 		"scaling down gg"
 	);
 
-	let drain_count = active_count - pctx.desired_count;
+	let drain_count = installed_count.saturating_sub(pctx.desired_count);
 
 	// Drain servers
 	if drain_count != 0 {
 		tracing::info!(count=%drain_count, "draining gg servers");
 
-		let drain_candidates = active_servers
+		let drain_candidates = installed_servers
 			.rev()
 			.take(drain_count)
 			.map(|server| server.server_id);
@@ -429,23 +451,23 @@ async fn scale_down_ats_servers<
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 	actions: &mut Vec<Action>,
 	pctx: &PoolCtx,
-	active_servers: I,
-	active_count: usize,
+	installed_servers: I,
+	installed_count: usize,
 ) -> GlobalResult<()> {
 	tracing::info!(
 		datacenter_id=?pctx.datacenter_id,
 		desired=%pctx.desired_count,
-		active=%active_count,
+		installed=%installed_count,
 		"scaling down ats"
 	);
 
-	let drain_count = active_count - pctx.desired_count;
+	let drain_count = installed_count.saturating_sub(pctx.desired_count);
 
 	// Drain servers
 	if drain_count != 0 {
 		tracing::info!(count=%drain_count, "draining ats servers");
 
-		let drain_candidates = active_servers
+		let drain_candidates = installed_servers
 			.rev()
 			.take(drain_count)
 			.map(|server| server.server_id);

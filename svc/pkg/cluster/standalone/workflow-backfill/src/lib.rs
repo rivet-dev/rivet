@@ -557,7 +557,7 @@ pub async fn run_from_env() -> GlobalResult<()> {
 			)?;
 
 			#[derive(Serialize, Hash)]
-			struct CreateDisksInput {
+			struct CreateBootDiskInput {
 				api_token: Option<String>,
 				image: String,
 				ssh_public_key: String,
@@ -565,15 +565,9 @@ pub async fn run_from_env() -> GlobalResult<()> {
 				disk_size: u64,
 			}
 
-			#[derive(Serialize, Hash)]
-			struct CreateDisksOutput {
-				boot_id: u64,
-				swap_id: u64,
-			}
-
 			wf.activity(
-				"create_disks",
-				CreateDisksInput {
+				"create_boot_disk",
+				CreateBootDiskInput {
 					api_token: dc.provider_api_token.clone(),
 					image: "linode/debian11".to_string(),
 					// Not the actual public key, but not required
@@ -582,12 +576,42 @@ pub async fn run_from_env() -> GlobalResult<()> {
 					// Not the actual server disk size, but not required
 					disk_size: 0,
 				},
-				CreateDisksOutput {
+				// Not the actual boot id, but not required
+				0,
+			)?;
+
+			#[derive(Serialize, Hash)]
+			struct WaitDiskReadyInput {
+				api_token: Option<String>,
+				linode_id: u64,
+				disk_id: u64,
+			}
+
+			wf.activity(
+				"wait_disk_ready",
+				WaitDiskReadyInput {
+					api_token: dc.provider_api_token.clone(),
+					linode_id,
 					// Not the actual boot id, but not required
-					boot_id: 0,
-					// Not the actual swap id, but not required
-					swap_id: 0,
+					disk_id: 0,
 				},
+				serde_json::Value::Null,
+			)?;
+
+			#[derive(Serialize, Hash)]
+			struct CreateSwapDiskInput {
+				api_token: Option<String>,
+				linode_id: u64,
+			}
+
+			wf.activity(
+				"create_swap_disk",
+				CreateSwapDiskInput {
+					api_token: dc.provider_api_token.clone(),
+					linode_id,
+				},
+				// Not the actual boot id, but not required
+				0,
 			)?;
 
 			#[derive(Serialize, Hash)]
@@ -595,7 +619,8 @@ pub async fn run_from_env() -> GlobalResult<()> {
 				api_token: Option<String>,
 				vlan_ip: Option<Ipv4Addr>,
 				linode_id: u64,
-				disks: CreateDisksOutput,
+				boot_disk_id: u64,
+				swap_disk_id: u64,
 			}
 
 			wf.activity(
@@ -613,12 +638,10 @@ pub async fn run_from_env() -> GlobalResult<()> {
 						})
 						.transpose()?,
 					linode_id,
-					disks: CreateDisksOutput {
-						// Not the actual boot id, but not required
-						boot_id: 0,
-						// Not the actual swap id, but not required
-						swap_id: 0,
-					},
+					// Not the actual boot id, but not required
+					boot_disk_id: 0,
+					// Not the actual swap id, but not required
+					swap_disk_id: 0,
 				},
 				serde_json::Value::Null,
 			)?;
