@@ -712,7 +712,7 @@ pub async fn run_from_env() -> GlobalResult<()> {
 			)?;
 
 			wf.signal(
-				"linode-server-provision-complete",
+				"linode_server_provision_complete",
 				json!({
 					"linode_id": linode_id,
 					"public_ip": public_ip,
@@ -813,7 +813,7 @@ pub async fn run_from_env() -> GlobalResult<()> {
 			};
 
 			wf.listen(
-				"linode-server-provision-complete",
+				"linode_server_provision_complete",
 				json!({
 					"linode_id": unwrap!(unwrap!(linode).linode_id),
 					"public_ip": public_ip,
@@ -905,7 +905,7 @@ pub async fn run_from_env() -> GlobalResult<()> {
 			})?;
 
 			wf.signal(
-				"cluster-datacenter-scale",
+				"cluster_datacenter_scale",
 				cluster::workflows::datacenter::Scale {},
 			)?;
 
@@ -997,11 +997,13 @@ pub async fn run_from_env() -> GlobalResult<()> {
 			}
 
 			if server.is_draining {
-				wf.listen("cluster-server-drain", json!({}))?;
+				wf.listen("cluster_server_drain", json!({}))?;
+
+				// Don't need to add the sub workflow, it should be idempotent
 			}
 
 			if server.is_tainted {
-				wf.listen("cluster-server-taint", json!({}))?;
+				wf.listen("cluster_server_taint", json!({}))?;
 			}
 
 			Ok(())
