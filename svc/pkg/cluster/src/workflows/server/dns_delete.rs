@@ -51,7 +51,7 @@ struct GetDnsRecordsInput {
 	server_id: Uuid,
 }
 
-#[derive(Debug, sqlx::FromRow, Serialize, Deserialize, Hash)]
+#[derive(Debug, Default, sqlx::FromRow, Serialize, Deserialize, Hash)]
 struct GetDnsRecordsOutput {
 	dns_record_id: Option<String>,
 	secondary_dns_record_id: Option<String>,
@@ -62,7 +62,7 @@ async fn get_dns_records(
 	ctx: &ActivityCtx,
 	input: &GetDnsRecordsInput,
 ) -> GlobalResult<GetDnsRecordsOutput> {
-	sql_fetch_one!(
+	let row = sql_fetch_optional!(
 		[ctx, GetDnsRecordsOutput]
 		"
 		SELECT dns_record_id, secondary_dns_record_id
@@ -73,7 +73,13 @@ async fn get_dns_records(
 		",
 		&input.server_id,
 	)
-	.await
+	.await?;
+
+	if row.is_none() {
+		tracing::warn!("server has no DNS record row");
+	}
+
+	Ok(row.unwrap_or_default())
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]

@@ -90,8 +90,32 @@ pub(crate) async fn create_dns_record(
 					cf::dns::DnsContent::TXT { .. } => "TXT",
 					cf::dns::DnsContent::SRV { .. } => "SRV",
 				};
-				let list_records_res =
-					get_dns_record(cf_token, zone_id, record_name, dns_type).await?;
+
+				// Find record to delete
+				let list_records_res = match content {
+					cf::dns::DnsContent::A { .. } => {
+						get_dns_record(cf_token, zone_id, record_name, dns_type).await?
+					}
+					cf::dns::DnsContent::TXT { .. } => {
+						// Get DNS record with content comparison
+						client
+							.request(&cf::dns::ListDnsRecords {
+								zone_identifier: zone_id,
+								params: cf::dns::ListDnsRecordsParams {
+									record_type: Some(content.clone()),
+									name: Some(record_name.to_string()),
+									..Default::default()
+								},
+							})
+							.await?
+							.result
+							.into_iter()
+							.next()
+					}
+					_ => {
+						unimplemented!("must configure whether to search for records via content vs no content for this DNS record type");
+					}
+				};
 
 				if let Some(record) = list_records_res {
 					delete_dns_record(client, zone_id, &record.id).await?;
@@ -140,7 +164,7 @@ pub(crate) async fn delete_dns_record(
 	Ok(())
 }
 
-/// Fetches the dns record by name.
+/// Fetches a dns record by name and type, not content.
 async fn get_dns_record(
 	cf_token: &str,
 	zone_id: &str,

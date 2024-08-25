@@ -82,7 +82,7 @@ pub async fn ds_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()>
 		Ok(_) => {}
 		// If we cannot recover a setup error, send a failed signal
 		Err(err) => {
-			tracing::warn!("unrecoverable setup");
+			tracing::warn!(?err, "unrecoverable setup");
 
 			// TODO: Cleanup
 

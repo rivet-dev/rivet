@@ -306,7 +306,14 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 		}
 	}
 
-	cleanup(ctx, input, &dc.provider, provider_server_workflow_id, true).await?;
+	cleanup(
+		ctx,
+		input,
+		&dc.provider,
+		provider_server_workflow_id,
+		state.has_dns,
+	)
+	.await?;
 
 	Ok(())
 }

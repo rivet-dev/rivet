@@ -23,8 +23,8 @@ use crate::{
 		time::{DurationToMillis, TsToMillis},
 		GlobalErrorExt, Location,
 	},
-	workflow::{Workflow, WorkflowInput},
 	worker,
+	workflow::{Workflow, WorkflowInput},
 };
 
 // Time to delay a workflow from retrying after an error
@@ -763,10 +763,24 @@ impl WorkflowCtx {
 		res: GlobalResult<T>,
 	) -> GlobalResult<GlobalResult<T>> {
 		match res {
-			Err(err) if !err.is_workflow_recoverable() => {
-				self.location_idx += 1;
-
-				Ok(Err(err))
+			Err(GlobalError::Raw(inner_err)) => {
+				match inner_err.downcast::<WorkflowError>() {
+					Ok(inner_err) => {
+						// Despite "history diverged" errors being unrecoverable, they should not have be returned
+						// by this function because the state of the history is already messed up and no new
+						// workflow items can be run.
+						if !inner_err.is_recoverable()
+							&& !matches!(*inner_err, WorkflowError::HistoryDiverged(_))
+						{
+							return Ok(Err(GlobalError::raw(inner_err)));
+						} else {
+							return Err(GlobalError::raw(inner_err));
+						}
+					}
+					Err(err) => {
+						return Err(GlobalError::Raw(err));
+					}
+				}
 			}
 			Err(err) => Err(err),
 			Ok(x) => Ok(Ok(x)),
