@@ -772,6 +772,8 @@ impl WorkflowCtx {
 						if !inner_err.is_recoverable()
 							&& !matches!(*inner_err, WorkflowError::HistoryDiverged(_))
 						{
+							self.location_idx += 1;
+
 							return Ok(Err(GlobalError::raw(inner_err)));
 						} else {
 							return Err(GlobalError::raw(inner_err));
