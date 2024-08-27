@@ -774,9 +774,9 @@ impl WorkflowCtx {
 						{
 							self.location_idx += 1;
 
-							return Ok(Err(GlobalError::raw(inner_err)));
+							return Ok(Err(GlobalError::Raw(inner_err)));
 						} else {
-							return Err(GlobalError::raw(inner_err));
+							return Err(GlobalError::Raw(inner_err));
 						}
 					}
 					Err(err) => {
