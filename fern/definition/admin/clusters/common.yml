@@ -44,13 +44,15 @@ types:
       display_name: string
       provider: Provider
       provider_datacenter_id: string
-      provider_api_token: optional<string>
       pools: list<Pool>
       build_delivery_method: BuildDeliveryMethod
+      prebakes_enabled: boolean
 
   Server:
     properties:
       server_id: uuid
+      datacenter_id: uuid
+      pool_type: PoolType
       public_ip: optional<string>
 
   PoolUpdate:

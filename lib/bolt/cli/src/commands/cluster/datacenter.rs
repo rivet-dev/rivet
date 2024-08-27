@@ -2,8 +2,6 @@ use anyhow::*;
 use bolt_core::context::ProjectContext;
 use clap::{Parser, ValueEnum};
 use rivet_api::{apis::*, models};
-use tabled::Tabled;
-use uuid::Uuid;
 
 #[derive(ValueEnum, Clone)]
 pub enum DatacenterProvider {
@@ -59,10 +57,10 @@ pub enum SubCommand {
 	/// Creates a new datacenter
 	Create {
 		/// The name id of the cluster
-		#[clap(long, short = 'c')]
+		#[clap(index = 1)]
 		cluster: String,
 		/// The name id of the datacenter
-		#[clap(long, short = 'd')]
+		#[clap(index = 2)]
 		name_id: String,
 		/// The display name of the datacenter
 		#[clap(long)]
@@ -83,19 +81,19 @@ pub enum SubCommand {
 	/// Lists all datacenters of a cluster
 	List {
 		/// The name id of the cluster
-		#[clap(long, short = 'c')]
+		#[clap(index = 1)]
 		cluster: String,
 	},
 	/// Update a datacenter's pools
 	Update {
 		/// The name id of the cluster
-		#[clap(long, short = 'c')]
+		#[clap(index = 1)]
 		cluster: String,
 		/// The name id of the datacenter
-		#[clap(index = 1)]
+		#[clap(index = 2)]
 		name_id: String,
 		/// The pool type
-		#[clap(index = 2)]
+		#[clap(index = 3)]
 		pool: DatacenterPoolType,
 		/// The hardware types
 		#[clap(long)]
@@ -116,12 +114,6 @@ pub enum SubCommand {
 		#[clap(long)]
 		prebakes_enabled: Option<bool>,
 	},
-}
-
-#[derive(Tabled)]
-struct DatacenterTableRow {
-	name_id: String,
-	datacenter_id: Uuid,
 }
 
 impl SubCommand {
@@ -191,11 +183,10 @@ impl SubCommand {
 				.await?
 				.datacenters;
 
-				rivet_term::status::success("Datacenters", "");
-				rivet_term::format::table(datacenters.iter().map(|d| DatacenterTableRow {
-					name_id: d.name_id.clone(),
-					datacenter_id: d.datacenter_id,
-				}));
+				rivet_term::status::success("Datacenters", datacenters.len().to_string());
+				if !datacenters.is_empty() {
+					render::datacenters(datacenters);
+				}
 			}
 			Self::Update {
 				cluster: cluster_name_id,
@@ -262,5 +253,80 @@ impl SubCommand {
 		}
 
 		Ok(())
+	}
+}
+
+mod render {
+	use rivet_api::models;
+	use tabled::Tabled;
+	use uuid::Uuid;
+
+	use super::super::render::display_option;
+
+	#[derive(Tabled, Default)]
+	struct DcTableRow {
+		#[tabled(display_with = "display_option")]
+		pub name_id: Option<String>,
+		#[tabled(display_with = "display_option")]
+		pub datacenter_id: Option<Uuid>,
+		#[tabled(display_with = "display_provider")]
+		pub provider: Option<models::AdminClustersProvider>,
+		#[tabled(inline)]
+		pub pool: PoolTableRow,
+		#[tabled(display_with = "display_option")]
+		pub prebakes_enabled: Option<bool>,
+	}
+
+	#[derive(Tabled, Default)]
+	struct PoolTableRow {
+		#[tabled(display_with = "display_pool_type")]
+		pub pool_type: Option<models::AdminClustersPoolType>,
+		#[tabled(display_with = "display_option")]
+		pub min_count: Option<i32>,
+		#[tabled(display_with = "display_option")]
+		pub desired_count: Option<i32>,
+		#[tabled(display_with = "display_option")]
+		pub max_count: Option<i32>,
+	}
+
+	pub fn datacenters(mut datacenters: Vec<models::AdminClustersDatacenter>) {
+		let rows = datacenters.iter_mut().flat_map(|d| {
+			d.pools.sort_by_key(|pool| pool.pool_type);
+
+			std::iter::once(DcTableRow {
+				name_id: Some(d.name_id.clone()),
+				datacenter_id: Some(d.datacenter_id),
+				provider: Some(d.provider),
+				prebakes_enabled: Some(d.prebakes_enabled),
+				..Default::default()
+			})
+			.chain(d.pools.iter().cloned().map(|pool| DcTableRow {
+				pool: PoolTableRow {
+					pool_type: Some(pool.pool_type),
+					min_count: Some(pool.min_count),
+					desired_count: Some(pool.desired_count),
+					max_count: Some(pool.max_count),
+				},
+				..Default::default()
+			}))
+		});
+
+		rivet_term::format::table(rows);
+	}
+
+	fn display_provider(item: &Option<models::AdminClustersProvider>) -> String {
+		match item {
+			Some(models::AdminClustersProvider::Linode) => "Linode".to_string(),
+			None => String::new(),
+		}
+	}
+
+	fn display_pool_type(item: &Option<models::AdminClustersPoolType>) -> String {
+		match item {
+			Some(models::AdminClustersPoolType::Job) => "Job".to_string(),
+			Some(models::AdminClustersPoolType::Gg) => "GG".to_string(),
+			Some(models::AdminClustersPoolType::Ats) => "ATS".to_string(),
+			None => String::new(),
+		}
 	}
 }

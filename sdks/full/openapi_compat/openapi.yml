@@ -91,10 +91,10 @@ components:
           items:
             $ref: '#/components/schemas/AdminClustersPool'
           type: array
+        prebakes_enabled:
+          type: boolean
         provider:
           $ref: '#/components/schemas/AdminClustersProvider'
-        provider_api_token:
-          type: string
         provider_datacenter_id:
           type: string
       required:
@@ -106,6 +106,7 @@ components:
       - provider_datacenter_id
       - pools
       - build_delivery_method
+      - prebakes_enabled
       type: object
     AdminClustersHardware:
       properties:
@@ -199,6 +200,11 @@ components:
       type: string
     AdminClustersServer:
       properties:
+        datacenter_id:
+          format: uuid
+          type: string
+        pool_type:
+          $ref: '#/components/schemas/AdminClustersPoolType'
         public_ip:
           type: string
         server_id:
@@ -206,6 +212,8 @@ components:
           type: string
       required:
       - server_id
+      - datacenter_id
+      - pool_type
       type: object
     AdminClustersUpdateDatacenterRequest:
       properties:
@@ -5222,6 +5230,154 @@ paths:
   /admin/clusters/{cluster_id}/servers/destroy:
     post:
       operationId: admin_clusters_servers_destroy
+      parameters:
+      - in: path
+        name: cluster_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: query
+        name: server_id
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: datacenter
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: pool
+        required: false
+        schema:
+          $ref: '#/components/schemas/AdminClustersPoolType'
+      - in: query
+        name: public_ip
+        required: false
+        schema:
+          type: string
+      responses:
+        '204':
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      tags:
+      - AdminClustersServers
+  /admin/clusters/{cluster_id}/servers/lost:
+    get:
+      operationId: admin_clusters_servers_listLost
+      parameters:
+      - in: path
+        name: cluster_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: query
+        name: server_id
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: datacenter
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: pool
+        required: false
+        schema:
+          $ref: '#/components/schemas/AdminClustersPoolType'
+      - in: query
+        name: public_ip
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminClustersListServersResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      tags:
+      - AdminClustersServers
+  /admin/clusters/{cluster_id}/servers/prune:
+    post:
+      operationId: admin_clusters_servers_prune
       parameters:
       - in: path
         name: cluster_id

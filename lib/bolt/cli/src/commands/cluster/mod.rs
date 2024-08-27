@@ -1,11 +1,11 @@
 use anyhow::*;
-use bolt_core::{context::ProjectContext, tasks::ssh};
+use bolt_core::context::ProjectContext;
 use clap::Parser;
 use rivet_api::{apis::*, models};
-use tabled::Tabled;
 use uuid::Uuid;
 
 mod datacenter;
+mod server;
 
 #[derive(Parser)]
 pub enum SubCommand {
@@ -20,62 +20,18 @@ pub enum SubCommand {
 	},
 	/// Lists all clusters
 	List,
-	/// Taint servers in a cluster
-	Taint {
-		/// The name id of the cluster
-		#[clap(index = 1)]
-		cluster: String,
-		#[clap(long)]
-		server_id: Option<String>,
-		#[clap(long, short = 'p')]
-		pool: Option<String>,
-		#[clap(long, short = 'd')]
-		datacenter: Option<String>,
-		#[clap(long)]
-		ip: Option<String>,
-	},
-	/// Destroy servers in a cluster
-	Destroy {
-		/// The name id of the cluster
-		#[clap(index = 1)]
-		cluster: String,
-		#[clap(long)]
-		server_id: Option<String>,
-		#[clap(long, short = 'p')]
-		pool: Option<String>,
-		#[clap(long, short = 'd')]
-		datacenter: Option<String>,
-		#[clap(long)]
-		ip: Option<String>,
-	},
-	/// SSH in to a server in the cluster
-	Ssh {
-		/// The name id of the cluster
-		#[clap(index = 1)]
-		cluster: String,
-		#[clap(long)]
-		server_id: Option<String>,
-		#[clap(long, short = 'p')]
-		pool: Option<String>,
-		#[clap(long, short = 'd')]
-		datacenter: Option<String>,
-		#[clap(long)]
-		ip: Option<String>,
-
-		#[clap(long, short = 'c')]
-		command: Option<String>,
-	},
 	/// Datacenter handler
+	#[clap(alias = "dc")]
 	Datacenter {
 		#[clap(subcommand)]
 		command: datacenter::SubCommand,
 	},
-}
-
-#[derive(Tabled)]
-struct ClusterTableRow {
-	name_id: String,
-	cluster_id: Uuid,
+	/// Server handler
+	#[clap(alias = "s")]
+	Server {
+		#[clap(subcommand)]
+		command: server::SubCommand,
+	},
 }
 
 impl SubCommand {
@@ -101,7 +57,6 @@ impl SubCommand {
 
 				rivet_term::status::success("Cluster created", "");
 			}
-
 			Self::List => {
 				let clusters =
 					admin_clusters_api::admin_clusters_list(&ctx.openapi_config_cloud().await?)
@@ -109,148 +64,51 @@ impl SubCommand {
 						.unwrap()
 						.clusters;
 
-				rivet_term::status::success("Clusters", "");
-				rivet_term::format::table(clusters.iter().map(|c| ClusterTableRow {
-					name_id: c.name_id.clone(),
-					cluster_id: c.cluster_id,
-				}));
-			}
+				rivet_term::status::success("Clusters", clusters.len().to_string());
 
-			Self::Taint {
-				cluster: cluster_name_id,
-				server_id,
-				pool,
-				datacenter,
-				ip,
-			} => {
-				let cloud_config = ctx.openapi_config_cloud().await?;
-
-				// Look up cluster
-				let clusters = admin_clusters_api::admin_clusters_list(&cloud_config)
-					.await?
-					.clusters;
-				let cluster = clusters.iter().find(|c| c.name_id == cluster_name_id);
-				let cluster = match cluster {
-					Some(c) => c,
-					None => bail!("cluster with the name id {} not found", cluster_name_id),
-				};
-
-				// Taint servers
-				let pool_type = pool
-					.map(|p| match p.as_str() {
-						"job" => Ok(models::AdminClustersPoolType::Job),
-						"gg" => Ok(models::AdminClustersPoolType::Gg),
-						"ats" => Ok(models::AdminClustersPoolType::Ats),
-						_ => Err(anyhow!("invalid pool type")),
-					})
-					.transpose()?;
-				admin_clusters_servers_api::admin_clusters_servers_taint(
-					&cloud_config,
-					&cluster.cluster_id.to_string(),
-					server_id.as_deref(),
-					datacenter.as_deref(),
-					pool_type,
-					ip.as_deref(),
-				)
-				.await?;
-			}
-			Self::Destroy {
-				cluster: cluster_name_id,
-				server_id,
-				pool,
-				datacenter,
-				ip,
-			} => {
-				let cloud_config = ctx.openapi_config_cloud().await?;
-
-				// Look up cluster
-				let clusters = admin_clusters_api::admin_clusters_list(&cloud_config)
-					.await?
-					.clusters;
-				let cluster = clusters.iter().find(|c| c.name_id == cluster_name_id);
-				let cluster = match cluster {
-					Some(c) => c,
-					None => bail!("cluster with the name id {} not found", cluster_name_id),
-				};
-
-				// Destroy servers
-				let pool_type = pool
-					.map(|p| match p.as_str() {
-						"job" => Ok(models::AdminClustersPoolType::Job),
-						"gg" => Ok(models::AdminClustersPoolType::Gg),
-						"ats" => Ok(models::AdminClustersPoolType::Ats),
-						_ => Err(anyhow!("invalid pool type")),
-					})
-					.transpose()?;
-				admin_clusters_servers_api::admin_clusters_servers_destroy(
-					&cloud_config,
-					&cluster.cluster_id.to_string(),
-					server_id.as_deref(),
-					datacenter.as_deref(),
-					pool_type,
-					ip.as_deref(),
-				)
-				.await?;
-			}
-			Self::Ssh {
-				cluster: cluster_name_id,
-				command,
-				server_id,
-				pool,
-				datacenter,
-				ip,
-			} => {
-				let cloud_config = ctx.openapi_config_cloud().await?;
-
-				// Look up cluster
-				let clusters = admin_clusters_api::admin_clusters_list(&cloud_config)
-					.await?
-					.clusters;
-				let cluster = clusters.iter().find(|c| c.name_id == cluster_name_id);
-				let cluster = match cluster {
-					Some(c) => c,
-					None => bail!("cluster with the name id {} not found", cluster_name_id),
-				};
-
-				// Look up server IPs
-				let pool_type = pool
-					.map(|p| match p.as_str() {
-						"job" => Ok(models::AdminClustersPoolType::Job),
-						"gg" => Ok(models::AdminClustersPoolType::Gg),
-						"ats" => Ok(models::AdminClustersPoolType::Ats),
-						_ => Err(anyhow!("invalid pool type")),
-					})
-					.transpose()?;
-				let mut servers = admin_clusters_servers_api::admin_clusters_servers_list(
-					&cloud_config,
-					&cluster.cluster_id.to_string(),
-					server_id.as_deref(),
-					datacenter.as_deref(),
-					pool_type,
-					ip.as_deref(),
-				)
-				.await?;
-				servers.servers.sort_by_key(|s| s.server_id);
-				let server_ips = servers
-					.servers
-					.iter()
-					.filter_map(|x| x.public_ip.as_ref())
-					.map(|x| x.as_str())
-					.collect::<Vec<_>>();
-
-				// SSH in to servers
-				if let Some(command) = command {
-					ssh::ip_all(&ctx, &server_ips, &command).await?;
-				} else {
-					let ip = server_ips.first().context("no matching servers")?;
-					ssh::ip(&ctx, ip, command.as_deref()).await?;
+				if !clusters.is_empty() {
+					render::clusters(clusters);
 				}
 			}
 			Self::Datacenter { command } => {
 				command.execute(ctx).await?;
 			}
+			Self::Server { command } => {
+				command.execute(ctx).await?;
+			}
 		}
 
 		Ok(())
+	}
+}
+
+mod render {
+	use rivet_api::models;
+	use tabled::Tabled;
+	use uuid::Uuid;
+
+	#[derive(Tabled)]
+	pub struct ClusterTableRow {
+		pub name_id: String,
+		pub cluster_id: Uuid,
+		#[tabled(display_with = "display_option")]
+		pub owner_team_id: Option<Uuid>,
+	}
+
+	pub fn clusters(clusters: Vec<models::AdminClustersCluster>) {
+		let rows = clusters.iter().map(|c| ClusterTableRow {
+			name_id: c.name_id.clone(),
+			cluster_id: c.cluster_id,
+			owner_team_id: c.owner_team_id,
+		});
+
+		rivet_term::format::table(rows);
+	}
+
+	pub(crate) fn display_option<T: std::fmt::Display>(item: &Option<T>) -> String {
+		match item {
+			Some(s) => s.to_string(),
+			None => String::new(),
+		}
 	}
 }

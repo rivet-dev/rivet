@@ -9,7 +9,7 @@ export interface Datacenter {
     displayName: string;
     provider: Rivet.admin.clusters.Provider;
     providerDatacenterId: string;
-    providerApiToken?: string;
     pools: Rivet.admin.clusters.Pool[];
     buildDeliveryMethod: Rivet.admin.clusters.BuildDeliveryMethod;
+    prebakesEnabled: boolean;
 }

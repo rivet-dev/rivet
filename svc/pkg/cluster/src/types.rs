@@ -32,7 +32,7 @@ pub struct Datacenter {
 	pub create_ts: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
 pub enum Provider {
 	Linode,
 }
@@ -150,6 +150,7 @@ pub struct Server {
 	pub server_id: Uuid,
 	pub datacenter_id: Uuid,
 	pub pool_type: PoolType,
+	pub provider_server_id: Option<String>,
 	pub vlan_ip: Option<IpAddr>,
 	pub public_ip: Option<IpAddr>,
 	pub cloud_destroy_ts: Option<i64>,

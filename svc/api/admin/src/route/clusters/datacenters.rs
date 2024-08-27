@@ -27,7 +27,7 @@ pub async fn list(
 		.await?
 		.datacenters
 		.into_iter()
-		.map(ApiTryInto::<models::AdminClustersDatacenter>::api_try_into)
+		.map(ApiTryInto::api_try_into)
 		.collect::<GlobalResult<Vec<_>>>()?;
 
 	Ok(models::AdminClustersListDatacentersResponse { datacenters })

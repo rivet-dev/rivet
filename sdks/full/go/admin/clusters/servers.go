@@ -22,6 +22,20 @@ type ListServersRequest struct {
 	PublicIp   *string   `json:"-"`
 }
 
+type ListLostServersRequest struct {
+	ServerId   *string   `json:"-"`
+	Datacenter *string   `json:"-"`
+	Pool       *PoolType `json:"-"`
+	PublicIp   *string   `json:"-"`
+}
+
+type PruneServersRequest struct {
+	ServerId   *string   `json:"-"`
+	Datacenter *string   `json:"-"`
+	Pool       *PoolType `json:"-"`
+	PublicIp   *string   `json:"-"`
+}
+
 type TaintServersRequest struct {
 	ServerId   *string   `json:"-"`
 	Datacenter *string   `json:"-"`

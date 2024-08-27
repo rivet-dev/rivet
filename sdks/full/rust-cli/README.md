@@ -33,6 +33,8 @@ Class | Method | HTTP request | Description
 *AdminClustersDatacentersApi* | [**admin_clusters_datacenters_update**](docs/AdminClustersDatacentersApi.md#admin_clusters_datacenters_update) | **PATCH** /admin/clusters/{cluster_id}/datacenters/{datacenter_id} | 
 *AdminClustersServersApi* | [**admin_clusters_servers_destroy**](docs/AdminClustersServersApi.md#admin_clusters_servers_destroy) | **POST** /admin/clusters/{cluster_id}/servers/destroy | 
 *AdminClustersServersApi* | [**admin_clusters_servers_list**](docs/AdminClustersServersApi.md#admin_clusters_servers_list) | **GET** /admin/clusters/{cluster_id}/servers | 
+*AdminClustersServersApi* | [**admin_clusters_servers_list_lost**](docs/AdminClustersServersApi.md#admin_clusters_servers_list_lost) | **GET** /admin/clusters/{cluster_id}/servers/lost | 
+*AdminClustersServersApi* | [**admin_clusters_servers_prune**](docs/AdminClustersServersApi.md#admin_clusters_servers_prune) | **POST** /admin/clusters/{cluster_id}/servers/prune | 
 *AdminClustersServersApi* | [**admin_clusters_servers_taint**](docs/AdminClustersServersApi.md#admin_clusters_servers_taint) | **POST** /admin/clusters/{cluster_id}/servers/taint | 
 *AuthIdentityAccessTokenApi* | [**auth_identity_access_token_complete_access_token_verification**](docs/AuthIdentityAccessTokenApi.md#auth_identity_access_token_complete_access_token_verification) | **POST** /auth/identity/access-token/complete-verification | 
 *AuthIdentityEmailApi* | [**auth_identity_email_complete_email_verification**](docs/AuthIdentityEmailApi.md#auth_identity_email_complete_email_verification) | **POST** /auth/identity/email/complete-verification | 

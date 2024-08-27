@@ -4,10 +4,13 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
+import { admin } from "../../../../../../index";
 export declare const Server: core.serialization.ObjectSchema<serializers.admin.clusters.Server.Raw, Rivet.admin.clusters.Server>;
 export declare namespace Server {
     interface Raw {
         server_id: string;
+        datacenter_id: string;
+        pool_type: admin.clusters.PoolType.Raw;
         public_ip?: string | null;
     }
 }

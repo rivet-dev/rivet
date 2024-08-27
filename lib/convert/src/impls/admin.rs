@@ -113,8 +113,8 @@ impl ApiTryFrom<cluster::types::Datacenter> for models::AdminClustersDatacenter 
 				})
 				.collect::<GlobalResult<Vec<_>>>()?,
 			provider: value.provider.api_into(),
-			provider_api_token: value.provider_api_token,
 			provider_datacenter_id: value.provider_datacenter_id,
+			prebakes_enabled: value.prebakes_enabled,
 		})
 	}
 }
@@ -135,5 +135,18 @@ impl ApiFrom<models::AdminClustersPoolUpdate> for cluster::types::PoolUpdate {
 			max_count: value.max_count.map(|c| c as u32),
 			drain_timeout: value.drain_timeout.map(|d| d as u64),
 		}
+	}
+}
+
+impl ApiTryFrom<cluster::types::Server> for models::AdminClustersServer {
+	type Error = GlobalError;
+
+	fn api_try_from(value: cluster::types::Server) -> GlobalResult<models::AdminClustersServer> {
+		Ok(models::AdminClustersServer {
+			server_id: value.server_id,
+			datacenter_id: value.datacenter_id,
+			pool_type: value.pool_type.api_into(),
+			public_ip: value.public_ip.map(|ip| ip.to_string()),
+		})
 	}
 }

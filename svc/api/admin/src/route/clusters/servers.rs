@@ -2,7 +2,7 @@ use std::{net::Ipv4Addr, str::FromStr};
 
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use rivet_api::models;
-use rivet_convert::ApiInto;
+use rivet_convert::{ApiInto, ApiTryInto};
 use rivet_operation::prelude::*;
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -68,13 +68,8 @@ pub async fn list(
 
 	let servers = servers_res
 		.servers
-		.iter()
-		.map(|server| {
-			GlobalResult::Ok(models::AdminClustersServer {
-				server_id: server.server_id,
-				public_ip: server.public_ip.map(|ip| ip.to_string()),
-			})
-		})
+		.into_iter()
+		.map(ApiTryInto::api_try_into)
 		.collect::<GlobalResult<Vec<_>>>()?;
 
 	Ok(models::AdminClustersListServersResponse { servers })
@@ -103,6 +98,43 @@ pub async fn destroy(
 	query: ServerFilterQuery,
 ) -> GlobalResult<Value> {
 	ctx.op(cluster::ops::server::destroy_with_filter::Input {
+		filter: query.convert(&ctx, cluster_id).await?,
+	})
+	.await?;
+
+	Ok(json!({}))
+}
+
+// MARK: GET /clusters/{cluster_id}/servers/lost
+pub async fn list_lost(
+	ctx: Ctx<Auth>,
+	cluster_id: Uuid,
+	_watch_index: WatchIndexQuery,
+	query: ServerFilterQuery,
+) -> GlobalResult<models::AdminClustersListServersResponse> {
+	let servers_res = ctx
+		.op(cluster::ops::server::lost_list::Input {
+			filter: query.convert(&ctx, cluster_id).await?,
+		})
+		.await?;
+
+	let servers = servers_res
+		.servers
+		.into_iter()
+		.map(ApiTryInto::api_try_into)
+		.collect::<GlobalResult<Vec<_>>>()?;
+
+	Ok(models::AdminClustersListServersResponse { servers })
+}
+
+// MARK: GET /clusters/{cluster_id}/servers/prune
+pub async fn prune(
+	ctx: Ctx<Auth>,
+	cluster_id: Uuid,
+	_body: serde_json::Value,
+	query: ServerFilterQuery,
+) -> GlobalResult<serde_json::Value> {
+	ctx.op(cluster::ops::server::prune_with_filter::Input {
 		filter: query.convert(&ctx, cluster_id).await?,
 	})
 	.await?;

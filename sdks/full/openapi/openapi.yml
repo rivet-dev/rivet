@@ -5574,6 +5574,154 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
       security: *ref_0
+  /admin/clusters/{cluster_id}/servers/lost:
+    get:
+      operationId: admin_clusters_servers_listLost
+      tags:
+        - AdminClustersServers
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: server_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: datacenter
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: pool
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/AdminClustersPoolType'
+        - name: public_ip
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminClustersListServersResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+  /admin/clusters/{cluster_id}/servers/prune:
+    post:
+      operationId: admin_clusters_servers_prune
+      tags:
+        - AdminClustersServers
+      parameters:
+        - name: cluster_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: server_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: datacenter
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: pool
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/AdminClustersPoolType'
+        - name: public_ip
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '204':
+          description: ''
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
   /auth/identity/access-token/complete-verification:
     post:
       description: Completes the access token verification process.
@@ -11002,14 +11150,14 @@ components:
           $ref: '#/components/schemas/AdminClustersProvider'
         provider_datacenter_id:
           type: string
-        provider_api_token:
-          type: string
         pools:
           type: array
           items:
             $ref: '#/components/schemas/AdminClustersPool'
         build_delivery_method:
           $ref: '#/components/schemas/AdminClustersBuildDeliveryMethod'
+        prebakes_enabled:
+          type: boolean
       required:
         - datacenter_id
         - cluster_id
@@ -11019,16 +11167,24 @@ components:
         - provider_datacenter_id
         - pools
         - build_delivery_method
+        - prebakes_enabled
     AdminClustersServer:
       type: object
       properties:
         server_id:
           type: string
           format: uuid
+        datacenter_id:
+          type: string
+          format: uuid
+        pool_type:
+          $ref: '#/components/schemas/AdminClustersPoolType'
         public_ip:
           type: string
       required:
         - server_id
+        - datacenter_id
+        - pool_type
     AdminClustersPoolUpdate:
       type: object
       properties:

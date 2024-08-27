@@ -9,6 +9,7 @@ license = "Apache-2.0"
 acme-lib = "0.9"
 anyhow = "1.0"
 chirp-workflow = { path = "../../../lib/chirp-workflow/core" }
+chrono = "0.4"
 cloudflare = { git = "https://github.com/cloudflare/cloudflare-rs.git", rev = "f14720e42184ee176a97676e85ef2d2d85bc3aae" }
 http = "0.2"
 include_dir = "0.7.3"

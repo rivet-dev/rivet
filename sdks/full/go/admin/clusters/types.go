@@ -70,9 +70,9 @@ type Datacenter struct {
 	DisplayName          string              `json:"display_name"`
 	Provider             Provider            `json:"provider,omitempty"`
 	ProviderDatacenterId string              `json:"provider_datacenter_id"`
-	ProviderApiToken     *string             `json:"provider_api_token,omitempty"`
 	Pools                []*Pool             `json:"pools,omitempty"`
 	BuildDeliveryMethod  BuildDeliveryMethod `json:"build_delivery_method,omitempty"`
+	PrebakesEnabled      bool                `json:"prebakes_enabled"`
 
 	_rawJSON json.RawMessage
 }
@@ -217,8 +217,10 @@ func (p Provider) Ptr() *Provider {
 }
 
 type Server struct {
-	ServerId uuid.UUID `json:"server_id"`
-	PublicIp *string   `json:"public_ip,omitempty"`
+	ServerId     uuid.UUID `json:"server_id"`
+	DatacenterId uuid.UUID `json:"datacenter_id"`
+	PoolType     PoolType  `json:"pool_type,omitempty"`
+	PublicIp     *string   `json:"public_ip,omitempty"`
 
 	_rawJSON json.RawMessage
 }

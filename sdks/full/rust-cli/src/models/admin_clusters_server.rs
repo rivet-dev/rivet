@@ -13,6 +13,10 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct AdminClustersServer {
+    #[serde(rename = "datacenter_id")]
+    pub datacenter_id: uuid::Uuid,
+    #[serde(rename = "pool_type")]
+    pub pool_type: crate::models::AdminClustersPoolType,
     #[serde(rename = "public_ip", skip_serializing_if = "Option::is_none")]
     pub public_ip: Option<String>,
     #[serde(rename = "server_id")]
@@ -20,8 +24,10 @@ pub struct AdminClustersServer {
 }
 
 impl AdminClustersServer {
-    pub fn new(server_id: uuid::Uuid) -> AdminClustersServer {
+    pub fn new(datacenter_id: uuid::Uuid, pool_type: crate::models::AdminClustersPoolType, server_id: uuid::Uuid) -> AdminClustersServer {
         AdminClustersServer {
+            datacenter_id,
+            pool_type,
             public_ip: None,
             server_id,
         }

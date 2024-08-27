@@ -4,6 +4,8 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
+**datacenter_id** | [**uuid::Uuid**](uuid::Uuid.md) |  | 
+**pool_type** | [**crate::models::AdminClustersPoolType**](AdminClustersPoolType.md) |  | 
 **public_ip** | Option<**String**> |  | [optional]
 **server_id** | [**uuid::Uuid**](uuid::Uuid.md) |  | 
 

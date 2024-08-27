@@ -54,6 +54,19 @@ define_router! {
 			),
 		},
 
+		"clusters" / Uuid / "servers" / "lost": {
+			GET: clusters::servers::list_lost(
+				query: clusters::servers::ServerFilterQuery,
+			),
+		},
+
+		"clusters" / Uuid / "servers" / "prune": {
+			POST: clusters::servers::prune(
+				query: clusters::servers::ServerFilterQuery,
+				body: serde_json::Value,
+			),
+		},
+
 		"clusters" / Uuid / "datacenters": {
 			GET: clusters::datacenters::list(),
 			POST: clusters::datacenters::create(

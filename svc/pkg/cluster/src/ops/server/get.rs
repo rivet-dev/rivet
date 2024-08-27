@@ -23,6 +23,7 @@ pub(crate) struct ServerRow {
 	datacenter_id: Uuid,
 	pool_type2: Option<sqlx::types::Json<PoolType>>,
 	pool_type: i64,
+	provider_server_id: Option<String>,
 	vlan_ip: Option<IpAddr>,
 	public_ip: Option<IpAddr>,
 	cloud_destroy_ts: Option<i64>,
@@ -41,6 +42,7 @@ impl TryFrom<ServerRow> for Server {
 			} else {
 				value.pool_type.try_into()?
 			},
+			provider_server_id: value.provider_server_id,
 			vlan_ip: value.vlan_ip,
 			public_ip: value.public_ip,
 			cloud_destroy_ts: value.cloud_destroy_ts,
@@ -58,6 +60,7 @@ pub async fn cluster_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResu
 			datacenter_id,
 			pool_type,
 			pool_type2,
+			provider_server_id,
 			vlan_ip,
 			public_ip,
 			cloud_destroy_ts

@@ -14,8 +14,8 @@ export declare namespace Datacenter {
         display_name: string;
         provider: admin.clusters.Provider.Raw;
         provider_datacenter_id: string;
-        provider_api_token?: string | null;
         pools: admin.clusters.Pool.Raw[];
         build_delivery_method: admin.clusters.BuildDeliveryMethod.Raw;
+        prebakes_enabled: boolean;
     }
 }

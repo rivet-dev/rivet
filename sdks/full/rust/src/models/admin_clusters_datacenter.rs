@@ -25,16 +25,16 @@ pub struct AdminClustersDatacenter {
     pub name_id: String,
     #[serde(rename = "pools")]
     pub pools: Vec<crate::models::AdminClustersPool>,
+    #[serde(rename = "prebakes_enabled")]
+    pub prebakes_enabled: bool,
     #[serde(rename = "provider")]
     pub provider: crate::models::AdminClustersProvider,
-    #[serde(rename = "provider_api_token", skip_serializing_if = "Option::is_none")]
-    pub provider_api_token: Option<String>,
     #[serde(rename = "provider_datacenter_id")]
     pub provider_datacenter_id: String,
 }
 
 impl AdminClustersDatacenter {
-    pub fn new(build_delivery_method: crate::models::AdminClustersBuildDeliveryMethod, cluster_id: uuid::Uuid, datacenter_id: uuid::Uuid, display_name: String, name_id: String, pools: Vec<crate::models::AdminClustersPool>, provider: crate::models::AdminClustersProvider, provider_datacenter_id: String) -> AdminClustersDatacenter {
+    pub fn new(build_delivery_method: crate::models::AdminClustersBuildDeliveryMethod, cluster_id: uuid::Uuid, datacenter_id: uuid::Uuid, display_name: String, name_id: String, pools: Vec<crate::models::AdminClustersPool>, prebakes_enabled: bool, provider: crate::models::AdminClustersProvider, provider_datacenter_id: String) -> AdminClustersDatacenter {
         AdminClustersDatacenter {
             build_delivery_method,
             cluster_id,
@@ -42,8 +42,8 @@ impl AdminClustersDatacenter {
             display_name,
             name_id,
             pools,
+            prebakes_enabled,
             provider,
-            provider_api_token: None,
             provider_datacenter_id,
         }
     }

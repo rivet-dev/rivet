@@ -26,6 +26,7 @@ pub async fn cluster_server_list(ctx: &OperationCtx, input: &Input) -> GlobalRes
 			s.datacenter_id,
 			s.pool_type,
 			s.pool_type2,
+			s.provider_server_id,
 			s.vlan_ip,
 			s.public_ip,
 			s.cloud_destroy_ts
@@ -33,12 +34,12 @@ pub async fn cluster_server_list(ctx: &OperationCtx, input: &Input) -> GlobalRes
 		JOIN db_cluster.datacenters AS d
 		ON s.datacenter_id = d.datacenter_id
 		WHERE
-			($1 OR s.cloud_destroy_ts IS NULL)
-			AND ($2 IS NULL OR s.server_id = ANY($2))
-			AND ($3 IS NULL OR s.datacenter_id = ANY($3))
-			AND ($4 IS NULL OR d.cluster_id = ANY($4))
-			AND ($5 IS NULL OR s.pool_type2 = ANY($5::JSONB[]))
-			AND ($6 IS NULL OR s.public_ip = ANY($6))
+			($1 OR s.cloud_destroy_ts IS NULL) AND
+			($2 IS NULL OR s.server_id = ANY($2)) AND
+			($3 IS NULL OR s.datacenter_id = ANY($3)) AND
+			($4 IS NULL OR d.cluster_id = ANY($4)) AND
+			($5 IS NULL OR s.pool_type2 = ANY($5::JSONB[])) AND
+			($6 IS NULL OR s.public_ip = ANY($6))
 		",
 		input.include_destroyed,
 		&input.filter.server_ids,

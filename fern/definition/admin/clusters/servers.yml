@@ -44,6 +44,29 @@ service:
           pool: optional<localCommons.PoolType>
           public_ip: optional<string>
 
+    listLost:
+      path: /lost
+      method: GET
+      request:
+        name: ListLostServersRequest
+        query-parameters:
+          server_id: optional<string>
+          datacenter: optional<string>
+          pool: optional<localCommons.PoolType>
+          public_ip: optional<string>
+      response: ListServersResponse
+
+    prune:
+      path: /prune
+      method: POST
+      request:
+        name: PruneServersRequest
+        query-parameters:
+          server_id: optional<string>
+          datacenter: optional<string>
+          pool: optional<localCommons.PoolType>
+          public_ip: optional<string>
+
 types:
   ListServersResponse:
     properties:

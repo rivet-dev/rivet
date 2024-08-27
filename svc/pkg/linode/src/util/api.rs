@@ -383,6 +383,26 @@ pub async fn delete_firewall(client: &Client, firewall_id: u64) -> GlobalResult<
 		.await
 }
 
+#[derive(Deserialize)]
+pub struct ListLinodeFirewallsResponse {
+	data: Vec<Firewall>,
+}
+
+#[derive(Deserialize)]
+pub struct Firewall {
+	pub id: u64,
+}
+
+pub async fn list_linode_firewalls(client: &Client, linode_id: u64) -> GlobalResult<Vec<Firewall>> {
+	tracing::info!("fetching linode firewalls");
+
+	let res = client
+		.get::<ListLinodeFirewallsResponse>(&format!("/linode/instances/{linode_id}/firewalls"))
+		.await?;
+
+	Ok(res.data)
+}
+
 pub async fn shut_down(client: &Client, linode_id: u64) -> GlobalResult<()> {
 	tracing::info!("shutting down instance");
 

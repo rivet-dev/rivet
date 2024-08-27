@@ -41,6 +41,32 @@ pub enum AdminClustersServersListError {
     UnknownValue(serde_json::Value),
 }
 
+/// struct for typed errors of method [`admin_clusters_servers_list_lost`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum AdminClustersServersListLostError {
+    Status400(crate::models::ErrorBody),
+    Status403(crate::models::ErrorBody),
+    Status404(crate::models::ErrorBody),
+    Status408(crate::models::ErrorBody),
+    Status429(crate::models::ErrorBody),
+    Status500(crate::models::ErrorBody),
+    UnknownValue(serde_json::Value),
+}
+
+/// struct for typed errors of method [`admin_clusters_servers_prune`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum AdminClustersServersPruneError {
+    Status400(crate::models::ErrorBody),
+    Status403(crate::models::ErrorBody),
+    Status404(crate::models::ErrorBody),
+    Status408(crate::models::ErrorBody),
+    Status429(crate::models::ErrorBody),
+    Status500(crate::models::ErrorBody),
+    UnknownValue(serde_json::Value),
+}
+
 /// struct for typed errors of method [`admin_clusters_servers_taint`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -134,6 +160,90 @@ pub async fn admin_clusters_servers_list(configuration: &configuration::Configur
         serde_json::from_str(&local_var_content).map_err(Error::from)
     } else {
         let local_var_entity: Option<AdminClustersServersListError> = serde_json::from_str(&local_var_content).ok();
+        let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
+        Err(Error::ResponseError(local_var_error))
+    }
+}
+
+pub async fn admin_clusters_servers_list_lost(configuration: &configuration::Configuration, cluster_id: &str, server_id: Option<&str>, datacenter: Option<&str>, pool: Option<crate::models::AdminClustersPoolType>, public_ip: Option<&str>) -> Result<crate::models::AdminClustersListServersResponse, Error<AdminClustersServersListLostError>> {
+    let local_var_configuration = configuration;
+
+    let local_var_client = &local_var_configuration.client;
+
+    let local_var_uri_str = format!("{}/admin/clusters/{cluster_id}/servers/lost", local_var_configuration.base_path, cluster_id=crate::apis::urlencode(cluster_id));
+    let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
+
+    if let Some(ref local_var_str) = server_id {
+        local_var_req_builder = local_var_req_builder.query(&[("server_id", &local_var_str.to_string())]);
+    }
+    if let Some(ref local_var_str) = datacenter {
+        local_var_req_builder = local_var_req_builder.query(&[("datacenter", &local_var_str.to_string())]);
+    }
+    if let Some(ref local_var_str) = pool {
+        local_var_req_builder = local_var_req_builder.query(&[("pool", &local_var_str.to_string())]);
+    }
+    if let Some(ref local_var_str) = public_ip {
+        local_var_req_builder = local_var_req_builder.query(&[("public_ip", &local_var_str.to_string())]);
+    }
+    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
+        local_var_req_builder = local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
+    }
+    if let Some(ref local_var_token) = local_var_configuration.bearer_access_token {
+        local_var_req_builder = local_var_req_builder.bearer_auth(local_var_token.to_owned());
+    };
+
+    let local_var_req = local_var_req_builder.build()?;
+    let local_var_resp = local_var_client.execute(local_var_req).await?;
+
+    let local_var_status = local_var_resp.status();
+    let local_var_content = local_var_resp.text().await?;
+
+    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
+        serde_json::from_str(&local_var_content).map_err(Error::from)
+    } else {
+        let local_var_entity: Option<AdminClustersServersListLostError> = serde_json::from_str(&local_var_content).ok();
+        let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
+        Err(Error::ResponseError(local_var_error))
+    }
+}
+
+pub async fn admin_clusters_servers_prune(configuration: &configuration::Configuration, cluster_id: &str, server_id: Option<&str>, datacenter: Option<&str>, pool: Option<crate::models::AdminClustersPoolType>, public_ip: Option<&str>) -> Result<(), Error<AdminClustersServersPruneError>> {
+    let local_var_configuration = configuration;
+
+    let local_var_client = &local_var_configuration.client;
+
+    let local_var_uri_str = format!("{}/admin/clusters/{cluster_id}/servers/prune", local_var_configuration.base_path, cluster_id=crate::apis::urlencode(cluster_id));
+    let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
+
+    if let Some(ref local_var_str) = server_id {
+        local_var_req_builder = local_var_req_builder.query(&[("server_id", &local_var_str.to_string())]);
+    }
+    if let Some(ref local_var_str) = datacenter {
+        local_var_req_builder = local_var_req_builder.query(&[("datacenter", &local_var_str.to_string())]);
+    }
+    if let Some(ref local_var_str) = pool {
+        local_var_req_builder = local_var_req_builder.query(&[("pool", &local_var_str.to_string())]);
+    }
+    if let Some(ref local_var_str) = public_ip {
+        local_var_req_builder = local_var_req_builder.query(&[("public_ip", &local_var_str.to_string())]);
+    }
+    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
+        local_var_req_builder = local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
+    }
+    if let Some(ref local_var_token) = local_var_configuration.bearer_access_token {
+        local_var_req_builder = local_var_req_builder.bearer_auth(local_var_token.to_owned());
+    };
+
+    let local_var_req = local_var_req_builder.build()?;
+    let local_var_resp = local_var_client.execute(local_var_req).await?;
+
+    let local_var_status = local_var_resp.status();
+    let local_var_content = local_var_resp.text().await?;
+
+    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
+        Ok(())
+    } else {
+        let local_var_entity: Option<AdminClustersServersPruneError> = serde_json::from_str(&local_var_content).ok();
         let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
         Err(Error::ResponseError(local_var_error))
     }
