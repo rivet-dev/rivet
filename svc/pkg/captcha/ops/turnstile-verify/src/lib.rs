@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use proto::backend::pkg::*;
 use rivet_operation::prelude::*;
 
@@ -17,15 +19,14 @@ async fn handle(
 ) -> GlobalResult<captcha::turnstile_verify::Response> {
 	let client = reqwest::Client::new();
 
+	let mut params = HashMap::new();
+	params.insert("response", &ctx.client_response);
+	params.insert("secret", &ctx.secret_key);
+	params.insert("remoteip", &ctx.remote_address);
+
 	let res = client
 		.post("https://challenges.cloudflare.com/turnstile/v0/siteverify")
-		.header("content-type", "application/x-www-form-urlencoded")
-		.body(format!(
-			"response={client_response}&secret={secret}&remoteip={remote_address}",
-			client_response = ctx.client_response,
-			secret = ctx.secret_key,
-			remote_address = ctx.remote_address,
-		))
+		.form(&params)
 		.send()
 		.await?
 		.json::<VerifyResponse>()

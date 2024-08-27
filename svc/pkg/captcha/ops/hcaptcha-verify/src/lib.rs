@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use proto::backend::pkg::*;
 use rivet_operation::prelude::*;
 
@@ -23,16 +25,15 @@ async fn handle(
 		util::env::read_secret(&["hcaptcha", "secret"]).await?
 	};
 
+	let mut params = HashMap::new();
+	params.insert("response", &ctx.client_response);
+	params.insert("secret", &secret_key);
+	params.insert("sitekey", &ctx.site_key);
+	params.insert("remoteip", &ctx.remote_address);
+
 	let res = client
 		.post("https://hcaptcha.com/siteverify")
-		.header("content-type", "application/x-www-form-urlencoded")
-		.body(format!(
-			"response={client_response}&secret={secret}&sitekey={site_key}&remoteip={remote_address}",
-			client_response = ctx.client_response,
-			secret = secret_key,
-			site_key = ctx.site_key,
-			remote_address = ctx.remote_address,
-		))
+		.form(&params)
 		.send()
 		.await?
 		.json::<VerifyResponse>()
