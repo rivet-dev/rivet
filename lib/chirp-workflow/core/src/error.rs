@@ -137,6 +137,7 @@ pub enum WorkflowError {
 }
 
 impl WorkflowError {
+	/// Returns the next deadline for a workflow to be woken up again based on the error.
 	pub(crate) fn deadline_ts(&self) -> Option<i64> {
 		match self {
 			WorkflowError::ActivityFailure(_, error_count) => {
@@ -155,6 +156,10 @@ impl WorkflowError {
 					.expect("doesn't fit in i64");
 
 				Some(deadline_ts)
+			}
+			// TODO: Add backoff
+			WorkflowError::ActivityTimeout | WorkflowError::OperationTimeout => {
+				Some(rivet_util::timestamp::now() + RETRY_TIMEOUT_MS as i64)
 			}
 			WorkflowError::Sleep(ts) => Some(*ts),
 			_ => None,

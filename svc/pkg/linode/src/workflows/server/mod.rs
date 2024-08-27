@@ -302,6 +302,7 @@ struct WaitInstanceReadyInput {
 }
 
 #[activity(WaitInstanceReady)]
+#[timeout = 60]
 async fn wait_instance_ready(
 	ctx: &ActivityCtx,
 	input: &WaitInstanceReadyInput,

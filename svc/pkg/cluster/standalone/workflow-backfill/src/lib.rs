@@ -85,7 +85,7 @@ pub async fn run_from_env() -> GlobalResult<()> {
 			)?;
 
 			wf.message(
-				"cluster-create-complete",
+				"cluster_create_complete",
 				json!({
 					"cluster_id": cluster.cluster_id,
 				}),
@@ -326,7 +326,7 @@ pub async fn run_from_env() -> GlobalResult<()> {
 			}
 
 			wf.message(
-				"cluster-datacenter-create-complete",
+				"cluster_datacenter_create_complete",
 				json!({
 					"datacenter_id": dc.datacenter_id,
 				}),
@@ -357,7 +357,7 @@ pub async fn run_from_env() -> GlobalResult<()> {
 		})?;
 	}
 
-	#[derive(sqlx::FromRow)]
+	#[derive(Debug, sqlx::FromRow)]
 	struct ServerRow {
 		server_id: Uuid,
 		datacenter_id: Uuid,
@@ -371,7 +371,7 @@ pub async fn run_from_env() -> GlobalResult<()> {
 		is_draining: bool,
 		is_tainted: bool,
 	}
-	#[derive(sqlx::FromRow)]
+	#[derive(Debug, sqlx::FromRow)]
 	struct ServerLinodeRow {
 		server_id: Uuid,
 		ssh_key_id: i64,
@@ -414,6 +414,7 @@ pub async fn run_from_env() -> GlobalResult<()> {
 			linode_id,
 			firewall_id
 		FROM db_cluster.servers_linode
+		WHERE destroy_ts IS NULL
 		",
 	)
 	.await?;
@@ -815,7 +816,7 @@ pub async fn run_from_env() -> GlobalResult<()> {
 			wf.listen(
 				"linode_server_provision_complete",
 				json!({
-					"linode_id": unwrap!(unwrap!(linode).linode_id),
+					"linode_id": unwrap!(unwrap!(linode, "no linode row").linode_id, "no linode id"),
 					"public_ip": public_ip,
 					"boot_disk_id": 0,
 				}),

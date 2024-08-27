@@ -417,8 +417,8 @@ pub enum CockroachDBProvider {
 		spend_limit: u32,
 		/// CRDB Request Units.
 		/// https://www.cockroachlabs.com/docs/cockroachcloud/architecture#request-unit-ru
-		request_unit_limit: u32,
-		/// Storage limit in MiB.
+		request_unit_limit: u64,
+		/// Storage limit in GiB.
 		storage_limit: u32,
 	},
 }
