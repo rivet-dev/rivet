@@ -121,12 +121,8 @@ async fn worker(
 
 	// Check if run found
 	let Some(DbOutput { server_id }) = db_output else {
-		if ctx.req_dt() > util::duration::minutes(5) {
-			tracing::error!("discarding stale message");
-			return Ok(());
-		} else {
-			retry_bail!("run not found, may be race condition with insertion");
-		}
+		tracing::error!("run not found, may be race condition with insertion");
+		return Ok(());
 	};
 
 	tracing::info!(%job_id, %server_id, "updated run");

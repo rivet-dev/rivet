@@ -195,12 +195,8 @@ async fn worker(
 			.await?;
 
 			let Some((run_id, finish_ts)) = run_row else {
-				if ctx.req_dt() > util::duration::minutes(5) {
-					tracing::error!("discarding stale message");
-					return Ok(());
-				} else {
-					retry_bail!("run not found, may be race condition with insertion");
-				}
+				tracing::error!("run not found, may be race condition with insertion");
+				return Ok(());
 			};
 
 			crate::workers::webhook::call(ctx, alloc_id.to_string()).await?;
