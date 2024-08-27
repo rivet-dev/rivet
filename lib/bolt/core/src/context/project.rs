@@ -214,6 +214,13 @@ impl ProjectContextData {
 			}
 		}
 
+		// MARK: Api
+		if let Some(hub_origin_regex) = &self.ns().rivet.api.hub_origin_regex {
+			if let Err(err) = regex::Regex::new(&hub_origin_regex) {
+				panic!("invalid hub origin regex: {err}");
+			}
+		}
+
 		// MARK: Backend
 		if self.ns().rivet.backend.is_some() {
 			assert!(
