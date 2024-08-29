@@ -1,4 +1,8 @@
-use std::{net::IpAddr, collections::HashSet, convert::{TryFrom, TryInto}};
+use std::{
+	collections::HashSet,
+	convert::{TryFrom, TryInto},
+	net::IpAddr,
+};
 
 use chirp_workflow::prelude::*;
 use linode::util::client;
@@ -6,7 +10,7 @@ use reqwest::header;
 use serde_json::json;
 
 use super::get::ServerRow;
-use crate::types::{Filter, Server, Provider};
+use crate::types::{Filter, Provider, Server};
 
 #[derive(Deserialize)]
 struct GetLinodesResponse {

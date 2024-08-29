@@ -373,7 +373,9 @@ mod render {
 		pub public_ip: Option<String>,
 	}
 
-	pub fn servers(servers: Vec<models::AdminClustersServer>) {
+	pub fn servers(mut servers: Vec<models::AdminClustersServer>) {
+		servers.sort_by_key(|s| (s.datacenter_id, s.pool_type, s.public_ip.clone()));
+
 		let rows = servers.iter().map(|s| ServerTableRow {
 			server_id: s.server_id,
 			datacenter_id: s.datacenter_id,

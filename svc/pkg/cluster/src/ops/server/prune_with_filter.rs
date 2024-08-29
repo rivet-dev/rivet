@@ -1,11 +1,11 @@
-use std::{convert::TryFrom, collections::HashSet};
+use std::{collections::HashSet, convert::TryFrom};
 
 use chirp_workflow::prelude::*;
-use serde_json::json;
 use linode::util::{api, client};
 use reqwest::header;
+use serde_json::json;
 
-use crate::{types::{Server, Filter, Provider}};
+use crate::types::{Filter, Provider, Server};
 
 #[derive(Debug)]
 pub struct Input {
@@ -21,7 +21,7 @@ pub async fn cluster_server_prune_with_filter(
 	input: &Input,
 ) -> GlobalResult<Output> {
 	let linode_token = util::env::read_secret(&["linode", "token"]).await?;
-	
+
 	let servers_res = ctx
 		.op(crate::ops::server::lost_list::Input {
 			filter: input.filter.clone(),
@@ -80,7 +80,7 @@ pub async fn cluster_server_prune_with_filter(
 			}
 		}
 	}
-		
+
 	Ok(Output {})
 }
 
@@ -102,7 +102,7 @@ async fn run_for_linode_account(
 		}
 
 		api::delete_instance(&client, linode_id).await?;
-		
+
 		// NOTE: Does not delete ssh keys
 	}
 

@@ -163,14 +163,18 @@ pub async fn cluster_datacenter_topology_get(
 			}
 		}
 
-		// Get node resource limits
-		let node = unwrap!(
-			node_info.iter().find(|node| node
-				.ID
+		// Gracefully handle if node does not exist in API response
+		let Some(node) = node_info.iter().find(|node| {
+			node.ID
 				.as_ref()
-				.map_or(false, |node_id| node_id == &server.nomad_node_id)),
-			format!("node not found {}", server.nomad_node_id)
-		);
+				.map_or(false, |node_id| node_id == &server.nomad_node_id)
+		}) else {
+			tracing::error!(%server.nomad_node_id, "node not found in nomad response");
+
+			continue;
+		};
+
+		// Get node resource limits
 		let resources = unwrap_ref!(node.node_resources);
 		let limits = Stats {
 			cpu: unwrap!(unwrap_ref!(resources.cpu).cpu_shares) as u64,
