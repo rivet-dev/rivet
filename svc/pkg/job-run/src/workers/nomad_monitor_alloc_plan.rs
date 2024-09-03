@@ -3,7 +3,10 @@ use proto::backend::{self, pkg::*};
 use redis::AsyncCommands;
 use serde::Deserialize;
 
-use crate::workers::NEW_NOMAD_CONFIG;
+use crate::{
+	util::{signal_allocation, NOMAD_REGION},
+	workers::{NEW_NOMAD_CONFIG, NOMAD_CONFIG},
+};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -229,11 +232,12 @@ async fn update_db(
 	let run_row = sql_fetch_optional!(
 		[ctx, RunRow, @tx tx]
 		"
-		SELECT runs.run_id, runs.region_id, runs.stop_ts, run_meta_nomad.alloc_plan_ts
-		FROM db_job_state.run_meta_nomad
-		INNER JOIN db_job_state.runs ON runs.run_id = run_meta_nomad.run_id
+		SELECT r.run_id, r.region_id, r.stop_ts, rn.alloc_plan_ts
+		FROM db_job_state.run_meta_nomad AS rn
+		INNER JOIN db_job_state.runs AS r
+		ON r.run_id = rn.run_id
 		WHERE dispatched_job_id = $1
-		FOR UPDATE OF run_meta_nomad
+		FOR UPDATE OF rn
 		",
 		&job_id,
 	)
@@ -255,7 +259,13 @@ async fn update_db(
 			[ctx, @tx tx]
 			"
 			UPDATE db_job_state.run_meta_nomad
-			SET alloc_id = $2, alloc_plan_ts = $3, node_id = $4, node_name = $5, node_public_ipv4 = $6, node_vlan_ipv4 = $7
+			SET
+				alloc_id = $2,
+				alloc_plan_ts = $3,
+				node_id = $4,
+				node_name = $5,
+				node_public_ipv4 = $6,
+				node_vlan_ipv4 = $7
 			WHERE run_id = $1
 			",
 			run_row.run_id,
@@ -300,6 +310,29 @@ async fn update_db(
 				&port.ip,
 			)
 			.await?;
+		}
+	} else {
+		tracing::warn!(%run_id, %alloc_id, "run was already allocated before, killing new allocation");
+
+		if let Err(err) = signal_allocation(
+			&NOMAD_CONFIG,
+			&alloc_id,
+			None,
+			Some(NOMAD_REGION),
+			None,
+			None,
+			Some(nomad_client::models::AllocSignalRequest {
+				task: None,
+				signal: Some("SIGKILL".to_string()),
+			}),
+		)
+		.await
+		{
+			tracing::warn!(
+				?err,
+				?alloc_id,
+				"error while trying to manually kill allocation"
+			);
 		}
 	}
 

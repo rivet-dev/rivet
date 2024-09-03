@@ -63,41 +63,42 @@ async fn worker(
 		}
 	};
 
-	// Fetch and update the run
-	let server_row = sql_fetch_optional!(
-		[ctx, ServerRow]
-		"
-		SELECT server_id, datacenter_id, nomad_eval_plan_ts
-		UPDATE db_ds.server_nomad
-		SET nomad_eval_plan_ts = $2
-		WHERE
-			nomad_dispatched_job_id = $1 AND
-			run_meta_nomad.nomad_eval_plan_ts IS NULL
-		",
-		job_id,
-		ctx.ts(),
-	)
-	.await?;
-
-	// Check if server found
-	let Some(server_row) = server_row else {
-		if ctx.req_dt() > util::duration::minutes(5) {
-			tracing::error!("discarding stale message");
-			return Ok(());
-		} else {
-			retry_bail!("server not found, may be race condition with insertion");
-		}
-	};
-	let server_id = server_row.server_id;
-
-	if let Some(eval_plan_ts) = server_row.nomad_eval_plan_ts {
-		tracing::info!(?eval_plan_ts, "eval already planned");
-		return Ok(());
-	}
-
-	tracing::info!(%job_id, %server_id, ?eval_status, "updated server");
-
 	// TODO: Rewrite on workflows
+
+	// // Fetch and update the run
+	// let server_row = sql_fetch_optional!(
+	// 	[ctx, ServerRow]
+	// 	"
+	// 	UPDATE db_ds.server_nomad
+	// 	SET nomad_eval_plan_ts = $2
+	// 	WHERE
+	// 		nomad_dispatched_job_id = $1 AND
+	// 		nomad_eval_plan_ts IS NULL
+	// 	RETURNING server_id, datacenter_id, nomad_eval_plan_ts
+	// 	",
+	// 	job_id,
+	// 	ctx.ts(),
+	// )
+	// .await?;
+
+	// // Check if server found
+	// let Some(server_row) = server_row else {
+	// 	if ctx.req_dt() > util::duration::minutes(5) {
+	// 		tracing::error!("discarding stale message");
+	// 		return Ok(());
+	// 	} else {
+	// 		retry_bail!("server not found, may be race condition with insertion");
+	// 	}
+	// };
+	// let server_id = server_row.server_id;
+
+	// if let Some(eval_plan_ts) = server_row.nomad_eval_plan_ts {
+	// 	tracing::info!(?eval_plan_ts, "eval already planned");
+	// 	return Ok(());
+	// }
+
+	// tracing::info!(%job_id, %server_id, ?eval_status, "updated server");
+
 	// match eval_status {
 	// 	EvalStatus::Failed => {
 	// 		tracing::info!(%server_id, "eval failed");

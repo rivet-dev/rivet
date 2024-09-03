@@ -1,3 +1,5 @@
+pub const NOMAD_REGION: &str = "global";
+
 // Have to patch `nomad_client::apis::allocations_api::signal_allocation` because it uses `/allocation`
 // instead of `/client/allocation`
 pub async fn signal_allocation(

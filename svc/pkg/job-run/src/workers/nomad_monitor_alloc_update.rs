@@ -15,14 +15,28 @@ enum TaskState {
 	Dead,
 }
 
+#[derive(Clone)]
+struct RunData {
+	job_id: String,
+	alloc_id: String,
+	alloc_state_json: String,
+	main_task_state: TaskState,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+struct RunRow {
+	run_id: Uuid,
+	alloc_id: Option<String>,
+	start_ts: Option<i64>,
+	finish_ts: Option<i64>,
+}
+
 #[worker(name = "job-run-nomad-monitor-alloc-update")]
 async fn worker(
 	ctx: &OperationContext<nomad::msg::monitor_alloc_update::Message>,
 ) -> GlobalResult<()> {
-	let _crdb = ctx.crdb().await?;
-
 	let AllocationUpdated { allocation: alloc } = serde_json::from_str(&ctx.payload_json)?;
-	let alloc_state_json = serde_json::to_value(&alloc)?;
+	let alloc_state_json = serde_json::to_string(&alloc)?;
 
 	let alloc_id = unwrap_ref!(alloc.ID);
 	let eval_id = unwrap_ref!(alloc.eval_id, "alloc has no eval");
@@ -64,142 +78,157 @@ async fn worker(
 		}
 	};
 
-	match main_task_state {
+	let run_data = RunData {
+		job_id: job_id.clone(),
+		alloc_id: alloc_id.clone(),
+		alloc_state_json,
+		main_task_state,
+	};
+
+	let run_found = rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| {
+		let ctx = ctx.clone();
+		let run_data = run_data.clone();
+		Box::pin(update_db(ctx, tx, run_data))
+	})
+	.await?;
+
+	// Check if run found
+	if !run_found {
+		if ctx.req_dt() > util::duration::minutes(5) {
+			tracing::error!("discarding stale message");
+			return Ok(());
+		} else {
+			retry_bail!("run not found, may be race condition with insertion");
+		}
+	};
+
+	Ok(())
+}
+
+/// Returns false if the run could not be found.
+#[tracing::instrument(skip_all)]
+async fn update_db(
+	ctx: OperationContext<nomad::msg::monitor_alloc_update::Message>,
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	run_data: RunData,
+) -> GlobalResult<bool> {
+	let run_row = sql_fetch_optional!(
+		[ctx, RunRow, @tx tx]
+		"
+		SELECT r.run_id, rn.alloc_id, r.start_ts, r.finish_ts
+		FROM db_job_state.run_meta_nomad AS rn
+		INNER JOIN db_job_state.runs AS r
+		ON r.run_id = rn.run_id
+		WHERE dispatched_job_id = $1
+		FOR UPDATE OF r, rn
+		",
+		&run_data.job_id,
+	)
+	.await?;
+
+	// Check if run found
+	let run_row = if let Some(run_row) = run_row {
+		run_row
+	} else {
+		tracing::info!("caught race condition");
+		return Ok(false);
+	};
+
+	if run_row
+		.alloc_id
+		.as_ref()
+		.map(|id| id != &run_data.alloc_id)
+		.unwrap_or_default()
+	{
+		tracing::warn!(existing_alloc_id=?run_row.alloc_id, new_alloc_id=%run_data.alloc_id, "alloc id does not match existing alloc id for job");
+
+		return Ok(true);
+	}
+
+	let run_id = run_row.run_id;
+
+	match run_data.main_task_state {
 		TaskState::Pending => {
 			tracing::info!("run pending");
 
-			let run_row = sql_fetch_optional!(
-				[ctx, (Uuid,)]
+			sql_execute!(
+				[ctx, @tx tx]
 				"
 				UPDATE db_job_state.run_meta_nomad
 				SET alloc_state = $2
-				WHERE dispatched_job_id = $1
-				RETURNING run_id
+				WHERE run_id = $1
 				",
-				job_id,
-				&alloc_state_json,
+				run_id,
+				&run_data.alloc_state_json,
 			)
 			.await?;
-
-			if run_row.is_none() {
-				if ctx.req_dt() > util::duration::minutes(5) {
-					tracing::error!("discarding stale message");
-					return Ok(());
-				} else {
-					retry_bail!("run not found, may be race condition with insertion");
-				}
-			};
-
-			Ok(())
 		}
 		TaskState::Running => {
-			let run_row = sql_fetch_optional!(
-				[ctx, (Uuid, Option<i64>)]
-				"
-				WITH
-					select_run AS (
-						SELECT runs.run_id, runs.start_ts
-						FROM db_job_state.run_meta_nomad
-						INNER JOIN db_job_state.runs ON runs.run_id = run_meta_nomad.run_id
-						WHERE dispatched_job_id = $1
-					),
-					_update_runs AS (
-						UPDATE db_job_state.runs
-						SET start_ts = $2
-						FROM select_run
-						WHERE
-							runs.run_id = select_run.run_id AND
-							runs.start_ts IS NULL
-						RETURNING 1
-					),
-					_update_run_meta_nomad AS (
-						UPDATE db_job_state.run_meta_nomad
-						SET alloc_state = $3
-						FROM select_run
-						WHERE run_meta_nomad.run_id = select_run.run_id
-						RETURNING 1
-					)
-				SELECT * FROM select_run
-				",
-				job_id,
-				ctx.ts(),
-				&alloc_state_json,
-			)
-			.await?;
+			if run_row.start_ts.is_none() {
+				sql_execute!(
+					[ctx, @tx tx]
+					"
+					WITH
+						_update_runs AS (
+							UPDATE db_job_state.runs
+							SET start_ts = $2
+							WHERE run_id = $1
+							RETURNING 1
+						),
+						_update_run_meta_nomad AS (
+							UPDATE db_job_state.run_meta_nomad
+							SET alloc_state = $3
+							WHERE run_id = $1
+							RETURNING 1
+						)
+					SELECT 1 FROM select_run
+					",
+					run_id,
+					ctx.ts(),
+					&run_data.alloc_state_json,
+				)
+				.await?;
 
-			let Some((run_id, start_ts)) = run_row else {
-				if ctx.req_dt() > util::duration::minutes(5) {
-					tracing::error!("discarding stale message");
-					return Ok(());
-				} else {
-					retry_bail!("run not found, may be race condition with insertion");
-				}
-			};
-
-			if start_ts.is_none() {
 				tracing::info!("run started");
 
 				msg!([ctx] job_run::msg::started(run_id) {
 					run_id: Some(run_id.into()),
 				})
 				.await?;
-
-				Ok(())
 			} else {
 				tracing::info!("run already started");
-
-				Ok(())
 			}
 		}
 		TaskState::Dead => {
-			let run_row = sql_fetch_optional!(
-				[ctx, (Uuid, Option<i64>)]
-				r#"
-				WITH
-					select_run AS (
-						SELECT runs.run_id, runs.finish_ts
-						FROM db_job_state.run_meta_nomad
-						INNER JOIN db_job_state.runs ON runs.run_id = run_meta_nomad.run_id
-						WHERE dispatched_job_id = $1
-					),
-					_update_runs AS (
-						UPDATE db_job_state.runs
-						SET
-							-- If the job stops immediately, the task state will never be "running" so we need to
-							-- make sure start_ts is set here as well
-							start_ts = COALESCE(start_ts, $2),
-							finish_ts = $2
-						FROM select_run
-						WHERE
-							runs.run_id = select_run.run_id AND
-							runs.finish_ts IS NULL
-						RETURNING 1
-					),
-					_update_run_meta_nomad AS (
-						UPDATE db_job_state.run_meta_nomad
-						SET alloc_state = $3
-						FROM select_run
-						WHERE run_meta_nomad.run_id = select_run.run_id
-						RETURNING 1
-					)
-				SELECT * FROM select_run
-				"#,
-				job_id,
-				ctx.ts(),
-				&alloc_state_json,
-			)
-			.await?;
+			if run_row.finish_ts.is_none() {
+				sql_execute!(
+					[ctx, @tx tx]
+					r#"
+					WITH
+						update_runs AS (
+							UPDATE db_job_state.runs
+							SET
+								-- If the job stops immediately, the task state will never be "running" so we need to
+								-- make sure start_ts is set here as well
+								start_ts = COALESCE(start_ts, $2),
+								finish_ts = $2
+							WHERE run_id = $1
+							RETURNING 1
+						),
+						update_run_meta_nomad AS (
+							UPDATE db_job_state.run_meta_nomad
+							SET alloc_state = $3
+							WHERE run_id = $1
+							RETURNING 1
+						)
+					SELECT 1
+					"#,
+					run_id,
+					ctx.ts(),
+					&run_data.alloc_state_json,
+				)
+				.await?;
 
-			let Some((run_id, finish_ts)) = run_row else {
-				if ctx.req_dt() > util::duration::minutes(5) {
-					tracing::error!("discarding stale message");
-					return Ok(());
-				} else {
-					retry_bail!("run not found, may be race condition with insertion");
-				}
-			};
-
-			if finish_ts.is_none() {
 				tracing::info!("run finished");
 
 				// Publish message
@@ -216,12 +245,11 @@ async fn worker(
 					run_id: Some(run_id.into()),
 				})
 				.await?;
-
-				Ok(())
 			} else {
 				tracing::info!("run already finished");
-				Ok(())
 			}
 		}
 	}
+
+	Ok(true)
 }

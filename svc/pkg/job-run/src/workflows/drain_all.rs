@@ -2,12 +2,14 @@ use chirp_workflow::prelude::*;
 use futures_util::StreamExt;
 use rivet_operation::prelude::proto::backend::pkg::*;
 
-use crate::{util::signal_allocation, workers::NOMAD_CONFIG};
+use crate::{
+	util::{signal_allocation, NOMAD_REGION},
+	workers::NOMAD_CONFIG,
+};
 
 // In ms, a small amount of time to separate the completion of the drain to the deletion of the
 // cluster server. We want the drain to complete first.
 const DRAIN_PADDING: u64 = 10000;
-const NOMAD_REGION: &str = "global";
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Input {
