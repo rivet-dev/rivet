@@ -12,7 +12,7 @@ service:
     game_id: uuid
     environment_id: uuid
   endpoints:
-    listDatacenters:
+    list:
       path: ""
       method: GET
       request:

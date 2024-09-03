@@ -12,7 +12,7 @@ service:
     game_id: uuid
     environment_id: uuid
   endpoints:
-    getBuild:
+    get:
       path: /{build_id}
       method: GET
       docs: >-
@@ -26,7 +26,7 @@ service:
           tags_json: optional<string>
       response: GetBuildResponse
 
-    listBuilds:
+    list:
       path: ""
       method: GET
       docs: >-
@@ -47,7 +47,7 @@ service:
         body: PatchBuildTagsRequest
       response: PatchBuildTagsResponse
 
-    prepareBuild:
+    prepare:
       path: /prepare
       method: POST
       docs: Creates a new game build for the given game.
@@ -55,7 +55,7 @@ service:
         body: CreateBuildRequest
       response: CreateBuildResponse
 
-    completeBuild:
+    complete:
       path: /{build_id}/complete
       method: POST
       docs: Marks an upload as complete.

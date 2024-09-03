@@ -10,7 +10,7 @@ service:
     game_id: uuid
     environment_id: uuid
   endpoints:
-    getServerLogs:
+    get:
       path: /{server_id}/logs
       method: GET
       docs: >-
