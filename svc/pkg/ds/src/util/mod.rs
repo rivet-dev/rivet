@@ -17,6 +17,14 @@ lazy_static::lazy_static! {
 		nomad_util::new_config_from_env().unwrap();
 }
 
+/// Determines if a Nomad job is dispatched from our dynamic server.
+///
+/// We use this when monitoring Nomad in order to determine which events to
+/// pay attention to.
+pub fn is_nomad_ds(job_id: &str) -> bool {
+	job_id.starts_with("ds-") && job_id.contains("/dispatch-")
+}
+
 pub fn build_ds_hostname(
 	server_id: Uuid,
 	port_name: &str,

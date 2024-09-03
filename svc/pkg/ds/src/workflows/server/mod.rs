@@ -967,7 +967,7 @@ async fn submit_job(ctx: &ActivityCtx, input: &SubmitJobInput) -> GlobalResult<S
 
 	// Generate new job ID
 	let job_id = format!(
-		"job-{hash}:{dc}",
+		"ds-{hash}:{dc}",
 		hash = &job_hash_str[0..12],
 		dc = input.dc_name_id,
 	);

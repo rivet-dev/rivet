@@ -19,7 +19,7 @@ pub async fn handle(
 	let eval_status_raw = unwrap_ref!(eval.status).as_str();
 
 	// Ignore jobs we don't care about
-	if !util_job::is_nomad_job_run(job_id) || triggered_by != "job-register" {
+	if triggered_by != "job-register" {
 		tracing::info!(%job_id, "disregarding event");
 		return Ok(());
 	}
@@ -34,19 +34,23 @@ pub async fn handle(
 		return Ok(());
 	}
 
-	msg!([ctx] nomad::msg::monitor_eval_update(job_id) {
-		dispatched_job_id: job_id.clone(),
-		payload_json: payload_json,
-	})
-	.await?;
-
-	ctx.tagged_signal(
-		&json!({
-			"nomad_dispatched_job_id": job_id,
-		}),
-		ds::workflows::server::NomadEvalUpdate { eval: eval.clone() },
-	)
-	.await?;
+	if util_job::is_nomad_job_run(job_id) {
+		msg!([ctx] nomad::msg::monitor_eval_update(job_id) {
+			dispatched_job_id: job_id.clone(),
+			payload_json: payload_json,
+		})
+		.await?;
+	} else if ds::util::is_nomad_ds(job_id) {
+		ctx.tagged_signal(
+			&json!({
+				"nomad_dispatched_job_id": job_id,
+			}),
+			ds::workflows::server::NomadEvalUpdate { eval: eval.clone() },
+		)
+		.await?;
+	} else {
+		tracing::info!(%job_id, "disregarding event");
+	}
 
 	Ok(())
 }

@@ -16,18 +16,13 @@ pub async fn handle(
 ) -> GlobalResult<()> {
 	let job_id = unwrap_ref!(alloc.job_id);
 
-	if !util_job::is_nomad_job_run(job_id) {
-		tracing::info!(%job_id, "disregarding event");
-		return Ok(());
-	}
-
-	msg!([ctx] nomad::msg::monitor_alloc_update(job_id) {
-		dispatched_job_id: job_id.clone(),
-		payload_json: payload_json,
-	})
-	.await?;
-
 	if util_job::is_nomad_job_run(job_id) {
+		msg!([ctx] nomad::msg::monitor_alloc_update(job_id) {
+			dispatched_job_id: job_id.clone(),
+			payload_json: payload_json,
+		})
+		.await?;
+	} else if ds::util::is_nomad_ds(job_id) {
 		ctx.tagged_signal(
 			&json!({
 				"nomad_dispatched_job_id": job_id,
@@ -37,6 +32,8 @@ pub async fn handle(
 			},
 		)
 		.await?;
+	} else {
+		tracing::info!(%job_id, "disregarding event");
 	}
 
 	Ok(())
