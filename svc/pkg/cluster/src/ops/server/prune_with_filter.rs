@@ -1,4 +1,4 @@
-use std::{collections::HashSet, convert::TryFrom};
+use std::collections::HashSet;
 
 use chirp_workflow::prelude::*;
 use linode::util::{api, client};
@@ -31,12 +31,12 @@ pub async fn cluster_server_prune_with_filter(
 	let dc_ids = servers_res
 		.servers
 		.iter()
-		.map(|x| x.server_id)
+		.map(|x| x.datacenter_id)
 		.collect::<Vec<_>>();
-	let dc_rows = sql_fetch_all!(
-		[ctx, (i64, Option<String>)]
+	let accounts = sql_fetch_all!(
+		[ctx, (sqlx::types::Json<Provider>, String)]
 		"
-		SELECT provider, provider_api_token
+		SELECT provider2, provider_api_token
 		FROM db_cluster.datacenters
 		WHERE
 			provider_api_token IS NOT NULL AND
@@ -44,22 +44,14 @@ pub async fn cluster_server_prune_with_filter(
 		",
 		dc_ids,
 	)
-	.await?;
-
-	let accounts = dc_rows
-		.iter()
-		.map(|(provider, provider_api_token)| {
-			let provider = Provider::try_from(*provider)?;
-			// Default token if none is set
-			let provider_api_token = match &provider {
-				Provider::Linode => provider_api_token
-					.clone()
-					.unwrap_or_else(|| linode_token.clone()),
-			};
-
-			Ok((provider, provider_api_token))
-		})
-		.collect::<GlobalResult<HashSet<_>>>()?;
+	.await?
+	.into_iter()
+	.map(|(provider, provider_api_token)| (provider.0, provider_api_token))
+	.chain(std::iter::once((
+		Provider::Linode,
+		util::env::read_secret(&["linode", "token"]).await?,
+	)))
+	.collect::<HashSet<_>>();
 
 	// Filter by namespace
 	let filter = json!({
@@ -93,8 +85,13 @@ async fn run_for_linode_account(
 	let client =
 		client::Client::new_with_headers(Some(api_token.to_string()), headers.clone()).await?;
 
+	tracing::info!("pruning {} servers", servers.len());
+
 	for server in servers {
 		let linode_id = unwrap_ref!(server.provider_server_id).parse()?;
+
+		tracing::info!("pruning {} (linode_id {})", server.server_id, linode_id);
+
 		let firewalls = api::list_linode_firewalls(&client, linode_id).await?;
 
 		for firewall in firewalls {

@@ -1,8 +1,4 @@
-use std::{
-	collections::HashSet,
-	convert::{TryFrom, TryInto},
-	net::IpAddr,
-};
+use std::{collections::HashSet, convert::TryInto, net::IpAddr};
 
 use chirp_workflow::prelude::*;
 use linode::util::client;
@@ -39,10 +35,10 @@ pub struct Output {
 pub async fn cluster_server_lost_list(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
 	let linode_token = util::env::read_secret(&["linode", "token"]).await?;
 
-	let dc_rows = sql_fetch_all!(
-		[ctx, (i64, Option<String>)]
+	let accounts = sql_fetch_all!(
+		[ctx, (sqlx::types::Json<Provider>, String)]
 		"
-		SELECT provider, provider_api_token
+		SELECT provider2, provider_api_token
 		FROM db_cluster.datacenters
 		WHERE
 			provider_api_token IS NOT NULL AND
@@ -50,22 +46,14 @@ pub async fn cluster_server_lost_list(ctx: &OperationCtx, input: &Input) -> Glob
 		",
 		&input.filter.cluster_ids,
 	)
-	.await?;
-
-	let accounts = dc_rows
-		.iter()
-		.map(|(provider, provider_api_token)| {
-			let provider = Provider::try_from(*provider)?;
-			// Default token if none is set
-			let provider_api_token = match &provider {
-				Provider::Linode => provider_api_token
-					.clone()
-					.unwrap_or_else(|| linode_token.clone()),
-			};
-
-			Ok((provider, provider_api_token))
-		})
-		.collect::<GlobalResult<HashSet<_>>>()?;
+	.await?
+	.into_iter()
+	.map(|(provider, provider_api_token)| (provider.0, provider_api_token))
+	.chain(std::iter::once((
+		Provider::Linode,
+		util::env::read_secret(&["linode", "token"]).await?,
+	)))
+	.collect::<HashSet<_>>();
 
 	// Filter by namespace
 	let filter = json!({
@@ -141,6 +129,7 @@ async fn run_for_linode_account(
 			s.datacenter_id,
 			s.pool_type,
 			s.pool_type2,
+			s.provider_server_id,
 			s.vlan_ip,
 			s.public_ip,
 			s.cloud_destroy_ts
