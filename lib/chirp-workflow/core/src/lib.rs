@@ -1,4 +1,5 @@
 pub mod activity;
+pub mod builder;
 pub mod compat;
 pub mod ctx;
 pub mod db;

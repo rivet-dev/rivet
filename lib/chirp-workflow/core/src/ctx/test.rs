@@ -5,10 +5,11 @@ use tokio::time::Duration;
 use uuid::Uuid;
 
 use crate::{
+	builder::common as builder,
 	ctx::{
+		common::{self, SUB_WORKFLOW_RETRY},
 		message::{SubscriptionHandle, TailAnchor, TailAnchorResponse},
-		workflow::SUB_WORKFLOW_RETRY,
-		MessageCtx, OperationCtx,
+		MessageCtx,
 	},
 	db::{DatabaseHandle, DatabasePgNats},
 	error::WorkflowError,
@@ -87,60 +88,6 @@ impl TestCtx {
 }
 
 impl TestCtx {
-	pub async fn dispatch_workflow<I>(&self, input: I) -> GlobalResult<Uuid>
-	where
-		I: WorkflowInput,
-		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
-	{
-		let name = I::Workflow::NAME;
-		let id = Uuid::new_v4();
-
-		tracing::info!(workflow_name=%name, workflow_id=%id, ?input, "dispatching workflow");
-
-		// Serialize input
-		let input_val = serde_json::to_value(input)
-			.map_err(WorkflowError::SerializeWorkflowOutput)
-			.map_err(GlobalError::raw)?;
-
-		self.db
-			.dispatch_workflow(self.ray_id, id, &name, None, input_val)
-			.await
-			.map_err(GlobalError::raw)?;
-
-		tracing::info!(workflow_name=%name, workflow_id=%id, "workflow dispatched");
-
-		Ok(id)
-	}
-
-	pub async fn dispatch_tagged_workflow<I>(
-		&self,
-		tags: &serde_json::Value,
-		input: I,
-	) -> GlobalResult<Uuid>
-	where
-		I: WorkflowInput,
-		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
-	{
-		let name = I::Workflow::NAME;
-		let id = Uuid::new_v4();
-
-		tracing::info!(workflow_name=%name, workflow_id=%id, ?tags, ?input, "dispatching tagged workflow");
-
-		// Serialize input
-		let input_val = serde_json::to_value(input)
-			.map_err(WorkflowError::SerializeWorkflowOutput)
-			.map_err(GlobalError::raw)?;
-
-		self.db
-			.dispatch_workflow(self.ray_id, id, &name, Some(tags), input_val)
-			.await
-			.map_err(GlobalError::raw)?;
-
-		tracing::info!(workflow_name=%name, workflow_id=%id, "workflow dispatched");
-
-		Ok(id)
-	}
-
 	pub async fn wait_for_workflow<W: Workflow>(
 		&self,
 		workflow_id: Uuid,
@@ -165,75 +112,30 @@ impl TestCtx {
 		}
 	}
 
-	pub async fn workflow<I>(
-		&self,
-		input: I,
-	) -> GlobalResult<<<I as WorkflowInput>::Workflow as Workflow>::Output>
+	/// Creates a workflow builder.
+	pub fn workflow<I>(&self, input: I) -> builder::workflow::WorkflowBuilder<I>
 	where
 		I: WorkflowInput,
 		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
 	{
-		let workflow_id = self.dispatch_workflow(input).await?;
-		let output = self.wait_for_workflow::<I::Workflow>(workflow_id).await?;
-		Ok(output)
+		builder::workflow::WorkflowBuilder::new(self.db.clone(), self.ray_id, input)
 	}
 
-	pub async fn tagged_workflow<I>(
+	/// Creates a signal builder.
+	pub fn signal<T: Signal + Serialize>(&self, body: T) -> builder::signal::SignalBuilder<T> {
+		builder::signal::SignalBuilder::new(self.db.clone(), self.ray_id, body)
+	}
+
+	#[tracing::instrument(err, skip_all, fields(operation = I::Operation::NAME))]
+	pub async fn op<I>(
 		&self,
-		tags: &serde_json::Value,
 		input: I,
-	) -> GlobalResult<<<I as WorkflowInput>::Workflow as Workflow>::Output>
+	) -> GlobalResult<<<I as OperationInput>::Operation as Operation>::Output>
 	where
-		I: WorkflowInput,
-		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
+		I: OperationInput,
+		<I as OperationInput>::Operation: Operation<Input = I>,
 	{
-		let workflow_id = self.dispatch_tagged_workflow(tags, input).await?;
-		let output = self.wait_for_workflow::<I::Workflow>(workflow_id).await?;
-		Ok(output)
-	}
-
-	pub async fn signal<T: Signal + Serialize>(
-		&self,
-		workflow_id: Uuid,
-		input: T,
-	) -> GlobalResult<Uuid> {
-		let signal_id = Uuid::new_v4();
-
-		tracing::info!(signal_name=%T::NAME, %workflow_id, %signal_id, "dispatching signal");
-
-		// Serialize input
-		let input_val = serde_json::to_value(input)
-			.map_err(WorkflowError::SerializeSignalBody)
-			.map_err(GlobalError::raw)?;
-
-		self.db
-			.publish_signal(self.ray_id, workflow_id, signal_id, T::NAME, input_val)
-			.await
-			.map_err(GlobalError::raw)?;
-
-		Ok(signal_id)
-	}
-
-	pub async fn tagged_signal<T: Signal + Serialize>(
-		&self,
-		tags: &serde_json::Value,
-		input: T,
-	) -> GlobalResult<Uuid> {
-		let signal_id = Uuid::new_v4();
-
-		tracing::info!(signal_name=%T::NAME, ?tags, %signal_id, "dispatching tagged signal");
-
-		// Serialize input
-		let input_val = serde_json::to_value(input)
-			.map_err(WorkflowError::SerializeSignalBody)
-			.map_err(GlobalError::raw)?;
-
-		self.db
-			.publish_tagged_signal(self.ray_id, tags, signal_id, T::NAME, input_val)
-			.await
-			.map_err(GlobalError::raw)?;
-
-		Ok(signal_id)
+		common::op(&self.db, &self.conn, self.ray_id, self.ts, false, input).await
 	}
 
 	/// Waits for a workflow to be triggered with a superset of given input. Strictly for tests.
@@ -251,54 +153,11 @@ impl TestCtx {
 		})
 	}
 
-	#[tracing::instrument(err, skip_all, fields(operation = I::Operation::NAME))]
-	pub async fn op<I>(
-		&self,
-		input: I,
-	) -> GlobalResult<<<I as OperationInput>::Operation as Operation>::Output>
-	where
-		I: OperationInput,
-		<I as OperationInput>::Operation: Operation<Input = I>,
-	{
-		tracing::info!(?input, "operation call");
-
-		let ctx = OperationCtx::new(
-			self.db.clone(),
-			&self.conn,
-			self.ray_id,
-			self.ts,
-			false,
-			I::Operation::NAME,
-		);
-
-		let res = I::Operation::run(&ctx, &input)
-			.await
-			.map_err(WorkflowError::OperationFailure)
-			.map_err(GlobalError::raw);
-
-		tracing::info!(?res, "operation response");
-
-		res
-	}
-
-	pub async fn msg<M>(&self, tags: serde_json::Value, body: M) -> GlobalResult<()>
+	pub async fn msg<M>(&self, body: M) -> builder::message::MessageBuilder<M>
 	where
 		M: Message,
 	{
-		self.msg_ctx
-			.message(tags, body)
-			.await
-			.map_err(GlobalError::raw)
-	}
-
-	pub async fn msg_wait<M>(&self, tags: serde_json::Value, body: M) -> GlobalResult<()>
-	where
-		M: Message,
-	{
-		self.msg_ctx
-			.message_wait(tags, body)
-			.await
-			.map_err(GlobalError::raw)
+		builder::message::MessageBuilder::new(&self.msg_ctx, body)
 	}
 
 	pub async fn subscribe<M>(

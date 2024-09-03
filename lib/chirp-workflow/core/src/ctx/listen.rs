@@ -19,7 +19,7 @@ impl<'a> ListenCtx<'a> {
 		// Fetch new pending signal
 		let signal = self
 			.ctx
-			.db
+			.db()
 			.pull_next_signal(
 				self.ctx.workflow_id(),
 				signal_names,

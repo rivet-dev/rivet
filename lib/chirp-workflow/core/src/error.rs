@@ -4,7 +4,7 @@ use global_error::GlobalError;
 use tokio::time::Instant;
 use uuid::Uuid;
 
-use crate::ctx::workflow::RETRY_TIMEOUT_MS;
+use crate::ctx::common::RETRY_TIMEOUT_MS;
 
 pub type WorkflowResult<T> = Result<T, WorkflowError>;
 

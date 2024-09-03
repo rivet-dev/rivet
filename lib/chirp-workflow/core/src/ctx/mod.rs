@@ -1,6 +1,7 @@
 mod activity;
 pub(crate) mod api;
 mod backfill;
+pub(crate) mod common;
 mod listen;
 pub mod message;
 mod operation;

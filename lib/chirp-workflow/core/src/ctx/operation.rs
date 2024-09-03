@@ -1,11 +1,12 @@
-use global_error::{GlobalError, GlobalResult};
+use global_error::GlobalResult;
 use rivet_pools::prelude::*;
 use serde::Serialize;
 use uuid::Uuid;
 
 use crate::{
+	builder::common as builder,
+	ctx::common,
 	db::DatabaseHandle,
-	error::WorkflowError,
 	operation::{Operation, OperationInput},
 	signal::Signal,
 };
@@ -69,69 +70,20 @@ impl OperationCtx {
 		I: OperationInput,
 		<I as OperationInput>::Operation: Operation<Input = I>,
 	{
-		tracing::info!(?input, "operation call");
-
-		let ctx = OperationCtx::new(
-			self.db.clone(),
+		common::op(
+			&self.db,
 			&self.conn,
 			self.ray_id,
 			self.op_ctx.req_ts(),
 			self.op_ctx.from_workflow(),
-			I::Operation::NAME,
-		);
-
-		let res = I::Operation::run(&ctx, &input)
-			.await
-			.map_err(WorkflowError::OperationFailure)
-			.map_err(GlobalError::raw);
-
-		tracing::info!(?res, "operation response");
-
-		res
+			input,
+		)
+		.await
 	}
 
-	pub async fn signal<T: Signal + Serialize>(
-		&self,
-		workflow_id: Uuid,
-		input: T,
-	) -> GlobalResult<Uuid> {
-		let signal_id = Uuid::new_v4();
-
-		tracing::info!(signal_name=%T::NAME, %workflow_id, %signal_id, "dispatching signal");
-
-		// Serialize input
-		let input_val = serde_json::to_value(input)
-			.map_err(WorkflowError::SerializeSignalBody)
-			.map_err(GlobalError::raw)?;
-
-		self.db
-			.publish_signal(self.ray_id, workflow_id, signal_id, T::NAME, input_val)
-			.await
-			.map_err(GlobalError::raw)?;
-
-		Ok(signal_id)
-	}
-
-	pub async fn tagged_signal<T: Signal + Serialize>(
-		&self,
-		tags: &serde_json::Value,
-		input: T,
-	) -> GlobalResult<Uuid> {
-		let signal_id = Uuid::new_v4();
-
-		tracing::info!(signal_name=%T::NAME, ?tags, %signal_id, "dispatching tagged signal");
-
-		// Serialize input
-		let input_val = serde_json::to_value(input)
-			.map_err(WorkflowError::SerializeSignalBody)
-			.map_err(GlobalError::raw)?;
-
-		self.db
-			.publish_tagged_signal(self.ray_id, tags, signal_id, T::NAME, input_val)
-			.await
-			.map_err(GlobalError::raw)?;
-
-		Ok(signal_id)
+	/// Creates a signal builder.
+	pub fn signal<T: Signal + Serialize>(&self, body: T) -> builder::signal::SignalBuilder<T> {
+		builder::signal::SignalBuilder::new(self.db.clone(), self.ray_id, body)
 	}
 }
 

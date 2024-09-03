@@ -56,7 +56,7 @@ impl Registry {
 				run: |ctx| {
 					async move {
 						// Deserialize input
-						let input = serde_json::from_value(ctx.input.as_ref().clone())
+						let input = serde_json::from_value(ctx.input().as_ref().clone())
 							.map_err(WorkflowError::DeserializeWorkflowInput)?;
 
 						// Run workflow

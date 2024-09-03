@@ -8,7 +8,11 @@ use uuid::Uuid;
 use crate::{
 	activity::ActivityId,
 	activity::{Activity, ActivityInput},
-	ctx::{ActivityCtx, ListenCtx, MessageCtx},
+	builder::workflow as builder,
+	ctx::{
+		common::{RETRY_TIMEOUT_MS, SUB_WORKFLOW_RETRY},
+		ActivityCtx, ListenCtx, MessageCtx,
+	},
 	db::{DatabaseHandle, PulledWorkflow},
 	error::{WorkflowError, WorkflowResult},
 	event::Event,
@@ -27,19 +31,15 @@ use crate::{
 	workflow::{Workflow, WorkflowInput},
 };
 
-// Time to delay a workflow from retrying after an error
-pub const RETRY_TIMEOUT_MS: usize = 2000;
-// Poll interval when polling for signals in-process
+/// Poll interval when polling for signals in-process
 const SIGNAL_RETRY: Duration = Duration::from_millis(100);
-// Most in-process signal poll tries
+/// Most in-process signal poll tries
 const MAX_SIGNAL_RETRIES: usize = 16;
-// Poll interval when polling for a sub workflow in-process
-pub const SUB_WORKFLOW_RETRY: Duration = Duration::from_millis(150);
-// Most in-process sub workflow poll tries
+/// Most in-process sub workflow poll tries
 const MAX_SUB_WORKFLOW_RETRIES: usize = 4;
-// Retry interval for failed db actions
+/// Retry interval for failed db actions
 const DB_ACTION_RETRY: Duration = Duration::from_millis(150);
-// Most db action retries
+/// Most db action retries
 const MAX_DB_ACTION_RETRIES: usize = 5;
 
 // TODO: Use generics to store input instead of a json value
@@ -54,7 +54,7 @@ pub struct WorkflowCtx {
 	ray_id: Uuid,
 
 	registry: RegistryHandle,
-	pub(crate) db: DatabaseHandle,
+	db: DatabaseHandle,
 
 	conn: rivet_connection::Connection,
 
@@ -62,7 +62,7 @@ pub struct WorkflowCtx {
 	/// The reason this type is a hashmap is to allow querying by location.
 	event_history: Arc<HashMap<Location, Vec<Event>>>,
 	/// Input data passed to this workflow.
-	pub(crate) input: Arc<serde_json::Value>,
+	input: Arc<serde_json::Value>,
 
 	root_location: Location,
 	location_idx: usize,
@@ -109,7 +109,16 @@ impl WorkflowCtx {
 	/// Creates a new workflow run with one more depth in the location. Meant to be implemented and not used
 	/// directly in workflows.
 	pub fn branch(&mut self) -> Self {
-		let branch = WorkflowCtx {
+		let branch = self.with_input(self.input.clone());
+
+		self.inc_location();
+
+		branch
+	}
+
+	/// Clones the current ctx but with a different input.
+	pub(crate) fn with_input(&self, input: Arc<serde_json::Value>) -> Self {
+		WorkflowCtx {
 			workflow_id: self.workflow_id,
 			name: self.name.clone(),
 			create_ts: self.create_ts,
@@ -122,7 +131,7 @@ impl WorkflowCtx {
 			conn: self.conn.clone(),
 
 			event_history: self.event_history.clone(),
-			input: self.input.clone(),
+			input,
 
 			root_location: self
 				.root_location
@@ -134,11 +143,7 @@ impl WorkflowCtx {
 			loop_location: self.loop_location.clone(),
 
 			msg_ctx: self.msg_ctx.clone(),
-		};
-
-		self.inc_location();
-
-		branch
+		}
 	}
 
 	/// Like `branch` but it does not add another layer of depth. Meant to be implemented and not used
@@ -160,6 +165,11 @@ impl WorkflowCtx {
 			.flatten()
 	}
 
+	/// Returns the event at the current location index.
+	pub(crate) fn current_history_event(&self) -> Option<&Event> {
+		self.relevant_history().nth(self.location_idx)
+	}
+
 	pub(crate) fn full_location(&self) -> Location {
 		self.root_location
 			.iter()
@@ -172,15 +182,6 @@ impl WorkflowCtx {
 		self.location_idx += 1;
 	}
 
-	pub(crate) fn loop_location(&self) -> Option<&[usize]> {
-		self.loop_location.as_deref()
-	}
-
-	/// For debugging, pretty prints the current location
-	fn loc(&self) -> String {
-		util::format_location(&self.full_location())
-	}
-
 	pub(crate) async fn run(mut self) -> WorkflowResult<()> {
 		tracing::info!(name=%self.name, id=%self.workflow_id, "running workflow");
 
@@ -190,7 +191,7 @@ impl WorkflowCtx {
 		// Run workflow
 		match (workflow.run)(&mut self).await {
 			Ok(output) => {
-				tracing::info!(name=%self.name, id=%self.workflow_id, "workflow success");
+				tracing::info!(name=%self.name, id=%self.workflow_id, "workflow completed");
 
 				let mut retries = 0;
 				let mut interval = tokio::time::interval(DB_ACTION_RETRY);
@@ -394,7 +395,8 @@ impl WorkflowCtx {
 }
 
 impl WorkflowCtx {
-	async fn dispatch_workflow_inner<I>(
+	/// Used internally to dispatch a workflow. Use `WorkflowCtx::workflow` instead.
+	pub(crate) async fn dispatch_workflow_inner<I>(
 		&mut self,
 		tags: Option<&serde_json::Value>,
 		input: I,
@@ -403,7 +405,7 @@ impl WorkflowCtx {
 		I: WorkflowInput,
 		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
 	{
-		let event = self.relevant_history().nth(self.location_idx);
+		let event = self.current_history_event();
 
 		// Signal received before
 		let id = if let Some(event) = event {
@@ -523,14 +525,13 @@ impl WorkflowCtx {
 		}
 	}
 
-	/// Runs a sub workflow in the same process as the current workflow (if possible) and returns its
-	/// response.
-	pub fn workflow<I>(&mut self, input: I) -> builder::SubWorkflowBuilder<I>
+	/// Creates a sub workflow builder.
+	pub fn workflow<I>(&mut self, input: I) -> builder::sub_workflow::SubWorkflowBuilder<I>
 	where
 		I: WorkflowInput,
 		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
 	{
-		builder::SubWorkflowBuilder::new(self, input)
+		builder::sub_workflow::SubWorkflowBuilder::new(self, input)
 	}
 
 	/// Run activity. Will replay on failure.
@@ -544,7 +545,7 @@ impl WorkflowCtx {
 	{
 		let activity_id = ActivityId::new::<I::Activity>(&input);
 
-		let event = self.relevant_history().nth(self.location_idx);
+		let event = self.current_history_event();
 
 		// Activity was ran before
 		let output = if let Some(event) = event {
@@ -672,15 +673,15 @@ impl WorkflowCtx {
 		}
 	}
 
-	/// Starts building a signal.
-	pub fn signal<T: Signal + Serialize>(&mut self, body: T) -> builder::SignalBuilder<T> {
-		builder::SignalBuilder::new(self, body)
+	/// Creates a signal builder.
+	pub fn signal<T: Signal + Serialize>(&mut self, body: T) -> builder::signal::SignalBuilder<T> {
+		builder::signal::SignalBuilder::new(self, body)
 	}
 
 	/// Listens for a signal for a short time before setting the workflow to sleep. Once the signal is
 	/// received, the workflow will be woken up and continue.
 	pub async fn listen<T: Listen>(&mut self) -> GlobalResult<T> {
-		let event = self.relevant_history().nth(self.location_idx);
+		let event = self.current_history_event();
 
 		// Signal received before
 		let signal = if let Some(event) = event {
@@ -734,7 +735,7 @@ impl WorkflowCtx {
 		&mut self,
 		listener: &T,
 	) -> GlobalResult<<T as CustomListener>::Output> {
-		let event = self.relevant_history().nth(self.location_idx);
+		let event = self.current_history_event();
 
 		// Signal received before
 		let signal = if let Some(event) = event {
@@ -787,7 +788,7 @@ impl WorkflowCtx {
 	// database so that upon replay it again receives no signal
 	// /// Checks if the given signal exists in the database.
 	// pub async fn query_signal<T: Listen>(&mut self) -> GlobalResult<Option<T>> {
-	// 	let event = self.relevant_history().nth(self.location_idx);
+	// 	let event = self.current_history_event();
 
 	// 	// Signal received before
 	// 	let signal = if let Some(event) = event {
@@ -821,11 +822,11 @@ impl WorkflowCtx {
 	// 	Ok(signal)
 	// }
 
-	pub fn msg<M>(&mut self, body: M) -> builder::MessageBuilder<M>
+	pub fn msg<M>(&mut self, body: M) -> builder::message::MessageBuilder<M>
 	where
 		M: Message,
 	{
-		builder::MessageBuilder::new(self, body)
+		builder::message::MessageBuilder::new(self, body)
 	}
 
 	/// Runs workflow steps in a loop. **Ensure that there are no side effects caused by the code in this
@@ -920,7 +921,7 @@ impl WorkflowCtx {
 	}
 
 	pub async fn sleep_until<T: TsToMillis>(&mut self, time: T) -> GlobalResult<()> {
-		let event = self.relevant_history().nth(self.location_idx);
+		let event = self.current_history_event();
 
 		// Slept before
 		let (deadline_ts, replay) = if let Some(event) = event {
@@ -958,7 +959,7 @@ impl WorkflowCtx {
 		// No-op
 		if duration < 0 {
 			if !replay {
-				tracing::warn!("tried to sleep for a negative duration");
+				tracing::warn!(name=%self.name, id=%self.workflow_id, %duration, "tried to sleep for a negative duration");
 			}
 		} else if duration < worker::TICK_INTERVAL.as_millis() as i64 + 1 {
 			tracing::info!(name=%self.name, id=%self.workflow_id, %deadline_ts, "sleeping in memory");
@@ -979,12 +980,41 @@ impl WorkflowCtx {
 }
 
 impl WorkflowCtx {
+	pub(crate) fn registry(&self) -> &RegistryHandle {
+		&self.registry
+	}
+
+	pub(crate) fn input(&self) -> &Arc<serde_json::Value> {
+		&self.input
+	}
+
+	pub(crate) fn loop_location(&self) -> Option<&[usize]> {
+		self.loop_location.as_deref()
+	}
+
+	pub(crate) fn db(&self) -> &DatabaseHandle {
+		&self.db
+	}
+
+	pub(crate) fn msg_ctx(&self) -> &MessageCtx {
+		&self.msg_ctx
+	}
+
+	/// For debugging, pretty prints the current location
+	pub(crate) fn loc(&self) -> String {
+		util::format_location(&self.full_location())
+	}
+
 	pub fn name(&self) -> &str {
 		&self.name
 	}
 
 	pub fn workflow_id(&self) -> Uuid {
 		self.workflow_id
+	}
+
+	pub fn ray_id(&self) -> Uuid {
+		self.ray_id
 	}
 
 	/// Timestamp at which this workflow run started.
@@ -1006,503 +1036,4 @@ impl WorkflowCtx {
 pub enum Loop<T> {
 	Continue,
 	Break(T),
-}
-
-// Tightly ingrained with the workflow ctx
-pub mod builder {
-	use std::{fmt::Display, sync::Arc};
-
-	use global_error::{GlobalError, GlobalResult};
-	use serde::Serialize;
-	use uuid::Uuid;
-
-	use crate::{
-		ctx::WorkflowCtx,
-		error::WorkflowError,
-		event::Event,
-		message::Message,
-		signal::Signal,
-		workflow::{Workflow, WorkflowInput},
-	};
-
-	#[derive(thiserror::Error, Debug)]
-	enum BuilderError {
-		#[error("tags must be a JSON map")]
-		TagsNotMap,
-		#[error("cannot call `to_workflow` and set tags on the same signal")]
-		WorkflowIdAndTags,
-		#[error("must call `to_workflow` or set tags on signal")]
-		NoWorkflowIdOrTags,
-	}
-
-	pub struct SignalBuilder<'a, T: Signal + Serialize> {
-		ctx: &'a mut WorkflowCtx,
-		body: T,
-		to_workflow_id: Option<Uuid>,
-		tags: serde_json::Map<String, serde_json::Value>,
-		error: Option<GlobalError>,
-	}
-
-	impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
-		pub(crate) fn new(ctx: &'a mut WorkflowCtx, body: T) -> Self {
-			SignalBuilder {
-				ctx,
-				body,
-				to_workflow_id: None,
-				tags: serde_json::Map::new(),
-				error: None,
-			}
-		}
-
-		pub fn to_workflow(mut self, workflow_id: Uuid) -> Self {
-			if self.error.is_some() {
-				return self;
-			}
-
-			self.to_workflow_id = Some(workflow_id);
-
-			self
-		}
-
-		pub fn tags(mut self, tags: serde_json::Value) -> Self {
-			if self.error.is_some() {
-				return self;
-			}
-
-			match tags {
-				serde_json::Value::Object(map) => {
-					self.tags.extend(map);
-				}
-				_ => self.error = Some(BuilderError::TagsNotMap.into()),
-			}
-
-			self
-		}
-
-		pub fn tag(mut self, k: impl Display, v: impl Serialize) -> Self {
-			if self.error.is_some() {
-				return self;
-			}
-
-			match serde_json::to_value(&v) {
-				Ok(v) => {
-					self.tags.insert(k.to_string(), v);
-				}
-				Err(err) => self.error = Some(err.into()),
-			}
-
-			self
-		}
-
-		pub async fn send(self) -> GlobalResult<Uuid> {
-			if let Some(err) = self.error {
-				return Err(err);
-			}
-
-			let event = self.ctx.relevant_history().nth(self.ctx.location_idx);
-
-			// Signal sent before
-			if let Some(event) = event {
-				// Validate history is consistent
-				let Event::SignalSend(signal) = event else {
-					return Err(WorkflowError::HistoryDiverged(format!(
-						"expected {event} at {}, found signal send {}",
-						self.ctx.loc(),
-						T::NAME
-					)))
-					.map_err(GlobalError::raw);
-				};
-
-				if signal.name != T::NAME {
-					return Err(WorkflowError::HistoryDiverged(format!(
-						"expected {event} at {}, found signal send {}",
-						self.ctx.loc(),
-						T::NAME
-					)))
-					.map_err(GlobalError::raw);
-				}
-
-				tracing::debug!(name=%self.ctx.name, id=%self.ctx.workflow_id, signal_name=%signal.name, signal_id=%signal.signal_id, "replaying signal dispatch");
-
-				Ok(signal.signal_id)
-			}
-			// Send signal
-			else {
-				let signal_id = Uuid::new_v4();
-
-				// Serialize input
-				let input_val = serde_json::to_value(&self.body)
-					.map_err(WorkflowError::SerializeSignalBody)
-					.map_err(GlobalError::raw)?;
-
-				match (self.to_workflow_id, self.tags.is_empty()) {
-					(Some(workflow_id), true) => {
-						tracing::info!(name=%self.ctx.name, id=%self.ctx.workflow_id, signal_name=%T::NAME, to_workflow_id=%workflow_id, %signal_id, "dispatching signal");
-
-						self.ctx
-							.db
-							.publish_signal_from_workflow(
-								self.ctx.workflow_id,
-								self.ctx.full_location().as_ref(),
-								self.ctx.ray_id,
-								workflow_id,
-								signal_id,
-								T::NAME,
-								input_val,
-								self.ctx.loop_location(),
-							)
-							.await
-							.map_err(GlobalError::raw)?;
-					}
-					(None, false) => {
-						tracing::info!(name=%self.ctx.name, id=%self.ctx.workflow_id, signal_name=%T::NAME, tags=?self.tags, %signal_id, "dispatching tagged signal");
-
-						self.ctx
-							.db
-							.publish_tagged_signal_from_workflow(
-								self.ctx.workflow_id,
-								self.ctx.full_location().as_ref(),
-								self.ctx.ray_id,
-								&serde_json::Value::Object(self.tags),
-								signal_id,
-								T::NAME,
-								input_val,
-								self.ctx.loop_location(),
-							)
-							.await
-							.map_err(GlobalError::raw)?;
-					}
-					(Some(_), false) => return Err(BuilderError::WorkflowIdAndTags.into()),
-					(None, true) => return Err(BuilderError::NoWorkflowIdOrTags.into()),
-				}
-
-				// Move to next event
-				self.ctx.inc_location();
-
-				Ok(signal_id)
-			}
-		}
-	}
-
-	pub struct MessageBuilder<'a, M: Message> {
-		ctx: &'a mut WorkflowCtx,
-		body: M,
-		tags: serde_json::Map<String, serde_json::Value>,
-		wait: bool,
-		error: Option<GlobalError>,
-	}
-
-	impl<'a, M: Message> MessageBuilder<'a, M> {
-		pub(crate) fn new(ctx: &'a mut WorkflowCtx, body: M) -> Self {
-			MessageBuilder {
-				ctx,
-				body,
-				tags: serde_json::Map::new(),
-				wait: false,
-				error: None,
-			}
-		}
-
-		pub fn tags(mut self, tags: serde_json::Value) -> Self {
-			if self.error.is_some() {
-				return self;
-			}
-
-			match tags {
-				serde_json::Value::Object(map) => {
-					self.tags.extend(map);
-				}
-				_ => self.error = Some(BuilderError::TagsNotMap.into()),
-			}
-
-			self
-		}
-
-		pub fn tag(mut self, k: impl Display, v: impl Serialize) -> Self {
-			if self.error.is_some() {
-				return self;
-			}
-
-			match serde_json::to_value(&v) {
-				Ok(v) => {
-					self.tags.insert(k.to_string(), v);
-				}
-				Err(err) => self.error = Some(err.into()),
-			}
-
-			self
-		}
-
-		pub async fn wait(mut self) -> Self {
-			if self.error.is_some() {
-				return self;
-			}
-
-			self.wait = true;
-
-			self
-		}
-
-		pub async fn send(self) -> GlobalResult<()> {
-			if let Some(err) = self.error {
-				return Err(err);
-			}
-
-			let event = self.ctx.relevant_history().nth(self.ctx.location_idx);
-
-			// Message sent before
-			if let Some(event) = event {
-				// Validate history is consistent
-				let Event::MessageSend(msg) = event else {
-					return Err(WorkflowError::HistoryDiverged(format!(
-						"expected {event} at {}, found message send {}",
-						self.ctx.loc(),
-						M::NAME,
-					)))
-					.map_err(GlobalError::raw);
-				};
-
-				if msg.name != M::NAME {
-					return Err(WorkflowError::HistoryDiverged(format!(
-						"expected {event} at {}, found message send {}",
-						self.ctx.loc(),
-						M::NAME,
-					)))
-					.map_err(GlobalError::raw);
-				}
-
-				tracing::debug!(name=%self.ctx.name, id=%self.ctx.workflow_id, msg_name=%msg.name, "replaying message dispatch");
-			}
-			// Send message
-			else {
-				tracing::info!(name=%self.ctx.name, id=%self.ctx.workflow_id, msg_name=%M::NAME, tags=?self.tags, "dispatching message");
-
-				// Serialize body
-				let body_val = serde_json::to_value(&self.body)
-					.map_err(WorkflowError::SerializeMessageBody)
-					.map_err(GlobalError::raw)?;
-				let location = self.ctx.full_location();
-				let tags = serde_json::Value::Object(self.tags);
-				let tags2 = tags.clone();
-
-				let (msg, write) = tokio::join!(
-					async {
-						self.ctx
-							.db
-							.commit_workflow_message_send_event(
-								self.ctx.workflow_id,
-								location.as_ref(),
-								&tags,
-								M::NAME,
-								body_val,
-								self.ctx.loop_location(),
-							)
-							.await
-					},
-					async {
-						if self.wait {
-							self.ctx.msg_ctx.message_wait(tags2, self.body).await
-						} else {
-							self.ctx.msg_ctx.message(tags2, self.body).await
-						}
-					},
-				);
-
-				msg.map_err(GlobalError::raw)?;
-				write.map_err(GlobalError::raw)?;
-			}
-
-			// Move to next event
-			self.ctx.inc_location();
-
-			Ok(())
-		}
-	}
-
-	pub struct SubWorkflowBuilder<'a, I: WorkflowInput> {
-		ctx: &'a mut WorkflowCtx,
-		input: I,
-		tags: serde_json::Map<String, serde_json::Value>,
-		error: Option<GlobalError>,
-	}
-
-	impl<'a, I: WorkflowInput> SubWorkflowBuilder<'a, I>
-	where
-		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
-	{
-		pub(crate) fn new(ctx: &'a mut WorkflowCtx, input: I) -> Self {
-			SubWorkflowBuilder {
-				ctx,
-				input,
-				tags: serde_json::Map::new(),
-				error: None,
-			}
-		}
-
-		pub fn tags(mut self, tags: serde_json::Value) -> Self {
-			if self.error.is_some() {
-				return self;
-			}
-
-			match tags {
-				serde_json::Value::Object(map) => {
-					self.tags.extend(map);
-				}
-				_ => self.error = Some(BuilderError::TagsNotMap.into()),
-			}
-
-			self
-		}
-
-		pub fn tag(mut self, k: impl Display, v: impl Serialize) -> Self {
-			if self.error.is_some() {
-				return self;
-			}
-
-			match serde_json::to_value(&v) {
-				Ok(v) => {
-					self.tags.insert(k.to_string(), v);
-				}
-				Err(err) => self.error = Some(err.into()),
-			}
-
-			self
-		}
-
-		pub async fn dispatch(self) -> GlobalResult<Uuid> {
-			if let Some(err) = self.error {
-				return Err(err);
-			}
-
-			let sub_workflow_name = I::Workflow::NAME;
-			let sub_workflow_id = Uuid::new_v4();
-
-			let no_tags = self.tags.is_empty();
-			let tags = serde_json::Value::Object(self.tags);
-			let tags = if no_tags { None } else { Some(&tags) };
-
-			tracing::info!(
-				name=%self.ctx.name,
-				id=%self.ctx.workflow_id,
-				%sub_workflow_name,
-				%sub_workflow_id,
-				?tags,
-				input=?self.input,
-				"dispatching sub workflow"
-			);
-
-			// Serialize input
-			let input_val = serde_json::to_value(&self.input)
-				.map_err(WorkflowError::SerializeWorkflowOutput)
-				.map_err(GlobalError::raw)?;
-
-			self.ctx
-				.db
-				.dispatch_sub_workflow(
-					self.ctx.ray_id,
-					self.ctx.workflow_id,
-					self.ctx.full_location().as_ref(),
-					sub_workflow_id,
-					&sub_workflow_name,
-					tags,
-					input_val,
-					self.ctx.loop_location(),
-				)
-				.await
-				.map_err(GlobalError::raw)?;
-
-			tracing::info!(
-				name=%self.ctx.name,
-				id=%self.ctx.workflow_id,
-				%sub_workflow_name,
-				?sub_workflow_id,
-				"sub workflow dispatched"
-			);
-
-			Ok(sub_workflow_id)
-		}
-
-		pub async fn run(
-			self,
-		) -> GlobalResult<<<I as WorkflowInput>::Workflow as Workflow>::Output> {
-			if let Some(err) = self.error {
-				return Err(err);
-			}
-
-			let no_tags = self.tags.is_empty();
-			let tags = serde_json::Value::Object(self.tags);
-			let tags = if no_tags { None } else { Some(&tags) };
-
-			// Lookup workflow
-			let Ok(workflow) = self.ctx.registry.get_workflow(I::Workflow::NAME) else {
-				tracing::warn!(
-					name=%self.ctx.name,
-					id=%self.ctx.workflow_id,
-					sub_workflow_name=%I::Workflow::NAME,
-					"sub workflow not found in current registry",
-				);
-
-				// TODO(RVT-3755): If a sub workflow is dispatched, then the worker is updated to include the sub
-				// worker in the registry, this will diverge in history because it will try to run the sub worker
-				// in-process during the replay
-				// If the workflow isn't in the current registry, dispatch the workflow instead
-				let sub_workflow_id = self.ctx.dispatch_workflow_inner(tags, self.input).await?;
-				let output = self
-					.ctx
-					.wait_for_workflow::<I::Workflow>(sub_workflow_id)
-					.await?;
-
-				return Ok(output);
-			};
-
-			tracing::info!(name=%self.ctx.name, id=%self.ctx.workflow_id, sub_workflow_name=%I::Workflow::NAME, "running sub workflow");
-
-			// Create a new branched workflow context for the sub workflow
-			let mut ctx = WorkflowCtx {
-				workflow_id: self.ctx.workflow_id,
-				name: I::Workflow::NAME.to_string(),
-				create_ts: rivet_util::timestamp::now(),
-				ts: rivet_util::timestamp::now(),
-				ray_id: self.ctx.ray_id,
-
-				registry: self.ctx.registry.clone(),
-				db: self.ctx.db.clone(),
-
-				conn: self
-					.ctx
-					.conn
-					.wrap(Uuid::new_v4(), self.ctx.ray_id, I::Workflow::NAME),
-
-				event_history: self.ctx.event_history.clone(),
-
-				// TODO(RVT-3756): This is redundant with the deserialization in `workflow.run` in the registry
-				input: Arc::new(serde_json::to_value(&self.input)?),
-
-				root_location: self
-					.ctx
-					.root_location
-					.iter()
-					.cloned()
-					.chain(std::iter::once(self.ctx.location_idx))
-					.collect(),
-				location_idx: 0,
-				loop_location: self.ctx.loop_location.clone(),
-
-				msg_ctx: self.ctx.msg_ctx.clone(),
-			};
-
-			// Run workflow
-			let output = (workflow.run)(&mut ctx).await.map_err(GlobalError::raw)?;
-
-			// TODO: RVT-3756
-			// Deserialize output
-			let output = serde_json::from_value(output)
-				.map_err(WorkflowError::DeserializeWorkflowOutput)
-				.map_err(GlobalError::raw)?;
-
-			self.ctx.inc_location();
-
-			Ok(output)
-		}
-	}
 }

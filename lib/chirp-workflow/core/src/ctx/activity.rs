@@ -3,9 +3,8 @@ use rivet_pools::prelude::*;
 use uuid::Uuid;
 
 use crate::{
-	ctx::OperationCtx,
+	ctx::common,
 	db::DatabaseHandle,
-	error::WorkflowError,
 	operation::{Operation, OperationInput},
 };
 
@@ -70,26 +69,15 @@ impl ActivityCtx {
 		I: OperationInput,
 		<I as OperationInput>::Operation: Operation<Input = I>,
 	{
-		tracing::info!(activity_name=%self.name, ?input, "operation call");
-
-		let ctx = OperationCtx::new(
-			self.db.clone(),
+		common::op(
+			&self.db,
 			&self.conn,
 			self.ray_id,
 			self.op_ctx.req_ts(),
 			true,
-			I::Operation::NAME,
-		);
-
-		let res = tokio::time::timeout(I::Operation::TIMEOUT, I::Operation::run(&ctx, &input))
-			.await
-			.map_err(|_| WorkflowError::OperationTimeout)?
-			.map_err(WorkflowError::OperationFailure)
-			.map_err(GlobalError::raw);
-
-		tracing::info!(activity_name=%self.name, ?res, "operation response");
-
-		res
+			input,
+		)
+		.await
 	}
 
 	pub async fn update_workflow_tags(&self, tags: &serde_json::Value) -> GlobalResult<()> {
