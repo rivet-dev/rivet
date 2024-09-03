@@ -47,10 +47,7 @@ pub async fn cluster_server_prune_with_filter(
 	.await?
 	.into_iter()
 	.map(|(provider, provider_api_token)| (provider.0, provider_api_token))
-	.chain(std::iter::once((
-		Provider::Linode,
-		util::env::read_secret(&["linode", "token"]).await?,
-	)))
+	.chain(std::iter::once((Provider::Linode, linode_token)))
 	.collect::<HashSet<_>>();
 
 	// Filter by namespace

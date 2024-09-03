@@ -3,8 +3,7 @@ use nomad_client::{
 	apis::{configuration::Configuration, nodes_api},
 	models,
 };
-use rivet_operation::prelude::proto::backend::pkg::mm;
-use serde_json::json;
+use rivet_operation::prelude::proto::backend::pkg::*;
 
 use crate::types::PoolType;
 

@@ -124,10 +124,10 @@ pub enum WorkflowError {
 	Pools(#[from] rivet_pools::Error),
 
 	#[error("activity timed out")]
-	ActivityTimeout,
+	ActivityTimeout(usize),
 
 	#[error("operation timed out")]
-	OperationTimeout,
+	OperationTimeout(usize),
 
 	#[error("duplicate registered workflow: {0}")]
 	DuplicateRegisteredWorkflow(String),
@@ -140,7 +140,9 @@ impl WorkflowError {
 	/// Returns the next deadline for a workflow to be woken up again based on the error.
 	pub(crate) fn deadline_ts(&self) -> Option<i64> {
 		match self {
-			WorkflowError::ActivityFailure(_, error_count) => {
+			WorkflowError::ActivityFailure(_, error_count)
+			| WorkflowError::ActivityTimeout(error_count)
+			| WorkflowError::OperationTimeout(error_count) => {
 				// NOTE: Max retry is handled in `WorkflowCtx::activity`
 				let mut backoff =
 					rivet_util::Backoff::new_at(8, None, RETRY_TIMEOUT_MS, 500, *error_count);
@@ -157,10 +159,6 @@ impl WorkflowError {
 
 				Some(deadline_ts)
 			}
-			// TODO: Add backoff
-			WorkflowError::ActivityTimeout | WorkflowError::OperationTimeout => {
-				Some(rivet_util::timestamp::now() + RETRY_TIMEOUT_MS as i64)
-			}
 			WorkflowError::Sleep(ts) => Some(*ts),
 			_ => None,
 		}
@@ -169,8 +167,8 @@ impl WorkflowError {
 	pub fn is_recoverable(&self) -> bool {
 		match self {
 			WorkflowError::ActivityFailure(_, _)
-			| WorkflowError::ActivityTimeout
-			| WorkflowError::OperationTimeout
+			| WorkflowError::ActivityTimeout(_)
+			| WorkflowError::OperationTimeout(_)
 			| WorkflowError::NoSignalFound(_)
 			| WorkflowError::SubWorkflowIncomplete(_)
 			| WorkflowError::Sleep(_) => true,
@@ -181,8 +179,8 @@ impl WorkflowError {
 	pub(crate) fn is_retryable(&self) -> bool {
 		match self {
 			WorkflowError::ActivityFailure(_, _)
-			| WorkflowError::ActivityTimeout
-			| WorkflowError::OperationTimeout => true,
+			| WorkflowError::ActivityTimeout(_)
+			| WorkflowError::OperationTimeout(_) => true,
 			_ => false,
 		}
 	}

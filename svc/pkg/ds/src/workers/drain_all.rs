@@ -2,7 +2,6 @@ use std::convert::TryInto;
 
 use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
-use serde_json::json;
 
 #[worker(name = "ds-drain-all")]
 async fn worker(ctx: &OperationContext<ds::msg::drain_all::Message>) -> GlobalResult<()> {
@@ -24,16 +23,16 @@ async fn worker(ctx: &OperationContext<ds::msg::drain_all::Message>) -> GlobalRe
 	.await?;
 
 	for (server_id, kill_timeout_ms) in server_rows {
-		chirp_workflow::compat::tagged_signal(
+		chirp_workflow::compat::signal(
 			ctx,
-			&json!({
-				"server_id": server_id,
-			}),
 			crate::workflows::server::Destroy {
 				override_kill_timeout_ms: (drain_timeout < kill_timeout_ms)
 					.then_some(drain_timeout),
 			},
 		)
+		.await?
+		.tag("server_id", server_id)
+		.send()
 		.await?;
 	}
 

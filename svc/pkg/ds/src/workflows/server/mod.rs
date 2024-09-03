@@ -112,6 +112,7 @@ pub async fn ds_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()>
 					server_id: input.server_id,
 					eval: sig.eval,
 				})
+				.output()
 				.await?;
 
 			if let EvalStatus::Failed = eval_status {
@@ -121,6 +122,7 @@ pub async fn ds_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()>
 					server_id: input.server_id,
 					override_kill_timeout_ms: None,
 				})
+				.output()
 				.await?;
 			}
 		}
@@ -131,6 +133,7 @@ pub async fn ds_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()>
 				server_id: input.server_id,
 				override_kill_timeout_ms: sig.override_kill_timeout_ms,
 			})
+			.output()
 			.await?;
 
 			return Ok(());
@@ -148,6 +151,7 @@ pub async fn ds_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()>
 							server_id,
 							alloc: sig.alloc,
 						})
+						.output()
 						.await?;
 					}
 					Main::NomadAllocUpdate(sig) => {
@@ -156,6 +160,7 @@ pub async fn ds_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()>
 								server_id,
 								alloc: sig.alloc,
 							})
+							.output()
 							.await?;
 
 						if finished {

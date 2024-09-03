@@ -63,8 +63,9 @@ where
 		I::Operation::NAME,
 	);
 
-	let res = I::Operation::run(&ctx, &input)
+	let res = tokio::time::timeout(I::Operation::TIMEOUT, I::Operation::run(&ctx, &input))
 		.await
+		.map_err(|_| WorkflowError::OperationTimeout(0))?
 		.map_err(WorkflowError::OperationFailure)
 		.map_err(GlobalError::raw);
 

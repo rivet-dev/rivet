@@ -300,7 +300,7 @@ impl WorkflowCtx {
 
 		let res = tokio::time::timeout(A::TIMEOUT, A::run(&ctx, input))
 			.await
-			.map_err(|_| WorkflowError::ActivityTimeout);
+			.map_err(|_| WorkflowError::ActivityTimeout(0));
 
 		let dt = start_instant.elapsed().as_secs_f64();
 
@@ -499,15 +499,24 @@ impl WorkflowCtx {
 								if error_count + 1 >= I::Activity::MAX_RETRIES {
 									WorkflowError::ActivityMaxFailuresReached(err)
 								} else {
-									// Add error count to the error
+									// Add error count to the error for backoff calculation
 									WorkflowError::ActivityFailure(err, error_count)
 								}
 							}
-							WorkflowError::ActivityTimeout | WorkflowError::OperationTimeout => {
+							WorkflowError::ActivityTimeout(_) => {
 								if error_count + 1 >= I::Activity::MAX_RETRIES {
 									WorkflowError::ActivityMaxFailuresReached(GlobalError::raw(err))
 								} else {
-									err
+									// Add error count to the error for backoff calculation
+									WorkflowError::ActivityTimeout(error_count)
+								}
+							}
+							WorkflowError::OperationTimeout(_) => {
+								if error_count + 1 >= I::Activity::MAX_RETRIES {
+									WorkflowError::ActivityMaxFailuresReached(GlobalError::raw(err))
+								} else {
+									// Add error count to the error for backoff calculation
+									WorkflowError::OperationTimeout(error_count)
 								}
 							}
 							_ => err,
@@ -822,8 +831,7 @@ impl WorkflowCtx {
 	pub async fn sleep<T: DurationToMillis>(&mut self, duration: T) -> GlobalResult<()> {
 		let ts = rivet_util::timestamp::now() as u64 + duration.to_millis()?;
 
-		self.sleep_until(ts as i64)
-			.await
+		self.sleep_until(ts as i64).await
 	}
 
 	pub async fn sleep_until<T: TsToMillis>(&mut self, time: T) -> GlobalResult<()> {

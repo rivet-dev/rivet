@@ -218,6 +218,24 @@ impl<K: Eq + Clone + Hash, V: Clone + Hash> AsHashableExt<K, V> for HashMap<K, V
 	}
 }
 
+impl<K: Eq + Clone + Hash, V: Clone + Hash> Into<HashableMap<K, V>> for HashMap<K, V> {
+	fn into(self) -> HashableMap<K, V> {
+		HashableMap(self.into_iter().collect())
+	}
+}
+
+impl<K: Eq + Clone + Hash, V: Clone + Hash> Into<HashableMap<K, V>> for &HashMap<K, V> {
+	fn into(self) -> HashableMap<K, V> {
+		HashableMap(self.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+	}
+}
+
+impl<K: Eq + Hash, V: Hash> FromIterator<(K, V)> for HashableMap<K, V> {
+	fn from_iter<I: IntoIterator<Item = (K, V)>>(iter: I) -> Self {
+		HashableMap(iter.into_iter().collect())
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use std::time::Instant;

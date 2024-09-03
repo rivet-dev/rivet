@@ -408,9 +408,9 @@
 						"uid": "prometheus"
 					},
 					"editorMode": "code",
-					"expr": "sum by (error_code) (rivet_chirp_workflow_dead{workflow_name=~\"[[workflow_name]]\"})",
+					"expr": "sum by (workflow_name, error_code) (rivet_chirp_workflow_dead{workflow_name=~\"[[workflow_name]]\"})",
 					"instant": false,
-					"legendFormat": "{{error_code}}",
+					"legendFormat": "(workflow_name) {{error_code}}",
 					"range": true,
 					"refId": "A"
 				}
