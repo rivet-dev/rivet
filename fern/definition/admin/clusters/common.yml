@@ -23,7 +23,7 @@ types:
       desired_count: integer
       min_count: integer
       max_count: integer
-      drain_timeout: long
+      drain_timeout_ms: long
 
   Hardware:
     properties:

@@ -8,6 +8,10 @@ use serde_json::json;
 
 use crate::types::PoolType;
 
+// In ms, a small amount of time to separate the completion of the drain in Nomad to the deletion of the
+// cluster server. We want the Nomad drain to complete first.
+const NOMAD_DRAIN_PADDING: u64 = 10000;
+
 lazy_static::lazy_static! {
 	static ref NOMAD_CONFIG: Configuration = nomad_util::new_config_from_env().unwrap();
 }
@@ -17,18 +21,24 @@ pub(crate) struct Input {
 	pub datacenter_id: Uuid,
 	pub server_id: Uuid,
 	pub pool_type: PoolType,
-	pub drain_timeout: u64,
 }
 
 #[workflow]
 pub(crate) async fn cluster_server_drain(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
+	let drain_timeout = ctx
+		.activity(GetDrainTimeoutInput {
+			datacenter_id: input.datacenter_id,
+			pool_type: input.pool_type.clone(),
+		})
+		.await?;
+
 	match input.pool_type {
 		PoolType::Job => {
 			let started_drain = ctx
 				.activity(DrainNodeInput {
 					datacenter_id: input.datacenter_id,
 					server_id: input.server_id,
-					drain_timeout: input.drain_timeout,
+					drain_timeout,
 				})
 				.await?;
 
@@ -55,6 +65,32 @@ pub(crate) async fn cluster_server_drain(ctx: &mut WorkflowCtx, input: &Input) -
 	}
 
 	Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+pub(crate) struct GetDrainTimeoutInput {
+	pub datacenter_id: Uuid,
+	pub pool_type: PoolType,
+}
+
+#[activity(GetDrainTimeout)]
+pub(crate) async fn get_drain_timeout(
+	ctx: &ActivityCtx,
+	input: &GetDrainTimeoutInput,
+) -> GlobalResult<u64> {
+	let dcs_res = ctx
+		.op(crate::ops::datacenter::get::Input {
+			datacenter_ids: vec![input.datacenter_id],
+		})
+		.await?;
+	let dc = unwrap!(dcs_res.datacenters.into_iter().next());
+
+	let pool = unwrap!(
+		dc.pools.iter().find(|p| p.pool_type == input.pool_type),
+		"datacenter does not have this type of pool configured"
+	);
+
+	Ok(pool.drain_timeout)
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
@@ -85,7 +121,9 @@ async fn drain_node(ctx: &ActivityCtx, input: &DrainNodeInput) -> GlobalResult<b
 			models::NodeUpdateDrainRequest {
 				drain_spec: Some(Box::new(models::DrainSpec {
 					// In nanoseconds. `drain_timeout` must be below 292 years for this to not overflow
-					deadline: Some((input.drain_timeout * 1000000) as i64),
+					deadline: Some(
+						(input.drain_timeout.saturating_sub(NOMAD_DRAIN_PADDING) * 1000000) as i64,
+					),
 					ignore_system_jobs: None,
 				})),
 				mark_eligible: None,

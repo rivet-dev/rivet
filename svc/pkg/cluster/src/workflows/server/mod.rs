@@ -289,7 +289,6 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 					datacenter_id: input.datacenter_id,
 					server_id: input.server_id,
 					pool_type: input.pool_type.clone(),
-					drain_timeout: pool.drain_timeout,
 				})
 				.await?;
 			}

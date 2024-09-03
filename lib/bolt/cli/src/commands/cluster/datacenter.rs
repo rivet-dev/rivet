@@ -282,6 +282,8 @@ mod render {
 		#[tabled(display_with = "display_pool_type")]
 		pub pool_type: Option<models::AdminClustersPoolType>,
 		#[tabled(display_with = "display_option")]
+		pub drain_timeout: Option<String>,
+		#[tabled(display_with = "display_option")]
 		pub min_count: Option<i32>,
 		#[tabled(display_with = "display_option")]
 		pub desired_count: Option<i32>,
@@ -303,6 +305,7 @@ mod render {
 			.chain(d.pools.iter().cloned().map(|pool| DcTableRow {
 				pool: PoolTableRow {
 					pool_type: Some(pool.pool_type),
+					drain_timeout: Some(format!("{}s", pool.drain_timeout / 1000)),
 					min_count: Some(pool.min_count),
 					desired_count: Some(pool.desired_count),
 					max_count: Some(pool.max_count),
