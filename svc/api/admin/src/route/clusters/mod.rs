@@ -34,21 +34,19 @@ pub async fn create(
 ) -> GlobalResult<models::AdminClustersCreateClusterResponse> {
 	let cluster_id = Uuid::new_v4();
 
-	let tags = json!({
-		"cluster_id": cluster_id,
-	});
 	let mut sub = ctx
-		.subscribe::<cluster::workflows::cluster::CreateComplete>(&tags)
+		.subscribe::<cluster::workflows::cluster::CreateComplete>(&json!({
+			"cluster_id": cluster_id,
+		}))
 		.await?;
 
-	ctx.dispatch_tagged_workflow(
-		&tags,
-		cluster::workflows::cluster::Input {
-			cluster_id,
-			owner_team_id: body.owner_team_id,
-			name_id: body.name_id,
-		},
-	)
+	ctx.workflow(cluster::workflows::cluster::Input {
+		cluster_id,
+		owner_team_id: body.owner_team_id,
+		name_id: body.name_id,
+	})
+	.tag("cluster_id", cluster_id)
+	.dispatch()
 	.await?;
 
 	sub.next().await?;

@@ -1,7 +1,6 @@
 use chirp_workflow::prelude::*;
 
 use cluster::types::TlsState;
-use serde_json::json;
 
 // How much time before the cert expires to renew it
 const EXPIRE_PADDING: i64 = util::duration::days(30);
@@ -38,13 +37,10 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 	.collect::<Vec<_>>();
 
 	for datacenter_id in updated_datacenter_ids {
-		ctx.tagged_signal(
-			&json!({
-				"datacenter_id": datacenter_id,
-			}),
-			cluster::workflows::datacenter::TlsRenew {},
-		)
-		.await?;
+		ctx.signal(cluster::workflows::datacenter::TlsRenew {})
+			.tag("datacenter_id", datacenter_id)
+			.send()
+			.await?;
 	}
 
 	Ok(())

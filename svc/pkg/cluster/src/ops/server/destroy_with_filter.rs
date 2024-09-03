@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 
 use chirp_workflow::prelude::*;
-use serde_json::json;
 
 use crate::types::Filter;
 
@@ -45,13 +44,10 @@ pub async fn cluster_server_destroy_with_filter(
 
 	// Destroy servers
 	for server_id in server_ids {
-		ctx.tagged_signal(
-			&json!({
-				"server_id": server_id,
-			}),
-			crate::workflows::server::Destroy {},
-		)
-		.await?;
+		ctx.signal(crate::workflows::server::Destroy {})
+			.tag("server_id", server_id)
+			.send()
+			.await?;
 	}
 
 	// Trigger scale event
@@ -61,13 +57,10 @@ pub async fn cluster_server_destroy_with_filter(
 		.map(|x| x.datacenter_id)
 		.collect::<HashSet<_>>();
 	for dc_id in dc_ids {
-		ctx.tagged_signal(
-			&json!({
-				"datacenter_id": dc_id,
-			}),
-			crate::workflows::datacenter::Scale {},
-		)
-		.await?;
+		ctx.signal(crate::workflows::datacenter::Scale {})
+			.tag("datacenter_id", dc_id)
+			.send()
+			.await?;
 	}
 
 	Ok(Output {})

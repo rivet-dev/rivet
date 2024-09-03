@@ -66,15 +66,13 @@ async fn handle(
 	.await?;
 
 	if let Some(cluster_id) = ctx.cluster_id {
-		chirp_workflow::compat::tagged_signal(
+		let sig = chirp_workflow::compat::signal(
 			ctx.op_ctx(),
-			&json!({
-				"cluster_id": cluster_id.as_uuid(),
-			}),
 			cluster::workflows::cluster::GameLink { game_id },
 		)
-		.await
-		.unwrap();
+		.await?;
+
+		sig.tag("cluster_id", cluster_id.as_uuid()).send().await?;
 	}
 
 	msg!([ctx] game::msg::create_complete(game_id) {

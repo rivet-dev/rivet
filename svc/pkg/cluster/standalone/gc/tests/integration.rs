@@ -65,14 +65,11 @@ async fn basic() {
 	.await
 	.unwrap();
 
-	ctx.tagged_signal(
-		&json!({
-			"server_id": server_id,
-		}),
-		cluster::workflows::server::Drain {},
-	)
-	.await
-	.unwrap();
+	ctx.signal(cluster::workflows::server::Drain {})
+		.tag("server_id", server_id)
+		.send()
+		.await
+		.unwrap();
 
 	// Run GC
 	let ts = util::timestamp::now() + DRAIN_TIMEOUT + 1;
@@ -104,14 +101,11 @@ async fn basic() {
 	}
 
 	// Clean up afterwards so we don't litter
-	ctx.tagged_signal(
-		&json!({
-			"server_id": server_id,
-		}),
-		cluster::workflows::server::Destroy {},
-	)
-	.await
-	.unwrap();
+	ctx.signal(cluster::workflows::server::Destroy {})
+		.tag("server_id", server_id)
+		.send()
+		.await
+		.unwrap();
 }
 
 async fn setup(ctx: &TestCtx) -> (Uuid, Uuid) {
@@ -132,16 +126,13 @@ async fn setup(ctx: &TestCtx) -> (Uuid, Uuid) {
 	}];
 	let provider = Provider::Linode;
 
-	ctx.dispatch_tagged_workflow(
-		&json!({
-			"cluster_id": cluster_id,
-		}),
-		cluster::workflows::cluster::Input {
-			cluster_id,
-			name_id: util::faker::ident(),
-			owner_team_id: None,
-		},
-	)
+	ctx.workflow(cluster::workflows::cluster::Input {
+		cluster_id,
+		name_id: util::faker::ident(),
+		owner_team_id: None,
+	})
+	.tag("cluster_id", cluster_id)
+	.dispatch()
 	.await
 	.unwrap();
 
@@ -151,25 +142,22 @@ async fn setup(ctx: &TestCtx) -> (Uuid, Uuid) {
 		}))
 		.await
 		.unwrap();
-	ctx.tagged_signal(
-		&json!({
-			"cluster_id": cluster_id,
-		}),
-		cluster::workflows::cluster::DatacenterCreate {
-			datacenter_id,
-			name_id: util::faker::ident(),
-			display_name: util::faker::ident(),
+	ctx.signal(cluster::workflows::cluster::DatacenterCreate {
+		datacenter_id,
+		name_id: util::faker::ident(),
+		display_name: util::faker::ident(),
 
-			provider: provider.clone(),
-			provider_datacenter_id: "us-southeast".to_string(),
-			provider_api_token: None,
+		provider: provider.clone(),
+		provider_datacenter_id: "us-southeast".to_string(),
+		provider_api_token: None,
 
-			pools: pools.clone(),
+		pools: pools.clone(),
 
-			build_delivery_method: BuildDeliveryMethod::TrafficServer,
-			prebakes_enabled: false,
-		},
-	)
+		build_delivery_method: BuildDeliveryMethod::TrafficServer,
+		prebakes_enabled: false,
+	})
+	.tag("cluster_id", cluster_id)
+	.send()
 	.await
 	.unwrap();
 
@@ -197,16 +185,13 @@ async fn setup(ctx: &TestCtx) -> (Uuid, Uuid) {
 	.await
 	.unwrap();
 
-	ctx.tagged_signal(
-		&json!({
-			"datacenter_id": datacenter_id,
-		}),
-		cluster::workflows::datacenter::ServerCreate {
-			server_id,
-			pool_type: pool_type.clone(),
-			tags: vec!["test".to_string()],
-		},
-	)
+	ctx.signal(cluster::workflows::datacenter::ServerCreate {
+		server_id,
+		pool_type: pool_type.clone(),
+		tags: vec!["test".to_string()],
+	})
+	.tag("datacenter_id", datacenter_id)
+	.send()
 	.await
 	.unwrap();
 

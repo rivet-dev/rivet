@@ -17,7 +17,7 @@ pub struct WorkflowBuilder<I: WorkflowInput> {
 	ray_id: Uuid,
 	input: I,
 	tags: serde_json::Map<String, serde_json::Value>,
-	error: Option<GlobalError>,
+	error: Option<BuilderError>,
 }
 
 impl<I: WorkflowInput> WorkflowBuilder<I>
@@ -66,7 +66,7 @@ where
 
 	pub async fn dispatch(self) -> GlobalResult<Uuid> {
 		if let Some(err) = self.error {
-			return Err(err);
+			return Err(err.into());
 		}
 
 		let workflow_name = I::Workflow::NAME;

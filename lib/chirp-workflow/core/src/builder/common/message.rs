@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use global_error::{GlobalError, GlobalResult};
+use global_error::GlobalResult;
 use serde::Serialize;
 
 use crate::{builder::BuilderError, ctx::MessageCtx, message::Message};
@@ -10,7 +10,7 @@ pub struct MessageBuilder<'a, M: Message> {
 	body: M,
 	tags: serde_json::Map<String, serde_json::Value>,
 	wait: bool,
-	error: Option<GlobalError>,
+	error: Option<BuilderError>,
 }
 
 impl<'a, M: Message> MessageBuilder<'a, M> {
@@ -66,7 +66,7 @@ impl<'a, M: Message> MessageBuilder<'a, M> {
 
 	pub async fn send(self) -> GlobalResult<()> {
 		if let Some(err) = self.error {
-			return Err(err);
+			return Err(err.into());
 		}
 
 		tracing::info!(msg_name=%M::NAME, tags=?self.tags, "dispatching message");

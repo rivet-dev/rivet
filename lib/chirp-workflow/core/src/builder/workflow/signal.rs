@@ -13,7 +13,7 @@ pub struct SignalBuilder<'a, T: Signal + Serialize> {
 	body: T,
 	to_workflow_id: Option<Uuid>,
 	tags: serde_json::Map<String, serde_json::Value>,
-	error: Option<GlobalError>,
+	error: Option<BuilderError>,
 }
 
 impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
@@ -69,7 +69,7 @@ impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
 
 	pub async fn send(self) -> GlobalResult<Uuid> {
 		if let Some(err) = self.error {
-			return Err(err);
+			return Err(err.into());
 		}
 
 		let event = self.ctx.current_history_event();

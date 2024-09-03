@@ -65,30 +65,27 @@ async fn server_create(ctx: TestCtx) {
 		.await
 		.unwrap();
 
-	ctx.dispatch_tagged_workflow(
-		&json!({
-			"server_id": server_id,
-		}),
-		ds::workflows::server::Input {
-			server_id,
-			env_id: *env_id,
-			cluster_id,
-			datacenter_id: faker_region.region_id.unwrap().as_uuid(),
-			resources: ds::types::ServerResources {
-				cpu_millicores: 100,
-				memory_mib: 200,
-			},
-			kill_timeout_ms: 0,
-			tags: vec![(String::from("test"), String::from("123"))]
-				.into_iter()
-				.collect(),
-			args: Vec::new(),
-			environment: env,
-			image_id: build_res.build_id.unwrap().as_uuid(),
-			network_mode: types::NetworkMode::Bridge,
-			network_ports: ports,
+	ctx.workflow(ds::workflows::server::Input {
+		server_id,
+		env_id: *env_id,
+		cluster_id,
+		datacenter_id: faker_region.region_id.unwrap().as_uuid(),
+		resources: ds::types::ServerResources {
+			cpu_millicores: 100,
+			memory_mib: 200,
 		},
-	)
+		kill_timeout_ms: 0,
+		tags: vec![(String::from("test"), String::from("123"))]
+			.into_iter()
+			.collect(),
+		args: Vec::new(),
+		environment: env,
+		image_id: build_res.build_id.unwrap().as_uuid(),
+		network_mode: types::NetworkMode::Bridge,
+		network_ports: ports,
+	})
+	.tag("server_id", server_id)
+	.dispatch()
 	.await
 	.unwrap();
 

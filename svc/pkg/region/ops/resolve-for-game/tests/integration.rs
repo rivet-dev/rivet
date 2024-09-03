@@ -7,15 +7,14 @@ async fn empty(ctx: TestCtx) {
 	let (cluster_id, datacenter_id, dc_name_id) = create_dc(&ctx).await;
 
 	let game_id = Uuid::new_v4();
-	chirp_workflow::compat::tagged_signal(
+	let sig = chirp_workflow::compat::signal(
 		ctx.op_ctx(),
-		&json!({
-			"cluster_id": cluster_id,
-		}),
 		cluster::workflows::cluster::GameLink { game_id },
 	)
 	.await
 	.unwrap();
+
+	sig.tag("cluster_id", cluster_id).send().await.unwrap();
 
 	let regions_res = op!([ctx] region_resolve_for_game {
 		game_id: Some(game_id.into()),
@@ -43,17 +42,18 @@ async fn create_dc(ctx: &TestCtx) -> (Uuid, Uuid, String) {
 	let dc_name_id = util::faker::ident();
 	let cluster_id = Uuid::new_v4();
 
-	chirp_workflow::compat::dispatch_tagged_workflow(
+	chirp_workflow::compat::workflow(
 		ctx.op_ctx(),
-		&json!({
-			"cluster_id": cluster_id,
-		}),
 		cluster::workflows::cluster::Input {
 			cluster_id,
 			name_id: util::faker::ident(),
 			owner_team_id: None,
 		},
 	)
+	.await
+	.unwrap()
+	.tag("cluster_id", cluster_id)
+	.dispatch()
 	.await
 	.unwrap();
 
@@ -66,11 +66,8 @@ async fn create_dc(ctx: &TestCtx) -> (Uuid, Uuid, String) {
 		)
 		.await
 		.unwrap();
-	chirp_workflow::compat::tagged_signal(
+	chirp_workflow::compat::signal(
 		ctx.op_ctx(),
-		&json!({
-			"cluster_id": cluster_id,
-		}),
 		cluster::workflows::cluster::DatacenterCreate {
 			datacenter_id,
 			name_id: dc_name_id.clone(),
@@ -86,6 +83,10 @@ async fn create_dc(ctx: &TestCtx) -> (Uuid, Uuid, String) {
 			prebakes_enabled: false,
 		},
 	)
+	.await
+	.unwrap()
+	.tag("cluster_id", cluster_id)
+	.send()
 	.await
 	.unwrap();
 

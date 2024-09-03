@@ -50,7 +50,7 @@ pub(crate) async fn cluster_datacenter(ctx: &mut WorkflowCtx, input: &Input) -> 
 		datacenter_id: input.datacenter_id,
 		renew: false,
 	})
-	.run()
+	.output()
 	.await?;
 
 	ctx.msg(CreateComplete {})
@@ -62,7 +62,7 @@ pub(crate) async fn cluster_datacenter(ctx: &mut WorkflowCtx, input: &Input) -> 
 	ctx.workflow(scale::Input {
 		datacenter_id: input.datacenter_id,
 	})
-	.run()
+	.output()
 	.await?;
 
 	ctx.repeat(|ctx| {
@@ -79,10 +79,14 @@ pub(crate) async fn cluster_datacenter(ctx: &mut WorkflowCtx, input: &Input) -> 
 					.await?;
 
 					// Scale
-					ctx.workflow(scale::Input { datacenter_id }).run().await?;
+					ctx.workflow(scale::Input { datacenter_id })
+						.output()
+						.await?;
 				}
 				Main::Scale(_) => {
-					ctx.workflow(scale::Input { datacenter_id }).run().await?;
+					ctx.workflow(scale::Input { datacenter_id })
+						.output()
+						.await?;
 				}
 				Main::ServerCreate(sig) => {
 					ctx.workflow(crate::workflows::server::Input {

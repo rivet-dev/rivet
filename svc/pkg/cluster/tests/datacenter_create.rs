@@ -13,40 +13,34 @@ async fn datacenter_create(ctx: TestCtx) {
 		.await
 		.unwrap();
 
-	ctx.dispatch_tagged_workflow(
-		&json!({
-			"cluster_id": cluster_id,
-		}),
-		cluster::workflows::cluster::Input {
-			cluster_id,
-			name_id: util::faker::ident(),
-			owner_team_id: None,
-		},
-	)
+	ctx.workflow(cluster::workflows::cluster::Input {
+		cluster_id,
+		name_id: util::faker::ident(),
+		owner_team_id: None,
+	})
+	.tag("cluster_id", cluster_id)
+	.dispatch()
 	.await
 	.unwrap();
 
 	sub.next().await.unwrap();
 
-	ctx.tagged_signal(
-		&json!({
-			"cluster_id": cluster_id,
-		}),
-		cluster::workflows::cluster::DatacenterCreate {
-			datacenter_id,
-			name_id: util::faker::ident(),
-			display_name: util::faker::ident(),
+	ctx.signal(cluster::workflows::cluster::DatacenterCreate {
+		datacenter_id,
+		name_id: util::faker::ident(),
+		display_name: util::faker::ident(),
 
-			provider: cluster::types::Provider::Linode,
-			provider_datacenter_id: "us-southeast".to_string(),
-			provider_api_token: None,
+		provider: cluster::types::Provider::Linode,
+		provider_datacenter_id: "us-southeast".to_string(),
+		provider_api_token: None,
 
-			pools: Vec::new(),
+		pools: Vec::new(),
 
-			build_delivery_method: cluster::types::BuildDeliveryMethod::TrafficServer,
-			prebakes_enabled: false,
-		},
-	)
+		build_delivery_method: cluster::types::BuildDeliveryMethod::TrafficServer,
+		prebakes_enabled: false,
+	})
+	.tag("cluster_id", cluster_id)
+	.send()
 	.await
 	.unwrap();
 

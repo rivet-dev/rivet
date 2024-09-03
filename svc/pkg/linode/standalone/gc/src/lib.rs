@@ -106,12 +106,11 @@ async fn run_for_linode_account(
 			let ctx = ctx.clone();
 
 			async move {
-				ctx.tagged_signal(
-					&json!({
-						"image_id": &image_id,
-					}),
-					linode::workflows::image::CreateComplete { image_id },
-				)
+				ctx.signal(linode::workflows::image::CreateComplete {
+					image_id: image_id.clone(),
+				})
+				.tag("image_id", image_id)
+				.send()
 				.await
 			}
 		})
@@ -146,13 +145,10 @@ async fn delete_expired_images(
 			let ctx = ctx.clone();
 
 			async move {
-				ctx.tagged_signal(
-					&json!({
-						"image_id": img.id,
-					}),
-					linode::workflows::image::Destroy {},
-				)
-				.await
+				ctx.signal(linode::workflows::image::Destroy {})
+					.tag("image_id", &img.id)
+					.send()
+					.await
 			}
 		})
 		.buffer_unordered(8)

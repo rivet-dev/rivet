@@ -13,29 +13,23 @@ async fn get_for_game(ctx: TestCtx) {
 		.await
 		.unwrap();
 
-	ctx.dispatch_tagged_workflow(
-		&json!({
-			"cluster_id": cluster_id,
-		}),
-		cluster::workflows::cluster::Input {
-			cluster_id,
-			name_id: util::faker::ident(),
-			owner_team_id: None,
-		},
-	)
+	ctx.workflow(cluster::workflows::cluster::Input {
+		cluster_id,
+		name_id: util::faker::ident(),
+		owner_team_id: None,
+	})
+	.tag("cluster_id", cluster_id)
+	.dispatch()
 	.await
 	.unwrap();
 
 	sub.next().await.unwrap();
 
-	ctx.tagged_signal(
-		&json!({
-			"cluster_id": cluster_id,
-		}),
-		cluster::workflows::cluster::GameLink { game_id },
-	)
-	.await
-	.unwrap();
+	ctx.signal(cluster::workflows::cluster::GameLink { game_id })
+		.tag("cluster_id", cluster_id)
+		.send()
+		.await
+		.unwrap();
 
 	let games_res = ctx
 		.op(cluster::ops::get_for_game::Input {

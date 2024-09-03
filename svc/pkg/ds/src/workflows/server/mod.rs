@@ -176,7 +176,7 @@ pub async fn ds_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()>
 		server_id: input.server_id,
 		override_kill_timeout_ms,
 	})
-	.run()
+	.output()
 	.await?;
 
 	Ok(())

@@ -3,7 +3,6 @@ use std::convert::TryInto;
 use chirp_workflow::prelude::*;
 use cluster::types::PoolType;
 use futures_util::FutureExt;
-use serde_json::json;
 
 #[derive(sqlx::FromRow)]
 struct ServerRow {
@@ -122,13 +121,10 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 
 	// Scale
 	for datacenter_id in datacenter_ids {
-		ctx.tagged_signal(
-			&json!({
-				"datacenter_id": datacenter_id,
-			}),
-			cluster::workflows::datacenter::Scale {},
-		)
-		.await?;
+		ctx.signal(cluster::workflows::datacenter::Scale {})
+			.tag("datacenter_id", datacenter_id)
+			.send()
+			.await?;
 	}
 
 	Ok(())

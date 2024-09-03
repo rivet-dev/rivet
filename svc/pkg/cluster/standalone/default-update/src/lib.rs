@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use chirp_workflow::prelude::*;
 use serde::Deserialize;
-use serde_json::json;
 
 #[derive(Deserialize)]
 struct Cluster {
@@ -142,13 +141,11 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 	if cluster_res.clusters.is_empty() {
 		tracing::warn!("creating default cluster");
 
-		ctx.dispatch_tagged_workflow(&json!({
-			"cluster_id": cluster_id,
-		}), cluster::workflows::cluster::Input {
+		ctx.workflow(cluster::workflows::cluster::Input {
 			cluster_id,
 			name_id: config.name_id.clone(),
 			owner_team_id: None,
-		}).await?;
+		}).tag("cluster_id", cluster_id,).dispatch().await?;
 	}
 
 	for existing_datacenter in &datacenters_res.datacenters {
@@ -199,18 +196,14 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 				})
 				.collect::<Vec<_>>();
 
-			ctx.tagged_signal(&json!({
-				"datacenter_id": datacenter.datacenter_id,
-			}), cluster::workflows::datacenter::Update {
+			ctx.signal(cluster::workflows::datacenter::Update {
 				pools: new_pools,
 				prebakes_enabled: Some(datacenter.prebakes_enabled),
-			}).await?;
+			}).tag("datacenter_id", datacenter.datacenter_id,).send().await?;
 		}
 		// Create new datacenter
 		else {
-			ctx.tagged_signal(&json!({
-				"cluster_id": cluster_id,
-			}), cluster::workflows::cluster::DatacenterCreate {
+			ctx.signal(cluster::workflows::cluster::DatacenterCreate {
 				datacenter_id: datacenter.datacenter_id,
 				name_id,
 				display_name: datacenter.display_name,
@@ -232,7 +225,7 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 	
 				build_delivery_method: datacenter.build_delivery_method.into(),
 				prebakes_enabled: datacenter.prebakes_enabled,
-			}).await?;
+			}).tag("cluster_id", cluster_id,).send().await?;
 		}
 	}
 

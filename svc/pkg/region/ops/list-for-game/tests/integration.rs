@@ -6,13 +6,14 @@ async fn empty(ctx: TestCtx) {
 	let (cluster_id, datacenter_id) = create_dc(&ctx).await;
 
 	let game_id = Uuid::new_v4();
-	chirp_workflow::compat::tagged_signal(
+	chirp_workflow::compat::signal(
 		ctx.op_ctx(),
-		&json!({
-			"cluster_id": cluster_id,
-		}),
 		cluster::workflows::cluster::GameLink { game_id },
 	)
+	.await
+	.unwrap()
+	.tag("cluster_id", cluster_id)
+	.send()
 	.await
 	.unwrap();
 
@@ -34,17 +35,18 @@ async fn create_dc(ctx: &TestCtx) -> (Uuid, Uuid) {
 	let datacenter_id = Uuid::new_v4();
 	let cluster_id = Uuid::new_v4();
 
-	chirp_workflow::compat::dispatch_tagged_workflow(
+	chirp_workflow::compat::workflow(
 		ctx.op_ctx(),
-		&json!({
-			"cluster_id": cluster_id,
-		}),
 		cluster::workflows::cluster::Input {
 			cluster_id,
 			name_id: util::faker::ident(),
 			owner_team_id: None,
 		},
 	)
+	.await
+	.unwrap()
+	.tag("cluster_id", cluster_id)
+	.dispatch()
 	.await
 	.unwrap();
 
@@ -57,11 +59,8 @@ async fn create_dc(ctx: &TestCtx) -> (Uuid, Uuid) {
 		)
 		.await
 		.unwrap();
-	chirp_workflow::compat::tagged_signal(
+	chirp_workflow::compat::signal(
 		ctx.op_ctx(),
-		&json!({
-			"cluster_id": cluster_id,
-		}),
 		cluster::workflows::cluster::DatacenterCreate {
 			datacenter_id,
 			name_id: util::faker::ident(),
@@ -77,6 +76,10 @@ async fn create_dc(ctx: &TestCtx) -> (Uuid, Uuid) {
 			prebakes_enabled: false,
 		},
 	)
+	.await
+	.unwrap()
+	.tag("cluster_id", cluster_id)
+	.send()
 	.await
 	.unwrap();
 

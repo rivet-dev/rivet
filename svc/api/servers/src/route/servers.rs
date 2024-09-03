@@ -83,62 +83,59 @@ pub async fn create(
 		}))
 		.await?;
 
-	ctx.dispatch_tagged_workflow(
-		&json!({
-			"server_id": server_id,
-		}),
-		ds::workflows::server::Input {
-			server_id,
-			env_id,
-			cluster_id,
-			datacenter_id: body.datacenter,
-			tags,
-			resources: (*body.resources).api_into(),
-			kill_timeout_ms: body
-				.lifecycle
-				.as_ref()
-				.and_then(|x| x.kill_timeout)
-				.unwrap_or_default(),
-			image_id: body.runtime.build,
-			args: body.runtime.arguments.unwrap_or_default(),
-			network_mode: body.network.mode.unwrap_or_default().api_into(),
-			environment: body.runtime.environment.unwrap_or_default(),
-			network_ports: unwrap!(body
-				.network
-				.ports
-				.into_iter()
-				.map(|(s, p)| Ok((
-					s,
-					ds::workflows::server::Port {
-						internal_port: p.internal_port,
-						routing: if let Some(routing) = p.routing {
-							match *routing {
-								models::ServersPortRouting {
-									game_guard: Some(_),
-									host: None,
-								} => ds::types::Routing::GameGuard {
-									protocol: p.protocol.api_into(),
-								},
-								models::ServersPortRouting {
-									game_guard: None,
-									host: Some(_),
-								} => ds::types::Routing::Host {
-									protocol: p.protocol.api_try_into()?,
-								},
-								models::ServersPortRouting { .. } => {
-									bail_with!(SERVERS_MUST_SPECIFY_ROUTING_TYPE)
-								}
-							}
-						} else {
-							ds::types::Routing::GameGuard {
+	ctx.workflow(ds::workflows::server::Input {
+		server_id,
+		env_id,
+		cluster_id,
+		datacenter_id: body.datacenter,
+		tags,
+		resources: (*body.resources).api_into(),
+		kill_timeout_ms: body
+			.lifecycle
+			.as_ref()
+			.and_then(|x| x.kill_timeout)
+			.unwrap_or_default(),
+		image_id: body.runtime.build,
+		args: body.runtime.arguments.unwrap_or_default(),
+		network_mode: body.network.mode.unwrap_or_default().api_into(),
+		environment: body.runtime.environment.unwrap_or_default(),
+		network_ports: unwrap!(body
+			.network
+			.ports
+			.into_iter()
+			.map(|(s, p)| Ok((
+				s,
+				ds::workflows::server::Port {
+					internal_port: p.internal_port,
+					routing: if let Some(routing) = p.routing {
+						match *routing {
+							models::ServersPortRouting {
+								game_guard: Some(_),
+								host: None,
+							} => ds::types::Routing::GameGuard {
 								protocol: p.protocol.api_into(),
+							},
+							models::ServersPortRouting {
+								game_guard: None,
+								host: Some(_),
+							} => ds::types::Routing::Host {
+								protocol: p.protocol.api_try_into()?,
+							},
+							models::ServersPortRouting { .. } => {
+								bail_with!(SERVERS_MUST_SPECIFY_ROUTING_TYPE)
 							}
 						}
+					} else {
+						ds::types::Routing::GameGuard {
+							protocol: p.protocol.api_into(),
+						}
 					}
-				)))
-				.collect::<GlobalResult<HashMap<_, _>>>()),
-		},
-	)
+				}
+			)))
+			.collect::<GlobalResult<HashMap<_, _>>>()),
+	})
+	.tag("server_id", server_id)
+	.dispatch()
 	.await?;
 
 	tokio::select! {
@@ -199,14 +196,11 @@ pub async fn destroy(
 		}))
 		.await?;
 
-	ctx.tagged_signal(
-		&json!({
-			"server_id": server_id,
-		}),
-		ds::workflows::server::Destroy {
-			override_kill_timeout_ms: query.override_kill_timeout,
-		},
-	)
+	ctx.signal(ds::workflows::server::Destroy {
+		override_kill_timeout_ms: query.override_kill_timeout,
+	})
+	.tag("server_id", server_id)
+	.send()
 	.await?;
 
 	sub.next().await?;

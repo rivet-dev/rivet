@@ -1,5 +1,4 @@
 use chirp_workflow::prelude::*;
-use serde_json::json;
 
 mod common;
 use common::{setup, Setup};
@@ -26,16 +25,13 @@ async fn server_provision(ctx: TestCtx) {
 	)
 	.await;
 
-	ctx.tagged_signal(
-		&json!({
-			"datacenter_id": datacenter_id,
-		}),
-		cluster::workflows::datacenter::ServerCreate {
-			server_id,
-			pool_type: dc.pools.first().unwrap().pool_type.clone(),
-			tags: vec!["test".to_string()],
-		},
-	)
+	ctx.signal(cluster::workflows::datacenter::ServerCreate {
+		server_id,
+		pool_type: dc.pools.first().unwrap().pool_type.clone(),
+		tags: vec!["test".to_string()],
+	})
+	.tag("datacenter_id", datacenter_id)
+	.send()
 	.await
 	.unwrap();
 
@@ -65,12 +61,9 @@ async fn server_provision(ctx: TestCtx) {
 	}
 
 	// Clean up afterwards so we don't litter
-	ctx.tagged_signal(
-		&json!({
-			"server_id": server_id,
-		}),
-		cluster::workflows::server::Destroy {},
-	)
-	.await
-	.unwrap();
+	ctx.signal(cluster::workflows::server::Destroy {})
+		.tag("server_id", server_id)
+		.send()
+		.await
+		.unwrap();
 }

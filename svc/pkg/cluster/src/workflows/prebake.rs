@@ -59,7 +59,7 @@ pub async fn cluster_prebake(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 						pool_type: input.pool_type.clone(),
 						initialize_immediately: false,
 					})
-					.run()
+					.output()
 					.await?;
 
 					// Create image

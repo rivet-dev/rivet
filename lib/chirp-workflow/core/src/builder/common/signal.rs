@@ -12,7 +12,7 @@ pub struct SignalBuilder<T: Signal + Serialize> {
 	body: T,
 	to_workflow_id: Option<Uuid>,
 	tags: serde_json::Map<String, serde_json::Value>,
-	error: Option<GlobalError>,
+	error: Option<BuilderError>,
 }
 
 impl<T: Signal + Serialize> SignalBuilder<T> {
@@ -69,7 +69,7 @@ impl<T: Signal + Serialize> SignalBuilder<T> {
 
 	pub async fn send(self) -> GlobalResult<Uuid> {
 		if let Some(err) = self.error {
-			return Err(err);
+			return Err(err.into());
 		}
 
 		let signal_id = Uuid::new_v4();

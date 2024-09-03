@@ -19,7 +19,7 @@ use crate::{
 };
 
 /// Max amount of workflows pulled from the database with each call to `pull_workflows`.
-const MAX_PULLED_WORKFLOWS: i64 = 10;
+const MAX_PULLED_WORKFLOWS: i64 = 50;
 // Base retry for query retry backoff
 const QUERY_RETRY_MS: usize = 750;
 /// Maximum times a query ran bu this database adapter is retried.

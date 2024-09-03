@@ -141,10 +141,10 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		);
 
 		let mut event = async_posthog::Event::new("cluster_beacon", &distinct_id);
-		event.insert_prop("$groups", &json!({ "cluster": util::env::cluster_id() }))?;
+		event.insert_prop("$groups", json!({ "cluster": util::env::cluster_id() }))?;
 		event.insert_prop(
 			"$set",
-			&json!({
+			json!({
 				"ns_id": util::env::namespace(),
 				"cluster_id": util::env::cluster_id(),
 			}),
@@ -156,7 +156,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		event.insert_prop("$group_key", util::env::cluster_id())?;
 		event.insert_prop(
 			"$group_set",
-			&json!({
+			json!({
 				"name": util::env::namespace(),
 			}),
 		)?;
@@ -177,7 +177,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		let mut event = async_posthog::Event::new("team_beacon", &distinct_id);
 		event.insert_prop(
 			"$groups",
-			&json!({
+			json!({
 				"cluster": util::env::cluster_id(),
 				"team": team_id,
 			}),
@@ -200,7 +200,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		event.insert_prop("$group_key", team_id)?;
 		event.insert_prop(
 			"$group_set",
-			&json!({
+			json!({
 				"display_name": team.display_name,
 				"create_ts": team.create_ts,
 			}),
@@ -217,7 +217,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		let mut event = async_posthog::Event::new("game_beacon", &distinct_id);
 		event.insert_prop(
 			"$groups",
-			&json!({
+			json!({
 				"cluster": util::env::cluster_id(),
 				"team": team_id,
 				"game": game_id,
@@ -242,7 +242,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		event.insert_prop("$group_key", game_id)?;
 		event.insert_prop(
 			"$group_set",
-			&json!({
+			json!({
 				"name_id": game.name_id,
 				"display_name": game.display_name,
 				"create_ts": game.create_ts,
@@ -305,7 +305,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		let mut event = async_posthog::Event::new("namespace_beacon", &distinct_id);
 		event.insert_prop(
 			"$groups",
-			&json!({
+			json!({
 				"cluster": util::env::cluster_id(),
 				"team": team_id,
 				"game": game_id,
@@ -334,7 +334,7 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		event.insert_prop("$group_key", game_id)?;
 		event.insert_prop(
 			"$group_set",
-			&json!({
+			json!({
 				"name_id": ns.name_id,
 				"display_name": ns.display_name,
 				"create_ts": ns.create_ts,

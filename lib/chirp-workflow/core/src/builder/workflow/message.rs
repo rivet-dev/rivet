@@ -12,7 +12,7 @@ pub struct MessageBuilder<'a, M: Message> {
 	body: M,
 	tags: serde_json::Map<String, serde_json::Value>,
 	wait: bool,
-	error: Option<GlobalError>,
+	error: Option<BuilderError>,
 }
 
 impl<'a, M: Message> MessageBuilder<'a, M> {
@@ -68,7 +68,7 @@ impl<'a, M: Message> MessageBuilder<'a, M> {
 
 	pub async fn send(self) -> GlobalResult<()> {
 		if let Some(err) = self.error {
-			return Err(err);
+			return Err(err.into());
 		}
 
 		let event = self.ctx.current_history_event();

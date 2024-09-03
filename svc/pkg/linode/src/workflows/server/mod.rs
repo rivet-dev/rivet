@@ -71,7 +71,7 @@ pub async fn linode_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult
 		linode_id: cleanup_ctx.linode_id,
 		firewall_id: cleanup_ctx.firewall_id,
 	})
-	.run()
+	.output()
 	.await?;
 
 	Ok(())

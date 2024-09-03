@@ -95,25 +95,22 @@ pub async fn create(
 		}))
 		.await?;
 
-	ctx.tagged_signal(
-		&json!({
-			"cluster_id": cluster_id,
-		}),
-		cluster::workflows::cluster::DatacenterCreate {
-			datacenter_id,
-			name_id: body.name_id.clone(),
-			display_name: body.display_name.clone(),
+	ctx.signal(cluster::workflows::cluster::DatacenterCreate {
+		datacenter_id,
+		name_id: body.name_id.clone(),
+		display_name: body.display_name.clone(),
 
-			provider: body.provider.api_into(),
-			provider_datacenter_id: body.provider_datacenter_id.clone(),
-			provider_api_token: None,
+		provider: body.provider.api_into(),
+		provider_datacenter_id: body.provider_datacenter_id.clone(),
+		provider_api_token: None,
 
-			pools,
+		pools,
 
-			build_delivery_method: body.build_delivery_method.api_into(),
-			prebakes_enabled: body.prebakes_enabled,
-		},
-	)
+		build_delivery_method: body.build_delivery_method.api_into(),
+		prebakes_enabled: body.prebakes_enabled,
+	})
+	.tag("cluster_id", cluster_id)
+	.send()
 	.await?;
 
 	sub.next().await?;
@@ -142,20 +139,17 @@ pub async fn update(
 		bail_with!(CLUSTER_DATACENTER_NOT_IN_CLUSTER);
 	}
 
-	ctx.tagged_signal(
-		&json!({
-			"datacenter_id": datacenter_id,
-		}),
-		cluster::workflows::datacenter::Update {
-			pools: body
-				.pools
-				.iter()
-				.cloned()
-				.map(ApiInto::api_into)
-				.collect::<Vec<_>>(),
-			prebakes_enabled: body.prebakes_enabled,
-		},
-	)
+	ctx.signal(cluster::workflows::datacenter::Update {
+		pools: body
+			.pools
+			.iter()
+			.cloned()
+			.map(ApiInto::api_into)
+			.collect::<Vec<_>>(),
+		prebakes_enabled: body.prebakes_enabled,
+	})
+	.tag("datacenter_id", datacenter_id)
+	.send()
 	.await?;
 
 	Ok(json!({}))

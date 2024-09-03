@@ -159,7 +159,7 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 					pool_type: input.pool_type.clone(),
 					initialize_immediately: true,
 				})
-				.run()
+				.output()
 				.await;
 
 			// If the server failed all attempts to install, clean it up
@@ -188,7 +188,7 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 			ctx.workflow(dns_create::Input {
 				server_id: input.server_id,
 			})
-			.run()
+			.output()
 			.await?;
 		}
 
@@ -223,14 +223,14 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 				ctx.workflow(dns_create::Input {
 					server_id: input.server_id,
 				})
-				.run()
+				.output()
 				.await?;
 			}
 			Main::DnsDelete(_) => {
 				ctx.workflow(dns_delete::Input {
 					server_id: input.server_id,
 				})
-				.run()
+				.output()
 				.await?;
 			}
 			Main::NomadRegistered(sig) => {
@@ -256,7 +256,7 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 					server_id: input.server_id,
 					pool_type: input.pool_type.clone(),
 				})
-				.run()
+				.output()
 				.await?;
 			}
 			Main::Undrain(_) => {
@@ -265,7 +265,7 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 					server_id: input.server_id,
 					pool_type: input.pool_type.clone(),
 				})
-				.run()
+				.output()
 				.await?;
 			}
 			Main::Taint(_) => {} // Only for state
@@ -664,7 +664,7 @@ async fn cleanup(
 			ctx.workflow(dns_delete::Input {
 				server_id: input.server_id,
 			})
-			.run()
+			.output()
 			.await?;
 		}
 	}

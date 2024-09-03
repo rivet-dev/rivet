@@ -13,16 +13,13 @@ async fn create(ctx: TestCtx) {
 		.await
 		.unwrap();
 
-	ctx.dispatch_tagged_workflow(
-		&json!({
-			"cluster_id": cluster_id,
-		}),
-		cluster::workflows::cluster::Input {
-			cluster_id,
-			name_id: util::faker::ident(),
-			owner_team_id: Some(owner_team_id),
-		},
-	)
+	ctx.workflow(cluster::workflows::cluster::Input {
+		cluster_id,
+		name_id: util::faker::ident(),
+		owner_team_id: Some(owner_team_id),
+	})
+	.tag("cluster_id", cluster_id)
+	.dispatch()
 	.await
 	.unwrap();
 

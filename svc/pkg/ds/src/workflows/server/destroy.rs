@@ -1,6 +1,5 @@
 use chirp_workflow::prelude::*;
 use futures_util::FutureExt;
-use serde_json::json;
 
 use crate::util::{signal_allocation, NOMAD_CONFIG};
 

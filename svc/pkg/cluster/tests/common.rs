@@ -34,16 +34,13 @@ pub async fn setup(ctx: &TestCtx, opts: Setup) -> SetupRes {
 		.await
 		.unwrap();
 
-	ctx.dispatch_tagged_workflow(
-		&json!({
-			"cluster_id": opts.cluster_id,
-		}),
-		cluster::workflows::cluster::Input {
-			cluster_id: opts.cluster_id,
-			name_id: util::faker::ident(),
-			owner_team_id: None,
-		},
-	)
+	ctx.workflow(cluster::workflows::cluster::Input {
+		cluster_id: opts.cluster_id,
+		name_id: util::faker::ident(),
+		owner_team_id: None,
+	})
+	.tag("cluster_id", opts.cluster_id)
+	.dispatch()
 	.await
 	.unwrap();
 
@@ -56,25 +53,22 @@ pub async fn setup(ctx: &TestCtx, opts: Setup) -> SetupRes {
 		.await
 		.unwrap();
 
-	ctx.tagged_signal(
-		&json!({
-			"cluster_id": opts.cluster_id,
-		}),
-		cluster::workflows::cluster::DatacenterCreate {
-			datacenter_id: opts.datacenter_id,
-			name_id: util::faker::ident(),
-			display_name: util::faker::ident(),
+	ctx.signal(cluster::workflows::cluster::DatacenterCreate {
+		datacenter_id: opts.datacenter_id,
+		name_id: util::faker::ident(),
+		display_name: util::faker::ident(),
 
-			provider: provider.clone(),
-			provider_datacenter_id: "us-southeast".to_string(),
-			provider_api_token: None,
+		provider: provider.clone(),
+		provider_datacenter_id: "us-southeast".to_string(),
+		provider_api_token: None,
 
-			pools: pools.clone(),
+		pools: pools.clone(),
 
-			build_delivery_method: cluster::types::BuildDeliveryMethod::TrafficServer,
-			prebakes_enabled: false,
-		},
-	)
+		build_delivery_method: cluster::types::BuildDeliveryMethod::TrafficServer,
+		prebakes_enabled: false,
+	})
+	.tag("cluster_id", opts.cluster_id)
+	.send()
 	.await
 	.unwrap();
 
