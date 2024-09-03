@@ -78,15 +78,14 @@ async fn worker(
 			.await?;
 
 			if run_row.is_none() {
-				if ctx.req_dt() > util::duration::minutes(5) {
-					tracing::error!("discarding stale message");
-					return Ok(());
-				} else {
-					retry_bail!("run not found, may be race condition with insertion");
-				}
+				tracing::error!(
+					?job_id,
+					"server not found, may be race condition with insertion"
+				);
+				return Ok(());
 			};
 
-			tracing::info!("run pending");
+			tracing::info!("server pending");
 
 			crate::workers::webhook::call(ctx, alloc_id.to_string()).await?;
 
@@ -129,12 +128,11 @@ async fn worker(
 			.await?;
 
 			let Some((run_id, start_ts)) = run_row else {
-				if ctx.req_dt() > util::duration::minutes(5) {
-					tracing::error!("discarding stale message");
-					return Ok(());
-				} else {
-					retry_bail!("run not found, may be race condition with insertion");
-				}
+				tracing::error!(
+					?job_id,
+					"server not found, may be race condition with insertion"
+				);
+				return Ok(());
 			};
 
 			crate::workers::webhook::call(ctx, alloc_id.to_string()).await?;
@@ -195,14 +193,17 @@ async fn worker(
 			.await?;
 
 			let Some((run_id, finish_ts)) = run_row else {
-				tracing::error!("run not found, may be race condition with insertion");
+				tracing::error!(
+					?job_id,
+					"server not found, may be race condition with insertion"
+				);
 				return Ok(());
 			};
 
 			crate::workers::webhook::call(ctx, alloc_id.to_string()).await?;
 
 			if finish_ts.is_none() {
-				tracing::info!("run finished");
+				tracing::info!("server finished");
 
 				// Publish message
 				//

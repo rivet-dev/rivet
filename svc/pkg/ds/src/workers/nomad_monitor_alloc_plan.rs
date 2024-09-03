@@ -121,7 +121,10 @@ async fn worker(
 
 	// Check if run found
 	let Some(DbOutput { server_id }) = db_output else {
-		tracing::error!("run not found, may be race condition with insertion");
+		tracing::error!(
+			?job_id,
+			"run not found, may be race condition with insertion"
+		);
 		return Ok(());
 	};
 

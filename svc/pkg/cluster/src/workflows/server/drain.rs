@@ -34,23 +34,13 @@ pub(crate) async fn cluster_server_drain(ctx: &mut WorkflowCtx, input: &Input) -
 
 	match input.pool_type {
 		PoolType::Job => {
-			let started_drain = ctx
+			ctx
 				.activity(DrainNodeInput {
 					datacenter_id: input.datacenter_id,
 					server_id: input.server_id,
 					drain_timeout,
 				})
 				.await?;
-
-			if !started_drain {
-				ctx.tagged_signal(
-					&json!({
-						"server_id": input.server_id,
-					}),
-					crate::workflows::server::NomadDrainComplete {},
-				)
-				.await?;
-			}
 		}
 		PoolType::Gg => {
 			ctx.tagged_signal(
@@ -101,7 +91,7 @@ struct DrainNodeInput {
 }
 
 #[activity(DrainNode)]
-async fn drain_node(ctx: &ActivityCtx, input: &DrainNodeInput) -> GlobalResult<bool> {
+async fn drain_node(ctx: &ActivityCtx, input: &DrainNodeInput) -> GlobalResult<()> {
 	let (nomad_node_id,) = sql_fetch_one!(
 		[ctx, (Option<String>,)]
 		"
@@ -149,8 +139,6 @@ async fn drain_node(ctx: &ActivityCtx, input: &DrainNodeInput) -> GlobalResult<b
 		{
 			if content == "node not found" {
 				tracing::warn!("node does not exist, not draining");
-
-				return Ok(false);
 			}
 		}
 
@@ -161,9 +149,7 @@ async fn drain_node(ctx: &ActivityCtx, input: &DrainNodeInput) -> GlobalResult<b
 			is_closed: true,
 		})
 		.await?;
-
-		Ok(true)
-	} else {
-		Ok(false)
 	}
+
+	Ok(())
 }

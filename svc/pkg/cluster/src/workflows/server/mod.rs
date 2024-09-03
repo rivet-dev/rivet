@@ -261,29 +261,6 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 				)
 				.await?;
 			}
-			Main::NomadDrainComplete(_) => {
-				match dc.provider {
-					Provider::Linode => {
-						// Job server draining is handled via cluster-gc for Linode
-					}
-					#[allow(unreachable_patterns)]
-					_ => {
-						ctx.activity(SetDrainCompleteInput {
-							server_id: input.server_id,
-						})
-						.await?;
-
-						// Scale
-						ctx.tagged_signal(
-							&json!({
-								"datacenter_id": input.datacenter_id,
-							}),
-							crate::workflows::datacenter::Scale {},
-						)
-						.await?;
-					}
-				}
-			}
 			Main::Drain(_) => {
 				ctx.workflow(drain::Input {
 					datacenter_id: input.datacenter_id,
@@ -783,14 +760,10 @@ impl CustomListener for State {
 		// Determine which signals to listen to
 		let mut signals = vec![Destroy::NAME, NomadRegistered::NAME];
 
-		if self.draining {
-			signals.push(NomadDrainComplete::NAME);
-
-			if !self.is_tainted {
-				signals.push(Undrain::NAME);
-			}
-		} else {
+		if !self.draining {
 			signals.push(Drain::NAME);
+		} else if !self.is_tainted {
+			signals.push(Undrain::NAME);
 		}
 
 		if !self.is_tainted {
@@ -852,9 +825,6 @@ pub struct NomadRegistered {
 	pub node_id: String,
 }
 
-#[signal("cluster_server_nomad_drain_complete")]
-pub struct NomadDrainComplete {}
-
 join_signal!(
 	Main,
 	[
@@ -864,7 +834,6 @@ join_signal!(
 		DnsCreate,
 		DnsDelete,
 		Destroy,
-		NomadRegistered,
-		NomadDrainComplete
+		NomadRegistered
 	]
 );
