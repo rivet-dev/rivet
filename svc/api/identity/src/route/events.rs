@@ -261,7 +261,7 @@ async fn fetch_lobby(
 	let (run_res, version) = tokio::try_join!(
 		// Fetch the job run
 		async {
-			op!([ctx] job_run_get {
+			op!([ctx] job_run::ops::get {
 				run_ids: vec![*run_id],
 			})
 			.await

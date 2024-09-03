@@ -81,7 +81,7 @@ async fn handle(
 
 	}
 
-	let job_res = op!([ctx] job_run_get {
+	let job_res = op!([ctx] job_run::ops::get {
 		run_ids: vec![run_id.into()],
 	})
 	.await?;

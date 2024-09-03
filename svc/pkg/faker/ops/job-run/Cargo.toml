@@ -12,7 +12,7 @@ prost = "0.10"
 
 faker-job-template = { path = "../job-template" }
 faker-region = { path = "../region" }
-job-run-get = { path = "../../../job-run/ops/get" }
+job-run = { path = "../../../job-run" }
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../../lib/chirp/worker" }

@@ -30,7 +30,7 @@ async fn cpu_stress(ctx: TestCtx) {
 	.unwrap();
 	let run_id = run_res.run_id.as_ref().unwrap();
 
-	let job_res = op!([ctx] job_run_get {
+	let job_res = op!([ctx] job_run::ops::get {
 		run_ids: vec![*run_id],
 	})
 	.await
@@ -50,7 +50,7 @@ async fn cpu_stress(ctx: TestCtx) {
 		tokio::time::sleep(Duration::from_secs(2)).await;
 
 		let now = util::timestamp::now();
-		let metrics_res = op!([ctx] job_run_metrics_log {
+		let metrics_res = op!([ctx] job_run::ops::metrics_log {
 			start: (now - util::duration::minutes(15)),
 			end: now,
 			step: 15000,
@@ -106,7 +106,7 @@ async fn memory_stress(ctx: TestCtx) {
 	.unwrap();
 	let run_id = run_res.run_id.as_ref().unwrap();
 
-	let job_res = op!([ctx] job_run_get {
+	let job_res = op!([ctx] job_run::ops::get {
 		run_ids: vec![*run_id],
 	})
 	.await
@@ -126,7 +126,7 @@ async fn memory_stress(ctx: TestCtx) {
 		tokio::time::sleep(Duration::from_secs(2)).await;
 
 		let now = util::timestamp::now();
-		let metrics_res = op!([ctx] job_run_metrics_log {
+		let metrics_res = op!([ctx] job_run::ops::metrics_log {
 			start: (now - util::duration::minutes(15)),
 			end: now,
 			step: 15000,

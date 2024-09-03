@@ -271,7 +271,7 @@ async fn get_lobby_addr(ctx: &TestCtx, lobby_id: Uuid, port: &str) -> (String, u
 	let lobby = lobby_res.lobbies.first().unwrap();
 	let run_id = lobby.run_id.unwrap();
 
-	let run_res = op!([ctx] job_run_get { run_ids: vec![run_id] })
+	let run_res = op!([ctx] job_run::ops::get { run_ids: vec![run_id] })
 		.await
 		.unwrap();
 	let run = run_res.runs.first().unwrap();
@@ -296,7 +296,7 @@ async fn get_lobby_host_ip(ctx: &TestCtx, lobby_id: Uuid) -> String {
 	let lobby = lobby_res.lobbies.first().unwrap();
 	let run_id = lobby.run_id.unwrap();
 
-	let run_res = op!([ctx] job_run_get { run_ids: vec![run_id] })
+	let run_res = op!([ctx] job_run::ops::get { run_ids: vec![run_id] })
 		.await
 		.unwrap();
 	let run = run_res.runs.first().unwrap();

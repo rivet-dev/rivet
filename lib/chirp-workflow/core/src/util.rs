@@ -85,23 +85,29 @@ pub mod time {
 	}
 
 	pub trait DurationToMillis {
-		fn to_millis(self) -> GlobalResult<i64>;
+		fn to_millis(self) -> GlobalResult<u64>;
 	}
 
 	impl DurationToMillis for i64 {
-		fn to_millis(self) -> GlobalResult<i64> {
+		fn to_millis(self) -> GlobalResult<u64> {
+			self.try_into().map_err(Into::into)
+		}
+	}
+
+	impl DurationToMillis for u64 {
+		fn to_millis(self) -> GlobalResult<u64> {
 			Ok(self)
 		}
 	}
 
 	impl DurationToMillis for Duration {
-		fn to_millis(self) -> GlobalResult<i64> {
+		fn to_millis(self) -> GlobalResult<u64> {
 			Ok(self.as_millis().try_into()?)
 		}
 	}
 
-	pub async fn sleep_until_ts(ts: i64) {
-		let target_time = UNIX_EPOCH + Duration::from_millis(ts as u64);
+	pub async fn sleep_until_ts(ts: u64) {
+		let target_time = UNIX_EPOCH + Duration::from_millis(ts);
 		if let Ok(sleep_duration) = target_time.duration_since(SystemTime::now()) {
 			tokio::time::sleep(sleep_duration).await;
 		}

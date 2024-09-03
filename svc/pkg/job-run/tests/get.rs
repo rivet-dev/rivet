@@ -14,7 +14,7 @@ async fn empty(ctx: TestCtx) {
 	let run_id = run_res.run_id.as_ref().unwrap().as_uuid();
 
 	// Read the run
-	let res = op!([ctx] job_run_get {
+	let res = op!([ctx] job_run::ops::get {
 		run_ids: vec![run_id.into(), Uuid::new_v4().into()],
 	})
 	.await

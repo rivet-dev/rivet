@@ -21,7 +21,7 @@ async fn raw(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	let get_res = op!([ctx] job_run_get {
+	let get_res = op!([ctx] job_run::ops::get {
 		run_ids: vec![run_id.into()],
 	})
 	.await

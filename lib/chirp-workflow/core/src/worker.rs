@@ -127,7 +127,7 @@ impl Worker {
 				async move {
 					// Sleep until deadline
 					if let Some(wake_deadline_ts) = wake_deadline_ts {
-						util::time::sleep_until_ts(wake_deadline_ts).await;
+						util::time::sleep_until_ts(wake_deadline_ts as u64).await;
 					}
 
 					ctx.run().await;

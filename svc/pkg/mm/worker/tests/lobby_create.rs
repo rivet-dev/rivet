@@ -223,7 +223,7 @@ async fn lobby_create_reuse_job_id(ctx: TestCtx) {
 		.flat_map(|x| x.run_id)
 		.collect::<Vec<_>>();
 
-	let runs = op!([ctx] job_run_get {
+	let runs = op!([ctx] job_run::ops::get {
 		run_ids: run_ids,
 	})
 	.await

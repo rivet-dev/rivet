@@ -1273,7 +1273,9 @@ impl WorkflowCtx {
 	}
 
 	pub async fn sleep<T: DurationToMillis>(&mut self, duration: T) -> GlobalResult<()> {
-		self.sleep_until(rivet_util::timestamp::now() + duration.to_millis()?)
+		let ts = rivet_util::timestamp::now() as u64 + duration.to_millis()?;
+
+		self.sleep_until(ts as i64)
 			.await
 	}
 

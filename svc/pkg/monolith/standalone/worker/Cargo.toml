@@ -27,7 +27,7 @@ ds = { path = "../../../ds" }
 external-worker = { path = "../../../external/worker" }
 game-user-worker = { path = "../../../game-user/worker" }
 job-log-worker = { path = "../../../job-log/worker" }
-job-run-worker = { path = "../../../job-run/worker" }
+job-run = { path = "../../../job-run" }
 kv-worker = { path = "../../../kv/worker" }
 mm-worker = { path = "../../../mm/worker" }
 team-invite-worker = { path = "../../../team-invite/worker" }

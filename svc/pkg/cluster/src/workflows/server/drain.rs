@@ -3,14 +3,10 @@ use nomad_client::{
 	apis::{configuration::Configuration, nodes_api},
 	models,
 };
-use rivet_operation::prelude::proto::backend::pkg::mm;
+use rivet_operation::prelude::proto::backend::pkg::*;
 use serde_json::json;
 
 use crate::types::PoolType;
-
-// In ms, a small amount of time to separate the completion of the drain in Nomad to the deletion of the
-// cluster server. We want the Nomad drain to complete first.
-const NOMAD_DRAIN_PADDING: u64 = 10000;
 
 lazy_static::lazy_static! {
 	static ref NOMAD_CONFIG: Configuration = nomad_util::new_config_from_env().unwrap();
@@ -34,13 +30,12 @@ pub(crate) async fn cluster_server_drain(ctx: &mut WorkflowCtx, input: &Input) -
 
 	match input.pool_type {
 		PoolType::Job => {
-			ctx
-				.activity(DrainNodeInput {
-					datacenter_id: input.datacenter_id,
-					server_id: input.server_id,
-					drain_timeout,
-				})
-				.await?;
+			ctx.activity(DrainNodeInput {
+				datacenter_id: input.datacenter_id,
+				server_id: input.server_id,
+				drain_timeout,
+			})
+			.await?;
 		}
 		PoolType::Gg => {
 			ctx.tagged_signal(
@@ -104,20 +99,11 @@ async fn drain_node(ctx: &ActivityCtx, input: &DrainNodeInput) -> GlobalResult<(
 	.await?;
 
 	if let Some(nomad_node_id) = nomad_node_id {
-		// Drain complete message is caught by `cluster-nomad-node-drain-complete`
-		let res = nodes_api::update_node_drain(
+		let res = nodes_api::update_node_eligibility(
 			&NOMAD_CONFIG,
 			&nomad_node_id,
-			models::NodeUpdateDrainRequest {
-				drain_spec: Some(Box::new(models::DrainSpec {
-					// In nanoseconds. `drain_timeout` must be below 292 years for this to not overflow
-					deadline: Some(
-						(input.drain_timeout.saturating_sub(NOMAD_DRAIN_PADDING) * 1000000) as i64,
-					),
-					ignore_system_jobs: None,
-				})),
-				mark_eligible: None,
-				meta: None,
+			models::NodeUpdateEligibilityRequest {
+				eligibility: Some("ineligible".to_string()),
 				node_id: Some(nomad_node_id.clone()),
 			},
 			None,
@@ -147,6 +133,18 @@ async fn drain_node(ctx: &ActivityCtx, input: &DrainNodeInput) -> GlobalResult<(
 			datacenter_id: Some(input.datacenter_id.into()),
 			nomad_node_id: nomad_node_id.clone(),
 			is_closed: true,
+		})
+		.await?;
+
+		msg!([ctx] job_run::msg::drain_all(&nomad_node_id) {
+			nomad_node_id: nomad_node_id.clone(),
+			drain_timeout: input.drain_timeout,
+		})
+		.await?;
+
+		msg!([ctx] ds::msg::drain_all(&nomad_node_id) {
+			nomad_node_id: nomad_node_id.clone(),
+			drain_timeout: input.drain_timeout,
 		})
 		.await?;
 	}

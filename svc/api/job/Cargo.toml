@@ -41,5 +41,5 @@ nomad-util = { path = "../../../lib/nomad-util" }
 nomad-client = "0.0.9"
 
 faker-job-run = { path = "../../pkg/faker/ops/job-run" }
-job-run-get = { path = "../../pkg/job-run/ops/get" }
+job-run = { path = "../../pkg/job-run" }
 token-create = { path = "../../pkg/token/ops/create" }

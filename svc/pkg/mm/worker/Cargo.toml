@@ -33,7 +33,7 @@ cluster = { path = "../../cluster" }
 game-get = { path = "../../game/ops/get" }
 game-namespace-get = { path = "../../game/ops/namespace-get" }
 game-version-get = { path = "../../game/ops/version-get" }
-job-run-get = { path = "../../job-run/ops/get" }
+job-run = { path = "../../job-run" }
 mm-config-game-get = { path = "../../mm-config/ops/game-get" }
 mm-config-lobby-group-resolve-version = { path = "../../mm-config/ops/lobby-group-resolve-version" }
 mm-config-namespace-get = { path = "../../mm-config/ops/namespace-get" }

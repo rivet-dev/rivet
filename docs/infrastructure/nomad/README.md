@@ -10,7 +10,7 @@ us run more than just Docker containers and has a much simpler and more flexible
 
 We use Nomad to run our Rivet services (see [`svc/`](../../../svc)), any 3rd party services that don't require
 a persistent volume or IP (see [`infra/tf/nomad/`](../../../infra/tf)), and all of the Rivet Serverless
-Lobbies for our customers (see [`job-run-create`](../../../svc/pkg/job-run/worker/src/workers/create/mod.rs)).
+Lobbies for our customers (see [`job-run-create`](../../../svc/pkg/job-run/src/workers/create/mod.rs)).
 
 ## Why bin pack and not spread?
 

@@ -49,7 +49,7 @@ game-user-link-get = { path = "../../pkg/game-user/ops/link-get" }
 game-user-recent-session-list = { path = "../../pkg/game-user/ops/recent-session-list" }
 game-user-recommend = { path = "../../pkg/game-user/ops/recommend" }
 identity-config-version-get = { path = "../../pkg/identity-config/ops/version-get" }
-job-run-get = { path = "../../pkg/job-run/ops/get" }
+job-run = { path = "../../pkg/job-run" }
 mm-config-lobby-group-resolve-version = { path = "../../pkg/mm-config/ops/lobby-group-resolve-version" }
 mm-config-version-get = { path = "../../pkg/mm-config/ops/version-get" }
 mm-lobby-get = { path = "../../pkg/mm/ops/lobby-get" }

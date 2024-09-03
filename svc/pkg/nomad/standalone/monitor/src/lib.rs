@@ -104,23 +104,5 @@ async fn handle(ctx: StandaloneCtx, event: nomad_util::monitor::NomadEvent) {
 		if let Err(err) = spawn_res {
 			tracing::error!(?err, "failed to spawn handle_event task");
 		}
-	} else if let Some(payload) = event
-		.decode::<node_drain::NodeDrain>("Node", "NodeDrain")
-		.unwrap()
-	{
-		// let client = shared_client.wrap_new("nomad-node-drain-monitor");
-		let spawn_res = tokio::task::Builder::new()
-			.name("nomad_node_drain_monitor::handle")
-			.spawn(async move {
-				match node_drain::handle(ctx, &payload).await {
-					Ok(_) => {}
-					Err(err) => {
-						tracing::error!(?err, ?payload, "error handling event");
-					}
-				}
-			});
-		if let Err(err) = spawn_res {
-			tracing::error!(?err, "failed to spawn handle_event task");
-		}
 	}
 }

@@ -27,7 +27,7 @@ faker-build = { path = "../../../faker/ops/build" }
 mm-config-version-get = { path = "../../../mm-config/ops/version-get" }
 game-namespace-version-set = { path = "../../../game/ops/namespace-version-set" }
 mm-lobby-get = { path = "../../../mm/ops/lobby-get" }
-job-run-get = { path = "../../../job-run/ops/get" }
+job-run = { path = "../../../job-run" }
 user-identity-create = { path = "../../../user-identity/ops/create" }
 token-create = { path = "../../../token/ops/create" }
 util-mm = { package = "rivet-util-mm", path = "../../../mm/util" }

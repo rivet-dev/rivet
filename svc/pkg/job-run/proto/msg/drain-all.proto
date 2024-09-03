@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.job_run.msg.drain_all;
+
+import "proto/common.proto";
+
+/// name = "msg-job-run-drain-all"
+/// parameters = [
+/// 	{ name = "nomad_node_id" },
+/// ]
+message Message {
+	string nomad_node_id = 1;
+	uint64 drain_timeout = 2;
+}

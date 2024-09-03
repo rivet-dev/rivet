@@ -83,8 +83,7 @@ game-validate = { path = "../../pkg/game/ops/validate" }
 game-version-get = { path = "../../pkg/game/ops/version-get" }
 game-version-list = { path = "../../pkg/game/ops/version-list" }
 game-version-validate = { path = "../../pkg/game/ops/version-validate" }
-job-run-get = { path = "../../pkg/job-run/ops/get" }
-job-run-metrics-log = { path = "../../pkg/job-run/ops/metrics-log" }
+job-run = { path = "../../pkg/job-run" }
 mm-config-lobby-group-get = { path = "../../pkg/mm-config/ops/lobby-group-get" }
 mm-config-lobby-group-resolve-version = { path = "../../pkg/mm-config/ops/lobby-group-resolve-version" }
 mm-config-namespace-config-set = { path = "../../pkg/mm-config/ops/namespace-config-set" }

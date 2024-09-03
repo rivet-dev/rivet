@@ -45,7 +45,6 @@ uuid = { version = "1", features = ["v4", "serde"] }
 build-get = { path = "../build/ops/get" }
 cluster = { path = "../cluster" }
 ip-info = { path = "../ip/ops/info" }
-job-run-get = { path = "../job-run/ops/get" }
 mm-config-version-get = { path = "../mm-config/ops/version-get" }
 mm-lobby-get = { path = "../mm/ops/lobby-get" }
 mm-lobby-list-for-user-id = { path = "../mm/ops/lobby-list-for-user-id" }

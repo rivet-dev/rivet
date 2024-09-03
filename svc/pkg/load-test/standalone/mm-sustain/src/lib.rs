@@ -264,7 +264,7 @@ async fn run_lobby_lifecycle(
 	// 	.await?;
 	// 	let lobby = unwrap!(lobby_res.lobbies.first());
 
-	// 	let run_res = op!([ctx] job_run_get {
+	// 	let run_res = op!([ctx] job_run::ops::get {
 	// 		run_ids: vec![unwrap!(lobby.run_id)],
 	// 	})
 	// 	.await?;
@@ -307,7 +307,7 @@ async fn get_lobby_addr(
 
 	let run_id = unwrap!(lobby.run_id);
 
-	let run_res = op!([ctx] job_run_get { run_ids: vec![run_id] }).await?;
+	let run_res = op!([ctx] job_run::ops::get { run_ids: vec![run_id] }).await?;
 	let run = unwrap!(run_res.runs.first());
 
 	let port = unwrap!(run

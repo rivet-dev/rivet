@@ -5,7 +5,7 @@ use proto::backend;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
-use crate::NEW_NOMAD_CONFIG;
+use crate::workers::NEW_NOMAD_CONFIG;
 
 // TODO: Only run create job if run job returns job not found
 

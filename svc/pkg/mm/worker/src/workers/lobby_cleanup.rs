@@ -159,7 +159,7 @@ async fn worker(ctx: &OperationContext<mm::msg::lobby_cleanup::Message>) -> Glob
 	if lobby_row.stop_ts.is_none() {
 		// Fetch run data
 		let run_json = if let Some(run_id) = lobby_row.run_id {
-			let run_res = op!([ctx] job_run_get {
+			let run_res = op!([ctx] job_run::ops::get {
 				run_ids: vec![run_id.into()],
 			})
 			.await?;

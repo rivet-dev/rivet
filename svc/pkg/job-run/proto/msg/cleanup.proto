@@ -10,7 +10,8 @@ import "proto/common.proto";
 /// 	{ name = "run_id" },
 /// ]
 message Message {
+	reserved 2;
+
 	rivet.common.Uuid run_id = 1;
-	bool skip_init_consume = 2;
 }
 

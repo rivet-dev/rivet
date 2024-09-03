@@ -4,7 +4,7 @@ use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
 use tokio::time::Duration;
 
-use crate::NEW_NOMAD_CONFIG;
+use crate::workers::NEW_NOMAD_CONFIG;
 
 mod create_job;
 

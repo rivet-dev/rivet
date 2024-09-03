@@ -140,10 +140,11 @@ async fn worker(
 			if start_ts.is_none() {
 				tracing::info!("run started");
 
-				msg!([ctx] job_run::msg::started(run_id) {
-					run_id: Some(run_id.into()),
-				})
-				.await?;
+				// TODO:
+				// msg!([ctx] job_run::msg::started(run_id) {
+				// 	run_id: Some(run_id.into()),
+				// })
+				// .await?;
 
 				Ok(())
 			} else {
@@ -205,20 +206,21 @@ async fn worker(
 			if finish_ts.is_none() {
 				tracing::info!("server finished");
 
-				// Publish message
-				//
-				// It's fine if this is called multiple times. The operation is
-				// idempotent and it's better to ensure the job gets cleaned up
-				// rather than forgotten.
-				msg!([ctx] job_run::msg::cleanup(run_id) {
-					run_id: Some(run_id.into()),
-					..Default::default()
-				})
-				.await?;
-				msg!([ctx] job_run::msg::finished(run_id) {
-					run_id: Some(run_id.into()),
-				})
-				.await?;
+				// TODO:
+				// // Publish message
+				// //
+				// // It's fine if this is called multiple times. The operation is
+				// // idempotent and it's better to ensure the job gets cleaned up
+				// // rather than forgotten.
+				// msg!([ctx] job_run::msg::cleanup(run_id) {
+				// 	run_id: Some(run_id.into()),
+				// 	..Default::default()
+				// })
+				// .await?;
+				// msg!([ctx] job_run::msg::finished(run_id) {
+				// 	run_id: Some(run_id.into()),
+				// })
+				// .await?;
 
 				Ok(())
 			} else {

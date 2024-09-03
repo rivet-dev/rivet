@@ -3,7 +3,7 @@ use proto::backend::{self, pkg::*};
 use redis::AsyncCommands;
 use serde::Deserialize;
 
-use crate::NEW_NOMAD_CONFIG;
+use crate::workers::NEW_NOMAD_CONFIG;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]

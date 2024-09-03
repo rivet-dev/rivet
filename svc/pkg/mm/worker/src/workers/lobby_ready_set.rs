@@ -7,7 +7,7 @@ use tokio::time::Duration;
 ///
 /// Traefik updates every 500 ms and we give an extra 500 ms for grace.
 ///
-/// See also svc/pkg/job-run/worker/src/workers/create/mod.rs @ TRAEFIK_GRACE
+/// See also svc/pkg/job-run/src/workers/create/mod.rs @ TRAEFIK_GRACE
 const TRAEFIK_GRACE_MS: i64 = 1_000;
 
 lazy_static::lazy_static! {

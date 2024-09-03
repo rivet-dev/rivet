@@ -233,17 +233,17 @@ macro_rules! msg {
 /// Small wrapper around a rust operation call to provide context and handle trace.
 #[macro_export]
 macro_rules! op {
-	([$container:expr] $mod:ident { $($name:ident: $value:expr),* $(,)? }) => {
-		$container.op_ctx().call::<::$mod::Operation>(
+	([$container:expr] $($mod:ident)::* { $($name:ident: $value:expr),* $(,)? }) => {
+		$container.op_ctx().call::<::$($mod)::*::Operation>(
 			#[allow(clippy::needless_update)]
-			::$mod::__Request {
+			::$($mod)::*::__Request {
 				$($name: $value,)*
 				..Default::default()
 			},
 		)
 	};
-	([$container:expr] $mod:ident { $($name:ident: $value:expr,)* ..Default::default() }) => {
-		op!([$container] $mod { $($name: $value,)* })
+	([$container:expr] $($mod:ident)::* { $($name:ident: $value:expr,)* ..Default::default() }) => {
+		op!([$container] $($mod)::* { $($name: $value,)* })
 	};
 
 	// TODO: Does nothing different

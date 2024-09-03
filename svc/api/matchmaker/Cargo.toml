@@ -46,7 +46,7 @@ game-namespace-resolve-url = { path = "../../pkg/game/ops/namespace-resolve-url"
 game-resolve-namespace-id = { path = "../../pkg/game/ops/resolve-namespace-id" }
 game-user-get = { path = "../../pkg/game-user/ops/get" }
 captcha-hcaptcha-config-get = { path = "../../pkg/captcha/ops/hcaptcha-config-get" }
-job-run-get = { path = "../../pkg/job-run/ops/get" }
+job-run = { path = "../../pkg/job-run" }
 mm-config-lobby-group-resolve-version = { path = "../../pkg/mm-config/ops/lobby-group-resolve-version" }
 mm-config-version-get = { path = "../../pkg/mm-config/ops/version-get" }
 mm-dev-player-token-create = { path = "../../pkg/mm/ops/dev-player-token-create" }

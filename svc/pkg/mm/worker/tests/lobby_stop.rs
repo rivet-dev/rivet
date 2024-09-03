@@ -25,7 +25,7 @@ async fn lobby_stop(ctx: TestCtx) {
 	let lobby_data = lobby_get.lobbies.first().unwrap();
 	let run_id = lobby_data.run_id.as_ref().unwrap().as_uuid();
 
-	let run_get = op!([ctx] job_run_get {
+	let run_get = op!([ctx] job_run::ops::get {
 		run_ids: vec![run_id.into()],
 	})
 	.await

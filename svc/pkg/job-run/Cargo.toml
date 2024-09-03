@@ -1,0 +1,52 @@
+[package]
+name = "job-run"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../../../lib/chirp/client" }
+chirp-worker = { path = "../../../lib/chirp/worker" }
+chirp-workflow = { path = "../../../lib/chirp-workflow/core" }
+chrono = "0.4"
+cjson = "0.1"
+hex = "0.4"
+indoc = "1.0"
+lazy_static = "1.4.0"
+nomad-client = "0.0.9"
+nomad-util = { path = "../../../lib/nomad-util" }
+rand = "0.8"
+reqwest = "0.11"
+rivet-health-checks = { path = "../../../lib/health-checks" }
+rivet-metrics = { path = "../../../lib/metrics" }
+rivet-operation = { path = "../../../lib/operation/core" }
+rivet-runtime = { path = "../../../lib/runtime" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_urlencoded = "0.7.0"
+sha2 = "0.10"
+util-job = { package = "rivet-util-job", path = "../job/util" }
+
+region-get = { path = "../region/ops/get" }
+token-create = { path = "../token/ops/create" }
+
+[dependencies.nomad_client_new]
+package = "nomad_client"
+git = "https://github.com/rivet-gg/nomad-client"
+rev = "abb66bf0c30c7ff5b0c695dae952481c33e538b5" # pragma: allowlist secret
+
+[dependencies.sqlx]
+git = "https://github.com/rivet-gg/sqlx"
+rev = "08d6e61aa0572e7ec557abbedb72cebb96e1ac5b"
+default-features = false
+features = [ "json" ]
+
+[dev-dependencies]
+rustls = "0.20"
+webpki = "0.22"
+webpki-roots = "0.22"
+
+faker-job-run = { path = "../faker/ops/job-run" }
+faker-job-template = { path = "../faker/ops/job-template" }
+faker-region = { path = "../faker/ops/region" }

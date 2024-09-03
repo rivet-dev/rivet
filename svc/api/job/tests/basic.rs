@@ -106,7 +106,7 @@
 // 	let run_id = res.run_id.unwrap().as_uuid();
 
 // 	// Check the run exists and that `job_run` is not broken
-// 	let runs_res = op!([ctx] job_run_get {
+// 	let runs_res = op!([ctx] job_run::ops::get {
 // 		run_ids: vec![run_id.into()],
 // 	})
 // 	.await
@@ -138,7 +138,7 @@
 
 // 		tokio::time::sleep(Duration::from_secs(2)).await;
 
-// 		let run_res = op!([ctx] job_run_get {
+// 		let run_res = op!([ctx] job_run::ops::get {
 // 			run_ids: vec![run_id.into()],
 // 		})
 // 		.await
@@ -171,7 +171,7 @@
 
 // 		cleanup_sub.next().await.unwrap();
 
-// 		let run_res = op!([ctx] job_run_get {
+// 		let run_res = op!([ctx] job_run::ops::get {
 // 			run_ids: vec![run_id.into()],
 // 		})
 // 		.await

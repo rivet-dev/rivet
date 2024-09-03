@@ -1,12 +1,13 @@
 [service]
-name = "job-run-worker"
+name = "job-run"
 
 [runtime]
 kind = "rust"
 
-[consumer]
+[package]
+
+[secrets]
 
 [databases]
 db-job-state = {}
 redis-job = {}
-

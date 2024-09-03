@@ -86,7 +86,7 @@ pub async fn get_lobby(
 	let metrics = if let Some(run) = lobby.run {
 		let now = util::timestamp::now();
 		if let Some(dispatched_job_id) = run.dispatched_job_id {
-			let metrics_res = op!([ctx] job_run_metrics_log {
+			let metrics_res = op!([ctx] job_run::ops::metrics_log {
 				start: now - util::duration::minutes(15),
 				end: now,
 				step: 15000,
@@ -146,7 +146,7 @@ async fn fetch_lobby_logs(ctx: &Ctx<Auth>, lobby_ids: Vec<Uuid>) -> GlobalResult
 		.collect::<HashSet<Uuid>>();
 
 	// Get runs
-	let run_res = op!([ctx] job_run_get {
+	let run_res = op!([ctx] job_run::ops::get {
 		run_ids: run_ids
 			.clone()
 			.into_iter()

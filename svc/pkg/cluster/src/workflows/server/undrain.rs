@@ -67,13 +67,11 @@ async fn undrain_node(ctx: &ActivityCtx, input: &UndrainNodeInput) -> GlobalResu
 	.await?;
 
 	if let Some(nomad_node_id) = nomad_node_id {
-		let res = nodes_api::update_node_drain(
+		let res = nodes_api::update_node_eligibility(
 			&NOMAD_CONFIG,
 			&nomad_node_id,
-			models::NodeUpdateDrainRequest {
-				drain_spec: None,
-				mark_eligible: Some(true),
-				meta: None,
+			models::NodeUpdateEligibilityRequest {
+				eligibility: Some("eligible".to_string()),
 				node_id: Some(nomad_node_id.clone()),
 			},
 			None,
@@ -94,9 +92,7 @@ async fn undrain_node(ctx: &ActivityCtx, input: &UndrainNodeInput) -> GlobalResu
 		)) = res
 		{
 			if content == "node not found" {
-				tracing::warn!("node does not exist, not undraining");
-
-				return Ok(());
+				tracing::warn!("node does not exist, not draining");
 			}
 		}
 

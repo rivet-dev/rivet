@@ -8,7 +8,7 @@
 | Drain nomad job                | `datacenter.drain_timeout`         | How long the Nomad jobs have to stop                                                                | `svc/pkg/mm/worker/src/workers/lobby_create/nomad_job.rs` (`nodes_api::update_node_drain`)                        |
 | Nomad job kill timeout         | Something really high              | Always be higher than anything passed to `datacenter.drain_timeout`. We'll manually send `SIGKILL`. | `svc/pkg/mm/worker/src/workers/lobby_create/nomad_job.rs` (`kill_timeout`)                                        |
 | job-run-stop delete Nomad job  | Nomad job kill timeout (see above) | This causes Nomad to send a `SIGTERM`                                                               | `svc/pkg/mm/worker/src/workers/lobby_create/nomad_job.rs` (`kill_timeout`)                                        |
-| job-run-stop manually kill job | `util_job::JOB_STOP_TIMEOUT` (30s) | This lets us configure a lower kill timeout when manually stopping a job                            | `svc/pkg/job-run/worker/src/workers/stop.rs` (`allocations_api::signal_allocation`)                               |
+| job-run-stop manually kill job | `util_job::JOB_STOP_TIMEOUT` (30s) | This lets us configure a lower kill timeout when manually stopping a job                            | `svc/pkg/job-run/src/workers/stop.rs` (`allocations_api::signal_allocation`)                                      |
 
 ## Signals 101
 

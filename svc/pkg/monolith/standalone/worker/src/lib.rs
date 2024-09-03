@@ -29,7 +29,7 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 		external_worker,
 		game_user_worker,
 		job_log_worker,
-		job_run_worker,
+		job_run,
 		kv_worker,
 		mm_worker,
 		team_invite_worker,

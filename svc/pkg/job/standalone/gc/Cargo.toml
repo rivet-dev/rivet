@@ -43,4 +43,4 @@ default-features = false
 chirp-worker = { path = "../../../../../lib/chirp/worker" }
 
 faker-job-run = { path = "../../../faker/ops/job-run" }
-job-run-get = { path = "../../../job-run/ops/get" }
+job-run = { path = "../../../job-run" }

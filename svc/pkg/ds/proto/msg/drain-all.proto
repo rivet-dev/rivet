@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package rivet.backend.pkg.ds.msg.drain_all;
+
+import "proto/common.proto";
+
+/// name = "msg-ds-drain-all"
+/// parameters = [
+/// 	{ name = "nomad_node_id" },
+/// ]
+message Message {
+	string nomad_node_id = 1;
+	uint64 drain_timeout = 2;
+}

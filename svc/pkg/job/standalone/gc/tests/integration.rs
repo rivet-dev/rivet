@@ -36,7 +36,7 @@ async fn test_kill_orphaned_job(ctx: TestCtx) {
 	let run_res = op!([ctx] faker_job_run {}).await.unwrap();
 	let run_id = run_res.run_id.as_ref().unwrap().as_uuid();
 
-	let run_get_res = op!([ctx] job_run_get {
+	let run_get_res = op!([ctx] job_run::ops::get {
 		run_ids: vec![run_id.into()],
 	})
 	.await
