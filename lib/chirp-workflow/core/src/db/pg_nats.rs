@@ -20,6 +20,8 @@ use crate::{
 
 /// Max amount of workflows pulled from the database with each call to `pull_workflows`.
 const MAX_PULLED_WORKFLOWS: i64 = 10;
+// Base retry for query retry backoff
+const QUERY_RETRY_MS: usize = 750;
 /// Maximum times a query ran bu this database adapter is retried.
 const MAX_QUERY_RETRIES: usize = 16;
 
@@ -73,20 +75,31 @@ impl DatabasePgNats {
 		Fut: std::future::Future<Output = WorkflowResult<T>> + 'a,
 		T: 'a,
 	{
+		let mut backoff = rivet_util::Backoff::new(3, None, QUERY_RETRY_MS, 50);
+
 		for _ in 0..MAX_QUERY_RETRIES {
 			match cb().await {
 				Err(WorkflowError::Sqlx(err)) => {
-					if let Some(db_err) = err.as_database_error() {
-						if db_err
-							.message()
-							.contains("TransactionRetryWithProtoRefreshError")
-						{
-							tracing::info!(message=%db_err.message(), "transaction retry");
-							continue;
+					use sqlx::Error::*;
+					match &err {
+						// Retry transaction errors immediately
+						Database(db_err) => {
+							if db_err
+								.message()
+								.contains("TransactionRetryWithProtoRefreshError")
+							{
+								tracing::info!(message=%db_err.message(), "transaction retry");
+							}
 						}
+						// Retry internal errors with a backoff
+						Io(_) | Tls(_) | Protocol(_) | PoolTimedOut | PoolClosed
+						| WorkerCrashed => {
+							tracing::info!(?err, "query retry");
+							backoff.tick().await;
+						}
+						// Throw error
+						_ => return Err(WorkflowError::Sqlx(err)),
 					}
-
-					return Err(WorkflowError::Sqlx(err));
 				}
 				x => return x,
 			}
