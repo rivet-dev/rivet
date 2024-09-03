@@ -3,7 +3,6 @@ use std::convert::TryInto;
 use chirp_workflow::prelude::*;
 use futures_util::FutureExt;
 use rivet_operation::prelude::{proto::backend, Message};
-use serde_json::json;
 
 pub mod scale;
 pub mod tls_issue;
@@ -51,20 +50,19 @@ pub(crate) async fn cluster_datacenter(ctx: &mut WorkflowCtx, input: &Input) -> 
 		datacenter_id: input.datacenter_id,
 		renew: false,
 	})
+	.run()
 	.await?;
 
-	ctx.msg(
-		json!({
-			"datacenter_id": input.datacenter_id,
-		}),
-		CreateComplete {},
-	)
-	.await?;
+	ctx.msg(CreateComplete {})
+		.tag("datacenter_id", input.datacenter_id)
+		.send()
+		.await?;
 
 	// Scale initially
 	ctx.workflow(scale::Input {
 		datacenter_id: input.datacenter_id,
 	})
+	.run()
 	.await?;
 
 	ctx.repeat(|ctx| {
@@ -81,30 +79,28 @@ pub(crate) async fn cluster_datacenter(ctx: &mut WorkflowCtx, input: &Input) -> 
 					.await?;
 
 					// Scale
-					ctx.workflow(scale::Input { datacenter_id }).await?;
+					ctx.workflow(scale::Input { datacenter_id }).run().await?;
 				}
 				Main::Scale(_) => {
-					ctx.workflow(scale::Input { datacenter_id }).await?;
+					ctx.workflow(scale::Input { datacenter_id }).run().await?;
 				}
 				Main::ServerCreate(sig) => {
-					ctx.dispatch_tagged_workflow(
-						&json!({
-							"server_id": sig.server_id,
-						}),
-						crate::workflows::server::Input {
-							datacenter_id,
-							server_id: sig.server_id,
-							pool_type: sig.pool_type,
-							tags: sig.tags,
-						},
-					)
+					ctx.workflow(crate::workflows::server::Input {
+						datacenter_id,
+						server_id: sig.server_id,
+						pool_type: sig.pool_type,
+						tags: sig.tags,
+					})
+					.tag("server_id", sig.server_id)
+					.dispatch()
 					.await?;
 				}
 				Main::TlsRenew(_) => {
-					ctx.dispatch_workflow(tls_issue::Input {
+					ctx.workflow(tls_issue::Input {
 						datacenter_id,
 						renew: true,
 					})
+					.dispatch()
 					.await?;
 				}
 			}

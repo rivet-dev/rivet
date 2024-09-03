@@ -5,7 +5,6 @@ use std::{
 
 use chirp_workflow::prelude::*;
 use rand::Rng;
-use serde_json::json;
 
 pub(crate) mod dns_create;
 pub(crate) mod dns_delete;
@@ -59,13 +58,14 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 
 		// Start custom image creation process
 		if image_res.updated {
-			ctx.dispatch_workflow(crate::workflows::prebake::Input {
+			ctx.workflow(crate::workflows::prebake::Input {
 				datacenter_id: input.datacenter_id,
 				provider: dc.provider.clone(),
 				pool_type: input.pool_type.clone(),
 				install_script_hash: crate::util::INSTALL_SCRIPT_HASH.to_string(),
 				tags: Vec::new(),
 			})
+			.dispatch()
 			.await?;
 		}
 
@@ -92,25 +92,22 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 		match dc.provider {
 			Provider::Linode => {
 				let workflow_id = ctx
-					.dispatch_tagged_workflow(
-						&json!({
-							"server_id": input.server_id,
-						}),
-						linode::workflows::server::Input {
-							server_id: input.server_id,
-							provider_datacenter_id: dc.provider_datacenter_id.clone(),
-							custom_image: custom_image.clone(),
-							api_token: dc.provider_api_token.clone(),
-							hardware: hardware.provider_hardware.clone(),
-							firewall_preset: match input.pool_type {
-								PoolType::Job => linode::types::FirewallPreset::Job,
-								PoolType::Gg => linode::types::FirewallPreset::Gg,
-								PoolType::Ats => linode::types::FirewallPreset::Ats,
-							},
-							vlan_ip: Some(vlan_ip),
-							tags: input.tags.clone(),
+					.workflow(linode::workflows::server::Input {
+						server_id: input.server_id,
+						provider_datacenter_id: dc.provider_datacenter_id.clone(),
+						custom_image: custom_image.clone(),
+						api_token: dc.provider_api_token.clone(),
+						hardware: hardware.provider_hardware.clone(),
+						firewall_preset: match input.pool_type {
+							PoolType::Job => linode::types::FirewallPreset::Job,
+							PoolType::Gg => linode::types::FirewallPreset::Gg,
+							PoolType::Ats => linode::types::FirewallPreset::Ats,
 						},
-					)
+						vlan_ip: Some(vlan_ip),
+						tags: input.tags.clone(),
+					})
+					.tag("server_id", input.server_id)
+					.dispatch()
 					.await?;
 
 				match ctx.listen::<Linode>().await? {
@@ -162,40 +159,36 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 					pool_type: input.pool_type.clone(),
 					initialize_immediately: true,
 				})
+				.run()
 				.await;
 
 			// If the server failed all attempts to install, clean it up
-			match ctx.catch_unrecoverable(install_res)? {
-				Ok(_) => {}
-				Err(err) => {
-					tracing::warn!(?err, "failed installing server, cleaning up");
+			if let Err(err) = ctx.catch_unrecoverable(install_res)? {
+				tracing::warn!(?err, "failed installing server, cleaning up");
 
-					ctx.activity(MarkDestroyedInput {
-						server_id: input.server_id,
-					})
-					.await?;
+				ctx.activity(MarkDestroyedInput {
+					server_id: input.server_id,
+				})
+				.await?;
 
-					cleanup(ctx, input, &dc.provider, provider_server_workflow_id, false).await?;
+				cleanup(ctx, input, &dc.provider, provider_server_workflow_id, false).await?;
 
-					return Err(err);
-				}
+				return Err(err);
 			}
 		}
 
 		// Scale to get rid of tainted servers
-		ctx.tagged_signal(
-			&json!({
-				"datacenter_id": input.datacenter_id,
-			}),
-			crate::workflows::datacenter::Scale {},
-		)
-		.await?;
+		ctx.signal(crate::workflows::datacenter::Scale {})
+			.tag("datacenter_id", input.datacenter_id)
+			.send()
+			.await?;
 
 		// Create DNS record because the server is already installed
 		if let PoolType::Gg = input.pool_type {
 			ctx.workflow(dns_create::Input {
 				server_id: input.server_id,
 			})
+			.run()
 			.await?;
 		}
 
@@ -214,13 +207,10 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 		.await?;
 
 		// Scale to bring up a new server to take this server's place
-		ctx.tagged_signal(
-			&json!({
-				"datacenter_id": input.datacenter_id,
-			}),
-			crate::workflows::datacenter::Scale {},
-		)
-		.await?;
+		ctx.signal(crate::workflows::datacenter::Scale {})
+			.tag("datacenter_id", input.datacenter_id)
+			.send()
+			.await?;
 
 		bail!("failed all attempts to provision server");
 	};
@@ -233,12 +223,14 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 				ctx.workflow(dns_create::Input {
 					server_id: input.server_id,
 				})
+				.run()
 				.await?;
 			}
 			Main::DnsDelete(_) => {
 				ctx.workflow(dns_delete::Input {
 					server_id: input.server_id,
 				})
+				.run()
 				.await?;
 			}
 			Main::NomadRegistered(sig) => {
@@ -253,13 +245,10 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 				.await?;
 
 				// Scale to get rid of tainted servers
-				ctx.tagged_signal(
-					&json!({
-						"datacenter_id": input.datacenter_id,
-					}),
-					crate::workflows::datacenter::Scale {},
-				)
-				.await?;
+				ctx.signal(crate::workflows::datacenter::Scale {})
+					.tag("datacenter_id", input.datacenter_id)
+					.send()
+					.await?;
 			}
 			Main::Drain(_) => {
 				ctx.workflow(drain::Input {
@@ -267,6 +256,7 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 					server_id: input.server_id,
 					pool_type: input.pool_type.clone(),
 				})
+				.run()
 				.await?;
 			}
 			Main::Undrain(_) => {
@@ -275,6 +265,7 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 					server_id: input.server_id,
 					pool_type: input.pool_type.clone(),
 				})
+				.run()
 				.await?;
 			}
 			Main::Taint(_) => {} // Only for state
@@ -673,6 +664,7 @@ async fn cleanup(
 			ctx.workflow(dns_delete::Input {
 				server_id: input.server_id,
 			})
+			.run()
 			.await?;
 		}
 	}
@@ -682,13 +674,10 @@ async fn cleanup(
 		Provider::Linode => {
 			tracing::info!(server_id=?input.server_id, "destroying linode server");
 
-			ctx.tagged_signal(
-				&json!({
-					"server_id": input.server_id,
-				}),
-				linode::workflows::server::Destroy {},
-			)
-			.await?;
+			ctx.signal(linode::workflows::server::Destroy {})
+				.tag("server_id", input.server_id)
+				.send()
+				.await?;
 
 			// Wait for workflow to complete
 			ctx.wait_for_workflow::<linode::workflows::server::Workflow>(

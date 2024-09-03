@@ -16,7 +16,6 @@ use std::{
 
 use chirp_workflow::prelude::*;
 use futures_util::{FutureExt, StreamExt, TryStreamExt};
-use serde_json::json;
 
 use crate::types::{Datacenter, PoolType, Provider};
 
@@ -143,45 +142,33 @@ impl Action {
 				server_id,
 				pool_type,
 			} => {
-				ctx.dispatch_tagged_workflow(
-					&json!({
-						"server_id": server_id,
-					}),
-					crate::workflows::server::Input {
-						datacenter_id,
-						server_id,
-						pool_type,
-						tags: Vec::new(),
-					},
-				)
+				ctx.workflow(crate::workflows::server::Input {
+					datacenter_id,
+					server_id,
+					pool_type,
+					tags: Vec::new(),
+				})
+				.tag("server_id", server_id)
+				.dispatch()
 				.await?;
 			}
 			Action::Drain { server_id } => {
-				ctx.tagged_signal(
-					&json!({
-						"server_id": server_id,
-					}),
-					crate::workflows::server::Drain {},
-				)
-				.await?;
+				ctx.signal(crate::workflows::server::Drain {})
+					.tag("server_id", server_id)
+					.send()
+					.await?;
 			}
 			Action::Undrain { server_id } => {
-				ctx.tagged_signal(
-					&json!({
-						"server_id": server_id,
-					}),
-					crate::workflows::server::Undrain {},
-				)
-				.await?;
+				ctx.signal(crate::workflows::server::Undrain {})
+					.tag("server_id", server_id)
+					.send()
+					.await?;
 			}
 			Action::Destroy { server_id } => {
-				ctx.tagged_signal(
-					&json!({
-						"server_id": server_id,
-					}),
-					crate::workflows::server::Destroy {},
-				)
-				.await?;
+				ctx.signal(crate::workflows::server::Destroy {})
+					.tag("server_id", server_id)
+					.send()
+					.await?;
 			}
 		}
 

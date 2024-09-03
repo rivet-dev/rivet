@@ -38,13 +38,10 @@ pub async fn linode_image(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<
 	let sig = ctx.listen::<CreateComplete>().await?;
 
 	// Piggy back signal up to the cluster prebake workflow
-	ctx.tagged_signal(
-		&json!({
-			"server_id": input.prebake_server_id,
-		}),
-		sig,
-	)
-	.await?;
+	ctx.signal(sig)
+		.tag("server_id", input.prebake_server_id)
+		.send()
+		.await?;
 
 	ctx.listen::<Destroy>().await?;
 

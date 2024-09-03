@@ -1,7 +1,6 @@
 use std::net::Ipv4Addr;
 
 use chirp_workflow::prelude::*;
-use serde_json::json;
 
 pub mod cleanup;
 
@@ -35,37 +34,32 @@ pub async fn linode_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult
 		Err(err) => {
 			tracing::warn!(?err, "unrecoverable provision, cleaning up");
 
-			ctx.dispatch_workflow(cleanup::Input {
+			ctx.workflow(cleanup::Input {
 				api_token: input.api_token.clone(),
 				ssh_key_id: cleanup_ctx.ssh_key_id,
 				linode_id: cleanup_ctx.linode_id,
 				firewall_id: cleanup_ctx.firewall_id,
 			})
+			.dispatch()
 			.await?;
 
-			ctx.tagged_signal(
-				&json!({
-					"server_id": input.server_id,
-				}),
-				ProvisionFailed {},
-			)
-			.await?;
+			ctx.signal(ProvisionFailed {})
+				.tag("server_id", input.server_id)
+				.send()
+				.await?;
 
 			// Throw the original error from the provisioning activities
 			return Err(err);
 		}
 	};
 
-	ctx.tagged_signal(
-		&json!({
-			"server_id": input.server_id,
-		}),
-		ProvisionComplete {
-			linode_id: provision_res.linode_id,
-			public_ip: provision_res.public_ip,
-			boot_disk_id: provision_res.boot_disk_id,
-		},
-	)
+	ctx.signal(ProvisionComplete {
+		linode_id: provision_res.linode_id,
+		public_ip: provision_res.public_ip,
+		boot_disk_id: provision_res.boot_disk_id,
+	})
+	.tag("server_id", input.server_id)
+	.send()
 	.await?;
 
 	// Wait for destroy signal
@@ -77,6 +71,7 @@ pub async fn linode_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult
 		linode_id: cleanup_ctx.linode_id,
 		firewall_id: cleanup_ctx.firewall_id,
 	})
+	.run()
 	.await?;
 
 	Ok(())

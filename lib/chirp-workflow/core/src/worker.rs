@@ -130,7 +130,9 @@ impl Worker {
 						util::time::sleep_until_ts(wake_deadline_ts as u64).await;
 					}
 
-					ctx.run().await;
+					if let Err(err) = ctx.run().await {
+						tracing::error!(?err, "unhandled error");
+					}
 				}
 				.in_current_span(),
 			);

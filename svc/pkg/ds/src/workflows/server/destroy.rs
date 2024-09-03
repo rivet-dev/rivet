@@ -24,13 +24,10 @@ pub(crate) async fn ds_server_destroy(ctx: &mut WorkflowCtx, input: &Input) -> G
 		})
 		.await?;
 
-	ctx.msg(
-		json!({
-			"server_id": input.server_id,
-		}),
-		DestroyStarted {},
-	)
-	.await?;
+	ctx.msg(DestroyStarted {})
+		.tag("server_id", input.server_id)
+		.send()
+		.await?;
 
 	if let Some(job_id) = &dynamic_server.dispatched_job_id {
 		let delete_output = ctx
@@ -56,13 +53,10 @@ pub(crate) async fn ds_server_destroy(ctx: &mut WorkflowCtx, input: &Input) -> G
 		}
 	}
 
-	ctx.msg(
-		json!({
-			"server_id": input.server_id,
-		}),
-		DestroyComplete {},
-	)
-	.await?;
+	ctx.msg(DestroyComplete {})
+		.tag("server_id", input.server_id)
+		.send()
+		.await?;
 
 	Ok(())
 }

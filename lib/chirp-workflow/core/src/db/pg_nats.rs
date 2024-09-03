@@ -463,7 +463,14 @@ impl Database for DatabasePgNats {
 		})
 		.await?;
 
-		self.wake_worker();
+		// Wake worker again if the deadline is before the next tick
+		if let Some(deadline_ts) = deadline_ts {
+			if deadline_ts
+				< rivet_util::timestamp::now() + worker::TICK_INTERVAL.as_millis() as i64 + 1
+			{
+				self.wake_worker();
+			}
+		}
 
 		Ok(())
 	}

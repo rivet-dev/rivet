@@ -1,6 +1,5 @@
 use chirp_workflow::prelude::*;
 use futures_util::FutureExt;
-use serde_json::json;
 
 use crate::types::{BuildDeliveryMethod, Pool, Provider};
 
@@ -20,13 +19,10 @@ pub async fn cluster(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
 	})
 	.await?;
 
-	ctx.msg(
-		json!({
-			"cluster_id": input.cluster_id,
-		}),
-		CreateComplete {},
-	)
-	.await?;
+	ctx.msg(CreateComplete {})
+		.tag("cluster_id", input.cluster_id)
+		.send()
+		.await?;
 
 	ctx.repeat(|ctx| {
 		let cluster_id = input.cluster_id;
@@ -40,35 +36,29 @@ pub async fn cluster(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
 					})
 					.await?;
 
-					ctx.msg(
-						json!({
-							"cluster_id": cluster_id,
-						}),
-						GameLinkComplete {},
-					)
-					.await?;
+					ctx.msg(GameLinkComplete {})
+						.tag("cluster_id", cluster_id)
+						.send()
+						.await?;
 				}
 				Main::DatacenterCreate(sig) => {
-					ctx.dispatch_tagged_workflow(
-						&json!({
-							"datacenter_id": sig.datacenter_id,
-						}),
-						crate::workflows::datacenter::Input {
-							cluster_id,
-							datacenter_id: sig.datacenter_id,
-							name_id: sig.name_id,
-							display_name: sig.display_name,
+					ctx.workflow(crate::workflows::datacenter::Input {
+						cluster_id,
+						datacenter_id: sig.datacenter_id,
+						name_id: sig.name_id,
+						display_name: sig.display_name,
 
-							provider: sig.provider,
-							provider_datacenter_id: sig.provider_datacenter_id,
-							provider_api_token: sig.provider_api_token,
+						provider: sig.provider,
+						provider_datacenter_id: sig.provider_datacenter_id,
+						provider_api_token: sig.provider_api_token,
 
-							pools: sig.pools,
+						pools: sig.pools,
 
-							build_delivery_method: sig.build_delivery_method,
-							prebakes_enabled: sig.prebakes_enabled,
-						},
-					)
+						build_delivery_method: sig.build_delivery_method,
+						prebakes_enabled: sig.prebakes_enabled,
+					})
+					.tag("datacenter_id", sig.datacenter_id)
+					.dispatch()
 					.await?;
 				}
 			}

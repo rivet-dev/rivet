@@ -3,7 +3,7 @@ use nomad_client::{
 	apis::{configuration::Configuration, nodes_api},
 	models,
 };
-use rivet_operation::prelude::proto::backend::pkg::*;
+use rivet_operation::prelude::proto::backend::pkg::mm;
 use serde_json::json;
 
 use crate::types::PoolType;
@@ -38,13 +38,10 @@ pub(crate) async fn cluster_server_drain(ctx: &mut WorkflowCtx, input: &Input) -
 			.await?;
 		}
 		PoolType::Gg => {
-			ctx.tagged_signal(
-				&json!({
-					"server_id": input.server_id,
-				}),
-				crate::workflows::server::DnsDelete {},
-			)
-			.await?;
+			ctx.signal(crate::workflows::server::DnsDelete {})
+				.tag("server_id", input.server_id)
+				.send()
+				.await?;
 		}
 		PoolType::Ats => {}
 	}

@@ -31,25 +31,22 @@ pub async fn cluster_prebake(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 	match input.provider {
 		Provider::Linode => {
 			let workflow_id = ctx
-				.dispatch_tagged_workflow(
-					&json!({
-						"server_id": prebake_server_id,
-					}),
-					linode::workflows::server::Input {
-						server_id: prebake_server_id,
-						provider_datacenter_id: dc.provider_datacenter_id.clone(),
-						custom_image: None,
-						api_token: dc.provider_api_token.clone(),
-						hardware: linode::util::consts::PREBAKE_HARDWARE.to_string(),
-						firewall_preset: match input.pool_type {
-							PoolType::Job => linode::types::FirewallPreset::Job,
-							PoolType::Gg => linode::types::FirewallPreset::Gg,
-							PoolType::Ats => linode::types::FirewallPreset::Ats,
-						},
-						vlan_ip: None,
-						tags,
+				.workflow(linode::workflows::server::Input {
+					server_id: prebake_server_id,
+					provider_datacenter_id: dc.provider_datacenter_id.clone(),
+					custom_image: None,
+					api_token: dc.provider_api_token.clone(),
+					hardware: linode::util::consts::PREBAKE_HARDWARE.to_string(),
+					firewall_preset: match input.pool_type {
+						PoolType::Job => linode::types::FirewallPreset::Job,
+						PoolType::Gg => linode::types::FirewallPreset::Gg,
+						PoolType::Ats => linode::types::FirewallPreset::Ats,
 					},
-				)
+					vlan_ip: None,
+					tags,
+				})
+				.tag("server_id", prebake_server_id)
+				.dispatch()
 				.await?;
 
 			match ctx.listen::<Linode>().await? {
@@ -62,21 +59,19 @@ pub async fn cluster_prebake(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 						pool_type: input.pool_type.clone(),
 						initialize_immediately: false,
 					})
+					.run()
 					.await?;
 
 					// Create image
 					let workflow_id = ctx
-						.dispatch_tagged_workflow(
-							&json!({
-								"linode_id": sig.linode_id,
-							}),
-							linode::workflows::image::Input {
-								prebake_server_id,
-								api_token: dc.provider_api_token.clone(),
-								linode_id: sig.linode_id,
-								boot_disk_id: sig.boot_disk_id,
-							},
-						)
+						.workflow(linode::workflows::image::Input {
+							prebake_server_id,
+							api_token: dc.provider_api_token.clone(),
+							linode_id: sig.linode_id,
+							boot_disk_id: sig.boot_disk_id,
+						})
+						.tag("linode_id", sig.linode_id)
+						.dispatch()
 						.await?;
 
 					// Wait for image creation
@@ -95,13 +90,10 @@ pub async fn cluster_prebake(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 					.await?;
 
 					// Destroy linode server after the image is complete
-					ctx.tagged_signal(
-						&json!({
-							"server_id": prebake_server_id,
-						}),
-						linode::workflows::server::Destroy {},
-					)
-					.await?;
+					ctx.signal(linode::workflows::server::Destroy {})
+						.tag("server_id", prebake_server_id)
+						.send()
+						.await?;
 
 					// Wait for image workflow to get cleaned up by linode-gc after the image expires
 					ctx.wait_for_workflow::<linode::workflows::server::Workflow>(workflow_id)

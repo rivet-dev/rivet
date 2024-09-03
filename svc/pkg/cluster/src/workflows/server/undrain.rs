@@ -4,7 +4,6 @@ use nomad_client::{
 	models,
 };
 use rivet_operation::prelude::proto::backend::pkg::mm;
-use serde_json::json;
 
 use crate::types::PoolType;
 
@@ -33,13 +32,10 @@ pub(crate) async fn cluster_server_undrain(
 			.await?;
 		}
 		PoolType::Gg => {
-			ctx.tagged_signal(
-				&json!({
-					"server_id": input.server_id,
-				}),
-				crate::workflows::server::DnsCreate {},
-			)
-			.await?;
+			ctx.signal(crate::workflows::server::DnsCreate {})
+				.tag("server_id", input.server_id)
+				.send()
+				.await?;
 		}
 		PoolType::Ats => {}
 	}

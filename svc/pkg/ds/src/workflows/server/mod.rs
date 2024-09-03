@@ -89,26 +89,20 @@ pub async fn ds_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()>
 
 			// TODO: Cleanup
 
-			ctx.msg(
-				json!({
-					"server_id": input.server_id,
-				}),
-				CreateFailed {},
-			)
-			.await?;
+			ctx.msg(CreateFailed {})
+				.tag("server_id", input.server_id)
+				.send()
+				.await?;
 
 			// Throw the original error from the setup activities
 			return Err(err);
 		}
 	}
 
-	ctx.msg(
-		json!({
-			"server_id": input.server_id,
-		}),
-		CreateComplete {},
-	)
-	.await?;
+	ctx.msg(CreateComplete {})
+		.tag("server_id", input.server_id)
+		.send()
+		.await?;
 
 	// Wait for evaluation
 	match ctx.listen::<Eval>().await? {
@@ -182,6 +176,7 @@ pub async fn ds_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()>
 		server_id: input.server_id,
 		override_kill_timeout_ms,
 	})
+	.run()
 	.await?;
 
 	Ok(())
