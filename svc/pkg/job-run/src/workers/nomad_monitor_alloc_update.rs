@@ -169,19 +169,19 @@ async fn update_db(
 					[ctx, @tx tx]
 					"
 					WITH
-						_update_runs AS (
+						update_runs AS (
 							UPDATE db_job_state.runs
 							SET start_ts = $2
 							WHERE run_id = $1
 							RETURNING 1
 						),
-						_update_run_meta_nomad AS (
+						update_run_meta_nomad AS (
 							UPDATE db_job_state.run_meta_nomad
 							SET alloc_state = $3
 							WHERE run_id = $1
 							RETURNING 1
 						)
-					SELECT 1 FROM select_run
+					SELECT 1
 					",
 					run_id,
 					ctx.ts(),

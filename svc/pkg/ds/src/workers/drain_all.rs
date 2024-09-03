@@ -30,7 +30,8 @@ async fn worker(ctx: &OperationContext<ds::msg::drain_all::Message>) -> GlobalRe
 				"server_id": server_id,
 			}),
 			crate::workflows::server::Destroy {
-				override_kill_timeout_ms: (drain_timeout < kill_timeout_ms).then(|| drain_timeout),
+				override_kill_timeout_ms: (drain_timeout < kill_timeout_ms)
+					.then_some(drain_timeout),
 			},
 		)
 		.await?;

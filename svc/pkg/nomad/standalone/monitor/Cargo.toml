@@ -33,6 +33,7 @@ tracing-logfmt = "0.3"
 util-job = { package = "rivet-util-job", path = "../../../job/util" }
 
 cluster = { path = "../../../cluster" }
+ds = { path = "../../../ds" }
 
 [dependencies.nomad_client]
 git = "https://github.com/rivet-gg/nomad-client"

@@ -25,18 +25,21 @@ use crate::{
 			escape_go_template, gen_oci_bundle_config, inject_consul_env_template,
 			nomad_host_port_env_var, template_env_var_int, DecodedPort, TransportProtocol,
 		},
-		NEW_NOMAD_CONFIG,
+		NOMAD_CONFIG, NOMAD_REGION,
 	},
 };
 
 pub mod destroy;
+pub mod nomad_alloc_plan;
+pub mod nomad_alloc_update;
+pub mod nomad_eval_update;
 
-const NOMAD_REGION: &str = "global";
+use nomad_eval_update::EvalStatus;
+
 const SETUP_SCRIPT: &str = include_str!("./scripts/setup.sh");
 const SETUP_JOB_RUNNER_SCRIPT: &str = include_str!("./scripts/setup_job_runner.sh");
 const SETUP_OCI_BUNDLE_SCRIPT: &str = include_str!("./scripts/setup_oci_bundle.sh");
 const SETUP_CNI_NETWORK_SCRIPT: &str = include_str!("./scripts/setup_cni_network.sh");
-// const CLEANUP_SCRIPT: &str = include_str!("./scripts/cleanup.sh");
 
 #[derive(Default, Clone)]
 struct GameGuardUnnest {
@@ -97,21 +100,87 @@ pub async fn ds_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()>
 			// Throw the original error from the setup activities
 			return Err(err);
 		}
-	};
+	}
 
 	ctx.msg(
 		json!({
-			"server_id": input.server_id
+			"server_id": input.server_id,
 		}),
 		CreateComplete {},
 	)
 	.await?;
 
-	let destroy_sig = ctx.listen::<Destroy>().await?;
+	// Wait for evaluation
+	match ctx.listen::<Eval>().await? {
+		Eval::NomadEvalUpdate(sig) => {
+			let eval_status = ctx
+				.workflow(nomad_eval_update::Input {
+					server_id: input.server_id,
+					eval: sig.eval,
+				})
+				.await?;
+
+			if let EvalStatus::Failed = eval_status {
+				tracing::info!("destroying after failed evaluation");
+
+				ctx.workflow(destroy::Input {
+					server_id: input.server_id,
+					override_kill_timeout_ms: None,
+				})
+				.await?;
+			}
+		}
+		Eval::Destroy(sig) => {
+			tracing::info!("destroying before evaluation");
+
+			ctx.workflow(destroy::Input {
+				server_id: input.server_id,
+				override_kill_timeout_ms: sig.override_kill_timeout_ms,
+			})
+			.await?;
+
+			return Ok(());
+		}
+	}
+
+	let override_kill_timeout_ms = ctx
+		.repeat(|ctx| {
+			let server_id = input.server_id;
+
+			async move {
+				match ctx.listen::<Main>().await? {
+					Main::NomadAllocPlan(sig) => {
+						ctx.workflow(nomad_alloc_plan::Input {
+							server_id,
+							alloc: sig.alloc,
+						})
+						.await?;
+					}
+					Main::NomadAllocUpdate(sig) => {
+						let finished = ctx
+							.workflow(nomad_alloc_update::Input {
+								server_id,
+								alloc: sig.alloc,
+							})
+							.await?;
+
+						if finished {
+							tracing::info!("alloc finished");
+							return Ok(Loop::Break(None));
+						}
+					}
+					Main::Destroy(sig) => return Ok(Loop::Break(sig.override_kill_timeout_ms)),
+				}
+
+				Ok(Loop::Continue)
+			}
+			.boxed()
+		})
+		.await?;
 
 	ctx.workflow(destroy::Input {
 		server_id: input.server_id,
-		override_kill_timeout_ms: destroy_sig.override_kill_timeout_ms,
+		override_kill_timeout_ms,
 	})
 	.await?;
 
@@ -276,6 +345,8 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<()>
 						)
 						SELECT $1, t.*
 						FROM unnest($16, $17, $18, $19) AS t(port_name, port_number, gg_port, protocol)
+						-- Check if lists are empty
+						WHERE port_name IS NOT NULL
 						RETURNING 1
 					)
 				SELECT 1
@@ -906,7 +977,7 @@ async fn submit_job(ctx: &ActivityCtx, input: &SubmitJobInput) -> GlobalResult<S
 	tracing::info!("submitting job");
 
 	nomad_client::apis::jobs_api::post_job(
-		&NEW_NOMAD_CONFIG,
+		&NOMAD_CONFIG,
 		&job_id,
 		nomad_client::models::JobRegisterRequest {
 			job: Some(Box::new(job_spec)),
@@ -1046,7 +1117,7 @@ async fn dispatch_job(ctx: &ActivityCtx, input: &DispatchJobInput) -> GlobalResu
 
 	// MARK: Dispatch job
 	let dispatch_res = nomad_client::apis::jobs_api::post_job_dispatch(
-		&NEW_NOMAD_CONFIG,
+		&NOMAD_CONFIG,
 		&input.job_id,
 		nomad_client::models::JobDispatchRequest {
 			job_id: Some(input.job_id.clone()),
@@ -1094,6 +1165,12 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<()>
 	)
 	.await?;
 
+	ctx.update_workflow_tags(&json!({
+		"server_id": input.server_id,
+		"nomad_dispatched_job_id": input.nomad_dispatched_job_id,
+	}))
+	.await?;
+
 	Ok(())
 }
 
@@ -1107,6 +1184,25 @@ pub struct CreateFailed {}
 pub struct Destroy {
 	pub override_kill_timeout_ms: Option<i64>,
 }
+
+#[signal("ds_server_nomad_alloc_plan")]
+pub struct NomadAllocPlan {
+	pub alloc: nomad_client::models::Allocation,
+}
+
+#[signal("ds_server_nomad_alloc_update")]
+pub struct NomadAllocUpdate {
+	pub alloc: nomad_client::models::Allocation,
+}
+
+#[signal("ds_server_nomad_eval_update")]
+pub struct NomadEvalUpdate {
+	pub eval: nomad_client::models::Evaluation,
+}
+
+join_signal!(Eval, [NomadEvalUpdate, Destroy,]);
+
+join_signal!(Main, [NomadAllocPlan, NomadAllocUpdate, Destroy,]);
 
 /// Choose which port to assign for a job's ingress port.
 ///

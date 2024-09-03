@@ -19,6 +19,7 @@ struct RunRow {
 	run_id: Uuid,
 	region_id: Uuid,
 	stop_ts: Option<i64>,
+	alloc_id: Option<String>,
 	alloc_plan_ts: Option<i64>,
 }
 
@@ -54,7 +55,6 @@ async fn worker(
 	let job_id = unwrap_ref!(alloc.job_id, "alloc has no job id");
 	let alloc_id = unwrap_ref!(alloc.ID);
 	let nomad_node_id = unwrap_ref!(alloc.node_id, "alloc has no node id");
-	let _nomad_node_name = unwrap_ref!(alloc.node_id, "alloc has no node name");
 
 	if !util_job::is_nomad_job_run(job_id) {
 		tracing::info!(%job_id, "disregarding event");
@@ -232,7 +232,7 @@ async fn update_db(
 	let run_row = sql_fetch_optional!(
 		[ctx, RunRow, @tx tx]
 		"
-		SELECT r.run_id, r.region_id, r.stop_ts, rn.alloc_plan_ts
+		SELECT r.run_id, r.region_id, r.stop_ts, rn.alloc_id, rn.alloc_plan_ts
 		FROM db_job_state.run_meta_nomad AS rn
 		INNER JOIN db_job_state.runs AS r
 		ON r.run_id = rn.run_id
@@ -312,27 +312,36 @@ async fn update_db(
 			.await?;
 		}
 	} else {
-		tracing::warn!(%run_id, %alloc_id, "run was already allocated before, killing new allocation");
+		tracing::warn!(%run_id, %alloc_id, "run was already allocated before");
 
-		if let Err(err) = signal_allocation(
-			&NOMAD_CONFIG,
-			&alloc_id,
-			None,
-			Some(NOMAD_REGION),
-			None,
-			None,
-			Some(nomad_client::models::AllocSignalRequest {
-				task: None,
-				signal: Some("SIGKILL".to_string()),
-			}),
-		)
-		.await
+		if run_row
+			.alloc_id
+			.as_ref()
+			.map(|id| id != &alloc_id)
+			.unwrap_or_default()
 		{
-			tracing::warn!(
-				?err,
-				?alloc_id,
-				"error while trying to manually kill allocation"
-			);
+			tracing::warn!(%run_id, existing_alloc_id=?run_row.alloc_id, new_alloc_id=%alloc_id, "different allocation id given, killing new allocation");
+
+			if let Err(err) = signal_allocation(
+				&NOMAD_CONFIG,
+				&alloc_id,
+				None,
+				Some(NOMAD_REGION),
+				None,
+				None,
+				Some(nomad_client::models::AllocSignalRequest {
+					task: None,
+					signal: Some("SIGKILL".to_string()),
+				}),
+			)
+			.await
+			{
+				tracing::warn!(
+					?err,
+					?alloc_id,
+					"error while trying to manually kill allocation"
+				);
+			}
 		}
 	}
 

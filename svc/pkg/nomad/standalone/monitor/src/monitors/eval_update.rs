@@ -1,6 +1,7 @@
 use chirp_workflow::prelude::*;
-use rivet_operation::prelude::proto::backend::pkg::*;
+use rivet_operation::prelude::proto::backend::pkg::nomad;
 use serde::Deserialize;
+use serde_json::json;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -37,6 +38,14 @@ pub async fn handle(
 		dispatched_job_id: job_id.clone(),
 		payload_json: payload_json,
 	})
+	.await?;
+
+	ctx.tagged_signal(
+		&json!({
+			"nomad_dispatched_job_id": job_id,
+		}),
+		ds::workflows::server::NomadEvalUpdate { eval: eval.clone() },
+	)
 	.await?;
 
 	Ok(())

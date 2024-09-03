@@ -311,9 +311,9 @@ pub fn signal(attr: TokenStream, item: TokenStream) -> TokenStream {
 	if !name
 		.value()
 		.chars()
-		.all(|c| c.is_alphanumeric() || c == '_')
+		.all(|c| c.is_ascii_lowercase() || c == '_')
 	{
-		return error(name.span(), "invalid signal name, must be [A-Za-z_]");
+		return error(name.span(), "invalid signal name, must be [a-z_]");
 	}
 
 	let item_struct = parse_macro_input!(item as ItemStruct);
@@ -362,9 +362,9 @@ pub fn message(attr: TokenStream, item: TokenStream) -> TokenStream {
 	if !name
 		.value()
 		.chars()
-		.all(|c| c.is_alphanumeric() || c == '_')
+		.all(|c| c.is_ascii_lowercase() || c == '_')
 	{
-		return error(name.span(), "invalid message name, must be [A-Za-z_]");
+		return error(name.span(), "invalid message name, must be [a-z_]");
 	}
 
 	let item_struct = parse_macro_input!(item as ItemStruct);
