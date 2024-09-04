@@ -10,7 +10,7 @@ pub enum SubCommand {
 		/// The name id of the cluster
 		#[clap(index = 1)]
 		cluster: String,
-		#[clap(long)]
+		#[clap(long, short = 's')]
 		server_id: Option<String>,
 		#[clap(long, short = 'p')]
 		pool: Option<String>,
@@ -24,7 +24,7 @@ pub enum SubCommand {
 		/// The name id of the cluster
 		#[clap(index = 1)]
 		cluster: String,
-		#[clap(long)]
+		#[clap(long, short = 's')]
 		server_id: Option<String>,
 		#[clap(long, short = 'p')]
 		pool: Option<String>,
@@ -38,7 +38,7 @@ pub enum SubCommand {
 		/// The name id of the cluster
 		#[clap(index = 1)]
 		cluster: String,
-		#[clap(long)]
+		#[clap(long, short = 's')]
 		server_id: Option<String>,
 		#[clap(long, short = 'p')]
 		pool: Option<String>,
@@ -52,7 +52,7 @@ pub enum SubCommand {
 		/// The name id of the cluster
 		#[clap(index = 1)]
 		cluster: String,
-		#[clap(long)]
+		#[clap(long, short = 's')]
 		server_id: Option<String>,
 		#[clap(long, short = 'p')]
 		pool: Option<String>,
@@ -66,7 +66,7 @@ pub enum SubCommand {
 		/// The name id of the cluster
 		#[clap(index = 1)]
 		cluster: String,
-		#[clap(long)]
+		#[clap(long, short = 's')]
 		server_id: Option<String>,
 		#[clap(long, short = 'p')]
 		pool: Option<String>,
@@ -80,7 +80,7 @@ pub enum SubCommand {
 		/// The name id of the cluster
 		#[clap(index = 1)]
 		cluster: String,
-		#[clap(long)]
+		#[clap(long, short = 's')]
 		server_id: Option<String>,
 		#[clap(long, short = 'p')]
 		pool: Option<String>,

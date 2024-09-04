@@ -17,7 +17,7 @@ If you run in to a too many retries error on a workflow, then:
 For a single workflow:
 
 ```sql
-UPDATE db_workflow.workflows SET wake_immediate = true WHERE workflow_id = 'MY_ID':uuid;
+UPDATE db_workflow.workflows SET wake_immediate = true WHERE workflow_id = 'MY_ID';
 ```
 
 For all workflows of a type:
@@ -26,12 +26,11 @@ For all workflows of a type:
 UPDATE db_workflow.workflows SET wake_immediate = true WHERE workflow_name = 'MY_NAME';
 ```
 
-
 # Visualize entire workflow history
 
 ```sql
 WITH workflow_events AS (
-    SELECT '1db61ba2-6271-40a5-9a38-e6fa212e6f7d'::uuid AS workflow_id
+    SELECT 'WORKFLOW_ID'::uuid AS workflow_id
 )
 SELECT location, 'activity' AS t, activity_name, input, output, forgotten
 FROM db_workflow.workflow_activity_events, workflow_events
@@ -69,7 +68,7 @@ ORDER BY location ASC;
 
 ```sql
 WITH workflow_ids AS (
-    SELECT 'WORKFLOW_ID':uuid AS workflow_id
+    SELECT 'WORKFLOW_ID'::uuid AS workflow_id
 ),
 delete_activity_events AS (
     DELETE FROM db_workflow.workflow_activity_events

@@ -75,7 +75,7 @@ impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
 		let event = self.ctx.current_history_event();
 
 		// Signal sent before
-		if let Some(event) = event {
+		let signal_id = if let Some(event) = event {
 			// Validate history is consistent
 			let Event::SignalSend(signal) = event else {
 				return Err(WorkflowError::HistoryDiverged(format!(
@@ -97,7 +97,7 @@ impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
 
 			tracing::debug!(name=%self.ctx.name(), id=%self.ctx.workflow_id(), signal_name=%signal.name, signal_id=%signal.signal_id, "replaying signal dispatch");
 
-			Ok(signal.signal_id)
+			signal.signal_id
 		}
 		// Send signal
 		else {
@@ -149,10 +149,12 @@ impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
 				(None, true) => return Err(BuilderError::NoWorkflowIdOrTags.into()),
 			}
 
-			// Move to next event
-			self.ctx.inc_location();
+			signal_id
+		};
 
-			Ok(signal_id)
-		}
+		// Move to next event
+		self.ctx.inc_location();
+
+		Ok(signal_id)
 	}
 }
