@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/).
 
+## [24.5.1](https://github.com/rivet-gg/rivet/compare/v24.5.0...v24.5.1) (2024-09-04)
+
+
+### Features
+
+* **workflows:** clean up dispatching syntax ([#1079](https://github.com/rivet-gg/rivet/issues/1079)) ([233efcc](https://github.com/rivet-gg/rivet/commit/233efcc2df179e2e1a8b456b14eb9116253fe1aa))
+
+
+### Bug Fixes
+
+* **clusters:** add drain padding to nomad ([#1100](https://github.com/rivet-gg/rivet/issues/1100)) ([01ee21b](https://github.com/rivet-gg/rivet/commit/01ee21b5da0b46b8aa2356ced8af3b6d9966ba7e))
+* **clusters:** fix list lost op ([#1110](https://github.com/rivet-gg/rivet/issues/1110)) ([8ae85d2](https://github.com/rivet-gg/rivet/commit/8ae85d29e8fce11ed62a935f0de0119e36770589))
+* **clusters:** gracefully handle node not found ([#1099](https://github.com/rivet-gg/rivet/issues/1099)) ([b460374](https://github.com/rivet-gg/rivet/commit/b4603749ad711e3baa7bdcb482b255c4c01e3dcf))
+* **clusters:** remove nomad drain complete signal ([#1101](https://github.com/rivet-gg/rivet/issues/1101)) ([c117224](https://github.com/rivet-gg/rivet/commit/c117224484b49070213fc3c2f98a2d399c097dc9))
+* **clusters:** switch from drain to ineligible system ([#1102](https://github.com/rivet-gg/rivet/issues/1102)) ([09f5143](https://github.com/rivet-gg/rivet/commit/09f5143ea94c199ee006b9051e4c97ebc53d70bd))
+* **ds:** change nomad prefix ([#1113](https://github.com/rivet-gg/rivet/issues/1113)) ([705a470](https://github.com/rivet-gg/rivet/commit/705a470cbdb6a21bd21209445d4c507b2e39356e))
+* **ds:** implement nomad monitors with signals ([#1105](https://github.com/rivet-gg/rivet/issues/1105)) ([238a8e9](https://github.com/rivet-gg/rivet/commit/238a8e98d5dd561fd442866f59862777e0e68b56))
+* fix signal history divergence ([#1115](https://github.com/rivet-gg/rivet/issues/1115)) ([3cbfc1b](https://github.com/rivet-gg/rivet/commit/3cbfc1b593bcfebf4f3acee261926ac6ab613531))
+* **job-run:** delete second allocation immediately ([#1104](https://github.com/rivet-gg/rivet/issues/1104)) ([78b73fd](https://github.com/rivet-gg/rivet/commit/78b73fd30b56f192fd23d07f7b57475a88a2f5e2))
+* **nomad:** readd allocation metrics ([#1109](https://github.com/rivet-gg/rivet/issues/1109)) ([600d4fb](https://github.com/rivet-gg/rivet/commit/600d4fb6df38bfd123045bf7cd35182b2b37342f))
+* update api endpoint names ([#1080](https://github.com/rivet-gg/rivet/issues/1080)) ([33e780d](https://github.com/rivet-gg/rivet/commit/33e780dacad902e0041cad7c0881d0bf308b61fe))
+* **workflows:** add retry to internal sql queries ([#1112](https://github.com/rivet-gg/rivet/issues/1112)) ([ef010d0](https://github.com/rivet-gg/rivet/commit/ef010d089652693985efbda45e59421dff698d78))
+* **workflows:** implement backoff for timeouts ([#1111](https://github.com/rivet-gg/rivet/issues/1111)) ([6659b34](https://github.com/rivet-gg/rivet/commit/6659b34f41e9e0e1f31b21ffd45485cfba4d6e09))
+
+
+### Chores
+
+* **main:** release 24.5.0 ([#1103](https://github.com/rivet-gg/rivet/issues/1103)) ([7652421](https://github.com/rivet-gg/rivet/commit/7652421cb2083de84413c1c2fccb1ac0f83ff118))
+* release 24.5.0 ([1657c7c](https://github.com/rivet-gg/rivet/commit/1657c7c233e73c83c70443c2e205c119ef6ee34d))
+* release 24.5.1 ([12f7ee9](https://github.com/rivet-gg/rivet/commit/12f7ee9e8f02c91229657292c580f4811a984518))
+* update all uses of workflows to new syntax ([#1108](https://github.com/rivet-gg/rivet/issues/1108)) ([0079be8](https://github.com/rivet-gg/rivet/commit/0079be80559487bbbe2c1b2bd52e797ac3e0cd05))
+* **workflows:** clean up internal contexts ([#1107](https://github.com/rivet-gg/rivet/issues/1107)) ([2148f9e](https://github.com/rivet-gg/rivet/commit/2148f9e4d5846eb3294dc78786b1629b8dab2110))
+
 ## [24.5.0](https://github.com/rivet-gg/rivet/compare/v24.4.1...v24.5.0) (2024-08-27)
 
 
