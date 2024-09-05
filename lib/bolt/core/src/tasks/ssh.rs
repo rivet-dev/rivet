@@ -45,9 +45,32 @@ async fn ip_inner(
 ) -> Result<()> {
 	block_in_place(|| {
 		if let Some(command) = command {
-			cmd!("ssh", "-t", "-l", "root", "-i", ssh_key.path(), ip, command).run()
+			cmd!(
+				"ssh",
+				"-o",
+				"StrictHostKeyChecking=no",
+				"-t",
+				"-l",
+				"root",
+				"-i",
+				ssh_key.path(),
+				ip,
+				command
+			)
+			.run()
 		} else {
-			cmd!("ssh", "-t", "-l", "root", "-i", ssh_key.path(), ip).run()
+			cmd!(
+				"ssh",
+				"-o",
+				"StrictHostKeyChecking=no",
+				"-t",
+				"-l",
+				"root",
+				"-i",
+				ssh_key.path(),
+				ip
+			)
+			.run()
 		}
 	})?;
 
