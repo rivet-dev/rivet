@@ -78,10 +78,10 @@ async fn handle(
 				query_timing.as_ref(),
 				formatdoc!(
 					"
-					max(
+					(max(
 						nomad_client_allocs_cpu_total_ticks{{exported_job=\"{nomad_job_id}\",task=\"{task}\"}} /
 						nomad_client_allocs_cpu_allocated{{exported_job=\"{nomad_job_id}\",task=\"{task}\"}}
-					) or vector(0)
+					) or vector(0)) * 100
 					",
 					nomad_job_id = metric.job,
 					task = metric.task
