@@ -186,7 +186,9 @@ pub async fn create_instance_config(
 			json!({
 				"label": "boot_config",
 				"booted": true,
-				"kernel": "linode/latest-64bit",
+				// IMPORTANT: Load test nodes before updating kernel version. 6.10 caused kernel
+				// panics sporadically.
+				"kernel": "linode/6.8.9-x86_64-linode164",
 				"root_device": "/dev/sda",
 				"devices": {
 					"sda": {
