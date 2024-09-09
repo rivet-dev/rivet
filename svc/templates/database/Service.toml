@@ -1,7 +1,0 @@
-[service]
-name = "db-{{pkg}}-{{name}}"
-
-[runtime]
-kind = "crdb"
-
-[database]

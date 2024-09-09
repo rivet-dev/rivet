@@ -36,8 +36,6 @@ enum SubCommand {
 	Logs(logs::LogsOpts),
 	/// Deploys and tests Rivet services.
 	Test(test::TestOpts),
-	/// Creates a new service.
-	Create(create::CreateOpts),
 	/// Generates files required for the Rivet project. Seldom used.
 	#[clap(hide(true), alias = "gen")]
 	Generate {
@@ -120,7 +118,6 @@ async fn main_inner() -> Result<std::process::ExitCode> {
 		SubCommand::Check(command) => command.execute(ctx).await?,
 		SubCommand::Logs(command) => command.execute(ctx).await?,
 		SubCommand::Test(command) => command.execute(ctx).await?,
-		SubCommand::Create(command) => command.execute(ctx).await?,
 		SubCommand::Generate { command } => command.execute(ctx).await?,
 		SubCommand::Secret { command } => command.execute(ctx).await?,
 		SubCommand::Output { command } => command.execute(ctx).await?,

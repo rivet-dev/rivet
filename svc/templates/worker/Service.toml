@@ -1,8 +1,0 @@
-[service]
-name = "{{pkg}}-worker"
-
-[runtime]
-kind = "rust"
-
-[consumer]
-

@@ -7,6 +7,5 @@ pub mod gen;
 pub mod infra;
 pub mod migrate;
 pub mod ssh;
-pub mod template;
 pub mod test;
 pub mod up;

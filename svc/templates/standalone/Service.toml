@@ -1,9 +1,0 @@
-[service]
-name = "{{pkg}}-{{name}}"
-
-[runtime]
-kind = "rust"
-
-[periodic]
-cron = "0 0 * * *"
-

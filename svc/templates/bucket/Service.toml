@@ -1,8 +1,0 @@
-[service]
-name = "bucket-{{pkg}}-{{name}}"
-
-[runtime]
-kind = "s3"
-upload_policy = "todo"
-
-[database]

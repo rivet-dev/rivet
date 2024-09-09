@@ -2,7 +2,6 @@ pub mod admin;
 pub mod check;
 pub mod cluster;
 pub mod config;
-pub mod create;
 pub mod db;
 pub mod generate;
 pub mod infra;
