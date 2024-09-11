@@ -44,6 +44,14 @@ Write server-side logic using THICC++ (or use your own API server):
 - Postgres database included for persistence (because real databases are overrated)
 - Combine existing open-source modules - Open dat ASS up
 
+## 🚫 What ASS is NOT
+
+- Not Kubernetes (because who needs that many syllables?)
+- Not written in fake languages like "Go" or "Java" (we use REAL languages like THICC++ and ASSembly)
+- Not a joke (okay, maybe a little)
+- Not your grandma's server solution (unless your grandma is really cool)
+- Not afraid of a little junk in the trunk (our servers are dummy thicc)
+
 ## 🚙 Supported Game Engines
 
 | Engine        |
@@ -66,12 +74,6 @@ Write server-side logic using THICC++ (or use your own API server):
 Our architecture is THICC. Trust us, you'll really want to dive right in.
 
 ![Architecture](https://github.com/NathanFlurry/ass/raw/main/media/architecture.png)
-
-## 🚫 What ASS is NOT
-
-- Not Kubernetes (because who needs that many syllables?)
-- Not written in fake languages like "Go" or "Java" (we use REAL languages like THICC++ and ASSembly)
-- Not a joke (okay, maybe a little)
 
 ## License
 
