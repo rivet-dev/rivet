@@ -8,7 +8,7 @@
   <a href="https://github.com/NathanFlurry/ass"><img alt="License: THICC-2.0" src="https://img.shields.io/badge/license-THICC--2.0-blue?style=flat-square"></a>
   <a href="https://github.com/NathanFlurry/ass"><img alt="GitHub commit activity" src="https://img.shields.io/badge/commits-thicc-green?style=flat-square"/></a>
   <a href="https://github.com/NathanFlurry/ass/issues"><img alt="GitHub closed issues" src="https://img.shields.io/badge/issues-clenched-red?style=flat-square"/></a>
-  <a href="https://github.com/NathanFlurry/ass"><img alt="Discord" src="https://img.shields.io/badge/discord-dummy__thicc-purple?style=flat-square"/></a>
+  <a href="https://rivet.gg/discord"><img alt="Discord" src="https://img.shields.io/badge/discord-dummy__thicc-purple?style=flat-square"/></a>
 </p>
 
 ## 🍑 Features
