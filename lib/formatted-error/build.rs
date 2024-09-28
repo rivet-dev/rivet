@@ -138,51 +138,58 @@ fn visit_dir(ctx: &mut Ctx, path: PathBuf) -> std::io::Result<()> {
 			visit_dir(ctx, path)?;
 		} else {
 			let contents = std::fs::read_to_string(path.clone())?;
-			println!("Deserializing {:?}", path);
-			let result = ctx
-				.matter
-				.parse(&contents)
-				.data
-				.unwrap()
-				.deserialize::<FrontMatter>()
-				.unwrap();
+			println!("Deserializing {}", path.display());
+			let result = ctx.matter.parse(&contents);
+
+			let data = result.data.unwrap().deserialize::<FrontMatter>().unwrap();
+			let Some(title_line) = result.content.split('\n').find(|x| x.starts_with("# ")) else {
+				panic!("Markdown content has no title (in {:?}).", path.display());
+			};
 
 			// Report an error on duplicate error name
-			if let Some(existing_path) = ctx.existing_keys.get(&result.name) {
+			if let Some(existing_path) = ctx.existing_keys.get(&data.name) {
 				panic!(
-					"Duplicate error with name {:?} (from {:?} and {:?}).",
-					result.name, existing_path, path
+					"Duplicate error with name {:?} (from {} and {}).",
+					data.name,
+					existing_path.display(),
+					path.display(),
 				);
 			} else {
-				ctx.existing_keys.insert(result.name.clone(), path.clone());
+				ctx.existing_keys.insert(data.name.clone(), path.clone());
 			}
 
 			// Validate frontmatter
-			if http::StatusCode::from_u16(result.http_status).is_err() {
+			if http::StatusCode::from_u16(data.http_status).is_err() {
 				panic!(
-					"Invalid HTTP status code {:?} for error {:?} (in {:?})",
-					result.http_status, result.name, path
+					"Invalid HTTP status code {:?} for error {:?} (in {})",
+					data.http_status,
+					data.name,
+					path.display()
 				);
 			}
 
-			let stripped_path = path
-				.strip_prefix(&ctx.base_path)
-				.unwrap()
-				.display()
-				.to_string();
-			let stripped_path = stripped_path
-				.strip_suffix(".md")
-				.expect("file should end with `.md`");
-			let documentation = format!("https://rivet.gg/docs/general/errors/{}", stripped_path);
+			let clean_title = title_line.to_lowercase()[2..]
+				.chars()
+				.filter_map(|x| {
+					if x.is_alphanumeric() {
+						Some(x)
+					} else if x == ' ' {
+						Some('-')
+					} else {
+						None
+					}
+				})
+				.collect::<String>();
+			let documentation = format!("https://rivet.gg/docs/general/errors#{clean_title}");
 
 			ctx.hash_items.push(formatdoc!(
 				"
 				({name:?}, FormattedError::new({name:?}, {description:?}, {description_basic:?}, {http_status}, {documentation:?})),
 				",
-				name = result.name,
-				description = result.description,
-				description_basic = result.description_basic,
-				http_status = result.http_status,
+				name = data.name,
+				description = data.description,
+				description_basic = data.description_basic,
+				http_status = data.http_status,
 				documentation = documentation,
 			));
 
@@ -190,7 +197,7 @@ fn visit_dir(ctx: &mut Ctx, path: PathBuf) -> std::io::Result<()> {
 				"
 				pub const {name}: &str = {name:?};
 				",
-				name = result.name,
+				name = data.name,
 			));
 		}
 	}
