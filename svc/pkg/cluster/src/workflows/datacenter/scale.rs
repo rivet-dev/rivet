@@ -249,9 +249,6 @@ async fn inner(
 	// Sort job servers by allocated memory
 	servers.sort_by_key(|server| memory_by_server.get(&server.server_id));
 
-	// TODO: remove
-	tracing::info!(server_ids=?servers.iter().map(|s| s.server_id).collect::<Vec<_>>(), ?memory_by_server, "server topo");
-
 	// TODO: RVT-3732 Sort gg and ats servers by cpu usage
 	// servers.sort_by_key
 

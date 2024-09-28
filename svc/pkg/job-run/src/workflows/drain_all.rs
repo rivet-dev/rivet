@@ -44,6 +44,33 @@ pub async fn job_run_drain_all(ctx: &mut WorkflowCtx, input: &Input) -> GlobalRe
 	Ok(())
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Input2 {
+	pub nomad_node_id: String,
+	pub drain_timeout: u64,
+}
+
+#[workflow(Workflow2)]
+pub async fn job_run_drain_all2(ctx: &mut WorkflowCtx, input: &Input2) -> GlobalResult<()> {
+	// We fetch here so that when we kill allocs later, we don't refetch new job runs that might be on the
+	// nomad node. Only allocs fetched at this time will be killed.
+	let job_runs = ctx
+		.activity(FetchJobRunsInput {
+			nomad_node_id: input.nomad_node_id.clone(),
+		})
+		.await?;
+
+	ctx.sleep(input.drain_timeout.saturating_sub(DRAIN_PADDING))
+		.await?;
+
+	ctx.activity(StopJobRuns2Input {
+		run_ids: job_runs.iter().map(|jr| jr.run_id).collect(),
+	})
+	.await?;
+
+	Ok(())
+}
+
 #[derive(Debug, Serialize, Deserialize, Hash)]
 struct FetchJobRunsInput {
 	nomad_node_id: String,
@@ -88,6 +115,24 @@ async fn stop_job_runs(ctx: &ActivityCtx, input: &StopJobRunsInput) -> GlobalRes
 		msg!([ctx] job_run::msg::stop(run_id) {
 			run_id: Some((*run_id).into()),
 			skip_kill_alloc: true,
+		})
+		.await?;
+	}
+
+	Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct StopJobRuns2Input {
+	run_ids: Vec<Uuid>,
+}
+
+#[activity(StopJobRuns2)]
+async fn stop_job_runs2(ctx: &ActivityCtx, input: &StopJobRuns2Input) -> GlobalResult<()> {
+	for run_id in &input.run_ids {
+		msg!([ctx] job_run::msg::stop(run_id) {
+			run_id: Some((*run_id).into()),
+			skip_kill_alloc: false,
 		})
 		.await?;
 	}

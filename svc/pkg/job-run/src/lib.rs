@@ -10,6 +10,7 @@ pub fn registry() -> WorkflowResult<Registry> {
 
 	let mut registry = Registry::new();
 	registry.register_workflow::<drain_all::Workflow>()?;
+	registry.register_workflow::<drain_all::Workflow2>()?;
 
 	Ok(registry)
 }

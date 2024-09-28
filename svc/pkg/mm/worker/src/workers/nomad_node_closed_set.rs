@@ -66,34 +66,9 @@ async fn worker(
 		}
 
 		pipe.query_async(&mut ctx.redis_mm().await?).await?;
-	} else {
-		let mut script = REDIS_SCRIPT.prepare_invoke();
-
-		script.arg(lobby_rows.len());
-
-		for lobby in lobby_rows {
-			script
-				.key(util_mm::key::lobby_config(lobby.lobby_id))
-				.key(util_mm::key::lobby_player_ids(lobby.lobby_id))
-				.key(util_mm::key::lobby_available_spots(
-					lobby.namespace_id,
-					datacenter_id,
-					lobby.lobby_group_id,
-					util_mm::JoinKind::Normal,
-				))
-				.key(util_mm::key::lobby_available_spots(
-					lobby.namespace_id,
-					datacenter_id,
-					lobby.lobby_group_id,
-					util_mm::JoinKind::Party,
-				))
-				.arg(lobby.lobby_id.to_string())
-				.arg(lobby.max_players_normal)
-				.arg(lobby.max_players_party);
-		}
-
-		script.invoke_async(&mut ctx.redis_mm().await?).await?;
 	}
+
+	// NOTE: Don't do anything on undrain
 
 	Ok(())
 }

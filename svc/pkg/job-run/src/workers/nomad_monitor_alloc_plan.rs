@@ -331,11 +331,7 @@ async fn update_db(
 			)
 			.await
 			{
-				tracing::warn!(
-					?err,
-					?alloc_id,
-					"error while trying to manually kill job"
-				);
+				tracing::warn!(?err, ?alloc_id, "error while trying to manually kill job");
 			}
 		}
 	}
