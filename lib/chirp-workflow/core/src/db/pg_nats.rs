@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use indoc::indoc;
 use rivet_pools::prelude::NatsPool;
@@ -22,6 +22,8 @@ use crate::{
 const MAX_PULLED_WORKFLOWS: i64 = 50;
 // Base retry for query retry backoff
 const QUERY_RETRY_MS: usize = 750;
+// Time in between transaction retries
+const TXN_RETRY: Duration = Duration::from_millis(100);
 /// Maximum times a query ran bu this database adapter is retried.
 const MAX_QUERY_RETRIES: usize = 16;
 
@@ -89,16 +91,16 @@ impl DatabasePgNats {
 					use sqlx::Error::*;
 					match &err {
 						// Retry transaction errors immediately
-						Database(db_err) => {
+						Database(db_err)
 							if db_err
 								.message()
-								.contains("TransactionRetryWithProtoRefreshError")
-							{
-								tracing::warn!(message=%db_err.message(), "transaction retry");
-							}
+								.contains("TransactionRetryWithProtoRefreshError") =>
+						{
+							tracing::info!(message=%db_err.message(), "transaction retry");
+							tokio::time::sleep(TXN_RETRY).await;
 						}
 						// Retry internal errors with a backoff
-						Io(_) | Tls(_) | Protocol(_) | PoolTimedOut | PoolClosed
+						Database(_) | Io(_) | Tls(_) | Protocol(_) | PoolTimedOut | PoolClosed
 						| WorkerCrashed => {
 							tracing::warn!(?err, "query retry");
 							backoff.tick().await;

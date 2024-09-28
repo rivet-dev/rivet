@@ -104,8 +104,9 @@ impl Registry {
 }
 
 pub struct RegistryWorkflow {
-	pub run:
-		for<'a> fn(
-			&'a mut WorkflowCtx,
-		) -> Pin<Box<dyn Future<Output = WorkflowResult<serde_json::Value>> + Send + 'a>>,
+	pub run: for<'a> fn(
+		&'a mut WorkflowCtx,
+	) -> Pin<
+		Box<dyn Future<Output = WorkflowResult<serde_json::Value>> + Send + 'a>,
+	>,
 }
