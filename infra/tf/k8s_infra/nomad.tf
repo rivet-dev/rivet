@@ -37,6 +37,23 @@ locals {
 					retry_join = [${join(", ", local.nomad_server_addrs_escaped)}]
 					retry_interval = "10s"
 				}
+
+				# Increase grace period for intermittent cross-region
+				# connection issues. These are usually compounded by the
+				# fact that everything is sent through a tunnel, requiring 2x
+				# the latency in order to reconnect to the server.
+				#
+				# We kill all jobs on a node when the jobs are lost, so we want to be
+				# extra generous about considering a node as lost.
+				#
+				# The default behavior is 10s for the heartbeat TTL + 10s for
+				# heartbeat grace.
+				#
+				# This behavior will sent a heartbeat every 15s but wait 2m
+				# before considering a node as lost and killing all
+				# allocations.
+				heartbeat_grace = "2m"
+				min_heartbeat_ttl = "15s"
 			}
 
 			telemetry {
