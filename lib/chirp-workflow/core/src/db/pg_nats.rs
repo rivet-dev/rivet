@@ -76,10 +76,16 @@ impl DatabasePgNats {
 		T: 'a,
 	{
 		let mut backoff = rivet_util::Backoff::new(3, None, QUERY_RETRY_MS, 50);
+		let mut i = 0;
 
-		for _ in 0..MAX_QUERY_RETRIES {
+		loop {
 			match cb().await {
 				Err(WorkflowError::Sqlx(err)) => {
+					i += 1;
+					if i > MAX_QUERY_RETRIES {
+						return Err(WorkflowError::MaxSqlRetries(err));
+					}
+
 					use sqlx::Error::*;
 					match &err {
 						// Retry transaction errors immediately
@@ -88,13 +94,13 @@ impl DatabasePgNats {
 								.message()
 								.contains("TransactionRetryWithProtoRefreshError")
 							{
-								tracing::info!(message=%db_err.message(), "transaction retry");
+								tracing::warn!(message=%db_err.message(), "transaction retry");
 							}
 						}
 						// Retry internal errors with a backoff
 						Io(_) | Tls(_) | Protocol(_) | PoolTimedOut | PoolClosed
 						| WorkerCrashed => {
-							tracing::info!(?err, "query retry");
+							tracing::warn!(?err, "query retry");
 							backoff.tick().await;
 						}
 						// Throw error
@@ -104,8 +110,6 @@ impl DatabasePgNats {
 				x => return x,
 			}
 		}
-
-		Err(WorkflowError::MaxSqlRetries)
 	}
 }
 

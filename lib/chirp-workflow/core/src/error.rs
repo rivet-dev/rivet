@@ -117,8 +117,8 @@ pub enum WorkflowError {
 	#[error("sql: {0}")]
 	Sqlx(sqlx::Error),
 
-	#[error("max sql retries")]
-	MaxSqlRetries,
+	#[error("max sql retries (last error: {0})")]
+	MaxSqlRetries(sqlx::Error),
 
 	#[error("pools: {0}")]
 	Pools(#[from] rivet_pools::Error),
