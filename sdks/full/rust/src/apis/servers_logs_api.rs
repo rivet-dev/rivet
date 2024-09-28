@@ -15,10 +15,10 @@ use crate::apis::ResponseContent;
 use super::{Error, configuration};
 
 
-/// struct for typed errors of method [`servers_logs_get_server_logs`]
+/// struct for typed errors of method [`servers_logs_get`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum ServersLogsGetServerLogsError {
+pub enum ServersLogsGetError {
     Status400(crate::models::ErrorBody),
     Status403(crate::models::ErrorBody),
     Status404(crate::models::ErrorBody),
@@ -30,7 +30,7 @@ pub enum ServersLogsGetServerLogsError {
 
 
 /// Returns the logs for a given server.
-pub async fn servers_logs_get_server_logs(configuration: &configuration::Configuration, game_id: &str, environment_id: &str, server_id: &str, stream: crate::models::ServersLogStream, watch_index: Option<&str>) -> Result<crate::models::ServersGetServerLogsResponse, Error<ServersLogsGetServerLogsError>> {
+pub async fn servers_logs_get(configuration: &configuration::Configuration, game_id: &str, environment_id: &str, server_id: &str, stream: crate::models::ServersLogStream, watch_index: Option<&str>) -> Result<crate::models::ServersGetServerLogsResponse, Error<ServersLogsGetError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;
@@ -58,7 +58,7 @@ pub async fn servers_logs_get_server_logs(configuration: &configuration::Configu
     if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
         serde_json::from_str(&local_var_content).map_err(Error::from)
     } else {
-        let local_var_entity: Option<ServersLogsGetServerLogsError> = serde_json::from_str(&local_var_content).ok();
+        let local_var_entity: Option<ServersLogsGetError> = serde_json::from_str(&local_var_content).ok();
         let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
         Err(Error::ResponseError(local_var_error))
     }

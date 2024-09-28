@@ -4,13 +4,13 @@ All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**servers_datacenters_list_datacenters**](ServersDatacentersApi.md#servers_datacenters_list_datacenters) | **GET** /games/{game_id}/environments/{environment_id}/datacenters | 
+[**servers_datacenters_list**](ServersDatacentersApi.md#servers_datacenters_list) | **GET** /games/{game_id}/environments/{environment_id}/datacenters | 
 
 
 
-## servers_datacenters_list_datacenters
+## servers_datacenters_list
 
-> crate::models::ServersListDatacentersResponse servers_datacenters_list_datacenters(game_id, environment_id)
+> crate::models::ServersListDatacentersResponse servers_datacenters_list(game_id, environment_id)
 
 
 ### Parameters

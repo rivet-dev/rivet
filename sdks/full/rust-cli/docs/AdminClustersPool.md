@@ -5,7 +5,7 @@
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **desired_count** | **i32** |  | 
-**drain_timeout** | **i64** |  | 
+**drain_timeout_ms** | **i64** |  | 
 **hardware** | [**Vec<crate::models::AdminClustersHardware>**](AdminClustersHardware.md) |  | 
 **max_count** | **i32** |  | 
 **min_count** | **i32** |  | 

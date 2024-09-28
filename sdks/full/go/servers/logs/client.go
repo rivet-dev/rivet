@@ -36,7 +36,7 @@ func NewClient(opts ...core.ClientOption) *Client {
 }
 
 // Returns the logs for a given server.
-func (c *Client) GetServerLogs(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, serverId uuid.UUID, request *servers.GetServerLogsRequest) (*servers.GetServerLogsResponse, error) {
+func (c *Client) Get(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, serverId uuid.UUID, request *servers.GetServerLogsRequest) (*servers.GetServerLogsResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL

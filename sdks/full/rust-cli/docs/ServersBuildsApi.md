@@ -4,17 +4,17 @@ All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**servers_builds_complete_build**](ServersBuildsApi.md#servers_builds_complete_build) | **POST** /games/{game_id}/environments/{environment_id}/builds/{build_id}/complete | 
-[**servers_builds_get_build**](ServersBuildsApi.md#servers_builds_get_build) | **GET** /games/{game_id}/environments/{environment_id}/builds/{build_id} | 
-[**servers_builds_list_builds**](ServersBuildsApi.md#servers_builds_list_builds) | **GET** /games/{game_id}/environments/{environment_id}/builds | 
+[**servers_builds_complete**](ServersBuildsApi.md#servers_builds_complete) | **POST** /games/{game_id}/environments/{environment_id}/builds/{build_id}/complete | 
+[**servers_builds_get**](ServersBuildsApi.md#servers_builds_get) | **GET** /games/{game_id}/environments/{environment_id}/builds/{build_id} | 
+[**servers_builds_list**](ServersBuildsApi.md#servers_builds_list) | **GET** /games/{game_id}/environments/{environment_id}/builds | 
 [**servers_builds_patch_tags**](ServersBuildsApi.md#servers_builds_patch_tags) | **PATCH** /games/{game_id}/environments/{environment_id}/builds/{build_id}/tags | 
-[**servers_builds_prepare_build**](ServersBuildsApi.md#servers_builds_prepare_build) | **POST** /games/{game_id}/environments/{environment_id}/builds/prepare | 
+[**servers_builds_prepare**](ServersBuildsApi.md#servers_builds_prepare) | **POST** /games/{game_id}/environments/{environment_id}/builds/prepare | 
 
 
 
-## servers_builds_complete_build
+## servers_builds_complete
 
-> servers_builds_complete_build(game_id, environment_id, build_id)
+> servers_builds_complete(game_id, environment_id, build_id)
 
 
 Marks an upload as complete.
@@ -44,9 +44,9 @@ Name | Type | Description  | Required | Notes
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 
-## servers_builds_get_build
+## servers_builds_get
 
-> crate::models::ServersGetBuildResponse servers_builds_get_build(game_id, environment_id, build_id, tags_json)
+> crate::models::ServersGetBuildResponse servers_builds_get(game_id, environment_id, build_id, tags_json)
 
 
 Lists all builds of the game associated with the token used. Can be filtered by tags in the query string.
@@ -77,9 +77,9 @@ Name | Type | Description  | Required | Notes
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 
-## servers_builds_list_builds
+## servers_builds_list
 
-> crate::models::ServersListBuildsResponse servers_builds_list_builds(game_id, environment_id, tags_json)
+> crate::models::ServersListBuildsResponse servers_builds_list(game_id, environment_id, tags_json)
 
 
 Lists all builds of the game associated with the token used. Can be filtered by tags in the query string.
@@ -140,9 +140,9 @@ Name | Type | Description  | Required | Notes
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 
-## servers_builds_prepare_build
+## servers_builds_prepare
 
-> crate::models::ServersCreateBuildResponse servers_builds_prepare_build(game_id, environment_id, servers_create_build_request)
+> crate::models::ServersCreateBuildResponse servers_builds_prepare(game_id, environment_id, servers_create_build_request)
 
 
 Creates a new game build for the given game.

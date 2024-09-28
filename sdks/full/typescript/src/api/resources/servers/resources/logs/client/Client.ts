@@ -46,12 +46,12 @@ export class Logs {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.servers.logs.getServerLogs("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *     await client.servers.logs.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
      *         stream: Rivet.servers.LogStream.StdOut,
      *         watchIndex: "string"
      *     })
      */
-    public async getServerLogs(
+    public async get(
         gameId: string,
         environmentId: string,
         serverId: string,

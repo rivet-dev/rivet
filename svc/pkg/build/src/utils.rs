@@ -1,20 +1,18 @@
-use std::hash::{Hasher, DefaultHasher};
+use std::hash::{DefaultHasher, Hasher};
 
-use proto::backend;
-use rivet_operation::prelude::*;
+use chirp_workflow::prelude::*;
+
+use crate::types::{BuildCompression, BuildKind};
 
 /// Generates the file name that holds the build tar.
-pub fn file_name(
-	kind: backend::build::BuildKind,
-	compression: backend::build::BuildCompression,
-) -> String {
+pub fn file_name(kind: BuildKind, compression: BuildCompression) -> String {
 	let file_name = match kind {
-		backend::build::BuildKind::DockerImage => "image",
-		backend::build::BuildKind::OciBundle => "oci-bundle",
+		BuildKind::DockerImage => "image",
+		BuildKind::OciBundle => "oci-bundle",
 	};
 	let file_ext = match compression {
-		backend::build::BuildCompression::None => "tar",
-		backend::build::BuildCompression::Lz4 => "tar.lz4",
+		BuildCompression::None => "tar",
+		BuildCompression::Lz4 => "tar.lz4",
 	};
 	format!("{file_name}.{file_ext}")
 }

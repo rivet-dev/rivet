@@ -1,5 +1,5 @@
 use std::{
-	collections::{hash_map::DefaultHasher, HashMap, HashSet},
+	collections::{HashMap, HashSet},
 	hash::Hasher,
 };
 
@@ -64,11 +64,12 @@ async fn handle(
 			.actions
 			.as_ref()
 			.and_then(|a| a.create.as_ref())
-			.is_some() || lobby_group.regions.iter().any(|x| {
-			x.idle_lobbies
-				.as_ref()
-				.map_or(true, |y| y.min_idle_lobbies == 0)
-		});
+			.is_some()
+			|| lobby_group.regions.iter().any(|x| {
+				x.idle_lobbies
+					.as_ref()
+					.map_or(true, |y| y.min_idle_lobbies == 0)
+			});
 
 		// Prepare runtime
 		let runtime = unwrap_ref!(lobby_group.runtime);
@@ -203,10 +204,7 @@ async fn validate_build(
 			file_name = util_build::file_name(build_kind, build_compression),
 		);
 		if !prewarm_ctx.paths.contains_key(&path) {
-			// Hash build id
-			let mut hasher = DefaultHasher::new();
-			hasher.write(build_id.as_bytes());
-			let build_id_hash = hasher.finish();
+			let build_id_hash = util_build::build_hash(build_id);
 
 			prewarm_ctx.paths.insert(path.clone(), build_id_hash);
 			prewarm_ctx.total_size += upload.content_length;

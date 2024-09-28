@@ -36,7 +36,7 @@ func NewClient(opts ...core.ClientOption) *Client {
 }
 
 // Lists all builds of the game associated with the token used. Can be filtered by tags in the query string.
-func (c *Client) GetBuild(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, buildId uuid.UUID, request *servers.GetBuildRequest) (*servers.GetBuildResponse, error) {
+func (c *Client) Get(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, buildId uuid.UUID, request *servers.GetBuildRequest) (*servers.GetBuildResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
@@ -122,7 +122,7 @@ func (c *Client) GetBuild(ctx context.Context, gameId uuid.UUID, environmentId u
 }
 
 // Lists all builds of the game associated with the token used. Can be filtered by tags in the query string.
-func (c *Client) ListBuilds(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, request *servers.ListBuildsRequest) (*servers.ListBuildsResponse, error) {
+func (c *Client) List(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, request *servers.ListBuildsRequest) (*servers.ListBuildsResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
@@ -286,7 +286,7 @@ func (c *Client) PatchTags(ctx context.Context, gameId uuid.UUID, environmentId 
 }
 
 // Creates a new game build for the given game.
-func (c *Client) PrepareBuild(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, request *servers.CreateBuildRequest) (*servers.CreateBuildResponse, error) {
+func (c *Client) Prepare(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, request *servers.CreateBuildRequest) (*servers.CreateBuildResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
@@ -365,7 +365,7 @@ func (c *Client) PrepareBuild(ctx context.Context, gameId uuid.UUID, environment
 }
 
 // Marks an upload as complete.
-func (c *Client) CompleteBuild(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, buildId uuid.UUID) error {
+func (c *Client) Complete(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, buildId uuid.UUID) error {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL

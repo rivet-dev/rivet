@@ -42,6 +42,7 @@ util-build = { package = "rivet-util-build", path = "../build/util" }
 util-job = { package = "rivet-util-job", path = "../job/util" }
 uuid = { version = "1", features = ["v4", "serde"] }
 
+build = { path = "../build" }
 build-get = { path = "../build/ops/get" }
 cluster = { path = "../cluster" }
 ip-info = { path = "../ip/ops/info" }

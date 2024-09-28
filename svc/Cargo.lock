@@ -1637,20 +1637,25 @@ dependencies = [
  "anyhow",
  "chirp-workflow",
  "cloudflare",
+ "cluster",
  "faker-build",
  "faker-game",
+ "faker-region",
+ "heck 0.3.3",
  "http 0.2.12",
  "include_dir",
  "indoc 1.0.9",
  "ip-info",
  "lazy_static",
  "linode",
+ "nomad-client",
  "nomad-util",
  "rand",
  "reqwest 0.11.27",
  "rivet-metrics",
  "rivet-operation",
  "rivet-runtime",
+ "rivet-util-job",
  "s3-util",
  "serde",
  "serde_json",
@@ -1659,6 +1664,7 @@ dependencies = [
  "strum 0.26.3",
  "token-create",
  "trust-dns-resolver",
+ "upload-get",
 ]
 
 [[package]]
@@ -3094,6 +3100,7 @@ name = "ds"
 version = "0.0.1"
 dependencies = [
  "bit-vec",
+ "build",
  "build-get",
  "chirp-client",
  "chirp-worker",

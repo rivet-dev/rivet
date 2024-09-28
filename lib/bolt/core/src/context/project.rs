@@ -426,28 +426,30 @@ impl ProjectContextData {
 				.unwrap();
 
 				svc_ctxs_map.insert(svc_ctx.name(), svc_ctx.clone());
-			} else {
-				// Read worker
-				let worker_path = pkg.path().join("worker");
-				if fs::metadata(&worker_path.join("Service.toml"))
-					.await
-					.is_ok()
-				{
-					// Load the service
-					let svc_ctx = context::service::ServiceContextData::from_path(
-						Weak::new(),
-						svc_ctxs_map,
-						&workspace_path,
-						&worker_path,
-					)
-					.await
-					.unwrap();
-					svc_ctxs_map.insert(svc_ctx.name(), svc_ctx.clone());
-				}
+			}
 
-				// Load all individual ops
-				Self::load_services_dir(svc_ctxs_map, &workspace_path, pkg.path().join("ops"))
-					.await;
+			// Read worker
+			let worker_path = pkg.path().join("worker");
+			if fs::metadata(&worker_path.join("Service.toml"))
+				.await
+				.is_ok()
+			{
+				// Load the service
+				let svc_ctx = context::service::ServiceContextData::from_path(
+					Weak::new(),
+					svc_ctxs_map,
+					&workspace_path,
+					&worker_path,
+				)
+				.await
+				.unwrap();
+				svc_ctxs_map.insert(svc_ctx.name(), svc_ctx.clone());
+			}
+
+			// Load all individual ops
+			let ops_path = pkg.path().join("ops");
+			if fs::metadata(&ops_path).await.is_ok() {
+				Self::load_services_dir(svc_ctxs_map, &workspace_path, ops_path).await;
 			}
 
 			// Read standalone

@@ -1,4 +1,4 @@
-use std::{collections::hash_map::DefaultHasher, hash::Hasher, net::IpAddr};
+use std::net::IpAddr;
 
 use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
@@ -923,9 +923,7 @@ async fn resolve_image_artifact_url(
 			// Hash build so that the ATS server that we download the build from is always the same one. This
 			// improves cache hit rates and reduces download times.
 			let build_id = unwrap_ref!(build.build_id).as_uuid();
-			let mut hasher = DefaultHasher::new();
-			hasher.write(build_id.as_bytes());
-			let hash = hasher.finish() as i64;
+			let hash = util_build::build_hash(build_id) as i64;
 
 			// NOTE: The algorithm for choosing the vlan_ip from the hash should match the one in
 			// prewarm_ats.rs @ prewarm_ats_cache
@@ -949,7 +947,7 @@ async fn resolve_image_artifact_url(
 				SELECT vlan_ip
 				FROM sel
 				-- Use mod to make sure the hash stays within bounds
-				OFFSET abs($3 % (SELECT COUNT(*) from sel))
+				OFFSET abs($3 % GREATEST((SELECT COUNT(*) from sel), 1))
 				LIMIT 1
 				",
 				// NOTE: region_id is just the old name for datacenter_id

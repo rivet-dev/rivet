@@ -198,6 +198,37 @@ pub async fn create_build(
 	})
 	.await?;
 	let build_id = unwrap_ref!(create_res.build_id).as_uuid();
+	let upload_id = unwrap_ref!(create_res.upload_id).as_uuid();
+
+	let prewarm_datacenter_ids = if let Some(prewarm_datacenter_ids) = body.prewarm_datacenters {
+		prewarm_datacenter_ids
+	} else {
+		let cluster_res = ctx
+			.op(cluster::ops::get_for_game::Input {
+				game_ids: vec![game_id],
+			})
+			.await?;
+		let cluster_id = unwrap!(cluster_res.games.first()).cluster_id;
+
+		let cluster_dcs_res = ctx
+			.op(cluster::ops::datacenter::list::Input {
+				cluster_ids: vec![cluster_id],
+			})
+			.await?;
+
+		unwrap!(cluster_dcs_res.clusters.first())
+			.datacenter_ids
+			.clone()
+	};
+
+	// Prewarm build
+	if !prewarm_datacenter_ids.is_empty() {
+		ctx.op(build::ops::prewarm_ats::Input {
+			datacenter_ids: prewarm_datacenter_ids,
+			build_ids: vec![build_id],
+		})
+		.await?;
+	}
 
 	let image_presigned_request = if !multipart_upload {
 		Some(Box::new(

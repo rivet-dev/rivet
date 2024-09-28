@@ -42,9 +42,9 @@ export class Datacenters {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.servers.datacenters.listDatacenters("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
+     *     await client.servers.datacenters.list("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
      */
-    public async listDatacenters(
+    public async list(
         gameId: string,
         environmentId: string,
         requestOptions?: Datacenters.RequestOptions

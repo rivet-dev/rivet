@@ -10,10 +10,12 @@ acme-lib = "0.9"
 anyhow = "1.0"
 chirp-workflow = { path = "../../../lib/chirp-workflow/core" }
 cloudflare = { git = "https://github.com/cloudflare/cloudflare-rs.git", rev = "f14720e42184ee176a97676e85ef2d2d85bc3aae" }
+heck = "0.3"
 http = "0.2"
 include_dir = "0.7.3"
 indoc = "1.0"
 lazy_static = "1.4"
+nomad-client = "0.0.9"
 nomad-util = { path = "../../../lib/nomad-util" }
 rand = "0.8"
 reqwest = { version = "0.11", features = ["json"] }
@@ -26,10 +28,13 @@ serde_json = "1.0"
 ssh2 = "0.9.4"
 trust-dns-resolver = { version = "0.23.2", features = ["dns-over-native-tls"] }
 strum = { version = "0.26", features = ["derive"] }
+util-job = { package = "rivet-util-job", path = "../job/util" }
 
+cluster = { path = "../cluster" }
 ip-info = { path = "../ip/ops/info" }
 linode = { path = "../linode" }
 token-create = { path = "../token/ops/create" }
+upload-get = { path = "../upload/ops/get" }
 
 [dependencies.sqlx]
 git = "https://github.com/rivet-gg/sqlx"
@@ -38,6 +43,7 @@ default-features = false
 features = [ "json" ]
 
 [dev-dependencies]
-faker-game = { path = "../faker/ops/game" }
 faker-build = { path = "../faker/ops/build" }
+faker-game = { path = "../faker/ops/game" }
+faker-region = { path = "../faker/ops/region" }
 

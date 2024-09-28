@@ -34,7 +34,7 @@ func NewClient(opts ...core.ClientOption) *Client {
 	}
 }
 
-func (c *Client) ListDatacenters(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID) (*servers.ListDatacentersResponse, error) {
+func (c *Client) List(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID) (*servers.ListDatacentersResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL

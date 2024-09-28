@@ -1,9 +1,4 @@
-use std::{
-	collections::HashMap,
-	convert::TryInto,
-	hash::{DefaultHasher, Hasher},
-	net::IpAddr,
-};
+use std::{collections::HashMap, convert::TryInto, net::IpAddr};
 
 use chirp_workflow::prelude::*;
 use cluster::types::BuildDeliveryMethod;
@@ -1327,9 +1322,7 @@ async fn resolve_image_artifact_url(
 
 			// Hash build so that the ATS server that we download the build from is always the same one. This
 			// improves cache hit rates and reduces download times.
-			let mut hasher = DefaultHasher::new();
-			hasher.write(build_id.as_bytes());
-			let hash = hasher.finish() as i64;
+			let hash = build::utils::build_hash(build_id) as i64;
 
 			// NOTE: The algorithm for choosing the vlan_ip from the hash should match the one in
 			// prewarm_ats.rs @ prewarm_ats_cache

@@ -8,5 +8,5 @@ export interface Pool {
     desiredCount: number;
     minCount: number;
     maxCount: number;
-    drainTimeout: number;
+    drainTimeoutMs: number;
 }

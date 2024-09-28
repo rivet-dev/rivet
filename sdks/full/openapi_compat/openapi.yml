@@ -146,7 +146,7 @@ components:
       properties:
         desired_count:
           type: integer
-        drain_timeout:
+        drain_timeout_ms:
           format: int64
           type: integer
         hardware:
@@ -165,7 +165,7 @@ components:
       - desired_count
       - min_count
       - max_count
-      - drain_timeout
+      - drain_timeout_ms
       type: object
     AdminClustersPoolType:
       enum:
@@ -4460,6 +4460,11 @@ components:
           type: boolean
         name:
           type: string
+        prewarm_datacenters:
+          items:
+            format: uuid
+            type: string
+          type: array
       required:
       - name
       - image_tag
@@ -9070,7 +9075,7 @@ paths:
     get:
       description: Lists all builds of the game associated with the token used. Can
         be filtered by tags in the query string.
-      operationId: servers_builds_listBuilds
+      operationId: servers_builds_list
       parameters:
       - in: path
         name: game_id
@@ -9138,7 +9143,7 @@ paths:
   /games/{game_id}/environments/{environment_id}/builds/prepare:
     post:
       description: Creates a new game build for the given game.
-      operationId: servers_builds_prepareBuild
+      operationId: servers_builds_prepare
       parameters:
       - in: path
         name: game_id
@@ -9208,7 +9213,7 @@ paths:
     get:
       description: Lists all builds of the game associated with the token used. Can
         be filtered by tags in the query string.
-      operationId: servers_builds_getBuild
+      operationId: servers_builds_get
       parameters:
       - in: path
         name: game_id
@@ -9282,7 +9287,7 @@ paths:
   /games/{game_id}/environments/{environment_id}/builds/{build_id}/complete:
     post:
       description: Marks an upload as complete.
-      operationId: servers_builds_completeBuild
+      operationId: servers_builds_complete
       parameters:
       - in: path
         name: game_id
@@ -9420,7 +9425,7 @@ paths:
       - ServersBuilds
   /games/{game_id}/environments/{environment_id}/datacenters:
     get:
-      operationId: servers_datacenters_listDatacenters
+      operationId: servers_datacenters_list
       parameters:
       - in: path
         name: game_id
@@ -9779,7 +9784,7 @@ paths:
   /games/{game_id}/environments/{environment_id}/servers/{server_id}/logs:
     get:
       description: Returns the logs for a given server.
-      operationId: servers_logs_getServerLogs
+      operationId: servers_logs_get
       parameters:
       - in: path
         name: game_id

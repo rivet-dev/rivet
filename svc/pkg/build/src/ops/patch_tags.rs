@@ -27,7 +27,7 @@ pub async fn patch_tags(ctx: &OperationCtx, input: &Input) -> GlobalResult<Outpu
 
 	rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| {
 		let ctx = ctx.clone();
-		let build_id = input.build_id.clone();
+		let build_id = input.build_id;
 		let tags_json = tags_json.clone();
 		let exclusive_tags = input.exclusive_tags.clone();
 

@@ -130,12 +130,12 @@ func (h *Hardware) String() string {
 }
 
 type Pool struct {
-	PoolType     PoolType    `json:"pool_type,omitempty"`
-	Hardware     []*Hardware `json:"hardware,omitempty"`
-	DesiredCount int         `json:"desired_count"`
-	MinCount     int         `json:"min_count"`
-	MaxCount     int         `json:"max_count"`
-	DrainTimeout int64       `json:"drain_timeout"`
+	PoolType       PoolType    `json:"pool_type,omitempty"`
+	Hardware       []*Hardware `json:"hardware,omitempty"`
+	DesiredCount   int         `json:"desired_count"`
+	MinCount       int         `json:"min_count"`
+	MaxCount       int         `json:"max_count"`
+	DrainTimeoutMs int64       `json:"drain_timeout_ms"`
 
 	_rawJSON json.RawMessage
 }

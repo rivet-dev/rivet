@@ -15,10 +15,10 @@ use crate::apis::ResponseContent;
 use super::{Error, configuration};
 
 
-/// struct for typed errors of method [`servers_builds_complete_build`]
+/// struct for typed errors of method [`servers_builds_complete`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum ServersBuildsCompleteBuildError {
+pub enum ServersBuildsCompleteError {
     Status400(crate::models::ErrorBody),
     Status403(crate::models::ErrorBody),
     Status404(crate::models::ErrorBody),
@@ -28,10 +28,10 @@ pub enum ServersBuildsCompleteBuildError {
     UnknownValue(serde_json::Value),
 }
 
-/// struct for typed errors of method [`servers_builds_get_build`]
+/// struct for typed errors of method [`servers_builds_get`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum ServersBuildsGetBuildError {
+pub enum ServersBuildsGetError {
     Status400(crate::models::ErrorBody),
     Status403(crate::models::ErrorBody),
     Status404(crate::models::ErrorBody),
@@ -41,10 +41,10 @@ pub enum ServersBuildsGetBuildError {
     UnknownValue(serde_json::Value),
 }
 
-/// struct for typed errors of method [`servers_builds_list_builds`]
+/// struct for typed errors of method [`servers_builds_list`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum ServersBuildsListBuildsError {
+pub enum ServersBuildsListError {
     Status400(crate::models::ErrorBody),
     Status403(crate::models::ErrorBody),
     Status404(crate::models::ErrorBody),
@@ -67,10 +67,10 @@ pub enum ServersBuildsPatchTagsError {
     UnknownValue(serde_json::Value),
 }
 
-/// struct for typed errors of method [`servers_builds_prepare_build`]
+/// struct for typed errors of method [`servers_builds_prepare`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum ServersBuildsPrepareBuildError {
+pub enum ServersBuildsPrepareError {
     Status400(crate::models::ErrorBody),
     Status403(crate::models::ErrorBody),
     Status404(crate::models::ErrorBody),
@@ -82,7 +82,7 @@ pub enum ServersBuildsPrepareBuildError {
 
 
 /// Marks an upload as complete.
-pub async fn servers_builds_complete_build(configuration: &configuration::Configuration, game_id: &str, environment_id: &str, build_id: &str) -> Result<(), Error<ServersBuildsCompleteBuildError>> {
+pub async fn servers_builds_complete(configuration: &configuration::Configuration, game_id: &str, environment_id: &str, build_id: &str) -> Result<(), Error<ServersBuildsCompleteError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;
@@ -106,14 +106,14 @@ pub async fn servers_builds_complete_build(configuration: &configuration::Config
     if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
         Ok(())
     } else {
-        let local_var_entity: Option<ServersBuildsCompleteBuildError> = serde_json::from_str(&local_var_content).ok();
+        let local_var_entity: Option<ServersBuildsCompleteError> = serde_json::from_str(&local_var_content).ok();
         let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
         Err(Error::ResponseError(local_var_error))
     }
 }
 
 /// Lists all builds of the game associated with the token used. Can be filtered by tags in the query string.
-pub async fn servers_builds_get_build(configuration: &configuration::Configuration, game_id: &str, environment_id: &str, build_id: &str, tags_json: Option<&str>) -> Result<crate::models::ServersGetBuildResponse, Error<ServersBuildsGetBuildError>> {
+pub async fn servers_builds_get(configuration: &configuration::Configuration, game_id: &str, environment_id: &str, build_id: &str, tags_json: Option<&str>) -> Result<crate::models::ServersGetBuildResponse, Error<ServersBuildsGetError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;
@@ -140,14 +140,14 @@ pub async fn servers_builds_get_build(configuration: &configuration::Configurati
     if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
         serde_json::from_str(&local_var_content).map_err(Error::from)
     } else {
-        let local_var_entity: Option<ServersBuildsGetBuildError> = serde_json::from_str(&local_var_content).ok();
+        let local_var_entity: Option<ServersBuildsGetError> = serde_json::from_str(&local_var_content).ok();
         let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
         Err(Error::ResponseError(local_var_error))
     }
 }
 
 /// Lists all builds of the game associated with the token used. Can be filtered by tags in the query string.
-pub async fn servers_builds_list_builds(configuration: &configuration::Configuration, game_id: &str, environment_id: &str, tags_json: Option<&str>) -> Result<crate::models::ServersListBuildsResponse, Error<ServersBuildsListBuildsError>> {
+pub async fn servers_builds_list(configuration: &configuration::Configuration, game_id: &str, environment_id: &str, tags_json: Option<&str>) -> Result<crate::models::ServersListBuildsResponse, Error<ServersBuildsListError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;
@@ -174,7 +174,7 @@ pub async fn servers_builds_list_builds(configuration: &configuration::Configura
     if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
         serde_json::from_str(&local_var_content).map_err(Error::from)
     } else {
-        let local_var_entity: Option<ServersBuildsListBuildsError> = serde_json::from_str(&local_var_content).ok();
+        let local_var_entity: Option<ServersBuildsListError> = serde_json::from_str(&local_var_content).ok();
         let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
         Err(Error::ResponseError(local_var_error))
     }
@@ -212,7 +212,7 @@ pub async fn servers_builds_patch_tags(configuration: &configuration::Configurat
 }
 
 /// Creates a new game build for the given game.
-pub async fn servers_builds_prepare_build(configuration: &configuration::Configuration, game_id: &str, environment_id: &str, servers_create_build_request: crate::models::ServersCreateBuildRequest) -> Result<crate::models::ServersCreateBuildResponse, Error<ServersBuildsPrepareBuildError>> {
+pub async fn servers_builds_prepare(configuration: &configuration::Configuration, game_id: &str, environment_id: &str, servers_create_build_request: crate::models::ServersCreateBuildRequest) -> Result<crate::models::ServersCreateBuildResponse, Error<ServersBuildsPrepareError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;
@@ -237,7 +237,7 @@ pub async fn servers_builds_prepare_build(configuration: &configuration::Configu
     if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
         serde_json::from_str(&local_var_content).map_err(Error::from)
     } else {
-        let local_var_entity: Option<ServersBuildsPrepareBuildError> = serde_json::from_str(&local_var_content).ok();
+        let local_var_entity: Option<ServersBuildsPrepareError> = serde_json::from_str(&local_var_content).ok();
         let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
         Err(Error::ResponseError(local_var_error))
     }

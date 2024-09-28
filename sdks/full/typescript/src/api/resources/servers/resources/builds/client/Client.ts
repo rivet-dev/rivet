@@ -46,11 +46,11 @@ export class Builds {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.servers.builds.getBuild("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *     await client.servers.builds.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
      *         tagsJson: "string"
      *     })
      */
-    public async getBuild(
+    public async get(
         gameId: string,
         environmentId: string,
         buildId: string,
@@ -192,11 +192,11 @@ export class Builds {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.servers.builds.listBuilds("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *     await client.servers.builds.list("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
      *         tagsJson: "string"
      *     })
      */
-    public async listBuilds(
+    public async list(
         gameId: string,
         environmentId: string,
         request: Rivet.servers.ListBuildsRequest = {},
@@ -477,16 +477,17 @@ export class Builds {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.servers.builds.prepareBuild("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *     await client.servers.builds.prepare("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
      *         name: "string",
      *         imageTag: "string",
      *         imageFile: {},
      *         multipartUpload: true,
      *         kind: Rivet.servers.BuildKind.DockerImage,
-     *         compression: Rivet.servers.BuildCompression.None
+     *         compression: Rivet.servers.BuildCompression.None,
+     *         prewarmDatacenters: ["d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"]
      *     })
      */
-    public async prepareBuild(
+    public async prepare(
         gameId: string,
         environmentId: string,
         request: Rivet.servers.CreateBuildRequest,
@@ -619,9 +620,9 @@ export class Builds {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.servers.builds.completeBuild("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
+     *     await client.servers.builds.complete("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
      */
-    public async completeBuild(
+    public async complete(
         gameId: string,
         environmentId: string,
         buildId: string,

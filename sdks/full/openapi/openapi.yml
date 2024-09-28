@@ -9363,7 +9363,7 @@ paths:
       description: >-
         Lists all builds of the game associated with the token used. Can be
         filtered by tags in the query string.
-      operationId: servers_builds_getBuild
+      operationId: servers_builds_get
       tags:
         - ServersBuilds
       parameters:
@@ -9439,7 +9439,7 @@ paths:
       description: >-
         Lists all builds of the game associated with the token used. Can be
         filtered by tags in the query string.
-      operationId: servers_builds_listBuilds
+      operationId: servers_builds_list
       tags:
         - ServersBuilds
       parameters:
@@ -9581,7 +9581,7 @@ paths:
   /games/{game_id}/environments/{environment_id}/builds/prepare:
     post:
       description: Creates a new game build for the given game.
-      operationId: servers_builds_prepareBuild
+      operationId: servers_builds_prepare
       tags:
         - ServersBuilds
       parameters:
@@ -9650,7 +9650,7 @@ paths:
   /games/{game_id}/environments/{environment_id}/builds/{build_id}/complete:
     post:
       description: Marks an upload as complete.
-      operationId: servers_builds_completeBuild
+      operationId: servers_builds_complete
       tags:
         - ServersBuilds
       parameters:
@@ -9714,7 +9714,7 @@ paths:
       security: *ref_0
   /games/{game_id}/environments/{environment_id}/datacenters:
     get:
-      operationId: servers_datacenters_listDatacenters
+      operationId: servers_datacenters_list
       tags:
         - ServersDatacenters
       parameters:
@@ -9777,7 +9777,7 @@ paths:
   /games/{game_id}/environments/{environment_id}/servers/{server_id}/logs:
     get:
       description: Returns the logs for a given server.
-      operationId: servers_logs_getServerLogs
+      operationId: servers_logs_get
       tags:
         - ServersLogs
       parameters:
@@ -11098,7 +11098,7 @@ components:
           type: integer
         max_count:
           type: integer
-        drain_timeout:
+        drain_timeout_ms:
           type: integer
           format: int64
       required:
@@ -11107,7 +11107,7 @@ components:
         - desired_count
         - min_count
         - max_count
-        - drain_timeout
+        - drain_timeout_ms
     AdminClustersHardware:
       type: object
       properties:
@@ -14524,6 +14524,11 @@ components:
           $ref: '#/components/schemas/ServersBuildKind'
         compression:
           $ref: '#/components/schemas/ServersBuildCompression'
+        prewarm_datacenters:
+          type: array
+          items:
+            type: string
+            format: uuid
       required:
         - name
         - image_tag

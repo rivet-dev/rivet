@@ -94,6 +94,7 @@ types:
         type: optional<boolean>
       kind: optional<BuildKind>
       compression: optional<BuildCompression>
+      prewarm_datacenters: optional<list<uuid>>
 
   CreateBuildResponse:
     properties:

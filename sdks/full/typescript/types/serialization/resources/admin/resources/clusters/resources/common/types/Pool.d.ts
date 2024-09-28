@@ -13,6 +13,6 @@ export declare namespace Pool {
         desired_count: number;
         min_count: number;
         max_count: number;
-        drain_timeout: number;
+        drain_timeout_ms: number;
     }
 }

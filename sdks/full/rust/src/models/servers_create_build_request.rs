@@ -26,6 +26,8 @@ pub struct ServersCreateBuildRequest {
     pub multipart_upload: Option<bool>,
     #[serde(rename = "name")]
     pub name: String,
+    #[serde(rename = "prewarm_datacenters", skip_serializing_if = "Option::is_none")]
+    pub prewarm_datacenters: Option<Vec<uuid::Uuid>>,
 }
 
 impl ServersCreateBuildRequest {
@@ -37,6 +39,7 @@ impl ServersCreateBuildRequest {
             kind: None,
             multipart_upload: None,
             name,
+            prewarm_datacenters: None,
         }
     }
 }

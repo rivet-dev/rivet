@@ -927,8 +927,8 @@ async fn handle(
 									]);
 								} else if ranges.iter().any(|other_range| {
 									this_range.proto == other_range.proto
-										&& this_range.max >= other_range.min && this_range.min
-										<= other_range.max
+										&& this_range.max >= other_range.min
+										&& this_range.min <= other_range.max
 								}) {
 									errors.push(util::err_path![
 										"config",

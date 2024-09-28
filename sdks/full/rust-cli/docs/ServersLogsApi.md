@@ -4,13 +4,13 @@ All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**servers_logs_get_server_logs**](ServersLogsApi.md#servers_logs_get_server_logs) | **GET** /games/{game_id}/environments/{environment_id}/servers/{server_id}/logs | 
+[**servers_logs_get**](ServersLogsApi.md#servers_logs_get) | **GET** /games/{game_id}/environments/{environment_id}/servers/{server_id}/logs | 
 
 
 
-## servers_logs_get_server_logs
+## servers_logs_get
 
-> crate::models::ServersGetServerLogsResponse servers_logs_get_server_logs(game_id, environment_id, server_id, stream, watch_index)
+> crate::models::ServersGetServerLogsResponse servers_logs_get(game_id, environment_id, server_id, stream, watch_index)
 
 
 Returns the logs for a given server.

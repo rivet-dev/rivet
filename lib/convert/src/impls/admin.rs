@@ -96,7 +96,7 @@ impl ApiTryFrom<cluster::types::Datacenter> for models::AdminClustersDatacenter 
 				.map(|p| {
 					Ok(models::AdminClustersPool {
 						desired_count: p.desired_count.try_into()?,
-						drain_timeout: p.drain_timeout.try_into()?,
+						drain_timeout_ms: p.drain_timeout.try_into()?,
 						hardware: p
 							.hardware
 							.iter()

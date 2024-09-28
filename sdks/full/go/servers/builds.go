@@ -21,11 +21,12 @@ type ListBuildsRequest struct {
 type CreateBuildRequest struct {
 	Name string `json:"name"`
 	// A tag given to the game build.
-	ImageTag        string              `json:"image_tag"`
-	ImageFile       *upload.PrepareFile `json:"image_file,omitempty"`
-	MultipartUpload *bool               `json:"multipart_upload,omitempty"`
-	Kind            *BuildKind          `json:"kind,omitempty"`
-	Compression     *BuildCompression   `json:"compression,omitempty"`
+	ImageTag           string              `json:"image_tag"`
+	ImageFile          *upload.PrepareFile `json:"image_file,omitempty"`
+	MultipartUpload    *bool               `json:"multipart_upload,omitempty"`
+	Kind               *BuildKind          `json:"kind,omitempty"`
+	Compression        *BuildCompression   `json:"compression,omitempty"`
+	PrewarmDatacenters []uuid.UUID         `json:"prewarm_datacenters,omitempty"`
 
 	_rawJSON json.RawMessage
 }

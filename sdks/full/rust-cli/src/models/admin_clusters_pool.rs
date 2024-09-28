@@ -15,8 +15,8 @@
 pub struct AdminClustersPool {
     #[serde(rename = "desired_count")]
     pub desired_count: i32,
-    #[serde(rename = "drain_timeout")]
-    pub drain_timeout: i64,
+    #[serde(rename = "drain_timeout_ms")]
+    pub drain_timeout_ms: i64,
     #[serde(rename = "hardware")]
     pub hardware: Vec<crate::models::AdminClustersHardware>,
     #[serde(rename = "max_count")]
@@ -28,10 +28,10 @@ pub struct AdminClustersPool {
 }
 
 impl AdminClustersPool {
-    pub fn new(desired_count: i32, drain_timeout: i64, hardware: Vec<crate::models::AdminClustersHardware>, max_count: i32, min_count: i32, pool_type: crate::models::AdminClustersPoolType) -> AdminClustersPool {
+    pub fn new(desired_count: i32, drain_timeout_ms: i64, hardware: Vec<crate::models::AdminClustersHardware>, max_count: i32, min_count: i32, pool_type: crate::models::AdminClustersPoolType) -> AdminClustersPool {
         AdminClustersPool {
             desired_count,
-            drain_timeout,
+            drain_timeout_ms,
             hardware,
             max_count,
             min_count,
