@@ -25,7 +25,7 @@ use crate::{
 			escape_go_template, gen_oci_bundle_config, inject_consul_env_template,
 			nomad_host_port_env_var, template_env_var_int, DecodedPort, TransportProtocol,
 		},
-		NOMAD_CONFIG, NOMAD_REGION,
+		NOMAD_CONFIG, NOMAD_REGION, RUNC_CLEANUP_CPU, RUNC_CLEANUP_MEMORY,
 	},
 };
 
@@ -40,6 +40,7 @@ const SETUP_SCRIPT: &str = include_str!("./scripts/setup.sh");
 const SETUP_JOB_RUNNER_SCRIPT: &str = include_str!("./scripts/setup_job_runner.sh");
 const SETUP_OCI_BUNDLE_SCRIPT: &str = include_str!("./scripts/setup_oci_bundle.sh");
 const SETUP_CNI_NETWORK_SCRIPT: &str = include_str!("./scripts/setup_cni_network.sh");
+const CLEANUP_SCRIPT: &str = include_str!("./scripts/cleanup.sh");
 
 #[derive(Default, Clone)]
 struct GameGuardUnnest {
@@ -831,36 +832,36 @@ async fn submit_job(ctx: &ActivityCtx, input: &SubmitJobInput) -> GlobalResult<S
 					})),
 					..Task::new()
 				},
-				// TODO: Remove
-				// Task {
-				// 	name: Some("runc-cleanup".into()),
-				// 	lifecycle: Some(Box::new(TaskLifecycle {
-				// 		hook: Some("poststop".into()),
-				// 		sidecar: Some(false),
-				// 	})),
-				// 	driver: Some("raw_exec".into()),
-				// 	config: Some({
-				// 		let mut x = HashMap::new();
-				// 		x.insert("command".into(), json!("${NOMAD_TASK_DIR}/cleanup.sh"));
-				// 		x
-				// 	}),
-				// 	templates: Some(vec![Template {
-				// 		embedded_tmpl: Some(CLEANUP_SCRIPT.into()),
-				// 		dest_path: Some("${NOMAD_TASK_DIR}/cleanup.sh".into()),
-				// 		perms: Some("744".into()),
-				// 		..Template::new()
-				// 	}]),
-				// 	resources: Some(Box::new(Resources {
-				// 		CPU: Some(util_mm::RUNC_CLEANUP_CPU),
-				// 		memory_mb: Some(util_mm::RUNC_CLEANUP_MEMORY),
-				// 		..Resources::new()
-				// 	})),
-				// 	log_config: Some(Box::new(LogConfig {
-				// 		max_files: Some(4),
-				// 		max_file_size_mb: Some(2),
-				// 	})),
-				// 	..Task::new()
-				// },
+				Task {
+					name: Some("runc-cleanup".into()),
+					lifecycle: Some(Box::new(TaskLifecycle {
+						hook: Some("poststop".into()),
+						sidecar: Some(false),
+					})),
+					driver: Some("raw_exec".into()),
+					config: Some({
+						let mut x = HashMap::new();
+						x.insert("command".into(), json!("${NOMAD_TASK_DIR}/cleanup.sh"));
+						x
+					}),
+					templates: Some(vec![Template {
+						embedded_tmpl: Some(CLEANUP_SCRIPT.into()),
+						dest_path: Some("${NOMAD_TASK_DIR}/cleanup.sh".into()),
+						perms: Some("744".into()),
+						..Template::new()
+					}]),
+					resources: Some(Box::new(Resources {
+						CPU: Some(RUNC_CLEANUP_CPU),
+						memory_mb: Some(RUNC_CLEANUP_MEMORY),
+						..Resources::new()
+					})),
+					log_config: Some(Box::new(LogConfig {
+						max_files: Some(4),
+						max_file_size_mb: Some(2),
+						disabled: None,
+					})),
+					..Task::new()
+				},
 				// Run cleanup task
 				Task {
 					name: Some(util_job::RUN_CLEANUP_TASK_NAME.into()),

@@ -510,33 +510,35 @@ impl ServiceContextData {
 				);
 			}
 
-			let can_depend =
-				if self.is_monolith_worker() {
-					matches!(
-						dep.config().kind,
-						ServiceKind::Database { .. }
-							| ServiceKind::Cache { .. } | ServiceKind::Operation { .. }
-							| ServiceKind::Package { .. }
-							| ServiceKind::Consumer { .. }
-					)
-				} else if matches!(self.config().kind, ServiceKind::Api { .. }) {
-					matches!(
-						dep.config().kind,
-						ServiceKind::Database { .. }
-							| ServiceKind::Cache { .. } | ServiceKind::Operation { .. }
-							| ServiceKind::Package { .. }
-							| ServiceKind::ApiRoutes { .. }
-							| ServiceKind::Consumer { .. }
-					)
-				} else {
-					matches!(
-						dep.config().kind,
-						ServiceKind::Database { .. }
-							| ServiceKind::Cache { .. } | ServiceKind::Operation { .. }
-							| ServiceKind::Package { .. }
-							| ServiceKind::Consumer { .. }
-					)
-				};
+			let can_depend = if self.is_monolith_worker() {
+				matches!(
+					dep.config().kind,
+					ServiceKind::Database { .. }
+						| ServiceKind::Cache { .. }
+						| ServiceKind::Operation { .. }
+						| ServiceKind::Package { .. }
+						| ServiceKind::Consumer { .. }
+				)
+			} else if matches!(self.config().kind, ServiceKind::Api { .. }) {
+				matches!(
+					dep.config().kind,
+					ServiceKind::Database { .. }
+						| ServiceKind::Cache { .. }
+						| ServiceKind::Operation { .. }
+						| ServiceKind::Package { .. }
+						| ServiceKind::ApiRoutes { .. }
+						| ServiceKind::Consumer { .. }
+				)
+			} else {
+				matches!(
+					dep.config().kind,
+					ServiceKind::Database { .. }
+						| ServiceKind::Cache { .. }
+						| ServiceKind::Operation { .. }
+						| ServiceKind::Package { .. }
+						| ServiceKind::Consumer { .. }
+				)
+			};
 
 			if !can_depend {
 				panic!(
