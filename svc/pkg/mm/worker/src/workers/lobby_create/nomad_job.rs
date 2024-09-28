@@ -107,7 +107,6 @@ pub fn gen_lobby_docker_job(
 		// Allow oversubscribing memory by 50% of the reserved
 		// memory if using less than the node's total memory
 		memory_max_mb: Some(tier.memory_max.try_into()?),
-		disk_mb: Some(tier.disk as i32), // TODO: Is this deprecated?
 		..Resources::new()
 	};
 

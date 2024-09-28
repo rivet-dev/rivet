@@ -12,6 +12,7 @@ const RESERVE_LB_MEMORY: u64 = 512;
 const RESERVE_MEMORY: u64 = RESERVE_SYSTEM_MEMORY + RESERVE_LB_MEMORY;
 
 const CPU_PER_CORE: u64 = 1999;
+const DISK_PER_CORE: u64 = 8192;
 
 /// Provider agnostic hardware specs.
 #[derive(Debug)]
@@ -53,7 +54,7 @@ impl JobNodeConfig {
 	}
 
 	pub fn disk_per_core(&self) -> u64 {
-		self.disk / self.cpu_cores
+		DISK_PER_CORE
 	}
 
 	pub fn bandwidth_per_core(&self) -> u64 {

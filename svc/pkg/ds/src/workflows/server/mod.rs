@@ -473,7 +473,7 @@ async fn submit_job(ctx: &ActivityCtx, input: &SubmitJobInput) -> GlobalResult<S
 		// Nomad configures CPU based on MHz, not millicores. We havel to calculate the CPU share
 		// by knowing how many MHz are on the client.
 		CPU: if tier.rivet_cores_numerator < tier.rivet_cores_denominator {
-			Some((tier.cpu - util_job::TASK_CLEANUP_CPU as u64).try_into()?)
+			Some(tier.cpu.try_into()?)
 		} else {
 			None
 		},
@@ -482,20 +482,10 @@ async fn submit_job(ctx: &ActivityCtx, input: &SubmitJobInput) -> GlobalResult<S
 		} else {
 			None
 		},
-		memory_mb: Some(
-			(TryInto::<i64>::try_into(memory)? / (1024 * 1024)
-				- util_job::TASK_CLEANUP_MEMORY as i64)
-				.try_into()?,
-		),
+		memory_mb: Some(tier.memory.try_into()?),
 		// Allow oversubscribing memory by 50% of the reserved
 		// memory if using less than the node's total memory
-		memory_max_mb: None,
-		// Some(
-		// 	(TryInto::<i64>::try_into(memory_max)? / (1024 * 1024)
-		// 		- util_job::TASK_CLEANUP_MEMORY as i64)
-		// 		.try_into()?,
-		// ),
-		disk_mb: Some(tier.disk as i32), // TODO: Is this deprecated?
+		memory_max_mb: Some(tier.memory_max.try_into()?),
 		..Resources::new()
 	};
 
