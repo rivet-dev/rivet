@@ -246,8 +246,11 @@ async fn inner(
 		.map(TryInto::try_into)
 		.collect::<GlobalResult<Vec<Server>>>()?;
 
-	// Sort job servers by memory usage
+	// Sort job servers by allocated memory
 	servers.sort_by_key(|server| memory_by_server.get(&server.server_id));
+
+	// TODO: remove
+	tracing::info!(server_ids=?servers.iter().map(|s| s.server_id).collect::<Vec<_>>(), ?memory_by_server, "server topo");
 
 	// TODO: RVT-3732 Sort gg and ats servers by cpu usage
 	// servers.sort_by_key
@@ -388,7 +391,6 @@ async fn scale_down_job_servers(
 
 		let drain_candidates = nomad_servers
 			.iter()
-			.rev()
 			.take(drain_count)
 			.map(|server| server.server_id);
 
@@ -420,7 +422,6 @@ async fn scale_down_gg_servers<'a, I: Iterator<Item = &'a Server> + DoubleEndedI
 		tracing::info!(count=%drain_count, "draining gg servers");
 
 		let drain_candidates = installed_servers
-			.rev()
 			.take(drain_count)
 			.map(|server| server.server_id);
 
@@ -455,7 +456,6 @@ async fn scale_down_ats_servers<
 		tracing::info!(count=%drain_count, "draining ats servers");
 
 		let drain_candidates = installed_servers
-			.rev()
 			.take(drain_count)
 			.map(|server| server.server_id);
 
