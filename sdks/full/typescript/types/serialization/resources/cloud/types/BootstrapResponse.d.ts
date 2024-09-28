@@ -14,5 +14,6 @@ export declare namespace BootstrapResponse {
         origins: cloud.BootstrapOrigins.Raw;
         captcha: cloud.BootstrapCaptcha.Raw;
         login_methods: cloud.BootstrapLoginMethods.Raw;
+        deploy_hash: string;
     }
 }

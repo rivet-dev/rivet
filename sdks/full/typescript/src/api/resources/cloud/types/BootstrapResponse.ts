@@ -11,4 +11,5 @@ export interface BootstrapResponse {
     origins: Rivet.cloud.BootstrapOrigins;
     captcha: Rivet.cloud.BootstrapCaptcha;
     loginMethods: Rivet.cloud.BootstrapLoginMethods;
+    deployHash: string;
 }

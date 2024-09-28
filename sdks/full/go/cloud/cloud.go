@@ -15,6 +15,7 @@ type BootstrapResponse struct {
 	Origins      *BootstrapOrigins      `json:"origins,omitempty"`
 	Captcha      *BootstrapCaptcha      `json:"captcha,omitempty"`
 	LoginMethods *BootstrapLoginMethods `json:"login_methods,omitempty"`
+	DeployHash   string                 `json:"deploy_hash"`
 
 	_rawJSON json.RawMessage
 }

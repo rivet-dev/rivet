@@ -620,7 +620,7 @@ pub async fn create(
 ) -> GlobalResult<models::CreateGroupResponse> {
 	let (_, user_ent) = ctx.auth().user(ctx.op_ctx()).await?;
 
-	let publicity = unwrap!(std::env::var("RIVET_ACCESS_KIND").ok());
+	let publicity = util::env::var("RIVET_ACCESS_KIND")?;
 	match publicity.as_str() {
 		"public" => {}
 		"private" => {

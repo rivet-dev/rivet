@@ -15,7 +15,7 @@ pub async fn get(
 pub async fn build_bootstrap_data() -> GlobalResult<models::CloudBootstrapResponse> {
 	Ok(models::CloudBootstrapResponse {
 		cluster: models::CloudBootstrapCluster::Oss,
-		access: match unwrap!(util::env::var("RIVET_ACCESS_KIND").ok()).as_str() {
+		access: match util::env::var("RIVET_ACCESS_KIND")?.as_str() {
 			"public" => models::CloudBootstrapAccess::Public,
 			"private" => models::CloudBootstrapAccess::Private,
 			_ => bail!("invalid RIVET_ACCESS_KIND"),
@@ -46,5 +46,6 @@ pub async fn build_bootstrap_data() -> GlobalResult<models::CloudBootstrapRespon
 			access_token: util::env::var("RIVET_ACCESS_TOKEN_LOGIN").map_or(false, |v| v == "1"),
 			email: util::env::var("SENDGRID_KEY").is_ok(),
 		}),
+		deploy_hash: util::env::var("RIVET_PROJECT_SOURCE_HASH")?,
 	})
 }

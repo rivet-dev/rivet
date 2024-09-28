@@ -9912,12 +9912,15 @@ components:
           $ref: '#/components/schemas/CloudBootstrapCaptcha'
         login_methods:
           $ref: '#/components/schemas/CloudBootstrapLoginMethods'
+        deploy_hash:
+          type: string
       required:
         - cluster
         - access
         - origins
         - captcha
         - login_methods
+        - deploy_hash
     CloudBootstrapCluster:
       type: string
       enum:

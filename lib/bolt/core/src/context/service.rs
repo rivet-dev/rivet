@@ -773,6 +773,11 @@ impl ServiceContextData {
 		let source_hash = self.source_hash_dev(&BuildOptimization::Debug).await?;
 		env.insert("RIVET_SOURCE_HASH".into(), source_hash.clone());
 
+		env.insert(
+			"RIVET_PROJECT_SOURCE_HASH".into(),
+			project_ctx.source_hash(),
+		);
+
 		let ns_service_config = self.ns_service_config().await;
 		env.insert(
 			"TOKIO_WORKER_THREADS".into(),

@@ -23,6 +23,7 @@ export const BootstrapResponse: core.serialization.ObjectSchema<
     origins: cloud$$bootstrapOrigins,
     captcha: cloud$$bootstrapCaptcha,
     loginMethods: core.serialization.property("login_methods", cloud$$bootstrapLoginMethods),
+    deployHash: core.serialization.property("deploy_hash", core.serialization.string()),
 });
 
 export declare namespace BootstrapResponse {
@@ -33,5 +34,6 @@ export declare namespace BootstrapResponse {
         origins: cloud.BootstrapOrigins.Raw;
         captcha: cloud.BootstrapCaptcha.Raw;
         login_methods: cloud.BootstrapLoginMethods.Raw;
+        deploy_hash: string;
     }
 }

@@ -19,6 +19,7 @@ types:
       origins: BootstrapOrigins
       captcha: BootstrapCaptcha
       login_methods: BootstrapLoginMethods
+      deploy_hash: string
 
   BootstrapCluster:
     docs: The type of cluster that the backend is currently running.

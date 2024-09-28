@@ -441,6 +441,8 @@ components:
           $ref: '#/components/schemas/CloudBootstrapCaptcha'
         cluster:
           $ref: '#/components/schemas/CloudBootstrapCluster'
+        deploy_hash:
+          type: string
         domains:
           $ref: '#/components/schemas/CloudBootstrapDomains'
         login_methods:
@@ -453,6 +455,7 @@ components:
       - origins
       - captcha
       - login_methods
+      - deploy_hash
       type: object
     CloudBuildSummary:
       description: A build summary.

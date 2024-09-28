@@ -10,7 +10,7 @@ pub async fn validate(
 	ctx: Ctx<Auth>,
 	body: models::CloudValidateGroupRequest,
 ) -> GlobalResult<models::CloudValidateGroupResponse> {
-	let publicity = unwrap!(std::env::var("RIVET_ACCESS_KIND").ok());
+	let publicity = util::env::var("RIVET_ACCESS_KIND")?;
 	match publicity.as_str() {
 		"public" => {}
 		"private" => {
