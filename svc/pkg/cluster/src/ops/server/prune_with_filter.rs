@@ -85,7 +85,11 @@ async fn run_for_linode_account(
 	tracing::info!("pruning {} servers", servers.len());
 
 	for server in servers {
-		let linode_id = unwrap_ref!(server.provider_server_id).parse()?;
+		let Some(linode_id) = &server.provider_server_id else {
+			tracing::warn!(server_id = ?server.server_id, "provider_server_ide is none");
+			continue;
+		};
+		let linode_id = linode_id.parse()?;
 
 		tracing::info!("pruning {} (linode_id {})", server.server_id, linode_id);
 
