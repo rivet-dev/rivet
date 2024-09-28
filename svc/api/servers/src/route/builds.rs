@@ -139,8 +139,9 @@ pub async fn patch_tags(
 		.check_game(ctx.op_ctx(), game_id, env_id, false)
 		.await?;
 
-	let tags: HashMap<String, String> =
-		serde_json::from_value::<HashMap<String, String>>(unwrap!(body.tags))?;
+	let tags = unwrap_with!(body.tags, API_BAD_BODY, error = "missing field `tags`");
+	let tags = serde_json::from_value::<HashMap<String, String>>(tags)
+		.map_err(|err| err_code!(API_BAD_BODY, error = err))?;
 
 	ctx.op(build::ops::get::Input {
 		build_ids: vec![build_id],

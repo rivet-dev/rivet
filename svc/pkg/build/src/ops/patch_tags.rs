@@ -41,15 +41,15 @@ pub async fn patch_tags(ctx: &OperationCtx, input: &Input) -> GlobalResult<Outpu
 					SET tags = (
 						SELECT jsonb_object_agg(key, value)
 						FROM jsonb_each(tags)
-						WHERE NOT (key = ANY($2::text[]))
+						WHERE NOT (key = ANY($2::TEXT[]))
 					)
 					WHERE
-						b.game_id = (
-							SELECT game_id
+						b.env_id = (
+							SELECT env_id
 							FROM db_build.builds
 							WHERE build_id = $1
 						)
-						AND tags ?| $2::text[];
+						AND tags ?| $2::TEXT[]
 					",
 					&build_id,
 					&exclusive_tags,
