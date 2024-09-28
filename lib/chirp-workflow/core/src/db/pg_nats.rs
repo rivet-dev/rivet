@@ -168,32 +168,43 @@ impl Database for DatabasePgNats {
 		worker_instance_id: Uuid,
 		filter: &[&str],
 	) -> WorkflowResult<Vec<PulledWorkflow>> {
-		// Select all workflows that haven't started or that have a wake condition
+		// Select all workflows that have a wake condition
 		let workflow_rows = self
 			.query(|| async {
 				sqlx::query_as::<_, PulledWorkflowRow>(indoc!(
 					"
 					WITH
 						pull_workflows AS (
-							UPDATE db_workflow.workflows AS w
-								-- Assign this node to this workflow
-							SET worker_instance_id = $1
-							WHERE
-								-- Filter
-								workflow_name = ANY($2) AND
-								-- Not already complete
-								output IS NULL AND
-								-- No assigned node (not running)
-								worker_instance_id IS NULL AND
-								-- Check for wake condition
-								(
-									-- Immediate
-									wake_immediate OR
-									-- After deadline
+							WITH select_pending_workflows AS (
+								SELECT workflow_id
+								FROM db_workflow.workflows
+								WHERE
+									-- Filter
+									workflow_name = ANY($2) AND
+									-- Not already complete
+									output IS NULL AND
+									-- No assigned node (not running)
+									worker_instance_id IS NULL AND
+									-- Check for wake condition
 									(
-										wake_deadline_ts IS NOT NULL AND
-										$3 > wake_deadline_ts - $4
-									) OR
+										-- Immediate
+										wake_immediate OR
+										-- After deadline
+										(
+											wake_deadline_ts IS NOT NULL AND
+											$3 > wake_deadline_ts - $4
+										)
+									)
+								UNION
+								SELECT workflow_id
+								FROM db_workflow.workflows AS w
+								WHERE
+									-- Filter
+									workflow_name = ANY($2) AND
+									-- Not already complete
+									output IS NULL AND
+									-- No assigned node (not running)
+									worker_instance_id IS NULL AND
 									-- Signal exists
 									(
 										SELECT true
@@ -203,7 +214,17 @@ impl Database for DatabasePgNats {
 											s.signal_name = ANY(w.wake_signals) AND
 											s.ack_ts IS NULL
 										LIMIT 1
-									) OR
+									)
+								UNION
+								SELECT workflow_id
+								FROM db_workflow.workflows AS w
+								WHERE
+									-- Filter
+									workflow_name = ANY($2) AND
+									-- Not already complete
+									output IS NULL AND
+									-- No assigned node (not running)
+									worker_instance_id IS NULL AND
 									-- Tagged signal exists
 									(
 										SELECT true
@@ -213,7 +234,17 @@ impl Database for DatabasePgNats {
 											s.tags <@ w.tags AND
 											s.ack_ts IS NULL
 										LIMIT 1
-									) OR
+									)
+								UNION
+								SELECT workflow_id
+								FROM db_workflow.workflows AS w
+								WHERE
+									-- Filter
+									workflow_name = ANY($2) AND
+									-- Not already complete
+									output IS NULL AND
+									-- No assigned node (not running)
+									worker_instance_id IS NULL AND
 									-- Sub workflow completed
 									(
 										SELECT true
@@ -222,9 +253,14 @@ impl Database for DatabasePgNats {
 											w2.workflow_id = w.wake_sub_workflow_id AND
 											output IS NOT NULL
 									)
-								)
-							LIMIT $5
-							RETURNING workflow_id, workflow_name, create_ts, ray_id, input, wake_deadline_ts
+								LIMIT $5
+							)
+							UPDATE db_workflow.workflows AS w
+							-- Assign current node to this workflow
+							SET worker_instance_id = $1
+							FROM select_pending_workflows AS pw
+							WHERE w.workflow_id = pw.workflow_id
+							RETURNING w.workflow_id, workflow_name, create_ts, ray_id, input, wake_deadline_ts
 						),
 						-- Update last ping
 						worker_instance_update AS (
