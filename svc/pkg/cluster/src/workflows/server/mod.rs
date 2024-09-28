@@ -675,7 +675,7 @@ async fn cleanup(
 			tracing::info!(server_id=?input.server_id, "destroying linode server");
 
 			ctx.signal(linode::workflows::server::Destroy {})
-				.tag("server_id", input.server_id)
+				.to_workflow(provider_server_workflow_id)
 				.send()
 				.await?;
 
@@ -734,14 +734,14 @@ impl CustomListener for State {
 		1    0      0 // undrain, taint,             nomad drain complete
 		1    0      1 //                             nomad drain complete
 		1    1      0 // undrain, taint, dns delete, nomad drain complete
-		1    1      1 //                             nomad drain complete
+		1    1      1 //                 dns delete, nomad drain complete
 
 	destroy				 // always
 	drain				 // if !drain
 	undrain				 // if drain && !taint
 	taint				 // if !taint
 	dns create			 // if !dns && !drain && !taint
-	dns delete			 // if dns && (!drain || !taint)
+	dns delete			 // if dns
 	nomad registered	 // always
 	nomad drain complete // if drain
 	*/
@@ -763,7 +763,7 @@ impl CustomListener for State {
 			signals.push(DnsCreate::NAME);
 		}
 
-		if self.has_dns && (!self.draining || !self.is_tainted) {
+		if self.has_dns {
 			signals.push(DnsDelete::NAME);
 		}
 
