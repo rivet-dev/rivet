@@ -1,7 +1,6 @@
 use chirp_workflow::prelude::*;
 use rivet_operation::prelude::proto::backend::pkg::nomad;
 use serde::Deserialize;
-use serde_json::json;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]

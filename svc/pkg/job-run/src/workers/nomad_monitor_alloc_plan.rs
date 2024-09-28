@@ -3,10 +3,7 @@ use proto::backend::{self, pkg::*};
 use redis::AsyncCommands;
 use serde::Deserialize;
 
-use crate::{
-	util::{signal_allocation, NOMAD_REGION},
-	workers::{NEW_NOMAD_CONFIG, NOMAD_CONFIG},
-};
+use crate::{util::NOMAD_REGION, workers::NEW_NOMAD_CONFIG};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -320,26 +317,24 @@ async fn update_db(
 			.map(|id| id != &alloc_id)
 			.unwrap_or_default()
 		{
-			tracing::warn!(%run_id, existing_alloc_id=?run_row.alloc_id, new_alloc_id=%alloc_id, "different allocation id given, killing new allocation");
+			tracing::warn!(%run_id, existing_alloc_id=?run_row.alloc_id, new_alloc_id=%alloc_id, "different allocation id given, killing job");
 
-			if let Err(err) = signal_allocation(
-				&NOMAD_CONFIG,
-				&alloc_id,
-				None,
+			if let Err(err) = nomad_client_new::apis::jobs_api::delete_job(
+				&NEW_NOMAD_CONFIG,
+				&job_id,
 				Some(NOMAD_REGION),
 				None,
 				None,
-				Some(nomad_client::models::AllocSignalRequest {
-					task: None,
-					signal: Some("SIGKILL".to_string()),
-				}),
+				None,
+				Some(false),
+				None,
 			)
 			.await
 			{
 				tracing::warn!(
 					?err,
 					?alloc_id,
-					"error while trying to manually kill allocation"
+					"error while trying to manually kill job"
 				);
 			}
 		}

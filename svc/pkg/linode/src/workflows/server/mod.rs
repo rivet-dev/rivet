@@ -266,6 +266,7 @@ struct CreateInstanceOutput {
 }
 
 #[activity(CreateInstance)]
+#[timeout = 120]
 async fn create_instance(
 	ctx: &ActivityCtx,
 	input: &CreateInstanceInput,

@@ -120,7 +120,7 @@ impl Client {
 		let res = self
 			.request(
 				self.inner
-					.get(&format!("https://api.linode.com/v4{endpoint}")),
+					.get(format!("https://api.linode.com/v4{endpoint}")),
 				None,
 				false,
 			)
@@ -132,7 +132,7 @@ impl Client {
 	pub async fn delete(&self, endpoint: &str) -> GlobalResult<()> {
 		self.request(
 			self.inner
-				.delete(&format!("https://api.linode.com/v4{endpoint}")),
+				.delete(format!("https://api.linode.com/v4{endpoint}")),
 			None,
 			true,
 		)
@@ -149,7 +149,7 @@ impl Client {
 		let res = self
 			.request(
 				self.inner
-					.post(&format!("https://api.linode.com/v4{endpoint}"))
+					.post(format!("https://api.linode.com/v4{endpoint}"))
 					.header("content-type", "application/json"),
 				Some(body),
 				false,
@@ -162,7 +162,7 @@ impl Client {
 	pub async fn post_no_res(&self, endpoint: &str, body: serde_json::Value) -> GlobalResult<()> {
 		self.request(
 			self.inner
-				.post(&format!("https://api.linode.com/v4{endpoint}"))
+				.post(format!("https://api.linode.com/v4{endpoint}"))
 				.header("content-type", "application/json"),
 			Some(body),
 			false,

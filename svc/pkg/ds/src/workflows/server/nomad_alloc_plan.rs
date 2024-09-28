@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use chirp_workflow::prelude::*;
 
-use crate::util::{signal_allocation, NOMAD_CONFIG, NOMAD_REGION};
+use crate::util::{NOMAD_CONFIG, NOMAD_REGION};
 
 // TODO:
 const TRAEFIK_GRACE_PERIOD: Duration = Duration::from_secs(2);
@@ -15,6 +15,7 @@ pub struct Input {
 
 #[workflow]
 pub async fn ds_server_nomad_alloc_plan(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
+	let job_id = unwrap_ref!(input.alloc.job_id);
 	let alloc_id = unwrap_ref!(input.alloc.ID);
 	let nomad_node_id = unwrap_ref!(input.alloc.node_id, "alloc has no node id");
 
@@ -64,8 +65,8 @@ pub async fn ds_server_nomad_alloc_plan(ctx: &mut WorkflowCtx, input: &Input) ->
 		.await?;
 
 	if db_res.kill_alloc {
-		ctx.activity(KillAllocInput {
-			alloc_id: alloc_id.clone(),
+		ctx.activity(DeleteJobInput {
+			job_id: job_id.clone(),
 		})
 		.await?;
 	}
@@ -227,37 +228,35 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<Upd
 		.unwrap_or_default();
 
 	if kill_alloc {
-		tracing::warn!(server_id=%input.server_id, existing_alloc_id=?nomad_alloc_id, new_alloc_id=%input.alloc_id, "different allocation id given, killing new allocation");
+		tracing::warn!(server_id=%input.server_id, existing_alloc_id=?nomad_alloc_id, new_alloc_id=%input.alloc_id, "different allocation id given, killing job");
 	}
 
 	Ok(UpdateDbOutput { kill_alloc })
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-struct KillAllocInput {
-	alloc_id: String,
+struct DeleteJobInput {
+	job_id: String,
 }
 
-#[activity(KillAlloc)]
-async fn kill_alloc(ctx: &ActivityCtx, input: &KillAllocInput) -> GlobalResult<()> {
-	if let Err(err) = signal_allocation(
+#[activity(DeleteJob)]
+async fn kill_alloc(ctx: &ActivityCtx, input: &DeleteJobInput) -> GlobalResult<()> {
+	if let Err(err) = nomad_client::apis::jobs_api::delete_job(
 		&NOMAD_CONFIG,
-		&input.alloc_id,
-		None,
+		&input.job_id,
 		Some(NOMAD_REGION),
 		None,
 		None,
-		Some(nomad_client_old::models::AllocSignalRequest {
-			task: None,
-			signal: Some("SIGKILL".to_string()),
-		}),
+		None,
+		Some(false),
+		None,
 	)
 	.await
 	{
 		tracing::warn!(
 			?err,
-			?input.alloc_id,
-			"error while trying to manually kill allocation"
+			?input.job_id,
+			"error while trying to manually kill job"
 		);
 	}
 

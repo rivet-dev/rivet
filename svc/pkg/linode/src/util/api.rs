@@ -305,7 +305,7 @@ pub async fn wait_disk_ready(client: &Client, linode_id: u64, disk_id: u64) -> G
 	loop {
 		let res = client
 			.inner()
-			.get(&format!(
+			.get(format!(
 				"https://api.linode.com/v4/linode/instances/{linode_id}/disks/{disk_id}"
 			))
 			.send()
