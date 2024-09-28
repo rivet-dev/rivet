@@ -20,7 +20,7 @@ async fn patch_tags_works(ctx: TestCtx) {
 
 	ctx.op(build::ops::patch_tags::Input {
 		build_id,
-		tags: HashMap::from([("tag1".to_string(), "value1".to_string())]),
+		tags: HashMap::from([("tag1".to_string(), Some("value1".to_string()))]),
 		exclusive_tags: None,
 	})
 	.await
@@ -35,7 +35,7 @@ async fn patch_tags_works(ctx: TestCtx) {
 		.builds;
 	assert_eq!(
 		build[0].tags,
-		HashMap::from([("tag1".to_string(), "value1".to_string())])
+		HashMap::from([("tag1".to_string(), Some("value1".to_string()))])
 	);
 }
 
@@ -57,7 +57,7 @@ async fn patch_tags_overlapping_keys_error(ctx: TestCtx) {
 
 	ctx.op(build::ops::patch_tags::Input {
 		build_id,
-		tags: HashMap::from([("tag1".to_string(), "value1".to_string())]),
+		tags: HashMap::from([("tag1".to_string(), Some("value1".to_string()))]),
 		exclusive_tags: Some(vec!["tag1".to_string(), "tag2".to_string()]),
 	})
 	.await
@@ -91,9 +91,9 @@ async fn patch_tags_exclusive_removes_tag_on_other_build(ctx: TestCtx) {
 	ctx.op(build::ops::patch_tags::Input {
 		build_id: build_a_id,
 		tags: HashMap::from([
-			("tag1".to_string(), "value1".to_string()),
-			("tag2".to_string(), "value2".to_string()),
-			("tag3".to_string(), "value3".to_string()),
+			("tag1".to_string(), Some("value1".to_string())),
+			("tag2".to_string(), Some("value2".to_string())),
+			("tag3".to_string(), Some("value3".to_string())),
 		]),
 		exclusive_tags: None,
 	})
@@ -102,7 +102,7 @@ async fn patch_tags_exclusive_removes_tag_on_other_build(ctx: TestCtx) {
 
 	ctx.op(build::ops::patch_tags::Input {
 		build_id: build_b_id,
-		tags: HashMap::from([("tag1".to_string(), "value2".to_string())]),
+		tags: HashMap::from([("tag1".to_string(), Some("value2".to_string()))]),
 		exclusive_tags: Some(vec!["tag1".to_string()]),
 	})
 	.await
@@ -122,13 +122,13 @@ async fn patch_tags_exclusive_removes_tag_on_other_build(ctx: TestCtx) {
 	assert_eq!(
 		build_a.tags,
 		HashMap::from([
-			("tag2".to_string(), "value2".to_string()),
-			("tag3".to_string(), "value3".to_string()),
+			("tag2".to_string(), Some("value2".to_string())),
+			("tag3".to_string(), Some("value3".to_string())),
 		])
 	);
 
 	assert_eq!(
 		build_b.tags,
-		HashMap::from([("tag1".to_string(), "value2".to_string())])
+		HashMap::from([("tag1".to_string(), Some("value2".to_string()))])
 	);
 }

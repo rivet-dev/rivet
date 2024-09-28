@@ -6,7 +6,7 @@ use chirp_workflow::prelude::*;
 #[derive(Debug)]
 pub struct Input {
 	pub build_id: Uuid,
-	pub tags: HashMap<String, String>,
+	pub tags: HashMap<String, Option<String>>,
 	pub exclusive_tags: Option<Vec<String>>,
 }
 

@@ -140,7 +140,7 @@ pub async fn patch_tags(
 		.await?;
 
 	let tags = unwrap_with!(body.tags, API_BAD_BODY, error = "missing field `tags`");
-	let tags = serde_json::from_value::<HashMap<String, String>>(tags)
+	let tags = serde_json::from_value::<HashMap<String, Option<String>>>(tags)
 		.map_err(|err| err_code!(API_BAD_BODY, error = err))?;
 
 	ctx.op(build::ops::get::Input {

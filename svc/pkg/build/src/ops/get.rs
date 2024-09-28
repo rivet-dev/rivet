@@ -25,7 +25,7 @@ struct BuildRow {
 	create_ts: i64,
 	kind: i64,
 	compression: i64,
-	tags: Value,
+	tags: String,
 }
 
 impl TryInto<types::Build> for BuildRow {
@@ -44,7 +44,7 @@ impl TryInto<types::Build> for BuildRow {
 			compression: unwrap!(types::BuildCompression::from_repr(
 				self.compression.try_into()?
 			)),
-			tags: serde_json::from_value(self.tags)?,
+			tags: serde_json::from_str(&self.tags)?,
 		})
 	}
 }

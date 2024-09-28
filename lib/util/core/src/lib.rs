@@ -9,7 +9,7 @@ use indexmap::IndexMap;
 use rand::Rng;
 pub use rivet_util_env as env;
 pub use rivet_util_macros as macros;
-use serde::{Deserialize, Serialize};
+use ::serde::{Deserialize, Serialize};
 use tokio::time::{Duration, Instant};
 
 pub mod billing;
@@ -27,6 +27,7 @@ pub mod math;
 pub mod net;
 pub mod req;
 pub mod route;
+pub mod serde;
 pub mod sort;
 pub mod timestamp;
 pub mod uuid;

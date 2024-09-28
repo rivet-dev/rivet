@@ -25,5 +25,5 @@ pub struct Build {
 	pub create_ts: i64,
 	pub kind: BuildKind,
 	pub compression: BuildCompression,
-	pub tags: HashMap<String, String>,
+	pub tags: HashMap<String, Option<String>>,
 }
