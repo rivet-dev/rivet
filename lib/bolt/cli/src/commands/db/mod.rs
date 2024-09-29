@@ -16,6 +16,8 @@ pub enum SubCommand {
 		service: String,
 		#[clap(short = 'q', long)]
 		query: Option<String>,
+		#[clap(short = 'f', long)]
+		forwarded: bool,
 	},
 }
 
@@ -23,11 +25,16 @@ impl SubCommand {
 	pub async fn execute(self, ctx: ProjectContext) -> Result<()> {
 		match self {
 			Self::Migrate { command } => command.execute(ctx).await,
-			Self::Shell { service, query } => {
+			Self::Shell {
+				service,
+				query,
+				forwarded,
+			} => {
 				tasks::db::shell(
 					&ctx,
 					&ctx.service_with_name(&service).await,
 					query.as_deref(),
+					forwarded,
 				)
 				.await?;
 

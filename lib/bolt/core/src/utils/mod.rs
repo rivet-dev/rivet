@@ -258,8 +258,8 @@ impl Drop for DroppablePort {
 
 pub fn kubectl_port_forward(
 	ctx: &ProjectContext,
-	service_name: &str,
 	namespace: &str,
+	service_name: &str,
 	(local_port, remote_port): (u16, u16),
 ) -> Result<DroppablePort> {
 	// println!(
@@ -269,9 +269,9 @@ pub fn kubectl_port_forward(
 	let handle = cmd!(
 		"kubectl",
 		"port-forward",
-		format!("service/{service_name}"),
-		"--namespace",
+		"-n",
 		namespace,
+		format!("service/{service_name}"),
 		format!("{local_port}:{remote_port}")
 	)
 	.env("KUBECONFIG", ctx.gen_kubeconfig_path())

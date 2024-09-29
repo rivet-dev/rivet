@@ -396,6 +396,7 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 			if !crdb_pre_queries.is_empty() {
 				db::crdb_shell(db::ShellContext {
 					ctx,
+					forwarded: false,
 					conn: &conn,
 					queries: &crdb_pre_queries,
 					log_type: db::LogType::Migration,
@@ -409,6 +410,7 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 				db::clickhouse_shell(
 					db::ShellContext {
 						ctx,
+						forwarded: false,
 						conn: &conn,
 						queries: &clickhouse_pre_queries,
 						log_type: db::LogType::Migration,
@@ -457,6 +459,7 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 			if !crdb_post_queries.is_empty() {
 				db::crdb_shell(db::ShellContext {
 					ctx,
+					forwarded: false,
 					conn: &conn,
 					queries: &crdb_post_queries,
 					log_type: db::LogType::Migration,
@@ -470,6 +473,7 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 				db::clickhouse_shell(
 					db::ShellContext {
 						ctx,
+						forwarded: false,
 						conn: &conn,
 						queries: &clickhouse_post_queries,
 						log_type: db::LogType::Migration,
@@ -605,7 +609,7 @@ async fn migration(ctx: &ProjectContext, migration_cmds: &[MigrateCmd]) -> Resul
 				{
 					"name": "migrate",
 					"image": MIGRATE_IMAGE,
-					"command": ["sh", "-c", migration_cmd],
+					"command": ["sleep", "1000"],
 					// // See https://github.com/golang-migrate/migrate/issues/494
 					// "env": [{
 					// 	"name": "TZ",
@@ -618,18 +622,20 @@ async fn migration(ctx: &ProjectContext, migration_cmds: &[MigrateCmd]) -> Resul
 		}
 	});
 
+	let pod_name = "migrate-sh-persistent";
+	db::start_persistent_pod(ctx, "migrate", pod_name, overrides).await?;
+
 	block_in_place(|| {
 		cmd!(
 			"kubectl",
-			"run",
-			"-itq",
-			"--rm",
-			"--restart=Never",
-			format!("--image={MIGRATE_IMAGE}"),
-			"--namespace",
+			"exec",
+			format!("pod/{pod_name}"),
+			"-n",
 			"bolt",
-			format!("--overrides={overrides}"),
-			db::shell_name("migrate"),
+			"--",
+			"sh",
+			"-c",
+			migration_cmd,
 		)
 		.env("KUBECONFIG", ctx.gen_kubeconfig_path())
 		.run()

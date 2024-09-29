@@ -21,11 +21,11 @@ impl DatabaseConnections {
 	pub async fn create(
 		ctx: &ProjectContext,
 		services: &[ServiceContext],
-		forward: bool,
+		forwarded: bool,
 	) -> Result<Arc<DatabaseConnections>> {
 		match &ctx.ns().cluster.kind {
 			config::ns::ClusterKind::SingleNode { .. } => {
-				if forward {
+				if forwarded {
 					DatabaseConnections::create_local_forwarded(ctx, services).await
 				} else {
 					DatabaseConnections::create_local(ctx, services).await
