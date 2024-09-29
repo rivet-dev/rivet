@@ -25,7 +25,7 @@ struct BuildRow {
 	create_ts: i64,
 	kind: i64,
 	compression: i64,
-	tags: String,
+	tags: sqlx::types::Json<Box<serde_json::value::RawValue>>,
 }
 
 impl TryInto<types::Build> for BuildRow {
@@ -44,7 +44,7 @@ impl TryInto<types::Build> for BuildRow {
 			compression: unwrap!(types::BuildCompression::from_repr(
 				self.compression.try_into()?
 			)),
-			tags: serde_json::from_str(&self.tags)?,
+			tags: serde_json::from_str(self.tags.0.get())?,
 		})
 	}
 }
@@ -54,22 +54,22 @@ pub async fn get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
 	let builds = sql_fetch_all!(
 		[ctx, BuildRow]
 		"
-        SELECT
-            build_id,
-            game_id,
-            env_id,
-            upload_id,
-            display_name,
-            image_tag,
-            create_ts,
-            kind,
-            compression,
-            tags
-        FROM
-            db_build.builds
-        WHERE
-            build_id = ANY($1)
-        ",
+		SELECT
+			build_id,
+			game_id,
+			env_id,
+			upload_id,
+			display_name,
+			image_tag,
+			create_ts,
+			kind,
+			compression,
+			tags
+		FROM
+			db_build.builds
+		WHERE
+			build_id = ANY($1)
+		",
 		&input.build_ids,
 	)
 	.await?

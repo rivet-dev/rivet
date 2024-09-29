@@ -37,19 +37,36 @@ pub async fn patch_tags(ctx: &OperationCtx, input: &Input) -> GlobalResult<Outpu
 				sql_execute!(
 					[ctx, @tx tx]
 					"
-					UPDATE db_build.builds b
-					SET tags = (
-						SELECT jsonb_object_agg(key, value)
-						FROM jsonb_each(tags)
-						WHERE NOT (key = ANY($2::TEXT[]))
+					WITH filter_tags AS (
+						SELECT build_id, jsonb_object_agg(key, value) AS tags
+						FROM db_build.builds AS b
+						JOIN LATERAL jsonb_each(tags)
+						ON key != ANY($2::TEXT[])
+						WHERE
+							b.env_id = (
+								SELECT env_id
+								FROM db_build.builds
+								WHERE build_id = $1
+							)
+							AND tags ?| $2::TEXT[]
+						GROUP BY build_id
 					)
-					WHERE
-						b.env_id = (
-							SELECT env_id
-							FROM db_build.builds
-							WHERE build_id = $1
-						)
-						AND tags ?| $2::TEXT[]
+					UPDATE db_build.builds AS b
+					SET tags = f2.tags
+					FROM (
+						SELECT b.build_id, COALESCE(f.tags, '{}'::JSONB) AS tags
+						FROM db_build.builds AS b
+						LEFT JOIN filter_tags AS f
+						ON b.build_id = f.build_id
+						WHERE
+							b.env_id = (
+								SELECT env_id
+								FROM db_build.builds
+								WHERE build_id = $1
+							)
+							AND b.tags ?| $2::TEXT[]
+					) AS f2
+					WHERE b.build_id = f2.build_id
 					",
 					&build_id,
 					&exclusive_tags,

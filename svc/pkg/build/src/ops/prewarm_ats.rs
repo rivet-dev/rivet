@@ -64,7 +64,11 @@ pub async fn prewarm_ats(ctx: &OperationCtx, input: &Input) -> GlobalResult<()> 
 				.await?;
 
 			let uploads_res = op!([ctx] upload_get {
-
+				upload_ids: builds_res
+					.builds
+					.iter()
+					.map(|build| build.upload_id.into())
+					.collect(),
 			})
 			.await?;
 

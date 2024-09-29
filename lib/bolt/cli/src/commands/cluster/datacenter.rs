@@ -305,7 +305,7 @@ mod render {
 			.chain(d.pools.iter().cloned().map(|pool| DcTableRow {
 				pool: PoolTableRow {
 					pool_type: Some(pool.pool_type),
-					drain_timeout: Some(format!("{}s", pool.drain_timeout / 1000)),
+					drain_timeout: Some(format!("{}s", pool.drain_timeout_ms / 1000)),
 					min_count: Some(pool.min_count),
 					desired_count: Some(pool.desired_count),
 					max_count: Some(pool.max_count),
