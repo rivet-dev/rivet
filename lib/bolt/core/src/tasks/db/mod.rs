@@ -7,8 +7,11 @@ use tokio::{io::AsyncWriteExt, task::block_in_place};
 use crate::{
 	config::{self, service::RuntimeKind},
 	context::{ProjectContext, ServiceContext},
+	dep,
 	utils::{self, db_conn::DatabaseConnections},
 };
+
+pub mod sqlx;
 
 const REDIS_IMAGE: &str = "ghcr.io/rivet-gg/redis:cc3241e";
 
@@ -150,63 +153,59 @@ async fn redis_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 			cmd.push_str(" --cacert /local/redis-ca.crt");
 		}
 
-		let overrides = json!({
-			"apiVersion": "v1",
-			"metadata": {
-				"namespace": "bolt",
-			},
-			"spec": {
-				"containers": [
-					{
-						"name": "redis",
-						"image": REDIS_IMAGE,
-						"command": ["sleep", "10000"],
-						"env": env,
-						"stdin": true,
-						"stdinOnce": true,
-						"tty": true,
-						"volumeMounts": if mount_ca {
-							json!([{
-								"name": "redis-ca",
-								"mountPath": "/local/redis-ca.crt",
-								"subPath": "redis-ca.crt"
-							}])
-						} else {
-							json!([])
-						}
+		let pod_spec = json!({
+			"restartPolicy": "Never",
+			"terminationGracePeriodSeconds": 0,
+			"containers": [
+				{
+					"name": "redis",
+					"image": REDIS_IMAGE,
+					"command": ["sleep", "10000"],
+					"env": env,
+					"stdin": true,
+					"stdinOnce": true,
+					"tty": true,
+					"volumeMounts": if mount_ca {
+						json!([{
+							"name": "redis-ca",
+							"mountPath": "/local/redis-ca.crt",
+							"subPath": "redis-ca.crt"
+						}])
+					} else {
+						json!([])
 					}
-				],
-				"volumes": if mount_ca {
-					json!([{
-						"name": "redis-ca",
-						"configMap": {
-							"name": format!("redis-{}-ca", db_name),
-							"defaultMode": 420,
-							// Distributed clusters don't need a CA for redis
-							"optional": true,
-							"items": [
-								{
-									"key": "ca.crt",
-									"path": "redis-ca.crt"
-								}
-							]
-						}
-					}])
-				} else {
-					json!([])
 				}
+			],
+			"volumes": if mount_ca {
+				json!([{
+					"name": "redis-ca",
+					"configMap": {
+						"name": format!("redis-{}-ca", db_name),
+						"defaultMode": 420,
+						// Distributed clusters don't need a CA for redis
+						"optional": true,
+						"items": [
+							{
+								"key": "ca.crt",
+								"path": "redis-ca.crt"
+							}
+						]
+					}
+				}])
+			} else {
+				json!([])
 			}
 		});
 
 		let pod_name = format!("redis-{db_name}-sh-persistent");
-		start_persistent_pod(ctx, "Redis", &pod_name, overrides).await?;
+		start_persistent_pod(ctx, "Redis", &pod_name, pod_spec).await?;
 
 		// Connect to persistent pod
 		block_in_place(|| {
 			cmd!(
 				"kubectl",
 				"exec",
-				format!("pod/{pod_name}"),
+				format!("job/{pod_name}"),
 				"-it",
 				"-n",
 				"bolt",
@@ -240,10 +239,10 @@ pub async fn crdb_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 	let mut query_cmd = String::new();
 	for ShellQuery { svc, query } in queries {
 		let db_name = svc.crdb_db_name();
-		let conn = conn.cockroach_host.as_ref().unwrap();
+		let host = conn.cockroach_host.as_ref().unwrap();
 		let username = ctx.read_secret(&["crdb", "username"]).await?;
 		let password = ctx.read_secret(&["crdb", "password"]).await?;
-		let mut db_url = format!("postgres://{}:{}@{}/{}", username, password, conn, db_name);
+		let mut db_url = format!("postgres://{}:{}@{}/{}", username, password, host, db_name);
 
 		// Add SSL
 		if !forwarded {
@@ -278,59 +277,55 @@ pub async fn crdb_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 
 		block_in_place(|| cmd!("bash", "-c", query_cmd).run())?;
 	} else {
-		let overrides = json!({
-			"apiVersion": "v1",
-			"metadata": {
-				"namespace": "bolt",
-			},
-			"spec": {
-				"containers": [
-					{
-						"name": "postgres",
-						"image": "postgres",
-						"command": ["sleep", "10000"],
-						"env": [
-							// See https://github.com/cockroachdb/cockroach/issues/37129#issuecomment-600115995
-							{
-								"name": "PGCLIENTENCODING",
-								"value": "utf-8",
-							}
-						],
-						"stdin": true,
-						"stdinOnce": true,
-						"tty": true,
-						"volumeMounts": [{
-							"name": "crdb-ca",
-							"mountPath": "/local/crdb-ca.crt",
-							"subPath": "crdb-ca.crt"
-						}]
-					}
-				],
-				"volumes": [{
-					"name": "crdb-ca",
-					"configMap": {
+		let pod_spec = json!({
+			"restartPolicy": "Never",
+			"terminationGracePeriodSeconds": 0,
+			"containers": [
+				{
+					"name": "postgres",
+					"image": "postgres",
+					"command": ["sleep", "10000"],
+					"env": [
+						// See https://github.com/cockroachdb/cockroach/issues/37129#issuecomment-600115995
+						{
+							"name": "PGCLIENTENCODING",
+							"value": "utf-8",
+						}
+					],
+					"stdin": true,
+					"stdinOnce": true,
+					"tty": true,
+					"volumeMounts": [{
 						"name": "crdb-ca",
-						"defaultMode": 420,
-						"items": [
-							{
-								"key": "ca.crt",
-								"path": "crdb-ca.crt"
-							}
-						]
-					}
-				}]
-			}
+						"mountPath": "/local/crdb-ca.crt",
+						"subPath": "crdb-ca.crt"
+					}]
+				}
+			],
+			"volumes": [{
+				"name": "crdb-ca",
+				"configMap": {
+					"name": "crdb-ca",
+					"defaultMode": 420,
+					"items": [
+						{
+							"key": "ca.crt",
+							"path": "crdb-ca.crt"
+						}
+					]
+				}
+			}]
 		});
 
 		let pod_name = "crdb-sh-persistent";
-		start_persistent_pod(ctx, "Cockroach", pod_name, overrides).await?;
+		start_persistent_pod(ctx, "Cockroach", pod_name, pod_spec).await?;
 
 		// Connect to persistent pod
 		block_in_place(|| {
 			cmd!(
 				"kubectl",
 				"exec",
-				format!("pod/{pod_name}"),
+				format!("job/{pod_name}"),
 				"-it",
 				"-n",
 				"bolt",
@@ -414,58 +409,54 @@ pub async fn clickhouse_shell(shell_ctx: ShellContext<'_>, no_db: bool) -> Resul
 
 		block_in_place(|| cmd!("bash", "-c", query_cmd).run())?;
 	} else {
-		let overrides = json!({
-			"apiVersion": "v1",
-			"metadata": {
-				"namespace": "bolt",
-			},
-			"spec": {
-				"containers": [
-					{
-						"name": "clickhouse",
-						"image": "clickhouse/clickhouse-server",
-						"command": ["sh", "-c"],
-						"args": [query_cmd],
-						"stdin": true,
-						"stdinOnce": true,
-						"tty": true,
-						"volumeMounts": [
-							{
-								"name": "clickhouse-ca",
-								"mountPath": "/local/clickhouse-ca.crt",
-								"subPath": "clickhouse-ca.crt"
-							},
-							{
-								"name": "clickhouse-config",
-								"mountPath": "/local/config.yml",
-								"subPath": "config.yml",
-							}
-						]
-					}
-				],
-				"volumes": [{
+		let pod_spec = json!({
+			"restartPolicy": "Never",
+			"terminationGracePeriodSeconds": 0,
+			"containers": [
+				{
+					"name": "clickhouse",
+					"image": "clickhouse/clickhouse-server",
+					"command": ["sh", "-c"],
+					"args": [query_cmd],
+					"stdin": true,
+					"stdinOnce": true,
+					"tty": true,
+					"volumeMounts": [
+						{
+							"name": "clickhouse-ca",
+							"mountPath": "/local/clickhouse-ca.crt",
+							"subPath": "clickhouse-ca.crt"
+						},
+						{
+							"name": "clickhouse-config",
+							"mountPath": "/local/config.yml",
+							"subPath": "config.yml",
+						}
+					]
+				}
+			],
+			"volumes": [{
+				"name": "clickhouse-ca",
+				"configMap": {
 					"name": "clickhouse-ca",
-					"configMap": {
-						"name": "clickhouse-ca",
-						"defaultMode": 420,
-						// Distributed clusters don't need a CA for clickhouse
-						"optional": true,
-						"items": [
-							{
-								"key": "ca.crt",
-								"path": "clickhouse-ca.crt"
-							}
-						]
-					}
-				}, {
+					"defaultMode": 420,
+					// Distributed clusters don't need a CA for clickhouse
+					"optional": true,
+					"items": [
+						{
+							"key": "ca.crt",
+							"path": "clickhouse-ca.crt"
+						}
+					]
+				}
+			}, {
+				"name": "clickhouse-config",
+				"configMap": {
 					"name": "clickhouse-config",
-					"configMap": {
-						"name": "clickhouse-config",
-						"defaultMode": 420,
-						"optional": true
-					}
-				}]
-			}
+					"defaultMode": 420,
+					"optional": true
+				}
+			}]
 		});
 
 		// Apply clickhouse config to K8s
@@ -499,14 +490,14 @@ pub async fn clickhouse_shell(shell_ctx: ShellContext<'_>, no_db: bool) -> Resul
 		}
 
 		let pod_name = "clickhouse-sh-persistent";
-		start_persistent_pod(ctx, "ClickHouse", pod_name, overrides).await?;
+		start_persistent_pod(ctx, "ClickHouse", pod_name, pod_spec).await?;
 
 		// Connect to persistent pod
 		block_in_place(|| {
 			cmd!(
 				"kubectl",
 				"exec",
-				format!("pod/{pod_name}"),
+				format!("job/{pod_name}"),
 				"-it",
 				"-n",
 				"bolt",
@@ -527,14 +518,14 @@ pub async fn start_persistent_pod(
 	ctx: &ProjectContext,
 	title: &str,
 	pod_name: &str,
-	overrides: serde_json::Value,
+	pod_spec: serde_json::Value,
 ) -> Result<()> {
 	let res = block_in_place(|| {
 		cmd!(
 			"kubectl",
 			"get",
 			"pod",
-			pod_name,
+			format!("--selector=job-name={pod_name}"),
 			"-n",
 			"bolt",
 			"--ignore-not-found"
@@ -547,21 +538,49 @@ pub async fn start_persistent_pod(
 	if !persistent_pod_exists {
 		rivet_term::status::progress(&format!("Creating persistent {title} pod"), "");
 
-		block_in_place(|| {
-			cmd!(
-				"kubectl",
-				"run",
-				"-q",
-				"--restart=Never",
-				"--image=postgres",
-				"-n",
-				"bolt",
-				format!("--overrides={overrides}"),
-				pod_name,
-			)
-			.env("KUBECONFIG", ctx.gen_kubeconfig_path())
-			.run()
-		})?;
+		let spec = json!({
+			"apiVersion": "batch/v1",
+			"kind": "Job",
+			"metadata": {
+				"name": pod_name,
+				"namespace": "bolt",
+				"labels": {
+					"app.kubernetes.io/name": pod_name
+				}
+			},
+			"spec": {
+				"ttlSecondsAfterFinished": 0,
+				"completions": 1,
+				"backoffLimit": 0,
+				"template": {
+					"metadata": {
+						"labels": {
+							"app.kubernetes.io/name": pod_name,
+						},
+					},
+					"spec": pod_spec,
+				}
+			}
+		});
+
+		dep::k8s::cli::apply_specs(ctx, vec![spec]).await?;
+
+		// block_in_place(|| {
+		// 	cmd!(
+		// 		"kubectl",
+		// 		"run",
+		// 		"-q",
+		// 		"--rm",
+		// 		"--restart=Never",
+		// 		"--image=postgres",
+		// 		"-n",
+		// 		"bolt",
+		// 		format!("--overrides={overrides}"),
+		// 		pod_name,
+		// 	)
+		// 	.env("KUBECONFIG", ctx.gen_kubeconfig_path())
+		// 	.run()
+		// })?;
 
 		// Wait for ready
 		tokio::time::sleep(std::time::Duration::from_secs(1)).await;

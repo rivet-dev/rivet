@@ -56,7 +56,7 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 			FROM db_workflow.workflows AS OF SYSTEM TIME '-1s'
 			WHERE
 				error IS NOT NULL AND
-				output IS NULL AND AND
+				output IS NULL AND
 				silence_ts IS NULL AND
 				wake_immediate = FALSE AND
 				wake_deadline_ts IS NULL AND

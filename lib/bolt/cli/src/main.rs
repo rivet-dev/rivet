@@ -76,6 +76,12 @@ enum SubCommand {
 		#[clap(subcommand)]
 		command: admin::SubCommand,
 	},
+	/// Manages internal workflows.
+	#[clap(alias = "wf")]
+	Workflow {
+		#[clap(subcommand)]
+		command: wf::SubCommand,
+	},
 }
 
 #[tokio::main]
@@ -125,6 +131,7 @@ async fn main_inner() -> Result<std::process::ExitCode> {
 		SubCommand::Database { command } => command.execute(ctx).await?,
 		SubCommand::Cluster { command } => command.execute(ctx).await?,
 		SubCommand::Admin { command } => command.execute(ctx).await?,
+		SubCommand::Workflow { command } => command.execute(ctx).await?,
 	}
 
 	Ok(std::process::ExitCode::SUCCESS)

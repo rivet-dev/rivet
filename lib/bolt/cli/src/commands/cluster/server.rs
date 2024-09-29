@@ -94,6 +94,7 @@ pub enum SubCommand {
 	},
 }
 
+// TODO: Move API calls and rendering to bolt core
 impl SubCommand {
 	pub async fn execute(self, ctx: ProjectContext) -> Result<()> {
 		match self {

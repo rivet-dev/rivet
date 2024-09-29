@@ -14,15 +14,17 @@ base64 = "0.13"
 bolt-config = { path = "../config" }
 chrono = "0.4"
 cjson = "0.1"
+clap = { version = "4.3", features = ["derive"] }
+colored_json = "5.0.0"
 derive_builder = "0.12"
 duct = "0.13"
 futures-util = "0.3"
 handlebars = "4.3.7"
 heck = "0.3"
 hex = "0.4"
+indexmap = "2.0"
 indicatif = "0.16"
 indoc = "1.0"
-indexmap = "2.0"
 ipnet = { version = "2.7", features = ["serde"] }
 json-patch = "1.2"
 lazy_static = "1.4"
@@ -33,12 +35,14 @@ rand = "0.8"
 regex = "1.5"
 reqwest = { version = "0.11", features = ["json"] }
 rivet-api = { path = "../../../sdks/full/rust" }
-rivet-term = { git = "https://github.com/rivet-gg/rivet-term.git", rev = "f70f76f63eba12e535e53db1b436d5297edf979a" }
+rivet-term = { git = "https://github.com/rivet-gg/rivet-term.git", rev = "d539a07d2920d47b88410f20e6d106b497cff1f5" }
 s3-util = { path = "../../s3-util" }
 serde = { version ="1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"
 sha2 = "0.10"
+strum = { version = "0.26", features = ["derive"] }
+tabled = { version = "0.16.0", features = ["ansi"] }
 tempfile = "3.2"
 thiserror = "1.0"
 tokio = { version = "1.29", features = ["full"] }
@@ -48,3 +52,18 @@ url = "2.3"
 urlencoding = "2.1"
 uuid = { version = "1", features = ["v4"] }
 wildmatch = "2.1"
+
+[dependencies.sqlx]
+git = "https://github.com/rivet-gg/sqlx"
+rev = "08d6e61aa0572e7ec557abbedb72cebb96e1ac5b"
+default-features = false
+features = [
+	"runtime-tokio",
+	"runtime-tokio-native-tls",
+	"postgres",
+	"uuid",
+	"macros",
+	"ipnetwork",
+	"json",
+	"bit-vec",
+]

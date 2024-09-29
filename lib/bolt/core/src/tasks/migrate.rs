@@ -599,37 +599,33 @@ async fn migration(ctx: &ProjectContext, migration_cmds: &[MigrateCmd]) -> Resul
 		}));
 	}
 
-	let overrides = json!({
-		"apiVersion": "v1",
-		"metadata": {
-			"namespace": "bolt",
-		},
-		"spec": {
-			"containers": [
-				{
-					"name": "migrate",
-					"image": MIGRATE_IMAGE,
-					"command": ["sleep", "1000"],
-					// // See https://github.com/golang-migrate/migrate/issues/494
-					// "env": [{
-					// 	"name": "TZ",
-					// 	"value": "UTC"
-					// }],
-					"volumeMounts": mounts
-				}
-			],
-			"volumes": volumes
-		}
+	let pod_spec = json!({
+		"restartPolicy": "Never",
+		"terminationGracePeriodSeconds": 0,
+		"containers": [
+			{
+				"name": "migrate",
+				"image": MIGRATE_IMAGE,
+				"command": ["sleep", "1000"],
+				// // See https://github.com/golang-migrate/migrate/issues/494
+				// "env": [{
+				// 	"name": "TZ",
+				// 	"value": "UTC"
+				// }],
+				"volumeMounts": mounts
+			}
+		],
+		"volumes": volumes
 	});
 
 	let pod_name = "migrate-sh-persistent";
-	db::start_persistent_pod(ctx, "migrate", pod_name, overrides).await?;
+	db::start_persistent_pod(ctx, "migrate", pod_name, pod_spec).await?;
 
 	block_in_place(|| {
 		cmd!(
 			"kubectl",
 			"exec",
-			format!("pod/{pod_name}"),
+			format!("job/{pod_name}"),
 			"-n",
 			"bolt",
 			"--",
