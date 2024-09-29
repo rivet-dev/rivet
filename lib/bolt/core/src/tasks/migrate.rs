@@ -281,7 +281,7 @@ pub async fn up_all(ctx: &ProjectContext) -> Result<()> {
 }
 
 pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()> {
-	let conn = DatabaseConnections::create(ctx, services).await?;
+	let conn = DatabaseConnections::create(ctx, services, false).await?;
 	let mut crdb_pre_queries = Vec::new();
 	let mut crdb_post_queries = Vec::new();
 	let mut clickhouse_pre_queries = Vec::new();
@@ -489,7 +489,7 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 }
 
 pub async fn down(ctx: &ProjectContext, service: &ServiceContext, num: usize) -> Result<()> {
-	let conn = DatabaseConnections::create(ctx, &[service.clone()]).await?;
+	let conn = DatabaseConnections::create(ctx, &[service.clone()], false).await?;
 	let database_url = conn.migrate_db_url(service).await?;
 
 	migration(
@@ -504,7 +504,7 @@ pub async fn down(ctx: &ProjectContext, service: &ServiceContext, num: usize) ->
 }
 
 pub async fn force(ctx: &ProjectContext, service: &ServiceContext, num: usize) -> Result<()> {
-	let conn = DatabaseConnections::create(ctx, &[service.clone()]).await?;
+	let conn = DatabaseConnections::create(ctx, &[service.clone()], false).await?;
 	let database_url = conn.migrate_db_url(service).await?;
 
 	migration(
@@ -519,7 +519,7 @@ pub async fn force(ctx: &ProjectContext, service: &ServiceContext, num: usize) -
 }
 
 pub async fn drop(ctx: &ProjectContext, service: &ServiceContext) -> Result<()> {
-	let conn = DatabaseConnections::create(ctx, &[service.clone()]).await?;
+	let conn = DatabaseConnections::create(ctx, &[service.clone()], false).await?;
 	let database_url = conn.migrate_db_url(service).await?;
 
 	migration(

@@ -187,6 +187,8 @@ impl Database for DatabasePgNats {
 									output IS NULL AND
 									-- No assigned node (not running)
 									worker_instance_id IS NULL AND
+									-- Not silenced
+									silence_ts IS NULL AND
 									-- Check for wake condition
 									(
 										-- Immediate
@@ -207,6 +209,8 @@ impl Database for DatabasePgNats {
 									output IS NULL AND
 									-- No assigned node (not running)
 									worker_instance_id IS NULL AND
+									-- Not silenced
+									silence_ts IS NULL AND
 									-- Signal exists
 									(
 										SELECT true
@@ -214,7 +218,8 @@ impl Database for DatabasePgNats {
 										WHERE
 											s.workflow_id = w.workflow_id AND
 											s.signal_name = ANY(w.wake_signals) AND
-											s.ack_ts IS NULL
+											s.ack_ts IS NULL AND
+											silence_ts IS NULL
 										LIMIT 1
 									)
 								UNION
@@ -227,6 +232,8 @@ impl Database for DatabasePgNats {
 									output IS NULL AND
 									-- No assigned node (not running)
 									worker_instance_id IS NULL AND
+									-- Not silenced
+									silence_ts IS NULL AND
 									-- Tagged signal exists
 									(
 										SELECT true
@@ -234,7 +241,8 @@ impl Database for DatabasePgNats {
 										WHERE
 											s.signal_name = ANY(w.wake_signals) AND
 											s.tags <@ w.tags AND
-											s.ack_ts IS NULL
+											s.ack_ts IS NULL AND
+											s.silence_ts IS NULL
 										LIMIT 1
 									)
 								UNION
@@ -247,6 +255,8 @@ impl Database for DatabasePgNats {
 									output IS NULL AND
 									-- No assigned node (not running)
 									worker_instance_id IS NULL AND
+									-- Not silenced
+									silence_ts IS NULL AND
 									-- Sub workflow completed
 									(
 										SELECT true
@@ -656,14 +666,16 @@ impl Database for DatabasePgNats {
 							WHERE
 								workflow_id = $1 AND
 								signal_name = ANY($2) AND
-								ack_ts IS NULL
+								ack_ts IS NULL AND
+								silence_ts IS NULL
 							UNION ALL
 							SELECT true AS tagged, signal_id, create_ts, signal_name, body
 							FROM db_workflow.tagged_signals
 							WHERE
 								signal_name = ANY($2) AND
 								tags <@ (SELECT tags FROM db_workflow.workflows WHERE workflow_id = $1) AND
-								ack_ts IS NULL
+								ack_ts IS NULL AND
+								silence_ts IS NULL
 							ORDER BY create_ts ASC
 							LIMIT 1
 						),

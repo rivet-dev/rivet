@@ -44,6 +44,7 @@ in
 			go-migrate
 			jq
 			openssh  # ssh-keygen
+			postgresql
 
 			# Runtimes
 			nodejs_20  # Required for Fern

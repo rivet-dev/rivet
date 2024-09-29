@@ -21,10 +21,15 @@ impl DatabaseConnections {
 	pub async fn create(
 		ctx: &ProjectContext,
 		services: &[ServiceContext],
+		forward: bool,
 	) -> Result<Arc<DatabaseConnections>> {
 		match &ctx.ns().cluster.kind {
 			config::ns::ClusterKind::SingleNode { .. } => {
-				DatabaseConnections::create_local(ctx, services).await
+				if forward {
+					DatabaseConnections::create_local_forwarded(ctx, services).await
+				} else {
+					DatabaseConnections::create_local(ctx, services).await
+				}
 			}
 			config::ns::ClusterKind::Distributed { .. } => {
 				DatabaseConnections::create_distributed(ctx, services).await
@@ -88,6 +93,46 @@ impl DatabaseConnections {
 			cockroach_host,
 			clickhouse_host,
 			clickhouse_config,
+		}))
+	}
+
+	async fn create_local_forwarded(
+		_ctx: &ProjectContext,
+		services: &[ServiceContext],
+	) -> Result<Arc<DatabaseConnections>> {
+		let mut redis_hosts = HashMap::new();
+		let mut cockroach_host = None;
+		let mut clickhouse_host = None;
+
+		for svc in services {
+			match &svc.config().runtime {
+				RuntimeKind::Redis { .. } => {
+					let name = svc.name();
+
+					if !redis_hosts.contains_key(&name) {
+						let host = "localhost:6379".to_string();
+						redis_hosts.insert(name, host);
+					}
+				}
+				RuntimeKind::CRDB { .. } => {
+					if cockroach_host.is_none() {
+						cockroach_host = Some("localhost:26257".to_string());
+					}
+				}
+				RuntimeKind::ClickHouse { .. } => {
+					if clickhouse_host.is_none() {
+						clickhouse_host = Some("localhost:9440".to_string());
+					}
+				}
+				x => bail!("cannot connect to this type of service: {x:?}"),
+			}
+		}
+
+		Ok(Arc::new(DatabaseConnections {
+			redis_hosts,
+			cockroach_host,
+			clickhouse_host,
+			clickhouse_config: None,
 		}))
 	}
 

@@ -207,13 +207,6 @@ pub fn pick_port() -> u16 {
 	portpicker::pick_unused_port().expect("no free ports")
 }
 
-pub struct PortForwardConfig {
-	pub service_name: &'static str,
-	pub namespace: &'static str,
-	pub local_port: u16,
-	pub remote_port: u16,
-}
-
 pub struct DroppablePort {
 	local_port: u16,
 	handle: duct::Handle,

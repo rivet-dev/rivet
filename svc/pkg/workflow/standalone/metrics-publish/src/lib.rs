@@ -44,7 +44,8 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 			FROM db_workflow.workflows AS OF SYSTEM TIME '-1s'
 			WHERE
 				output IS NULL AND
-				worker_instance_id IS NOT NULL
+				worker_instance_id IS NOT NULL AND
+				silence_ts IS NULL
 			GROUP BY workflow_name
 			",
 		),
@@ -55,7 +56,8 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 			FROM db_workflow.workflows AS OF SYSTEM TIME '-1s'
 			WHERE
 				error IS NOT NULL AND
-				output IS NULL AND
+				output IS NULL AND AND
+				silence_ts IS NULL AND
 				wake_immediate = FALSE AND
 				wake_deadline_ts IS NULL AND
 				cardinality(wake_signals) = 0 AND
@@ -71,6 +73,7 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 			WHERE
 				worker_instance_id IS NULL AND
 				output IS NULL AND
+				silence_ts IS NULL AND
 				(
 					wake_immediate OR
 					wake_deadline_ts IS NOT NULL OR
@@ -87,18 +90,22 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 			FROM (
 				SELECT signal_name
 				FROM db_workflow.signals
-				WHERE ack_ts IS NULL
+				WHERE
+					ack_ts IS NULL AND
+					silence_ts IS NULL
 				UNION ALL
 				SELECT signal_name
 				FROM db_workflow.tagged_signals
-				WHERE ack_ts IS NULL
+				WHERE
+					ack_ts IS NULL AND
+					silence_ts IS NULL
 			) AS OF SYSTEM TIME '-1s'
 			GROUP BY signal_name
 			",
 		),
 	)?;
 
-	// Get rid of metrics that don't exist in the db anymore (stateful)
+	// Get rid of metrics that don't exist in the db anymore (declarative)
 	chirp_workflow::metrics::WORKFLOW_TOTAL.reset();
 	chirp_workflow::metrics::WORKFLOW_ACTIVE.reset();
 	chirp_workflow::metrics::WORKFLOW_DEAD.reset();

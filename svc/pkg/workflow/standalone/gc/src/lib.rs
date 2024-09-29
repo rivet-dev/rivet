@@ -35,6 +35,7 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 			wi.last_ping_ts < $1 AND
 			wi.worker_instance_id = w.worker_instance_id AND
 			w.output IS NULL AND
+			w.silence_ts IS NULL AND
 			-- Check for any wake condition so we don't restart a permanently dead workflow
 			(
 				w.wake_immediate OR

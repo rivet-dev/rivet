@@ -8,7 +8,7 @@ use tokio::{io::AsyncWriteExt, task::block_in_place};
 use crate::{
 	config::{self, service::RuntimeKind},
 	context::{ProjectContext, ServiceContext},
-	utils::db_conn::DatabaseConnections,
+	utils::{self, db_conn::DatabaseConnections},
 };
 
 const REDIS_IMAGE: &str = "ghcr.io/rivet-gg/redis:cc3241e";
@@ -31,7 +31,7 @@ pub struct ShellContext<'a> {
 }
 
 pub async fn shell(ctx: &ProjectContext, svc: &ServiceContext, query: Option<&str>) -> Result<()> {
-	let conn = DatabaseConnections::create(ctx, &[svc.clone()]).await?;
+	let conn = DatabaseConnections::create(ctx, &[svc.clone()], true).await?;
 	let shell_ctx = ShellContext {
 		ctx,
 		conn: &conn,
@@ -255,6 +255,14 @@ pub async fn crdb_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 		}
 		query_cmd.push_str(&cmd);
 	}
+
+	utils::kubectl_port_forward(ctx, "cockroachdb", "cockroachdb", (26257, 26257))?;
+
+	println!("{query_cmd}");
+
+	block_in_place(|| cmd!(query_cmd).run())?;
+
+	return Ok(());
 
 	let overrides = json!({
 		"apiVersion": "v1",
