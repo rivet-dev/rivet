@@ -30,7 +30,7 @@ define_router! {
 				query: servers::ListQuery,
 				rate_limit: {
 					buckets: [
-						{ count: 200, bucket: duration::minutes(1) },
+						{ count: 60_000, bucket: duration::minutes(1) },
 					],
 				},
 			),
@@ -38,7 +38,7 @@ define_router! {
 				body: models::ServersCreateServerRequest,
 				rate_limit: {
 					buckets: [
-						{ count: 100, bucket: duration::minutes(1) },
+						{ count: 1_000, bucket: duration::minutes(1) },
 					],
 				},
 			),
@@ -48,7 +48,7 @@ define_router! {
 			GET: servers::get(
 				rate_limit: {
 					buckets: [
-						{ count: 120, bucket: duration::minutes(1) },
+						{ count: 60_000, bucket: duration::minutes(1) },
 					],
 				},
 
@@ -57,7 +57,7 @@ define_router! {
 				query: servers::DeleteQuery,
 				rate_limit: {
 					buckets: [
-						{ count: 200, bucket: duration::minutes(1) },
+						{ count: 10_000, bucket: duration::minutes(1) },
 					],
 				},
 			),
@@ -76,7 +76,7 @@ define_router! {
 				query: builds::GetQuery,
 				rate_limit: {
 					buckets: [
-						{ count: 200, bucket: duration::minutes(1) },
+						{ count: 60_000, bucket: duration::minutes(1) },
 					],
 				},
 			),
@@ -86,7 +86,7 @@ define_router! {
 			GET: builds::get(
 				rate_limit: {
 					buckets: [
-						{ count: 100, bucket: duration::minutes(1) },
+						{ count: 60_000, bucket: duration::minutes(1) },
 					],
 				},
 			),
@@ -109,7 +109,7 @@ define_router! {
 			GET: dc::list(
 				rate_limit: {
 					buckets: [
-						{ count: 100, bucket: duration::minutes(1) },
+						{ count: 60_000, bucket: duration::minutes(1) },
 					],
 				},
 			),
