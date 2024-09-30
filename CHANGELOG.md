@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/).
 
+## [24.5.2](https://github.com/rivet-gg/rivet/compare/v24.5.1...v24.5.2) (2024-09-30)
+
+
+### Features
+
+* add hash to bootstrap ([#1168](https://github.com/rivet-gg/rivet/issues/1168)) ([4b0be5f](https://github.com/rivet-gg/rivet/commit/4b0be5f071b27d524c824e9b7ed4039e8354fe45))
+* **bolt:** add workflow commands to bolt ([#1131](https://github.com/rivet-gg/rivet/issues/1131)) ([a47b296](https://github.com/rivet-gg/rivet/commit/a47b296939d04d204428f7ce91b68c75550d9b30))
+* **builds:** add prewarm ats for builds ([#1176](https://github.com/rivet-gg/rivet/issues/1176)) ([0a269b4](https://github.com/rivet-gg/rivet/commit/0a269b46e578650f7672656569bff8e703cbd9f0))
+
+
+### Bug Fixes
+
+* allocation sizes for nomad ([#1127](https://github.com/rivet-gg/rivet/issues/1127)) ([2e3217e](https://github.com/rivet-gg/rivet/commit/2e3217edf975cfc8c0cbc035f3ada92c2641b610))
+* **bolt:** add forwarded and persistent db shells ([#1130](https://github.com/rivet-gg/rivet/issues/1130)) ([f9b6707](https://github.com/rivet-gg/rivet/commit/f9b6707888e34a7ea9564a79a05024434e80610f))
+* **builds:** allow null tags ([#1177](https://github.com/rivet-gg/rivet/issues/1177)) ([1c75e3b](https://github.com/rivet-gg/rivet/commit/1c75e3b68af0347bd457cdda4d6efb6eac073434))
+* **builds:** fix exclusive tags query ([#1173](https://github.com/rivet-gg/rivet/issues/1173)) ([b8c323a](https://github.com/rivet-gg/rivet/commit/b8c323aa725d7d7a1450e5fb72c8654ea7ed93b7))
+* **clusters:** allow dns deletion when draining and tainted ([#1132](https://github.com/rivet-gg/rivet/issues/1132)) ([c808d08](https://github.com/rivet-gg/rivet/commit/c808d08df13083d292399d516a5cf080f8a622ca))
+* **cluster:** skip pruning servers without provider server id ([#1133](https://github.com/rivet-gg/rivet/issues/1133)) ([ca43432](https://github.com/rivet-gg/rivet/commit/ca43432fae665a98f0efbecf88013c6985ebb9f3))
+* **ds, mm:** hard code disk per core ([#1134](https://github.com/rivet-gg/rivet/issues/1134)) ([5ee2809](https://github.com/rivet-gg/rivet/commit/5ee28094409aa4a620d8caff4df739f3fd08381b))
+* **ds:** add back runc cleanup ([#1172](https://github.com/rivet-gg/rivet/issues/1172)) ([8e08889](https://github.com/rivet-gg/rivet/commit/8e0888933c9d4481863df0e6b9677089c2f1b73c))
+* fix build tags ([#1190](https://github.com/rivet-gg/rivet/issues/1190)) ([6e2d214](https://github.com/rivet-gg/rivet/commit/6e2d2148b595f3ebcd3f12bc34e67c1af432e643))
+* fix documentation link for errors ([#1174](https://github.com/rivet-gg/rivet/issues/1174)) ([eb7fdaf](https://github.com/rivet-gg/rivet/commit/eb7fdaff5ac63f1bed9d01db9b04d24ef0d969e3))
+* **job-run:** fix dupe allocs, re-enable drain all ([#1128](https://github.com/rivet-gg/rivet/issues/1128)) ([d019e01](https://github.com/rivet-gg/rivet/commit/d019e01cfc9f6420492f9e9213563b4823ff23fe))
+* **mm, ds:** fix dupe alloc killing ([#1124](https://github.com/rivet-gg/rivet/issues/1124)) ([dcdb06a](https://github.com/rivet-gg/rivet/commit/dcdb06a050b12561a679a84f4b243417a15d3071))
+* more accurate job-run cpu metrics ([#1122](https://github.com/rivet-gg/rivet/issues/1122)) ([312958e](https://github.com/rivet-gg/rivet/commit/312958e79b97f5b57eb297fcc03d2e1a3d2cd695))
+* reduce scheduler skew on distributed clusters ([#1175](https://github.com/rivet-gg/rivet/issues/1175)) ([2794e09](https://github.com/rivet-gg/rivet/commit/2794e0986fe14147ee92f8381cab7c517a0f28fb))
+* **worfklows:** add silence ts ([#1129](https://github.com/rivet-gg/rivet/issues/1129)) ([06d965b](https://github.com/rivet-gg/rivet/commit/06d965bf9088b1a69177f9e7fac7d3b7d9e8371d))
+* **workflows:** add error message for max sql retries ([#1125](https://github.com/rivet-gg/rivet/issues/1125)) ([80a33f0](https://github.com/rivet-gg/rivet/commit/80a33f00509b7c08aa3a670ded38f180fc9d29f7))
+* **workflows:** add retry delay for txn errors ([#1138](https://github.com/rivet-gg/rivet/issues/1138)) ([614846b](https://github.com/rivet-gg/rivet/commit/614846be4f712e570bfcf5e3cf595848ce60852d))
+* **workflows:** use unions instead of OR ([#1170](https://github.com/rivet-gg/rivet/issues/1170)) ([1ca8ab6](https://github.com/rivet-gg/rivet/commit/1ca8ab64e3793eb1b53839b7139b73c1b800377f))
+
+
+### Chores
+
+* add back node exporter metrics ([#1136](https://github.com/rivet-gg/rivet/issues/1136)) ([1eeedcb](https://github.com/rivet-gg/rivet/commit/1eeedcb83be74398c8ac71888bd652305c154666))
+* enable batch ssh commands ([#1119](https://github.com/rivet-gg/rivet/issues/1119)) ([505c09c](https://github.com/rivet-gg/rivet/commit/505c09cd7b74db003324c5f283638fbfb8acc4b8))
+* increase install timeout ([#1139](https://github.com/rivet-gg/rivet/issues/1139)) ([38584c9](https://github.com/rivet-gg/rivet/commit/38584c92f6f7b879070d63e43d46fbf8d7d34242))
+* increase nomad heartbeat ttl ([#1140](https://github.com/rivet-gg/rivet/issues/1140)) ([437494a](https://github.com/rivet-gg/rivet/commit/437494ab658889543f886082355c8a68767ed54c))
+* **linode:** pin kernel version ([#1123](https://github.com/rivet-gg/rivet/issues/1123)) ([48686f7](https://github.com/rivet-gg/rivet/commit/48686f7cad56aa5ed35d1657a4957d43781dc7d3))
+* release 24.5.2 ([90318ca](https://github.com/rivet-gg/rivet/commit/90318ca55d19a89e68c264e507b80f2140221d73))
+* remove bolt templates ([#1135](https://github.com/rivet-gg/rivet/issues/1135)) ([f0925f0](https://github.com/rivet-gg/rivet/commit/f0925f0ae989c55a913e383fac43b9e5ebfa03bf))
+* revert new node exporter metrics ([#1118](https://github.com/rivet-gg/rivet/issues/1118)) ([07b6095](https://github.com/rivet-gg/rivet/commit/07b60954115ba10e324512f8b221ace507cc50df))
+
 ## [24.5.1](https://github.com/rivet-gg/rivet/compare/v24.5.0...v24.5.1) (2024-09-04)
 
 
