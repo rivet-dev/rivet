@@ -50,6 +50,10 @@ async fn handle(ctx: OperationContext<build::get::Request>) -> GlobalResult<buil
 	.await?
 	.into_iter()
 	.map(|build| {
+		let Value::Object(tags) = build.tags else {
+			bail!("tags not a map");
+		};
+
 		Ok(backend::build::Build {
 			build_id: Some(build.build_id.into()),
 			game_id: build.game_id.map(|x| x.into()),
@@ -60,7 +64,11 @@ async fn handle(ctx: OperationContext<build::get::Request>) -> GlobalResult<buil
 			create_ts: build.create_ts,
 			kind: build.kind as i32,
 			compression: build.compression as i32,
-			tags: serde_json::from_value(build.tags)?,
+			tags: serde_json::from_value(
+				tags.into_iter()
+					.filter(|(_, v)| !matches!(v, Value::Null))
+					.collect(),
+			)?,
 		})
 	})
 	.collect::<GlobalResult<Vec<_>>>()?;
