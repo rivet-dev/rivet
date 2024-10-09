@@ -109,7 +109,16 @@ impl Container {
 								anyhow::Ok(())
 							},
 							// Wait for child process
-							async { lz4_child.wait().await.map_err(Into::into) },
+							async {
+								let cmd_out = lz4_child.wait_with_output().await?;
+								ensure!(
+									cmd_out.status.success(),
+									"failed `lz4` command\n{}",
+									std::str::from_utf8(&cmd_out.stderr)?
+								);
+
+								Ok(())
+							},
 						)?;
 					}
 				}
@@ -197,52 +206,27 @@ impl Container {
 						anyhow::Ok(())
 					},
 					// Wait for child processes
-					async { lz4_child.wait().await.map_err(Into::into) },
-					async { tar_child.wait().await.map_err(Into::into) },
+					async {
+						let cmd_out = lz4_child.wait_with_output().await?;
+						ensure!(
+							cmd_out.status.success(),
+							"failed `lz4` command\n{}",
+							std::str::from_utf8(&cmd_out.stderr)?
+						);
+
+						Ok(())
+					},
+					async {
+						let cmd_out = tar_child.wait_with_output().await?;
+						ensure!(
+							cmd_out.status.success(),
+							"failed `lz4` command\n{}",
+							std::str::from_utf8(&cmd_out.stderr)?
+						);
+
+						Ok(())
+					},
 				)?;
-
-				// // Wait for lz4 and tar to finish
-				// lz4_child.wait().await?;
-				// tar_child.wait().await?;
-
-				// // Write from stream to file
-				// while let Some(chunk) = stream.next().await {
-				// 	output_file.write_all(&chunk?).await?;
-				// }
-
-				// fs::create_dir(&oci_bundle_path).await?;
-
-				// let oci_bundle_path = oci_bundle_path.clone();
-				// let tmp_path2 = tmp_path.clone();
-				// let compression = self.config.image.compression;
-				// let container_id = self.container_id;
-				// task::spawn_blocking(move || {
-				// 	let input_file = std::fs::File::open(tmp_path2)?;
-
-				// 	match compression {
-				// 		protocol::ImageCompression::None => {
-				// 			tracing::info!(?container_id, "unzipping archive");
-
-				// 			let mut archive = Archive::new(input_file);
-
-				// 			archive.unpack(oci_bundle_path)?;
-				// 		}
-				// 		protocol::ImageCompression::Lz4 => {
-				// 			tracing::info!(?container_id, "decompressing and unzipping archive");
-
-				// 			let decoder = FrameDecoder::new(input_file);
-				// 			let mut archive = Archive::new(decoder);
-
-				// 			archive.unpack(oci_bundle_path)?;
-				// 		}
-				// 	}
-
-				// 	Ok(())
-				// })
-				// .await??;
-
-				// // Delete tmp file
-				// fs::remove_file(&tmp_path).await?;
 			}
 		}
 

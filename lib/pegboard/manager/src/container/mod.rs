@@ -74,6 +74,7 @@ impl Container {
 
 		// Write container to DB
 		let config_json = serde_json::to_vec(&self.config)?;
+
 		utils::query(|| async {
 			// NOTE: On conflict here in case this query runs but the command is not acknowledged
 			sqlx::query(indoc!(
@@ -307,7 +308,7 @@ impl Container {
 				}
 			}
 		} else {
-			tracing::warn!(?pid, "process died before exit code file was written");
+			tracing::warn!(container_id=?self.container_id, ?pid, "process died before exit code file was written");
 
 			None
 		};

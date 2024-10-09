@@ -1,0 +1,51 @@
+{
+	"data_dir": "/vector-data-dir",
+	"sources": {
+		"vector": {
+			"type": "vector",
+			"address": "0.0.0.0:5020"
+		},
+		"tcp_json": {
+			"type": "socket",
+			"mode": "tcp",
+			"address": "0.0.0.0:5021",
+			"decoding": {
+				"codec": "json"
+			}
+		},
+		"vector_logs": {
+			"type": "internal_logs"
+		}
+	},
+	"transforms": {
+		"dynamic_servers": {
+			"type": "filter",
+			"inputs": ["vector", "tcp_json"],
+			"condition": {
+				"type": "vrl",
+				"source": ".source == \"dynamic_servers\""
+			}
+		},
+		"add_prefix": {
+			"type": "remap",
+			"inputs": ["dynamic_servers"],
+			"source": ".message, err = \"\u001b[2m\" + \"container_id=\" + .server_id + \"\u001b[0m \" + .message"
+		}
+	},
+	"sinks": {
+		"container_logs": {
+			"type": "console",
+			"inputs": ["add_prefix"],
+			"encoding": {
+				"codec": "text"
+			}
+		},
+		"console": {
+			"type": "console",
+			"inputs": ["vector_logs"],
+			"encoding": {
+				"codec": "text"
+			}
+		}
+	}
+}

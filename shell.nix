@@ -45,6 +45,7 @@ in
 			jq
 			openssh  # ssh-keygen
 			postgresql
+			vector
 
 			# Runtimes
 			nodejs_20  # Required for Fern

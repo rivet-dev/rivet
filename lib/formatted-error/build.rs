@@ -15,7 +15,7 @@ struct FrontMatter {
 
 struct Ctx {
 	matter: Matter<TOML>,
-	base_path: PathBuf,
+	_base_path: PathBuf,
 	hash_items: Vec<String>,
 	const_items: Vec<String>,
 	existing_keys: HashMap<String, PathBuf>,
@@ -25,7 +25,7 @@ impl Ctx {
 	fn new(base_path: PathBuf) -> Ctx {
 		Ctx {
 			matter: Matter::<TOML>::new(),
-			base_path,
+			_base_path: base_path,
 			hash_items: Vec::new(),
 			const_items: Vec::new(),
 			existing_keys: HashMap::new(),

@@ -155,8 +155,31 @@ async fn handle_connection_inner(
 		}
 	}
 
-	// Insert into db and spawn workflow (if not exists)
-	upsert_client(ctx, client_id, datacenter_id).await?;
+	// Only create the client after receiving the init packet to prevent a race condition
+	if let Some(msg) = rx.next().await {
+		match msg? {
+			Message::Binary(buf) => {
+				let packet = protocol::ToServer::deserialize(protocol_version, &buf)?;
+
+				if let protocol::ToServer::Init { .. } = &packet {
+					// Insert into db and spawn workflow (if not exists)
+					upsert_client(ctx, client_id, datacenter_id).await?;
+				} else {
+					bail!("unexpected initial packet: {packet:?}");
+				}
+
+				// Forward to client wf
+				ctx.signal(packet)
+					.tag("client_id", client_id)
+					.send()
+					.await?;
+			}
+			Message::Close(_) => {
+				bail!(format!("socket closed {client_id}"));
+			}
+			_ => bail!("unexpected initial message: {msg:?}"),
+		}
+	}
 
 	// Receive messages from socket
 	while let Some(msg) = rx.next().await {

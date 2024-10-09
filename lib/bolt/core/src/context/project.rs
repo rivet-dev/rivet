@@ -112,7 +112,7 @@ impl ProjectContextData {
 
 		let mut svc_ctxs_map = HashMap::new();
 
-		let mut source_diff = String::new();
+		let mut source_diff = Vec::new();
 
 		// Load sub projects
 		for (_, additional_root) in &config.additional_roots {
@@ -120,14 +120,14 @@ impl ProjectContextData {
 			Self::load_root_dir(&mut svc_ctxs_map, path.clone()).await;
 
 			// Compute the git diff between the current branch and the local changes
-			source_diff.push_str(&get_source_diff(&path).await.unwrap());
+			source_diff.extend(&get_source_diff(&path).await.unwrap());
 		}
 
 		// Load main project after sub projects so it overrides sub project services
 		Self::load_root_dir(&mut svc_ctxs_map, project_root.clone()).await;
 
 		// Compute the git diff between the current branch and the local changes
-		source_diff.push_str(&get_source_diff(&project_root).await.unwrap());
+		source_diff.extend(&get_source_diff(&project_root).await.unwrap());
 
 		// If there is no diff, use the git commit hash
 		let source_hash = if source_diff.is_empty() {
@@ -142,7 +142,7 @@ impl ProjectContextData {
 				.to_string()
 		} else {
 			// Get hash of diff
-			hex::encode(Sha256::digest(source_diff.as_bytes()))
+			hex::encode(Sha256::digest(source_diff))
 		};
 
 		let mut svc_ctxs = svc_ctxs_map.values().cloned().collect::<Vec<_>>();
@@ -1231,7 +1231,7 @@ impl ProjectContextData {
 	}
 }
 
-async fn get_source_diff(path: &Path) -> Result<String> {
+async fn get_source_diff(path: &Path) -> Result<Vec<u8>> {
 	use tokio::io::AsyncReadExt;
 	use tokio::process::Command;
 
@@ -1241,7 +1241,7 @@ async fn get_source_diff(path: &Path) -> Result<String> {
 		.args(&["--no-pager", "diff", "HEAD", "--minimal"])
 		.output()
 		.await?;
-	let mut result = String::from_utf8(diff_output.stdout)?;
+	let mut result = diff_output.stdout;
 
 	// Add diff for untracked files
 	let ls_files_output = Command::new("git")
@@ -1257,12 +1257,12 @@ async fn get_source_diff(path: &Path) -> Result<String> {
 		.await?;
 	for file in String::from_utf8(ls_files_output.stdout)?.split('\0') {
 		if !file.is_empty() {
-			let mut file_content = String::new();
+			let mut file_content = Vec::new();
 			tokio::fs::File::open(path.join(file))
 				.await?
-				.read_to_string(&mut file_content)
+				.read(&mut file_content)
 				.await?;
-			result.push_str(&file_content);
+			result.extend(file_content);
 		}
 	}
 

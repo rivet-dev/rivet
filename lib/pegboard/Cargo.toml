@@ -2,5 +2,6 @@
 members = [
 	"container-runner",
 	"manager",
+	"echo"
 ]
 

@@ -114,6 +114,7 @@ pub fn setup(command: &str) -> Setup {
 	.env("NOMAD_ALLOC_DIR", alloc_dir.path())
 	.env("NOMAD_META_job_run_id", job_run_id)
 	.env("NOMAD_TASK_NAME", "main")
+	.env("NOMAD_META_root_user_enabled", "1")
 	.spawn()
 	.expect("Failed to spawn child process");
 

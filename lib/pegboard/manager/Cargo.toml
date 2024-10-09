@@ -5,6 +5,10 @@ edition = "2021"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 license = "Apache-2.0"
 
+[features]
+# Enable this feature flag to build and run integration tests
+test = []
+
 [dependencies]
 anyhow = "1.0.79"
 futures-util = { version = "0.3" }
@@ -13,12 +17,14 @@ indoc = "2.0"
 lazy_static = "1.4"
 nix = { version = "0.27", default-features = false, features = ["user", "signal"] }
 notify = { version = "6.1.1", default-features = false, features = [ "serde" ] }
+portpicker = "0.1"
 prometheus = "0.13"
 rand = "0.8"
 reqwest = { version = "0.11", features = ["stream"] }
 serde = { version = "1.0.195", features = ["derive"] }
 serde_json = "1.0.111"
 sysinfo = "0.31.4" 
+tempfile = "3.2"
 tokio = { version = "1.27", default-features = false, features = ["fs", "process", "macros", "rt", "rt-multi-thread"] }
 tokio-tungstenite = "0.23.1"
 tokio-util = { version = "0.7", default-features = false, features = ["io-util"] }

@@ -9,7 +9,7 @@ use serde::Deserialize;
 #[derive(Deserialize, Debug)]
 pub struct VectorMessage {
 	pub source: String,
-	pub run_id: String,
+	pub server_id: String,
 	pub task: String,
 	pub stream_type: u8,
 	pub ts: u64,

@@ -196,7 +196,7 @@ impl Ctx {
 
 					let packet = protocol::ToClient::deserialize(&buf)?;
 
-					self.clone().process_packet(packet).await?;
+					self.process_packet(packet).await?;
 				}
 				Message::Pong(_) => tracing::debug!("received pong"),
 				Message::Close(_) => {
@@ -310,7 +310,7 @@ impl Ctx {
 	async fn rebroadcast(&self, last_event_idx: i64) -> Result<()> {
 		// Fetch all missed events
 		let events = utils::query(|| async {
-			sqlx::query_as::<_, (i64, String)>(indoc!(
+			sqlx::query_as::<_, (i64, Vec<u8>)>(indoc!(
 				"
 				SELECT idx, payload
 				FROM events
@@ -326,10 +326,14 @@ impl Ctx {
 		.map(|(index, payload)| {
 			Ok(protocol::EventWrapper {
 				index,
-				inner: protocol::Raw::from_string(payload)?,
+				inner: protocol::Raw::from_string(String::from_utf8_lossy(&payload).into())?,
 			})
 		})
-		.collect::<Result<_>>()?;
+		.collect::<Result<Vec<_>>>()?;
+
+		if events.is_empty() {
+			return Ok(());
+		}
 
 		self.send_packet(protocol::ToServer::Events(events)).await
 	}
@@ -417,11 +421,16 @@ impl Ctx {
 	) -> Result<PathBuf> {
 		let url = Url::parse(container_runner_binary_url)?;
 		let path_stub = utils::get_s3_path_stub(&url, true)?;
-		let path = self.runner_binaries_path().join(path_stub);
+		let path = self.runner_binaries_path().join(&path_stub);
 
 		// Check file doesn't exist
 		if fs::metadata(&path).await.is_err() {
-			fs::create_dir(path.parent().context("no path parent")?).await?;
+			let parent = path_stub
+				.parent()
+				.filter(|x| x.components().next().is_some())
+				.context("no parent path in runner url")?;
+
+			fs::create_dir(self.runner_binaries_path().join(parent)).await?;
 
 			tracing::info!(%container_runner_binary_url, "downloading");
 			utils::download_file(container_runner_binary_url, &path).await?;
@@ -451,5 +460,13 @@ impl Ctx {
 
 	pub fn runner_binaries_path(&self) -> PathBuf {
 		self.working_path().join("bin")
+	}
+}
+
+// Test bindings
+#[cfg(feature = "test")]
+impl Ctx {
+	pub fn containers(&self) -> &RwLock<HashMap<Uuid, Arc<Container>>> {
+		&self.containers
 	}
 }
