@@ -19,9 +19,9 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 	.await?;
 
 	let dc_rows = sql_fetch_all!(
-		[ctx, (i64, Option<sqlx::types::Json<Provider>>, String,)]
+		[ctx, (i64, String,)]
 		"
-		SELECT DISTINCT provider, provider2, provider_api_token
+		SELECT DISTINCT provider, provider_api_token
 		FROM db_cluster.datacenters
 		WHERE provider_api_token IS NOT NULL
 		",
@@ -29,8 +29,7 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 	.await?
 	.into_iter()
 	.chain(std::iter::once((
-		0,
-		Some(sqlx::types::Json(Provider::Linode)),
+		Provider::Linode as i64,
 		util::env::read_secret(&["linode", "token"]).await?,
 	)));
 
@@ -44,12 +43,8 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 		header::HeaderValue::from_str(&serde_json::to_string(&filter)?)?,
 	);
 
-	for (provider, provider2, api_token) in dc_rows {
-		let provider = if let Some(provider) = provider2 {
-			provider.0
-		} else {
-			provider.try_into()?
-		};
+	for (provider, api_token) in dc_rows {
+		let provider = unwrap!(Provider::from_repr(provider.try_into()?));
 
 		match provider {
 			Provider::Linode => run_for_linode_account(&ctx, &api_token, &headers).await?,

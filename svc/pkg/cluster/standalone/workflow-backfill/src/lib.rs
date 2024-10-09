@@ -166,7 +166,7 @@ pub async fn run_from_env() -> GlobalResult<()> {
 				"name_id": dc.name_id.clone(),
 				"display_name": dc.display_name.clone(),
 
-				"provider": TryInto::<cluster::types::Provider>::try_into(dc.provider)?,
+				"provider": unwrap!(cluster::types::Provider::from_repr(dc.provider.try_into()?)),
 				"provider_datacenter_id": dc.provider_datacenter_id.clone(),
 				"provider_api_token": dc.provider_api_token.clone(),
 
@@ -211,7 +211,7 @@ pub async fn run_from_env() -> GlobalResult<()> {
 					name_id: dc.name_id.clone(),
 					display_name: dc.display_name.clone(),
 
-					provider: dc.provider.try_into()?,
+					provider: unwrap!(cluster::types::Provider::from_repr(dc.provider.try_into()?)),
 					provider_datacenter_id: dc.provider_datacenter_id.clone(),
 					provider_api_token: dc.provider_api_token.clone(),
 
@@ -442,7 +442,9 @@ pub async fn run_from_env() -> GlobalResult<()> {
 				.map(TryInto::<cluster::types::Pool>::try_into)
 				.collect::<GlobalResult<Vec<_>>>()?
 		};
-		let pool_type = server.pool_type.try_into()?;
+		let pool_type = unwrap!(cluster::types::PoolType::from_repr(
+			server.pool_type.try_into()?
+		));
 		let pool = unwrap!(pools.iter().find(|p| p.pool_type == pool_type));
 
 		let linode = server_linode_rows
@@ -732,7 +734,7 @@ pub async fn run_from_env() -> GlobalResult<()> {
 			wf.input(json!({
 				"datacenter_id": server.datacenter_id,
 				"server_id": server.server_id,
-				"pool_type": pool_type.clone(),
+				"pool_type": pool_type,
 				"tags": [],
 			}))?;
 			wf.finalize();
@@ -753,7 +755,7 @@ pub async fn run_from_env() -> GlobalResult<()> {
 					name_id: dc.name_id.clone(),
 					display_name: dc.display_name.clone(),
 
-					provider: dc.provider.try_into()?,
+					provider: unwrap!(cluster::types::Provider::from_repr(dc.provider.try_into()?)),
 					provider_datacenter_id: dc.provider_datacenter_id.clone(),
 					provider_api_token: dc.provider_api_token.clone(),
 
@@ -796,7 +798,7 @@ pub async fn run_from_env() -> GlobalResult<()> {
 				GetVlanIpInput {
 					datacenter_id: server.datacenter_id,
 					server_id: server.server_id,
-					pool_type: pool_type.clone(),
+					pool_type,
 				},
 				vlan_ip,
 			)?;
@@ -840,7 +842,7 @@ pub async fn run_from_env() -> GlobalResult<()> {
 				"update_db",
 				UpdateDbInput {
 					server_id: server.server_id,
-					pool_type: pool_type.clone(),
+					pool_type,
 					cluster_id: dc.cluster_id,
 					datacenter_id: server.datacenter_id,
 					provider_datacenter_id: dc.provider_datacenter_id.clone(),
@@ -878,7 +880,7 @@ pub async fn run_from_env() -> GlobalResult<()> {
 					InstallOverSshInput {
 						datacenter_id: server.datacenter_id,
 						public_ip,
-						pool_type: pool_type.clone(),
+						pool_type,
 						initialize_immediately: true,
 						server_token: install_token.clone(),
 					},
@@ -897,7 +899,7 @@ pub async fn run_from_env() -> GlobalResult<()> {
 					UpdateDbInput {
 						datacenter_id: server.datacenter_id,
 						server_id: server.server_id,
-						pool_type: pool_type.clone(),
+						pool_type,
 					},
 					serde_json::Value::Null,
 				)?;

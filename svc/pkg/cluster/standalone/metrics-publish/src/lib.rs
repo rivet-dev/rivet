@@ -9,7 +9,6 @@ use cluster::{
 #[derive(sqlx::FromRow)]
 struct ServerRow {
 	datacenter_id: Uuid,
-	pool_type2: Option<sqlx::types::Json<PoolType>>,
 	pool_type: i64,
 	is_provisioned: bool,
 	is_installed: bool,
@@ -35,12 +34,7 @@ impl TryFrom<ServerRow> for Server {
 	fn try_from(value: ServerRow) -> GlobalResult<Self> {
 		Ok(Server {
 			datacenter_id: value.datacenter_id,
-			// Handle backwards compatibility
-			pool_type: if let Some(pool_type) = value.pool_type2 {
-				pool_type.0
-			} else {
-				value.pool_type.try_into()?
-			},
+			pool_type: unwrap!(PoolType::from_repr(value.pool_type.try_into()?)),
 			is_provisioned: value.is_provisioned,
 			is_installed: value.is_installed,
 			has_nomad_node: value.has_nomad_node,

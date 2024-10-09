@@ -43,7 +43,7 @@ pub async fn info(
 
 	let name = cluster::util::server_name(
 		&datacenter.provider_datacenter_id,
-		server.pool_type.clone(),
+		server.pool_type,
 		server.server_id,
 	);
 

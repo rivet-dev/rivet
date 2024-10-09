@@ -8,7 +8,6 @@ use futures_util::FutureExt;
 struct ServerRow {
 	server_id: Uuid,
 	datacenter_id: Uuid,
-	pool_type2: Option<sqlx::types::Json<PoolType>>,
 	pool_type: i64,
 	drain_ts: i64,
 }
@@ -59,11 +58,7 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 			let drained_servers = servers
 				.into_iter()
 				.map(|server| {
-					let pool_type = if let Some(pool_type) = server.pool_type2.clone() {
-						pool_type.0
-					} else {
-						server.pool_type.try_into()?
-					};
+					let pool_type = unwrap!(PoolType::from_repr(server.pool_type.try_into()?));
 					let datacenter = unwrap!(datacenters_res
 						.datacenters
 						.iter()

@@ -16,7 +16,7 @@ pub struct SetupRes {
 
 pub async fn setup(ctx: &TestCtx, opts: Setup) -> SetupRes {
 	let pools = vec![cluster::types::Pool {
-		pool_type: opts.pool_type.clone(),
+		pool_type: opts.pool_type,
 		hardware: vec![cluster::types::Hardware {
 			provider_hardware: cluster::util::test::LINODE_HARDWARE.to_string(),
 		}],
@@ -58,7 +58,7 @@ pub async fn setup(ctx: &TestCtx, opts: Setup) -> SetupRes {
 		name_id: util::faker::ident(),
 		display_name: util::faker::ident(),
 
-		provider: provider.clone(),
+		provider: provider,
 		provider_datacenter_id: "us-southeast".to_string(),
 		provider_api_token: None,
 

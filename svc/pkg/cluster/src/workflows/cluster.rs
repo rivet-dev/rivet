@@ -123,7 +123,10 @@ pub struct DatacenterCreate {
 	pub build_delivery_method: BuildDeliveryMethod,
 	pub prebakes_enabled: bool,
 }
-join_signal!(Main, [GameLink, DatacenterCreate]);
+join_signal!(Main {
+	GameLink,
+	DatacenterCreate,
+});
 
 #[message("cluster_game_link_complete")]
 pub struct GameLinkComplete {}

@@ -23,7 +23,7 @@ pub(crate) async fn cluster_server_drain(ctx: &mut WorkflowCtx, input: &Input) -
 	let drain_timeout = ctx
 		.activity(GetDrainTimeoutInput {
 			datacenter_id: input.datacenter_id,
-			pool_type: input.pool_type.clone(),
+			pool_type: input.pool_type,
 		})
 		.await?;
 

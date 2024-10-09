@@ -8,6 +8,6 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 	let worker = Worker::new(reg.handle(), db.clone());
 
 	// Start worker
-	worker.start_with_nats(pools).await?;
+	worker.wake_start(pools).await?;
 	bail!("worker exited unexpectedly");
 }

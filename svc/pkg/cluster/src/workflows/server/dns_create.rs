@@ -23,19 +23,19 @@ pub async fn cluster_server_dns_create(ctx: &mut WorkflowCtx, input: &Input) -> 
 
 	let (primary_dns_record_id, secondary_dns_record_id) = ctx
 		.join((
-			CreateDnsRecordInput {
+			activity(CreateDnsRecordInput {
 				record_name: format!("*.lobby.{}.{domain_job}", server_res.datacenter_id),
 				public_ip: server_res.public_ip,
 				zone_id: zone_id.to_string(),
-			},
+			}),
 			// This is solely for compatibility with Discord activities. Their docs say they support parameter
 			// mapping but it does not work
 			// https://discord.com/developers/docs/activities/development-guides#prefixtarget-formatting-rules
-			CreateDnsRecordInput {
+			activity(CreateDnsRecordInput {
 				record_name: format!("lobby.{}.{domain_job}", server_res.datacenter_id),
 				public_ip: server_res.public_ip,
 				zone_id: zone_id.to_string(),
-			},
+			}),
 		))
 		.await?;
 

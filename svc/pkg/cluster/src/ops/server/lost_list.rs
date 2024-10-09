@@ -36,9 +36,9 @@ pub async fn cluster_server_lost_list(ctx: &OperationCtx, input: &Input) -> Glob
 	let linode_token = util::env::read_secret(&["linode", "token"]).await?;
 
 	let accounts = sql_fetch_all!(
-		[ctx, (sqlx::types::Json<Provider>, String)]
+		[ctx, (i64, String)]
 		"
-		SELECT provider2, provider_api_token
+		SELECT provider, provider_api_token
 		FROM db_cluster.datacenters
 		WHERE
 			provider_api_token IS NOT NULL AND
@@ -48,9 +48,14 @@ pub async fn cluster_server_lost_list(ctx: &OperationCtx, input: &Input) -> Glob
 	)
 	.await?
 	.into_iter()
-	.map(|(provider, provider_api_token)| (provider.0, provider_api_token))
-	.chain(std::iter::once((Provider::Linode, linode_token)))
-	.collect::<HashSet<_>>();
+	.map(|(provider, provider_api_token)| {
+		Ok((
+			unwrap!(Provider::from_repr(provider.try_into()?)),
+			provider_api_token,
+		))
+	})
+	.chain(std::iter::once(Ok((Provider::Linode, linode_token))))
+	.collect::<GlobalResult<HashSet<_>>>()?;
 
 	// Filter by namespace
 	let filter = json!({
@@ -125,7 +130,6 @@ async fn run_for_linode_account(
 			s.server_id,
 			s.datacenter_id,
 			s.pool_type,
-			s.pool_type2,
 			s.provider_server_id,
 			s.vlan_ip,
 			s.public_ip,
@@ -140,7 +144,7 @@ async fn run_for_linode_account(
 			($2 IS NULL OR s.server_id = ANY($2)) AND
 			($3 IS NULL OR s.datacenter_id = ANY($3)) AND
 			($4 IS NULL OR d.cluster_id = ANY($4)) AND
-			($5 IS NULL OR s.pool_type2 = ANY($5::JSONB[])) AND
+			($5 IS NULL OR s.pool_type = ANY($5)) AND
 			($6 IS NULL OR s.public_ip = ANY($6))
 		",
 		server_ids,
@@ -150,9 +154,9 @@ async fn run_for_linode_account(
 		filter.pool_types
 			.as_ref()
 			.map(|x| x.iter()
-				.map(serde_json::to_string)
-				.collect::<Result<Vec<_>, _>>()
-			).transpose()?,
+				.map(|x| *x as i64)
+				.collect::<Vec<_>>()
+			),
 		filter.public_ips
 			.as_ref()
 			.map(|x| x.iter()

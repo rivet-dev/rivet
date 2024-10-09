@@ -12,7 +12,6 @@ struct DatacenterTlsRow {
 	job_cert_pem: Option<String>,
 	job_private_key_pem: Option<String>,
 	state: i64,
-	state2: Option<sqlx::types::Json<TlsState>>,
 	expire_ts: i64,
 }
 
@@ -26,12 +25,7 @@ impl TryFrom<DatacenterTlsRow> for DatacenterTls {
 			gg_private_key_pem: value.gg_private_key_pem,
 			job_cert_pem: value.job_cert_pem,
 			job_private_key_pem: value.job_private_key_pem,
-			// Handle backwards compatibility
-			state: if let Some(state) = value.state2 {
-				state.0
-			} else {
-				value.state.try_into()?
-			},
+			state: unwrap!(TlsState::from_repr(value.state.try_into()?)),
 			expire_ts: value.expire_ts,
 		})
 	}
@@ -70,7 +64,6 @@ pub async fn cluster_datacenter_tls_get(ctx: &OperationCtx, input: &Input) -> Gl
 			job_cert_pem,
 			job_private_key_pem,
 			state,
-			state2,
 			expire_ts
 		FROM db_cluster.datacenter_tls
 		WHERE datacenter_id = ANY($1)

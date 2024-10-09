@@ -162,6 +162,17 @@ impl<K: Eq + Hash + Clone, V: Hash + Clone> Clone for HashableMap<K, V> {
 	}
 }
 
+pub trait AsHashableExt<K: Eq + Hash, V: Hash> {
+	/// Converts the iterable to a `HashableMap` via cloning.
+	fn as_hashable(&self) -> HashableMap<K, V>;
+}
+
+impl<K: Eq + Clone + Hash, V: Clone + Hash> AsHashableExt<K, V> for HashMap<K, V> {
+	fn as_hashable(&self) -> HashableMap<K, V> {
+		HashableMap(self.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+	}
+}
+
 impl<K: Eq + Clone + Hash, V: Clone + Hash> Into<HashableMap<K, V>> for HashMap<K, V> {
 	fn into(self) -> HashableMap<K, V> {
 		HashableMap(self.into_iter().collect())

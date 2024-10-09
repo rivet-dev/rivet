@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, convert::TryInto};
 
 use chirp_workflow::prelude::*;
 use linode::util::{api, client};
@@ -34,9 +34,9 @@ pub async fn cluster_server_prune_with_filter(
 		.map(|x| x.datacenter_id)
 		.collect::<Vec<_>>();
 	let accounts = sql_fetch_all!(
-		[ctx, (sqlx::types::Json<Provider>, String)]
+		[ctx, (i64, String)]
 		"
-		SELECT provider2, provider_api_token
+		SELECT provider, provider_api_token
 		FROM db_cluster.datacenters
 		WHERE
 			provider_api_token IS NOT NULL AND
@@ -46,9 +46,14 @@ pub async fn cluster_server_prune_with_filter(
 	)
 	.await?
 	.into_iter()
-	.map(|(provider, provider_api_token)| (provider.0, provider_api_token))
-	.chain(std::iter::once((Provider::Linode, linode_token)))
-	.collect::<HashSet<_>>();
+	.map(|(provider, provider_api_token)| {
+		Ok((
+			unwrap!(Provider::from_repr(provider.try_into()?)),
+			provider_api_token,
+		))
+	})
+	.chain(std::iter::once(Ok((Provider::Linode, linode_token))))
+	.collect::<GlobalResult<HashSet<_>>>()?;
 
 	// Filter by namespace
 	let filter = json!({

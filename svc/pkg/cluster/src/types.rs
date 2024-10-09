@@ -32,21 +32,9 @@ pub struct Datacenter {
 	pub create_ts: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
 pub enum Provider {
-	Linode,
-}
-
-// Backwards compatibility
-impl TryFrom<i64> for Provider {
-	type Error = GlobalError;
-
-	fn try_from(value: i64) -> GlobalResult<Self> {
-		match value {
-			0 => Ok(Provider::Linode),
-			_ => bail!("unexpected Provider variant"),
-		}
-	}
+	Linode = 0,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
@@ -66,7 +54,7 @@ impl TryFrom<backend::cluster::Pool> for Pool {
 
 	fn try_from(value: backend::cluster::Pool) -> GlobalResult<Self> {
 		Ok(Pool {
-			pool_type: (value.pool_type as i64).try_into()?,
+			pool_type: unwrap!(PoolType::from_repr(value.pool_type.try_into()?)),
 			hardware: value
 				.hardware
 				.iter()
@@ -82,34 +70,11 @@ impl TryFrom<backend::cluster::Pool> for Pool {
 	}
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
 pub enum PoolType {
-	Job,
-	Gg,
-	Ats,
-}
-
-// Backwards compatibility
-impl TryFrom<i64> for PoolType {
-	type Error = GlobalError;
-
-	fn try_from(value: i64) -> GlobalResult<Self> {
-		match value {
-			0 => Ok(PoolType::Job),
-			1 => Ok(PoolType::Gg),
-			2 => Ok(PoolType::Ats),
-			_ => bail!("unexpected PoolType variant"),
-		}
-	}
-}
-impl From<PoolType> for i64 {
-	fn from(value: PoolType) -> i64 {
-		match value {
-			PoolType::Job => 0,
-			PoolType::Gg => 1,
-			PoolType::Ats => 2,
-		}
-	}
+	Job = 0,
+	Gg = 1,
+	Ats = 2,
 }
 
 impl std::fmt::Display for PoolType {
@@ -165,23 +130,9 @@ pub struct Filter {
 	pub public_ips: Option<Vec<Ipv4Addr>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
 pub enum TlsState {
-	Creating,
-	Active,
-	Renewing,
-}
-
-// Backwards compatibility
-impl TryFrom<i64> for TlsState {
-	type Error = GlobalError;
-
-	fn try_from(value: i64) -> GlobalResult<Self> {
-		match value {
-			0 => Ok(TlsState::Creating),
-			1 => Ok(TlsState::Active),
-			2 => Ok(TlsState::Renewing),
-			_ => bail!("unexpected TlsState variant"),
-		}
-	}
+	Creating = 0,
+	Active = 1,
+	Renewing = 2,
 }

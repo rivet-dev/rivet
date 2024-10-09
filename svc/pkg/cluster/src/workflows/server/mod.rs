@@ -43,7 +43,7 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 		.activity(GetVlanIpInput {
 			datacenter_id: input.datacenter_id,
 			server_id: input.server_id,
-			pool_type: input.pool_type.clone(),
+			pool_type: input.pool_type,
 		})
 		.await?;
 
@@ -51,8 +51,8 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 		let image_res = ctx
 			.activity(GetPrebakeInput {
 				datacenter_id: input.datacenter_id,
-				pool_type: input.pool_type.clone(),
-				provider: dc.provider.clone(),
+				pool_type: input.pool_type,
+				provider: dc.provider,
 			})
 			.await?;
 
@@ -60,8 +60,8 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 		if image_res.updated {
 			ctx.workflow(crate::workflows::prebake::Input {
 				datacenter_id: input.datacenter_id,
-				provider: dc.provider.clone(),
-				pool_type: input.pool_type.clone(),
+				provider: dc.provider,
+				pool_type: input.pool_type,
 				install_script_hash: crate::util::INSTALL_SCRIPT_HASH.to_string(),
 				tags: Vec::new(),
 			})
@@ -137,7 +137,7 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 
 		ctx.activity(UpdateDbInput {
 			server_id: input.server_id,
-			pool_type: input.pool_type.clone(),
+			pool_type: input.pool_type,
 			cluster_id: dc.cluster_id,
 			datacenter_id: dc.datacenter_id,
 			provider_datacenter_id: dc.provider_datacenter_id.clone(),
@@ -156,7 +156,7 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 					datacenter_id: input.datacenter_id,
 					server_id: Some(input.server_id),
 					public_ip,
-					pool_type: input.pool_type.clone(),
+					pool_type: input.pool_type,
 					initialize_immediately: true,
 				})
 				.output()
@@ -254,7 +254,7 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 				ctx.workflow(drain::Input {
 					datacenter_id: input.datacenter_id,
 					server_id: input.server_id,
-					pool_type: input.pool_type.clone(),
+					pool_type: input.pool_type,
 				})
 				.output()
 				.await?;
@@ -263,7 +263,7 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 				ctx.workflow(undrain::Input {
 					datacenter_id: input.datacenter_id,
 					server_id: input.server_id,
-					pool_type: input.pool_type.clone(),
+					pool_type: input.pool_type,
 				})
 				.output()
 				.await?;
@@ -524,11 +524,7 @@ async fn insert_metrics(
 			&datacenter_id.to_string(),
 			provider_datacenter_id,
 			datacenter_name_id,
-			match pool_type {
-				PoolType::Job => "job",
-				PoolType::Gg => "gg",
-				PoolType::Ats => "ats",
-			},
+			&pool_type.to_string(),
 		])
 		.observe(dt);
 }
@@ -789,7 +785,10 @@ impl Default for State {
 // Listen for linode provision signals
 type ProvisionComplete = linode::workflows::server::ProvisionComplete;
 type ProvisionFailed = linode::workflows::server::ProvisionFailed;
-join_signal!(pub(crate) Linode, [ProvisionComplete, ProvisionFailed]);
+join_signal!(pub(crate) Linode {
+	ProvisionComplete,
+	ProvisionFailed,
+});
 
 #[signal("cluster_server_drain")]
 pub struct Drain {}
@@ -814,15 +813,12 @@ pub struct NomadRegistered {
 	pub node_id: String,
 }
 
-join_signal!(
-	Main,
-	[
-		Drain,
-		Undrain,
-		Taint,
-		DnsCreate,
-		DnsDelete,
-		Destroy,
-		NomadRegistered
-	]
-);
+join_signal!(Main {
+	Drain,
+	Undrain,
+	Taint,
+	DnsCreate,
+	DnsDelete,
+	Destroy,
+	NomadRegistered,
+});

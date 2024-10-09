@@ -21,7 +21,6 @@ pub struct Output {
 pub(crate) struct ServerRow {
 	server_id: Uuid,
 	datacenter_id: Uuid,
-	pool_type2: Option<sqlx::types::Json<PoolType>>,
 	pool_type: i64,
 	provider_server_id: Option<String>,
 	vlan_ip: Option<IpAddr>,
@@ -36,12 +35,7 @@ impl TryFrom<ServerRow> for Server {
 		Ok(Server {
 			server_id: value.server_id,
 			datacenter_id: value.datacenter_id,
-			// Handle backwards compatibility
-			pool_type: if let Some(pool_type) = value.pool_type2 {
-				pool_type.0
-			} else {
-				value.pool_type.try_into()?
-			},
+			pool_type: unwrap!(PoolType::from_repr(value.pool_type.try_into()?)),
 			provider_server_id: value.provider_server_id,
 			vlan_ip: value.vlan_ip,
 			public_ip: value.public_ip,
@@ -59,7 +53,6 @@ pub async fn cluster_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResu
 			server_id,
 			datacenter_id,
 			pool_type,
-			pool_type2,
 			provider_server_id,
 			vlan_ip,
 			public_ip,

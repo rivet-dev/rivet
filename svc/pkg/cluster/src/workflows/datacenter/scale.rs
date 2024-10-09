@@ -22,8 +22,7 @@ use crate::types::{Datacenter, PoolType, Provider};
 #[derive(sqlx::FromRow)]
 struct ServerRow {
 	server_id: Uuid,
-	pool_type: i64,
-	pool_type2: Option<sqlx::types::Json<PoolType>>,
+	pool_type: i32,
 	is_installed: bool,
 	has_nomad_node: bool,
 	is_draining: bool,
@@ -46,12 +45,7 @@ impl TryFrom<ServerRow> for Server {
 	fn try_from(value: ServerRow) -> GlobalResult<Self> {
 		Ok(Server {
 			server_id: value.server_id,
-			// Handle backwards compatibility
-			pool_type: if let Some(pool_type) = value.pool_type2 {
-				pool_type.0
-			} else {
-				value.pool_type.try_into()?
-			},
+			pool_type: unwrap!(PoolType::from_repr(value.pool_type.try_into()?)),
 			is_installed: value.is_installed,
 			has_nomad_node: value.has_nomad_node,
 			is_tainted: value.is_tainted,
@@ -222,7 +216,7 @@ async fn inner(
 		[ctx, ServerRow, @tx tx]
 		"
 		SELECT
-			server_id, pool_type, pool_type2,
+			server_id, pool_type,
 			(install_complete_ts IS NOT NULL) AS is_installed,
 			(nomad_node_id IS NOT NULL) AS has_nomad_node,
 			(drain_ts IS NOT NULL) AS is_draining,
@@ -258,8 +252,8 @@ async fn inner(
 	for pool in &dc.pools {
 		let pool_ctx = PoolCtx {
 			datacenter_id: dc.datacenter_id,
-			provider: dc.provider.clone(),
-			pool_type: pool.pool_type.clone(),
+			provider: dc.provider,
+			pool_type: pool.pool_type,
 			desired_count: pool.desired_count.max(pool.min_count).min(pool.max_count) as usize,
 		};
 
@@ -738,24 +732,21 @@ async fn provision_server(
 		INSERT INTO db_cluster.servers (
 			server_id,
 			datacenter_id,
-			pool_type2,
-			create_ts,
-
-			-- Backwards compatibility
-			pool_type
+			pool_type,
+			create_ts
 		)
-		VALUES ($1, $2, $3, $4, 0)
+		VALUES ($1, $2, $3, $4)
 		",
 		server_id,
 		pctx.datacenter_id,
-		serde_json::to_string(&pctx.pool_type)?,
+		pctx.pool_type as i64,
 		util::timestamp::now(),
 	)
 	.await?;
 
 	actions.push(Action::Provision {
 		server_id,
-		pool_type: pctx.pool_type.clone(),
+		pool_type: pctx.pool_type,
 	});
 
 	Ok(())

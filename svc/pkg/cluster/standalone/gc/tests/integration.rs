@@ -115,7 +115,7 @@ async fn setup(ctx: &TestCtx) -> (Uuid, Uuid) {
 
 	let pool_type = PoolType::Gg;
 	let pools = vec![Pool {
-		pool_type: pool_type.clone(),
+		pool_type,
 		hardware: vec![Hardware {
 			provider_hardware: cluster::util::test::LINODE_HARDWARE.to_string(),
 		}],
@@ -147,7 +147,7 @@ async fn setup(ctx: &TestCtx) -> (Uuid, Uuid) {
 		name_id: util::faker::ident(),
 		display_name: util::faker::ident(),
 
-		provider: provider.clone(),
+		provider,
 		provider_datacenter_id: "us-southeast".to_string(),
 		provider_api_token: None,
 
@@ -187,7 +187,7 @@ async fn setup(ctx: &TestCtx) -> (Uuid, Uuid) {
 
 	ctx.signal(cluster::workflows::datacenter::ServerCreate {
 		server_id,
-		pool_type: pool_type.clone(),
+		pool_type,
 		tags: vec!["test".to_string()],
 	})
 	.tag("datacenter_id", datacenter_id)

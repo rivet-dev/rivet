@@ -27,7 +27,7 @@ async fn server_provision(ctx: TestCtx) {
 
 	ctx.signal(cluster::workflows::datacenter::ServerCreate {
 		server_id,
-		pool_type: dc.pools.first().unwrap().pool_type.clone(),
+		pool_type: dc.pools.first().unwrap().pool_type,
 		tags: vec!["test".to_string()],
 	})
 	.tag("datacenter_id", datacenter_id)

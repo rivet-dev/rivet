@@ -108,7 +108,7 @@ impl ApiTryFrom<cluster::types::Datacenter> for models::AdminClustersDatacenter 
 							.collect::<Vec<_>>(),
 						min_count: p.min_count.try_into()?,
 						max_count: p.max_count.try_into()?,
-						pool_type: p.pool_type.clone().api_into(),
+						pool_type: p.pool_type.api_into(),
 					})
 				})
 				.collect::<GlobalResult<Vec<_>>>()?,

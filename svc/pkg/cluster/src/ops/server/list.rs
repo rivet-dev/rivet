@@ -25,7 +25,6 @@ pub async fn cluster_server_list(ctx: &OperationCtx, input: &Input) -> GlobalRes
 			s.server_id,
 			s.datacenter_id,
 			s.pool_type,
-			s.pool_type2,
 			s.provider_server_id,
 			s.vlan_ip,
 			s.public_ip,
@@ -38,7 +37,7 @@ pub async fn cluster_server_list(ctx: &OperationCtx, input: &Input) -> GlobalRes
 			($2 IS NULL OR s.server_id = ANY($2)) AND
 			($3 IS NULL OR s.datacenter_id = ANY($3)) AND
 			($4 IS NULL OR d.cluster_id = ANY($4)) AND
-			($5 IS NULL OR s.pool_type2 = ANY($5::JSONB[])) AND
+			($5 IS NULL OR s.pool_type = ANY($5)) AND
 			($6 IS NULL OR s.public_ip = ANY($6))
 		",
 		input.include_destroyed,
@@ -48,9 +47,9 @@ pub async fn cluster_server_list(ctx: &OperationCtx, input: &Input) -> GlobalRes
 		input.filter.pool_types
 			.as_ref()
 			.map(|x| x.iter()
-				.map(serde_json::to_string)
-				.collect::<Result<Vec<_>, _>>()
-			).transpose()?,
+				.map(|x| *x as i64)
+				.collect::<Vec<_>>()
+			),
 		input.filter.public_ips
 			.as_ref()
 			.map(|x| x.iter()

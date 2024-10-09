@@ -186,7 +186,7 @@ pub async fn ds_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()>
 async fn setup(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
 	let (_, prereq) = ctx
 		.join((
-			InsertDbInput {
+			activity(InsertDbInput {
 				server_id: input.server_id,
 				env_id: input.env_id,
 				datacenter_id: input.datacenter_id,
@@ -199,11 +199,11 @@ async fn setup(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
 				network_mode: input.network_mode,
 				environment: input.environment.as_hashable(),
 				network_ports: input.network_ports.as_hashable(),
-			},
-			GetBuildAndDcInput {
+			}),
+			activity(GetBuildAndDcInput {
 				image_id: input.image_id,
 				datacenter_id: input.datacenter_id,
-			},
+			}),
 		))
 		.await?;
 
@@ -1185,9 +1185,16 @@ pub struct NomadEvalUpdate {
 	pub eval: nomad_client::models::Evaluation,
 }
 
-join_signal!(Eval, [NomadEvalUpdate, Destroy,]);
+join_signal!(Eval {
+	NomadEvalUpdate,
+	Destroy,
+});
 
-join_signal!(Main, [NomadAllocPlan, NomadAllocUpdate, Destroy,]);
+join_signal!(Main {
+	NomadAllocPlan,
+	NomadAllocUpdate,
+	Destroy,
+});
 
 /// Choose which port to assign for a job's ingress port.
 ///

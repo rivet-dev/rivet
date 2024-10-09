@@ -71,14 +71,14 @@ async fn query_dcs(ctx: OperationCtx, datacenter_ids: Vec<Uuid>) -> GlobalResult
 		FROM db_cluster.servers
 		WHERE
 			datacenter_id = ANY($1) AND
-			pool_type2 = $2 AND
+			pool_type = $2 AND
 			public_ip IS NOT NULL AND
 			cloud_destroy_ts IS NULL
 		-- For consistency
 		ORDER BY public_ip DESC
 		",
 		&datacenter_ids,
-		serde_json::to_string(&PoolType::Gg)?,
+		PoolType::Gg as i64,
 	)
 	.await?;
 

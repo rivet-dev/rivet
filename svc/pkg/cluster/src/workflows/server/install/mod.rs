@@ -34,7 +34,7 @@ pub(crate) async fn cluster_server_install(
 	ctx.activity(InstallOverSshInput {
 		datacenter_id: input.datacenter_id,
 		public_ip: input.public_ip,
-		pool_type: input.pool_type.clone(),
+		pool_type: input.pool_type,
 		initialize_immediately: input.initialize_immediately,
 		server_token,
 	})
@@ -45,7 +45,7 @@ pub(crate) async fn cluster_server_install(
 		ctx.activity(UpdateDbInput {
 			datacenter_id: input.datacenter_id,
 			server_id,
-			pool_type: input.pool_type.clone(),
+			pool_type: input.pool_type,
 		})
 		.await?;
 	}
@@ -104,7 +104,7 @@ async fn install_over_ssh(ctx: &ActivityCtx, input: &InstallOverSshInput) -> Glo
 		util::env::read_secret(&["ssh", "server", "private_key_openssh"]).await?;
 
 	let install_script = install_scripts::gen_install(
-		input.pool_type.clone(),
+		input.pool_type,
 		input.initialize_immediately,
 		&input.server_token,
 		input.datacenter_id,
@@ -112,7 +112,7 @@ async fn install_over_ssh(ctx: &ActivityCtx, input: &InstallOverSshInput) -> Glo
 	.await?;
 	let hook_script = install_scripts::gen_hook(&input.server_token).await?;
 	let initialize_script =
-		install_scripts::gen_initialize(input.pool_type.clone(), input.datacenter_id).await?;
+		install_scripts::gen_initialize(input.pool_type, input.datacenter_id).await?;
 
 	// Spawn blocking thread for ssh (no async support)
 	tokio::task::spawn_blocking(move || {

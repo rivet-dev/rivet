@@ -44,13 +44,13 @@ pub(crate) async fn cluster_datacenter_tls_issue(
 
 	let (gg_cert, job_cert) = ctx
 		.join((
-			OrderInput {
+			activity(OrderInput {
 				renew: input.renew,
 				zone_id: base_zone_id.to_string(),
 				common_name: domain_main.to_string(),
 				subject_alternative_names: vec![format!("*.{datacenter_id}.{domain_main}")],
-			},
-			OrderInput {
+			}),
+			activity(OrderInput {
 				renew: input.renew,
 				zone_id: job_zone_id.to_string(),
 				common_name: domain_job.to_string(),
@@ -58,7 +58,7 @@ pub(crate) async fn cluster_datacenter_tls_issue(
 					format!("*.lobby.{datacenter_id}.{domain_job}"),
 					format!("*.{datacenter_id}.{domain_job}"),
 				],
-			},
+			}),
 		))
 		.await?;
 

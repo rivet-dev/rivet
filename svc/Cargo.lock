@@ -2679,6 +2679,7 @@ dependencies = [
  "rivet-metrics",
  "rivet-runtime",
  "sqlx",
+ "strum 0.26.3",
  "tokio",
  "tracing",
  "tracing-subscriber",

@@ -1,8 +1,5 @@
-use std::convert::TryInto;
-
 use chirp_workflow::prelude::*;
 use futures_util::FutureExt;
-use rivet_operation::prelude::{proto::backend, Message};
 
 pub mod scale;
 pub mod tls_issue;
@@ -34,7 +31,7 @@ pub(crate) async fn cluster_datacenter(ctx: &mut WorkflowCtx, input: &Input) -> 
 		name_id: input.name_id.clone(),
 		display_name: input.display_name.clone(),
 
-		provider: input.provider.clone(),
+		provider: input.provider,
 		provider_datacenter_id: input.provider_datacenter_id.clone(),
 		provider_api_token: input.provider_api_token.clone(),
 
@@ -157,33 +154,27 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<()>
 					cluster_id,
 					name_id,
 					display_name,
-					provider2,
+					provider,
 					provider_datacenter_id,
 					provider_api_token,
 					pools2,
-					build_delivery_method2,
+					build_delivery_method,
 					prebakes_enabled,
-					create_ts,
-
-					-- Backwards compatibility
-					provider,
-					pools,
-					build_delivery_method
+					create_ts
 				)
 				VALUES (
-					$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-					0, b'', 0
+					$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 				)
 				",
 				input.datacenter_id,
 				input.cluster_id,
 				&input.name_id,
 				&input.display_name,
-				serde_json::to_string(&input.provider)?,
+				input.provider as i64,
 				&input.provider_datacenter_id,
 				&input.provider_api_token,
 				pools_buf,
-				serde_json::to_string(&input.build_delivery_method)?,
+				input.build_delivery_method as i64,
 				input.prebakes_enabled,
 				util::timestamp::now(),
 			)
@@ -195,16 +186,13 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<()>
 				"
 				INSERT INTO db_cluster.datacenter_tls (
 					datacenter_id,
-					state2,
-					expire_ts,
-
-					-- Backwards compatibility
-					state
+					state,
+					expire_ts
 				)
-				VALUES ($1, $2, 0, 0)
+				VALUES ($1, $2)
 				",
 				input.datacenter_id,
-				serde_json::to_string(&TlsState::Creating)?,
+				TlsState::Creating as i64,
 			)
 			.await?;
 
@@ -236,7 +224,12 @@ pub struct ServerCreate {
 	pub tags: Vec<String>,
 }
 
-join_signal!(Main, [Update, Scale, ServerCreate, TlsRenew]);
+join_signal!(Main {
+	Update,
+	Scale,
+	ServerCreate,
+	TlsRenew,
+});
 
 #[message("cluster_datacenter_create_complete")]
 pub struct CreateComplete {}
@@ -251,26 +244,16 @@ struct UpdateDbInput {
 #[activity(UpdateDb)]
 async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<()> {
 	// Get current pools
-	let (pools, pools2) = sql_fetch_one!(
-		[ctx, (Vec<u8>, Option<sqlx::types::Json<Vec<Pool>>>,)]
+	let (pools,) = sql_fetch_one!(
+		[ctx, (sqlx::types::Json<Vec<Pool>>,)]
 		"
-		SELECT pools, pools2 FROM db_cluster.datacenters
+		SELECT pools2 FROM db_cluster.datacenters
 		WHERE datacenter_id = $1
 		",
 		input.datacenter_id,
 	)
 	.await?;
-	// Handle backwards compatibility
-	let mut pools = if let Some(pools) = pools2 {
-		pools.0
-	} else {
-		let proto = backend::cluster::Pools::decode(pools.as_slice())?.pools;
-
-		proto
-			.into_iter()
-			.map(TryInto::try_into)
-			.collect::<GlobalResult<Vec<_>>>()?
-	};
+	let mut pools = pools.0;
 
 	for pool in &input.pools {
 		let current_pool = unwrap!(

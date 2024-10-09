@@ -56,7 +56,7 @@ pub async fn cluster_prebake(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 						datacenter_id: input.datacenter_id,
 						server_id: None,
 						public_ip: sig.public_ip,
-						pool_type: input.pool_type.clone(),
+						pool_type: input.pool_type,
 						initialize_immediately: false,
 					})
 					.output()
@@ -81,9 +81,9 @@ pub async fn cluster_prebake(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 
 					// Write image id to db
 					ctx.activity(UpdateDbInput {
-						provider: input.provider.clone(),
+						provider: input.provider,
 						datacenter_id: input.datacenter_id,
-						pool_type: input.pool_type.clone(),
+						pool_type: input.pool_type,
 						install_script_hash: input.install_script_hash.clone(),
 						image_id: image_create_res.image_id,
 					})
@@ -110,9 +110,9 @@ pub async fn cluster_prebake(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 	}
 
 	ctx.activity(SetDestroyedInput {
-		provider: input.provider.clone(),
+		provider: input.provider,
 		datacenter_id: input.datacenter_id,
-		pool_type: input.pool_type.clone(),
+		pool_type: input.pool_type,
 		install_script_hash: input.install_script_hash.clone(),
 	})
 	.await?;
