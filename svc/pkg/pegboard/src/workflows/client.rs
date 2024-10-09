@@ -18,7 +18,7 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 			match ctx.listen::<Main>().await? {
 				Main::Forward(sig) => {
 					match sig {
-						protocol::ToServer::Init {} => todo!(),
+						protocol::ToServer::Init { last_command_idx } => todo!(),
 						protocol::ToServer::Events(events) => {
 							// Write to db
 							ctx.activity(InsertEventsInput {

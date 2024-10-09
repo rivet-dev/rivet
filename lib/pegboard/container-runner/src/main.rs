@@ -33,6 +33,12 @@ fn main() -> anyhow::Result<()> {
 		.context("`container_dir` arg required")?;
 	let pegboard_container_dir = Path::new(&pegboard_container_dir);
 
+	// Write PID to file
+	fs::write(
+		pegboard_container_dir.join("pid"),
+		std::process::id().to_string().as_bytes(),
+	)?;
+
 	let root_user_enabled = var("PEGBOARD_META_root_user_enabled")? == "1";
 	let stakeholder = match var("PEGBOARD_META_stakeholder").ok() {
 		Some(x) if x == "dynamic_server" => Stakeholder::DynamicServer {

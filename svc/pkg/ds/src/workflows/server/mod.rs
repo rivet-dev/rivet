@@ -494,6 +494,7 @@ async fn submit_job(ctx: &ActivityCtx, input: &SubmitJobInput) -> GlobalResult<S
 		.iter()
 		.map(|(port_label, port)| match port.routing {
 			Routing::GameGuard { protocol } => {
+				// Must be present for GG routing
 				let target = unwrap!(port.internal_port) as u16;
 
 				Ok(DecodedPort {

@@ -14,7 +14,7 @@ use sqlx::{
 };
 use tokio::sync::mpsc::{channel, Receiver};
 use tokio::{
-	fs::{self, OpenOptions},
+	fs::{self, File},
 	io::AsyncWriteExt,
 };
 use url::Url;
@@ -50,17 +50,14 @@ pub async fn download_file(url: &str, file_path: &Path) -> Result<()> {
 	// Create file and start request
 	let (mut file, response) = tokio::try_join!(
 		async {
-			OpenOptions::new()
-				.write(true)
-				.create(true)
-				.open(file_path)
+			File::create(file_path)
 				.await
 				.map_err(Into::<anyhow::Error>::into)
 		},
 		async { reqwest::get(url).await.map_err(Into::<anyhow::Error>::into) }
 	)?;
 
-	let mut stream = response.bytes_stream();
+	let mut stream = response.error_for_status()?.bytes_stream();
 
 	// Write from stream to file
 	while let Some(chunk) = stream.next().await {
@@ -111,8 +108,19 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 
 	sqlx::query(indoc!(
 		"
+		CREATE TABLE IF NOT EXISTS state (
+			last_command_idx INTEGER NOT NULL,
+		)
+		",
+	))
+	.execute(&mut *conn)
+	.await?;
+
+	sqlx::query(indoc!(
+		"
 		CREATE TABLE IF NOT EXISTS events (
 			data BLOB NOT NULL,
+			index INTEGER NOT NULL,
 			create_ts INTEGER NOT NULL
 		)
 		",
@@ -120,21 +128,24 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 	.execute(&mut *conn)
 	.await?;
 
-	// sqlx::query(indoc!(
-	// 	"
-	// 	CREATE TABLE IF NOT EXISTS commands (
-
-	// 	)
-	// 	",
-	// ))
-	// .execute(&mut *conn)
-	// .await?;
+	sqlx::query(indoc!(
+		"
+		CREATE TABLE IF NOT EXISTS commands (
+			data BLOB NOT NULL,
+			index INTEGER NOT NULL,
+			ack_ts INTEGER NOT NULL
+		)
+		",
+	))
+	.execute(&mut *conn)
+	.await?;
 
 	sqlx::query(indoc!(
 		"
 		CREATE TABLE IF NOT EXISTS containers (
 			container_id TEXT PRIMARY KEY, -- UUID
-			create_ts INTEGER NOT NULL,
+			start_ts INTEGER NOT NULL,
+			running_ts INTEGER,
 			stop_ts INTEGER,
 			exit_ts INTEGER,
 			exit_code INTEGER

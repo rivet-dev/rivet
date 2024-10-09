@@ -1,8 +1,4 @@
-use std::{
-	collections::HashMap,
-	net::SocketAddr,
-	sync::Arc,
-};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
 use chirp_workflow::prelude::*;
 use futures_util::{stream::SplitSink, SinkExt, StreamExt};
@@ -100,14 +96,8 @@ async fn handle_connection(
 		};
 
 		// Handle result for cleanup
-		match handle_connection_inner(
-			&ctx,
-			conns.clone(),
-			ws_stream,
-			protocol_version,
-			client_id,
-		)
-		.await
+		match handle_connection_inner(&ctx, conns.clone(), ws_stream, protocol_version, client_id)
+			.await
 		{
 			Err(err) => {
 				// Clean up connection
@@ -164,7 +154,9 @@ async fn handle_connection_inner(
 					.await?;
 			}
 			// TODO: Implement timeout for clients that haven't pinged in a while
-			Message::Ping(_) => tx.lock().await.send(Message::Pong(Vec::new())).await?,
+			Message::Ping(_) => {
+				tx.lock().await.send(Message::Pong(Vec::new())).await?;
+			}
 			Message::Close(_) => {
 				bail!(format!("socket closed {client_id}"));
 			}

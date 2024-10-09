@@ -2,6 +2,7 @@ use std::{
 	collections::HashMap,
 	path::{Path, PathBuf},
 	sync::Arc,
+	time::Duration,
 };
 
 use anyhow::*;
@@ -12,19 +13,27 @@ use futures_util::{
 use indoc::indoc;
 use pegboard::protocol;
 use sqlx::{pool::PoolConnection, Sqlite, SqlitePool};
-use tokio::{fs, net::TcpStream, sync::Mutex};
+use tokio::{
+	fs,
+	net::TcpStream,
+	process::Command,
+	sync::{Mutex, RwLock},
+};
 use tokio_tungstenite::{tungstenite::protocol::Message, MaybeTlsStream, WebSocketStream};
 use url::Url;
 use uuid::Uuid;
 
 use crate::{container::Container, utils};
 
+const PING_INTERVAL: Duration = Duration::from_secs(1);
+
 pub struct Ctx {
 	path: PathBuf,
 	pool: SqlitePool,
 	tx: Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>,
 
-	containers: Mutex<HashMap<Uuid, Arc<Container>>>,
+	pub(crate) api_endpoint: RwLock<Option<String>>,
+	pub(crate) containers: RwLock<HashMap<Uuid, Arc<Container>>>,
 }
 
 impl Ctx {
@@ -37,7 +46,9 @@ impl Ctx {
 			path,
 			pool,
 			tx: Mutex::new(tx),
-			containers: Mutex::new(HashMap::new()),
+
+			api_endpoint: RwLock::new(None),
+			containers: RwLock::new(HashMap::new()),
 		})
 	}
 
@@ -82,8 +93,6 @@ impl Ctx {
 	}
 
 	pub async fn event(&self, event: protocol::Event) -> Result<()> {
-		tracing::info!(?event);
-
 		self.write_event(&event).await?;
 		self.send_packet(protocol::ToServer::Events(vec![event]))
 			.await
@@ -98,6 +107,18 @@ impl Ctx {
 		self: &Arc<Self>,
 		mut rx: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
 	) -> Result<()> {
+		// Start ping thread
+		let s = self.clone();
+		tokio::spawn(async move {
+			loop {
+				tokio::time::sleep(PING_INTERVAL).await;
+				s.tx.lock().await.send(Message::Ping(Vec::new())).await?;
+			}
+
+			#[allow(unreachable_code)]
+			Ok(())
+		});
+
 		// Receive messages from socket
 		while let Some(msg) = rx.next().await {
 			match msg? {
@@ -106,6 +127,7 @@ impl Ctx {
 
 					self.clone().process_packet(packet).await?;
 				}
+				Message::Pong(_) => tracing::debug!("received pong"),
 				Message::Close(_) => {
 					bail!("socket closed");
 				}
@@ -115,12 +137,18 @@ impl Ctx {
 			}
 		}
 
+		// TODO: Implement pinging
+
 		bail!("stream closed");
 	}
 
 	async fn process_packet(self: &Arc<Self>, packet: protocol::ToClient) -> Result<()> {
 		match packet {
-			protocol::ToClient::Init { .. } => {
+			protocol::ToClient::Init { api_endpoint, .. } => {
+				{
+					let mut guard = self.api_endpoint.write().await;
+					*guard = Some(api_endpoint);
+				}
 				self.rebuild().await?;
 			}
 			protocol::ToClient::Commands(commands) => {
@@ -141,33 +169,24 @@ impl Ctx {
 		match command {
 			protocol::Command::StartContainer {
 				container_id,
-				image_artifact_url,
-				container_runner_binary_url,
-				root_user_enabled,
-				stakeholder,
+				config,
 			} => {
 				// Insert container
-				let mut containers = self.containers.lock().await;
-				let container = containers.entry(container_id).or_insert_with(|| {
-					Container::new(
-						container_id,
-						image_artifact_url,
-						container_runner_binary_url,
-						root_user_enabled,
-						stakeholder,
-					)
-				});
+				let mut containers = self.containers.write().await;
+				let container = containers
+					.entry(container_id)
+					.or_insert_with(|| Container::new(container_id));
 
 				// Spawn container
-				container.start(&self).await?;
+				container.start(&self, config).await?;
 			}
 			protocol::Command::StopContainer { container_id } => {
-				if let Some(container) = self.containers.lock().await.get(&container_id) {
+				if let Some(container) = self.containers.read().await.get(&container_id) {
 					container.stop(&self).await?;
 				} else {
-					tracing::error!(
+					tracing::warn!(
 						?container_id,
-						"received stop container command for container that doesn't exist"
+						"received stop container command for container that doesn't exist (likely already stopped)"
 					);
 				}
 			}
@@ -207,6 +226,8 @@ impl Ctx {
 		// Check file doesn't exist
 		if fs::metadata(&path).await.is_err() {
 			utils::download_file(container_runner_binary_url, &path).await?;
+
+			Command::new("chmod").arg("+x").arg(&path).output().await?;
 		}
 
 		Ok(path.to_path_buf())
