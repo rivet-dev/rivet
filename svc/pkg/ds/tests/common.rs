@@ -116,7 +116,7 @@ impl Setup {
 			env_id: self.env_id,
 			datacenter_id: self.datacenter_id,
 			cluster_id: self.cluster_id,
-			client: ds::types::GameClient::Nomad,
+			runtime: ds::types::GameRuntime::Nomad,
 			resources: ds::types::ServerResources {
 				cpu_millicores: 100,
 				memory_mib: 200,

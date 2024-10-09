@@ -238,7 +238,7 @@ fn parse_trait_fn(
 		return Err(error(
 			item_fn.sig.span(),
 			&format!(
-				"{} function must have exactly two parameters: ctx: {:?} and input: YourInputType",
+				"{} function must have exactly two parameters: ctx: {} and input: &YourInputType",
 				trait_name,
 				ctx_ty.to_token_stream().to_string()
 			),

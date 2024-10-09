@@ -102,7 +102,7 @@ region-list-for-game = { path = "../../pkg/region/ops/list-for-game" }
 team-get = { path = "../../pkg/team/ops/get" }
 team-member-count = { path = "../../pkg/team/ops/member-count" }
 team-validate = { path = "../../pkg/team/ops/validate" }
-tier-list = { path = "../../pkg/tier/ops/list" }
+tier = { path = "../../pkg/tier" }
 token-create = { path = "../../pkg/token/ops/create" }
 token-revoke = { path = "../../pkg/token/ops/revoke" }
 upload-complete = { path = "../../pkg/upload/ops/complete" }

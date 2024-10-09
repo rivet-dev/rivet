@@ -272,15 +272,17 @@ struct SubmitJobInput {
 
 #[activity(SubmitJob)]
 async fn submit_job(ctx: &ActivityCtx, input: &SubmitJobInput) -> GlobalResult<String> {
-	let tier_res = op!([ctx] tier_list {
-		region_ids: vec![input.datacenter_id.into()],
-	})
-	.await?;
-	let tier_region = unwrap!(tier_res.regions.first());
+	let tier_res = ctx
+		.op(tier::ops::list::Input {
+			datacenter_ids: vec![input.datacenter_id],
+			pegboard: false,
+		})
+		.await?;
+	let tier_dc = unwrap!(tier_res.datacenters.first());
+	let mut tiers = tier_dc.tiers.iter().collect::<Vec<_>>();
 
 	// Find the first tier that has more CPU and memory than the requested
 	// resources
-	let mut tiers = tier_region.tiers.clone();
 
 	// Sort the tiers by cpu
 	tiers.sort_by(|a, b| a.cpu.cmp(&b.cpu));

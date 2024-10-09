@@ -24,6 +24,10 @@ pub fn configure() -> GlobalResult<String> {
 				.join(", "),
 		)
 		.replace(
+			"__RESERVE_MEMORY__",
+			&crate::util::NOMAD_RESERVE_MEMORY.to_string(),
+		)
+		.replace(
 			"__GG_VLAN_SUBNET__",
 			&util::net::gg::vlan_ip_net().to_string(),
 		)

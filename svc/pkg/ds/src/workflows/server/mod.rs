@@ -13,7 +13,7 @@ use rivet_operation::prelude::proto::backend;
 
 use crate::types::{
 	build::{BuildCompression, BuildKind},
-	GameClient, GameGuardProtocol, NetworkMode, Routing, ServerResources,
+	GameGuardProtocol, GameRuntime, NetworkMode, Routing, ServerResources,
 };
 
 pub mod nomad;
@@ -43,7 +43,7 @@ pub struct Input {
 	pub env_id: Uuid,
 	pub datacenter_id: Uuid,
 	pub cluster_id: Uuid,
-	pub client: GameClient,
+	pub runtime: GameRuntime,
 	pub tags: HashMap<String, String>,
 	pub resources: ServerResources,
 	pub kill_timeout_ms: i64,
@@ -64,8 +64,8 @@ pub struct Port {
 
 #[workflow]
 pub async fn ds_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
-	match input.client {
-		GameClient::Nomad => {
+	match input.runtime {
+		GameRuntime::Nomad => {
 			ctx.workflow(nomad::Input {
 				server_id: input.server_id,
 				env_id: input.env_id,
@@ -84,7 +84,7 @@ pub async fn ds_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()>
 			.output()
 			.await
 		}
-		GameClient::Pegboard => {
+		GameRuntime::Pegboard => {
 			ctx.workflow(pegboard::Input {
 				server_id: input.server_id,
 				env_id: input.env_id,

@@ -206,7 +206,7 @@ members = [
 	"pkg/team/ops/validate",
 	"pkg/team/worker",
 	"pkg/telemetry/standalone/beacon",
-	"pkg/tier/ops/list",
+	"pkg/tier",
 	"pkg/token/ops/create",
 	"pkg/token/ops/exchange",
 	"pkg/token/ops/get",

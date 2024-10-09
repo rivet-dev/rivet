@@ -1,4 +1,4 @@
-use std::net::IpAddr;
+use std::net::Ipv4Addr;
 
 use chirp_workflow::prelude::*;
 use strum::FromRepr;
@@ -36,7 +36,7 @@ impl ToClient {
 pub enum ToServer {
 	Init {
 		last_command_idx: i64,
-		// TODO: hardware info
+		system: SystemInfo,
 	},
 	Events(Vec<EventWrapper>),
 	FetchStateResponse {},
@@ -50,6 +50,14 @@ impl ToServer {
 	pub fn deserialize(_protocol_version: u16, buf: &[u8]) -> Result<Self, PegboardProtocolError> {
 		serde_json::from_slice(buf).map_err(PegboardProtocolError::Serde)
 	}
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+pub struct SystemInfo {
+	// MHz
+	pub cpu: u64,
+	// MiB
+	pub memory: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -72,7 +80,7 @@ pub enum Command {
 	},
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize, Clone, Hash)]
 pub struct ContainerConfig {
 	pub image: Image,
 	pub container_runner_binary_url: String,
@@ -84,7 +92,7 @@ pub struct ContainerConfig {
 	pub stakeholder: Stakeholder,
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize, Clone, Hash)]
 pub struct Image {
 	pub artifact_url: String,
 	pub kind: ImageKind,
@@ -103,22 +111,22 @@ pub enum ImageCompression {
 	Lz4,
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize, Clone, Hash)]
 pub enum Port {
 	GameGuard {
 		target: u16,
-		proxy_protocol: TransportProtocol,
+		protocol: TransportProtocol,
 	},
 	Host {
-		proxy_protocol: TransportProtocol,
+		protocol: TransportProtocol,
 	},
 }
 
 impl Port {
-	pub fn proxy_protocol(&self) -> &TransportProtocol {
+	pub fn protocol(&self) -> &TransportProtocol {
 		match self {
-			Port::GameGuard { proxy_protocol, .. } => proxy_protocol,
-			Port::Host { proxy_protocol } => proxy_protocol,
+			Port::GameGuard { protocol, .. } => protocol,
+			Port::Host { protocol } => protocol,
 		}
 	}
 }
@@ -144,7 +152,7 @@ pub enum NetworkMode {
 	Host,
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize, Clone, Hash)]
 pub struct Resources {
 	/// Millicore (1/1000 of a core).
 	pub cpu: u64,
@@ -154,7 +162,7 @@ pub struct Resources {
 	pub memory_max: u64,
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize, Clone, Hash)]
 pub enum Stakeholder {
 	DynamicServer { server_id: Uuid },
 }
@@ -189,23 +197,35 @@ pub enum Event {
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub enum ContainerState {
 	/// Container planned, not yet started.
-	Starting { client_id: Uuid },
+	/// Sent by pegboard dc.
+	Allocated { client_id: Uuid },
+	/// Container starting on client.
+	/// Sent by pegboard client.
+	Starting,
 	/// Container has a running process.
+	/// Sent by pegboard client.
 	Running {
 		pid: usize,
-		ports: util::serde::HashableMap<String, ProxiedPort>,
+		proxied_ports: util::serde::HashableMap<String, ProxiedPort>,
 	},
 	/// Container planned to stop.
+	/// Sent by pegboard dc.
 	Stopping,
 	/// Container stopped, process exit not yet received.
+	/// Sent by pegboard client.
 	Stopped,
 	/// Container process exited.
+	/// Sent by pegboard client.
 	Exited { exit_code: Option<i32> },
+	/// Container failed to allocate to a client.
+	/// Sent by pegboard dc.
+	FailedToAllocate,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct ProxiedPort {
-	pub source: u32,
-	pub target: u32,
-	pub ip: IpAddr,
+	pub source: u16,
+	pub target: u16,
+	pub ip: Ipv4Addr,
+	pub protocol: TransportProtocol,
 }

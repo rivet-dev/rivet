@@ -311,14 +311,18 @@ async fn fetch_region(
 async fn fetch_tiers(
 	ctx: &OperationContext<mm::msg::lobby_create::Message>,
 	region_id: Uuid,
-) -> GlobalResult<Vec<backend::region::Tier>> {
-	let tier_res = op!([ctx] tier_list {
-		region_ids: vec![region_id.into()],
-	})
+) -> GlobalResult<Vec<tier::types::Tier>> {
+	let tier_res = chirp_workflow::compat::op(
+		&ctx,
+		tier::ops::list::Input {
+			datacenter_ids: vec![region_id],
+			pegboard: false,
+		},
+	)
 	.await?;
-	let tier_region = unwrap!(tier_res.regions.first());
+	let tier_dc = unwrap!(tier_res.datacenters.first());
 
-	Ok(tier_region.tiers.clone())
+	Ok(tier_dc.tiers.clone())
 }
 
 #[tracing::instrument]
@@ -584,7 +588,7 @@ async fn create_docker_job(
 	lobby_group: &backend::matchmaker::LobbyGroup,
 	lobby_group_meta: &backend::matchmaker::LobbyGroupMeta,
 	region: &backend::region::Region,
-	tier: &backend::region::Tier,
+	tier: &tier::types::Tier,
 	max_players_normal: u32,
 	max_players_direct: u32,
 	run_id: Uuid,

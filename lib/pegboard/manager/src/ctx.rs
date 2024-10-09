@@ -1,5 +1,6 @@
 use std::{
 	collections::HashMap,
+	net::Ipv4Addr,
 	path::{Path, PathBuf},
 	sync::Arc,
 	time::Duration,
@@ -14,6 +15,7 @@ use indoc::indoc;
 use nix::unistd::Pid;
 use pegboard::protocol;
 use sqlx::{pool::PoolConnection, Sqlite, SqlitePool};
+use sysinfo::System;
 use tokio::{
 	fs,
 	net::TcpStream,
@@ -40,6 +42,8 @@ pub struct Ctx {
 	pool: SqlitePool,
 	tx: Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>,
 
+	pub(crate) network_ip: Ipv4Addr,
+	pub(crate) system: System,
 	pub(crate) api_endpoint: RwLock<Option<String>>,
 	pub(crate) containers: RwLock<HashMap<Uuid, Arc<Container>>>,
 }
@@ -47,6 +51,8 @@ pub struct Ctx {
 impl Ctx {
 	pub fn new(
 		path: PathBuf,
+		network_ip: Ipv4Addr,
+		system: System,
 		pool: SqlitePool,
 		tx: SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
 	) -> Arc<Self> {
@@ -55,6 +61,8 @@ impl Ctx {
 			pool,
 			tx: Mutex::new(tx),
 
+			network_ip,
+			system,
 			api_endpoint: RwLock::new(None),
 			containers: RwLock::new(HashMap::new()),
 		})
@@ -164,8 +172,14 @@ impl Ctx {
 			})
 			.await?;
 
-			self.send_packet(protocol::ToServer::Init { last_command_idx })
-				.await?;
+			self.send_packet(protocol::ToServer::Init {
+				last_command_idx,
+				system: protocol::SystemInfo {
+					cpu: self.system.cpus().first().context("no cpus")?.frequency(),
+					memory: self.system.total_memory() / (1024 * 1024),
+				},
+			})
+			.await?;
 		}
 
 		// Receive messages from socket

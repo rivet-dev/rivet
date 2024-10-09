@@ -150,10 +150,10 @@ impl ApiTryFrom<models::UploadPrepareFile> for backend::upload::PrepareFile {
 	}
 }
 
-impl ApiTryFrom<backend::region::Tier> for models::CloudRegionTier {
+impl ApiTryFrom<::tier::types::Tier> for models::CloudRegionTier {
 	type Error = GlobalError;
 
-	fn api_try_from(value: backend::region::Tier) -> GlobalResult<Self> {
+	fn api_try_from(value: ::tier::types::Tier) -> GlobalResult<Self> {
 		Ok(models::CloudRegionTier {
 			tier_name_id: value.tier_name_id.to_owned(),
 			rivet_cores_numerator: value.rivet_cores_numerator.api_try_into()?,

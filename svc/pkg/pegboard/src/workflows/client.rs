@@ -18,10 +18,14 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 			match ctx.listen::<Main>().await? {
 				Main::Forward(sig) => {
 					match sig {
-						protocol::ToServer::Init { last_command_idx } => {
+						protocol::ToServer::Init {
+							last_command_idx,
+							system,
+						} => {
 							let init_data = ctx
-								.activity(FetchInitDataInput {
+								.activity(ProcessInitInput {
 									client_id,
+									system,
 									last_command_idx,
 								})
 								.await?;
@@ -136,33 +140,38 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 	Ok(())
 }
 
-// TODO: This does not need to be retryable
 #[derive(Debug, Serialize, Deserialize, Hash)]
-struct FetchInitDataInput {
+struct ProcessInitInput {
 	client_id: Uuid,
 	last_command_idx: i64,
+	system: protocol::SystemInfo,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct FetchInitDataOutput {
+struct ProcessInitOutput {
 	last_event_idx: i64,
 	missed_commands: Vec<protocol::CommandWrapper>,
 }
 
-#[activity(FetchInitData)]
-async fn fetch_init_data(
+#[activity(ProcessInit)]
+async fn process_init(
 	ctx: &ActivityCtx,
-	input: &FetchInitDataInput,
-) -> GlobalResult<FetchInitDataOutput> {
+	input: &ProcessInitInput,
+) -> GlobalResult<ProcessInitOutput> {
 	let ((last_event_idx,), commands) = tokio::try_join!(
 		sql_fetch_one!(
 			[ctx, (i64,)]
 			"
-			SELECT last_event_idx
-			FROM db_pegboard.clients
+			UPDATE db_pegboard.clients
+			SET
+				cpu = $2 AND
+				memory = $3
 			WHERE client_id = $1
+			RETURNING last_event_idx 
 			",
 			input.client_id,
+			input.system.cpu as i64,
+			input.system.memory as i64
 		),
 		sql_fetch_all!(
 			[ctx, (i64, String)]
@@ -177,7 +186,7 @@ async fn fetch_init_data(
 		),
 	)?;
 
-	Ok(FetchInitDataOutput {
+	Ok(ProcessInitOutput {
 		last_event_idx,
 		missed_commands: commands
 			.into_iter()

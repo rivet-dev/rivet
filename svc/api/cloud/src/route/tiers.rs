@@ -15,19 +15,17 @@ pub async fn list_tiers(
 	}).await?;
 	let cluster = unwrap!(datacenters_res.clusters.first());
 
-	let res = op!([ctx] tier_list {
-		region_ids: cluster.datacenter_ids
-			.iter()
-			.cloned()
-			.map(Into::into)
-			.collect::<Vec<_>>(),
-	})
-	.await?;
+	let res = ctx
+		.op(tier::ops::list::Input {
+			datacenter_ids: cluster.datacenter_ids.clone(),
+			pegboard: false,
+		})
+		.await?;
 
-	let region = unwrap!(res.regions.first());
+	let dc = unwrap!(res.datacenters.first());
 
 	Ok(models::CloudGetRegionTiersResponse {
-		tiers: region
+		tiers: dc
 			.tiers
 			.clone()
 			.into_iter()

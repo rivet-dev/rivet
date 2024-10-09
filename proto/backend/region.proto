@@ -24,14 +24,3 @@ message Region {
 	// INHERITED FROM Datacenter
 	rivet.backend.cluster.BuildDeliveryMethod build_delivery_method = 100;
 }
-
-message Tier {
-	string tier_name_id = 1;
-	uint32 rivet_cores_numerator = 2;
-	uint32 rivet_cores_denominator = 3;
-	uint64 cpu = 4; // MHz
-	uint64 memory = 5; // In MB
-	uint64 memory_max = 9; // In MB
-	uint64 disk = 6; // In MB
-	uint64 bandwidth = 7; // In MB
-}

@@ -309,7 +309,7 @@ dependencies = [
  "team-member-count",
  "team-validate",
  "thiserror",
- "tier-list",
+ "tier",
  "token-create",
  "token-revoke",
  "tokio",
@@ -3147,7 +3147,7 @@ dependencies = [
  "sha2",
  "sqlx",
  "strum 0.24.1",
- "tier-list",
+ "tier",
  "token-create",
  "tracing-subscriber",
  "upload-get",
@@ -4209,6 +4209,7 @@ version = "0.0.1"
 dependencies = [
  "chirp-client",
  "chirp-worker",
+ "chirp-workflow",
  "external-request-validate",
  "faker-game",
  "game-version-get",
@@ -4218,7 +4219,7 @@ dependencies = [
  "region-get",
  "rivet-operation",
  "rivet-util-mm",
- "tier-list",
+ "tier",
 ]
 
 [[package]]
@@ -5713,6 +5714,7 @@ dependencies = [
  "build-get",
  "chirp-client",
  "chirp-worker",
+ "chirp-workflow",
  "cluster",
  "faker-build",
  "faker-game",
@@ -5728,7 +5730,7 @@ dependencies = [
  "rivet-util-mm",
  "s3-util",
  "sqlx",
- "tier-list",
+ "tier",
  "upload-get",
 ]
 
@@ -5983,6 +5985,7 @@ dependencies = [
  "build-get",
  "chirp-client",
  "chirp-worker",
+ "chirp-workflow",
  "chrono",
  "cluster",
  "csv",
@@ -6031,7 +6034,7 @@ dependencies = [
  "serde",
  "sqlx",
  "team-get",
- "tier-list",
+ "tier",
  "token-create",
  "upload-complete",
  "upload-get",
@@ -7487,6 +7490,7 @@ dependencies = [
  "team-member-count",
  "team-profile-validate",
  "team-validate",
+ "tier",
  "types-proto",
  "user-follow-count",
  "user-follow-get",
@@ -9146,16 +9150,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "tier-list"
+name = "tier"
 version = "0.0.1"
 dependencies = [
- "chirp-client",
- "chirp-worker",
  "chirp-workflow",
  "cluster",
  "linode",
- "prost 0.10.4",
- "rivet-operation",
 ]
 
 [[package]]

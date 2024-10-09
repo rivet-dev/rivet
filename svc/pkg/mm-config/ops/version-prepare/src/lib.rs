@@ -42,9 +42,13 @@ async fn handle(
 			op!([ctx] region_get {
 				region_ids: region_ids.clone(),
 			}),
-			op!([ctx] tier_list {
-				region_ids: region_ids.clone(),
-			}),
+			chirp_workflow::compat::op(
+				&ctx,
+				::tier::ops::list::Input {
+					datacenter_ids: region_ids.iter().map(|x| x.as_uuid()).collect(),
+					pegboard: false,
+				},
+			),
 		)?;
 
 		// Validate regions exist
@@ -80,7 +84,7 @@ async fn handle(
 			runtime,
 			&lobby_group.regions,
 			&regions_res.regions,
-			&tier_res.regions,
+			&tier_res.datacenters,
 			&mut prewarm_ctx,
 			needs_ats_prewarm,
 		)
@@ -107,7 +111,7 @@ async fn prepare_runtime(
 	runtime: &backend::matchmaker::lobby_runtime::Runtime,
 	lg_regions: &[backend::matchmaker::lobby_group::Region],
 	regions_data: &[backend::region::Region],
-	tier_regions: &[tier::list::response::Region],
+	tier_dcs: &[::tier::ops::list::Datacenter],
 	prewarm_ctx: &mut PrewarmAtsContext,
 	needs_ats_prewarm: bool,
 ) -> GlobalResult<backend::matchmaker::LobbyRuntimeCtx> {
@@ -128,11 +132,10 @@ async fn prepare_runtime(
 				);
 
 				// Validate tier
-				let tier_region = unwrap!(tier_regions
-					.iter()
-					.find(|x| x.region_id == lg_region.region_id));
+				let region_id = unwrap!(lg_region.region_id).as_uuid();
+				let tier_dc = unwrap!(tier_dcs.iter().find(|x| x.datacenter_id == region_id));
 				ensure!(
-					tier_region
+					tier_dc
 						.tiers
 						.iter()
 						.any(|x| x.tier_name_id == lg_region.tier_name_id),

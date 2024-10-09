@@ -1,0 +1,7 @@
+[service]
+name = "tier"
+
+[runtime]
+kind = "rust"
+
+[package]

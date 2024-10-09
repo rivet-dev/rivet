@@ -329,7 +329,11 @@ impl Container {
 	}
 
 	// Only ran for bridge networking
-	pub async fn setup_cni_network(&self, ctx: &Ctx) -> Result<()> {
+	pub async fn setup_cni_network(
+		&self,
+		ctx: &Ctx,
+		proxied_ports: &protocol::HashableMap<String, protocol::ProxiedPort>,
+	) -> Result<()> {
 		tracing::info!(container_id=?self.container_id, "setting up cni network");
 
 		let container_path = ctx.container_path(self.container_id);
@@ -337,7 +341,16 @@ impl Container {
 
 		tracing::info!(container_id=?self.container_id, "writing cni params");
 
-		let cni_port_mappings = self.bind_ports(ctx).await?;
+		let cni_port_mappings = proxied_ports
+			.iter()
+			.map(|(_, port)| {
+				json!({
+					"HostPort": port.source,
+					"ContainerPort": port.target,
+					"Protocol": port.protocol.to_string(),
+				})
+			})
+			.collect::<Vec<_>>();
 
 		// MARK: Generate CNI parameters
 		//
@@ -403,13 +416,30 @@ impl Container {
 		Ok(())
 	}
 
-	pub(crate) async fn bind_ports(&self, ctx: &Ctx) -> Result<Vec<serde_json::Value>> {
+	// Used for CNI network creation
+	pub(crate) async fn bind_ports(
+		&self,
+		ctx: &Ctx,
+	) -> Result<protocol::HashableMap<String, protocol::ProxiedPort>> {
+		let ports = self
+			.config
+			.ports
+			.iter()
+			.map(|(label, port)| match port {
+				protocol::Port::GameGuard { target, protocol } => Ok((label, *target, *protocol)),
+				protocol::Port::Host { .. } => {
+					// TODO:
+					bail!("host ports not implemented");
+				}
+			})
+			.collect::<Result<Vec<_>>>()?;
+
 		let mut tcp_count = 0;
 		let mut udp_count = 0;
 
 		// Count ports
-		for (_, port) in &self.config.ports {
-			match port.proxy_protocol {
+		for (_, _, protocol) in &ports {
+			match protocol {
 				protocol::TransportProtocol::Tcp => tcp_count += 1,
 				protocol::TransportProtocol::Udp => udp_count += 1,
 			}
@@ -495,59 +525,47 @@ impl Container {
 			bail!("not enough available ports");
 		}
 
-		let cni_port_mappings = self
-			.config
-			.ports
+		let proxied_ports = ports
 			.iter()
-			.filter(|(_, port)| matches!(port.proxy_protocol(), protocol::TransportProtocol::Tcp))
+			.filter(|(_, _, protocol)| matches!(protocol, protocol::TransportProtocol::Tcp))
 			.zip(
 				rows.iter()
 					.filter(|(_, protocol)| *protocol == protocol::TransportProtocol::Tcp as i64),
 			)
-			.map(|((_, port), (host_port, _))| {
-				match port {
-					protocol::Port::GameGuard { target, proxy_protocol } => {
-						Ok(json!({
-							"HostPort": host_port,
-							"ContainerPort": port.target,
-							"Protocol": port.proxy_protocol.to_string(),
-						}))
-					}
-					protocol::Port::Host { .. } => {
-						// TODO:
-						bail!("host ports not implemented");
-					}
-				}
+			.map(|((label, target, protocol), (host_port, _))| {
+				(
+					(*label).clone(),
+					protocol::ProxiedPort {
+						source: *host_port as u16,
+						target: *target,
+						ip: ctx.network_ip,
+						protocol: *protocol,
+					},
+				)
 			})
+			// Chain UDP ports
 			.chain(
-				self.config
-					.ports
+				ports
 					.iter()
-					.filter(|(_, port)| {
-						matches!(port.proxy_protocol(), protocol::TransportProtocol::Udp)
-					})
+					.filter(|(_, _, protocol)| matches!(protocol, protocol::TransportProtocol::Udp))
 					.zip(rows.iter().filter(|(_, protocol)| {
 						*protocol == protocol::TransportProtocol::Udp as i64
 					}))
-					.map(|((_, port), (host_port, _))| {
-						match port {
-							protocol::Port::GameGuard { target, proxy_protocol } => {
-								Ok(json!({
-									"HostPort": host_port,
-									"ContainerPort": port.target,
-									"Protocol": port.proxy_protocol.to_string(),
-								}))
-							}
-							protocol::Port::Host { .. } => {
-								// TODO:
-								bail!("host ports not implemented");
-							}
-						}
+					.map(|((label, target, protocol), (host_port, _))| {
+						(
+							(*label).clone(),
+							protocol::ProxiedPort {
+								source: *host_port as u16,
+								target: *target,
+								ip: ctx.network_ip,
+								protocol: *protocol,
+							},
+						)
 					}),
 			)
-			.collect::<Vec<_>>();
+			.collect();
 
-		Ok(cni_port_mappings)
+		Ok(proxied_ports)
 	}
 
 	#[tracing::instrument(skip_all)]

@@ -1,7 +1,11 @@
-use std::path::Path;
+use std::{
+	net::{IpAddr, Ipv4Addr},
+	path::Path,
+};
 
 use anyhow::*;
 use futures_util::StreamExt;
+use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 use tracing_subscriber::prelude::*;
 use url::Url;
 use uuid::Uuid;
@@ -28,7 +32,14 @@ async fn main() -> Result<()> {
 	// Start metrics server
 	tokio::spawn(metrics::run_standalone());
 
-	let client_id: Uuid = Uuid::parse_str(&utils::var("CLIENT_ID")?)?;
+	let client_id = Uuid::parse_str(&utils::var("CLIENT_ID")?)?;
+	let network_ip = get_network_ip(&utils::var("NETWORK_INTERFACE")?)?;
+
+	let system = System::new_with_specifics(
+		RefreshKind::new()
+			.with_cpu(CpuRefreshKind::new().with_frequency())
+			.with_memory(MemoryRefreshKind::new().with_ram()),
+	);
 
 	let working_path = Path::new("/etc/pegboard");
 	utils::init_working_dir(&working_path).await?;
@@ -60,9 +71,31 @@ async fn main() -> Result<()> {
 
 	tracing::info!("connected");
 
-	let ctx = Ctx::new(working_path.to_path_buf(), pool, tx);
+	let ctx = Ctx::new(working_path.to_path_buf(), network_ip, system, pool, tx);
 
 	ctx.start(rx).await
+}
+
+fn get_network_ip(network_interface_name: &str) -> Result<Ipv4Addr> {
+	let network_interface = pnet_datalink::interfaces()
+		.into_iter()
+		.find(|iface| iface.name == network_interface_name)
+		.context(format!(
+			"network interface not found: {network_interface_name}"
+		))?;
+	let network_ip = network_interface
+		.ips
+		.iter()
+		.find_map(|net| {
+			if let IpAddr::V4(ip) = net.ip() {
+				Some(ip)
+			} else {
+				None
+			}
+		})
+		.context("no ipv4 network on interface")?;
+
+	Ok(network_ip)
 }
 
 fn init_tracing() {

@@ -71,7 +71,11 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 	// Wait for container start
 	match ctx.listen::<Init>().await? {
 		Init::ContainerStateUpdate(sig) => match sig.state {
-			pp::ContainerState::Starting { client_id } => client_id,
+			pp::ContainerState::Allocated { client_id } => client_id,
+			pp::ContainerState::FailedToAllocate => {
+				// TODO: Return error from wf
+				bail!("failed to allocate container");
+			}
 			state => bail!(format!("unexpected container state: {state:?}")),
 		},
 		Init::Destroy(sig) => {
@@ -97,11 +101,11 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 			async move {
 				match ctx.listen::<Main>().await? {
 					Main::ContainerStateUpdate(sig) => match sig.state {
-						pp::ContainerState::Running { ports, .. } => {
+						pp::ContainerState::Running { proxied_ports, .. } => {
 							ctx.activity(UpdatePortsInput {
 								server_id,
 								datacenter_id,
-								ports,
+								proxied_ports,
 							})
 							.await?;
 						}
@@ -245,7 +249,7 @@ async fn setup(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<Uuid> {
 							crate::util::format_port_label(port_label),
 							pp::Port::GameGuard {
 								target,
-								proxy_protocol: match protocol {
+								protocol: match protocol {
 									GameGuardProtocol::Http
 									| GameGuardProtocol::Https
 									| GameGuardProtocol::Tcp
@@ -321,15 +325,17 @@ async fn select_resources(
 	ctx: &ActivityCtx,
 	input: &SelectResourcesInput,
 ) -> GlobalResult<pp::Resources> {
-	let tier_res = op!([ctx] tier_list {
-		region_ids: vec![input.datacenter_id.into()],
-	})
-	.await?;
-	let tier_region = unwrap!(tier_res.regions.first());
+	let tier_res = ctx
+		.op(tier::ops::list::Input {
+			datacenter_ids: vec![input.datacenter_id],
+			pegboard: true,
+		})
+		.await?;
+	let tier_dc = unwrap!(tier_res.datacenters.first());
+	let mut tiers = tier_dc.tiers.iter().collect::<Vec<_>>();
 
 	// Find the first tier that has more CPU and memory than the requested
 	// resources
-	let mut tiers = tier_region.tiers.clone();
 
 	// Sort the tiers by cpu
 	tiers.sort_by(|a, b| a.cpu.cmp(&b.cpu));
@@ -354,7 +360,7 @@ async fn select_resources(
 struct UpdatePortsInput {
 	server_id: Uuid,
 	datacenter_id: Uuid,
-	ports: util::serde::HashableMap<String, pp::ProxiedPort>,
+	proxied_ports: util::serde::HashableMap<String, pp::ProxiedPort>,
 }
 
 #[activity(UpdatePorts)]
@@ -363,7 +369,7 @@ async fn update_ports(ctx: &ActivityCtx, input: &UpdatePortsInput) -> GlobalResu
 	let mut flat_port_sources = Vec::new();
 	let mut flat_port_ips = Vec::new();
 
-	for (label, port) in &input.ports {
+	for (label, port) in &input.proxied_ports {
 		flat_port_labels.push(label.as_str());
 		flat_port_sources.push(port.source as i64);
 		flat_port_ips.push(port.ip.to_string());
@@ -406,7 +412,7 @@ async fn update_ports(ctx: &ActivityCtx, input: &UpdatePortsInput) -> GlobalResu
 	.await?;
 
 	// Invalidate cache when ports are updated
-	if !input.ports.is_empty() {
+	if !input.proxied_ports.is_empty() {
 		ctx.cache()
 			.purge("servers_ports", [input.datacenter_id])
 			.await?;

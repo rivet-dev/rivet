@@ -102,16 +102,18 @@ impl Container {
 			use std::result::Result::{Err, Ok};
 
 			match self2.setup(&ctx2).await {
-				Ok(container_runner_path) => match self2.run(&ctx2, container_runner_path).await {
-					Ok(pid) => {
-						if let Err(err) = self2.observe(&ctx2, pid).await {
-							tracing::error!(container_id=?self2.container_id, ?err, "observe failed");
+				Ok((container_runner_path, proxied_ports)) => {
+					match self2.run(&ctx2, container_runner_path, proxied_ports).await {
+						Ok(pid) => {
+							if let Err(err) = self2.observe(&ctx2, pid).await {
+								tracing::error!(container_id=?self2.container_id, ?err, "observe failed");
+							}
+						}
+						Err(err) => {
+							tracing::error!(container_id=?self2.container_id, ?err, "run failed")
 						}
 					}
-					Err(err) => {
-						tracing::error!(container_id=?self2.container_id, ?err, "run failed")
-					}
-				},
+				}
 				Err(err) => tracing::error!(container_id=?self2.container_id, ?err, "setup failed"),
 			}
 
@@ -122,7 +124,13 @@ impl Container {
 		Ok(())
 	}
 
-	async fn setup(self: &Arc<Self>, ctx: &Arc<Ctx>) -> Result<PathBuf> {
+	async fn setup(
+		self: &Arc<Self>,
+		ctx: &Arc<Ctx>,
+	) -> Result<(
+		PathBuf,
+		protocol::HashableMap<String, protocol::ProxiedPort>,
+	)> {
 		tracing::info!(container_id=?self.container_id, "setting up");
 
 		let container_path = ctx.container_path(self.container_id);
@@ -138,14 +146,24 @@ impl Container {
 		self.setup_oci_bundle(&ctx).await?;
 
 		// Run CNI setup script
-		if let protocol::NetworkMode::Bridge = self.config.network_mode {
-			self.setup_cni_network(&ctx).await?;
-		}
+		let proxied_ports = if let protocol::NetworkMode::Bridge = self.config.network_mode {
+			let proxied_ports = self.bind_ports(ctx).await?;
+			self.setup_cni_network(&ctx, &proxied_ports).await?;
 
-		Ok(container_runner_path)
+			proxied_ports
+		} else {
+			Default::default()
+		};
+
+		Ok((container_runner_path, proxied_ports))
 	}
 
-	async fn run(self: &Arc<Self>, ctx: &Arc<Ctx>, container_runner_path: PathBuf) -> Result<Pid> {
+	async fn run(
+		self: &Arc<Self>,
+		ctx: &Arc<Ctx>,
+		container_runner_path: PathBuf,
+		proxied_ports: protocol::HashableMap<String, protocol::ProxiedPort>,
+	) -> Result<Pid> {
 		tracing::info!(container_id=?self.container_id, "spawning");
 
 		let mut runner_env = vec![
@@ -197,6 +215,7 @@ impl Container {
 			container_id: self.container_id,
 			state: protocol::ContainerState::Running {
 				pid: pid.as_raw().try_into()?,
+				proxied_ports,
 			},
 		})
 		.await?;

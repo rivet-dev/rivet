@@ -92,7 +92,7 @@ pub async fn create(
 		env_id,
 		datacenter_id: body.datacenter,
 		cluster_id,
-		client: game_config.client,
+		runtime: game_config.runtime,
 		tags,
 		resources: (*body.resources).api_into(),
 		kill_timeout_ms: body

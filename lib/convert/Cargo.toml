@@ -37,6 +37,7 @@ team-get = { path = "../../svc/pkg/team/ops/get" }
 team-member-count = { path = "../../svc/pkg/team/ops/member-count" }
 team-profile-validate = { path = "../../svc/pkg/team/ops/profile-validate" }
 team-validate = { path = "../../svc/pkg/team/ops/validate" }
+tier = { path = "../../svc/pkg/tier" }
 user-follow-count = { path = "../../svc/pkg/user-follow/ops/count" }
 user-follow-get = { path = "../../svc/pkg/user-follow/ops/get" }
 user-get = { path = "../../svc/pkg/user/ops/get" }

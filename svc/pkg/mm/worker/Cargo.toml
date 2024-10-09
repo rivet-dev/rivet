@@ -8,6 +8,7 @@ license = "Apache-2.0"
 [dependencies]
 chirp-client = { path = "../../../../lib/chirp/client" }
 chirp-worker = { path = "../../../../lib/chirp/worker" }
+chirp-workflow = { path = "../../../../lib/chirp-workflow/core" }
 chrono = "0.4"
 csv = "1.1"
 heck = "0.3"
@@ -46,7 +47,7 @@ mm-lobby-idle-update = { path = "../ops/lobby-idle-update" }
 mm-lobby-state-get = { path = "../ops/lobby-state-get" }
 region-get = { path = "../../region/ops/get" }
 team-get = { path = "../../team/ops/get" }
-tier-list = { path = "../../tier/ops/list" }
+tier = { path = "../../tier" }
 token-create = { path = "../../token/ops/create" }
 upload-complete = { path = "../../upload/ops/complete" }
 upload-get = { path = "../../upload/ops/get" }

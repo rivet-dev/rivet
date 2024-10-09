@@ -5,6 +5,9 @@ CREATE TABLE clients (
 	last_event_idx INT NOT NULL DEFAULT 0,
 	last_command_idx INT NOT NULL DEFAULT 0,
 
+	cpu INT NOT NULL DEFAULT 0,
+	memory INT NOT NULL DEFAULT 0,
+
 	drain_ts INT
 );
 

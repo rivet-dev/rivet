@@ -354,8 +354,7 @@ client {
 	}
 
 	reserved {
-		# See tier_list::RESERVE_MEMORY
-		memory = 1024
+		memory = __RESERVE_MEMORY__
 		disk = 10000
 	}
 }

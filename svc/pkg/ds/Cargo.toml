@@ -52,7 +52,7 @@ mm-lobby-get = { path = "../mm/ops/lobby-get" }
 mm-lobby-list-for-user-id = { path = "../mm/ops/lobby-list-for-user-id" }
 pegboard = { path = "../pegboard" }
 region-get = { path = "../region/ops/get" }
-tier-list = { path = "../tier/ops/list" }
+tier = { path = "../tier" }
 token-create = { path = "../token/ops/create" }
 upload-get = { path = "../upload/ops/get" }
 user-identity-get = { path = "../user-identity/ops/get" }

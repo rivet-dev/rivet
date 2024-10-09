@@ -398,18 +398,24 @@ async fn handle(
 		.await?;
 
 		// Fetch all tiers
-		let tiers_res = op!([ctx] tier_list {
-			region_ids: regions_res.regions
-				.iter()
-				.filter_map(|region| region.region_id)
-				.collect::<Vec<_>>()
-		})
+		let tiers_res = chirp_workflow::compat::op(
+			&ctx,
+			::tier::ops::list::Input {
+				datacenter_ids: regions_res
+					.regions
+					.iter()
+					.filter_map(|region| region.region_id)
+					.map(|id| id.as_uuid())
+					.collect::<Vec<_>>(),
+				pegboard: false,
+			},
+		)
 		.await?;
 
 		let tiers = tiers_res
-			.regions
+			.datacenters
 			.iter()
-			.flat_map(|region| region.tiers.clone())
+			.flat_map(|dc| dc.tiers.iter())
 			.collect::<Vec<_>>();
 
 		if matchmaker.lobby_groups.is_empty() {
