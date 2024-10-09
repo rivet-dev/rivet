@@ -1,5 +1,6 @@
 CREATE TABLE clients (
 	client_id UUID PRIMARY KEY,
+	datacenter_id UUID NOT NULL,
 	create_ts INT NOT NULL,
 	last_ping_ts INT NOT NULL,
 	last_event_idx INT NOT NULL DEFAULT 0,

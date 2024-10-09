@@ -108,17 +108,21 @@ async fn allocate_container(
 		"
 		INSERT INTO db_pegboard.containers (container_id, client_id, config, create_ts)
 		SELECT $3, client_id, $4, $5
-		FROM db_pegboard.clients
+		FROM db_pegboard.clients AS c
 		WHERE
 			datacenter_id = $1 AND
 			last_ping_ts > $2 AND
+			drain_ts IS NULL AND
+			delete_ts IS NULL AND
 			(
 				SELECT SUM(((config->'resources'->'cpu')::INT))
-				FROM db_pegboard.containers
+				FROM db_pegboard.containers AS co
+				WHERE co.client_id = c.client_id
 			) + $6 <= cpu AND
 			(
 				SELECT SUM(((config->'resources'->'memory')::INT))
-				FROM db_pegboard.containers
+				FROM db_pegboard.containers AS co
+				WHERE co.client_id = c.client_id
 			) + $7 <= memory
 		ORDER BY cpu, memory DESC
 		LIMIT 1

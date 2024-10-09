@@ -30,6 +30,7 @@ async fn main() -> Result<()> {
 	tokio::spawn(metrics::run_standalone());
 
 	let client_id = Uuid::parse_str(&utils::var("CLIENT_ID")?)?;
+	let datacenter_id = Uuid::parse_str(&utils::var("DATACENTER_ID")?)?;
 	let network_ip = utils::var("NETWORK_IP")?.parse::<Ipv4Addr>()?;
 
 	let system = System::new_with_specifics(
@@ -56,7 +57,8 @@ async fn main() -> Result<()> {
 	let mut url = Url::parse("ws://127.0.0.1:5030")?;
 	url.set_path(&format!("/v{PROTOCOL_VERSION}"));
 	url.query_pairs_mut()
-		.append_pair("client_id", &client_id.to_string());
+		.append_pair("client_id", &client_id.to_string())
+		.append_pair("datacenter_id", &datacenter_id.to_string());
 
 	tracing::info!("connecting to ws: {url}");
 
