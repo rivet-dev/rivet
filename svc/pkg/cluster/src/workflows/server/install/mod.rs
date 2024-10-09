@@ -262,11 +262,7 @@ fn insert_metrics(
 			&dc.datacenter_id.to_string(),
 			&dc.provider_datacenter_id,
 			&dc.name_id,
-			match pool_type {
-				PoolType::Job => "job",
-				PoolType::Gg => "gg",
-				PoolType::Ats => "ats",
-			},
+			&pool_type.to_string(),
 		])
 		.observe(dt);
 }

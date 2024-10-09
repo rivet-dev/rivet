@@ -28,12 +28,6 @@ pub fn configure(config: &Config, pool_type: PoolType) -> String {
 		.collect::<Vec<_>>()
 		.join(", ");
 
-	let pool_type_str = match pool_type {
-		PoolType::Job => "job",
-		PoolType::Gg => "gg",
-		PoolType::Ats => "ats",
-	};
-
 	let mut config_str = formatdoc!(
 		r#"
 		[api]
@@ -52,7 +46,7 @@ pub fn configure(config: &Config, pool_type: PoolType) -> String {
 			.tags.server_id = "___SERVER_ID___"
 			.tags.datacenter_id = "___DATACENTER_ID___"
 			.tags.cluster_id = "___CLUSTER_ID___"
-			.tags.pool_type = "{pool_type_str}"
+			.tags.pool_type = "{pool_type}"
 			.tags.public_ip = "${{PUBLIC_IP}}"
 			'''
 

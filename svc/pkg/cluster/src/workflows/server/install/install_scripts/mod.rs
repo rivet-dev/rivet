@@ -51,6 +51,15 @@ pub async fn gen_install(
 			script.push(components::docker::install());
 			script.push(components::traffic_server::install());
 		}
+		PoolType::Pegboard => {
+			script.push(components::docker::install());
+			script.push(components::lz4::install());
+			script.push(components::skopeo::install());
+			script.push(components::umoci::install());
+			script.push(components::cni::tool());
+			script.push(components::cni::plugins());
+			script.push(components::pegboard::install());
+		}
 	}
 
 	// MARK: Common (post)
@@ -112,6 +121,17 @@ pub async fn gen_initialize(pool_type: PoolType, datacenter_id: Uuid) -> GlobalR
 		}
 		PoolType::Ats => {
 			script.push(components::traffic_server::configure().await?);
+		}
+		PoolType::Pegboard => {
+			script.push(components::pegboard::configure()?);
+
+			prometheus_targets.insert(
+				"pegboard".into(),
+				components::vector::PrometheusTarget {
+					endpoint: todo!(),
+					scrape_interval: 15,
+				},
+			);
 		}
 	}
 

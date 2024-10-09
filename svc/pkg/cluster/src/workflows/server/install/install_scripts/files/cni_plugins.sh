@@ -11,4 +11,3 @@ tar -xz -C /opt/cni-plugins-$version -f /tmp/cni-plugins.tgz
 # Copy plugins to /opt/cni/bin
 mkdir -p /opt/cni/bin /opt/cni/config
 cp -r /opt/cni-plugins-$version/* /opt/cni/bin/
-

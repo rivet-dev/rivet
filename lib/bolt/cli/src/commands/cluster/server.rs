@@ -123,6 +123,7 @@ impl SubCommand {
 						"job" => Ok(models::AdminClustersPoolType::Job),
 						"gg" => Ok(models::AdminClustersPoolType::Gg),
 						"ats" => Ok(models::AdminClustersPoolType::Ats),
+						"pb" | "pegboard" => Ok(models::AdminClustersPoolType::Pegboard),
 						_ => Err(anyhow!("invalid pool type")),
 					})
 					.transpose()?;
@@ -165,6 +166,7 @@ impl SubCommand {
 						"job" => Ok(models::AdminClustersPoolType::Job),
 						"gg" => Ok(models::AdminClustersPoolType::Gg),
 						"ats" => Ok(models::AdminClustersPoolType::Ats),
+						"pb" | "pegboard" => Ok(models::AdminClustersPoolType::Pegboard),
 						_ => Err(anyhow!("invalid pool type")),
 					})
 					.transpose()?;
@@ -203,6 +205,7 @@ impl SubCommand {
 						"job" => Ok(models::AdminClustersPoolType::Job),
 						"gg" => Ok(models::AdminClustersPoolType::Gg),
 						"ats" => Ok(models::AdminClustersPoolType::Ats),
+						"pb" | "pegboard" => Ok(models::AdminClustersPoolType::Pegboard),
 						_ => Err(anyhow!("invalid pool type")),
 					})
 					.transpose()?;
@@ -240,6 +243,7 @@ impl SubCommand {
 						"job" => Ok(models::AdminClustersPoolType::Job),
 						"gg" => Ok(models::AdminClustersPoolType::Gg),
 						"ats" => Ok(models::AdminClustersPoolType::Ats),
+						"pb" | "pegboard" => Ok(models::AdminClustersPoolType::Pegboard),
 						_ => Err(anyhow!("invalid pool type")),
 					})
 					.transpose()?;
@@ -284,6 +288,7 @@ impl SubCommand {
 						"job" => Ok(models::AdminClustersPoolType::Job),
 						"gg" => Ok(models::AdminClustersPoolType::Gg),
 						"ats" => Ok(models::AdminClustersPoolType::Ats),
+						"pb" | "pegboard" => Ok(models::AdminClustersPoolType::Pegboard),
 						_ => Err(anyhow!("invalid pool type")),
 					})
 					.transpose()?;
@@ -323,6 +328,7 @@ impl SubCommand {
 						"job" => Ok(models::AdminClustersPoolType::Job),
 						"gg" => Ok(models::AdminClustersPoolType::Gg),
 						"ats" => Ok(models::AdminClustersPoolType::Ats),
+						"pb" | "pegboard" => Ok(models::AdminClustersPoolType::Pegboard),
 						_ => Err(anyhow!("invalid pool type")),
 					})
 					.transpose()?;
@@ -392,6 +398,7 @@ mod render {
 			models::AdminClustersPoolType::Job => "Job".to_string(),
 			models::AdminClustersPoolType::Gg => "GG".to_string(),
 			models::AdminClustersPoolType::Ats => "ATS".to_string(),
+			models::AdminClustersPoolType::Pegboard => "Pegboard".to_string(),
 		}
 	}
 }

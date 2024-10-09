@@ -58,7 +58,7 @@ pub async fn create(
 	// is to make sure that the datacenter starts in a valid state.
 	let pools = vec![
 		cluster::types::Pool {
-			pool_type: cluster::types::PoolType::Job,
+			pool_type: cluster::types::PoolType::Pegboard,
 			hardware: vec![cluster::types::Hardware {
 				provider_hardware: "g6-nanode-1".to_string(),
 			}],

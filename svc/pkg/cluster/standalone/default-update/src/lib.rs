@@ -44,13 +44,12 @@ struct Pool {
 }
 
 #[derive(Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
 enum PoolType {
-	#[serde(rename = "job")]
 	Job,
-	#[serde(rename = "gg")]
 	Gg,
-	#[serde(rename = "ats")]
 	Ats,
+	Pegboard,
 }
 
 impl From<PoolType> for cluster::types::PoolType {
@@ -59,6 +58,7 @@ impl From<PoolType> for cluster::types::PoolType {
 			PoolType::Job => cluster::types::PoolType::Job,
 			PoolType::Gg => cluster::types::PoolType::Gg,
 			PoolType::Ats => cluster::types::PoolType::Ats,
+			PoolType::Pegboard => cluster::types::PoolType::Pegboard,
 		}
 	}
 }
@@ -172,7 +172,7 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 				.map(|(pool_type, pool)| {
 					let desired_count = match pool_type {
 						PoolType::Ats | PoolType::Gg => Some(pool.desired_count),
-						PoolType::Job => {
+						PoolType::Job | PoolType::Pegboard => {
 							if use_autoscaler {
 								None
 							} else {

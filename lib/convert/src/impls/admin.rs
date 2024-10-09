@@ -11,6 +11,7 @@ impl ApiFrom<models::AdminClustersPoolType> for cluster::types::PoolType {
 			models::AdminClustersPoolType::Job => cluster::types::PoolType::Job,
 			models::AdminClustersPoolType::Gg => cluster::types::PoolType::Gg,
 			models::AdminClustersPoolType::Ats => cluster::types::PoolType::Ats,
+			models::AdminClustersPoolType::Pegboard => cluster::types::PoolType::Pegboard,
 		}
 	}
 }
@@ -21,6 +22,7 @@ impl ApiFrom<cluster::types::PoolType> for models::AdminClustersPoolType {
 			cluster::types::PoolType::Job => models::AdminClustersPoolType::Job,
 			cluster::types::PoolType::Gg => models::AdminClustersPoolType::Gg,
 			cluster::types::PoolType::Ats => models::AdminClustersPoolType::Ats,
+			cluster::types::PoolType::Pegboard => models::AdminClustersPoolType::Pegboard,
 		}
 	}
 }

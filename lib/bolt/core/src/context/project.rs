@@ -313,9 +313,14 @@ impl ProjectContextData {
 					.get(&config::ns::ProvisioningDatacenterPoolType::Job);
 				let job_count = job_pool.map(|pool| pool.desired_count).unwrap_or_default();
 
+				let pb_pool = datacenter
+					.pools
+					.get(&config::ns::ProvisioningDatacenterPoolType::Pegboard);
+				let job_count = pb_pool.map(|pool| pool.desired_count).unwrap_or_default();
+
 				assert_ne!(
-					job_count, 0,
-					"invalid datacenter ({}): Missing job servers",
+					job_count + pb_count, 0,
+					"invalid datacenter ({}): Missing job or pegboard servers",
 					name_id,
 				);
 				assert!(
@@ -326,6 +331,16 @@ impl ProjectContextData {
 				assert!(
 					job_pool.unwrap().min_count <= job_pool.unwrap().desired_count,
 					"invalid datacenter ({}): Job min > desired",
+					name_id,
+				);
+				assert!(
+					pb_count <= pb_pool.unwrap().max_count,
+					"invalid datacenter ({}): Pegboard desired > max",
+					name_id,
+				);
+				assert!(
+					pb_pool.unwrap().min_count <= pb_pool.unwrap().desired_count,
+					"invalid datacenter ({}): Pegboard min > desired",
 					name_id,
 				);
 
@@ -350,6 +365,14 @@ impl ProjectContextData {
 						assert!(
 							job_pool.drain_timeout >= 55 * 60 * 1000,
 							"invalid datacenter ({}): Job drain timeout < 55 min (Linode bills hourly, drain timeout should be close to hour intervals)",
+							name_id,
+						);
+					}
+
+					if let Some(pb_pool) = &pb_pool {
+						assert!(
+							pb_pool.drain_timeout >= 55 * 60 * 1000,
+							"invalid datacenter ({}): Pegboard drain timeout < 55 min (Linode bills hourly, drain timeout should be close to hour intervals)",
 							name_id,
 						);
 					}

@@ -40,6 +40,7 @@ pub enum DatacenterPoolType {
 	Job,
 	Gg,
 	Ats,
+	Pegboard,
 }
 
 impl From<DatacenterPoolType> for models::AdminClustersPoolType {
@@ -48,6 +49,7 @@ impl From<DatacenterPoolType> for models::AdminClustersPoolType {
 			DatacenterPoolType::Job => models::AdminClustersPoolType::Job,
 			DatacenterPoolType::Gg => models::AdminClustersPoolType::Gg,
 			DatacenterPoolType::Ats => models::AdminClustersPoolType::Ats,
+			DatacenterPoolType::Pegboard => models::AdminClustersPoolType::Pegboard,
 		}
 	}
 }
@@ -329,6 +331,7 @@ mod render {
 			Some(models::AdminClustersPoolType::Job) => "Job".to_string(),
 			Some(models::AdminClustersPoolType::Gg) => "GG".to_string(),
 			Some(models::AdminClustersPoolType::Ats) => "ATS".to_string(),
+			Some(models::AdminClustersPoolType::Pegboard) => "Pegboard".to_string(),
 			None => String::new(),
 		}
 	}

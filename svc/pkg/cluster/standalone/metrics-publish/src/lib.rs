@@ -127,6 +127,13 @@ fn insert_metrics(dc: &Datacenter, servers: &[Server]) -> GlobalResult<()> {
 				.filter(|s| matches!(s.pool_type, PoolType::Ats))
 				.collect::<Vec<_>>(),
 		),
+		(
+			PoolType::Pegboard,
+			servers_in_dc
+				.clone()
+				.filter(|s| matches!(s.pool_type, PoolType::Pegboard))
+				.collect::<Vec<_>>(),
+		),
 	];
 
 	// Aggregate all states per pool type
@@ -135,6 +142,7 @@ fn insert_metrics(dc: &Datacenter, servers: &[Server]) -> GlobalResult<()> {
 		let mut installing = 0;
 		let mut active = 0;
 		let mut nomad = 0;
+		let mut pegboard = 0;
 		let mut draining = 0;
 		let mut tainted = 0;
 		let mut draining_tainted = 0;
@@ -148,6 +156,10 @@ fn insert_metrics(dc: &Datacenter, servers: &[Server]) -> GlobalResult<()> {
 
 					if server.has_nomad_node {
 						nomad += 1;
+					}
+
+					if server.has_pegboard_client {
+						pegboard += 1;
 					}
 				} else {
 					installing += 1;
@@ -192,15 +204,27 @@ fn insert_metrics(dc: &Datacenter, servers: &[Server]) -> GlobalResult<()> {
 			.with_label_values(&labels)
 			.set(draining_tainted);
 
-		if let PoolType::Job = pool_type {
-			metrics::NOMAD_SERVERS
+		match pool_type {
+			PoolType::Job => {
+				metrics::NOMAD_SERVERS
+					.with_label_values(&[
+						&cluster_id,
+						&datacenter_id,
+						&dc.provider_datacenter_id,
+						&dc.name_id,
+					])
+					.set(nomad);
+			}
+			PoolType::Pegboard => {
+				metrics::PEGBOARD_SERVERS
 				.with_label_values(&[
 					&cluster_id,
 					&datacenter_id,
 					&dc.provider_datacenter_id,
 					&dc.name_id,
 				])
-				.set(nomad);
+				.set(pegboard);
+			}
 		}
 	}
 

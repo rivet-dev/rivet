@@ -99,7 +99,7 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 						api_token: dc.provider_api_token.clone(),
 						hardware: hardware.provider_hardware.clone(),
 						firewall_preset: match input.pool_type {
-							PoolType::Job => linode::types::FirewallPreset::Job,
+							PoolType::Job | PoolType::Pegboard => linode::types::FirewallPreset::Job,
 							PoolType::Gg => linode::types::FirewallPreset::Gg,
 							PoolType::Ats => linode::types::FirewallPreset::Ats,
 						},
@@ -313,7 +313,7 @@ struct GetVlanIpInput {
 async fn get_vlan_ip(ctx: &ActivityCtx, input: &GetVlanIpInput) -> GlobalResult<Ipv4Addr> {
 	// Find next available vlan index
 	let mut vlan_addr_range = match input.pool_type {
-		PoolType::Job => util::net::job::vlan_addr_range(),
+		PoolType::Job | PoolType::Pegboard => util::net::job::vlan_addr_range(),
 		PoolType::Gg => util::net::gg::vlan_addr_range(),
 		PoolType::Ats => util::net::ats::vlan_addr_range(),
 	};

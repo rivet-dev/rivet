@@ -66,6 +66,8 @@ pub async fn cluster_datacenter_topology_get(
 	)
 	.await?;
 
+	todo!("implement for pegboard also");
+
 	// Fetch batch data from nomad
 	let (allocation_info, node_info) = tokio::try_join!(
 		async {

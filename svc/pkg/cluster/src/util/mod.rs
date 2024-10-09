@@ -20,13 +20,8 @@ pub fn default_cluster_id() -> Uuid {
 
 pub fn server_name(provider_datacenter_id: &str, pool_type: PoolType, server_id: Uuid) -> String {
 	let ns = util::env::namespace();
-	let pool_type_str = match pool_type {
-		PoolType::Job => "job",
-		PoolType::Gg => "gg",
-		PoolType::Ats => "ats",
-	};
 
-	format!("{ns}-{provider_datacenter_id}-{pool_type_str}-{server_id}",)
+	format!("{ns}-{provider_datacenter_id}-{pool_type}-{server_id}")
 }
 
 pub(crate) async fn cf_client(
