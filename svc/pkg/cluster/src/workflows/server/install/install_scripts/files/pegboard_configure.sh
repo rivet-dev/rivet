@@ -33,7 +33,7 @@ SUBNET_IPV6="fd00:db8:2::/64"
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 # MARK: iptables
-cat << EOF > /usr/local/bin/setup_nomad_networking.sh
+cat << EOF > /usr/local/bin/setup_pegboard_networking.sh
 #!/bin/bash
 set -euf
 
@@ -210,34 +210,34 @@ for ipt in iptables ip6tables; do
 done
 EOF
 
-chmod +x /usr/local/bin/setup_nomad_networking.sh
+chmod +x /usr/local/bin/setup_pegboard_networking.sh
 
-cat << 'EOF' > /etc/systemd/system/setup_nomad_networking.service
+cat << 'EOF' > /etc/systemd/system/setup_pegboard_networking.service
 [Unit]
-Description=Setup Nomad Networking
+Description=Setup Pegboard Networking
 After=network.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/setup_nomad_networking.sh
+ExecStart=/usr/local/bin/setup_pegboard_networking.sh
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable setup_nomad_networking
-systemctl start setup_nomad_networking
+systemctl enable setup_pegboard_networking
+systemctl start setup_pegboard_networking
 
 # Dual-stack CNI config
 #
 # We use ptp instead of bridge networking in order to isolate the pod's traffic. It's also more performant than bridge networking.
 #
 # See default Nomad configuration: https://github.com/hashicorp/nomad/blob/a8f0f2612ef9d283ed903721f8453a0c0c3f51c5/client/allocrunner/networking_bridge_linux.go#L152
-cat << EOF > /opt/cni/config/rivet-job.conflist
+cat << EOF > /opt/cni/config/rivet-pegboard.conflist
 {
 	"cniVersion": "0.4.0",
-	"name": "rivet-job",
+	"name": "rivet-pegboard",
 	"plugins": [
 		{
 			"type": "loopback"
@@ -284,123 +284,26 @@ cat << EOF > /opt/cni/config/rivet-job.conflist
 }
 EOF
 
-# Create directories
-mkdir -p /opt/nomad/data
-
-mkdir -p /etc/nomad.d
-
-# Copy HCL files
-cat << EOF > /etc/nomad.d/common.hcl
-region = "global"
-datacenter = "___DATACENTER_ID___"
-data_dir = "/opt/nomad/data"
-name = "___NODE_NAME___"
-
-bind_addr = "___VLAN_IP___"
-
-addresses {
-	http = "___VLAN_IP___ 127.0.0.1"
-}
-
-telemetry {
-	collection_interval = "5s"
-	disable_hostname = true
-	prometheus_metrics = true
-	publish_allocation_metrics = true
-	publish_node_metrics = true
-}
-
-# Needed for Prometheus rate limiting
-limits {
-	http_max_conns_per_client = 4096
-	rpc_max_conns_per_client = 4096
-}
-EOF
-
-cat << EOF > /etc/nomad.d/client.hcl
-client {
-	enabled = true
-
-	node_class = "job"
-
-	# Expose services running on job nodes internally to GG
-	network_interface = "__VLAN_IFACE__"
-
-	# Nomad port range for GG-routed traffic.
-	#
-	# See firewall rules in docs/infrastructure/networking/EDGE_CLUSTER_NETWORKING.md
-	min_dynamic_port = 20000
-	max_dynamic_port = 25999
-
-	# Intentionally high kill timeout, killing allocations is handled manually
-	max_kill_timeout = "86400s"
-
-	server_join {
-		retry_join = [
-			__SERVER_JOIN__
-		]
-		retry_interval = "60s"
-		retry_max = 0
-	}
-
-	meta {
-		"pool-type" = "job"
-		"server-id" = "___SERVER_ID___"
-		"datacenter-id" = "___DATACENTER_ID___"
-		"cluster-id" = "___CLUSTER_ID___"
-
-		"network-vlan-ipv4" = "___VLAN_IP___"
-		"network-public-ipv4" = "${PUBLIC_IP}"
-	}
-
-	reserved {
-		# See tier_list::RESERVE_MEMORY
-		memory = 1024
-		disk = 10000
-	}
-}
-
-plugin "docker" {
-	config {
-		extra_labels = ["job_name", "task_group_name", "task_name", "node_name"]
-	}
-}
-
-plugin "raw_exec" {
-	config {
-		enabled = true
-		# Disable cgroups because we need to spawn child cgroups without constraints.
-		no_cgroups = true
-	}
-}
-EOF
-
 # Systemd service
-cat << 'EOF' > /etc/systemd/system/nomad.service
-# See https://developer.hashicorp.com/nomad/tutorials/enterprise/production-deployment-guide-vm-with-consul#configure-systemd
+cat << 'EOF' > /etc/systemd/system/pegboard.service
 
 [Unit]
-Description=Nomad
-Wants=network-online.target setup_nomad_networking.service
-After=network-online.target setup_nomad_networking.service
-ConditionDirectoryNotEmpty=/etc/nomad.d/
+Description=Pegboard
+Wants=network-online.target setup_pegboard_networking.service
+After=network-online.target setup_pegboard_networking.service
+ConditionPathExists=/etc/pegboard/
 
 [Service]
-ExecReload=/bin/kill -HUP $MAINPID
-ExecStart=/usr/local/bin/nomad agent -config /etc/nomad.d
-KillMode=process
-KillSignal=SIGINT
-LimitNOFILE=65536
-LimitNPROC=infinity
+Environment="CLIENT_ID=___SERVER_ID___"
+ExecStart=/usr/bin/pegboard
 Restart=always
 RestartSec=2
 TasksMax=infinity
-OOMScoreAdjust=-1000
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable nomad
-systemctl start nomad
+systemctl enable pegboard
+systemctl start pegboard

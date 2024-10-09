@@ -99,7 +99,9 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 						api_token: dc.provider_api_token.clone(),
 						hardware: hardware.provider_hardware.clone(),
 						firewall_preset: match input.pool_type {
-							PoolType::Job | PoolType::Pegboard => linode::types::FirewallPreset::Job,
+							PoolType::Job | PoolType::Pegboard => {
+								linode::types::FirewallPreset::Job
+							}
 							PoolType::Gg => linode::types::FirewallPreset::Gg,
 							PoolType::Ats => linode::types::FirewallPreset::Ats,
 						},

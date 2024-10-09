@@ -57,6 +57,8 @@ pub struct DnsZones {
 #[derive(Debug, Clone, Deserialize)]
 pub struct InfraArtifacts {
 	pub job_runner_binary_key: TerraformOutputValue<String>,
+	pub container_runner_binary_key: TerraformOutputValue<String>,
+	pub pegboard_manager_binary_key: TerraformOutputValue<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

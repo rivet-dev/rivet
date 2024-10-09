@@ -109,6 +109,20 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 					.send()
 					.await?;
 				}
+				Main::Drain(_) => {
+					ctx.activity(SetDrainInput {
+						client_id,
+						drain: true,
+					})
+					.await?;
+				}
+				Main::Undrain(_) => {
+					ctx.activity(SetDrainInput {
+						client_id,
+						drain: false,
+					})
+					.await?;
+				}
 			}
 
 			Ok(Loop::<()>::Continue)
@@ -243,6 +257,29 @@ async fn insert_command(ctx: &ActivityCtx, input: &InsertCommandInput) -> Global
 	Ok(index)
 }
 
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct SetDrainInput {
+	client_id: Uuid,
+	drain: bool,
+}
+
+#[activity(SetDrain)]
+async fn set_drain(ctx: &ActivityCtx, input: &SetDrainInput) -> GlobalResult<()> {
+	sql_execute!(
+		[ctx]
+		"
+		UPDATE db_pegboard.clients
+		SET draining = $2
+		WHERE client_id = $1
+		",
+		input.client_id,
+		input.drain,
+	)
+	.await?;
+
+	Ok(())
+}
+
 #[message("pegboard_client_to_ws")]
 pub struct ToWs {
 	pub client_id: Uuid,
@@ -254,8 +291,16 @@ struct ContainerStateUpdate {
 	pub state: protocol::ContainerState,
 }
 
+#[signal("pegboard_client_drain")]
+pub struct Drain {}
+
+#[signal("pegboard_client_undrain")]
+pub struct Undrain {}
+
 join_signal!(Main {
 	Command(protocol::Command),
 	// Forwarded from the ws to this workflow
 	Forward(protocol::ToServer),
+	Drain,
+	Undrain,
 });

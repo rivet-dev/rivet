@@ -46,9 +46,10 @@ type TaintServersRequest struct {
 type PoolType string
 
 const (
-	PoolTypeJob PoolType = "job"
-	PoolTypeGg  PoolType = "gg"
-	PoolTypeAts PoolType = "ats"
+	PoolTypeJob      PoolType = "job"
+	PoolTypeGg       PoolType = "gg"
+	PoolTypeAts      PoolType = "ats"
+	PoolTypePegboard PoolType = "pegboard"
 )
 
 func NewPoolTypeFromString(s string) (PoolType, error) {
@@ -59,6 +60,8 @@ func NewPoolTypeFromString(s string) (PoolType, error) {
 		return PoolTypeGg, nil
 	case "ats":
 		return PoolTypeAts, nil
+	case "pegboard":
+		return PoolTypePegboard, nil
 	}
 	var t PoolType
 	return "", fmt.Errorf("%s is not a valid %T", s, t)

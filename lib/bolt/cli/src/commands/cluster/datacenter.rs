@@ -1,58 +1,9 @@
 use anyhow::*;
 use bolt_core::context::ProjectContext;
-use clap::{Parser, ValueEnum};
+use clap::Parser;
 use rivet_api::{apis::*, models};
 
-#[derive(ValueEnum, Clone)]
-pub enum DatacenterProvider {
-	Linode,
-}
-
-impl From<DatacenterProvider> for models::AdminClustersProvider {
-	fn from(provider: DatacenterProvider) -> Self {
-		match provider {
-			DatacenterProvider::Linode => models::AdminClustersProvider::Linode,
-		}
-	}
-}
-
-#[derive(ValueEnum, Clone)]
-pub enum DatacenterBuildDeliveryMethod {
-	TrafficServer,
-	S3Direct,
-}
-
-impl From<DatacenterBuildDeliveryMethod> for models::AdminClustersBuildDeliveryMethod {
-	fn from(method: DatacenterBuildDeliveryMethod) -> Self {
-		match method {
-			DatacenterBuildDeliveryMethod::TrafficServer => {
-				models::AdminClustersBuildDeliveryMethod::TrafficServer
-			}
-			DatacenterBuildDeliveryMethod::S3Direct => {
-				models::AdminClustersBuildDeliveryMethod::S3Direct
-			}
-		}
-	}
-}
-
-#[derive(ValueEnum, Clone)]
-pub enum DatacenterPoolType {
-	Job,
-	Gg,
-	Ats,
-	Pegboard,
-}
-
-impl From<DatacenterPoolType> for models::AdminClustersPoolType {
-	fn from(pool_type: DatacenterPoolType) -> Self {
-		match pool_type {
-			DatacenterPoolType::Job => models::AdminClustersPoolType::Job,
-			DatacenterPoolType::Gg => models::AdminClustersPoolType::Gg,
-			DatacenterPoolType::Ats => models::AdminClustersPoolType::Ats,
-			DatacenterPoolType::Pegboard => models::AdminClustersPoolType::Pegboard,
-		}
-	}
-}
+use super::{BuildDeliveryMethod, PoolType, Provider};
 
 #[derive(Parser)]
 pub enum SubCommand {
@@ -69,13 +20,13 @@ pub enum SubCommand {
 		display_name: String,
 		/// The provider of the datacenter
 		#[clap(long)]
-		provider: DatacenterProvider,
+		provider: Provider,
 		/// The provider datacenter ID
 		#[clap(long)]
 		provider_datacenter_id: String,
 		/// The build delivery method
 		#[clap(long)]
-		build_delivery_method: DatacenterBuildDeliveryMethod,
+		build_delivery_method: BuildDeliveryMethod,
 		/// Whether or not prebakes are enabled
 		#[clap(long)]
 		prebakes_enabled: bool,
@@ -96,7 +47,7 @@ pub enum SubCommand {
 		name_id: String,
 		/// The pool type
 		#[clap(index = 3)]
-		pool: DatacenterPoolType,
+		pool: PoolType,
 		/// The hardware types
 		#[clap(long)]
 		hardware: Vec<String>,

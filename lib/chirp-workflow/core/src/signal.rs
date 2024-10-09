@@ -32,8 +32,8 @@ pub trait Signal {
 /// 	MySignal(sig) => println!("received MySignal {sig:?}"),
 /// 	MySignal2(sig) => println!("received MySignal2 {sig:?}"),
 /// }
-/// 
-/// 
+///
+///
 /// // Also allows aliases:
 /// join_signal!(MyJoinSignal {
 /// 	MySignal,

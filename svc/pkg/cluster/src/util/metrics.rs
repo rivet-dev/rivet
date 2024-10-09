@@ -25,6 +25,12 @@ lazy_static::lazy_static! {
 		&["cluster_id", "datacenter_id", "provider_datacenter_id", "datacenter_name_id"],
 		*REGISTRY,
 	).unwrap();
+	pub static ref PEGBOARD_SERVERS: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		"provision_pegboard_servers",
+		"Job servers with pegboard connected.",
+		&["cluster_id", "datacenter_id", "provider_datacenter_id", "datacenter_name_id"],
+		*REGISTRY,
+	).unwrap();
 	pub static ref DRAINING_SERVERS: IntGaugeVec = register_int_gauge_vec_with_registry!(
 		"provision_draining_servers",
 		"Servers being drained.",

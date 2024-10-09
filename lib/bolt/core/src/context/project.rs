@@ -316,33 +316,39 @@ impl ProjectContextData {
 				let pb_pool = datacenter
 					.pools
 					.get(&config::ns::ProvisioningDatacenterPoolType::Pegboard);
-				let job_count = pb_pool.map(|pool| pool.desired_count).unwrap_or_default();
+				let pb_count = pb_pool.map(|pool| pool.desired_count).unwrap_or_default();
 
 				assert_ne!(
-					job_count + pb_count, 0,
-					"invalid datacenter ({}): Missing job or pegboard servers",
+					job_count + pb_count,
+					0,
+					"invalid datacenter ({}): Must have at least 1 job or pegboard server",
 					name_id,
 				);
-				assert!(
-					job_count <= job_pool.unwrap().max_count,
-					"invalid datacenter ({}): Job desired > max",
-					name_id,
-				);
-				assert!(
-					job_pool.unwrap().min_count <= job_pool.unwrap().desired_count,
-					"invalid datacenter ({}): Job min > desired",
-					name_id,
-				);
-				assert!(
-					pb_count <= pb_pool.unwrap().max_count,
-					"invalid datacenter ({}): Pegboard desired > max",
-					name_id,
-				);
-				assert!(
-					pb_pool.unwrap().min_count <= pb_pool.unwrap().desired_count,
-					"invalid datacenter ({}): Pegboard min > desired",
-					name_id,
-				);
+
+				if let Some(job_pool) = &job_pool {
+					assert!(
+						job_count <= job_pool.max_count,
+						"invalid datacenter ({}): Job desired > max",
+						name_id,
+					);
+					assert!(
+						job_pool.min_count <= job_pool.desired_count,
+						"invalid datacenter ({}): Job min > desired",
+						name_id,
+					);
+				}
+				if let Some(pb_pool) = &pb_pool {
+					assert!(
+						pb_count <= pb_pool.max_count,
+						"invalid datacenter ({}): Pegboard desired > max",
+						name_id,
+					);
+					assert!(
+						pb_pool.min_count <= pb_pool.desired_count,
+						"invalid datacenter ({}): Pegboard min > desired",
+						name_id,
+					);
+				}
 
 				// Validate Linode
 				#[allow(irrefutable_let_patterns)]

@@ -2,6 +2,9 @@ use anyhow::*;
 use bolt_core::{context::ProjectContext, tasks::ssh};
 use clap::Parser;
 use rivet_api::{apis::*, models};
+use uuid::Uuid;
+
+use super::PoolType;
 
 #[derive(Parser)]
 pub enum SubCommand {
@@ -11,9 +14,9 @@ pub enum SubCommand {
 		#[clap(index = 1)]
 		cluster: String,
 		#[clap(long, short = 's')]
-		server_id: Option<String>,
+		server_id: Option<Uuid>,
 		#[clap(long, short = 'p')]
-		pool: Option<String>,
+		pool: Option<PoolType>,
 		#[clap(long, short = 'd')]
 		datacenter: Option<String>,
 		#[clap(long)]
@@ -25,9 +28,9 @@ pub enum SubCommand {
 		#[clap(index = 1)]
 		cluster: String,
 		#[clap(long, short = 's')]
-		server_id: Option<String>,
+		server_id: Option<Uuid>,
 		#[clap(long, short = 'p')]
-		pool: Option<String>,
+		pool: Option<PoolType>,
 		#[clap(long, short = 'd')]
 		datacenter: Option<String>,
 		#[clap(long)]
@@ -39,9 +42,9 @@ pub enum SubCommand {
 		#[clap(index = 1)]
 		cluster: String,
 		#[clap(long, short = 's')]
-		server_id: Option<String>,
-		#[clap(long, short = 'p')]
-		pool: Option<String>,
+		server_id: Option<Uuid>,
+		#[clap(long, short = 'p', value_enum)]
+		pool: Option<PoolType>,
 		#[clap(long, short = 'd')]
 		datacenter: Option<String>,
 		#[clap(long)]
@@ -53,9 +56,9 @@ pub enum SubCommand {
 		#[clap(index = 1)]
 		cluster: String,
 		#[clap(long, short = 's')]
-		server_id: Option<String>,
-		#[clap(long, short = 'p')]
-		pool: Option<String>,
+		server_id: Option<Uuid>,
+		#[clap(long, short = 'p', value_enum)]
+		pool: Option<PoolType>,
 		#[clap(long, short = 'd')]
 		datacenter: Option<String>,
 		#[clap(long)]
@@ -67,9 +70,9 @@ pub enum SubCommand {
 		#[clap(index = 1)]
 		cluster: String,
 		#[clap(long, short = 's')]
-		server_id: Option<String>,
-		#[clap(long, short = 'p')]
-		pool: Option<String>,
+		server_id: Option<Uuid>,
+		#[clap(long, short = 'p', value_enum)]
+		pool: Option<PoolType>,
 		#[clap(long, short = 'd')]
 		datacenter: Option<String>,
 		#[clap(long)]
@@ -81,9 +84,9 @@ pub enum SubCommand {
 		#[clap(index = 1)]
 		cluster: String,
 		#[clap(long, short = 's')]
-		server_id: Option<String>,
-		#[clap(long, short = 'p')]
-		pool: Option<String>,
+		server_id: Option<Uuid>,
+		#[clap(long, short = 'p', value_enum)]
+		pool: Option<PoolType>,
 		#[clap(long, short = 'd')]
 		datacenter: Option<String>,
 		#[clap(long)]
@@ -118,21 +121,13 @@ impl SubCommand {
 				};
 
 				// Taint servers
-				let pool_type = pool
-					.map(|p| match p.as_str() {
-						"job" => Ok(models::AdminClustersPoolType::Job),
-						"gg" => Ok(models::AdminClustersPoolType::Gg),
-						"ats" => Ok(models::AdminClustersPoolType::Ats),
-						"pb" | "pegboard" => Ok(models::AdminClustersPoolType::Pegboard),
-						_ => Err(anyhow!("invalid pool type")),
-					})
-					.transpose()?;
+				let server_id = server_id.map(|x| x.to_string());
 				let servers = admin_clusters_servers_api::admin_clusters_servers_list(
 					&cloud_config,
 					&cluster.cluster_id.to_string(),
 					server_id.as_deref(),
 					datacenter.as_deref(),
-					pool_type,
+					pool.map(Into::into),
 					ip.as_deref(),
 				)
 				.await?
@@ -161,21 +156,13 @@ impl SubCommand {
 				};
 
 				// Taint servers
-				let pool_type = pool
-					.map(|p| match p.as_str() {
-						"job" => Ok(models::AdminClustersPoolType::Job),
-						"gg" => Ok(models::AdminClustersPoolType::Gg),
-						"ats" => Ok(models::AdminClustersPoolType::Ats),
-						"pb" | "pegboard" => Ok(models::AdminClustersPoolType::Pegboard),
-						_ => Err(anyhow!("invalid pool type")),
-					})
-					.transpose()?;
+				let server_id = server_id.map(|x| x.to_string());
 				admin_clusters_servers_api::admin_clusters_servers_taint(
 					&cloud_config,
 					&cluster.cluster_id.to_string(),
 					server_id.as_deref(),
 					datacenter.as_deref(),
-					pool_type,
+					pool.map(Into::into),
 					ip.as_deref(),
 				)
 				.await?;
@@ -200,21 +187,13 @@ impl SubCommand {
 				};
 
 				// Destroy servers
-				let pool_type = pool
-					.map(|p| match p.as_str() {
-						"job" => Ok(models::AdminClustersPoolType::Job),
-						"gg" => Ok(models::AdminClustersPoolType::Gg),
-						"ats" => Ok(models::AdminClustersPoolType::Ats),
-						"pb" | "pegboard" => Ok(models::AdminClustersPoolType::Pegboard),
-						_ => Err(anyhow!("invalid pool type")),
-					})
-					.transpose()?;
+				let server_id = server_id.map(|x| x.to_string());
 				admin_clusters_servers_api::admin_clusters_servers_destroy(
 					&cloud_config,
 					&cluster.cluster_id.to_string(),
 					server_id.as_deref(),
 					datacenter.as_deref(),
-					pool_type,
+					pool.map(Into::into),
 					ip.as_deref(),
 				)
 				.await?;
@@ -238,21 +217,13 @@ impl SubCommand {
 					None => bail!("cluster with the name id {} not found", cluster_name_id),
 				};
 
-				let pool_type = pool
-					.map(|p| match p.as_str() {
-						"job" => Ok(models::AdminClustersPoolType::Job),
-						"gg" => Ok(models::AdminClustersPoolType::Gg),
-						"ats" => Ok(models::AdminClustersPoolType::Ats),
-						"pb" | "pegboard" => Ok(models::AdminClustersPoolType::Pegboard),
-						_ => Err(anyhow!("invalid pool type")),
-					})
-					.transpose()?;
+				let server_id = server_id.map(|x| x.to_string());
 				let servers = admin_clusters_servers_api::admin_clusters_servers_list_lost(
 					&cloud_config,
 					&cluster.cluster_id.to_string(),
 					server_id.as_deref(),
 					datacenter.as_deref(),
-					pool_type,
+					pool.map(Into::into),
 					ip.as_deref(),
 				)
 				.await?
@@ -283,21 +254,13 @@ impl SubCommand {
 				};
 
 				// Prune servers
-				let pool_type = pool
-					.map(|p| match p.as_str() {
-						"job" => Ok(models::AdminClustersPoolType::Job),
-						"gg" => Ok(models::AdminClustersPoolType::Gg),
-						"ats" => Ok(models::AdminClustersPoolType::Ats),
-						"pb" | "pegboard" => Ok(models::AdminClustersPoolType::Pegboard),
-						_ => Err(anyhow!("invalid pool type")),
-					})
-					.transpose()?;
+				let server_id = server_id.map(|x| x.to_string());
 				admin_clusters_servers_api::admin_clusters_servers_prune(
 					&cloud_config,
 					&cluster.cluster_id.to_string(),
 					server_id.as_deref(),
 					datacenter.as_deref(),
-					pool_type,
+					pool.map(Into::into),
 					ip.as_deref(),
 				)
 				.await?;
@@ -323,21 +286,13 @@ impl SubCommand {
 				};
 
 				// Look up server IPs
-				let pool_type = pool
-					.map(|p| match p.as_str() {
-						"job" => Ok(models::AdminClustersPoolType::Job),
-						"gg" => Ok(models::AdminClustersPoolType::Gg),
-						"ats" => Ok(models::AdminClustersPoolType::Ats),
-						"pb" | "pegboard" => Ok(models::AdminClustersPoolType::Pegboard),
-						_ => Err(anyhow!("invalid pool type")),
-					})
-					.transpose()?;
+				let server_id = server_id.map(|x| x.to_string());
 				let mut servers = admin_clusters_servers_api::admin_clusters_servers_list(
 					&cloud_config,
 					&cluster.cluster_id.to_string(),
 					server_id.as_deref(),
 					datacenter.as_deref(),
-					pool_type,
+					pool.map(Into::into),
 					ip.as_deref(),
 				)
 				.await?;

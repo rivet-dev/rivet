@@ -43,6 +43,21 @@ pub(crate) async fn cluster_server_drain(ctx: &mut WorkflowCtx, input: &Input) -
 				.await?;
 		}
 		PoolType::Ats => {}
+		PoolType::Pegboard => {
+			let pegboard_client_id = ctx
+				.activity(DrainPegboardClientInput {
+					server_id: input.server_id,
+					drain_timeout,
+				})
+				.await?;
+
+			if let Some(pegboard_client_id) = pegboard_client_id {
+				ctx.signal(pegboard::workflows::client::Drain {})
+					.tag("client_id", pegboard_client_id)
+					.send()
+					.await?;
+			}
+		}
 	}
 
 	Ok(())
@@ -139,11 +154,46 @@ async fn drain_node(ctx: &ActivityCtx, input: &DrainNodeInput) -> GlobalResult<(
 		.await?;
 
 		msg!([ctx] ds::msg::drain_all(&nomad_node_id) {
-			nomad_node_id: nomad_node_id.clone(),
+			nomad_node_id: Some(nomad_node_id.clone()),
+			pegboard_client_id: None,
 			drain_timeout: input.drain_timeout,
 		})
 		.await?;
 	}
 
 	Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct DrainPegboardClientInput {
+	server_id: Uuid,
+	drain_timeout: u64,
+}
+
+#[activity(DrainPegboardClient)]
+async fn drain_pegboard_client(
+	ctx: &ActivityCtx,
+	input: &DrainPegboardClientInput,
+) -> GlobalResult<Option<Uuid>> {
+	let (pegboard_client_id,) = sql_fetch_one!(
+		[ctx, (Option<Uuid>,)]
+		"
+		SELECT pegboard_client_id
+		FROM db_cluster.servers
+		WHERE server_id = $1
+		",
+		input.server_id,
+	)
+	.await?;
+
+	if let Some(pegboard_client_id) = pegboard_client_id {
+		msg!([ctx] ds::msg::drain_all(&pegboard_client_id) {
+			nomad_node_id: None,
+			pegboard_client_id: Some(pegboard_client_id.into()),
+			drain_timeout: input.drain_timeout,
+		})
+		.await?;
+	}
+
+	Ok(pegboard_client_id)
 }

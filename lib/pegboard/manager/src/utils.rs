@@ -23,6 +23,10 @@ const MAX_QUERY_RETRIES: usize = 16;
 const QUERY_RETRY: Duration = Duration::from_millis(500);
 const TXN_RETRY: Duration = Duration::from_millis(250);
 
+pub fn var(name: &str) -> Result<String> {
+	std::env::var(name).context(name.to_string())
+}
+
 pub async fn init_working_dir(working_path: &Path) -> Result<()> {
 	if fs::metadata(&working_path).await.is_err() {
 		bail!("working dir `{}` does not exist", working_path.display());

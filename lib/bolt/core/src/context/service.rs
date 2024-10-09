@@ -903,6 +903,14 @@ impl ServiceContextData {
 			"JOB_RUNNER_BINARY_KEY".into(),
 			(*infra_artifacts_output.job_runner_binary_key).clone(),
 		);
+		env.insert(
+			"CONTAINER_RUNNER_BINARY_KEY".into(),
+			(*infra_artifacts_output.container_runner_binary_key).clone(),
+		);
+		env.insert(
+			"PEGBOARD_MANAGER_BINARY_KEY".into(),
+			(*infra_artifacts_output.pegboard_manager_binary_key).clone(),
+		);
 
 		// Backend
 		if project_ctx.ns().rivet.backend.is_some() {
@@ -1073,6 +1081,10 @@ impl ServiceContextData {
 				env.insert(
 					"RIVET_JOB_SERVER_PROVISION_MARGIN".to_string(),
 					provisioning.job_server_provision_margin.to_string(),
+				);
+				env.insert(
+					"RIVET_PB_SERVER_PROVISION_MARGIN".to_string(),
+					provisioning.pb_server_provision_margin.to_string(),
 				);
 			}
 

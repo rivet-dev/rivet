@@ -25,6 +25,7 @@ struct ServerRow {
 	pool_type: i32,
 	is_installed: bool,
 	has_nomad_node: bool,
+	has_pb_client: bool,
 	is_draining: bool,
 	is_drained: bool,
 	is_tainted: bool,
@@ -35,6 +36,7 @@ struct Server {
 	pool_type: PoolType,
 	is_installed: bool,
 	has_nomad_node: bool,
+	has_pb_client: bool,
 	drain_state: DrainState,
 	is_tainted: bool,
 }
@@ -48,6 +50,7 @@ impl TryFrom<ServerRow> for Server {
 			pool_type: unwrap!(PoolType::from_repr(value.pool_type.try_into()?)),
 			is_installed: value.is_installed,
 			has_nomad_node: value.has_nomad_node,
+			has_pb_client: value.has_pb_client,
 			is_tainted: value.is_tainted,
 			drain_state: if value.is_drained {
 				DrainState::Complete
@@ -219,6 +222,7 @@ async fn inner(
 			server_id, pool_type,
 			(install_complete_ts IS NOT NULL) AS is_installed,
 			(nomad_node_id IS NOT NULL) AS has_nomad_node,
+			(pegboard_client_id IS NOT NULL) AS has_pb_client,
 			(drain_ts IS NOT NULL) AS is_draining,
 			(drain_complete_ts IS NOT NULL) AS is_drained,
 			(taint_ts IS NOT NULL) AS is_tainted
@@ -325,6 +329,16 @@ async fn scale_servers(
 
 			if pctx.desired_count < installed_count {
 				scale_down_ats_servers(ctx, tx, actions, pctx, installed_servers, installed_count)
+					.await?;
+			}
+		}
+		PoolType::Pegboard => {
+			let (pb_servers, without_pb_servers) = active_servers
+				.clone()
+				.partition::<Vec<_>, _>(|server| server.has_pb_client);
+
+			if pctx.desired_count < pb_servers.len() {
+				scale_down_pb_servers(ctx, tx, actions, pctx, pb_servers, without_pb_servers)
 					.await?;
 			}
 		}
@@ -456,6 +470,58 @@ async fn scale_down_ats_servers<
 	Ok(())
 }
 
+async fn scale_down_pb_servers(
+	ctx: &ActivityCtx,
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	actions: &mut Vec<Action>,
+	pctx: &PoolCtx,
+	pb_servers: Vec<&Server>,
+	without_pb_servers: Vec<&Server>,
+) -> GlobalResult<()> {
+	tracing::info!(
+		datacenter_id=?pctx.datacenter_id,
+		desired=%pctx.desired_count,
+		pb_servers=%pb_servers.len(),
+		"scaling down pegboard"
+	);
+
+	let diff = pb_servers.len().saturating_sub(pctx.desired_count);
+
+	let destroy_count = match pctx.provider {
+		// Never destroy servers when scaling down with Linode, always drain
+		Provider::Linode => 0,
+		#[allow(unreachable_patterns)]
+		_ => diff.min(without_pb_servers.len()),
+	};
+	let drain_count = diff - destroy_count;
+
+	// Destroy servers
+	if destroy_count != 0 {
+		tracing::info!(count=%destroy_count, "destroying servers");
+
+		let destroy_candidates = without_pb_servers
+			.iter()
+			.take(destroy_count)
+			.map(|server| server.server_id);
+
+		destroy_servers(ctx, tx, actions, destroy_candidates).await?;
+	}
+
+	// Drain servers
+	if drain_count != 0 {
+		tracing::info!(count=%drain_count, "draining pb servers");
+
+		let drain_candidates = pb_servers
+			.iter()
+			.take(drain_count)
+			.map(|server| server.server_id);
+
+		drain_servers(ctx, tx, actions, drain_candidates).await?;
+	}
+
+	Ok(())
+}
+
 async fn scale_up_servers<'a, I: Iterator<Item = &'a Server> + Clone>(
 	ctx: &ActivityCtx,
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -485,10 +551,11 @@ async fn scale_up_servers<'a, I: Iterator<Item = &'a Server> + Clone>(
 	if undrain_count != 0 {
 		tracing::info!(count=%undrain_count, "undraining servers");
 
-		// Because job servers are ordered by memory usage, this will undrain the servers with the most memory
-		// usage
+		// Because job/pb servers are ordered by memory usage, this will undrain the servers with the most
+		// memory usage
 		let undrain_candidates = draining_servers
 			.iter()
+			.rev()
 			.take(undrain_count)
 			.map(|server| server.server_id);
 

@@ -9,6 +9,7 @@ import "proto/common.proto";
 /// 	{ name = "nomad_node_id" },
 /// ]
 message Message {
-	string nomad_node_id = 1;
+	optional string nomad_node_id = 1;
+	optional string pegboard_client_id = 3;
 	uint64 drain_timeout = 2;
 }

@@ -2596,6 +2596,7 @@ dependencies = [
  "merkle_hash",
  "nomad-util",
  "nomad_client",
+ "pegboard",
  "rand",
  "reqwest 0.11.27",
  "rivet-metrics",
@@ -6480,6 +6481,7 @@ version = "0.0.1"
 dependencies = [
  "chirp-workflow",
  "serde",
+ "sqlx",
  "thiserror",
 ]
 

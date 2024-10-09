@@ -172,6 +172,7 @@ components:
       - job
       - gg
       - ats
+      - pegboard
       type: string
     AdminClustersPoolUpdate:
       properties:

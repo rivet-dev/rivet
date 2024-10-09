@@ -457,7 +457,9 @@ pub async fn run_from_env() -> GlobalResult<()> {
 		let install_token = create_token(&ctx).await?;
 
 		let firewall_preset = match pool_type {
-			cluster::types::PoolType::Job | cluster::types::PoolType::Pegboard => linode::types::FirewallPreset::Job,
+			cluster::types::PoolType::Job | cluster::types::PoolType::Pegboard => {
+				linode::types::FirewallPreset::Job
+			}
 			cluster::types::PoolType::Gg => linode::types::FirewallPreset::Gg,
 			cluster::types::PoolType::Ats => linode::types::FirewallPreset::Ats,
 		};

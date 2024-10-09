@@ -13,6 +13,7 @@ struct ServerRow {
 	is_provisioned: bool,
 	is_installed: bool,
 	has_nomad_node: bool,
+	has_pegboard_client: bool,
 	is_draining: bool,
 	is_drained: bool,
 	is_tainted: bool,
@@ -24,6 +25,7 @@ struct Server {
 	is_provisioned: bool,
 	is_installed: bool,
 	has_nomad_node: bool,
+	has_pegboard_client: bool,
 	is_draining: bool,
 	is_tainted: bool,
 }
@@ -38,6 +40,7 @@ impl TryFrom<ServerRow> for Server {
 			is_provisioned: value.is_provisioned,
 			is_installed: value.is_installed,
 			has_nomad_node: value.has_nomad_node,
+			has_pegboard_client: value.has_pegboard_client,
 			is_tainted: value.is_tainted,
 			is_draining: value.is_draining && !value.is_drained,
 		})
@@ -80,6 +83,7 @@ async fn select_servers(ctx: &StandaloneCtx) -> GlobalResult<Vec<Server>> {
 			(provider_server_id IS NOT NULL) AS is_provisioned,
 			(install_complete_ts IS NOT NULL) AS is_installed,
 			(nomad_node_id IS NOT NULL) AS has_nomad_node,
+			(pegboard_client_id IS NOT NULL) AS has_pegboard_client,
 			(drain_ts IS NOT NULL) AS is_draining,
 			(drain_complete_ts IS NOT NULL) AS is_drained,
 			(taint_ts IS NOT NULL) AS is_tainted
@@ -217,14 +221,15 @@ fn insert_metrics(dc: &Datacenter, servers: &[Server]) -> GlobalResult<()> {
 			}
 			PoolType::Pegboard => {
 				metrics::PEGBOARD_SERVERS
-				.with_label_values(&[
-					&cluster_id,
-					&datacenter_id,
-					&dc.provider_datacenter_id,
-					&dc.name_id,
-				])
-				.set(pegboard);
+					.with_label_values(&[
+						&cluster_id,
+						&datacenter_id,
+						&dc.provider_datacenter_id,
+						&dc.name_id,
+					])
+					.set(pegboard);
 			}
+			_ => {}
 		}
 	}
 

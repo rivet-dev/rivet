@@ -58,7 +58,7 @@ pub async fn gen_install(
 			script.push(components::umoci::install());
 			script.push(components::cni::tool());
 			script.push(components::cni::plugins());
-			script.push(components::pegboard::install());
+			script.push(components::pegboard::install().await?);
 		}
 	}
 
@@ -128,7 +128,7 @@ pub async fn gen_initialize(pool_type: PoolType, datacenter_id: Uuid) -> GlobalR
 			prometheus_targets.insert(
 				"pegboard".into(),
 				components::vector::PrometheusTarget {
-					endpoint: todo!(),
+					endpoint: "http://127.0.0.1:5000".into(),
 					scrape_interval: 15,
 				},
 			);

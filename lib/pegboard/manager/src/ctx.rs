@@ -24,7 +24,7 @@ use tokio_tungstenite::{tungstenite::protocol::Message, MaybeTlsStream, WebSocke
 use url::Url;
 use uuid::Uuid;
 
-use crate::{container::Container, utils};
+use crate::{container::Container, metrics, utils};
 
 const PING_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -73,6 +73,8 @@ impl Ctx {
 	async fn send_packet(&self, packet: protocol::ToServer) -> Result<()> {
 		let buf = packet.serialize()?;
 		self.tx.lock().await.send(Message::Binary(buf)).await?;
+
+		metrics::PACKET_SEND_TOTAL.with_label_values(&[]).inc();
 
 		Ok(())
 	}
@@ -170,6 +172,8 @@ impl Ctx {
 		while let Some(msg) = rx.next().await {
 			match msg? {
 				Message::Binary(buf) => {
+					metrics::PACKET_RECV_TOTAL.with_label_values(&[]).inc();
+
 					let packet = protocol::ToClient::deserialize(&buf)?;
 
 					self.clone().process_packet(packet).await?;

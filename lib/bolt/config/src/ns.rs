@@ -453,9 +453,7 @@ impl Default for ClickHouseProvider {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum ClickHouseManagedTier {
-	#[serde(rename = "development")]
 	Development {},
-	#[serde(rename = "production")]
 	Production {
 		min_total_memory_gb: usize,
 		max_total_memory_gb: usize,
@@ -624,10 +622,14 @@ pub struct NsfwCheck {
 pub struct Provisioning {
 	/// Default cluster.
 	pub cluster: Option<ProvisioningCluster>,
-	/// How many empty job servers to have at all times. Used in the simple provisioning algorithm on Rivet
-	/// Enterprise.
-	#[serde(default = "default_job_server_provision_margin")]
+	/// How many empty job servers to have at all times. Used in the simple provisioning
+	/// algorithm on Rivet Enterprise.
+	#[serde(default = "default_game_server_provision_margin")]
 	pub job_server_provision_margin: u32,
+	/// How many empty pegboard servers to have at all times. Used in the simple provisioning
+	/// algorithm on Rivet Enterprise.
+	#[serde(default = "default_game_server_provision_margin")]
+	pub pb_server_provision_margin: u32,
 	#[serde(default)]
 	pub acme_directory: ProvisioningAcmeDirectory,
 }
@@ -702,13 +704,12 @@ pub struct ProvisioningDatacenterHardware {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum ProvisioningDatacenterPoolType {
-	#[serde(rename = "job")]
 	Job,
-	#[serde(rename = "gg")]
 	Gg,
-	#[serde(rename = "ats")]
 	Ats,
+	Pegboard,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -787,7 +788,7 @@ fn default_tunnel_port() -> u16 {
 	5000
 }
 
-fn default_job_server_provision_margin() -> u32 {
+fn default_game_server_provision_margin() -> u32 {
 	2
 }
 

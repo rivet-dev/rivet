@@ -58,7 +58,7 @@ pub async fn setup(ctx: &TestCtx, opts: Setup) -> SetupRes {
 		name_id: util::faker::ident(),
 		display_name: util::faker::ident(),
 
-		provider: provider,
+		provider,
 		provider_datacenter_id: "us-southeast".to_string(),
 		provider_api_token: None,
 

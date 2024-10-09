@@ -11077,6 +11077,7 @@ components:
         - job
         - gg
         - ats
+        - pegboard
     AdminClustersProvider:
       type: string
       enum:

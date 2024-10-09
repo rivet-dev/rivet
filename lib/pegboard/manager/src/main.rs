@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 mod container;
 mod ctx;
+mod metrics;
 mod utils;
 
 use ctx::Ctx;
@@ -18,12 +19,16 @@ const PROTOCOL_VERSION: u16 = 1;
 async fn main() -> Result<()> {
 	init_tracing();
 
-	let client_id: Uuid = Uuid::parse_str(
-		&std::env::args()
-			.skip(1)
-			.next()
-			.context("`client_id` arg required")?,
-	)?;
+	// Print version
+	if std::env::args().any(|a| a == "-v" || a == "--version") {
+		println!(env!("CARGO_PKG_VERSION"));
+		return Ok(());
+	}
+
+	// Start metrics server
+	tokio::spawn(metrics::run_standalone());
+
+	let client_id: Uuid = Uuid::parse_str(&utils::var("CLIENT_ID")?)?;
 
 	let working_path = Path::new("/etc/pegboard");
 	utils::init_working_dir(&working_path).await?;

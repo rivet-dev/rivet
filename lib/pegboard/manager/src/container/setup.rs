@@ -17,7 +17,6 @@ use tokio::{
 	fs::{self, File},
 	io::{AsyncReadExt, AsyncWriteExt},
 	process::Command,
-	task,
 };
 
 use super::{oci_config, Container};
@@ -92,9 +91,6 @@ impl Container {
 						tokio::try_join!(
 							// Pipe the response body to lz4 stdin
 							async move {
-								let mut lz4_stdin = lz4_stdin;
-								tokio::pin!(stream);
-
 								while let Some(chunk) = stream.next().await {
 									let data = chunk?;
 									lz4_stdin.write_all(&data).await?;
@@ -169,9 +165,6 @@ impl Container {
 				tokio::try_join!(
 					// Pipe the response body to lz4 stdin
 					async move {
-						let mut lz4_stdin = lz4_stdin;
-						tokio::pin!(stream);
-
 						while let Some(chunk) = stream.next().await {
 							let data = chunk?;
 							lz4_stdin.write_all(&data).await?;

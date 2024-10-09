@@ -1,11 +1,61 @@
 use anyhow::*;
 use bolt_core::context::ProjectContext;
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use rivet_api::{apis::*, models};
 use uuid::Uuid;
 
 mod datacenter;
 mod server;
+
+#[derive(ValueEnum, Clone)]
+pub enum Provider {
+	Linode,
+}
+
+impl From<Provider> for models::AdminClustersProvider {
+	fn from(provider: Provider) -> Self {
+		match provider {
+			Provider::Linode => models::AdminClustersProvider::Linode,
+		}
+	}
+}
+
+#[derive(ValueEnum, Clone)]
+pub enum BuildDeliveryMethod {
+	TrafficServer,
+	S3Direct,
+}
+
+impl From<BuildDeliveryMethod> for models::AdminClustersBuildDeliveryMethod {
+	fn from(method: BuildDeliveryMethod) -> Self {
+		match method {
+			BuildDeliveryMethod::TrafficServer => {
+				models::AdminClustersBuildDeliveryMethod::TrafficServer
+			}
+			BuildDeliveryMethod::S3Direct => models::AdminClustersBuildDeliveryMethod::S3Direct,
+		}
+	}
+}
+
+#[derive(ValueEnum, Clone)]
+pub enum PoolType {
+	Job,
+	Gg,
+	Ats,
+	Pegboard,
+	Pb,
+}
+
+impl From<PoolType> for models::AdminClustersPoolType {
+	fn from(pool_type: PoolType) -> Self {
+		match pool_type {
+			PoolType::Job => models::AdminClustersPoolType::Job,
+			PoolType::Gg => models::AdminClustersPoolType::Gg,
+			PoolType::Ats => models::AdminClustersPoolType::Ats,
+			PoolType::Pegboard | PoolType::Pb => models::AdminClustersPoolType::Pegboard,
+		}
+	}
+}
 
 #[derive(Parser)]
 pub enum SubCommand {

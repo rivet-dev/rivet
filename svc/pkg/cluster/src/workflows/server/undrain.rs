@@ -38,6 +38,20 @@ pub(crate) async fn cluster_server_undrain(
 				.await?;
 		}
 		PoolType::Ats => {}
+		PoolType::Pegboard => {
+			let pegboard_client_id = ctx
+				.activity(GetPegboardClientInput {
+					server_id: input.server_id,
+				})
+				.await?;
+
+			if let Some(pegboard_client_id) = pegboard_client_id {
+				ctx.signal(pegboard::workflows::client::Undrain {})
+					.tag("client_id", pegboard_client_id)
+					.send()
+					.await?;
+			}
+		}
 	}
 
 	Ok(())
@@ -102,4 +116,28 @@ async fn undrain_node(ctx: &ActivityCtx, input: &UndrainNodeInput) -> GlobalResu
 	}
 
 	Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct GetPegboardClientInput {
+	server_id: Uuid,
+}
+
+#[activity(GetPegboardClient)]
+async fn get_pegboard_client(
+	ctx: &ActivityCtx,
+	input: &GetPegboardClientInput,
+) -> GlobalResult<Option<Uuid>> {
+	let (pegboard_client_id,) = sql_fetch_one!(
+		[ctx, (Option<Uuid>,)]
+		"
+		SELECT pegboard_client_id
+		FROM db_cluster.servers
+		WHERE server_id = $1
+		",
+		input.server_id,
+	)
+	.await?;
+
+	Ok(pegboard_client_id)
 }

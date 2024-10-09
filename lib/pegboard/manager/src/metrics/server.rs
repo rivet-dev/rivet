@@ -7,15 +7,11 @@ use hyper::{
 };
 use prometheus::{Encoder, TextEncoder};
 
-// TODO: Record extra labels
+const METRICS_PORT: u16 = 5000;
 
 #[tracing::instrument(skip_all)]
 pub async fn run_standalone() {
-	let port: u16 = std::env::var("METRICS_PORT")
-		.ok()
-		.and_then(|v| v.parse::<u16>().ok())
-		.expect("METRICS_PORT");
-	let addr = SocketAddr::from(([0, 0, 0, 0], port));
+	let addr = SocketAddr::from(([0, 0, 0, 0], METRICS_PORT));
 
 	let server = Server::bind(&addr).serve(make_service_fn(|_| async {
 		Ok::<_, hyper::Error>(service_fn(serve_req))
@@ -29,7 +25,7 @@ pub async fn run_standalone() {
 async fn serve_req(_req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
 	let encoder = TextEncoder::new();
 
-	let metric_families = crate::registry::REGISTRY.gather();
+	let metric_families = super::registry::REGISTRY.gather();
 	let mut buffer = Vec::new();
 	encoder
 		.encode(&metric_families, &mut buffer)
