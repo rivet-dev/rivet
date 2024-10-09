@@ -1,7 +1,7 @@
 use anyhow::*;
 use bolt_core::{context::ProjectContext, tasks::ssh};
 use clap::Parser;
-use rivet_api::{apis::*, models};
+use rivet_api::apis::*;
 use uuid::Uuid;
 
 use super::{unwrap_cluster_name_id, PoolType};

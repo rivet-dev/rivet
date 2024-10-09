@@ -48,13 +48,13 @@ pub async fn prewarm_ats(ctx: &OperationCtx, input: &Input) -> GlobalResult<()> 
 			FROM db_cluster.servers
 			WHERE
 				datacenter_id = ANY($1) AND
-				pool_type2 = $2 AND
+				pool_type = $2 AND
 				vlan_ip IS NOT NULL AND
 				drain_ts IS NULL AND
 				cloud_destroy_ts IS NULL
 			",
 			input.datacenter_ids.clone(),
-			serde_json::to_string(&cluster::types::PoolType::Ats)?,
+			cluster::types::PoolType::Ats as i32,
 		),
 		async {
 			let builds_res = ctx
@@ -114,10 +114,10 @@ pub async fn prewarm_ats(ctx: &OperationCtx, input: &Input) -> GlobalResult<()> 
 	let job_spec_json = serde_json::to_string(&gen_prewarm_job(input.build_ids.len())?)?;
 
 	for datacenter_id in &input.datacenter_ids {
-		let mut vlan_ips_in_region = vlan_ips
+		let mut vlan_ips_in_dc = vlan_ips
 			.iter()
 			.filter(|row| &row.datacenter_id == datacenter_id);
-		let vlan_ip_count = vlan_ips_in_region.clone().count() as i64;
+		let vlan_ip_count = vlan_ips_in_dc.clone().count() as i64;
 
 		if vlan_ip_count == 0 {
 			continue;
@@ -133,7 +133,7 @@ pub async fn prewarm_ats(ctx: &OperationCtx, input: &Input) -> GlobalResult<()> 
 				// NOTE: The algorithm here for deterministically choosing the vlan ip should match the one
 				// used in the SQL statement in mm-lobby-create @ resolve_image_artifact_url
 				let idx = (build_id_hash % vlan_ip_count.max(1)).unsigned_abs() as usize;
-				let vlan_ip = &unwrap!(vlan_ips_in_region.nth(idx), "no vlan ip").vlan_ip;
+				let vlan_ip = &unwrap!(vlan_ips_in_dc.nth(idx), "no vlan ip").vlan_ip;
 
 				Ok(backend::job::Parameter {
 					key: format!("artifact_url_{i}"),

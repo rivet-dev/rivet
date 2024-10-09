@@ -599,39 +599,36 @@ async fn migration(ctx: &ProjectContext, migration_cmds: &[MigrateCmd]) -> Resul
 		}));
 	}
 
-	let pod_spec = json!({
-		"restartPolicy": "Never",
-		"terminationGracePeriodSeconds": 0,
-		"containers": [
-			{
-				"name": "migrate",
-				"image": MIGRATE_IMAGE,
-				"command": ["sleep", "1000"],
-				// // See https://github.com/golang-migrate/migrate/issues/494
-				// "env": [{
-				// 	"name": "TZ",
-				// 	"value": "UTC"
-				// }],
-				"volumeMounts": mounts
-			}
-		],
-		"volumes": volumes
+	let overrides = json!({
+		"apiVersion": "v1",
+		"metadata": {
+			"namespace": "bolt",
+		},
+		"spec": {
+			"containers": [
+				{
+					"name": "migrate",
+					"image": MIGRATE_IMAGE,
+					"command": ["sh", "-c", migration_cmd],
+					"volumeMounts": mounts
+				}
+			],
+			"volumes": volumes
+		}
 	});
-
-	let pod_name = "migrate-sh-persistent";
-	db::start_persistent_pod(ctx, "migrate", pod_name, pod_spec).await?;
 
 	block_in_place(|| {
 		cmd!(
 			"kubectl",
-			"exec",
-			format!("job/{pod_name}"),
+			"run",
+			"-itq",
+			"--rm",
+			"--restart=Never",
+			format!("--image={MIGRATE_IMAGE}"),
 			"-n",
 			"bolt",
-			"--",
-			"sh",
-			"-c",
-			migration_cmd,
+			format!("--overrides={overrides}"),
+			db::shell_name("migrate"),
 		)
 		.env("KUBECONFIG", ctx.gen_kubeconfig_path())
 		.run()

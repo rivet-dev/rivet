@@ -1,8 +1,9 @@
 use anyhow::*;
 use duct::cmd;
 use indoc::formatdoc;
+use rand::Rng;
 use serde_json::json;
-use tokio::{io::AsyncWriteExt, task::block_in_place};
+use tokio::{io::AsyncWriteExt, process::Command, task::block_in_place};
 
 use crate::{
 	config::{self, service::RuntimeKind},
@@ -416,8 +417,7 @@ pub async fn clickhouse_shell(shell_ctx: ShellContext<'_>, no_db: bool) -> Resul
 				{
 					"name": "clickhouse",
 					"image": "clickhouse/clickhouse-server",
-					"command": ["sh", "-c"],
-					"args": [query_cmd],
+					"command": ["sleep", "10000"],
 					"stdin": true,
 					"stdinOnce": true,
 					"tty": true,
@@ -549,7 +549,7 @@ pub async fn start_persistent_pod(
 				}
 			},
 			"spec": {
-				"ttlSecondsAfterFinished": 0,
+				"ttlSecondsAfterFinished": 5,
 				"completions": 1,
 				"backoffLimit": 0,
 				"template": {
@@ -565,26 +565,33 @@ pub async fn start_persistent_pod(
 
 		dep::k8s::cli::apply_specs(ctx, vec![spec]).await?;
 
-		// block_in_place(|| {
-		// 	cmd!(
-		// 		"kubectl",
-		// 		"run",
-		// 		"-q",
-		// 		"--rm",
-		// 		"--restart=Never",
-		// 		"--image=postgres",
-		// 		"-n",
-		// 		"bolt",
-		// 		format!("--overrides={overrides}"),
-		// 		pod_name,
-		// 	)
-		// 	.env("KUBECONFIG", ctx.gen_kubeconfig_path())
-		// 	.run()
-		// })?;
-
 		// Wait for ready
-		tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+		let label = format!("app.kubernetes.io/name={pod_name}");
+		let status = Command::new("kubectl")
+			.args([
+				"wait",
+				"--for=condition=Ready",
+				"pod",
+				"--selector",
+				&label,
+				"-n",
+				"bolt",
+			])
+			.env("KUBECONFIG", ctx.gen_kubeconfig_path())
+			.stdout(std::process::Stdio::null())
+			.status()
+			.await?;
+		if !status.success() {
+			bail!("failed to check pod readiness");
+		}
 	}
 
 	Ok(())
+}
+
+// Generates a pod name for the shell with a random hash at the end
+pub fn shell_name(name: &str) -> String {
+	let hash = rand::thread_rng().gen_range::<usize, _>(0..9999);
+
+	format!("{name}-sh-{hash}")
 }
