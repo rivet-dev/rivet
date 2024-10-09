@@ -36,6 +36,12 @@ locals {
 				service_namespace = kubernetes_namespace.nomad.0.metadata[0].name
 				service_port = 4647
 			}
+			# Addresses a random Pegboard server.
+			"pegboard-server" = {
+				service = "rivet-pegboard-ws"
+				service_namespace = kubernetes_namespace.rivet_service.metadata[0].name
+				service_port = 80
+			}
 		}] : [],
 		var.prometheus_enabled ? [{
 			"vector" = {

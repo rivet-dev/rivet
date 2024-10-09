@@ -121,9 +121,6 @@ pub enum ServiceKind {
 	#[serde(rename = "api-routes", rename_all = "kebab-case")]
 	ApiRoutes {},
 
-	#[serde(rename = "static", rename_all = "kebab-case")]
-	Static { router: ServiceRouter },
-
 	#[serde(rename = "database")]
 	Database {},
 
@@ -317,8 +314,7 @@ impl ServiceKind {
 			ServiceKind::Api {
 				router: Some(router),
 				..
-			}
-			| ServiceKind::Static { router } => Some(router),
+			} => Some(router),
 			_ => None,
 		}
 	}
@@ -327,7 +323,7 @@ impl ServiceKind {
 	/// because this will be true for any services that are internally-facing HTTP servers, such as
 	/// `api-job`.
 	pub fn has_server(&self) -> bool {
-		matches!(self, ServiceKind::Api { .. } | ServiceKind::Static { .. })
+		matches!(self, ServiceKind::Api { .. })
 	}
 
 	pub fn short(&self) -> &str {
@@ -339,7 +335,6 @@ impl ServiceKind {
 			ServiceKind::Consumer { .. } => "consumer",
 			ServiceKind::Api { .. } => "api",
 			ServiceKind::ApiRoutes { .. } => "api-routes",
-			ServiceKind::Static { .. } => "static",
 			ServiceKind::Database { .. } => "database",
 			ServiceKind::Cache { .. } => "cache",
 			ServiceKind::Package { .. } => "package",
@@ -351,7 +346,6 @@ impl ServiceKind {
 			ServiceKind::Headless { .. }
 			| ServiceKind::Oneshot { .. }
 			| ServiceKind::Periodic { .. }
-			| ServiceKind::Static { .. }
 			| ServiceKind::Api { .. } => ComponentClass::Executable,
 
 			ServiceKind::Operation { .. }

@@ -131,8 +131,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		RunContext::Service { .. } => match svc_ctx.config().kind {
 			ServiceKind::Headless { .. }
 			| ServiceKind::Consumer { .. }
-			| ServiceKind::Api { .. }
-			| ServiceKind::Static { .. } => SpecType::Deployment,
+			| ServiceKind::Api { .. } => SpecType::Deployment,
 			ServiceKind::Oneshot { .. } => SpecType::Job,
 			ServiceKind::Periodic { .. } => SpecType::CronJob,
 			ServiceKind::Operation { .. }

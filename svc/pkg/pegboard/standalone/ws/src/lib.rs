@@ -44,9 +44,9 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 }
 
 async fn socket_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>) -> GlobalResult<()> {
-	let addr = ("TODO", 8080);
-	let listener = TcpListener::bind(&addr).await?;
-	tracing::info!("Listening on: {:?}", addr);
+	let addr = "127.0.0.1:80";
+	let listener = TcpListener::bind(addr).await?;
+	tracing::info!("Listening on: {}", addr);
 
 	loop {
 		match listener.accept().await {
@@ -62,28 +62,44 @@ async fn handle_connection(
 	raw_stream: TcpStream,
 	addr: SocketAddr,
 ) {
-	tracing::error!(?addr, "new connection");
+	tracing::info!(?addr, "new connection");
 
 	let ctx = ctx.clone();
 
 	tokio::spawn(async move {
-		let mut uri = None;
-		let ws_stream = tokio_tungstenite::accept_hdr_async(
-			raw_stream,
-			|req: &tokio_tungstenite::tungstenite::handshake::server::Request, res| {
-				// Bootleg way of reading the uri
-				uri = Some(req.uri().clone());
+		// TODO: This is an ugly way to improve error visibility
+		let setup_res = async move {
+			let mut uri = None;
+			let ws_stream = tokio_tungstenite::accept_hdr_async(
+				raw_stream,
+				|req: &tokio_tungstenite::tungstenite::handshake::server::Request, res| {
+					// Bootleg way of reading the uri
+					uri = Some(req.uri().clone());
 
-				Ok(res)
-			},
-		)
-		.await?;
+					tracing::info!(?addr, ?uri, "handshake");
 
-		// Parse URI
-		let uri = unwrap!(uri, "socket has no associated request");
-		let (protocol_version, client_id) = parse_uri(uri)?;
+					Ok(res)
+				},
+			)
+			.await?;
 
-		// Handle result
+			// Parse URL
+			let uri = unwrap!(uri, "socket has no associated request");
+			let (protocol_version, client_id) = parse_url(addr, uri)?;
+
+			Ok((ws_stream, protocol_version, client_id))
+		};
+
+		// Print error
+		let (ws_stream, protocol_version, client_id) = match setup_res.await {
+			Ok(x) => x,
+			Err(err) => {
+				tracing::error!(?addr, "{err}");
+				return Err(err);
+			}
+		};
+
+		// Handle result for cleanup
 		match handle_connection_inner(
 			&ctx,
 			conns.clone(),
@@ -218,15 +234,15 @@ async fn signal_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>) -> 
 	}
 }
 
-fn parse_uri(uri: hyper::Uri) -> GlobalResult<(u16, Uuid)> {
-	let url = url::Url::parse(&uri.to_string())?;
+fn parse_url(addr: SocketAddr, uri: hyper::Uri) -> GlobalResult<(u16, Uuid)> {
+	let url = url::Url::parse(&format!("ws://{addr}{uri}"))?;
 
 	// Get protocol version from last path segment
 	let last_segment = unwrap!(
 		unwrap!(url.path_segments(), "invalid url").last(),
 		"no path segments"
 	);
-	assert!(last_segment.starts_with('v'), "invalid protocol version");
+	ensure!(last_segment.starts_with('v'), "invalid protocol version");
 	let protocol_version = last_segment[1..].parse::<u16>()?;
 
 	// Read client_id from query parameters

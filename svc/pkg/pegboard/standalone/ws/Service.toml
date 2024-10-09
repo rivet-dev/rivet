@@ -4,5 +4,4 @@ name = "pegboard-ws"
 [runtime]
 kind = "rust"
 
-[headless]
-singleton = true
+[api]

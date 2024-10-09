@@ -18,7 +18,7 @@ async fn main() -> Result<()> {
 	let client_id: Uuid = todo!();
 
 	// Build connection URL
-	let mut url = Url::parse("TODO:8080")?;
+	let mut url = Url::parse("ws://127.0.0.1:5030")?;
 	url.set_path("/v1");
 	url.query_pairs_mut()
 		.append_pair("client_id", &client_id.to_string());

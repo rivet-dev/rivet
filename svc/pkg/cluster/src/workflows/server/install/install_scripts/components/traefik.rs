@@ -34,6 +34,10 @@ pub const TUNNEL_SERVICES: &[TunnelService] = &[
 		name: "vector-tcp-json",
 		port: TUNNEL_VECTOR_TCP_JSON_PORT,
 	},
+	TunnelService {
+		name: "pegboard-server",
+		port: 5030,
+	},
 ];
 
 /// Service that gets exposed from the Traefik tunnel.
