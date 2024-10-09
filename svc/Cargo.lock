@@ -6479,6 +6479,7 @@ version = "0.0.1"
 dependencies = [
  "chirp-workflow",
  "serde",
+ "thiserror",
 ]
 
 [[package]]
@@ -6487,6 +6488,7 @@ version = "0.0.1"
 dependencies = [
  "chirp-client",
  "chirp-workflow",
+ "hyper 1.4.1",
  "pegboard",
  "rivet-connection",
  "rivet-health-checks",

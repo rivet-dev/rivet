@@ -1,7 +1,8 @@
 use chirp_workflow::prelude::*;
-use futures_util::FutureExt;
+use futures_util::{FutureExt, StreamExt, TryStreamExt};
+use serde_json::json;
 
-use crate::types::{ClientEvent, Command, ContainerState};
+use crate::protocol;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Input {
@@ -14,37 +15,57 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 		let client_id = input.client_id;
 
 		async move {
-			match ctx.listen::<Either>().await? {
-				Either::Command(sig) => {
-					// Forward signal to ws as message
-					ctx.msg(sig).tag("target", "ws").send().await?;
-				}
-				Either::ClientEvent(sig) => {
-					ctx.join((
-						// Write to db
-						activity(InsertEventInput {
-							client_id,
-							event: sig.clone(),
-						}),
-						// Re-dispatch container state updates
-						closure(|ctx| {
-							async move {
-								if let ClientEvent::ContainerStateUpdate {
+			match ctx.listen::<Main>().await? {
+				Main::Forward(sig) => {
+					match sig {
+						protocol::ToServer::Init {} => todo!(),
+						protocol::ToServer::Events(events) => {
+							// Write to db
+							ctx.activity(InsertEventsInput {
+								client_id,
+								events: events.clone(),
+							})
+							.await?;
+
+							// Re-dispatch container state updates
+							let iter = events.into_iter().filter_map(|event| {
+								if let protocol::Event::ContainerStateUpdate {
 									container_id,
 									state,
-								} = sig
+								} = event
 								{
-									ctx.signal(ContainerStateUpdate { state })
-										.tag("container_id", container_id)
-										.send()
-										.await?;
-								}
+									let mut ctx = ctx.step();
 
-								Ok(())
-							}
-							.boxed()
-						}),
-					))
+									Some(
+										async move {
+											ctx.signal(ContainerStateUpdate { state })
+												.tag("container_id", container_id)
+												.send()
+												.await
+										}
+										.boxed(),
+									)
+								} else {
+									None
+								}
+							});
+
+							futures_util::stream::iter(iter)
+								.buffer_unordered(16)
+								.try_collect::<Vec<_>>()
+								.await?;
+						}
+						protocol::ToServer::FetchStateResponse {} => todo!(),
+					}
+				}
+				Main::Command(sig) => {
+					// Forward signal to ws as message
+					ctx.msg(ToWs {
+						client_id,
+						inner: protocol::ToClient::Commands(vec![sig]),
+					})
+					.tags(json!({}))
+					.send()
 					.await?;
 				}
 			}
@@ -58,21 +79,17 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 	Ok(())
 }
 
-#[signal("pegboard_container_state_update")]
-struct ContainerStateUpdate {
-	state: ContainerState,
-}
-
-join_signal!(Either, [Command, ClientEvent]);
-
 #[derive(Debug, Serialize, Deserialize, Hash)]
-pub(crate) struct InsertEventInput {
+pub(crate) struct InsertEventsInput {
 	client_id: Uuid,
-	event: ClientEvent,
+	events: Vec<protocol::Event>,
 }
 
-#[activity(InsertEvent)]
-pub(crate) async fn insert_event(ctx: &ActivityCtx, input: &InsertEventInput) -> GlobalResult<()> {
+#[activity(InsertEvents)]
+pub(crate) async fn insert_events(
+	ctx: &ActivityCtx,
+	input: &InsertEventsInput,
+) -> GlobalResult<()> {
 	sql_execute!(
 		[ctx]
 		"
@@ -85,3 +102,20 @@ pub(crate) async fn insert_event(ctx: &ActivityCtx, input: &InsertEventInput) ->
 
 	Ok(())
 }
+
+#[message("pegboard_client_to_ws")]
+pub struct ToWs {
+	pub client_id: Uuid,
+	pub inner: protocol::ToClient,
+}
+
+#[signal("pegboard_container_state_update")]
+struct ContainerStateUpdate {
+	pub state: protocol::ContainerState,
+}
+
+join_signal!(Main {
+	Command(protocol::Command),
+	// Forwarded from the ws to this workflow
+	Forward(protocol::ToServer),
+});

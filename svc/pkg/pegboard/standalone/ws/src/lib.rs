@@ -13,9 +13,14 @@ use tokio::{
 };
 use tokio_tungstenite::{tungstenite::protocol::Message, WebSocketStream};
 
-use pegboard::types::{ClientEvent, Command};
+use pegboard::protocol;
 
-type Connections = HashMap<Uuid, Mutex<SplitSink<WebSocketStream<TcpStream>, Message>>>;
+struct Connection {
+	protocol_version: u16,
+	tx: Mutex<SplitSink<WebSocketStream<TcpStream>, Message>>,
+}
+
+type Connections = HashMap<Uuid, Connection>;
 
 #[tracing::instrument(skip_all)]
 pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
@@ -39,8 +44,7 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 }
 
 async fn socket_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>) -> GlobalResult<()> {
-	// TODO:
-	let addr = ("127.0.0.1", 8080);
+	let addr = ("TODO", 8080);
 	let listener = TcpListener::bind(&addr).await?;
 	tracing::info!("Listening on: {:?}", addr);
 
@@ -77,67 +81,87 @@ async fn handle_connection(
 
 		// Parse URI
 		let uri = unwrap!(uri, "socket has no associated request");
-		let url = url::Url::parse(&uri.to_string())?;
+		let (protocol_version, client_id) = parse_uri(uri)?;
 
-		let (tx, mut rx) = ws_stream.split();
-
-		// Get protocol version from last path segment
-		let protocol_version = unwrap!(
-			unwrap!(url.path_segments(), "invalid url").last(),
-			"no path segments"
+		// Handle result
+		match handle_connection_inner(
+			&ctx,
+			conns.clone(),
+			ws_stream,
+			addr,
+			protocol_version,
+			client_id,
 		)
-		.parse::<u16>()?;
-
-		// Read client_id from query parameters
-		let client_id = unwrap!(
-			url.query_pairs()
-				.find_map(|(n, v)| (n == "client_id").then_some(v)),
-			"missing `client_id` query parameter"
-		);
-		let client_id = util::uuid::parse(client_id.as_ref())?;
-
-		// Store connection
+		.await
 		{
-			let mut conns = conns.write().await;
+			Err(err) => {
+				// Clean up connection
+				conns.write().await.remove(&client_id);
 
-			if let Some(old_tx) = conns.insert(client_id, Mutex::new(tx)) {
-				tracing::warn!(
-					?client_id,
-					"client already connected, closing old connection"
-				);
-
-				old_tx.lock().await.send(Message::Close(None)).await?;
+				Err(err)
 			}
+			x => x,
 		}
-
-		// Insert into db and spawn workflow (if not exists)
-		upsert_client(&ctx, client_id, addr.ip()).await?;
-
-		// Receive messages from socket
-		loop {
-			let Some(msg) = rx.next().await else {
-				bail!(format!("stream closed {client_id}"));
-			};
-
-			match msg? {
-				Message::Binary(buf) => {
-					let event = ClientEvent::deserialize(protocol_version, &buf)?;
-
-					ctx.signal(event).tag("client_id", client_id).send().await?;
-				}
-				Message::Close(_) => {
-					bail!(format!("socket closed {client_id}"));
-				}
-				msg => {
-					tracing::warn!(?client_id, ?msg, "unexpected message");
-				}
-			}
-		}
-
-		// Only way I could figure out to help the complier infer type
-		#[allow(unreachable_code)]
-		GlobalResult::Ok(())
 	});
+}
+
+async fn handle_connection_inner(
+	ctx: &StandaloneCtx,
+	conns: Arc<RwLock<Connections>>,
+	ws_stream: WebSocketStream<TcpStream>,
+	addr: SocketAddr,
+	protocol_version: u16,
+	client_id: Uuid,
+) -> GlobalResult<()> {
+	let (tx, mut rx) = ws_stream.split();
+
+	let conn = Connection {
+		protocol_version,
+		tx: Mutex::new(tx),
+	};
+
+	// Store connection
+	{
+		let mut conns = conns.write().await;
+		if let Some(old_conn) = conns.insert(client_id, conn) {
+			tracing::warn!(
+				?client_id,
+				"client already connected, closing old connection"
+			);
+
+			old_conn.tx.lock().await.send(Message::Close(None)).await?;
+		}
+	}
+
+	// Insert into db and spawn workflow (if not exists)
+	upsert_client(ctx, client_id, addr.ip()).await?;
+
+	// Receive messages from socket
+	while let Some(msg) = rx.next().await {
+		match msg? {
+			Message::Binary(buf) => {
+				let packet = protocol::ToServer::deserialize(protocol_version, &buf)?;
+
+				// Forward to client wf
+				ctx.signal(packet)
+					.tag("client_id", client_id)
+					.send()
+					.await?;
+			}
+			Message::Close(_) => {
+				bail!(format!("socket closed {client_id}"));
+			}
+			msg => {
+				tracing::warn!(?client_id, ?msg, "unexpected message");
+			}
+		}
+	}
+
+	bail!(format!("stream closed {client_id}"));
+
+	// Only way I could figure out to help the complier infer type
+	#[allow(unreachable_code)]
+	GlobalResult::Ok(())
 }
 
 async fn upsert_client(ctx: &StandaloneCtx, client_id: Uuid, ip: IpAddr) -> GlobalResult<()> {
@@ -171,9 +195,7 @@ async fn upsert_client(ctx: &StandaloneCtx, client_id: Uuid, ip: IpAddr) -> Glob
 async fn signal_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>) -> GlobalResult<()> {
 	// Listen for commands from client workflows
 	let mut sub = ctx
-		.subscribe::<Command>(&json!({
-			"target": "ws",
-		}))
+		.subscribe::<pegboard::workflows::client::ToWs>(&json!({}))
 		.await?;
 
 	loop {
@@ -183,12 +205,37 @@ async fn signal_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>) -> 
 			let conns = conns.read().await;
 
 			// Send command to socket
-			if let Some(write) = conns.get(&msg.client_id) {
-				let buf = msg.inner.serialize()?;
-				write.lock().await.send(Message::Binary(buf)).await?;
+			if let Some(conn) = conns.get(&msg.client_id) {
+				let buf = msg.inner.serialize(conn.protocol_version)?;
+				conn.tx.lock().await.send(Message::Binary(buf)).await?;
 			} else {
-				tracing::warn!(?client_id, "received command for client that isn't connected, ignoring");
+				tracing::warn!(
+					client_id=?msg.client_id,
+					"received command for client that isn't connected, ignoring"
+				);
 			}
 		}
 	}
+}
+
+fn parse_uri(uri: hyper::Uri) -> GlobalResult<(u16, Uuid)> {
+	let url = url::Url::parse(&uri.to_string())?;
+
+	// Get protocol version from last path segment
+	let last_segment = unwrap!(
+		unwrap!(url.path_segments(), "invalid url").last(),
+		"no path segments"
+	);
+	assert!(last_segment.starts_with('v'), "invalid protocol version");
+	let protocol_version = last_segment[1..].parse::<u16>()?;
+
+	// Read client_id from query parameters
+	let client_id = unwrap!(
+		url.query_pairs()
+			.find_map(|(n, v)| (n == "client_id").then_some(v)),
+		"missing `client_id` query parameter"
+	);
+	let client_id = util::uuid::parse(client_id.as_ref())?;
+
+	Ok((protocol_version, client_id))
 }

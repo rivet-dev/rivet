@@ -234,7 +234,6 @@ async fn setup(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
 		.activity(DispatchJobInput {
 			environment: input.environment.as_hashable(),
 			server_id: input.server_id,
-			build_upload_id: prereq.build_upload_id,
 			job_id,
 			image_artifact_url: artifacts.image_artifact_url,
 			job_runner_binary_url: artifacts.job_runner_binary_url,
@@ -1054,7 +1053,6 @@ struct DispatchJobInput {
 	environment: util::HashableMap<String, String>,
 	server_id: Uuid,
 	job_id: String,
-	build_upload_id: Uuid,
 	image_artifact_url: String,
 	job_runner_binary_url: String,
 }

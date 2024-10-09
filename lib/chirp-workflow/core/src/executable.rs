@@ -40,7 +40,6 @@ where
 	}
 }
 
-// Closure executable impl
 #[async_trait]
 impl<T: Executable> Executable for Option<T> {
 	type Output = Option<T::Output>;

@@ -8,6 +8,7 @@ license = "Apache-2.0"
 [dependencies]
 chirp-client = { path = "../../../../../lib/chirp/client" }
 chirp-workflow = { path = "../../../../../lib/chirp-workflow/core" }
+hyper = "1.4"
 rivet-connection = { path = "../../../../../lib/connection" }
 rivet-health-checks = { path = "../../../../../lib/health-checks" }
 rivet-metrics = { path = "../../../../../lib/metrics" }

@@ -66,7 +66,7 @@ Instead, you can increment the location preemptively with `ctx.step()`:
 
 ```rust
 let iter = actions.into_iter().map(|action| {
-	let ctx = ctx.step();
+	let mut ctx = ctx.step();
 
 	async move {
 		ctx.activity(MyActivityInput {
