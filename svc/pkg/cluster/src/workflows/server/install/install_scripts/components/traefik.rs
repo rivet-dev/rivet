@@ -42,7 +42,7 @@ pub const TUNNEL_SERVICES: &[TunnelService] = &[
 
 /// Service that gets exposed from the Traefik tunnel.
 pub struct TunnelService {
-	/// Name of the service for the subdomain. This is how the Treafik tunnel server knows where to
+	/// Name of the service for the subdomain. This is how the Traefik tunnel server knows where to
 	/// route traffic.
 	name: &'static str,
 

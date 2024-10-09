@@ -25,6 +25,7 @@ CREATE TABLE client_commands (
 
 CREATE TABLE containers (
 	container_id UUID PRIMARY KEY,
+	client_id UUID NOT NULL,
 	config JSONB NOT NULL, -- pegboard::protocol::ContainerConfig
 	create_ts INT NOT NULL,
 
@@ -36,10 +37,10 @@ CREATE TABLE containers (
 	exit_ts INT,
 
 	pid INT,
-	exit_code INT
+	exit_code INT,
+
+	INDEX(client_id)
 );
 
-CREATE INDEX containers_config_resources_cpu_idx
-ON containers (config->'resources'->'cpu'::INT);
-CREATE INDEX containers_config_resources_memory_idx
-ON containers (config->'resources'->'memory'::INT);
+CREATE INDEX ON containers (((config->'resources'->'cpu')::INT));
+CREATE INDEX ON containers (((config->'resources'->'memory')::INT));

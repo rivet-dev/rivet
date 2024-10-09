@@ -2,7 +2,7 @@ locals {
 	job_runner_src_dir = "${path.module}/../../../lib/job-runner"
 
 	job_runner_src_files = flatten([
-		["${local.job_runner_src_dir}/Cargo.toml", "${local.job_runner_src_dir}/Cargo.lock"],
+		["${local.job_runner_src_dir}/Cargo.toml"],
 		[for f in fileset("${local.job_runner_src_dir}/src/", "**/*"): "${local.job_runner_src_dir}/src/${f}"],
 	])
 	job_runner_src_hash = md5(join("", [

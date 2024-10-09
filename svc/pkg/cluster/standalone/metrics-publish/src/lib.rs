@@ -79,7 +79,7 @@ async fn select_servers(ctx: &StandaloneCtx) -> GlobalResult<Vec<Server>> {
 		[ctx, ServerRow]
 		"
 		SELECT
-			datacenter_id, pool_type, pool_type2,
+			datacenter_id, pool_type,
 			(provider_server_id IS NOT NULL) AS is_provisioned,
 			(install_complete_ts IS NOT NULL) AS is_installed,
 			(nomad_node_id IS NOT NULL) AS has_nomad_node,

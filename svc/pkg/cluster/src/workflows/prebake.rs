@@ -163,10 +163,10 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<()>
 			datacenter_id = $3 AND
 			pool_type = $4
 		",
-		serde_json::to_string(&input.provider)?,
+		input.provider as i32,
 		&input.install_script_hash,
 		input.datacenter_id,
-		serde_json::to_string(&input.pool_type)?,
+		input.pool_type as i32,
 		&input.image_id,
 	)
 	.await?;
@@ -195,10 +195,10 @@ async fn set_destroyed(ctx: &ActivityCtx, input: &SetDestroyedInput) -> GlobalRe
 			datacenter_id = $3 AND
 			pool_type = $4
 		",
-		serde_json::to_string(&input.provider)?,
+		input.provider as i32,
 		&input.install_script_hash,
 		input.datacenter_id,
-		serde_json::to_string(&input.pool_type)?,
+		input.pool_type as i32,
 		util::timestamp::now(),
 	)
 	.await?;

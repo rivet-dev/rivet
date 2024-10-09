@@ -6078,6 +6078,7 @@ dependencies = [
  "ds",
  "job-run",
  "linode",
+ "pegboard",
  "rivet-health-checks",
  "rivet-metrics",
  "rivet-runtime",

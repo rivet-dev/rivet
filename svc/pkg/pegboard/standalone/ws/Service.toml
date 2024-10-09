@@ -1,5 +1,6 @@
 [service]
 name = "pegboard-ws"
+priority = 60
 
 [runtime]
 kind = "rust"

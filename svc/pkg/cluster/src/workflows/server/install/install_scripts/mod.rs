@@ -128,7 +128,7 @@ pub async fn gen_initialize(pool_type: PoolType, datacenter_id: Uuid) -> GlobalR
 			prometheus_targets.insert(
 				"pegboard".into(),
 				components::vector::PrometheusTarget {
-					endpoint: "http://127.0.0.1:5000".into(),
+					endpoint: "http://127.0.0.1:6000".into(),
 					scrape_interval: 15,
 				},
 			);

@@ -256,27 +256,51 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<()>
 	let mut pools = pools.0;
 
 	for pool in &input.pools {
-		let current_pool = unwrap!(
-			pools.iter_mut().find(|p| p.pool_type == pool.pool_type),
-			"attempting to update pool that doesn't exist in current config"
-		);
+		if let Some(current_pool) = pools.iter_mut().find(|p| p.pool_type == pool.pool_type) {
+			// Update pool config
+			if !pool.hardware.is_empty() {
+				current_pool.hardware.clone_from(&pool.hardware);
+			}
+			if let Some(desired_count) = pool.desired_count {
+				current_pool.desired_count = desired_count;
+			}
+			if let Some(min_count) = pool.min_count {
+				current_pool.min_count = min_count;
+			}
+			if let Some(max_count) = pool.max_count {
+				current_pool.max_count = max_count;
+			}
+			if let Some(drain_timeout) = pool.drain_timeout {
+				current_pool.drain_timeout = drain_timeout;
+			}
+		} else {
+			tracing::info!(pool_type=?pool.pool_type, "creating new pool");
 
-		// Update pool config
-		if !pool.hardware.is_empty() {
-			current_pool.hardware.clone_from(&pool.hardware);
-		}
-		if let Some(desired_count) = pool.desired_count {
-			current_pool.desired_count = desired_count;
-		}
-		if let Some(min_count) = pool.min_count {
-			current_pool.min_count = min_count;
-		}
-		if let Some(max_count) = pool.max_count {
-			current_pool.max_count = max_count;
-		}
-		if let Some(drain_timeout) = pool.drain_timeout {
-			current_pool.drain_timeout = drain_timeout;
-		}
+			ensure!(
+				!pool.hardware.is_empty(),
+				"must have `hardware` when creating a new pool"
+			);
+
+			let min_count = unwrap!(
+				pool.min_count,
+				"must have `min_count` when creating a new pool"
+			);
+
+			pools.push(Pool {
+				pool_type: pool.pool_type,
+				hardware: pool.hardware.clone(),
+				desired_count: pool.desired_count.unwrap_or(min_count),
+				min_count,
+				max_count: unwrap!(
+					pool.max_count,
+					"must have `max_count` when creating a new pool"
+				),
+				drain_timeout: unwrap!(
+					pool.drain_timeout,
+					"must have `drain_timeout` when creating a new pool"
+				),
+			});
+		};
 	}
 
 	sql_execute!(

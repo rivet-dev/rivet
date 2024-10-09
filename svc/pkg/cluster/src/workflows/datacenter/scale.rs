@@ -22,7 +22,7 @@ use crate::types::{Datacenter, PoolType, Provider};
 #[derive(sqlx::FromRow)]
 struct ServerRow {
 	server_id: Uuid,
-	pool_type: i32,
+	pool_type: i64,
 	is_installed: bool,
 	has_nomad_node: bool,
 	has_pb_client: bool,

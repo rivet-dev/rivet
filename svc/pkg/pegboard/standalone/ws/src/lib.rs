@@ -40,9 +40,11 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 }
 
 async fn socket_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>) -> GlobalResult<()> {
-	let addr = "127.0.0.1:80";
+	let port = util::env::var("PORT")?.parse::<u16>()?;
+	let addr = SocketAddr::from(([0, 0, 0, 0], port));
+
 	let listener = TcpListener::bind(addr).await?;
-	tracing::info!("Listening on: {}", addr);
+	tracing::info!(?port, "server listening");
 
 	loop {
 		match listener.accept().await {

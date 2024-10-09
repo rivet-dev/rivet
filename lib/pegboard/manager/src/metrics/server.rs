@@ -7,7 +7,7 @@ use hyper::{
 };
 use prometheus::{Encoder, TextEncoder};
 
-const METRICS_PORT: u16 = 5000;
+const METRICS_PORT: u16 = 6000;
 
 #[tracing::instrument(skip_all)]
 pub async fn run_standalone() {

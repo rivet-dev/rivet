@@ -192,6 +192,8 @@ impl Ctx {
 	}
 
 	async fn process_packet(self: &Arc<Self>, packet: protocol::ToClient) -> Result<()> {
+		tracing::debug!(?packet, "received packet");
+
 		match packet {
 			protocol::ToClient::Init {
 				last_event_idx,

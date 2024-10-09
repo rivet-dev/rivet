@@ -81,17 +81,14 @@ pub async fn setup(ctx: &TestCtx, opts: Setup) -> SetupRes {
 		INSERT INTO db_cluster.servers (
 			server_id,
 			datacenter_id,
-			pool_type2,
-			create_ts,
-
-			-- Backwards compatibility
-			pool_type
+			pool_type,
+			create_ts
 		)
-		VALUES ($1, $2, $3, $4, 0)
+		VALUES ($1, $2, $3, $4)
 		",
 		opts.server_id,
 		opts.datacenter_id,
-		serde_json::to_string(&opts.pool_type)?,
+		opts.pool_type as i32,
 		util::timestamp::now(),
 	)
 	.await

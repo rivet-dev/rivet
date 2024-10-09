@@ -281,7 +281,7 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<()>
 			gg_private_key_pem = $3,
 			job_cert_pem = $4,
 			job_private_key_pem = $5,
-			state2 = $6,
+			state = $6,
 			expire_ts = $7
 		WHERE datacenter_id = $1
 		",
@@ -290,7 +290,7 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<()>
 		&input.gg_private_key,
 		&input.job_cert,
 		&input.job_private_key,
-		serde_json::to_string(&TlsState::Active)?,
+		TlsState::Active as i32,
 		input.expire_ts,
 	)
 	.await?;

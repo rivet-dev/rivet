@@ -68,8 +68,6 @@ async fn ip_inner(
 				"root",
 				"-i",
 				ssh_key.path(),
-				"-L",
-				"9090:10.0.0.84:8080",
 				ip,
 			)
 			.run()

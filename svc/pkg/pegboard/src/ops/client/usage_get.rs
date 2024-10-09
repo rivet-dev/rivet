@@ -43,10 +43,13 @@ pub async fn pegboard_client_usage_get(ctx: &OperationCtx, input: &Input) -> Glo
 		"
 		SELECT
 			client_id,
-			SUM(config->'resources'->'cpu'::INT) AS cpu,
-			SUM(config->'resources'->'memory'::INT) AS memory
+			SUM((config->'resources'->'cpu')::INT) AS cpu,
+			SUM((config->'resources'->'memory')::INT) AS memory
 		FROM db_pegboard.containers
-		WHERE client_id = ANY($1)
+		WHERE
+			client_id = ANY($1) AND
+			stop_ts IS NULL AND
+			exit_ts IS NULL
 		GROUP BY client_id
 		",
 		&input.client_ids,

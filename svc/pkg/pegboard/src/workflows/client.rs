@@ -39,13 +39,15 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 							.await?;
 
 							// Send missed commands
-							ctx.msg(ToWs {
-								client_id,
-								inner: protocol::ToClient::Commands(init_data.missed_commands),
-							})
-							.tags(json!({}))
-							.send()
-							.await?;
+							if !init_data.missed_commands.is_empty() {
+								ctx.msg(ToWs {
+									client_id,
+									inner: protocol::ToClient::Commands(init_data.missed_commands),
+								})
+								.tags(json!({}))
+								.send()
+								.await?;
+							}
 						}
 						protocol::ToServer::Events(events) => {
 							// Write to db
@@ -157,7 +159,7 @@ async fn fetch_init_data(
 			[ctx, (i64,)]
 			"
 			SELECT last_event_idx
-			FROM db_pegboard.client
+			FROM db_pegboard.clients
 			WHERE client_id = $1
 			",
 			input.client_id,

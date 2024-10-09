@@ -21,15 +21,15 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 		[ctx, (Uuid,)]
 		"
 		UPDATE db_cluster.datacenter_tls
-		SET state2 = $3
+		SET state = $3
 		WHERE
-			state2 = $1 AND
+			state = $1 AND
 			expire_ts < $2
 		RETURNING datacenter_id
 		",
-		serde_json::to_string(&TlsState::Active)?,
+		TlsState::Active as i32,
 		util::timestamp::now() + EXPIRE_PADDING,
-		serde_json::to_string(&TlsState::Renewing)?,
+		TlsState::Renewing as i32,
 	)
 	.await?
 	.into_iter()

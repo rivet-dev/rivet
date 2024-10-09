@@ -31,7 +31,7 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 			let servers = sql_fetch_all!(
 				[ctx, ServerRow, @tx tx]
 				"
-				SELECT server_id, datacenter_id, pool_type, pool_type2, drain_ts
+				SELECT server_id, datacenter_id, pool_type, drain_ts
 				FROM db_cluster.servers
 				WHERE
 					drain_ts IS NOT NULL AND

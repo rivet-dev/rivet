@@ -15,3 +15,4 @@ cluster = { path = "../../../cluster" }
 ds = { path = "../../../ds" }
 job-run = { path = "../../../job-run" }
 linode = { path = "../../../linode" }
+pegboard = { path = "../../../pegboard" }

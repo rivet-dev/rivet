@@ -1,8 +1,8 @@
 locals {
-	container_runner_src_dir = "${path.module}/../../../lib/container-runner"
+	container_runner_src_dir = "${path.module}/../../../lib/pegboard/container-runner"
 
 	container_runner_src_files = flatten([
-		["${local.container_runner_src_dir}/Cargo.toml", "${local.container_runner_src_dir}/Cargo.lock"],
+		["${local.container_runner_src_dir}/Cargo.toml"],
 		[for f in fileset("${local.container_runner_src_dir}/src/", "**/*"): "${local.container_runner_src_dir}/src/${f}"],
 	])
 	container_runner_src_hash = md5(join("", [

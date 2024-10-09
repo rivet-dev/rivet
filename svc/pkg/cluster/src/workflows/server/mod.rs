@@ -332,7 +332,7 @@ async fn get_vlan_ip(ctx: &ActivityCtx, input: &GetVlanIpInput) -> GlobalResult<
 					SELECT 1
 					FROM db_cluster.servers
 					WHERE
-						pool_type2 = $3 AND
+						pool_type = $3 AND
 						-- Technically this should check all servers where their datacenter's provider and
 						-- provider_datacenter_id are the same because VLAN is separated by irl datacenter
 						-- but this is good enough
@@ -353,7 +353,7 @@ async fn get_vlan_ip(ctx: &ActivityCtx, input: &GetVlanIpInput) -> GlobalResult<
 		// Choose a random index to start from for better index spread
 		rand::thread_rng().gen_range(0i64..max_idx),
 		max_idx,
-		serde_json::to_string(&input.pool_type)?,
+		input.pool_type as i32,
 		input.datacenter_id,
 		input.server_id,
 	)
@@ -426,10 +426,10 @@ async fn get_prebake(ctx: &ActivityCtx, input: &GetPrebakeInput) -> GlobalResult
 		FULL OUTER JOIN updated
 		ON true
 		",
-		serde_json::to_string(&input.provider)?,
+		input.provider as i32,
 		crate::util::INSTALL_SCRIPT_HASH,
 		input.datacenter_id,
-		serde_json::to_string(&input.pool_type)?,
+		input.pool_type as i32,
 		util::timestamp::now(),
 		// 5 month expiration
 		util::timestamp::now() - util::duration::days(5 * 30),
