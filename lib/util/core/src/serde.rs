@@ -118,6 +118,18 @@ impl Serialize for SimpleValue {
 #[derive(Serialize, Deserialize)]
 pub struct HashableMap<K: Eq + Hash, V: Hash>(IndexMap<K, V>);
 
+impl<K: Eq + Hash, V: Hash> HashableMap<K, V> {
+	pub fn new() -> Self {
+		HashableMap(IndexMap::new())
+	}
+}
+
+impl<K: Eq + Hash, V: Hash> Default for HashableMap<K, V> {
+	fn default() -> Self {
+		HashableMap::new()
+	}
+}
+
 impl<K: Eq + Hash, V: Hash> Deref for HashableMap<K, V> {
 	type Target = IndexMap<K, V>;
 
@@ -150,26 +162,9 @@ impl<K: Eq + Hash + Clone, V: Hash + Clone> Clone for HashableMap<K, V> {
 	}
 }
 
-pub trait AsHashableExt<K: Eq + Hash, V: Hash> {
-	/// Converts the iterable to a `HashableMap` via cloning.
-	fn as_hashable(&self) -> HashableMap<K, V>;
-}
-
-impl<K: Eq + Clone + Hash, V: Clone + Hash> AsHashableExt<K, V> for HashMap<K, V> {
-	fn as_hashable(&self) -> HashableMap<K, V> {
-		self.into()
-	}
-}
-
 impl<K: Eq + Clone + Hash, V: Clone + Hash> Into<HashableMap<K, V>> for HashMap<K, V> {
 	fn into(self) -> HashableMap<K, V> {
 		HashableMap(self.into_iter().collect())
-	}
-}
-
-impl<K: Eq + Clone + Hash, V: Clone + Hash> Into<HashableMap<K, V>> for &HashMap<K, V> {
-	fn into(self) -> HashableMap<K, V> {
-		HashableMap(self.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
 	}
 }
 
@@ -196,7 +191,7 @@ impl<T> Raw<T> {
 }
 
 impl<T: Serialize> Raw<T> {
-	pub fn serialize(t: &T) -> Result<Self, serde_json::Error> {
+	pub fn new(t: &T) -> Result<Self, serde_json::Error> {
 		Ok(Raw {
 			_marker: PhantomData,
 			inner: serde_json::value::RawValue::from_string(serde_json::to_string(&t)?)?,

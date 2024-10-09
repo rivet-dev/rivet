@@ -40,6 +40,12 @@ pub async fn init_working_dir(working_path: &Path) -> Result<()> {
 		x => x.context("failed to create /db dir in working dir")?,
 	}
 
+	// Create bin dir
+	match fs::create_dir(working_path.join("bin")).await {
+		Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+		x => x.context("failed to create /bin dir in working dir")?,
+	}
+
 	Ok(())
 }
 
@@ -129,7 +135,7 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 	sqlx::query(indoc!(
 		"
 		CREATE TABLE IF NOT EXISTS events (
-			index INTEGER NOT NULL UNIQUE,
+			idx INTEGER NOT NULL UNIQUE,
 			payload BLOB NOT NULL,
 			create_ts INTEGER NOT NULL
 		)
@@ -141,7 +147,7 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 	sqlx::query(indoc!(
 		"
 		CREATE TABLE IF NOT EXISTS commands (
-			index INTEGER NOT NULL UNIQUE,
+			idx INTEGER NOT NULL UNIQUE,
 			payload BLOB NOT NULL,
 			ack_ts INTEGER NOT NULL
 		)
@@ -154,10 +160,14 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 		"
 		CREATE TABLE IF NOT EXISTS containers (
 			container_id TEXT PRIMARY KEY, -- UUID
+			config BLOB NOT NULL,
+
 			start_ts INTEGER NOT NULL,
 			running_ts INTEGER,
 			stop_ts INTEGER,
 			exit_ts INTEGER,
+
+			pid INTEGER,
 			exit_code INTEGER
 		)
 		",

@@ -217,7 +217,7 @@ async fn signal_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>) -> 
 				let buf = msg.inner.serialize(conn.protocol_version)?;
 				conn.tx.lock().await.send(Message::Binary(buf)).await?;
 			} else {
-				tracing::warn!(
+				tracing::debug!(
 					client_id=?msg.client_id,
 					"received command for client that isn't connected, ignoring"
 				);

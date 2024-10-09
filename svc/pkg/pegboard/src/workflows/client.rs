@@ -85,7 +85,7 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 					}
 				}
 				Main::Command(command) => {
-					let raw_command = protocol::Raw::serialize(&command)?;
+					let raw_command = protocol::Raw::new(&command)?;
 
 					// Write to db
 					let index = ctx
@@ -188,7 +188,7 @@ async fn insert_events(ctx: &ActivityCtx, input: &InsertEventsInput) -> GlobalRe
 		sql_execute!(
 			[ctx]
 			"
-			INSERT INTO db_pegboard.client_events
+			INSERT INTO db_pegboard.client_events (client_id, index, payload, ack_ts)
 			VALUES ($1, $2, $3, $4)
 			",
 			input.client_id,

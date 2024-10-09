@@ -1,7 +1,7 @@
 use chirp_workflow::prelude::*;
 
 // Reexport for ease of use in pegboard manager
-pub use util::serde::Raw;
+pub use util::serde::{HashableMap, Raw};
 
 #[derive(thiserror::Error, Debug)]
 pub enum PegboardProtocolError {
@@ -49,7 +49,6 @@ impl ToServer {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CommandWrapper {
 	pub index: i64,
-	#[serde(flatten)]
 	pub inner: Raw<Command>,
 }
 
@@ -68,7 +67,6 @@ pub enum Command {
 #[derive(Debug, Serialize, Deserialize, Hash)]
 pub struct ContainerConfig {
 	pub image: Image,
-	pub image_artifact_url: String,
 	pub container_runner_binary_url: String,
 	pub root_user_enabled: bool,
 	pub env: util::serde::HashableMap<String, String>,
@@ -156,7 +154,6 @@ impl Stakeholder {
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct EventWrapper {
 	pub index: i64,
-	#[serde(flatten)]
 	pub inner: Raw<Event>,
 }
 
@@ -170,8 +167,14 @@ pub enum Event {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub enum ContainerState {
+	/// Container planned, not yet started.
 	Starting,
+	/// Container has a running process.
 	Running { pid: usize },
+	/// Container planned to stop.
 	Stopping,
+	/// Container stopped, process exit not yet received.
+	Stopped,
+	/// Container process exited.
 	Exited { exit_code: Option<i32> },
 }

@@ -11,6 +11,7 @@ use futures_util::{
 	SinkExt, StreamExt,
 };
 use indoc::indoc;
+use nix::unistd::Pid;
 use pegboard::protocol;
 use sqlx::{pool::PoolConnection, Sqlite, SqlitePool};
 use tokio::{
@@ -26,6 +27,13 @@ use uuid::Uuid;
 use crate::{container::Container, utils};
 
 const PING_INTERVAL: Duration = Duration::from_secs(1);
+
+#[derive(sqlx::FromRow)]
+struct ContainerRow {
+	container_id: Uuid,
+	config: Vec<u8>,
+	pid: Option<i32>,
+}
 
 pub struct Ctx {
 	path: PathBuf,
@@ -70,34 +78,37 @@ impl Ctx {
 	}
 
 	async fn write_event(&self, event: &protocol::Event) -> Result<i64> {
-		// Write event to db
-		let event_json = serde_json::to_vec(event)?;
+		// Fetch next idx
 		let (index,) = utils::query(|| async {
 			sqlx::query_as::<_, (i64,)>(indoc!(
 				"
-				WITH
-					last_idx AS (
-						UPDATE state
-						SET last_event_idx = last_event_idx + 1
-						RETURNING last_event_idx - 1
-					),
-					insert_event AS (
-						INSERT INTO events (
-							index,
-							payload,
-							create_ts
-						)
-						SELECT last_idx.last_event_idx, ?1, ?2
-						FROM last_idx
-						LIMIT 1
-						RETURNING 1
-					)
-				SELECT last_event_idx FROM last_idx
+				UPDATE state
+				SET last_event_idx = last_event_idx + 1
+				RETURNING last_event_idx - 1
 				",
 			))
+			.fetch_one(&mut *self.sql().await?)
+			.await
+		})
+		.await?;
+
+		// Write event to db
+		let event_json = serde_json::to_vec(event)?;
+		utils::query(|| async {
+			sqlx::query(indoc!(
+				"
+				INSERT INTO events (
+					idx,
+					payload,
+					create_ts
+				)
+				SELECT ?1, ?2, ?3
+				",
+			))
+			.bind(index)
 			.bind(&event_json)
 			.bind(utils::now())
-			.fetch_one(&mut *self.sql().await?)
+			.execute(&mut *self.sql().await?)
 			.await
 		})
 		.await?;
@@ -110,16 +121,11 @@ impl Ctx {
 
 		let wrapped_event = protocol::EventWrapper {
 			index,
-			inner: protocol::Raw::serialize(&event)?,
+			inner: protocol::Raw::new(&event)?,
 		};
 
 		self.send_packet(protocol::ToServer::Events(vec![wrapped_event]))
 			.await
-	}
-
-	// Rebuilds state from DB
-	pub async fn rebuild(self: &Arc<Self>, last_event_idx: i64) -> Result<()> {
-		todo!();
 	}
 
 	pub async fn start(
@@ -127,11 +133,16 @@ impl Ctx {
 		mut rx: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
 	) -> Result<()> {
 		// Start ping thread
-		let s = self.clone();
+		let self2 = self.clone();
 		tokio::spawn(async move {
 			loop {
 				tokio::time::sleep(PING_INTERVAL).await;
-				s.tx.lock().await.send(Message::Ping(Vec::new())).await?;
+				self2
+					.tx
+					.lock()
+					.await
+					.send(Message::Ping(Vec::new()))
+					.await?;
 			}
 
 			#[allow(unreachable_code)]
@@ -173,8 +184,6 @@ impl Ctx {
 			}
 		}
 
-		// TODO: Implement pinging
-
 		bail!("stream closed");
 	}
 
@@ -189,7 +198,11 @@ impl Ctx {
 					*guard = Some(api_endpoint);
 				}
 
-				self.rebuild(last_event_idx).await?;
+				// Send out all missed events
+				self.rebroadcast(last_event_idx).await?;
+
+				// Rebuild state only after the init packet is received and processed
+				self.rebuild().await?;
 			}
 			protocol::ToClient::Commands(commands) => {
 				for command in commands {
@@ -212,10 +225,10 @@ impl Ctx {
 				let mut containers = self.containers.write().await;
 				let container = containers
 					.entry(container_id)
-					.or_insert_with(|| Container::new(container_id));
+					.or_insert_with(|| Container::new(container_id, *config));
 
 				// Spawn container
-				container.start(&self, *config).await?;
+				container.start(&self).await?;
 			}
 			protocol::Command::StopContainer { container_id } => {
 				if let Some(container) = self.containers.read().await.get(&container_id) {
@@ -233,22 +246,24 @@ impl Ctx {
 		utils::query(|| async {
 			sqlx::query(indoc!(
 				"
-				WITH
-					update_last_idx AS (
-						UPDATE state
-						SET last_command_idx = ?2
-						RETURNING 1
-					),
-					insert_event AS (
-						INSERT INTO commands (
-							index,
-							payload,
-							create_ts
-						)
-						VALUES(?1, ?2, ?3)
-						RETURNING 1
-					)
-				SELECT 1
+				UPDATE state
+				SET last_command_idx = ?1
+				",
+			))
+			.bind(command.index)
+			.execute(&mut *self.sql().await?)
+			.await
+		})
+		.await?;
+		utils::query(|| async {
+			sqlx::query(indoc!(
+				"
+				INSERT INTO commands (
+					idx,
+					payload,
+					ack_ts
+				)
+				VALUES(?1, ?2, ?3)
 				",
 			))
 			.bind(command.index)
@@ -258,6 +273,110 @@ impl Ctx {
 			.await
 		})
 		.await?;
+
+		Ok(())
+	}
+
+	async fn rebroadcast(&self, last_event_idx: i64) -> Result<()> {
+		// Fetch all missed events
+		let events = utils::query(|| async {
+			sqlx::query_as::<_, (i64, String)>(indoc!(
+				"
+				SELECT idx, payload
+				FROM events
+				WHERE idx > ?1
+				",
+			))
+			.bind(last_event_idx)
+			.fetch_all(&mut *self.sql().await?)
+			.await
+		})
+		.await?
+		.into_iter()
+		.map(|(index, payload)| {
+			Ok(protocol::EventWrapper {
+				index,
+				inner: protocol::Raw::from_string(payload)?,
+			})
+		})
+		.collect::<Result<_>>()?;
+
+		self.send_packet(protocol::ToServer::Events(events)).await
+	}
+
+	// TODO: Parallelize
+	// Rebuilds state from DB
+	async fn rebuild(self: &Arc<Self>) -> Result<()> {
+		let container_rows = utils::query(|| async {
+			sqlx::query_as::<_, ContainerRow>(indoc!(
+				"
+				SELECT container_id, config, pid
+				FROM containers
+				WHERE stop_ts IS NULL AND exit_ts IS NULL
+				",
+			))
+			.fetch_all(&mut *self.sql().await?)
+			.await
+		})
+		.await?;
+
+		// Emit stop events
+		for row in &container_rows {
+			if row.pid.is_some() {
+				continue;
+			}
+
+			tracing::error!("container has no pid, stopping");
+
+			utils::query(|| async {
+				sqlx::query(indoc!(
+					"
+					UPDATE containers
+					SET stop_ts = ?2
+					WHERE container_id = ?1
+					",
+				))
+				.bind(row.container_id)
+				.bind(utils::now())
+				.execute(&mut *self.sql().await?)
+				.await
+			})
+			.await?;
+
+			self.event(protocol::Event::ContainerStateUpdate {
+				container_id: row.container_id,
+				state: protocol::ContainerState::Stopped,
+			})
+			.await?;
+		}
+
+		// Start container observers
+		let mut containers_guard = self.containers.write().await;
+		for row in container_rows {
+			let Some(pid) = row.pid else {
+				continue;
+			};
+
+			let pid = Pid::from_raw(pid);
+			let config = serde_json::from_slice(&row.config)?;
+			let container = Container::with_pid(row.container_id, config, pid);
+			let container = containers_guard
+				.entry(row.container_id)
+				.or_insert(container);
+
+			let container = container.clone();
+			let self2 = self.clone();
+			tokio::spawn(async move {
+				use std::result::Result::Err;
+
+				if let Err(err) = container.observe(&self2, pid).await {
+					tracing::error!(container_id=?row.container_id, ?err, "observe failed");
+				}
+
+				// Cleanup afterwards
+				container.cleanup(&self2).await
+			});
+		}
 
 		Ok(())
 	}
@@ -274,9 +393,17 @@ impl Ctx {
 
 		// Check file doesn't exist
 		if fs::metadata(&path).await.is_err() {
+			fs::create_dir(path.parent().context("no path parent")?).await?;
+
+			tracing::info!(%container_runner_binary_url, "downloading");
 			utils::download_file(container_runner_binary_url, &path).await?;
 
-			Command::new("chmod").arg("+x").arg(&path).output().await?;
+			let cmd_out = Command::new("chmod").arg("+x").arg(&path).output().await?;
+			ensure!(
+				cmd_out.status.success(),
+				"failed chmod command\n{}",
+				std::str::from_utf8(&cmd_out.stderr)?
+			);
 		}
 
 		Ok(path.to_path_buf())

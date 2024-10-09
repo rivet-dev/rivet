@@ -114,13 +114,25 @@ the internal location.
 `std::collections::HashMap` does not implement `Hash`. To get around this, use `util::serde::HashableMap`:
 
 ```rust
-use util::serde::AsHashableExt;
+
+struct Input {
+	map: HashMap<..., ...>,
+}
+
+// ...
 
 ctx
 	.activity(MyActivityInput {
-		map: input.map.as_hashable(),
+		map: input.map.into(),
 	})
 	.await?;
+
+// ...
+
+struct MyActivityInput {
+	map: util::serde::HashableMap<..., ...>,
+}
+
 ```
 
 ## Nested options with serde

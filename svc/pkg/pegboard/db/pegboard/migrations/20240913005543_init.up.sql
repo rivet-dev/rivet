@@ -25,10 +25,16 @@ CREATE TABLE client_commands (
 
 CREATE TABLE containers (
 	container_id UUID PRIMARY KEY,
+	config JSONB NOT NULL,
 	create_ts INT NOT NULL,
+
+	-- See protocol.rs `ContainerState` for info
 	start_ts INT,
 	running_ts INT,
+	stopping_ts INT,
 	stop_ts INT,
 	exit_ts INT,
+
+	pid INT,
 	exit_code INT
 );

@@ -44,8 +44,8 @@ fn main() -> anyhow::Result<()> {
 		Some(x) if x == "dynamic_server" => Stakeholder::DynamicServer {
 			server_id: var("PEGBOARD_META_server_id")?,
 		},
-		Some(x) => bail!("invalid container manager: {x}"),
-		None => bail!("no container manager specified"),
+		Some(x) => bail!("invalid container stakeholder: {x}"),
+		None => bail!("no container stakeholder specified"),
 	};
 
 	let (shutdown_tx, shutdown_rx) = mpsc::sync_channel(1);
@@ -112,8 +112,13 @@ fn run_container(
 	pegboard_container_dir: &Path,
 	root_user_enabled: bool,
 ) -> anyhow::Result<i32> {
-	let container_id = fs::read_to_string(pegboard_container_dir.join("container-id"))
-		.context("failed to read container-id")?;
+	// Extract container id from dir
+	let container_id = pegboard_container_dir
+		.iter()
+		.last()
+		.context("empty `pegboard_container_dir`")?
+		.to_string_lossy()
+		.to_string();
 	let oci_bundle_path = pegboard_container_dir.join("oci-bundle");
 	let oci_bundle_config_json = oci_bundle_path.join("config.json");
 
@@ -167,14 +172,13 @@ fn run_container(
 	// This will wait for the child to exit and then exit itself so we have time to ship all of the
 	// required logs
 	let mut signals = Signals::new(&[SIGTERM])?;
-	let runc_container_id = container_id.clone();
 	thread::spawn(move || {
 		for _ in signals.forever() {
-			println!("Received SIGTERM, forwarding to runc container {runc_container_id}");
+			println!("Received SIGTERM, forwarding to runc container {container_id}");
 			let status = Command::new("runc")
 				.arg("kill")
 				.arg("--all")
-				.arg(&runc_container_id)
+				.arg(&container_id)
 				.arg("SIGTERM")
 				.status();
 			println!("runc kill status: {:?}", status);
