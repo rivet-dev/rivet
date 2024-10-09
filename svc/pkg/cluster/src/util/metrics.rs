@@ -66,7 +66,14 @@ lazy_static::lazy_static! {
 	).unwrap();
 	pub static ref NOMAD_JOIN_DURATION: HistogramVec = register_histogram_vec_with_registry!(
 		"provision_nomad_join_duration",
-		"Time from installed to nomad joined.",
+		"Time from installed to Nomad joined.",
+		&["cluster_id", "datacenter_id", "provider_datacenter_id", "datacenter_name_id"],
+		PROVISION_BUCKETS.to_vec(),
+		*REGISTRY,
+	).unwrap();
+	pub static ref PEGBOARD_JOIN_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"provision_pegboard_join_duration",
+		"Time from installed to Pegboard joined.",
 		&["cluster_id", "datacenter_id", "provider_datacenter_id", "datacenter_name_id"],
 		PROVISION_BUCKETS.to_vec(),
 		*REGISTRY,

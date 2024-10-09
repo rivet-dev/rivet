@@ -5,6 +5,7 @@ use std::{
 
 use chirp_workflow::prelude::*;
 use rand::Rng;
+use serde_json::json;
 
 pub(crate) mod dns_create;
 pub(crate) mod dns_delete;
@@ -185,13 +186,24 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 			.send()
 			.await?;
 
-		// Create DNS record because the server is already installed
-		if let PoolType::Gg = input.pool_type {
-			ctx.workflow(dns_create::Input {
-				server_id: input.server_id,
-			})
-			.output()
-			.await?;
+		match input.pool_type {
+			// Create DNS record because the server is already installed
+			PoolType::Gg => {
+				ctx.workflow(dns_create::Input {
+					server_id: input.server_id,
+				})
+				.output()
+				.await?;
+			}
+			// Update tags to include pegboard client_id (currently the same as the server_id)
+			PoolType::Pegboard => {
+				ctx.activity(UpdateTagsInput {
+					server_id: input.server_id,
+					client_id: input.server_id,
+				})
+				.await?;
+			}
+			_ => {}
 		}
 
 		provider_server_workflow_id
@@ -243,6 +255,23 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 					provider_datacenter_id: dc.provider_datacenter_id.clone(),
 					datacenter_name_id: dc.name_id.clone(),
 					node_id: sig.node_id,
+				})
+				.await?;
+
+				// Scale to get rid of tainted servers
+				ctx.signal(crate::workflows::datacenter::Scale {})
+					.tag("datacenter_id", input.datacenter_id)
+					.send()
+					.await?;
+			}
+			Main::PegboardRegistered(_) => {
+				ctx.activity(SetPegboardClientIdInput {
+					server_id: input.server_id,
+					cluster_id: dc.cluster_id,
+					datacenter_id: dc.datacenter_id,
+					provider_datacenter_id: dc.provider_datacenter_id.clone(),
+					datacenter_name_id: dc.name_id.clone(),
+					client_id: input.server_id,
 				})
 				.await?;
 
@@ -495,40 +524,37 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<()>
 	)
 	.await?;
 
-	insert_metrics(
-		input.cluster_id,
-		input.datacenter_id,
-		&input.provider_datacenter_id,
-		&input.datacenter_name_id,
-		&input.pool_type,
-		provision_complete_ts,
-		create_ts,
-	)
-	.await;
-
-	Ok(())
-}
-
-async fn insert_metrics(
-	cluster_id: Uuid,
-	datacenter_id: Uuid,
-	provider_datacenter_id: &str,
-	datacenter_name_id: &str,
-	pool_type: &PoolType,
-	provision_complete_ts: i64,
-	create_ts: i64,
-) {
+	// Insert metrics
 	let dt = (provision_complete_ts - create_ts) as f64 / 1000.0;
 
 	metrics::PROVISION_DURATION
 		.with_label_values(&[
-			&cluster_id.to_string(),
-			&datacenter_id.to_string(),
-			provider_datacenter_id,
-			datacenter_name_id,
-			&pool_type.to_string(),
+			&input.cluster_id.to_string(),
+			&input.datacenter_id.to_string(),
+			&input.provider_datacenter_id,
+			&input.datacenter_name_id,
+			&input.pool_type.to_string(),
 		])
 		.observe(dt);
+
+	Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct UpdateTagsInput {
+	server_id: Uuid,
+	client_id: Uuid,
+}
+
+#[activity(UpdateTags)]
+async fn update_tags(ctx: &ActivityCtx, input: &UpdateTagsInput) -> GlobalResult<()> {
+	ctx.update_workflow_tags(&json!({
+		"server_id": input.server_id,
+		"client_id": input.client_id,
+	}))
+	.await?;
+
+	Ok(())
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
@@ -575,8 +601,7 @@ async fn set_nomad_node_id(ctx: &ActivityCtx, input: &SetNomadNodeIdInput) -> Gl
 		SET
 			nomad_node_id = $2,
 			nomad_join_ts = $3
-		WHERE
-			server_id = $1
+		WHERE server_id = $1
 		RETURNING nomad_node_id, install_complete_ts
 		",
 		input.server_id,
@@ -591,14 +616,16 @@ async fn set_nomad_node_id(ctx: &ActivityCtx, input: &SetNomadNodeIdInput) -> Gl
 
 	// Insert metrics
 	if let Some(install_complete_ts) = install_complete_ts {
-		insert_nomad_metrics(
-			input.cluster_id,
-			input.datacenter_id,
-			&input.provider_datacenter_id,
-			&input.datacenter_name_id,
-			nomad_join_ts,
-			install_complete_ts,
-		);
+		let dt = (nomad_join_ts - install_complete_ts) as f64 / 1000.0;
+
+		metrics::NOMAD_JOIN_DURATION
+			.with_label_values(&[
+				&input.cluster_id.to_string(),
+				&input.datacenter_id.to_string(),
+				&input.provider_datacenter_id,
+				&input.datacenter_name_id,
+			])
+			.observe(dt);
 	} else {
 		tracing::warn!("missing install_complete_ts");
 	}
@@ -606,24 +633,58 @@ async fn set_nomad_node_id(ctx: &ActivityCtx, input: &SetNomadNodeIdInput) -> Gl
 	Ok(())
 }
 
-fn insert_nomad_metrics(
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct SetPegboardClientIdInput {
+	server_id: Uuid,
 	cluster_id: Uuid,
 	datacenter_id: Uuid,
-	provider_datacenter_id: &str,
-	datacenter_name_id: &str,
-	nomad_join_ts: i64,
-	install_complete_ts: i64,
-) {
-	let dt = (nomad_join_ts - install_complete_ts) as f64 / 1000.0;
+	provider_datacenter_id: String,
+	datacenter_name_id: String,
+	client_id: Uuid,
+}
 
-	metrics::NOMAD_JOIN_DURATION
-		.with_label_values(&[
-			&cluster_id.to_string(),
-			&datacenter_id.to_string(),
-			provider_datacenter_id,
-			datacenter_name_id,
-		])
-		.observe(dt);
+#[activity(SetPegboardClientId)]
+async fn set_pegboard_client_id(
+	ctx: &ActivityCtx,
+	input: &SetPegboardClientIdInput,
+) -> GlobalResult<()> {
+	let pegboard_join_ts = util::timestamp::now();
+
+	let (old_pegboard_client_id, install_complete_ts) = sql_fetch_one!(
+		[ctx, (Option<Uuid>, Option<i64>)]
+		"
+		UPDATE db_cluster.servers
+		SET
+			pegboard_client_id = $2
+		WHERE server_id = $1
+		RETURNING pegboard_client_id, install_complete_ts
+		",
+		input.server_id,
+		&input.client_id,
+	)
+	.await?;
+
+	if let Some(old_pegboard_client_id) = old_pegboard_client_id {
+		tracing::warn!(%old_pegboard_client_id, "pegboard client id was already set");
+	}
+
+	// Insert metrics
+	if let Some(install_complete_ts) = install_complete_ts {
+		let dt = (pegboard_join_ts - install_complete_ts) as f64 / 1000.0;
+
+		metrics::PEGBOARD_JOIN_DURATION
+			.with_label_values(&[
+				&input.cluster_id.to_string(),
+				&input.datacenter_id.to_string(),
+				&input.provider_datacenter_id,
+				&input.datacenter_name_id,
+			])
+			.observe(dt);
+	} else {
+		tracing::warn!("missing install_complete_ts");
+	}
+
+	Ok(())
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
@@ -745,7 +806,11 @@ impl CustomListener for State {
 	*/
 	async fn listen(&self, ctx: &ListenCtx) -> WorkflowResult<Self::Output> {
 		// Determine which signals to listen to
-		let mut signals = vec![Destroy::NAME, NomadRegistered::NAME];
+		let mut signals = vec![
+			Destroy::NAME,
+			NomadRegistered::NAME,
+			pegboard::workflows::client::Registered::NAME,
+		];
 
 		if !self.draining {
 			signals.push(Drain::NAME);
@@ -823,4 +888,5 @@ join_signal!(Main {
 	DnsDelete,
 	Destroy,
 	NomadRegistered,
+	PegboardRegistered(pegboard::workflows::client::Registered),
 });

@@ -1,4 +1,12 @@
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use std::{
+	collections::HashMap,
+	net::SocketAddr,
+	sync::{
+		atomic::{AtomicBool, Ordering},
+		Arc,
+	},
+	time::Duration,
+};
 
 use chirp_workflow::prelude::*;
 use futures_util::{stream::SplitSink, SinkExt, StreamExt};
@@ -11,12 +19,15 @@ use tokio_tungstenite::{tungstenite::protocol::Message, WebSocketStream};
 
 use pegboard::protocol;
 
+const UPDATE_PING_INTERVAL: Duration = Duration::from_secs(3);
+
 struct Connection {
 	protocol_version: u16,
-	tx: Arc<Mutex<SplitSink<WebSocketStream<TcpStream>, Message>>>,
+	tx: Mutex<SplitSink<WebSocketStream<TcpStream>, Message>>,
+	update_ping: AtomicBool,
 }
 
-type Connections = HashMap<Uuid, Connection>;
+type Connections = HashMap<Uuid, Arc<Connection>>;
 
 #[tracing::instrument(skip_all)]
 pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
@@ -33,7 +44,8 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 
 	tokio::try_join!(
 		socket_thread(&ctx, conns.clone()),
-		signal_thread(&ctx, conns.clone()),
+		msg_thread(&ctx, conns.clone()),
+		update_ping_thread(&ctx, conns.clone()),
 	)?;
 
 	Ok(())
@@ -70,21 +82,23 @@ async fn handle_connection(
 				Ok(x) => x,
 				Err(err) => {
 					tracing::error!(?addr, "{err}");
-					return Err(err);
+					return;
 				}
 			};
 
-		// Handle result for cleanup
-		match handle_connection_inner(&ctx, conns.clone(), ws_stream, protocol_version, client_id)
-			.await
+		if let Err(err) =
+			handle_connection_inner(&ctx, conns.clone(), ws_stream, protocol_version, client_id)
+				.await
 		{
-			Err(err) => {
-				// Clean up connection
-				conns.write().await.remove(&client_id);
+			tracing::error!(?addr, "{err}");
+		}
 
-				Err(err)
+		// Clean up
+		let conn = conns.write().await.remove(&client_id);
+		if let Some(conn) = conn {
+			if let Err(err) = conn.tx.lock().await.send(Message::Close(None)).await {
+				tracing::error!(?addr, "failed closing socket: {err}");
 			}
-			x => x,
 		}
 	});
 }
@@ -123,16 +137,16 @@ async fn handle_connection_inner(
 ) -> GlobalResult<()> {
 	let (tx, mut rx) = ws_stream.split();
 
-	let tx = Arc::new(Mutex::new(tx));
-	let conn = Connection {
+	let conn = Arc::new(Connection {
 		protocol_version,
-		tx: tx.clone(),
-	};
+		tx: Mutex::new(tx),
+		update_ping: AtomicBool::new(false),
+	});
 
 	// Store connection
 	{
 		let mut conns = conns.write().await;
-		if let Some(old_conn) = conns.insert(client_id, conn) {
+		if let Some(old_conn) = conns.insert(client_id, conn.clone()) {
 			tracing::warn!(
 				?client_id,
 				"client already connected, closing old connection"
@@ -158,8 +172,8 @@ async fn handle_connection_inner(
 					.await?;
 			}
 			Message::Ping(_) => {
-				update_ping(ctx, client_id).await?;
-				tx.lock().await.send(Message::Pong(Vec::new())).await?;
+				conn.update_ping.store(true, Ordering::Relaxed);
+				conn.tx.lock().await.send(Message::Pong(Vec::new())).await?;
 			}
 			Message::Close(_) => {
 				bail!(format!("socket closed {client_id}"));
@@ -179,24 +193,47 @@ async fn handle_connection_inner(
 
 async fn upsert_client(ctx: &StandaloneCtx, client_id: Uuid) -> GlobalResult<()> {
 	// Inserting before creating the workflow prevents a race condition with using select + insert instead
-	let inserted = sql_fetch_optional!(
-		[ctx, (i64,)]
+	let (exists, deleted) = sql_fetch_one!(
+		[ctx, (bool, bool)]
 		"
-		INSERT INTO db_pegboard.clients (client_id, create_ts, last_ping_ts)
-		VALUES ($1, $2, $2)
-		ON CONFLICT (client_id) DO NOTHING
-		RETURNING 1
+		WITH
+			select_exists AS (
+				SELECT 1
+				FROM db_pegboard.clients
+				WHERE client_id = $1
+			),
+			select_deleted AS (
+				SELECT 1
+				FROM db_pegboard.clients
+				WHERE
+					client_id = $1 AND
+					delete_ts IS NOT NULL
+			),
+			insert_client AS (
+				INSERT INTO db_pegboard.clients (client_id, create_ts, last_ping_ts)
+				VALUES ($1, $2, $2)
+				ON CONFLICT (client_id)
+					DO UPDATE
+					SET delete_ts = NULL
+				RETURNING 1
+			)
+		SELECT
+			EXISTS(SELECT 1 FROM select_exists) AS exists,
+			EXISTS(SELECT 1 FROM select_deleted) AS deleted
 		",
 		client_id,
 		util::timestamp::now(),
 	)
-	.await?
-	.is_some();
+	.await?;
 
-	// If the row was inserted, spawn a new client workflow
-	if inserted {
+	if deleted {
+		tracing::warn!(?client_id, "client was previously deleted");
+	}
+
+	if exists == deleted {
 		tracing::info!(?client_id, "new client");
-
+		
+		// Spawn a new client workflow
 		ctx.workflow(pegboard::workflows::client::Input { client_id })
 			.tag("client_id", client_id)
 			.dispatch()
@@ -206,56 +243,92 @@ async fn upsert_client(ctx: &StandaloneCtx, client_id: Uuid) -> GlobalResult<()>
 	Ok(())
 }
 
-async fn update_ping(ctx: &StandaloneCtx, client_id: Uuid) -> GlobalResult<()> {
-	let (deleted,) = sql_fetch_one!(
-		[ctx, (bool,)]
-		"
-		WITH
-			select_old AS (
-				SELECT delete_ts IS NOT NULL AS deleted
-				FROM db_pegboard.clients
-				WHERE client_id = $1
-			)
-		UPDATE db_pegboard.clients
-		SET
-			last_ping_ts = $2 AND
-			delete_ts = NULL
-		WHERE client_id = $1
-		RETURNING (SELECT * FROM select_old)
-		",
-		client_id,
-		util::timestamp::now(),
-	)
-	.await?;
+/// Updates the ping of all clients requesting a ping update at once.
+async fn update_ping_thread(
+	ctx: &StandaloneCtx,
+	conns: Arc<RwLock<Connections>>,
+) -> GlobalResult<()> {
+	loop {
+		tokio::time::sleep(UPDATE_PING_INTERVAL).await;
 
-	if deleted {
-		tracing::warn!(?client_id, "deleted client reconnected");
+		let client_ids = {
+			let conns = conns.read().await;
+
+			// Select all clients that required a ping update
+			conns
+				.iter()
+				.filter_map(|(client_id, conn)| {
+					conn.update_ping
+						.swap(false, Ordering::Relaxed)
+						.then_some(*client_id)
+				})
+				.collect::<Vec<_>>()
+		};
+
+		if client_ids.is_empty() {
+			continue;
+		}
+
+		sql_execute!(
+			[ctx]
+			"
+			UPDATE db_pegboard.clients
+				SET last_ping_ts = $2
+				WHERE client_id = ANY($1)
+				RETURNING 1
+			",
+			client_ids,
+			util::timestamp::now(),
+		)
+		.await?;
 	}
-
-	Ok(())
 }
 
-async fn signal_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>) -> GlobalResult<()> {
+async fn msg_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>) -> GlobalResult<()> {
 	// Listen for commands from client workflows
 	let mut sub = ctx
 		.subscribe::<pegboard::workflows::client::ToWs>(&json!({}))
 		.await?;
+	let mut close_sub = ctx
+		.subscribe::<pegboard::workflows::client::CloseWs>(&json!({}))
+		.await?;
 
 	loop {
-		let msg = sub.next().await?;
+		tokio::select! {
+			msg = sub.next() => {
+				let msg = msg?;
 
-		{
-			let conns = conns.read().await;
+				{
+					let conns = conns.read().await;
 
-			// Send command to socket
-			if let Some(conn) = conns.get(&msg.client_id) {
-				let buf = msg.inner.serialize(conn.protocol_version)?;
-				conn.tx.lock().await.send(Message::Binary(buf)).await?;
-			} else {
-				tracing::debug!(
-					client_id=?msg.client_id,
-					"received command for client that isn't connected, ignoring"
-				);
+					// Send command to socket
+					if let Some(conn) = conns.get(&msg.client_id) {
+						let buf = msg.inner.serialize(conn.protocol_version)?;
+						conn.tx.lock().await.send(Message::Binary(buf)).await?;
+					} else {
+						tracing::debug!(
+							client_id=?msg.client_id,
+							"received command for client that isn't connected, ignoring"
+						);
+					}
+				}
+			}
+			msg = close_sub.next() => {
+				let msg = msg?;
+
+				{
+					let conns = conns.read().await;
+
+					// Close socket
+					if let Some(conn) = conns.get(&msg.client_id) {
+						conn.tx.lock().await.send(Message::Close(None)).await?;
+					} else {
+						tracing::debug!(
+							client_id=?msg.client_id,
+							"received close command for client that isn't connected, ignoring"
+						);
+					}
+				}
 			}
 		}
 	}

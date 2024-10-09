@@ -13,7 +13,6 @@ indoc = "2.0"
 lazy_static = "1.4"
 nix = { version = "0.27", default-features = false, features = ["user", "signal"] }
 notify = { version = "6.1.1", default-features = false, features = [ "serde" ] }
-pnet_datalink = "0.35.0"
 prometheus = "0.13"
 rand = "0.8"
 reqwest = { version = "0.11", features = ["stream"] }

@@ -14,6 +14,9 @@ pub struct Input {
 
 #[workflow]
 pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
+	// Whatever started this client should be listening for this
+	ctx.signal(Registered { }).tag("client_id", input.client_id).send().await?;
+	
 	ctx.repeat(|ctx| {
 		let client_id = input.client_id;
 
@@ -136,6 +139,14 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 	)
 	.await?;
 
+	// Close websocket connection
+	ctx.msg(CloseWs {
+		client_id: input.client_id,
+	})
+	.tags(json!({}))
+	.send()
+	.await?;
+
 	Ok(())
 }
 
@@ -163,10 +174,10 @@ async fn process_init(
 			"
 			UPDATE db_pegboard.clients
 			SET
-				cpu = $2 AND
+				cpu = $2,
 				memory = $3
 			WHERE client_id = $1
-			RETURNING last_event_idx 
+			RETURNING last_event_idx
 			",
 			input.client_id,
 			input.system.cpu as i64,
@@ -330,6 +341,10 @@ pub async fn handle_commands(
 	client_id: Uuid,
 	commands: Vec<protocol::Command>,
 ) -> GlobalResult<()> {
+	if commands.is_empty() {
+		return Ok(());
+	}
+
 	let raw_commands = commands
 		.iter()
 		.map(protocol::Raw::new)
@@ -402,7 +417,7 @@ async fn insert_commands(ctx: &ActivityCtx, input: &InsertCommandsInput) -> Glob
 		[ctx, (i64,)]
 		"
 		WITH
-			last_idx AS (
+			last_event_idx(idx) AS (
 				UPDATE db_pegboard.clients
 				SET last_command_idx = last_command_idx + 1
 				WHERE client_id = $1
@@ -415,12 +430,12 @@ async fn insert_commands(ctx: &ActivityCtx, input: &InsertCommandsInput) -> Glob
 					index,
 					create_ts
 				)
-				SELECT $1, p.payload, last_idx.last_command_idx + p.index - 1, $3
-				FROM last_idx
+				SELECT $1, p.payload, l.idx + p.index - 1, $3
+				FROM last_event_idx AS l
 				CROSS JOIN UNNEST($2) WITH ORDINALITY AS p(payload, index)
 				RETURNING 1
 			)
-		SELECT last_event_idx FROM last_idx
+		SELECT idx FROM last_event_idx
 		",
 		input.client_id,
 		&input.commands,
@@ -468,7 +483,7 @@ async fn fetch_all_containers(
 		[ctx, (Uuid,)]
 		"
 		SELECT container_id
-		FROM db_pegboard.clients
+		FROM db_pegboard.containers
 		WHERE
 			client_id = $1 AND
 			stopping_ts IS NULL AND
@@ -485,10 +500,19 @@ async fn fetch_all_containers(
 	Ok(container_ids)
 }
 
+#[signal("pegboard_client_registered")]
+pub struct Registered {
+}
+
 #[message("pegboard_client_to_ws")]
 pub struct ToWs {
 	pub client_id: Uuid,
 	pub inner: protocol::ToClient,
+}
+
+#[message("pegboard_client_close_ws")]
+pub struct CloseWs {
+	pub client_id: Uuid,
 }
 
 #[signal("pegboard_container_state_update")]

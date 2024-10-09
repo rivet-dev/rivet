@@ -295,7 +295,7 @@ ConditionPathExists=/etc/pegboard/
 
 [Service]
 Environment="CLIENT_ID=___SERVER_ID___"
-Environment="NETWORK_INTERFACE=__VLAN_IFACE__"
+Environment="NETWORK_IP=___VLAN_IP___"
 ExecStart=/usr/bin/pegboard
 Restart=always
 RestartSec=2

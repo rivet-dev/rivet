@@ -120,7 +120,10 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 		"
 		CREATE TABLE IF NOT EXISTS state (
 			last_event_idx INTEGER NOT NULL,
-			last_command_idx INTEGER NOT NULL
+			last_command_idx INTEGER NOT NULL,
+
+			-- Keeps this table having one row
+			_persistence BOOLEAN UNIQUE NOT NULL DEFAULT TRUE
 		)
 		",
 	))
@@ -129,8 +132,9 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 
 	sqlx::query(indoc!(
 		"
-		INSERT INTO state
+		INSERT INTO state (last_event_idx, last_command_idx)
 		VALUES (0, 0)
+		ON CONFLICT DO NOTHING
 		",
 	))
 	.execute(&mut *conn)

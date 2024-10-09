@@ -1,7 +1,4 @@
-use std::{
-	net::{IpAddr, Ipv4Addr},
-	path::Path,
-};
+use std::{net::Ipv4Addr, path::Path};
 
 use anyhow::*;
 use futures_util::StreamExt;
@@ -33,7 +30,7 @@ async fn main() -> Result<()> {
 	tokio::spawn(metrics::run_standalone());
 
 	let client_id = Uuid::parse_str(&utils::var("CLIENT_ID")?)?;
-	let network_ip = get_network_ip(&utils::var("NETWORK_INTERFACE")?)?;
+	let network_ip = utils::var("NETWORK_IP")?.parse::<Ipv4Addr>()?;
 
 	let system = System::new_with_specifics(
 		RefreshKind::new()
@@ -74,28 +71,6 @@ async fn main() -> Result<()> {
 	let ctx = Ctx::new(working_path.to_path_buf(), network_ip, system, pool, tx);
 
 	ctx.start(rx).await
-}
-
-fn get_network_ip(network_interface_name: &str) -> Result<Ipv4Addr> {
-	let network_interface = pnet_datalink::interfaces()
-		.into_iter()
-		.find(|iface| iface.name == network_interface_name)
-		.context(format!(
-			"network interface not found: {network_interface_name}"
-		))?;
-	let network_ip = network_interface
-		.ips
-		.iter()
-		.find_map(|net| {
-			if let IpAddr::V4(ip) = net.ip() {
-				Some(ip)
-			} else {
-				None
-			}
-		})
-		.context("no ipv4 network on interface")?;
-
-	Ok(network_ip)
 }
 
 fn init_tracing() {

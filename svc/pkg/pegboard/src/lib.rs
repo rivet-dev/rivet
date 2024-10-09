@@ -3,7 +3,6 @@ use chirp_workflow::prelude::*;
 pub mod ops;
 pub mod protocol;
 pub mod types;
-pub mod utils;
 pub mod workflows;
 
 pub fn registry() -> WorkflowResult<Registry> {
