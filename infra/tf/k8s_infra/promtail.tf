@@ -17,6 +17,7 @@ resource "kubernetes_namespace" "promtail" {
 }
 
 resource "helm_release" "promtail" {
+	depends_on = [null_resource.wait_for_service_monitors]
 	count = var.prometheus_enabled ? 1 : 0
 
 	name = "promtail"

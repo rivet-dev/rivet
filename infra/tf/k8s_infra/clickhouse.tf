@@ -29,7 +29,7 @@ resource "kubernetes_namespace" "clickhouse" {
 
 resource "helm_release" "clickhouse" {
 	count = local.clickhouse_enabled ? 1 : 0
-	depends_on = [null_resource.daemons]
+	depends_on = [null_resource.daemons, null_resource.wait_for_service_monitors]
 
 	name = "clickhouse"
 	namespace = kubernetes_namespace.clickhouse.0.metadata.0.name

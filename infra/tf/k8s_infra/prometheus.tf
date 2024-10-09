@@ -303,3 +303,15 @@ resource "helm_release" "prometheus" {
 		}
 	})]
 }
+
+
+resource "null_resource" "wait_for_service_monitors" {
+	provisioner "local-exec" {
+		command = <<EOT
+			until kubectl get crd servicemonitors.monitoring.coreos.com; do
+			echo "Waiting for CRD to be available..."
+			sleep 5
+			done
+		EOT
+	}
+}

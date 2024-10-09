@@ -54,7 +54,7 @@ resource "kubernetes_namespace" "redis" {
 }
 
 resource "helm_release" "redis" {
-	depends_on = [null_resource.daemons]
+	depends_on = [null_resource.daemons, null_resource.wait_for_service_monitors]
 	for_each = local.redis_svcs
 
 	name = "redis"

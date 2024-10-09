@@ -172,7 +172,7 @@ resource "kubernetes_service" "nomad_server_indexed" {
 
 resource "kubectl_manifest" "nomad_server_monitor" {
 	count = var.edge_enabled && var.prometheus_enabled ? 1 : 0
-	depends_on = [kubernetes_stateful_set.nomad_server]
+	depends_on = [kubernetes_stateful_set.nomad_server, null_resource.wait_for_service_monitors]
 
 	yaml_body = yamlencode({
 		apiVersion = "monitoring.coreos.com/v1"

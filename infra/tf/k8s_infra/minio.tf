@@ -27,7 +27,7 @@ module "minio_secrets" {
 }
 
 resource "helm_release" "minio" {
-	depends_on = [null_resource.daemons]
+	depends_on = [null_resource.daemons, null_resource.wait_for_service_monitors]
 	count = local.has_minio ? 1 : 0
 
 	name = "minio"

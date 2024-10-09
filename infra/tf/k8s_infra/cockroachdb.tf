@@ -26,7 +26,7 @@ resource "kubernetes_namespace" "cockroachdb" {
 
 # NOTE: Helm chart is no longer supported by CockroachDB. However, it's intended to be used only for development and it's the easiest to set up.
 resource "helm_release" "cockroachdb" {
-	depends_on = [null_resource.daemons]
+	depends_on = [null_resource.daemons, null_resource.wait_for_service_monitors]
 	count = local.cockroachdb_k8s ? 1 : 0
 
 	name = "cockroachdb"
