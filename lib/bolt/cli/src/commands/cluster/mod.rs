@@ -132,6 +132,27 @@ impl SubCommand {
 	}
 }
 
+pub fn unwrap_cluster_name_id(
+	ctx: &ProjectContext,
+	cluster_name_id: Option<String>,
+) -> Result<String> {
+	if let Some(cluster_name_id) = cluster_name_id {
+		Ok(cluster_name_id)
+	} else {
+		Ok(ctx
+			.ns()
+			.rivet
+			.provisioning
+			.as_ref()
+			.context("no `rivet.provisioning` in ns config")?
+			.cluster
+			.as_ref()
+			.context("no `rivet.provisioning.cluster` in ns config")?
+			.name_id
+			.clone())
+	}
+}
+
 mod render {
 	use rivet_api::models;
 	use tabled::Tabled;

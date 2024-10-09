@@ -3,18 +3,18 @@ use bolt_core::context::ProjectContext;
 use clap::Parser;
 use rivet_api::{apis::*, models};
 
-use super::{BuildDeliveryMethod, PoolType, Provider};
+use super::{unwrap_cluster_name_id, BuildDeliveryMethod, PoolType, Provider};
 
 #[derive(Parser)]
 pub enum SubCommand {
 	/// Creates a new datacenter
 	Create {
-		/// The name id of the cluster
-		#[clap(index = 1)]
-		cluster: String,
 		/// The name id of the datacenter
-		#[clap(index = 2)]
+		#[clap(index = 1)]
 		name_id: String,
+		/// The name id of the cluster. Defaults to the name in the namespace config.
+		#[clap(long, short = 'c')]
+		cluster: Option<String>,
 		/// The display name of the datacenter
 		#[clap(long)]
 		display_name: String,
@@ -33,21 +33,21 @@ pub enum SubCommand {
 	},
 	/// Lists all datacenters of a cluster
 	List {
-		/// The name id of the cluster
-		#[clap(index = 1)]
-		cluster: String,
+		/// The name id of the cluster. Defaults to the name in the namespace config.
+		#[clap(long, short = 'c')]
+		cluster: Option<String>,
 	},
 	/// Update a datacenter's pools
 	Update {
-		/// The name id of the cluster
-		#[clap(index = 1)]
-		cluster: String,
 		/// The name id of the datacenter
-		#[clap(index = 2)]
+		#[clap(index = 1)]
 		name_id: String,
 		/// The pool type
-		#[clap(index = 3)]
+		#[clap(index = 2)]
 		pool: PoolType,
+		/// The name id of the cluster. Defaults to the name in the namespace config.
+		#[clap(long, short = 'c')]
+		cluster: Option<String>,
 		/// The hardware types
 		#[clap(long)]
 		hardware: Vec<String>,
@@ -91,6 +91,7 @@ impl SubCommand {
 						.await?
 						.clusters;
 
+				let cluster_name_id = unwrap_cluster_name_id(&ctx, cluster_name_id)?;
 				let cluster = clusters.iter().find(|c| c.name_id == cluster_name_id);
 
 				let cluster = match cluster {
@@ -122,6 +123,7 @@ impl SubCommand {
 						.await?
 						.clusters;
 
+				let cluster_name_id = unwrap_cluster_name_id(&ctx, cluster_name_id)?;
 				let cluster = clusters.iter().find(|c| c.name_id == cluster_name_id);
 
 				let cluster = match cluster {
@@ -157,8 +159,8 @@ impl SubCommand {
 						.await?
 						.clusters;
 
+				let cluster_name_id = unwrap_cluster_name_id(&ctx, cluster_name_id)?;
 				let cluster = clusters.iter().find(|c| c.name_id == cluster_name_id);
-
 				let cluster = match cluster {
 					Some(c) => c,
 					None => bail!("cluster with the name id {} not found", cluster_name_id),

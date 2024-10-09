@@ -4,15 +4,15 @@ use clap::Parser;
 use rivet_api::{apis::*, models};
 use uuid::Uuid;
 
-use super::PoolType;
+use super::{unwrap_cluster_name_id, PoolType};
 
 #[derive(Parser)]
 pub enum SubCommand {
 	/// Lists all datacenters of a cluster
 	List {
-		/// The name id of the cluster
-		#[clap(index = 1)]
-		cluster: String,
+		/// The name id of the cluster. Defaults to the name in the namespace config.
+		#[clap(long, short = 'c')]
+		cluster: Option<String>,
 		#[clap(long, short = 's')]
 		server_id: Option<Uuid>,
 		#[clap(long, short = 'p')]
@@ -24,9 +24,9 @@ pub enum SubCommand {
 	},
 	/// Taint servers in a cluster
 	Taint {
-		/// The name id of the cluster
-		#[clap(index = 1)]
-		cluster: String,
+		/// The name id of the cluster. Defaults to the name in the namespace config.
+		#[clap(long, short = 'c')]
+		cluster: Option<String>,
 		#[clap(long, short = 's')]
 		server_id: Option<Uuid>,
 		#[clap(long, short = 'p')]
@@ -41,9 +41,9 @@ pub enum SubCommand {
 	},
 	/// Destroy servers in a cluster
 	Destroy {
-		/// The name id of the cluster
-		#[clap(index = 1)]
-		cluster: String,
+		/// The name id of the cluster. Defaults to the name in the namespace config.
+		#[clap(long, short = 'c')]
+		cluster: Option<String>,
 		#[clap(long, short = 's')]
 		server_id: Option<Uuid>,
 		#[clap(long, short = 'p', value_enum)]
@@ -58,9 +58,9 @@ pub enum SubCommand {
 	},
 	/// Lists lost servers in a cluster
 	ListLost {
-		/// The name id of the cluster
-		#[clap(index = 1)]
-		cluster: String,
+		/// The name id of the cluster. Defaults to the name in the namespace config.
+		#[clap(long, short = 'c')]
+		cluster: Option<String>,
 		#[clap(long, short = 's')]
 		server_id: Option<Uuid>,
 		#[clap(long, short = 'p', value_enum)]
@@ -72,9 +72,9 @@ pub enum SubCommand {
 	},
 	/// Prunes lost servers in a cluster. use `list-lost` to see servers first.
 	Prune {
-		/// The name id of the cluster
-		#[clap(index = 1)]
-		cluster: String,
+		/// The name id of the cluster. Defaults to the name in the namespace config.
+		#[clap(long, short = 'c')]
+		cluster: Option<String>,
 		#[clap(long, short = 's')]
 		server_id: Option<Uuid>,
 		#[clap(long, short = 'p', value_enum)]
@@ -89,9 +89,9 @@ pub enum SubCommand {
 	},
 	/// SSH in to a server in the cluster
 	Ssh {
-		/// The name id of the cluster
-		#[clap(index = 1)]
-		cluster: String,
+		/// The name id of the cluster. Defaults to the name in the namespace config.
+		#[clap(long, short = 'c')]
+		cluster: Option<String>,
 		#[clap(long, short = 's')]
 		server_id: Option<Uuid>,
 		#[clap(long, short = 'p', value_enum)]
@@ -104,7 +104,7 @@ pub enum SubCommand {
 		#[clap(long)]
 		all: bool,
 
-		#[clap(long, short = 'c')]
+		#[clap(long, short = 'q')]
 		command: Option<String>,
 	},
 }
@@ -126,6 +126,8 @@ impl SubCommand {
 				let clusters = admin_clusters_api::admin_clusters_list(&cloud_config)
 					.await?
 					.clusters;
+
+				let cluster_name_id = unwrap_cluster_name_id(&ctx, cluster_name_id)?;
 				let cluster = clusters.iter().find(|c| c.name_id == cluster_name_id);
 				let cluster = match cluster {
 					Some(c) => c,
@@ -170,6 +172,7 @@ impl SubCommand {
 				let clusters = admin_clusters_api::admin_clusters_list(&cloud_config)
 					.await?
 					.clusters;
+				let cluster_name_id = unwrap_cluster_name_id(&ctx, cluster_name_id)?;
 				let cluster = clusters.iter().find(|c| c.name_id == cluster_name_id);
 				let cluster = match cluster {
 					Some(c) => c,
@@ -210,6 +213,7 @@ impl SubCommand {
 				let clusters = admin_clusters_api::admin_clusters_list(&cloud_config)
 					.await?
 					.clusters;
+				let cluster_name_id = unwrap_cluster_name_id(&ctx, cluster_name_id)?;
 				let cluster = clusters.iter().find(|c| c.name_id == cluster_name_id);
 				let cluster = match cluster {
 					Some(c) => c,
@@ -241,6 +245,7 @@ impl SubCommand {
 				let clusters = admin_clusters_api::admin_clusters_list(&cloud_config)
 					.await?
 					.clusters;
+				let cluster_name_id = unwrap_cluster_name_id(&ctx, cluster_name_id)?;
 				let cluster = clusters.iter().find(|c| c.name_id == cluster_name_id);
 				let cluster = match cluster {
 					Some(c) => c,
@@ -286,6 +291,7 @@ impl SubCommand {
 				let clusters = admin_clusters_api::admin_clusters_list(&cloud_config)
 					.await?
 					.clusters;
+				let cluster_name_id = unwrap_cluster_name_id(&ctx, cluster_name_id)?;
 				let cluster = clusters.iter().find(|c| c.name_id == cluster_name_id);
 				let cluster = match cluster {
 					Some(c) => c,
@@ -327,6 +333,7 @@ impl SubCommand {
 				let clusters = admin_clusters_api::admin_clusters_list(&cloud_config)
 					.await?
 					.clusters;
+				let cluster_name_id = unwrap_cluster_name_id(&ctx, cluster_name_id)?;
 				let cluster = clusters.iter().find(|c| c.name_id == cluster_name_id);
 				let cluster = match cluster {
 					Some(c) => c,

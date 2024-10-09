@@ -647,7 +647,7 @@ pub enum ProvisioningAcmeDirectory {
 #[serde(deny_unknown_fields)]
 pub struct ProvisioningCluster {
 	/// Identifier name of the default cluster.
-	name_id: String,
+	pub name_id: String,
 	#[serde(default)]
 	pub datacenters: HashMap<String, ProvisioningDatacenter>,
 }
