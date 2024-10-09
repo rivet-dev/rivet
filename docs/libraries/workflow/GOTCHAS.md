@@ -140,3 +140,12 @@ Be careful when writing your struct definitions.
 When force waking a sleeping workflow by setting `wake_immediate = true`, know that if the workflow is
 currently on a `sleep` step it will go back to sleep if it has not reached its `wake_deadline` yet. For all
 other steps, the workflow will continue normally (usually just go back to sleep).
+
+## Long-lived tasks in `ctx.join`
+
+When executing multiple long-lived activities in a `ctx.join` call using a tuple, remember that internally it
+uses `tokio::join!` and not `tokio::try_join`. This means it will wait until all items finish and does not
+short circuit when an `Err` is returned from any branch.
+
+So if you have an activity that errors immediately and another that takes a while to finish, the `ctx.join`
+call will wait until the long task is complete (or errors) before returning.

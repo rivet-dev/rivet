@@ -541,9 +541,21 @@ impl WorkflowCtx {
 		Ok(output)
 	}
 
-	/// Joins multiple executable actions (activities, closures) and awaits them simultaneously.
+	/// Joins multiple executable actions (activities, closures) and awaits them simultaneously. This does not
+	/// short circuit in the event of an error to make sure activity side effects are recorded.
 	pub async fn join<T: Executable>(&mut self, exec: T) -> GlobalResult<T::Output> {
 		exec.execute(self).await
+	}
+
+	/// Joins multiple executable actions (activities, closures) and awaits them simultaneously, short
+	/// circuiting in the event of an error.
+	///
+	/// **BEWARE**: You should almost **never** use `try_join` over `join`.
+	///
+	/// The only possible case for using this over `join` is:
+	/// - You have long running activities that are cancellable
+	pub async fn try_join<T: Executable>(&mut self, exec: T) -> GlobalResult<T::Output> {
+		exec.try_execute(self).await
 	}
 
 	/// Spawns a new thread to execute workflow steps in.
@@ -551,7 +563,7 @@ impl WorkflowCtx {
 	where
 		F: for<'a> FnOnce(&'a mut WorkflowCtx) -> AsyncResult<'a, T> + Send + 'static,
 	{
-		let mut ctx = self.clone();
+		let mut ctx = self.branch();
 		tokio::task::spawn(async move { closure(f).execute(&mut ctx).await })
 	}
 

@@ -178,6 +178,7 @@ members = [
 	"pkg/monolith/standalone/workflow-worker",
 	"pkg/nomad/standalone/monitor",
 	"pkg/nsfw/ops/image-score",
+	"pkg/pegboard",
 	"pkg/perf/ops/log-get",
 	"pkg/profanity/ops/check",
 	"pkg/region/ops/get",

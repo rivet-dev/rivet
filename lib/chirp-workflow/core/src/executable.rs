@@ -8,10 +8,16 @@ use crate::ctx::WorkflowCtx;
 /// Signifies a retryable executable entity in a workflow. For example: activity, tuple of activities (join),
 /// closure.
 #[async_trait]
-pub trait Executable: Send {
+pub trait Executable: Send + Sized {
 	type Output: Send;
 
 	async fn execute(self, ctx: &mut WorkflowCtx) -> GlobalResult<Self::Output>;
+	/// In the event that an executable has multiple sub executables (i.e. a tuple of executables), this can
+	/// be implemented to provide the ability to choose whether to use `tokio::join!` or tokio::try_join!`
+	/// internally. Default implementation just calls `execute`.
+	async fn try_execute(self, ctx: &mut WorkflowCtx) -> GlobalResult<Self::Output> {
+		self.execute(ctx).await
+	}
 }
 
 pub type AsyncResult<'a, T> = Pin<Box<dyn Future<Output = GlobalResult<T>> + Send + 'a>>;
@@ -58,6 +64,23 @@ macro_rules! impl_tuple {
 
 				// Handle errors here instead
 				Ok(($($args?),*))
+			}
+
+			async fn try_execute(self, ctx: &mut WorkflowCtx) -> GlobalResult<Self::Output> {
+				#[allow(non_snake_case)]
+				let ($($args),*) = self;
+
+				#[allow(non_snake_case)]
+				let ($(mut $args),*) = ($(
+					TupleHelper {
+						branch: ctx.step(),
+						exec: $args,
+					}
+				),*);
+
+				tokio::try_join!(
+					$($args.exec.execute(&mut $args.branch)),*
+				)
 			}
 		}
 	}
