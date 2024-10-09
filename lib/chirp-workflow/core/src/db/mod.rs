@@ -5,7 +5,7 @@ use uuid::Uuid;
 use crate::{
 	activity::ActivityId,
 	error::{WorkflowError, WorkflowResult},
-	event::Event,
+	event::{Event, SleepState},
 	utils::Location,
 	workflow::Workflow,
 };
@@ -184,8 +184,16 @@ pub trait Database: Send {
 		&self,
 		from_workflow_id: Uuid,
 		location: &[usize],
-		util_ts: i64,
+		deadline_ts: i64,
 		loop_location: Option<&[usize]>,
+	) -> WorkflowResult<()>;
+
+	/// Updates a workflow sleep event's state.
+	async fn update_workflow_sleep_event_state(
+		&self,
+		from_workflow_id: Uuid,
+		location: &[usize],
+		state: SleepState,
 	) -> WorkflowResult<()>;
 }
 
@@ -290,4 +298,5 @@ pub struct SleepEventRow {
 	pub workflow_id: Uuid,
 	pub location: Vec<i64>,
 	pub deadline_ts: i64,
+	pub state: i64,
 }

@@ -2285,6 +2285,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sqlx",
+ "strum 0.26.3",
  "thiserror",
  "tokio",
  "tokio-util 0.7.11",
@@ -6483,6 +6484,7 @@ dependencies = [
  "chirp-workflow",
  "serde",
  "sqlx",
+ "strum 0.24.1",
  "thiserror",
 ]
 

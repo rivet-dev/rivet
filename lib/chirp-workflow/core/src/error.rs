@@ -87,6 +87,9 @@ pub enum WorkflowError {
 	#[error("deserialize loop input: {0}")]
 	DeserializeLoopOutput(serde_json::Error),
 
+	#[error("invalid sleep state: {0}")]
+	InvalidSleepState(i64),
+
 	#[error("create subscription: {0}")]
 	CreateSubscription(rivet_pools::prelude::nats::Error),
 
@@ -138,8 +141,14 @@ pub enum WorkflowError {
 	#[error("sleeping until {0}")]
 	Sleep(i64),
 
+	#[error("no signal found: {0:?}. sleeping until {1}")]
+	NoSignalFoundAndSleep(Box<[&'static str]>, i64),
+
 	#[error("cannot have multiple concurrent calls to Database::wake")]
 	WakeLock(tokio::sync::TryLockError),
+
+	#[error("int conversion error: {0}")]
+	TryFromIntError(#[from] std::num::TryFromIntError),
 }
 
 impl WorkflowError {
@@ -165,23 +174,26 @@ impl WorkflowError {
 
 				Some(deadline_ts)
 			}
-			WorkflowError::Sleep(ts) => Some(*ts),
+			WorkflowError::Sleep(ts) | WorkflowError::NoSignalFoundAndSleep(_, ts) => Some(*ts),
 			_ => None,
 		}
 	}
 
+	/// Any error that the workflow can continue on with its execution from.
 	pub fn is_recoverable(&self) -> bool {
 		match self {
 			WorkflowError::ActivityFailure(_, _)
 			| WorkflowError::ActivityTimeout(_)
 			| WorkflowError::OperationTimeout(_)
 			| WorkflowError::NoSignalFound(_)
+			| WorkflowError::NoSignalFoundAndSleep(_, _)
 			| WorkflowError::SubWorkflowIncomplete(_)
 			| WorkflowError::Sleep(_) => true,
 			_ => false,
 		}
 	}
 
+	/// Any error that the workflow can try again on.
 	pub(crate) fn is_retryable(&self) -> bool {
 		match self {
 			WorkflowError::ActivityFailure(_, _)
@@ -192,10 +204,10 @@ impl WorkflowError {
 	}
 
 	pub(crate) fn signals(&self) -> &[&'static str] {
-		if let WorkflowError::NoSignalFound(signals) = self {
-			signals
-		} else {
-			&[]
+		match self {
+			WorkflowError::NoSignalFound(signals)
+			| WorkflowError::NoSignalFoundAndSleep(signals, _) => signals,
+			_ => &[],
 		}
 	}
 

@@ -16,7 +16,7 @@ use super::{
 use crate::{
 	activity::ActivityId,
 	error::{WorkflowError, WorkflowResult},
-	event::combine_events,
+	event::{combine_events, SleepState},
 	message, worker,
 };
 
@@ -452,7 +452,7 @@ impl Database for DatabasePgNats {
 				sqlx::query_as::<_, SleepEventRow>(indoc!(
 					"
 					SELECT
-						workflow_id, location, deadline_ts
+						workflow_id, location, deadline_ts, state
 					FROM db_workflow.workflow_sleep_events
 					WHERE workflow_id = ANY($1) AND forgotten = FALSE
 					ORDER BY workflow_id, location ASC
@@ -1154,9 +1154,9 @@ impl Database for DatabasePgNats {
 			sqlx::query(indoc!(
 				"
 				INSERT INTO db_workflow.workflow_sleep_events(
-					workflow_id, location, deadline_ts, loop_location
+					workflow_id, location, deadline_ts, loop_location, state
 				)
-				VALUES($1, $2, $3, $4)
+				VALUES($1, $2, $3, $4, $5)
 				RETURNING 1
 				",
 			))
@@ -1164,6 +1164,33 @@ impl Database for DatabasePgNats {
 			.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
 			.bind(deadline_ts)
 			.bind(loop_location.map(|l| l.iter().map(|x| *x as i64).collect::<Vec<_>>()))
+			.bind(SleepState::Normal as i64)
+			.execute(&mut *self.conn().await?)
+			.await
+			.map_err(WorkflowError::Sqlx)
+		})
+		.await?;
+
+		Ok(())
+	}
+
+	async fn update_workflow_sleep_event_state(
+		&self,
+		from_workflow_id: Uuid,
+		location: &[usize],
+		state: SleepState,
+	) -> WorkflowResult<()> {
+		self.query(|| async {
+			sqlx::query(indoc!(
+				"
+				UPDATE db_workflow.workflow_sleep_events
+				SET state = $3
+				WHERE workflow_id = $1 AND location = $2
+				",
+			))
+			.bind(from_workflow_id)
+			.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
+			.bind(state as i64)
 			.execute(&mut *self.conn().await?)
 			.await
 			.map_err(WorkflowError::Sqlx)

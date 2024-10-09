@@ -91,52 +91,15 @@ where
 			);
 		}
 
-		// Lookup workflow
-		let Ok(workflow) = self.ctx.registry().get_workflow(I::Workflow::NAME) else {
-			tracing::warn!(
-				name=%self.ctx.name(),
-				id=%self.ctx.workflow_id(),
-				sub_workflow_name=%I::Workflow::NAME,
-				"sub workflow not found in current registry",
-			);
-
-			let tags = if self.tags.is_empty() {
-				None
-			} else {
-				Some(serde_json::Value::Object(self.tags))
-			};
-
-			// TODO(RVT-3755): If a sub workflow is dispatched, then the worker is updated to include the sub
-			// worker in the registry, this will diverge in history because it will try to run the sub worker
-			// in-process during the replay
-			// If the workflow isn't in the current registry, dispatch the workflow instead
-			let sub_workflow_id = Self::dispatch_workflow_inner(self.ctx, self.input, tags)
-				.await
-				.map_err(GlobalError::raw)?;
-			let output = self
-				.ctx
-				.wait_for_workflow::<I::Workflow>(sub_workflow_id)
-				.await?;
-
-			return Ok(output);
-		};
-
 		tracing::info!(name=%self.ctx.name(), id=%self.ctx.workflow_id(), sub_workflow_name=%I::Workflow::NAME, "running sub workflow");
 
-		// TODO(RVT-3756): This is redundant with the deserialization in `workflow.run` in the registry
-		// Create a new branched workflow context for the sub workflow
 		let mut ctx = self
 			.ctx
 			.with_input(Arc::new(serde_json::to_value(&self.input)?));
 
 		// Run workflow
-		let output = (workflow.run)(&mut ctx).await.map_err(GlobalError::raw)?;
-
-		// TODO: RVT-3756
-		// Deserialize output
-		let output = serde_json::from_value(output)
-			.map_err(WorkflowError::DeserializeWorkflowOutput)
-			.map_err(GlobalError::raw)?;
+		let output =
+			<<I as WorkflowInput>::Workflow as Workflow>::run(&mut ctx, &self.input).await?;
 
 		self.ctx.inc_location();
 

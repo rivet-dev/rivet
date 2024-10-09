@@ -15,7 +15,7 @@ use crate::{
 	},
 	db::{DatabaseHandle, PulledWorkflow},
 	error::{WorkflowError, WorkflowResult},
-	event::Event,
+	event::{Event, SleepState},
 	executable::{AsyncResult, Executable},
 	listen::{CustomListener, Listen},
 	message::Message,
@@ -637,7 +637,7 @@ impl WorkflowCtx {
 						}
 						retries += 1;
 					}
-					err => return err.map_err(GlobalError::raw),
+					Err(err) => return Err(GlobalError::raw(err)),
 				}
 			}
 		};
@@ -691,7 +691,7 @@ impl WorkflowCtx {
 						}
 						retries += 1;
 					}
-					err => return err.map_err(GlobalError::raw),
+					Err(err) => return Err(GlobalError::raw(err)),
 				}
 			}
 		};
@@ -831,13 +831,13 @@ impl WorkflowCtx {
 		Ok(output)
 	}
 
-	pub async fn sleep<T: DurationToMillis>(&mut self, duration: T) -> GlobalResult<()> {
+	pub async fn sleep(&mut self, duration: impl DurationToMillis) -> GlobalResult<()> {
 		let ts = rivet_util::timestamp::now() as u64 + duration.to_millis()?;
 
 		self.sleep_until(ts as i64).await
 	}
 
-	pub async fn sleep_until<T: TsToMillis>(&mut self, time: T) -> GlobalResult<()> {
+	pub async fn sleep_until(&mut self, time: impl TsToMillis) -> GlobalResult<()> {
 		let event = self.current_history_event();
 
 		// Slept before
@@ -874,16 +874,19 @@ impl WorkflowCtx {
 		let duration = deadline_ts.saturating_sub(rivet_util::timestamp::now());
 
 		// No-op
-		if duration < 0 {
-			if !replay {
+		if duration <= 0 {
+			if !replay && duration < -50 {
 				tracing::warn!(name=%self.name, id=%self.workflow_id, %duration, "tried to sleep for a negative duration");
 			}
-		} else if duration < worker::TICK_INTERVAL.as_millis() as i64 + 1 {
+		}
+		// Sleep in memory if duration is shorter than the worker tick
+		else if duration < worker::TICK_INTERVAL.as_millis() as i64 + 1 {
 			tracing::info!(name=%self.name, id=%self.workflow_id, %deadline_ts, "sleeping in memory");
 
-			// Sleep in memory if duration is shorter than the worker tick
 			tokio::time::sleep(std::time::Duration::from_millis(duration.try_into()?)).await;
-		} else {
+		}
+		// Workflow sleep
+		else {
 			tracing::info!(name=%self.name, id=%self.workflow_id, %deadline_ts, "sleeping");
 
 			return Err(WorkflowError::Sleep(deadline_ts)).map_err(GlobalError::raw);
@@ -894,13 +897,197 @@ impl WorkflowCtx {
 
 		Ok(())
 	}
+
+	/// Listens for a signal for a short time with a timeout before setting the workflow to sleep. Once the
+	/// signal is received, the workflow will be woken up and continue.
+	///
+	/// Internally this is a sleep event and a signal event.
+	pub async fn listen_with_timeout<T: Listen>(
+		&mut self,
+		duration: impl DurationToMillis,
+	) -> GlobalResult<Option<T>> {
+		let time = (rivet_util::timestamp::now() as u64 + duration.to_millis()?) as i64;
+		let event = self.current_history_event();
+		let sleep_location = self.full_location();
+
+		// Slept before
+		let (deadline_ts, state, replay) = if let Some(event) = event {
+			// Validate history is consistent
+			let Event::Sleep(sleep) = event else {
+				return Err(WorkflowError::HistoryDiverged(format!(
+					"expected {event} at {}, found sleep",
+					self.loc(),
+				)))
+				.map_err(GlobalError::raw);
+			};
+
+			tracing::debug!(name=%self.name, id=%self.workflow_id, "replaying sleep");
+
+			(sleep.deadline_ts, sleep.state, true)
+		}
+		// Sleep
+		else {
+			let deadline_ts = TsToMillis::to_millis(time)?;
+
+			self.db
+				.commit_workflow_sleep_event(
+					self.workflow_id,
+					sleep_location.as_ref(),
+					deadline_ts,
+					self.loop_location(),
+				)
+				.await?;
+
+			(deadline_ts, SleepState::Normal, false)
+		};
+
+		// Move to next event
+		self.inc_location();
+
+		// Signal received before, short circuit
+		if matches!(state, SleepState::Interrupted) {
+			let next_event = self.current_history_event();
+
+			if let Some(event) = next_event {
+				// Validate history is consistent
+				let Event::Signal(signal) = event else {
+					return Err(WorkflowError::HistoryDiverged(format!(
+						"expected {event} at {}, found signal",
+						self.loc(),
+					)))
+					.map_err(GlobalError::raw);
+				};
+
+				tracing::debug!(name=%self.name, id=%self.workflow_id, signal_name=%signal.name, "replaying signal");
+
+				let signal =
+					T::parse(&signal.name, signal.body.clone()).map_err(GlobalError::raw)?;
+
+				// Move to next event
+				self.inc_location();
+
+				return Ok(Some(signal));
+			} else {
+				return Err(WorkflowError::HistoryDiverged(format!(
+					"expected event at {}, found nothing",
+					self.loc(),
+				)))
+				.map_err(GlobalError::raw);
+			}
+		} else {
+		}
+
+		let duration = deadline_ts.saturating_sub(rivet_util::timestamp::now());
+
+		// Duration is now 0, timeout is over
+		let signal = if duration <= 0 {
+			if !replay && duration < -50 {
+				tracing::warn!(name=%self.name, id=%self.workflow_id, %duration, "tried to sleep for a negative duration");
+			}
+
+			// After timeout is over, check once for signal
+			if matches!(state, SleepState::Normal) {
+				let ctx = ListenCtx::new(self);
+
+				match T::listen(&ctx).await {
+					Ok(x) => Some(x),
+					Err(WorkflowError::NoSignalFound(_)) => None,
+					Err(err) => return Err(GlobalError::raw(err)),
+				}
+			} else {
+				None
+			}
+		}
+		// Sleep in memory if duration is shorter than the worker tick
+		else if duration < worker::TICK_INTERVAL.as_millis() as i64 + 1 {
+			tracing::info!(name=%self.name, id=%self.workflow_id, %deadline_ts, "sleeping in memory");
+
+			let res = tokio::time::timeout(
+				std::time::Duration::from_millis(duration.try_into()?),
+				async {
+					tracing::info!(name=%self.name, id=%self.workflow_id, "listening for signal with timeout");
+
+					let mut interval = tokio::time::interval(SIGNAL_RETRY);
+					interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+					let ctx = ListenCtx::new(self);
+
+					loop {
+						interval.tick().await;
+
+						match T::listen(&ctx).await {
+							// Retry
+							Err(WorkflowError::NoSignalFound(_)) => {}
+							x => return x,
+						}
+					}
+				},
+			)
+			.await;
+
+			match res {
+				Ok(res) => Some(res.map_err(GlobalError::raw)?),
+				Err(_) => {
+					tracing::info!(name=%self.name, id=%self.workflow_id, "timed out listening for signal");
+
+					None
+				}
+			}
+		}
+		// Workflow sleep for long durations
+		else {
+			tracing::info!(name=%self.name, id=%self.workflow_id, "listening for signal with timeout");
+
+			let mut retries = 0;
+			let mut interval = tokio::time::interval(SIGNAL_RETRY);
+			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+			let ctx = ListenCtx::new(self);
+
+			loop {
+				interval.tick().await;
+
+				match T::listen(&ctx).await {
+					Ok(res) => break Some(res),
+					Err(WorkflowError::NoSignalFound(signals)) => {
+						if retries > MAX_SIGNAL_RETRIES {
+							return Err(WorkflowError::NoSignalFoundAndSleep(signals, deadline_ts))
+								.map_err(GlobalError::raw);
+						}
+						retries += 1;
+					}
+					Err(err) => return Err(GlobalError::raw(err)),
+				}
+			}
+		};
+
+		// Update sleep state
+		if signal.is_some() {
+			self.db
+				.update_workflow_sleep_event_state(
+					self.workflow_id,
+					sleep_location.as_ref(),
+					SleepState::Interrupted,
+				)
+				.await?;
+
+			// Move to next event
+			self.inc_location();
+		} else if matches!(state, SleepState::Normal) {
+			self.db
+				.update_workflow_sleep_event_state(
+					self.workflow_id,
+					sleep_location.as_ref(),
+					SleepState::Uninterrupted,
+				)
+				.await?;
+		}
+
+		Ok(signal)
+	}
 }
 
 impl WorkflowCtx {
-	pub(crate) fn registry(&self) -> &RegistryHandle {
-		&self.registry
-	}
-
 	pub(crate) fn input(&self) -> &Arc<serde_json::Value> {
 		&self.input
 	}

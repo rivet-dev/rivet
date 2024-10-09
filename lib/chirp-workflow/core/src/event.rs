@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use serde::de::DeserializeOwned;
+use strum::FromRepr;
 use uuid::Uuid;
 
 use crate::{
@@ -180,6 +181,7 @@ impl TryFrom<LoopEventRow> for LoopEvent {
 #[derive(Debug)]
 pub struct SleepEvent {
 	pub deadline_ts: i64,
+	pub state: SleepState,
 }
 
 impl TryFrom<SleepEventRow> for SleepEvent {
@@ -188,8 +190,17 @@ impl TryFrom<SleepEventRow> for SleepEvent {
 	fn try_from(value: SleepEventRow) -> WorkflowResult<Self> {
 		Ok(SleepEvent {
 			deadline_ts: value.deadline_ts,
+			state: SleepState::from_repr(value.state.try_into()?)
+				.ok_or_else(|| WorkflowError::InvalidSleepState(value.state))?,
 		})
 	}
+}
+
+#[derive(Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
+pub enum SleepState {
+	Normal,
+	Uninterrupted,
+	Interrupted,
 }
 
 /// Takes all workflow events (each with their own location) and combines them via enum into a hashmap of the
