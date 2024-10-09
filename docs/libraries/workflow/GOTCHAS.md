@@ -111,10 +111,10 @@ the internal location.
 
 ## Hashmaps in activity inputs/outputs
 
-`std::collections::HashMap` does not implement `Hash`. To get around this, use `util::HashableMap`:
+`std::collections::HashMap` does not implement `Hash`. To get around this, use `util::serde::HashableMap`:
 
 ```rust
-use util::AsHashableExt;
+use util::serde::AsHashableExt;
 
 ctx
 	.activity(MyActivityInput {

@@ -69,37 +69,56 @@ impl Ctx {
 		Ok(())
 	}
 
-	async fn write_event(&self, event: &protocol::Event) -> Result<()> {
+	async fn write_event(&self, event: &protocol::Event) -> Result<i64> {
 		// Write event to db
 		let event_json = serde_json::to_vec(event)?;
-		utils::query(|| async {
-			sqlx::query(indoc!(
+		let (index,) = utils::query(|| async {
+			sqlx::query_as::<_, (i64,)>(indoc!(
 				"
-				INSERT INTO events (
-					data,
-					create_ts
-				)
-				VALUES (?1, ?2)
+				WITH
+					last_idx AS (
+						UPDATE state
+						SET last_event_idx = last_event_idx + 1
+						RETURNING last_event_idx - 1
+					),
+					insert_event AS (
+						INSERT INTO events (
+							index,
+							payload,
+							create_ts
+						)
+						SELECT last_idx.last_event_idx, ?1, ?2
+						FROM last_idx
+						LIMIT 1
+						RETURNING 1
+					)
+				SELECT last_event_idx FROM last_idx
 				",
 			))
 			.bind(&event_json)
 			.bind(utils::now())
-			.execute(&mut *self.sql().await?)
+			.fetch_one(&mut *self.sql().await?)
 			.await
 		})
 		.await?;
 
-		Ok(())
+		Ok(index)
 	}
 
 	pub async fn event(&self, event: protocol::Event) -> Result<()> {
-		self.write_event(&event).await?;
-		self.send_packet(protocol::ToServer::Events(vec![event]))
+		let index = self.write_event(&event).await?;
+
+		let wrapped_event = protocol::EventWrapper {
+			index,
+			inner: protocol::Raw::serialize(&event)?,
+		};
+
+		self.send_packet(protocol::ToServer::Events(vec![wrapped_event]))
 			.await
 	}
 
 	// Rebuilds state from DB
-	pub async fn rebuild(self: &Arc<Self>) -> Result<()> {
+	pub async fn rebuild(self: &Arc<Self>, last_event_idx: i64) -> Result<()> {
 		todo!();
 	}
 
@@ -118,6 +137,23 @@ impl Ctx {
 			#[allow(unreachable_code)]
 			Ok(())
 		});
+
+		// Send init packet
+		{
+			let (last_command_idx,) = utils::query(|| async {
+				sqlx::query_as::<_, (i64,)>(indoc!(
+					"
+					SELECT last_command_idx FROM state
+					",
+				))
+				.fetch_one(&mut *self.sql().await?)
+				.await
+			})
+			.await?;
+
+			self.send_packet(protocol::ToServer::Init { last_command_idx })
+				.await?;
+		}
 
 		// Receive messages from socket
 		while let Some(msg) = rx.next().await {
@@ -144,12 +180,16 @@ impl Ctx {
 
 	async fn process_packet(self: &Arc<Self>, packet: protocol::ToClient) -> Result<()> {
 		match packet {
-			protocol::ToClient::Init { api_endpoint, .. } => {
+			protocol::ToClient::Init {
+				last_event_idx,
+				api_endpoint,
+			} => {
 				{
 					let mut guard = self.api_endpoint.write().await;
 					*guard = Some(api_endpoint);
 				}
-				self.rebuild().await?;
+
+				self.rebuild(last_event_idx).await?;
 			}
 			protocol::ToClient::Commands(commands) => {
 				for command in commands {
@@ -162,11 +202,8 @@ impl Ctx {
 		Ok(())
 	}
 
-	async fn process_command(self: &Arc<Self>, command: protocol::Command) -> Result<()> {
-		// TODO: This is deserialized then serialized again
-		let command_json = serde_json::to_vec(&command)?;
-
-		match command {
+	async fn process_command(self: &Arc<Self>, command: protocol::CommandWrapper) -> Result<()> {
+		match command.inner.deserialize()? {
 			protocol::Command::StartContainer {
 				container_id,
 				config,
@@ -178,7 +215,7 @@ impl Ctx {
 					.or_insert_with(|| Container::new(container_id));
 
 				// Spawn container
-				container.start(&self, config).await?;
+				container.start(&self, *config).await?;
 			}
 			protocol::Command::StopContainer { container_id } => {
 				if let Some(container) = self.containers.read().await.get(&container_id) {
@@ -196,14 +233,26 @@ impl Ctx {
 		utils::query(|| async {
 			sqlx::query(indoc!(
 				"
-				INSERT INTO commands (
-					data,
-					ack_ts
-				)
-				VALUES (?1, ?2)
+				WITH
+					update_last_idx AS (
+						UPDATE state
+						SET last_command_idx = ?2
+						RETURNING 1
+					),
+					insert_event AS (
+						INSERT INTO commands (
+							index,
+							payload,
+							create_ts
+						)
+						VALUES(?1, ?2, ?3)
+						RETURNING 1
+					)
+				SELECT 1
 				",
 			))
-			.bind(&command_json)
+			.bind(command.index)
+			.bind(&command.inner)
 			.bind(utils::now())
 			.execute(&mut *self.sql().await?)
 			.await

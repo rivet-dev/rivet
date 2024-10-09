@@ -1,6 +1,7 @@
-use std::collections::HashMap;
-
 use chirp_workflow::prelude::*;
+
+// Reexport for ease of use in pegboard manager
+pub use util::serde::Raw;
 
 #[derive(thiserror::Error, Debug)]
 pub enum PegboardProtocolError {
@@ -10,8 +11,11 @@ pub enum PegboardProtocolError {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ToClient {
-	Init { last_event_idx: u64, api_endpoint: String },
-	Commands(Vec<Command>),
+	Init {
+		last_event_idx: i64,
+		api_endpoint: String,
+	},
+	Commands(Vec<CommandWrapper>),
 	FetchStateRequest {},
 }
 
@@ -27,8 +31,8 @@ impl ToClient {
 
 #[signal("pegboard_forward_to_server")]
 pub enum ToServer {
-	Init { last_command_idx: u64 },
-	Events(Vec<Event>),
+	Init { last_command_idx: i64 },
+	Events(Vec<EventWrapper>),
 	FetchStateResponse {},
 }
 
@@ -42,32 +46,39 @@ impl ToServer {
 	}
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CommandWrapper {
+	pub index: i64,
+	#[serde(flatten)]
+	pub inner: Raw<Command>,
+}
+
 #[signal("pegboard_client_command")]
-#[derive(Debug)]
+#[derive(Debug, Hash)]
 pub enum Command {
 	StartContainer {
 		container_id: Uuid,
-		config: ContainerConfig,
+		config: Box<ContainerConfig>,
 	},
 	StopContainer {
 		container_id: Uuid,
-	}
+	},
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Hash)]
 pub struct ContainerConfig {
 	pub image: Image,
 	pub image_artifact_url: String,
 	pub container_runner_binary_url: String,
 	pub root_user_enabled: bool,
-	pub env: HashMap<String, String>,
-	pub ports: HashMap<String, Port>,
+	pub env: util::serde::HashableMap<String, String>,
+	pub ports: util::serde::HashableMap<String, Port>,
 	pub network_mode: NetworkMode,
 	pub resources: Resources,
 	pub stakeholder: Stakeholder,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Hash)]
 pub struct Image {
 	pub artifact_url: String,
 	pub kind: ImageKind,
@@ -86,7 +97,7 @@ pub enum ImageCompression {
 	Lz4,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Hash)]
 pub struct Port {
 	// Null when using host networking since one is automatically assigned
 	pub internal_port: Option<i32>,
@@ -114,7 +125,7 @@ pub enum NetworkMode {
 	Host,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Hash)]
 pub struct Resources {
 	/// Millicore (1/1000 of a core).
 	pub cpu: u64,
@@ -124,7 +135,7 @@ pub struct Resources {
 	pub memory_max: u64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Hash)]
 pub enum Stakeholder {
 	DynamicServer { server_id: Uuid },
 }
@@ -140,6 +151,13 @@ impl Stakeholder {
 			}
 		}
 	}
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+pub struct EventWrapper {
+	pub index: i64,
+	#[serde(flatten)]
+	pub inner: Raw<Event>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]

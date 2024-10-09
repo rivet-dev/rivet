@@ -8,7 +8,7 @@ use rand::Rng;
 use rivet_operation::prelude::proto::backend;
 use serde_json::json;
 use sha2::{Digest, Sha256};
-use util::AsHashableExt;
+use util::serde::AsHashableExt;
 
 use crate::{
 	types::{
@@ -255,14 +255,14 @@ struct InsertDbInput {
 	env_id: Uuid,
 	datacenter_id: Uuid,
 	cluster_id: Uuid,
-	tags: util::HashableMap<String, String>,
+	tags: util::serde::HashableMap<String, String>,
 	resources: ServerResources,
 	kill_timeout_ms: i64,
 	image_id: Uuid,
 	args: Vec<String>,
 	network_mode: NetworkMode,
-	environment: util::HashableMap<String, String>,
-	network_ports: util::HashableMap<String, Port>,
+	environment: util::serde::HashableMap<String, String>,
+	network_ports: util::serde::HashableMap<String, Port>,
 }
 
 #[activity(InsertDb)]
@@ -436,7 +436,7 @@ struct SubmitJobInput {
 	datacenter_id: Uuid,
 	resources: ServerResources,
 	network_mode: NetworkMode,
-	network_ports: util::HashableMap<String, Port>,
+	network_ports: util::serde::HashableMap<String, Port>,
 	build_kind: BuildKind,
 	build_compression: BuildCompression,
 	dc_name_id: String,
@@ -1051,7 +1051,7 @@ async fn resolve_artifacts(
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
 struct DispatchJobInput {
-	environment: util::HashableMap<String, String>,
+	environment: util::serde::HashableMap<String, String>,
 	server_id: Uuid,
 	job_id: String,
 	image_artifact_url: String,

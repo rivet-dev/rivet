@@ -109,7 +109,8 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 	sqlx::query(indoc!(
 		"
 		CREATE TABLE IF NOT EXISTS state (
-			last_command_idx INTEGER NOT NULL,
+			last_event_idx INTEGER NOT NULL,
+			last_command_idx INTEGER NOT NULL
 		)
 		",
 	))
@@ -118,9 +119,18 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 
 	sqlx::query(indoc!(
 		"
+		INSERT INTO state
+		VALUES (0, 0)
+		",
+	))
+	.execute(&mut *conn)
+	.await?;
+
+	sqlx::query(indoc!(
+		"
 		CREATE TABLE IF NOT EXISTS events (
-			data BLOB NOT NULL,
-			index INTEGER NOT NULL,
+			index INTEGER NOT NULL UNIQUE,
+			payload BLOB NOT NULL,
 			create_ts INTEGER NOT NULL
 		)
 		",
@@ -131,8 +141,8 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 	sqlx::query(indoc!(
 		"
 		CREATE TABLE IF NOT EXISTS commands (
-			data BLOB NOT NULL,
-			index INTEGER NOT NULL,
+			index INTEGER NOT NULL UNIQUE,
+			payload BLOB NOT NULL,
 			ack_ts INTEGER NOT NULL
 		)
 		",

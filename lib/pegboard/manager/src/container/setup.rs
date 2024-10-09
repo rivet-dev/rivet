@@ -71,7 +71,7 @@ pub async fn cni_bundle(
 			}
 
 			if let protocol::ImageCompression::Lz4 = config.image.compression {
-				// Give tmp name
+				// Rename to tmp name
 				let tmp_path = container_path.join("tmp.tar");
 				fs::rename(&docker_image_path, &tmp_path).await?;
 

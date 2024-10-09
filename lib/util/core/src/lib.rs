@@ -1,15 +1,6 @@
-use std::{
-	collections::HashMap,
-	fmt,
-	hash::{Hash, Hasher},
-	ops::Deref,
-};
-
-use indexmap::IndexMap;
 use rand::Rng;
 pub use rivet_util_env as env;
 pub use rivet_util_macros as macros;
-use ::serde::{Deserialize, Serialize};
 use tokio::time::{Duration, Instant};
 
 pub mod billing;
@@ -168,72 +159,6 @@ impl Backoff {
 impl Default for Backoff {
 	fn default() -> Backoff {
 		Backoff::new(5, Some(16), 1_000, 1_000)
-	}
-}
-
-/// Used in workflow activity inputs/outputs. Using this over BTreeMap is preferred because this does not
-/// reorder keys, providing faster insert and lookup.
-#[derive(Serialize, Deserialize)]
-pub struct HashableMap<K: Eq + Hash, V: Hash>(IndexMap<K, V>);
-
-impl<K: Eq + Hash, V: Hash> Deref for HashableMap<K, V> {
-	type Target = IndexMap<K, V>;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
-
-impl<K: Eq + Ord + Hash, V: Hash> Hash for HashableMap<K, V> {
-	fn hash<H: Hasher>(&self, state: &mut H) {
-		let mut kv = Vec::from_iter(&self.0);
-		kv.sort_unstable_by(|a, b| a.0.cmp(b.0));
-		kv.hash(state);
-	}
-}
-
-impl<K: Eq + Hash + fmt::Debug, V: Hash + fmt::Debug> fmt::Debug for HashableMap<K, V> {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.debug_map().entries(self.iter()).finish()
-	}
-}
-
-impl<K: Eq + Hash + Clone, V: Hash + Clone> Clone for HashableMap<K, V> {
-	fn clone(&self) -> Self {
-		HashableMap(self.0.clone())
-	}
-
-	fn clone_from(&mut self, other: &Self) {
-		self.0.clone_from(&other.0);
-	}
-}
-
-pub trait AsHashableExt<K: Eq + Hash, V: Hash> {
-	/// Converts the iterable to a `HashableMap` via cloning.
-	fn as_hashable(&self) -> HashableMap<K, V>;
-}
-
-impl<K: Eq + Clone + Hash, V: Clone + Hash> AsHashableExt<K, V> for HashMap<K, V> {
-	fn as_hashable(&self) -> HashableMap<K, V> {
-		HashableMap(self.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
-	}
-}
-
-impl<K: Eq + Clone + Hash, V: Clone + Hash> Into<HashableMap<K, V>> for HashMap<K, V> {
-	fn into(self) -> HashableMap<K, V> {
-		HashableMap(self.into_iter().collect())
-	}
-}
-
-impl<K: Eq + Clone + Hash, V: Clone + Hash> Into<HashableMap<K, V>> for &HashMap<K, V> {
-	fn into(self) -> HashableMap<K, V> {
-		HashableMap(self.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
-	}
-}
-
-impl<K: Eq + Hash, V: Hash> FromIterator<(K, V)> for HashableMap<K, V> {
-	fn from_iter<I: IntoIterator<Item = (K, V)>>(iter: I) -> Self {
-		HashableMap(iter.into_iter().collect())
 	}
 }
 
