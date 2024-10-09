@@ -35,6 +35,9 @@ pub enum SubCommand {
 		datacenter: Option<String>,
 		#[clap(long)]
 		ip: Option<String>,
+		/// Confirms that you want to execute this command on all servers
+		#[clap(long)]
+		all: bool,
 	},
 	/// Destroy servers in a cluster
 	Destroy {
@@ -49,6 +52,9 @@ pub enum SubCommand {
 		datacenter: Option<String>,
 		#[clap(long)]
 		ip: Option<String>,
+		/// Confirms that you want to execute this command on all servers
+		#[clap(long)]
+		all: bool,
 	},
 	/// Lists lost servers in a cluster
 	ListLost {
@@ -77,6 +83,9 @@ pub enum SubCommand {
 		datacenter: Option<String>,
 		#[clap(long)]
 		ip: Option<String>,
+		/// Confirms that you want to execute this command on all lost servers
+		#[clap(long)]
+		all: bool,
 	},
 	/// SSH in to a server in the cluster
 	Ssh {
@@ -91,6 +100,9 @@ pub enum SubCommand {
 		datacenter: Option<String>,
 		#[clap(long)]
 		ip: Option<String>,
+		/// Confirms that you want to execute this command on all servers
+		#[clap(long)]
+		all: bool,
 
 		#[clap(long, short = 'c')]
 		command: Option<String>,
@@ -142,7 +154,16 @@ impl SubCommand {
 				pool,
 				datacenter,
 				ip,
+				all,
 			} => {
+				if server_id.is_none()
+					&& pool.is_none()
+					&& datacenter.is_none()
+					&& ip.is_none() && !all
+				{
+					bail!("must use --all if command has no filters");
+				}
+
 				let cloud_config = ctx.openapi_config_cloud().await?;
 
 				// Look up cluster
@@ -173,7 +194,16 @@ impl SubCommand {
 				pool,
 				datacenter,
 				ip,
+				all,
 			} => {
+				if server_id.is_none()
+					&& pool.is_none()
+					&& datacenter.is_none()
+					&& ip.is_none() && !all
+				{
+					bail!("must use --all if command has no filters");
+				}
+
 				let cloud_config = ctx.openapi_config_cloud().await?;
 
 				// Look up cluster
@@ -240,7 +270,16 @@ impl SubCommand {
 				pool,
 				datacenter,
 				ip,
+				all,
 			} => {
+				if server_id.is_none()
+					&& pool.is_none()
+					&& datacenter.is_none()
+					&& ip.is_none() && !all
+				{
+					bail!("must use --all if command has no filters");
+				}
+
 				let cloud_config = ctx.openapi_config_cloud().await?;
 
 				// Look up cluster
@@ -272,7 +311,16 @@ impl SubCommand {
 				pool,
 				datacenter,
 				ip,
+				all,
 			} => {
+				if server_id.is_none()
+					&& pool.is_none()
+					&& datacenter.is_none()
+					&& ip.is_none() && !all
+				{
+					bail!("must use --all if command has no filters");
+				}
+
 				let cloud_config = ctx.openapi_config_cloud().await?;
 
 				// Look up cluster
