@@ -40,7 +40,7 @@ pub async fn handle(
 		})
 		.await?;
 	} else if ds::util::is_nomad_ds(job_id) {
-		ctx.signal(ds::workflows::server::NomadEvalUpdate { eval: eval.clone() })
+		ctx.signal(ds::workflows::server::nomad::NomadEvalUpdate { eval: eval.clone() })
 			.tag("nomad_dispatched_job_id", job_id)
 			.send()
 			.await?;

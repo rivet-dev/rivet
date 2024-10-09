@@ -58,9 +58,9 @@ struct ServerNomad {
 #[derive(sqlx::FromRow)]
 struct ServerPort {
 	server_id: Uuid,
-	nomad_label: String,
-	nomad_ip: String,
-	nomad_source: i64,
+	label: String,
+	ip: String,
+	source: i64,
 }
 
 #[derive(Debug)]
@@ -74,7 +74,7 @@ pub struct Output {
 }
 
 #[operation]
-pub async fn get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
+pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
 	let (server_rows, port_gg_rows, port_host_rows, server_nomad_rows, internal_port_rows) = tokio::try_join!(
 		sql_fetch_all!(
 			[ctx, ServerRow]
@@ -133,12 +133,12 @@ pub async fn get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
 			"
 			SELECT
 				server_id,
-				nomad_dispatched_job_id,
-				nomad_alloc_id,
-				nomad_node_id,
-				nomad_node_name,
-				nomad_node_public_ipv4,
-				nomad_node_vlan_ipv4,
+				-- nomad_dispatched_job_id,
+				-- nomad_alloc_id,
+				-- nomad_node_id,
+				-- nomad_node_name,
+				-- nomad_node_public_ipv4,
+				-- nomad_node_vlan_ipv4,
 				nomad_alloc_plan_ts
 			FROM db_ds.server_nomad
 			WHERE server_id = ANY($1)
@@ -150,9 +150,9 @@ pub async fn get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
 			"
 			SELECT
 				server_id,
-				nomad_label,
-				nomad_ip,
-				nomad_source
+				label,
+				ip,
+				source
 			FROM db_ds.internal_ports
 			WHERE server_id = ANY($1)
 			",
@@ -188,10 +188,8 @@ pub async fn get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
 						.map(|host_port| {
 							let internal_port = internal_port_rows.iter().find(|x| {
 								x.server_id == server.server_id
-									&& x.nomad_label
-										== crate::util::format_nomad_port_label(
-											&host_port.port_name,
-										)
+									&& x.label
+										== crate::util::format_port_label(&host_port.port_name)
 							});
 
 							Ok((
@@ -264,14 +262,12 @@ fn create_port_host(
 	Ok(Port {
 		internal_port: Some(host_port.port_number.try_into()?),
 		public_hostname: if is_connectable {
-			internal_port.map(|x| x.nomad_ip.clone())
+			internal_port.map(|x| x.ip.clone())
 		} else {
 			None
 		},
 		public_port: if is_connectable {
-			internal_port
-				.map(|x| x.nomad_source.try_into())
-				.transpose()?
+			internal_port.map(|x| x.source.try_into()).transpose()?
 		} else {
 			None
 		},

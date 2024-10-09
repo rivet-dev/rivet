@@ -47,12 +47,16 @@ pub async fn create(
 		.check_game(ctx.op_ctx(), game_id, env_id, true)
 		.await?;
 
-	let clusters_get = ctx
-		.op(cluster::ops::get_for_game::Input {
+	let (clusters_res, game_configs_res) = tokio::try_join!(
+		ctx.op(cluster::ops::get_for_game::Input {
 			game_ids: vec![game_id],
-		})
-		.await?;
-	let cluster_id = unwrap!(clusters_get.games.first()).cluster_id;
+		}),
+		ctx.op(ds::ops::game_config::get::Input {
+			game_ids: vec![game_id],
+		}),
+	)?;
+	let cluster_id = unwrap!(clusters_res.games.first()).cluster_id;
+	let game_config = unwrap!(game_configs_res.game_configs.first());
 
 	let datacenters = ctx
 		.op(cluster::ops::datacenter::list::Input {
@@ -86,8 +90,9 @@ pub async fn create(
 	ctx.workflow(ds::workflows::server::Input {
 		server_id,
 		env_id,
-		cluster_id,
 		datacenter_id: body.datacenter,
+		cluster_id,
+		client: game_config.client,
 		tags,
 		resources: (*body.resources).api_into(),
 		kill_timeout_ms: body
@@ -96,6 +101,7 @@ pub async fn create(
 			.and_then(|x| x.kill_timeout)
 			.unwrap_or_default(),
 		image_id: body.runtime.build,
+		root_user_enabled: game_config.root_user_enabled,
 		args: body.runtime.arguments.unwrap_or_default(),
 		network_mode: body.network.mode.unwrap_or_default().api_into(),
 		environment: body.runtime.environment.unwrap_or_default(),
@@ -191,7 +197,7 @@ pub async fn destroy(
 	);
 
 	let mut sub = ctx
-		.subscribe::<ds::workflows::server::destroy::DestroyStarted>(&json!({
+		.subscribe::<ds::workflows::server::DestroyStarted>(&json!({
 			"server_id": server_id,
 		}))
 		.await?;

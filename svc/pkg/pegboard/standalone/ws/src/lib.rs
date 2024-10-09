@@ -167,7 +167,7 @@ async fn handle_connection_inner(
 			}
 		}
 	}
-	
+
 	bail!(format!("stream closed {client_id}"));
 
 	// Only way I could figure out to help the complier infer type
@@ -204,7 +204,7 @@ async fn upsert_client(ctx: &StandaloneCtx, client_id: Uuid) -> GlobalResult<()>
 
 async fn update_ping(ctx: &StandaloneCtx, client_id: Uuid) -> GlobalResult<()> {
 	sql_execute!(
-		[ctx, (i64,)]
+		[ctx]
 		"
 		UPDATE db_pegboard.clients
 		SET last_ping_ts = $2

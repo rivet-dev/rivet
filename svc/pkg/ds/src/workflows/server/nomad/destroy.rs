@@ -1,13 +1,8 @@
 use chirp_workflow::prelude::*;
 use futures_util::FutureExt;
 
+use super::super::{DestroyComplete, DestroyStarted};
 use crate::util::{signal_allocation, NOMAD_CONFIG};
-
-#[message("ds_server_destroy_started")]
-pub struct DestroyStarted {}
-
-#[message("ds_server_destroy_complete")]
-pub struct DestroyComplete {}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct Input {
@@ -16,8 +11,11 @@ pub(crate) struct Input {
 }
 
 #[workflow]
-pub(crate) async fn ds_server_destroy(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
-	let dynamic_server = ctx
+pub(crate) async fn ds_server_nomad_destroy(
+	ctx: &mut WorkflowCtx,
+	input: &Input,
+) -> GlobalResult<()> {
+	let ds = ctx
 		.activity(UpdateDbInput {
 			server_id: input.server_id,
 		})
@@ -28,7 +26,7 @@ pub(crate) async fn ds_server_destroy(ctx: &mut WorkflowCtx, input: &Input) -> G
 		.send()
 		.await?;
 
-	if let Some(job_id) = &dynamic_server.dispatched_job_id {
+	if let Some(job_id) = &ds.dispatched_job_id {
 		let delete_output = ctx
 			.activity(DeleteJobInput {
 				job_id: job_id.clone(),
@@ -36,7 +34,7 @@ pub(crate) async fn ds_server_destroy(ctx: &mut WorkflowCtx, input: &Input) -> G
 			.await?;
 
 		if delete_output.job_exists {
-			if let Some(alloc_id) = &dynamic_server.alloc_id {
+			if let Some(alloc_id) = &ds.alloc_id {
 				ctx.activity(SignalAllocInput {
 					alloc_id: alloc_id.clone(),
 					signal: "SIGTERM".to_string(),
@@ -44,12 +42,8 @@ pub(crate) async fn ds_server_destroy(ctx: &mut WorkflowCtx, input: &Input) -> G
 				.await?;
 
 				// See `docs/packages/job/JOB_DRAINING_AND_KILL_TIMEOUTS.md`
-				ctx.sleep(
-					input
-						.override_kill_timeout_ms
-						.unwrap_or(dynamic_server.kill_timeout_ms),
-				)
-				.await?;
+				ctx.sleep(input.override_kill_timeout_ms.unwrap_or(ds.kill_timeout_ms))
+					.await?;
 
 				ctx.activity(SignalAllocInput {
 					alloc_id: alloc_id.clone(),

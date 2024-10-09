@@ -15,8 +15,8 @@ struct DynamicServer {
 	server_id: Uuid,
 	datacenter_id: Uuid,
 	label: String,
-	nomad_ip: String,
-	nomad_source: i64,
+	ip: String,
+	source: i64,
 	port_number: i64,
 	gg_port: i64,
 	port_name: String,
@@ -52,9 +52,9 @@ pub async fn build_ds(
 				SELECT
 					s.server_id,
 					s.datacenter_id,
-					ip.nomad_label AS label,
-					ip.nomad_ip,
-					ip.nomad_source,
+					ip.label,
+					ip.ip,
+					ip.source,
 					gg.port_number,
 					gg.gg_port,
 					gg.port_name,
@@ -65,7 +65,7 @@ pub async fn build_ds(
 				JOIN db_ds.docker_ports_protocol_game_guard AS gg
 				ON
 					ip.server_id = gg.server_id AND
-					ip.nomad_label = CONCAT('ds_', REPLACE(gg.port_name, '-', '_'))
+					ip.label = CONCAT('ds_', REPLACE(gg.port_name, '-', '_'))
 				WHERE
 					s.datacenter_id = $1 AND
 					s.destroy_ts IS NULL
@@ -128,8 +128,8 @@ fn ds_register_proxied_port(
 	config: &mut types::TraefikConfigResponse,
 ) -> GlobalResult<()> {
 	let ingress_port = proxied_port.gg_port;
-	let target_nomad_port_label = proxied_port.label.clone();
-	let service_id = format!("ds-run:{}:{}", run_id, target_nomad_port_label);
+	let target_port_label = proxied_port.label.clone();
+	let service_id = format!("ds-run:{}:{}", run_id, target_port_label);
 	let proxy_protocol = unwrap!(ds::types::GameGuardProtocol::from_repr(
 		proxied_port.protocol.try_into()?
 	));
@@ -144,7 +144,7 @@ fn ds_register_proxied_port(
 						servers: vec![types::TraefikServer {
 							url: Some(format!(
 								"http://{}:{}",
-								proxied_port.nomad_ip, proxied_port.nomad_source
+								proxied_port.ip, proxied_port.source
 							)),
 							address: None,
 						}],
@@ -160,10 +160,7 @@ fn ds_register_proxied_port(
 					load_balancer: types::TraefikLoadBalancer {
 						servers: vec![types::TraefikServer {
 							url: None,
-							address: Some(format!(
-								"{}:{}",
-								proxied_port.nomad_ip, proxied_port.nomad_source
-							)),
+							address: Some(format!("{}:{}", proxied_port.ip, proxied_port.source)),
 						}],
 						sticky: None,
 					},
@@ -177,10 +174,7 @@ fn ds_register_proxied_port(
 					load_balancer: types::TraefikLoadBalancer {
 						servers: vec![types::TraefikServer {
 							url: None,
-							address: Some(format!(
-								"{}:{}",
-								proxied_port.nomad_ip, proxied_port.nomad_source
-							)),
+							address: Some(format!("{}:{}", proxied_port.ip, proxied_port.source)),
 						}],
 						sticky: None,
 					},
@@ -197,7 +191,7 @@ fn ds_register_proxied_port(
 			let rule = format_http_rule(proxied_port)?;
 
 			// Hash key
-			let unique_key = (&run_id, &target_nomad_port_label, &rule, &middlewares);
+			let unique_key = (&run_id, &target_port_label, &rule, &middlewares);
 			let mut hasher = DefaultHasher::new();
 			unique_key.hash(&mut hasher);
 			let hash = hasher.finish();
@@ -220,7 +214,7 @@ fn ds_register_proxied_port(
 			let rule = format_http_rule(proxied_port)?;
 
 			// Hash key
-			let unique_key = (&run_id, &target_nomad_port_label, &rule, &middlewares);
+			let unique_key = (&run_id, &target_port_label, &rule, &middlewares);
 			let mut hasher = DefaultHasher::new();
 			unique_key.hash(&mut hasher);
 			let hash = hasher.finish();
@@ -239,7 +233,7 @@ fn ds_register_proxied_port(
 		}
 		ds::types::GameGuardProtocol::Tcp => {
 			config.tcp.routers.insert(
-				format!("ds-run:{}:{}:tcp", run_id, target_nomad_port_label),
+				format!("ds-run:{}:{}:tcp", run_id, target_port_label),
 				types::TraefikRouter {
 					entry_points: vec![format!("lb-{ingress_port}-tcp")],
 					rule: Some("HostSNI(`*`)".into()),
@@ -252,7 +246,7 @@ fn ds_register_proxied_port(
 		}
 		ds::types::GameGuardProtocol::TcpTls => {
 			config.tcp.routers.insert(
-				format!("ds-run:{}:{}:tcp-tls", run_id, target_nomad_port_label),
+				format!("ds-run:{}:{}:tcp-tls", run_id, target_port_label),
 				types::TraefikRouter {
 					entry_points: vec![format!("lb-{ingress_port}-tcp")],
 					rule: Some("HostSNI(`*`)".into()),
@@ -265,7 +259,7 @@ fn ds_register_proxied_port(
 		}
 		ds::types::GameGuardProtocol::Udp => {
 			config.udp.routers.insert(
-				format!("ds-run:{}:{}:udp", run_id, target_nomad_port_label),
+				format!("ds-run:{}:{}:udp", run_id, target_port_label),
 				types::TraefikRouter {
 					entry_points: vec![format!("lb-{ingress_port}-udp")],
 					rule: None,

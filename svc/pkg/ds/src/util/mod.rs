@@ -40,13 +40,13 @@ pub fn build_ds_hostname(
 	))
 }
 
-/// Formats the port label to be used in Nomad.
+/// Formats the port label to be used in Nomad and Pegboard.
 ///
 /// Prefixing this port ensure that the user defined port names don't interfere
 /// with other ports.
 ///
 /// See also SQL `concat` in `svc/api/traefik-provider/src/route/game_guard/dynamic_servers.rs`.
-pub fn format_nomad_port_label(port_label: &str) -> String {
+pub fn format_port_label(port_label: &str) -> String {
 	let snake_port_label = heck::SnakeCase::to_snake_case(port_label);
 	format!("ds_{snake_port_label}")
 }

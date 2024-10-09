@@ -16,7 +16,7 @@ pub struct Output {
 }
 
 #[operation]
-pub async fn list_for_env(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
+pub async fn ds_server_list_for_env(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
 	let server_ids = sql_fetch_all!(
 		[ctx, (Uuid,)]
 		"

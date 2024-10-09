@@ -16,8 +16,9 @@ heck = "0.3"
 hex = "0.4"
 http = "0.2"
 lazy_static = "1.4.0"
-nomad-util = { path = "../../../lib/nomad-util" }
+nix = { version = "0.27", default-features = false, features = ["signal"] }
 nomad-client-old = { package = "nomad-client", version = "0.0.9" }
+nomad-util = { path = "../../../lib/nomad-util" }
 rand = "0.8"
 regex = "1.10"
 reqwest = { version = "0.12", features = ["json"] }
@@ -49,6 +50,7 @@ ip-info = { path = "../ip/ops/info" }
 mm-config-version-get = { path = "../mm-config/ops/version-get" }
 mm-lobby-get = { path = "../mm/ops/lobby-get" }
 mm-lobby-list-for-user-id = { path = "../mm/ops/lobby-list-for-user-id" }
+pegboard = { path = "../pegboard" }
 region-get = { path = "../region/ops/get" }
 tier-list = { path = "../tier/ops/list" }
 token-create = { path = "../token/ops/create" }

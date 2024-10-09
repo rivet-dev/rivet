@@ -75,6 +75,14 @@ pub enum GameClient {
 	Pegboard = 1,
 }
 
+#[derive(Debug, Clone)]
+pub struct GameConfig {
+	pub game_id: Uuid,
+	pub host_networking_enabled: bool,
+	pub root_user_enabled: bool,
+	pub client: GameClient,
+}
+
 // Move to build pkg when migrated to workflows
 pub mod build {
 	use serde::{Deserialize, Serialize};

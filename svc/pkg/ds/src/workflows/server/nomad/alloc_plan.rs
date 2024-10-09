@@ -187,9 +187,9 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<Upd
 			insert_ports AS (
 				INSERT INTO db_ds.internal_ports (
 					server_id,
-					nomad_label,
-					nomad_source,
-					nomad_ip
+					label,
+					source,
+					ip
 				)
 				SELECT $1, label, source, ip
 				FROM unnest($8, $9, $10) AS n(label, source, ip)

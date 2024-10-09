@@ -114,14 +114,16 @@ impl Setup {
 		ctx.workflow(ds::workflows::server::Input {
 			server_id,
 			env_id: self.env_id,
-			cluster_id: self.cluster_id,
 			datacenter_id: self.datacenter_id,
+			cluster_id: self.cluster_id,
+			client: ds::types::GameClient::Nomad,
 			resources: ds::types::ServerResources {
 				cpu_millicores: 100,
 				memory_mib: 200,
 			},
 			kill_timeout_ms: 0,
 			tags: HashMap::new(),
+			root_user_enabled: false,
 			args: Vec::new(),
 			environment: env,
 			image_id: self.image_id,

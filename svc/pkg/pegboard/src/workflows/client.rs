@@ -289,7 +289,7 @@ pub struct ToWs {
 }
 
 #[signal("pegboard_container_state_update")]
-struct ContainerStateUpdate {
+pub struct ContainerStateUpdate {
 	pub state: protocol::ContainerState,
 }
 

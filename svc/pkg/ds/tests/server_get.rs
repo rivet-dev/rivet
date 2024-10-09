@@ -68,14 +68,16 @@ async fn server_get(ctx: TestCtx) {
 	ctx.workflow(ds::workflows::server::Input {
 		server_id,
 		env_id: *env_id,
-		cluster_id,
 		datacenter_id: faker_region.region_id.unwrap().as_uuid(),
+		cluster_id,
+		client: ds::types::GameClient::Nomad,
 		resources: ds::types::ServerResources {
 			cpu_millicores: 100,
 			memory_mib: 200,
 		},
 		kill_timeout_ms: 0,
 		tags: HashMap::new(),
+		root_user_enabled: false,
 		args: Vec::new(),
 		environment: env,
 		image_id: build_res.build_id.unwrap().as_uuid(),

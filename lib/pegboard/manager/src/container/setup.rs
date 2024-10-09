@@ -499,34 +499,50 @@ impl Container {
 			.config
 			.ports
 			.iter()
-			.filter(|(_, port)| matches!(port.proxy_protocol, protocol::TransportProtocol::Tcp))
+			.filter(|(_, port)| matches!(port.proxy_protocol(), protocol::TransportProtocol::Tcp))
 			.zip(
 				rows.iter()
 					.filter(|(_, protocol)| *protocol == protocol::TransportProtocol::Tcp as i64),
 			)
 			.map(|((_, port), (host_port, _))| {
-				json!({
-					"HostPort": host_port,
-					"ContainerPort": port.internal_port,
-					"Protocol": port.proxy_protocol.to_string(),
-				})
+				match port {
+					protocol::Port::GameGuard { target, proxy_protocol } => {
+						Ok(json!({
+							"HostPort": host_port,
+							"ContainerPort": port.target,
+							"Protocol": port.proxy_protocol.to_string(),
+						}))
+					}
+					protocol::Port::Host { .. } => {
+						// TODO:
+						bail!("host ports not implemented");
+					}
+				}
 			})
 			.chain(
 				self.config
 					.ports
 					.iter()
 					.filter(|(_, port)| {
-						matches!(port.proxy_protocol, protocol::TransportProtocol::Udp)
+						matches!(port.proxy_protocol(), protocol::TransportProtocol::Udp)
 					})
 					.zip(rows.iter().filter(|(_, protocol)| {
 						*protocol == protocol::TransportProtocol::Udp as i64
 					}))
 					.map(|((_, port), (host_port, _))| {
-						json!({
-							"HostPort": host_port,
-							"ContainerPort": port.internal_port,
-							"Protocol": port.proxy_protocol.to_string(),
-						})
+						match port {
+							protocol::Port::GameGuard { target, proxy_protocol } => {
+								Ok(json!({
+									"HostPort": host_port,
+									"ContainerPort": port.target,
+									"Protocol": port.proxy_protocol.to_string(),
+								}))
+							}
+							protocol::Port::Host { .. } => {
+								// TODO:
+								bail!("host ports not implemented");
+							}
+						}
 					}),
 			)
 			.collect::<Vec<_>>();

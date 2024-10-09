@@ -1,3 +1,5 @@
+use std::net::IpAddr;
+
 use chirp_workflow::prelude::*;
 use strum::FromRepr;
 
@@ -32,7 +34,10 @@ impl ToClient {
 
 #[signal("pegboard_forward_to_server")]
 pub enum ToServer {
-	Init { last_command_idx: i64 },
+	Init {
+		last_command_idx: i64,
+		// TODO: hardware info
+	},
 	Events(Vec<EventWrapper>),
 	FetchStateResponse {},
 }
@@ -99,10 +104,23 @@ pub enum ImageCompression {
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-pub struct Port {
-	// Null when using host networking since one is automatically assigned
-	pub internal_port: Option<i32>,
-	pub proxy_protocol: TransportProtocol,
+pub enum Port {
+	GameGuard {
+		target: u16,
+		proxy_protocol: TransportProtocol,
+	},
+	Host {
+		proxy_protocol: TransportProtocol,
+	},
+}
+
+impl Port {
+	pub fn proxy_protocol(&self) -> &TransportProtocol {
+		match self {
+			Port::GameGuard { proxy_protocol, .. } => proxy_protocol,
+			Port::Host { proxy_protocol } => proxy_protocol,
+		}
+	}
 }
 
 #[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
@@ -171,13 +189,23 @@ pub enum Event {
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub enum ContainerState {
 	/// Container planned, not yet started.
-	Starting,
+	Starting { client_id: Uuid },
 	/// Container has a running process.
-	Running { pid: usize },
+	Running {
+		pid: usize,
+		ports: util::serde::HashableMap<String, ProxiedPort>,
+	},
 	/// Container planned to stop.
 	Stopping,
 	/// Container stopped, process exit not yet received.
 	Stopped,
 	/// Container process exited.
 	Exited { exit_code: Option<i32> },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+pub struct ProxiedPort {
+	pub source: u32,
+	pub target: u32,
+	pub ip: IpAddr,
 }
