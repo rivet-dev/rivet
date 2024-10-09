@@ -395,7 +395,7 @@ where
 	_guard: DropGuard,
 	subject: String,
 	subscription: nats::Subscriber,
-	pub tags: serde_json::Value,
+	tags: serde_json::Value,
 }
 
 impl<M> Debug for SubscriptionHandle<M>

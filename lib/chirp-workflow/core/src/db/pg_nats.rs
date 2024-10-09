@@ -1,6 +1,6 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
-use futures_util::{stream::FuturesUnordered, FutureExt, StreamExt, TryStreamExt};
+use futures_util::StreamExt;
 use indoc::indoc;
 use rivet_pools::prelude::NatsPool;
 use sqlx::{pool::PoolConnection, Acquire, PgPool, Postgres};
@@ -59,20 +59,18 @@ impl DatabasePgNats {
 	fn wake_worker(&self) {
 		let nats = self.nats.clone();
 
-		let spawn_res = tokio::task::Builder::new()
-			.name("wake")
-			.spawn(
-				async move {
-					// Fail gracefully
-					if let Err(err) = nats
-						.publish(message::WORKER_WAKE_SUBJECT, Vec::new().into())
-						.await
-					{
-						tracing::warn!(?err, "failed to publish wake message");
-					}
+		let spawn_res = tokio::task::Builder::new().name("wake").spawn(
+			async move {
+				// Fail gracefully
+				if let Err(err) = nats
+					.publish(message::WORKER_WAKE_SUBJECT, Vec::new().into())
+					.await
+				{
+					tracing::warn!(?err, "failed to publish wake message");
 				}
-				.in_current_span(),
-			);
+			}
+			.in_current_span(),
+		);
 		if let Err(err) = spawn_res {
 			tracing::error!(?err, "failed to spawn wake task");
 		}

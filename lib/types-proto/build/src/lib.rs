@@ -335,6 +335,7 @@ mod config {
 		pub tail_ttl: Option<u64>,
 		#[serde(default)]
 		pub history: bool,
+		#[allow(dead_code)]
 		#[serde(default)]
 		pub deduplicate: bool,
 		pub parameters: Vec<MessageSubjectParameter>,

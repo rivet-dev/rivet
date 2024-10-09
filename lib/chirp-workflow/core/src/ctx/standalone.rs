@@ -12,7 +12,6 @@ use crate::{
 	},
 	db::DatabaseHandle,
 	error::WorkflowResult,
-	listen::Listen,
 	message::{Message, NatsMessage},
 	operation::{Operation, OperationInput},
 	signal::Signal,
@@ -92,15 +91,6 @@ impl StandaloneCtx {
 	pub fn signal<T: Signal + Serialize>(&self, body: T) -> builder::signal::SignalBuilder<T> {
 		builder::signal::SignalBuilder::new(self.db.clone(), self.ray_id, body)
 	}
-
-	// /// Listens for a signal indefinitely.
-	// pub async fn listen<T: Listen>(&mut self) -> GlobalResult<T> {
-	// 	tracing::info!(name=%self.name, "listening for signal");
-
-	// 	let ctx = ListenCtx::new(self);
-
-	// 	T::listen(&ctx).await
-	// }
 
 	#[tracing::instrument(err, skip_all, fields(operation = I::Operation::NAME))]
 	pub async fn op<I>(

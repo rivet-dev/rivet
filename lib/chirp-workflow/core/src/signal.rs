@@ -40,13 +40,16 @@ macro_rules! join_signal {
 		#[async_trait::async_trait]
 		impl Listen for $join {
 			async fn listen(ctx: &chirp_workflow::prelude::ListenCtx) -> chirp_workflow::prelude::WorkflowResult<Self> {
-				let row = ctx.listen_any(&[$($signals::NAME),*]).await?;
+				let row = ctx.listen_any(&[
+					$(<$signals as chirp_workflow::prelude::Signal>::NAME),*
+				]).await?;
+
 				Self::parse(&row.signal_name, row.body)
 			}
 
 			fn parse(name: &str, body: serde_json::Value) -> chirp_workflow::prelude::WorkflowResult<Self> {
 				$(
-					if name == $signals::NAME {
+					if name == <$signals as chirp_workflow::prelude::Signal>::NAME {
 						Ok(
 							Self::$signals(
 								serde_json::from_value(body)
@@ -57,7 +60,10 @@ macro_rules! join_signal {
 				)else*
 
 				else {
-					unreachable!("received signal that wasn't queried for: {}, expected {:?}", name, &[$($signals::NAME),*]);
+					unreachable!(
+						"received signal that wasn't queried for: {}, expected {:?}",
+						name, &[$(<$signals as chirp_workflow::prelude::Signal>::NAME),*]
+					);
 				}
 			}
 		}

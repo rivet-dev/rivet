@@ -6487,12 +6487,14 @@ version = "0.0.1"
 dependencies = [
  "chirp-client",
  "chirp-workflow",
+ "pegboard",
  "rivet-connection",
  "rivet-health-checks",
  "rivet-metrics",
  "rivet-runtime",
  "serde",
  "tokio-tungstenite 0.23.1",
+ "url",
 ]
 
 [[package]]

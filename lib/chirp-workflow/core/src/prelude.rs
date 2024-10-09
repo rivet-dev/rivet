@@ -19,7 +19,7 @@ pub use crate::{
 	ctx::*,
 	db,
 	error::{WorkflowError, WorkflowResult},
-	executable::{closure, Executable},
+	executable::{activity, closure, Executable},
 	listen::{CustomListener, Listen},
 	message::Message,
 	operation::Operation,

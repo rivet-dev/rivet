@@ -4,7 +4,7 @@ use syn::{
 	parse::{Parse, ParseStream},
 	parse_macro_input,
 	spanned::Spanned,
-	GenericArgument, Ident, ItemFn, ItemStruct, LitStr, PathArguments, ReturnType, Type,
+	GenericArgument, Ident, Item, ItemFn, ItemStruct, LitStr, PathArguments, ReturnType, Type,
 };
 
 struct Config {
@@ -118,18 +118,6 @@ pub fn activity(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 		impl chirp_workflow::activity::ActivityInput for #input_type {
 			type Activity = #struct_ident;
-		}
-
-		// NOTE: This would normally be an impl on the trait `ActivityInput` but this has conflicts with other
-		// generic implementations on `Executable` so we implement executable on all of the input structs
-		// instead
-		#[async_trait::async_trait]
-		impl chirp_workflow::prelude::Executable for #input_type {
-			type Output = <#struct_ident as chirp_workflow::prelude::Activity>::Output;
-
-			async fn execute(self, ctx: &mut chirp_workflow::prelude::WorkflowCtx) -> GlobalResult<Self::Output> {
-				ctx.activity(self).await
-			}
 		}
 
 		#[async_trait::async_trait]
@@ -316,13 +304,15 @@ pub fn signal(attr: TokenStream, item: TokenStream) -> TokenStream {
 		return error(name.span(), "invalid signal name, must be [a-z_]");
 	}
 
-	let item_struct = parse_macro_input!(item as ItemStruct);
-
-	let struct_ident = &item_struct.ident;
+	let item = parse_macro_input!(item as Item);
+	let (ident, attrs) = match item {
+		Item::Struct(ref item_struct) => (&item_struct.ident, &item_struct.attrs),
+		Item::Enum(ref item_enum) => (&item_enum.ident, &item_enum.attrs),
+		_ => return error(item.span(), "expected struct or enum"),
+	};
 
 	// If also a message, don't derive serde traits
-	let also_message = item_struct
-		.attrs
+	let also_message = attrs
 		.iter()
 		.filter_map(|attr| attr.path().segments.last())
 		.any(|seg| seg.ident == "message");
@@ -334,16 +324,16 @@ pub fn signal(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 	let expanded = quote! {
 		#serde_derive
-		#item_struct
+		#item
 
-		impl chirp_workflow::prelude::Signal for #struct_ident {
+		impl chirp_workflow::prelude::Signal for #ident {
 			const NAME: &'static str = #name;
 		}
 
 		#[async_trait::async_trait]
-		impl chirp_workflow::prelude::Listen for #struct_ident {
+		impl chirp_workflow::prelude::Listen for #ident {
 			async fn listen(ctx: &chirp_workflow::prelude::ListenCtx) -> chirp_workflow::prelude::WorkflowResult<Self> {
-				let row = ctx.listen_any(&[<Self as Signal>::NAME]).await?;
+				let row = ctx.listen_any(&[<Self as chirp_workflow::prelude::Signal>::NAME]).await?;
 				Self::parse(&row.signal_name, row.body)
 			}
 

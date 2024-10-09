@@ -1,10 +1,6 @@
 // Internal types
 pub use chirp_client::prelude::*;
 pub use chirp_perf::PerfCtx;
-#[cfg(feature = "attributes")]
-pub use chirp_worker_attributes::worker;
-#[cfg(feature = "attributes")]
-pub use chirp_worker_attributes::worker_test;
 pub use formatted_error;
 pub use global_error::{ext::*, prelude::*};
 pub use rivet_util::timestamp::DateTimeExt;

@@ -3,7 +3,10 @@ use std::{future::Future, pin::Pin};
 use async_trait::async_trait;
 use global_error::GlobalResult;
 
-use crate::ctx::WorkflowCtx;
+use crate::{
+	activity::{Activity, ActivityInput},
+	ctx::WorkflowCtx,
+};
 
 /// Signifies a retryable executable entity in a workflow. For example: activity, tuple of activities (join),
 /// closure.
@@ -34,6 +37,22 @@ where
 	async fn execute(self, ctx: &mut WorkflowCtx) -> GlobalResult<Self::Output> {
 		let mut branch = ctx.branch();
 		(self)(&mut branch).await
+	}
+}
+
+// Closure executable impl
+#[async_trait]
+impl<T: Executable> Executable for Option<T> {
+	type Output = Option<T::Output>;
+
+	async fn execute(self, ctx: &mut WorkflowCtx) -> GlobalResult<Self::Output> {
+		let mut branch = ctx.step();
+
+		if let Some(inner) = self {
+			inner.execute(&mut branch).await.map(Some)
+		} else {
+			Ok(None)
+		}
 	}
 }
 
@@ -104,4 +123,34 @@ where
 	F: for<'a> FnOnce(&'a mut WorkflowCtx) -> AsyncResult<'a, T> + Send,
 {
 	f
+}
+
+pub struct ExecutableActivity<I>
+where
+	I: ActivityInput,
+	<I as ActivityInput>::Activity: Activity<Input = I>,
+{
+	inner: I,
+}
+
+#[async_trait]
+impl<I> Executable for ExecutableActivity<I>
+where
+	I: ActivityInput + Send + Sync,
+	<I as ActivityInput>::Activity: Activity<Input = I>,
+{
+	type Output = <I::Activity as Activity>::Output;
+
+	async fn execute(self, ctx: &mut WorkflowCtx) -> GlobalResult<Self::Output> {
+		ctx.activity(self.inner).await
+	}
+}
+
+// Wraps activity inputs for trait impl
+pub fn activity<I>(input: I) -> ExecutableActivity<I>
+where
+	I: ActivityInput,
+	<I as ActivityInput>::Activity: Activity<Input = I>,
+{
+	ExecutableActivity { inner: input }
 }
