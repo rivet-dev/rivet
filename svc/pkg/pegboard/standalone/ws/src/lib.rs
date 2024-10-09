@@ -1,6 +1,6 @@
 use std::{
 	collections::HashMap,
-	net::{IpAddr, SocketAddr},
+	net::SocketAddr,
 	sync::Arc,
 };
 
@@ -17,7 +17,7 @@ use pegboard::protocol;
 
 struct Connection {
 	protocol_version: u16,
-	tx: Mutex<SplitSink<WebSocketStream<TcpStream>, Message>>,
+	tx: Arc<Mutex<SplitSink<WebSocketStream<TcpStream>, Message>>>,
 }
 
 type Connections = HashMap<Uuid, Connection>;
@@ -104,7 +104,6 @@ async fn handle_connection(
 			&ctx,
 			conns.clone(),
 			ws_stream,
-			addr,
 			protocol_version,
 			client_id,
 		)
@@ -125,15 +124,15 @@ async fn handle_connection_inner(
 	ctx: &StandaloneCtx,
 	conns: Arc<RwLock<Connections>>,
 	ws_stream: WebSocketStream<TcpStream>,
-	addr: SocketAddr,
 	protocol_version: u16,
 	client_id: Uuid,
 ) -> GlobalResult<()> {
 	let (tx, mut rx) = ws_stream.split();
 
+	let tx = Arc::new(Mutex::new(tx));
 	let conn = Connection {
 		protocol_version,
-		tx: Mutex::new(tx),
+		tx: tx.clone(),
 	};
 
 	// Store connection
@@ -150,7 +149,7 @@ async fn handle_connection_inner(
 	}
 
 	// Insert into db and spawn workflow (if not exists)
-	upsert_client(ctx, client_id, addr.ip()).await?;
+	upsert_client(ctx, client_id).await?;
 
 	// Receive messages from socket
 	while let Some(msg) = rx.next().await {
@@ -164,6 +163,8 @@ async fn handle_connection_inner(
 					.send()
 					.await?;
 			}
+			// TODO: Implement timeout for clients that haven't pinged in a while
+			Message::Ping(_) => tx.lock().await.send(Message::Pong(Vec::new())).await?,
 			Message::Close(_) => {
 				bail!(format!("socket closed {client_id}"));
 			}
@@ -180,18 +181,17 @@ async fn handle_connection_inner(
 	GlobalResult::Ok(())
 }
 
-async fn upsert_client(ctx: &StandaloneCtx, client_id: Uuid, ip: IpAddr) -> GlobalResult<()> {
+async fn upsert_client(ctx: &StandaloneCtx, client_id: Uuid) -> GlobalResult<()> {
 	// Inserting before creating the workflow prevents a race condition with using select + insert instead
 	let inserted = sql_fetch_optional!(
 		[ctx, (i64,)]
 		"
-		INSERT INTO db_pegboard.clients (client_id, ip, create_ts)
-		VALUES ($1, $2, $3)
+		INSERT INTO db_pegboard.clients (client_id, create_ts)
+		VALUES ($1, $2)
 		ON CONFLICT (client_id) DO NOTHING
 		RETURNING 1
 		",
 		client_id,
-		ip,
 		util::timestamp::now(),
 	)
 	.await?

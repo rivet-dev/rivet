@@ -48,8 +48,12 @@ pub enum Command {
 		container_id: Uuid,
 		image_artifact_url: String,
 		container_runner_binary_url: String,
+		root_user_enabled: bool,
 		stakeholder: Stakeholder,
 	},
+	StopContainer {
+		container_id: Uuid,
+	}
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -81,7 +85,7 @@ pub enum Event {
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub enum ContainerState {
 	Starting,
-	Running,
+	Running { pid: usize },
 	Stopping,
-	Exited { exit_code: Option<u16> },
+	Exited { exit_code: Option<i32> },
 }

@@ -27,10 +27,13 @@ const MAX_BUFFER_BYTES: usize = 1024 * 1024;
 const MAX_PREVIEW_LINES: usize = 128;
 
 fn main() -> anyhow::Result<()> {
-	let pegboard_container_dir = var("PEGBOARD_CONTAINER_DIR")?;
+	let pegboard_container_dir = std::env::args()
+		.skip(1)
+		.next()
+		.context("`container_dir` arg required")?;
 	let pegboard_container_dir = Path::new(&pegboard_container_dir);
-	let root_user_enabled = var("PEGBOARD_META_root_user_enabled")? == "1";
 
+	let root_user_enabled = var("PEGBOARD_META_root_user_enabled")? == "1";
 	let stakeholder = match var("PEGBOARD_META_stakeholder").ok() {
 		Some(x) if x == "dynamic_server" => Stakeholder::DynamicServer {
 			server_id: var("PEGBOARD_META_server_id")?,
