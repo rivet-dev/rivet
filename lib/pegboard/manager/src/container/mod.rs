@@ -395,27 +395,34 @@ impl Container {
 		}
 
 		// Update stop_ts
-		if matches!(signal, Signal::SIGTERM) || pid.is_none() {
-			utils::query(|| async {
-				sqlx::query(indoc!(
+		if matches!(signal, Signal::SIGTERM | Signal::SIGKILL) || pid.is_none() {
+			let stop_ts_set = utils::query(|| async {
+				sqlx::query_as::<_, (bool,)>(indoc!(
 					"
 					UPDATE containers
 					SET stop_ts = ?2
-					container_id = ?1
+					WHERE
+						container_id = ?1 AND
+						stop_ts IS NULL
+					RETURNING 1
 					",
 				))
 				.bind(self.container_id)
 				.bind(utils::now())
-				.execute(&mut *ctx.sql().await?)
+				.fetch_optional(&mut *ctx.sql().await?)
 				.await
 			})
-			.await?;
+			.await?
+			.is_some();
 
-			ctx.event(protocol::Event::ContainerStateUpdate {
-				container_id: self.container_id,
-				state: protocol::ContainerState::Stopped,
-			})
-			.await?;
+			// Emit event if not stopped before
+			if stop_ts_set {
+				ctx.event(protocol::Event::ContainerStateUpdate {
+					container_id: self.container_id,
+					state: protocol::ContainerState::Stopped,
+				})
+				.await?;
+			}
 		}
 
 		Ok(())

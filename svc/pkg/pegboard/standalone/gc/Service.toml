@@ -1,0 +1,8 @@
+[service]
+name = "pegboard-gc"
+
+[runtime]
+kind = "rust"
+
+[headless]
+singleton = true

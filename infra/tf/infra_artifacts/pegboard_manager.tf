@@ -27,7 +27,7 @@ resource "null_resource" "pegboard_manager_build" {
 		# Variables
 		IMAGE_NAME="pegboard-manager:${local.pegboard_manager_src_hash}"
 		CONTAINER_NAME="temp-pegboard-manager-${local.pegboard_manager_src_hash}"
-		BINARY_PATH_IN_CONTAINER="/app/lib/pegboard/target/x86_64-unknown-linux-musl/release/pegboard-manager"
+		BINARY_PATH_IN_CONTAINER="/pegboard-manager"
 		DST_BINARY_PATH="${local.pegboard_manager_dst_binary_path}"
 
 		# Build the Docker image

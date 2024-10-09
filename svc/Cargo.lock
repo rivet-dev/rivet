@@ -6498,10 +6498,30 @@ name = "pegboard"
 version = "0.0.1"
 dependencies = [
  "chirp-workflow",
+ "nix",
  "serde",
  "sqlx",
  "strum 0.24.1",
  "thiserror",
+]
+
+[[package]]
+name = "pegboard-gc"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-workflow",
+ "nix",
+ "pegboard",
+ "rivet-connection",
+ "rivet-health-checks",
+ "rivet-metrics",
+ "rivet-runtime",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "tracing-logfmt",
+ "tracing-subscriber",
 ]
 
 [[package]]

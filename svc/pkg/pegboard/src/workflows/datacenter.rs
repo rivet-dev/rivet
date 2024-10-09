@@ -3,8 +3,8 @@ use futures_util::FutureExt;
 
 use crate::protocol;
 
-/// How long before not considering a client for allocation.
-const CLIENT_PING_THRESHOLD_MS: i64 = 10000;
+/// How long after last ping before not considering a client for allocation.
+const CLIENT_ELIGIBLE_THRESHOLD_MS: i64 = util::duration::seconds(10);
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Input {
@@ -106,7 +106,8 @@ async fn allocate_container(
 	let row = sql_fetch_optional!(
 		[ctx, (Uuid,)]
 		"
-		SELECT client_id
+		INSERT INTO db_pegboard.containers (container_id, client_id, config, create_ts)
+		SELECT $3, client_id, $4, $5
 		FROM db_pegboard.clients
 		WHERE
 			datacenter_id = $1 AND
@@ -114,16 +115,20 @@ async fn allocate_container(
 			(
 				SELECT SUM(((config->'resources'->'cpu')::INT))
 				FROM db_pegboard.containers
-			) + $3 <= cpu AND
+			) + $6 <= cpu AND
 			(
 				SELECT SUM(((config->'resources'->'memory')::INT))
 				FROM db_pegboard.containers
-			) + $4 <= memory
+			) + $7 <= memory
 		ORDER BY cpu, memory DESC
 		LIMIT 1
+		RETURNING client_id
 		",
+		input.datacenter_id,
+		util::timestamp::now() - CLIENT_ELIGIBLE_THRESHOLD_MS,
 		input.container_id,
-		util::timestamp::now() - CLIENT_PING_THRESHOLD_MS,
+		serde_json::to_string(&input.config)?,
+		util::timestamp::now(),
 		input.config.resources.cpu as i64,
 		input.config.resources.memory as i64,
 	)

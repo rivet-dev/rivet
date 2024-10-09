@@ -1,5 +1,8 @@
+use std::convert::TryInto;
+
 use chirp_workflow::prelude::*;
-use futures_util::{FutureExt, StreamExt, TryStreamExt};
+use futures_util::FutureExt;
+use nix::sys::signal::Signal;
 use serde_json::json;
 
 use crate::protocol;
@@ -53,6 +56,7 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 								.await?;
 							}
 						}
+						// We assume events are in order by index
 						protocol::ToServer::Events(events) => {
 							// Write to db
 							ctx.activity(InsertEventsInput {
@@ -61,59 +65,31 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 							})
 							.await?;
 
-							// TODO: Update containers table with container state updates
+							ctx.activity(UpdateContainerStateInput {
+								events: events.iter().map(|x| x.inner.clone()).collect(),
+							})
+							.await?;
 
-							// Re-dispatch container state updates
-							futures_util::stream::iter(events.into_iter())
-								.map(|event| {
-									let mut ctx = ctx.step();
-
-									async move {
-										if let protocol::Event::ContainerStateUpdate {
-											container_id,
-											state,
-										} = serde_json::from_str(event.inner.get())?
-										{
-											ctx.signal(ContainerStateUpdate { state })
-												.tag("container_id", container_id)
-												.send()
-												.await?;
-										}
-
-										GlobalResult::Ok(())
-									}
-								})
-								.buffer_unordered(16)
-								.try_collect::<Vec<_>>()
-								.await?;
+							// NOTE: This should not be parallelized because signals should be sent in order
+							for event in events {
+								#[allow(irrefutable_let_patterns)]
+								if let protocol::Event::ContainerStateUpdate {
+									container_id,
+									state,
+								} = serde_json::from_str(event.inner.get())?
+								{
+									ctx.signal(ContainerStateUpdate { state })
+										.tag("container_id", container_id)
+										.send()
+										.await?;
+								}
+							}
 						}
 						protocol::ToServer::FetchStateResponse {} => todo!(),
 					}
 				}
 				Main::Command(command) => {
-					let raw_command = protocol::Raw::new(&command)?;
-
-					// Write to db
-					let index = ctx
-						.activity(InsertCommandInput {
-							client_id,
-							command: raw_command.clone(),
-						})
-						.await?;
-
-					let wrapped_command = protocol::CommandWrapper {
-						index,
-						inner: raw_command,
-					};
-
-					// Forward signal to ws as message
-					ctx.msg(ToWs {
-						client_id,
-						inner: protocol::ToClient::Commands(vec![wrapped_command]),
-					})
-					.tags(json!({}))
-					.send()
-					.await?;
+					handle_commands(ctx, client_id, vec![command]).await?;
 				}
 				Main::Drain(_) => {
 					ctx.activity(SetDrainInput {
@@ -129,12 +105,35 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 					})
 					.await?;
 				}
+				Main::Destroy(_) => return Ok(Loop::Break(())),
 			}
 
-			Ok(Loop::<()>::Continue)
+			Ok(Loop::Continue)
 		}
 		.boxed()
 	})
+	.await?;
+
+	let container_ids = ctx
+		.activity(FetchAllContainersInput {
+			client_id: input.client_id,
+		})
+		.await?;
+
+	// Evict all containers.
+	// Note that even if this client is unresponsive and does not process the signal commands, the
+	// pegboard-gc service will manually set the containers as closed after 30 seconds.
+	handle_commands(
+		ctx,
+		input.client_id,
+		container_ids
+			.into_iter()
+			.map(|container_id| protocol::Command::SignalContainer {
+				container_id,
+				signal: Signal::SIGKILL as i32,
+			})
+			.collect(),
+	)
 	.await?;
 
 	Ok(())
@@ -228,13 +227,177 @@ async fn insert_events(ctx: &ActivityCtx, input: &InsertEventsInput) -> GlobalRe
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-struct InsertCommandInput {
-	client_id: Uuid,
-	command: protocol::Raw<protocol::Command>,
+struct UpdateContainerStateInput {
+	events: Vec<protocol::Raw<protocol::Event>>,
 }
 
-#[activity(InsertCommand)]
-async fn insert_command(ctx: &ActivityCtx, input: &InsertCommandInput) -> GlobalResult<i64> {
+#[activity(UpdateContainerState)]
+async fn update_container_state(
+	ctx: &ActivityCtx,
+	input: &UpdateContainerStateInput,
+) -> GlobalResult<()> {
+	use protocol::ContainerState::*;
+
+	// TODO: Parallelize
+	for event in &input.events {
+		// Update containers table with container state updates
+		match event.deserialize()? {
+			protocol::Event::ContainerStateUpdate {
+				container_id,
+				state,
+			} => match state {
+				Starting => {
+					sql_execute!(
+						[ctx]
+						"
+						UPDATE db_pegboard.containers
+						SET start_ts = $2
+						WHERE container_id = $1
+						",
+						container_id,
+						util::timestamp::now(),
+					)
+					.await?;
+				}
+				Running { pid, .. } => {
+					sql_execute!(
+						[ctx]
+						"
+						UPDATE db_pegboard.containers
+						SET
+							running_ts = $2 AND
+							pid = $3
+						WHERE container_id = $1
+						",
+						container_id,
+						util::timestamp::now(),
+						pid as i64,
+					)
+					.await?;
+				}
+				Stopping => {
+					sql_execute!(
+						[ctx]
+						"
+						UPDATE db_pegboard.containers
+						SET stopping_ts = $2
+						WHERE container_id = $1
+						",
+						container_id,
+						util::timestamp::now(),
+					)
+					.await?;
+				}
+				Stopped => {
+					sql_execute!(
+						[ctx]
+						"
+						UPDATE db_pegboard.containers
+						SET stop_ts = $2
+						WHERE container_id = $1
+						",
+						container_id,
+						util::timestamp::now(),
+					)
+					.await?;
+				}
+				Exited { exit_code } => {
+					sql_execute!(
+						[ctx]
+						"
+						UPDATE db_pegboard.containers
+						SET
+							exit_ts = $2 AND
+							exit_code = $3
+						WHERE container_id = $1
+						",
+						container_id,
+						util::timestamp::now(),
+						exit_code,
+					)
+					.await?;
+				}
+				Allocated { .. } | FailedToAllocate => bail!("invalid state for updating db"),
+			},
+		}
+	}
+
+	Ok(())
+}
+
+pub async fn handle_commands(
+	ctx: &mut WorkflowCtx,
+	client_id: Uuid,
+	commands: Vec<protocol::Command>,
+) -> GlobalResult<()> {
+	let raw_commands = commands
+		.iter()
+		.map(protocol::Raw::new)
+		.collect::<Result<Vec<_>, _>>()?;
+
+	// Write to db
+	let index = ctx
+		.activity(InsertCommandsInput {
+			client_id,
+			commands: raw_commands.clone(),
+		})
+		.await?;
+
+	for (i, raw_command) in raw_commands.into_iter().enumerate() {
+		let wrapped_command = protocol::CommandWrapper {
+			index: index + i as i64,
+			inner: raw_command,
+		};
+
+		// Forward signal to ws as message
+		ctx.msg(ToWs {
+			client_id,
+			inner: protocol::ToClient::Commands(vec![wrapped_command]),
+		})
+		.tags(json!({}))
+		.send()
+		.await?;
+	}
+
+	// Update container state based on commands
+	for command in commands {
+		if let protocol::Command::SignalContainer {
+			container_id,
+			signal,
+		} = command
+		{
+			if let Signal::SIGTERM = signal.try_into()? {
+				ctx.activity(UpdateContainerStateInput {
+					events: vec![protocol::Raw::new(
+						&protocol::Event::ContainerStateUpdate {
+							container_id,
+							state: protocol::ContainerState::Stopping,
+						},
+					)?],
+				})
+				.await?;
+
+				ctx.signal(crate::workflows::client::ContainerStateUpdate {
+					state: protocol::ContainerState::Stopping,
+				})
+				.tag("container_id", container_id)
+				.send()
+				.await?;
+			}
+		}
+	}
+
+	Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct InsertCommandsInput {
+	client_id: Uuid,
+	commands: Vec<protocol::Raw<protocol::Command>>,
+}
+
+#[activity(InsertCommands)]
+async fn insert_commands(ctx: &ActivityCtx, input: &InsertCommandsInput) -> GlobalResult<i64> {
 	let (index,) = sql_fetch_one!(
 		[ctx, (i64,)]
 		"
@@ -245,22 +408,22 @@ async fn insert_command(ctx: &ActivityCtx, input: &InsertCommandInput) -> Global
 				WHERE client_id = $1
 				RETURNING last_command_idx - 1
 			),
-			insert_command AS (
+			insert_commands AS (
 				INSERT INTO db_pegboard.client_commands (
 					client_id,
 					payload,
 					index,
 					create_ts
 				)
-				SELECT $1, $2, last_idx.last_command_idx, $3
+				SELECT $1, p.payload, last_idx.last_command_idx + p.index - 1, $3
 				FROM last_idx
-				LIMIT 1
+				CROSS JOIN UNNEST($2) WITH ORDINALITY AS p(payload, index)
 				RETURNING 1
 			)
 		SELECT last_event_idx FROM last_idx
 		",
 		input.client_id,
-		&input.command,
+		&input.commands,
 		util::timestamp::now(),
 	)
 	.await?;
@@ -291,6 +454,37 @@ async fn set_drain(ctx: &ActivityCtx, input: &SetDrainInput) -> GlobalResult<()>
 	Ok(())
 }
 
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct FetchAllContainersInput {
+	client_id: Uuid,
+}
+
+#[activity(FetchAllContainers)]
+async fn fetch_all_containers(
+	ctx: &ActivityCtx,
+	input: &FetchAllContainersInput,
+) -> GlobalResult<Vec<Uuid>> {
+	let container_ids = sql_fetch_all!(
+		[ctx, (Uuid,)]
+		"
+		SELECT container_id
+		FROM db_pegboard.clients
+		WHERE
+			client_id = $1 AND
+			stopping_ts IS NULL AND
+			stop_ts IS NULL AND
+			exit_ts IS NULL
+		",
+		input.client_id,
+	)
+	.await?
+	.into_iter()
+	.map(|(id,)| id)
+	.collect();
+
+	Ok(container_ids)
+}
+
 #[message("pegboard_client_to_ws")]
 pub struct ToWs {
 	pub client_id: Uuid,
@@ -308,10 +502,14 @@ pub struct Drain {}
 #[signal("pegboard_client_undrain")]
 pub struct Undrain {}
 
+#[signal("pegboard_client_destroy")]
+pub struct Destroy {}
+
 join_signal!(Main {
 	Command(protocol::Command),
 	// Forwarded from the ws to this workflow
 	Forward(protocol::ToServer),
 	Drain,
 	Undrain,
+	Destroy,
 });

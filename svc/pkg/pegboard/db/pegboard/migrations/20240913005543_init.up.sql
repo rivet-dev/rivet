@@ -5,10 +5,12 @@ CREATE TABLE clients (
 	last_event_idx INT NOT NULL DEFAULT 0,
 	last_command_idx INT NOT NULL DEFAULT 0,
 
+	-- Total resources
 	cpu INT NOT NULL DEFAULT 0,
 	memory INT NOT NULL DEFAULT 0,
 
-	drain_ts INT
+	drain_ts INT,
+	delete_ts INT
 );
 
 CREATE TABLE client_events (

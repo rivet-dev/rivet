@@ -65,37 +65,14 @@ async fn handle_connection(
 	let ctx = ctx.clone();
 
 	tokio::spawn(async move {
-		// TODO: This is an ugly way to improve error visibility
-		let setup_res = async move {
-			let mut uri = None;
-			let ws_stream = tokio_tungstenite::accept_hdr_async(
-				raw_stream,
-				|req: &tokio_tungstenite::tungstenite::handshake::server::Request, res| {
-					// Bootleg way of reading the uri
-					uri = Some(req.uri().clone());
-
-					tracing::info!(?addr, ?uri, "handshake");
-
-					Ok(res)
-				},
-			)
-			.await?;
-
-			// Parse URL
-			let uri = unwrap!(uri, "socket has no associated request");
-			let (protocol_version, client_id) = parse_url(addr, uri)?;
-
-			Ok((ws_stream, protocol_version, client_id))
-		};
-
-		// Print error
-		let (ws_stream, protocol_version, client_id) = match setup_res.await {
-			Ok(x) => x,
-			Err(err) => {
-				tracing::error!(?addr, "{err}");
-				return Err(err);
-			}
-		};
+		let (ws_stream, protocol_version, client_id) =
+			match setup_connection(raw_stream, addr).await {
+				Ok(x) => x,
+				Err(err) => {
+					tracing::error!(?addr, "{err}");
+					return Err(err);
+				}
+			};
 
 		// Handle result for cleanup
 		match handle_connection_inner(&ctx, conns.clone(), ws_stream, protocol_version, client_id)
@@ -110,6 +87,31 @@ async fn handle_connection(
 			x => x,
 		}
 	});
+}
+
+async fn setup_connection(
+	raw_stream: TcpStream,
+	addr: SocketAddr,
+) -> GlobalResult<(WebSocketStream<TcpStream>, u16, Uuid)> {
+	let mut uri = None;
+	let ws_stream = tokio_tungstenite::accept_hdr_async(
+		raw_stream,
+		|req: &tokio_tungstenite::tungstenite::handshake::server::Request, res| {
+			// Bootleg way of reading the uri
+			uri = Some(req.uri().clone());
+
+			tracing::info!(?addr, ?uri, "handshake");
+
+			Ok(res)
+		},
+	)
+	.await?;
+
+	// Parse URL
+	let uri = unwrap!(uri, "socket has no associated request");
+	let (protocol_version, client_id) = parse_url(addr, uri)?;
+
+	Ok((ws_stream, protocol_version, client_id))
 }
 
 async fn handle_connection_inner(
@@ -193,6 +195,8 @@ async fn upsert_client(ctx: &StandaloneCtx, client_id: Uuid) -> GlobalResult<()>
 
 	// If the row was inserted, spawn a new client workflow
 	if inserted {
+		tracing::info!(?client_id, "new client");
+
 		ctx.workflow(pegboard::workflows::client::Input { client_id })
 			.tag("client_id", client_id)
 			.dispatch()
@@ -203,17 +207,30 @@ async fn upsert_client(ctx: &StandaloneCtx, client_id: Uuid) -> GlobalResult<()>
 }
 
 async fn update_ping(ctx: &StandaloneCtx, client_id: Uuid) -> GlobalResult<()> {
-	sql_execute!(
-		[ctx]
+	let (deleted,) = sql_fetch_one!(
+		[ctx, (bool,)]
 		"
+		WITH
+			select_old AS (
+				SELECT delete_ts IS NOT NULL AS deleted
+				FROM db_pegboard.clients
+				WHERE client_id = $1
+			)
 		UPDATE db_pegboard.clients
-		SET last_ping_ts = $2
+		SET
+			last_ping_ts = $2 AND
+			delete_ts = NULL
 		WHERE client_id = $1
+		RETURNING (SELECT * FROM select_old)
 		",
 		client_id,
 		util::timestamp::now(),
 	)
 	.await?;
+
+	if deleted {
+		tracing::warn!(?client_id, "deleted client reconnected");
+	}
 
 	Ok(())
 }

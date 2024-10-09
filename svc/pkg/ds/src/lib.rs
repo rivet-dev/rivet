@@ -16,7 +16,6 @@ pub fn registry() -> WorkflowResult<Registry> {
 	registry.register_workflow::<server::nomad::alloc_plan::Workflow>()?;
 	registry.register_workflow::<server::nomad::alloc_update::Workflow>()?;
 	registry.register_workflow::<server::nomad::eval_update::Workflow>()?;
-	registry.register_workflow::<server::nomad::eval_update::Workflow>()?;
 	registry.register_workflow::<server::pegboard::Workflow>()?;
 	registry.register_workflow::<server::pegboard::destroy::Workflow>()?;
 
