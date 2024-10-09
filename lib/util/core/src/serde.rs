@@ -185,6 +185,33 @@ impl<K: Eq + Hash, V: Hash> FromIterator<(K, V)> for HashableMap<K, V> {
 	}
 }
 
+impl<K: Eq + Hash, V: Hash> IntoIterator for HashableMap<K, V> {
+	type Item = (K, V);
+	type IntoIter = indexmap::map::IntoIter<K, V>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.into_iter()
+	}
+}
+
+impl<'a, K: Eq + Hash, V: Hash> IntoIterator for &'a HashableMap<K, V> {
+	type Item = (&'a K, &'a V);
+	type IntoIter = indexmap::map::Iter<'a, K, V>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.iter()
+	}
+}
+
+impl<'a, K: Eq + Hash, V: Hash> IntoIterator for &'a mut HashableMap<K, V> {
+	type Item = (&'a K, &'a mut V);
+	type IntoIter = indexmap::map::IterMut<'a, K, V>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.iter_mut()
+	}
+}
+
 /// Allows partial json ser/de.
 /// Effectively a `serde_json::value::RawValue` with type information.
 pub struct Raw<T> {

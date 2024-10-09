@@ -271,11 +271,11 @@ async fn set_drain(ctx: &ActivityCtx, input: &SetDrainInput) -> GlobalResult<()>
 		[ctx]
 		"
 		UPDATE db_pegboard.clients
-		SET draining = $2
+		SET drain_ts = $2
 		WHERE client_id = $1
 		",
 		input.client_id,
-		input.drain,
+		input.drain.then(util::timestamp::now),
 	)
 	.await?;
 

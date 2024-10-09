@@ -8,6 +8,7 @@ use anyhow::*;
 use futures_util::{stream::FuturesUnordered, FutureExt, StreamExt};
 use indoc::indoc;
 use nix::{
+	errno::Errno,
 	sys::signal::{kill, Signal},
 	unistd::Pid,
 };
@@ -295,6 +296,22 @@ impl Container {
 		})
 		.await?;
 
+		// Unbind ports
+		utils::query(|| async {
+			sqlx::query(indoc!(
+				"
+				UPDATE container_ports
+				SET delete_ts = ?2
+				WHERE container_id = ?1
+				",
+			))
+			.bind(self.container_id)
+			.bind(utils::now())
+			.execute(&mut *ctx.sql().await?)
+			.await
+		})
+		.await?;
+
 		ctx.event(protocol::Event::ContainerStateUpdate {
 			container_id: self.container_id,
 			state: protocol::ContainerState::Exited { exit_code },
@@ -306,31 +323,31 @@ impl Container {
 		Ok(())
 	}
 
-	pub async fn stop(self: &Arc<Self>, ctx: &Arc<Ctx>) -> Result<()> {
-		tracing::info!(container_id=?self.container_id, "stopping");
+	pub async fn signal(self: &Arc<Self>, ctx: &Arc<Ctx>, signal: Signal) -> Result<()> {
+		tracing::info!(container_id=?self.container_id, ?signal, "sending signal");
 
 		let self2 = self.clone();
 		let ctx2 = ctx.clone();
 		tokio::spawn(async move {
-			if let Err(err) = self2.stop_inner(&ctx2).await {
-				tracing::error!(?err, "container stop failed");
+			if let Err(err) = self2.signal_inner(&ctx2, signal).await {
+				tracing::error!(?err, "container signal failed");
 			}
-
-			self2.cleanup(&ctx2).await
 		});
 
 		Ok(())
 	}
 
-	async fn stop_inner(self: &Arc<Self>, ctx: &Arc<Ctx>) -> Result<()> {
+	async fn signal_inner(self: &Arc<Self>, ctx: &Arc<Ctx>, signal: Signal) -> Result<()> {
 		let mut i = 0;
 
+		// Signal command might be sent before the container has a valid PID. This loop waits for the PID to
+		// be set
 		let pid = loop {
 			if let Some(pid) = *self.pid.lock().await {
 				break Some(pid);
 			}
 
-			tracing::warn!(container_id=?self.container_id, "waiting for pid to stop workflow");
+			tracing::warn!(container_id=?self.container_id, "waiting for pid to signal container");
 
 			if i > STOP_PID_RETRIES {
 				tracing::error!(
@@ -345,31 +362,42 @@ impl Container {
 			tokio::time::sleep(STOP_PID_INTERVAL).await;
 		};
 
-		// Kill if PID found
+		// Kill if PID set
 		if let Some(pid) = pid {
-			kill(pid, Signal::SIGTERM)?;
+			use std::result::Result::{Err, Ok};
+
+			match kill(pid, signal) {
+				Ok(_) => {}
+				Err(Errno::ESRCH) => {
+					tracing::warn!(container_id=?self.container_id, ?pid, "pid not found for signalling")
+				}
+				Err(err) => return Err(err.into()),
+			}
 		}
 
-		utils::query(|| async {
-			sqlx::query(indoc!(
-				"
-				UPDATE containers
-				SET stop_ts = ?2
-				container_id = ?1
-				",
-			))
-			.bind(self.container_id)
-			.bind(utils::now())
-			.execute(&mut *ctx.sql().await?)
-			.await
-		})
-		.await?;
+		// Update stop_ts
+		if matches!(signal, Signal::SIGTERM) || pid.is_none() {
+			utils::query(|| async {
+				sqlx::query(indoc!(
+					"
+					UPDATE containers
+					SET stop_ts = ?2
+					container_id = ?1
+					",
+				))
+				.bind(self.container_id)
+				.bind(utils::now())
+				.execute(&mut *ctx.sql().await?)
+				.await
+			})
+			.await?;
 
-		ctx.event(protocol::Event::ContainerStateUpdate {
-			container_id: self.container_id,
-			state: protocol::ContainerState::Stopped,
-		})
-		.await?;
+			ctx.event(protocol::Event::ContainerStateUpdate {
+				container_id: self.container_id,
+				state: protocol::ContainerState::Stopped,
+			})
+			.await?;
+		}
 
 		Ok(())
 	}

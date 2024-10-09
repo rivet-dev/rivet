@@ -1,4 +1,5 @@
 use chirp_workflow::prelude::*;
+use strum::FromRepr;
 
 // Reexport for ease of use in pegboard manager
 pub use util::serde::{HashableMap, Raw};
@@ -59,8 +60,10 @@ pub enum Command {
 		container_id: Uuid,
 		config: Box<ContainerConfig>,
 	},
-	StopContainer {
+	SignalContainer {
 		container_id: Uuid,
+		// See nix::sys::signal::Signal
+		signal: i32,
 	},
 }
 
@@ -102,10 +105,10 @@ pub struct Port {
 	pub proxy_protocol: TransportProtocol,
 }
 
-#[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
 pub enum TransportProtocol {
-	Tcp,
-	Udp,
+	Tcp = 0,
+	Udp = 1,
 }
 
 impl std::fmt::Display for TransportProtocol {

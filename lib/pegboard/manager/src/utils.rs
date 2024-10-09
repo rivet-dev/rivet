@@ -179,6 +179,39 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 	.execute(&mut *conn)
 	.await?;
 
+	sqlx::query(indoc!(
+		"
+		CREATE TABLE IF NOT EXISTS container_ports (
+			container_id TEXT NOT NULL, -- UUID
+			port INT NOT NULL,
+			protocol INT NOT NULL, -- protocol::TransportProtocol
+
+			delete_ts INT
+		)
+		",
+	))
+	.execute(&mut *conn)
+	.await?;
+
+	sqlx::query(indoc!(
+		"
+		CREATE INDEX IF NOT EXISTS container_ports_id_idx
+		ON container_ports(container_id)
+		",
+	))
+	.execute(&mut *conn)
+	.await?;
+
+	sqlx::query(indoc!(
+		"
+		CREATE UNIQUE INDEX IF NOT EXISTS container_ports_unique_idx
+		ON container_ports(port, protocol)
+		WHERE delete_ts IS NULL
+		",
+	))
+	.execute(&mut *conn)
+	.await?;
+
 	Ok(())
 }
 

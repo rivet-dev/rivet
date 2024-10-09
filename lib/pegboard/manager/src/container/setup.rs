@@ -12,6 +12,7 @@ use nix::{
 	unistd::{fork, pipe, read, write, ForkResult, Pid},
 };
 use pegboard::protocol;
+use rand::Rng;
 use serde_json::{json, Value};
 use tokio::{
 	fs::{self, File},
@@ -20,9 +21,11 @@ use tokio::{
 };
 
 use super::{oci_config, Container};
-use crate::ctx::Ctx;
+use crate::{ctx::Ctx, utils};
 
 const NETWORK_NAME: &str = "rivet-pegboard";
+const MIN_INGRESS_PORT: u16 = 20000;
+const MAX_INGRESS_PORT: u16 = 31999;
 
 impl Container {
 	pub async fn setup_oci_bundle(&self, ctx: &Ctx) -> Result<()> {
@@ -334,21 +337,7 @@ impl Container {
 
 		tracing::info!(container_id=?self.container_id, "writing cni params");
 
-		let cni_port_mappings = self
-			.config
-			.ports
-			.iter()
-			.map(|(_, port)| {
-				// Pick random port that isn't taken
-				let host_port = todo!();
-
-				json!({
-					"HostPort": host_port,
-					"ContainerPort": port.internal_port,
-					"Protocol": port.proxy_protocol.to_string(),
-				})
-			})
-			.collect::<Vec<_>>();
+		let cni_port_mappings = self.bind_ports(ctx).await?;
 
 		// MARK: Generate CNI parameters
 		//
@@ -412,6 +401,137 @@ impl Container {
 		);
 
 		Ok(())
+	}
+
+	pub(crate) async fn bind_ports(&self, ctx: &Ctx) -> Result<Vec<serde_json::Value>> {
+		let mut tcp_count = 0;
+		let mut udp_count = 0;
+
+		// Count ports
+		for (_, port) in &self.config.ports {
+			match port.proxy_protocol {
+				protocol::TransportProtocol::Tcp => tcp_count += 1,
+				protocol::TransportProtocol::Udp => udp_count += 1,
+			}
+		}
+
+		let max = MAX_INGRESS_PORT - MIN_INGRESS_PORT;
+		let tcp_offset = rand::thread_rng().gen_range(0..max);
+		let udp_offset = rand::thread_rng().gen_range(0..max);
+
+		// Selects available TCP and UDP ports
+		let rows = utils::query(|| async {
+			sqlx::query_as::<_, (i64, i64)>(indoc!(
+				"
+				INSERT INTO container_ports (container_id, port, protocol)
+				SELECT ?1, port, protocol
+				-- Select TCP ports
+				FROM (
+					WITH RECURSIVE
+						nums(n, i) AS (
+							SELECT ?4, ?4
+							UNION ALL
+							SELECT (n + 1) % (?6 + 1), i + 1
+							FROM nums
+							WHERE i < ?6 + ?4
+						),
+						available_ports(port) AS (
+							SELECT nums.n
+							FROM nums
+							LEFT JOIN container_ports AS p
+							ON
+								nums.n = p.port AND
+								p.protocol = 0 AND
+								delete_ts IS NULL
+							WHERE
+								p.port IS NULL OR
+								delete_ts IS NOT NULL
+							LIMIT ?2
+						)
+					SELECT port, 0 AS protocol FROM available_ports
+				)
+				UNION ALL
+				SELECT ?1, port, protocol
+				-- Select UDP ports
+				FROM (
+					WITH RECURSIVE
+						nums(n, i) AS (
+							SELECT ?5, ?5
+							UNION ALL
+							SELECT (n + 1) % (?6 + 1), i + 1
+							FROM nums
+							WHERE i < ?6 + ?5
+						),
+						available_ports(port) AS (
+							SELECT nums.n
+							FROM nums
+							LEFT JOIN container_ports AS p
+							ON
+								nums.n = p.port AND
+								p.protocol = 1 AND
+								delete_ts IS NULL
+							WHERE
+								p.port IS NULL OR
+								delete_ts IS NOT NULL
+							LIMIT ?3
+						)
+					SELECT port, 1 AS protocol FROM available_ports
+				)
+				RETURNING port, protocol
+				",
+			))
+			.bind(self.container_id)
+			.bind(tcp_count as i64) // ?2
+			.bind(udp_count as i64) // ?3
+			.bind(tcp_offset as i64) // ?4
+			.bind(udp_offset as i64) // ?5
+			.bind(max as i64) // ?6
+			.fetch_all(&mut *ctx.sql().await?)
+			.await
+		})
+		.await?;
+
+		if rows.len() != tcp_count + udp_count {
+			bail!("not enough available ports");
+		}
+
+		let cni_port_mappings = self
+			.config
+			.ports
+			.iter()
+			.filter(|(_, port)| matches!(port.proxy_protocol, protocol::TransportProtocol::Tcp))
+			.zip(
+				rows.iter()
+					.filter(|(_, protocol)| *protocol == protocol::TransportProtocol::Tcp as i64),
+			)
+			.map(|((_, port), (host_port, _))| {
+				json!({
+					"HostPort": host_port,
+					"ContainerPort": port.internal_port,
+					"Protocol": port.proxy_protocol.to_string(),
+				})
+			})
+			.chain(
+				self.config
+					.ports
+					.iter()
+					.filter(|(_, port)| {
+						matches!(port.proxy_protocol, protocol::TransportProtocol::Udp)
+					})
+					.zip(rows.iter().filter(|(_, protocol)| {
+						*protocol == protocol::TransportProtocol::Udp as i64
+					}))
+					.map(|((_, port), (host_port, _))| {
+						json!({
+							"HostPort": host_port,
+							"ContainerPort": port.internal_port,
+							"Protocol": port.proxy_protocol.to_string(),
+						})
+					}),
+			)
+			.collect::<Vec<_>>();
+
+		Ok(cni_port_mappings)
 	}
 
 	#[tracing::instrument(skip_all)]

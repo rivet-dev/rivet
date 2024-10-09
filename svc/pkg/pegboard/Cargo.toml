@@ -8,6 +8,7 @@ license = "Apache-2.0"
 [dependencies]
 chirp-workflow = { path = "../../../lib/chirp-workflow/core" }
 serde = { version = "1.0.198", features = ["derive"] }
+strum = { version = "0.24", features = ["derive"] }
 thiserror = "1.0"
 
 [dependencies.sqlx]

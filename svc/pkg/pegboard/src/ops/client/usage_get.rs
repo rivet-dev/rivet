@@ -48,7 +48,6 @@ pub async fn pegboard_client_usage_get(ctx: &OperationCtx, input: &Input) -> Glo
 		FROM db_pegboard.containers
 		WHERE
 			client_id = ANY($1) AND
-			stop_ts IS NULL AND
 			exit_ts IS NULL
 		GROUP BY client_id
 		",

@@ -155,8 +155,8 @@ async fn handle_connection_inner(
 					.send()
 					.await?;
 			}
-			// TODO: Implement timeout for clients that haven't pinged in a while
 			Message::Ping(_) => {
+				update_ping(ctx, client_id).await?;
 				tx.lock().await.send(Message::Pong(Vec::new())).await?;
 			}
 			Message::Close(_) => {
@@ -167,7 +167,7 @@ async fn handle_connection_inner(
 			}
 		}
 	}
-
+	
 	bail!(format!("stream closed {client_id}"));
 
 	// Only way I could figure out to help the complier infer type
@@ -180,8 +180,8 @@ async fn upsert_client(ctx: &StandaloneCtx, client_id: Uuid) -> GlobalResult<()>
 	let inserted = sql_fetch_optional!(
 		[ctx, (i64,)]
 		"
-		INSERT INTO db_pegboard.clients (client_id, create_ts)
-		VALUES ($1, $2)
+		INSERT INTO db_pegboard.clients (client_id, create_ts, last_ping_ts)
+		VALUES ($1, $2, $2)
 		ON CONFLICT (client_id) DO NOTHING
 		RETURNING 1
 		",
@@ -198,6 +198,22 @@ async fn upsert_client(ctx: &StandaloneCtx, client_id: Uuid) -> GlobalResult<()>
 			.dispatch()
 			.await?;
 	}
+
+	Ok(())
+}
+
+async fn update_ping(ctx: &StandaloneCtx, client_id: Uuid) -> GlobalResult<()> {
+	sql_execute!(
+		[ctx, (i64,)]
+		"
+		UPDATE db_pegboard.clients
+		SET last_ping_ts = $2
+		WHERE client_id = $1
+		",
+		client_id,
+		util::timestamp::now(),
+	)
+	.await?;
 
 	Ok(())
 }

@@ -236,9 +236,12 @@ impl Ctx {
 				// Spawn container
 				container.start(&self).await?;
 			}
-			protocol::Command::StopContainer { container_id } => {
+			protocol::Command::SignalContainer {
+				container_id,
+				signal,
+			} => {
 				if let Some(container) = self.containers.read().await.get(&container_id) {
-					container.stop(&self).await?;
+					container.signal(&self, signal.try_into()?).await?;
 				} else {
 					tracing::warn!(
 						?container_id,
@@ -318,7 +321,7 @@ impl Ctx {
 				"
 				SELECT container_id, config, pid
 				FROM containers
-				WHERE stop_ts IS NULL AND exit_ts IS NULL
+				WHERE exit_ts IS NULL
 				",
 			))
 			.fetch_all(&mut *self.sql().await?)
