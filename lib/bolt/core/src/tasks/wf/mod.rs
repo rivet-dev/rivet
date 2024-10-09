@@ -1,15 +1,28 @@
-use std::cmp::Ordering;
+use std::{
+	cmp::Ordering,
+	path::{Path, PathBuf},
+	process::Stdio,
+};
 
 use anyhow::*;
-use chrono::{Local, TimeZone};
+use chrono::{TimeZone, Utc};
 use clap::ValueEnum;
+use duct::cmd;
 use indoc::indoc;
 use rivet_term::console::style;
+use serde_json::json;
 use sqlx::PgPool;
+use tokio::{
+	fs::{self, File},
+	process::Command,
+	task::block_in_place,
+};
 use uuid::Uuid;
 
 use crate::{
+	config,
 	context::ProjectContext,
+	dep,
 	tasks::db,
 	utils::{self, colored_json, db_conn::DatabaseConnections, indent_string},
 };
@@ -90,8 +103,9 @@ pub struct WorkflowRow {
 }
 
 #[derive(sqlx::FromRow)]
-struct HistoryEvent {
+struct HistoryEventRow {
 	location: Vec<i64>,
+	/// Event type.
 	t: i64,
 	name: Option<String>,
 	input: Option<serde_json::Value>,
@@ -99,8 +113,16 @@ struct HistoryEvent {
 	forgotten: bool,
 }
 
+#[derive(sqlx::FromRow)]
+struct ActivityErrorRow {
+	location: Vec<i64>,
+	error: String,
+	count: i64,
+	latest_ts: i64,
+}
+
 pub async fn get_workflow(ctx: &ProjectContext, workflow_id: Uuid) -> Result<Option<WorkflowRow>> {
-	let (pool, _port) = build_pool(ctx).await?;
+	let pool = build_pool(ctx).await?;
 	let mut conn = db::sqlx::get_conn(&pool).await?;
 
 	let workflow = sqlx::query_as::<_, WorkflowRow>(indoc!(
@@ -138,7 +160,7 @@ pub async fn find_workflows(
 	name: Option<String>,
 	state: Option<WorkflowState>,
 ) -> Result<Vec<WorkflowRow>> {
-	let (pool, _port) = build_pool(ctx).await?;
+	let pool = build_pool(ctx).await?;
 	let mut conn = db::sqlx::get_conn(&pool).await?;
 
 	let mut query_str = indoc!(
@@ -238,7 +260,7 @@ pub async fn print_workflows(workflows: Vec<WorkflowRow>, pretty: bool) -> Resul
 
 			println!("  {} {}", style("id").bold(), workflow.workflow_id);
 
-			let datetime = Local
+			let datetime = Utc
 				.timestamp_millis_opt(workflow.create_ts)
 				.single()
 				.context("invalid ts")?;
@@ -287,7 +309,7 @@ pub async fn print_workflows(workflows: Vec<WorkflowRow>, pretty: bool) -> Resul
 }
 
 pub async fn silence_workflow(ctx: &ProjectContext, workflow_id: Uuid) -> Result<()> {
-	let (pool, _port) = build_pool(ctx).await?;
+	let pool = build_pool(ctx).await?;
 	let mut conn = db::sqlx::get_conn(&pool).await?;
 
 	sqlx::query(indoc!(
@@ -306,7 +328,7 @@ pub async fn silence_workflow(ctx: &ProjectContext, workflow_id: Uuid) -> Result
 }
 
 pub async fn wake_workflow(ctx: &ProjectContext, workflow_id: Uuid) -> Result<()> {
-	let (pool, _port) = build_pool(ctx).await?;
+	let pool = build_pool(ctx).await?;
 	let mut conn = db::sqlx::get_conn(&pool).await?;
 
 	sqlx::query(indoc!(
@@ -326,14 +348,16 @@ pub async fn wake_workflow(ctx: &ProjectContext, workflow_id: Uuid) -> Result<()
 pub async fn print_history(
 	ctx: &ProjectContext,
 	workflow_id: Uuid,
+	include_errors: bool,
 	include_forgotten: bool,
 	print_location: bool,
 ) -> Result<()> {
-	let (pool, _port) = build_pool(ctx).await?;
+	let pool = build_pool(ctx).await?;
 	let mut conn = db::sqlx::get_conn(&pool).await?;
 	let mut conn2 = db::sqlx::get_conn(&pool).await?;
+	let mut conn3 = db::sqlx::get_conn(&pool).await?;
 
-	let (wf_row, events) = tokio::try_join!(
+	let (wf_row, events, error_rows) = tokio::try_join!(
 		async move {
 			sqlx::query_as::<_, (String, serde_json::Value, Option<serde_json::Value>)>(indoc!(
 				"
@@ -348,51 +372,70 @@ pub async fn print_history(
 			.map_err(Into::into)
 		},
 		async move {
-			sqlx::query_as::<_, HistoryEvent>(indoc!(
+			sqlx::query_as::<_, HistoryEventRow>(indoc!(
 				"
-			WITH workflow_events AS (
-				SELECT $1 AS workflow_id
-			)
-			SELECT location, 0 AS t, activity_name AS name, input, output, forgotten
-			FROM db_workflow.workflow_activity_events, workflow_events
-			WHERE
-				workflow_activity_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
-			UNION ALL
-			SELECT location, 1 AS t, signal_name AS name, body as input, null as output, forgotten
-			FROM db_workflow.workflow_signal_events, workflow_events
-			WHERE
-				workflow_signal_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
-			UNION ALL
-			SELECT location, 2 AS t, w.workflow_name AS name, w.input, w.output, forgotten
-			FROM workflow_events, db_workflow.workflow_sub_workflow_events AS sw
-			JOIN db_workflow.workflows AS w
-			ON sw.sub_workflow_id = w.workflow_id
-			WHERE
-				sw.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
-			UNION ALL
-			SELECT location, 3 AS t, signal_name AS name, body as input, null as output, forgotten
-			FROM db_workflow.workflow_signal_send_events, workflow_events
-			WHERE
-				workflow_signal_send_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
-			UNION ALL
-			SELECT location, 4 AS t, message_name AS name, body as input, null as output, forgotten
-			FROM db_workflow.workflow_message_send_events, workflow_events
-			WHERE
-				workflow_message_send_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
-			UNION ALL
-			SELECT location, 5 AS t, NULL AS name, null as input, null as output, forgotten
-			FROM db_workflow.workflow_loop_events, workflow_events
-			WHERE
-				workflow_loop_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
-			ORDER BY location ASC;
-			"
+				WITH workflow_events AS (
+					SELECT $1 AS workflow_id
+				)
+				SELECT location, 0 AS t, activity_name AS name, input, output, forgotten
+				FROM db_workflow.workflow_activity_events, workflow_events
+				WHERE
+					workflow_activity_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
+				UNION ALL
+				SELECT location, 1 AS t, signal_name AS name, body as input, null as output, forgotten
+				FROM db_workflow.workflow_signal_events, workflow_events
+				WHERE
+					workflow_signal_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
+				UNION ALL
+				SELECT location, 2 AS t, w.workflow_name AS name, w.input, w.output, forgotten
+				FROM workflow_events, db_workflow.workflow_sub_workflow_events AS sw
+				JOIN db_workflow.workflows AS w
+				ON sw.sub_workflow_id = w.workflow_id
+				WHERE
+					sw.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
+				UNION ALL
+				SELECT location, 3 AS t, signal_name AS name, body as input, null as output, forgotten
+				FROM db_workflow.workflow_signal_send_events, workflow_events
+				WHERE
+					workflow_signal_send_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
+				UNION ALL
+				SELECT location, 4 AS t, message_name AS name, body as input, null as output, forgotten
+				FROM db_workflow.workflow_message_send_events, workflow_events
+				WHERE
+					workflow_message_send_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
+				UNION ALL
+				SELECT location, 5 AS t, NULL AS name, null as input, null as output, forgotten
+				FROM db_workflow.workflow_loop_events, workflow_events
+				WHERE
+					workflow_loop_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
+				ORDER BY location ASC;
+				"
 			))
 			.bind(workflow_id)
 			.bind(include_forgotten)
 			.fetch_all(&mut *conn2)
 			.await
 			.map_err(Into::into)
-		}
+		},
+		async move {
+			if include_errors {
+				sqlx::query_as::<_, ActivityErrorRow>(indoc!(
+					"
+					SELECT location, error, COUNT(error), MAX(ts) AS latest_ts
+					FROM db_workflow.workflow_activity_errors
+					WHERE workflow_id = $1
+					GROUP BY location, error
+					ORDER BY latest_ts
+					"
+				))
+				.bind(workflow_id)
+				.fetch_all(&mut *conn3)
+				.await
+				.map_err(Into::into)
+			} else {
+				Ok(Vec::new())
+			}
+		},
 	)?;
 
 	let Some((workflow_name, input, output)) = wf_row else {
@@ -429,6 +472,10 @@ pub async fn print_history(
 
 	for i in 0..events.len() {
 		let event = events.get(i).unwrap();
+		let errors = error_rows
+			.iter()
+			.filter(|row| row.location == event.location)
+			.collect::<Vec<_>>();
 
 		let t = EventType::from_repr(event.t.try_into()?).context("invalid event type")?;
 
@@ -454,7 +501,11 @@ pub async fn print_history(
 		if let Some(input) = &event.input {
 			print!("{}", "  ".repeat(event.location.len()));
 
-			let c = if event.output.is_none() { "╰" } else { "├" };
+			let c = if event.output.is_none() && errors.is_empty() {
+				"╰"
+			} else {
+				"├"
+			};
 			let c = if event.forgotten {
 				style(c).red().dim()
 			} else {
@@ -477,11 +528,13 @@ pub async fn print_history(
 		if let Some(output) = &event.output {
 			print!("{}", "  ".repeat(event.location.len()));
 
-			if event.forgotten {
-				print!("{} ", style("╰").red().dim());
+			let c = if errors.is_empty() { "╰" } else { "├" };
+			let c = if event.forgotten {
+				style(c).red().dim()
 			} else {
-				print!("{} ", style("╰").dim());
-			}
+				style(c).dim()
+			};
+			print!("{} ", c);
 
 			print!("output");
 
@@ -493,6 +546,43 @@ pub async fn print_history(
 			}
 
 			println!("");
+		}
+
+		if !errors.is_empty() {
+			print!("{}", "  ".repeat(event.location.len()));
+
+			if event.forgotten {
+				print!("{} ", style("╰").red().dim());
+			} else {
+				print!("{} ", style("╰").dim());
+			}
+
+			println!("{}", style("errors"));
+
+			for (i, error) in errors.iter().enumerate() {
+				print!("{}", "  ".repeat(event.location.len() + 1));
+
+				let c = if i == errors.len() - 1 { "╰" } else { "├" };
+				let c = if event.forgotten {
+					style(c).red().dim()
+				} else {
+					style(c).dim()
+				};
+				print!("{} ", c);
+
+				let datetime = Utc
+					.timestamp_millis_opt(error.latest_ts)
+					.single()
+					.context("invalid ts")?;
+				let date = datetime.format("%Y-%m-%d %H:%M:%S");
+
+				println!(
+					"{} {} {}",
+					style(format!("(last {})", date)).magenta(),
+					style(format!("x{}", error.count)).yellow().bold(),
+					style(error.error.replace('\n', " ")).dim(),
+				);
+			}
 		}
 
 		if !matches!(t, EventType::Loop) {
@@ -579,21 +669,142 @@ pub async fn print_history(
 	Ok(())
 }
 
-async fn build_pool(ctx: &ProjectContext) -> Result<(PgPool, utils::DroppablePort)> {
+fn crt_path() -> PathBuf {
+	Path::new("/tmp").join("rivet").join("crdb-ca.crt")
+}
+
+async fn build_pool(ctx: &ProjectContext) -> Result<PgPool> {
+	if !utils::is_port_in_use(26257).await {
+		bail!("to use `bolt wf` commands, you must manually start a new port forward with `bolt wf forward`.");
+	}
+
 	let db_workflow = ctx.service_with_name("db-workflow").await;
 	let db_conn = DatabaseConnections::create(ctx, &[db_workflow], true).await?;
 
-	let host = db_conn.cockroach_host.as_ref().unwrap();
 	let username = ctx.read_secret(&["crdb", "username"]).await?;
 	let password = ctx.read_secret(&["crdb", "password"]).await?;
-	let db_url = format!("postgres://{}:{}@{}", username, password, host);
+	let mut db_url = format!("postgres://{}:{}@localhost:26257", username, password);
 
-	// rivet_term::status::progress("Forwarding...", "");
-	let port = utils::kubectl_port_forward(ctx, "cockroachdb", "cockroachdb", (26257, 26257))?;
-	port.check().await?;
+	if let config::ns::ClusterKind::Distributed { .. } = ctx.ns().cluster.kind {
+		// Add parameters
+		db_url.push_str("?sslmode=verify-ca&sslrootcert=");
+		db_url.push_str(&crt_path().to_str().context("bad path")?);
+
+		let host = db_conn.cockroach_host.as_ref().unwrap();
+		let (cluster_identifier, _) = host.split_once('.').context("bad crdb host url")?;
+		db_url.push_str("&options=--cluster%3D");
+		db_url.push_str(cluster_identifier);
+	}
 
 	// Must return port so it isn't dropped
-	Ok((db::sqlx::build_pool(&db_url).await?, port))
+	Ok(db::sqlx::build_pool(&db_url).await?)
+}
+
+pub async fn forward(ctx: &ProjectContext) -> Result<()> {
+	match ctx.ns().cluster.kind {
+		config::ns::ClusterKind::SingleNode { .. } => {
+			let port =
+				utils::kubectl_port_forward(ctx, "cockroachdb", "svc/cockroachdb", (26257, 26257))?;
+			port.check().await?;
+
+			rivet_term::status::progress("Proxying", "`bolt wf` commands can now be executed");
+
+			port.wait().await?;
+		}
+		config::ns::ClusterKind::Distributed { .. } => {
+			let db_workflow = ctx.service_with_name("db-workflow").await;
+			let db_conn = DatabaseConnections::create(ctx, &[db_workflow], true).await?;
+
+			let host = db_conn.cockroach_host.as_ref().unwrap();
+
+			// Check if proxy pod exists
+			let res = block_in_place(|| {
+				cmd!(
+					"kubectl",
+					"get",
+					"pod/crdb-proxy",
+					"-n",
+					"bolt",
+					"--ignore-not-found"
+				)
+				.env("KUBECONFIG", ctx.gen_kubeconfig_path())
+				.read()
+			})?;
+			let persistent_pod_exists = !res.is_empty();
+
+			// Create TCP proxy through K8s cluster
+			if !persistent_pod_exists {
+				let spec = json!({
+					"apiVersion": "v1",
+					"kind": "Pod",
+					"metadata": {
+						"name": "crdb-proxy",
+						"namespace": "bolt",
+						"labels": {
+							"app.kubernetes.io/name": "crdb-proxy",
+						}
+					},
+					"spec": {
+						"containers": [{
+							"name": "crdb-proxy-container",
+							"image": "alpine/socat",
+							"args": [
+								"TCP4-LISTEN:26257,fork,reuseaddr",
+								format!("TCP4:{host}")
+							],
+							"ports": [{
+								"containerPort": 26257
+							}]
+						}]
+					}
+				});
+
+				rivet_term::status::progress("Applying spec", "pod/crdb-proxy");
+				dep::k8s::cli::apply_specs(ctx, vec![spec]).await?;
+			}
+
+			let crt_path = crt_path();
+
+			// Save CA cert locally
+			if fs::metadata(&crt_path).await.is_err() {
+				fs::create_dir_all(crt_path.parent().context("bad path")?).await?;
+
+				let mut file = File::create(&crt_path).await?;
+
+				// Read CRDB CA cert
+				rivet_term::status::progress("Reading CRDB CA cert", "");
+				let mut cmd = Command::new("kubectl")
+					.args([
+						"get",
+						"configmap",
+						"crdb-ca",
+						"-n",
+						"bolt",
+						"-o",
+						"jsonpath={.data.ca\\.crt}",
+					])
+					.env("KUBECONFIG", ctx.gen_kubeconfig_path())
+					.stdout(Stdio::piped())
+					.spawn()?;
+
+				// Pipe to file
+				if let Some(mut stdout) = cmd.stdout.take() {
+					tokio::io::copy(&mut stdout, &mut file).await?;
+				}
+
+				ensure!(cmd.wait().await?.success());
+			}
+			let port = utils::kubectl_port_forward(ctx, "bolt", "pod/crdb-proxy", (26257, 26257))?;
+
+			port.check().await?;
+
+			rivet_term::status::progress("Proxying", "`bolt wf` commands can now be executed");
+
+			port.wait().await?;
+		}
+	}
+
+	Ok(())
 }
 
 fn chunk_string(s: &str, size: usize) -> Vec<String> {
@@ -614,8 +825,8 @@ mod render {
 
 	#[derive(Tabled)]
 	struct WorkflowTableRow {
-		pub workflow_name: String,
 		pub workflow_id: Uuid,
+		pub workflow_name: String,
 		#[tabled(display_with = "display_state")]
 		pub state: WorkflowState,
 		#[tabled(display_with = "display_option")]

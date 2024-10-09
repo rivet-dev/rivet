@@ -142,8 +142,12 @@ async fn redis_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 	);
 
 	if forwarded {
-		let port =
-			utils::kubectl_port_forward(ctx, &format!("redis-{db_name}"), "redis", (6379, 6379))?;
+		let port = utils::kubectl_port_forward(
+			ctx,
+			&format!("redis-{db_name}"),
+			"svc/redis",
+			(6379, 6379),
+		)?;
 		port.check().await?;
 
 		block_in_place(|| cmd!("bash", "-c", cmd).run())?;
@@ -273,7 +277,8 @@ pub async fn crdb_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 	}
 
 	if forwarded {
-		let port = utils::kubectl_port_forward(ctx, "cockroachdb", "cockroachdb", (26257, 26257))?;
+		let port =
+			utils::kubectl_port_forward(ctx, "cockroachdb", "svc/cockroachdb", (26257, 26257))?;
 		port.check().await?;
 
 		block_in_place(|| cmd!("bash", "-c", query_cmd).run())?;
@@ -405,7 +410,7 @@ pub async fn clickhouse_shell(shell_ctx: ShellContext<'_>, no_db: bool) -> Resul
 
 	// TODO: Does not work when forwarded, not sure why
 	if forwarded {
-		let port = utils::kubectl_port_forward(ctx, "clickhouse", "clickhouse", (9440, 9440))?;
+		let port = utils::kubectl_port_forward(ctx, "clickhouse", "svc/clickhouse", (9440, 9440))?;
 		port.check().await?;
 
 		block_in_place(|| cmd!("bash", "-c", query_cmd).run())?;

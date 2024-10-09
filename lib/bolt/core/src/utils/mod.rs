@@ -232,9 +232,6 @@ impl DroppablePort {
 	}
 
 	pub async fn check(&self) -> Result<()> {
-		// TODO: Probe TCP in loop
-		tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-
 		// Check that handle didn't close
 		if let Some(output) = self.handle.try_wait()? {
 			eprintln!("{}", std::str::from_utf8(&output.stdout)?);
@@ -244,17 +241,34 @@ impl DroppablePort {
 			);
 		}
 
-		// Probe port
-		match TcpStream::connect(format!("127.0.0.1:{}", self.local_port)).await {
-			Result::Ok(_) => {
-				// println!("Port forward ready: {}", self.local_port)
+		let mut retries = 0;
+		loop {
+			// Probe port
+			match TcpStream::connect(format!("127.0.0.1:{}", self.local_port)).await {
+				Result::Ok(_) => {
+					break;
+				}
+				Err(err) => {
+					if retries > 20 {
+						bail!("port forward failed ({}): {err}", self.local_port)
+					}
+
+					retries += 1;
+				}
 			}
-			Err(_) => {
-				bail!("port forward failed: {}", self.local_port)
-			}
+
+			tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 		}
 
 		Ok(())
+	}
+
+	pub async fn wait(self) -> Result<()> {
+		tokio::task::spawn_blocking(move || {
+			self.handle.wait()?;
+			Ok(())
+		})
+		.await?
 	}
 }
 
@@ -268,7 +282,7 @@ impl Drop for DroppablePort {
 pub fn kubectl_port_forward(
 	ctx: &ProjectContext,
 	namespace: &str,
-	service_name: &str,
+	name: &str,
 	(local_port, remote_port): (u16, u16),
 ) -> Result<DroppablePort> {
 	// println!(
@@ -280,7 +294,7 @@ pub fn kubectl_port_forward(
 		"port-forward",
 		"-n",
 		namespace,
-		format!("service/{service_name}"),
+		name,
 		format!("{local_port}:{remote_port}")
 	)
 	.env("KUBECONFIG", ctx.gen_kubeconfig_path())
@@ -289,6 +303,11 @@ pub fn kubectl_port_forward(
 	.start()?;
 
 	Ok(DroppablePort { local_port, handle })
+}
+
+pub async fn is_port_in_use(port: u16) -> bool {
+	let address = format!("127.0.0.1:{}", port);
+	TcpStream::connect(address).await.is_ok()
 }
 
 pub fn render_diff(indent: usize, patches: &json_patch::Patch) {

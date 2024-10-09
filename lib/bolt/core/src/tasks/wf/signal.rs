@@ -31,7 +31,7 @@ pub struct SignalRow {
 }
 
 pub async fn get_signal(ctx: &ProjectContext, signal_id: Uuid) -> Result<Option<SignalRow>> {
-	let (pool, _port) = build_pool(ctx).await?;
+	let pool = build_pool(ctx).await?;
 	let mut conn = db::sqlx::get_conn(&pool).await?;
 
 	let signal = sqlx::query_as::<_, SignalRow>(indoc!(
@@ -73,7 +73,7 @@ pub async fn find_signals(
 	name: Option<String>,
 	state: Option<SignalState>,
 ) -> Result<Vec<SignalRow>> {
-	let (pool, _port) = build_pool(ctx).await?;
+	let pool = build_pool(ctx).await?;
 	let mut conn = db::sqlx::get_conn(&pool).await?;
 
 	let mut query_str = indoc!(
@@ -195,7 +195,7 @@ pub async fn print_signals(signals: Vec<SignalRow>, pretty: bool) -> Result<()> 
 }
 
 pub async fn silence_signal(ctx: &ProjectContext, signal_id: Uuid) -> Result<()> {
-	let (pool, _port) = build_pool(ctx).await?;
+	let pool = build_pool(ctx).await?;
 	let mut conn = db::sqlx::get_conn(&pool).await?;
 
 	sqlx::query(indoc!(
@@ -235,8 +235,8 @@ mod render {
 
 	#[derive(Tabled)]
 	struct SignalTableRow {
-		pub signal_name: String,
 		pub signal_id: Uuid,
+		pub signal_name: String,
 		#[tabled(display_with = "display_state")]
 		pub state: SignalState,
 		#[tabled(rename = "tags/workflow_id")]

@@ -44,8 +44,13 @@ pub enum SubCommand {
 	History {
 		#[clap(index = 1)]
 		workflow_id: Uuid,
+		/// Includes activity errors in graph.
+		#[clap(short = 'e', long)]
+		include_errors: bool,
+		/// Includes forgotten events in graph, shown in red.
 		#[clap(short = 'f', long)]
 		include_forgotten: bool,
+		/// Includes location numbers for events in graph.
 		#[clap(short = 'l', long)]
 		print_location: bool,
 	},
@@ -53,6 +58,8 @@ pub enum SubCommand {
 		#[clap(subcommand)]
 		command: signal::SubCommand,
 	},
+	/// Starts a port forward to CockroachDB at port 26257.
+	Forward {},
 }
 
 impl SubCommand {
@@ -75,12 +82,21 @@ impl SubCommand {
 			Self::Wake { workflow_id } => tasks::wf::wake_workflow(&ctx, workflow_id).await,
 			Self::History {
 				workflow_id,
+				include_errors,
 				include_forgotten,
 				print_location,
 			} => {
-				tasks::wf::print_history(&ctx, workflow_id, include_forgotten, print_location).await
+				tasks::wf::print_history(
+					&ctx,
+					workflow_id,
+					include_errors,
+					include_forgotten,
+					print_location,
+				)
+				.await
 			}
 			Self::Signal { command } => command.execute(ctx).await,
+			Self::Forward {} => tasks::wf::forward(&ctx).await,
 		}
 	}
 }
