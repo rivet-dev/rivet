@@ -112,6 +112,14 @@ impl StandaloneCtx {
 		.await
 	}
 
+	/// Creates a message builder.
+	pub fn msg<M>(&mut self, body: M) -> builder::message::MessageBuilder<M>
+	where
+		M: Message,
+	{
+		builder::message::MessageBuilder::new(&self.msg_ctx, body)
+	}
+
 	pub async fn subscribe<M>(
 		&self,
 		tags: &serde_json::Value,

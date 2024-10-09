@@ -36,6 +36,9 @@ pub enum WorkflowError {
 	#[error("history diverged: {0}")]
 	HistoryDiverged(String),
 
+	#[error("latent history found: {0}")]
+	LatentHistoryFound(String),
+
 	#[error("serialize workflow input: {0}")]
 	SerializeWorkflowInput(serde_json::Error),
 
@@ -90,6 +93,9 @@ pub enum WorkflowError {
 	#[error("invalid sleep state: {0}")]
 	InvalidSleepState(i64),
 
+	#[error("invalid event type: {0}")]
+	InvalidEventType(i64),
+
 	#[error("create subscription: {0}")]
 	CreateSubscription(rivet_pools::prelude::nats::Error),
 
@@ -116,6 +122,9 @@ pub enum WorkflowError {
 
 	#[error("integer conversion failed")]
 	IntegerConversion,
+
+	#[error("missing event data")]
+	MissingEventData,
 
 	#[error("build sql pool: {0}")]
 	BuildSqlx(sqlx::Error),
@@ -147,8 +156,14 @@ pub enum WorkflowError {
 	#[error("cannot have multiple concurrent calls to Database::wake")]
 	WakeLock(tokio::sync::TryLockError),
 
+	#[error("`ListenCtx` has already been used once (`listen_any` called)")]
+	ListenCtxUsed,
+
 	#[error("int conversion error: {0}")]
 	TryFromIntError(#[from] std::num::TryFromIntError),
+
+	#[error("serialize location: {0}")]
+	SerializeLocation(serde_json::Error),
 }
 
 impl WorkflowError {

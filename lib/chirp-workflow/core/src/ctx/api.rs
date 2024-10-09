@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use global_error::{GlobalError, GlobalResult};
 use rivet_pools::prelude::*;
 use serde::Serialize;
@@ -109,6 +107,14 @@ impl ApiCtx {
 			input,
 		)
 		.await
+	}
+
+	/// Creates a message builder.
+	pub fn msg<M>(&mut self, body: M) -> builder::message::MessageBuilder<M>
+	where
+		M: Message,
+	{
+		builder::message::MessageBuilder::new(&self.msg_ctx, body)
 	}
 
 	pub async fn subscribe<M>(

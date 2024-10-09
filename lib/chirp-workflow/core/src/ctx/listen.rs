@@ -1,21 +1,39 @@
 use crate::{
 	ctx::WorkflowCtx,
-	db::SignalRow,
+	db::SignalData,
 	error::{WorkflowError, WorkflowResult},
+	history::location::Location,
 };
 
 /// Indirection struct to prevent invalid implementations of listen traits.
 pub struct ListenCtx<'a> {
 	ctx: &'a mut WorkflowCtx,
+	location: &'a Location,
+	// HACK: Prevent `ListenCtx::listen_any` from being called more than once
+	used: bool,
 }
 
 impl<'a> ListenCtx<'a> {
-	pub(crate) fn new(ctx: &'a mut WorkflowCtx) -> Self {
-		ListenCtx { ctx }
+	pub(crate) fn new(ctx: &'a mut WorkflowCtx, location: &'a Location) -> Self {
+		ListenCtx {
+			ctx,
+			location,
+			used: false,
+		}
 	}
 
 	/// Checks for a signal to this workflow with any of the given signal names.
-	pub async fn listen_any(&self, signal_names: &[&'static str]) -> WorkflowResult<SignalRow> {
+	/// - Will error if called more than once.
+	pub async fn listen_any(
+		&mut self,
+		signal_names: &[&'static str],
+	) -> WorkflowResult<SignalData> {
+		if self.used {
+			return Err(WorkflowError::ListenCtxUsed);
+		} else {
+			self.used = true;
+		}
+
 		// Fetch new pending signal
 		let signal = self
 			.ctx
@@ -23,7 +41,8 @@ impl<'a> ListenCtx<'a> {
 			.pull_next_signal(
 				self.ctx.workflow_id(),
 				signal_names,
-				self.ctx.full_location().as_ref(),
+				&self.location,
+				self.ctx.version(),
 				self.ctx.loop_location(),
 			)
 			.await?;

@@ -67,7 +67,7 @@ pub fn workflow(attr: TokenStream, item: TokenStream) -> TokenStream {
 		}
 
 		#[async_trait::async_trait]
-		impl chirp_workflow::prelude::Workflow for #struct_ident {
+		impl chirp_workflow::workflow::Workflow for #struct_ident {
 			type Input = #input_type;
 			type Output = #output_type;
 
@@ -121,7 +121,7 @@ pub fn activity(attr: TokenStream, item: TokenStream) -> TokenStream {
 		}
 
 		#[async_trait::async_trait]
-		impl chirp_workflow::prelude::Activity for #struct_ident {
+		impl chirp_workflow::activity::Activity for #struct_ident {
 			type Input = #input_type;
 			type Output = #output_type;
 
@@ -179,7 +179,7 @@ pub fn operation(attr: TokenStream, item: TokenStream) -> TokenStream {
 		}
 
 		#[async_trait::async_trait]
-		impl chirp_workflow::prelude::Operation for #struct_ident {
+		impl chirp_workflow::operation::Operation for #struct_ident {
 			type Input = #input_type;
 			type Output = #output_type;
 
@@ -326,19 +326,19 @@ pub fn signal(attr: TokenStream, item: TokenStream) -> TokenStream {
 		#serde_derive
 		#item
 
-		impl chirp_workflow::prelude::Signal for #ident {
+		impl chirp_workflow::signal::Signal for #ident {
 			const NAME: &'static str = #name;
 		}
 
 		#[async_trait::async_trait]
-		impl chirp_workflow::prelude::Listen for #ident {
-			async fn listen(ctx: &chirp_workflow::prelude::ListenCtx) -> chirp_workflow::prelude::WorkflowResult<Self> {
-				let row = ctx.listen_any(&[<Self as chirp_workflow::prelude::Signal>::NAME]).await?;
-				Self::parse(&row.signal_name, row.body)
+		impl chirp_workflow::listen::Listen for #ident {
+			async fn listen(ctx: &mut chirp_workflow::prelude::ListenCtx) -> chirp_workflow::prelude::WorkflowResult<Self> {
+				let row = ctx.listen_any(&[<Self as chirp_workflow::signal::Signal>::NAME]).await?;
+				Self::parse(&row.signal_name, &row.body)
 			}
 
-			fn parse(_name: &str, body: serde_json::Value) -> chirp_workflow::prelude::WorkflowResult<Self> {
-				serde_json::from_value(body).map_err(WorkflowError::DeserializeSignalBody)
+			fn parse(_name: &str, body: &serde_json::value::RawValue) -> chirp_workflow::prelude::WorkflowResult<Self> {
+				serde_json::from_str(body.get()).map_err(WorkflowError::DeserializeSignalBody)
 			}
 		}
 	};
@@ -384,7 +384,7 @@ pub fn message(attr: TokenStream, item: TokenStream) -> TokenStream {
 		#[derive(Debug)]
 		#item_struct
 
-		impl chirp_workflow::prelude::Message for #struct_ident {
+		impl chirp_workflow::message::Message for #struct_ident {
 			const NAME: &'static str = #name;
 			const TAIL_TTL: std::time::Duration = std::time::Duration::from_secs(#tail_ttl);
 		}

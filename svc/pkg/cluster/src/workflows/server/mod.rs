@@ -804,7 +804,7 @@ impl CustomListener for State {
 	nomad registered	 // always
 	nomad drain complete // if drain
 	*/
-	async fn listen(&self, ctx: &ListenCtx) -> WorkflowResult<Self::Output> {
+	async fn listen(&self, ctx: &mut ListenCtx) -> WorkflowResult<Self::Output> {
 		// Determine which signals to listen to
 		let mut signals = vec![
 			Destroy::NAME,
@@ -831,10 +831,10 @@ impl CustomListener for State {
 		}
 
 		let row = ctx.listen_any(&signals).await?;
-		Self::parse(&row.signal_name, row.body)
+		Self::parse(&row.signal_name, &row.body)
 	}
 
-	fn parse(name: &str, body: serde_json::Value) -> WorkflowResult<Self::Output> {
+	fn parse(name: &str, body: &serde_json::value::RawValue) -> WorkflowResult<Self::Output> {
 		Main::parse(name, body)
 	}
 }

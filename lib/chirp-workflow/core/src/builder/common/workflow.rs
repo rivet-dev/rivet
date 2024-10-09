@@ -85,12 +85,12 @@ where
 		);
 
 		// Serialize input
-		let input_val = serde_json::to_value(&self.input)
+		let input_val = serde_json::value::to_raw_value(&self.input)
 			.map_err(WorkflowError::SerializeWorkflowOutput)
 			.map_err(GlobalError::raw)?;
 
 		self.db
-			.dispatch_workflow(self.ray_id, workflow_id, &workflow_name, tags, input_val)
+			.dispatch_workflow(self.ray_id, workflow_id, &workflow_name, tags, &input_val)
 			.await
 			.map_err(GlobalError::raw)?;
 

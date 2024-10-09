@@ -1,6 +1,5 @@
 use std::{
 	collections::{HashMap, HashSet},
-	hash::Hasher,
 };
 
 use proto::backend::{self, pkg::*};

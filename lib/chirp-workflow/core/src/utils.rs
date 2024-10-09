@@ -1,9 +1,7 @@
 use global_error::{GlobalError, GlobalResult};
 use uuid::Uuid;
 
-use crate::error::WorkflowError;
-
-pub type Location = Box<[usize]>;
+use crate::{error::WorkflowError, history::location::Location};
 
 /// Allows for checking if a global error returned from an activity is recoverable.
 pub trait GlobalErrorExt {

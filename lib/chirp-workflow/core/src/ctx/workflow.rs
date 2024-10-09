@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc, time::Instant};
+use std::{sync::Arc, time::Instant};
 
 use global_error::{GlobalError, GlobalResult};
 use serde::{de::DeserializeOwned, Serialize};
@@ -6,26 +6,30 @@ use tokio::time::Duration;
 use uuid::Uuid;
 
 use crate::{
-	activity::ActivityId,
 	activity::{Activity, ActivityInput},
 	builder::workflow as builder,
 	ctx::{
 		common::{RETRY_TIMEOUT_MS, SUB_WORKFLOW_RETRY},
-		ActivityCtx, ListenCtx, MessageCtx,
+		ActivityCtx, ListenCtx, MessageCtx, VersionedWorkflowCtx,
 	},
 	db::{DatabaseHandle, PulledWorkflow},
 	error::{WorkflowError, WorkflowResult},
-	event::{Event, SleepState},
 	executable::{AsyncResult, Executable},
+	history::{
+		cursor::{Cursor, HistoryResult},
+		event::{EventId, SleepState},
+		location::Location,
+		removed::Removed,
+		History,
+	},
 	listen::{CustomListener, Listen},
 	message::Message,
 	metrics,
 	registry::RegistryHandle,
 	signal::Signal,
 	utils::{
-		self,
 		time::{DurationToMillis, TsToMillis},
-		GlobalErrorExt, Location,
+		GlobalErrorExt,
 	},
 	worker,
 	workflow::{Workflow, WorkflowInput},
@@ -42,7 +46,6 @@ const DB_ACTION_RETRY: Duration = Duration::from_millis(150);
 /// Most db action retries
 const MAX_DB_ACTION_RETRIES: usize = 5;
 
-// TODO: Use generics to store input instead of a json value
 // NOTE: Clonable because of inner arcs
 #[derive(Clone)]
 pub struct WorkflowCtx {
@@ -52,23 +55,21 @@ pub struct WorkflowCtx {
 	create_ts: i64,
 	ts: i64,
 	ray_id: Uuid,
+	version: usize,
 
 	registry: RegistryHandle,
 	db: DatabaseHandle,
 
 	conn: rivet_connection::Connection,
 
-	/// All events that have ever been recorded on this workflow.
-	/// The reason this type is a hashmap is to allow querying by location.
-	event_history: Arc<HashMap<Location, Vec<Event>>>,
 	/// Input data passed to this workflow.
-	input: Arc<serde_json::Value>,
-
-	root_location: Location,
-	location_idx: usize,
+	input: Arc<Box<serde_json::value::RawValue>>,
+	/// All events that have ever been recorded on this workflow.
+	event_history: History,
+	cursor: Cursor,
 
 	/// If this context is currently in a loop, this is the location of the where the loop started.
-	loop_location: Option<Box<[usize]>>,
+	loop_location: Option<Location>,
 
 	msg_ctx: MessageCtx,
 }
@@ -81,105 +82,50 @@ impl WorkflowCtx {
 		workflow: PulledWorkflow,
 	) -> GlobalResult<Self> {
 		let msg_ctx = MessageCtx::new(&conn, workflow.ray_id).await?;
+		let event_history = Arc::new(workflow.events);
 
 		Ok(WorkflowCtx {
 			workflow_id: workflow.workflow_id,
 			name: workflow.workflow_name,
 			create_ts: workflow.create_ts,
 			ts: rivet_util::timestamp::now(),
-
 			ray_id: workflow.ray_id,
+			version: 1,
 
 			registry,
 			db,
 
 			conn,
 
-			event_history: Arc::new(workflow.events),
 			input: Arc::new(workflow.input),
 
-			root_location: Box::new([]),
-			location_idx: 0,
+			event_history: event_history.clone(),
+			cursor: Cursor::new(event_history, Location::empty()),
 			loop_location: None,
 
 			msg_ctx,
 		})
 	}
 
-	/// Creates a new workflow run with one more depth in the location. Meant to be implemented and not used
-	/// directly in workflows.
-	pub fn branch(&mut self) -> Self {
-		let branch = self.with_input(self.input.clone());
-
-		self.inc_location();
-
-		branch
+	/// Creates a workflow ctx reference with a given version.
+	pub fn v<'a>(&'a mut self, version: usize) -> VersionedWorkflowCtx<'a> {
+		VersionedWorkflowCtx::new(self, version)
 	}
 
-	/// Clones the current ctx but with a different input.
-	pub(crate) fn with_input(&self, input: Arc<serde_json::Value>) -> Self {
-		WorkflowCtx {
-			workflow_id: self.workflow_id,
-			name: self.name.clone(),
-			create_ts: self.create_ts,
-			ts: self.ts,
-			ray_id: self.ray_id,
-
-			registry: self.registry.clone(),
-			db: self.db.clone(),
-
-			conn: self.conn.clone(),
-
-			event_history: self.event_history.clone(),
-			input,
-
-			root_location: self
-				.root_location
-				.iter()
-				.cloned()
-				.chain(std::iter::once(self.location_idx))
-				.collect(),
-			location_idx: 0,
-			loop_location: self.loop_location.clone(),
-
-			msg_ctx: self.msg_ctx.clone(),
+	/// Errors if the given version is less than the current version.
+	pub(crate) fn compare_version(
+		&self,
+		step: impl std::fmt::Display,
+		version: usize,
+	) -> WorkflowResult<()> {
+		if version < self.version {
+			Err(WorkflowError::HistoryDiverged(format!(
+				"version of {step} is less than that of the current context (v{} < v{})",
+				version, self.version
+			)))
+		} else {
+			Ok(())
 		}
-	}
-
-	/// Like `branch` but it does not add another layer of depth. Meant to be implemented and not used
-	/// directly in workflows.
-	pub fn step(&mut self) -> Self {
-		let branch = self.clone();
-
-		self.inc_location();
-
-		branch
-	}
-
-	/// Returns only the history relevant to this workflow run (based on location).
-	fn relevant_history(&self) -> impl Iterator<Item = &Event> {
-		self.event_history
-			.get(&self.root_location)
-			// `into_iter` and `flatten` are for the `Option`
-			.into_iter()
-			.flatten()
-	}
-
-	/// Returns the event at the current location index.
-	pub(crate) fn current_history_event(&self) -> Option<&Event> {
-		self.relevant_history().nth(self.location_idx)
-	}
-
-	pub(crate) fn full_location(&self) -> Location {
-		self.root_location
-			.iter()
-			.cloned()
-			.chain(std::iter::once(self.location_idx))
-			.collect()
-	}
-
-	pub fn inc_location(&mut self) {
-		self.location_idx += 1;
 	}
 
 	pub(crate) async fn run(mut self) -> WorkflowResult<()> {
@@ -189,7 +135,16 @@ impl WorkflowCtx {
 		let workflow = self.registry.get_workflow(&self.name)?;
 
 		// Run workflow
-		match (workflow.run)(&mut self).await {
+		let mut res = (workflow.run)(&mut self).await;
+
+		// Validate no leftover events
+		if res.is_ok() {
+			if let Err(err) = self.cursor().check_clear() {
+				res = Err(err);
+			}
+		}
+
+		match res {
 			Ok(output) => {
 				tracing::info!(name=%self.name, id=%self.workflow_id, "workflow completed");
 
@@ -282,7 +237,8 @@ impl WorkflowCtx {
 	async fn run_activity<A: Activity>(
 		&mut self,
 		input: &A::Input,
-		activity_id: &ActivityId,
+		event_id: &EventId,
+		location: &Location,
 		create_ts: i64,
 	) -> WorkflowResult<A::Output> {
 		tracing::debug!(name=%self.name, id=%self.workflow_id, activity_name=%A::NAME, "running activity");
@@ -309,18 +265,19 @@ impl WorkflowCtx {
 				tracing::debug!("activity success");
 
 				// Write output
-				let input_val =
-					serde_json::to_value(input).map_err(WorkflowError::SerializeActivityInput)?;
-				let output_val = serde_json::to_value(&output)
+				let input_val = serde_json::value::to_raw_value(input)
+					.map_err(WorkflowError::SerializeActivityInput)?;
+				let output_val = serde_json::value::to_raw_value(&output)
 					.map_err(WorkflowError::SerializeActivityOutput)?;
 				self.db
 					.commit_workflow_activity_event(
 						self.workflow_id,
-						self.full_location().as_ref(),
-						activity_id,
+						location,
+						self.version,
+						event_id,
 						create_ts,
-						input_val,
-						Ok(output_val),
+						&input_val,
+						Ok(&output_val),
 						self.loop_location(),
 					)
 					.await?;
@@ -335,17 +292,18 @@ impl WorkflowCtx {
 				tracing::debug!(?err, "activity error");
 
 				let err_str = err.to_string();
-				let input_val =
-					serde_json::to_value(input).map_err(WorkflowError::SerializeActivityInput)?;
+				let input_val = serde_json::value::to_raw_value(input)
+					.map_err(WorkflowError::SerializeActivityInput)?;
 
 				// Write error (failed state)
 				self.db
 					.commit_workflow_activity_event(
 						self.workflow_id,
-						self.full_location().as_ref(),
-						activity_id,
+						location,
+						self.version,
+						event_id,
 						create_ts,
-						input_val,
+						&input_val,
 						Err(&err_str),
 						self.loop_location(),
 					)
@@ -366,16 +324,17 @@ impl WorkflowCtx {
 				tracing::debug!("activity timeout");
 
 				let err_str = err.to_string();
-				let input_val =
-					serde_json::to_value(input).map_err(WorkflowError::SerializeActivityInput)?;
+				let input_val = serde_json::value::to_raw_value(input)
+					.map_err(WorkflowError::SerializeActivityInput)?;
 
 				self.db
 					.commit_workflow_activity_event(
 						self.workflow_id,
-						self.full_location().as_ref(),
-						activity_id,
+						location,
+						self.version,
+						event_id,
 						create_ts,
-						input_val,
+						&input_val,
 						Err(&err_str),
 						self.loop_location(),
 					)
@@ -391,6 +350,75 @@ impl WorkflowCtx {
 				Err(err)
 			}
 		}
+	}
+
+	/// Creates a new workflow run with one more depth in the location.
+	/// - **Not to be used directly by workflow users. For implementation uses only.**
+	/// - **Remember to validate history after this branch is used.**
+	pub(crate) async fn branch(&mut self) -> WorkflowResult<Self> {
+		self.branch_inner(self.input.clone(), self.version, None)
+			.await
+	}
+
+	pub(crate) async fn branch_inner(
+		&mut self,
+		input: Arc<Box<serde_json::value::RawValue>>,
+		version: usize,
+		// We allow providing a custom location in the case of loops, which take the spot of the branch event.
+		custom_location: Option<Location>,
+	) -> WorkflowResult<Self> {
+		let location = if let Some(location) = custom_location {
+			location
+		} else {
+			let history_res = self.cursor.compare_branch(version)?;
+			let location = self.cursor.current_location_for(&history_res);
+
+			// Validate history is consistent
+			if !matches!(history_res, HistoryResult::Event(_)) {
+				self.db
+					.commit_workflow_branch_event(
+						self.workflow_id,
+						&location,
+						self.version,
+						self.loop_location.as_ref(),
+					)
+					.await?;
+			}
+
+			location
+		};
+
+		Ok(WorkflowCtx {
+			workflow_id: self.workflow_id,
+			name: self.name.clone(),
+			create_ts: self.create_ts,
+			ts: self.ts,
+			ray_id: self.ray_id,
+			version,
+
+			registry: self.registry.clone(),
+			db: self.db.clone(),
+
+			conn: self.conn.clone(),
+
+			input,
+
+			event_history: self.event_history.clone(),
+			cursor: Cursor::new(self.event_history.clone(), location),
+			loop_location: self.loop_location.clone(),
+
+			msg_ctx: self.msg_ctx.clone(),
+		})
+	}
+
+	/// Like `branch` but it does not add another layer of depth.
+	/// - **Not to be used directly by workflow users. For implementation uses only.**
+	pub fn step(&mut self) -> Self {
+		let branch = self.clone();
+
+		self.cursor.inc();
+
+		branch
 	}
 }
 
@@ -437,7 +465,7 @@ impl WorkflowCtx {
 		I: WorkflowInput,
 		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
 	{
-		builder::sub_workflow::SubWorkflowBuilder::new(self, input)
+		builder::sub_workflow::SubWorkflowBuilder::new(self, self.version, input)
 	}
 
 	/// Run activity. Will replay on failure.
@@ -449,34 +477,16 @@ impl WorkflowCtx {
 		I: ActivityInput,
 		<I as ActivityInput>::Activity: Activity<Input = I>,
 	{
-		let activity_id = ActivityId::new::<I::Activity>(&input);
+		let event_id = EventId::new(I::Activity::NAME, &input);
 
-		let event = self.current_history_event();
+		let history_res = self
+			.cursor
+			.compare_activity(self.version, &event_id)
+			.map_err(GlobalError::raw)?;
+		let location = self.cursor.current_location_for(&history_res);
 
 		// Activity was ran before
-		let output = if let Some(event) = event {
-			// Validate history is consistent
-			let Event::Activity(activity) = event else {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event} at {}, found activity {}",
-					self.loc(),
-					activity_id.name
-				)))
-				.map_err(GlobalError::raw);
-			};
-
-			if activity.activity_id != activity_id {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected activity {}#{:x} at {}, found activity {}#{:x}",
-					activity.activity_id.name,
-					activity.activity_id.input_hash,
-					self.loc(),
-					activity_id.name,
-					activity_id.input_hash,
-				)))
-				.map_err(GlobalError::raw);
-			}
-
+		let output = if let HistoryResult::Event(activity) = history_res {
 			// Activity succeeded
 			if let Some(output) = activity.parse_output().map_err(GlobalError::raw)? {
 				tracing::debug!(name=%self.name, id=%self.workflow_id, activity_name=%I::Activity::NAME, "replaying activity");
@@ -488,7 +498,7 @@ impl WorkflowCtx {
 				let error_count = activity.error_count;
 
 				match self
-					.run_activity::<I::Activity>(&input, &activity_id, activity.create_ts)
+					.run_activity::<I::Activity>(&input, &event_id, &location, activity.create_ts)
 					.await
 				{
 					Err(err) => {
@@ -530,13 +540,18 @@ impl WorkflowCtx {
 		}
 		// This is a new activity
 		else {
-			self.run_activity::<I::Activity>(&input, &activity_id, rivet_util::timestamp::now())
-				.await
-				.map_err(GlobalError::raw)?
+			self.run_activity::<I::Activity>(
+				&input,
+				&event_id,
+				&location,
+				rivet_util::timestamp::now(),
+			)
+			.await
+			.map_err(GlobalError::raw)?
 		};
 
 		// Move to next event
-		self.inc_location();
+		self.cursor.update(&location);
 
 		Ok(output)
 	}
@@ -545,17 +560,6 @@ impl WorkflowCtx {
 	/// short circuit in the event of an error to make sure activity side effects are recorded.
 	pub async fn join<T: Executable>(&mut self, exec: T) -> GlobalResult<T::Output> {
 		exec.execute(self).await
-	}
-
-	/// Joins multiple executable actions (activities, closures) and awaits them simultaneously, short
-	/// circuiting in the event of an error.
-	///
-	/// **BEWARE**: You should almost **never** use `try_join` over `join`.
-	///
-	/// The only possible case for using this over `join` is:
-	/// - You have long running activities that are cancellable
-	pub async fn try_join<T: Executable>(&mut self, exec: T) -> GlobalResult<T::Output> {
-		exec.try_execute(self).await
 	}
 
 	/// Tests if the given error is unrecoverable. If it is, allows the user to run recovery code safely.
@@ -574,7 +578,7 @@ impl WorkflowCtx {
 						if !inner_err.is_recoverable()
 							&& !matches!(*inner_err, WorkflowError::HistoryDiverged(_))
 						{
-							self.inc_location();
+							self.cursor.inc();
 
 							return Ok(Err(GlobalError::Raw(inner_err)));
 						} else {
@@ -593,28 +597,28 @@ impl WorkflowCtx {
 
 	/// Creates a signal builder.
 	pub fn signal<T: Signal + Serialize>(&mut self, body: T) -> builder::signal::SignalBuilder<T> {
-		builder::signal::SignalBuilder::new(self, body)
+		builder::signal::SignalBuilder::new(self, self.version, body)
 	}
 
 	/// Listens for a signal for a short time before setting the workflow to sleep. Once the signal is
 	/// received, the workflow will be woken up and continue.
 	pub async fn listen<T: Listen>(&mut self) -> GlobalResult<T> {
-		let event = self.current_history_event();
+		let history_res = self
+			.cursor
+			.compare_signal(self.version)
+			.map_err(GlobalError::raw)?;
+		let location = self.cursor.current_location_for(&history_res);
 
 		// Signal received before
-		let signal = if let Some(event) = event {
-			// Validate history is consistent
-			let Event::Signal(signal) = event else {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event} at {}, found signal",
-					self.loc(),
-				)))
-				.map_err(GlobalError::raw);
-			};
+		let signal = if let HistoryResult::Event(signal) = history_res {
+			tracing::debug!(
+				name=%self.name,
+				id=%self.workflow_id,
+				signal_name=%signal.name,
+				"replaying signal"
+			);
 
-			tracing::debug!(name=%self.name, id=%self.workflow_id, signal_name=%signal.name, "replaying signal");
-
-			T::parse(&signal.name, signal.body.clone()).map_err(GlobalError::raw)?
+			T::parse(&signal.name, &signal.body).map_err(GlobalError::raw)?
 		}
 		// Listen for new messages
 		else {
@@ -624,12 +628,12 @@ impl WorkflowCtx {
 			let mut interval = tokio::time::interval(SIGNAL_RETRY);
 			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-			let ctx = ListenCtx::new(self);
+			let mut ctx = ListenCtx::new(self, &location);
 
 			loop {
 				interval.tick().await;
 
-				match T::listen(&ctx).await {
+				match T::listen(&mut ctx).await {
 					Ok(res) => break res,
 					Err(err) if matches!(err, WorkflowError::NoSignalFound(_)) => {
 						if retries > MAX_SIGNAL_RETRIES {
@@ -643,7 +647,7 @@ impl WorkflowCtx {
 		};
 
 		// Move to next event
-		self.inc_location();
+		self.cursor.update(&location);
 
 		Ok(signal)
 	}
@@ -653,22 +657,22 @@ impl WorkflowCtx {
 		&mut self,
 		listener: &T,
 	) -> GlobalResult<<T as CustomListener>::Output> {
-		let event = self.current_history_event();
+		let history_res = self
+			.cursor
+			.compare_signal(self.version)
+			.map_err(GlobalError::raw)?;
+		let location = self.cursor.current_location_for(&history_res);
 
 		// Signal received before
-		let signal = if let Some(event) = event {
-			// Validate history is consistent
-			let Event::Signal(signal) = event else {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event} at {}, found signal",
-					self.loc(),
-				)))
-				.map_err(GlobalError::raw);
-			};
+		let signal = if let HistoryResult::Event(signal) = history_res {
+			tracing::debug!(
+				name=%self.name,
+				id=%self.workflow_id,
+				signal_name=%signal.name,
+				"replaying signal",
+			);
 
-			tracing::debug!(name=%self.name, id=%self.workflow_id, signal_name=%signal.name, "replaying signal");
-
-			T::parse(&signal.name, signal.body.clone()).map_err(GlobalError::raw)?
+			T::parse(&signal.name, &signal.body).map_err(GlobalError::raw)?
 		}
 		// Listen for new messages
 		else {
@@ -678,12 +682,12 @@ impl WorkflowCtx {
 			let mut interval = tokio::time::interval(SIGNAL_RETRY);
 			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-			let ctx = ListenCtx::new(self);
+			let mut ctx = ListenCtx::new(self, &location);
 
 			loop {
 				interval.tick().await;
 
-				match listener.listen(&ctx).await {
+				match listener.listen(&mut ctx).await {
 					Ok(res) => break res,
 					Err(err) if matches!(err, WorkflowError::NoSignalFound(_)) => {
 						if retries > MAX_SIGNAL_RETRIES {
@@ -697,7 +701,7 @@ impl WorkflowCtx {
 		};
 
 		// Move to next event
-		self.inc_location();
+		self.cursor.update(&location);
 
 		Ok(signal)
 	}
@@ -725,9 +729,9 @@ impl WorkflowCtx {
 	// 	}
 	// 	// Listen for new message
 	// 	else {
-	// 		let ctx = ListenCtx::new(self);
+	// 		let mut ctx = ListenCtx::new(self);
 
-	// 		match T::listen(&ctx).await {
+	// 		match T::listen(&mut ctx).await {
 	// 			Ok(res) => Some(res),
 	// 			Err(err) if matches!(err, WorkflowError::NoSignalFound(_)) => None,
 	// 			Err(err) => return Err(err).map_err(GlobalError::raw),
@@ -735,16 +739,17 @@ impl WorkflowCtx {
 	// 	};
 
 	// 	// Move to next event
-	// 	self.inc_location();
+	// 	self.cursor.update();
 
 	// 	Ok(signal)
 	// }
 
+	/// Creates a message builder.
 	pub fn msg<M>(&mut self, body: M) -> builder::message::MessageBuilder<M>
 	where
 		M: Message,
 	{
-		builder::message::MessageBuilder::new(self, body)
+		builder::message::MessageBuilder::new(self, self.version, body)
 	}
 
 	/// Runs workflow steps in a loop. **Ensure that there are no side effects caused by the code in this
@@ -754,36 +759,35 @@ impl WorkflowCtx {
 		F: for<'a> FnMut(&'a mut WorkflowCtx) -> AsyncResult<'a, Loop<T>>,
 		T: Serialize + DeserializeOwned,
 	{
-		let event_location = self.location_idx;
-		let loop_location = self.full_location();
-		let mut loop_branch = self.branch();
-
-		let event = self.relevant_history().nth(event_location);
+		let history_res = self
+			.cursor
+			.compare_loop(self.version)
+			.map_err(GlobalError::raw)?;
+		let loop_location = self.cursor.current_location_for(&history_res);
 
 		// Loop existed before
-		let output = if let Some(event) = event {
-			// Validate history is consistent
-			let Event::Loop(loop_event) = event else {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event} at {}, found loop",
-					self.loc(),
-				)))
-				.map_err(GlobalError::raw);
-			};
-
+		let (iteration, output) = if let HistoryResult::Event(loop_event) = history_res {
 			let output = loop_event.parse_output().map_err(GlobalError::raw)?;
 
-			// Shift by iteration count
-			loop_branch.location_idx = loop_event.iteration;
-
-			output
+			(loop_event.iteration, output)
 		} else {
-			None
+			(0, None)
 		};
+
+		let mut loop_branch = self
+			.branch_inner(
+				self.input.clone(),
+				self.version,
+				Some(loop_location.clone()),
+			)
+			.await
+			.map_err(GlobalError::raw)?;
+		// Shift by iteration count
+		loop_branch.cursor.set_idx(iteration);
 
 		// Loop complete
 		let output = if let Some(output) = output {
-			tracing::debug!(name=%self.name, id=%self.workflow_id, "replaying loop");
+			tracing::debug!(name=%self.name, id=%self.workflow_id, "replaying loop output");
 
 			output
 		}
@@ -792,35 +796,64 @@ impl WorkflowCtx {
 			tracing::info!(name=%self.name, id=%self.workflow_id, "running loop");
 
 			loop {
-				let mut iteration_branch = loop_branch.branch();
+				// HACK: We have to temporarily set the loop location to the current loop so that the branch
+				// event created in `WorkflowCtx::branch` has the correct loop location.
+				let old_loop_location = loop_branch.loop_location.replace(loop_location.clone());
+				let mut iteration_branch = loop_branch.branch().await.map_err(GlobalError::raw)?;
+
+				// Set back to previous loop location
+				loop_branch.loop_location = old_loop_location;
+
+				// Set branch loop location to the current loop
 				iteration_branch.loop_location = Some(loop_location.clone());
 
+				// Run loop
 				match cb(&mut iteration_branch).await? {
 					Loop::Continue => {
 						self.db
-							.update_loop(
+							.upsert_loop(
 								self.workflow_id,
-								loop_location.as_ref(),
-								loop_branch.location_idx,
+								&loop_location,
+								self.version,
+								loop_branch.cursor.iter_idx(),
 								None,
 								self.loop_location(),
 							)
 							.await?;
+
+						// Validate no leftover events
+						iteration_branch
+							.cursor
+							.check_clear()
+							.map_err(GlobalError::raw)?;
+
+						// Move to next event
+						self.cursor.update(iteration_branch.cursor().root());
 					}
 					Loop::Break(res) => {
-						let output_val = serde_json::to_value(&res)
+						let output_val = serde_json::value::to_raw_value(&res)
 							.map_err(WorkflowError::SerializeLoopOutput)
 							.map_err(GlobalError::raw)?;
 
 						self.db
-							.update_loop(
+							.upsert_loop(
 								self.workflow_id,
-								loop_location.as_ref(),
-								loop_branch.location_idx,
-								Some(output_val),
+								&loop_location,
+								self.version,
+								loop_branch.cursor.iter_idx(),
+								Some(&output_val),
 								self.loop_location(),
 							)
 							.await?;
+
+						// Validate no leftover events
+						iteration_branch
+							.cursor
+							.check_clear()
+							.map_err(GlobalError::raw)?;
+
+						// Move to next event
+						self.cursor.update(iteration_branch.cursor().root());
 
 						break res;
 					}
@@ -838,19 +871,14 @@ impl WorkflowCtx {
 	}
 
 	pub async fn sleep_until(&mut self, time: impl TsToMillis) -> GlobalResult<()> {
-		let event = self.current_history_event();
+		let history_res = self
+			.cursor
+			.compare_sleep(self.version)
+			.map_err(GlobalError::raw)?;
+		let location = self.cursor.current_location_for(&history_res);
 
 		// Slept before
-		let (deadline_ts, replay) = if let Some(event) = event {
-			// Validate history is consistent
-			let Event::Sleep(sleep) = event else {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event} at {}, found sleep",
-					self.loc(),
-				)))
-				.map_err(GlobalError::raw);
-			};
-
+		let (deadline_ts, replay) = if let HistoryResult::Event(sleep) = history_res {
 			tracing::debug!(name=%self.name, id=%self.workflow_id, "replaying sleep");
 
 			(sleep.deadline_ts, true)
@@ -862,7 +890,8 @@ impl WorkflowCtx {
 			self.db
 				.commit_workflow_sleep_event(
 					self.workflow_id,
-					self.full_location().as_ref(),
+					&location,
+					self.version,
 					deadline_ts,
 					self.loop_location(),
 				)
@@ -893,7 +922,7 @@ impl WorkflowCtx {
 		}
 
 		// Move to next event
-		self.inc_location();
+		self.cursor.update(&location);
 
 		Ok(())
 	}
@@ -907,20 +936,14 @@ impl WorkflowCtx {
 		duration: impl DurationToMillis,
 	) -> GlobalResult<Option<T>> {
 		let time = (rivet_util::timestamp::now() as u64 + duration.to_millis()?) as i64;
-		let event = self.current_history_event();
-		let sleep_location = self.full_location();
+		let history_res = self
+			.cursor
+			.compare_sleep(self.version)
+			.map_err(GlobalError::raw)?;
+		let sleep_location = self.cursor.current_location_for(&history_res);
 
 		// Slept before
-		let (deadline_ts, state, replay) = if let Some(event) = event {
-			// Validate history is consistent
-			let Event::Sleep(sleep) = event else {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event} at {}, found sleep",
-					self.loc(),
-				)))
-				.map_err(GlobalError::raw);
-			};
-
+		let (deadline_ts, state, replay) = if let HistoryResult::Event(sleep) = history_res {
 			tracing::debug!(name=%self.name, id=%self.workflow_id, "replaying sleep");
 
 			(sleep.deadline_ts, sleep.state, true)
@@ -932,7 +955,8 @@ impl WorkflowCtx {
 			self.db
 				.commit_workflow_sleep_event(
 					self.workflow_id,
-					sleep_location.as_ref(),
+					&sleep_location,
+					self.version,
 					deadline_ts,
 					self.loop_location(),
 				)
@@ -941,40 +965,42 @@ impl WorkflowCtx {
 			(deadline_ts, SleepState::Normal, false)
 		};
 
+		// Location of the signal event (comes after the sleep event)
+		let sleep_location2 = self.cursor.current_location_for(&history_res);
+
 		// Move to next event
-		self.inc_location();
+		self.cursor.update(&sleep_location);
 
-		// Signal received before, short circuit
+		// Signal received before
 		if matches!(state, SleepState::Interrupted) {
-			let next_event = self.current_history_event();
+			let history_res = self
+				.cursor
+				.compare_signal(self.version)
+				.map_err(GlobalError::raw)?;
+			let location = self.cursor.current_location_for(&history_res);
 
-			if let Some(event) = next_event {
-				// Validate history is consistent
-				let Event::Signal(signal) = event else {
-					return Err(WorkflowError::HistoryDiverged(format!(
-						"expected {event} at {}, found signal",
-						self.loc(),
-					)))
-					.map_err(GlobalError::raw);
-				};
+			if let HistoryResult::Event(signal) = history_res {
+				tracing::debug!(
+					name=%self.name,
+					id=%self.workflow_id,
+					signal_name=%signal.name,
+					"replaying signal",
+				);
 
-				tracing::debug!(name=%self.name, id=%self.workflow_id, signal_name=%signal.name, "replaying signal");
-
-				let signal =
-					T::parse(&signal.name, signal.body.clone()).map_err(GlobalError::raw)?;
+				let signal = T::parse(&signal.name, &signal.body).map_err(GlobalError::raw)?;
 
 				// Move to next event
-				self.inc_location();
+				self.cursor.update(&location);
 
+				// Short circuit
 				return Ok(Some(signal));
 			} else {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected event at {}, found nothing",
-					self.loc(),
+					"expected signal at {}, found nothing",
+					location,
 				)))
 				.map_err(GlobalError::raw);
 			}
-		} else {
 		}
 
 		let duration = deadline_ts.saturating_sub(rivet_util::timestamp::now());
@@ -982,14 +1008,19 @@ impl WorkflowCtx {
 		// Duration is now 0, timeout is over
 		let signal = if duration <= 0 {
 			if !replay && duration < -50 {
-				tracing::warn!(name=%self.name, id=%self.workflow_id, %duration, "tried to sleep for a negative duration");
+				tracing::warn!(
+					name=%self.name,
+					id=%self.workflow_id,
+					%duration,
+					"tried to sleep for a negative duration",
+				);
 			}
 
 			// After timeout is over, check once for signal
 			if matches!(state, SleepState::Normal) {
-				let ctx = ListenCtx::new(self);
+				let mut ctx = ListenCtx::new(self, &sleep_location2);
 
-				match T::listen(&ctx).await {
+				match T::listen(&mut ctx).await {
 					Ok(x) => Some(x),
 					Err(WorkflowError::NoSignalFound(_)) => None,
 					Err(err) => return Err(GlobalError::raw(err)),
@@ -1010,12 +1041,12 @@ impl WorkflowCtx {
 					let mut interval = tokio::time::interval(SIGNAL_RETRY);
 					interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-					let ctx = ListenCtx::new(self);
+					let mut ctx = ListenCtx::new(self, &sleep_location2);
 
 					loop {
 						interval.tick().await;
 
-						match T::listen(&ctx).await {
+						match T::listen(&mut ctx).await {
 							// Retry
 							Err(WorkflowError::NoSignalFound(_)) => {}
 							x => return x,
@@ -1042,12 +1073,12 @@ impl WorkflowCtx {
 			let mut interval = tokio::time::interval(SIGNAL_RETRY);
 			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-			let ctx = ListenCtx::new(self);
+			let mut ctx = ListenCtx::new(self, &sleep_location2);
 
 			loop {
 				interval.tick().await;
 
-				match T::listen(&ctx).await {
+				match T::listen(&mut ctx).await {
 					Ok(res) => break Some(res),
 					Err(WorkflowError::NoSignalFound(signals)) => {
 						if retries > MAX_SIGNAL_RETRIES {
@@ -1066,18 +1097,18 @@ impl WorkflowCtx {
 			self.db
 				.update_workflow_sleep_event_state(
 					self.workflow_id,
-					sleep_location.as_ref(),
+					&sleep_location,
 					SleepState::Interrupted,
 				)
 				.await?;
 
 			// Move to next event
-			self.inc_location();
+			self.cursor.update(&sleep_location2);
 		} else if matches!(state, SleepState::Normal) {
 			self.db
 				.update_workflow_sleep_event_state(
 					self.workflow_id,
-					sleep_location.as_ref(),
+					&sleep_location,
 					SleepState::Uninterrupted,
 				)
 				.await?;
@@ -1085,15 +1116,82 @@ impl WorkflowCtx {
 
 		Ok(signal)
 	}
+
+	/// Represents a removed workflow step.
+	pub async fn removed<T: Removed>(&mut self) -> GlobalResult<()> {
+		// Existing event
+		if self
+			.cursor
+			.compare_removed::<T>()
+			.map_err(GlobalError::raw)?
+		{
+			tracing::debug!(
+				name=%self.name,
+				id=%self.workflow_id,
+				"skipping removed step",
+			);
+		}
+		// New "removed" event
+		else {
+			tracing::debug!(name=%self.name, id=%self.workflow_id, "inserting removed step");
+
+			self.db
+				.commit_workflow_removed_event(
+					self.workflow_id,
+					&self.cursor.current_location(),
+					T::event_type(),
+					T::name(),
+					self.loop_location(),
+				)
+				.await?;
+		};
+
+		// Move to next event
+		self.cursor.inc();
+
+		Ok(())
+	}
+
+	/// Returns true if the workflow has never reached this point before and is consistent for all future
+	/// executions of this workflow.
+	pub async fn is_new(&mut self) -> GlobalResult<bool> {
+		// Existing event
+		let is_new = if let Some(is_new) = self
+			.cursor
+			.compare_version_check()
+			.map_err(GlobalError::raw)?
+		{
+			is_new
+		} else {
+			tracing::debug!(name=%self.name, id=%self.workflow_id, "inserting version check");
+
+			self.db
+				.commit_workflow_version_check_event(
+					self.workflow_id,
+					&self.cursor.current_location(),
+					self.loop_location(),
+				)
+				.await?;
+
+			true
+		};
+
+		if is_new {
+			// Move to next event
+			self.cursor.inc();
+		}
+
+		Ok(is_new)
+	}
 }
 
 impl WorkflowCtx {
-	pub(crate) fn input(&self) -> &Arc<serde_json::Value> {
+	pub(crate) fn input(&self) -> &Arc<Box<serde_json::value::RawValue>> {
 		&self.input
 	}
 
-	pub(crate) fn loop_location(&self) -> Option<&[usize]> {
-		self.loop_location.as_deref()
+	pub(crate) fn loop_location(&self) -> Option<&Location> {
+		self.loop_location.as_ref()
 	}
 
 	pub(crate) fn db(&self) -> &DatabaseHandle {
@@ -1104,9 +1202,12 @@ impl WorkflowCtx {
 		&self.msg_ctx
 	}
 
-	/// For debugging, pretty prints the current location
-	pub(crate) fn loc(&self) -> String {
-		utils::format_location(&self.full_location())
+	pub(crate) fn cursor(&self) -> &Cursor {
+		&self.cursor
+	}
+
+	pub(crate) fn cursor_mut(&mut self) -> &mut Cursor {
+		&mut self.cursor
 	}
 
 	pub fn name(&self) -> &str {
@@ -1119,6 +1220,14 @@ impl WorkflowCtx {
 
 	pub fn ray_id(&self) -> Uuid {
 		self.ray_id
+	}
+
+	pub fn version(&self) -> usize {
+		self.version
+	}
+
+	pub(crate) fn set_version(&mut self, version: usize) {
+		self.version = version;
 	}
 
 	/// Timestamp at which this workflow run started.

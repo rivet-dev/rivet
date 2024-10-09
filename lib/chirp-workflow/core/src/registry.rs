@@ -56,7 +56,7 @@ impl Registry {
 				run: |ctx| {
 					async move {
 						// Deserialize input
-						let input = serde_json::from_value(ctx.input().as_ref().clone())
+						let input = serde_json::from_str(ctx.input().get())
 							.map_err(WorkflowError::DeserializeWorkflowInput)?;
 
 						// Run workflow
@@ -79,7 +79,7 @@ impl Registry {
 						};
 
 						// Serialize output
-						let output_val = serde_json::to_value(output)
+						let output_val = serde_json::value::to_raw_value(&output)
 							.map_err(WorkflowError::SerializeWorkflowOutput)?;
 
 						Ok(output_val)
@@ -107,6 +107,6 @@ pub struct RegistryWorkflow {
 	pub run: for<'a> fn(
 		&'a mut WorkflowCtx,
 	) -> Pin<
-		Box<dyn Future<Output = WorkflowResult<serde_json::Value>> + Send + 'a>,
+		Box<dyn Future<Output = WorkflowResult<Box<serde_json::value::RawValue>>> + Send + 'a>,
 	>,
 }

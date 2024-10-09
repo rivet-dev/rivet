@@ -4,11 +4,14 @@ use global_error::{GlobalError, GlobalResult};
 use serde::Serialize;
 
 use crate::{
-	builder::BuilderError, ctx::WorkflowCtx, error::WorkflowError, event::Event, message::Message,
+	builder::BuilderError, ctx::WorkflowCtx, error::WorkflowError, history::cursor::HistoryResult,
+	message::Message,
 };
 
 pub struct MessageBuilder<'a, M: Message> {
 	ctx: &'a mut WorkflowCtx,
+	version: usize,
+
 	body: M,
 	tags: serde_json::Map<String, serde_json::Value>,
 	wait: bool,
@@ -16,9 +19,11 @@ pub struct MessageBuilder<'a, M: Message> {
 }
 
 impl<'a, M: Message> MessageBuilder<'a, M> {
-	pub(crate) fn new(ctx: &'a mut WorkflowCtx, body: M) -> Self {
+	pub(crate) fn new(ctx: &'a mut WorkflowCtx, version: usize, body: M) -> Self {
 		MessageBuilder {
 			ctx,
+			version,
+
 			body,
 			tags: serde_json::Map::new(),
 			wait: false,
@@ -71,40 +76,31 @@ impl<'a, M: Message> MessageBuilder<'a, M> {
 			return Err(err.into());
 		}
 
-		let event = self.ctx.current_history_event();
+		// Error for version mismatch. This is done in the builder instead of in `VersionedWorkflowCtx` to
+		// defer the error.
+		self.ctx
+			.compare_version("message", self.version)
+			.map_err(GlobalError::raw)?;
+
+		let history_res = self
+			.ctx
+			.cursor()
+			.compare_msg(self.version, M::NAME)
+			.map_err(GlobalError::raw)?;
+		let location = self.ctx.cursor().current_location_for(&history_res);
 
 		// Message sent before
-		if let Some(event) = event {
-			// Validate history is consistent
-			let Event::MessageSend(msg) = event else {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event} at {}, found message send {}",
-					self.ctx.loc(),
-					M::NAME,
-				)))
-				.map_err(GlobalError::raw);
-			};
-
-			if msg.name != M::NAME {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event} at {}, found message send {}",
-					self.ctx.loc(),
-					M::NAME,
-				)))
-				.map_err(GlobalError::raw);
-			}
-
-			tracing::debug!(name=%self.ctx.name(), id=%self.ctx.workflow_id(), msg_name=%msg.name, "replaying message dispatch");
+		if let HistoryResult::Event(_) = history_res {
+			tracing::debug!(name=%self.ctx.name(), id=%self.ctx.workflow_id(), msg_name=%M::NAME, "replaying message dispatch");
 		}
 		// Send message
 		else {
 			tracing::info!(name=%self.ctx.name(), id=%self.ctx.workflow_id(), msg_name=%M::NAME, tags=?self.tags, "dispatching message");
 
 			// Serialize body
-			let body_val = serde_json::to_value(&self.body)
+			let body_val = serde_json::value::to_raw_value(&self.body)
 				.map_err(WorkflowError::SerializeMessageBody)
 				.map_err(GlobalError::raw)?;
-			let location = self.ctx.full_location();
 			let tags = serde_json::Value::Object(self.tags);
 			let tags2 = tags.clone();
 
@@ -114,10 +110,11 @@ impl<'a, M: Message> MessageBuilder<'a, M> {
 						.db()
 						.commit_workflow_message_send_event(
 							self.ctx.workflow_id(),
-							location.as_ref(),
+							&location,
+							self.version,
 							&tags,
 							M::NAME,
-							body_val,
+							&body_val,
 							self.ctx.loop_location(),
 						)
 						.await
@@ -136,7 +133,7 @@ impl<'a, M: Message> MessageBuilder<'a, M> {
 		}
 
 		// Move to next event
-		self.ctx.inc_location();
+		self.ctx.cursor_mut().update(&location);
 
 		Ok(())
 	}

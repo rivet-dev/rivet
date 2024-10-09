@@ -75,7 +75,7 @@ impl<T: Signal + Serialize> SignalBuilder<T> {
 		let signal_id = Uuid::new_v4();
 
 		// Serialize input
-		let input_val = serde_json::to_value(&self.body)
+		let input_val = serde_json::value::to_raw_value(&self.body)
 			.map_err(WorkflowError::SerializeSignalBody)
 			.map_err(GlobalError::raw)?;
 
@@ -84,7 +84,7 @@ impl<T: Signal + Serialize> SignalBuilder<T> {
 				tracing::info!(signal_name=%T::NAME, to_workflow_id=%workflow_id, %signal_id, "dispatching signal");
 
 				self.db
-					.publish_signal(self.ray_id, workflow_id, signal_id, T::NAME, input_val)
+					.publish_signal(self.ray_id, workflow_id, signal_id, T::NAME, &input_val)
 					.await
 					.map_err(GlobalError::raw)?;
 			}
@@ -97,7 +97,7 @@ impl<T: Signal + Serialize> SignalBuilder<T> {
 						&serde_json::Value::Object(self.tags),
 						signal_id,
 						T::NAME,
-						input_val,
+						&input_val,
 					)
 					.await
 					.map_err(GlobalError::raw)?;

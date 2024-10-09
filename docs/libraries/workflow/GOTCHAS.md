@@ -25,14 +25,10 @@ When fetching data for use in a workflow, you will most often put it in an activ
 depending on how much later the data from the activity is used, it may become stale. Make sure to add another
 activity where needed when you need more up-to-date info.
 
-## `WorkflowCtx::spawn`
+## Spawning a thread
 
-`WorkflowCtx::spawn` allows you to run workflow steps in a different thread and returns its join handle. Be
-**very careful** when using it because it is the developers responsibility to make sure it's result is handled
-correctly. If a spawn thread errors but its result is not handled, the main thread may continue as though no
-error occurred. This will result in a corrupt workflow state and a divergent history.
-
-Also see [Consistency with concurrency](#consistency-with-concurrency).
+You should not use `tokio::spawn` to execute workflow code. Instead, dispatch a new workflow and await it for
+its output.
 
 ## Consistency with concurrency
 
@@ -82,18 +78,17 @@ futures_util::stream::iter(iter)
 	.await?;
 ```
 
-If you plan on running more than one workflow step in each future, use a branch instead:
+If you plan on running more than one workflow step in each future, use a closure instead:
 
 ```rust
 let iter = actions.into_iter().map(|action| {
-	let ctx = ctx.branch();
-
-	async move {
-		ctx.activity(MyActivityInput {
-			action,
-		}).await?;
-	}
-	.boxed()
+	(
+		closure(|ctx| async move {
+			ctx.activity(MyActivityInput {
+				action,
+			}).await?;
+		}).await
+	)(ctx)
 });
 
 futures_util::stream::iter(iter)
@@ -148,3 +143,85 @@ short circuit when an `Err` is returned from any branch.
 
 So if you have an activity that errors immediately and another that takes a while to finish, the `ctx.join`
 call will wait until the long task is complete (or errors) before returning.
+
+## Adding a new sub workflow or closure (branching steps) to an existing workflow
+
+Be careful that your correctly set the version of new branching steps (sub workflows, closures) so as to not
+corrupt the history state.
+
+Branching steps are unique in that it is possible to corrupt the workflow if you incorrectly set their version
+when patching a workflow. For all other step types, the workflow engine will error before any changes to the
+history are made.
+
+**Example**
+
+```rust
+fn my_workflow() {
+	ctx.activity(Foo);
+
+	ctx.workflow(OtherWorkflow).run();
+
+	ctx.activity(Lorem);
+}
+
+fn other_workflow() {
+	ctx.activity(Bar);
+	ctx.activity(Baz);
+}
+```
+
+**After patching**
+
+```rust
+fn my_workflow() {
+	ctx.activity(Foo);
+
+	// Forgot to update version to 2
+	ctx.workflow(OtherWorkflow2).run();
+	ctx.workflow(OtherWorkflow).run();
+
+	ctx.activity(Lorem);
+}
+
+fn other_workflow() {
+	ctx.activity(Bar);
+	ctx.activity(Baz);
+}
+
+fn other_workflow2() {
+	ctx.v(2).activity(UpdatedBar);
+	// No baz
+}
+```
+
+The workflow engine does not know the difference between one branch or another. When running `OtherWorkflow2`,
+it will enter a branched context which it assumes is the same as the `OtherWorkflow` branch it ran previously.
+It will proceed to add `UpdatedBar` as a patch, and then error after it sees that `Bar` and `Baz` no longer
+exist in the branch.
+
+This means the history is now corrupt, as `UpdatedBar` was inserted before an error was thrown.
+
+**Correct Code**
+
+```rust
+fn my_workflow() {
+	ctx.activity(Foo);
+
+	ctx.v(2).workflow(OtherWorkflow2).run();
+	ctx.workflow(OtherWorkflow).run();
+
+	ctx.activity(Lorem);
+}
+
+fn other_workflow() {
+	ctx.activity(Bar);
+	ctx.activity(Baz);
+}
+
+fn other_workflow2() {
+	ctx.v(2).activity(UpdatedBar);
+	// No baz
+}
+```
+
+> Closures and sub workflows function in the same way. They create a new branch in history.

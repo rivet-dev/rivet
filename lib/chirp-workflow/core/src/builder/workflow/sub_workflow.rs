@@ -8,12 +8,14 @@ use crate::{
 	builder::BuilderError,
 	ctx::WorkflowCtx,
 	error::{WorkflowError, WorkflowResult},
-	event::Event,
+	history::cursor::HistoryResult,
 	workflow::{Workflow, WorkflowInput},
 };
 
 pub struct SubWorkflowBuilder<'a, I: WorkflowInput> {
 	ctx: &'a mut WorkflowCtx,
+	version: usize,
+
 	input: I,
 	tags: serde_json::Map<String, serde_json::Value>,
 	error: Option<BuilderError>,
@@ -23,9 +25,11 @@ impl<'a, I: WorkflowInput> SubWorkflowBuilder<'a, I>
 where
 	<I as WorkflowInput>::Workflow: Workflow<Input = I>,
 {
-	pub(crate) fn new(ctx: &'a mut WorkflowCtx, input: I) -> Self {
+	pub(crate) fn new(ctx: &'a mut WorkflowCtx, version: usize, input: I) -> Self {
 		SubWorkflowBuilder {
 			ctx,
+			version,
+
 			input,
 			tags: serde_json::Map::new(),
 			error: None,
@@ -73,7 +77,13 @@ where
 			Some(serde_json::Value::Object(self.tags))
 		};
 
-		Self::dispatch_workflow_inner(self.ctx, self.input, tags)
+		// Error for version mismatch. This is done in the builder instead of in `VersionedWorkflowCtx` to
+		// defer the error.
+		self.ctx
+			.compare_version("sub workflow", self.version)
+			.map_err(GlobalError::raw)?;
+
+		Self::dispatch_workflow_inner(self.ctx, self.version, self.input, tags)
 			.await
 			.map_err(GlobalError::raw)
 	}
@@ -91,23 +101,37 @@ where
 			);
 		}
 
-		tracing::info!(name=%self.ctx.name(), id=%self.ctx.workflow_id(), sub_workflow_name=%I::Workflow::NAME, "running sub workflow");
+		// Err for version mismatch
+		self.ctx
+			.compare_version("sub workflow", self.version)
+			.map_err(GlobalError::raw)?;
 
-		let mut ctx = self
+		let input_val = serde_json::value::to_raw_value(&self.input)
+			.map_err(WorkflowError::SerializeWorkflowInput)
+			.map_err(GlobalError::raw)?;
+		let mut branch = self
 			.ctx
-			.with_input(Arc::new(serde_json::to_value(&self.input)?));
+			.branch_inner(Arc::new(input_val), self.version, None)
+			.await
+			.map_err(GlobalError::raw)?;
 
+		tracing::info!(name=%self.ctx.name(), id=%self.ctx.workflow_id(), sub_workflow_name=%I::Workflow::NAME, "running sub workflow");
 		// Run workflow
 		let output =
-			<<I as WorkflowInput>::Workflow as Workflow>::run(&mut ctx, &self.input).await?;
+			<<I as WorkflowInput>::Workflow as Workflow>::run(&mut branch, &self.input).await?;
 
-		self.ctx.inc_location();
+		// Validate no leftover events
+		branch.cursor().check_clear().map_err(GlobalError::raw)?;
+
+		// Move to next event
+		self.ctx.cursor_mut().update(branch.cursor().root());
 
 		Ok(output)
 	}
 
 	async fn dispatch_workflow_inner(
 		ctx: &mut WorkflowCtx,
+		version: usize,
 		input: I,
 		tags: Option<serde_json::Value>,
 	) -> WorkflowResult<Uuid>
@@ -115,27 +139,13 @@ where
 		I: WorkflowInput,
 		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
 	{
-		let event = ctx.current_history_event();
+		let history_res = ctx
+			.cursor()
+			.compare_sub_workflow(version, I::Workflow::NAME)?;
+		let location = ctx.cursor().current_location_for(&history_res);
 
 		// Signal received before
-		let id = if let Some(event) = event {
-			// Validate history is consistent
-			let Event::SubWorkflow(sub_workflow) = event else {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event} at {}, found sub workflow {}",
-					ctx.loc(),
-					I::Workflow::NAME
-				)));
-			};
-
-			if sub_workflow.name != I::Workflow::NAME {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event} at {}, found sub_workflow {}",
-					ctx.loc(),
-					I::Workflow::NAME
-				)));
-			}
-
+		let id = if let HistoryResult::Event(sub_workflow) = history_res {
 			tracing::debug!(
 				name=%ctx.name(),
 				id=%ctx.workflow_id(),
@@ -162,18 +172,19 @@ where
 			);
 
 			// Serialize input
-			let input_val =
-				serde_json::to_value(input).map_err(WorkflowError::SerializeWorkflowOutput)?;
+			let input_val = serde_json::value::to_raw_value(&input)
+				.map_err(WorkflowError::SerializeWorkflowOutput)?;
 
 			ctx.db()
 				.dispatch_sub_workflow(
 					ctx.ray_id(),
 					ctx.workflow_id(),
-					ctx.full_location().as_ref(),
+					&location,
+					version,
 					sub_workflow_id,
 					&sub_workflow_name,
 					tags.as_ref(),
-					input_val,
+					&input_val,
 					ctx.loop_location(),
 				)
 				.await?;
@@ -190,7 +201,7 @@ where
 		};
 
 		// Move to next event
-		ctx.inc_location();
+		ctx.cursor_mut().update(&location);
 
 		Ok(id)
 	}

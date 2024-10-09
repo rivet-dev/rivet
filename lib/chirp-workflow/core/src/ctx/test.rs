@@ -124,7 +124,7 @@ impl TestCtx {
 	/// Waits for a workflow to be triggered with a superset of given input. Strictly for tests.
 	pub fn observe<W: Workflow>(&self, input: serde_json::Value) -> GlobalResult<ObserveHandle> {
 		// Serialize input
-		let input_val = serde_json::to_value(input)
+		let input_val = serde_json::value::to_raw_value(&input)
 			.map_err(WorkflowError::SerializeWorkflowOutput)
 			.map_err(GlobalError::raw)?;
 
@@ -272,7 +272,7 @@ impl TestCtx {
 pub struct ObserveHandle {
 	db: DatabaseHandle,
 	name: &'static str,
-	input: serde_json::Value,
+	input: Box<serde_json::value::RawValue>,
 	ts: i64,
 }
 

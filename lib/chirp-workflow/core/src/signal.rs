@@ -56,20 +56,20 @@ macro_rules! join_signal {
 
     	#[async_trait::async_trait]
 		impl Listen for $join {
-			async fn listen(ctx: &chirp_workflow::prelude::ListenCtx) -> chirp_workflow::prelude::WorkflowResult<Self> {
+			async fn listen(ctx: &mut chirp_workflow::prelude::ListenCtx) -> chirp_workflow::prelude::WorkflowResult<Self> {
 				let row = ctx.listen_any(&[
-				    $(<$just_types as chirp_workflow::prelude::Signal>::NAME),*
+				    $(<$just_types as chirp_workflow::signal::Signal>::NAME),*
 				]).await?;
 
-				Self::parse(&row.signal_name, row.body)
+				Self::parse(&row.signal_name, &row.body)
 			}
 
-			fn parse(name: &str, body: serde_json::Value) -> chirp_workflow::prelude::WorkflowResult<Self> {
+			fn parse(name: &str, body: &serde_json::value::RawValue) -> chirp_workflow::prelude::WorkflowResult<Self> {
 				$(
-				    if name == <$types as chirp_workflow::prelude::Signal>::NAME {
+				    if name == <$types as chirp_workflow::signal::Signal>::NAME {
 						Ok(
 							Self::$names(
-								serde_json::from_value(body)
+								serde_json::from_str(body.get())
 									.map_err(WorkflowError::DeserializeSignalBody)?
 							)
 						)
@@ -78,7 +78,7 @@ macro_rules! join_signal {
 				else {
 					unreachable!(
 						"received signal that wasn't queried for: {}, expected {:?}",
-						name, &[$(<$just_types as chirp_workflow::prelude::Signal>::NAME),*]
+						name, &[$(<$just_types as chirp_workflow::signal::Signal>::NAME),*]
 					);
 				}
 			}

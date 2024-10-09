@@ -1,3 +1,5 @@
+use std::{collections::HashMap, sync::Arc};
+
 use futures_util::FutureExt;
 use global_error::unwrap_ref;
 use global_error::GlobalResult;
@@ -11,7 +13,7 @@ use std::{
 };
 use uuid::Uuid;
 
-use crate::utils::Location;
+use crate::history::{cursor::Cursor, location::Location};
 
 // Yes
 type Query = Box<
@@ -76,8 +78,7 @@ pub struct WorkflowBackfillCtx {
 	workflow_id: Uuid,
 	workflow_name: String,
 
-	root_location: Location,
-	location_idx: usize,
+	cursor: Cursor,
 
 	tags: Option<serde_json::Value>,
 	input: Option<serde_json::Value>,
@@ -92,8 +93,7 @@ impl WorkflowBackfillCtx {
 			workflow_id: Uuid::new_v4(),
 			workflow_name: workflow_name.to_string(),
 
-			root_location: Box::new([]),
-			location_idx: 0,
+			cursor: Cursor::new(Arc::new(HashMap::new()), Location::empty()),
 
 			tags: None,
 			input: None,
@@ -108,13 +108,7 @@ impl WorkflowBackfillCtx {
 			workflow_id: self.workflow_id,
 			workflow_name: self.workflow_name.clone(),
 
-			root_location: self
-				.root_location
-				.iter()
-				.cloned()
-				.chain(std::iter::once(self.location_idx))
-				.collect(),
-			location_idx: 0,
+			cursor: Cursor::new(Arc::new(HashMap::new()), self.cursor.current_location()),
 
 			tags: None,
 			input: None,
@@ -123,25 +117,14 @@ impl WorkflowBackfillCtx {
 			queries: Vec::new(),
 		};
 
-		self.location_idx += 1;
+		self.cursor.inc();
 
 		branch
 	}
 
-	fn full_location(&self) -> Vec<i64> {
-		self.root_location
-			.iter()
-			.cloned()
-			.map(|x| x as i64)
-			.chain(std::iter::once(self.location_idx as i64))
-			.collect()
-	}
-
-	pub fn set_location(&mut self, location: &[usize]) {
-		assert!(!location.is_empty(), "empty location");
-		self.root_location = Box::from(&location[..location.len() - 1]);
-		self.location_idx = *location.last().unwrap();
-	}
+	// TODO:
+	// pub fn set_location(&mut self, location: &Location) {
+	// }
 
 	pub fn finalize(&mut self) {
 		let wake_immediate = true;
@@ -210,7 +193,7 @@ impl WorkflowBackfillCtx {
 		let input_hash = hasher.finish();
 
 		let workflow_id = self.workflow_id;
-		let location = self.full_location();
+		let location = self.cursor.current_location();
 		let activity_name = activity_name.to_string();
 
 		self.queries.push(Box::new(move |tx| {
@@ -227,8 +210,8 @@ impl WorkflowBackfillCtx {
 				.bind(location)
 				.bind(activity_name)
 				.bind(input_hash.to_le_bytes())
-				.bind(serde_json::to_value(&input)?)
-				.bind(serde_json::to_value(&output)?)
+				.bind(sqlx::types::Json(serde_json::value::to_raw_value(&input)?))
+				.bind(sqlx::types::Json(serde_json::value::to_raw_value(&output)?))
 				.bind(rivet_util::timestamp::now())
 				.execute(&mut **tx)
 				.await?;
@@ -238,7 +221,7 @@ impl WorkflowBackfillCtx {
 			.boxed()
 		}));
 
-		self.location_idx += 1;
+		self.cursor.inc();
 
 		Ok(())
 	}
@@ -250,7 +233,7 @@ impl WorkflowBackfillCtx {
 		body: T,
 	) -> GlobalResult<()> {
 		let workflow_id = self.workflow_id;
-		let location = self.full_location();
+		let location = self.cursor.current_location();
 		let message_name = message_name.to_string();
 
 		self.queries.push(Box::new(move |tx| {
@@ -276,7 +259,7 @@ impl WorkflowBackfillCtx {
 			.boxed()
 		}));
 
-		self.location_idx += 1;
+		self.cursor.inc();
 
 		Ok(())
 	}
@@ -287,7 +270,7 @@ impl WorkflowBackfillCtx {
 		body: T,
 	) -> GlobalResult<()> {
 		let workflow_id = self.workflow_id;
-		let location = self.full_location();
+		let location = self.cursor.current_location();
 		let signal_name = signal_name.to_string();
 
 		self.queries.push(Box::new(move |tx| {
@@ -313,7 +296,7 @@ impl WorkflowBackfillCtx {
 			.boxed()
 		}));
 
-		self.location_idx += 1;
+		self.cursor.inc();
 
 		Ok(())
 	}
@@ -333,7 +316,7 @@ impl WorkflowBackfillCtx {
 
 	pub fn dispatch_sub_workflow(&mut self, sub_workflow_id: Uuid) -> GlobalResult<()> {
 		let workflow_id = self.workflow_id;
-		let location = self.full_location();
+		let location = self.cursor.current_location();
 
 		self.queries.push(Box::new(move |tx| {
 			async move {
@@ -357,7 +340,7 @@ impl WorkflowBackfillCtx {
 			.boxed()
 		}));
 
-		self.location_idx += 1;
+		self.cursor.inc();
 
 		Ok(())
 	}
@@ -368,7 +351,7 @@ impl WorkflowBackfillCtx {
 		body: T,
 	) -> GlobalResult<()> {
 		let workflow_id = self.workflow_id;
-		let location = self.full_location();
+		let location = self.cursor.current_location();
 		let signal_name = signal_name.to_string();
 
 		self.queries.push(Box::new(move |tx| {
@@ -395,8 +378,10 @@ impl WorkflowBackfillCtx {
 			.boxed()
 		}));
 
-		self.location_idx += 1;
+		self.cursor.inc();
 
 		Ok(())
 	}
+
+	// TODO: Loop
 }

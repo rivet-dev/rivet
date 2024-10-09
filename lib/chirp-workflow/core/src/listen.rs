@@ -7,8 +7,9 @@ use crate::{ctx::ListenCtx, error::WorkflowResult};
 /// `CustomListener`.
 #[async_trait]
 pub trait Listen: Sized {
-	async fn listen(ctx: &ListenCtx) -> WorkflowResult<Self>;
-	fn parse(name: &str, body: serde_json::Value) -> WorkflowResult<Self>;
+	/// This function may be polled by the `WorkflowCtx`.
+	async fn listen(ctx: &mut ListenCtx) -> WorkflowResult<Self>;
+	fn parse(name: &str, body: &serde_json::value::RawValue) -> WorkflowResult<Self>;
 }
 
 /// A trait which allows listening for signals with a custom state. This is used by
@@ -17,6 +18,7 @@ pub trait Listen: Sized {
 pub trait CustomListener: Sized {
 	type Output;
 
-	async fn listen(&self, ctx: &ListenCtx) -> WorkflowResult<Self::Output>;
-	fn parse(name: &str, body: serde_json::Value) -> WorkflowResult<Self::Output>;
+	/// This function may be polled by the `WorkflowCtx`.
+	async fn listen(&self, ctx: &mut ListenCtx) -> WorkflowResult<Self::Output>;
+	fn parse(name: &str, body: &serde_json::value::RawValue) -> WorkflowResult<Self::Output>;
 }

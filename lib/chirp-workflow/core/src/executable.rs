@@ -1,12 +1,9 @@
 use std::{future::Future, pin::Pin};
 
 use async_trait::async_trait;
-use global_error::GlobalResult;
+use global_error::{GlobalError, GlobalResult};
 
-use crate::{
-	activity::{Activity, ActivityInput},
-	ctx::WorkflowCtx,
-};
+use crate::ctx::WorkflowCtx;
 
 /// Signifies a retryable executable entity in a workflow. For example: activity, tuple of activities (join),
 /// closure.
@@ -15,12 +12,6 @@ pub trait Executable: Send + Sized {
 	type Output: Send;
 
 	async fn execute(self, ctx: &mut WorkflowCtx) -> GlobalResult<Self::Output>;
-	/// In the event that an executable has multiple sub executables (i.e. a tuple of executables), this can
-	/// be implemented to provide the ability to choose whether to use `tokio::join!` or tokio::try_join!`
-	/// internally. Default implementation just calls `execute`.
-	async fn try_execute(self, ctx: &mut WorkflowCtx) -> GlobalResult<Self::Output> {
-		self.execute(ctx).await
-	}
 }
 
 pub type AsyncResult<'a, T> = Pin<Box<dyn Future<Output = GlobalResult<T>> + Send + 'a>>;
@@ -35,11 +26,21 @@ where
 	type Output = T;
 
 	async fn execute(self, ctx: &mut WorkflowCtx) -> GlobalResult<Self::Output> {
-		let mut branch = ctx.branch();
-		(self)(&mut branch).await
+		let mut branch = ctx.branch().await.map_err(GlobalError::raw)?;
+
+		let res = (self)(&mut branch).await?;
+
+		// Validate no leftover events
+		branch.cursor().check_clear().map_err(GlobalError::raw)?;
+
+		// Move to next event
+		ctx.cursor_mut().update(branch.cursor().root());
+
+		Ok(res)
 	}
 }
 
+// Option executable impl
 #[async_trait]
 impl<T: Executable> Executable for Option<T> {
 	type Output = Option<T::Output>;
@@ -83,23 +84,6 @@ macro_rules! impl_tuple {
 				// Handle errors here instead
 				Ok(($($args?),*))
 			}
-
-			async fn try_execute(self, ctx: &mut WorkflowCtx) -> GlobalResult<Self::Output> {
-				#[allow(non_snake_case)]
-				let ($($args),*) = self;
-
-				#[allow(non_snake_case)]
-				let ($(mut $args),*) = ($(
-					TupleHelper {
-						branch: ctx.step(),
-						exec: $args,
-					}
-				),*);
-
-				tokio::try_join!(
-					$($args.exec.execute(&mut $args.branch)),*
-				)
-			}
 		}
 	}
 }
@@ -113,43 +97,4 @@ impl_tuple!(A, B, C, D, E);
 struct TupleHelper<T: Executable> {
 	branch: WorkflowCtx,
 	exec: T,
-}
-
-// Must wrap all closured being used as executables in `WorkflowCtx::join` in this function due to
-// https://github.com/rust-lang/rust/issues/70263
-pub fn closure<F, T: Send>(f: F) -> F
-where
-	F: for<'a> FnOnce(&'a mut WorkflowCtx) -> AsyncResult<'a, T> + Send,
-{
-	f
-}
-
-pub struct ExecutableActivity<I>
-where
-	I: ActivityInput,
-	<I as ActivityInput>::Activity: Activity<Input = I>,
-{
-	inner: I,
-}
-
-#[async_trait]
-impl<I> Executable for ExecutableActivity<I>
-where
-	I: ActivityInput + Send + Sync,
-	<I as ActivityInput>::Activity: Activity<Input = I>,
-{
-	type Output = <I::Activity as Activity>::Output;
-
-	async fn execute(self, ctx: &mut WorkflowCtx) -> GlobalResult<Self::Output> {
-		ctx.activity(self.inner).await
-	}
-}
-
-// Wraps activity inputs for trait impl
-pub fn activity<I>(input: I) -> ExecutableActivity<I>
-where
-	I: ActivityInput,
-	<I as ActivityInput>::Activity: Activity<Input = I>,
-{
-	ExecutableActivity { inner: input }
 }

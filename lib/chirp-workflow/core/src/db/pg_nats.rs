@@ -1,3 +1,5 @@
+//! Implementation of a workflow database driver with PostgreSQL (CockroachDB) and NATS.
+
 use std::{sync::Arc, time::Duration};
 
 use futures_util::StreamExt;
@@ -8,15 +10,13 @@ use tokio::sync::Mutex;
 use tracing::Instrument;
 use uuid::Uuid;
 
-use super::{
-	ActivityEventRow, Database, LoopEventRow, MessageSendEventRow, PulledWorkflow,
-	PulledWorkflowRow, SignalEventRow, SignalRow, SignalSendEventRow, SleepEventRow,
-	SubWorkflowEventRow, WorkflowRow,
-};
+use super::{Database, PulledWorkflow, SignalData, WorkflowData};
 use crate::{
-	activity::ActivityId,
 	error::{WorkflowError, WorkflowResult},
-	event::{combine_events, SleepState},
+	history::{
+		event::{EventId, EventType, SleepState},
+		location::Location,
+	},
 	message, worker,
 };
 
@@ -148,7 +148,7 @@ impl Database for DatabasePgNats {
 		workflow_id: Uuid,
 		workflow_name: &str,
 		tags: Option<&serde_json::Value>,
-		input: serde_json::Value,
+		input: &serde_json::value::RawValue,
 	) -> WorkflowResult<()> {
 		self.query(|| async {
 			sqlx::query(indoc!(
@@ -164,7 +164,7 @@ impl Database for DatabasePgNats {
 			.bind(rivet_util::timestamp::now())
 			.bind(ray_id)
 			.bind(&tags)
-			.bind(&input)
+			.bind(sqlx::types::Json(input))
 			.execute(&mut *self.conn().await?)
 			.await
 			.map_err(WorkflowError::Sqlx)
@@ -176,7 +176,7 @@ impl Database for DatabasePgNats {
 		Ok(())
 	}
 
-	async fn get_workflow(&self, workflow_id: Uuid) -> WorkflowResult<Option<WorkflowRow>> {
+	async fn get_workflow(&self, workflow_id: Uuid) -> WorkflowResult<Option<WorkflowData>> {
 		sqlx::query_as::<_, WorkflowRow>(indoc!(
 			"
 			SELECT workflow_id, input, output
@@ -187,6 +187,7 @@ impl Database for DatabasePgNats {
 		.bind(workflow_id)
 		.fetch_optional(&mut *self.conn().await?)
 		.await
+		.map(|row| row.map(Into::into))
 		.map_err(WorkflowError::Sqlx)
 	}
 
@@ -325,7 +326,6 @@ impl Database for DatabasePgNats {
 			return Ok(Vec::new());
 		}
 
-		// Turn rows into hashmap
 		let workflow_ids = workflow_rows
 			.iter()
 			.map(|row| row.workflow_id)
@@ -333,148 +333,211 @@ impl Database for DatabasePgNats {
 
 		// TODO: Convert into union query
 		// Fetch all events for all fetched workflows
-		let (
-			activity_events,
-			signal_events,
-			signal_send_events,
-			msg_send_events,
-			sub_workflow_events,
-			loop_events,
-			sleep_events,
-		) = tokio::try_join!(
-			async {
-				sqlx::query_as::<_, ActivityEventRow>(indoc!(
-					"
-					SELECT
-						ev.workflow_id,
-						ev.location,
-						ev.activity_name,
-						ev.input_hash,
-						ev.output,
-						ev.create_ts,
-						COUNT(err.workflow_id) AS error_count
-					FROM db_workflow.workflow_activity_events AS ev
-					LEFT JOIN db_workflow.workflow_activity_errors AS err
-					ON
-						ev.workflow_id = err.workflow_id AND
-						ev.location = err.location
-					WHERE ev.workflow_id = ANY($1) AND forgotten = FALSE
-					GROUP BY ev.workflow_id, ev.location, ev.activity_name, ev.input_hash, ev.output
-					ORDER BY ev.workflow_id, ev.location ASC
-					",
-				))
-				.bind(&workflow_ids)
-				.fetch_all(&mut *self.conn().await?)
-				.await
-				.map_err(WorkflowError::Sqlx)
-			},
-			async {
-				sqlx::query_as::<_, SignalEventRow>(indoc!(
-					"
-					SELECT
-						workflow_id, location, signal_name, body
-					FROM db_workflow.workflow_signal_events
-					WHERE workflow_id = ANY($1) AND forgotten = FALSE
-					ORDER BY workflow_id, location ASC
-					",
-				))
-				.bind(&workflow_ids)
-				.fetch_all(&mut *self.conn().await?)
-				.await
-				.map_err(WorkflowError::Sqlx)
-			},
-			async {
-				sqlx::query_as::<_, SignalSendEventRow>(indoc!(
-					"
-					SELECT
-						workflow_id, location, signal_id, signal_name
-					FROM db_workflow.workflow_signal_send_events
-					WHERE workflow_id = ANY($1) AND forgotten = FALSE
-					ORDER BY workflow_id, location ASC
-					",
-				))
-				.bind(&workflow_ids)
-				.fetch_all(&mut *self.conn().await?)
-				.await
-				.map_err(WorkflowError::Sqlx)
-			},
-			async {
-				sqlx::query_as::<_, MessageSendEventRow>(indoc!(
-					"
-					SELECT
-						workflow_id, location, message_name
-					FROM db_workflow.workflow_message_send_events
-					WHERE workflow_id = ANY($1) AND forgotten = FALSE
-					ORDER BY workflow_id, location ASC
-					",
-				))
-				.bind(&workflow_ids)
-				.fetch_all(&mut *self.conn().await?)
-				.await
-				.map_err(WorkflowError::Sqlx)
-			},
-			async {
-				sqlx::query_as::<_, SubWorkflowEventRow>(indoc!(
-					"
-					SELECT
-						sw.workflow_id,
-						sw.location,
-						sw.sub_workflow_id,
-						w.workflow_name AS sub_workflow_name
-					FROM db_workflow.workflow_sub_workflow_events AS sw
-					JOIN db_workflow.workflows AS w
-					ON sw.sub_workflow_id = w.workflow_id
-					WHERE sw.workflow_id = ANY($1) AND forgotten = FALSE
-					ORDER BY sw.workflow_id, sw.location ASC
-					",
-				))
-				.bind(&workflow_ids)
-				.fetch_all(&mut *self.conn().await?)
-				.await
-				.map_err(WorkflowError::Sqlx)
-			},
-			async {
-				sqlx::query_as::<_, LoopEventRow>(indoc!(
-					"
-					SELECT
-						workflow_id, location, iteration, output
-					FROM db_workflow.workflow_loop_events
-					WHERE workflow_id = ANY($1) AND forgotten = FALSE
-					ORDER BY workflow_id, location ASC
-					",
-				))
-				.bind(&workflow_ids)
-				.fetch_all(&mut *self.conn().await?)
-				.await
-				.map_err(WorkflowError::Sqlx)
-			},
-			async {
-				sqlx::query_as::<_, SleepEventRow>(indoc!(
-					"
-					SELECT
-						workflow_id, location, deadline_ts, state
-					FROM db_workflow.workflow_sleep_events
-					WHERE workflow_id = ANY($1) AND forgotten = FALSE
-					ORDER BY workflow_id, location ASC
-					",
-				))
-				.bind(&workflow_ids)
-				.fetch_all(&mut *self.conn().await?)
-				.await
-				.map_err(WorkflowError::Sqlx)
-			},
-		)?;
+		let events = sqlx::query_as::<_, AmalgamEventRow>(indoc!(
+			"
+			-- Activity events
+			SELECT
+				ev.workflow_id,
+				ev.location,
+				ev.location2,
+				0 AS event_type, -- EventType
+				ev.activity_name AS name,
+				NULL AS auxiliary_id,
+				ev.input_hash AS hash,
+				ev.output AS output,
+				ev.create_ts AS create_ts,
+				COUNT(err.*) AS error_count,
+				NULL AS iteration,
+				NULL AS deadline_ts,
+				NULL AS state,
+				NULL AS inner_event_type
+			FROM db_workflow.workflow_activity_events AS ev
+			LEFT JOIN db_workflow.workflow_activity_errors AS err
+			ON
+				ev.workflow_id = err.workflow_id AND
+				ev.location2_hash = err.location2_hash
+			WHERE ev.workflow_id = ANY($1) AND forgotten = FALSE
+			GROUP BY ev.workflow_id, ev.location2
+			UNION ALL
+			-- Signal listen events
+			SELECT
+				workflow_id,
+				location,
+				location2,
+				1 AS event_type, -- EventType
+				signal_name AS name,
+				NULL AS auxiliary_id,
+				NULL AS hash,
+				body AS output,
+				NULL AS create_ts,
+				NULL AS error_count,
+				NULL AS iteration,
+				NULL AS deadline_ts,
+				NULL AS state,
+				NULL AS inner_event_type
+			FROM db_workflow.workflow_signal_events
+			WHERE workflow_id = ANY($1) AND forgotten = FALSE
+			UNION ALL
+			-- Signal send events
+			SELECT
+				workflow_id,
+				location,
+				location2,
+				2 AS event_type, -- EventType
+				signal_name AS name,
+				signal_id AS auxiliary_id,
+				NULL AS hash,
+				NULL AS output,
+				NULL AS create_ts,
+				NULL AS error_count,
+				NULL AS iteration,
+				NULL AS deadline_ts,
+				NULL AS state,
+				NULL AS inner_event_type
+			FROM db_workflow.workflow_signal_send_events
+			WHERE workflow_id = ANY($1) AND forgotten = FALSE
+			UNION ALL
+			-- Message send events
+			SELECT
+				workflow_id,
+				location,
+				location2,
+				3 AS event_type, -- EventType
+				message_name AS name,
+				NULL AS auxiliary_id,
+				NULL AS hash,
+				NULL AS output,
+				NULL AS create_ts,
+				NULL AS error_count,
+				NULL AS iteration,
+				NULL AS deadline_ts,
+				NULL AS state,
+				NULL AS inner_event_type
+			FROM db_workflow.workflow_message_send_events
+			WHERE workflow_id = ANY($1) AND forgotten = FALSE
+			UNION ALL
+			-- Sub workflow events
+			SELECT
+				sw.workflow_id,
+				sw.location,
+				sw.location2,
+				4 AS event_type, -- pg_nats::types::EventType
+				w.workflow_name AS name,
+				sw.sub_workflow_id AS auxiliary_id,
+				NULL AS hash,
+				NULL AS output,
+				NULL AS create_ts,
+				NULL AS error_count,
+				NULL AS iteration,
+				NULL AS deadline_ts,
+				NULL AS state,
+				NULL AS inner_event_type
+			FROM db_workflow.workflow_sub_workflow_events AS sw
+			JOIN db_workflow.workflows AS w
+			ON sw.sub_workflow_id = w.workflow_id
+			WHERE sw.workflow_id = ANY($1) AND forgotten = FALSE
+			UNION ALL
+			-- Loop events
+			SELECT
+				workflow_id,
+				location,
+				location2,
+				5 AS event_type, -- pg_nats::types::EventType
+				NULL AS name,
+				NULL AS auxiliary_id,
+				NULL AS hash,
+				output,
+				NULL AS create_ts,
+				NULL AS error_count,
+				iteration,
+				NULL AS deadline_ts,
+				NULL AS state,
+				NULL AS inner_event_type
+			FROM db_workflow.workflow_loop_events
+			WHERE workflow_id = ANY($1) AND forgotten = FALSE
+			UNION ALL
+			-- Sleep events
+			SELECT
+				workflow_id,
+				location,
+				location2,
+				6 AS event_type, -- pg_nats::types::EventType
+				NULL AS name,
+				NULL AS auxiliary_id,
+				NULL AS hash,
+				NULL AS output,
+				NULL AS create_ts,
+				NULL AS error_count,
+				NULL AS iteration,
+				deadline_ts,
+				state,
+				NULL AS inner_event_type
+			FROM db_workflow.workflow_sleep_events
+			WHERE workflow_id = ANY($1) AND forgotten = FALSE
+			-- Branch events
+			SELECT
+				workflow_id,
+				ARRAY[] AS location,
+				location AS location2,
+				7 AS event_type, -- pg_nats::types::EventType
+				NULL AS name,
+				NULL AS auxiliary_id,
+				NULL AS hash,
+				NULL AS output,
+				NULL AS create_ts,
+				NULL AS error_count,
+				NULL AS iteration,
+				NULL AS deadline_ts,
+				NULL AS state,
+				NULL AS inner_event_type
+			FROM db_workflow.workflow_sleep_events
+			WHERE workflow_id = ANY($1) AND forgotten = FALSE
+			-- Removed events
+			SELECT
+				workflow_id,
+				ARRAY[] AS location,
+				location AS location2,
+				8 AS event_type, -- pg_nats::types::EventType
+				event_name AS name,
+				NULL AS auxiliary_id,
+				NULL AS hash,
+				NULL AS output,
+				NULL AS create_ts,
+				NULL AS error_count,
+				NULL AS iteration,
+				NULL AS deadline_ts,
+				NULL AS state,
+				event_type AS inner_event_type
+			FROM db_workflow.workflow_sleep_events
+			WHERE workflow_id = ANY($1) AND forgotten = FALSE
+			-- Version check events
+			SELECT
+				workflow_id,
+				ARRAY[] AS location,
+				location AS location2,
+				9 AS event_type, -- pg_nats::types::EventType
+				NULL AS name,
+				NULL AS auxiliary_id,
+				NULL AS hash,
+				NULL AS output,
+				NULL AS create_ts,
+				NULL AS error_count,
+				NULL AS iteration,
+				NULL AS deadline_ts,
+				NULL AS state,
+				NULL AS inner_event_type
+			FROM db_workflow.workflow_sleep_events
+			WHERE workflow_id = ANY($1) AND forgotten = FALSE
+			-- We don't order by location2 because it is a JSONB type (probably inefficient)
+			ORDER BY workflow_id ASC;
+			",
+		))
+		.bind(&workflow_ids)
+		.fetch_all(&mut *self.conn().await?)
+		.await
+		.map_err(WorkflowError::Sqlx)?;
 
-		let workflows = combine_events(
-			workflow_rows,
-			activity_events,
-			signal_events,
-			signal_send_events,
-			msg_send_events,
-			sub_workflow_events,
-			loop_events,
-			sleep_events,
-		)?;
+		let workflows = build_histories(workflow_rows, events)?;
 
 		Ok(workflows)
 	}
@@ -482,7 +545,7 @@ impl Database for DatabasePgNats {
 	async fn commit_workflow(
 		&self,
 		workflow_id: Uuid,
-		output: &serde_json::Value,
+		output: &serde_json::value::RawValue,
 	) -> WorkflowResult<()> {
 		self.query(|| async {
 			sqlx::query(indoc!(
@@ -493,7 +556,7 @@ impl Database for DatabasePgNats {
 				",
 			))
 			.bind(workflow_id)
-			.bind(output)
+			.bind(sqlx::types::Json(output))
 			.execute(&mut *self.conn().await?)
 			.await
 			.map_err(WorkflowError::Sqlx)
@@ -581,12 +644,13 @@ impl Database for DatabasePgNats {
 	async fn commit_workflow_activity_event(
 		&self,
 		workflow_id: Uuid,
-		location: &[usize],
-		activity_id: &ActivityId,
+		location: &Location,
+		version: usize,
+		event_id: &EventId,
 		create_ts: i64,
-		input: serde_json::Value,
-		res: Result<serde_json::Value, &str>,
-		loop_location: Option<&[usize]>,
+		input: &serde_json::value::RawValue,
+		res: Result<&serde_json::value::RawValue, &str>,
+		loop_location: Option<&Location>,
 	) -> WorkflowResult<()> {
 		match res {
 			Ok(output) => {
@@ -595,27 +659,29 @@ impl Database for DatabasePgNats {
 						"
 						INSERT INTO db_workflow.workflow_activity_events (
 							workflow_id,
-							location,
+							location2,
+							version,
 							activity_name,
 							input_hash,
 							input,
 							output,
 							create_ts,
-							loop_location
+							loop_location2
 						)
-						VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-						ON CONFLICT (workflow_id, location) DO UPDATE
+						VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+						ON CONFLICT (workflow_id, location2) DO UPDATE
 						SET output = excluded.output
 						",
 					))
 					.bind(workflow_id)
-					.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
-					.bind(&activity_id.name)
-					.bind(activity_id.input_hash.to_le_bytes())
-					.bind(&input)
-					.bind(&output)
+					.bind(location)
+					.bind(version as i64)
+					.bind(&event_id.name)
+					.bind(event_id.input_hash.to_le_bytes())
+					.bind(sqlx::types::Json(input))
+					.bind(sqlx::types::Json(output))
 					.bind(create_ts)
-					.bind(loop_location.map(|l| l.iter().map(|x| *x as i64).collect::<Vec<_>>()))
+					.bind(loop_location)
 					.execute(&mut *self.conn().await?)
 					.await
 					.map_err(WorkflowError::Sqlx)
@@ -630,20 +696,20 @@ impl Database for DatabasePgNats {
 							event AS (
 								INSERT INTO db_workflow.workflow_activity_events (
 									workflow_id,
-									location,
+									location2,
 									activity_name,
 									input_hash,
 									input,
 									create_ts,
-									loop_location
+									loop_location2
 								)
 								VALUES ($1, $2, $3, $4, $5, $7, $8)
-								ON CONFLICT (workflow_id, location) DO NOTHING
+								ON CONFLICT (workflow_id, location2) DO NOTHING
 								RETURNING 1
 							),
 							err AS (
 								INSERT INTO db_workflow.workflow_activity_errors (
-									workflow_id, location, activity_name, error, ts
+									workflow_id, location2, activity_name, error, ts
 								)
 								VALUES ($1, $2, $3, $6, $9)
 								RETURNING 1
@@ -652,13 +718,13 @@ impl Database for DatabasePgNats {
 						",
 					))
 					.bind(workflow_id)
-					.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
-					.bind(&activity_id.name)
-					.bind(activity_id.input_hash.to_le_bytes())
-					.bind(&input)
+					.bind(location)
+					.bind(&event_id.name)
+					.bind(event_id.input_hash.to_le_bytes())
+					.bind(sqlx::types::Json(input))
 					.bind(err)
 					.bind(create_ts)
-					.bind(loop_location.map(|l| l.iter().map(|x| *x as i64).collect::<Vec<_>>()))
+					.bind(loop_location)
 					.bind(rivet_util::timestamp::now())
 					.execute(&mut *self.conn().await?)
 					.await
@@ -675,9 +741,10 @@ impl Database for DatabasePgNats {
 		&self,
 		workflow_id: Uuid,
 		filter: &[&str],
-		location: &[usize],
-		loop_location: Option<&[usize]>,
-	) -> WorkflowResult<Option<SignalRow>> {
+		location: &Location,
+		version: usize,
+		loop_location: Option<&Location>,
+	) -> WorkflowResult<Option<SignalData>> {
 		let signal = self
 			.query(|| async {
 				sqlx::query_as::<_, SignalRow>(indoc!(
@@ -707,7 +774,7 @@ impl Database for DatabasePgNats {
 						-- If the next signal is not tagged, acknowledge it with this statement
 						ack_signal AS (
 							UPDATE db_workflow.signals
-							SET ack_ts = $4
+							SET ack_ts = $5
 							WHERE signal_id = (
 								SELECT signal_id FROM next_signal WHERE tagged = false
 							)
@@ -716,7 +783,7 @@ impl Database for DatabasePgNats {
 						-- If the next signal is tagged, acknowledge it with this statement
 						ack_tagged_signal AS (
 							UPDATE db_workflow.tagged_signals
-							SET ack_ts = $4
+							SET ack_ts = $5
 							WHERE signal_id = (
 								SELECT signal_id FROM next_signal WHERE tagged = true
 							)
@@ -725,16 +792,24 @@ impl Database for DatabasePgNats {
 						-- After acking the signal, add it to the events table
 						insert_event AS (
 							INSERT INTO db_workflow.workflow_signal_events (
-								workflow_id, location, signal_id, signal_name, body, ack_ts, loop_location
-							)
-							SELECT
-								$1 AS workflow_id,
-								$3 AS location,
+								workflow_id,
+								location2,
+								version,
 								signal_id,
 								signal_name,
 								body,
-								$4 AS ack_ts,
-								$5 AS loop_location
+								ack_ts,
+								loop_location2
+							)
+							SELECT
+								$1 AS workflow_id,
+								$3 AS location2,
+								$4 AS version,
+								signal_id,
+								signal_name,
+								body,
+								$5 AS ack_ts,
+								$6 AS loop_location2
 							FROM next_signal
 							RETURNING 1
 						)
@@ -743,11 +818,13 @@ impl Database for DatabasePgNats {
 				))
 				.bind(workflow_id)
 				.bind(filter)
-				.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
+				.bind(location)
+				.bind(version as i64)
 				.bind(rivet_util::timestamp::now())
-				.bind(loop_location.map(|l| l.iter().map(|x| *x as i64).collect::<Vec<_>>()))
+				.bind(loop_location)
 				.fetch_optional(&mut *self.conn().await?)
 				.await
+				.map(|row| row.map(Into::into))
 				.map_err(WorkflowError::Sqlx)
 			})
 			.await?;
@@ -761,7 +838,7 @@ impl Database for DatabasePgNats {
 		workflow_id: Uuid,
 		signal_id: Uuid,
 		signal_name: &str,
-		body: serde_json::Value,
+		body: &serde_json::value::RawValue,
 	) -> WorkflowResult<()> {
 		self.query(|| async {
 			sqlx::query(indoc!(
@@ -773,7 +850,7 @@ impl Database for DatabasePgNats {
 			.bind(signal_id)
 			.bind(workflow_id)
 			.bind(signal_name)
-			.bind(&body)
+			.bind(sqlx::types::Json(body))
 			.bind(ray_id)
 			.bind(rivet_util::timestamp::now())
 			.execute(&mut *self.conn().await?)
@@ -793,7 +870,7 @@ impl Database for DatabasePgNats {
 		tags: &serde_json::Value,
 		signal_id: Uuid,
 		signal_name: &str,
-		body: serde_json::Value,
+		body: &serde_json::value::RawValue,
 	) -> WorkflowResult<()> {
 		self.query(|| async {
 			sqlx::query(indoc!(
@@ -805,7 +882,7 @@ impl Database for DatabasePgNats {
 			.bind(signal_id)
 			.bind(tags)
 			.bind(signal_name)
-			.bind(&body)
+			.bind(sqlx::types::Json(body))
 			.bind(ray_id)
 			.bind(rivet_util::timestamp::now())
 			.execute(&mut *self.conn().await?)
@@ -822,13 +899,14 @@ impl Database for DatabasePgNats {
 	async fn publish_signal_from_workflow(
 		&self,
 		from_workflow_id: Uuid,
-		location: &[usize],
+		location: &Location,
+		version: usize,
 		ray_id: Uuid,
 		to_workflow_id: Uuid,
 		signal_id: Uuid,
 		signal_name: &str,
-		body: serde_json::Value,
-		loop_location: Option<&[usize]>,
+		body: &serde_json::value::RawValue,
+		loop_location: Option<&Location>,
 	) -> WorkflowResult<()> {
 		self.query(|| async {
 			sqlx::query(indoc!(
@@ -841,9 +919,9 @@ impl Database for DatabasePgNats {
 					),
 					send_event AS (
 						INSERT INTO db_workflow.workflow_signal_send_events(
-							workflow_id, location, signal_id, signal_name, body, loop_location
+							workflow_id, location2, version, signal_id, signal_name, body, loop_location2
 						)
-						VALUES($7, $8, $1, $3, $4, $9)
+						VALUES($7, $8, $9, $1, $3, $4, $10)
 						RETURNING 1
 					)
 				SELECT 1
@@ -852,12 +930,13 @@ impl Database for DatabasePgNats {
 			.bind(signal_id)
 			.bind(to_workflow_id)
 			.bind(signal_name)
-			.bind(&body)
+			.bind(sqlx::types::Json(body))
 			.bind(ray_id)
 			.bind(rivet_util::timestamp::now())
 			.bind(from_workflow_id)
-			.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
-			.bind(loop_location.map(|l| l.iter().map(|x| *x as i64).collect::<Vec<_>>()))
+			.bind(location)
+			.bind(version as i64)
+			.bind(loop_location)
 			.execute(&mut *self.conn().await?)
 			.await
 			.map_err(WorkflowError::Sqlx)
@@ -872,13 +951,14 @@ impl Database for DatabasePgNats {
 	async fn publish_tagged_signal_from_workflow(
 		&self,
 		from_workflow_id: Uuid,
-		location: &[usize],
+		location: &Location,
+		version: usize,
 		ray_id: Uuid,
 		tags: &serde_json::Value,
 		signal_id: Uuid,
 		signal_name: &str,
-		body: serde_json::Value,
-		loop_location: Option<&[usize]>,
+		body: &serde_json::value::RawValue,
+		loop_location: Option<&Location>,
 	) -> WorkflowResult<()> {
 		self.query(|| async {
 			sqlx::query(indoc!(
@@ -891,9 +971,9 @@ impl Database for DatabasePgNats {
 					),
 					send_event AS (
 						INSERT INTO db_workflow.workflow_signal_send_events(
-							workflow_id, location, signal_id, signal_name, body, loop_location
+							workflow_id, location2, version, signal_id, signal_name, body, loop_location2
 						)
-						VALUES($7, $8, $1, $3, $4, $9)
+						VALUES($7, $8, $9, $1, $3, $4, $10)
 						RETURNING 1
 					)
 				SELECT 1
@@ -902,12 +982,13 @@ impl Database for DatabasePgNats {
 			.bind(signal_id)
 			.bind(tags)
 			.bind(signal_name)
-			.bind(&body)
+			.bind(sqlx::types::Json(body))
 			.bind(ray_id)
 			.bind(rivet_util::timestamp::now())
 			.bind(from_workflow_id)
-			.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
-			.bind(loop_location.map(|l| l.iter().map(|x| *x as i64).collect::<Vec<_>>()))
+			.bind(location)
+			.bind(version as i64)
+			.bind(loop_location)
 			.execute(&mut *self.conn().await?)
 			.await
 			.map_err(WorkflowError::Sqlx)
@@ -923,12 +1004,13 @@ impl Database for DatabasePgNats {
 		&self,
 		ray_id: Uuid,
 		workflow_id: Uuid,
-		location: &[usize],
+		location: &Location,
+		version: usize,
 		sub_workflow_id: Uuid,
 		sub_workflow_name: &str,
 		tags: Option<&serde_json::Value>,
-		input: serde_json::Value,
-		loop_location: Option<&[usize]>,
+		input: &serde_json::value::RawValue,
+		loop_location: Option<&Location>,
 	) -> WorkflowResult<()> {
 		self.query(|| async {
 			sqlx::query(indoc!(
@@ -943,9 +1025,9 @@ impl Database for DatabasePgNats {
 					),
 					sub_workflow AS (
 						INSERT INTO db_workflow.workflow_sub_workflow_events(
-							workflow_id, location, sub_workflow_id, create_ts, loop_location
+							workflow_id, location2, version, sub_workflow_id, create_ts, loop_location2
 						)
-						VALUES($1, $7, $8, $3, $9)
+						VALUES($1, $7, $8, $9, $3, $10)
 						RETURNING 1
 					)
 				SELECT 1
@@ -956,10 +1038,11 @@ impl Database for DatabasePgNats {
 			.bind(rivet_util::timestamp::now())
 			.bind(ray_id)
 			.bind(tags)
-			.bind(&input)
-			.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
+			.bind(sqlx::types::Json(input))
+			.bind(location)
+			.bind(version as i64)
 			.bind(sub_workflow_id)
-			.bind(loop_location.map(|l| l.iter().map(|x| *x as i64).collect::<Vec<_>>()))
+			.bind(loop_location)
 			.execute(&mut *self.conn().await?)
 			.await
 			.map_err(WorkflowError::Sqlx)
@@ -974,7 +1057,7 @@ impl Database for DatabasePgNats {
 	async fn poll_workflow(
 		&self,
 		workflow_name: &str,
-		input: &serde_json::Value,
+		input: &serde_json::value::RawValue,
 		after_ts: i64,
 	) -> WorkflowResult<Option<(Uuid, i64)>> {
 		sqlx::query_as::<_, (Uuid, i64)>(indoc!(
@@ -989,7 +1072,7 @@ impl Database for DatabasePgNats {
 			",
 		))
 		.bind(workflow_name)
-		.bind(input)
+		.bind(sqlx::types::Json(input))
 		.bind(after_ts)
 		.fetch_optional(&mut *self.conn().await?)
 		.await
@@ -999,28 +1082,30 @@ impl Database for DatabasePgNats {
 	async fn commit_workflow_message_send_event(
 		&self,
 		from_workflow_id: Uuid,
-		location: &[usize],
+		location: &Location,
+		version: usize,
 		tags: &serde_json::Value,
 		message_name: &str,
-		body: serde_json::Value,
-		loop_location: Option<&[usize]>,
+		body: &serde_json::value::RawValue,
+		loop_location: Option<&Location>,
 	) -> WorkflowResult<()> {
 		self.query(|| async {
 			sqlx::query(indoc!(
 				"
 				INSERT INTO db_workflow.workflow_message_send_events(
-					workflow_id, location, tags, message_name, body, loop_location
+					workflow_id, location2, version, tags, message_name, body, loop_location2
 				)
-				VALUES($1, $2, $3, $4, $5, $6)
+				VALUES($1, $2, $3, $4, $5, $6, $7)
 				RETURNING 1
 				",
 			))
 			.bind(from_workflow_id)
-			.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
+			.bind(location)
+			.bind(version as i64)
 			.bind(tags)
 			.bind(message_name)
-			.bind(&body)
-			.bind(loop_location.map(|l| l.iter().map(|x| *x as i64).collect::<Vec<_>>()))
+			.bind(sqlx::types::Json(body))
+			.bind(loop_location)
 			.execute(&mut *self.conn().await?)
 			.await
 			.map_err(WorkflowError::Sqlx)
@@ -1030,13 +1115,14 @@ impl Database for DatabasePgNats {
 		Ok(())
 	}
 
-	async fn update_loop(
+	async fn upsert_loop(
 		&self,
 		workflow_id: Uuid,
-		location: &[usize],
+		location: &Location,
+		version: usize,
 		iteration: usize,
-		output: Option<serde_json::Value>,
-		loop_location: Option<&[usize]>,
+		output: Option<&serde_json::value::RawValue>,
+		loop_location: Option<&Location>,
 	) -> WorkflowResult<()> {
 		self.query(|| async {
 			let mut conn = self.conn().await?;
@@ -1046,13 +1132,13 @@ impl Database for DatabasePgNats {
 				"
 				INSERT INTO db_workflow.workflow_loop_events (
 					workflow_id,
-					location,
+					location2,
 					iteration,
 					output,
-					loop_location
+					loop_location2
 				)
-				VALUES ($1, $2, $3, $4, $5)
-				ON CONFLICT (workflow_id, location) DO UPDATE
+				VALUES ($1, $2, $3, $4, $5, $6)
+				ON CONFLICT (workflow_id, location2) DO UPDATE
 				SET
 					iteration = $3,
 					output = $4
@@ -1060,10 +1146,11 @@ impl Database for DatabasePgNats {
 				",
 			))
 			.bind(workflow_id)
-			.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
+			.bind(&location)
+			.bind(version as i64)
 			.bind(iteration as i64)
-			.bind(&output)
-			.bind(loop_location.map(|l| l.iter().map(|x| *x as i64).collect::<Vec<_>>()))
+			.bind(sqlx::types::Json(output))
+			.bind(loop_location)
 			.execute(&mut *tx)
 			.await
 			.map_err(WorkflowError::Sqlx)?;
@@ -1076,7 +1163,7 @@ impl Database for DatabasePgNats {
 						SET forgotten = TRUE
 						WHERE
 							workflow_id = $1 AND
-							loop_location = $2 AND
+							loop_location2_hash = $2 AND
 							forgotten = FALSE
 						RETURNING 1
 					),
@@ -1085,7 +1172,7 @@ impl Database for DatabasePgNats {
 						SET forgotten = TRUE
 						WHERE
 							workflow_id = $1 AND
-							loop_location = $2 AND
+							loop_location2_hash = $2 AND
 							forgotten = FALSE
 						RETURNING 1
 					),
@@ -1094,7 +1181,7 @@ impl Database for DatabasePgNats {
 						SET forgotten = TRUE
 						WHERE
 							workflow_id = $1 AND
-							loop_location = $2 AND
+							loop_location2_hash = $2 AND
 							forgotten = FALSE
 						RETURNING 1
 					),
@@ -1103,7 +1190,7 @@ impl Database for DatabasePgNats {
 						SET forgotten = TRUE
 						WHERE
 							workflow_id = $1 AND
-							loop_location = $2 AND
+							loop_location2_hash = $2 AND
 							forgotten = FALSE
 						RETURNING 1
 					),
@@ -1112,7 +1199,7 @@ impl Database for DatabasePgNats {
 						SET forgotten = TRUE
 						WHERE
 							workflow_id = $1 AND
-							loop_location = $2 AND
+							loop_location2_hash = $2 AND
 							forgotten = FALSE
 						RETURNING 1
 					),	
@@ -1121,7 +1208,34 @@ impl Database for DatabasePgNats {
 						SET forgotten = TRUE
 						WHERE
 							workflow_id = $1 AND
-							loop_location = $2 AND
+							loop_location2_hash = $2 AND
+							forgotten = FALSE
+						RETURNING 1
+					),
+					forget_branch_events AS (
+						UPDATE db_workflow.workflow_branch_events
+						SET forgotten = TRUE
+						WHERE
+							workflow_id = $1 AND
+							loop_location_hash = $2 AND
+							forgotten = FALSE
+						RETURNING 1
+					),
+					forget_removed_events AS (
+						UPDATE db_workflow.workflow_removed_events
+						SET forgotten = TRUE
+						WHERE
+							workflow_id = $1 AND
+							loop_location_hash = $2 AND
+							forgotten = FALSE
+						RETURNING 1
+					),
+					forget_version_check_events AS (
+						UPDATE db_workflow.workflow_version_check_events
+						SET forgotten = TRUE
+						WHERE
+							workflow_id = $1 AND
+							loop_location_hash = $2 AND
 							forgotten = FALSE
 						RETURNING 1
 					)
@@ -1129,7 +1243,7 @@ impl Database for DatabasePgNats {
 				",
 			))
 			.bind(workflow_id)
-			.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
+			.bind(hash_location(&location)?)
 			.execute(&mut *tx)
 			.await
 			.map_err(WorkflowError::Sqlx)?;
@@ -1146,24 +1260,26 @@ impl Database for DatabasePgNats {
 	async fn commit_workflow_sleep_event(
 		&self,
 		from_workflow_id: Uuid,
-		location: &[usize],
+		location: &Location,
+		version: usize,
 		deadline_ts: i64,
-		loop_location: Option<&[usize]>,
+		loop_location: Option<&Location>,
 	) -> WorkflowResult<()> {
 		self.query(|| async {
 			sqlx::query(indoc!(
 				"
 				INSERT INTO db_workflow.workflow_sleep_events(
-					workflow_id, location, deadline_ts, loop_location, state
+					workflow_id, location2, version, deadline_ts, loop_location2, state
 				)
-				VALUES($1, $2, $3, $4, $5)
+				VALUES($1, $2, $3, $4, $5, $6)
 				RETURNING 1
 				",
 			))
 			.bind(from_workflow_id)
-			.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
+			.bind(location)
+			.bind(version as i64)
 			.bind(deadline_ts)
-			.bind(loop_location.map(|l| l.iter().map(|x| *x as i64).collect::<Vec<_>>()))
+			.bind(loop_location)
 			.bind(SleepState::Normal as i64)
 			.execute(&mut *self.conn().await?)
 			.await
@@ -1177,7 +1293,7 @@ impl Database for DatabasePgNats {
 	async fn update_workflow_sleep_event_state(
 		&self,
 		from_workflow_id: Uuid,
-		location: &[usize],
+		location: &Location,
 		state: SleepState,
 	) -> WorkflowResult<()> {
 		self.query(|| async {
@@ -1185,11 +1301,11 @@ impl Database for DatabasePgNats {
 				"
 				UPDATE db_workflow.workflow_sleep_events
 				SET state = $3
-				WHERE workflow_id = $1 AND location = $2
+				WHERE workflow_id = $1 AND location2 = $2
 				",
 			))
 			.bind(from_workflow_id)
-			.bind(location.iter().map(|x| *x as i64).collect::<Vec<_>>())
+			.bind(location)
 			.bind(state as i64)
 			.execute(&mut *self.conn().await?)
 			.await
@@ -1199,4 +1315,477 @@ impl Database for DatabasePgNats {
 
 		Ok(())
 	}
+
+	async fn commit_workflow_branch_event(
+		&self,
+		from_workflow_id: Uuid,
+		location: &Location,
+		version: usize,
+		loop_location: Option<&Location>,
+	) -> WorkflowResult<()> {
+		self.query(|| async {
+			sqlx::query(indoc!(
+				"
+				INSERT INTO db_workflow.workflow_branch_events(
+					workflow_id, location, version, loop_location
+				)
+				VALUES($1, $2, $3)
+				RETURNING 1
+				",
+			))
+			.bind(from_workflow_id)
+			.bind(location)
+			.bind(version as i64)
+			.bind(loop_location)
+			.execute(&mut *self.conn().await?)
+			.await
+			.map_err(WorkflowError::Sqlx)
+		})
+		.await?;
+
+		Ok(())
+	}
+
+	async fn commit_workflow_removed_event(
+		&self,
+		from_workflow_id: Uuid,
+		location: &Location,
+		event_type: EventType,
+		event_name: Option<&str>,
+		loop_location: Option<&Location>,
+	) -> WorkflowResult<()> {
+		self.query(|| async {
+			sqlx::query(indoc!(
+				"
+				INSERT INTO db_workflow.workflow_removed_events(
+					workflow_id, location, event_type, event_name, loop_location
+				)
+				VALUES($1, $2, $3, $4, $5)
+				RETURNING 1
+				",
+			))
+			.bind(from_workflow_id)
+			.bind(location)
+			.bind(event_type as i32)
+			.bind(event_name)
+			.bind(loop_location)
+			.execute(&mut *self.conn().await?)
+			.await
+			.map_err(WorkflowError::Sqlx)
+		})
+		.await?;
+
+		Ok(())
+	}
+
+	async fn commit_workflow_version_check_event(
+		&self,
+		from_workflow_id: Uuid,
+		location: &Location,
+		loop_location: Option<&Location>,
+	) -> WorkflowResult<()> {
+		self.query(|| async {
+			sqlx::query(indoc!(
+				"
+				INSERT INTO db_workflow.workflow_version_check_events(
+					workflow_id, location, loop_location
+				)
+				VALUES($1, $2, $3)
+				RETURNING 1
+				",
+			))
+			.bind(from_workflow_id)
+			.bind(location)
+			.bind(loop_location)
+			.execute(&mut *self.conn().await?)
+			.await
+			.map_err(WorkflowError::Sqlx)
+		})
+		.await?;
+
+		Ok(())
+	}
 }
+
+mod types {
+	use std::collections::HashMap;
+
+	use uuid::Uuid;
+
+	use crate::{
+		db::{PulledWorkflow, SignalData, WorkflowData},
+		error::{WorkflowError, WorkflowResult},
+		history::{
+			event::{
+				ActivityEvent, Event, EventData, EventId, EventType, LoopEvent, MessageSendEvent,
+				RemovedEvent, SignalEvent, SignalSendEvent, SleepEvent, SleepState,
+				SubWorkflowEvent,
+			},
+			location::{Coordinate, Location},
+		},
+	};
+
+	type RawJson = sqlx::types::Json<Box<serde_json::value::RawValue>>;
+
+	#[derive(sqlx::FromRow)]
+	pub struct WorkflowRow {
+		workflow_id: Uuid,
+		input: RawJson,
+		output: Option<RawJson>,
+	}
+
+	impl From<WorkflowRow> for WorkflowData {
+		fn from(value: WorkflowRow) -> Self {
+			WorkflowData {
+				workflow_id: value.workflow_id,
+				input: value.input.0,
+				output: value.output.map(|x| x.0),
+			}
+		}
+	}
+
+	#[derive(sqlx::FromRow)]
+	pub struct PulledWorkflowRow {
+		pub workflow_id: Uuid,
+		workflow_name: String,
+		create_ts: i64,
+		ray_id: Uuid,
+		input: RawJson,
+		wake_deadline_ts: Option<i64>,
+	}
+
+	#[derive(sqlx::FromRow)]
+	pub struct SignalRow {
+		signal_id: Uuid,
+		signal_name: String,
+		body: RawJson,
+		create_ts: i64,
+	}
+
+	impl From<SignalRow> for SignalData {
+		fn from(value: SignalRow) -> Self {
+			SignalData {
+				signal_id: value.signal_id,
+				signal_name: value.signal_name,
+				body: value.body.0,
+				create_ts: value.create_ts,
+			}
+		}
+	}
+
+	/// Stores data for all event types in one.
+	#[derive(sqlx::FromRow)]
+	pub struct AmalgamEventRow {
+		workflow_id: Uuid,
+		location: Vec<i64>,
+		location2: Option<Location>,
+		version: i64,
+		event_type: i64,
+		name: Option<String>,
+		auxiliary_id: Option<Uuid>,
+		hash: Option<Vec<u8>>,
+		output: Option<RawJson>,
+		create_ts: Option<i64>,
+		error_count: Option<i64>,
+		iteration: Option<i64>,
+		deadline_ts: Option<i64>,
+		state: Option<i64>,
+		inner_event_type: Option<i64>,
+	}
+
+	impl TryFrom<AmalgamEventRow> for Event {
+		type Error = WorkflowError;
+
+		fn try_from(value: AmalgamEventRow) -> WorkflowResult<Self> {
+			// Backwards compatibility
+			let location_tail = value
+				.location2
+				.as_ref()
+				.map(|x| x.tail().cloned().expect("empty location"))
+				.unwrap_or_else(|| {
+					Coordinate::new(Box::new([
+						// NOTE: Add 1 because we switched from 0-based to 1-based
+						*value.location.last().expect("empty location") as usize + 1,
+					]))
+				});
+
+			let event_type = value
+				.event_type
+				.try_into()
+				.map_err(|_| WorkflowError::IntegerConversion)?;
+			let event_type = EventType::from_repr(event_type)
+				.ok_or_else(|| WorkflowError::InvalidEventType(value.event_type))?;
+
+			Ok(Event {
+				coordinate: location_tail,
+				version: value
+					.version
+					.try_into()
+					.map_err(|_| WorkflowError::IntegerConversion)?,
+				data: match event_type {
+					EventType::Activity => EventData::Activity(value.try_into()?),
+					EventType::Signal => EventData::Signal(value.try_into()?),
+					EventType::SignalSend => EventData::SignalSend(value.try_into()?),
+					EventType::MessageSend => EventData::MessageSend(value.try_into()?),
+					EventType::SubWorkflow => EventData::SubWorkflow(value.try_into()?),
+					EventType::Loop => EventData::Loop(value.try_into()?),
+					EventType::Sleep => EventData::Sleep(value.try_into()?),
+					EventType::Branch => EventData::Branch,
+					EventType::Removed => EventData::Removed(value.try_into()?),
+					EventType::VersionCheck => EventData::VersionCheck,
+				},
+			})
+		}
+	}
+
+	impl TryFrom<AmalgamEventRow> for ActivityEvent {
+		type Error = WorkflowError;
+
+		fn try_from(value: AmalgamEventRow) -> WorkflowResult<Self> {
+			Ok(ActivityEvent {
+				event_id: EventId::from_bytes(
+					value.name.ok_or(WorkflowError::MissingEventData)?,
+					value.hash.ok_or(WorkflowError::MissingEventData)?,
+				)?,
+				create_ts: value.create_ts.ok_or(WorkflowError::MissingEventData)?,
+				output: value.output.map(|x| x.0),
+				error_count: value
+					.error_count
+					.ok_or(WorkflowError::MissingEventData)?
+					.try_into()
+					.map_err(|_| WorkflowError::IntegerConversion)?,
+			})
+		}
+	}
+
+	impl TryFrom<AmalgamEventRow> for SignalEvent {
+		type Error = WorkflowError;
+
+		fn try_from(value: AmalgamEventRow) -> WorkflowResult<Self> {
+			Ok(SignalEvent {
+				name: value.name.ok_or(WorkflowError::MissingEventData)?,
+				body: value
+					.output
+					.map(|x| x.0)
+					.ok_or(WorkflowError::MissingEventData)?,
+			})
+		}
+	}
+
+	impl TryFrom<AmalgamEventRow> for SignalSendEvent {
+		type Error = WorkflowError;
+
+		fn try_from(value: AmalgamEventRow) -> WorkflowResult<Self> {
+			Ok(SignalSendEvent {
+				signal_id: value.auxiliary_id.ok_or(WorkflowError::MissingEventData)?,
+				name: value.name.ok_or(WorkflowError::MissingEventData)?,
+			})
+		}
+	}
+
+	impl TryFrom<AmalgamEventRow> for MessageSendEvent {
+		type Error = WorkflowError;
+
+		fn try_from(value: AmalgamEventRow) -> WorkflowResult<Self> {
+			Ok(MessageSendEvent {
+				name: value.name.ok_or(WorkflowError::MissingEventData)?,
+			})
+		}
+	}
+
+	impl TryFrom<AmalgamEventRow> for SubWorkflowEvent {
+		type Error = WorkflowError;
+
+		fn try_from(value: AmalgamEventRow) -> WorkflowResult<Self> {
+			Ok(SubWorkflowEvent {
+				sub_workflow_id: value.auxiliary_id.ok_or(WorkflowError::MissingEventData)?,
+				name: value.name.ok_or(WorkflowError::MissingEventData)?,
+			})
+		}
+	}
+
+	impl TryFrom<AmalgamEventRow> for LoopEvent {
+		type Error = WorkflowError;
+
+		fn try_from(value: AmalgamEventRow) -> WorkflowResult<Self> {
+			Ok(LoopEvent {
+				output: value.output.map(|x| x.0),
+				iteration: value
+					.iteration
+					.ok_or(WorkflowError::MissingEventData)?
+					.try_into()
+					.map_err(|_| WorkflowError::IntegerConversion)?,
+			})
+		}
+	}
+
+	impl TryFrom<AmalgamEventRow> for SleepEvent {
+		type Error = WorkflowError;
+
+		fn try_from(value: AmalgamEventRow) -> WorkflowResult<Self> {
+			let state = value.state.ok_or(WorkflowError::MissingEventData)?;
+
+			Ok(SleepEvent {
+				deadline_ts: value.deadline_ts.ok_or(WorkflowError::MissingEventData)?,
+				state: SleepState::from_repr(state.try_into()?)
+					.ok_or_else(|| WorkflowError::InvalidSleepState(state))?,
+			})
+		}
+	}
+
+	impl TryFrom<AmalgamEventRow> for RemovedEvent {
+		type Error = WorkflowError;
+
+		fn try_from(value: AmalgamEventRow) -> WorkflowResult<Self> {
+			let event_type = value
+				.inner_event_type
+				.ok_or(WorkflowError::MissingEventData)?;
+
+			Ok(RemovedEvent {
+				name: value.name,
+				event_type: EventType::from_repr(event_type.try_into()?)
+					.ok_or_else(|| WorkflowError::InvalidSleepState(event_type))?,
+			})
+		}
+	}
+
+	// Implements sqlx postgres types for `Location`
+	impl sqlx::Type<sqlx::Postgres> for Location {
+		fn type_info() -> sqlx::postgres::PgTypeInfo {
+			<i64 as sqlx::postgres::PgHasArrayType>::array_type_info()
+		}
+
+		fn compatible(ty: &sqlx::postgres::PgTypeInfo) -> bool {
+			<i64 as sqlx::postgres::PgHasArrayType>::array_compatible(ty)
+		}
+	}
+
+	impl<'q> sqlx::Encode<'q, sqlx::Postgres> for Location {
+		fn encode_by_ref(
+			&self,
+			buf: &mut sqlx::postgres::PgArgumentBuffer,
+		) -> sqlx::encode::IsNull {
+			<serde_json::Value as sqlx::Encode<'q, sqlx::Postgres>>::encode(
+				serialize_location(self),
+				buf,
+			)
+		}
+	}
+
+	impl sqlx::Decode<'_, sqlx::Postgres> for Location {
+		fn decode(value: sqlx::postgres::PgValueRef) -> Result<Self, sqlx::error::BoxDynError> {
+			let value =
+				<sqlx::types::Json<Vec<Vec<usize>>> as sqlx::Decode<sqlx::Postgres>>::decode(
+					value,
+				)?;
+
+			Ok(value.0.into_iter().collect())
+		}
+	}
+
+	/// Convert location to json as `number[][]`.
+	fn serialize_location(location: &Location) -> serde_json::Value {
+		serde_json::Value::Array(
+			location
+				.as_ref()
+				.iter()
+				.map(|coord| {
+					serde_json::Value::Array(
+						coord
+							.iter()
+							.map(|x| serde_json::Value::Number((*x).into()))
+							.collect(),
+					)
+				})
+				.collect(),
+		)
+	}
+
+	// IMPORTANT: Must match the hashing algorithm used in the `db-workflow` `loop_location2_hash` generated
+	/// column expression.
+	pub fn hash_location(location: &Location) -> WorkflowResult<Vec<u8>> {
+		Ok(md5::compute(
+			serde_json::to_vec(&serialize_location(location))
+				.map_err(WorkflowError::SerializeLocation)?,
+		)
+		.to_vec())
+	}
+
+	/// Takes all workflow events (each with their own location) and combines them via enum into a hashmap of the
+	/// following structure:
+	///
+	/// Given the location [1, 2, 3], 3 is the index and [1, 2] is the root location
+	///
+	/// HashMap {
+	/// 	[1, 2]: [
+	/// 		example signal event,
+	/// 		example activity event,
+	/// 		example sub workflow event,
+	/// 		example activity event (this is [1, 2, 3])
+	/// 	],
+	/// }
+	pub fn build_histories(
+		workflow_rows: Vec<PulledWorkflowRow>,
+		event_rows: Vec<AmalgamEventRow>,
+	) -> WorkflowResult<Vec<PulledWorkflow>> {
+		// Map workflow rows by workflow id
+		let mut workflows_by_id = workflow_rows
+			.into_iter()
+			.map(|row| {
+				let events_by_location: HashMap<Location, Vec<Event>> = HashMap::new();
+
+				(row.workflow_id, (row, events_by_location))
+			})
+			.collect::<HashMap<_, _>>();
+
+		for event_row in event_rows {
+			// Backwards compatibility
+			let location_root = event_row
+				.location2
+				.as_ref()
+				.map(|x| x.root())
+				.unwrap_or_else(|| {
+					event_row
+						.location
+						.iter()
+						.take(event_row.location.len().saturating_sub(1))
+						// NOTE: Add 1 because we switched from 0-based to 1-based
+						.map(|x| Coordinate::new(Box::new([(*x) as usize + 1])))
+						.collect()
+				});
+
+			// Get workflow entry
+			let (_, ref mut events_by_location) = workflows_by_id
+				.get_mut(&event_row.workflow_id)
+				.expect("unreachable, workflow for event not found");
+
+			events_by_location
+				.entry(location_root)
+				.or_default()
+				.push(event_row.try_into()?);
+		}
+
+		let workflows = workflows_by_id
+			.into_values()
+			.map(|(row, mut events_by_location)| {
+				for events in events_by_location.values_mut() {
+					// Events are already mostly sorted themselves so this should be fairly cheap
+					events.sort_by_key(|event| event.coordinate().clone());
+				}
+
+				PulledWorkflow {
+					workflow_id: row.workflow_id,
+					workflow_name: row.workflow_name,
+					create_ts: row.create_ts,
+					ray_id: row.ray_id,
+					input: row.input.0,
+					wake_deadline_ts: row.wake_deadline_ts,
+					events: events_by_location,
+				}
+			})
+			.collect();
+
+		Ok(workflows)
+	}
+}
+use types::*;
