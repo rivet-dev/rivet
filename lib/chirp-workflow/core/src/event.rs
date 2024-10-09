@@ -10,7 +10,7 @@ use crate::{
 		SignalEventRow, SignalSendEventRow, SleepEventRow, SubWorkflowEventRow,
 	},
 	error::{WorkflowError, WorkflowResult},
-	util::Location,
+	utils::Location,
 };
 
 /// An event that happened in the workflow run.

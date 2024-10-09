@@ -11,7 +11,7 @@ use std::{
 };
 use uuid::Uuid;
 
-use crate::util::Location;
+use crate::utils::Location;
 
 // Yes
 type Query = Box<

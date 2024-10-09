@@ -13,6 +13,6 @@ pub mod operation;
 pub mod prelude;
 pub mod registry;
 mod signal;
-pub mod util;
+pub mod utils;
 mod worker;
 pub mod workflow;

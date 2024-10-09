@@ -1,13 +1,9 @@
-use global_error::{macros::*, GlobalError, GlobalResult};
-use rand::Rng;
+use global_error::{GlobalError, GlobalResult};
 use uuid::Uuid;
 
 use crate::error::WorkflowError;
 
 pub type Location = Box<[usize]>;
-
-// How often the `inject_fault` function fails in percent
-const FAULT_RATE: usize = 80;
 
 /// Allows for checking if a global error returned from an activity is recoverable.
 pub trait GlobalErrorExt {
@@ -114,14 +110,6 @@ pub mod time {
 	}
 }
 
-pub fn inject_fault() -> GlobalResult<()> {
-	if rand::thread_rng().gen_range(0..100) < FAULT_RATE {
-		bail!("This is a random panic!");
-	}
-
-	Ok(())
-}
-
 pub(crate) fn new_conn(
 	shared_client: &chirp_client::SharedClientHandle,
 	pools: &rivet_pools::Pools,
@@ -145,6 +133,24 @@ pub(crate) fn new_conn(
 	);
 
 	rivet_connection::Connection::new(client, pools.clone(), cache.clone())
+}
+
+/// Returns true if `subset` is a subset of `superset`.
+pub fn is_value_subset(subset: &serde_json::Value, superset: &serde_json::Value) -> bool {
+	match (subset, superset) {
+		(serde_json::Value::Object(sub_obj), serde_json::Value::Object(super_obj)) => {
+			sub_obj.iter().all(|(k, sub_val)| {
+				super_obj
+					.get(k)
+					.map_or(false, |super_val| is_value_subset(sub_val, super_val))
+			})
+		}
+		(serde_json::Value::Array(sub_arr), serde_json::Value::Array(super_arr)) => sub_arr
+			.iter()
+			.zip(super_arr)
+			.all(|(sub_val, super_val)| is_value_subset(sub_val, super_val)),
+		_ => subset == superset,
+	}
 }
 
 pub fn format_location(loc: &Location) -> String {

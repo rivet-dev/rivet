@@ -78,6 +78,9 @@ pub enum WorkflowError {
 	#[error("serialize message tags: {0:?}")]
 	SerializeMessageTags(cjson::Error),
 
+	#[error("decode message tags: {0}")]
+	DeserializeMessageTags(serde_json::Error),
+
 	#[error("serialize loop output: {0}")]
 	SerializeLoopOutput(serde_json::Error),
 
@@ -134,6 +137,9 @@ pub enum WorkflowError {
 
 	#[error("sleeping until {0}")]
 	Sleep(i64),
+
+	#[error("cannot have multiple concurrent calls to Database::wake")]
+	WakeLock(tokio::sync::TryLockError),
 }
 
 impl WorkflowError {

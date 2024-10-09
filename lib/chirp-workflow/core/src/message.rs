@@ -1,6 +1,5 @@
 use std::fmt::Debug;
 
-use rivet_operation::prelude::proto::chirp;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -11,58 +10,59 @@ pub const WORKER_WAKE_SUBJECT: &str = "chirp.workflow.worker.wake";
 pub trait Message: Debug + Send + Sync + Serialize + DeserializeOwned + 'static {
 	const NAME: &'static str;
 	const TAIL_TTL: std::time::Duration;
+
+	fn nats_subject() -> String {
+		format!("chirp.workflow.msg.{}", Self::NAME)
+	}
 }
 
-pub fn serialize_message_nats_subject<M>(tags_str: &str) -> String
-where
-	M: Message,
-{
-	format!("chirp.workflow.msg.{}.{}", M::NAME, tags_str,)
-}
-
-/// A message received from a Chirp subscription.
+/// A message received from a NATS subscription.
 #[derive(Debug)]
-pub struct ReceivedMessage<M>
+pub struct NatsMessage<M>
 where
 	M: Message,
 {
 	pub(crate) ray_id: Uuid,
 	pub(crate) req_id: Uuid,
 	pub(crate) ts: i64,
-	pub(crate) trace: Vec<TraceEntry>,
 	pub(crate) body: M,
 }
 
-impl<M> ReceivedMessage<M>
+impl<M> NatsMessage<M>
 where
 	M: Message,
 {
 	#[tracing::instrument(skip(buf))]
 	pub(crate) fn deserialize(buf: &[u8]) -> WorkflowResult<Self> {
-		// Deserialize the wrapper
 		let message_wrapper = Self::deserialize_wrapper(buf)?;
 
+		Self::deserialize_from_wrapper(message_wrapper)
+	}
+
+	#[tracing::instrument(skip(wrapper))]
+	pub(crate) fn deserialize_from_wrapper(
+		wrapper: NatsMessageWrapper<'_>,
+	) -> WorkflowResult<Self> {
 		// Deserialize the body
-		let body = serde_json::from_str::<M>(message_wrapper.body.get())
+		let body = serde_json::from_str(wrapper.body.get())
 			.map_err(WorkflowError::DeserializeMessageBody)?;
 
-		Ok(ReceivedMessage {
-			ray_id: message_wrapper.ray_id,
-			req_id: message_wrapper.req_id,
-			ts: message_wrapper.ts,
-			trace: message_wrapper.trace,
+		Ok(NatsMessage {
+			ray_id: wrapper.ray_id,
+			req_id: wrapper.req_id,
+			ts: wrapper.ts,
 			body,
 		})
 	}
 
 	// Only returns the message wrapper
 	#[tracing::instrument(skip(buf))]
-	pub(crate) fn deserialize_wrapper<'a>(buf: &'a [u8]) -> WorkflowResult<MessageWrapper<'a>> {
+	pub(crate) fn deserialize_wrapper<'a>(buf: &'a [u8]) -> WorkflowResult<NatsMessageWrapper<'a>> {
 		serde_json::from_slice(buf).map_err(WorkflowError::DeserializeMessage)
 	}
 }
 
-impl<M> std::ops::Deref for ReceivedMessage<M>
+impl<M> std::ops::Deref for NatsMessage<M>
 where
 	M: Message,
 {
@@ -73,7 +73,7 @@ where
 	}
 }
 
-impl<M> ReceivedMessage<M>
+impl<M> NatsMessage<M>
 where
 	M: Message,
 {
@@ -93,42 +93,42 @@ where
 	pub fn body(&self) -> &M {
 		&self.body
 	}
-
-	pub fn trace(&self) -> &[TraceEntry] {
-		&self.trace
-	}
 }
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct MessageWrapper<'a> {
+pub(crate) struct NatsMessageWrapper<'a> {
 	pub(crate) ray_id: Uuid,
 	pub(crate) req_id: Uuid,
 	pub(crate) tags: serde_json::Value,
 	pub(crate) ts: i64,
-	pub(crate) trace: Vec<TraceEntry>,
 	#[serde(borrow)]
 	pub(crate) body: &'a serde_json::value::RawValue,
 	pub(crate) allow_recursive: bool,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TraceEntry {
-	context_name: String,
-	pub(crate) req_id: Uuid,
-	ts: i64,
-}
+pub mod redis_keys {
+	use std::{
+		collections::hash_map::DefaultHasher,
+		hash::{Hash, Hasher},
+	};
 
-impl TryFrom<chirp::TraceEntry> for TraceEntry {
-	type Error = WorkflowError;
+	use super::Message;
 
-	fn try_from(value: chirp::TraceEntry) -> WorkflowResult<Self> {
-		Ok(TraceEntry {
-			context_name: value.context_name.clone(),
-			req_id: value
-				.req_id
-				.map(|id| id.as_uuid())
-				.ok_or(WorkflowError::MissingMessageData)?,
-			ts: value.ts,
-		})
+	/// HASH
+	pub fn message_tail<M>(tags_str: &str) -> String
+	where
+		M: Message,
+	{
+		// Get hash of the tags
+		let mut hasher = DefaultHasher::new();
+		tags_str.hash(&mut hasher);
+
+		format!("{{topic:{}:{:x}}}:tail", M::NAME, hasher.finish())
+	}
+
+	pub mod message_tail {
+		pub const REQUEST_ID: &str = "r";
+		pub const TS: &str = "t";
+		pub const BODY: &str = "b";
 	}
 }

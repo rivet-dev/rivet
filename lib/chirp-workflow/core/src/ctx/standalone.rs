@@ -12,7 +12,8 @@ use crate::{
 	},
 	db::DatabaseHandle,
 	error::WorkflowResult,
-	message::{Message, ReceivedMessage},
+	listen::Listen,
+	message::{Message, NatsMessage},
 	operation::{Operation, OperationInput},
 	signal::Signal,
 	workflow::{Workflow, WorkflowInput},
@@ -54,7 +55,7 @@ impl StandaloneCtx {
 			(),
 		);
 
-		let msg_ctx = MessageCtx::new(&conn, req_id, ray_id).await?;
+		let msg_ctx = MessageCtx::new(&conn, ray_id).await?;
 
 		Ok(StandaloneCtx {
 			ray_id,
@@ -92,6 +93,15 @@ impl StandaloneCtx {
 		builder::signal::SignalBuilder::new(self.db.clone(), self.ray_id, body)
 	}
 
+	// /// Listens for a signal indefinitely.
+	// pub async fn listen<T: Listen>(&mut self) -> GlobalResult<T> {
+	// 	tracing::info!(name=%self.name, "listening for signal");
+
+	// 	let ctx = ListenCtx::new(self);
+
+	// 	T::listen(&ctx).await
+	// }
+
 	#[tracing::instrument(err, skip_all, fields(operation = I::Operation::NAME))]
 	pub async fn op<I>(
 		&self,
@@ -128,7 +138,7 @@ impl StandaloneCtx {
 	pub async fn tail_read<M>(
 		&self,
 		tags: serde_json::Value,
-	) -> GlobalResult<Option<ReceivedMessage<M>>>
+	) -> GlobalResult<Option<NatsMessage<M>>>
 	where
 		M: Message,
 	{

@@ -1,8 +1,10 @@
 use std::{sync::Arc, time::Duration};
 
+use futures_util::{stream::FuturesUnordered, FutureExt, StreamExt, TryStreamExt};
 use indoc::indoc;
 use rivet_pools::prelude::NatsPool;
 use sqlx::{pool::PoolConnection, Acquire, PgPool, Postgres};
+use tokio::sync::Mutex;
 use tracing::Instrument;
 use uuid::Uuid;
 
@@ -30,11 +32,17 @@ const MAX_QUERY_RETRIES: usize = 16;
 pub struct DatabasePgNats {
 	pool: PgPool,
 	nats: NatsPool,
+	sub: Mutex<Option<rivet_pools::prelude::nats::Subscriber>>,
 }
 
 impl DatabasePgNats {
 	pub fn from_pools(pool: PgPool, nats: NatsPool) -> Arc<DatabasePgNats> {
-		Arc::new(DatabasePgNats { pool, nats })
+		Arc::new(DatabasePgNats {
+			pool,
+			// Lazy load the nats sub
+			sub: Mutex::new(None),
+			nats,
+		})
 	}
 
 	async fn conn(&self) -> WorkflowResult<PoolConnection<Postgres>> {
@@ -52,7 +60,7 @@ impl DatabasePgNats {
 		let nats = self.nats.clone();
 
 		let spawn_res = tokio::task::Builder::new()
-			.name("chirp_workflow::DatabasePgNats::wake")
+			.name("wake")
 			.spawn(
 				async move {
 					// Fail gracefully
@@ -117,6 +125,25 @@ impl DatabasePgNats {
 
 #[async_trait::async_trait]
 impl Database for DatabasePgNats {
+	async fn wake(&self) -> WorkflowResult<()> {
+		let mut sub = self.sub.try_lock().map_err(WorkflowError::WakeLock)?;
+
+		// Initialize sub
+		if sub.is_none() {
+			*sub = Some(
+				self.nats
+					.subscribe(message::WORKER_WAKE_SUBJECT)
+					.await
+					.map_err(|x| WorkflowError::CreateSubscription(x.into()))?,
+			);
+		}
+
+		match sub.as_mut().expect("unreachable").next().await {
+			Some(_) => Ok(()),
+			None => Err(WorkflowError::SubscriptionUnsubscribed),
+		}
+	}
+
 	async fn dispatch_workflow(
 		&self,
 		ray_id: Uuid,

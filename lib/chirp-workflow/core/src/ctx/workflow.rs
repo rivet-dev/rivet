@@ -16,13 +16,13 @@ use crate::{
 	db::{DatabaseHandle, PulledWorkflow},
 	error::{WorkflowError, WorkflowResult},
 	event::Event,
-	executable::{closure, AsyncResult, Executable},
+	executable::{AsyncResult, Executable},
 	listen::{CustomListener, Listen},
 	message::Message,
 	metrics,
 	registry::RegistryHandle,
 	signal::Signal,
-	util::{
+	utils::{
 		self,
 		time::{DurationToMillis, TsToMillis},
 		GlobalErrorExt, Location,
@@ -80,7 +80,7 @@ impl WorkflowCtx {
 		conn: rivet_connection::Connection,
 		workflow: PulledWorkflow,
 	) -> GlobalResult<Self> {
-		let msg_ctx = MessageCtx::new(&conn, workflow.workflow_id, workflow.ray_id).await?;
+		let msg_ctx = MessageCtx::new(&conn, workflow.ray_id).await?;
 
 		Ok(WorkflowCtx {
 			workflow_id: workflow.workflow_id,
@@ -558,15 +558,6 @@ impl WorkflowCtx {
 		exec.try_execute(self).await
 	}
 
-	/// Spawns a new thread to execute workflow steps in.
-	pub fn spawn<F, T: Send + 'static>(&mut self, f: F) -> tokio::task::JoinHandle<GlobalResult<T>>
-	where
-		F: for<'a> FnOnce(&'a mut WorkflowCtx) -> AsyncResult<'a, T> + Send + 'static,
-	{
-		let mut ctx = self.branch();
-		tokio::task::spawn(async move { closure(f).execute(&mut ctx).await })
-	}
-
 	/// Tests if the given error is unrecoverable. If it is, allows the user to run recovery code safely.
 	/// Should always be used when trying to handle activity errors manually.
 	pub fn catch_unrecoverable<T>(
@@ -928,7 +919,7 @@ impl WorkflowCtx {
 
 	/// For debugging, pretty prints the current location
 	pub(crate) fn loc(&self) -> String {
-		util::format_location(&self.full_location())
+		utils::format_location(&self.full_location())
 	}
 
 	pub fn name(&self) -> &str {

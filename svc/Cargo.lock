@@ -2275,7 +2275,6 @@ dependencies = [
  "lazy_static",
  "prost 0.12.6",
  "prost-types 0.12.6",
- "rand",
  "rivet-cache",
  "rivet-connection",
  "rivet-metrics",
@@ -6479,6 +6478,19 @@ name = "pegboard"
 version = "0.0.1"
 dependencies = [
  "chirp-workflow",
+ "serde",
+]
+
+[[package]]
+name = "pegboard-ws"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-workflow",
+ "rivet-connection",
+ "rivet-health-checks",
+ "rivet-metrics",
+ "rivet-runtime",
  "serde",
  "tokio-tungstenite 0.23.1",
 ]

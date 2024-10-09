@@ -13,7 +13,7 @@ use crate::{
 	},
 	db::DatabaseHandle,
 	error::WorkflowResult,
-	message::{Message, ReceivedMessage},
+	message::{Message, NatsMessage},
 	operation::{Operation, OperationInput},
 	signal::Signal,
 	workflow::{Workflow, WorkflowInput},
@@ -55,7 +55,7 @@ impl ApiCtx {
 			(),
 		);
 
-		let msg_ctx = MessageCtx::new(&conn, req_id, ray_id).await?;
+		let msg_ctx = MessageCtx::new(&conn, ray_id).await?;
 
 		Ok(ApiCtx {
 			ray_id,
@@ -129,7 +129,7 @@ impl ApiCtx {
 	pub async fn tail_read<M>(
 		&self,
 		tags: serde_json::Value,
-	) -> GlobalResult<Option<ReceivedMessage<M>>>
+	) -> GlobalResult<Option<NatsMessage<M>>>
 	where
 		M: Message,
 	{

@@ -6,7 +6,7 @@ use crate::{
 	activity::ActivityId,
 	error::{WorkflowError, WorkflowResult},
 	event::Event,
-	util::Location,
+	utils::Location,
 	workflow::Workflow,
 };
 
@@ -17,6 +17,15 @@ pub type DatabaseHandle = Arc<dyn Database + Sync>;
 
 #[async_trait::async_trait]
 pub trait Database: Send {
+	/// When using a wake worker instead of a polling worker, this function will return once the worker
+	/// should fetch the database again.
+	async fn wake(&self) -> WorkflowResult<()> {
+		unimplemented!(
+			"{} does not implement Database::wake",
+			std::any::type_name::<Self>()
+		);
+	}
+
 	/// Writes a new workflow to the database.
 	async fn dispatch_workflow(
 		&self,

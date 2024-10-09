@@ -102,7 +102,7 @@ where
 	M: Message,
 	B: Debug + Clone,
 {
-	let msg_ctx = MessageCtx::new(ctx.conn(), ctx.req_id(), ctx.ray_id())
+	let msg_ctx = MessageCtx::new(ctx.conn(), ctx.ray_id())
 		.await
 		.map_err(GlobalError::raw)?;
 

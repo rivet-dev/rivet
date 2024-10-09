@@ -13,7 +13,8 @@ use uuid::Uuid;
 
 use crate::{
 	error::{WorkflowError, WorkflowResult},
-	message::{self, Message, MessageWrapper, ReceivedMessage, TraceEntry},
+	message::{redis_keys, Message, NatsMessage, NatsMessageWrapper},
+	utils,
 };
 
 /// Time (in ms) that we subtract from the anchor grace period in order to
@@ -29,29 +30,15 @@ pub struct MessageCtx {
 	/// Used for writing to message tails. This cache is ephemeral.
 	redis_chirp_ephemeral: RedisPool,
 
-	req_id: Uuid,
 	ray_id: Uuid,
-	trace: Vec<TraceEntry>,
 }
 
 impl MessageCtx {
-	pub async fn new(
-		conn: &rivet_connection::Connection,
-		req_id: Uuid,
-		ray_id: Uuid,
-	) -> WorkflowResult<Self> {
+	pub async fn new(conn: &rivet_connection::Connection, ray_id: Uuid) -> WorkflowResult<Self> {
 		Ok(MessageCtx {
 			nats: conn.nats().await?,
 			redis_chirp_ephemeral: conn.redis_chirp_ephemeral().await?,
-			req_id,
 			ray_id,
-			trace: conn
-				.chirp()
-				.trace()
-				.iter()
-				.cloned()
-				.map(TryInto::try_into)
-				.collect::<WorkflowResult<Vec<_>>>()?,
 		})
 	}
 }
@@ -109,7 +96,7 @@ impl MessageCtx {
 		M: Message,
 	{
 		let tags_str = cjson::to_string(&tags).map_err(WorkflowError::SerializeMessageTags)?;
-		let nats_subject = message::serialize_message_nats_subject::<M>(&tags_str);
+		let nats_subject = M::nats_subject();
 		let duration_since_epoch = std::time::SystemTime::now()
 			.duration_since(std::time::UNIX_EPOCH)
 			.unwrap_or_else(|err| unreachable!("time is broken: {}", err));
@@ -124,12 +111,11 @@ impl MessageCtx {
 
 		// Serialize message
 		let req_id = Uuid::new_v4();
-		let message = MessageWrapper {
+		let message = NatsMessageWrapper {
 			req_id: req_id,
 			ray_id: self.ray_id,
-			tags: tags.clone(),
+			tags,
 			ts,
-			trace: self.trace.clone(),
 			allow_recursive: false, // TODO:
 			body: &body_buf,
 		};
@@ -278,8 +264,7 @@ impl MessageCtx {
 	where
 		M: Message,
 	{
-		let tags_str = cjson::to_string(opts.tags).map_err(WorkflowError::SerializeMessageTags)?;
-		let nats_subject = message::serialize_message_nats_subject::<M>(&tags_str);
+		let nats_subject = M::nats_subject();
 
 		// Create subscription and flush immediately.
 		tracing::info!(%nats_subject, tags = ?opts.tags, "creating subscription");
@@ -296,7 +281,7 @@ impl MessageCtx {
 		}
 
 		// Return handle
-		let subscription = SubscriptionHandle::new(nats_subject, subscription, self.req_id);
+		let subscription = SubscriptionHandle::new(nats_subject, subscription, opts.tags.clone());
 		Ok(subscription)
 	}
 
@@ -305,7 +290,7 @@ impl MessageCtx {
 	pub async fn tail_read<M>(
 		&self,
 		tags: serde_json::Value,
-	) -> WorkflowResult<Option<ReceivedMessage<M>>>
+	) -> WorkflowResult<Option<NatsMessage<M>>>
 	where
 		M: Message,
 	{
@@ -320,7 +305,7 @@ impl MessageCtx {
 
 		// Deserialize message
 		let message = if let Some(message_buf) = message_buf {
-			let message = ReceivedMessage::<M>::deserialize(message_buf.as_slice())?;
+			let message = NatsMessage::<M>::deserialize(message_buf.as_slice())?;
 			tracing::info!(?message, "immediate read tail message");
 
 			let recv_lag = (rivet_util::timestamp::now() as f64 - message.ts as f64) / 1000.;
@@ -410,7 +395,7 @@ where
 	_guard: DropGuard,
 	subject: String,
 	subscription: nats::Subscriber,
-	req_id: Uuid,
+	pub tags: serde_json::Value,
 }
 
 impl<M> Debug for SubscriptionHandle<M>
@@ -420,6 +405,7 @@ where
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("SubscriptionHandle")
 			.field("subject", &self.subject)
+			.field("tags", &self.tags)
 			.finish()
 	}
 }
@@ -429,7 +415,7 @@ where
 	M: Message,
 {
 	#[tracing::instrument(level = "debug", skip_all)]
-	fn new(subject: String, subscription: nats::Subscriber, req_id: Uuid) -> Self {
+	fn new(subject: String, subscription: nats::Subscriber, tags: serde_json::Value) -> Self {
 		let token = CancellationToken::new();
 
 		{
@@ -458,7 +444,7 @@ where
 			_guard: token.drop_guard(),
 			subject,
 			subscription,
-			req_id,
+			tags,
 		}
 	}
 
@@ -466,26 +452,7 @@ where
 	///
 	/// This future can be safely dropped.
 	#[tracing::instrument]
-	pub async fn next(&mut self) -> WorkflowResult<ReceivedMessage<M>> {
-		self.next_inner(false).await
-	}
-
-	// TODO: Add a full config struct to pass to `next` that impl's `Default`
-	/// Waits for the next message in the subscription that originates from the
-	/// parent request ID via trace.
-	///
-	/// This future can be safely dropped.
-	#[tracing::instrument]
-	pub async fn next_with_trace(
-		&mut self,
-		filter_trace: bool,
-	) -> WorkflowResult<ReceivedMessage<M>> {
-		self.next_inner(filter_trace).await
-	}
-
-	/// This future can be safely dropped.
-	#[tracing::instrument(level = "trace")]
-	async fn next_inner(&mut self, filter_trace: bool) -> WorkflowResult<ReceivedMessage<M>> {
+	pub async fn next(&mut self) -> WorkflowResult<NatsMessage<M>> {
 		tracing::info!("waiting for message");
 
 		loop {
@@ -501,47 +468,22 @@ where
 				}
 			};
 
-			if filter_trace {
-				let message_wrapper =
-					ReceivedMessage::<M>::deserialize_wrapper(&nats_message.payload[..])?;
+			let message_wrapper = NatsMessage::<M>::deserialize_wrapper(&nats_message.payload[..])?;
 
-				// Check if the message trace stack originates from this client
-				//
-				// We intentionally use the request ID instead of just checking the ray ID because
-				// there may be multiple calls to `message_with_subscribe` within the same ray.
-				// Explicitly checking the parent request ensures the response is unique to this
-				// message.
-				if message_wrapper
-					.trace
-					.iter()
-					.rev()
-					.any(|trace_entry| trace_entry.req_id == self.req_id)
-				{
-					let message = ReceivedMessage::<M>::deserialize(&nats_message.payload[..])?;
-					tracing::info!(?message, "received message");
-
-					return Ok(message);
-				}
-			} else {
-				let message = ReceivedMessage::<M>::deserialize(&nats_message.payload[..])?;
+			// Check if the subscription tags match a subset of the message tags
+			if utils::is_value_subset(&self.tags, &message_wrapper.tags) {
+				let message = NatsMessage::<M>::deserialize_from_wrapper(message_wrapper)?;
 				tracing::info!(?message, "received message");
-
-				let recv_lag = (rivet_util::timestamp::now() as f64 - message.ts as f64) / 1000.;
-				crate::metrics::MESSAGE_RECV_LAG
-					.with_label_values(&[M::NAME])
-					.observe(recv_lag);
 
 				return Ok(message);
 			}
 
-			// Message not from parent, continue with loop
+			// Message tags don't match, continue with loop
 		}
 	}
 
 	/// Converts the subscription in to a stream.
-	pub fn into_stream(
-		self,
-	) -> impl futures_util::Stream<Item = WorkflowResult<ReceivedMessage<M>>> {
+	pub fn into_stream(self) -> impl futures_util::Stream<Item = WorkflowResult<NatsMessage<M>>> {
 		futures_util::stream::try_unfold(self, |mut sub| async move {
 			let message = sub.next().await?;
 			Ok(Some((message, sub)))
@@ -569,7 +511,7 @@ pub enum TailAnchorResponse<M>
 where
 	M: Message + Debug,
 {
-	Message(ReceivedMessage<M>),
+	Message(NatsMessage<M>),
 
 	/// Anchor was older than the TTL of the message.
 	AnchorExpired,
@@ -587,32 +529,5 @@ where
 			Self::Message(msg) => Some(msg.msg_ts()),
 			Self::AnchorExpired => None,
 		}
-	}
-}
-
-mod redis_keys {
-	use std::{
-		collections::hash_map::DefaultHasher,
-		hash::{Hash, Hasher},
-	};
-
-	use crate::message::Message;
-
-	/// HASH
-	pub fn message_tail<M>(tags_str: &str) -> String
-	where
-		M: Message,
-	{
-		// Get hash of the tags
-		let mut hasher = DefaultHasher::new();
-		tags_str.hash(&mut hasher);
-
-		format!("{{topic:{}:{:x}}}:tail", M::NAME, hasher.finish())
-	}
-
-	pub mod message_tail {
-		pub const REQUEST_ID: &str = "r";
-		pub const TS: &str = "t";
-		pub const BODY: &str = "b";
 	}
 }

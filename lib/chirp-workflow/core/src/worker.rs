@@ -1,13 +1,9 @@
-use futures_util::StreamExt;
 use global_error::GlobalResult;
 use tokio::time::Duration;
 use tracing::Instrument;
 use uuid::Uuid;
 
-use crate::{
-	ctx::WorkflowCtx, db::DatabaseHandle, error::WorkflowError, message, registry::RegistryHandle,
-	util,
-};
+use crate::{ctx::WorkflowCtx, db::DatabaseHandle, registry::RegistryHandle, utils};
 
 pub const TICK_INTERVAL: Duration = Duration::from_secs(5);
 
@@ -29,7 +25,8 @@ impl Worker {
 		}
 	}
 
-	pub async fn start(mut self, pools: rivet_pools::Pools) -> GlobalResult<()> {
+	/// Polls the database periodically
+	pub async fn poll_start(mut self, pools: rivet_pools::Pools) -> GlobalResult<()> {
 		tracing::info!(
 			worker_instance_id=?self.worker_instance_id,
 			"starting worker instance with {} registered workflows",
@@ -49,7 +46,8 @@ impl Worker {
 		}
 	}
 
-	pub async fn start_with_nats(mut self, pools: rivet_pools::Pools) -> GlobalResult<()> {
+	/// Polls the database periodically or wakes immediately when `Database::wake` finishes
+	pub async fn wake_start(mut self, pools: rivet_pools::Pools) -> GlobalResult<()> {
 		tracing::info!(
 			worker_instance_id=?self.worker_instance_id,
 			"starting worker instance with {} registered workflows",
@@ -63,25 +61,10 @@ impl Worker {
 		let mut interval = tokio::time::interval(TICK_INTERVAL);
 		interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-		// Create a subscription to the wake subject which receives messages whenever the worker should be
-		// awoken
-		let mut sub = pools
-			.nats()?
-			.subscribe(message::WORKER_WAKE_SUBJECT)
-			.await
-			.map_err(|x| WorkflowError::CreateSubscription(x.into()))?;
-
 		loop {
 			tokio::select! {
 				_ = interval.tick() => {},
-				msg = sub.next() => {
-					match msg {
-						Some(_) => interval.reset(),
-						None => {
-							return Err(WorkflowError::SubscriptionUnsubscribed.into());
-						}
-					}
-				}
+				res = self.db.wake() => res?,
 			}
 
 			self.tick(&shared_client, &pools, &cache).await?;
@@ -111,7 +94,7 @@ impl Worker {
 			.pull_workflows(self.worker_instance_id, &filter)
 			.await?;
 		for workflow in workflows {
-			let conn = util::new_conn(
+			let conn = utils::new_conn(
 				&shared_client,
 				pools,
 				cache,
@@ -127,7 +110,7 @@ impl Worker {
 				async move {
 					// Sleep until deadline
 					if let Some(wake_deadline_ts) = wake_deadline_ts {
-						util::time::sleep_until_ts(wake_deadline_ts as u64).await;
+						utils::time::sleep_until_ts(wake_deadline_ts as u64).await;
 					}
 
 					if let Err(err) = ctx.run().await {

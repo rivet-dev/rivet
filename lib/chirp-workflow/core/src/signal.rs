@@ -32,28 +32,11 @@ pub trait Signal {
 /// ````
 #[macro_export]
 macro_rules! join_signal {
-	(pub $join:ident, [$($signals:ident),* $(,)?]) => {
-		pub enum $join {
+	($vis:vis $join:ident, [$($signals:ident),* $(,)?]) => {
+		$vis enum $join {
 			$($signals($signals)),*
 		}
 
-		join_signal!(@ $join, [$($signals),*]);
-	};
-	(pub($($vis:tt)*) $join:ident, [$($signals:ident),* $(,)?]) => {
-		pub($($vis)*) enum $join {
-			$($signals($signals)),*
-		}
-
-		join_signal!(@ $join, [$($signals),*]);
-	};
-	($join:ident, [$($signals:ident),* $(,)?]) => {
-		enum $join {
-			$($signals($signals)),*
-		}
-
-		join_signal!(@ $join, [$($signals),*]);
-	};
-	(@ $join:ident, [$($signals:ident),*]) => {
 		#[async_trait::async_trait]
 		impl Listen for $join {
 			async fn listen(ctx: &chirp_workflow::prelude::ListenCtx) -> chirp_workflow::prelude::WorkflowResult<Self> {

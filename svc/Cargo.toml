@@ -179,6 +179,7 @@ members = [
 	"pkg/nomad/standalone/monitor",
 	"pkg/nsfw/ops/image-score",
 	"pkg/pegboard",
+	"pkg/pegboard/standalone/ws",
 	"pkg/perf/ops/log-get",
 	"pkg/profanity/ops/check",
 	"pkg/region/ops/get",

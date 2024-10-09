@@ -7,5 +7,4 @@ license = "Apache-2.0"
 
 [dependencies]
 chirp-workflow = { path = "../../../lib/chirp-workflow/core" }
-tokio-tungstenite = "0.23.1"
 serde = { version = "1.0.198", features = ["derive"] }

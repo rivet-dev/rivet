@@ -25,7 +25,7 @@ pub use crate::{
 	operation::Operation,
 	registry::Registry,
 	signal::{join_signal, Signal},
-	util::GlobalErrorExt,
+	utils::GlobalErrorExt,
 	worker::Worker,
 	workflow::Workflow,
 };

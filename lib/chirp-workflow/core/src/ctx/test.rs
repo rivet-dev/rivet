@@ -13,10 +13,10 @@ use crate::{
 	},
 	db::{DatabaseHandle, DatabasePgNats},
 	error::WorkflowError,
-	message::{Message, ReceivedMessage},
+	message::{Message, NatsMessage},
 	operation::{Operation, OperationInput},
 	signal::Signal,
-	util,
+	utils,
 	workflow::{Workflow, WorkflowInput},
 };
 
@@ -50,7 +50,7 @@ impl TestCtx {
 			.expect("failed to create chirp client");
 		let cache =
 			rivet_cache::CacheInner::from_env(pools.clone()).expect("failed to create cache");
-		let conn = util::new_conn(
+		let conn = utils::new_conn(
 			&shared_client,
 			&pools,
 			&cache,
@@ -73,7 +73,7 @@ impl TestCtx {
 
 		let db =
 			DatabasePgNats::from_pools(pools.crdb().unwrap(), pools.nats_option().clone().unwrap());
-		let msg_ctx = MessageCtx::new(&conn, req_id, ray_id).await.unwrap();
+		let msg_ctx = MessageCtx::new(&conn, ray_id).await.unwrap();
 
 		TestCtx {
 			name: service_name,
@@ -176,7 +176,7 @@ impl TestCtx {
 	pub async fn tail_read<M>(
 		&self,
 		tags: serde_json::Value,
-	) -> GlobalResult<Option<ReceivedMessage<M>>>
+	) -> GlobalResult<Option<NatsMessage<M>>>
 	where
 		M: Message,
 	{
