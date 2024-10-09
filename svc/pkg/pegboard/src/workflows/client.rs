@@ -15,8 +15,11 @@ pub struct Input {
 #[workflow]
 pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
 	// Whatever started this client should be listening for this
-	ctx.signal(Registered { }).tag("client_id", input.client_id).send().await?;
-	
+	ctx.signal(Registered {})
+		.tag("client_id", input.client_id)
+		.send()
+		.await?;
+
 	ctx.repeat(|ctx| {
 		let client_id = input.client_id;
 
@@ -186,7 +189,7 @@ async fn process_init(
 		sql_fetch_all!(
 			[ctx, (i64, String)]
 			"
-			SELECT index, payload
+			SELECT index, payload::TEXT
 			FROM db_pegboard.client_commands
 			WHERE client_id = $1 AND index > $2
 			ORDER BY index ASC
@@ -218,21 +221,37 @@ struct InsertEventsInput {
 
 #[activity(InsertEvents)]
 async fn insert_events(ctx: &ActivityCtx, input: &InsertEventsInput) -> GlobalResult<()> {
-	// TODO: Parallelize
-	for event_wrapper in &input.events {
-		sql_execute!(
-			[ctx]
-			"
-			INSERT INTO db_pegboard.client_events (client_id, index, payload, ack_ts)
-			VALUES ($1, $2, $3, $4)
-			",
-			input.client_id,
-			event_wrapper.index,
-			&event_wrapper.inner,
-			util::timestamp::now(),
-		)
-		.await?;
-	}
+	let last_event_idx = if let Some(last_event_wrapper) = input.events.last() {
+		last_event_wrapper.index
+	} else {
+		return Ok(());
+	};
+
+	sql_execute!(
+		[ctx]
+		"
+		WITH
+			update_last_event_idx AS (
+				UPDATE db_pegboard.clients
+				SET last_event_idx = $2
+				WHERE client_id = $1
+				RETURNING 1
+			),
+			insert_events AS (
+				INSERT INTO db_pegboard.client_events (client_id, index, payload, ack_ts)
+				SELECT $1, index, payload, $5
+				FROM UNNEST($3, $4) AS e(index, payload)
+				RETURNING 1
+			)
+		SELECT 1
+		",
+		input.client_id,
+		last_event_idx,
+		input.events.iter().map(|wrapper| wrapper.index).collect::<Vec<_>>(),
+		input.events.iter().map(|wrapper| &wrapper.inner).collect::<Vec<_>>(),
+		util::timestamp::now(),
+	)
+	.await?;
 
 	Ok(())
 }
@@ -242,12 +261,19 @@ struct UpdateContainerStateInput {
 	events: Vec<protocol::Raw<protocol::Event>>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct UpdateContainerStateOutput {
+	stopping_container_ids: Vec<Uuid>,
+}
+
 #[activity(UpdateContainerState)]
 async fn update_container_state(
 	ctx: &ActivityCtx,
 	input: &UpdateContainerStateInput,
-) -> GlobalResult<()> {
+) -> GlobalResult<UpdateContainerStateOutput> {
 	use protocol::ContainerState::*;
+
+	let mut stopping_container_ids = Vec::new();
 
 	// TODO: Parallelize
 	for event in &input.events {
@@ -276,7 +302,7 @@ async fn update_container_state(
 						"
 						UPDATE db_pegboard.containers
 						SET
-							running_ts = $2 AND
+							running_ts = $2,
 							pid = $3
 						WHERE container_id = $1
 						",
@@ -287,17 +313,23 @@ async fn update_container_state(
 					.await?;
 				}
 				Stopping => {
-					sql_execute!(
-						[ctx]
+					let set_stopping_ts = sql_fetch_optional!(
+						[ctx, (i64,)]
 						"
 						UPDATE db_pegboard.containers
 						SET stopping_ts = $2
-						WHERE container_id = $1
+						WHERE container_id = $1 AND stopping_ts IS NULL
+						RETURNING 1
 						",
 						container_id,
 						util::timestamp::now(),
 					)
-					.await?;
+					.await?
+					.is_some();
+
+					if set_stopping_ts {
+						stopping_container_ids.push(container_id);
+					}
 				}
 				Stopped => {
 					sql_execute!(
@@ -318,7 +350,7 @@ async fn update_container_state(
 						"
 						UPDATE db_pegboard.containers
 						SET
-							exit_ts = $2 AND
+							exit_ts = $2,
 							exit_code = $3
 						WHERE container_id = $1
 						",
@@ -333,7 +365,9 @@ async fn update_container_state(
 		}
 	}
 
-	Ok(())
+	Ok(UpdateContainerStateOutput {
+		stopping_container_ids,
+	})
 }
 
 pub async fn handle_commands(
@@ -381,23 +415,27 @@ pub async fn handle_commands(
 			signal,
 		} = command
 		{
-			if let Signal::SIGTERM = signal.try_into()? {
-				ctx.activity(UpdateContainerStateInput {
-					events: vec![protocol::Raw::new(
-						&protocol::Event::ContainerStateUpdate {
-							container_id,
-							state: protocol::ContainerState::Stopping,
-						},
-					)?],
-				})
-				.await?;
+			if matches!(signal.try_into()?, Signal::SIGTERM | Signal::SIGKILL) {
+				let res = ctx
+					.activity(UpdateContainerStateInput {
+						events: vec![protocol::Raw::new(
+							&protocol::Event::ContainerStateUpdate {
+								container_id,
+								state: protocol::ContainerState::Stopping,
+							},
+						)?],
+					})
+					.await?;
 
-				ctx.signal(crate::workflows::client::ContainerStateUpdate {
-					state: protocol::ContainerState::Stopping,
-				})
-				.tag("container_id", container_id)
-				.send()
-				.await?;
+				// Publish signal if stopping_ts was not set before
+				if !res.stopping_container_ids.is_empty() {
+					ctx.signal(crate::workflows::client::ContainerStateUpdate {
+						state: protocol::ContainerState::Stopping,
+					})
+					.tag("container_id", container_id)
+					.send()
+					.await?;
+				}
 			}
 		}
 	}
@@ -417,25 +455,25 @@ async fn insert_commands(ctx: &ActivityCtx, input: &InsertCommandsInput) -> Glob
 		[ctx, (i64,)]
 		"
 		WITH
-			last_event_idx(idx) AS (
+			last_command_idx(idx) AS (
 				UPDATE db_pegboard.clients
-				SET last_command_idx = last_command_idx + 1
+				SET last_command_idx = last_command_idx + array_length($2, 1)
 				WHERE client_id = $1
-				RETURNING last_command_idx - 1
+				RETURNING last_command_idx - array_length($2, 1)
 			),
 			insert_commands AS (
 				INSERT INTO db_pegboard.client_commands (
 					client_id,
-					payload,
 					index,
+					payload,
 					create_ts
 				)
-				SELECT $1, p.payload, l.idx + p.index - 1, $3
-				FROM last_event_idx AS l
+				SELECT $1, l.idx + p.index, p.payload, $3
+				FROM last_command_idx AS l
 				CROSS JOIN UNNEST($2) WITH ORDINALITY AS p(payload, index)
 				RETURNING 1
 			)
-		SELECT idx FROM last_event_idx
+		SELECT idx FROM last_command_idx
 		",
 		input.client_id,
 		&input.commands,
@@ -443,7 +481,8 @@ async fn insert_commands(ctx: &ActivityCtx, input: &InsertCommandsInput) -> Glob
 	)
 	.await?;
 
-	Ok(index)
+	// Postgres is 1-based
+	Ok(index + 1)
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
@@ -501,8 +540,7 @@ async fn fetch_all_containers(
 }
 
 #[signal("pegboard_client_registered")]
-pub struct Registered {
-}
+pub struct Registered {}
 
 #[message("pegboard_client_to_ws")]
 pub struct ToWs {

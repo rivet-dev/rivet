@@ -1,13 +1,11 @@
 [package]
-name = "tier"
+name = "game-node"
 version = "0.0.1"
-edition = "2021"
+edition = "2018"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 license = "Apache-2.0"
 
 [dependencies]
 chirp-workflow = { path = "../../../lib/chirp-workflow/core" }
 
-cluster = { path = "../cluster" }
-game-node = { path = "../game-node" }
 linode = { path = "../linode" }

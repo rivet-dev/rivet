@@ -25,7 +25,7 @@ pub fn configure() -> GlobalResult<String> {
 		)
 		.replace(
 			"__RESERVE_MEMORY__",
-			&crate::util::NOMAD_RESERVE_MEMORY.to_string(),
+			&game_node::NOMAD_RESERVE_MEMORY.to_string(),
 		)
 		.replace(
 			"__GG_VLAN_SUBNET__",

@@ -1,4 +1,5 @@
 use std::{
+	io::Write,
 	os::unix::process::CommandExt,
 	path::{Path, PathBuf},
 	process::Stdio,
@@ -9,7 +10,7 @@ use futures_util::StreamExt;
 use indoc::indoc;
 use nix::{
 	sys::wait::{waitpid, WaitStatus},
-	unistd::{fork, pipe, read, write, ForkResult, Pid},
+	unistd::{fork, pipe, read, setsid, write, ForkResult, Pid},
 };
 use pegboard::protocol;
 use rand::Rng;
@@ -35,6 +36,17 @@ impl Container {
 		let oci_bundle_path = container_path.join("oci-bundle");
 		let netns_path = self.netns_path();
 
+		let api_endpoint_env_var = {
+			let api_endpoint = ctx
+				.api_endpoint
+				.read()
+				.await
+				.clone()
+				.context("missing api endpoint")?;
+
+			format!("RIVET_API_ENDPOINT={api_endpoint}")
+		};
+
 		// Write base config
 		fs::write(
 			container_path.join("oci-bundle-config.base.json"),
@@ -42,13 +54,7 @@ impl Container {
 				self.config.resources.cpu,
 				self.config.resources.memory,
 				self.config.resources.memory_max,
-				vec!["RIVET_API_ENDPOINT".to_string(), {
-					ctx.api_endpoint
-						.read()
-						.await
-						.clone()
-						.context("missing api endpoint")?
-				}],
+				vec![api_endpoint_env_var],
 			))?,
 		)
 		.await?;
@@ -446,6 +452,7 @@ impl Container {
 		}
 
 		let max = MAX_INGRESS_PORT - MIN_INGRESS_PORT;
+		// Add random spread to port selection
 		let tcp_offset = rand::thread_rng().gen_range(0..max);
 		let udp_offset = rand::thread_rng().gen_range(0..max);
 
@@ -454,8 +461,8 @@ impl Container {
 			sqlx::query_as::<_, (i64, i64)>(indoc!(
 				"
 				INSERT INTO container_ports (container_id, port, protocol)
-				SELECT ?1, port, protocol
 				-- Select TCP ports
+				SELECT ?1, port, protocol
 				FROM (
 					WITH RECURSIVE
 						nums(n, i) AS (
@@ -481,8 +488,8 @@ impl Container {
 					SELECT port, 0 AS protocol FROM available_ports
 				)
 				UNION ALL
-				SELECT ?1, port, protocol
 				-- Select UDP ports
+				SELECT ?1, port, protocol
 				FROM (
 					WITH RECURSIVE
 						nums(n, i) AS (
@@ -569,16 +576,8 @@ impl Container {
 	}
 
 	#[tracing::instrument(skip_all)]
-	pub async fn cleanup(&self, ctx: &Ctx) -> Result<()> {
+	pub async fn cleanup_setup(&self, ctx: &Ctx) -> Result<()> {
 		use std::result::Result::{Err, Ok};
-
-		tracing::info!(container_id=?self.container_id, "cleaning up");
-
-		{
-			// Cleanup ctx
-			let mut containers = ctx.containers.write().await;
-			containers.remove(&self.container_id);
-		}
 
 		match Command::new("runc")
 			.arg("delete")
@@ -656,7 +655,7 @@ impl Container {
 
 	// Path to the created namespace
 	fn netns_path(&self) -> PathBuf {
-		if let protocol::NetworkMode::Bridge = self.config.network_mode {
+		if let protocol::NetworkMode::Host = self.config.network_mode {
 			// Host network
 			Path::new("/proc/1/ns/net").to_path_buf()
 		} else {
@@ -674,6 +673,7 @@ pub fn spawn_orphaned_container_runner(
 	// Prepare the arguments for the container runner
 	let runner_args = vec![container_path.to_str().context("bad path")?];
 
+	// TODO: Do pipes have to be manually deleted here?
 	// Pipe communication between processes
 	let (pipe_read, pipe_write) = pipe()?;
 
@@ -689,9 +689,9 @@ pub fn spawn_orphaned_container_runner(
 					// Read the second child's PID from the pipe
 					let mut buf = [0u8; 4];
 					read(pipe_read, &mut buf)?;
-					let second_child_pid = Pid::from_raw(i32::from_le_bytes(buf));
+					let orphan_pid = Pid::from_raw(i32::from_le_bytes(buf));
 
-					Ok(second_child_pid)
+					Ok(orphan_pid)
 				}
 				WaitStatus::Exited(_, status) => {
 					bail!("Child process exited with status {}", status)
@@ -704,13 +704,23 @@ pub fn spawn_orphaned_container_runner(
 			match unsafe { fork() } {
 				Result::Ok(ForkResult::Parent { child }) => {
 					// Write the second child's PID to the pipe
-					let child_pid_bytes = child.as_raw().to_le_bytes();
-					write(pipe_write, &child_pid_bytes)?;
+					let orphan_pid_bytes = child.as_raw().to_le_bytes();
+					write(pipe_write, &orphan_pid_bytes)?;
+
+					// Write orphan PID to the containers cgroup so that it is no longer part of the parent cgroup.
+					// This is important for allowing systemd to restart pegboard without restarting orphans.
+					let mut cgroup_procs = std::fs::File::options()
+						.append(true)
+						.open(Path::new(utils::CGROUP_PATH).join("cgroup.procs"))?;
+					cgroup_procs.write_all(format!("{}\n", child.as_raw()).as_bytes())?;
 
 					// Exit the intermediate child
 					std::process::exit(0);
 				}
 				Result::Ok(ForkResult::Child) => {
+					// Disassociate from the parent by creating a new session
+					setsid().context("setsid failed")?;
+
 					// Exit immediately on fail in order to not leak process
 					let err = std::process::Command::new(&container_runner_path)
 						.args(&runner_args)
@@ -724,8 +734,6 @@ pub fn spawn_orphaned_container_runner(
 				}
 				Err(err) => {
 					// Exit immediately in order to not leak child process.
-					//
-					// The first fork doesn't need to exit on error since it
 					eprintln!("process second fork failed: {err:?}");
 					std::process::exit(1);
 				}

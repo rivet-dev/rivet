@@ -1,0 +1,11 @@
+[service]
+name = "pegboard-dc-init"
+essential = true
+
+[runtime]
+kind = "rust"
+
+[oneshot]
+
+[databases]
+db-workflow = {}

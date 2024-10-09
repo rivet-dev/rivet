@@ -1,10 +1,10 @@
 use prometheus::*;
 
-mod buckets;
+// mod buckets;
 mod registry;
 mod server;
 
-pub use buckets::BUCKETS;
+// pub use buckets::BUCKETS;
 pub use registry::REGISTRY;
 pub use server::run_standalone;
 

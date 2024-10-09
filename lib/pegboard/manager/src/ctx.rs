@@ -35,6 +35,7 @@ struct ContainerRow {
 	container_id: Uuid,
 	config: Vec<u8>,
 	pid: Option<i32>,
+	stop_ts: Option<i64>,
 }
 
 pub struct Ctx {
@@ -94,7 +95,7 @@ impl Ctx {
 				"
 				UPDATE state
 				SET last_event_idx = last_event_idx + 1
-				RETURNING last_event_idx - 1
+				RETURNING last_event_idx
 				",
 			))
 			.fetch_one(&mut *self.sql().await?)
@@ -175,7 +176,12 @@ impl Ctx {
 			self.send_packet(protocol::ToServer::Init {
 				last_command_idx,
 				system: protocol::SystemInfo {
-					cpu: self.system.cpus().first().context("no cpus")?.frequency(),
+					// Sum of cpu frequency
+					cpu: self
+						.system
+						.cpus()
+						.iter()
+						.fold(0, |s, cpu| s + cpu.frequency()),
 					memory: self.system.total_memory() / (1024 * 1024),
 				},
 			})
@@ -266,36 +272,37 @@ impl Ctx {
 		}
 
 		// Ack command
-		utils::query(|| async {
-			sqlx::query(indoc!(
-				"
-				UPDATE state
-				SET last_command_idx = ?1
-				",
-			))
-			.bind(command.index)
-			.execute(&mut *self.sql().await?)
-			.await
-		})
-		.await?;
-		utils::query(|| async {
-			sqlx::query(indoc!(
-				"
-				INSERT INTO commands (
-					idx,
-					payload,
-					ack_ts
-				)
-				VALUES(?1, ?2, ?3)
-				",
-			))
-			.bind(command.index)
-			.bind(&command.inner)
-			.bind(utils::now())
-			.execute(&mut *self.sql().await?)
-			.await
-		})
-		.await?;
+		use std::result::Result::{Err, Ok};
+		tokio::try_join!(
+			utils::query(|| async {
+				sqlx::query(indoc!(
+					"
+					UPDATE state
+					SET last_command_idx = ?1
+					",
+				))
+				.bind(command.index)
+				.execute(&mut *self.sql().await?)
+				.await
+			}),
+			utils::query(|| async {
+				sqlx::query(indoc!(
+					"
+					INSERT INTO commands (
+						idx,
+						payload,
+						ack_ts
+					)
+					VALUES(?1, ?2, ?3)
+					",
+				))
+				.bind(command.index)
+				.bind(&command.inner)
+				.bind(utils::now())
+				.execute(&mut *self.sql().await?)
+				.await
+			}),
+		)?;
 
 		Ok(())
 	}
@@ -327,13 +334,12 @@ impl Ctx {
 		self.send_packet(protocol::ToServer::Events(events)).await
 	}
 
-	// TODO: Parallelize
 	// Rebuilds state from DB
 	async fn rebuild(self: &Arc<Self>) -> Result<()> {
 		let container_rows = utils::query(|| async {
 			sqlx::query_as::<_, ContainerRow>(indoc!(
 				"
-				SELECT container_id, config, pid
+				SELECT container_id, config, pid, stop_ts
 				FROM containers
 				WHERE exit_ts IS NULL
 				",
@@ -343,34 +349,33 @@ impl Ctx {
 		})
 		.await?;
 
+		// NOTE: Sqlite doesn't support arrays, can't parallelize this easily
 		// Emit stop events
 		for row in &container_rows {
-			if row.pid.is_some() {
-				continue;
+			if row.pid.is_none() && row.stop_ts.is_none() {
+				tracing::error!(container_id=?row.container_id, "container has no pid, stopping");
+
+				utils::query(|| async {
+					sqlx::query(indoc!(
+						"
+						UPDATE containers
+						SET stop_ts = ?2
+						WHERE container_id = ?1
+						",
+					))
+					.bind(row.container_id)
+					.bind(utils::now())
+					.execute(&mut *self.sql().await?)
+					.await
+				})
+				.await?;
+
+				self.event(protocol::Event::ContainerStateUpdate {
+					container_id: row.container_id,
+					state: protocol::ContainerState::Stopped,
+				})
+				.await?;
 			}
-
-			tracing::error!("container has no pid, stopping");
-
-			utils::query(|| async {
-				sqlx::query(indoc!(
-					"
-					UPDATE containers
-					SET stop_ts = ?2
-					WHERE container_id = ?1
-					",
-				))
-				.bind(row.container_id)
-				.bind(utils::now())
-				.execute(&mut *self.sql().await?)
-				.await
-			})
-			.await?;
-
-			self.event(protocol::Event::ContainerStateUpdate {
-				container_id: row.container_id,
-				state: protocol::ContainerState::Stopped,
-			})
-			.await?;
 		}
 
 		// Start container observers

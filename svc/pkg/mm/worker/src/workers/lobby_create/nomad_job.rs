@@ -85,8 +85,8 @@ pub fn gen_lobby_docker_job(
 
 	// runc-compatible resources
 	let cpu = tier.rivet_cores_numerator as u64 * 1_000 / tier.rivet_cores_denominator as u64; // Millicore (1/1000 of a core)
-	let memory = tier.memory * (1024 * 1024); // bytes
-	let memory_max = tier.memory_max * (1024 * 1024); // bytes
+	let memory = tier.memory as u64 * (1024 * 1024); // bytes
+	let memory_max = tier.memory_max as u64 * (1024 * 1024); // bytes
 
 	// Nomad-compatible resources
 	let resources = Resources {
@@ -94,7 +94,7 @@ pub fn gen_lobby_docker_job(
 		// Nomad configures CPU based on MHz, not millicores. We havel to calculate the CPU share
 		// by knowing how many MHz are on the client.
 		CPU: if tier.rivet_cores_numerator < tier.rivet_cores_denominator {
-			Some(tier.cpu.try_into()?)
+			Some((tier.cpu - util_job::TASK_CLEANUP_CPU as u32).try_into()?)
 		} else {
 			None
 		},

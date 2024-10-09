@@ -29,18 +29,21 @@ async fn main() -> Result<()> {
 	// Start metrics server
 	tokio::spawn(metrics::run_standalone());
 
+	// Read env
 	let client_id = Uuid::parse_str(&utils::var("CLIENT_ID")?)?;
 	let datacenter_id = Uuid::parse_str(&utils::var("DATACENTER_ID")?)?;
 	let network_ip = utils::var("NETWORK_IP")?.parse::<Ipv4Addr>()?;
 
+	// Read system metrics
 	let system = System::new_with_specifics(
 		RefreshKind::new()
 			.with_cpu(CpuRefreshKind::new().with_frequency())
 			.with_memory(MemoryRefreshKind::new().with_ram()),
 	);
 
+	// Init project directories
 	let working_path = Path::new("/etc/pegboard");
-	utils::init_working_dir(&working_path).await?;
+	utils::init(&working_path).await?;
 
 	// Init sqlite db
 	let sqlite_db_url = format!(
@@ -53,7 +56,7 @@ async fn main() -> Result<()> {
 	let pool = utils::build_sqlite_pool(&sqlite_db_url).await?;
 	utils::init_sqlite_schema(&pool).await?;
 
-	// Build connection URL
+	// Build WS connection URL
 	let mut url = Url::parse("ws://127.0.0.1:5030")?;
 	url.set_path(&format!("/v{PROTOCOL_VERSION}"));
 	url.query_pairs_mut()

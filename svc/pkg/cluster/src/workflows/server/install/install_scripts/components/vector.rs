@@ -38,7 +38,6 @@ pub fn configure(config: &Config, pool_type: PoolType) -> String {
 			inputs = [{sources}]
             condition = '!starts_with!(.name, "go_") && !starts_with!(.name, "promhttp_")'
 
-
 		[transforms.add_meta]
 			type = "remap"
 			inputs = ["filter_metrics"]

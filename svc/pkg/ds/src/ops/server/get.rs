@@ -56,6 +56,12 @@ struct ServerNomad {
 }
 
 #[derive(sqlx::FromRow)]
+struct ServerPegboard {
+	server_id: Uuid,
+	running_ts: Option<i64>,
+}
+
+#[derive(sqlx::FromRow)]
 struct ServerPort {
 	server_id: Uuid,
 	label: String,
@@ -75,7 +81,14 @@ pub struct Output {
 
 #[operation]
 pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
-	let (server_rows, port_gg_rows, port_host_rows, server_nomad_rows, internal_port_rows) = tokio::try_join!(
+	let (
+		server_rows,
+		port_gg_rows,
+		port_host_rows,
+		server_nomad_rows,
+		server_pegboard_rows,
+		internal_port_rows,
+	) = tokio::try_join!(
 		sql_fetch_all!(
 			[ctx, ServerRow]
 			"
@@ -146,6 +159,17 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 			&input.server_ids,
 		),
 		sql_fetch_all!(
+			[ctx, ServerPegboard]
+			"
+			SELECT server_id, running_ts
+			FROM db_ds.servers_pegboard AS s
+			JOIN db_pegboard.containers AS co
+			ON s.pegboard_container_id = co.container_id
+			WHERE server_id = ANY($1)
+			",
+			&input.server_ids,
+		),
+		sql_fetch_all!(
 			[ctx, ServerPort]
 			"
 			SELECT
@@ -165,12 +189,21 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 		.iter()
 		.filter_map(|server_id| server_rows.iter().find(|x| x.server_id == *server_id))
 		.map(|server| {
-			let server_nomad = unwrap!(server_nomad_rows
-				.iter()
-				.find(|x| x.server_id == server.server_id));
-
 			// TODO: Handle timeout to let Traefik pull config
-			let is_connectable = server_nomad.nomad_alloc_plan_ts.is_some();
+			let is_connectable = if let Some(server_nomad) = server_nomad_rows
+				.iter()
+				.find(|x| x.server_id == server.server_id)
+			{
+				server_nomad.nomad_alloc_plan_ts.is_some()
+			} else if let Some(server_pb) = server_pegboard_rows
+				.iter()
+				.find(|x| x.server_id == server.server_id)
+			{
+				server_pb.running_ts.is_some()
+			} else {
+				// neither nomad nor pegboard server attached
+				false
+			};
 
 			let ports = port_gg_rows
 				.iter()

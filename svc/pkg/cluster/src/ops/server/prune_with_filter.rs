@@ -15,6 +15,7 @@ pub struct Input {
 #[derive(Debug)]
 pub struct Output {}
 
+// TODO: Also prune cloudflare DNS
 #[operation]
 pub async fn cluster_server_prune_with_filter(
 	ctx: &OperationCtx,

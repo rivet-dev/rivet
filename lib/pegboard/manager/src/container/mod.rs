@@ -1,6 +1,9 @@
 use std::{
 	path::{Path, PathBuf},
-	sync::Arc,
+	sync::{
+		atomic::{AtomicBool, Ordering},
+		Arc,
+	},
 	time::Duration,
 };
 
@@ -42,6 +45,7 @@ pub struct Container {
 	config: protocol::ContainerConfig,
 
 	pid: Mutex<Option<Pid>>,
+	exited: AtomicBool,
 }
 
 impl Container {
@@ -51,6 +55,7 @@ impl Container {
 			config,
 
 			pid: Mutex::new(None),
+			exited: AtomicBool::new(false),
 		})
 	}
 
@@ -60,6 +65,7 @@ impl Container {
 			config,
 
 			pid: Mutex::new(Some(pid)),
+			exited: AtomicBool::new(false),
 		})
 	}
 
@@ -198,7 +204,7 @@ impl Container {
 				"
 				UPDATE containers
 				SET
-					running_ts = ?2 AND
+					running_ts = ?2,
 					pid = ?3
 				WHERE container_id = ?1
 				",
@@ -284,58 +290,31 @@ impl Container {
 		};
 
 		let exit_code = if let ObservationState::Exited = state {
-			Some(
-				fs::read_to_string(&exit_code_path)
-					.await?
-					.trim()
-					.parse::<i32>()?,
-			)
+			use std::result::Result::Ok;
+			match fs::read_to_string(&exit_code_path).await {
+				Ok(contents) => match contents.trim().parse::<i32>() {
+					Ok(x) => Some(x),
+					Err(err) => {
+						tracing::error!(?err, "failed to parse exit code file");
+
+						None
+					}
+				},
+				Err(err) => {
+					tracing::error!(?err, "failed to read exit code file");
+
+					None
+				}
+			}
 		} else {
+			tracing::warn!(?pid, "process died before exit code file was written");
+
 			None
 		};
 
-		tracing::info!(container_id=?self.container_id, ?exit_code, "received exit code");
+		tracing::info!(container_id=?self.container_id, ?exit_code, "exited");
 
-		// Update DB
-		utils::query(|| async {
-			sqlx::query(indoc!(
-				"
-				UPDATE containers
-				SET
-					exit_ts = ?2 AND
-					exit_code = ?3
-				WHERE container_id = ?1
-				",
-			))
-			.bind(self.container_id)
-			.bind(utils::now())
-			.bind(exit_code)
-			.execute(&mut *ctx.sql().await?)
-			.await
-		})
-		.await?;
-
-		// Unbind ports
-		utils::query(|| async {
-			sqlx::query(indoc!(
-				"
-				UPDATE container_ports
-				SET delete_ts = ?2
-				WHERE container_id = ?1
-				",
-			))
-			.bind(self.container_id)
-			.bind(utils::now())
-			.execute(&mut *ctx.sql().await?)
-			.await
-		})
-		.await?;
-
-		ctx.event(protocol::Event::ContainerStateUpdate {
-			container_id: self.container_id,
-			state: protocol::ContainerState::Exited { exit_code },
-		})
-		.await?;
+		self.set_exit_code(ctx, exit_code).await?;
 
 		tracing::info!(container_id=?self.container_id, "complete");
 
@@ -426,5 +405,70 @@ impl Container {
 		}
 
 		Ok(())
+	}
+
+	#[tracing::instrument(skip_all)]
+	pub async fn set_exit_code(&self, ctx: &Ctx, exit_code: Option<i32>) -> Result<()> {
+		// Update DB
+		utils::query(|| async {
+			sqlx::query(indoc!(
+				"
+				UPDATE containers
+				SET
+					exit_ts = ?2,
+					exit_code = ?3
+				WHERE container_id = ?1
+				",
+			))
+			.bind(self.container_id)
+			.bind(utils::now())
+			.bind(exit_code)
+			.execute(&mut *ctx.sql().await?)
+			.await
+		})
+		.await?;
+
+		// Unbind ports
+		utils::query(|| async {
+			sqlx::query(indoc!(
+				"
+				UPDATE container_ports
+				SET delete_ts = ?2
+				WHERE container_id = ?1
+				",
+			))
+			.bind(self.container_id)
+			.bind(utils::now())
+			.execute(&mut *ctx.sql().await?)
+			.await
+		})
+		.await?;
+
+		ctx.event(protocol::Event::ContainerStateUpdate {
+			container_id: self.container_id,
+			state: protocol::ContainerState::Exited { exit_code },
+		})
+		.await?;
+
+		self.exited.store(true, Ordering::SeqCst);
+
+		Ok(())
+	}
+
+	#[tracing::instrument(skip_all)]
+	pub async fn cleanup(&self, ctx: &Ctx) -> Result<()> {
+		tracing::info!(container_id=?self.container_id, "cleaning up");
+
+		{
+			// Cleanup ctx
+			let mut containers = ctx.containers.write().await;
+			containers.remove(&self.container_id);
+		}
+
+		if !self.exited.load(Ordering::SeqCst) {
+			self.set_exit_code(ctx, None).await?;
+		}
+
+		self.cleanup_setup(ctx).await
 	}
 }

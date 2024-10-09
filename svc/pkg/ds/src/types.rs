@@ -29,8 +29,8 @@ pub struct Server {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct ServerResources {
-	pub cpu_millicores: i32,
-	pub memory_mib: i32,
+	pub cpu_millicores: u32,
+	pub memory_mib: u32,
 }
 
 #[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
@@ -140,8 +140,8 @@ impl ApiTryFrom<Server> for models::ServersServer {
 impl ApiFrom<models::ServersResources> for ServerResources {
 	fn api_from(value: models::ServersResources) -> ServerResources {
 		ServerResources {
-			cpu_millicores: value.cpu,
-			memory_mib: value.memory,
+			cpu_millicores: value.cpu as u32,
+			memory_mib: value.memory as u32,
 		}
 	}
 }
@@ -149,8 +149,8 @@ impl ApiFrom<models::ServersResources> for ServerResources {
 impl ApiFrom<ServerResources> for models::ServersResources {
 	fn api_from(value: ServerResources) -> models::ServersResources {
 		models::ServersResources {
-			cpu: value.cpu_millicores,
-			memory: value.memory_mib,
+			cpu: value.cpu_millicores as i32,
+			memory: value.memory_mib as i32,
 		}
 	}
 }

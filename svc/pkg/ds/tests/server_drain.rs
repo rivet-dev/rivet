@@ -1,11 +1,10 @@
 use chirp_workflow::prelude::*;
 use ds::types;
-// use rivet_api::{apis::*, models};
 use rivet_operation::prelude::proto::backend;
 use serde_json::json;
 
 #[workflow_test]
-async fn server_create(ctx: TestCtx) {
+async fn server_drain(ctx: TestCtx) {
 	let game_res = op!([ctx] faker_game {
 		..Default::default()
 	})
@@ -72,10 +71,10 @@ async fn server_create(ctx: TestCtx) {
 		cluster_id,
 		runtime: ds::types::GameRuntime::Pegboard,
 		resources: ds::types::ServerResources {
-			cpu_millicores: 100,
-			memory_mib: 200,
+			cpu_millicores: 50,
+			memory_mib: 50,
 		},
-		kill_timeout_ms: 0,
+		kill_timeout_ms: 10000,
 		tags: vec![(String::from("test"), String::from("123"))]
 			.into_iter()
 			.collect(),
@@ -93,41 +92,25 @@ async fn server_create(ctx: TestCtx) {
 
 	sub.next().await.unwrap();
 
-	// Async sleep for 5 seconds
+	ctx.signal(ds::workflows::server::Drain {
+		drain_timeout: 30000,
+	})
+	.tag("server_id", server_id)
+	.send()
+	.await
+	.unwrap();
+
 	tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
-	let server = ctx
-		.op(ds::ops::server::get::Input {
-			server_ids: vec![server_id],
-		})
-		.await
-		.unwrap()
-		.servers
-		.into_iter()
-		.next()
-		.unwrap();
-
-	let hostname = server
-		.network_ports
-		.get("testing2")
-		.unwrap()
-		.public_hostname
-		.as_ref()
-		.expect("no public hostname");
-
-	// Echo body
-	let random_body = Uuid::new_v4().to_string();
-	let client = reqwest::Client::new();
-	let res = client
-		.post(format!("http://{hostname}"))
-		.body(random_body.clone())
+	ctx.signal(ds::workflows::server::Undrain {})
+		.tag("server_id", server_id)
 		.send()
 		.await
-		.unwrap()
-		.error_for_status()
 		.unwrap();
-	let res_text = res.text().await.unwrap();
-	assert_eq!(random_body, res_text, "echoed wrong response");
 
-	// assert_eq!(game_res.prod_env_id.unwrap(), server.env_id.unwrap().as_uuid());
+	ctx.signal(ds::workflows::server::Drain { drain_timeout: 0 })
+		.tag("server_id", server_id)
+		.send()
+		.await
+		.unwrap();
 }

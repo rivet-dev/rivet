@@ -1,5 +1,5 @@
 use chirp_workflow::prelude::*;
-use cluster::util::GameNodeConfig;
+use game_node::types::GameNodeConfig;
 
 use crate::types::Tier;
 
@@ -95,8 +95,8 @@ fn generate_tier(
 	pegboard: bool,
 	c: &GameNodeConfig,
 	name: &str,
-	numerator: u64,
-	denominator: u64,
+	numerator: u32,
+	denominator: u32,
 ) -> Tier {
 	let memory_per_core = if pegboard {
 		c.memory_per_core_pb()
@@ -106,13 +106,14 @@ fn generate_tier(
 
 	Tier {
 		tier_name_id: name.into(),
-		rivet_cores_numerator: numerator as u32,
-		rivet_cores_denominator: denominator as u32,
+		rivet_cores_numerator: numerator,
+		rivet_cores_denominator: denominator,
 		cpu: c.cpu_per_core() * numerator / denominator,
+		cpu_millicores: 1000 * numerator / denominator,
 		memory: memory_per_core * numerator / denominator,
 		// Allow oversubscribing memory by 50% of the reserved
 		// memory
-		memory_max: u64::min(
+		memory_max: u32::min(
 			(memory_per_core * numerator / denominator) * 3 / 2,
 			c.memory,
 		),

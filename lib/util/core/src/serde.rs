@@ -350,3 +350,10 @@ impl<T> sqlx::postgres::PgHasArrayType for Raw<T> {
         sqlx::postgres::PgTypeInfo::with_name("_jsonb")
 	}
 }
+
+impl<T> sqlx::postgres::PgHasArrayType for &Raw<T> {
+    fn array_type_info() -> sqlx::postgres::PgTypeInfo {
+		// JSONB array
+        sqlx::postgres::PgTypeInfo::with_name("_jsonb")
+	}
+}

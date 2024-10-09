@@ -2587,6 +2587,7 @@ dependencies = [
  "chirp-workflow",
  "chrono",
  "cloudflare",
+ "game-node",
  "hex",
  "http 0.2.12",
  "include_dir",
@@ -3982,6 +3983,14 @@ dependencies = [
  "region-list-for-game",
  "rivet-operation",
  "sqlx",
+]
+
+[[package]]
+name = "game-node"
+version = "0.0.1"
+dependencies = [
+ "chirp-workflow",
+ "linode",
 ]
 
 [[package]]
@@ -6498,11 +6507,32 @@ name = "pegboard"
 version = "0.0.1"
 dependencies = [
  "chirp-workflow",
+ "game-node",
  "nix",
  "serde",
  "sqlx",
  "strum 0.24.1",
  "thiserror",
+]
+
+[[package]]
+name = "pegboard-dc-init"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "chirp-workflow",
+ "pegboard",
+ "reqwest 0.11.27",
+ "rivet-connection",
+ "rivet-pools",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-logfmt",
+ "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
@@ -9175,6 +9205,7 @@ version = "0.0.1"
 dependencies = [
  "chirp-workflow",
  "cluster",
+ "game-node",
  "linode",
 ]
 

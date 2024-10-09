@@ -4,11 +4,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InstanceType {
 	pub hardware_id: String,
-	pub memory: u64,
-	pub disk: u64,
-	pub vcpus: u64,
-	pub transfer: u64,
-	pub network_out: u64,
+	pub memory: u32,
+	pub disk: u32,
+	pub vcpus: u32,
+	pub transfer: u32,
+	pub network_out: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]

@@ -12,6 +12,8 @@ serde = { version = "1.0.198", features = ["derive"] }
 strum = { version = "0.24", features = ["derive"] }
 thiserror = "1.0"
 
+game-node = { path = "../game-node" }
+
 [dependencies.sqlx]
 git = "https://github.com/rivet-gg/sqlx"
 rev = "08d6e61aa0572e7ec557abbedb72cebb96e1ac5b"

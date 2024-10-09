@@ -123,13 +123,13 @@ pub async fn build_ds(
 
 #[tracing::instrument(skip(config))]
 fn ds_register_proxied_port(
-	run_id: Uuid,
+	server_id: Uuid,
 	proxied_port: &DynamicServer,
 	config: &mut types::TraefikConfigResponse,
 ) -> GlobalResult<()> {
 	let ingress_port = proxied_port.gg_port;
 	let target_port_label = proxied_port.label.clone();
-	let service_id = format!("ds-run:{}:{}", run_id, target_port_label);
+	let service_id = format!("ds:{}:{}", server_id, target_port_label);
 	let proxy_protocol = unwrap!(ds::types::GameGuardProtocol::from_repr(
 		proxied_port.protocol.try_into()?
 	));
@@ -191,13 +191,13 @@ fn ds_register_proxied_port(
 			let rule = format_http_rule(proxied_port)?;
 
 			// Hash key
-			let unique_key = (&run_id, &target_port_label, &rule, &middlewares);
+			let unique_key = (&server_id, &target_port_label, &rule, &middlewares);
 			let mut hasher = DefaultHasher::new();
 			unique_key.hash(&mut hasher);
 			let hash = hasher.finish();
 
 			config.http.routers.insert(
-				format!("ds-run:{run_id}:{hash:x}:http"),
+				format!("ds:{server_id}:{hash:x}:http"),
 				types::TraefikRouter {
 					entry_points: vec![format!("lb-{ingress_port}")],
 					rule: Some(rule),
@@ -214,13 +214,13 @@ fn ds_register_proxied_port(
 			let rule = format_http_rule(proxied_port)?;
 
 			// Hash key
-			let unique_key = (&run_id, &target_port_label, &rule, &middlewares);
+			let unique_key = (&server_id, &target_port_label, &rule, &middlewares);
 			let mut hasher = DefaultHasher::new();
 			unique_key.hash(&mut hasher);
 			let hash = hasher.finish();
 
 			config.http.routers.insert(
-				format!("ds-run:{run_id}:{hash:x}:https"),
+				format!("ds:{server_id}:{hash:x}:https"),
 				types::TraefikRouter {
 					entry_points: vec![format!("lb-{ingress_port}")],
 					rule: Some(rule),
@@ -233,7 +233,7 @@ fn ds_register_proxied_port(
 		}
 		ds::types::GameGuardProtocol::Tcp => {
 			config.tcp.routers.insert(
-				format!("ds-run:{}:{}:tcp", run_id, target_port_label),
+				format!("ds:{}:{}:tcp", server_id, target_port_label),
 				types::TraefikRouter {
 					entry_points: vec![format!("lb-{ingress_port}-tcp")],
 					rule: Some("HostSNI(`*`)".into()),
@@ -246,7 +246,7 @@ fn ds_register_proxied_port(
 		}
 		ds::types::GameGuardProtocol::TcpTls => {
 			config.tcp.routers.insert(
-				format!("ds-run:{}:{}:tcp-tls", run_id, target_port_label),
+				format!("ds:{}:{}:tcp-tls", server_id, target_port_label),
 				types::TraefikRouter {
 					entry_points: vec![format!("lb-{ingress_port}-tcp")],
 					rule: Some("HostSNI(`*`)".into()),
@@ -259,7 +259,7 @@ fn ds_register_proxied_port(
 		}
 		ds::types::GameGuardProtocol::Udp => {
 			config.udp.routers.insert(
-				format!("ds-run:{}:{}:udp", run_id, target_port_label),
+				format!("ds:{}:{}:udp", server_id, target_port_label),
 				types::TraefikRouter {
 					entry_points: vec![format!("lb-{ingress_port}-udp")],
 					rule: None,

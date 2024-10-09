@@ -51,14 +51,15 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 			SELECT
 				container_id,
 				client_id,
-				start_ts IS NULL AS failed_start,
-				stop_ts IS NULL AS failed_stop
+				running_ts IS NULL AS failed_start,
+				stopping_ts IS NOT NULL AS failed_stop
 			FROM db_pegboard.containers
 			WHERE
 				(
-					(create_ts < $1 AND start_ts IS NULL) OR
-					(stopping_ts < $2 AND stop_ts IS NULL)
+					(create_ts < $1 AND running_ts IS NULL) OR
+					stopping_ts < $2
 				) AND
+				stop_ts IS NULL AND
 				exit_ts IS NULL
 			",
 			ts - CONTAINER_START_THRESHOLD_MS,
@@ -101,7 +102,7 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 
 	// Manually set stop ts for failed stop containers
 	let failed_stop_container_ids = failed_container_rows
-		.into_iter()
+		.iter()
 		.filter(|row| row.failed_stop)
 		.map(|row| row.container_id)
 		.collect::<Vec<_>>();
@@ -109,7 +110,7 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 		sql_fetch_all!(
 			[ctx, ContainerRow]
 			"
-			UPDATE
+			UPDATE db_pegboard.containers
 			SET stop_ts = $2
 			WHERE container_id = ANY($1)
 			",

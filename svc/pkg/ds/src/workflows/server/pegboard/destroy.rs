@@ -9,6 +9,9 @@ use super::super::{DestroyComplete, DestroyStarted};
 pub(crate) struct Input {
 	pub server_id: Uuid,
 	pub override_kill_timeout_ms: Option<i64>,
+	/// Whether or not to send signals to the container. In the case that the container was already stopped
+	/// or exited, signals are unnecessary.
+	pub signal: bool,
 }
 
 #[workflow]
@@ -27,25 +30,27 @@ pub(crate) async fn ds_server_pegboard_destroy(
 		.send()
 		.await?;
 
-	ctx.signal(pp::Command::SignalContainer {
-		container_id: ds.container_id,
-		signal: Signal::SIGTERM as i32,
-	})
-	.tag("datacenter_id", ds.datacenter_id)
-	.send()
-	.await?;
-
-	// See `docs/packages/job/JOB_DRAINING_AND_KILL_TIMEOUTS.md`
-	ctx.sleep(input.override_kill_timeout_ms.unwrap_or(ds.kill_timeout_ms))
+	if input.signal {
+		ctx.signal(pp::Command::SignalContainer {
+			container_id: ds.container_id,
+			signal: Signal::SIGTERM as i32,
+		})
+		.tag("datacenter_id", ds.datacenter_id)
+		.send()
 		.await?;
 
-	ctx.signal(pp::Command::SignalContainer {
-		container_id: ds.container_id,
-		signal: Signal::SIGKILL as i32,
-	})
-	.tag("datacenter_id", ds.datacenter_id)
-	.send()
-	.await?;
+		// See `docs/packages/job/JOB_DRAINING_AND_KILL_TIMEOUTS.md`
+		ctx.sleep(input.override_kill_timeout_ms.unwrap_or(ds.kill_timeout_ms))
+			.await?;
+
+		ctx.signal(pp::Command::SignalContainer {
+			container_id: ds.container_id,
+			signal: Signal::SIGKILL as i32,
+		})
+		.tag("datacenter_id", ds.datacenter_id)
+		.send()
+		.await?;
+	}
 
 	ctx.msg(DestroyComplete {})
 		.tag("server_id", input.server_id)

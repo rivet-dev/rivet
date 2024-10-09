@@ -10,7 +10,7 @@ use util::serde::AsHashableExt;
 
 use super::{
 	resolve_image_artifact_url, CreateComplete, CreateFailed, Destroy, Drain, DrainState,
-	GetBuildAndDcInput, InsertDbInput, Port, DRAIN_PADDING_MS,
+	GetBuildAndDcInput, InsertDbInput, Port, DRAIN_PADDING_MS, TRAEFIK_GRACE_PERIOD,
 };
 use crate::types::{
 	build::{BuildCompression, BuildKind},
@@ -21,7 +21,7 @@ pub mod destroy;
 
 #[derive(Serialize, Deserialize)]
 struct StateRes {
-	destroy: bool,
+	signal: bool,
 	override_kill_timeout_ms: Option<i64>,
 }
 
@@ -84,6 +84,7 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 			ctx.workflow(destroy::Input {
 				server_id: input.server_id,
 				override_kill_timeout_ms: sig.override_kill_timeout_ms,
+				signal: true,
 			})
 			.output()
 			.await?;
@@ -101,7 +102,13 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 			async move {
 				match ctx.listen::<Main>().await? {
 					Main::ContainerStateUpdate(sig) => match sig.state {
+						pp::ContainerState::Starting => {
+							ctx.activity(SetStartedInput { server_id }).await?;
+						}
 						pp::ContainerState::Running { proxied_ports, .. } => {
+							// Wait for Traefik to be ready
+							ctx.sleep(TRAEFIK_GRACE_PERIOD).await?;
+
 							ctx.activity(UpdatePortsInput {
 								server_id,
 								datacenter_id,
@@ -114,8 +121,10 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 						| pp::ContainerState::Exited { .. } => {
 							tracing::info!("container stopped");
 
+							ctx.activity(SetFinishedInput { server_id }).await?;
+
 							return Ok(Loop::Break(StateRes {
-								destroy: false,
+								signal: false,
 								override_kill_timeout_ms: None,
 							}));
 						}
@@ -131,18 +140,18 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 
 						match ctx.listen_with_timeout::<DrainState>(sleep_for).await? {
 							Some(DrainState::Undrain(_)) => {}
-							// TODO: Compare the override timeout to the drain deadline and choose the
+							// TODO: Compare the override timeout to the remaining drain timeout and choose the
 							// smaller one
 							Some(DrainState::Destroy(sig)) => {
 								return Ok(Loop::Break(StateRes {
-									destroy: true,
+									signal: true,
 									override_kill_timeout_ms: sig.override_kill_timeout_ms,
 								}));
 							}
 							// Drain timeout complete
 							None => {
 								return Ok(Loop::Break(StateRes {
-									destroy: true,
+									signal: true,
 									override_kill_timeout_ms: Some(
 										kill_timeout_ms.min(drain_timeout),
 									),
@@ -152,7 +161,7 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 					}
 					Main::Destroy(sig) => {
 						return Ok(Loop::Break(StateRes {
-							destroy: true,
+							signal: true,
 							override_kill_timeout_ms: sig.override_kill_timeout_ms,
 						}))
 					}
@@ -164,14 +173,13 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 		})
 		.await?;
 
-	if state_res.destroy {
-		ctx.workflow(destroy::Input {
-			server_id: input.server_id,
-			override_kill_timeout_ms: state_res.override_kill_timeout_ms,
-		})
-		.output()
-		.await?;
-	}
+	ctx.workflow(destroy::Input {
+		server_id: input.server_id,
+		override_kill_timeout_ms: state_res.override_kill_timeout_ms,
+		signal: state_res.signal,
+	})
+	.output()
+	.await?;
 
 	Ok(())
 }
@@ -334,20 +342,19 @@ async fn select_resources(
 	let tier_dc = unwrap!(tier_res.datacenters.first());
 	let mut tiers = tier_dc.tiers.iter().collect::<Vec<_>>();
 
-	// Find the first tier that has more CPU and memory than the requested
-	// resources
-
 	// Sort the tiers by cpu
 	tiers.sort_by(|a, b| a.cpu.cmp(&b.cpu));
+
+	// Find the first tier that has more CPU and memory than the requested
+	// resources
 	let tier = unwrap!(tiers.iter().find(|t| {
-		t.cpu as i32 >= input.resources.cpu_millicores
-			&& t.memory as i32 >= input.resources.memory_mib
+		t.cpu_millicores >= input.resources.cpu_millicores && t.memory >= input.resources.memory_mib
 	}));
 
 	// runc-compatible resources
 	let cpu = tier.rivet_cores_numerator as u64 * 1_000 / tier.rivet_cores_denominator as u64; // Millicore (1/1000 of a core)
-	let memory = tier.memory * (1024 * 1024); // bytes
-	let memory_max = tier.memory_max * (1024 * 1024); // bytes
+	let memory = tier.memory as u64 * (1024 * 1024);
+	let memory_max = tier.memory_max as u64 * (1024 * 1024);
 
 	Ok(pp::Resources {
 		cpu,
@@ -397,7 +404,7 @@ async fn update_ports(ctx: &ActivityCtx, input: &UpdatePortsInput) -> GlobalResu
 				SELECT $1, label, source, ip
 				FROM unnest($3, $4, $5) AS n(label, source, ip)
 				WHERE EXISTS(
-					SELECT 1 FROM update_server_nomad
+					SELECT 1 FROM update_server
 				)
 				RETURNING 1
 			)
@@ -481,6 +488,50 @@ async fn resolve_artifacts(
 		image_artifact_url,
 		container_runner_binary_url,
 	})
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct SetStartedInput {
+	server_id: Uuid,
+}
+
+#[activity(SetStarted)]
+async fn set_started(ctx: &ActivityCtx, input: &SetStartedInput) -> GlobalResult<()> {
+	sql_execute!(
+		[ctx]
+		"
+		UPDATE db_ds.servers
+		SET start_ts = $2
+		WHERE server_id = $1
+		",
+		input.server_id,
+		util::timestamp::now(),
+	)
+	.await?;
+
+	Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct SetFinishedInput {
+	server_id: Uuid,
+}
+
+#[activity(SetFinished)]
+async fn set_finished(ctx: &ActivityCtx, input: &SetFinishedInput) -> GlobalResult<()> {
+	sql_execute!(
+		[ctx]
+		"
+		UPDATE db_ds.servers
+		SET finish_ts = $2
+		WHERE server_id = $1
+		",
+		input.server_id,
+		util::timestamp::now(),
+	)
+	.await?;
+
+	Ok(())
 }
 
 join_signal!(Init {

@@ -22,12 +22,13 @@ use url::Url;
 const MAX_QUERY_RETRIES: usize = 16;
 const QUERY_RETRY: Duration = Duration::from_millis(500);
 const TXN_RETRY: Duration = Duration::from_millis(250);
+pub const CGROUP_PATH: &str = "/sys/fs/cgroup/pegboard_containers";
 
 pub fn var(name: &str) -> Result<String> {
 	std::env::var(name).context(name.to_string())
 }
 
-pub async fn init_working_dir(working_path: &Path) -> Result<()> {
+pub async fn init(working_path: &Path) -> Result<()> {
 	if fs::metadata(&working_path).await.is_err() {
 		bail!("working dir `{}` does not exist", working_path.display());
 	}
@@ -48,6 +49,12 @@ pub async fn init_working_dir(working_path: &Path) -> Result<()> {
 	match fs::create_dir(working_path.join("bin")).await {
 		Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
 		x => x.context("failed to create /bin dir in working dir")?,
+	}
+
+	// Create cgroup folder for containers
+	match fs::create_dir(CGROUP_PATH).await {
+		Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+		x => x.context("failed to create cgroup dir for containers")?,
 	}
 
 	Ok(())
@@ -133,7 +140,7 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 	sqlx::query(indoc!(
 		"
 		INSERT INTO state (last_event_idx, last_command_idx)
-		VALUES (0, 0)
+		VALUES (-1, -1)
 		ON CONFLICT DO NOTHING
 		",
 	))
@@ -167,7 +174,7 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 	sqlx::query(indoc!(
 		"
 		CREATE TABLE IF NOT EXISTS containers (
-			container_id TEXT PRIMARY KEY, -- UUID
+			container_id BLOB PRIMARY KEY, -- UUID
 			config BLOB NOT NULL,
 
 			start_ts INTEGER NOT NULL,
@@ -186,7 +193,7 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 	sqlx::query(indoc!(
 		"
 		CREATE TABLE IF NOT EXISTS container_ports (
-			container_id TEXT NOT NULL, -- UUID
+			container_id BLOB NOT NULL, -- UUID
 			port INT NOT NULL,
 			protocol INT NOT NULL, -- protocol::TransportProtocol
 

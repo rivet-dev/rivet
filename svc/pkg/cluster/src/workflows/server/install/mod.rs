@@ -97,7 +97,6 @@ struct InstallOverSshInput {
 
 #[activity(InstallOverSsh)]
 #[timeout = 300]
-#[max_retries = 10]
 async fn install_over_ssh(ctx: &ActivityCtx, input: &InstallOverSshInput) -> GlobalResult<()> {
 	let public_ip = input.public_ip;
 	let private_key_openssh =

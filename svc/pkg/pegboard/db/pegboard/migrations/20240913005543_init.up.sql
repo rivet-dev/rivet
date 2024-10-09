@@ -3,8 +3,8 @@ CREATE TABLE clients (
 	datacenter_id UUID NOT NULL,
 	create_ts INT NOT NULL,
 	last_ping_ts INT NOT NULL,
-	last_event_idx INT NOT NULL DEFAULT 0,
-	last_command_idx INT NOT NULL DEFAULT 0,
+	last_event_idx INT NOT NULL DEFAULT -1,
+	last_command_idx INT NOT NULL DEFAULT -1,
 
 	-- Total resources
 	cpu INT NOT NULL DEFAULT 0,
@@ -15,7 +15,7 @@ CREATE TABLE clients (
 );
 
 CREATE TABLE client_events (
-	client_id UUID PRIMARY KEY,
+	client_id UUID NOT NULL,
 	index INT NOT NULL,
 	payload JSONB NOT NULL,
 	ack_ts INT NOT NULL,
@@ -24,7 +24,7 @@ CREATE TABLE client_events (
 );
 
 CREATE TABLE client_commands (
-	client_id UUID PRIMARY KEY,
+	client_id UUID NOT NULL,
 	index INT NOT NULL,
 	payload JSONB NOT NULL,
 	create_ts INT NOT NULL,

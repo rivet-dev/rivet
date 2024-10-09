@@ -152,6 +152,7 @@ pub enum NetworkMode {
 	Host,
 }
 
+/// runc-compatible resources.
 #[derive(Debug, Serialize, Deserialize, Clone, Hash)]
 pub struct Resources {
 	/// Millicore (1/1000 of a core).
@@ -212,7 +213,7 @@ pub enum ContainerState {
 	/// Sent by pegboard dc.
 	Stopping,
 	/// Container stopped, process exit not yet received.
-	/// Sent by pegboard client.
+	/// Sent by pegboard client and pegboard gc.
 	Stopped,
 	/// Container process exited.
 	/// Sent by pegboard client.

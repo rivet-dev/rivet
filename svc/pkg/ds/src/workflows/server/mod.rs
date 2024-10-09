@@ -3,6 +3,7 @@ use std::{
 	convert::TryInto,
 	hash::{DefaultHasher, Hasher},
 	net::IpAddr,
+	time::Duration,
 };
 
 use chirp_workflow::prelude::*;
@@ -22,6 +23,9 @@ pub mod pegboard;
 // In ms, a small amount of time to separate the completion of the drain to the deletion of the
 // cluster server. We want the drain to complete first.
 const DRAIN_PADDING_MS: i64 = 10000;
+
+// TODO: Restructure traefik to get rid of this
+const TRAEFIK_GRACE_PERIOD: Duration = Duration::from_secs(2);
 
 #[derive(Default, Clone)]
 pub(crate) struct GameGuardUnnest {
@@ -208,8 +212,8 @@ pub(crate) async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> Globa
 				input.datacenter_id,
 				input.cluster_id,
 				serde_json::to_string(&input.tags)?, // 5
-				input.resources.cpu_millicores,
-				input.resources.memory_mib,
+				input.resources.cpu_millicores as i32,
+				input.resources.memory_mib as i32,
 				input.kill_timeout_ms,
 				ctx.ts(),
 				input.image_id, // 10
@@ -472,7 +476,6 @@ async fn bind_with_retries(
 				JOIN db_ds.docker_ports_protocol_game_guard AS p
 				ON s.server_id = p.server_id
 				WHERE
-					s.cleanup_ts IS NULL AND
 					s.destroy_ts IS NULL AND
 					p.gg_port = $1 AND
 					p.protocol = $2

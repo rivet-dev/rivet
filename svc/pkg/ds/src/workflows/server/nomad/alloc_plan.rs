@@ -1,11 +1,7 @@
-use std::time::Duration;
-
 use chirp_workflow::prelude::*;
 
+use super::super::TRAEFIK_GRACE_PERIOD;
 use crate::util::{NOMAD_CONFIG, NOMAD_REGION};
-
-// TODO:
-const TRAEFIK_GRACE_PERIOD: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Input {

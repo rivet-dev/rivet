@@ -5,8 +5,8 @@ use chirp_workflow::prelude::*;
 #[derive(sqlx::FromRow)]
 struct ClientRow {
 	client_id: Uuid,
-	cpu: i64,
-	memory: i64,
+	total_cpu: i64,
+	total_memory: i64,
 }
 
 #[derive(Debug)]
@@ -30,7 +30,7 @@ pub struct Client {
 pub struct Stats {
 	/// Mhz
 	pub cpu: u64,
-	/// MB
+	/// MiB
 	pub memory: u64,
 	/// MB
 	pub disk: u64,
@@ -42,14 +42,20 @@ pub async fn pegboard_client_usage_get(ctx: &OperationCtx, input: &Input) -> Glo
 		[ctx, ClientRow]
 		"
 		SELECT
-			client_id,
-			SUM((config->'resources'->'cpu')::INT) AS cpu,
-			SUM((config->'resources'->'memory')::INT) AS memory
-		FROM db_pegboard.containers
+			c.client_id,
+			-- Millicores to MHz
+			COALESCE(SUM_INT((co.config->'resources'->>'cpu')::INT), 0) * 1999 // 1000 AS total_cpu,
+			-- Bytes to MiB
+			COALESCE(SUM_INT((co.config->'resources'->>'memory')::INT // 1024 // 1024), 0) AS total_memory
+		FROM db_pegboard.clients AS c
+		LEFT JOIN db_pegboard.containers AS co
+		ON
+			c.client_id = co.client_id AND
+			co.stop_ts IS NULL AND
+			co.exit_ts IS NULL
 		WHERE
-			client_id = ANY($1) AND
-			exit_ts IS NULL
-		GROUP BY client_id
+			c.client_id = ANY($1)
+		GROUP BY c.client_id
 		",
 		&input.client_ids,
 	)
@@ -59,8 +65,8 @@ pub async fn pegboard_client_usage_get(ctx: &OperationCtx, input: &Input) -> Glo
 		Ok(Client {
 			client_id: client.client_id,
 			usage: Stats {
-				cpu: client.cpu.try_into()?,
-				memory: client.memory.try_into()?,
+				cpu: client.total_cpu.try_into()?,
+				memory: client.total_memory.try_into()?,
 				disk: 0, // TODO:
 			},
 			limits: Stats {

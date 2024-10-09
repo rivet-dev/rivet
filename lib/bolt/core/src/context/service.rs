@@ -356,7 +356,7 @@ impl ServiceContextData {
 	}
 
 	pub fn depends_on_cluster_config(&self) -> bool {
-		self.name() == "cluster-default-update"
+		self.name() == "cluster-default-update" || self.name() == "pegboard-dc-init"
 	}
 
 	pub fn depends_on_provision_margin(&self) -> bool {
