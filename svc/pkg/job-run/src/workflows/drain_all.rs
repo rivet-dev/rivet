@@ -9,7 +9,7 @@ use crate::{
 
 // In ms, a small amount of time to separate the completion of the drain to the deletion of the
 // cluster server. We want the drain to complete first.
-const DRAIN_PADDING: u64 = 10000;
+const DRAIN_PADDING_MS: u64 = 10000;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Input {
@@ -32,7 +32,7 @@ pub async fn job_run_drain_all(ctx: &mut WorkflowCtx, input: &Input) -> GlobalRe
 	})
 	.await?;
 
-	ctx.sleep(input.drain_timeout.saturating_sub(DRAIN_PADDING))
+	ctx.sleep(input.drain_timeout.saturating_sub(DRAIN_PADDING_MS))
 		.await?;
 
 	ctx.activity(KillAllocsInput {
@@ -60,7 +60,7 @@ pub async fn job_run_drain_all2(ctx: &mut WorkflowCtx, input: &Input2) -> Global
 		})
 		.await?;
 
-	ctx.sleep(input.drain_timeout.saturating_sub(DRAIN_PADDING))
+	ctx.sleep(input.drain_timeout.saturating_sub(DRAIN_PADDING_MS))
 		.await?;
 
 	ctx.activity(StopJobRuns2Input {

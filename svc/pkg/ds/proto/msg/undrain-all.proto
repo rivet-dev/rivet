@@ -1,15 +1,14 @@
 syntax = "proto3";
 
-package rivet.backend.pkg.ds.msg.drain_all;
+package rivet.backend.pkg.ds.msg.undrain_all;
 
 import "proto/common.proto";
 
-/// name = "msg-ds-drain-all"
+/// name = "msg-ds-undrain-all"
 /// parameters = [
 /// 	{ name = "client_id" },
 /// ]
 message Message {
 	optional string nomad_node_id = 1;
 	optional string pegboard_client_id = 3;
-	uint64 drain_timeout = 2;
 }

@@ -69,6 +69,12 @@ pub enum HostProtocol {
 	Udp = 1,
 }
 
+#[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
+pub enum GameClient {
+	Nomad = 0,
+	Pegboard = 1,
+}
+
 // Move to build pkg when migrated to workflows
 pub mod build {
 	use serde::{Deserialize, Serialize};

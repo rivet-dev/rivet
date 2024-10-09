@@ -186,6 +186,7 @@ async fn drain_pegboard_client(
 	)
 	.await?;
 
+	// Drain dynamic servers
 	if let Some(pegboard_client_id) = pegboard_client_id {
 		msg!([ctx] ds::msg::drain_all(&pegboard_client_id) {
 			nomad_node_id: None,

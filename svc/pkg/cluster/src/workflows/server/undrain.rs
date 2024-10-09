@@ -3,7 +3,7 @@ use nomad_client::{
 	apis::{configuration::Configuration, nodes_api},
 	models,
 };
-use rivet_operation::prelude::proto::backend::pkg::mm;
+use rivet_operation::prelude::proto::backend::pkg::*;
 
 use crate::types::PoolType;
 
@@ -40,7 +40,7 @@ pub(crate) async fn cluster_server_undrain(
 		PoolType::Ats => {}
 		PoolType::Pegboard => {
 			let pegboard_client_id = ctx
-				.activity(GetPegboardClientInput {
+				.activity(UndrainPegboardClientInput {
 					server_id: input.server_id,
 				})
 				.await?;
@@ -113,20 +113,27 @@ async fn undrain_node(ctx: &ActivityCtx, input: &UndrainNodeInput) -> GlobalResu
 			is_closed: false,
 		})
 		.await?;
+
+		// Undrain dynamic servers
+		msg!([ctx] ds::msg::undrain_all(&nomad_node_id) {
+			nomad_node_id: Some(nomad_node_id.clone()),
+			pegboard_client_id: None,
+		})
+		.await?;
 	}
 
 	Ok(())
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-struct GetPegboardClientInput {
+struct UndrainPegboardClientInput {
 	server_id: Uuid,
 }
 
-#[activity(GetPegboardClient)]
-async fn get_pegboard_client(
+#[activity(UndrainPegboardClient)]
+async fn undrain_pegboard_client(
 	ctx: &ActivityCtx,
-	input: &GetPegboardClientInput,
+	input: &UndrainPegboardClientInput,
 ) -> GlobalResult<Option<Uuid>> {
 	let (pegboard_client_id,) = sql_fetch_one!(
 		[ctx, (Option<Uuid>,)]
@@ -138,6 +145,15 @@ async fn get_pegboard_client(
 		input.server_id,
 	)
 	.await?;
+
+	// Undrain dynamic servers
+	if let Some(pegboard_client_id) = pegboard_client_id {
+		msg!([ctx] ds::msg::undrain_all(&pegboard_client_id) {
+			nomad_node_id: None,
+			pegboard_client_id: Some(pegboard_client_id.into()),
+		})
+		.await?;
+	}
 
 	Ok(pegboard_client_id)
 }

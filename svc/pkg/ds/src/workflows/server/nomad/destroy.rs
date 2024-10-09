@@ -37,6 +37,13 @@ pub(crate) async fn ds_server_destroy(ctx: &mut WorkflowCtx, input: &Input) -> G
 
 		if delete_output.job_exists {
 			if let Some(alloc_id) = &dynamic_server.alloc_id {
+				ctx.activity(SignalAllocInput {
+					alloc_id: alloc_id.clone(),
+					signal: "SIGTERM".to_string(),
+				})
+				.await?;
+
+				// See `docs/packages/job/JOB_DRAINING_AND_KILL_TIMEOUTS.md`
 				ctx.sleep(
 					input
 						.override_kill_timeout_ms
@@ -44,8 +51,9 @@ pub(crate) async fn ds_server_destroy(ctx: &mut WorkflowCtx, input: &Input) -> G
 				)
 				.await?;
 
-				ctx.activity(KillAllocInput {
+				ctx.activity(SignalAllocInput {
 					alloc_id: alloc_id.clone(),
+					signal: "SIGKILL".to_string(),
 				})
 				.await?;
 			}
@@ -162,15 +170,13 @@ async fn delete_job(ctx: &ActivityCtx, input: &DeleteJobInput) -> GlobalResult<D
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-struct KillAllocInput {
+struct SignalAllocInput {
 	alloc_id: String,
+	signal: String,
 }
 
-/// Kills the server's allocation after 30 seconds
-///
-/// See `docs/packages/job/JOB_DRAINING_AND_KILL_TIMEOUTS.md`
-#[activity(KillAlloc)]
-async fn kill_alloc(ctx: &ActivityCtx, input: &KillAllocInput) -> GlobalResult<()> {
+#[activity(SignalAlloc)]
+async fn signal_alloc(ctx: &ActivityCtx, input: &SignalAllocInput) -> GlobalResult<()> {
 	// TODO: Handle 404 safely. See RVTEE-498
 	if let Err(err) = signal_allocation(
 		&NOMAD_CONFIG,
@@ -181,15 +187,12 @@ async fn kill_alloc(ctx: &ActivityCtx, input: &KillAllocInput) -> GlobalResult<(
 		None,
 		Some(nomad_client_old::models::AllocSignalRequest {
 			task: None,
-			signal: Some("SIGKILL".to_string()),
+			signal: Some(input.signal.clone()),
 		}),
 	)
 	.await
 	{
-		tracing::warn!(
-			?err,
-			"error while trying to manually kill allocation, ignoring"
-		);
+		tracing::warn!(?err, "error while trying to signal allocation, ignoring");
 	}
 
 	Ok(())

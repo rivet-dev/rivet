@@ -9,9 +9,9 @@ async fn worker(ctx: &OperationContext<ds::msg::drain_all::Message>) -> GlobalRe
 
 	let server_rows = if let Some(nomad_node_id) = &ctx.nomad_node_id {
 		sql_fetch_all!(
-			[ctx, (Uuid, i64)]
+			[ctx, (Uuid,)]
 			"
-			SELECT s.server_id, s.kill_timeout_ms
+			SELECT s.server_id
 			FROM db_ds.servers AS s
 			JOIN db_ds.server_nomad AS sn
 			ON s.server_id = sn.server_id
@@ -24,9 +24,9 @@ async fn worker(ctx: &OperationContext<ds::msg::drain_all::Message>) -> GlobalRe
 		.await?
 	} else if let Some(pegboard_client_id) = &ctx.pegboard_client_id {
 		sql_fetch_all!(
-			[ctx, (Uuid, i64)]
+			[ctx, (Uuid,)]
 			"
-			SELECT s.server_id, s.kill_timeout_ms
+			SELECT s.server_id
 			FROM db_ds.servers AS s
 			JOIN db_ds.servers_pegboard AS spb
 			ON s.server_id = spb.server_id
@@ -41,18 +41,12 @@ async fn worker(ctx: &OperationContext<ds::msg::drain_all::Message>) -> GlobalRe
 		bail!("neither `nomad_node_id` nor `pegboard_client_id` set");
 	};
 
-	for (server_id, kill_timeout_ms) in server_rows {
-		chirp_workflow::compat::signal(
-			ctx,
-			crate::workflows::server::Destroy {
-				override_kill_timeout_ms: (drain_timeout < kill_timeout_ms)
-					.then_some(drain_timeout),
-			},
-		)
-		.await?
-		.tag("server_id", server_id)
-		.send()
-		.await?;
+	for (server_id,) in server_rows {
+		chirp_workflow::compat::signal(ctx, crate::workflows::server::Drain { drain_timeout })
+			.await?
+			.tag("server_id", server_id)
+			.send()
+			.await?;
 	}
 
 	Ok(())
