@@ -9,7 +9,6 @@ use crate::{
 	builder::common as builder,
 	builder::BuilderError,
 	ctx::{
-		api::WORKFLOW_TIMEOUT,
 		common,
 		message::{MessageCtx, SubscriptionHandle},
 	},
@@ -28,11 +27,7 @@ pub async fn wait_for_workflow<W: Workflow, B: Debug + Clone>(
 ) -> GlobalResult<W::Output> {
 	let db = db_from_ctx(ctx).await?;
 
-	tokio::time::timeout(
-		WORKFLOW_TIMEOUT,
-		common::wait_for_workflow::<W>(&db, workflow_id),
-	)
-	.await?
+	common::wait_for_workflow::<W>(&db, workflow_id).await
 }
 
 /// Dispatch a new workflow and wait for it to complete. Has a 60s timeout.

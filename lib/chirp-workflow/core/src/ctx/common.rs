@@ -7,6 +7,7 @@ use uuid::Uuid;
 pub const SUB_WORKFLOW_RETRY: Duration = Duration::from_millis(150);
 /// Time to delay a workflow from retrying after an error
 pub const RETRY_TIMEOUT_MS: usize = 2000;
+pub const WORKFLOW_TIMEOUT: Duration = Duration::from_secs(60);
 
 use crate::{
 	ctx::OperationCtx,
@@ -16,7 +17,8 @@ use crate::{
 	workflow::Workflow,
 };
 
-/// Polls the database for the workflow
+/// Polls the database for the workflow.
+/// 60 second timeout.
 pub async fn wait_for_workflow<W: Workflow>(
 	db: &DatabaseHandle,
 	workflow_id: Uuid,
@@ -24,20 +26,24 @@ pub async fn wait_for_workflow<W: Workflow>(
 	tracing::info!(workflow_name=%W::NAME, %workflow_id, "waiting for workflow");
 
 	let mut interval = tokio::time::interval(SUB_WORKFLOW_RETRY);
-	loop {
-		interval.tick().await;
 
-		// Check if state finished
-		let workflow = db
-			.get_workflow(workflow_id)
-			.await
-			.map_err(GlobalError::raw)?
-			.ok_or(WorkflowError::WorkflowNotFound)
-			.map_err(GlobalError::raw)?;
-		if let Some(output) = workflow.parse_output::<W>().map_err(GlobalError::raw)? {
-			return Ok(output);
+	tokio::time::timeout(WORKFLOW_TIMEOUT, async {
+		loop {
+			interval.tick().await;
+
+			// Check if state finished
+			let workflow = db
+				.get_workflow(workflow_id)
+				.await
+				.map_err(GlobalError::raw)?
+				.ok_or(WorkflowError::WorkflowNotFound)
+				.map_err(GlobalError::raw)?;
+			if let Some(output) = workflow.parse_output::<W>().map_err(GlobalError::raw)? {
+				return Ok(output);
+			}
 		}
-	}
+	})
+	.await?
 }
 
 pub async fn op<I>(

@@ -19,8 +19,6 @@ use crate::{
 	workflow::{Workflow, WorkflowInput},
 };
 
-pub const WORKFLOW_TIMEOUT: Duration = Duration::from_secs(60);
-
 pub struct ApiCtx {
 	ray_id: Uuid,
 	name: &'static str,

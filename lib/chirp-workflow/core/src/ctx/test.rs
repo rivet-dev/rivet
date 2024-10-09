@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::{
 	builder::common as builder,
 	ctx::{
-		common::{self, SUB_WORKFLOW_RETRY},
+		common,
 		message::{SubscriptionHandle, TailAnchor, TailAnchorResponse},
 		MessageCtx,
 	},
@@ -92,24 +92,7 @@ impl TestCtx {
 		&self,
 		workflow_id: Uuid,
 	) -> GlobalResult<W::Output> {
-		tracing::info!(workflow_name=%W::NAME, %workflow_id, "waiting for workflow");
-
-		let mut interval = tokio::time::interval(SUB_WORKFLOW_RETRY);
-		loop {
-			interval.tick().await;
-
-			// Check if state finished
-			let workflow = self
-				.db
-				.get_workflow(workflow_id)
-				.await
-				.map_err(GlobalError::raw)?
-				.ok_or(WorkflowError::WorkflowNotFound)
-				.map_err(GlobalError::raw)?;
-			if let Some(output) = workflow.parse_output::<W>().map_err(GlobalError::raw)? {
-				return Ok(output);
-			}
-		}
+		common::wait_for_workflow::<W>(&self.db, workflow_id).await
 	}
 
 	/// Creates a workflow builder.
