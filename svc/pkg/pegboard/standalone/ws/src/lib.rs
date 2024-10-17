@@ -29,6 +29,24 @@ struct Connection {
 
 type Connections = HashMap<Uuid, Arc<Connection>>;
 
+pub async fn start() -> GlobalResult<()> {
+	let pools = rivet_pools::from_env("pegboard-ws").await?;
+
+	tokio::task::Builder::new()
+		.name("pegboard_ws::health_checks")
+		.spawn(rivet_health_checks::run_standalone(
+			rivet_health_checks::Config {
+				pools: Some(pools.clone()),
+			},
+		))?;
+
+	tokio::task::Builder::new()
+		.name("pegboard_ws::metrics")
+		.spawn(rivet_metrics::run_standalone())?;
+
+	run_from_env(pools.clone()).await
+}
+
 #[tracing::instrument(skip_all)]
 pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 	let client = chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("pegboard-ws");

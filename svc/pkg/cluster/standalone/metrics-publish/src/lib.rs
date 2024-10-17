@@ -6,6 +6,17 @@ use cluster::{
 	util::metrics,
 };
 
+pub async fn start() -> GlobalResult<()> {
+	let pools = rivet_pools::from_env("cluster-metrics-publish").await?;
+
+	let mut interval = tokio::time::interval(std::time::Duration::from_secs(7));
+	loop {
+		interval.tick().await;
+
+		run_from_env(pools.clone()).await?;
+	}
+}
+
 #[derive(sqlx::FromRow)]
 struct ServerRow {
 	datacenter_id: Uuid,

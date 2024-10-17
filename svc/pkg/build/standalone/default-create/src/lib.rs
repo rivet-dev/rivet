@@ -73,7 +73,7 @@ struct DefaultBuildConfig {
 }
 
 #[tracing::instrument]
-pub async fn run_from_env() -> GlobalResult<()> {
+pub async fn start() -> GlobalResult<()> {
 	let pools = rivet_pools::from_env("build-default-create").await?;
 	let client =
 		chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("build-default-create");

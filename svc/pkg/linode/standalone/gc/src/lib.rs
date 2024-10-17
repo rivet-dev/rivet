@@ -7,6 +7,17 @@ use linode::util::{api, client};
 use reqwest::header;
 use serde_json::json;
 
+pub async fn start() -> GlobalResult<()> {
+	let pools = rivet_pools::from_env("linode-gc").await?;
+
+	let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
+	loop {
+		interval.tick().await;
+
+		run_from_env(pools.clone()).await?;
+	}
+}
+
 #[tracing::instrument(skip_all)]
 pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 	let client = chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("linode-gc");
@@ -18,6 +29,7 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 	)
 	.await?;
 
+	let secret = util::env::read_secret(&["linode", "token"]).await?;
 	let dc_rows = sql_fetch_all!(
 		[ctx, (i64, String,)]
 		"
@@ -28,10 +40,7 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 	)
 	.await?
 	.into_iter()
-	.chain(std::iter::once((
-		Provider::Linode as i64,
-		util::env::read_secret(&["linode", "token"]).await?,
-	)));
+	.chain(std::iter::once((Provider::Linode as i64, secret)));
 
 	let filter = json!({
 		"status": "available",
@@ -47,7 +56,9 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 		let provider = unwrap!(Provider::from_repr(provider.try_into()?));
 
 		match provider {
-			Provider::Linode => run_for_linode_account(&ctx, &api_token, &headers).await?,
+			Provider::Linode => {
+				run_for_linode_account(ctx.clone(), api_token.clone(), &headers).await?
+			}
 		}
 	}
 
@@ -55,13 +66,12 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 }
 
 async fn run_for_linode_account(
-	ctx: &StandaloneCtx,
-	api_token: &str,
+	ctx: StandaloneCtx,
+	api_token: String,
 	headers: &header::HeaderMap,
 ) -> GlobalResult<()> {
 	// Build HTTP client
-	let client =
-		client::Client::new_with_headers(Some(api_token.to_string()), headers.clone()).await?;
+	let client = client::Client::new_with_headers(Some(api_token), headers.clone()).await?;
 
 	let complete_images = api::list_custom_images(&client).await?;
 
@@ -72,7 +82,7 @@ async fn run_for_linode_account(
 		tracing::warn!("page limit reached, new images may not be returned");
 	}
 
-	delete_expired_images(ctx, &complete_images).await?;
+	delete_expired_images(ctx.clone(), complete_images.clone()).await?;
 
 	// Get image ids
 	let image_ids = complete_images
@@ -117,8 +127,8 @@ async fn run_for_linode_account(
 }
 
 async fn delete_expired_images(
-	ctx: &StandaloneCtx,
-	complete_images: &[api::CustomImage],
+	ctx: StandaloneCtx,
+	complete_images: Vec<api::CustomImage>,
 ) -> GlobalResult<()> {
 	// Prebake images have an expiration because of their server token. We add 2 days of padding here for
 	// safety
@@ -135,13 +145,13 @@ async fn delete_expired_images(
 		tracing::info!(count=?expired_images_count, "deleting expired images");
 	}
 
-	futures_util::stream::iter(expired_images)
+	futures_util::stream::iter(expired_images.cloned().collect::<Vec<_>>())
 		.map(|img| {
 			let ctx = ctx.clone();
 
 			async move {
 				ctx.signal(linode::workflows::image::Destroy {})
-					.tag("image_id", &img.id)
+					.tag("image_id", img.id)
 					.send()
 					.await
 			}

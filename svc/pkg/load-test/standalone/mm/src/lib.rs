@@ -13,6 +13,14 @@ const LOBBY_GROUP_NAME_ID: &str = "test";
 const CHUNK_SIZE: usize = 2048;
 const BUFFER_SIZE: usize = 16;
 
+pub async fn start() -> GlobalResult<()> {
+	run_from_env(util::timestamp::now()).await?;
+
+	tracing::info!("finished");
+
+	Ok(())
+}
+
 struct Ctx {
 	op_ctx: OperationContext<()>,
 	conns: Vec<Conn>,

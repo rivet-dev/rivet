@@ -1,5 +1,14 @@
 use rivet_operation::prelude::*;
 
+pub async fn start() -> GlobalResult<()> {
+	let pools = rivet_pools::from_env("load-test-sqlx").await?;
+	let _shared_client = chirp_client::SharedClient::from_env(pools.clone())?;
+
+	run_from_env(util::timestamp::now()).await?;
+
+	Ok(())
+}
+
 #[tracing::instrument(skip_all)]
 pub async fn run_from_env(_ts: i64) -> GlobalResult<()> {
 	let pools = rivet_pools::from_env("load-test-sqlx").await?;

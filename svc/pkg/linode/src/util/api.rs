@@ -452,7 +452,7 @@ pub struct ListCustomImagesResponse {
 	pub data: Vec<CustomImage>,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 pub struct CustomImage {
 	pub id: String,
 	pub created_by: Option<String>,

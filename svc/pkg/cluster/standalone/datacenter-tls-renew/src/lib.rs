@@ -5,6 +5,12 @@ use cluster::types::TlsState;
 // How much time before the cert expires to renew it
 const EXPIRE_PADDING: i64 = util::duration::days(30);
 
+pub async fn start() -> GlobalResult<()> {
+	let pools = rivet_pools::from_env("cluster-datacenter-tls-renew").await?;
+
+	run_from_env(pools).await
+}
+
 #[tracing::instrument(skip_all)]
 pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 	let client = chirp_client::SharedClient::from_env(pools.clone())?

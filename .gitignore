@@ -55,3 +55,8 @@ lib/**/Cargo.lock
 **/node_modules/
 
 tests/basic-game/.env
+
+
+# Added by cargo
+
+/target

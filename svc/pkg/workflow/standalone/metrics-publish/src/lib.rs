@@ -1,5 +1,16 @@
 use chirp_workflow::prelude::*;
 
+pub async fn start() -> GlobalResult<()> {
+	let pools = rivet_pools::from_env("workflow-metrics-publish").await?;
+
+	let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
+	loop {
+		interval.tick().await;
+
+		run_from_env(pools.clone()).await?;
+	}
+}
+
 #[tracing::instrument(skip_all)]
 pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 	let client =

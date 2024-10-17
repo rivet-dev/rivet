@@ -3,6 +3,14 @@ use rivet_api::apis::configuration::Configuration;
 use rivet_operation::prelude::*;
 use tokio::time::{Duration, Instant};
 
+pub async fn start() -> GlobalResult<()> {
+	run_from_env(util::timestamp::now()).await?;
+
+	tracing::info!("finished");
+
+	Ok(())
+}
+
 #[tracing::instrument(skip_all)]
 pub async fn run_from_env(_ts: i64) -> GlobalResult<()> {
 	let pools = rivet_pools::from_env("load-test-watch-requests").await?;

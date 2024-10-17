@@ -3,6 +3,10 @@ use indoc::indoc;
 use proto::backend::pkg::*;
 use rivet_operation::prelude::*;
 
+pub async fn start() -> GlobalResult<()> {
+	run_from_env(util::timestamp::now()).await
+}
+
 #[tracing::instrument]
 pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 	let pools = rivet_pools::from_env("user-delete-pending").await?;

@@ -30,7 +30,7 @@ pub async fn handles(
 		.map(Into::into)
 		.collect::<Vec<_>>();
 
-	let (users,  mutual_follows) = tokio::try_join!(
+	let (users, mutual_follows) = tokio::try_join!(
 		users(ctx, user_ids.clone()),
 		mutual_follows(ctx, current_user_id, raw_user_ids),
 	)?;
@@ -41,15 +41,7 @@ pub async fn handles(
 	users
 		.users
 		.iter()
-		.map(|user| {
-			let is_mutual_following = mutual_follows.follows.iter().any(|follow| {
-				follow.is_mutual
-					&& follow.follower_user_id.as_ref() == user.user_id.as_ref()
-					&& follow.following_user_id.as_ref() == Some(&raw_current_user_id)
-			});
-
-			convert::identity::handle(current_user_id, user,  is_mutual_following)
-		})
+		.map(|user| convert::identity::handle(current_user_id, user))
 		.collect::<GlobalResult<Vec<_>>>()
 }
 
@@ -68,7 +60,7 @@ pub async fn summaries(
 		.map(Into::into)
 		.collect::<Vec<_>>();
 
-	let (users,  mutual_follows) = tokio::try_join!(
+	let (users, mutual_follows) = tokio::try_join!(
 		users(ctx, user_ids.clone()),
 		mutual_follows(ctx, current_user_id, raw_user_ids),
 	)?;
@@ -77,13 +69,7 @@ pub async fn summaries(
 	users
 		.users
 		.iter()
-		.map(|user| {
-			convert::identity::summary(
-				current_user_id,
-				user,
-				&mutual_follows.follows,
-			)
-		})
+		.map(|user| convert::identity::summary(current_user_id, user, &mutual_follows.follows))
 		.collect::<GlobalResult<Vec<_>>>()
 }
 

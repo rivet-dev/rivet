@@ -95,8 +95,17 @@ impl From<BuildDeliveryMethod> for cluster::types::BuildDeliveryMethod {
 	}
 }
 
+pub async fn start(use_autoscaler: bool) -> GlobalResult<()> {
+	// TODO: When running bolt up, this service gets created first before `cluster-worker` so the messages
+	// sent from here are received but effectively forgotten because `cluster-worker` gets restarted
+	// immediately afterwards. This server will be replaced with a bolt infra step
+	tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+	start_inner(use_autoscaler).await
+}
+
 #[tracing::instrument]
-pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
+pub async fn start_inner(use_autoscaler: bool) -> GlobalResult<()> {
 	let pools = rivet_pools::from_env("cluster-default-update").await?;
 	let client =
 		chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("cluster-default-update");
@@ -134,9 +143,11 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 
 	// Get all datacenters
 	let cluster = unwrap!(datacenter_list_res.clusters.first());
-	let datacenters_res = ctx.op(cluster::ops::datacenter::get::Input {
-		datacenter_ids: cluster.datacenter_ids.clone(),
-	}).await?;
+	let datacenters_res = ctx
+		.op(cluster::ops::datacenter::get::Input {
+			datacenter_ids: cluster.datacenter_ids.clone(),
+		})
+		.await?;
 
 	if cluster_res.clusters.is_empty() {
 		tracing::warn!("creating default cluster");
@@ -145,7 +156,10 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 			cluster_id,
 			name_id: config.name_id.clone(),
 			owner_team_id: None,
-		}).tag("cluster_id", cluster_id,).dispatch().await?;
+		})
+		.tag("cluster_id", cluster_id)
+		.dispatch()
+		.await?;
 	}
 
 	for existing_datacenter in &datacenters_res.datacenters {
@@ -199,7 +213,10 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 			ctx.signal(cluster::workflows::datacenter::Update {
 				pools: new_pools,
 				prebakes_enabled: Some(datacenter.prebakes_enabled),
-			}).tag("datacenter_id", datacenter.datacenter_id,).send().await?;
+			})
+			.tag("datacenter_id", datacenter.datacenter_id)
+			.send()
+			.await?;
 		}
 		// Create new datacenter
 		else {
@@ -207,25 +224,34 @@ pub async fn run_from_env(use_autoscaler: bool) -> GlobalResult<()> {
 				datacenter_id: datacenter.datacenter_id,
 				name_id,
 				display_name: datacenter.display_name,
-	
+
 				provider: datacenter.provider.into(),
 				provider_datacenter_id: datacenter.provider_datacenter_name,
 				provider_api_token: None,
-	
-				pools: datacenter.pools.into_iter().map(|(pool_type, pool)| {
-					cluster::types::Pool {
+
+				pools: datacenter
+					.pools
+					.into_iter()
+					.map(|(pool_type, pool)| cluster::types::Pool {
 						pool_type: pool_type.into(),
-						hardware: pool.hardware.into_iter().map(Into::into).collect::<Vec<_>>(),
+						hardware: pool
+							.hardware
+							.into_iter()
+							.map(Into::into)
+							.collect::<Vec<_>>(),
 						desired_count: pool.desired_count,
 						min_count: pool.min_count,
 						max_count: pool.max_count,
 						drain_timeout: pool.drain_timeout,
-					}
-				}).collect::<Vec<_>>(),
-	
+					})
+					.collect::<Vec<_>>(),
+
 				build_delivery_method: datacenter.build_delivery_method.into(),
 				prebakes_enabled: datacenter.prebakes_enabled,
-			}).tag("cluster_id", cluster_id,).send().await?;
+			})
+			.tag("cluster_id", cluster_id)
+			.send()
+			.await?;
 		}
 	}
 

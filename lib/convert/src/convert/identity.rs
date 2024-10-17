@@ -10,10 +10,8 @@ use crate::{convert, fetch, ApiTryInto};
 pub fn handle(
 	current_user_id: Uuid,
 	user: &backend::user::User,
-	is_mutual_following: bool,
 ) -> GlobalResult<models::IdentityHandle> {
 	let user_id = unwrap_ref!(user.user_id).as_uuid();
-	let is_self = user_id == current_user_id;
 
 	Ok(models::IdentityHandle {
 		identity_id: user_id,

@@ -3,6 +3,11 @@ use chirp_workflow::prelude::*;
 mod monitors;
 use monitors::*;
 
+pub async fn start() -> GlobalResult<()> {
+	let pools = rivet_pools::from_env("nomad-monitor").await?;
+	run_from_env(pools).await
+}
+
 pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 	let client = chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("nomad-monitor");
 	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;

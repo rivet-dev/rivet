@@ -10,25 +10,7 @@ use tracing::Instrument;
 use uuid::Uuid;
 
 #[tracing::instrument(skip_all)]
-pub fn start<T: 'static, Fut>(handle: T)
-where
-	T: Fn(
-			chirp_client::SharedClientHandle,
-			rivet_pools::Pools,
-			rivet_cache::Cache,
-			Uuid,
-			Request<Body>,
-		) -> Fut
-		+ Send
-		+ Sync
-		+ Copy,
-	Fut: Future<Output = Result<Response<Body>, http::Error>> + Send,
-{
-	rivet_runtime::run(start_fut(handle)).unwrap()
-}
-
-#[tracing::instrument(skip_all)]
-async fn start_fut<T: 'static, Fut>(handle: T)
+pub async fn start<T: 'static, Fut>(handle: T)
 where
 	T: Fn(
 			chirp_client::SharedClientHandle,

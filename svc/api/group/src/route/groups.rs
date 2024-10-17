@@ -301,14 +301,8 @@ pub async fn members(
 		.users
 		.iter()
 		.map(|user| {
-			let is_mutual_following = user_follows.follows.iter().any(|follow| {
-				follow.follower_user_id.as_ref() == user.user_id.as_ref()
-					&& follow.following_user_id.as_ref() == Some(&raw_user_ent_id)
-					&& follow.is_mutual
-			});
-
 			Ok(models::GroupMember {
-				identity: convert::identity::handle(user_ent.user_id, user, is_mutual_following)?,
+				identity: convert::identity::handle(user_ent.user_id, user)?,
 			})
 		})
 		.collect::<GlobalResult<Vec<_>>>()?;
@@ -460,14 +454,8 @@ pub async fn join_requests(
 				.find(|join_request| user.user_id == join_request.user_id)
 				.map(|jr| jr.ts)
 				.unwrap_or(update_ts);
-			let is_mutual_following = user_follows.follows.iter().any(|follow| {
-				follow.follower_user_id.as_ref() == user.user_id.as_ref()
-					&& follow.following_user_id.as_ref() == Some(&raw_user_ent_id)
-					&& follow.is_mutual
-			});
-
 			Ok(models::GroupJoinRequest {
-				identity: convert::identity::handle(user_ent.user_id, user, is_mutual_following)?,
+				identity: convert::identity::handle(user_ent.user_id, user)?,
 				ts: util::timestamp::to_chrono(join_request_ts)?,
 			})
 		})
@@ -1359,14 +1347,8 @@ pub async fn bans(
 				.ban_ts
 			};
 
-			let is_mutual_following = user_follows.follows.iter().any(|follow| {
-				follow.follower_user_id.as_ref() == user.user_id.as_ref()
-					&& follow.following_user_id.as_ref() == Some(&raw_user_ent_id)
-					&& follow.is_mutual
-			});
-
 			Ok(models::GroupBannedIdentity {
-				identity: convert::identity::handle(user_ent.user_id, user, is_mutual_following)?,
+				identity: convert::identity::handle(user_ent.user_id, user)?,
 				ban_ts: util::timestamp::to_chrono(ban_ts)?,
 			})
 		})

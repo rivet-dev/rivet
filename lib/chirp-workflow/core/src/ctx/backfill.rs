@@ -18,8 +18,9 @@ use crate::history::{cursor::Cursor, location::Location};
 // Yes
 type Query = Box<
 	dyn for<'a> FnOnce(
-		&'a mut sqlx::Transaction<'_, sqlx::Postgres>,
-	) -> Pin<Box<dyn Future<Output = GlobalResult<()>> + Send + 'a>>,
+			&'a mut sqlx::Transaction<'_, sqlx::Postgres>,
+		) -> Pin<Box<dyn Future<Output = GlobalResult<()>> + Send + 'a>>
+		+ Send,
 >;
 
 pub struct BackfillCtx {

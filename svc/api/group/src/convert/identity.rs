@@ -2,17 +2,12 @@ use proto::backend;
 use rivet_group_server::models;
 use rivet_operation::prelude::*;
 
-use crate::{convert, fetch};
-
 pub fn handle(
 	current_user_id: Uuid,
 	user: &backend::user::User,
-	is_mutual_following: bool,
 ) -> GlobalResult<models::IdentityHandle> {
 	let raw_user_id = unwrap!(user.user_id);
 	let user_id = raw_user_id.as_uuid();
-
-	let is_self = user_id == current_user_id;
 
 	Ok(models::IdentityHandle {
 		identity_id: user_id.to_string(),
