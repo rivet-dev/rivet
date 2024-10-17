@@ -437,7 +437,6 @@ Class | Method | HTTP request | Description
  - [IdentityPrepareAvatarUploadRequest](docs/IdentityPrepareAvatarUploadRequest.md)
  - [IdentityPrepareAvatarUploadResponse](docs/IdentityPrepareAvatarUploadResponse.md)
  - [IdentityPrepareGameLinkResponse](docs/IdentityPrepareGameLinkResponse.md)
- - [IdentityPresence](docs/IdentityPresence.md)
  - [IdentityProfile](docs/IdentityProfile.md)
  - [IdentityReportRequest](docs/IdentityReportRequest.md)
  - [IdentitySearchResponse](docs/IdentitySearchResponse.md)

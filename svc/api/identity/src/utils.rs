@@ -49,25 +49,6 @@ pub async fn resolve_user_with_game_user_id(
 	Ok(Some(unwrap_ref!(game_user.user_id).as_uuid()))
 }
 
-pub fn touch_user_presence(ctx: OperationContext<()>, user_id: Uuid, silent: bool) {
-	let spawn_res = tokio::task::Builder::new()
-		.name("api_identity::user_presence_touch")
-		.spawn(async move {
-			let res = op!([ctx] user_presence_touch {
-				user_id: Some(user_id.into()),
-				silent: silent,
-			})
-			.await;
-			match res {
-				Ok(_) => {}
-				Err(err) => tracing::error!(?err, "failed to touch user presence"),
-			}
-		});
-	if let Err(err) = spawn_res {
-		tracing::error!(?err, "failed to spawn user_presence_touch task");
-	}
-}
-
 pub async fn validate_config(
 	ctx: &OperationContext<()>,
 	namespace_id: common::Uuid,

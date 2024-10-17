@@ -55,7 +55,6 @@ upload-prepare = { path = "../../pkg/upload/ops/prepare" }
 user-follow-get = { path = "../../pkg/user-follow/ops/get" }
 user-get = { path = "../../pkg/user/ops/get" }
 user-identity-get = { path = "../../pkg/user-identity/ops/get" }
-user-presence-get = { path = "../../pkg/user-presence/ops/get" }
 user-team-list = { path = "../../pkg/user/ops/team-list" }
 
 [dev-dependencies]

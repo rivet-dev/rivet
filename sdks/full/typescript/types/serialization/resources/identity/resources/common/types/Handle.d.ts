@@ -12,7 +12,6 @@ export declare namespace Handle {
         display_name: common.DisplayName.Raw;
         account_number: common.AccountNumber.Raw;
         avatar_url: string;
-        presence?: identity.Presence.Raw | null;
         is_registered: boolean;
         external: identity.ExternalLinks.Raw;
     }

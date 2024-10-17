@@ -37,7 +37,6 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 		upload_worker,
 		user_dev_worker,
 		user_follow_worker,
-		user_presence_worker,
 		user_report_worker,
 		user_worker,
 	];

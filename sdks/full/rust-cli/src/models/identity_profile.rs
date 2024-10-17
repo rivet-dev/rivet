@@ -64,8 +64,6 @@ pub struct IdentityProfile {
     pub join_ts: String,
     #[serde(rename = "linked_accounts")]
     pub linked_accounts: Vec<crate::models::IdentityLinkedAccount>,
-    #[serde(rename = "presence", skip_serializing_if = "Option::is_none")]
-    pub presence: Option<Box<crate::models::IdentityPresence>>,
 }
 
 impl IdentityProfile {
@@ -92,7 +90,6 @@ impl IdentityProfile {
             is_registered,
             join_ts,
             linked_accounts,
-            presence: None,
         }
     }
 }

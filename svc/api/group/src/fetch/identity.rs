@@ -9,12 +9,6 @@ use rivet_operation::prelude::*;
 
 use crate::{auth::Auth, convert};
 
-pub struct PresencesCtx {
-	pub res: user_presence::get::Response,
-	pub games: Vec<backend::game::Game>,
-	pub games_with_namespace_ids: Vec<convert::GameWithNamespaceIds>,
-}
-
 pub async fn users(
 	ctx: &Ctx<Auth>,
 	user_ids: Vec<common::Uuid>,
@@ -23,65 +17,6 @@ pub async fn users(
 		user_ids: user_ids,
 	})
 	.await
-}
-
-pub async fn presence_data(
-	ctx: &Ctx<Auth>,
-	_current_user_id: Uuid,
-	user_ids: Vec<common::Uuid>,
-	_summary_info: bool,
-) -> GlobalResult<PresencesCtx> {
-	let ((presences_res, game_ids),) = tokio::try_join!(presences_and_game_ids(ctx, user_ids),)?;
-	let (games, games_with_namespace_ids) = games(
-		ctx,
-		game_ids
-			.into_iter()
-			.map(Into::<common::Uuid>::into)
-			.collect::<Vec<_>>(),
-		Vec::new(),
-	)
-	.await?;
-
-	Ok(PresencesCtx {
-		res: presences_res,
-		games,
-		games_with_namespace_ids,
-	})
-}
-
-async fn presences_and_game_ids(
-	ctx: &Ctx<Auth>,
-	user_ids: Vec<common::Uuid>,
-) -> GlobalResult<(user_presence::get::Response, Vec<Uuid>)> {
-	let user_presences_res = op!([ctx] user_presence_get {
-		user_ids: user_ids,
-	})
-	.await?;
-
-	// Fetch game ids from game activities
-	let game_ids = user_presences_res
-		.users
-		.iter()
-		.filter_map(|user_presence| {
-			if let Some(backend::user::Presence {
-				game_activity:
-					Some(backend::user::presence::GameActivity {
-						game_id: Some(game_id),
-						..
-					}),
-				..
-			}) = &user_presence.presence
-			{
-				Some(game_id.as_uuid())
-			} else {
-				None
-			}
-		})
-		.collect::<HashSet<_>>()
-		.into_iter()
-		.collect::<Vec<_>>();
-
-	Ok((user_presences_res, game_ids))
 }
 
 async fn games(

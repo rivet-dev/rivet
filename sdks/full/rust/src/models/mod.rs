@@ -504,8 +504,6 @@ pub mod identity_prepare_avatar_upload_response;
 pub use self::identity_prepare_avatar_upload_response::IdentityPrepareAvatarUploadResponse;
 pub mod identity_prepare_game_link_response;
 pub use self::identity_prepare_game_link_response::IdentityPrepareGameLinkResponse;
-pub mod identity_presence;
-pub use self::identity_presence::IdentityPresence;
 pub mod identity_profile;
 pub use self::identity_profile::IdentityProfile;
 pub mod identity_report_request;

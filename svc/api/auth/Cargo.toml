@@ -42,7 +42,6 @@ user-resolve-email = { path = "../../pkg/user/ops/resolve-email" }
 user-token-create = { path = "../../pkg/user/ops/token-create" }
 user-identity-create = { path = "../../pkg/user-identity/ops/create" }
 token-create = { path = "../../pkg/token/ops/create" }
-user-presence-touch = { path = "../../pkg/user-presence/ops/touch" }
 
 [dev-dependencies]
 rivet-auth = { path = "../../../lib/smithy-output/api-auth/rust" }

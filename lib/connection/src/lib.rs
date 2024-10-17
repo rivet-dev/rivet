@@ -95,10 +95,6 @@ impl Connection {
 		self.pools.redis("persistent")
 	}
 
-	pub async fn redis_user_presence(&self) -> Result<RedisPool, rivet_pools::Error> {
-		self.pools.redis("ephemeral")
-	}
-
 	pub async fn redis_chirp_ephemeral(&self) -> Result<RedisPool, rivet_pools::Error> {
 		self.pools.redis("ephemeral")
 	}

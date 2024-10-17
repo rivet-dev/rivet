@@ -42,7 +42,6 @@ user-follow-count = { path = "../../svc/pkg/user-follow/ops/count" }
 user-follow-get = { path = "../../svc/pkg/user-follow/ops/get" }
 user-get = { path = "../../svc/pkg/user/ops/get" }
 user-identity-get = { path = "../../svc/pkg/user-identity/ops/get" }
-user-presence-get = { path = "../../svc/pkg/user-presence/ops/get" }
 user-team-list = { path = "../../svc/pkg/user/ops/team-list" }
 
 rivet-api = { path = "../../sdks/full/rust" }

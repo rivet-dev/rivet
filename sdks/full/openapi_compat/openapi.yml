@@ -3619,8 +3619,6 @@ components:
         is_registered:
           description: Whether or not this identity is registered with a linked account.
           type: boolean
-        presence:
-          $ref: '#/components/schemas/IdentityPresence'
       required:
       - identity_id
       - display_name
@@ -3757,20 +3755,6 @@ components:
       - identity_link_url
       - expire_ts
       type: object
-    IdentityPresence:
-      description: Information about the identity's current status, party, and active
-        game.
-      properties:
-        game_activity:
-          $ref: '#/components/schemas/IdentityGameActivity'
-        status:
-          $ref: '#/components/schemas/IdentityStatus'
-        update_ts:
-          $ref: '#/components/schemas/Timestamp'
-      required:
-      - update_ts
-      - status
-      type: object
     IdentityProfile:
       description: An identity profile.
       properties:
@@ -3836,8 +3820,6 @@ components:
           items:
             $ref: '#/components/schemas/IdentityLinkedAccount'
           type: array
-        presence:
-          $ref: '#/components/schemas/IdentityPresence'
       required:
       - identity_id
       - display_name
@@ -3942,8 +3924,6 @@ components:
         is_registered:
           description: Whether or not this identity is registered with a linked account.
           type: boolean
-        presence:
-          $ref: '#/components/schemas/IdentityPresence'
       required:
       - identity_id
       - display_name

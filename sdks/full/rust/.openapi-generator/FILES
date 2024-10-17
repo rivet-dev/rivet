@@ -288,7 +288,6 @@ docs/IdentityListRecentFollowersResponse.md
 docs/IdentityPrepareAvatarUploadRequest.md
 docs/IdentityPrepareAvatarUploadResponse.md
 docs/IdentityPrepareGameLinkResponse.md
-docs/IdentityPresence.md
 docs/IdentityProfile.md
 docs/IdentityReportRequest.md
 docs/IdentitySearchResponse.md
@@ -684,7 +683,6 @@ src/models/identity_list_recent_followers_response.rs
 src/models/identity_prepare_avatar_upload_request.rs
 src/models/identity_prepare_avatar_upload_response.rs
 src/models/identity_prepare_game_link_response.rs
-src/models/identity_presence.rs
 src/models/identity_profile.rs
 src/models/identity_report_request.rs
 src/models/identity_search_response.rs

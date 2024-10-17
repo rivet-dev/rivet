@@ -37,8 +37,6 @@ pub struct IdentitySummary {
     /// Whether or not this identity is registered with a linked account.
     #[serde(rename = "is_registered")]
     pub is_registered: bool,
-    #[serde(rename = "presence", skip_serializing_if = "Option::is_none")]
-    pub presence: Option<Box<crate::models::IdentityPresence>>,
 }
 
 impl IdentitySummary {
@@ -54,7 +52,6 @@ impl IdentitySummary {
             is_following_me,
             is_mutual_following,
             is_registered,
-            presence: None,
         }
     }
 }

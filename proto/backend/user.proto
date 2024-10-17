@@ -22,24 +22,3 @@ message User {
 	optional int64 delete_complete_ts = 13;
 }
 
-message Presence {
-	reserved 3;  // Party
-
-	message GameActivity {
-		rivet.common.Uuid game_id = 1;
-		string message = 2;
-		optional string public_metadata = 3;
-		optional string friend_metadata = 4;
-	}
-
-	int64 update_ts = 1;
-	Status status = 2;
-	optional GameActivity game_activity = 5;
-}
-
-enum Status {
-	OFFLINE = 0;
-	ONLINE = 1;
-	AWAY = 2;
-}
-

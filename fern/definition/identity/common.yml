@@ -82,7 +82,6 @@ types:
       avatar_url:
         type: string
         docs: The URL of this identity's avatar image.
-      presence: optional<Presence>
       is_registered:
         type: boolean
         docs: Whether or not this identity is registered with a linked account.
@@ -97,7 +96,6 @@ types:
       avatar_url:
         type: string
         docs: The URL of this identity's avatar image.
-      presence: optional<Presence>
       is_registered:
         type: boolean
         docs: Whether or not this identity is registered with a linked account.
@@ -120,7 +118,6 @@ types:
       avatar_url:
         docs: The URL of this identity's avatar image.
         type: string
-      presence: optional<Presence>
       is_registered:
         docs: Whether or not this identity is registered with a linked account.
         type: boolean
@@ -165,13 +162,6 @@ types:
       settings:
         type: optional<string>
         docs: A link to the Rivet settings page.
-
-  Presence:
-    docs: Information about the identity's current status, party, and active game.
-    properties:
-      update_ts: commons.Timestamp
-      status: Status
-      game_activity: optional<GameActivity>
 
   Status:
     docs: The current status of an identity. This helps players understand if

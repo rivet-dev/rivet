@@ -49,21 +49,3 @@ pub fn delete_refresh_token_header(origin: &Url) -> GlobalResult<(HeaderName, He
 			.map_err(Into::<GlobalError>::into)?,
 	))
 }
-
-pub fn touch_user_presence(ctx: OperationContext<()>, user_id: Uuid) {
-	let spawn_res = tokio::task::Builder::new()
-		.name("api_auth::user_presence_touch")
-		.spawn(async move {
-			let res = op!([ctx] user_presence_touch {
-				user_id: Some(user_id.into()),
-			})
-			.await;
-			match res {
-				Ok(_) => {}
-				Err(err) => tracing::error!(?err, "failed to touch user presence"),
-			}
-		});
-	if let Err(err) = spawn_res {
-		tracing::error!(?err, "failed to spawn user_presence_touch task");
-	}
-}

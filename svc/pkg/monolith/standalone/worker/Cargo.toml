@@ -35,6 +35,5 @@ team-worker = { path = "../../../team/worker" }
 upload-worker = { path = "../../../upload/worker" }
 user-dev-worker = { path = "../../../user-dev/worker" }
 user-follow-worker = { path = "../../../user-follow/worker" }
-user-presence-worker = { path = "../../../user-presence/worker" }
 user-report-worker = { path = "../../../user-report/worker" }
 user-worker = { path = "../../../user/worker" }

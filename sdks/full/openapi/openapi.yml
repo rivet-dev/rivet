@@ -13836,8 +13836,6 @@ components:
         avatar_url:
           type: string
           description: The URL of this identity's avatar image.
-        presence:
-          $ref: '#/components/schemas/IdentityPresence'
         is_registered:
           type: boolean
           description: Whether or not this identity is registered with a linked account.
@@ -13864,8 +13862,6 @@ components:
         avatar_url:
           type: string
           description: The URL of this identity's avatar image.
-        presence:
-          $ref: '#/components/schemas/IdentityPresence'
         is_registered:
           type: boolean
           description: Whether or not this identity is registered with a linked account.
@@ -13905,8 +13901,6 @@ components:
         avatar_url:
           type: string
           description: The URL of this identity's avatar image.
-        presence:
-          $ref: '#/components/schemas/IdentityPresence'
         is_registered:
           type: boolean
           description: Whether or not this identity is registered with a linked account.
@@ -13992,19 +13986,6 @@ components:
           description: A link to the Rivet settings page.
       required:
         - profile
-    IdentityPresence:
-      type: object
-      description: Information about the identity's current status, party, and active game.
-      properties:
-        update_ts:
-          $ref: '#/components/schemas/Timestamp'
-        status:
-          $ref: '#/components/schemas/IdentityStatus'
-        game_activity:
-          $ref: '#/components/schemas/IdentityGameActivity'
-      required:
-        - update_ts
-        - status
     IdentityStatus:
       type: string
       enum:

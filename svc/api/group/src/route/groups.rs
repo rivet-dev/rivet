@@ -238,12 +238,6 @@ pub async fn members(
 				tail_anchor!([ctx, anchor] user::msg::update(user_id.as_uuid())).boxed()
 			}));
 
-		// User presence subs
-		let user_presence_subs_select =
-			util::future::select_all_or_wait(user_ids.iter().cloned().map(|user_id| {
-				tail_anchor!([ctx, anchor] user_presence::msg::update(user_id.as_uuid())).boxed()
-			}));
-
 		// Listen for updates
 		util::macros::select_with_timeout!({
 			event = team_member_create_sub => {
@@ -261,9 +255,6 @@ pub async fn members(
 				}
 			}
 			event = user_subs_select => {
-				(None, event?.msg_ts())
-			}
-			event = user_presence_subs_select => {
 				(None, event?.msg_ts())
 			}
 		})
@@ -293,9 +284,8 @@ pub async fn members(
 
 	// NOTE: We don't use fetch::identities::handles here because the end model is `GroupMember` not `IdentityHandle`
 	// Fetch team member and join request data
-	let (users, presences_ctx, user_follows) = tokio::try_join!(
+	let (users, user_follows) = tokio::try_join!(
 		fetch::identity::users(&ctx, user_ids.clone()),
-		fetch::identity::presence_data(&ctx, user_ent.user_id, user_ids.clone(), false),
 		fetch::identity::follows(
 			&ctx,
 			user_ent.user_id,
@@ -318,12 +308,7 @@ pub async fn members(
 			});
 
 			Ok(models::GroupMember {
-				identity: convert::identity::handle(
-					user_ent.user_id,
-					user,
-					&presences_ctx,
-					is_mutual_following,
-				)?,
+				identity: convert::identity::handle(user_ent.user_id, user, is_mutual_following)?,
 			})
 		})
 		.collect::<GlobalResult<Vec<_>>>()?;
@@ -400,12 +385,6 @@ pub async fn join_requests(
 				tail_anchor!([ctx, anchor] user::msg::update(user_id.as_uuid())).boxed()
 			}));
 
-		// User presence subs
-		let user_presence_subs_select =
-			util::future::select_all_or_wait(user_ids.iter().cloned().map(|user_id| {
-				tail_anchor!([ctx, anchor] user_presence::msg::update(user_id.as_uuid())).boxed()
-			}));
-
 		// Listen for updates
 		util::macros::select_with_timeout!({
 			event = team_join_request_create_sub => {
@@ -423,9 +402,6 @@ pub async fn join_requests(
 				}
 			}
 			event = user_subs_select => {
-				(None, event?.msg_ts())
-			}
-			event = user_presence_subs_select => {
 				(None, event?.msg_ts())
 			}
 		})
@@ -461,9 +437,8 @@ pub async fn join_requests(
 	// NOTE: We don't use fetch::identities::handles here because the end model is `GroupMember` not
 	// `IdentityHandle`
 	// Fetch team member and join request data
-	let (users, presences_ctx, user_follows) = tokio::try_join!(
+	let (users, user_follows) = tokio::try_join!(
 		fetch::identity::users(&ctx, user_ids.clone()),
-		fetch::identity::presence_data(&ctx, user_ent.user_id, user_ids.clone(), false),
 		fetch::identity::follows(
 			&ctx,
 			user_ent.user_id,
@@ -492,12 +467,7 @@ pub async fn join_requests(
 			});
 
 			Ok(models::GroupJoinRequest {
-				identity: convert::identity::handle(
-					user_ent.user_id,
-					user,
-					&presences_ctx,
-					is_mutual_following,
-				)?,
+				identity: convert::identity::handle(user_ent.user_id, user, is_mutual_following)?,
 				ts: util::timestamp::to_chrono(join_request_ts)?,
 			})
 		})
@@ -1309,12 +1279,6 @@ pub async fn bans(
 				tail_anchor!([ctx, anchor] user::msg::update(user_id.as_uuid())).boxed()
 			}));
 
-		// User presence subs
-		let user_presence_subs_select =
-			util::future::select_all_or_wait(user_ids.iter().cloned().map(|user_id| {
-				tail_anchor!([ctx, anchor] user_presence::msg::update(user_id.as_uuid())).boxed()
-			}));
-
 		// Listen for updates
 		util::macros::select_with_timeout!({
 			event = team_ban_sub => {
@@ -1332,9 +1296,6 @@ pub async fn bans(
 				}
 			}
 			event = user_subs_select => {
-				(None, event?.msg_ts())
-			}
-			event = user_presence_subs_select => {
 				(None, event?.msg_ts())
 			}
 		})
@@ -1370,9 +1331,8 @@ pub async fn bans(
 	// NOTE: We don't use fetch::identities::handles here because the end model is `BannedIdentity` not
 	// `IdentityHandle`
 	// Fetch team member and ban data
-	let (users, presences_ctx, user_follows) = tokio::try_join!(
+	let (users, user_follows) = tokio::try_join!(
 		fetch::identity::users(&ctx, user_ids.clone()),
-		fetch::identity::presence_data(&ctx, user_ent.user_id, user_ids.clone(), false),
 		fetch::identity::follows(
 			&ctx,
 			user_ent.user_id,
@@ -1406,12 +1366,7 @@ pub async fn bans(
 			});
 
 			Ok(models::GroupBannedIdentity {
-				identity: convert::identity::handle(
-					user_ent.user_id,
-					user,
-					&presences_ctx,
-					is_mutual_following,
-				)?,
+				identity: convert::identity::handle(user_ent.user_id, user, is_mutual_following)?,
 				ban_ts: util::timestamp::to_chrono(ban_ts)?,
 			})
 		})

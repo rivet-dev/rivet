@@ -1,7 +1,0 @@
-[service]
-name = "db-user-presence"
-
-[runtime]
-kind = "crdb"
-
-[database]

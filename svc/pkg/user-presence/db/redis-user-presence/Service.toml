@@ -1,9 +1,0 @@
-[service]
-name = "redis-user-presence"
-
-[runtime]
-kind = "redis"
-persistent = false
-
-[cache]
-

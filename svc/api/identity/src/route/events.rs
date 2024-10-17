@@ -27,8 +27,6 @@ pub async fn events(
 		None
 	};
 
-	utils::touch_user_presence(ctx.op_ctx().base(), current_user_id, false);
-
 	// Wait for an update if needed
 	let EventsWaitResponse {
 		new_mm_lobby_joins,
@@ -126,9 +124,6 @@ async fn events_wait(
 					new_mm_lobby_joins.push((msg.msg_ts(), mm_lobby_join.clone()));
 				}
 				backend::user::event::event::Kind::UserUpdate(_) => {
-					user_update_ts = Some(msg.msg_ts());
-				}
-				backend::user::event::event::Kind::PresenceUpdate(_) => {
 					user_update_ts = Some(msg.msg_ts());
 				}
 				backend::user::event::event::Kind::TeamMemberRemove(team) => {

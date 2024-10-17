@@ -6,12 +6,11 @@ import "proto/common.proto";
 import "proto/backend/user.proto";
 
 message Event {
-	reserved 3;
+	reserved 3, 6;
 
 	oneof kind {
 		UserUpdate user_update = 5;
 		MatchmakerLobbyJoin matchmaker_lobby_join = 4;
-		PresenceUpdate presence_update = 6;
 		TeamMemberRemove team_member_remove = 7;
 	}
 }
@@ -26,13 +25,6 @@ message MatchmakerLobbyJoin {
 	rivet.common.Uuid lobby_id = 3;
 	rivet.common.Uuid player_id = 4;
 	string player_token = 5;
-}
-
-message PresenceUpdate {
-	oneof kind {
-		backend.user.Status status = 1;
-		backend.user.Presence.GameActivity game_activity = 2;
-	}
 }
 
 message TeamMemberRemove {

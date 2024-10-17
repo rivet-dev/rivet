@@ -15,13 +15,6 @@ pub struct TeamsCtx {
 	pub teams: Vec<backend::team::Team>,
 }
 
-#[derive(Debug)]
-pub struct PresencesCtx {
-	pub res: user_presence::get::Response,
-	pub games: Vec<backend::game::Game>,
-	pub games_with_namespace_ids: Vec<convert::GameWithNamespaceIds>,
-}
-
 pub async fn handles(
 	ctx: &OperationContext<()>,
 	current_user_id: Uuid,
@@ -37,9 +30,8 @@ pub async fn handles(
 		.map(Into::into)
 		.collect::<Vec<_>>();
 
-	let (users, presences_ctx, mutual_follows) = tokio::try_join!(
+	let (users,  mutual_follows) = tokio::try_join!(
 		users(ctx, user_ids.clone()),
-		presence_data(ctx, user_ids.clone(), false),
 		mutual_follows(ctx, current_user_id, raw_user_ids),
 	)?;
 
@@ -56,7 +48,7 @@ pub async fn handles(
 					&& follow.following_user_id.as_ref() == Some(&raw_current_user_id)
 			});
 
-			convert::identity::handle(current_user_id, user, &presences_ctx, is_mutual_following)
+			convert::identity::handle(current_user_id, user,  is_mutual_following)
 		})
 		.collect::<GlobalResult<Vec<_>>>()
 }
@@ -76,9 +68,8 @@ pub async fn summaries(
 		.map(Into::into)
 		.collect::<Vec<_>>();
 
-	let (users, presences_ctx, mutual_follows) = tokio::try_join!(
+	let (users,  mutual_follows) = tokio::try_join!(
 		users(ctx, user_ids.clone()),
-		presence_data(ctx, user_ids.clone(), false),
 		mutual_follows(ctx, current_user_id, raw_user_ids),
 	)?;
 
@@ -90,7 +81,6 @@ pub async fn summaries(
 			convert::identity::summary(
 				current_user_id,
 				user,
-				&presences_ctx,
 				&mutual_follows.follows,
 			)
 		})
@@ -119,7 +109,6 @@ pub async fn profiles(
 
 	let (
 		users,
-		presences_ctx,
 		teams_ctx,
 		mutual_follows,
 		(follower_counts, following_counts),
@@ -127,7 +116,6 @@ pub async fn profiles(
 		self_is_game_linked,
 	) = tokio::try_join!(
 		users(ctx, user_ids.clone()),
-		presence_data(ctx, user_ids.clone(), true),
 		teams(ctx, user_ids.clone()),
 		mutual_follows(ctx, current_user_id, raw_user_ids),
 		follows(ctx, user_ids.clone()),
@@ -144,7 +132,6 @@ pub async fn profiles(
 				current_user_id,
 				user,
 				convert::identity::ProfileCtx {
-					presences_ctx: &presences_ctx,
 					teams_ctx: &teams_ctx,
 					mutual_follows: &mutual_follows.follows,
 					follower_counts: &follower_counts.follows,
@@ -166,65 +153,6 @@ pub async fn users(
 		user_ids: user_ids,
 	})
 	.await
-}
-
-pub async fn presence_data(
-	ctx: &OperationContext<()>,
-	user_ids: Vec<common::Uuid>,
-	_summary_info: bool,
-) -> GlobalResult<PresencesCtx> {
-	let ((presences_res, game_ids),) = tokio::try_join!(presences_and_game_ids(ctx, user_ids),)?;
-
-	let (games, games_with_namespace_ids) = games(
-		ctx,
-		game_ids
-			.into_iter()
-			.map(Into::<common::Uuid>::into)
-			.collect::<Vec<_>>(),
-		Vec::new(),
-	)
-	.await?;
-
-	Ok(PresencesCtx {
-		res: presences_res,
-		games,
-		games_with_namespace_ids,
-	})
-}
-
-async fn presences_and_game_ids(
-	ctx: &OperationContext<()>,
-	user_ids: Vec<common::Uuid>,
-) -> GlobalResult<(user_presence::get::Response, Vec<Uuid>)> {
-	let user_presences_res = op!([ctx] user_presence_get {
-		user_ids: user_ids,
-	})
-	.await?;
-
-	// Fetch game ids from game activities
-	let game_ids = user_presences_res
-		.users
-		.iter()
-		.filter_map(|user_presence| {
-			if let Some(backend::user::Presence {
-				game_activity:
-					Some(backend::user::presence::GameActivity {
-						game_id: Some(game_id),
-						..
-					}),
-				..
-			}) = &user_presence.presence
-			{
-				Some(game_id.as_uuid())
-			} else {
-				None
-			}
-		})
-		.collect::<HashSet<_>>()
-		.into_iter()
-		.collect::<Vec<_>>();
-
-	Ok((user_presences_res, game_ids))
 }
 
 async fn games(

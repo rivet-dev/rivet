@@ -8,7 +8,6 @@ export * from "./Handle";
 export * from "./Summary";
 export * from "./Profile";
 export * from "./ExternalLinks";
-export * from "./Presence";
 export * from "./Status";
 export * from "./GameActivity";
 export * from "./Group";

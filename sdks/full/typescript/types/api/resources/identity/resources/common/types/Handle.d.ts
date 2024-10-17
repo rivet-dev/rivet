@@ -11,7 +11,6 @@ export interface Handle {
     accountNumber: Rivet.AccountNumber;
     /** The URL of this identity's avatar image. */
     avatarUrl: string;
-    presence?: Rivet.identity.Presence;
     /** Whether or not this identity is registered with a linked account. */
     isRegistered: boolean;
     external: Rivet.identity.ExternalLinks;

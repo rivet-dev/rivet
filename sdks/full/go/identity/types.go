@@ -181,6 +181,42 @@ func (e *EmailLinkedAccount) String() string {
 	return fmt.Sprintf("%#v", e)
 }
 
+// The game an identity is currently participating in.
+type GameActivity struct {
+	Game *game.Handle `json:"game,omitempty"`
+	// A short activity message about the current game activity.
+	Message string `json:"message"`
+	// JSON data seen by anyone.
+	PublicMetadata interface{} `json:"public_metadata,omitempty"`
+	// JSON data seen only by the given identity and their mutual followers.
+	MutualMetadata interface{} `json:"mutual_metadata,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (g *GameActivity) UnmarshalJSON(data []byte) error {
+	type unmarshaler GameActivity
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*g = GameActivity(value)
+	g._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (g *GameActivity) String() string {
+	if len(g._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(g._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(g); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", g)
+}
+
 type GameLinkStatus string
 
 const (
@@ -450,8 +486,7 @@ type Profile struct {
 	DisplayName   sdk.DisplayName   `json:"display_name"`
 	AccountNumber sdk.AccountNumber `json:"account_number"`
 	// The URL of this identity's avatar image.
-	AvatarUrl string             `json:"avatar_url"`
-	Presence  *identity.Presence `json:"presence,omitempty"`
+	AvatarUrl string `json:"avatar_url"`
 	// Whether or not this identity is registered with a linked account.
 	IsRegistered bool                    `json:"is_registered"`
 	External     *identity.ExternalLinks `json:"external,omitempty"`
@@ -503,14 +538,39 @@ func (p *Profile) String() string {
 	return fmt.Sprintf("%#v", p)
 }
 
+// The current status of an identity. This helps players understand if another player is currently playing or has their game in the background.
+type Status string
+
+const (
+	StatusOnline  Status = "online"
+	StatusAway    Status = "away"
+	StatusOffline Status = "offline"
+)
+
+func NewStatusFromString(s string) (Status, error) {
+	switch s {
+	case "online":
+		return StatusOnline, nil
+	case "away":
+		return StatusAway, nil
+	case "offline":
+		return StatusOffline, nil
+	}
+	var t Status
+	return "", fmt.Errorf("%s is not a valid %T", s, t)
+}
+
+func (s Status) Ptr() *Status {
+	return &s
+}
+
 // An identity summary.
 type Summary struct {
 	IdentityId    uuid.UUID         `json:"identity_id"`
 	DisplayName   sdk.DisplayName   `json:"display_name"`
 	AccountNumber sdk.AccountNumber `json:"account_number"`
 	// The URL of this identity's avatar image.
-	AvatarUrl string             `json:"avatar_url"`
-	Presence  *identity.Presence `json:"presence,omitempty"`
+	AvatarUrl string `json:"avatar_url"`
 	// Whether or not this identity is registered with a linked account.
 	IsRegistered bool                    `json:"is_registered"`
 	External     *identity.ExternalLinks `json:"external,omitempty"`
@@ -648,7 +708,7 @@ type UpdateProfileRequest struct {
 }
 
 type UpdateStatusRequest struct {
-	Status identity.Status `json:"status,omitempty"`
+	Status Status `json:"status,omitempty"`
 }
 
 type ValidateProfileRequest struct {

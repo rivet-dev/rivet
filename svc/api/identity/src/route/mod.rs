@@ -3,7 +3,6 @@ use hyper::{Body, Request, Response};
 use rivet_api::models;
 use uuid::Uuid;
 
-mod activities;
 mod events;
 mod identities;
 mod links;
@@ -96,35 +95,6 @@ define_router! {
 		"identities" / "self" / "beta-signup": {
 			POST: identities::beta_signup(body: models::IdentitySignupForBetaRequest),
 		},
-		"identities" / "self" / "activity": {
-			POST: identities::set_game_activity(
-				body: models::IdentitySetGameActivityRequest,
-				rate_limit: {
-					key: "identity-activity-set",
-					buckets: [
-						{ count: 8 },
-					],
-				},
-			),
-			DELETE: identities::remove_game_activity(
-				rate_limit: {
-					key: "identity-activity-set",
-					buckets: [
-						{ count: 8 },
-					],
-				},
-			),
-		},
-		"identities" / "self" / "status": {
-			POST: identities::update_status(
-				body: models::IdentityUpdateStatusRequest,
-				rate_limit: {
-					buckets: [
-						{ count: 8 },
-					],
-				},
-			),
-		},
 		"identities" / Uuid / "follow": {
 			POST: identities::follow_identity(
 				body: serde_json::Value,
@@ -180,11 +150,6 @@ define_router! {
 		// Events
 		"events" / "live": {
 			GET: events::events(),
-		},
-
-		// Activities
-		"activities": {
-			GET: activities::activities(),
 		},
 
 		// Links

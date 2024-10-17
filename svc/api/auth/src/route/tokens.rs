@@ -176,8 +176,6 @@ async fn register_user(
 	})
 	.await?;
 
-	utils::touch_user_presence(ctx.op_ctx().base(), user_id);
-
 	// Generate token
 	let token_res = op!([ctx] user_token_create {
 		user_id: Some(user_id.into()),

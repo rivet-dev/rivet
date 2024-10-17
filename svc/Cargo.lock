@@ -172,7 +172,6 @@ dependencies = [
  "user-get",
  "user-identity-create",
  "user-identity-get",
- "user-presence-touch",
  "user-resolve-access-token",
  "user-resolve-email",
  "user-token-create",
@@ -436,7 +435,6 @@ dependencies = [
  "user-follow-get",
  "user-get",
  "user-identity-get",
- "user-presence-get",
  "user-team-list",
  "user-token-create",
  "uuid",
@@ -563,7 +561,6 @@ dependencies = [
  "user-identity-get",
  "user-mutual-friend-list",
  "user-pending-delete-toggle",
- "user-presence-touch",
  "user-profile-validate",
  "user-search",
  "uuid",
@@ -6086,7 +6083,6 @@ dependencies = [
  "upload-worker",
  "user-dev-worker",
  "user-follow-worker",
- "user-presence-worker",
  "user-report-worker",
  "user-worker",
 ]
@@ -7553,7 +7549,6 @@ dependencies = [
  "user-follow-get",
  "user-get",
  "user-identity-get",
- "user-presence-get",
  "user-team-list",
 ]
 
@@ -7917,15 +7912,6 @@ name = "rivet-util-team"
 version = "0.1.0"
 dependencies = [
  "rivet-operation",
-]
-
-[[package]]
-name = "rivet-util-user-presence"
-version = "0.1.0"
-dependencies = [
- "rivet-util",
- "serde",
- "uuid",
 ]
 
 [[package]]
@@ -10249,69 +10235,6 @@ dependencies = [
  "sqlx",
  "user-identity-create",
  "user-identity-get",
-]
-
-[[package]]
-name = "user-presence-gc"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "chrono",
- "futures-util",
- "indoc 1.0.9",
- "lazy_static",
- "prost 0.10.4",
- "rivet-connection",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-operation",
- "rivet-pools",
- "rivet-runtime",
- "rivet-util-user-presence",
- "tokio",
- "tracing",
- "tracing-logfmt",
- "tracing-subscriber",
- "user-presence-touch",
-]
-
-[[package]]
-name = "user-presence-get"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "chrono",
- "prost 0.10.4",
- "rivet-operation",
- "rivet-util-user-presence",
-]
-
-[[package]]
-name = "user-presence-touch"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "faker-user",
- "prost 0.10.4",
- "rivet-operation",
- "rivet-util-user-presence",
-]
-
-[[package]]
-name = "user-presence-worker"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "faker-user",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-runtime",
- "rivet-util-user-presence",
- "sqlx",
 ]
 
 [[package]]

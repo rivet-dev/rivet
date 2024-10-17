@@ -7,7 +7,6 @@ import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
 import { DisplayName as common$$displayName } from "../../../../common/types/DisplayName";
 import { AccountNumber as common$$accountNumber } from "../../../../common/types/AccountNumber";
-import { Presence as identity_common$$presence } from "./Presence";
 import { ExternalLinks as identity_common$$externalLinks } from "./ExternalLinks";
 import { DevState as identity_common$$devState } from "./DevState";
 import { Timestamp as common$$timestamp } from "../../../../common/types/Timestamp";
@@ -23,7 +22,6 @@ export const Profile: core.serialization.ObjectSchema<serializers.identity.Profi
         displayName: core.serialization.property("display_name", common$$displayName),
         accountNumber: core.serialization.property("account_number", common$$accountNumber),
         avatarUrl: core.serialization.property("avatar_url", core.serialization.string()),
-        presence: identity_common$$presence.optional(),
         isRegistered: core.serialization.property("is_registered", core.serialization.boolean()),
         external: identity_common$$externalLinks,
         isAdmin: core.serialization.property("is_admin", core.serialization.boolean()),
@@ -51,7 +49,6 @@ export declare namespace Profile {
         display_name: common.DisplayName.Raw;
         account_number: common.AccountNumber.Raw;
         avatar_url: string;
-        presence?: identity.Presence.Raw | null;
         is_registered: boolean;
         external: identity.ExternalLinks.Raw;
         is_admin: boolean;

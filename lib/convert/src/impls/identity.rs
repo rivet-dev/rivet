@@ -46,13 +46,3 @@ impl ApiFrom<game_user::link_get::response::GameUserLinkStatus> for models::Iden
 		}
 	}
 }
-
-impl ApiFrom<models::IdentityStatus> for backend::user::Status {
-	fn api_from(value: models::IdentityStatus) -> Self {
-		match value {
-			models::IdentityStatus::Offline => backend::user::Status::Offline,
-			models::IdentityStatus::Online => backend::user::Status::Online,
-			models::IdentityStatus::Away => backend::user::Status::Away,
-		}
-	}
-}

@@ -254,10 +254,6 @@ impl TestCtx {
 		self.conn.redis_mm().await
 	}
 
-	pub async fn redis_user_presence(&self) -> Result<RedisPool, rivet_pools::Error> {
-		self.conn.redis_user_presence().await
-	}
-
 	pub async fn clickhouse(&self) -> GlobalResult<ClickHousePool> {
 		self.conn.clickhouse().await
 	}

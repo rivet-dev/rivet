@@ -1,6 +1,4 @@
-use std::{
-	collections::{HashMap, HashSet},
-};
+use std::collections::{HashMap, HashSet};
 
 use proto::backend::{self, pkg::*};
 use rivet_operation::prelude::*;

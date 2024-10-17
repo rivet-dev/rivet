@@ -45,10 +45,6 @@ pub async fn get_game_link(
 	watch_index: WatchIndexQuery,
 	query: GameLinkQuery,
 ) -> GlobalResult<models::IdentityGetGameLinkResponse> {
-	if let Ok((current_user_id, _)) = ctx.auth().dual_user(ctx.op_ctx()).await {
-		utils::touch_user_presence(ctx.op_ctx().base(), current_user_id, false);
-	}
-
 	let (game_user_link_ent, _) = ctx
 		.auth()
 		.game_user_link_ent(query.identity_link_token.to_owned())?;
@@ -165,8 +161,6 @@ pub async fn complete_game_link(
 ) -> GlobalResult<serde_json::Value> {
 	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
 
-	utils::touch_user_presence(ctx.op_ctx().base(), user_ent.user_id, false);
-
 	let (game_user_link_ent, token_jti) = ctx
 		.auth()
 		.game_user_link_ent(body.identity_link_token.to_owned())?;
@@ -200,8 +194,6 @@ pub async fn cancel_game_link(
 	body: models::IdentityCancelGameLinkRequest,
 ) -> GlobalResult<serde_json::Value> {
 	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
-
-	utils::touch_user_presence(ctx.op_ctx().base(), user_ent.user_id, false);
 
 	let (game_user_link_ent, token_jti) = ctx
 		.auth()

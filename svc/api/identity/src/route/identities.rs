@@ -58,8 +58,6 @@ pub async fn setup_identity(
 		})
 		.await?;
 
-		utils::touch_user_presence(ctx.op_ctx().base(), user_id, true);
-
 		// Decode the tokens for the expiration ts
 		let user_token_claims = rivet_claims::decode(&game_user_res.token)??;
 		let game_user_id = *unwrap!(game_user_res.game_user_id);
@@ -210,7 +208,6 @@ async fn attempt_setup_existing_identity_token(
 		tracing::info!("game user not found");
 		return Ok(None);
 	};
-	utils::touch_user_presence(ctx.op_ctx().base(), user_id, false);
 
 	let (identities, game_resolve_res) = tokio::try_join!(
 		fetch::identity::profiles(
@@ -479,71 +476,13 @@ pub async fn search(
 	let user_handles = res
 		.users
 		.iter()
-		.map(|user| convert::identity::handle_without_presence(current_user_id, user))
+		.map(|user| convert::identity::handle(current_user_id, user))
 		.collect::<GlobalResult<Vec<_>>>()?;
 
 	Ok(models::IdentitySearchResponse {
 		identities: user_handles,
 		anchor: user_search_res.anchor.as_ref().map(ToString::to_string),
 	})
-}
-
-// MARK: POST /identities/self/activity/
-pub async fn set_game_activity(
-	ctx: Ctx<Auth>,
-	body: models::IdentitySetGameActivityRequest,
-) -> GlobalResult<serde_json::Value> {
-	let game_user = ctx.auth().fetch_game_user(ctx.op_ctx()).await?;
-
-	msg!([ctx] user_presence::msg::game_activity_set(game_user.user_id) {
-		user_id: Some(game_user.user_id.into()),
-		game_activity: Some(backend::user::presence::GameActivity {
-			game_id: Some(game_user.game_id.into()),
-			message: body.game_activity.message.unwrap_or_default(),
-			public_metadata: body.game_activity
-				.public_metadata
-				.map(|public_metadata| serde_json::to_string(&public_metadata))
-				.transpose()?,
-			friend_metadata: body.game_activity
-				.mutual_metadata
-				.map(|mutual_metadata| serde_json::to_string(&mutual_metadata))
-				.transpose()?,
-		}),
-	})
-	.await?;
-
-	Ok(serde_json::json!({}))
-}
-
-// MARK: DELETE /identities/self/activity/
-pub async fn remove_game_activity(ctx: Ctx<Auth>) -> GlobalResult<serde_json::Value> {
-	let game_user = ctx.auth().fetch_game_user(ctx.op_ctx()).await?;
-
-	msg!([ctx] user_presence::msg::game_activity_set(game_user.user_id) {
-		user_id: Some(game_user.user_id.into()),
-		game_activity: None,
-	})
-	.await?;
-
-	Ok(serde_json::json!({}))
-}
-
-// MARK: POST /identities/self/status
-pub async fn update_status(
-	ctx: Ctx<Auth>,
-	body: models::IdentityUpdateStatusRequest,
-) -> GlobalResult<serde_json::Value> {
-	let (current_user_id, _) = ctx.auth().dual_user(ctx.op_ctx()).await?;
-
-	msg!([ctx] user_presence::msg::status_set(current_user_id) {
-		user_id: Some(current_user_id.into()),
-		status: ApiInto::<backend::user::Status>::api_into(body.status) as i32,
-		user_set_status: true,
-		silent: false,
-	})
-	.await?;
-
-	Ok(serde_json::json!({}))
 }
 
 // MARK: POST /identities/{}/follow
@@ -755,12 +694,6 @@ pub async fn followers(
 		let follow_sub = tail_anchor!([ctx, anchor] user_follow::msg::create("*", identity_id));
 		let unfollow_sub = tail_anchor!([ctx, anchor] user_follow::msg::delete("*", identity_id));
 
-		// User presence subs
-		let user_presence_subs_select =
-			util::future::select_all_or_wait(user_ids.iter().cloned().map(|user_id| {
-				tail_anchor!([ctx, anchor] user_presence::msg::update(user_id)).boxed()
-			}));
-
 		util::macros::select_with_timeout!({
 			event = follow_sub => {
 				if let TailAnchorResponse::Message(msg) = event? {
@@ -772,13 +705,6 @@ pub async fn followers(
 			event = unfollow_sub => {
 				if let TailAnchorResponse::Message(msg) = event? {
 					(msg.follower_user_id.map(FollowConsumerUpdate::FollowRemove), Some(msg.msg_ts()))
-				} else {
-					Default::default()
-				}
-			}
-			event = user_presence_subs_select => {
-				if let TailAnchorResponse::Message(msg) = event? {
-					(None, Some(msg.msg_ts()))
 				} else {
 					Default::default()
 				}
@@ -848,12 +774,6 @@ pub async fn following(
 		let follow_sub = tail_anchor!([ctx, anchor] user_follow::msg::create(identity_id, "*"));
 		let unfollow_sub = tail_anchor!([ctx, anchor] user_follow::msg::delete(identity_id, "*"));
 
-		// User presence subs
-		let user_presence_subs_select =
-			util::future::select_all_or_wait(user_ids.iter().cloned().map(|user_id| {
-				tail_anchor!([ctx, anchor] user_presence::msg::update(user_id)).boxed()
-			}));
-
 		util::macros::select_with_timeout!({
 			event = follow_sub => {
 				if let TailAnchorResponse::Message(msg) = event? {
@@ -865,13 +785,6 @@ pub async fn following(
 			event = unfollow_sub => {
 				if let TailAnchorResponse::Message(msg) = event? {
 					(msg.following_user_id.map(FollowConsumerUpdate::FollowRemove), Some(msg.msg_ts()))
-				} else {
-					Default::default()
-				}
-			}
-			event = user_presence_subs_select => {
-				if let TailAnchorResponse::Message(msg) = event? {
-					(None, Some(msg.msg_ts()))
 				} else {
 					Default::default()
 				}
@@ -942,12 +855,6 @@ pub async fn friends(
 		let unfollow_sub =
 			tail_anchor!([ctx, anchor] user::msg::mutual_follow_delete(current_user_id));
 
-		// User presence subs
-		let user_presence_subs_select =
-			util::future::select_all_or_wait(user_ids.iter().cloned().map(|user_id| {
-				tail_anchor!([ctx, anchor] user_presence::msg::update(user_id)).boxed()
-			}));
-
 		util::macros::select_with_timeout!({
 			event = follow_sub => {
 				if let TailAnchorResponse::Message(msg) = event? {
@@ -959,13 +866,6 @@ pub async fn friends(
 			event = unfollow_sub => {
 				if let TailAnchorResponse::Message(msg) = event? {
 					(msg.user_b_id.map(FollowConsumerUpdate::FollowRemove), Some(msg.msg_ts()))
-				} else {
-					Default::default()
-				}
-			}
-			event = user_presence_subs_select => {
-				if let TailAnchorResponse::Message(msg) = event? {
-					(None, Some(msg.msg_ts()))
 				} else {
 					Default::default()
 				}
@@ -1075,12 +975,6 @@ pub async fn recent_followers(
 		let mutual_sub =
 			tail_anchor!([ctx, anchor] user::msg::mutual_follow_create(current_user_id));
 
-		// User presence subs
-		let user_presence_subs_select =
-			util::future::select_all_or_wait(user_ids.iter().cloned().map(|user_id| {
-				tail_anchor!([ctx, anchor] user_presence::msg::update(user_id)).boxed()
-			}));
-
 		util::macros::select_with_timeout!({
 			event = follow_sub => {
 				if let TailAnchorResponse::Message(msg) = event? {
@@ -1115,11 +1009,6 @@ pub async fn recent_followers(
 				} else {
 					Default::default()
 				}
-			}
-			event = user_presence_subs_select => {
-				let event = event?;
-
-				(None, event.msg_ts())
 			}
 		})
 	} else {

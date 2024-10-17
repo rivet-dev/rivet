@@ -7,7 +7,6 @@ import (
 	fmt "fmt"
 	uuid "github.com/google/uuid"
 	sdk "sdk"
-	game "sdk/common/game"
 	core "sdk/core"
 )
 
@@ -44,50 +43,13 @@ func (e *ExternalLinks) String() string {
 	return fmt.Sprintf("%#v", e)
 }
 
-// The game an identity is currently participating in.
-type GameActivity struct {
-	Game *game.Handle `json:"game,omitempty"`
-	// A short activity message about the current game activity.
-	Message string `json:"message"`
-	// JSON data seen by anyone.
-	PublicMetadata interface{} `json:"public_metadata,omitempty"`
-	// JSON data seen only by the given identity and their mutual followers.
-	MutualMetadata interface{} `json:"mutual_metadata,omitempty"`
-
-	_rawJSON json.RawMessage
-}
-
-func (g *GameActivity) UnmarshalJSON(data []byte) error {
-	type unmarshaler GameActivity
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*g = GameActivity(value)
-	g._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (g *GameActivity) String() string {
-	if len(g._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(g._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(g); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", g)
-}
-
 // An identity handle.
 type Handle struct {
 	IdentityId    uuid.UUID         `json:"identity_id"`
 	DisplayName   sdk.DisplayName   `json:"display_name"`
 	AccountNumber sdk.AccountNumber `json:"account_number"`
 	// The URL of this identity's avatar image.
-	AvatarUrl string    `json:"avatar_url"`
-	Presence  *Presence `json:"presence,omitempty"`
+	AvatarUrl string `json:"avatar_url"`
 	// Whether or not this identity is registered with a linked account.
 	IsRegistered bool           `json:"is_registered"`
 	External     *ExternalLinks `json:"external,omitempty"`
@@ -116,62 +78,4 @@ func (h *Handle) String() string {
 		return value
 	}
 	return fmt.Sprintf("%#v", h)
-}
-
-// Information about the identity's current status, party, and active game.
-type Presence struct {
-	UpdateTs     sdk.Timestamp `json:"update_ts"`
-	Status       Status        `json:"status,omitempty"`
-	GameActivity *GameActivity `json:"game_activity,omitempty"`
-
-	_rawJSON json.RawMessage
-}
-
-func (p *Presence) UnmarshalJSON(data []byte) error {
-	type unmarshaler Presence
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*p = Presence(value)
-	p._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (p *Presence) String() string {
-	if len(p._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(p._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(p); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", p)
-}
-
-// The current status of an identity. This helps players understand if another player is currently playing or has their game in the background.
-type Status string
-
-const (
-	StatusOnline  Status = "online"
-	StatusAway    Status = "away"
-	StatusOffline Status = "offline"
-)
-
-func NewStatusFromString(s string) (Status, error) {
-	switch s {
-	case "online":
-		return StatusOnline, nil
-	case "away":
-		return StatusAway, nil
-	case "offline":
-		return StatusOffline, nil
-	}
-	var t Status
-	return "", fmt.Errorf("%s is not a valid %T", s, t)
-}
-
-func (s Status) Ptr() *Status {
-	return &s
 }

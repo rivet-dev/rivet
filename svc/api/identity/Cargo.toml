@@ -67,7 +67,6 @@ user-get = { path = "../../pkg/user/ops/get" }
 user-identity-get = { path = "../../pkg/user-identity/ops/get" }
 user-mutual-friend-list = { path = "../../pkg/user/ops/mutual-friend-list" }
 user-pending-delete-toggle = { path = "../../pkg/user/ops/pending-delete-toggle" }
-user-presence-touch = { path = "../../pkg/user-presence/ops/touch" }
 user-profile-validate = { path = "../../pkg/user/ops/profile-validate" }
 user-search = { path = "../../pkg/user/ops/search" }
 
