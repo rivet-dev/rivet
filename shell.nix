@@ -6,9 +6,6 @@ let
 
 	custom_clickhouse = import ./infra/nix/pkgs/clickhouse.nix { inherit (pkgs) stdenv fetchurl lib; };
 
-	envSkipBolt = builtins.getEnv "NIX_SKIP_BOLT" == "1";
-	custom_bolt = import ./infra/nix/bolt/default.nix;
-
 	useSccache = builtins.getEnv "USE_SCCACHE" == "1";
 	extraInputs = if useSccache then [ unstablePkgs.sccache ] else [];
 	sccacheShellHook = if useSccache then ''
@@ -73,7 +70,6 @@ in
 			# Fixes "cannot change locale" warning
 			glibcLocales
 		]
-			++ lib.optional (builtins.getEnv "NIX_SKIP_BOLT" != "1") custom_bolt
 			++ extraInputs
 			++ (
 				pkgs.lib.optionals stdenv.isDarwin [
@@ -88,8 +84,8 @@ in
 			# Setup Git LFS
 			git lfs install --manual > /dev/null
 
-			# Add binaries to path so we can use a locally built copy of Bolt.
-			export PATH="${toString ./target/debug/.}:${toString ./target/release/.}:$PATH"
+			# Alias of Bolt CLI
+			alias bolt='cargo run -q -p bolt --'
 
 			# See https://docs.rs/prost-build/0.8.0/prost_build/#sourcing-protoc
 			export PROTOC="${pkgs.protobuf}/bin/protoc"
