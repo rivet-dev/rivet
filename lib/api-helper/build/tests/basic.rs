@@ -194,7 +194,7 @@ pub async fn auth() {
 			.body(Body::from(""))
 			.unwrap();
 
-		let pools = rivet_pools::from_env("api-helper-test").await.unwrap();
+		let pools = rivet_pools::from_env().await.unwrap();
 		let shared_client =
 			chirp_client::SharedClient::from_env(pools.clone()).expect("create client");
 		let cache = rivet_cache::CacheInner::from_env(pools.clone()).expect("create cache");
@@ -224,7 +224,7 @@ pub async fn auth() {
 			.body(Body::from(""))
 			.unwrap();
 
-		let pools = rivet_pools::from_env("api-helper-test").await.unwrap();
+		let pools = rivet_pools::from_env().await.unwrap();
 		let shared_client =
 			chirp_client::SharedClient::from_env(pools.clone()).expect("create client");
 		let cache = rivet_cache::CacheInner::from_env(pools.clone()).expect("create cache");
@@ -252,7 +252,7 @@ pub async fn responses() {
 	init_tracing();
 	set_env_vars().await;
 
-	let pools = rivet_pools::from_env("api-helper-test").await.unwrap();
+	let pools = rivet_pools::from_env().await.unwrap();
 	let shared_client = chirp_client::SharedClient::from_env(pools.clone()).expect("create client");
 	let cache = rivet_cache::CacheInner::from_env(pools.clone()).expect("create cache");
 

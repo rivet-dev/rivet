@@ -212,7 +212,7 @@ pub struct S3 {
 	#[serde(default)]
 	pub cors: S3Cors,
 	#[serde(flatten, default)]
-	pub providers: S3Providers,
+	pub provider: S3Provider,
 	/// Used to migrate data from an old S3 provider to the new one.
 	pub backfill: Option<String>,
 }
@@ -223,29 +223,28 @@ pub struct S3Cors {
 	pub allowed_origins: Option<Vec<String>>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(deny_unknown_fields)]
-pub struct S3Providers {
-	pub minio: Option<S3Provider>,
-	pub backblaze: Option<S3Provider>,
-	pub aws: Option<S3Provider>,
+pub enum S3Provider {
+	#[serde(rename = "minio")]
+	Minio,
+	#[serde(rename = "aws")]
+	Aws,
 }
 
-impl Default for S3Providers {
-	fn default() -> Self {
-		Self {
-			minio: Some(S3Provider { default: true }),
-			backblaze: None,
-			aws: None,
+impl S3Provider {
+	pub fn as_str(&self) -> &str {
+		match self {
+			S3Provider::Minio => "minio",
+			S3Provider::Aws => "aws",
 		}
 	}
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(deny_unknown_fields)]
-pub struct S3Provider {
-	#[serde(default)]
-	pub default: bool,
+impl Default for S3Provider {
+	fn default() -> Self {
+		Self::Minio
+	}
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -383,8 +382,6 @@ pub struct Redis {
 pub enum RedisProvider {
 	#[serde(rename = "kubernetes")]
 	Kubernetes {},
-	#[serde(rename = "aws")]
-	Aws {},
 	#[serde(rename = "aiven")]
 	Aiven {
 		project: String,
@@ -514,8 +511,6 @@ pub enum RustBuildOpt {
 #[serde(deny_unknown_fields)]
 pub struct Rivet {
 	#[serde(default)]
-	pub telemetry: Telemetry,
-	#[serde(default)]
 	pub access: RivetAccess,
 	#[serde(default)]
 	pub login: RivetLogin,
@@ -535,14 +530,6 @@ pub struct Rivet {
 	pub billing: Option<RivetBilling>,
 	#[serde(default)]
 	pub backend: Option<RivetBackend>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
-#[serde(deny_unknown_fields)]
-pub struct Telemetry {
-	/// Disables sending telemetry to Rivet.
-	#[serde(default)]
-	pub disable: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]

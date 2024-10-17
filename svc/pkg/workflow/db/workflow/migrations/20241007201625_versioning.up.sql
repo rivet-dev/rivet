@@ -217,5 +217,3 @@ CREATE TABLE workflow_version_check_events (
 CREATE INDEX ON workflow_version_check_events (workflow_id, loop_location_hash)
 WHERE forgotten = FALSE;
 
-
-FROM your_table;

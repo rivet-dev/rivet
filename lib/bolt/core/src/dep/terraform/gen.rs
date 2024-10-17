@@ -1,19 +1,12 @@
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
+use bolt_config::ns::S3Provider;
 use indoc::{formatdoc, indoc};
 use serde_json::json;
 use tokio::fs;
 
-use crate::{
-	config::{
-		ns,
-		service::{RuntimeKind, UploadPolicy},
-	},
-	context::ProjectContext,
-	dep,
-	utils::media_resize,
-};
+use crate::{config::ns, context::ProjectContext, dep, utils::media_resize};
 
 pub async fn project(ctx: &ProjectContext) {
 	// Init all Terraform projects in parallel
@@ -166,7 +159,7 @@ async fn vars(ctx: &ProjectContext) {
 			vars.insert("dev_public_ip".into(), json!(ctx.get_dev_public_ip().await));
 
 			// Expose Minio on a dedicated port if DNS not enabled
-			if config.dns.is_none() && config.s3.providers.minio.is_some() {
+			if config.dns.is_none() && config.s3.provider == S3Provider::Minio {
 				vars.insert("minio_port".into(), json!(minio_port));
 			} else {
 				vars.insert("minio_port".into(), json!(null));
@@ -349,8 +342,7 @@ async fn vars(ctx: &ProjectContext) {
 		}
 
 		// Add Minio
-		let s3_providers = &config.s3.providers;
-		if s3_providers.minio.is_some() {
+		if config.s3.provider == S3Provider::Minio {
 			extra_dns.push(json!({
 				"zone_name": "main",
 				"name": format!("minio.{}", domain_main),
@@ -449,35 +441,11 @@ async fn vars(ctx: &ProjectContext) {
 	// Redis services
 	{
 		let mut redis_dbs = HashMap::new();
-
-		// Generate persistent and ephemeral databases
-		for svc_ctx in all_svc {
-			if let RuntimeKind::Redis { persistent } = svc_ctx.config().runtime {
-				if persistent {
-					redis_dbs.insert(
-						"persistent",
-						json!({
-							"persistent": true,
-						}),
-					);
-				} else {
-					redis_dbs.insert(
-						"ephemeral",
-						json!({
-							"persistent": false,
-						}),
-					);
-				}
-
-				if redis_dbs.len() == 2 {
-					break;
-				}
-			}
-		}
+		redis_dbs.insert("persistent", json!({ "persistent": true }));
+		redis_dbs.insert("ephemeral", json!({ "ephemeral": true }));
 
 		let redis_provider = match &config.redis.provider {
 			ns::RedisProvider::Kubernetes { .. } => "kubernetes",
-			ns::RedisProvider::Aws { .. } => "aws",
 			ns::RedisProvider::Aiven {
 				project,
 				cloud,
@@ -505,35 +473,17 @@ async fn vars(ctx: &ProjectContext) {
 
 	// S3
 	{
-		// Allow testing domains for non-production environments
-		let cors_allowed_origins = ctx.s3_cors_allowed_origins();
-
-		let mut s3_buckets = HashMap::<String, serde_json::Value>::new();
-
-		for svc_ctx in all_svc {
-			if let RuntimeKind::S3 { upload_policy } = &svc_ctx.config().runtime {
-				s3_buckets.insert(
-					svc_ctx.s3_bucket_name().await,
-					json!({
-						"cors_allowed_origins": cors_allowed_origins,
-						"policy": match upload_policy {
-							UploadPolicy::None => "none",
-							UploadPolicy::Download => "download",
-							UploadPolicy::Public => "public",
-							UploadPolicy::Upload => "upload",
-						},
-					}),
-				);
-			}
-		}
-
-		vars.insert("s3_buckets".into(), json!(s3_buckets));
-
+		let s3_config = ctx.s3_config().await.unwrap();
 		vars.insert(
-			"s3_default_provider".into(),
-			json!(ctx.default_s3_provider().unwrap().0.as_str()),
+			"s3".into(),
+			json!({
+				"provider": ctx.ns().s3.provider.as_str(),
+				"endpoint_internal": s3_config.endpoint_internal,
+				"endpoint_external": s3_config.endpoint_external,
+				"region": s3_config.region,
+
+			}),
 		);
-		vars.insert("s3_providers".into(), s3_providers(ctx).await.unwrap());
 	}
 
 	// Better Uptime
@@ -669,45 +619,4 @@ async fn vars(ctx: &ProjectContext) {
 	let _ = fs::create_dir_all(&tf_gen_path.parent().unwrap()).await;
 	let vars_json = serde_json::to_string(&vars).unwrap();
 	fs::write(&tf_gen_path, vars_json).await.unwrap();
-}
-
-async fn s3_providers(ctx: &ProjectContext) -> Result<serde_json::Value> {
-	let mut res = serde_json::Map::with_capacity(1);
-
-	let providers = &ctx.ns().s3.providers;
-	if providers.minio.is_some() {
-		let s3_config = ctx.s3_config(s3_util::Provider::Minio).await?;
-		res.insert(
-			"minio".to_string(),
-			json!({
-				"endpoint_internal": s3_config.endpoint_internal,
-				"endpoint_external": s3_config.endpoint_external,
-				"region": s3_config.region,
-			}),
-		);
-	}
-	if providers.backblaze.is_some() {
-		let s3_config = ctx.s3_config(s3_util::Provider::Backblaze).await?;
-		res.insert(
-			"backblaze".to_string(),
-			json!({
-				"endpoint_internal": s3_config.endpoint_internal,
-				"endpoint_external": s3_config.endpoint_external,
-				"region": s3_config.region,
-			}),
-		);
-	}
-	if providers.aws.is_some() {
-		let s3_config = ctx.s3_config(s3_util::Provider::Aws).await?;
-		res.insert(
-			"aws".to_string(),
-			json!({
-				"endpoint_internal": s3_config.endpoint_internal,
-				"endpoint_external": s3_config.endpoint_external,
-				"region": s3_config.region,
-			}),
-		);
-	}
-
-	Ok(res.into())
 }

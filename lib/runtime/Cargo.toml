@@ -10,7 +10,7 @@ console-subscriber = "0.1"
 lazy_static = "1.4"
 rivet-metrics = { path = "../metrics" }
 thiserror = "1.0"
-tokio = { version = "1.29", features = ["full", "tracing"] }
+tokio = { version = "1.40", features = ["full", "tracing"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }  # Used with attribute
 tracing-logfmt = "0.3"

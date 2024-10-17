@@ -5,7 +5,6 @@ use std::{
 
 use anyhow::Result;
 use duct::cmd;
-use indexmap::IndexSet;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use tokio::{fs, task::block_in_place};
@@ -13,7 +12,7 @@ use tokio::{fs, task::block_in_place};
 use crate::{
 	config::{
 		self, ns,
-		service::{ServiceKind, ServiceRouter},
+		project::service::{ServiceKind, ServiceRouter},
 	},
 	context::{ProjectContext, RunContext, ServiceContext},
 	dep::terraform::{self, output::read_k8s_cluster_aws},
@@ -129,18 +128,9 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 
 	let spec_type = match run_context {
 		RunContext::Service { .. } => match svc_ctx.config().kind {
-			ServiceKind::Headless { .. }
-			| ServiceKind::Consumer { .. }
-			| ServiceKind::Api { .. } => SpecType::Deployment,
+			ServiceKind::Headless { .. } | ServiceKind::Api { .. } => SpecType::Deployment,
 			ServiceKind::Oneshot { .. } => SpecType::Job,
 			ServiceKind::Periodic { .. } => SpecType::CronJob,
-			ServiceKind::Operation { .. }
-			| ServiceKind::Package { .. }
-			| ServiceKind::Database { .. }
-			| ServiceKind::Cache { .. }
-			| ServiceKind::ApiRoutes { .. } => {
-				unreachable!()
-			}
 		},
 		RunContext::Test { .. } => unreachable!(),
 	};
@@ -155,12 +145,12 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 				config::ns::ClusterKind::Distributed { .. } => true,
 			}) && matches!(
 		svc_ctx.config().kind,
-		ServiceKind::Headless { .. } | ServiceKind::Consumer { .. } | ServiceKind::Api { .. }
+		ServiceKind::Headless { .. } | ServiceKind::Api { .. }
 	);
 
 	let has_metrics = matches!(
 		svc_ctx.config().kind,
-		ServiceKind::Headless { .. } | ServiceKind::Consumer { .. } | ServiceKind::Api { .. }
+		ServiceKind::Headless { .. } | ServiceKind::Api { .. }
 	);
 
 	// Render env
@@ -329,10 +319,20 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			} else {
 				"IfNotPresent"
 			},
-			format!("/usr/bin/{}", svc_ctx.cargo_name().unwrap()),
+			format!("/usr/bin/{}", svc_ctx.cargo_name()),
 		),
 	};
-	let command = format!("/usr/bin/install_ca.sh && {exec}");
+
+	let args = svc_ctx
+		.config()
+		.build
+		.args
+		.iter()
+		.map(|x| format!("\"{x}\""))
+		.collect::<Vec<_>>()
+		.join(" ");
+
+	let command = format!("/usr/bin/install_ca.sh && {exec} {args}");
 
 	// Create resource limits
 	let ns_service_config = svc_ctx.ns_service_config().await;
@@ -452,12 +452,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 			}));
 		}
 		SpecType::CronJob => {
-			let ServiceKind::Periodic {
-				cron,
-				prohibit_overlap,
-				time_zone: _,
-			} = &svc_ctx.config().kind
-			else {
+			let ServiceKind::Periodic { cron } = &svc_ctx.config().kind else {
 				unreachable!()
 			};
 
@@ -467,13 +462,7 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 				"metadata": metadata,
 				"spec": {
 					"schedule": cron,
-					// Timezones are in alpha
-					// "timeZone": time_zone,
-					"concurrencyPolicy": if *prohibit_overlap {
-						"Forbid"
-					} else {
-						"Allow"
-					},
+					"concurrencyPolicy": "Forbid",
 					"jobTemplate": {
 						"spec": {
 							"template": pod_template
@@ -493,11 +482,10 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		ServiceKind::Headless {
 			singleton: false,
 			..
-		} | ServiceKind::Consumer { .. }
-			| ServiceKind::Api {
-				singleton: false,
-				..
-			}
+		} | ServiceKind::Api {
+			singleton: false,
+			..
+		}
 	) {
 		specs.push(json!({
 			"apiVersion": "autoscaling/v2",
@@ -604,8 +592,8 @@ async fn build_volumes(
 	exec_ctx: &ExecServiceContext,
 ) -> (Vec<serde_json::Value>, Vec<serde_json::Value>) {
 	let ExecServiceContext {
-		svc_ctx,
-		run_context,
+		svc_ctx: _,
+		run_context: _,
 		driver,
 	} = exec_ctx;
 
@@ -651,25 +639,7 @@ async fn build_volumes(
 	// Add Redis CA
 	match project_ctx.ns().redis.provider {
 		config::ns::RedisProvider::Kubernetes {} => {
-			let redis_deps = svc_ctx
-				.redis_dependencies(run_context)
-				.await
-				.iter()
-				.map(|redis_dep| {
-					if let config::service::RuntimeKind::Redis { persistent } =
-						redis_dep.config().runtime
-					{
-						if persistent {
-							"persistent"
-						} else {
-							"ephemeral"
-						}
-					} else {
-						unreachable!();
-					}
-				})
-				// IndexSet to avoid duplicates and keep order
-				.collect::<IndexSet<_>>();
+			let redis_deps = ["persistent", "ephemeral"];
 
 			volumes.extend(redis_deps.iter().map(|db| {
 				json!({
@@ -694,7 +664,7 @@ async fn build_volumes(
 				})
 			}));
 		}
-		config::ns::RedisProvider::Aws { .. } | config::ns::RedisProvider::Aiven { .. } => {
+		config::ns::RedisProvider::Aiven { .. } => {
 			// Uses publicly signed cert
 		}
 	}

@@ -6,7 +6,7 @@ use cluster::types::TlsState;
 const EXPIRE_PADDING: i64 = util::duration::days(30);
 
 pub async fn start() -> GlobalResult<()> {
-	let pools = rivet_pools::from_env("cluster-datacenter-tls-renew").await?;
+	let pools = rivet_pools::from_env().await?;
 
 	run_from_env(pools).await
 }

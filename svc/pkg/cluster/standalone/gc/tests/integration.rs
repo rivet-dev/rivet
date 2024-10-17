@@ -22,7 +22,7 @@ async fn basic() {
 		.init();
 
 	let ctx = TestCtx::from_env("cluster-gc-test").await;
-	let pools = rivet_pools::from_env("cluster-gc-test").await.unwrap();
+	let pools = rivet_pools::from_env().await.unwrap();
 
 	let (server_id, _) = setup(&ctx).await;
 

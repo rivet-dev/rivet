@@ -19,14 +19,14 @@ impl SubCommand {
 	pub async fn execute(self) -> Result<()> {
 		match self {
 			Self::Up { services: names } => {
-				let services = if names.is_empty() {
-					rivet_migrate::registry::get_all_services()
+				if names.is_empty() {
+					rivet_migrate::up_all().await?;
 				} else {
-					rivet_migrate::registry::get_services(
+					let services = rivet_migrate::registry::get_services(
 						&names.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
-					)
+					);
+					rivet_migrate::up(&services).await?;
 				};
-				rivet_migrate::up(&services).await?;
 			}
 			Self::Down { service, num } => {
 				let service =

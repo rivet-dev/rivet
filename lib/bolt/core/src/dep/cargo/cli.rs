@@ -9,31 +9,29 @@ use uuid::Uuid;
 
 use crate::context::ProjectContext;
 
+// TODO: Clean this up
 const DOCKERIGNORE: &str = indoc!(
 	r#"
 	*
-	# Rivet
+
 	!Bolt.toml
-	!infra/misc/svc_scripts
-	!oss/infra/misc/svc_scripts
-	!gen/docker
+	!Cargo.lock
+	!Cargo.toml
+	!errors
 	!gen/build_script.sh
+	!gen/docker
 	!gen/test_build_script.sh
-	sdks/runtime
-	oss/sdks/runtime
+	!infra/default-builds
+	!infra/misc/svc_scripts
 	!lib
-	!oss/lib
-	!svc
-	svc/**/*.md
-	!oss/svc
-	oss/svc/**/*.md
 	!proto
-	!oss/proto
-	!sdks/full/rust/src
 	!sdks/full/rust/Cargo.toml
-	!oss/sdks/full/rust/src
-	!oss/sdks/full/rust/Cargo.toml
-	!oss/errors
+	!sdks/full/rust/src
+	!src
+	!svc
+
+	sdks/runtime
+	svc/**/*.md
 	"#
 );
 
@@ -174,7 +172,7 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 					r#"
 					# syntax=docker/dockerfile:1.2
 
-					FROM rust:1.80.0-slim AS rust
+					FROM rust:1.81.0-slim AS rust
 
 					RUN apt-get update \
 					    && apt-get install --yes protobuf-compiler pkg-config libssl-dev g++ git libpq-dev wget \
@@ -194,7 +192,6 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 						--mount=type=cache,target=/usr/local/cargo/git \
 						--mount=type=cache,target=/usr/local/cargo/registry \
 						--mount=type=cache,target=/usr/rivet/target \
-						--mount=type=cache,target=/usr/rivet/oss/target \
 						chmod +x ./build_script.sh && sh -c ./build_script.sh && mkdir /usr/bin/rivet && find target/{optimization} -maxdepth 1 -type f ! -name "*.*" -exec mv {{}} /usr/bin/rivet/ \;
 					
 					# Create an empty image and copy binaries + test outputs to it (this is to minimize the
@@ -208,22 +205,8 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 			.await?;
 
 			// Check if we need to include default builds in the build context
-			let has_default_builds = opts
-				.build_calls
-				.iter()
-				.flat_map(|call| call.bins)
-				.any(|bin| bin.as_ref() == "build-default-create");
-
 			let dockerignore_path = gen_path.join("Dockerfile.build.dockerignore");
-			fs::write(
-				&dockerignore_path,
-				if has_default_builds {
-					format!("{DOCKERIGNORE}\n!infra/default-builds/\n!oss/infra/default-builds/")
-				} else {
-					DOCKERIGNORE.to_string()
-				},
-			)
-			.await?;
+			fs::write(&dockerignore_path, DOCKERIGNORE.to_string()).await?;
 
 			// Build image
 			let mut cmd = Command::new("docker");
@@ -270,7 +253,10 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 						FROM debian:12.1-slim AS run
 
 						# Update ca-certificates. Install curl for health checks.
-						RUN DEBIAN_FRONTEND=noninteractive apt-get update -y && apt-get install -y --no-install-recommends ca-certificates openssl curl
+						RUN DEBIAN_FRONTEND=noninteractive apt-get update -y && \
+							apt-get install -y --no-install-recommends ca-certificates openssl curl && \
+							curl -L https://github.com/golang-migrate/migrate/releases/download/v4.18.1/migrate.linux-amd64.tar.gz | tar xvz && \
+							mv migrate /usr/local/bin/migrate
 
 						# Copy supporting scripts
 						COPY {svc_scripts_path}/health_check.sh {svc_scripts_path}/install_ca.sh /usr/bin/
@@ -439,7 +425,7 @@ pub async fn build_tests<'a, T: AsRef<str>>(
 				r#"
 				# syntax=docker/dockerfile:1.2
 
-				FROM rust:1.80.0-slim AS build
+				FROM rust:1.81.0-slim AS build
 
 				RUN apt-get update && apt-get install -y protobuf-compiler pkg-config libssl-dev g++ git
 
@@ -463,7 +449,6 @@ pub async fn build_tests<'a, T: AsRef<str>>(
 					--mount=type=cache,target=/usr/local/cargo/git \
 					--mount=type=cache,target=/usr/local/cargo/registry \
 					--mount=type=cache,target=/usr/rivet/target \
-					--mount=type=cache,target=/usr/rivet/oss/target \
 					sh -c ./build_script.sh && mkdir /usr/bin/rivet && find target/{optimization}/deps -maxdepth 1 -type f ! -name "*.*" -exec mv {{}} /usr/bin/rivet/ \;
 				
 				FROM debian:12.1-slim AS run

@@ -12,7 +12,7 @@ chirp-client = { path = "../../../lib/chirp/client" }
 http = "0.2"
 hyper = { version = "0.14", features = ["server", "http1", "tcp"] }
 rivet-operation = { path = "../../../lib/operation/core" }
-tokio = { version = "1.29" }
+tokio = { version = "1.40" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = [
     "fmt",

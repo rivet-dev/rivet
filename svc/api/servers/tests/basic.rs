@@ -26,7 +26,7 @@ impl Ctx {
 				.init();
 		});
 
-		let pools = rivet_pools::from_env("api-servers-test").await?;
+		let pools = rivet_pools::from_env().await?;
 		let cache = rivet_cache::CacheInner::new(
 			"api-servers-test".to_string(),
 			util::env::var("RIVET_SOURCE_HASH")?,

@@ -10,11 +10,7 @@ use tokio::{fs, task::block_in_place};
 use toml_edit::value;
 use uuid::Uuid;
 
-use crate::{
-	config::{self, service::RuntimeKind},
-	context::ProjectContextData,
-	utils,
-};
+use crate::{config, context::ProjectContextData};
 
 /// Comment attached to the head of the namespace config.
 const NS_CONFIG_COMMENT: &str = r#"# Documentation: doc/bolt/config/NAMESPACE.md
@@ -278,25 +274,10 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 	let ctx = ProjectContextData::new(Some(ns_id.to_string())).await;
 
 	// MARK: Redis
-	for svc in ctx.all_services().await {
-		let RuntimeKind::Redis { persistent } = svc.config().runtime else {
-			continue;
-		};
-
-		let db_name = if persistent {
-			"persistent"
-		} else {
-			"ephemeral"
-		};
+	for db_name in ["persistent", "ephemeral"] {
 		let (db_name, username) = match &ctx.ns().redis.provider {
 			config::ns::RedisProvider::Kubernetes {} | config::ns::RedisProvider::Aiven { .. } => {
 				(db_name.to_string(), "default".to_string())
-			}
-			config::ns::RedisProvider::Aws {} => {
-				let db_name = format!("rivet-{}-{}", ctx.ns_id(), db_name);
-				let username = format!("{db_name}-root");
-
-				(db_name, username)
 			}
 		};
 
@@ -334,10 +315,6 @@ pub async fn generate(project_path: &Path, ns_id: &str) -> Result<()> {
 
 	// Write configs again with new secrets
 	generator.write().await?;
-
-	let mut event = utils::telemetry::build_event(&ctx, "bolt_config_generate").await?;
-	event.insert_prop("ns_id", ns_id)?;
-	utils::telemetry::capture_event(&ctx, event).await?;
 
 	eprintln!();
 	rivet_term::status::success(

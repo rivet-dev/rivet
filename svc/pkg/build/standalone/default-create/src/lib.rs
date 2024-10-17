@@ -4,63 +4,64 @@ use rivet_operation::prelude::*;
 use uuid::Uuid;
 
 const DEFAULT_BUILDS: &[DefaultBuildConfig] = &[
-	DefaultBuildConfig {
-		kind: "game-multiplayer",
-		tag: include_str!(
-			"../../../../../../infra/default-builds/outputs/game-multiplayer-tag.txt"
-		),
-		tar: include_bytes!("../../../../../../infra/default-builds/outputs/game-multiplayer.tar"),
-	},
-	DefaultBuildConfig {
-		kind: "test-fail-immediately",
-		tag: include_str!(
-			"../../../../../../infra/default-builds/outputs/test-fail-immediately-tag.txt"
-		),
-		tar: include_bytes!(
-			"../../../../../../infra/default-builds/outputs/test-fail-immediately.tar"
-		),
-	},
-	DefaultBuildConfig {
-		kind: "test-hang-indefinitely",
-		tag: include_str!(
-			"../../../../../../infra/default-builds/outputs/test-hang-indefinitely-tag.txt"
-		),
-		tar: include_bytes!(
-			"../../../../../../infra/default-builds/outputs/test-hang-indefinitely.tar"
-		),
-	},
-	DefaultBuildConfig {
-		kind: "test-mm-lobby-ready",
-		tag: include_str!(
-			"../../../../../../infra/default-builds/outputs/test-mm-lobby-ready-tag.txt"
-		),
-		tar: include_bytes!(
-			"../../../../../../infra/default-builds/outputs/test-mm-lobby-ready.tar"
-		),
-	},
-	DefaultBuildConfig {
-		kind: "test-mm-lobby-echo",
-		tag: include_str!(
-			"../../../../../../infra/default-builds/outputs/test-mm-lobby-echo-tag.txt"
-		),
-		tar: include_bytes!(
-			"../../../../../../infra/default-builds/outputs/test-mm-lobby-echo.tar"
-		),
-	},
-	DefaultBuildConfig {
-		kind: "test-mm-player-connect",
-		tag: include_str!(
-			"../../../../../../infra/default-builds/outputs/test-mm-player-connect-tag.txt"
-		),
-		tar: include_bytes!(
-			"../../../../../../infra/default-builds/outputs/test-mm-player-connect.tar"
-		),
-	},
-	DefaultBuildConfig {
-		kind: "test-ds-echo",
-		tag: include_str!("../../../../../../infra/default-builds/outputs/test-ds-echo-tag.txt"),
-		tar: include_bytes!("../../../../../../infra/default-builds/outputs/test-ds-echo.tar"),
-	},
+	// TODO: Add back
+	// DefaultBuildConfig {
+	// 	kind: "game-multiplayer",
+	// 	tag: include_str!(
+	// 		"../../../../../../infra/default-builds/outputs/game-multiplayer-tag.txt"
+	// 	),
+	// 	tar: include_bytes!("../../../../../../infra/default-builds/outputs/game-multiplayer.tar"),
+	// },
+	// DefaultBuildConfig {
+	// 	kind: "test-fail-immediately",
+	// 	tag: include_str!(
+	// 		"../../../../../../infra/default-builds/outputs/test-fail-immediately-tag.txt"
+	// 	),
+	// 	tar: include_bytes!(
+	// 		"../../../../../../infra/default-builds/outputs/test-fail-immediately.tar"
+	// 	),
+	// },
+	// DefaultBuildConfig {
+	// 	kind: "test-hang-indefinitely",
+	// 	tag: include_str!(
+	// 		"../../../../../../infra/default-builds/outputs/test-hang-indefinitely-tag.txt"
+	// 	),
+	// 	tar: include_bytes!(
+	// 		"../../../../../../infra/default-builds/outputs/test-hang-indefinitely.tar"
+	// 	),
+	// },
+	// DefaultBuildConfig {
+	// 	kind: "test-mm-lobby-ready",
+	// 	tag: include_str!(
+	// 		"../../../../../../infra/default-builds/outputs/test-mm-lobby-ready-tag.txt"
+	// 	),
+	// 	tar: include_bytes!(
+	// 		"../../../../../../infra/default-builds/outputs/test-mm-lobby-ready.tar"
+	// 	),
+	// },
+	// DefaultBuildConfig {
+	// 	kind: "test-mm-lobby-echo",
+	// 	tag: include_str!(
+	// 		"../../../../../../infra/default-builds/outputs/test-mm-lobby-echo-tag.txt"
+	// 	),
+	// 	tar: include_bytes!(
+	// 		"../../../../../../infra/default-builds/outputs/test-mm-lobby-echo.tar"
+	// 	),
+	// },
+	// DefaultBuildConfig {
+	// 	kind: "test-mm-player-connect",
+	// 	tag: include_str!(
+	// 		"../../../../../../infra/default-builds/outputs/test-mm-player-connect-tag.txt"
+	// 	),
+	// 	tar: include_bytes!(
+	// 		"../../../../../../infra/default-builds/outputs/test-mm-player-connect.tar"
+	// 	),
+	// },
+	// DefaultBuildConfig {
+	// 	kind: "test-ds-echo",
+	// 	tag: include_str!("../../../../../../infra/default-builds/outputs/test-ds-echo-tag.txt"),
+	// 	tar: include_bytes!("../../../../../../infra/default-builds/outputs/test-ds-echo.tar"),
+	// },
 ];
 
 struct DefaultBuildConfig {
@@ -74,7 +75,7 @@ struct DefaultBuildConfig {
 
 #[tracing::instrument]
 pub async fn start() -> GlobalResult<()> {
-	let pools = rivet_pools::from_env("build-default-create").await?;
+	let pools = rivet_pools::from_env().await?;
 	let client =
 		chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("build-default-create");
 	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;

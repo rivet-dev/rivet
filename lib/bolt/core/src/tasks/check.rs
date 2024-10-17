@@ -1,39 +1,10 @@
-use std::{collections::HashMap, path::Path, process::Command, sync::Arc};
-
 use rivet_term::console::style;
 use tokio::fs;
 
 use crate::{
-	context::{ProjectContext, ProjectContextData, ServiceContextData},
-	dep, tasks,
-	utils::{self, command_helper::CommandHelper},
+	context::{ProjectContext, ProjectContextData},
+	dep, utils,
 };
-
-pub async fn check_all(
-	ctx: &ProjectContext,
-	skip_build: bool,
-	skip_generate: bool,
-	skip_tests: bool,
-	skip_config_sync_check: bool,
-	validate_format: bool,
-) {
-	let all_svc_names = ctx
-		.all_services()
-		.await
-		.iter()
-		.map(|svc| svc.name())
-		.collect::<Vec<_>>();
-	check_service(
-		ctx,
-		&all_svc_names,
-		skip_build,
-		skip_generate,
-		skip_tests,
-		skip_config_sync_check,
-		validate_format,
-	)
-	.await;
-}
 
 /// Checks if the config and secrets files are in sync with 1Password.
 pub async fn check_config_sync(ctx: &ProjectContext) {

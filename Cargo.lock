@@ -4094,6 +4094,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fsevent-sys"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76ee7a02da4d231650c7cea31349b889be2f45ddb3ef3032d2ec8185f6313fd2"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "funty"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5578,6 +5587,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "job-runner"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "portpicker",
+ "serde",
+ "serde_json",
+ "signal-hook",
+ "tempfile",
+ "uuid",
+]
+
+[[package]]
 name = "js-sys"
 version = "0.3.70"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6792,6 +6814,7 @@ checksum = "6205bd8bb1e454ad2e27422015fb5e4f2bcc7e08fa8f27058670d208324a4d2d"
 dependencies = [
  "bitflags 2.6.0",
  "filetime",
+ "fsevent-sys",
  "inotify",
  "kqueue",
  "libc",
@@ -8056,7 +8079,12 @@ dependencies = [
  "pegboard-dc-init",
  "pegboard-gc",
  "pegboard-ws",
+ "rivet-health-checks",
+ "rivet-metrics",
  "rivet-migrate",
+ "rivet-pools",
+ "rivet-runtime",
+ "s3-util",
  "telemetry-beacon",
  "tokio",
  "tracing",
@@ -8171,6 +8199,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "rivet-cloud"
+version = "0.0.1"
+dependencies = [
+ "aws-smithy-client 0.41.0",
+ "aws-smithy-http 0.41.0",
+ "aws-smithy-json",
+ "aws-smithy-types 0.41.0",
+ "bytes",
+ "http 0.2.12",
+ "tower",
+]
+
+[[package]]
+name = "rivet-cloud-server"
+version = "0.0.1"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "rivet-connection"
 version = "0.1.0"
 dependencies = [
@@ -8279,6 +8329,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rivet-identity-server"
+version = "0.0.14"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "rivet-job"
 version = "0.0.1"
 dependencies = [
@@ -8311,6 +8370,15 @@ dependencies = [
  "bytes",
  "http 0.2.12",
  "tower",
+]
+
+[[package]]
+name = "rivet-kv-server"
+version = "0.0.8"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -8395,6 +8463,28 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.79",
+]
+
+[[package]]
+name = "rivet-party"
+version = "0.0.7"
+dependencies = [
+ "aws-smithy-client 0.41.0",
+ "aws-smithy-http 0.41.0",
+ "aws-smithy-json",
+ "aws-smithy-types 0.41.0",
+ "bytes",
+ "http 0.2.12",
+ "tower",
+]
+
+[[package]]
+name = "rivet-party-server"
+version = "0.0.7"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -8509,6 +8599,15 @@ name = "rivet-test-images"
 version = "0.1.0"
 dependencies = [
  "testcontainers",
+]
+
+[[package]]
+name = "rivet-traefik-provider-server"
+version = "0.0.1"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -8800,6 +8899,7 @@ dependencies = [
  "aws-smithy-http 0.52.0",
  "aws-smithy-types 0.52.0",
  "http 0.2.12",
+ "rivet-util",
  "thiserror",
  "tokio",
  "tracing",
@@ -9967,6 +10067,28 @@ checksum = "1e4129646ca0ed8f45d09b929036bafad5377103edd06e50bf574b353d2b08d9"
 dependencies = [
  "libc",
  "winapi",
+]
+
+[[package]]
+name = "test-ds-echo"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "futures-util",
+ "hyper 0.14.30",
+ "reqwest 0.11.27",
+ "tokio",
+ "tokio-util 0.7.12",
+]
+
+[[package]]
+name = "test-mm-lobby-echo"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "hyper 0.14.30",
+ "reqwest 0.11.27",
+ "tokio",
 ]
 
 [[package]]

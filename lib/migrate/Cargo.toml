@@ -11,7 +11,7 @@ indoc = "1.0"
 rivet-pools = { path = "../pools" }
 rivet-util = { path = "../util/core" }
 tempfile = "3.13.0"
-tokio = { version = "1.29", features = ["full"] }
+tokio = { version = "1.40", features = ["full"] }
 tracing = "0.1"
 url = "2.5.2"
 urlencoding = "2.1.3"

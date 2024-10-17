@@ -65,7 +65,7 @@ async fn basic_client() {
 	set_env_vars().await;
 
 	// Build client
-	let pools = rivet_pools::from_env("chirp-test").await.unwrap();
+	let pools = rivet_pools::from_env().await.unwrap();
 	let nats = pools.nats().unwrap();
 
 	let shared_client = chirp_client::SharedClient::new(

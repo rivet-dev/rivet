@@ -30,7 +30,7 @@ async fn test_kill_orphaned_job(ctx: TestCtx) {
 		return;
 	}
 
-	let pools = rivet_pools::from_env("job-gc-test").await.unwrap();
+	let pools = rivet_pools::from_env().await.unwrap();
 
 	// Run the job
 	let run_res = op!([ctx] faker_job_run {}).await.unwrap();

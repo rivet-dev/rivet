@@ -16,9 +16,7 @@ async fn basic() {
 		.init();
 
 	let _ctx = TestCtx::from_env("cluster-datacenter-tls-renew-test").await;
-	let _pools = rivet_pools::from_env("cluster-datacenter-tls-renew-test")
-		.await
-		.unwrap();
+	let _pools = rivet_pools::from_env().await.await.unwrap();
 
 	// TODO:
 }

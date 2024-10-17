@@ -10,9 +10,7 @@ use tokio::{net::TcpStream, sync::Mutex};
 use crate::context::ProjectContext;
 
 pub mod command_helper;
-pub mod db_conn;
 pub mod media_resize;
-pub mod telemetry;
 
 pub fn progress_bar(len: usize) -> ProgressBar {
 	let pb = ProgressBar::new(len as u64);

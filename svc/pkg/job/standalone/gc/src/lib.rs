@@ -30,19 +30,7 @@ pub const CHECK_ORPHANED_JOB_THRESHOLD: i64 = util::duration::hours(1);
 pub async fn start() -> GlobalResult<()> {
 	// TODO: Handle ctrl-c
 
-	let pools = rivet_pools::from_env("job-gc").await?;
-
-	tokio::task::Builder::new()
-		.name("job_gc::health_checks")
-		.spawn(rivet_health_checks::run_standalone(
-			rivet_health_checks::Config {
-				pools: Some(pools.clone()),
-			},
-		))?;
-
-	tokio::task::Builder::new()
-		.name("job_gc::metrics")
-		.spawn(rivet_metrics::run_standalone())?;
+	let pools = rivet_pools::from_env().await?;
 
 	let mut interval = tokio::time::interval(std::time::Duration::from_secs(60 * 15));
 	loop {

@@ -27,20 +27,36 @@ struct Cli {
 enum SubCommand {
 	/// Starts the Rivet server
 	Server(server::Opts),
+	/// Provisions all of the required resources to run Rivet.
+	///
+	/// If you need to provision specific parts, use the `rivet db migrate up` and `rivet storage
+	/// provision` commands.
+	Provision(provision::Opts),
 	/// Manages databases
 	#[clap(alias = "db")]
 	Database {
 		#[clap(subcommand)]
 		command: db::SubCommand,
 	},
+	/// Manages buckets
+	Storage {
+		#[clap(subcommand)]
+		command: storage::SubCommand,
+	},
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
-	let cli = Cli::parse();
+fn main() -> Result<()> {
+	rivet_runtime::run(async { main_inner().await })??;
+	Ok(())
+}
 
+async fn main_inner() -> Result<()> {
+	// Run command
+	let cli = Cli::parse();
 	match cli.command {
 		SubCommand::Server(opts) => opts.execute().await,
+		SubCommand::Provision(opts) => opts.execute().await,
 		SubCommand::Database { command } => command.execute().await,
+		SubCommand::Storage { command } => command.execute().await,
 	}
 }

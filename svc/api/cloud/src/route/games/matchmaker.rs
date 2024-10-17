@@ -94,18 +94,8 @@ pub async fn export_history(
 	.await?;
 	let upload = unwrap!(upload_res.uploads.first(), "upload not found");
 
-	let proto_provider = unwrap!(
-		backend::upload::Provider::from_i32(upload.provider),
-		"invalid upload provider"
-	);
-	let provider = match proto_provider {
-		backend::upload::Provider::Minio => s3_util::Provider::Minio,
-		backend::upload::Provider::Backblaze => s3_util::Provider::Backblaze,
-		backend::upload::Provider::Aws => s3_util::Provider::Aws,
-	};
 	let s3_client = s3_util::Client::from_env_opt(
 		"bucket-lobby-history-export",
-		provider,
 		s3_util::EndpointKind::External,
 	)
 	.await?;
@@ -206,7 +196,9 @@ pub async fn get_lobby_logs(
 
 			// Timeout cleanly
 			if query_start.elapsed().as_millis() > util::watch::DEFAULT_TIMEOUT as u128 {
-				break job_log::read::Response { entries: Vec::new() };
+				break job_log::read::Response {
+					entries: Vec::new(),
+				};
 			}
 
 			// Throttle request
@@ -305,21 +297,9 @@ pub async fn export_lobby_logs(
 		backend::job::log::StreamType::StdErr => "stderr.txt",
 	};
 
-	let proto_provider = unwrap!(
-		backend::upload::Provider::from_i32(upload.provider),
-		"invalid upload provider"
-	);
-	let provider = match proto_provider {
-		backend::upload::Provider::Minio => s3_util::Provider::Minio,
-		backend::upload::Provider::Backblaze => s3_util::Provider::Backblaze,
-		backend::upload::Provider::Aws => s3_util::Provider::Aws,
-	};
-	let s3_client = s3_util::Client::from_env_opt(
-		"bucket-job-log-export",
-		provider,
-		s3_util::EndpointKind::External,
-	)
-	.await?;
+	let s3_client =
+		s3_util::Client::from_env_opt("bucket-job-log-export", s3_util::EndpointKind::External)
+			.await?;
 	let presigned_req = s3_client
 		.get_object()
 		.bucket(s3_client.bucket())

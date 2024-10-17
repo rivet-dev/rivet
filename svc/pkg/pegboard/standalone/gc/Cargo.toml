@@ -13,7 +13,7 @@ rivet-connection = { path = "../../../../../lib/connection" }
 rivet-health-checks = { path = "../../../../../lib/health-checks" }
 rivet-metrics = { path = "../../../../../lib/metrics" }
 rivet-runtime = { path = "../../../../../lib/runtime" }
-tokio = { version = "1.29", features = ["full"] }
+tokio = { version = "1.40", features = ["full"] }
 tracing = "0.1"
 tracing-logfmt = "0.3"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }

@@ -32,7 +32,7 @@ async fn all() {
 }
 
 async fn remove_unready_lobbies(ctx: TestCtx) {
-	let pools = rivet_pools::from_env("mm-gc-test").await.unwrap();
+	let pools = rivet_pools::from_env().await.unwrap();
 
 	let lobby = op!([ctx] faker_mm_lobby {
 		skip_set_ready: true,
@@ -92,7 +92,7 @@ async fn remove_unready_lobbies(ctx: TestCtx) {
 }
 
 async fn remove_unregistered_players(ctx: TestCtx) {
-	let pools = rivet_pools::from_env("mm-gc-test").await.unwrap();
+	let pools = rivet_pools::from_env().await.unwrap();
 
 	let lobby = op!([ctx] faker_mm_lobby {
 		..Default::default()
@@ -178,7 +178,7 @@ async fn remove_unregistered_players(ctx: TestCtx) {
 }
 
 async fn remove_auto_remove_players(ctx: TestCtx) {
-	let pools = rivet_pools::from_env("mm-gc-test").await.unwrap();
+	let pools = rivet_pools::from_env().await.unwrap();
 
 	let lobby = op!([ctx] faker_mm_lobby {
 		..Default::default()

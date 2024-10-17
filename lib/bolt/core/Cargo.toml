@@ -45,7 +45,7 @@ strum = { version = "0.26", features = ["derive"] }
 tabled = { version = "0.16.0", features = ["ansi"] }
 tempfile = "3.2"
 thiserror = "1.0"
-tokio = { version = "1.29", features = ["full"] }
+tokio = { version = "1.40", features = ["full"] }
 toml = "0.7"
 toml_edit = "0.19"
 url = "2.3"

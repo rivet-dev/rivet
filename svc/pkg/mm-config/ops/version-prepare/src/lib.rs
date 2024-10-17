@@ -65,12 +65,11 @@ async fn handle(
 			.actions
 			.as_ref()
 			.and_then(|a| a.create.as_ref())
-			.is_some()
-			|| lobby_group.regions.iter().any(|x| {
-				x.idle_lobbies
-					.as_ref()
-					.map_or(true, |y| y.min_idle_lobbies == 0)
-			});
+			.is_some() || lobby_group.regions.iter().any(|x| {
+			x.idle_lobbies
+				.as_ref()
+				.map_or(true, |y| y.min_idle_lobbies == 0)
+		});
 
 		// Prepare runtime
 		let runtime = unwrap_ref!(lobby_group.runtime);
@@ -184,22 +183,10 @@ async fn validate_build(
 	let upload_id = unwrap_ref!(upload.upload_id).as_uuid();
 	ensure!(upload.complete_ts.is_some(), "build upload is not complete");
 
-	// Parse provider
-	let proto_provider = unwrap!(
-		backend::upload::Provider::from_i32(upload.provider),
-		"invalid upload provider"
-	);
-	let provider = match proto_provider {
-		backend::upload::Provider::Minio => s3_util::Provider::Minio,
-		backend::upload::Provider::Backblaze => s3_util::Provider::Backblaze,
-		backend::upload::Provider::Aws => s3_util::Provider::Aws,
-	};
-
 	// Generate path used to request the image
 	if needs_ats_prewarm {
 		let path = format!(
-			"/s3-cache/{provider}/{namespace}-bucket-build/{upload_id}/{file_name}",
-			provider = heck::KebabCase::to_kebab_case(provider.as_str()),
+			"/s3-cache/{namespace}-bucket-build/{upload_id}/{file_name}",
 			namespace = util::env::namespace(),
 			file_name = util_build::file_name(build_kind, build_compression),
 		);

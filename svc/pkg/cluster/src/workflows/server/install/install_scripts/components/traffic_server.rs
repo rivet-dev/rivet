@@ -1,6 +1,5 @@
 use chirp_workflow::prelude::*;
 use include_dir::{include_dir, Dir};
-use s3_util::Provider;
 
 use super::s3;
 
@@ -64,22 +63,8 @@ async fn config() -> GlobalResult<Vec<(String, String)>> {
 
 	// Remap & S3
 	let mut remap = String::new();
-	let default_s3_provider = Provider::default()?;
-	if s3_util::s3_provider_active("bucket-build", Provider::Minio) {
-		let output = s3::gen_provider(Provider::Minio, default_s3_provider).await?;
-		remap.push_str(&output.append_remap);
-		config_files.extend(output.config_files);
-	}
-	if s3_util::s3_provider_active("bucket-build", Provider::Backblaze) {
-		let output = s3::gen_provider(Provider::Backblaze, default_s3_provider).await?;
-		remap.push_str(&output.append_remap);
-		config_files.extend(output.config_files);
-	}
-	if s3_util::s3_provider_active("bucket-build", Provider::Aws) {
-		let output = s3::gen_provider(Provider::Aws, default_s3_provider).await?;
-		remap.push_str(&output.append_remap);
-		config_files.extend(output.config_files);
-	}
+	let output = s3::gen_remap().await?;
+	config_files.extend(output.config_files);
 	config_files.push(("remap.config".to_string(), remap));
 
 	Ok(config_files)

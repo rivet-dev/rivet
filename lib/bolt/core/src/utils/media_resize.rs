@@ -1,6 +1,5 @@
 const UUID_V4_REGEXP: &str = "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
 
-// TODO: Update to support multiple S3 providers
 pub struct ResizePreset {
 	ns: String,
 	name: String,

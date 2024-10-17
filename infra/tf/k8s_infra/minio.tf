@@ -1,5 +1,5 @@
 locals {
-	has_minio = can(var.s3_providers["minio"])
+	has_minio = var.s3.provider == "minio"
 	service_minio = lookup(var.services, "minio", {
 		count = 1
 		resources = {
@@ -22,7 +22,7 @@ module "minio_secrets" {
 
 	source = "../modules/secrets"
 
-	keys = ["s3/minio/root/key_id", "s3/minio/root/key"]
+	keys = ["s3/root/key_id", "s3/root/key"]
 	optional = true
 }
 
@@ -49,8 +49,8 @@ resource "helm_release" "minio" {
 		} : null
 
 		auth = {
-			rootUser = module.minio_secrets[0].values["s3/minio/root/key_id"]
-			rootPassword = module.minio_secrets[0].values["s3/minio/root/key"]
+			rootUser = module.minio_secrets[0].values["s3/root/key_id"]
+			rootPassword = module.minio_secrets[0].values["s3/root/key"]
 		}
 		service = {
 			# Expose as LB so it can be accessed from the host if needed

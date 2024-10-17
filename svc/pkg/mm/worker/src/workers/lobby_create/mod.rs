@@ -762,9 +762,6 @@ async fn resolve_job_runner_binary_url(
 	ctx: &OperationContext<mm::msg::lobby_create::Message>,
 	region: &backend::region::Region,
 ) -> GlobalResult<String> {
-	// Get provider
-	let provider = s3_util::Provider::default()?;
-
 	let file_name = std::env::var("JOB_RUNNER_BINARY_KEY")?;
 
 	// Build URL
@@ -779,7 +776,6 @@ async fn resolve_job_runner_binary_url(
 			// Build client
 			let s3_client = s3_util::Client::from_env_opt(
 				"bucket-infra-artifacts",
-				provider,
 				s3_util::EndpointKind::External,
 			)
 			.await?;
@@ -835,9 +831,8 @@ async fn resolve_job_runner_binary_url(
 			.await?;
 
 			let addr = format!(
-				"http://{vlan_ip}:8080/s3-cache/{provider}/{namespace}-bucket-infra-artifacts/{file_name}",
+				"http://{vlan_ip}:8080/s3-cache/{namespace}-bucket-infra-artifacts/{file_name}",
 				vlan_ip = ats_vlan_ip,
-				provider = heck::KebabCase::to_kebab_case(provider.as_str()),
 				namespace = util::env::namespace(),
 			);
 
@@ -872,17 +867,6 @@ async fn resolve_image_artifact_url(
 	.await?;
 	let upload = unwrap!(upload_res.uploads.first());
 
-	// Get provider
-	let proto_provider = unwrap!(
-		backend::upload::Provider::from_i32(upload.provider),
-		"invalid upload provider"
-	);
-	let provider = match proto_provider {
-		backend::upload::Provider::Minio => s3_util::Provider::Minio,
-		backend::upload::Provider::Backblaze => s3_util::Provider::Backblaze,
-		backend::upload::Provider::Aws => s3_util::Provider::Aws,
-	};
-
 	let file_name = util_build::file_name(build_kind, build_compression);
 
 	let mm_lobby_delivery_method = unwrap!(
@@ -897,8 +881,7 @@ async fn resolve_image_artifact_url(
 
 			// Build client
 			let s3_client =
-				s3_util::Client::from_env_opt(bucket, provider, s3_util::EndpointKind::External)
-					.await?;
+				s3_util::Client::from_env_opt(bucket, s3_util::EndpointKind::External).await?;
 
 			let upload_id = unwrap_ref!(upload.upload_id).as_uuid();
 			let presigned_req = s3_client
@@ -963,9 +946,8 @@ async fn resolve_image_artifact_url(
 
 			let upload_id = unwrap_ref!(upload.upload_id).as_uuid();
 			let addr = format!(
-				"http://{vlan_ip}:8080/s3-cache/{provider}/{namespace}-bucket-build/{upload_id}/{file_name}",
+				"http://{vlan_ip}:8080/s3-cache/{namespace}-bucket-build/{upload_id}/{file_name}",
 				vlan_ip = ats_vlan_ip,
-				provider = heck::KebabCase::to_kebab_case(provider.as_str()),
 				namespace = util::env::namespace(),
 				upload_id = upload_id,
 			);

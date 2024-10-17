@@ -1,3 +1,6 @@
+use anyhow::*;
+use bolt_config::ns::S3Provider;
+use sha2::{Digest, Sha256};
 use std::{
 	collections::{HashMap, HashSet},
 	path::{Path, PathBuf},
@@ -5,12 +8,9 @@ use std::{
 	str::FromStr,
 	sync::{Arc, Weak},
 };
-
-use anyhow::*;
-use sha2::{Digest, Sha256};
 use tokio::{fs, sync::Mutex};
 
-use super::{RunContext, ServiceContext};
+use super::{ServiceContext, ServiceContextData};
 use crate::{config, context, dep::terraform, utils::command_helper::CommandHelper};
 
 pub type ProjectContext = Arc<ProjectContextData>;
@@ -23,7 +23,7 @@ pub struct ProjectContextData {
 	ns_config: config::ns::Namespace,
 	cache: Mutex<config::cache::Cache>,
 	secrets: serde_json::Value,
-	svc_ctxs: Vec<context::service::ServiceContext>,
+	svc_ctxs_sorted: Vec<context::service::ServiceContext>,
 	svc_ctxs_map: HashMap<String, context::service::ServiceContext>,
 
 	source_hash: String,
@@ -110,26 +110,8 @@ impl ProjectContextData {
 		)
 		.await;
 
-		let mut svc_ctxs_map = HashMap::new();
-
-		let mut source_diff = Vec::new();
-
-		// Load sub projects
-		for (_, additional_root) in &config.additional_roots {
-			let path = project_root.join(&additional_root.path);
-			Self::load_root_dir(&mut svc_ctxs_map, path.clone()).await;
-
-			// Compute the git diff between the current branch and the local changes
-			source_diff.extend(&get_source_diff(&path).await.unwrap());
-		}
-
-		// Load main project after sub projects so it overrides sub project services
-		Self::load_root_dir(&mut svc_ctxs_map, project_root.clone()).await;
-
-		// Compute the git diff between the current branch and the local changes
-		source_diff.extend(&get_source_diff(&project_root).await.unwrap());
-
 		// If there is no diff, use the git commit hash
+		let source_diff = get_source_diff(&project_root).await.unwrap();
 		let source_hash = if source_diff.is_empty() {
 			let mut cmd = Command::new("git");
 			cmd.current_dir(&project_root).arg("rev-parse").arg("HEAD");
@@ -145,8 +127,16 @@ impl ProjectContextData {
 			hex::encode(Sha256::digest(source_diff))
 		};
 
-		let mut svc_ctxs = svc_ctxs_map.values().cloned().collect::<Vec<_>>();
-		svc_ctxs.sort_by_key(|v| v.name());
+		// Build services
+		let mut svc_ctxs_map = HashMap::new();
+		for (name, service) in &config.services {
+			let data = ServiceContextData::new(Weak::new(), service.clone());
+			svc_ctxs_map.insert(name.clone(), Arc::new(data));
+		}
+
+		// Build sorted list of services for consistent execution order
+		let mut svc_ctxs_sorted = svc_ctxs_map.values().cloned().collect::<Vec<_>>();
+		svc_ctxs_sorted.sort_by_key(|v| v.name());
 
 		// Create project
 		let ctx = Arc::new(ProjectContextData {
@@ -157,7 +147,7 @@ impl ProjectContextData {
 			ns_config,
 			secrets,
 			cache: Mutex::new(cache),
-			svc_ctxs,
+			svc_ctxs_sorted,
 			svc_ctxs_map,
 
 			source_hash,
@@ -166,7 +156,7 @@ impl ProjectContextData {
 		ctx.validate_ns();
 
 		// Assign references to all services after we're done
-		for svc in &ctx.svc_ctxs {
+		for (_, svc) in &ctx.svc_ctxs_map {
 			svc.set_project(Arc::downgrade(&ctx)).await;
 		}
 
@@ -429,106 +419,6 @@ impl ProjectContextData {
 }
 
 impl ProjectContextData {
-	async fn load_root_dir(
-		svc_ctxs_map: &mut HashMap<String, context::service::ServiceContext>,
-		path: PathBuf,
-	) {
-		let workspace_path = path.join("svc");
-
-		// APIs
-		Self::load_services_dir(svc_ctxs_map, &workspace_path, workspace_path.join("api")).await;
-
-		// Packages
-		let pkgs_path = workspace_path.join("pkg");
-		let mut pkg_dir = fs::read_dir(&pkgs_path).await.unwrap();
-		while let Some(pkg) = pkg_dir.next_entry().await.unwrap() {
-			// Check if pkg-level service config exists
-			if fs::metadata(pkg.path().join("Service.toml")).await.is_ok() {
-				// Load the directory as a single crate
-				let svc_ctx = context::service::ServiceContextData::from_path(
-					Weak::new(),
-					svc_ctxs_map,
-					&workspace_path,
-					&pkg.path(),
-				)
-				.await
-				.unwrap();
-
-				svc_ctxs_map.insert(svc_ctx.name(), svc_ctx.clone());
-			}
-
-			// Read worker
-			let worker_path = pkg.path().join("worker");
-			if fs::metadata(&worker_path.join("Service.toml"))
-				.await
-				.is_ok()
-			{
-				// Load the service
-				let svc_ctx = context::service::ServiceContextData::from_path(
-					Weak::new(),
-					svc_ctxs_map,
-					&workspace_path,
-					&worker_path,
-				)
-				.await
-				.unwrap();
-				svc_ctxs_map.insert(svc_ctx.name(), svc_ctx.clone());
-			}
-
-			// Load all individual ops
-			let ops_path = pkg.path().join("ops");
-			if fs::metadata(&ops_path).await.is_ok() {
-				Self::load_services_dir(svc_ctxs_map, &workspace_path, ops_path).await;
-			}
-
-			// Read standalone
-			Self::load_services_dir(svc_ctxs_map, &workspace_path, pkg.path().join("standalone"))
-				.await;
-
-			// Read dbs
-			Self::load_services_dir(svc_ctxs_map, &workspace_path, pkg.path().join("db")).await;
-
-			// Read buckets
-			Self::load_services_dir(svc_ctxs_map, &workspace_path, pkg.path().join("buckets"))
-				.await;
-		}
-	}
-
-	async fn load_services_dir(
-		svc_ctxs_map: &mut HashMap<String, context::service::ServiceContext>,
-		workspace_path: &Path,
-		path: PathBuf,
-	) {
-		if !path.exists() {
-			return;
-		}
-
-		let mut dir = fs::read_dir(path).await.unwrap();
-		while let Some(entry) = dir.next_entry().await.unwrap() {
-			// Check if service config exists
-			if fs::metadata(entry.path().join("Service.toml"))
-				.await
-				.is_err()
-			{
-				continue;
-			}
-
-			// Load the service
-			let svc_ctx = context::service::ServiceContextData::from_path(
-				Weak::new(),
-				svc_ctxs_map,
-				workspace_path,
-				&entry.path(),
-			)
-			.await
-			.unwrap();
-
-			svc_ctxs_map.insert(svc_ctx.name(), svc_ctx.clone());
-		}
-	}
-}
-
-impl ProjectContextData {
 	async fn read_config(project_path: &Path) -> config::project::Project {
 		let config_path = project_path.join("Bolt.toml");
 		let config_str = fs::read_to_string(config_path).await.unwrap();
@@ -580,14 +470,6 @@ impl ProjectContextData {
 				}
 			}
 		};
-
-		// Verify s3 config
-		if config.s3.providers.minio.is_none()
-			&& config.s3.providers.backblaze.is_none()
-			&& config.s3.providers.aws.is_none()
-		{
-			panic!("expected at least one s3 provider");
-		}
 
 		config
 	}
@@ -665,7 +547,7 @@ impl ProjectContextData {
 	}
 
 	pub async fn all_services(&self) -> &[ServiceContext] {
-		self.svc_ctxs.as_slice()
+		self.svc_ctxs_sorted.as_slice()
 	}
 
 	pub async fn service_with_name(
@@ -722,72 +604,6 @@ impl ProjectContextData {
 			}
 		}
 		svc_ctxs
-	}
-
-	pub async fn recursive_dependencies_with_pattern(
-		self: &Arc<Self>,
-		svc_names: &[impl AsRef<str>],
-		run_context: &RunContext,
-	) -> Vec<ServiceContext> {
-		let svc_names = self
-			.services_with_patterns(svc_names)
-			.await
-			.iter()
-			.map(|x| x.name())
-			.collect::<Vec<String>>();
-		self.recursive_dependencies(svc_names.as_slice(), run_context)
-			.await
-	}
-
-	pub async fn recursive_dependencies(
-		self: &Arc<Self>,
-		svc_names: &[impl AsRef<str>],
-		run_context: &RunContext,
-	) -> Vec<ServiceContext> {
-		// Fetch core services
-		let mut all_svc = self.services_with_names(&svc_names).await;
-
-		// Add all dependencies
-		let mut first_iter = true; // If this is the first recursive iteration
-		let mut pending_deps = all_svc.clone(); // Services whose dependencies still need to be processed
-		while !pending_deps.is_empty() {
-			// Find all new dependencies
-			let mut new_deps = Vec::<ServiceContext>::new();
-			for svc_ctx in &pending_deps {
-				let dependencies = if first_iter {
-					// Use the provided run context for the root services
-					svc_ctx.dependencies(run_context).await
-				} else {
-					// Use `Service` context for recursive dependencies. If we recursively use the `Test` run
-					// context recursively, we'll get all of the dev-dependencies and likely get circular
-					// dependencies.
-					svc_ctx.dependencies(&RunContext::Service {}).await
-				};
-
-				for dep_ctx in dependencies {
-					// Check if dependency is already registered
-					if !all_svc.iter().any(|d| d.name() == dep_ctx.name()) {
-						all_svc.push(dep_ctx.clone());
-						new_deps.push(dep_ctx.clone());
-					}
-				}
-			}
-
-			// Save new pending dep list
-			pending_deps = new_deps;
-			first_iter = false;
-		}
-
-		all_svc
-	}
-
-	pub async fn services_with_migrations(&self) -> Vec<ServiceContext> {
-		self.all_services()
-			.await
-			.iter()
-			.filter(|x| x.has_migrations())
-			.cloned()
-			.collect::<Vec<_>>()
 	}
 }
 
@@ -1014,61 +830,18 @@ pub struct S3Config {
 }
 
 impl ProjectContextData {
-	pub fn default_s3_provider(
-		self: &Arc<Self>,
-	) -> Result<(s3_util::Provider, config::ns::S3Provider)> {
-		let providers = &self.ns().s3.providers;
-
-		// Find the provider with the default flag set
-		if let Some(p) = &providers.minio {
-			if p.default {
-				return Ok((s3_util::Provider::Minio, p.clone()));
-			}
-		}
-
-		if let Some(p) = &providers.backblaze {
-			if p.default {
-				return Ok((s3_util::Provider::Backblaze, p.clone()));
-			}
-		}
-
-		if let Some(p) = &providers.aws {
-			if p.default {
-				return Ok((s3_util::Provider::Aws, p.clone()));
-			}
-		}
-
-		// If none have the default flag, return the first provider
-		if let Some(p) = &providers.minio {
-			return Ok((s3_util::Provider::Minio, p.clone()));
-		} else if let Some(p) = &providers.backblaze {
-			return Ok((s3_util::Provider::Backblaze, p.clone()));
-		} else if let Some(p) = &providers.aws {
-			return Ok((s3_util::Provider::Aws, p.clone()));
-		}
-
-		bail!("no s3 provider configured")
-	}
-
 	/// Returns the appropriate S3 connection configuration for the provided S3 provider.
-	pub async fn s3_credentials(
-		self: &Arc<Self>,
-		provider: s3_util::Provider,
-	) -> Result<S3Credentials> {
+	pub async fn s3_credentials(self: &Arc<Self>) -> Result<S3Credentials> {
 		Ok(S3Credentials {
-			access_key_id: self
-				.read_secret(&["s3", provider.as_str(), "terraform", "key_id"])
-				.await?,
-			access_key_secret: self
-				.read_secret(&["s3", provider.as_str(), "terraform", "key"])
-				.await?,
+			access_key_id: self.read_secret(&["s3", "terraform", "key_id"]).await?,
+			access_key_secret: self.read_secret(&["s3", "terraform", "key"]).await?,
 		})
 	}
 
 	/// Returns the appropriate S3 connection configuration for the provided S3 provider.
-	pub async fn s3_config(self: &Arc<Self>, provider: s3_util::Provider) -> Result<S3Config> {
-		match provider {
-			s3_util::Provider::Minio => {
+	pub async fn s3_config(self: &Arc<Self>) -> Result<S3Config> {
+		match &self.ns().s3.provider {
+			S3Provider::Minio => {
 				Ok(S3Config {
 					endpoint_internal: "http://minio.minio.svc.cluster.local:9000".into(),
 					// Use localhost if DNS is not configured
@@ -1078,17 +851,7 @@ impl ProjectContextData {
 					region: "us-east-1".into(),
 				})
 			}
-			s3_util::Provider::Backblaze => {
-				let endpoint = "https://s3.us-west-004.backblazeb2.com".to_string();
-				Ok(S3Config {
-					endpoint_internal: endpoint.clone(),
-					endpoint_external: endpoint,
-					// See region information here:
-					// https://help.backblaze.com/hc/en-us/articles/360047425453-Getting-Started-with-the-S3-Compatible-API
-					region: "us-west-004".into(),
-				})
-			}
-			s3_util::Provider::Aws => {
+			S3Provider::Aws => {
 				let endpoint = "https://s3.us-east-1.amazonaws.com".to_string();
 				Ok(S3Config {
 					endpoint_internal: endpoint.clone(),
@@ -1232,6 +995,19 @@ impl ProjectContextData {
 }
 
 async fn get_source_diff(path: &Path) -> Result<Vec<u8>> {
+	// Get diff for this repo
+	let mut result = get_diff_for_path(path).await?;
+
+	// Also get diff for all submodules
+	let submodules = get_submodules(path).await?;
+	for submodule in submodules {
+		result.extend(get_diff_for_path(&submodule).await?);
+	}
+
+	Ok(result)
+}
+
+async fn get_diff_for_path(path: &Path) -> Result<Vec<u8>> {
 	use tokio::io::AsyncReadExt;
 	use tokio::process::Command;
 
@@ -1260,11 +1036,35 @@ async fn get_source_diff(path: &Path) -> Result<Vec<u8>> {
 			let mut file_content = Vec::new();
 			tokio::fs::File::open(path.join(file))
 				.await?
-				.read(&mut file_content)
+				.read_to_end(&mut file_content)
 				.await?;
 			result.extend(file_content);
 		}
 	}
 
 	Ok(result)
+}
+
+async fn get_submodules(path: &Path) -> Result<Vec<PathBuf>> {
+	let mut submodule_cmd = Command::new("git");
+	submodule_cmd
+		.current_dir(path)
+		.args(&["submodule", "status", "--recursive"]);
+
+	let submodule_output = submodule_cmd
+		.exec_string_with_err("Command failed", true)
+		.await?
+		.trim()
+		.to_string();
+
+	let paths = submodule_output
+		.lines()
+		.filter_map(|line| {
+			line.split_whitespace()
+				.nth(1)
+				.map(|submodule_path| path.join(submodule_path))
+		})
+		.collect();
+
+	Ok(paths)
 }

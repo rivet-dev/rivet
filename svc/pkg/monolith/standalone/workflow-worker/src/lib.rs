@@ -1,7 +1,7 @@
 use chirp_workflow::prelude::*;
 
 pub async fn start() -> GlobalResult<()> {
-	let pools = rivet_pools::from_env("monolith-workflow-worker").await?;
+	let pools = rivet_pools::from_env().await?;
 
 	run_from_env(pools).await?;
 

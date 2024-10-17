@@ -101,30 +101,25 @@ fn update_compile_opts(mut base: schemac::CompileOpts) -> io::Result<schemac::Co
 }
 
 fn seek_project_roots() -> io::Result<Vec<PathBuf>> {
-	// Find project root
-	let mut project_root = std::env::current_dir()?;
-	loop {
-		if project_root.join("Bolt.toml").exists() {
-			// Found project root
-			break;
-		} else if let Some(parent) = project_root.parent() {
-			project_root = parent.to_owned();
-		} else {
-			panic!("could not find project root");
-		}
-	}
-
-	// Read project roots
-	let bolt_toml = fs::read_to_string(project_root.join("Bolt.toml"))?;
-	let project_config = bolt_config::project::decode(&bolt_toml)
-		.map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
-
-	let mut roots = vec![project_root.clone()];
-	for (_, additional_root) in project_config.additional_roots.iter() {
-		roots.push(project_root.join(&additional_root.path));
-	}
-
-	Ok(roots)
+    let mut current_dir = std::env::current_dir()?;
+    loop {
+        if current_dir.join("Cargo.toml").exists() {
+            // Check if this Cargo.toml is a workspace root
+            let cargo_toml = std::fs::read_to_string(current_dir.join("Cargo.toml"))?;
+            if cargo_toml.contains("[workspace]") {
+                return Ok(vec![current_dir]);
+            }
+        }
+        
+        if let Some(parent) = current_dir.parent() {
+            current_dir = parent.to_owned();
+        } else {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "Could not find workspace Cargo.toml",
+            ));
+        }
+    }
 }
 
 fn find_all_proto(path: &Path) -> io::Result<Vec<PathBuf>> {

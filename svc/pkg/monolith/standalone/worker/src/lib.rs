@@ -1,7 +1,7 @@
 use rivet_operation::prelude::*;
 
 pub async fn start() -> GlobalResult<()> {
-	let pools = rivet_pools::from_env("monolith-worker").await?;
+	let pools = rivet_pools::from_env().await?;
 
 	run_from_env(pools).await?;
 

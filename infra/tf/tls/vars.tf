@@ -36,12 +36,13 @@ variable "kubeconfig_path" {
 }
 
 # MARK: S3
-variable "s3_providers" {
-	type = map(object({
+variable "s3" {
+	type = object({
+		provider = string
 		endpoint_internal = string
 		endpoint_external = string
 		region = string
-	}))
+	})
 }
 
 # MARK: Imagor

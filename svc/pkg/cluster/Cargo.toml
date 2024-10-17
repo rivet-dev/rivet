@@ -46,4 +46,4 @@ features = [ "json", "ipnetwork" ]
 [build-dependencies]
 merkle_hash = "3.6"
 hex = "0.4"
-tokio = { version = "1.29", features = ["full"] }
+tokio = { version = "1.40", features = ["full"] }

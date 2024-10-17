@@ -7,10 +7,10 @@ locals {
 		}
 	})
 
-	result_storage_s3_endpoint = var.s3_providers[var.s3_default_provider].endpoint_internal
-	result_storage_s3_region = var.s3_providers[var.s3_default_provider].region
-	result_storage_s3_access_key_id = module.imagor_secrets.values["s3/${var.s3_default_provider}/terraform/key_id"]
-	result_storage_s3_secret_access_key = module.imagor_secrets.values["s3/${var.s3_default_provider}/terraform/key"]
+	result_storage_s3_endpoint = var.s3.endpoint_internal
+	result_storage_s3_region = var.s3.region
+	result_storage_s3_access_key_id = module.imagor_secrets.values["s3/terraform/key_id"]
+	result_storage_s3_secret_access_key = module.imagor_secrets.values["s3/terraform/key"]
 	result_storage_s3_bucket = "${var.namespace}-bucket-imagor-result-storage"
 
 	imagor_presets = flatten([
@@ -43,8 +43,8 @@ module "imagor_secrets" {
 	source = "../modules/secrets"
 
 	keys = [
-		"s3/${var.s3_default_provider}/terraform/key_id",
-		"s3/${var.s3_default_provider}/terraform/key",
+		"s3/terraform/key_id",
+		"s3/terraform/key",
 	]
 }
 

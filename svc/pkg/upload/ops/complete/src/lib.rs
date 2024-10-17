@@ -26,14 +26,14 @@ async fn handle(
 ) -> GlobalResult<upload::complete::Response> {
 	let upload_id = unwrap_ref!(ctx.upload_id).as_uuid();
 
-	let (bucket, provider, files, user_id) = fetch_files(&ctx, upload_id).await?;
+	let (bucket, files, user_id) = fetch_files(&ctx, upload_id).await?;
 	let files_len = files.len();
 
 	if let Some(req_bucket) = &ctx.bucket {
 		ensure_eq_with!(&bucket, req_bucket, DB_INVALID_BUCKET);
 	}
 
-	let s3_client = s3_util::Client::from_env_with_provider(&bucket, provider).await?;
+	let s3_client = s3_util::Client::from_env(&bucket).await?;
 
 	let nsfw_scores =
 		validate_profanity_scores(&ctx, &s3_client, upload_id, &files, user_id).await?;
@@ -91,7 +91,7 @@ async fn handle(
 async fn fetch_files(
 	ctx: &OperationContext<upload::complete::Request>,
 	upload_id: Uuid,
-) -> GlobalResult<(String, s3_util::Provider, Vec<FileRow>, Option<Uuid>)> {
+) -> GlobalResult<(String, Vec<FileRow>, Option<Uuid>)> {
 	let (upload, files) = tokio::try_join!(
 		sql_fetch_one!(
 			[ctx, UploadRow]
@@ -113,20 +113,9 @@ async fn fetch_files(
 		)
 	)?;
 
-	// Parse provider
-	let proto_provider = unwrap!(
-		backend::upload::Provider::from_i32(upload.provider as i32),
-		"invalid upload provider"
-	);
-	let provider = match proto_provider {
-		backend::upload::Provider::Minio => s3_util::Provider::Minio,
-		backend::upload::Provider::Backblaze => s3_util::Provider::Backblaze,
-		backend::upload::Provider::Aws => s3_util::Provider::Aws,
-	};
+	tracing::info!(bucket=?upload.bucket, files_len = ?files.len(), "fetched files");
 
-	tracing::info!(bucket=?upload.bucket, ?provider, files_len = ?files.len(), "fetched files");
-
-	Ok((upload.bucket, provider, files, upload.user_id))
+	Ok((upload.bucket, files, upload.user_id))
 }
 
 async fn validate_profanity_scores(

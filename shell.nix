@@ -85,7 +85,9 @@ in
 			git lfs install --manual > /dev/null
 
 			# Alias of Bolt CLI
-			alias bolt='cargo run -q -p bolt --'
+			# Add binaries to path so we can use a locally built copy of Bolt.
+			export PATH="${toString ./target/debug/.}:${toString ./target/release/.}:$PATH"
+			alias bolt='cargo build -q -p bolt && ./target/debug/bolt'
 
 			# See https://docs.rs/prost-build/0.8.0/prost_build/#sourcing-protoc
 			export PROTOC="${pkgs.protobuf}/bin/protoc"

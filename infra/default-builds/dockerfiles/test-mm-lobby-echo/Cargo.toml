@@ -4,13 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tokio = { version = "1.29", features = ["full"] }
+tokio = { version = "1.40", features = ["full"] }
 reqwest = "0.11"
 anyhow = "1.0"
 hyper = { version = "0.14", features = ["server"] }
-
-[profile.release]
-opt-level = 'z'
-lto = true
-codegen-units = 1
 

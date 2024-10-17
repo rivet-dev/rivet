@@ -1,6 +1,6 @@
 use anyhow::*;
 use bolt_core::{
-	context::{self, ProjectContextData, RunContext},
+	context::{self, ProjectContextData},
 	dep, tasks,
 };
 use clap::Parser;
@@ -22,14 +22,6 @@ pub enum SubCommand {
 	SetNamespace {
 		#[clap(index = 1)]
 		namespace: String,
-	},
-	ServiceDependencies {
-		#[clap(index = 1)]
-		svc_name: String,
-		#[clap(long, short = 'r')]
-		recursive: bool,
-		#[clap(long)]
-		test: bool,
 	},
 	Show,
 	SourceHash,
@@ -70,35 +62,6 @@ impl SubCommand {
 			}
 			Self::SetNamespace { namespace } => {
 				tasks::config::set_namespace(namespace).await?;
-			}
-			Self::ServiceDependencies {
-				svc_name,
-				recursive,
-				test,
-			} => {
-				let run_context = if *test {
-					RunContext::Test {
-						test_id: String::new(),
-					}
-				} else {
-					RunContext::Service {}
-				};
-
-				// Build project
-				let ctx = ProjectContextData::new(std::env::var("BOLT_NAMESPACE").ok()).await;
-
-				// Read deps
-				let deps = if *recursive {
-					ctx.recursive_dependencies(&[&svc_name], &run_context).await
-				} else {
-					let svc = ctx.service_with_name(svc_name).await;
-					svc.dependencies(&run_context).await
-				};
-
-				// Print deps
-				for dep in deps {
-					println!("{}", dep.name());
-				}
 			}
 			Self::Show => {
 				let ctx = ProjectContextData::new(std::env::var("BOLT_NAMESPACE").ok()).await;

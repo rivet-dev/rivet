@@ -4,7 +4,10 @@ use anyhow::*;
 use indoc::formatdoc;
 use rivet_pools::prelude::*;
 use sqlx::prelude::*;
-use tokio::task::block_in_place;
+use tokio::{
+	io::{AsyncBufReadExt, BufReader},
+	task::block_in_place,
+};
 use urlencoding::encode;
 
 use registry::{SqlService, SqlServiceKind};
@@ -32,8 +35,17 @@ struct MigrateCmd {
 	args: Vec<String>,
 }
 
+pub async fn up_all() -> Result<()> {
+	let services = crate::registry::get_all_services();
+	up(&services).await?;
+	Ok(())
+}
+
 pub async fn up(services: &[&'static SqlService]) -> Result<()> {
-	let pools = rivet_pools::from_env("rivet-migrate").await?;
+	let crdb = rivet_pools::crdb_from_env("rivet".into())
+		.await?
+		.context("missing crdb")?;
+	let clickhouse = rivet_pools::clickhouse_from_env()?;
 
 	let mut crdb_pre_queries = Vec::new();
 	let mut crdb_post_queries = Vec::new();
@@ -65,33 +77,55 @@ pub async fn up(services: &[&'static SqlService]) -> Result<()> {
 				crdb_post_queries.push(query);
 			}
 			SqlServiceKind::ClickHouse => {
-				if !pools.clickhouse_enabled() {
+				if clickhouse.is_none() {
 					tracing::warn!("clickhouse is disabled, skipping {}", svc.db_name);
 					continue;
-				}
+				};
 
 				let db_name = &svc.db_name;
 
-				let query = formatdoc!(
+				clickhouse_pre_queries.push(formatdoc!(
 					"
 					CREATE ROLE IF NOT EXISTS admin;
+					"
+				));
+				clickhouse_pre_queries.push(formatdoc!(
+					"
 					GRANT CREATE DATABASE ON *.* TO admin;
+					"
+				));
+				clickhouse_pre_queries.push(formatdoc!(
+					"
 					GRANT
 						CREATE TABLE, DROP TABLE, INSERT, SELECT
 					ON {db_name}.* TO admin;
+					"
+				));
 
+				clickhouse_pre_queries.push(formatdoc!(
+					"
 					CREATE ROLE IF NOT EXISTS write;
+					"
+				));
+				clickhouse_pre_queries.push(formatdoc!(
+					"
 					GRANT
 						INSERT, SELECT
 					ON {db_name}.* TO write;
-
+					"
+				));
+				clickhouse_pre_queries.push(formatdoc!(
+					"
 					CREATE ROLE IF NOT EXISTS readonly;
+					"
+				));
+				clickhouse_pre_queries.push(formatdoc!(
+					"
 					GRANT
 						SELECT
 					ON {db_name}.* TO readonly;
 					"
-				);
-				clickhouse_pre_queries.push(query);
+				));
 
 				for (username, role) in [
 					("bolt", ClickhouseRole::Admin),
@@ -107,15 +141,18 @@ pub async fn up(services: &[&'static SqlService]) -> Result<()> {
 					])
 					.await?;
 
-					let query = formatdoc!(
+					clickhouse_pre_queries.push(formatdoc!(
 						"
 						CREATE USER
 						IF NOT EXISTS {username}
 						IDENTIFIED WITH sha256_password BY '{password}';
+						"
+					));
+					clickhouse_pre_queries.push(formatdoc!(
+						"
 						GRANT {role} TO {username};
 						"
-					);
-					clickhouse_pre_queries.push(query);
+					));
 				}
 
 				let query = format!(r#"CREATE DATABASE IF NOT EXISTS "{db_name}";"#);
@@ -129,7 +166,6 @@ pub async fn up(services: &[&'static SqlService]) -> Result<()> {
 	tokio::try_join!(
 		async {
 			if !crdb_pre_queries.is_empty() {
-				let crdb = pools.crdb()?;
 				for query in crdb_pre_queries {
 					let mut conn = crdb.acquire().await?;
 					conn.execute(query.as_str()).await?;
@@ -139,9 +175,7 @@ pub async fn up(services: &[&'static SqlService]) -> Result<()> {
 		},
 		async {
 			if !clickhouse_pre_queries.is_empty() {
-				let clickhouse = pools
-					.clickhouse()
-					.map_err(|err| anyhow!("failed to acquire clickhouse: {err}"))?;
+				let clickhouse = clickhouse.as_ref().context("missing clickhouse")?;
 				for query in clickhouse_pre_queries {
 					clickhouse.query(&query).execute().await?;
 				}
@@ -155,10 +189,10 @@ pub async fn up(services: &[&'static SqlService]) -> Result<()> {
 
 	let migrations = services
 		.iter()
+		// TODO: Remove this. Disable ClickHouse since it's not working at the moment.
+		.filter(|svc| !matches!(&svc.kind, SqlServiceKind::ClickHouse))
 		// Exclude ClickHouse if needed
-		.filter(|svc| {
-			pools.clickhouse_enabled() || !matches!(&svc.kind, SqlServiceKind::ClickHouse)
-		})
+		.filter(|svc| clickhouse.is_some() || !matches!(&svc.kind, SqlServiceKind::ClickHouse))
 		// Create command
 		.map(|svc| MigrateCmd {
 			service: svc,
@@ -172,7 +206,6 @@ pub async fn up(services: &[&'static SqlService]) -> Result<()> {
 	tokio::try_join!(
 		async {
 			if !crdb_post_queries.is_empty() {
-				let crdb = pools.crdb()?;
 				for query in crdb_post_queries {
 					let mut conn = crdb.acquire().await?;
 					conn.execute(query.as_str()).await?;
@@ -182,9 +215,7 @@ pub async fn up(services: &[&'static SqlService]) -> Result<()> {
 		},
 		async {
 			if !clickhouse_post_queries.is_empty() {
-				let clickhouse = pools
-					.clickhouse()
-					.map_err(|err| anyhow!("failed to acquire clickhouse: {err}"))?;
+				let clickhouse = clickhouse.as_ref().context("missing clickhouse")?;
 				for query in clickhouse_post_queries {
 					clickhouse.query(&query).execute().await?;
 				}
@@ -225,21 +256,56 @@ pub async fn drop(service: &'static SqlService) -> Result<()> {
 
 async fn run_migrations(migration_cmds: &[MigrateCmd]) -> Result<()> {
 	for cmd in migration_cmds {
+		tracing::info!(db_name=%cmd.service.db_name, "running db migration");
+
 		// Write migrations to temp path
 		let dir = tempfile::tempdir()?;
 		block_in_place(|| cmd.service.migrations.extract(dir.path()))?;
 
 		// Run migration
 		let migrate_url = migrate_db_url(cmd.service).await?;
-		let status = tokio::process::Command::new("migrate")
+		let mut child = tokio::process::Command::new("migrate")
 			.arg("-database")
 			.arg(migrate_url)
 			.arg("-path")
-			.arg(dir.path())
+			.arg(dir.path().join("migrations"))
 			.args(&cmd.args)
-			.status()
-			.await?;
-		ensure!(status.success(), "migrate failed: {}", cmd.service.db_name);
+			.stdout(std::process::Stdio::piped())
+			.stderr(std::process::Stdio::piped())
+			.spawn()?;
+
+		// Log output in real-time
+		let stdout = child.stdout.take().expect("Failed to capture stdout");
+		let stderr = child.stderr.take().expect("Failed to capture stderr");
+
+		tokio::spawn(async move {
+			let mut stdout_reader = BufReader::new(stdout).lines();
+			while let Some(line) = stdout_reader
+				.next_line()
+				.await
+				.expect("Failed to read stdout")
+			{
+				tracing::info!("migrate stdout: {}", line);
+			}
+		});
+
+		tokio::spawn(async move {
+			let mut stderr_reader = BufReader::new(stderr).lines();
+			while let Some(line) = stderr_reader
+				.next_line()
+				.await
+				.expect("Failed to read stderr")
+			{
+				tracing::warn!("migrate stderr: {}", line);
+			}
+		});
+
+		let status = child.wait().await?;
+		if !status.success() {
+			tracing::error!("migrate failed: {}", cmd.service.db_name);
+			std::future::pending::<()>().await;
+			unreachable!();
+		}
 	}
 
 	Ok(())
@@ -252,15 +318,19 @@ async fn migrate_db_url(service: &SqlService) -> Result<String> {
 			let crdb_url = rivet_pools::crdb_url_from_env()?.context("missing crdb_url")?;
 			let crdb_url_parsed = url::Url::parse(&crdb_url)?;
 			let crdb_host = crdb_url_parsed.host_str().context("crdb missing host")?;
+			let crdb_port = crdb_url_parsed
+				.port_or_known_default()
+				.context("crdb missing port")?;
 
 			let username = rivet_util::env::read_secret(&["crdb", "username"]).await?;
 			let password = rivet_util::env::read_secret(&["crdb", "password"]).await?;
 
 			Ok(format!(
-				"cockroach://{}:{}@{}/{}?sslmode=verify-ca&sslrootcert=/local/crdb-ca.crt",
+				"cockroach://{}:{}@{}:{}/{}?sslmode=verify-ca&sslrootcert=/usr/local/share/ca-certificates/crdb-ca.crt",
 				encode(&username),
 				encode(&password),
 				crdb_host,
+				crdb_port,
 				encode(&service.db_name),
 			))
 		}
@@ -271,6 +341,9 @@ async fn migrate_db_url(service: &SqlService) -> Result<String> {
 			let clickhouse_host = clickhouse_url_parsed
 				.host_str()
 				.context("clickhouse missing host")?;
+			let clickhouse_port = clickhouse_url_parsed
+				.port_or_known_default()
+				.context("clickhouse missing port")?;
 
 			let clickhouse_user = "bolt";
 			let clickhouse_password =
@@ -279,8 +352,9 @@ async fn migrate_db_url(service: &SqlService) -> Result<String> {
 			let query_other = "&x-multi-statement=true&x-migrations-table-engine=ReplicatedMergeTree&secure=true&skip_verify=true".to_string();
 
 			Ok(format!(
-				"clickhouse://{}/?database={}&username={}&password={}{}",
+				"clickhouse://{}:{}/?database={}&username={}&password={}{}",
 				clickhouse_host,
+				clickhouse_port,
 				encode(&service.db_name),
 				encode(&clickhouse_user),
 				encode(&clickhouse_password),

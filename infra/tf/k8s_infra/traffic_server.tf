@@ -18,31 +18,24 @@ locals {
 		{
 			for f in fileset("${path.module}/files/traffic_server/etc/dynamic", "**/*"):
 			f => templatefile("${path.module}/files/traffic_server/etc/dynamic/${f}", {
-				s3_providers = var.s3_providers
-				s3_default_provider = var.s3_default_provider
+				s3 = var.s3
 				# G = k8s Gi
 				# https://docs.trafficserver.apache.org/admin-guide/files/storage.config.en.html#:~:text=As%20with%20standard%20records.config%20integers%2C%20human%20readable%20prefixes%20are%20also%20supported.%20They%20include
 				volume_size_cache = "${var.cdn_cache_size_gb}G"
 			})
 		},
-		# S3 providers
-		flatten([
-			for provider_name, provider in var.s3_providers:
-			{
-				"s3_region_map_${provider_name}.config" = templatefile("${path.module}/files/traffic_server/etc/s3/s3_region_map.config", {
-					s3_host = element(regex("^(?:https?://)?([^/]+)", provider.endpoint_internal), 1)
-					s3_region = provider.region
-				})
-			}
-		])...
+		{
+			"s3_region_map.config" = templatefile("${path.module}/files/traffic_server/etc/s3/s3_region_map.config", {
+				s3_host = element(regex("^(?:https?://)?([^/]+)", var.s3.endpoint_internal), 1)
+				s3_region = var.s3.region
+			})
+		}
 	)
 
 	traffic_server_s3_auth_data = {
-		for provider_name, provider in var.s3_providers:
-		"s3_auth_v4_${provider_name}.config" => templatefile("${path.module}/files/traffic_server/etc/s3/s3_auth_v4.config", {
-			s3_provider_name = provider_name
-			s3_access_key_id = module.traffic_server_s3_secrets.values["s3/${provider_name}/terraform/key_id"]
-			s3_secret_access_key = module.traffic_server_s3_secrets.values["s3/${provider_name}/terraform/key"]
+		"s3_auth_v4.config" = templatefile("${path.module}/files/traffic_server/etc/s3/s3_auth_v4.config", {
+			s3_access_key_id = module.traffic_server_s3_secrets.values["s3/terraform/key_id"]
+			s3_secret_access_key = module.traffic_server_s3_secrets.values["s3/terraform/key"]
 		})
 	}
 
@@ -53,10 +46,7 @@ locals {
 module "traffic_server_s3_secrets" {
 	source = "../modules/secrets"
 
-	keys = flatten([
-		for provider_name, provider in var.s3_providers:
-		["s3/${provider_name}/terraform/key_id", "s3/${provider_name}/terraform/key"]
-	])
+	keys = ["s3/terraform/key_id", "s3/terraform/key"]
 }
 
 resource "kubernetes_namespace" "traffic_server" {

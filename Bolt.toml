@@ -1,63 +1,302 @@
-# [services]
-# sql = [
-# 	{ kind = "cockroachdb", path = "svc/pkg/build/db/build", db_name = "db_build" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/captcha/db/captcha", db_name = "db_captcha" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/cdn/db/cdn", db_name = "db_cdn" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/cf-custom-hostname/db/cf-custom-hostname", db_name = "db_cf_custom_hostname" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/cloud/db/cloud", db_name = "db_cloud" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/cluster/db/cluster", db_name = "db_cluster" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/custom-user-avatar/db/custom-avatar", db_name = "db_custom_avatar" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/ds/db/servers", db_name = "db_servers" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/email-verification/db/email-verification", db_name = "db_email_verification" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/game-user/db/game-user", db_name = "db_game_user" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/game/db/game", db_name = "db_game" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/identity-config/db/identity-config", db_name = "db_identity_config" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/ip/db/info", db_name = "db_info" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/job/db/config", db_name = "db_config" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/job/db/state", db_name = "db_state" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/kv-config/db/kv-config", db_name = "db_kv_config" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/kv/db/kv", db_name = "db_kv" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/linode/db/linode", db_name = "db_linode" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/mm-config/db/mm-config", db_name = "db_mm_config" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/mm/db/state", db_name = "db_state" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/pegboard/db/pegboard", db_name = "db_pegboard" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/team-invite/db/team-invite", db_name = "db_team_invite" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/team/db/team", db_name = "db_team" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/token/db/token", db_name = "db_token" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/upload/db/upload", db_name = "db_upload" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/user-dev/db/user-dev", db_name = "db_user_dev" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/user-follow/db/user-follow", db_name = "db_user_follow" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/user-identity/db/user-identity", db_name = "db_user_identity" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/user-report/db/user-report", db_name = "db_user_report" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/user/db/user", db_name = "db_user" },
-# 	{ kind = "cockroachdb", path = "svc/pkg/workflow/db/workflow", db_name = "db_workflow" },
-#
-# 	{ kind = "clickhouse", path = "svc/pkg/ds-log/db/log", db_name = "db_log" },
-# 	{ kind = "clickhouse", path = "svc/pkg/job-log/db/log", db_name = "db_log" },
-# ]
-# buckets = [
-# 	{ name = "build" },
-# 	{ name = "cdn" },
-# 	{ name = "export" },
-# 	{ name = "banner" },
-# 	{ name = "logo" },
-# 	{ name = "artifacts" },
-# 	{ name = "export" },
-# 	{ name = "log" },
-# 	{ name = "imagor-result-storage" },
-# 	{ name = "svc-build" },
-# 	{ name = "lobby-history-export" },
-# 	{ name = "log" },
-# 	{ name = "avatar" },
-# 	{ name = "billing" },
-# 	{ name = "avatar" },
-# ]
-# redis = [
-# 	{ name = "redis-cdn", ephemeral = false },
-# 	{ name = "redis-job", ephemeral = false },
-# 	{ name = "redis-cache", ephemeral = true },
-# 	{ name = "redis-chirp", ephemeral = false },
-# 	{ name = "redis-chirp-ephemeral", ephemeral = true },
-# 	{ name = "redis-mm", ephemeral = false },
-# ]
-#
+# This is a special service
+[services.provision]
+	name = "provision"
+
+	[services.provision.build]
+		package = "rivet"
+		args = ["provision"]
+
+	[services.provision.oneshot]
+
+	[services.provision.secrets]
+		"linode/token" = {}
+		"crdb/user/grafana/username" = {}
+		"crdb/user/grafana/password" = {}
+		"crdb/username" = {}
+		"crdb/password" = {}
+		"clickhouse/users/bolt/password" = { optional = true }
+		"clickhouse/users/chirp/password" = { optional = true }
+		"clickhouse/users/grafana/password" = { optional = true }
+		"clickhouse/users/vector/password" = { optional = true }
+		"cloudflare/terraform/auth_token" = { optional = true }
+		"rivet/api_traefik_provider/token" = {}
+		"stripe/secret_key" = { optional = true }
+		"stripe/webhook_secret" = { optional = true }
+		"rivet/api_status/token" = {}
+		"rivet/api_admin/token" = {}
+		"ssh/server/private_key_openssh" = {}
+		"hcaptcha/secret" = { optional = true }
+		"turnstile/cdn/secret_key" = { optional = true }
+		"turnstile/main/secret_key" = { optional = true }
+		"ip_info/token" = { optional = true }
+
+	[services.provision.resources.single-node]
+		cpu = 250
+		memory = 256
+
+	[services.provision.resources.distributed]
+		cpu = 250
+		memory = 250
+
+[services.api]
+	name = "api"
+
+	[services.api.build]
+		package = "rivet"
+		args = ["server", "--services", "api"]
+
+	[services.api.api]
+		singleton = false
+
+		[[services.api.api.router.mounts]]
+			deprecated = true
+			subdomain = "admin.api"
+			strip-prefix = "/v1"
+			add-path = "/admin"
+
+		[[services.api.api.router.mounts]]
+			deprecated = true
+
+		[[services.api.api.router.mounts]]
+			deprecated = true
+			subdomain = "cf-verification.api"
+			strip-prefix = "/v1"
+			add-path = "/cf-verification"
+
+		[[services.api.api.router.mounts]]
+			deprecated = true
+			subdomain = "cloud.api"
+			strip-prefix = "/v1"
+			add-path = "/cloud"
+
+		[[services.api.api.router.mounts]]
+			deprecated = true
+			subdomain = "group.api"
+			strip-prefix = "/v1"
+			add-path = "/group"
+
+		[[services.api.api.router.mounts]]
+			deprecated = true
+			subdomain = "identity.api"
+			strip-prefix = "/v1"
+			add-path = "/identity"
+
+		[[services.api.api.router.mounts]]
+			deprecated = true
+			subdomain = "job.api"
+			strip-prefix = "/v1"
+			add-path = "/job"
+
+		[[services.api.api.router.mounts]]
+			deprecated = true
+			subdomain = "kv.api"
+			strip-prefix = "/v1"
+			add-path = "/kv"
+
+		[[services.api.api.router.mounts]]
+			deprecated = true
+			subdomain = "matchmaker.api"
+			strip-prefix = "/v1"
+			add-path = "/matchmaker"
+
+		[[services.api.api.router.mounts]]
+			deprecated = true
+			subdomain = "portal.api"
+			strip-prefix = "/v1"
+			add-path = "/portal"
+
+		[[services.api.api.router.mounts]]
+			deprecated = true
+			subdomain = "status.api"
+			strip-prefix = "/v1"
+			add-path = "/status"
+
+	[services.api.secrets]
+		"linode/token" = {}
+		"crdb/user/grafana/username" = {}
+		"crdb/user/grafana/password" = {}
+		"crdb/username" = {}
+		"crdb/password" = {}
+		"clickhouse/users/bolt/password" = { optional = true }
+		"clickhouse/users/chirp/password" = { optional = true }
+		"clickhouse/users/grafana/password" = { optional = true }
+		"clickhouse/users/vector/password" = { optional = true }
+		"cloudflare/terraform/auth_token" = { optional = true }
+		"rivet/api_traefik_provider/token" = {}
+		"stripe/secret_key" = { optional = true }
+		"stripe/webhook_secret" = { optional = true }
+		"rivet/api_status/token" = {}
+		"rivet/api_admin/token" = {}
+		"ssh/server/private_key_openssh" = {}
+		"hcaptcha/secret" = { optional = true }
+		"turnstile/cdn/secret_key" = { optional = true }
+		"turnstile/main/secret_key" = { optional = true }
+		"ip_info/token" = { optional = true }
+
+	[services.api.resources.single-node]
+		cpu = 250
+		memory = 256
+
+	[services.api.resources.distributed]
+		cpu = 1000
+		memory = 1024
+
+[services.api-internal]
+	name = "api-internal"
+
+	[services.api-internal.build]
+		package = "rivet"
+		args = ["server", "--services", "api-internal"]
+
+	[services.api-internal.api]
+		singleton = false
+
+	[services.api-internal.secrets]
+		"linode/token" = {}
+		"crdb/user/grafana/username" = {}
+		"crdb/user/grafana/password" = {}
+		"crdb/username" = {}
+		"crdb/password" = {}
+		"clickhouse/users/bolt/password" = { optional = true }
+		"clickhouse/users/chirp/password" = { optional = true }
+		"clickhouse/users/grafana/password" = { optional = true }
+		"clickhouse/users/vector/password" = { optional = true }
+		"cloudflare/terraform/auth_token" = { optional = true }
+		"rivet/api_traefik_provider/token" = {}
+		"stripe/secret_key" = { optional = true }
+		"stripe/webhook_secret" = { optional = true }
+		"rivet/api_status/token" = {}
+		"rivet/api_admin/token" = {}
+		"ssh/server/private_key_openssh" = {}
+		"hcaptcha/secret" = { optional = true }
+		"turnstile/cdn/secret_key" = { optional = true }
+		"turnstile/main/secret_key" = { optional = true }
+		"ip_info/token" = { optional = true }
+
+	[services.api-internal.resources.single-node]
+		cpu = 50
+		memory = 64
+
+	[services.api-internal.resources.distributed]
+		cpu = 1000
+		memory = 512
+
+[services.standalone]
+	name = "standalone"
+
+	[services.standalone.build]
+		package = "rivet"
+		args = ["server", "--services", "standalone"]
+
+	[services.standalone.headless]
+		singleton = true
+
+	[services.standalone.secrets]
+		"linode/token" = {}
+		"crdb/user/grafana/username" = {}
+		"crdb/user/grafana/password" = {}
+		"crdb/username" = {}
+		"crdb/password" = {}
+		"clickhouse/users/bolt/password" = { optional = true }
+		"clickhouse/users/chirp/password" = { optional = true }
+		"clickhouse/users/grafana/password" = { optional = true }
+		"clickhouse/users/vector/password" = { optional = true }
+		"cloudflare/terraform/auth_token" = { optional = true }
+		"rivet/api_traefik_provider/token" = {}
+		"stripe/secret_key" = { optional = true }
+		"stripe/webhook_secret" = { optional = true }
+		"rivet/api_status/token" = {}
+		"rivet/api_admin/token" = {}
+		"ssh/server/private_key_openssh" = {}
+		"hcaptcha/secret" = { optional = true }
+		"turnstile/cdn/secret_key" = { optional = true }
+		"turnstile/main/secret_key" = { optional = true }
+		"ip_info/token" = { optional = true }
+
+	[services.standalone.resources.single-node]
+		cpu = 250
+		# See SVC-3413
+		memory = 512
+
+	[services.standalone.resources.distributed]
+		cpu = 1000
+		memory = 1024
+
+[services.oneshot]
+	name = "oneshot"
+
+	[services.oneshot.build]
+		package = "rivet"
+		args = ["server", "--services", "oneshot"]
+
+	[services.oneshot.oneshot]
+
+	[services.oneshot.secrets]
+		"linode/token" = {}
+		"crdb/user/grafana/username" = {}
+		"crdb/user/grafana/password" = {}
+		"crdb/username" = {}
+		"crdb/password" = {}
+		"clickhouse/users/bolt/password" = { optional = true }
+		"clickhouse/users/chirp/password" = { optional = true }
+		"clickhouse/users/grafana/password" = { optional = true }
+		"clickhouse/users/vector/password" = { optional = true }
+		"cloudflare/terraform/auth_token" = { optional = true }
+		"rivet/api_traefik_provider/token" = {}
+		"stripe/secret_key" = { optional = true }
+		"stripe/webhook_secret" = { optional = true }
+		"rivet/api_status/token" = {}
+		"rivet/api_admin/token" = {}
+		"ssh/server/private_key_openssh" = {}
+		"hcaptcha/secret" = { optional = true }
+		"turnstile/cdn/secret_key" = { optional = true }
+		"turnstile/main/secret_key" = { optional = true }
+		"ip_info/token" = { optional = true }
+
+	[services.oneshot.resources.single-node]
+		cpu = 250
+		memory = 256
+
+	[services.oneshot.resources.distributed]
+		cpu = 1000
+		memory = 1024
+
+[services.cron]
+	name = "cron"
+
+	[services.cron.build]
+		package = "rivet"
+		args = ["server", "--services", "cron"]
+
+	[services.cron.periodic]
+		cron = "0 0 * * *"
+
+	[services.cron.secrets]
+		"linode/token" = {}
+		"crdb/user/grafana/username" = {}
+		"crdb/user/grafana/password" = {}
+		"crdb/username" = {}
+		"crdb/password" = {}
+		"clickhouse/users/bolt/password" = { optional = true }
+		"clickhouse/users/chirp/password" = { optional = true }
+		"clickhouse/users/grafana/password" = { optional = true }
+		"clickhouse/users/vector/password" = { optional = true }
+		"cloudflare/terraform/auth_token" = { optional = true }
+		"rivet/api_traefik_provider/token" = {}
+		"stripe/secret_key" = { optional = true }
+		"stripe/webhook_secret" = { optional = true }
+		"rivet/api_status/token" = {}
+		"rivet/api_admin/token" = {}
+		"ssh/server/private_key_openssh" = {}
+		"hcaptcha/secret" = { optional = true }
+		"turnstile/cdn/secret_key" = { optional = true }
+		"turnstile/main/secret_key" = { optional = true }
+		"ip_info/token" = { optional = true }
+
+	[services.cron.resources.single-node]
+		cpu = 250
+		memory = 256
+
+	[services.cron.resources.distributed]
+		cpu = 1000
+		memory = 1024

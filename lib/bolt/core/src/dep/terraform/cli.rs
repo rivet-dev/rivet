@@ -4,7 +4,7 @@ use anyhow::Result;
 use lazy_static::lazy_static;
 use tokio::sync::Semaphore;
 
-use crate::{config, context::ProjectContext, utils, utils::command_helper::CommandHelper};
+use crate::{config, context::ProjectContext, utils::command_helper::CommandHelper};
 
 lazy_static! {
 	static ref TF_INIT_SEMAPHORE: Arc<Semaphore> = Arc::new(Semaphore::new(1));
@@ -102,10 +102,6 @@ pub async fn apply(
 	yes: bool,
 	varfile_path: &Path,
 ) -> Result<()> {
-	let mut event = utils::telemetry::build_event(ctx, "bolt_terraform_apply").await?;
-	event.insert_prop("plan_id", plan_id)?;
-	utils::telemetry::capture_event(ctx, event).await?;
-
 	let mut cmd = build_command(ctx, plan_id).await;
 	cmd.arg("apply")
 		.arg(format!("-var-file={}", varfile_path.display()))
@@ -119,10 +115,6 @@ pub async fn apply(
 }
 
 pub async fn destroy(ctx: &ProjectContext, plan_id: &str, varfile_path: &Path) -> Result<()> {
-	let mut event = utils::telemetry::build_event(ctx, "bolt_terraform_destroy").await?;
-	event.insert_prop("plan_id", plan_id)?;
-	utils::telemetry::capture_event(ctx, event).await?;
-
 	let mut cmd = build_command(ctx, plan_id).await;
 	cmd.arg("destroy")
 		.arg(format!("-var-file={}", varfile_path.display()));

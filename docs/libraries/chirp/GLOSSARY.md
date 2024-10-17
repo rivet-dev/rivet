@@ -2,7 +2,7 @@
 
 ## Chirp
 
-- service: An individual process/container that does something. See `bolt_config::ServiceKind`.
+- service: An individual process/container that does something. See `bolt_config::project::serviceKind`.
 - chirp client: A lightweight client to interface with Chirp services. Usually used from a _context_. See
   `chirp_client::ChirpClient`.
 - context: Contexts can represent workers (see `chirp_worker::Message`), operations (see

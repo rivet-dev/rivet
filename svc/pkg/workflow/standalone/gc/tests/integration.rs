@@ -13,7 +13,7 @@ async fn basic() {
 		)
 		.init();
 
-	let pools = rivet_pools::from_env("workflow-gc-test").await.unwrap();
+	let pools = rivet_pools::from_env().await.unwrap();
 
 	// TODO:
 	run_from_env(util::timestamp::now(), pools).await.unwrap();

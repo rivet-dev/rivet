@@ -9,7 +9,7 @@ pub async fn start() -> GlobalResult<()> {
 
 #[tracing::instrument]
 pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
-	let pools = rivet_pools::from_env("user-delete-pending").await?;
+	let pools = rivet_pools::from_env().await?;
 	let client =
 		chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("user-delete-pending");
 	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;

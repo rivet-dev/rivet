@@ -52,7 +52,7 @@ const SQL_SERVICES: &[SqlService] = &[
 	SqlService {
 		kind: SqlServiceKind::CockroachDB,
 		migrations: include_dir!("svc/pkg/ds/db/servers"),
-		db_name: "db_servers",
+		db_name: "db_ds",
 	},
 	SqlService {
 		kind: SqlServiceKind::CockroachDB,
@@ -77,17 +77,17 @@ const SQL_SERVICES: &[SqlService] = &[
 	SqlService {
 		kind: SqlServiceKind::CockroachDB,
 		migrations: include_dir!("svc/pkg/ip/db/info"),
-		db_name: "db_info",
+		db_name: "db_ip_info",
 	},
 	SqlService {
 		kind: SqlServiceKind::CockroachDB,
 		migrations: include_dir!("svc/pkg/job/db/config"),
-		db_name: "db_config",
+		db_name: "db_job_config",
 	},
 	SqlService {
 		kind: SqlServiceKind::CockroachDB,
 		migrations: include_dir!("svc/pkg/job/db/state"),
-		db_name: "db_state",
+		db_name: "db_job_state",
 	},
 	SqlService {
 		kind: SqlServiceKind::CockroachDB,
@@ -112,7 +112,7 @@ const SQL_SERVICES: &[SqlService] = &[
 	SqlService {
 		kind: SqlServiceKind::CockroachDB,
 		migrations: include_dir!("svc/pkg/mm/db/state"),
-		db_name: "db_state",
+		db_name: "db_mm_state",
 	},
 	SqlService {
 		kind: SqlServiceKind::CockroachDB,
@@ -170,42 +170,16 @@ const SQL_SERVICES: &[SqlService] = &[
 		db_name: "db_workflow",
 	},
 	SqlService {
-		kind: SqlServiceKind::CockroachDB,
+		kind: SqlServiceKind::ClickHouse,
 		migrations: include_dir!("svc/pkg/ds-log/db/log"),
-		db_name: "db_log",
+		db_name: "db_ds_log",
 	},
 	SqlService {
-		kind: SqlServiceKind::CockroachDB,
+		kind: SqlServiceKind::ClickHouse,
 		migrations: include_dir!("svc/pkg/job-log/db/log"),
-		db_name: "db_log",
+		db_name: "db_job_log",
 	},
 ];
-
-// buckets = [
-// 	{ name = "build" },
-// 	{ name = "cdn" },
-// 	{ name = "export" },
-// 	{ name = "banner" },
-// 	{ name = "logo" },
-// 	{ name = "artifacts" },
-// 	{ name = "export" },
-// 	{ name = "log" },
-// 	{ name = "imagor-result-storage" },
-// 	{ name = "svc-build" },
-// 	{ name = "lobby-history-export" },
-// 	{ name = "log" },
-// 	{ name = "avatar" },
-// 	{ name = "billing" },
-// 	{ name = "avatar" },
-// ]
-// redis = [
-// 	{ name = "redis-cdn", ephemeral = false },
-// 	{ name = "redis-job", ephemeral = false },
-// 	{ name = "redis-cache", ephemeral = true },
-// 	{ name = "redis-chirp", ephemeral = false },
-// 	{ name = "redis-chirp-ephemeral", ephemeral = true },
-// 	{ name = "redis-mm", ephemeral = false },
-// ]
 
 pub fn get_service(name: &str) -> Option<&'static SqlService> {
 	SQL_SERVICES.iter().filter(|x| x.db_name == name).next()

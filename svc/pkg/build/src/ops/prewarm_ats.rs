@@ -82,21 +82,9 @@ pub async fn prewarm_ats(ctx: &OperationCtx, input: &Input) -> GlobalResult<()> 
 						.iter()
 						.find(|upload| upload.upload_id == proto_upload_id));
 
-					// Parse provider
-					let proto_provider = unwrap!(
-						backend::upload::Provider::from_i32(upload.provider),
-						"invalid upload provider"
-					);
-					let provider = match proto_provider {
-						backend::upload::Provider::Minio => s3_util::Provider::Minio,
-						backend::upload::Provider::Backblaze => s3_util::Provider::Backblaze,
-						backend::upload::Provider::Aws => s3_util::Provider::Aws,
-					};
-
 					// Build path
 					let path = format!(
-						"/s3-cache/{provider}/{namespace}-bucket-build/{upload_id}/{file_name}",
-						provider = heck::KebabCase::to_kebab_case(provider.as_str()),
+						"/s3-cache/default/{namespace}-bucket-build/{upload_id}/{file_name}",
 						namespace = util::env::namespace(),
 						upload_id = build.upload_id,
 						file_name = utils::file_name(build.kind, build.compression),

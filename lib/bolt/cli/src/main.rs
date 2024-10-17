@@ -30,8 +30,6 @@ enum SubCommand {
 	},
 	/// Builds and deploys all Rivet services.
 	Up(up::UpOpts),
-	/// Checks if a Rivet service is valid without deploying it.
-	Check(check::CheckOpts),
 	/// Tails the logs of a Rivet service.
 	Logs(logs::LogsOpts),
 	/// Deploys and tests Rivet services.
@@ -60,12 +58,6 @@ enum SubCommand {
 		#[clap(subcommand)]
 		command: terraform::SubCommand,
 	},
-	/// Manages databases for services.
-	#[clap(alias = "db")]
-	Database {
-		#[clap(subcommand)]
-		command: db::SubCommand,
-	},
 	/// Cluster related operations
 	Cluster {
 		#[clap(subcommand)]
@@ -76,22 +68,10 @@ enum SubCommand {
 		#[clap(subcommand)]
 		command: admin::SubCommand,
 	},
-	/// Manages internal workflows.
-	#[clap(alias = "wf")]
-	Workflow {
-		#[clap(subcommand)]
-		command: wf::SubCommand,
-	},
 }
 
 #[tokio::main]
 async fn main() -> Result<std::process::ExitCode> {
-	let res = main_inner().await;
-	bolt_core::utils::telemetry::wait_all().await;
-	res
-}
-
-async fn main_inner() -> Result<std::process::ExitCode> {
 	let args = Opts::parse();
 
 	// Match commands that need to be ran before ProjectContext is created
@@ -121,17 +101,14 @@ async fn main_inner() -> Result<std::process::ExitCode> {
 		}
 		SubCommand::Infra { command } => command.execute(ctx).await?,
 		SubCommand::Up(command) => command.execute(ctx).await?,
-		SubCommand::Check(command) => command.execute(ctx).await?,
 		SubCommand::Logs(command) => command.execute(ctx).await?,
 		SubCommand::Test(command) => command.execute(ctx).await?,
 		SubCommand::Generate { command } => command.execute(ctx).await?,
 		SubCommand::Secret { command } => command.execute(ctx).await?,
 		SubCommand::Output { command } => command.execute(ctx).await?,
 		SubCommand::Terraform { command } => command.execute(ctx).await?,
-		SubCommand::Database { command } => command.execute(ctx).await?,
 		SubCommand::Cluster { command } => command.execute(ctx).await?,
 		SubCommand::Admin { command } => command.execute(ctx).await?,
-		SubCommand::Workflow { command } => command.execute(ctx).await?,
 	}
 
 	Ok(std::process::ExitCode::SUCCESS)

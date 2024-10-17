@@ -146,7 +146,6 @@ pub async fn read_clickhouse(ctx: &ProjectContext) -> ClickHouse {
 pub async fn read_redis(ctx: &ProjectContext) -> Redis {
 	match &ctx.ns().redis.provider {
 		config::ns::RedisProvider::Kubernetes { .. } => read_plan::<Redis>(ctx, "redis_k8s").await,
-		config::ns::RedisProvider::Aws { .. } => read_plan::<Redis>(ctx, "redis_aws").await,
 		config::ns::RedisProvider::Aiven { .. } => read_plan::<Redis>(ctx, "redis_aiven").await,
 	}
 }

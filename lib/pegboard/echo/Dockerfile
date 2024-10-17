@@ -1,9 +1,8 @@
-FROM clux/muslrust:1.80.0-stable AS rust
+FROM clux/muslrust:1.81.0-stable AS rust
 
 WORKDIR /app
-COPY Cargo.toml .
-COPY src/ src/
-RUN cargo build --release
+COPY . .
+RUN cargo build --release --bin echo-server
 
 # Create non-root user and group
 RUN useradd -m -d /home/nonroot -s /bin/sh nonroot

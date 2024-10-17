@@ -1,8 +1,6 @@
 pub mod admin;
-pub mod check;
 pub mod cluster;
 pub mod config;
-pub mod db;
 pub mod generate;
 pub mod infra;
 pub mod init;
@@ -12,4 +10,3 @@ pub mod secret;
 pub mod terraform;
 pub mod test;
 pub mod up;
-pub mod wf;

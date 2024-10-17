@@ -32,7 +32,7 @@ resource "null_resource" "container_runner_build" {
 		docker build --platform linux/amd64 -t $IMAGE_NAME '${local.container_runner_src_dir}'
 
 		# Create a temporary container
-		docker create --name $CONTAINER_NAME $IMAGE_NAME
+		docker create --platform linux/amd64 --name $CONTAINER_NAME $IMAGE_NAME
 
 		# Copy the binary from the container to the host
 		docker cp $CONTAINER_NAME:$BINARY_PATH_IN_CONTAINER $DST_BINARY_PATH
@@ -50,7 +50,7 @@ resource "aws_s3_object" "container_runner_binary_upload" {
 		prevent_destroy = true
 	}
 
-	bucket = "${var.namespace}-bucket-infra-artifacts"
+	bucket = local.artifacts_bucket_name
 	key = "container-runner/${local.container_runner_src_hash}/container-runner"
 	source = local.container_runner_dst_binary_path
 }

@@ -16,7 +16,7 @@ hyper = { version = "0.14", features = ["server", "http1", "tcp"] }
 indoc = "2.0"
 lazy_static = "1.4"
 nix = { version = "0.27", default-features = false, features = ["user", "signal"] }
-notify = { version = "6.1.1", default-features = false, features = [ "serde" ] }
+notify = { version = "6.1.1", default-features = false, features = ["serde", "fsevent-sys"] }
 portpicker = "0.1"
 prometheus = "0.13"
 rand = "0.8"

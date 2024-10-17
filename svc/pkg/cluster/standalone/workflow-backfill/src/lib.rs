@@ -10,7 +10,7 @@ use serde_json::json;
 
 #[tracing::instrument(skip_all)]
 pub async fn start() -> GlobalResult<()> {
-	let pools = rivet_pools::from_env("cluster-workflow-backfill").await?;
+	let pools = rivet_pools::from_env().await?;
 	let client =
 		chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("cluster-workflow-backfill");
 	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;

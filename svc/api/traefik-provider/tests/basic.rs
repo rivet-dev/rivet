@@ -34,7 +34,7 @@ impl Ctx {
 				.init();
 		});
 
-		let pools = rivet_pools::from_env("api-auth-test").await.unwrap();
+		let pools = rivet_pools::from_env().await.unwrap();
 		let cache = rivet_cache::CacheInner::new(
 			"api-auth-test".to_string(),
 			std::env::var("RIVET_SOURCE_HASH").unwrap(),

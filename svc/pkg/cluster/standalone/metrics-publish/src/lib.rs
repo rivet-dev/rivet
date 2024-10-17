@@ -7,7 +7,7 @@ use cluster::{
 };
 
 pub async fn start() -> GlobalResult<()> {
-	let pools = rivet_pools::from_env("cluster-metrics-publish").await?;
+	let pools = rivet_pools::from_env().await?;
 
 	let mut interval = tokio::time::interval(std::time::Duration::from_secs(7));
 	loop {

@@ -28,30 +28,8 @@ struct MultipartUpdate {
 async fn handle(
 	ctx: OperationContext<upload::prepare::Request>,
 ) -> GlobalResult<upload::prepare::Response> {
-	let provider = if let Some(provider) = ctx.provider {
-		let proto_provider = unwrap!(
-			backend::upload::Provider::from_i32(provider),
-			"invalid upload provider"
-		);
-
-		match proto_provider {
-			backend::upload::Provider::Minio => s3_util::Provider::Minio,
-			backend::upload::Provider::Backblaze => s3_util::Provider::Backblaze,
-			backend::upload::Provider::Aws => s3_util::Provider::Aws,
-		}
-	} else {
-		s3_util::Provider::default()?
-	};
-	// Convert back to proto to include the default
-	let proto_provider = match provider {
-		s3_util::Provider::Minio => backend::upload::Provider::Minio,
-		s3_util::Provider::Backblaze => backend::upload::Provider::Backblaze,
-		s3_util::Provider::Aws => backend::upload::Provider::Aws,
-	};
-
 	let s3_client_external =
-		s3_util::Client::from_env_opt(&ctx.bucket, provider, s3_util::EndpointKind::External)
-			.await?;
+		s3_util::Client::from_env_opt(&ctx.bucket, s3_util::EndpointKind::External).await?;
 
 	// Validate upload sizes
 	let total_content_length = ctx
@@ -133,7 +111,8 @@ async fn handle(
 		total_content_length as i64,
 		&ctx.bucket,
 		user_id,
-		proto_provider as i64,
+		// Hardcoded to AWS since we don't use this feature anymore
+		backend::upload::Provider::Aws as i64,
 		paths,
 		mimes,
 		content_lengths,

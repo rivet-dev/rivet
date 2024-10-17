@@ -10,7 +10,7 @@ const PARALLEL_WORKERS: usize = 1;
 pub async fn start() -> GlobalResult<()> {
 	// TODO: Handle ctrl-c
 
-	let pools = rivet_pools::from_env("job-gc").await?;
+	let pools = rivet_pools::from_env().await?;
 
 	let mut interval = tokio::time::interval(std::time::Duration::from_secs(60 * 15));
 	loop {
@@ -22,7 +22,7 @@ pub async fn start() -> GlobalResult<()> {
 
 #[tracing::instrument(skip_all)]
 pub async fn run_from_env(_ts: i64) -> GlobalResult<()> {
-	let pools = rivet_pools::from_env("load-test-mm-sustain").await?;
+	let pools = rivet_pools::from_env().await?;
 	let client =
 		chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("load-test-mm-sustain");
 	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;

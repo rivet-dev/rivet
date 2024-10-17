@@ -5,7 +5,7 @@ use rivet_operation::prelude::*;
 const WORKER_INSTANCE_LOST_THRESHOLD: i64 = util::duration::seconds(30);
 
 pub async fn start() -> GlobalResult<()> {
-	let pools = rivet_pools::from_env("workflow-gc").await?;
+	let pools = rivet_pools::from_env().await?;
 
 	let mut interval = tokio::time::interval(Duration::from_secs(15));
 	loop {

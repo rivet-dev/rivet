@@ -331,7 +331,6 @@ pub(crate) async fn resolve_image_artifact_url(
 	build_delivery_method: BuildDeliveryMethod,
 	build_id: Uuid,
 	upload_id: Uuid,
-	provider: s3_util::Provider,
 ) -> GlobalResult<String> {
 	// Build URL
 	match build_delivery_method {
@@ -339,12 +338,9 @@ pub(crate) async fn resolve_image_artifact_url(
 			tracing::info!("using s3 direct delivery");
 
 			// Build client
-			let s3_client = s3_util::Client::from_env_opt(
-				"bucket-build",
-				provider,
-				s3_util::EndpointKind::External,
-			)
-			.await?;
+			let s3_client =
+				s3_util::Client::from_env_opt("bucket-build", s3_util::EndpointKind::External)
+					.await?;
 
 			let presigned_req = s3_client
 				.get_object()
@@ -405,9 +401,8 @@ pub(crate) async fn resolve_image_artifact_url(
 			.await?;
 
 			let addr = format!(
-				"http://{vlan_ip}:8080/s3-cache/{provider}/{namespace}-bucket-build/{upload_id}/{build_file_name}",
+				"http://{vlan_ip}:8080/s3-cache/{namespace}-bucket-build/{upload_id}/{build_file_name}",
 				vlan_ip = ats_vlan_ip,
-				provider = heck::KebabCase::to_kebab_case(provider.as_str()),
 				namespace = util::env::namespace(),
 				upload_id = upload_id,
 			);

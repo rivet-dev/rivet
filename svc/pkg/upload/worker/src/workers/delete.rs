@@ -68,18 +68,7 @@ async fn worker(ctx: &OperationContext<upload::msg::delete::Message>) -> GlobalR
 		if let Some(x) = deletions.get_mut(&upload.bucket) {
 			x.keys.push(key);
 		} else {
-			// Parse provider
-			let proto_provider = unwrap!(
-				backend::upload::Provider::from_i32(upload.provider as i32),
-				"invalid upload provider"
-			);
-			let provider = match proto_provider {
-				backend::upload::Provider::Minio => s3_util::Provider::Minio,
-				backend::upload::Provider::Backblaze => s3_util::Provider::Backblaze,
-				backend::upload::Provider::Aws => s3_util::Provider::Aws,
-			};
-
-			let client = s3_util::Client::from_env_with_provider(&upload.bucket, provider).await?;
+			let client = s3_util::Client::from_env(&upload.bucket).await?;
 
 			deletions.insert(
 				upload.bucket.clone(),

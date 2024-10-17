@@ -13,4 +13,5 @@ aws-smithy-types = { version = "0.52" }
 http = "0.2"
 thiserror = "1.0"
 tracing = "0.1"
-tokio = { version = "1.29" }
+tokio = { version = "1.40" }
+rivet-util = { version = "0.1.0", path = "../util/core" }

@@ -456,17 +456,6 @@ async fn resolve_artifacts(
 	let upload = unwrap!(upload_res.uploads.first());
 	let upload_id = unwrap_ref!(upload.upload_id).as_uuid();
 
-	// Get provider
-	let proto_provider = unwrap!(
-		backend::upload::Provider::from_i32(upload.provider),
-		"invalid upload provider"
-	);
-	let provider = match proto_provider {
-		backend::upload::Provider::Minio => s3_util::Provider::Minio,
-		backend::upload::Provider::Backblaze => s3_util::Provider::Backblaze,
-		backend::upload::Provider::Aws => s3_util::Provider::Aws,
-	};
-
 	let image_artifact_url = resolve_image_artifact_url(
 		ctx,
 		input.datacenter_id,
@@ -474,7 +463,6 @@ async fn resolve_artifacts(
 		input.dc_build_delivery_method,
 		input.image_id,
 		upload_id,
-		provider,
 	)
 	.await?;
 	let container_runner_binary_url = resolve_container_runner_binary_url(
@@ -551,9 +539,6 @@ async fn resolve_container_runner_binary_url(
 	datacenter_id: Uuid,
 	build_delivery_method: BuildDeliveryMethod,
 ) -> GlobalResult<String> {
-	// Get provider
-	let provider = s3_util::Provider::default()?;
-
 	let file_name = std::env::var("CONTAINER_RUNNER_BINARY_KEY")?;
 
 	// Build URL
@@ -564,7 +549,6 @@ async fn resolve_container_runner_binary_url(
 			// Build client
 			let s3_client = s3_util::Client::from_env_opt(
 				"bucket-infra-artifacts",
-				provider,
 				s3_util::EndpointKind::External,
 			)
 			.await?;
@@ -617,9 +601,8 @@ async fn resolve_container_runner_binary_url(
 			.await?;
 
 			let addr = format!(
-				"http://{vlan_ip}:8080/s3-cache/{provider}/{namespace}-bucket-infra-artifacts/{file_name}",
+				"http://{vlan_ip}:8080/s3-cache/{namespace}-bucket-infra-artifacts/{file_name}",
 				vlan_ip = ats_vlan_ip,
-				provider = heck::KebabCase::to_kebab_case(provider.as_str()),
 				namespace = util::env::namespace(),
 			);
 

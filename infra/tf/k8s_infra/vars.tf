@@ -112,12 +112,6 @@ variable "redis_provider" {
 	type = string
 }
 
-variable "redis_dbs" {
-	type = map(object({
-		persistent = bool
-	}))
-}
-
 # MARK: K8s
 variable "kubeconfig_path" {
 	type = string
@@ -136,20 +130,13 @@ variable "k8s_dashboard_enabled" {
 }
 
 # MARK: S3
-variable "s3_default_provider" {
-	type = string
-}
-
-variable "s3_providers" {
-	type = map(object({
+variable "s3" {
+	type = object({
+		provider = string
 		endpoint_internal = string
 		endpoint_external = string
 		region = string
-	}))
-}
-
-variable "s3_buckets" {
-	type = map(any)
+	})
 }
 
 # MARK: Rivet

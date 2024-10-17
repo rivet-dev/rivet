@@ -31,7 +31,6 @@ pub enum PlanStepKind {
 		/// The purpose of this is to speed up the destroy step in CI.
 		needs_destroy: bool,
 	},
-	Migrate,
 	Up,
 }
 
@@ -54,9 +53,6 @@ impl PlanStepKind {
 				cmd.exec().await?;
 
 				terraform::output::clear_cache(&ctx, plan_id).await;
-			}
-			PlanStepKind::Migrate => {
-				tasks::migrate::up_all(&ctx).await?;
 			}
 			PlanStepKind::Up => tasks::up::up_all(&ctx, false, false, false, false).await?,
 		}
@@ -87,7 +83,7 @@ impl PlanStepKind {
 
 				terraform::output::clear_cache(&ctx, plan_id).await;
 			}
-			PlanStepKind::Migrate | PlanStepKind::Up => {
+			PlanStepKind::Up => {
 				// Do nothing
 			}
 		}
@@ -186,15 +182,6 @@ pub fn build_plan(
 				kind: PlanStepKind::Terraform {
 					plan_id: "redis_k8s".into(),
 					needs_destroy: false,
-				},
-			});
-		}
-		ns::RedisProvider::Aws { .. } => {
-			plan.push(PlanStep {
-				name_id: "redis-aws",
-				kind: PlanStepKind::Terraform {
-					plan_id: "redis_aws".into(),
-					needs_destroy: true,
 				},
 			});
 		}
@@ -307,47 +294,13 @@ pub fn build_plan(
 		});
 	}
 
-	// S3
-	let s3_providers = &ctx.ns().s3.providers;
-	if s3_providers.minio.is_some() {
-		plan.push(PlanStep {
-			name_id: "s3-minio",
-			kind: PlanStepKind::Terraform {
-				plan_id: "s3_minio".into(),
-				needs_destroy: false,
-			},
-		});
-	}
-	if s3_providers.backblaze.is_some() {
-		plan.push(PlanStep {
-			name_id: "s3-backblaze",
-			kind: PlanStepKind::Terraform {
-				plan_id: "s3_backblaze".into(),
-				needs_destroy: true,
-			},
-		});
-	}
-	if s3_providers.aws.is_some() {
-		plan.push(PlanStep {
-			name_id: "s3-aws",
-			kind: PlanStepKind::Terraform {
-				plan_id: "s3_aws".into(),
-				needs_destroy: true,
-			},
-		});
-	}
-
+	// Infra artifacts
 	plan.push(PlanStep {
 		name_id: "infra-artifacts",
 		kind: PlanStepKind::Terraform {
 			plan_id: "infra_artifacts".into(),
 			needs_destroy: false,
 		},
-	});
-
-	plan.push(PlanStep {
-		name_id: "migrate",
-		kind: PlanStepKind::Migrate,
 	});
 
 	plan.push(PlanStep {

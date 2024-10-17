@@ -11,6 +11,11 @@ locals {
 			persistence = "rdb"
 		}
 	}
+
+	redis_svcs = {
+		"persistent" = {}
+		"ephemeral" = {}
+	}
 }
 
 module "secrets" {
@@ -19,7 +24,7 @@ module "secrets" {
 	keys = flatten([
 		["aiven/api_token"],
 		[
-			for k, v in var.redis_dbs:
+			for k, v in local.redis_svcs:
 			[
 				"redis/${k}/username",
 				"redis/${k}/password",
@@ -29,7 +34,7 @@ module "secrets" {
 }
 
 resource "aiven_redis" "main" {
-	for_each = var.redis_dbs
+	for_each = local.redis_svcs
 
 	project = var.redis_aiven.project
 	cloud_name = var.redis_aiven.cloud
@@ -64,7 +69,7 @@ resource "aiven_redis" "main" {
 }
 
 resource "aiven_redis_user" "main" {
-	for_each = var.redis_dbs
+	for_each = local.redis_svcs
 
 	project = var.redis_aiven.project
 	service_name = aiven_redis.main[each.key].service_name

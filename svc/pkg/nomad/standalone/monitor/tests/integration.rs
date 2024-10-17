@@ -12,7 +12,7 @@ async fn basic() {
 		)
 		.init();
 
-	let pools = rivet_pools::from_env("nomad-monitor-test").await.unwrap();
+	let pools = rivet_pools::from_env().await.unwrap();
 
 	run_from_env(pools).await.unwrap();
 }
