@@ -52,6 +52,9 @@ pub mod service {
 		/// constraints.
 		#[serde(default)]
 		pub priority: Option<usize>,
+		/// If true, this service will do nothing and sleep indefinitely.
+		#[serde(default)]
+		pub noop: bool,
 		/// If this service should only be used for tests.
 		#[serde(default)]
 		pub test_only: bool,

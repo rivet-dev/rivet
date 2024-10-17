@@ -252,9 +252,11 @@ pub async fn build<'a, T: AsRef<str>>(ctx: &ProjectContext, opts: BuildOpts<'a, 
 
 						FROM debian:12.1-slim AS run
 
-						# Update ca-certificates. Install curl for health checks.
+						# - Update ca-certificates
+						# - Install curl for health checks
+						# - Install database clients (Redis, Postgres, ClickHouse, go-migrate)
 						RUN DEBIAN_FRONTEND=noninteractive apt-get update -y && \
-							apt-get install -y --no-install-recommends ca-certificates openssl curl && \
+							apt-get install -y --no-install-recommends ca-certificates openssl curl redis-tools postgresql-client clickhouse-client && \
 							curl -L https://github.com/golang-migrate/migrate/releases/download/v4.18.1/migrate.linux-amd64.tar.gz | tar xvz && \
 							mv migrate /usr/local/bin/migrate
 

@@ -7,6 +7,7 @@ pub mod init;
 pub mod logs;
 pub mod output;
 pub mod secret;
+pub mod shell;
 pub mod terraform;
 pub mod test;
 pub mod up;

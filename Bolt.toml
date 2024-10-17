@@ -300,3 +300,44 @@
 	[services.cron.resources.distributed]
 		cpu = 1000
 		memory = 1024
+
+[services.shell]
+	name = "shell"
+	noop = true
+
+	[services.shell.build]
+		package = "rivet"
+		args = []
+
+	[services.shell.headless]
+		singleton = true
+
+	[services.shell.secrets]
+		"linode/token" = {}
+		"crdb/user/grafana/username" = {}
+		"crdb/user/grafana/password" = {}
+		"crdb/username" = {}
+		"crdb/password" = {}
+		"clickhouse/users/bolt/password" = { optional = true }
+		"clickhouse/users/chirp/password" = { optional = true }
+		"clickhouse/users/grafana/password" = { optional = true }
+		"clickhouse/users/vector/password" = { optional = true }
+		"cloudflare/terraform/auth_token" = { optional = true }
+		"rivet/api_traefik_provider/token" = {}
+		"stripe/secret_key" = { optional = true }
+		"stripe/webhook_secret" = { optional = true }
+		"rivet/api_status/token" = {}
+		"rivet/api_admin/token" = {}
+		"ssh/server/private_key_openssh" = {}
+		"hcaptcha/secret" = { optional = true }
+		"turnstile/cdn/secret_key" = { optional = true }
+		"turnstile/main/secret_key" = { optional = true }
+		"ip_info/token" = { optional = true }
+
+	[services.shell.resources.single-node]
+		cpu = 250
+		memory = 256
+
+	[services.shell.resources.distributed]
+		cpu = 250
+		memory = 250

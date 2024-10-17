@@ -68,6 +68,8 @@ enum SubCommand {
 		#[clap(subcommand)]
 		command: admin::SubCommand,
 	},
+	/// Connect to the shell inside the cluster
+	Shell(shell::Opts),
 }
 
 #[tokio::main]
@@ -109,6 +111,7 @@ async fn main() -> Result<std::process::ExitCode> {
 		SubCommand::Terraform { command } => command.execute(ctx).await?,
 		SubCommand::Cluster { command } => command.execute(ctx).await?,
 		SubCommand::Admin { command } => command.execute(ctx).await?,
+		SubCommand::Shell(opts) => opts.execute(ctx).await?,
 	}
 
 	Ok(std::process::ExitCode::SUCCESS)

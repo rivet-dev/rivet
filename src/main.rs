@@ -3,6 +3,7 @@ use clap::Parser;
 use commands::*;
 
 mod commands;
+mod util;
 
 // Check that some services are enabled
 #[cfg(not(any(
@@ -43,6 +44,12 @@ enum SubCommand {
 		#[clap(subcommand)]
 		command: storage::SubCommand,
 	},
+	/// Manages workflows
+	#[clap(alias = "wf")]
+	Workflow {
+		#[clap(subcommand)]
+		command: wf::SubCommand,
+	},
 }
 
 fn main() -> Result<()> {
@@ -58,5 +65,6 @@ async fn main_inner() -> Result<()> {
 		SubCommand::Provision(opts) => opts.execute().await,
 		SubCommand::Database { command } => command.execute().await,
 		SubCommand::Storage { command } => command.execute().await,
+		SubCommand::Workflow { command } => command.execute().await,
 	}
 }

@@ -135,7 +135,8 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		RunContext::Test { .. } => unreachable!(),
 	};
 
-	let has_health = matches!(run_context, RunContext::Service { .. })
+	let has_health = !svc_ctx.config().service.noop
+		&& matches!(run_context, RunContext::Service { .. })
 		&& project_ctx
 			.ns()
 			.kubernetes
@@ -148,10 +149,11 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		ServiceKind::Headless { .. } | ServiceKind::Api { .. }
 	);
 
-	let has_metrics = matches!(
-		svc_ctx.config().kind,
-		ServiceKind::Headless { .. } | ServiceKind::Api { .. }
-	);
+	let has_metrics = !svc_ctx.config().service.noop
+		&& matches!(
+			svc_ctx.config().kind,
+			ServiceKind::Headless { .. } | ServiceKind::Api { .. }
+		);
 
 	// Render env
 	let env = svc_ctx.env(run_context).await.unwrap();
@@ -332,7 +334,11 @@ pub async fn gen_svc(exec_ctx: &ExecServiceContext) -> Vec<serde_json::Value> {
 		.collect::<Vec<_>>()
 		.join(" ");
 
-	let command = format!("/usr/bin/install_ca.sh && {exec} {args}");
+	let command = if svc_ctx.config().service.noop {
+		format!("/usr/bin/install_ca.sh && sleep infinity")
+	} else {
+		format!("/usr/bin/install_ca.sh && {exec} {args}")
+	};
 
 	// Create resource limits
 	let ns_service_config = svc_ctx.ns_service_config().await;

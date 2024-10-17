@@ -668,13 +668,6 @@ impl ServiceContextData {
 				username, password,
 			);
 			env.insert("CRDB_URL".into(), url);
-
-			// TODO:
-			let workflow_url = format!(
-				"postgres://{}:{}@{crdb_host}/db_workflow?sslmode={sslmode}",
-				username, password,
-			);
-			env.insert("CRDB_WORKFLOW_URL".into(), workflow_url);
 		}
 
 		// Redis
