@@ -1,0 +1,77 @@
+[package]
+name = "rivet-cli"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+
+[[bin]]
+name = "rivet"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0"
+chrono = "0.4.38"
+clap = { version = "4.3", features = ["derive"] }
+colored_json = "5.0.0"
+global-error = { path = "../global-error" }
+include_dir = "0.7.4"
+indoc = "2.0.5"
+rivet-migrate = { path = "../migrate" }
+rivet-pools = { version = "0.1.0", path = "../pools" }
+rivet-runtime = { version = "0.1.0", path = "../runtime" }
+rivet-server = { path = "../server" }
+rivet-term = { git = "https://github.com/rivet-gg/rivet-term.git", rev = "d539a07d2920d47b88410f20e6d106b497cff1f5" }
+s3-util = { version = "0.1.0", path = "../s3-util" }
+serde = { version = "1.0.210", features = ["derive"] }
+serde_json = "1.0.128"
+serde_yaml = "0.9.34"
+strum = "0.26.3"
+tabled = "0.16.0"
+tempfile = "3.13.0"
+thiserror = "1.0.64"
+tokio = { version = "1.40", features = ["full", "tracing"] }
+tracing = "0.1"
+url = "2.5.2"
+uuid = "1.10.0"
+
+ # Standalone
+cluster-datacenter-tls-renew = { path = "../../svc/pkg/cluster/standalone/datacenter-tls-renew" }
+cluster-gc = { path = "../../svc/pkg/cluster/standalone/gc" }
+cluster-metrics-publish = { path = "../../svc/pkg/cluster/standalone/metrics-publish" }
+job-gc = { path = "../../svc/pkg/job/standalone/gc" }
+linode-gc = { path = "../../svc/pkg/linode/standalone/gc" }
+load-test-api-cloud = { path = "../../svc/pkg/load-test/standalone/api-cloud" }
+load-test-mm = { path = "../../svc/pkg/load-test/standalone/mm" }
+load-test-mm-sustain = { path = "../../svc/pkg/load-test/standalone/mm-sustain" }
+load-test-sqlx = { path = "../../svc/pkg/load-test/standalone/sqlx" }
+load-test-watch-requests = { path = "../../svc/pkg/load-test/standalone/watch-requests" }
+mm-gc = { path = "../../svc/pkg/mm/standalone/gc" }
+monolith-worker = { path = "../../svc/pkg/monolith/standalone/worker" }
+monolith-workflow-worker = { path = "../../svc/pkg/monolith/standalone/workflow-worker" }
+nomad-monitor = { path = "../../svc/pkg/nomad/standalone/monitor" }
+pegboard-gc = { path = "../../svc/pkg/pegboard/standalone/gc" }
+pegboard-ws = { path = "../../svc/pkg/pegboard/standalone/ws" }
+workflow-gc = { path = "../../svc/pkg/workflow/standalone/gc" }
+workflow-metrics-publish = { path = "../../svc/pkg/workflow/standalone/metrics-publish" }
+
+# Cron
+telemetry-beacon = { path = "../../svc/pkg/telemetry/standalone/beacon" }
+user-delete-pending = { path = "../../svc/pkg/user/standalone/delete-pending" }
+
+# API
+api-internal-monolith = { path = "../../svc/api/internal-monolith" }
+api-monolith = { path = "../../svc/api/monolith" }
+
+# Oneshot
+build-default-create = { path = "../../svc/pkg/build/standalone/default-create" }
+cluster-default-update = { path = "../../svc/pkg/cluster/standalone/default-update" }
+cluster-workflow-backfill = { path = "../../svc/pkg/cluster/standalone/workflow-backfill" }
+pegboard-dc-init = { path = "../../svc/pkg/pegboard/standalone/dc-init" }
+
+
+[dependencies.sqlx]
+git = "https://github.com/rivet-gg/sqlx"
+rev = "08d6e61aa0572e7ec557abbedb72cebb96e1ac5b"
+default-features = false
+features = ["runtime-tokio", "postgres"]
+

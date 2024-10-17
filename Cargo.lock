@@ -1152,17 +1152,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-recursion"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7d78656ba01f1b93024b7c3a0467f1608e4be67d725749fdcd7d2c7678fd7a2"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "async-trait"
 version = "0.1.83"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1193,17 +1182,6 @@ name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
-
-[[package]]
-name = "atty"
-version = "0.2.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9b39be18770d11421cdb1b9947a45dd3f37e93092cbf377614828a319d5fee8"
-dependencies = [
- "hermit-abi 0.1.19",
- "libc",
- "winapi",
-]
 
 [[package]]
 name = "autocfg"
@@ -1725,95 +1703,6 @@ checksum = "e412e2cd0f2b2d93e02543ceae7917b3c70331573df19ee046bcbc35e45e87d7"
 dependencies = [
  "byteorder",
  "cipher",
-]
-
-[[package]]
-name = "bolt"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "atty",
- "bolt-core",
- "chrono",
- "clap",
- "duct",
- "json-patch",
- "rivet-api",
- "rivet-term",
- "serde_json",
- "serde_plain",
- "tabled",
- "tempfile",
- "tokio",
- "toml 0.7.8",
- "toml_edit",
- "uuid",
-]
-
-[[package]]
-name = "bolt-config"
-version = "0.1.0"
-dependencies = [
- "heck 0.3.3",
- "serde",
- "serde_json",
- "strum 0.25.0",
- "strum_macros 0.25.3",
- "toml 0.7.8",
- "uuid",
-]
-
-[[package]]
-name = "bolt-core"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-posthog",
- "async-recursion",
- "async-trait",
- "base64 0.13.1",
- "bolt-config",
- "chrono",
- "cjson",
- "clap",
- "colored_json",
- "derive_builder",
- "duct",
- "futures-util",
- "handlebars",
- "heck 0.3.3",
- "hex",
- "indexmap 2.6.0",
- "indicatif",
- "indoc 1.0.9",
- "ipnet",
- "json-patch",
- "lazy_static",
- "maplit",
- "portpicker",
- "prost 0.10.4",
- "rand",
- "regex",
- "reqwest 0.11.27",
- "rivet-api",
- "rivet-term",
- "s3-util",
- "serde",
- "serde_json",
- "serde_yaml",
- "sha2 0.10.8",
- "sqlx",
- "strum 0.26.3",
- "tabled",
- "tempfile",
- "thiserror",
- "tokio",
- "toml 0.7.8",
- "toml_edit",
- "url",
- "urlencoding",
- "uuid",
- "wildmatch",
 ]
 
 [[package]]
@@ -3569,18 +3458,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "duct"
-version = "0.13.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4ab5718d1224b63252cd0c6f74f6480f9ffeb117438a2e0f5cf6d9a4798929c"
-dependencies = [
- "libc",
- "once_cell",
- "os_pipe",
- "shared_child",
-]
-
-[[package]]
 name = "ecdsa"
 version = "0.16.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4792,20 +4669,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "handlebars"
-version = "4.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "faa67bab9ff362228eb3d00bd024a4965d8231bbb7921167f0cfa66c6626b225"
-dependencies = [
- "log",
- "pest",
- "pest_derive",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
 name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4899,15 +4762,6 @@ name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
-
-[[package]]
-name = "hermit-abi"
-version = "0.1.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62b467343b94ba476dcb2500d242dadbb39557df889310ac77c5d99100aaac33"
-dependencies = [
- "libc",
-]
 
 [[package]]
 name = "hermit-abi"
@@ -5345,18 +5199,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "indicatif"
-version = "0.16.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d207dc617c7a380ab07ff572a6e52fa202a2a8f355860ac9c38e23f8196be1b"
-dependencies = [
- "console",
- "lazy_static",
- "number_prefix",
- "regex",
-]
-
-[[package]]
 name = "indoc"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5606,17 +5448,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1868808506b929d7b0cfa8f75951347aa71bb21144b7791bae35d9bccfcfe37a"
 dependencies = [
  "wasm-bindgen",
-]
-
-[[package]]
-name = "json-patch"
-version = "1.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec9ad60d674508f3ca8f380a928cfe7b096bc729c4e2dbfe3852bc45da3ab30b"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror",
 ]
 
 [[package]]
@@ -6144,7 +5975,7 @@ version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "80e04d1dcff3aae0704555fe5fee3bcfaf3d1fdf8a7e521d5b9d2b42acb52cec"
 dependencies = [
- "hermit-abi 0.3.9",
+ "hermit-abi",
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys 0.52.0",
@@ -6929,12 +6760,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "number_prefix"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "830b246a0e5f20af87141b25c173cd1b609bd7779a4617d6ec582abaf90870f3"
-
-[[package]]
 name = "object"
 version = "0.36.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6997,16 +6822,6 @@ dependencies = [
  "libc",
  "pkg-config",
  "vcpkg",
-]
-
-[[package]]
-name = "os_pipe"
-version = "1.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ffd2b0a5634335b135d5728d84c5e0fd726954b87111f7506a61c502280d982"
-dependencies = [
- "libc",
- "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -8051,64 +7866,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "rivet"
-version = "0.1.0"
+name = "rivet-api"
+version = "0.0.1"
 dependencies = [
- "anyhow",
- "api-internal-monolith",
- "api-monolith",
- "build-default-create",
- "chrono",
- "clap",
- "cluster-datacenter-tls-renew",
- "cluster-default-update",
- "cluster-gc",
- "cluster-metrics-publish",
- "cluster-workflow-backfill",
- "colored_json",
- "global-error",
- "indoc 2.0.5",
- "job-gc",
- "linode-gc",
- "load-test-api-cloud",
- "load-test-mm",
- "load-test-mm-sustain",
- "load-test-sqlx",
- "load-test-watch-requests",
- "mm-gc",
- "monolith-worker",
- "monolith-workflow-worker",
- "nomad-monitor",
- "pegboard-dc-init",
- "pegboard-gc",
- "pegboard-ws",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-migrate",
- "rivet-pools",
- "rivet-runtime",
- "rivet-term",
- "s3-util",
+ "reqwest 0.11.27",
  "serde",
+ "serde_derive",
  "serde_json",
- "serde_yaml",
- "sqlx",
- "strum 0.26.3",
- "tabled",
- "telemetry-beacon",
- "tempfile",
- "thiserror",
- "tokio",
- "tracing",
+ "serde_with",
  "url",
- "user-delete-pending",
  "uuid",
- "workflow-gc",
- "workflow-metrics-publish",
 ]
 
 [[package]]
-name = "rivet-api"
+name = "rivet-api-cli"
 version = "0.0.1"
 dependencies = [
  "reqwest 0.11.27",
@@ -8210,6 +7981,63 @@ dependencies = [
  "thiserror",
  "types-proto",
  "uuid",
+]
+
+[[package]]
+name = "rivet-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "api-internal-monolith",
+ "api-monolith",
+ "build-default-create",
+ "chrono",
+ "clap",
+ "cluster-datacenter-tls-renew",
+ "cluster-default-update",
+ "cluster-gc",
+ "cluster-metrics-publish",
+ "cluster-workflow-backfill",
+ "colored_json",
+ "global-error",
+ "include_dir",
+ "indoc 2.0.5",
+ "job-gc",
+ "linode-gc",
+ "load-test-api-cloud",
+ "load-test-mm",
+ "load-test-mm-sustain",
+ "load-test-sqlx",
+ "load-test-watch-requests",
+ "mm-gc",
+ "monolith-worker",
+ "monolith-workflow-worker",
+ "nomad-monitor",
+ "pegboard-dc-init",
+ "pegboard-gc",
+ "pegboard-ws",
+ "rivet-migrate",
+ "rivet-pools",
+ "rivet-runtime",
+ "rivet-server",
+ "rivet-term",
+ "s3-util",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sqlx",
+ "strum 0.26.3",
+ "tabled",
+ "telemetry-beacon",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "url",
+ "user-delete-pending",
+ "uuid",
+ "workflow-gc",
+ "workflow-metrics-publish",
 ]
 
 [[package]]
@@ -8571,6 +8399,20 @@ dependencies = [
  "tracing",
  "tracing-logfmt",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "rivet-server"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "global-error",
+ "include_dir",
+ "rivet-health-checks",
+ "rivet-metrics",
+ "rivet-pools",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -9091,15 +8933,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_plain"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ce1fc6db65a611022b23a0dec6975d63fb80a302cb3388835ff02c097258d50"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "serde_repr"
 version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9220,16 +9053,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6"
 dependencies = [
  "lazy_static",
-]
-
-[[package]]
-name = "shared_child"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09fa9338aed9a1df411814a5b2252f7cd206c55ae9bf2fa763f8de84603aa60c"
-dependencies = [
- "libc",
- "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -9669,12 +9492,6 @@ dependencies = [
 
 [[package]]
 name = "strum"
-version = "0.25.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "290d54ea6f91c969195bdbcd7442c8c2a2ba87da8bf60a7ee86a235d4bc1e125"
-
-[[package]]
-name = "strum"
 version = "0.26.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fec0f0aef304996cf250b31b5a10dee7980c85da9d759361292b8bca5a18f06"
@@ -9693,19 +9510,6 @@ dependencies = [
  "quote",
  "rustversion",
  "syn 1.0.109",
-]
-
-[[package]]
-name = "strum_macros"
-version = "0.25.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23dc1fa9ac9c169a78ba62f0b841814b7abae11bdd047b9c58f893439e309ea0"
-dependencies = [
- "heck 0.4.1",
- "proc-macro2",
- "quote",
- "rustversion",
- "syn 2.0.79",
 ]
 
 [[package]]
@@ -10759,7 +10563,6 @@ dependencies = [
 name = "types-proto-build"
 version = "0.1.0"
 dependencies = [
- "bolt-config",
  "heck 0.3.3",
  "indoc 1.0.9",
  "prost-build",
@@ -11554,12 +11357,6 @@ name = "widestring"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7219d36b6eac893fa81e84ebe06485e7dcbb616177469b142df14f1f4deb1311"
-
-[[package]]
-name = "wildmatch"
-version = "2.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68ce1ab1f8c62655ebe1350f589c61e505cf94d385bc6a12899442d9081e71fd"
 
 [[package]]
 name = "winapi"

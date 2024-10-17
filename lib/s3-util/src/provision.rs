@@ -1,6 +1,6 @@
 use aws_sdk_s3::error::{CreateBucketError, CreateBucketErrorKind};
 
-use crate::{registry, Client, ClientError};
+use crate::{Client, ClientError, S3Bucket};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProvisionError {
@@ -13,7 +13,7 @@ pub enum ProvisionError {
 }
 
 /// Provisions all required S3 buckets.
-pub async fn provision() -> Result<(), ProvisionError> {
+pub async fn provision(buckets: &[S3Bucket]) -> Result<(), ProvisionError> {
 	// Build client
 	let region = crate::s3_region()?;
 	let (access_key_id, secret_access_key) = crate::s3_credentials()?;
@@ -21,7 +21,7 @@ pub async fn provision() -> Result<(), ProvisionError> {
 	let client = Client::new("", &endpoint, &region, &access_key_id, &secret_access_key)?;
 
 	// Provision buckets
-	for bucket in registry::BUCKETS {
+	for bucket in buckets {
 		let bucket_name = crate::namespaced_bucket_name(&bucket.name);
 
 		match client.create_bucket().bucket(&bucket_name).send().await {

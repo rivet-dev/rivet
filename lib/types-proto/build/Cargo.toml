@@ -6,7 +6,6 @@ authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 license = "Apache-2.0"
 
 [dependencies]
-bolt-config = { path = "../../bolt/config" }
 heck = "0.3"
 indoc = "1.0"
 prost-build = "0.11"
