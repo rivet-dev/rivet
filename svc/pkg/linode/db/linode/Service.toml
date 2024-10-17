@@ -1,7 +1,0 @@
-[service]
-name = "db-linode"
-
-[runtime]
-kind = "crdb"
-
-[database]

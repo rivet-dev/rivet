@@ -1,7 +1,0 @@
-[service]
-name = "db-cdn"
-
-[runtime]
-kind = "crdb"
-
-[database]

@@ -1,8 +1,0 @@
-[service]
-name = "api-job"
-essential = true
-
-[runtime]
-kind = "rust"
-
-[api-routes]

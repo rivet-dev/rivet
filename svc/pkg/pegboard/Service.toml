@@ -1,7 +1,0 @@
-[service]
-name = "pegboard"
-
-[runtime]
-kind = "rust"
-
-[package]

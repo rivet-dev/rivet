@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt, time::Duration};
 
 use anyhow::*;
-use bolt_config::service::RuntimeKind;
+use bolt_config::project::{SqlService, SqlServiceKind};
 use duct::cmd;
 use futures_util::{StreamExt, TryStreamExt};
 use indoc::formatdoc;
@@ -10,7 +10,7 @@ use tokio::{fs, io::AsyncWriteExt, task::block_in_place};
 
 use super::db;
 use crate::{
-	context::{ProjectContext, ServiceContext},
+	context::ProjectContext,
 	utils::{self, db_conn::DatabaseConnections},
 };
 
@@ -33,28 +33,22 @@ impl fmt::Display for ClickhouseRole {
 }
 
 struct MigrateCmd {
-	service: ServiceContext,
+	service: SqlService,
 	database_url: String,
 	cmd: String,
 }
 
 pub async fn create(
 	_ctx: &ProjectContext,
-	service: &ServiceContext,
+	service: &SqlService,
 	migration_name: &str,
 ) -> Result<()> {
-	let db_ext = match &service.config().runtime {
-		RuntimeKind::CRDB { .. } => "sql",
-		RuntimeKind::ClickHouse { .. } => "sql",
-		x => bail!("cannot migrate this type of service: {x:?}"),
-	};
-
 	block_in_place(|| {
 		cmd!(
 			"migrate",
 			"create",
 			"-ext",
-			db_ext,
+			"sql",
 			"-dir",
 			service.migrations_path(),
 			migration_name,
@@ -70,12 +64,12 @@ pub async fn check_all(ctx: &ProjectContext) -> Result<()> {
 	check(ctx, &services[..]).await
 }
 
-pub async fn check(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()> {
+pub async fn check(ctx: &ProjectContext, services: &[SqlService]) -> Result<()> {
 	// Spawn Cockroach test container
 	let crdb_port = utils::pick_port();
 	let crdb_container_id = if services
 		.iter()
-		.any(|x| matches!(x.config().runtime, RuntimeKind::CRDB { .. }))
+		.any(|x| matches!(x.kind, SqlServiceKind::CockroachDB))
 	{
 		let image = "cockroachdb/cockroach:v22.2.0";
 		rivet_term::status::progress("Creating container", image);
@@ -133,7 +127,7 @@ pub async fn check(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<
 	let clickhouse_port = utils::pick_port();
 	let clickhouse_container_id = if services
 		.iter()
-		.any(|x| matches!(x.config().runtime, RuntimeKind::ClickHouse { .. }))
+		.any(|x| matches!(x.kind, SqlServiceKind::ClickHouse))
 	{
 		let image = "clickhouse/clickhouse-server:22.12.3.5-alpine";
 		rivet_term::status::progress("Creating container", image);
@@ -184,12 +178,12 @@ pub async fn check(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<
 	// Run migrations against test containers
 	for svc in services {
 		eprintln!();
-		rivet_term::status::progress("Checking", svc.name());
+		rivet_term::status::progress("Checking", &svc.path);
 
-		let database_url = match &svc.config().runtime {
-			RuntimeKind::CRDB { .. } => {
+		let database_url = match &svc.kind {
+			SqlServiceKind::CockroachDB => {
 				// Build URL
-				let db_name = svc.crdb_db_name();
+				let db_name = &svc.db_name;
 				let database_url =
 					format!("cockroach://root@127.0.0.1:{crdb_port}/{db_name}?sslmode=disable",);
 
@@ -214,17 +208,17 @@ pub async fn check(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<
 
 				database_url
 			}
-			RuntimeKind::ClickHouse { .. } => {
+			SqlServiceKind::ClickHouse => {
 				if ctx.ns().clickhouse.is_none() {
 					rivet_term::status::warn(
 						"Warning",
-						format!("Clickhouse is disabled. Skipping {}", svc.name()),
+						format!("Clickhouse is disabled. Skipping {}", svc.path),
 					);
 					continue;
 				}
 
 				// Build URL
-				let db_name = svc.clickhouse_db_name();
+				let db_name = &svc.db_name;
 				let database_url =
 					format!("clickhouse://127.0.0.1:{clickhouse_port}/?database={db_name}&x-multi-statement=true");
 
@@ -252,7 +246,7 @@ pub async fn check(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<
 				"-database",
 				database_url,
 				"-path",
-				svc.migrations_path(),
+				format!("{}/migrations", svc.path),
 				"up",
 			)
 			.run()
@@ -276,11 +270,11 @@ pub async fn check(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<
 }
 
 pub async fn up_all(ctx: &ProjectContext) -> Result<()> {
-	let services = ctx.services_with_migrations().await;
+	let services = &ctx.config().services.sql;
 	up(ctx, &services[..]).await
 }
 
-pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()> {
+pub async fn up(ctx: &ProjectContext, services: &[SqlService]) -> Result<()> {
 	let conn = DatabaseConnections::create(ctx, services, false).await?;
 	let mut crdb_pre_queries = Vec::new();
 	let mut crdb_post_queries = Vec::new();
@@ -289,9 +283,9 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 
 	// Run migrations
 	for svc in services {
-		match &svc.config().runtime {
-			RuntimeKind::CRDB { .. } => {
-				let db_name = svc.crdb_db_name();
+		match &svc.kind {
+			SqlServiceKind::CockroachDB => {
+				let db_name = &svc.db_name;
 				let query = format!(r#"CREATE DATABASE IF NOT EXISTS "{db_name}";"#);
 
 				crdb_pre_queries.push(db::ShellQuery {
@@ -320,7 +314,7 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 					query: Some(query),
 				});
 			}
-			RuntimeKind::ClickHouse { .. } => {
+			SqlServiceKind::ClickHouse => {
 				if ctx.ns().clickhouse.is_none() {
 					rivet_term::status::warn(
 						"Warning",
@@ -329,7 +323,7 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 					continue;
 				}
 
-				let db_name = svc.clickhouse_db_name();
+				let db_name = &svc.db_name;
 
 				let query = formatdoc!(
 					"
@@ -428,8 +422,7 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 	rivet_term::status::progress("Running migrations", "");
 
 	let filtered_services = services.iter().filter(|svc| {
-		ctx.ns().clickhouse.is_some()
-			|| !matches!(&svc.config().runtime, RuntimeKind::ClickHouse { .. })
+		ctx.ns().clickhouse.is_some() || !matches!(&svc.kind, SqlServiceKind::ClickHouse)
 	});
 
 	let migrations = futures_util::stream::iter(filtered_services)
@@ -492,7 +485,7 @@ pub async fn up(ctx: &ProjectContext, services: &[ServiceContext]) -> Result<()>
 	Ok(())
 }
 
-pub async fn down(ctx: &ProjectContext, service: &ServiceContext, num: usize) -> Result<()> {
+pub async fn down(ctx: &ProjectContext, service: &SqlService, num: usize) -> Result<()> {
 	let conn = DatabaseConnections::create(ctx, &[service.clone()], false).await?;
 	let database_url = conn.migrate_db_url(service).await?;
 
@@ -507,7 +500,7 @@ pub async fn down(ctx: &ProjectContext, service: &ServiceContext, num: usize) ->
 	.await
 }
 
-pub async fn force(ctx: &ProjectContext, service: &ServiceContext, num: usize) -> Result<()> {
+pub async fn force(ctx: &ProjectContext, service: &SqlService, num: usize) -> Result<()> {
 	let conn = DatabaseConnections::create(ctx, &[service.clone()], false).await?;
 	let database_url = conn.migrate_db_url(service).await?;
 
@@ -522,7 +515,7 @@ pub async fn force(ctx: &ProjectContext, service: &ServiceContext, num: usize) -
 	.await
 }
 
-pub async fn drop(ctx: &ProjectContext, service: &ServiceContext) -> Result<()> {
+pub async fn drop(ctx: &ProjectContext, service: &SqlService) -> Result<()> {
 	let conn = DatabaseConnections::create(ctx, &[service.clone()], false).await?;
 	let database_url = conn.migrate_db_url(service).await?;
 
@@ -637,7 +630,7 @@ async fn migration(ctx: &ProjectContext, migration_cmds: &[MigrateCmd]) -> Resul
 	Ok(())
 }
 
-async fn upload_migrations(ctx: &ProjectContext, svc: &ServiceContext) -> Result<()> {
+async fn upload_migrations(ctx: &ProjectContext, svc: &SqlService) -> Result<()> {
 	let mut files = HashMap::new();
 
 	// Read all files in migrations directory

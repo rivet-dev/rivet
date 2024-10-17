@@ -1,9 +1,0 @@
-[service]
-name = "redis-cdn"
-
-[runtime]
-kind = "redis"
-persistent = true
-
-[cache]
-

@@ -25,7 +25,14 @@ struct Cli {
 
 #[derive(Parser)]
 enum SubCommand {
-	Start(start::Opts),
+	/// Starts the Rivet server
+	Server(server::Opts),
+	/// Manages databases
+	#[clap(alias = "db")]
+	Database {
+		#[clap(subcommand)]
+		command: db::SubCommand,
+	},
 }
 
 #[tokio::main]
@@ -33,6 +40,7 @@ async fn main() -> Result<()> {
 	let cli = Cli::parse();
 
 	match cli.command {
-		SubCommand::Start(opts) => opts.execute().await,
+		SubCommand::Server(opts) => opts.execute().await,
+		SubCommand::Database { command } => command.execute().await,
 	}
 }

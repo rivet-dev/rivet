@@ -1,7 +1,0 @@
-[service]
-name = "mm-lobby-for-run-id"
-
-[runtime]
-kind = "rust"
-
-[operation]

@@ -1,9 +1,0 @@
-[service]
-name = "redis-job"
-
-[runtime]
-kind = "redis"
-persistent = true
-
-[cache]
-

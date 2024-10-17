@@ -72,9 +72,13 @@ impl PoolsInner {
 		self.redis("ephemeral")
 	}
 
+	pub fn clickhouse_enabled(&self) -> bool {
+		std::env::var("CLICKHOUSE_DISABLED").is_err()
+	}
+
 	pub fn clickhouse(&self) -> GlobalResult<ClickHousePool> {
 		ensure_with!(
-			std::env::var("CLICKHOUSE_DISABLED").is_err(),
+			self.clickhouse_enabled(),
 			FEATURE_DISABLED,
 			feature = "Clickhouse"
 		);

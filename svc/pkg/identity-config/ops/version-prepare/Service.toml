@@ -1,7 +1,0 @@
-[service]
-name = "identity-config-version-prepare"
-
-[runtime]
-kind = "rust"
-
-[operation]

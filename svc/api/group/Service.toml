@@ -1,8 +1,0 @@
-[service]
-name = "api-group"
-
-[runtime]
-kind = "rust"
-
-[api-routes]
-

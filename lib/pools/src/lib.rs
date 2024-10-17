@@ -127,8 +127,17 @@ async fn nats_from_env(client_name: String) -> Result<Option<NatsPool>, Error> {
 }
 
 #[tracing::instrument]
-async fn crdb_from_env(_client_name: String) -> Result<Option<CrdbPool>, Error> {
+pub fn crdb_url_from_env() -> Result<Option<String>, Error> {
 	if let Some(url) = std::env::var("CRDB_URL").ok() {
+		Ok(Some(url))
+	} else {
+		Ok(None)
+	}
+}
+
+#[tracing::instrument]
+async fn crdb_from_env(_client_name: String) -> Result<Option<CrdbPool>, Error> {
+	if let Some(url) = crdb_url_from_env()? {
 		let min_connections = std::env::var("CRDB_MIN_CONNECTIONS")
 			.ok()
 			.and_then(|s| s.parse::<u32>().ok())
@@ -230,8 +239,17 @@ async fn redis_from_env() -> Result<HashMap<String, RedisPool>, Error> {
 }
 
 #[tracing::instrument]
-fn clickhouse_from_env() -> Result<Option<ClickHousePool>, Error> {
+pub fn clickhouse_url_from_env() -> Result<Option<String>, Error> {
 	if let Some(url) = std::env::var("CLICKHOUSE_URL").ok() {
+		Ok(Some(url))
+	} else {
+		Ok(None)
+	}
+}
+
+#[tracing::instrument]
+fn clickhouse_from_env() -> Result<Option<ClickHousePool>, Error> {
+	if let Some(url) = clickhouse_url_from_env()? {
 		tracing::info!(%url, "clickhouse connecting");
 
 		// Build HTTP client

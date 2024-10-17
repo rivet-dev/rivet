@@ -1,7 +1,0 @@
-[service]
-name = "db-mm-state"
-
-[runtime]
-kind = "crdb"
-
-[database]

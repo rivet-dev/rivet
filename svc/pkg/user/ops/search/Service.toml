@@ -1,7 +1,0 @@
-[service]
-name = "user-search"
-
-[runtime]
-kind = "rust"
-
-[operation]

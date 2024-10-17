@@ -1,7 +1,0 @@
-[service]
-name = "region-list-for-game"
-
-[runtime]
-kind = "rust"
-
-[operation]

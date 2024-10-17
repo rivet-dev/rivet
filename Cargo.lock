@@ -8056,6 +8056,7 @@ dependencies = [
  "pegboard-dc-init",
  "pegboard-gc",
  "pegboard-ws",
+ "rivet-migrate",
  "telemetry-beacon",
  "tokio",
  "tracing",
@@ -8342,6 +8343,23 @@ dependencies = [
  "lazy_static",
  "prometheus",
  "tracing",
+]
+
+[[package]]
+name = "rivet-migrate"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "futures-util",
+ "include_dir",
+ "indoc 1.0.9",
+ "rivet-pools",
+ "rivet-util",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "url",
+ "urlencoding",
 ]
 
 [[package]]

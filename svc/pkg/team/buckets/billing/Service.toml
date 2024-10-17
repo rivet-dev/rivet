@@ -1,8 +1,0 @@
-[service]
-name = "bucket-billing"
-
-[runtime]
-kind = "s3"
-upload_policy = "none"
-
-[database]

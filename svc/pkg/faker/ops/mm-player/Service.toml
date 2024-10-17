@@ -1,7 +1,0 @@
-[service]
-name = "faker-mm-player"
-
-[runtime]
-kind = "rust"
-
-[operation]

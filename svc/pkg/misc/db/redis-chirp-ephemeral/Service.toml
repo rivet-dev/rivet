@@ -1,9 +1,0 @@
-[service]
-name = "redis-chirp-ephemeral"
-
-[runtime]
-kind = "redis"
-persistent = false
-
-[cache]
-

@@ -1,9 +1,0 @@
-[service]
-name = "load-test-mm-sustain"
-load-test = true
-
-[runtime]
-kind = "rust"
-
-[headless]
-

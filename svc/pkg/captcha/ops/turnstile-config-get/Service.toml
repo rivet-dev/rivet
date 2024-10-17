@@ -1,7 +1,0 @@
-[service]
-name = "captcha-turnstile-config-get"
-
-[runtime]
-kind = "rust"
-
-[operation]

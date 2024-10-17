@@ -6,10 +6,6 @@ mod migrate;
 
 #[derive(Parser)]
 pub enum SubCommand {
-	Migrate {
-		#[clap(subcommand)]
-		command: migrate::SubCommand,
-	},
 	#[clap(alias = "sh")]
 	Shell {
 		#[clap(index = 1)]
@@ -24,7 +20,6 @@ pub enum SubCommand {
 impl SubCommand {
 	pub async fn execute(self, ctx: ProjectContext) -> Result<()> {
 		match self {
-			Self::Migrate { command } => command.execute(ctx).await,
 			Self::Shell {
 				service,
 				query,

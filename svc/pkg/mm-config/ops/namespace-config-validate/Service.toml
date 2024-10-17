@@ -1,7 +1,0 @@
-[service]
-name = "mm-config-namespace-config-validate"
-
-[runtime]
-kind = "rust"
-
-[operation]

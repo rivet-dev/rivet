@@ -11,6 +11,7 @@ tokio = { version = "1.29", features = ["full", "tracing"] }
 global-error = { path = "lib/global-error" }
 tracing = "0.1"
 clap = { version = "4.3", features = ["derive"] }
+rivet-migrate = { path = "lib/migrate" }
 
  # Standalone
 cluster-datacenter-tls-renew = { path = "svc/pkg/cluster/standalone/datacenter-tls-renew", optional = true }
@@ -347,6 +348,8 @@ members = [
 	"lib/chirp/types",
 	"lib/chirp/worker",
 	"lib/chirp/worker-attributes",
+	"lib/chirp-workflow/core",
+	"lib/chirp-workflow/macros",
 	"lib/bolt/cli",
 	"lib/bolt/core",
 	"lib/bolt/config",
@@ -360,7 +363,7 @@ members = [
 	"lib/cache/result",
 	"lib/pegboard/container-runner",
 	"lib/pegboard/manager",
-	"lib/pegboard/echo",
+	"lib/pegboard/echo", "lib/migrate",
 ]
 
 # Speed up compilation

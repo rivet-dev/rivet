@@ -1,9 +1,0 @@
-[service]
-name = "redis-cache"
-
-[runtime]
-kind = "redis"
-persistent = false
-
-[cache]
-

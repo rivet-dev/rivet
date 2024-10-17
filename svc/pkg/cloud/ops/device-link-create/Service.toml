@@ -1,7 +1,0 @@
-[service]
-name = "cloud-device-link-create"
-
-[runtime]
-kind = "rust"
-
-[operation]

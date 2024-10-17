@@ -1,7 +1,0 @@
-[service]
-name = "game-validate"
-
-[runtime]
-kind = "rust"
-
-[operation]

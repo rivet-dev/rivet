@@ -1,7 +1,0 @@
-[service]
-name = "db-identity-config"
-
-[runtime]
-kind = "crdb"
-
-[database]

@@ -1,7 +1,0 @@
-[service]
-name = "api-portal"
-
-[runtime]
-kind = "rust"
-
-[api-routes]

@@ -1,7 +1,0 @@
-[service]
-name = "game-namespace-resolve-url"
-
-[runtime]
-kind = "rust"
-
-[operation]

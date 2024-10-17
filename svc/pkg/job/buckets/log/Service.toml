@@ -1,8 +1,0 @@
-[service]
-name = "bucket-job-log"
-
-[runtime]
-kind = "s3"
-upload_policy = "none"  # TODO: Change to `none` and use presigned requests
-
-[database]

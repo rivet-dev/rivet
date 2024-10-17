@@ -1,7 +1,0 @@
-[service]
-name = "db-job-config"
-
-[runtime]
-kind = "crdb"
-
-[database]

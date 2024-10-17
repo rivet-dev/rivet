@@ -1,8 +1,0 @@
-[service]
-name = "faker-game"
-test-only = true
-
-[runtime]
-kind = "rust"
-
-[operation]

@@ -1,9 +1,0 @@
-[workspace]
-members = [
-	"client",
-	"metrics",
-	"perf",
-	"types",
-	"worker",
-	"worker-attributes",
-]

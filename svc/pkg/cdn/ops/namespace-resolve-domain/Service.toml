@@ -1,7 +1,0 @@
-[service]
-name = "cdn-namespace-resolve-domain"
-
-[runtime]
-kind = "rust"
-
-[operation]

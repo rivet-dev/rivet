@@ -1,8 +1,0 @@
-[service]
-name = "api-cloud"
-
-[runtime]
-kind = "rust"
-
-[api-routes]
-

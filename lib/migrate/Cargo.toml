@@ -1,0 +1,18 @@
+[package]
+name = "rivet-migrate"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+futures-util = "0.3"
+include_dir = "0.7.4"
+indoc = "1.0"
+rivet-pools = { path = "../pools" }
+rivet-util = { path = "../util/core" }
+tempfile = "3.13.0"
+tokio = { version = "1.29", features = ["full"] }
+tracing = "0.1"
+url = "2.5.2"
+urlencoding = "2.1.3"
+

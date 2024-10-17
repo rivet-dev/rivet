@@ -1,7 +1,0 @@
-[service]
-name = "cloud-worker"
-
-[runtime]
-kind = "rust"
-
-[consumer]

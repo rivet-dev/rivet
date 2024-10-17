@@ -1,7 +1,0 @@
-[service]
-name = "db-user"
-
-[runtime]
-kind = "crdb"
-
-[database]

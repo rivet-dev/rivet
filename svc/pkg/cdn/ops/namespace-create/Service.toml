@@ -1,7 +1,0 @@
-[service]
-name = "cdn-namespace-create"
-
-[runtime]
-kind = "rust"
-
-[operation]

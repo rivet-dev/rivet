@@ -1,7 +1,0 @@
-[service]
-name = "mm-config-game-upsert"
-
-[runtime]
-kind = "rust"
-
-[operation]

@@ -1,7 +1,0 @@
-[service]
-name = "api-cf-verification"
-
-[runtime]
-kind = "rust"
-
-[api-routes]

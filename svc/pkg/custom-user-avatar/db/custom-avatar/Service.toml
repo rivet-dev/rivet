@@ -1,7 +1,0 @@
-[service]
-name = "db-game-custom-avatar"
-
-[runtime]
-kind = "crdb"
-
-[database]

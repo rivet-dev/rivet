@@ -1,7 +1,0 @@
-[service]
-name = "db-user-follow"
-
-[runtime]
-kind = "crdb"
-
-[database]

@@ -5,8 +5,11 @@ use indoc::indoc;
 use urlencoding::encode;
 
 use crate::{
-	config::{self, service::RuntimeKind},
-	context::{ProjectContext, ServiceContext},
+	config::{
+		self,
+		project::{SqlService, SqlServiceKind},
+	},
+	context::ProjectContext,
 	dep::terraform,
 };
 
@@ -20,7 +23,7 @@ pub struct DatabaseConnections {
 impl DatabaseConnections {
 	pub async fn create(
 		ctx: &ProjectContext,
-		services: &[ServiceContext],
+		services: &[SqlService],
 		forwarded: bool,
 	) -> Result<Arc<DatabaseConnections>> {
 		match &ctx.ns().cluster.kind {
@@ -39,7 +42,7 @@ impl DatabaseConnections {
 
 	async fn create_local(
 		_ctx: &ProjectContext,
-		services: &[ServiceContext],
+		services: &[SqlService],
 	) -> Result<Arc<DatabaseConnections>> {
 		let mut redis_hosts = HashMap::new();
 		let mut cockroach_host = None;
@@ -47,7 +50,7 @@ impl DatabaseConnections {
 		let mut clickhouse_config = None;
 
 		for svc in services {
-			match &svc.config().runtime {
+			match &svc.kind {
 				RuntimeKind::Redis { persistent } => {
 					let name = svc.name();
 
@@ -98,7 +101,7 @@ impl DatabaseConnections {
 
 	async fn create_local_forwarded(
 		_ctx: &ProjectContext,
-		services: &[ServiceContext],
+		services: &[SqlService],
 	) -> Result<Arc<DatabaseConnections>> {
 		let mut redis_hosts = HashMap::new();
 		let mut cockroach_host = None;
@@ -138,7 +141,7 @@ impl DatabaseConnections {
 
 	async fn create_distributed(
 		ctx: &ProjectContext,
-		services: &[ServiceContext],
+		services: &[SqlService],
 	) -> Result<Arc<DatabaseConnections>> {
 		let mut redis_hosts = HashMap::new();
 		let mut cockroach_host = None;
@@ -199,57 +202,5 @@ impl DatabaseConnections {
 			clickhouse_host,
 			clickhouse_config,
 		}))
-	}
-
-	/// Returns the URL to use for database migrations.
-	pub async fn migrate_db_url(&self, service: &ServiceContext) -> Result<String> {
-		let project_ctx = service.project().await;
-
-		match &service.config().runtime {
-			RuntimeKind::CRDB { .. } => {
-				let db_name = service.crdb_db_name();
-				let host = self.cockroach_host.as_ref().unwrap();
-				let username = project_ctx.read_secret(&["crdb", "username"]).await?;
-				let password = project_ctx.read_secret(&["crdb", "password"]).await?;
-
-				// Serverless clusters require a cluster identifier
-				let full_db_name = match &project_ctx.ns().cluster.kind {
-					config::ns::ClusterKind::SingleNode { .. } => db_name,
-					config::ns::ClusterKind::Distributed { .. } => {
-						let crdb_data = terraform::output::read_crdb(&project_ctx).await;
-
-						format!("{}.{}", *crdb_data.cluster_identifier, db_name)
-					}
-				};
-
-				Ok(format!(
-					"cockroach://{}:{}@{}/{}?sslmode=verify-ca&sslrootcert=/local/crdb-ca.crt",
-					encode(&username),
-					encode(&password),
-					host,
-					encode(&full_db_name),
-				))
-			}
-			RuntimeKind::ClickHouse { .. } => {
-				let db_name = service.clickhouse_db_name();
-				let clickhouse_user = "bolt";
-				let clickhouse_password = project_ctx
-					.read_secret(&["clickhouse", "users", "bolt", "password"])
-					.await?;
-				let host = self.clickhouse_host.as_ref().unwrap();
-
-				let query_other = "&x-multi-statement=true&x-migrations-table-engine=ReplicatedMergeTree&secure=true&skip_verify=true".to_string();
-
-				Ok(format!(
-					"clickhouse://{}/?database={}&username={}&password={}{}",
-					host,
-					encode(&db_name),
-					encode(&clickhouse_user),
-					encode(&clickhouse_password),
-					query_other,
-				))
-			}
-			x @ _ => bail!("cannot migrate this type of service: {x:?}"),
-		}
 	}
 }

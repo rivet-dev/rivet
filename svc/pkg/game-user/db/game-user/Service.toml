@@ -1,7 +1,0 @@
-[service]
-name = "db-game-user"
-
-[runtime]
-kind = "crdb"
-
-[database]

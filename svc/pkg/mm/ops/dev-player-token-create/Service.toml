@@ -1,7 +1,0 @@
-[service]
-name = "mm-dev-player-token-create"
-
-[runtime]
-kind = "rust"
-
-[operation]

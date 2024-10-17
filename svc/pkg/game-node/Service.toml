@@ -1,7 +1,0 @@
-[service]
-name = "game-node"
-
-[runtime]
-kind = "rust"
-
-[package]

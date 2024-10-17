@@ -1,8 +1,0 @@
-[service]
-name = "cluster-datacenter-tls-renew"
-
-[runtime]
-kind = "rust"
-
-[headless]
-singleton = true

@@ -1,7 +1,0 @@
-[service]
-name = "db-workflow"
-
-[runtime]
-kind = "crdb"
-
-[database]

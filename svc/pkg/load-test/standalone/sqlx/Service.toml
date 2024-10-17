@@ -1,9 +1,0 @@
-[service]
-name = "load-test-sqlx"
-load-test = true
-
-[runtime]
-kind = "rust"
-
-[headless]
-

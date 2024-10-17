@@ -1,9 +1,0 @@
-[service]
-name = "load-test-watch-requests"
-load-test = true
-
-[runtime]
-kind = "rust"
-
-[headless]
-

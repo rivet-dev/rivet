@@ -1,8 +1,0 @@
-[service]
-name = "workflow-metrics-publish"
-
-[runtime]
-kind = "rust"
-
-[headless]
-singleton = true

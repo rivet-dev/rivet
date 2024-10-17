@@ -1,8 +1,0 @@
-[service]
-name = "api-identity"
-
-[runtime]
-kind = "rust"
-
-[api-routes]
-

@@ -1,7 +1,0 @@
-[service]
-name = "email-send"
-
-[runtime]
-kind = "rust"
-
-[operation]
