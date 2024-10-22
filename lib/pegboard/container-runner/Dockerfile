@@ -1,6 +1,6 @@
 FROM clux/muslrust:1.81.0-stable
 
 WORKDIR /app
-COPY . .
+COPY Cargo.toml .
+COPY src/ src/
 RUN cargo build --release --bin container-runner
-

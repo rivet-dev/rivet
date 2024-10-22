@@ -8,7 +8,7 @@ use nix::{
 	unistd::Pid,
 };
 use pegboard::protocol;
-use pegboard_manager::{utils, Ctx};
+use pegboard_manager::Ctx;
 use tokio::{net::TcpStream, sync::Mutex};
 use tokio_tungstenite::tungstenite::protocol::Message;
 use uuid::Uuid;
@@ -18,30 +18,31 @@ use common::*;
 
 /// Verifies client picks up actor killed by external signal.
 #[tokio::test(flavor = "multi_thread")]
-async fn actor_external_kill() {
+async fn container_external_kill() {
 	setup_tracing();
 
 	tracing::info!("starting test");
 
-	let _temp_dir = setup_dependencies().await;
+	let (_gen_tmp_dir, gen_tmp_dir_path) = setup_dependencies().await;
 
 	let ctx_wrapper: Arc<Mutex<Option<Arc<Ctx>>>> = Arc::new(Mutex::new(None));
 	let (close_tx, close_rx) = tokio::sync::watch::channel(());
+	let close_tx = Arc::new(close_tx);
 
 	let port = portpicker::pick_unused_port().expect("no free ports");
 	start_server(ctx_wrapper.clone(), close_tx, port, handle_connection);
 
 	// Init project directories
 	let tmp_dir = tempfile::TempDir::new().unwrap();
-	utils::init(tmp_dir.path()).await.unwrap();
+	let config = init_client(&gen_tmp_dir_path, tmp_dir.path()).await;
 	tracing::info!(path=%tmp_dir.path().display(), "client dir");
 
-	start_client(tmp_dir.path(), ctx_wrapper, close_rx, port).await;
+	start_client(config, ctx_wrapper, close_rx, port).await;
 }
 
 async fn handle_connection(
 	ctx_wrapper: Arc<Mutex<Option<Arc<Ctx>>>>,
-	close_tx: tokio::sync::watch::Sender<()>,
+	close_tx: Arc<tokio::sync::watch::Sender<()>>,
 	raw_stream: TcpStream,
 ) {
 	tokio::spawn(async move {

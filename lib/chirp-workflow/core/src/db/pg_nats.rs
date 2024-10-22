@@ -1706,7 +1706,7 @@ mod types {
 		fn encode_by_ref(
 			&self,
 			buf: &mut sqlx::postgres::PgArgumentBuffer,
-		) -> sqlx::encode::IsNull {
+		) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
 			<serde_json::Value as sqlx::Encode<'q, sqlx::Postgres>>::encode(
 				serialize_location(self),
 				buf,

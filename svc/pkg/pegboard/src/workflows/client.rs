@@ -44,7 +44,6 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 								client_id,
 								inner: protocol::ToClient::Init {
 									last_event_idx: init_data.last_event_idx,
-									api_endpoint: util::env::origin_api().to_string(),
 								},
 							})
 							.tags(json!({}))

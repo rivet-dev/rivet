@@ -1,0 +1,5 @@
+*
+
+!lib/pegboard/runner-protocol
+!lib/pegboard/v8-isolate-runner/Cargo.toml
+!lib/pegboard/v8-isolate-runner/src

@@ -26,23 +26,23 @@ const MAX_BUFFER_BYTES: usize = 1024 * 1024;
 /// identify the reasons for program crashes from the container's output.
 const MAX_PREVIEW_LINES: usize = 128;
 
-fn main() -> anyhow::Result<()> {
-	let pegboard_actor_dir = std::env::args()
+fn main() -> Result<()> {
+	let actor_path = std::env::args()
 		.skip(1)
 		.next()
-		.context("`actor_dir` arg required")?;
-	let pegboard_actor_dir = Path::new(&pegboard_actor_dir);
+		.context("`actor_path` arg required")?;
+	let actor_path = Path::new(&actor_path);
 
 	// Write PID to file
 	fs::write(
-		pegboard_actor_dir.join("pid"),
+		actor_path.join("pid"),
 		std::process::id().to_string().as_bytes(),
 	)?;
 
-	let root_user_enabled = var("PEGBOARD_META_root_user_enabled")? == "1";
-	let stakeholder = match var("PEGBOARD_META_stakeholder").ok() {
+	let root_user_enabled = var("ROOT_USER_ENABLED")? == "1";
+	let stakeholder = match var("STAKEHOLDER").ok() {
 		Some(x) if x == "dynamic_server" => Stakeholder::DynamicServer {
-			server_id: var("PEGBOARD_META_server_id")?,
+			server_id: var("SERVER_ID")?,
 		},
 		Some(x) => bail!("invalid actor stakeholder: {x}"),
 		None => bail!("no actor stakeholder specified"),
@@ -61,7 +61,7 @@ fn main() -> anyhow::Result<()> {
 	let log_shipper_thread = log_shipper.spawn();
 
 	// Run the container
-	let exit_code = match run_container(msg_tx.clone(), &pegboard_actor_dir, root_user_enabled) {
+	let exit_code = match run_container(msg_tx.clone(), &actor_path, root_user_enabled) {
 		Result::Ok(exit_code) => exit_code,
 		Err(err) => {
 			eprintln!("run container failed: {err:?}");
@@ -96,7 +96,7 @@ fn main() -> anyhow::Result<()> {
 	}
 
 	fs::write(
-		pegboard_actor_dir.join("exit-code"),
+		actor_path.join("exit-code"),
 		exit_code.to_string().as_bytes(),
 	)?;
 
@@ -108,17 +108,17 @@ fn main() -> anyhow::Result<()> {
 /// Returns the exit code of the container that will be passed to the parent
 fn run_container(
 	msg_tx: mpsc::SyncSender<log_shipper::ReceivedMessage>,
-	pegboard_actor_dir: &Path,
+	actor_path: &Path,
 	root_user_enabled: bool,
-) -> anyhow::Result<i32> {
-	// Extract actor id from dir
-	let actor_id = pegboard_actor_dir
+) -> Result<i32> {
+	// Extract actor id from path
+	let actor_id = actor_path
 		.iter()
 		.last()
-		.context("empty `pegboard_actor_dir`")?
+		.context("empty `actor_path`")?
 		.to_string_lossy()
 		.to_string();
-	let oci_bundle_path = pegboard_actor_dir.join("oci-bundle");
+	let oci_bundle_path = actor_path.join("oci-bundle");
 	let oci_bundle_config_json = oci_bundle_path.join("config.json");
 
 	// Validate OCI bundle

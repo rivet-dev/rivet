@@ -103,14 +103,14 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 						pp::ActorState::Starting => {
 							ctx.activity(SetStartedInput { server_id }).await?;
 						}
-						pp::ActorState::Running { proxied_ports, .. } => {
+						pp::ActorState::Running { ports, .. } => {
 							// Wait for Traefik to be ready
 							ctx.sleep(TRAEFIK_GRACE_PERIOD).await?;
 
 							ctx.activity(UpdatePortsInput {
 								server_id,
 								datacenter_id,
-								proxied_ports,
+								ports,
 							})
 							.await?;
 						}
@@ -368,7 +368,7 @@ async fn select_resources(
 struct UpdatePortsInput {
 	server_id: Uuid,
 	datacenter_id: Uuid,
-	proxied_ports: util::serde::HashableMap<String, pp::ProxiedPort>,
+	ports: util::serde::HashableMap<String, pp::BoundPort>,
 }
 
 #[activity(UpdatePorts)]
@@ -377,7 +377,7 @@ async fn update_ports(ctx: &ActivityCtx, input: &UpdatePortsInput) -> GlobalResu
 	let mut flat_port_sources = Vec::new();
 	let mut flat_port_ips = Vec::new();
 
-	for (label, port) in &input.proxied_ports {
+	for (label, port) in &input.ports {
 		flat_port_labels.push(label.as_str());
 		flat_port_sources.push(port.source as i64);
 		flat_port_ips.push(port.ip.to_string());
@@ -420,7 +420,7 @@ async fn update_ports(ctx: &ActivityCtx, input: &UpdatePortsInput) -> GlobalResu
 	.await?;
 
 	// Invalidate cache when ports are updated
-	if !input.proxied_ports.is_empty() {
+	if !input.ports.is_empty() {
 		ctx.cache()
 			.purge("servers_ports", [input.datacenter_id])
 			.await?;

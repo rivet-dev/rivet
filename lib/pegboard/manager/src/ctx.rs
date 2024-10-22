@@ -1,10 +1,4 @@
-use std::{
-	collections::HashMap,
-	net::Ipv4Addr,
-	path::{Path, PathBuf},
-	sync::Arc,
-	time::Duration,
-};
+use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 
 use anyhow::*;
 use futures_util::{
@@ -17,18 +11,17 @@ use pegboard::protocol;
 use sqlx::{pool::PoolConnection, Sqlite, SqlitePool};
 use sysinfo::System;
 use tokio::{
-	fs,
-	net::TcpStream,
-	process::Command,
+	net::{TcpListener, TcpStream},
 	sync::{Mutex, RwLock},
 };
 use tokio_tungstenite::{tungstenite::protocol::Message, MaybeTlsStream, WebSocketStream};
-use url::Url;
 use uuid::Uuid;
 
-use crate::{actor::Actor, metrics, utils};
+use crate::{actor::Actor, config::Config, metrics, runner, utils};
 
 const PING_INTERVAL: Duration = Duration::from_secs(1);
+/// TCP Port for runners to connect to.
+const RUNNER_PORT: u16 = 54321;
 
 #[derive(sqlx::FromRow)]
 struct ActorRow {
@@ -39,33 +32,30 @@ struct ActorRow {
 }
 
 pub struct Ctx {
-	path: PathBuf,
+	config: Config,
 	pool: SqlitePool,
 	tx: Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>,
 
-	pub(crate) network_ip: Ipv4Addr,
 	pub(crate) system: System,
-	pub(crate) api_endpoint: RwLock<Option<String>>,
 	pub(crate) actors: RwLock<HashMap<Uuid, Arc<Actor>>>,
+	isolate_runner: RwLock<Option<runner::Handle>>,
 }
 
 impl Ctx {
 	pub fn new(
-		path: PathBuf,
-		network_ip: Ipv4Addr,
+		config: Config,
 		system: System,
 		pool: SqlitePool,
 		tx: SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
 	) -> Arc<Self> {
 		Arc::new(Ctx {
-			path,
+			config,
 			pool,
 			tx: Mutex::new(tx),
 
-			network_ip,
 			system,
-			api_endpoint: RwLock::new(None),
 			actors: RwLock::new(HashMap::new()),
+			isolate_runner: RwLock::new(None),
 		})
 	}
 
@@ -141,11 +131,11 @@ impl Ctx {
 
 	pub async fn start(
 		self: &Arc<Self>,
-		mut rx: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
+		rx: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
 	) -> Result<()> {
 		// Start ping thread
 		let self2 = self.clone();
-		tokio::spawn(async move {
+		let ping_thread = tokio::spawn(async move {
 			loop {
 				tokio::time::sleep(PING_INTERVAL).await;
 				self2
@@ -154,6 +144,33 @@ impl Ctx {
 					.await
 					.send(Message::Ping(Vec::new()))
 					.await?;
+			}
+
+			#[allow(unreachable_code)]
+			Ok(())
+		});
+
+		// Start runner socket
+		let self2 = self.clone();
+		let runner_socket = tokio::spawn(async move {
+			tracing::warn!(port=%RUNNER_PORT, "listening for runner sockets");
+			let listener = TcpListener::bind(("0.0.0.0", RUNNER_PORT)).await?;
+
+			loop {
+				use std::result::Result::{Err, Ok};
+				match listener.accept().await {
+					Ok((stream, _)) => {
+						let mut socket = tokio_tungstenite::accept_async(stream).await?;
+
+						if let Some(runner) = &*self2.isolate_runner.read().await {
+							runner.attach_socket(socket).await?;
+						} else {
+							socket.close(None).await?;
+							bail!("no isolate runner to attach socket to");
+						}
+					}
+					Err(err) => tracing::error!(?err, "failed to connect websocket"),
+				}
 			}
 
 			#[allow(unreachable_code)]
@@ -188,7 +205,19 @@ impl Ctx {
 			.await?;
 		}
 
-		// Receive messages from socket
+		tokio::try_join!(
+			async { ping_thread.await? },
+			async { runner_socket.await? },
+			self.receive_messages(rx),
+		)?;
+
+		Ok(())
+	}
+
+	async fn receive_messages(
+		self: &Arc<Self>,
+		mut rx: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
+	) -> Result<()> {
 		while let Some(msg) = rx.next().await {
 			match msg? {
 				Message::Binary(buf) => {
@@ -215,19 +244,12 @@ impl Ctx {
 		tracing::debug!(?packet, "received packet");
 
 		match packet {
-			protocol::ToClient::Init {
-				last_event_idx,
-				api_endpoint,
-			} => {
-				{
-					let mut guard = self.api_endpoint.write().await;
-					*guard = Some(api_endpoint);
-				}
-
+			protocol::ToClient::Init { last_event_idx } => {
 				// Send out all missed events
 				self.rebroadcast(last_event_idx).await?;
 
-				// Rebuild state only after the init packet is received and processed
+				// Rebuild state only after the init packet is received and processed so that we don't emit
+				// any new events before the missed events are rebroadcast
 				self.rebuild().await?;
 			}
 			protocol::ToClient::Commands(commands) => {
@@ -301,6 +323,99 @@ impl Ctx {
 		Ok(())
 	}
 
+	// Should not be called before `rebuild`.
+	pub(crate) async fn get_or_spawn_isolate_runner(self: &Arc<Self>) -> Result<runner::Handle> {
+		let mut guard = self.isolate_runner.write().await;
+
+		if let Some(runner) = &*guard {
+			Ok(runner.clone())
+		} else {
+			tracing::info!("spawning new isolate runner");
+
+			let env = vec![
+				(
+					"VECTOR_SOCKET_ADDR",
+					self.config.vector_socket_addr.to_string(),
+				),
+				(
+					"ACTORS_PATH",
+					self.actors_path().to_str().context("bad path")?.to_string(),
+				),
+			];
+			let working_path = self.isolate_runner_path();
+
+			let runner = runner::Handle::spawn_orphaned(
+				runner::Comms::socket(),
+				&self.config.isolate_runner_binary_path,
+				working_path,
+				&env,
+			)?;
+			let pid = runner.pid();
+
+			self.observe_isolate_runner(&runner);
+
+			// Save runner pid
+			utils::query(|| async {
+				sqlx::query(indoc!(
+					"
+					UPDATE state
+					SET isolate_runner_pid = ?1
+					",
+				))
+				.bind(pid.as_raw())
+				.execute(&mut *self.sql().await?)
+				.await
+			})
+			.await?;
+
+			*guard = Some(runner.clone());
+
+			Ok(runner)
+		}
+	}
+
+	fn observe_isolate_runner(self: &Arc<Self>, runner: &runner::Handle) {
+		// Observe runner
+		let self2 = self.clone();
+		let runner2 = runner.clone();
+		tokio::spawn(async move {
+			use std::result::Result::{Err, Ok};
+
+			let exit_code = match runner2.observe().await {
+				Ok(exit_code) => exit_code,
+				Err(err) => {
+					// TODO: This should hard error the manager
+					tracing::error!(%err, "failed to observe isolate runner");
+					return;
+				}
+			};
+
+			tracing::error!(?exit_code, "isolate runner exited");
+
+			// Update in-memory state
+			let mut guard = self2.isolate_runner.write().await;
+			*guard = None;
+
+			// Update db state
+			let res = utils::query(|| async {
+				sqlx::query(indoc!(
+					"
+					UPDATE state
+					SET isolate_runner_pid = NULL
+					",
+				))
+				.execute(&mut *self2.sql().await?)
+				.await
+			})
+			.await;
+
+			if let Err(err) = res {
+				// TODO: This should hard error the manager
+				tracing::error!(%err, "failed to write isolate runner pid");
+			}
+		});
+	}
+
 	async fn rebroadcast(&self, last_event_idx: i64) -> Result<()> {
 		// Fetch all missed events
 		let events = utils::query(|| async {
@@ -334,18 +449,49 @@ impl Ctx {
 
 	// Rebuilds state from DB
 	async fn rebuild(self: &Arc<Self>) -> Result<()> {
-		let actor_rows = utils::query(|| async {
-			sqlx::query_as::<_, ActorRow>(indoc!(
-				"
-				SELECT actor_id, config, pid, stop_ts
-				FROM actors
-				WHERE exit_ts IS NULL
-				",
-			))
-			.fetch_all(&mut *self.sql().await?)
-			.await
-		})
-		.await?;
+		use std::result::Result::{Err, Ok};
+		let (actor_rows, isolate_runner_pid) = tokio::try_join!(
+			utils::query(|| async {
+				sqlx::query_as::<_, ActorRow>(indoc!(
+					"
+					SELECT actor_id, config, pid, stop_ts
+					FROM actors
+					WHERE exit_ts IS NULL
+					",
+				))
+				.fetch_all(&mut *self.sql().await?)
+				.await
+			}),
+			utils::query(|| async {
+				sqlx::query_as::<_, (Option<i32>,)>(indoc!(
+					"
+					SELECT isolate_runner_pid
+					FROM state
+					",
+				))
+				.fetch_one(&mut *self.sql().await?)
+				.await
+				.map(|x| x.0)
+			}),
+		)?;
+
+		// Recreate isolate runner handle
+		let isolate_runner = if let Some(isolate_runner_pid) = isolate_runner_pid {
+			let mut guard = self.isolate_runner.write().await;
+
+			let runner = runner::Handle::from_pid(
+				runner::Comms::socket(),
+				Pid::from_raw(isolate_runner_pid),
+				self.isolate_runner_path(),
+			);
+			self.observe_isolate_runner(&runner);
+
+			*guard = Some(runner.clone());
+
+			Some(runner)
+		} else {
+			None
+		};
 
 		// NOTE: Sqlite doesn't support arrays, can't parallelize this easily
 		// Emit stop events
@@ -383,9 +529,29 @@ impl Ctx {
 				continue;
 			};
 
-			let pid = Pid::from_raw(pid);
-			let config = serde_json::from_slice(&row.config)?;
-			let actor = Actor::with_pid(row.actor_id, config, pid);
+			let config = serde_json::from_slice::<protocol::ActorConfig>(&row.config)?;
+
+			// Clone isolate runner handle
+			let runner = if Some(pid) == isolate_runner_pid {
+				isolate_runner.clone().expect("isolate runner must exist")
+			} else {
+				match config.image.kind {
+					protocol::ImageKind::DockerImage | protocol::ImageKind::OciBundle => {
+						runner::Handle::from_pid(
+							runner::Comms::Basic,
+							Pid::from_raw(pid),
+							self.actor_path(row.actor_id),
+						)
+					}
+					protocol::ImageKind::JavaScript => runner::Handle::from_pid(
+						runner::Comms::socket(),
+						Pid::from_raw(pid),
+						self.actor_path(row.actor_id),
+					),
+				}
+			};
+
+			let actor = Actor::with_runner(row.actor_id, config, runner);
 			let actor = actors_guard.entry(row.actor_id).or_insert(actor);
 
 			let actor = actor.clone();
@@ -393,7 +559,7 @@ impl Ctx {
 			tokio::spawn(async move {
 				use std::result::Result::Err;
 
-				if let Err(err) = actor.observe(&self2, pid).await {
+				if let Err(err) = actor.observe(&self2).await {
 					tracing::error!(actor_id=?row.actor_id, ?err, "observe failed");
 				}
 
@@ -407,48 +573,20 @@ impl Ctx {
 }
 
 impl Ctx {
-	pub async fn fetch_runner(&self, runner_artifact_url: &str) -> Result<PathBuf> {
-		let url = Url::parse(runner_artifact_url)?;
-		let path_stub = utils::get_s3_path_stub(&url, true)?;
-		let path = self.runner_binaries_path().join(&path_stub);
-
-		// Check file doesn't exist
-		if fs::metadata(&path).await.is_err() {
-			let parent = path_stub
-				.parent()
-				.filter(|x| x.components().next().is_some())
-				.context("no parent path in runner url")?;
-
-			fs::create_dir(self.runner_binaries_path().join(parent)).await?;
-
-			tracing::info!(%runner_artifact_url, "downloading");
-			utils::download_file(runner_artifact_url, &path).await?;
-
-			let cmd_out = Command::new("chmod").arg("+x").arg(&path).output().await?;
-			ensure!(
-				cmd_out.status.success(),
-				"failed chmod command\n{}",
-				std::str::from_utf8(&cmd_out.stderr)?
-			);
-		}
-
-		Ok(path.to_path_buf())
+	pub fn config(&self) -> &Config {
+		&self.config
 	}
-}
 
-impl Ctx {
-	pub fn working_path(&self) -> &Path {
-		self.path.as_path()
+	pub fn actors_path(&self) -> PathBuf {
+		self.config.working_path.join("actors")
 	}
 
 	pub fn actor_path(&self, actor_id: Uuid) -> PathBuf {
-		self.working_path()
-			.join("actors")
-			.join(actor_id.to_string())
+		self.actors_path().join(actor_id.to_string())
 	}
 
-	pub fn runner_binaries_path(&self) -> PathBuf {
-		self.working_path().join("bin")
+	pub fn isolate_runner_path(&self) -> PathBuf {
+		self.config.working_path.join("runner")
 	}
 }
 

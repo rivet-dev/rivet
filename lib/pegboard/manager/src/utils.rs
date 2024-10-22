@@ -1,101 +1,81 @@
 use std::{
-	path::{Path, PathBuf},
+	path::Path,
 	time::{self, Duration},
 };
 
 use anyhow::*;
-use futures_util::StreamExt;
 use indoc::indoc;
-use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use sqlx::{
 	migrate::MigrateDatabase,
 	sqlite::{SqlitePool, SqlitePoolOptions},
 	Sqlite,
 };
-use tokio::sync::mpsc::{channel, Receiver};
 use tokio::{
-	fs::{self, File},
-	io::AsyncWriteExt,
+	fs,
+	sync::mpsc::{channel, Receiver},
 };
-use url::Url;
+
+use crate::config::Config;
 
 const MAX_QUERY_RETRIES: usize = 16;
 const QUERY_RETRY: Duration = Duration::from_millis(500);
 const TXN_RETRY: Duration = Duration::from_millis(250);
-pub const CGROUP_PATH: &str = "/sys/fs/cgroup/pegboard_actors";
+pub const CGROUP_PATH: &str = "/sys/fs/cgroup/pegboard_runners";
 
-pub fn var(name: &str) -> Result<String> {
-	std::env::var(name).context(name.to_string())
-}
+pub async fn init_dir(config: &Config) -> Result<()> {
+	if fs::metadata(&config.working_path).await.is_err() {
+		bail!(
+			"working dir `{}` does not exist",
+			config.working_path.display()
+		);
+	}
 
-pub async fn init(working_path: &Path) -> Result<()> {
-	if fs::metadata(&working_path).await.is_err() {
-		bail!("working dir `{}` does not exist", working_path.display());
+	if fs::metadata(&config.container_runner_binary_path)
+		.await
+		.is_err()
+	{
+		bail!(
+			"container runner binary `{}` does not exist",
+			config.container_runner_binary_path.display()
+		);
+	}
+
+	if fs::metadata(&config.isolate_runner_binary_path)
+		.await
+		.is_err()
+	{
+		bail!(
+			"isolate runner binary `{}` does not exist",
+			config.isolate_runner_binary_path.display()
+		);
 	}
 
 	// Create actors dir
-	match fs::create_dir(working_path.join("actors")).await {
+	match fs::create_dir(config.working_path.join("actors")).await {
 		Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
 		x => x.context("failed to create /actors dir in working dir")?,
 	}
 
+	// Create runner dir
+	match fs::create_dir(config.working_path.join("runner")).await {
+		Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+		x => x.context("failed to create /runner dir in working dir")?,
+	}
+
 	// Create db dir
-	match fs::create_dir(working_path.join("db")).await {
+	match fs::create_dir(config.working_path.join("db")).await {
 		Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
 		x => x.context("failed to create /db dir in working dir")?,
 	}
 
-	// Create bin dir
-	match fs::create_dir(working_path.join("bin")).await {
-		Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-		x => x.context("failed to create /bin dir in working dir")?,
-	}
-
-	// Create cgroup folder for actors
+	// Create cgroup folder for runners
 	match fs::create_dir(CGROUP_PATH).await {
 		Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-		x => x.context("failed to create cgroup dir for actors")?,
+		x => x.context("failed to create cgroup dir for runners")?,
 	}
 
 	Ok(())
-}
-
-pub async fn download_file(url: &str, file_path: &Path) -> Result<()> {
-	// Fix tokio/anyhow macro bug
-	use std::result::Result::{Err, Ok};
-
-	// Create file and start request
-	let (mut file, response) = tokio::try_join!(
-		async {
-			File::create(file_path)
-				.await
-				.map_err(Into::<anyhow::Error>::into)
-		},
-		async { reqwest::get(url).await.map_err(Into::<anyhow::Error>::into) }
-	)?;
-
-	let mut stream = response.error_for_status()?.bytes_stream();
-
-	// Write from stream to file
-	while let Some(chunk) = stream.next().await {
-		file.write_all(&chunk?).await?;
-	}
-
-	anyhow::Ok(())
-}
-
-// Get `UUID/job-runner` from URL (HOST/s3-cache/aws/BUCKET/job-runner/UUID/job-runner)
-pub fn get_s3_path_stub(url: &Url, with_uuid: bool) -> Result<PathBuf> {
-	let path_segments = url.path_segments().context("bad actor runner url")?;
-	let path_stub = path_segments
-		.rev()
-		.take(if with_uuid { 2 } else { 1 })
-		.collect::<Vec<_>>()
-		.into_iter()
-		.rev()
-		.collect::<PathBuf>();
-
-	Ok(path_stub)
 }
 
 pub async fn init_sqlite_db(db_url: &str) -> Result<()> {
@@ -128,6 +108,8 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 		CREATE TABLE IF NOT EXISTS state (
 			last_event_idx INTEGER NOT NULL,
 			last_command_idx INTEGER NOT NULL,
+
+			isolate_runner_pid INTEGER,
 
 			-- Keeps this table having one row
 			_persistence BOOLEAN UNIQUE NOT NULL DEFAULT TRUE
@@ -192,6 +174,8 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 
 	sqlx::query(indoc!(
 		"
+		-- NOTE: This does not store the actual port, but an offset from the minimum (see MIN_INGRESS_PORT
+		-- in actor/setup.rs)
 		CREATE TABLE IF NOT EXISTS actor_ports (
 			actor_id BLOB NOT NULL, -- UUID
 			port INT NOT NULL,
@@ -292,7 +276,7 @@ fn async_watcher() -> Result<(RecommendedWatcher, Receiver<notify::Result<Event>
 			// `Create` event is received in wait_for_creation
 			let _ = tx.blocking_send(res);
 		},
-		Config::default().with_poll_interval(Duration::from_secs(2)),
+		notify::Config::default().with_poll_interval(Duration::from_secs(2)),
 	)?;
 
 	Ok((watcher, rx))

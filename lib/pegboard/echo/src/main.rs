@@ -10,6 +10,8 @@ fn main() {
 	println!("Listening on {addr}");
 
 	for mut request in server.incoming_requests() {
+		println!("req");
+
 		let mut content = Vec::new();
 		request.as_reader().read_to_end(&mut content).unwrap();
 

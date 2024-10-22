@@ -323,8 +323,8 @@ where
 {
 	fn encode_by_ref(
 		&self,
-		buf: &mut <DB as sqlx::database::HasArguments<'q>>::ArgumentBuffer,
-	) -> sqlx::encode::IsNull {
+		buf: &mut <DB as sqlx::Database>::ArgumentBuffer<'q>,
+	) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
 		<sqlx::types::Json<&RawValue> as sqlx::Encode<'q, DB>>::encode(
 			sqlx::types::Json(self.inner.as_ref()),
 			buf,
@@ -332,13 +332,13 @@ where
 	}
 }
 
-impl<T, DB> sqlx::Decode<'_, DB> for Raw<T>
+impl<'q, T, DB> sqlx::Decode<'q, DB> for Raw<T>
 where
 	DB: sqlx::Database,
 	for<'a> std::string::String: sqlx::Decode<'a, DB>,
 {
 	fn decode(
-		value: <DB as sqlx::database::HasValueRef<'_>>::ValueRef,
+		value: <DB as sqlx::Database>::ValueRef<'q>,
 	) -> Result<Self, sqlx::error::BoxDynError> {
 		Ok(Raw {
 			_marker: PhantomData,
@@ -348,13 +348,6 @@ where
 }
 
 impl<T> sqlx::postgres::PgHasArrayType for Raw<T> {
-	fn array_type_info() -> sqlx::postgres::PgTypeInfo {
-		// JSONB array
-		sqlx::postgres::PgTypeInfo::with_name("_jsonb")
-	}
-}
-
-impl<T> sqlx::postgres::PgHasArrayType for &Raw<T> {
 	fn array_type_info() -> sqlx::postgres::PgTypeInfo {
 		// JSONB array
 		sqlx::postgres::PgTypeInfo::with_name("_jsonb")

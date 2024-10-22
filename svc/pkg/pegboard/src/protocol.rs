@@ -13,10 +13,10 @@ pub enum PegboardProtocolError {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ToClient {
 	Init {
 		last_event_idx: i64,
-		api_endpoint: String,
 	},
 	Commands(Vec<CommandWrapper>),
 	FetchStateRequest {},
@@ -33,6 +33,7 @@ impl ToClient {
 }
 
 #[signal("pegboard_forward_to_server")]
+#[serde(rename_all = "snake_case")]
 pub enum ToServer {
 	Init {
 		last_command_idx: i64,
@@ -68,6 +69,7 @@ pub struct CommandWrapper {
 
 #[signal("pegboard_client_command")]
 #[derive(Debug, Hash)]
+#[serde(rename_all = "snake_case")]
 pub enum Command {
 	StartActor {
 		actor_id: Uuid,
@@ -82,21 +84,14 @@ pub enum Command {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash)]
 pub struct ActorConfig {
-	pub driver: Driver,
+	// pub driver: Driver,
 	pub image: Image,
-	pub runner_artifact_url: String,
 	pub root_user_enabled: bool,
 	pub resources: Resources,
 	pub env: util::serde::HashableMap<String, String>,
 	pub ports: util::serde::HashableMap<String, Port>,
 	pub network_mode: NetworkMode,
 	pub stakeholder: Stakeholder,
-}
-
-#[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Driver {
-	Container,
-	V8Isolate,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash)]
@@ -107,6 +102,7 @@ pub struct Image {
 }
 
 #[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum ImageKind {
 	DockerImage,
 	OciBundle,
@@ -114,12 +110,14 @@ pub enum ImageKind {
 }
 
 #[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum ImageCompression {
 	None,
 	Lz4,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash)]
+#[serde(rename_all = "snake_case")]
 pub enum Port {
 	GameGuard {
 		target: u16,
@@ -140,6 +138,7 @@ impl Port {
 }
 
 #[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
+#[serde(rename_all = "snake_case")]
 pub enum TransportProtocol {
 	Tcp = 0,
 	Udp = 1,
@@ -155,6 +154,7 @@ impl std::fmt::Display for TransportProtocol {
 }
 
 #[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum NetworkMode {
 	Bridge,
 	Host,
@@ -171,6 +171,7 @@ pub struct Resources {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash)]
+#[serde(rename_all = "snake_case")]
 pub enum Stakeholder {
 	DynamicServer { server_id: Uuid },
 }
@@ -180,8 +181,8 @@ impl Stakeholder {
 		match self {
 			Stakeholder::DynamicServer { server_id } => {
 				vec![
-					("PEGBOARD_META_stakeholder", "dynamic_server".to_string()),
-					("PEGBOARD_META_server_id", server_id.to_string()),
+					("STAKEHOLDER", "dynamic_server".to_string()),
+					("SERVER_ID", server_id.to_string()),
 				]
 			}
 		}
@@ -195,11 +196,13 @@ pub struct EventWrapper {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+#[serde(rename_all = "snake_case")]
 pub enum Event {
 	ActorStateUpdate { actor_id: Uuid, state: ActorState },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+#[serde(rename_all = "snake_case")]
 pub enum ActorState {
 	/// Actor planned, not yet started.
 	/// Sent by pegboard dc.
@@ -211,7 +214,7 @@ pub enum ActorState {
 	/// Sent by pegboard client.
 	Running {
 		pid: usize,
-		proxied_ports: util::serde::HashableMap<String, ProxiedPort>,
+		ports: util::serde::HashableMap<String, BoundPort>,
 	},
 	/// Actor planned to stop.
 	/// Sent by pegboard dc.
@@ -228,9 +231,10 @@ pub enum ActorState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
-pub struct ProxiedPort {
+pub struct BoundPort {
 	pub source: u16,
-	pub target: u16,
+	// Null if host port
+	pub target: Option<u16>,
 	pub ip: Ipv4Addr,
 	pub protocol: TransportProtocol,
 }

@@ -79,7 +79,7 @@ impl LogShipper {
 	}
 
 	fn run_inner(&self) -> Result<()> {
-		let vector_socket_addr = var("PEGBOARD_META_vector_socket_addr")?;
+		let vector_socket_addr = var("VECTOR_SOCKET_ADDR")?;
 
 		println!("Connecting log shipper to Vector at {vector_socket_addr}");
 

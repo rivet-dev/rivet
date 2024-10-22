@@ -1,5 +1,4 @@
 use std::{
-	path::{Path, PathBuf},
 	sync::{
 		atomic::{AtomicBool, Ordering},
 		Arc,
@@ -8,18 +7,16 @@ use std::{
 };
 
 use anyhow::*;
-use futures_util::{stream::FuturesUnordered, FutureExt, StreamExt};
 use indoc::indoc;
 use nix::{
 	errno::Errno,
 	sys::signal::{kill, Signal},
-	unistd::Pid,
 };
 use pegboard::protocol;
 use tokio::{fs, sync::Mutex};
 use uuid::Uuid;
 
-use crate::{ctx::Ctx, utils};
+use crate::{ctx::Ctx, runner, utils};
 
 mod oci_config;
 mod seccomp;
@@ -29,22 +26,12 @@ mod setup;
 const STOP_PID_INTERVAL: Duration = std::time::Duration::from_millis(250);
 /// How many times to check for a PID when a stop command was received.
 const STOP_PID_RETRIES: usize = 32;
-/// How often to check that a PID is still running when observing actor state.
-const PID_POLL_INTERVAL: Duration = std::time::Duration::from_millis(1000);
-const VECTOR_SOCKET_ADDR: &str = "127.0.0.1:5021";
-
-#[derive(Debug)]
-enum ObservationState {
-	Exited,
-	Running,
-	Dead,
-}
 
 pub struct Actor {
 	actor_id: Uuid,
 	config: protocol::ActorConfig,
 
-	pid: Mutex<Option<Pid>>,
+	runner: Mutex<Option<runner::Handle>>,
 	exited: AtomicBool,
 }
 
@@ -54,17 +41,21 @@ impl Actor {
 			actor_id,
 			config,
 
-			pid: Mutex::new(None),
+			runner: Mutex::new(None),
 			exited: AtomicBool::new(false),
 		})
 	}
 
-	pub fn with_pid(actor_id: Uuid, config: protocol::ActorConfig, pid: Pid) -> Arc<Self> {
+	pub fn with_runner(
+		actor_id: Uuid,
+		config: protocol::ActorConfig,
+		runner: runner::Handle,
+	) -> Arc<Self> {
 		Arc::new(Actor {
 			actor_id,
 			config,
 
-			pid: Mutex::new(Some(pid)),
+			runner: Mutex::new(Some(runner)),
 			exited: AtomicBool::new(false),
 		})
 	}
@@ -109,18 +100,16 @@ impl Actor {
 			use std::result::Result::{Err, Ok};
 
 			match self2.setup(&ctx2).await {
-				Ok((runner_path, proxied_ports)) => {
-					match self2.run(&ctx2, runner_path, proxied_ports).await {
-						Ok(pid) => {
-							if let Err(err) = self2.observe(&ctx2, pid).await {
-								tracing::error!(actor_id=?self2.actor_id, ?err, "observe failed");
-							}
-						}
-						Err(err) => {
-							tracing::error!(actor_id=?self2.actor_id, ?err, "run failed")
+				Ok(proxied_ports) => match self2.run(&ctx2, proxied_ports).await {
+					Ok(_) => {
+						if let Err(err) = self2.observe(&ctx2).await {
+							tracing::error!(actor_id=?self2.actor_id, ?err, "observe failed");
 						}
 					}
-				}
+					Err(err) => {
+						tracing::error!(actor_id=?self2.actor_id, ?err, "run failed")
+					}
+				},
 				Err(err) => tracing::error!(actor_id=?self2.actor_id, ?err, "setup failed"),
 			}
 
@@ -134,10 +123,7 @@ impl Actor {
 	async fn setup(
 		self: &Arc<Self>,
 		ctx: &Arc<Ctx>,
-	) -> Result<(
-		PathBuf,
-		protocol::HashableMap<String, protocol::ProxiedPort>,
-	)> {
+	) -> Result<protocol::HashableMap<String, protocol::BoundPort>> {
 		tracing::info!(actor_id=?self.actor_id, "setting up");
 
 		let actor_path = ctx.actor_path(self.actor_id);
@@ -145,53 +131,81 @@ impl Actor {
 		// Create actor working dir
 		fs::create_dir(&actor_path).await?;
 
-		// Download actor runner
-		let runner_path = ctx.fetch_runner(&self.config.runner_artifact_url).await?;
+		// Download artifact
+		self.download_image(&ctx).await?;
 
-		self.setup_oci_bundle(&ctx).await?;
+		let ports = self.bind_ports(ctx).await?;
+
+		// Setup OCI
+		match self.config.image.kind {
+			protocol::ImageKind::DockerImage | protocol::ImageKind::OciBundle => {
+				self.setup_oci_bundle(&ctx).await?
+			}
+			protocol::ImageKind::JavaScript => {
+				// Runner must be running before setting up, it works based on file watchers
+				ctx.get_or_spawn_isolate_runner().await?;
+
+				self.setup_isolate(&ctx, &ports).await?
+			}
+		}
 
 		// Run CNI setup script
-		let proxied_ports = if let protocol::NetworkMode::Bridge = self.config.network_mode {
-			let proxied_ports = self.bind_ports(ctx).await?;
-			self.setup_cni_network(&ctx, &proxied_ports).await?;
+		if let protocol::NetworkMode::Bridge = self.config.network_mode {
+			self.setup_cni_network(&ctx, &ports).await?;
+		}
 
-			proxied_ports
-		} else {
-			Default::default()
-		};
-
-		Ok((runner_path, proxied_ports))
+		Ok(ports)
 	}
 
 	async fn run(
 		self: &Arc<Self>,
 		ctx: &Arc<Ctx>,
-		runner_path: PathBuf,
-		proxied_ports: protocol::HashableMap<String, protocol::ProxiedPort>,
-	) -> Result<Pid> {
+		ports: protocol::HashableMap<String, protocol::BoundPort>,
+	) -> Result<()> {
 		tracing::info!(actor_id=?self.actor_id, "spawning");
 
 		let mut runner_env = vec![
 			(
-				"PEGBOARD_META_root_user_enabled",
+				"ROOT_USER_ENABLED",
 				self.config.root_user_enabled.to_string(),
 			),
 			(
-				"PEGBOARD_META_vector_socket_addr",
-				VECTOR_SOCKET_ADDR.to_string(),
+				"VECTOR_SOCKET_ADDR",
+				ctx.config().vector_socket_addr.to_string(),
 			),
 		];
 		runner_env.extend(self.config.stakeholder.env());
 
-		// Spawn runner which spawns the actor
-		let pid =
-			setup::spawn_orphaned_runner(runner_path, ctx.actor_path(self.actor_id), &runner_env)?;
+		let runner = match self.config.image.kind {
+			// Spawn runner which spawns the container
+			protocol::ImageKind::DockerImage | protocol::ImageKind::OciBundle => {
+				runner::Handle::spawn_orphaned(
+					runner::Comms::Basic,
+					&ctx.config().container_runner_binary_path,
+					ctx.actor_path(self.actor_id),
+					&runner_env,
+				)?
+			}
+			// Shared runner
+			protocol::ImageKind::JavaScript => {
+				let runner = ctx.get_or_spawn_isolate_runner().await?;
+
+				runner
+					.send(&runner_protocol::ToRunner::Start {
+						actor_id: self.actor_id,
+					})
+					.await?;
+
+				runner
+			}
+		};
+		let pid = runner.pid().clone();
 
 		tracing::info!(actor_id=?self.actor_id, ?pid, "pid received");
 
-		// Store PID
+		// Store runner
 		{
-			*self.pid.lock().await = Some(pid);
+			*self.runner.lock().await = Some(runner);
 		}
 
 		// Update DB
@@ -217,98 +231,61 @@ impl Actor {
 			actor_id: self.actor_id,
 			state: protocol::ActorState::Running {
 				pid: pid.as_raw().try_into()?,
-				proxied_ports,
+				ports,
 			},
 		})
 		.await?;
 
-		Ok(pid)
+		Ok(())
 	}
 
 	// Watch actor for updates
-	pub(crate) async fn observe(&self, ctx: &Arc<Ctx>, pid: Pid) -> Result<()> {
-		tracing::info!(actor_id=?self.actor_id, ?pid, "observing");
+	pub(crate) async fn observe(&self, ctx: &Arc<Ctx>) -> Result<()> {
+		tracing::info!(actor_id=?self.actor_id, "observing");
 
-		let exit_code_path = ctx.actor_path(self.actor_id).join("exit-code");
-		let proc_path = Path::new("/proc").join(pid.to_string());
+		let Some(runner) = ({ (*self.runner.lock().await).clone() }) else {
+			bail!("actor does not have a runner to observe yet");
+		};
 
-		let mut futs = FuturesUnordered::new();
-
-		// Watch for exit code file being written
-		futs.push(
-			async {
-				utils::wait_for_creation(&exit_code_path).await?;
-
-				Ok(ObservationState::Exited)
+		let exit_code = match self.config.image.kind {
+			protocol::ImageKind::DockerImage | protocol::ImageKind::OciBundle => {
+				runner.observe().await?
 			}
-			.boxed(),
-		);
+			// With isolates we have to check if the shared isolate runner exited and if the isolate itself
+			// exited
+			protocol::ImageKind::JavaScript => {
+				let actor_path = ctx.actor_path(self.actor_id);
+				let actor_observer = async {
+					let exit_code_path = actor_path.join("exit-code");
 
-		// Polling interval to check that the pid still exists
-		futs.push(
-			async {
-				tokio::time::sleep(PID_POLL_INTERVAL).await;
+					utils::wait_for_creation(&exit_code_path).await?;
 
-				if fs::metadata(&proc_path).await.is_ok() {
-					Ok(ObservationState::Running)
-				} else {
-					Ok(ObservationState::Dead)
-				}
-			}
-			.boxed(),
-		);
+					use std::result::Result::{Err, Ok};
+					let exit_code = match fs::read_to_string(&exit_code_path).await {
+						Ok(contents) => match contents.trim().parse::<i32>() {
+							Ok(x) => Some(x),
+							Err(err) => {
+								tracing::error!(actor_id=?self.actor_id, ?err, "failed to parse exit code file");
 
-		let state = loop {
-			// Get next complete future
-			if let Some(state) = futs.next().await {
-				let state = state?;
-
-				// If still running, add poll future back to list
-				if let ObservationState::Running = state {
-					futs.push(
-						async {
-							tokio::time::sleep(PID_POLL_INTERVAL).await;
-
-							if fs::metadata(&proc_path).await.is_ok() {
-								Ok(ObservationState::Running)
-							} else {
-								Ok(ObservationState::Dead)
+								None
 							}
+						},
+						Err(err) => {
+							tracing::error!(actor_id=?self.actor_id, ?err, "failed to read exit code file");
+
+							None
 						}
-						.boxed(),
-					);
-				} else {
-					break state;
-				}
-			} else {
-				bail!("observation failed, developer error");
-			}
-		};
+					};
 
-		let exit_code = if let ObservationState::Exited = state {
-			use std::result::Result::Ok;
-			match fs::read_to_string(&exit_code_path).await {
-				Ok(contents) => match contents.trim().parse::<i32>() {
-					Ok(x) => Some(x),
-					Err(err) => {
-						tracing::error!(?err, "failed to parse exit code file");
+					Result::<_>::Ok(exit_code)
+				};
 
-						None
-					}
-				},
-				Err(err) => {
-					tracing::error!(?err, "failed to read exit code file");
-
-					None
+				tokio::select! {
+					res = runner.observe() => res?,
+					res = actor_observer => res?,
 				}
 			}
-		} else {
-			tracing::warn!(actor_id=?self.actor_id, ?pid, "process died before exit code file was written");
-
-			None
 		};
-
-		tracing::info!(actor_id=?self.actor_id, ?exit_code, "exited");
 
 		self.set_exit_code(ctx, exit_code).await?;
 
@@ -334,11 +311,11 @@ impl Actor {
 	async fn signal_inner(self: &Arc<Self>, ctx: &Arc<Ctx>, signal: Signal) -> Result<()> {
 		let mut i = 0;
 
-		// Signal command might be sent before the actor has a valid PID. This loop waits for the PID to
-		// be set
-		let pid = loop {
-			if let Some(pid) = *self.pid.lock().await {
-				break Some(pid);
+		// Signal command might be sent before the actor has a runner. This loop waits for the runner to start
+		let runner_guard = loop {
+			let runner_guard = self.runner.lock().await;
+			if runner_guard.is_some() {
+				break Some(runner_guard);
 			}
 
 			tracing::warn!(actor_id=?self.actor_id, "waiting for pid to signal actor");
@@ -356,21 +333,39 @@ impl Actor {
 			tokio::time::sleep(STOP_PID_INTERVAL).await;
 		};
 
-		// Kill if PID set
-		if let Some(pid) = pid {
-			use std::result::Result::{Err, Ok};
+		let has_runner = runner_guard.is_some();
 
-			match kill(pid, signal) {
-				Ok(_) => {}
-				Err(Errno::ESRCH) => {
-					tracing::warn!(actor_id=?self.actor_id, ?pid, "pid not found for signalling")
+		// Kill if PID set
+		if let Some(runner) = runner_guard {
+			let runner = &*runner.as_ref().expect("must exist");
+
+			// Send message
+			if runner.has_socket() {
+				runner
+					.send(&runner_protocol::ToRunner::Signal {
+						actor_id: self.actor_id,
+						signal: signal as i32,
+					})
+					.await?;
+			}
+			// Send signal
+			else {
+				use std::result::Result::{Err, Ok};
+
+				let pid = runner.pid().clone();
+
+				match kill(pid, signal) {
+					Ok(_) => {}
+					Err(Errno::ESRCH) => {
+						tracing::warn!(actor_id=?self.actor_id, ?pid, "pid not found for signalling")
+					}
+					Err(err) => return Err(err.into()),
 				}
-				Err(err) => return Err(err.into()),
 			}
 		}
 
 		// Update stop_ts
-		if matches!(signal, Signal::SIGTERM | Signal::SIGKILL) || pid.is_none() {
+		if matches!(signal, Signal::SIGTERM | Signal::SIGKILL) || !has_runner {
 			let stop_ts_set = utils::query(|| async {
 				sqlx::query_as::<_, (bool,)>(indoc!(
 					"

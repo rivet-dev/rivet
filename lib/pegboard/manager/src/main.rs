@@ -1,17 +1,19 @@
-use std::{net::Ipv4Addr, path::Path};
+use std::path::Path;
 
 use anyhow::*;
 use futures_util::StreamExt;
 use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 use tracing_subscriber::prelude::*;
 use url::Url;
-use uuid::Uuid;
 
 mod actor;
+mod config;
 mod ctx;
 mod metrics;
+mod runner;
 mod utils;
 
+use config::Config;
 use ctx::Ctx;
 
 const PROTOCOL_VERSION: u16 = 1;
@@ -20,19 +22,41 @@ const PROTOCOL_VERSION: u16 = 1;
 async fn main() -> Result<()> {
 	init_tracing();
 
-	// Print version
-	if std::env::args().any(|a| a == "-v" || a == "--version") {
-		println!(env!("CARGO_PKG_VERSION"));
-		return Ok(());
+	// Read args
+	let mut config_flag = false;
+	let mut args = std::env::args();
+	let config_path = loop {
+		let Some(arg) = args.next() else {
+			bail!("missing `--config` argument");
+		};
+
+		if config_flag {
+			break Path::new(&arg).to_path_buf();
+		} else if arg == "-c" || arg == "--config" {
+			config_flag = true;
+		} else if arg == "-v" || arg == "--version" {
+			// Print version
+			println!(env!("CARGO_PKG_VERSION"));
+			return Ok(());
+		} else {
+			bail!("unexpected argument {arg}");
+		}
+	};
+
+	// Read config
+	let config_data = std::fs::read_to_string(&config_path)
+		.with_context(|| format!("Failed to read config file at {}", config_path.display()))?;
+	let config = serde_json::from_str::<Config>(&config_data)
+		.with_context(|| format!("Failed to parse config file at {}", config_path.display()))?;
+
+	// SAFETY: No other task has spawned yet.
+	// set client_id env var so it can be read by the prometheus registry
+	unsafe {
+		std::env::set_var("CLIENT_ID", config.client_id.to_string());
 	}
 
 	// Start metrics server
 	tokio::spawn(metrics::run_standalone());
-
-	// Read env
-	let client_id = Uuid::parse_str(&utils::var("CLIENT_ID")?)?;
-	let datacenter_id = Uuid::parse_str(&utils::var("DATACENTER_ID")?)?;
-	let network_ip = utils::var("NETWORK_IP")?.parse::<Ipv4Addr>()?;
 
 	// Read system metrics
 	let system = System::new_with_specifics(
@@ -42,13 +66,12 @@ async fn main() -> Result<()> {
 	);
 
 	// Init project directories
-	let working_path = Path::new("/etc/pegboard");
-	utils::init(&working_path).await?;
+	utils::init_dir(&config).await?;
 
 	// Init sqlite db
 	let sqlite_db_url = format!(
 		"sqlite://{}",
-		working_path.join("db").join("database.db").display()
+		config.working_path.join("db").join("database.db").display()
 	);
 	utils::init_sqlite_db(&sqlite_db_url).await?;
 
@@ -60,8 +83,8 @@ async fn main() -> Result<()> {
 	let mut url = Url::parse("ws://127.0.0.1:5030")?;
 	url.set_path(&format!("/v{PROTOCOL_VERSION}"));
 	url.query_pairs_mut()
-		.append_pair("client_id", &client_id.to_string())
-		.append_pair("datacenter_id", &datacenter_id.to_string());
+		.append_pair("client_id", &config.client_id.to_string())
+		.append_pair("datacenter_id", &config.datacenter_id.to_string());
 
 	tracing::info!("connecting to ws: {url}");
 
@@ -73,7 +96,7 @@ async fn main() -> Result<()> {
 
 	tracing::info!("connected");
 
-	let ctx = Ctx::new(working_path.to_path_buf(), network_ip, system, pool, tx);
+	let ctx = Ctx::new(config, system, pool, tx);
 
 	ctx.start(rx).await
 }

@@ -17,7 +17,6 @@ indoc = "2.0"
 lazy_static = "1.4"
 nix = { version = "0.27", default-features = false, features = ["user", "signal"] }
 notify = { version = "6.1.1", default-features = false, features = ["serde", "fsevent-sys"] }
-portpicker = "0.1"
 prometheus = "0.13"
 rand = "0.8"
 reqwest = { version = "0.11", features = ["stream"] }
@@ -35,14 +34,15 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
     "fmt",
     "json",
 ] }
-url = "2.5.0"
+url = "2.4"
 uuid = { version = "1.6.1", features = ["v4"] }
 
+runner-protocol = { path = "../runner-protocol" }
 pegboard = { path = "../../../svc/pkg/pegboard" }
 
 [dependencies.sqlx]
 git = "https://github.com/rivet-gg/sqlx"
-rev = "08d6e61aa0572e7ec557abbedb72cebb96e1ac5b"
+rev = "e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
 default-features = false
 features = [
 	"runtime-tokio",
@@ -52,3 +52,6 @@ features = [
 	"json",
 	"ipnetwork"
 ]
+
+[dev-dependencies]
+portpicker = "0.1"

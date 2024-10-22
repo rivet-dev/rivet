@@ -1,6 +1,5 @@
 use std::{
-	io::Write,
-	os::unix::process::CommandExt,
+	collections::HashMap,
 	path::{Path, PathBuf},
 	process::Stdio,
 };
@@ -8,10 +7,6 @@ use std::{
 use anyhow::*;
 use futures_util::StreamExt;
 use indoc::indoc;
-use nix::{
-	sys::wait::{waitpid, WaitStatus},
-	unistd::{fork, pipe, read, setsid, write, ForkResult, Pid},
-};
 use pegboard::protocol;
 use rand::Rng;
 use serde_json::{json, Value};
@@ -29,37 +24,11 @@ const MIN_INGRESS_PORT: u16 = 20000;
 const MAX_INGRESS_PORT: u16 = 31999;
 
 impl Actor {
-	pub async fn setup_oci_bundle(&self, ctx: &Ctx) -> Result<()> {
-		tracing::info!(actor_id=?self.actor_id, "setting up oci bundle");
+	pub async fn download_image(&self, ctx: &Ctx) -> Result<()> {
+		tracing::info!(actor_id=?self.actor_id, "downloading artifact");
 
 		let actor_path = ctx.actor_path(self.actor_id);
 		let oci_bundle_path = actor_path.join("oci-bundle");
-		let netns_path = self.netns_path();
-
-		let api_endpoint_env_var = {
-			let api_endpoint = ctx
-				.api_endpoint
-				.read()
-				.await
-				.clone()
-				.context("missing api endpoint")?;
-
-			format!("RIVET_API_ENDPOINT={api_endpoint}")
-		};
-
-		// Write base config
-		fs::write(
-			actor_path.join("oci-bundle-config.base.json"),
-			serde_json::to_vec(&oci_config::config(
-				self.config.resources.cpu,
-				self.config.resources.memory,
-				self.config.resources.memory_max,
-				vec![api_endpoint_env_var],
-			))?,
-		)
-		.await?;
-
-		tracing::info!(actor_id=?self.actor_id, "downloading artifact");
 
 		let mut stream = reqwest::get(&self.config.image.artifact_url)
 			.await?
@@ -69,7 +38,6 @@ impl Actor {
 		match self.config.image.kind {
 			protocol::ImageKind::DockerImage => {
 				let docker_image_path = actor_path.join("docker-image.tar");
-				let oci_image_path = actor_path.join("oci-image");
 
 				match self.config.image.compression {
 					protocol::ImageCompression::None => {
@@ -122,37 +90,6 @@ impl Actor {
 						)?;
 					}
 				}
-
-				// We need to convert the Docker image to an OCI bundle in order to run it.
-				// Allows us to work with the build with umoci
-				tracing::info!(actor_id=?self.actor_id, "converting Docker image -> OCI image");
-				let cmd_out = Command::new("skopeo")
-					.arg("copy")
-					.arg(format!("docker-archive:{}", docker_image_path.display()))
-					.arg(format!("oci:{}:default", oci_image_path.display()))
-					.output()
-					.await?;
-				ensure!(
-					cmd_out.status.success(),
-					"failed `skopeo` command\n{}",
-					std::str::from_utf8(&cmd_out.stderr)?
-				);
-
-				// Allows us to run the bundle natively with runc
-				tracing::info!(actor_id=?self.actor_id, "converting OCI image -> OCI bundle");
-
-				let cmd_out = Command::new("umoci")
-					.arg("unpack")
-					.arg("--image")
-					.arg(format!("{}:default", oci_image_path.display()))
-					.arg(&oci_bundle_path)
-					.output()
-					.await?;
-				ensure!(
-					cmd_out.status.success(),
-					"failed `umoci` command\n{}",
-					std::str::from_utf8(&cmd_out.stderr)?
-				);
 			}
 			protocol::ImageKind::OciBundle => {
 				tracing::info!(actor_id=?self.actor_id, "decompressing and unarchiving artifact");
@@ -228,7 +165,120 @@ impl Actor {
 					},
 				)?;
 			}
+			protocol::ImageKind::JavaScript => {
+				let script_path = actor_path.join("index.js");
+
+				match self.config.image.compression {
+					protocol::ImageCompression::None => {
+						tracing::info!(actor_id=?self.actor_id, "saving artifact to file");
+
+						let mut output_file = File::create(&script_path).await?;
+
+						// Write from stream to file
+						while let Some(chunk) = stream.next().await {
+							output_file.write_all(&chunk?).await?;
+						}
+					}
+					protocol::ImageCompression::Lz4 => {
+						tracing::info!(actor_id=?self.actor_id, "decompressing artifact");
+
+						// Spawn the lz4 process
+						let mut lz4_child = Command::new("lz4")
+							.arg("-d")
+							.arg("-")
+							.arg(&script_path)
+							.stdin(Stdio::piped())
+							.spawn()?;
+
+						// Take the stdin of lz4
+						let mut lz4_stdin = lz4_child.stdin.take().context("lz4 stdin")?;
+
+						use std::result::Result::{Err, Ok};
+						tokio::try_join!(
+							// Pipe the response body to lz4 stdin
+							async move {
+								while let Some(chunk) = stream.next().await {
+									let data = chunk?;
+									lz4_stdin.write_all(&data).await?;
+								}
+								lz4_stdin.shutdown().await?;
+
+								anyhow::Ok(())
+							},
+							// Wait for child process
+							async {
+								let cmd_out = lz4_child.wait_with_output().await?;
+								ensure!(
+									cmd_out.status.success(),
+									"failed `lz4` command\n{}",
+									std::str::from_utf8(&cmd_out.stderr)?
+								);
+
+								Ok(())
+							},
+						)?;
+					}
+				}
+			}
 		}
+
+		Ok(())
+	}
+
+	pub async fn setup_oci_bundle(&self, ctx: &Ctx) -> Result<()> {
+		tracing::info!(actor_id=?self.actor_id, "setting up oci bundle");
+
+		let actor_path = ctx.actor_path(self.actor_id);
+		let oci_bundle_path = actor_path.join("oci-bundle");
+		let netns_path = self.netns_path();
+
+		// We need to convert the Docker image to an OCI bundle in order to run it.
+		// Allows us to work with the build with umoci
+		if let protocol::ImageKind::DockerImage = self.config.image.kind {
+			let docker_image_path = actor_path.join("docker-image.tar");
+			let oci_image_path = actor_path.join("oci-image");
+
+			tracing::info!(actor_id=?self.actor_id, "converting Docker image -> OCI image");
+			let cmd_out = Command::new("skopeo")
+				.arg("copy")
+				.arg(format!("docker-archive:{}", docker_image_path.display()))
+				.arg(format!("oci:{}:default", oci_image_path.display()))
+				.output()
+				.await?;
+			ensure!(
+				cmd_out.status.success(),
+				"failed `skopeo` command\n{}",
+				std::str::from_utf8(&cmd_out.stderr)?
+			);
+
+			// Allows us to run the bundle natively with runc
+			tracing::info!(actor_id=?self.actor_id, "converting OCI image -> OCI bundle");
+
+			let cmd_out = Command::new("umoci")
+				.arg("unpack")
+				.arg("--image")
+				.arg(format!("{}:default", oci_image_path.display()))
+				.arg(&oci_bundle_path)
+				.output()
+				.await?;
+			ensure!(
+				cmd_out.status.success(),
+				"failed `umoci` command\n{}",
+				std::str::from_utf8(&cmd_out.stderr)?
+			);
+		}
+
+		// Write base config
+		fs::write(
+			actor_path.join("oci-bundle-config.base.json"),
+			serde_json::to_vec(&oci_config::config(
+				self.config.resources.cpu,
+				self.config.resources.memory,
+				self.config.resources.memory_max,
+				vec![format!("RIVET_API_ENDPOINT={}", ctx.config().api_endpoint)],
+			))?,
+		)
+		.await?;
 
 		// resolv.conf
 		//
@@ -318,11 +368,59 @@ impl Actor {
 		Ok(())
 	}
 
+	pub async fn setup_isolate(
+		&self,
+		ctx: &Ctx,
+		ports: &protocol::HashableMap<String, protocol::BoundPort>,
+	) -> Result<()> {
+		let actor_path = ctx.actor_path(self.actor_id);
+
+		// Schema in v8-isolate-runner
+		let config = json!({
+			"resources": {
+				"memory": self.config.resources.memory,
+				"memory_max": self.config.resources.memory_max,
+			},
+			// TODO:
+			"ports": ports
+				.values()
+				.map(|port| {
+					json!({
+						// Host ports don't have a target
+						"target": port.target.unwrap_or(port.source),
+						"protocol": port.protocol,
+					})
+				})
+				.collect::<Vec<_>>(),
+			"env": self
+				.config
+				.env
+				.iter()
+				.map(|(k, v)| (k.clone(), v.clone()))
+				.chain(ports.iter().map(|(label, port)| {
+					(
+						format!("PORT_{}", label),
+						port.target.unwrap_or(port.source).to_string(),
+					)
+				}))
+				.chain(std::iter::once(("RIVET_API_ENDPOINT".to_string(), ctx.config().api_endpoint.clone())))
+				.collect::<HashMap<_, _>>(),
+			"stakeholder": self.config.stakeholder,
+		});
+		fs::write(
+			actor_path.join("config.json"),
+			&serde_json::to_vec(&config)?,
+		)
+		.await?;
+
+		Ok(())
+	}
+
 	// Only ran for bridge networking
 	pub async fn setup_cni_network(
 		&self,
 		ctx: &Ctx,
-		proxied_ports: &protocol::HashableMap<String, protocol::ProxiedPort>,
+		ports: &protocol::HashableMap<String, protocol::BoundPort>,
 	) -> Result<()> {
 		tracing::info!(actor_id=?self.actor_id, "setting up cni network");
 
@@ -331,7 +429,7 @@ impl Actor {
 
 		tracing::info!(actor_id=?self.actor_id, "writing cni params");
 
-		let cni_port_mappings = proxied_ports
+		let cni_port_mappings = ports
 			.iter()
 			.map(|(_, port)| {
 				json!({
@@ -406,21 +504,19 @@ impl Actor {
 		Ok(())
 	}
 
-	// Used for CNI network creation
 	pub(crate) async fn bind_ports(
 		&self,
 		ctx: &Ctx,
-	) -> Result<protocol::HashableMap<String, protocol::ProxiedPort>> {
+	) -> Result<protocol::HashableMap<String, protocol::BoundPort>> {
 		let ports = self
 			.config
 			.ports
 			.iter()
 			.map(|(label, port)| match port {
-				protocol::Port::GameGuard { target, protocol } => Ok((label, *target, *protocol)),
-				protocol::Port::Host { .. } => {
-					// TODO:
-					bail!("host ports not implemented");
+				protocol::Port::GameGuard { target, protocol } => {
+					Ok((label, Some(*target), *protocol))
 				}
+				protocol::Port::Host { protocol } => Ok((label, None, *protocol)),
 			})
 			.collect::<Result<Vec<_>>>()?;
 
@@ -444,6 +540,7 @@ impl Actor {
 		let rows = utils::query(|| async {
 			sqlx::query_as::<_, (i64, i64)>(indoc!(
 				"
+				-- NOTE: This does not store the actual port, but an offset from the minimum (see MIN_INGRESS_PORT above)
 				INSERT INTO actor_ports (actor_id, port, protocol)
 				-- Select TCP ports
 				SELECT ?1, port, protocol
@@ -526,10 +623,10 @@ impl Actor {
 			.map(|((label, target, protocol), (host_port, _))| {
 				(
 					(*label).clone(),
-					protocol::ProxiedPort {
-						source: *host_port as u16,
+					protocol::BoundPort {
+						source: MIN_INGRESS_PORT + *host_port as u16,
 						target: *target,
-						ip: ctx.network_ip,
+						ip: ctx.config().network_ip,
 						protocol: *protocol,
 					},
 				)
@@ -545,10 +642,10 @@ impl Actor {
 					.map(|((label, target, protocol), (host_port, _))| {
 						(
 							(*label).clone(),
-							protocol::ProxiedPort {
-								source: *host_port as u16,
+							protocol::BoundPort {
+								source: MIN_INGRESS_PORT + *host_port as u16,
 								target: *target,
-								ip: ctx.network_ip,
+								ip: ctx.config().network_ip,
 								protocol: *protocol,
 							},
 						)
@@ -645,83 +742,6 @@ impl Actor {
 		} else {
 			// CNI network that will be created
 			Path::new("/var/run/netns").join(self.actor_id.to_string())
-		}
-	}
-}
-
-pub fn spawn_orphaned_runner(
-	runner_path: PathBuf,
-	actor_path: PathBuf,
-	env: &[(&str, String)],
-) -> Result<Pid> {
-	// Prepare the arguments for the actor runner
-	let runner_args = vec![actor_path.to_str().context("bad path")?];
-
-	// TODO: Do pipes have to be manually deleted here?
-	// Pipe communication between processes
-	let (pipe_read, pipe_write) = pipe()?;
-
-	// NOTE: This is why we fork the process twice: https://stackoverflow.com/a/5386753
-	match unsafe { fork() }.context("process first fork failed")? {
-		ForkResult::Parent { child } => {
-			// Close the writing end of the pipe in the parent
-			nix::unistd::close(pipe_write)?;
-
-			// Ensure that the child process spawned successfully
-			match waitpid(child, None).context("waitpid failed")? {
-				WaitStatus::Exited(_, 0) => {
-					// Read the second child's PID from the pipe
-					let mut buf = [0u8; 4];
-					read(pipe_read, &mut buf)?;
-					let orphan_pid = Pid::from_raw(i32::from_le_bytes(buf));
-
-					Ok(orphan_pid)
-				}
-				WaitStatus::Exited(_, status) => {
-					bail!("Child process exited with status {}", status)
-				}
-				_ => bail!("Unexpected wait status for child process"),
-			}
-		}
-		ForkResult::Child => {
-			// Child process
-			match unsafe { fork() } {
-				Result::Ok(ForkResult::Parent { child }) => {
-					// Write the second child's PID to the pipe
-					let orphan_pid_bytes = child.as_raw().to_le_bytes();
-					write(pipe_write, &orphan_pid_bytes)?;
-
-					// Write orphan PID to the actors cgroup so that it is no longer part of the parent cgroup.
-					// This is important for allowing systemd to restart pegboard without restarting orphans.
-					let mut cgroup_procs = std::fs::File::options()
-						.append(true)
-						.open(Path::new(utils::CGROUP_PATH).join("cgroup.procs"))?;
-					cgroup_procs.write_all(format!("{}\n", child.as_raw()).as_bytes())?;
-
-					// Exit the intermediate child
-					std::process::exit(0);
-				}
-				Result::Ok(ForkResult::Child) => {
-					// Disassociate from the parent by creating a new session
-					setsid().context("setsid failed")?;
-
-					// Exit immediately on fail in order to not leak process
-					let err = std::process::Command::new(&runner_path)
-						.args(&runner_args)
-						.envs(env.iter().cloned())
-						.stdin(Stdio::null())
-						.stdout(Stdio::null())
-						.stderr(Stdio::null())
-						.exec();
-					eprintln!("exec failed: {err:?}");
-					std::process::exit(1);
-				}
-				Err(err) => {
-					// Exit immediately in order to not leak child process.
-					eprintln!("process second fork failed: {err:?}");
-					std::process::exit(1);
-				}
-			}
 		}
 	}
 }

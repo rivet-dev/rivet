@@ -24,7 +24,7 @@ enum State {
 
 /// Goes through all actor states and commands.
 #[tokio::test(flavor = "multi_thread")]
-async fn container_lifecycle() {
+async fn isolate_lifecycle() {
 	setup_tracing();
 
 	tracing::info!("starting test");
@@ -43,7 +43,7 @@ async fn container_lifecycle() {
 	let config = init_client(&gen_tmp_dir_path, tmp_dir.path()).await;
 	tracing::info!(path=%tmp_dir.path().display(), "client dir");
 
-	start_client(config, ctx_wrapper, close_rx, port).await;
+	start_client(config, ctx_wrapper, close_rx.clone(), port).await;
 }
 
 async fn handle_connection(
@@ -64,7 +64,6 @@ async fn handle_connection(
 		};
 
 		let actor_id = Uuid::new_v4();
-		let actor_port = portpicker::pick_unused_port().expect("no free ports");
 		let mut actor_state = State::None;
 
 		// Receive messages from socket
@@ -78,7 +77,7 @@ async fn handle_connection(
 						protocol::ToServer::Init { .. } => {
 							send_init_packet(&mut tx).await;
 
-							start_echo_actor(&mut tx, actor_id, actor_port).await;
+							start_js_echo_actor(&mut tx, actor_id).await;
 						}
 						protocol::ToServer::Events(events) => {
 							for event in events {
@@ -104,7 +103,9 @@ async fn handle_connection(
 											"actor not in client memory"
 										);
 									}
-									protocol::ActorState::Running { .. } => {
+									protocol::ActorState::Running { ref ports, .. } => {
+										let port = ports.values().next().unwrap().source;
+
 										if let State::Starting = actor_state {
 											actor_state = State::Running;
 										} else {
@@ -120,10 +121,15 @@ async fn handle_connection(
 											"actor not in client memory"
 										);
 
+										tokio::time::sleep(std::time::Duration::from_millis(250))
+											.await;
+
+										tracing::info!("sending echo");
+
 										// Send echo test
 										let req = b"hello world";
 										let res = reqwest::Client::new()
-											.post(format!("http://0.0.0.0:{actor_port}"))
+											.post(format!("http://0.0.0.0:{port}"))
 											.body(req.to_vec())
 											.send()
 											.await

@@ -15,7 +15,7 @@ use hyper::{
 	Body, Response, Server,
 };
 use pegboard::protocol;
-use pegboard_manager::{utils, Ctx};
+use pegboard_manager::{utils, Config, Ctx};
 use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 use tokio::{
 	fs::File,
@@ -58,8 +58,6 @@ pub async fn send_init_packet(tx: &mut SplitSink<WebSocketStream<tokio::net::Tcp
 		tx,
 		protocol::ToClient::Init {
 			last_event_idx: utils::now(),
-			// Not necessary for the test
-			api_endpoint: "".to_string(),
 		},
 	)
 	.await
@@ -79,7 +77,6 @@ pub async fn start_echo_actor(
 				kind: protocol::ImageKind::DockerImage,
 				compression: protocol::ImageCompression::None,
 			},
-			runner_artifact_url: format!("http://127.0.0.1:{ARTIFACTS_PORT}/0/runner"),
 			root_user_enabled: false,
 			env: [("PORT".to_string(), port.to_string())]
 				.into_iter()
@@ -107,13 +104,51 @@ pub async fn start_echo_actor(
 	send_command(tx, cmd).await;
 }
 
+pub async fn start_js_echo_actor(
+	tx: &mut SplitSink<WebSocketStream<tokio::net::TcpStream>, Message>,
+	actor_id: Uuid,
+) {
+	let cmd = protocol::Command::StartActor {
+		actor_id,
+		config: Box::new(protocol::ActorConfig {
+			image: protocol::Image {
+				// Should match the URL in `serve_binaries`
+				artifact_url: format!("http://127.0.0.1:{ARTIFACTS_PORT}/js-image"),
+				kind: protocol::ImageKind::JavaScript,
+				compression: protocol::ImageCompression::None,
+			},
+			root_user_enabled: false,
+			env: Default::default(),
+			ports: [(
+				"main".to_string(),
+				protocol::Port::Host {
+					protocol: protocol::TransportProtocol::Tcp,
+				},
+			)]
+			.into_iter()
+			.collect(),
+			network_mode: protocol::NetworkMode::Host,
+			resources: protocol::Resources {
+				cpu: 100,
+				memory: 10 * 1024 * 1024,
+				memory_max: 15 * 1024 * 1024,
+			},
+			stakeholder: protocol::Stakeholder::DynamicServer {
+				server_id: actor_id,
+			},
+		}),
+	};
+
+	send_command(tx, cmd).await;
+}
+
 pub fn start_server<F, Fut>(
 	ctx_wrapper: Arc<Mutex<Option<Arc<Ctx>>>>,
-	close_tx: tokio::sync::watch::Sender<()>,
+	close_tx: Arc<tokio::sync::watch::Sender<()>>,
 	port: u16,
 	handle_connection: F,
 ) where
-	F: Fn(Arc<Mutex<Option<Arc<Ctx>>>>, tokio::sync::watch::Sender<()>, TcpStream) -> Fut
+	F: Fn(Arc<Mutex<Option<Arc<Ctx>>>>, Arc<tokio::sync::watch::Sender<()>>, TcpStream) -> Fut
 		+ Send
 		+ 'static,
 	Fut: std::future::Future<Output = ()> + Send,
@@ -132,16 +167,52 @@ pub fn start_server<F, Fut>(
 	});
 }
 
+pub async fn init_client(gen_path: &Path, working_path: &Path) -> Config {
+	let container_runner_binary_path = working_path.join("bin").join("container-runner");
+	let isolate_runner_binary_path = working_path.join("bin").join("isolate-runner");
+
+	tokio::fs::create_dir(working_path.join("bin"))
+		.await
+		.unwrap();
+
+	// Copy binaries
+	tokio::fs::copy(
+		container_runner_path(gen_path),
+		&container_runner_binary_path,
+	)
+	.await
+	.unwrap();
+	tokio::fs::copy(
+		v8_isolate_runner_path(gen_path),
+		&isolate_runner_binary_path,
+	)
+	.await
+	.unwrap();
+
+	let config = Config {
+		client_id: Uuid::new_v4(),
+		datacenter_id: Uuid::new_v4(),
+		network_ip: "127.0.0.1".parse().unwrap(),
+		vector_socket_addr: "127.0.0.1:5021".parse().unwrap(),
+		// Not necessary for the test
+		api_endpoint: "".to_string(),
+
+		working_path: working_path.to_path_buf(),
+		container_runner_binary_path,
+		isolate_runner_binary_path,
+	};
+
+	utils::init_dir(&config).await.unwrap();
+
+	config
+}
+
 pub async fn start_client(
-	working_path: &Path,
+	config: Config,
 	ctx_wrapper: Arc<Mutex<Option<Arc<Ctx>>>>,
 	mut close_rx: tokio::sync::watch::Receiver<()>,
 	port: u16,
 ) {
-	let client_id = Uuid::new_v4();
-	let datacenter_id = Uuid::new_v4();
-	let network_ip = "127.0.0.1".parse().unwrap();
-
 	// Read system metrics
 	let system = System::new_with_specifics(
 		RefreshKind::new()
@@ -152,7 +223,7 @@ pub async fn start_client(
 	// Init sqlite db
 	let sqlite_db_url = format!(
 		"sqlite://{}",
-		working_path.join("db").join("database.db").display()
+		config.working_path.join("db").join("database.db").display()
 	);
 	utils::init_sqlite_db(&sqlite_db_url).await.unwrap();
 
@@ -165,8 +236,8 @@ pub async fn start_client(
 	url.set_port(Some(port)).unwrap();
 	url.set_path(&format!("/v{PROTOCOL_VERSION}"));
 	url.query_pairs_mut()
-		.append_pair("client_id", &client_id.to_string())
-		.append_pair("datacenter_id", &datacenter_id.to_string());
+		.append_pair("client_id", &config.client_id.to_string())
+		.append_pair("datacenter_id", &config.datacenter_id.to_string());
 
 	tracing::info!("connecting to ws: {url}");
 
@@ -179,7 +250,7 @@ pub async fn start_client(
 
 	tracing::info!("connected");
 
-	let ctx = Ctx::new(working_path.to_path_buf(), network_ip, system, pool, tx);
+	let ctx = Ctx::new(config, system, pool, tx);
 
 	// Share reference
 	{
@@ -231,19 +302,44 @@ pub async fn build_binaries(gen_path: &Path) {
 
 	assert!(status.success());
 
+	// Js image
+	tokio::fs::copy(
+		Path::new(env!("CARGO_MANIFEST_DIR"))
+			.join("tests")
+			.join("echo.js"),
+		js_image_path(gen_path),
+	)
+	.await
+	.unwrap();
+
+	build_runner(gen_path, "container").await;
+	build_runner(gen_path, "v8-isolate").await;
+}
+
+async fn build_runner(gen_path: &Path, variant: &str) {
+	tracing::info!("building {variant} runner");
+
+	let pkg_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+	let image_name = format!("pegboard-{variant}-runner");
+
 	// Build runner binary
-	let runner_crate_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-		.join("..")
-		.join("container-runner");
-	let image_name = "pegboard-container-runner";
 	let status = Command::new("docker")
-		.current_dir(&runner_crate_path)
 		.arg("build")
 		.arg("--platform")
 		.arg("linux/amd64")
 		.arg("-t")
-		.arg(image_name)
-		.arg(".")
+		.arg(&image_name)
+		.arg("-f")
+		.arg(
+			pkg_path
+				.join(format!("{variant}-runner"))
+				.join("Dockerfile"),
+		)
+		.arg(if variant == "container" {
+			pkg_path.join(format!("{variant}-runner"))
+		} else {
+			pkg_path.join("..").join("..")
+		})
 		.status()
 		.await
 		.unwrap();
@@ -252,15 +348,19 @@ pub async fn build_binaries(gen_path: &Path) {
 
 	tracing::info!("copying runner image");
 
-	let container_name = "temp-pegboard-container-runner-container";
-	let binary_path_in_container = "/app/target/x86_64-unknown-linux-musl/release/container-runner";
+	let container_name = format!("temp-pegboard-{variant}-runner-container");
+	let binary_path_in_container = if variant == "container" {
+		format!("/app/target/x86_64-unknown-linux-musl/release/{variant}-runner")
+	} else {
+		format!("/{variant}-runner")
+	};
 
 	// Create a temporary container
 	let status = Command::new("docker")
 		.arg("create")
 		.arg("--name")
-		.arg(container_name)
-		.arg(image_name)
+		.arg(&container_name)
+		.arg(&image_name)
 		.status()
 		.await
 		.expect("Failed to create container");
@@ -270,7 +370,11 @@ pub async fn build_binaries(gen_path: &Path) {
 	let status = Command::new("docker")
 		.arg("cp")
 		.arg(format!("{}:{}", container_name, binary_path_in_container))
-		.arg(runner_path(gen_path))
+		.arg(if variant == "container" {
+			container_runner_path(gen_path)
+		} else {
+			v8_isolate_runner_path(gen_path)
+		})
 		.status()
 		.await
 		.expect("Failed to copy binary from container");
@@ -296,12 +400,12 @@ pub async fn serve_binaries(gen_path: PathBuf) {
 					let gen_path = gen_path;
 					let path = req.uri().path();
 
-					let path = if path == "/0/runner" {
-						runner_path(&gen_path)
-					} else if path == "/image" {
+					let path = if path == "/image" {
 						image_path(&gen_path)
+					} else if path == "/js-image" {
+						js_image_path(&gen_path)
 					} else {
-						panic!("invalid path");
+						panic!("invalid path: {path}");
 					};
 
 					let file = File::open(path).await?;
@@ -339,27 +443,46 @@ pub async fn start_vector() {
 }
 
 static SETUP_DEPENDENCIES: AtomicBool = AtomicBool::new(false);
-pub async fn setup_dependencies() -> Option<tempfile::TempDir> {
+static mut TEMP_DIR_PATH: Option<PathBuf> = None;
+
+pub async fn setup_dependencies() -> (Option<tempfile::TempDir>, PathBuf) {
 	if !SETUP_DEPENDENCIES.swap(true, Ordering::SeqCst) {
 		let tmp_dir = tempfile::TempDir::new().unwrap();
+		let tmp_dir_path = tmp_dir.path().to_path_buf();
+
+		// SAFETY: We are the only thread that can modify TEMP_DIR_PATH at this point, as we have just
+		// swapped SETUP_DEPENDENCIES to true.
+		unsafe {
+			TEMP_DIR_PATH = Some(tmp_dir_path.clone());
+		}
+
 		build_binaries(tmp_dir.path()).await;
 
 		tokio::spawn(serve_binaries(tmp_dir.path().to_path_buf()));
 
 		tokio::spawn(start_vector());
 
-		Some(tmp_dir)
+		(Some(tmp_dir), tmp_dir_path)
 	} else {
-		None
+		// SAFETY: Once SETUP_DEPENDENCIES is true, TEMP_DIR_PATH is guaranteed to be initialized.
+		(None, unsafe { TEMP_DIR_PATH.clone().unwrap() })
 	}
 }
 
-pub fn runner_path(gen_path: &Path) -> PathBuf {
+pub fn container_runner_path(gen_path: &Path) -> PathBuf {
 	gen_path.join("pegboard-container-runner").to_path_buf()
+}
+
+pub fn v8_isolate_runner_path(gen_path: &Path) -> PathBuf {
+	gen_path.join("pegboard-v8-isolate-runner").to_path_buf()
 }
 
 pub fn image_path(gen_path: &Path) -> PathBuf {
 	gen_path.join("pegboard-echo-server").to_path_buf()
+}
+
+pub fn js_image_path(gen_path: &Path) -> PathBuf {
+	gen_path.join("pegboard-js-echo-server.js").to_path_buf()
 }
 
 static SETUP_TRACING: Once = Once::new();
