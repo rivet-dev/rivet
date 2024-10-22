@@ -8,11 +8,17 @@ const EXPIRE_PADDING: i64 = util::duration::days(30);
 pub async fn start() -> GlobalResult<()> {
 	let pools = rivet_pools::from_env().await?;
 
-	run_from_env(pools).await
+	let mut interval = tokio::time::interval(std::time::Duration::from_secs(60 * 60));
+	loop {
+		interval.tick().await;
+
+		let ts = util::timestamp::now();
+		run_from_env(ts, pools.clone()).await?;
+	}
 }
 
 #[tracing::instrument(skip_all)]
-pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
+pub async fn run_from_env(_ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()> {
 	let client = chirp_client::SharedClient::from_env(pools.clone())?
 		.wrap_new("cluster-datacenter-tls-renew");
 	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;

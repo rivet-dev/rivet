@@ -263,7 +263,8 @@ async fn run_migrations(migration_cmds: &[MigrateCmd]) -> Result<()> {
 			.args(&cmd.args)
 			.stdout(std::process::Stdio::piped())
 			.stderr(std::process::Stdio::piped())
-			.spawn()?;
+			.spawn()
+			.context("failed to run migrate command")?;
 
 		// Log output in real-time
 		let stdout = child.stdout.take().expect("Failed to capture stdout");

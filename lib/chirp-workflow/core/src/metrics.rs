@@ -7,6 +7,18 @@ lazy_static::lazy_static! {
 		&[],
 		*REGISTRY,
 	).unwrap();
+	pub static ref PULL_WORKFLOWS_PARTIAL_DURATION: GaugeVec = register_gauge_vec_with_registry!(
+		"chirp_pull_workflows_partial_duration",
+		"Duration of just pulling workflows.",
+		&["worker_instance_id"],
+		*REGISTRY,
+	).unwrap();
+	pub static ref PULL_WORKFLOWS_FULL_DURATION: GaugeVec = register_gauge_vec_with_registry!(
+		"chirp_pull_workflows_full_duration",
+		"Duration of pulling workflows and their histories.",
+		&["worker_instance_id"],
+		*REGISTRY,
+	).unwrap();
 
 	pub static ref WORKFLOW_TOTAL: IntGaugeVec = register_int_gauge_vec_with_registry!(
 		"chirp_workflow_total",
@@ -66,10 +78,11 @@ lazy_static::lazy_static! {
 		BUCKETS.to_vec(),
 		*REGISTRY,
 	).unwrap();
-	pub static ref MESSAGE_RECV_LAG: HistogramVec = register_histogram_vec_with_registry!(
-		"chirp_workflow_message_recv_lag",
-		"Time between the publish timestamp and the timestamp the message was received.",
-		&["message_name"],
+
+	pub static ref SIGNAL_PULL_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"chirp_workflow_signal_pull_duration",
+		"Total duration to pull signals.",
+		&["workflow_name", "signal_name"],
 		BUCKETS.to_vec(),
 		*REGISTRY,
 	).unwrap();

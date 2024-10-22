@@ -3,7 +3,7 @@ use tokio::time::Duration;
 use tracing::Instrument;
 use uuid::Uuid;
 
-use crate::{ctx::WorkflowCtx, db::DatabaseHandle, registry::RegistryHandle, utils};
+use crate::{ctx::WorkflowCtx, db::DatabaseHandle, metrics, registry::RegistryHandle, utils};
 
 pub const TICK_INTERVAL: Duration = Duration::from_secs(5);
 
@@ -18,6 +18,10 @@ pub struct Worker {
 
 impl Worker {
 	pub fn new(registry: RegistryHandle, db: DatabaseHandle) -> Self {
+		// Get rid of metrics that don't exist in the db anymore (declarative)
+		metrics::PULL_WORKFLOWS_FULL_DURATION.reset();
+		metrics::PULL_WORKFLOWS_PARTIAL_DURATION.reset();
+
 		Worker {
 			worker_instance_id: Uuid::new_v4(),
 			registry,

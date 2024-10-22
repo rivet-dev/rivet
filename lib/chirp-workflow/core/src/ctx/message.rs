@@ -290,11 +290,6 @@ impl MessageCtx {
 			let message = NatsMessage::<M>::deserialize(message_buf.as_slice())?;
 			tracing::info!(?message, "immediate read tail message");
 
-			let recv_lag = (rivet_util::timestamp::now() as f64 - message.ts as f64) / 1000.;
-			crate::metrics::MESSAGE_RECV_LAG
-				.with_label_values(&[M::NAME])
-				.observe(recv_lag);
-
 			Some(message)
 		} else {
 			tracing::info!("no tail message to read");

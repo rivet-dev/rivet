@@ -1,8 +1,11 @@
+use std::time::Instant;
+
 use crate::{
 	ctx::WorkflowCtx,
 	db::SignalData,
 	error::{WorkflowError, WorkflowResult},
 	history::location::Location,
+	metrics,
 };
 
 /// Indirection struct to prevent invalid implementations of listen traits.
@@ -38,6 +41,8 @@ impl<'a> ListenCtx<'a> {
 			self.used = true;
 		}
 
+		let start_instant = Instant::now();
+
 		// Fetch new pending signal
 		let signal = self
 			.ctx
@@ -50,6 +55,17 @@ impl<'a> ListenCtx<'a> {
 				self.ctx.loop_location(),
 			)
 			.await?;
+
+		let dt = start_instant.elapsed().as_secs_f64();
+		metrics::SIGNAL_PULL_DURATION
+			.with_label_values(&[
+				&self.ctx.name(),
+				signal
+					.as_ref()
+					.map(|signal| signal.signal_name.as_str())
+					.unwrap_or("<none>"),
+			])
+			.observe(dt);
 
 		let Some(signal) = signal else {
 			return Err(WorkflowError::NoSignalFound(Box::from(signal_names)));

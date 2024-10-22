@@ -157,15 +157,6 @@ pub trait Database: Send {
 		loop_location: Option<&Location>,
 	) -> WorkflowResult<()>;
 
-	/// Fetches a workflow that has the given json as a subset of its input after the given ts. Used primarily
-	/// in tests.
-	async fn poll_workflow(
-		&self,
-		name: &str,
-		input: &serde_json::value::RawValue,
-		after_ts: i64,
-	) -> WorkflowResult<Option<(Uuid, i64)>>;
-
 	/// Writes a message send event to history.
 	async fn commit_workflow_message_send_event(
 		&self,
