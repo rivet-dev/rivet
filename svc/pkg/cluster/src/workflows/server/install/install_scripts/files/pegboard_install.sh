@@ -7,7 +7,14 @@ EOF
 
 sysctl --system
 
+mkdir -p /etc/pegboard
+mkdir -p /etc/pegboard/bin
+
 curl -Lf -o /usr/bin/pegboard "__BINARY_URL__"
 chmod +x /usr/bin/pegboard
 
-mkdir -p /etc/pegboard
+curl -Lf -o /usr/bin/pegboard "__CONTAINER_RUNNER_BINARY_URL__"
+chmod +x /usr/bin/pegboard/bin/container-runner
+
+curl -Lf -o /usr/bin/pegboard "__V8_ISOLATE_BINARY_URL__"
+chmod +x /usr/bin/pegboard/bin/v8-isolate-runner

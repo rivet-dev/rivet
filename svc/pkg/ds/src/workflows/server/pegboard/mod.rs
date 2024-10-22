@@ -206,7 +206,7 @@ async fn setup(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<Uuid> {
 		))
 		.await?;
 
-	let (actor_id, resources, artifacts) = ctx
+	let (actor_id, resources, image_artifact_url) = ctx
 		.join((
 			activity(SelectActorIdInput {
 				server_id: input.server_id,
@@ -221,7 +221,6 @@ async fn setup(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<Uuid> {
 				server_id: input.server_id,
 				build_upload_id: build_dc.build_upload_id,
 				build_file_name: build_dc.build_file_name,
-				build_kind: build_dc.build_kind,
 				dc_build_delivery_method: build_dc.dc_build_delivery_method,
 			}),
 		))
@@ -230,12 +229,8 @@ async fn setup(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<Uuid> {
 	ctx.signal(pp::Command::StartActor {
 		actor_id,
 		config: Box::new(pp::ActorConfig {
-			driver: match build_dc.build_kind {
-				BuildKind::DockerImage | BuildKind::OciBundle => pp::Driver::Container,
-				BuildKind::JavaScript => pp::Driver::V8Isolate,
-			},
 			image: pp::Image {
-				artifact_url: artifacts.image_artifact_url,
+				artifact_url: image_artifact_url,
 				kind: match build_dc.build_kind {
 					BuildKind::DockerImage => pp::ImageKind::DockerImage,
 					BuildKind::OciBundle => pp::ImageKind::OciBundle,
@@ -246,7 +241,6 @@ async fn setup(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<Uuid> {
 					BuildCompression::Lz4 => pp::ImageCompression::Lz4,
 				},
 			},
-			runner_artifact_url: artifacts.runner_artifact_url,
 			root_user_enabled: input.root_user_enabled,
 			env: input.environment.as_hashable(),
 			ports: input
@@ -435,22 +429,14 @@ struct ResolveArtifactsInput {
 	image_id: Uuid,
 	server_id: Uuid,
 	build_upload_id: Uuid,
-	build_kind: BuildKind,
 	build_file_name: String,
 	dc_build_delivery_method: BuildDeliveryMethod,
 }
-
-#[derive(Debug, Serialize, Deserialize, Hash)]
-struct ResolveArtifactsOutput {
-	image_artifact_url: String,
-	runner_artifact_url: String,
-}
-
 #[activity(ResolveArtifacts)]
 async fn resolve_artifacts(
 	ctx: &ActivityCtx,
 	input: &ResolveArtifactsInput,
-) -> GlobalResult<ResolveArtifactsOutput> {
+) -> GlobalResult<String> {
 	let upload_res = op!([ctx] upload_get {
 		upload_ids: vec![input.build_upload_id.into()],
 	})
@@ -467,18 +453,8 @@ async fn resolve_artifacts(
 		upload_id,
 	)
 	.await?;
-	let runner_artifact_url = resolve_runner_artifact_url(
-		ctx,
-		input.datacenter_id,
-		input.build_kind,
-		input.dc_build_delivery_method,
-	)
-	.await?;
 
-	Ok(ResolveArtifactsOutput {
-		image_artifact_url,
-		runner_artifact_url,
-	})
+	Ok(image_artifact_url)
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
@@ -535,92 +511,3 @@ join_signal!(Main {
 	Destroy,
 	Drain,
 });
-
-/// Generates a presigned URL for the runner binary.
-async fn resolve_runner_artifact_url(
-	ctx: &ActivityCtx,
-	datacenter_id: Uuid,
-	build_kind: BuildKind,
-	build_delivery_method: BuildDeliveryMethod,
-) -> GlobalResult<String> {
-	// Get provider
-	let provider = s3_util::Provider::default()?;
-
-	let file_name = match build_kind {
-		BuildKind::DockerImage | BuildKind::OciBundle => {
-			std::env::var("CONTAINER_RUNNER_BINARY_KEY")?
-		}
-		BuildKind::JavaScript => std::env::var("V8_ISOLATE_RUNNER_BINARY_KEY")?,
-	};
-
-	// Build URL
-	match build_delivery_method {
-		BuildDeliveryMethod::S3Direct => {
-			tracing::info!("actor runner using s3 direct delivery");
-
-			// Build client
-			let s3_client = s3_util::Client::from_env_opt(
-				"bucket-infra-artifacts",
-				s3_util::EndpointKind::External,
-			)
-			.await?;
-			let presigned_req = s3_client
-				.get_object()
-				.bucket(s3_client.bucket())
-				.key(file_name)
-				.presigned(
-					s3_util::aws_sdk_s3::presigning::config::PresigningConfig::builder()
-						.expires_in(std::time::Duration::from_secs(15 * 60))
-						.build()?,
-				)
-				.await?;
-
-			let addr = presigned_req.uri().clone();
-
-			let addr_str = addr.to_string();
-			tracing::info!(addr = %addr_str, "resolved runner presigned request");
-
-			Ok(addr_str)
-		}
-		BuildDeliveryMethod::TrafficServer => {
-			tracing::info!("runner using traffic server delivery");
-
-			// Choose a random ATS node to pull from
-			let (ats_vlan_ip,) = sql_fetch_one!(
-				[ctx, (IpAddr,)]
-				"
-				WITH sel AS (
-					-- Select candidate vlan ips
-					SELECT
-						vlan_ip
-					FROM db_cluster.servers
-					WHERE
-						datacenter_id = $1 AND
-						pool_type = $2 AND
-						vlan_ip IS NOT NULL AND
-						install_complete_ts IS NOT NULL AND
-						drain_ts IS NULL AND
-						cloud_destroy_ts IS NULL	
-				)
-				SELECT vlan_ip
-				FROM sel
-				ORDER BY random()
-				LIMIT 1
-				",
-				&datacenter_id,
-				cluster::types::PoolType::Ats as i32,
-			)
-			.await?;
-
-			let addr = format!(
-				"http://{vlan_ip}:8080/s3-cache/{namespace}-bucket-infra-artifacts/{file_name}",
-				vlan_ip = ats_vlan_ip,
-				namespace = util::env::namespace(),
-			);
-
-			tracing::info!(%addr, "resolved artifact s3 url");
-
-			Ok(addr)
-		}
-	}
-}

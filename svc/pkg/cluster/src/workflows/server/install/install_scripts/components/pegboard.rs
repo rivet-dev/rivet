@@ -1,13 +1,30 @@
 use chirp_workflow::prelude::*;
 
 pub async fn install() -> GlobalResult<String> {
-	let binary_url = resolve_manager_binary_url().await?;
+	let s3_client = s3_util::Client::from_env_opt(
+		"bucket-infra-artifacts",
+		s3_util::EndpointKind::External,
+	)
+	.await?;
 
-	Ok(include_str!("../files/pegboard_install.sh").replace("__BINARY_URL__", &binary_url))
+	let (manager_binary_url, container_runner_binary_url, v8_isolate_runner_url) = tokio::try_join!(
+		resolve_binary_url(&s3_client, util::env::var("PEGBOARD_MANAGER_BINARY_KEY")?),
+		resolve_binary_url(&s3_client, util::env::var("CONTAINER_RUNNER_BINARY_KEY")?),
+		resolve_binary_url(&s3_client, util::env::var("V8_ISOLATE_RUNNER_BINARY_KEY")?),
+	)?;
+
+	Ok(include_str!("../files/pegboard_install.sh")
+		.replace("__MANAGER_BINARY_URL__", &manager_binary_url)
+		.replace(
+			"__CONTAINER_RUNNER_BINARY_URL__",
+			&container_runner_binary_url,
+		)
+		.replace("__V8_ISOLATE_BINARY_URL__", &v8_isolate_runner_url))
 }
 
 pub fn configure() -> GlobalResult<String> {
 	Ok(include_str!("../files/pegboard_configure.sh")
+		.replace("__ORIGIN_API__", util::env::origin_api())
 		// HACK: Hardcoded to Linode
 		.replace("__PUBLIC_IFACE__", "eth0")
 		// HACK: Hardcoded to Linode
@@ -22,14 +39,11 @@ pub fn configure() -> GlobalResult<String> {
 		))
 }
 
-/// Generates a presigned URL for the pegboard manager binary.
-async fn resolve_manager_binary_url() -> GlobalResult<String> {
-	let file_name = util::env::var("PEGBOARD_MANAGER_BINARY_KEY")?;
-
-	// Build client
-	let s3_client =
-		s3_util::Client::from_env_opt("bucket-infra-artifacts", s3_util::EndpointKind::External)
-			.await?;
+/// Generates a presigned S3 URL for binaries.
+async fn resolve_binary_url(
+	s3_client: &s3_util::Client,
+	file_name: String,
+) -> GlobalResult<String> {
 	let presigned_req = s3_client
 		.get_object()
 		.bucket(s3_client.bucket())
@@ -41,9 +55,5 @@ async fn resolve_manager_binary_url() -> GlobalResult<String> {
 		)
 		.await?;
 
-	let addr = presigned_req.uri().clone();
-
-	let addr_str = addr.to_string();
-
-	Ok(addr_str)
+	Ok(presigned_req.uri().clone().to_string())
 }

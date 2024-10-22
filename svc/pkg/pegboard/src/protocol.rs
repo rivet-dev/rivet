@@ -15,9 +15,7 @@ pub enum PegboardProtocolError {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ToClient {
-	Init {
-		last_event_idx: i64,
-	},
+	Init { last_event_idx: i64 },
 	Commands(Vec<CommandWrapper>),
 	FetchStateRequest {},
 }

@@ -32,5 +32,5 @@ fn default_container_runner_binary_path() -> PathBuf {
 }
 
 fn default_isolate_runner_binary_path() -> PathBuf {
-	default_working_path().join("bin").join("isolate-runner")
+	default_working_path().join("bin").join("v8-isolate-runner")
 }

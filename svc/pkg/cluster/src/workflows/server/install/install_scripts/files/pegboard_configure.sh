@@ -1,5 +1,16 @@
 PUBLIC_IP=$(ip -4 route get 1.0.0.0 | awk '{print $7; exit}')
 
+# MARK: Pegboard config
+cat << 'EOF' > /etc/pegboard/config.json
+{
+	"client_id": "___SERVER_ID___",
+	"datacenter_id": "___DATACENTER_ID___",
+	"network_ip": "___VLAN_IP___",
+	"vector_socket_addr": "127.0.0.1:5021",
+	"api_endpoint": "__ORIGIN_API__"
+}
+EOF
+
 # Create admin chain that only accepts traffic from the GG subnet
 #
 # See Nomad equivalent: https://github.com/hashicorp/nomad/blob/a8f0f2612ef9d283ed903721f8453a0c0c3f51c5/client/allocrunner/networking_bridge_linux.go#L73
@@ -294,10 +305,7 @@ After=network-online.target setup_pegboard_networking.service
 ConditionPathExists=/etc/pegboard/
 
 [Service]
-Environment="CLIENT_ID=___SERVER_ID___"
-Environment="DATACENTER_ID=___DATACENTER_ID___"
-Environment="NETWORK_IP=___VLAN_IP___"
-ExecStart=/usr/bin/pegboard
+ExecStart=/usr/bin/pegboard -c /etc/pegboard/config.json
 Restart=always
 RestartSec=2
 TasksMax=infinity

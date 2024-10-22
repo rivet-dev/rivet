@@ -234,8 +234,6 @@ async fn run_inner(
 			// Wait for stop signal
 			_ = stop_rx.changed() => {
 				println!("{actor_id}: Forcefully stopping isolate");
-
-				worker.terminate_execution();
 				break 'block true;
 			},
 			// Evalulate module and run event loop
@@ -271,8 +269,6 @@ async fn run_inner(
 				// Wait for stop signal
 				_ = stop_rx.changed() => {
 					println!("{actor_id}: Forcefully stopping isolate");
-
-					worker.terminate_execution();
 					break;
 				},
 				res = worker.run_event_loop_with_exit() => {
@@ -296,6 +292,8 @@ async fn run_inner(
 			}
 		}
 	}
+
+	worker.terminate_execution();
 
 	println!("{actor_id}: Isolate complete");
 
