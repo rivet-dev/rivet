@@ -107,7 +107,7 @@ pub async fn start(use_autoscaler: bool) -> GlobalResult<()> {
 }
 
 #[tracing::instrument]
-pub async fn start_inner(use_autoscaler: bool) -> GlobalResult<()> {
+async fn start_inner(use_autoscaler: bool) -> GlobalResult<()> {
 	let pools = rivet_pools::from_env().await?;
 	let client =
 		chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("cluster-default-update");

@@ -1,13 +1,5 @@
 use rivet_operation::prelude::*;
 
-pub async fn start() -> GlobalResult<()> {
-	let pools = rivet_pools::from_env().await?;
-
-	run_from_env(pools).await?;
-
-	Ok(())
-}
-
 macro_rules! spawn_workers {
 	([$shared_client:ident, $pools:ident, $cache:ident, $join_set:ident] $($pkg:ident),* $(,)?) => {
 		$(
@@ -19,6 +11,14 @@ macro_rules! spawn_workers {
 			)?;
 		)*
 	};
+}
+
+pub async fn start() -> GlobalResult<()> {
+	let pools = rivet_pools::from_env().await?;
+
+	run_from_env(pools).await?;
+
+	Ok(())
 }
 
 #[tracing::instrument(skip_all)]

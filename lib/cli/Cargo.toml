@@ -34,7 +34,7 @@ tracing = "0.1"
 url = "2.5.2"
 uuid = "1.10.0"
 
- # Standalone
+# Standalone
 cluster-datacenter-tls-renew = { path = "../../svc/pkg/cluster/standalone/datacenter-tls-renew" }
 cluster-gc = { path = "../../svc/pkg/cluster/standalone/gc" }
 cluster-metrics-publish = { path = "../../svc/pkg/cluster/standalone/metrics-publish" }

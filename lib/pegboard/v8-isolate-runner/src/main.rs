@@ -3,7 +3,6 @@ use std::{collections::HashMap, path::Path, time::Duration};
 use anyhow::*;
 use deno_runtime::deno_core::JsRuntime;
 use futures_util::{stream::SplitStream, StreamExt};
-use rand::Rng;
 use tokio::{
 	fs,
 	net::TcpStream,
@@ -132,9 +131,7 @@ async fn handle_connection(
 								break;
 							}
 
-							let jitter =
-								Duration::from_millis(rand::thread_rng().gen_range(0..100));
-							tokio::time::sleep(THREAD_STATUS_POLL + jitter).await
+							tokio::time::sleep(THREAD_STATUS_POLL).await
 						}
 					});
 
