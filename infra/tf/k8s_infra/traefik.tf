@@ -57,7 +57,7 @@ resource "helm_release" "traefik" {
 		} : null
 
 		additionalArguments = [
-			"--providers.http.endpoint=http://rivet-api-internal-monolith.rivet-service.svc.cluster.local/traefik-provider/config/core?token=${module.traefik_secrets.values["rivet/api_traefik_provider/token"]}",
+			"--providers.http.endpoint=http://rivet-api-internal.rivet-service.svc.cluster.local/traefik-provider/config/core?token=${module.traefik_secrets.values["rivet/api_traefik_provider/token"]}",
 			"--providers.http.pollInterval=2.5s",
 			# See docs/infrastructure/TIMEOUTS.md
 			"--entryPoints.web.transport.lifeCycle.graceTimeOut=60s",

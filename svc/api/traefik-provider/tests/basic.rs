@@ -12,7 +12,7 @@ const CDN_POLL_INTERVAL: Duration = Duration::from_millis(500);
 static GLOBAL_INIT: Once = Once::new();
 
 const API_TRAEFIK_PROVIDER_URL: &str =
-	"http://rivet-api-internal-monolith.rivet-service.svc.cluster.local/traefik-provider";
+	"http://rivet-api-internal.rivet-service.svc.cluster.local/traefik-provider";
 
 async fn get_api_traefik_provider_token() -> String {
 	util::env::read_secret(&["rivet", "api_traefik_provider", "token"])

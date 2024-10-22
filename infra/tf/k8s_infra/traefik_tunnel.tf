@@ -3,7 +3,7 @@ locals {
 	tunnel_services = merge(flatten([
 		var.edge_enabled ? [{
 			"api-internal" = {
-				service = "rivet-api-internal-monolith"
+				service = "rivet-api-internal"
 				service_namespace = kubernetes_namespace.rivet_service.metadata[0].name
 				service_port = 80
 			},
@@ -150,7 +150,7 @@ resource "helm_release" "traefik_tunnel" {
 		} : null
 
 		additionalArguments = [
-			"--providers.http.endpoint=http://rivet-api-internal-monolith.rivet-service.svc.cluster.local/traefik-provider/config/tunnel?token=${module.traefik_secrets.values["rivet/api_traefik_provider/token"]}",
+			"--providers.http.endpoint=http://rivet-api-internal.rivet-service.svc.cluster.local/traefik-provider/config/tunnel?token=${module.traefik_secrets.values["rivet/api_traefik_provider/token"]}",
 			"--providers.http.pollInterval=2.5s",			
 		]
 		
