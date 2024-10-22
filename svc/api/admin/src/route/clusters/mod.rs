@@ -35,9 +35,7 @@ pub async fn create(
 	let cluster_id = Uuid::new_v4();
 
 	let mut sub = ctx
-		.subscribe::<cluster::workflows::cluster::CreateComplete>(&json!({
-			"cluster_id": cluster_id,
-		}))
+		.subscribe::<cluster::workflows::cluster::CreateComplete>(("cluster_id", cluster_id))
 		.await?;
 
 	ctx.workflow(cluster::workflows::cluster::Input {

@@ -157,13 +157,14 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<()>
 					provider,
 					provider_datacenter_id,
 					provider_api_token,
+					pools,
 					pools2,
 					build_delivery_method,
 					prebakes_enabled,
 					create_ts
 				)
 				VALUES (
-					$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+					$1, $2, $3, $4, $5, $6, $7, '', $8, $9, $10, $11
 				)
 				",
 				input.datacenter_id,
@@ -189,7 +190,7 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<()>
 					state,
 					expire_ts
 				)
-				VALUES ($1, $2)
+				VALUES ($1, $2, 0)
 				",
 				input.datacenter_id,
 				TlsState::Creating as i64,

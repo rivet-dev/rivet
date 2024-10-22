@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use super::{
 	event::{
 		ActivityEvent, Event, EventData, EventId, EventType, LoopEvent, MessageSendEvent,
@@ -30,16 +32,8 @@ impl Cursor {
 
 			// This is the only place a coordinate of `0` can exist. It is used as a left-most bound for
 			// coordinates; no coordinates can come before 0.
-			prev_coord: Coordinate::new(Box::new([0])),
+			prev_coord: Coordinate::simple(0),
 		}
-	}
-
-	pub(crate) fn iter_idx(&self) -> usize {
-		self.iter_idx
-	}
-
-	pub(crate) fn set_idx(&mut self, iter_idx: usize) {
-		self.iter_idx = iter_idx;
 	}
 
 	pub fn current_coord(&self) -> Coordinate {
@@ -68,7 +62,7 @@ impl Cursor {
 				idx + 1
 			};
 
-			Coordinate::new(Box::new([int]))
+			Coordinate::simple(int)
 		}
 	}
 
@@ -77,11 +71,7 @@ impl Cursor {
 	}
 
 	pub fn current_location(&self) -> Location {
-		self.root_location
-			.iter()
-			.cloned()
-			.chain(std::iter::once(self.current_coord()))
-			.collect()
+		self.root_location.join(self.current_coord())
 	}
 
 	/// Returns the current location based on the history result of a comparison. The returned location
@@ -91,56 +81,62 @@ impl Cursor {
 
 		let coord = match history_res {
 			HistoryResult::Event(_) | HistoryResult::New => curr,
-			// Pick a location between the previous and current location based on coordinate and version
+			// Pick a location between the previous and current locations based on cardinality
 			HistoryResult::Insertion => {
-				// The difference between these two is `historical_prev` will always come from history,
-				// whereas `prev` might be the last returned value from this function (not in history)
-				let historical_prev = if self.iter_idx == 0 {
-					Coordinate::new(Box::new([0]))
-				} else {
-					self.coord_at(self.iter_idx - 1)
-				};
 				let prev = &self.prev_coord;
 
-				if &historical_prev == prev {
-					// 1.1 vs 1.1.1 (cardinality)
-					if prev.cardinality() >= curr.cardinality() {
-						// prev + .1
-						prev.into_iter()
-							.cloned()
-							.chain(std::iter::once(1))
-							.collect::<Coordinate>()
-					} else {
-						// prev + .0.1
+				match prev.cardinality().cmp(&curr.cardinality()) {
+					// 1.1 vs 1.1.1
+					Ordering::Less => {
+						// prev + .0.1 (2.3 -> 2.3.0.1)
 						prev.into_iter()
 							.cloned()
 							.chain(std::iter::once(0))
 							.chain(std::iter::once(1))
 							.collect::<Coordinate>()
 					}
-				} else {
-					// Increment tail (1.2 -> 1.3)
-					prev.with_tail(prev.tail() + 1)
+					// 1.1 vs 1.2
+					Ordering::Equal => {
+						// prev + .1 (8 -> 8.1)
+						prev.into_iter()
+							.cloned()
+							.chain(std::iter::once(1))
+							.collect::<Coordinate>()
+					}
+					// 1.3.1 vs 1.4
+					Ordering::Greater => {
+						// Increment tail (1.2 -> 1.3)
+						prev.with_tail(prev.tail() + 1)
+					}
 				}
 			}
 		};
 
-		self.root_location
-			.iter()
-			.cloned()
-			.chain(std::iter::once(coord))
-			.collect()
+		self.root_location.join(coord)
 	}
 
 	pub fn current_event(&self) -> Option<&Event> {
 		if let Some(branch) = self.events.get(&self.root_location) {
-			branch.get(self.iter_idx)
+			let event = branch.get(self.iter_idx);
+
+			// Empty events are considered `None`
+			if let Some(Event {
+				data: EventData::Empty,
+				..
+			}) = &event
+			{
+				None
+			} else {
+				event
+			}
 		} else {
 			None
 		}
 	}
 
 	pub(crate) fn inc(&mut self) {
+		self.prev_coord = self.current_coord();
+
 		self.iter_idx += 1;
 	}
 
@@ -154,7 +150,7 @@ impl Cursor {
 		// the next event. Otherwise, `Cursor::current_location_for` returned an inserted version which does
 		// not constitute incrementing the cursor (as it only acts on history).
 		if tail == &self.current_coord() {
-			self.inc();
+			self.iter_idx += 1;
 		}
 
 		self.prev_coord = tail.clone();
@@ -170,8 +166,9 @@ impl Cursor {
 		if self.iter_idx < branch.len() {
 			let latent = branch.len() - self.iter_idx;
 			return Err(WorkflowError::LatentHistoryFound(format!(
-				"expected {latent} more event{}",
-				if latent == 1 { "s" } else { "" }
+				"expected {latent} more event{} in root at {}",
+				if latent == 1 { "" } else { "s" },
+				self.root_location,
 			)));
 		};
 
@@ -185,22 +182,26 @@ impl Cursor {
 		event_id: &EventId,
 	) -> WorkflowResult<HistoryResult<&ActivityEvent>> {
 		if let Some(event) = self.current_event() {
-			if event.version < version {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"attempted insertion of activity {} before {event} at {} (invalid due to versions: v{} < v{})",
-					event_id.name,
-					self.current_location(),
-					version,
-					event.version,
-				)));
-			} else if event.version > version {
+			if version > event.version {
 				return Ok(HistoryResult::Insertion);
+			}
+
+			if version < event.version {
+				return Err(WorkflowError::HistoryDiverged(format!(
+					"expected {} v{} at {}, found activity {:?} v{}",
+					event.data,
+					event.version,
+					self.current_location(),
+					event_id.name,
+					version,
+				)));
 			}
 
 			// Validate history is consistent
 			let EventData::Activity(activity) = &event.data else {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event} at {}, found activity {}",
+					"expected {} at {}, found activity {:?}",
+					event.data,
 					self.current_location(),
 					event_id.name
 				)));
@@ -208,7 +209,7 @@ impl Cursor {
 
 			if &activity.event_id != event_id {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected activity {}#{:x} at {}, found activity {}#{:x}",
+					"expected activity {:?}#{:x} at {}, found activity {:?}#{:x}",
 					activity.event_id.name,
 					activity.event_id.input_hash,
 					self.current_location(),
@@ -230,22 +231,26 @@ impl Cursor {
 		msg_name: &str,
 	) -> WorkflowResult<HistoryResult<&MessageSendEvent>> {
 		if let Some(event) = self.current_event() {
-			if event.version < version {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"attempted insertion of message send {} before {event} at {} (invalid due to versions: v{} < v{})",
-					msg_name,
-					self.current_location(),
-					version,
-					event.version,
-				)));
-			} else if event.version > version {
+			if version > event.version {
 				return Ok(HistoryResult::Insertion);
+			}
+
+			if version < event.version {
+				return Err(WorkflowError::HistoryDiverged(format!(
+					"expected {} v{} at {}, found message send {:?} v{}",
+					event.data,
+					event.version,
+					self.current_location(),
+					msg_name,
+					version,
+				)));
 			}
 
 			// Validate history is consistent
 			let EventData::MessageSend(msg) = &event.data else {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event} at {}, found message send {}",
+					"expected {} at {}, found message send {:?}",
+					event.data,
 					self.current_location(),
 					msg_name,
 				)));
@@ -253,7 +258,8 @@ impl Cursor {
 
 			if msg.name != msg_name {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event} at {}, found message send {}",
+					"expected {} at {}, found message send {:?}",
+					event.data,
 					self.current_location(),
 					msg_name,
 				)));
@@ -272,22 +278,26 @@ impl Cursor {
 		signal_name: &str,
 	) -> WorkflowResult<HistoryResult<&SignalSendEvent>> {
 		if let Some(event) = self.current_event() {
-			if event.version < version {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"attempted insertion of signal send {} before {event} at {} (invalid due to versions: v{} < v{})",
-					signal_name,
-					self.current_location(),
-					version,
-					event.version,
-				)));
-			} else if event.version > version {
+			if version > event.version {
 				return Ok(HistoryResult::Insertion);
+			}
+
+			if version < event.version {
+				return Err(WorkflowError::HistoryDiverged(format!(
+					"expected {} v{} at {}, found signal send {:?} v{}",
+					event.data,
+					event.version,
+					self.current_location(),
+					signal_name,
+					version,
+				)));
 			}
 
 			// Validate history is consistent
 			let EventData::SignalSend(signal) = &event.data else {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event} at {}, found signal send {}",
+					"expected {} at {}, found signal send {:?}",
+					event.data,
 					self.current_location(),
 					signal_name,
 				)));
@@ -295,7 +305,8 @@ impl Cursor {
 
 			if signal.name != signal_name {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event} at {}, found signal send {}",
+					"expected {} at {}, found signal send {:?}",
+					event.data,
 					self.current_location(),
 					signal_name,
 				)));
@@ -314,22 +325,26 @@ impl Cursor {
 		sub_workflow_name: &str,
 	) -> WorkflowResult<HistoryResult<&SubWorkflowEvent>> {
 		if let Some(event) = self.current_event() {
-			if event.version < version {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"attempted insertion of sub workflow {} before {event} at {} (invalid due to versions: v{} < v{})",
-					sub_workflow_name,
-					self.current_location(),
-					version,
-					event.version,
-				)));
-			} else if event.version > version {
+			if version > event.version {
 				return Ok(HistoryResult::Insertion);
+			}
+
+			if version < event.version {
+				return Err(WorkflowError::HistoryDiverged(format!(
+					"expected {} v{} at {}, found sub workflow {:?} v{}",
+					event.data,
+					event.version,
+					self.current_location(),
+					sub_workflow_name,
+					version,
+				)));
 			}
 
 			// Validate history is consistent
 			let EventData::SubWorkflow(sub_workflow) = &event.data else {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event} at {}, found sub workflow {}",
+					"expected {} at {}, found sub workflow {:?}",
+					event.data,
 					self.current_location(),
 					sub_workflow_name,
 				)));
@@ -337,7 +352,8 @@ impl Cursor {
 
 			if sub_workflow.name != sub_workflow_name {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event} at {}, found sub_workflow {}",
+					"expected {} at {}, found sub_workflow {:?}",
+					event.data,
 					self.current_location(),
 					sub_workflow_name,
 				)));
@@ -352,21 +368,25 @@ impl Cursor {
 	/// Returns `Some` if the current event is a replay.
 	pub fn compare_signal(&self, version: usize) -> WorkflowResult<HistoryResult<&SignalEvent>> {
 		if let Some(event) = self.current_event() {
-			if event.version < version {
+			if version > event.version {
+				return Ok(HistoryResult::Insertion);
+			}
+
+			if version < event.version {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"attempted insertion of signal before {event} at {} (invalid due to versions: v{} < v{})",
+					"expected {} v{} at {}, found signal v{}",
+					event.data,
+					event.version,
 					self.current_location(),
 					version,
-					event.version,
 				)));
-			} else if event.version > version {
-				return Ok(HistoryResult::Insertion);
 			}
 
 			// Validate history is consistent
 			let EventData::Signal(signal) = &event.data else {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event} at {}, found signal",
+					"expected {} at {}, found signal",
+					event.data,
 					self.current_location(),
 				)));
 			};
@@ -380,21 +400,25 @@ impl Cursor {
 	/// Returns `Some` if the current event is a replay.
 	pub fn compare_loop(&self, version: usize) -> WorkflowResult<HistoryResult<&LoopEvent>> {
 		if let Some(event) = self.current_event() {
-			if event.version < version {
+			if version > event.version {
+				return Ok(HistoryResult::Insertion);
+			}
+
+			if version < event.version {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"attempted insertion of loop before {event} at {} (invalid due to versions: v{} < v{})",
+					"expected {} v{} at {}, found loop v{}",
+					event.data,
+					event.version,
 					self.current_location(),
 					version,
-					event.version,
 				)));
-			} else if event.version > version {
-				return Ok(HistoryResult::Insertion);
 			}
 
 			// Validate history is consistent
 			let EventData::Loop(loop_event) = &event.data else {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event} at {}, found loop",
+					"expected {} at {}, found loop",
+					event.data,
 					self.current_location(),
 				)));
 			};
@@ -408,21 +432,25 @@ impl Cursor {
 	/// Returns `Some` if the current event is a replay.
 	pub fn compare_sleep(&self, version: usize) -> WorkflowResult<HistoryResult<&SleepEvent>> {
 		if let Some(event) = self.current_event() {
-			if event.version < version {
+			if version > event.version {
+				return Ok(HistoryResult::Insertion);
+			}
+
+			if version < event.version {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"attempted insertion of sleep before {event} at {} (invalid due to versions: v{} < v{})",
+					"expected {} v{} at {}, found sleep v{}",
+					event.data,
+					event.version,
 					self.current_location(),
 					version,
-					event.version,
 				)));
-			} else if event.version > version {
-				return Ok(HistoryResult::Insertion);
 			}
 
 			// Validate history is consistent
 			let EventData::Sleep(sleep) = &event.data else {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event} at {}, found sleep",
+					"expected {} at {}, found sleep",
+					event.data,
 					self.current_location(),
 				)));
 			};
@@ -436,21 +464,25 @@ impl Cursor {
 	/// Returns `true` if the current event is a replay.
 	pub fn compare_branch(&self, version: usize) -> WorkflowResult<HistoryResult<()>> {
 		if let Some(event) = self.current_event() {
-			if event.version < version {
+			if version > event.version {
+				return Ok(HistoryResult::Insertion);
+			}
+
+			if version < event.version {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"attempted insertion of branch before {event} at {} (invalid due to versions: v{} < v{})",
+					"expected {} v{} at {}, found branch v{}",
+					event.data,
+					event.version,
 					self.current_location(),
 					version,
-					event.version,
 				)));
-			} else if event.version > version {
-				return Ok(HistoryResult::Insertion);
 			}
 
 			// Validate history is consistent
 			let EventData::Branch = &event.data else {
 				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event} at {}, found branch",
+					"expected {} at {}, found branch",
+					event.data,
 					self.current_location(),
 				)));
 			};
@@ -462,11 +494,36 @@ impl Cursor {
 	}
 
 	/// Returns `true` if the current event is a replay.
+	/// Because loops have a sparse history with potentially 0 events (after forgetting), they create branches
+	/// at specific locations instead of using `current_location_for`. This means the cursor cannot use
+	/// `current_event` to compare the history and instead we just find the correct event via coordinate.
+	pub fn compare_loop_branch(&self, iteration: usize) -> WorkflowResult<bool> {
+		let empty_vec = Vec::new();
+		let branch = self.events.get(&self.root_location).unwrap_or(&empty_vec);
+		let coordinate = Coordinate::simple(iteration + 1);
+
+		if let Some(event) = branch.iter().find(|x| x.coordinate == coordinate) {
+			// Validate history is consistent
+			let EventData::Branch = &event.data else {
+				return Err(WorkflowError::HistoryDiverged(format!(
+					"expected {} at {}, found branch",
+					event.data,
+					self.current_location(),
+				)));
+			};
+
+			Ok(true)
+		} else {
+			Ok(false)
+		}
+	}
+
+	/// Returns `true` if the current event is a replay.
 	pub fn compare_removed<T: Removed>(&self) -> WorkflowResult<bool> {
 		if let Some(event) = self.current_event() {
 			// Validate history is consistent
 			let valid = if let EventData::Removed(removed) = &event.data {
-				removed.name.as_deref() == T::name() && removed.event_type == T::event_type()
+				removed.event_type == T::event_type() && removed.name.as_deref() == T::name()
 			} else {
 				match T::event_type() {
 					EventType::Activity => {
@@ -506,12 +563,24 @@ impl Cursor {
 			};
 
 			if !valid {
-				return Err(WorkflowError::HistoryDiverged(format!(
-					"expected {event} at {}, found removed {}",
-					self.current_location(),
-					T::event_type(),
-				)));
-			};
+				let msg = if let Some(name) = T::name() {
+					format!(
+						"expected {} at {}, found removed {} {name:?}",
+						event.data,
+						self.current_location(),
+						T::event_type(),
+					)
+				} else {
+					format!(
+						"expected {} at {}, found removed {}",
+						event.data,
+						self.current_location(),
+						T::event_type(),
+					)
+				};
+
+				return Err(WorkflowError::HistoryDiverged(msg));
+			}
 
 			Ok(true)
 		} else {
@@ -558,6 +627,31 @@ mod tests {
 		($($i:expr),*) => {
 			Coordinate::new(Box::new([$($i),*]))
 		};
+	}
+
+	#[test]
+	fn coord_with_sparse_events() {
+		let events = [(
+			loc![],
+			vec![
+				Event {
+					coordinate: coord![2, 1],
+					version: 1,
+					data: EventData::VersionCheck,
+				},
+				Event {
+					coordinate: coord![4],
+					version: 1,
+					data: EventData::VersionCheck,
+				},
+			],
+		)]
+		.into_iter()
+		.collect();
+		let mut cursor = Cursor::new(Arc::new(events), Location::empty());
+
+		assert_eq!(coord![2, 1], cursor.coord_at(0));
+		assert_eq!(coord![5], cursor.coord_at(2));
 	}
 
 	/// Before 1 is 0.1

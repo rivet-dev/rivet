@@ -90,9 +90,10 @@ pub async fn create(
 	];
 
 	let mut sub = ctx
-		.subscribe::<cluster::workflows::datacenter::CreateComplete>(&json!({
-			"datacenter_id": datacenter_id,
-		}))
+		.subscribe::<cluster::workflows::datacenter::CreateComplete>((
+			"datacenter_id",
+			datacenter_id,
+		))
 		.await?;
 
 	ctx.signal(cluster::workflows::cluster::DatacenterCreate {

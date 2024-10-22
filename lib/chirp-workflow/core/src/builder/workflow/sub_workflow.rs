@@ -111,7 +111,7 @@ where
 			.map_err(GlobalError::raw)?;
 		let mut branch = self
 			.ctx
-			.branch_inner(Arc::new(input_val), self.version, None)
+			.custom_branch(Arc::new(input_val), self.version)
 			.await
 			.map_err(GlobalError::raw)?;
 

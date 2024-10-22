@@ -28,3 +28,23 @@ ALTER TABLE workflow_loop_events
 ALTER TABLE workflow_sleep_events
 	DROP CONSTRAINT workflow_sleep_events_pkey,
 	ADD PRIMARY KEY (_uuid);
+
+
+-- Backfill location2 for activities and loops (they cause problems with ON CONFLICT)
+UPDATE db_workflow.workflow_activity_events AS a
+SET location2 = (
+	SELECT jsonb_agg(jsonb_build_array(x + 1))
+	FROM unnest(a.location) AS x
+)
+FROM db_workflow.workflows AS w
+WHERE
+	a.workflow_id = w.workflow_id AND
+	w.output IS NULL AND
+	a.forgotten = false;
+
+UPDATE workflow_loop_events
+SET location2 = (
+	SELECT jsonb_agg(jsonb_build_array(x + 1))
+	FROM unnest(location) AS x
+)
+WHERE forgotten = FALSE;

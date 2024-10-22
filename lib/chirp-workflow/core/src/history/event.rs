@@ -27,6 +27,12 @@ impl Event {
 	}
 }
 
+impl std::fmt::Display for Event {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{} v{} @ {}", self.data, self.version, self.coordinate)
+	}
+}
+
 impl Deref for Event {
 	type Target = EventData;
 
@@ -46,13 +52,16 @@ pub enum EventData {
 	Sleep(SleepEvent),
 	Removed(RemovedEvent),
 	VersionCheck,
-	// Used as a placeholder for branching locations
 	Branch,
+
+	/// NOTE: Strictly used as a placeholder for backfilling. When using this, the coordinate of the `Event`
+	/// must still be valid.
+	Empty,
 }
 
-impl std::fmt::Display for Event {
+impl std::fmt::Display for EventData {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match &self.data {
+		match &self {
 			EventData::Activity(activity) => write!(f, "activity {:?}", activity.event_id.name),
 			EventData::Signal(signal) => write!(f, "signal {:?}", signal.name),
 			EventData::SignalSend(signal_send) => write!(f, "signal send {:?}", signal_send.name),
@@ -66,13 +75,14 @@ impl std::fmt::Display for Event {
 			EventData::Sleep(_) => write!(f, "sleep"),
 			EventData::Removed(removed) => {
 				if let Some(name) = &removed.name {
-					write!(f, "removed {} {name}", removed.event_type)
+					write!(f, "removed {} {name:?}", removed.event_type)
 				} else {
 					write!(f, "removed {}", removed.event_type)
 				}
 			}
 			EventData::VersionCheck => write!(f, "version check"),
 			EventData::Branch => write!(f, "branch"),
+			EventData::Empty => write!(f, "empty"),
 		}
 	}
 }

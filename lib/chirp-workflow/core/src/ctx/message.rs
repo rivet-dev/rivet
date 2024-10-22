@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use crate::{
 	error::{WorkflowError, WorkflowResult},
-	message::{redis_keys, Message, NatsMessage, NatsMessageWrapper},
+	message::{redis_keys, AsTags, Message, NatsMessage, NatsMessageWrapper},
 	utils,
 };
 
@@ -56,7 +56,11 @@ impl MessageCtx {
 	/// service should need to wait or fail if a message does not publish
 	/// successfully.
 	#[tracing::instrument(err, skip_all, fields(message = M::NAME))]
-	pub async fn message<M>(&self, tags: serde_json::Value, message_body: M) -> WorkflowResult<()>
+	pub async fn message<M>(
+		&self,
+		tags: impl AsTags + 'static,
+		message_body: M,
+	) -> WorkflowResult<()>
 	where
 		M: Message,
 	{
@@ -87,15 +91,11 @@ impl MessageCtx {
 	/// messages at once so we put the messages in a queue instead of submitting
 	/// a large number of tasks to Tokio at once.
 	#[tracing::instrument(err, skip_all, fields(message = M::NAME))]
-	pub async fn message_wait<M>(
-		&self,
-		tags: serde_json::Value,
-		message_body: M,
-	) -> WorkflowResult<()>
+	pub async fn message_wait<M>(&self, tags: impl AsTags, message_body: M) -> WorkflowResult<()>
 	where
 		M: Message,
 	{
-		let tags_str = cjson::to_string(&tags).map_err(WorkflowError::SerializeMessageTags)?;
+		let tags_str = tags.as_cjson_tags()?;
 		let nats_subject = M::nats_subject();
 		let duration_since_epoch = std::time::SystemTime::now()
 			.duration_since(std::time::UNIX_EPOCH)
@@ -114,30 +114,18 @@ impl MessageCtx {
 		let message = NatsMessageWrapper {
 			req_id: req_id,
 			ray_id: self.ray_id,
-			tags,
+			tags: tags.as_tags()?,
 			ts,
-			allow_recursive: false, // TODO:
 			body: &body_buf,
 		};
 		let message_buf = serde_json::to_vec(&message).map_err(WorkflowError::SerializeMessage)?;
 
-		// TODO: opts.dont_log_body
-		if true {
-			tracing::info!(
-				%nats_subject,
-				body_bytes = ?body_buf_len,
-				message_bytes = ?message_buf.len(),
-				"publish message"
-			);
-		} else {
-			tracing::info!(
-				%nats_subject,
-				?message_body,
-				body_bytes = ?body_buf_len,
-				message_bytes = ?message_buf.len(),
-				"publish message"
-			);
-		}
+		tracing::info!(
+			%nats_subject,
+			body_bytes = ?body_buf_len,
+			message_bytes = ?message_buf.len(),
+			"publish message"
+		);
 
 		// Write to Redis and NATS.
 		//
@@ -241,15 +229,12 @@ impl MessageCtx {
 impl MessageCtx {
 	/// Listens for Chirp workflow messages globally on NATS.
 	#[tracing::instrument(level = "debug", err, skip_all)]
-	pub async fn subscribe<M>(
-		&self,
-		tags: &serde_json::Value,
-	) -> WorkflowResult<SubscriptionHandle<M>>
+	pub async fn subscribe<M>(&self, tags: impl AsTags) -> WorkflowResult<SubscriptionHandle<M>>
 	where
 		M: Message,
 	{
 		self.subscribe_opt::<M>(SubscribeOpts {
-			tags,
+			tags: tags.as_tags()?,
 			flush_nats: true,
 		})
 		.await
@@ -259,7 +244,7 @@ impl MessageCtx {
 	#[tracing::instrument(err, skip_all, fields(message = M::NAME))]
 	pub async fn subscribe_opt<M>(
 		&self,
-		opts: SubscribeOpts<'_>,
+		opts: SubscribeOpts,
 	) -> WorkflowResult<SubscriptionHandle<M>>
 	where
 		M: Message,
@@ -287,17 +272,14 @@ impl MessageCtx {
 
 	/// Reads the tail message of a stream without waiting for a message.
 	#[tracing::instrument(err, skip_all, fields(message = M::NAME))]
-	pub async fn tail_read<M>(
-		&self,
-		tags: serde_json::Value,
-	) -> WorkflowResult<Option<NatsMessage<M>>>
+	pub async fn tail_read<M>(&self, tags: impl AsTags) -> WorkflowResult<Option<NatsMessage<M>>>
 	where
 		M: Message,
 	{
 		let mut conn = self.redis_chirp_ephemeral.clone();
 
 		// Fetch message
-		let tags_str = cjson::to_string(&tags).map_err(WorkflowError::SerializeMessageTags)?;
+		let tags_str = tags.as_cjson_tags()?;
 		let tail_key = redis_keys::message_tail::<M>(&tags_str);
 		let message_buf = conn
 			.hget::<_, _, Option<Vec<u8>>>(&tail_key, redis_keys::message_tail::BODY)
@@ -341,7 +323,7 @@ impl MessageCtx {
 	#[tracing::instrument(err, skip_all, fields(message = M::NAME))]
 	pub async fn tail_anchor<M>(
 		&self,
-		tags: serde_json::Value,
+		tags: impl AsTags,
 		anchor: &TailAnchor,
 	) -> WorkflowResult<TailAnchorResponse<M>>
 	where
@@ -379,8 +361,8 @@ impl MessageCtx {
 }
 
 #[derive(Debug)]
-pub struct SubscribeOpts<'a> {
-	pub tags: &'a serde_json::Value,
+pub struct SubscribeOpts {
+	pub tags: serde_json::Value,
 	pub flush_nats: bool,
 }
 

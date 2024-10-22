@@ -69,20 +69,26 @@ pub enum WorkflowError {
 	#[error("serialize message body: {0}")]
 	SerializeMessageBody(serde_json::Error),
 
+	#[error("deserialize message body: {0}")]
+	DeserializeMessageBody(serde_json::Error),
+
 	#[error("serialize message: {0}")]
 	SerializeMessage(serde_json::Error),
 
-	#[error("decode message body: {0}")]
-	DeserializeMessageBody(serde_json::Error),
-
-	#[error("decode message: {0}")]
+	#[error("deserialize message: {0}")]
 	DeserializeMessage(serde_json::Error),
 
-	#[error("serialize message tags: {0:?}")]
-	SerializeMessageTags(cjson::Error),
+	#[error("cjson serialize tags: {0:?}")]
+	CjsonSerializeTags(cjson::Error),
 
-	#[error("decode message tags: {0}")]
-	DeserializeMessageTags(serde_json::Error),
+	#[error("serialize tags: {0:?}")]
+	SerializeTags(serde_json::Error),
+
+	#[error("deserialize tags: {0}")]
+	DeserializeTags(serde_json::Error),
+
+	#[error("tags must be a json object")]
+	InvalidTags,
 
 	#[error("serialize loop output: {0}")]
 	SerializeLoopOutput(serde_json::Error),

@@ -450,21 +450,17 @@ pub async fn print_history(
 
 		println!(
 			"{} {}",
-			style(workflow_name).yellow().bold(),
-			style(workflow_id).yellow()
+			style(workflow_name).blue().bold(),
+			style(workflow_id).blue()
 		);
 
-		print!(
-			"  {} {}",
-			style("╰").yellow().dim(),
-			style("input").yellow()
-		);
+		print!("  {} {}", style("╰").blue().dim(), style("input").blue());
 
 		let input = serde_json::to_string(&input)?;
 		let input_trim = input.chars().take(50).collect::<String>();
-		print!(" {}", style(input_trim).yellow().dim());
+		print!(" {}", style(input_trim).blue().dim());
 		if input.len() > 50 {
-			print!(" {}", style("...").yellow().dim());
+			print!(" {}", style("...").blue().dim());
 		}
 
 		println!("\n");
@@ -648,19 +644,15 @@ pub async fn print_history(
 
 	// Print footer
 	if let Some(output) = output {
-		println!("{}", style("Workflow complete").yellow().bold());
+		println!("{}", style("Workflow complete").green().bold());
 
-		print!(
-			"  {} {}",
-			style("╰").yellow().dim(),
-			style("output").yellow()
-		);
+		print!("  {} {}", style("╰").green().dim(), style("output").green());
 
 		let output = serde_json::to_string(&output)?;
 		let output_trim = output.chars().take(50).collect::<String>();
-		print!(" {}", style(output_trim).yellow().dim());
+		print!(" {}", style(output_trim).green().dim());
 		if output.len() > 50 {
-			print!(" {}", style("...").yellow().dim());
+			print!(" {}", style("...").green().dim());
 		}
 
 		println!("");

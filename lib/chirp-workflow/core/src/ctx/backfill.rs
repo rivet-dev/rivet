@@ -123,10 +123,6 @@ impl WorkflowBackfillCtx {
 		branch
 	}
 
-	// TODO:
-	// pub fn set_location(&mut self, location: &Location) {
-	// }
-
 	pub fn finalize(&mut self) {
 		let wake_immediate = true;
 

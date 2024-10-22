@@ -22,6 +22,10 @@ impl<'a> ListenCtx<'a> {
 		}
 	}
 
+	pub(crate) fn reset(&mut self) {
+		self.used = false;
+	}
+
 	/// Checks for a signal to this workflow with any of the given signal names.
 	/// - Will error if called more than once.
 	pub async fn listen_any(

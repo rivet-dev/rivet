@@ -33,7 +33,7 @@ resource "helm_release" "cockroachdb" {
 	namespace = kubernetes_namespace.cockroachdb[0].metadata.0.name
 	repository = "https://charts.cockroachdb.com/"
 	chart = "cockroachdb"
-	version = "11.1.5"  # v23.1.9
+	version = "14.0.4"  # v24.2.3
 	values = [yamlencode({
 		statefulset = {
 			replicas = local.service_cockroachdb.count

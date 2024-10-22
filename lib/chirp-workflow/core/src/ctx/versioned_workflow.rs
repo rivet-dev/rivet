@@ -24,7 +24,7 @@ macro_rules! wrap {
 
 		let old_version = $self.inner.version();
 
-		$self.inner.set_version($self.version);
+		$self.inner.set_version($self.version());
 		let res = $code;
 		$self.inner.set_version(old_version);
 
@@ -45,6 +45,10 @@ impl<'a> VersionedWorkflowCtx<'a> {
 
 	pub fn into_inner(self) -> &'a mut WorkflowCtx {
 		self.inner
+	}
+
+	pub fn version(&self) -> usize {
+		self.inner.version() + self.version - 1
 	}
 
 	/// Creates a workflow ctx reference with a given version.
@@ -71,7 +75,7 @@ impl<'a> VersionedWorkflowCtx<'a> {
 		I: WorkflowInput,
 		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
 	{
-		builder::sub_workflow::SubWorkflowBuilder::new(self.inner, self.version, input)
+		builder::sub_workflow::SubWorkflowBuilder::new(self.inner, self.version(), input)
 	}
 
 	/// Run activity. Will replay on failure.
@@ -94,7 +98,7 @@ impl<'a> VersionedWorkflowCtx<'a> {
 
 	/// Creates a signal builder.
 	pub fn signal<T: Signal + Serialize>(&mut self, body: T) -> builder::signal::SignalBuilder<T> {
-		builder::signal::SignalBuilder::new(self.inner, self.version, body)
+		builder::signal::SignalBuilder::new(self.inner, self.version(), body)
 	}
 
 	/// Listens for a signal for a short time before setting the workflow to sleep. Once the signal is
@@ -118,7 +122,7 @@ impl<'a> VersionedWorkflowCtx<'a> {
 	where
 		M: Message,
 	{
-		builder::message::MessageBuilder::new(self.inner, self.version, body)
+		builder::message::MessageBuilder::new(self.inner, self.version(), body)
 	}
 
 	/// Runs workflow steps in a loop. **Ensure that there are no side effects caused by the code in this
@@ -149,7 +153,7 @@ impl<'a> VersionedWorkflowCtx<'a> {
 	}
 }
 
-// impl<'a> Deref for VersionedWorkflowCtx<'a> {
+// impl<'a> std::ops::Deref for VersionedWorkflowCtx<'a> {
 // 	type Target = WorkflowCtx;
 
 // 	fn deref(&self) -> &Self::Target {

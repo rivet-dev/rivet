@@ -17,7 +17,7 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 		.merge(pegboard::registry()?)?;
 
 	let db = db::DatabasePgNats::from_pools(pools.crdb()?, pools.nats()?);
-	let worker = Worker::new(reg.handle(), db.clone());
+	let worker = Worker::new(reg.handle(), db);
 
 	// Start worker
 	worker.wake_start(pools).await?;

@@ -179,7 +179,7 @@ pub trait Database: Send {
 	) -> WorkflowResult<()>;
 
 	/// Updates a loop event in history and forgets all history items in the previous iteration.
-	async fn upsert_loop(
+	async fn upsert_workflow_loop_event(
 		&self,
 		workflow_id: Uuid,
 		location: &Location,

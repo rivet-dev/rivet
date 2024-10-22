@@ -88,6 +88,12 @@ pub mod time {
 		}
 	}
 
+	impl DurationToMillis for i32 {
+		fn to_millis(self) -> GlobalResult<u64> {
+			self.try_into().map_err(Into::into)
+		}
+	}
+
 	impl DurationToMillis for u64 {
 		fn to_millis(self) -> GlobalResult<u64> {
 			Ok(self)

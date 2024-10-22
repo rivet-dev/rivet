@@ -69,7 +69,7 @@ pub struct Sleep;
 
 impl Removed for Sleep {
 	fn event_type() -> EventType {
-		EventType::Activity
+		EventType::Sleep
 	}
 }
 

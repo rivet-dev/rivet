@@ -13,7 +13,7 @@ use crate::{
 		message::{MessageCtx, SubscriptionHandle},
 	},
 	db::{DatabaseHandle, DatabasePgNats},
-	message::Message,
+	message::{AsTags, Message},
 	operation::{Operation, OperationInput},
 	signal::Signal,
 	workflow::{Workflow, WorkflowInput},
@@ -91,7 +91,7 @@ where
 
 pub async fn subscribe<M, B>(
 	ctx: &rivet_operation::OperationContext<B>,
-	tags: &serde_json::Value,
+	tags: impl AsTags,
 ) -> GlobalResult<SubscriptionHandle<M>>
 where
 	M: Message,

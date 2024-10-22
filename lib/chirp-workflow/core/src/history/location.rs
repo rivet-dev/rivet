@@ -24,6 +24,14 @@ impl Location {
 	pub fn tail(&self) -> Option<&Coordinate> {
 		self.0.last()
 	}
+
+	pub fn join(&self, coordinate: Coordinate) -> Location {
+		self.0
+			.iter()
+			.cloned()
+			.chain(std::iter::once(coordinate))
+			.collect()
+	}
 }
 
 impl std::fmt::Display for Location {
@@ -79,6 +87,10 @@ pub struct Coordinate(Box<[usize]>);
 impl Coordinate {
 	pub fn new(raw: Box<[usize]>) -> Self {
 		Coordinate(raw)
+	}
+
+	pub fn simple(int: usize) -> Self {
+		Coordinate(Box::new([int]))
 	}
 
 	pub fn with_tail(&self, tail: usize) -> Self {

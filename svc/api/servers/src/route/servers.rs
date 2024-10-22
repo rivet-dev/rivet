@@ -77,14 +77,10 @@ pub async fn create(
 	let server_id = Uuid::new_v4();
 
 	let mut create_sub = ctx
-		.subscribe::<ds::workflows::server::CreateComplete>(&json!({
-			"server_id": server_id,
-		}))
+		.subscribe::<ds::workflows::server::CreateComplete>(("server_id", server_id))
 		.await?;
 	let mut fail_sub = ctx
-		.subscribe::<ds::workflows::server::CreateFailed>(&json!({
-			"server_id": server_id,
-		}))
+		.subscribe::<ds::workflows::server::CreateFailed>(("server_id", server_id))
 		.await?;
 
 	ctx.workflow(ds::workflows::server::Input {
@@ -197,9 +193,7 @@ pub async fn destroy(
 	);
 
 	let mut sub = ctx
-		.subscribe::<ds::workflows::server::DestroyStarted>(&json!({
-			"server_id": server_id,
-		}))
+		.subscribe::<ds::workflows::server::DestroyStarted>(("server_id", server_id))
 		.await?;
 
 	ctx.signal(ds::workflows::server::Destroy {

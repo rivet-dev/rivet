@@ -78,27 +78,10 @@ futures_util::stream::iter(iter)
 	.await?;
 ```
 
-If you plan on running more than one workflow step in each future, use a closure instead:
+If you plan on running more than one workflow step in each future, use a `closure` stub.
 
-```rust
-let iter = actions.into_iter().map(|action| {
-	(
-		closure(|ctx| async move {
-			ctx.activity(MyActivityInput {
-				action,
-			}).await?;
-		}).await
-	)(ctx)
-});
-
-futures_util::stream::iter(iter)
-	.buffer_unordered(16)
-	.try_collect::<Vec<_>>()
-	.await?;
-```
-
-Note that the first example would also work with a branch, but its a bit overkill as it creates a new layer in
-the internal location.
+Note that the first example would also work with a `closure`, but its a bit overkill as it creates a new layer
+in the internal location.
 
 > **\*** Even if they did know about each other via atomics, there is no guarantee of consistency from
 > `buffer_unordered`. Preemptively incrementing the location ensures consistency regardless of the order or

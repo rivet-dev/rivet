@@ -12,7 +12,7 @@ use crate::{
 	},
 	db::DatabaseHandle,
 	error::WorkflowResult,
-	message::{Message, NatsMessage},
+	message::{AsTags, Message, NatsMessage},
 	operation::{Operation, OperationInput},
 	signal::Signal,
 	workflow::{Workflow, WorkflowInput},
@@ -120,10 +120,7 @@ impl StandaloneCtx {
 		builder::message::MessageBuilder::new(&self.msg_ctx, body)
 	}
 
-	pub async fn subscribe<M>(
-		&self,
-		tags: &serde_json::Value,
-	) -> GlobalResult<SubscriptionHandle<M>>
+	pub async fn subscribe<M>(&self, tags: impl AsTags) -> GlobalResult<SubscriptionHandle<M>>
 	where
 		M: Message,
 	{
@@ -133,10 +130,7 @@ impl StandaloneCtx {
 			.map_err(GlobalError::raw)
 	}
 
-	pub async fn tail_read<M>(
-		&self,
-		tags: serde_json::Value,
-	) -> GlobalResult<Option<NatsMessage<M>>>
+	pub async fn tail_read<M>(&self, tags: impl AsTags) -> GlobalResult<Option<NatsMessage<M>>>
 	where
 		M: Message,
 	{
@@ -148,7 +142,7 @@ impl StandaloneCtx {
 
 	pub async fn tail_anchor<M>(
 		&self,
-		tags: serde_json::Value,
+		tags: impl AsTags,
 		anchor: &TailAnchor,
 	) -> GlobalResult<TailAnchorResponse<M>>
 	where

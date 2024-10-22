@@ -13,7 +13,7 @@ use crate::{
 	},
 	db::{DatabaseHandle, DatabasePgNats},
 	error::WorkflowError,
-	message::{Message, NatsMessage},
+	message::{AsTags, Message, NatsMessage},
 	operation::{Operation, OperationInput},
 	signal::Signal,
 	utils,
@@ -143,10 +143,7 @@ impl TestCtx {
 		builder::message::MessageBuilder::new(&self.msg_ctx, body)
 	}
 
-	pub async fn subscribe<M>(
-		&self,
-		tags: &serde_json::Value,
-	) -> GlobalResult<SubscriptionHandle<M>>
+	pub async fn subscribe<M>(&self, tags: impl AsTags) -> GlobalResult<SubscriptionHandle<M>>
 	where
 		M: Message,
 	{
@@ -156,10 +153,7 @@ impl TestCtx {
 			.map_err(GlobalError::raw)
 	}
 
-	pub async fn tail_read<M>(
-		&self,
-		tags: serde_json::Value,
-	) -> GlobalResult<Option<NatsMessage<M>>>
+	pub async fn tail_read<M, T>(&self, tags: impl AsTags) -> GlobalResult<Option<NatsMessage<M>>>
 	where
 		M: Message,
 	{
@@ -169,9 +163,9 @@ impl TestCtx {
 			.map_err(GlobalError::raw)
 	}
 
-	pub async fn tail_anchor<M>(
+	pub async fn tail_anchor<M, T>(
 		&self,
-		tags: serde_json::Value,
+		tags: impl AsTags,
 		anchor: &TailAnchor,
 	) -> GlobalResult<TailAnchorResponse<M>>
 	where
