@@ -11078,6 +11078,7 @@ components:
         - gg
         - ats
         - pegboard
+        - pegboard_isolate
     AdminClustersProvider:
       type: string
       enum:

@@ -2,7 +2,7 @@ use std::convert::{TryFrom, TryInto};
 
 use chirp_workflow::prelude::*;
 
-use crate::types::{GameConfig, GameRuntime};
+use crate::types::{GameConfig, ServerRuntime};
 
 #[derive(Debug, Default)]
 pub struct Input {
@@ -30,7 +30,7 @@ impl TryFrom<GameConfigRow> for GameConfig {
 			game_id: value.game_id,
 			host_networking_enabled: value.host_networking_enabled,
 			root_user_enabled: value.root_user_enabled,
-			runtime: unwrap!(GameRuntime::from_repr(value.runtime.try_into()?)),
+			runtime: unwrap!(ServerRuntime::from_repr(value.runtime.try_into()?)),
 		})
 	}
 }

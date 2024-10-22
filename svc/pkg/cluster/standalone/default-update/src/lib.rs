@@ -50,6 +50,7 @@ enum PoolType {
 	Gg,
 	Ats,
 	Pegboard,
+	PegboardIsolate,
 }
 
 impl From<PoolType> for cluster::types::PoolType {
@@ -59,6 +60,7 @@ impl From<PoolType> for cluster::types::PoolType {
 			PoolType::Gg => cluster::types::PoolType::Gg,
 			PoolType::Ats => cluster::types::PoolType::Ats,
 			PoolType::Pegboard => cluster::types::PoolType::Pegboard,
+			PoolType::PegboardIsolate => cluster::types::PoolType::PegboardIsolate,
 		}
 	}
 }
@@ -184,15 +186,10 @@ pub async fn start_inner(use_autoscaler: bool) -> GlobalResult<()> {
 				.pools
 				.into_iter()
 				.map(|(pool_type, pool)| {
-					let desired_count = match pool_type {
-						PoolType::Ats | PoolType::Gg => Some(pool.desired_count),
-						PoolType::Job | PoolType::Pegboard => {
-							if use_autoscaler {
-								None
-							} else {
-								Some(pool.desired_count)
-							}
-						}
+					let desired_count = if use_autoscaler {
+						None
+					} else {
+						Some(pool.desired_count)
 					};
 
 					cluster::types::PoolUpdate {

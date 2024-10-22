@@ -69,7 +69,7 @@ async fn server_drain(ctx: TestCtx) {
 		env_id: *env_id,
 		datacenter_id: faker_region.region_id.unwrap().as_uuid(),
 		cluster_id,
-		runtime: ds::types::GameRuntime::Pegboard,
+		runtime: ds::types::ServerRuntime::Pegboard,
 		resources: ds::types::ServerResources {
 			cpu_millicores: 50,
 			memory_mib: 50,

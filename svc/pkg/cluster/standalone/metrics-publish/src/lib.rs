@@ -240,6 +240,16 @@ fn insert_metrics(dc: &Datacenter, servers: &[Server]) -> GlobalResult<()> {
 					])
 					.set(pegboard);
 			}
+			PoolType::PegboardIsolate => {
+				metrics::PEGBOARD_ISOLATE_SERVERS
+					.with_label_values(&[
+						&cluster_id,
+						&datacenter_id,
+						&dc.provider_datacenter_id,
+						&dc.name_id,
+					])
+					.set(pegboard);
+			}
 			_ => {}
 		}
 	}

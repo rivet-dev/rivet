@@ -84,7 +84,8 @@ async fn main() -> Result<()> {
 	url.set_path(&format!("/v{PROTOCOL_VERSION}"));
 	url.query_pairs_mut()
 		.append_pair("client_id", &config.client_id.to_string())
-		.append_pair("datacenter_id", &config.datacenter_id.to_string());
+		.append_pair("datacenter_id", &config.datacenter_id.to_string())
+		.append_pair("flavor", &config.flavor.to_string());
 
 	tracing::info!("connecting to ws: {url}");
 

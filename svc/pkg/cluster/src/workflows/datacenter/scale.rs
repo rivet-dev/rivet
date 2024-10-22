@@ -332,7 +332,7 @@ async fn scale_servers(
 					.await?;
 			}
 		}
-		PoolType::Pegboard => {
+		PoolType::Pegboard | PoolType::PegboardIsolate => {
 			let (pb_servers, without_pb_servers) = active_servers
 				.clone()
 				.partition::<Vec<_>, _>(|server| server.has_pb_client);

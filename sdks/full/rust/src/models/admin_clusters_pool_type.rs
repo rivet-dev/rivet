@@ -20,6 +20,8 @@ pub enum AdminClustersPoolType {
     Ats,
     #[serde(rename = "pegboard")]
     Pegboard,
+    #[serde(rename = "pegboard_isolate")]
+    PegboardIsolate,
 
 }
 
@@ -30,6 +32,7 @@ impl ToString for AdminClustersPoolType {
             Self::Gg => String::from("gg"),
             Self::Ats => String::from("ats"),
             Self::Pegboard => String::from("pegboard"),
+            Self::PegboardIsolate => String::from("pegboard_isolate"),
         }
     }
 }

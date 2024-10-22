@@ -70,7 +70,7 @@ pub enum HostProtocol {
 }
 
 #[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
-pub enum GameRuntime {
+pub enum ServerRuntime {
 	Nomad = 0,
 	Pegboard = 1,
 }
@@ -80,7 +80,7 @@ pub struct GameConfig {
 	pub game_id: Uuid,
 	pub host_networking_enabled: bool,
 	pub root_user_enabled: bool,
-	pub runtime: GameRuntime,
+	pub runtime: ServerRuntime,
 }
 
 impl ApiTryFrom<Server> for models::ServersServer {

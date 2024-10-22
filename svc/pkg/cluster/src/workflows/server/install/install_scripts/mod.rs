@@ -51,7 +51,7 @@ pub async fn gen_install(
 			script.push(components::docker::install());
 			script.push(components::traffic_server::install());
 		}
-		PoolType::Pegboard => {
+		PoolType::Pegboard | PoolType::PegboardIsolate => {
 			script.push(components::docker::install());
 			script.push(components::lz4::install());
 			script.push(components::skopeo::install());
@@ -123,7 +123,18 @@ pub async fn gen_initialize(pool_type: PoolType, datacenter_id: Uuid) -> GlobalR
 			script.push(components::traffic_server::configure().await?);
 		}
 		PoolType::Pegboard => {
-			script.push(components::pegboard::configure()?);
+			script.push(components::pegboard::configure(pegboard::protocol::ClientFlavor::Container)?);
+
+			prometheus_targets.insert(
+				"pegboard".into(),
+				components::vector::PrometheusTarget {
+					endpoint: "http://127.0.0.1:6000".into(),
+					scrape_interval: 15,
+				},
+			);
+		}
+		PoolType::PegboardIsolate => {
+			script.push(components::pegboard::configure(pegboard::protocol::ClientFlavor::Isolate)?);
 
 			prometheus_targets.insert(
 				"pegboard".into(),

@@ -170,7 +170,7 @@ async fn print_test_data(ctx: TestCtx) {
 		env_id: *env_id,
 		datacenter_id: faker_region.region_id.unwrap().as_uuid(),
 		cluster_id,
-		runtime: ds::types::GameRuntime::Nomad,
+		runtime: ds::types::ServerRuntime::Nomad,
 		resources: ds::types::ServerResources {
 			cpu_millicores: 100,
 			memory_mib: 200,

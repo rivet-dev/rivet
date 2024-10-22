@@ -7,6 +7,7 @@ types:
       - gg
       - ats
       - pegboard
+      - pegboard_isolate
 
   Provider:
     enum:

@@ -7,6 +7,7 @@ cat << 'EOF' > /etc/pegboard/config.json
 	"datacenter_id": "___DATACENTER_ID___",
 	"network_ip": "___VLAN_IP___",
 	"vector_socket_addr": "127.0.0.1:5021",
+	"flavor": "__FLAVOR__",
 	"api_endpoint": "__ORIGIN_API__"
 }
 EOF

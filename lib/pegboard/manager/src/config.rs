@@ -3,6 +3,7 @@ use std::{
 	path::{Path, PathBuf},
 };
 
+use pegboard::protocol;
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -12,6 +13,7 @@ pub struct Config {
 	pub datacenter_id: Uuid,
 	pub network_ip: Ipv4Addr,
 	pub vector_socket_addr: SocketAddr,
+	pub flavor: protocol::ClientFlavor,
 
 	pub api_endpoint: String,
 

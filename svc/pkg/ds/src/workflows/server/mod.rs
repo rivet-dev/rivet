@@ -13,7 +13,7 @@ use futures_util::FutureExt;
 use rand::Rng;
 use rivet_operation::prelude::proto::backend;
 
-use crate::types::{GameGuardProtocol, GameRuntime, NetworkMode, Routing, ServerResources};
+use crate::types::{GameGuardProtocol, ServerRuntime, NetworkMode, Routing, ServerResources};
 
 pub mod nomad;
 pub mod pegboard;
@@ -45,7 +45,7 @@ pub struct Input {
 	pub env_id: Uuid,
 	pub datacenter_id: Uuid,
 	pub cluster_id: Uuid,
-	pub runtime: GameRuntime,
+	pub runtime: ServerRuntime,
 	pub tags: HashMap<String, String>,
 	pub resources: ServerResources,
 	pub kill_timeout_ms: i64,
@@ -67,7 +67,7 @@ pub struct Port {
 #[workflow]
 pub async fn ds_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
 	match input.runtime {
-		GameRuntime::Nomad => {
+		ServerRuntime::Nomad => {
 			ctx.workflow(nomad::Input {
 				server_id: input.server_id,
 				env_id: input.env_id,
@@ -86,7 +86,7 @@ pub async fn ds_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()>
 			.output()
 			.await
 		}
-		GameRuntime::Pegboard => {
+		ServerRuntime::Pegboard => {
 			ctx.workflow(pegboard::Input {
 				server_id: input.server_id,
 				env_id: input.env_id,

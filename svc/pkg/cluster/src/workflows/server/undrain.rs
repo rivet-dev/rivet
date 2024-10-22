@@ -38,7 +38,7 @@ pub(crate) async fn cluster_server_undrain(
 				.await?;
 		}
 		PoolType::Ats => {}
-		PoolType::Pegboard => {
+		PoolType::Pegboard | PoolType::PegboardIsolate => {
 			let pegboard_client_id = ctx
 				.activity(UndrainPegboardClientInput {
 					server_id: input.server_id,

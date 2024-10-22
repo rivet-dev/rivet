@@ -1,13 +1,13 @@
 use chirp_workflow::prelude::*;
 
-use crate::types::GameRuntime;
+use crate::types::ServerRuntime;
 
 #[derive(Debug, Default)]
 pub struct Input {
 	pub game_id: Uuid,
 	pub host_networking_enabled: Option<bool>,
 	pub root_user_enabled: Option<bool>,
-	pub runtime: Option<GameRuntime>,
+	pub runtime: Option<ServerRuntime>,
 }
 
 #[operation]

@@ -173,6 +173,7 @@ components:
       - gg
       - ats
       - pegboard
+      - pegboard_isolate
       type: string
     AdminClustersPoolUpdate:
       properties:

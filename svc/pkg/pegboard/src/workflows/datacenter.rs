@@ -119,7 +119,9 @@ async fn allocate_actor(
 				-- Not draining
 				c.drain_ts IS NULL AND
 				-- Not deleted
-				c.delete_ts IS NULL
+				c.delete_ts IS NULL AND
+				-- Flavor match
+				c.flavor = $8
 			GROUP BY c.client_id
 		)
 		INSERT INTO db_pegboard.actors (actor_id, client_id, config, create_ts)
@@ -127,9 +129,9 @@ async fn allocate_actor(
 		FROM available_clients
 		WHERE
 			-- Compare millicores
-			total_cpu + $6 <= cpu * 1000 // $8 AND
+			total_cpu + $6 <= cpu * 1000 // $9 AND
 			-- Compare memory MiB
-			total_memory + $7 <= memory - $9
+			total_memory + $7 <= memory - $10
 		ORDER BY total_cpu, total_memory DESC
 		LIMIT 1
 		RETURNING client_id
@@ -142,11 +144,17 @@ async fn allocate_actor(
 		input.config.resources.cpu as i64,
 		// Bytes to MiB
 		(input.config.resources.memory / 1024 / 1024) as i64,
+		// Pegboard manager flavor
+		match input.config.image.kind {
+			protocol::ImageKind::DockerImage |
+			protocol::ImageKind::OciBundle => protocol::ClientFlavor::Container,
+			protocol::ImageKind::JavaScript => protocol::ClientFlavor::Isolate,
+		} as i32,
 		// NOTE: This should technically be reading from a tier config but for now its constant because linode
 		// provides the same CPU per core for all instance types
 		game_node::CPU_PER_CORE as i32,
 		// Subtract reserve memory from client memory
-		(game_node::RESERVE_LB_MEMORY + game_node::PEGBOARD_RESERVE_MEMORY) as i32,
+		(game_node::RESERVE_LB_MEMORY + game_node::PEGBOARD_RESERVE_MEMORY) as i32, // $10
 	)
 	.await?
 	.map(|(client_id,)| client_id);

@@ -667,7 +667,7 @@ mod tests {
 		cursor.update(&new);
 	}
 
-	/// Between 2.1 and 3 should be 2.1.1
+	/// Between 2.1 and 3 should be 2.2
 	#[test]
 	fn between_complex_and_simple() {
 		let events = [(
@@ -692,12 +692,12 @@ mod tests {
 		cursor.update(&loc![coord![1], coord![2, 1]]);
 
 		let new = cursor.current_location_for(&HistoryResult::<()>::Insertion);
-		assert_eq!(loc![coord![1], coord![2, 1, 1]], new);
+		assert_eq!(loc![coord![1], coord![2, 2]], new);
 
 		cursor.update(&new);
 
 		let new = cursor.current_location_for(&HistoryResult::<()>::Insertion);
-		assert_eq!(loc![coord![1], coord![2, 1, 2]], new);
+		assert_eq!(loc![coord![1], coord![2, 3]], new);
 	}
 
 	/// Between 2.1 and 2.2 should be 2.1.1

@@ -138,6 +138,7 @@ async fn handle_connection_inner(
 		protocol_version,
 		client_id,
 		datacenter_id,
+		flavor,
 	}: UrlData,
 ) -> GlobalResult<()> {
 	let (tx, mut rx) = ws_stream.split();
@@ -169,7 +170,7 @@ async fn handle_connection_inner(
 
 				if let protocol::ToServer::Init { .. } = &packet {
 					// Insert into db and spawn workflow (if not exists)
-					upsert_client(ctx, client_id, datacenter_id).await?;
+					upsert_client(ctx, client_id, datacenter_id, flavor).await?;
 				} else {
 					bail!("unexpected initial packet: {packet:?}");
 				}
@@ -223,6 +224,7 @@ async fn upsert_client(
 	ctx: &StandaloneCtx,
 	client_id: Uuid,
 	datacenter_id: Uuid,
+	flavor: protocol::ClientFlavor,
 ) -> GlobalResult<()> {
 	// Inserting before creating the workflow prevents a race condition with using select + insert instead
 	let (exists, deleted) = sql_fetch_one!(
@@ -243,9 +245,9 @@ async fn upsert_client(
 			),
 			insert_client AS (
 				INSERT INTO db_pegboard.clients (
-					client_id, datacenter_id, create_ts, last_ping_ts
+					client_id, datacenter_id, flavor, create_ts, last_ping_ts
 				)
-				VALUES ($1, $2, $3, $3)
+				VALUES ($1, $2, $3, $4, $4)
 				ON CONFLICT (client_id)
 					DO UPDATE
 					SET delete_ts = NULL
@@ -257,6 +259,7 @@ async fn upsert_client(
 		",
 		client_id,
 		datacenter_id,
+		flavor as i32,
 		util::timestamp::now(),
 	)
 	.await?;
@@ -374,6 +377,7 @@ struct UrlData {
 	protocol_version: u16,
 	client_id: Uuid,
 	datacenter_id: Uuid,
+	flavor: protocol::ClientFlavor,
 }
 
 fn parse_url(addr: SocketAddr, uri: hyper::Uri) -> GlobalResult<UrlData> {
@@ -402,9 +406,17 @@ fn parse_url(addr: SocketAddr, uri: hyper::Uri) -> GlobalResult<UrlData> {
 	);
 	let datacenter_id = util::uuid::parse(datacenter_id.as_ref())?;
 
+	let flavor = unwrap!(
+		url.query_pairs()
+			.find_map(|(n, v)| (n == "flavor").then_some(v)),
+		"missing `flavor` query parameter"
+	);
+	let flavor = flavor.parse()?;
+
 	Ok(UrlData {
 		protocol_version,
 		client_id,
 		datacenter_id,
+		flavor,
 	})
 }

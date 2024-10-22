@@ -100,7 +100,7 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 						api_token: dc.provider_api_token.clone(),
 						hardware: hardware.provider_hardware.clone(),
 						firewall_preset: match input.pool_type {
-							PoolType::Job | PoolType::Pegboard => {
+							PoolType::Job | PoolType::Pegboard | PoolType::PegboardIsolate => {
 								linode::types::FirewallPreset::Job
 							}
 							PoolType::Gg => linode::types::FirewallPreset::Gg,
@@ -196,7 +196,7 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 				.await?;
 			}
 			// Update tags to include pegboard client_id (currently the same as the server_id)
-			PoolType::Pegboard => {
+			PoolType::Pegboard | PoolType::PegboardIsolate => {
 				ctx.activity(UpdateTagsInput {
 					server_id: input.server_id,
 					client_id: input.server_id,
@@ -344,7 +344,7 @@ struct GetVlanIpInput {
 async fn get_vlan_ip(ctx: &ActivityCtx, input: &GetVlanIpInput) -> GlobalResult<Ipv4Addr> {
 	// Find next available vlan index
 	let mut vlan_addr_range = match input.pool_type {
-		PoolType::Job | PoolType::Pegboard => util::net::job::vlan_addr_range(),
+		PoolType::Job | PoolType::Pegboard | PoolType::PegboardIsolate => util::net::job::vlan_addr_range(),
 		PoolType::Gg => util::net::gg::vlan_addr_range(),
 		PoolType::Ats => util::net::ats::vlan_addr_range(),
 	};

@@ -13,6 +13,7 @@ pub struct InstanceType {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub enum FirewallPreset {
+	// TODO: Rename to game
 	Job,
 	Gg,
 	Ats,

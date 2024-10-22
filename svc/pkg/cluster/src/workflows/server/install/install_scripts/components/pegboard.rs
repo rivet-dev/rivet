@@ -20,8 +20,9 @@ pub async fn install() -> GlobalResult<String> {
 		.replace("__V8_ISOLATE_BINARY_URL__", &v8_isolate_runner_url))
 }
 
-pub fn configure() -> GlobalResult<String> {
+pub fn configure(flavor: pegboard::protocol::ClientFlavor) -> GlobalResult<String> {
 	Ok(include_str!("../files/pegboard_configure.sh")
+		.replace("__FLAVOR__", &flavor.to_string())
 		.replace("__ORIGIN_API__", util::env::origin_api())
 		// HACK: Hardcoded to Linode
 		.replace("__PUBLIC_IFACE__", "eth0")

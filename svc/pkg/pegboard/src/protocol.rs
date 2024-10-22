@@ -10,6 +10,8 @@ pub use util::serde::{HashableMap, Raw};
 pub enum PegboardProtocolError {
 	#[error("ser/de error: {0}")]
 	Serde(#[from] serde_json::Error),
+	#[error("invalid client flavor: {0}")]
+	InvalidClientFlavor(String),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -235,4 +237,31 @@ pub struct BoundPort {
 	pub target: Option<u16>,
 	pub ip: Ipv4Addr,
 	pub protocol: TransportProtocol,
+}
+
+#[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
+pub enum ClientFlavor {
+	Container = 0,
+	Isolate = 1,
+}
+
+impl std::fmt::Display for ClientFlavor {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			ClientFlavor::Container => write!(f, "container"),
+			ClientFlavor::Isolate => write!(f, "isolate"),
+		}
+	}
+}
+
+impl std::str::FromStr for ClientFlavor {
+	type Err = PegboardProtocolError;
+
+	fn from_str(s: &str) -> Result<Self, PegboardProtocolError> {
+		match s {
+			"container" => Ok(ClientFlavor::Container),
+			"isolate" => Ok(ClientFlavor::Isolate),
+			x => Err(PegboardProtocolError::InvalidClientFlavor(x.to_string())),
+		}
+	}
 }
