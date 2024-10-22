@@ -22,7 +22,7 @@ use url::Url;
 const MAX_QUERY_RETRIES: usize = 16;
 const QUERY_RETRY: Duration = Duration::from_millis(500);
 const TXN_RETRY: Duration = Duration::from_millis(250);
-pub const CGROUP_PATH: &str = "/sys/fs/cgroup/pegboard_containers";
+pub const CGROUP_PATH: &str = "/sys/fs/cgroup/pegboard_actors";
 
 pub fn var(name: &str) -> Result<String> {
 	std::env::var(name).context(name.to_string())
@@ -33,10 +33,10 @@ pub async fn init(working_path: &Path) -> Result<()> {
 		bail!("working dir `{}` does not exist", working_path.display());
 	}
 
-	// Create containers dir
-	match fs::create_dir(working_path.join("containers")).await {
+	// Create actors dir
+	match fs::create_dir(working_path.join("actors")).await {
 		Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-		x => x.context("failed to create /containers dir in working dir")?,
+		x => x.context("failed to create /actors dir in working dir")?,
 	}
 
 	// Create db dir
@@ -51,10 +51,10 @@ pub async fn init(working_path: &Path) -> Result<()> {
 		x => x.context("failed to create /bin dir in working dir")?,
 	}
 
-	// Create cgroup folder for containers
+	// Create cgroup folder for actors
 	match fs::create_dir(CGROUP_PATH).await {
 		Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-		x => x.context("failed to create cgroup dir for containers")?,
+		x => x.context("failed to create cgroup dir for actors")?,
 	}
 
 	Ok(())
@@ -86,7 +86,7 @@ pub async fn download_file(url: &str, file_path: &Path) -> Result<()> {
 
 // Get `UUID/job-runner` from URL (HOST/s3-cache/aws/BUCKET/job-runner/UUID/job-runner)
 pub fn get_s3_path_stub(url: &Url, with_uuid: bool) -> Result<PathBuf> {
-	let path_segments = url.path_segments().context("bad container runner url")?;
+	let path_segments = url.path_segments().context("bad actor runner url")?;
 	let path_stub = path_segments
 		.rev()
 		.take(if with_uuid { 2 } else { 1 })
@@ -173,8 +173,8 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 
 	sqlx::query(indoc!(
 		"
-		CREATE TABLE IF NOT EXISTS containers (
-			container_id BLOB PRIMARY KEY, -- UUID
+		CREATE TABLE IF NOT EXISTS actors (
+			actor_id BLOB PRIMARY KEY, -- UUID
 			config BLOB NOT NULL,
 
 			start_ts INTEGER NOT NULL,
@@ -192,8 +192,8 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 
 	sqlx::query(indoc!(
 		"
-		CREATE TABLE IF NOT EXISTS container_ports (
-			container_id BLOB NOT NULL, -- UUID
+		CREATE TABLE IF NOT EXISTS actor_ports (
+			actor_id BLOB NOT NULL, -- UUID
 			port INT NOT NULL,
 			protocol INT NOT NULL, -- protocol::TransportProtocol
 
@@ -206,8 +206,8 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 
 	sqlx::query(indoc!(
 		"
-		CREATE INDEX IF NOT EXISTS container_ports_id_idx
-		ON container_ports(container_id)
+		CREATE INDEX IF NOT EXISTS actor_ports_id_idx
+		ON actor_ports(actor_id)
 		",
 	))
 	.execute(&mut *conn)
@@ -215,8 +215,8 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 
 	sqlx::query(indoc!(
 		"
-		CREATE UNIQUE INDEX IF NOT EXISTS container_ports_unique_idx
-		ON container_ports(port, protocol)
+		CREATE UNIQUE INDEX IF NOT EXISTS actor_ports_unique_idx
+		ON actor_ports(port, protocol)
 		WHERE delete_ts IS NULL
 		",
 	))

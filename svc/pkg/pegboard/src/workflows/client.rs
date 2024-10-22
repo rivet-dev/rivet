@@ -71,7 +71,7 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 							})
 							.await?;
 
-							ctx.activity(UpdateContainerStateInput {
+							ctx.activity(UpdateActorStateInput {
 								events: events.iter().map(|x| x.inner.clone()).collect(),
 							})
 							.await?;
@@ -79,13 +79,11 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 							// NOTE: This should not be parallelized because signals should be sent in order
 							for event in events {
 								#[allow(irrefutable_let_patterns)]
-								if let protocol::Event::ContainerStateUpdate {
-									container_id,
-									state,
-								} = serde_json::from_str(event.inner.get())?
+								if let protocol::Event::ActorStateUpdate { actor_id, state } =
+									serde_json::from_str(event.inner.get())?
 								{
-									ctx.signal(ContainerStateUpdate { state })
-										.tag("container_id", container_id)
+									ctx.signal(ActorStateUpdate { state })
+										.tag("actor_id", actor_id)
 										.send()
 										.await?;
 								}
@@ -120,22 +118,22 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 	})
 	.await?;
 
-	let container_ids = ctx
-		.activity(FetchAllContainersInput {
+	let actor_ids = ctx
+		.activity(FetchAllActorsInput {
 			client_id: input.client_id,
 		})
 		.await?;
 
-	// Evict all containers.
+	// Evict all actors.
 	// Note that even if this client is unresponsive and does not process the signal commands, the
-	// pegboard-gc service will manually set the containers as closed after 30 seconds.
+	// pegboard-gc service will manually set the actors as closed after 30 seconds.
 	handle_commands(
 		ctx,
 		input.client_id,
-		container_ids
+		actor_ids
 			.into_iter()
-			.map(|container_id| protocol::Command::SignalContainer {
-				container_id,
+			.map(|actor_id| protocol::Command::SignalActor {
+				actor_id,
 				signal: Signal::SIGKILL as i32,
 			})
 			.collect(),
@@ -257,41 +255,38 @@ async fn insert_events(ctx: &ActivityCtx, input: &InsertEventsInput) -> GlobalRe
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-struct UpdateContainerStateInput {
+struct UpdateActorStateInput {
 	events: Vec<protocol::Raw<protocol::Event>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-struct UpdateContainerStateOutput {
-	stopping_container_ids: Vec<Uuid>,
+struct UpdateActorStateOutput {
+	stopping_actor_ids: Vec<Uuid>,
 }
 
-#[activity(UpdateContainerState)]
-async fn update_container_state(
+#[activity(UpdateActorState)]
+async fn update_actor_state(
 	ctx: &ActivityCtx,
-	input: &UpdateContainerStateInput,
-) -> GlobalResult<UpdateContainerStateOutput> {
-	use protocol::ContainerState::*;
+	input: &UpdateActorStateInput,
+) -> GlobalResult<UpdateActorStateOutput> {
+	use protocol::ActorState::*;
 
-	let mut stopping_container_ids = Vec::new();
+	let mut stopping_actor_ids = Vec::new();
 
 	// TODO: Parallelize
 	for event in &input.events {
-		// Update containers table with container state updates
+		// Update actors table with actor state updates
 		match event.deserialize()? {
-			protocol::Event::ContainerStateUpdate {
-				container_id,
-				state,
-			} => match state {
+			protocol::Event::ActorStateUpdate { actor_id, state } => match state {
 				Starting => {
 					sql_execute!(
 						[ctx]
 						"
-						UPDATE db_pegboard.containers
+						UPDATE db_pegboard.actors
 						SET start_ts = $2
-						WHERE container_id = $1
+						WHERE actor_id = $1
 						",
-						container_id,
+						actor_id,
 						util::timestamp::now(),
 					)
 					.await?;
@@ -300,13 +295,13 @@ async fn update_container_state(
 					sql_execute!(
 						[ctx]
 						"
-						UPDATE db_pegboard.containers
+						UPDATE db_pegboard.actors
 						SET
 							running_ts = $2,
 							pid = $3
-						WHERE container_id = $1
+						WHERE actor_id = $1
 						",
-						container_id,
+						actor_id,
 						util::timestamp::now(),
 						pid as i64,
 					)
@@ -316,30 +311,30 @@ async fn update_container_state(
 					let set_stopping_ts = sql_fetch_optional!(
 						[ctx, (i64,)]
 						"
-						UPDATE db_pegboard.containers
+						UPDATE db_pegboard.actors
 						SET stopping_ts = $2
-						WHERE container_id = $1 AND stopping_ts IS NULL
+						WHERE actor_id = $1 AND stopping_ts IS NULL
 						RETURNING 1
 						",
-						container_id,
+						actor_id,
 						util::timestamp::now(),
 					)
 					.await?
 					.is_some();
 
 					if set_stopping_ts {
-						stopping_container_ids.push(container_id);
+						stopping_actor_ids.push(actor_id);
 					}
 				}
 				Stopped => {
 					sql_execute!(
 						[ctx]
 						"
-						UPDATE db_pegboard.containers
+						UPDATE db_pegboard.actors
 						SET stop_ts = $2
-						WHERE container_id = $1
+						WHERE actor_id = $1
 						",
-						container_id,
+						actor_id,
 						util::timestamp::now(),
 					)
 					.await?;
@@ -348,13 +343,13 @@ async fn update_container_state(
 					sql_execute!(
 						[ctx]
 						"
-						UPDATE db_pegboard.containers
+						UPDATE db_pegboard.actors
 						SET
 							exit_ts = $2,
 							exit_code = $3
-						WHERE container_id = $1
+						WHERE actor_id = $1
 						",
-						container_id,
+						actor_id,
 						util::timestamp::now(),
 						exit_code,
 					)
@@ -365,9 +360,7 @@ async fn update_container_state(
 		}
 	}
 
-	Ok(UpdateContainerStateOutput {
-		stopping_container_ids,
-	})
+	Ok(UpdateActorStateOutput { stopping_actor_ids })
 }
 
 pub async fn handle_commands(
@@ -408,31 +401,25 @@ pub async fn handle_commands(
 		.await?;
 	}
 
-	// Update container state based on commands
+	// Update actor state based on commands
 	for command in commands {
-		if let protocol::Command::SignalContainer {
-			container_id,
-			signal,
-		} = command
-		{
+		if let protocol::Command::SignalActor { actor_id, signal } = command {
 			if matches!(signal.try_into()?, Signal::SIGTERM | Signal::SIGKILL) {
 				let res = ctx
-					.activity(UpdateContainerStateInput {
-						events: vec![protocol::Raw::new(
-							&protocol::Event::ContainerStateUpdate {
-								container_id,
-								state: protocol::ContainerState::Stopping,
-							},
-						)?],
+					.activity(UpdateActorStateInput {
+						events: vec![protocol::Raw::new(&protocol::Event::ActorStateUpdate {
+							actor_id,
+							state: protocol::ActorState::Stopping,
+						})?],
 					})
 					.await?;
 
 				// Publish signal if stopping_ts was not set before
-				if !res.stopping_container_ids.is_empty() {
-					ctx.signal(crate::workflows::client::ContainerStateUpdate {
-						state: protocol::ContainerState::Stopping,
+				if !res.stopping_actor_ids.is_empty() {
+					ctx.signal(crate::workflows::client::ActorStateUpdate {
+						state: protocol::ActorState::Stopping,
 					})
-					.tag("container_id", container_id)
+					.tag("actor_id", actor_id)
 					.send()
 					.await?;
 				}
@@ -509,20 +496,20 @@ async fn set_drain(ctx: &ActivityCtx, input: &SetDrainInput) -> GlobalResult<()>
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-struct FetchAllContainersInput {
+struct FetchAllActorsInput {
 	client_id: Uuid,
 }
 
-#[activity(FetchAllContainers)]
-async fn fetch_all_containers(
+#[activity(FetchAllActors)]
+async fn fetch_all_actors(
 	ctx: &ActivityCtx,
-	input: &FetchAllContainersInput,
+	input: &FetchAllActorsInput,
 ) -> GlobalResult<Vec<Uuid>> {
-	let container_ids = sql_fetch_all!(
+	let actor_ids = sql_fetch_all!(
 		[ctx, (Uuid,)]
 		"
-		SELECT container_id
-		FROM db_pegboard.containers
+		SELECT actor_id
+		FROM db_pegboard.actors
 		WHERE
 			client_id = $1 AND
 			stopping_ts IS NULL AND
@@ -536,7 +523,7 @@ async fn fetch_all_containers(
 	.map(|(id,)| id)
 	.collect();
 
-	Ok(container_ids)
+	Ok(actor_ids)
 }
 
 #[signal("pegboard_client_registered")]
@@ -553,9 +540,9 @@ pub struct CloseWs {
 	pub client_id: Uuid,
 }
 
-#[signal("pegboard_container_state_update")]
-pub struct ContainerStateUpdate {
-	pub state: protocol::ContainerState,
+#[signal("pegboard_actor_state_update")]
+pub struct ActorStateUpdate {
+	pub state: protocol::ActorState,
 }
 
 #[signal("pegboard_client_drain")]

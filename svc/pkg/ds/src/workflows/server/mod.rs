@@ -6,16 +6,14 @@ use std::{
 	time::Duration,
 };
 
+use build::types::{BuildCompression, BuildKind};
 use chirp_workflow::prelude::*;
 use cluster::types::BuildDeliveryMethod;
 use futures_util::FutureExt;
 use rand::Rng;
 use rivet_operation::prelude::proto::backend;
 
-use crate::types::{
-	build::{BuildCompression, BuildKind},
-	GameGuardProtocol, GameRuntime, NetworkMode, Routing, ServerResources,
-};
+use crate::types::{GameGuardProtocol, GameRuntime, NetworkMode, Routing, ServerResources};
 
 pub mod nomad;
 pub mod pegboard;

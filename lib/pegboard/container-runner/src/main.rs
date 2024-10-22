@@ -27,15 +27,15 @@ const MAX_BUFFER_BYTES: usize = 1024 * 1024;
 const MAX_PREVIEW_LINES: usize = 128;
 
 fn main() -> anyhow::Result<()> {
-	let pegboard_container_dir = std::env::args()
+	let pegboard_actor_dir = std::env::args()
 		.skip(1)
 		.next()
-		.context("`container_dir` arg required")?;
-	let pegboard_container_dir = Path::new(&pegboard_container_dir);
+		.context("`actor_dir` arg required")?;
+	let pegboard_actor_dir = Path::new(&pegboard_actor_dir);
 
 	// Write PID to file
 	fs::write(
-		pegboard_container_dir.join("pid"),
+		pegboard_actor_dir.join("pid"),
 		std::process::id().to_string().as_bytes(),
 	)?;
 
@@ -44,8 +44,8 @@ fn main() -> anyhow::Result<()> {
 		Some(x) if x == "dynamic_server" => Stakeholder::DynamicServer {
 			server_id: var("PEGBOARD_META_server_id")?,
 		},
-		Some(x) => bail!("invalid container stakeholder: {x}"),
-		None => bail!("no container stakeholder specified"),
+		Some(x) => bail!("invalid actor stakeholder: {x}"),
+		None => bail!("no actor stakeholder specified"),
 	};
 
 	let (shutdown_tx, shutdown_rx) = mpsc::sync_channel(1);
@@ -61,8 +61,7 @@ fn main() -> anyhow::Result<()> {
 	let log_shipper_thread = log_shipper.spawn();
 
 	// Run the container
-	let exit_code = match run_container(msg_tx.clone(), &pegboard_container_dir, root_user_enabled)
-	{
+	let exit_code = match run_container(msg_tx.clone(), &pegboard_actor_dir, root_user_enabled) {
 		Result::Ok(exit_code) => exit_code,
 		Err(err) => {
 			eprintln!("run container failed: {err:?}");
@@ -97,7 +96,7 @@ fn main() -> anyhow::Result<()> {
 	}
 
 	fs::write(
-		pegboard_container_dir.join("exit-code"),
+		pegboard_actor_dir.join("exit-code"),
 		exit_code.to_string().as_bytes(),
 	)?;
 
@@ -109,17 +108,17 @@ fn main() -> anyhow::Result<()> {
 /// Returns the exit code of the container that will be passed to the parent
 fn run_container(
 	msg_tx: mpsc::SyncSender<log_shipper::ReceivedMessage>,
-	pegboard_container_dir: &Path,
+	pegboard_actor_dir: &Path,
 	root_user_enabled: bool,
 ) -> anyhow::Result<i32> {
-	// Extract container id from dir
-	let container_id = pegboard_container_dir
+	// Extract actor id from dir
+	let actor_id = pegboard_actor_dir
 		.iter()
 		.last()
-		.context("empty `pegboard_container_dir`")?
+		.context("empty `pegboard_actor_dir`")?
 		.to_string_lossy()
 		.to_string();
-	let oci_bundle_path = pegboard_container_dir.join("oci-bundle");
+	let oci_bundle_path = pegboard_actor_dir.join("oci-bundle");
 	let oci_bundle_config_json = oci_bundle_path.join("config.json");
 
 	// Validate OCI bundle
@@ -152,12 +151,12 @@ fn run_container(
 	// Spawn runc container
 	println!(
 		"Starting container {} with OCI bundle {}",
-		container_id,
+		actor_id,
 		oci_bundle_path.display()
 	);
 	let mut runc_child = Command::new("runc")
 		.arg("run")
-		.arg(&container_id)
+		.arg(&actor_id)
 		.arg("-b")
 		.arg(oci_bundle_path)
 		.stdout(Stdio::piped())
@@ -174,11 +173,11 @@ fn run_container(
 	let mut signals = Signals::new(&[SIGTERM])?;
 	thread::spawn(move || {
 		for _ in signals.forever() {
-			println!("Received SIGTERM, forwarding to runc container {container_id}");
+			println!("Received SIGTERM, forwarding to runc container {actor_id}");
 			let status = Command::new("runc")
 				.arg("kill")
 				.arg("--all")
-				.arg(&container_id)
+				.arg(&actor_id)
 				.arg("SIGTERM")
 				.status();
 			println!("runc kill status: {:?}", status);

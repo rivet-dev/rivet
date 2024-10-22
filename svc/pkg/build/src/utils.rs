@@ -9,6 +9,7 @@ pub fn file_name(kind: BuildKind, compression: BuildCompression) -> String {
 	let file_name = match kind {
 		BuildKind::DockerImage => "image",
 		BuildKind::OciBundle => "oci-bundle",
+		BuildKind::JavaScript => "js",
 	};
 	let file_ext = match compression {
 		BuildCompression::None => "tar",

@@ -1,5 +1,6 @@
 use std::{collections::HashMap, convert::TryInto, net::IpAddr};
 
+use build::types::{BuildCompression, BuildKind};
 use chirp_workflow::prelude::*;
 use cluster::types::BuildDeliveryMethod;
 use futures_util::FutureExt;
@@ -14,10 +15,7 @@ use super::{
 	GetBuildAndDcInput, InsertDbInput, Port, DRAIN_PADDING_MS,
 };
 use crate::{
-	types::{
-		build::{BuildCompression, BuildKind},
-		NetworkMode, Routing, ServerResources,
-	},
+	types::{NetworkMode, Routing, ServerResources},
 	util::{
 		nomad_job::{
 			escape_go_template, gen_oci_bundle_config, inject_consul_env_template,
@@ -583,6 +581,9 @@ async fn submit_job(ctx: &ActivityCtx, input: &SubmitJobInput) -> GlobalResult<S
 										match input.build_kind {
 											BuildKind::DockerImage => "docker-image",
 											BuildKind::OciBundle => "oci-bundle",
+											BuildKind::JavaScript => {
+												bail!("javascript builds not implemented for nomad")
+											}
 										},
 									),
 							),

@@ -31,8 +31,8 @@ async fn client_rebuild_state() {
 	let ctx_wrapper: Arc<Mutex<Option<Arc<Ctx>>>> = Arc::new(Mutex::new(None));
 	let (close_tx, mut close_rx) = tokio::sync::watch::channel(());
 
-	let container_id = Uuid::new_v4();
-	let container_port = portpicker::pick_unused_port().expect("no free ports");
+	let actor_id = Uuid::new_v4();
+	let actor_port = portpicker::pick_unused_port().expect("no free ports");
 	let first_client = Arc::new(AtomicBool::new(true));
 
 	let port = portpicker::pick_unused_port().expect("no free ports");
@@ -46,8 +46,8 @@ async fn client_rebuild_state() {
 				ctx_wrapper,
 				close_tx,
 				raw_stream,
-				container_id,
-				container_port,
+				actor_id,
+				actor_port,
 				first_client2.clone(),
 			)
 		},
@@ -70,8 +70,8 @@ async fn handle_connection(
 	ctx_wrapper: Arc<Mutex<Option<Arc<Ctx>>>>,
 	close_tx: tokio::sync::watch::Sender<()>,
 	raw_stream: TcpStream,
-	container_id: Uuid,
-	container_port: u16,
+	actor_id: Uuid,
+	actor_port: u16,
 	first_client: Arc<AtomicBool>,
 ) {
 	tokio::spawn(async move {
@@ -98,26 +98,26 @@ async fn handle_connection(
 							send_init_packet(&mut tx).await;
 
 							if first_client.load(Ordering::SeqCst) {
-								// Spawn container on first client
-								start_echo_container(&mut tx, container_id, container_port).await;
+								// Spawn actor on first client
+								start_echo_actor(&mut tx, actor_id, actor_port).await;
 							} else {
 								tokio::time::sleep(Duration::from_millis(350)).await;
 
-								// Verify container is picked up again for second client
-								let containers = ctx.containers().read().await;
+								// Verify actor is picked up again for second client
+								let actors = ctx.actors().read().await;
 
 								assert!(
-									containers.contains_key(&container_id),
-									"container not in client memory"
+									actors.contains_key(&actor_id),
+									"actor not in client memory"
 								);
 
-								tracing::info!("container still present");
+								tracing::info!("actor still present");
 
-								// Stop container
+								// Stop actor
 								send_command(
 									&mut tx,
-									protocol::Command::SignalContainer {
-										container_id,
+									protocol::Command::SignalActor {
+										actor_id,
 										signal: Signal::SIGKILL as i32,
 									},
 								)
@@ -128,30 +128,30 @@ async fn handle_connection(
 							for event in events {
 								tracing::info!(?event, "received event");
 
-								let protocol::Event::ContainerStateUpdate { state, .. } =
+								let protocol::Event::ActorStateUpdate { state, .. } =
 									event.inner.deserialize().unwrap();
 
 								match state {
-									// Wait for container to start running
-									protocol::ContainerState::Running { .. } => {
+									// Wait for actor to start running
+									protocol::ActorState::Running { .. } => {
 										// Stop first client
 										close_tx.send(()).unwrap();
 									}
-									protocol::ContainerState::Exited { .. } => {
+									protocol::ActorState::Exited { .. } => {
 										tokio::time::sleep(Duration::from_millis(5)).await;
 
 										// Verify client state
-										let containers = ctx.containers().read().await;
+										let actors = ctx.actors().read().await;
 										assert!(
-											!containers.contains_key(&container_id),
-											"container still in client memory"
+											!actors.contains_key(&actor_id),
+											"actor still in client memory"
 										);
 
 										// Test complete
 										close_tx.send(()).unwrap();
 									}
-									protocol::ContainerState::Starting
-									| protocol::ContainerState::Stopped => {}
+									protocol::ActorState::Starting
+									| protocol::ActorState::Stopped => {}
 									state => panic!("unexpected state received: {state:?}"),
 								}
 							}

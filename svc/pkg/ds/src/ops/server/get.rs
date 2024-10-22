@@ -163,8 +163,8 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 			"
 			SELECT server_id, running_ts
 			FROM db_ds.servers_pegboard AS s
-			JOIN db_pegboard.containers AS co
-			ON s.pegboard_container_id = co.container_id
+			JOIN db_pegboard.actors AS a
+			ON s.pegboard_actor_id = a.actor_id
 			WHERE server_id = ANY($1)
 			",
 			&input.server_ids,

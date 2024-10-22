@@ -65,23 +65,23 @@ pub async fn send_init_packet(tx: &mut SplitSink<WebSocketStream<tokio::net::Tcp
 	.await
 }
 
-pub async fn start_echo_container(
+pub async fn start_echo_actor(
 	tx: &mut SplitSink<WebSocketStream<tokio::net::TcpStream>, Message>,
-	container_id: Uuid,
-	container_port: u16,
+	actor_id: Uuid,
+	port: u16,
 ) {
-	let cmd = protocol::Command::StartContainer {
-		container_id,
-		config: Box::new(protocol::ContainerConfig {
+	let cmd = protocol::Command::StartActor {
+		actor_id,
+		config: Box::new(protocol::ActorConfig {
 			image: protocol::Image {
 				// Should match the URL in `serve_binaries`
 				artifact_url: format!("http://127.0.0.1:{ARTIFACTS_PORT}/image"),
 				kind: protocol::ImageKind::DockerImage,
 				compression: protocol::ImageCompression::None,
 			},
-			container_runner_binary_url: format!("http://127.0.0.1:{ARTIFACTS_PORT}/0/runner"),
+			runner_artifact_url: format!("http://127.0.0.1:{ARTIFACTS_PORT}/0/runner"),
 			root_user_enabled: false,
-			env: [("PORT".to_string(), container_port.to_string())]
+			env: [("PORT".to_string(), port.to_string())]
 				.into_iter()
 				.collect(),
 			ports: [(
@@ -99,7 +99,7 @@ pub async fn start_echo_container(
 				memory_max: 15 * 1024 * 1024,
 			},
 			stakeholder: protocol::Stakeholder::DynamicServer {
-				server_id: container_id,
+				server_id: actor_id,
 			},
 		}),
 	};
@@ -232,12 +232,12 @@ pub async fn build_binaries(gen_path: &Path) {
 	assert!(status.success());
 
 	// Build runner binary
-	let container_runner_crate_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+	let runner_crate_path = Path::new(env!("CARGO_MANIFEST_DIR"))
 		.join("..")
 		.join("container-runner");
 	let image_name = "pegboard-container-runner";
 	let status = Command::new("docker")
-		.current_dir(&container_runner_crate_path)
+		.current_dir(&runner_crate_path)
 		.arg("build")
 		.arg("--platform")
 		.arg("linux/amd64")
@@ -270,7 +270,7 @@ pub async fn build_binaries(gen_path: &Path) {
 	let status = Command::new("docker")
 		.arg("cp")
 		.arg(format!("{}:{}", container_name, binary_path_in_container))
-		.arg(container_runner_path(gen_path))
+		.arg(runner_path(gen_path))
 		.status()
 		.await
 		.expect("Failed to copy binary from container");
@@ -297,7 +297,7 @@ pub async fn serve_binaries(gen_path: PathBuf) {
 					let path = req.uri().path();
 
 					let path = if path == "/0/runner" {
-						container_runner_path(&gen_path)
+						runner_path(&gen_path)
 					} else if path == "/image" {
 						image_path(&gen_path)
 					} else {
@@ -354,7 +354,7 @@ pub async fn setup_dependencies() -> Option<tempfile::TempDir> {
 	}
 }
 
-pub fn container_runner_path(gen_path: &Path) -> PathBuf {
+pub fn runner_path(gen_path: &Path) -> PathBuf {
 	gen_path.join("pegboard-container-runner").to_path_buf()
 }
 

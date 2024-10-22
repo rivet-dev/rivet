@@ -30,8 +30,8 @@ async fn worker(ctx: &OperationContext<ds::msg::drain_all::Message>) -> GlobalRe
 			FROM db_ds.servers AS s
 			JOIN db_ds.servers_pegboard AS spb
 			ON s.server_id = spb.server_id
-			JOIN db_pegboard.containers AS co
-			ON spb.pegboard_container_id = co.container_id
+			JOIN db_pegboard.actors AS a
+			ON spb.pegboard_actor_id = co.actor_id
 			WHERE
 				co.client_id = $1 AND
 				s.destroy_ts IS NULL

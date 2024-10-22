@@ -22,9 +22,9 @@ enum State {
 	Exited,
 }
 
-/// Goes through all container states and commands.
+/// Goes through all actor states and commands.
 #[tokio::test(flavor = "multi_thread")]
-async fn container_lifecycle() {
+async fn actor_lifecycle() {
 	setup_tracing();
 
 	tracing::info!("starting test");
@@ -62,9 +62,9 @@ async fn handle_connection(
 			guard.clone().unwrap()
 		};
 
-		let container_id = Uuid::new_v4();
-		let container_port = portpicker::pick_unused_port().expect("no free ports");
-		let mut container_state = State::None;
+		let actor_id = Uuid::new_v4();
+		let actor_port = portpicker::pick_unused_port().expect("no free ports");
+		let mut actor_state = State::None;
 
 		// Receive messages from socket
 		while let Some(msg) = rx.next().await {
@@ -77,48 +77,52 @@ async fn handle_connection(
 						protocol::ToServer::Init { .. } => {
 							send_init_packet(&mut tx).await;
 
-							start_echo_container(&mut tx, container_id, container_port).await;
+							start_echo_actor(&mut tx, actor_id, actor_port).await;
 						}
 						protocol::ToServer::Events(events) => {
 							for event in events {
 								tracing::info!(?event, "received event");
 
-								let protocol::Event::ContainerStateUpdate { state, .. } =
+								let protocol::Event::ActorStateUpdate { state, .. } =
 									event.inner.deserialize().unwrap();
 
 								match state {
-									protocol::ContainerState::Starting => {
-										if let State::None = container_state {
-											container_state = State::Starting;
+									protocol::ActorState::Starting => {
+										if let State::None = actor_state {
+											actor_state = State::Starting;
 										} else {
-											panic!("invalid prior state: {container_state:?} -> {state:?}");
+											panic!(
+												"invalid prior state: {actor_state:?} -> {state:?}"
+											);
 										}
 
 										// Verify client state
-										let containers = ctx.containers().read().await;
+										let actors = ctx.actors().read().await;
 										assert!(
-											containers.contains_key(&container_id),
-											"container not in client memory"
+											actors.contains_key(&actor_id),
+											"actor not in client memory"
 										);
 									}
-									protocol::ContainerState::Running { .. } => {
-										if let State::Starting = container_state {
-											container_state = State::Running;
+									protocol::ActorState::Running { .. } => {
+										if let State::Starting = actor_state {
+											actor_state = State::Running;
 										} else {
-											panic!("invalid prior state: {container_state:?} -> {state:?}");
+											panic!(
+												"invalid prior state: {actor_state:?} -> {state:?}"
+											);
 										}
 
 										// Verify client state
-										let containers = ctx.containers().read().await;
+										let actors = ctx.actors().read().await;
 										assert!(
-											containers.contains_key(&container_id),
-											"container not in client memory"
+											actors.contains_key(&actor_id),
+											"actor not in client memory"
 										);
 
 										// Send echo test
 										let req = b"hello world";
 										let res = reqwest::Client::new()
-											.post(format!("http://0.0.0.0:{container_port}"))
+											.post(format!("http://0.0.0.0:{actor_port}"))
 											.body(req.to_vec())
 											.send()
 											.await
@@ -132,44 +136,48 @@ async fn handle_connection(
 
 										tracing::info!("echo success");
 
-										// Stop container
+										// Stop actor
 										send_command(
 											&mut tx,
-											protocol::Command::SignalContainer {
-												container_id,
+											protocol::Command::SignalActor {
+												actor_id,
 												signal: Signal::SIGKILL as i32,
 											},
 										)
 										.await;
 									}
-									protocol::ContainerState::Stopped => {
-										if let State::Running = container_state {
-											container_state = State::Stopped;
+									protocol::ActorState::Stopped => {
+										if let State::Running = actor_state {
+											actor_state = State::Stopped;
 										} else {
-											panic!("invalid prior state: {container_state:?} -> {state:?}");
+											panic!(
+												"invalid prior state: {actor_state:?} -> {state:?}"
+											);
 										}
 
 										// Verify client state
-										let containers = ctx.containers().read().await;
+										let actors = ctx.actors().read().await;
 										assert!(
-											containers.contains_key(&container_id),
-											"container not in client memory"
+											actors.contains_key(&actor_id),
+											"actor not in client memory"
 										);
 									}
-									protocol::ContainerState::Exited { .. } => {
-										if let State::Stopped = container_state {
-											container_state = State::Exited;
+									protocol::ActorState::Exited { .. } => {
+										if let State::Stopped = actor_state {
+											actor_state = State::Exited;
 										} else {
-											panic!("invalid prior state: {container_state:?} -> {state:?}");
+											panic!(
+												"invalid prior state: {actor_state:?} -> {state:?}"
+											);
 										}
 
 										tokio::time::sleep(Duration::from_millis(5)).await;
 
 										// Verify client state
-										let containers = ctx.containers().read().await;
+										let actors = ctx.actors().read().await;
 										assert!(
-											!containers.contains_key(&container_id),
-											"container still in client memory"
+											!actors.contains_key(&actor_id),
+											"actor still in client memory"
 										);
 
 										// Test complete

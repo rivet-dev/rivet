@@ -13,8 +13,8 @@ use uuid::Uuid;
 use super::mock_vector;
 
 pub struct Setup {
-	pub container_id: String,
-	pub container_dir: tempfile::TempDir,
+	pub actor_id: String,
+	pub actor_dir: tempfile::TempDir,
 	pub socket_dir: tempfile::TempDir,
 	pub child: Child,
 	pub msg_rx: Receiver<super::mock_vector::VectorMessage>,
@@ -36,7 +36,7 @@ impl Drop for Setup {
 		Command::new("runc")
 			.arg("delete")
 			.arg("--force")
-			.arg(&self.container_id)
+			.arg(&self.actor_id)
 			.status()
 			.unwrap();
 
@@ -48,8 +48,8 @@ impl Drop for Setup {
 pub fn setup(command: &str) -> Setup {
 	let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
 
-	let container_id = Uuid::new_v4().to_string();
-	let container_dir = tempdir().unwrap();
+	let actor_id = Uuid::new_v4().to_string();
+	let actor_dir = tempdir().unwrap();
 
 	// Spawn listener, wait for start
 	let (msg_tx, msg_rx) = std::sync::mpsc::channel();
@@ -58,15 +58,12 @@ pub fn setup(command: &str) -> Setup {
 	std::thread::spawn(move || mock_vector::listener(socket_port, msg_tx).unwrap());
 	std::thread::sleep(Duration::from_secs(1));
 
-	// Build container dir
-	fs::write(container_dir.path().join("container-id"), &container_id).unwrap();
-
 	// Extract OCI bundle
 	let status = Command::new("skopeo")
 		.arg("copy")
 		.arg("docker://debian:12.4")
 		.arg("oci:oci-image:latest")
-		.current_dir(container_dir.path())
+		.current_dir(actor_dir.path())
 		.status()
 		.unwrap();
 	assert!(status.success());
@@ -76,13 +73,13 @@ pub fn setup(command: &str) -> Setup {
 		.arg("--image")
 		.arg("oci-image:latest")
 		.arg("oci-bundle")
-		.current_dir(container_dir.path())
+		.current_dir(actor_dir.path())
 		.status()
 		.unwrap();
 	assert!(status.success());
 
 	// Generate runc container
-	let oci_bundle_path = container_dir.path().join("oci-bundle");
+	let oci_bundle_path = actor_dir.path().join("oci-bundle");
 	let oci_config_path = oci_bundle_path.join("config.json");
 	let mut config =
 		serde_json::from_str::<serde_json::Value>(&fs::read_to_string(&oci_config_path).unwrap())
@@ -105,7 +102,7 @@ pub fn setup(command: &str) -> Setup {
 			.join("debug")
 			.join(env!("CARGO_PKG_NAME")),
 	)
-	.arg(container_dir.path())
+	.arg(actor_dir.path())
 	.env(
 		"PEGBOARD_META_vector_socket_addr",
 		format!("127.0.0.1:{socket_port}"),
@@ -120,8 +117,8 @@ pub fn setup(command: &str) -> Setup {
 	std::thread::sleep(Duration::from_secs(1));
 
 	Setup {
-		container_id,
-		container_dir,
+		actor_id,
+		actor_dir,
 		socket_dir,
 		child,
 		msg_rx,

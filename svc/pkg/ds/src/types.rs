@@ -83,24 +83,6 @@ pub struct GameConfig {
 	pub runtime: GameRuntime,
 }
 
-// Move to build pkg when migrated to workflows
-pub mod build {
-	use serde::{Deserialize, Serialize};
-	use strum::FromRepr;
-
-	#[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
-	pub enum BuildKind {
-		DockerImage = 0,
-		OciBundle = 1,
-	}
-
-	#[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
-	pub enum BuildCompression {
-		None = 0,
-		Lz4 = 1,
-	}
-}
-
 impl ApiTryFrom<Server> for models::ServersServer {
 	type Error = GlobalError;
 

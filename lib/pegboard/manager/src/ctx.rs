@@ -26,13 +26,13 @@ use tokio_tungstenite::{tungstenite::protocol::Message, MaybeTlsStream, WebSocke
 use url::Url;
 use uuid::Uuid;
 
-use crate::{container::Container, metrics, utils};
+use crate::{actor::Actor, metrics, utils};
 
 const PING_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(sqlx::FromRow)]
-struct ContainerRow {
-	container_id: Uuid,
+struct ActorRow {
+	actor_id: Uuid,
 	config: Vec<u8>,
 	pid: Option<i32>,
 	stop_ts: Option<i64>,
@@ -46,7 +46,7 @@ pub struct Ctx {
 	pub(crate) network_ip: Ipv4Addr,
 	pub(crate) system: System,
 	pub(crate) api_endpoint: RwLock<Option<String>>,
-	pub(crate) containers: RwLock<HashMap<Uuid, Arc<Container>>>,
+	pub(crate) actors: RwLock<HashMap<Uuid, Arc<Actor>>>,
 }
 
 impl Ctx {
@@ -65,7 +65,7 @@ impl Ctx {
 			network_ip,
 			system,
 			api_endpoint: RwLock::new(None),
-			containers: RwLock::new(HashMap::new()),
+			actors: RwLock::new(HashMap::new()),
 		})
 	}
 
@@ -243,29 +243,23 @@ impl Ctx {
 
 	async fn process_command(self: &Arc<Self>, command: protocol::CommandWrapper) -> Result<()> {
 		match command.inner.deserialize()? {
-			protocol::Command::StartContainer {
-				container_id,
-				config,
-			} => {
-				// Insert container
-				let mut containers = self.containers.write().await;
-				let container = containers
-					.entry(container_id)
-					.or_insert_with(|| Container::new(container_id, *config));
+			protocol::Command::StartActor { actor_id, config } => {
+				// Insert actor
+				let mut actors = self.actors.write().await;
+				let actor = actors
+					.entry(actor_id)
+					.or_insert_with(|| Actor::new(actor_id, *config));
 
-				// Spawn container
-				container.start(&self).await?;
+				// Spawn actor
+				actor.start(&self).await?;
 			}
-			protocol::Command::SignalContainer {
-				container_id,
-				signal,
-			} => {
-				if let Some(container) = self.containers.read().await.get(&container_id) {
-					container.signal(&self, signal.try_into()?).await?;
+			protocol::Command::SignalActor { actor_id, signal } => {
+				if let Some(actor) = self.actors.read().await.get(&actor_id) {
+					actor.signal(&self, signal.try_into()?).await?;
 				} else {
 					tracing::warn!(
-						?container_id,
-						"received stop container command for container that doesn't exist (likely already stopped)"
+						?actor_id,
+						"received stop actor command for actor that doesn't exist (likely already stopped)"
 					);
 				}
 			}
@@ -340,11 +334,11 @@ impl Ctx {
 
 	// Rebuilds state from DB
 	async fn rebuild(self: &Arc<Self>) -> Result<()> {
-		let container_rows = utils::query(|| async {
-			sqlx::query_as::<_, ContainerRow>(indoc!(
+		let actor_rows = utils::query(|| async {
+			sqlx::query_as::<_, ActorRow>(indoc!(
 				"
-				SELECT container_id, config, pid, stop_ts
-				FROM containers
+				SELECT actor_id, config, pid, stop_ts
+				FROM actors
 				WHERE exit_ts IS NULL
 				",
 			))
@@ -355,58 +349,56 @@ impl Ctx {
 
 		// NOTE: Sqlite doesn't support arrays, can't parallelize this easily
 		// Emit stop events
-		for row in &container_rows {
+		for row in &actor_rows {
 			if row.pid.is_none() && row.stop_ts.is_none() {
-				tracing::error!(container_id=?row.container_id, "container has no pid, stopping");
+				tracing::error!(actor_id=?row.actor_id, "actor has no pid, stopping");
 
 				utils::query(|| async {
 					sqlx::query(indoc!(
 						"
-						UPDATE containers
+						UPDATE actors
 						SET stop_ts = ?2
-						WHERE container_id = ?1
+						WHERE actor_id = ?1
 						",
 					))
-					.bind(row.container_id)
+					.bind(row.actor_id)
 					.bind(utils::now())
 					.execute(&mut *self.sql().await?)
 					.await
 				})
 				.await?;
 
-				self.event(protocol::Event::ContainerStateUpdate {
-					container_id: row.container_id,
-					state: protocol::ContainerState::Stopped,
+				self.event(protocol::Event::ActorStateUpdate {
+					actor_id: row.actor_id,
+					state: protocol::ActorState::Stopped,
 				})
 				.await?;
 			}
 		}
 
-		// Start container observers
-		let mut containers_guard = self.containers.write().await;
-		for row in container_rows {
+		// Start actor observers
+		let mut actors_guard = self.actors.write().await;
+		for row in actor_rows {
 			let Some(pid) = row.pid else {
 				continue;
 			};
 
 			let pid = Pid::from_raw(pid);
 			let config = serde_json::from_slice(&row.config)?;
-			let container = Container::with_pid(row.container_id, config, pid);
-			let container = containers_guard
-				.entry(row.container_id)
-				.or_insert(container);
+			let actor = Actor::with_pid(row.actor_id, config, pid);
+			let actor = actors_guard.entry(row.actor_id).or_insert(actor);
 
-			let container = container.clone();
+			let actor = actor.clone();
 			let self2 = self.clone();
 			tokio::spawn(async move {
 				use std::result::Result::Err;
 
-				if let Err(err) = container.observe(&self2, pid).await {
-					tracing::error!(container_id=?row.container_id, ?err, "observe failed");
+				if let Err(err) = actor.observe(&self2, pid).await {
+					tracing::error!(actor_id=?row.actor_id, ?err, "observe failed");
 				}
 
 				// Cleanup afterwards
-				container.cleanup(&self2).await
+				actor.cleanup(&self2).await
 			});
 		}
 
@@ -415,11 +407,8 @@ impl Ctx {
 }
 
 impl Ctx {
-	pub async fn fetch_container_runner(
-		&self,
-		container_runner_binary_url: &str,
-	) -> Result<PathBuf> {
-		let url = Url::parse(container_runner_binary_url)?;
+	pub async fn fetch_runner(&self, runner_artifact_url: &str) -> Result<PathBuf> {
+		let url = Url::parse(runner_artifact_url)?;
 		let path_stub = utils::get_s3_path_stub(&url, true)?;
 		let path = self.runner_binaries_path().join(&path_stub);
 
@@ -432,8 +421,8 @@ impl Ctx {
 
 			fs::create_dir(self.runner_binaries_path().join(parent)).await?;
 
-			tracing::info!(%container_runner_binary_url, "downloading");
-			utils::download_file(container_runner_binary_url, &path).await?;
+			tracing::info!(%runner_artifact_url, "downloading");
+			utils::download_file(runner_artifact_url, &path).await?;
 
 			let cmd_out = Command::new("chmod").arg("+x").arg(&path).output().await?;
 			ensure!(
@@ -452,10 +441,10 @@ impl Ctx {
 		self.path.as_path()
 	}
 
-	pub fn container_path(&self, container_id: Uuid) -> PathBuf {
+	pub fn actor_path(&self, actor_id: Uuid) -> PathBuf {
 		self.working_path()
-			.join("containers")
-			.join(container_id.to_string())
+			.join("actors")
+			.join(actor_id.to_string())
 	}
 
 	pub fn runner_binaries_path(&self) -> PathBuf {
@@ -466,7 +455,7 @@ impl Ctx {
 // Test bindings
 #[cfg(feature = "test")]
 impl Ctx {
-	pub fn containers(&self) -> &RwLock<HashMap<Uuid, Arc<Container>>> {
-		&self.containers
+	pub fn actors(&self) -> &RwLock<HashMap<Uuid, Arc<Actor>>> {
+		&self.actors
 	}
 }

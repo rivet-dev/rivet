@@ -21,19 +21,19 @@ use tokio::{
 	process::Command,
 };
 
-use super::{oci_config, Container};
+use super::{oci_config, Actor};
 use crate::{ctx::Ctx, utils};
 
 const NETWORK_NAME: &str = "rivet-pegboard";
 const MIN_INGRESS_PORT: u16 = 20000;
 const MAX_INGRESS_PORT: u16 = 31999;
 
-impl Container {
+impl Actor {
 	pub async fn setup_oci_bundle(&self, ctx: &Ctx) -> Result<()> {
-		tracing::info!(container_id=?self.container_id, "setting up oci bundle");
+		tracing::info!(actor_id=?self.actor_id, "setting up oci bundle");
 
-		let container_path = ctx.container_path(self.container_id);
-		let oci_bundle_path = container_path.join("oci-bundle");
+		let actor_path = ctx.actor_path(self.actor_id);
+		let oci_bundle_path = actor_path.join("oci-bundle");
 		let netns_path = self.netns_path();
 
 		let api_endpoint_env_var = {
@@ -49,7 +49,7 @@ impl Container {
 
 		// Write base config
 		fs::write(
-			container_path.join("oci-bundle-config.base.json"),
+			actor_path.join("oci-bundle-config.base.json"),
 			serde_json::to_vec(&oci_config::config(
 				self.config.resources.cpu,
 				self.config.resources.memory,
@@ -59,7 +59,7 @@ impl Container {
 		)
 		.await?;
 
-		tracing::info!(container_id=?self.container_id, "downloading artifact");
+		tracing::info!(actor_id=?self.actor_id, "downloading artifact");
 
 		let mut stream = reqwest::get(&self.config.image.artifact_url)
 			.await?
@@ -68,12 +68,12 @@ impl Container {
 
 		match self.config.image.kind {
 			protocol::ImageKind::DockerImage => {
-				let docker_image_path = container_path.join("docker-image.tar");
-				let oci_image_path = container_path.join("oci-image");
+				let docker_image_path = actor_path.join("docker-image.tar");
+				let oci_image_path = actor_path.join("oci-image");
 
 				match self.config.image.compression {
 					protocol::ImageCompression::None => {
-						tracing::info!(container_id=?self.container_id, "saving artifact to file");
+						tracing::info!(actor_id=?self.actor_id, "saving artifact to file");
 
 						let mut output_file = File::create(&docker_image_path).await?;
 
@@ -83,7 +83,7 @@ impl Container {
 						}
 					}
 					protocol::ImageCompression::Lz4 => {
-						tracing::info!(container_id=?self.container_id, "decompressing artifact");
+						tracing::info!(actor_id=?self.actor_id, "decompressing artifact");
 
 						// Spawn the lz4 process
 						let mut lz4_child = Command::new("lz4")
@@ -125,7 +125,7 @@ impl Container {
 
 				// We need to convert the Docker image to an OCI bundle in order to run it.
 				// Allows us to work with the build with umoci
-				tracing::info!(container_id=?self.container_id, "converting Docker image -> OCI image");
+				tracing::info!(actor_id=?self.actor_id, "converting Docker image -> OCI image");
 				let cmd_out = Command::new("skopeo")
 					.arg("copy")
 					.arg(format!("docker-archive:{}", docker_image_path.display()))
@@ -139,7 +139,7 @@ impl Container {
 				);
 
 				// Allows us to run the bundle natively with runc
-				tracing::info!(container_id=?self.container_id, "converting OCI image -> OCI bundle");
+				tracing::info!(actor_id=?self.actor_id, "converting OCI image -> OCI bundle");
 
 				let cmd_out = Command::new("umoci")
 					.arg("unpack")
@@ -155,7 +155,7 @@ impl Container {
 				);
 			}
 			protocol::ImageKind::OciBundle => {
-				tracing::info!(container_id=?self.container_id, "decompressing and unarchiving artifact");
+				tracing::info!(actor_id=?self.actor_id, "decompressing and unarchiving artifact");
 
 				fs::create_dir(&oci_bundle_path).await?;
 
@@ -234,7 +234,7 @@ impl Container {
 		//
 		// See also rivet-job.conflist in lib/bolt/core/src/dep/terraform/install_scripts/files/nomad.sh
 		fs::write(
-			container_path.join("resolv.conf"),
+			actor_path.join("resolv.conf"),
 			indoc!(
 				"
 				nameserver 8.8.8.8
@@ -253,18 +253,18 @@ impl Container {
 		//
 		// Sanitize the config.json by copying safe properties from the provided bundle in to our base config.
 		//
-		// This way, we enforce our own capabilities on the container instead of trusting the
+		// This way, we enforce our own capabilities on the actor instead of trusting the
 		// provided config.json
-		tracing::info!(container_id=?self.container_id, "templating config.json");
+		tracing::info!(actor_id=?self.actor_id, "templating config.json");
 		let config_path = oci_bundle_path.join("config.json");
-		let override_config_path = container_path.join("oci-bundle-config.overrides.json");
+		let override_config_path = actor_path.join("oci-bundle-config.overrides.json");
 		fs::rename(&config_path, &override_config_path).await?;
 
 		// TODO: get new envb in here somehow
 		// TODO: check bounds
 
 		// Template new config
-		let base_config_path = container_path.join("oci-bundle-config.base.json");
+		let base_config_path = actor_path.join("oci-bundle-config.base.json");
 		let base_config_json = fs::read_to_string(&base_config_path).await?;
 		let mut base_config = serde_json::from_str::<Value>(&base_config_json)?;
 
@@ -309,7 +309,7 @@ impl Container {
 			.push(json!({
 				"destination": "/etc/resolv.conf",
 				"type": "bind",
-				"source": container_path.join("resolv.conf").to_str().context("resolv.conf path")?,
+				"source": actor_path.join("resolv.conf").to_str().context("resolv.conf path")?,
 				"options": ["rbind", "rprivate"]
 			}));
 
@@ -324,19 +324,19 @@ impl Container {
 		ctx: &Ctx,
 		proxied_ports: &protocol::HashableMap<String, protocol::ProxiedPort>,
 	) -> Result<()> {
-		tracing::info!(container_id=?self.container_id, "setting up cni network");
+		tracing::info!(actor_id=?self.actor_id, "setting up cni network");
 
-		let container_path = ctx.container_path(self.container_id);
+		let actor_path = ctx.actor_path(self.actor_id);
 		let netns_path = self.netns_path();
 
-		tracing::info!(container_id=?self.container_id, "writing cni params");
+		tracing::info!(actor_id=?self.actor_id, "writing cni params");
 
 		let cni_port_mappings = proxied_ports
 			.iter()
 			.map(|(_, port)| {
 				json!({
 					"HostPort": port.source,
-					"ContainerPort": port.target,
+					"ActorPort": port.target,
 					"Protocol": port.protocol.to_string(),
 				})
 			})
@@ -344,19 +344,19 @@ impl Container {
 
 		// MARK: Generate CNI parameters
 		//
-		// See https://github.com/containernetworking/cni/blob/b62753aa2bfa365c1ceaff6f25774a8047c896b5/cnitool/cnitool.go#L31
+		// See https://github.com/actornetworking/cni/blob/b62753aa2bfa365c1ceaff6f25774a8047c896b5/cnitool/cnitool.go#L31
 
 		// See Nomad capabilities equivalent:
 		// https://github.com/hashicorp/nomad/blob/a8f0f2612ef9d283ed903721f8453a0c0c3f51c5/client/allocrunner/networking_cni.go#L105C46-L105C46
 		//
 		// See supported args:
-		// https://github.com/containerd/go-cni/blob/6603d5bd8941d7f2026bb5627f6aa4ff434f859a/namespace_opts.go#L22
+		// https://github.com/actord/go-cni/blob/6603d5bd8941d7f2026bb5627f6aa4ff434f859a/namespace_opts.go#L22
 		let cni_params = json!({
 			"portMappings": cni_port_mappings,
 		});
 		let cni_params_json = serde_json::to_string(&cni_params)?;
 		fs::write(
-			container_path.join("cni-cap-args.json"),
+			actor_path.join("cni-cap-args.json"),
 			cni_params_json.as_bytes(),
 		)
 		.await?;
@@ -367,12 +367,12 @@ impl Container {
 		// https://github.com/hashicorp/nomad/blob/a8f0f2612ef9d283ed903721f8453a0c0c3f51c5/client/allocrunner/network_manager_linux.go#L119
 
 		// Name of the network in /opt/cni/config/$NETWORK_NAME.conflist
-		tracing::info!(container_id=?self.container_id, "creating network");
+		tracing::info!(actor_id=?self.actor_id, "creating network");
 
 		let cmd_out = Command::new("ip")
 			.arg("netns")
 			.arg("add")
-			.arg(self.container_id.to_string())
+			.arg(self.actor_id.to_string())
 			.output()
 			.await?;
 		ensure!(
@@ -381,7 +381,7 @@ impl Container {
 			std::str::from_utf8(&cmd_out.stderr)?
 		);
 
-		tracing::info!(container_id=?self.container_id, "adding network {NETWORK_NAME} to namespace {}", netns_path.display());
+		tracing::info!(actor_id=?self.actor_id, "adding network {NETWORK_NAME} to namespace {}", netns_path.display());
 		tracing::debug!(
 			"Adding network {} to namespace {}",
 			NETWORK_NAME,
@@ -444,7 +444,7 @@ impl Container {
 		let rows = utils::query(|| async {
 			sqlx::query_as::<_, (i64, i64)>(indoc!(
 				"
-				INSERT INTO container_ports (container_id, port, protocol)
+				INSERT INTO actor_ports (actor_id, port, protocol)
 				-- Select TCP ports
 				SELECT ?1, port, protocol
 				FROM (
@@ -459,7 +459,7 @@ impl Container {
 						available_ports(port) AS (
 							SELECT nums.n
 							FROM nums
-							LEFT JOIN container_ports AS p
+							LEFT JOIN actor_ports AS p
 							ON
 								nums.n = p.port AND
 								p.protocol = 0 AND
@@ -486,7 +486,7 @@ impl Container {
 						available_ports(port) AS (
 							SELECT nums.n
 							FROM nums
-							LEFT JOIN container_ports AS p
+							LEFT JOIN actor_ports AS p
 							ON
 								nums.n = p.port AND
 								p.protocol = 1 AND
@@ -501,7 +501,7 @@ impl Container {
 				RETURNING port, protocol
 				",
 			))
-			.bind(self.container_id)
+			.bind(self.actor_id)
 			.bind(tcp_count as i64) // ?2
 			.bind(udp_count as i64) // ?3
 			.bind(tcp_offset as i64) // ?4
@@ -566,7 +566,7 @@ impl Container {
 		match Command::new("runc")
 			.arg("delete")
 			.arg("--force")
-			.arg(self.container_id.to_string())
+			.arg(self.actor_id.to_string())
 			.output()
 			.await
 		{
@@ -582,11 +582,11 @@ impl Container {
 			Err(err) => tracing::error!(?err, "failed to run `runc` command"),
 		}
 
-		let container_path = ctx.container_path(self.container_id);
+		let actor_path = ctx.actor_path(self.actor_id);
 		let netns_path = self.netns_path();
 
 		if let protocol::NetworkMode::Bridge = self.config.network_mode {
-			match fs::read_to_string(container_path.join("cni-cap-args.json")).await {
+			match fs::read_to_string(actor_path.join("cni-cap-args.json")).await {
 				Ok(cni_params_json) => {
 					match Command::new("cnitool")
 						.arg("del")
@@ -617,7 +617,7 @@ impl Container {
 			match Command::new("ip")
 				.arg("netns")
 				.arg("del")
-				.arg(self.container_id.to_string())
+				.arg(self.actor_id.to_string())
 				.output()
 				.await
 			{
@@ -644,18 +644,18 @@ impl Container {
 			Path::new("/proc/1/ns/net").to_path_buf()
 		} else {
 			// CNI network that will be created
-			Path::new("/var/run/netns").join(self.container_id.to_string())
+			Path::new("/var/run/netns").join(self.actor_id.to_string())
 		}
 	}
 }
 
-pub fn spawn_orphaned_container_runner(
-	container_runner_path: PathBuf,
-	container_path: PathBuf,
+pub fn spawn_orphaned_runner(
+	runner_path: PathBuf,
+	actor_path: PathBuf,
 	env: &[(&str, String)],
 ) -> Result<Pid> {
-	// Prepare the arguments for the container runner
-	let runner_args = vec![container_path.to_str().context("bad path")?];
+	// Prepare the arguments for the actor runner
+	let runner_args = vec![actor_path.to_str().context("bad path")?];
 
 	// TODO: Do pipes have to be manually deleted here?
 	// Pipe communication between processes
@@ -691,7 +691,7 @@ pub fn spawn_orphaned_container_runner(
 					let orphan_pid_bytes = child.as_raw().to_le_bytes();
 					write(pipe_write, &orphan_pid_bytes)?;
 
-					// Write orphan PID to the containers cgroup so that it is no longer part of the parent cgroup.
+					// Write orphan PID to the actors cgroup so that it is no longer part of the parent cgroup.
 					// This is important for allowing systemd to restart pegboard without restarting orphans.
 					let mut cgroup_procs = std::fs::File::options()
 						.append(true)
@@ -706,7 +706,7 @@ pub fn spawn_orphaned_container_runner(
 					setsid().context("setsid failed")?;
 
 					// Exit immediately on fail in order to not leak process
-					let err = std::process::Command::new(&container_runner_path)
+					let err = std::process::Command::new(&runner_path)
 						.args(&runner_args)
 						.envs(env.iter().cloned())
 						.stdin(Stdio::null())

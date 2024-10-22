@@ -4,17 +4,17 @@ use nix::sys::signal::Signal;
 use pegboard::protocol;
 
 /// How long to wait after last ping before forcibly removing a client from the database and deleting its
-/// workflow, evicting all containers. Note that the client may still be running and can reconnect.
+/// workflow, evicting all actors. Note that the client may still be running and can reconnect.
 const CLIENT_LOST_THRESHOLD_MS: i64 = util::duration::minutes(2);
-/// How long to wait after creating and not receiving a starting state before forcibly stopping container.
-const CONTAINER_START_THRESHOLD_MS: i64 = util::duration::seconds(30);
-/// How long to wait after stopping and not receiving a stop state before manually setting container as
+/// How long to wait after creating and not receiving a starting state before forcibly stopping actor.
+const ACTOR_START_THRESHOLD_MS: i64 = util::duration::seconds(30);
+/// How long to wait after stopping and not receiving a stop state before manually setting actor as
 /// stopped.
-const CONTAINER_STOP_THRESHOLD_MS: i64 = util::duration::seconds(30);
+const ACTOR_STOP_THRESHOLD_MS: i64 = util::duration::seconds(30);
 
 #[derive(sqlx::FromRow)]
-struct ContainerRow {
-	container_id: Uuid,
+struct ActorRow {
+	actor_id: Uuid,
 	client_id: Uuid,
 	failed_start: bool,
 	failed_stop: bool,
@@ -43,7 +43,7 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 	)
 	.await?;
 
-	let (dead_client_rows, failed_container_rows) = tokio::try_join!(
+	let (dead_client_rows, failed_actor_rows) = tokio::try_join!(
 		sql_fetch_all!(
 			[ctx, (Uuid,)]
 			"
@@ -58,14 +58,14 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 			ts,
 		),
 		sql_fetch_all!(
-			[ctx, ContainerRow]
+			[ctx, ActorRow]
 			"
 			SELECT
-				container_id,
+				actor_id,
 				client_id,
 				running_ts IS NULL AS failed_start,
 				stopping_ts IS NOT NULL AS failed_stop
-			FROM db_pegboard.containers
+			FROM db_pegboard.actors
 			WHERE
 				(
 					(create_ts < $1 AND running_ts IS NULL) OR
@@ -74,8 +74,8 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 				stop_ts IS NULL AND
 				exit_ts IS NULL
 			",
-			ts - CONTAINER_START_THRESHOLD_MS,
-			ts - CONTAINER_STOP_THRESHOLD_MS,
+			ts - ACTOR_START_THRESHOLD_MS,
+			ts - ACTOR_STOP_THRESHOLD_MS,
 		),
 	)?;
 
@@ -88,22 +88,22 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 			.await?;
 	}
 
-	for row in &failed_container_rows {
+	for row in &failed_actor_rows {
 		if row.failed_stop {
-			tracing::warn!(container_id=?row.container_id, "container failed to stop");
+			tracing::warn!(actor_id=?row.actor_id, "actor failed to stop");
 
 			// Manually set stopped state
-			ctx.signal(pegboard::workflows::client::ContainerStateUpdate {
-				state: protocol::ContainerState::Stopped,
+			ctx.signal(pegboard::workflows::client::ActorStateUpdate {
+				state: protocol::ActorState::Stopped,
 			})
-			.tag("container_id", row.container_id)
+			.tag("actor_id", row.actor_id)
 			.send()
 			.await?;
 		} else if row.failed_start {
-			tracing::warn!(container_id=?row.container_id, "container failed to start");
+			tracing::warn!(actor_id=?row.actor_id, "actor failed to start");
 
-			ctx.signal(protocol::Command::SignalContainer {
-				container_id: row.container_id,
+			ctx.signal(protocol::Command::SignalActor {
+				actor_id: row.actor_id,
 				signal: Signal::SIGKILL as i32,
 			})
 			.tag("client_id", row.client_id)
@@ -112,21 +112,21 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 		}
 	}
 
-	// Manually set stop ts for failed stop containers
-	let failed_stop_container_ids = failed_container_rows
+	// Manually set stop ts for failed stop actors
+	let failed_stop_actor_ids = failed_actor_rows
 		.iter()
 		.filter(|row| row.failed_stop)
-		.map(|row| row.container_id)
+		.map(|row| row.actor_id)
 		.collect::<Vec<_>>();
-	if !failed_stop_container_ids.is_empty() {
+	if !failed_stop_actor_ids.is_empty() {
 		sql_fetch_all!(
-			[ctx, ContainerRow]
+			[ctx, ActorRow]
 			"
-			UPDATE db_pegboard.containers
+			UPDATE db_pegboard.actors
 			SET stop_ts = $2
-			WHERE container_id = ANY($1)
+			WHERE actor_id = ANY($1)
 			",
-			failed_stop_container_ids,
+			failed_stop_actor_ids,
 			ts,
 		)
 		.await?;

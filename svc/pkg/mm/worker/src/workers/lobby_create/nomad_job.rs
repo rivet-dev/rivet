@@ -474,6 +474,9 @@ pub fn gen_lobby_docker_job(
 												"docker-image"
 											}
 											backend::build::BuildKind::OciBundle => "oci-bundle",
+											backend::build::BuildKind::JavaScript => {
+												bail!("javascript builds not implemented for mm")
+											}
 										},
 									),
 							),

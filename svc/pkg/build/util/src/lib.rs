@@ -11,6 +11,7 @@ pub fn file_name(
 	let file_name = match kind {
 		backend::build::BuildKind::DockerImage => "image",
 		backend::build::BuildKind::OciBundle => "oci-bundle",
+		backend::build::BuildKind::JavaScript => "js",
 	};
 	let file_ext = match compression {
 		backend::build::BuildCompression::None => "tar",

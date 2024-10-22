@@ -29,7 +29,7 @@ mod setup;
 const STOP_PID_INTERVAL: Duration = std::time::Duration::from_millis(250);
 /// How many times to check for a PID when a stop command was received.
 const STOP_PID_RETRIES: usize = 32;
-/// How often to check that a PID is still running when observing container state.
+/// How often to check that a PID is still running when observing actor state.
 const PID_POLL_INTERVAL: Duration = std::time::Duration::from_millis(1000);
 const VECTOR_SOCKET_ADDR: &str = "127.0.0.1:5021";
 
@@ -40,18 +40,18 @@ enum ObservationState {
 	Dead,
 }
 
-pub struct Container {
-	container_id: Uuid,
-	config: protocol::ContainerConfig,
+pub struct Actor {
+	actor_id: Uuid,
+	config: protocol::ActorConfig,
 
 	pid: Mutex<Option<Pid>>,
 	exited: AtomicBool,
 }
 
-impl Container {
-	pub fn new(container_id: Uuid, config: protocol::ContainerConfig) -> Arc<Self> {
-		Arc::new(Container {
-			container_id,
+impl Actor {
+	pub fn new(actor_id: Uuid, config: protocol::ActorConfig) -> Arc<Self> {
+		Arc::new(Actor {
+			actor_id,
 			config,
 
 			pid: Mutex::new(None),
@@ -59,9 +59,9 @@ impl Container {
 		})
 	}
 
-	pub fn with_pid(container_id: Uuid, config: protocol::ContainerConfig, pid: Pid) -> Arc<Self> {
-		Arc::new(Container {
-			container_id,
+	pub fn with_pid(actor_id: Uuid, config: protocol::ActorConfig, pid: Pid) -> Arc<Self> {
+		Arc::new(Actor {
+			actor_id,
 			config,
 
 			pid: Mutex::new(Some(pid)),
@@ -70,25 +70,25 @@ impl Container {
 	}
 
 	pub async fn start(self: &Arc<Self>, ctx: &Arc<Ctx>) -> Result<()> {
-		tracing::info!(container_id=?self.container_id, "starting");
+		tracing::info!(actor_id=?self.actor_id, "starting");
 
-		// Write container to DB
+		// Write actor to DB
 		let config_json = serde_json::to_vec(&self.config)?;
 
 		utils::query(|| async {
 			// NOTE: On conflict here in case this query runs but the command is not acknowledged
 			sqlx::query(indoc!(
 				"
-				INSERT INTO containers (
-					container_id,
+				INSERT INTO actors (
+					actor_id,
 					config,
 					start_ts
 				)
 				VALUES (?1, ?2, ?3)
-				ON CONFLICT (container_id) DO NOTHING
+				ON CONFLICT (actor_id) DO NOTHING
 				",
 			))
-			.bind(self.container_id)
+			.bind(self.actor_id)
 			.bind(&config_json)
 			.bind(utils::now())
 			.execute(&mut *ctx.sql().await?)
@@ -96,9 +96,9 @@ impl Container {
 		})
 		.await?;
 
-		ctx.event(protocol::Event::ContainerStateUpdate {
-			container_id: self.container_id,
-			state: protocol::ContainerState::Starting,
+		ctx.event(protocol::Event::ActorStateUpdate {
+			actor_id: self.actor_id,
+			state: protocol::ActorState::Starting,
 		})
 		.await?;
 
@@ -109,19 +109,19 @@ impl Container {
 			use std::result::Result::{Err, Ok};
 
 			match self2.setup(&ctx2).await {
-				Ok((container_runner_path, proxied_ports)) => {
-					match self2.run(&ctx2, container_runner_path, proxied_ports).await {
+				Ok((runner_path, proxied_ports)) => {
+					match self2.run(&ctx2, runner_path, proxied_ports).await {
 						Ok(pid) => {
 							if let Err(err) = self2.observe(&ctx2, pid).await {
-								tracing::error!(container_id=?self2.container_id, ?err, "observe failed");
+								tracing::error!(actor_id=?self2.actor_id, ?err, "observe failed");
 							}
 						}
 						Err(err) => {
-							tracing::error!(container_id=?self2.container_id, ?err, "run failed")
+							tracing::error!(actor_id=?self2.actor_id, ?err, "run failed")
 						}
 					}
 				}
-				Err(err) => tracing::error!(container_id=?self2.container_id, ?err, "setup failed"),
+				Err(err) => tracing::error!(actor_id=?self2.actor_id, ?err, "setup failed"),
 			}
 
 			// Cleanup afterwards
@@ -138,17 +138,15 @@ impl Container {
 		PathBuf,
 		protocol::HashableMap<String, protocol::ProxiedPort>,
 	)> {
-		tracing::info!(container_id=?self.container_id, "setting up");
+		tracing::info!(actor_id=?self.actor_id, "setting up");
 
-		let container_path = ctx.container_path(self.container_id);
+		let actor_path = ctx.actor_path(self.actor_id);
 
-		// Create container working dir
-		fs::create_dir(&container_path).await?;
+		// Create actor working dir
+		fs::create_dir(&actor_path).await?;
 
-		// Download container runner
-		let container_runner_path = ctx
-			.fetch_container_runner(&self.config.container_runner_binary_url)
-			.await?;
+		// Download actor runner
+		let runner_path = ctx.fetch_runner(&self.config.runner_artifact_url).await?;
 
 		self.setup_oci_bundle(&ctx).await?;
 
@@ -162,16 +160,16 @@ impl Container {
 			Default::default()
 		};
 
-		Ok((container_runner_path, proxied_ports))
+		Ok((runner_path, proxied_ports))
 	}
 
 	async fn run(
 		self: &Arc<Self>,
 		ctx: &Arc<Ctx>,
-		container_runner_path: PathBuf,
+		runner_path: PathBuf,
 		proxied_ports: protocol::HashableMap<String, protocol::ProxiedPort>,
 	) -> Result<Pid> {
-		tracing::info!(container_id=?self.container_id, "spawning");
+		tracing::info!(actor_id=?self.actor_id, "spawning");
 
 		let mut runner_env = vec![
 			(
@@ -185,14 +183,11 @@ impl Container {
 		];
 		runner_env.extend(self.config.stakeholder.env());
 
-		// Spawn runner which spawns the container
-		let pid = setup::spawn_orphaned_container_runner(
-			container_runner_path,
-			ctx.container_path(self.container_id),
-			&runner_env,
-		)?;
+		// Spawn runner which spawns the actor
+		let pid =
+			setup::spawn_orphaned_runner(runner_path, ctx.actor_path(self.actor_id), &runner_env)?;
 
-		tracing::info!(container_id=?self.container_id, ?pid, "pid received");
+		tracing::info!(actor_id=?self.actor_id, ?pid, "pid received");
 
 		// Store PID
 		{
@@ -203,14 +198,14 @@ impl Container {
 		utils::query(|| async {
 			sqlx::query(indoc!(
 				"
-				UPDATE containers
+				UPDATE actors
 				SET
 					running_ts = ?2,
 					pid = ?3
-				WHERE container_id = ?1
+				WHERE actor_id = ?1
 				",
 			))
-			.bind(self.container_id)
+			.bind(self.actor_id)
 			.bind(utils::now())
 			.bind(pid.as_raw())
 			.execute(&mut *ctx.sql().await?)
@@ -218,9 +213,9 @@ impl Container {
 		})
 		.await?;
 
-		ctx.event(protocol::Event::ContainerStateUpdate {
-			container_id: self.container_id,
-			state: protocol::ContainerState::Running {
+		ctx.event(protocol::Event::ActorStateUpdate {
+			actor_id: self.actor_id,
+			state: protocol::ActorState::Running {
 				pid: pid.as_raw().try_into()?,
 				proxied_ports,
 			},
@@ -230,11 +225,11 @@ impl Container {
 		Ok(pid)
 	}
 
-	// Watch container for updates
+	// Watch actor for updates
 	pub(crate) async fn observe(&self, ctx: &Arc<Ctx>, pid: Pid) -> Result<()> {
-		tracing::info!(container_id=?self.container_id, ?pid, "observing");
+		tracing::info!(actor_id=?self.actor_id, ?pid, "observing");
 
-		let exit_code_path = ctx.container_path(self.container_id).join("exit-code");
+		let exit_code_path = ctx.actor_path(self.actor_id).join("exit-code");
 		let proc_path = Path::new("/proc").join(pid.to_string());
 
 		let mut futs = FuturesUnordered::new();
@@ -308,28 +303,28 @@ impl Container {
 				}
 			}
 		} else {
-			tracing::warn!(container_id=?self.container_id, ?pid, "process died before exit code file was written");
+			tracing::warn!(actor_id=?self.actor_id, ?pid, "process died before exit code file was written");
 
 			None
 		};
 
-		tracing::info!(container_id=?self.container_id, ?exit_code, "exited");
+		tracing::info!(actor_id=?self.actor_id, ?exit_code, "exited");
 
 		self.set_exit_code(ctx, exit_code).await?;
 
-		tracing::info!(container_id=?self.container_id, "complete");
+		tracing::info!(actor_id=?self.actor_id, "complete");
 
 		Ok(())
 	}
 
 	pub async fn signal(self: &Arc<Self>, ctx: &Arc<Ctx>, signal: Signal) -> Result<()> {
-		tracing::info!(container_id=?self.container_id, ?signal, "sending signal");
+		tracing::info!(actor_id=?self.actor_id, ?signal, "sending signal");
 
 		let self2 = self.clone();
 		let ctx2 = ctx.clone();
 		tokio::spawn(async move {
 			if let Err(err) = self2.signal_inner(&ctx2, signal).await {
-				tracing::error!(?err, "container signal failed");
+				tracing::error!(?err, "actor signal failed");
 			}
 		});
 
@@ -339,19 +334,19 @@ impl Container {
 	async fn signal_inner(self: &Arc<Self>, ctx: &Arc<Ctx>, signal: Signal) -> Result<()> {
 		let mut i = 0;
 
-		// Signal command might be sent before the container has a valid PID. This loop waits for the PID to
+		// Signal command might be sent before the actor has a valid PID. This loop waits for the PID to
 		// be set
 		let pid = loop {
 			if let Some(pid) = *self.pid.lock().await {
 				break Some(pid);
 			}
 
-			tracing::warn!(container_id=?self.container_id, "waiting for pid to signal container");
+			tracing::warn!(actor_id=?self.actor_id, "waiting for pid to signal actor");
 
 			if i > STOP_PID_RETRIES {
 				tracing::error!(
-					container_id=?self.container_id,
-					"timed out waiting for container to get PID, considering container stopped",
+					actor_id=?self.actor_id,
+					"timed out waiting for actor to get PID, considering actor stopped",
 				);
 
 				break None;
@@ -368,7 +363,7 @@ impl Container {
 			match kill(pid, signal) {
 				Ok(_) => {}
 				Err(Errno::ESRCH) => {
-					tracing::warn!(container_id=?self.container_id, ?pid, "pid not found for signalling")
+					tracing::warn!(actor_id=?self.actor_id, ?pid, "pid not found for signalling")
 				}
 				Err(err) => return Err(err.into()),
 			}
@@ -379,15 +374,15 @@ impl Container {
 			let stop_ts_set = utils::query(|| async {
 				sqlx::query_as::<_, (bool,)>(indoc!(
 					"
-					UPDATE containers
+					UPDATE actors
 					SET stop_ts = ?2
 					WHERE
-						container_id = ?1 AND
+						actor_id = ?1 AND
 						stop_ts IS NULL
 					RETURNING 1
 					",
 				))
-				.bind(self.container_id)
+				.bind(self.actor_id)
 				.bind(utils::now())
 				.fetch_optional(&mut *ctx.sql().await?)
 				.await
@@ -397,9 +392,9 @@ impl Container {
 
 			// Emit event if not stopped before
 			if stop_ts_set {
-				ctx.event(protocol::Event::ContainerStateUpdate {
-					container_id: self.container_id,
-					state: protocol::ContainerState::Stopped,
+				ctx.event(protocol::Event::ActorStateUpdate {
+					actor_id: self.actor_id,
+					state: protocol::ActorState::Stopped,
 				})
 				.await?;
 			}
@@ -414,14 +409,14 @@ impl Container {
 		utils::query(|| async {
 			sqlx::query(indoc!(
 				"
-				UPDATE containers
+				UPDATE actors
 				SET
 					exit_ts = ?2,
 					exit_code = ?3
-				WHERE container_id = ?1
+				WHERE actor_id = ?1
 				",
 			))
-			.bind(self.container_id)
+			.bind(self.actor_id)
 			.bind(utils::now())
 			.bind(exit_code)
 			.execute(&mut *ctx.sql().await?)
@@ -433,21 +428,21 @@ impl Container {
 		utils::query(|| async {
 			sqlx::query(indoc!(
 				"
-				UPDATE container_ports
+				UPDATE actor_ports
 				SET delete_ts = ?2
-				WHERE container_id = ?1
+				WHERE actor_id = ?1
 				",
 			))
-			.bind(self.container_id)
+			.bind(self.actor_id)
 			.bind(utils::now())
 			.execute(&mut *ctx.sql().await?)
 			.await
 		})
 		.await?;
 
-		ctx.event(protocol::Event::ContainerStateUpdate {
-			container_id: self.container_id,
-			state: protocol::ContainerState::Exited { exit_code },
+		ctx.event(protocol::Event::ActorStateUpdate {
+			actor_id: self.actor_id,
+			state: protocol::ActorState::Exited { exit_code },
 		})
 		.await?;
 
@@ -458,12 +453,12 @@ impl Container {
 
 	#[tracing::instrument(skip_all)]
 	pub async fn cleanup(&self, ctx: &Ctx) -> Result<()> {
-		tracing::info!(container_id=?self.container_id, "cleaning up");
+		tracing::info!(actor_id=?self.actor_id, "cleaning up");
 
 		{
 			// Cleanup ctx
-			let mut containers = ctx.containers.write().await;
-			containers.remove(&self.container_id);
+			let mut actors = ctx.actors.write().await;
+			actors.remove(&self.actor_id);
 		}
 
 		if !self.exited.load(Ordering::SeqCst) {

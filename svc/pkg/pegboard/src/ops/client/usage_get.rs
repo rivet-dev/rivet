@@ -44,15 +44,15 @@ pub async fn pegboard_client_usage_get(ctx: &OperationCtx, input: &Input) -> Glo
 		SELECT
 			c.client_id,
 			-- Millicores to MHz
-			COALESCE(SUM_INT((co.config->'resources'->>'cpu')::INT), 0) * 1999 // 1000 AS total_cpu,
+			COALESCE(SUM_INT((a.config->'resources'->>'cpu')::INT), 0) * 1999 // 1000 AS total_cpu,
 			-- Bytes to MiB
-			COALESCE(SUM_INT((co.config->'resources'->>'memory')::INT // 1024 // 1024), 0) AS total_memory
+			COALESCE(SUM_INT((a.config->'resources'->>'memory')::INT // 1024 // 1024), 0) AS total_memory
 		FROM db_pegboard.clients AS c
-		LEFT JOIN db_pegboard.containers AS co
+		LEFT JOIN db_pegboard.actors AS a
 		ON
-			c.client_id = co.client_id AND
-			co.stop_ts IS NULL AND
-			co.exit_ts IS NULL
+			c.client_id = a.client_id AND
+			a.stop_ts IS NULL AND
+			a.exit_ts IS NULL
 		WHERE
 			c.client_id = ANY($1)
 		GROUP BY c.client_id

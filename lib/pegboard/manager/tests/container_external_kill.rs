@@ -16,9 +16,9 @@ use uuid::Uuid;
 mod common;
 use common::*;
 
-/// Verifies client picks up container killed by external signal.
+/// Verifies client picks up actor killed by external signal.
 #[tokio::test(flavor = "multi_thread")]
-async fn container_external_kill() {
+async fn actor_external_kill() {
 	setup_tracing();
 
 	tracing::info!("starting test");
@@ -56,8 +56,8 @@ async fn handle_connection(
 			guard.clone().unwrap()
 		};
 
-		let container_id = Uuid::new_v4();
-		let container_port = portpicker::pick_unused_port().expect("no free ports");
+		let actor_id = Uuid::new_v4();
+		let actor_port = portpicker::pick_unused_port().expect("no free ports");
 
 		// Receive messages from socket
 		while let Some(msg) = rx.next().await {
@@ -70,36 +70,36 @@ async fn handle_connection(
 						protocol::ToServer::Init { .. } => {
 							send_init_packet(&mut tx).await;
 
-							start_echo_container(&mut tx, container_id, container_port).await;
+							start_echo_actor(&mut tx, actor_id, actor_port).await;
 						}
 						protocol::ToServer::Events(events) => {
 							for event in events {
 								tracing::info!(?event, "received event");
 
-								let protocol::Event::ContainerStateUpdate { state, .. } =
+								let protocol::Event::ActorStateUpdate { state, .. } =
 									event.inner.deserialize().unwrap();
 
 								match state {
-									protocol::ContainerState::Running { pid, .. } => {
-										// Kill container
-										tracing::info!("killing container");
+									protocol::ActorState::Running { pid, .. } => {
+										// Kill actor
+										tracing::info!("killing actor");
 										kill(Pid::from_raw(pid as i32), Signal::SIGKILL).unwrap();
 									}
-									protocol::ContainerState::Exited { .. } => {
+									protocol::ActorState::Exited { .. } => {
 										tokio::time::sleep(Duration::from_millis(5)).await;
 
 										// Verify client state
-										let containers = ctx.containers().read().await;
+										let actors = ctx.actors().read().await;
 										assert!(
-											!containers.contains_key(&container_id),
-											"container still in client memory"
+											!actors.contains_key(&actor_id),
+											"actor still in client memory"
 										);
 
 										// Test complete
 										close_tx.send(()).unwrap();
 									}
-									protocol::ContainerState::Starting
-									| protocol::ContainerState::Stopped => {}
+									protocol::ActorState::Starting
+									| protocol::ActorState::Stopped => {}
 									state => panic!("unexpected state received: {state:?}"),
 								}
 							}

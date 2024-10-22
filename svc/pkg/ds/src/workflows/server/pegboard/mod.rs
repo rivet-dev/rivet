@@ -1,5 +1,6 @@
 use std::{collections::HashMap, net::IpAddr};
 
+use build::types::{BuildCompression, BuildKind};
 use chirp_workflow::prelude::*;
 use cluster::types::BuildDeliveryMethod;
 use futures_util::FutureExt;
@@ -12,10 +13,7 @@ use super::{
 	resolve_image_artifact_url, CreateComplete, CreateFailed, Destroy, Drain, DrainState,
 	GetBuildAndDcInput, InsertDbInput, Port, DRAIN_PADDING_MS, TRAEFIK_GRACE_PERIOD,
 };
-use crate::types::{
-	build::{BuildCompression, BuildKind},
-	GameGuardProtocol, NetworkMode, Routing, ServerResources,
-};
+use crate::types::{GameGuardProtocol, NetworkMode, Routing, ServerResources};
 
 pub mod destroy;
 
@@ -68,18 +66,18 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 		.send()
 		.await?;
 
-	// Wait for container start
+	// Wait for actor start
 	match ctx.listen::<Init>().await? {
-		Init::ContainerStateUpdate(sig) => match sig.state {
-			pp::ContainerState::Allocated { client_id } => client_id,
-			pp::ContainerState::FailedToAllocate => {
+		Init::ActorStateUpdate(sig) => match sig.state {
+			pp::ActorState::Allocated { client_id } => client_id,
+			pp::ActorState::FailedToAllocate => {
 				// TODO: Return error from wf
-				bail!("failed to allocate container");
+				bail!("failed to allocate actor");
 			}
-			state => bail!(format!("unexpected container state: {state:?}")),
+			state => bail!(format!("unexpected actor state: {state:?}")),
 		},
 		Init::Destroy(sig) => {
-			tracing::info!("destroying before container start");
+			tracing::info!("destroying before actor start");
 
 			ctx.workflow(destroy::Input {
 				server_id: input.server_id,
@@ -101,11 +99,11 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 
 			async move {
 				match ctx.listen::<Main>().await? {
-					Main::ContainerStateUpdate(sig) => match sig.state {
-						pp::ContainerState::Starting => {
+					Main::ActorStateUpdate(sig) => match sig.state {
+						pp::ActorState::Starting => {
 							ctx.activity(SetStartedInput { server_id }).await?;
 						}
-						pp::ContainerState::Running { proxied_ports, .. } => {
+						pp::ActorState::Running { proxied_ports, .. } => {
 							// Wait for Traefik to be ready
 							ctx.sleep(TRAEFIK_GRACE_PERIOD).await?;
 
@@ -116,10 +114,10 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 							})
 							.await?;
 						}
-						pp::ContainerState::Stopping
-						| pp::ContainerState::Stopped
-						| pp::ContainerState::Exited { .. } => {
-							tracing::info!("container stopped");
+						pp::ActorState::Stopping
+						| pp::ActorState::Stopped
+						| pp::ActorState::Exited { .. } => {
+							tracing::info!("actor stopped");
 
 							ctx.activity(SetFinishedInput { server_id }).await?;
 
@@ -128,7 +126,7 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 								override_kill_timeout_ms: None,
 							}));
 						}
-						state => bail!(format!("unexpected container state: {state:?}")),
+						state => bail!(format!("unexpected actor state: {state:?}")),
 					},
 					Main::Drain(sig) => {
 						let drain_timeout = sig.drain_timeout.saturating_sub(DRAIN_PADDING_MS);
@@ -208,9 +206,9 @@ async fn setup(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<Uuid> {
 		))
 		.await?;
 
-	let (container_id, resources, artifacts) = ctx
+	let (actor_id, resources, artifacts) = ctx
 		.join((
-			activity(SelectContainerIdInput {
+			activity(SelectActorIdInput {
 				server_id: input.server_id,
 			}),
 			activity(SelectResourcesInput {
@@ -223,26 +221,32 @@ async fn setup(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<Uuid> {
 				server_id: input.server_id,
 				build_upload_id: build_dc.build_upload_id,
 				build_file_name: build_dc.build_file_name,
+				build_kind: build_dc.build_kind,
 				dc_build_delivery_method: build_dc.dc_build_delivery_method,
 			}),
 		))
 		.await?;
 
-	ctx.signal(pp::Command::StartContainer {
-		container_id,
-		config: Box::new(pp::ContainerConfig {
+	ctx.signal(pp::Command::StartActor {
+		actor_id,
+		config: Box::new(pp::ActorConfig {
+			driver: match build_dc.build_kind {
+				BuildKind::DockerImage | BuildKind::OciBundle => pp::Driver::Container,
+				BuildKind::JavaScript => pp::Driver::V8Isolate,
+			},
 			image: pp::Image {
 				artifact_url: artifacts.image_artifact_url,
 				kind: match build_dc.build_kind {
 					BuildKind::DockerImage => pp::ImageKind::DockerImage,
 					BuildKind::OciBundle => pp::ImageKind::OciBundle,
+					BuildKind::JavaScript => pp::ImageKind::JavaScript,
 				},
 				compression: match build_dc.build_compression {
 					BuildCompression::None => pp::ImageCompression::None,
 					BuildCompression::Lz4 => pp::ImageCompression::Lz4,
 				},
 			},
-			container_runner_binary_url: artifacts.container_runner_binary_url,
+			runner_artifact_url: artifacts.runner_artifact_url,
 			root_user_enabled: input.root_user_enabled,
 			env: input.environment.as_hashable(),
 			ports: input
@@ -287,39 +291,36 @@ async fn setup(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<Uuid> {
 	.send()
 	.await?;
 
-	Ok(container_id)
+	Ok(actor_id)
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-struct SelectContainerIdInput {
+struct SelectActorIdInput {
 	server_id: Uuid,
 }
 
-#[activity(SelectContainerId)]
-async fn select_container_id(
-	ctx: &ActivityCtx,
-	input: &SelectContainerIdInput,
-) -> GlobalResult<Uuid> {
-	let container_id = Uuid::new_v4();
+#[activity(SelectActorId)]
+async fn select_actor_id(ctx: &ActivityCtx, input: &SelectActorIdInput) -> GlobalResult<Uuid> {
+	let actor_id = Uuid::new_v4();
 
 	sql_execute!(
 		[ctx]
 		"
-		INSERT INTO db_ds.servers_pegboard (server_id, pegboard_container_id)
+		INSERT INTO db_ds.servers_pegboard (server_id, pegboard_actor_id)
 		VALUES ($1, $2)
 		",
 		input.server_id,
-		container_id,
+		actor_id,
 	)
 	.await?;
 
 	ctx.update_workflow_tags(&json!({
 		"server_id": input.server_id,
-		"container_id": container_id,
+		"actor_id": actor_id,
 	}))
 	.await?;
 
-	Ok(container_id)
+	Ok(actor_id)
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
@@ -434,6 +435,7 @@ struct ResolveArtifactsInput {
 	image_id: Uuid,
 	server_id: Uuid,
 	build_upload_id: Uuid,
+	build_kind: BuildKind,
 	build_file_name: String,
 	dc_build_delivery_method: BuildDeliveryMethod,
 }
@@ -441,7 +443,7 @@ struct ResolveArtifactsInput {
 #[derive(Debug, Serialize, Deserialize, Hash)]
 struct ResolveArtifactsOutput {
 	image_artifact_url: String,
-	container_runner_binary_url: String,
+	runner_artifact_url: String,
 }
 
 #[activity(ResolveArtifacts)]
@@ -465,16 +467,17 @@ async fn resolve_artifacts(
 		upload_id,
 	)
 	.await?;
-	let container_runner_binary_url = resolve_container_runner_binary_url(
+	let runner_artifact_url = resolve_runner_artifact_url(
 		ctx,
 		input.datacenter_id,
+		input.build_kind,
 		input.dc_build_delivery_method,
 	)
 	.await?;
 
 	Ok(ResolveArtifactsOutput {
 		image_artifact_url,
-		container_runner_binary_url,
+		runner_artifact_url,
 	})
 }
 
@@ -523,28 +526,37 @@ async fn set_finished(ctx: &ActivityCtx, input: &SetFinishedInput) -> GlobalResu
 }
 
 join_signal!(Init {
-	ContainerStateUpdate(pegboard::workflows::client::ContainerStateUpdate),
+	ActorStateUpdate(pegboard::workflows::client::ActorStateUpdate),
 	Destroy,
 });
 
 join_signal!(Main {
-	ContainerStateUpdate(pegboard::workflows::client::ContainerStateUpdate),
+	ActorStateUpdate(pegboard::workflows::client::ActorStateUpdate),
 	Destroy,
 	Drain,
 });
 
-/// Generates a presigned URL for the container runner binary.
-async fn resolve_container_runner_binary_url(
+/// Generates a presigned URL for the runner binary.
+async fn resolve_runner_artifact_url(
 	ctx: &ActivityCtx,
 	datacenter_id: Uuid,
+	build_kind: BuildKind,
 	build_delivery_method: BuildDeliveryMethod,
 ) -> GlobalResult<String> {
-	let file_name = std::env::var("CONTAINER_RUNNER_BINARY_KEY")?;
+	// Get provider
+	let provider = s3_util::Provider::default()?;
+
+	let file_name = match build_kind {
+		BuildKind::DockerImage | BuildKind::OciBundle => {
+			std::env::var("CONTAINER_RUNNER_BINARY_KEY")?
+		}
+		BuildKind::JavaScript => std::env::var("V8_ISOLATE_RUNNER_BINARY_KEY")?,
+	};
 
 	// Build URL
 	match build_delivery_method {
 		BuildDeliveryMethod::S3Direct => {
-			tracing::info!("container runner using s3 direct delivery");
+			tracing::info!("actor runner using s3 direct delivery");
 
 			// Build client
 			let s3_client = s3_util::Client::from_env_opt(
@@ -566,12 +578,12 @@ async fn resolve_container_runner_binary_url(
 			let addr = presigned_req.uri().clone();
 
 			let addr_str = addr.to_string();
-			tracing::info!(addr = %addr_str, "resolved container runner presigned request");
+			tracing::info!(addr = %addr_str, "resolved runner presigned request");
 
 			Ok(addr_str)
 		}
 		BuildDeliveryMethod::TrafficServer => {
-			tracing::info!("container runner using traffic server delivery");
+			tracing::info!("runner using traffic server delivery");
 
 			// Choose a random ATS node to pull from
 			let (ats_vlan_ip,) = sql_fetch_one!(

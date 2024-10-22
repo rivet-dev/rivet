@@ -7,7 +7,7 @@ use tracing_subscriber::prelude::*;
 use url::Url;
 use uuid::Uuid;
 
-mod container;
+mod actor;
 mod ctx;
 mod metrics;
 mod utils;

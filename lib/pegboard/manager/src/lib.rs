@@ -1,7 +1,7 @@
 // Test exports
 
 #[cfg(feature = "test")]
-mod container;
+mod actor;
 #[cfg(feature = "test")]
 mod ctx;
 #[cfg(feature = "test")]

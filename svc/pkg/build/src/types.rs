@@ -2,13 +2,14 @@ use chirp_workflow::prelude::*;
 use std::collections::HashMap;
 use strum::FromRepr;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, FromRepr)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Hash, PartialEq, Eq, FromRepr)]
 pub enum BuildKind {
 	DockerImage = 0,
 	OciBundle = 1,
+	JavaScript = 2,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, FromRepr)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Hash, PartialEq, Eq, FromRepr)]
 pub enum BuildCompression {
 	None = 0,
 	Lz4 = 1,

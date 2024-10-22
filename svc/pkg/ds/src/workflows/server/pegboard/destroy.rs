@@ -9,7 +9,7 @@ use super::super::{DestroyComplete, DestroyStarted};
 pub(crate) struct Input {
 	pub server_id: Uuid,
 	pub override_kill_timeout_ms: Option<i64>,
-	/// Whether or not to send signals to the container. In the case that the container was already stopped
+	/// Whether or not to send signals to the actor. In the case that the actor was already stopped
 	/// or exited, signals are unnecessary.
 	pub signal: bool,
 }
@@ -31,8 +31,8 @@ pub(crate) async fn ds_server_pegboard_destroy(
 		.await?;
 
 	if input.signal {
-		ctx.signal(pp::Command::SignalContainer {
-			container_id: ds.container_id,
+		ctx.signal(pp::Command::SignalActor {
+			actor_id: ds.actor_id,
 			signal: Signal::SIGTERM as i32,
 		})
 		.tag("datacenter_id", ds.datacenter_id)
@@ -43,8 +43,8 @@ pub(crate) async fn ds_server_pegboard_destroy(
 		ctx.sleep(input.override_kill_timeout_ms.unwrap_or(ds.kill_timeout_ms))
 			.await?;
 
-		ctx.signal(pp::Command::SignalContainer {
-			container_id: ds.container_id,
+		ctx.signal(pp::Command::SignalActor {
+			actor_id: ds.actor_id,
 			signal: Signal::SIGKILL as i32,
 		})
 		.tag("datacenter_id", ds.datacenter_id)
@@ -69,7 +69,7 @@ struct UpdateDbInput {
 struct UpdateDbOutput {
 	datacenter_id: Uuid,
 	kill_timeout_ms: i64,
-	container_id: Uuid,
+	actor_id: Uuid,
 }
 
 #[activity(UpdateDb)]
@@ -95,7 +95,7 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<Upd
 				RETURNING
 					s1.datacenter_id,
 					s1.kill_timeout_ms,
-					spb.pegboard_container_id AS container_id
+					spb.pegboard_actor_id AS actor_id
 				",
 				server_id,
 				ctx.ts(),

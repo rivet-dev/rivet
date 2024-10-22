@@ -69,27 +69,34 @@ pub struct CommandWrapper {
 #[signal("pegboard_client_command")]
 #[derive(Debug, Hash)]
 pub enum Command {
-	StartContainer {
-		container_id: Uuid,
-		config: Box<ContainerConfig>,
+	StartActor {
+		actor_id: Uuid,
+		config: Box<ActorConfig>,
 	},
-	SignalContainer {
-		container_id: Uuid,
+	SignalActor {
+		actor_id: Uuid,
 		// See nix::sys::signal::Signal
 		signal: i32,
 	},
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash)]
-pub struct ContainerConfig {
+pub struct ActorConfig {
+	pub driver: Driver,
 	pub image: Image,
-	pub container_runner_binary_url: String,
+	pub runner_artifact_url: String,
 	pub root_user_enabled: bool,
+	pub resources: Resources,
 	pub env: util::serde::HashableMap<String, String>,
 	pub ports: util::serde::HashableMap<String, Port>,
 	pub network_mode: NetworkMode,
-	pub resources: Resources,
 	pub stakeholder: Stakeholder,
+}
+
+#[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Driver {
+	Container,
+	V8Isolate,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash)]
@@ -103,6 +110,7 @@ pub struct Image {
 pub enum ImageKind {
 	DockerImage,
 	OciBundle,
+	JavaScript,
 }
 
 #[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq)]
@@ -152,7 +160,6 @@ pub enum NetworkMode {
 	Host,
 }
 
-/// runc-compatible resources.
 #[derive(Debug, Serialize, Deserialize, Clone, Hash)]
 pub struct Resources {
 	/// Millicore (1/1000 of a core).
@@ -189,36 +196,33 @@ pub struct EventWrapper {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub enum Event {
-	ContainerStateUpdate {
-		container_id: Uuid,
-		state: ContainerState,
-	},
+	ActorStateUpdate { actor_id: Uuid, state: ActorState },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
-pub enum ContainerState {
-	/// Container planned, not yet started.
+pub enum ActorState {
+	/// Actor planned, not yet started.
 	/// Sent by pegboard dc.
 	Allocated { client_id: Uuid },
-	/// Container starting on client.
+	/// Actor starting on client.
 	/// Sent by pegboard client.
 	Starting,
-	/// Container has a running process.
+	/// Actor has a running process.
 	/// Sent by pegboard client.
 	Running {
 		pid: usize,
 		proxied_ports: util::serde::HashableMap<String, ProxiedPort>,
 	},
-	/// Container planned to stop.
+	/// Actor planned to stop.
 	/// Sent by pegboard dc.
 	Stopping,
-	/// Container stopped, process exit not yet received.
+	/// Actor stopped, process exit not yet received.
 	/// Sent by pegboard client and pegboard gc.
 	Stopped,
-	/// Container process exited.
+	/// Actor process exited.
 	/// Sent by pegboard client.
 	Exited { exit_code: Option<i32> },
-	/// Container failed to allocate to a client.
+	/// Actor failed to allocate to a client.
 	/// Sent by pegboard dc.
 	FailedToAllocate,
 }

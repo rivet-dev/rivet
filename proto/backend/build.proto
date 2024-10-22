@@ -7,6 +7,7 @@ import "proto/common.proto";
 enum BuildKind {
 	DOCKER_IMAGE = 0;
 	OCI_BUNDLE = 1;
+	JAVA_SCRIPT = 2;
 }
 
 enum BuildCompression {

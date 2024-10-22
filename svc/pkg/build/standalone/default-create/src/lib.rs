@@ -10,57 +10,72 @@ const DEFAULT_BUILDS: &[DefaultBuildConfig] = &[
 	// 	tag: include_str!(
 	// 		"../../../../../../infra/default-builds/outputs/game-multiplayer-tag.txt"
 	// 	),
-	// 	tar: include_bytes!("../../../../../../infra/default-builds/outputs/game-multiplayer.tar"),
+	// 	content: include_bytes!(
+	// 		"../../../../../../infra/default-builds/outputs/game-multiplayer.tar"
+	// 	),
+	// 	mime: "tar",
 	// },
 	// DefaultBuildConfig {
 	// 	kind: "test-fail-immediately",
 	// 	tag: include_str!(
 	// 		"../../../../../../infra/default-builds/outputs/test-fail-immediately-tag.txt"
 	// 	),
-	// 	tar: include_bytes!(
+	// 	content: include_bytes!(
 	// 		"../../../../../../infra/default-builds/outputs/test-fail-immediately.tar"
 	// 	),
+	// 	mime: "tar",
 	// },
 	// DefaultBuildConfig {
 	// 	kind: "test-hang-indefinitely",
 	// 	tag: include_str!(
 	// 		"../../../../../../infra/default-builds/outputs/test-hang-indefinitely-tag.txt"
 	// 	),
-	// 	tar: include_bytes!(
+	// 	content: include_bytes!(
 	// 		"../../../../../../infra/default-builds/outputs/test-hang-indefinitely.tar"
 	// 	),
+	// 	mime: "tar",
 	// },
 	// DefaultBuildConfig {
 	// 	kind: "test-mm-lobby-ready",
 	// 	tag: include_str!(
 	// 		"../../../../../../infra/default-builds/outputs/test-mm-lobby-ready-tag.txt"
 	// 	),
-	// 	tar: include_bytes!(
+	// 	content: include_bytes!(
 	// 		"../../../../../../infra/default-builds/outputs/test-mm-lobby-ready.tar"
 	// 	),
+	// 	mime: "tar",
 	// },
 	// DefaultBuildConfig {
 	// 	kind: "test-mm-lobby-echo",
 	// 	tag: include_str!(
 	// 		"../../../../../../infra/default-builds/outputs/test-mm-lobby-echo-tag.txt"
 	// 	),
-	// 	tar: include_bytes!(
+	// 	content: include_bytes!(
 	// 		"../../../../../../infra/default-builds/outputs/test-mm-lobby-echo.tar"
 	// 	),
+	// 	mime: "tar",
 	// },
 	// DefaultBuildConfig {
 	// 	kind: "test-mm-player-connect",
 	// 	tag: include_str!(
 	// 		"../../../../../../infra/default-builds/outputs/test-mm-player-connect-tag.txt"
 	// 	),
-	// 	tar: include_bytes!(
+	// 	content: include_bytes!(
 	// 		"../../../../../../infra/default-builds/outputs/test-mm-player-connect.tar"
 	// 	),
+	// 	mime: "tar",
 	// },
 	// DefaultBuildConfig {
 	// 	kind: "test-ds-echo",
 	// 	tag: include_str!("../../../../../../infra/default-builds/outputs/test-ds-echo-tag.txt"),
-	// 	tar: include_bytes!("../../../../../../infra/default-builds/outputs/test-ds-echo.tar"),
+	// 	content: include_bytes!("../../../../../../infra/default-builds/outputs/test-ds-echo.tar"),
+	// 	mime: "tar",
+	// },
+	// DefaultBuildConfig {
+	// 	kind: "test-js-echo",
+	// 	tag: include_str!("../../../../../../infra/default-builds/outputs/test-js-echo-tag.txt"),
+	// 	content: include_bytes!("../../../../../../infra/default-builds/outputs/test-js-echo.js"),
+	// 	mime: "js",
 	// },
 ];
 
@@ -70,7 +85,9 @@ struct DefaultBuildConfig {
 	/// Tag for the image that's archived.
 	tag: &'static str,
 	/// Bytes for the image that needs to be uploaded.
-	tar: &'static [u8],
+	content: &'static [u8],
+	/// File type.
+	mime: &'static str,
 }
 
 #[tracing::instrument]
@@ -139,8 +156,8 @@ async fn upload_build(
 		bucket: "bucket-build".into(),
 		files: vec![
 			backend::upload::PrepareFile {
-				path: "image.tar".into(),
-				content_length: build.tar.len() as u64,
+				path: format!("image.{}", build.mime),
+				content_length: build.content.len() as u64,
 				multipart: true,
 				..Default::default()
 			},
@@ -153,7 +170,7 @@ async fn upload_build(
 		let start = req.byte_offset as usize;
 		let end = (req.byte_offset + req.content_length) as usize;
 
-		let part = &build.tar[start..end];
+		let part = &build.content[start..end];
 
 		let url = &req.url;
 		tracing::info!(%url, part=%req.part_number, "uploading file");
