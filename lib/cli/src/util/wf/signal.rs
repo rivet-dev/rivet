@@ -6,7 +6,10 @@ use rivet_term::console::style;
 use uuid::Uuid;
 
 use super::{build_pool, KvPair};
-use crate::util::{self, format::{colored_json, indent_string}};
+use crate::util::{
+	self,
+	format::{colored_json, indent_string},
+};
 
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[clap(rename_all = "kebab_case")]

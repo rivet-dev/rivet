@@ -22,4 +22,3 @@ impl ApiFrom<models::GroupPublicity> for backend::team::Publicity {
 		}
 	}
 }
-

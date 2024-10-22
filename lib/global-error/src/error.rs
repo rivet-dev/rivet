@@ -27,7 +27,7 @@ pub enum GlobalError {
 		/// we should only retry the message on this specific worker.
 		retry_immediately: bool,
 	},
-	/// Custom errors with metadata matching a schema defined in /errors at the project root. 
+	/// Custom errors with metadata matching a schema defined in /errors at the project root.
 	BadRequest {
 		code: String,
 		context: HashMap<String, String>,

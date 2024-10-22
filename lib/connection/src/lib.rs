@@ -26,12 +26,7 @@ impl Connection {
 
 	/// Creates a new `Connection` with the appropriate context in the `Client` to make requests. Used when
 	// calling another operation.
-	pub fn wrap(
-		&self,
-		parent_req_id: Uuid,
-		ray_id: Uuid,
-		name: &str,
-	) -> Connection {
+	pub fn wrap(&self, parent_req_id: Uuid, ray_id: Uuid, name: &str) -> Connection {
 		// Not the same as the operation ctx's ts because this cannot be overridden by debug start ts
 		let ts = rivet_util::timestamp::now();
 		let trace_entry = chirp_client::TraceEntry {
@@ -45,15 +40,11 @@ impl Connection {
 		};
 
 		Connection::new(
-			(*self.client).clone().wrap(
-				parent_req_id,
-				ray_id,
-				{
-					let mut x = self.client.trace().to_vec();
-					x.push(trace_entry);
-					x
-				},
-			),
+			(*self.client).clone().wrap(parent_req_id, ray_id, {
+				let mut x = self.client.trace().to_vec();
+				x.push(trace_entry);
+				x
+			}),
 			self.pools.clone(),
 			self.cache.clone(),
 		)

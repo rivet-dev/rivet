@@ -136,22 +136,16 @@ impl Actor {
 
 		let ports = self.bind_ports(ctx).await?;
 
-		// Setup OCI
 		match self.config.image.kind {
 			protocol::ImageKind::DockerImage | protocol::ImageKind::OciBundle => {
-				self.setup_oci_bundle(&ctx).await?
-			}
-			protocol::ImageKind::JavaScript => {
-				// Runner must be running before setting up, it works based on file watchers
-				ctx.get_or_spawn_isolate_runner().await?;
+				self.setup_oci_bundle(&ctx).await?;
 
-				self.setup_isolate(&ctx, &ports).await?
+				// Run CNI setup script
+				if let protocol::NetworkMode::Bridge = self.config.network_mode {
+					self.setup_cni_network(&ctx, &ports).await?;
+				}
 			}
-		}
-
-		// Run CNI setup script
-		if let protocol::NetworkMode::Bridge = self.config.network_mode {
-			self.setup_cni_network(&ctx, &ports).await?;
+			protocol::ImageKind::JavaScript => self.setup_isolate(&ctx, &ports).await?,
 		}
 
 		Ok(ports)
@@ -255,34 +249,32 @@ impl Actor {
 			// exited
 			protocol::ImageKind::JavaScript => {
 				let actor_path = ctx.actor_path(self.actor_id);
-				let actor_observer = async {
-					let exit_code_path = actor_path.join("exit-code");
-
-					utils::wait_for_creation(&exit_code_path).await?;
-
-					use std::result::Result::{Err, Ok};
-					let exit_code = match fs::read_to_string(&exit_code_path).await {
-						Ok(contents) => match contents.trim().parse::<i32>() {
-							Ok(x) => Some(x),
-							Err(err) => {
-								tracing::error!(actor_id=?self.actor_id, ?err, "failed to parse exit code file");
-
-								None
-							}
-						},
-						Err(err) => {
-							tracing::error!(actor_id=?self.actor_id, ?err, "failed to read exit code file");
-
-							None
-						}
-					};
-
-					Result::<_>::Ok(exit_code)
-				};
+				let exit_code_path = actor_path.join("exit-code");
 
 				tokio::select! {
 					res = runner.observe() => res?,
-					res = actor_observer => res?,
+					res = utils::wait_for_creation(&exit_code_path) => {
+						res?;
+
+						use std::result::Result::{Err, Ok};
+						let exit_code = match fs::read_to_string(&exit_code_path).await {
+							Ok(contents) => match contents.trim().parse::<i32>() {
+								Ok(x) => Some(x),
+								Err(err) => {
+									tracing::error!(actor_id=?self.actor_id, ?err, "failed to parse exit code file");
+
+									None
+								}
+							},
+							Err(err) => {
+								tracing::error!(actor_id=?self.actor_id, ?err, "failed to read exit code file");
+
+								None
+							}
+						};
+
+						exit_code
+					},
 				}
 			}
 		};

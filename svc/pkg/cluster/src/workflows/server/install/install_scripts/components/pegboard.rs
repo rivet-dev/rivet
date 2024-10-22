@@ -1,11 +1,9 @@
 use chirp_workflow::prelude::*;
 
 pub async fn install() -> GlobalResult<String> {
-	let s3_client = s3_util::Client::from_env_opt(
-		"bucket-infra-artifacts",
-		s3_util::EndpointKind::External,
-	)
-	.await?;
+	let s3_client =
+		s3_util::Client::from_env_opt("bucket-infra-artifacts", s3_util::EndpointKind::External)
+			.await?;
 
 	let (manager_binary_url, container_runner_binary_url, v8_isolate_runner_url) = tokio::try_join!(
 		resolve_binary_url(&s3_client, util::env::var("PEGBOARD_MANAGER_BINARY_KEY")?),

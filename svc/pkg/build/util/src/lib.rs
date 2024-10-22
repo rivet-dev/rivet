@@ -1,4 +1,4 @@
-use std::hash::{Hasher, DefaultHasher};
+use std::hash::{DefaultHasher, Hasher};
 
 use proto::backend;
 use rivet_operation::prelude::*;

@@ -26,4 +26,3 @@ pub async fn create_cloud_token(
 		token: token_res.token,
 	})
 }
-

@@ -6,8 +6,8 @@ use std::{
 
 use redis::AsyncCommands;
 use rivet_pools::prelude::*;
+use serde::{de::DeserializeOwned, Serialize};
 use tracing::Instrument;
-use serde::{Serialize, de::DeserializeOwned};
 
 use super::*;
 use crate::{

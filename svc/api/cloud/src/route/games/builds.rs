@@ -59,8 +59,7 @@ pub async fn get_builds(
 						.map_or(0, |upload| upload.content_length)
 						.api_try_into()?,
 					complete: upload.map_or(true, |upload| upload.complete_ts.is_some()),
-					tags: build
-						.tags.clone(),
+					tags: build.tags.clone(),
 				},
 			))
 		})

@@ -497,7 +497,7 @@ impl Endpoint {
 		} else {
 			quote! {}
 		};
-		
+
 		// Generate a path to use for the metrics
 		//
 		// This path can't contain the actual variables from the real

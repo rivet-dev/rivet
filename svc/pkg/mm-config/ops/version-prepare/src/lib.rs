@@ -65,11 +65,12 @@ async fn handle(
 			.actions
 			.as_ref()
 			.and_then(|a| a.create.as_ref())
-			.is_some() || lobby_group.regions.iter().any(|x| {
-			x.idle_lobbies
-				.as_ref()
-				.map_or(true, |y| y.min_idle_lobbies == 0)
-		});
+			.is_some()
+			|| lobby_group.regions.iter().any(|x| {
+				x.idle_lobbies
+					.as_ref()
+					.map_or(true, |y| y.min_idle_lobbies == 0)
+			});
 
 		// Prepare runtime
 		let runtime = unwrap_ref!(lobby_group.runtime);

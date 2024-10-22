@@ -41,10 +41,7 @@ pub fn handle_rejection(
 			{
 				err_code!(ERROR, error = err.to_string())
 			} else {
-				err_code!(
-					ERROR,
-					error = "An internal error has occurred.",
-				)
+				err_code!(ERROR, error = "An internal error has occurred.",)
 			}
 		}
 		GlobalError::Raw(err) => {

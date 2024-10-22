@@ -95,7 +95,7 @@ async fn allocate_actor(
 	let client_id = sql_fetch_optional!(
 		[ctx, (Uuid,)]
 		"
-		WITH client_resources AS (
+		WITH available_clients AS (
 			SELECT
 				c.client_id,
 				c.cpu,
@@ -124,7 +124,7 @@ async fn allocate_actor(
 		)
 		INSERT INTO db_pegboard.actors (actor_id, client_id, config, create_ts)
 		SELECT $3, client_id, $4, $5
-		FROM client_resources
+		FROM available_clients
 		WHERE
 			-- Compare millicores
 			total_cpu + $6 <= cpu * 1000 // $8 AND

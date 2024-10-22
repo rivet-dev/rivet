@@ -44,7 +44,9 @@ impl ApiFrom<cluster::types::Provider> for models::AdminClustersProvider {
 }
 
 impl ApiFrom<models::AdminClustersBuildDeliveryMethod> for cluster::types::BuildDeliveryMethod {
-	fn api_from(value: models::AdminClustersBuildDeliveryMethod) -> cluster::types::BuildDeliveryMethod {
+	fn api_from(
+		value: models::AdminClustersBuildDeliveryMethod,
+	) -> cluster::types::BuildDeliveryMethod {
 		match value {
 			models::AdminClustersBuildDeliveryMethod::TrafficServer => {
 				cluster::types::BuildDeliveryMethod::TrafficServer
@@ -57,7 +59,9 @@ impl ApiFrom<models::AdminClustersBuildDeliveryMethod> for cluster::types::Build
 }
 
 impl ApiFrom<cluster::types::BuildDeliveryMethod> for models::AdminClustersBuildDeliveryMethod {
-	fn api_from(value: cluster::types::BuildDeliveryMethod) -> models::AdminClustersBuildDeliveryMethod {
+	fn api_from(
+		value: cluster::types::BuildDeliveryMethod,
+	) -> models::AdminClustersBuildDeliveryMethod {
 		match value {
 			cluster::types::BuildDeliveryMethod::TrafficServer => {
 				models::AdminClustersBuildDeliveryMethod::TrafficServer
@@ -85,7 +89,9 @@ impl ApiTryFrom<cluster::types::Cluster> for models::AdminClustersCluster {
 impl ApiTryFrom<cluster::types::Datacenter> for models::AdminClustersDatacenter {
 	type Error = GlobalError;
 
-	fn api_try_from(value: cluster::types::Datacenter) -> GlobalResult<models::AdminClustersDatacenter> {
+	fn api_try_from(
+		value: cluster::types::Datacenter,
+	) -> GlobalResult<models::AdminClustersDatacenter> {
 		Ok(models::AdminClustersDatacenter {
 			build_delivery_method: value.build_delivery_method.api_into(),
 			cluster_id: value.cluster_id,
@@ -102,10 +108,8 @@ impl ApiTryFrom<cluster::types::Datacenter> for models::AdminClustersDatacenter 
 						hardware: p
 							.hardware
 							.iter()
-							.map(|h| {
-								models::AdminClustersHardware {
-									provider_hardware: h.provider_hardware.clone(),
-								}
+							.map(|h| models::AdminClustersHardware {
+								provider_hardware: h.provider_hardware.clone(),
 							})
 							.collect::<Vec<_>>(),
 						min_count: p.min_count.try_into()?,

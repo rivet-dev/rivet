@@ -504,7 +504,8 @@ impl ApiTryFrom<models::CloudVersionMatchmakerGameModeFindConfig>
 			identity_requirement: value
 				.identity_requirement
 				.map(ApiInto::<backend::matchmaker::IdentityRequirement>::api_into)
-				.unwrap_or(backend::matchmaker::IdentityRequirement::None) as i32,
+				.unwrap_or(backend::matchmaker::IdentityRequirement::None)
+				as i32,
 			verification: value
 				.verification
 				.map(|x| (*x).api_try_into())
@@ -548,7 +549,8 @@ impl ApiTryFrom<models::CloudVersionMatchmakerGameModeJoinConfig>
 			identity_requirement: value
 				.identity_requirement
 				.map(ApiInto::<backend::matchmaker::IdentityRequirement>::api_into)
-				.unwrap_or(backend::matchmaker::IdentityRequirement::None) as i32,
+				.unwrap_or(backend::matchmaker::IdentityRequirement::None)
+				as i32,
 			verification: value
 				.verification
 				.map(|x| (*x).api_try_into())
@@ -602,7 +604,8 @@ impl ApiTryFrom<models::CloudVersionMatchmakerGameModeCreateConfig>
 			identity_requirement: value
 				.identity_requirement
 				.map(ApiInto::<backend::matchmaker::IdentityRequirement>::api_into)
-				.unwrap_or(backend::matchmaker::IdentityRequirement::None) as i32,
+				.unwrap_or(backend::matchmaker::IdentityRequirement::None)
+				as i32,
 			verification: value
 				.verification
 				.map(|x| (*x).api_try_into())

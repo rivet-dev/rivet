@@ -3,7 +3,7 @@ pub mod metrics;
 mod pools;
 pub mod utils;
 
-use std::{collections::HashMap, env, fmt::Debug, str::FromStr, sync::Arc, time::Duration};
+use std::{collections::HashMap, env, str::FromStr, sync::Arc, time::Duration};
 
 use rand::prelude::SliceRandom;
 use tokio::{sync::OnceCell, task::JoinSet};
