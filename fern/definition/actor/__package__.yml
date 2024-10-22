@@ -1,0 +1,108 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: common.yml
+
+service:
+  auth: true
+  base-path: /games/{game_id}/environments/{environment_id}/actors
+  path-parameters:
+    game_id: uuid
+    environment_id: uuid
+  endpoints:
+    get:
+      path: /{actor_id}
+      method: GET
+      docs: Gets a dynamic actor.
+      path-parameters:
+        actor_id:
+          docs: The id of the actor to destroy
+          type: uuid
+      response: GetActorResponse
+
+    list:
+      path: ""
+      method: GET
+      docs: >-
+        Lists all actors associated with the token used. Can be filtered by
+        tags in the query string.
+      request:
+        name: GetActorsRequest
+        query-parameters:
+          tags_json: optional<string>
+          include_destroyed: optional<boolean>
+          cursor: optional<uuid>
+      response: ListActorsResponse
+
+    create:
+      path: ""
+      method: POST
+      docs: Create a new dynamic actor.
+      request:
+        body: CreateActorRequest
+      response: CreateActorResponse
+
+    destroy:
+      path: /{actor_id}
+      method: DELETE
+      docs: Destroy a dynamic actor.
+      path-parameters:
+        actor_id:
+          docs: The id of the actor to destroy
+          type: uuid
+      request:
+        name: DestroyActorRequest
+        query-parameters:
+          override_kill_timeout:
+            docs: >-
+              The duration to wait for in milliseconds before killing the actor.
+              This should be used to override the default kill timeout if a faster
+              time is needed, say for ignoring a graceful shutdown.
+            type: optional<long>
+      response: DestroyActorResponse
+
+types:
+  GetActorResponse:
+    properties:
+      actor: commons.Actor
+
+  CreateActorRequest:
+    properties:
+      datacenter: uuid
+      tags: unknown
+      runtime: CreateActorRuntimeRequest
+      network: CreateActorNetworkRequest
+      resources: commons.Resources
+      lifecycle: optional<commons.Lifecycle>
+
+  CreateActorRuntimeRequest:
+    properties:
+      build: uuid
+      arguments: optional<list<string>>
+      environment: optional<map<string, string>>
+
+  CreateActorNetworkRequest:
+    properties:
+      mode: optional<commons.NetworkMode>
+      ports: map<string, CreateActorPortRequest>
+
+  CreateActorPortRequest:
+    properties:
+      protocol: commons.PortProtocol
+      internal_port: optional<integer>
+      routing: optional<commons.PortRouting>
+
+  CreateActorResponse:
+    properties:
+      actor:
+        docs: The actor that was created
+        type: commons.Actor
+
+  DestroyActorResponse:
+    properties: {}
+
+  ListActorsResponse:
+    properties:
+      actors:
+        docs: A list of actors for the game associated with the token.
+        type: list<commons.Actor>

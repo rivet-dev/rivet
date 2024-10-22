@@ -1,3 +1,4 @@
+export * as actor from "./actor";
 export * as admin from "./admin";
 export * as cloud from "./cloud";
 export * as group from "./group";

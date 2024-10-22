@@ -1,11 +1,10 @@
-use std::{collections::HashMap, net::IpAddr};
+use std::collections::HashMap;
 
 use build::types::{BuildCompression, BuildKind};
 use chirp_workflow::prelude::*;
 use cluster::types::BuildDeliveryMethod;
 use futures_util::FutureExt;
 use pegboard::protocol as pp;
-use rivet_operation::prelude::proto::backend;
 use serde_json::json;
 use util::serde::AsHashableExt;
 

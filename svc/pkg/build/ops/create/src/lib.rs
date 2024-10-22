@@ -46,7 +46,7 @@ async fn handle(
 
 			let (image_tag, upload_id) = unwrap!(
 				default_build_row,
-				format!("default build missing: {build_kind}")
+				"default build missing: {build_kind}",
 			);
 
 			(image_tag, upload_id, Vec::new())

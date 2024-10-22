@@ -13,6 +13,7 @@ members = [
 "svc/api/kv/",
 "svc/api/traefik-provider/",
 "svc/api/identity/",
+"svc/api/actor/",
 "svc/api/auth/",
 "svc/api/group/",
 "svc/api/cf-verification/",
