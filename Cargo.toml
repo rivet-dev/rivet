@@ -27,7 +27,7 @@ members = [
 "svc/pkg/token/ops/revoke/",
 "svc/pkg/token/ops/get/",
 "svc/pkg/token/ops/create/",
-"svc/pkg/game-node/",
+"svc/pkg/server-spec/",
 "svc/pkg/nsfw/util/",
 "svc/pkg/nsfw/ops/image-score/",
 "svc/pkg/cluster/",

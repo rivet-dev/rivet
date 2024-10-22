@@ -87,7 +87,7 @@ async fn fetch_ip_info_io(
 			let status = ip_info_res.status();
 			let body = ip_info_res.text().await?;
 
-			bail!(format!("ip info error ({status}): {body}"));
+			bail!("ip info error ({status}): {body}");
 		};
 
 		let ip_info_raw = ip_info_res.json::<serde_json::Value>().await?;

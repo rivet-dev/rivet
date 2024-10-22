@@ -23,17 +23,16 @@ pub struct Output {
 pub struct Client {
 	pub client_id: Uuid,
 	pub usage: Stats,
-	pub limits: Stats,
 }
 
 #[derive(Debug)]
 pub struct Stats {
 	/// Mhz
-	pub cpu: u64,
+	pub cpu: u32,
 	/// MiB
-	pub memory: u64,
-	/// MB
-	pub disk: u64,
+	pub memory: u32,
+	/// MiB
+	pub disk: u32,
 }
 
 #[operation]
@@ -68,11 +67,6 @@ pub async fn pegboard_client_usage_get(ctx: &OperationCtx, input: &Input) -> Glo
 				cpu: client.total_cpu.try_into()?,
 				memory: client.total_memory.try_into()?,
 				disk: 0, // TODO:
-			},
-			limits: Stats {
-				cpu: 0,    // TODO:
-				memory: 0, // TODO:
-				disk: 0,   // TODO:
 			},
 		})
 	})

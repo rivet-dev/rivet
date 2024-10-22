@@ -344,7 +344,9 @@ struct GetVlanIpInput {
 async fn get_vlan_ip(ctx: &ActivityCtx, input: &GetVlanIpInput) -> GlobalResult<Ipv4Addr> {
 	// Find next available vlan index
 	let mut vlan_addr_range = match input.pool_type {
-		PoolType::Job | PoolType::Pegboard | PoolType::PegboardIsolate => util::net::job::vlan_addr_range(),
+		PoolType::Job | PoolType::Pegboard | PoolType::PegboardIsolate => {
+			util::net::job::vlan_addr_range()
+		}
 		PoolType::Gg => util::net::gg::vlan_addr_range(),
 		PoolType::Ats => util::net::ats::vlan_addr_range(),
 	};

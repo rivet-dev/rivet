@@ -25,7 +25,7 @@ pub fn configure() -> GlobalResult<String> {
 		)
 		.replace(
 			"__RESERVE_MEMORY__",
-			&game_node::NOMAD_RESERVE_MEMORY.to_string(),
+			&server_spec::NOMAD_RESERVE_MEMORY.to_string(),
 		)
 		.replace(
 			"__GG_VLAN_SUBNET__",

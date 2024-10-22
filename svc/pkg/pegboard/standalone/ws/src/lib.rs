@@ -182,7 +182,7 @@ async fn handle_connection_inner(
 					.await?;
 			}
 			Message::Close(_) => {
-				bail!(format!("socket closed {client_id}"));
+				bail!("socket closed {client_id}");
 			}
 			_ => bail!("unexpected initial message: {msg:?}"),
 		}
@@ -205,7 +205,7 @@ async fn handle_connection_inner(
 				conn.tx.lock().await.send(Message::Pong(Vec::new())).await?;
 			}
 			Message::Close(_) => {
-				bail!(format!("socket closed {client_id}"));
+				bail!("socket closed {client_id}");
 			}
 			msg => {
 				tracing::warn!(?client_id, ?msg, "unexpected message");
@@ -213,7 +213,7 @@ async fn handle_connection_inner(
 		}
 	}
 
-	bail!(format!("stream closed {client_id}"));
+	bail!("stream closed {client_id}");
 
 	// Only way I could figure out to help the complier infer type
 	#[allow(unreachable_code)]

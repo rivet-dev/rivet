@@ -199,7 +199,7 @@ async fn acme_account() -> GlobalResult<Account<MemoryPersist>> {
 	let url = match util::env::var("TLS_ACME_DIRECTORY")?.as_str() {
 		"lets_encrypt" => DirectoryUrl::LetsEncrypt,
 		"lets_encrypt_staging" => DirectoryUrl::LetsEncryptStaging,
-		x => bail!(format!("unknown ACME directory: {x}")),
+		x => bail!("unknown ACME directory: {x}"),
 	};
 
 	tracing::info!("fetching account from directory {:?}", url);

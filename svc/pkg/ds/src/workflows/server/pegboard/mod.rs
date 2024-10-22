@@ -74,7 +74,7 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 				// TODO: Return error from wf
 				bail!("failed to allocate actor");
 			}
-			state => bail!(format!("unexpected actor state: {state:?}")),
+			state => bail!("unexpected actor state: {state:?}"),
 		},
 		Init::Destroy(sig) => {
 			tracing::info!("destroying before actor start");
@@ -126,7 +126,7 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 								override_kill_timeout_ms: None,
 							}));
 						}
-						state => bail!(format!("unexpected actor state: {state:?}")),
+						state => bail!("unexpected actor state: {state:?}"),
 					},
 					Main::Drain(sig) => {
 						let drain_timeout = sig.drain_timeout.saturating_sub(DRAIN_PADDING_MS);

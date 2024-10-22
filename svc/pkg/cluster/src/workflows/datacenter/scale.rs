@@ -213,7 +213,7 @@ async fn inner(
 	ctx: ActivityCtx,
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 	dc: Datacenter,
-	memory_by_server: HashMap<Uuid, u64>,
+	memory_by_server: HashMap<Uuid, u32>,
 ) -> GlobalResult<Vec<Action>> {
 	let servers = sql_fetch_all!(
 		[ctx, ServerRow, @tx tx]
@@ -244,11 +244,8 @@ async fn inner(
 		.map(TryInto::try_into)
 		.collect::<GlobalResult<Vec<Server>>>()?;
 
-	// Sort job servers by allocated memory
+	// Sort servers by memory usage
 	servers.sort_by_key(|server| memory_by_server.get(&server.server_id));
-
-	// TODO: RVT-3732 Sort gg and ats servers by cpu usage
-	// servers.sort_by_key
 
 	let mut actions = Vec::new();
 

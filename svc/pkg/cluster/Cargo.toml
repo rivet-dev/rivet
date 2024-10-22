@@ -23,13 +23,14 @@ rivet-operation = { path = "../../../lib/operation/core" }
 rivet-runtime = { path = "../../../lib/runtime" }
 s3-util = { path = "../../../lib/s3-util" }
 serde = { version = "1.0.198", features = ["derive"] }
+serde_urlencoded = "0.7.0"
 ssh2 = "0.9.4"
 strum = { version = "0.24", features = ["derive"] }
 trust-dns-resolver = { version = "0.23.2", features = ["dns-over-native-tls"] }
 
 ip-info = { path = "../ip/ops/info" }
 linode = { path = "../linode" }
-game-node = { path = "../game-node" }
+server-spec = { path = "../server-spec" }
 pegboard = { path = "../pegboard" }
 token-create = { path = "../token/ops/create" }
 

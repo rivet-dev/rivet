@@ -109,7 +109,7 @@ impl Client {
 				}
 
 				tracing::info!(status=?res.status(), "api request failed");
-				bail!(res.json::<ApiErrorResponse>().await?.to_string());
+				bail!("{}", res.json::<ApiErrorResponse>().await?);
 			}
 
 			break Ok(res);

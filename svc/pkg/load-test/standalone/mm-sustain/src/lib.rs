@@ -243,7 +243,7 @@ async fn run_lobby_lifecycle(
 	.await?;
 
 	if let Err(err) = res {
-		bail!(format!("{err:?}"));
+		bail!("{err:?}");
 	}
 
 	// Test HTTP connectivity

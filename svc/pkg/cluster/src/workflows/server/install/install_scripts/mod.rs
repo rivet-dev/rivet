@@ -123,7 +123,9 @@ pub async fn gen_initialize(pool_type: PoolType, datacenter_id: Uuid) -> GlobalR
 			script.push(components::traffic_server::configure().await?);
 		}
 		PoolType::Pegboard => {
-			script.push(components::pegboard::configure(pegboard::protocol::ClientFlavor::Container)?);
+			script.push(components::pegboard::configure(
+				pegboard::protocol::ClientFlavor::Container,
+			)?);
 
 			prometheus_targets.insert(
 				"pegboard".into(),
@@ -134,7 +136,9 @@ pub async fn gen_initialize(pool_type: PoolType, datacenter_id: Uuid) -> GlobalR
 			);
 		}
 		PoolType::PegboardIsolate => {
-			script.push(components::pegboard::configure(pegboard::protocol::ClientFlavor::Isolate)?);
+			script.push(components::pegboard::configure(
+				pegboard::protocol::ClientFlavor::Isolate,
+			)?);
 
 			prometheus_targets.insert(
 				"pegboard".into(),

@@ -1,5 +1,5 @@
 use chirp_workflow::prelude::*;
-use game_node::types::GameNodeConfig;
+use server_spec::types::ServerSpec;
 
 use crate::types::Tier;
 
@@ -71,7 +71,7 @@ pub async fn tier_list(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output
 					.find(|it| it.hardware_id == hardware),
 				"datacenter hardware stats not found"
 			);
-			let config = GameNodeConfig::from_linode(instance_type);
+			let config = ServerSpec::from_linode(instance_type);
 
 			Ok(Datacenter {
 				datacenter_id,
@@ -93,7 +93,7 @@ pub async fn tier_list(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output
 
 fn generate_tier(
 	pegboard: bool,
-	c: &GameNodeConfig,
+	c: &ServerSpec,
 	name: &str,
 	numerator: u32,
 	denominator: u32,

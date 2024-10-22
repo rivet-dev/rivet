@@ -152,9 +152,9 @@ async fn allocate_actor(
 		} as i32,
 		// NOTE: This should technically be reading from a tier config but for now its constant because linode
 		// provides the same CPU per core for all instance types
-		game_node::CPU_PER_CORE as i32,
+		server_spec::CPU_PER_CORE as i32,
 		// Subtract reserve memory from client memory
-		(game_node::RESERVE_LB_MEMORY + game_node::PEGBOARD_RESERVE_MEMORY) as i32, // $10
+		(server_spec::RESERVE_LB_MEMORY + server_spec::PEGBOARD_RESERVE_MEMORY) as i32, // $10
 	)
 	.await?
 	.map(|(client_id,)| client_id);

@@ -140,7 +140,7 @@ impl ToGlobalError for reqwest::Response {
 			let status = self.status();
 			let body = self.text().await?;
 
-			bail!(format!("{url} ({status}):\n{body}"));
+			bail!("{url} ({status}):\n{body}");
 		}
 	}
 }

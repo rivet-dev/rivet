@@ -62,10 +62,9 @@ async fn config() -> GlobalResult<Vec<(String, String)>> {
 	));
 
 	// Remap & S3
-	let mut remap = String::new();
 	let output = s3::gen_remap().await?;
 	config_files.extend(output.config_files);
-	config_files.push(("remap.config".to_string(), remap));
+	config_files.push(("remap.config".to_string(), output.append_remap));
 
 	Ok(config_files)
 }

@@ -9,5 +9,5 @@ license = "Apache-2.0"
 chirp-workflow = { path = "../../../lib/chirp-workflow/core" }
 
 cluster = { path = "../cluster" }
-game-node = { path = "../game-node" }
+server-spec = { path = "../server-spec" }
 linode = { path = "../linode" }
