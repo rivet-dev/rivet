@@ -34,6 +34,7 @@ impl ToClient {
 
 #[signal("pegboard_forward_to_server")]
 #[serde(rename_all = "snake_case")]
+#[derive(Debug)]
 pub enum ToServer {
 	Init {
 		last_command_idx: i64,

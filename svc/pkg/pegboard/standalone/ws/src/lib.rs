@@ -184,7 +184,7 @@ async fn handle_connection_inner(
 			Message::Close(_) => {
 				bail!("socket closed {client_id}");
 			}
-			_ => bail!("unexpected initial message: {msg:?}"),
+			msg => bail!("unexpected initial message: {msg:?}"),
 		}
 	}
 
@@ -207,9 +207,7 @@ async fn handle_connection_inner(
 			Message::Close(_) => {
 				bail!("socket closed {client_id}");
 			}
-			msg => {
-				tracing::warn!(?client_id, ?msg, "unexpected message");
-			}
+			msg => tracing::warn!(?client_id, ?msg, "unexpected message"),
 		}
 	}
 

@@ -157,9 +157,10 @@ pub async fn up(services: &[SqlService]) -> Result<()> {
 	tokio::try_join!(
 		async {
 			if !crdb_pre_queries.is_empty() {
+				let mut conn = crdb.acquire().await.context("can't acquire crdb")?;
+
 				for query in crdb_pre_queries {
-					let mut conn = crdb.acquire().await?;
-					conn.execute(query.as_str()).await?;
+					conn.execute(query.as_str()).await.with_context(|| format!("failed executing crdb pre-migration:\n{query}"))?;
 				}
 			}
 			Ok(())
@@ -167,8 +168,9 @@ pub async fn up(services: &[SqlService]) -> Result<()> {
 		async {
 			if !clickhouse_pre_queries.is_empty() {
 				let clickhouse = clickhouse.as_ref().context("missing clickhouse")?;
+				
 				for query in clickhouse_pre_queries {
-					clickhouse.query(&query).execute().await?;
+					clickhouse.query(&query).execute().await.with_context(|| format!("failed executing clickhouse pre-migration:\n{query}"))?;
 				}
 			}
 
