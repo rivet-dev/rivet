@@ -30,12 +30,12 @@ export class Logs {
     constructor(protected readonly _options: Logs.Options = {}) {}
 
     /**
-     * Returns the logs for a given server.
+     * Returns the logs for a given actor.
      *
      * @param {string} gameId
      * @param {string} environmentId
-     * @param {string} serverId
-     * @param {Rivet.actor.GetServerLogsRequest} request
+     * @param {string} actorId
+     * @param {Rivet.actor.GetActorLogsRequest} request
      * @param {Logs.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @throws {@link Rivet.InternalError}
@@ -54,10 +54,10 @@ export class Logs {
     public async get(
         gameId: string,
         environmentId: string,
-        serverId: string,
-        request: Rivet.actor.GetServerLogsRequest,
+        actorId: string,
+        request: Rivet.actor.GetActorLogsRequest,
         requestOptions?: Logs.RequestOptions
-    ): Promise<Rivet.actor.GetServerLogsResponse> {
+    ): Promise<Rivet.actor.GetActorLogsResponse> {
         const { stream, watchIndex } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
         _queryParams["stream"] = stream;
@@ -70,7 +70,7 @@ export class Logs {
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
                 `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(
                     environmentId
-                )}/servers/${encodeURIComponent(serverId)}/logs`
+                )}/actors/${encodeURIComponent(actorId)}/logs`
             ),
             method: "GET",
             headers: {
@@ -84,7 +84,7 @@ export class Logs {
             abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
-            return serializers.actor.GetServerLogsResponse.parseOrThrow(_response.body, {
+            return serializers.actor.GetActorLogsResponse.parseOrThrow(_response.body, {
                 unrecognizedObjectKeys: "passthrough",
                 allowUnrecognizedUnionMembers: true,
                 allowUnrecognizedEnumValues: true,

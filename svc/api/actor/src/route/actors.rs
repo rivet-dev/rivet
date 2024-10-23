@@ -31,8 +31,8 @@ pub async fn get(
 	// Validate token can access server
 	ensure_with!(server.env_id == env_id, SERVERS_SERVER_NOT_FOUND);
 
-	Ok(models::ServersGetServerResponse {
-		server: Box::new(server.clone().api_try_into()?),
+	Ok(models::ActorGetActorResponse {
+		actor: Box::new(server.clone().api_try_into()?),
 	})
 }
 
@@ -111,19 +111,19 @@ pub async fn create(
 					internal_port: p.internal_port,
 					routing: if let Some(routing) = p.routing {
 						match *routing {
-							models::ServersPortRouting {
+							models::ActorPortRouting {
 								game_guard: Some(_),
 								host: None,
 							} => ds::types::Routing::GameGuard {
 								protocol: p.protocol.api_into(),
 							},
-							models::ServersPortRouting {
+							models::ActorPortRouting {
 								game_guard: None,
 								host: Some(_),
 							} => ds::types::Routing::Host {
 								protocol: p.protocol.api_try_into()?,
 							},
-							models::ServersPortRouting { .. } => {
+							models::ActorPortRouting { .. } => {
 								bail_with!(SERVERS_MUST_SPECIFY_ROUTING_TYPE)
 							}
 						}
@@ -222,7 +222,7 @@ pub async fn list_actors(
 	env_id: Uuid,
 	_watch_index: WatchIndexQuery,
 	query: ListQuery,
-) -> GlobalResult<models::ActorListActorResponse> {
+) -> GlobalResult<models::ActorListActorsResponse> {
 	ctx.auth()
 		.check_game(ctx.op_ctx(), game_id, env_id, true)
 		.await?;
@@ -251,5 +251,5 @@ pub async fn list_actors(
 		.map(ApiTryInto::api_try_into)
 		.collect::<GlobalResult<Vec<_>>>()?;
 
-	Ok(models::ActorListActorResponse { actors: servers })
+	Ok(models::ActorListActorsResponse { actors: servers })
 }

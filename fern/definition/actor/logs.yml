@@ -5,30 +5,30 @@ imports:
 
 service:
   auth: true
-  base-path: /games/{game_id}/environments/{environment_id}/servers
+  base-path: /games/{game_id}/environments/{environment_id}/actors
   path-parameters:
     game_id: uuid
     environment_id: uuid
   endpoints:
     get:
-      path: /{server_id}/logs
+      path: /{actor_id}/logs
       method: GET
       docs: >-
-        Returns the logs for a given server.
+        Returns the logs for a given actor.
       path-parameters:
-        server_id:
+        actor_id:
           type: uuid
       request:
-        name: GetServerLogsRequest
+        name: GetActorLogsRequest
         query-parameters:
           stream: LogStream
           watch_index:
             docs: A query parameter denoting the requests watch index.
             type: optional<string>
-      response: GetServerLogsResponse
+      response: GetActorLogsResponse
 
 types:
-  GetServerLogsResponse:
+  GetActorLogsResponse:
     properties:
       lines:
         docs: Sorted old to new.

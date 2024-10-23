@@ -35,7 +35,7 @@ define_router! {
 				},
 			),
 			POST: actors::create(
-				body: models::ActorsCreateActorRequest,
+				body: models::ActorCreateActorRequest,
 				rate_limit: {
 					buckets: [
 						{ count: 1_000, bucket: duration::minutes(1) },
@@ -44,7 +44,27 @@ define_router! {
 			),
 		},
 
-		"games" / Uuid / "environments" / Uuid / "actor" / Uuid: {
+		// MARK: Servers (LEGACY)
+		"games" / Uuid / "environments" / Uuid / "servers": {
+			GET: actors::list_actors(
+				query: actors::ListQuery,
+				rate_limit: {
+					buckets: [
+						{ count: 60_000, bucket: duration::minutes(1) },
+					],
+				},
+			),
+			POST: actors::create(
+				body: models::ActorCreateActorRequest,
+				rate_limit: {
+					buckets: [
+						{ count: 1_000, bucket: duration::minutes(1) },
+					],
+				},
+			),
+		},
+
+		"games" / Uuid / "environments" / Uuid / "servers" / Uuid: {
 			GET: actors::get(
 				rate_limit: {
 					buckets: [
@@ -62,11 +82,16 @@ define_router! {
 				},
 			),
 		},
+		"games" / Uuid / "environments" / Uuid / "servers" / Uuid / "logs" : {
+			GET: logs::get_logs(
+				query: logs::GetActorLogsQuery,
+			),
+		},
 
 		// MARK: Logs
 		"games" / Uuid / "environments" / Uuid / "actor" / Uuid / "logs" : {
 			GET: logs::get_logs(
-				query: logs::GetServerLogsQuery,
+				query: logs::GetActorLogsQuery,
 			),
 		},
 
@@ -93,11 +118,11 @@ define_router! {
 		},
 
 		"games" / Uuid / "environments" / Uuid / "builds" / Uuid / "tags": {
-			PATCH: builds::patch_tags(body: models::ServersPatchBuildTagsRequest),
+			PATCH: builds::patch_tags(body: models::ActorPatchBuildTagsRequest),
 		},
 
 		"games" / Uuid / "environments" / Uuid / "builds" / "prepare": {
-			POST: builds::create_build(body: models::ServersCreateBuildRequest),
+			POST: builds::create_build(body: models::ActorCreateBuildRequest),
 		},
 
 		"games" / Uuid / "environments" / Uuid / "builds" / Uuid / "complete": {

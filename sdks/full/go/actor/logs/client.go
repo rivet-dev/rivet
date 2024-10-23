@@ -35,13 +35,13 @@ func NewClient(opts ...core.ClientOption) *Client {
 	}
 }
 
-// Returns the logs for a given server.
-func (c *Client) Get(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, serverId uuid.UUID, request *actor.GetServerLogsRequest) (*actor.GetServerLogsResponse, error) {
+// Returns the logs for a given actor.
+func (c *Client) Get(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, actorId uuid.UUID, request *actor.GetActorLogsRequest) (*actor.GetActorLogsResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/environments/%v/servers/%v/logs", gameId, environmentId, serverId)
+	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/environments/%v/actors/%v/logs", gameId, environmentId, actorId)
 
 	queryParams := make(url.Values)
 	queryParams.Add("stream", fmt.Sprintf("%v", request.Stream))
@@ -106,7 +106,7 @@ func (c *Client) Get(ctx context.Context, gameId uuid.UUID, environmentId uuid.U
 		return apiError
 	}
 
-	var response *actor.GetServerLogsResponse
+	var response *actor.GetActorLogsResponse
 	if err := c.caller.Call(
 		ctx,
 		&core.CallParams{

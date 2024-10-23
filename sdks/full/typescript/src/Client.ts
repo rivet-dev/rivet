@@ -11,7 +11,6 @@ import { Group } from "./api/resources/group/client/Client";
 import { Identity } from "./api/resources/identity/client/Client";
 import { Kv } from "./api/resources/kv/client/Client";
 import { Provision } from "./api/resources/provision/client/Client";
-import { Servers } from "./api/resources/servers/client/Client";
 import { Auth } from "./api/resources/auth/client/Client";
 import { Games } from "./api/resources/games/client/Client";
 import { Job } from "./api/resources/job/client/Client";
@@ -78,12 +77,6 @@ export class RivetClient {
 
     public get provision(): Provision {
         return (this._provision ??= new Provision(this._options));
-    }
-
-    protected _servers: Servers | undefined;
-
-    public get servers(): Servers {
-        return (this._servers ??= new Servers(this._options));
     }
 
     protected _auth: Auth | undefined;

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euf -o pipefail
 
+# FERN_NO_VERSION_REDIRECTION=true FERN_DISABLE_TELEMETRY=true fern generate --local --group $FERN_GROUP --log-level debug
+
 # To install fern, first clone the repo and check out the branch
 # $ git clone https://github.com/rivet-gg/fern
 # $ cd fern
@@ -11,8 +13,11 @@ set -euf -o pipefail
 # $ yarn compile
 # $ yarn dist:cli:dev
 # $ docker image ls | grep fern
-# $ docker image rm <id of the typescript image>
 # $ docker builder prune
+# $ yarn workspace @fern-typescript/sdk-generator-cli run dockerTagVersion:browser 999.999.999
+#
+# If needed:
+# $ yarn workspace @fern-api/openapi-generator run dockerTagVersion 999.999.999
 #
 # Finally, run this with the path to the fern repo, say:
 # $ FERN_REPO_PATH=~/fern ./oss/scripts/fern/gen.sh
@@ -32,7 +37,7 @@ fi
 
 # Generate Fern libraries
 echo "Using Fern from $FERN_REPO_PATH"
-FERN_NO_VERSION_REDIRECTION=true node "$FERN_REPO_PATH/packages/cli/cli/dist/dev/cli.cjs" generate --local --group $FERN_GROUP --log-level debug
+FERN_NO_VERSION_REDIRECTION=true FERN_DISABLE_TELEMETRY=true node "$FERN_REPO_PATH/packages/cli/cli/dist/dev/cli.cjs" generate --local --group $FERN_GROUP --log-level debug
 
 # Add missing deps
 (cd sdks/$FERN_GROUP/typescript && nix-shell -p jq --run 'jq ".devDependencies[\"@types/node-fetch\"] = \"2.6.11\"" package.json > package.json.tmp && mv package.json.tmp package.json')

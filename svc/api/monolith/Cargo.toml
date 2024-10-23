@@ -21,6 +21,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 ] }
 url = "2.2.2"
 
+api-actor = { path = "../actor" }
 api-admin = { path = "../admin" }
 api-auth = { path = "../auth" }
 api-cf-verification = { path = "../cf-verification" }
@@ -32,5 +33,4 @@ api-job = { path = "../job" }
 api-kv = { path = "../kv" }
 api-matchmaker = { path = "../matchmaker" }
 api-portal = { path = "../portal" }
-api-servers = { path = "../servers" }
 api-status = { path = "../status" }

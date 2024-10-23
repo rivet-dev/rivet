@@ -16,8 +16,12 @@ import * as Rivet from "../../../../../../index";
  *         },
  *         maxPlayers: 1,
  *         captcha: {
- *             hcaptcha: {},
- *             turnstile: {}
+ *             hcaptcha: {
+ *                 clientResponse: "string"
+ *             },
+ *             turnstile: {
+ *                 clientResponse: "string"
+ *             }
  *         },
  *         verificationData: {
  *             "key": "value"

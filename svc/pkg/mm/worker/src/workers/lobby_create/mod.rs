@@ -600,7 +600,7 @@ async fn create_docker_job(
 	let lobby_group_id = unwrap_ref!(lobby_group_meta.lobby_group_id).as_uuid();
 	let region_id = unwrap_ref!(region.region_id).as_uuid();
 
-	let job_runner_binary_url = resolve_job_runner_binary_url(ctx, region).await?;
+	let job_runner_binary_url = std::env::var("JOB_RUNNER_BINARY_URL")?;
 
 	let resolve_perf = ctx.perf().start("resolve-image-artifact-url").await;
 	let build_id = unwrap_ref!(runtime.build_id).as_uuid();
@@ -754,93 +754,6 @@ async fn create_docker_job(
 	.await?;
 
 	Ok(())
-}
-
-/// Generates a presigned URL for the job runner binary.
-#[tracing::instrument]
-async fn resolve_job_runner_binary_url(
-	ctx: &OperationContext<mm::msg::lobby_create::Message>,
-	region: &backend::region::Region,
-) -> GlobalResult<String> {
-	let file_name = std::env::var("JOB_RUNNER_BINARY_KEY")?;
-
-	// Build URL
-	let mm_lobby_delivery_method = unwrap!(
-		backend::cluster::BuildDeliveryMethod::from_i32(region.build_delivery_method),
-		"invalid datacenter build delivery method"
-	);
-	match mm_lobby_delivery_method {
-		backend::cluster::BuildDeliveryMethod::S3Direct => {
-			tracing::info!("job runner using s3 direct delivery");
-
-			// Build client
-			let s3_client = s3_util::Client::from_env_opt(
-				"bucket-infra-artifacts",
-				s3_util::EndpointKind::External,
-			)
-			.await?;
-			let presigned_req = s3_client
-				.get_object()
-				.bucket(s3_client.bucket())
-				.key(file_name)
-				.presigned(
-					s3_util::aws_sdk_s3::presigning::config::PresigningConfig::builder()
-						.expires_in(std::time::Duration::from_secs(15 * 60))
-						.build()?,
-				)
-				.await?;
-
-			let addr = presigned_req.uri().clone();
-
-			let addr_str = addr.to_string();
-			tracing::info!(addr = %addr_str, "resolved job runner presigned request");
-
-			Ok(addr_str)
-		}
-		backend::cluster::BuildDeliveryMethod::TrafficServer => {
-			tracing::info!("job runner using traffic server delivery");
-
-			let region_id = unwrap_ref!(region.region_id).as_uuid();
-
-			// Choose a random ATS node to pull from
-			let (ats_vlan_ip,) = sql_fetch_one!(
-				[ctx, (IpAddr,)]
-				"
-				WITH sel AS (
-					-- Select candidate vlan ips
-					SELECT
-						vlan_ip
-					FROM db_cluster.servers
-					WHERE
-						datacenter_id = $1 AND
-						pool_type = $2 AND
-						vlan_ip IS NOT NULL AND
-						install_complete_ts IS NOT NULL AND
-						drain_ts IS NULL AND
-						cloud_destroy_ts IS NULL	
-				)
-				SELECT vlan_ip
-				FROM sel
-				ORDER BY random()
-				LIMIT 1
-				",
-				// NOTE: region_id is just the old name for datacenter_id
-				&region_id,
-				cluster::types::PoolType::Ats as i32,
-			)
-			.await?;
-
-			let addr = format!(
-				"http://{vlan_ip}:8080/s3-cache/{namespace}-bucket-infra-artifacts/{file_name}",
-				vlan_ip = ats_vlan_ip,
-				namespace = util::env::namespace(),
-			);
-
-			tracing::info!(%addr, "resolved artifact s3 url");
-
-			Ok(addr)
-		}
-	}
 }
 
 #[tracing::instrument]

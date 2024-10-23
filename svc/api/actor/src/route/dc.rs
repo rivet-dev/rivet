@@ -10,7 +10,7 @@ pub async fn list(
 	game_id: Uuid,
 	env_id: Uuid,
 	_watch_index: WatchIndexQuery,
-) -> GlobalResult<models::ServersListDatacentersResponse> {
+) -> GlobalResult<models::ActorListDatacentersResponse> {
 	ctx.auth()
 		.check_game(ctx.op_ctx(), game_id, env_id, true)
 		.await?;
@@ -41,12 +41,12 @@ pub async fn list(
 	let datacenters = dcs_res
 		.datacenters
 		.into_iter()
-		.map(|dc| models::ServersDatacenter {
+		.map(|dc| models::ActorDatacenter {
 			id: dc.datacenter_id,
 			slug: dc.name_id,
 			name: dc.display_name,
 		})
 		.collect::<Vec<_>>();
 
-	Ok(models::ServersListDatacentersResponse { datacenters })
+	Ok(models::ActorListDatacentersResponse { datacenters })
 }

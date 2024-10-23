@@ -9,13 +9,13 @@ import (
 	core "sdk/core"
 )
 
-type GetServerLogsRequest struct {
+type GetActorLogsRequest struct {
 	Stream LogStream `json:"-"`
 	// A query parameter denoting the requests watch index.
 	WatchIndex *string `json:"-"`
 }
 
-type GetServerLogsResponse struct {
+type GetActorLogsResponse struct {
 	// Sorted old to new.
 	Lines []string `json:"lines,omitempty"`
 	// Sorted old to new.
@@ -25,18 +25,18 @@ type GetServerLogsResponse struct {
 	_rawJSON json.RawMessage
 }
 
-func (g *GetServerLogsResponse) UnmarshalJSON(data []byte) error {
-	type unmarshaler GetServerLogsResponse
+func (g *GetActorLogsResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler GetActorLogsResponse
 	var value unmarshaler
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
-	*g = GetServerLogsResponse(value)
+	*g = GetActorLogsResponse(value)
 	g._rawJSON = json.RawMessage(data)
 	return nil
 }
 
-func (g *GetServerLogsResponse) String() string {
+func (g *GetActorLogsResponse) String() string {
 	if len(g._rawJSON) > 0 {
 		if value, err := core.StringifyJSON(g._rawJSON); err == nil {
 			return value

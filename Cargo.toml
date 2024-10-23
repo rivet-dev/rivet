@@ -23,7 +23,7 @@ members = [
 "svc/api/cloud/",
 "svc/api/job/",
 "svc/api/games/",
-"svc/api/servers/",
+"svc/api/actor/",
 "svc/pkg/token/ops/exchange/",
 "svc/pkg/token/ops/revoke/",
 "svc/pkg/token/ops/get/",

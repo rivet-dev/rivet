@@ -50,11 +50,59 @@ export class Versions {
      *             scripts: {
      *                 "string": "string"
      *             },
-     *             engine: {},
-     *             cdn: {},
-     *             matchmaker: {},
+     *             engine: {
+     *                 unity: {},
+     *                 unreal: {
+     *                     gameModule: "string"
+     *                 },
+     *                 godot: {},
+     *                 html5: {},
+     *                 custom: {}
+     *             },
+     *             cdn: {
+     *                 buildCommand: "string",
+     *                 buildOutput: "string",
+     *                 buildEnv: {},
+     *                 siteId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *                 routes: []
+     *             },
+     *             matchmaker: {
+     *                 gameModes: {},
+     *                 captcha: {
+     *                     requestsBeforeReverify: 1,
+     *                     verificationTtl: 1000000,
+     *                     hcaptcha: undefined,
+     *                     turnstile: undefined
+     *                 },
+     *                 devHostname: "string",
+     *                 regions: {},
+     *                 maxPlayers: 1,
+     *                 maxPlayersDirect: 1,
+     *                 maxPlayersParty: 1,
+     *                 docker: {
+     *                     dockerfile: undefined,
+     *                     buildArgs: undefined,
+     *                     image: undefined,
+     *                     imageId: undefined,
+     *                     args: undefined,
+     *                     env: undefined,
+     *                     networkMode: undefined,
+     *                     ports: undefined
+     *                 },
+     *                 tier: "string",
+     *                 idleLobbies: {
+     *                     min: 1,
+     *                     max: 1
+     *                 },
+     *                 lobbyGroups: []
+     *             },
      *             kv: {},
-     *             identity: {}
+     *             identity: {
+     *                 displayNames: [],
+     *                 avatars: [],
+     *                 customDisplayNames: [],
+     *                 customAvatars: []
+     *             }
      *         }
      *     })
      */
@@ -327,11 +375,59 @@ export class Versions {
      *             scripts: {
      *                 "string": "string"
      *             },
-     *             engine: {},
-     *             cdn: {},
-     *             matchmaker: {},
+     *             engine: {
+     *                 unity: {},
+     *                 unreal: {
+     *                     gameModule: "string"
+     *                 },
+     *                 godot: {},
+     *                 html5: {},
+     *                 custom: {}
+     *             },
+     *             cdn: {
+     *                 buildCommand: "string",
+     *                 buildOutput: "string",
+     *                 buildEnv: {},
+     *                 siteId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *                 routes: []
+     *             },
+     *             matchmaker: {
+     *                 gameModes: {},
+     *                 captcha: {
+     *                     requestsBeforeReverify: 1,
+     *                     verificationTtl: 1000000,
+     *                     hcaptcha: undefined,
+     *                     turnstile: undefined
+     *                 },
+     *                 devHostname: "string",
+     *                 regions: {},
+     *                 maxPlayers: 1,
+     *                 maxPlayersDirect: 1,
+     *                 maxPlayersParty: 1,
+     *                 docker: {
+     *                     dockerfile: undefined,
+     *                     buildArgs: undefined,
+     *                     image: undefined,
+     *                     imageId: undefined,
+     *                     args: undefined,
+     *                     env: undefined,
+     *                     networkMode: undefined,
+     *                     ports: undefined
+     *                 },
+     *                 tier: "string",
+     *                 idleLobbies: {
+     *                     min: 1,
+     *                     max: 1
+     *                 },
+     *                 lobbyGroups: []
+     *             },
      *             kv: {},
-     *             identity: {}
+     *             identity: {
+     *                 displayNames: [],
+     *                 avatars: [],
+     *                 customDisplayNames: [],
+     *                 customAvatars: []
+     *             }
      *         }
      *     })
      */

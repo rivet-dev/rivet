@@ -740,7 +740,12 @@ export class Kv {
      * @example
      *     await client.kv.putBatch({
      *         namespaceId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
-     *         entries: [{}]
+     *         entries: [{
+     *                 key: "string",
+     *                 value: {
+     *                     "key": "value"
+     *                 }
+     *             }]
      *     })
      */
     public async putBatch(request: Rivet.kv.PutBatchRequest, requestOptions?: Kv.RequestOptions): Promise<void> {

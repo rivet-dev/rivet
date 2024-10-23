@@ -52,6 +52,8 @@ const (
 	BuildKindDockerImage BuildKind = "docker_image"
 	// OCI-compliant bundle.
 	BuildKindOciBundle BuildKind = "oci_bundle"
+	// A JavaScript file.
+	BuildKindJavascript BuildKind = "javascript"
 )
 
 func NewBuildKindFromString(s string) (BuildKind, error) {
@@ -60,6 +62,8 @@ func NewBuildKindFromString(s string) (BuildKind, error) {
 		return BuildKindDockerImage, nil
 	case "oci_bundle":
 		return BuildKindOciBundle, nil
+	case "javascript":
+		return BuildKindJavascript, nil
 	}
 	var t BuildKind
 	return "", fmt.Errorf("%s is not a valid %T", s, t)

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, convert::TryInto, net::IpAddr};
+use std::{collections::HashMap, convert::TryInto};
 
 use build::types::{BuildCompression, BuildKind};
 use chirp_workflow::prelude::*;
@@ -976,9 +976,7 @@ async fn resolve_artifacts(
 		upload_id,
 	)
 	.await?;
-	let job_runner_binary_url =
-		resolve_job_runner_binary_url(ctx, input.datacenter_id, input.dc_build_delivery_method)
-			.await?;
+	let job_runner_binary_url = std::env::var("JOB_RUNNER_BINARY_URL")?;
 
 	Ok(ResolveArtifactsOutput {
 		image_artifact_url,
@@ -1012,83 +1010,3 @@ join_signal!(Main {
 	Destroy,
 	Drain,
 });
-
-/// Generates a presigned URL for the job runner binary.
-async fn resolve_job_runner_binary_url(
-	ctx: &ActivityCtx,
-	datacenter_id: Uuid,
-	build_delivery_method: BuildDeliveryMethod,
-) -> GlobalResult<String> {
-	let file_name = std::env::var("JOB_RUNNER_BINARY_KEY")?;
-
-	// Build URL
-	match build_delivery_method {
-		BuildDeliveryMethod::S3Direct => {
-			tracing::info!("job runner using s3 direct delivery");
-
-			// Build client
-			let s3_client = s3_util::Client::from_env_opt(
-				"bucket-infra-artifacts",
-				s3_util::EndpointKind::External,
-			)
-			.await?;
-			let presigned_req = s3_client
-				.get_object()
-				.bucket(s3_client.bucket())
-				.key(file_name)
-				.presigned(
-					s3_util::aws_sdk_s3::presigning::config::PresigningConfig::builder()
-						.expires_in(std::time::Duration::from_secs(15 * 60))
-						.build()?,
-				)
-				.await?;
-
-			let addr = presigned_req.uri().clone();
-
-			let addr_str = addr.to_string();
-			tracing::info!(addr = %addr_str, "resolved job runner presigned request");
-
-			Ok(addr_str)
-		}
-		BuildDeliveryMethod::TrafficServer => {
-			tracing::info!("job runner using traffic server delivery");
-
-			// Choose a random ATS node to pull from
-			let (ats_vlan_ip,) = sql_fetch_one!(
-				[ctx, (IpAddr,)]
-				"
-				WITH sel AS (
-					-- Select candidate vlan ips
-					SELECT
-						vlan_ip
-					FROM db_cluster.servers
-					WHERE
-						datacenter_id = $1 AND
-						pool_type = $2 AND
-						vlan_ip IS NOT NULL AND
-						install_complete_ts IS NOT NULL AND
-						drain_ts IS NULL AND
-						cloud_destroy_ts IS NULL	
-				)
-				SELECT vlan_ip
-				FROM sel
-				ORDER BY random()
-				LIMIT 1
-				",
-				&datacenter_id,
-				cluster::types::PoolType::Ats as i32,
-			)
-			.await?;
-
-			let addr = format!(
-				"http://{vlan_ip}:8080/s3-cache/{namespace}-bucket-infra-artifacts/{file_name}",
-				vlan_ip = ats_vlan_ip,
-				namespace = util::env::namespace(),
-			);
-
-			tracing::info!(%addr, "resolved artifact s3 url");
-
-			Ok(addr)
-		}
-	}
-}

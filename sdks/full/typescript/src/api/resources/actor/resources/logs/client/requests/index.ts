@@ -1,1 +1,1 @@
-export { type GetServerLogsRequest } from "./GetServerLogsRequest";
+export { type GetActorLogsRequest } from "./GetActorLogsRequest";

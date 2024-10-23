@@ -2,6 +2,381 @@ components:
   schemas:
     AccountNumber:
       type: integer
+    ActorActor:
+      properties:
+        created_at:
+          format: int64
+          type: integer
+        datacenter:
+          format: uuid
+          type: string
+        destroyed_at:
+          format: int64
+          type: integer
+        environment:
+          format: uuid
+          type: string
+        id:
+          format: uuid
+          type: string
+        lifecycle:
+          $ref: '#/components/schemas/ActorLifecycle'
+        network:
+          $ref: '#/components/schemas/ActorNetwork'
+        resources:
+          $ref: '#/components/schemas/ActorResources'
+        runtime:
+          $ref: '#/components/schemas/ActorRuntime'
+        started_at:
+          format: int64
+          type: integer
+        tags: {}
+      required:
+      - id
+      - environment
+      - datacenter
+      - tags
+      - runtime
+      - network
+      - resources
+      - lifecycle
+      - created_at
+      type: object
+    ActorBuild:
+      properties:
+        content_length:
+          description: Unsigned 64 bit integer.
+          format: int64
+          type: integer
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        id:
+          format: uuid
+          type: string
+        name:
+          type: string
+        tags:
+          additionalProperties:
+            type: string
+          description: Tags of this build
+          type: object
+      required:
+      - id
+      - name
+      - created_at
+      - content_length
+      - tags
+      type: object
+    ActorBuildCompression:
+      enum:
+      - none
+      - lz4
+      type: string
+    ActorBuildKind:
+      enum:
+      - docker_image
+      - oci_bundle
+      - javascript
+      type: string
+    ActorCreateActorNetworkRequest:
+      properties:
+        mode:
+          $ref: '#/components/schemas/ActorNetworkMode'
+        ports:
+          additionalProperties:
+            $ref: '#/components/schemas/ActorCreateActorPortRequest'
+          type: object
+      required:
+      - ports
+      type: object
+    ActorCreateActorPortRequest:
+      properties:
+        internal_port:
+          type: integer
+        protocol:
+          $ref: '#/components/schemas/ActorPortProtocol'
+        routing:
+          $ref: '#/components/schemas/ActorPortRouting'
+      required:
+      - protocol
+      type: object
+    ActorCreateActorRequest:
+      properties:
+        datacenter:
+          format: uuid
+          type: string
+        lifecycle:
+          $ref: '#/components/schemas/ActorLifecycle'
+        network:
+          $ref: '#/components/schemas/ActorCreateActorNetworkRequest'
+        resources:
+          $ref: '#/components/schemas/ActorResources'
+        runtime:
+          $ref: '#/components/schemas/ActorCreateActorRuntimeRequest'
+        tags: {}
+      required:
+      - datacenter
+      - tags
+      - runtime
+      - network
+      - resources
+      type: object
+    ActorCreateActorResponse:
+      properties:
+        actor:
+          $ref: '#/components/schemas/ActorActor'
+          description: The actor that was created
+      required:
+      - actor
+      type: object
+    ActorCreateActorRuntimeRequest:
+      properties:
+        arguments:
+          items:
+            type: string
+          type: array
+        build:
+          format: uuid
+          type: string
+        environment:
+          additionalProperties:
+            type: string
+          type: object
+      required:
+      - build
+      type: object
+    ActorCreateBuildRequest:
+      properties:
+        compression:
+          $ref: '#/components/schemas/ActorBuildCompression'
+        image_file:
+          $ref: '#/components/schemas/UploadPrepareFile'
+        image_tag:
+          description: A tag given to the game build.
+          type: string
+        kind:
+          $ref: '#/components/schemas/ActorBuildKind'
+        multipart_upload:
+          type: boolean
+        name:
+          type: string
+        prewarm_datacenters:
+          items:
+            format: uuid
+            type: string
+          type: array
+      required:
+      - name
+      - image_tag
+      - image_file
+      type: object
+    ActorCreateBuildResponse:
+      properties:
+        build:
+          format: uuid
+          type: string
+        image_presigned_request:
+          $ref: '#/components/schemas/UploadPresignedRequest'
+        image_presigned_requests:
+          items:
+            $ref: '#/components/schemas/UploadPresignedRequest'
+          type: array
+      required:
+      - build
+      type: object
+    ActorDatacenter:
+      properties:
+        id:
+          format: uuid
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+      required:
+      - id
+      - slug
+      - name
+      type: object
+    ActorDestroyActorResponse:
+      properties: {}
+      type: object
+    ActorGameGuardRouting:
+      properties: {}
+      type: object
+    ActorGetActorLogsResponse:
+      properties:
+        lines:
+          description: Sorted old to new.
+          items:
+            type: string
+          type: array
+        timestamps:
+          description: Sorted old to new.
+          items:
+            type: string
+          type: array
+        watch:
+          $ref: '#/components/schemas/WatchResponse'
+      required:
+      - lines
+      - timestamps
+      - watch
+      type: object
+    ActorGetActorResponse:
+      properties:
+        actor:
+          $ref: '#/components/schemas/ActorActor'
+      required:
+      - actor
+      type: object
+    ActorGetBuildResponse:
+      properties:
+        build:
+          $ref: '#/components/schemas/ActorBuild'
+      required:
+      - build
+      type: object
+    ActorHostRouting:
+      properties: {}
+      type: object
+    ActorLifecycle:
+      properties:
+        kill_timeout:
+          description: The duration to wait for in milliseconds before killing the
+            actor. This should be set to a safe default, and can be overridden during
+            a DELETE request if needed.
+          format: int64
+          type: integer
+      type: object
+    ActorListActorsResponse:
+      properties:
+        actors:
+          description: A list of actors for the game associated with the token.
+          items:
+            $ref: '#/components/schemas/ActorActor'
+          type: array
+      required:
+      - actors
+      type: object
+    ActorListBuildsResponse:
+      properties:
+        builds:
+          description: A list of builds for the game associated with the token.
+          items:
+            $ref: '#/components/schemas/ActorBuild'
+          type: array
+      required:
+      - builds
+      type: object
+    ActorListDatacentersResponse:
+      properties:
+        datacenters:
+          items:
+            $ref: '#/components/schemas/ActorDatacenter'
+          type: array
+      required:
+      - datacenters
+      type: object
+    ActorLogStream:
+      enum:
+      - std_out
+      - std_err
+      type: string
+    ActorNetwork:
+      properties:
+        mode:
+          $ref: '#/components/schemas/ActorNetworkMode'
+        ports:
+          additionalProperties:
+            $ref: '#/components/schemas/ActorPort'
+          type: object
+      required:
+      - ports
+      type: object
+    ActorNetworkMode:
+      enum:
+      - bridge
+      - host
+      type: string
+    ActorPatchBuildTagsRequest:
+      properties:
+        exclusive_tags:
+          description: Removes the given tag keys from all other builds.
+          items:
+            type: string
+          type: array
+        tags: {}
+      required:
+      - tags
+      type: object
+    ActorPatchBuildTagsResponse:
+      properties: {}
+      type: object
+    ActorPort:
+      properties:
+        internal_port:
+          type: integer
+        protocol:
+          $ref: '#/components/schemas/ActorPortProtocol'
+        public_hostname:
+          type: string
+        public_port:
+          type: integer
+        routing:
+          $ref: '#/components/schemas/ActorPortRouting'
+      required:
+      - protocol
+      - routing
+      type: object
+    ActorPortProtocol:
+      enum:
+      - http
+      - https
+      - tcp
+      - tcp_tls
+      - udp
+      type: string
+    ActorPortRouting:
+      properties:
+        game_guard:
+          $ref: '#/components/schemas/ActorGameGuardRouting'
+        host:
+          $ref: '#/components/schemas/ActorHostRouting'
+      type: object
+    ActorResources:
+      properties:
+        cpu:
+          description: 'The number of CPU cores in millicores, or 1/1000 of a core.
+            For example,
+
+            1/8 of a core would be 125 millicores, and 1 core would be 1000
+
+            millicores.'
+          type: integer
+        memory:
+          description: The amount of memory in megabytes
+          type: integer
+      required:
+      - cpu
+      - memory
+      type: object
+    ActorRuntime:
+      properties:
+        arguments:
+          items:
+            type: string
+          type: array
+        build:
+          format: uuid
+          type: string
+        environment:
+          additionalProperties:
+            type: string
+          type: object
+      required:
+      - build
+      type: object
     AdminClustersBuildDeliveryMethod:
       enum:
       - traffic_server
@@ -4395,380 +4770,6 @@ components:
       - cluster_id
       - vlan_ip
       type: object
-    ServersBuild:
-      properties:
-        content_length:
-          description: Unsigned 64 bit integer.
-          format: int64
-          type: integer
-        created_at:
-          $ref: '#/components/schemas/Timestamp'
-        id:
-          format: uuid
-          type: string
-        name:
-          type: string
-        tags:
-          additionalProperties:
-            type: string
-          description: Tags of this build
-          type: object
-      required:
-      - id
-      - name
-      - created_at
-      - content_length
-      - tags
-      type: object
-    ServersBuildCompression:
-      enum:
-      - none
-      - lz4
-      type: string
-    ServersBuildKind:
-      enum:
-      - docker_image
-      - oci_bundle
-      type: string
-    ServersCreateBuildRequest:
-      properties:
-        compression:
-          $ref: '#/components/schemas/ServersBuildCompression'
-        image_file:
-          $ref: '#/components/schemas/UploadPrepareFile'
-        image_tag:
-          description: A tag given to the game build.
-          type: string
-        kind:
-          $ref: '#/components/schemas/ServersBuildKind'
-        multipart_upload:
-          type: boolean
-        name:
-          type: string
-        prewarm_datacenters:
-          items:
-            format: uuid
-            type: string
-          type: array
-      required:
-      - name
-      - image_tag
-      - image_file
-      type: object
-    ServersCreateBuildResponse:
-      properties:
-        build:
-          format: uuid
-          type: string
-        image_presigned_request:
-          $ref: '#/components/schemas/UploadPresignedRequest'
-        image_presigned_requests:
-          items:
-            $ref: '#/components/schemas/UploadPresignedRequest'
-          type: array
-      required:
-      - build
-      type: object
-    ServersCreateServerNetworkRequest:
-      properties:
-        mode:
-          $ref: '#/components/schemas/ServersNetworkMode'
-        ports:
-          additionalProperties:
-            $ref: '#/components/schemas/ServersCreateServerPortRequest'
-          type: object
-      required:
-      - ports
-      type: object
-    ServersCreateServerPortRequest:
-      properties:
-        internal_port:
-          type: integer
-        protocol:
-          $ref: '#/components/schemas/ServersPortProtocol'
-        routing:
-          $ref: '#/components/schemas/ServersPortRouting'
-      required:
-      - protocol
-      type: object
-    ServersCreateServerRequest:
-      properties:
-        datacenter:
-          format: uuid
-          type: string
-        lifecycle:
-          $ref: '#/components/schemas/ServersLifecycle'
-        network:
-          $ref: '#/components/schemas/ServersCreateServerNetworkRequest'
-        resources:
-          $ref: '#/components/schemas/ServersResources'
-        runtime:
-          $ref: '#/components/schemas/ServersCreateServerRuntimeRequest'
-        tags: {}
-      required:
-      - datacenter
-      - tags
-      - runtime
-      - network
-      - resources
-      type: object
-    ServersCreateServerResponse:
-      properties:
-        server:
-          $ref: '#/components/schemas/ServersServer'
-          description: The server that was created
-      required:
-      - server
-      type: object
-    ServersCreateServerRuntimeRequest:
-      properties:
-        arguments:
-          items:
-            type: string
-          type: array
-        build:
-          format: uuid
-          type: string
-        environment:
-          additionalProperties:
-            type: string
-          type: object
-      required:
-      - build
-      type: object
-    ServersDatacenter:
-      properties:
-        id:
-          format: uuid
-          type: string
-        name:
-          type: string
-        slug:
-          type: string
-      required:
-      - id
-      - slug
-      - name
-      type: object
-    ServersDestroyServerResponse:
-      properties: {}
-      type: object
-    ServersGameGuardRouting:
-      properties: {}
-      type: object
-    ServersGetBuildResponse:
-      properties:
-        build:
-          $ref: '#/components/schemas/ServersBuild'
-      required:
-      - build
-      type: object
-    ServersGetServerLogsResponse:
-      properties:
-        lines:
-          description: Sorted old to new.
-          items:
-            type: string
-          type: array
-        timestamps:
-          description: Sorted old to new.
-          items:
-            type: string
-          type: array
-        watch:
-          $ref: '#/components/schemas/WatchResponse'
-      required:
-      - lines
-      - timestamps
-      - watch
-      type: object
-    ServersGetServerResponse:
-      properties:
-        server:
-          $ref: '#/components/schemas/ServersServer'
-      required:
-      - server
-      type: object
-    ServersHostRouting:
-      properties: {}
-      type: object
-    ServersLifecycle:
-      properties:
-        kill_timeout:
-          description: The duration to wait for in milliseconds before killing the
-            server. This should be set to a safe default, and can be overridden during
-            a DELETE request if needed.
-          format: int64
-          type: integer
-      type: object
-    ServersListBuildsResponse:
-      properties:
-        builds:
-          description: A list of builds for the game associated with the token.
-          items:
-            $ref: '#/components/schemas/ServersBuild'
-          type: array
-      required:
-      - builds
-      type: object
-    ServersListDatacentersResponse:
-      properties:
-        datacenters:
-          items:
-            $ref: '#/components/schemas/ServersDatacenter'
-          type: array
-      required:
-      - datacenters
-      type: object
-    ServersListServersResponse:
-      properties:
-        servers:
-          description: A list of servers for the game associated with the token.
-          items:
-            $ref: '#/components/schemas/ServersServer'
-          type: array
-      required:
-      - servers
-      type: object
-    ServersLogStream:
-      enum:
-      - std_out
-      - std_err
-      type: string
-    ServersNetwork:
-      properties:
-        mode:
-          $ref: '#/components/schemas/ServersNetworkMode'
-        ports:
-          additionalProperties:
-            $ref: '#/components/schemas/ServersPort'
-          type: object
-      required:
-      - ports
-      type: object
-    ServersNetworkMode:
-      enum:
-      - bridge
-      - host
-      type: string
-    ServersPatchBuildTagsRequest:
-      properties:
-        exclusive_tags:
-          description: Removes the given tag keys from all other builds.
-          items:
-            type: string
-          type: array
-        tags: {}
-      required:
-      - tags
-      type: object
-    ServersPatchBuildTagsResponse:
-      properties: {}
-      type: object
-    ServersPort:
-      properties:
-        internal_port:
-          type: integer
-        protocol:
-          $ref: '#/components/schemas/ServersPortProtocol'
-        public_hostname:
-          type: string
-        public_port:
-          type: integer
-        routing:
-          $ref: '#/components/schemas/ServersPortRouting'
-      required:
-      - protocol
-      - routing
-      type: object
-    ServersPortProtocol:
-      enum:
-      - http
-      - https
-      - tcp
-      - tcp_tls
-      - udp
-      type: string
-    ServersPortRouting:
-      properties:
-        game_guard:
-          $ref: '#/components/schemas/ServersGameGuardRouting'
-        host:
-          $ref: '#/components/schemas/ServersHostRouting'
-      type: object
-    ServersResources:
-      properties:
-        cpu:
-          description: 'The number of CPU cores in millicores, or 1/1000 of a core.
-            For example,
-
-            1/8 of a core would be 125 millicores, and 1 core would be 1000
-
-            millicores.'
-          type: integer
-        memory:
-          description: The amount of memory in megabytes
-          type: integer
-      required:
-      - cpu
-      - memory
-      type: object
-    ServersRuntime:
-      properties:
-        arguments:
-          items:
-            type: string
-          type: array
-        build:
-          format: uuid
-          type: string
-        environment:
-          additionalProperties:
-            type: string
-          type: object
-      required:
-      - build
-      type: object
-    ServersServer:
-      properties:
-        created_at:
-          format: int64
-          type: integer
-        datacenter:
-          format: uuid
-          type: string
-        destroyed_at:
-          format: int64
-          type: integer
-        environment:
-          format: uuid
-          type: string
-        id:
-          format: uuid
-          type: string
-        lifecycle:
-          $ref: '#/components/schemas/ServersLifecycle'
-        network:
-          $ref: '#/components/schemas/ServersNetwork'
-        resources:
-          $ref: '#/components/schemas/ServersResources'
-        runtime:
-          $ref: '#/components/schemas/ServersRuntime'
-        started_at:
-          format: int64
-          type: integer
-        tags: {}
-      required:
-      - id
-      - environment
-      - datacenter
-      - tags
-      - runtime
-      - network
-      - resources
-      - lifecycle
-      - created_at
-      type: object
     Timestamp:
       description: RFC3339 timestamp
       format: date-time
@@ -9056,11 +9057,387 @@ paths:
       security: *id001
       tags:
       - ProvisionDatacenters
+  /games/{game_id}/environments/{environment_id}/actors:
+    get:
+      description: Lists all actors associated with the token used. Can be filtered
+        by tags in the query string.
+      operationId: actor_list
+      parameters:
+      - in: path
+        name: game_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: environment_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: query
+        name: tags_json
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: include_destroyed
+        required: false
+        schema:
+          type: boolean
+      - in: query
+        name: cursor
+        required: false
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActorListActorsResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      tags:
+      - Actor
+    post:
+      description: Create a new dynamic actor.
+      operationId: actor_create
+      parameters:
+      - in: path
+        name: game_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: environment_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActorCreateActorRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActorCreateActorResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      tags:
+      - Actor
+  /games/{game_id}/environments/{environment_id}/actors/{actor_id}:
+    delete:
+      description: Destroy a dynamic actor.
+      operationId: actor_destroy
+      parameters:
+      - in: path
+        name: game_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: environment_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: The id of the actor to destroy
+        in: path
+        name: actor_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: The duration to wait for in milliseconds before killing the actor.
+          This should be used to override the default kill timeout if a faster time
+          is needed, say for ignoring a graceful shutdown.
+        in: query
+        name: override_kill_timeout
+        required: false
+        schema:
+          format: int64
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActorDestroyActorResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      tags:
+      - Actor
+    get:
+      description: Gets a dynamic actor.
+      operationId: actor_get
+      parameters:
+      - in: path
+        name: game_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: environment_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: The id of the actor to destroy
+        in: path
+        name: actor_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActorGetActorResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      tags:
+      - Actor
+  /games/{game_id}/environments/{environment_id}/actors/{actor_id}/logs:
+    get:
+      description: Returns the logs for a given actor.
+      operationId: actor_logs_get
+      parameters:
+      - in: path
+        name: game_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: environment_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: path
+        name: actor_id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: query
+        name: stream
+        required: true
+        schema:
+          $ref: '#/components/schemas/ActorLogStream'
+      - description: A query parameter denoting the requests watch index.
+        in: query
+        name: watch_index
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActorGetActorLogsResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      tags:
+      - ActorLogs
   /games/{game_id}/environments/{environment_id}/builds:
     get:
       description: Lists all builds of the game associated with the token used. Can
         be filtered by tags in the query string.
-      operationId: servers_builds_list
+      operationId: actor_builds_list
       parameters:
       - in: path
         name: game_id
@@ -9084,7 +9461,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServersListBuildsResponse'
+                $ref: '#/components/schemas/ActorListBuildsResponse'
           description: ''
         '400':
           content:
@@ -9124,11 +9501,11 @@ paths:
           description: ''
       security: *id001
       tags:
-      - ServersBuilds
+      - ActorBuilds
   /games/{game_id}/environments/{environment_id}/builds/prepare:
     post:
       description: Creates a new game build for the given game.
-      operationId: servers_builds_prepare
+      operationId: actor_builds_prepare
       parameters:
       - in: path
         name: game_id
@@ -9146,14 +9523,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ServersCreateBuildRequest'
+              $ref: '#/components/schemas/ActorCreateBuildRequest'
         required: true
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServersCreateBuildResponse'
+                $ref: '#/components/schemas/ActorCreateBuildResponse'
           description: ''
         '400':
           content:
@@ -9193,12 +9570,12 @@ paths:
           description: ''
       security: *id001
       tags:
-      - ServersBuilds
+      - ActorBuilds
   /games/{game_id}/environments/{environment_id}/builds/{build_id}:
     get:
       description: Lists all builds of the game associated with the token used. Can
         be filtered by tags in the query string.
-      operationId: servers_builds_get
+      operationId: actor_builds_get
       parameters:
       - in: path
         name: game_id
@@ -9228,7 +9605,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServersGetBuildResponse'
+                $ref: '#/components/schemas/ActorGetBuildResponse'
           description: ''
         '400':
           content:
@@ -9268,11 +9645,11 @@ paths:
           description: ''
       security: *id001
       tags:
-      - ServersBuilds
+      - ActorBuilds
   /games/{game_id}/environments/{environment_id}/builds/{build_id}/complete:
     post:
       description: Marks an upload as complete.
-      operationId: servers_builds_complete
+      operationId: actor_builds_complete
       parameters:
       - in: path
         name: game_id
@@ -9333,10 +9710,10 @@ paths:
           description: ''
       security: *id001
       tags:
-      - ServersBuilds
+      - ActorBuilds
   /games/{game_id}/environments/{environment_id}/builds/{build_id}/tags:
     patch:
-      operationId: servers_builds_patchTags
+      operationId: actor_builds_patchTags
       parameters:
       - in: path
         name: game_id
@@ -9360,14 +9737,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ServersPatchBuildTagsRequest'
+              $ref: '#/components/schemas/ActorPatchBuildTagsRequest'
         required: true
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServersPatchBuildTagsResponse'
+                $ref: '#/components/schemas/ActorPatchBuildTagsResponse'
           description: ''
         '400':
           content:
@@ -9407,10 +9784,10 @@ paths:
           description: ''
       security: *id001
       tags:
-      - ServersBuilds
+      - ActorBuilds
   /games/{game_id}/environments/{environment_id}/datacenters:
     get:
-      operationId: servers_datacenters_list
+      operationId: actor_datacenters_list
       parameters:
       - in: path
         name: game_id
@@ -9429,7 +9806,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ServersListDatacentersResponse'
+                $ref: '#/components/schemas/ActorListDatacentersResponse'
           description: ''
         '400':
           content:
@@ -9469,383 +9846,7 @@ paths:
           description: ''
       security: *id001
       tags:
-      - ServersDatacenters
-  /games/{game_id}/environments/{environment_id}/servers:
-    get:
-      description: Lists all servers associated with the token used. Can be filtered
-        by tags in the query string.
-      operationId: servers_list
-      parameters:
-      - in: path
-        name: game_id
-        required: true
-        schema:
-          format: uuid
-          type: string
-      - in: path
-        name: environment_id
-        required: true
-        schema:
-          format: uuid
-          type: string
-      - in: query
-        name: tags_json
-        required: false
-        schema:
-          type: string
-      - in: query
-        name: include_destroyed
-        required: false
-        schema:
-          type: boolean
-      - in: query
-        name: cursor
-        required: false
-        schema:
-          format: uuid
-          type: string
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ServersListServersResponse'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '408':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '429':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '500':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-      security: *id001
-      tags:
-      - Servers
-    post:
-      description: Create a new dynamic server.
-      operationId: servers_create
-      parameters:
-      - in: path
-        name: game_id
-        required: true
-        schema:
-          format: uuid
-          type: string
-      - in: path
-        name: environment_id
-        required: true
-        schema:
-          format: uuid
-          type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ServersCreateServerRequest'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ServersCreateServerResponse'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '408':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '429':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '500':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-      security: *id001
-      tags:
-      - Servers
-  /games/{game_id}/environments/{environment_id}/servers/{server_id}:
-    delete:
-      description: Destroy a dynamic server.
-      operationId: servers_destroy
-      parameters:
-      - in: path
-        name: game_id
-        required: true
-        schema:
-          format: uuid
-          type: string
-      - in: path
-        name: environment_id
-        required: true
-        schema:
-          format: uuid
-          type: string
-      - description: The id of the server to destroy
-        in: path
-        name: server_id
-        required: true
-        schema:
-          format: uuid
-          type: string
-      - description: The duration to wait for in milliseconds before killing the server.
-          This should be used to override the default kill timeout if a faster time
-          is needed, say for ignoring a graceful shutdown.
-        in: query
-        name: override_kill_timeout
-        required: false
-        schema:
-          format: int64
-          type: integer
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ServersDestroyServerResponse'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '408':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '429':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '500':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-      security: *id001
-      tags:
-      - Servers
-    get:
-      description: Gets a dynamic server.
-      operationId: servers_get
-      parameters:
-      - in: path
-        name: game_id
-        required: true
-        schema:
-          format: uuid
-          type: string
-      - in: path
-        name: environment_id
-        required: true
-        schema:
-          format: uuid
-          type: string
-      - description: The id of the server to destroy
-        in: path
-        name: server_id
-        required: true
-        schema:
-          format: uuid
-          type: string
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ServersGetServerResponse'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '408':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '429':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '500':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-      security: *id001
-      tags:
-      - Servers
-  /games/{game_id}/environments/{environment_id}/servers/{server_id}/logs:
-    get:
-      description: Returns the logs for a given server.
-      operationId: servers_logs_get
-      parameters:
-      - in: path
-        name: game_id
-        required: true
-        schema:
-          format: uuid
-          type: string
-      - in: path
-        name: environment_id
-        required: true
-        schema:
-          format: uuid
-          type: string
-      - in: path
-        name: server_id
-        required: true
-        schema:
-          format: uuid
-          type: string
-      - in: query
-        name: stream
-        required: true
-        schema:
-          $ref: '#/components/schemas/ServersLogStream'
-      - description: A query parameter denoting the requests watch index.
-        in: query
-        name: watch_index
-        required: false
-        schema:
-          type: string
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ServersGetServerLogsResponse'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '403':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '408':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '429':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-        '500':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-          description: ''
-      security: *id001
-      tags:
-      - ServersLogs
+      - ActorDatacenters
   /games/{game_id}/environments/{environment_id}/tokens/service:
     post:
       description: Creates a new environment service token.

@@ -66,7 +66,7 @@ define_router! {
 			prefix: "status",
 		},
 		{
-			path: api_servers::route::Router,
+			path: api_actor::route::Router,
 		},
 	],
 }

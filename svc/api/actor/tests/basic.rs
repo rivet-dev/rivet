@@ -28,16 +28,16 @@ impl Ctx {
 
 		let pools = rivet_pools::from_env().await?;
 		let cache = rivet_cache::CacheInner::new(
-			"api-servers-test".to_string(),
+			"api-actor-test".to_string(),
 			util::env::var("RIVET_SOURCE_HASH")?,
 			pools.redis_cache()?,
 		);
 		let client = chirp_client::SharedClient::from_env(pools.clone())
 			.expect("create client")
-			.wrap_new("api-servers-test");
+			.wrap_new("api-actor-test");
 		let conn = rivet_connection::Connection::new(client, pools, cache);
 		let op_ctx = OperationContext::new(
-			"api-servers-test".to_string(),
+			"api-actor-test".to_string(),
 			std::time::Duration::from_secs(60),
 			conn,
 			Uuid::new_v4(),
