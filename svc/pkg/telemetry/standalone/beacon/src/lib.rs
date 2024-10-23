@@ -1,18 +1,20 @@
-use std::{collections::HashSet, fmt::Display, time::Duration};
-
 use indoc::indoc;
 use rivet_operation::prelude::*;
 use serde_json::json;
+use std::{collections::HashMap, time::Duration};
+use sysinfo::System;
+
+// This information is intended for use with diagnosing errors in the wild.
+//
+// Events are sent to PostHog (https://posthog.com/). These events enrich our Sentry errors in
+// order to better understand the unique edge cases that might cause an error.
+//
+// Rivet is a powerful yet complicated system and these metrics help us support the open-source
+// community. If you have questions or concerns about this data, please reach out to us on Discord:
+// https://rivet.gg/discord
 
 // This API key is safe to hardcode. It will not change and is intended to be public.
 const POSTHOG_API_KEY: &str = "phc_1lUNmul6sAdFzDK1VHXNrikCfD7ivQZSpf2yzrPvr4m";
-
-#[derive(Debug, sqlx::FromRow)]
-struct NamespaceAnalytics {
-	namespace_id: Uuid,
-	total_users: i64,
-	linked_users: i64,
-}
 
 pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> GlobalResult<()> {
 	run_from_env(config, pools, util::timestamp::now()).await
@@ -38,348 +40,198 @@ pub async fn run_from_env(
 		(),
 	);
 
-	if config.server()?.rivet.telemetry.enable {
+	if !config.server()?.rivet.telemetry.enable {
 		tracing::info!("telemetry disabled");
 		return Ok(());
 	}
 
+	// Get the cluster ID
 	let cluster_id = chirp_workflow::compat::op(&ctx, dynamic_config::ops::get_config::Input {})
 		.await?
 		.cluster_id;
 
-	let team_ids = sql_fetch_all!(
-		[ctx, (Uuid,)]
-		"
-		SELECT team_id
-		FROM db_team.teams
-		",
-	)
-	.await?
-	.into_iter()
-	.map(|(team_id,)| Into::<common::Uuid>::into(team_id))
-	.collect::<Vec<_>>();
-
-	let game_user_namespaces = sql_fetch_all!(
-		[ctx, NamespaceAnalytics]
-		"
-		SELECT
-			gu.namespace_id,
-			count(DISTINCT gu.user_id) FILTER (WHERE l.link_id IS NULL) AS total_users,
-			count(DISTINCT gu.user_id) FILTER (WHERE l.link_id IS NOT NULL) AS linked_users
-		FROM db_game_user.game_users AS gu
-		LEFT JOIN db_game_user.links AS l ON l.new_game_user_id = gu.game_user_id
-		GROUP BY gu.namespace_id
-		",
-	)
-	.await?;
-
-	let namespaces = sql_fetch_all!(
-		[ctx, (Uuid, Uuid)]
-		"
-		SELECT namespace_id, game_id
-		FROM db_game.game_namespaces
-		",
-	)
-	.await?;
-
-	let game_ids = namespaces
-		.iter()
-		.map(|x| x.1)
-		.collect::<HashSet<Uuid>>()
-		.into_iter()
-		.map(Into::<common::Uuid>::into)
-		.collect::<Vec<_>>();
-	let namespace_ids = namespaces
-		.iter()
-		.map(|x| Into::<common::Uuid>::into(x.0))
-		.collect::<Vec<_>>();
-
-	let teams = op!([ctx] team_get {
-		team_ids: team_ids.clone(),
-	})
-	.await?;
-
-	let team_members = op!([ctx] team_member_count {
-		team_ids: team_ids,
-	})
-	.await?;
-
-	let games = op!([ctx] game_get {
-		game_ids: game_ids,
-	})
-	.await?;
-
-	let namespaces = op!([ctx] game_namespace_get {
-		namespace_ids: namespace_ids.clone(),
-	})
-	.await?;
-
-	let version_ids = namespaces
-		.namespaces
-		.iter()
-		.filter_map(|x| x.version_id)
-		.collect::<Vec<_>>();
-
-	let versions = op!([ctx] game_version_get {
-		version_ids: version_ids.clone(),
-	})
-	.await?;
-
-	let cloud_versions = op!([ctx] cloud_version_get {
-		version_ids: version_ids,
-	})
-	.await?;
-
-	let player_counts = op!([ctx] mm_player_count_for_namespace {
-		namespace_ids: namespace_ids.clone(),
-	})
-	.await?;
-
-	// TODO: Registered players
-	// TODO: MAU
-
+	// Build events
 	let mut events = Vec::new();
+	let distinct_id = format!("cluster:{cluster_id}");
 
-	{
-		// We include both the cluster ID and the namespace ID in the distinct_id in case the config is
-		// copied to a new namespace with a different name accidentally
-		let distinct_id = format!(
-			"cluster:{}:{}",
-			ctx.config().server()?.rivet.namespace,
-			cluster_id
-		);
+	// Send beacon
+	let mut event = async_posthog::Event::new("cluster_beacon", &distinct_id);
+	event.insert_prop("$groups", json!({ "cluster": cluster_id }))?;
+	event.insert_prop(
+		"$set",
+		json!({
+			"cluster_id": cluster_id,
+			"os": os_report(),
+			"source_hash": rivet_env::source_hash(),
+			"config": get_config_data(&ctx)?,
+			"infrastructure": get_infrastructure_data(&ctx)?,
+			"pegboard": get_pegboard_data(&ctx).await?,
+		}),
+	)?;
+	events.push(event);
 
-		let mut event = async_posthog::Event::new("cluster_beacon", &distinct_id);
-		event.insert_prop("$groups", json!({ "cluster": cluster_id }))?;
-		event.insert_prop(
-			"$set",
-			json!({
-				"ns_id": ctx.config().server()?.rivet.namespace,
-				"cluster_id": cluster_id,
-			}),
-		)?;
-		events.push(event);
+	// Add cluster identification data
+	let mut event = async_posthog::Event::new("$groupidentify", &distinct_id);
+	event.insert_prop("$group_type", "cluster")?;
+	event.insert_prop("$group_key", cluster_id)?;
+	event.insert_prop(
+		"$group_set",
+		json!({
+			"name": ctx.config().server()?.rivet.namespace,
+		}),
+	)?;
+	events.push(event);
 
-		let mut event = async_posthog::Event::new("$groupidentify", &distinct_id);
-		event.insert_prop("$group_type", "cluster")?;
-		event.insert_prop("$group_key", cluster_id)?;
-		event.insert_prop(
-			"$group_set",
-			json!({
-				"name": ctx.config().server()?.rivet.namespace,
-			}),
-		)?;
-		events.push(event);
-	}
-
-	for team in &teams.teams {
-		let team_id = team.team_id.unwrap().as_uuid();
-
-		let member_count = team_members
-			.teams
-			.iter()
-			.find(|x| x.team_id == team.team_id)
-			.map_or(0, |x| x.member_count);
-
-		let distinct_id = build_distinct_id(ctx.config(), cluster_id, format!("team:{team_id}"))?;
-
-		let mut event = async_posthog::Event::new("team_beacon", &distinct_id);
-		event.insert_prop(
-			"$groups",
-			json!({
-				"cluster": cluster_id,
-				"team": team_id,
-			}),
-		)?;
-		event.insert_prop(
-			"$set",
-			json!({
-				"ns_id": ctx.config().server()?.rivet.namespace,
-				"cluster_id": cluster_id,
-				"team_id": team_id,
-				"display_name": team.display_name,
-				"create_ts": team.create_ts,
-				"member_count": member_count,
-			}),
-		)?;
-		events.push(event);
-
-		let mut event = async_posthog::Event::new("$groupidentify", &distinct_id);
-		event.insert_prop("$group_type", "team")?;
-		event.insert_prop("$group_key", team_id)?;
-		event.insert_prop(
-			"$group_set",
-			json!({
-				"display_name": team.display_name,
-				"create_ts": team.create_ts,
-			}),
-		)?;
-		events.push(event);
-	}
-
-	for game in &games.games {
-		let game_id = game.game_id.unwrap().as_uuid();
-		let team_id = game.developer_team_id.unwrap().as_uuid();
-
-		let distinct_id = build_distinct_id(ctx.config(), cluster_id, format!("game:{game_id}"))?;
-
-		let mut event = async_posthog::Event::new("game_beacon", &distinct_id);
-		event.insert_prop(
-			"$groups",
-			json!({
-				"cluster": cluster_id,
-				"team": team_id,
-				"game": game_id,
-			}),
-		)?;
-		event.insert_prop(
-			"$set",
-			json!({
-				"ns_id": ctx.config().server()?.rivet.namespace,
-				"cluster_id": cluster_id,
-				"game_id": game_id,
-				"name_id": game.name_id,
-				"display_name": game.display_name,
-				"create_ts": game.create_ts,
-				"url": game.url,
-			}),
-		)?;
-		events.push(event);
-
-		let mut event = async_posthog::Event::new("$groupidentify", &distinct_id);
-		event.insert_prop("$group_type", "game")?;
-		event.insert_prop("$group_key", game_id)?;
-		event.insert_prop(
-			"$group_set",
-			json!({
-				"name_id": game.name_id,
-				"display_name": game.display_name,
-				"create_ts": game.create_ts,
-				"url": game.url,
-			}),
-		)?;
-		events.push(event);
-	}
-
-	for ns in &namespaces.namespaces {
-		let ns_id = ns.namespace_id.unwrap().as_uuid();
-		let game_id = ns.game_id.unwrap().as_uuid();
-		let team_id = games
-			.games
-			.iter()
-			.find(|x| x.game_id == ns.game_id)
-			.and_then(|x| x.developer_team_id)
-			.map(|x| x.as_uuid());
-
-		let game_user_analytics = game_user_namespaces
-			.iter()
-			.find(|x| x.namespace_id == ns_id);
-
-		// TODO: Replace this with peak player count
-		let player_count = player_counts
-			.namespaces
-			.iter()
-			.find(|x| x.namespace_id == ns.namespace_id)
-			.map_or(0, |x| x.player_count);
-
-		let version = versions
-			.versions
-			.iter()
-			.find(|x| x.version_id == ns.version_id)
-			.map(|version| {
-				let config = cloud_versions
-					.versions
-					.iter()
-					.find(|x| x.version_id == version.version_id)
-					.and_then(|x| x.config.as_ref())
-					.map(|config| {
-						json!({
-							"cdn": config.cdn.as_ref().map(|_| json!({})),
-							"matchmaker": config.matchmaker.as_ref().map(|_| json!({})),
-							"kv": config.kv.as_ref().map(|_| json!({})),
-							"identity": config.identity.as_ref().map(|_| json!({})),
-						})
-					});
-
-				json!({
-					"version_id": version.version_id.unwrap().as_uuid(),
-					"create_ts": version.create_ts,
-					"display_name": version.display_name,
-					"config": config,
-				})
-			});
-
-		let distinct_id = build_distinct_id(ctx.config(), cluster_id, format!("ns:{ns_id}"))?;
-
-		let mut event = async_posthog::Event::new("namespace_beacon", &distinct_id);
-		event.insert_prop(
-			"$groups",
-			json!({
-				"cluster": cluster_id,
-				"team": team_id,
-				"game": game_id,
-				"namespace": ns_id,
-			}),
-		)?;
-		event.insert_prop(
-			"$set",
-			json!({
-				"ns_id": ctx.config().server()?.rivet.namespace,
-				"cluster_id": cluster_id,
-				"namespace_id": ns_id,
-				"name_id": ns.name_id,
-				"display_name": ns.display_name,
-				"create_ts": ns.create_ts,
-				"version": version,
-			}),
-		)?;
-		event.insert_prop("total_users", game_user_analytics.map(|x| x.total_users))?;
-		event.insert_prop("linked_users", game_user_analytics.map(|x| x.linked_users))?;
-		event.insert_prop("player_count", player_count)?;
-		events.push(event);
-
-		let mut event = async_posthog::Event::new("$groupidentify", &distinct_id);
-		event.insert_prop("$group_type", "namespace")?;
-		event.insert_prop("$group_key", game_id)?;
-		event.insert_prop(
-			"$group_set",
-			json!({
-				"name_id": ns.name_id,
-				"display_name": ns.display_name,
-				"create_ts": ns.create_ts,
-			}),
-		)?;
-		events.push(event);
-	}
 	tracing::info!(len = ?events.len(), "built events");
 
 	// Send events in chunks
 	let client = async_posthog::client(POSTHOG_API_KEY);
-
-	while !events.is_empty() {
-		let chunk_size = 64;
-		let chunk = if chunk_size < events.len() {
-			events.split_off(events.len() - chunk_size)
-		} else {
-			std::mem::take(&mut events)
-		};
-		tracing::info!(remaining_len = ?events.len(), chunk_len = ?chunk.len(), "sending events");
-		client.capture_batch(chunk).await?;
-	}
+	client.capture_batch(events).await?;
 
 	tracing::info!("all events sent");
 
 	Ok(())
 }
 
-fn build_distinct_id(
-	config: &rivet_config::Config,
-	cluster_id: Uuid,
-	entity: impl Display,
-) -> GlobalResult<String> {
-	Ok(format!(
-		"cluster:{}:{}:{entity}",
-		config.server()?.rivet.namespace,
-		cluster_id,
-	))
+/// Returns information about the operating system running the cluster.
+///
+/// This helps Rivet diagnose crash reports to easily pinpoint if issues are
+/// coming from a specific operating system.
+fn os_report() -> serde_json::Value {
+	// Create a new System object
+	let system = sysinfo::System::new_with_specifics(
+		sysinfo::RefreshKind::new()
+			.with_cpu(sysinfo::CpuRefreshKind::everything())
+			.with_memory(sysinfo::MemoryRefreshKind::everything()),
+	);
+
+	// Gather OS information
+	let os_name = std::env::consts::OS;
+	let os_version = format!(
+		"{}",
+		System::os_version().unwrap_or_else(|| String::from("Unknown"))
+	);
+	let architecture = std::env::consts::ARCH;
+	let hostname = System::host_name().unwrap_or_else(|| String::from("unknown"));
+
+	// Gather memory information
+	let total_memory = system.total_memory();
+	let available_memory = system.available_memory();
+
+	// Gather CPU information
+	let cpu_info = system.cpus();
+	let cpu_model = cpu_info
+		.get(0)
+		.map(|p| p.brand().to_string())
+		.unwrap_or_else(|| String::from("Unknown CPU"));
+
+	// Combine everything into a JSON object
+	json!({
+		"name": os_name,
+		"version": os_version,
+		"architecture": architecture,
+		"hostname": hostname,
+		"memory": {
+			"total": total_memory,
+			"available": available_memory,
+		},
+		"cpu": {
+			"model": cpu_model,
+			"cores": cpu_info.len(),
+		}
+	})
 }
+
+/// Returns information about what feature configs are enabled.
+///
+/// This helps Rivet diagnose crash reports to understand if specific features
+/// are causing crashes.
+fn get_config_data(ctx: &OperationContext<()>) -> GlobalResult<serde_json::Value> {
+	let server_config = ctx.config().server()?;
+	Ok(json!({
+		"rivet": {
+			"namespace": server_config.rivet.namespace,
+			"cluster_enabled": server_config.rivet.cluster.is_some(),
+			"auth_access_kind": format!("{:?}", server_config.rivet.auth.access_kind),
+			"auth_access_token_login": server_config.rivet.auth.access_token_login,
+			"dns_enabled": server_config.rivet.dns.is_some(),
+			"job_run_enabled": server_config.rivet.job_run.is_some(),
+			"api_origin": server_config.rivet.api.public_origin,
+			"hub_origin": server_config.rivet.hub.public_origin,
+		},
+	}))
+}
+
+/// Returns information about what infrastructure is enabled.
+///
+/// This helps Rivet diagnose crash reports to understand if parts of the
+/// infrastructure are causing issues.
+fn get_infrastructure_data(ctx: &OperationContext<()>) -> GlobalResult<serde_json::Value> {
+	let server_config = ctx.config().server()?;
+	Ok(json!({
+		"nomad_enabled": server_config.nomad.is_some(),
+		"cloudflare_enabled": server_config.cloudflare.is_some(),
+		"sendgrid_enabled": server_config.sendgrid.is_some(),
+		"loops_enabled": server_config.loops.is_some(),
+		"ip_info_enabled": server_config.ip_info.is_some(),
+		"hcaptcha_enabled": server_config.hcaptcha.is_some(),
+		"turnstile_enabled": server_config.turnstile.is_some(),
+		"stripe_enabled": server_config.stripe.is_some(),
+		"neon_enabled": server_config.neon.is_some(),
+		"linode_enabled": server_config.linode.is_some(),
+		"clickhouse_enabled": server_config.clickhouse.is_some(),
+		"prometheus_enabled": server_config.prometheus.is_some(),
+		"s3_endpoint": server_config.s3.endpoint_external,
+	}))
+}
+
+/// Returns information about the pegboard configuration.
+///
+/// This is helpful for diagnosing issues with the self-hosted clusters under
+/// load. e.g. if a cluster is running on constraint resources (see os_report),
+/// does the cluster configuration affect it?
+async fn get_pegboard_data(ctx: &OperationContext<()>) -> GlobalResult<serde_json::Value> {
+	use pegboard::protocol::ClientFlavor;
+
+	let mut clients = HashMap::new();
+	for flavor in [ClientFlavor::Container, ClientFlavor::Isolate] {
+		let (count, cpu_sum, memory_sum) = sql_fetch_one!(
+			[ctx, (i64, i64, i64,)]
+			"
+			SELECT count(*), sum(cpu), sum(memory))
+			FROM db_pegboard.clients AS OF SYSTEM TIME '-5s'
+			WHERE
+				delete_ts IS NULL
+				AND flavor = $1
+			",
+			flavor as i32,
+		)
+		.await?;
+		clients.insert(
+			flavor.to_string(),
+			json!({
+				"count": count,
+				"cpu_sum": cpu_sum,
+				"memory_sum": memory_sum,
+			}),
+		);
+	}
+
+	let (total_count, running_count) = sql_fetch_one!(
+		[ctx, (i64, i64)]
+		"
+		SELECT count(*), count(CASE WHEN stop_ts IS NULL THEN 1 END)
+		FROM db_pegboard.actors AS OF SYSTEM TIME '-5s'
+		",
+	)
+	.await?;
+
+	Ok(json!({
+		"clients": clients,
+		"actors": {
+			"total": total_count,
+			"running": running_count,
+		}
+	}))
+}
+
