@@ -270,6 +270,8 @@ members = [
 "lib/pegboard/echo/",
 "lib/pegboard/container-runner/",
 "lib/pegboard/manager/",
+# "lib/pegboard/v8-isolate-runner/",
+"lib/pegboard/runner-protocol/",
 "lib/s3-util/",
 "lib/cache/result/",
 "lib/cache/build/",

@@ -12,11 +12,11 @@ RUN \
 	cd lib/pegboard/manager && \
 	RUSTFLAGS="--cfg tokio_unstable" cargo build --release --package pegboard-manager --bin pegboard-manager && \
 	mkdir -p /app/dist && \
-	mv /app/target/target/x86_64-unknown-linux-musl/release/pegboard-manager /app/dist/pegboard-manager
+	mv /app/lib/pegboard/target/x86_64-unknown-linux-musl/release/pegboard-manager /app/dist/pegboard-manager
 
 # Create an empty image and copy binaries into it to minimize the size of the image
 FROM scratch
-COPY --from=rust /app/dist /
+COPY --from=rust /app/dist/ /
 
 # Allows `docker create` to work even though this fails
 CMD [""]
