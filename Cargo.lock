@@ -7248,7 +7248,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sqlx",
- "sysinfo",
+ "sysinfo 0.31.4",
  "tempfile",
  "tokio",
  "tokio-tungstenite 0.23.1",
@@ -9856,6 +9856,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "sysinfo"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3b5ae3f4f7d64646c46c4cae4e3f01d1c5d255c7406fdd7c7f999a94e488791"
+dependencies = [
+ "core-foundation-sys",
+ "libc",
+ "memchr",
+ "ntapi",
+ "rayon",
+ "windows",
+]
+
+[[package]]
 name = "system-configuration"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10136,13 +10150,16 @@ dependencies = [
  "indoc 1.0.9",
  "lazy_static",
  "mm-player-count-for-namespace",
+ "pegboard",
  "prost 0.10.4",
  "rivet-config",
  "rivet-connection",
+ "rivet-env",
  "rivet-operation",
  "rivet-pools",
  "rivet-runtime",
  "sqlx",
+ "sysinfo 0.32.0",
  "team-get",
  "team-member-count",
  "tokio",
