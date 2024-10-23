@@ -36,10 +36,11 @@ pub enum SubCommand {
 }
 
 impl SubCommand {
-	pub async fn execute(self) -> Result<()> {
+	pub async fn execute(self, config: rivet_config::Config) -> Result<()> {
 		match self {
 			Self::Get { signal_id } => {
-				let signal = util::wf::signal::get_signal(signal_id).await?;
+				let pool = util::wf::build_pool(&config).await?;
+				let signal = util::wf::signal::get_signal(pool, signal_id).await?;
 				util::wf::signal::print_signals(signal.into_iter().collect(), true).await
 			}
 			Self::List {
@@ -49,11 +50,15 @@ impl SubCommand {
 				state,
 				pretty,
 			} => {
+				let pool = util::wf::build_pool(&config).await?;
 				let signals =
-					util::wf::signal::find_signals(tags, workflow_id, name, state).await?;
+					util::wf::signal::find_signals(pool, tags, workflow_id, name, state).await?;
 				util::wf::signal::print_signals(signals, pretty).await
 			}
-			Self::Ack { signal_id } => util::wf::signal::silence_signal(signal_id).await,
+			Self::Ack { signal_id } => {
+				let pool = util::wf::build_pool(&config).await?;
+				util::wf::signal::silence_signal(pool, signal_id).await
+			}
 		}
 	}
 }

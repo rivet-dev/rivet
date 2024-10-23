@@ -23,7 +23,7 @@ pub async fn prepare(
 	Ok(models::CloudDevicesPrepareDeviceLinkResponse {
 		device_link_id: unwrap_ref!(create_res.device_link_id).as_uuid(),
 		device_link_token: create_res.token.clone(),
-		device_link_url: util::route::cloud_device_link(&create_res.token),
+		device_link_url: util::route::cloud_device_link(ctx.config(), &create_res.token),
 	})
 }
 
@@ -41,7 +41,11 @@ pub async fn get(
 	// No auth required since the device doesn't have a token yet
 
 	// Decode device link token
-	let claims = rivet_claims::decode(&query.device_link_token)??.as_cloud_device_link()?;
+	let claims = rivet_claims::decode(
+		&ctx.config().server()?.jwt.public,
+		&query.device_link_token,
+	)??
+	.as_cloud_device_link()?;
 	let link_id = claims.device_link_id;
 
 	// Check for complete message
@@ -89,7 +93,11 @@ pub async fn complete(
 		.await?;
 
 	// Decode device link token
-	let claims = rivet_claims::decode(&body.device_link_token)??.as_cloud_device_link()?;
+	let claims = rivet_claims::decode(
+		&ctx.config().server()?.jwt.public,
+		&body.device_link_token,
+	)??
+	.as_cloud_device_link()?;
 	let link_id = claims.device_link_id;
 
 	// Check the link isn't complete already

@@ -9,13 +9,13 @@ use serde::Serialize;
 use serde_json::json;
 
 #[tracing::instrument(skip_all)]
-pub async fn start() -> GlobalResult<()> {
-	let pools = rivet_pools::from_env().await?;
+pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> GlobalResult<()> {
 	let client =
 		chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("cluster-workflow-backfill");
 	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
 	let ctx = StandaloneCtx::new(
 		chirp_workflow::compat::db_from_pools(&pools).await?,
+		config,
 		rivet_connection::Connection::new(client, pools, cache),
 		"cluster-workflow-backfill",
 	)
@@ -252,16 +252,22 @@ pub async fn start() -> GlobalResult<()> {
 						&tls.job_private_key_pem,
 					) {
 						wf.sub_workflow(|swf| {
-							let base_zone_id = unwrap!(
-								util::env::cloudflare::zone::main::id(),
+							let base_zone_id = unwrap_ref!(
+								ctx.config().server()?.cloudflare()?.zone.main,
 								"dns not configured"
 							);
-							let job_zone_id = unwrap!(
-								util::env::cloudflare::zone::job::id(),
+							let job_zone_id = unwrap_ref!(
+								ctx.config().server()?.cloudflare()?.zone.job,
 								"dns not configured"
 							);
-							let domain_main = unwrap!(util::env::domain_main(), "dns not enabled");
-							let domain_job = unwrap!(util::env::domain_job(), "dns not enabled");
+							let domain_main = unwrap_ref!(
+								ctx.config().server()?.cloudflare()?.zone.main,
+								"dns not enabled"
+							);
+							let domain_job = unwrap_ref!(
+								ctx.config().server()?.cloudflare()?.zone.job,
+								"dns not enabled"
+							);
 
 							#[derive(Serialize, Hash)]
 							struct OrderInput {
@@ -517,7 +523,7 @@ pub async fn start() -> GlobalResult<()> {
 						}),
 					)?;
 
-					let ns = util::env::namespace();
+					let ns = &ctx.config().server()?.rivet.namespace;
 					let tags = vec![
 						// HACK: Linode requires tags to be > 3 characters. We extend the namespace to make sure it
 						// meets the minimum length requirement.
@@ -948,11 +954,12 @@ pub async fn start() -> GlobalResult<()> {
 									}),
 								)?;
 
-								let zone_id = unwrap!(
-									util::env::cloudflare::zone::job::id(),
+								let zone_id = unwrap_ref!(
+									ctx.config().server()?.cloudflare()?.zone.job,
 									"dns not configured"
 								);
-								let domain_job = unwrap!(util::env::domain_job());
+								let domain_job =
+									unwrap_ref!(ctx.config().server()?.rivet.dns()?.domain_job);
 
 								#[derive(Serialize, Hash)]
 								struct CreateDnsRecordInput {

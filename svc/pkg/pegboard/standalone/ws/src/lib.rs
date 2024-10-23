@@ -29,18 +29,20 @@ struct Connection {
 
 type Connections = HashMap<Uuid, Arc<Connection>>;
 
-pub async fn start() -> GlobalResult<()> {
-	let pools = rivet_pools::from_env().await?;
-
-	run_from_env(pools.clone()).await
+pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> GlobalResult<()> {
+	run_from_env(config.clone(), pools.clone()).await
 }
 
 #[tracing::instrument(skip_all)]
-pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
+pub async fn run_from_env(
+	config: rivet_config::Config,
+	pools: rivet_pools::Pools,
+) -> GlobalResult<()> {
 	let client = chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("pegboard-ws");
 	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
 	let ctx = StandaloneCtx::new(
 		chirp_workflow::compat::db_from_pools(&pools).await?,
+		config,
 		rivet_connection::Connection::new(client, pools, cache),
 		"pegboard-ws",
 	)
@@ -58,7 +60,7 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 }
 
 async fn socket_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>) -> GlobalResult<()> {
-	let port = util::env::var("PORT")?.parse::<u16>()?;
+	let port = ctx.config().server()?.rivet.pegboard.port;
 	let addr = SocketAddr::from(([0, 0, 0, 0], port));
 
 	let listener = TcpListener::bind(addr).await?;

@@ -7,29 +7,31 @@ use linode::util::{api, client};
 use reqwest::header;
 use serde_json::json;
 
-pub async fn start() -> GlobalResult<()> {
-	let pools = rivet_pools::from_env().await?;
-
+pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> GlobalResult<()> {
 	let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
 	loop {
 		interval.tick().await;
 
-		run_from_env(pools.clone()).await?;
+		run_from_env(config.clone(), pools.clone()).await?;
 	}
 }
 
 #[tracing::instrument(skip_all)]
-pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
+pub async fn run_from_env(
+	config: rivet_config::Config,
+	pools: rivet_pools::Pools,
+) -> GlobalResult<()> {
 	let client = chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("linode-gc");
 	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
 	let ctx = StandaloneCtx::new(
 		chirp_workflow::compat::db_from_pools(&pools).await?,
+		config,
 		rivet_connection::Connection::new(client, pools, cache),
 		"linode-gc",
 	)
 	.await?;
 
-	let secret = util::env::read_secret(&["linode", "token"]).await?;
+	let secret = ctx.config().server()?.linode()?.api_token.read();
 	let dc_rows = sql_fetch_all!(
 		[ctx, (i64, String,)]
 		"
@@ -40,7 +42,7 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 	)
 	.await?
 	.into_iter()
-	.chain(std::iter::once((Provider::Linode as i64, secret)));
+	.chain(std::iter::once((Provider::Linode as i64, secret.clone())));
 
 	let filter = json!({
 		"status": "available",
@@ -71,9 +73,9 @@ async fn run_for_linode_account(
 	headers: &header::HeaderMap,
 ) -> GlobalResult<()> {
 	// Build HTTP client
-	let client = client::Client::new_with_headers(Some(api_token), headers.clone()).await?;
+	let client = client::Client::new_with_headers(api_token, headers.clone()).await?;
 
-	let complete_images = api::list_custom_images(&client).await?;
+	let complete_images = api::list_custom_images(ctx.config(), &client).await?;
 
 	if complete_images.len() == linode::util::api::CUSTOM_IMAGE_LIST_SIZE {
 		// We don't need to paginate since we'll never have more than

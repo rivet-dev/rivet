@@ -20,6 +20,7 @@ team-validate = { path = "../ops/validate" }
 user-identity-get = { path = "../../user-identity/ops/get" }
 game-namespace-list = { path = "../../game/ops/namespace-list" }
 mm-lobby-list-for-namespace = { path = "../../mm/ops/lobby-list-for-namespace" }
+rivet-config = { version = "0.1.0", path = "../../../../lib/config" }
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../lib/chirp/worker" }

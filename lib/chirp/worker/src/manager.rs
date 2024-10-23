@@ -18,7 +18,7 @@ use tracing::Instrument;
 use types_proto::rivet::chirp;
 
 use crate::{
-	config::{Config, WorkerKind},
+	config::{Config as WorkerConfig, WorkerKind},
 	error::ManagerError,
 	request::{RedisMessageMeta, Request},
 	worker::Worker,
@@ -38,11 +38,12 @@ pub struct Manager<W>
 where
 	W: Worker,
 {
-	pub(crate) config: Arc<Config>,
+	pub(crate) worker_config: Arc<WorkerConfig>,
 
 	worker: W,
 	shared_client: chirp_client::SharedClientHandle,
 	cache: rivet_cache::Cache,
+	pub(crate) config: rivet_config::Config,
 	pub(crate) pools: rivet_pools::Pools,
 
 	// Cloned copies of the pools that we've asserted exist.
@@ -63,24 +64,26 @@ impl<W> Manager<W>
 where
 	W: Worker,
 {
-	#[tracing::instrument(err, skip(shared_client, pools, cache, worker))]
+	#[tracing::instrument(err, skip(shared_client, config, pools, cache, worker))]
 	pub fn new(
-		config: Config,
+		worker_config: WorkerConfig,
 		shared_client: chirp_client::SharedClientHandle,
+		config: rivet_config::Config,
 		pools: rivet_pools::Pools,
 		cache: rivet_cache::Cache,
 		worker: W,
 	) -> Result<Arc<Self>, ManagerError> {
-		tracing::info!(config_data = ?config, "init worker manager");
+		tracing::info!(config_data = ?worker_config, "init worker manager");
 
 		let nats = pools.nats()?;
 		let redis_chirp = pools.redis_chirp()?;
 
 		let manager = Arc::new(Manager {
-			config: Arc::new(config),
+			worker_config: Arc::new(worker_config),
 			worker,
 			shared_client,
 			cache,
+			config,
 			pools,
 
 			nats,
@@ -98,17 +101,33 @@ where
 	#[tracing::instrument]
 	pub async fn start(self: Arc<Self>) -> Result<(), ManagerError> {
 		// Build the subscription
-		match &self.config.worker_kind {
+		match &self.worker_config.worker_kind {
 			WorkerKind::Rpc { group } => {
-				let subject = chirp_client::endpoint::subject(&self.config.service_name);
+				let subject = chirp_client::endpoint::subject(&self.worker_config.service_name);
 
 				self.clone().rpc_receiver(subject, group.clone()).await;
 			}
 			WorkerKind::Consumer { topic, group } => {
 				// Create a dedicated connection to redis-chirp for blocking Redis requests
 				// that won't block other requests in the pool.
-				let url = std::env::var("REDIS_URL_PERSISTENT").expect("REDIS_URL_PERSISTENT");
-				let mut redis_chirp_conn = redis::Client::open(url)
+				let redis_config = &self
+					.config
+					.server()
+					.map_err(ManagerError::Global)?
+					.redis
+					.persistent;
+
+				let mut url = redis_config.url.clone();
+				if let Some(username) = &redis_config.username {
+					url.set_username(username)
+						.map_err(|()| ManagerError::ModifyRedisUrl)?;
+				}
+				if let Some(password) = &redis_config.password {
+					url.set_password(Some(password.read()))
+						.map_err(|()| ManagerError::ModifyRedisUrl)?;
+				}
+
+				let mut redis_chirp_conn = redis::Client::open(url.clone())
 					.map_err(ManagerError::BuildRedis)?
 					.get_tokio_connection_manager()
 					.await
@@ -198,7 +217,7 @@ where
 		group: String,
 	) -> CleanExit {
 		let topic_key = chirp_client::redis_keys::message_topic(&topic);
-		let consumer = self.config.worker_instance.clone();
+		let consumer = self.worker_config.worker_instance.clone();
 
 		// Retry with a 15 second padding
 		let pending_retry_time = W::TIMEOUT + Duration::from_secs(15);
@@ -401,7 +420,7 @@ where
 					}
 				}
 
-				// Determine wether or not to break the loop
+				// Determine whether or not to break the loop
 				claim_attempts += 1;
 				if !claimed_msgs.ids.is_empty() {
 					break claimed_msgs.ids;
@@ -533,8 +552,8 @@ where
 		nats_message: Option<nats::Message>,
 		mut redis_message_meta: Option<RedisMessageMeta>,
 	) {
-		let worker_name = match &self.config.worker_kind {
-			WorkerKind::Rpc { .. } => self.config.service_name.clone(),
+		let worker_name = match &self.worker_config.worker_kind {
+			WorkerKind::Rpc { .. } => self.worker_config.service_name.clone(),
 			WorkerKind::Consumer { group, .. } => format!("{}--{}", group, W::NAME),
 		};
 
@@ -555,7 +574,7 @@ where
 			dont_log_body,
 			req_debug,
 			allow_recursive,
-		) = match &self.config.worker_kind {
+		) = match &self.worker_config.worker_kind {
 			WorkerKind::Rpc { .. } => {
 				match chirp::Request::decode(raw_msg_buf.as_slice()) {
 					Ok(req) => {
@@ -699,7 +718,6 @@ where
 					context_name: worker_name.clone(),
 					req_id: req_id_proto.clone(),
 					ts,
-					run_context: chirp::RunContext::Service as i32,
 				});
 				x
 			});
@@ -728,6 +746,7 @@ where
 				op_ctx: OperationContext::new(
 					worker_name,
 					W::TIMEOUT,
+					self.config.clone(),
 					conn,
 					req_id,
 					ray_id,
@@ -931,7 +950,7 @@ where
 
 					(
 						// Serialize response body if a reply is needed
-						if let WorkerKind::Rpc { .. } = &self.config.worker_kind {
+						if let WorkerKind::Rpc { .. } = &self.worker_config.worker_kind {
 							let mut body_buf =
 								Vec::with_capacity(prost::Message::encoded_len(&res));
 							prost::Message::encode(&res, &mut body_buf)
@@ -977,7 +996,7 @@ where
 					}
 
 					(
-						if let WorkerKind::Rpc { .. } = &self.config.worker_kind {
+						if let WorkerKind::Rpc { .. } = &self.worker_config.worker_kind {
 							Some(chirp::Response {
 								kind: Some(chirp::response::Kind::Err(err_proto.clone())),
 							})
@@ -997,7 +1016,7 @@ where
 						Into::<chirp::response::Err>::into(err_code!(CHIRP_REQUEST_TIMEOUT));
 
 					(
-						if let WorkerKind::Rpc { .. } = &self.config.worker_kind {
+						if let WorkerKind::Rpc { .. } = &self.worker_config.worker_kind {
 							Some(chirp::Response {
 								kind: Some(chirp::response::Kind::Err(err_proto.clone())),
 							})

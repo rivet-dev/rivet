@@ -18,7 +18,7 @@ pub struct Output {
 #[operation]
 pub async fn linode_instance_type_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
 	// Build HTTP client
-	let client = client::Client::new(None).await?;
+	let client = client::Client::new(ctx.config(), None).await?;
 
 	// Get hardware stats from linode and cache
 	let instance_types_res = ctx

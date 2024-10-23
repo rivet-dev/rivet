@@ -73,10 +73,24 @@ async fn handle(
 			let origin_host = unwrap_ref!(ctx.origin_host, "no origin");
 
 			// Check for "rivet.game" host
-			let secret_key = if util::env::domain_cdn().map_or(false, |domain_cdn| {
-				domain_cdn == origin_host || origin_host.ends_with(&format!(".{domain_cdn}"))
-			}) {
-				util::env::read_secret(&["turnstile", "cdn", "secret_key"]).await?
+			let secret_key = if ctx
+				.config()
+				.server()?
+				.rivet
+				.dns()?
+				.domain_cdn
+				.as_ref()
+				.map_or(false, |domain_cdn| {
+					domain_cdn == origin_host || origin_host.ends_with(&format!(".{domain_cdn}"))
+				}) {
+				unwrap_ref!(ctx
+					.config()
+					.server()?
+					.turnstile
+					.as_ref()
+					.and_then(|x| x.cdn_secret_key.as_ref()))
+				.read()
+				.clone()
 			} else {
 				turnstile.secret_key.clone()
 			};

@@ -8,7 +8,8 @@ use types_proto::rivet::{
 use crate::{convert, fetch, ApiTryInto};
 
 pub fn handle(
-	current_user_id: Uuid,
+	config: &rivet_config::Config,
+	_current_user_id: Uuid,
 	user: &backend::user::User,
 ) -> GlobalResult<models::IdentityHandle> {
 	let user_id = unwrap_ref!(user.user_id).as_uuid();
@@ -17,23 +18,23 @@ pub fn handle(
 		identity_id: user_id,
 		display_name: user.display_name.clone(),
 		account_number: user.account_number as i32,
-		avatar_url: util::route::user_avatar(&user),
+		avatar_url: util::route::user_avatar(config, &user),
 		is_registered: true, // TODO:
 		external: Box::new(models::IdentityExternalLinks {
-			profile: util::route::user_profile(user_id),
+			profile: util::route::user_profile(config, user_id),
 			settings: None,
 		}),
 	})
 }
 
 pub fn summary(
+	config: &rivet_config::Config,
 	current_user_id: Uuid,
 	user: &backend::user::User,
 	mutual_follows: &[user_follow::get::response::Follow],
 ) -> GlobalResult<models::IdentitySummary> {
 	let user_id_proto = unwrap!(user.user_id);
 	let user_id = user_id_proto.as_uuid();
-	let is_self = user_id == current_user_id;
 
 	let current_user_id = Into::<common::Uuid>::into(current_user_id);
 	let following = mutual_follows.iter().any(|follow| {
@@ -50,10 +51,10 @@ pub fn summary(
 		identity_id: user_id,
 		display_name: user.display_name.clone(),
 		account_number: user.account_number as i32,
-		avatar_url: util::route::user_avatar(&user),
+		avatar_url: util::route::user_avatar(config, &user),
 		is_registered: true, // TODO:
 		external: Box::new(models::IdentityExternalLinks {
-			profile: util::route::user_profile(user_id),
+			profile: util::route::user_profile(config, user_id),
 			settings: None,
 		}),
 		following,
@@ -74,6 +75,7 @@ pub struct ProfileCtx<'a> {
 }
 
 pub fn profile(
+	config: &rivet_config::Config,
 	current_user_id: Uuid,
 	user: &backend::user::User,
 	pctx: ProfileCtx,
@@ -115,7 +117,7 @@ pub fn profile(
 			})
 			.map(|team| {
 				Ok(models::IdentityGroup {
-					group: Box::new(convert::group::handle(team)?),
+					group: Box::new(convert::group::handle(config, team)?),
 				})
 			})
 			.collect::<GlobalResult<Vec<_>>>()?
@@ -149,11 +151,11 @@ pub fn profile(
 		identity_id: user_id,
 		display_name: user.display_name.to_owned(),
 		account_number: user.account_number as i32,
-		avatar_url: util::route::user_avatar(&user),
+		avatar_url: util::route::user_avatar(config, &user),
 		is_registered,
 		external: Box::new(models::IdentityExternalLinks {
-			profile: util::route::user_profile(user_id),
-			settings: (is_self && pctx.is_game_user).then(util::route::user_settings),
+			profile: util::route::user_profile(config, user_id),
+			settings: (is_self && pctx.is_game_user).then(|| util::route::user_settings(config)),
 		}),
 		dev_state: None,
 		is_admin: is_self && user.is_admin,

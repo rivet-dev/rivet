@@ -33,10 +33,6 @@ impl CacheInner {
 			.map(|bucket| RateLimitResult::new(bucket.count, bucket.bucket_duration_ms));
 		let original_len = results.len();
 
-		if *rivet_util::debug::DISABLE_RATE_LIMIT {
-			return results.collect::<Vec<_>>();
-		}
-
 		// Increment the bucket hit count
 		let results = futures_util::stream::iter(results)
 			.map(|result| {

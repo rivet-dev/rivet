@@ -10,19 +10,28 @@ pub enum ProvisionError {
 	CreateBucketError(String),
 	#[error("missing env var: {0}")]
 	MissingEnvVar(String),
+	#[error("{0}")]
+	Global(global_error::GlobalError),
 }
 
 /// Provisions all required S3 buckets.
-pub async fn provision(buckets: &[S3Bucket]) -> Result<(), ProvisionError> {
+pub async fn provision(
+	config: rivet_config::Config,
+	buckets: &[S3Bucket],
+) -> Result<(), ProvisionError> {
 	// Build client
-	let region = crate::s3_region()?;
-	let (access_key_id, secret_access_key) = crate::s3_credentials()?;
-	let endpoint = crate::s3_endpoint_external()?;
-	let client = Client::new("", &endpoint, &region, &access_key_id, &secret_access_key)?;
+	let s3_config = &config.server().map_err(ProvisionError::Global)?.s3;
+	let client = Client::new(
+		"",
+		&s3_config.endpoint_external.to_string(),
+		&s3_config.region,
+		&*s3_config.access_key_id.read(),
+		&*s3_config.secret_access_key.read(),
+	)?;
 
 	// Provision buckets
 	for bucket in buckets {
-		let bucket_name = crate::namespaced_bucket_name(&bucket.name);
+		let bucket_name = crate::namespaced_bucket_name(&config, &bucket.name)?;
 
 		match client.create_bucket().bucket(&bucket_name).send().await {
 			Ok(_) => tracing::info!(bucket = ?bucket_name, "bucket created"),

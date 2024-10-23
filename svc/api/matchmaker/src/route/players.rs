@@ -20,12 +20,12 @@ pub async fn connected(
 ) -> GlobalResult<serde_json::Value> {
 	// Mock response
 	if ctx.auth().game_ns_dev_option()?.is_some() {
-		let _player_ent = decode_player_token_dev(&body.player_token)?;
+		let _player_ent = decode_player_token_dev(ctx.config(), &body.player_token)?;
 		return Ok(json!({}));
 	}
 
 	let lobby_ent = ctx.auth().lobby()?;
-	let player_ent = decode_player_token(&body.player_token)?;
+	let player_ent = decode_player_token(ctx.config(), &body.player_token)?;
 
 	let res = msg!([ctx] mm::msg::player_register(player_ent.player_id) -> Result<mm::msg::player_register_complete, mm::msg::player_register_fail> {
 		player_id: Some(player_ent.player_id.into()),
@@ -67,12 +67,12 @@ pub async fn disconnected(
 ) -> GlobalResult<serde_json::Value> {
 	// Mock response
 	if ctx.auth().game_ns_dev_option()?.is_some() {
-		let _player_ent = decode_player_token_dev(&body.player_token)?;
+		let _player_ent = decode_player_token_dev(ctx.config(), &body.player_token)?;
 		return Ok(json!({}));
 	}
 
 	let lobby_ent = ctx.auth().lobby()?;
-	let player_ent = decode_player_token(&body.player_token)?;
+	let player_ent = decode_player_token(ctx.config(), &body.player_token)?;
 
 	let res = msg!([ctx] mm::msg::player_remove(player_ent.player_id) -> Result<mm::msg::player_remove_complete, mm::msg::player_remove_fail> {
 		player_id: Some(player_ent.player_id.into()),
@@ -99,8 +99,11 @@ pub async fn disconnected(
 	}
 }
 
-fn decode_player_token(token: &str) -> GlobalResult<rivet_claims::ent::MatchmakerPlayer> {
-	let player_claims = rivet_claims::decode(token)
+fn decode_player_token(
+	config: &rivet_config::Config,
+	token: &str,
+) -> GlobalResult<rivet_claims::ent::MatchmakerPlayer> {
+	let player_claims = rivet_claims::decode(&config.server()?.jwt.public, token)
 		.map_err(|_| err_code!(TOKEN_ERROR, error = "Malformed player token"))?
 		.map_err(|_| err_code!(TOKEN_ERROR, error = "Invalid player token"))?;
 
@@ -109,9 +112,10 @@ fn decode_player_token(token: &str) -> GlobalResult<rivet_claims::ent::Matchmake
 }
 
 fn decode_player_token_dev(
+	config: &rivet_config::Config,
 	token: &str,
 ) -> GlobalResult<rivet_claims::ent::MatchmakerDevelopmentPlayer> {
-	let player_claims = rivet_claims::decode(token)
+	let player_claims = rivet_claims::decode(&config.server()?.jwt.public, token)
 		.map_err(|_| err_code!(TOKEN_ERROR, error = "Malformed player token"))?
 		.map_err(|_| err_code!(TOKEN_ERROR, error = "Invalid player token"))?;
 

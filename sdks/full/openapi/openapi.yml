@@ -10023,8 +10023,6 @@ components:
       type: object
       description: Domains that host parts of Rivet
       properties:
-        main:
-          type: string
         cdn:
           type: string
         job:
@@ -10032,7 +10030,6 @@ components:
         opengb:
           type: string
       required:
-        - main
         - cdn
         - job
     CloudBootstrapOrigins:

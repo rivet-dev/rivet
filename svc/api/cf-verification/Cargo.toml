@@ -35,6 +35,8 @@ url = "2.2.2"
 uuid = { version = "1", features = ["v4"] }
 
 cf-custom-hostname-get = { path = "../../pkg/cf-custom-hostname/ops/get" }
+rivet-config = { version = "0.1.0", path = "../../../lib/config" }
+rivet-env = { version = "0.1.0", path = "../../../lib/env" }
 
 [dev-dependencies]
 rivet-cf-verification = { path = "../../../lib/smithy-output/api-cf-verification/rust" }

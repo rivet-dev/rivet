@@ -24,8 +24,9 @@ pub async fn prepare_game_link(
 
 	let _link_id = unwrap_ref!(game_user_link_create_res.link_id).as_uuid();
 	let identity_link_token = &game_user_link_create_res.user_link_token;
-	let identity_link_url = util::route::identity_game_link(identity_link_token);
-	let claims = rivet_claims::decode(identity_link_token)??;
+	let identity_link_url = util::route::identity_game_link(ctx.config(), identity_link_token);
+	let claims =
+		rivet_claims::decode(&ctx.config().server()?.jwt.public, identity_link_token)??;
 
 	Ok(models::IdentityPrepareGameLinkResponse {
 		identity_link_token: identity_link_token.clone(),
@@ -108,7 +109,7 @@ pub async fn get_game_link(
 		.await?;
 		let game = unwrap!(game_res.games.first());
 
-		convert::game::handle(game)?
+		convert::game::handle(ctx.config(), game)?
 	};
 
 	// Fetch new identity
@@ -118,7 +119,8 @@ pub async fn get_game_link(
 	) {
 		let new_game_user_id = new_game_user_id.as_uuid();
 
-		let new_game_user_token_claims = rivet_claims::decode(new_game_user_token)??;
+		let new_game_user_token_claims =
+			rivet_claims::decode(&ctx.config().server()?.jwt.public, new_game_user_token)??;
 
 		// Fetch game user
 		let game_user_res = op!([ctx] game_user_get {

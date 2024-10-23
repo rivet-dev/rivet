@@ -244,7 +244,7 @@ async fn turnstile(ctx: TestCtx) {
 	};
 
 	// Test CDN site key (should fail as its an actual site key)
-	if let Some(domain_cdn) = util::env::domain_cdn() {
+	if let Some(domain_cdn) = ctx.config().server()?.rivet.dns()?.domain_cdn {
 		op!([ctx] captcha_verify {
 			topic: topic.clone(),
 			remote_address: remote_address.to_string(),

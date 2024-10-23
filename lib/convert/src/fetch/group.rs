@@ -47,6 +47,7 @@ pub async fn summaries(
 			let is_current_identity_member = user_teams.iter().any(|t| t.team_id == team.team_id);
 
 			convert::group::summary(
+				ctx.config(),
 				team,
 				&team_member_count_res.teams,
 				is_current_identity_member,

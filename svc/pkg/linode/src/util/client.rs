@@ -12,11 +12,14 @@ pub struct Client {
 }
 
 impl Client {
-	pub async fn new(api_token: Option<String>) -> GlobalResult<Self> {
-		let api_token = if let Some(api_token) = api_token {
-			api_token
+	pub async fn new(
+		config: &rivet_config::Config,
+		override_api_token: Option<String>,
+	) -> GlobalResult<Self> {
+		let api_token = if let Some(x) = &override_api_token {
+			(*x).clone()
 		} else {
-			util::env::read_secret(&["linode", "token"]).await?
+			config.server()?.linode()?.api_token.read().clone()
 		};
 
 		let auth = format!("Bearer {}", api_token);
@@ -34,15 +37,9 @@ impl Client {
 	}
 
 	pub async fn new_with_headers(
-		api_token: Option<String>,
+		api_token: String,
 		mut headers: header::HeaderMap,
 	) -> GlobalResult<Self> {
-		let api_token = if let Some(api_token) = api_token {
-			api_token
-		} else {
-			util::env::read_secret(&["linode", "token"]).await?
-		};
-
 		let auth = format!("Bearer {}", api_token);
 		headers.insert(header::AUTHORIZATION, header::HeaderValue::from_str(&auth)?);
 

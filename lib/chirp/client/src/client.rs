@@ -80,10 +80,10 @@ impl SharedClient {
 	#[tracing::instrument(skip(pools))]
 	pub fn from_env(pools: rivet_pools::Pools) -> Result<SharedClientHandle, ClientError> {
 		Ok(SharedClient::new(
-			pools.nats()?,
-			pools.redis_chirp()?,
-			pools.redis_chirp_ephemeral()?,
-			pools.redis_cache()?,
+			pools.nats().map_err(ClientError::Pools)?,
+			pools.redis_chirp().map_err(ClientError::Pools)?,
+			pools.redis_chirp_ephemeral().map_err(ClientError::Pools)?,
+			pools.redis_cache().map_err(ClientError::Pools)?,
 		))
 	}
 
@@ -97,10 +97,6 @@ impl SharedClient {
 				context_name: context_name.into(),
 				req_id: Some(req_id.into()),
 				ts: rivet_util::timestamp::now(),
-				run_context: match rivet_util::env::run_context() {
-					rivet_util::env::RunContext::Service => chirp::RunContext::Service,
-					rivet_util::env::RunContext::Test => chirp::RunContext::Test,
-				} as i32,
 			}],
 		)
 	}

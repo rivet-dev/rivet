@@ -6,7 +6,7 @@ use serde_json::json;
 async fn handle(
 	ctx: OperationContext<cdn::namespace_domain_remove::Request>,
 ) -> GlobalResult<cdn::namespace_domain_remove::Response> {
-	ensure!(util::feature::cf_custom_hostname());
+	ensure!(ctx.config().server()?.cloudflare()?.zone.game.is_some());
 
 	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 

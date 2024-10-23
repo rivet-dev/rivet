@@ -177,11 +177,7 @@ export class Builds {
      *     await client.cloud.games.builds.createGameBuild("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
      *         displayName: "string",
      *         imageTag: "string",
-     *         imageFile: {
-     *             path: "string",
-     *             contentType: "string",
-     *             contentLength: 1000000
-     *         },
+     *         imageFile: {},
      *         multipartUpload: true,
      *         kind: Rivet.cloud.games.BuildKind.DockerImage,
      *         compression: Rivet.cloud.games.BuildCompression.None

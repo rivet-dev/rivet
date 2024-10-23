@@ -23,27 +23,33 @@ enum PoolType {
 	Pegboard,
 }
 
-#[tracing::instrument]
-pub async fn start() -> GlobalResult<()> {
-	let pools = rivet_pools::from_env().await?;
+#[tracing::instrument(skip_all)]
+pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> GlobalResult<()> {
 	let client = chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("pegboard-dc-init");
 	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
 	let ctx = StandaloneCtx::new(
 		chirp_workflow::compat::db_from_pools(&pools).await?,
+		config,
 		rivet_connection::Connection::new(client, pools, cache),
 		"pegboard-dc-init",
 	)
 	.await?;
 
 	// Read config from env
-	let Some(config_json) = util::env::var("RIVET_DEFAULT_CLUSTER_CONFIG").ok() else {
+	let Some(cluster_config_json) = &ctx
+		.config()
+		.server()?
+		.rivet
+		.cluster()?
+		.default_cluster_config
+	else {
 		tracing::warn!("no cluster config set in namespace config");
 		return Ok(());
 	};
-	let config = serde_json::from_str::<Cluster>(&config_json)?;
+	let cluster_config = serde_json::from_value::<Cluster>(cluster_config_json.clone())?;
 
 	// Find datacenter ids with pegboard pools
-	let datacenter_ids = config
+	let datacenter_ids = cluster_config
 		.datacenters
 		.iter()
 		.flat_map(|(_, dc)| {

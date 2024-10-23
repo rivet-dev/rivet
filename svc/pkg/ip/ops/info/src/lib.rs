@@ -75,8 +75,8 @@ async fn fetch_ip_info_io(
 		let client = reqwest::Client::new();
 		let req = client.get(format!("https://ipinfo.io/{}", ip_str));
 
-		let req = if let Some(token) = util::env::read_secret_opt(&["ip_info", "token"]).await? {
-			req.query(&[("token", token)])
+		let req = if let Some(ip_info) = &ctx.config().server()?.ip_info {
+			req.query(&[("token", ip_info.token.read().as_str())])
 		} else {
 			req
 		};

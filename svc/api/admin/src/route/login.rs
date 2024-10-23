@@ -36,7 +36,7 @@ pub async fn login(
 	.await?;
 
 	let access_token_token = unwrap!(token_res.token).token;
-	let access_token_link_url = util::route::access_token_link(&access_token_token);
+	let access_token_link_url = util::route::access_token_link(ctx.config(), &access_token_token);
 
 	Ok(models::AdminLoginResponse {
 		url: access_token_link_url,

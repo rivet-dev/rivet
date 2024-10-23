@@ -13,11 +13,11 @@ use regex::Regex;
 use rivet_claims::ClaimsDecode;
 
 /// Origins that the hub may be requesting from.
-pub fn hub_origin_regex() -> Regex {
+pub fn hub_origin_regex(config: &rivet_config::Config) -> Regex {
 	// TODO: Make this lazy static to prevent reparsing regex for every request
-	let regex_str =
-		std::env::var("RIVET_API_HUB_ORIGIN_REGEX").expect("RIVET_API_HUB_ORIGIN_REGEX");
-	Regex::new(&regex_str).expect("invalid regex")
+	let regex_str = &config.server().unwrap().rivet.hub.public_origin_regex;
+	let regex = Regex::new(&regex_str).expect("failed to build hub origin regex");
+	regex
 }
 
 #[derive(Default)]
@@ -41,9 +41,9 @@ impl CorsConfigBuilder {
 	}
 
 	/// CORS config for services intended to be exposed to the Hub.
-	pub fn hub() -> Self {
+	pub fn hub(config: &rivet_config::Config) -> Self {
 		Self::default()
-			.origin_regex(hub_origin_regex())
+			.origin_regex(hub_origin_regex(config))
 			.methods(&["GET", "POST", "PUT", "PATCH", "DELETE"])
 			.headers(&["Content-Type", "Authorization"])
 			.credentials()
@@ -281,25 +281,30 @@ pub fn as_auth_expired<T>(res: GlobalResult<T>) -> GlobalResult<T> {
 }
 
 pub async fn basic_rate_limit(
+	config: &rivet_config::Config,
 	rate_limit_ctx: crate::auth::AuthRateLimitCtx<'_>,
 ) -> GlobalResult<()> {
 	if let Some(remote_address) = rate_limit_ctx.remote_address {
-		let config = rate_limit_ctx.rate_limit_config;
+		let rate_limit_config = rate_limit_ctx.rate_limit_config;
 
 		// Trigger rate limit
-		let rate_limit_key = config.key.to_owned();
+		let rate_limit_key = rate_limit_config.key.to_owned();
 		let rate_limit_results = rate_limit_ctx
 			.cache
 			.rate_limit(
-				&("req", config.key.to_owned()),
+				&("req", rate_limit_config.key.to_owned()),
 				&remote_address.to_string(),
-				config,
+				rate_limit_config,
 			)
 			.await;
 
 		// Decode bypass token
 		if let Some(bypass_token) = rate_limit_ctx.bypass_token {
-			as_auth_expired(rivet_claims::decode(&bypass_token)?)?.as_bypass()?;
+			as_auth_expired(rivet_claims::decode(
+				&config.server()?.jwt.public,
+				&bypass_token,
+			)?)?
+			.as_bypass()?;
 		}
 		// Handle rate limiting
 		else if let Some(rate_limit_result) = rate_limit_results.iter().find(|res| !res.is_valid)

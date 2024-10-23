@@ -9,11 +9,12 @@ use rivet_cache::{Cache, RateLimitConfig};
 #[async_trait]
 pub trait ApiAuth: Sized {
 	async fn new(
+		config: rivet_config::Config,
 		api_token: Option<String>,
 		rate_limit_ctx: AuthRateLimitCtx<'_>,
 	) -> GlobalResult<Self>;
 
-	async fn rate_limit(rate_limit_ctx: AuthRateLimitCtx<'_>) -> GlobalResult<()>;
+	async fn rate_limit(config: &rivet_config::Config, rate_limit_ctx: AuthRateLimitCtx<'_>) -> GlobalResult<()>;
 }
 
 pub struct AuthRateLimitCtx<'a> {

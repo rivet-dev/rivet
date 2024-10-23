@@ -16,7 +16,10 @@ pub async fn cluster_server_dns_delete(ctx: &mut WorkflowCtx, input: &Input) -> 
 		})
 		.await?;
 
-	let zone_id = unwrap!(util::env::cloudflare::zone::job::id(), "dns not configured");
+	let zone_id = unwrap!(
+		ctx.config().server()?.cloudflare()?.zone.job.clone(),
+		"dns not configured"
+	);
 
 	if let Some(dns_record_id) = records_res.dns_record_id {
 		ctx.activity(DeleteDnsRecordInput {
@@ -90,7 +93,7 @@ struct DeleteDnsRecordInput {
 
 #[activity(DeleteDnsRecord)]
 async fn delete_dns_record(ctx: &ActivityCtx, input: &DeleteDnsRecordInput) -> GlobalResult<()> {
-	let client = cf_client(None).await?;
+	let client = cf_client(ctx.config(), None).await?;
 
 	let res = client
 		.request(&cf::dns::DeleteDnsRecord {

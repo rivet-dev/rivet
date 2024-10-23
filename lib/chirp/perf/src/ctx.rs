@@ -153,8 +153,7 @@ impl PerfCtxInner {
 	) -> Result<perf::SvcPerf, PerfCtxInnerError> {
 		Ok(perf::SvcPerf {
 			// TODO: This should reflect the worker name, not the service name
-			context_name: env::var("CHIRP_SERVICE_NAME")
-				.map_err(|_| PerfCtxInnerError::MissingEnvVar("CHIRP_SERVICE_NAME".to_owned()))?,
+			context_name: rivet_env::service_name().to_string(),
 			ts,
 			duration: self.base_ts.elapsed().as_nanos() as i64,
 			req_id: Some(req_id.into()),

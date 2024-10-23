@@ -16,28 +16,34 @@ pub struct ResolvedGameUser {
 
 /// Information derived from the authentication middleware.
 pub struct Auth {
+	config: rivet_config::Config,
 	claims: Option<Claims>,
 }
 
 #[async_trait]
 impl ApiAuth for Auth {
 	async fn new(
+		config: rivet_config::Config,
 		api_token: Option<String>,
 		rate_limit_ctx: AuthRateLimitCtx<'_>,
 	) -> GlobalResult<Auth> {
-		Self::rate_limit(rate_limit_ctx).await?;
+		Self::rate_limit(&config, rate_limit_ctx).await?;
 
 		Ok(Auth {
+			config: config.clone(),
 			claims: if let Some(api_token) = api_token {
-				Some(as_auth_expired(rivet_claims::decode(&api_token)?)?)
+				Some(as_auth_expired(rivet_claims::decode(
+					&config.server()?.jwt.public,
+					&api_token,
+				)?)?)
 			} else {
 				None
 			},
 		})
 	}
 
-	async fn rate_limit(rate_limit_ctx: AuthRateLimitCtx<'_>) -> GlobalResult<()> {
-		basic_rate_limit(rate_limit_ctx).await
+	async fn rate_limit(config: &rivet_config::Config, rate_limit_ctx: AuthRateLimitCtx<'_>) -> GlobalResult<()> {
+		basic_rate_limit(config, rate_limit_ctx).await
 	}
 }
 
@@ -139,7 +145,7 @@ impl Auth {
 		token: String,
 	) -> GlobalResult<(rivet_claims::ent::GameUserLink, Uuid)> {
 		// Decode & validate claims
-		let claims = rivet_claims::decode(&token)
+		let claims = rivet_claims::decode(&self.config.server()?.jwt.public, &token)
 			.map_err(|_| err_code!(API_FORBIDDEN, reason = "Claims error"))??;
 		let game_user_link_ent = claims
 			.as_game_user_link()

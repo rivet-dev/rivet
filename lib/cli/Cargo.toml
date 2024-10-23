@@ -67,6 +67,7 @@ build-default-create = { path = "../../svc/pkg/build/standalone/default-create" 
 cluster-default-update = { path = "../../svc/pkg/cluster/standalone/default-update" }
 cluster-workflow-backfill = { path = "../../svc/pkg/cluster/standalone/workflow-backfill" }
 pegboard-dc-init = { path = "../../svc/pkg/pegboard/standalone/dc-init" }
+rivet-config = { version = "0.1.0", path = "../config" }
 
 
 [dependencies.sqlx]

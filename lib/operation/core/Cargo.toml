@@ -17,6 +17,7 @@ indoc = "1.0"
 prost = "0.10"
 prost-types = "0.10"
 rivet-cache = { path = "../../cache/build" }
+rivet-config = { version = "0.1.0", path = "../../config" }
 rivet-connection = { path = "../../connection" }
 rivet-operation-macros = { path = "../macros" }
 rivet-pools = { path = "../../pools" }

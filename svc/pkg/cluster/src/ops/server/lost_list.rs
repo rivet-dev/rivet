@@ -33,7 +33,7 @@ pub struct Output {
 /// than 12 hours.
 #[operation]
 pub async fn cluster_server_lost_list(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
-	let linode_token = util::env::read_secret(&["linode", "token"]).await?;
+	let linode_token = ctx.config().server()?.linode()?.api_token.read().clone();
 
 	let accounts = sql_fetch_all!(
 		[ctx, (i64, String)]
@@ -60,7 +60,7 @@ pub async fn cluster_server_lost_list(ctx: &OperationCtx, input: &Input) -> Glob
 	// Filter by namespace
 	let filter = json!({
 		"label": {
-			"+contains": format!("{}-", util::env::namespace()),
+			"+contains": format!("{}-", ctx.config().server()?.rivet.namespace),
 		}
 	});
 	let mut headers = header::HeaderMap::new();
@@ -90,8 +90,7 @@ async fn run_for_linode_account(
 	headers: &header::HeaderMap,
 ) -> GlobalResult<Vec<Server>> {
 	// Build HTTP client
-	let client =
-		client::Client::new_with_headers(Some(api_token.to_string()), headers.clone()).await?;
+	let client = client::Client::new_with_headers(api_token.to_string(), headers.clone()).await?;
 
 	let req = client
 		.inner()
@@ -106,6 +105,7 @@ async fn run_for_linode_account(
 
 	tracing::info!("{} servers in account", res.data.len());
 
+	let server_config = ctx.config().server()?;
 	let server_ids = res
 		.data
 		.into_iter()
@@ -117,7 +117,7 @@ async fn run_for_linode_account(
 		.filter_map(|linode| {
 			linode
 				.label
-				.get(util::env::namespace().len() + 1..)
+				.get(server_config.rivet.namespace.len() + 1..)
 				.map(util::uuid::parse)
 		})
 		.collect::<GlobalResult<Vec<_>>>()?;

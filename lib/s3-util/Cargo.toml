@@ -15,3 +15,5 @@ thiserror = "1.0"
 tracing = "0.1"
 tokio = { version = "1.40" }
 rivet-util = { version = "0.1.0", path = "../util/core" }
+rivet-config = { version = "0.1.0", path = "../config" }
+global-error = { version = "0.1.5", path = "../global-error" }

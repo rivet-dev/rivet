@@ -23,6 +23,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
     "ansi",
 ] }
 tracing-logfmt = "0.3"
+rivet-config = { version = "0.1.0", path = "../../../../../lib/config" }
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../../lib/chirp/worker" }

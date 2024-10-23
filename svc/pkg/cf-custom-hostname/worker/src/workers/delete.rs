@@ -17,7 +17,7 @@ struct CloudflareErrorEntry {
 async fn worker(
 	ctx: &OperationContext<cf_custom_hostname::msg::delete::Message>,
 ) -> GlobalResult<()> {
-	let game_zone_id = unwrap!(util::env::cloudflare::zone::game::id());
+	let game_zone_id = unwrap_ref!(ctx.config().server()?.cloudflare()?.zone.game);
 
 	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 
@@ -48,7 +48,10 @@ async fn worker(
 		))
 		.header(
 			reqwest::header::AUTHORIZATION,
-			format!("Bearer {}", util::env::cloudflare::auth_token()),
+			format!(
+				"Bearer {}",
+				ctx.config().server()?.cloudflare()?.auth_token.read()
+			),
 		)
 		.send()
 		.await?;

@@ -14,12 +14,6 @@ static GLOBAL_INIT: Once = Once::new();
 const API_TRAEFIK_PROVIDER_URL: &str =
 	"http://rivet-api-internal.rivet-service.svc.cluster.local/traefik-provider";
 
-async fn get_api_traefik_provider_token() -> String {
-	util::env::read_secret(&["rivet", "api_traefik_provider", "token"])
-		.await
-		.unwrap()
-}
-
 struct Ctx {
 	op_ctx: OperationContext<()>,
 }
@@ -34,10 +28,10 @@ impl Ctx {
 				.init();
 		});
 
-		let pools = rivet_pools::from_env().await.unwrap();
+		let pools = rivet_pools::Pools::new(config).await.unwrap();
 		let cache = rivet_cache::CacheInner::new(
 			"api-auth-test".to_string(),
-			std::env::var("RIVET_SOURCE_HASH").unwrap(),
+			rivet_env::source_hash().to_string(),
 			pools.redis_cache().unwrap(),
 		);
 		let client = chirp_client::SharedClient::from_env(pools.clone())
@@ -114,7 +108,13 @@ async fn cdn() {
 		let res = reqwest::Client::new()
 			.get(&format!(
 				"{API_TRAEFIK_PROVIDER_URL}/config/core?token={token}",
-				token = get_api_traefik_provider_token().await
+				token = ctx
+					.config()
+					.server()?
+					.rivet
+					.tokens
+					.api_traefik_provider
+					.read()
 			))
 			.send()
 			.await
@@ -471,7 +471,7 @@ mod cdn_suite {
 			base: format!(
 				"https://{}.{}",
 				game.name_id,
-				util::env::domain_cdn().unwrap()
+				ctx.config().server()?.rivet.dns()?.domain_cdn
 			),
 			game,
 		}

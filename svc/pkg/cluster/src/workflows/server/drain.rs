@@ -7,10 +7,6 @@ use rivet_operation::prelude::proto::backend::pkg::*;
 
 use crate::types::PoolType;
 
-lazy_static::lazy_static! {
-	static ref NOMAD_CONFIG: Configuration = nomad_util::new_config_from_env().unwrap();
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct Input {
 	pub datacenter_id: Uuid,
@@ -110,8 +106,9 @@ async fn drain_node(ctx: &ActivityCtx, input: &DrainNodeInput) -> GlobalResult<(
 	.await?;
 
 	if let Some(nomad_node_id) = nomad_node_id {
+		let nomad_config = nomad_util::new_build_config(ctx.config())?;
 		let res = nodes_api::update_node_eligibility(
-			&NOMAD_CONFIG,
+			&nomad_config,
 			&nomad_node_id,
 			models::NodeUpdateEligibilityRequest {
 				eligibility: Some("ineligible".to_string()),

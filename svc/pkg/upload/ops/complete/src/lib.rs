@@ -33,7 +33,7 @@ async fn handle(
 		ensure_eq_with!(&bucket, req_bucket, DB_INVALID_BUCKET);
 	}
 
-	let s3_client = s3_util::Client::from_env(&bucket).await?;
+	let s3_client = s3_util::Client::with_bucket(ctx.config(), &bucket).await?;
 
 	let nsfw_scores =
 		validate_profanity_scores(&ctx, &s3_client, upload_id, &files, user_id).await?;
@@ -183,11 +183,7 @@ async fn validate_profanity_scores(
 				})
 				.await?;
 
-				if ctx.test()
-					|| std::env::var("RIVET_UPLOAD_NSFW_ERROR_VERBOSE")
-						.ok()
-						.map_or(false, |x| x == "1")
-				{
+				if ctx.config().server()?.rivet.upload_nsfw_error_verbose {
 					bail_with!(UPLOAD_NSFW_CONTENT_DETECTED {
 						metadata: serde_json::json!({
 							"url": score.url,

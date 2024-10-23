@@ -1,0 +1,7 @@
+[package]
+name = "rivet-test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+types-proto = { version = "0.1.0", path = "../types-proto/core" }

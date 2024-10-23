@@ -18,12 +18,8 @@ import * as Rivet from "../../../../../../index";
  *             "key": "value"
  *         },
  *         captcha: {
- *             hcaptcha: {
- *                 clientResponse: "string"
- *             },
- *             turnstile: {
- *                 clientResponse: "string"
- *             }
+ *             hcaptcha: {},
+ *             turnstile: {}
  *         },
  *         verificationData: {
  *             "key": "value"

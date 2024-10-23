@@ -85,7 +85,7 @@ pub async fn prewarm_ats(ctx: &OperationCtx, input: &Input) -> GlobalResult<()> 
 					// Build path
 					let path = format!(
 						"/s3-cache/default/{namespace}-bucket-build/{upload_id}/{file_name}",
-						namespace = util::env::namespace(),
+						namespace = ctx.config().server()?.rivet.namespace,
 						upload_id = build.upload_id,
 						file_name = utils::file_name(build.kind, build.compression),
 					);

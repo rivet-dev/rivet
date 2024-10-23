@@ -19,11 +19,12 @@ use crate::{
 
 pub struct ApiCtx {
 	ray_id: Uuid,
-	name: &'static str,
+	name: String,
 	ts: i64,
 
 	db: DatabaseHandle,
 
+	config: rivet_config::Config,
 	conn: rivet_connection::Connection,
 	msg_ctx: MessageCtx,
 
@@ -34,15 +35,17 @@ pub struct ApiCtx {
 impl ApiCtx {
 	pub async fn new(
 		db: DatabaseHandle,
+		config: rivet_config::Config,
 		conn: rivet_connection::Connection,
 		req_id: Uuid,
 		ray_id: Uuid,
 		ts: i64,
-		name: &'static str,
+		name: String,
 	) -> WorkflowResult<Self> {
 		let op_ctx = rivet_operation::OperationContext::new(
-			name.to_string(),
+			name.clone(),
 			std::time::Duration::from_secs(60),
+			config.clone(),
 			conn.clone(),
 			req_id,
 			ray_id,
@@ -58,6 +61,7 @@ impl ApiCtx {
 			name,
 			ts,
 			db,
+			config,
 			conn,
 			op_ctx,
 			msg_ctx,
@@ -100,6 +104,7 @@ impl ApiCtx {
 	{
 		common::op(
 			&self.db,
+			&self.config,
 			&self.conn,
 			self.ray_id,
 			self.op_ctx.req_ts(),
@@ -154,7 +159,7 @@ impl ApiCtx {
 
 impl ApiCtx {
 	pub fn name(&self) -> &str {
-		self.name
+		&self.name
 	}
 
 	// pub fn timeout(&self) -> Duration {
@@ -184,14 +189,12 @@ impl ApiCtx {
 		self.ts.saturating_sub(self.op_ctx.req_ts())
 	}
 
-	pub fn trace(&self) -> &[chirp_client::TraceEntry] {
-		self.conn.trace()
+	pub fn config(&self) -> &rivet_config::Config {
+		&self.config
 	}
 
-	pub fn test(&self) -> bool {
-		self.trace()
-			.iter()
-			.any(|x| x.run_context == chirp_client::RunContext::Test as i32)
+	pub fn trace(&self) -> &[chirp_client::TraceEntry] {
+		self.conn.trace()
 	}
 
 	pub fn chirp(&self) -> &chirp_client::Client {

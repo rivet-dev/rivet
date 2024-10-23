@@ -18,3 +18,4 @@ tokio-tungstenite = "0.23.1"
 url = "2.2.2"
 
 pegboard = { path = "../.." }
+rivet-config = { version = "0.1.0", path = "../../../../../lib/config" }

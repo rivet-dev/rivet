@@ -9,10 +9,6 @@ use server_spec::types::ServerSpec;
 
 use crate::types::PoolType;
 
-lazy_static::lazy_static! {
-	static ref NOMAD_CONFIG: Configuration = nomad_util::new_config_from_env().unwrap();
-}
-
 #[derive(sqlx::FromRow)]
 struct ServerRow {
 	server_id: Uuid,
@@ -185,7 +181,7 @@ pub async fn cluster_datacenter_topology_get(
 					)
 				})
 				.collect::<Vec<_>>();
-			let prometheus_metrics = fetch_server_metrics(&servers, &hardware_specs)
+			let prometheus_metrics = fetch_server_metrics(ctx.config(), &servers, &hardware_specs)
 				.await
 				.map_or_else(
 					|err| {
@@ -199,8 +195,9 @@ pub async fn cluster_datacenter_topology_get(
 		},
 		async {
 			// Request is not paginated
+			let nomad_config = nomad_util::new_build_config(ctx.config())?;
 			allocations_api::get_allocations(
-				&NOMAD_CONFIG,
+				&nomad_config,
 				None,
 				None,
 				None,
@@ -218,8 +215,9 @@ pub async fn cluster_datacenter_topology_get(
 		},
 		async {
 			// Request is not paginated
+			let nomad_config = nomad_util::new_build_config(ctx.config())?;
 			nodes_api::get_nodes(
-				&NOMAD_CONFIG,
+				&nomad_config,
 				None,
 				None,
 				None,
@@ -424,11 +422,12 @@ fn get_hardware_specs_or_default(
 
 // Fetches cpu and memory data for specified servers
 async fn fetch_server_metrics(
+	config: &rivet_config::Config,
 	servers: &[&ServerRowStructured],
 	hardware_specs: &HashMap<String, ServerSpec>,
 ) -> GlobalResult<HashMap<Uuid, Stats>> {
 	let prom_res = handle_request(
-		&PROMETHEUS_URL,
+		&config.server()?.prometheus()?.url.to_string(),
 		formatdoc!(
 			r#"
 			label_replace(
@@ -580,10 +579,6 @@ enum Metric {
 	Memory,
 	#[serde(rename = "bandwidth")]
 	Bandwidth,
-}
-
-lazy_static::lazy_static! {
-	static ref PROMETHEUS_URL: String = util::env::var("PROMETHEUS_URL").unwrap();
 }
 
 async fn handle_request(url: &String, query: String) -> GlobalResult<Vec<PrometheusResult>> {

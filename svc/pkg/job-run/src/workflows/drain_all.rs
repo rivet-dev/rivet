@@ -2,10 +2,7 @@ use chirp_workflow::prelude::*;
 use futures_util::StreamExt;
 use rivet_operation::prelude::proto::backend::pkg::*;
 
-use crate::{
-	util::{signal_allocation, NOMAD_REGION},
-	workers::NOMAD_CONFIG,
-};
+use crate::util::{signal_allocation, NOMAD_REGION};
 
 // In ms, a small amount of time to separate the completion of the drain to the deletion of the
 // cluster server. We want the drain to complete first.
@@ -148,27 +145,31 @@ struct KillAllocsInput {
 
 #[activity(KillAllocs)]
 async fn kill_allocs(ctx: &ActivityCtx, input: &KillAllocsInput) -> GlobalResult<()> {
+	let client = nomad_util::build_config(ctx.config())?;
 	futures_util::stream::iter(input.alloc_ids.iter().cloned())
-		.map(|alloc_id| async move {
-			if let Err(err) = signal_allocation(
-				&NOMAD_CONFIG,
-				&alloc_id,
-				None,
-				Some(NOMAD_REGION),
-				None,
-				None,
-				Some(nomad_client::models::AllocSignalRequest {
-					task: None,
-					signal: Some("SIGKILL".to_string()),
-				}),
-			)
-			.await
-			{
-				tracing::warn!(
-					?err,
-					?alloc_id,
-					"error while trying to manually kill allocation"
-				);
+		.map(|alloc_id| {
+			let client = client.clone();
+			async move {
+				if let Err(err) = signal_allocation(
+					&client,
+					&alloc_id,
+					None,
+					Some(NOMAD_REGION),
+					None,
+					None,
+					Some(nomad_client::models::AllocSignalRequest {
+						task: None,
+						signal: Some("SIGKILL".to_string()),
+					}),
+				)
+				.await
+				{
+					tracing::warn!(
+						?err,
+						?alloc_id,
+						"error while trying to manually kill allocation"
+					);
+				}
 			}
 		})
 		.buffer_unordered(16)

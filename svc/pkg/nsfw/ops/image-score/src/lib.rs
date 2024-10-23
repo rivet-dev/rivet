@@ -37,7 +37,7 @@ async fn handle(
 	ctx: OperationContext<nsfw::image_score::Request>,
 ) -> GlobalResult<nsfw::image_score::Response> {
 	// NSFW API disabled, return default response
-	if util::env::var("RIVET_UPLOAD_NSFW_CHECK_ENABLED").is_err() {
+	if !ctx.config().server()?.rivet.upload_nsfw_check_enabled {
 		return Ok(nsfw::image_score::Response {
 			scores: ctx
 				.image_urls

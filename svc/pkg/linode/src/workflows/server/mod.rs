@@ -99,7 +99,7 @@ async fn provision(
 	cleanup: &mut CleanupCtx,
 ) -> GlobalResult<ProvisionOutput> {
 	let is_test = input.tags.iter().any(|tag| tag == "test");
-	let ns = util::env::namespace();
+	let ns = &ctx.config().server()?.rivet.namespace;
 	// Linode label must be 3-64 characters, UUID's are 36
 	let name = format!("{ns}-{}", input.server_id);
 
@@ -235,13 +235,13 @@ async fn create_ssh_key(
 	ctx: &ActivityCtx,
 	input: &CreateSshKeyInput,
 ) -> GlobalResult<CreateSshKeyOutput> {
-	// Build HTTP client
-	let client = client::Client::new(input.api_token.clone()).await?;
+	let client = client::Client::new(ctx.config(), input.api_token.clone()).await?;
 
-	let ns = util::env::namespace();
+	let ns = &ctx.config().server()?.rivet.namespace;
 
 	let ssh_key_label = format!("{ns}-{}", input.server_id);
-	let ssh_key_res = api::create_ssh_key(&client, &ssh_key_label, input.is_test).await?;
+	let ssh_key_res =
+		api::create_ssh_key(ctx.config(), &client, &ssh_key_label, input.is_test).await?;
 
 	Ok(CreateSshKeyOutput {
 		ssh_key_id: ssh_key_res.id,
@@ -271,10 +271,10 @@ async fn create_instance(
 	ctx: &ActivityCtx,
 	input: &CreateInstanceInput,
 ) -> GlobalResult<CreateInstanceOutput> {
-	// Build HTTP client
-	let client = client::Client::new(input.api_token.clone()).await?;
+	let client = client::Client::new(ctx.config(), input.api_token.clone()).await?;
 
 	let create_instance_res = api::create_instance(
+		ctx.config(),
 		&client,
 		&input.name,
 		&input.datacenter,
@@ -303,8 +303,7 @@ async fn wait_instance_ready(
 	ctx: &ActivityCtx,
 	input: &WaitInstanceReadyInput,
 ) -> GlobalResult<()> {
-	// Build HTTP client
-	let client = client::Client::new(input.api_token.clone()).await?;
+	let client = client::Client::new(ctx.config(), input.api_token.clone()).await?;
 
 	api::wait_instance_ready(&client, input.linode_id).await
 }
@@ -320,8 +319,7 @@ struct CreateBootDiskInput {
 
 #[activity(CreateBootDisk)]
 async fn create_boot_disk(ctx: &ActivityCtx, input: &CreateBootDiskInput) -> GlobalResult<u64> {
-	// Build HTTP client
-	let client = client::Client::new(input.api_token.clone()).await?;
+	let client = client::Client::new(ctx.config(), input.api_token.clone()).await?;
 
 	api::create_boot_disk(
 		&client,
@@ -342,8 +340,7 @@ struct WaitDiskReadyInput {
 
 #[activity(WaitDiskReady)]
 async fn wait_disk_ready(ctx: &ActivityCtx, input: &WaitDiskReadyInput) -> GlobalResult<()> {
-	// Build HTTP client
-	let client = client::Client::new(input.api_token.clone()).await?;
+	let client = client::Client::new(ctx.config(), input.api_token.clone()).await?;
 
 	api::wait_disk_ready(&client, input.linode_id, input.disk_id).await
 }
@@ -356,8 +353,7 @@ struct CreateSwapDiskInput {
 
 #[activity(CreateSwapDisk)]
 async fn create_swap_disk(ctx: &ActivityCtx, input: &CreateSwapDiskInput) -> GlobalResult<u64> {
-	// Build HTTP client
-	let client = client::Client::new(input.api_token.clone()).await?;
+	let client = client::Client::new(ctx.config(), input.api_token.clone()).await?;
 
 	api::create_swap_disk(&client, input.linode_id).await
 }
@@ -376,10 +372,10 @@ async fn create_instance_config(
 	ctx: &ActivityCtx,
 	input: &CreateInstanceConfigInput,
 ) -> GlobalResult<()> {
-	// Build HTTP client
-	let client = client::Client::new(input.api_token.clone()).await?;
+	let client = client::Client::new(ctx.config(), input.api_token.clone()).await?;
 
 	api::create_instance_config(
+		ctx.config(),
 		&client,
 		input.vlan_ip.as_ref(),
 		input.linode_id,
@@ -400,10 +396,10 @@ struct CreateFirewallInput {
 
 #[activity(CreateFirewall)]
 async fn create_firewall(ctx: &ActivityCtx, input: &CreateFirewallInput) -> GlobalResult<u64> {
-	// Build HTTP client
-	let client = client::Client::new(input.api_token.clone()).await?;
+	let client = client::Client::new(ctx.config(), input.api_token.clone()).await?;
 
 	let firewall_res = api::create_firewall(
+		ctx.config(),
 		&client,
 		&input.firewall_preset,
 		&input.tags,
@@ -422,8 +418,7 @@ struct BootInstanceInput {
 
 #[activity(BootInstance)]
 async fn boot_instance(ctx: &ActivityCtx, input: &BootInstanceInput) -> GlobalResult<()> {
-	// Build HTTP client
-	let client = client::Client::new(input.api_token.clone()).await?;
+	let client = client::Client::new(ctx.config(), input.api_token.clone()).await?;
 
 	api::boot_instance(&client, input.linode_id).await?;
 
@@ -438,8 +433,7 @@ struct GetPublicIpInput {
 
 #[activity(GetPublicIp)]
 async fn get_public_ip(ctx: &ActivityCtx, input: &GetPublicIpInput) -> GlobalResult<Ipv4Addr> {
-	// Build HTTP client
-	let client = client::Client::new(input.api_token.clone()).await?;
+	let client = client::Client::new(ctx.config(), input.api_token.clone()).await?;
 
 	api::get_public_ip(&client, input.linode_id).await
 }

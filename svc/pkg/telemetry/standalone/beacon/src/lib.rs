@@ -14,18 +14,22 @@ struct NamespaceAnalytics {
 	linked_users: i64,
 }
 
-pub async fn start() -> GlobalResult<()> {
-	run_from_env(util::timestamp::now()).await
+pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> GlobalResult<()> {
+	run_from_env(config, pools, util::timestamp::now()).await
 }
 
-#[tracing::instrument]
-pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
-	let pools = rivet_pools::from_env().await?;
+#[tracing::instrument(skip_all)]
+pub async fn run_from_env(
+	config: rivet_config::Config,
+	pools: rivet_pools::Pools,
+	_ts: i64,
+) -> GlobalResult<()> {
 	let client = chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("telemetry-beacon");
 	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
 	let ctx = OperationContext::new(
 		"telemetry-beacon".into(),
 		Duration::from_secs(300),
+		config.clone(),
 		rivet_connection::Connection::new(client, pools, cache),
 		Uuid::new_v4(),
 		Uuid::new_v4(),
@@ -34,13 +38,14 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		(),
 	);
 
-	if std::env::var("RIVET_TELEMETRY_DISABLE")
-		.ok()
-		.map_or(false, |x| x == "1")
-	{
+	if config.server()?.rivet.telemetry.enable {
 		tracing::info!("telemetry disabled");
 		return Ok(());
 	}
+
+	let cluster_id = chirp_workflow::compat::op(&ctx, dynamic_config::ops::get_config::Input {})
+		.await?
+		.cluster_id;
 
 	let team_ids = sql_fetch_all!(
 		[ctx, (Uuid,)]
@@ -140,28 +145,28 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		// copied to a new namespace with a different name accidentally
 		let distinct_id = format!(
 			"cluster:{}:{}",
-			util::env::namespace(),
-			util::env::cluster_id()
+			ctx.config().server()?.rivet.namespace,
+			cluster_id
 		);
 
 		let mut event = async_posthog::Event::new("cluster_beacon", &distinct_id);
-		event.insert_prop("$groups", json!({ "cluster": util::env::cluster_id() }))?;
+		event.insert_prop("$groups", json!({ "cluster": cluster_id }))?;
 		event.insert_prop(
 			"$set",
 			json!({
-				"ns_id": util::env::namespace(),
-				"cluster_id": util::env::cluster_id(),
+				"ns_id": ctx.config().server()?.rivet.namespace,
+				"cluster_id": cluster_id,
 			}),
 		)?;
 		events.push(event);
 
 		let mut event = async_posthog::Event::new("$groupidentify", &distinct_id);
 		event.insert_prop("$group_type", "cluster")?;
-		event.insert_prop("$group_key", util::env::cluster_id())?;
+		event.insert_prop("$group_key", cluster_id)?;
 		event.insert_prop(
 			"$group_set",
 			json!({
-				"name": util::env::namespace(),
+				"name": ctx.config().server()?.rivet.namespace,
 			}),
 		)?;
 		events.push(event);
@@ -176,21 +181,21 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 			.find(|x| x.team_id == team.team_id)
 			.map_or(0, |x| x.member_count);
 
-		let distinct_id = build_distinct_id(format!("team:{team_id}"));
+		let distinct_id = build_distinct_id(ctx.config(), cluster_id, format!("team:{team_id}"))?;
 
 		let mut event = async_posthog::Event::new("team_beacon", &distinct_id);
 		event.insert_prop(
 			"$groups",
 			json!({
-				"cluster": util::env::cluster_id(),
+				"cluster": cluster_id,
 				"team": team_id,
 			}),
 		)?;
 		event.insert_prop(
 			"$set",
 			json!({
-				"ns_id": util::env::namespace(),
-				"cluster_id": util::env::cluster_id(),
+				"ns_id": ctx.config().server()?.rivet.namespace,
+				"cluster_id": cluster_id,
 				"team_id": team_id,
 				"display_name": team.display_name,
 				"create_ts": team.create_ts,
@@ -216,13 +221,13 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		let game_id = game.game_id.unwrap().as_uuid();
 		let team_id = game.developer_team_id.unwrap().as_uuid();
 
-		let distinct_id = build_distinct_id(format!("game:{game_id}"));
+		let distinct_id = build_distinct_id(ctx.config(), cluster_id, format!("game:{game_id}"))?;
 
 		let mut event = async_posthog::Event::new("game_beacon", &distinct_id);
 		event.insert_prop(
 			"$groups",
 			json!({
-				"cluster": util::env::cluster_id(),
+				"cluster": cluster_id,
 				"team": team_id,
 				"game": game_id,
 			}),
@@ -230,8 +235,8 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		event.insert_prop(
 			"$set",
 			json!({
-				"ns_id": util::env::namespace(),
-				"cluster_id": util::env::cluster_id(),
+				"ns_id": ctx.config().server()?.rivet.namespace,
+				"cluster_id": cluster_id,
 				"game_id": game_id,
 				"name_id": game.name_id,
 				"display_name": game.display_name,
@@ -304,13 +309,13 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 				})
 			});
 
-		let distinct_id = build_distinct_id(format!("ns:{ns_id}"));
+		let distinct_id = build_distinct_id(ctx.config(), cluster_id, format!("ns:{ns_id}"))?;
 
 		let mut event = async_posthog::Event::new("namespace_beacon", &distinct_id);
 		event.insert_prop(
 			"$groups",
 			json!({
-				"cluster": util::env::cluster_id(),
+				"cluster": cluster_id,
 				"team": team_id,
 				"game": game_id,
 				"namespace": ns_id,
@@ -319,8 +324,8 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 		event.insert_prop(
 			"$set",
 			json!({
-				"ns_id": util::env::namespace(),
-				"cluster_id": util::env::cluster_id(),
+				"ns_id": ctx.config().server()?.rivet.namespace,
+				"cluster_id": cluster_id,
 				"namespace_id": ns_id,
 				"name_id": ns.name_id,
 				"display_name": ns.display_name,
@@ -367,10 +372,14 @@ pub async fn run_from_env(ts: i64) -> GlobalResult<()> {
 	Ok(())
 }
 
-fn build_distinct_id(entity: impl Display) -> String {
-	format!(
+fn build_distinct_id(
+	config: &rivet_config::Config,
+	cluster_id: Uuid,
+	entity: impl Display,
+) -> GlobalResult<String> {
+	Ok(format!(
 		"cluster:{}:{}:{entity}",
-		util::env::namespace(),
-		util::env::cluster_id()
-	)
+		config.server()?.rivet.namespace,
+		cluster_id,
+	))
 }

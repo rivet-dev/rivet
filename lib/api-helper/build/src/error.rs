@@ -21,6 +21,7 @@ pub struct ErrorReply {
 }
 
 pub fn handle_rejection(
+	config: &rivet_config::Config,
 	err: GlobalError,
 	mut response: http::response::Builder,
 	ray_id: Uuid,
@@ -35,9 +36,13 @@ pub fn handle_rejection(
 			tracing::error!(?err, "internal error response");
 
 			// Replace internal errors with global errors
-			if std::env::var("RIVET_API_ERROR_VERBOSE")
-				.ok()
-				.map_or(false, |x| x == "1")
+			// TODO: Remove panic
+			if config
+				.server()
+				.expect("missing server")
+				.rivet
+				.api
+				.verbose_errors
 			{
 				err_code!(ERROR, error = err.to_string())
 			} else {
@@ -48,9 +53,13 @@ pub fn handle_rejection(
 			tracing::error!(?err, "internal error response");
 
 			// Replace internal errors with global errors
-			if std::env::var("RIVET_API_ERROR_VERBOSE")
-				.ok()
-				.map_or(false, |x| x == "1")
+			// TODO: Remove panic
+			if config
+				.server()
+				.expect("missing server")
+				.rivet
+				.api
+				.verbose_errors
 			{
 				err_code!(ERROR, error = err.to_string())
 			} else {
@@ -65,7 +74,7 @@ pub fn handle_rejection(
 	// Modify request based on error
 	match &err {
 		GlobalError::BadRequest { code, metadata, .. } => {
-			if code == &formatted_error::code::API_RATE_LIMIT {
+			if code == formatted_error::code::API_RATE_LIMIT {
 				if let Some(ts) = metadata
 					.as_ref()
 					.map(|m| serde_json::from_str::<i64>(m).ok())

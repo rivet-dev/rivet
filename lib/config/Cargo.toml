@@ -1,0 +1,15 @@
+[package]
+name = "rivet-config"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+config = { version = "0.14.0", default-features = false, features = ["async", "json", "yaml"] }
+dirs = "5.0.1"
+glob = "0.3.1"
+global-error = { version = "0.1.5", path = "../global-error" }
+serde = { version = "1.0.210", features = ["derive"] }
+serde_json = "1.0.129"
+url = { version = "2.5.2", features = ["serde"] }
+uuid = { version = "1.11.0", features = ["serde", "v4"] }
+

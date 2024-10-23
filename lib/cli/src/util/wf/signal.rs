@@ -2,10 +2,12 @@ use anyhow::*;
 use chrono::{Local, TimeZone};
 use clap::ValueEnum;
 use indoc::indoc;
+use rivet_pools::CrdbPool;
 use rivet_term::console::style;
 use uuid::Uuid;
 
-use super::{build_pool, KvPair};
+use super::KvPair;
+
 use crate::util::{
 	self,
 	format::{colored_json, indent_string},
@@ -29,8 +31,7 @@ pub struct SignalRow {
 	ack_ts: Option<i64>,
 }
 
-pub async fn get_signal(signal_id: Uuid) -> Result<Option<SignalRow>> {
-	let pool = build_pool().await?;
+pub async fn get_signal(pool: CrdbPool, signal_id: Uuid) -> Result<Option<SignalRow>> {
 	let mut conn = pool.acquire().await?;
 
 	let signal = sqlx::query_as::<_, SignalRow>(indoc!(
@@ -66,12 +67,12 @@ pub async fn get_signal(signal_id: Uuid) -> Result<Option<SignalRow>> {
 }
 
 pub async fn find_signals(
+	pool: CrdbPool,
 	tags: Vec<KvPair>,
 	workflow_id: Option<Uuid>,
 	name: Option<String>,
 	state: Option<SignalState>,
 ) -> Result<Vec<SignalRow>> {
-	let pool = build_pool().await?;
 	let mut conn = pool.acquire().await?;
 
 	let mut query_str = indoc!(
@@ -192,8 +193,7 @@ pub async fn print_signals(signals: Vec<SignalRow>, pretty: bool) -> Result<()> 
 	Ok(())
 }
 
-pub async fn silence_signal(signal_id: Uuid) -> Result<()> {
-	let pool = build_pool().await?;
+pub async fn silence_signal(pool: CrdbPool, signal_id: Uuid) -> Result<()> {
 	let mut conn = pool.acquire().await?;
 
 	sqlx::query(indoc!(

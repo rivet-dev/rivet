@@ -35,16 +35,19 @@ pub fn analytics_lobby_summary_from_lobby(
 	})
 }
 
-impl ApiTryFrom<backend::game::Game> for models::GameHandle {
+impl ApiTryFrom<(&rivet_config::Config, backend::game::Game)> for models::GameHandle {
 	type Error = GlobalError;
 
-	fn api_try_from(value: backend::game::Game) -> GlobalResult<Self> {
+	// TODO: Replace this nasty fn with a bare fn
+	fn api_try_from(
+		(config, value): (&rivet_config::Config, backend::game::Game),
+	) -> GlobalResult<Self> {
 		Ok(models::GameHandle {
 			game_id: unwrap_ref!(value.game_id).as_uuid(),
 			name_id: value.name_id.to_owned(),
 			display_name: value.display_name.to_owned(),
-			logo_url: util::route::game_logo(&value),
-			banner_url: util::route::game_banner(&value),
+			logo_url: util::route::game_logo(config, &value),
+			banner_url: util::route::game_banner(config, &value),
 		})
 	}
 }

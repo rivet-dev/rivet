@@ -18,11 +18,14 @@ pub async fn start(
 ) -> GlobalResult<models::AuthIdentityStartEmailVerificationResponse> {
 	let user_ent = ctx.auth().user(ctx.op_ctx()).await?;
 
-	// Verify captcha
-	let secret_key_opt = util::env::read_secret_opt(&["turnstile", "main", "secret_key"]).await?;
-
 	// If no Turnstile key defined, skip captcha
-	if let Some(secret_key) = secret_key_opt {
+	if let Some(secret_key) = &ctx
+		.config()
+		.server()?
+		.turnstile
+		.as_ref()
+		.and_then(|x| x.main_secret_key.as_ref())
+	{
 		if let Some(captcha) = body.captcha {
 			if captcha.turnstile.is_some() {
 				op!([ctx] captcha_verify {
@@ -37,7 +40,7 @@ pub async fn start(
 						turnstile: Some(backend::captcha::captcha_config::Turnstile {
 							// Not needed for captcha verification
 							site_key: "".to_string(),
-							secret_key,
+							secret_key: secret_key.read().clone(),
 						}),
 						..Default::default()
 					}),
@@ -116,7 +119,7 @@ pub async fn complete(
 
 		// Set refresh token
 		{
-			let (k, v) = refresh_token_header(origin, token_res.refresh_token)?;
+			let (k, v) = refresh_token_header(ctx.config(), origin, token_res.refresh_token)?;
 			unwrap!(response.headers_mut()).insert(k, v);
 		}
 
@@ -184,7 +187,7 @@ pub async fn complete_access_token(
 
 		// Set refresh token
 		{
-			let (k, v) = refresh_token_header(origin, token_res.refresh_token)?;
+			let (k, v) = refresh_token_header(ctx.config(), origin, token_res.refresh_token)?;
 			unwrap!(response.headers_mut()).insert(k, v);
 		}
 	}

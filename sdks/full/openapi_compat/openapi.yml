@@ -783,12 +783,9 @@ components:
           type: string
         job:
           type: string
-        main:
-          type: string
         opengb:
           type: string
       required:
-      - main
       - cdn
       - job
       type: object

@@ -17,13 +17,16 @@ impl TestCtx {
 	pub async fn from_env(test_name: &str) -> Result<TestCtx, ManagerError> {
 		let service_name = format!(
 			"{}-test--{}",
-			std::env::var("CHIRP_SERVICE_NAME").unwrap(),
+			rivet_env::service_name(),
 			test_name
 		);
-		let source_hash = std::env::var("RIVET_SOURCE_HASH").unwrap();
-		let pools = rivet_pools::from_env().await?;
-		let cache =
-			rivet_cache::CacheInner::new(service_name.clone(), source_hash, pools.redis_cache()?);
+		let config: rivet_config::Config = todo!();
+		let pools = rivet_pools::Pools::new(config).await?;
+		let cache = rivet_cache::CacheInner::new(
+			service_name.clone(),
+			rivet_env::source_hash().to_string(),
+			pools.redis_cache()?,
+		);
 		let client = chirp_client::SharedClient::from_env(pools.clone())
 			.unwrap()
 			.wrap_new(&service_name);
@@ -31,6 +34,7 @@ impl TestCtx {
 		let op_ctx = OperationContext::new(
 			service_name.clone(),
 			Duration::from_secs(60),
+			config,
 			conn,
 			Uuid::new_v4(),
 			Uuid::new_v4(),

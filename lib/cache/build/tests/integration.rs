@@ -7,8 +7,18 @@ use std::{
 use rand::{seq::IteratorRandom, thread_rng, Rng};
 use uuid::Uuid;
 
-async fn build_cache() -> rivet_cache::Cache {
-	let redis_conn = redis::Client::open(todo!())
+async fn build_cache(config: &rivet_config::Config) -> rivet_cache::Cache {
+	let redis_config = &self.config.server().unwrap().redis.persistent;
+
+	let mut url = redis_config.url.clone();
+	if let Some(username) = &redis_config.username {
+		url.set_username(username).unwrap();
+	}
+	if let Some(password) = &redis_config.password {
+		url.set_password(Some(password.read())).unwrap();
+	}
+
+	let redis_conn = redis::Client::open(url)
 		.unwrap()
 		.get_tokio_connection_manager()
 		.await

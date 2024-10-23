@@ -211,7 +211,12 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 				.map(|gg_port| {
 					Ok((
 						gg_port.port_name.clone(),
-						create_port_gg(is_connectable, gg_port, server.datacenter_id)?,
+						create_port_gg(
+							ctx.config(),
+							is_connectable,
+							gg_port,
+							server.datacenter_id,
+						)?,
 					))
 				})
 				.chain(
@@ -261,6 +266,7 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 }
 
 fn create_port_gg(
+	config: &rivet_config::Config,
 	is_connectable: bool,
 	gg_port: &DockerPortProtocolGameGuard,
 	datacenter_id: Uuid,
@@ -269,6 +275,7 @@ fn create_port_gg(
 		internal_port: Some(gg_port.port_number.try_into()?),
 		public_hostname: if is_connectable {
 			Some(crate::util::build_ds_hostname(
+				config,
 				gg_port.server_id,
 				&gg_port.port_name,
 				datacenter_id,

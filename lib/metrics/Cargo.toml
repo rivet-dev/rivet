@@ -9,5 +9,7 @@ license = "Apache-2.0"
 hyper = { version = "0.14", features = ["server", "http1", "tcp"] }
 lazy_static = "1.4"
 prometheus = "0.13"
+rivet-config = { version = "0.1.0", path = "../config" }
+rivet-env = { version = "0.1.0", path = "../env" }
 tracing = "0.1"
 

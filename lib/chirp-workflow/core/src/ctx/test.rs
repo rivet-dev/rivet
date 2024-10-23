@@ -25,6 +25,7 @@ pub struct TestCtx {
 
 	db: DatabaseHandle,
 
+	config: rivet_config::Config,
 	conn: rivet_connection::Connection,
 	msg_ctx: MessageCtx,
 
@@ -36,12 +37,13 @@ impl TestCtx {
 	pub async fn from_env(test_name: &str) -> TestCtx {
 		let service_name = format!(
 			"{}-test--{}",
-			std::env::var("CHIRP_SERVICE_NAME").unwrap(),
+			rivet_env::service_name().to_string(),
 			test_name
 		);
 
 		let ray_id = Uuid::new_v4();
-		let pools = rivet_pools::from_env()
+		let config = todo!();
+		let pools = rivet_pools::Pools::new(config)
 			.await
 			.expect("failed to create pools");
 		let shared_client = chirp_client::SharedClient::from_env(pools.clone())
@@ -61,6 +63,7 @@ impl TestCtx {
 		let op_ctx = rivet_operation::OperationContext::new(
 			service_name.to_string(),
 			std::time::Duration::from_secs(60),
+			config.clone(),
 			conn.clone(),
 			req_id,
 			ray_id,
@@ -78,6 +81,7 @@ impl TestCtx {
 			ray_id,
 			ts: rivet_util::timestamp::now(),
 			db,
+			config,
 			conn,
 			op_ctx,
 			msg_ctx,
@@ -116,7 +120,16 @@ impl TestCtx {
 		I: OperationInput,
 		<I as OperationInput>::Operation: Operation<Input = I>,
 	{
-		common::op(&self.db, &self.conn, self.ray_id, self.ts, false, input).await
+		common::op(
+			&self.db,
+			&self.config,
+			&self.conn,
+			self.ray_id,
+			self.ts,
+			false,
+			input,
+		)
+		.await
 	}
 
 	pub async fn msg<M>(&self, body: M) -> builder::message::MessageBuilder<M>
@@ -189,14 +202,12 @@ impl TestCtx {
 		self.ts.saturating_sub(self.op_ctx.req_ts())
 	}
 
-	pub fn trace(&self) -> &[chirp_client::TraceEntry] {
-		self.conn.trace()
+	pub fn config(&self) -> &rivet_config::Config {
+		&self.config
 	}
 
-	pub fn test(&self) -> bool {
-		self.trace()
-			.iter()
-			.any(|x| x.run_context == chirp_client::RunContext::Test as i32)
+	pub fn trace(&self) -> &[chirp_client::TraceEntry] {
+		self.conn.trace()
 	}
 
 	pub fn chirp(&self) -> &chirp_client::Client {

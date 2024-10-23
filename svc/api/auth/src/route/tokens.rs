@@ -31,8 +31,9 @@ pub async fn identity(
 	// Prevent getting refresh token on logout, makes sure only a new guest token is returned
 	let refresh_token = if !body.logout {
 		// Find refresh token
+		let jwt_key_public = &ctx.config().server()?.jwt.public;
 		let refresh_token_cookie = cookies.iter().flat_map(|x| x.iter()).filter(|&(k, _)| k == USER_REFRESH_TOKEN_COOKIE).filter_map(|(_k, v)| {
-			match rivet_claims::decode(v) {
+			match rivet_claims::decode(jwt_key_public,v) {
 				Ok(x) => Some((x, v)),
 				Err(err) => {
 					// Gracefully ignore cookies that can't be decoded.
@@ -106,7 +107,7 @@ pub async fn identity(
 					|| err.is(formatted_error::code::TOKEN_REVOKED)
 				{
 					// Delete refresh token
-					let (k, v) = delete_refresh_token_header(origin)?;
+					let (k, v) = delete_refresh_token_header(ctx.config(), origin)?;
 					unwrap!(response.headers_mut()).insert(k, v);
 				}
 
@@ -124,13 +125,13 @@ pub async fn identity(
 
 	// Set refresh token
 	{
-		let (k, v) = refresh_token_header(origin, refresh_token)?;
+		let (k, v) = refresh_token_header(ctx.config(), origin, refresh_token)?;
 		unwrap!(response.headers_mut()).insert(k, v);
 	}
 
 	// Decode user token to extract user ID. We do this on the server since it adds a
 	// lot of extra complexity to the client to decode this token.
-	let user_claims = rivet_claims::decode(&token)??;
+	let user_claims = rivet_claims::decode(&ctx.config().server()?.jwt.public, &token)??;
 	let user_ent = user_claims.as_user()?;
 
 	// Verify user is not deleted
@@ -149,7 +150,7 @@ pub async fn identity(
 			.await?;
 
 			// Delete refresh token
-			let (k, v) = delete_refresh_token_header(origin)?;
+			let (k, v) = delete_refresh_token_header(ctx.config(), origin)?;
 			unwrap!(response.headers_mut()).insert(k, v);
 
 			bail_with!(TOKEN_REVOKED);

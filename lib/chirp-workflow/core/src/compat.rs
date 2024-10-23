@@ -80,6 +80,7 @@ where
 	let db = db_from_ctx(ctx).await?;
 	common::op(
 		&db,
+		ctx.config(),
 		ctx.conn(),
 		ctx.ray_id(),
 		ctx.req_ts(),

@@ -9,9 +9,9 @@ pub fn install() -> String {
 	include_str!("../files/traffic_server_install.sh").replace("__IMAGE__", TRAFFIC_SERVER_IMAGE)
 }
 
-pub async fn configure() -> GlobalResult<String> {
+pub async fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 	// Write config to files
-	let mut config_scripts = config()
+	let mut config_scripts = trafficserver_config(config)
 		.await?
 		.into_iter()
 		.map(|(k, v)| format!("cat << 'EOF' > /etc/trafficserver/{k}\n{v}\nEOF\n"))
@@ -49,7 +49,9 @@ static TRAFFIC_SERVER_CONFIG_DIR: Dir<'_> = include_dir!(
 	"$CARGO_MANIFEST_DIR/src/workflows/server/install/install_scripts/files/traffic_server"
 );
 
-async fn config() -> GlobalResult<Vec<(String, String)>> {
+async fn trafficserver_config(
+	config: &rivet_config::Config,
+) -> GlobalResult<Vec<(String, String)>> {
 	// Static files
 	let mut config_files = Vec::new();
 	collect_config_files(&TRAFFIC_SERVER_CONFIG_DIR, &mut config_files)?;
@@ -62,7 +64,7 @@ async fn config() -> GlobalResult<Vec<(String, String)>> {
 	));
 
 	// Remap & S3
-	let output = s3::gen_remap().await?;
+	let output = s3::gen_remap(config).await?;
 	config_files.extend(output.config_files);
 	config_files.push(("remap.config".to_string(), output.append_remap));
 

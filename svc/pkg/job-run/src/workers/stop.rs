@@ -16,10 +16,7 @@ struct RunMetaNomadRow {
 	dispatched_job_id: Option<String>,
 }
 
-use crate::{
-	util::signal_allocation,
-	workers::{NEW_NOMAD_CONFIG, NOMAD_CONFIG},
-};
+use crate::util::signal_allocation;
 
 // Update timeout to give time for the timeout in `kill_allocation`
 #[worker(name = "job-run-stop", timeout = 90)]
@@ -52,7 +49,7 @@ async fn worker(ctx: &OperationContext<job_run::msg::stop::Message>) -> GlobalRe
 	};
 
 	// HACK: Remove from proxied ports early. This also gets removed in job-run-cleanup, but that
-	// may not run correclty if the dispatched job id is not set correctly.
+	// may not run correctly if the dispatched job id is not set correctly.
 	ctx.redis_job()
 		.await?
 		.hdel(
@@ -81,7 +78,7 @@ async fn worker(ctx: &OperationContext<job_run::msg::stop::Message>) -> GlobalRe
 	}) = &run_meta_nomad_row
 	{
 		match nomad_client_new::apis::jobs_api::delete_job(
-			&NEW_NOMAD_CONFIG,
+			&nomad_util::new_build_config(ctx.config())?,
 			dispatched_job_id,
 			Some(&region.nomad_region),
 			None,
@@ -97,7 +94,11 @@ async fn worker(ctx: &OperationContext<job_run::msg::stop::Message>) -> GlobalRe
 
 				if !ctx.skip_kill_alloc {
 					if let Some(alloc_id) = alloc_id {
-						kill_allocation(region.nomad_region.clone(), alloc_id.clone());
+						kill_allocation(
+							ctx.config(),
+							region.nomad_region.clone(),
+							alloc_id.clone(),
+						)?;
 					}
 				}
 			}
@@ -182,14 +183,19 @@ async fn update_db(
 /// Kills the allocation after 30 seconds
 ///
 /// See `docs/packages/job/JOB_DRAINING_AND_KILL_TIMEOUTS.md`
-fn kill_allocation(nomad_region: String, alloc_id: String) {
+fn kill_allocation(
+	config: &rivet_config::Config,
+	nomad_region: String,
+	alloc_id: String,
+) -> GlobalResult<()> {
+	let client = nomad_util::build_config(config)?;
 	task::spawn(async move {
 		tokio::time::sleep(util_job::JOB_STOP_TIMEOUT).await;
 
 		tracing::info!(?alloc_id, "manually killing allocation");
 
 		if let Err(err) = signal_allocation(
-			&NOMAD_CONFIG,
+			&client,
 			&alloc_id,
 			None,
 			Some(&nomad_region),
@@ -209,4 +215,6 @@ fn kill_allocation(nomad_region: String, alloc_id: String) {
 			);
 		}
 	});
+
+	Ok(())
 }

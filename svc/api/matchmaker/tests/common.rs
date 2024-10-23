@@ -37,10 +37,10 @@ impl Ctx {
 				.init();
 		});
 
-		let pools = rivet_pools::from_env().await.unwrap();
+		let pools = rivet_pools::Pools::new(config).await.unwrap();
 		let cache = rivet_cache::CacheInner::new(
 			"api-matchmaker-test".to_string(),
-			std::env::var("RIVET_SOURCE_HASH").unwrap(),
+			rivet_env::source_hash().to_string(),
 			pools.redis_cache().unwrap(),
 		);
 		let client = chirp_client::SharedClient::from_env(pools.clone())
@@ -113,7 +113,16 @@ impl Ctx {
 				let mut headers = header::HeaderMap::new();
 				headers.insert(
 					header::HOST,
-					header::HeaderValue::from_str(util::env::domain_main_api().unwrap()).unwrap(),
+					header::HeaderValue::from_str(
+						self.op_ctx
+							.config()
+							.server()?
+							.rivet
+							.domain
+							.main_api
+							.unwrap(),
+					)
+					.unwrap(),
 				);
 				headers.insert(
 					"cf-connecting-ip",

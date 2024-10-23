@@ -9,12 +9,8 @@ import * as Rivet from "../../../../../../index";
  *     {
  *         lobbyId: "string",
  *         captcha: {
- *             hcaptcha: {
- *                 clientResponse: "string"
- *             },
- *             turnstile: {
- *                 clientResponse: "string"
- *             }
+ *             hcaptcha: {},
+ *             turnstile: {}
  *         },
  *         verificationData: {
  *             "key": "value"

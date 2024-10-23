@@ -28,79 +28,99 @@ impl RunConfigData {
 	}
 }
 
-pub fn default_config() -> Result<RunConfigData> {
+pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 	let services = vec![
-		// API
-		Service::new("api_monolith", ServiceKind::Api, || {
-			Box::pin(api_monolith::start())
+		// APInpm install -g @withgraphite/graphite-cli@stable
+		Service::new("api_monolith", ServiceKind::Api, |config, pools| {
+			Box::pin(api_monolith::start(config, pools))
 		}),
 		// API internal
-		Service::new("api_internal_monolith", ServiceKind::ApiInternal, || {
-			Box::pin(api_internal_monolith::start())
-		}),
-		Service::new("pegboard_ws", ServiceKind::ApiInternal, || {
-			Box::pin(pegboard_ws::start())
+		Service::new(
+			"api_internal_monolith",
+			ServiceKind::ApiInternal,
+			|config, pools| Box::pin(api_internal_monolith::start(config, pools)),
+		),
+		Service::new("pegboard_ws", ServiceKind::ApiInternal, |config, pools| {
+			Box::pin(pegboard_ws::start(config, pools))
 		}),
 		// Standalone
-		Service::new("monolith_worker", ServiceKind::Standalone, || {
-			Box::pin(monolith_worker::start())
-		}),
-		Service::new("monolith_workflow_worker", ServiceKind::Standalone, || {
-			Box::pin(monolith_workflow_worker::start())
-		}),
+		Service::new(
+			"monolith_worker",
+			ServiceKind::Standalone,
+			|config, pools| Box::pin(monolith_worker::start(config, pools)),
+		),
+		Service::new(
+			"monolith_workflow_worker",
+			ServiceKind::Standalone,
+			|config, pools| Box::pin(monolith_workflow_worker::start(config, pools)),
+		),
 		// Singleton
-		Service::new("pegboard_gc", ServiceKind::Singleton, || {
-			Box::pin(pegboard_gc::start())
+		Service::new("pegboard_gc", ServiceKind::Singleton, |config, pools| {
+			Box::pin(pegboard_gc::start(config, pools))
 		}),
-		Service::new("nomad_monitor", ServiceKind::Singleton, || {
-			Box::pin(nomad_monitor::start())
+		Service::new("nomad_monitor", ServiceKind::Singleton, |config, pools| {
+			Box::pin(nomad_monitor::start(config, pools))
 		}),
-		Service::new("cluster_metrics_publish", ServiceKind::Singleton, || {
-			Box::pin(cluster_metrics_publish::start())
-		}),
-		Service::new("cluster_gc", ServiceKind::Singleton, || {
-			Box::pin(cluster_gc::start())
+		Service::new(
+			"cluster_metrics_publish",
+			ServiceKind::Singleton,
+			|config, pools| Box::pin(cluster_metrics_publish::start(config, pools)),
+		),
+		Service::new("cluster_gc", ServiceKind::Singleton, |config, pools| {
+			Box::pin(cluster_gc::start(config, pools))
 		}),
 		Service::new(
 			"cluster_datacenter_tls_renew",
 			ServiceKind::Singleton,
-			|| Box::pin(cluster_datacenter_tls_renew::start()),
+			|config, pools| Box::pin(cluster_datacenter_tls_renew::start(config, pools)),
 		),
-		Service::new("linode_gc", ServiceKind::Singleton, || {
-			Box::pin(linode_gc::start())
+		Service::new("linode_gc", ServiceKind::Singleton, |config, pools| {
+			Box::pin(linode_gc::start(config, pools))
 		}),
-		Service::new("workflow_metrics_publish", ServiceKind::Singleton, || {
-			Box::pin(workflow_metrics_publish::start())
+		Service::new(
+			"workflow_metrics_publish",
+			ServiceKind::Singleton,
+			|config, pools| Box::pin(workflow_metrics_publish::start(config, pools)),
+		),
+		Service::new("workflow_gc", ServiceKind::Singleton, |config, pools| {
+			Box::pin(workflow_gc::start(config, pools))
 		}),
-		Service::new("workflow_gc", ServiceKind::Singleton, || {
-			Box::pin(workflow_gc::start())
+		Service::new("mm_gc", ServiceKind::Singleton, |config, pools| {
+			Box::pin(mm_gc::start(config, pools))
 		}),
-		Service::new("mm_gc", ServiceKind::Singleton, || Box::pin(mm_gc::start())),
-		Service::new("job_gc", ServiceKind::Singleton, || {
-			Box::pin(job_gc::start())
+		Service::new("job_gc", ServiceKind::Singleton, |config, pools| {
+			Box::pin(job_gc::start(config, pools))
 		}),
-		Service::new("user_delete_pending", ServiceKind::Singleton, || {
-			Box::pin(user_delete_pending::start())
-		}),
+		Service::new(
+			"user_delete_pending",
+			ServiceKind::Singleton,
+			|config, pools| Box::pin(user_delete_pending::start(config, pools)),
+		),
 		// Oneshot
-		Service::new("build_default_create", ServiceKind::Oneshot, || {
-			Box::pin(build_default_create::start())
+		Service::new(
+			"build_default_create",
+			ServiceKind::Oneshot,
+			|config, pools| Box::pin(build_default_create::start(config, pools)),
+		),
+		Service::new("pegboard_dc_init", ServiceKind::Oneshot, |config, pools| {
+			Box::pin(pegboard_dc_init::start(config, pools))
 		}),
-		Service::new("pegboard_dc_init", ServiceKind::Oneshot, || {
-			Box::pin(pegboard_dc_init::start())
-		}),
-		Service::new("cluster_default_update", ServiceKind::Oneshot, || {
-			Box::pin(cluster_default_update::start(false))
-		}),
-		Service::new("cluster_workflow_backfill", ServiceKind::Oneshot, || {
-			Box::pin(cluster_workflow_backfill::start())
-		}),
+		Service::new(
+			"cluster_default_update",
+			ServiceKind::Oneshot,
+			|config, pools| Box::pin(cluster_default_update::start(config, pools, false)),
+		),
+		Service::new(
+			"cluster_workflow_backfill",
+			ServiceKind::Oneshot,
+			|config, pools| Box::pin(cluster_workflow_backfill::start(config, pools)),
+		),
 		// Cron
-		Service::new("telemetry_beacon", ServiceKind::Cron, || {
-			Box::pin(telemetry_beacon::start())
+		Service::new("telemetry_beacon", ServiceKind::Cron, |config, pools| {
+			Box::pin(telemetry_beacon::start(config, pools))
 		}),
-		Service::new("user_delete_pending", ServiceKind::Cron, || {
-			Box::pin(user_delete_pending::start())
+		Service::new("user_delete_pending", ServiceKind::Cron, |config, pools| {
+			Box::pin(user_delete_pending::start(config, pools))
 		}),
 		// TODO:
 		// - load_test_mm_sustain
@@ -153,6 +173,13 @@ pub fn default_config() -> Result<RunConfigData> {
 			kind: SqlServiceKind::CockroachDB,
 			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../svc/pkg/ds/db/servers"),
 			db_name: "db_ds",
+		},
+		SqlService {
+			kind: SqlServiceKind::CockroachDB,
+			migrations: include_dir!(
+				"$CARGO_MANIFEST_DIR/../../svc/pkg/dynamic-config/db/dynamic-config"
+			),
+			db_name: "db_dynamic_config",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,

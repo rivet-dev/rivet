@@ -53,7 +53,7 @@ async fn fail(
 async fn worker(
 	ctx: &OperationContext<cf_custom_hostname::msg::create::Message>,
 ) -> GlobalResult<()> {
-	let game_zone_id = unwrap!(util::env::cloudflare::zone::game::id());
+	let game_zone_id = unwrap_ref!(ctx.config().server()?.cloudflare()?.zone.game);
 
 	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
 
@@ -135,7 +135,10 @@ async fn worker(
 		))
 		.header(
 			reqwest::header::AUTHORIZATION,
-			format!("Bearer {}", util::env::cloudflare::auth_token()),
+			format!(
+				"Bearer {}",
+				ctx.config().server()?.cloudflare()?.auth_token.read()
+			),
 		)
 		.json(&payload)
 		.send()
@@ -146,7 +149,7 @@ async fn worker(
 		let text = res.text().await;
 
 		// Gracefully handle error if possible
-		if let Ok(text) = &text {
+		if let Result::Ok(text) = &text {
 			match serde_json::from_str::<CloudflareError>(text) {
 				Ok(err_body) => {
 					if err_body.errors.iter().any(|x| x.code == 1406) {

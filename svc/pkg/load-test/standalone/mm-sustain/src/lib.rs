@@ -7,28 +7,30 @@ use tokio::time::Instant;
 
 const PARALLEL_WORKERS: usize = 1;
 
-pub async fn start() -> GlobalResult<()> {
+pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> GlobalResult<()> {
 	// TODO: Handle ctrl-c
-
-	let pools = rivet_pools::from_env().await?;
 
 	let mut interval = tokio::time::interval(std::time::Duration::from_secs(60 * 15));
 	loop {
 		interval.tick().await;
 
-		run_from_env(util::timestamp::now()).await?;
+		run_from_env(config.clone(), pools.clone(), util::timestamp::now()).await?;
 	}
 }
 
 #[tracing::instrument(skip_all)]
-pub async fn run_from_env(_ts: i64) -> GlobalResult<()> {
-	let pools = rivet_pools::from_env().await?;
+pub async fn run_from_env(
+	config: rivet_config::Config,
+	pools: rivet_pools::Pools,
+	_ts: i64,
+) -> GlobalResult<()> {
 	let client =
 		chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("load-test-mm-sustain");
 	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
 	let ctx = OperationContext::new(
 		"load-test-mm-sustain".into(),
 		std::time::Duration::from_secs(60),
+		config,
 		rivet_connection::Connection::new(client, pools, cache),
 		Uuid::new_v4(),
 		Uuid::new_v4(),
@@ -238,7 +240,7 @@ async fn run_lobby_lifecycle(
 		lobby_config_json: None,
 		tags: HashMap::new(),
 		dynamic_max_players: None,
-		parameters: util::env::test_id_param(),
+		parameters: rivet_test::test_id_param(),
 	})
 	.await?;
 

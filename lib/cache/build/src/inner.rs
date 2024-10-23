@@ -25,13 +25,15 @@ impl Debug for CacheInner {
 impl CacheInner {
 	#[tracing::instrument(skip(pools))]
 	pub fn from_env(pools: rivet_pools::Pools) -> Result<Cache, Error> {
-		let service_name = env::var("CHIRP_SERVICE_NAME")
-			.map_err(|_| Error::MissingEnvVar("CHIRP_SERVICE_NAME".into()))?;
-		let service_source_hash = env::var("RIVET_SOURCE_HASH")
-			.map_err(|_| Error::MissingEnvVar("RIVET_SOURCE_HASH".into()))?;
-		let redis_cache = pools.redis_cache()?;
+		let service_name = rivet_env::service_name();
+		let service_source_hash = rivet_env::source_hash().to_string();
+		let redis_cache = pools.redis_cache().map_err(|err| Error::Pools(err))?;
 
-		Ok(Self::new(service_name, service_source_hash, redis_cache))
+		Ok(Self::new(
+			service_name.to_string(),
+			service_source_hash,
+			redis_cache,
+		))
 	}
 
 	#[tracing::instrument(skip(redis_conn))]

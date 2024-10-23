@@ -41,7 +41,7 @@ pub async fn handles(
 	users
 		.users
 		.iter()
-		.map(|user| convert::identity::handle(current_user_id, user))
+		.map(|user| convert::identity::handle(ctx.config(), current_user_id, user))
 		.collect::<GlobalResult<Vec<_>>>()
 }
 
@@ -69,7 +69,9 @@ pub async fn summaries(
 	users
 		.users
 		.iter()
-		.map(|user| convert::identity::summary(current_user_id, user, &mutual_follows.follows))
+		.map(|user| {
+			convert::identity::summary(ctx.config(), current_user_id, user, &mutual_follows.follows)
+		})
 		.collect::<GlobalResult<Vec<_>>>()
 }
 
@@ -115,6 +117,7 @@ pub async fn profiles(
 		.iter()
 		.map(|user| {
 			convert::identity::profile(
+				ctx.config(),
 				current_user_id,
 				user,
 				convert::identity::ProfileCtx {

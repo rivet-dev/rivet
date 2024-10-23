@@ -68,7 +68,7 @@ async fn worker(ctx: &OperationContext<upload::msg::delete::Message>) -> GlobalR
 		if let Some(x) = deletions.get_mut(&upload.bucket) {
 			x.keys.push(key);
 		} else {
-			let client = s3_util::Client::from_env(&upload.bucket).await?;
+			let client = s3_util::Client::with_bucket(ctx.config(), &upload.bucket).await?;
 
 			deletions.insert(
 				upload.bucket.clone(),

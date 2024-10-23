@@ -24,16 +24,16 @@ struct DynamicServer {
 }
 
 impl DynamicServer {
-	fn parent_host(&self) -> GlobalResult<String> {
+	fn parent_host(&self, config: &rivet_config::Config) -> GlobalResult<String> {
 		Ok(format!(
 			"lobby.{}.{}",
 			self.datacenter_id,
-			unwrap!(util::env::domain_job()),
+			unwrap_ref!(config.server()?.rivet.dns()?.domain_job),
 		))
 	}
 
-	fn hostname(&self) -> GlobalResult<String> {
-		ds::util::build_ds_hostname(self.server_id, &self.port_name, self.datacenter_id)
+	fn hostname(&self, config: &rivet_config::Config) -> GlobalResult<String> {
+		ds::util::build_ds_hostname(config, self.server_id, &self.port_name, self.datacenter_id)
 	}
 }
 
@@ -83,7 +83,8 @@ pub async fn build_ds(
 	// Process proxied ports
 	for dynamic_server in &dynamic_servers {
 		let server_id = dynamic_server.server_id;
-		let register_res = ds_register_proxied_port(server_id, dynamic_server, config);
+		let register_res =
+			ds_register_proxied_port(ctx.config(), server_id, dynamic_server, config);
 		match register_res {
 			Ok(_) => {}
 			Err(err) => {
@@ -123,9 +124,10 @@ pub async fn build_ds(
 
 #[tracing::instrument(skip(config))]
 fn ds_register_proxied_port(
+	config: &rivet_config::Config,
 	server_id: Uuid,
 	proxied_port: &DynamicServer,
-	config: &mut types::TraefikConfigResponse,
+	traefik_config: &mut types::TraefikConfigResponse,
 ) -> GlobalResult<()> {
 	let ingress_port = proxied_port.gg_port;
 	let target_port_label = proxied_port.label.clone();
@@ -137,7 +139,7 @@ fn ds_register_proxied_port(
 	// Insert the relevant service
 	match proxy_protocol {
 		ds::types::GameGuardProtocol::Http | ds::types::GameGuardProtocol::Https => {
-			config.http.services.insert(
+			traefik_config.http.services.insert(
 				service_id.clone(),
 				types::TraefikService {
 					load_balancer: types::TraefikLoadBalancer {
@@ -154,7 +156,7 @@ fn ds_register_proxied_port(
 			);
 		}
 		ds::types::GameGuardProtocol::Tcp | ds::types::GameGuardProtocol::TcpTls => {
-			config.tcp.services.insert(
+			traefik_config.tcp.services.insert(
 				service_id.clone(),
 				types::TraefikService {
 					load_balancer: types::TraefikLoadBalancer {
@@ -168,7 +170,7 @@ fn ds_register_proxied_port(
 			);
 		}
 		ds::types::GameGuardProtocol::Udp => {
-			config.udp.services.insert(
+			traefik_config.udp.services.insert(
 				service_id.clone(),
 				types::TraefikService {
 					load_balancer: types::TraefikLoadBalancer {
@@ -188,7 +190,7 @@ fn ds_register_proxied_port(
 		ds::types::GameGuardProtocol::Http => {
 			// Generate config
 			let middlewares = http_router_middlewares();
-			let rule = format_http_rule(proxied_port)?;
+			let rule = format_http_rule(config, proxied_port)?;
 
 			// Hash key
 			let unique_key = (&server_id, &target_port_label, &rule, &middlewares);
@@ -196,7 +198,7 @@ fn ds_register_proxied_port(
 			unique_key.hash(&mut hasher);
 			let hash = hasher.finish();
 
-			config.http.routers.insert(
+			traefik_config.http.routers.insert(
 				format!("ds:{server_id}:{hash:x}:http"),
 				types::TraefikRouter {
 					entry_points: vec![format!("lb-{ingress_port}")],
@@ -211,7 +213,7 @@ fn ds_register_proxied_port(
 		ds::types::GameGuardProtocol::Https => {
 			// Generate config
 			let middlewares = http_router_middlewares();
-			let rule = format_http_rule(proxied_port)?;
+			let rule = format_http_rule(config, proxied_port)?;
 
 			// Hash key
 			let unique_key = (&server_id, &target_port_label, &rule, &middlewares);
@@ -219,7 +221,7 @@ fn ds_register_proxied_port(
 			unique_key.hash(&mut hasher);
 			let hash = hasher.finish();
 
-			config.http.routers.insert(
+			traefik_config.http.routers.insert(
 				format!("ds:{server_id}:{hash:x}:https"),
 				types::TraefikRouter {
 					entry_points: vec![format!("lb-{ingress_port}")],
@@ -227,12 +229,15 @@ fn ds_register_proxied_port(
 					priority: None,
 					service: service_id.clone(),
 					middlewares,
-					tls: Some(types::TraefikTls::build(build_tls_domains(proxied_port)?)),
+					tls: Some(types::TraefikTls::build(build_tls_domains(
+						config,
+						proxied_port,
+					)?)),
 				},
 			);
 		}
 		ds::types::GameGuardProtocol::Tcp => {
-			config.tcp.routers.insert(
+			traefik_config.tcp.routers.insert(
 				format!("ds:{}:{}:tcp", server_id, target_port_label),
 				types::TraefikRouter {
 					entry_points: vec![format!("lb-{ingress_port}-tcp")],
@@ -245,7 +250,7 @@ fn ds_register_proxied_port(
 			);
 		}
 		ds::types::GameGuardProtocol::TcpTls => {
-			config.tcp.routers.insert(
+			traefik_config.tcp.routers.insert(
 				format!("ds:{}:{}:tcp-tls", server_id, target_port_label),
 				types::TraefikRouter {
 					entry_points: vec![format!("lb-{ingress_port}-tcp")],
@@ -253,12 +258,15 @@ fn ds_register_proxied_port(
 					priority: None,
 					service: service_id,
 					middlewares: vec![],
-					tls: Some(types::TraefikTls::build(build_tls_domains(proxied_port)?)),
+					tls: Some(types::TraefikTls::build(build_tls_domains(
+						config,
+						proxied_port,
+					)?)),
 				},
 			);
 		}
 		ds::types::GameGuardProtocol::Udp => {
-			config.udp.routers.insert(
+			traefik_config.udp.routers.insert(
 				format!("ds:{}:{}:udp", server_id, target_port_label),
 				types::TraefikRouter {
 					entry_points: vec![format!("lb-{ingress_port}-udp")],
@@ -275,18 +283,24 @@ fn ds_register_proxied_port(
 	Ok(())
 }
 
-fn format_http_rule(proxied_port: &DynamicServer) -> GlobalResult<String> {
-	Ok(format!("Host(`{}`)", proxied_port.hostname()?))
+fn format_http_rule(
+	config: &rivet_config::Config,
+	proxied_port: &DynamicServer,
+) -> GlobalResult<String> {
+	Ok(format!("Host(`{}`)", proxied_port.hostname(config)?))
 }
 
-fn build_tls_domains(proxied_port: &DynamicServer) -> GlobalResult<Vec<types::TraefikTlsDomain>> {
+fn build_tls_domains(
+	config: &rivet_config::Config,
+	proxied_port: &DynamicServer,
+) -> GlobalResult<Vec<types::TraefikTlsDomain>> {
 	// Derive TLS config. Jobs can specify their own ingress rules, so we
 	// need to derive which domains to use for the job.
 	//
 	// A parent wildcard SSL mode will use the parent domain as the SSL
 	// name.
 	let mut domains = Vec::new();
-	let parent_host = proxied_port.parent_host()?;
+	let parent_host = proxied_port.parent_host(config)?;
 	domains.push(types::TraefikTlsDomain {
 		main: parent_host.to_owned(),
 		sans: vec![format!("*.{}", parent_host)],

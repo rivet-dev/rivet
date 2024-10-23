@@ -103,7 +103,7 @@ pub async fn status(
 
 	// Create client
 	let mut headers = reqwest::header::HeaderMap::new();
-	headers.insert("host", util::env::host_api().parse()?);
+	headers.insert("host", ctx.config().server()?.rivet.api_host()?.parse()?);
 	headers.insert(
 		"cf-connecting-ip",
 		reqwest::header::HeaderValue::from_str("127.0.0.1")?,

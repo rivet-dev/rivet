@@ -18,7 +18,7 @@ async fn empty(ctx: TestCtx) {
 	.await
 	.unwrap();
 
-	tracing::info!(link=?util::route::identity_game_link(&res.user_link_token));
+	tracing::info!(link=?util::route::identity_game_link(ctx.config(), &res.user_link_token));
 
 	let res = op!([ctx] game_user_link_get {
 		link_ids: vec![res.link_id.unwrap()]

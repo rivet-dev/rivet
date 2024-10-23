@@ -2,8 +2,6 @@ use chirp_worker::prelude::*;
 use proto::backend::pkg::*;
 use serde::Deserialize;
 
-use crate::workers::NEW_NOMAD_CONFIG;
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 struct PlanResult {
@@ -133,7 +131,7 @@ async fn worker(
 			// Stop the job from attempting to run on another node. This will
 			// be called in job-run-stop too, but we want to catch this earlier.
 			match nomad_client_new::apis::jobs_api::delete_job(
-				&NEW_NOMAD_CONFIG,
+				&nomad_util::new_build_config(ctx.config())?,
 				job_id,
 				Some(&region.nomad_region),
 				None,

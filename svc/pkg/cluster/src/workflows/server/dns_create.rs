@@ -18,8 +18,11 @@ pub async fn cluster_server_dns_create(ctx: &mut WorkflowCtx, input: &Input) -> 
 		})
 		.await?;
 
-	let zone_id = unwrap!(util::env::cloudflare::zone::job::id(), "dns not configured");
-	let domain_job = unwrap!(util::env::domain_job());
+	let zone_id = unwrap_ref!(
+		ctx.config().server()?.cloudflare()?.zone.job,
+		"dns not configured"
+	);
+	let domain_job = unwrap_ref!(ctx.config().server()?.rivet.dns()?.domain_job);
 
 	let (primary_dns_record_id, secondary_dns_record_id) = ctx
 		.join((
@@ -99,8 +102,8 @@ async fn create_dns_record(
 	ctx: &ActivityCtx,
 	input: &CreateDnsRecordInput,
 ) -> GlobalResult<String> {
-	let cf_token = util::env::read_secret(&["cloudflare", "terraform", "auth_token"]).await?;
-	let client = cf_client(Some(&cf_token)).await?;
+	let cf_token = &*ctx.config().server()?.cloudflare()?.auth_token.read();
+	let client = cf_client(ctx.config(), Some(&cf_token)).await?;
 
 	let record_id = create_dns_record(
 		&client,

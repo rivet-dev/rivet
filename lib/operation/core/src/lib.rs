@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use chirp_client::prelude::*;
 use chirp_metrics as metrics;
 use global_error::{GlobalError, GlobalResult};
+use rivet_config::Config;
 use rivet_connection::Connection;
 use rivet_pools::prelude::*;
 use rivet_util as util;
@@ -34,6 +35,7 @@ where
 	name: String,
 	timeout: Duration,
 
+	config: Config,
 	conn: Connection,
 	req_id: Uuid,
 	ray_id: Uuid,
@@ -53,6 +55,7 @@ where
 	pub fn new(
 		name: String,
 		timeout: Duration,
+		config: Config,
 		conn: Connection,
 		req_id: Uuid,
 		ray_id: Uuid,
@@ -63,6 +66,7 @@ where
 		OperationContext {
 			name,
 			timeout,
+			config,
 			conn,
 			req_id,
 			ray_id,
@@ -141,6 +145,7 @@ where
 		OperationContext {
 			name: O::NAME.to_string(),
 			timeout: O::TIMEOUT,
+			config: self.config.clone(),
 			conn: self.conn.wrap(req_id, self.ray_id, O::NAME),
 			req_id,
 			ray_id: self.ray_id,
@@ -157,6 +162,7 @@ where
 		OperationContext {
 			name: self.name.clone(),
 			timeout: self.timeout,
+			config: self.config.clone(),
 			conn: self.conn.clone(),
 			req_id: self.req_id,
 			ray_id: self.ray_id,
@@ -210,14 +216,12 @@ where
 		self.conn.trace()
 	}
 
-	pub fn test(&self) -> bool {
-		self.trace()
-			.iter()
-			.any(|x| x.run_context == chirp_client::RunContext::Test as i32)
-	}
-
 	pub fn op_ctx(&self) -> &OperationContext<B> {
 		&self
+	}
+
+	pub fn config(&self) -> &Config {
+		&self.config
 	}
 
 	pub fn conn(&self) -> &Connection {

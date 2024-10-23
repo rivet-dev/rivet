@@ -49,7 +49,7 @@ async fn handle(
 			"d-a742c54153a6436694516fc58cb6eabf".to_string(),
 			json!({
 				"game_display_name": game.display_name.clone(),
-				"game_logo_url": util::route::game_logo(game),
+				"game_logo_url": util::route::game_logo(ctx.config(), game),
 				"verification_code": code,
 			}),
 		)

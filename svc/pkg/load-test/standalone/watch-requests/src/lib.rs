@@ -3,8 +3,8 @@ use rivet_api::apis::configuration::Configuration;
 use rivet_operation::prelude::*;
 use tokio::time::{Duration, Instant};
 
-pub async fn start() -> GlobalResult<()> {
-	run_from_env(util::timestamp::now()).await?;
+pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> GlobalResult<()> {
+	run_from_env(config, pools, util::timestamp::now()).await?;
 
 	tracing::info!("finished");
 
@@ -12,14 +12,18 @@ pub async fn start() -> GlobalResult<()> {
 }
 
 #[tracing::instrument(skip_all)]
-pub async fn run_from_env(_ts: i64) -> GlobalResult<()> {
-	let pools = rivet_pools::from_env().await?;
+pub async fn run_from_env(
+	config: rivet_config::Config,
+	pools: rivet_pools::Pools,
+	_ts: i64,
+) -> GlobalResult<()> {
 	let client =
 		chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("load-test-watch-requests");
 	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
 	let ctx = OperationContext::new(
 		"load-test-watch-requests".into(),
 		std::time::Duration::from_secs(60),
+		config,
 		rivet_connection::Connection::new(client, pools, cache),
 		Uuid::new_v4(),
 		Uuid::new_v4(),
@@ -117,7 +121,7 @@ pub async fn run_from_env(_ts: i64) -> GlobalResult<()> {
 			);
 			headers.insert(
 				"host",
-				reqwest::header::HeaderValue::from_str(unwrap!(util::env::domain_main_api()))?,
+				reqwest::header::HeaderValue::from_str(&ctx.config().server()?.rivet.api_host()?)?,
 			);
 			headers.insert(
 				"cf-connecting-ip",

@@ -48,6 +48,7 @@ pub async fn wait_for_workflow<W: Workflow>(
 
 pub async fn op<I>(
 	db: &DatabaseHandle,
+	config: &rivet_config::Config,
 	conn: &rivet_connection::Connection,
 	ray_id: Uuid,
 	req_ts: i64,
@@ -62,6 +63,7 @@ where
 
 	let ctx = OperationCtx::new(
 		db.clone(),
+		config,
 		conn,
 		ray_id,
 		req_ts,

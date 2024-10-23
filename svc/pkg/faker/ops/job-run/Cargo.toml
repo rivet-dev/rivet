@@ -13,6 +13,8 @@ prost = "0.10"
 faker-job-template = { path = "../job-template" }
 faker-region = { path = "../region" }
 job-run = { path = "../../../job-run" }
+rivet-test = { version = "0.1.0", path = "../../../../../lib/test" }
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../../lib/chirp/worker" }
+rivet-test = { version = "0.1.0", path = "../../../../../lib/test" }

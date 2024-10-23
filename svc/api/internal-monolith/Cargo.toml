@@ -23,3 +23,5 @@ url = "2.2.2"
 
 api-traefik-provider = { path = "../traefik-provider" }
 api-provision = { path = "../provision" }
+rivet-config = { version = "0.1.0", path = "../../../lib/config" }
+rivet-env = { version = "0.1.0", path = "../../../lib/env" }

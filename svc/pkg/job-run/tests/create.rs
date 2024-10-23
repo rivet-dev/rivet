@@ -14,7 +14,7 @@ async fn basic_http(ctx: TestCtx) {
 		return;
 	}
 
-	let domain_job = util::env::domain_job().unwrap();
+	let domain_job = ctx.config().server()?.rivet.dns()?.domain_job.unwrap();
 
 	let region_res = op!([ctx] faker_region {}).await.unwrap();
 	let region_id = region_res.region_id.as_ref().unwrap().as_uuid();
@@ -48,7 +48,7 @@ async fn basic_http(ctx: TestCtx) {
 					value: test_id.clone(),
 				},
 			],
-			util::env::test_id_param(),
+			rivet_test::test_id_param(),
 		]
 		.concat(),
 		job_spec_json: template_res.job_spec_json.clone(),
@@ -107,7 +107,7 @@ async fn basic_tcp(ctx: TestCtx) {
 		return;
 	}
 
-	let domain_job = util::env::domain_job().unwrap();
+	let domain_job = ctx.config().server()?.rivet.dns()?.domain_job.unwrap();
 
 	let region_res = op!([ctx] faker_region {}).await.unwrap();
 	let region_id = region_res.region_id.as_ref().unwrap().as_uuid();
@@ -141,7 +141,7 @@ async fn basic_tcp(ctx: TestCtx) {
 					value: test_id.clone(),
 				},
 			],
-			util::env::test_id_param(),
+			rivet_test::test_id_param(),
 		]
 		.concat(),
 		job_spec_json: template_res.job_spec_json.clone(),
@@ -219,7 +219,7 @@ async fn basic_udp(ctx: TestCtx) {
 		return;
 	}
 
-	let domain_job = util::env::domain_job().unwrap();
+	let domain_job = ctx.config().server()?.rivet.dns()?.domain_job.unwrap();
 
 	let region_res = op!([ctx] faker_region {}).await.unwrap();
 	let region_id = region_res.region_id.as_ref().unwrap().as_uuid();
@@ -252,7 +252,7 @@ async fn basic_udp(ctx: TestCtx) {
 					value: test_id.clone(),
 				},
 			],
-			util::env::test_id_param(),
+			rivet_test::test_id_param(),
 		]
 		.concat(),
 		job_spec_json: template_res.job_spec_json.clone(),
@@ -333,7 +333,7 @@ async fn plan_fail(ctx: TestCtx) {
 					value: test_id.clone(),
 				},
 			],
-			util::env::test_id_param(),
+			rivet_test::test_id_param(),
 		]
 		.concat(),
 		job_spec_json: template_res.job_spec_json.clone(),
@@ -550,7 +550,7 @@ async fn validate_job(
 	region_id: Uuid,
 	port_label: &str,
 ) -> ValidateJobOutput {
-	let nomad_config = nomad_util::config_from_env().unwrap();
+	let nomad_config = nomad_util::build_config().unwrap();
 
 	let (cql_region_id,) =
 		sqlx::query_as::<_, (Uuid,)>("SELECT region_id FROM db_job_state.runs WHERE run_id = $1")

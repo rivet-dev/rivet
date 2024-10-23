@@ -54,10 +54,11 @@ pub enum SubCommand {
 }
 
 impl SubCommand {
-	pub async fn execute(self) -> Result<()> {
+	pub async fn execute(self, config: rivet_config::Config) -> Result<()> {
 		match self {
 			Self::Get { workflow_id } => {
-				let workflow = util::wf::get_workflow(workflow_id).await?;
+				let pool = util::wf::build_pool(&config).await?;
+				let workflow = util::wf::get_workflow(pool, workflow_id).await?;
 				util::wf::print_workflows(workflow.into_iter().collect(), true).await
 			}
 			Self::List {
@@ -66,17 +67,27 @@ impl SubCommand {
 				state,
 				pretty,
 			} => {
-				let workflows = util::wf::find_workflows(tags, name, state).await?;
+				let pool = util::wf::build_pool(&config).await?;
+				let workflows = util::wf::find_workflows(pool, tags, name, state).await?;
 				util::wf::print_workflows(workflows, pretty).await
 			}
-			Self::Ack { workflow_id } => util::wf::silence_workflow(workflow_id).await,
-			Self::Wake { workflow_id } => util::wf::wake_workflow(workflow_id).await,
+			Self::Ack { workflow_id } => {
+				let pool = util::wf::build_pool(&config).await?;
+				util::wf::silence_workflow(pool, workflow_id).await
+			}
+			Self::Wake { workflow_id } => {
+				let pool = util::wf::build_pool(&config).await?;
+				util::wf::wake_workflow(pool, workflow_id).await
+			}
 			Self::History {
 				workflow_id,
 				include_forgotten,
 				print_location,
-			} => util::wf::print_history(workflow_id, include_forgotten, print_location).await,
-			Self::Signal { command } => command.execute().await,
+			} => {
+				let pool = util::wf::build_pool(&config).await?;
+				util::wf::print_history(pool, workflow_id, include_forgotten, print_location).await
+			}
+			Self::Signal { command } => command.execute(config).await,
 		}
 	}
 }

@@ -50,8 +50,7 @@ struct DeleteInstanceInput {
 
 #[activity(DeleteInstance)]
 async fn delete_instance(ctx: &ActivityCtx, input: &DeleteInstanceInput) -> GlobalResult<()> {
-	// Build HTTP client
-	let client = client::Client::new(input.api_token.clone()).await?;
+	let client = client::Client::new(ctx.config(), input.api_token.clone()).await?;
 
 	api::delete_instance(&client, input.linode_id).await?;
 
@@ -66,8 +65,7 @@ struct DeleteFirewallInput {
 
 #[activity(DeleteFirewall)]
 async fn delete_firewall(ctx: &ActivityCtx, input: &DeleteFirewallInput) -> GlobalResult<()> {
-	// Build HTTP client
-	let client = client::Client::new(input.api_token.clone()).await?;
+	let client = client::Client::new(ctx.config(), input.api_token.clone()).await?;
 
 	api::delete_firewall(&client, input.firewall_id).await?;
 
@@ -82,8 +80,7 @@ struct DeleteSshKeyInput {
 
 #[activity(DeleteSshKey)]
 async fn delete_ssh_key(ctx: &ActivityCtx, input: &DeleteSshKeyInput) -> GlobalResult<()> {
-	// Build HTTP client
-	let client = client::Client::new(input.api_token.clone()).await?;
+	let client = client::Client::new(ctx.config(), input.api_token.clone()).await?;
 
 	api::delete_ssh_key(&client, input.ssh_key_id).await?;
 	Ok(())

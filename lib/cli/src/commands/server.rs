@@ -34,7 +34,11 @@ impl Into<rivet_server::ServiceKind> for ServiceKind {
 }
 
 impl Opts {
-	pub async fn execute(&self, run_config: &RunConfig) -> Result<()> {
+	pub async fn execute(
+		&self,
+		config: rivet_config::Config,
+		run_config: &RunConfig,
+	) -> Result<()> {
 		let services = if self.services.is_empty() {
 			// Run all services
 			run_config.services.clone()
@@ -54,7 +58,9 @@ impl Opts {
 				.collect::<Vec<_>>()
 		};
 
-		rivet_server::start(services).await?;
+		let pools = rivet_pools::Pools::new(config.clone()).await?;
+
+		rivet_server::start(config, pools, services).await?;
 
 		Ok(())
 	}

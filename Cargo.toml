@@ -278,7 +278,6 @@ members = [
 "lib/connection/",
 "lib/util/core/",
 "lib/util/search/",
-"lib/util/env/",
 "lib/util/macros/",
 "lib/nomad-util/",
 "lib/health-checks/",
@@ -292,6 +291,7 @@ members = [
 "lib/server/",
 "lib/redis-util/",
 "lib/cli/",
+"lib/config/",
 "lib/types-proto/core/",
 "lib/types-proto/build/",
 "lib/smithy-output/api-status/rust-server/",
@@ -329,7 +329,7 @@ members = [
 "lib/convert/",
 "lib/chirp-workflow/core/",
 "lib/chirp-workflow/macros/",
-"lib/claims/",
+"lib/claims/", "lib/config", "lib/test", "svc/pkg/dynamic-config", "lib/env",
 ]
 
 # Speed up compilation

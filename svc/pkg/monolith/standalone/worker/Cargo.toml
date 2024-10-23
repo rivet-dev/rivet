@@ -37,3 +37,4 @@ user-dev-worker = { path = "../../../user-dev/worker" }
 user-follow-worker = { path = "../../../user-follow/worker" }
 user-report-worker = { path = "../../../user-report/worker" }
 user-worker = { path = "../../../user/worker" }
+rivet-config = { version = "0.1.0", path = "../../../../../lib/config" }

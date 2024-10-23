@@ -6,21 +6,25 @@ use types_proto::rivet::backend::{self, pkg::*};
 
 use crate::ApiInto;
 
-pub fn handle(team: &backend::team::Team) -> GlobalResult<models::GroupHandle> {
+pub fn handle(
+	config: &rivet_config::Config,
+	team: &backend::team::Team,
+) -> GlobalResult<models::GroupHandle> {
 	let team_id = unwrap_ref!(team.team_id).as_uuid();
 
 	Ok(models::GroupHandle {
 		group_id: team_id,
 		display_name: team.display_name.to_owned(),
-		avatar_url: util::route::team_avatar(&team),
+		avatar_url: util::route::team_avatar(config, &team),
 		external: Box::new(models::GroupExternalLinks {
-			profile: util::route::team_profile(team_id),
+			profile: util::route::team_profile(config, team_id),
 		}),
 		is_developer: Some(true),
 	})
 }
 
 pub fn summary(
+	config: &rivet_config::Config,
 	team: &backend::team::Team,
 	team_member_counts: &[team::member_count::response::Team],
 	is_current_identity_member: bool,
@@ -39,9 +43,9 @@ pub fn summary(
 		group_id: team_id,
 		display_name: team.display_name.clone(),
 		bio: team.bio.clone(),
-		avatar_url: util::route::team_avatar(&team),
+		avatar_url: util::route::team_avatar(config, &team),
 		external: Box::new(models::GroupExternalLinks {
-			profile: util::route::team_profile(team_id),
+			profile: util::route::team_profile(config, team_id),
 		}),
 
 		is_current_identity_member,

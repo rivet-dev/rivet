@@ -1,15 +1,16 @@
 use chirp_workflow::prelude::*;
 
-pub async fn start() -> GlobalResult<()> {
-	let pools = rivet_pools::from_env().await?;
-
-	run_from_env(pools).await?;
+pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> GlobalResult<()> {
+	run_from_env(config, pools).await?;
 
 	Ok(())
 }
 
 #[tracing::instrument(skip_all)]
-pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
+pub async fn run_from_env(
+	config: rivet_config::Config,
+	pools: rivet_pools::Pools,
+) -> GlobalResult<()> {
 	let reg = cluster::registry()?
 		.merge(linode::registry()?)?
 		.merge(ds::registry()?)?
@@ -20,6 +21,6 @@ pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
 	let worker = Worker::new(reg.handle(), db);
 
 	// Start worker
-	worker.wake_start(pools).await?;
+	worker.wake_start(config, pools).await?;
 	bail!("worker exited unexpectedly");
 }

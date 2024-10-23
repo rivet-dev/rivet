@@ -69,6 +69,8 @@ user-mutual-friend-list = { path = "../../pkg/user/ops/mutual-friend-list" }
 user-pending-delete-toggle = { path = "../../pkg/user/ops/pending-delete-toggle" }
 user-profile-validate = { path = "../../pkg/user/ops/profile-validate" }
 user-search = { path = "../../pkg/user/ops/search" }
+rivet-config = { version = "0.1.0", path = "../../../lib/config" }
+rivet-env = { version = "0.1.0", path = "../../../lib/env" }
 
 [dev-dependencies]
 rivet-connection = { path = "../../../lib/connection" }

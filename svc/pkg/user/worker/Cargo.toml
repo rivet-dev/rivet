@@ -25,6 +25,7 @@ user-get = { path = "../ops/get" }
 user-identity-delete = { path = "../../user-identity/ops/delete" }
 user-profile-validate = { path = "../ops/profile-validate" }
 user-team-list = { path = "../ops/team-list" }
+rivet-config = { version = "0.1.0", path = "../../../../lib/config" }
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../lib/chirp/worker" }

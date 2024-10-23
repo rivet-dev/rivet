@@ -112,6 +112,8 @@ upload-prepare = { path = "../../pkg/upload/ops/prepare" }
 user-get = { path = "../../pkg/user/ops/get" }
 user-identity-get = { path = "../../pkg/user-identity/ops/get" }
 user-team-list = { path = "../../pkg/user/ops/team-list" }
+rivet-config = { version = "0.1.0", path = "../../../lib/config" }
+rivet-env = { version = "0.1.0", path = "../../../lib/env" }
 
 [dev-dependencies]
 rand = "0.8"

@@ -4,15 +4,13 @@ use chirp_workflow::prelude::*;
 use cluster::types::PoolType;
 use futures_util::FutureExt;
 
-pub async fn start() -> GlobalResult<()> {
-	let pools = rivet_pools::from_env().await?;
-
+pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> GlobalResult<()> {
 	let mut interval = tokio::time::interval(std::time::Duration::from_secs(120));
 	loop {
 		interval.tick().await;
 
 		let ts = util::timestamp::now();
-		run_from_env(ts, pools.clone()).await?;
+		run_from_env(config.clone(), pools.clone(), ts).await?;
 	}
 }
 
@@ -25,11 +23,16 @@ struct ServerRow {
 }
 
 #[tracing::instrument(skip_all)]
-pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()> {
+pub async fn run_from_env(
+	config: rivet_config::Config,
+	pools: rivet_pools::Pools,
+	ts: i64,
+) -> GlobalResult<()> {
 	let client = chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("cluster-gc");
 	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
 	let ctx = StandaloneCtx::new(
 		chirp_workflow::compat::db_from_pools(&pools).await?,
+		config,
 		rivet_connection::Connection::new(client, pools, cache),
 		"cluster-gc",
 	)

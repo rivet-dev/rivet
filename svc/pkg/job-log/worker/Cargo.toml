@@ -17,6 +17,7 @@ serde = { version = "1.0", features = ["derive"] }
 
 upload-complete = { path = "../../upload/ops/complete" }
 upload-prepare = { path = "../../upload/ops/prepare" }
+rivet-config = { version = "0.1.0", path = "../../../../lib/config" }
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../lib/chirp/worker" }

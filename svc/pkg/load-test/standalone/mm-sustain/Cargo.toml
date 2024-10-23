@@ -31,6 +31,8 @@ job-run = { path = "../../../job-run" }
 user-identity-create = { path = "../../../user-identity/ops/create" }
 token-create = { path = "../../../token/ops/create" }
 util-mm = { package = "rivet-util-mm", path = "../../../mm/util" }
+rivet-config = { version = "0.1.0", path = "../../../../../lib/config" }
+rivet-test = { version = "0.1.0", path = "../../../../../lib/test" }
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../../lib/chirp/worker" }

@@ -19,6 +19,7 @@ cdn-version-get = { path = "../ops/version-get" }
 game-get = { path = "../../game/ops/get" }
 game-namespace-get = { path = "../../game/ops/namespace-get" }
 upload-get = { path = "../../upload/ops/get" }
+rivet-config = { version = "0.1.0", path = "../../../../lib/config" }
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../lib/chirp/worker" }

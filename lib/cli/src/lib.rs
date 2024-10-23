@@ -32,16 +32,26 @@ pub enum SubCommand {
 		#[clap(subcommand)]
 		command: wf::SubCommand,
 	},
+	/// Manage the Rivet config
+	Config {
+		#[clap(subcommand)]
+		command: config::SubCommand,
+	},
 }
 
 impl SubCommand {
-	pub async fn execute(self, run_config: run_config::RunConfig) -> Result<()> {
+	pub async fn execute(
+		self,
+		config: rivet_config::Config,
+		run_config: run_config::RunConfig,
+	) -> Result<()> {
 		match self {
-			SubCommand::Server(opts) => opts.execute(&run_config).await,
-			SubCommand::Provision(opts) => opts.execute(&run_config).await,
-			SubCommand::Database { command } => command.execute(&run_config).await,
-			SubCommand::Storage { command } => command.execute(&run_config).await,
-			SubCommand::Workflow { command } => command.execute().await,
+			SubCommand::Server(opts) => opts.execute(config, &run_config).await,
+			SubCommand::Provision(opts) => opts.execute(config, &run_config).await,
+			SubCommand::Database { command } => command.execute(config, &run_config).await,
+			SubCommand::Storage { command } => command.execute(config, &run_config).await,
+			SubCommand::Workflow { command } => command.execute(config).await,
+			SubCommand::Config { command } => command.execute(config).await,
 		}
 	}
 }

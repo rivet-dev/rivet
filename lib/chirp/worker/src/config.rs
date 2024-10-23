@@ -25,34 +25,15 @@ pub enum WorkerKind {
 
 impl Config {
 	pub fn from_env(topic: &str) -> Result<Self, ManagerError> {
-		let worker_kind_name = env::var("CHIRP_WORKER_KIND")
-			.map_err(|_| ManagerError::MissingEnvVar("CHIRP_WORKER_KIND".into()))?;
-		let worker_kind = match worker_kind_name.as_str() {
-			"rpc" => WorkerKind::Rpc {
-				group: env::var("CHIRP_WORKER_RPC_GROUP")
-					.map_err(|_| ManagerError::MissingEnvVar("CHIRP_WORKER_RPC_GROUP".into()))?,
-			},
-			"consumer" => WorkerKind::Consumer {
-				topic: topic.into(),
-				group: env::var("CHIRP_WORKER_CONSUMER_GROUP").map_err(|_| {
-					ManagerError::MissingEnvVar("CHIRP_WORKER_CONSUMER_GROUP".into())
-				})?,
-			},
-			_ => {
-				return Err(ManagerError::InvalidEnvVar {
-					key: "CHIRP_WORKER_KIND".to_owned(),
-					message: "unknown worker kind".to_owned(),
-				})
-			}
+		let worker_kind = WorkerKind::Consumer {
+			topic: topic.into(),
+			group: rivet_env::service_name().to_string(),
 		};
 
 		Ok(Self {
-			service_name: env::var("CHIRP_SERVICE_NAME")
-				.map_err(|_| ManagerError::MissingEnvVar("CHIRP_SERVICE_NAME".into()))?,
-			worker_instance: env::var("CHIRP_WORKER_INSTANCE")
-				.map_err(|_| ManagerError::MissingEnvVar("CHIRP_WORKER_INSTANCE".into()))?,
-			worker_source_hash: env::var("RIVET_SOURCE_HASH")
-				.map_err(|_| ManagerError::MissingEnvVar("RIVET_SOURCE_HASH".into()))?,
+			service_name: rivet_env::service_name().to_string(),
+			worker_instance: rivet_env::service_instance().to_string(),
+			worker_source_hash: rivet_env::source_hash().to_string(),
 			worker_kind,
 		})
 	}

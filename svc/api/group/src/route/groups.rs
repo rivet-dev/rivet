@@ -11,6 +11,7 @@ use proto::{
 	common,
 };
 use rivet_api::models as new_models;
+use rivet_config::config::rivet::RivetAccessKind;
 use rivet_convert::{ApiInto, ApiTryInto};
 use rivet_group_server::models;
 use rivet_operation::prelude::*;
@@ -149,9 +150,9 @@ pub async fn profile(
 			group_id: team_id.to_string(),
 			display_name: team.display_name.clone(),
 			bio: team.bio.clone(),
-			avatar_url: util::route::team_avatar(&team),
+			avatar_url: util::route::team_avatar(ctx.config(), &team),
 			external: models::GroupExternalLinks {
-				profile: util::route::team_profile(team_id),
+				profile: util::route::team_profile(ctx.config(), team_id),
 				chat: Default::default(),
 			},
 
@@ -302,7 +303,7 @@ pub async fn members(
 		.iter()
 		.map(|user| {
 			Ok(models::GroupMember {
-				identity: convert::identity::handle(user_ent.user_id, user)?,
+				identity: convert::identity::handle(ctx.config(), user_ent.user_id, user)?,
 			})
 		})
 		.collect::<GlobalResult<Vec<_>>>()?;
@@ -455,7 +456,7 @@ pub async fn join_requests(
 				.map(|jr| jr.ts)
 				.unwrap_or(update_ts);
 			Ok(models::GroupJoinRequest {
-				identity: convert::identity::handle(user_ent.user_id, user)?,
+				identity: convert::identity::handle(ctx.config(), user_ent.user_id, user)?,
 				ts: util::timestamp::to_chrono(join_request_ts)?,
 			})
 		})
@@ -578,13 +579,8 @@ pub async fn create(
 ) -> GlobalResult<models::CreateGroupResponse> {
 	let (_, user_ent) = ctx.auth().user(ctx.op_ctx()).await?;
 
-	let publicity = util::env::var("RIVET_ACCESS_KIND")?;
-	match publicity.as_str() {
-		"public" => {}
-		"private" => {
-			ctx.auth().admin(ctx.op_ctx()).await?;
-		}
-		_ => bail!("invalid RIVET_ACCESS_KIND"),
+	if RivetAccessKind::Public != ctx.config().server()?.rivet.auth.access_kind {
+		ctx.auth().admin(ctx.op_ctx()).await?;
 	}
 
 	let team_id = Uuid::new_v4();
@@ -749,7 +745,7 @@ pub async fn search(
 	let group_handles = team_res
 		.teams
 		.iter()
-		.map(convert::group::handle)
+		.map(|t| convert::group::handle(ctx.config(), t))
 		.collect::<GlobalResult<Vec<_>>>()?;
 
 	Ok(models::SearchGroupsResponse {
@@ -1065,7 +1061,7 @@ pub async fn get_invite(
 		let team = unwrap!(team_res.teams.first());
 
 		Ok(models::GetGroupInviteResponse {
-			group: convert::group::handle(team)?,
+			group: convert::group::handle(ctx.config(), team)?,
 		})
 	} else {
 		bail_with!(GROUP_INVITE_CODE_INVALID);
@@ -1348,7 +1344,7 @@ pub async fn bans(
 			};
 
 			Ok(models::GroupBannedIdentity {
-				identity: convert::identity::handle(user_ent.user_id, user)?,
+				identity: convert::identity::handle(ctx.config(), user_ent.user_id, user)?,
 				ban_ts: util::timestamp::to_chrono(ban_ts)?,
 			})
 		})

@@ -94,7 +94,8 @@ pub async fn export_history(
 	.await?;
 	let upload = unwrap!(upload_res.uploads.first(), "upload not found");
 
-	let s3_client = s3_util::Client::from_env_opt(
+	let s3_client = s3_util::Client::with_bucket_and_endpoint(
+		ctx.config(),
 		"bucket-lobby-history-export",
 		s3_util::EndpointKind::External,
 	)
@@ -297,9 +298,12 @@ pub async fn export_lobby_logs(
 		backend::job::log::StreamType::StdErr => "stderr.txt",
 	};
 
-	let s3_client =
-		s3_util::Client::from_env_opt("bucket-job-log-export", s3_util::EndpointKind::External)
-			.await?;
+	let s3_client = s3_util::Client::with_bucket_and_endpoint(
+		ctx.config(),
+		"bucket-job-log-export",
+		s3_util::EndpointKind::External,
+	)
+	.await?;
 	let presigned_req = s3_client
 		.get_object()
 		.bucket(s3_client.bucket())

@@ -35,6 +35,7 @@ ip-info = { path = "../ip/ops/info" }
 linode = { path = "../linode" }
 token-create = { path = "../token/ops/create" }
 upload-get = { path = "../upload/ops/get" }
+rivet-config = { version = "0.1.0", path = "../../../lib/config" }
 
 [dependencies.sqlx]
 git = "https://github.com/rivet-gg/sqlx"

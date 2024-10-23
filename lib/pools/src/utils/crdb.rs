@@ -1,3 +1,5 @@
+use global_error::prelude::*;
+
 // Helpful links:
 // - https://www.cockroachlabs.com/docs/v22.2/transaction-retry-error-reference
 // - https://www.cockroachlabs.com/docs/v22.2/advanced-client-side-transaction-retries
@@ -5,8 +7,6 @@
 // - https://github.com/cockroachdb/docs/blob/1250d113dcb6de3a885eef1f3b2dfbc6d7eba5fa/_includes/v2.0/app/txn-sample.rs#L10
 
 use std::{future::Future, pin::Pin};
-
-use global_error::prelude::*;
 
 use crate::CrdbPool;
 

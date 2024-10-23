@@ -4,8 +4,6 @@ use chirp_worker::prelude::*;
 use proto::backend::{self, pkg::*};
 use tokio::time::Duration;
 
-use crate::workers::NEW_NOMAD_CONFIG;
-
 mod create_job;
 
 // TODO: Reduce disk space for allocations
@@ -75,7 +73,7 @@ async fn worker(ctx: &OperationContext<job_run::msg::create::Message>) -> Global
 
 	// Create the job
 	let create_job_perf = ctx.perf().start("create-job").await;
-	let nomad_job_id = create_job::create_job(&ctx.job_spec_json, region).await?;
+	let nomad_job_id = create_job::create_job(ctx.config(), &ctx.job_spec_json, region).await?;
 	create_job_perf.end();
 
 	// Create a token for the run
@@ -100,6 +98,7 @@ async fn worker(ctx: &OperationContext<job_run::msg::create::Message>) -> Global
 	// Run the job
 	let run_job_perf = ctx.perf().start("run-job").await;
 	let nomad_dispatched_job_id = run_job(
+		ctx.config(),
 		ctx.body(),
 		run_id,
 		job_run_token,
@@ -141,8 +140,9 @@ async fn worker(ctx: &OperationContext<job_run::msg::create::Message>) -> Global
 	Ok(())
 }
 
-#[tracing::instrument(skip(req))]
+#[tracing::instrument(skip(config, req))]
 async fn run_job(
+	config: &rivet_config::Config,
 	req: &job_run::msg::create::Message,
 	run_id: Uuid,
 	job_run_token: String,
@@ -154,7 +154,7 @@ async fn run_job(
 		("job_run_token".into(), job_run_token),
 	];
 	let dispatch_res = nomad_client_new::apis::jobs_api::post_job_dispatch(
-		&NEW_NOMAD_CONFIG,
+		&nomad_util::new_build_config(config)?,
 		nomad_job_id,
 		nomad_client_new::models::JobDispatchRequest {
 			job_id: Some(nomad_job_id.to_string()),

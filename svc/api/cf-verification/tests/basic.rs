@@ -16,12 +16,12 @@
 // 			.with_target(false)
 // 			.try_init();
 
-// 		let pools = rivet_pools::from_env("api-cf-verification-test")
+// 		let pools = rivet_pools::Pools::new(config"api-cf-verification-test")
 // 			.await
 // 			.unwrap();
 // 		let cache = rivet_cache::CacheInner::new(
 // 			"api-cf-verification-test".to_string(),
-// 			std::env::var("RIVET_SOURCE_HASH").unwrap(),
+// 			std::env::var("rivet_env").unwrap(),
 // 			pools.redis_cache().unwrap(),
 // 		);
 // 		let client = chirp_client::SharedClient::from_env(pools.clone())

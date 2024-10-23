@@ -152,18 +152,19 @@ pub fn instance(config: Instance) -> String {
 	script
 }
 
-pub fn tunnel(name: &str) -> GlobalResult<String> {
+pub fn tunnel(config: &rivet_config::Config, name: &str) -> GlobalResult<String> {
 	// Build transports for each service
+	let tls_config = &config.server()?.tls()?;
 	let mut tcp_server_transports = HashMap::new();
 	for TunnelService { name, .. } in TUNNEL_SERVICES {
 		tcp_server_transports.insert(
 			name.to_string(),
 			ServerTransport {
 				server_name: format!("{name}.tunnel.rivet.gg"),
-				root_cas: vec![util::env::var("TLS_ROOT_CA_CERT_PEM")?],
+				root_cas: vec![tls_config.root_ca_cert_pem.read().clone()],
 				certs: vec![TlsCert {
-					cert_pem: util::env::var("TLS_CERT_LOCALLY_SIGNED_JOB_CERT_PEM")?,
-					key_pem: util::env::var("TLS_CERT_LOCALLY_SIGNED_JOB_KEY_PEM")?,
+					cert_pem: tls_config.cert_locally_signed_job_cert_pem.read().clone(),
+					key_pem: tls_config.cert_locally_signed_job_key_pem.read().clone(),
 				}],
 			},
 		);
@@ -172,7 +173,7 @@ pub fn tunnel(name: &str) -> GlobalResult<String> {
 	Ok(instance(Instance {
 		name: name.to_string(),
 		static_config: tunnel_static_config(),
-		dynamic_config: tunnel_dynamic_config(&util::env::var("RIVET_HOST_TUNNEL")?),
+		dynamic_config: tunnel_dynamic_config(&config.server()?.rivet.tunnel.public_host),
 		tcp_server_transports,
 	}))
 }
@@ -221,13 +222,21 @@ fn tunnel_dynamic_config(host_tunnel: &str) -> String {
 	config
 }
 
-pub async fn gg_static_config() -> GlobalResult<String> {
-	let api_traefik_provider_token =
-		&util::env::read_secret(&["rivet", "api_traefik_provider", "token"]).await?;
-	let http_provider_endpoint = format!(
-		"http://127.0.0.1:{port}/traefik-provider/config/game-guard?token={api_traefik_provider_token}&datacenter=___DATACENTER_ID___",
-		port = TUNNEL_API_INTERNAL_PORT,
-	);
+pub async fn gg_static_config(config: &rivet_config::Config) -> GlobalResult<String> {
+	let http_provider_endpoint = if let Some(api_traefik_provider_token) =
+		&config.server()?.rivet.token.api_traefik_provider
+	{
+		format!(
+			"http://127.0.0.1:{port}/traefik-provider/config/game-guard?token={}&datacenter=___DATACENTER_ID___",
+			token = api_traefik_provider_token.read(),
+			port = TUNNEL_API_INTERNAL_PORT,
+		)
+	} else {
+		format!(
+			"http://127.0.0.1:{port}/traefik-provider/config/game-guard?datacenter=___DATACENTER_ID___",
+			port = TUNNEL_API_INTERNAL_PORT,
+		)
+	};
 
 	// Metrics are disabled since they're too high cardinality for Prometheus (both the # of
 	// entrypoint & the frequently changing routers + services)
@@ -288,8 +297,11 @@ pub async fn gg_static_config() -> GlobalResult<String> {
 	Ok(config)
 }
 
-pub fn gg_dynamic_config(datacenter_id: Uuid) -> GlobalResult<String> {
-	let domain_job = unwrap!(util::env::domain_job(), "dns not enabled");
+pub fn gg_dynamic_config(
+	config: &rivet_config::Config,
+	datacenter_id: Uuid,
+) -> GlobalResult<String> {
+	let domain_job = unwrap_ref!(config.server()?.rivet.dns()?.domain_job, "dns not enabled");
 
 	let main = format!("{datacenter_id}.{domain_job}");
 

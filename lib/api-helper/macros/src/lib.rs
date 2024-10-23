@@ -134,19 +134,8 @@ impl EndpointRouter {
 		let endpoints = self
 			.routes
 			.into_iter()
-			.map(|endpoint| endpoint.render(self.cors_config.is_some()))
+			.map(|endpoint| endpoint.render(self.cors_config.clone()))
 			.collect::<syn::Result<Vec<_>>>()?;
-
-		let cors_config = self
-			.cors_config
-			.map(|cors_config| {
-				quote! {
-					lazy_static::lazy_static! {
-						static ref CORS_CONFIG: api_helper::util::CorsConfig = #cors_config;
-					}
-				}
-			})
-			.unwrap_or_else(|| quote! {});
 
 		let mounts = self
 			.mounts
@@ -166,6 +155,7 @@ impl EndpointRouter {
 
 								#mount_path::__inner(
 									shared_client.clone(),
+									config.clone(),
 									pools.clone(),
 									cache.clone(),
 									ray_id,
@@ -189,6 +179,7 @@ impl EndpointRouter {
 				#[tracing::instrument(skip_all)]
 				pub async fn __inner(
 					shared_client: chirp_client::SharedClientHandle,
+					config: rivet_config::Config,
 					pools: rivet_pools::Pools,
 					cache: rivet_cache::Cache,
 					ray_id: uuid::Uuid,
@@ -203,9 +194,6 @@ impl EndpointRouter {
 						return Ok(None);
 					}
 
-					// Define cors config
-					#cors_config
-
 					let body = __AsyncOption::None
 						#(#endpoints)*
 						#(#mounts)*
@@ -217,6 +205,7 @@ impl EndpointRouter {
 				#[tracing::instrument(skip_all)]
 				pub async fn handle(
 					shared_client: chirp_client::SharedClientHandle,
+					config: rivet_config::Config,
 					pools: rivet_pools::Pools,
 					cache: rivet_cache::Cache,
 					ray_id: uuid::Uuid,
@@ -226,14 +215,14 @@ impl EndpointRouter {
 					tracing::info!(method=?request.method(), uri=?request.uri(), "received request");
 
 					// Create router config for complex nested routers
-					let mut router_config = match api_helper::macro_util::__RouterConfig::new(request.uri()) {
+					let mut router_config = match api_helper::macro_util::__RouterConfig::new(&config, request.uri()) {
 						Ok(x) => x,
-						Err(err) => return api_helper::error::handle_rejection(err, response, ray_id),
+						Err(err) => return api_helper::error::handle_rejection(&config, err, response, ray_id),
 					};
 
 					// Handle router
 					let res = Self::__inner(
-						shared_client, pools, cache,
+						shared_client, config.clone(), pools, cache,
 						ray_id, &mut request, &mut response,
 						&mut router_config,
 					).await;
@@ -265,7 +254,7 @@ impl EndpointRouter {
 						Ok(body) => {
 							Ok(response.body(hyper::Body::from(body))?)
 						},
-						Err(err) => api_helper::error::handle_rejection(err, response, ray_id),
+						Err(err) => api_helper::error::handle_rejection(&config, err, response, ray_id),
 					}
 				}
 			}
@@ -475,11 +464,12 @@ impl Parse for Endpoint {
 }
 
 impl Endpoint {
-	fn render(self, verify_cors: bool) -> syn::Result<TokenStream2> {
+	fn render(self, cors_config: Option<syn::Expr>) -> syn::Result<TokenStream2> {
 		// Check cors at the endpoint level
-		let cors = if verify_cors {
+		let cors = if let Some(cors_config) = cors_config {
 			quote! {
-				match api_helper::util::verify_cors(request, &*CORS_CONFIG)? {
+				let cors = (#cors_config)(&config);
+				match api_helper::util::verify_cors(request, &cors)? {
 					// Set headers and immediately return empty response
 					api_helper::util::CorsResponse::Preflight(headers) => {
 						response.headers_mut().map(|h| h.extend(headers));
@@ -789,14 +779,14 @@ impl EndpointFunction {
 
 				quote! {
 					rivet_cache::RateLimitConfig {
-						key: format!("{}-{}", rivet_operation::prelude::util::env::chirp_service_name(), #key),
+						key: format!("{}-{}", rivet_env::service_name(), #key),
 						buckets: #buckets,
 					}
 				}
 			} else {
 				quote! {
 					rivet_cache::RateLimitConfig {
-						key: format!("{}{}", rivet_operation::prelude::util::env::chirp_service_name(), #default_key),
+						key: format!("{}{}", rivet_env::service_name(), #default_key),
 						buckets: vec![ #default_bucket ],
 					}
 				}
@@ -902,6 +892,7 @@ impl EndpointFunction {
 
 				let ctx = macro_util::__with_ctx(
 					shared_client.clone(),
+					config.clone(),
 					pools.clone(),
 					cache.clone(),
 					&request,

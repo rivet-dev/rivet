@@ -44,7 +44,7 @@ async fn handle(
 					value: server_response.clone(),
 				},
 			],
-			util::env::test_id_param(),
+			rivet_test::test_id_param(),
 		]
 		.concat(),
 		job_spec_json: job_spec_json,

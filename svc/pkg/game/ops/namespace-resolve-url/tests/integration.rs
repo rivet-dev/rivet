@@ -13,7 +13,12 @@ async fn test_no_ns(ctx: TestCtx) {
 		format!(
 			"http://{}.{}/hello-world",
 			game_data.name_id,
-			util::env::domain_cdn().expect("no domain cdn")
+			ctx.config()
+				.server()?
+				.rivet
+				.domain
+				.cdn
+				.expect("no domain cdn")
 		),
 	)
 	.await
@@ -39,7 +44,7 @@ async fn test_with_ns(ctx: TestCtx) {
 				"http://{}--{}.{}/hello-world",
 				game_data.name_id,
 				ns.name_id,
-				util::env::domain_cdn().unwrap()
+				ctx.config().server()?.rivet.dns()?.domain_cdn.unwrap()
 			),
 		)
 		.await

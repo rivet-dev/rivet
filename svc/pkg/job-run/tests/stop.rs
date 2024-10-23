@@ -7,7 +7,7 @@ async fn stop(ctx: TestCtx) {
 		return;
 	}
 
-	let nomad_config = nomad_util::config_from_env().unwrap();
+	let nomad_config = nomad_util::build_config().unwrap();
 
 	let run_res = op!([ctx] faker_job_run {
 		..Default::default()

@@ -27,10 +27,10 @@
 // 				.init();
 // 		});
 
-// 		let pools = rivet_pools::from_env().await.unwrap();
+// 		let pools = rivet_pools::Pools::new(config).await.unwrap();
 // 		let cache = rivet_cache::CacheInner::new(
 // 			"api-auth-test".to_string(),
-// 			std::env::var("RIVET_SOURCE_HASH").unwrap(),
+// 			std::env::var("rivet_env").unwrap(),
 // 			pools.redis_cache().unwrap(),
 // 		);
 // 		let client = chirp_client::SharedClient::from_env(pools.clone())

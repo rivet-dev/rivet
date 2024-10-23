@@ -65,7 +65,7 @@ async fn basic_client() {
 	set_env_vars().await;
 
 	// Build client
-	let pools = rivet_pools::from_env().await.unwrap();
+	let pools = rivet_pools::Pools::new(config).await.unwrap();
 	let nats = pools.nats().unwrap();
 
 	let shared_client = chirp_client::SharedClient::new(
@@ -264,10 +264,6 @@ async fn basic_client() {
 
 // Set test env vars to mimic actual env
 async fn set_env_vars() {
-	std::env::set_var("RIVET_SOURCE_HASH", "00000000");
-
-	std::env::set_var("CHIRP_SERVICE_NAME", "chirp-test");
-
 	std::env::set_var("NATS_URL", todo!());
 	std::env::set_var("NATS_USERNAME", "chirp");
 	std::env::set_var("NATS_PASSWORD", "password");

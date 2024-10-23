@@ -36,9 +36,16 @@ async fn new_and_reload(ctx: TestCtx) {
 	.await
 	.expect("create new token");
 
-	let _ = rivet_claims::decode(&new_res.token.as_ref().unwrap().token).expect("decode new token");
-	let _ = rivet_claims::decode(&new_res.refresh_token.as_ref().unwrap().token)
-		.expect("decode refresh token");
+	let _ = rivet_claims::decode(
+		&ctx.config().server()?.jwt.public,
+		&new_res.token.as_ref().unwrap().token,
+	)
+	.expect("decode new token");
+	let _ = rivet_claims::decode(
+		&ctx.config().server()?.jwt.public,
+		&new_res.refresh_token.as_ref().unwrap().token,
+	)
+	.expect("decode refresh token");
 	assert_eq!(
 		"usr",
 		new_res
@@ -88,15 +95,21 @@ async fn new_and_reload(ctx: TestCtx) {
 
 	// Decode and validate the tokens
 	{
-		let user_token = rivet_claims::decode(&new_res.token.as_ref().unwrap().token)
-			.expect("decode user token")
-			.expect("validate user token");
+		let user_token = rivet_claims::decode(
+			&ctx.config().server()?.jwt.public,
+			&new_res.token.as_ref().unwrap().token,
+		)
+		.expect("decode user token")
+		.expect("validate user token");
 		let user_ent = user_token.as_user().unwrap();
 		assert_eq!(user_id, user_ent.user_id, "mismatching user id");
 
-		let refresh_token = rivet_claims::decode(&new_res.refresh_token.as_ref().unwrap().token)
-			.expect("decode user token")
-			.expect("validate refresh token");
+		let refresh_token = rivet_claims::decode(
+			&ctx.config().server()?.jwt.public,
+			&new_res.refresh_token.as_ref().unwrap().token,
+		)
+		.expect("decode user token")
+		.expect("validate refresh token");
 		let _refresh_ent = refresh_token.as_refresh().unwrap();
 	}
 }
@@ -134,7 +147,11 @@ async fn new_and_reload_combined(ctx: TestCtx) {
 	.await
 	.expect("create new token");
 
-	let _ = rivet_claims::decode(&new_res.token.as_ref().unwrap().token).expect("decode new token");
+	let _ = rivet_claims::decode(
+		&ctx.config().server()?.jwt.public,
+		&new_res.token.as_ref().unwrap().token,
+	)
+	.expect("decode new token");
 	assert_eq!(
 		"usr",
 		new_res
@@ -173,9 +190,12 @@ async fn new_and_reload_combined(ctx: TestCtx) {
 
 	// Decode and validate the tokens
 	{
-		let user_token = rivet_claims::decode(&new_res.token.as_ref().unwrap().token)
-			.expect("decode user token")
-			.expect("validate user token");
+		let user_token = rivet_claims::decode(
+			&ctx.config().server()?.jwt.public,
+			&new_res.token.as_ref().unwrap().token,
+		)
+		.expect("decode user token")
+		.expect("validate user token");
 		let user_ent = user_token.as_user().unwrap();
 		assert_eq!(user_id, user_ent.user_id, "mismatching user id");
 		assert!(new_res.refresh_token.is_none());

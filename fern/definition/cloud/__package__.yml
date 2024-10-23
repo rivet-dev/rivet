@@ -35,7 +35,6 @@ types:
   BootstrapDomains:
     docs: Domains that host parts of Rivet
     properties:
-      main: string
       cdn: string
       job: string
       # TODO: This is the legacy name, but changing this MIGHT break CLI 1.0

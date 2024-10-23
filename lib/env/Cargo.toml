@@ -1,0 +1,13 @@
+[package]
+name = "rivet-env"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+lazy_static = "1.5.0"
+uuid = { version = "1.11.0", features = ["v4"] }
+vergen-git2 = "1.0.1"
+
+[build-dependencies]
+anyhow = "1.0.90"
+vergen-git2 = "1.0.1"

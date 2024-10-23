@@ -188,7 +188,7 @@ async fn validate_build(
 	if needs_ats_prewarm {
 		let path = format!(
 			"/s3-cache/{namespace}-bucket-build/{upload_id}/{file_name}",
-			namespace = util::env::namespace(),
+			namespace = ctx.config().server()?.rivet.namespace,
 			file_name = util_build::file_name(build_kind, build_compression),
 		);
 		if !prewarm_ctx.paths.contains_key(&path) {

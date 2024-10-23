@@ -11,9 +11,9 @@ pub enum SubCommand {
 }
 
 impl SubCommand {
-	pub async fn execute(self, run_config: &RunConfig) -> Result<()> {
+	pub async fn execute(self, config: rivet_config::Config, run_config: &RunConfig) -> Result<()> {
 		match self {
-			Self::Provision(opts) => opts.execute(run_config).await,
+			Self::Provision(opts) => opts.execute(config, run_config).await,
 		}
 	}
 }

@@ -21,7 +21,7 @@ pub async fn cluster_server_prune_with_filter(
 	ctx: &OperationCtx,
 	input: &Input,
 ) -> GlobalResult<Output> {
-	let linode_token = util::env::read_secret(&["linode", "token"]).await?;
+	let linode_token = ctx.config().server()?.linode()?.api_token.read().clone();
 
 	let servers_res = ctx
 		.op(crate::ops::server::lost_list::Input {
@@ -59,7 +59,7 @@ pub async fn cluster_server_prune_with_filter(
 	// Filter by namespace
 	let filter = json!({
 		"label": {
-			"+contains": format!("{}-", util::env::namespace()),
+			"+contains": format!("{}-", ctx.config().server()?.rivet.namespace),
 		}
 	});
 	let mut headers = header::HeaderMap::new();
@@ -85,8 +85,7 @@ async fn run_for_linode_account(
 	headers: &header::HeaderMap,
 ) -> GlobalResult<()> {
 	// Build HTTP client
-	let client =
-		client::Client::new_with_headers(Some(api_token.to_string()), headers.clone()).await?;
+	let client = client::Client::new_with_headers(api_token.to_string(), headers.clone()).await?;
 
 	tracing::info!("pruning {} servers", servers.len());
 

@@ -97,34 +97,48 @@ impl From<BuildDeliveryMethod> for cluster::types::BuildDeliveryMethod {
 	}
 }
 
-pub async fn start(use_autoscaler: bool) -> GlobalResult<()> {
+pub async fn start(
+	config: rivet_config::Config,
+	pools: rivet_pools::Pools,
+	use_autoscaler: bool,
+) -> GlobalResult<()> {
 	// TODO: When running bolt up, this service gets created first before `cluster-worker` so the messages
 	// sent from here are received but effectively forgotten because `cluster-worker` gets restarted
 	// immediately afterwards. This server will be replaced with a bolt infra step
 	tokio::time::sleep(std::time::Duration::from_secs(3)).await;
 
-	start_inner(use_autoscaler).await
+	start_inner(config, pools, use_autoscaler).await
 }
 
-#[tracing::instrument]
-async fn start_inner(use_autoscaler: bool) -> GlobalResult<()> {
-	let pools = rivet_pools::from_env().await?;
+#[tracing::instrument(skip_all)]
+pub async fn start_inner(
+	config: rivet_config::Config,
+	pools: rivet_pools::Pools,
+	use_autoscaler: bool,
+) -> GlobalResult<()> {
 	let client =
 		chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("cluster-default-update");
 	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
 	let ctx = StandaloneCtx::new(
 		chirp_workflow::compat::db_from_pools(&pools).await?,
+		config,
 		rivet_connection::Connection::new(client, pools, cache),
 		"cluster-default-update",
 	)
 	.await?;
 
 	// Read config from env
-	let Some(config_json) = util::env::var("RIVET_DEFAULT_CLUSTER_CONFIG").ok() else {
+	let Some(config_json) = &ctx
+		.config()
+		.server()?
+		.rivet
+		.cluster()?
+		.default_cluster_config
+	else {
 		tracing::warn!("no cluster config set in namespace config");
 		return Ok(());
 	};
-	let config = serde_json::from_str::<Cluster>(&config_json)?;
+	let config = serde_json::from_value::<Cluster>(config_json.clone())?;
 
 	// HACK: When deploying both monolith worker and this service for the first time, there is a race
 	// condition which might result in the message being published from here but not caught by

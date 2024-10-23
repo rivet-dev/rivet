@@ -33,10 +33,6 @@ impl Connection {
 			context_name: name.to_string(),
 			req_id: Some(parent_req_id.into()),
 			ts,
-			run_context: match rivet_util::env::run_context() {
-				rivet_util::env::RunContext::Service => chirp_client::RunContext::Service,
-				rivet_util::env::RunContext::Test => chirp_client::RunContext::Test,
-			} as i32,
 		};
 
 		Connection::new(

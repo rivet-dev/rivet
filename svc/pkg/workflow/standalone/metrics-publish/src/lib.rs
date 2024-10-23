@@ -1,23 +1,25 @@
 use chirp_workflow::prelude::*;
 
-pub async fn start() -> GlobalResult<()> {
-	let pools = rivet_pools::from_env().await?;
-
+pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> GlobalResult<()> {
 	let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
 	loop {
 		interval.tick().await;
 
-		run_from_env(pools.clone()).await?;
+		run_from_env(config.clone(), pools.clone()).await?;
 	}
 }
 
 #[tracing::instrument(skip_all)]
-pub async fn run_from_env(pools: rivet_pools::Pools) -> GlobalResult<()> {
+pub async fn run_from_env(
+	config: rivet_config::Config,
+	pools: rivet_pools::Pools,
+) -> GlobalResult<()> {
 	let client =
 		chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("workflow-metrics-publish");
 	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
 	let ctx = StandaloneCtx::new(
 		chirp_workflow::compat::db_from_pools(&pools).await?,
+		config,
 		rivet_connection::Connection::new(client, pools, cache),
 		"workflow-metrics-publish",
 	)

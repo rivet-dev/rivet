@@ -16,3 +16,4 @@ ds = { path = "../../../ds" }
 job-run = { path = "../../../job-run" }
 linode = { path = "../../../linode" }
 pegboard = { path = "../../../pegboard" }
+rivet-config = { version = "0.1.0", path = "../../../../../lib/config" }

@@ -336,9 +336,12 @@ pub(crate) async fn resolve_image_artifact_url(
 			tracing::info!("using s3 direct delivery");
 
 			// Build client
-			let s3_client =
-				s3_util::Client::from_env_opt("bucket-build", s3_util::EndpointKind::External)
-					.await?;
+			let s3_client = s3_util::Client::with_bucket_and_endpoint(
+				ctx.config(),
+				"bucket-build",
+				s3_util::EndpointKind::External,
+			)
+			.await?;
 
 			let presigned_req = s3_client
 				.get_object()
@@ -401,7 +404,7 @@ pub(crate) async fn resolve_image_artifact_url(
 			let addr = format!(
 				"http://{vlan_ip}:8080/s3-cache/{namespace}-bucket-build/{upload_id}/{build_file_name}",
 				vlan_ip = ats_vlan_ip,
-				namespace = util::env::namespace(),
+				namespace = ctx.config().server()?.rivet.namespace,
 				upload_id = upload_id,
 			);
 

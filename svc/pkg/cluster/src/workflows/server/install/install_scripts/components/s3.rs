@@ -9,11 +9,11 @@ pub struct GenRemapS3Output {
 	pub config_files: Vec<(String, String)>,
 }
 
-pub async fn gen_remap() -> GlobalResult<GenRemapS3Output> {
+pub async fn gen_remap(config: &rivet_config::Config) -> GlobalResult<GenRemapS3Output> {
+	let s3_config = &config.server()?.s3;
+
 	let mut remap = String::new();
-	let endpoint_external = s3_util::s3_endpoint_external()?;
-	let region = s3_util::s3_region()?;
-	let (access_key_id, secret_access_key) = s3_util::s3_credentials()?;
+	let endpoint_external = s3_config.endpoint_external.to_string();
 
 	// Build plugin chain
 	let plugins = format!("@plugin=tslua.so @pparam=/etc/trafficserver/strip_headers.lua @plugin=s3_auth.so @pparam=--config @pparam=s3_auth_v4.config");
@@ -32,6 +32,8 @@ pub async fn gen_remap() -> GlobalResult<GenRemapS3Output> {
 			version=4
 			v4-region-map=s3_region_map.config
 			"#,
+			access_key_id = s3_config.access_key_id.read(),
+			secret_access_key = s3_config.secret_access_key.read(),
 		),
 	));
 	config_files.push((
@@ -42,7 +44,7 @@ pub async fn gen_remap() -> GlobalResult<GenRemapS3Output> {
 			{s3_host}: {s3_region}
 			"#,
 			s3_host = endpoint_external.split_once("://").unwrap().1,
-			s3_region = region,
+			s3_region = s3_config.region,
 		),
 	));
 

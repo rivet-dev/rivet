@@ -1,32 +1,38 @@
-use global_error::prelude::*;
 use types_proto::rivet::backend;
 use uuid::Uuid;
 
-use crate::env::{domain_main, origin_api, origin_hub};
+// TODO: Remove unwraps of server config
 
-pub fn user_settings() -> String {
-	format!("{}/settings", origin_hub())
+pub fn user_settings(config: &rivet_config::Config) -> String {
+	format!(
+		"{}/settings",
+		config.server().unwrap().rivet.hub.public_origin
+	)
 }
 
-pub fn user_profile(user_id: Uuid) -> String {
-	format!("{}/identities/{}", origin_hub(), user_id)
+pub fn user_profile(config: &rivet_config::Config, user_id: Uuid) -> String {
+	format!(
+		"{}/identities/{}",
+		config.server().unwrap().rivet.hub.public_origin,
+		user_id
+	)
 }
 
-pub fn team_profile(team_id: Uuid) -> String {
-	format!("{}/groups/{}", origin_hub(), team_id)
+pub fn team_profile(config: &rivet_config::Config, team_id: Uuid) -> String {
+	format!(
+		"{}/groups/{}",
+		config.server().unwrap().rivet.hub.public_origin,
+		team_id
+	)
 }
 
-pub fn game_profile(game_name_id: &str) -> String {
-	format!("{}/games/{}", origin_hub(), game_name_id)
-}
-
-pub fn user_avatar(user: &backend::user::User) -> String {
+pub fn user_avatar(config: &rivet_config::Config, user: &backend::user::User) -> String {
 	if let (Some(upload_id), Some(file_name)) =
 		(user.profile_upload_id, user.profile_file_name.as_ref())
 	{
 		format!(
 			"{}/media/user-avatar/{}/{}",
-			origin_api(),
+			config.server().unwrap().rivet.api.public_origin,
 			upload_id,
 			file_name
 		)
@@ -35,22 +41,27 @@ pub fn user_avatar(user: &backend::user::User) -> String {
 	}
 }
 
-pub fn custom_avatar(upload_id: Uuid, file_name: &str, _provider: i32) -> String {
+pub fn custom_avatar(
+	config: &rivet_config::Config,
+	upload_id: Uuid,
+	file_name: &str,
+	_provider: i32,
+) -> String {
 	format!(
 		"{}/media/user-avatar/{}/{}",
-		origin_api(),
+		config.server().unwrap().rivet.api.public_origin,
 		upload_id,
 		file_name
 	)
 }
 
-pub fn team_avatar(team: &backend::team::Team) -> Option<String> {
+pub fn team_avatar(config: &rivet_config::Config, team: &backend::team::Team) -> Option<String> {
 	if let (Some(upload_id), Some(file_name)) =
 		(team.profile_upload_id, team.profile_file_name.as_ref())
 	{
 		Some(format!(
 			"{}/media/team-avatar/{}/{}",
-			origin_api(),
+			config.server().unwrap().rivet.api.public_origin,
 			upload_id,
 			file_name
 		))
@@ -59,12 +70,12 @@ pub fn team_avatar(team: &backend::team::Team) -> Option<String> {
 	}
 }
 
-pub fn game_logo(game: &backend::game::Game) -> Option<String> {
+pub fn game_logo(config: &rivet_config::Config, game: &backend::game::Game) -> Option<String> {
 	if let (Some(upload_id), Some(file_name)) = (game.logo_upload_id, game.logo_file_name.as_ref())
 	{
 		Some(format!(
 			"{}/media/game-logo/{}/{}",
-			origin_api(),
+			config.server().unwrap().rivet.api.public_origin,
 			upload_id,
 			file_name
 		))
@@ -73,13 +84,13 @@ pub fn game_logo(game: &backend::game::Game) -> Option<String> {
 	}
 }
 
-pub fn game_banner(game: &backend::game::Game) -> Option<String> {
+pub fn game_banner(config: &rivet_config::Config, game: &backend::game::Game) -> Option<String> {
 	if let (Some(upload_id), Some(file_name)) =
 		(game.banner_upload_id, game.banner_file_name.as_ref())
 	{
 		Some(format!(
 			"{}/media/game-banner/{}/{}",
-			origin_api(),
+			config.server().unwrap().rivet.api.public_origin,
 			upload_id,
 			file_name
 		))
@@ -88,24 +99,39 @@ pub fn game_banner(game: &backend::game::Game) -> Option<String> {
 	}
 }
 
-pub fn identity_game_link(link_token: &str) -> String {
-	format!("{}/link/{}", origin_hub(), link_token)
+pub fn identity_game_link(config: &rivet_config::Config, link_token: &str) -> String {
+	format!(
+		"{}/link/{}",
+		config.server().unwrap().rivet.hub.public_origin,
+		link_token
+	)
 }
 
-pub fn cloud_device_link(link_token: &str) -> String {
-	format!("{}/devices/link/{}", origin_hub(), link_token)
+pub fn cloud_device_link(config: &rivet_config::Config, link_token: &str) -> String {
+	format!(
+		"{}/devices/link/{}",
+		config.server().unwrap().rivet.hub.public_origin,
+		link_token
+	)
 }
 
-pub fn access_token_link(access_token_token: &str) -> String {
-	format!("{}/access-token/{}", origin_hub(), access_token_token)
+pub fn access_token_link(config: &rivet_config::Config, access_token_token: &str) -> String {
+	format!(
+		"{}/access-token/{}",
+		config.server().unwrap().rivet.hub.public_origin,
+		access_token_token
+	)
 }
 
-pub fn billing(team_id: Uuid) -> String {
-	format!("{}/groups/{}/billing", origin_hub(), team_id)
-}
+pub fn backend_endpoint(config: &rivet_config::Config, backend_slug: &str) -> String {
+	let backend_domain = &config
+		.server()
+		.unwrap()
+		.rivet
+		.backend
+		.as_ref()
+		.expect("backend not enabled")
+		.base_domain;
 
-pub fn backend_endpoint(backend_slug: &str) -> GlobalResult<String> {
-	let domain_main = unwrap!(domain_main(), "dns not enabled");
-
-	Ok(format!("https://{}.backend.{}", backend_slug, domain_main,))
+	format!("https://{}.{}", backend_slug, backend_domain)
 }

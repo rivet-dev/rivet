@@ -129,10 +129,6 @@ pub(crate) fn new_conn(
 			context_name: name.into(),
 			req_id: Some(req_id.into()),
 			ts: rivet_util::timestamp::now(),
-			run_context: match rivet_util::env::run_context() {
-				rivet_util::env::RunContext::Service => chirp_client::RunContext::Service,
-				rivet_util::env::RunContext::Test => chirp_client::RunContext::Test,
-			} as i32,
 		}],
 	);
 

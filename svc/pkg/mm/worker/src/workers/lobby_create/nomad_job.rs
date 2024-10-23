@@ -70,6 +70,7 @@ struct DecodedPort {
 }
 
 pub fn gen_lobby_docker_job(
+	config: &rivet_config::Config,
 	runtime: &backend::matchmaker::lobby_runtime::Docker,
 	_image_tag: &str,
 	tier: &tier::types::Tier,
@@ -186,7 +187,7 @@ pub fn gen_lobby_docker_job(
 		})
 		.chain([(
 			"RIVET_API_ENDPOINT".to_string(),
-			util::env::origin_api().to_string(),
+			config.server()?.rivet.api.public_origin.clone().to_string(),
 		)])
 		.chain(
 			// DEPRECATED:
@@ -198,11 +199,18 @@ pub fn gen_lobby_docker_job(
 				("RIVET_MATCHMAKER_API_URL", "matchmaker"),
 			]
 			.iter()
-			.filter(|_| util::env::support_deprecated_subdomains())
 			.map(|(env, service)| {
 				(
 					env.to_string(),
-					util::env::origin_api().replace("://", &format!("://{}.", service)),
+					// TODO: Remove unwrap
+					config
+						.server()
+						.unwrap()
+						.rivet
+						.api
+						.public_origin
+						.to_string()
+						.replace("://", &format!("://{}.", service)),
 				)
 			}),
 		)

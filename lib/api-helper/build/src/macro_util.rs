@@ -8,6 +8,7 @@ use hyper::{
 	body::{Bytes, HttpBody},
 	header, Body, Request,
 };
+use rivet_config::config::rivet::DnsProvider;
 use rivet_operation::prelude::util;
 use serde::de::DeserializeOwned;
 use url::Url;
@@ -35,10 +36,10 @@ pub struct __RouterConfig {
 
 #[doc(hidden)]
 impl __RouterConfig {
-	pub fn new(uri: &hyper::Uri) -> GlobalResult<Self> {
+	pub fn new(config: &rivet_config::Config, uri: &hyper::Uri) -> GlobalResult<Self> {
 		// This url doesn't actually represent the url of the request, it's just put here so that the
 		// URI can be parsed by url::Url::parse
-		let url = format!("{}{}", util::env::origin_api(), uri);
+		let url = format!("{}{}", config.server()?.rivet.api.public_origin, uri);
 		let route = url::Url::parse(url.as_str())?;
 
 		Ok(__RouterConfig {
@@ -230,6 +231,7 @@ pub fn __deserialize_query<T: DeserializeOwned + Send>(route: &Url) -> GlobalRes
 #[doc(hidden)]
 pub async fn __with_ctx<A: auth::ApiAuth + Send>(
 	shared_client: chirp_client::SharedClientHandle,
+	config: rivet_config::Config,
 	pools: rivet_pools::Pools,
 	cache: rivet_cache::Cache,
 	request: &Request<Body>,
@@ -289,17 +291,18 @@ pub async fn __with_ctx<A: auth::ApiAuth + Send>(
 		//
 		// Otherwise, we use the cf-connecting-ip header since that's the recommended header to
 		// use by Cloudflare.
-		let remote_address_str = if rivet_util::env::dns_provider() == Some("cloudflare") {
-			__deserialize_header::<String, _>(&request, "cf-connecting-ip")?
-		} else {
-			// Traefik will override any user-provided provided x-forwarded-for
-			// header, so we can trust this
-			__deserialize_header::<String, _>(&request, "x-forwarded-for")?
-				.split(",")
-				.last()
-				.ok_or_else(|| err_code!(API_MISSING_HEADER, header = "x-forwarded-for"))?
-				.to_string()
-		};
+		let remote_address_str =
+			if config.server()?.rivet.dns()?.provider == DnsProvider::Cloudflare {
+				__deserialize_header::<String, _>(&request, "cf-connecting-ip")?
+			} else {
+				// Traefik will override any user-provided provided x-forwarded-for
+				// header, so we can trust this
+				__deserialize_header::<String, _>(&request, "x-forwarded-for")?
+					.split(",")
+					.last()
+					.ok_or_else(|| err_code!(API_MISSING_HEADER, header = "x-forwarded-for"))?
+					.to_string()
+			};
 		let remote_address =
 			IpAddr::from_str(&remote_address_str).map_err(|_| err_code!(API_INVALID_IP))?;
 
@@ -309,23 +312,28 @@ pub async fn __with_ctx<A: auth::ApiAuth + Send>(
 	// Create connections
 	let req_id = Uuid::new_v4();
 	let ts = rivet_util::timestamp::now();
-	let svc_name = rivet_util::env::chirp_service_name();
+	let svc_name = rivet_env::service_name().to_string();
 	let client = shared_client.wrap(
 		req_id,
 		ray_id,
 		vec![chirp_client::TraceEntry {
-			context_name: svc_name.to_string(),
+			context_name: svc_name.clone(),
 			req_id: Some(req_id.into()),
 			ts,
-			run_context: match rivet_util::env::run_context() {
-				rivet_util::env::RunContext::Service => chirp_client::RunContext::Service,
-				rivet_util::env::RunContext::Test => chirp_client::RunContext::Test,
-			} as i32,
 		}],
 	);
 	let conn = rivet_connection::Connection::new(client, pools.clone(), cache.clone());
 	let db = chirp_workflow::compat::db_from_pools(&pools).await?;
-	let internal_ctx = ApiCtx::new(db, conn, req_id, ray_id, ts, svc_name).await?;
+	let internal_ctx = ApiCtx::new(
+		db,
+		config.clone(),
+		conn,
+		req_id,
+		ray_id,
+		ts,
+		svc_name.clone(),
+	)
+	.await?;
 
 	// Create auth
 	let rate_limit_ctx = AuthRateLimitCtx {
@@ -338,7 +346,7 @@ pub async fn __with_ctx<A: auth::ApiAuth + Send>(
 			.transpose()?
 			.flatten(),
 	};
-	let auth = A::new(bearer_token, rate_limit_ctx).await?;
+	let auth = A::new(config.clone(), bearer_token, rate_limit_ctx).await?;
 
 	Ok(Ctx {
 		auth,

@@ -5,18 +5,17 @@ use proto::backend;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
-use crate::workers::NEW_NOMAD_CONFIG;
-
 // TODO: Only run create job if run job returns job not found
 
 pub async fn create_job(
+	config: &rivet_config::Config,
 	base_job_json: &str,
 	region: &backend::region::Region,
 ) -> GlobalResult<String> {
-	let (job_id, job) = build_job(base_job_json, region)?;
+	let (job_id, job) = build_job(config, base_job_json, region)?;
 
 	// Submit the job
-	submit_job(&job_id, job.clone(), region).await?;
+	submit_job(config, &job_id, job.clone(), region).await?;
 
 	Ok(job_id)
 }
@@ -27,13 +26,14 @@ fn override_job_id(job_id: &str, job: &mut nomad_client_new::models::Job) {
 }
 
 fn build_job(
+	config: &rivet_config::Config,
 	base_job_json: &str,
 	region: &backend::region::Region,
 ) -> GlobalResult<(String, nomad_client_new::models::Job)> {
 	let base_job = serde_json::from_str::<nomad_client_new::models::Job>(base_job_json)?;
 
 	// Modify the job spec
-	let mut job = modify_job_spec(base_job, region)?;
+	let mut job = modify_job_spec(config, base_job, region)?;
 
 	// Derive jobspec hash
 	//
@@ -61,6 +61,7 @@ fn build_job(
 
 /// Modifies the provided job spec to be compatible with the Rivet job runtime.
 fn modify_job_spec(
+	config: &rivet_config::Config,
 	mut job: nomad_client_new::models::Job,
 	region: &backend::region::Region,
 ) -> GlobalResult<nomad_client_new::models::Job> {
@@ -152,15 +153,15 @@ fn modify_job_spec(
 
 	// Add cleanup task
 	let tasks = unwrap!(task_group.tasks.as_mut());
-	tasks.push(gen_cleanup_task());
+	tasks.push(gen_cleanup_task(config)?);
 
 	Ok(job)
 }
 
-fn gen_cleanup_task() -> nomad_client_new::models::Task {
+fn gen_cleanup_task(config: &rivet_config::Config) -> GlobalResult<nomad_client_new::models::Task> {
 	use nomad_client_new::models::*;
 
-	Task {
+	Ok(Task {
 		name: Some(util_job::RUN_CLEANUP_TASK_NAME.into()),
 		lifecycle: Some(Box::new(TaskLifecycle {
 			hook: Some("poststop".into()),
@@ -228,7 +229,7 @@ fn gen_cleanup_task() -> nomad_client_new::models::Task {
 
 				print('\n> Finished')
 				"#,
-				origin_api = util::env::origin_api(),
+				origin_api = config.server()?.rivet.api.public_origin,
 			)),
 			..Template::new()
 		}]),
@@ -243,11 +244,12 @@ fn gen_cleanup_task() -> nomad_client_new::models::Task {
 			disabled: Some(false),
 		})),
 		..Task::new()
-	}
+	})
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(config))]
 async fn submit_job(
+	config: &rivet_config::Config,
 	job_id: &str,
 	job: nomad_client_new::models::Job,
 	region: &backend::region::Region,
@@ -255,7 +257,7 @@ async fn submit_job(
 	tracing::info!("submitting job");
 
 	nomad_client_new::apis::jobs_api::post_job(
-		&NEW_NOMAD_CONFIG,
+		&nomad_util::new_build_config(config)?,
 		job_id,
 		nomad_client_new::models::JobRegisterRequest {
 			job: Some(Box::new(job)),
@@ -289,8 +291,8 @@ mod tests {
 			let base_job_json_a = serde_json::to_string(&gen_job(x)).unwrap();
 			let base_job_json_b = serde_json::to_string(&gen_job(x)).unwrap();
 
-			let (job_id_a, _) = super::build_job(&base_job_json_a, &region).unwrap();
-			let (job_id_b, _) = super::build_job(&base_job_json_b, &region).unwrap();
+			let (job_id_a, _) = super::build_job(todo!(), &base_job_json_a, &region).unwrap();
+			let (job_id_b, _) = super::build_job(todo!(), &base_job_json_b, &region).unwrap();
 			assert_eq!(job_id_a, job_id_b, "job id is not deterministic");
 		}
 	}
@@ -302,8 +304,8 @@ mod tests {
 		let base_job_json_a = serde_json::to_string(&gen_job("foo")).unwrap();
 		let base_job_json_b = serde_json::to_string(&gen_job("bar")).unwrap();
 
-		let (job_id_a, _) = super::build_job(&base_job_json_a, &region).unwrap();
-		let (job_id_b, _) = super::build_job(&base_job_json_b, &region).unwrap();
+		let (job_id_a, _) = super::build_job(todo!(), &base_job_json_a, &region).unwrap();
+		let (job_id_b, _) = super::build_job(todo!(), &base_job_json_b, &region).unwrap();
 		assert_ne!(job_id_a, job_id_b, "job id is not deterministic");
 	}
 

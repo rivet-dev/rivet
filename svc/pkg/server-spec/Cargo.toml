@@ -9,3 +9,4 @@ license = "Apache-2.0"
 chirp-workflow = { path = "../../../lib/chirp-workflow/core" }
 
 linode = { path = "../linode" }
+rivet-config = { version = "0.1.0", path = "../../../lib/config" }

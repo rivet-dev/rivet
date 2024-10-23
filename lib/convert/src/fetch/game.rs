@@ -42,7 +42,7 @@ pub async fn summaries(
 			let state = unwrap!(states.get(&game_id));
 			let dev_team = unwrap!(dev_teams.get(&game_id));
 
-			convert::game::summary(game, state, dev_team)
+			convert::game::summary(ctx.config(), game, state, dev_team)
 		})
 		.collect::<GlobalResult<Vec<_>>>()
 }

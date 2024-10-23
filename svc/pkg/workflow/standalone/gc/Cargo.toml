@@ -16,6 +16,7 @@ tokio = { version = "1.40", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
 tracing-logfmt = "0.3"
+rivet-config = { version = "0.1.0", path = "../../../../../lib/config" }
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../../lib/chirp/worker" }

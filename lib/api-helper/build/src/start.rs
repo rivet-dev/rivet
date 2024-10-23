@@ -10,10 +10,15 @@ use tracing::Instrument;
 use uuid::Uuid;
 
 #[tracing::instrument(skip_all)]
-pub async fn start<T: 'static, Fut>(handle: T)
-where
+pub async fn start<T: 'static, Fut>(
+	config: rivet_config::Config,
+	pools: rivet_pools::Pools,
+	port: u16,
+	handle: T,
+) where
 	T: Fn(
 			chirp_client::SharedClientHandle,
+			rivet_config::Config,
 			rivet_pools::Pools,
 			rivet_cache::Cache,
 			Uuid,
@@ -24,19 +29,14 @@ where
 		+ Copy,
 	Fut: Future<Output = Result<Response<Body>, http::Error>> + Send,
 {
-	let pools = rivet_pools::from_env().await.expect("create pool");
 	let shared_client = chirp_client::SharedClient::from_env(pools.clone()).expect("create client");
 
 	let cache = rivet_cache::CacheInner::from_env(pools.clone()).expect("create cache");
 
-	let port: u16 = std::env::var("PORT")
-		.ok()
-		.and_then(|v| v.parse::<u16>().ok())
-		.unwrap();
-
 	// A `MakeService` that produces a `Service` to handle each connection
 	let make_service = make_service_fn(move |conn: &AddrStream| {
 		let shared_client = shared_client.clone();
+		let config = config.clone();
 		let pools = pools.clone();
 		let cache = cache.clone();
 
@@ -46,6 +46,7 @@ where
 			let start = Instant::now();
 
 			let shared_client = shared_client.clone();
+			let config = config.clone();
 			let pools = pools.clone();
 			let cache = cache.clone();
 
@@ -66,7 +67,8 @@ where
 					.name("api_helper::handle")
 					.spawn(
 						async move {
-							let mut res = handle(shared_client, pools, cache, ray_id, req).await?;
+							let mut res =
+								handle(shared_client, config, pools, cache, ray_id, req).await?;
 							res.headers_mut()
 								.insert("rvt-ray-id", ray_id.to_string().parse()?);
 							Result::<Response<Body>, http::Error>::Ok(res)

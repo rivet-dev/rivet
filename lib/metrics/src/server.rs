@@ -10,11 +10,8 @@ use prometheus::{Encoder, TextEncoder};
 // TODO: Record extra labels
 
 #[tracing::instrument(skip_all)]
-pub async fn run_standalone() {
-	let port: u16 = std::env::var("METRICS_PORT")
-		.ok()
-		.and_then(|v| v.parse::<u16>().ok())
-		.expect("METRICS_PORT");
+pub async fn run_standalone(config: rivet_config::Config) {
+	let port: u16 = config.server().unwrap().rivet.metrics.port;
 	let addr = SocketAddr::from(([0, 0, 0, 0], port));
 
 	let server = Server::bind(&addr).serve(make_service_fn(|_| async {

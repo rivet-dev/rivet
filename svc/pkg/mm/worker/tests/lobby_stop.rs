@@ -7,7 +7,7 @@ async fn lobby_stop(ctx: TestCtx) {
 		return;
 	}
 
-	let _nomad_config = nomad_util::config_from_env().unwrap();
+	let _nomad_config = nomad_util::build_config().unwrap();
 
 	let lobby_res = op!([ctx] faker_mm_lobby {
 		..Default::default()

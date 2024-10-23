@@ -17,6 +17,7 @@ util-game-user = { package = "rivet-util-game-user", path = "../util" }
 token-create = { path = "../../token/ops/create" }
 token-exchange = { path = "../../token/ops/exchange" }
 token-revoke = { path = "../../token/ops/revoke" }
+rivet-config = { version = "0.1.0", path = "../../../../lib/config" }
 
 [dependencies.sqlx]
 git = "https://github.com/rivet-gg/sqlx"

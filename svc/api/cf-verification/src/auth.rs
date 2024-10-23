@@ -10,15 +10,16 @@ pub struct Auth {
 #[async_trait]
 impl ApiAuth for Auth {
 	async fn new(
+		config: rivet_config::Config,
 		_api_token: Option<String>,
 		rate_limit_ctx: AuthRateLimitCtx<'_>,
 	) -> GlobalResult<Auth> {
-		Self::rate_limit(rate_limit_ctx).await?;
+		Self::rate_limit(&config, rate_limit_ctx).await?;
 
 		Ok(Auth { _claims: None })
 	}
 
-	async fn rate_limit(_rate_limit_ctx: AuthRateLimitCtx<'_>) -> GlobalResult<()> {
+	async fn rate_limit(config: &rivet_config::Config, _rate_limit_ctx: AuthRateLimitCtx<'_>) -> GlobalResult<()> {
 		Ok(())
 	}
 }

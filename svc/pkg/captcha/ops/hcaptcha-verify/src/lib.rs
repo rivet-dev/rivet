@@ -22,7 +22,9 @@ async fn handle(
 	let secret_key = if let Some(secret_key) = &ctx.secret_key {
 		secret_key.clone()
 	} else {
-		util::env::read_secret(&["hcaptcha", "secret"]).await?
+		unwrap_ref!(ctx.config().server()?.hcaptcha()?.secret_fallback)
+			.read()
+			.clone()
 	};
 
 	let mut params = HashMap::new();

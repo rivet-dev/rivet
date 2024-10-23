@@ -6,8 +6,9 @@ use hyper::{
 	Body, Request, Response,
 };
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Config {
+	pub config: rivet_config::Config,
 	pub pools: Option<rivet_pools::Pools>,
 }
 
@@ -20,10 +21,7 @@ pub enum HealthCheckError {
 #[tracing::instrument(skip_all)]
 pub async fn run_standalone(config: Config) {
 	let config = Arc::new(config);
-	let port: u16 = std::env::var("HEALTH_PORT")
-		.ok()
-		.and_then(|v| v.parse::<u16>().ok())
-		.unwrap();
+	let port: u16 = config.config.server().unwrap().rivet.health.port;
 	let addr = SocketAddr::from(([0, 0, 0, 0], port));
 	let make_service = make_service_fn(|_conn| {
 		let config = config.clone();

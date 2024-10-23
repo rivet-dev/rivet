@@ -60,6 +60,7 @@ pub struct WorkflowCtx {
 	registry: RegistryHandle,
 	db: DatabaseHandle,
 
+	config: rivet_config::Config,
 	conn: rivet_connection::Connection,
 
 	/// Input data passed to this workflow.
@@ -78,6 +79,7 @@ impl WorkflowCtx {
 	pub async fn new(
 		registry: RegistryHandle,
 		db: DatabaseHandle,
+		config: rivet_config::Config,
 		conn: rivet_connection::Connection,
 		workflow: PulledWorkflow,
 	) -> GlobalResult<Self> {
@@ -95,6 +97,7 @@ impl WorkflowCtx {
 			registry,
 			db,
 
+			config,
 			conn,
 
 			input: Arc::new(workflow.input),
@@ -248,6 +251,7 @@ impl WorkflowCtx {
 		let ctx = ActivityCtx::new(
 			self.workflow_id,
 			self.db.clone(),
+			&self.config,
 			&self.conn,
 			self.create_ts,
 			self.ray_id,
@@ -401,6 +405,7 @@ impl WorkflowCtx {
 			registry: self.registry.clone(),
 			db: self.db.clone(),
 
+			config: self.config.clone(),
 			conn: self.conn.clone(),
 
 			input,
@@ -1274,6 +1279,10 @@ impl WorkflowCtx {
 	/// Time between when the timestamp was processed and when it was published.
 	pub fn req_dt(&self) -> i64 {
 		self.ts.saturating_sub(self.create_ts)
+	}
+
+	pub fn config(&self) -> &rivet_config::Config {
+		&self.config
 	}
 }
 

@@ -4,8 +4,8 @@ pub fn install() -> String {
 	include_str!("../files/nomad_install.sh").to_string()
 }
 
-pub fn configure() -> GlobalResult<String> {
-	let nomad_server_count = util::env::var("NOMAD_SERVER_COUNT")?.parse::<usize>()?;
+pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
+	let nomad_server_count = config.server()?.nomad()?.server_count;
 	let servers = (0..nomad_server_count)
 		.map(|idx| format!("127.0.0.1:{}", 5000 + idx))
 		.collect::<Vec<_>>();

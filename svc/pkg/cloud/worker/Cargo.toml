@@ -14,5 +14,6 @@ rivet-runtime = { path = "../../../../lib/runtime" }
 
 cloud-game-token-create = { path = "../ops/game-token-create" }
 chrono = "0.4.31"
+rivet-config = { version = "0.1.0", path = "../../../../lib/config" }
 [dev-dependencies]
 chirp-worker = { path = "../../../../lib/chirp/worker" }

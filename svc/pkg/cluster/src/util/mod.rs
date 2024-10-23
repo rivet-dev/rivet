@@ -18,20 +18,28 @@ pub fn default_cluster_id() -> Uuid {
 	Uuid::nil()
 }
 
-pub fn server_name(provider_datacenter_id: &str, pool_type: PoolType, server_id: Uuid) -> String {
-	let ns = util::env::namespace();
+pub fn server_name(
+	config: &rivet_config::Config,
+	provider_datacenter_id: &str,
+	pool_type: PoolType,
+	server_id: Uuid,
+) -> GlobalResult<String> {
+	let ns = &config.server()?.rivet.namespace;
 
-	format!("{ns}-{provider_datacenter_id}-{pool_type}-{server_id}")
+	Ok(format!(
+		"{ns}-{provider_datacenter_id}-{pool_type}-{server_id}"
+	))
 }
 
 pub(crate) async fn cf_client(
+	config: &rivet_config::Config,
 	cf_token: Option<&str>,
 ) -> GlobalResult<cf_framework::async_api::Client> {
 	// Create CF client
 	let cf_token = if let Some(cf_token) = cf_token {
 		cf_token.to_string()
 	} else {
-		util::env::read_secret(&["cloudflare", "terraform", "auth_token"]).await?
+		config.server()?.cloudflare()?.auth_token.read().clone()
 	};
 	let client = cf_framework::async_api::Client::new(
 		cf_framework::auth::Credentials::UserAuthToken { token: cf_token },

@@ -12,7 +12,7 @@ pub mod job;
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ConfigQuery {
-	token: String,
+	token: Option<String>,
 	datacenter: Uuid,
 }
 

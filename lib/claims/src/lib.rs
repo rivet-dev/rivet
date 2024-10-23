@@ -10,10 +10,6 @@ mod schema {
 
 pub const ALGORITHM: Algorithm = Algorithm::EdDSA;
 
-lazy_static::lazy_static! {
-	static ref JWT_KEY_PUBLIC: Option<String> = std::env::var("RIVET_JWT_KEY_PUBLIC").ok();
-}
-
 pub mod ent {
 	use std::convert::{TryFrom, TryInto};
 
@@ -750,12 +746,7 @@ impl EntitlementTag for schema::Entitlement {
 	}
 }
 
-pub fn decode(token: &str) -> GlobalResult<GlobalResult<schema::Claims>> {
-	let pem_public = unwrap!(
-		JWT_KEY_PUBLIC.as_ref(),
-		"missing env var `RIVET_JWT_KEY_PUBLIC`"
-	);
-
+pub fn decode(pem_public: &str, token: &str) -> GlobalResult<GlobalResult<schema::Claims>> {
 	let mut validation = jsonwebtoken::Validation::default();
 	validation.algorithms = vec![ALGORITHM];
 	validation.validate_exp = false;

@@ -1,5 +1,6 @@
 use anyhow::*;
 use clap::{Parser, ValueEnum};
+use std::path::PathBuf;
 
 use crate::run_config::RunConfig;
 
@@ -32,9 +33,9 @@ pub enum DatabaseType {
 }
 
 impl SubCommand {
-	pub async fn execute(self, run_config: &RunConfig) -> Result<()> {
+	pub async fn execute(self, config: rivet_config::Config, run_config: &RunConfig) -> Result<()> {
 		match self {
-			Self::Migrate { command } => command.execute(run_config).await,
+			Self::Migrate { command } => command.execute(config, run_config).await,
 			Self::Shell {
 				database_type: db_type,
 				service,
@@ -50,11 +51,11 @@ impl SubCommand {
 
 				match db_type {
 					DatabaseType::Cockroachdb => {
-						crate::util::db::cockroachdb_shell(shell_ctx).await?
+						crate::util::db::cockroachdb_shell(config, shell_ctx).await?
 					}
-					DatabaseType::Redis => crate::util::db::redis_shell(shell_ctx).await?,
+					DatabaseType::Redis => crate::util::db::redis_shell(config, shell_ctx).await?,
 					DatabaseType::Clickhouse => {
-						crate::util::db::clickhouse_shell(shell_ctx).await?
+						crate::util::db::clickhouse_shell(config, shell_ctx).await?
 					}
 				}
 

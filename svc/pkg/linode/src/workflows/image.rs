@@ -23,7 +23,11 @@ pub async fn linode_image(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<
 	// NOTE: Linode imposes a restriction of 50 characters on custom image labels, so unfortunately we cannot
 	// use the image variant as the name. All we need from the label is for it to be unique. Keep in mind that
 	// the UUID and hyphen take 37 characters, leaving us with 13 for the namespace name
-	let name = format!("{}-{}", util::env::namespace(), input.prebake_server_id);
+	let name = format!(
+		"{}-{}",
+		ctx.config().server()?.rivet.namespace,
+		input.prebake_server_id
+	);
 
 	let image_id = ctx
 		.activity(CreateCustomImageInput {
@@ -63,7 +67,7 @@ struct ShutdownInput {
 #[activity(Shutdown)]
 async fn shutdown(ctx: &ActivityCtx, input: &ShutdownInput) -> GlobalResult<()> {
 	// Build HTTP client
-	let client = client::Client::new(input.api_token.clone()).await?;
+	let client = client::Client::new(ctx.config(), input.api_token.clone()).await?;
 
 	api::shut_down(&client, input.linode_id).await?;
 
@@ -84,7 +88,7 @@ async fn create_custom_image(
 	input: &CreateCustomImageInput,
 ) -> GlobalResult<String> {
 	// Build HTTP client
-	let client = client::Client::new(input.api_token.clone()).await?;
+	let client = client::Client::new(ctx.config(), input.api_token.clone()).await?;
 
 	let create_image_res =
 		api::create_custom_image(&client, &input.name, input.boot_disk_id).await?;
@@ -128,7 +132,7 @@ struct DestroyInput {
 #[activity(DestroyActivity)]
 async fn destroy(ctx: &ActivityCtx, input: &DestroyInput) -> GlobalResult<()> {
 	// Build HTTP client
-	let client = client::Client::new(input.api_token.clone()).await?;
+	let client = client::Client::new(ctx.config(), input.api_token.clone()).await?;
 
 	api::delete_custom_image(&client, &input.image_id).await?;
 

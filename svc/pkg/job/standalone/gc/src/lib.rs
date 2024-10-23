@@ -18,30 +18,27 @@ use indoc::indoc;
 use proto::backend::pkg::*;
 use rivet_operation::prelude::*;
 
-lazy_static::lazy_static! {
-	static ref NOMAD_CONFIG: nomad_client::apis::configuration::Configuration =
-		nomad_util::config_from_env().unwrap();
-}
-
 /// How long after a job is submitted before we begin checking it against the
 /// known jobs.
 pub const CHECK_ORPHANED_JOB_THRESHOLD: i64 = util::duration::hours(1);
 
-pub async fn start() -> GlobalResult<()> {
+pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> GlobalResult<()> {
 	// TODO: Handle ctrl-c
-
-	let pools = rivet_pools::from_env().await?;
 
 	let mut interval = tokio::time::interval(std::time::Duration::from_secs(60 * 15));
 	loop {
 		interval.tick().await;
 
-		run_from_env(util::timestamp::now(), pools.clone()).await?;
+		run_from_env(config.clone(), pools.clone(), util::timestamp::now()).await?;
 	}
 }
 
 #[tracing::instrument(skip_all)]
-pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()> {
+pub async fn run_from_env(
+	config: rivet_config::Config,
+	pools: rivet_pools::Pools,
+	ts: i64,
+) -> GlobalResult<()> {
 	let check_orphaned_ts = ts - CHECK_ORPHANED_JOB_THRESHOLD;
 
 	let client = chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("job-gc");
@@ -49,6 +46,7 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 	let ctx = OperationContext::new(
 		"job-gc".into(),
 		std::time::Duration::from_secs(60),
+		config,
 		rivet_connection::Connection::new(client, pools, cache),
 		Uuid::new_v4(),
 		Uuid::new_v4(),
@@ -58,9 +56,15 @@ pub async fn run_from_env(ts: i64, pools: rivet_pools::Pools) -> GlobalResult<()
 	);
 
 	// Find jobs to stop.
-	let job_stubs =
-		nomad_client::apis::jobs_api::get_jobs(&NOMAD_CONFIG, None, None, None, None, Some("job-"))
-			.await?;
+	let job_stubs = nomad_client::apis::jobs_api::get_jobs(
+		&nomad_util::build_config(ctx.config())?,
+		None,
+		None,
+		None,
+		None,
+		Some("job-"),
+	)
+	.await?;
 	let job_ids_from_nomad = job_stubs
 		.into_iter()
 		.filter(|job| {

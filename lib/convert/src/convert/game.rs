@@ -4,17 +4,21 @@ use types_proto::rivet::backend;
 
 use crate::{convert, fetch, ApiTryInto};
 
-pub fn handle(game: &backend::game::Game) -> GlobalResult<models::GameHandle> {
+pub fn handle(
+	config: &rivet_config::Config,
+	game: &backend::game::Game,
+) -> GlobalResult<models::GameHandle> {
 	Ok(models::GameHandle {
 		game_id: unwrap_ref!(game.game_id).as_uuid(),
 		name_id: game.name_id.to_owned(),
 		display_name: game.display_name.to_owned(),
-		logo_url: util::route::game_logo(&game),
-		banner_url: util::route::game_banner(&game),
+		logo_url: util::route::game_logo(config, &game),
+		banner_url: util::route::game_banner(config, &game),
 	})
 }
 
 pub fn summary(
+	config: &rivet_config::Config,
 	game: &backend::game::Game,
 	state: &fetch::game::GameState,
 	dev_team: &backend::team::Team,
@@ -30,10 +34,10 @@ pub fn summary(
 		game_id: unwrap_ref!(game.game_id).as_uuid(),
 		name_id: game.name_id.to_owned(),
 		display_name: game.display_name.to_owned(),
-		logo_url: util::route::game_logo(&game),
-		banner_url: util::route::game_banner(&game),
+		logo_url: util::route::game_logo(config, &game),
+		banner_url: util::route::game_banner(config, &game),
 		url: game_url,
-		developer: Box::new(convert::group::handle(dev_team)?),
+		developer: Box::new(convert::group::handle(config, dev_team)?),
 		total_player_count: ApiTryInto::api_try_into(state.total_player_count)?,
 	})
 }

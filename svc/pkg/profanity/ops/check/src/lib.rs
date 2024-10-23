@@ -11,10 +11,7 @@ lazy_static! {
 async fn handle(
 	ctx: OperationContext<profanity::check::Request>,
 ) -> GlobalResult<profanity::check::Response> {
-	let disable_filter = ctx.test()
-		|| std::env::var("RIVET_PROFANITY_FILTER_DISABLE")
-			.ok()
-			.map_or(true, |x| x == "1");
+	let disable_filter = ctx.config().server()?.rivet.profanity_filter_disable;
 
 	let (results, censored_results) = if !disable_filter {
 		if ctx.censor {

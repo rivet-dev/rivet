@@ -21,6 +21,7 @@ tokio-util = "0.7"
 tracing = "0.1"
 governor = "0.6"
 url = "2.4"
+rivet-config = { version = "0.1.0", path = "../config" }
 
 [dependencies.sqlx]
 git = "https://github.com/rivet-gg/sqlx"

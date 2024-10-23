@@ -12,11 +12,6 @@ pub const RUNC_SETUP_MEMORY: i32 = 32;
 pub const RUNC_CLEANUP_CPU: i32 = 50;
 pub const RUNC_CLEANUP_MEMORY: i32 = 32;
 
-lazy_static::lazy_static! {
-	pub static ref NOMAD_CONFIG: nomad_client::apis::configuration::Configuration =
-		nomad_util::new_config_from_env().unwrap();
-}
-
 /// Determines if a Nomad job is dispatched from our dynamic server.
 ///
 /// We use this when monitoring Nomad in order to determine which events to
@@ -26,6 +21,7 @@ pub fn is_nomad_ds(job_id: &str) -> bool {
 }
 
 pub fn build_ds_hostname(
+	config: &rivet_config::Config,
 	server_id: Uuid,
 	port_name: &str,
 	datacenter_id: Uuid,
@@ -36,7 +32,7 @@ pub fn build_ds_hostname(
 		server_id,
 		port_name,
 		datacenter_id,
-		unwrap!(rivet_util::env::domain_job()),
+		unwrap_ref!(config.server()?.rivet.dns()?.domain_job),
 	))
 }
 

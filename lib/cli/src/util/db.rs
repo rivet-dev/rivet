@@ -11,12 +11,16 @@ pub struct ShellContext<'a> {
 	pub queries: &'a [ShellQuery],
 }
 
-pub async fn redis_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
+pub async fn redis_shell(config: rivet_config::Config, shell_ctx: ShellContext<'_>) -> Result<()> {
 	let ShellContext { queries, .. } = shell_ctx;
 
 	for ShellQuery { svc, query } in queries {
-		let url_var = format!("REDIS_URL_{}", svc.to_uppercase().replace("-", "_"));
-		let url = std::env::var(&url_var).context(format!("{url_var} not set"))?;
+		let server_config = config.server.as_ref().context("missing server")?;
+		let redis_config = match svc.as_str() {
+			"ephemeral" => &server_config.redis.ephemeral,
+			"persistent" => &server_config.redis.persistent,
+			_ => bail!("redis svc can only be ephemeral or persistent"),
+		};
 
 		tracing::info!(?svc, "connecting to redis");
 
@@ -24,22 +28,18 @@ pub async fn redis_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 			bail!("cannot pass query to redis shell at the moment");
 		}
 
-		let parsed_url = url::Url::parse(&url)?;
-		let hostname = parsed_url.host_str().context("Missing hostname")?;
+		let parsed_url = redis_config.url.clone();
+		let hostname = parsed_url.host_str().context("missing hostname")?;
 		let port = parsed_url.port().unwrap_or(6379);
-		let username = parsed_url.username();
 
 		let mut cmd = std::process::Command::new("redis-cli");
-		cmd.args(&[
-			"-h",
-			hostname,
-			"-p",
-			&port.to_string(),
-			"--user",
-			username,
-			"-c",
-			"--tls",
-		]);
+		cmd.args(&["-h", hostname, "-p", &port.to_string(), "-c", "--tls"]);
+		if let Some(username) = &redis_config.username {
+			cmd.arg("--user").arg(username);
+		}
+		if let Some(password) = &redis_config.password {
+			cmd.arg("--password").arg(password.read());
+		}
 
 		let ca_path = format!("/usr/local/share/ca-certificates/redis-{svc}-ca.crt");
 		if Path::new(&ca_path).exists() {
@@ -58,8 +58,13 @@ pub async fn redis_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 	Ok(())
 }
 
-pub async fn cockroachdb_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
+pub async fn cockroachdb_shell(
+	config: rivet_config::Config,
+	shell_ctx: ShellContext<'_>,
+) -> Result<()> {
 	let ShellContext { queries, .. } = shell_ctx;
+
+	let server_config = config.server.as_ref().context("server not enabled")?;
 
 	tracing::info!("connecting to cockroachdb");
 
@@ -69,8 +74,7 @@ pub async fn cockroachdb_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 		query,
 	} in queries
 	{
-		let url = rivet_pools::crdb_url_from_env()?.context("missing cockroachdb url")?;
-		let mut parsed_url = url::Url::parse(&url)?;
+		let mut parsed_url = server_config.cockroachdb.url.clone();
 		parsed_url.set_path(&format!("/{}", db_name));
 
 		let ca_path = "/usr/local/share/ca-certificates/crdb-ca.crt";
@@ -78,6 +82,10 @@ pub async fn cockroachdb_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 			parsed_url.set_query(Some(&format!("sslmode=verify-ca&sslrootcert={ca_path}")));
 		} else {
 			parsed_url.set_query(None);
+		}
+		parsed_url.set_username(&server_config.cockroachdb.username);
+		if let Some(password) = &server_config.cockroachdb.password {
+			parsed_url.set_password(Some(password.read()));
 		}
 
 		let db_url = parsed_url.to_string();
@@ -100,8 +108,13 @@ pub async fn cockroachdb_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 	Ok(())
 }
 
-pub async fn clickhouse_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
+pub async fn clickhouse_shell(
+	config: rivet_config::Config,
+	shell_ctx: ShellContext<'_>,
+) -> Result<()> {
 	let ShellContext { queries, .. } = shell_ctx;
+
+	let server_config = config.server.as_ref().context("server not enabled")?;
 
 	tracing::info!("connecting to clickhouse");
 
@@ -110,18 +123,19 @@ pub async fn clickhouse_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 		query,
 	} in queries
 	{
-		let url = rivet_pools::clickhouse_url_from_env()?.context("missing clickhouse url")?;
-		let parsed_url = url::Url::parse(&url)?;
+		let clickhouse_config = server_config
+			.clickhouse
+			.as_ref()
+			.context("clickhouse disabled")?;
+		let parsed_url = clickhouse_config.url.clone();
 
 		let hostname = parsed_url.host_str().unwrap_or("localhost");
 		let port = parsed_url.port().unwrap_or(9440).to_string();
-		let user = parsed_url.username();
-		let password = parsed_url.password().unwrap_or("");
 
 		let ca_path = "/usr/local/share/ca-certificates/clickhouse-ca.crt";
 		let config = json!({
-			"user": user,
-			"password": password,
+			"user": clickhouse_config.username,
+			"password": clickhouse_config.password.as_ref().map(|x| x.read().clone()),
 			"secure": true,
 			"openSSL": if Path::new(&ca_path).exists() {
 				json!({
@@ -143,14 +157,15 @@ pub async fn clickhouse_shell(shell_ctx: ShellContext<'_>) -> Result<()> {
 			.arg("--port")
 			.arg(&port)
 			.arg("--user")
-			.arg(user)
-			.arg("--password")
-			.arg(password)
+			.arg(&clickhouse_config.username)
 			.arg("--secure")
 			.arg("--database")
 			.arg(db_name)
 			.arg("--config-file")
 			.arg(config_file.path());
+		if let Some(password) = &clickhouse_config.password {
+			cmd.arg("--password").arg(password.read());
+		}
 
 		if let Some(query) = query {
 			cmd.arg("--multiquery").arg(query);

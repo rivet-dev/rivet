@@ -30,4 +30,6 @@ url = "2.2.2"
 uuid = { version = "1", features = ["v4"] }
 
 cluster = { path = "../../pkg/cluster" }
+rivet-config = { version = "0.1.0", path = "../../../lib/config" }
+rivet-env = { version = "0.1.0", path = "../../../lib/env" }
 

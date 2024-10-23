@@ -51,6 +51,9 @@ pub enum NomadError {
 		#[from]
 		source: base64::DecodeError,
 	},
+
+	#[error("{0}")]
+	Global(global_error::GlobalError),
 }
 
 impl<T> From<nomad_client::apis::Error<T>> for NomadError

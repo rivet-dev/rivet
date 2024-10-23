@@ -42,4 +42,13 @@ pub enum ManagerError {
 
 	#[error("build redis: {0}")]
 	BuildRedis(redis::RedisError),
+
+	#[error("parse redis url: {0}")]
+	ParseRedisUrl(url::ParseError),
+
+	#[error("modify redis url")]
+	ModifyRedisUrl,
+
+	#[error("{0}")]
+	Global(global_error::GlobalError),
 }

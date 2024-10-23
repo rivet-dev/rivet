@@ -32,6 +32,9 @@ game-version-get = { path = "../../../game/ops/version-get" }
 mm-player-count-for-namespace = { path = "../../../mm/ops/player-count-for-namespace" }
 team-get = { path = "../../../team/ops/get" }
 team-member-count = { path = "../../../team/ops/member-count" }
+rivet-config = { version = "0.1.0", path = "../../../../../lib/config" }
+dynamic-config = { version = "0.1.0", path = "../../../dynamic-config" }
+chirp-workflow = { version = "0.1.0", path = "../../../../../lib/chirp-workflow/core" }
 
 [dependencies.sqlx]
 git = "https://github.com/rivet-gg/sqlx"

@@ -59,7 +59,8 @@ pub async fn setup_identity(
 		.await?;
 
 		// Decode the tokens for the expiration ts
-		let user_token_claims = rivet_claims::decode(&game_user_res.token)??;
+		let user_token_claims =
+			rivet_claims::decode(&ctx.config().server()?.jwt.public, &game_user_res.token)??;
 		let game_user_id = *unwrap!(game_user_res.game_user_id);
 		let refresh_jti = unwrap!(user_token_claims.jti);
 
@@ -104,17 +105,18 @@ async fn attempt_setup_existing_identity_token(
 		return Ok(None);
 	};
 
-	let req_user_token_claims = match rivet_claims::decode(req_user_token) {
-		Ok(Ok(x)) => x,
-		Ok(Err(err)) => {
-			tracing::warn!(?err, "failed to validate token, probably expired");
-			return Ok(None);
-		}
-		Err(err) => {
-			tracing::warn!(?err, "failed to decode token");
-			return Ok(None);
-		}
-	};
+	let req_user_token_claims =
+		match rivet_claims::decode(&ctx.config().server()?.jwt.public, req_user_token) {
+			Ok(Ok(x)) => x,
+			Ok(Err(err)) => {
+				tracing::warn!(?err, "failed to validate token, probably expired");
+				return Ok(None);
+			}
+			Err(err) => {
+				tracing::warn!(?err, "failed to decode token");
+				return Ok(None);
+			}
+		};
 
 	// Check if the token is revoked
 	let req_user_token_jti = unwrap!(req_user_token_claims.jti);
@@ -183,7 +185,8 @@ async fn attempt_setup_existing_identity_token(
 		let user_token = unwrap_ref!(token_create_res.token);
 
 		// Decode the token
-		let user_token_claims = rivet_claims::decode(&user_token.token)??;
+		let user_token_claims =
+			rivet_claims::decode(&ctx.config().server()?.jwt.public, &user_token.token)??;
 
 		(user_token.token.to_owned(), user_token_claims)
 	} else {
@@ -476,7 +479,7 @@ pub async fn search(
 	let user_handles = res
 		.users
 		.iter()
-		.map(|user| convert::identity::handle(current_user_id, user))
+		.map(|user| convert::identity::handle(ctx.config(), current_user_id, user))
 		.collect::<GlobalResult<Vec<_>>>()?;
 
 	Ok(models::IdentitySearchResponse {

@@ -3,15 +3,18 @@ use rivet_convert::{ApiInto, ApiTryInto};
 use rivet_group_server::models;
 use rivet_operation::prelude::*;
 
-pub fn handle(team: &backend::team::Team) -> GlobalResult<models::GroupHandle> {
+pub fn handle(
+	config: &rivet_config::Config,
+	team: &backend::team::Team,
+) -> GlobalResult<models::GroupHandle> {
 	let team_id = unwrap_ref!(team.team_id).as_uuid();
 
 	Ok(models::GroupHandle {
 		group_id: team_id.to_string(),
 		display_name: team.display_name.to_owned(),
-		avatar_url: util::route::team_avatar(team),
+		avatar_url: util::route::team_avatar(config, team),
 		external: models::GroupExternalLinks {
-			profile: util::route::team_profile(team_id),
+			profile: util::route::team_profile(config, team_id),
 			chat: Default::default(),
 		},
 		is_developer: Some(true),
@@ -19,6 +22,7 @@ pub fn handle(team: &backend::team::Team) -> GlobalResult<models::GroupHandle> {
 }
 
 pub fn summary(
+	config: &rivet_config::Config,
 	team: &backend::team::Team,
 	team_member_counts: &[team::member_count::response::Team],
 	is_current_identity_member: bool,
@@ -37,9 +41,9 @@ pub fn summary(
 		group_id: team_id.to_string(),
 		display_name: team.display_name.clone(),
 		bio: team.bio.clone(),
-		avatar_url: util::route::team_avatar(team),
+		avatar_url: util::route::team_avatar(config, team),
 		external: models::GroupExternalLinks {
-			profile: util::route::team_profile(team_id),
+			profile: util::route::team_profile(config, team_id),
 			chat: Default::default(),
 		},
 

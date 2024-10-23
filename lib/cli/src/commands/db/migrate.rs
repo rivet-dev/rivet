@@ -1,5 +1,6 @@
 use anyhow::*;
 use clap::Parser;
+use std::path::PathBuf;
 
 use crate::run_config::RunConfig;
 
@@ -18,11 +19,11 @@ pub enum SubCommand {
 }
 
 impl SubCommand {
-	pub async fn execute(self, run_config: &RunConfig) -> Result<()> {
+	pub async fn execute(self, config: rivet_config::Config, run_config: &RunConfig) -> Result<()> {
 		match self {
 			Self::Up { services: names } => {
 				if names.is_empty() {
-					rivet_migrate::up(&run_config.sql_services).await?;
+					rivet_migrate::up(config, &run_config.sql_services).await?;
 				} else {
 					let services = run_config
 						.sql_services
@@ -30,7 +31,7 @@ impl SubCommand {
 						.filter(|x| names.iter().any(|y| *y == x.db_name))
 						.cloned()
 						.collect::<Vec<_>>();
-					rivet_migrate::up(&services).await?;
+					rivet_migrate::up(config, &services).await?;
 				};
 			}
 			Self::Down { service, num } => {
@@ -39,7 +40,7 @@ impl SubCommand {
 					.iter()
 					.find(|x| x.db_name == service)
 					.context("service not found")?;
-				rivet_migrate::down(service, num).await?;
+				rivet_migrate::down(config, service, num).await?;
 			}
 			Self::Force { service, num } => {
 				let service = run_config
@@ -47,7 +48,7 @@ impl SubCommand {
 					.iter()
 					.find(|x| x.db_name == service)
 					.context("service not found")?;
-				rivet_migrate::force(&service, num).await?;
+				rivet_migrate::force(config, &service, num).await?;
 			}
 			Self::Drop { service } => {
 				let service = run_config
@@ -55,7 +56,7 @@ impl SubCommand {
 					.iter()
 					.find(|x| x.db_name == service)
 					.context("service not found")?;
-				rivet_migrate::drop(&service).await?;
+				rivet_migrate::drop(config, &service).await?;
 			}
 		}
 

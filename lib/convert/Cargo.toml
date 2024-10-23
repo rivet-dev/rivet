@@ -47,3 +47,4 @@ user-team-list = { path = "../../svc/pkg/user/ops/team-list" }
 rivet-api = { path = "../../sdks/full/rust" }
 rivet-group-server = { path = "../../lib/smithy-output/api-group/rust-server" }
 rivet-portal-server = { path = "../../lib/smithy-output/api-portal/rust-server" }
+rivet-config = { version = "0.1.0", path = "../config" }

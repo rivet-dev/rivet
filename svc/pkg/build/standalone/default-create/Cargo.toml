@@ -26,6 +26,7 @@ uuid = { version = "1", features = ["v4"] }
 
 upload-complete = { path = "../../../upload/ops/complete" }
 upload-prepare = { path = "../../../upload/ops/prepare" }
+rivet-config = { version = "0.1.0", path = "../../../../../lib/config" }
 
 [dependencies.sqlx]
 git = "https://github.com/rivet-gg/sqlx"

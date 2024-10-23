@@ -182,7 +182,6 @@ pub async fn cors() {
 #[tokio::test(flavor = "multi_thread")]
 pub async fn auth() {
 	init_tracing();
-	set_env_vars().await;
 
 	// Normal ctx
 	{
@@ -194,7 +193,7 @@ pub async fn auth() {
 			.body(Body::from(""))
 			.unwrap();
 
-		let pools = rivet_pools::from_env().await.unwrap();
+		let pools = rivet_pools::Pools::new(config).await.unwrap();
 		let shared_client =
 			chirp_client::SharedClient::from_env(pools.clone()).expect("create client");
 		let cache = rivet_cache::CacheInner::from_env(pools.clone()).expect("create cache");
@@ -224,7 +223,7 @@ pub async fn auth() {
 			.body(Body::from(""))
 			.unwrap();
 
-		let pools = rivet_pools::from_env().await.unwrap();
+		let pools = rivet_pools::Pools::new(config).await.unwrap();
 		let shared_client =
 			chirp_client::SharedClient::from_env(pools.clone()).expect("create client");
 		let cache = rivet_cache::CacheInner::from_env(pools.clone()).expect("create cache");
@@ -250,9 +249,8 @@ pub async fn auth() {
 #[tokio::test(flavor = "multi_thread")]
 pub async fn responses() {
 	init_tracing();
-	set_env_vars().await;
 
-	let pools = rivet_pools::from_env().await.unwrap();
+	let pools = rivet_pools::Pools::new(config).await.unwrap();
 	let shared_client = chirp_client::SharedClient::from_env(pools.clone()).expect("create client");
 	let cache = rivet_cache::CacheInner::from_env(pools.clone()).expect("create cache");
 
@@ -436,16 +434,4 @@ mod test_endpoint {
 	) -> GlobalResult<TestResponse> {
 		bail_with!(API_BAD_QUERY, error = "something");
 	}
-}
-
-// Set env vars
-async fn set_env_vars() {
-	std::env::set_var("RIVET_SOURCE_HASH", "00000000");
-	std::env::set_var("RIVET_DOMAIN_MAIN", "127.0.0.1:8080");
-
-	std::env::set_var("CHIRP_SERVICE_NAME", &*SERVICE_NAME);
-
-	std::env::set_var("NATS_URL", todo!());
-	std::env::set_var("NATS_USERNAME", "chirp");
-	std::env::set_var("NATS_PASSWORD", "password");
 }

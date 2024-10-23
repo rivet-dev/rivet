@@ -1,7 +1,7 @@
 use chirp_workflow::prelude::*;
 
 use super::super::TRAEFIK_GRACE_PERIOD;
-use crate::util::{NOMAD_CONFIG, NOMAD_REGION};
+use crate::util::NOMAD_REGION;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Input {
@@ -89,7 +89,7 @@ async fn fetch_node_info(
 ) -> GlobalResult<FetchNodeInfoOutput> {
 	// Fetch node metadata
 	let node = nomad_client::apis::nodes_api::get_node(
-		&NOMAD_CONFIG,
+		&nomad_util::new_build_config(ctx.config())?,
 		&input.nomad_node_id,
 		None,
 		None,
@@ -238,7 +238,7 @@ struct DeleteJobInput {
 #[activity(DeleteJob)]
 async fn kill_alloc(ctx: &ActivityCtx, input: &DeleteJobInput) -> GlobalResult<()> {
 	if let Err(err) = nomad_client::apis::jobs_api::delete_job(
-		&NOMAD_CONFIG,
+		&nomad_util::new_build_config(ctx.config())?,
 		&input.job_id,
 		Some(NOMAD_REGION),
 		None,

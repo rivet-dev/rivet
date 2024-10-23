@@ -2,7 +2,7 @@ use chirp_workflow::prelude::*;
 use futures_util::FutureExt;
 
 use super::super::{DestroyComplete, DestroyStarted};
-use crate::util::{signal_allocation, NOMAD_CONFIG};
+use crate::util::signal_allocation;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct Input {
@@ -141,7 +141,7 @@ async fn delete_job(ctx: &ActivityCtx, input: &DeleteJobInput) -> GlobalResult<D
 	// job-run-stop lifecycle event.
 
 	match nomad_client::apis::jobs_api::delete_job(
-		&NOMAD_CONFIG,
+		&nomad_util::new_build_config(ctx.config())?,
 		&input.job_id,
 		Some(super::NOMAD_REGION),
 		None,
@@ -173,7 +173,7 @@ struct SignalAllocInput {
 async fn signal_alloc(ctx: &ActivityCtx, input: &SignalAllocInput) -> GlobalResult<()> {
 	// TODO: Handle 404 safely. See RVTEE-498
 	if let Err(err) = signal_allocation(
-		&NOMAD_CONFIG,
+		&nomad_util::new_build_config(ctx.config())?,
 		&input.alloc_id,
 		None,
 		Some(super::NOMAD_REGION),

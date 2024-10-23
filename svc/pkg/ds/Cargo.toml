@@ -56,6 +56,7 @@ tier = { path = "../tier" }
 token-create = { path = "../token/ops/create" }
 upload-get = { path = "../upload/ops/get" }
 user-identity-get = { path = "../user-identity/ops/get" }
+rivet-config = { version = "0.1.0", path = "../../../lib/config" }
 
 [dependencies.sqlx]
 git = "https://github.com/rivet-gg/sqlx"

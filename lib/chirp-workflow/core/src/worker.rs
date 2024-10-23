@@ -30,7 +30,11 @@ impl Worker {
 	}
 
 	/// Polls the database periodically
-	pub async fn poll_start(mut self, pools: rivet_pools::Pools) -> GlobalResult<()> {
+	pub async fn poll_start(
+		mut self,
+		config: rivet_config::Config,
+		pools: rivet_pools::Pools,
+	) -> GlobalResult<()> {
 		tracing::info!(
 			worker_instance_id=?self.worker_instance_id,
 			"starting worker instance with {} registered workflows",
@@ -46,12 +50,16 @@ impl Worker {
 
 		loop {
 			interval.tick().await;
-			self.tick(&shared_client, &pools, &cache).await?;
+			self.tick(&shared_client, &config, &pools, &cache).await?;
 		}
 	}
 
 	/// Polls the database periodically or wakes immediately when `Database::wake` finishes
-	pub async fn wake_start(mut self, pools: rivet_pools::Pools) -> GlobalResult<()> {
+	pub async fn wake_start(
+		mut self,
+		config: rivet_config::Config,
+		pools: rivet_pools::Pools,
+	) -> GlobalResult<()> {
 		tracing::info!(
 			worker_instance_id=?self.worker_instance_id,
 			"starting worker instance with {} registered workflows",
@@ -71,7 +79,7 @@ impl Worker {
 				res = self.db.wake() => res?,
 			}
 
-			self.tick(&shared_client, &pools, &cache).await?;
+			self.tick(&shared_client, &config, &pools, &cache).await?;
 		}
 	}
 
@@ -79,6 +87,7 @@ impl Worker {
 	async fn tick(
 		&mut self,
 		shared_client: &chirp_client::SharedClientHandle,
+		config: &rivet_config::Config,
 		pools: &rivet_pools::Pools,
 		cache: &rivet_cache::Cache,
 	) -> GlobalResult<()> {
@@ -107,8 +116,14 @@ impl Worker {
 				&workflow.workflow_name,
 			);
 			let wake_deadline_ts = workflow.wake_deadline_ts;
-			let ctx =
-				WorkflowCtx::new(self.registry.clone(), self.db.clone(), conn, workflow).await?;
+			let ctx = WorkflowCtx::new(
+				self.registry.clone(),
+				self.db.clone(),
+				config.clone(),
+				conn,
+				workflow,
+			)
+			.await?;
 
 			tokio::task::spawn(
 				async move {

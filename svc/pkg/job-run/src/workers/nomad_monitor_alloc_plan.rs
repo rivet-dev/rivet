@@ -3,7 +3,7 @@ use proto::backend::{self, pkg::*};
 use redis::AsyncCommands;
 use serde::Deserialize;
 
-use crate::{util::NOMAD_REGION, workers::NEW_NOMAD_CONFIG};
+use crate::util::NOMAD_REGION;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -60,7 +60,7 @@ async fn worker(
 
 	// Fetch node metadata
 	let node = nomad_client_new::apis::nodes_api::get_node(
-		&NEW_NOMAD_CONFIG,
+		&nomad_util::new_build_config(ctx.config())?,
 		nomad_node_id,
 		None,
 		None,
@@ -320,7 +320,7 @@ async fn update_db(
 			tracing::warn!(%run_id, existing_alloc_id=?run_row.alloc_id, new_alloc_id=%alloc_id, "different allocation id given, killing job");
 
 			if let Err(err) = nomad_client_new::apis::jobs_api::delete_job(
-				&NEW_NOMAD_CONFIG,
+				&nomad_util::new_build_config(ctx.config())?,
 				&job_id,
 				Some(NOMAD_REGION),
 				None,

@@ -12,6 +12,7 @@ const GG_TRAEFIK_INSTANCE_NAME: &str = "game_guard";
 // This script installs all of the software that doesn't need to know anything about the server running
 // it (doesn't need to know server id, datacenter id, vlan ip, etc)
 pub async fn gen_install(
+	config: &rivet_config::Config,
 	pool_type: PoolType,
 	initialize_immediately: bool,
 	server_token: &str,
@@ -23,7 +24,7 @@ pub async fn gen_install(
 		components::node_exporter::install(),
 		components::sysctl::install(),
 		components::traefik::install(),
-		components::traefik::tunnel(TUNNEL_NAME)?,
+		components::traefik::tunnel(config, TUNNEL_NAME)?,
 		components::vector::install(),
 	];
 
@@ -58,7 +59,7 @@ pub async fn gen_install(
 			script.push(components::umoci::install());
 			script.push(components::cni::tool());
 			script.push(components::cni::plugins());
-			script.push(components::pegboard::install().await?);
+			script.push(components::pegboard::install(config).await?);
 		}
 	}
 
@@ -82,7 +83,11 @@ pub async fn gen_hook(server_token: &str) -> GlobalResult<String> {
 
 // This script is templated on the server itself after fetching server data from the Rivet API (see gen_hook).
 // After being templated, it is run.
-pub async fn gen_initialize(pool_type: PoolType, datacenter_id: Uuid) -> GlobalResult<String> {
+pub async fn gen_initialize(
+	config: &rivet_config::Config,
+	pool_type: PoolType,
+	datacenter_id: Uuid,
+) -> GlobalResult<String> {
 	let mut script = Vec::new();
 
 	let mut prometheus_targets = HashMap::new();
@@ -99,7 +104,7 @@ pub async fn gen_initialize(pool_type: PoolType, datacenter_id: Uuid) -> GlobalR
 	// MARK: Specific pool components
 	match pool_type {
 		PoolType::Job => {
-			script.push(components::nomad::configure()?);
+			script.push(components::nomad::configure(&config)?);
 
 			prometheus_targets.insert(
 				"nomad".into(),
@@ -113,17 +118,18 @@ pub async fn gen_initialize(pool_type: PoolType, datacenter_id: Uuid) -> GlobalR
 			script.push(components::traefik::instance(
 				components::traefik::Instance {
 					name: GG_TRAEFIK_INSTANCE_NAME.to_string(),
-					static_config: components::traefik::gg_static_config().await?,
-					dynamic_config: components::traefik::gg_dynamic_config(datacenter_id)?,
+					static_config: components::traefik::gg_static_config(config).await?,
+					dynamic_config: components::traefik::gg_dynamic_config(config, datacenter_id)?,
 					tcp_server_transports: Default::default(),
 				},
 			));
 		}
 		PoolType::Ats => {
-			script.push(components::traffic_server::configure().await?);
+			script.push(components::traffic_server::configure(config).await?);
 		}
 		PoolType::Pegboard => {
 			script.push(components::pegboard::configure(
+				config,
 				pegboard::protocol::ClientFlavor::Container,
 			)?);
 
@@ -137,6 +143,7 @@ pub async fn gen_initialize(pool_type: PoolType, datacenter_id: Uuid) -> GlobalR
 		}
 		PoolType::PegboardIsolate => {
 			script.push(components::pegboard::configure(
+				config,
 				pegboard::protocol::ClientFlavor::Isolate,
 			)?);
 

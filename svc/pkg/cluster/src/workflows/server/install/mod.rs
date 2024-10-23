@@ -99,10 +99,17 @@ struct InstallOverSshInput {
 #[timeout = 300]
 async fn install_over_ssh(ctx: &ActivityCtx, input: &InstallOverSshInput) -> GlobalResult<()> {
 	let public_ip = input.public_ip;
-	let private_key_openssh =
-		util::env::read_secret(&["ssh", "server", "private_key_openssh"]).await?;
+	let private_key_openssh = ctx
+		.config()
+		.server()?
+		.ssh()?
+		.server
+		.private_key_openssh
+		.read()
+		.clone();
 
 	let install_script = install_scripts::gen_install(
+		ctx.config(),
 		input.pool_type,
 		input.initialize_immediately,
 		&input.server_token,
@@ -111,7 +118,7 @@ async fn install_over_ssh(ctx: &ActivityCtx, input: &InstallOverSshInput) -> Glo
 	.await?;
 	let hook_script = install_scripts::gen_hook(&input.server_token).await?;
 	let initialize_script =
-		install_scripts::gen_initialize(input.pool_type, input.datacenter_id).await?;
+		install_scripts::gen_initialize(ctx.config(), input.pool_type, input.datacenter_id).await?;
 
 	// Spawn blocking thread for ssh (no async support)
 	tokio::task::spawn_blocking(move || {

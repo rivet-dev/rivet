@@ -74,7 +74,12 @@ pub async fn get_custom_avatars(
 					upload_id,
 					display_name: profile_file_name.clone(),
 					url: upload.complete_ts.map(|_| {
-						util::route::custom_avatar(upload_id, &profile_file_name, upload.provider)
+						util::route::custom_avatar(
+							ctx.config(),
+							upload_id,
+							&profile_file_name,
+							upload.provider,
+						)
 					}),
 					create_ts: util::timestamp::to_string(upload.create_ts)?,
 					content_length: upload.content_length as i64,

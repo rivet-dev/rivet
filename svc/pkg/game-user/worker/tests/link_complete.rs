@@ -15,9 +15,12 @@ async fn empty(ctx: TestCtx) {
 	})
 	.await
 	.unwrap();
-	let create_token = rivet_claims::decode(&create_res.user_link_token)
-		.unwrap()
-		.unwrap();
+	let create_token = rivet_claims::decode(
+		&ctx.config().server()?.jwt.public,
+		&create_res.user_link_token,
+	)
+	.unwrap()
+	.unwrap();
 
 	let new_user_id = Uuid::new_v4();
 
@@ -72,9 +75,12 @@ async fn cancel(ctx: TestCtx) {
 	})
 	.await
 	.unwrap();
-	let create_token = rivet_claims::decode(&create_res.user_link_token)
-		.unwrap()
-		.unwrap();
+	let create_token = rivet_claims::decode(
+		&ctx.config().server()?.jwt.public,
+		&create_res.user_link_token,
+	)
+	.unwrap()
+	.unwrap();
 
 	let new_user_id = Uuid::new_v4();
 

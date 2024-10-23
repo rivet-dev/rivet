@@ -1,13 +1,13 @@
 #[derive(Debug, thiserror::Error)]
 pub enum ClientError {
-	#[error("env var: {0}")]
-	VarError(#[from] std::env::VarError),
 	#[error("invalid uri: {0}")]
 	InvalidEndpoint(#[from] aws_smithy_http::endpoint::error::InvalidEndpointError),
 	#[error("lookup host: {0}")]
 	LookupHost(std::io::Error),
 	#[error("unresolved host")]
 	UnresolvedHost,
+	#[error("{0}")]
+	Global(global_error::GlobalError),
 }
 
 /// How to access the S3 service.
@@ -51,11 +51,6 @@ impl Client {
 		access_key_id: &str,
 		secret_access_key: &str,
 	) -> Result<Self, ClientError> {
-		dbg!(&bucket);
-		dbg!(&endpoint);
-		dbg!(&region);
-		dbg!(&access_key_id);
-		dbg!(&secret_access_key);
 		let config = aws_sdk_s3::Config::builder()
 			.region(aws_sdk_s3::Region::new(region.to_owned()))
 			.endpoint_resolver(aws_sdk_s3::Endpoint::immutable(endpoint)?)
@@ -76,23 +71,26 @@ impl Client {
 		})
 	}
 
-	pub async fn from_env(svc_name: &str) -> Result<Self, ClientError> {
-		Self::from_env_opt(svc_name, EndpointKind::Internal).await
+	pub async fn with_bucket(
+		config: &rivet_config::Config,
+		svc_name: &str,
+	) -> Result<Self, ClientError> {
+		Self::with_bucket_and_endpoint(config, svc_name, EndpointKind::Internal).await
 	}
 
-	pub async fn from_env_opt(
+	pub async fn with_bucket_and_endpoint(
+		config: &rivet_config::Config,
 		svc_name: &str,
 		endpoint_kind: EndpointKind,
 	) -> Result<Self, ClientError> {
-		let bucket = namespaced_bucket_name(&svc_name);
-		let region = std::env::var("S3_REGION")?;
-		let access_key_id = std::env::var("S3_ACCESS_KEY_ID")?;
-		let secret_access_key = std::env::var("S3_SECRET_ACCESS_KEY")?;
+		let s3_config = &config.server().map_err(ClientError::Global)?.s3;
+
+		let bucket = namespaced_bucket_name(config, &svc_name)?;
 
 		let endpoint = match endpoint_kind {
-			EndpointKind::Internal => std::env::var("S3_ENDPOINT_INTERNAL")?,
+			EndpointKind::Internal => s3_config.endpoint_internal.to_string(),
 			EndpointKind::InternalResolved => {
-				let mut endpoint = std::env::var("S3_ENDPOINT_INTERNAL")?;
+				let mut endpoint = s3_config.endpoint_internal.to_string();
 
 				// HACK: Resolve Minio DNS address to schedule the job with. We
 				// do this since the job servers don't have the internal DNS servers
@@ -121,15 +119,15 @@ impl Client {
 
 				endpoint
 			}
-			EndpointKind::External => std::env::var("S3_ENDPOINT_EXTERNAL")?,
+			EndpointKind::External => s3_config.endpoint_external.to_string(),
 		};
 
 		Self::new(
 			&bucket,
 			&endpoint,
-			&region,
-			&access_key_id,
-			&secret_access_key,
+			&s3_config.region,
+			&s3_config.access_key_id.read(),
+			&s3_config.secret_access_key.read(),
 		)
 	}
 
@@ -138,21 +136,17 @@ impl Client {
 	}
 }
 
-pub fn s3_region() -> Result<String, ClientError> {
-	std::env::var("S3_REGION").map_err(Into::into)
-}
-
-pub fn s3_credentials() -> Result<(String, String), ClientError> {
-	let access_key_id = std::env::var("S3_ACCESS_KEY_ID")?;
-	let secret_access_key = std::env::var("S3_SECRET_ACCESS_KEY")?;
-
-	Ok((access_key_id, secret_access_key))
-}
-
-pub fn s3_endpoint_external() -> Result<String, ClientError> {
-	std::env::var("S3_ENDPOINT_EXTERNAL").map_err(Into::into)
-}
-
-pub fn namespaced_bucket_name(name: &str) -> String {
-	format!("{}-{}", rivet_util::env::namespace(), name)
+pub fn namespaced_bucket_name(
+	config: &rivet_config::Config,
+	name: &str,
+) -> Result<String, ClientError> {
+	Ok(format!(
+		"{}-{}",
+		config
+			.server()
+			.map_err(ClientError::Global)?
+			.rivet
+			.namespace,
+		name
+	))
 }

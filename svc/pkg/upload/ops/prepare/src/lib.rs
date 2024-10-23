@@ -28,8 +28,12 @@ struct MultipartUpdate {
 async fn handle(
 	ctx: OperationContext<upload::prepare::Request>,
 ) -> GlobalResult<upload::prepare::Response> {
-	let s3_client_external =
-		s3_util::Client::from_env_opt(&ctx.bucket, s3_util::EndpointKind::External).await?;
+	let s3_client_external = s3_util::Client::with_bucket_and_endpoint(
+		ctx.config(),
+		&ctx.bucket,
+		s3_util::EndpointKind::External,
+	)
+	.await?;
 
 	// Validate upload sizes
 	let total_content_length = ctx

@@ -141,22 +141,26 @@ pub fn biography(s: impl AsRef<str>) -> bool {
 ///
 /// Will prevent domains from matching Rivet-specific domains if
 /// `is_external` is true.
-pub fn domain(s: impl AsRef<str>, is_external: bool) -> bool {
+pub fn domain(config: &rivet_config::Config, s: impl AsRef<str>, is_external: bool) -> bool {
 	let s = s.as_ref();
 
-	if let (true, Some(domain_main), Some(domain_cdn), Some(domain_job)) = (
-		is_external,
-		crate::env::domain_main(),
-		crate::env::domain_cdn(),
-		crate::env::domain_job(),
-	) {
-		if s.ends_with(&format!(".{domain_main}"))
-			|| s.ends_with(&format!(".{domain_cdn}"))
-			|| s == domain_main
-			|| s == domain_cdn
-			|| s == domain_job
-		{
-			return false;
+	let Some(server_config) = &config.server else {
+		return false;
+	};
+
+	if is_external {
+		if let Some(dns) = &server_config.rivet.dns {
+			if let Some(domain_cdn) = &dns.domain_cdn {
+				if s.ends_with(&format!(".{domain_cdn}")) || s == domain_cdn {
+					return false;
+				}
+			}
+
+			if let Some(domain_job) = &dns.domain_job {
+				if s.ends_with(&format!(".{domain_job}")) || s == domain_job {
+					return false;
+				}
+			}
 		}
 	}
 
