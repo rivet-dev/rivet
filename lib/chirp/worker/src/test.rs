@@ -15,13 +15,11 @@ pub struct TestCtx {
 
 impl TestCtx {
 	pub async fn from_env(test_name: &str) -> Result<TestCtx, ManagerError> {
-		let service_name = format!(
-			"{}-test--{}",
-			rivet_env::service_name(),
-			test_name
-		);
-		let config: rivet_config::Config = todo!();
-		let pools = rivet_pools::Pools::new(config).await?;
+		let service_name = format!("{}-test--{}", rivet_env::service_name(), test_name);
+		let config = rivet_config::Config::load::<String>(&[])
+			.await
+			.map_err(ManagerError::Global)?;
+		let pools = rivet_pools::Pools::new(config.clone()).await?;
 		let cache = rivet_cache::CacheInner::new(
 			service_name.clone(),
 			rivet_env::source_hash().to_string(),

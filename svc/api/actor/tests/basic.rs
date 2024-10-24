@@ -26,8 +26,8 @@ impl Ctx {
 				.init();
 		});
 
-		let config: rivet_config::Config = todo!();
-		let pools = rivet_pools::Pools::new(config).await?;
+		let config = rivet_config::Config::load::<String>(&[]).await?;
+		let pools = rivet_pools::Pools::new(config.clone()).await?;
 		let cache = rivet_cache::CacheInner::new(
 			"api-actor-test".to_string(),
 			rivet_env::source_hash().to_string(),

@@ -42,8 +42,8 @@ impl TestCtx {
 		);
 
 		let ray_id = Uuid::new_v4();
-		let config = todo!();
-		let pools = rivet_pools::Pools::new(config)
+		let config = rivet_config::Config::load::<String>(&[]).await.unwrap();
+		let pools = rivet_pools::Pools::new(config.clone())
 			.await
 			.expect("failed to create pools");
 		let shared_client = chirp_client::SharedClient::from_env(pools.clone())
