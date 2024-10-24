@@ -1,0 +1,20 @@
+[package]
+name = "cdn-version-prepare"
+version = "0.0.1"
+edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-operation = { path = "../../../../common/operation/core" }
+chirp-client = { path = "../../../../common/chirp/client" }
+prost = "0.10"
+
+upload-get = { path = "../../../upload/ops/get" }
+cdn-site-get = { path = "../site-get" }
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../common/chirp/worker" }
+
+faker-game = { path = "../../../faker/ops/game" }
+faker-cdn-site = { path = "../../../faker/ops/cdn-site" }

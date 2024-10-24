@@ -1,0 +1,37 @@
+[package]
+name = "mm-config-version-prepare"
+version = "0.0.1"
+edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../../../../common/chirp/client" }
+chirp-workflow = { path = "../../../../common/chirp-workflow/core" }
+heck = "0.3"
+nomad-client = "0.0.9"
+prost = "0.10"
+reqwest = "0.11"
+rivet-operation = { path = "../../../../common/operation/core" }
+s3-util = { path = "../../../../common/s3-util" }
+util-build = { package = "rivet-util-build", path = "../../../build/util" }
+util-job = { package = "rivet-util-job", path = "../../../job/util" }
+
+build-get = { path = "../../../build/ops/get" }
+cluster = { path = "../../../cluster" }
+upload-get = { path = "../../../upload/ops/get" }
+region-get = { path = "../../../region/ops/get" }
+tier = { path = "../../../tier" }
+
+[dependencies.sqlx]
+git = "https://github.com/rivet-gg/sqlx"
+rev = "e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
+default-features = false
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../common/chirp/worker" }
+util-mm = { package = "rivet-util-mm", path = "../../../mm/util" }
+
+faker-build = { path = "../../../faker/ops/build" }
+faker-game = { path = "../../../faker/ops/game" }
+faker-region = { path = "../../../faker/ops/region" }

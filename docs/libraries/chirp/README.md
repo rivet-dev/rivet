@@ -28,8 +28,8 @@ destructive API calls). They're commonly used for "getters" that execute databas
   1. Run `bolt create operation <package name> <service-name>` (e.g.
      `bolt create operation user-dev my-service`)
 - **Manual creation**
-  1. Create the Protobuf interface under `svc/pkg/*/types/my_operation.proto`
-  2. Create a library under `svc/pkg/*/ops/my-operation`
+  1. Create the Protobuf interface under `packages/services/*/types/my_operation.proto`
+  2. Create a library under `packages/services/*/ops/my-operation`
   3. Write the operation body under `src/main.rs`
   4. Write tests for the operation under `tests/`
 
@@ -71,8 +71,8 @@ Workers are used for two main use cases:
 - **Automatic creation**
   1. Run `bolt create worker <package name> <worker-name>` (e.g. `bolt create worker user-dev my-worker`)
 - **Manual creation** You'll usually need to create a new message for this worker. Do this first.
-  1. Create a worker under `svc/pkg/*/worker/src/workers/my_worker.rs`
-  2. Register the worker under `svc/pkg/*/worker/src/main.rs`
+  1. Create a worker under `packages/services/*/worker/src/workers/my_worker.rs`
+  2. Register the worker under `packages/services/*/worker/src/main.rs`
 
 **Messages**
 
@@ -108,7 +108,7 @@ Errors thrown by workers do not propagate back to whichever service created the 
 error, then the worker will be retried with exponential back off until it succeeds.
 
 If you want to be able to catch erroneous behavior from a worker, you need to create an error message type for
-the worker (e.g. `svc/pkg/team/types/msg/create-fail.proto`) and explicitly publish said message upon
+the worker (e.g. `packages/services/team/types/msg/create-fail.proto`) and explicitly publish said message upon
 erroneous behavior.
 
 > The reason the term "erroneous behavior" is used instead of just "error" is because when workers error

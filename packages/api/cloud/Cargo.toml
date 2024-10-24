@@ -1,0 +1,125 @@
+[package]
+name = "api-cloud"
+version = "0.0.1"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+edition = "2021"
+license = "Apache-2.0"
+
+[dependencies]
+api-helper = { path = "../../common/api-helper/build" }
+async-trait = "0.1"
+base64 = "0.13"
+bytes = "1.0"
+chirp-client = { path = "../../common/chirp/client" }
+chrono = "0.4"
+futures-util = "0.3"
+http = "0.2"
+hyper = { version = "0.14", features = ["server", "http1", "stream", "tcp"] }
+lazy_static = "1.4"
+prost = "0.10"
+rand = "0.8"
+reqwest = "0.11"
+rivet-api = { path = "../../../sdks/full/rust" }
+rivet-cache = { path = "../../common/cache/build" }
+rivet-claims = { path = "../../common/claims" }
+rivet-convert = { path = "../../common/convert" }
+rivet-health-checks = { path = "../../common/health-checks" }
+rivet-operation = { path = "../../common/operation/core" }
+rivet-pools = { path = "../../common/pools" }
+s3-util = { path = "../../common/s3-util" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1.40" }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+url = "2.2.2"
+util-job = { package = "rivet-util-job", path = "../../services/job/util" }
+util-mm = { package = "rivet-util-mm", path = "../../services/mm/util" }
+util-nsfw = { package = "rivet-util-nsfw", path = "../../services/nsfw/util" }
+util-team = { package = "rivet-util-team", path = "../../services/team/util" }
+uuid = { version = "1", features = ["v4"] }
+
+build-create = { path = "../../services/build/ops/create" }
+build-get = { path = "../../services/build/ops/get" }
+build-list-for-game = { path = "../../services/build/ops/list-for-game" }
+cdn-namespace-auth-user-remove = { path = "../../services/cdn/ops/namespace-auth-user-remove" }
+cdn-namespace-auth-user-update = { path = "../../services/cdn/ops/namespace-auth-user-update" }
+cdn-namespace-domain-create = { path = "../../services/cdn/ops/namespace-domain-create" }
+cdn-namespace-domain-remove = { path = "../../services/cdn/ops/namespace-domain-remove" }
+cdn-ns-auth-type-set = { path = "../../services/cdn/ops/ns-auth-type-set" }
+cdn-ns-enable-domain-public-auth-set = { path = "../../services/cdn/ops/ns-enable-domain-public-auth-set" }
+cdn-site-create = { path = "../../services/cdn/ops/site-create" }
+cdn-site-get = { path = "../../services/cdn/ops/site-get" }
+cdn-site-list-for-game = { path = "../../services/cdn/ops/site-list-for-game" }
+cf-custom-hostname-list-for-namespace-id = { path = "../../services/cf-custom-hostname/ops/list-for-namespace-id" }
+cloud-device-link-create = { path = "../../services/cloud/ops/device-link-create" }
+cloud-game-config-create = { path = "../../services/cloud/ops/game-config-create" }
+cloud-game-config-get = { path = "../../services/cloud/ops/game-config-get" }
+cloud-game-token-create = { path = "../../services/cloud/ops/game-token-create" }
+cloud-namespace-create = { path = "../../services/cloud/ops/namespace-create" }
+cloud-namespace-get = { path = "../../services/cloud/ops/namespace-get" }
+cloud-namespace-token-development-create = { path = "../../services/cloud/ops/namespace-token-development-create" }
+cloud-namespace-token-public-create = { path = "../../services/cloud/ops/namespace-token-public-create" }
+cloud-version-get = { path = "../../services/cloud/ops/version-get" }
+cloud-version-publish = { path = "../../services/cloud/ops/version-publish" }
+cluster = { path = "../../services/cluster" }
+custom-user-avatar-list-for-game = { path = "../../services/custom-user-avatar/ops/list-for-game" }
+custom-user-avatar-upload-complete = { path = "../../services/custom-user-avatar/ops/upload-complete" }
+game-banner-upload-complete = { path = "../../services/game/ops/banner-upload-complete" }
+game-create = { path = "../../services/game/ops/create" }
+game-get = { path = "../../services/game/ops/get" }
+game-list-for-team = { path = "../../services/game/ops/list-for-team" }
+game-logo-upload-complete = { path = "../../services/game/ops/logo-upload-complete" }
+game-namespace-create = { path = "../../services/game/ops/namespace-create" }
+game-namespace-get = { path = "../../services/game/ops/namespace-get" }
+game-namespace-list = { path = "../../services/game/ops/namespace-list" }
+game-namespace-validate = { path = "../../services/game/ops/namespace-validate" }
+game-namespace-version-history-list = { path = "../../services/game/ops/namespace-version-history-list" }
+game-namespace-version-set = { path = "../../services/game/ops/namespace-version-set" }
+game-resolve-namespace-id = { path = "../../services/game/ops/resolve-namespace-id" }
+game-token-development-validate = { path = "../../services/game/ops/token-development-validate" }
+game-validate = { path = "../../services/game/ops/validate" }
+game-version-get = { path = "../../services/game/ops/version-get" }
+game-version-list = { path = "../../services/game/ops/version-list" }
+game-version-validate = { path = "../../services/game/ops/version-validate" }
+job-run = { path = "../../services/job-run" }
+mm-config-lobby-group-get = { path = "../../services/mm-config/ops/lobby-group-get" }
+mm-config-lobby-group-resolve-version = { path = "../../services/mm-config/ops/lobby-group-resolve-version" }
+mm-config-namespace-config-set = { path = "../../services/mm-config/ops/namespace-config-set" }
+mm-config-namespace-config-validate = { path = "../../services/mm-config/ops/namespace-config-validate" }
+mm-config-version-get = { path = "../../services/mm-config/ops/version-get" }
+mm-lobby-get = { path = "../../services/mm/ops/lobby-get" }
+mm-lobby-history = { path = "../../services/mm/ops/lobby-history" }
+mm-lobby-list-for-namespace = { path = "../../services/mm/ops/lobby-list-for-namespace" }
+mm-lobby-player-count = { path = "../../services/mm/ops/lobby-player-count" }
+mm-lobby-runtime-aggregate = { path = "../../services/mm/ops/lobby-runtime-aggregate" }
+mm-player-count-for-namespace = { path = "../../services/mm/ops/player-count-for-namespace" }
+job-log-read = { path = "../../services/job-log/ops/read" }
+perf-log-get = { path = "../../services/perf/ops/log-get" }
+region-get = { path = "../../services/region/ops/get" }
+region-list-for-game = { path = "../../services/region/ops/list-for-game" }
+team-get = { path = "../../services/team/ops/get" }
+team-member-count = { path = "../../services/team/ops/member-count" }
+team-validate = { path = "../../services/team/ops/validate" }
+tier = { path = "../../services/tier" }
+token-create = { path = "../../services/token/ops/create" }
+token-revoke = { path = "../../services/token/ops/revoke" }
+upload-complete = { path = "../../services/upload/ops/complete" }
+upload-file-list = { path = "../../services/upload/ops/file-list" }
+upload-get = { path = "../../services/upload/ops/get" }
+upload-prepare = { path = "../../services/upload/ops/prepare" }
+user-get = { path = "../../services/user/ops/get" }
+user-identity-get = { path = "../../services/user-identity/ops/get" }
+user-team-list = { path = "../../services/user/ops/team-list" }
+rivet-config = { version = "0.1.0", path = "../../common/config" }
+rivet-env = { version = "0.1.0", path = "../../common/env" }
+
+[dev-dependencies]
+rand = "0.8"
+rivet-connection = { path = "../../common/connection" }
+
+faker-region = { path = "../../services/faker/ops/region" }
+faker-team = { path = "../../services/faker/ops/team" }
+token-create = { path = "../../services/token/ops/create" }
+user-identity-create = { path = "../../services/user-identity/ops/create" }

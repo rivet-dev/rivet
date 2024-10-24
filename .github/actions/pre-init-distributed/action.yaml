@@ -47,7 +47,7 @@ runs:
       with:
         key: ${{ runner.os }}-bolt-gen
         path: |
-          svc/pkg/region/ops/config-get/gen
+          packages/services/region/ops/config-get/gen
 
     # MARK: Nix
     - uses: cachix/install-nix-action@v22

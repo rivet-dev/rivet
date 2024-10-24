@@ -1,0 +1,18 @@
+[package]
+name = "game-namespace-validate"
+version = "0.0.1"
+edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-operation = { path = "../../../../common/operation/core" }
+chirp-client = { path = "../../../../common/chirp/client" }
+prost = "0.10"
+
+game-namespace-resolve-name-id = { path = "../namespace-resolve-name-id" }
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../common/chirp/worker" }
+
+faker-game = { path = "../../../faker/ops/game" }

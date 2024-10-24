@@ -1,0 +1,51 @@
+[package]
+name = "cluster"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+acme-lib = "0.9"
+anyhow = "1.0"
+chirp-workflow = { path = "../../common/chirp-workflow/core" }
+chrono = "0.4"
+cloudflare = { git = "https://github.com/cloudflare/cloudflare-rs.git", rev = "f14720e42184ee176a97676e85ef2d2d85bc3aae" }
+http = "0.2"
+include_dir = "0.7.3"
+indoc = "1.0"
+lazy_static = "1.4"
+nomad-util = { path = "../../common/nomad-util" }
+rand = "0.8"
+reqwest = { version = "0.11", features = ["json"] }
+rivet-metrics = { path = "../../common/metrics" }
+rivet-operation = { path = "../../common/operation/core" }
+rivet-runtime = { path = "../../common/runtime" }
+s3-util = { path = "../../common/s3-util" }
+serde = { version = "1.0.198", features = ["derive"] }
+serde_urlencoded = "0.7.0"
+ssh2 = "0.9.4"
+strum = { version = "0.24", features = ["derive"] }
+trust-dns-resolver = { version = "0.23.2", features = ["dns-over-native-tls"] }
+
+ip-info = { path = "../ip/ops/info" }
+linode = { path = "../linode" }
+server-spec = { path = "../server-spec" }
+pegboard = { path = "../pegboard" }
+token-create = { path = "../token/ops/create" }
+rivet-config = { version = "0.1.0", path = "../../common/config" }
+
+[dependencies.nomad_client]
+git = "https://github.com/rivet-gg/nomad-client"
+rev = "abb66bf0c30c7ff5b0c695dae952481c33e538b5" # pragma: allowlist secret
+
+[dependencies.sqlx]
+git = "https://github.com/rivet-gg/sqlx"
+rev = "e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
+default-features = false
+features = [ "json", "ipnetwork" ]
+
+[build-dependencies]
+merkle_hash = "3.6"
+hex = "0.4"
+tokio = { version = "1.40", features = ["full"] }

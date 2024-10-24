@@ -35,7 +35,7 @@ disable = true
 
 ### Beacon
 
-[Source code](/svc/pkg/telemetry/standalone/beacon/src/lib.rs)
+[Source code](/packages/services/telemetry/standalone/beacon/src/lib.rs)
 
 This data is sent once per day.
 

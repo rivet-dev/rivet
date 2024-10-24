@@ -1,0 +1,29 @@
+[package]
+name = "team-worker"
+version = "0.0.1"
+edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-worker = { path = "../../../common/chirp/worker" }
+chirp-client = { path = "../../../common/chirp/client" }
+serde = { version = "1.0", features = ["derive"] }
+reqwest = "0.11"
+rivet-health-checks = { path = "../../../common/health-checks" }
+rivet-metrics = { path = "../../../common/metrics" }
+rivet-runtime = { path = "../../../common/runtime" }
+
+team-join-request-list = { path = "../ops/join-request-list" }
+team-profile-validate = { path = "../ops/profile-validate" }
+team-validate = { path = "../ops/validate" }
+user-identity-get = { path = "../../user-identity/ops/get" }
+game-namespace-list = { path = "../../game/ops/namespace-list" }
+mm-lobby-list-for-namespace = { path = "../../mm/ops/lobby-list-for-namespace" }
+rivet-config = { version = "0.1.0", path = "../../../common/config" }
+
+[dev-dependencies]
+chirp-worker = { path = "../../../common/chirp/worker" }
+
+faker-team = { path = "../../faker/ops/team" }
+team-user-ban-get = { path = "../ops/user-ban-get" }

@@ -1,0 +1,21 @@
+[package]
+name = "pegboard-ws"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../../../../common/chirp/client" }
+chirp-workflow = { path = "../../../../common/chirp-workflow/core" }
+hyper = "1.4"
+rivet-connection = { path = "../../../../common/connection" }
+rivet-health-checks = { path = "../../../../common/health-checks" }
+rivet-metrics = { path = "../../../../common/metrics" }
+rivet-runtime = { path = "../../../../common/runtime" }
+serde = { version = "1.0", features = ["derive"] }
+tokio-tungstenite = "0.23.1"
+url = "2.2.2"
+
+pegboard = { path = "../.." }
+rivet-config = { version = "0.1.0", path = "../../../../common/config" }

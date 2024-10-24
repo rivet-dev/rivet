@@ -20,7 +20,7 @@ Traffic Server & S3.
 
 ## Implementation
 
-See [`svc/pkg/mm/worker/src/workers/lobby_create/mod.rs`](/svc/pkg/mm/worker/src/workers/lobby_create/mod.rs)
+See [`packages/services/mm/worker/src/workers/lobby_create/mod.rs`](/packages/services/mm/worker/src/workers/lobby_create/mod.rs)
 for details
 
 ### Direct from S3

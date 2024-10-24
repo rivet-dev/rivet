@@ -1,0 +1,12 @@
+[package]
+name = "server-spec"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-workflow = { path = "../../common/chirp-workflow/core" }
+
+linode = { path = "../linode" }
+rivet-config = { version = "0.1.0", path = "../../common/config" }

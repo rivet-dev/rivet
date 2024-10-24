@@ -1,0 +1,25 @@
+[package]
+name = "region-recommend"
+version = "0.0.1"
+edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-operation = { path = "../../../../common/operation/core" }
+chirp-client = { path = "../../../../common/chirp/client" }
+prost = "0.10"
+geoutils = "0.4"
+
+ip-info = { path = "../../../ip/ops/info" }
+region-get = { path = "../get" }
+
+[dependencies.sqlx]
+git = "https://github.com/rivet-gg/sqlx"
+rev = "e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
+default-features = false
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../common/chirp/worker" }
+
+region-list = { path = "../list" }

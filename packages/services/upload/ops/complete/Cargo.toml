@@ -1,0 +1,28 @@
+[package]
+name = "upload-complete"
+version = "0.0.1"
+edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../../../../common/chirp/client" }
+rivet-operation = { path = "../../../../common/operation/core" }
+chrono = "0.4"
+prost = "0.10"
+s3-util = { path = "../../../../common/s3-util" }
+url = "2.2"
+
+nsfw-image-score = { path = "../../../nsfw/ops/image-score" }
+
+[dependencies.sqlx]
+git = "https://github.com/rivet-gg/sqlx"
+rev = "e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
+default-features = false
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../common/chirp/worker" }
+reqwest = "0.11"
+
+upload-get = { path = "../get" }
+upload-prepare = { path = "../prepare" }

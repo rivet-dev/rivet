@@ -28,7 +28,7 @@
 
 ### DNS records
 
-[Source](../../../svc/pkg/cluster/worker/src/workers/server_dns_create.rs)
+[Source](../../../packages/services/cluster/worker/src/workers/server_dns_create.rs)
 
 Dynamically create a DNS record for each GG node formatted like `*.lobby.{dc_id}.rivet.run`. Example:
 
@@ -42,7 +42,7 @@ These the IPs of these records change as the GG nodes scale up and down, but the
 
 ### TLS certs
 
-[Source](../../../svc/pkg/cluster/worker/src/workers/datacenter_tls_issue.rs)
+[Source](../../../packages/services/cluster/worker/src/workers/datacenter_tls_issue.rs)
 
 Each datacenter needs a TLS cert. For the example above, we need a TLS cert for
 `*.lobby.51f3d45e-693f-4470-b86d-66980edd87ec.rivet.run` and

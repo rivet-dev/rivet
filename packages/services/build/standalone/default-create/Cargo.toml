@@ -1,0 +1,38 @@
+[package]
+name = "build-default-create"
+version = "0.0.1"
+edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../../../../common/chirp/client" }
+rivet-operation = { path = "../../../../common/operation/core" }
+futures-util = "0.3"
+indoc = "1.0"
+prost = "0.10"
+reqwest = "0.11"
+rivet-connection = { path = "../../../../common/connection" }
+rivet-pools = { path = "../../../../common/pools" }
+s3-util = { path = "../../../../common/s3-util" }
+tokio = { version = "1.40", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = [
+    "fmt",
+    "json",
+    "ansi",
+] }
+tracing-logfmt = "0.3"
+uuid = { version = "1", features = ["v4"] }
+
+upload-complete = { path = "../../../upload/ops/complete" }
+upload-prepare = { path = "../../../upload/ops/prepare" }
+rivet-config = { version = "0.1.0", path = "../../../../common/config" }
+
+[dependencies.sqlx]
+git = "https://github.com/rivet-gg/sqlx"
+rev = "e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
+default-features = false
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../common/chirp/worker" }

@@ -1,0 +1,17 @@
+[package]
+name = "faker-job-template"
+version = "0.0.1"
+edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-operation = { path = "../../../../common/operation/core" }
+chirp-client = { path = "../../../../common/chirp/client" }
+prost = "0.10"
+util-job = { package = "rivet-util-job", path = "../../../job/util" }
+
+nomad-client = "0.0.9"
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../common/chirp/worker" }

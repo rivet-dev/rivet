@@ -1,0 +1,35 @@
+[package]
+name = "user-worker"
+version = "0.0.1"
+edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-convert = { path = "../../../common/convert" }
+chirp-client = { path = "../../../common/chirp/client" }
+chirp-worker = { path = "../../../common/chirp/worker" }
+chrono = "0.4"
+lazy_static = "1.4.0"
+rivet-health-checks = { path = "../../../common/health-checks" }
+rivet-metrics = { path = "../../../common/metrics" }
+rivet-runtime = { path = "../../../common/runtime" }
+
+game-get = { path = "../../game/ops/get" }
+game-namespace-get = { path = "../../game/ops/namespace-get" }
+identity-config-version-get = { path = "../../identity-config/ops/version-get" }
+team-get = { path = "../../team/ops/get" }
+team-member-list = { path = "../../team/ops/member-list" }
+upload-list-for-user = { path = "../../upload/ops/list-for-user" }
+user-get = { path = "../ops/get" }
+user-identity-delete = { path = "../../user-identity/ops/delete" }
+user-profile-validate = { path = "../ops/profile-validate" }
+user-team-list = { path = "../ops/team-list" }
+rivet-config = { version = "0.1.0", path = "../../../common/config" }
+
+[dev-dependencies]
+chirp-worker = { path = "../../../common/chirp/worker" }
+
+faker-user = { path = "../../faker/ops/user" }
+upload-get = { path = "../../upload/ops/get" }
+upload-prepare = { path = "../../upload/ops/prepare" }

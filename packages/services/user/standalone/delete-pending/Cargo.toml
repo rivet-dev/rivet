@@ -1,0 +1,30 @@
+[package]
+name = "user-delete-pending"
+version = "0.0.38"
+edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+lazy_static = "1.4"
+chirp-client = { path = "../../../../common/chirp/client" }
+rivet-operation = { path = "../../../../common/operation/core" }
+futures-util = "0.3"
+indoc = "1.0"
+prost = "0.10"
+rivet-connection = { path = "../../../../common/connection" }
+rivet-pools = { path = "../../../../common/pools" }
+rivet-runtime = { path = "../../../../common/runtime" }
+tokio = { version = "1.40", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = [
+    "fmt",
+    "json",
+    "ansi",
+] }
+tracing-logfmt = "0.3"
+rivet-config = { version = "0.1.0", path = "../../../../common/config" }
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../common/chirp/worker" }
+chrono = "0.4"

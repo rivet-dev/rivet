@@ -1,0 +1,50 @@
+[package]
+name = "rivet-convert"
+version = "0.1.0"
+edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../chirp/client" }
+rivet-operation = { path = "../operation/core" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = "0.4"
+types-proto = { path = "../types-proto/core" }
+util-mm = { package = "rivet-util-mm", path = "../../services/mm/util" }
+
+cdn-namespace-get = { path = "../../services/cdn/ops/namespace-get" }
+cluster = { path = "../../services/cluster" }
+game-get = { path = "../../services/game/ops/get" }
+game-namespace-get = { path = "../../services/game/ops/namespace-get" }
+game-namespace-list = { path = "../../services/game/ops/namespace-list" }
+game-resolve-namespace-id = { path = "../../services/game/ops/resolve-namespace-id" }
+game-token-development-validate = { path = "../../services/game/ops/token-development-validate" }
+game-user-get = { path = "../../services/game-user/ops/get" }
+game-user-link-get = { path = "../../services/game-user/ops/link-get" }
+game-validate = { path = "../../services/game/ops/validate" }
+game-version-validate = { path = "../../services/game/ops/version-validate" }
+job-run = { path = "../../services/job-run" }
+kv-list = { path = "../../services/kv/ops/list" }
+mm-lobby-player-count = { path = "../../services/mm/ops/lobby-player-count" }
+mm-lobby-runtime-aggregate = { path = "../../services/mm/ops/lobby-runtime-aggregate" }
+mm-player-count-for-namespace = { path = "../../services/mm/ops/player-count-for-namespace" }
+region-get = { path = "../../services/region/ops/get" }
+region-list-for-game = { path = "../../services/region/ops/list-for-game" }
+region-resolve = { path = "../../services/region/ops/resolve" }
+team-get = { path = "../../services/team/ops/get" }
+team-member-count = { path = "../../services/team/ops/member-count" }
+team-profile-validate = { path = "../../services/team/ops/profile-validate" }
+team-validate = { path = "../../services/team/ops/validate" }
+tier = { path = "../../services/tier" }
+user-follow-count = { path = "../../services/user-follow/ops/count" }
+user-follow-get = { path = "../../services/user-follow/ops/get" }
+user-get = { path = "../../services/user/ops/get" }
+user-identity-get = { path = "../../services/user-identity/ops/get" }
+user-team-list = { path = "../../services/user/ops/team-list" }
+
+rivet-api = { path = "../../../sdks/full/rust" }
+rivet-group-server = { path = "../smithy-output/api-group/rust-server" }
+rivet-portal-server = { path = "../smithy-output/api-portal/rust-server" }
+rivet-config = { version = "0.1.0", path = "../config" }

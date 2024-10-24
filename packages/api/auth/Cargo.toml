@@ -1,0 +1,55 @@
+[package]
+name = "api-auth"
+version = "0.0.1"
+edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-convert = { path = "../../common/convert" }
+api-helper = { path = "../../common/api-helper/build" }
+async-trait = "0.1"
+chirp-client = { path = "../../common/chirp/client" }
+rivet-operation = { path = "../../common/operation/core" }
+chrono = "0.4"
+headers = "0.3"
+http = "0.2"
+hyper = { version = "0.14", features = ["server", "http1", "stream", "tcp"] }
+lazy_static = "1.4"
+prost = "0.10"
+rivet-auth-server = { path = "../../common/smithy-output/api-auth/rust-server" }
+rivet-cache = { path = "../../common/cache/build" }
+rivet-claims = { path = "../../common/claims" }
+rivet-health-checks = { path = "../../common/health-checks" }
+rivet-pools = { path = "../../common/pools" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1.40" }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+url = "2.2.2"
+uuid = { version = "1", features = ["v4"] }
+rivet-api = { path = "../../../sdks/full/rust" }
+
+user-get = { path = "../../services/user/ops/get" }
+token-revoke = { path = "../../services/token/ops/revoke" }
+captcha-verify = { path = "../../services/captcha/ops/verify" }
+email-verification-create = { path = "../../services/email-verification/ops/create" }
+email-verification-complete = { path = "../../services/email-verification/ops/complete" }
+user-resolve-access-token = { path = "../../services/user/ops/resolve-access-token" }
+user-resolve-email = { path = "../../services/user/ops/resolve-email" }
+user-token-create = { path = "../../services/user/ops/token-create" }
+user-identity-create = { path = "../../services/user-identity/ops/create" }
+token-create = { path = "../../services/token/ops/create" }
+rivet-config = { version = "0.1.0", path = "../../common/config" }
+rivet-env = { version = "0.1.0", path = "../../common/env" }
+
+[dev-dependencies]
+rivet-auth = { path = "../../common/smithy-output/api-auth/rust" }
+rivet-connection = { path = "../../common/connection" }
+
+faker-user = { path = "../../services/faker/ops/user" }
+user-token-create = { path = "../../services/user/ops/token-create" }
+debug-email-res = { path = "../../services/debug/ops/email-res" }
+user-identity-get = { path = "../../services/user-identity/ops/get" }
