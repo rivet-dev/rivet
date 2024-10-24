@@ -1,0 +1,6 @@
+{
+  "recurse": true,
+  "markdown": true,
+  "skip": "https://hub.rivet.gg,https://twitter.com,https://www.cloudflare.com,https://cloudflare.com,https://github.com,https://support.cloudflare.com,http://localhost,https://tanks.rivet.game",
+  "format": "json"
+}

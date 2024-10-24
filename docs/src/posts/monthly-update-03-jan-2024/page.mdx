@@ -1,0 +1,98 @@
+import graph from './graph.png';
+
+
+export const author = 'forest-anderson'
+  
+export const published = '2024-02-08'
+export const category = 'monthly-update'
+export const tags = ['monthly-update', 'godot', 'servers', 'open-beta']
+
+# January 2024 Monthly Update
+
+Open beta, Godot plugin, server provisioning.
+
+
+January saw the release of Rivet's Open Beta! We also released a new Godot
+plugin, and work has been done on automatic server provisioning.
+
+## Open Beta
+
+Rivet is in Open Beta! This means that you can create a Rivet account, and start
+shipping your own multiplayer games.
+
+Rivet has been in closed beta for several months, and we've been working closely
+with a group of developers to test out the platform at scale. Over December and
+January, we've done a lot of work increasing the stability of the platform.
+
+In January, we brought up our new production cluster. This will be the final
+version that Rivet moves forward with (we have several testing clusters), and
+what you'll use when you get started with Rivet. We have been migrating existing
+users over throughout the past few weeks, and we're excited to help lots of new
+developers get onboarded on to the platform.
+
+## Godot plugin
+
+We've been working on a plugin for the Godot game engine. This plugin is many
+steps ahead of the previous engine plugins that Rivet shipped. It considers the
+full lifetime of a multiplayer game on Rivet, and leaves a lot of room for more
+educational content in the future.
+
+The new Godot plugin includes a full build pipeline that can be run entirely
+from inside the engine, without interacting with the Rivet CLI at all. With a
+click of a button, a server build of your Godot project will be built, inserted
+into a Docker container, and uploaded to Rivet. This makes it super easy to get
+a playtest going with some friends to check out your latest features!
+
+You can also do several other things, from shipping to production, to quickly
+accessing your game's logs and lobbies on the hub. There will be many
+improvements to the plugin over the next few months, and we're excited to see
+developers making use of it. To play around with the plugin, you can check out
+the ever-improving [Godot learning center](https://rivet.gg/docs/godot), where
+we've just released a full walkthrough of [integrating Godot's bomber demo with
+Rivet](https://rivet.gg/docs/godot/tutorials/quickstart).
+
+The next big feature in this direction will be the overhaul of the Unity plugin
+to match the Godot plugin's functionality, so stay tuned!
+
+## Auto server provisioning
+
+Lots of work went into the automated server provisioning system. This allows
+Rivet to easily scale up and down game servers in different data centers around
+the world.
+
+When a developer ships their multiplayer game on Rivet, they'll want the game to
+scale up in a region that's close to their players as demand increases. Because
+there are many developers using Rivet in a single region at once, Rivet needs to
+quickly be able to start a new virtual machine so that it can start running game
+servers.
+
+<div style={{ display: 'flex', justifyContent: 'center' }}>
+  <Image src={graph} alt="Graph" />
+</div>
+
+| *In the image above, the purple line represents the required VM capacity based
+on how much CPU (beige section) is being used. The pink line then represents
+changes in how many VMs are available. The green line represents the rate of
+change of CPUs required.*
+
+A key part of this work was decreasing the start time of a new virtual machine.
+If Rivet predicts a sudden increase in demand, it needs to be able to start a
+new virtual machine as fast as possible. With optimizations that were made,
+start time is now around 40-90 seconds.
+
+## Other ongoing items
+
+We've been hard at work in several other directions as well. A key area we're
+focusing on is improving the ease of open source contributions. This includes
+making a consistent way to bring up Rivet's infrastructure locally. We want to
+make sure that developers can contribute without too much configuration on their
+end, so we're looking at how we can leverage Devcontainers or GitHub Codespaces
+(and alternatives).
+
+We're also playing around with building Rivet's Rust `svc` crates in Docker on
+Apple M1 machines. There are a lot of optimizations here that we're using to
+reduce build times. We published our `rivet.yaml` schema to the
+[schemastore](https://www.schemastore.org/json/), making it easier for people to
+get hints when configuring their Rivet games.
+
+

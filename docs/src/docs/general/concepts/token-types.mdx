@@ -1,0 +1,85 @@
+# Types of tokens
+
+Rivet heavily relies on different types of tokens for controlling access to the API. Token are portable and flexible, which lets you use our API in whatever way works best for your project. Tokens often contain information about who is making the request, such as the player ID or the game namespace.
+
+The token label is the text before the first `.` in the token. For example, in the token `player.eyJ0eXAi.foo.bar`, the label is `player`.
+
+Rivet tokens are a variation on the JWT spec that uses Protobufs under the hood & include a label to help you identify the token. We don't provide a public way of inspecting the token at the moment.
+
+Read more at https://rivet.gg/docs/general/errors/token/invalid.
+
+## Generic
+
+### Namespace Public
+
+Label: `pub_{your namespace id}`
+
+<AccordionGroup>
+  <Accordion title='Where does it come from?'>Coming soon</Accordion>
+  <Accordion title='Where should it be used?'>Coming soon</Accordion>
+  <Accordion title='How sensitive is it?'>Coming soon</Accordion>
+</AccordionGroup>
+
+### Namespace Development
+
+Label: `dev_{your namespace id}`
+
+<AccordionGroup>
+  <Accordion title='Where does it come from?'>Coming soon</Accordion>
+  <Accordion title='Where should it be used?'>Coming soon</Accordion>
+  <Accordion title='How sensitive is it?'>Coming soon</Accordion>
+</AccordionGroup>
+
+## Matchmaker
+
+### Matchmaker Lobby
+
+Label: `lobby`
+
+<AccordionGroup>
+  <Accordion title='Where does it come from?'>Coming soon</Accordion>
+  <Accordion title='Where should it be used?'>Coming soon</Accordion>
+  <Accordion title='How sensitive is it?'>Coming soon</Accordion>
+</AccordionGroup>
+
+### Matchmaker Player
+
+Label: `player`
+
+<AccordionGroup>
+  <Accordion title='Where does it come from?'>Coming soon</Accordion>
+  <Accordion title='Where should it be used?'>Coming soon</Accordion>
+  <Accordion title='How sensitive is it?'>Coming soon</Accordion>
+</AccordionGroup>
+
+### Matchmaker Development Player
+
+Label: `dev_player`
+
+<AccordionGroup>
+  <Accordion title='Where does it come from?'>Coming soon</Accordion>
+  <Accordion title='Where should it be used?'>Coming soon</Accordion>
+  <Accordion title='How sensitive is it?'>Coming soon</Accordion>
+</AccordionGroup>
+
+## Cloud
+
+### Cloud
+
+Label: `cloud`
+
+<AccordionGroup>
+  <Accordion title='Where does it come from?'>Coming soon</Accordion>
+  <Accordion title='Where should it be used?'>Coming soon</Accordion>
+  <Accordion title='How sensitive is it?'>Coming soon</Accordion>
+</AccordionGroup>
+
+### Cloud Device Link
+
+Label: `device`
+
+<AccordionGroup>
+  <Accordion title='Where does it come from?'>Coming soon</Accordion>
+  <Accordion title='Where should it be used?'>Coming soon</Accordion>
+  <Accordion title='How sensitive is it?'>Coming soon</Accordion>
+</AccordionGroup>

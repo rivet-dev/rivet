@@ -1,0 +1,38 @@
+
+# games.createGame
+
+
+
+## Description
+
+Creates a new game.
+
+
+## Code Examples
+
+<CodeGroup title='Request' tag='POST' label='https://api.rivet.gg/cloud/games'>
+
+```bash {{ "title": "cURL" }}
+# Write the request body to body.json before running
+curl -X POST -d '@body.json' 'https://api.rivet.gg/cloud/games'
+```
+
+```ts
+// Create Rivet client
+import { RivetClient } from '@rivet-gg/api';
+const RIVET = new RivetClient({ token: '[YOUR TOKEN HERE]' });
+
+// Make request
+await RIVET.cloud.games.createGame({
+  // Add your request body here
+});
+```
+
+</CodeGroup>
+
+## Request Parameters
+
+## Request Body
+<SchemaPreview schema={{"type":"object","properties":{"name_id":{"type":"any"},"display_name":{"type":"string","description":"Represent a resource's readable display name."},"developer_group_id":{"type":"string"}}}}/>
+## Response Body
+<SchemaPreview schema={{"type":"object","properties":{"game_id":{"type":"string"}}}}/>

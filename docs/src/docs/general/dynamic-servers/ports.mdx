@@ -1,0 +1,15 @@
+# Ports
+
+When running a game on Rivet, you need to expose ports for players to connect to your lobby.
+
+By default, Rivet uses [Rivet Game Guard](/docs/dynamic-servers/concepts/game-guard) to enable DDoS mitigation and TLS termination out of the box. We recommend using this whenever possible, but on rare occasion you will need to use [host networking](/docs/dynamic-servers/concepts/host-bridge-networking).
+
+## Connecting to your game
+
+When [finding a lobby](/docs/matchmaker/api/lobbies/find), Rivet returns map of `ports` with the address and port to connect to.
+
+Unless using host networking, there is no static IP address and port exposed for players to connect to your game.
+
+## Support Matrix
+
+<ProtocolSupportMatrix />

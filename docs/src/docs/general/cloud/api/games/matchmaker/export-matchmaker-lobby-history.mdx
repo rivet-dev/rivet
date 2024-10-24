@@ -1,0 +1,44 @@
+
+# games.matchmaker.exportMatchmakerLobbyHistory
+
+
+
+## Description
+
+Exports lobby history over a given query time span.
+
+
+## Code Examples
+
+<CodeGroup title='Request' tag='POST' label='https://api.rivet.gg/cloud/games/{game_id}/matchmaker/lobbies/export-history'>
+
+```bash {{ "title": "cURL" }}
+# Write the request body to body.json before running
+curl -X POST -d '@body.json' 'https://api.rivet.gg/cloud/games/{game_id}/matchmaker/lobbies/export-history'
+```
+
+```ts
+// Create Rivet client
+import { RivetClient } from '@rivet-gg/api';
+const RIVET = new RivetClient({ token: '[YOUR TOKEN HERE]' });
+
+// Make request
+await RIVET.cloud.games.matchmaker.exportMatchmakerLobbyHistory({
+  // Add your request body here
+});
+```
+
+</CodeGroup>
+
+## Request Parameters
+<div className="property ml-4">
+<div className="flex flex-row items-center my-2">
+<h2 className="text-lg font-bold text-cream-50 m-0">game\_id</h2><code className="m-0 ml-4 pb-0 pt-0.5 text-cream-500"><span className="font-normal text-cream-600">required</span> path parameter</code>
+</div>
+
+</div>
+
+## Request Body
+<SchemaPreview schema={{"type":"object","properties":{"query_start":{"type":"number","description":"Unsigned 64 bit integer."},"query_end":{"type":"number","description":"Unsigned 64 bit integer."}}}}/>
+## Response Body
+<SchemaPreview schema={{"type":"object","properties":{"url":{"type":"string","description":"The URL to a CSV file for the given lobby history."}}}}/>

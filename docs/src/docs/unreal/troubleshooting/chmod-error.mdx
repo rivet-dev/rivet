@@ -1,0 +1,24 @@
+# Failed to chmod "MyProject.sh"
+
+## Symptoms
+
+Running your Unreal Engine project in Docker fails with the following error:
+
+```
+Running: /usr/bin/env -- "chmod" "+x" "/project/Intermediate/Staging/MultiplayerTest1Server.sh"
+chmod: changing permissions of '/project/Intermediate/Staging/MultiplayerTest1Server.sh': Operation not permitted
+Took 0.0064401s to run env, ExitCode=1
+ERROR: Failed to chmod "/project/Intermediate/Staging/MultiplayerTest1Server.sh"
+       (see /home/ue4/Library/Logs/Unreal Engine/LocalBuildLogs/Log.txt for full exception trace)
+AutomationTool executed for 0h 2m 46s
+AutomationTool exiting with ExitCode=1 (Error_Unknown)
+RunUAT ERROR: AutomationTool was unable to run successfully. Exited with code: 1
+```
+
+## Explanation
+
+This is happening because there are files in the `Intermediate` folder that are owned by a different user. This can happen if you build the Linux target on your host machine and then try to run it in Docker.
+
+## Solution
+
+Delete the whole `Intermediate` folder and try again.

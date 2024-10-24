@@ -1,0 +1,35 @@
+
+# devices.links.prepare
+
+
+
+## Description
+
+*Coming Soon!*
+
+
+## Code Examples
+
+<CodeGroup title='Request' tag='POST' label='https://api.rivet.gg/cloud/devices/links'>
+
+```bash {{ "title": "cURL" }}
+curl -X POST 'https://api.rivet.gg/cloud/devices/links'
+```
+
+```ts
+// Create Rivet client
+import { RivetClient } from '@rivet-gg/api';
+const RIVET = new RivetClient({ token: '[YOUR TOKEN HERE]' });
+
+// Make request
+await RIVET.cloud.devices.links.prepare({
+  // Add your request body here
+});
+```
+
+</CodeGroup>
+
+## Request Parameters
+
+## Response Body
+<SchemaPreview schema={{"type":"object","properties":{"device_link_id":{"type":"string"},"device_link_token":{"type":"string"},"device_link_url":{"type":"string"}}}}/>

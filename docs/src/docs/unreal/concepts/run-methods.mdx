@@ -1,0 +1,80 @@
+# Methods for running your game
+
+<ComingSoon />
+
+{/*
+<Info>
+	**Why can't I use 'Launch Separate Server'?**
+	Ideally, you would be able to test a dedicated server from Unreal Engine's editor with these settings:
+
+    - **Multiplayer Options -> Launch Separate Server**: true
+    - **Multiplayer Options -> Play Net Mode**: Standalone
+    - **Multiplayer Options -> Run Under One Process**: True
+    - **Server -> Server Map Name Override**: /Game/ThirdPerson/Maps/ThirdPersonMap
+
+    However, there's a bug in Unreal Engine that causes the spawned standalone clients to use the *Server Map Name Override*, which makes this useless.
+
+    Read more [here](https://www.reddit.com/r/unrealengine/comments/pnquou/question_main_menu_multiplayer/).
+
+    See also [this trouble shooting section](#standalone-client-automatically-goes-to-the-wrong-map).
+
+</Info>
+
+## Quick iteration: PIE + listen server
+
+This setting is useful for quick iteration.
+
+Open _Edit -> Editor Preferences -> Level Editor -> Play_ and update the following settings:
+
+- **Multiplayer Options -> Launch Separate Server**: True
+- **Multiplayer Options -> Play Net Mode**: Play Standalone
+- **Multiplayer Options -> Run Under One Process**: False
+- **Client -> Play Number Of Clients**: >= 2
+- **Server -> Server Map Name Override**: _Empty_
+
+<Warning>
+	Be aware that running as a listen server may behave differently than with a dedicated server if [actor authority](https://docs.unrealengine.com/5.1/en-US/networking-overview-for-unreal-engine/#networkroleandauthority) is not handled correctly.
+
+    Using a listen server means that all actors have `Role == ROLE_Authority`. In production, actors will have `Role == ROLE_SimulatedProxy`. Read more [here](https://docs.unrealengine.com/5.1/en-US/actor-role-and-remoterole-in-unreal-engine/).
+
+    Check your functionality with PIE + standalone server if you think you might be having issues.
+
+</Warning>
+
+## Testing authority: PIE + standalone server
+
+This setting is useful for:
+
+- Testing the offline -> online flow of a user joining a server
+- Testing actor roles are handled correctly with a dedicated server (i.e. as close to production as possible)
+
+Open _Edit -> Editor Preferences -> Level Editor -> Play_ and update the following settings:
+
+- **Multiplayer Options -> Launch Separate Server**: False
+- **Multiplayer Options -> Play Net Mode**: Standalone
+- **Multiplayer Options -> Run Under One Process**: True
+- **Client -> Play Number Of Clients**: >= 2
+- **Server -> Server Map Name Override**: _Empty_
+
+## Testing for release: standalone client + standalone server
+
+TODO
+
+This is useful for release testing locally.
+
+- Build debug client
+- Build debug server
+- Bake client
+- Bake server
+- Open server binary
+- Open client binary
+
+## Testing on Rivet's servers: standalone client + Rivet server
+
+TODO
+
+This is useful for testing Rivet functionality in production.
+
+- Publish to Rivet
+- Use a public token on localhost
+*/}

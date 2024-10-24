@@ -1,0 +1,37 @@
+{
+  "godot": {
+    "name": "Godot",
+    "href": "/docs/godot",
+    "text": "text-purple-500",
+    "shadow": "shadow-purple-500",
+    "patternColor": "purple"
+  },
+  "unity": {
+    "name": "Unity",
+    "href": "/docs/unity",
+    "text": "text-blue-500",
+    "shadow": "shadow-blue-300",
+    "patternColor": "blue"
+  },
+  "unreal": {
+    "name": "Unreal Engine",
+    "href": "/docs/unreal",
+    "text": "text-red-500",
+    "shadow": "shadow-red-500",
+    "patternColor": "red"
+  },
+  "html5": {
+    "name": "HTML5",
+    "href": "/docs/html5",
+    "text": "text-orange-500",
+    "shadow": "shadow-orange-500",
+    "patternColor": "orange"
+  },
+  "custom": {
+    "name": "Custom",
+    "href": "/docs/custom",
+    "text": "text-charcole-500",
+    "shadow": "shadow-charcole-400",
+    "patternColor": "gray"
+  }
+}

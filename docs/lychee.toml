@@ -1,0 +1,21 @@
+exclude = [
+    # Rivet domains that shouldn't be checked against in example code
+    '^https://.*\.api\.rivet\.gg/',
+    '^https://hub\.rivet\.gg/.*',
+    '^https://.*\.rivet\.game/',
+    '^https://ph\.rivet\.gg/',
+
+    # Strict rate limits
+    '^https://www\.cloudflare\.com/learning/',
+    '^https://github\.com/',
+    '^https://twitter\.com',
+    '^https://discord\.gg/',
+
+    # Example code
+    '@body\.json',
+
+    # Bug parsing `src={xxxx}`
+    '%7B.*%7D$'
+]
+# exclude_all_private = true
+exclude_mail = true

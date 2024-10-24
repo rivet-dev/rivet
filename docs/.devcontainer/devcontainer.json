@@ -1,0 +1,13 @@
+{
+	"name": "Node.js",
+	"image": "mcr.microsoft.com/devcontainers/javascript-node:1-20-bullseye",
+	"postCreateCommand": "yarn install",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"unifiedjs.vscode-mdx",
+				"esbenp.prettier-vscode"
+			]
+		}
+	}
+}

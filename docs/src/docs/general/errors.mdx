@@ -1,0 +1,994 @@
+# Errors 
+## API Bad Body
+
+<Summary>{`API_BAD_BODY`}</Summary>
+
+The request body could not be deserialized or has an unknown size.
+
+
+## API Bad Body
+
+<Summary>{`API_BODY_TOO_LARGE`}</Summary>
+
+The request body could not be deserialized or has an unknown size.
+
+
+## API Bad Content Length
+
+<Summary>{`API_BAD_CONTENT_LENGTH`}</Summary>
+
+The Content-Length header or a `content_length` property in the body could not be deserialized. This is most
+likely due to a negative value being passed or a value out of bounds of a standard signed 64-bit integer.
+
+
+## API Bad Header
+
+<Summary>{`API_BAD_HEADER`}</Summary>
+
+A request header could not be deserialized.
+
+
+## API Bad Headers
+
+<Summary>{`API_BAD_HEADERS`}</Summary>
+
+The request headers could not be deserialized.
+
+
+## API Bad Query
+
+<Summary>{`API_BAD_QUERY`}</Summary>
+
+The request query could not be deserialized.
+
+
+## API Bad Query Parameter
+
+<Summary>{`API_BAD_QUERY_PARAMETER`}</Summary>
+
+An invalid parameter value was passed to a given query parameter. This is usually when an unknown enum variant
+is passed to an enum parameter.
+
+
+## API CORS Header Not Allowed
+
+<Summary>{`API_CORS_HEADER_NOT_ALLOWED`}</Summary>
+
+The request has a header which is not allowed by the CORS policy set by the requested API.
+
+
+## API CORS Method Not Allowed
+
+<Summary>{`API_CORS_METHOD_NOT_ALLOWED`}</Summary>
+
+The request uses a method which is not allowed by the CORS policy set by the requested API.
+
+
+## API CORS Origin Not Allowed
+
+<Summary>{`API_CORS_ORIGIN_NOT_ALLOWED`}</Summary>
+
+The request comes from an origin which is not allowed by the CORS policy set by the requested API.
+
+
+## API Forbidden
+
+<Summary>{`API_FORBIDDEN`}</Summary>
+
+The user is not allowed to access the requested resource.
+
+
+## API Invalid IP
+
+<Summary>{`API_INVALID_IP`}</Summary>
+
+The remote address provided by the `x-forwarded-for` header is not a valid IP address.
+
+
+## API Method Not Allowed
+
+<Summary>{`API_METHOD_NOT_ALLOWED`}</Summary>
+
+The request uses a method which is not allowed by the requested API. This differs from "API CORS Method Not
+Allowed" in that it was not caused by CORS validation.
+
+
+## API Missing Header
+
+<Summary>{`API_MISSING_HEADER`}</Summary>
+
+A request header is required but missing.
+
+
+## API Not Found
+
+<Summary>{`API_NOT_FOUND`}</Summary>
+
+The requested endpoint was not found.
+
+
+## API Rate Limit
+
+<Summary>{`API_RATE_LIMIT`}</Summary>
+
+The user has sent too many requests and has triggered a rate limit.
+
+
+## API Unauthorized
+
+<Summary>{`API_UNAUTHORIZED`}</Summary>
+
+The user is not authorized for the reason given, or the user did not provide a bearer token to authenticate
+with.
+
+A bearer token is a token in the `Authorization` header that follows the form `Authorization: Bearer <token>`.
+The prefix, `"Bearer "`, is required.
+
+
+## Billing Not Enabled
+
+<Summary>{`BILLING_NOT_ENABLED`}</Summary>
+
+Billing is not enabled.
+
+
+## Captcha Failed
+
+<Summary>{`CAPTCHA_CAPTCHA_FAILED`}</Summary>
+
+The captcha response did not pass the given Captcha.
+
+
+## Captcha Invalid
+
+<Summary>{`CAPTCHA_CAPTCHA_INVALID`}</Summary>
+
+The given captcha does not apply to this resource.
+
+
+## Captcha Required
+
+<Summary>{`CAPTCHA_CAPTCHA_REQUIRED`}</Summary>
+
+A captcha was required but not provided in the request.
+
+
+## CDN Invalid Auth User Password
+
+<Summary>{`CDN_INVALID_AUTH_USER_PASSWORD`}</Summary>
+
+The provided auth user password is invalid. This is usually caused by invalid encryption.
+
+
+## CDN Invalid Domain
+
+<Summary>{`CDN_INVALID_DOMAIN`}</Summary>
+
+The provided domain is invalid.
+
+
+## CDN Too Many Auth Users
+
+<Summary>{`CDN_TOO_MANY_AUTH_USERS`}</Summary>
+
+The limit for auth users on a namespace has been reached.
+
+
+## CDN Too Many Domains
+
+<Summary>{`CDN_TOO_MANY_DOMAINS`}</Summary>
+
+The limit for custom domains on a namespace has been reached.
+
+
+## Cloud Invalid Config
+
+<Summary>{`CLOUD_INVALID_CONFIG`}</Summary>
+
+The given config was invalid.
+
+
+## Cloudflare Error
+
+<Summary>{`CLOUDFLARE_ERROR`}</Summary>
+
+An error was returned by a cloudflare API and has been re-routed to this error response.
+
+
+## Cluster Not Found
+
+<Summary>{`CLUSTER_NOT_FOUND`}</Summary>
+
+The requested cluster was not found.
+
+
+## Datacenter Not Found
+
+<Summary>{`CLUSTER_DATACENTER_NOT_FOUND`}</Summary>
+
+The requested datacenter was not found.
+
+
+## Datacenter Not In Cluster
+
+<Summary>{`CLUSTER_DATACENTER_NOT_IN_CLUSTER`}</Summary>
+
+The requested datacenter is not part of the requested cluster.
+
+
+## Device Link Already Complete
+
+<Summary>{`CLOUD_DEVICE_LINK_ALREADY_COMPLETE`}</Summary>
+
+
+
+## Entitlement Expired
+
+<Summary>{`CLAIMS_ENTITLEMENT_EXPIRED`}</Summary>
+
+The requestee's entitlement claims are no longer valid and must be refreshed or recreated.
+
+
+## Failed to consume group invite
+
+<Summary>{`GROUP_FAILED_TO_CONSUME_INVITE`}</Summary>
+
+An attempt to use a group invite failed for an unknown reason.
+
+
+## Feature Disabled
+
+<Summary>{`FEATURE_DISABLED`}</Summary>
+
+A feature required to use/access this resource is disabled.
+
+
+## Game Mode Not Found
+
+<Summary>{`MATCHMAKER_GAME_MODE_NOT_FOUND`}</Summary>
+
+A game mode could not be found for the given game mode label.
+
+
+## Game Not Found
+
+<Summary>{`GAME_NOT_FOUND`}</Summary>
+
+The requested game could not be found.
+
+
+## Generic Token Error
+
+<Summary>{`TOKEN_ERROR`}</Summary>
+
+Placeholder token error that is not yet made into a concrete error.
+
+
+## Glob Invalid
+
+<Summary>{`GLOB_INVALID`}</Summary>
+
+Invalid glob pattern given
+
+
+## Group Already Member
+
+<Summary>{`GROUP_ALREADY_MEMBER`}</Summary>
+
+The identity is already a member of the request/related group.
+
+
+## Group cannot request join
+
+<Summary>{`GROUP_CANNOT_REQUEST_JOIN`}</Summary>
+
+Cannot create a join request for this group. This is usually because the group is of "open" publicity and can
+simply be joined instead.
+
+
+## Group Deactivated
+
+<Summary>{`GROUP_DEACTIVATED`}</Summary>
+
+The developer group has been deactivated. Please [contact support](https://rivet.gg/support) if you believe
+this is a mistake.
+
+# Reason: `NoPaymentMethod`
+
+A developer group requires a payment method for using Rivet services.
+
+How to check your billing info:
+
+1. Visit https://hub.rivet.gg/
+2. Select the game you are experiencing this error with.
+3. Click **Settings** in the top right corner of your game's banner.
+4. Click **Billing** in the left sidebar.
+
+# Reason: `PaymentFailed`
+
+One of the payments made by the developer group has failed. Please view the billing page to investigate
+further.
+
+How to check your billing info:
+
+1. Visit https://hub.rivet.gg/
+2. Select the game you are experiencing this error with.
+3. Click **Settings** in the top right corner of your game's banner.
+4. Click **Billing** in the left sidebar.
+
+If needed, feel free to [contact support](https://rivet.gg/support) for further assistance.
+
+# Reason: `Banned`
+
+The developer group has been banned from using Rivet services. Please
+[contact support](https://rivet.gg/support) if you believe this is a mistake.
+
+# No reason given
+
+If this error did not come with a reason, contact the developer group to let them know you have experienced
+the error.
+
+
+## Group Full
+
+<Summary>{`GROUP_FULL`}</Summary>
+
+The group is full and another member cannot be added.
+
+
+## Group Insufficient Permissions
+
+<Summary>{`GROUP_INSUFFICIENT_PERMISSIONS`}</Summary>
+
+The identity that created this request does not have sufficient permissions in the related group.
+
+
+## Group Invalid Developer Status
+
+<Summary>{`GROUP_ENTERPRISE_RESTRICTION`}</Summary>
+
+The current developer status of the given group prevents this action.
+
+
+## Group invite code already used
+
+<Summary>{`GROUP_INVITE_CODE_ALREADY_USED`}</Summary>
+
+Invite code max use limit reached.
+
+
+## Group invite code expired
+
+<Summary>{`GROUP_INVITE_CODE_EXPIRED`}</Summary>
+
+The given invite code is expired.
+
+
+## Group invite code invalid
+
+<Summary>{`GROUP_INVITE_CODE_INVALID`}</Summary>
+
+The given invite code is invalid.
+
+
+## Group invite code revoked
+
+<Summary>{`GROUP_INVITE_CODE_REVOKED`}</Summary>
+
+The given invite code is revoked.
+
+
+## Group Join Request Already Exists
+
+<Summary>{`GROUP_JOIN_REQUEST_ALREADY_EXISTS`}</Summary>
+
+A group the user is requesting to join already has a join request from that user.
+
+
+## Group Member Banned
+
+<Summary>{`GROUP_MEMBER_BANNED`}</Summary>
+
+The identity that created this request is banned from the related group.
+
+
+## Group Not Found
+
+<Summary>{`GROUP_NOT_FOUND`}</Summary>
+
+A group with the given ID could not be found.
+
+
+## Group Not Joinable
+
+<Summary>{`GROUP_NOT_JOINABLE`}</Summary>
+
+The group attempting to be joined does not allow anyone to join it.
+
+
+## Group Not Member
+
+<Summary>{`GROUP_NOT_MEMBER`}</Summary>
+
+The identity is not a member of the request/related group.
+
+
+## Hostname Taken
+
+<Summary>{`CLOUD_HOSTNAME_TAKEN`}</Summary>
+
+The given hostname has already been taken.
+
+
+## Identity Not Admin
+
+<Summary>{`IDENTITY_NOT_ADMIN`}</Summary>
+
+The identity requesting this endpoint is not an admin.
+
+
+## Identity Not Found
+
+<Summary>{`IDENTITY_NOT_FOUND`}</Summary>
+
+The requested identity does not exist or is not visible to whoever is requesting.
+
+
+## Identity Not Registered
+
+<Summary>{`IDENTITY_NOT_REGISTERED`}</Summary>
+
+The identity that created this request is not registered.
+
+
+## KV Batch Too Large
+
+<Summary>{`KV_BATCH_TOO_LARGE`}</Summary>
+
+Too many keys were provided in the batch. Try providing fewer keys.
+
+
+## KV Entries Missing
+
+<Summary>{`KV_ENTRIES_MISSING`}</Summary>
+
+No entries were passed to the requested KV endpoint.
+
+
+## KV Key Validation Error
+
+<Summary>{`KV_KEY_VALIDATION_ERROR`}</Summary>
+
+A key passed to one of the KV endpoints was invalid.
+
+The maximum length for a key is 512 characters.
+
+
+## KV Keys Missing
+
+<Summary>{`KV_KEYS_MISSING`}</Summary>
+
+No keys were passed to the requested KV endpoint.
+
+
+## KV Value Too Long
+
+<Summary>{`KV_VALUE_TOO_LONG`}</Summary>
+
+The encoded value was longer than 262,144 bytes.
+
+
+## Matchmaker Auto Create Failed
+
+<Summary>{`MATCHMAKER_AUTO_CREATE_FAILED`}</Summary>
+
+Could not find a valid game mode and region pair for automatic lobby creation.
+
+
+## Matchmaker Custom Lobbies Disabled
+
+<Summary>{`MATCHMAKER_CUSTOM_LOBBIES_DISABLED`}</Summary>
+
+Custom lobbies are not allowed for the selected game mode.
+
+
+## Matchmaker Custom Lobby Config Invalid
+
+<Summary>{`MATCHMAKER_CUSTOM_LOBBY_CONFIG_INVALID`}</Summary>
+
+The given custom lobby config is invalid. This is most likely because it exceeds the maximum size limit of
+16KiB.
+
+## Publicity errors
+
+You may encounter an error such as `"public" publicity not allowed with this custom game mode`. This occurs
+when the publicity of the `/create` request is not allowed by the custom game mode config configured for this
+game.
+
+Given this `rivet.yaml`:
+
+```yaml
+matchmaker:
+    game_modes:
+        default:
+            actions:
+                create:
+                    enabled: true
+                    enable_public: false # Optional
+                    enable_private: true # Optional
+```
+
+The following request will not work because `enable_public` is `false`:
+
+```js
+import { RivetClient } from "@rivet-gg/api";
+const RIVET = new RivetClient({ token: addYourTokenHere });
+
+// Make request
+await RIVET.matchmaker.lobbies.create({
+	gameMode: "default",
+	publicity: "public",
+});
+```
+
+Read more about custom game configs [here](https://rivet.gg/docs/matchmaker/guides/custom-games).
+
+
+## Matchmaker Custom Lobby Limit Reached
+
+<Summary>{`MATCHMAKER_CUSTOM_LOBBY_LIMIT_REACHED`}</Summary>
+
+User cannot create any more custom lobbies.
+
+
+## Matchmaker Dynamic Max Players Disabled
+
+<Summary>{`MATCHMAKER_DYNAMIC_MAX_PLAYERS_DISABLED`}</Summary>
+
+Dynamic max player count is not enabled for the given game mode.
+
+
+## Matchmaker Dynamic Max Players Invalid
+
+<Summary>{`MATCHMAKER_DYNAMIC_MAX_PLAYERS_INVALID`}</Summary>
+
+The given max player count is invalid for the given game mode. This is usually because the player count is
+below 1 or above the maximum specified in the game mode config.
+
+
+## Matchmaker Find Disabled
+
+<Summary>{`MATCHMAKER_FIND_DISABLED`}</Summary>
+
+The find endpoint has been disabled by the developer.
+
+
+## Matchmaker Identity Required
+
+<Summary>{`MATCHMAKER_IDENTITY_REQUIRED`}</Summary>
+
+This resource can not be accessed without an identity.
+
+If you are a developer seeing this error, make sure your API calls to matchmaker endpoints include a bearer
+token with game user entitlements.
+
+
+## Matchmaker Invalid Version Config
+
+<Summary>{`MATCHMAKER_INVALID_VERSION_CONFIG`}</Summary>
+
+The given version config was invalid.
+
+
+## Matchmaker Join Disabled
+
+<Summary>{`MATCHMAKER_JOIN_DISABLED`}</Summary>
+
+The join endpoint has been disabled by the developer.
+
+
+## Matchmaker Lobby Closed
+
+<Summary>{`MATCHMAKER_LOBBY_CLOSED`}</Summary>
+
+The given lobby is not accepting new players.
+
+Look for any unexpected requests made to `PUT /matchmaker/lobbies/closed`.
+
+
+## Matchmaker Lobby Full
+
+<Summary>{`MATCHMAKER_LOBBY_FULL`}</Summary>
+
+The given lobby is full.
+
+If desired, you can increase the player limit independently for players joining with a direct link and players
+joining as members of a party in the matchmaker configuration.
+
+
+## Matchmaker Lobby Not Found
+
+<Summary>{`MATCHMAKER_LOBBY_NOT_FOUND`}</Summary>
+
+A lobby could not be found for the direct seek request.
+
+Check that the lobby ID is valid.
+
+
+## Matchmaker Lobby Not Started
+
+<Summary>{`MATCHMAKER_LOBBY_NOT_STARTED`}</Summary>
+
+A lobby has not started so this operation could not be completed yet.
+
+
+## Matchmaker Lobby Stopped
+
+<Summary>{`MATCHMAKER_LOBBY_STOPPED`}</Summary>
+
+The given lobby has been stopped.
+
+
+## Matchmaker No Available Lobbies
+
+<Summary>{`MATCHMAKER_NO_AVAILABLE_LOBBIES`}</Summary>
+
+No lobbies could be found for the given lobby group.
+
+If you want to automatically create a new lobby when no lobbies are found, check that
+`prevent_auto_create_lobby` is not set.
+
+
+## Matchmaker No Game Mode Provided
+
+<Summary>{`MATCHMAKER_NO_GAME_MODE_PROVIDED`}</Summary>
+
+No game modes provided in request. Must have at least one game mode.
+
+
+## Matchmaker Player Already Connected
+
+<Summary>{`MATCHMAKER_PLAYER_ALREADY_CONNECTED`}</Summary>
+
+The player has already connected to a server and cannot be connected again.
+
+If you need to let a player reconnect to a server, create a new player by joining the same lobby directly with
+`JoinLobby`.
+
+
+## Matchmaker Player In Different Lobby
+
+<Summary>{`MATCHMAKER_PLAYER_IN_DIFFERENT_LOBBY`}</Summary>
+
+The player is in a different lobby.
+
+
+## Matchmaker Player Registration Expired
+
+<Summary>{`MATCHMAKER_PLAYER_REGISTRATION_EXPIRED`}</Summary>
+
+The player took too long to connect to the server.
+
+When this happens, the matchmaker releases the spot that was reserved for the player for someone else to use.
+
+
+## Matchmaker Player Removed
+
+<Summary>{`MATCHMAKER_PLAYER_REMOVED`}</Summary>
+
+Attempted an operation on a player that has already been removed from the lobby.
+
+
+## Matchmaker Region Not Enabled For Game Mode
+
+<Summary>{`MATCHMAKER_REGION_NOT_ENABLED_FOR_GAME_MODE`}</Summary>
+
+The region is not enabled for the game mode.
+
+Check that the provided region is enabled for the game mode in the game mode configuration on the Rivet
+dashboard.
+
+
+## Matchmaker Region Not Found
+
+<Summary>{`MATCHMAKER_REGION_NOT_FOUND`}</Summary>
+
+The region(s) provided were not found.
+
+
+## Matchmaker Registration Required
+
+<Summary>{`MATCHMAKER_REGISTRATION_REQUIRED`}</Summary>
+
+This resource can not be accessed without a registered identity.
+
+If you are a developer seeing this error, make sure your API calls to matchmaker endpoints include a bearer
+token with game user entitlements, and the given game user is registered on Rivet.
+
+
+## Matchmaker Tag Name Too Long
+
+<Summary>{`MATCHMAKER_TAG_NAME_TOO_LONG`}</Summary>
+
+A given tag name was too long. Maximum length 128.
+
+
+## Matchmaker Tag Too Long
+
+<Summary>{`MATCHMAKER_TAG_TOO_LONG`}</Summary>
+
+A given tag was too long. Maximum length 512.
+
+
+## Matchmaker Tags Disabled
+
+<Summary>{`MATCHMAKER_TAGS_DISABLED`}</Summary>
+
+Tags are not allowed with the given game mode. They must be enabled in the version config.
+
+
+## Matchmaker Too Many Lobbies
+
+<Summary>{`MATCHMAKER_TOO_MANY_LOBBIES`}</Summary>
+
+The maximum lobby count has been reached and no more lobbies can be created.
+
+Increase your maximum lobby count in the namespace config on the Rivet dashboard.
+
+
+## Matchmaker Too Many Players From Source
+
+<Summary>{`MATCHMAKER_TOO_MANY_PLAYERS_FROM_SOURCE`}</Summary>
+
+There are too many players given from the given source IP.
+
+To increase this value, change the maximum players per IP in your namespace configuration in the Rivet
+dashboard.
+
+
+## Matchmaker Too Many Tags
+
+<Summary>{`MATCHMAKER_TOO_MANY_TAGS`}</Summary>
+
+Too many lobby tags provided. Maximum 8.
+
+
+## Matchmaker Verification Failed
+
+<Summary>{`MATCHMAKER_VERIFICATION_FAILED`}</Summary>
+
+The user did not pass external matchmaker verification.
+
+
+## Matchmaker Verification Request Failed
+
+<Summary>{`MATCHMAKER_VERIFICATION_REQUEST_FAILED`}</Summary>
+
+The external matchmaker verification system failed or returned an invalid response. This is not an error that
+has been caused by the user.
+
+If you are a developer seeing this error, check to see if your external matchmaker verification server is
+correctly responding to Rivet's requests.
+
+
+## Missing Entitlement
+
+<Summary>{`CLAIMS_MISSING_ENTITLEMENT`}</Summary>
+
+A required entitlement claim is missing.
+
+
+## Multiple Server Port Routers
+
+<Summary>{`SERVERS_MULTIPLE_PORT_ROUTERS`}</Summary>
+
+Multiple server port routers were provided.
+
+
+## Multiple Server Runtimes
+
+<Summary>{`SERVERS_MULTIPLE_RUNTIMES`}</Summary>
+
+Multiple server runtimes were provided.
+
+
+## Must Specify Routing Type
+
+<Summary>{`SERVERS_MUST_SPECIFY_ROUTING_TYPE`}</Summary>
+
+Must specify either `game_guard` or `host` routing type.
+
+
+
+## No Port Routers
+
+<Summary>{`SERVERS_NO_PORT_ROUTERS`}</Summary>
+
+No port routers were provided.
+
+
+## No Server Runtime
+
+<Summary>{`SERVERS_NO_RUNTIME`}</Summary>
+
+No server runtime were provided.
+
+
+## NSFW Content Detected in Upload
+
+<Summary>{`UPLOAD_NSFW_CONTENT_DETECTED`}</Summary>
+
+NSFW content was detected in the uploaded content.
+
+
+## OpenGB Environment Not Found
+
+<Summary>{`OPENGB_ENV_NOT_FOUND`}</Summary>
+
+The requested environment could not be found.
+
+
+## OpenGB Environment Update Failed
+
+<Summary>{`OPENGB_ENV_UPDATE_FAILED`}</Summary>
+
+The environment could not be updated for the provided reason.
+
+
+## OpenGB Invalid Neon Project Config
+
+<Summary>{`OPENGB_INVALID_NEON_PROJECT_CONFIG`}</Summary>
+
+The Neon project config given was invalid. See https://api-docs.neon.tech/reference/updateproject for more
+info.
+
+
+## OpenGB Invalid Variable
+
+<Summary>{`OPENGB_INVALID_VARIABLE`}</Summary>
+
+A provided environment variable is invalid.
+
+
+## OpenGB Module DB Not Found
+
+<Summary>{`OPENGB_MODULE_DB_NOT_FOUND`}</Summary>
+
+The requested module database could not be found.
+
+
+## OpenGB Project Not Found
+
+<Summary>{`OPENGB_PROJECT_NOT_FOUND`}</Summary>
+
+The requested project could not be found.
+
+
+## Refresh Token Not Found
+
+<Summary>{`TOKEN_REFRESH_NOT_FOUND`}</Summary>
+
+The refresh token could not be found.
+
+
+## Script Not Found
+
+<Summary>{`CLI_SCRIPT_NOT_FOUND`}</Summary>
+
+Add the script under the `scripts` config in rivet.yaml.
+
+
+## Server Not Found
+
+<Summary>{`SERVERS_SERVER_NOT_FOUND`}</Summary>
+
+Server not found for the given ID.
+
+
+## Token Exchange Failed
+
+<Summary>{`TOKEN_EXCHANGE_FAILED`}</Summary>
+
+The given token could not be exchanged.
+
+
+## Token Expired
+
+<Summary>{`TOKEN_EXPIRED`}</Summary>
+
+The given token has expired and can no longer be used.
+
+
+## Token Invalid
+
+<Summary>{`TOKEN_INVALID`}</Summary>
+
+The given token could not be parsed.
+
+## Token is invalid: invalid signature
+
+The given token does not match the official Rivet signature for signing tokens. If you are using the Rivet
+CLI, ensure that the token you are using belongs to the same cluster that it was created from.
+
+## Token is invalid: invalid separator count
+
+The given token has an invalid amount of separators (`.`). Inspect your token to make sure it has either 2 or
+3 segments separated by `.`'s. This can be caused by improperly copying and pasting the token when using it.
+
+## Token is invalid: invalid algorithm
+
+The algorithm specified in the token is not allowed by Rivet. This likely signified a breaking change with how
+tokens are parsed and should never show up.
+
+
+
+## Token structure
+
+A token will look something like this:
+
+`label.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+
+where every `x` is a random base64 valid character.
+
+The label has no functionality and only serves to differentiate tokens easily for the user. It and the
+following `.` are optional.
+
+
+## Token Revoked
+
+<Summary>{`TOKEN_REVOKED`}</Summary>
+
+The token is consumed or revoked.
+
+This may be because the token has been manually revoked or already used to refresh another token.
+
+
+## Too Many Pending Hostnames
+
+<Summary>{`CLOUD_TOO_MANY_PENDING_HOSTNAMES_FOR_GROUP`}</Summary>
+
+The limit for pending hostnames for the given group has been reached. Please wait until they have been
+resolved before attempting to add another hostname.
+
+
+## Unsupported Host Protocol
+
+<Summary>{`SERVERS_UNSUPPORTED_HOST_PROTOCOL`}</Summary>
+
+Host protocol must use the TCP or UDP protocol.
+
+
+
+## Upload Invalid
+
+<Summary>{`UPLOAD_INVALID`}</Summary>
+
+Upload is invalid.
+
+
+## Upload Too Large
+
+<Summary>{`UPLOAD_TOO_LARGE`}</Summary>
+
+The given upload was too large.
+
+
+## UUID Invalid
+
+<Summary>{`UUID_INVALID`}</Summary>
+
+An invalid UUID was provided and could not be parsed.
+
+
+## Validation Error
+
+<Summary>{`VALIDATION_ERROR`}</Summary>
+
+The given resource did not pass validation and was rejected.
+
+
+## Wrong Identity
+
+<Summary>{`IDENTITY_WRONG_IDENTITY`}</Summary>
+
+The given resource is not available for the current identity.

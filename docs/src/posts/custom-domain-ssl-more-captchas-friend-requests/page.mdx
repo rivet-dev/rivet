@@ -1,0 +1,84 @@
+export const author = 'nathan-flurry'
+export const published = '2021-01-16'
+export const category = 'changelog'
+export const keywords = ['colyseus', 'multiplayer', 'javascript']
+
+# Custom domain SSL, more captchas, friend requests, and more
+
+Custom SSL certificates is now provided for custom domains, Cloudflare Turnstile can now be used for matchmaker captcha, registration emails sent to users now match the style of the game they're coming from
+
+## Matchmaker
+
+### Added
+
+- Cloudflare Turnstile can now be used for matchmaker captchas which can be faster and more accurate than Hcaptcha
+- Matchmaker endpoints will mock the configured regions with fake servers when using development tokens
+
+‍
+
+## CDN
+
+### Added
+
+- Custom SSL certificates and automatic DDoS protection is now provided for custom domains
+- Custom domains now require a verification process
+
+‍
+
+## Identities
+
+### Added
+
+- Registration emails sent to users now match the style of the game they're coming from
+- Recent followers endpoint shows identities who recently followed the current identity, useful for building a "friend request" system
+- Identity followers and following can be listed
+- Identity profiles include follower and following count
+
+### Changed
+
+- Searching for users is now blazing fast
+
+### Fixed
+
+- Users now go offline within 60 seconds if the client does not explicitly change the status when the user leave
+- Improved performance of identity-related _GET_ endpoints
+- Identities sometimes wrongly showed as following the current identity
+
+‍
+
+## Groups
+
+### Added
+
+- Identities can be kicked from groups
+- Identities can  be banned from groups
+- Group join requests can be listed from a separate endpoint with pagination
+- Group members can be listed from a separate endpoint with pagination
+
+### Changed
+
+- Searching for groups is now blazing fast
+
+### Deprecated
+
+- _rivet.group#GroupProfile$join_requests_
+- _rivet.group#GroupProfile$members_
+
+‍
+
+## Developer Dashboard
+
+### Added
+
+- Versions are now grouped in to folders by month
+
+‍
+
+## Misc
+
+### Changed
+
+- Improved upload speeds for uploads with 10,000+ files, such as large CDN sites
+
+‍
+

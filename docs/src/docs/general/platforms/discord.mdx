@@ -1,0 +1,61 @@
+# Discord Activities
+
+Integrate your Rivet game with [Discord Activities](https://discord.com/developers/docs/activities/overview).
+
+<Steps>
+<Step title="Set up Discord SDK">
+Set up the Discord SDK ([docs](https://discord.com/developers/docs/activities/building-an-activity#step-3-installing-the-embedded-app-sdk)):
+
+```js
+// Import the SDK
+import { DiscordSDK } from "@discord/embedded-app-sdk";
+
+// Instantiate the SDK 
+const discordSdk = new DiscordSDK(process.env.DISCORD_CLIENT_ID);
+
+setupDiscordSdk().then(() => {
+    console.log("Discord SDK is ready");
+});
+
+async function setupDiscordSdk() {
+    await discordSdk.ready();
+}
+```
+</Step>
+
+<Step title="Update lobbies code">
+Update your Rivet matchmaking code to include tags:
+```js
+const res = await rivet.lobbies.findOrCreate({
+    tags: {
+        // Discord SDK set up in previous step
+        instanceId: discordSdk.instanceId,
+    },
+    // ...
+});
+```
+</Step>
+
+<Step title="Set up route mapping">
+After following the [activity tutorial](https://discord.com/developers/docs/activities/building-an-activity), access the [URL mapping](https://discord.com/developers/docs/activities/development-guides#url-mapping) for your Discord app and configure it like so:
+
+| Prefix | Target |
+|--------|--------|
+| /gstatic | fonts.gstatic.com/ |
+| /ws | lobby.rivet.run/ |
+| /api | api.rivet.gg/ |
+| / | asteroids-xxx.rivet.game/ |
+
+<Note>
+    The URL used for the "Root Mapping" will be printed in the console when you deploy to Rivet via `rivet deploy`.
+</Note>
+</Step>
+
+<Step title="Run activity">
+Run activity (read docs [here](https://discord.com/developers/docs/activities/building-an-activity#step-4-running-your-app-locally-in-discord))
+</Step>
+</Steps>
+
+## Example repo
+
+A fully integrated example can be found [here](https://github.com/rivet-gg/discord-embedded-app-sdk/tree/main/examples/asteroids-rivet). (This is using a slightly dated API, but is lagely identical.)

@@ -1,0 +1,52 @@
+export const author = 'nicholas-kissel'
+export const published = '2023-08-28'
+export const category = 'monthly-update'
+export const keywords = ['monthly-update', 'unity', 'lobbies', 'verification', 'state', 'java', 'go']
+
+# August 2023 Monthly Update
+
+Unity support, custom lobbies, external verification, lobby state, faster starts, Java/Go clients
+
+
+We are excited to launch a ton of new features during the month of August. First though, we want to thank you all for your support on Hacker News with our [Show HN post](https://github.com/rivet-gg/rivet) on our open-source game server management and over 1200 Github stars in less than a week.
+
+## Unity
+
+Rivet finally supports Unity, the last major game engine we wanted to support in our lineup. Rivet now supports all major engines: Unity, Unreal, Godot, and HTML5; and will support more engines in the future.
+
+[Unity FishNet Demo Game](https://github.com/rivet-gg/example-tanks-unity-fishnet)
+
+We're working on publishing a richer plugin experience & examples using Mirror, NGO, Photon, and more.
+
+## Custom Lobbies
+
+The matchmaker now supports the ability to create custom lobbies for your game, solving the issue of private game modes, mini-games, UGC content, or other unique game server functionality.
+
+[Custom Lobbies Guide](/docs/matchmaker/guides/custom-games)
+
+## External Verification
+
+You can now use your own logic to allow and reject matchmaking requests. This is helpful for custom account systems, internal anti-botting mechanisms, and restricting users from joining private game servers.
+
+[External Verification Guide](/docs/matchmaker/guides/anti-botting#custom-external-verification)
+
+## Lobby State
+
+Lobbies can now broadcast their state to the matchmaker API. This is helpful for games like battle royale games that broadcast the players remaining or any other game that wants to publish the game's progress.
+
+This state can be updated with [lobbies.setState](/docs/matchmaker/api/lobbies/set-state) and read using [lobbies.getState](/docs/matchmaker/api/lobbies/get-state) or [lobbies.list](/docs/matchmaker/api/lobbies/list).
+
+## Faster cold starts
+
+Game servers launch faster now from around 12s to around 3s for Unity. This greatly reduces the wait time for gamers waiting to join and the ability for Rivet to quickly scale during surge periods.
+
+## Java and Go clients
+
+Run game servers on Rivet can now use our official Java and Go clients. We can't wait to see games built with engines like Java's [LibGDX](https://libgdx.com/) and Go's [Ebitengine](https://ebitengine.org/).
+
+## Open-source improvements
+
+* Support for multiple file providers including S3, Backblaze, MinIO
+* Support for multipart uploads
+
+

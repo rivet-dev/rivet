@@ -1,5 +1,0 @@
-# Design
-
-## Hierarchy
-
-TODO

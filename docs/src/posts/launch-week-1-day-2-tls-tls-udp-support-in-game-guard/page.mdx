@@ -1,0 +1,45 @@
+import versionConfig from './version-config.png';
+
+export const author ='nathan-flurry'
+export const published = '2023-03-21'
+export const category = 'launch-week'
+export const keywords = ['game-guard', 'tcp', 'tls', 'udp']
+
+# Launch Week 1, Day 2: TLS+TLS & UDP support in Game Guard
+
+Use Game Guard for TCP+TLS & UDP sockets to protect from DDoS traffic and handle TLS termination
+
+
+
+Competitive multiplayer games frequently use UDP sockets and many casual games rely on TCP sockets so they don't have to worry about packet loss.
+
+Previously, Rivet Game Guard supported proxying WebSocket traffic. Starting today, Game Guard also proxies TCP+TLS & UDP traffic out of the box using the same, easy-to-use APIs provided out of the box.
+
+This provides DDoS mitigation out of the box to your game sockets no matter the protocol you use.
+
+‍
+
+## LS support
+
+Additionally, Rivet Game Guard enhances TCP socket security with automatic SSL/TLS termination [here](/docs/dynamic-servers/concepts/game-guard#ssl-tls-termination). Now you can get the benefits of TLS certificates without the hassle of frequently updating them.
+
+‍
+
+## What about **[**WebRTC**](https://webrtc.org/)**, **[**ENet**](http://sauerbraten.org/enet/)**, and **[**KCP**](https://github.com/skywind3000/kcp/blob/master/README.en.md)**?**
+
+These protocols are also supported by Game Guard, since these protocols are all built on top of TCP & UDP under the hood.
+
+‍
+
+## How do I add support?
+
+Adding TCP+TLS & UDP support is as easy as setting _protocol_ to _udp_, _tcp_tls_, or _tcp_.
+
+‍
+
+<Image src={versionConfig} alt='Version config' />
+
+‍
+
+Learn more about all of Rivet's supported protocols [here](/docs/dynamic-servers/concepts/protocols).
+
