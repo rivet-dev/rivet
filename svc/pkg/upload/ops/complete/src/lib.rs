@@ -142,7 +142,7 @@ async fn validate_profanity_scores(
 				.bucket(s3_client.bucket())
 				.key(key)
 				.presigned(
-					s3_util::aws_sdk_s3::presigning::config::PresigningConfig::builder()
+					s3_util::aws_sdk_s3::presigning::PresigningConfig::builder()
 						.expires_in(std::time::Duration::from_secs(5 * 60))
 						.build()?,
 				)
@@ -229,7 +229,7 @@ async fn validate_files(
 					.upload_id(multipart_upload_id.clone())
 					.send()
 					.await?;
-				let parts = unwrap!(parts_res.parts());
+				let parts = parts_res.parts();
 
 				s3_client
 					.complete_multipart_upload()
@@ -237,13 +237,13 @@ async fn validate_files(
 					.key(format!("{}/{}", upload_id, file_row.path))
 					.upload_id(multipart_upload_id)
 					.multipart_upload(
-						s3_util::aws_sdk_s3::model::CompletedMultipartUpload::builder()
+						s3_util::aws_sdk_s3::types::CompletedMultipartUpload::builder()
 							.set_parts(Some(parts.iter().map(|part| {
-								s3_util::aws_sdk_s3::model::CompletedPart::builder()
-									.part_number(part.part_number())
+								Ok(s3_util::aws_sdk_s3::types::CompletedPart::builder()
+									.part_number(unwrap!(part.part_number()))
 									.set_e_tag(part.e_tag().map(|s| s.to_owned()))
 									.build()
-							}).collect::<Vec<_>>()))
+							)}).collect::<GlobalResult<Vec<_>>>()?))
 							.build()
 					)
 					.send()
@@ -279,7 +279,7 @@ async fn validate_files(
 			// we validate it regardless
 			ensure_eq!(
 				file_row.content_length,
-				head_obj.content_length,
+				unwrap!(head_obj.content_length),
 				"incorrect content length"
 			);
 

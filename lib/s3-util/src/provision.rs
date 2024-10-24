@@ -1,4 +1,4 @@
-use aws_sdk_s3::error::{CreateBucketError, CreateBucketErrorKind};
+use aws_sdk_s3::operation::create_bucket::CreateBucketError;
 
 use crate::{Client, ClientError, S3Bucket};
 
@@ -36,11 +36,8 @@ pub async fn provision(
 		match client.create_bucket().bucket(&bucket_name).send().await {
 			Ok(_) => tracing::info!(bucket = ?bucket_name, "bucket created"),
 			Err(err) => {
-				if let aws_sdk_s3::types::SdkError::ServiceError(service_err) = &err {
-					if let CreateBucketError {
-						kind: CreateBucketErrorKind::BucketAlreadyOwnedByYou(_),
-						..
-					} = service_err.err()
+				if let aws_sdk_s3::error::SdkError::ServiceError(service_err) = &err {
+					if let CreateBucketError::BucketAlreadyOwnedByYou(_) = service_err.err()
 					{
 						tracing::info!(bucket = ?bucket_name, "bucket already exists");
 						continue;

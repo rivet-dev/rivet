@@ -52,15 +52,17 @@ impl Client {
 		secret_access_key: &str,
 	) -> Result<Self, ClientError> {
 		let config = aws_sdk_s3::Config::builder()
-			.region(aws_sdk_s3::Region::new(region.to_owned()))
-			.endpoint_resolver(aws_sdk_s3::Endpoint::immutable(endpoint)?)
-			.credentials_provider(aws_sdk_s3::Credentials::new(
+			.region(aws_sdk_s3::config::Region::new(region.to_owned()))
+			.endpoint_url(endpoint)
+			.force_path_style(true)
+			.credentials_provider(aws_sdk_s3::config::Credentials::new(
 				access_key_id,
 				secret_access_key,
 				None,
 				None,
 				"Static",
 			))
+			.behavior_version(aws_sdk_s3::config::BehaviorVersion::v2024_03_28())
 			// .sleep_impl(Arc::new(aws_smithy_async::rt::sleep::TokioSleep::new()))
 			.build();
 		let client = aws_sdk_s3::Client::from_conf(config);

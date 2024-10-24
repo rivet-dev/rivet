@@ -222,7 +222,7 @@ async fn handle_upload(
 		}
 		let presigned_upload_req = put_obj_builder
 			.presigned(
-				s3_util::aws_sdk_s3::presigning::config::PresigningConfig::builder()
+				s3_util::aws_sdk_s3::presigning::PresigningConfig::builder()
 					.expires_in(Duration::from_secs(60 * 60))
 					.build()?,
 			)
@@ -295,7 +295,7 @@ async fn handle_multipart_upload(
 
 				let presigned_upload_req = upload_part_builder
 					.presigned(
-						s3_util::aws_sdk_s3::presigning::config::PresigningConfig::builder()
+						s3_util::aws_sdk_s3::presigning::PresigningConfig::builder()
 							.expires_in(Duration::from_secs(60 * 60 * 6))
 							.build()?,
 					)

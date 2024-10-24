@@ -105,7 +105,7 @@ pub async fn export_history(
 		.bucket(s3_client.bucket())
 		.key(format!("{upload_id}/export.csv"))
 		.presigned(
-			s3_util::aws_sdk_s3::presigning::config::PresigningConfig::builder()
+			s3_util::aws_sdk_s3::presigning::PresigningConfig::builder()
 				.expires_in(Duration::from_secs(60 * 60))
 				.build()?,
 		)
@@ -309,7 +309,7 @@ pub async fn export_lobby_logs(
 		.bucket(s3_client.bucket())
 		.key(format!("{upload_id}/{filename}"))
 		.presigned(
-			s3_util::aws_sdk_s3::presigning::config::PresigningConfig::builder()
+			s3_util::aws_sdk_s3::presigning::PresigningConfig::builder()
 				.expires_in(Duration::from_secs(60 * 60))
 				.build()?,
 		)

@@ -348,7 +348,7 @@ pub(crate) async fn resolve_image_artifact_url(
 				.bucket(s3_client.bucket())
 				.key(format!("{upload_id}/{build_file_name}"))
 				.presigned(
-					s3_util::aws_sdk_s3::presigning::config::PresigningConfig::builder()
+					s3_util::aws_sdk_s3::presigning::PresigningConfig::builder()
 						.expires_in(std::time::Duration::from_secs(15 * 60))
 						.build()?,
 				)

@@ -86,30 +86,34 @@ async fn worker(ctx: &OperationContext<upload::msg::delete::Message>) -> GlobalR
 		.collect::<HashMap<_, _>>();
 	tracing::info!(deletions=?counts, "deleting");
 
-	// Execute batch deletions per bucket
-	futures_util::stream::iter(deletions)
+	let deletions = deletions
+		.into_iter()
 		.map(|(_, deletion)| {
-			let delete = s3_util::aws_sdk_s3::model::Delete::builder()
+			let delete = s3_util::aws_sdk_s3::types::Delete::builder()
 				.set_objects(Some(
 					deletion
 						.keys
 						.iter()
 						.map(|key| {
-							s3_util::aws_sdk_s3::model::ObjectIdentifier::builder()
+							s3_util::aws_sdk_s3::types::ObjectIdentifier::builder()
 								.key(key)
 								.build()
 						})
-						.collect::<Vec<_>>(),
+						.collect::<Result<Vec<_>, _>>()?,
 				))
-				.build();
+				.build()?;
 
-			deletion
+			Ok(deletion
 				.client
 				.delete_objects()
 				.bucket(deletion.client.bucket())
 				.delete(delete)
-				.send()
+				.send())
 		})
+		.collect::<GlobalResult<Vec<_>>>()?;
+
+	// Execute batch deletions per bucket
+	futures_util::stream::iter(deletions)
 		.buffer_unordered(32)
 		.try_collect::<Vec<_>>()
 		.await?;

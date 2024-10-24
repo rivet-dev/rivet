@@ -1,3 +1,5 @@
+use std::{collections::HashMap, path::PathBuf};
+
 use global_error::prelude::*;
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -85,6 +87,10 @@ pub struct Rivet {
 	#[serde(default)]
 	pub backend: Option<Backend>,
 
+	/// Configuration for test builds.
+	#[serde(default)]
+	pub test_builds: HashMap<String, TestBuild>,
+
 	/// Deprecated: Configuration for job running.
 	#[serde(default)]
 	pub job_run: Option<JobRun>,
@@ -113,6 +119,7 @@ impl Default for Rivet {
 			pegboard: Pegboard::default(),
 			job_run: None,
 			auth: Auth::default(),
+			token: Tokens::default(),
 			api: Api::default(),
 			api_internal: ApiInternal::default(),
 			metrics: Metrics::default(),
@@ -122,7 +129,7 @@ impl Default for Rivet {
 			dns: None,
 			billing: None,
 			backend: None,
-			token: Tokens::default(),
+			test_builds: Default::default(),
 			profanity_filter_disable: false,
 			upload_nsfw_check_enabled: false,
 			upload_nsfw_error_verbose: false,
@@ -180,6 +187,15 @@ pub struct Billing {
 pub struct Backend {
 	/// Base domain serving the backend endpoints.
 	pub base_domain: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct TestBuild {
+	/// Image tag.
+	pub tag: String,
+	/// S3 key.
+	pub key: PathBuf,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

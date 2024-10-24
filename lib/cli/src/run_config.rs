@@ -321,25 +321,25 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 	];
 
 	let s3_buckets = vec![
-		S3Bucket { name: "build" },
-		S3Bucket { name: "cdn" },
-		S3Bucket { name: "export" },
-		S3Bucket { name: "banner" },
-		S3Bucket { name: "logo" },
-		S3Bucket { name: "artifacts" },
-		S3Bucket { name: "export" },
-		S3Bucket { name: "log" },
+		S3Bucket { name: "bucket-build" },
+		S3Bucket { name: "bucket-cdn" },
+		S3Bucket { name: "bucket-export" },
+		S3Bucket { name: "bucket-banner" },
+		S3Bucket { name: "bucket-logo" },
+		S3Bucket { name: "bucket-artifacts" },
+		S3Bucket { name: "bucket-export" },
+		S3Bucket { name: "bucket-log" },
 		S3Bucket {
-			name: "imagor-result-storage",
+			name: "bucket-imagor-result-storage",
 		},
-		S3Bucket { name: "svc-build" },
+		S3Bucket { name: "bucket-svc-build" },
 		S3Bucket {
-			name: "lobby-history-export",
+			name: "bucket-lobby-history-export",
 		},
-		S3Bucket { name: "log" },
-		S3Bucket { name: "avatar" },
-		S3Bucket { name: "billing" },
-		S3Bucket { name: "avatar" },
+		S3Bucket { name: "bucket-log" },
+		S3Bucket { name: "bucket-avatar" },
+		S3Bucket { name: "bucket-billing" },
+		S3Bucket { name: "bucket-avatar" },
 	];
 
 	Ok(RunConfigData {
