@@ -37,18 +37,32 @@ pub struct __RouterConfig {
 #[doc(hidden)]
 impl __RouterConfig {
 	pub fn new(config: &rivet_config::Config, uri: &hyper::Uri) -> GlobalResult<Self> {
+		// NOTE: We do not use `Url::join` because it normalizes paths
 		// This url doesn't actually represent the url of the request, it's just put here so that the
 		// URI can be parsed by url::Url::parse
-		let url = format!("{}{}", config.server()?.rivet.api.public_origin, uri);
+		let url = format!(
+			"{}{}",
+			config
+				.server()?
+				.rivet
+				.api
+				.public_origin
+				.to_string()
+				.trim_end_matches('/'),
+			uri,
+		);
 		let route = url::Url::parse(url.as_str())?;
 
 		Ok(__RouterConfig {
 			route: route.clone(),
 			path_segments: route
 				.path_segments()
+				.into_iter()
+				.flatten()
+				.map(ToString::to_string)
 				// Store it backwards for more efficient `pop`ing
-				.map(|ps| ps.rev().map(ToString::to_string).collect::<Vec<_>>())
-				.unwrap_or_default(),
+				.rev()
+				.collect::<Vec<_>>(),
 			prefix: None,
 		})
 	}

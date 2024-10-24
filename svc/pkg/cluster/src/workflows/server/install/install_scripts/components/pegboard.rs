@@ -20,7 +20,7 @@ pub async fn install(config: &rivet_config::Config) -> GlobalResult<String> {
 	.to_string();
 
 	Ok(include_str!("../files/pegboard_install.sh")
-		.replace("__MANAGER_BINARY_URL__", &manager_binary_url)
+		.replace("__PEGBOARD_MANAGER_BINARY_URL__", &manager_binary_url)
 		.replace(
 			"__CONTAINER_RUNNER_BINARY_URL__",
 			&container_runner_binary_url,
