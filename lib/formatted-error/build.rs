@@ -36,8 +36,6 @@ impl Ctx {
 fn main() -> std::io::Result<()> {
 	let error_registry_path = {
 		let mut path = std::env::current_dir()?;
-		path.pop();
-		path.pop();
 		path.push("errors");
 		path
 	};
