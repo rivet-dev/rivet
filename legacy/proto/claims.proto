@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package rivet.claims;
 
-import "proto/common.proto";
-import "proto/backend/matchmaker.proto";
+import "legacy/proto/common.proto";
+import "legacy/proto/backend/matchmaker.proto";
 
 message Entitlement {
 	// Can issue a new token for a given session.

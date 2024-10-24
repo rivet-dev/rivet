@@ -3,8 +3,8 @@ syntax = "proto3";
 package rivet.backend.pkg.ds_log.read;
 
 import "google/protobuf/empty.proto";
-import "proto/backend/ds/log.proto";
-import "proto/common.proto";
+import "legacy/proto/backend/ds/log.proto";
+import "legacy/proto/common.proto";
 
 message Request {
 	message NtsRangeQuery {

@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package rivet.backend.pkg.mm.msg.lobby_create_fail;
 
-import "proto/common.proto";
-import "proto/chirp.proto";
+import "legacy/proto/common.proto";
+import "legacy/proto/chirp.proto";
 
 enum ErrorCode {
 	UNKNOWN = 0;

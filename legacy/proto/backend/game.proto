@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package rivet.backend.game;
 
-import "proto/common.proto";
-import "proto/backend/upload.proto";
+import "legacy/proto/common.proto";
+import "legacy/proto/backend/upload.proto";
 
 message Game {
 	rivet.common.Uuid game_id = 1;

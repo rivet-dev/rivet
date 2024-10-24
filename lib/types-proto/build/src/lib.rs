@@ -20,6 +20,7 @@ where
 {
 	let project_roots = seek_project_roots()?;
 	let main_project_root = &project_roots[0];
+	let proto_path = main_project_root.join("legacy").join("proto");
 	let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
 
 	let mut input_paths = Vec::new();
@@ -27,12 +28,9 @@ where
 	// Add common proto from root of project
 	//
 	// This will be symlinked if there are multiple roots
-	println!(
-		"cargo:rerun-if-changed={}",
-		main_project_root.join("proto").display()
-	);
-	if main_project_root.join("proto").is_dir() {
-		let paths = find_all_proto(&main_project_root.join("proto"))?;
+	println!("cargo:rerun-if-changed={}", proto_path.display());
+	if proto_path.is_dir() {
+		let paths = find_all_proto(&proto_path)?;
 		input_paths.extend(paths);
 	};
 
@@ -101,25 +99,25 @@ fn update_compile_opts(mut base: schemac::CompileOpts) -> io::Result<schemac::Co
 }
 
 fn seek_project_roots() -> io::Result<Vec<PathBuf>> {
-    let mut current_dir = std::env::current_dir()?;
-    loop {
-        if current_dir.join("Cargo.toml").exists() {
-            // Check if this Cargo.toml is a workspace root
-            let cargo_toml = std::fs::read_to_string(current_dir.join("Cargo.toml"))?;
-            if cargo_toml.contains("[workspace]") {
-                return Ok(vec![current_dir]);
-            }
-        }
-        
-        if let Some(parent) = current_dir.parent() {
-            current_dir = parent.to_owned();
-        } else {
-            return Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                "Could not find workspace Cargo.toml",
-            ));
-        }
-    }
+	let mut current_dir = std::env::current_dir()?;
+	loop {
+		if current_dir.join("Cargo.toml").exists() {
+			// Check if this Cargo.toml is a workspace root
+			let cargo_toml = std::fs::read_to_string(current_dir.join("Cargo.toml"))?;
+			if cargo_toml.contains("[workspace]") {
+				return Ok(vec![current_dir]);
+			}
+		}
+
+		if let Some(parent) = current_dir.parent() {
+			current_dir = parent.to_owned();
+		} else {
+			return Err(io::Error::new(
+				io::ErrorKind::NotFound,
+				"Could not find workspace Cargo.toml",
+			));
+		}
+	}
 }
 
 fn find_all_proto(path: &Path) -> io::Result<Vec<PathBuf>> {

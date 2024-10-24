@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package rivet.backend.pkg.cloud.version_publish;
 
-import "proto/common.proto";
-import "proto/backend/cloud.proto";
+import "legacy/proto/common.proto";
+import "legacy/proto/backend/cloud.proto";
 
 message Request {
 	rivet.common.Uuid game_id = 1;

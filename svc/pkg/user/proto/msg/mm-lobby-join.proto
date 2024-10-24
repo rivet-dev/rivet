@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.pkg.user.msg.mm_lobby_join;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 /// name = "msg-user-mm-lobby-join"
 /// parameters = [

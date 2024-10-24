@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.pkg.team.msg.member_remove_complete;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 /// name = "msg-team-member-remove-complete"
 /// tail-ttl = 300

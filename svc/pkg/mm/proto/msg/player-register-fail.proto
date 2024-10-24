@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.pkg.mm.msg.player_register_fail;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 enum ErrorCode {
 	UNKNOWN = 0;

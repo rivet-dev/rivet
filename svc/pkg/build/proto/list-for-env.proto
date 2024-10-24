@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.pkg.build.list_for_env;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 message Request {
 	rivet.common.Uuid env_id = 1;

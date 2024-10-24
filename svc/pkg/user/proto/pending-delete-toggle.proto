@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.pkg.user.pending_delete_toggle;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 message Request {
 	rivet.common.Uuid user_id = 1;

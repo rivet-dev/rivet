@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package rivet.backend.user.update;
 
-import "proto/common.proto";
-import "proto/backend/user.proto";
+import "legacy/proto/common.proto";
+import "legacy/proto/backend/user.proto";
 
 message Update {
 	reserved 2, 3;

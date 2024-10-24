@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.cf;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 message CustomHostname {
     enum Status {

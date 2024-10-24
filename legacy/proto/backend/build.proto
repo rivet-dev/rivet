@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.build;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 enum BuildKind {
 	DOCKER_IMAGE = 0;

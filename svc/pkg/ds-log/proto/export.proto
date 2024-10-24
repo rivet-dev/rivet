@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package rivet.backend.pkg.ds_log.export;
 
-import "proto/common.proto";
-import "proto/backend/ds/log.proto";
+import "legacy/proto/common.proto";
+import "legacy/proto/backend/ds/log.proto";
 
 message Request {
 	rivet.common.Uuid request_id = 1;

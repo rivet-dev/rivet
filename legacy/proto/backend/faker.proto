@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.faker;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 import "google/protobuf/empty.proto";
 
 enum Image {

@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.pkg.cdn.namespace_resolve_domain;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 message Request {
 	repeated string domains = 1;

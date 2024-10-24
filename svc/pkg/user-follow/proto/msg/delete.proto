@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.pkg.user_follow.msg.delete;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 /// name = "msg-user-follow-delete"
 /// tail-ttl = 300

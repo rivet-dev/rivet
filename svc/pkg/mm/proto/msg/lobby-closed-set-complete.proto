@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.pkg.mm.msg.lobby_closed_set_complete;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 /// name = "msg-mm-lobby-closed-set-complete"
 /// parameters = [

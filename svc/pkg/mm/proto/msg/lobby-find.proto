@@ -2,9 +2,9 @@ syntax = "proto3";
 
 package rivet.backend.pkg.mm.msg.lobby_find;
 
-import "proto/common.proto";
-import "proto/backend/net.proto";
-import "proto/backend/matchmaker/query.proto";
+import "legacy/proto/common.proto";
+import "legacy/proto/backend/net.proto";
+import "legacy/proto/backend/matchmaker/query.proto";
 
 message Player {
 	rivet.common.Uuid player_id = 1;

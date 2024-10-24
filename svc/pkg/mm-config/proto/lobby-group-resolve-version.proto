@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.pkg.mm_config.lobby_group_resolve_version;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 message Request {
 	repeated rivet.common.Uuid lobby_group_ids = 1;

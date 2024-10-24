@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.pkg.user.mutual_friend_list;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 message Request {
 	rivet.common.Uuid user_a_id = 1;

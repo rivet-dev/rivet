@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.pkg.kv.msg.directory_update;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 /// name = "msg-kv-directory-update"
 /// tail-ttl = 60

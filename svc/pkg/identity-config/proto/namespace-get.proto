@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package rivet.backend.pkg.identity_config.namespace_get;
 
-import "proto/common.proto";
-import "proto/backend/identity.proto";
+import "legacy/proto/common.proto";
+import "legacy/proto/backend/identity.proto";
 
 message Request {
 	repeated rivet.common.Uuid namespace_ids = 1;

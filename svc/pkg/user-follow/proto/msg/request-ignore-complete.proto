@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.pkg.user_follow.msg.request_ignore_complete;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 /// name = "msg-user-follow-request-ignore-complete"
 /// tail-ttl = 300

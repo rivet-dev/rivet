@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.upload;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 enum Provider {
 	MINIO = 0;

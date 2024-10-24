@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.pkg.team.avatar_upload_complete;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 message Request {
 	rivet.common.Uuid team_id = 1;

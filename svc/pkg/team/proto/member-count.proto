@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.pkg.team.member_count;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 message Request {
 	repeated rivet.common.Uuid team_ids = 1;

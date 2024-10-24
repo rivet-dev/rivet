@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.pkg.team.resolve_display_name;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 message Request {
 	repeated string display_names = 1;

@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.pkg.cloud.msg.device_link_complete;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 /// name = "msg-cloud-device-link-complete"
 /// tail-ttl = 3600

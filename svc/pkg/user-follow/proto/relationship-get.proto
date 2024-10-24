@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.pkg.user_follow.relationship_get;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 message Request {
     message User {

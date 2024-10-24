@@ -2,9 +2,9 @@ syntax = "proto3";
 
 package rivet.backend.team;
 
-import "proto/common.proto";
-import "proto/backend/user.proto";
-import "proto/backend/upload.proto";
+import "legacy/proto/common.proto";
+import "legacy/proto/backend/user.proto";
+import "legacy/proto/backend/upload.proto";
 
 enum DeactivateReason {
 	UNKNOWN = 0;

@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.pkg.game.resolve_namespace_id;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 message Request {
 	repeated rivet.common.Uuid namespace_ids = 1;

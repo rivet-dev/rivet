@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.pkg.ds.msg.drain_all;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 /// name = "msg-ds-drain-all"
 /// parameters = [

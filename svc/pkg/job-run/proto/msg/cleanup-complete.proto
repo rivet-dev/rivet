@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.pkg.job_run.msg.cleanup_complete;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 /// name = "msg-job-run-cleanup-complete"
 /// parameters = [

@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package rivet.backend.pkg.perf.log_get;
 
-import "proto/common.proto";
-import "proto/perf.proto";
+import "legacy/proto/common.proto";
+import "legacy/proto/perf.proto";
 
 message Request {
     repeated rivet.common.Uuid ray_ids = 1;

@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.pkg.analytics.msg.event_create;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 /// name = "msg-analytics-event-create"
 /// parameters = []

@@ -413,7 +413,7 @@ mod tests {
 	fn build_all_proto() {
 		let current_dir = std::env::current_dir().unwrap();
 		let project_root = current_dir.parent().unwrap().parent().unwrap();
-		let proto_dir = project_root.join("proto");
+		let proto_dir = project_root.join("legacy").join("proto");
 
 		let output = compile(
 			CompileOpts::default()

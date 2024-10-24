@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package rivet.backend.pkg.faker.build;
 
-import "proto/common.proto";
-import "proto/backend/faker.proto";
+import "legacy/proto/common.proto";
+import "legacy/proto/backend/faker.proto";
 import "google/protobuf/empty.proto";
 
 message Request {

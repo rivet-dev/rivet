@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.pkg.user_dev.msg.game_update;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 /// name = "msg-user-dev-game-update"
 /// tail-ttl = 300

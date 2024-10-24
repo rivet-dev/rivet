@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.pkg.kv.get;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 message Request {
     message Key {

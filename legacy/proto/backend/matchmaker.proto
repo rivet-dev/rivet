@@ -2,9 +2,9 @@ syntax = "proto3";
 
 package rivet.backend.matchmaker;
 
-import "proto/common.proto";
-import "proto/backend/captcha.proto";
-import "proto/backend/region.proto";
+import "legacy/proto/common.proto";
+import "legacy/proto/backend/captcha.proto";
+import "legacy/proto/backend/region.proto";
 
 // MARK: Game Config
 message GameConfig {

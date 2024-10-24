@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.backend.ds.log;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 enum StreamType {
 	STD_OUT = 0;

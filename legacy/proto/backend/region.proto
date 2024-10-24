@@ -2,9 +2,9 @@ syntax = "proto3";
 
 package rivet.backend.region;
 
-import "proto/common.proto";
-import "proto/backend/net.proto";
-import "proto/backend/cluster.proto";
+import "legacy/proto/common.proto";
+import "legacy/proto/backend/net.proto";
+import "legacy/proto/backend/cluster.proto";
 
 message Region {
 	reserved 6, 10, 11, 12, 13;

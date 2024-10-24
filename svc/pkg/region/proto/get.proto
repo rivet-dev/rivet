@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package rivet.backend.pkg.region.get;
 
-import "proto/common.proto";
-import "proto/backend/region.proto";
+import "legacy/proto/common.proto";
+import "legacy/proto/backend/region.proto";
 
 message Request {
 	repeated rivet.common.Uuid region_ids = 1;

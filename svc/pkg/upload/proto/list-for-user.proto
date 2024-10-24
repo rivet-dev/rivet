@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package rivet.backend.pkg.upload.list_for_user;
 
-import "proto/common.proto";
-import "proto/backend/upload.proto";
+import "legacy/proto/common.proto";
+import "legacy/proto/backend/upload.proto";
 
 message Request {
 	repeated rivet.common.Uuid user_ids = 1;

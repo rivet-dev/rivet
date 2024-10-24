@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package rivet.backend.pkg.job_log.msg.export;
 
-import "proto/common.proto";
-import "proto/backend/job/log.proto";
+import "legacy/proto/common.proto";
+import "legacy/proto/backend/job/log.proto";
 
 /// name = "msg-job-log-export"
 /// parameters = [

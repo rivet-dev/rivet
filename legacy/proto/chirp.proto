@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package rivet.chirp;
 
-import "proto/common.proto";
+import "legacy/proto/common.proto";
 
 message Message {
 	reserved 1;
