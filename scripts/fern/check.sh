@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
 set -euf -o pipefail
 
-fern check
+(cd sdks && fern check)
 

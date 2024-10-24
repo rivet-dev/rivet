@@ -8,14 +8,14 @@ groups:
         version: 0.0.22
         output:
           location: local-file-system
-          path: ../sdks/runtime/openapi
+          path: ../../sdks/runtime/openapi
       - name: fernapi/fern-typescript-browser-sdk
         # Custom version that we generate locally
         version: 999.999.999
         ir-version: v53
         output:
           location: local-file-system
-          path: ../sdks/runtime/typescript/src
+          path: ../../sdks/runtime/typescript/src
         config:
           outputSourceFiles: true
           namespaceExport: Rivet
@@ -26,21 +26,21 @@ groups:
         version: 0.9.3
         output:
           location: local-file-system
-          path: ../sdks/runtime/go
+          path: ../../sdks/runtime/go
   full:
     generators:
       - name: fernapi/fern-openapi
         version: 0.0.22
         output:
           location: local-file-system
-          path: ../sdks/full/openapi
+          path: ../../sdks/full/openapi
       - name: fernapi/fern-typescript-browser-sdk
         # Custom version that we generate locally
         version: 999.999.999
         ir-version: v53
         output:
           location: local-file-system
-          path: ../sdks/full/typescript/src
+          path: ../../sdks/full/typescript/src
         config:
           outputSourceFiles: true
           namespaceExport: Rivet
@@ -51,4 +51,4 @@ groups:
         version: 0.9.3
         output:
           location: local-file-system
-          path: ../sdks/full/go
+          path: ../../sdks/full/go
