@@ -1,6 +1,4 @@
 exclude_path = [
-    # Generated documentation
-    "gen/",
 ]
 exclude = [
     # Bot prevention times out

@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="./media/icon-text-white.svg" alt="Rivet">
-      <img src="./media/icon-text-black.svg" alt="Rivet">
+      <source media="(prefers-color-scheme: dark)" srcset="./.github/media/icon-text-white.svg" alt="Rivet">
+      <img src="./.github/media/icon-text-black.svg" alt="Rivet">
   </picture>
 </p>
 
@@ -112,7 +112,7 @@ faster
 We maintain a detailed architecture diagram
 [here](https://www.figma.com/file/GvCj77EG79NUoW1dRG4qkg/Architecture?type=whiteboard&node-id=0%3A1&t=WqMQ2r6avjM0jPK0-1).
 
-![Architecture](./media/architecture.png)
+![Architecture](./.github/media/architecture.png)
 
 ## 📖 Documentation
 

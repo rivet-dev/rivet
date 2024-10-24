@@ -11,13 +11,13 @@ To begin, you must first create a new item in 1password and add two text fields 
 names of the fields are not important:
 
 <p align="center">
-  <img alt="1password creating a new item" src="../../../media/1password_create_item.png">
+  <img alt="1password creating a new item" src="../../../.github/media/1password_create_item.png">
 </p>
 
 you will need to copy its UUID:
 
 <p align="center">
-  <img alt="1password context menu" src="../../../media/1password_context_menu.png">
+  <img alt="1password context menu" src="../../../.github/media/1password_context_menu.png">
 </p>
 
 Finally, you have two options for pushing your local config to 1password:
