@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use deno_runtime::deno_permissions;
 use serde::Deserialize;
 
+/// Config for running an isolate. Similar to runc config.
 #[derive(Deserialize)]
 pub struct Config {
 	pub resources: Resources,

@@ -162,7 +162,7 @@ pub async fn gen_initialize(
 		script.push(components::vector::configure(
 			&components::vector::Config { prometheus_targets },
 			pool_type,
-		));
+		)?);
 	}
 
 	let joined = script.join("\n\necho \"======\"\n\n");

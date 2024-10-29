@@ -25,7 +25,7 @@ async fn server_create(ctx: TestCtx) {
 
 	let build_res = op!([ctx] faker_build {
 		env_id: Some(env_id),
-		image: backend::faker::Image::JsEcho as i32,
+		image: backend::faker::Image::DsEcho as i32,
 	})
 	.await
 	.unwrap();
@@ -70,7 +70,7 @@ async fn server_create(ctx: TestCtx) {
 		env_id: *env_id,
 		datacenter_id: faker_region.region_id.unwrap().as_uuid(),
 		cluster_id,
-		runtime: ds::types::ServerRuntime::Pegboard,
+		runtime: ds::types::ServerRuntime::Nomad,
 		resources: ds::types::ServerResources {
 			cpu_millicores: 100,
 			memory_mib: 200,

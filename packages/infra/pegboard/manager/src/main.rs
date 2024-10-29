@@ -1,8 +1,12 @@
-use std::path::Path;
+use std::{
+	os::fd::AsRawFd,
+	path::{Path, PathBuf},
+};
 
 use anyhow::*;
 use futures_util::StreamExt;
 use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
+use tokio::fs;
 use tracing_subscriber::prelude::*;
 use url::Url;
 
@@ -51,6 +55,10 @@ async fn main() -> Result<()> {
 		.with_context(|| format!("Failed to read config file at {}", config_path.display()))?;
 	let config = serde_json::from_str::<Config>(&config_data)
 		.with_context(|| format!("Failed to parse config file at {}", config_path.display()))?;
+
+	if config.redirect_logs {
+		redirect_logs(config.working_path.join("log")).await?;
+	}
 
 	// SAFETY: No other task has spawned yet.
 	// set client_id env var so it can be read by the prometheus registry
@@ -113,4 +121,20 @@ fn init_tracing() {
 				.with_filter(tracing_subscriber::filter::LevelFilter::INFO),
 		)
 		.init();
+}
+
+async fn redirect_logs(log_file_path: PathBuf) -> Result<()> {
+	tracing::info!("Redirecting all logs to {}", log_file_path.display());
+	let log_file = fs::OpenOptions::new()
+		.write(true)
+		.create(true)
+		.append(true)
+		.open(log_file_path)
+		.await?;
+	let log_fd = log_file.as_raw_fd();
+
+	nix::unistd::dup2(log_fd, nix::libc::STDOUT_FILENO)?;
+	nix::unistd::dup2(log_fd, nix::libc::STDERR_FILENO)?;
+
+	Ok(())
 }

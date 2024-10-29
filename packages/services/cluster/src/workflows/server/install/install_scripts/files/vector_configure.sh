@@ -3,7 +3,7 @@ PUBLIC_IP=$(ip -4 route get 1.0.0.0 | awk '{print $7; exit}')
 # Write config
 mkdir -p /etc/vector /var/lib/vector
 
-cat << EOF > /etc/vector/vector.toml
+cat << EOF > /etc/vector/vector.json
 __VECTOR_CONFIG__
 EOF
 
@@ -23,9 +23,9 @@ Requires=network-online.target
 [Service]
 User=vector
 Group=vector
-ExecStartPre=/usr/bin/vector validate --config-toml /etc/vector/vector.toml
-ExecStart=/usr/bin/vector --config-toml /etc/vector/vector.toml
-ExecReload=/usr/bin/vector validate --config-toml /etc/vector/vector.toml
+ExecStartPre=/usr/bin/vector validate --config-json /etc/vector/vector.json
+ExecStart=/usr/bin/vector --config-json /etc/vector/vector.json
+ExecReload=/usr/bin/vector validate --config-json /etc/vector/vector.json
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
 AmbientCapabilities=CAP_NET_BIND_SERVICE

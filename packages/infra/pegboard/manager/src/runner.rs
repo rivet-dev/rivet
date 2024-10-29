@@ -185,7 +185,7 @@ impl Handle {
 		// Watch for exit code file being written
 		futs.push(
 			async {
-				utils::wait_for_creation(&exit_code_path).await?;
+				utils::wait_for_write(&exit_code_path).await?;
 
 				Ok(ObservationState::Exited)
 			}

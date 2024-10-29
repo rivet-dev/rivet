@@ -53,18 +53,6 @@ pub(crate) async fn cluster_datacenter_tls_issue(
 		"dns not enabled"
 	);
 
-	let job_cert = ctx
-		.activity(OrderInput {
-			renew: input.renew,
-			zone_id: job_zone_id.to_string(),
-			common_name: domain_job.to_string(),
-			subject_alternative_names: vec![
-				format!("*.lobby.{datacenter_id}.{domain_job}"),
-				format!("*.{datacenter_id}.{domain_job}"),
-			],
-		})
-		.await?;
-
 	let (gg_cert, job_cert) = ctx
 		.join((
 			activity(OrderInput {

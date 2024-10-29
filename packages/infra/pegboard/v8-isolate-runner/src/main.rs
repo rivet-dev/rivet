@@ -1,4 +1,9 @@
-use std::{collections::HashMap, path::Path, time::Duration};
+use std::{
+	collections::HashMap,
+	os::fd::AsRawFd,
+	path::{Path, PathBuf},
+	time::Duration,
+};
 
 use anyhow::*;
 use deno_runtime::deno_core::JsRuntime;
@@ -29,6 +34,8 @@ async fn main() -> Result<()> {
 		.next()
 		.context("`working_path` arg required")?;
 	let working_path = Path::new(&working_path);
+
+	redirect_logs(working_path.join("log")).await?;
 
 	// Write PID to file
 	fs::write(
@@ -175,4 +182,20 @@ async fn read_packet(
 	let packet = serde_json::from_slice(&buf)?;
 
 	Ok(Some(packet))
+}
+
+async fn redirect_logs(log_file_path: PathBuf) -> Result<()> {
+	println!("Redirecting all logs to {}", log_file_path.display());
+	let log_file = fs::OpenOptions::new()
+		.write(true)
+		.create(true)
+		.append(true)
+		.open(log_file_path)
+		.await?;
+	let log_fd = log_file.as_raw_fd();
+
+	nix::unistd::dup2(log_fd, nix::libc::STDOUT_FILENO)?;
+	nix::unistd::dup2(log_fd, nix::libc::STDERR_FILENO)?;
+
+	Ok(())
 }

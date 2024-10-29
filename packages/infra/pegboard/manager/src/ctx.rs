@@ -153,7 +153,7 @@ impl Ctx {
 		// Start runner socket
 		let self2 = self.clone();
 		let runner_socket = tokio::spawn(async move {
-			tracing::warn!(port=%RUNNER_PORT, "listening for runner sockets");
+			tracing::info!(port=%RUNNER_PORT, "listening for runner sockets");
 			let listener = TcpListener::bind(("0.0.0.0", RUNNER_PORT)).await?;
 
 			loop {
@@ -375,6 +375,8 @@ impl Ctx {
 	}
 
 	fn observe_isolate_runner(self: &Arc<Self>, runner: &runner::Handle) {
+		tracing::info!("observing isolate runner");
+
 		// Observe runner
 		let self2 = self.clone();
 		let runner2 = runner.clone();

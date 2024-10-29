@@ -196,6 +196,7 @@ pub async fn init_client(gen_path: &Path, working_path: &Path) -> Config {
 		vector_socket_addr: "127.0.0.1:5021".parse().unwrap(),
 		// Not necessary for the test
 		flavor: protocol::ClientFlavor::Container,
+		redirect_logs: false,
 
 		// Not necessary for the test
 		api_endpoint: "".to_string(),

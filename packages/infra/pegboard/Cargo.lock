@@ -1036,6 +1036,7 @@ name = "container-runner"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "nix 0.27.1",
  "portpicker",
  "serde",
  "serde_json",

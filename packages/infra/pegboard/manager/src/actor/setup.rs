@@ -707,12 +707,14 @@ impl Actor {
 										);
 									}
 								}
-								Err(err) => tracing::error!(?err, "failed to run `cnitool` command"),
+								Err(err) => {
+									tracing::error!(?err, "failed to run `cnitool` command")
+								}
 							}
 						}
 						Err(err) => tracing::error!(?err, "failed to read `cni-cap-args.json`"),
 					}
-		
+
 					match Command::new("ip")
 						.arg("netns")
 						.arg("del")

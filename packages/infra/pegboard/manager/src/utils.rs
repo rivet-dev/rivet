@@ -5,7 +5,10 @@ use std::{
 
 use anyhow::*;
 use indoc::indoc;
-use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{
+	event::{AccessKind, AccessMode},
+	Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
+};
 use sqlx::{
 	migrate::MigrateDatabase,
 	sqlite::{SqlitePool, SqlitePoolOptions},
@@ -273,7 +276,7 @@ fn async_watcher() -> Result<(RecommendedWatcher, Receiver<notify::Result<Event>
 			let tx = tx.clone();
 
 			// Send event. We ignore the result because the watcher and channel are dropped after the first
-			// `Create` event is received in wait_for_creation
+			// `Create` event is received in wait_for_write
 			let _ = tx.blocking_send(res);
 		},
 		notify::Config::default().with_poll_interval(Duration::from_secs(2)),
@@ -282,7 +285,7 @@ fn async_watcher() -> Result<(RecommendedWatcher, Receiver<notify::Result<Event>
 	Ok((watcher, rx))
 }
 
-pub async fn wait_for_creation<P: AsRef<Path>>(path: P) -> Result<()> {
+pub async fn wait_for_write<P: AsRef<Path>>(path: P) -> Result<()> {
 	let path = path.as_ref();
 	let (mut watcher, mut rx) = async_watcher()?;
 
@@ -300,8 +303,8 @@ pub async fn wait_for_creation<P: AsRef<Path>>(path: P) -> Result<()> {
 	while let Some(res) = rx.recv().await {
 		let res = res?;
 
-		// Wait for creation of path
-		if let EventKind::Create(_) = res.kind {
+		// Wait for data to be written to path
+		if let EventKind::Access(AccessKind::Close(AccessMode::Write)) = res.kind {
 			if res.paths.iter().any(|p| p == path) {
 				break;
 			}

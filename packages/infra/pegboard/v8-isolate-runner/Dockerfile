@@ -1,4 +1,5 @@
-FROM clux/muslrust:1.80.0-stable AS rust
+# This version is required for GLIBC 2.31 (used by edge servers on Linode)
+FROM rust:1.82.0-bullseye AS rust
 
 WORKDIR /app
 COPY packages/infra/pegboard/runner-protocol/ runner-protocol/

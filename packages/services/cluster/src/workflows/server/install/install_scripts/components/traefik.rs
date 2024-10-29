@@ -227,9 +227,9 @@ pub async fn gg_static_config(config: &rivet_config::Config) -> GlobalResult<Str
 		&config.server()?.rivet.token.api_traefik_provider
 	{
 		format!(
-			"http://127.0.0.1:{port}/traefik-provider/config/game-guard?token={}&datacenter=___DATACENTER_ID___",
-			token = api_traefik_provider_token.read(),
+			"http://127.0.0.1:{port}/traefik-provider/config/game-guard?token={token}&datacenter=___DATACENTER_ID___",
 			port = TUNNEL_API_INTERNAL_PORT,
+			token = api_traefik_provider_token.read(),
 		)
 	} else {
 		format!(

@@ -1,7 +1,4 @@
-use std::{
-	sync::Arc,
-	time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use anyhow::*;
 use indoc::indoc;
@@ -250,7 +247,7 @@ impl Actor {
 
 				tokio::select! {
 					res = runner.observe() => res?,
-					res = utils::wait_for_creation(&exit_code_path) => {
+					res = utils::wait_for_write(&exit_code_path) => {
 						res?;
 
 						use std::result::Result::{Err, Ok};

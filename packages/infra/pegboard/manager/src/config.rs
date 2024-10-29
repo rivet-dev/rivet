@@ -14,6 +14,8 @@ pub struct Config {
 	pub network_ip: Ipv4Addr,
 	pub vector_socket_addr: SocketAddr,
 	pub flavor: protocol::ClientFlavor,
+	#[serde(default = "default_redirect_logs")]
+	pub redirect_logs: bool,
 
 	pub api_endpoint: String,
 
@@ -35,4 +37,8 @@ fn default_container_runner_binary_path() -> PathBuf {
 
 fn default_isolate_runner_binary_path() -> PathBuf {
 	default_working_path().join("bin").join("v8-isolate-runner")
+}
+
+fn default_redirect_logs() -> bool {
+	true
 }
