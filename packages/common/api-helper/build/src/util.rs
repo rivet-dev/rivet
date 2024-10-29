@@ -15,7 +15,7 @@ use rivet_claims::ClaimsDecode;
 /// Origins that the hub may be requesting from.
 pub fn hub_origin_regex(config: &rivet_config::Config) -> Regex {
 	// TODO: Make this lazy static to prevent reparsing regex for every request
-	let regex_str = &config.server().unwrap().rivet.hub.public_origin_regex;
+	let regex_str = &config.server().unwrap().rivet.hub.public_origin_regex();
 	let regex = Regex::new(&regex_str).expect("failed to build hub origin regex");
 	regex
 }

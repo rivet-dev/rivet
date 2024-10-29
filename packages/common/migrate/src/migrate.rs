@@ -215,6 +215,9 @@ pub async fn up(config: rivet_config::Config, services: &[SqlService]) -> Result
 		}
 	)?;
 
+	tracing::info!("shutting down pools");
+	crdb.close().await;
+
 	tracing::info!("migrated");
 
 	Ok(())
@@ -333,10 +336,16 @@ async fn migrate_db_url(config: rivet_config::Config, service: &SqlService) -> R
 				encode(&server_config.cockroachdb.username).to_string()
 			};
 
-			Ok(format!(
-				"cockroach://{auth}@{crdb_host}:{crdb_port}/{}?sslmode=verify-ca&sslrootcert=/usr/local/share/ca-certificates/crdb-ca.crt",
-				encode(&service.db_name),
-			))
+			let mut url = url::Url::parse(&format!(
+				"cockroach://{auth}@{crdb_host}:{crdb_port}/{}",
+				encode(&service.db_name)
+			))?;
+
+			if let Some(sslmode) = crdb_url_parsed.query_pairs().find(|(k, _)| k == "sslmode") {
+				url.query_pairs_mut().append_pair("sslmode", &sslmode.1);
+			}
+
+			Ok(url.to_string())
 		}
 		SqlServiceKind::ClickHouse => {
 			let clickhouse_config = server_config

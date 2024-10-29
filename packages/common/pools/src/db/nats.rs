@@ -70,6 +70,7 @@ pub async fn setup(config: Config, client_name: String) -> Result<NatsPool, Erro
 		.connect(&server_addrs[..])
 		.await
 		.map_err(Error::BuildNats)?;
+
 	tracing::info!(?server_addrs, "nats connected");
 
 	Ok(conn)

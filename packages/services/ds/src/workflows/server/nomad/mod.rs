@@ -402,7 +402,7 @@ async fn submit_job(ctx: &ActivityCtx, input: &SubmitJobInput) -> GlobalResult<S
 				.server()?
 				.rivet
 				.api
-				.public_origin
+				.public_origin()
 				.clone()
 				.to_string(),
 		)])
@@ -751,7 +751,7 @@ async fn submit_job(ctx: &ActivityCtx, input: &SubmitJobInput) -> GlobalResult<S
 			
 							print('\n> Finished')
 							"#,
-							origin_api = ctx.config().server()?.rivet.api.public_origin,
+							origin_api = ctx.config().server()?.rivet.api.public_origin(),
 						)),
 						..Template::new()
 					}]),

@@ -37,7 +37,7 @@ pub async fn build_bootstrap_data(
 			None
 		},
 		origins: Box::new(models::CloudBootstrapOrigins {
-			hub: config.server()?.rivet.hub.public_origin.to_string(),
+			hub: config.server()?.rivet.hub.public_origin().to_string(),
 		}),
 		captcha: Box::new(models::CloudBootstrapCaptcha {
 			turnstile: server_config

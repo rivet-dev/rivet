@@ -60,11 +60,12 @@ pub async fn run_from_env(
 }
 
 async fn socket_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>) -> GlobalResult<()> {
-	let port = ctx.config().server()?.rivet.pegboard.port;
-	let addr = SocketAddr::from(([0, 0, 0, 0], port));
+	let host = ctx.config().server()?.rivet.pegboard.host();
+	let port = ctx.config().server()?.rivet.pegboard.port();
+	let addr = SocketAddr::from((host, port));
 
 	let listener = TcpListener::bind(addr).await?;
-	tracing::info!(?port, "server listening");
+	tracing::info!(?port, ?port, "server listening");
 
 	loop {
 		match listener.accept().await {

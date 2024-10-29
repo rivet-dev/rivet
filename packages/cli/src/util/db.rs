@@ -38,7 +38,7 @@ pub async fn redis_shell(config: rivet_config::Config, shell_ctx: ShellContext<'
 			cmd.arg("--user").arg(username);
 		}
 		if let Some(password) = &redis_config.password {
-			cmd.arg("--password").arg(password.read());
+			cmd.arg("--pass").arg(password.read());
 		}
 
 		let ca_path = format!("/usr/local/share/ca-certificates/redis-{svc}-ca.crt");

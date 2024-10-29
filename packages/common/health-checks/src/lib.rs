@@ -21,8 +21,9 @@ pub enum HealthCheckError {
 #[tracing::instrument(skip_all)]
 pub async fn run_standalone(config: Config) {
 	let config = Arc::new(config);
-	let port: u16 = config.config.server().unwrap().rivet.health.port;
-	let addr = SocketAddr::from(([0, 0, 0, 0], port));
+	let host = config.config.server().unwrap().rivet.health.host();
+	let port = config.config.server().unwrap().rivet.health.port();
+	let addr = SocketAddr::from((host, port));
 	let make_service = make_service_fn(|_conn| {
 		let config = config.clone();
 		async move {

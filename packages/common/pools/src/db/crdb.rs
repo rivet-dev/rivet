@@ -65,5 +65,7 @@ pub async fn setup(config: Config) -> Result<CrdbPool, Error> {
 		.await
 		.map_err(Error::BuildSqlx)?;
 
+	tracing::info!("crdb connected");
+
 	Ok(pool)
 }

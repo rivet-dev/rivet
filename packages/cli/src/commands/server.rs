@@ -5,6 +5,8 @@ use crate::run_config::RunConfig;
 
 #[derive(Parser)]
 pub struct Opts {
+	#[arg(long)]
+	skip_provision: bool,
 	#[arg(long, value_enum)]
 	services: Vec<ServiceKind>,
 }
@@ -39,6 +41,16 @@ impl Opts {
 		config: rivet_config::Config,
 		run_config: &RunConfig,
 	) -> Result<()> {
+		// Provision services before starting server
+		if !self.skip_provision {
+			tracing::info!("provisioning s3");
+			s3_util::provision(config.clone(), &run_config.s3_buckets).await?;
+
+			tracing::info!("migrating database");
+			rivet_migrate::up(config.clone(), &run_config.sql_services).await?;
+		}
+
+		// Select services t orun
 		let services = if self.services.is_empty() {
 			// Run all services
 			run_config.services.clone()
@@ -58,8 +70,8 @@ impl Opts {
 				.collect::<Vec<_>>()
 		};
 
+		// Start server
 		let pools = rivet_pools::Pools::new(config.clone()).await?;
-
 		rivet_server::start(config, pools, services).await?;
 
 		Ok(())

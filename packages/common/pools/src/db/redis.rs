@@ -1,10 +1,16 @@
 use rivet_config::Config;
 use std::collections::HashMap;
 use tokio::task::JoinSet;
+use tokio::time::Duration;
 
 use crate::Error;
 
 pub type RedisPool = redis::aio::ConnectionManager;
+
+//// Connection timeout for the first connection.
+///
+/// This does not affect reconnection attempts.
+const INITIAL_CONNECTION_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[tracing::instrument(skip(config))]
 pub async fn setup(config: Config) -> Result<HashMap<String, RedisPool>, Error> {
@@ -31,10 +37,15 @@ pub async fn setup(config: Config) -> Result<HashMap<String, RedisPool>, Error> 
 			.spawn(async move {
 				tracing::info!("redis connecting");
 				let client = redis::Client::open(url).map_err(Error::BuildRedis)?;
-				let conn =
-					redis::aio::ConnectionManager::new_with_backoff(client, 2, 100, usize::MAX)
-						.await
-						.map_err(Error::BuildRedis)?;
+
+				// Add timeout for initial connection
+				let conn = tokio::time::timeout(
+					INITIAL_CONNECTION_TIMEOUT,
+					redis::aio::ConnectionManager::new_with_backoff(client, 2, 100, usize::MAX),
+				)
+				.await
+				.map_err(|_| Error::RedisInitialConnectionTimeout)?
+				.map_err(Error::BuildRedis)?;
 
 				tracing::info!("redis connected");
 
@@ -49,6 +60,8 @@ pub async fn setup(config: Config) -> Result<HashMap<String, RedisPool>, Error> 
 		let (key, conn) = res.map_err(Error::TokioJoin)??;
 		redis.insert(key.to_string(), conn.clone());
 	}
+
+	tracing::info!("redis connected");
 
 	Ok(redis)
 }

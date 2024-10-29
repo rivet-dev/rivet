@@ -1,0 +1,159 @@
+version: '3.8'
+
+services:
+  rivet:
+    build:
+      context: ../../..
+      dockerfile: resources/docker/dev-full/Dockerfile
+    command: /usr/bin/rivet server
+    environment:
+      - RUST_BACKTRACE=1
+    stop_grace_period: 0s
+    ports:
+        # API
+      - "8080:8080"
+      # API internal
+      - "8081:8080"
+      # Pegboard
+      - "8082:8082"
+    depends_on:
+      - cockroachdb
+      - redis
+      - clickhouse
+      - nats
+      - minio
+      # - vector
+    volumes:
+      - ./rivet:/etc/rivet:ro
+    networks:
+      - rivet-network
+
+  shell:
+    build:
+      context: ../../..
+      dockerfile: resources/docker/dev-full/Dockerfile
+    command: sleep infinity
+    stop_grace_period: 0s
+    volumes:
+      - ./rivet:/etc/rivet:ro
+    networks:
+      - rivet-network
+
+  cockroachdb:
+    image: cockroachdb/cockroach:v24.2.3
+    command: start-single-node --insecure
+    # ports:
+    #   - "26257:26257"
+    #   - "8080:8080"
+    volumes:
+      - cockroach-data:/cockroach/cockroach-data
+    networks:
+      - rivet-network
+
+  redis:
+    image: bitnami/valkey:8.0.1
+    # TODO: Remove root user
+    user: root
+    # ports:
+    #   - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --requirepass password --save 60 1 --appendonly yes
+    networks:
+      - rivet-network
+
+  clickhouse:
+    image: bitnami/clickhouse:23.10.1
+    environment:
+      - CLICKHOUSE_ADMIN_PASSWORD=default
+    # ports:
+    #   - "8123:8123"
+    #   - "9000:9000"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./clickhouse/users.xml:/etc/clickhouse-server/users.d/users.xml:ro
+    networks:
+      - rivet-network
+
+  nats:
+    image: nats:2.10.22-scratch
+    # ports:
+    #   - "4222:4222"
+    #   - "8222:8222"
+    networks:
+      - rivet-network
+
+  # traefik:
+  #   image: traefik:v3.1.6
+  #   command:
+  #     - "--api.insecure=true"
+  #     - "--providers.docker=true"
+  #     - "--providers.docker.exposedbydefault=false"
+  #   # ports:
+  #   #   - "80:80"
+  #   #   - "8081:8080"
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock:ro
+  #   networks:
+  #     - rivet-network
+
+  # prometheus:
+  #   image: bitnami/prometheus:2.55.0
+  #   # ports:
+  #   #   - "9090:9090"
+  #   volumes:
+  #     - prometheus-data:/prometheus
+  #   command:
+  #     - '--config.file=/etc/prometheus/prometheus.yml'
+  #     - '--storage.tsdb.path=/prometheus'
+  #   networks:
+  #     - rivet-network
+
+  # grafana:
+  #   image: grafana/grafana:11.3.0
+  #   # ports:
+  #   #   - "3000:3000"
+  #   volumes:
+  #     - grafana-data:/var/lib/grafana
+  #   environment:
+  #     - GF_SECURITY_ADMIN_PASSWORD=admin
+  #   depends_on:
+  #     - prometheus
+  #   networks:
+  #     - rivet-network
+
+  minio:
+    image: bitnami/minio:2024.10.13-debian-12-r0
+    # command: server /data --console-address ":9001"
+    # ports:
+    #   - "9000:9000"
+      # - "9001:9001"
+    volumes:
+      - minio-data:/data
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    networks:
+      - rivet-network
+
+  # vector:
+  #   image: timberio/vector:0.42.0-distroless-static
+  #   # ports:
+  #   #   - "8282:8282"
+  #   volumes:
+  #     - vector-data:/var/lib/vector
+  #   networks:
+  #     - rivet-network
+
+networks:
+  rivet-network:
+    driver: bridge
+
+volumes:
+  cockroach-data:
+  redis-data:
+  clickhouse-data:
+  prometheus-data:
+  grafana-data:
+  minio-data:
+  vector-data:

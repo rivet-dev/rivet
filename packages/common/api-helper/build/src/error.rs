@@ -42,7 +42,7 @@ pub fn handle_rejection(
 				.expect("missing server")
 				.rivet
 				.api
-				.verbose_errors
+				.verbose_errors()
 			{
 				err_code!(ERROR, error = err.to_string())
 			} else {
@@ -59,7 +59,7 @@ pub fn handle_rejection(
 				.expect("missing server")
 				.rivet
 				.api
-				.verbose_errors
+				.verbose_errors()
 			{
 				err_code!(ERROR, error = err.to_string())
 			} else {

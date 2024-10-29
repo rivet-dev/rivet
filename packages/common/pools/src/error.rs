@@ -33,6 +33,9 @@ pub enum Error {
 	#[error("modify redis url")]
 	ModifyRedisUrl,
 
+	#[error("initial connection timeout")]
+	RedisInitialConnectionTimeout,
+
 	#[error("build sqlx: {0}")]
 	BuildSqlx(sqlx::Error),
 

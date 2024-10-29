@@ -214,8 +214,8 @@ impl Default for S3 {
 			region: "us-east-1".into(),
 			endpoint_internal: Url::parse("http://127.0.0.1:9000").unwrap(),
 			endpoint_external: Url::parse("http://127.0.0.1:9000").unwrap(),
-			access_key_id: Secret::new("minioadmin".into()),
-			secret_access_key: Secret::new("minioadmin".into()),
+			access_key_id: Secret::new("root".into()),
+			secret_access_key: Secret::new("root".into()),
 		}
 	}
 }
@@ -442,7 +442,9 @@ impl Default for Nats {
 pub struct ClickHouse {
 	pub url: Url,
 	pub username: String,
+	#[serde(default)]
 	pub password: Option<Secret<String>>,
+	#[serde(default)]
 	pub provision_users: HashMap<String, ClickHouseUser>,
 }
 

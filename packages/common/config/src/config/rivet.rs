@@ -1,11 +1,24 @@
-use std::{collections::HashMap, path::PathBuf};
-
 use global_error::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, net::IpAddr, path::PathBuf};
 use url::Url;
 use uuid::Uuid;
 
 use crate::secret::Secret;
+
+pub mod default_hosts {
+	use std::net::{IpAddr, Ipv4Addr};
+
+	// Public services using public interface
+	pub const API: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+	pub const API_INTERNAL: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+	pub const PEGBOARD: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+	pub const TUNNEL: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+
+	// Private services using loopback interface
+	pub const HEALTH: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+	pub const METRICS: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+}
 
 pub mod default_ports {
 	pub const API: u16 = 8080;
@@ -161,7 +174,8 @@ impl Rivet {
 	}
 
 	pub fn api_host(&self) -> GlobalResult<String> {
-		let host_str = unwrap!(self.api.public_origin.host_str(), "api origin missing host");
+		let public_origin = self.api.public_origin();
+		let host_str = unwrap!(public_origin.host_str(), "api origin missing host");
 		Ok(host_str.to_string())
 	}
 }
@@ -198,39 +212,53 @@ pub struct TestBuild {
 	pub key: PathBuf,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Api {
 	/// The public origin URL for the API.
-	pub public_origin: Url,
+	pub public_origin: Option<Url>,
+	/// The host on which the API service listens.
+	pub host: Option<IpAddr>,
 	/// The port on which the API service listens.
-	pub port: u16,
+	pub port: Option<u16>,
 	/// Flag to enable verbose error reporting.
-	pub verbose_errors: bool,
+	pub verbose_errors: Option<bool>,
 }
 
-impl Default for Api {
-	fn default() -> Self {
-		Self {
-			public_origin: url::Url::parse(&format!("http://127.0.0.1:{}", default_ports::API))
-				.unwrap(),
-			port: default_ports::API,
-			verbose_errors: false,
-		}
+impl Api {
+	pub fn public_origin(&self) -> Url {
+		self.public_origin.clone().unwrap_or_else(|| {
+			url::Url::parse(&format!("http://127.0.0.1:{}", default_ports::API)).unwrap()
+		})
+	}
+
+	pub fn host(&self) -> IpAddr {
+		self.host.unwrap_or(default_hosts::API)
+	}
+
+	pub fn port(&self) -> u16 {
+		self.port.unwrap_or(default_ports::API)
+	}
+
+	pub fn verbose_errors(&self) -> bool {
+		self.verbose_errors.unwrap_or(false)
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ApiInternal {
-	pub port: u16,
+	pub host: Option<IpAddr>,
+	pub port: Option<u16>,
 }
 
-impl Default for ApiInternal {
-	fn default() -> Self {
-		Self {
-			port: default_ports::API_INTERNAL,
-		}
+impl ApiInternal {
+	pub fn host(&self) -> IpAddr {
+		self.host.unwrap_or(default_hosts::API_INTERNAL)
+	}
+
+	pub fn port(&self) -> u16 {
+		self.port.unwrap_or(default_ports::API_INTERNAL)
 	}
 }
 
@@ -285,12 +313,13 @@ pub struct ClusterPool {
 	pub provision_margin: u32,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Pegboard {
+	/// The host on which the Pegboard service listens.
+	pub host: Option<IpAddr>,
 	/// The port on which the Pegboard service listens.
-	#[serde(default = "Pegboard::default_port")]
-	pub port: u16,
+	pub port: Option<u16>,
 	/// The url for the manager binary.
 	#[serde(default)]
 	pub manager_binary_url: Option<Url>,
@@ -302,20 +331,25 @@ pub struct Pegboard {
 	pub isolate_runner_binary_url: Option<Url>,
 }
 
-impl Default for Pegboard {
-	fn default() -> Self {
-		Self {
-			port: Self::default_port(),
-			manager_binary_url: None,
-			container_runner_binary_url: None,
-			isolate_runner_binary_url: None,
-		}
-	}
-}
-
 impl Pegboard {
-	fn default_port() -> u16 {
-		default_ports::PEGBOARD
+	pub fn host(&self) -> IpAddr {
+		self.host.unwrap_or(default_hosts::PEGBOARD)
+	}
+
+	pub fn port(&self) -> u16 {
+		self.port.unwrap_or(default_ports::PEGBOARD)
+	}
+
+	pub fn manager_binary_url(&self) -> Option<&Url> {
+		self.manager_binary_url.as_ref()
+	}
+
+	pub fn container_runner_binary_url(&self) -> Option<&Url> {
+		self.container_runner_binary_url.as_ref()
+	}
+
+	pub fn isolate_runner_binary_url(&self) -> Option<&Url> {
+		self.isolate_runner_binary_url.as_ref()
 	}
 }
 
@@ -357,22 +391,26 @@ impl Default for Tunnel {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Hub {
 	/// The origin URL for the Hub service.
-	pub public_origin: Url,
+	pub public_origin: Option<Url>,
 	/// Regular expression to match valid Hub origins.
-	pub public_origin_regex: String,
+	pub public_origin_regex: Option<String>,
 }
 
-impl Default for Hub {
-	fn default() -> Hub {
-		Self {
-			public_origin: url::Url::parse(&format!("http://127.0.0.1:{}", default_ports::API))
-				.unwrap(),
-			public_origin_regex: format!("^http:\\/\\/:127\\.0\\.0\\.1:{}", default_ports::API),
-		}
+impl Hub {
+	pub fn public_origin(&self) -> Url {
+		self.public_origin.clone().unwrap_or_else(|| {
+			Url::parse(&format!("http://127.0.0.1:{}", default_ports::API)).unwrap()
+		})
+	}
+
+	pub fn public_origin_regex(&self) -> String {
+		self.public_origin_regex
+			.clone()
+			.unwrap_or_else(|| format!("^http:\\/\\/:127\\.0\\.0\\.1:{}", default_ports::API))
 	}
 }
 
@@ -397,31 +435,37 @@ impl Default for Tokens {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Health {
-	pub port: u16,
+	pub host: Option<IpAddr>,
+	pub port: Option<u16>,
 }
 
-impl Default for Health {
-	fn default() -> Self {
-		Self {
-			port: default_ports::HEALTH,
-		}
+impl Health {
+	pub fn host(&self) -> IpAddr {
+		self.host.unwrap_or(default_hosts::HEALTH)
+	}
+
+	pub fn port(&self) -> u16 {
+		self.port.unwrap_or(default_ports::HEALTH)
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Metrics {
-	pub port: u16,
+	pub host: Option<IpAddr>,
+	pub port: Option<u16>,
 }
 
-impl Default for Metrics {
-	fn default() -> Self {
-		Self {
-			port: default_ports::METRICS,
-		}
+impl Metrics {
+	pub fn host(&self) -> IpAddr {
+		self.host.unwrap_or(default_hosts::METRICS)
+	}
+
+	pub fn port(&self) -> u16 {
+		self.port.unwrap_or(default_ports::METRICS)
 	}
 }
 

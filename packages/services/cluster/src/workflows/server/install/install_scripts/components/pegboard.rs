@@ -4,17 +4,17 @@ pub async fn install(config: &rivet_config::Config) -> GlobalResult<String> {
 	let pb_config = &config.server()?.rivet.pegboard;
 
 	let manager_binary_url = unwrap_ref!(
-		pb_config.manager_binary_url,
+		pb_config.manager_binary_url(),
 		"manager binary url not configured"
 	)
 	.to_string();
 	let container_runner_binary_url = unwrap_ref!(
-		pb_config.container_runner_binary_url,
+		pb_config.container_runner_binary_url(),
 		"container runner binary url not configured"
 	)
 	.to_string();
 	let isolate_runner_binary_url = unwrap_ref!(
-		pb_config.isolate_runner_binary_url,
+		pb_config.isolate_runner_binary_url(),
 		"isolate runner binary url not configured"
 	)
 	.to_string();
@@ -32,7 +32,7 @@ pub fn configure(
 	config: &rivet_config::Config,
 	flavor: pegboard::protocol::ClientFlavor,
 ) -> GlobalResult<String> {
-	let origin_api = config.server()?.rivet.api.public_origin.to_string();
+	let origin_api = config.server()?.rivet.api.public_origin().to_string();
 	Ok(include_str!("../files/pegboard_configure.sh")
 		.replace("__FLAVOR__", &flavor.to_string())
 		.replace("__ORIGIN_API__", &origin_api)

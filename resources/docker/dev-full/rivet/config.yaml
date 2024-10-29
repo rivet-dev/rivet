@@ -1,0 +1,28 @@
+server:
+  jwt:
+    public: ""
+    private: ""
+  cockroachdb:
+    url: postgresql://cockroachdb:26257/defaultdb?sslmode=disable
+    username: root
+  redis:
+    ephemeral:
+      url: redis://redis:6379
+      password: password
+    persistent:
+      url: redis://redis:6379
+      password: password
+  clickhouse:
+    url: clickhouse://clickhouse:8123
+    username: default
+    password: default
+  s3:
+    region: us-east-1
+    endpoint_internal: http://minio:9000
+    endpoint_external: http://minio:9000
+    access_key_id: minioadmin
+    secret_access_key: minioadmin
+  nats:
+    urls:
+      - nats://nats:4222
+

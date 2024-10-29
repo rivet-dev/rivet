@@ -11,8 +11,9 @@ use prometheus::{Encoder, TextEncoder};
 
 #[tracing::instrument(skip_all)]
 pub async fn run_standalone(config: rivet_config::Config) {
-	let port: u16 = config.server().unwrap().rivet.metrics.port;
-	let addr = SocketAddr::from(([0, 0, 0, 0], port));
+	let host = config.server().unwrap().rivet.metrics.host();
+	let port = config.server().unwrap().rivet.metrics.port();
+	let addr = SocketAddr::from((host, port));
 
 	let server = Server::bind(&addr).serve(make_service_fn(|_| async {
 		Ok::<_, hyper::Error>(service_fn(serve_req))

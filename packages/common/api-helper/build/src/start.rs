@@ -1,4 +1,9 @@
-use std::{convert::Infallible, future::Future, net::SocketAddr, time::Instant};
+use std::{
+	convert::Infallible,
+	future::Future,
+	net::{IpAddr, SocketAddr},
+	time::Instant,
+};
 
 use hyper::{
 	body::HttpBody,
@@ -13,6 +18,7 @@ use uuid::Uuid;
 pub async fn start<T: 'static, Fut>(
 	config: rivet_config::Config,
 	pools: rivet_pools::Pools,
+	host: IpAddr,
 	port: u16,
 	handle: T,
 ) where
@@ -127,10 +133,10 @@ pub async fn start<T: 'static, Fut>(
 		async move { Ok::<_, Infallible>(service) }
 	});
 
-	let addr = SocketAddr::from(([0, 0, 0, 0], port));
+	let addr = SocketAddr::from((host, port));
 	let server = Server::bind(&addr).serve(make_service);
 
-	tracing::info!(?port, "server listening");
+	tracing::info!(?host, ?port, "server listening");
 	if let Err(e) = server.await {
 		eprintln!("server error: {}", e);
 	}

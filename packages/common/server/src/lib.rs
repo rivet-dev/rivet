@@ -74,6 +74,8 @@ pub async fn start(
 	pools: rivet_pools::Pools,
 	services: Vec<Service>,
 ) -> Result<()> {
+	tracing::info!(services = ?services.len(), "starting server");
+
 	// Spawn services
 	let mut join_set = tokio::task::JoinSet::new();
 	for service in services {

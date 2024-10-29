@@ -3,7 +3,6 @@ resolver = "2"
 # Find all packages with: find . -name Cargo.toml | grep -v "sdks/runtime" | grep -v "sdks/full/rust-cli" | grep -v "infra/" | sed -E 's|^./(.*)Cargo\.toml$|"\1",|'
 members = [
 "sdks/full/rust/",
-"sdks/full/rust-cli/",
 "packages/cli/",
 "packages/common/operation/core/",
 "packages/common/operation/macros/",
