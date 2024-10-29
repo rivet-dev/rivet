@@ -110,11 +110,6 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			ServiceKind::Oneshot,
 			|config, pools| Box::pin(cluster_default_update::start(config, pools, false)),
 		),
-		Service::new(
-			"cluster_workflow_backfill",
-			ServiceKind::Oneshot,
-			|config, pools| Box::pin(cluster_workflow_backfill::start(config, pools)),
-		),
 		// Cron
 		Service::new("telemetry_beacon", ServiceKind::Cron, |config, pools| {
 			Box::pin(telemetry_beacon::start(config, pools))

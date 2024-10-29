@@ -90,7 +90,6 @@ members = [
 "packages/services/nsfw/util/",
 "packages/services/nsfw/ops/image-score/",
 "packages/services/cluster/",
-"packages/services/cluster/standalone/workflow-backfill/",
 "packages/services/cluster/standalone/datacenter-tls-renew/",
 "packages/services/cluster/standalone/default-update/",
 "packages/services/cluster/standalone/gc/",

@@ -2989,29 +2989,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cluster-workflow-backfill"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-workflow",
- "cluster",
- "linode",
- "rivet-config",
- "rivet-connection",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-operation",
- "rivet-runtime",
- "serde",
- "sqlx",
- "token-create",
- "tokio",
- "tracing",
- "tracing-logfmt",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "colorchoice"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8357,7 +8334,6 @@ dependencies = [
  "cluster-default-update",
  "cluster-gc",
  "cluster-metrics-publish",
- "cluster-workflow-backfill",
  "colored_json",
  "global-error",
  "include_dir",

@@ -65,7 +65,6 @@ api-monolith = { path = "../api/monolith" }
 # Oneshot
 build-default-create = { path = "../services/build/standalone/default-create" }
 cluster-default-update = { path = "../services/cluster/standalone/default-update" }
-cluster-workflow-backfill = { path = "../services/cluster/standalone/workflow-backfill" }
 pegboard-dc-init = { path = "../services/pegboard/standalone/dc-init" }
 rivet-config = { version = "0.1.0", path = "../common/config" }
 
