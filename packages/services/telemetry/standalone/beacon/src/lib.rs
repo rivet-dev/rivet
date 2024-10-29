@@ -198,7 +198,7 @@ async fn get_pegboard_data(ctx: &OperationContext<()>) -> GlobalResult<serde_jso
 		let (count, cpu_sum, memory_sum) = sql_fetch_one!(
 			[ctx, (i64, i64, i64,)]
 			"
-			SELECT count(*), sum(cpu), sum(memory))
+			SELECT count(*)::int, coalesce(sum(cpu), 0)::int, coalesce(sum(memory), 0)::int
 			FROM db_pegboard.clients AS OF SYSTEM TIME '-5s'
 			WHERE
 				delete_ts IS NULL
@@ -220,7 +220,7 @@ async fn get_pegboard_data(ctx: &OperationContext<()>) -> GlobalResult<serde_jso
 	let (total_count, running_count) = sql_fetch_one!(
 		[ctx, (i64, i64)]
 		"
-		SELECT count(*), count(CASE WHEN stop_ts IS NULL THEN 1 END)
+		SELECT count(*)::int, count(CASE WHEN stop_ts IS NULL THEN 1 END)::int
 		FROM db_pegboard.actors AS OF SYSTEM TIME '-5s'
 		",
 	)

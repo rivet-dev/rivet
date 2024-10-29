@@ -3,7 +3,7 @@ use chirp_worker::prelude::*;
 use tracing_subscriber::prelude::*;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn basic() {
+async fn telemetry_beacon() {
 	tracing_subscriber::registry()
 		.with(
 			tracing_logfmt::builder()
@@ -12,5 +12,9 @@ async fn basic() {
 		)
 		.init();
 
-	run_from_env(util::timestamp::now()).await.unwrap();
+	let config = rivet_config::Config::load::<String>(&[]).await.unwrap();
+	let pools = rivet_pools::Pools::new(config.clone()).await.unwrap();
+	run_from_env(config, pools, util::timestamp::now())
+		.await
+		.unwrap();
 }
