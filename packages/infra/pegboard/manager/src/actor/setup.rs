@@ -434,7 +434,7 @@ impl Actor {
 			.map(|(_, port)| {
 				json!({
 					"HostPort": port.source,
-					"ActorPort": port.target,
+					"ContainerPort": port.target,
 					"Protocol": port.protocol.to_string(),
 				})
 			})
@@ -682,17 +682,41 @@ impl Actor {
 		let actor_path = ctx.actor_path(self.actor_id);
 		let netns_path = self.netns_path();
 
-		if let protocol::NetworkMode::Bridge = self.config.network_mode {
-			match fs::read_to_string(actor_path.join("cni-cap-args.json")).await {
-				Ok(cni_params_json) => {
-					match Command::new("cnitool")
+		match self.config.image.kind {
+			protocol::ImageKind::DockerImage | protocol::ImageKind::OciBundle => {
+				if let protocol::NetworkMode::Bridge = self.config.network_mode {
+					match fs::read_to_string(actor_path.join("cni-cap-args.json")).await {
+						Ok(cni_params_json) => {
+							match Command::new("cnitool")
+								.arg("del")
+								.arg(NETWORK_NAME)
+								.arg(netns_path)
+								.env("CNI_PATH", "/opt/cni/bin")
+								.env("NETCONFPATH", "/opt/cni/config")
+								.env("CNI_IFNAME", "eth0")
+								.env("CAP_ARGS", cni_params_json)
+								.output()
+								.await
+							{
+								Ok(cmd_out) => {
+									if !cmd_out.status.success() {
+										tracing::error!(
+											stdout=%std::str::from_utf8(&cmd_out.stdout)?,
+											stderr=%std::str::from_utf8(&cmd_out.stderr)?,
+											"failed `cnitool del` command",
+										);
+									}
+								}
+								Err(err) => tracing::error!(?err, "failed to run `cnitool` command"),
+							}
+						}
+						Err(err) => tracing::error!(?err, "failed to read `cni-cap-args.json`"),
+					}
+		
+					match Command::new("ip")
+						.arg("netns")
 						.arg("del")
-						.arg(NETWORK_NAME)
-						.arg(netns_path)
-						.env("CNI_PATH", "/opt/cni/bin")
-						.env("NETCONFPATH", "/opt/cni/config")
-						.env("CNI_IFNAME", "eth0")
-						.env("CAP_ARGS", cni_params_json)
+						.arg(self.actor_id.to_string())
 						.output()
 						.await
 					{
@@ -701,34 +725,15 @@ impl Actor {
 								tracing::error!(
 									stdout=%std::str::from_utf8(&cmd_out.stdout)?,
 									stderr=%std::str::from_utf8(&cmd_out.stderr)?,
-									"failed `cnitool del` command",
+									"failed `ip netns` command",
 								);
 							}
 						}
-						Err(err) => tracing::error!(?err, "failed to run `cnitool` command"),
+						Err(err) => tracing::error!(?err, "failed to run `ip` command"),
 					}
 				}
-				Err(err) => tracing::error!(?err, "failed to read `cni-cap-args.json`"),
 			}
-
-			match Command::new("ip")
-				.arg("netns")
-				.arg("del")
-				.arg(self.actor_id.to_string())
-				.output()
-				.await
-			{
-				Ok(cmd_out) => {
-					if !cmd_out.status.success() {
-						tracing::error!(
-							stdout=%std::str::from_utf8(&cmd_out.stdout)?,
-							stderr=%std::str::from_utf8(&cmd_out.stderr)?,
-							"failed `ip netns` command",
-						);
-					}
-				}
-				Err(err) => tracing::error!(?err, "failed to run `ip` command"),
-			}
+			protocol::ImageKind::JavaScript => {}
 		}
 
 		Ok(())

@@ -11,13 +11,17 @@ pub fn file_name(
 	let file_name = match kind {
 		backend::build::BuildKind::DockerImage => "image",
 		backend::build::BuildKind::OciBundle => "oci-bundle",
+		backend::build::BuildKind::JavaScript => "index",
+	};
+	let file_ext = match kind {
+		backend::build::BuildKind::DockerImage | backend::build::BuildKind::OciBundle => "tar",
 		backend::build::BuildKind::JavaScript => "js",
 	};
-	let file_ext = match compression {
-		backend::build::BuildCompression::None => "tar",
-		backend::build::BuildCompression::Lz4 => "tar.lz4",
+	let file_ext_compression = match compression {
+		backend::build::BuildCompression::None => "",
+		backend::build::BuildCompression::Lz4 => ".lz4",
 	};
-	format!("{file_name}.{file_ext}")
+	format!("{file_name}.{file_ext}{file_ext_compression}")
 }
 
 pub fn build_hash(build_id: Uuid) -> u64 {

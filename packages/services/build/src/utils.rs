@@ -9,13 +9,17 @@ pub fn file_name(kind: BuildKind, compression: BuildCompression) -> String {
 	let file_name = match kind {
 		BuildKind::DockerImage => "image",
 		BuildKind::OciBundle => "oci-bundle",
+		BuildKind::JavaScript => "index",
+	};
+	let file_ext = match kind {
+		BuildKind::DockerImage | BuildKind::OciBundle => "tar",
 		BuildKind::JavaScript => "js",
 	};
-	let file_ext = match compression {
-		BuildCompression::None => "tar",
-		BuildCompression::Lz4 => "tar.lz4",
+	let file_ext_compression = match compression {
+		BuildCompression::None => "",
+		BuildCompression::Lz4 => ".lz4",
 	};
-	format!("{file_name}.{file_ext}")
+	format!("{file_name}.{file_ext}{file_ext_compression}")
 }
 
 pub fn build_hash(build_id: Uuid) -> u64 {

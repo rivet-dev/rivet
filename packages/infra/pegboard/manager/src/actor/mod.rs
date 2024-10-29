@@ -1,8 +1,5 @@
 use std::{
-	sync::{
-		atomic::{AtomicBool, Ordering},
-		Arc,
-	},
+	sync::Arc,
 	time::Duration,
 };
 
@@ -32,7 +29,7 @@ pub struct Actor {
 	config: protocol::ActorConfig,
 
 	runner: Mutex<Option<runner::Handle>>,
-	exited: AtomicBool,
+	exited: Mutex<bool>,
 }
 
 impl Actor {
@@ -42,7 +39,7 @@ impl Actor {
 			config,
 
 			runner: Mutex::new(None),
-			exited: AtomicBool::new(false),
+			exited: Mutex::new(false),
 		})
 	}
 
@@ -56,7 +53,7 @@ impl Actor {
 			config,
 
 			runner: Mutex::new(Some(runner)),
-			exited: AtomicBool::new(false),
+			exited: Mutex::new(false),
 		})
 	}
 
@@ -392,6 +389,13 @@ impl Actor {
 
 	#[tracing::instrument(skip_all)]
 	pub async fn set_exit_code(&self, ctx: &Ctx, exit_code: Option<i32>) -> Result<()> {
+		let mut guard = self.exited.lock().await;
+
+		// Already exited
+		if *guard {
+			return Ok(());
+		}
+
 		// Update DB
 		utils::query(|| async {
 			sqlx::query(indoc!(
@@ -433,7 +437,7 @@ impl Actor {
 		})
 		.await?;
 
-		self.exited.store(true, Ordering::SeqCst);
+		*guard = true;
 
 		Ok(())
 	}
@@ -448,9 +452,8 @@ impl Actor {
 			actors.remove(&self.actor_id);
 		}
 
-		if !self.exited.load(Ordering::SeqCst) {
-			self.set_exit_code(ctx, None).await?;
-		}
+		// Set exit code if it hasn't already been set
+		self.set_exit_code(ctx, None).await?;
 
 		self.cleanup_setup(ctx).await
 	}

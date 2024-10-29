@@ -61,6 +61,10 @@ impl TestCtx {
 		&self.op_ctx
 	}
 
+	pub fn config(&self) -> &rivet_config::Config {
+		self.op_ctx.config()
+	}
+
 	pub async fn crdb(&self) -> Result<CrdbPool, rivet_pools::Error> {
 		self.op_ctx.crdb().await
 	}

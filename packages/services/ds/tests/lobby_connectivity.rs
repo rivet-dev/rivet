@@ -10,7 +10,7 @@ use common::*;
 
 #[workflow_test]
 async fn server_connectivity_http_normal(ctx: TestCtx) {
-	if !util::feature::job_run() {
+	if ctx.config().server().unwrap().rivet.job_run.is_none() {
 		return;
 	}
 
@@ -38,7 +38,7 @@ async fn server_connectivity_http_normal(ctx: TestCtx) {
 
 #[workflow_test]
 async fn server_connectivity_http_host(ctx: TestCtx) {
-	if !util::feature::job_run() {
+	if ctx.config().server().unwrap().rivet.job_run.is_none() {
 		return;
 	}
 
@@ -87,7 +87,7 @@ async fn server_connectivity_http_host(ctx: TestCtx) {
 
 #[workflow_test]
 async fn server_connectivity_tcp(ctx: TestCtx) {
-	if !util::feature::job_run() {
+	if ctx.config().server().unwrap().rivet.job_run.is_none() {
 		return;
 	}
 
@@ -119,7 +119,7 @@ async fn server_connectivity_tcp(ctx: TestCtx) {
 
 #[workflow_test]
 async fn server_connectivity_tcp_host(ctx: TestCtx) {
-	if !util::feature::job_run() {
+	if ctx.config().server().unwrap().rivet.job_run.is_none() {
 		return;
 	}
 
@@ -177,7 +177,7 @@ async fn server_connectivity_tcp_host(ctx: TestCtx) {
 
 #[workflow_test]
 async fn server_connectivity_udp(ctx: TestCtx) {
-	if !util::feature::job_run() {
+	if ctx.config().server().unwrap().rivet.job_run.is_none() {
 		return;
 	}
 
@@ -206,7 +206,7 @@ async fn server_connectivity_udp(ctx: TestCtx) {
 
 #[workflow_test]
 async fn server_connectivity_udp_host(ctx: TestCtx) {
-	if !util::feature::job_run() {
+	if ctx.config().server().unwrap().rivet.job_run.is_none() {
 		return;
 	}
 

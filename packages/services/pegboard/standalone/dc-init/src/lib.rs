@@ -23,6 +23,7 @@ enum PoolType {
 	Pegboard,
 }
 
+// TODO: This is not idempotent.
 #[tracing::instrument(skip_all)]
 pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> GlobalResult<()> {
 	let client = chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("pegboard-dc-init");

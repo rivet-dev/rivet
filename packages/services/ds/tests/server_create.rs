@@ -25,7 +25,7 @@ async fn server_create(ctx: TestCtx) {
 
 	let build_res = op!([ctx] faker_build {
 		env_id: Some(env_id),
-		image: backend::faker::Image::DsEcho as i32,
+		image: backend::faker::Image::JsEcho as i32,
 	})
 	.await
 	.unwrap();
@@ -70,7 +70,7 @@ async fn server_create(ctx: TestCtx) {
 		env_id: *env_id,
 		datacenter_id: faker_region.region_id.unwrap().as_uuid(),
 		cluster_id,
-		runtime: ds::types::ServerRuntime::Nomad,
+		runtime: ds::types::ServerRuntime::Pegboard,
 		resources: ds::types::ServerResources {
 			cpu_millicores: 100,
 			memory_mib: 200,
@@ -93,41 +93,67 @@ async fn server_create(ctx: TestCtx) {
 
 	sub.next().await.unwrap();
 
-	// Async sleep for 5 seconds
-	tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+	tracing::info!("waiting for public hostname");
 
-	let server = ctx
-		.op(ds::ops::server::get::Input {
-			server_ids: vec![server_id],
-		})
-		.await
-		.unwrap()
-		.servers
-		.into_iter()
-		.next()
-		.unwrap();
+	let hostname = loop {
+		tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+	
+		let server = ctx
+			.op(ds::ops::server::get::Input {
+				server_ids: vec![server_id],
+			})
+			.await
+			.unwrap()
+			.servers
+			.into_iter()
+			.next()
+			.unwrap();
+	
+		if let Some(hostname) = server
+			.network_ports
+			.get("testing2")
+			.unwrap()
+			.public_hostname.as_ref() {
+			break hostname.clone();
+		}
+	};
 
-	let hostname = server
-		.network_ports
-		.get("testing2")
-		.unwrap()
-		.public_hostname
-		.as_ref()
-		.expect("no public hostname");
+	tracing::info!(%hostname, "echoing");
 
 	// Echo body
 	let random_body = Uuid::new_v4().to_string();
 	let client = reqwest::Client::new();
-	let res = client
-		.post(format!("http://{hostname}"))
-		.body(random_body.clone())
-		.send()
-		.await
-		.unwrap()
-		.error_for_status()
-		.unwrap();
-	let res_text = res.text().await.unwrap();
-	assert_eq!(random_body, res_text, "echoed wrong response");
+
+	loop {
+		let res = tokio::time::timeout(
+			std::time::Duration::from_secs(2),
+			async {
+				client
+					.post(format!("http://{hostname}"))
+					.body(random_body.clone())
+					.send()
+					.await
+					.unwrap()
+			}
+		).await;
+
+		let Ok(res) = res else {
+			tracing::warn!("timed out for some reason");
+			continue;
+		};
+
+		if let reqwest::StatusCode::NOT_FOUND = res.status() {
+			tracing::warn!("endpoint not found yet");
+			tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+			continue;
+		}
+
+		let res = res.error_for_status().unwrap();
+		let res_text = res.text().await.unwrap();
+		assert_eq!(random_body, res_text, "echoed wrong response");
+
+		break;
+	}
 
 	// assert_eq!(game_res.prod_env_id.unwrap(), server.env_id.unwrap().as_uuid());
 }
