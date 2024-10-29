@@ -74,7 +74,7 @@ pub struct Rivet {
 
 	/// Configuration for the health check service.
 	#[serde(default)]
-	pub health: Metrics,
+	pub health: Health,
 
 	/// Configuration for the tunnel service.
 	#[serde(default)]
@@ -136,7 +136,7 @@ impl Default for Rivet {
 			api: Api::default(),
 			api_internal: ApiInternal::default(),
 			metrics: Metrics::default(),
-			health: Metrics::default(),
+			health: Health::default(),
 			telemetry: Telemetry::default(),
 			cdn: None,
 			dns: None,
