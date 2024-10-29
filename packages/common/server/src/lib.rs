@@ -38,7 +38,7 @@ pub enum ServiceKind {
 	Standalone,
 	Singleton,
 	Oneshot,
-	Cron,
+	Cron(CronConfig),
 	/// Run no matter what.
 	Core,
 }
@@ -49,13 +49,14 @@ impl ServiceKind {
 
 		match self {
 			Api | ApiInternal | Standalone | Singleton | Core => ServiceBehavior::Service,
-			Oneshot | Cron => ServiceBehavior::Oneshot,
+			Oneshot => ServiceBehavior::Oneshot,
+			Cron(config) => ServiceBehavior::Cron(config.clone()),
 		}
 	}
 }
 
 /// Defines how a service should be ran.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 enum ServiceBehavior {
 	/// Spawns a service that will run indefinitely.
 	///
@@ -65,6 +66,14 @@ enum ServiceBehavior {
 	///
 	/// If crashes, it will be retried indefinitely.
 	Oneshot,
+	/// Runs a task on a scheudle.
+	Cron(CronConfig),
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CronConfig {
+	pub run_immediately: bool,
+	pub schedule: String,
 }
 
 /// Runs services & waits for completion.
@@ -96,6 +105,8 @@ pub async fn start(
 	// Spawn services
 	tracing::info!(services = ?services.len(), "starting services");
 	let mut join_set = tokio::task::JoinSet::new();
+	let cron_schedule = tokio_cron_scheduler::JobScheduler::new().await?;
+	let mut sleep_indefinitely = false;
 	for service in services {
 		tracing::debug!(name = %service.name, kind = ?service.kind, "server starting service");
 
@@ -157,12 +168,90 @@ pub async fn start(
 					})
 					.context("failed to spawn oneoff")?;
 			}
+			ServiceBehavior::Cron(cron_config) => {
+				sleep_indefinitely = true;
+
+				// Spawn immediate task
+				if cron_config.run_immediately {
+					let service = service.clone();
+					join_set
+						.build_task()
+						.name(&format!("rivet::cron_immediate::{}", service.name))
+						.spawn({
+							let config = config.clone();
+							let pools = pools.clone();
+							async move {
+								tracing::debug!(cron = %service.name, "starting immediate cron");
+
+								for attempt in 1..=8 {
+									match (service.run)(config.clone(), pools.clone()).await {
+										Result::Ok(_) => {
+											tracing::debug!(cron = %service.name, ?attempt, "cron finished");
+											break;
+										}
+										Err(err) => {
+											tracing::error!(cron = %service.name, ?attempt, ?err, "cron crashed");
+
+											tokio::time::sleep(Duration::from_secs(1)).await;
+
+											tracing::info!(cron = %service.name, ?attempt, "restarting cron");
+										}
+									}
+								}
+							}
+						})
+						.context("failed to spawn cron")?;
+				}
+
+				// Spawn cron
+				let config = config.clone();
+				let pools = pools.clone();
+				let service = service.clone();
+				cron_schedule
+					.add(tokio_cron_scheduler::Job::new_async_tz(
+						&cron_config.schedule,
+						chrono::Utc,
+						move |notification, _| {
+							let config = config.clone();
+							let pools = pools.clone();
+							let service = service.clone();
+							Box::pin(async move {
+								tracing::debug!(cron = %service.name, ?notification, "running cron");
+
+								for attempt in 1..=8 {
+									match (service.run)(config.clone(), pools.clone()).await {
+										Result::Ok(_) => {
+											tracing::debug!(cron = %service.name, ?attempt, "cron finished");
+											return;
+										}
+										Err(err) => {
+											tracing::error!(cron = %service.name, ?attempt, ?err, "cron crashed");
+
+											tokio::time::sleep(Duration::from_secs(1)).await;
+
+											tracing::info!(cron = %service.name, ?attempt, "restarting cron");
+										}
+									}
+								}
+							})
+						},
+					)?)
+					.await?;
+			}
 		}
 	}
 
-	// Wait for services
-	join_set.join_all().await;
-	tracing::info!("all services finished");
+	cron_schedule.start().await?;
 
-	Ok(())
+	if sleep_indefinitely {
+		std::future::pending().await
+	} else {
+		// Wait for services
+		join_set.join_all().await;
+
+		// Exit
+		tracing::info!("all services finished");
+
+		Ok(())
+	}
 }

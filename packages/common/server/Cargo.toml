@@ -13,4 +13,6 @@ rivet-pools = { version = "0.1.0", path = "../pools" }
 tracing = "0.1.40"
 include_dir = "0.7.4"
 rivet-config = { version = "0.1.0", path = "../config" }
+tokio-cron-scheduler = "0.13.0"
+chrono = "0.4.38"
 

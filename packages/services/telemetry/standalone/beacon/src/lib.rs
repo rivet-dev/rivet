@@ -17,7 +17,7 @@ use sysinfo::System;
 const POSTHOG_API_KEY: &str = "phc_1lUNmul6sAdFzDK1VHXNrikCfD7ivQZSpf2yzrPvr4m";
 
 pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> GlobalResult<()> {
-	run_from_env(config, pools, util::timestamp::now()).await
+	run_from_env(config.clone(), pools.clone(), util::timestamp::now()).await
 }
 
 #[tracing::instrument(skip_all)]

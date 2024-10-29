@@ -1,5 +1,6 @@
 use anyhow::*;
 use clap::Parser;
+use rivet_server::CronConfig;
 
 use crate::run_config::RunConfig;
 
@@ -30,7 +31,7 @@ impl Into<rivet_server::ServiceKind> for ServiceKind {
 			Standalone => rivet_server::ServiceKind::Standalone,
 			Singleton => rivet_server::ServiceKind::Singleton,
 			Oneshot => rivet_server::ServiceKind::Oneshot,
-			Cron => rivet_server::ServiceKind::Cron,
+			Cron => rivet_server::ServiceKind::Cron(CronConfig::default()),
 		}
 	}
 }

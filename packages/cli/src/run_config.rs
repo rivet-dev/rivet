@@ -1,7 +1,7 @@
 use anyhow::*;
 use include_dir::include_dir;
 use rivet_migrate::{SqlService, SqlServiceKind};
-use rivet_server::{Service, ServiceKind};
+use rivet_server::{CronConfig, Service, ServiceKind};
 use s3_util::S3Bucket;
 use std::sync::Arc;
 
@@ -111,12 +111,22 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			|config, pools| Box::pin(cluster_default_update::start(config, pools, false)),
 		),
 		// Cron
-		Service::new("telemetry_beacon", ServiceKind::Cron, |config, pools| {
-			Box::pin(telemetry_beacon::start(config, pools))
-		}),
-		Service::new("user_delete_pending", ServiceKind::Cron, |config, pools| {
-			Box::pin(user_delete_pending::start(config, pools))
-		}),
+		Service::new(
+			"telemetry_beacon",
+			ServiceKind::Cron(CronConfig {
+				run_immediately: true,
+				schedule: "* * * * * *".into(),
+			}),
+			|config, pools| Box::pin(telemetry_beacon::start(config, pools)),
+		),
+		Service::new(
+			"user_delete_pending",
+			ServiceKind::Cron(CronConfig {
+				run_immediately: false,
+				schedule: "* * * * * *".into(),
+			}),
+			|config, pools| Box::pin(user_delete_pending::start(config, pools)),
+		),
 		// TODO:
 		// - load_test_mm_sustain
 		// - load_test_mm
