@@ -37,7 +37,10 @@ pub async fn provision(
 			Ok(_) => tracing::info!(bucket = ?bucket_name, "bucket created"),
 			Err(err) => {
 				if let aws_sdk_s3::error::SdkError::ServiceError(service_err) = &err {
-					if let CreateBucketError::BucketAlreadyOwnedByYou(_) = service_err.err()
+					// Minio responds with BucketAlreadyExists
+					// SeaweedFS responds with BucketAlreadyExists
+					if let CreateBucketError::BucketAlreadyOwnedByYou(_)
+					| CreateBucketError::BucketAlreadyExists(_) = service_err.err()
 					{
 						tracing::info!(bucket = ?bucket_name, "bucket already exists");
 						continue;

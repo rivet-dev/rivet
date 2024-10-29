@@ -7,6 +7,7 @@ license = "Apache-2.0"
 
 [dependencies]
 chirp-client = { path = "../chirp/client" }
+global-error = { version = "0.1.5", path = "../global-error" }
 hyper = { version = "0.14", features = ["server", "http1", "tcp"] }
 rivet-config = { version = "0.1.0", path = "../config" }
 rivet-pools = { path = "../pools" }

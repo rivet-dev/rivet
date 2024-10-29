@@ -6,10 +6,12 @@ authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 license = "Apache-2.0"
 
 [dependencies]
+global-error = { version = "0.1.5", path = "../global-error" }
 hyper = { version = "0.14", features = ["server", "http1", "tcp"] }
 lazy_static = "1.4"
 prometheus = "0.13"
 rivet-config = { version = "0.1.0", path = "../config" }
 rivet-env = { version = "0.1.0", path = "../env" }
+tokio = "1.41.0"
 tracing = "0.1"
 

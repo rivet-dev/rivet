@@ -138,19 +138,12 @@ pub async fn start(
 		}
 	}
 
-	// Run server
-	tokio::task::Builder::new()
-		.name("rivet::health_checks")
-		.spawn(rivet_health_checks::run_standalone(
-			rivet_health_checks::Config {
-				config: config.clone(),
-				pools: Some(pools.clone()),
-			},
-		))?;
-
-	tokio::task::Builder::new()
-		.name("rivet::metrics")
-		.spawn(rivet_metrics::run_standalone(config.clone()))?;
+	// Run health & metrics servers
+	rivet_health_checks::spawn_standalone(rivet_health_checks::Config {
+		config: config.clone(),
+		pools: Some(pools.clone()),
+	})?;
+	rivet_metrics::spawn_standalone(config.clone())?;
 
 	// Wait for services
 	join_set.join_all().await;

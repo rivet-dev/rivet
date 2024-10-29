@@ -5,4 +5,4 @@ mod server;
 pub use buckets::{BUCKETS, PROVISION_BUCKETS};
 pub use prometheus;
 pub use registry::REGISTRY;
-pub use server::run_standalone;
+pub use server::spawn_standalone;

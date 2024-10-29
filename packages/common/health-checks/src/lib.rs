@@ -1,3 +1,4 @@
+use global_error::prelude::*;
 use std::{convert::Infallible, net::SocketAddr, sync::Arc};
 
 use hyper::{
@@ -19,12 +20,13 @@ pub enum HealthCheckError {
 }
 
 #[tracing::instrument(skip_all)]
-pub async fn run_standalone(config: Config) {
+pub fn spawn_standalone(config: Config) -> GlobalResult<()> {
 	let config = Arc::new(config);
-	let host = config.config.server().unwrap().rivet.health.host();
-	let port = config.config.server().unwrap().rivet.health.port();
+	let host = config.config.server()?.rivet.health.host();
+	let port = config.config.server()?.rivet.health.port();
 	let addr = SocketAddr::from((host, port));
-	let make_service = make_service_fn(|_conn| {
+
+	let make_service = make_service_fn(move |_conn| {
 		let config = config.clone();
 		async move {
 			let config = config.clone();
@@ -34,10 +36,17 @@ pub async fn run_standalone(config: Config) {
 			}))
 		}
 	});
-	let server = Server::bind(&addr).serve(make_service);
-	if let Err(e) = server.await {
-		eprintln!("server error: {}", e);
-	}
+
+	let server = Server::try_bind(&addr)?.serve(make_service);
+
+	tokio::spawn(async move {
+		tracing::info!(?host, ?port, "started health server");
+		if let Err(err) = server.await {
+			tracing::error!(?err, "health server error");
+		}
+	});
+
+	Ok(())
 }
 
 #[tracing::instrument(skip_all)]
