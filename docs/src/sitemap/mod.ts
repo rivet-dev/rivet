@@ -5,6 +5,13 @@ import { Sitemap, SiteTab } from '@/lib/sitemap';
 // - Siebar links should advertise the product, collapse any advanced pages away
 // - The sidebar should be 1 screen height when collapsed
 
+// Profiles:
+// - What does Rivet do?
+//	- Does it work for my use cases -> Use Cases
+//	- Curious about the technology -> Build with Rivet
+// - Just want to jump in
+// - Poeple who want to run Open Source
+
 export const sitemap = [
 	{
 		title: 'Documentation',
@@ -16,30 +23,67 @@ export const sitemap = [
 				pages: [
 					{ title: 'Initial Setup', href: '/docs', icon: 'play' },
 					{ title: 'Intro to Rivet', href: '/docs', icon: 'book' },
+					// { title: 'Local Development', href: '/docs', icon: 'computer' },
+					{
+						title: 'Languages & Game Engines',
+						collapsible: true,
+						pages: [
+							{ title: 'Godot', href: '/docs' },
+							{ title: 'Unity', href: '/docs' },
+							{ title: 'Unreal', href: '/docs' },
+							{ title: 'JavaScript & TypeScript', href: '/docs' },
+						]
+					},
 				]
 			},
 			{
-				title: 'Learn About Rivet',
+				title: 'Use Cases',
 				pages: [
-					{ title: 'What Are Actors?', href: '/docs', icon: 'user-group' },
-					{ title: 'Containers vs Isolates', href: '/docs', icon: 'box' },
-					{
-						title: 'Use Cases',
-						collapsible: true,
-						pages: [
-							{ title: 'Gaming', href: '/docs', icon: 'gamepad' },
-							{ title: 'AI', href: '/docs', icon: 'robot' },
-						]
-					}
+					{ title: 'Multiplayer Tools', href: '/docs', icon: 'rotate' },
+					{ title: 'Dedicated Game Servers', href: '/docs', icon: 'gamepad' },
+					{ title: 'AI Agents', href: '/docs', icon: 'robot' },
+					{ title: 'Batch Jobs', href: '/docs', icon: 'forklift' },
+					// { title: 'Live Events', href: '/docs', icon: 'calendar' },
+					{ title: 'Run User Code', href: '/docs', icon: 'alien-8bit' },
+					{ title: 'More', href: '/docs', icon: 'ellipsis' },
 				]
 			},
+			// {
+			// 	title: 'Learn About Rivet',
+			// 	pages: [
+			// 		{ title: 'What Are Actors?', href: '/docs', icon: 'user-group' },
+			// 		{ title: 'Containers vs Isolates', href: '/docs', icon: 'box' },
+			// 		{
+			// 			title: 'Use Cases',
+			// 			collapsible: true,
+			// 			pages: [
+			// 				{ title: 'Dedicated Game Servers', href: '/docs', icon: 'gamepad' },
+			// 				{ title: 'AI Voice Agents', href: '/docs', icon: 'robot' },
+			// 				{ title: 'Run User Code', href: '/docs', icon: 'robot' },
+			// 			]
+			// 		}
+			// 	]
+			// },
 			{
 				title: 'Build with Rivet',
 				pages: [
-					{ title: 'Creating an Actor', href: '/docs', icon: 'plus' },
-					{ title: 'Actor Messaging', href: '/docs', icon: 'envelope' },
-					{ title: 'Actor Networking', href: '/docs', icon: 'network-wired' },
-					{ title: 'Authentication', href: '/docs', icon: 'lock' },
+					{ title: 'What Are Actors?', href: '/docs', icon: 'block-question' },
+					// { title: 'Low-Latency Networking', href: '/docs', icon: 'network-wired' },
+					{ title: 'Low-Latency Networking', href: '/docs', icon: 'network-wired' },
+					{ title: 'Realtime Messaging', href: '/docs', icon: 'envelope' },
+					{ title: 'Persistence', href: '/docs', icon: 'floppy-disk' },
+					{ title: 'Scaling & Concurrency', href: '/docs', icon: 'maximize' },
+					{ title: 'Edge Regions', href: '/docs', icon: 'globe' },
+					{
+						title: 'Concepts',
+						collapsible: true,
+						pages: [
+							{ title: 'Authentication', href: '/docs', icon: 'fingerprint' },
+							{ title: 'DDoS & Botting Mitigation', href: '/docs', icon: 'shield-halved' },
+							{ title: 'Fault Tolerance', href: '/docs', icon: 'fingerprint' },
+							{ title: 'Containers vs Isolates', href: '/docs', icon: 'box' },
+						]
+					},
 				]
 			},
 			{
@@ -48,15 +92,15 @@ export const sitemap = [
 					{ title: 'Self-Hosting', href: '/docs', icon: 'server' },
 					{ title: 'Billing', href: '/docs', icon: 'credit-card' },
 					{ title: 'DDoS Mitigation', href: '/docs', icon: 'shield' },
-					{ title: 'Security', href: '/docs', icon: 'lock-open' },
+					{ title: 'Security', href: '/docs', icon: 'lock' },
 					{
 						title: 'Comparison',
 						collapsible: true,
 						pages: [
-							{ title: 'Kubernetes', href: '/docs', icon: 'ship' },
-							{ title: 'Cloudflare', href: '/docs', icon: 'cloud' },
-							{ title: 'Socket.io', href: '/docs', icon: 'plug' },
-							{ title: 'Redis', href: '/docs', icon: 'database' },
+							{ title: 'Kubernetes', href: '/docs' },
+							{ title: 'Cloudflare', href: '/docs' },
+							{ title: 'Socket.io', href: '/docs' },
+							{ title: 'Redis', href: '/docs' },
 						]
 					}
 				]
@@ -64,11 +108,19 @@ export const sitemap = [
 		]
 	},
 	{
-		title: 'Guides',
+		title: 'Examples',
 		href: '/docs/examples',
 		sidebar: [
+			// TODO: Gropu by type in sidebar
 		]
 	},
+	// {
+	// 	title: 'Integrations',
+	// 	href: '/docs/examples',
+	// 	sidebar: [
+	// 		// TODO: Gropu by type in sidebar
+	// 	]
+	// },
 	{
 		title: 'Actors SDK',
 		href: '/docs/examples',
