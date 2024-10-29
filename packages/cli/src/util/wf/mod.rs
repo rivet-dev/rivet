@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 
 use anyhow::*;
-use chrono::{Local, TimeZone};
+use chrono::{Utc, TimeZone};
 use clap::ValueEnum;
 use indoc::indoc;
 use rivet_pools::CrdbPool;
@@ -90,8 +90,9 @@ pub struct WorkflowRow {
 }
 
 #[derive(sqlx::FromRow)]
-struct HistoryEvent {
+struct HistoryEventRow {
 	location: Vec<i64>,
+	/// Event type.
 	t: i64,
 	name: Option<String>,
 	input: Option<serde_json::Value>,
@@ -99,10 +100,18 @@ struct HistoryEvent {
 	forgotten: bool,
 }
 
-pub async fn get_workflow(pool: CrdbPool, workflow_id: Uuid) -> Result<Option<WorkflowRow>> {
+#[derive(sqlx::FromRow)]
+struct ActivityErrorRow {
+	location: Vec<i64>,
+	error: String,
+	count: i64,
+	latest_ts: i64,
+}
+
+pub async fn get_workflows(pool: CrdbPool, workflow_ids: Vec<Uuid>) -> Result<Vec<WorkflowRow>> {
 	let mut conn = pool.acquire().await?;
 
-	let workflow = sqlx::query_as::<_, WorkflowRow>(indoc!(
+	let workflows = sqlx::query_as::<_, WorkflowRow>(indoc!(
 		"
 		SELECT
 			workflow_id,
@@ -121,14 +130,14 @@ pub async fn get_workflow(pool: CrdbPool, workflow_id: Uuid) -> Result<Option<Wo
 			) AS has_wake_condition
 		FROM db_workflow.workflows
 		WHERE
-			workflow_id = $1
+			workflow_id = ANY($1)
 		"
 	))
-	.bind(workflow_id)
-	.fetch_optional(&mut *conn)
+	.bind(workflow_ids)
+	.fetch_all(&mut *conn)
 	.await?;
 
-	Ok(workflow)
+	Ok(workflows)
 }
 
 pub async fn find_workflows(
@@ -236,7 +245,7 @@ pub async fn print_workflows(workflows: Vec<WorkflowRow>, pretty: bool) -> Resul
 
 			println!("  {} {}", style("id").bold(), workflow.workflow_id);
 
-			let datetime = Local
+			let datetime = Utc
 				.timestamp_millis_opt(workflow.create_ts)
 				.single()
 				.context("invalid ts")?;
@@ -284,17 +293,17 @@ pub async fn print_workflows(workflows: Vec<WorkflowRow>, pretty: bool) -> Resul
 	Ok(())
 }
 
-pub async fn silence_workflow(pool: CrdbPool, workflow_id: Uuid) -> Result<()> {
+pub async fn silence_workflows(pool: CrdbPool, workflow_ids: Vec<Uuid>) -> Result<()> {
 	let mut conn = pool.acquire().await?;
 
 	sqlx::query(indoc!(
 		"
 		UPDATE db_workflow.workflows
 		SET silence_ts = $2
-		WHERE workflow_id = $1
+		WHERE workflow_id = ANY($1)
 		"
 	))
-	.bind(workflow_id)
+	.bind(workflow_ids)
 	.bind(util::now())
 	.execute(&mut *conn)
 	.await?;
@@ -302,17 +311,17 @@ pub async fn silence_workflow(pool: CrdbPool, workflow_id: Uuid) -> Result<()> {
 	Ok(())
 }
 
-pub async fn wake_workflow(pool: CrdbPool, workflow_id: Uuid) -> Result<()> {
+pub async fn wake_workflows(pool: CrdbPool, workflow_ids: Vec<Uuid>) -> Result<()> {
 	let mut conn = pool.acquire().await?;
 
 	sqlx::query(indoc!(
 		"
 		UPDATE db_workflow.workflows
 		SET wake_immediate = TRUE
-		WHERE workflow_id = $1
+		WHERE workflow_id = ANY($1)
 		"
 	))
-	.bind(workflow_id)
+	.bind(workflow_ids)
 	.execute(&mut *conn)
 	.await?;
 
@@ -322,13 +331,15 @@ pub async fn wake_workflow(pool: CrdbPool, workflow_id: Uuid) -> Result<()> {
 pub async fn print_history(
 	pool: CrdbPool,
 	workflow_id: Uuid,
+	include_errors: bool,
 	include_forgotten: bool,
 	print_location: bool,
 ) -> Result<()> {
 	let mut conn = pool.acquire().await?;
 	let mut conn2 = pool.acquire().await?;
+	let mut conn3 = pool.acquire().await?;
 
-	let (wf_row, events) = tokio::try_join!(
+	let (wf_row, events, error_rows) = tokio::try_join!(
 		async move {
 			sqlx::query_as::<_, (String, serde_json::Value, Option<serde_json::Value>)>(indoc!(
 				"
@@ -343,51 +354,70 @@ pub async fn print_history(
 			.map_err(Into::into)
 		},
 		async move {
-			sqlx::query_as::<_, HistoryEvent>(indoc!(
+			sqlx::query_as::<_, HistoryEventRow>(indoc!(
 				"
-			WITH workflow_events AS (
-				SELECT $1 AS workflow_id
-			)
-			SELECT location, 0 AS t, activity_name AS name, input, output, forgotten
-			FROM db_workflow.workflow_activity_events, workflow_events
-			WHERE
-				workflow_activity_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
-			UNION ALL
-			SELECT location, 1 AS t, signal_name AS name, body as input, null as output, forgotten
-			FROM db_workflow.workflow_signal_events, workflow_events
-			WHERE
-				workflow_signal_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
-			UNION ALL
-			SELECT location, 2 AS t, w.workflow_name AS name, w.input, w.output, forgotten
-			FROM workflow_events, db_workflow.workflow_sub_workflow_events AS sw
-			JOIN db_workflow.workflows AS w
-			ON sw.sub_workflow_id = w.workflow_id
-			WHERE
-				sw.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
-			UNION ALL
-			SELECT location, 3 AS t, signal_name AS name, body as input, null as output, forgotten
-			FROM db_workflow.workflow_signal_send_events, workflow_events
-			WHERE
-				workflow_signal_send_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
-			UNION ALL
-			SELECT location, 4 AS t, message_name AS name, body as input, null as output, forgotten
-			FROM db_workflow.workflow_message_send_events, workflow_events
-			WHERE
-				workflow_message_send_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
-			UNION ALL
-			SELECT location, 5 AS t, NULL AS name, null as input, null as output, forgotten
-			FROM db_workflow.workflow_loop_events, workflow_events
-			WHERE
-				workflow_loop_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
-			ORDER BY location ASC;
-			"
+				WITH workflow_events AS (
+					SELECT $1 AS workflow_id
+				)
+				SELECT location, 0 AS t, activity_name AS name, input, output, forgotten
+				FROM db_workflow.workflow_activity_events, workflow_events
+				WHERE
+					workflow_activity_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
+				UNION ALL
+				SELECT location, 1 AS t, signal_name AS name, body as input, null as output, forgotten
+				FROM db_workflow.workflow_signal_events, workflow_events
+				WHERE
+					workflow_signal_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
+				UNION ALL
+				SELECT location, 2 AS t, w.workflow_name AS name, w.input, w.output, forgotten
+				FROM workflow_events, db_workflow.workflow_sub_workflow_events AS sw
+				JOIN db_workflow.workflows AS w
+				ON sw.sub_workflow_id = w.workflow_id
+				WHERE
+					sw.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
+				UNION ALL
+				SELECT location, 3 AS t, signal_name AS name, body as input, null as output, forgotten
+				FROM db_workflow.workflow_signal_send_events, workflow_events
+				WHERE
+					workflow_signal_send_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
+				UNION ALL
+				SELECT location, 4 AS t, message_name AS name, body as input, null as output, forgotten
+				FROM db_workflow.workflow_message_send_events, workflow_events
+				WHERE
+					workflow_message_send_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
+				UNION ALL
+				SELECT location, 5 AS t, NULL AS name, null as input, null as output, forgotten
+				FROM db_workflow.workflow_loop_events, workflow_events
+				WHERE
+					workflow_loop_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
+				ORDER BY location ASC;
+				"
 			))
 			.bind(workflow_id)
 			.bind(include_forgotten)
 			.fetch_all(&mut *conn2)
 			.await
 			.map_err(Into::into)
-		}
+		},
+		async move {
+			if include_errors {
+				sqlx::query_as::<_, ActivityErrorRow>(indoc!(
+					"
+					SELECT location, error, COUNT(error), MAX(ts) AS latest_ts
+					FROM db_workflow.workflow_activity_errors
+					WHERE workflow_id = $1
+					GROUP BY location, error
+					ORDER BY latest_ts
+					"
+				))
+				.bind(workflow_id)
+				.fetch_all(&mut *conn3)
+				.await
+				.map_err(Into::into)
+			} else {
+				Ok(Vec::new())
+			}
+		},
 	)?;
 
 	let Some((workflow_name, input, output)) = wf_row else {
@@ -402,21 +432,17 @@ pub async fn print_history(
 
 		println!(
 			"{} {}",
-			style(workflow_name).yellow().bold(),
-			style(workflow_id).yellow()
+			style(workflow_name).blue().bold(),
+			style(workflow_id).blue()
 		);
 
-		print!(
-			"  {} {}",
-			style("╰").yellow().dim(),
-			style("input").yellow()
-		);
+		print!("  {} {}", style("╰").blue().dim(), style("input").blue());
 
 		let input = serde_json::to_string(&input)?;
 		let input_trim = input.chars().take(50).collect::<String>();
-		print!(" {}", style(input_trim).yellow().dim());
+		print!(" {}", style(input_trim).blue().dim());
 		if input.len() > 50 {
-			print!(" {}", style("...").yellow().dim());
+			print!(" {}", style("...").blue().dim());
 		}
 
 		println!("\n");
@@ -424,6 +450,10 @@ pub async fn print_history(
 
 	for i in 0..events.len() {
 		let event = events.get(i).unwrap();
+		let errors = error_rows
+			.iter()
+			.filter(|row| row.location == event.location)
+			.collect::<Vec<_>>();
 
 		let t = EventType::from_repr(event.t.try_into()?).context("invalid event type")?;
 
@@ -449,7 +479,11 @@ pub async fn print_history(
 		if let Some(input) = &event.input {
 			print!("{}", "  ".repeat(event.location.len()));
 
-			let c = if event.output.is_none() { "╰" } else { "├" };
+			let c = if event.output.is_none() && errors.is_empty() {
+				"╰"
+			} else {
+				"├"
+			};
 			let c = if event.forgotten {
 				style(c).red().dim()
 			} else {
@@ -472,11 +506,13 @@ pub async fn print_history(
 		if let Some(output) = &event.output {
 			print!("{}", "  ".repeat(event.location.len()));
 
-			if event.forgotten {
-				print!("{} ", style("╰").red().dim());
+			let c = if errors.is_empty() { "╰" } else { "├" };
+			let c = if event.forgotten {
+				style(c).red().dim()
 			} else {
-				print!("{} ", style("╰").dim());
-			}
+				style(c).dim()
+			};
+			print!("{} ", c);
 
 			print!("output");
 
@@ -488,6 +524,43 @@ pub async fn print_history(
 			}
 
 			println!("");
+		}
+
+		if !errors.is_empty() {
+			print!("{}", "  ".repeat(event.location.len()));
+
+			if event.forgotten {
+				print!("{} ", style("╰").red().dim());
+			} else {
+				print!("{} ", style("╰").dim());
+			}
+
+			println!("{}", style("errors"));
+
+			for (i, error) in errors.iter().enumerate() {
+				print!("{}", "  ".repeat(event.location.len() + 1));
+
+				let c = if i == errors.len() - 1 { "╰" } else { "├" };
+				let c = if event.forgotten {
+					style(c).red().dim()
+				} else {
+					style(c).dim()
+				};
+				print!("{} ", c);
+
+				let datetime = Utc
+					.timestamp_millis_opt(error.latest_ts)
+					.single()
+					.context("invalid ts")?;
+				let date = datetime.format("%Y-%m-%d %H:%M:%S");
+
+				println!(
+					"{} {} {}",
+					style(format!("(last {})", date)).magenta(),
+					style(format!("x{}", error.count)).yellow().bold(),
+					style(error.error.replace('\n', " ")).dim(),
+				);
+			}
 		}
 
 		if !matches!(t, EventType::Loop) {
@@ -553,19 +626,15 @@ pub async fn print_history(
 
 	// Print footer
 	if let Some(output) = output {
-		println!("{}", style("Workflow complete").yellow().bold());
+		println!("{}", style("Workflow complete").green().bold());
 
-		print!(
-			"  {} {}",
-			style("╰").yellow().dim(),
-			style("output").yellow()
-		);
+		print!("  {} {}", style("╰").green().dim(), style("output").green());
 
 		let output = serde_json::to_string(&output)?;
 		let output_trim = output.chars().take(50).collect::<String>();
-		print!(" {}", style(output_trim).yellow().dim());
+		print!(" {}", style(output_trim).green().dim());
 		if output.len() > 50 {
-			print!(" {}", style("...").yellow().dim());
+			print!(" {}", style("...").green().dim());
 		}
 
 		println!("");
@@ -597,8 +666,8 @@ mod render {
 
 	#[derive(Tabled)]
 	struct WorkflowTableRow {
-		pub workflow_name: String,
 		pub workflow_id: Uuid,
+		pub workflow_name: String,
 		#[tabled(display_with = "display_state")]
 		pub state: WorkflowState,
 		#[tabled(display_with = "display_option")]

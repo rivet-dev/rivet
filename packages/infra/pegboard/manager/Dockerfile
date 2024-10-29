@@ -8,11 +8,11 @@ COPY . .
 RUN \
 	--mount=type=cache,target=/root/.cargo/git \
 	--mount=type=cache,target=/root/.cargo/registry \
-	--mount=type=cache,target=/app/lib/pegboard/target \
-	cd lib/pegboard/manager && \
+	--mount=type=cache,target=/app/packages/infra/pegboard/target \
+	cd packages/infra/pegboard/manager && \
 	RUSTFLAGS="--cfg tokio_unstable" cargo build --release --package pegboard-manager --bin pegboard-manager && \
 	mkdir -p /app/dist && \
-	mv /app/lib/pegboard/target/x86_64-unknown-linux-musl/release/pegboard-manager /app/dist/pegboard-manager
+	mv /app/packages/infra/pegboard/target/x86_64-unknown-linux-musl/release/pegboard-manager /app/dist/pegboard-manager
 
 # Create an empty image and copy binaries into it to minimize the size of the image
 FROM scratch

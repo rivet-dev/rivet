@@ -31,7 +31,7 @@ pub struct SignalRow {
 	ack_ts: Option<i64>,
 }
 
-pub async fn get_signal(pool: CrdbPool, signal_id: Uuid) -> Result<Option<SignalRow>> {
+pub async fn get_signals(pool: CrdbPool, signal_ids: Vec<Uuid>) -> Result<Vec<SignalRow>> {
 	let mut conn = pool.acquire().await?;
 
 	let signal = sqlx::query_as::<_, SignalRow>(indoc!(
@@ -56,11 +56,11 @@ pub async fn get_signal(pool: CrdbPool, signal_id: Uuid) -> Result<Option<Signal
 			body,
 			ack_ts
 		FROM db_workflow.tagged_signals
-		WHERE signal_id = $1
+		WHERE signal_id = ANY($1)
 		"
 	))
-	.bind(signal_id)
-	.fetch_optional(&mut *conn)
+	.bind(signal_ids)
+	.fetch_all(&mut *conn)
 	.await?;
 
 	Ok(signal)
@@ -193,7 +193,7 @@ pub async fn print_signals(signals: Vec<SignalRow>, pretty: bool) -> Result<()> 
 	Ok(())
 }
 
-pub async fn silence_signal(pool: CrdbPool, signal_id: Uuid) -> Result<()> {
+pub async fn silence_signals(pool: CrdbPool, signal_ids: Vec<Uuid>) -> Result<()> {
 	let mut conn = pool.acquire().await?;
 
 	sqlx::query(indoc!(
@@ -202,19 +202,19 @@ pub async fn silence_signal(pool: CrdbPool, signal_id: Uuid) -> Result<()> {
 			update_signals AS (
 				UPDATE db_workflow.signals
 				SET silence_ts = $2
-				WHERE signal_id = $1
+				WHERE signal_id = ANY($1)
 				RETURNING 1
 			),
 			update_tagged_signals AS (
 				UPDATE db_workflow.tagged_signals
 				SET silence_ts = $2
-				WHERE signal_id = $1
+				WHERE signal_id = ANY($1)
 				RETURNING 1
 			)
 		SELECT 1
 		"
 	))
-	.bind(signal_id)
+	.bind(signal_ids)
 	.bind(util::now())
 	.execute(&mut *conn)
 	.await?;

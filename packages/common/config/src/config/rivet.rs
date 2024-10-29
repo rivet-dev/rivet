@@ -291,13 +291,13 @@ pub struct Pegboard {
 	/// The port on which the Pegboard service listens.
 	#[serde(default = "Pegboard::default_port")]
 	pub port: u16,
-	/// The key for the manager binary.
+	/// The url for the manager binary.
 	#[serde(default)]
 	pub manager_binary_url: Option<Url>,
-	/// The key for the container runner binary.
+	/// The url for the container runner binary.
 	#[serde(default)]
 	pub container_runner_binary_url: Option<Url>,
-	/// The key for the isolate runner binary.
+	/// The url for the isolate runner binary.
 	#[serde(default)]
 	pub isolate_runner_binary_url: Option<Url>,
 }

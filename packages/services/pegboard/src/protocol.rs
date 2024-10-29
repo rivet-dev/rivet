@@ -241,6 +241,7 @@ pub struct BoundPort {
 }
 
 #[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
+#[serde(rename_all = "snake_case")]
 pub enum ClientFlavor {
 	Container = 0,
 	Isolate = 1,

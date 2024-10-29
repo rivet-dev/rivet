@@ -1,13 +1,3 @@
 {
-	"folders": [
-		{
-			"path": "..",
-		},
-		{
-			"path": "../lib/bolt",
-		},
-		{
-			"path": "../svc",
-		}
-	],
+	"folders": []
 }

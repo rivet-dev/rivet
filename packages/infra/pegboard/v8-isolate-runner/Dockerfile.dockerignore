@@ -1,5 +1,5 @@
 *
 
-!lib/pegboard/runner-protocol
-!lib/pegboard/v8-isolate-runner/Cargo.toml
-!lib/pegboard/v8-isolate-runner/src
+!packages/infra/pegboard/runner-protocol
+!packages/infra/pegboard/v8-isolate-runner/Cargo.toml
+!packages/infra/pegboard/v8-isolate-runner/src

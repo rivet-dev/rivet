@@ -25,6 +25,9 @@ async fn main() -> Result<()> {
 	// Read args
 	let mut config_flag = false;
 	let mut args = std::env::args();
+	// Skip exec
+	args.next();
+
 	let config_path = loop {
 		let Some(arg) = args.next() else {
 			bail!("missing `--config` argument");

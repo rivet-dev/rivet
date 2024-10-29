@@ -1,9 +1,9 @@
 FROM clux/muslrust:1.80.0-stable AS rust
 
 WORKDIR /app
-COPY lib/pegboard/runner-protocol/ runner-protocol/
-COPY lib/pegboard/v8-isolate-runner/Cargo.toml v8-isolate-runner/Cargo.toml
-COPY lib/pegboard/v8-isolate-runner/src/ v8-isolate-runner/src/
+COPY packages/infra/pegboard/runner-protocol/ runner-protocol/
+COPY packages/infra/pegboard/v8-isolate-runner/Cargo.toml v8-isolate-runner/Cargo.toml
+COPY packages/infra/pegboard/v8-isolate-runner/src/ v8-isolate-runner/src/
 RUN \
 	--mount=type=cache,target=/root/.cargo/git \
 	--mount=type=cache,target=/root/.cargo/registry \

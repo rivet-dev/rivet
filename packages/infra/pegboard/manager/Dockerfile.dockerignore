@@ -3,17 +3,10 @@
 !Bolt.toml
 !Cargo.lock
 !Cargo.toml
-!errors
-!gen/build_script.sh
-!gen/docker
-!gen/test_build_script.sh
-!infra/default-builds
-!infra/misc/svc_scripts
-!lib
-!proto
+!packages
+!resources/legacy/proto
 !sdks/full/rust/Cargo.toml
 !sdks/full/rust/src
-!src
 !svc
 
 sdks/runtime

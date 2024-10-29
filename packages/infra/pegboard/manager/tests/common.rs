@@ -193,7 +193,7 @@ pub async fn init_client(gen_path: &Path, working_path: &Path) -> Config {
 		client_id: Uuid::new_v4(),
 		datacenter_id: Uuid::new_v4(),
 		network_ip: "127.0.0.1".parse().unwrap(),
-		vector_socket_addr: "127.0.0.1:5021".parse().unwrap(),		
+		vector_socket_addr: "127.0.0.1:5021".parse().unwrap(),
 		// Not necessary for the test
 		flavor: protocol::ClientFlavor::Container,
 

@@ -9,10 +9,9 @@ use crate::util::{
 
 #[derive(Parser)]
 pub enum SubCommand {
-	/// Prints the given signal.
+	/// Prints the given signal(s).
 	Get {
-		#[clap(index = 1)]
-		signal_id: Uuid,
+		signal_ids: Vec<Uuid>,
 	},
 	/// Finds signals that match the given tags.
 	List {
@@ -30,18 +29,17 @@ pub enum SubCommand {
 	},
 	/// Silences a signal from showing up as dead or running again.
 	Ack {
-		#[clap(index = 1)]
-		signal_id: Uuid,
+		signal_ids: Vec<Uuid>,
 	},
 }
 
 impl SubCommand {
 	pub async fn execute(self, config: rivet_config::Config) -> Result<()> {
 		match self {
-			Self::Get { signal_id } => {
+			Self::Get { signal_ids } => {
 				let pool = util::wf::build_pool(&config).await?;
-				let signal = util::wf::signal::get_signal(pool, signal_id).await?;
-				util::wf::signal::print_signals(signal.into_iter().collect(), true).await
+				let signals = util::wf::signal::get_signals(pool, signal_ids).await?;
+				util::wf::signal::print_signals(signals, true).await
 			}
 			Self::List {
 				tags,
@@ -55,9 +53,9 @@ impl SubCommand {
 					util::wf::signal::find_signals(pool, tags, workflow_id, name, state).await?;
 				util::wf::signal::print_signals(signals, pretty).await
 			}
-			Self::Ack { signal_id } => {
+			Self::Ack { signal_ids } => {
 				let pool = util::wf::build_pool(&config).await?;
-				util::wf::signal::silence_signal(pool, signal_id).await
+				util::wf::signal::silence_signals(pool, signal_ids).await
 			}
 		}
 	}
