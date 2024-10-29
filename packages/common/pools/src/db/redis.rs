@@ -35,7 +35,7 @@ pub async fn setup(config: Config) -> Result<HashMap<String, RedisPool>, Error> 
 			.build_task()
 			.name("redis_from_env")
 			.spawn(async move {
-				tracing::info!("redis connecting");
+				tracing::debug!("redis connecting");
 				let client = redis::Client::open(url).map_err(Error::BuildRedis)?;
 
 				// Add timeout for initial connection
@@ -47,7 +47,7 @@ pub async fn setup(config: Config) -> Result<HashMap<String, RedisPool>, Error> 
 				.map_err(|_| Error::RedisInitialConnectionTimeout)?
 				.map_err(Error::BuildRedis)?;
 
-				tracing::info!("redis connected");
+				tracing::debug!("redis connected");
 
 				Ok((key, conn))
 			})
@@ -61,7 +61,7 @@ pub async fn setup(config: Config) -> Result<HashMap<String, RedisPool>, Error> 
 		redis.insert(key.to_string(), conn.clone());
 	}
 
-	tracing::info!("redis connected");
+	tracing::debug!("redis connected");
 
 	Ok(redis)
 }

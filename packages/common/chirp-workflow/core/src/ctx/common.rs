@@ -23,7 +23,7 @@ pub async fn wait_for_workflow<W: Workflow>(
 	db: &DatabaseHandle,
 	workflow_id: Uuid,
 ) -> GlobalResult<W::Output> {
-	tracing::info!(workflow_name=%W::NAME, %workflow_id, "waiting for workflow");
+	tracing::debug!(workflow_name=%W::NAME, %workflow_id, "waiting for workflow");
 
 	let mut interval = tokio::time::interval(SUB_WORKFLOW_RETRY);
 
@@ -59,7 +59,7 @@ where
 	I: OperationInput,
 	<I as OperationInput>::Operation: Operation<Input = I>,
 {
-	tracing::info!(?input, "operation call");
+	tracing::debug!(?input, "operation call");
 
 	let ctx = OperationCtx::new(
 		db.clone(),
@@ -77,7 +77,7 @@ where
 		.map_err(WorkflowError::OperationFailure)
 		.map_err(GlobalError::raw);
 
-	tracing::info!(?res, "operation response");
+	tracing::debug!(?res, "operation response");
 
 	res
 }

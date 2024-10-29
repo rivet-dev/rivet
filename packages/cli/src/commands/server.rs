@@ -43,10 +43,7 @@ impl Opts {
 	) -> Result<()> {
 		// Provision services before starting server
 		if !self.skip_provision {
-			tracing::info!("provisioning s3");
 			s3_util::provision(config.clone(), &run_config.s3_buckets).await?;
-
-			tracing::info!("migrating database");
 			rivet_migrate::up(config.clone(), &run_config.sql_services).await?;
 		}
 

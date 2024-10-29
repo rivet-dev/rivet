@@ -8,7 +8,7 @@ pub type ClickHousePool = clickhouse::Client;
 #[tracing::instrument(skip(config))]
 pub fn setup(config: Config) -> Result<Option<ClickHousePool>, Error> {
 	if let Some(clickhouse) = &config.server().map_err(Error::Global)?.clickhouse {
-		tracing::info!("clickhouse connecting");
+		tracing::debug!("clickhouse connecting");
 
 		// Build HTTP client
 		let mut http_connector = hyper::client::connect::HttpConnector::new();

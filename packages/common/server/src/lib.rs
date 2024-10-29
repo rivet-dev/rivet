@@ -94,10 +94,10 @@ pub async fn start(
 	));
 
 	// Spawn services
-	tracing::info!(services = ?services.len(), "starting server");
+	tracing::info!(services = ?services.len(), "starting services");
 	let mut join_set = tokio::task::JoinSet::new();
 	for service in services {
-		tracing::info!(name = %service.name, kind = ?service.kind, "server starting service");
+		tracing::debug!(name = %service.name, kind = ?service.kind, "server starting service");
 
 		match service.kind.behavior() {
 			ServiceBehavior::Service => {
@@ -108,9 +108,9 @@ pub async fn start(
 						let config = config.clone();
 						let pools = pools.clone();
 						async move {
-							loop {
-								tracing::info!(service = %service.name, "starting service");
+							tracing::debug!(service = %service.name, "starting service");
 
+							loop {
 								match (service.run)(config.clone(), pools.clone()).await {
 									Result::Ok(_) => {
 										tracing::error!(service = %service.name, "service exited unexpectedly");
@@ -121,6 +121,8 @@ pub async fn start(
 								}
 
 								tokio::time::sleep(Duration::from_secs(1)).await;
+
+								tracing::info!(service = %service.name, "restarting service");
 							}
 						}
 					})
@@ -134,20 +136,22 @@ pub async fn start(
 						let config = config.clone();
 						let pools = pools.clone();
 						async move {
-							loop {
-								tracing::info!(oneoff = %service.name, "starting oneoff");
+							tracing::debug!(oneoff = %service.name, "starting oneoff");
 
+							loop {
 								match (service.run)(config.clone(), pools.clone()).await {
 									Result::Ok(_) => {
-										tracing::error!(oneoff = %service.name, "oneoff finished");
+										tracing::debug!(oneoff = %service.name, "oneoff finished");
 										break;
 									}
 									Err(err) => {
 										tracing::error!(oneoff = %service.name, ?err, "oneoff crashed");
+
+										tokio::time::sleep(Duration::from_secs(1)).await;
+
+										tracing::info!(oneoff = %service.name, "restarting oneoff");
 									}
 								}
-
-								tokio::time::sleep(Duration::from_secs(1)).await;
 							}
 						}
 					})

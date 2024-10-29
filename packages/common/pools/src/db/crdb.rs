@@ -8,7 +8,7 @@ pub type CrdbPool = sqlx::PgPool;
 #[tracing::instrument(skip(config))]
 pub async fn setup(config: Config) -> Result<CrdbPool, Error> {
 	let crdb = &config.server().map_err(Error::Global)?.cockroachdb;
-	tracing::info!("crdb connecting");
+	tracing::debug!("crdb connecting");
 
 	// let client_name = client_name.clone();
 
@@ -65,7 +65,7 @@ pub async fn setup(config: Config) -> Result<CrdbPool, Error> {
 		.await
 		.map_err(Error::BuildSqlx)?;
 
-	tracing::info!("crdb connected");
+	tracing::debug!("crdb connected");
 
 	Ok(pool)
 }

@@ -40,7 +40,7 @@ pub async fn setup(config: Config, client_name: String) -> Result<NatsPool, Erro
 				async move {
 					match event {
 						async_nats::Event::Connected => {
-							tracing::info!(?server_addrs, "nats reconnected");
+							tracing::debug!(?server_addrs, "nats reconnected");
 						}
 						async_nats::Event::Disconnected => {
 							tracing::error!(?server_addrs, "nats disconnected");
@@ -65,13 +65,13 @@ pub async fn setup(config: Config, client_name: String) -> Result<NatsPool, Erro
 	// NATS has built in backoff with jitter (with max of 4s), so
 	// once the connection is established, we never have to worry
 	// about disconnections that aren't handled by NATS.
-	tracing::info!(?server_addrs, "nats connecting");
+	tracing::debug!(?server_addrs, "nats connecting");
 	let conn = options
 		.connect(&server_addrs[..])
 		.await
 		.map_err(Error::BuildNats)?;
 
-	tracing::info!(?server_addrs, "nats connected");
+	tracing::debug!(?server_addrs, "nats connected");
 
 	Ok(conn)
 }

@@ -15,10 +15,13 @@ pub enum ProvisionError {
 }
 
 /// Provisions all required S3 buckets.
+#[tracing::instrument(skip_all)]
 pub async fn provision(
 	config: rivet_config::Config,
 	buckets: &[S3Bucket],
 ) -> Result<(), ProvisionError> {
+	tracing::info!(buckets = ?buckets.len(), "provisioning s3 buckets");
+
 	// Build client
 	let s3_config = &config.server().map_err(ProvisionError::Global)?.s3;
 	let client = Client::new(
@@ -34,7 +37,7 @@ pub async fn provision(
 		let bucket_name = crate::namespaced_bucket_name(&config, &bucket.name)?;
 
 		match client.create_bucket().bucket(&bucket_name).send().await {
-			Ok(_) => tracing::info!(bucket = ?bucket_name, "bucket created"),
+			Ok(_) => tracing::debug!(bucket = ?bucket_name, "bucket created"),
 			Err(err) => {
 				if let aws_sdk_s3::error::SdkError::ServiceError(service_err) = &err {
 					// Minio responds with BucketAlreadyExists
@@ -42,7 +45,7 @@ pub async fn provision(
 					if let CreateBucketError::BucketAlreadyOwnedByYou(_)
 					| CreateBucketError::BucketAlreadyExists(_) = service_err.err()
 					{
-						tracing::info!(bucket = ?bucket_name, "bucket already exists");
+						tracing::debug!(bucket = ?bucket_name, "bucket already exists");
 						continue;
 					}
 				}
@@ -51,7 +54,7 @@ pub async fn provision(
 		}
 	}
 
-	tracing::info!("finished provisioning storage buckets");
+	tracing::debug!("finished provisioning storage buckets");
 
 	Ok(())
 }

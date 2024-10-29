@@ -16,7 +16,10 @@ struct MigrateCmd {
 	args: Vec<String>,
 }
 
+#[tracing::instrument(skip_all)]
 pub async fn up(config: rivet_config::Config, services: &[SqlService]) -> Result<()> {
+	tracing::info!(sql_services = ?services.len(), "running sql migrations");
+
 	let server_config = config.server.as_ref().context("missing server")?;
 
 	let crdb = rivet_pools::db::crdb::setup(config.clone())
@@ -146,7 +149,7 @@ pub async fn up(config: rivet_config::Config, services: &[SqlService]) -> Result
 	}
 
 	// Run pre-migration queries in parallel
-	tracing::info!(crdb = ?crdb_pre_queries.len(), clickhouse = ?clickhouse_pre_queries.len(), "running pre-migrations");
+	tracing::debug!(crdb = ?crdb_pre_queries.len(), clickhouse = ?clickhouse_pre_queries.len(), "running pre-migrations");
 	tokio::try_join!(
 		async {
 			if !crdb_pre_queries.is_empty() {
@@ -175,7 +178,7 @@ pub async fn up(config: rivet_config::Config, services: &[SqlService]) -> Result
 		}
 	)?;
 
-	tracing::info!("running migrations");
+	tracing::debug!("running migrations");
 
 	let migrations = services
 		.iter()
@@ -192,7 +195,7 @@ pub async fn up(config: rivet_config::Config, services: &[SqlService]) -> Result
 	run_migrations(config.clone(), &migrations).await?;
 
 	// Run post-migration queries in parallel
-	tracing::info!(crdb = ?crdb_post_queries.len(), clickhouse = ?clickhouse_post_queries.len(), "running post-migrations");
+	tracing::debug!(crdb = ?crdb_post_queries.len(), clickhouse = ?clickhouse_post_queries.len(), "running post-migrations");
 	tokio::try_join!(
 		async {
 			if !crdb_post_queries.is_empty() {
@@ -215,10 +218,10 @@ pub async fn up(config: rivet_config::Config, services: &[SqlService]) -> Result
 		}
 	)?;
 
-	tracing::info!("shutting down pools");
+	tracing::debug!("shutting down pools");
 	crdb.close().await;
 
-	tracing::info!("migrated");
+	tracing::debug!("migrated");
 
 	Ok(())
 }
@@ -258,7 +261,7 @@ pub async fn drop(config: rivet_config::Config, service: &SqlService) -> Result<
 
 async fn run_migrations(config: rivet_config::Config, migration_cmds: &[MigrateCmd]) -> Result<()> {
 	for cmd in migration_cmds {
-		tracing::info!(db_name=%cmd.service.db_name, "running db migration");
+		tracing::debug!(db_name=%cmd.service.db_name, "running db migration");
 
 		// Write migrations to temp path
 		let dir = tempfile::tempdir()?;
@@ -288,7 +291,7 @@ async fn run_migrations(config: rivet_config::Config, migration_cmds: &[MigrateC
 				.await
 				.expect("Failed to read stdout")
 			{
-				tracing::info!("migrate stdout: {}", line);
+				tracing::debug!("migrate stdout: {}", line);
 			}
 		});
 
@@ -299,7 +302,7 @@ async fn run_migrations(config: rivet_config::Config, migration_cmds: &[MigrateC
 				.await
 				.expect("Failed to read stderr")
 			{
-				tracing::warn!("migrate stderr: {}", line);
+				tracing::debug!("migrate stderr: {}", line);
 			}
 		});
 

@@ -53,7 +53,7 @@ macro_rules! __sql_query_metrics_finish {
 
 		// Log query
 		let location = concat!(file!(), ":", line!(), ":", column!());
-		tracing::info!(%location, ty = %stringify!($rv), dt = ?duration, action = stringify!($action), "sql query");
+		tracing::debug!(%location, ty = %stringify!($rv), dt = ?duration, action = stringify!($action), "sql query");
 
 		// Count metric
 		rivet_pools::metrics::SQL_QUERY_DURATION
