@@ -10,23 +10,34 @@ services:
       - RUST_BACKTRACE=1
     stop_grace_period: 0s
     ports:
-        # API
+      # API
       - "8080:8080"
       # API internal
       - "8081:8080"
       # Pegboard
       - "8082:8082"
     depends_on:
-      - cockroachdb
-      - redis
-      - clickhouse
-      - nats
-      - minio
-      - vector
+      cockroachdb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      vector:
+        condition: service_started
     volumes:
       - ./rivet:/etc/rivet:ro
     networks:
       - rivet-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/health"]
+      interval: 2s
+      timeout: 10s
+      retries: 3
 
   shell:
     build:
@@ -46,6 +57,11 @@ services:
       - cockroach-data:/cockroach/cockroach-data
     networks:
       - rivet-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/health?ready=1"]
+      interval: 2s
+      timeout: 10s
+      retries: 3
 
   redis:
     image: bitnami/valkey:8.0.1
@@ -56,6 +72,11 @@ services:
     command: redis-server --requirepass password --save 60 1 --appendonly yes
     networks:
       - rivet-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 10s
+      retries: 3
 
   clickhouse:
     image: bitnami/clickhouse:23.10.1
@@ -66,11 +87,21 @@ services:
       - ./clickhouse/users.xml:/etc/clickhouse-server/users.d/users.xml:ro
     networks:
       - rivet-network
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--password", "default", "--query", "SELECT 1"]
+      interval: 2s
+      timeout: 10s
+      retries: 3
 
   nats:
     image: nats:2.10.22-scratch
     networks:
       - rivet-network
+    healthcheck:
+      test: ["CMD", "nats-server", "--health"]
+      interval: 2s
+      timeout: 10s
+      retries: 3
 
   prometheus:
     image: bitnami/prometheus:2.55.0
@@ -81,6 +112,11 @@ services:
       - '--storage.tsdb.path=/prometheus'
     networks:
       - rivet-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9090/-/healthy"]
+      interval: 2s
+      timeout: 10s
+      retries: 3
 
   grafana:
     image: grafana/grafana:11.3.0
@@ -92,6 +128,11 @@ services:
       - prometheus
     networks:
       - rivet-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/api/health"]
+      interval: 2s
+      timeout: 10s
+      retries: 3
 
   minio:
     image: bitnami/minio:2024.10.13-debian-12-r0
@@ -102,6 +143,11 @@ services:
       - MINIO_ROOT_PASSWORD=minioadmin
     networks:
       - rivet-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 2s
+      timeout: 10s
+      retries: 3
 
   vector:
     image: timberio/vector:0.42.0-distroless-static
