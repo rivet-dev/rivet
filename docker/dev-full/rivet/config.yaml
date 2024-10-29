@@ -25,10 +25,10 @@ server:
     password: default
   s3:
     region: us-east-1
-    endpoint_internal: http://minio:9000
-    endpoint_external: http://minio:9000
-    access_key_id: minioadmin
-    secret_access_key: minioadmin
+    endpoint_internal: http://seaweedfs:8000
+    endpoint_external: http://seaweedfs:8000
+    access_key_id: admin
+    secret_access_key: admin
   nats:
     urls:
       - nats://nats:4222

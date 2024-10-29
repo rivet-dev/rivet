@@ -25,7 +25,7 @@ services:
         condition: service_healthy
       nats:
         condition: service_healthy
-      minio:
+      seaweedfs:
         condition: service_healthy
       vector:
         condition: service_started
@@ -37,7 +37,7 @@ services:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/health"]
       interval: 2s
       timeout: 10s
-      retries: 3
+      retries: 10
 
   shell:
     build:
@@ -61,7 +61,7 @@ services:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/health?ready=1"]
       interval: 2s
       timeout: 10s
-      retries: 3
+      retries: 10
 
   redis:
     image: bitnami/valkey:8.0.1
@@ -76,7 +76,7 @@ services:
       test: ["CMD", "redis-cli", "ping"]
       interval: 2s
       timeout: 10s
-      retries: 3
+      retries: 10
 
   clickhouse:
     image: bitnami/clickhouse:23.10.1
@@ -91,7 +91,7 @@ services:
       test: ["CMD", "clickhouse-client", "--password", "default", "--query", "SELECT 1"]
       interval: 2s
       timeout: 10s
-      retries: 3
+      retries: 10
 
   nats:
     image: nats:2.10.22-scratch
@@ -101,7 +101,7 @@ services:
       test: ["CMD", "nats-server", "--health"]
       interval: 2s
       timeout: 10s
-      retries: 3
+      retries: 10
 
   prometheus:
     image: bitnami/prometheus:2.55.0
@@ -116,7 +116,7 @@ services:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9090/-/healthy"]
       interval: 2s
       timeout: 10s
-      retries: 3
+      retries: 10
 
   grafana:
     image: grafana/grafana:11.3.0
@@ -132,22 +132,21 @@ services:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/api/health"]
       interval: 2s
       timeout: 10s
-      retries: 3
+      retries: 10
 
-  minio:
-    image: bitnami/minio:2024.10.13-debian-12-r0
+  seaweedfs:
+    image: bitnami/seaweedfs:3.78.0
+    command: server -dir /var/lib/seaweedfs -s3 -s3.config /etc/seaweedfs/s3.json -s3.port=8000 -s3.allowEmptyFolder=false -s3.allowDeleteBucketNotEmpty=false
     volumes:
-      - minio-data:/data
-    environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
+      - ./seaweedfs:/etc/seaweedfs:ro
+      - seaweedfs-data:/var/lib/seaweedfs
     networks:
       - rivet-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
+      test: ["CMD", "bash", "-c", ">/dev/tcp/127.0.0.1/8000"]
       interval: 2s
       timeout: 10s
-      retries: 3
+      retries: 10
 
   vector:
     image: timberio/vector:0.42.0-distroless-static
@@ -166,5 +165,5 @@ volumes:
   clickhouse-data:
   prometheus-data:
   grafana-data:
-  minio-data:
+  seaweedfs-data:
   vector-data:
