@@ -13,7 +13,18 @@ const METRICS_PORT: u16 = 6000;
 pub async fn run_standalone() {
 	let addr = SocketAddr::from(([0, 0, 0, 0], METRICS_PORT));
 
-	let server = Server::bind(&addr).serve(make_service_fn(|_| async {
+	let server = match Server::try_bind(&addr) {
+		Ok(x) => x,
+		Err(err) => {
+			tracing::error!(?host, ?port, ?err, "failed to bind pegboard metrics server");
+
+			// TODO: Find cleaner way of crashing entire program
+			// Hard crash program since a server failing to bind is critical
+			std::process::exit(1);
+		}
+	};
+
+	let server = server.serve(make_service_fn(|_| async {
 		Ok::<_, hyper::Error>(service_fn(serve_req))
 	}));
 	if let Err(err) = server.await {

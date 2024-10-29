@@ -138,10 +138,19 @@ where
 	});
 
 	let addr = SocketAddr::from((host, port));
-	let server = Server::bind(&addr).serve(make_service);
+	let server = match Server::try_bind(&addr) {
+		Ok(x) => x,
+		Err(err) => {
+			tracing::error!(?host, ?port, ?err, "failed to bind api server");
+
+			// TODO: Find cleaner way of crashing entire program
+			// Hard crash program since a server failing to bind is critical
+			std::process::exit(1);
+		}
+	};
 
 	tracing::info!(?host, ?port, "server listening");
-	server.await?;
+	server.serve(make_service).await?;
 
 	Ok(())
 }

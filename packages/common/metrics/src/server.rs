@@ -15,7 +15,18 @@ pub async fn run_standalone(config: rivet_config::Config) -> GlobalResult<()> {
 	let port = config.server()?.rivet.metrics.port();
 	let addr = SocketAddr::from((host, port));
 
-	let server = Server::try_bind(&addr)?.serve(make_service_fn(|_| async {
+	let server = match Server::try_bind(&addr) {
+		Ok(x) => x,
+		Err(err) => {
+			tracing::error!(?host, ?port, ?err, "failed to bind metrics server");
+
+			// TODO: Find cleaner way of crashing entire program
+			// Hard crash program since a server failing to bind is critical
+			std::process::exit(1);
+		}
+	};
+
+	let server = server.serve(make_service_fn(|_| async {
 		Ok::<_, hyper::Error>(service_fn(serve_req))
 	}));
 

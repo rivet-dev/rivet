@@ -37,7 +37,18 @@ pub async fn run_standalone(config: Config) -> GlobalResult<()> {
 		}
 	});
 
-	let server = Server::try_bind(&addr)?.serve(make_service);
+	let server = match Server::try_bind(&addr) {
+		Ok(x) => x,
+		Err(err) => {
+			tracing::error!(?host, ?port, ?err, "failed to bind health check server");
+
+			// TODO: Find cleaner way of crashing entire program
+			// Hard crash program since a server failing to bind is critical
+			std::process::exit(1);
+		}
+	};
+
+	let server = server.serve(make_service);
 
 	tracing::info!(?host, ?port, "started health server");
 	server.await?;

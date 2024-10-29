@@ -153,8 +153,17 @@ impl Ctx {
 		// Start runner socket
 		let self2 = self.clone();
 		let runner_socket = tokio::spawn(async move {
-			tracing::info!(port=%RUNNER_PORT, "listening for runner sockets");
-			let listener = TcpListener::bind(("0.0.0.0", RUNNER_PORT)).await?;
+			tracing::warn!(port=%RUNNER_PORT, "listening for runner sockets");
+			let listener = match TcpListener::bind(("0.0.0.0", RUNNER_PORT)).await {
+				Ok(x) => x,
+				Err(err) => {
+					tracing::error!(host = "0.0.0.0", port = ?RUNNER_PORT, "failed to bind pegboard manager server");
+
+					// TODO: Find cleaner way of crashing entire program
+					// Hard crash program since a server failing to bind is critical
+					std::process::exit(1);
+				}
+			};
 
 			loop {
 				use std::result::Result::{Err, Ok};
