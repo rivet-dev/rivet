@@ -28,10 +28,19 @@ pub async fn get_cluster_id(ctx: &OperationCtx, input: &Input) -> GlobalResult<O
 			sql_fetch_one!(
 				[ctx, (Uuid,)]
 				"
-				INSERT INTO config (id, cluster_id)
-				VALUES (1, $1)
-				ON CONFLICT (id) DO NOTHING
-				RETURNING cluster_id
+				WITH new_row AS (
+					INSERT INTO db_dynamic_config.config (id, cluster_id)
+					VALUES (1, $1)
+					ON CONFLICT (id) DO NOTHING
+					RETURNING cluster_id
+				)
+				SELECT cluster_id 
+				FROM new_row
+				UNION ALL
+				SELECT cluster_id 
+				FROM db_dynamic_config.config
+				WHERE NOT EXISTS (SELECT 1 FROM new_row)
+
 				",
 				default_cluster_id
 			)
