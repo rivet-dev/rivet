@@ -142,8 +142,10 @@ pub async fn start(
 	rivet_health_checks::spawn_standalone(rivet_health_checks::Config {
 		config: config.clone(),
 		pools: Some(pools.clone()),
-	})?;
-	rivet_metrics::spawn_standalone(config.clone())?;
+	})
+	.map_err(|err| anyhow!("failed to spawn health checks: {err}"))?;
+	rivet_metrics::spawn_standalone(config.clone())
+		.map_err(|err| anyhow!("failed to spawn metrics: {err}"))?;
 
 	// Wait for services
 	join_set.join_all().await;

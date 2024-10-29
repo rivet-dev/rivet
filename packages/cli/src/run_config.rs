@@ -30,7 +30,7 @@ impl RunConfigData {
 
 pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 	let services = vec![
-		// APInpm install -g @withgraphite/graphite-cli@stable
+		// API
 		Service::new("api_monolith", ServiceKind::Api, |config, pools| {
 			Box::pin(api_monolith::start(config, pools))
 		}),

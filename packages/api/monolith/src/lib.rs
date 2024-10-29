@@ -10,6 +10,5 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> G
 		config.server()?.rivet.api.port(),
 		route::handle,
 	)
-	.await;
-	Ok(())
+	.await
 }

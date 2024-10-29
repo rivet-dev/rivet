@@ -1,15 +1,15 @@
-use std::{
-	convert::Infallible,
-	future::Future,
-	net::{IpAddr, SocketAddr},
-	time::Instant,
-};
-
+use global_error::prelude::*;
 use hyper::{
 	body::HttpBody,
 	server::conn::AddrStream,
 	service::{make_service_fn, service_fn},
 	Body, Request, Response, Server,
+};
+use std::{
+	convert::Infallible,
+	future::Future,
+	net::{IpAddr, SocketAddr},
+	time::Instant,
 };
 use tracing::Instrument;
 use uuid::Uuid;
@@ -21,7 +21,8 @@ pub async fn start<T: 'static, Fut>(
 	host: IpAddr,
 	port: u16,
 	handle: T,
-) where
+) -> GlobalResult<()>
+where
 	T: Fn(
 			chirp_client::SharedClientHandle,
 			rivet_config::Config,
@@ -35,9 +36,9 @@ pub async fn start<T: 'static, Fut>(
 		+ Copy,
 	Fut: Future<Output = Result<Response<Body>, http::Error>> + Send,
 {
-	let shared_client = chirp_client::SharedClient::from_env(pools.clone()).expect("create client");
+	let shared_client = chirp_client::SharedClient::from_env(pools.clone())?;
 
-	let cache = rivet_cache::CacheInner::from_env(pools.clone()).expect("create cache");
+	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
 
 	// A `MakeService` that produces a `Service` to handle each connection
 	let make_service = make_service_fn(move |conn: &AddrStream| {
@@ -140,7 +141,7 @@ pub async fn start<T: 'static, Fut>(
 	let server = Server::bind(&addr).serve(make_service);
 
 	tracing::info!(?host, ?port, "server listening");
-	if let Err(e) = server.await {
-		eprintln!("server error: {}", e);
-	}
+	server.await?;
+
+	Ok(())
 }
