@@ -10,15 +10,15 @@ export const BootstrapDomains: core.serialization.ObjectSchema<
     serializers.cloud.BootstrapDomains.Raw,
     Rivet.cloud.BootstrapDomains
 > = core.serialization.object({
-    cdn: core.serialization.string(),
-    job: core.serialization.string(),
+    cdn: core.serialization.string().optional(),
+    job: core.serialization.string().optional(),
     opengb: core.serialization.string().optional(),
 });
 
 export declare namespace BootstrapDomains {
     interface Raw {
-        cdn: string;
-        job: string;
+        cdn?: string | null;
+        job?: string | null;
         opengb?: string | null;
     }
 }

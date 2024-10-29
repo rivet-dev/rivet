@@ -885,18 +885,26 @@ fn direct_proxied_port(
 	region_id: Uuid,
 	port: &backend::matchmaker::lobby_runtime::Port,
 ) -> GlobalResult<backend::job::ProxiedPortConfig> {
+	let ingress_hostnames = if let Some(domain_job) = config
+		.server()?
+		.rivet
+		.dns
+		.as_ref()
+		.and_then(|x| x.domain_job.as_ref())
+	{
+		vec![format!(
+			"{}-{}.lobby.{}.{}",
+			lobby_id, port.label, region_id, domain_job,
+		)]
+	} else {
+		Vec::new()
+	};
 	Ok(backend::job::ProxiedPortConfig {
 		// Match the port label generated in mm-config-version-prepare
 		// and in api-matchmaker
 		target_nomad_port_label: Some(util_mm::format_nomad_port_label(&port.label)),
 		ingress_port: None,
-		ingress_hostnames: vec![format!(
-			"{}-{}.lobby.{}.{}",
-			lobby_id,
-			port.label,
-			region_id,
-			unwrap_ref!(config.server()?.rivet.dns()?.domain_job),
-		)],
+		ingress_hostnames,
 		proxy_protocol: job_proxy_protocol(port.proxy_protocol)? as i32,
 		ssl_domain_mode: backend::job::SslDomainMode::ParentWildcard as i32,
 	})
@@ -908,19 +916,28 @@ fn path_proxied_port(
 	region_id: Uuid,
 	port: &backend::matchmaker::lobby_runtime::Port,
 ) -> GlobalResult<backend::job::ProxiedPortConfig> {
+	// TODO: Not just for hostnames anymore, change name?
+	let ingress_hostnames = if let Some(domain_job) = config
+		.server()?
+		.rivet
+		.dns
+		.as_ref()
+		.and_then(|x| x.domain_job.as_ref())
+	{
+		vec![format!(
+			"lobby.{}.{}/{}-{}",
+			region_id, domain_job, lobby_id, port.label,
+		)]
+	} else {
+		Vec::new()
+	};
+
 	Ok(backend::job::ProxiedPortConfig {
 		// Match the port label generated in mm-config-version-prepare
 		// and in api-matchmaker
 		target_nomad_port_label: Some(util_mm::format_nomad_port_label(&port.label)),
 		ingress_port: None,
-		// TODO: Not just for hostnames anymore, change name?
-		ingress_hostnames: vec![format!(
-			"lobby.{}.{}/{}-{}",
-			region_id,
-			unwrap_ref!(config.server()?.rivet.dns()?.domain_job),
-			lobby_id,
-			port.label,
-		)],
+		ingress_hostnames,
 		proxy_protocol: job_proxy_protocol(port.proxy_protocol)? as i32,
 		ssl_domain_mode: backend::job::SslDomainMode::Exact as i32,
 	})

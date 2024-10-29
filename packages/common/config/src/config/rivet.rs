@@ -80,9 +80,9 @@ pub struct Rivet {
 	#[serde(default)]
 	pub tunnel: Tunnel,
 
-	/// Configuration for the hub service.
+	/// Configuration for the UI service.
 	#[serde(default)]
-	pub hub: Hub,
+	pub ui: Ui,
 
 	/// Configuration for DNS management.
 	#[serde(default)]
@@ -128,7 +128,7 @@ impl Default for Rivet {
 			default_cluster_id: None,
 			cluster: None,
 			tunnel: Default::default(),
-			hub: Default::default(),
+			ui: Default::default(),
 			pegboard: Pegboard::default(),
 			job_run: None,
 			auth: Auth::default(),
@@ -223,6 +223,11 @@ pub struct Api {
 	pub port: Option<u16>,
 	/// Flag to enable verbose error reporting.
 	pub verbose_errors: Option<bool>,
+	/// Flag to respect the X-Forwarded-For header for client IP addresses.
+	///
+	/// Will be ignored in favor of CF-Connecting-IP if DNS provider is
+	/// configured as Cloudflare.
+	pub respect_forwarded_for: Option<bool>,
 }
 
 impl Api {
@@ -241,7 +246,11 @@ impl Api {
 	}
 
 	pub fn verbose_errors(&self) -> bool {
-		self.verbose_errors.unwrap_or(false)
+		self.verbose_errors.unwrap_or(true)
+	}
+
+	pub fn respect_forwarded_for(&self) -> bool {
+		self.respect_forwarded_for.unwrap_or(false)
 	}
 }
 
@@ -393,14 +402,22 @@ impl Default for Tunnel {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct Hub {
-	/// The origin URL for the Hub service.
+pub struct Ui {
+	/// Enables serving the UI automatically.
+	///
+	/// If disabled, the UI can be hosted separately.
+	pub enable: Option<bool>,
+	/// The origin URL for the UI.
 	pub public_origin: Option<Url>,
-	/// Regular expression to match valid Hub origins.
+	/// Regular expression to match valid UI origins.
 	pub public_origin_regex: Option<String>,
 }
 
-impl Hub {
+impl Ui {
+	pub fn enable(&self) -> bool {
+		self.enable.unwrap_or(true)
+	}
+
 	pub fn public_origin(&self) -> Url {
 		self.public_origin.clone().unwrap_or_else(|| {
 			Url::parse(&format!("http://127.0.0.1:{}", default_ports::API)).unwrap()
@@ -408,9 +425,12 @@ impl Hub {
 	}
 
 	pub fn public_origin_regex(&self) -> String {
-		self.public_origin_regex
-			.clone()
-			.unwrap_or_else(|| format!("^http:\\/\\/:127\\.0\\.0\\.1:{}", default_ports::API))
+		self.public_origin_regex.clone().unwrap_or_else(|| {
+			format!(
+				"^https?://(?:localhost|127\\.0\\.0\\.1|\\[::1\\]|\\[::\\]|0\\.0\\.0\\.0):{}",
+				default_ports::API
+			)
+		})
 	}
 }
 

@@ -157,7 +157,7 @@ fn get_config_data(ctx: &OperationContext<()>) -> GlobalResult<serde_json::Value
 			"dns_enabled": server_config.rivet.dns.is_some(),
 			"job_run_enabled": server_config.rivet.job_run.is_some(),
 			"api_origin": server_config.rivet.api.public_origin(),
-			"hub_origin": server_config.rivet.hub.public_origin(),
+			"hub_origin": server_config.rivet.ui.public_origin(),
 		},
 	}))
 }

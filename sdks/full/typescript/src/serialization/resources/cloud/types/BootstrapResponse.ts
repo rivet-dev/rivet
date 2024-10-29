@@ -19,7 +19,7 @@ export const BootstrapResponse: core.serialization.ObjectSchema<
 > = core.serialization.object({
     cluster: cloud$$bootstrapCluster,
     access: cloud$$bootstrapAccess,
-    domains: cloud$$bootstrapDomains.optional(),
+    domains: cloud$$bootstrapDomains,
     origins: cloud$$bootstrapOrigins,
     captcha: cloud$$bootstrapCaptcha,
     loginMethods: core.serialization.property("login_methods", cloud$$bootstrapLoginMethods),
@@ -30,7 +30,7 @@ export declare namespace BootstrapResponse {
     interface Raw {
         cluster: cloud.BootstrapCluster.Raw;
         access: cloud.BootstrapAccess.Raw;
-        domains?: cloud.BootstrapDomains.Raw | null;
+        domains: cloud.BootstrapDomains.Raw;
         origins: cloud.BootstrapOrigins.Raw;
         captcha: cloud.BootstrapCaptcha.Raw;
         login_methods: cloud.BootstrapLoginMethods.Raw;

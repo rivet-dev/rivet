@@ -243,10 +243,12 @@ impl EndpointRouter {
 
 					// Set JSON headers
 					if let Some(mut headers) = response.headers_mut() {
-						headers.insert(
-							http::header::CONTENT_TYPE,
-							http::HeaderValue::from_static("application/json")
-						);
+						if !headers.contains_key(http::header::CONTENT_TYPE) {
+							headers.insert(
+								http::header::CONTENT_TYPE,
+								http::HeaderValue::from_static("application/json")
+							);
+						}
 					}
 
 					// Convert to hyper response

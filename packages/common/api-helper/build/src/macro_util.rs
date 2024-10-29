@@ -296,18 +296,31 @@ pub async fn __with_ctx<A: auth::ApiAuth + Send>(
 		//
 		// Otherwise, we use the cf-connecting-ip header since that's the recommended header to
 		// use by Cloudflare.
-		let remote_address_str =
-			if config.server()?.rivet.dns()?.provider == DnsProvider::Cloudflare {
-				__deserialize_header::<String, _>(&request, "cf-connecting-ip")?
-			} else {
-				// Traefik will override any user-provided provided x-forwarded-for
-				// header, so we can trust this
-				__deserialize_header::<String, _>(&request, "x-forwarded-for")?
-					.split(",")
-					.last()
-					.ok_or_else(|| err_code!(API_MISSING_HEADER, header = "x-forwarded-for"))?
-					.to_string()
-			};
+		let remote_address_str = if config
+			.server()?
+			.rivet
+			.dns
+			.as_ref()
+			.map_or(false, |x| x.provider == DnsProvider::Cloudflare)
+		{
+			__deserialize_header::<String, _>(&request, "cf-connecting-ip")?
+		} else if config.server()?.rivet.api.respect_forwarded_for() {
+			// Traefik will override any user-provided provided x-forwarded-for
+			// header, so we can trust this
+			__deserialize_header::<String, _>(&request, "x-forwarded-for")?
+				.split(",")
+				.last()
+				.ok_or_else(|| err_code!(API_MISSING_HEADER, header = "x-forwarded-for"))?
+				.to_string()
+		} else {
+			// Read the IP address from the raw socket
+			unwrap!(
+				request.extensions().get::<std::net::SocketAddr>(),
+				"missing remote address extension"
+			)
+			.ip()
+			.to_string()
+		};
 		let remote_address =
 			IpAddr::from_str(&remote_address_str).map_err(|_| err_code!(API_INVALID_IP))?;
 

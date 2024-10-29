@@ -24,20 +24,21 @@ pub async fn build_bootstrap_data(
 			RivetAccessKind::Public => models::CloudBootstrapAccess::Public,
 			RivetAccessKind::Private => models::CloudBootstrapAccess::Private,
 		},
-		domains: if let (Some(cdn), Some(job)) = (
-			config.server()?.rivet.dns()?.domain_cdn.clone(),
-			config.server()?.rivet.dns()?.domain_job.clone(),
-		) {
-			Some(Box::new(models::CloudBootstrapDomains {
-				cdn: cdn.into(),
-				job: job.into(),
-				opengb: None,
-			}))
-		} else {
-			None
-		},
+		domains: Box::new(models::CloudBootstrapDomains {
+			cdn: server_config
+				.rivet
+				.dns
+				.as_ref()
+				.and_then(|x| x.domain_cdn.clone()),
+			job: server_config
+				.rivet
+				.dns
+				.as_ref()
+				.and_then(|x| x.domain_job.clone()),
+			opengb: None,
+		}),
 		origins: Box::new(models::CloudBootstrapOrigins {
-			hub: config.server()?.rivet.hub.public_origin().to_string(),
+			hub: config.server()?.rivet.ui.public_origin().to_string(),
 		}),
 		captcha: Box::new(models::CloudBootstrapCaptcha {
 			turnstile: server_config

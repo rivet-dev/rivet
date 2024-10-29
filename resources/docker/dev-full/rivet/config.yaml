@@ -1,7 +1,14 @@
 server:
+  # IMPORTANT: Do not ship this to production
   jwt:
-    public: ""
-    private: ""
+    public: |
+      -----BEGIN PUBLIC KEY-----
+      MCowBQYDK2VwAyEAx7S9ab9ErA50y0tVfFro919+BBxFSuwMKmcJ5QI853Y=
+      -----END PUBLIC KEY-----
+    private: |
+      -----BEGIN PRIVATE KEY-----
+      MC4CAQAwBQYDK2VwBCIEIDI+WHFytxvdtfGot36NMCI26s2Yp0+E5u9OiPf3NQX3
+      -----END PRIVATE KEY-----
   cockroachdb:
     url: postgresql://cockroachdb:26257/defaultdb?sslmode=disable
     username: root

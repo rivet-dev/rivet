@@ -29,6 +29,9 @@ define_router! {
 	routes: {},
 	mounts: [
 		{
+			path: api_ui::route::Router,
+		},
+		{
 			path: api_admin::route::Router,
 			prefix: "admin",
 		},

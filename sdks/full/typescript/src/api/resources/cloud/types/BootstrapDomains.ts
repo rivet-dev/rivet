@@ -6,7 +6,7 @@
  * Domains that host parts of Rivet
  */
 export interface BootstrapDomains {
-    cdn: string;
-    job: string;
+    cdn?: string;
+    job?: string;
     opengb?: string;
 }

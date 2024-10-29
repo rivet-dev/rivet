@@ -1439,8 +1439,8 @@ func (b BootstrapCluster) Ptr() *BootstrapCluster {
 
 // Domains that host parts of Rivet
 type BootstrapDomains struct {
-	Cdn    string  `json:"cdn"`
-	Job    string  `json:"job"`
+	Cdn    *string `json:"cdn,omitempty"`
+	Job    *string `json:"job,omitempty"`
 	Opengb *string `json:"opengb,omitempty"`
 
 	_rawJSON json.RawMessage

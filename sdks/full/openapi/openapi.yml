@@ -10004,6 +10004,7 @@ components:
       required:
         - cluster
         - access
+        - domains
         - origins
         - captcha
         - login_methods
@@ -10029,9 +10030,6 @@ components:
           type: string
         opengb:
           type: string
-      required:
-        - cdn
-        - job
     CloudBootstrapOrigins:
       type: object
       description: Origins used to build URLs from

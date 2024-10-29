@@ -322,7 +322,7 @@ members = [
 "packages/services/custom-user-avatar/ops/list-for-game/",
 "packages/services/custom-user-avatar/ops/upload-complete/",
 "packages/services/debug/ops/email-res/",
-"packages/services/tier/", "packages/common/hub-embed",
+"packages/services/tier/", "packages/common/hub-embed", "packages/api/ui",
 ]
 
 # Speed up compilation

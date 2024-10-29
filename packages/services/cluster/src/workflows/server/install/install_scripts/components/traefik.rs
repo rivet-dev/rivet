@@ -301,7 +301,16 @@ pub fn gg_dynamic_config(
 	config: &rivet_config::Config,
 	datacenter_id: Uuid,
 ) -> GlobalResult<String> {
-	let domain_job = unwrap_ref!(config.server()?.rivet.dns()?.domain_job, "dns not enabled");
+	let Some(domain_job) = config
+		.server()?
+		.rivet
+		.dns
+		.as_ref()
+		.and_then(|x| x.domain_job.as_ref())
+	else {
+		// Don't return a config since we can't reserve a unique hostname
+		return Ok(String::new());
+	};
 
 	let main = format!("{datacenter_id}.{domain_job}");
 

@@ -77,9 +77,9 @@ async fn handle(
 				.config()
 				.server()?
 				.rivet
-				.dns()?
-				.domain_cdn
+				.dns
 				.as_ref()
+				.and_then(|x| x.domain_cdn.as_ref())
 				.map_or(false, |domain_cdn| {
 					domain_cdn == origin_host || origin_host.ends_with(&format!(".{domain_cdn}"))
 				}) {

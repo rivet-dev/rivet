@@ -21,8 +21,8 @@ pub struct CloudBootstrapResponse {
     pub cluster: crate::models::CloudBootstrapCluster,
     #[serde(rename = "deploy_hash")]
     pub deploy_hash: String,
-    #[serde(rename = "domains", skip_serializing_if = "Option::is_none")]
-    pub domains: Option<Box<crate::models::CloudBootstrapDomains>>,
+    #[serde(rename = "domains")]
+    pub domains: Box<crate::models::CloudBootstrapDomains>,
     #[serde(rename = "login_methods")]
     pub login_methods: Box<crate::models::CloudBootstrapLoginMethods>,
     #[serde(rename = "origins")]
@@ -30,13 +30,13 @@ pub struct CloudBootstrapResponse {
 }
 
 impl CloudBootstrapResponse {
-    pub fn new(access: crate::models::CloudBootstrapAccess, captcha: crate::models::CloudBootstrapCaptcha, cluster: crate::models::CloudBootstrapCluster, deploy_hash: String, login_methods: crate::models::CloudBootstrapLoginMethods, origins: crate::models::CloudBootstrapOrigins) -> CloudBootstrapResponse {
+    pub fn new(access: crate::models::CloudBootstrapAccess, captcha: crate::models::CloudBootstrapCaptcha, cluster: crate::models::CloudBootstrapCluster, deploy_hash: String, domains: crate::models::CloudBootstrapDomains, login_methods: crate::models::CloudBootstrapLoginMethods, origins: crate::models::CloudBootstrapOrigins) -> CloudBootstrapResponse {
         CloudBootstrapResponse {
             access,
             captcha: Box::new(captcha),
             cluster,
             deploy_hash,
-            domains: None,
+            domains: Box::new(domains),
             login_methods: Box::new(login_methods),
             origins: Box::new(origins),
         }

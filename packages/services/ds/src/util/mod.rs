@@ -27,12 +27,10 @@ pub fn build_ds_hostname(
 	datacenter_id: Uuid,
 ) -> GlobalResult<String> {
 	// TODO: Change lobby -> server
+	let domain_job = unwrap_ref!(config.server()?.rivet.dns()?.domain_job);
 	Ok(format!(
 		"{}-{}.lobby.{}.{}",
-		server_id,
-		port_name,
-		datacenter_id,
-		unwrap_ref!(config.server()?.rivet.dns()?.domain_job),
+		server_id, port_name, datacenter_id, domain_job
 	))
 }
 

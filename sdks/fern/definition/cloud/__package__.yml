@@ -15,7 +15,7 @@ types:
     properties:
       cluster: BootstrapCluster
       access: BootstrapAccess
-      domains: optional<BootstrapDomains>
+      domains: BootstrapDomains
       origins: BootstrapOrigins
       captcha: BootstrapCaptcha
       login_methods: BootstrapLoginMethods
@@ -35,8 +35,8 @@ types:
   BootstrapDomains:
     docs: Domains that host parts of Rivet
     properties:
-      cdn: string
-      job: string
+      cdn: optional<string>
+      job: optional<string>
       # TODO: This is the legacy name, but changing this MIGHT break CLI 1.0
       # clients. Need to check this.
       opengb: optional<string>

@@ -7,29 +7,6 @@ use uuid::Uuid;
 pub mod datacenters;
 pub mod servers;
 
-pub async fn handle(
-	shared_client: chirp_client::SharedClientHandle,
-	config: rivet_config::Config,
-	pools: rivet_pools::Pools,
-	cache: rivet_cache::Cache,
-	ray_id: uuid::Uuid,
-	request: Request<Body>,
-) -> Result<Response<Body>, http::Error> {
-	let response = Response::builder();
-
-	// Handle route
-	Router::handle(
-		shared_client,
-		config,
-		pools,
-		cache,
-		ray_id,
-		request,
-		response,
-	)
-	.await
-}
-
 define_router! {
 	routes: {
 		"datacenters" / Uuid / "tls": {

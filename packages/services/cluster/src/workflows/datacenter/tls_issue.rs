@@ -37,20 +37,20 @@ pub(crate) async fn cluster_datacenter_tls_issue(
 
 	let main_zone_id = unwrap!(
 		ctx.config().server()?.cloudflare()?.zone.main.clone(),
-		"dns not configured"
+		"main cloudflare zone not configured"
 	);
 	let domain_main = unwrap!(
 		ctx.config().server()?.rivet.dns()?.domain_main.clone(),
-		"dns not enabled"
+		"main domain not enabled"
 	);
 
 	let job_zone_id = unwrap!(
 		ctx.config().server()?.cloudflare()?.zone.job.clone(),
-		"dns not configured"
+		"job cloudflare zone not configured"
 	);
 	let domain_job = unwrap!(
 		ctx.config().server()?.rivet.dns()?.domain_job.clone(),
-		"dns not enabled"
+		"job domain not enabled"
 	);
 
 	let (gg_cert, job_cert) = ctx

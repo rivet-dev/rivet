@@ -785,9 +785,6 @@ components:
           type: string
         opengb:
           type: string
-      required:
-      - cdn
-      - job
       type: object
     CloudBootstrapLoginMethods:
       properties:
@@ -826,6 +823,7 @@ components:
       required:
       - cluster
       - access
+      - domains
       - origins
       - captcha
       - login_methods

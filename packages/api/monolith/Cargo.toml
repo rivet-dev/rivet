@@ -36,3 +36,4 @@ api-portal = { path = "../portal" }
 api-status = { path = "../status" }
 rivet-config = { version = "0.1.0", path = "../../common/config" }
 rivet-env = { version = "0.1.0", path = "../../common/env" }
+api-ui = { version = "0.1.0", path = "../ui" }

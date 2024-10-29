@@ -8,7 +8,7 @@ Name | Type | Description | Notes
 **captcha** | [**crate::models::CloudBootstrapCaptcha**](CloudBootstrapCaptcha.md) |  | 
 **cluster** | [**crate::models::CloudBootstrapCluster**](CloudBootstrapCluster.md) |  | 
 **deploy_hash** | **String** |  | 
-**domains** | Option<[**crate::models::CloudBootstrapDomains**](CloudBootstrapDomains.md)> |  | [optional]
+**domains** | [**crate::models::CloudBootstrapDomains**](CloudBootstrapDomains.md) |  | 
 **login_methods** | [**crate::models::CloudBootstrapLoginMethods**](CloudBootstrapLoginMethods.md) |  | 
 **origins** | [**crate::models::CloudBootstrapOrigins**](CloudBootstrapOrigins.md) |  | 
 

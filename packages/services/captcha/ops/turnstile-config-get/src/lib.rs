@@ -13,14 +13,14 @@ async fn handle(
 			.config()
 			.server()?
 			.rivet
-			.dns()?
-			.domain_cdn
+			.dns
 			.as_ref()
+			.and_then(|x| x.domain_cdn.as_ref())
 			.map_or(false, |domain_cdn| {
 				domain_cdn == origin_host || origin_host.ends_with(&format!(".{domain_cdn}"))
 			}) {
 			Some(
-				unwrap_ref!(
+				unwrap!(
 					ctx.config()
 						.server()?
 						.turnstile
@@ -38,7 +38,7 @@ async fn handle(
 	};
 
 	// Default to host from captcha config
-	let site_key = site_key.cloned().unwrap_or_else(|| config.site_key.clone());
+	let site_key = site_key.unwrap_or_else(|| config.site_key.clone());
 
 	Ok(captcha::turnstile_config_get::Response { site_key })
 }

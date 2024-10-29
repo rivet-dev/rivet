@@ -94,7 +94,15 @@ pub async fn build_cdn(
 			// This number needs to be high to allow for parallel requests
 			amount: 128,
 			source_criterion: types::InFlightReqSourceCriterion::RequestHeaderName(
-				if ctx.config().server()?.rivet.dns()?.provider == DnsProvider::Cloudflare {
+				if ctx
+					.config()
+					.server()?
+					.rivet
+					.dns
+					.as_ref()
+					.map(|x| &x.provider)
+					== Some(&DnsProvider::Cloudflare)
+				{
 					"cf-connecting-ip".to_string()
 				} else {
 					"x-forwarded-for".to_string()
@@ -193,7 +201,13 @@ fn register_namespace(
 	traefik_config: &mut types::TraefikConfigResponse,
 	s3_client: &s3_util::Client,
 ) -> GlobalResult<()> {
-	let Some(domain_cdn) = &config.server()?.rivet.dns()?.domain_cdn else {
+	let Some(domain_cdn) = &config
+		.server()?
+		.rivet
+		.dns
+		.as_ref()
+		.and_then(|x| x.domain_cdn.as_ref())
+	else {
 		return Ok(());
 	};
 
@@ -380,7 +394,13 @@ fn register_custom_cdn_route(
 	router_middlewares_html: Vec<String>,
 	route: &backend::cdn::Route,
 ) -> GlobalResult<()> {
-	let Some(domain_cdn) = &config.server()?.rivet.dns()?.domain_cdn else {
+	let Some(domain_cdn) = &config
+		.server()?
+		.rivet
+		.dns
+		.as_ref()
+		.and_then(|x| x.domain_cdn.as_ref())
+	else {
 		return Ok(());
 	};
 

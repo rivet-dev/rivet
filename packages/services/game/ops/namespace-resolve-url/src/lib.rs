@@ -31,7 +31,16 @@ async fn resolve_rivet_game_subdomain(
 	ctx: &OperationContext<game::namespace_resolve_url::Request>,
 	domain: &str,
 ) -> GlobalResult<Option<game::namespace_resolve_url::response::Resolution>> {
-	let domain_cdn = unwrap_ref!(ctx.config().server()?.rivet.dns()?.domain_cdn);
+	let Some(domain_cdn) = ctx
+		.config()
+		.server()?
+		.rivet
+		.dns
+		.as_ref()
+		.and_then(|x| x.domain_cdn.as_ref())
+	else {
+		return Ok(None);
+	};
 	let strip_suffix = format!(".{domain_cdn}");
 	tracing::info!(%domain, %strip_suffix, "attempting to strip base domain");
 	let specifier = if let Some(x) = domain.strip_suffix(&strip_suffix) {

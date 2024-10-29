@@ -14,20 +14,20 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudBootstrapDomains {
-    #[serde(rename = "cdn")]
-    pub cdn: String,
-    #[serde(rename = "job")]
-    pub job: String,
+    #[serde(rename = "cdn", skip_serializing_if = "Option::is_none")]
+    pub cdn: Option<String>,
+    #[serde(rename = "job", skip_serializing_if = "Option::is_none")]
+    pub job: Option<String>,
     #[serde(rename = "opengb", skip_serializing_if = "Option::is_none")]
     pub opengb: Option<String>,
 }
 
 impl CloudBootstrapDomains {
     /// Domains that host parts of Rivet
-    pub fn new(cdn: String, job: String) -> CloudBootstrapDomains {
+    pub fn new() -> CloudBootstrapDomains {
         CloudBootstrapDomains {
-            cdn,
-            job,
+            cdn: None,
+            job: None,
             opengb: None,
         }
     }

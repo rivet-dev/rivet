@@ -48,13 +48,16 @@ pub async fn start<T: 'static, Fut>(
 
 		// Create a `Service` for responding to the request
 		let remote_addr = conn.remote_addr();
-		let service = service_fn(move |req: Request<Body>| {
+		let service = service_fn(move |mut req: Request<Body>| {
 			let start = Instant::now();
 
 			let shared_client = shared_client.clone();
 			let config = config.clone();
 			let pools = pools.clone();
 			let cache = cache.clone();
+
+			// Add the SocketAddr as an extension to the request
+			req.extensions_mut().insert(remote_addr);
 
 			// Handle request
 			let ray_id = Uuid::new_v4();
