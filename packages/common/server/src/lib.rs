@@ -39,6 +39,8 @@ pub enum ServiceKind {
 	Singleton,
 	Oneshot,
 	Cron,
+	/// Run no matter what.
+	Core,
 }
 
 impl ServiceKind {
@@ -46,7 +48,7 @@ impl ServiceKind {
 		use ServiceKind::*;
 
 		match self {
-			Api | ApiInternal | Standalone | Singleton => ServiceBehavior::Service,
+			Api | ApiInternal | Standalone | Singleton | Core => ServiceBehavior::Service,
 			Oneshot | Cron => ServiceBehavior::Oneshot,
 		}
 	}
@@ -72,11 +74,27 @@ enum ServiceBehavior {
 pub async fn start(
 	config: rivet_config::Config,
 	pools: rivet_pools::Pools,
-	services: Vec<Service>,
+	mut services: Vec<Service>,
 ) -> Result<()> {
-	tracing::info!(services = ?services.len(), "starting server");
+	// Inject metrics and health services
+	services.push(Service::new(
+		"health_checks",
+		ServiceKind::Core,
+		|config, pools| {
+			rivet_health_checks::run_standalone(rivet_health_checks::Config {
+				config,
+				pools: Some(pools),
+			})
+		},
+	));
+	services.push(Service::new(
+		"metrics",
+		ServiceKind::Core,
+		|config, _pools| rivet_metrics::run_standalone(config),
+	));
 
 	// Spawn services
+	tracing::info!(services = ?services.len(), "starting server");
 	let mut join_set = tokio::task::JoinSet::new();
 	for service in services {
 		tracing::info!(name = %service.name, kind = ?service.kind, "server starting service");
@@ -137,15 +155,6 @@ pub async fn start(
 			}
 		}
 	}
-
-	// Run health & metrics servers
-	rivet_health_checks::spawn_standalone(rivet_health_checks::Config {
-		config: config.clone(),
-		pools: Some(pools.clone()),
-	})
-	.map_err(|err| anyhow!("failed to spawn health checks: {err}"))?;
-	rivet_metrics::spawn_standalone(config.clone())
-		.map_err(|err| anyhow!("failed to spawn metrics: {err}"))?;
 
 	// Wait for services
 	join_set.join_all().await;

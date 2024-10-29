@@ -10,7 +10,7 @@ use std::net::SocketAddr;
 // TODO: Record extra labels
 
 #[tracing::instrument(skip_all)]
-pub fn spawn_standalone(config: rivet_config::Config) -> GlobalResult<()> {
+pub async fn run_standalone(config: rivet_config::Config) -> GlobalResult<()> {
 	let host = config.server()?.rivet.metrics.host();
 	let port = config.server()?.rivet.metrics.port();
 	let addr = SocketAddr::from((host, port));
@@ -19,12 +19,8 @@ pub fn spawn_standalone(config: rivet_config::Config) -> GlobalResult<()> {
 		Ok::<_, hyper::Error>(service_fn(serve_req))
 	}));
 
-	tokio::spawn(async move {
-		tracing::info!(?host, ?port, "started metrics server");
-		if let Err(err) = server.await {
-			tracing::error!(?err, "metrics server error");
-		}
-	});
+	tracing::info!(?host, ?port, "started metrics server");
+	server.await?;
 
 	Ok(())
 }

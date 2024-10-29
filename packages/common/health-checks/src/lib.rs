@@ -20,7 +20,7 @@ pub enum HealthCheckError {
 }
 
 #[tracing::instrument(skip_all)]
-pub fn spawn_standalone(config: Config) -> GlobalResult<()> {
+pub async fn run_standalone(config: Config) -> GlobalResult<()> {
 	let config = Arc::new(config);
 	let host = config.config.server()?.rivet.health.host();
 	let port = config.config.server()?.rivet.health.port();
@@ -39,12 +39,8 @@ pub fn spawn_standalone(config: Config) -> GlobalResult<()> {
 
 	let server = Server::try_bind(&addr)?.serve(make_service);
 
-	tokio::spawn(async move {
-		tracing::info!(?host, ?port, "started health server");
-		if let Err(err) = server.await {
-			tracing::error!(?err, "health server error");
-		}
-	});
+	tracing::info!(?host, ?port, "started health server");
+	server.await?;
 
 	Ok(())
 }
