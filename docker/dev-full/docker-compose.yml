@@ -3,8 +3,8 @@ version: '3.8'
 services:
   rivet:
     build:
-      context: ../../..
-      dockerfile: resources/docker/dev-full/Dockerfile
+      context: ../..
+      dockerfile: docker/dev-full/Dockerfile
     command: /usr/bin/rivet server
     environment:
       - RUST_BACKTRACE=1
@@ -31,7 +31,7 @@ services:
   shell:
     build:
       context: ../../..
-      dockerfile: resources/docker/dev-full/Dockerfile
+      dockerfile: docker/dev-full/Dockerfile
     command: sleep infinity
     stop_grace_period: 0s
     volumes:
