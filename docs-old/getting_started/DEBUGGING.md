@@ -1,5 +1,39 @@
 # Debugging
 
+## Logging filter
+
+Logging is implemented using Tracing's [`EnvFilter`](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html).
+
+This filter can be configured by setting the `RUST_LOG` environment variable.
+
+To enable all debug logging, set the env var: `RUST_LOG=debug`
+
+For example, to enable debug logging for the `cluster` crate, set the env var: `RUST_LOG=cluster=debug`
+
+Read more on how to use the filter [here](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html).
+
+# Tracing instruments
+
+Every log has a stack trace associated with it. This is not a native Rust backtrace; instead this is a backtrace to any function with `#[tracing::instrument]` defined on it.
+
+This allows us to understand where logs came from without incurring the overhead of Rust's native backtraces.
+
+# Tokio console
+
+Tokio Console can be enabled by setting the env var `TOKIO_CONSOLE_ENABLE=1` and visiting 127.0.0.1:6669. This address can be overridden with `TOKIO_CONSOLE_BIND`.
+
+# Logging properties
+
+- `RUST_LOG` (see [`EnvFilter`](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html))
+- `TOKIO_CONSOLE_ENABLE`
+- `TOKIO_CONSOLE_BIND`
+- `RUST_LOG_SPAN_NAME`
+- `RUST_LOG_SPAN_PATH`
+- `RUST_LOG_TARGET`
+- `RUST_LOG_LOCATION`
+- `RUST_LOG_MODULE_PATH`
+- `RUST_LOG_ANSI_COLOR`
+
 ## Fetching service logs
 
 ### Option A: `bolt logs`

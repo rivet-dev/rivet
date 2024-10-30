@@ -36,9 +36,9 @@ impl Worker {
 		pools: rivet_pools::Pools,
 	) -> GlobalResult<()> {
 		tracing::info!(
-			worker_instance_id=?self.worker_instance_id,
-			"starting worker instance with {} registered workflows",
-			self.registry.size(),
+			worker_instance_id = ?self.worker_instance_id,
+			registered_workflows = ?self.registry.size(),
+			"started worker instance",
 		);
 
 		let shared_client = chirp_client::SharedClient::from_env(pools.clone())?;
@@ -61,9 +61,9 @@ impl Worker {
 		pools: rivet_pools::Pools,
 	) -> GlobalResult<()> {
 		tracing::info!(
-			worker_instance_id=?self.worker_instance_id,
-			"starting worker instance with {} registered workflows",
-			self.registry.size(),
+			worker_instance_id = ?self.worker_instance_id,
+			registered_workflows = ?self.registry.size(),
+			"started worker instance",
 		);
 
 		let shared_client = chirp_client::SharedClient::from_env(pools.clone())?;

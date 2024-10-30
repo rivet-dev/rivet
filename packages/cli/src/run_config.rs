@@ -28,8 +28,10 @@ impl RunConfigData {
 	}
 }
 
-pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
-	let services = vec![
+pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
+	let server_config = rivet_config.server().map_err(|err| anyhow!("{err}"))?;
+
+	let mut services = vec![
 		// API
 		Service::new(
 			"api_monolith_public",
@@ -49,7 +51,6 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			ServiceKind::ApiPrivate,
 			|config, pools| Box::pin(api_monolith_private::start(config, pools)),
 		),
-		// Standalone
 		Service::new(
 			"monolith_worker",
 			ServiceKind::Standalone,
@@ -60,28 +61,8 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			ServiceKind::Standalone,
 			|config, pools| Box::pin(monolith_workflow_worker::start(config, pools)),
 		),
-		// Singleton
 		Service::new("pegboard_gc", ServiceKind::Singleton, |config, pools| {
 			Box::pin(pegboard_gc::start(config, pools))
-		}),
-		Service::new("nomad_monitor", ServiceKind::Singleton, |config, pools| {
-			Box::pin(nomad_monitor::start(config, pools))
-		}),
-		Service::new(
-			"cluster_metrics_publish",
-			ServiceKind::Singleton,
-			|config, pools| Box::pin(cluster_metrics_publish::start(config, pools)),
-		),
-		Service::new("cluster_gc", ServiceKind::Singleton, |config, pools| {
-			Box::pin(cluster_gc::start(config, pools))
-		}),
-		Service::new(
-			"cluster_datacenter_tls_renew",
-			ServiceKind::Singleton,
-			|config, pools| Box::pin(cluster_datacenter_tls_renew::start(config, pools)),
-		),
-		Service::new("linode_gc", ServiceKind::Singleton, |config, pools| {
-			Box::pin(linode_gc::start(config, pools))
 		}),
 		Service::new(
 			"workflow_metrics_publish",
@@ -94,41 +75,10 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 		Service::new("mm_gc", ServiceKind::Singleton, |config, pools| {
 			Box::pin(mm_gc::start(config, pools))
 		}),
-		Service::new("job_gc", ServiceKind::Singleton, |config, pools| {
-			Box::pin(job_gc::start(config, pools))
-		}),
-		Service::new(
-			"user_delete_pending",
-			ServiceKind::Singleton,
-			|config, pools| Box::pin(user_delete_pending::start(config, pools)),
-		),
-		// Oneshot
-		Service::new(
-			"admin_default_login",
-			ServiceKind::Oneshot,
-			|config, pools| Box::pin(admin_default_login::start(config, pools)),
-		),
 		Service::new(
 			"build_default_create",
 			ServiceKind::Oneshot,
 			|config, pools| Box::pin(build_default_create::start(config, pools)),
-		),
-		Service::new("pegboard_dc_init", ServiceKind::Oneshot, |config, pools| {
-			Box::pin(pegboard_dc_init::start(config, pools))
-		}),
-		Service::new(
-			"cluster_default_update",
-			ServiceKind::Oneshot,
-			|config, pools| Box::pin(cluster_default_update::start(config, pools, false)),
-		),
-		// Cron
-		Service::new(
-			"telemetry_beacon",
-			ServiceKind::Cron(CronConfig {
-				run_immediately: true,
-				schedule: "0 0 * * * *".into(),
-			}),
-			|config, pools| Box::pin(telemetry_beacon::start(config, pools)),
 		),
 		Service::new(
 			"user_delete_pending",
@@ -138,12 +88,79 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			}),
 			|config, pools| Box::pin(user_delete_pending::start(config, pools)),
 		),
-		// TODO:
-		// - load_test_mm_sustain
-		// - load_test_mm
-		// - load_test_sqlx
-		// - load_test_watch_requests
 	];
+
+	if server_config.linode.is_some() {
+		services.push(Service::new(
+			"linode_gc",
+			ServiceKind::Singleton,
+			|config, pools| Box::pin(linode_gc::start(config, pools)),
+		));
+	}
+
+	if server_config.rivet.cluster.is_some() {
+		services.push(Service::new(
+			"cluster_metrics_publish",
+			ServiceKind::Singleton,
+			|config, pools| Box::pin(cluster_metrics_publish::start(config, pools)),
+		));
+		services.push(Service::new(
+			"cluster_gc",
+			ServiceKind::Singleton,
+			|config, pools| Box::pin(cluster_gc::start(config, pools)),
+		));
+		services.push(Service::new(
+			"cluster_datacenter_tls_renew",
+			ServiceKind::Singleton,
+			|config, pools| Box::pin(cluster_datacenter_tls_renew::start(config, pools)),
+		));
+		services.push(Service::new(
+			"pegboard_dc_init",
+			ServiceKind::Oneshot,
+			|config, pools| Box::pin(pegboard_dc_init::start(config, pools)),
+		));
+		services.push(Service::new(
+			"cluster_default_update",
+			ServiceKind::Oneshot,
+			|config, pools| Box::pin(cluster_default_update::start(config, pools, false)),
+		));
+	}
+
+	if server_config.nomad.is_some() {
+		services.push(Service::new(
+			"nomad_monitor",
+			ServiceKind::Singleton,
+			|config, pools| Box::pin(nomad_monitor::start(config, pools)),
+		));
+	}
+
+	if server_config.nomad.is_some() && server_config.rivet.job_run.is_some() {
+		services.push(Service::new(
+			"job_gc",
+			ServiceKind::Singleton,
+			|config, pools| Box::pin(job_gc::start(config, pools)),
+		));
+	}
+
+	let auth_config = &server_config.rivet.auth;
+	if auth_config.access_token_login && auth_config.print_login_url {
+		services.push(Service::new(
+			"admin_default_login",
+			ServiceKind::Oneshot,
+			|config, pools| Box::pin(admin_default_login::start(config, pools)),
+		));
+	}
+
+	if server_config.rivet.telemetry.enable {
+		services.push(Service::new(
+			"telemetry_beacon",
+			ServiceKind::Cron(CronConfig {
+				run_immediately: true,
+				schedule: "0 0 * * * *".into(),
+			}),
+			|config, pools| Box::pin(telemetry_beacon::start(config, pools)),
+		));
+	}
 
 	let sql_services = vec![
 		SqlService {

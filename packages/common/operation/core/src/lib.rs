@@ -80,7 +80,7 @@ where
 	/// Calls the given operation. Use the `op!` macro instead of calling this directly.
 	#[tracing::instrument(err, skip_all, fields(operation = O::NAME))]
 	pub async fn call<O: Operation>(&self, body: O::Request) -> GlobalResult<O::Response> {
-		tracing::info!(?body, "operation call");
+		tracing::debug!(?body, "operation call");
 
 		// Record metrics
 		metrics::CHIRP_REQUEST_PENDING
@@ -101,7 +101,7 @@ where
 			.spawn(timeout_fut)?
 			.await??;
 
-		tracing::info!(?res, "operation response");
+		tracing::debug!(?res, "operation response");
 
 		// Record metrics
 		{

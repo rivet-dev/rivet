@@ -18,6 +18,7 @@ use uuid::Uuid;
 pub async fn start<T: 'static, Fut>(
 	config: rivet_config::Config,
 	pools: rivet_pools::Pools,
+	service_name: &'static str,
 	host: IpAddr,
 	port: u16,
 	handle: T,
@@ -64,12 +65,29 @@ where
 			let ray_id = Uuid::new_v4();
 			let req_span = tracing::info_span!("http request", method = %req.method(), uri = %req.uri(), %ray_id);
 			async move {
-				tracing::info!(
-					method = %req.method(),
-					uri = %req.uri(),
-					headers = ?req.headers(),
+				let method = req.method().clone();
+				let uri = req.uri().clone();
+				let protocol = req.version().clone();
+
+				let headers = req.headers();
+				let referrer = headers
+					.get("referer")
+					.map_or("-", |h| h.to_str().unwrap_or("-"))
+					.to_string();
+				let user_agent = headers
+					.get("user-agent")
+					.map_or("-", |h| h.to_str().unwrap_or("-"))
+					.to_string();
+				let x_forwarded_for = headers
+					.get("x-forwarded-for")
+					.map_or("-", |h| h.to_str().unwrap_or("-"))
+					.to_string();
+
+				tracing::debug!(
+					%method,
+					%uri,
 					body_size_hint = ?req.body().size_hint(),
-					remote_addr = %remote_addr,
+					%remote_addr,
 					"http request meta"
 				);
 
@@ -114,18 +132,33 @@ where
 				} else if res.status().is_client_error() {
 					tracing::warn!(status = ?res.status().as_u16(), "http client error");
 				} else if res.status().is_redirection() {
-					tracing::info!(status = ?res.status().as_u16(), "http redirection");
+					tracing::debug!(status = ?res.status().as_u16(), "http redirection");
 				} else if res.status().is_informational() {
-					tracing::info!(status = ?res.status().as_u16(), "http informational");
+					tracing::debug!(status = ?res.status().as_u16(), "http informational");
 				}
 
 				let duration = start.elapsed().as_secs_f64();
-				tracing::info!(
+				tracing::debug!(
 					status = %res.status().as_u16(),
-					headers = ?res.headers(),
 					body_size_hint = ?res.body().size_hint(),
 					duration = duration,
 					"http response meta"
+				);
+
+				// Detailed access log
+				tracing::info!(
+					%ray_id,
+					%remote_addr,
+					%method,
+					%uri,
+					?protocol,
+					status = res.status().as_u16(),
+					body_bytes_sent = res.body().size_hint().lower(),
+					request_duration = %format!("{:.3}ms", duration * 1000.0),
+					%referrer,
+					%user_agent,
+					%x_forwarded_for,
+					"http request"
 				);
 
 				Ok::<_, http::Error>(res)
@@ -149,7 +182,7 @@ where
 		}
 	};
 
-	tracing::info!(?host, ?port, "server listening");
+	tracing::info!(?host, ?port, "{} server listening", service_name);
 	server.serve(make_service).await?;
 
 	Ok(())

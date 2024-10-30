@@ -83,9 +83,15 @@ pub async fn cockroachdb_shell(
 		} else {
 			parsed_url.set_query(None);
 		}
-		parsed_url.set_username(&server_config.cockroachdb.username);
+		parsed_url
+			.set_username(&server_config.cockroachdb.username)
+			.ok()
+			.context("failed to set username")?;
 		if let Some(password) = &server_config.cockroachdb.password {
-			parsed_url.set_password(Some(password.read()));
+			parsed_url
+				.set_password(Some(password.read()))
+				.ok()
+				.context("failed to set password")?;
 		}
 
 		let db_url = parsed_url.to_string();

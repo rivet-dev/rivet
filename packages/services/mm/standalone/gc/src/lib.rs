@@ -80,12 +80,14 @@ async fn cull_unready_lobbies(
 		.collect::<Vec<_>>();
 
 	// Stop the lobbies
-	tracing::info!(count = unready_lobby_ids.len(), "stopping lobbies");
-	for lobby_id in unready_lobby_ids.into_iter() {
-		msg!([client] @wait mm::msg::lobby_stop(lobby_id) {
-			lobby_id: Some(lobby_id.into()),
-		})
-		.await?;
+	if !unready_lobby_ids.is_empty() {
+		tracing::info!(count = unready_lobby_ids.len(), "stopping lobbies");
+		for lobby_id in unready_lobby_ids.into_iter() {
+			msg!([client] @wait mm::msg::lobby_stop(lobby_id) {
+				lobby_id: Some(lobby_id.into()),
+			})
+			.await?;
+		}
 	}
 
 	// We don't call idle update here in case the lobbies are failing to boot
@@ -110,15 +112,18 @@ async fn cull_unregistered_players(
 		.into_iter()
 		.filter_map(|x| util::uuid::parse(&x).ok())
 		.collect::<Vec<_>>();
-	tracing::info!(count = %remove_player_ids.len(), "removing unregistered players");
 
-	for player_id in &remove_player_ids {
-		msg!([client] @wait mm::msg::player_remove(player_id) {
-			player_id: Some((*player_id).into()),
-			lobby_id: None,
-			..Default::default()
-		})
-		.await?;
+	if !remove_player_ids.is_empty() {
+		tracing::info!(count = %remove_player_ids.len(), "removing unregistered players");
+
+		for player_id in &remove_player_ids {
+			msg!([client] @wait mm::msg::player_remove(player_id) {
+				player_id: Some((*player_id).into()),
+				lobby_id: None,
+				..Default::default()
+			})
+			.await?;
+		}
 	}
 
 	Ok(())
@@ -139,15 +144,18 @@ async fn cull_auto_remove_players(
 		.into_iter()
 		.filter_map(|x| util::uuid::parse(&x).ok())
 		.collect::<Vec<_>>();
-	tracing::info!(count = %remove_player_ids.len(), "auto removing players");
 
-	for player_id in &remove_player_ids {
-		msg!([client] @wait mm::msg::player_remove(player_id) {
-			player_id: Some((*player_id).into()),
-			lobby_id: None,
-			..Default::default()
-		})
-		.await?;
+	if !remove_player_ids.is_empty() {
+		tracing::info!(count = %remove_player_ids.len(), "auto removing players");
+
+		for player_id in &remove_player_ids {
+			msg!([client] @wait mm::msg::player_remove(player_id) {
+				player_id: Some((*player_id).into()),
+				lobby_id: None,
+				..Default::default()
+			})
+			.await?;
+		}
 	}
 
 	Ok(())

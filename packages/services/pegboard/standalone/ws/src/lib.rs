@@ -74,7 +74,7 @@ async fn socket_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>) -> 
 			std::process::exit(1);
 		}
 	};
-	tracing::info!(?port, ?port, "server listening");
+	tracing::info!(?port, ?port, "pegboard ws server listening");
 
 	loop {
 		match listener.accept().await {

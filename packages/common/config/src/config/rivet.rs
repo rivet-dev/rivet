@@ -12,7 +12,7 @@ pub mod default_hosts {
 	// Public services using public interface
 	pub const API_PUBLIC: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
 	pub const API_EDGE: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
-	pub const API_PRIVATE: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+	pub const API_PRIVATE: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
 	pub const PEGBOARD: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
 	pub const TUNNEL: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
 

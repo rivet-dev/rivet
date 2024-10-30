@@ -40,11 +40,6 @@ pub async fn run_from_env(
 		(),
 	);
 
-	if !config.server()?.rivet.telemetry.enable {
-		tracing::info!("telemetry disabled");
-		return Ok(());
-	}
-
 	// Get the cluster ID
 	let cluster_id = chirp_workflow::compat::op(&ctx, dynamic_config::ops::get_config::Input {})
 		.await?
@@ -82,13 +77,13 @@ pub async fn run_from_env(
 	)?;
 	events.push(event);
 
-	tracing::info!(len = ?events.len(), "built events");
+	tracing::debug!(len = ?events.len(), "built events");
 
 	// Send events in chunks
 	let client = async_posthog::client(POSTHOG_API_KEY);
 	client.capture_batch(events).await?;
 
-	tracing::info!("all events sent");
+	tracing::debug!("all events sent");
 
 	Ok(())
 }

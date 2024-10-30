@@ -1,7 +1,7 @@
 use std::{env, future::Future, sync::Once, time::Duration};
 
 use thiserror::Error;
-use tracing_subscriber::prelude::*;
+use tracing_subscriber::{prelude::*, EnvFilter};
 
 mod metrics;
 
@@ -41,15 +41,26 @@ impl RunConfig {
 
 	fn setup_tracing(&self) {
 		SETUP_TRACING.call_once(|| {
+			let mut env_filter = EnvFilter::default()
+				// Default filter
+				.add_directive("info".parse().unwrap())
+				// Disable verbose logs
+				.add_directive("tokio_cron_scheduler=warn".parse().unwrap());
+
+			// Parse env filter
+			if let Ok(filter) = std::env::var("RUST_LOG") {
+				for s in filter.split(',').filter(|x| !x.is_empty()) {
+					env_filter = env_filter.add_directive(s.parse().expect("invalid env filter"));
+				}
+			}
+
 			if self.pretty_logs {
 				// Pretty print
 				tracing_subscriber::fmt()
 					.pretty()
-					.with_max_level(tracing::Level::INFO)
+					.with_env_filter(env_filter)
 					.init();
 			} else {
-				let fmt_filter = tracing_subscriber::filter::LevelFilter::INFO;
-
 				if std::env::var("TOKIO_CONSOLE_ENABLE").is_ok() {
 					// logfmt + tokio-console
 					tracing_subscriber::registry()
@@ -59,17 +70,36 @@ impl RunConfig {
 								.with_default_env()
 								.spawn(),
 						)
-						.with(
-							tracing_logfmt::builder()
-								.layer()
-								.with_filter(fmt_filter)
-								.with_filter(fmt_filter),
-						)
+						.with(tracing_logfmt::builder().layer().with_filter(env_filter))
 						.init();
 				} else {
 					// logfmt
 					tracing_subscriber::registry()
-						.with(tracing_logfmt::builder().layer().with_filter(fmt_filter))
+						.with(
+							tracing_logfmt::builder()
+								.with_span_name(
+									std::env::var("RUST_LOG_SPAN_NAME").map_or(false, |x| x == "1"),
+								)
+								.with_span_path(
+									std::env::var("RUST_LOG_SPAN_PATH").map_or(false, |x| x == "1"),
+								)
+								.with_target(
+									std::env::var("RUST_LOG_TARGET").map_or(false, |x| x == "1"),
+								)
+								.with_location(
+									std::env::var("RUST_LOG_LOCATION").map_or(false, |x| x == "1"),
+								)
+								.with_module_path(
+									std::env::var("RUST_LOG_MODULE_PATH")
+										.map_or(false, |x| x == "1"),
+								)
+								.with_ansi_color(
+									std::env::var("RUST_LOG_ANSI_COLOR")
+										.map_or(false, |x| x == "1"),
+								)
+								.layer()
+								.with_filter(env_filter),
+						)
 						.init();
 				}
 			}

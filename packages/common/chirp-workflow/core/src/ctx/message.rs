@@ -120,7 +120,7 @@ impl MessageCtx {
 		};
 		let message_buf = serde_json::to_vec(&message).map_err(WorkflowError::SerializeMessage)?;
 
-		tracing::info!(
+		tracing::debug!(
 			%nats_subject,
 			body_bytes = ?body_buf_len,
 			message_bytes = ?message_buf.len(),
@@ -252,7 +252,7 @@ impl MessageCtx {
 		let nats_subject = M::nats_subject();
 
 		// Create subscription and flush immediately.
-		tracing::info!(%nats_subject, tags = ?opts.tags, "creating subscription");
+		tracing::debug!(%nats_subject, tags = ?opts.tags, "creating subscription");
 		let subscription = self
 			.nats
 			.subscribe(nats_subject.clone())
@@ -288,11 +288,11 @@ impl MessageCtx {
 		// Deserialize message
 		let message = if let Some(message_buf) = message_buf {
 			let message = NatsMessage::<M>::deserialize(message_buf.as_slice())?;
-			tracing::info!(?message, "immediate read tail message");
+			tracing::debug!(?message, "immediate read tail message");
 
 			Some(message)
 		} else {
-			tracing::info!("no tail message to read");
+			tracing::debug!("no tail message to read");
 			None
 		};
 
@@ -349,7 +349,7 @@ impl MessageCtx {
 			}
 		};
 
-		tracing::info!(?message, %source, ?anchor, "read tail message");
+		tracing::debug!(?message, %source, ?anchor, "read tail message");
 
 		Ok(TailAnchorResponse::Message(message))
 	}
@@ -430,7 +430,7 @@ where
 	/// This future can be safely dropped.
 	#[tracing::instrument]
 	pub async fn next(&mut self) -> WorkflowResult<NatsMessage<M>> {
-		tracing::info!("waiting for message");
+		tracing::debug!("waiting for message");
 
 		loop {
 			// Poll the subscription.
@@ -450,7 +450,7 @@ where
 			// Check if the subscription tags match a subset of the message tags
 			if utils::is_value_subset(&self.tags, &message_wrapper.tags) {
 				let message = NatsMessage::<M>::deserialize_from_wrapper(message_wrapper)?;
-				tracing::info!(?message, "received message");
+				tracing::debug!(?message, "received message");
 
 				return Ok(message);
 			}

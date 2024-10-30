@@ -330,14 +330,14 @@ impl Client {
 			.map_err(ClientError::EncodeRequestBody)?;
 
 		if req_dont_log_body {
-			tracing::info!(
+			tracing::debug!(
 				?subject,
 				?req_debug,
 				body_bytes = ?req_body_buf.len(),
 				"rpc req"
 			);
 		} else {
-			tracing::info!(
+			tracing::debug!(
 				?subject,
 				?req_body,
 				?req_debug,
@@ -362,9 +362,9 @@ impl Client {
 		let res_body = <M::Response as prost::Message>::decode(res_body_buf.as_slice())
 			.map_err(ClientError::DecodeResponseBody)?;
 		if req_dont_log_body {
-			tracing::info!(?subject, "rpc res");
+			tracing::debug!(?subject, "rpc res");
 		} else {
-			tracing::info!(?subject, ?res_body, "rpc res");
+			tracing::debug!(?subject, ?res_body, "rpc res");
 		}
 
 		Ok(RpcResponse { body: res_body })
@@ -652,14 +652,14 @@ impl Client {
 		prost::Message::encode(&message, &mut message_buf).map_err(ClientError::EncodeMessage)?;
 
 		if opts.dont_log_body {
-			tracing::info!(
+			tracing::debug!(
 				?nats_subject,
 				body_bytes = ?body_buf_len,
 				message_bytes = ?message_buf.len(),
 				"publish message"
 			);
 		} else {
-			tracing::info!(
+			tracing::debug!(
 				?nats_subject,
 				?message_body,
 				body_bytes = ?body_buf_len,
@@ -999,7 +999,7 @@ impl Client {
 		let nats_subject = message::serialize_message_nats_subject::<M, _>(&opts.parameters);
 
 		// Create subscription and flush immediately.
-		tracing::info!(%nats_subject, parameters = ?opts.parameters, "creating subscription");
+		tracing::debug!(%nats_subject, parameters = ?opts.parameters, "creating subscription");
 		let subscription = self
 			.nats
 			.subscribe(nats_subject.clone())
@@ -1049,10 +1049,10 @@ impl Client {
 		// Decode message
 		let msg = if let Some(msg_buf) = msg_buf {
 			let msg = ReceivedMessage::<M>::decode(msg_buf.as_slice())?;
-			tracing::info!(?msg, "immediate read tail message");
+			tracing::debug!(?msg, "immediate read tail message");
 			Some(msg)
 		} else {
-			tracing::info!("no tail message to read");
+			tracing::debug!("no tail message to read");
 			None
 		};
 
@@ -1117,7 +1117,7 @@ impl Client {
 			}
 		};
 
-		tracing::info!(?msg, %source, ?anchor, "read tail message");
+		tracing::debug!(?msg, %source, ?anchor, "read tail message");
 
 		lifetime_perf.end();
 
@@ -1353,7 +1353,7 @@ impl Client {
 		// Sort messages by timestamp
 		messages.sort_by_key(|x| x.ts);
 
-		tracing::info!(?messages, ?anchor, ?start_time, "read recent tail messages");
+		tracing::debug!(?messages, ?anchor, ?start_time, "read recent tail messages");
 
 		lifetime_perf.end();
 
@@ -1476,7 +1476,7 @@ where
 	/// This future can be safely dropped.
 	#[tracing::instrument(level = "trace")]
 	async fn next_inner(&mut self, filter_trace: bool) -> Result<ReceivedMessage<M>, ClientError> {
-		tracing::info!("waiting for message");
+		tracing::debug!("waiting for message");
 
 		loop {
 			// Poll the subscription.
@@ -1510,7 +1510,7 @@ where
 					.any(|trace_entry| trace_entry.req_id() == self.parent_req_id)
 				{
 					let message = ReceivedMessage::<M>::decode(&nats_message.payload[..])?;
-					tracing::info!(?message, "received message");
+					tracing::debug!(?message, "received message");
 
 					self.perf.mark_rpc(
 						format!("msg.rx.{}", self.subject.replace(".", "\\.")),
@@ -1522,7 +1522,7 @@ where
 				}
 			} else {
 				let message = ReceivedMessage::<M>::decode(&nats_message.payload[..])?;
-				tracing::info!(?message, "received message");
+				tracing::debug!(?message, "received message");
 
 				self.perf.mark_rpc(
 					format!("msg.rx.{}", self.subject.replace(".", "\\.")),

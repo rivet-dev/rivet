@@ -1,6 +1,5 @@
 use anyhow::*;
 use clap::Parser;
-use std::path::PathBuf;
 
 use crate::run_config::RunConfig;
 

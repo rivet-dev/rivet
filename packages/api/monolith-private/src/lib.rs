@@ -6,6 +6,7 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> G
 	api_helper::start(
 		config.clone(),
 		pools,
+		"private",
 		config.server()?.rivet.api_private.host(),
 		config.server()?.rivet.api_private.port(),
 		route::handle,

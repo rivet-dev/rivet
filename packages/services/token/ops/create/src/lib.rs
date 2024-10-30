@@ -245,7 +245,7 @@ async fn create_token(
 	};
 
 	// Encode token
-	tracing::info!(?claims, "encoding");
+	tracing::debug!(?claims, "encoding");
 	let token = encode(
 		label,
 		&Header {
@@ -259,7 +259,7 @@ async fn create_token(
 	// Write to database
 	let mut claims_buf = Vec::with_capacity(claims.encoded_len());
 	claims.encode(&mut claims_buf)?;
-	tracing::info!(buf_len = %claims_buf.len(), "writing claims");
+	tracing::debug!(buf_len = %claims_buf.len(), "writing claims");
 	if !ephemeral {
 		// Create the token and update the session expiration as needed
 		sql_execute!(
