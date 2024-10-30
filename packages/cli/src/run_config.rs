@@ -126,7 +126,7 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			"telemetry_beacon",
 			ServiceKind::Cron(CronConfig {
 				run_immediately: true,
-				schedule: "* * * * * *".into(),
+				schedule: "0 0 * * * *".into(),
 			}),
 			|config, pools| Box::pin(telemetry_beacon::start(config, pools)),
 		),
@@ -134,7 +134,7 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			"user_delete_pending",
 			ServiceKind::Cron(CronConfig {
 				run_immediately: false,
-				schedule: "* * * * * *".into(),
+				schedule: "0 0 0 * * *".into(),
 			}),
 			|config, pools| Box::pin(user_delete_pending::start(config, pools)),
 		),
