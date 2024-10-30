@@ -50,22 +50,6 @@ service:
         body: ValidateProfileRequest
       response: ValidateProfileResponse
 
-    search:
-      path: /search
-      method: GET
-      docs: Fuzzy search for groups.
-      request:
-        name: SearchRequest
-        query-parameters:
-          query:
-            docs: The query to match group display names against.
-            type: string
-          anchor: optional<string>
-          limit:
-            docs: Unsigned 32 bit integer.
-            type: optional<double>
-      response: SearchResponse
-
     completeAvatarUpload:
       path: /{group_id}/avatar-upload/{upload_id}/complete
       method: POST
@@ -281,13 +265,6 @@ types:
       errors:
         docs: A list of validation errors.
         type: list<commons.ValidationError>
-
-  SearchResponse:
-    properties:
-      groups:
-        docs: A list of group handles.
-        type: list<groupCommons.Handle>
-      anchor: optional<string>
 
   GetBansResponse:
     properties:

@@ -115,24 +115,6 @@ service:
             account_number: optional<commons.AccountNumber>
             bio: optional<commons.Bio>
 
-    search:
-      docs: Fuzzy search for identities.
-      path: /search
-      method: GET
-      request:
-        name: SearchRequest
-        query-parameters:
-          query:
-            type: string
-            docs: The query to match identity display names and account numbers against.
-          anchor:
-            type: optional<string>
-            docs: How many identities to offset the search by.
-          limit:
-            type: optional<integer>
-            docs: Amount of identities to return. Must be between 1 and 32 inclusive.
-      response: SearchResponse
-
     setGameActivity:
       docs: Sets the current identity's game activity. This activity will
         automatically be removed when the identity goes offline.
@@ -158,21 +140,6 @@ service:
         body:
           properties:
             status: identityCommons.Status
-
-    follow:
-      docs: Follows the given identity. In order for identities to be "friends", the
-        other identity has to also follow this identity.
-      path: /{identity_id}/follow
-      method: POST
-      path-parameters:
-        identity_id: uuid
-
-    unfollow:
-      docs: Unfollows the given identity.
-      path: /{identity_id}/follow
-      method: DELETE
-      path-parameters:
-        identity_id: uuid
 
     prepareAvatarUpload:
       docs: Prepares an avatar image upload. Complete upload with
@@ -212,88 +179,6 @@ service:
             company_size: string
             preferred_tools: string
             goals: string
-
-    report:
-      docs: Creates an abuse report for an identity.
-      path: /{identity_id}/report
-      method: POST
-      path-parameters:
-        identity_id: uuid
-      request:
-        name: ReportRequest
-        body:
-          properties:
-            reason: optional<string>
-
-    listFollowers:
-      path: /{identity_id}/followers
-      method: GET
-      path-parameters:
-        identity_id: uuid
-      request:
-        name: ListFollowersRequest
-        query-parameters:
-          anchor: optional<string>
-          limit:
-            type: optional<string>
-            docs: Range is between 1 and 32 (inclusive).
-      response: ListFollowersResponse
-
-    listFollowing:
-      path: /{identity_id}/following
-      method: GET
-      path-parameters:
-        identity_id: uuid
-      request:
-        name: ListFollowingRequest
-        query-parameters:
-          anchor: optional<string>
-          limit:
-            type: optional<string>
-            docs: Range is between 1 and 32 (inclusive).
-      response: ListFollowingResponse
-
-    listFriends:
-      path: /self/friends
-      method: GET
-      request:
-        name: ListFriendsRequest
-        query-parameters:
-          anchor: optional<string>
-          limit:
-            type: optional<string>
-            docs: Range is between 1 and 32 (inclusive).
-      response: ListFriendsResponse
-
-    listMutualFriends:
-      path: /{identity_id}/mutual-friends
-      method: GET
-      path-parameters:
-        identity_id: uuid
-      request:
-        name: ListMutualFriendsRequest
-        query-parameters:
-          anchor: optional<string>
-          limit:
-            type: optional<string>
-            docs: Range is between 1 and 32 (inclusive).
-      response: ListMutualFriendsResponse
-
-    listRecentFollowers:
-      path: /self/recent-followers
-      method: GET
-      request:
-        name: ListRecentFollowersRequest
-        query-parameters:
-          count: optional<integer>
-          watch_index: optional<commons.WatchQuery>
-      response: ListRecentFollowersResponse
-
-    ignoreRecentFollower:
-      path: /self/recent-followers/{identity_id}/ignore
-      method: POST
-      path-parameters:
-        identity_id: uuid
 
     markDeletion:
       path: /self/delete-request
@@ -342,44 +227,8 @@ types:
     properties:
       errors: list<commons.ValidationError>
 
-  SearchResponse:
-    properties:
-      identities: list<identityCommons.Handle>
-      anchor:
-        type: optional<string>
-        docs: |
-          The pagination anchor.
-
   PrepareAvatarUploadResponse:
     properties:
       upload_id: uuid
       presigned_request: uploadCommons.PresignedRequest
 
-  ListFollowersResponse:
-    properties:
-      identities: list<identityCommons.Handle>
-      anchor: optional<string>
-      watch: commons.WatchResponse
-
-  ListFollowingResponse:
-    properties:
-      identities: list<identityCommons.Handle>
-      anchor: optional<string>
-      watch: commons.WatchResponse
-
-  ListRecentFollowersResponse:
-    properties:
-      identities: list<identityCommons.Handle>
-      anchor: optional<string>
-      watch: commons.WatchResponse
-
-  ListFriendsResponse:
-    properties:
-      identities: list<identityCommons.Handle>
-      anchor: optional<string>
-      watch: commons.WatchResponse
-
-  ListMutualFriendsResponse:
-    properties:
-      identities: list<identityCommons.Handle>
-      anchor: optional<string>

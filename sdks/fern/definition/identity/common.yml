@@ -5,7 +5,6 @@ imports:
   gameCommons: ../game/common.yml
   groupCommons: ../group/common.yml
   identityCommons: ../identity/common.yml
-  matchmakerCommons: ../matchmaker/common.yml
 
 types:
   GlobalEvent:
@@ -18,7 +17,6 @@ types:
   GlobalEventKind:
     properties:
       identity_update: optional<GlobalEventIdentityUpdate>
-      matchmaker_lobby_join: optional<GlobalEventMatchmakerLobbyJoin>
 
   GlobalEventNotification:
     docs: |
@@ -52,12 +50,6 @@ types:
   GlobalEventIdentityUpdate:
     properties:
       identity: identityCommons.Profile
-
-  GlobalEventMatchmakerLobbyJoin:
-    properties:
-      lobby: matchmakerCommons.JoinLobby
-      ports: map<string, matchmakerCommons.JoinPort>
-      player: matchmakerCommons.JoinPlayer
 
   UpdateGameActivity:
     docs: Information about the identity's current game. This is information that
