@@ -1,1 +1,0 @@
-# profanity-check

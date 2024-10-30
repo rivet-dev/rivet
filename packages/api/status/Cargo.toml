@@ -48,6 +48,5 @@ rivet-env = { version = "0.1.0", path = "../../common/env" }
 rivet-connection = { path = "../../common/connection" }
 rivet-status = { path = "../../common/smithy-output/api-status/rust" }
 urlencoding = "2.1.0"
-util-kv = { package = "rivet-util-kv", path = "../../services/kv/util" }
 uuid = { version = "1", features = ["v4"] }
 faker-region = { path = "../../services/faker/ops/region" }

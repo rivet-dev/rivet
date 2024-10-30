@@ -15,10 +15,6 @@ cdn-version-publish = { path = "../../../cdn/ops/version-publish" }
 game-get = { path = "../../../game/ops/get" }
 game-version-create = { path = "../../../game/ops/version-create" }
 game-version-validate = { path = "../../../game/ops/version-validate" }
-identity-config-version-prepare = { path = "../../../identity-config/ops/version-prepare" }
-identity-config-version-publish = { path = "../../../identity-config/ops/version-publish" }
-kv-config-version-prepare = { path = "../../../kv-config/ops/version-prepare" }
-kv-config-version-publish = { path = "../../../kv-config/ops/version-publish" }
 mm-config-version-prepare = { path = "../../../mm-config/ops/version-prepare" }
 mm-config-version-publish = { path = "../../../mm-config/ops/version-publish" }
 

@@ -429,7 +429,6 @@ dependencies = [
  "mm-lobby-player-count",
  "mm-lobby-runtime-aggregate",
  "mm-player-count-for-namespace",
- "perf-log-get",
  "prost 0.10.4",
  "rand",
  "region-get",
@@ -447,7 +446,6 @@ dependencies = [
  "rivet-pools",
  "rivet-util-job",
  "rivet-util-mm",
- "rivet-util-nsfw",
  "rivet-util-team",
  "s3-util",
  "serde",
@@ -563,7 +561,6 @@ dependencies = [
  "rivet-health-checks",
  "rivet-operation",
  "rivet-pools",
- "rivet-util-nsfw",
  "serde",
  "serde_json",
  "team-avatar-upload-complete",
@@ -574,7 +571,6 @@ dependencies = [
  "team-member-list",
  "team-profile-validate",
  "team-recommend",
- "team-search",
  "team-user-ban-get",
  "team-user-ban-list",
  "thiserror",
@@ -584,7 +580,6 @@ dependencies = [
  "tracing-subscriber",
  "upload-prepare",
  "url",
- "user-follow-get",
  "user-get",
  "user-identity-get",
  "user-team-list",
@@ -667,15 +662,8 @@ dependencies = [
  "game-namespace-get",
  "game-namespace-resolve-url",
  "game-resolve-namespace-id",
- "game-user-create",
- "game-user-get",
- "game-user-link-create",
- "game-user-link-get",
- "game-user-recent-session-list",
- "game-user-recommend",
  "http 0.2.12",
  "hyper 0.14.30",
- "identity-config-version-get",
  "job-run",
  "lazy_static",
  "mm-config-lobby-group-resolve-version",
@@ -696,9 +684,7 @@ dependencies = [
  "rivet-identity",
  "rivet-operation",
  "rivet-pools",
- "rivet-util-game-user",
  "rivet-util-mm",
- "rivet-util-nsfw",
  "serde",
  "serde_json",
  "team-recommend",
@@ -712,15 +698,10 @@ dependencies = [
  "upload-prepare",
  "url",
  "user-avatar-upload-complete",
- "user-follow-list",
- "user-follow-request-list",
- "user-follow-toggle",
  "user-get",
  "user-identity-get",
- "user-mutual-friend-list",
  "user-pending-delete-toggle",
  "user-profile-validate",
- "user-search",
  "uuid",
 ]
 
@@ -783,65 +764,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "api-kv"
-version = "0.0.1"
-dependencies = [
- "api-helper",
- "async-trait",
- "chirp-client",
- "chrono",
- "cloud-game-token-create",
- "faker-build",
- "faker-game",
- "faker-game-namespace",
- "faker-game-version",
- "faker-region",
- "futures-util",
- "game-get",
- "game-namespace-get",
- "game-user-get",
- "http 0.2.12",
- "hyper 0.14.30",
- "kv-config-version-get",
- "kv-get",
- "kv-list",
- "lazy_static",
- "mm-lobby-get",
- "prost 0.10.4",
- "rand",
- "regex",
- "region-get",
- "reqwest 0.11.27",
- "rivet-api",
- "rivet-cache",
- "rivet-claims",
- "rivet-config",
- "rivet-connection",
- "rivet-convert",
- "rivet-env",
- "rivet-health-checks",
- "rivet-kv",
- "rivet-operation",
- "rivet-pools",
- "rivet-util-kv",
- "rivet-util-mm",
- "serde",
- "serde_json",
- "thiserror",
- "token-create",
- "token-revoke",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "url",
- "urlencoding",
- "user-get",
- "user-identity-get",
- "user-team-list",
- "uuid",
-]
-
-[[package]]
 name = "api-matchmaker"
 version = "0.0.1"
 dependencies = [
@@ -867,7 +789,6 @@ dependencies = [
  "game-namespace-get",
  "game-namespace-resolve-url",
  "game-resolve-namespace-id",
- "game-user-get",
  "http 0.2.12",
  "hyper 0.14.30",
  "job-run",
@@ -924,7 +845,6 @@ dependencies = [
  "api-helper",
  "api-identity",
  "api-job",
- "api-kv",
  "api-matchmaker",
  "api-portal",
  "api-status",
@@ -1049,7 +969,6 @@ dependencies = [
  "rivet-pools",
  "rivet-status",
  "rivet-status-server",
- "rivet-util-kv",
  "s3-util",
  "serde",
  "serde_json",
@@ -2331,15 +2250,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "censor"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5563d2728feef9a6186acdd148bccbe850dad63c5ba55a3b3355abc9137cb3eb"
-dependencies = [
- "once_cell",
-]
-
-[[package]]
 name = "cf-custom-hostname-get"
 version = "0.0.1"
 dependencies = [
@@ -2737,8 +2647,6 @@ dependencies = [
  "game-namespace-create",
  "game-namespace-get",
  "game-version-create",
- "identity-config-namespace-create",
- "kv-config-namespace-create",
  "mm-config-namespace-create",
  "prost 0.10.4",
  "rivet-operation",
@@ -2756,8 +2664,6 @@ dependencies = [
  "faker-game",
  "game-namespace-create",
  "game-version-create",
- "identity-config-namespace-get",
- "kv-config-namespace-get",
  "mm-config-namespace-get",
  "prost 0.10.4",
  "rivet-operation",
@@ -2805,8 +2711,6 @@ dependencies = [
  "faker-build",
  "faker-game",
  "faker-region",
- "identity-config-version-get",
- "kv-config-version-get",
  "mm-config-version-get",
  "prost 0.10.4",
  "rivet-operation",
@@ -2827,10 +2731,6 @@ dependencies = [
  "game-get",
  "game-version-create",
  "game-version-validate",
- "identity-config-version-prepare",
- "identity-config-version-publish",
- "kv-config-version-prepare",
- "kv-config-version-publish",
  "mm-config-version-prepare",
  "mm-config-version-publish",
  "prost 0.10.4",
@@ -4637,126 +4537,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "game-user-create"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "chrono",
- "game-user-get",
- "prost 0.10.4",
- "rivet-operation",
- "rivet-util-game-user",
- "sqlx",
- "token-create",
-]
-
-[[package]]
-name = "game-user-get"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "chrono",
- "game-user-create",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
-]
-
-[[package]]
-name = "game-user-link-create"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "chrono",
- "game-user-create",
- "game-user-get",
- "game-user-link-get",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
- "token-create",
-]
-
-[[package]]
-name = "game-user-link-get"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "chrono",
- "game-user-create",
- "game-user-link-create",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
-]
-
-[[package]]
-name = "game-user-list-for-user"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "chrono",
- "game-user-create",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
-]
-
-[[package]]
-name = "game-user-recent-session-list"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "chrono",
- "faker-game",
- "game-namespace-create",
- "game-user-create",
- "game-version-create",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
-]
-
-[[package]]
-name = "game-user-recommend"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
-]
-
-[[package]]
-name = "game-user-worker"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "chrono",
- "game-user-create",
- "game-user-get",
- "game-user-link-create",
- "game-user-link-get",
- "rivet-claims",
- "rivet-config",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-runtime",
- "rivet-util-game-user",
- "sqlx",
- "token-create",
- "token-exchange",
- "token-revoke",
-]
-
-[[package]]
 name = "game-validate"
 version = "0.0.1"
 dependencies = [
@@ -5409,66 +5189,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
-name = "identity-config-namespace-create"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
-]
-
-[[package]]
-name = "identity-config-namespace-get"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "identity-config-namespace-create",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
-]
-
-[[package]]
-name = "identity-config-version-get"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "faker-game",
- "faker-game-version",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
-]
-
-[[package]]
-name = "identity-config-version-prepare"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "faker-game",
- "prost 0.10.4",
- "rivet-operation",
-]
-
-[[package]]
-name = "identity-config-version-publish"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "faker-game",
- "identity-config-version-get",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
-]
-
-[[package]]
 name = "idna"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5773,102 +5493,6 @@ dependencies = [
  "serde",
  "serde_json",
  "simple_asn1",
-]
-
-[[package]]
-name = "kv-config-namespace-create"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
-]
-
-[[package]]
-name = "kv-config-namespace-get"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "kv-config-namespace-create",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
-]
-
-[[package]]
-name = "kv-config-version-get"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "faker-game",
- "faker-game-version",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
-]
-
-[[package]]
-name = "kv-config-version-prepare"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "faker-game",
- "prost 0.10.4",
- "rivet-operation",
-]
-
-[[package]]
-name = "kv-config-version-publish"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "faker-game",
- "kv-config-version-get",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
-]
-
-[[package]]
-name = "kv-get"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
-]
-
-[[package]]
-name = "kv-list"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
-]
-
-[[package]]
-name = "kv-worker"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "chrono",
- "kv-get",
- "rivet-config",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-runtime",
- "rivet-util-kv",
 ]
 
 [[package]]
@@ -6780,10 +6404,8 @@ dependencies = [
  "cloud-worker",
  "ds",
  "external-worker",
- "game-user-worker",
  "job-log-worker",
  "job-run",
- "kv-worker",
  "mm-worker",
  "rivet-config",
  "rivet-connection",
@@ -6797,9 +6419,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "upload-worker",
- "user-dev-worker",
- "user-follow-worker",
- "user-report-worker",
  "user-worker",
 ]
 
@@ -6967,18 +6586,6 @@ name = "nonzero_ext"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "38bf9645c8b145698bb0b18a4637dcacbc421ea49bef2317e4fd8065a387cf21"
-
-[[package]]
-name = "nsfw-image-score"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "reqwest 0.11.27",
- "rivet-operation",
- "serde",
-]
 
 [[package]]
 name = "ntapi"
@@ -7404,16 +7011,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 
 [[package]]
-name = "perf-log-get"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
-]
-
-[[package]]
 name = "pest"
 version = "2.7.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7619,18 +7216,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b3e4daa0dcf6feba26f985457cdf104d4b4256fc5a09547140f3631bb076b19a"
 dependencies = [
  "unicode-ident",
-]
-
-[[package]]
-name = "profanity-check"
-version = "0.0.1"
-dependencies = [
- "censor",
- "chirp-client",
- "chirp-worker",
- "lazy_static",
- "prost 0.10.4",
- "rivet-operation",
 ]
 
 [[package]]
@@ -8459,12 +8044,9 @@ dependencies = [
  "game-namespace-list",
  "game-resolve-namespace-id",
  "game-token-development-validate",
- "game-user-get",
- "game-user-link-get",
  "game-validate",
  "game-version-validate",
  "job-run",
- "kv-list",
  "mm-lobby-player-count",
  "mm-lobby-runtime-aggregate",
  "mm-player-count-for-namespace",
@@ -8485,8 +8067,6 @@ dependencies = [
  "team-validate",
  "tier",
  "types-proto",
- "user-follow-count",
- "user-follow-get",
  "user-get",
  "user-identity-get",
  "user-team-list",
@@ -8923,23 +8503,11 @@ name = "rivet-util-cdn"
 version = "0.1.0"
 
 [[package]]
-name = "rivet-util-game-user"
-version = "0.1.0"
-dependencies = [
- "rivet-util",
- "uuid",
-]
-
-[[package]]
 name = "rivet-util-job"
 version = "0.1.0"
 dependencies = [
  "uuid",
 ]
-
-[[package]]
-name = "rivet-util-kv"
-version = "0.1.0"
 
 [[package]]
 name = "rivet-util-macros"
@@ -8967,17 +8535,6 @@ dependencies = [
  "serde_json",
  "strum 0.24.1",
  "user-identity-get",
- "uuid",
-]
-
-[[package]]
-name = "rivet-util-nsfw"
-version = "0.1.0"
-
-[[package]]
-name = "rivet-util-search"
-version = "0.1.0"
-dependencies = [
  "uuid",
 ]
 
@@ -10229,19 +9786,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "team-search"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "lazy_static",
- "prost 0.10.4",
- "regex",
- "rivet-operation",
- "sqlx",
-]
-
-[[package]]
 name = "team-user-ban-get"
 version = "0.0.1"
 dependencies = [
@@ -10269,7 +9813,6 @@ version = "0.0.1"
 dependencies = [
  "chirp-client",
  "chirp-worker",
- "profanity-check",
  "prost 0.10.4",
  "rivet-operation",
  "team-resolve-display-name",
@@ -10354,6 +9897,28 @@ checksum = "1e4129646ca0ed8f45d09b929036bafad5377103edd06e50bf574b353d2b08d9"
 dependencies = [
  "libc",
  "winapi",
+]
+
+[[package]]
+name = "test-ds-echo"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "futures-util",
+ "hyper 0.14.30",
+ "reqwest 0.11.27",
+ "tokio",
+ "tokio-util 0.7.12",
+]
+
+[[package]]
+name = "test-mm-lobby-echo"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "hyper 0.14.30",
+ "reqwest 0.11.27",
+ "tokio",
 ]
 
 [[package]]
@@ -11116,7 +10681,6 @@ dependencies = [
  "chirp-client",
  "chirp-worker",
  "chrono",
- "nsfw-image-score",
  "prost 0.10.4",
  "reqwest 0.11.27",
  "rivet-operation",
@@ -11271,100 +10835,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "user-dev-worker"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "game-get",
- "rivet-config",
- "team-member-list",
-]
-
-[[package]]
-name = "user-follow-count"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
- "user-follow-toggle",
-]
-
-[[package]]
-name = "user-follow-get"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
- "user-follow-toggle",
-]
-
-[[package]]
-name = "user-follow-list"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
- "user-follow-toggle",
-]
-
-[[package]]
-name = "user-follow-relationship-get"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
- "user-follow-toggle",
-]
-
-[[package]]
-name = "user-follow-request-list"
-version = "0.0.35"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
- "user-follow-toggle",
-]
-
-[[package]]
-name = "user-follow-toggle"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
-]
-
-[[package]]
-name = "user-follow-worker"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "rivet-config",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-runtime",
-]
-
-[[package]]
 name = "user-get"
 version = "0.0.1"
 dependencies = [
@@ -11418,18 +10888,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "user-mutual-friend-list"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
- "user-follow-toggle",
-]
-
-[[package]]
 name = "user-pending-delete-toggle"
 version = "0.0.1"
 dependencies = [
@@ -11450,23 +10908,10 @@ dependencies = [
  "chirp-client",
  "chirp-worker",
  "faker-user",
- "profanity-check",
  "prost 0.10.4",
  "rivet-operation",
  "sqlx",
  "user-get",
-]
-
-[[package]]
-name = "user-report-worker"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "rivet-config",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-runtime",
 ]
 
 [[package]]
@@ -11490,20 +10935,6 @@ dependencies = [
  "chirp-worker",
  "faker-user",
  "prost 0.10.4",
- "rivet-operation",
- "sqlx",
- "user-identity-create",
-]
-
-[[package]]
-name = "user-search"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "lazy_static",
- "prost 0.10.4",
- "regex",
  "rivet-operation",
  "sqlx",
  "user-identity-create",
@@ -11543,7 +10974,6 @@ dependencies = [
  "faker-user",
  "game-get",
  "game-namespace-get",
- "identity-config-version-get",
  "lazy_static",
  "rivet-config",
  "rivet-convert",

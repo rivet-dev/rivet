@@ -1,1 +1,0 @@
-# identity-config-version-get

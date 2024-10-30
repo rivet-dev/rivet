@@ -11,6 +11,8 @@ import "resources/legacy/proto/backend/identity.proto";
 import "resources/legacy/proto/backend/captcha.proto";
 
 message Request {
+	reserved 106, 107;
+
 	message OverrideCdnConfig {
 		optional rivet.backend.cdn.VersionConfig config = 1;
 	}
@@ -43,8 +45,6 @@ message Request {
 	optional rivet.backend.cloud.VersionConfig override_config = 101;
 	optional OverrideCdnConfig override_cdn_config = 104;
 	optional OverrideMatchmakerConfig override_mm_config = 102;
-	optional OverrideKvConfig override_kv_config = 106;
-	optional OverrideIdentityConfig override_identity_config = 107;
 
 	optional OverrideLobbyGroups override_lobby_groups = 103;
 	optional OverrideCaptcha override_captcha = 105;

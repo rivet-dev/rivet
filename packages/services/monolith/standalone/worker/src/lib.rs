@@ -1,6 +1,5 @@
 use rivet_operation::prelude::*;
 
-
 macro_rules! spawn_workers {
 	([$shared_client:ident, $config:ident, $pools:ident, $cache:ident, $join_set:ident] $($pkg:ident),* $(,)?) => {
 		$(
@@ -16,10 +15,7 @@ macro_rules! spawn_workers {
 }
 
 #[tracing::instrument(skip_all)]
-pub async fn start(
-	config: rivet_config::Config,
-	pools: rivet_pools::Pools,
-) -> GlobalResult<()> {
+pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> GlobalResult<()> {
 	let shared_client = chirp_client::SharedClient::from_env(pools.clone())?;
 	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
 
@@ -32,17 +28,12 @@ pub async fn start(
 		cloud_worker,
 		ds,
 		external_worker,
-		game_user_worker,
 		job_log_worker,
 		job_run,
-		kv_worker,
 		mm_worker,
 		team_invite_worker,
 		team_worker,
 		upload_worker,
-		user_dev_worker,
-		user_follow_worker,
-		user_report_worker,
 		user_worker,
 	];
 

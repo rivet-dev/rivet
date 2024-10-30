@@ -243,36 +243,6 @@ pub mod ent {
 	}
 
 	#[derive(Clone, Debug)]
-	pub struct GameUser {
-		pub game_user_id: Uuid,
-	}
-
-	impl TryFrom<&schema::entitlement::GameUser> for GameUser {
-		type Error = GlobalError;
-
-		fn try_from(value: &schema::entitlement::GameUser) -> GlobalResult<Self> {
-			Ok(GameUser {
-				game_user_id: unwrap!(value.game_user_id).as_uuid(),
-			})
-		}
-	}
-
-	#[derive(Clone, Debug)]
-	pub struct GameUserLink {
-		pub link_id: Uuid,
-	}
-
-	impl TryFrom<&schema::entitlement::GameUserLink> for GameUserLink {
-		type Error = GlobalError;
-
-		fn try_from(value: &schema::entitlement::GameUserLink) -> GlobalResult<Self> {
-			Ok(GameUserLink {
-				link_id: unwrap!(value.link_id).as_uuid(),
-			})
-		}
-	}
-
-	#[derive(Clone, Debug)]
 	pub struct UploadFile {
 		pub upload_id: Uuid,
 		pub path: String,
@@ -390,9 +360,6 @@ pub trait ClaimsDecode {
 		&self,
 	) -> GlobalResult<Option<ent::GameNamespaceDevelopment>>;
 	fn as_matchmaker_development_player(&self) -> GlobalResult<ent::MatchmakerDevelopmentPlayer>;
-	fn as_game_user(&self) -> GlobalResult<ent::GameUser>;
-	fn as_game_user_option(&self) -> GlobalResult<Option<ent::GameUser>>;
-	fn as_game_user_link(&self) -> GlobalResult<ent::GameUserLink>;
 	fn as_upload_file(&self) -> GlobalResult<ent::UploadFile>;
 	fn as_cloud_device_link(&self) -> GlobalResult<ent::CloudDeviceLink>;
 	fn as_bypass(&self) -> GlobalResult<ent::Bypass>;
@@ -560,50 +527,6 @@ impl ClaimsDecode for schema::Claims {
 			.and_then(std::convert::identity)
 	}
 
-	fn as_game_user(&self) -> GlobalResult<ent::GameUser> {
-		self.entitlements
-			.iter()
-			.find_map(|ent| match &ent.kind {
-				Some(schema::entitlement::Kind::GameUser(ent)) => {
-					Some(ent::GameUser::try_from(ent))
-				}
-				_ => None,
-			})
-			.ok_or(err_code!(
-				CLAIMS_MISSING_ENTITLEMENT,
-				entitlements = "GameUser"
-			))
-			.and_then(std::convert::identity)
-	}
-
-	fn as_game_user_option(&self) -> GlobalResult<Option<ent::GameUser>> {
-		self.entitlements
-			.iter()
-			.find_map(|ent| match &ent.kind {
-				Some(schema::entitlement::Kind::GameUser(ent)) => {
-					Some(ent::GameUser::try_from(ent))
-				}
-				_ => None,
-			})
-			.transpose()
-	}
-
-	fn as_game_user_link(&self) -> GlobalResult<ent::GameUserLink> {
-		self.entitlements
-			.iter()
-			.find_map(|ent| match &ent.kind {
-				Some(schema::entitlement::Kind::GameUserLink(ent)) => {
-					Some(ent::GameUserLink::try_from(ent))
-				}
-				_ => None,
-			})
-			.ok_or(err_code!(
-				CLAIMS_MISSING_ENTITLEMENT,
-				entitlements = "GameUserLink"
-			))
-			.and_then(std::convert::identity)
-	}
-
 	fn as_upload_file(&self) -> GlobalResult<ent::UploadFile> {
 		self.entitlements
 			.iter()
@@ -733,8 +656,6 @@ impl EntitlementTag for schema::Entitlement {
 			schema::entitlement::Kind::GameCloud(_) => 7,
 			schema::entitlement::Kind::GameNamespaceDevelopment(_) => 8,
 			schema::entitlement::Kind::MatchmakerDevelopmentPlayer(_) => 9,
-			schema::entitlement::Kind::GameUser(_) => 10,
-			schema::entitlement::Kind::GameUserLink(_) => 11,
 			schema::entitlement::Kind::UploadFile(_) => 12,
 			schema::entitlement::Kind::CloudDeviceLink(_) => 14,
 			schema::entitlement::Kind::Bypass(_) => 15,

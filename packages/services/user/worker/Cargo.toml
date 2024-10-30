@@ -17,7 +17,6 @@ rivet-runtime = { path = "../../../common/runtime" }
 
 game-get = { path = "../../game/ops/get" }
 game-namespace-get = { path = "../../game/ops/namespace-get" }
-identity-config-version-get = { path = "../../identity-config/ops/version-get" }
 team-get = { path = "../../team/ops/get" }
 team-member-list = { path = "../../team/ops/member-list" }
 upload-list-for-user = { path = "../../upload/ops/list-for-user" }

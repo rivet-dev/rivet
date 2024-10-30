@@ -1,1 +1,0 @@
-ALTER TABLE user_follows ADD COLUMN ignored BOOLEAN NOT NULL DEFAULT true;

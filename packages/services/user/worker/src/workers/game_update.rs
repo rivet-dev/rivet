@@ -30,7 +30,7 @@ async fn worker(ctx: &OperationContext<game::msg::update::Message>) -> GlobalRes
 		let user_id = unwrap_ref!(member.user_id).as_uuid();
 
 		events.push(
-			msg!([ctx] user_dev::msg::game_update(user_id) {
+			msg!([ctx] user::msg::game_update(user_id) {
 				user_id: member.user_id,
 				game_id: ctx.game_id,
 			})

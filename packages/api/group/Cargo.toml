@@ -34,7 +34,6 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
     "ansi",
 ] }
 url = "2.2.2"
-util-nsfw = { package = "rivet-util-nsfw", path = "../../services/nsfw/util" }
 uuid = { version = "1", features = ["v4"] }
 
 game-get = { path = "../../services/game/ops/get" }
@@ -47,12 +46,10 @@ team-member-count = { path = "../../services/team/ops/member-count" }
 team-member-list = { path = "../../services/team/ops/member-list" }
 team-profile-validate = { path = "../../services/team/ops/profile-validate" }
 team-recommend = { path = "../../services/team/ops/recommend" }
-team-search = { path = "../../services/team/ops/search" }
 team-user-ban-get = { path = "../../services/team/ops/user-ban-get" }
 team-user-ban-list = { path = "../../services/team/ops/user-ban-list" }
 token-revoke = { path = "../../services/token/ops/revoke" }
 upload-prepare = { path = "../../services/upload/ops/prepare" }
-user-follow-get = { path = "../../services/user-follow/ops/get" }
 user-get = { path = "../../services/user/ops/get" }
 user-identity-get = { path = "../../services/user-identity/ops/get" }
 user-team-list = { path = "../../services/user/ops/team-list" }

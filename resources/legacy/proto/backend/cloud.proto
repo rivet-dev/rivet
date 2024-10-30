@@ -5,8 +5,6 @@ package rivet.backend.cloud;
 import "resources/legacy/proto/common.proto";
 import "resources/legacy/proto/backend/matchmaker.proto";
 import "resources/legacy/proto/backend/cdn.proto";
-import "resources/legacy/proto/backend/kv.proto";
-import "resources/legacy/proto/backend/identity.proto";
 
 message Game {
 	rivet.common.Uuid game_id = 1;
@@ -18,12 +16,10 @@ message GameNamespace {
 }
 
 message NamespaceConfig {
-	reserved 105;
+	reserved 103, 104, 105;
 
 	optional rivet.backend.cdn.NamespaceConfig cdn = 101;
 	optional rivet.backend.matchmaker.NamespaceConfig matchmaker = 102;
-	optional rivet.backend.kv.NamespaceConfig kv = 103;
-	optional rivet.backend.identity.NamespaceConfig identity = 104;
 }
 
 message GameVersion {
@@ -34,10 +30,8 @@ message GameVersion {
 // Represents how a game version will be published. This is a data type that will be used
 // before the version is actually inserted in to the database.
 message VersionConfig {
-	reserved 105;
+	reserved 103, 104, 105;
 
 	optional rivet.backend.cdn.VersionConfig cdn = 101;
 	optional rivet.backend.matchmaker.VersionConfig matchmaker = 102;
-	optional rivet.backend.kv.VersionConfig kv = 103;
-	optional rivet.backend.identity.VersionConfig identity = 104;
 }

@@ -894,7 +894,7 @@ where
 				.worker
 				.handle(req.op_ctx())
 				.instrument(
-					tracing::debug!("handle", name = %W::NAME, tick_index = backoff.tick_index()),
+					tracing::debug_span!("handle", name = %W::NAME, tick_index = backoff.tick_index()),
 				)
 				.await;
 

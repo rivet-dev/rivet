@@ -35,7 +35,10 @@ impl ApiAuth for Auth {
 		})
 	}
 
-	async fn rate_limit(config: &rivet_config::Config, rate_limit_ctx: AuthRateLimitCtx<'_>) -> GlobalResult<()> {
+	async fn rate_limit(
+		config: &rivet_config::Config,
+		rate_limit_ctx: AuthRateLimitCtx<'_>,
+	) -> GlobalResult<()> {
 		basic_rate_limit(config, rate_limit_ctx).await
 	}
 }
@@ -115,35 +118,5 @@ impl Auth {
 		} else {
 			Ok(None)
 		}
-	}
-
-	pub async fn fetch_game_user_option(
-		&self,
-		ctx: &OperationContext<()>,
-	) -> GlobalResult<Option<Uuid>> {
-		if let Ok(claims) = self.claims() {
-			if let Ok(game_user_ent) = claims.as_game_user() {
-				let game_user_res = op!([ctx] game_user_get {
-					game_user_ids: vec![game_user_ent.game_user_id.into()]
-				})
-				.await?;
-				let game_user = unwrap!(game_user_res.game_users.first());
-
-				// Verify that game user is not deleted
-				if game_user.deleted_ts.is_some() {
-					let jti = unwrap!(claims.jti);
-					op!([ctx] token_revoke {
-						jtis: vec![jti],
-					})
-					.await?;
-
-					bail_with!(TOKEN_REVOKED);
-				}
-
-				return Ok(Some(unwrap_ref!(game_user.user_id).as_uuid()));
-			}
-		}
-
-		Ok(None)
 	}
 }

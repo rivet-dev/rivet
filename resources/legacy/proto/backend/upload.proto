@@ -39,10 +39,11 @@ message UploadFile {
 }
 
 message PrepareFile {
+	reserved 4;
+
 	string path = 1;
 	optional string mime = 2;
 	uint64 content_length = 3;
-	optional float nsfw_score_threshold = 4;
 	bool multipart = 5;
 }
 

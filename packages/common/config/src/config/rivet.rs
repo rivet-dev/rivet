@@ -111,14 +111,6 @@ pub struct Rivet {
 	/// Deprecated: Configuration for CDN.
 	#[serde(default)]
 	pub cdn: Option<Cdn>,
-
-	// TODO: Remove these
-	#[serde(default)]
-	pub profanity_filter_disable: bool,
-	#[serde(default)]
-	pub upload_nsfw_check_enabled: bool,
-	#[serde(default)]
-	pub upload_nsfw_error_verbose: bool,
 }
 
 impl Default for Rivet {
@@ -143,9 +135,6 @@ impl Default for Rivet {
 			billing: None,
 			backend: None,
 			test_builds: Default::default(),
-			profanity_filter_disable: false,
-			upload_nsfw_check_enabled: false,
-			upload_nsfw_error_verbose: false,
 		}
 	}
 }

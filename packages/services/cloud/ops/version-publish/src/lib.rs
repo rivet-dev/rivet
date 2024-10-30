@@ -59,28 +59,6 @@ async fn handle(
 	} else {
 		None
 	};
-	let kv_config_ctx = if let Some(kv_config) = &config.kv {
-		let prepare_res = op!([ctx] kv_config_version_prepare {
-			game_id: Some(game_id.into()),
-			config: Some(kv_config.clone()),
-		})
-		.await?;
-
-		Some(unwrap_ref!(prepare_res.config_ctx).clone())
-	} else {
-		None
-	};
-	let identity_config_ctx = if let Some(identity_config) = &config.identity {
-		let prepare_res = op!([ctx] identity_config_version_prepare {
-			game_id: Some(game_id.into()),
-			config: Some(identity_config.clone()),
-		})
-		.await?;
-
-		Some(unwrap_ref!(prepare_res.config_ctx).clone())
-	} else {
-		None
-	};
 
 	// Create the game version
 	let version_create_res = op!([ctx] game_version_create {
@@ -115,24 +93,6 @@ async fn handle(
 			version_id: Some(version_id.into()),
 			config: Some(mm_config.clone()),
 			config_ctx: Some((*mm_config_ctx).clone()),
-		})
-		.await?;
-	}
-	if let (Some(kv_config), Some(kv_config_ctx)) = (&config.kv, &kv_config_ctx) {
-		op!([ctx] kv_config_version_publish {
-			version_id: Some(version_id.into()),
-			config: Some(kv_config.clone()),
-			config_ctx: Some((*kv_config_ctx).clone()),
-		})
-		.await?;
-	}
-	if let (Some(identity_config), Some(identity_config_ctx)) =
-		(&config.identity, &identity_config_ctx)
-	{
-		op!([ctx] identity_config_version_publish {
-			version_id: Some(version_id.into()),
-			config: Some(identity_config.clone()),
-			config_ctx: Some((*identity_config_ctx).clone()),
 		})
 		.await?;
 	}

@@ -73,16 +73,6 @@ message Entitlement {
 		rivet.common.Uuid player_id = 2;
 	}
 
-	// Token created when a user connects to a game and generates a guest user.
-	message GameUser {
-		rivet.common.Uuid game_user_id = 1;
-	}
-
-	// Token used by the user to link their game rivet account to their rivet account.
-	message GameUserLink {
-		rivet.common.Uuid link_id = 1;
-	}
-
 	// Token used to upload files to an upload.
 	message UploadFile {
 		rivet.common.Uuid upload_id = 1;
@@ -123,6 +113,8 @@ message Entitlement {
 		rivet.common.Uuid env_id = 1;
 	}
 
+	reserved 10, 11;
+
 	oneof kind {
 		Refresh refresh = 1;
 		User user = 2;
@@ -133,8 +125,6 @@ message Entitlement {
 		GameCloud game_cloud = 7;
 		GameNamespaceDevelopment game_namespace_development = 8;
 		MatchmakerDevelopmentPlayer matchmaker_development_player = 9;
-		GameUser game_user = 10;
-		GameUserLink game_user_link = 11;
 		UploadFile upload_file = 12;
 		CloudDeviceLink cloud_device_link = 14;
 		Bypass bypass = 15;

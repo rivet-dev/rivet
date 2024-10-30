@@ -21,12 +21,9 @@ game-namespace-get = { path = "../../services/game/ops/namespace-get" }
 game-namespace-list = { path = "../../services/game/ops/namespace-list" }
 game-resolve-namespace-id = { path = "../../services/game/ops/resolve-namespace-id" }
 game-token-development-validate = { path = "../../services/game/ops/token-development-validate" }
-game-user-get = { path = "../../services/game-user/ops/get" }
-game-user-link-get = { path = "../../services/game-user/ops/link-get" }
 game-validate = { path = "../../services/game/ops/validate" }
 game-version-validate = { path = "../../services/game/ops/version-validate" }
 job-run = { path = "../../services/job-run" }
-kv-list = { path = "../../services/kv/ops/list" }
 mm-lobby-player-count = { path = "../../services/mm/ops/lobby-player-count" }
 mm-lobby-runtime-aggregate = { path = "../../services/mm/ops/lobby-runtime-aggregate" }
 mm-player-count-for-namespace = { path = "../../services/mm/ops/player-count-for-namespace" }
@@ -38,8 +35,6 @@ team-member-count = { path = "../../services/team/ops/member-count" }
 team-profile-validate = { path = "../../services/team/ops/profile-validate" }
 team-validate = { path = "../../services/team/ops/validate" }
 tier = { path = "../../services/tier" }
-user-follow-count = { path = "../../services/user-follow/ops/count" }
-user-follow-get = { path = "../../services/user-follow/ops/get" }
 user-get = { path = "../../services/user/ops/get" }
 user-identity-get = { path = "../../services/user-identity/ops/get" }
 user-team-list = { path = "../../services/user/ops/team-list" }

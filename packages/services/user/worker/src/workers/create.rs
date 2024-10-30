@@ -19,59 +19,17 @@ async fn worker(ctx: &OperationContext<user::msg::create::Message>) -> GlobalRes
 
 	let join_ts = ctx.ts();
 
-	// Get customizations from game version
-	let (display_name, avatar_upload_id) = if let Some(namespace_id) = ctx.namespace_id {
-		let namespace_res = op!([ctx] game_namespace_get {
-			namespace_ids: vec![namespace_id],
-		})
-		.await?;
-
-		let version_id = unwrap!(unwrap!(namespace_res.namespaces.first()).version_id);
-
-		let identity_config_res = op!([ctx] identity_config_version_get {
-			version_ids: vec![version_id],
-		})
-		.await?;
-		let identity_config = unwrap_ref!(unwrap!(identity_config_res.versions.first()).config);
-
-		let mut rng = rand::thread_rng();
-		let display_name = identity_config
-			.custom_display_names
-			.iter()
-			.choose(&mut rng)
-			.map(|c| c.display_name.clone());
-		let avatar_upload_id = identity_config
-			.custom_avatars
-			.iter()
-			.choose(&mut rng)
-			.and_then(|avatar| avatar.upload_id)
-			.as_ref()
-			.map(common::Uuid::as_uuid);
-
-		(display_name, avatar_upload_id)
-	} else {
-		(None, None)
-	};
-
 	// Attempt to create a unique handle 3 times
 	let mut attempts = 3u32;
-	let (_display_name, _account_number) = loop {
+	let (display_name, _account_number) = loop {
 		if attempts == 0 {
 			bail!("failed all attempts to create unique user handle");
 		}
 		attempts -= 1;
 
-		let display_name = gen_display_name(display_name.as_deref().unwrap_or("Guest"));
+		let display_name = gen_display_name("Guest");
 
-		if let Some(x) = insert_user(
-			ctx,
-			user_id,
-			display_name.clone(),
-			avatar_upload_id,
-			join_ts,
-		)
-		.await?
-		{
+		if let Some(x) = insert_user(ctx, user_id, display_name.clone(), None, join_ts).await? {
 			break x;
 		}
 	};
@@ -81,15 +39,10 @@ async fn worker(ctx: &OperationContext<user::msg::create::Message>) -> GlobalRes
 	})
 	.await?;
 
-	let mut properties = json!({
+	let properties_json = Some(serde_json::to_string(&json!({
 		"user_id": user_id,
-	});
-
-	if let Some(display_name) = display_name {
-		properties["display_name"] = json!(display_name);
-	}
-
-	let properties_json = Some(serde_json::to_string(&properties)?);
+		"display_name": display_name,
+	}))?);
 
 	msg!([ctx] analytics::msg::event_create() {
 		events: vec![

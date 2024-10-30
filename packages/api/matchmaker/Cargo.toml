@@ -44,7 +44,6 @@ cdn-namespace-get = { path = "../../services/cdn/ops/namespace-get" }
 game-namespace-get = { path = "../../services/game/ops/namespace-get" }
 game-namespace-resolve-url = { path = "../../services/game/ops/namespace-resolve-url" }
 game-resolve-namespace-id = { path = "../../services/game/ops/resolve-namespace-id" }
-game-user-get = { path = "../../services/game-user/ops/get" }
 captcha-hcaptcha-config-get = { path = "../../services/captcha/ops/hcaptcha-config-get" }
 job-run = { path = "../../services/job-run" }
 mm-config-lobby-group-resolve-version = { path = "../../services/mm-config/ops/lobby-group-resolve-version" }

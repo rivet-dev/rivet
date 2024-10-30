@@ -37,17 +37,11 @@ async fn handle(
 		.collect::<Vec<_>>();
 
 	// Fetch all dependent configs
-	let (cdn_configs_res, mm_configs_res, kv_configs_res, identity_configs_res) = tokio::try_join!(
+	let (cdn_configs_res, mm_configs_res) = tokio::try_join!(
 		op!([ctx] cdn_version_get {
 			version_ids: all_version_ids_proto.clone(),
 		}),
 		op!([ctx] mm_config_version_get {
-			version_ids: all_version_ids_proto.clone(),
-		}),
-		op!([ctx] kv_config_version_get {
-			version_ids: all_version_ids_proto.clone(),
-		}),
-		op!([ctx] identity_config_version_get {
 			version_ids: all_version_ids_proto.clone(),
 		}),
 	)?;
@@ -71,20 +65,6 @@ async fn handle(
 						.iter()
 						.find(|mm_version| {
 							mm_version.version_id.as_ref() == Some(&version_id_proto)
-						})
-						.map(|v| v.config.clone().unwrap()),
-					kv: kv_configs_res
-						.versions
-						.iter()
-						.find(|kv_version| {
-							kv_version.version_id.as_ref() == Some(&version_id_proto)
-						})
-						.map(|v| v.config.clone().unwrap()),
-					identity: identity_configs_res
-						.versions
-						.iter()
-						.find(|identity_version| {
-							identity_version.version_id.as_ref() == Some(&version_id_proto)
 						})
 						.map(|v| v.config.clone().unwrap()),
 				}),

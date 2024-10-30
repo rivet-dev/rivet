@@ -1,8 +1,8 @@
-use proto::backend::{self, pkg::*};
+use proto::backend;
 use rivet_api::models;
 use rivet_operation::prelude::*;
 
-use crate::{ApiFrom, ApiTryFrom};
+use crate::ApiTryFrom;
 
 impl ApiTryFrom<backend::user_identity::Identity> for models::IdentityLinkedAccount {
 	type Error = GlobalError;
@@ -26,22 +26,6 @@ impl ApiTryFrom<backend::user_identity::Identity> for models::IdentityLinkedAcco
 					})),
 					..Default::default()
 				})
-			}
-		}
-	}
-}
-
-impl ApiFrom<game_user::link_get::response::GameUserLinkStatus> for models::IdentityGameLinkStatus {
-	fn api_from(value: game_user::link_get::response::GameUserLinkStatus) -> Self {
-		match value {
-			game_user::link_get::response::GameUserLinkStatus::Complete => {
-				models::IdentityGameLinkStatus::Complete
-			}
-			game_user::link_get::response::GameUserLinkStatus::Incomplete => {
-				models::IdentityGameLinkStatus::Incomplete
-			}
-			game_user::link_get::response::GameUserLinkStatus::Cancelled => {
-				models::IdentityGameLinkStatus::Cancelled
 			}
 		}
 	}

@@ -7,13 +7,6 @@ use proto::{backend::pkg::*, claims::Claims};
 use rivet_claims::ClaimsDecode;
 use rivet_operation::prelude::*;
 
-pub struct ResolvedGameUser {
-	pub game_user_id: Uuid,
-	pub user_id: Uuid,
-	pub namespace_id: Uuid,
-	pub game_id: Uuid,
-}
-
 /// Information derived from the authentication middleware.
 pub struct Auth {
 	config: rivet_config::Config,
@@ -42,7 +35,10 @@ impl ApiAuth for Auth {
 		})
 	}
 
-	async fn rate_limit(config: &rivet_config::Config, rate_limit_ctx: AuthRateLimitCtx<'_>) -> GlobalResult<()> {
+	async fn rate_limit(
+		config: &rivet_config::Config,
+		rate_limit_ctx: AuthRateLimitCtx<'_>,
+	) -> GlobalResult<()> {
 		basic_rate_limit(config, rate_limit_ctx).await
 	}
 }
@@ -138,98 +134,6 @@ impl Auth {
 		}
 
 		Ok(user_ent)
-	}
-
-	pub fn game_user_link_ent(
-		&self,
-		token: String,
-	) -> GlobalResult<(rivet_claims::ent::GameUserLink, Uuid)> {
-		// Decode & validate claims
-		let claims = rivet_claims::decode(&self.config.server()?.jwt.public, &token)
-			.map_err(|_| err_code!(API_FORBIDDEN, reason = "Claims error"))??;
-		let game_user_link_ent = claims
-			.as_game_user_link()
-			.map_err(|_| err_code!(API_FORBIDDEN, reason = "Decode error"))?;
-		let token_jti = unwrap!(claims.jti).as_uuid();
-
-		Ok((game_user_link_ent, token_jti))
-	}
-
-	pub async fn fetch_game_user(
-		&self,
-		ctx: &OperationContext<()>,
-	) -> GlobalResult<ResolvedGameUser> {
-		let claims = self.claims()?;
-		let game_user_ent = claims.as_game_user()?;
-
-		let game_user_res = op!([ctx] game_user_get {
-			game_user_ids: vec![game_user_ent.game_user_id.into()]
-		})
-		.await?;
-		let game_user = unwrap!(game_user_res.game_users.first());
-
-		// Verify that game user is not deleted
-		if game_user.deleted_ts.is_some() {
-			let jti = unwrap!(claims.jti);
-			op!([ctx] token_revoke {
-				jtis: vec![jti],
-			})
-			.await?;
-
-			bail_with!(TOKEN_REVOKED);
-		}
-
-		let namespace_id = unwrap_ref!(game_user.namespace_id);
-
-		let namespace_res = op!([ctx] game_namespace_get {
-			namespace_ids: vec![*namespace_id]
-		})
-		.await?;
-		let namespace = unwrap!(namespace_res.namespaces.first());
-
-		Ok(ResolvedGameUser {
-			game_user_id: game_user_ent.game_user_id,
-			user_id: unwrap_ref!(game_user.user_id).as_uuid(),
-			namespace_id: namespace_id.as_uuid(),
-			game_id: unwrap_ref!(namespace.game_id).as_uuid(),
-		})
-	}
-
-	pub async fn dual_user(
-		&self,
-		ctx: &OperationContext<()>,
-	) -> GlobalResult<(Uuid, Option<game_user::get::response::GameUser>)> {
-		let claims = self.claims()?;
-
-		if claims.as_user().is_ok() {
-			let user_ent = self.user(ctx).await?;
-
-			Ok((user_ent.user_id, None))
-		} else if let Ok(game_user_ent) = claims.as_game_user() {
-			let game_user_res = op!([ctx] game_user_get {
-				game_user_ids: vec![game_user_ent.game_user_id.into()]
-			})
-			.await?;
-			let game_user = unwrap!(game_user_res.game_users.first());
-
-			// Verify that game user is not deleted
-			if game_user.deleted_ts.is_some() {
-				let jti = unwrap!(claims.jti);
-				op!([ctx] token_revoke {
-					jtis: vec![jti],
-				})
-				.await?;
-
-				bail_with!(TOKEN_REVOKED);
-			}
-
-			Ok((
-				unwrap_ref!(game_user.user_id).as_uuid(),
-				Some(game_user.clone()),
-			))
-		} else {
-			bail_with!(CLAIMS_MISSING_ENTITLEMENT, entitlements = "User, GameUser");
-		}
 	}
 
 	/// Validates that the given agent is an admin user

@@ -10,7 +10,6 @@ pub mod api;
 pub mod cloud;
 pub mod group;
 pub mod identity;
-pub mod kv;
 pub mod portal;
 
 impl ApiFrom<common::ValidationError> for new_models::ValidationError {

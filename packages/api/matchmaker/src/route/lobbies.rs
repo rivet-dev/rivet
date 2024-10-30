@@ -304,10 +304,7 @@ pub async fn create(
 	}
 
 	// Verify bearer auth and get user ID
-	let (game_ns, user_id) = tokio::try_join!(
-		ctx.auth().game_ns(&ctx),
-		ctx.auth().fetch_game_user_option(ctx.op_ctx()),
-	)?;
+	let game_ns = ctx.auth().game_ns(&ctx).await?;
 	let (ns_data, game_resolve_res) = tokio::try_join!(
 		fetch_ns(&ctx, &game_ns),
 		op!([ctx] game_resolve_namespace_id {
@@ -402,7 +399,7 @@ pub async fn create(
 		&util_mm::verification::VerifyConfigOpts {
 			kind: util_mm::verification::ConnectionKind::Create,
 			namespace_id: ns_data.namespace_id,
-			user_id,
+			user_id: None,
 			client_info: vec![ctx.client_info()],
 			tags: &tags,
 			dynamic_max_players,
@@ -450,7 +447,7 @@ pub async fn create(
 			create_ray_id: Some(ctx.op_ctx().ray_id().into()),
 			preemptively_created: false,
 
-			creator_user_id: user_id.map(Into::into),
+			creator_user_id: None,
 			is_custom: true,
 			publicity: Some(publicity as i32),
 			lobby_config_json: body.lobby_config
@@ -898,23 +895,17 @@ async fn find_inner(
 	dynamic_max_players: Option<i32>,
 	verification: VerificationType,
 ) -> GlobalResult<FindResponse> {
-	let (version_config, user_id) = tokio::try_join!(
-		// Fetch version config if it was not passed as an argument
-		async {
-			if let Some(version_config) = version_config {
-				Ok(version_config)
-			} else {
-				let version_config_res = op!([ctx] mm_config_version_get {
-					version_ids: vec![game_ns.version_id.into()],
-				})
-				.await?;
+	let version_config = if let Some(version_config) = version_config {
+		version_config
+	} else {
+		let version_config_res = op!([ctx] mm_config_version_get {
+			version_ids: vec![game_ns.version_id.into()],
+		})
+		.await?;
 
-				let version_config = unwrap!(version_config_res.versions.first());
-				Ok(unwrap_ref!(version_config.config).clone())
-			}
-		},
-		ctx.auth().fetch_game_user_option(ctx.op_ctx()),
-	)?;
+		let version_config = unwrap!(version_config_res.versions.first());
+		unwrap_ref!(version_config.config).clone()
+	};
 
 	// Validate captcha
 	if let Some(captcha_config) = &version_config.captcha {
@@ -1031,7 +1022,7 @@ async fn find_inner(
 			client_info: Some(ctx.client_info()),
 		}],
 		query: Some(query),
-		user_id: user_id.map(Into::into),
+		user_id: None,
 		verification_data_json: if let VerificationType::UserData(verification_data) = &verification {
 			verification_data
 			.as_ref()

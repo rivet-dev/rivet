@@ -11,8 +11,6 @@ chirp-client = { path = "../../../../common/chirp/client" }
 prost = "0.10"
 
 cdn-namespace-get = { path = "../../../cdn/ops/namespace-get" }
-identity-config-namespace-get = { path = "../../../identity-config/ops/namespace-get" }
-kv-config-namespace-get = { path = "../../../kv-config/ops/namespace-get" }
 mm-config-namespace-get = { path = "../../../mm-config/ops/namespace-get" }
 
 [dependencies.sqlx]

@@ -32,8 +32,6 @@ pub async fn config_to_proto(
 		} else {
 			None
 		},
-		kv: value.kv.map(|_| backend::kv::VersionConfig {}),
-		identity: value.identity.map(|x| (*x).api_try_into()).transpose()?,
 	})
 }
 
@@ -56,11 +54,7 @@ pub async fn config_to_openapi(
 		} else {
 			None
 		},
-		kv: value.kv.map(|_| serde_json::json!({})),
-		identity: value
-			.identity
-			.map(ApiTryFrom::api_try_from)
-			.transpose()?
-			.map(Box::new),
+		kv: None,
+		identity: None,
 	})
 }

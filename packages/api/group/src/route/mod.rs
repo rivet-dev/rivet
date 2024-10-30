@@ -21,16 +21,6 @@ define_router! {
 		"groups" / "profile" / "validate": {
 			POST: groups::validate_profile(body: models::ValidateGroupProfileRequest),
 		},
-		"groups" / "search": {
-			GET: groups::search(
-				query: groups::SearchQuery,
-				rate_limit: {
-					buckets: [
-						{ count: 128 },
-					],
-				},
-			),
-		},
 		"groups" / "avatar-upload" / "prepare": {
 			POST: groups::prepare_avatar_upload(body: new_models::GroupPrepareAvatarUploadRequest),
 		},

@@ -174,13 +174,6 @@ async fn empty(ctx: TestCtx) {
 					..Default::default()
 				}),
 			}),
-			kv: None,
-			identity: Some(backend::identity::VersionConfig {
-				custom_display_names: vec![backend::identity::CustomDisplayName {
-					display_name: "some bad name".to_string(),
-				}],
-				custom_avatars: Vec::new(),
-			}),
 		}),
 	})
 	.await

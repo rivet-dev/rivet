@@ -12,8 +12,6 @@ prost = "0.10"
 util-mm = { package = "rivet-util-mm", path = "../../../mm/util" }
 
 cdn-version-get = { path = "../../../cdn/ops/version-get" }
-identity-config-version-get = { path = "../../../identity-config/ops/version-get" }
-kv-config-version-get = { path = "../../../kv-config/ops/version-get" }
 mm-config-version-get = { path = "../../../mm-config/ops/version-get" }
 
 [dependencies.sqlx]

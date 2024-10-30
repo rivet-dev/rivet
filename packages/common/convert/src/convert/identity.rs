@@ -31,21 +31,9 @@ pub fn summary(
 	config: &rivet_config::Config,
 	current_user_id: Uuid,
 	user: &backend::user::User,
-	mutual_follows: &[user_follow::get::response::Follow],
 ) -> GlobalResult<models::IdentitySummary> {
 	let user_id_proto = unwrap!(user.user_id);
 	let user_id = user_id_proto.as_uuid();
-
-	let current_user_id = Into::<common::Uuid>::into(current_user_id);
-	let following = mutual_follows.iter().any(|follow| {
-		follow.follower_user_id.as_ref() == Some(&current_user_id)
-			&& follow.following_user_id.as_ref() == Some(&user_id_proto)
-	});
-	let is_following_me = mutual_follows.iter().any(|follow| {
-		follow.follower_user_id.as_ref() == Some(&user_id_proto)
-			&& follow.following_user_id.as_ref() == Some(&current_user_id)
-	});
-	let is_mutual_following = following && is_following_me;
 
 	Ok(models::IdentitySummary {
 		identity_id: user_id,
@@ -57,21 +45,17 @@ pub fn summary(
 			profile: util::route::user_profile(config, user_id),
 			settings: None,
 		}),
-		following,
-		is_following_me,
-		is_mutual_following,
+		following: false,
+		is_following_me: false,
+		is_mutual_following: false,
 	})
 }
 
 #[derive(Debug)]
 pub struct ProfileCtx<'a> {
 	pub teams_ctx: &'a fetch::identity::TeamsCtx,
-	pub mutual_follows: &'a [user_follow::get::response::Follow],
-	pub follower_counts: &'a [user_follow::count::response::Follows],
-	pub following_counts: &'a [user_follow::count::response::Follows],
 	pub linked_accounts: &'a [user_identity::get::response::User],
 	pub self_is_game_linked: bool,
-	pub is_game_user: bool,
 }
 
 pub fn profile(
@@ -123,30 +107,6 @@ pub fn profile(
 			.collect::<GlobalResult<Vec<_>>>()?
 	};
 
-	let current_user_id = Into::<common::Uuid>::into(current_user_id);
-	let following = pctx.mutual_follows.iter().any(|follow| {
-		follow.follower_user_id.as_ref() == Some(&current_user_id)
-			&& follow.following_user_id.as_ref() == Some(&user_id_proto)
-	});
-	let is_following_me = pctx.mutual_follows.iter().any(|follow| {
-		follow.follower_user_id.as_ref() == Some(&user_id_proto)
-			&& follow.following_user_id.as_ref() == Some(&current_user_id)
-	});
-	let is_mutual_following = following && is_following_me;
-
-	let follower_count = pctx
-		.follower_counts
-		.iter()
-		.find(|f| f.user_id == user.user_id)
-		.map(|f| f.count)
-		.unwrap_or_default();
-	let following_count = pctx
-		.following_counts
-		.iter()
-		.find(|f| f.user_id == user.user_id)
-		.map(|f| f.count)
-		.unwrap_or_default();
-
 	Ok(models::IdentityProfile {
 		identity_id: user_id,
 		display_name: user.display_name.to_owned(),
@@ -155,22 +115,22 @@ pub fn profile(
 		is_registered,
 		external: Box::new(models::IdentityExternalLinks {
 			profile: util::route::user_profile(config, user_id),
-			settings: (is_self && pctx.is_game_user).then(|| util::route::user_settings(config)),
+			settings: None,
 		}),
 		dev_state: None,
 		is_admin: is_self && user.is_admin,
-		is_game_linked: (is_self && pctx.is_game_user).then_some(pctx.self_is_game_linked),
+		is_game_linked: None,
 
-		follower_count,
-		following_count,
-		following,
-		is_following_me,
-		is_mutual_following,
+		follower_count: 0,
+		following_count: 0,
+		following: false,
+		is_following_me: false,
+		is_mutual_following: false,
 		awaiting_deletion: is_self.then(|| user.delete_request_ts.is_some()),
 
 		join_ts: util::timestamp::to_string(user.join_ts)?,
 		bio: user.bio.clone(),
-		linked_accounts: if is_self && !pctx.is_game_user {
+		linked_accounts: if is_self {
 			identities
 				.iter()
 				.cloned()

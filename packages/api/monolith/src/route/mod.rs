@@ -63,10 +63,6 @@ define_router! {
 			prefix: "job",
 		},
 		{
-			path: api_kv::route::Router,
-			prefix: "kv",
-		},
-		{
 			path: api_matchmaker::route::Router,
 			prefix: "matchmaker",
 		},

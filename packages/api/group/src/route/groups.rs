@@ -285,17 +285,7 @@ pub async fn members(
 
 	// NOTE: We don't use fetch::identities::handles here because the end model is `GroupMember` not `IdentityHandle`
 	// Fetch team member and join request data
-	let (users, user_follows) = tokio::try_join!(
-		fetch::identity::users(&ctx, user_ids.clone()),
-		fetch::identity::follows(
-			&ctx,
-			user_ent.user_id,
-			user_ids
-				.iter()
-				.map(common::Uuid::as_uuid)
-				.collect::<Vec<_>>()
-		),
-	)?;
+	let users = fetch::identity::users(&ctx, user_ids.clone()).await?;
 
 	let raw_user_ent_id = Into::<common::Uuid>::into(user_ent.user_id);
 	let members = users
@@ -432,17 +422,7 @@ pub async fn join_requests(
 	// NOTE: We don't use fetch::identities::handles here because the end model is `GroupMember` not
 	// `IdentityHandle`
 	// Fetch team member and join request data
-	let (users, user_follows) = tokio::try_join!(
-		fetch::identity::users(&ctx, user_ids.clone()),
-		fetch::identity::follows(
-			&ctx,
-			user_ent.user_id,
-			user_ids
-				.iter()
-				.map(common::Uuid::as_uuid)
-				.collect::<Vec<_>>()
-		),
-	)?;
+	let users = fetch::identity::users(&ctx, user_ids.clone()).await?;
 
 	let raw_user_ent_id = Into::<common::Uuid>::into(user_ent.user_id);
 	let join_requests = users
@@ -706,54 +686,6 @@ pub async fn resolve_join_request(
 	Ok(models::ResolveGroupJoinRequestResponse {})
 }
 
-// MARK: GET /groups/search
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SearchQuery {
-	query: String,
-	limit: Option<u32>,
-	anchor: Option<String>,
-}
-
-pub async fn search(
-	ctx: Ctx<Auth>,
-	_watch_index: WatchIndexQuery,
-	query: SearchQuery,
-) -> GlobalResult<models::SearchGroupsResponse> {
-	ctx.auth().user(ctx.op_ctx()).await?;
-
-	ensure_with!(
-		query.limit.map(|v| v != 0).unwrap_or(true),
-		API_BAD_QUERY_PARAMETER,
-		parameter = "count",
-		error = "Must be greater than 0",
-	);
-
-	let team_search_res = op!([ctx] team_search {
-		query: query.query.clone(),
-		limit: query.limit.unwrap_or(32),
-		anchor: query.anchor
-			.map(|anchor| anchor.parse::<i64>())
-			.transpose()?,
-	})
-	.await?;
-
-	let team_res = op!([ctx] team_get {
-		team_ids: team_search_res.team_ids.clone(),
-	})
-	.await?;
-
-	let group_handles = team_res
-		.teams
-		.iter()
-		.map(|t| convert::group::handle(ctx.config(), t))
-		.collect::<GlobalResult<Vec<_>>>()?;
-
-	Ok(models::SearchGroupsResponse {
-		groups: group_handles,
-		anchor: team_search_res.anchor.as_ref().map(ToString::to_string),
-	})
-}
-
 // MARK: POST /groups/{}/profile
 pub async fn validate_profile(
 	ctx: Ctx<Auth>,
@@ -857,7 +789,6 @@ pub async fn prepare_avatar_upload(
 				path: format!("image.{}", ext),
 				mime: Some(format!("image/{}", ext)),
 				content_length: body.content_length.api_try_into()?,
-				nsfw_score_threshold: Some(util_nsfw::score_thresholds::TEAM_AVATAR),
 				..Default::default()
 			},
 		],
@@ -1315,17 +1246,7 @@ pub async fn bans(
 	// NOTE: We don't use fetch::identities::handles here because the end model is `BannedIdentity` not
 	// `IdentityHandle`
 	// Fetch team member and ban data
-	let (users, user_follows) = tokio::try_join!(
-		fetch::identity::users(&ctx, user_ids.clone()),
-		fetch::identity::follows(
-			&ctx,
-			user_ent.user_id,
-			user_ids
-				.iter()
-				.map(common::Uuid::as_uuid)
-				.collect::<Vec<_>>()
-		),
-	)?;
+	let users = fetch::identity::users(&ctx, user_ids.clone()).await?;
 
 	let raw_user_ent_id = Into::<common::Uuid>::into(user_ent.user_id);
 	let banned_identities = users

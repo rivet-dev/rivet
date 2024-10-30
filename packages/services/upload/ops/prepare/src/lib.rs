@@ -86,11 +86,6 @@ async fn handle(
 		.iter()
 		.map(|x| x.content_length as i64)
 		.collect::<Vec<_>>();
-	let nsfw_score_thresholds = ctx
-		.files
-		.iter()
-		.map(|x| x.nsfw_score_threshold)
-		.collect::<Vec<_>>();
 
 	// Insert in to database
 	sql_execute!(
@@ -103,9 +98,9 @@ async fn handle(
 				RETURNING 1
 			),
 			_insert_files AS (
-				INSERT INTO db_upload.upload_files (upload_id, path, mime, content_length, nsfw_score_threshold)
+				INSERT INTO db_upload.upload_files (upload_id, path, mime, content_length)
 				SELECT $1, rows.*
-				FROM unnest($7, $8, $9, $10) AS rows
+				FROM unnest($7, $8, $9) AS rows
 				RETURNING 1
 			)
 		SELECT 1
@@ -120,7 +115,6 @@ async fn handle(
 		paths,
 		mimes,
 		content_lengths,
-		nsfw_score_thresholds,
 	)
 	.await?;
 

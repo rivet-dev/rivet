@@ -32,9 +32,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
     "ansi",
 ] }
 url = "2.2.2"
-util-game-user = { package = "rivet-util-game-user", path = "../../services/game-user/util" }
 util-mm = { package = "rivet-util-mm", path = "../../services/mm/util" }
-util-nsfw = { package = "rivet-util-nsfw", path = "../../services/nsfw/util" }
 uuid = { version = "1", features = ["v4"] }
 
 cdn-namespace-get = { path = "../../services/cdn/ops/namespace-get" }
@@ -42,13 +40,6 @@ game-get = { path = "../../services/game/ops/get" }
 game-namespace-get = { path = "../../services/game/ops/namespace-get" }
 game-namespace-resolve-url = { path = "../../services/game/ops/namespace-resolve-url" }
 game-resolve-namespace-id = { path = "../../services/game/ops/resolve-namespace-id" }
-game-user-create = { path = "../../services/game-user/ops/create" }
-game-user-get = { path = "../../services/game-user/ops/get" }
-game-user-link-create = { path = "../../services/game-user/ops/link-create" }
-game-user-link-get = { path = "../../services/game-user/ops/link-get" }
-game-user-recent-session-list = { path = "../../services/game-user/ops/recent-session-list" }
-game-user-recommend = { path = "../../services/game-user/ops/recommend" }
-identity-config-version-get = { path = "../../services/identity-config/ops/version-get" }
 job-run = { path = "../../services/job-run" }
 mm-config-lobby-group-resolve-version = { path = "../../services/mm-config/ops/lobby-group-resolve-version" }
 mm-config-version-get = { path = "../../services/mm-config/ops/version-get" }
@@ -60,15 +51,10 @@ token-get = { path = "../../services/token/ops/get" }
 token-revoke = { path = "../../services/token/ops/revoke" }
 upload-prepare = { path = "../../services/upload/ops/prepare" }
 user-avatar-upload-complete = { path = "../../services/user/ops/avatar-upload-complete" }
-user-follow-list = { path = "../../services/user-follow/ops/list" }
-user-follow-request-list = { path = "../../services/user-follow/ops/request-list" }
-user-follow-toggle = { path = "../../services/user-follow/ops/toggle" }
 user-get = { path = "../../services/user/ops/get" }
 user-identity-get = { path = "../../services/user-identity/ops/get" }
-user-mutual-friend-list = { path = "../../services/user/ops/mutual-friend-list" }
 user-pending-delete-toggle = { path = "../../services/user/ops/pending-delete-toggle" }
 user-profile-validate = { path = "../../services/user/ops/profile-validate" }
-user-search = { path = "../../services/user/ops/search" }
 rivet-config = { version = "0.1.0", path = "../../common/config" }
 rivet-env = { version = "0.1.0", path = "../../common/env" }
 

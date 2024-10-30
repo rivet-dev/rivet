@@ -6,12 +6,10 @@ import "resources/legacy/proto/common.proto";
 import "resources/legacy/proto/backend/user.proto";
 
 message Update {
-	reserved 2, 3;
+	reserved 2, 3, 4, 5;
 
 	oneof kind {
 		UserUpdate update = 1;
-		FollowCreate follow_create = 4;
-		FollowDelete follow_delete = 5;
 	}
 }
 
@@ -19,10 +17,3 @@ message UserUpdate {
 	reserved 1;
 }
 
-message FollowCreate {
-	rivet.common.Uuid follower_user_id = 1;
-}
-
-message FollowDelete {
-	rivet.common.Uuid follower_user_id = 1;
-}

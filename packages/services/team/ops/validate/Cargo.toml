@@ -11,7 +11,6 @@ chirp-client = { path = "../../../../common/chirp/client" }
 prost = "0.10"
 
 team-resolve-display-name = { path = "../resolve-display-name" }
-profanity-check = { path = "../../../profanity/ops/check" }
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../common/chirp/worker" }

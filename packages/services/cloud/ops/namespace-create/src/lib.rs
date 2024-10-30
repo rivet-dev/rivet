@@ -32,12 +32,6 @@ async fn handle(
 		op!([ctx] mm_config_namespace_create {
 			namespace_id: Some(namespace_id.into()),
 		}),
-		op!([ctx] kv_config_namespace_create {
-			namespace_id: Some(namespace_id.into()),
-		}),
-		op!([ctx] identity_config_namespace_create {
-			namespace_id: Some(namespace_id.into()),
-		}),
 	)?;
 
 	sql_execute!(

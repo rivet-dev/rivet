@@ -13,8 +13,6 @@ prost = "0.10"
 s3-util = { path = "../../../../common/s3-util" }
 url = "2.2"
 
-nsfw-image-score = { path = "../../../nsfw/ops/image-score" }
-
 [dependencies.sqlx]
 git = "https://github.com/rivet-gg/sqlx"
 rev = "e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"

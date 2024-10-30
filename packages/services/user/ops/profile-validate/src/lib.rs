@@ -15,17 +15,7 @@ async fn handle(
 			errors.push(util::err_path!["display-name", "too-long"]);
 		}
 
-		if util::check::display_name(display_name) {
-			let profanity_res = op!([ctx] profanity_check {
-				strings: vec![display_name.clone()],
-				censor: false,
-			})
-			.await?;
-
-			if *unwrap!(profanity_res.results.first()) {
-				errors.push(util::err_path!["display-name", "invalid"]);
-			}
-		} else {
+		if !util::check::display_name(display_name) {
 			errors.push(util::err_path!["display-name", "invalid"]);
 		}
 	}

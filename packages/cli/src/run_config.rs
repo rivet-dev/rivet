@@ -195,20 +195,8 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/game-user/db/game-user"),
-			db_name: "db_game_user",
-		},
-		SqlService {
-			kind: SqlServiceKind::CockroachDB,
 			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/game/db/game"),
 			db_name: "db_game",
-		},
-		SqlService {
-			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!(
-				"$CARGO_MANIFEST_DIR/../services/identity-config/db/identity-config"
-			),
-			db_name: "db_identity_config",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
@@ -224,16 +212,6 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			kind: SqlServiceKind::CockroachDB,
 			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/job/db/state"),
 			db_name: "db_job_state",
-		},
-		SqlService {
-			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/kv-config/db/kv-config"),
-			db_name: "db_kv_config",
-		},
-		SqlService {
-			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/kv/db/kv"),
-			db_name: "db_kv",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
@@ -277,25 +255,10 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/user-dev/db/user-dev"),
-			db_name: "db_user_dev",
-		},
-		SqlService {
-			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/user-follow/db/user-follow"),
-			db_name: "db_user_follow",
-		},
-		SqlService {
-			kind: SqlServiceKind::CockroachDB,
 			migrations: include_dir!(
 				"$CARGO_MANIFEST_DIR/../services/user-identity/db/user-identity"
 			),
 			db_name: "db_user_identity",
-		},
-		SqlService {
-			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/user-report/db/user-report"),
-			db_name: "db_user_report",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,

@@ -118,21 +118,6 @@ async fn handle(
 						.map_or_else(|| None, |config| config.captcha_config),
 				})
 			},
-			kv: if let Some(config) = ctx.override_kv_config.clone() {
-				config.config
-			} else {
-				Some(backend::kv::VersionConfig {})
-			},
-			identity: if let Some(config) = ctx.override_identity_config.clone() {
-				config.config
-			} else {
-				Some(backend::identity::VersionConfig {
-					custom_display_names: vec![backend::identity::CustomDisplayName {
-						display_name: "Guest".to_string(),
-					}],
-					custom_avatars: Vec::new(),
-				})
-			},
 		}
 	};
 

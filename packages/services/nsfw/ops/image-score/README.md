@@ -1,1 +1,0 @@
-# nsfw-image-score

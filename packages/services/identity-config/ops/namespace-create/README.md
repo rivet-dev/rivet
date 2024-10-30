@@ -1,1 +1,0 @@
-# identity-config-namespace-create

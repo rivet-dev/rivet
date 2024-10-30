@@ -8,7 +8,6 @@ pub mod bootstrap;
 pub mod devices;
 pub mod games;
 pub mod groups;
-pub mod logs;
 pub mod tiers;
 pub mod uploads;
 
@@ -190,11 +189,6 @@ define_router! {
 		// Tiers
 		"region-tiers": {
 			GET: tiers::list_tiers(opt_auth: true),
-		},
-
-		// Logs
-		"rays" / Uuid / "perf": {
-			GET: logs::get_ray_perf(),
 		},
 
 		// Device links

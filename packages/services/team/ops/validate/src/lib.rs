@@ -24,15 +24,6 @@ async fn handle(
 			errors.push(util::err_path!["not-unique"]);
 		}
 
-		let profanity_res = op!([ctx] profanity_check {
-			strings: vec![ctx.display_name.clone()],
-			censor: false,
-		})
-		.await?;
-
-		if *unwrap!(profanity_res.results.first()) {
-			errors.push(util::err_path!["display-name-invalid"]);
-		}
 	} else {
 		errors.push(util::err_path!["display-name-invalid"]);
 	}

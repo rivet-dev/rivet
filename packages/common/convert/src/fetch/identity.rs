@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use proto::{
 	backend::{self, pkg::*},
 	common,
@@ -30,12 +28,7 @@ pub async fn handles(
 		.map(Into::into)
 		.collect::<Vec<_>>();
 
-	let (users, mutual_follows) = tokio::try_join!(
-		users(ctx, user_ids.clone()),
-		mutual_follows(ctx, current_user_id, raw_user_ids),
-	)?;
-
-	let raw_current_user_id = Into::<common::Uuid>::into(current_user_id);
+	let users = users(ctx, user_ids.clone()).await?;
 
 	// Convert all data
 	users
@@ -60,55 +53,35 @@ pub async fn summaries(
 		.map(Into::into)
 		.collect::<Vec<_>>();
 
-	let (users, mutual_follows) = tokio::try_join!(
-		users(ctx, user_ids.clone()),
-		mutual_follows(ctx, current_user_id, raw_user_ids),
-	)?;
+	let users = users(ctx, user_ids.clone()).await?;
 
 	// Convert all data
 	users
 		.users
 		.iter()
-		.map(|user| {
-			convert::identity::summary(ctx.config(), current_user_id, user, &mutual_follows.follows)
-		})
+		.map(|user| convert::identity::summary(ctx.config(), current_user_id, user))
 		.collect::<GlobalResult<Vec<_>>>()
 }
 
 pub async fn profiles(
 	ctx: &OperationContext<()>,
 	current_user_id: Uuid,
-	game_user_id: Option<Uuid>,
 	raw_user_ids: Vec<Uuid>,
 ) -> GlobalResult<Vec<models::IdentityProfile>> {
 	if raw_user_ids.is_empty() {
 		return Ok(Vec::new());
 	}
 
-	let is_game_user = game_user_id.is_some();
-	let contains_self = raw_user_ids
-		.iter()
-		.any(|user_id| user_id == &current_user_id);
 	let user_ids = raw_user_ids
 		.clone()
 		.into_iter()
 		.map(Into::into)
 		.collect::<Vec<_>>();
 
-	let (
-		users,
-		teams_ctx,
-		mutual_follows,
-		(follower_counts, following_counts),
-		linked_accounts,
-		self_is_game_linked,
-	) = tokio::try_join!(
+	let (users, teams_ctx, linked_accounts) = tokio::try_join!(
 		users(ctx, user_ids.clone()),
 		teams(ctx, user_ids.clone()),
-		mutual_follows(ctx, current_user_id, raw_user_ids),
-		follows(ctx, user_ids.clone()),
 		linked_accounts(ctx, user_ids.clone()),
-		is_game_linked(ctx, game_user_id, contains_self),
 	)?;
 
 	// Convert all data
@@ -122,12 +95,8 @@ pub async fn profiles(
 				user,
 				convert::identity::ProfileCtx {
 					teams_ctx: &teams_ctx,
-					mutual_follows: &mutual_follows.follows,
-					follower_counts: &follower_counts.follows,
-					following_counts: &following_counts.follows,
 					linked_accounts: &linked_accounts.users,
-					self_is_game_linked,
-					is_game_user,
+					self_is_game_linked: false,
 				},
 			)
 		})
@@ -142,53 +111,6 @@ pub async fn users(
 		user_ids: user_ids,
 	})
 	.await
-}
-
-async fn games(
-	ctx: &OperationContext<()>,
-	game_ids: Vec<common::Uuid>,
-	namespace_ids: Vec<common::Uuid>,
-) -> GlobalResult<(Vec<backend::game::Game>, Vec<convert::GameWithNamespaceIds>)> {
-	let game_resolve_res = op!([ctx] game_resolve_namespace_id {
-		namespace_ids: namespace_ids,
-	})
-	.await?;
-
-	let games_res = op!([ctx] game_get {
-		game_ids: game_resolve_res
-			.games
-			.iter()
-			.map(|game| Ok(unwrap!(game.game_id)))
-			.collect::<GlobalResult<Vec<_>>>()?
-			.into_iter()
-			.chain(game_ids)
-			.collect::<Vec<_>>(),
-	})
-	.await?;
-
-	// Collects games and their namespace ids together
-	let games_with_namespace_ids = game_resolve_res
-		.games
-		.iter()
-		.filter_map(|resolved_game| {
-			games_res
-				.games
-				.iter()
-				.find(|game| resolved_game.game_id == game.game_id)
-				.map(|game| {
-					Ok(convert::GameWithNamespaceIds {
-						namespace_ids: resolved_game
-							.namespace_ids
-							.iter()
-							.map(|x| x.as_uuid())
-							.collect::<Vec<_>>(),
-						game: game.clone(),
-					})
-				})
-		})
-		.collect::<GlobalResult<Vec<_>>>()?;
-
-	Ok((games_res.games.clone(), games_with_namespace_ids))
 }
 
 async fn teams(ctx: &OperationContext<()>, user_ids: Vec<common::Uuid>) -> GlobalResult<TeamsCtx> {
@@ -225,46 +147,6 @@ async fn teams(ctx: &OperationContext<()>, user_ids: Vec<common::Uuid>) -> Globa
 	})
 }
 
-async fn follows(
-	ctx: &OperationContext<()>,
-	user_ids: Vec<common::Uuid>,
-) -> GlobalResult<(user_follow::count::Response, user_follow::count::Response)> {
-	tokio::try_join!(
-		op!([ctx] user_follow_count {
-			kind: user_follow::count::request::Kind::Follower as i32,
-			user_ids: user_ids.clone(),
-		}),
-		op!([ctx] user_follow_count {
-			kind: user_follow::count::request::Kind::Following as i32,
-			user_ids: user_ids,
-		}),
-	)
-}
-
-pub async fn mutual_follows(
-	ctx: &OperationContext<()>,
-	current_user_id: Uuid,
-	raw_user_ids: Vec<Uuid>,
-) -> GlobalResult<user_follow::get::Response> {
-	// Converts to hashmap to remove duplicate queries
-	let queries = raw_user_ids
-		.clone()
-		.into_iter()
-		.flat_map(|user_id| [(current_user_id, user_id), (user_id, current_user_id)])
-		.collect::<HashSet<_>>()
-		.into_iter()
-		.map(|(user_a_id, user_b_id)| user_follow::get::request::Query {
-			follower_user_id: Some(user_a_id.into()),
-			following_user_id: Some(user_b_id.into()),
-		})
-		.collect::<Vec<_>>();
-
-	op!([ctx] user_follow_get {
-		queries: queries,
-	})
-	.await
-}
-
 async fn linked_accounts(
 	ctx: &OperationContext<()>,
 	user_ids: Vec<common::Uuid>,
@@ -273,23 +155,4 @@ async fn linked_accounts(
 		user_ids: user_ids.clone(),
 	})
 	.await
-}
-
-/// Determines if the game user has been linked through the Rivet dashboard.
-async fn is_game_linked(
-	ctx: &OperationContext<()>,
-	game_user_id: Option<Uuid>,
-	contains_self: bool,
-) -> GlobalResult<bool> {
-	if let (Some(game_user_id), true) = (game_user_id, contains_self) {
-		let game_user_res = op!([ctx] game_user_get {
-			game_user_ids: vec![game_user_id.into()],
-		})
-		.await?;
-		let game_user = unwrap!(game_user_res.game_users.first());
-
-		Ok(game_user.link_id.is_some())
-	} else {
-		Ok(false)
-	}
 }

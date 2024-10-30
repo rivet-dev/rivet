@@ -139,7 +139,6 @@ pub async fn prepare_avatar_upload(
 				path: format!("image.{ext}"),
 				mime: Some(format!("image/{ext}")),
 				content_length: body.content_length.api_try_into()?,
-				nsfw_score_threshold: Some(util_nsfw::score_thresholds::USER_AVATAR),
 				..Default::default()
 			},
 		],

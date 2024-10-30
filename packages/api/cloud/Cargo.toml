@@ -36,7 +36,6 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["f
 url = "2.2.2"
 util-job = { package = "rivet-util-job", path = "../../services/job/util" }
 util-mm = { package = "rivet-util-mm", path = "../../services/mm/util" }
-util-nsfw = { package = "rivet-util-nsfw", path = "../../services/nsfw/util" }
 util-team = { package = "rivet-util-team", path = "../../services/team/util" }
 uuid = { version = "1", features = ["v4"] }
 
@@ -96,7 +95,6 @@ mm-lobby-player-count = { path = "../../services/mm/ops/lobby-player-count" }
 mm-lobby-runtime-aggregate = { path = "../../services/mm/ops/lobby-runtime-aggregate" }
 mm-player-count-for-namespace = { path = "../../services/mm/ops/player-count-for-namespace" }
 job-log-read = { path = "../../services/job-log/ops/read" }
-perf-log-get = { path = "../../services/perf/ops/log-get" }
 region-get = { path = "../../services/region/ops/get" }
 region-list-for-game = { path = "../../services/region/ops/list-for-game" }
 team-get = { path = "../../services/team/ops/get" }

@@ -34,7 +34,7 @@ pub async fn list(
 		// Error if a cloud token tries to watch this endpoint, game update
 		// messages for teams aren't implemented
 		if let Some(user_id) = accessible_games.user_id {
-			let game_update_sub = tail_anchor!([ctx, anchor] user_dev::msg::game_update(user_id));
+			let game_update_sub = tail_anchor!([ctx, anchor] user::msg::game_update(user_id));
 
 			util::macros::select_with_timeout!({
 				event = game_update_sub => {
@@ -196,11 +196,6 @@ async fn gen_default_version_config(
 				actions: None,
 			}],
 			captcha: None,
-		}),
-		kv: Some(backend::kv::VersionConfig {}),
-		identity: Some(backend::identity::VersionConfig {
-			custom_display_names: Vec::new(),
-			custom_avatars: Vec::new(),
 		}),
 	})
 }
@@ -498,7 +493,6 @@ pub async fn prepare_logo_upload(
 				path: format!("logo.{ext}"),
 				mime: Some(format!("image/{ext}")),
 				content_length: body.content_length.api_try_into()?,
-				nsfw_score_threshold: Some(util_nsfw::score_thresholds::GAME_LOGO),
 				..Default::default()
 			},
 		],
@@ -573,7 +567,6 @@ pub async fn prepare_banner_upload(
 				path: format!("banner.{ext}"),
 				mime: Some(format!("image/{ext}")),
 				content_length: body.content_length.api_try_into()?,
-				nsfw_score_threshold: Some(util_nsfw::score_thresholds::GAME_BANNER),
 				..Default::default()
 			},
 		],

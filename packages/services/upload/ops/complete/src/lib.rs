@@ -16,7 +16,6 @@ struct UploadRow {
 struct FileRow {
 	path: String,
 	content_length: i64,
-	nsfw_score_threshold: Option<f32>,
 	multipart_upload_id: Option<String>,
 }
 
@@ -34,9 +33,6 @@ async fn handle(
 	}
 
 	let s3_client = s3_util::Client::with_bucket(ctx.config(), &bucket).await?;
-
-	let nsfw_scores =
-		validate_profanity_scores(&ctx, &s3_client, upload_id, &files, user_id).await?;
 
 	validate_files(&s3_client, upload_id, files).await?;
 
@@ -60,13 +56,6 @@ async fn handle(
 	})
 	.await?;
 
-	let analytics_nsfw_scores = nsfw_scores.map(|scores| {
-		json!({
-			"min": scores.iter().fold(f32::NEG_INFINITY, |a, &b| a.min(b)),
-			"max": scores.iter().fold(f32::INFINITY, |a, &b| a.max(b)),
-			"mean": scores.iter().sum::<f32>() / scores.len() as f32,
-		})
-	});
 	msg!([ctx] analytics::msg::event_create() {
 		events: vec![
 			analytics::msg::event_create::Event {
@@ -77,7 +66,6 @@ async fn handle(
 					"upload_id": upload_id,
 					"bucket": bucket,
 					"files_len": files_len,
-					"nsfw_scores": analytics_nsfw_scores,
 				}))?),
 				..Default::default()
 			}
@@ -105,7 +93,7 @@ async fn fetch_files(
 		sql_fetch_all!(
 			[ctx, FileRow]
 			"
-			SELECT path, content_length, nsfw_score_threshold, multipart_upload_id
+			SELECT path, content_length, multipart_upload_id
 			FROM db_upload.upload_files
 			WHERE upload_id = $1
 			",
@@ -116,96 +104,6 @@ async fn fetch_files(
 	tracing::info!(bucket=?upload.bucket, files_len = ?files.len(), "fetched files");
 
 	Ok((upload.bucket, files, upload.user_id))
-}
-
-async fn validate_profanity_scores(
-	ctx: &OperationContext<upload::complete::Request>,
-	s3_client: &s3_util::Client,
-	upload_id: Uuid,
-	files: &[FileRow],
-	user_id: Option<Uuid>,
-) -> GlobalResult<Option<Vec<f32>>> {
-	tracing::info!("validating profanity scores");
-
-	// Validate profanity scores
-	let nsfw_required_scores = futures_util::stream::iter(files)
-		// Filter out files that don't need to match a profanity score
-		.filter_map(|file_row| async move {
-			file_row
-				.nsfw_score_threshold
-				.map(|x| (format!("{}/{}", upload_id, file_row.path), x))
-		})
-		// Generate presigned get requests for the profanity filter to fetch
-		.then(|(key, score)| async move {
-			let presigned_req = s3_client
-				.get_object()
-				.bucket(s3_client.bucket())
-				.key(key)
-				.presigned(
-					s3_util::aws_sdk_s3::presigning::PresigningConfig::builder()
-						.expires_in(std::time::Duration::from_secs(5 * 60))
-						.build()?,
-				)
-				.await?;
-			let url = presigned_req.uri().to_string();
-			GlobalResult::Ok((url, score))
-		})
-		.try_collect::<HashMap<String, f32>>()
-		.await?;
-
-	let scores = if !nsfw_required_scores.is_empty() {
-		// Score the images
-		let score_res = op!([ctx] nsfw_image_score {
-			image_urls: nsfw_required_scores.keys().cloned().collect(),
-		})
-		.await?;
-
-		// Validate the images fall within the approved scores
-		for score in &score_res.scores {
-			let required_score = unwrap!(nsfw_required_scores.get(&score.url));
-			if score.score >= *required_score {
-				msg!([ctx] analytics::msg::event_create() {
-					events: vec![
-						analytics::msg::event_create::Event {
-							event_id: Some(Uuid::new_v4().into()),
-							name: "upload.nsfw_detected".into(),
-							properties_json: Some(serde_json::to_string(&json!({
-								"user_id": user_id,
-								"upload_id": upload_id,
-								"bucket": s3_client.bucket(),
-								"url": score.url,
-								"required_score": required_score,
-								"score": score.score,
-							}))?),
-							..Default::default()
-						}
-					],
-				})
-				.await?;
-
-				if ctx.config().server()?.rivet.upload_nsfw_error_verbose {
-					bail_with!(UPLOAD_NSFW_CONTENT_DETECTED {
-						metadata: serde_json::json!({
-							"url": score.url,
-							"score": score.score,
-						}),
-					});
-				} else {
-					// Don't expose the score in production to prevent
-					// exploitation
-					bail_with!(UPLOAD_NSFW_CONTENT_DETECTED);
-				}
-			}
-		}
-
-		let scores = score_res.scores.iter().map(|x| x.score).collect::<Vec<_>>();
-
-		Some(scores)
-	} else {
-		None
-	};
-
-	Ok(scores)
 }
 
 async fn validate_files(
