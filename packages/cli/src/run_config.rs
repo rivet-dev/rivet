@@ -103,9 +103,11 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			|config, pools| Box::pin(user_delete_pending::start(config, pools)),
 		),
 		// Oneshot
-		// Service::new("admin_login", ServiceKind::Oneshot, |config, pools| {
-		// 	Box::pin(TODO)
-		// }),
+		Service::new(
+			"admin_default_login",
+			ServiceKind::Oneshot,
+			|config, pools| Box::pin(admin_default_login::start(config, pools)),
+		),
 		Service::new(
 			"build_default_create",
 			ServiceKind::Oneshot,

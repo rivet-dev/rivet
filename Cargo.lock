@@ -34,6 +34,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "512761e0bb2578dd7380c6baaa0f4ce03e84f95e960231d1dec8bf4d7d6e2627"
 
 [[package]]
+name = "admin-default-login"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-workflow",
+ "rivet-config",
+ "rivet-connection",
+ "rivet-health-checks",
+ "rivet-metrics",
+ "rivet-operation",
+ "rivet-runtime",
+ "sqlx",
+ "token-create",
+ "tokio",
+ "tracing",
+ "tracing-logfmt",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "aes"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7947,6 +7967,7 @@ dependencies = [
 name = "rivet-cli"
 version = "0.1.0"
 dependencies = [
+ "admin-default-login",
  "anyhow",
  "api-monolith-edge",
  "api-monolith-private",

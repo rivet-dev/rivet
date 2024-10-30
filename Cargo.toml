@@ -85,6 +85,7 @@ members = [
 "packages/api/games/",
 "packages/api/actor/",
 "packages/api/monolith-public/",
+"packages/services/admin/standalone/default-login",
 "packages/services/token/ops/exchange/",
 "packages/services/token/ops/revoke/",
 "packages/services/token/ops/get/",

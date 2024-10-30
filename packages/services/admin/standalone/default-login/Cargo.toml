@@ -1,0 +1,28 @@
+[package]
+name = "admin-default-login"
+version = "0.0.1"
+edition = "2018"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+chirp-client = { path = "../../../../common/chirp/client" }
+chirp-workflow = { path = "../../../../common/chirp-workflow/core" }
+rivet-connection = { path = "../../../../common/connection" }
+rivet-health-checks = { path = "../../../../common/health-checks" }
+rivet-metrics = { path = "../../../../common/metrics" }
+rivet-runtime = { path = "../../../../common/runtime" }
+tokio = { version = "1.40", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+tracing-logfmt = "0.3"
+rivet-config = { version = "0.1.0", path = "../../../../common/config" }
+token-create = { version = "0.0.1", path = "../../../token/ops/create" }
+rivet-operation = { version = "0.1.0", path = "../../../../common/operation/core" }
+
+[dependencies.sqlx]
+git = "https://github.com/rivet-gg/sqlx"
+rev = "e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
+default-features = false
+
+[dev-dependencies]

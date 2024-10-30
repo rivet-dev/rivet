@@ -388,6 +388,8 @@ pub struct Auth {
 	pub access_kind: RivetAccessKind,
 	/// Flag to enable access token login.
 	pub access_token_login: bool,
+	/// Automatically print a URL to log in to Rivet as admin.
+	pub print_login_url: bool,
 }
 
 impl Default for Auth {
@@ -395,6 +397,7 @@ impl Default for Auth {
 		Self {
 			access_kind: RivetAccessKind::Private,
 			access_token_login: true,
+			print_login_url: true,
 		}
 	}
 }
