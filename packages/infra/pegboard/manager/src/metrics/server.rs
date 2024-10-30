@@ -16,7 +16,7 @@ pub async fn run_standalone() {
 	let server = match Server::try_bind(&addr) {
 		Ok(x) => x,
 		Err(err) => {
-			tracing::error!(?host, ?port, ?err, "failed to bind pegboard metrics server");
+			tracing::error!(?addr, ?err, "failed to bind pegboard metrics server");
 
 			// TODO: Find cleaner way of crashing entire program
 			// Hard crash program since a server failing to bind is critical

@@ -12,6 +12,6 @@ lazy_static = "1.4"
 prometheus = "0.13"
 rivet-config = { version = "0.1.0", path = "../config" }
 rivet-env = { version = "0.1.0", path = "../env" }
-tokio = "1.41.0"
+tokio = "1.36.0"
 tracing = "0.1"
 
