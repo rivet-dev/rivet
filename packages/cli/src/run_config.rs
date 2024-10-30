@@ -31,18 +31,24 @@ impl RunConfigData {
 pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 	let services = vec![
 		// API
-		Service::new("api_monolith", ServiceKind::Api, |config, pools| {
-			Box::pin(api_monolith::start(config, pools))
-		}),
-		// API internal
 		Service::new(
-			"api_internal_monolith",
-			ServiceKind::ApiInternal,
-			|config, pools| Box::pin(api_internal_monolith::start(config, pools)),
+			"api_monolith_public",
+			ServiceKind::ApiPublic,
+			|config, pools| Box::pin(api_monolith_public::start(config, pools)),
 		),
-		Service::new("pegboard_ws", ServiceKind::ApiInternal, |config, pools| {
+		Service::new(
+			"api_monolith_edge",
+			ServiceKind::ApiEdge,
+			|config, pools| Box::pin(api_monolith_edge::start(config, pools)),
+		),
+		Service::new("pegboard_ws", ServiceKind::ApiEdge, |config, pools| {
 			Box::pin(pegboard_ws::start(config, pools))
 		}),
+		Service::new(
+			"api_monolith_private",
+			ServiceKind::ApiPrivate,
+			|config, pools| Box::pin(api_monolith_private::start(config, pools)),
+		),
 		// Standalone
 		Service::new(
 			"monolith_worker",
@@ -97,6 +103,9 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			|config, pools| Box::pin(user_delete_pending::start(config, pools)),
 		),
 		// Oneshot
+		// Service::new("admin_login", ServiceKind::Oneshot, |config, pools| {
+		// 	Box::pin(TODO)
+		// }),
 		Service::new(
 			"build_default_create",
 			ServiceKind::Oneshot,

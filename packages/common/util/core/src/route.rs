@@ -32,7 +32,7 @@ pub fn user_avatar(config: &rivet_config::Config, user: &backend::user::User) ->
 	{
 		format!(
 			"{}/media/user-avatar/{}/{}",
-			config.server().unwrap().rivet.api.public_origin(),
+			config.server().unwrap().rivet.api_public.public_origin(),
 			upload_id,
 			file_name
 		)
@@ -49,7 +49,7 @@ pub fn custom_avatar(
 ) -> String {
 	format!(
 		"{}/media/user-avatar/{}/{}",
-		config.server().unwrap().rivet.api.public_origin(),
+		config.server().unwrap().rivet.api_public.public_origin(),
 		upload_id,
 		file_name
 	)
@@ -61,7 +61,7 @@ pub fn team_avatar(config: &rivet_config::Config, team: &backend::team::Team) ->
 	{
 		Some(format!(
 			"{}/media/team-avatar/{}/{}",
-			config.server().unwrap().rivet.api.public_origin(),
+			config.server().unwrap().rivet.api_public.public_origin(),
 			upload_id,
 			file_name
 		))
@@ -75,7 +75,7 @@ pub fn game_logo(config: &rivet_config::Config, game: &backend::game::Game) -> O
 	{
 		Some(format!(
 			"{}/media/game-logo/{}/{}",
-			config.server().unwrap().rivet.api.public_origin(),
+			config.server().unwrap().rivet.api_public.public_origin(),
 			upload_id,
 			file_name
 		))
@@ -90,7 +90,7 @@ pub fn game_banner(config: &rivet_config::Config, game: &backend::game::Game) ->
 	{
 		Some(format!(
 			"{}/media/game-banner/{}/{}",
-			config.server().unwrap().rivet.api.public_origin(),
+			config.server().unwrap().rivet.api_public.public_origin(),
 			upload_id,
 			file_name
 		))

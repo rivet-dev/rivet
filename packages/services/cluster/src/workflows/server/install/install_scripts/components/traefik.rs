@@ -224,7 +224,7 @@ fn tunnel_dynamic_config(host_tunnel: &str) -> String {
 
 pub async fn gg_static_config(config: &rivet_config::Config) -> GlobalResult<String> {
 	let http_provider_endpoint = if let Some(api_traefik_provider_token) =
-		&config.server()?.rivet.token.api_traefik_provider
+		&config.server()?.rivet.token.traefik_provider
 	{
 		format!(
 			"http://127.0.0.1:{port}/traefik-provider/config/game-guard?token={token}&datacenter=___DATACENTER_ID___",

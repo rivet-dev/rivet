@@ -10,8 +10,9 @@ pub mod default_hosts {
 	use std::net::{IpAddr, Ipv4Addr};
 
 	// Public services using public interface
-	pub const API: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
-	pub const API_INTERNAL: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+	pub const API_PUBLIC: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+	pub const API_EDGE: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+	pub const API_PRIVATE: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
 	pub const PEGBOARD: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
 	pub const TUNNEL: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
 
@@ -21,8 +22,9 @@ pub mod default_hosts {
 }
 
 pub mod default_ports {
-	pub const API: u16 = 8080;
-	pub const API_INTERNAL: u16 = 8081;
+	pub const API_PUBLIC: u16 = 8080;
+	pub const API_EDGE: u16 = 8081;
+	pub const API_PRIVATE: u16 = 8084;
 	pub const PEGBOARD: u16 = 8082;
 	pub const TUNNEL: u16 = 8003;
 
@@ -62,11 +64,15 @@ pub struct Rivet {
 
 	/// Configuration for the public API service.
 	#[serde(default)]
-	pub api: Api,
+	pub api_public: ApiPublic,
 
-	/// Configuration for the internal API service.
+	/// Configuration for the edge API service.
 	#[serde(default)]
-	pub api_internal: ApiInternal,
+	pub api_edge: ApiEdge,
+
+	/// Configuration for the private API service.
+	#[serde(default)]
+	pub api_private: ApiPrivate,
 
 	/// Configuration for the metrics service.
 	#[serde(default)]
@@ -125,8 +131,9 @@ impl Default for Rivet {
 			job_run: None,
 			auth: Auth::default(),
 			token: Tokens::default(),
-			api: Api::default(),
-			api_internal: ApiInternal::default(),
+			api_public: ApiPublic::default(),
+			api_edge: ApiEdge::default(),
+			api_private: ApiPrivate::default(),
 			metrics: Metrics::default(),
 			health: Health::default(),
 			telemetry: Telemetry::default(),
@@ -163,7 +170,7 @@ impl Rivet {
 	}
 
 	pub fn api_host(&self) -> GlobalResult<String> {
-		let public_origin = self.api.public_origin();
+		let public_origin = self.api_public.public_origin();
 		let host_str = unwrap!(public_origin.host_str(), "api origin missing host");
 		Ok(host_str.to_string())
 	}
@@ -203,7 +210,7 @@ pub struct TestBuild {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct Api {
+pub struct ApiPublic {
 	/// The public origin URL for the API.
 	pub public_origin: Option<Url>,
 	/// The host on which the API service listens.
@@ -219,19 +226,19 @@ pub struct Api {
 	pub respect_forwarded_for: Option<bool>,
 }
 
-impl Api {
+impl ApiPublic {
 	pub fn public_origin(&self) -> Url {
 		self.public_origin.clone().unwrap_or_else(|| {
-			url::Url::parse(&format!("http://127.0.0.1:{}", default_ports::API)).unwrap()
+			url::Url::parse(&format!("http://127.0.0.1:{}", default_ports::API_PUBLIC)).unwrap()
 		})
 	}
 
 	pub fn host(&self) -> IpAddr {
-		self.host.unwrap_or(default_hosts::API)
+		self.host.unwrap_or(default_hosts::API_PUBLIC)
 	}
 
 	pub fn port(&self) -> u16 {
-		self.port.unwrap_or(default_ports::API)
+		self.port.unwrap_or(default_ports::API_PUBLIC)
 	}
 
 	pub fn verbose_errors(&self) -> bool {
@@ -245,18 +252,35 @@ impl Api {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct ApiInternal {
+pub struct ApiEdge {
 	pub host: Option<IpAddr>,
 	pub port: Option<u16>,
 }
 
-impl ApiInternal {
+impl ApiEdge {
 	pub fn host(&self) -> IpAddr {
-		self.host.unwrap_or(default_hosts::API_INTERNAL)
+		self.host.unwrap_or(default_hosts::API_EDGE)
 	}
 
 	pub fn port(&self) -> u16 {
-		self.port.unwrap_or(default_ports::API_INTERNAL)
+		self.port.unwrap_or(default_ports::API_EDGE)
+	}
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct ApiPrivate {
+	pub host: Option<IpAddr>,
+	pub port: Option<u16>,
+}
+
+impl ApiPrivate {
+	pub fn host(&self) -> IpAddr {
+		self.host.unwrap_or(default_hosts::API_PRIVATE)
+	}
+
+	pub fn port(&self) -> u16 {
+		self.port.unwrap_or(default_ports::API_PRIVATE)
 	}
 }
 
@@ -409,7 +433,7 @@ impl Ui {
 
 	pub fn public_origin(&self) -> Url {
 		self.public_origin.clone().unwrap_or_else(|| {
-			Url::parse(&format!("http://127.0.0.1:{}", default_ports::API)).unwrap()
+			Url::parse(&format!("http://127.0.0.1:{}", default_ports::API_PUBLIC)).unwrap()
 		})
 	}
 
@@ -417,7 +441,7 @@ impl Ui {
 		self.public_origin_regex.clone().unwrap_or_else(|| {
 			format!(
 				"^https?://(?:localhost|127\\.0\\.0\\.1|\\[::1\\]|\\[::\\]|0\\.0\\.0\\.0):{}",
-				default_ports::API
+				default_ports::API_PUBLIC
 			)
 		})
 	}
@@ -427,19 +451,19 @@ impl Ui {
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Tokens {
 	/// Token for the API Traefik provider.
-	pub api_traefik_provider: Option<Secret<String>>,
+	pub traefik_provider: Option<Secret<String>>,
 	/// Token for API status checks.
-	pub api_status: Option<Secret<String>>,
+	pub status: Option<Secret<String>>,
 	/// Token for API admin access.
-	pub api_admin: Option<Secret<String>>,
+	pub admin: Option<Secret<String>>,
 }
 
 impl Default for Tokens {
 	fn default() -> Tokens {
 		Self {
-			api_traefik_provider: None,
-			api_status: None,
-			api_admin: None,
+			traefik_provider: None,
+			status: None,
+			admin: None,
 		}
 	}
 }

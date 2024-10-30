@@ -37,6 +37,11 @@ pub enum SubCommand {
 		#[clap(subcommand)]
 		command: config::SubCommand,
 	},
+	/// Manages admin functionality of the cluster
+	Admin {
+		#[clap(subcommand)]
+		command: admin::SubCommand,
+	},
 }
 
 impl SubCommand {
@@ -52,6 +57,7 @@ impl SubCommand {
 			SubCommand::Storage { command } => command.execute(config, &run_config).await,
 			SubCommand::Workflow { command } => command.execute(config).await,
 			SubCommand::Config { command } => command.execute(config).await,
+			SubCommand::Admin { command } => command.execute(config).await,
 		}
 	}
 }

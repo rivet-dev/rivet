@@ -40,7 +40,12 @@ impl __RouterConfig {
 		// NOTE: We do not use `Url::join` because it normalizes paths
 		// This url doesn't actually represent the url of the request, it's just put here so that the
 		// URI can be parsed by url::Url::parse
-		let origin = config.server()?.rivet.api.public_origin().to_string();
+		let origin = config
+			.server()?
+			.rivet
+			.api_public
+			.public_origin()
+			.to_string();
 		let url = format!("{}{}", origin.trim_end_matches('/'), uri);
 		let route = url::Url::parse(url.as_str())?;
 
@@ -304,7 +309,7 @@ pub async fn __with_ctx<A: auth::ApiAuth + Send>(
 			.map_or(false, |x| x.provider == DnsProvider::Cloudflare)
 		{
 			__deserialize_header::<String, _>(&request, "cf-connecting-ip")?
-		} else if config.server()?.rivet.api.respect_forwarded_for() {
+		} else if config.server()?.rivet.api_public.respect_forwarded_for() {
 			// Traefik will override any user-provided provided x-forwarded-for
 			// header, so we can trust this
 			__deserialize_header::<String, _>(&request, "x-forwarded-for")?

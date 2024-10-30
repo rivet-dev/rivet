@@ -17,7 +17,7 @@ impl Router {
 			replacement_count
 		);
 
-		let public_origin = config.server()?.rivet.api.public_origin().to_string();
+		let public_origin = config.server()?.rivet.api_public.public_origin().to_string();
 		let replaced_content = content_str.replace("%VITE_APP_API_URL%", &public_origin);
 
 		Ok(replaced_content.into_bytes())

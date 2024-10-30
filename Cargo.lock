@@ -706,26 +706,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "api-internal-monolith"
-version = "0.0.1"
-dependencies = [
- "api-helper",
- "api-provision",
- "api-traefik-provider",
- "async-trait",
- "chirp-client",
- "http 0.2.12",
- "hyper 0.14.30",
- "rivet-config",
- "rivet-env",
- "rivet-operation",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "url",
-]
-
-[[package]]
 name = "api-job"
 version = "0.0.1"
 dependencies = [
@@ -832,11 +812,49 @@ dependencies = [
 ]
 
 [[package]]
-name = "api-monolith"
+name = "api-monolith-edge"
+version = "0.0.1"
+dependencies = [
+ "api-helper",
+ "api-provision",
+ "api-traefik-provider",
+ "async-trait",
+ "chirp-client",
+ "http 0.2.12",
+ "hyper 0.14.30",
+ "rivet-config",
+ "rivet-env",
+ "rivet-operation",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
+name = "api-monolith-private"
+version = "0.0.1"
+dependencies = [
+ "api-admin",
+ "api-helper",
+ "async-trait",
+ "chirp-client",
+ "http 0.2.12",
+ "hyper 0.14.30",
+ "rivet-config",
+ "rivet-env",
+ "rivet-operation",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
+name = "api-monolith-public"
 version = "0.0.1"
 dependencies = [
  "api-actor",
- "api-admin",
  "api-auth",
  "api-cf-verification",
  "api-cloud",
@@ -3560,7 +3578,7 @@ dependencies = [
  "rand",
  "regex",
  "region-get",
- "reqwest 0.12.8",
+ "reqwest 0.12.9",
  "rivet-api",
  "rivet-config",
  "rivet-convert",
@@ -7716,9 +7734,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.12.8"
+version = "0.12.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f713147fbe92361e52392c73b8c9e48c04c6625bce969ef54dc901e58e042a7b"
+checksum = "a77c62af46e79de0a562e1a9849205ffcb7fc1238876e9bd743357570e04046f"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -7930,8 +7948,9 @@ name = "rivet-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "api-internal-monolith",
- "api-monolith",
+ "api-monolith-edge",
+ "api-monolith-private",
+ "api-monolith-public",
  "build-default-create",
  "chrono",
  "clap",
@@ -7957,6 +7976,7 @@ dependencies = [
  "pegboard-dc-init",
  "pegboard-gc",
  "pegboard-ws",
+ "reqwest 0.12.9",
  "rivet-config",
  "rivet-migrate",
  "rivet-pools",
@@ -8126,7 +8146,7 @@ name = "rivet-hub-embed"
 version = "0.1.0"
 dependencies = [
  "include_dir",
- "reqwest 0.12.8",
+ "reqwest 0.12.9",
  "zip",
 ]
 
@@ -8535,6 +8555,13 @@ dependencies = [
  "serde_json",
  "strum 0.24.1",
  "user-identity-get",
+ "uuid",
+]
+
+[[package]]
+name = "rivet-util-search"
+version = "0.1.0"
+dependencies = [
  "uuid",
 ]
 
@@ -9897,28 +9924,6 @@ checksum = "1e4129646ca0ed8f45d09b929036bafad5377103edd06e50bf574b353d2b08d9"
 dependencies = [
  "libc",
  "winapi",
-]
-
-[[package]]
-name = "test-ds-echo"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "futures-util",
- "hyper 0.14.30",
- "reqwest 0.11.27",
- "tokio",
- "tokio-util 0.7.12",
-]
-
-[[package]]
-name = "test-mm-lobby-echo"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "hyper 0.14.30",
- "reqwest 0.11.27",
- "tokio",
 ]
 
 [[package]]

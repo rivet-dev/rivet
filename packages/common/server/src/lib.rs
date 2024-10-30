@@ -33,8 +33,9 @@ impl Service {
 /// Defines the type of the service. Used for filtering service types to run.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ServiceKind {
-	Api,
-	ApiInternal,
+	ApiPublic,
+	ApiEdge,
+	ApiPrivate,
 	Standalone,
 	Singleton,
 	Oneshot,
@@ -48,7 +49,9 @@ impl ServiceKind {
 		use ServiceKind::*;
 
 		match self {
-			Api | ApiInternal | Standalone | Singleton | Core => ServiceBehavior::Service,
+			ApiPublic | ApiEdge | ApiPrivate | Standalone | Singleton | Core => {
+				ServiceBehavior::Service
+			}
 			Oneshot => ServiceBehavior::Oneshot,
 			Cron(config) => ServiceBehavior::Cron(config.clone()),
 		}
@@ -66,7 +69,7 @@ enum ServiceBehavior {
 	///
 	/// If crashes, it will be retried indefinitely.
 	Oneshot,
-	/// Runs a task on a scheudle.
+	/// Runs a task on a schedule.
 	Cron(CronConfig),
 }
 

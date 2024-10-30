@@ -14,8 +14,9 @@ pub struct Opts {
 
 #[derive(clap::ValueEnum, Clone, PartialEq)]
 enum ServiceKind {
-	Api,
-	ApiInternal,
+	ApiPublic,
+	ApiEdge,
+	ApiPrivate,
 	Standalone,
 	Singleton,
 	Oneshot,
@@ -26,8 +27,9 @@ impl Into<rivet_server::ServiceKind> for ServiceKind {
 	fn into(self) -> rivet_server::ServiceKind {
 		use ServiceKind::*;
 		match self {
-			Api => rivet_server::ServiceKind::Api,
-			ApiInternal => rivet_server::ServiceKind::ApiInternal,
+			ApiPublic => rivet_server::ServiceKind::ApiPublic,
+			ApiEdge => rivet_server::ServiceKind::ApiEdge,
+			ApiPrivate => rivet_server::ServiceKind::ApiPrivate,
 			Standalone => rivet_server::ServiceKind::Standalone,
 			Singleton => rivet_server::ServiceKind::Singleton,
 			Oneshot => rivet_server::ServiceKind::Oneshot,

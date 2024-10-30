@@ -32,7 +32,7 @@ pub fn configure(
 	config: &rivet_config::Config,
 	flavor: pegboard::protocol::ClientFlavor,
 ) -> GlobalResult<String> {
-	let origin_api = config.server()?.rivet.api.public_origin().to_string();
+	let origin_api = config.server()?.rivet.api_public.public_origin().to_string();
 	Ok(include_str!("../files/pegboard_configure.sh")
 		.replace("__FLAVOR__", &flavor.to_string())
 		.replace("__ORIGIN_API__", &origin_api)

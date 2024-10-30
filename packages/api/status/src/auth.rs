@@ -20,7 +20,7 @@ impl ApiAuth for Auth {
 			ensure_eq_with!(
 				api_token,
 				*unwrap_ref!(
-					config.server()?.rivet.token.api_status,
+					config.server()?.rivet.token.status,
 					"no api status token provided"
 				)
 				.read(),

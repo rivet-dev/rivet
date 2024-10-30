@@ -187,7 +187,13 @@ pub fn gen_lobby_docker_job(
 		})
 		.chain([(
 			"RIVET_API_ENDPOINT".to_string(),
-			config.server()?.rivet.api.public_origin().clone().to_string(),
+			config
+				.server()?
+				.rivet
+				.api_public
+				.public_origin()
+				.clone()
+				.to_string(),
 		)])
 		.chain(
 			// DEPRECATED:
@@ -207,7 +213,7 @@ pub fn gen_lobby_docker_job(
 						.server()
 						.unwrap()
 						.rivet
-						.api
+						.api_public
 						.public_origin()
 						.to_string()
 						.replace("://", &format!("://{}.", service)),

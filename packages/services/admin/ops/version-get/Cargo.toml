@@ -1,0 +1,28 @@
+[package]
+name = "cloud-version-get"
+version = "0.0.1"
+edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+rivet-operation = { path = "../../../../common/operation/core" }
+chirp-client = { path = "../../../../common/chirp/client" }
+prost = "0.10"
+util-mm = { package = "rivet-util-mm", path = "../../../mm/util" }
+
+cdn-version-get = { path = "../../../cdn/ops/version-get" }
+mm-config-version-get = { path = "../../../mm-config/ops/version-get" }
+
+[dependencies.sqlx]
+git = "https://github.com/rivet-gg/sqlx"
+rev = "e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
+default-features = false
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../common/chirp/worker" }
+
+faker-build = { path = "../../../faker/ops/build" }
+faker-game = { path = "../../../faker/ops/game" }
+faker-region = { path = "../../../faker/ops/region" }
+cloud-version-publish = { path = "../version-publish" }

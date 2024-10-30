@@ -59,14 +59,16 @@ telemetry-beacon = { path = "../services/telemetry/standalone/beacon" }
 user-delete-pending = { path = "../services/user/standalone/delete-pending" }
 
 # API
-api-internal-monolith = { path = "../api/internal-monolith" }
-api-monolith = { path = "../api/monolith" }
+api-monolith-edge = { path = "../api/monolith-edge" }
+api-monolith-private = { path = "../api/monolith-private" }
+api-monolith-public = { path = "../api/monolith-public" }
 
 # Oneshot
 build-default-create = { path = "../services/build/standalone/default-create" }
 cluster-default-update = { path = "../services/cluster/standalone/default-update" }
 pegboard-dc-init = { path = "../services/pegboard/standalone/dc-init" }
 rivet-config = { version = "0.1.0", path = "../common/config" }
+reqwest = "0.12.9"
 
 
 [dependencies.sqlx]

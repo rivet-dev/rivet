@@ -1,0 +1,26 @@
+[package]
+name = "api-monolith-private"
+version = "0.0.1"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+edition = "2021"
+license = "Apache-2.0"
+
+[dependencies]
+api-helper = { path = "../../common/api-helper/build" }
+async-trait = "0.1"
+chirp-client = { path = "../../common/chirp/client" }
+http = "0.2"
+hyper = { version = "0.14", features = ["server", "http1", "tcp"] }
+rivet-operation = { path = "../../common/operation/core" }
+tokio = { version = "1.40" }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = [
+    "fmt",
+    "json",
+    "ansi",
+] }
+url = "2.2.2"
+
+api-admin = { path = "../admin" }
+rivet-config = { version = "0.1.0", path = "../../common/config" }
+rivet-env = { version = "0.1.0", path = "../../common/env" }

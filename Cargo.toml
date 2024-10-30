@@ -1,10 +1,8 @@
 [workspace]
 resolver = "2"
-# Find all packages with: find . -name Cargo.toml | grep -v "sdks/runtime" | grep -v "sdks/full/rust-cli" | grep -v "infra/" | sed -E 's|^./(.*)Cargo\.toml$|"\1",|'
+# Find all packages with: find . -name Cargo.toml | grep -v resources | grep -v "sdks/runtime" | grep -v "sdks/full/rust-cli" | grep -v "infra/" | sed -E 's|^./(.*)Cargo\.toml$|"\1",|'
 members = [
 "sdks/full/rust/",
-"resources/default-builds/dockerfiles/test-ds-echo/",
-"resources/default-builds/dockerfiles/test-mm-lobby-echo/",
 "packages/cli/",
 "packages/common/operation/core/",
 "packages/common/operation/macros/",
@@ -16,6 +14,7 @@ members = [
 "packages/common/test/",
 "packages/common/connection/",
 "packages/common/util/core/",
+"packages/common/util/search/",
 "packages/common/util/macros/",
 "packages/common/config/",
 "packages/common/nomad-util/",
@@ -72,19 +71,20 @@ members = [
 "packages/api/ui/",
 "packages/api/matchmaker/",
 "packages/api/portal/",
-"packages/api/monolith/",
 "packages/api/traefik-provider/",
 "packages/api/identity/",
 "packages/api/auth/",
 "packages/api/group/",
+"packages/api/monolith-edge/",
 "packages/api/cf-verification/",
 "packages/api/admin/",
 "packages/api/status/",
-"packages/api/internal-monolith/",
 "packages/api/cloud/",
 "packages/api/job/",
+"packages/api/monolith-private/",
 "packages/api/games/",
 "packages/api/actor/",
+"packages/api/monolith-public/",
 "packages/services/token/ops/exchange/",
 "packages/services/token/ops/revoke/",
 "packages/services/token/ops/get/",

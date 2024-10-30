@@ -17,11 +17,8 @@ impl ApiAuth for Auth {
 
 		// TODO: Use JWT
 		if let Some(api_token) = api_token {
-			let valid_token = unwrap_ref!(
-				config.server()?.rivet.token.api_admin,
-				"missing admin token"
-			)
-			.read();
+			let valid_token =
+				unwrap_ref!(config.server()?.rivet.token.admin, "missing admin token").read();
 			ensure_eq_with!(
 				api_token,
 				*valid_token,
