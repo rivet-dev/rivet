@@ -73,7 +73,7 @@ where
 		cache: rivet_cache::Cache,
 		worker: W,
 	) -> Result<Arc<Self>, ManagerError> {
-		tracing::info!(config_data = ?worker_config, "init worker manager");
+		tracing::debug!(config_data = ?worker_config, "init worker manager");
 
 		let nats = pools.nats()?;
 		let redis_chirp = pools.redis_chirp()?;
@@ -163,7 +163,7 @@ where
 	async fn rpc_receiver(self: Arc<Self>, subject: String, group: String) -> CleanExit {
 		'conn: loop {
 			// Acquire subscription
-			tracing::info!(%subject, %group, "creating rpc subscription");
+			tracing::debug!(%subject, %group, "creating rpc subscription");
 			let mut sub = match self
 				.nats
 				.queue_subscribe(subject.clone(), group.clone())
@@ -177,7 +177,7 @@ where
 				}
 			};
 
-			tracing::info!("started");
+			tracing::debug!("started");
 			loop {
 				tokio::select! {
 					msg = sub.next() => {
@@ -228,14 +228,14 @@ where
 		// Setup consumer
 		'setup: loop {
 			// Create stream & group
-			tracing::info!(%topic, %group, %topic_key, "creating group and stream");
+			tracing::debug!(%topic, %group, %topic_key, "creating group and stream");
 			match redis_chirp_conn
 				.xgroup_create_mkstream::<_, _, _, ()>(&topic_key, &group, "$")
 				.await
 			{
 				Ok(_) => {}
 				Err(err) if err.code() == Some("BUSYGROUP") => {
-					tracing::info!("consumer group already created");
+					tracing::debug!("consumer group already created");
 					break 'setup;
 				}
 				Err(err) => {
@@ -246,7 +246,7 @@ where
 			}
 		}
 
-		tracing::info!("started");
+		tracing::debug!("started");
 		'msg: loop {
 			// TODO: Acquire an independent connection
 
@@ -428,7 +428,7 @@ where
 					tracing::warn!("exceeded 16 claim attempts, breaking claim loop");
 					break claimed_msgs.ids;
 				} else {
-					tracing::info!("no claimed messages, requesting more pending messages");
+					tracing::debug!("no claimed messages, requesting more pending messages");
 				}
 			};
 
@@ -621,7 +621,7 @@ where
 						}
 
 						// Parse the request
-						tracing::info!(
+						tracing::debug!(
 							req_id = ?req.req_id,
 							ray_id = ?req.ray_id,
 							ts = ?req.ts,
@@ -654,7 +654,7 @@ where
 						.with_label_values(&[&worker_name])
 						.observe(recv_lag);
 
-					tracing::info!(
+					tracing::debug!(
 						// TODO: Add back once we can decode UUIDs in Chirp
 						// req_id = ?msg.req_id,
 						// ray_id = ?msg.ray_id,
@@ -704,9 +704,9 @@ where
 			}
 		};
 		if !dont_log_body {
-			tracing::info!(?req_body, "request");
+			tracing::debug!(?req_body, "request");
 		} else {
-			tracing::info!("request")
+			tracing::debug!("request")
 		}
 
 		let worker_req = {
@@ -837,9 +837,9 @@ where
 		req: Request<W::Request>,
 	) -> Result<WorkerResponseSummary, ManagerError> {
 		if req.dont_log_body {
-			tracing::info!(request = ?req, "handling req");
+			tracing::debug!(request = ?req, "handling req");
 		} else {
-			tracing::info!(request = ?req, body = ?req.op_ctx.body(), "handling req");
+			tracing::debug!(request = ?req, body = ?req.op_ctx.body(), "handling req");
 		}
 
 		let is_recursive = !req.allow_recursive
@@ -894,7 +894,7 @@ where
 				.worker
 				.handle(req.op_ctx())
 				.instrument(
-					tracing::info_span!("handle", name = %W::NAME, tick_index = backoff.tick_index()),
+					tracing::debug!("handle", name = %W::NAME, tick_index = backoff.tick_index()),
 				)
 				.await;
 
@@ -906,10 +906,10 @@ where
 					..
 				})
 			) {
-				tracing::info!("ticking request retry backoff");
+				tracing::debug!("ticking request retry backoff");
 
 				if backoff.tick().await {
-					tracing::info!("retrying request");
+					tracing::debug!("retrying request");
 				} else {
 					tracing::warn!("retry request failed too many times");
 					return res;
@@ -932,14 +932,14 @@ where
 			match handle_res {
 				Ok(Ok(res)) => {
 					if req.dont_log_body {
-						tracing::info!("worker success");
+						tracing::debug!("worker success");
 					} else {
-						tracing::info!(?res, "worker success");
+						tracing::debug!(?res, "worker success");
 					}
 
 					// Ack the message if needed
 					if let Some(msg_meta) = req.redis_message_meta {
-						tracing::info!(?msg_meta, "acking message");
+						tracing::debug!(?msg_meta, "acking message");
 						let spawn_res = tokio::task::Builder::new()
 							.name("chirp_worker::consumer_ack_ok")
 							.spawn(self.clone().consumer_ack(msg_meta));
@@ -1037,7 +1037,7 @@ where
 			let mut res_buf = Vec::with_capacity(prost::Message::encoded_len(&rpc_res));
 			prost::Message::encode(&rpc_res, &mut res_buf).map_err(ManagerError::EncodeResponse)?;
 
-			tracing::info!(res_bytes = ?res_buf.len(), "sending rpc nats response");
+			tracing::debug!(res_bytes = ?res_buf.len(), "sending rpc nats response");
 
 			let reply = nats_message
 				.reply
@@ -1071,7 +1071,7 @@ where
 			.await
 		{
 			Ok(_) => {
-				tracing::info!(?msg_meta, "acknowledged stream message");
+				tracing::debug!(?msg_meta, "acknowledged stream message");
 				// break;
 			}
 			Err(err) => {
