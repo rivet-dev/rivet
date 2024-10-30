@@ -304,9 +304,6 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 		},
 		S3Bucket { name: "bucket-log" },
 		S3Bucket {
-			name: "bucket-imagor-result-storage",
-		},
-		S3Bucket {
 			name: "bucket-svc-build",
 		},
 		S3Bucket {
