@@ -132,7 +132,7 @@ impl TestCtx {
 		.await
 	}
 
-	pub async fn msg<M>(&self, body: M) -> builder::message::MessageBuilder<M>
+	pub fn msg<M>(&self, body: M) -> builder::message::MessageBuilder<M>
 	where
 		M: Message,
 	{
@@ -212,6 +212,10 @@ impl TestCtx {
 
 	pub fn chirp(&self) -> &chirp_client::Client {
 		self.conn.chirp()
+	}
+
+	pub fn conn(&self) -> &rivet_connection::Connection {
+		&self.conn
 	}
 
 	pub fn cache(&self) -> rivet_cache::RequestConfig {

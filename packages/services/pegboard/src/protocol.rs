@@ -119,26 +119,21 @@ pub enum ImageCompression {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash)]
 #[serde(rename_all = "snake_case")]
-pub enum Port {
-	GameGuard {
-		target: u16,
-		protocol: TransportProtocol,
-	},
-	Host {
-		protocol: TransportProtocol,
-	},
+pub struct Port {
+	/// Must be set with bridge networking, unset with host networking.
+	pub target: Option<u16>,
+	pub protocol: TransportProtocol,
+	pub routing: PortRouting,
 }
 
-impl Port {
-	pub fn protocol(&self) -> &TransportProtocol {
-		match self {
-			Port::GameGuard { protocol, .. } => protocol,
-			Port::Host { protocol } => protocol,
-		}
-	}
+#[derive(Debug, Serialize, Deserialize, Clone, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum PortRouting {
+	GameGuard,
+	Host,
 }
 
-#[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
+#[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, FromRepr)]
 #[serde(rename_all = "snake_case")]
 pub enum TransportProtocol {
 	Tcp = 0,
@@ -215,7 +210,7 @@ pub enum ActorState {
 	/// Sent by pegboard client.
 	Running {
 		pid: usize,
-		ports: util::serde::HashableMap<String, BoundPort>,
+		ports: util::serde::HashableMap<String, ProxiedPort>,
 	},
 	/// Actor planned to stop.
 	/// Sent by pegboard dc.
@@ -232,10 +227,12 @@ pub enum ActorState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
-pub struct BoundPort {
+pub struct ProxiedPort {
+	/// Port on the host.
 	pub source: u16,
-	// Null if host port
-	pub target: Option<u16>,
+	/// Port in the container.
+	pub target: u16,
+	/// Vlan IP of the node running the container.
 	pub ip: Ipv4Addr,
 	pub protocol: TransportProtocol,
 }

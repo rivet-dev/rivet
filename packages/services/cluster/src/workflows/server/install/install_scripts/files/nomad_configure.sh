@@ -329,8 +329,8 @@ client {
 	# Nomad port range for GG-routed traffic.
 	#
 	# See firewall rules in docs/infrastructure/networking/EDGE_CLUSTER_NETWORKING.md
-	min_dynamic_port = 20000
-	max_dynamic_port = 25999
+	min_dynamic_port = __MIN_DYNAMIC_PORT__
+	max_dynamic_port = __MAX_DYNAMIC_PORT__
 
 	# Intentionally high kill timeout, killing allocations is handled manually
 	max_kill_timeout = "86400s"

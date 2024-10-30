@@ -1,4 +1,4 @@
-use std::{collections::HashMap, convert::TryInto};
+use std::{collections::HashMap, convert::TryInto, net::IpAddr};
 
 use chirp_workflow::prelude::*;
 
@@ -27,45 +27,39 @@ struct ServerRow {
 }
 
 #[derive(sqlx::FromRow)]
-struct DockerPortProtocolGameGuard {
+struct ServerPortGg {
 	server_id: Uuid,
 	port_name: String,
-	port_number: i64,
+	port_number: Option<i64>,
 	gg_port: i64,
 	protocol: i64,
 }
 
 #[derive(sqlx::FromRow)]
-struct DockerPortHost {
+struct ServerPortHost {
 	server_id: Uuid,
 	port_name: String,
-	port_number: i64,
 	protocol: i64,
 }
 
 #[derive(sqlx::FromRow)]
 struct ServerNomad {
 	server_id: Uuid,
-	// nomad_dispatched_job_id: Option<String>,
-	// nomad_alloc_id: Option<String>,
-	// nomad_node_id: Option<String>,
-	// nomad_node_name: Option<String>,
-	// nomad_node_public_ipv4: Option<String>,
-	// nomad_node_vlan_ipv4: Option<String>,
 	nomad_alloc_plan_ts: Option<i64>,
+	nomad_node_public_ipv4: Option<String>,
 }
 
 #[derive(sqlx::FromRow)]
 struct ServerPegboard {
 	server_id: Uuid,
 	running_ts: Option<i64>,
+	public_ip: Option<IpAddr>,
 }
 
 #[derive(sqlx::FromRow)]
-struct ServerPort {
+struct ProxiedPort {
 	server_id: Uuid,
 	label: String,
-	ip: String,
 	source: i64,
 }
 
@@ -85,9 +79,9 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 		server_rows,
 		port_gg_rows,
 		port_host_rows,
+		proxied_port_rows,
 		server_nomad_rows,
 		server_pegboard_rows,
-		internal_port_rows,
 	) = tokio::try_join!(
 		sql_fetch_all!(
 			[ctx, ServerRow]
@@ -115,7 +109,7 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 			&input.server_ids,
 		),
 		sql_fetch_all!(
-			[ctx, DockerPortProtocolGameGuard]
+			[ctx, ServerPortGg]
 			"
 			SELECT
 				server_id,
@@ -123,20 +117,31 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 				port_number,
 				gg_port,
 				protocol
-			FROM db_ds.docker_ports_protocol_game_guard
+			FROM db_ds.server_ports_gg
 			WHERE server_id = ANY($1)
 			",
 			&input.server_ids,
 		),
 		sql_fetch_all!(
-			[ctx, DockerPortHost]
+			[ctx, ServerPortHost]
 			"
 			SELECT
 				server_id,
 				port_name,
-				port_number,
 				protocol
-			FROM db_ds.docker_ports_host
+			FROM db_ds.server_ports_host
+			WHERE server_id = ANY($1)
+			",
+			&input.server_ids,
+		),
+		sql_fetch_all!(
+			[ctx, ProxiedPort]
+			"
+			SELECT
+				server_id,
+				label,
+				source
+			FROM db_ds.server_proxied_ports
 			WHERE server_id = ANY($1)
 			",
 			&input.server_ids,
@@ -146,13 +151,8 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 			"
 			SELECT
 				server_id,
-				-- nomad_dispatched_job_id,
-				-- nomad_alloc_id,
-				-- nomad_node_id,
-				-- nomad_node_name,
-				-- nomad_node_public_ipv4,
-				-- nomad_node_vlan_ipv4,
-				nomad_alloc_plan_ts
+				nomad_alloc_plan_ts,
+				nomad_node_public_ipv4
 			FROM db_ds.server_nomad
 			WHERE server_id = ANY($1)
 			",
@@ -161,24 +161,13 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 		sql_fetch_all!(
 			[ctx, ServerPegboard]
 			"
-			SELECT server_id, running_ts
-			FROM db_ds.servers_pegboard AS s
+			SELECT ds.server_id, a.running_ts, s.public_ip
+			FROM db_ds.servers_pegboard AS ds
 			JOIN db_pegboard.actors AS a
-			ON s.pegboard_actor_id = a.actor_id
-			WHERE server_id = ANY($1)
-			",
-			&input.server_ids,
-		),
-		sql_fetch_all!(
-			[ctx, ServerPort]
-			"
-			SELECT
-				server_id,
-				label,
-				ip,
-				source
-			FROM db_ds.internal_ports
-			WHERE server_id = ANY($1)
+			ON ds.pegboard_actor_id = a.actor_id
+			JOIN db_cluster.servers AS s
+			ON a.client_id = s.server_id
+			WHERE ds.server_id = ANY($1)
 			",
 			&input.server_ids,
 		),
@@ -190,19 +179,25 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 		.filter_map(|server_id| server_rows.iter().find(|x| x.server_id == *server_id))
 		.map(|server| {
 			// TODO: Handle timeout to let Traefik pull config
-			let is_connectable = if let Some(server_nomad) = server_nomad_rows
+			let (is_connectable, public_ip) = if let Some(server_nomad) = server_nomad_rows
 				.iter()
 				.find(|x| x.server_id == server.server_id)
 			{
-				server_nomad.nomad_alloc_plan_ts.is_some()
+				(
+					server_nomad.nomad_alloc_plan_ts.is_some(),
+					server_nomad.nomad_node_public_ipv4.clone(),
+				)
 			} else if let Some(server_pb) = server_pegboard_rows
 				.iter()
 				.find(|x| x.server_id == server.server_id)
 			{
-				server_pb.running_ts.is_some()
+				(
+					server_pb.running_ts.is_some(),
+					server_pb.public_ip.map(|x| x.to_string()),
+				)
 			} else {
-				// neither nomad nor pegboard server attached
-				false
+				// Neither nomad nor pegboard server attached
+				(false, None)
 			};
 
 			let ports = port_gg_rows
@@ -224,7 +219,7 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 						.iter()
 						.filter(|p| p.server_id == server.server_id)
 						.map(|host_port| {
-							let internal_port = internal_port_rows.iter().find(|x| {
+							let proxied_port = proxied_port_rows.iter().find(|x| {
 								x.server_id == server.server_id
 									&& x.label
 										== crate::util::format_port_label(&host_port.port_name)
@@ -232,7 +227,12 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 
 							Ok((
 								host_port.port_name.clone(),
-								create_port_host(is_connectable, host_port, internal_port)?,
+								create_port_host(
+									is_connectable,
+									public_ip.as_deref(),
+									host_port,
+									proxied_port,
+								)?,
 							))
 						}),
 				)
@@ -268,11 +268,11 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 fn create_port_gg(
 	config: &rivet_config::Config,
 	is_connectable: bool,
-	gg_port: &DockerPortProtocolGameGuard,
+	gg_port: &ServerPortGg,
 	datacenter_id: Uuid,
 ) -> GlobalResult<Port> {
 	Ok(Port {
-		internal_port: Some(gg_port.port_number.try_into()?),
+		internal_port: gg_port.port_number.map(TryInto::try_into).transpose()?,
 		public_hostname: if is_connectable {
 			Some(crate::util::build_ds_hostname(
 				config,
@@ -296,18 +296,19 @@ fn create_port_gg(
 
 fn create_port_host(
 	is_connectable: bool,
-	host_port: &DockerPortHost,
-	internal_port: Option<&ServerPort>,
+	public_ip: Option<&str>,
+	host_port: &ServerPortHost,
+	proxied_port: Option<&ProxiedPort>,
 ) -> GlobalResult<Port> {
 	Ok(Port {
-		internal_port: Some(host_port.port_number.try_into()?),
+		internal_port: None,
 		public_hostname: if is_connectable {
-			internal_port.map(|x| x.ip.clone())
+			proxied_port.and_then(|_| public_ip).map(|x| x.to_string())
 		} else {
 			None
 		},
 		public_port: if is_connectable {
-			internal_port.map(|x| x.source.try_into()).transpose()?
+			proxied_port.map(|x| x.source.try_into()).transpose()?
 		} else {
 			None
 		},

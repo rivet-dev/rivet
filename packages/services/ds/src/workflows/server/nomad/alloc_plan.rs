@@ -181,7 +181,7 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<Upd
 				RETURNING 1
 			),
 			insert_ports AS (
-				INSERT INTO db_ds.internal_ports (
+				INSERT INTO db_ds.server_proxied_ports (
 					server_id,
 					label,
 					source,

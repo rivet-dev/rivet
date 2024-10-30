@@ -15,13 +15,17 @@ use tokio::{
 	io::{AsyncReadExt, AsyncWriteExt},
 	process::Command,
 };
+use uuid::Uuid;
 
 use super::{oci_config, Actor};
 use crate::{ctx::Ctx, utils};
 
 const NETWORK_NAME: &str = "rivet-pegboard";
-const MIN_INGRESS_PORT: u16 = 20000;
-const MAX_INGRESS_PORT: u16 = 31999;
+// Should match util::net::job
+const MIN_GG_PORT: u16 = 20000;
+const MAX_GG_PORT: u16 = 25999;
+const MIN_HOST_PORT: u16 = 26000;
+const MAX_HOST_PORT: u16 = 31999;
 
 impl Actor {
 	pub async fn download_image(&self, ctx: &Ctx) -> Result<()> {
@@ -225,7 +229,11 @@ impl Actor {
 		Ok(())
 	}
 
-	pub async fn setup_oci_bundle(&self, ctx: &Ctx) -> Result<()> {
+	pub async fn setup_oci_bundle(
+		&self,
+		ctx: &Ctx,
+		ports: &protocol::HashableMap<String, protocol::ProxiedPort>,
+	) -> Result<()> {
 		tracing::info!(actor_id=?self.actor_id, "setting up oci bundle");
 
 		let actor_path = ctx.actor_path(self.actor_id);
@@ -269,16 +277,22 @@ impl Actor {
 		}
 
 		// Write base config
-		fs::write(
-			actor_path.join("oci-bundle-config.base.json"),
-			serde_json::to_vec(&oci_config::config(
-				self.config.resources.cpu,
-				self.config.resources.memory,
-				self.config.resources.memory_max,
-				vec![format!("RIVET_API_ENDPOINT={}", ctx.config().api_endpoint)],
-			))?,
-		)
-		.await?;
+		let base_config_path = actor_path.join("oci-bundle-config.base.json");
+		let mut base_config = oci_config::config(
+			self.config.resources.cpu,
+			self.config.resources.memory,
+			self.config.resources.memory_max,
+			// Add port env vars and api endpoint
+			ports
+				.iter()
+				.map(|(label, port)| format!("PORT_{}={}", label.replace('-', "_"), port.target))
+				.chain(std::iter::once(format!(
+					"RIVET_API_ENDPOINT={}",
+					ctx.config().api_endpoint
+				)))
+				.collect(),
+		);
+		fs::write(base_config_path, serde_json::to_vec(&base_config)?).await?;
 
 		// resolv.conf
 		//
@@ -313,15 +327,11 @@ impl Actor {
 		// TODO: get new envb in here somehow
 		// TODO: check bounds
 
-		// Template new config
-		let base_config_path = actor_path.join("oci-bundle-config.base.json");
-		let base_config_json = fs::read_to_string(&base_config_path).await?;
-		let mut base_config = serde_json::from_str::<Value>(&base_config_json)?;
-
 		let override_config_json = fs::read_to_string(&override_config_path).await?;
 		let override_config = serde_json::from_str::<Value>(&override_config_json)?;
 		let override_process = override_config["process"].clone();
 
+		// Template new config
 		base_config["process"]["args"] = override_process["args"].clone();
 		base_config["process"]["env"] = Value::Array(
 			self.config
@@ -371,11 +381,11 @@ impl Actor {
 	pub async fn setup_isolate(
 		&self,
 		ctx: &Ctx,
-		ports: &protocol::HashableMap<String, protocol::BoundPort>,
+		ports: &protocol::HashableMap<String, protocol::ProxiedPort>,
 	) -> Result<()> {
 		let actor_path = ctx.actor_path(self.actor_id);
 
-		// Schema in v8-isolate-runner
+		// TODO: Use schema in v8-isolate-runner (don't import v8-isolate-runner because its fat)
 		let config = json!({
 			"resources": {
 				"memory": self.config.resources.memory,
@@ -386,8 +396,7 @@ impl Actor {
 				.values()
 				.map(|port| {
 					json!({
-						// Host ports don't have a target
-						"target": port.target.unwrap_or(port.source),
+						"target": port.target,
 						"protocol": port.protocol,
 					})
 				})
@@ -397,10 +406,11 @@ impl Actor {
 				.env
 				.iter()
 				.map(|(k, v)| (k.clone(), v.clone()))
+				// Add port env vars and api endpoint
 				.chain(ports.iter().map(|(label, port)| {
 					(
-						format!("PORT_{}", label),
-						port.target.unwrap_or(port.source).to_string(),
+						format!("PORT_{}", label.replace('-', "_")),
+						port.target.to_string(),
 					)
 				}))
 				.chain(std::iter::once(("RIVET_API_ENDPOINT".to_string(), ctx.config().api_endpoint.clone())))
@@ -420,7 +430,7 @@ impl Actor {
 	pub async fn setup_cni_network(
 		&self,
 		ctx: &Ctx,
-		ports: &protocol::HashableMap<String, protocol::BoundPort>,
+		ports: &protocol::HashableMap<String, protocol::ProxiedPort>,
 	) -> Result<()> {
 		tracing::info!(actor_id=?self.actor_id, "setting up cni network");
 
@@ -507,151 +517,68 @@ impl Actor {
 	pub(crate) async fn bind_ports(
 		&self,
 		ctx: &Ctx,
-	) -> Result<protocol::HashableMap<String, protocol::BoundPort>> {
-		let ports = self
+	) -> Result<protocol::HashableMap<String, protocol::ProxiedPort>> {
+		let (mut gg_ports, mut host_ports): (Vec<_>, Vec<_>) = self
 			.config
 			.ports
 			.iter()
-			.map(|(label, port)| match port {
-				protocol::Port::GameGuard { target, protocol } => {
-					Ok((label, Some(*target), *protocol))
-				}
-				protocol::Port::Host { protocol } => Ok((label, None, *protocol)),
-			})
-			.collect::<Result<Vec<_>>>()?;
+			.partition(|(_, port)| matches!(port.routing, protocol::PortRouting::GameGuard));
 
-		let mut tcp_count = 0;
-		let mut udp_count = 0;
+		// TODO: Could combine these into one query
+		let (mut gg_port_rows, mut host_port_rows) = tokio::try_join!(
+			bind_ports_inner(ctx, self.actor_id, &gg_ports, MIN_GG_PORT..=MAX_GG_PORT),
+			bind_ports_inner(
+				ctx,
+				self.actor_id,
+				&host_ports,
+				MIN_HOST_PORT..=MAX_HOST_PORT
+			),
+		)?;
 
-		// Count ports
-		for (_, _, protocol) in &ports {
-			match protocol {
-				protocol::TransportProtocol::Tcp => tcp_count += 1,
-				protocol::TransportProtocol::Udp => udp_count += 1,
-			}
-		}
+		// The SQL query returns a list of TCP ports then UDP ports. We sort the input ports here to match
+		// that order.
+		gg_ports.sort_by_key(|(_, port)| port.protocol);
+		host_ports.sort_by_key(|(_, port)| port.protocol);
+		// We sort the SQL results here also, just in case
+		gg_port_rows.sort_by_key(|(_, protocol)| *protocol);
+		host_port_rows.sort_by_key(|(_, protocol)| *protocol);
 
-		let max = MAX_INGRESS_PORT - MIN_INGRESS_PORT;
-		// Add random spread to port selection
-		let tcp_offset = rand::thread_rng().gen_range(0..max);
-		let udp_offset = rand::thread_rng().gen_range(0..max);
+		let proxied_ports =
+			gg_ports
+				.iter()
+				.zip(gg_port_rows)
+				.map(|((label, port), (host_port, _))| {
+					let host_port = host_port as u16;
 
-		// Selects available TCP and UDP ports
-		let rows = utils::query(|| async {
-			sqlx::query_as::<_, (i64, i64)>(indoc!(
-				"
-				-- NOTE: This does not store the actual port, but an offset from the minimum (see MIN_INGRESS_PORT above)
-				INSERT INTO actor_ports (actor_id, port, protocol)
-				-- Select TCP ports
-				SELECT ?1, port, protocol
-				FROM (
-					WITH RECURSIVE
-						nums(n, i) AS (
-							SELECT ?4, ?4
-							UNION ALL
-							SELECT (n + 1) % (?6 + 1), i + 1
-							FROM nums
-							WHERE i < ?6 + ?4
-						),
-						available_ports(port) AS (
-							SELECT nums.n
-							FROM nums
-							LEFT JOIN actor_ports AS p
-							ON
-								nums.n = p.port AND
-								p.protocol = 0 AND
-								delete_ts IS NULL
-							WHERE
-								p.port IS NULL OR
-								delete_ts IS NOT NULL
-							LIMIT ?2
-						)
-					SELECT port, 0 AS protocol FROM available_ports
-				)
-				UNION ALL
-				-- Select UDP ports
-				SELECT ?1, port, protocol
-				FROM (
-					WITH RECURSIVE
-						nums(n, i) AS (
-							SELECT ?5, ?5
-							UNION ALL
-							SELECT (n + 1) % (?6 + 1), i + 1
-							FROM nums
-							WHERE i < ?6 + ?5
-						),
-						available_ports(port) AS (
-							SELECT nums.n
-							FROM nums
-							LEFT JOIN actor_ports AS p
-							ON
-								nums.n = p.port AND
-								p.protocol = 1 AND
-								delete_ts IS NULL
-							WHERE
-								p.port IS NULL OR
-								delete_ts IS NOT NULL
-							LIMIT ?3
-						)
-					SELECT port, 1 AS protocol FROM available_ports
-				)
-				RETURNING port, protocol
-				",
-			))
-			.bind(self.actor_id)
-			.bind(tcp_count as i64) // ?2
-			.bind(udp_count as i64) // ?3
-			.bind(tcp_offset as i64) // ?4
-			.bind(udp_offset as i64) // ?5
-			.bind(max as i64) // ?6
-			.fetch_all(&mut *ctx.sql().await?)
-			.await
-		})
-		.await?;
+					(
+						(*label).clone(),
+						protocol::ProxiedPort {
+							source: host_port,
+							// When no target port was selected, default to randomly selected host port
+							target: port.target.unwrap_or(host_port),
+							ip: ctx.config().network_ip,
+							protocol: port.protocol,
+						},
+					)
+				})
+				// Chain host ports
+				.chain(host_ports.iter().zip(host_port_rows).map(
+					|((label, port), (host_port, _))| {
+						let host_port = host_port as u16;
 
-		if rows.len() != tcp_count + udp_count {
-			bail!("not enough available ports");
-		}
-
-		let proxied_ports = ports
-			.iter()
-			.filter(|(_, _, protocol)| matches!(protocol, protocol::TransportProtocol::Tcp))
-			.zip(
-				rows.iter()
-					.filter(|(_, protocol)| *protocol == protocol::TransportProtocol::Tcp as i64),
-			)
-			.map(|((label, target, protocol), (host_port, _))| {
-				(
-					(*label).clone(),
-					protocol::BoundPort {
-						source: MIN_INGRESS_PORT + *host_port as u16,
-						target: *target,
-						ip: ctx.config().network_ip,
-						protocol: *protocol,
-					},
-				)
-			})
-			// Chain UDP ports
-			.chain(
-				ports
-					.iter()
-					.filter(|(_, _, protocol)| matches!(protocol, protocol::TransportProtocol::Udp))
-					.zip(rows.iter().filter(|(_, protocol)| {
-						*protocol == protocol::TransportProtocol::Udp as i64
-					}))
-					.map(|((label, target, protocol), (host_port, _))| {
 						(
 							(*label).clone(),
-							protocol::BoundPort {
-								source: MIN_INGRESS_PORT + *host_port as u16,
-								target: *target,
+							protocol::ProxiedPort {
+								source: host_port,
+								// When no target port was selected, default to randomly selected host port
+								target: port.target.unwrap_or(host_port),
 								ip: ctx.config().network_ip,
-								protocol: *protocol,
+								protocol: port.protocol,
 							},
 						)
-					}),
-			)
-			.collect();
+					},
+				))
+				.collect();
 
 		Ok(proxied_ports)
 	}
@@ -751,4 +678,110 @@ impl Actor {
 			Path::new("/var/run/netns").join(self.actor_id.to_string())
 		}
 	}
+}
+
+async fn bind_ports_inner(
+	ctx: &Ctx,
+	actor_id: Uuid,
+	ports: &[(&String, &protocol::Port)],
+	range: std::ops::RangeInclusive<u16>,
+) -> Result<Vec<(i64, i64)>> {
+	if ports.is_empty() {
+		return Ok(Vec::new());
+	}
+
+	let mut tcp_count = 0;
+	let mut udp_count = 0;
+
+	// Count ports
+	for (_, port) in ports {
+		match port.protocol {
+			protocol::TransportProtocol::Tcp => tcp_count += 1,
+			protocol::TransportProtocol::Udp => udp_count += 1,
+		}
+	}
+
+	let truncated_max = range.end() - range.start();
+	// Add random spread to port selection
+	let tcp_offset = rand::thread_rng().gen_range(0..truncated_max);
+	let udp_offset = rand::thread_rng().gen_range(0..truncated_max);
+
+	// Selects available TCP and UDP ports
+	let rows = utils::query(|| async {
+		sqlx::query_as::<_, (i64, i64)>(indoc!(
+			"
+			INSERT INTO actor_ports (actor_id, port, protocol)
+			-- Select TCP ports
+			SELECT ?1, port, protocol
+			FROM (
+				WITH RECURSIVE
+					nums(n, i) AS (
+						SELECT ?4, ?4
+						UNION ALL
+						SELECT (n + 1) % (?7 + 1), i + 1
+						FROM nums
+						WHERE i < ?7 + ?4
+					),
+					available_ports(port) AS (
+						SELECT nums.n + ?6
+						FROM nums
+						LEFT JOIN actor_ports AS p
+						ON
+							nums.n + ?6 = p.port AND
+							p.protocol = 0 AND
+							delete_ts IS NULL
+						WHERE
+							p.port IS NULL OR
+							delete_ts IS NOT NULL
+						LIMIT ?2
+					)
+				SELECT port, 0 AS protocol FROM available_ports
+			)
+			UNION ALL
+			-- Select UDP ports
+			SELECT ?1, port, protocol
+			FROM (
+				WITH RECURSIVE
+					nums(n, i) AS (
+						SELECT ?5, ?5
+						UNION ALL
+						SELECT (n + 1) % (?7 + 1), i + 1
+						FROM nums
+						WHERE i < ?7 + ?5
+					),
+					available_ports(port) AS (
+						SELECT nums.n + ?6
+						FROM nums
+						LEFT JOIN actor_ports AS p
+						ON
+							nums.n + ?6 = p.port AND
+							p.protocol = 1 AND
+							delete_ts IS NULL
+						WHERE
+							p.port IS NULL OR
+							delete_ts IS NOT NULL
+						LIMIT ?3
+					)
+				SELECT port, 1 AS protocol FROM available_ports
+			)
+			RETURNING port, protocol
+			",
+		))
+		.bind(actor_id)
+		.bind(tcp_count as i64) // ?2
+		.bind(udp_count as i64) // ?3
+		.bind(tcp_offset as i64) // ?4
+		.bind(udp_offset as i64) // ?5
+		.bind(*range.start() as i64) // ?6
+		.bind(truncated_max as i64) // ?7
+		.fetch_all(&mut *ctx.sql().await?)
+		.await
+	})
+	.await?;
+
+	if rows.len() != tcp_count + udp_count {
+		bail!("not enough available ports");
+	}
+
+	Ok(rows)
 }

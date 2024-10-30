@@ -117,7 +117,7 @@ impl Actor {
 	async fn setup(
 		self: &Arc<Self>,
 		ctx: &Arc<Ctx>,
-	) -> Result<protocol::HashableMap<String, protocol::BoundPort>> {
+	) -> Result<protocol::HashableMap<String, protocol::ProxiedPort>> {
 		tracing::info!(actor_id=?self.actor_id, "setting up");
 
 		let actor_path = ctx.actor_path(self.actor_id);
@@ -132,7 +132,7 @@ impl Actor {
 
 		match self.config.image.kind {
 			protocol::ImageKind::DockerImage | protocol::ImageKind::OciBundle => {
-				self.setup_oci_bundle(&ctx).await?;
+				self.setup_oci_bundle(&ctx, &ports).await?;
 
 				// Run CNI setup script
 				if let protocol::NetworkMode::Bridge = self.config.network_mode {
@@ -148,7 +148,7 @@ impl Actor {
 	async fn run(
 		self: &Arc<Self>,
 		ctx: &Arc<Ctx>,
-		ports: protocol::HashableMap<String, protocol::BoundPort>,
+		ports: protocol::HashableMap<String, protocol::ProxiedPort>,
 	) -> Result<()> {
 		tracing::info!(actor_id=?self.actor_id, "spawning");
 

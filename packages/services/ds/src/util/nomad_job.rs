@@ -2,12 +2,21 @@ use chirp_worker::prelude::*;
 use regex::Regex;
 
 use super::oci_config;
-use crate::types::GameGuardProtocol;
+use crate::types::{GameGuardProtocol, HostProtocol};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransportProtocol {
 	Tcp,
 	Udp,
+}
+
+impl TransportProtocol {
+	pub fn as_cni_protocol(&self) -> &'static str {
+		match self {
+			Self::Tcp => "tcp",
+			Self::Udp => "udp",
+		}
+	}
 }
 
 impl From<GameGuardProtocol> for TransportProtocol {
@@ -22,23 +31,13 @@ impl From<GameGuardProtocol> for TransportProtocol {
 	}
 }
 
-impl TransportProtocol {
-	pub fn as_cni_protocol(&self) -> &'static str {
-		match self {
-			Self::Tcp => "tcp",
-			Self::Udp => "udp",
+impl From<HostProtocol> for TransportProtocol {
+	fn from(proxy_protocol: HostProtocol) -> Self {
+		match proxy_protocol {
+			HostProtocol::Tcp => Self::Tcp,
+			HostProtocol::Udp => Self::Udp,
 		}
 	}
-}
-
-/// Helper structure for parsing all of the runtime's ports before building the
-/// config.
-#[derive(Clone)]
-pub struct DecodedPort {
-	pub label: String,
-	pub nomad_port_label: String,
-	pub target: u16,
-	pub proxy_protocol: GameGuardProtocol,
 }
 
 /// Build base config used to generate the OCI bundle's config.json.

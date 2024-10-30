@@ -12,7 +12,7 @@ use super::{
 	resolve_image_artifact_url, CreateComplete, CreateFailed, Destroy, Drain, DrainState,
 	GetBuildAndDcInput, InsertDbInput, Port, DRAIN_PADDING_MS, TRAEFIK_GRACE_PERIOD,
 };
-use crate::types::{GameGuardProtocol, NetworkMode, Routing, ServerResources};
+use crate::types::{GameGuardProtocol, HostProtocol, NetworkMode, Routing, ServerResources};
 
 pub mod destroy;
 
@@ -246,28 +246,31 @@ async fn setup(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<Uuid> {
 				.network_ports
 				.iter()
 				.map(|(port_label, port)| match port.routing {
-					Routing::GameGuard { protocol } => {
-						// Must be present for GG routing
-						let target = unwrap!(port.internal_port) as u16;
-
-						Ok((
-							crate::util::format_port_label(port_label),
-							pp::Port::GameGuard {
-								target,
-								protocol: match protocol {
-									GameGuardProtocol::Http
-									| GameGuardProtocol::Https
-									| GameGuardProtocol::Tcp
-									| GameGuardProtocol::TcpTls => pp::TransportProtocol::Tcp,
-									GameGuardProtocol::Udp => pp::TransportProtocol::Udp,
-								},
+					Routing::GameGuard { protocol } => Ok((
+						crate::util::format_port_label(port_label),
+						pp::Port {
+							target: port.internal_port,
+							protocol: match protocol {
+								GameGuardProtocol::Http
+								| GameGuardProtocol::Https
+								| GameGuardProtocol::Tcp
+								| GameGuardProtocol::TcpTls => pp::TransportProtocol::Tcp,
+								GameGuardProtocol::Udp => pp::TransportProtocol::Udp,
 							},
-						))
-					}
-					Routing::Host { .. } => {
-						// TODO:
-						bail!("host ports not implemented");
-					}
+							routing: pp::PortRouting::GameGuard,
+						},
+					)),
+					Routing::Host { protocol } => Ok((
+						crate::util::format_port_label(port_label),
+						pp::Port {
+							target: port.internal_port,
+							protocol: match protocol {
+								HostProtocol::Tcp => pp::TransportProtocol::Tcp,
+								HostProtocol::Udp => pp::TransportProtocol::Udp,
+							},
+							routing: pp::PortRouting::Host,
+						},
+					)),
 				})
 				.collect::<GlobalResult<_>>()?,
 			network_mode: match input.network_mode {
@@ -361,7 +364,7 @@ async fn select_resources(
 struct UpdatePortsInput {
 	server_id: Uuid,
 	datacenter_id: Uuid,
-	ports: util::serde::HashableMap<String, pp::BoundPort>,
+	ports: util::serde::HashableMap<String, pp::ProxiedPort>,
 }
 
 #[activity(UpdatePorts)]
@@ -389,7 +392,7 @@ async fn update_ports(ctx: &ActivityCtx, input: &UpdatePortsInput) -> GlobalResu
 				RETURNING 1
 			),
 			insert_ports AS (
-				INSERT INTO db_ds.internal_ports (
+				INSERT INTO db_ds.server_proxied_ports (
 					server_id,
 					label,
 					source,

@@ -32,7 +32,13 @@ pub fn configure(
 	config: &rivet_config::Config,
 	flavor: pegboard::protocol::ClientFlavor,
 ) -> GlobalResult<String> {
-	let origin_api = config.server()?.rivet.api_public.public_origin().to_string();
+	let origin_api = config
+		.server()?
+		.rivet
+		.api_public
+		.public_origin()
+		.to_string();
+
 	Ok(include_str!("../files/pegboard_configure.sh")
 		.replace("__FLAVOR__", &flavor.to_string())
 		.replace("__ORIGIN_API__", &origin_api)
@@ -47,5 +53,13 @@ pub fn configure(
 		.replace(
 			"__ATS_VLAN_SUBNET__",
 			&util::net::ats::vlan_ip_net().to_string(),
+		)
+		.replace(
+			"__MIN_HOST_PORT__",
+			&util::net::job::MIN_HOST_PORT_TCP.to_string(),
+		)
+		.replace(
+			"__MAX_HOST_PORT__",
+			&util::net::job::MAX_HOST_PORT_TCP.to_string(),
 		))
 }

@@ -46,7 +46,7 @@ async fn server_create(ctx: TestCtx) {
 	let ports = vec![(
 		"testing2".to_string(),
 		ds::workflows::server::Port {
-			internal_port: Some(28234),
+			internal_port: None,
 			routing: types::Routing::GameGuard {
 				protocol: types::GameGuardProtocol::Http,
 			},
@@ -95,9 +95,9 @@ async fn server_create(ctx: TestCtx) {
 
 	tracing::info!("waiting for public hostname");
 
-	let hostname = loop {
+	let (hostname, port) = loop {
 		tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-	
+
 		let server = ctx
 			.op(ds::ops::server::get::Input {
 				server_ids: vec![server_id],
@@ -108,34 +108,31 @@ async fn server_create(ctx: TestCtx) {
 			.into_iter()
 			.next()
 			.unwrap();
-	
-		if let Some(hostname) = server
-			.network_ports
-			.get("testing2")
-			.unwrap()
-			.public_hostname.as_ref() {
-			break hostname.clone();
+
+		let port = server.network_ports.get("testing2").unwrap();
+
+		if let Some(hostname) = port.public_hostname.as_ref() {
+			break (hostname.clone(), port.public_port.unwrap());
 		}
 	};
 
-	tracing::info!(%hostname, "echoing");
+	tracing::info!(%hostname, %port, "echoing");
 
 	// Echo body
 	let random_body = Uuid::new_v4().to_string();
-	let client = reqwest::Client::new();
 
 	loop {
-		let res = tokio::time::timeout(
-			std::time::Duration::from_secs(2),
-			async {
-				client
-					.post(format!("http://{hostname}"))
-					.body(random_body.clone())
-					.send()
-					.await
-					.unwrap()
-			}
-		).await;
+		// Create a new client each time to prevent cache
+		let client = reqwest::Client::new();
+		let res = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+			client
+				.post(format!("http://{hostname}:{port}"))
+				.body(random_body.clone())
+				.send()
+				.await
+				.unwrap()
+		})
+		.await;
 
 		let Ok(res) = res else {
 			tracing::warn!("timed out for some reason");

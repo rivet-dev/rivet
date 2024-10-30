@@ -16,6 +16,14 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 		// HACK: Hardcoded to Linode
 		.replace("__VLAN_IFACE__", "eth1")
 		.replace(
+			"__MIN_DYNAMIC_PORT__",
+			&util::net::job::MIN_GG_PORT_TCP.to_string(),
+		)
+		.replace(
+			"__MAX_DYNAMIC_PORT__",
+			&util::net::job::MAX_GG_PORT_TCP.to_string(),
+		)
+		.replace(
 			"__SERVER_JOIN__",
 			&servers
 				.iter()

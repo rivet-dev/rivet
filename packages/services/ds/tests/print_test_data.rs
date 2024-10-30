@@ -198,7 +198,15 @@ async fn print_test_data(ctx: TestCtx) {
 		server_id,
 		"testing2",
 		faker_region.region_id.unwrap(),
-		ctx.config().server().unwrap().rivet.dns().unwrap().domain_job.as_ref().unwrap(),
+		ctx.config()
+			.server()
+			.unwrap()
+			.rivet
+			.dns()
+			.unwrap()
+			.domain_job
+			.as_ref()
+			.unwrap(),
 	);
 
 	// Async sleep for 5 seconds

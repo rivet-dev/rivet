@@ -17,7 +17,6 @@ struct DynamicServer {
 	label: String,
 	ip: String,
 	source: i64,
-	port_number: i64,
 	gg_port: i64,
 	port_name: String,
 	protocol: i64,
@@ -52,20 +51,19 @@ pub async fn build_ds(
 				SELECT
 					s.server_id,
 					s.datacenter_id,
-					ip.label,
-					ip.ip,
-					ip.source,
-					gg.port_number,
+					pp.label,
+					pp.ip,
+					pp.source,
 					gg.gg_port,
 					gg.port_name,
 					gg.protocol
-				FROM db_ds.internal_ports AS ip
+				FROM db_ds.server_proxied_ports AS pp
 				JOIN db_ds.servers AS s
-				ON ip.server_id = s.server_id
-				JOIN db_ds.docker_ports_protocol_game_guard AS gg
+				ON pp.server_id = s.server_id
+				JOIN db_ds.server_ports_gg AS gg
 				ON
-					ip.server_id = gg.server_id AND
-					ip.label = CONCAT('ds_', REPLACE(gg.port_name, '-', '_'))
+					pp.server_id = gg.server_id AND
+					pp.label = CONCAT('ds_', REPLACE(gg.port_name, '-', '_'))
 				WHERE
 					s.datacenter_id = $1 AND
 					s.destroy_ts IS NULL

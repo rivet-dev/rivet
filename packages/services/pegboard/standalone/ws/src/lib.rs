@@ -321,9 +321,8 @@ async fn update_ping_thread(
 			[ctx]
 			"
 			UPDATE db_pegboard.clients
-				SET last_ping_ts = $2
-				WHERE client_id = ANY($1)
-				RETURNING 1
+			SET last_ping_ts = $2
+			WHERE client_id = ANY($1)
 			",
 			client_ids,
 			util::timestamp::now(),

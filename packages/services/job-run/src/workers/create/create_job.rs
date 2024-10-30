@@ -229,7 +229,13 @@ fn gen_cleanup_task(config: &rivet_config::Config) -> GlobalResult<nomad_client_
 
 				print('\n> Finished')
 				"#,
-				origin_api = config.server()?.rivet.api_public.public_origin(),
+				origin_api = config
+					.server()?
+					.rivet
+					.api_public
+					.public_origin()
+					.to_string()
+					.trim_end_matches("/"),
 			)),
 			..Template::new()
 		}]),

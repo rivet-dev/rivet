@@ -98,12 +98,14 @@ async fn allocate_actor(
 		WITH available_clients AS (
 			SELECT
 				c.client_id,
-				c.cpu,
-				c.memory,
 				-- Millicores
-				COALESCE(SUM_INT((a.config->'resources'->>'cpu')::INT), 0) AS total_cpu,
+				c.cpu * 1000 // $9 AS available_cpu,
 				-- MiB
-				COALESCE(SUM_INT((a.config->'resources'->>'memory')::INT // 1024 // 1024), 0) AS total_memory
+				c.memory - $10 AS available_memory,
+				-- Millicores
+				COALESCE(SUM_INT((a.config->'resources'->>'cpu')::INT), 0) AS allocated_cpu,
+				-- MiB
+				COALESCE(SUM_INT((a.config->'resources'->>'memory')::INT // 1024 // 1024), 0) AS allocated_memory
 			FROM db_pegboard.clients AS c
 			LEFT JOIN db_pegboard.actors AS a
 			ON
@@ -128,11 +130,9 @@ async fn allocate_actor(
 		SELECT $3, client_id, $4, $5
 		FROM available_clients
 		WHERE
-			-- Compare millicores
-			total_cpu + $6 <= cpu * 1000 // $9 AND
-			-- Compare memory MiB
-			total_memory + $7 <= memory - $10
-		ORDER BY total_cpu, total_memory DESC
+			allocated_cpu + $6 <= available_cpu AND
+			allocated_memory + $7 <= available_memory
+		ORDER BY allocated_cpu, allocated_memory DESC
 		LIMIT 1
 		RETURNING client_id
 		",

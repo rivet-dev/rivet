@@ -13,7 +13,7 @@ use futures_util::FutureExt;
 use rand::Rng;
 use rivet_operation::prelude::proto::backend;
 
-use crate::types::{GameGuardProtocol, ServerRuntime, NetworkMode, Routing, ServerResources};
+use crate::types::{GameGuardProtocol, NetworkMode, Routing, ServerResources, ServerRuntime};
 
 pub mod nomad;
 pub mod pegboard;
@@ -25,18 +25,19 @@ const DRAIN_PADDING_MS: i64 = 10000;
 // TODO: Restructure traefik to get rid of this
 const TRAEFIK_GRACE_PERIOD: Duration = Duration::from_secs(2);
 
-#[derive(Default, Clone)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct GameGuardUnnest {
 	pub port_names: Vec<String>,
 	pub port_numbers: Vec<Option<i32>>,
-	pub gg_ports: Vec<Option<i32>>,
 	pub protocols: Vec<i32>,
+	pub gg_ports: Vec<i32>,
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct HostUnnest {
 	pub port_names: Vec<String>,
 	pub port_numbers: Vec<Option<i32>>,
+	pub protocols: Vec<i32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -60,7 +61,7 @@ pub struct Input {
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct Port {
 	// Null when using host networking since one is automatically assigned
-	pub internal_port: Option<i32>,
+	pub internal_port: Option<u16>,
 	pub routing: Routing,
 }
 
@@ -133,17 +134,20 @@ pub(crate) async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> Globa
 		match port.routing {
 			Routing::GameGuard { protocol } => {
 				gg_unnest.port_names.push(name.clone());
-				gg_unnest.port_numbers.push(port.internal_port);
-				gg_unnest.gg_ports.push(if port.internal_port.is_some() {
-					Some(choose_ingress_port(ctx, protocol).await?)
-				} else {
-					None
-				});
+				gg_unnest
+					.port_numbers
+					.push(port.internal_port.map(|x| x as i32));
 				gg_unnest.protocols.push(protocol as i32);
+				gg_unnest
+					.gg_ports
+					.push(choose_ingress_port(ctx, protocol).await? as i32);
 			}
-			Routing::Host { .. } => {
+			Routing::Host { protocol } => {
 				host_unnest.port_names.push(name.clone());
-				host_unnest.port_numbers.push(port.internal_port);
+				host_unnest
+					.port_numbers
+					.push(port.internal_port.map(|x| x as i32));
+				host_unnest.protocols.push(protocol as i32);
 			}
 		};
 	}
@@ -180,25 +184,26 @@ pub(crate) async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> Globa
 						RETURNING 1
 					),
 					host_port AS (
-						INSERT INTO db_ds.docker_ports_host (
-							server_id,
-							port_name,
-							port_number
-						)
-						SELECT $1, t.*
-						FROM unnest($14, $15) AS t(port_name, port_number)
-						RETURNING 1
-					),
-					gg_port AS (
-						INSERT INTO db_ds.docker_ports_protocol_game_guard (
+						INSERT INTO db_ds.server_ports_host (
 							server_id,
 							port_name,
 							port_number,
-							gg_port,
 							protocol
 						)
 						SELECT $1, t.*
-						FROM unnest($16, $17, $18, $19) AS t(port_name, port_number, gg_port, protocol)
+						FROM unnest($14, $15, $16) AS t(port_name, port_number, protocol)
+						RETURNING 1
+					),
+					gg_port AS (
+						INSERT INTO db_ds.server_ports_gg (
+							server_id,
+							port_name,
+							port_number,
+							protocol,
+							gg_port
+						)
+						SELECT $1, t.*
+						FROM unnest($17, $18, $19, $20) AS t(port_name, port_number, protocol, gg_port)
 						-- Check if lists are empty
 						WHERE port_name IS NOT NULL
 						RETURNING 1
@@ -220,10 +225,11 @@ pub(crate) async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> Globa
 				serde_json::to_string(&input.environment)?,
 				host_unnest.port_names,
 				host_unnest.port_numbers, // 15
+				host_unnest.protocols,
 				gg_unnest.port_names,
 				gg_unnest.port_numbers,
-				gg_unnest.gg_ports,
 				gg_unnest.protocols,
+				gg_unnest.gg_ports, // 20
 			)
 			.await
 		}
@@ -354,9 +360,7 @@ pub(crate) async fn resolve_image_artifact_url(
 				)
 				.await?;
 
-			let addr = presigned_req.uri().clone();
-
-			let addr_str = addr.to_string();
+			let addr_str = presigned_req.uri().to_string();
 			tracing::info!(addr = %addr_str, "resolved artifact s3 presigned request");
 
 			Ok(addr_str)
@@ -416,13 +420,14 @@ pub(crate) async fn resolve_image_artifact_url(
 }
 
 /// Choose which port to assign for a job's ingress port.
+/// This is required because TCP and UDP do not have a `Host` header and thus cannot be re-routed by hostname.
 ///
 /// If not provided by `ProxiedPort`, then:
 /// - HTTP: 80
 /// - HTTPS: 443
 /// - TCP/TLS: random
 /// - UDP: random
-async fn choose_ingress_port(ctx: &ActivityCtx, protocol: GameGuardProtocol) -> GlobalResult<i32> {
+async fn choose_ingress_port(ctx: &ActivityCtx, protocol: GameGuardProtocol) -> GlobalResult<u16> {
 	match protocol {
 		GameGuardProtocol::Http => Ok(80),
 		GameGuardProtocol::Https => Ok(443),
@@ -445,14 +450,15 @@ async fn choose_ingress_port(ctx: &ActivityCtx, protocol: GameGuardProtocol) -> 
 	}
 }
 
+// TODO: Use the same algorithm for picking ports as vlan ip in cluster or ports in the mb manager
 /// This is very poorly written for TCP & UDP ports and may bite us in the ass
 /// some day. See https://linear.app/rivet-gg/issue/RVT-1799
 async fn bind_with_retries(
 	ctx: &ActivityCtx,
 	proxy_protocol: GameGuardProtocol,
 	range: std::ops::RangeInclusive<u16>,
-) -> GlobalResult<i32> {
-	let mut attempts = 3u32;
+) -> GlobalResult<u16> {
+	let mut attempts = 3;
 
 	// Try to bind to a random port, verifying that it is not already bound
 	loop {
@@ -461,7 +467,7 @@ async fn bind_with_retries(
 		}
 		attempts -= 1;
 
-		let port = rand::thread_rng().gen_range(range.clone()) as i32;
+		let port = rand::thread_rng().gen_range(range.clone());
 
 		let (already_exists,) = sql_fetch_one!(
 			[ctx, (bool,)]
@@ -469,7 +475,7 @@ async fn bind_with_retries(
 			SELECT EXISTS(
 				SELECT 1
 				FROM db_ds.servers AS s
-				JOIN db_ds.docker_ports_protocol_game_guard AS p
+				JOIN db_ds.server_ports_gg AS p
 				ON s.server_id = p.server_id
 				WHERE
 					s.destroy_ts IS NULL AND
@@ -477,7 +483,7 @@ async fn bind_with_retries(
 					p.protocol = $2
 			)
 			",
-			port,
+			port as i32,
 			proxy_protocol as i32,
 		)
 		.await?;

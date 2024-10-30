@@ -6,14 +6,28 @@ use uuid::Uuid;
 pub fn user_settings(config: &rivet_config::Config) -> String {
 	format!(
 		"{}/settings",
-		config.server().unwrap().rivet.ui.public_origin(),
+		config
+			.server()
+			.unwrap()
+			.rivet
+			.ui
+			.public_origin()
+			.to_string()
+			.trim_end_matches("/"),
 	)
 }
 
 pub fn user_profile(config: &rivet_config::Config, user_id: Uuid) -> String {
 	format!(
 		"{}/identities/{}",
-		config.server().unwrap().rivet.ui.public_origin(),
+		config
+			.server()
+			.unwrap()
+			.rivet
+			.ui
+			.public_origin()
+			.to_string()
+			.trim_end_matches("/"),
 		user_id
 	)
 }
@@ -21,7 +35,14 @@ pub fn user_profile(config: &rivet_config::Config, user_id: Uuid) -> String {
 pub fn team_profile(config: &rivet_config::Config, team_id: Uuid) -> String {
 	format!(
 		"{}/groups/{}",
-		config.server().unwrap().rivet.ui.public_origin(),
+		config
+			.server()
+			.unwrap()
+			.rivet
+			.ui
+			.public_origin()
+			.to_string()
+			.trim_end_matches("/"),
 		team_id
 	)
 }
@@ -32,7 +53,14 @@ pub fn user_avatar(config: &rivet_config::Config, user: &backend::user::User) ->
 	{
 		format!(
 			"{}/media/user-avatar/{}/{}",
-			config.server().unwrap().rivet.api_public.public_origin(),
+			config
+				.server()
+				.unwrap()
+				.rivet
+				.api_public
+				.public_origin()
+				.to_string()
+				.trim_end_matches("/"),
 			upload_id,
 			file_name
 		)
@@ -49,7 +77,14 @@ pub fn custom_avatar(
 ) -> String {
 	format!(
 		"{}/media/user-avatar/{}/{}",
-		config.server().unwrap().rivet.api_public.public_origin(),
+		config
+			.server()
+			.unwrap()
+			.rivet
+			.api_public
+			.public_origin()
+			.to_string()
+			.trim_end_matches("/"),
 		upload_id,
 		file_name
 	)
@@ -61,7 +96,14 @@ pub fn team_avatar(config: &rivet_config::Config, team: &backend::team::Team) ->
 	{
 		Some(format!(
 			"{}/media/team-avatar/{}/{}",
-			config.server().unwrap().rivet.api_public.public_origin(),
+			config
+				.server()
+				.unwrap()
+				.rivet
+				.api_public
+				.public_origin()
+				.to_string()
+				.trim_end_matches("/"),
 			upload_id,
 			file_name
 		))
@@ -75,7 +117,14 @@ pub fn game_logo(config: &rivet_config::Config, game: &backend::game::Game) -> O
 	{
 		Some(format!(
 			"{}/media/game-logo/{}/{}",
-			config.server().unwrap().rivet.api_public.public_origin(),
+			config
+				.server()
+				.unwrap()
+				.rivet
+				.api_public
+				.public_origin()
+				.to_string()
+				.trim_end_matches("/"),
 			upload_id,
 			file_name
 		))
@@ -90,7 +139,14 @@ pub fn game_banner(config: &rivet_config::Config, game: &backend::game::Game) ->
 	{
 		Some(format!(
 			"{}/media/game-banner/{}/{}",
-			config.server().unwrap().rivet.api_public.public_origin(),
+			config
+				.server()
+				.unwrap()
+				.rivet
+				.api_public
+				.public_origin()
+				.to_string()
+				.trim_end_matches("/"),
 			upload_id,
 			file_name
 		))
@@ -102,7 +158,14 @@ pub fn game_banner(config: &rivet_config::Config, game: &backend::game::Game) ->
 pub fn identity_game_link(config: &rivet_config::Config, link_token: &str) -> String {
 	format!(
 		"{}/link/{}",
-		config.server().unwrap().rivet.ui.public_origin(),
+		config
+			.server()
+			.unwrap()
+			.rivet
+			.ui
+			.public_origin()
+			.to_string()
+			.trim_end_matches("/"),
 		link_token
 	)
 }
@@ -110,7 +173,14 @@ pub fn identity_game_link(config: &rivet_config::Config, link_token: &str) -> St
 pub fn cloud_device_link(config: &rivet_config::Config, link_token: &str) -> String {
 	format!(
 		"{}/devices/link/{}",
-		config.server().unwrap().rivet.ui.public_origin(),
+		config
+			.server()
+			.unwrap()
+			.rivet
+			.ui
+			.public_origin()
+			.to_string()
+			.trim_end_matches("/"),
 		link_token
 	)
 }
@@ -118,7 +188,14 @@ pub fn cloud_device_link(config: &rivet_config::Config, link_token: &str) -> Str
 pub fn access_token_link(config: &rivet_config::Config, access_token_token: &str) -> String {
 	format!(
 		"{}/access-token/{}",
-		config.server().unwrap().rivet.ui.public_origin(),
+		config
+			.server()
+			.unwrap()
+			.rivet
+			.ui
+			.public_origin()
+			.to_string()
+			.trim_end_matches("/"),
 		access_token_token
 	)
 }

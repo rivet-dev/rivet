@@ -131,14 +131,21 @@ pub mod job {
 	use super::{default_firewall, FirewallRule};
 
 	// Port ranges for the load balancer hosts
-	// 20000-26000 are for traffic from gg on LAN
+	// 20000-25999 are for traffic from gg on LAN
 	// 26000-31999 is for host networking only
 	pub const MIN_INGRESS_PORT_TCP: u16 = 20000;
-	pub const MIN_HOST_PORT_TCP: u16 = 26000;
 	pub const MAX_INGRESS_PORT_TCP: u16 = 31999;
+	pub const MIN_GG_PORT_TCP: u16 = MIN_INGRESS_PORT_TCP;
+	pub const MAX_GG_PORT_TCP: u16 = 25999;
+	pub const MIN_HOST_PORT_TCP: u16 = MAX_GG_PORT_TCP + 1;
+	pub const MAX_HOST_PORT_TCP: u16 = MAX_INGRESS_PORT_TCP;
+
 	pub const MIN_INGRESS_PORT_UDP: u16 = 20000;
-	pub const MIN_HOST_PORT_UDP: u16 = 26000;
 	pub const MAX_INGRESS_PORT_UDP: u16 = 31999;
+	pub const MIN_GG_PORT_UDP: u16 = MIN_INGRESS_PORT_UDP;
+	pub const MAX_GG_PORT_UDP: u16 = 25999;
+	pub const MIN_HOST_PORT_UDP: u16 = MAX_GG_PORT_UDP + 1;
+	pub const MAX_HOST_PORT_UDP: u16 = MAX_INGRESS_PORT_UDP;
 
 	pub fn vlan_addr_range() -> Ipv4AddrRange {
 		Ipv4AddrRange::new(Ipv4Addr::new(10, 0, 4, 1), Ipv4Addr::new(10, 0, 255, 254))
@@ -147,17 +154,17 @@ pub mod job {
 	pub fn firewall() -> Vec<FirewallRule> {
 		vec![
 			default_firewall(),
-			// Ports available to Nomad jobs using the host network
+			// Ports available to Nomad jobs/actors using the host network
 			FirewallRule {
-				label: "nomad-host-tcp".into(),
-				ports: format!("{}-{}", MIN_HOST_PORT_TCP, MAX_INGRESS_PORT_TCP),
+				label: "host-tcp".into(),
+				ports: format!("{}-{}", MIN_HOST_PORT_TCP, MAX_HOST_PORT_TCP),
 				protocol: "tcp".into(),
 				inbound_ipv4_cidr: vec!["0.0.0.0/0".into()],
 				inbound_ipv6_cidr: vec!["::/0".into()],
 			},
 			FirewallRule {
-				label: "nomad-host-udp".into(),
-				ports: format!("{}-{}", MIN_HOST_PORT_UDP, MAX_INGRESS_PORT_UDP),
+				label: "host-udp".into(),
+				ports: format!("{}-{}", MIN_HOST_PORT_UDP, MAX_HOST_PORT_UDP),
 				protocol: "udp".into(),
 				inbound_ipv4_cidr: vec!["0.0.0.0/0".into()],
 				inbound_ipv6_cidr: vec!["::/0".into()],

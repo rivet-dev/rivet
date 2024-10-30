@@ -185,7 +185,7 @@ for ipt in iptables ip6tables; do
 	add_ipt_rule "\$ipt" "mangle" "RIVET-TOS-GG" "-m tos ! --tos 0x0 -j RETURN"
 	add_ipt_rule "\$ipt" "mangle" "RIVET-TOS-GG" "-j TOS --set-tos 0x10"
 
-	# VLAN only applicable ot IPv4
+	# VLAN only applicable to IPv4
 	if [ "\$ipt" == "iptables" ]; then
 		# MARK: GG TOS
 		add_ipt_rule "\$ipt" "mangle" "RIVET-FORWARD" "-s __GG_VLAN_SUBNET__ -d \$SUBNET_VAR -j RIVET-TOS-GG"
@@ -215,6 +215,10 @@ for ipt in iptables ip6tables; do
 	add_ipt_rule "\$ipt" "filter" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j MARK --set-mark 1"
     # Allow egress traffic
 	add_ipt_rule "\$ipt" "filter" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j ACCEPT"
+
+	# Allow public ingress traffic ONLY on host ports
+	add_ipt_rule "\$ipt" "filter" "$ADMIN_CHAIN" "-p tcp --dport __MIN_HOST_PORT__:__MAX_HOST_PORT__ -d \$SUBNET_VAR -i __PUBLIC_IFACE__ -j ACCEPT"
+	add_ipt_rule "\$ipt" "filter" "$ADMIN_CHAIN" "-p udp --dport __MIN_HOST_PORT__:__MAX_HOST_PORT__ -d \$SUBNET_VAR -i __PUBLIC_IFACE__ -j ACCEPT"
 
 	# MARK: Deny
     # Deny all other egress traffic

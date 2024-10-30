@@ -108,7 +108,7 @@ pub async fn create(
 			.map(|(s, p)| Ok((
 				s,
 				ds::workflows::server::Port {
-					internal_port: p.internal_port,
+					internal_port: p.internal_port.map(TryInto::try_into).transpose()?,
 					routing: if let Some(routing) = p.routing {
 						match *routing {
 							models::ActorPortRouting {

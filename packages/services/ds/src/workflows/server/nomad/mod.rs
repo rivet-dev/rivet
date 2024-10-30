@@ -19,7 +19,7 @@ use crate::{
 	util::{
 		nomad_job::{
 			escape_go_template, gen_oci_bundle_config, inject_consul_env_template,
-			nomad_host_port_env_var, template_env_var_int, DecodedPort, TransportProtocol,
+			nomad_host_port_env_var, template_env_var, template_env_var_int, TransportProtocol,
 		},
 		NOMAD_REGION, RUNC_CLEANUP_CPU, RUNC_CLEANUP_MEMORY,
 	},
@@ -315,66 +315,66 @@ async fn submit_job(ctx: &ActivityCtx, input: &SubmitJobInput) -> GlobalResult<S
 		..Resources::new()
 	};
 
-	// Read ports
-	let decoded_ports = input
-		.network_ports
-		.iter()
-		.map(|(port_label, port)| match port.routing {
-			Routing::GameGuard { protocol } => {
-				// Must be present for GG routing
-				let target = unwrap!(port.internal_port) as u16;
-
-				Ok(DecodedPort {
-					label: port_label.clone(),
-					nomad_port_label: crate::util::format_port_label(port_label),
-					target,
-					proxy_protocol: protocol,
-				})
-			}
-			Routing::Host { .. } => {
-				todo!()
-			}
-		})
-		.collect::<GlobalResult<Vec<DecodedPort>>>()?;
-
 	// The container will set up port forwarding manually from the Nomad-defined ports on the host
 	// to the CNI container
-	let dynamic_ports = decoded_ports
+	let dynamic_ports = input
+		.network_ports
 		.iter()
-		.map(|port| nomad_client::models::Port {
-			label: Some(port.nomad_port_label.clone()),
+		.map(|(port_label, _)| nomad_client::models::Port {
+			label: Some(crate::util::format_port_label(port_label)),
 			..nomad_client::models::Port::new()
 		})
 		.collect::<Vec<_>>();
 
 	// Port mappings to pass to the container. Only used in bridge networking.
-	let cni_port_mappings = decoded_ports
-		.clone()
-		.into_iter()
-		.map(|port| {
-			json!({
-				"HostPort": template_env_var_int(&nomad_host_port_env_var(&port.nomad_port_label)),
-				"ContainerPort": port.target,
-				"Protocol": TransportProtocol::from(port.proxy_protocol).as_cni_protocol(),
-			})
+	let cni_port_mappings = input
+		.network_ports
+		.iter()
+		.map(|(port_label, port)| {
+			let nomad_port_label = crate::util::format_port_label(port_label);
+			let host_port_template =
+				template_env_var_int(&nomad_host_port_env_var(&nomad_port_label));
+
+			let container_port_value = match input.network_mode {
+				// CNI will handle mapping the host port to the container port
+				NetworkMode::Bridge => serde_json::Value::from(unwrap!(port.internal_port)),
+				// The container needs to listen on the correct port
+				_ => serde_json::Value::String(host_port_template.clone()),
+			};
+
+			let protocol = match port.routing {
+				Routing::GameGuard { protocol } => {
+					TransportProtocol::from(protocol).as_cni_protocol()
+				}
+				Routing::Host { protocol } => TransportProtocol::from(protocol).as_cni_protocol(),
+			};
+
+			Ok(json!({
+				"HostPort": host_port_template,
+				"ContainerPort": container_port_value,
+				"Protocol": protocol,
+			}))
 		})
-		.collect::<Vec<_>>();
+		.collect::<GlobalResult<Vec<_>>>()?;
 
-	// TODO:
-	// let prepared_ports = input.network_ports.iter().map(|(label, port)| {
-	// 	let port_value = match input.network_mode {
-	// 		// CNI will handle mapping the host port to the container port
-	// 		NetworkMode::Bridge => unwrap!(port.internal_port).to_string(),
-	// 		// The container needs to listen on the correct port
-	// 		NetworkMode::Host => template_env_var(&nomad_host_port_env_var(&label)),
-	// 	};
+	let env_ports = input
+		.network_ports
+		.iter()
+		.map(|(port_label, port)| {
+			let nomad_port_label = crate::util::format_port_label(port_label);
 
-	// 	GlobalResult::Ok(Some(String::new()))
-	// 	// TODO
-	// 	// Port with the kebab case port key. Included for backward compatibility & for
-	// 	// less confusion.
-	// 	// Ok((format!("PORT_{}", port.label.replace('-', "_")), port_value))
-	// });
+			let container_port_value = match input.network_mode {
+				NetworkMode::Bridge => unwrap!(port.internal_port).to_string(),
+				_ => template_env_var(&nomad_host_port_env_var(&nomad_port_label)),
+			};
+
+			// Port with the kebab case key. Included for backward compatibility & for less confusion.
+			Ok((
+				format!("PORT_{}", port_label.replace('-', "_")),
+				container_port_value,
+			))
+		})
+		.collect::<GlobalResult<Vec<_>>>()?;
 
 	// Also see util_ds:consts::DEFAULT_ENV_KEYS
 	let mut env = Vec::<(String, String)>::new()
@@ -436,29 +436,34 @@ async fn submit_job(ctx: &ActivityCtx, input: &SubmitJobInput) -> GlobalResult<S
 		.collect::<Vec<String>>();
 	env.sort();
 
-	let services = decoded_ports
+	let services = input
+		.network_ports
 		.iter()
-		.map(|port| {
-			let service_name = format!("${{NOMAD_META_LOBBY_ID}}-{}", port.label);
+		.map(|(port_label, port)| {
+			let service_name = format!("${{NOMAD_META_LOBBY_ID}}-{}", port_label);
+			let nomad_port_label = crate::util::format_port_label(port_label);
+			let transport_protocol = match port.routing {
+				Routing::GameGuard { protocol } => TransportProtocol::from(protocol),
+				Routing::Host { protocol } => TransportProtocol::from(protocol),
+			};
+
 			Ok(Some(Service {
 				provider: Some("nomad".into()),
 				name: Some(service_name),
 				tags: Some(vec!["game".into()]),
-				port_label: Some(port.nomad_port_label.clone()),
-				// checks: if TransportProtocol::from(port.proxy_protocol)
-				// 	== TransportProtocol::Tcp
-				// {
-				// 	Some(vec![ServiceCheck {
-				// 		name: Some(format!("{}-probe", port.label)),
-				// 		port_label: Some(port.nomad_port_label.clone()),
-				// 		_type: Some("tcp".into()),
-				// 		interval: Some(30_000_000_000),
-				// 		timeout: Some(2_000_000_000),
-				// 		..ServiceCheck::new()
-				// 	}])
-				// } else {
-				// 	None
-				// },
+				port_label: Some(nomad_port_label.clone()),
+				checks: if transport_protocol == TransportProtocol::Tcp {
+					Some(vec![ServiceCheck {
+						name: Some(format!("{}-probe", port_label)),
+						port_label: Some(nomad_port_label.clone()),
+						_type: Some("tcp".into()),
+						interval: Some(30_000_000_000),
+						timeout: Some(2_000_000_000),
+						..ServiceCheck::new()
+					}])
+				} else {
+					None
+				},
 				..Service::new()
 			}))
 		})
