@@ -1,10 +1,13 @@
+use serde::{Deserialize, Serialize};
 use std::net::Ipv4Addr;
-
-use chirp_workflow::prelude::*;
 use strum::FromRepr;
+use uuid::Uuid;
+
+#[cfg(feature = "chirp")]
+use chirp_workflow::prelude::*;
 
 // Reexport for ease of use in pegboard manager
-pub use util::serde::{HashableMap, Raw};
+pub use ::util::serde::{HashableMap, Raw};
 
 #[derive(thiserror::Error, Debug)]
 pub enum PegboardProtocolError {
@@ -32,9 +35,10 @@ impl ToClient {
 	}
 }
 
-#[signal("pegboard_forward_to_server")]
-#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "chirp", signal("pegboard_forward_to_server"))]
+#[cfg_attr(not(feature = "chirp"), derive(Serialize, Deserialize))]
 #[derive(Debug)]
+#[serde(rename_all = "snake_case")]
 pub enum ToServer {
 	Init {
 		last_command_idx: i64,
@@ -68,7 +72,8 @@ pub struct CommandWrapper {
 	pub inner: Raw<Command>,
 }
 
-#[signal("pegboard_client_command")]
+#[cfg_attr(feature = "chirp", signal("pegboard_client_command"))]
+#[cfg_attr(not(feature = "chirp"), derive(Serialize, Deserialize))]
 #[derive(Debug, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum Command {
@@ -89,8 +94,8 @@ pub struct ActorConfig {
 	pub image: Image,
 	pub root_user_enabled: bool,
 	pub resources: Resources,
-	pub env: util::serde::HashableMap<String, String>,
-	pub ports: util::serde::HashableMap<String, Port>,
+	pub env: ::util::serde::HashableMap<String, String>,
+	pub ports: ::util::serde::HashableMap<String, Port>,
 	pub network_mode: NetworkMode,
 	pub stakeholder: Stakeholder,
 }
@@ -133,7 +138,9 @@ pub enum PortRouting {
 	Host,
 }
 
-#[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, FromRepr)]
+#[derive(
+	Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, FromRepr,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum TransportProtocol {
 	Tcp = 0,
@@ -210,7 +217,7 @@ pub enum ActorState {
 	/// Sent by pegboard client.
 	Running {
 		pid: usize,
-		ports: util::serde::HashableMap<String, ProxiedPort>,
+		ports: ::util::serde::HashableMap<String, ProxiedPort>,
 	},
 	/// Actor planned to stop.
 	/// Sent by pegboard dc.
