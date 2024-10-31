@@ -83,8 +83,10 @@ pub async fn start_echo_actor(
 				.collect(),
 			ports: [(
 				"main".to_string(),
-				protocol::Port::Host {
+				protocol::Port {
+					target: None,
 					protocol: protocol::TransportProtocol::Tcp,
+					routing: protocol::PortRouting::Host,
 				},
 			)]
 			.into_iter()
@@ -121,8 +123,10 @@ pub async fn start_js_echo_actor(
 			env: Default::default(),
 			ports: [(
 				"main".to_string(),
-				protocol::Port::Host {
+				protocol::Port {
+					target: None,
 					protocol: protocol::TransportProtocol::Tcp,
+					routing: protocol::PortRouting::Host,
 				},
 			)]
 			.into_iter()
@@ -342,7 +346,7 @@ async fn build_runner(gen_path: &Path, variant: &str) {
 		.arg(if variant == "container" {
 			pkg_path.join(format!("{variant}-runner"))
 		} else {
-			pkg_path.join("..").join("..")
+			pkg_path.join("..").join("..").join("..")
 		})
 		.status()
 		.await
