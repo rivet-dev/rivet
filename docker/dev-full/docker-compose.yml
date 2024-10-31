@@ -4,7 +4,7 @@ services:
   rivet:
     build:
       context: ../..
-      dockerfile: docker/dev-full/Dockerfile
+      dockerfile: docker/dev-full/server.Dockerfile
     command: /usr/bin/rivet server
     environment:
       - RUST_BACKTRACE=1
@@ -42,11 +42,19 @@ services:
   shell:
     build:
       context: ../../..
-      dockerfile: docker/dev-full/Dockerfile
+      dockerfile: docker/dev-full/server.Dockerfile
     command: sleep infinity
     stop_grace_period: 0s
     volumes:
       - ./rivet:/etc/rivet:ro
+    networks:
+      - rivet-network
+
+  shell:
+    build:
+      context: ../../..
+      dockerfile: docker/dev-full/client.Dockerfile
+    stop_grace_period: 0s
     networks:
       - rivet-network
 
