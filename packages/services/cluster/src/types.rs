@@ -37,6 +37,14 @@ pub enum Provider {
 	Linode = 0,
 }
 
+impl From<rivet_config::config::rivet::Provider> for Provider {
+	fn from(value: rivet_config::config::rivet::Provider) -> Provider {
+		match value {
+			rivet_config::config::rivet::Provider::Linode => Provider::Linode,
+		}
+	}
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct Pool {
 	pub pool_type: PoolType,
@@ -91,9 +99,29 @@ impl std::fmt::Display for PoolType {
 	}
 }
 
+impl From<rivet_config::config::rivet::PoolType> for PoolType {
+	fn from(value: rivet_config::config::rivet::PoolType) -> PoolType {
+		match value {
+			rivet_config::config::rivet::PoolType::Job => PoolType::Job,
+			rivet_config::config::rivet::PoolType::Gg => PoolType::Gg,
+			rivet_config::config::rivet::PoolType::Ats => PoolType::Ats,
+			rivet_config::config::rivet::PoolType::Pegboard => PoolType::Pegboard,
+			rivet_config::config::rivet::PoolType::PegboardIsolate => PoolType::PegboardIsolate,
+		}
+	}
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct Hardware {
 	pub provider_hardware: String,
+}
+
+impl From<rivet_config::config::rivet::Hardware> for Hardware {
+	fn from(value: rivet_config::config::rivet::Hardware) -> Hardware {
+		Hardware {
+			provider_hardware: value.name,
+		}
+	}
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
@@ -112,6 +140,17 @@ pub struct PoolUpdate {
 pub enum BuildDeliveryMethod {
 	TrafficServer = 0,
 	S3Direct = 1,
+}
+
+impl From<rivet_config::config::rivet::BuildDeliveryMethod> for BuildDeliveryMethod {
+	fn from(value: rivet_config::config::rivet::BuildDeliveryMethod) -> BuildDeliveryMethod {
+		match value {
+			rivet_config::config::rivet::BuildDeliveryMethod::TrafficServer => {
+				BuildDeliveryMethod::TrafficServer
+			}
+			rivet_config::config::rivet::BuildDeliveryMethod::S3Direct => BuildDeliveryMethod::S3Direct,
+		}
+	}
 }
 
 #[derive(Debug)]

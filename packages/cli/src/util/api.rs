@@ -1,8 +1,10 @@
 use anyhow::*;
-use serde_json::json;
+use rivet_api::{
+	apis::{admin_api, configuration::Configuration},
+	models,
+};
 
-/// Creates a login link for the hub.
-pub async fn admin_login_url(config: &rivet_config::Config, username: String) -> Result<String> {
+pub fn private_api_config(config: &rivet_config::Config) -> Result<Configuration> {
 	let server_config = config.server().map_err(|err| anyhow!("{err}"))?;
 	let admin_token =
 		server_config.rivet.token.admin.as_ref().context(
@@ -10,29 +12,19 @@ pub async fn admin_login_url(config: &rivet_config::Config, username: String) ->
 		)?;
 	let api_private_config = &server_config.rivet.api_private;
 
-	let response = reqwest::Client::new()
-		.post(format!(
-			"http://{}:{}/admin/login",
-			api_private_config.host(),
-			api_private_config.port()
-		))
-		.bearer_auth(admin_token.read())
-		.json(&json!({
-			"name": username,
-		}))
-		.send()
-		.await?;
+	Ok(Configuration {
+		base_path: api_private_config.internal_origin().to_string().trim_end_matches("/").to_string(),
+		bearer_access_token: Some(admin_token.read().clone()),
+		..Default::default()
+	})
+}
 
-	if !response.status().is_success() {
-		bail!(
-			"failed to login ({}):\n{:#?}",
-			response.status().as_u16(),
-			response.json::<serde_json::Value>().await?
-		);
-	}
-
-	let body = response.json::<serde_json::Value>().await?;
-	let url = body.get("url").expect("url in login body").to_string();
+/// Creates a login link for the hub.
+pub async fn admin_login_url(config: &rivet_config::Config, username: String) -> Result<String> {
+	let api_config = private_api_config(config)?;
+	let url = admin_api::admin_login(&api_config, models::AdminLoginRequest { name: username })
+		.await?
+		.url;
 
 	Ok(url)
 }

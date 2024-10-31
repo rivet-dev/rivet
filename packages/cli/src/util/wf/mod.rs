@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 
 use anyhow::*;
-use chrono::{Utc, TimeZone};
+use chrono::{TimeZone, Utc};
 use clap::ValueEnum;
 use indoc::indoc;
 use rivet_pools::CrdbPool;

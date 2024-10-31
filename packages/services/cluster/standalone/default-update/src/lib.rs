@@ -1,101 +1,4 @@
-use std::collections::HashMap;
-
 use chirp_workflow::prelude::*;
-use serde::Deserialize;
-
-#[derive(Deserialize)]
-struct Cluster {
-	name_id: String,
-	datacenters: HashMap<String, Datacenter>,
-}
-
-#[derive(Deserialize)]
-struct Datacenter {
-	datacenter_id: Uuid,
-	display_name: String,
-	provider: Provider,
-	provider_datacenter_name: String,
-	pools: HashMap<PoolType, Pool>,
-	build_delivery_method: BuildDeliveryMethod,
-	prebakes_enabled: bool,
-}
-
-#[derive(Deserialize)]
-enum Provider {
-	#[serde(rename = "linode")]
-	Linode,
-}
-
-impl From<Provider> for cluster::types::Provider {
-	fn from(value: Provider) -> cluster::types::Provider {
-		match value {
-			Provider::Linode => cluster::types::Provider::Linode,
-		}
-	}
-}
-
-#[derive(Deserialize)]
-struct Pool {
-	hardware: Vec<Hardware>,
-	desired_count: u32,
-	min_count: u32,
-	max_count: u32,
-	drain_timeout: u64,
-}
-
-#[derive(Deserialize, PartialEq, Eq, Hash)]
-#[serde(rename_all = "snake_case")]
-enum PoolType {
-	Job,
-	Gg,
-	Ats,
-	Pegboard,
-	PegboardIsolate,
-}
-
-impl From<PoolType> for cluster::types::PoolType {
-	fn from(value: PoolType) -> cluster::types::PoolType {
-		match value {
-			PoolType::Job => cluster::types::PoolType::Job,
-			PoolType::Gg => cluster::types::PoolType::Gg,
-			PoolType::Ats => cluster::types::PoolType::Ats,
-			PoolType::Pegboard => cluster::types::PoolType::Pegboard,
-			PoolType::PegboardIsolate => cluster::types::PoolType::PegboardIsolate,
-		}
-	}
-}
-
-#[derive(Deserialize)]
-struct Hardware {
-	name: String,
-}
-
-impl From<Hardware> for cluster::types::Hardware {
-	fn from(value: Hardware) -> cluster::types::Hardware {
-		cluster::types::Hardware {
-			provider_hardware: value.name,
-		}
-	}
-}
-
-#[derive(Deserialize)]
-enum BuildDeliveryMethod {
-	#[serde(rename = "traffic_server")]
-	TrafficServer,
-	#[serde(rename = "s3_direct")]
-	S3Direct,
-}
-
-impl From<BuildDeliveryMethod> for cluster::types::BuildDeliveryMethod {
-	fn from(value: BuildDeliveryMethod) -> cluster::types::BuildDeliveryMethod {
-		match value {
-			BuildDeliveryMethod::TrafficServer => {
-				cluster::types::BuildDeliveryMethod::TrafficServer
-			}
-			BuildDeliveryMethod::S3Direct => cluster::types::BuildDeliveryMethod::S3Direct,
-		}
-	}
-}
 
 pub async fn start(
 	config: rivet_config::Config,
@@ -128,17 +31,15 @@ pub async fn start_inner(
 	.await?;
 
 	// Read config from env
-	let Some(config_json) = &ctx
+	let Ok(config) = &ctx
 		.config()
 		.server()?
 		.rivet
-		.cluster()?
-		.default_cluster_config
+		.cluster()
 	else {
 		tracing::warn!("no cluster config set in namespace config");
 		return Ok(());
 	};
-	let config = serde_json::from_value::<Cluster>(config_json.clone())?;
 
 	// HACK: When deploying both monolith worker and this service for the first time, there is a race
 	// condition which might result in the message being published from here but not caught by
@@ -188,7 +89,7 @@ pub async fn start_inner(
 		}
 	}
 
-	for (name_id, datacenter) in config.datacenters {
+	for (name_id, datacenter) in &config.datacenters {
 		let existing_datacenter = datacenters_res
 			.datacenters
 			.iter()
@@ -198,7 +99,7 @@ pub async fn start_inner(
 		if existing_datacenter {
 			let new_pools = datacenter
 				.pools
-				.into_iter()
+				.iter()
 				.map(|(pool_type, pool)| {
 					let desired_count = if use_autoscaler {
 						None
@@ -207,10 +108,11 @@ pub async fn start_inner(
 					};
 
 					cluster::types::PoolUpdate {
-						pool_type: pool_type.into(),
+						pool_type: (*pool_type).into(),
 						hardware: pool
 							.hardware
-							.into_iter()
+							.iter()
+							.cloned()
 							.map(Into::into)
 							.collect::<Vec<_>>(),
 						desired_count,
@@ -233,21 +135,22 @@ pub async fn start_inner(
 		else {
 			ctx.signal(cluster::workflows::cluster::DatacenterCreate {
 				datacenter_id: datacenter.datacenter_id,
-				name_id,
-				display_name: datacenter.display_name,
+				name_id: name_id.clone(),
+				display_name: datacenter.display_name.clone(),
 
 				provider: datacenter.provider.into(),
-				provider_datacenter_id: datacenter.provider_datacenter_name,
+				provider_datacenter_id: datacenter.provider_datacenter_name.clone(),
 				provider_api_token: None,
 
 				pools: datacenter
 					.pools
-					.into_iter()
+					.iter()
 					.map(|(pool_type, pool)| cluster::types::Pool {
-						pool_type: pool_type.into(),
+						pool_type: (*pool_type).into(),
 						hardware: pool
 							.hardware
-							.into_iter()
+							.iter()
+							.cloned()
 							.map(Into::into)
 							.collect::<Vec<_>>(),
 						desired_count: pool.desired_count,

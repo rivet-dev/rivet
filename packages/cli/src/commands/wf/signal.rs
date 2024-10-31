@@ -10,9 +10,7 @@ use crate::util::{
 #[derive(Parser)]
 pub enum SubCommand {
 	/// Prints the given signal(s).
-	Get {
-		signal_ids: Vec<Uuid>,
-	},
+	Get { signal_ids: Vec<Uuid> },
 	/// Finds signals that match the given tags.
 	List {
 		tags: Vec<KvPair>,
@@ -28,9 +26,7 @@ pub enum SubCommand {
 		pretty: bool,
 	},
 	/// Silences a signal from showing up as dead or running again.
-	Ack {
-		signal_ids: Vec<Uuid>,
-	},
+	Ack { signal_ids: Vec<Uuid> },
 }
 
 impl SubCommand {

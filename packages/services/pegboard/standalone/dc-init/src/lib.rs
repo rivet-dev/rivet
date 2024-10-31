@@ -1,27 +1,5 @@
-use std::collections::HashMap;
-
 use chirp_workflow::prelude::*;
-use serde::Deserialize;
-
-#[derive(Deserialize)]
-struct Cluster {
-	datacenters: HashMap<String, Datacenter>,
-}
-
-#[derive(Deserialize)]
-struct Datacenter {
-	datacenter_id: Uuid,
-	pools: HashMap<PoolType, serde_json::Value>,
-}
-
-#[derive(Deserialize, PartialEq, Eq, Hash)]
-#[serde(rename_all = "snake_case")]
-enum PoolType {
-	Job,
-	Gg,
-	Ats,
-	Pegboard,
-}
+use cluster::types::PoolType;
 
 // TODO: This is not idempotent.
 #[tracing::instrument(skip_all)]
@@ -37,17 +15,15 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> G
 	.await?;
 
 	// Read config from env
-	let Some(cluster_config_json) = &ctx
+	let Ok(cluster_config) = &ctx
 		.config()
 		.server()?
 		.rivet
-		.cluster()?
-		.default_cluster_config
+		.cluster()
 	else {
 		tracing::warn!("no cluster config set in namespace config");
 		return Ok(());
 	};
-	let cluster_config = serde_json::from_value::<Cluster>(cluster_config_json.clone())?;
 
 	// Find datacenter ids with pegboard pools
 	let datacenter_ids = cluster_config
@@ -56,7 +32,7 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> G
 		.flat_map(|(_, dc)| {
 			dc.pools
 				.iter()
-				.any(|(pool_type, _)| matches!(pool_type, PoolType::Pegboard))
+				.any(|(pool_type, _)| matches!((*pool_type).into(), PoolType::Pegboard))
 				.then_some(dc.datacenter_id)
 		})
 		.collect::<Vec<_>>();

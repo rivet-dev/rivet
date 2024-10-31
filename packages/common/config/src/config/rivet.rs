@@ -46,63 +46,48 @@ pub struct Rivet {
 	#[serde(default)]
 	pub default_cluster_id: Option<Uuid>,
 
-	/// Manages the automatic provisioning of servers that Rivet runs on.
 	#[serde(default)]
 	pub cluster: Option<Cluster>,
 
-	/// The service that manages Rivet Actors.
 	#[serde(default, rename = "orchestrator")]
 	pub pegboard: Pegboard,
 
-	/// Configuration for authentication and access control.
 	#[serde(default)]
 	pub auth: Auth,
 
-	/// Configuration for various tokens used in the system.
 	#[serde(default)]
 	pub token: Tokens,
 
-	/// Configuration for the public API service.
 	#[serde(default)]
 	pub api_public: ApiPublic,
 
-	/// Configuration for the edge API service.
 	#[serde(default)]
 	pub api_edge: ApiEdge,
 
-	/// Configuration for the private API service.
 	#[serde(default)]
 	pub api_private: ApiPrivate,
 
-	/// Configuration for the metrics service.
 	#[serde(default)]
 	pub metrics: Metrics,
 
-	/// Configuration for the health check service.
 	#[serde(default)]
 	pub health: Health,
 
-	/// Configuration for the tunnel service.
 	#[serde(default)]
 	pub tunnel: Tunnel,
 
-	/// Configuration for the UI service.
 	#[serde(default)]
 	pub ui: Ui,
 
-	/// Configuration for DNS management.
 	#[serde(default)]
 	pub dns: Option<Dns>,
 
-	/// Configuration for telemetry collection.
 	#[serde(default)]
 	pub telemetry: Telemetry,
 
-	/// Configuration for billing features (Enterprise Edition).
 	#[serde(default)]
 	pub billing: Option<Billing>,
 
-	/// Configuration for backend features (Enterprise Edition).
 	#[serde(default)]
 	pub backend: Option<Backend>,
 
@@ -110,11 +95,9 @@ pub struct Rivet {
 	#[serde(default)]
 	pub test_builds: HashMap<String, TestBuild>,
 
-	/// Deprecated: Configuration for job running.
 	#[serde(default)]
 	pub job_run: Option<JobRun>,
 
-	/// Deprecated: Configuration for CDN.
 	#[serde(default)]
 	pub cdn: Option<Cdn>,
 }
@@ -183,6 +166,7 @@ pub enum RivetAccessKind {
 	Private,
 }
 
+/// Configuration for billing features (Enterprise Edition).
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Billing {
@@ -192,6 +176,7 @@ pub struct Billing {
 	pub studio_price_id: String,
 }
 
+/// Configuration for backend features (Enterprise Edition).
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Backend {
@@ -199,6 +184,7 @@ pub struct Backend {
 	pub base_domain: String,
 }
 
+/// Configuration for a default test build.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct TestBuild {
@@ -208,6 +194,7 @@ pub struct TestBuild {
 	pub key: PathBuf,
 }
 
+/// Configuration for the public API service.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ApiPublic {
@@ -229,7 +216,7 @@ pub struct ApiPublic {
 impl ApiPublic {
 	pub fn public_origin(&self) -> Url {
 		self.public_origin.clone().unwrap_or_else(|| {
-			url::Url::parse(&format!("http://127.0.0.1:{}", default_ports::API_PUBLIC)).unwrap()
+			url::Url::parse(&format!("http://127.0.0.1:{}", self.port())).unwrap()
 		})
 	}
 
@@ -250,6 +237,7 @@ impl ApiPublic {
 	}
 }
 
+/// Configuration for the edge API service.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ApiEdge {
@@ -267,14 +255,23 @@ impl ApiEdge {
 	}
 }
 
+/// Configuration for the private API service.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ApiPrivate {
+	/// The internal origin URL for the API.
+	pub internal_origin: Option<Url>,
 	pub host: Option<IpAddr>,
 	pub port: Option<u16>,
 }
 
 impl ApiPrivate {
+	pub fn internal_origin(&self) -> Url {
+		self.internal_origin.clone().unwrap_or_else(|| {
+			url::Url::parse(&format!("http://{}:{}", self.host(), self.port())).unwrap()
+		})
+	}
+
 	pub fn host(&self) -> IpAddr {
 		self.host.unwrap_or(default_hosts::API_PRIVATE)
 	}
@@ -284,6 +281,7 @@ impl ApiPrivate {
 	}
 }
 
+/// Deprecated: Configuration for CDN.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Cdn {}
@@ -294,6 +292,7 @@ impl Default for Cdn {
 	}
 }
 
+/// Configuration for DNS management.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Dns {
@@ -313,13 +312,66 @@ pub enum DnsProvider {
 	Cloudflare,
 }
 
+/// Manages the automatic provisioning of servers that Rivet runs on.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Cluster {
-	/// Configuration for different server pools.
+	pub name_id: String,
+	pub datacenters: HashMap<String, Datacenter>,
+
+	/// Configuration for server pools that use a margin for scaling.
 	pub pools: ClusterPools,
-	/// Default configuration for new clusters.
-	pub default_cluster_config: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct Datacenter {
+	pub datacenter_id: Uuid,
+	pub display_name: String,
+	pub provider: Provider,
+	pub provider_datacenter_name: String,
+	pub pools: HashMap<PoolType, Pool>,
+	pub build_delivery_method: BuildDeliveryMethod,
+	pub prebakes_enabled: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum Provider {
+	Linode,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct Pool {
+	pub hardware: Vec<Hardware>,
+	pub desired_count: u32,
+	pub min_count: u32,
+	pub max_count: u32,
+	pub drain_timeout: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum PoolType {
+	Job,
+	Gg,
+	Ats,
+	Pegboard,
+	PegboardIsolate,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct Hardware {
+	pub name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum BuildDeliveryMethod {
+	TrafficServer,
+	S3Direct,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -335,6 +387,7 @@ pub struct ClusterPool {
 	pub provision_margin: u32,
 }
 
+/// The service that manages Rivet Actors.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Pegboard {
@@ -375,12 +428,14 @@ impl Pegboard {
 	}
 }
 
+/// Deprecated: Configuration for job running.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct JobRun {
 	pub job_runner_binary_url: Url,
 }
 
+/// Configuration for authentication and access control.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Auth {
@@ -402,6 +457,7 @@ impl Default for Auth {
 	}
 }
 
+/// Configuration for the tunnel service.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Tunnel {
@@ -416,6 +472,7 @@ impl Default for Tunnel {
 	}
 }
 
+/// Configuration for the UI service.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Ui {
@@ -450,6 +507,7 @@ impl Ui {
 	}
 }
 
+/// Configuration for various tokens used in the system.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Tokens {
@@ -471,6 +529,7 @@ impl Default for Tokens {
 	}
 }
 
+/// Configuration for the health check service.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Health {
@@ -488,6 +547,7 @@ impl Health {
 	}
 }
 
+/// Configuration for the metrics service.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Metrics {
@@ -505,6 +565,7 @@ impl Metrics {
 	}
 }
 
+/// Configuration for telemetry collection.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Telemetry {

@@ -1,6 +1,5 @@
 use anyhow::*;
 use clap::{Parser, ValueEnum};
-use std::path::PathBuf;
 
 use crate::run_config::RunConfig;
 

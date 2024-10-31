@@ -12,9 +12,7 @@ mod signal;
 #[derive(Parser)]
 pub enum SubCommand {
 	/// Prints the given workflow(s).
-	Get {
-		workflow_ids: Vec<Uuid>,
-	},
+	Get { workflow_ids: Vec<Uuid> },
 	/// Finds workflows with the given tags, name and state.
 	List {
 		tags: Vec<KvPair>,
@@ -28,13 +26,9 @@ pub enum SubCommand {
 		pretty: bool,
 	},
 	/// Silences a workflow from showing up as dead or running again.
-	Ack {
-		workflow_ids: Vec<Uuid>,
-	},
+	Ack { workflow_ids: Vec<Uuid> },
 	/// Sets the wake immediate property of a workflow to true.
-	Wake {
-		workflow_ids: Vec<Uuid>,
-	},
+	Wake { workflow_ids: Vec<Uuid> },
 	/// Lists the entire event history of a workflow.
 	History {
 		#[clap(index = 1)]
