@@ -246,7 +246,7 @@ async fn setup(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<Uuid> {
 				.network_ports
 				.iter()
 				.map(|(port_label, port)| match port.routing {
-					Routing::GameGuard { protocol } => Ok((
+					Routing::GameGuard { protocol, .. } => Ok((
 						crate::util::format_port_label(port_label),
 						pp::Port {
 							target: port.internal_port,
@@ -418,7 +418,7 @@ async fn update_ports(ctx: &ActivityCtx, input: &UpdatePortsInput) -> GlobalResu
 	// Invalidate cache when ports are updated
 	if !input.ports.is_empty() {
 		ctx.cache()
-			.purge("servers_ports", [input.datacenter_id])
+			.purge("ds_proxied_ports", [input.datacenter_id])
 			.await?;
 	}
 

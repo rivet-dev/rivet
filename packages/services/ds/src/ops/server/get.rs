@@ -3,7 +3,8 @@ use std::{collections::HashMap, convert::TryInto, net::IpAddr};
 use chirp_workflow::prelude::*;
 
 use crate::types::{
-	GameGuardProtocol, HostProtocol, NetworkMode, Port, Routing, Server, ServerResources,
+	GameGuardProtocol, HostProtocol, NetworkMode, Port, PortAuthorization, PortAuthorizationType,
+	Routing, Server, ServerResources,
 };
 
 #[derive(sqlx::FromRow)]
@@ -33,6 +34,10 @@ struct ServerPortGg {
 	port_number: Option<i64>,
 	gg_port: i64,
 	protocol: i64,
+
+	auth_type: Option<i64>,
+	auth_key: Option<String>,
+	auth_value: Option<String>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -112,13 +117,20 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 			[ctx, ServerPortGg]
 			"
 			SELECT
-				server_id,
-				port_name,
-				port_number,
-				gg_port,
-				protocol
-			FROM db_ds.server_ports_gg
-			WHERE server_id = ANY($1)
+				p.server_id,
+				p.port_name,
+				p.port_number,
+				p.gg_port,
+				p.protocol,
+				a.auth_type,
+				a.auth_key,
+				a.auth_value
+			FROM db_ds.server_ports_gg AS p
+			LEFT JOIN db_ds.server_ports_gg_auth AS a
+			ON
+				p.server_id = a.server_id AND
+				p.port_name = a.port_name
+			WHERE p.server_id = ANY($1)
 			",
 			&input.server_ids,
 		),
@@ -290,6 +302,24 @@ fn create_port_gg(
 		},
 		routing: Routing::GameGuard {
 			protocol: unwrap!(GameGuardProtocol::from_repr(gg_port.protocol.try_into()?)),
+			authorization: {
+				let authorization_type = if let Some(auth_type) = gg_port.auth_type {
+					unwrap!(PortAuthorizationType::from_repr(auth_type.try_into()?))
+				} else {
+					PortAuthorizationType::None
+				};
+
+				match authorization_type {
+					PortAuthorizationType::None => PortAuthorization::None,
+					PortAuthorizationType::Bearer => {
+						PortAuthorization::Bearer(unwrap!(gg_port.auth_value.clone()))
+					}
+					PortAuthorizationType::Query => PortAuthorization::Query(
+						unwrap!(gg_port.auth_key.clone()),
+						unwrap!(gg_port.auth_value.clone()),
+					),
+				}
+			},
 		},
 	})
 }

@@ -28,19 +28,6 @@ pub enum IdentityCompleteAvatarUploadError {
     UnknownValue(serde_json::Value),
 }
 
-/// struct for typed errors of method [`identity_follow`]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum IdentityFollowError {
-    Status400(crate::models::ErrorBody),
-    Status403(crate::models::ErrorBody),
-    Status404(crate::models::ErrorBody),
-    Status408(crate::models::ErrorBody),
-    Status429(crate::models::ErrorBody),
-    Status500(crate::models::ErrorBody),
-    UnknownValue(serde_json::Value),
-}
-
 /// struct for typed errors of method [`identity_get_handles`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -93,84 +80,6 @@ pub enum IdentityGetSummariesError {
     UnknownValue(serde_json::Value),
 }
 
-/// struct for typed errors of method [`identity_ignore_recent_follower`]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum IdentityIgnoreRecentFollowerError {
-    Status400(crate::models::ErrorBody),
-    Status403(crate::models::ErrorBody),
-    Status404(crate::models::ErrorBody),
-    Status408(crate::models::ErrorBody),
-    Status429(crate::models::ErrorBody),
-    Status500(crate::models::ErrorBody),
-    UnknownValue(serde_json::Value),
-}
-
-/// struct for typed errors of method [`identity_list_followers`]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum IdentityListFollowersError {
-    Status400(crate::models::ErrorBody),
-    Status403(crate::models::ErrorBody),
-    Status404(crate::models::ErrorBody),
-    Status408(crate::models::ErrorBody),
-    Status429(crate::models::ErrorBody),
-    Status500(crate::models::ErrorBody),
-    UnknownValue(serde_json::Value),
-}
-
-/// struct for typed errors of method [`identity_list_following`]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum IdentityListFollowingError {
-    Status400(crate::models::ErrorBody),
-    Status403(crate::models::ErrorBody),
-    Status404(crate::models::ErrorBody),
-    Status408(crate::models::ErrorBody),
-    Status429(crate::models::ErrorBody),
-    Status500(crate::models::ErrorBody),
-    UnknownValue(serde_json::Value),
-}
-
-/// struct for typed errors of method [`identity_list_friends`]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum IdentityListFriendsError {
-    Status400(crate::models::ErrorBody),
-    Status403(crate::models::ErrorBody),
-    Status404(crate::models::ErrorBody),
-    Status408(crate::models::ErrorBody),
-    Status429(crate::models::ErrorBody),
-    Status500(crate::models::ErrorBody),
-    UnknownValue(serde_json::Value),
-}
-
-/// struct for typed errors of method [`identity_list_mutual_friends`]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum IdentityListMutualFriendsError {
-    Status400(crate::models::ErrorBody),
-    Status403(crate::models::ErrorBody),
-    Status404(crate::models::ErrorBody),
-    Status408(crate::models::ErrorBody),
-    Status429(crate::models::ErrorBody),
-    Status500(crate::models::ErrorBody),
-    UnknownValue(serde_json::Value),
-}
-
-/// struct for typed errors of method [`identity_list_recent_followers`]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum IdentityListRecentFollowersError {
-    Status400(crate::models::ErrorBody),
-    Status403(crate::models::ErrorBody),
-    Status404(crate::models::ErrorBody),
-    Status408(crate::models::ErrorBody),
-    Status429(crate::models::ErrorBody),
-    Status500(crate::models::ErrorBody),
-    UnknownValue(serde_json::Value),
-}
-
 /// struct for typed errors of method [`identity_mark_deletion`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -210,32 +119,6 @@ pub enum IdentityRemoveGameActivityError {
     UnknownValue(serde_json::Value),
 }
 
-/// struct for typed errors of method [`identity_report`]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum IdentityReportError {
-    Status400(crate::models::ErrorBody),
-    Status403(crate::models::ErrorBody),
-    Status404(crate::models::ErrorBody),
-    Status408(crate::models::ErrorBody),
-    Status429(crate::models::ErrorBody),
-    Status500(crate::models::ErrorBody),
-    UnknownValue(serde_json::Value),
-}
-
-/// struct for typed errors of method [`identity_search`]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum IdentitySearchError {
-    Status400(crate::models::ErrorBody),
-    Status403(crate::models::ErrorBody),
-    Status404(crate::models::ErrorBody),
-    Status408(crate::models::ErrorBody),
-    Status429(crate::models::ErrorBody),
-    Status500(crate::models::ErrorBody),
-    UnknownValue(serde_json::Value),
-}
-
 /// struct for typed errors of method [`identity_set_game_activity`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -266,19 +149,6 @@ pub enum IdentitySetupError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum IdentitySignupForBetaError {
-    Status400(crate::models::ErrorBody),
-    Status403(crate::models::ErrorBody),
-    Status404(crate::models::ErrorBody),
-    Status408(crate::models::ErrorBody),
-    Status429(crate::models::ErrorBody),
-    Status500(crate::models::ErrorBody),
-    UnknownValue(serde_json::Value),
-}
-
-/// struct for typed errors of method [`identity_unfollow`]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum IdentityUnfollowError {
     Status400(crate::models::ErrorBody),
     Status403(crate::models::ErrorBody),
     Status404(crate::models::ErrorBody),
@@ -367,37 +237,6 @@ pub async fn identity_complete_avatar_upload(configuration: &configuration::Conf
         Ok(())
     } else {
         let local_var_entity: Option<IdentityCompleteAvatarUploadError> = serde_json::from_str(&local_var_content).ok();
-        let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
-        Err(Error::ResponseError(local_var_error))
-    }
-}
-
-/// Follows the given identity. In order for identities to be \"friends\", the other identity has to also follow this identity.
-pub async fn identity_follow(configuration: &configuration::Configuration, identity_id: &str) -> Result<(), Error<IdentityFollowError>> {
-    let local_var_configuration = configuration;
-
-    let local_var_client = &local_var_configuration.client;
-
-    let local_var_uri_str = format!("{}/identity/identities/{identity_id}/follow", local_var_configuration.base_path, identity_id=crate::apis::urlencode(identity_id));
-    let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
-
-    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
-        local_var_req_builder = local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
-    }
-    if let Some(ref local_var_token) = local_var_configuration.bearer_access_token {
-        local_var_req_builder = local_var_req_builder.bearer_auth(local_var_token.to_owned());
-    };
-
-    let local_var_req = local_var_req_builder.build()?;
-    let local_var_resp = local_var_client.execute(local_var_req).await?;
-
-    let local_var_status = local_var_resp.status();
-    let local_var_content = local_var_resp.text().await?;
-
-    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
-        Ok(())
-    } else {
-        let local_var_entity: Option<IdentityFollowError> = serde_json::from_str(&local_var_content).ok();
         let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
         Err(Error::ResponseError(local_var_error))
     }
@@ -535,216 +374,6 @@ pub async fn identity_get_summaries(configuration: &configuration::Configuration
     }
 }
 
-pub async fn identity_ignore_recent_follower(configuration: &configuration::Configuration, identity_id: &str) -> Result<(), Error<IdentityIgnoreRecentFollowerError>> {
-    let local_var_configuration = configuration;
-
-    let local_var_client = &local_var_configuration.client;
-
-    let local_var_uri_str = format!("{}/identity/identities/self/recent-followers/{identity_id}/ignore", local_var_configuration.base_path, identity_id=crate::apis::urlencode(identity_id));
-    let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
-
-    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
-        local_var_req_builder = local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
-    }
-    if let Some(ref local_var_token) = local_var_configuration.bearer_access_token {
-        local_var_req_builder = local_var_req_builder.bearer_auth(local_var_token.to_owned());
-    };
-
-    let local_var_req = local_var_req_builder.build()?;
-    let local_var_resp = local_var_client.execute(local_var_req).await?;
-
-    let local_var_status = local_var_resp.status();
-    let local_var_content = local_var_resp.text().await?;
-
-    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
-        Ok(())
-    } else {
-        let local_var_entity: Option<IdentityIgnoreRecentFollowerError> = serde_json::from_str(&local_var_content).ok();
-        let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
-        Err(Error::ResponseError(local_var_error))
-    }
-}
-
-pub async fn identity_list_followers(configuration: &configuration::Configuration, identity_id: &str, anchor: Option<&str>, limit: Option<&str>) -> Result<crate::models::IdentityListFollowersResponse, Error<IdentityListFollowersError>> {
-    let local_var_configuration = configuration;
-
-    let local_var_client = &local_var_configuration.client;
-
-    let local_var_uri_str = format!("{}/identity/identities/{identity_id}/followers", local_var_configuration.base_path, identity_id=crate::apis::urlencode(identity_id));
-    let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
-
-    if let Some(ref local_var_str) = anchor {
-        local_var_req_builder = local_var_req_builder.query(&[("anchor", &local_var_str.to_string())]);
-    }
-    if let Some(ref local_var_str) = limit {
-        local_var_req_builder = local_var_req_builder.query(&[("limit", &local_var_str.to_string())]);
-    }
-    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
-        local_var_req_builder = local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
-    }
-    if let Some(ref local_var_token) = local_var_configuration.bearer_access_token {
-        local_var_req_builder = local_var_req_builder.bearer_auth(local_var_token.to_owned());
-    };
-
-    let local_var_req = local_var_req_builder.build()?;
-    let local_var_resp = local_var_client.execute(local_var_req).await?;
-
-    let local_var_status = local_var_resp.status();
-    let local_var_content = local_var_resp.text().await?;
-
-    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
-        serde_json::from_str(&local_var_content).map_err(Error::from)
-    } else {
-        let local_var_entity: Option<IdentityListFollowersError> = serde_json::from_str(&local_var_content).ok();
-        let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
-        Err(Error::ResponseError(local_var_error))
-    }
-}
-
-pub async fn identity_list_following(configuration: &configuration::Configuration, identity_id: &str, anchor: Option<&str>, limit: Option<&str>) -> Result<crate::models::IdentityListFollowingResponse, Error<IdentityListFollowingError>> {
-    let local_var_configuration = configuration;
-
-    let local_var_client = &local_var_configuration.client;
-
-    let local_var_uri_str = format!("{}/identity/identities/{identity_id}/following", local_var_configuration.base_path, identity_id=crate::apis::urlencode(identity_id));
-    let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
-
-    if let Some(ref local_var_str) = anchor {
-        local_var_req_builder = local_var_req_builder.query(&[("anchor", &local_var_str.to_string())]);
-    }
-    if let Some(ref local_var_str) = limit {
-        local_var_req_builder = local_var_req_builder.query(&[("limit", &local_var_str.to_string())]);
-    }
-    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
-        local_var_req_builder = local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
-    }
-    if let Some(ref local_var_token) = local_var_configuration.bearer_access_token {
-        local_var_req_builder = local_var_req_builder.bearer_auth(local_var_token.to_owned());
-    };
-
-    let local_var_req = local_var_req_builder.build()?;
-    let local_var_resp = local_var_client.execute(local_var_req).await?;
-
-    let local_var_status = local_var_resp.status();
-    let local_var_content = local_var_resp.text().await?;
-
-    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
-        serde_json::from_str(&local_var_content).map_err(Error::from)
-    } else {
-        let local_var_entity: Option<IdentityListFollowingError> = serde_json::from_str(&local_var_content).ok();
-        let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
-        Err(Error::ResponseError(local_var_error))
-    }
-}
-
-pub async fn identity_list_friends(configuration: &configuration::Configuration, anchor: Option<&str>, limit: Option<&str>) -> Result<crate::models::IdentityListFriendsResponse, Error<IdentityListFriendsError>> {
-    let local_var_configuration = configuration;
-
-    let local_var_client = &local_var_configuration.client;
-
-    let local_var_uri_str = format!("{}/identity/identities/self/friends", local_var_configuration.base_path);
-    let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
-
-    if let Some(ref local_var_str) = anchor {
-        local_var_req_builder = local_var_req_builder.query(&[("anchor", &local_var_str.to_string())]);
-    }
-    if let Some(ref local_var_str) = limit {
-        local_var_req_builder = local_var_req_builder.query(&[("limit", &local_var_str.to_string())]);
-    }
-    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
-        local_var_req_builder = local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
-    }
-    if let Some(ref local_var_token) = local_var_configuration.bearer_access_token {
-        local_var_req_builder = local_var_req_builder.bearer_auth(local_var_token.to_owned());
-    };
-
-    let local_var_req = local_var_req_builder.build()?;
-    let local_var_resp = local_var_client.execute(local_var_req).await?;
-
-    let local_var_status = local_var_resp.status();
-    let local_var_content = local_var_resp.text().await?;
-
-    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
-        serde_json::from_str(&local_var_content).map_err(Error::from)
-    } else {
-        let local_var_entity: Option<IdentityListFriendsError> = serde_json::from_str(&local_var_content).ok();
-        let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
-        Err(Error::ResponseError(local_var_error))
-    }
-}
-
-pub async fn identity_list_mutual_friends(configuration: &configuration::Configuration, identity_id: &str, anchor: Option<&str>, limit: Option<&str>) -> Result<crate::models::IdentityListMutualFriendsResponse, Error<IdentityListMutualFriendsError>> {
-    let local_var_configuration = configuration;
-
-    let local_var_client = &local_var_configuration.client;
-
-    let local_var_uri_str = format!("{}/identity/identities/{identity_id}/mutual-friends", local_var_configuration.base_path, identity_id=crate::apis::urlencode(identity_id));
-    let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
-
-    if let Some(ref local_var_str) = anchor {
-        local_var_req_builder = local_var_req_builder.query(&[("anchor", &local_var_str.to_string())]);
-    }
-    if let Some(ref local_var_str) = limit {
-        local_var_req_builder = local_var_req_builder.query(&[("limit", &local_var_str.to_string())]);
-    }
-    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
-        local_var_req_builder = local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
-    }
-    if let Some(ref local_var_token) = local_var_configuration.bearer_access_token {
-        local_var_req_builder = local_var_req_builder.bearer_auth(local_var_token.to_owned());
-    };
-
-    let local_var_req = local_var_req_builder.build()?;
-    let local_var_resp = local_var_client.execute(local_var_req).await?;
-
-    let local_var_status = local_var_resp.status();
-    let local_var_content = local_var_resp.text().await?;
-
-    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
-        serde_json::from_str(&local_var_content).map_err(Error::from)
-    } else {
-        let local_var_entity: Option<IdentityListMutualFriendsError> = serde_json::from_str(&local_var_content).ok();
-        let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
-        Err(Error::ResponseError(local_var_error))
-    }
-}
-
-pub async fn identity_list_recent_followers(configuration: &configuration::Configuration, count: Option<i32>, watch_index: Option<&str>) -> Result<crate::models::IdentityListRecentFollowersResponse, Error<IdentityListRecentFollowersError>> {
-    let local_var_configuration = configuration;
-
-    let local_var_client = &local_var_configuration.client;
-
-    let local_var_uri_str = format!("{}/identity/identities/self/recent-followers", local_var_configuration.base_path);
-    let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
-
-    if let Some(ref local_var_str) = count {
-        local_var_req_builder = local_var_req_builder.query(&[("count", &local_var_str.to_string())]);
-    }
-    if let Some(ref local_var_str) = watch_index {
-        local_var_req_builder = local_var_req_builder.query(&[("watch_index", &local_var_str.to_string())]);
-    }
-    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
-        local_var_req_builder = local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
-    }
-    if let Some(ref local_var_token) = local_var_configuration.bearer_access_token {
-        local_var_req_builder = local_var_req_builder.bearer_auth(local_var_token.to_owned());
-    };
-
-    let local_var_req = local_var_req_builder.build()?;
-    let local_var_resp = local_var_client.execute(local_var_req).await?;
-
-    let local_var_status = local_var_resp.status();
-    let local_var_content = local_var_resp.text().await?;
-
-    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
-        serde_json::from_str(&local_var_content).map_err(Error::from)
-    } else {
-        let local_var_entity: Option<IdentityListRecentFollowersError> = serde_json::from_str(&local_var_content).ok();
-        let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
-        Err(Error::ResponseError(local_var_error))
-    }
-}
-
 pub async fn identity_mark_deletion(configuration: &configuration::Configuration, ) -> Result<(), Error<IdentityMarkDeletionError>> {
     let local_var_configuration = configuration;
 
@@ -833,76 +462,6 @@ pub async fn identity_remove_game_activity(configuration: &configuration::Config
         Ok(())
     } else {
         let local_var_entity: Option<IdentityRemoveGameActivityError> = serde_json::from_str(&local_var_content).ok();
-        let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
-        Err(Error::ResponseError(local_var_error))
-    }
-}
-
-/// Creates an abuse report for an identity.
-pub async fn identity_report(configuration: &configuration::Configuration, identity_id: &str, identity_report_request: crate::models::IdentityReportRequest) -> Result<(), Error<IdentityReportError>> {
-    let local_var_configuration = configuration;
-
-    let local_var_client = &local_var_configuration.client;
-
-    let local_var_uri_str = format!("{}/identity/identities/{identity_id}/report", local_var_configuration.base_path, identity_id=crate::apis::urlencode(identity_id));
-    let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
-
-    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
-        local_var_req_builder = local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
-    }
-    if let Some(ref local_var_token) = local_var_configuration.bearer_access_token {
-        local_var_req_builder = local_var_req_builder.bearer_auth(local_var_token.to_owned());
-    };
-    local_var_req_builder = local_var_req_builder.json(&identity_report_request);
-
-    let local_var_req = local_var_req_builder.build()?;
-    let local_var_resp = local_var_client.execute(local_var_req).await?;
-
-    let local_var_status = local_var_resp.status();
-    let local_var_content = local_var_resp.text().await?;
-
-    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
-        Ok(())
-    } else {
-        let local_var_entity: Option<IdentityReportError> = serde_json::from_str(&local_var_content).ok();
-        let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
-        Err(Error::ResponseError(local_var_error))
-    }
-}
-
-/// Fuzzy search for identities.
-pub async fn identity_search(configuration: &configuration::Configuration, query: &str, anchor: Option<&str>, limit: Option<i32>) -> Result<crate::models::IdentitySearchResponse, Error<IdentitySearchError>> {
-    let local_var_configuration = configuration;
-
-    let local_var_client = &local_var_configuration.client;
-
-    let local_var_uri_str = format!("{}/identity/identities/search", local_var_configuration.base_path);
-    let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
-
-    local_var_req_builder = local_var_req_builder.query(&[("query", &query.to_string())]);
-    if let Some(ref local_var_str) = anchor {
-        local_var_req_builder = local_var_req_builder.query(&[("anchor", &local_var_str.to_string())]);
-    }
-    if let Some(ref local_var_str) = limit {
-        local_var_req_builder = local_var_req_builder.query(&[("limit", &local_var_str.to_string())]);
-    }
-    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
-        local_var_req_builder = local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
-    }
-    if let Some(ref local_var_token) = local_var_configuration.bearer_access_token {
-        local_var_req_builder = local_var_req_builder.bearer_auth(local_var_token.to_owned());
-    };
-
-    let local_var_req = local_var_req_builder.build()?;
-    let local_var_resp = local_var_client.execute(local_var_req).await?;
-
-    let local_var_status = local_var_resp.status();
-    let local_var_content = local_var_resp.text().await?;
-
-    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
-        serde_json::from_str(&local_var_content).map_err(Error::from)
-    } else {
-        let local_var_entity: Option<IdentitySearchError> = serde_json::from_str(&local_var_content).ok();
         let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
         Err(Error::ResponseError(local_var_error))
     }
@@ -999,37 +558,6 @@ pub async fn identity_signup_for_beta(configuration: &configuration::Configurati
         Ok(())
     } else {
         let local_var_entity: Option<IdentitySignupForBetaError> = serde_json::from_str(&local_var_content).ok();
-        let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
-        Err(Error::ResponseError(local_var_error))
-    }
-}
-
-/// Unfollows the given identity.
-pub async fn identity_unfollow(configuration: &configuration::Configuration, identity_id: &str) -> Result<(), Error<IdentityUnfollowError>> {
-    let local_var_configuration = configuration;
-
-    let local_var_client = &local_var_configuration.client;
-
-    let local_var_uri_str = format!("{}/identity/identities/{identity_id}/follow", local_var_configuration.base_path, identity_id=crate::apis::urlencode(identity_id));
-    let mut local_var_req_builder = local_var_client.request(reqwest::Method::DELETE, local_var_uri_str.as_str());
-
-    if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
-        local_var_req_builder = local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
-    }
-    if let Some(ref local_var_token) = local_var_configuration.bearer_access_token {
-        local_var_req_builder = local_var_req_builder.bearer_auth(local_var_token.to_owned());
-    };
-
-    let local_var_req = local_var_req_builder.build()?;
-    let local_var_resp = local_var_client.execute(local_var_req).await?;
-
-    let local_var_status = local_var_resp.status();
-    let local_var_content = local_var_resp.text().await?;
-
-    if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
-        Ok(())
-    } else {
-        let local_var_entity: Option<IdentityUnfollowError> = serde_json::from_str(&local_var_content).ok();
         let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
         Err(Error::ResponseError(local_var_error))
     }

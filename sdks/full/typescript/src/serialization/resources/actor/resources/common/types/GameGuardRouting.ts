@@ -5,12 +5,18 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
+import { PortAuthorization as actor_common$$portAuthorization } from "./PortAuthorization";
+import { actor } from "../../../../index";
 
 export const GameGuardRouting: core.serialization.ObjectSchema<
     serializers.actor.GameGuardRouting.Raw,
     Rivet.actor.GameGuardRouting
-> = core.serialization.object({});
+> = core.serialization.object({
+    authorization: actor_common$$portAuthorization.optional(),
+});
 
 export declare namespace GameGuardRouting {
-    interface Raw {}
+    interface Raw {
+        authorization?: actor.PortAuthorization.Raw | null;
+    }
 }

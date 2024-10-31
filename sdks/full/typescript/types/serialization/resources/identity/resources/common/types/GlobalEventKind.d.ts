@@ -9,6 +9,5 @@ export declare const GlobalEventKind: core.serialization.ObjectSchema<serializer
 export declare namespace GlobalEventKind {
     interface Raw {
         identity_update?: identity.GlobalEventIdentityUpdate.Raw | null;
-        matchmaker_lobby_join?: identity.GlobalEventMatchmakerLobbyJoin.Raw | null;
     }
 }

@@ -1,5 +1,5 @@
 [package]
-name = "cloud-worker"
+name = "admin-worker"
 version = "0.0.1"
 edition = "2021"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
@@ -12,7 +12,7 @@ rivet-health-checks = { path = "../../../common/health-checks" }
 rivet-metrics = { path = "../../../common/metrics" }
 rivet-runtime = { path = "../../../common/runtime" }
 
-cloud-game-token-create = { path = "../ops/game-token-create" }
+cloud-game-token-create = { path = "../../cloud/ops/game-token-create" }
 chrono = "0.4.31"
 rivet-config = { version = "0.1.0", path = "../../../common/config" }
 [dev-dependencies]

@@ -49,14 +49,6 @@ type ListSuggestedRequest struct {
 	WatchIndex *string `json:"-"`
 }
 
-type SearchRequest struct {
-	// The query to match group display names against.
-	Query  string  `json:"-"`
-	Anchor *string `json:"-"`
-	// Unsigned 32 bit integer.
-	Limit *float64 `json:"-"`
-}
-
 // A banned identity.
 type BannedIdentity struct {
 	Identity *identity.Handle `json:"identity,omitempty"`

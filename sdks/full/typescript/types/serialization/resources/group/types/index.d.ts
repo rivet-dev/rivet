@@ -5,7 +5,6 @@ export * from "./PrepareAvatarUploadRequest";
 export * from "./PrepareAvatarUploadResponse";
 export * from "./ValidateProfileRequest";
 export * from "./ValidateProfileResponse";
-export * from "./SearchResponse";
 export * from "./GetBansResponse";
 export * from "./GetJoinRequestsResponse";
 export * from "./GetMembersResponse";

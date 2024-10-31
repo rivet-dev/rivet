@@ -50,8 +50,13 @@ pub struct Port {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub enum Routing {
-	GameGuard { protocol: GameGuardProtocol },
-	Host { protocol: HostProtocol },
+	GameGuard {
+		protocol: GameGuardProtocol,
+		authorization: PortAuthorization,
+	},
+	Host {
+		protocol: HostProtocol,
+	},
 }
 
 #[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
@@ -61,6 +66,20 @@ pub enum GameGuardProtocol {
 	Tcp = 2,
 	TcpTls = 3,
 	Udp = 4,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+pub enum PortAuthorization {
+	None,
+	Bearer(String),
+	Query(String, String),
+}
+
+#[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
+pub enum PortAuthorizationType {
+	None = 0,
+	Bearer = 1,
+	Query = 2,
 }
 
 #[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
@@ -158,10 +177,32 @@ impl ApiFrom<NetworkMode> for models::ActorNetworkMode {
 impl ApiFrom<Port> for models::ActorPort {
 	fn api_from(value: Port) -> models::ActorPort {
 		let (protocol, routing) = match &value.routing {
-			Routing::GameGuard { protocol } => (
+			Routing::GameGuard {
+				protocol,
+				authorization,
+			} => (
 				(*protocol).api_into(),
 				models::ActorPortRouting {
-					game_guard: Some(json!({})),
+					game_guard: Some(Box::new(models::ActorGameGuardRouting {
+						authorization: match authorization {
+							PortAuthorization::None => None,
+							PortAuthorization::Bearer(token) => {
+								Some(Box::new(models::ActorPortAuthorization {
+									bearer: Some(token.clone()),
+									..Default::default()
+								}))
+							}
+							PortAuthorization::Query(key, value) => {
+								Some(Box::new(models::ActorPortAuthorization {
+									query: Some(Box::new(models::ActorPortQueryAuthorization {
+										key: key.clone(),
+										value: value.clone(),
+									})),
+									..Default::default()
+								}))
+							}
+						},
+					})),
 					..Default::default()
 				},
 			),

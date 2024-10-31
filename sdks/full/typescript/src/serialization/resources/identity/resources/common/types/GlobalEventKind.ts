@@ -6,7 +6,6 @@ import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
 import { GlobalEventIdentityUpdate as identity_common$$globalEventIdentityUpdate } from "./GlobalEventIdentityUpdate";
-import { GlobalEventMatchmakerLobbyJoin as identity_common$$globalEventMatchmakerLobbyJoin } from "./GlobalEventMatchmakerLobbyJoin";
 import { identity } from "../../../../index";
 
 export const GlobalEventKind: core.serialization.ObjectSchema<
@@ -17,15 +16,10 @@ export const GlobalEventKind: core.serialization.ObjectSchema<
         "identity_update",
         identity_common$$globalEventIdentityUpdate.optional()
     ),
-    matchmakerLobbyJoin: core.serialization.property(
-        "matchmaker_lobby_join",
-        identity_common$$globalEventMatchmakerLobbyJoin.optional()
-    ),
 });
 
 export declare namespace GlobalEventKind {
     interface Raw {
         identity_update?: identity.GlobalEventIdentityUpdate.Raw | null;
-        matchmaker_lobby_join?: identity.GlobalEventMatchmakerLobbyJoin.Raw | null;
     }
 }

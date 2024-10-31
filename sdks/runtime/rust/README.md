@@ -25,13 +25,6 @@ All URIs are relative to *https://api.rivet.gg*
 
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
-*KvApi* | [**kv_delete**](docs/KvApi.md#kv_delete) | **DELETE** /kv/entries | 
-*KvApi* | [**kv_delete_batch**](docs/KvApi.md#kv_delete_batch) | **DELETE** /kv/entries/batch | 
-*KvApi* | [**kv_get**](docs/KvApi.md#kv_get) | **GET** /kv/entries | 
-*KvApi* | [**kv_get_batch**](docs/KvApi.md#kv_get_batch) | **GET** /kv/entries/batch | 
-*KvApi* | [**kv_list**](docs/KvApi.md#kv_list) | **GET** /kv/entries/list | 
-*KvApi* | [**kv_put**](docs/KvApi.md#kv_put) | **PUT** /kv/entries | 
-*KvApi* | [**kv_put_batch**](docs/KvApi.md#kv_put_batch) | **PUT** /kv/entries/batch | 
 *MatchmakerLobbiesApi* | [**matchmaker_lobbies_create**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_create) | **POST** /matchmaker/lobbies/create | 
 *MatchmakerLobbiesApi* | [**matchmaker_lobbies_find**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_find) | **POST** /matchmaker/lobbies/find | 
 *MatchmakerLobbiesApi* | [**matchmaker_lobbies_get_state**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_get_state) | **GET** /matchmaker/lobbies/{lobby_id}/state | 
@@ -54,13 +47,6 @@ Class | Method | HTTP request | Description
  - [ErrorBody](docs/ErrorBody.md)
  - [GeoCoord](docs/GeoCoord.md)
  - [GeoDistance](docs/GeoDistance.md)
- - [KvEntry](docs/KvEntry.md)
- - [KvGetBatchResponse](docs/KvGetBatchResponse.md)
- - [KvGetResponse](docs/KvGetResponse.md)
- - [KvListResponse](docs/KvListResponse.md)
- - [KvPutBatchRequest](docs/KvPutBatchRequest.md)
- - [KvPutEntry](docs/KvPutEntry.md)
- - [KvPutRequest](docs/KvPutRequest.md)
  - [MatchmakerCreateLobbyResponse](docs/MatchmakerCreateLobbyResponse.md)
  - [MatchmakerCustomLobbyPublicity](docs/MatchmakerCustomLobbyPublicity.md)
  - [MatchmakerFindLobbyResponse](docs/MatchmakerFindLobbyResponse.md)
@@ -83,7 +69,6 @@ Class | Method | HTTP request | Description
  - [MatchmakerPlayersConnectedRequest](docs/MatchmakerPlayersConnectedRequest.md)
  - [MatchmakerRegionInfo](docs/MatchmakerRegionInfo.md)
  - [MatchmakerRegionStatistics](docs/MatchmakerRegionStatistics.md)
- - [WatchResponse](docs/WatchResponse.md)
 
 
 To get access to the crate's generated documentation, use:

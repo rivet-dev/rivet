@@ -4,5 +4,4 @@
 import * as Rivet from "../../../../../index";
 export interface GlobalEventKind {
     identityUpdate?: Rivet.identity.GlobalEventIdentityUpdate;
-    matchmakerLobbyJoin?: Rivet.identity.GlobalEventMatchmakerLobbyJoin;
 }

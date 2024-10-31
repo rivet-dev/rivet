@@ -2,7 +2,6 @@ export * from "./GlobalEvent";
 export * from "./GlobalEventKind";
 export * from "./GlobalEventNotification";
 export * from "./GlobalEventIdentityUpdate";
-export * from "./GlobalEventMatchmakerLobbyJoin";
 export * from "./UpdateGameActivity";
 export * from "./Handle";
 export * from "./Summary";

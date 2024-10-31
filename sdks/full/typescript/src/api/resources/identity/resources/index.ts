@@ -4,8 +4,5 @@ export * as common from "./common";
 export * from "./common/types";
 export * as events from "./events";
 export * from "./events/types";
-export * as links from "./links";
-export * from "./links/types";
 export * from "./activities/client/requests";
 export * from "./events/client/requests";
-export * from "./links/client/requests";

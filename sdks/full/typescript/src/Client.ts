@@ -9,7 +9,6 @@ import { Admin } from "./api/resources/admin/client/Client";
 import { Cloud } from "./api/resources/cloud/client/Client";
 import { Group } from "./api/resources/group/client/Client";
 import { Identity } from "./api/resources/identity/client/Client";
-import { Kv } from "./api/resources/kv/client/Client";
 import { Provision } from "./api/resources/provision/client/Client";
 import { Auth } from "./api/resources/auth/client/Client";
 import { Games } from "./api/resources/games/client/Client";
@@ -65,12 +64,6 @@ export class RivetClient {
 
     public get identity(): Identity {
         return (this._identity ??= new Identity(this._options));
-    }
-
-    protected _kv: Kv | undefined;
-
-    public get kv(): Kv {
-        return (this._kv ??= new Kv(this._options));
     }
 
     protected _provision: Provision | undefined;

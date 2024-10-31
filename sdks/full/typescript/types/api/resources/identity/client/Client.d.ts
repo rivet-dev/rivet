@@ -6,7 +6,6 @@ import * as core from "../../../../core";
 import * as Rivet from "../../../index";
 import { Activities } from "../resources/activities/client/Client";
 import { Events } from "../resources/events/client/Client";
-import { Links } from "../resources/links/client/Client";
 export declare namespace Identity {
     interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
@@ -170,27 +169,6 @@ export declare class Identity {
      */
     validateProfile(request?: Rivet.identity.ValidateProfileRequest, requestOptions?: Identity.RequestOptions): Promise<void>;
     /**
-     * Fuzzy search for identities.
-     *
-     * @param {Rivet.identity.SearchRequest} request
-     * @param {Identity.RequestOptions} requestOptions - Request-specific configuration.
-     *
-     * @throws {@link Rivet.InternalError}
-     * @throws {@link Rivet.RateLimitError}
-     * @throws {@link Rivet.ForbiddenError}
-     * @throws {@link Rivet.UnauthorizedError}
-     * @throws {@link Rivet.NotFoundError}
-     * @throws {@link Rivet.BadRequestError}
-     *
-     * @example
-     *     await client.identity.search({
-     *         query: "string",
-     *         anchor: "string",
-     *         limit: 1
-     *     })
-     */
-    search(request: Rivet.identity.SearchRequest, requestOptions?: Identity.RequestOptions): Promise<Rivet.identity.SearchResponse>;
-    /**
      * Sets the current identity's game activity. This activity will automatically be removed when the identity goes offline.
      *
      * @param {Rivet.identity.SetGameActivityRequest} request
@@ -253,40 +231,6 @@ export declare class Identity {
      */
     updateStatus(request: Rivet.identity.UpdateStatusRequest, requestOptions?: Identity.RequestOptions): Promise<void>;
     /**
-     * Follows the given identity. In order for identities to be "friends", the other identity has to also follow this identity.
-     *
-     * @param {string} identityId
-     * @param {Identity.RequestOptions} requestOptions - Request-specific configuration.
-     *
-     * @throws {@link Rivet.InternalError}
-     * @throws {@link Rivet.RateLimitError}
-     * @throws {@link Rivet.ForbiddenError}
-     * @throws {@link Rivet.UnauthorizedError}
-     * @throws {@link Rivet.NotFoundError}
-     * @throws {@link Rivet.BadRequestError}
-     *
-     * @example
-     *     await client.identity.follow("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
-     */
-    follow(identityId: string, requestOptions?: Identity.RequestOptions): Promise<void>;
-    /**
-     * Unfollows the given identity.
-     *
-     * @param {string} identityId
-     * @param {Identity.RequestOptions} requestOptions - Request-specific configuration.
-     *
-     * @throws {@link Rivet.InternalError}
-     * @throws {@link Rivet.RateLimitError}
-     * @throws {@link Rivet.ForbiddenError}
-     * @throws {@link Rivet.UnauthorizedError}
-     * @throws {@link Rivet.NotFoundError}
-     * @throws {@link Rivet.BadRequestError}
-     *
-     * @example
-     *     await client.identity.unfollow("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
-     */
-    unfollow(identityId: string, requestOptions?: Identity.RequestOptions): Promise<void>;
-    /**
      * Prepares an avatar image upload. Complete upload with `CompleteIdentityAvatarUpload`.
      *
      * @param {Rivet.identity.PrepareAvatarUploadRequest} request
@@ -348,134 +292,6 @@ export declare class Identity {
      */
     signupForBeta(request: Rivet.identity.SignupForBetaRequest, requestOptions?: Identity.RequestOptions): Promise<void>;
     /**
-     * Creates an abuse report for an identity.
-     *
-     * @param {string} identityId
-     * @param {Rivet.identity.ReportRequest} request
-     * @param {Identity.RequestOptions} requestOptions - Request-specific configuration.
-     *
-     * @throws {@link Rivet.InternalError}
-     * @throws {@link Rivet.RateLimitError}
-     * @throws {@link Rivet.ForbiddenError}
-     * @throws {@link Rivet.UnauthorizedError}
-     * @throws {@link Rivet.NotFoundError}
-     * @throws {@link Rivet.BadRequestError}
-     *
-     * @example
-     *     await client.identity.report("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         reason: "string"
-     *     })
-     */
-    report(identityId: string, request?: Rivet.identity.ReportRequest, requestOptions?: Identity.RequestOptions): Promise<void>;
-    /**
-     * @param {string} identityId
-     * @param {Rivet.identity.ListFollowersRequest} request
-     * @param {Identity.RequestOptions} requestOptions - Request-specific configuration.
-     *
-     * @throws {@link Rivet.InternalError}
-     * @throws {@link Rivet.RateLimitError}
-     * @throws {@link Rivet.ForbiddenError}
-     * @throws {@link Rivet.UnauthorizedError}
-     * @throws {@link Rivet.NotFoundError}
-     * @throws {@link Rivet.BadRequestError}
-     *
-     * @example
-     *     await client.identity.listFollowers("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         anchor: "string",
-     *         limit: "string"
-     *     })
-     */
-    listFollowers(identityId: string, request?: Rivet.identity.ListFollowersRequest, requestOptions?: Identity.RequestOptions): Promise<Rivet.identity.ListFollowersResponse>;
-    /**
-     * @param {string} identityId
-     * @param {Rivet.identity.ListFollowingRequest} request
-     * @param {Identity.RequestOptions} requestOptions - Request-specific configuration.
-     *
-     * @throws {@link Rivet.InternalError}
-     * @throws {@link Rivet.RateLimitError}
-     * @throws {@link Rivet.ForbiddenError}
-     * @throws {@link Rivet.UnauthorizedError}
-     * @throws {@link Rivet.NotFoundError}
-     * @throws {@link Rivet.BadRequestError}
-     *
-     * @example
-     *     await client.identity.listFollowing("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         anchor: "string",
-     *         limit: "string"
-     *     })
-     */
-    listFollowing(identityId: string, request?: Rivet.identity.ListFollowingRequest, requestOptions?: Identity.RequestOptions): Promise<Rivet.identity.ListFollowingResponse>;
-    /**
-     * @param {Rivet.identity.ListFriendsRequest} request
-     * @param {Identity.RequestOptions} requestOptions - Request-specific configuration.
-     *
-     * @throws {@link Rivet.InternalError}
-     * @throws {@link Rivet.RateLimitError}
-     * @throws {@link Rivet.ForbiddenError}
-     * @throws {@link Rivet.UnauthorizedError}
-     * @throws {@link Rivet.NotFoundError}
-     * @throws {@link Rivet.BadRequestError}
-     *
-     * @example
-     *     await client.identity.listFriends({
-     *         anchor: "string",
-     *         limit: "string"
-     *     })
-     */
-    listFriends(request?: Rivet.identity.ListFriendsRequest, requestOptions?: Identity.RequestOptions): Promise<Rivet.identity.ListFriendsResponse>;
-    /**
-     * @param {string} identityId
-     * @param {Rivet.identity.ListMutualFriendsRequest} request
-     * @param {Identity.RequestOptions} requestOptions - Request-specific configuration.
-     *
-     * @throws {@link Rivet.InternalError}
-     * @throws {@link Rivet.RateLimitError}
-     * @throws {@link Rivet.ForbiddenError}
-     * @throws {@link Rivet.UnauthorizedError}
-     * @throws {@link Rivet.NotFoundError}
-     * @throws {@link Rivet.BadRequestError}
-     *
-     * @example
-     *     await client.identity.listMutualFriends("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         anchor: "string",
-     *         limit: "string"
-     *     })
-     */
-    listMutualFriends(identityId: string, request?: Rivet.identity.ListMutualFriendsRequest, requestOptions?: Identity.RequestOptions): Promise<Rivet.identity.ListMutualFriendsResponse>;
-    /**
-     * @param {Rivet.identity.ListRecentFollowersRequest} request
-     * @param {Identity.RequestOptions} requestOptions - Request-specific configuration.
-     *
-     * @throws {@link Rivet.InternalError}
-     * @throws {@link Rivet.RateLimitError}
-     * @throws {@link Rivet.ForbiddenError}
-     * @throws {@link Rivet.UnauthorizedError}
-     * @throws {@link Rivet.NotFoundError}
-     * @throws {@link Rivet.BadRequestError}
-     *
-     * @example
-     *     await client.identity.listRecentFollowers({
-     *         count: 1,
-     *         watchIndex: "string"
-     *     })
-     */
-    listRecentFollowers(request?: Rivet.identity.ListRecentFollowersRequest, requestOptions?: Identity.RequestOptions): Promise<Rivet.identity.ListRecentFollowersResponse>;
-    /**
-     * @param {string} identityId
-     * @param {Identity.RequestOptions} requestOptions - Request-specific configuration.
-     *
-     * @throws {@link Rivet.InternalError}
-     * @throws {@link Rivet.RateLimitError}
-     * @throws {@link Rivet.ForbiddenError}
-     * @throws {@link Rivet.UnauthorizedError}
-     * @throws {@link Rivet.NotFoundError}
-     * @throws {@link Rivet.BadRequestError}
-     *
-     * @example
-     *     await client.identity.ignoreRecentFollower("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
-     */
-    ignoreRecentFollower(identityId: string, requestOptions?: Identity.RequestOptions): Promise<void>;
-    /**
      * @param {Identity.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @throws {@link Rivet.InternalError}
@@ -507,7 +323,5 @@ export declare class Identity {
     get activities(): Activities;
     protected _events: Events | undefined;
     get events(): Events;
-    protected _links: Links | undefined;
-    get links(): Links;
     protected _getAuthorizationHeader(): Promise<string | undefined>;
 }

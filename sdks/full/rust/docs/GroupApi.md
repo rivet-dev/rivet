@@ -16,7 +16,6 @@ Method | HTTP request | Description
 [**group_leave**](GroupApi.md#group_leave) | **POST** /group/groups/{group_id}/leave | 
 [**group_list_suggested**](GroupApi.md#group_list_suggested) | **GET** /group/groups | 
 [**group_prepare_avatar_upload**](GroupApi.md#group_prepare_avatar_upload) | **POST** /group/groups/avatar-upload/prepare | 
-[**group_search**](GroupApi.md#group_search) | **GET** /group/groups/search | 
 [**group_transfer_ownership**](GroupApi.md#group_transfer_ownership) | **POST** /group/groups/{group_id}/transfer-owner | 
 [**group_unban_identity**](GroupApi.md#group_unban_identity) | **DELETE** /group/groups/{group_id}/bans/{identity_id} | 
 [**group_update_profile**](GroupApi.md#group_update_profile) | **POST** /group/groups/{group_id}/profile | 
@@ -390,38 +389,6 @@ Name | Type | Description  | Required | Notes
 ### HTTP request headers
 
 - **Content-Type**: application/json
-- **Accept**: application/json
-
-[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
-
-
-## group_search
-
-> crate::models::GroupSearchResponse group_search(query, anchor, limit)
-
-
-Fuzzy search for groups.
-
-### Parameters
-
-
-Name | Type | Description  | Required | Notes
-------------- | ------------- | ------------- | ------------- | -------------
-**query** | **String** | The query to match group display names against. | [required] |
-**anchor** | Option<**String**> |  |  |
-**limit** | Option<**f64**> | Unsigned 32 bit integer. |  |
-
-### Return type
-
-[**crate::models::GroupSearchResponse**](GroupSearchResponse.md)
-
-### Authorization
-
-[BearerAuth](../README.md#BearerAuth)
-
-### HTTP request headers
-
-- **Content-Type**: Not defined
 - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)

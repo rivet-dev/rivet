@@ -5,4 +5,3 @@ export { SetGameActivityRequest } from "./SetGameActivityRequest";
 export { UpdateStatusRequest } from "./UpdateStatusRequest";
 export { PrepareAvatarUploadRequest } from "./PrepareAvatarUploadRequest";
 export { SignupForBetaRequest } from "./SignupForBetaRequest";
-export { ReportRequest } from "./ReportRequest";

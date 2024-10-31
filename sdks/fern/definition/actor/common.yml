@@ -77,7 +77,18 @@ types:
       host: optional<HostRouting>
 
   GameGuardRouting:
-    properties: {}
+    properties:
+      authorization: optional<PortAuthorization>
+
+  PortAuthorization:
+    properties:
+      bearer: optional<string>
+      query: optional<PortQueryAuthorization>
+
+  PortQueryAuthorization:
+    properties:
+      key: string
+      value: string
 
   HostRouting:
     properties: {}

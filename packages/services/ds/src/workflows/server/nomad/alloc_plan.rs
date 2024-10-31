@@ -215,7 +215,7 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<Upd
 	}
 	// Invalidate cache when ports are updated
 	else if !input.ports.is_empty() {
-		ctx.cache().purge("servers_ports", [datacenter_id]).await?;
+		ctx.cache().purge("ds_proxied_ports", [datacenter_id]).await?;
 	}
 
 	let kill_alloc = nomad_alloc_id

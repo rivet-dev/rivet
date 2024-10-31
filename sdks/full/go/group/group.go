@@ -323,37 +323,6 @@ func (p *PrepareAvatarUploadResponse) String() string {
 	return fmt.Sprintf("%#v", p)
 }
 
-type SearchResponse struct {
-	// A list of group handles.
-	Groups []*group.Handle `json:"groups,omitempty"`
-	Anchor *string         `json:"anchor,omitempty"`
-
-	_rawJSON json.RawMessage
-}
-
-func (s *SearchResponse) UnmarshalJSON(data []byte) error {
-	type unmarshaler SearchResponse
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*s = SearchResponse(value)
-	s._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (s *SearchResponse) String() string {
-	if len(s._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(s._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(s); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", s)
-}
-
 type TransferOwnershipRequest struct {
 	// Identity to transfer the group to.
 	// Must be a member of the group.

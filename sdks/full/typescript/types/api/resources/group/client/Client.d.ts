@@ -106,27 +106,6 @@ export declare class Group {
      */
     validateProfile(request: Rivet.group.ValidateProfileRequest, requestOptions?: Group.RequestOptions): Promise<Rivet.group.ValidateProfileResponse>;
     /**
-     * Fuzzy search for groups.
-     *
-     * @param {Rivet.group.SearchRequest} request
-     * @param {Group.RequestOptions} requestOptions - Request-specific configuration.
-     *
-     * @throws {@link Rivet.InternalError}
-     * @throws {@link Rivet.RateLimitError}
-     * @throws {@link Rivet.ForbiddenError}
-     * @throws {@link Rivet.UnauthorizedError}
-     * @throws {@link Rivet.NotFoundError}
-     * @throws {@link Rivet.BadRequestError}
-     *
-     * @example
-     *     await client.group.search({
-     *         query: "string",
-     *         anchor: "string",
-     *         limit: 1.1
-     *     })
-     */
-    search(request: Rivet.group.SearchRequest, requestOptions?: Group.RequestOptions): Promise<Rivet.group.SearchResponse>;
-    /**
      * Completes an avatar image upload. Must be called after the file upload
      * process completes.
      * Call `rivet.api.group#PrepareAvatarUpload` first.

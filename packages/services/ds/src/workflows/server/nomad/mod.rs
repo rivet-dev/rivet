@@ -343,7 +343,7 @@ async fn submit_job(ctx: &ActivityCtx, input: &SubmitJobInput) -> GlobalResult<S
 			};
 
 			let protocol = match port.routing {
-				Routing::GameGuard { protocol } => {
+				Routing::GameGuard { protocol, .. } => {
 					TransportProtocol::from(protocol).as_cni_protocol()
 				}
 				Routing::Host { protocol } => TransportProtocol::from(protocol).as_cni_protocol(),
@@ -377,25 +377,8 @@ async fn submit_job(ctx: &ActivityCtx, input: &SubmitJobInput) -> GlobalResult<S
 		.collect::<GlobalResult<Vec<_>>>()?;
 
 	// Also see util_ds:consts::DEFAULT_ENV_KEYS
-	let mut env = Vec::<(String, String)>::new()
+	let mut env = Vec::new()
 		.into_iter()
-		// TODO
-		// .chain(if lobby_config {
-		// 	Some((
-		// 		"RIVET_LOBBY_CONFIG".to_string(),
-		// 		template_env_var("NOMAD_META_LOBBY_CONFIG"),
-		// 	))
-		// } else {
-		// 	None
-		// })
-		// .chain(if lobby_tags {
-		// 	Some((
-		// 		"RIVET_LOBBY_TAGS".to_string(),
-		// 		template_env_var("NOMAD_META_LOBBY_TAGS"),
-		// 	))
-		// } else {
-		// 	None
-		// })
 		.chain([(
 			"RIVET_API_ENDPOINT".to_string(),
 			ctx.config()
@@ -406,32 +389,7 @@ async fn submit_job(ctx: &ActivityCtx, input: &SubmitJobInput) -> GlobalResult<S
 				.clone()
 				.to_string(),
 		)])
-		// Ports
-		// TODO
-		// .chain(prepared_ports)
-		// // Port ranges
-		// .chain(
-		// 	decoded_ports
-		// 		.iter()
-		// 		.filter_map(|port| {
-		// 			if let PortTarget::Range { min, max } = &port.target {
-		// 				let snake_port_label = port.label.replace('-', "_");
-		// 				Some([
-		// 					(
-		// 						format!("PORT_RANGE_MIN_{}", snake_port_label),
-		// 						min.to_string(),
-		// 					),
-		// 					(
-		// 						format!("PORT_RANGE_MAX_{}", snake_port_label),
-		// 						max.to_string(),
-		// 					),
-		// 				])
-		// 			} else {
-		// 				None
-		// 			}
-		// 		})
-		// 		.flatten(),
-		// )
+		.chain(env_ports)
 		.map(|(k, v)| format!("{k}={v}"))
 		.collect::<Vec<String>>();
 	env.sort();
@@ -443,7 +401,7 @@ async fn submit_job(ctx: &ActivityCtx, input: &SubmitJobInput) -> GlobalResult<S
 			let service_name = format!("${{NOMAD_META_LOBBY_ID}}-{}", port_label);
 			let nomad_port_label = crate::util::format_port_label(port_label);
 			let transport_protocol = match port.routing {
-				Routing::GameGuard { protocol } => TransportProtocol::from(protocol),
+				Routing::GameGuard { protocol, .. } => TransportProtocol::from(protocol),
 				Routing::Host { protocol } => TransportProtocol::from(protocol),
 			};
 
@@ -678,91 +636,6 @@ async fn submit_job(ctx: &ActivityCtx, input: &SubmitJobInput) -> GlobalResult<S
 					resources: Some(Box::new(Resources {
 						CPU: Some(RUNC_CLEANUP_CPU),
 						memory_mb: Some(RUNC_CLEANUP_MEMORY),
-						..Resources::new()
-					})),
-					log_config: Some(Box::new(LogConfig {
-						max_files: Some(4),
-						max_file_size_mb: Some(2),
-						disabled: Some(false),
-					})),
-					..Task::new()
-				},
-				// Run cleanup task
-				Task {
-					name: Some(util_job::RUN_CLEANUP_TASK_NAME.into()),
-					lifecycle: Some(Box::new(TaskLifecycle {
-						hook: Some("poststop".into()),
-						sidecar: Some(false),
-					})),
-					driver: Some("docker".into()),
-					config: Some({
-						let mut config = HashMap::new();
-
-						config.insert("image".into(), json!("python:3.10.7-alpine3.16"));
-						config.insert(
-							"args".into(),
-							json!([
-								"/bin/sh",
-								"-c",
-								"apk add --no-cache ca-certificates && python3 /local/cleanup.py"
-							]),
-						);
-
-						config
-					}),
-					templates: Some(vec![Template {
-						dest_path: Some("local/cleanup.py".into()),
-						embedded_tmpl: Some(formatdoc!(
-							r#"
-							import ssl
-							import urllib.request, json, os, mimetypes, sys
-			
-							BEARER = '{{{{env "NOMAD_META_JOB_RUN_TOKEN"}}}}'
-			
-							ctx = ssl.create_default_context()
-			
-							def eprint(*args, **kwargs):
-								print(*args, file=sys.stderr, **kwargs)
-			
-							def req(method, url, data = None, headers = {{}}):
-								request = urllib.request.Request(
-									url=url,
-									data=data,
-									method=method,
-									headers=headers
-								)
-			
-								try:
-									res = urllib.request.urlopen(request, context=ctx)
-									assert res.status == 200, f"Received non-200 status: {{res.status}}"
-									return res
-								except urllib.error.HTTPError as err:
-									eprint(f"HTTP Error ({{err.code}} {{err.reason}}):\n\nBODY:\n{{err.read().decode()}}\n\nHEADERS:\n{{err.headers}}")
-			
-									raise err
-			
-							print(f'\n> Cleaning up job')
-			
-							res_json = None
-							with req('POST', f'{origin_api}/job/runs/cleanup',
-								data = json.dumps({{}}).encode(),
-								headers = {{
-									'Authorization': f'Bearer {{BEARER}}',
-									'Content-Type': 'application/json'
-								}}
-							) as res:
-								res_json = json.load(res)
-			
-			
-							print('\n> Finished')
-							"#,
-							origin_api = ctx.config().server()?.rivet.api_public.public_origin(),
-						)),
-						..Template::new()
-					}]),
-					resources: Some(Box::new(Resources {
-						CPU: Some(util_job::TASK_CLEANUP_CPU),
-						memory_mb: Some(util_job::TASK_CLEANUP_MEMORY),
 						..Resources::new()
 					})),
 					log_config: Some(Box::new(LogConfig {

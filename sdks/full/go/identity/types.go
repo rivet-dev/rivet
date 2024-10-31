@@ -11,7 +11,6 @@ import (
 	group "sdk/common/group"
 	identity "sdk/common/identity"
 	core "sdk/core"
-	matchmaker "sdk/matchmaker"
 )
 
 type GetHandlesRequest struct {
@@ -30,53 +29,11 @@ type GetSummariesRequest struct {
 	IdentityIds []string `json:"-"`
 }
 
-type ListFollowersRequest struct {
-	Anchor *string `json:"-"`
-	// Range is between 1 and 32 (inclusive).
-	Limit *string `json:"-"`
-}
-
-type ListFollowingRequest struct {
-	Anchor *string `json:"-"`
-	// Range is between 1 and 32 (inclusive).
-	Limit *string `json:"-"`
-}
-
-type ListFriendsRequest struct {
-	Anchor *string `json:"-"`
-	// Range is between 1 and 32 (inclusive).
-	Limit *string `json:"-"`
-}
-
-type ListMutualFriendsRequest struct {
-	Anchor *string `json:"-"`
-	// Range is between 1 and 32 (inclusive).
-	Limit *string `json:"-"`
-}
-
-type ListRecentFollowersRequest struct {
-	Count      *int            `json:"-"`
-	WatchIndex *sdk.WatchQuery `json:"-"`
-}
-
 type PrepareAvatarUploadRequest struct {
 	Path string `json:"path"`
 	// See https://www.iana.org/assignments/media-types/media-types.xhtml
 	Mime          string `json:"mime"`
 	ContentLength int64  `json:"content_length"`
-}
-
-type ReportRequest struct {
-	Reason *string `json:"reason,omitempty"`
-}
-
-type SearchRequest struct {
-	// The query to match identity display names and account numbers against.
-	Query string `json:"-"`
-	// How many identities to offset the search by.
-	Anchor *string `json:"-"`
-	// Amount of identities to return. Must be between 1 and 32 inclusive.
-	Limit *int `json:"-"`
 }
 
 type SetGameActivityRequest struct {
@@ -304,8 +261,7 @@ func (g *GlobalEventIdentityUpdate) String() string {
 }
 
 type GlobalEventKind struct {
-	IdentityUpdate      *GlobalEventIdentityUpdate      `json:"identity_update,omitempty"`
-	MatchmakerLobbyJoin *GlobalEventMatchmakerLobbyJoin `json:"matchmaker_lobby_join,omitempty"`
+	IdentityUpdate *GlobalEventIdentityUpdate `json:"identity_update,omitempty"`
 
 	_rawJSON json.RawMessage
 }
@@ -322,37 +278,6 @@ func (g *GlobalEventKind) UnmarshalJSON(data []byte) error {
 }
 
 func (g *GlobalEventKind) String() string {
-	if len(g._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(g._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(g); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", g)
-}
-
-type GlobalEventMatchmakerLobbyJoin struct {
-	Lobby  *matchmaker.JoinLobby           `json:"lobby,omitempty"`
-	Ports  map[string]*matchmaker.JoinPort `json:"ports,omitempty"`
-	Player *matchmaker.JoinPlayer          `json:"player,omitempty"`
-
-	_rawJSON json.RawMessage
-}
-
-func (g *GlobalEventMatchmakerLobbyJoin) UnmarshalJSON(data []byte) error {
-	type unmarshaler GlobalEventMatchmakerLobbyJoin
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*g = GlobalEventMatchmakerLobbyJoin(value)
-	g._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (g *GlobalEventMatchmakerLobbyJoin) String() string {
 	if len(g._rawJSON) > 0 {
 		if value, err := core.StringifyJSON(g._rawJSON); err == nil {
 			return value
@@ -639,37 +564,6 @@ func (u *UpdateGameActivity) String() string {
 		return value
 	}
 	return fmt.Sprintf("%#v", u)
-}
-
-type GetGameLinkNewIdentity struct {
-	IdentityToken         sdk.Jwt       `json:"identity_token"`
-	IdentityTokenExpireTs sdk.Timestamp `json:"identity_token_expire_ts"`
-	Identity              *Profile      `json:"identity,omitempty"`
-
-	_rawJSON json.RawMessage
-}
-
-func (g *GetGameLinkNewIdentity) UnmarshalJSON(data []byte) error {
-	type unmarshaler GetGameLinkNewIdentity
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*g = GetGameLinkNewIdentity(value)
-	g._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (g *GetGameLinkNewIdentity) String() string {
-	if len(g._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(g._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(g); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", g)
 }
 
 type ValidateProfileResponse struct {

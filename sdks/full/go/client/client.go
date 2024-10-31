@@ -13,7 +13,6 @@ import (
 	groupclient "sdk/group/client"
 	identityclient "sdk/identity/client"
 	jobclient "sdk/job/client"
-	kvclient "sdk/kv/client"
 	matchmakerclient "sdk/matchmaker/client"
 	portalclient "sdk/portal/client"
 	provisionclient "sdk/provision/client"
@@ -29,7 +28,6 @@ type Client struct {
 	Cloud      *cloudclient.Client
 	Group      *groupclient.Client
 	Identity   *identityclient.Client
-	Kv         *kvclient.Client
 	Provision  *provisionclient.Client
 	Auth       *authclient.Client
 	Games      *gamesclient.Client
@@ -52,7 +50,6 @@ func NewClient(opts ...core.ClientOption) *Client {
 		Cloud:      cloudclient.NewClient(opts...),
 		Group:      groupclient.NewClient(opts...),
 		Identity:   identityclient.NewClient(opts...),
-		Kv:         kvclient.NewClient(opts...),
 		Provision:  provisionclient.NewClient(opts...),
 		Auth:       authclient.NewClient(opts...),
 		Games:      gamesclient.NewClient(opts...),

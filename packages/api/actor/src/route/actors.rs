@@ -112,10 +112,24 @@ pub async fn create(
 					routing: if let Some(routing) = p.routing {
 						match *routing {
 							models::ActorPortRouting {
-								game_guard: Some(_),
+								game_guard: Some(gg),
 								host: None,
 							} => ds::types::Routing::GameGuard {
 								protocol: p.protocol.api_into(),
+								authorization: match gg.authorization.as_deref() {
+									Some(models::ActorPortAuthorization {
+										bearer: Some(token),
+										..
+									}) => ds::types::PortAuthorization::Bearer(token.clone()),
+									Some(models::ActorPortAuthorization {
+										query: Some(query),
+										..
+									}) => ds::types::PortAuthorization::Query(
+										query.key.clone(),
+										query.value.clone(),
+									),
+									_ => ds::types::PortAuthorization::None,
+								},
 							},
 							models::ActorPortRouting {
 								game_guard: None,
@@ -130,6 +144,7 @@ pub async fn create(
 					} else {
 						ds::types::Routing::GameGuard {
 							protocol: p.protocol.api_into(),
+							authorization: ds::types::PortAuthorization::None,
 						}
 					}
 				}

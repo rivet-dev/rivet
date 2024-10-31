@@ -174,17 +174,13 @@ pub async fn create_build(
 	let multipart_upload = body.multipart_upload.unwrap_or(false);
 
 	let kind = match body.kind {
-		None | Some(models::ActorBuildKind::DockerImage) => {
-			backend::build::BuildKind::DockerImage
-		}
+		None | Some(models::ActorBuildKind::DockerImage) => backend::build::BuildKind::DockerImage,
 		Some(models::ActorBuildKind::OciBundle) => backend::build::BuildKind::OciBundle,
 		Some(models::ActorBuildKind::Javascript) => backend::build::BuildKind::JavaScript,
 	};
 
 	let compression = match body.compression {
-		None | Some(models::ActorBuildCompression::None) => {
-			backend::build::BuildCompression::None
-		}
+		None | Some(models::ActorBuildCompression::None) => backend::build::BuildCompression::None,
 		Some(models::ActorBuildCompression::Lz4) => backend::build::BuildCompression::Lz4,
 	};
 

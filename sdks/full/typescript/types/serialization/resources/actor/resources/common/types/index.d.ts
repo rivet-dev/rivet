@@ -8,6 +8,8 @@ export * from "./Port";
 export * from "./PortProtocol";
 export * from "./PortRouting";
 export * from "./GameGuardRouting";
+export * from "./PortAuthorization";
+export * from "./PortQueryAuthorization";
 export * from "./HostRouting";
 export * from "./Build";
 export * from "./Datacenter";

@@ -4,7 +4,6 @@
 
 import * as environments from "./environments";
 import * as core from "./core";
-import { Kv } from "./api/resources/kv/client/Client";
 import { Matchmaker } from "./api/resources/matchmaker/client/Client";
 
 export declare namespace RivetClient {
@@ -26,12 +25,6 @@ export declare namespace RivetClient {
 
 export class RivetClient {
     constructor(protected readonly _options: RivetClient.Options) {}
-
-    protected _kv: Kv | undefined;
-
-    public get kv(): Kv {
-        return (this._kv ??= new Kv(this._options));
-    }
 
     protected _matchmaker: Matchmaker | undefined;
 

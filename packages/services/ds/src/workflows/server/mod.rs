@@ -13,7 +13,10 @@ use futures_util::FutureExt;
 use rand::Rng;
 use rivet_operation::prelude::proto::backend;
 
-use crate::types::{GameGuardProtocol, NetworkMode, Routing, ServerResources, ServerRuntime};
+use crate::types::{
+	GameGuardProtocol, NetworkMode, PortAuthorization, PortAuthorizationType, Routing,
+	ServerResources, ServerRuntime,
+};
 
 pub mod nomad;
 pub mod pegboard;
@@ -24,21 +27,6 @@ const DRAIN_PADDING_MS: i64 = 10000;
 
 // TODO: Restructure traefik to get rid of this
 const TRAEFIK_GRACE_PERIOD: Duration = Duration::from_secs(2);
-
-#[derive(Clone, Debug, Default)]
-pub(crate) struct GameGuardUnnest {
-	pub port_names: Vec<String>,
-	pub port_numbers: Vec<Option<i32>>,
-	pub protocols: Vec<i32>,
-	pub gg_ports: Vec<i32>,
-}
-
-#[derive(Clone, Debug, Default)]
-pub(crate) struct HostUnnest {
-	pub port_names: Vec<String>,
-	pub port_numbers: Vec<Option<i32>>,
-	pub protocols: Vec<i32>,
-}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Input {
@@ -109,6 +97,29 @@ pub async fn ds_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()>
 	}
 }
 
+#[derive(Clone, Debug, Default)]
+pub(crate) struct GameGuardUnnest {
+	pub port_names: Vec<String>,
+	pub port_numbers: Vec<Option<i32>>,
+	pub protocols: Vec<i32>,
+	pub gg_ports: Vec<i32>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct GameGuardAuthUnnest {
+	pub port_names: Vec<String>,
+	pub port_auth_types: Vec<i32>,
+	pub port_auth_keys: Vec<Option<String>>,
+	pub port_auth_values: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct HostUnnest {
+	pub port_names: Vec<String>,
+	pub port_numbers: Vec<Option<i32>>,
+	pub protocols: Vec<i32>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub(crate) struct InsertDbInput {
 	server_id: Uuid,
@@ -128,11 +139,15 @@ pub(crate) struct InsertDbInput {
 #[activity(InsertDb)]
 pub(crate) async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<()> {
 	let mut gg_unnest = GameGuardUnnest::default();
+	let mut gg_auth_unnest = GameGuardAuthUnnest::default();
 	let mut host_unnest = HostUnnest::default();
 
 	for (name, port) in input.network_ports.iter() {
 		match port.routing {
-			Routing::GameGuard { protocol } => {
+			Routing::GameGuard {
+				protocol,
+				ref authorization,
+			} => {
 				gg_unnest.port_names.push(name.clone());
 				gg_unnest
 					.port_numbers
@@ -141,6 +156,26 @@ pub(crate) async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> Globa
 				gg_unnest
 					.gg_ports
 					.push(choose_ingress_port(ctx, protocol).await? as i32);
+
+				match authorization {
+					PortAuthorization::None => {}
+					PortAuthorization::Bearer(token) => {
+						gg_auth_unnest.port_names.push(name.clone());
+						gg_auth_unnest
+							.port_auth_types
+							.push(PortAuthorizationType::Bearer as i32);
+						gg_auth_unnest.port_auth_keys.push(None);
+						gg_auth_unnest.port_auth_values.push(token.clone());
+					}
+					PortAuthorization::Query(key, value) => {
+						gg_auth_unnest.port_names.push(name.clone());
+						gg_auth_unnest
+							.port_auth_types
+							.push(PortAuthorizationType::Query as i32);
+						gg_auth_unnest.port_auth_keys.push(Some(key.clone()));
+						gg_auth_unnest.port_auth_values.push(value.clone());
+					}
+				}
 			}
 			Routing::Host { protocol } => {
 				host_unnest.port_names.push(name.clone());
@@ -204,8 +239,18 @@ pub(crate) async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> Globa
 						)
 						SELECT $1, t.*
 						FROM unnest($17, $18, $19, $20) AS t(port_name, port_number, protocol, gg_port)
-						-- Check if lists are empty
-						WHERE port_name IS NOT NULL
+						RETURNING 1
+					),
+					gg_port_auth AS (
+						INSERT INTO db_ds.server_ports_gg_auth (
+							server_id,
+							port_name,
+							auth_type,
+							auth_key,
+							auth_value
+						)
+						SELECT $1, t.*
+						FROM unnest($17, $18, $19, $20) AS t(port_name, auth_type, auth_key, auth_value)
 						RETURNING 1
 					)
 				SELECT 1
@@ -241,7 +286,7 @@ pub(crate) async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> Globa
 	// workflow step
 	// Invalidate cache when new server is created
 	ctx.cache()
-		.purge("servers_ports", [input.datacenter_id])
+		.purge("ds_proxied_ports", [input.datacenter_id])
 		.await?;
 
 	Ok(())

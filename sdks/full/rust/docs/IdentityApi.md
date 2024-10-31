@@ -5,26 +5,16 @@ All URIs are relative to *https://api.rivet.gg*
 Method | HTTP request | Description
 ------------- | ------------- | -------------
 [**identity_complete_avatar_upload**](IdentityApi.md#identity_complete_avatar_upload) | **POST** /identity/identities/avatar-upload/{upload_id}/complete | 
-[**identity_follow**](IdentityApi.md#identity_follow) | **POST** /identity/identities/{identity_id}/follow | 
 [**identity_get_handles**](IdentityApi.md#identity_get_handles) | **GET** /identity/identities/batch/handle | 
 [**identity_get_profile**](IdentityApi.md#identity_get_profile) | **GET** /identity/identities/{identity_id}/profile | 
 [**identity_get_self_profile**](IdentityApi.md#identity_get_self_profile) | **GET** /identity/identities/self/profile | 
 [**identity_get_summaries**](IdentityApi.md#identity_get_summaries) | **GET** /identity/identities/batch/summary | 
-[**identity_ignore_recent_follower**](IdentityApi.md#identity_ignore_recent_follower) | **POST** /identity/identities/self/recent-followers/{identity_id}/ignore | 
-[**identity_list_followers**](IdentityApi.md#identity_list_followers) | **GET** /identity/identities/{identity_id}/followers | 
-[**identity_list_following**](IdentityApi.md#identity_list_following) | **GET** /identity/identities/{identity_id}/following | 
-[**identity_list_friends**](IdentityApi.md#identity_list_friends) | **GET** /identity/identities/self/friends | 
-[**identity_list_mutual_friends**](IdentityApi.md#identity_list_mutual_friends) | **GET** /identity/identities/{identity_id}/mutual-friends | 
-[**identity_list_recent_followers**](IdentityApi.md#identity_list_recent_followers) | **GET** /identity/identities/self/recent-followers | 
 [**identity_mark_deletion**](IdentityApi.md#identity_mark_deletion) | **POST** /identity/identities/self/delete-request | 
 [**identity_prepare_avatar_upload**](IdentityApi.md#identity_prepare_avatar_upload) | **POST** /identity/identities/avatar-upload/prepare | 
 [**identity_remove_game_activity**](IdentityApi.md#identity_remove_game_activity) | **DELETE** /identity/identities/self/activity | 
-[**identity_report**](IdentityApi.md#identity_report) | **POST** /identity/identities/{identity_id}/report | 
-[**identity_search**](IdentityApi.md#identity_search) | **GET** /identity/identities/search | 
 [**identity_set_game_activity**](IdentityApi.md#identity_set_game_activity) | **POST** /identity/identities/self/activity | 
 [**identity_setup**](IdentityApi.md#identity_setup) | **POST** /identity/identities | 
 [**identity_signup_for_beta**](IdentityApi.md#identity_signup_for_beta) | **POST** /identity/identities/self/beta-signup | 
-[**identity_unfollow**](IdentityApi.md#identity_unfollow) | **DELETE** /identity/identities/{identity_id}/follow | 
 [**identity_unmark_deletion**](IdentityApi.md#identity_unmark_deletion) | **DELETE** /identity/identities/self/delete-request | 
 [**identity_update_profile**](IdentityApi.md#identity_update_profile) | **POST** /identity/identities/self/profile | 
 [**identity_update_status**](IdentityApi.md#identity_update_status) | **POST** /identity/identities/identities/self/status | 
@@ -45,36 +35,6 @@ Completes an avatar image upload. Must be called after the file upload process c
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **upload_id** | **uuid::Uuid** |  | [required] |
-
-### Return type
-
- (empty response body)
-
-### Authorization
-
-[BearerAuth](../README.md#BearerAuth)
-
-### HTTP request headers
-
-- **Content-Type**: Not defined
-- **Accept**: application/json
-
-[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
-
-
-## identity_follow
-
-> identity_follow(identity_id)
-
-
-Follows the given identity. In order for identities to be \"friends\", the other identity has to also follow this identity.
-
-### Parameters
-
-
-Name | Type | Description  | Required | Notes
-------------- | ------------- | ------------- | ------------- | -------------
-**identity_id** | **uuid::Uuid** |  | [required] |
 
 ### Return type
 
@@ -213,182 +173,6 @@ Name | Type | Description  | Required | Notes
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 
-## identity_ignore_recent_follower
-
-> identity_ignore_recent_follower(identity_id)
-
-
-### Parameters
-
-
-Name | Type | Description  | Required | Notes
-------------- | ------------- | ------------- | ------------- | -------------
-**identity_id** | **uuid::Uuid** |  | [required] |
-
-### Return type
-
- (empty response body)
-
-### Authorization
-
-[BearerAuth](../README.md#BearerAuth)
-
-### HTTP request headers
-
-- **Content-Type**: Not defined
-- **Accept**: application/json
-
-[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
-
-
-## identity_list_followers
-
-> crate::models::IdentityListFollowersResponse identity_list_followers(identity_id, anchor, limit)
-
-
-### Parameters
-
-
-Name | Type | Description  | Required | Notes
-------------- | ------------- | ------------- | ------------- | -------------
-**identity_id** | **uuid::Uuid** |  | [required] |
-**anchor** | Option<**String**> |  |  |
-**limit** | Option<**String**> | Range is between 1 and 32 (inclusive). |  |
-
-### Return type
-
-[**crate::models::IdentityListFollowersResponse**](IdentityListFollowersResponse.md)
-
-### Authorization
-
-[BearerAuth](../README.md#BearerAuth)
-
-### HTTP request headers
-
-- **Content-Type**: Not defined
-- **Accept**: application/json
-
-[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
-
-
-## identity_list_following
-
-> crate::models::IdentityListFollowingResponse identity_list_following(identity_id, anchor, limit)
-
-
-### Parameters
-
-
-Name | Type | Description  | Required | Notes
-------------- | ------------- | ------------- | ------------- | -------------
-**identity_id** | **uuid::Uuid** |  | [required] |
-**anchor** | Option<**String**> |  |  |
-**limit** | Option<**String**> | Range is between 1 and 32 (inclusive). |  |
-
-### Return type
-
-[**crate::models::IdentityListFollowingResponse**](IdentityListFollowingResponse.md)
-
-### Authorization
-
-[BearerAuth](../README.md#BearerAuth)
-
-### HTTP request headers
-
-- **Content-Type**: Not defined
-- **Accept**: application/json
-
-[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
-
-
-## identity_list_friends
-
-> crate::models::IdentityListFriendsResponse identity_list_friends(anchor, limit)
-
-
-### Parameters
-
-
-Name | Type | Description  | Required | Notes
-------------- | ------------- | ------------- | ------------- | -------------
-**anchor** | Option<**String**> |  |  |
-**limit** | Option<**String**> | Range is between 1 and 32 (inclusive). |  |
-
-### Return type
-
-[**crate::models::IdentityListFriendsResponse**](IdentityListFriendsResponse.md)
-
-### Authorization
-
-[BearerAuth](../README.md#BearerAuth)
-
-### HTTP request headers
-
-- **Content-Type**: Not defined
-- **Accept**: application/json
-
-[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
-
-
-## identity_list_mutual_friends
-
-> crate::models::IdentityListMutualFriendsResponse identity_list_mutual_friends(identity_id, anchor, limit)
-
-
-### Parameters
-
-
-Name | Type | Description  | Required | Notes
-------------- | ------------- | ------------- | ------------- | -------------
-**identity_id** | **uuid::Uuid** |  | [required] |
-**anchor** | Option<**String**> |  |  |
-**limit** | Option<**String**> | Range is between 1 and 32 (inclusive). |  |
-
-### Return type
-
-[**crate::models::IdentityListMutualFriendsResponse**](IdentityListMutualFriendsResponse.md)
-
-### Authorization
-
-[BearerAuth](../README.md#BearerAuth)
-
-### HTTP request headers
-
-- **Content-Type**: Not defined
-- **Accept**: application/json
-
-[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
-
-
-## identity_list_recent_followers
-
-> crate::models::IdentityListRecentFollowersResponse identity_list_recent_followers(count, watch_index)
-
-
-### Parameters
-
-
-Name | Type | Description  | Required | Notes
-------------- | ------------- | ------------- | ------------- | -------------
-**count** | Option<**i32**> |  |  |
-**watch_index** | Option<**String**> |  |  |
-
-### Return type
-
-[**crate::models::IdentityListRecentFollowersResponse**](IdentityListRecentFollowersResponse.md)
-
-### Authorization
-
-[BearerAuth](../README.md#BearerAuth)
-
-### HTTP request headers
-
-- **Content-Type**: Not defined
-- **Accept**: application/json
-
-[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
-
-
 ## identity_mark_deletion
 
 > identity_mark_deletion()
@@ -458,69 +242,6 @@ This endpoint does not need any parameter.
 ### Return type
 
  (empty response body)
-
-### Authorization
-
-[BearerAuth](../README.md#BearerAuth)
-
-### HTTP request headers
-
-- **Content-Type**: Not defined
-- **Accept**: application/json
-
-[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
-
-
-## identity_report
-
-> identity_report(identity_id, identity_report_request)
-
-
-Creates an abuse report for an identity.
-
-### Parameters
-
-
-Name | Type | Description  | Required | Notes
-------------- | ------------- | ------------- | ------------- | -------------
-**identity_id** | **uuid::Uuid** |  | [required] |
-**identity_report_request** | [**IdentityReportRequest**](IdentityReportRequest.md) |  | [required] |
-
-### Return type
-
- (empty response body)
-
-### Authorization
-
-[BearerAuth](../README.md#BearerAuth)
-
-### HTTP request headers
-
-- **Content-Type**: application/json
-- **Accept**: application/json
-
-[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
-
-
-## identity_search
-
-> crate::models::IdentitySearchResponse identity_search(query, anchor, limit)
-
-
-Fuzzy search for identities.
-
-### Parameters
-
-
-Name | Type | Description  | Required | Notes
-------------- | ------------- | ------------- | ------------- | -------------
-**query** | **String** | The query to match identity display names and account numbers against. | [required] |
-**anchor** | Option<**String**> | How many identities to offset the search by. |  |
-**limit** | Option<**i32**> | Amount of identities to return. Must be between 1 and 32 inclusive. |  |
-
-### Return type
-
-[**crate::models::IdentitySearchResponse**](IdentitySearchResponse.md)
 
 ### Authorization
 
@@ -619,36 +340,6 @@ Name | Type | Description  | Required | Notes
 ### HTTP request headers
 
 - **Content-Type**: application/json
-- **Accept**: application/json
-
-[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
-
-
-## identity_unfollow
-
-> identity_unfollow(identity_id)
-
-
-Unfollows the given identity.
-
-### Parameters
-
-
-Name | Type | Description  | Required | Notes
-------------- | ------------- | ------------- | ------------- | -------------
-**identity_id** | **uuid::Uuid** |  | [required] |
-
-### Return type
-
- (empty response body)
-
-### Authorization
-
-[BearerAuth](../README.md#BearerAuth)
-
-### HTTP request headers
-
-- **Content-Type**: Not defined
 - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)

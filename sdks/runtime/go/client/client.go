@@ -5,7 +5,6 @@ package client
 import (
 	http "net/http"
 	core "sdk/core"
-	kvclient "sdk/kv/client"
 	matchmakerclient "sdk/matchmaker/client"
 )
 
@@ -14,7 +13,6 @@ type Client struct {
 	caller  *core.Caller
 	header  http.Header
 
-	Kv         *kvclient.Client
 	Matchmaker *matchmakerclient.Client
 }
 
@@ -27,7 +25,6 @@ func NewClient(opts ...core.ClientOption) *Client {
 		baseURL:    options.BaseURL,
 		caller:     core.NewCaller(options.HTTPClient),
 		header:     options.ToHeader(),
-		Kv:         kvclient.NewClient(opts...),
 		Matchmaker: matchmakerclient.NewClient(opts...),
 	}
 }

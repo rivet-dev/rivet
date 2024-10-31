@@ -114,7 +114,7 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<Upd
 	// workflow step
 	// Invalidate cache when server is destroyed
 	ctx.cache()
-		.purge("servers_ports", [db_output.datacenter_id])
+		.purge("ds_proxied_ports", [db_output.datacenter_id])
 		.await?;
 
 	Ok(db_output)
