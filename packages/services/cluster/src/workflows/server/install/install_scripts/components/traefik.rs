@@ -6,7 +6,7 @@ use indoc::formatdoc;
 use super::{
 	ok_server::OK_SERVER_PORT,
 	vector::{TUNNEL_VECTOR_PORT, TUNNEL_VECTOR_TCP_JSON_PORT},
-	TUNNEL_API_INTERNAL_PORT,
+	TUNNEL_API_EDGE_PORT,
 };
 
 pub const TUNNEL_SERVICES: &[TunnelService] = &[
@@ -23,8 +23,8 @@ pub const TUNNEL_SERVICES: &[TunnelService] = &[
 		port: 5002,
 	},
 	TunnelService {
-		name: "api-internal",
-		port: TUNNEL_API_INTERNAL_PORT,
+		name: "api-edge",
+		port: TUNNEL_API_EDGE_PORT,
 	},
 	TunnelService {
 		name: "vector",
@@ -228,13 +228,13 @@ pub async fn gg_static_config(config: &rivet_config::Config) -> GlobalResult<Str
 	{
 		format!(
 			"http://127.0.0.1:{port}/traefik-provider/config/game-guard?token={token}&datacenter=___DATACENTER_ID___",
-			port = TUNNEL_API_INTERNAL_PORT,
+			port = TUNNEL_API_EDGE_PORT,
 			token = api_traefik_provider_token.read(),
 		)
 	} else {
 		format!(
 			"http://127.0.0.1:{port}/traefik-provider/config/game-guard?datacenter=___DATACENTER_ID___",
-			port = TUNNEL_API_INTERNAL_PORT,
+			port = TUNNEL_API_EDGE_PORT,
 		)
 	};
 

@@ -12,7 +12,7 @@ const CDN_POLL_INTERVAL: Duration = Duration::from_millis(500);
 static GLOBAL_INIT: Once = Once::new();
 
 const API_TRAEFIK_PROVIDER_URL: &str =
-	"http://rivet-api-internal.rivet-service.svc.cluster.local/traefik-provider";
+	"http://rivet-api-edge.rivet-service.svc.cluster.local/traefik-provider";
 
 struct Ctx {
 	op_ctx: OperationContext<()>,

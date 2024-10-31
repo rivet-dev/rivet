@@ -1,6 +1,6 @@
 CREATE TABLE server_ports_gg_auth (
 	server_id UUID NOT NULL,
-	port_name UUID NOT NULL,
+	port_name TEXT NOT NULL,
 	auth_type INT NOT NULL,
 	key TEXT,
 	value TEXT NOT NULL,

@@ -1,6 +1,6 @@
 use chirp_workflow::prelude::*;
 
-use super::TUNNEL_API_INTERNAL_PORT;
+use super::TUNNEL_API_EDGE_PORT;
 
 pub fn create_hook(tunnel_name: &str, initialize_immediately: bool) -> GlobalResult<String> {
 	let mut script =
@@ -17,8 +17,8 @@ pub fn fetch_info(server_token: &str) -> GlobalResult<String> {
 	Ok(include_str!("../files/rivet_fetch_info.sh")
 		.replace("__SERVER_TOKEN__", server_token)
 		.replace(
-			"__TUNNEL_API_INTERNAL_PORT__",
-			&TUNNEL_API_INTERNAL_PORT.to_string(),
+			"__TUNNEL_API_EDGE_PORT__",
+			&TUNNEL_API_EDGE_PORT.to_string(),
 		))
 }
 
@@ -32,8 +32,8 @@ pub fn fetch_tls(
 		.replace("__NAME__", traefik_instance_name)
 		.replace("__SERVER_TOKEN__", server_token)
 		.replace(
-			"__TUNNEL_API_INTERNAL_PORT__",
-			&TUNNEL_API_INTERNAL_PORT.to_string(),
+			"__TUNNEL_API_EDGE_PORT__",
+			&TUNNEL_API_EDGE_PORT.to_string(),
 		)
 		.replace("__DATACENTER_ID__", &datacenter_id.to_string());
 

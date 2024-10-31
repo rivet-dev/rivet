@@ -46,9 +46,10 @@ async fn server_create(ctx: TestCtx) {
 	let ports = vec![(
 		"testing2".to_string(),
 		ds::workflows::server::Port {
-			internal_port: None,
+			internal_port: Some(28234),
 			routing: types::Routing::GameGuard {
 				protocol: types::GameGuardProtocol::Http,
+				authorization: types::PortAuthorization::None,
 			},
 		},
 	)]
@@ -124,7 +125,7 @@ async fn server_create(ctx: TestCtx) {
 	loop {
 		// Create a new client each time to prevent cache
 		let client = reqwest::Client::new();
-		let res = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+		let res = tokio::time::timeout(std::time::Duration::from_secs(3), async {
 			client
 				.post(format!("http://{hostname}:{port}"))
 				.body(random_body.clone())

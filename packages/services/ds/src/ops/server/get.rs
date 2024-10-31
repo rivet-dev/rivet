@@ -123,8 +123,8 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 				p.gg_port,
 				p.protocol,
 				a.auth_type,
-				a.auth_key,
-				a.auth_value
+				a.key AS auth_key,
+				a.value AS auth_value
 			FROM db_ds.server_ports_gg AS p
 			LEFT JOIN db_ds.server_ports_gg_auth AS a
 			ON

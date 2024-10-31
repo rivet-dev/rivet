@@ -48,6 +48,7 @@ async fn server_drain(ctx: TestCtx) {
 			internal_port: Some(28234),
 			routing: types::Routing::GameGuard {
 				protocol: types::GameGuardProtocol::Http,
+				authorization: types::PortAuthorization::None,
 			},
 		},
 	)]

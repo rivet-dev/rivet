@@ -65,8 +65,8 @@ pub async fn build_ds(
 					gg.port_name,
 					gg.protocol,
 					gga.auth_type,
-					gga.auth_key,
-					gga.auth_value
+					gga.key AS auth_key,
+					gga.value AS auth_value
 				FROM db_ds.server_proxied_ports AS pp
 				JOIN db_ds.servers AS s
 				ON pp.server_id = s.server_id

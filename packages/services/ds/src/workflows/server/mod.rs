@@ -193,6 +193,7 @@ pub(crate) async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> Globa
 		let input = input.clone();
 		let host_unnest = host_unnest.clone();
 		let gg_unnest = gg_unnest.clone();
+		let gg_auth_unnest = gg_auth_unnest.clone();
 
 		async move {
 			sql_execute!(
@@ -246,11 +247,11 @@ pub(crate) async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> Globa
 							server_id,
 							port_name,
 							auth_type,
-							auth_key,
-							auth_value
+							key,
+							value
 						)
 						SELECT $1, t.*
-						FROM unnest($17, $18, $19, $20) AS t(port_name, auth_type, auth_key, auth_value)
+						FROM unnest($21, $22, $23, $24) AS t(port_name, auth_type, auth_key, auth_value)
 						RETURNING 1
 					)
 				SELECT 1
@@ -275,6 +276,10 @@ pub(crate) async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> Globa
 				gg_unnest.port_numbers,
 				gg_unnest.protocols,
 				gg_unnest.gg_ports, // 20
+				gg_auth_unnest.port_names,
+				gg_auth_unnest.port_auth_types,
+				gg_auth_unnest.port_auth_keys,
+				gg_auth_unnest.port_auth_values, // 20
 			)
 			.await
 		}

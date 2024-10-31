@@ -149,6 +149,7 @@ async fn print_test_data(ctx: TestCtx) {
 			internal_port: Some(28234),
 			routing: types::Routing::GameGuard {
 				protocol: types::GameGuardProtocol::Http,
+				authorization: types::PortAuthorization::None,
 			},
 		},
 	)]

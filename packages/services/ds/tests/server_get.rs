@@ -50,6 +50,7 @@ async fn server_get(ctx: TestCtx) {
 			internal_port: Some(28234),
 			routing: types::Routing::GameGuard {
 				protocol: types::GameGuardProtocol::Http,
+				authorization: types::PortAuthorization::None,
 			},
 		},
 	)]

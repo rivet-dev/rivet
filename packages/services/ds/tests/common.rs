@@ -76,6 +76,7 @@ impl Setup {
 					internal_port: Some(8001),
 					routing: types::Routing::GameGuard {
 						protocol: types::GameGuardProtocol::Http,
+						authorization: types::PortAuthorization::None,
 					},
 				},
 			),
@@ -85,6 +86,7 @@ impl Setup {
 					internal_port: Some(8002),
 					routing: types::Routing::GameGuard {
 						protocol: types::GameGuardProtocol::Tcp,
+						authorization: types::PortAuthorization::None,
 					},
 				},
 			),
@@ -94,6 +96,7 @@ impl Setup {
 					internal_port: Some(8003),
 					routing: types::Routing::GameGuard {
 						protocol: types::GameGuardProtocol::Udp,
+						authorization: types::PortAuthorization::None,
 					},
 				},
 			),
