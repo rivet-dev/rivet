@@ -35,7 +35,7 @@ pub async fn config(
 	let mut config = types::TraefikConfigResponse::default();
 
 	// Fetch configs and catch any errors
-	build_cdn(&ctx, &mut config).await?;
+	// build_cdn(&ctx, &mut config).await?;
 
 	// tracing::info!(
 	// 	http_services = ?config.http.services.len(),

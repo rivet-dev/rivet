@@ -58,7 +58,7 @@ impl ToServer {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct SystemInfo {
 	// MHz
 	pub cpu: u64,

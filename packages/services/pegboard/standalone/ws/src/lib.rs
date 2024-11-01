@@ -64,16 +64,7 @@ async fn socket_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>) -> 
 	let port = ctx.config().server()?.rivet.pegboard.port();
 	let addr = SocketAddr::from((host, port));
 
-	let listener = match TcpListener::bind(addr).await {
-		Ok(x) => x,
-		Err(err) => {
-			tracing::error!(?addr, ?err, "failed to bind pegboard ws server");
-
-			// TODO: Find cleaner way of crashing entire program
-			// Hard crash program since a server failing to bind is critical
-			std::process::exit(1);
-		}
-	};
+	let listener = TcpListener::bind(addr).await?;
 	tracing::info!(?port, ?port, "pegboard ws server listening");
 
 	loop {

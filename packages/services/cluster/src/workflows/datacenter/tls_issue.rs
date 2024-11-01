@@ -53,6 +53,8 @@ pub(crate) async fn cluster_datacenter_tls_issue(
 		"job domain not enabled"
 	);
 
+	ctx.removed::<Activity<Order>>().await?;
+
 	let (gg_cert, job_cert) = ctx
 		.join((
 			activity(OrderInput {

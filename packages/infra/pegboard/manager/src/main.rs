@@ -1,12 +1,18 @@
 use std::{
 	os::fd::AsRawFd,
 	path::{Path, PathBuf},
+	time::Duration,
 };
 
 use anyhow::*;
 use futures_util::StreamExt;
+use pegboard::protocol;
+use sqlx::sqlite::SqlitePool;
 use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
-use tokio::fs;
+use tokio::{
+	fs,
+	runtime::{Builder, Runtime},
+};
 use tracing_subscriber::prelude::*;
 use url::Url;
 
@@ -22,8 +28,40 @@ use ctx::Ctx;
 
 const PROTOCOL_VERSION: u16 = 1;
 
-#[tokio::main]
-async fn main() -> Result<()> {
+#[derive(Clone)]
+struct Init {
+	config: Config,
+	system: protocol::SystemInfo,
+	pool: SqlitePool,
+	url: Url,
+}
+
+fn main() -> Result<()> {
+	let init = { Runtime::new()?.block_on(init())? };
+
+	// Retry loop
+	loop {
+		let runtime = Builder::new_multi_thread().enable_all().build()?;
+
+		use std::result::Result::{Err, Ok};
+		match runtime.block_on(run(init.clone())) {
+			Ok(_) => return Ok(()),
+			Err(err) => {
+				// Only restart if its a `RuntimeError`
+				let runtime_err = err.downcast::<ctx::RuntimeError>()?;
+
+				tracing::error!("runtime error: {runtime_err}");
+
+				// Destroy entire runtime to kill any background threads
+				runtime.shutdown_background();
+			}
+		}
+
+		std::thread::sleep(Duration::from_secs(2));
+	}
+}
+
+async fn init() -> Result<Init> {
 	init_tracing();
 
 	// Read args
@@ -44,14 +82,15 @@ async fn main() -> Result<()> {
 		} else if arg == "-v" || arg == "--version" {
 			// Print version
 			println!(env!("CARGO_PKG_VERSION"));
-			return Ok(());
+			std::process::exit(0);
 		} else {
 			bail!("unexpected argument {arg}");
 		}
 	};
 
 	// Read config
-	let config_data = std::fs::read_to_string(&config_path)
+	let config_data = fs::read_to_string(&config_path)
+		.await
 		.with_context(|| format!("Failed to read config file at {}", config_path.display()))?;
 	let config = serde_json::from_str::<Config>(&config_data)
 		.with_context(|| format!("Failed to parse config file at {}", config_path.display()))?;
@@ -61,13 +100,10 @@ async fn main() -> Result<()> {
 	}
 
 	// SAFETY: No other task has spawned yet.
-	// set client_id env var so it can be read by the prometheus registry
+	// Set client_id env var so it can be read by the prometheus registry
 	unsafe {
 		std::env::set_var("CLIENT_ID", config.client_id.to_string());
 	}
-
-	// Start metrics server
-	tokio::spawn(metrics::run_standalone());
 
 	// Read system metrics
 	let system = System::new_with_specifics(
@@ -75,6 +111,11 @@ async fn main() -> Result<()> {
 			.with_cpu(CpuRefreshKind::new().with_frequency())
 			.with_memory(MemoryRefreshKind::new().with_ram()),
 	);
+	let system = protocol::SystemInfo {
+		// Sum of cpu frequency
+		cpu: system.cpus().iter().fold(0, |s, cpu| s + cpu.frequency()),
+		memory: system.total_memory() / (1024 * 1024),
+	};
 
 	// Init project directories
 	utils::init_dir(&config).await?;
@@ -98,19 +139,36 @@ async fn main() -> Result<()> {
 		.append_pair("datacenter_id", &config.datacenter_id.to_string())
 		.append_pair("flavor", &config.flavor.to_string());
 
-	tracing::info!("connecting to ws: {url}");
+	Ok(Init {
+		config,
+		system,
+		pool,
+		url,
+	})
+}
+
+async fn run(init: Init) -> Result<()> {
+	// Start metrics server
+	let metrics_thread = tokio::spawn(metrics::run_standalone());
+
+	tracing::info!("connecting to ws: {}", init.url);
 
 	// Connect to WS
-	let (ws_stream, _) = tokio_tungstenite::connect_async(url.to_string())
+	let (ws_stream, _) = tokio_tungstenite::connect_async(init.url.to_string())
 		.await
-		.context("failed to connect to websocket")?;
+		.map_err(ctx::RuntimeError::ConnectionFailed)?;
 	let (tx, rx) = ws_stream.split();
 
 	tracing::info!("connected");
 
-	let ctx = Ctx::new(config, system, pool, tx);
+	let ctx = Ctx::new(init.config, init.system, init.pool, tx);
 
-	ctx.start(rx).await
+	tokio::try_join!(
+		async { metrics_thread.await?.map_err(Into::into) },
+		ctx.run(rx),
+	)?;
+
+	Ok(())
 }
 
 fn init_tracing() {

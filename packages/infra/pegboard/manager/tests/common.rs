@@ -227,6 +227,11 @@ pub async fn start_client(
 			.with_cpu(CpuRefreshKind::new().with_frequency())
 			.with_memory(MemoryRefreshKind::new().with_ram()),
 	);
+	let system = protocol::SystemInfo {
+		// Sum of cpu frequency
+		cpu: system.cpus().iter().fold(0, |s, cpu| s + cpu.frequency()),
+		memory: system.total_memory() / (1024 * 1024),
+	};
 
 	// Init sqlite db
 	let sqlite_db_url = format!(
@@ -266,7 +271,7 @@ pub async fn start_client(
 	}
 
 	tokio::select! {
-		res = ctx.start(rx) => res.unwrap(),
+		res = ctx.run(rx) => res.unwrap(),
 		_ = close_rx.changed() => {}
 	}
 

@@ -10,26 +10,17 @@ use prometheus::{Encoder, TextEncoder};
 const METRICS_PORT: u16 = 6000;
 
 #[tracing::instrument(skip_all)]
-pub async fn run_standalone() {
+pub async fn run_standalone() -> anyhow::Result<()> {
 	let addr = SocketAddr::from(([0, 0, 0, 0], METRICS_PORT));
 
-	let server = match Server::try_bind(&addr) {
-		Ok(x) => x,
-		Err(err) => {
-			tracing::error!(?addr, ?err, "failed to bind pegboard metrics server");
+	let server = Server::try_bind(&addr)?;
 
-			// TODO: Find cleaner way of crashing entire program
-			// Hard crash program since a server failing to bind is critical
-			std::process::exit(1);
-		}
-	};
-
-	let server = server.serve(make_service_fn(|_| async {
-		Ok::<_, hyper::Error>(service_fn(serve_req))
-	}));
-	if let Err(err) = server.await {
-		tracing::error!(?err, "metrics server error");
-	}
+	server
+		.serve(make_service_fn(|_| async {
+			Ok::<_, hyper::Error>(service_fn(serve_req))
+		}))
+		.await
+		.map_err(Into::into)
 }
 
 #[tracing::instrument(skip_all)]

@@ -9,7 +9,6 @@ use indoc::indoc;
 use nix::unistd::Pid;
 use pegboard::protocol;
 use sqlx::{pool::PoolConnection, Sqlite, SqlitePool};
-use sysinfo::System;
 use tokio::{
 	net::{TcpListener, TcpStream},
 	sync::{Mutex, RwLock},
@@ -22,6 +21,18 @@ use crate::{actor::Actor, config::Config, metrics, runner, utils};
 const PING_INTERVAL: Duration = Duration::from_secs(1);
 /// TCP Port for runners to connect to.
 const RUNNER_PORT: u16 = 54321;
+
+#[derive(thiserror::Error, Debug)]
+pub enum RuntimeError {
+	#[error("ws connection failed: {0}")]
+	ConnectionFailed(tokio_tungstenite::tungstenite::Error),
+	#[error("runner socket failed: {0}")]
+	RunnerSocketListenFailed(std::io::Error),
+	#[error("socket closed")]
+	SocketClosed,
+	#[error("stream closed")]
+	StreamClosed,
+}
 
 #[derive(sqlx::FromRow)]
 struct ActorRow {
@@ -36,7 +47,7 @@ pub struct Ctx {
 	pool: SqlitePool,
 	tx: Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>,
 
-	pub(crate) system: System,
+	system: protocol::SystemInfo,
 	pub(crate) actors: RwLock<HashMap<Uuid, Arc<Actor>>>,
 	isolate_runner: RwLock<Option<runner::Handle>>,
 }
@@ -44,7 +55,7 @@ pub struct Ctx {
 impl Ctx {
 	pub fn new(
 		config: Config,
-		system: System,
+		system: protocol::SystemInfo,
 		pool: SqlitePool,
 		tx: SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
 	) -> Arc<Self> {
@@ -129,7 +140,7 @@ impl Ctx {
 			.await
 	}
 
-	pub async fn start(
+	pub async fn run(
 		self: &Arc<Self>,
 		rx: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
 	) -> Result<()> {
@@ -154,16 +165,10 @@ impl Ctx {
 		let self2 = self.clone();
 		let runner_socket = tokio::spawn(async move {
 			tracing::warn!(port=%RUNNER_PORT, "listening for runner sockets");
-			let listener = match TcpListener::bind(("0.0.0.0", RUNNER_PORT)).await {
-				Result::Ok(x) => x,
-				Err(err) => {
-					tracing::error!(host = "0.0.0.0", port = ?RUNNER_PORT, "failed to bind pegboard manager server");
 
-					// TODO: Find cleaner way of crashing entire program
-					// Hard crash program since a server failing to bind is critical
-					std::process::exit(1);
-				}
-			};
+			let listener = TcpListener::bind(("0.0.0.0", RUNNER_PORT))
+				.await
+				.map_err(RuntimeError::RunnerSocketListenFailed)?;
 
 			loop {
 				use std::result::Result::{Err, Ok};
@@ -201,15 +206,7 @@ impl Ctx {
 
 			self.send_packet(protocol::ToServer::Init {
 				last_command_idx,
-				system: protocol::SystemInfo {
-					// Sum of cpu frequency
-					cpu: self
-						.system
-						.cpus()
-						.iter()
-						.fold(0, |s, cpu| s + cpu.frequency()),
-					memory: self.system.total_memory() / (1024 * 1024),
-				},
+				system: self.system.clone(),
 			})
 			.await?;
 		}
@@ -237,16 +234,14 @@ impl Ctx {
 					self.process_packet(packet).await?;
 				}
 				Message::Pong(_) => tracing::debug!("received pong"),
-				Message::Close(_) => {
-					bail!("socket closed");
-				}
+				Message::Close(_) => return Err(RuntimeError::SocketClosed.into()),
 				msg => {
 					tracing::warn!(?msg, "unexpected message");
 				}
 			}
 		}
 
-		bail!("stream closed");
+		Err(RuntimeError::StreamClosed.into())
 	}
 
 	async fn process_packet(self: &Arc<Self>, packet: protocol::ToClient) -> Result<()> {
