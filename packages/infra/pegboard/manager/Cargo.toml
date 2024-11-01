@@ -12,7 +12,7 @@ test = []
 [dependencies]
 anyhow = "1.0.79"
 futures-util = { version = "0.3" }
-hyper = { version = "0.14", features = ["server", "http1", "tcp"] }
+hyper = { version = "0.14", features = ["server", "http1", "tcp", "stream"] }
 indoc = "2.0"
 lazy_static = "1.4"
 nix = { version = "0.27", default-features = false, features = ["fs", "user", "signal"] }

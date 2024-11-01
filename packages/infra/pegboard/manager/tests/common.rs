@@ -443,11 +443,22 @@ pub async fn start_vector() {
 		.join("tests")
 		.join("vector.json");
 
-	let status = Command::new("vector")
+	tracing::info!("{}", config_path.display());
+
+	let status = Command::new("docker")
+		.arg("run")
+		.arg("-v")
+		.arg(format!("{}:/etc/vector/vector.json:ro", config_path.display()))
+		.arg("--rm")
+		.arg("-p")
+		.arg("5020:5020")
+		.arg("-p")
+		.arg("5021:5021")
+		.arg("--name")
+		.arg("test-vector")
+		.arg("timberio/vector:0.42.0-debian")
 		.arg("-c")
-		.arg(config_path)
-		.arg("-q")
-		.env("VECTOR_NO_GRACEFUL_SHUTDOWN_LIMIT", "1")
+		.arg("/etc/vector/vector.json")
 		.status()
 		.await
 		.unwrap();
