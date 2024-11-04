@@ -1,7 +1,7 @@
 PUBLIC_IP=$(ip -4 route get 1.0.0.0 | awk '{print $7; exit}')
 
 # MARK: Pegboard config
-cat << 'EOF' > /etc/pegboard/config.json
+cat << 'EOF' > /etc/rivet-client/config.json
 {
 	"client_id": "___SERVER_ID___",
 	"datacenter_id": "___DATACENTER_ID___",
@@ -308,10 +308,10 @@ cat << 'EOF' > /etc/systemd/system/pegboard.service
 Description=Pegboard
 Wants=network-online.target setup_pegboard_networking.service
 After=network-online.target setup_pegboard_networking.service
-ConditionPathExists=/etc/pegboard/
+ConditionPathExists=/etc/rivet-client/
 
 [Service]
-ExecStart=/usr/bin/pegboard -c /etc/pegboard/config.json
+ExecStart=/usr/bin/rivet-client -c /etc/rivet-client/config.json
 Restart=always
 RestartSec=2
 TasksMax=infinity

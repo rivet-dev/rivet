@@ -7,14 +7,13 @@ EOF
 
 sysctl --system
 
-mkdir -p /etc/pegboard
-mkdir -p /etc/pegboard/bin
+mkdir -p /etc/rivet-client
 
-curl -Lf -o /usr/bin/pegboard "__PEGBOARD_MANAGER_BINARY_URL__"
-chmod +x /usr/bin/pegboard
+curl -Lf -o /usr/local/bin/rivet-client "__PEGBOARD_MANAGER_BINARY_URL__"
+chmod +x /usr/local/bin/rivet-client
 
-curl -Lf -o /etc/pegboard/bin/container-runner "__CONTAINER_RUNNER_BINARY_URL__"
-chmod +x /etc/pegboard/bin/container-runner
+curl -Lf -o /usr/local/bin/rivet-container-runner "__CONTAINER_RUNNER_BINARY_URL__"
+chmod +x /usr/local/bin/rivet-container-runner
 
-curl -Lf -o /etc/pegboard/bin/v8-isolate-runner "__V8_ISOLATE_BINARY_URL__"
-chmod +x /etc/pegboard/bin/v8-isolate-runner
+curl -Lf -o /usr/local/bin/rivet-isolate-v8-runner "__V8_ISOLATE_BINARY_URL__"
+chmod +x /usr/local/bin/rivet-isolate-v8-runner

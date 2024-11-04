@@ -77,7 +77,7 @@ pub fn configure(config: &Config, pool_type: PoolType) -> GlobalResult<String> {
 		PoolType::Pegboard | PoolType::PegboardIsolate => {
 			config_json["sources"]["pegboard_manager"] = json!({
 				"type": "file",
-				"include": ["/etc/pegboard/log"]
+				"include": ["/var/lib/rivet-client/log"]
 			});
 
 			config_json["transforms"]["pegboard_manager_add_meta"] = json!({
@@ -99,7 +99,7 @@ pub fn configure(config: &Config, pool_type: PoolType) -> GlobalResult<String> {
 
 			config_json["sources"]["pegboard_v8_isolate_runner"] = json!({
 				"type": "file",
-				"include": ["/etc/pegboard/runner/log"]
+				"include": ["/var/lib/rivet-client/runner/log"]
 			});
 
 			config_json["transforms"]["pegboard_v8_isolate_runner_add_meta"] = json!({
@@ -121,7 +121,7 @@ pub fn configure(config: &Config, pool_type: PoolType) -> GlobalResult<String> {
 
 			config_json["sources"]["pegboard_container_runners"] = json!({
 				"type": "file",
-				"include": ["/etc/pegboard/actors/*/log"]
+				"include": ["/var/lib/rivet-client/actors/*/log"]
 			});
 
 			config_json["transforms"]["pegboard_container_runner_add_meta"] = json!({
@@ -130,7 +130,7 @@ pub fn configure(config: &Config, pool_type: PoolType) -> GlobalResult<String> {
 				"source": formatdoc!(
 					r#"
 					.source = "pegboard_container_runner"
-					.actor_id, err = parse_regex(.file, r'/etc/pegboard/actors/(?P<actor_id>[0-9a-fA-F-]+)/log').actor_id
+					.actor_id, err = parse_regex(.file, r'/var/lib/rivet-client/actors/(?P<actor_id>[0-9a-fA-F-]+)/log').actor_id
 
 					.client_id = "___SERVER_ID___"
 					.server_id = "___SERVER_ID___"
