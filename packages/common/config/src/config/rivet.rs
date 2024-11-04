@@ -289,6 +289,15 @@ pub struct Cluster {
 
 	/// Configuration for server pools that use a margin for scaling.
 	pub pools: ClusterPools,
+
+	/// The URL for the manager binary.
+	pub manager_binary_url: Url,
+
+	/// The URL for the container runner binary.
+	pub container_runner_binary_url: Url,
+
+	/// The URL for the isolate runner binary.
+	pub isolate_runner_binary_url: Url,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -363,15 +372,6 @@ pub struct Pegboard {
 	pub host: Option<IpAddr>,
 	/// The port on which the Pegboard service listens.
 	pub port: Option<u16>,
-	/// The url for the manager binary.
-	#[serde(default)]
-	pub manager_binary_url: Option<Url>,
-	/// The url for the container runner binary.
-	#[serde(default)]
-	pub container_runner_binary_url: Option<Url>,
-	/// The url for the isolate runner binary.
-	#[serde(default)]
-	pub isolate_runner_binary_url: Option<Url>,
 }
 
 impl Pegboard {
@@ -381,18 +381,6 @@ impl Pegboard {
 
 	pub fn port(&self) -> u16 {
 		self.port.unwrap_or(default_ports::PEGBOARD)
-	}
-
-	pub fn manager_binary_url(&self) -> Option<&Url> {
-		self.manager_binary_url.as_ref()
-	}
-
-	pub fn container_runner_binary_url(&self) -> Option<&Url> {
-		self.container_runner_binary_url.as_ref()
-	}
-
-	pub fn isolate_runner_binary_url(&self) -> Option<&Url> {
-		self.isolate_runner_binary_url.as_ref()
 	}
 }
 

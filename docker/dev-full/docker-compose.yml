@@ -152,6 +152,8 @@ services:
 
   seaweedfs:
     image: bitnami/seaweedfs:3.78.0
+    # TODO: Remove root user
+    user: root
     command: server -dir /var/lib/seaweedfs -s3 -s3.config /etc/seaweedfs/s3.json -s3.port=8000 -s3.allowEmptyFolder=false -s3.allowDeleteBucketNotEmpty=false
     volumes:
       - ./seaweedfs:/etc/seaweedfs:ro
