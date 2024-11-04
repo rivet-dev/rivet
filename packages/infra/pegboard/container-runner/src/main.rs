@@ -1,5 +1,6 @@
 use std::{
 	fs,
+	net::SocketAddr,
 	os::fd::AsRawFd,
 	path::{Path, PathBuf},
 	sync::mpsc,
@@ -35,6 +36,11 @@ fn main() -> Result<()> {
 	)?;
 
 	let root_user_enabled = var("ROOT_USER_ENABLED")? == "1";
+	let vector_socket_addr: Option<SocketAddr> = var("VECTOR_SOCKET_ADDR")
+		.ok()
+		.map(|x| x.parse())
+		.transpose()
+		.context("failed to parse vector socket addr")?;
 	let stakeholder = match var("STAKEHOLDER").ok() {
 		Some(x) if x == "dynamic_server" => Stakeholder::DynamicServer {
 			server_id: var("SERVER_ID")?,
@@ -46,14 +52,20 @@ fn main() -> Result<()> {
 	let (shutdown_tx, shutdown_rx) = mpsc::sync_channel(1);
 
 	// Start log shipper
-	let (msg_tx, msg_rx) =
-		mpsc::sync_channel::<log_shipper::ReceivedMessage>(MAX_BUFFER_BYTES / MAX_LINE_BYTES);
-	let log_shipper = log_shipper::LogShipper {
-		shutdown_rx,
-		msg_rx,
-		stakeholder,
+	let (msg_tx, log_shipper_thread) = if let Some(vector_socket_addr) = vector_socket_addr {
+		let (msg_tx, msg_rx) =
+			mpsc::sync_channel::<log_shipper::ReceivedMessage>(MAX_BUFFER_BYTES / MAX_LINE_BYTES);
+		let log_shipper = log_shipper::LogShipper {
+			shutdown_rx,
+			msg_rx,
+			vector_socket_addr,
+			stakeholder,
+		};
+		let log_shipper_thread = log_shipper.spawn();
+		(Some(msg_tx), Some(log_shipper_thread))
+	} else {
+		(None, None)
 	};
-	let log_shipper_thread = log_shipper.spawn();
 
 	// Run the container
 	let exit_code = match container::run(msg_tx.clone(), &actor_path, root_user_enabled) {
@@ -83,10 +95,12 @@ fn main() -> Result<()> {
 
 	// Wait for log shipper to finish
 	drop(msg_tx);
-	match log_shipper_thread.join() {
-		Result::Ok(_) => {}
-		Err(err) => {
-			eprintln!("log shipper failed: {err:?}")
+	if let Some(log_shipper_thread) = log_shipper_thread {
+		match log_shipper_thread.join() {
+			Result::Ok(_) => {}
+			Err(err) => {
+				eprintln!("log shipper failed: {err:?}")
+			}
 		}
 	}
 

@@ -1,10 +1,10 @@
-use std::{io::Write, net::TcpStream, sync::mpsc, thread::JoinHandle};
+use std::{io::Write, net::SocketAddr, net::TcpStream, sync::mpsc, thread::JoinHandle};
 
 use anyhow::*;
 use serde::Serialize;
 use serde_json;
 
-use crate::utils::{var, Stakeholder};
+use crate::utils::Stakeholder;
 
 #[derive(Copy, Clone, Debug)]
 #[repr(u8)]
@@ -35,6 +35,8 @@ pub struct LogShipper {
 	/// If the socket closes or creates back pressure, logs will be dropped on the main thread when
 	/// trying to send to this channel.
 	pub msg_rx: mpsc::Receiver<ReceivedMessage>,
+
+	pub vector_socket_addr: SocketAddr,
 
 	pub stakeholder: Stakeholder,
 }
@@ -79,11 +81,12 @@ impl LogShipper {
 	}
 
 	fn run_inner(&self) -> Result<()> {
-		let vector_socket_addr = var("VECTOR_SOCKET_ADDR")?;
+		println!(
+			"Connecting log shipper to Vector at {}",
+			self.vector_socket_addr
+		);
 
-		println!("Connecting log shipper to Vector at {vector_socket_addr}");
-
-		let mut stream = TcpStream::connect(vector_socket_addr)?;
+		let mut stream = TcpStream::connect(self.vector_socket_addr)?;
 
 		println!("Log shipper connected");
 

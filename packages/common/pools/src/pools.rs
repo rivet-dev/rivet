@@ -5,6 +5,7 @@ use tokio_util::sync::{CancellationToken, DropGuard};
 
 use crate::{ClickHousePool, CrdbPool, Error, NatsPool, RedisPool};
 
+// TODO: Automatically shutdown all pools on drop
 pub(crate) struct PoolsInner {
 	pub(crate) _guard: DropGuard,
 	config: rivet_config::Config,

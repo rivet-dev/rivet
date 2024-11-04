@@ -17,7 +17,7 @@ impl SubCommand {
 			Self::Login { username } => {
 				rivet_term::status::progress("Logging in as", &username);
 
-				let url = crate::util::api::admin_login_url(&config, username).await?;
+				let url = crate::util::admin::login_create(&config, username).await?;
 
 				eprintln!();
 				rivet_term::status::success("Login with this url", "");

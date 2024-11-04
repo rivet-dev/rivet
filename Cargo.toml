@@ -77,11 +77,9 @@ members = [
 "packages/api/group/",
 "packages/api/monolith-edge/",
 "packages/api/cf-verification/",
-"packages/api/admin/",
 "packages/api/status/",
 "packages/api/cloud/",
 "packages/api/job/",
-"packages/api/monolith-private/",
 "packages/api/games/",
 "packages/api/actor/",
 "packages/api/monolith-public/",
@@ -285,7 +283,7 @@ members = [
 "packages/services/custom-user-avatar/ops/list-for-game/",
 "packages/services/custom-user-avatar/ops/upload-complete/",
 "packages/services/debug/ops/email-res/",
-"packages/services/tier/",
+"packages/services/tier/", "packages/services/admin",
 ]
 
 # Speed up compilation

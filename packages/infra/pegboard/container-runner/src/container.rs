@@ -21,7 +21,7 @@ const MAX_PREVIEW_LINES: usize = 128;
 ///
 /// Returns the exit code of the container that will be passed to the parent
 pub fn run(
-	msg_tx: mpsc::SyncSender<log_shipper::ReceivedMessage>,
+	msg_tx: Option<mpsc::SyncSender<log_shipper::ReceivedMessage>>,
 	actor_path: &Path,
 	root_user_enabled: bool,
 ) -> Result<i32> {
@@ -139,7 +139,7 @@ pub fn run(
 
 /// Spawn a thread to ship logs from a stream to log_shipper::LogShipper
 fn ship_logs(
-	msg_tx: mpsc::SyncSender<log_shipper::ReceivedMessage>,
+	msg_tx: Option<mpsc::SyncSender<log_shipper::ReceivedMessage>>,
 	stream_type: log_shipper::StreamType,
 	stream: impl BufRead + Send + 'static,
 ) -> thread::JoinHandle<()> {
@@ -235,11 +235,15 @@ fn ship_logs(
 ///
 /// Returns true if receiver is disconnected
 pub fn send_message(
-	msg_tx: &mpsc::SyncSender<log_shipper::ReceivedMessage>,
+	msg_tx: &Option<mpsc::SyncSender<log_shipper::ReceivedMessage>>,
 	throttle_error: Option<&mut throttle::Throttle>,
 	stream_type: log_shipper::StreamType,
 	message: String,
 ) -> bool {
+	let Some(msg_tx) = msg_tx.as_ref() else {
+		return false;
+	};
+
 	// Timestamp is formatted in nanoseconds since that's the way it's formatted in
 	// ClickHouse
 	let ts = SystemTime::now()

@@ -1,0 +1,10 @@
+{
+	"client_id": "fc67e54e-5d6a-4726-ab23-77b0e54f068f",
+	"datacenter_id": "d3dcbe9e-2c0d-4dae-b147-cd6e7c725616",
+	"network_ip": "127.0.0.1",
+	"vector_socket_addr": "127.0.0.1:5030",
+	"flavor": "isolate",
+	"redirect_logs": false,
+	"pegboard_ws_endpoint": "ws://rivet-server:8082",
+	"api_public_endpoint": "http://rivet-server:8080"
+}

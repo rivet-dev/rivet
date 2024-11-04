@@ -152,16 +152,13 @@ impl Actor {
 	) -> Result<()> {
 		tracing::info!(actor_id=?self.actor_id, "spawning");
 
-		let mut runner_env = vec![
-			(
-				"ROOT_USER_ENABLED",
-				self.config.root_user_enabled.to_string(),
-			),
-			(
-				"VECTOR_SOCKET_ADDR",
-				ctx.config().vector_socket_addr.to_string(),
-			),
-		];
+		let mut runner_env = vec![(
+			"ROOT_USER_ENABLED",
+			self.config.root_user_enabled.to_string(),
+		)];
+		if let Some(vector_socket_addr) = ctx.config().vector_socket_addr {
+			runner_env.push(("VECTOR_SOCKET_ADDR", vector_socket_addr.to_string()));
+		}
 		runner_env.extend(self.config.stakeholder.env());
 
 		let runner = match self.config.image.kind {

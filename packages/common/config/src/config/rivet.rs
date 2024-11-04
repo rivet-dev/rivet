@@ -12,7 +12,6 @@ pub mod default_hosts {
 	// Public services using public interface
 	pub const API_PUBLIC: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
 	pub const API_EDGE: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
-	pub const API_PRIVATE: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
 	pub const PEGBOARD: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
 	pub const TUNNEL: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
 
@@ -24,7 +23,6 @@ pub mod default_hosts {
 pub mod default_ports {
 	pub const API_PUBLIC: u16 = 8080;
 	pub const API_EDGE: u16 = 8081;
-	pub const API_PRIVATE: u16 = 8084;
 	pub const PEGBOARD: u16 = 8082;
 	pub const TUNNEL: u16 = 8003;
 
@@ -63,9 +61,6 @@ pub struct Rivet {
 
 	#[serde(default)]
 	pub api_edge: ApiEdge,
-
-	#[serde(default)]
-	pub api_private: ApiPrivate,
 
 	#[serde(default)]
 	pub metrics: Metrics,
@@ -116,7 +111,6 @@ impl Default for Rivet {
 			token: Tokens::default(),
 			api_public: ApiPublic::default(),
 			api_edge: ApiEdge::default(),
-			api_private: ApiPrivate::default(),
 			metrics: Metrics::default(),
 			health: Health::default(),
 			telemetry: Telemetry::default(),
@@ -252,32 +246,6 @@ impl ApiEdge {
 
 	pub fn port(&self) -> u16 {
 		self.port.unwrap_or(default_ports::API_EDGE)
-	}
-}
-
-/// Configuration for the private API service.
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct ApiPrivate {
-	/// The internal origin URL for the API.
-	pub internal_origin: Option<Url>,
-	pub host: Option<IpAddr>,
-	pub port: Option<u16>,
-}
-
-impl ApiPrivate {
-	pub fn internal_origin(&self) -> Url {
-		self.internal_origin.clone().unwrap_or_else(|| {
-			url::Url::parse(&format!("http://{}:{}", self.host(), self.port())).unwrap()
-		})
-	}
-
-	pub fn host(&self) -> IpAddr {
-		self.host.unwrap_or(default_hosts::API_PRIVATE)
-	}
-
-	pub fn port(&self) -> u16 {
-		self.port.unwrap_or(default_ports::API_PRIVATE)
 	}
 }
 
@@ -515,8 +483,6 @@ pub struct Tokens {
 	pub traefik_provider: Option<Secret<String>>,
 	/// Token for API status checks.
 	pub status: Option<Secret<String>>,
-	/// Token for API admin access.
-	pub admin: Option<Secret<String>>,
 }
 
 impl Default for Tokens {
@@ -524,7 +490,6 @@ impl Default for Tokens {
 		Self {
 			traefik_provider: None,
 			status: None,
-			admin: None,
 		}
 	}
 }

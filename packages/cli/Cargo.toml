@@ -61,7 +61,6 @@ user-delete-pending = { path = "../services/user/standalone/delete-pending" }
 
 # API
 api-monolith-edge = { path = "../api/monolith-edge" }
-api-monolith-private = { path = "../api/monolith-private" }
 api-monolith-public = { path = "../api/monolith-public" }
 
 # Oneshot
@@ -71,6 +70,11 @@ pegboard-dc-init = { path = "../services/pegboard/standalone/dc-init" }
 rivet-config = { version = "0.1.0", path = "../common/config" }
 reqwest = "0.12.9"
 admin-default-login = { version = "0.0.1", path = "../services/admin/standalone/default-login" }
+admin = { version = "0.1.0", path = "../services/admin" }
+chirp-client = { version = "0.1.0", path = "../common/chirp/client" }
+rivet-cache = { version = "0.1.0", path = "../common/cache/build" }
+chirp-workflow = { version = "0.1.0", path = "../common/chirp-workflow/core" }
+rivet-connection = { version = "0.1.0", path = "../common/connection" }
 
 
 [dependencies.sqlx]

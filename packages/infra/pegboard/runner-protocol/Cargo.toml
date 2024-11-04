@@ -1,5 +1,5 @@
 [package]
-name = "runner-protocol"
+name = "pegboard-runner-protocol"
 version = "0.1.0"
 edition = "2021"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]

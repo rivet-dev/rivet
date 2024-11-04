@@ -34,9 +34,51 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "512761e0bb2578dd7380c6baaa0f4ce03e84f95e960231d1dec8bf4d7d6e2627"
 
 [[package]]
+name = "admin"
+version = "0.1.0"
+dependencies = [
+ "acme-lib",
+ "anyhow",
+ "chirp-client",
+ "chirp-workflow",
+ "cloudflare",
+ "cluster",
+ "faker-build",
+ "faker-game",
+ "faker-region",
+ "heck 0.3.3",
+ "http 0.2.12",
+ "include_dir",
+ "indoc 1.0.9",
+ "ip-info",
+ "lazy_static",
+ "linode",
+ "nomad-client",
+ "nomad-util",
+ "rand",
+ "reqwest 0.11.27",
+ "rivet-cache",
+ "rivet-config",
+ "rivet-metrics",
+ "rivet-operation",
+ "rivet-runtime",
+ "rivet-util-job",
+ "s3-util",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "ssh2",
+ "strum 0.26.3",
+ "token-create",
+ "trust-dns-resolver",
+ "upload-get",
+]
+
+[[package]]
 name = "admin-default-login"
 version = "0.0.1"
 dependencies = [
+ "admin",
  "chirp-client",
  "chirp-workflow",
  "rivet-config",
@@ -250,47 +292,6 @@ dependencies = [
  "user-get",
  "user-identity-get",
  "user-team-list",
- "uuid",
-]
-
-[[package]]
-name = "api-admin"
-version = "0.0.1"
-dependencies = [
- "api-helper",
- "async-trait",
- "async_once",
- "chirp-client",
- "chirp-workflow",
- "chrono",
- "cluster",
- "http 0.2.12",
- "hyper 0.14.30",
- "lazy_static",
- "prost 0.10.4",
- "reqwest 0.11.27",
- "rivet-api",
- "rivet-cache",
- "rivet-claims",
- "rivet-config",
- "rivet-connection",
- "rivet-convert",
- "rivet-env",
- "rivet-health-checks",
- "rivet-matchmaker",
- "rivet-operation",
- "rivet-pools",
- "rivet-util-mm",
- "s3-util",
- "serde",
- "serde_json",
- "thiserror",
- "token-create",
- "tokio",
- "tracing",
- "tracing-futures",
- "tracing-subscriber",
- "url",
  "uuid",
 ]
 
@@ -838,25 +839,6 @@ dependencies = [
  "api-helper",
  "api-provision",
  "api-traefik-provider",
- "async-trait",
- "chirp-client",
- "http 0.2.12",
- "hyper 0.14.30",
- "rivet-config",
- "rivet-env",
- "rivet-operation",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "url",
-]
-
-[[package]]
-name = "api-monolith-private"
-version = "0.0.1"
-dependencies = [
- "api-admin",
- "api-helper",
  "async-trait",
  "chirp-client",
  "http 0.2.12",
@@ -6984,6 +6966,7 @@ dependencies = [
  "chirp-client",
  "chirp-worker",
  "chirp-workflow",
+ "cluster",
  "pegboard",
  "reqwest 0.11.27",
  "rivet-config",
@@ -7979,12 +7962,14 @@ dependencies = [
 name = "rivet-cli"
 version = "0.1.0"
 dependencies = [
+ "admin",
  "admin-default-login",
  "anyhow",
  "api-monolith-edge",
- "api-monolith-private",
  "api-monolith-public",
  "build-default-create",
+ "chirp-client",
+ "chirp-workflow",
  "chrono",
  "clap",
  "cluster-datacenter-tls-renew",
@@ -8010,7 +7995,10 @@ dependencies = [
  "pegboard-gc",
  "pegboard-ws",
  "reqwest 0.12.9",
+ "rivet-api",
+ "rivet-cache",
  "rivet-config",
+ "rivet-connection",
  "rivet-migrate",
  "rivet-pools",
  "rivet-runtime",

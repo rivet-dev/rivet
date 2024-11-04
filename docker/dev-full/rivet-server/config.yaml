@@ -1,4 +1,7 @@
 server:
+  rivet:
+    ui:
+      public_origin_regex: .*
   # IMPORTANT: Do not ship this to production
   jwt:
     public: |

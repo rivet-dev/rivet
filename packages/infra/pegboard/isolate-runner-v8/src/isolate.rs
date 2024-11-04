@@ -40,16 +40,23 @@ pub fn run(actors_path: PathBuf, actor_id: Uuid, stop_rx: watch::Receiver<()>) -
 	let (shutdown_tx, shutdown_rx) = mpsc::sync_channel(1);
 
 	// Start log shipper
-	let (msg_tx, msg_rx) = mpsc::sync_channel::<log_shipper::ReceivedMessage>(
-		log_shipper::MAX_BUFFER_BYTES / log_shipper::MAX_LINE_BYTES,
-	);
-	let log_shipper = log_shipper::LogShipper {
-		actor_id,
-		shutdown_rx,
-		msg_rx,
-		stakeholder: config.stakeholder.clone(),
+	let (msg_tx, log_shipper_thread) = if let Some(vector_socket_addr) = config.vector_socket_addr {
+		let (msg_tx, msg_rx) = mpsc::sync_channel::<log_shipper::ReceivedMessage>(
+			log_shipper::MAX_BUFFER_BYTES / log_shipper::MAX_LINE_BYTES,
+		);
+		let log_shipper = log_shipper::LogShipper {
+			actor_id,
+			shutdown_rx,
+			msg_rx,
+			vector_socket_addr,
+			stakeholder: config.stakeholder.clone(),
+		};
+		let log_shipper_thread = log_shipper.spawn();
+
+		(Some(msg_tx), Some(log_shipper_thread))
+	} else {
+		(None, None)
 	};
-	let log_shipper_thread = log_shipper.spawn();
 
 	// Run the isolate
 	let exit_code = match create_and_run_current_thread(run_inner(
@@ -86,10 +93,12 @@ pub fn run(actors_path: PathBuf, actor_id: Uuid, stop_rx: watch::Receiver<()>) -
 
 	// Wait for log shipper to finish
 	drop(msg_tx);
-	match log_shipper_thread.join() {
-		Result::Ok(_) => {}
-		Err(err) => {
-			eprintln!("{actor_id}: Log shipper failed: {err:?}")
+	if let Some(log_shipper_thread) = log_shipper_thread {
+		match log_shipper_thread.join() {
+			Result::Ok(_) => {}
+			Err(err) => {
+				eprintln!("{actor_id}: Log shipper failed: {err:?}")
+			}
 		}
 	}
 
@@ -106,7 +115,7 @@ async fn run_inner(
 	actor_id: Uuid,
 	actor_path: PathBuf,
 	mut stop_rx: watch::Receiver<()>,
-	msg_tx: mpsc::SyncSender<log_shipper::ReceivedMessage>,
+	msg_tx: Option<mpsc::SyncSender<log_shipper::ReceivedMessage>>,
 	config: Config,
 ) -> Result<i32> {
 	println!("{actor_id}: Starting isolate");

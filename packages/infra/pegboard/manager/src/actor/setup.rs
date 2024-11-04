@@ -288,7 +288,7 @@ impl Actor {
 				.map(|(label, port)| format!("PORT_{}={}", label.replace('-', "_"), port.target))
 				.chain(std::iter::once(format!(
 					"RIVET_API_ENDPOINT={}",
-					ctx.config().api_endpoint
+					ctx.config().api_public_endpoint
 				)))
 				.collect(),
 		);
@@ -413,9 +413,10 @@ impl Actor {
 						port.target.to_string(),
 					)
 				}))
-				.chain(std::iter::once(("RIVET_API_ENDPOINT".to_string(), ctx.config().api_endpoint.clone())))
+				.chain(std::iter::once(("RIVET_API_ENDPOINT".to_string(), ctx.config().api_public_endpoint.to_string())))
 				.collect::<HashMap<_, _>>(),
 			"stakeholder": self.config.stakeholder,
+			"vector_socket_addr": ctx.config().vector_socket_addr,
 		});
 		fs::write(
 			actor_path.join("config.json"),

@@ -732,20 +732,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2459377285ad874054d797f3ccebf984978aa39129f6eafde5cdc8315b612f8"
 
 [[package]]
-name = "container-runner"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "nix 0.27.1",
- "portpicker",
- "serde",
- "serde_json",
- "signal-hook",
- "tempfile",
- "uuid",
-]
-
-[[package]]
 name = "cooked-waker"
 version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2001,13 +1987,6 @@ dependencies = [
  "rfc6979",
  "signature",
  "spki",
-]
-
-[[package]]
-name = "echo-server"
-version = "0.1.0"
-dependencies = [
- "tiny_http",
 ]
 
 [[package]]
@@ -4131,6 +4110,50 @@ dependencies = [
 ]
 
 [[package]]
+name = "pegboard-container-runner"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "nix 0.27.1",
+ "portpicker",
+ "serde",
+ "serde_json",
+ "signal-hook",
+ "tempfile",
+ "uuid",
+]
+
+[[package]]
+name = "pegboard-echo-server"
+version = "0.1.0"
+dependencies = [
+ "tiny_http",
+]
+
+[[package]]
+name = "pegboard-isolate-runner-v8"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "deno_ast",
+ "deno_core",
+ "deno_runtime",
+ "futures-util",
+ "netif",
+ "nix 0.27.1",
+ "pegboard-runner-protocol",
+ "portpicker",
+ "serde",
+ "serde_json",
+ "signal-hook",
+ "tempfile",
+ "tokio",
+ "tokio-tungstenite",
+ "twox-hash",
+ "uuid",
+]
+
+[[package]]
 name = "pegboard-manager"
 version = "0.1.0"
 dependencies = [
@@ -4142,11 +4165,11 @@ dependencies = [
  "nix 0.27.1",
  "notify",
  "pegboard",
+ "pegboard-runner-protocol",
  "portpicker",
  "prometheus",
  "rand",
  "reqwest",
- "runner-protocol",
  "serde",
  "serde_json",
  "sqlx",
@@ -4160,6 +4183,14 @@ dependencies = [
  "tracing-logfmt",
  "tracing-subscriber",
  "url",
+ "uuid",
+]
+
+[[package]]
+name = "pegboard-runner-protocol"
+version = "0.1.0"
+dependencies = [
+ "serde",
  "uuid",
 ]
 
@@ -4910,14 +4941,6 @@ dependencies = [
  "spki",
  "subtle",
  "zeroize",
-]
-
-[[package]]
-name = "runner-protocol"
-version = "0.1.0"
-dependencies = [
- "serde",
- "uuid",
 ]
 
 [[package]]
@@ -7014,29 +7037,6 @@ dependencies = [
  "once_cell",
  "paste",
  "which 6.0.3",
-]
-
-[[package]]
-name = "v8-isolate-runner"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "deno_ast",
- "deno_core",
- "deno_runtime",
- "futures-util",
- "netif",
- "nix 0.27.1",
- "portpicker",
- "runner-protocol",
- "serde",
- "serde_json",
- "signal-hook",
- "tempfile",
- "tokio",
- "tokio-tungstenite",
- "twox-hash",
- "uuid",
 ]
 
 [[package]]

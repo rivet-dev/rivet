@@ -47,11 +47,6 @@ pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			Box::pin(pegboard_ws::start(config, pools))
 		}),
 		Service::new(
-			"api_monolith_private",
-			ServiceKind::ApiPrivate,
-			|config, pools| Box::pin(api_monolith_private::start(config, pools)),
-		),
-		Service::new(
 			"monolith_worker",
 			ServiceKind::Standalone,
 			|config, pools| Box::pin(monolith_worker::start(config, pools)),

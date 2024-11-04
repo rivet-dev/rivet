@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.2
 
-FROM rust:1.81.0-slim AS rust
+FROM rust:1.82.0-slim AS rust
 
 # - Install curl for health checks
 # - Install go-migrate for running migrations
@@ -23,7 +23,7 @@ RUN apt-get update && \
     (curl -L https://github.com/golang-migrate/migrate/releases/download/v4.18.1/migrate.linux-amd64.tar.gz | tar xvz) && \
     mv migrate /usr/local/bin/migrate
 
-WORKDIR /usr/rivet
+WORKDIR /app
 
 COPY . .
 
@@ -32,7 +32,7 @@ COPY . .
 RUN \
 	--mount=type=cache,target=/usr/local/cargo/git \
 	--mount=type=cache,target=/usr/local/cargo/registry \
-	--mount=type=cache,target=/usr/rivet/target \
+	--mount=type=cache,target=/app/target \
 	RUSTFLAGS="--cfg tokio_unstable" cargo build --bin rivet && \
 	mv target/debug/rivet /usr/bin/rivet && \
 	mkdir /etc/rivet

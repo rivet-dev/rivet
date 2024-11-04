@@ -8,7 +8,8 @@ cat << 'EOF' > /etc/pegboard/config.json
 	"network_ip": "___VLAN_IP___",
 	"vector_socket_addr": "127.0.0.1:5021",
 	"flavor": "__FLAVOR__",
-	"api_endpoint": "__ORIGIN_API__"
+	"pegboard_ws_endpoint": "127.0.0.1:5030"
+	"api_public_endpoint": "__ORIGIN_API__"
 }
 EOF
 

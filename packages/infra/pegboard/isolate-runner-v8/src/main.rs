@@ -56,7 +56,7 @@ async fn main() -> Result<()> {
 	let (fatal_tx, mut fatal_rx) = tokio::sync::mpsc::channel::<()>(1);
 
 	let res = tokio::select! {
-		res = retry_connection(actors_path, &mut actors, fatal_tx) => res,
+		res = retry_connection(actors_path,  &mut actors, fatal_tx) => res,
 		// If any fatal error occurs in the isolate threads, kill the entire program
 		_ = fatal_rx.recv() => Err(anyhow!("Fatal error")),
 	};

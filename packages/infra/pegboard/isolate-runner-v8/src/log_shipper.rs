@@ -1,6 +1,6 @@
 use std::{
 	io::{BufRead, Write},
-	net::TcpStream,
+	net::{SocketAddr, TcpStream},
 	sync::mpsc,
 	thread::JoinHandle,
 	time::{Duration, SystemTime, UNIX_EPOCH},
@@ -11,7 +11,7 @@ use serde::Serialize;
 use serde_json;
 use uuid::Uuid;
 
-use crate::{config::Stakeholder, throttle, utils::var};
+use crate::{config::Stakeholder, throttle};
 
 /// Maximum length of a single log line
 pub const MAX_LINE_BYTES: usize = 1024;
@@ -54,6 +54,8 @@ pub struct LogShipper {
 	/// If the socket closes or creates back pressure, logs will be dropped on the main thread when
 	/// trying to send to this channel.
 	pub msg_rx: mpsc::Receiver<ReceivedMessage>,
+
+	pub vector_socket_addr: SocketAddr,
 
 	pub stakeholder: Stakeholder,
 }
@@ -101,14 +103,12 @@ impl LogShipper {
 	}
 
 	fn run_inner(&self) -> Result<()> {
-		let vector_socket_addr = var("VECTOR_SOCKET_ADDR")?;
-
 		println!(
-			"{}: Connecting log shipper to Vector at {vector_socket_addr}",
-			self.actor_id
+			"{}: Connecting log shipper to Vector at {}",
+			self.actor_id, self.vector_socket_addr
 		);
 
-		let mut stream = TcpStream::connect(vector_socket_addr)?;
+		let mut stream = TcpStream::connect(self.vector_socket_addr)?;
 
 		println!("{}: Log shipper connected", self.actor_id);
 
@@ -150,7 +150,7 @@ enum VectorMessage<'a> {
 /// Spawn a thread to ship logs from a stream to LogShipper
 pub fn ship_logs(
 	actor_id: Uuid,
-	msg_tx: mpsc::SyncSender<ReceivedMessage>,
+	msg_tx: Option<mpsc::SyncSender<ReceivedMessage>>,
 	stream_type: StreamType,
 	stream: impl BufRead + Send + 'static,
 ) -> JoinHandle<()> {
@@ -255,11 +255,15 @@ pub fn ship_logs(
 /// Returns true if receiver is disconnected
 pub fn send_message(
 	actor_id: Uuid,
-	msg_tx: &mpsc::SyncSender<ReceivedMessage>,
+	msg_tx: &Option<mpsc::SyncSender<ReceivedMessage>>,
 	throttle_error: Option<&mut throttle::Throttle>,
 	stream_type: StreamType,
 	message: String,
 ) -> bool {
+	let Some(msg_tx) = msg_tx.as_ref() else {
+		return false;
+	};
+
 	// Timestamp is formatted in nanoseconds since that's the way it's formatted in
 	// ClickHouse
 	let ts = SystemTime::now()

@@ -236,7 +236,7 @@ pub async fn start_client(
 	// Init sqlite db
 	let sqlite_db_url = format!(
 		"sqlite://{}",
-		config.working_path.join("db").join("database.db").display()
+		config.data_dir.join("db").join("database.db").display()
 	);
 	utils::init_sqlite_db(&sqlite_db_url).await.unwrap();
 

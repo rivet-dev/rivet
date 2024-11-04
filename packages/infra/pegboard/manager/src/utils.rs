@@ -9,6 +9,7 @@ use notify::{
 	event::{AccessKind, AccessMode},
 	Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
 };
+use pegboard::protocol;
 use sqlx::{
 	migrate::MigrateDatabase,
 	sqlite::{SqlitePool, SqlitePoolOptions},
@@ -27,16 +28,14 @@ const TXN_RETRY: Duration = Duration::from_millis(250);
 pub const CGROUP_PATH: &str = "/sys/fs/cgroup/pegboard_runners";
 
 pub async fn init_dir(config: &Config) -> Result<()> {
-	if fs::metadata(&config.working_path).await.is_err() {
-		bail!(
-			"working dir `{}` does not exist",
-			config.working_path.display()
-		);
+	if fs::metadata(&config.data_dir).await.is_err() {
+		bail!("data dir `{}` does not exist", config.data_dir.display());
 	}
 
-	if fs::metadata(&config.container_runner_binary_path)
-		.await
-		.is_err()
+	if config.flavor == protocol::ClientFlavor::Container
+		&& fs::metadata(&config.container_runner_binary_path)
+			.await
+			.is_err()
 	{
 		bail!(
 			"container runner binary `{}` does not exist",
@@ -44,9 +43,10 @@ pub async fn init_dir(config: &Config) -> Result<()> {
 		);
 	}
 
-	if fs::metadata(&config.isolate_runner_binary_path)
-		.await
-		.is_err()
+	if config.flavor == protocol::ClientFlavor::Isolate
+		&& fs::metadata(&config.isolate_runner_binary_path)
+			.await
+			.is_err()
 	{
 		bail!(
 			"isolate runner binary `{}` does not exist",
@@ -55,21 +55,21 @@ pub async fn init_dir(config: &Config) -> Result<()> {
 	}
 
 	// Create actors dir
-	match fs::create_dir(config.working_path.join("actors")).await {
+	match fs::create_dir(config.data_dir.join("actors")).await {
 		Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-		x => x.context("failed to create /actors dir in working dir")?,
+		x => x.context("failed to create /actors dir in data dir")?,
 	}
 
 	// Create runner dir
-	match fs::create_dir(config.working_path.join("runner")).await {
+	match fs::create_dir(config.data_dir.join("runner")).await {
 		Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-		x => x.context("failed to create /runner dir in working dir")?,
+		x => x.context("failed to create /runner dir in data dir")?,
 	}
 
 	// Create db dir
-	match fs::create_dir(config.working_path.join("db")).await {
+	match fs::create_dir(config.data_dir.join("db")).await {
 		Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-		x => x.context("failed to create /db dir in working dir")?,
+		x => x.context("failed to create /db dir in data dir")?,
 	}
 
 	// Create cgroup folder for runners

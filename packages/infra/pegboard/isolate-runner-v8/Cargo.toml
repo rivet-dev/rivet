@@ -1,5 +1,5 @@
 [package]
-name = "v8-isolate-runner"
+name = "pegboard-isolate-runner-v8"
 version = "0.1.0"
 edition = "2021"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
@@ -20,7 +20,7 @@ tokio-tungstenite = "0.23.1"
 twox-hash = "1.6.3"
 uuid = { version = "1.6.1", features = ["v4"] }
 
-runner-protocol = { path = "../runner-protocol" }
+runner-protocol = { path = "../runner-protocol", package = "pegboard-runner-protocol" }
 
 [dependencies.deno_runtime]
 # path = "../../../../../deno/runtime"

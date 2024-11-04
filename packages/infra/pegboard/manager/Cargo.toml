@@ -38,7 +38,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 url = "2.4"
 uuid = { version = "1.6.1", features = ["v4"] }
 
-runner-protocol = { path = "../runner-protocol" }
+runner-protocol = { path = "../runner-protocol", package = "pegboard-runner-protocol" }
 pegboard = { path = "../../../services/pegboard", default-features = false }
 
 [dependencies.sqlx]

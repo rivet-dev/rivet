@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  rivet:
+  rivet-server:
     build:
       context: ../..
       dockerfile: docker/dev-full/server.Dockerfile
@@ -30,7 +30,7 @@ services:
       vector:
         condition: service_started
     volumes:
-      - ./rivet:/etc/rivet:ro
+      - ./rivet-server:/etc/rivet:ro
     networks:
       - rivet-network
     healthcheck:
@@ -39,22 +39,30 @@ services:
       timeout: 10s
       retries: 10
 
-  shell:
+  rivet-shell:
     build:
-      context: ../../..
+      context: ../..
       dockerfile: docker/dev-full/server.Dockerfile
     command: sleep infinity
+    environment:
+      - RUST_BACKTRACE=1
     stop_grace_period: 0s
     volumes:
-      - ./rivet:/etc/rivet:ro
+      - ./rivet-server:/etc/rivet:ro
     networks:
       - rivet-network
 
-  shell:
+  rivet-client:
     build:
-      context: ../../..
+      context: ../..
       dockerfile: docker/dev-full/client.Dockerfile
+    environment:
+      - RUST_BACKTRACE=1
+    privileged: true
     stop_grace_period: 0s
+    volumes:
+      - ./rivet-client:/etc/pegboard
+      - client-data:/var/lib/pegboard
     networks:
       - rivet-network
 
@@ -168,6 +176,7 @@ networks:
     driver: bridge
 
 volumes:
+  client-data:
   cockroach-data:
   redis-data:
   clickhouse-data:

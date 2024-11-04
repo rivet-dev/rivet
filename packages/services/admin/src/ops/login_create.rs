@@ -1,19 +1,22 @@
-use api_helper::ctx::Ctx;
-use proto::backend::pkg::*;
-use rivet_api::models;
-use rivet_operation::prelude::*;
-
-use crate::auth::Auth;
+use chirp_workflow::prelude::*;
+use rivet_operation::prelude::proto::{self, backend::pkg::*};
 
 pub const TOKEN_TTL: i64 = util::duration::minutes(15);
 
-// MARK: POST /login
-pub async fn login(
-	ctx: Ctx<Auth>,
-	body: models::AdminLoginRequest,
-) -> GlobalResult<models::AdminLoginResponse> {
+#[derive(Debug)]
+pub struct Input {
+	pub username: String,
+}
+
+#[derive(Debug)]
+pub struct Output {
+	pub url: String,
+}
+
+#[operation]
+pub async fn login_create(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
 	let token_res = op!([ctx] token_create {
-		issuer: "api-admin".to_string(),
+		issuer: "admin".to_string(),
 		token_config: Some(token::create::request::TokenConfig {
 			ttl: TOKEN_TTL,
 		}),
@@ -24,7 +27,7 @@ pub async fn login(
 				proto::claims::Entitlement {
 					kind: Some(
 						proto::claims::entitlement::Kind::AccessToken(proto::claims::entitlement::AccessToken {
-							name: body.name.clone(),
+							name: input.username.clone(),
 						})
 					)
 				}
@@ -38,7 +41,7 @@ pub async fn login(
 	let access_token_token = unwrap!(token_res.token).token;
 	let access_token_link_url = util::route::access_token_link(ctx.config(), &access_token_token);
 
-	Ok(models::AdminLoginResponse {
+	Ok(Output {
 		url: access_token_link_url,
 	})
 }

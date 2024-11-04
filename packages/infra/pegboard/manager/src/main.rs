@@ -96,7 +96,7 @@ async fn init() -> Result<Init> {
 		.with_context(|| format!("Failed to parse config file at {}", config_path.display()))?;
 
 	if config.redirect_logs {
-		redirect_logs(config.working_path.join("log")).await?;
+		redirect_logs(config.data_dir.join("log")).await?;
 	}
 
 	// SAFETY: No other task has spawned yet.
@@ -123,7 +123,7 @@ async fn init() -> Result<Init> {
 	// Init sqlite db
 	let sqlite_db_url = format!(
 		"sqlite://{}",
-		config.working_path.join("db").join("database.db").display()
+		config.data_dir.join("db").join("database.db").display()
 	);
 	utils::init_sqlite_db(&sqlite_db_url).await?;
 
@@ -132,7 +132,7 @@ async fn init() -> Result<Init> {
 	utils::init_sqlite_schema(&pool).await?;
 
 	// Build WS connection URL
-	let mut url = Url::parse("ws://127.0.0.1:5030")?;
+	let mut url = config.pegboard_ws_endpoint.clone();
 	url.set_path(&format!("/v{PROTOCOL_VERSION}"));
 	url.query_pairs_mut()
 		.append_pair("client_id", &config.client_id.to_string())
@@ -151,12 +151,15 @@ async fn run(init: Init) -> Result<()> {
 	// Start metrics server
 	let metrics_thread = tokio::spawn(metrics::run_standalone());
 
-	tracing::info!("connecting to ws: {}", init.url);
+	tracing::info!("connecting to ws: {}", &init.url);
 
 	// Connect to WS
 	let (ws_stream, _) = tokio_tungstenite::connect_async(init.url.to_string())
 		.await
-		.map_err(ctx::RuntimeError::ConnectionFailed)?;
+		.map_err(|source| ctx::RuntimeError::ConnectionFailed {
+			url: init.url.clone(),
+			source,
+		})?;
 	let (tx, rx) = ws_stream.split();
 
 	tracing::info!("connected");

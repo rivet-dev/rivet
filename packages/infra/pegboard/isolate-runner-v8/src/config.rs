@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, net::SocketAddr};
 
 use deno_runtime::deno_permissions;
 use serde::Deserialize;
@@ -10,6 +10,7 @@ pub struct Config {
 	pub ports: Vec<Port>,
 	pub env: HashMap<String, String>,
 	pub stakeholder: Stakeholder,
+	pub vector_socket_addr: Option<SocketAddr>,
 }
 
 #[derive(Deserialize)]

@@ -19,6 +19,7 @@ tracing-logfmt = "0.3"
 rivet-config = { version = "0.1.0", path = "../../../../common/config" }
 token-create = { version = "0.0.1", path = "../../../token/ops/create" }
 rivet-operation = { version = "0.1.0", path = "../../../../common/operation/core" }
+admin = { version = "0.1.0", path = "../.." }
 
 [dependencies.sqlx]
 git = "https://github.com/rivet-gg/sqlx"

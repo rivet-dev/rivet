@@ -14,6 +14,7 @@ use tokio::{
 	sync::{Mutex, RwLock},
 };
 use tokio_tungstenite::{tungstenite::protocol::Message, MaybeTlsStream, WebSocketStream};
+use url::Url;
 use uuid::Uuid;
 
 use crate::{actor::Actor, config::Config, metrics, runner, utils};
@@ -24,8 +25,11 @@ const RUNNER_PORT: u16 = 54321;
 
 #[derive(thiserror::Error, Debug)]
 pub enum RuntimeError {
-	#[error("ws connection failed: {0}")]
-	ConnectionFailed(tokio_tungstenite::tungstenite::Error),
+	#[error("ws connection to {url} failed: {source}")]
+	ConnectionFailed {
+		url: Url,
+		source: tokio_tungstenite::tungstenite::Error,
+	},
 	#[error("runner socket failed: {0}")]
 	RunnerSocketListenFailed(std::io::Error),
 	#[error("socket closed")]
@@ -336,16 +340,10 @@ impl Ctx {
 		} else {
 			tracing::info!("spawning new isolate runner");
 
-			let env = vec![
-				(
-					"VECTOR_SOCKET_ADDR",
-					self.config.vector_socket_addr.to_string(),
-				),
-				(
-					"ACTORS_PATH",
-					self.actors_path().to_str().context("bad path")?.to_string(),
-				),
-			];
+			let env = vec![(
+				"ACTORS_PATH",
+				self.actors_path().to_str().context("bad path")?.to_string(),
+			)];
 			let working_path = self.isolate_runner_path();
 
 			let runner = runner::Handle::spawn_orphaned(
@@ -584,7 +582,7 @@ impl Ctx {
 	}
 
 	pub fn actors_path(&self) -> PathBuf {
-		self.config.working_path.join("actors")
+		self.config.data_dir.join("actors")
 	}
 
 	pub fn actor_path(&self, actor_id: Uuid) -> PathBuf {
@@ -592,7 +590,7 @@ impl Ctx {
 	}
 
 	pub fn isolate_runner_path(&self) -> PathBuf {
-		self.config.working_path.join("runner")
+		self.config.data_dir.join("runner")
 	}
 }
 
