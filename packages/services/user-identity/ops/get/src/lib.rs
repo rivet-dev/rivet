@@ -5,7 +5,6 @@ use rivet_operation::prelude::*;
 struct IdentityRow {
 	user_id: Uuid,
 	email: Option<String>,
-	name: Option<String>,
 }
 
 impl From<IdentityRow> for user_identity::get::CacheUserIdentity {
@@ -13,7 +12,6 @@ impl From<IdentityRow> for user_identity::get::CacheUserIdentity {
 		user_identity::get::CacheUserIdentity {
 			user_id: Some(val.user_id.into()),
 			email: val.email,
-			access_token_name: val.name,
 		}
 	}
 }
@@ -38,13 +36,9 @@ async fn handle(
 					let identity_rows = sql_fetch_all!(
 						[ctx, IdentityRow]
 						"
-						SELECT COALESCE(e.user_id, a.user_id) as user_id, e.email, a.name
+						SELECT e.user_id AS user_id, e.email
 						FROM db_user_identity.emails as e
-						FULL OUTER JOIN db_user_identity.access_tokens as a
-						ON e.user_id = a.user_id
-						WHERE
-							e.user_id = ANY($1) OR
-							a.user_id = ANY($1);
+						WHERE e.user_id = ANY($1)
 						",
 						&user_ids,
 					)
@@ -74,26 +68,15 @@ async fn handle(
 						.map_or(false, |x| x.as_uuid() == *user_id)
 				})
 				.flat_map(|x| {
-					IntoIterator::into_iter([
-						x.email
-							.as_ref()
-							.map(|email| backend::user_identity::Identity {
-								kind: Some(backend::user_identity::identity::Kind::Email(
-									backend::user_identity::identity::Email {
-										email: email.clone(),
-									},
-								)),
-							}),
-						x.access_token_name
-							.as_ref()
-							.map(|name| backend::user_identity::Identity {
-								kind: Some(backend::user_identity::identity::Kind::AccessToken(
-									backend::user_identity::identity::AccessToken {
-										name: name.clone(),
-									},
-								)),
-							}),
-					])
+					IntoIterator::into_iter([x.email.as_ref().map(|email| {
+						backend::user_identity::Identity {
+							kind: Some(backend::user_identity::identity::Kind::Email(
+								backend::user_identity::identity::Email {
+									email: email.clone(),
+								},
+							)),
+						}
+					})])
 					.flatten()
 				})
 				.collect::<Vec<_>>();

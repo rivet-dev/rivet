@@ -185,21 +185,6 @@ pub fn cloud_device_link(config: &rivet_config::Config, link_token: &str) -> Str
 	)
 }
 
-pub fn access_token_link(config: &rivet_config::Config, access_token_token: &str) -> String {
-	format!(
-		"{}/access-token/{}",
-		config
-			.server()
-			.unwrap()
-			.rivet
-			.ui
-			.public_origin()
-			.to_string()
-			.trim_end_matches("/"),
-		access_token_token
-	)
-}
-
 pub fn backend_endpoint(config: &rivet_config::Config, backend_slug: &str) -> String {
 	let backend_domain = &config
 		.server()

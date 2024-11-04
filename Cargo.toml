@@ -131,7 +131,6 @@ members = [
 "packages/services/user/ops/pending-delete-toggle/",
 "packages/services/user/ops/token-create/",
 "packages/services/user/ops/team-list/",
-"packages/services/user/ops/resolve-access-token/",
 "packages/services/user/ops/avatar-upload-complete/",
 "packages/services/user/worker/",
 "packages/services/game/ops/namespace-version-set/",

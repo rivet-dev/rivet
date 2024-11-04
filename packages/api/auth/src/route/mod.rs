@@ -38,16 +38,5 @@ define_router! {
 				},
 			),
 		},
-		"identity" / "access-token" / "complete-verification": {
-			POST: identity::complete_access_token(
-				body: models::AuthIdentityCompleteAccessTokenVerificationRequest,
-				with_response: true,
-				rate_limit: {
-					buckets: [
-						{ count: 2 },
-					],
-				},
-			),
-		},
 	},
 }

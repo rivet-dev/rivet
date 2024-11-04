@@ -288,21 +288,6 @@ pub mod ent {
 	}
 
 	#[derive(Clone, Debug)]
-	pub struct AccessToken {
-		pub name: String,
-	}
-
-	impl TryFrom<&schema::entitlement::AccessToken> for AccessToken {
-		type Error = GlobalError;
-
-		fn try_from(value: &schema::entitlement::AccessToken) -> GlobalResult<Self> {
-			Ok(AccessToken {
-				name: value.name.clone(),
-			})
-		}
-	}
-
-	#[derive(Clone, Debug)]
 	pub struct ProvisionedServer {}
 
 	impl TryFrom<&schema::entitlement::ProvisionedServer> for ProvisionedServer {
@@ -363,7 +348,6 @@ pub trait ClaimsDecode {
 	fn as_upload_file(&self) -> GlobalResult<ent::UploadFile>;
 	fn as_cloud_device_link(&self) -> GlobalResult<ent::CloudDeviceLink>;
 	fn as_bypass(&self) -> GlobalResult<ent::Bypass>;
-	fn as_access_token(&self) -> GlobalResult<ent::AccessToken>;
 	fn as_provisioned_server(&self) -> GlobalResult<ent::ProvisionedServer>;
 	fn as_opengb_db(&self) -> GlobalResult<ent::OpenGbDb>;
 	fn as_env_service(&self) -> GlobalResult<ent::EnvService>;
@@ -589,22 +573,6 @@ impl ClaimsDecode for schema::Claims {
 			.and_then(std::convert::identity)
 	}
 
-	fn as_access_token(&self) -> GlobalResult<ent::AccessToken> {
-		self.entitlements
-			.iter()
-			.find_map(|ent| match &ent.kind {
-				Some(schema::entitlement::Kind::AccessToken(ent)) => {
-					Some(ent::AccessToken::try_from(ent))
-				}
-				_ => None,
-			})
-			.ok_or(err_code!(
-				CLAIMS_MISSING_ENTITLEMENT,
-				entitlements = "AccessToken"
-			))
-			.and_then(std::convert::identity)
-	}
-
 	fn as_opengb_db(&self) -> GlobalResult<ent::OpenGbDb> {
 		self.entitlements
 			.iter()
@@ -659,7 +627,6 @@ impl EntitlementTag for schema::Entitlement {
 			schema::entitlement::Kind::UploadFile(_) => 12,
 			schema::entitlement::Kind::CloudDeviceLink(_) => 14,
 			schema::entitlement::Kind::Bypass(_) => 15,
-			schema::entitlement::Kind::AccessToken(_) => 16,
 			schema::entitlement::Kind::ProvisionedServer(_) => 17,
 			schema::entitlement::Kind::OpengbDb(_) => 18,
 			schema::entitlement::Kind::EnvService(_) => 19,

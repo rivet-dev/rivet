@@ -160,7 +160,16 @@ pub enum AccessKind {
 	Public,
 	/// Only admin users can crate teams & projects.
 	Private,
-	/// Anyone can access the cluster without an account.
+	/// Anyone can access the cluster without authorization.
+	///
+	/// If enabled:
+	/// - A default project with slug "default" & environment with slug "default" will be created
+	/// automatically
+	///	  - This allows using Rivet without manually creating a new project/environment
+	/// - Project & environment fields will fallback to "default" if not provided
+	///   - This allows using Rivet with simplfied requests, like `POST /actors` without a query
+	/// - If no bearer token is provided, authentication will always succeed
+	///	  - This allows setting up development environments without manually creating tokens
 	Development,
 }
 

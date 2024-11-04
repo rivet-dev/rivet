@@ -57,16 +57,26 @@ impl Auth {
 		self.claims()?.as_env_service()
 	}
 
+	/// Check if the provided token is authenticated for the provided project & env.
+	///
+	/// If in development mode:
+	/// - The project & env will fallback to "default" if not provided
+	/// - The auth token will always pass
 	pub async fn check(
 		&self,
 		ctx: &OperationContext<()>,
 		query: &GlobalQuery,
 		allow_service: bool,
 	) -> GlobalResult<CheckOutput> {
-		let claims = self.claims()?;
+		let is_development = ctx.config().server()?.rivet.auth.access_kind
+			== rivet_config::config::rivet::AccessKind::Development;
 
 		// Lookup project name ID
-		let project = unwrap_with!(query.project(), GAME_NOT_FOUND);
+		let project = if is_development {
+			query.project().unwrap_or("default")
+		} else {
+			unwrap_with!(query.project(), GAME_NOT_FOUND)
+		};
 		let game_res = op!([ctx] game_resolve_name_id {
 			name_ids: vec![project.to_string()],
 		})
@@ -75,7 +85,11 @@ impl Auth {
 		let game_id = unwrap!(game.game_id).as_uuid();
 
 		// Lookup environment name ID
-		let environment = unwrap_with!(query.environment(), GAME_ENVIRONMENT_NOT_FOUND);
+		let environment = if is_development {
+			query.environment().unwrap_or("default")
+		} else {
+			unwrap_with!(query.project(), GAME_NOT_FOUND)
+		};
 		let env_res = op!([ctx] game_namespace_resolve_name_id {
 			game_id: game.game_id,
 			name_ids: vec![environment.to_string()],
@@ -83,9 +97,6 @@ impl Auth {
 		.await?;
 		let env = unwrap_with!(env_res.namespaces.first(), GAME_ENVIRONMENT_NOT_FOUND);
 		let env_id = unwrap!(env.namespace_id).as_uuid();
-
-		// Build output
-		let output = CheckOutput { game_id, env_id };
 
 		// Get the game this env belongs to
 		let ns_res = op!([ctx] game_namespace_get {
@@ -99,6 +110,17 @@ impl Auth {
 			unwrap!(env.game_id).as_uuid() == game_id,
 			GAME_ENVIRONMENT_NOT_FOUND
 		);
+
+		// Build output
+		let output = CheckOutput { game_id, env_id };
+
+		// Skip auth if in development mode
+		if self.claims.is_none() && is_development {
+			return Ok(output);
+		}
+
+		// Validate claims
+		let claims = self.claims()?;
 
 		// Validate token
 		if let Ok(cloud_ent) = claims.as_game_cloud() {

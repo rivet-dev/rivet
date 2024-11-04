@@ -57,5 +57,4 @@ types:
 
   BootstrapLoginMethods:
     properties:
-      access_token: boolean
       email: boolean

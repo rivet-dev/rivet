@@ -42,34 +42,6 @@ async fn handle(
 			})
 			.await?;
 		}
-		backend::user_identity::identity::Kind::AccessToken(access_token) => {
-			sql_execute!(
-				[ctx]
-				"
-				INSERT INTO db_user_identity.access_tokens (name, user_id, create_ts)
-				VALUES ($1, $2, $3)
-				",
-				&access_token.name,
-				user_id,
-				ctx.ts(),
-			)
-			.await?;
-
-			msg!([ctx] analytics::msg::event_create() {
-				events: vec![
-					analytics::msg::event_create::Event {
-						event_id: Some(Uuid::new_v4().into()),
-						name: "user_identity.create".into(),
-						properties_json: Some(serde_json::to_string(&json!({
-							"identity_access_token": access_token.name,
-							"user_id": user_id,
-						}))?),
-						..Default::default()
-					}
-				],
-			})
-			.await?;
-		}
 	}
 
 	ctx.cache()

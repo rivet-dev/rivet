@@ -34,7 +34,10 @@ impl ApiAuth for Auth {
 		})
 	}
 
-	async fn rate_limit(config: &rivet_config::Config, rate_limit_ctx: AuthRateLimitCtx<'_>) -> GlobalResult<()> {
+	async fn rate_limit(
+		config: &rivet_config::Config,
+		rate_limit_ctx: AuthRateLimitCtx<'_>,
+	) -> GlobalResult<()> {
 		basic_rate_limit(config, rate_limit_ctx).await
 	}
 }
@@ -68,16 +71,5 @@ impl Auth {
 		}
 
 		Ok(user_ent)
-	}
-
-	pub fn access_token_ent(&self, token: String) -> GlobalResult<rivet_claims::ent::AccessToken> {
-		// Decode & validate claims
-		let claims = rivet_claims::decode(&self.config.server()?.jwt.public, &token)
-			.map_err(|_| err_code!(API_FORBIDDEN, reason = "Claims error"))??;
-		let access_token_ent = claims
-			.as_access_token()
-			.map_err(|_| err_code!(API_FORBIDDEN, reason = "Decode error"))?;
-
-		Ok(access_token_ent)
 	}
 }

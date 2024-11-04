@@ -277,7 +277,6 @@ dependencies = [
  "user-get",
  "user-identity-create",
  "user-identity-get",
- "user-resolve-access-token",
  "user-resolve-email",
  "user-token-create",
  "uuid",
@@ -10919,19 +10918,6 @@ dependencies = [
  "rivet-operation",
  "sqlx",
  "user-get",
-]
-
-[[package]]
-name = "user-resolve-access-token"
-version = "0.0.1"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "faker-user",
- "prost 0.10.4",
- "rivet-operation",
- "sqlx",
- "user-identity-create",
 ]
 
 [[package]]

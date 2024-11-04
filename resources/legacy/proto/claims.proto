@@ -90,13 +90,6 @@ message Entitlement {
 
 	}
 
-	// Token used to login via the CLI.
-	message AccessToken {
-		// Name of the token to be referenced as. This is used to create
-		// multiple tokens for different users.
-		string name = 1;
-	}
-
 	// Issued to provisioned servers for communication with our API. This will be written to prebake servers
 	// (see /docs/packages/cluster/SERVER_PROVISIONING.md).
 	message ProvisionedServer {
@@ -113,7 +106,7 @@ message Entitlement {
 		rivet.common.Uuid env_id = 1;
 	}
 
-	reserved 10, 11;
+	reserved 10, 11, 16;
 
 	oneof kind {
 		Refresh refresh = 1;
@@ -128,7 +121,6 @@ message Entitlement {
 		UploadFile upload_file = 12;
 		CloudDeviceLink cloud_device_link = 14;
 		Bypass bypass = 15;
-		AccessToken access_token = 16;
 		ProvisionedServer provisioned_server = 17;
 		OpenGbDb opengb_db = 18;
 		EnvService env_service = 19;
