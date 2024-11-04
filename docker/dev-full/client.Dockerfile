@@ -10,17 +10,17 @@ COPY . .
 RUN \
 	--mount=type=cache,target=/usr/local/cargo/git \
 	--mount=type=cache,target=/usr/local/cargo/registry \
-	--mount=type=cache,target=/app/packages/infra/pegboard/target \
-	cd packages/infra/pegboard && \
-	RUSTFLAGS="--cfg tokio_unstable" cargo build --bin pegboard-manager --bin pegboard-isolate-runner-v8 && \
+	--mount=type=cache,target=/app/packages/infra/client/target \
+	cd packages/infra/client && \
+	RUSTFLAGS="--cfg tokio_unstable" cargo build --bin rivet-client --bin rivet-isolate-v8-runner --bin rivet-container-runner && \
 	mkdir -p /app/dist && \
-	mv target/debug/pegboard-manager target/debug/pegboard-isolate-runner-v8 /app/dist/
+	mv target/debug/rivet-client target/debug/rivet-isolate-v8-runner target/debug/rivet-container-runner /app/dist/
 
 # MARK: Runner
 #
 # Requires OpenSSL 1.1, so we pin this to Debian 11 instead of 12 (which uses OpenSSL 3).
 FROM debian:11-slim
 RUN DEBIAN_FRONTEND=noninteractive apt-get update -y && apt-get install -y --no-install-recommends ca-certificates openssl
-COPY --from=builder /app/dist/pegboard-manager /app/dist/pegboard-isolate-runner-v8 /usr/local/bin/
-ENTRYPOINT ["pegboard-manager", "-c", "/etc/pegboard/config.json"]
+COPY --from=builder /app/dist/rivet-client /app/dist/rivet-isolate-v8-runner /app/dist/rivet-container-runner /usr/local/bin/
+ENTRYPOINT ["rivet-client", "-c", "/etc/rivet-client/config.json"]
 

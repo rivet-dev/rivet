@@ -1,0 +1,85 @@
+[package]
+name = "rivet-server"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+
+[[bin]]
+name = "rivet-server"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0"
+chrono = "0.4.38"
+clap = { version = "4.3", features = ["derive"] }
+colored_json = "5.0.0"
+global-error = { path = "../../common/global-error" }
+include_dir = "0.7.4"
+indoc = "2.0.5"
+rivet-api = { path = "../../../sdks/full/rust" }
+rivet-migrate = { path = "../../common/migrate" }
+rivet-pools = { version = "0.1.0", path = "../../common/pools" }
+rivet-runtime = { version = "0.1.0", path = "../../common/runtime" }
+rivet-service-manager = { path = "../../common/service-manager" }
+rivet-term = { git = "https://github.com/rivet-gg/rivet-term.git", rev = "d539a07d2920d47b88410f20e6d106b497cff1f5" }
+s3-util = { version = "0.1.0", path = "../../common/s3-util" }
+serde = { version = "1.0.210", features = ["derive"] }
+serde_json = "1.0.128"
+serde_yaml = "0.9.34"
+strum = "0.26.3"
+tabled = "0.16.0"
+tempfile = "3.13.0"
+thiserror = "1.0.64"
+tokio = { version = "1.40", features = ["full", "tracing"] }
+tracing = "0.1"
+url = "2.4"
+uuid = "1.10.0"
+
+# Standalone
+cluster-datacenter-tls-renew = { path = "../../services/cluster/standalone/datacenter-tls-renew" }
+cluster-gc = { path = "../../services/cluster/standalone/gc" }
+cluster-metrics-publish = { path = "../../services/cluster/standalone/metrics-publish" }
+job-gc = { path = "../../services/job/standalone/gc" }
+linode-gc = { path = "../../services/linode/standalone/gc" }
+load-test-api-cloud = { path = "../../services/load-test/standalone/api-cloud" }
+load-test-mm = { path = "../../services/load-test/standalone/mm" }
+load-test-mm-sustain = { path = "../../services/load-test/standalone/mm-sustain" }
+load-test-sqlx = { path = "../../services/load-test/standalone/sqlx" }
+load-test-watch-requests = { path = "../../services/load-test/standalone/watch-requests" }
+mm-gc = { path = "../../services/mm/standalone/gc" }
+monolith-worker = { path = "../../services/monolith/standalone/worker" }
+monolith-workflow-worker = { path = "../../services/monolith/standalone/workflow-worker" }
+nomad-monitor = { path = "../../services/nomad/standalone/monitor" }
+pegboard-gc = { path = "../../services/pegboard/standalone/gc" }
+pegboard-ws = { path = "../../services/pegboard/standalone/ws" }
+workflow-gc = { path = "../../services/workflow/standalone/gc" }
+workflow-metrics-publish = { path = "../../services/workflow/standalone/metrics-publish" }
+
+# Cron
+telemetry-beacon = { path = "../../services/telemetry/standalone/beacon" }
+user-delete-pending = { path = "../../services/user/standalone/delete-pending" }
+
+# API
+api-monolith-edge = { path = "../../api/monolith-edge" }
+api-monolith-public = { path = "../../api/monolith-public" }
+
+# Oneshot
+build-default-create = { path = "../../services/build/standalone/default-create" }
+cluster-default-update = { path = "../../services/cluster/standalone/default-update" }
+pegboard-dc-init = { path = "../../services/pegboard/standalone/dc-init" }
+rivet-config = { version = "0.1.0", path = "../../common/config" }
+reqwest = "0.12.9"
+admin-default-login = { version = "0.0.1", path = "../../services/admin/standalone/default-login" }
+admin = { version = "0.1.0", path = "../../services/admin" }
+chirp-client = { version = "0.1.0", path = "../../common/chirp/client" }
+rivet-cache = { version = "0.1.0", path = "../../common/cache/build" }
+chirp-workflow = { version = "0.1.0", path = "../../common/chirp-workflow/core" }
+rivet-connection = { version = "0.1.0", path = "../../common/connection" }
+
+
+[dependencies.sqlx]
+git = "https://github.com/rivet-gg/sqlx"
+rev = "e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
+default-features = false
+features = ["runtime-tokio", "postgres"]
+

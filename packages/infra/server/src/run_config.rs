@@ -1,7 +1,7 @@
 use anyhow::*;
 use include_dir::include_dir;
 use rivet_migrate::{SqlService, SqlServiceKind};
-use rivet_server::{CronConfig, Service, ServiceKind};
+use rivet_service_manager::{CronConfig, Service, ServiceKind};
 use s3_util::S3Bucket;
 use std::sync::Arc;
 
@@ -160,147 +160,149 @@ pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 	let sql_services = vec![
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/build/db/build"),
+			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/build/db/build"),
 			db_name: "db_build",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/captcha/db/captcha"),
+			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/captcha/db/captcha"),
 			db_name: "db_captcha",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/cdn/db/cdn"),
+			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/cdn/db/cdn"),
 			db_name: "db_cdn",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
 			migrations: include_dir!(
-				"$CARGO_MANIFEST_DIR/../services/cf-custom-hostname/db/cf-custom-hostname"
+				"$CARGO_MANIFEST_DIR/../../services/cf-custom-hostname/db/cf-custom-hostname"
 			),
 			db_name: "db_cf_custom_hostname",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/cloud/db/cloud"),
+			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/cloud/db/cloud"),
 			db_name: "db_cloud",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/cluster/db/cluster"),
+			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/cluster/db/cluster"),
 			db_name: "db_cluster",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
 			migrations: include_dir!(
-				"$CARGO_MANIFEST_DIR/../services/custom-user-avatar/db/custom-avatar"
+				"$CARGO_MANIFEST_DIR/../../services/custom-user-avatar/db/custom-avatar"
 			),
 			db_name: "db_custom_avatar",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/ds/db/servers"),
+			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/ds/db/servers"),
 			db_name: "db_ds",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
 			migrations: include_dir!(
-				"$CARGO_MANIFEST_DIR/../services/dynamic-config/db/dynamic-config"
+				"$CARGO_MANIFEST_DIR/../../services/dynamic-config/db/dynamic-config"
 			),
 			db_name: "db_dynamic_config",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
 			migrations: include_dir!(
-				"$CARGO_MANIFEST_DIR/../services/email-verification/db/email-verification"
+				"$CARGO_MANIFEST_DIR/../../services/email-verification/db/email-verification"
 			),
 			db_name: "db_email_verification",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/game/db/game"),
+			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/game/db/game"),
 			db_name: "db_game",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/ip/db/info"),
+			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/ip/db/info"),
 			db_name: "db_ip_info",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/job/db/config"),
+			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/job/db/config"),
 			db_name: "db_job_config",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/job/db/state"),
+			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/job/db/state"),
 			db_name: "db_job_state",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/linode/db/linode"),
+			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/linode/db/linode"),
 			db_name: "db_linode",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/mm-config/db/mm-config"),
+			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/mm-config/db/mm-config"),
 			db_name: "db_mm_config",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/mm/db/state"),
+			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/mm/db/state"),
 			db_name: "db_mm_state",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/pegboard/db/pegboard"),
+			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/pegboard/db/pegboard"),
 			db_name: "db_pegboard",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/team-invite/db/team-invite"),
+			migrations: include_dir!(
+				"$CARGO_MANIFEST_DIR/../../services/team-invite/db/team-invite"
+			),
 			db_name: "db_team_invite",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/team/db/team"),
+			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/team/db/team"),
 			db_name: "db_team",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/token/db/token"),
+			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/token/db/token"),
 			db_name: "db_token",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/upload/db/upload"),
+			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/upload/db/upload"),
 			db_name: "db_upload",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
 			migrations: include_dir!(
-				"$CARGO_MANIFEST_DIR/../services/user-identity/db/user-identity"
+				"$CARGO_MANIFEST_DIR/../../services/user-identity/db/user-identity"
 			),
 			db_name: "db_user_identity",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/user/db/user"),
+			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/user/db/user"),
 			db_name: "db_user",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/workflow/db/workflow"),
+			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/workflow/db/workflow"),
 			db_name: "db_workflow",
 		},
 		SqlService {
 			kind: SqlServiceKind::ClickHouse,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/ds-log/db/log"),
+			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/ds-log/db/log"),
 			db_name: "db_ds_log",
 		},
 		SqlService {
 			kind: SqlServiceKind::ClickHouse,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../services/job-log/db/log"),
+			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/job-log/db/log"),
 			db_name: "db_job_log",
 		},
 	];

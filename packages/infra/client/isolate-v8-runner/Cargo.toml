@@ -1,9 +1,13 @@
 [package]
-name = "pegboard-isolate-runner-v8"
+name = "pegboard-isolate-v8-runner"
 version = "0.1.0"
 edition = "2021"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 license = "Apache-2.0"
+
+[[bin]]
+name = "rivet-isolate-v8-runner"
+path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.79"

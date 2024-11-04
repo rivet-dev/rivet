@@ -5,6 +5,10 @@ edition = "2021"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 license = "Apache-2.0"
 
+[[bin]]
+name = "rivet-container-runner"
+path = "src/main.rs"
+
 [dependencies]
 anyhow = "1.0.79"
 nix = { version = "0.27", default-features = false, features = ["fs"] }

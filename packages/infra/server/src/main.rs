@@ -1,6 +1,6 @@
 use anyhow::*;
 use clap::Parser;
-use rivet_cli::SubCommand;
+use rivet_server::SubCommand;
 use std::{path::PathBuf, sync::Arc};
 
 #[derive(Parser)]
@@ -28,7 +28,7 @@ async fn main_inner() -> Result<()> {
 		.map_err(|err| anyhow!("{err}"))?;
 
 	// Build run config
-	let run_config = Arc::new(rivet_cli::run_config::config(config.clone())?);
+	let run_config = Arc::new(rivet_server::run_config::config(config.clone())?);
 
 	// Execute command
 	cli.command.execute(config, run_config).await

@@ -96,6 +96,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "admin-worker"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-worker",
+ "chrono",
+ "cloud-game-token-create",
+ "rivet-config",
+ "rivet-health-checks",
+ "rivet-metrics",
+ "rivet-runtime",
+]
+
+[[package]]
 name = "aes"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -180,9 +194,9 @@ dependencies = [
 
 [[package]]
 name = "anstream"
-version = "0.6.15"
+version = "0.6.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64e15c1ab1f89faffbf04a634d5e1962e9074f2741eef6d97f3c4e322426d526"
+checksum = "23a1e53f0f5d86382dafe1cf314783b2044280f406e7e1506368220ad11b1338"
 dependencies = [
  "anstyle",
  "anstyle-parse",
@@ -195,36 +209,36 @@ dependencies = [
 
 [[package]]
 name = "anstyle"
-version = "1.0.8"
+version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bec1de6f59aedf83baf9ff929c98f2ad654b97c9510f4e70cf6f661d49fd5b1"
+checksum = "55cc3b69f167a1ef2e161439aa98aed94e6028e5f9a59be9a6ffb47aef1651f9"
 
 [[package]]
 name = "anstyle-parse"
-version = "0.2.5"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb47de1e80c2b463c735db5b217a0ddc39d612e7ac9e2e96a5aed1f57616c1cb"
+checksum = "3b2d16507662817a6a20a9ea92df6652ee4f94f914589377d69f3b21bc5798a9"
 dependencies = [
  "utf8parse",
 ]
 
 [[package]]
 name = "anstyle-query"
-version = "1.1.1"
+version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d36fc52c7f6c869915e99412912f22093507da8d9e942ceaf66fe4b7c14422a"
+checksum = "79947af37f4177cfead1110013d678905c37501914fba0efea834c3fe9a8d60c"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
 name = "anstyle-wincon"
-version = "3.0.4"
+version = "3.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5bf74e1b6e971609db8ca7a9ce79fd5768ab6ae46441c572e46cf596f59e57f8"
+checksum = "2109dbce0e72be3ec00bed26e6a7479ca384ad226efdd66db8fa2e3a38c83125"
 dependencies = [
  "anstyle",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2912,9 +2926,9 @@ dependencies = [
 
 [[package]]
 name = "colorchoice"
-version = "1.0.2"
+version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3fd119d74b830634cea2a0f58bbd0d54540518a14397557951e79340abc28c0"
+checksum = "5b63caa9aa9397e2d9480a9b13673856c78d8ac123288526c37d7839f2a86990"
 
 [[package]]
 name = "colored_json"
@@ -7961,71 +7975,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rivet-cli"
-version = "0.1.0"
-dependencies = [
- "admin",
- "admin-default-login",
- "anyhow",
- "api-monolith-edge",
- "api-monolith-public",
- "build-default-create",
- "chirp-client",
- "chirp-workflow",
- "chrono",
- "clap",
- "cluster-datacenter-tls-renew",
- "cluster-default-update",
- "cluster-gc",
- "cluster-metrics-publish",
- "colored_json",
- "global-error",
- "include_dir",
- "indoc 2.0.5",
- "job-gc",
- "linode-gc",
- "load-test-api-cloud",
- "load-test-mm",
- "load-test-mm-sustain",
- "load-test-sqlx",
- "load-test-watch-requests",
- "mm-gc",
- "monolith-worker",
- "monolith-workflow-worker",
- "nomad-monitor",
- "pegboard-dc-init",
- "pegboard-gc",
- "pegboard-ws",
- "reqwest 0.12.9",
- "rivet-api",
- "rivet-cache",
- "rivet-config",
- "rivet-connection",
- "rivet-migrate",
- "rivet-pools",
- "rivet-runtime",
- "rivet-server",
- "rivet-term",
- "s3-util",
- "serde",
- "serde_json",
- "serde_yaml",
- "sqlx",
- "strum 0.26.3",
- "tabled",
- "telemetry-beacon",
- "tempfile",
- "thiserror",
- "tokio",
- "tracing",
- "url",
- "user-delete-pending",
- "uuid",
- "workflow-gc",
- "workflow-metrics-publish",
-]
-
-[[package]]
 name = "rivet-cloud"
 version = "0.0.1"
 dependencies = [
@@ -8426,6 +8375,71 @@ dependencies = [
 
 [[package]]
 name = "rivet-server"
+version = "0.1.0"
+dependencies = [
+ "admin",
+ "admin-default-login",
+ "anyhow",
+ "api-monolith-edge",
+ "api-monolith-public",
+ "build-default-create",
+ "chirp-client",
+ "chirp-workflow",
+ "chrono",
+ "clap",
+ "cluster-datacenter-tls-renew",
+ "cluster-default-update",
+ "cluster-gc",
+ "cluster-metrics-publish",
+ "colored_json",
+ "global-error",
+ "include_dir",
+ "indoc 2.0.5",
+ "job-gc",
+ "linode-gc",
+ "load-test-api-cloud",
+ "load-test-mm",
+ "load-test-mm-sustain",
+ "load-test-sqlx",
+ "load-test-watch-requests",
+ "mm-gc",
+ "monolith-worker",
+ "monolith-workflow-worker",
+ "nomad-monitor",
+ "pegboard-dc-init",
+ "pegboard-gc",
+ "pegboard-ws",
+ "reqwest 0.12.9",
+ "rivet-api",
+ "rivet-cache",
+ "rivet-config",
+ "rivet-connection",
+ "rivet-migrate",
+ "rivet-pools",
+ "rivet-runtime",
+ "rivet-service-manager",
+ "rivet-term",
+ "s3-util",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sqlx",
+ "strum 0.26.3",
+ "tabled",
+ "telemetry-beacon",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "url",
+ "user-delete-pending",
+ "uuid",
+ "workflow-gc",
+ "workflow-metrics-publish",
+]
+
+[[package]]
+name = "rivet-service-manager"
 version = "0.1.0"
 dependencies = [
  "anyhow",

@@ -1,6 +1,6 @@
 use anyhow::*;
 use clap::Parser;
-use rivet_server::CronConfig;
+use rivet_service_manager::CronConfig;
 
 use crate::run_config::RunConfig;
 
@@ -23,17 +23,17 @@ enum ServiceKind {
 	Cron,
 }
 
-impl Into<rivet_server::ServiceKind> for ServiceKind {
-	fn into(self) -> rivet_server::ServiceKind {
+impl Into<rivet_service_manager::ServiceKind> for ServiceKind {
+	fn into(self) -> rivet_service_manager::ServiceKind {
 		use ServiceKind::*;
 		match self {
-			ApiPublic => rivet_server::ServiceKind::ApiPublic,
-			ApiEdge => rivet_server::ServiceKind::ApiEdge,
-			ApiPrivate => rivet_server::ServiceKind::ApiPrivate,
-			Standalone => rivet_server::ServiceKind::Standalone,
-			Singleton => rivet_server::ServiceKind::Singleton,
-			Oneshot => rivet_server::ServiceKind::Oneshot,
-			Cron => rivet_server::ServiceKind::Cron(CronConfig::default()),
+			ApiPublic => rivet_service_manager::ServiceKind::ApiPublic,
+			ApiEdge => rivet_service_manager::ServiceKind::ApiEdge,
+			ApiPrivate => rivet_service_manager::ServiceKind::ApiPrivate,
+			Standalone => rivet_service_manager::ServiceKind::Standalone,
+			Singleton => rivet_service_manager::ServiceKind::Singleton,
+			Oneshot => rivet_service_manager::ServiceKind::Oneshot,
+			Cron => rivet_service_manager::ServiceKind::Cron(CronConfig::default()),
 		}
 	}
 }
@@ -60,7 +60,7 @@ impl Opts {
 				.services
 				.iter()
 				.map(|x| x.clone().into())
-				.collect::<Vec<rivet_server::ServiceKind>>();
+				.collect::<Vec<rivet_service_manager::ServiceKind>>();
 
 			run_config
 				.services
@@ -72,7 +72,7 @@ impl Opts {
 
 		// Start server
 		let pools = rivet_pools::Pools::new(config.clone()).await?;
-		rivet_server::start(config, pools, services).await?;
+		rivet_service_manager::start(config, pools, services).await?;
 
 		Ok(())
 	}

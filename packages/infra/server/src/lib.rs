@@ -9,7 +9,7 @@ pub mod util;
 #[derive(Parser)]
 pub enum SubCommand {
 	/// Starts the Rivet server
-	Server(server::Opts),
+	Start(start::Opts),
 	/// Provisions all of the required resources to run Rivet.
 	///
 	/// If you need to provision specific parts, use the `rivet db migrate up` and `rivet storage
@@ -51,7 +51,7 @@ impl SubCommand {
 		run_config: run_config::RunConfig,
 	) -> Result<()> {
 		match self {
-			SubCommand::Server(opts) => opts.execute(config, &run_config).await,
+			SubCommand::Start(opts) => opts.execute(config, &run_config).await,
 			SubCommand::Provision(opts) => opts.execute(config, &run_config).await,
 			SubCommand::Database { command } => command.execute(config, &run_config).await,
 			SubCommand::Storage { command } => command.execute(config, &run_config).await,

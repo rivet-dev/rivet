@@ -33,7 +33,7 @@ RUN \
 	--mount=type=cache,target=/usr/local/cargo/git \
 	--mount=type=cache,target=/usr/local/cargo/registry \
 	--mount=type=cache,target=/app/target \
-	RUSTFLAGS="--cfg tokio_unstable" cargo build --bin rivet && \
-	mv target/debug/rivet /usr/bin/rivet && \
-	mkdir /etc/rivet
+	RUSTFLAGS="--cfg tokio_unstable" cargo build --bin rivet-server && \
+	mv target/debug/rivet-server /usr/bin/rivet-server && \
+	mkdir /etc/rivet-server
 

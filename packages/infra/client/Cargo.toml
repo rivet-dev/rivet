@@ -2,7 +2,7 @@
 members = [
 	"container-runner",
 	"echo",
-	"isolate-runner-v8",
+	"isolate-v8-runner",
 	"manager",
 	"runner-protocol",
 ]

@@ -1,9 +1,9 @@
 [workspace]
 resolver = "2"
-# Find all packages with: find . -name Cargo.toml | grep -v resources | grep -v "sdks/runtime" | grep -v "sdks/full/rust-cli" | grep -v "infra/" | sed -E 's|^./(.*)Cargo\.toml$|"\1",|'
+# Find all packages with: find . -name Cargo.toml | grep -v resources | grep -v "sdks/runtime" | grep -v "sdks/full/rust-cli" | grep -v "infra/client/" | grep -v "infra/legacy/job-runner" | sed -E 's|^./(.*)Cargo\.toml$|"\1",|'
 members = [
 "sdks/full/rust/",
-"packages/cli/",
+"packages/infra/server/",
 "packages/common/operation/core/",
 "packages/common/operation/macros/",
 "packages/common/metrics/",
@@ -26,7 +26,7 @@ members = [
 "packages/common/chirp/worker-attributes/",
 "packages/common/chirp/client/",
 "packages/common/runtime/",
-"packages/common/server/",
+"packages/common/service-manager/",
 "packages/common/redis-util/",
 "packages/common/env/",
 "packages/common/types-proto/core/",
@@ -83,7 +83,6 @@ members = [
 "packages/api/games/",
 "packages/api/actor/",
 "packages/api/monolith-public/",
-"packages/services/admin/standalone/default-login",
 "packages/services/token/ops/exchange/",
 "packages/services/token/ops/revoke/",
 "packages/services/token/ops/get/",
@@ -107,6 +106,9 @@ members = [
 "packages/services/ds/",
 "packages/services/linode/",
 "packages/services/linode/standalone/gc/",
+"packages/services/admin/",
+"packages/services/admin/standalone/default-login/",
+"packages/services/admin/worker/",
 "packages/services/load-test/standalone/api-cloud/",
 "packages/services/load-test/standalone/watch-requests/",
 "packages/services/load-test/standalone/sqlx/",
@@ -283,7 +285,7 @@ members = [
 "packages/services/custom-user-avatar/ops/list-for-game/",
 "packages/services/custom-user-avatar/ops/upload-complete/",
 "packages/services/debug/ops/email-res/",
-"packages/services/tier/", "packages/services/admin",
+"packages/services/tier/",
 ]
 
 # Speed up compilation

@@ -1,5 +1,5 @@
 [package]
-name = "rivet-server"
+name = "rivet-service-manager"
 version = "0.1.0"
 edition = "2021"
 

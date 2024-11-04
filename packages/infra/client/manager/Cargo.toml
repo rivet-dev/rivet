@@ -5,6 +5,10 @@ edition = "2021"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 license = "Apache-2.0"
 
+[[bin]]
+name = "rivet-client"
+path = "src/main.rs"
+
 [features]
 # Enable this feature flag to build and run integration tests
 test = []

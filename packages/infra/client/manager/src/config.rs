@@ -30,15 +30,15 @@ pub struct Config {
 }
 
 fn default_working_path() -> PathBuf {
-	Path::new("/var/lib/pegboard").to_path_buf()
+	Path::new("/var/lib/rivet-client").to_path_buf()
 }
 
 fn default_container_runner_binary_path() -> PathBuf {
-	Path::new("/usr/local/bin/pegboard-container-runner").into()
+	Path::new("/usr/local/bin/rivet-container-runner").into()
 }
 
 fn default_isolate_runner_binary_path() -> PathBuf {
-	Path::new("/usr/local/bin/pegboard-isolate-runner-v8").into()
+	Path::new("/usr/local/bin/rivet-isolate-v8-runner").into()
 }
 
 fn default_redirect_logs() -> bool {
