@@ -1,6 +1,7 @@
 use api_helper::{define_router, util::CorsConfigBuilder};
 use hyper::{Body, Request, Response};
 use rivet_api::models;
+use rivet_operation::prelude::*;
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -10,35 +11,34 @@ pub mod dc;
 pub mod logs;
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(untagged)]
-pub enum GlobalQuery {
-	Nothing,
-	Environment {
-		/// Slug of the environment.
-		environment: String,
-	},
-	ProjectAndEnvironment {
-		/// Slug of the project.
-		project: String,
-		/// Slug of the environment.
-		environment: String,
-	},
+pub struct GlobalQuery {
+	/// Slug of the project.
+	///
+	/// If provided, `environment` must also be provided.
+	pub project: Option<String>,
+
+	/// Slug of the environment.
+	pub environment: Option<String>,
 }
 
 impl GlobalQuery {
-	pub fn project(&self) -> Option<&str> {
-		match self {
-			Self::ProjectAndEnvironment { project, .. } => Some(&project),
-			_ => None,
-		}
-	}
-
-	pub fn environment(&self) -> Option<&str> {
-		match self {
-			Self::ProjectAndEnvironment { environment, .. } | Self::Environment { environment } => {
-				Some(&environment)
+	/// Returns both the project and environment.
+	///
+	/// Validates that the project can only be specified with the environment.
+	pub fn project_and_env(&self) -> GlobalResult<(Option<&str>, Option<&str>)> {
+		if let Some(environment) = &self.environment {
+			Ok((self.project.as_ref().map(|x| x.as_str()), Some(environment)))
+		} else {
+			// Don't allow just the project
+			if self.project.is_some() {
+				bail_with!(
+					API_BAD_QUERY,
+					parameter = "project",
+					error = "Must provide both `project` and `environment` query together."
+				)
+			} else {
+				Ok((None, None))
 			}
-			_ => None,
 		}
 	}
 }

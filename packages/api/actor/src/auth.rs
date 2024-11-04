@@ -71,11 +71,13 @@ impl Auth {
 		let is_development = ctx.config().server()?.rivet.auth.access_kind
 			== rivet_config::config::rivet::AccessKind::Development;
 
+		let (project_query, environment_query) = query.project_and_env()?;
+
 		// Lookup project name ID
 		let project = if is_development {
-			query.project().unwrap_or(util::dev_defaults::PROJECT_SLUG)
+			project_query.unwrap_or(util::dev_defaults::PROJECT_SLUG)
 		} else {
-			unwrap_with!(query.project(), GAME_NOT_FOUND)
+			unwrap_with!(project_query, GAME_NOT_FOUND)
 		};
 		let game_res = op!([ctx] game_resolve_name_id {
 			name_ids: vec![project.to_string()],
@@ -86,11 +88,9 @@ impl Auth {
 
 		// Lookup environment name ID
 		let environment = if is_development {
-			query
-				.environment()
-				.unwrap_or(util::dev_defaults::ENVIRONMENT_SLUG)
+			environment_query.unwrap_or(util::dev_defaults::ENVIRONMENT_SLUG)
 		} else {
-			unwrap_with!(query.project(), GAME_NOT_FOUND)
+			unwrap_with!(environment_query, GAME_ENVIRONMENT_NOT_FOUND)
 		};
 		let env_res = op!([ctx] game_namespace_resolve_name_id {
 			game_id: game.game_id,

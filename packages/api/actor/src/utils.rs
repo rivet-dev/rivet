@@ -23,8 +23,8 @@ pub async fn build_global_query_compat(
 
 	ensure_eq!(ns.game_id, game.game_id, "env does not belong to project");
 
-	Ok(GlobalQuery::ProjectAndEnvironment {
-		project: game.name_id.clone(),
-		environment: ns.name_id.clone(),
+	Ok(GlobalQuery {
+		project: Some(game.name_id.clone()),
+		environment: Some(ns.name_id.clone()),
 	})
 }
