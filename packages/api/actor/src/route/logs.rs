@@ -8,25 +8,30 @@ use rivet_operation::prelude::*;
 use serde::Deserialize;
 use std::time::Duration;
 
-use crate::{assert, auth::Auth};
+use crate::{
+	assert,
+	auth::{Auth, CheckOutput},
+	utils::build_global_query_compat,
+};
+
+use super::GlobalQuery;
 
 // MARK: GET /games/{}/environments/{}/actors/{}/logs
 #[derive(Debug, Deserialize)]
 pub struct GetActorLogsQuery {
+	#[serde(flatten)]
+	pub global: GlobalQuery,
 	pub stream: models::CloudGamesLogStream,
 }
 
 pub async fn get_logs(
 	ctx: Ctx<Auth>,
-	game_id: Uuid,
-	env_id: Uuid,
 	server_id: Uuid,
 	watch_index: WatchIndexQuery,
 	query: GetActorLogsQuery,
 ) -> GlobalResult<models::ActorGetActorLogsResponse> {
-	ctx.auth()
-		.check_game(ctx.op_ctx(), game_id, env_id, false)
-		.await?;
+	let CheckOutput { game_id, env_id } =
+		ctx.auth().check(ctx.op_ctx(), &query.global, false).await?;
 
 	// Validate server belongs to game
 	assert::server_for_env(&ctx, server_id, game_id, env_id).await?;
@@ -61,15 +66,6 @@ pub async fn get_logs(
 				order_asc: false,
 				query: Some(ds_log::read::request::Query::AfterNts(anchor))
 
-			})
-			.await?;
-
-			let list_res = op!([ctx] @dont_log_body ds_log_read {
-				server_id: Some(server_id.into()),
-				stream_type: stream_type as i32,
-				count: 64,
-				order_asc: false,
-				query: Some(ds_log::read::request::Query::AfterNts(anchor))
 			})
 			.await?;
 
@@ -134,4 +130,25 @@ pub async fn get_logs(
 		timestamps,
 		watch: WatchResponse::new_as_model(watch_nts),
 	})
+}
+
+pub async fn get_logs_deprecated(
+	ctx: Ctx<Auth>,
+	game_id: Uuid,
+	env_id: Uuid,
+	server_id: Uuid,
+	watch_index: WatchIndexQuery,
+	query: GetActorLogsQuery,
+) -> GlobalResult<models::ActorGetActorLogsResponse> {
+	let global = build_global_query_compat(&ctx, game_id, env_id).await?;
+	get_logs(
+		ctx,
+		server_id,
+		watch_index,
+		GetActorLogsQuery {
+			global,
+			stream: query.stream,
+		},
+	)
+	.await
 }

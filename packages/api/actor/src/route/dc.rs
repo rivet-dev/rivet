@@ -2,18 +2,20 @@ use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use rivet_api::models;
 use rivet_operation::prelude::*;
 
-use crate::auth::Auth;
+use crate::{
+	auth::{Auth, CheckOutput},
+	utils::build_global_query_compat,
+};
+
+use super::GlobalQuery;
 
 // MARK: GET /games/{}/environments/{}/datacenters
 pub async fn list(
 	ctx: Ctx<Auth>,
-	game_id: Uuid,
-	env_id: Uuid,
 	_watch_index: WatchIndexQuery,
+	query: GlobalQuery,
 ) -> GlobalResult<models::ActorListDatacentersResponse> {
-	ctx.auth()
-		.check_game(ctx.op_ctx(), game_id, env_id, true)
-		.await?;
+	let CheckOutput { game_id, .. } = ctx.auth().check(ctx.op_ctx(), &query, false).await?;
 
 	let cluster_res = ctx
 		.op(cluster::ops::get_for_game::Input {
@@ -49,4 +51,14 @@ pub async fn list(
 		.collect::<Vec<_>>();
 
 	Ok(models::ActorListDatacentersResponse { datacenters })
+}
+
+pub async fn list_deprecated(
+	ctx: Ctx<Auth>,
+	game_id: Uuid,
+	env_id: Uuid,
+	watch_index: WatchIndexQuery,
+) -> GlobalResult<models::ActorListDatacentersResponse> {
+	let global = build_global_query_compat(&ctx, game_id, env_id).await?;
+	list(ctx, watch_index, global).await
 }

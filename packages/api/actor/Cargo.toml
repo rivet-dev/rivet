@@ -52,6 +52,8 @@ user-identity-get = { path = "../../services/user-identity/ops/get" }
 user-team-list = { path = "../../services/user/ops/team-list" }
 rivet-config = { version = "0.1.0", path = "../../common/config" }
 rivet-env = { version = "0.1.0", path = "../../common/env" }
+game-resolve-name-id = { version = "0.0.1", path = "../../services/game/ops/resolve-name-id" }
+game-namespace-resolve-name-id = { version = "0.0.1", path = "../../services/game/ops/namespace-resolve-name-id" }
 
 [dev-dependencies]
 rivet-connection = { path = "../../common/connection" }

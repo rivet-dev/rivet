@@ -259,6 +259,8 @@ dependencies = [
  "faker-region",
  "game-get",
  "game-namespace-get",
+ "game-namespace-resolve-name-id",
+ "game-resolve-name-id",
  "game-version-get",
  "http 0.2.12",
  "hyper 0.14.30",

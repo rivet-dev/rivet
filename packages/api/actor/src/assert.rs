@@ -7,7 +7,7 @@ use crate::auth::Auth;
 pub async fn server_for_env(
 	ctx: &Ctx<Auth>,
 	server_id: Uuid,
-	game_id: Uuid,
+	_game_id: Uuid,
 	env_id: Uuid,
 ) -> GlobalResult<()> {
 	let servers_res = ctx

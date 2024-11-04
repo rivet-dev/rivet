@@ -6,9 +6,15 @@ use proto::claims::Claims;
 use rivet_claims::ClaimsDecode;
 use rivet_operation::prelude::*;
 
+use crate::route::GlobalQuery;
+
 pub struct Auth {
-	config: rivet_config::Config,
 	claims: Option<Claims>,
+}
+
+pub struct CheckOutput {
+	pub game_id: Uuid,
+	pub env_id: Uuid,
 }
 
 #[async_trait]
@@ -21,7 +27,6 @@ impl ApiAuth for Auth {
 		Self::rate_limit(&config, rate_limit_ctx).await?;
 
 		Ok(Auth {
-			config: config.clone(),
 			claims: if let Some(api_token) = api_token {
 				Some(as_auth_expired(rivet_claims::decode(
 					&config.server()?.jwt.public,
@@ -52,14 +57,35 @@ impl Auth {
 		self.claims()?.as_env_service()
 	}
 
-	pub async fn check_game(
+	pub async fn check(
 		&self,
 		ctx: &OperationContext<()>,
-		game_id: Uuid,
-		env_id: Uuid,
+		query: &GlobalQuery,
 		allow_service: bool,
-	) -> GlobalResult<()> {
+	) -> GlobalResult<CheckOutput> {
 		let claims = self.claims()?;
+
+		// Lookup project name ID
+		let project = unwrap_with!(query.project(), GAME_NOT_FOUND);
+		let game_res = op!([ctx] game_resolve_name_id {
+			name_ids: vec![project.to_string()],
+		})
+		.await?;
+		let game = unwrap_with!(game_res.games.first(), GAME_NOT_FOUND);
+		let game_id = unwrap!(game.game_id).as_uuid();
+
+		// Lookup environment name ID
+		let environment = unwrap_with!(query.environment(), GAME_ENVIRONMENT_NOT_FOUND);
+		let env_res = op!([ctx] game_namespace_resolve_name_id {
+			game_id: game.game_id,
+			name_ids: vec![environment.to_string()],
+		})
+		.await?;
+		let env = unwrap_with!(env_res.namespaces.first(), GAME_ENVIRONMENT_NOT_FOUND);
+		let env_id = unwrap!(env.namespace_id).as_uuid();
+
+		// Build output
+		let output = CheckOutput { game_id, env_id };
 
 		// Get the game this env belongs to
 		let ns_res = op!([ctx] game_namespace_get {
@@ -81,7 +107,7 @@ impl Auth {
 				API_FORBIDDEN,
 				reason = "Cloud token cannot write to this game",
 			);
-			Ok(())
+			Ok(output)
 		} else if let Ok(service_ent) = claims.as_env_service() {
 			ensure_with!(
 				allow_service,
@@ -93,7 +119,7 @@ impl Auth {
 				API_FORBIDDEN,
 				reason = "Service token cannot write to this game",
 			);
-			Ok(())
+			Ok(output)
 		} else if let Ok(user_ent) = claims.as_user() {
 			// Get the user
 			let (user_res, game_res, team_list_res) = tokio::try_join!(
@@ -114,7 +140,7 @@ impl Auth {
 
 			// Allow admin
 			if user.is_admin {
-				return Ok(());
+				return Ok(output);
 			}
 
 			// Verify user is not deleted
@@ -142,7 +168,7 @@ impl Auth {
 				reasons = util_team::format_deactivate_reasons(&dev_team.deactivate_reasons)?,
 			);
 
-			Ok(())
+			Ok(output)
 		} else {
 			bail_with!(
 				CLAIMS_MISSING_ENTITLEMENT,

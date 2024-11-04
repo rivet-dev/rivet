@@ -2,23 +2,26 @@ use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use rivet_api::models;
 use rivet_convert::{ApiInto, ApiTryInto};
 use rivet_operation::prelude::*;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::json;
 use std::collections::HashMap;
 
-use crate::{assert, auth::Auth};
+use crate::{
+	assert,
+	auth::{Auth, CheckOutput},
+	utils::build_global_query_compat,
+};
+
+use super::GlobalQuery;
 
 // MARK: GET /games/{}/environments/{}/actors/{}
 pub async fn get(
 	ctx: Ctx<Auth>,
-	game_id: Uuid,
-	env_id: Uuid,
 	actor_id: Uuid,
 	_watch_index: WatchIndexQuery,
+	query: GlobalQuery,
 ) -> GlobalResult<models::ActorGetActorResponse> {
-	ctx.auth()
-		.check_game(ctx.op_ctx(), game_id, env_id, true)
-		.await?;
+	let CheckOutput { env_id, .. } = ctx.auth().check(ctx.op_ctx(), &query, false).await?;
 
 	// Get the server
 	let servers_res = ctx
@@ -36,16 +39,24 @@ pub async fn get(
 	})
 }
 
-// MARK: POST /games/{}/environments/{}/actors
-pub async fn create(
+pub async fn get_deprecated(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
 	env_id: Uuid,
+	actor_id: Uuid,
+	watch_index: WatchIndexQuery,
+) -> GlobalResult<models::ActorGetActorResponse> {
+	let global = build_global_query_compat(&ctx, game_id, env_id).await?;
+	get(ctx, actor_id, watch_index, global).await
+}
+
+// MARK: POST /games/{}/environments/{}/actors
+pub async fn create(
+	ctx: Ctx<Auth>,
 	body: models::ActorCreateActorRequest,
+	query: GlobalQuery,
 ) -> GlobalResult<models::ActorCreateActorResponse> {
-	ctx.auth()
-		.check_game(ctx.op_ctx(), game_id, env_id, true)
-		.await?;
+	let CheckOutput { game_id, env_id } = ctx.auth().check(ctx.op_ctx(), &query, false).await?;
 
 	let (clusters_res, game_configs_res) = tokio::try_join!(
 		ctx.op(cluster::ops::get_for_game::Input {
@@ -175,22 +186,31 @@ pub async fn create(
 	})
 }
 
+pub async fn create_deprecated(
+	ctx: Ctx<Auth>,
+	game_id: Uuid,
+	env_id: Uuid,
+	body: models::ActorCreateActorRequest,
+) -> GlobalResult<models::ActorCreateActorResponse> {
+	let global = build_global_query_compat(&ctx, game_id, env_id).await?;
+	create(ctx, body, global).await
+}
+
 // MARK: DELETE /games/{}/environments/{}/actors/{}
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct DeleteQuery {
+	#[serde(flatten)]
+	global: GlobalQuery,
 	override_kill_timeout: Option<i64>,
 }
 
 pub async fn destroy(
 	ctx: Ctx<Auth>,
-	game_id: Uuid,
-	env_id: Uuid,
 	actor_id: Uuid,
 	query: DeleteQuery,
 ) -> GlobalResult<serde_json::Value> {
-	ctx.auth()
-		.check_game(ctx.op_ctx(), game_id, env_id, true)
-		.await?;
+	let CheckOutput { game_id, env_id } =
+		ctx.auth().check(ctx.op_ctx(), &query.global, false).await?;
 
 	assert::server_for_env(&ctx, actor_id, game_id, env_id).await?;
 
@@ -223,9 +243,30 @@ pub async fn destroy(
 	Ok(json!({}))
 }
 
+pub async fn destroy_deprecated(
+	ctx: Ctx<Auth>,
+	game_id: Uuid,
+	env_id: Uuid,
+	actor_id: Uuid,
+	query: DeleteQuery,
+) -> GlobalResult<serde_json::Value> {
+	let global = build_global_query_compat(&ctx, game_id, env_id).await?;
+	destroy(
+		ctx,
+		actor_id,
+		DeleteQuery {
+			global,
+			override_kill_timeout: query.override_kill_timeout,
+		},
+	)
+	.await
+}
+
 // MARK: GET /games/{}/environments/{}/actors
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct ListQuery {
+	#[serde(flatten)]
+	global: GlobalQuery,
 	tags_json: Option<String>,
 	include_destroyed: Option<bool>,
 	cursor: Option<Uuid>,
@@ -233,14 +274,10 @@ pub struct ListQuery {
 
 pub async fn list_actors(
 	ctx: Ctx<Auth>,
-	game_id: Uuid,
-	env_id: Uuid,
 	_watch_index: WatchIndexQuery,
 	query: ListQuery,
 ) -> GlobalResult<models::ActorListActorsResponse> {
-	ctx.auth()
-		.check_game(ctx.op_ctx(), game_id, env_id, true)
-		.await?;
+	let CheckOutput { env_id, .. } = ctx.auth().check(ctx.op_ctx(), &query.global, false).await?;
 
 	let list_res = ctx
 		.op(ds::ops::server::list_for_env::Input {
@@ -267,4 +304,15 @@ pub async fn list_actors(
 		.collect::<GlobalResult<Vec<_>>>()?;
 
 	Ok(models::ActorListActorsResponse { actors: servers })
+}
+
+pub async fn list_actors_deprecated(
+	ctx: Ctx<Auth>,
+	game_id: Uuid,
+	env_id: Uuid,
+	watch_index: WatchIndexQuery,
+	query: ListQuery,
+) -> GlobalResult<models::ActorListActorsResponse> {
+	let global = build_global_query_compat(&ctx, game_id, env_id).await?;
+	list_actors(ctx, watch_index, ListQuery { global, ..query }).await
 }
