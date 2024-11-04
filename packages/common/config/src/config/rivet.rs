@@ -155,9 +155,13 @@ impl Rivet {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub enum RivetAccessKind {
+pub enum AccessKind {
+	/// Anyone can sign up for an account.
 	Public,
+	/// Only admin users can crate teams & projects.
 	Private,
+	/// Anyone can access the cluster without an account.
+	Development,
 }
 
 /// Configuration for billing features (Enterprise Edition).
@@ -395,20 +399,13 @@ pub struct JobRun {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Auth {
-	/// Determines whether the Rivet instance is public or private.
-	pub access_kind: RivetAccessKind,
-	/// Flag to enable access token login.
-	pub access_token_login: bool,
-	/// Automatically print a URL to log in to Rivet as admin.
-	pub print_login_url: bool,
+	pub access_kind: AccessKind,
 }
 
 impl Default for Auth {
 	fn default() -> Self {
 		Self {
-			access_kind: RivetAccessKind::Private,
-			access_token_login: true,
-			print_login_url: true,
+			access_kind: AccessKind::Private,
 		}
 	}
 }

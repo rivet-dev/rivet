@@ -11,7 +11,7 @@ use proto::{
 	common,
 };
 use rivet_api::models as new_models;
-use rivet_config::config::rivet::RivetAccessKind;
+use rivet_config::config::rivet::AccessKind;
 use rivet_convert::{ApiInto, ApiTryInto};
 use rivet_group_server::models;
 use rivet_operation::prelude::*;
@@ -559,7 +559,7 @@ pub async fn create(
 ) -> GlobalResult<models::CreateGroupResponse> {
 	let (_, user_ent) = ctx.auth().user(ctx.op_ctx()).await?;
 
-	if RivetAccessKind::Public != ctx.config().server()?.rivet.auth.access_kind {
+	if AccessKind::Public != ctx.config().server()?.rivet.auth.access_kind {
 		ctx.auth().admin(ctx.op_ctx()).await?;
 	}
 

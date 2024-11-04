@@ -1,6 +1,6 @@
 use api_helper::ctx::Ctx;
 use rivet_api::models;
-use rivet_config::config::rivet::RivetAccessKind;
+use rivet_config::config::rivet::AccessKind;
 use rivet_convert::ApiInto;
 use rivet_operation::prelude::*;
 
@@ -11,7 +11,7 @@ pub async fn validate(
 	ctx: Ctx<Auth>,
 	body: models::CloudValidateGroupRequest,
 ) -> GlobalResult<models::CloudValidateGroupResponse> {
-	if ctx.config().server()?.rivet.auth.access_kind != RivetAccessKind::Public {
+	if ctx.config().server()?.rivet.auth.access_kind != AccessKind::Public {
 		ctx.auth().admin(ctx.op_ctx()).await?;
 	}
 

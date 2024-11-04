@@ -1,0 +1,12 @@
+[package]
+name = "user"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+chirp-workflow = { path = "../../common/chirp-workflow/core" }
+
+cluster = { path = "../cluster" }
+server-spec = { path = "../server-spec" }
+linode = { path = "../linode" }
+rivet-config = { version = "0.1.0", path = "../../common/config" }

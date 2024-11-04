@@ -31,6 +31,7 @@ types:
     enum:
       - value: public
       - value: private
+      - value: development
 
   BootstrapDomains:
     docs: Domains that host parts of Rivet

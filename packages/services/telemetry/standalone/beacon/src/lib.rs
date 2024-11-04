@@ -148,7 +148,6 @@ fn get_config_data(ctx: &OperationContext<()>) -> GlobalResult<serde_json::Value
 			"namespace": server_config.rivet.namespace,
 			"cluster_enabled": server_config.rivet.cluster.is_some(),
 			"auth_access_kind": format!("{:?}", server_config.rivet.auth.access_kind),
-			"auth_access_token_login": server_config.rivet.auth.access_token_login,
 			"dns_enabled": server_config.rivet.dns.is_some(),
 			"job_run_enabled": server_config.rivet.job_run.is_some(),
 			"api_origin": server_config.rivet.api_public.public_origin(),

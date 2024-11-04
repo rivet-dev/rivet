@@ -85,6 +85,15 @@ pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 		),
 	];
 
+	if server_config.rivet.auth.access_kind == rivet_config::config::rivet::AccessKind::Development
+	{
+		services.push(Service::new(
+			"cloud_default_create",
+			ServiceKind::Oneshot,
+			|config, pools| Box::pin(cloud_default_create::start(config, pools)),
+		));
+	}
+
 	if server_config.linode.is_some() {
 		services.push(Service::new(
 			"linode_gc",
@@ -134,15 +143,6 @@ pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			"job_gc",
 			ServiceKind::Singleton,
 			|config, pools| Box::pin(job_gc::start(config, pools)),
-		));
-	}
-
-	let auth_config = &server_config.rivet.auth;
-	if auth_config.access_token_login && auth_config.print_login_url {
-		services.push(Service::new(
-			"admin_default_login",
-			ServiceKind::Oneshot,
-			|config, pools| Box::pin(admin_default_login::start(config, pools)),
 		));
 	}
 

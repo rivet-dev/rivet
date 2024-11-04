@@ -1,6 +1,6 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use rivet_api::models;
-use rivet_config::config::rivet::RivetAccessKind;
+use rivet_config::config::rivet::AccessKind;
 use rivet_operation::prelude::*;
 
 use crate::auth::Auth;
@@ -21,8 +21,9 @@ pub async fn build_bootstrap_data(
 	Ok(models::CloudBootstrapResponse {
 		cluster: models::CloudBootstrapCluster::Oss,
 		access: match server_config.rivet.auth.access_kind {
-			RivetAccessKind::Public => models::CloudBootstrapAccess::Public,
-			RivetAccessKind::Private => models::CloudBootstrapAccess::Private,
+			AccessKind::Public => models::CloudBootstrapAccess::Public,
+			AccessKind::Private => models::CloudBootstrapAccess::Private,
+			AccessKind::Development => models::CloudBootstrapAccess::Development,
 		},
 		domains: Box::new(models::CloudBootstrapDomains {
 			cdn: server_config
@@ -48,8 +49,9 @@ pub async fn build_bootstrap_data(
 				.map(|site_key| Box::new(models::CloudBootstrapCaptchaTurnstile { site_key })),
 		}),
 		login_methods: Box::new(models::CloudBootstrapLoginMethods {
-			access_token: server_config.rivet.auth.access_token_login,
 			email: server_config.sendgrid.is_some(),
+			// Deprecated
+			access_token: false,
 		}),
 		deploy_hash: rivet_env::source_hash().to_string(),
 	})

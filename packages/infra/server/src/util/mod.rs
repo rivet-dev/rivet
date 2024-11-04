@@ -1,4 +1,3 @@
-pub mod admin;
 pub mod db;
 pub mod format;
 pub mod wf;

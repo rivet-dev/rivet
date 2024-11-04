@@ -1,0 +1,33 @@
+[package]
+name = "cloud-default-create"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+chirp-client = { path = "../../../../common/chirp/client" }
+chirp-workflow = { path = "../../../../common/chirp-workflow/core" }
+reqwest = "0.11"
+rivet-connection = { path = "../../../../common/connection" }
+rivet-pools = { path = "../../../../common/pools" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.40", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
+tracing-logfmt = "0.3"
+uuid = { version = "1", features = ["v4"] }
+
+rivet-config = { version = "0.1.0", path = "../../../../common/config" }
+user = { version = "0.1.0", path = "../../../user" }
+game-resolve-name-id = { version = "0.0.1", path = "../../../game/ops/resolve-name-id" }
+cloud-game-config-create = { version = "0.0.1", path = "../../ops/game-config-create" }
+team-resolve-display-name = { version = "0.0.1", path = "../../../team/ops/resolve-display-name" }
+cloud-namespace-create = { version = "0.0.1", path = "../../ops/namespace-create" }
+game-create = { version = "0.0.1", path = "../../../game/ops/create" }
+rivet-operation = { version = "0.1.0", path = "../../../../common/operation/core" }
+game-namespace-resolve-name-id = { version = "0.0.1", path = "../../../game/ops/namespace-resolve-name-id" }
+game-namespace-create = { version = "0.0.1", path = "../../../game/ops/namespace-create" }
+cloud-version-publish = { version = "0.0.1", path = "../../ops/version-publish" }
+
+[dev-dependencies]
+chirp-worker = { path = "../../../../common/chirp/worker" }

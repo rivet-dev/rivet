@@ -106,9 +106,6 @@ members = [
 "packages/services/ds/",
 "packages/services/linode/",
 "packages/services/linode/standalone/gc/",
-"packages/services/admin/",
-"packages/services/admin/standalone/default-login/",
-"packages/services/admin/worker/",
 "packages/services/load-test/standalone/api-cloud/",
 "packages/services/load-test/standalone/watch-requests/",
 "packages/services/load-test/standalone/sqlx/",
@@ -285,8 +282,8 @@ members = [
 "packages/services/custom-user-avatar/ops/list-for-game/",
 "packages/services/custom-user-avatar/ops/upload-complete/",
 "packages/services/debug/ops/email-res/",
-"packages/services/tier/",
-]
+"packages/services/tier/", "packages/services/cloud/standalone/default-create"
+, "packages/services/user"]
 
 # Speed up compilation
 [profile.dev]

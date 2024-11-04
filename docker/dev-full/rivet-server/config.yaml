@@ -1,7 +1,11 @@
 server:
   rivet:
+    auth:
+      access_kind: development
+
     ui:
       public_origin_regex: .*
+
   # IMPORTANT: Do not ship this to production
   jwt:
     public: |
@@ -12,6 +16,7 @@ server:
       -----BEGIN PRIVATE KEY-----
       MC4CAQAwBQYDK2VwBCIEIDI+WHFytxvdtfGot36NMCI26s2Yp0+E5u9OiPf3NQX3
       -----END PRIVATE KEY-----
+
   cockroachdb:
     url: postgresql://cockroachdb:26257/defaultdb?sslmode=disable
     username: root
