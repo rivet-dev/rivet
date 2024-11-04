@@ -344,9 +344,8 @@ pub async fn get(
 	};
 	let update_ts = update_ts.unwrap_or_else(util::timestamp::now);
 
-	let ((games, dev_teams), states, ns_list_res, version_list_res) = tokio::try_join!(
+	let ((games, dev_teams), ns_list_res, version_list_res) = tokio::try_join!(
 		fetch::game::games_and_dev_teams(ctx.op_ctx(), vec![game_id.into()]),
-		fetch::game::state(ctx.op_ctx(), vec![game_id.into()]),
 		op!([ctx] game_namespace_list {
 			game_ids: vec![game_id.into()],
 		}),
@@ -355,7 +354,6 @@ pub async fn get(
 		}),
 	)?;
 	let game = unwrap!(games.games.first());
-	let state = unwrap!(states.get(&game_id));
 	let dev_team = unwrap!(dev_teams.get(&game_id));
 	let ns_list = unwrap!(ns_list_res.games.first());
 	let version_list = unwrap!(version_list_res.games.first());
@@ -425,13 +423,15 @@ pub async fn get(
 			name_id: game.name_id.to_owned(),
 			display_name: game.display_name.to_owned(),
 			developer_group_id: unwrap_ref!(dev_team.team_id).as_uuid(),
-			total_player_count: state.total_player_count.api_try_into()?,
 			logo_url: util::route::game_logo(ctx.config(), game),
 			banner_url: util::route::game_banner(ctx.config(), game),
 
 			namespaces,
 			versions,
 			available_regions: regions,
+
+			// Deprecated
+			total_player_count: 0,
 		}),
 		watch: WatchResponse::new_as_model(update_ts),
 	})

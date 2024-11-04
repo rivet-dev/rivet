@@ -185,7 +185,7 @@ impl RequestConfig {
 					"cache returned wrong number of values"
 				);
 
-				tracing::info!(
+				tracing::debug!(
 					cached_len = cached_values.iter().filter(|x| x.is_some()).count(),
 					total_len = cached_values.len(),
 					"read from cache"

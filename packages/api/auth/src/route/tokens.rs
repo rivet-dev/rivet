@@ -3,11 +3,12 @@ use http::response::Builder;
 use proto::backend::{self, pkg::*};
 use rivet_auth_server::models;
 use rivet_claims::ClaimsDecode;
+use rivet_config::config::rivet::AccessKind;
 use rivet_operation::prelude::*;
 
 use crate::{
 	auth::Auth,
-	utils::{self, delete_refresh_token_header, refresh_token_header},
+	utils::{delete_refresh_token_header, refresh_token_header},
 };
 
 // Also see user-token-create/src/main.rs
@@ -115,7 +116,7 @@ pub async fn identity(
 			}
 		}
 	} else {
-		register_user(ctx.client_info(), ctx.op_ctx()).await?
+		fallback_user(ctx.client_info(), ctx.op_ctx()).await?
 	};
 
 	// Validate response
@@ -165,17 +166,43 @@ pub async fn identity(
 	})
 }
 
-async fn register_user(
+/// This will return the user authentication data if no refresh token is provided or if the refresh
+/// token is expired.
+///
+/// With AccessKind::Development, this will return the default user.
+///
+/// Otherwise, this will return a new guest user.
+async fn fallback_user(
 	client_info: backend::net::ClientInfo,
 	ctx: &OperationContext<()>,
 ) -> GlobalResult<(String, String)> {
-	// Register user
-	let user_id = Uuid::new_v4();
-	msg!([ctx] user::msg::create(user_id) -> user::msg::create_complete {
-		user_id: Some(user_id.into()),
-		namespace_id: None,
-	})
-	.await?;
+	let user_id = match ctx.config().server()?.rivet.auth.access_kind {
+		AccessKind::Public | AccessKind::Private => {
+			// Register new user
+			let user_id = Uuid::new_v4();
+			msg!([ctx] user::msg::create(user_id) -> user::msg::create_complete {
+				user_id: Some(user_id.into()),
+				namespace_id: None,
+				display_name: None,
+			})
+			.await?;
+
+			user_id
+		}
+		AccessKind::Development => {
+			// Lookup default user
+			let user_resolve_res = chirp_workflow::compat::op(
+				ctx,
+				::user::ops::resolve_display_name::Input {
+					display_name: util::dev_defaults::USER_NAME.into(),
+				},
+			)
+			.await?;
+			let user_id = unwrap!(user_resolve_res.user_id, "default user not found");
+
+			user_id
+		}
+	};
 
 	// Generate token
 	let token_res = op!([ctx] user_token_create {

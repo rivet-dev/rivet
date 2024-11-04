@@ -43,6 +43,8 @@ user-identity-create = { path = "../../services/user-identity/ops/create" }
 token-create = { path = "../../services/token/ops/create" }
 rivet-config = { version = "0.1.0", path = "../../common/config" }
 rivet-env = { version = "0.1.0", path = "../../common/env" }
+user = { version = "0.1.0", path = "../../services/user" }
+chirp-workflow = { version = "0.1.0", path = "../../common/chirp-workflow/core" }
 
 [dev-dependencies]
 rivet-auth = { path = "../../common/smithy-output/api-auth/rust" }

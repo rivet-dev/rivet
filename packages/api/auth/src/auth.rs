@@ -8,7 +8,6 @@ use rivet_operation::prelude::*;
 
 /// Information derived from the authentication middleware.
 pub struct Auth {
-	config: rivet_config::Config,
 	claims: Option<Claims>,
 }
 
@@ -22,7 +21,6 @@ impl ApiAuth for Auth {
 		Self::rate_limit(&config, rate_limit_ctx).await?;
 
 		Ok(Auth {
-			config: config.clone(),
 			claims: if let Some(api_token) = api_token {
 				Some(as_auth_expired(rivet_claims::decode(
 					&config.server()?.jwt.public,

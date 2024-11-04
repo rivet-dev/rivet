@@ -243,6 +243,7 @@ dependencies = [
  "async-trait",
  "captcha-verify",
  "chirp-client",
+ "chirp-workflow",
  "chrono",
  "debug-email-res",
  "email-verification-complete",
@@ -274,6 +275,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "user",
  "user-get",
  "user-identity-create",
  "user-identity-get",
@@ -10888,8 +10890,10 @@ dependencies = [
  "chirp-worker",
  "faker-user",
  "prost 0.10.4",
+ "rivet-config",
  "rivet-operation",
  "sqlx",
+ "user-get",
  "user-identity-create",
 ]
 

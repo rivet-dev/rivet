@@ -1,9 +1,6 @@
 use rivet_api::models;
 use rivet_operation::prelude::*;
-use types_proto::rivet::{
-	backend::{self, pkg::*},
-	common,
-};
+use types_proto::rivet::backend::{self, pkg::*};
 
 use crate::{convert, fetch, ApiTryInto};
 

@@ -42,6 +42,9 @@ async fn handle(
 			})
 			.await?;
 		}
+		backend::user_identity::identity::Kind::DefaultUser(_) => {
+			bail!("cannot create default user identity")
+		}
 	}
 
 	ctx.cache()

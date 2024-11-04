@@ -27,7 +27,11 @@ async fn worker(ctx: &OperationContext<user::msg::create::Message>) -> GlobalRes
 		}
 		attempts -= 1;
 
-		let display_name = gen_display_name("Guest");
+		let display_name = if let Some(display_name) = ctx.display_name.clone() {
+			display_name
+		} else {
+			gen_display_name("Guest")
+		};
 
 		if let Some(x) = insert_user(ctx, user_id, display_name.clone(), None, join_ts).await? {
 			break x;
@@ -74,7 +78,7 @@ async fn insert_user(
 	join_ts: i64,
 ) -> GlobalResult<Option<(String, i64)>> {
 	let account_number = gen_account_number();
-	tracing::info!(%display_name, %account_number, "attempt");
+	tracing::debug!(%display_name, %account_number, "insert user attempt");
 
 	let res = if let Some(avatar_upload_id) = avatar_upload_id {
 		sql_execute!(

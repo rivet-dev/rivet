@@ -20,25 +20,18 @@ pub fn handle(
 pub fn summary(
 	config: &rivet_config::Config,
 	game: &backend::game::Game,
-	state: &fetch::game::GameState,
 	dev_team: &backend::team::Team,
 ) -> GlobalResult<models::GameSummary> {
-	let game_url = state
-		.prod_config
-		.domains
-		.first()
-		.map(|d| d.domain.clone())
-		.unwrap_or_else(|| game.url.clone());
-
 	Ok(models::GameSummary {
 		game_id: unwrap_ref!(game.game_id).as_uuid(),
 		name_id: game.name_id.to_owned(),
 		display_name: game.display_name.to_owned(),
 		logo_url: util::route::game_logo(config, &game),
 		banner_url: util::route::game_banner(config, &game),
-		url: game_url,
 		developer: Box::new(convert::group::handle(config, dev_team)?),
-		total_player_count: ApiTryInto::api_try_into(state.total_player_count)?,
+		// Deprecated
+		total_player_count: 0,
+		url: game.url.clone(),
 	})
 }
 

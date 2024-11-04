@@ -16,7 +16,7 @@ pub async fn resolve_display_name(ctx: &OperationCtx, input: &Input) -> GlobalRe
 		[ctx, (Uuid,)]
 		"
 		SELECT user_id
-		FROM users
+		FROM db_user.users
 		WHERE display_name = $1
 		",
 		&input.display_name,

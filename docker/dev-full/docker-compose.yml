@@ -8,6 +8,10 @@ services:
     command: /usr/bin/rivet-server start
     environment:
       - RUST_BACKTRACE=1
+      - RUST_LOG=debug,hyper=info
+      - RUST_LOG_TARGET=1
+      - RUST_LOG_SPAN_PATH=1
+      - RUST_LOG_ANSI_COLOR=1
     stop_grace_period: 0s
     ports:
       # API
@@ -164,7 +168,8 @@ services:
       test: ["CMD", "bash", "-c", ">/dev/tcp/127.0.0.1/8000"]
       interval: 2s
       timeout: 10s
-      retries: 10
+      # SeaweedFS takes a long time to start
+      retries: 30
 
   vector:
     image: timberio/vector:0.42.0-distroless-static

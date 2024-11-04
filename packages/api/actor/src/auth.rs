@@ -73,7 +73,7 @@ impl Auth {
 
 		// Lookup project name ID
 		let project = if is_development {
-			query.project().unwrap_or("default")
+			query.project().unwrap_or(util::dev_defaults::PROJECT_SLUG)
 		} else {
 			unwrap_with!(query.project(), GAME_NOT_FOUND)
 		};
@@ -86,7 +86,9 @@ impl Auth {
 
 		// Lookup environment name ID
 		let environment = if is_development {
-			query.environment().unwrap_or("default")
+			query
+				.environment()
+				.unwrap_or(util::dev_defaults::ENVIRONMENT_SLUG)
 		} else {
 			unwrap_with!(query.project(), GAME_NOT_FOUND)
 		};

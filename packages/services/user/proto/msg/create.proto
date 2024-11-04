@@ -11,4 +11,5 @@ import "resources/legacy/proto/common.proto";
 message Message {
 	rivet.common.Uuid user_id = 1;
 	optional rivet.common.Uuid namespace_id = 2;
+	optional string display_name = 3;
 }

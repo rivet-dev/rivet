@@ -8,6 +8,7 @@ async fn create(ctx: TestCtx) {
 	msg!([ctx] user::msg::create(user_id) -> user::msg::create_complete {
 		user_id: Some(user_id.into()),
 		namespace_id: None,
+		display_name: None,
 	})
 	.await
 	.unwrap();

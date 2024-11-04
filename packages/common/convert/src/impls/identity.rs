@@ -19,6 +19,12 @@ impl ApiTryFrom<backend::user_identity::Identity> for models::IdentityLinkedAcco
 					..Default::default()
 				})
 			}
+			backend::user_identity::identity::Kind::DefaultUser(_) => {
+				Ok(models::IdentityLinkedAccount {
+					default_user: Some(true),
+					..Default::default()
+				})
+			}
 		}
 	}
 }
