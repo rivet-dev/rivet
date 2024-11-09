@@ -30,6 +30,8 @@ pub enum RuntimeError {
 		url: Url,
 		source: tokio_tungstenite::tungstenite::Error,
 	},
+	#[error("ws failed: {0}")]
+	SocketFailed(tokio_tungstenite::tungstenite::Error),
 	#[error("runner socket failed: {0}")]
 	RunnerSocketListenFailed(std::io::Error),
 	#[error("socket closed")]
@@ -229,7 +231,7 @@ impl Ctx {
 		mut rx: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
 	) -> Result<()> {
 		while let Some(msg) = rx.next().await {
-			match msg? {
+			match msg.map_err(RuntimeError::SocketFailed)? {
 				Message::Binary(buf) => {
 					metrics::PACKET_RECV_TOTAL.with_label_values(&[]).inc();
 

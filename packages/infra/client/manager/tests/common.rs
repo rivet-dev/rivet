@@ -448,7 +448,10 @@ pub async fn start_vector() {
 	let status = Command::new("docker")
 		.arg("run")
 		.arg("-v")
-		.arg(format!("{}:/etc/vector/vector.json:ro", config_path.display()))
+		.arg(format!(
+			"{}:/etc/vector/vector.json:ro",
+			config_path.display()
+		))
 		.arg("--rm")
 		.arg("-p")
 		.arg("5020:5020")
