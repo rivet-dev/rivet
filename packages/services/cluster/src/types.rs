@@ -8,7 +8,7 @@ use rivet_operation::prelude::proto::backend;
 use serde::{Deserialize, Serialize};
 use strum::FromRepr;
 
-#[derive(Debug, sqlx::FromRow)]
+#[derive(Debug, Clone, sqlx::FromRow)]
 pub struct Cluster {
 	pub cluster_id: Uuid,
 	pub name_id: String,
@@ -78,7 +78,7 @@ impl TryFrom<backend::cluster::Pool> for Pool {
 	}
 }
 
-#[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
+#[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, FromRepr)]
 pub enum PoolType {
 	Job = 0,
 	Gg = 1,

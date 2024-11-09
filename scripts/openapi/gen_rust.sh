@@ -22,7 +22,6 @@ if [ "$FERN_GROUP" == "full" ]; then
 	# Fix OpenAPI bug (https://github.com/OpenAPITools/openapi-generator/issues/14171)
 	sed -i 's/CloudGamesLogStream/crate::models::CloudGamesLogStream/' "$GEN_PATH_RUST/src/apis/cloud_games_matchmaker_api.rs"
 	sed -i 's/ActorLogStream/crate::models::ActorLogStream/' "$GEN_PATH_RUST/src/apis/actor_logs_api.rs"
-	sed -i 's/AdminClustersPoolType/crate::models::AdminClustersPoolType/' "$GEN_PATH_RUST/src/apis/admin_clusters_servers_api.rs"
 
 	# Create variant specifically for the CLI
 	cp -r $GEN_PATH_RUST $GEN_PATH_RUST_CLI
