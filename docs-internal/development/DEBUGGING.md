@@ -34,32 +34,6 @@ Tokio Console can be enabled by setting the env var `TOKIO_CONSOLE_ENABLE=1` and
 - `RUST_LOG_MODULE_PATH`
 - `RUST_LOG_ANSI_COLOR`
 
-## Fetching service logs
-
-### Option A: `bolt logs`
-
-To read logs of a **single, currently running service**, run the following command:
-
-```
-bolt logs my-service
-```
-
-This command also supports `--follow` and `--stderr`.
-
-### Option B: Loki
-
-If the container has **stopped, restarted, or is a short-lived job**, you need to use Loki to read the logs.
-
-Connect to the Grafana dashboard by running the following:
-
-```
-./scripts/forward/grafana.sh
-```
-
-Next, visit http://localhost:9090 and open the _Explore_ page and query `{name=~"rivet-.*"} |= "ERROR"`, or
-click
-[here](http://localhost:9090/explore?panes=%7B%22DNM%22:%7B%22datasource%22:%22loki%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22expr%22:%22%7Bname%3D~%5C%22rivet-.*%5C%22%7D%20%7C%3D%20%5C%22ERROR%5C%22%22,%22queryType%22:%22range%22,%22datasource%22:%7B%22type%22:%22loki%22,%22uid%22:%22loki%22%7D,%22editorMode%22:%22code%22%7D%5D,%22range%22:%7B%22from%22:%22now-6h%22,%22to%22:%22now%22%7D%7D%7D&schemaVersion=1&orgId=1).
-
 ## Reading logs
 
 Rivet uses structured logging, which can be verbose and hard to read at times.
@@ -136,15 +110,6 @@ The following log messages are commonly queried against in Loki to narrow down e
 ## Testing
 
 Rivet is extensively tested, which makes it easy to narrow down the cause of an error.
-
-You can run all of the tests by running `bolt test`, but this may take a long time depending on your hardware.
-If you don't know the specific service causing an issue, use the glob syntax to test a portion of the
-codebase. For example, to test all user-related services, run `bolt test user-*`.
-
-### How tests work
-
-The `bolt test` command will run tests in parallel by running tests as pods inside the Kubernetes cluster.
-Logs are written to the path displayed in the output.
 
 ### Reading test logs
 

@@ -14,7 +14,3 @@ The following
 failed to solve: process "/bin/sh -c RUSTFLAGS=\"--cfg tokio_unstable\" cargo build --bin rivet-server && \tmv target/debug/rivet-server /usr/bin/rivet-server && \tmkdir /etc/rivet-server" did not complete successfully: exit code: 101
 ```
 
-## `default user not found`
-
-TODO
-

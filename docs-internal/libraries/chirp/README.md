@@ -1,5 +1,7 @@
 # Chirp
 
+> This document is outdated. Please see new best practices uses workflows.
+
 ## What is Chirp?
 
 Chirp is the system used to communicate between Rivet services. It's built on top of NATS and Redis Streams.
@@ -24,14 +26,10 @@ destructive API calls). They're commonly used for "getters" that execute databas
 
 **Writing operations**
 
-- **Automatic creation**
-  1. Run `bolt create operation <package name> <service-name>` (e.g.
-     `bolt create operation user-dev my-service`)
-- **Manual creation**
-  1. Create the Protobuf interface under `packages/services/*/types/my_operation.proto`
-  2. Create a library under `packages/services/*/ops/my-operation`
-  3. Write the operation body under `src/main.rs`
-  4. Write tests for the operation under `tests/`
+1. Create the Protobuf interface under `packages/services/*/types/my_operation.proto`
+2. Create a library under `packages/services/*/ops/my-operation`
+3. Write the operation body under `src/main.rs`
+4. Write tests for the operation under `tests/`
 
 **Calling operations**
 
@@ -68,11 +66,10 @@ Workers are used for two main use cases:
 
 **Writing workers**
 
-- **Automatic creation**
-  1. Run `bolt create worker <package name> <worker-name>` (e.g. `bolt create worker user-dev my-worker`)
-- **Manual creation** You'll usually need to create a new message for this worker. Do this first.
-  1. Create a worker under `packages/services/*/worker/src/workers/my_worker.rs`
-  2. Register the worker under `packages/services/*/worker/src/main.rs`
+You'll usually need to create a new message for this worker. Do this first.
+
+1. Create a worker under `packages/services/*/worker/src/workers/my_worker.rs`
+2. Register the worker under `packages/services/*/worker/src/main.rs`
 
 **Messages**
 

@@ -1,6 +1,6 @@
 # IP Ranges
 
-See [`lib/bolt/core/src/dep/terraform/net.rs`](../../../lib/bolt/core/src/dep/terraform/net.rs)
+See uses of `vlan_ip_net` in `packages/common/config/src/config/server/rivet/cluster_provision.rs`.
 
 ## VLAN (Class A)
 
