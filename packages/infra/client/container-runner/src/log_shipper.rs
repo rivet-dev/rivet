@@ -4,7 +4,7 @@ use anyhow::*;
 use serde::Serialize;
 use serde_json;
 
-use crate::utils::Stakeholder;
+use crate::utils::ActorOwner;
 
 #[derive(Copy, Clone, Debug)]
 #[repr(u8)]
@@ -38,7 +38,7 @@ pub struct LogShipper {
 
 	pub vector_socket_addr: SocketAddr,
 
-	pub stakeholder: Stakeholder,
+	pub owner: ActorOwner,
 }
 
 impl LogShipper {
@@ -91,8 +91,8 @@ impl LogShipper {
 		println!("Log shipper connected");
 
 		while let Result::Ok(message) = self.msg_rx.recv() {
-			let vector_message = match &self.stakeholder {
-				Stakeholder::DynamicServer { server_id } => VectorMessage::DynamicServers {
+			let vector_message = match &self.owner {
+				ActorOwner::DynamicServer { server_id } => VectorMessage::DynamicServers {
 					server_id: server_id.as_str(),
 					task: "main", // Backwards compatibility with logs
 					stream_type: message.stream_type as u8,

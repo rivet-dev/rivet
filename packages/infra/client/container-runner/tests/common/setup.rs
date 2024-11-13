@@ -108,7 +108,7 @@ pub fn setup(command: &str) -> Setup {
 		format!("127.0.0.1:{socket_port}"),
 	)
 	.env("PEGBOARD_META_root_user_enabled", "1")
-	.env("PEGBOARD_META_stakeholder", "dynamic_server")
+	.env("PEGBOARD_META_owner", "dynamic_server")
 	.env("PEGBOARD_META_server_id", "")
 	.spawn()
 	.expect("Failed to spawn child process");

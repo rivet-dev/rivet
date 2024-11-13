@@ -7,7 +7,7 @@ use std::{
 };
 
 use anyhow::*;
-use utils::{var, Stakeholder};
+use utils::{var, ActorOwner};
 
 mod container;
 mod log_shipper;
@@ -41,12 +41,12 @@ fn main() -> Result<()> {
 		.map(|x| x.parse())
 		.transpose()
 		.context("failed to parse vector socket addr")?;
-	let stakeholder = match var("STAKEHOLDER").ok() {
-		Some(x) if x == "dynamic_server" => Stakeholder::DynamicServer {
+	let owner = match var("OWNER").ok() {
+		Some(x) if x == "dynamic_server" => ActorOwner::DynamicServer {
 			server_id: var("SERVER_ID")?,
 		},
-		Some(x) => bail!("invalid actor stakeholder: {x}"),
-		None => bail!("no actor stakeholder specified"),
+		Some(x) => bail!("invalid actor owner: {x}"),
+		None => bail!("no actor owner specified"),
 	};
 
 	let (shutdown_tx, shutdown_rx) = mpsc::sync_channel(1);
@@ -59,7 +59,7 @@ fn main() -> Result<()> {
 			shutdown_rx,
 			msg_rx,
 			vector_socket_addr,
-			stakeholder,
+			owner,
 		};
 		let log_shipper_thread = log_shipper.spawn();
 		(Some(msg_tx), Some(log_shipper_thread))

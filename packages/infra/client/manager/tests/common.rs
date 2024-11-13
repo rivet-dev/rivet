@@ -97,7 +97,7 @@ pub async fn start_echo_actor(
 				memory: 10 * 1024 * 1024,
 				memory_max: 15 * 1024 * 1024,
 			},
-			stakeholder: protocol::Stakeholder::DynamicServer {
+			owner: protocol::ActorOwner::DynamicServer {
 				server_id: actor_id,
 			},
 		}),
@@ -137,7 +137,7 @@ pub async fn start_js_echo_actor(
 				memory: 10 * 1024 * 1024,
 				memory_max: 15 * 1024 * 1024,
 			},
-			stakeholder: protocol::Stakeholder::DynamicServer {
+			owner: protocol::ActorOwner::DynamicServer {
 				server_id: actor_id,
 			},
 		}),

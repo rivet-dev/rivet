@@ -9,7 +9,7 @@ pub struct Config {
 	pub resources: Resources,
 	pub ports: Vec<Port>,
 	pub env: HashMap<String, String>,
-	pub stakeholder: Stakeholder,
+	pub owner: ActorOwner,
 	pub vector_socket_addr: Option<SocketAddr>,
 }
 
@@ -45,6 +45,6 @@ pub struct Resources {
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Stakeholder {
+pub enum ActorOwner {
 	DynamicServer { server_id: String },
 }

@@ -49,7 +49,7 @@ pub fn run(actors_path: PathBuf, actor_id: Uuid, stop_rx: watch::Receiver<()>) -
 			shutdown_rx,
 			msg_rx,
 			vector_socket_addr,
-			stakeholder: config.stakeholder.clone(),
+			owner: config.owner.clone(),
 		};
 		let log_shipper_thread = log_shipper.spawn();
 

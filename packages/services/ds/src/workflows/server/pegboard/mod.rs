@@ -278,7 +278,7 @@ async fn setup(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<Uuid> {
 				NetworkMode::Host => pp::NetworkMode::Host,
 			},
 			resources,
-			stakeholder: pp::Stakeholder::DynamicServer {
+			owner: pp::ActorOwner::DynamicServer {
 				server_id: input.server_id,
 			},
 		}),

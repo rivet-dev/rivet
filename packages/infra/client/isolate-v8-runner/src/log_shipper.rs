@@ -11,7 +11,7 @@ use serde::Serialize;
 use serde_json;
 use uuid::Uuid;
 
-use crate::{config::Stakeholder, throttle};
+use crate::{config::ActorOwner, throttle};
 
 /// Maximum length of a single log line
 pub const MAX_LINE_BYTES: usize = 1024;
@@ -57,7 +57,7 @@ pub struct LogShipper {
 
 	pub vector_socket_addr: SocketAddr,
 
-	pub stakeholder: Stakeholder,
+	pub owner: ActorOwner,
 }
 
 impl LogShipper {
@@ -113,8 +113,8 @@ impl LogShipper {
 		println!("{}: Log shipper connected", self.actor_id);
 
 		while let Result::Ok(message) = self.msg_rx.recv() {
-			let vector_message = match &self.stakeholder {
-				Stakeholder::DynamicServer { server_id } => VectorMessage::DynamicServers {
+			let vector_message = match &self.owner {
+				ActorOwner::DynamicServer { server_id } => VectorMessage::DynamicServers {
 					server_id: server_id.as_str(),
 					task: "main", // Backwards compatibility with logs
 					stream_type: message.stream_type as u8,

@@ -159,7 +159,7 @@ impl Actor {
 		if let Some(vector_address) = &ctx.config().logs.vector_address {
 			runner_env.push(("VECTOR_SOCKET_ADDR", vector_address.to_string()));
 		}
-		runner_env.extend(self.config.stakeholder.env());
+		runner_env.extend(self.config.owner.env());
 
 		let runner = match self.config.image.kind {
 			// Spawn runner which spawns the container

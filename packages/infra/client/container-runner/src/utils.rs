@@ -1,6 +1,6 @@
 use anyhow::*;
 
-pub enum Stakeholder {
+pub enum ActorOwner {
 	DynamicServer { server_id: String },
 }
 

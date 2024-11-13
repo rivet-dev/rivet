@@ -90,7 +90,7 @@ pub struct ActorConfig {
 	pub env: ::util::serde::HashableMap<String, String>,
 	pub ports: ::util::serde::HashableMap<String, Port>,
 	pub network_mode: NetworkMode,
-	pub stakeholder: Stakeholder,
+	pub owner: ActorOwner,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash)]
@@ -168,16 +168,16 @@ pub struct Resources {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash)]
 #[serde(rename_all = "snake_case")]
-pub enum Stakeholder {
+pub enum ActorOwner {
 	DynamicServer { server_id: Uuid },
 }
 
-impl Stakeholder {
+impl ActorOwner {
 	pub fn env(&self) -> Vec<(&str, String)> {
 		match self {
-			Stakeholder::DynamicServer { server_id } => {
+			ActorOwner::DynamicServer { server_id } => {
 				vec![
-					("STAKEHOLDER", "dynamic_server".to_string()),
+					("OWNER", "dynamic_server".to_string()),
 					("SERVER_ID", server_id.to_string()),
 				]
 			}
