@@ -19,6 +19,8 @@ pub struct ProvisionServersGetInfoResponse {
     pub datacenter_id: uuid::Uuid,
     #[serde(rename = "name")]
     pub name: String,
+    #[serde(rename = "public_ip")]
+    pub public_ip: String,
     #[serde(rename = "server_id")]
     pub server_id: uuid::Uuid,
     #[serde(rename = "vlan_ip")]
@@ -26,11 +28,12 @@ pub struct ProvisionServersGetInfoResponse {
 }
 
 impl ProvisionServersGetInfoResponse {
-    pub fn new(cluster_id: uuid::Uuid, datacenter_id: uuid::Uuid, name: String, server_id: uuid::Uuid, vlan_ip: String) -> ProvisionServersGetInfoResponse {
+    pub fn new(cluster_id: uuid::Uuid, datacenter_id: uuid::Uuid, name: String, public_ip: String, server_id: uuid::Uuid, vlan_ip: String) -> ProvisionServersGetInfoResponse {
         ProvisionServersGetInfoResponse {
             cluster_id,
             datacenter_id,
             name,
+            public_ip,
             server_id,
             vlan_ip,
         }

@@ -15,6 +15,7 @@ export const GetInfoResponse: core.serialization.ObjectSchema<
     datacenterId: core.serialization.property("datacenter_id", core.serialization.string()),
     clusterId: core.serialization.property("cluster_id", core.serialization.string()),
     vlanIp: core.serialization.property("vlan_ip", core.serialization.string()),
+    publicIp: core.serialization.property("public_ip", core.serialization.string()),
 });
 
 export declare namespace GetInfoResponse {
@@ -24,5 +25,6 @@ export declare namespace GetInfoResponse {
         datacenter_id: string;
         cluster_id: string;
         vlan_ip: string;
+        public_ip: string;
     }
 }

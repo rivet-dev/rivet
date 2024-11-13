@@ -5,7 +5,9 @@ cat << 'EOF' > /etc/rivet-client/config.json
 {
 	"client_id": "___SERVER_ID___",
 	"datacenter_id": "___DATACENTER_ID___",
-	"network_ip": "___VLAN_IP___",
+	"actor_network_ip": "___VLAN_IP___",
+	"actor_vlan_ip": "___VLAN_IP___",
+	"actor_public_ip": "___PUBLIC_IP___",
 	"vector_socket_addr": "127.0.0.1:5021",
 	"flavor": "__FLAVOR__",
 	"pegboard_ws_endpoint": "127.0.0.1:5030"

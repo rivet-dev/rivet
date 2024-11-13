@@ -16,7 +16,7 @@ use crate::{
 
 use super::GlobalQuery;
 
-// MARK: GET /games/{}/environments/{}/builds/{}
+// MARK: GET /builds/{}
 pub async fn get(
 	ctx: Ctx<Auth>,
 	build_id: Uuid,
@@ -69,7 +69,7 @@ pub async fn get_deprecated(
 	get(ctx, build_id, watch_index, global).await
 }
 
-// MARK: GET /games/{}/environments/{}/builds
+// MARK: GET /builds
 #[derive(Debug, Clone, Deserialize)]
 pub struct ListQuery {
 	#[serde(flatten)]
@@ -158,7 +158,7 @@ pub async fn list_deprecated(
 	.await
 }
 
-// MARK: PATCH /games/{}/environments/{}/builds/{}/tags
+// MARK: PATCH /builds/{}/tags
 pub async fn patch_tags(
 	ctx: Ctx<Auth>,
 	build_id: Uuid,
@@ -201,7 +201,7 @@ pub async fn patch_tags_deprecated(
 	patch_tags(ctx, build_id, body, global).await
 }
 
-// MARK: POST /games/{}/environments/{}/builds/prepare
+// MARK: POST /builds/prepare
 pub async fn create_build(
 	ctx: Ctx<Auth>,
 	body: models::ActorCreateBuildRequest,
@@ -310,7 +310,7 @@ pub async fn create_build_deprecated(
 	create_build(ctx, body, global).await
 }
 
-// MARK: POST /games/{}/builds/{}/complete
+// MARK: POST /builds/{}/complete
 pub async fn complete_build(
 	ctx: Ctx<Auth>,
 	build_id: Uuid,

@@ -7,4 +7,5 @@ export interface GetInfoResponse {
     datacenterId: string;
     clusterId: string;
     vlanIp: string;
+    publicIp: string;
 }

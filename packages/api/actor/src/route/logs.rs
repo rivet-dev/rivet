@@ -16,7 +16,7 @@ use crate::{
 
 use super::GlobalQuery;
 
-// MARK: GET /games/{}/environments/{}/actors/{}/logs
+// MARK: GET /actors/{}/logs
 #[derive(Debug, Deserialize)]
 pub struct GetActorLogsQuery {
 	#[serde(flatten)]

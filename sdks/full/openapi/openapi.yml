@@ -8743,12 +8743,15 @@ components:
           format: uuid
         vlan_ip:
           type: string
+        public_ip:
+          type: string
       required:
         - name
         - server_id
         - datacenter_id
         - cluster_id
         - vlan_ip
+        - public_ip
     ActorGetBuildResponse:
       type: object
       properties:

@@ -14,7 +14,7 @@ use crate::{
 
 use super::GlobalQuery;
 
-// MARK: GET /games/{}/environments/{}/actors/{}
+// MARK: GET /actors/{}
 pub async fn get(
 	ctx: Ctx<Auth>,
 	actor_id: Uuid,
@@ -50,7 +50,7 @@ pub async fn get_deprecated(
 	get(ctx, actor_id, watch_index, global).await
 }
 
-// MARK: POST /games/{}/environments/{}/actors
+// MARK: POST /actors
 pub async fn create(
 	ctx: Ctx<Auth>,
 	body: models::ActorCreateActorRequest,
@@ -196,7 +196,7 @@ pub async fn create_deprecated(
 	create(ctx, body, global).await
 }
 
-// MARK: DELETE /games/{}/environments/{}/actors/{}
+// MARK: DELETE /actors/{}
 #[derive(Debug, Clone, Deserialize)]
 pub struct DeleteQuery {
 	#[serde(flatten)]
@@ -262,7 +262,7 @@ pub async fn destroy_deprecated(
 	.await
 }
 
-// MARK: GET /games/{}/environments/{}/actors
+// MARK: GET /actors
 #[derive(Debug, Clone, Deserialize)]
 pub struct ListQuery {
 	#[serde(flatten)]

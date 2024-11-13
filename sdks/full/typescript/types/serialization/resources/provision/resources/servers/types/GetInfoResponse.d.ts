@@ -12,5 +12,6 @@ export declare namespace GetInfoResponse {
         datacenter_id: string;
         cluster_id: string;
         vlan_ip: string;
+        public_ip: string;
     }
 }

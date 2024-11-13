@@ -1,4 +1,4 @@
-use std::{collections::HashMap, convert::TryInto, net::IpAddr};
+use std::{collections::HashMap, convert::TryInto};
 
 use chirp_workflow::prelude::*;
 
@@ -58,7 +58,7 @@ struct ServerNomad {
 struct ServerPegboard {
 	server_id: Uuid,
 	running_ts: Option<i64>,
-	public_ip: Option<IpAddr>,
+	public_ip: Option<String>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -173,12 +173,15 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 		sql_fetch_all!(
 			[ctx, ServerPegboard]
 			"
-			SELECT ds.server_id, a.running_ts, s.public_ip
+			SELECT
+				ds.server_id AS server_id,
+				a.running_ts AS running_ts,
+				(c.config->>'actor_public_ip') AS public_ip
 			FROM db_ds.servers_pegboard AS ds
 			JOIN db_pegboard.actors AS a
 			ON ds.pegboard_actor_id = a.actor_id
-			JOIN db_cluster.servers AS s
-			ON a.client_id = s.server_id
+			JOIN db_pegboard.clients AS c
+			ON a.client_id = c.client_id
 			WHERE ds.server_id = ANY($1)
 			",
 			&input.server_ids,
@@ -203,10 +206,7 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 				.iter()
 				.find(|x| x.server_id == server.server_id)
 			{
-				(
-					server_pb.running_ts.is_some(),
-					server_pb.public_ip.map(|x| x.to_string()),
-				)
+				(server_pb.running_ts.is_some(), server_pb.public_ip.clone())
 			} else {
 				// Neither nomad nor pegboard server attached
 				(false, None)

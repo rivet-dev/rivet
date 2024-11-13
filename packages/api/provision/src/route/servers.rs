@@ -54,5 +54,6 @@ pub async fn info(
 		datacenter_id: server.datacenter_id,
 		cluster_id: datacenter.cluster_id,
 		vlan_ip: unwrap_ref!(server.vlan_ip, "server should have vlan ip by now").to_string(),
+		public_ip: unwrap_ref!(server.public_ip, "server should have public ip by now").to_string(),
 	})
 }

@@ -20,3 +20,4 @@ types:
       datacenter_id: uuid
       cluster_id: uuid
       vlan_ip: string
+      public_ip: string

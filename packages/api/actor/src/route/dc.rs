@@ -9,7 +9,7 @@ use crate::{
 
 use super::GlobalQuery;
 
-// MARK: GET /games/{}/environments/{}/datacenters
+// MARK: GET /datacenters
 pub async fn list(
 	ctx: Ctx<Auth>,
 	_watch_index: WatchIndexQuery,

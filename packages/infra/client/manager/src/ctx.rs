@@ -486,6 +486,8 @@ impl Ctx {
 		let isolate_runner = if let Some(isolate_runner_pid) = isolate_runner_pid {
 			let mut guard = self.isolate_runner.write().await;
 
+			tracing::info!(?isolate_runner_pid, "found old isolate runner");
+
 			let runner = runner::Handle::from_pid(
 				runner::Comms::socket(),
 				Pid::from_raw(isolate_runner_pid),

@@ -4241,6 +4241,8 @@ components:
           type: string
         name:
           type: string
+        public_ip:
+          type: string
         server_id:
           format: uuid
           type: string
@@ -4252,6 +4254,7 @@ components:
       - datacenter_id
       - cluster_id
       - vlan_ip
+      - public_ip
       type: object
     Timestamp:
       description: RFC3339 timestamp

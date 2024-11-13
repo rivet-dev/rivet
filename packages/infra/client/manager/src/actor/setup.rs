@@ -557,7 +557,7 @@ impl Actor {
 							source: host_port,
 							// When no target port was selected, default to randomly selected host port
 							target: port.target.unwrap_or(host_port),
-							ip: ctx.config().network_ip,
+							ip: ctx.config().actor_network_ip,
 							protocol: port.protocol,
 						},
 					)
@@ -573,7 +573,7 @@ impl Actor {
 								source: host_port,
 								// When no target port was selected, default to randomly selected host port
 								target: port.target.unwrap_or(host_port),
-								ip: ctx.config().network_ip,
+								ip: ctx.config().actor_network_ip,
 								protocol: port.protocol,
 							},
 						)

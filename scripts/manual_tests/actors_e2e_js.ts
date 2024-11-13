@@ -9,7 +9,7 @@ const ENDPOINT = Deno.env.get("RIVET_ENDPOINT") ?? "http://127.0.0.1:8080";
 const BUILD = Deno.env.get("RIVET_BUILD") ??
   resolve(
     import.meta.dirname,
-    "../../resources/default-builds/js/test-js-echo/index.js",
+    "./fixtures/echo_http.js",
   );
 
 // Helper function to make HTTP requests
