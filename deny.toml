@@ -10,12 +10,15 @@ ignore = [
 [licenses]
 allow = [
 	"Apache-2.0",
+	"BSD-2-Clause",
 	"BSD-3-Clause",
 	"ISC",
 	"MIT",
 	"MPL-2.0",
 	"CC0-1.0",
 	"Unicode-3.0",
+	"Zlib",
+	"EPL-2.0",
 ]
 
 # We use the same config to scan multiple projects
@@ -30,8 +33,8 @@ name = "ring"
 allow = ["OpenSSL"]
 
 [[licenses.exceptions]]
-name = "portpicker"
-allow = ["Unlicense"]
+name = "lockfree-object-pool"
+allow = ["BSL-1.0"]  # Boost Software License, not Business Source License
 
 # See https://github.com/EmbarkStudios/buildkite-jobify/blob/a1b953b03f3330e499b1af47cc2dc38bd777da7c/deny.toml#LL27C1-L38C1
 [[licenses.clarify]]

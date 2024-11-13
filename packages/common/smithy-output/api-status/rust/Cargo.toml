@@ -2,9 +2,9 @@
 [package]
 name = "rivet-status"
 version = "0.0.1"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 description = ""
 edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 license = "Apache-2.0"
 
 [package.metadata.docs.rs]

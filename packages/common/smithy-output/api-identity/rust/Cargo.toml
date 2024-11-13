@@ -2,9 +2,9 @@
 [package]
 name = "rivet-identity"
 version = "0.0.14"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 description = "Rivet service for authenticating and managing identities"
 edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 license = "Apache-2.0"
 
 [package.metadata.docs.rs]
