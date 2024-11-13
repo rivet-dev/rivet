@@ -26,7 +26,7 @@ pub async fn provision(
 	let s3_config = &config.server().map_err(ProvisionError::Global)?.s3;
 	let client = Client::new(
 		"",
-		&s3_config.endpoint_external.to_string(),
+		&s3_config.endpoint_internal.to_string(),
 		&s3_config.region,
 		&*s3_config.access_key_id.read(),
 		&*s3_config.secret_access_key.read(),
