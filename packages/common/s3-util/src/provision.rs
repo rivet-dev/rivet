@@ -26,15 +26,15 @@ pub async fn provision(
 	let s3_config = &config.server().map_err(ProvisionError::Global)?.s3;
 	let client = Client::new(
 		"",
-		&s3_config.endpoint_internal.to_string(),
+		s3_config.endpoint_internal.as_ref(),
 		&s3_config.region,
-		&*s3_config.access_key_id.read(),
-		&*s3_config.secret_access_key.read(),
+		s3_config.access_key_id.read(),
+		s3_config.secret_access_key.read(),
 	)?;
 
 	// Provision buckets
 	for bucket in buckets {
-		let bucket_name = crate::namespaced_bucket_name(&config, &bucket.name)?;
+		let bucket_name = crate::namespaced_bucket_name(&config, bucket.name)?;
 
 		match client.create_bucket().bucket(&bucket_name).send().await {
 			Ok(_) => tracing::debug!(bucket = ?bucket_name, "bucket created"),

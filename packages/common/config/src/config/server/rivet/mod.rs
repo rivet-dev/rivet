@@ -330,13 +330,9 @@ impl ApiEdge {
 /// Deprecated: Configuration for CDN.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
+#[derive(Default)]
 pub struct Cdn {}
 
-impl Default for Cdn {
-	fn default() -> Self {
-		Self {}
-	}
-}
 
 /// Configuration for DNS management.
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -419,7 +415,7 @@ impl Datacenter {
 	pub fn pools(&self) -> HashMap<dc_provision::PoolType, dc_provision::Pool> {
 		self.provision
 			.as_ref()
-			.map_or_else(|| HashMap::new(), |x| x.pools.clone())
+			.map_or_else(HashMap::new, |x| x.pools.clone())
 	}
 
 	pub fn prebakes_enabled(&self) -> bool {
@@ -574,6 +570,7 @@ impl Ui {
 /// Configuration for various tokens used in the system.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
+#[derive(Default)]
 pub struct Tokens {
 	/// Token for the API Traefik provider.
 	pub traefik_provider: Option<Secret<String>>,
@@ -581,14 +578,6 @@ pub struct Tokens {
 	pub status: Option<Secret<String>>,
 }
 
-impl Default for Tokens {
-	fn default() -> Tokens {
-		Self {
-			traefik_provider: None,
-			status: None,
-		}
-	}
-}
 
 /// Configuration for the health check service.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]

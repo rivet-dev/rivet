@@ -28,7 +28,7 @@ pub fn parse_delete_error(
 						.map_err(crate::error::DeleteError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -46,7 +46,7 @@ pub fn parse_delete_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::DeleteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -65,7 +65,7 @@ pub fn parse_delete_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::DeleteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -84,7 +84,7 @@ pub fn parse_delete_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::DeleteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -103,7 +103,7 @@ pub fn parse_delete_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::DeleteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -122,7 +122,7 @@ pub fn parse_delete_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::DeleteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -174,7 +174,7 @@ pub fn parse_delete_batch_error(
 						.map_err(crate::error::DeleteBatchError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -192,7 +192,7 @@ pub fn parse_delete_batch_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::DeleteBatchError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -211,7 +211,7 @@ pub fn parse_delete_batch_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::DeleteBatchError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -230,7 +230,7 @@ pub fn parse_delete_batch_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::DeleteBatchError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -249,7 +249,7 @@ pub fn parse_delete_batch_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::DeleteBatchError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -268,7 +268,7 @@ pub fn parse_delete_batch_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::DeleteBatchError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -320,7 +320,7 @@ pub fn parse_get_error(
 						.map_err(crate::error::GetError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -338,7 +338,7 @@ pub fn parse_get_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -357,7 +357,7 @@ pub fn parse_get_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -376,7 +376,7 @@ pub fn parse_get_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -395,7 +395,7 @@ pub fn parse_get_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -414,7 +414,7 @@ pub fn parse_get_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -471,7 +471,7 @@ pub fn parse_get_batch_error(
 						.map_err(crate::error::GetBatchError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -489,7 +489,7 @@ pub fn parse_get_batch_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetBatchError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -508,7 +508,7 @@ pub fn parse_get_batch_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetBatchError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -527,7 +527,7 @@ pub fn parse_get_batch_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetBatchError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -546,7 +546,7 @@ pub fn parse_get_batch_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetBatchError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -565,7 +565,7 @@ pub fn parse_get_batch_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetBatchError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -622,7 +622,7 @@ pub fn parse_put_error(
 						.map_err(crate::error::PutError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -640,7 +640,7 @@ pub fn parse_put_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::PutError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -659,7 +659,7 @@ pub fn parse_put_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::PutError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -678,7 +678,7 @@ pub fn parse_put_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::PutError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -697,7 +697,7 @@ pub fn parse_put_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::PutError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -716,7 +716,7 @@ pub fn parse_put_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::PutError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -768,7 +768,7 @@ pub fn parse_put_batch_error(
 						.map_err(crate::error::PutBatchError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -786,7 +786,7 @@ pub fn parse_put_batch_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::PutBatchError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -805,7 +805,7 @@ pub fn parse_put_batch_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::PutBatchError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -824,7 +824,7 @@ pub fn parse_put_batch_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::PutBatchError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -843,7 +843,7 @@ pub fn parse_put_batch_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::PutBatchError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -862,7 +862,7 @@ pub fn parse_put_batch_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::PutBatchError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp

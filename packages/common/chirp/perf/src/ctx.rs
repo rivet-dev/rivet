@@ -1,5 +1,4 @@
 use std::{
-	env,
 	fmt::Debug,
 	sync::{
 		atomic::{AtomicI64, Ordering},

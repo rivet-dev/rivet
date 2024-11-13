@@ -18,7 +18,6 @@ pub fn biography<T: AsRef<str>>(s: T) -> String {
 	let mut accum = 0;
 	let chars = s
 		.chars()
-		.into_iter()
 		.filter(|c| {
 			if c == &'\n' {
 				accum += 1;
@@ -65,7 +64,7 @@ pub fn item_list<'a, I: Iterator<Item = impl AsRef<str>>>(mut iter: I) -> String
 		s.push_str(item.as_ref());
 	}
 
-	while let Some(item) = iter.next() {
+	for item in iter {
 		s.push_str(", ");
 		s.push_str(item.as_ref());
 	}

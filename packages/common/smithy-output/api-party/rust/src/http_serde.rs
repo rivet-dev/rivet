@@ -8,7 +8,7 @@ pub fn add_headers_find_matchmaker_lobby_for_party(
 		if !formatted_2.is_empty() {
 			let header_value = formatted_2;
 			let header_value =
-				http::header::HeaderValue::try_from(&*header_value).map_err(|err| {
+				http::header::HeaderValue::try_from(header_value).map_err(|err| {
 					aws_smithy_http::operation::BuildError::InvalidField {
 						field: "origin",
 						details: format!(

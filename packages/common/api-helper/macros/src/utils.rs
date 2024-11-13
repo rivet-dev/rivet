@@ -182,7 +182,7 @@ where
 {
 	pub fn expect_expr(&self) -> syn::Result<&syn::Expr> {
 		match self {
-			Self::Expr(v) => Ok(&v),
+			Self::Expr(v) => Ok(v),
 			Self::Paren(v) => Err(syn::Error::new(v.span(), "Expected single expression")),
 			Self::Bracket(v) => Err(syn::Error::new(v.span(), "Expected single expression")),
 			Self::Block(v) => Err(syn::Error::new(v.span(), "Expected single expression")),
@@ -193,7 +193,7 @@ where
 	pub fn expect_paren(&self) -> syn::Result<&SimpleTuple<P>> {
 		match self {
 			Self::Expr(v) => Err(syn::Error::new(v.span(), "Expected parenthesis block")),
-			Self::Paren(v) => Ok(&v),
+			Self::Paren(v) => Ok(v),
 			Self::Bracket(v) => Err(syn::Error::new(v.span(), "Expected parenthesis block")),
 			Self::Block(v) => Err(syn::Error::new(v.span(), "Expected parenthesis block")),
 		}
@@ -203,7 +203,7 @@ where
 		match self {
 			Self::Expr(v) => Err(syn::Error::new(v.span(), "Expected bracket block")),
 			Self::Paren(v) => Err(syn::Error::new(v.span(), "Expected bracket block")),
-			Self::Bracket(v) => Ok(&v),
+			Self::Bracket(v) => Ok(v),
 			Self::Block(v) => Err(syn::Error::new(v.span(), "Expected bracket block")),
 		}
 	}
@@ -214,7 +214,7 @@ where
 			Self::Expr(v) => Err(syn::Error::new(v.span(), "Expected block")),
 			Self::Paren(v) => Err(syn::Error::new(v.span(), "Expected block")),
 			Self::Bracket(v) => Err(syn::Error::new(v.span(), "Expected block")),
-			Self::Block(v) => Ok(&v),
+			Self::Block(v) => Ok(v),
 		}
 	}
 }
@@ -281,7 +281,7 @@ pub enum ExprTree {
 impl ExprTree {
 	pub fn expect_expr(&self) -> syn::Result<&syn::Expr> {
 		match self {
-			Self::Expr(v) => Ok(&v),
+			Self::Expr(v) => Ok(v),
 			Self::Paren(v) => Err(syn::Error::new(v.span(), "Expected single expression")),
 			Self::Bracket(v) => Err(syn::Error::new(v.span(), "Expected single expression")),
 			Self::Block(v) => Err(syn::Error::new(v.span(), "Expected single expression")),
@@ -303,7 +303,7 @@ impl ExprTree {
 		match self {
 			Self::Expr(v) => Err(syn::Error::new(v.span(), "Expected bracket block")),
 			Self::Paren(v) => Err(syn::Error::new(v.span(), "Expected bracket block")),
-			Self::Bracket(v) => Ok(&v),
+			Self::Bracket(v) => Ok(v),
 			Self::Block(v) => Err(syn::Error::new(v.span(), "Expected bracket block")),
 		}
 	}
@@ -313,7 +313,7 @@ impl ExprTree {
 			Self::Expr(v) => Err(syn::Error::new(v.span(), "Expected map")),
 			Self::Paren(v) => Err(syn::Error::new(v.span(), "Expected map")),
 			Self::Bracket(v) => Err(syn::Error::new(v.span(), "Expected map")),
-			Self::Block(v) => Ok(&v),
+			Self::Block(v) => Ok(v),
 		}
 	}
 }

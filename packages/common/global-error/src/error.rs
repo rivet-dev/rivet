@@ -149,7 +149,7 @@ impl GlobalError {
 			GlobalError::Internal { .. } | GlobalError::Raw(_) => Ok(None),
 			GlobalError::BadRequest { metadata, .. } => metadata
 				.as_ref()
-				.map(|metadata| serde_json::from_str::<serde_json::Value>(&metadata))
+				.map(|metadata| serde_json::from_str::<serde_json::Value>(metadata))
 				.transpose()
 				.map_err(Into::into),
 		}
@@ -214,7 +214,7 @@ impl From<GlobalError> for chirp::response::Err {
 				chirp::response::Err {
 					kind: Some(chirp::response::err::Kind::Internal(
 						chirp::response::err::Internal {
-							ty: ty,
+							ty,
 							message: format!("{}", err),
 							debug,
 						},
@@ -255,7 +255,7 @@ impl BadRequestBuilder {
 	pub fn build(self) -> GlobalError {
 		GlobalError::BadRequest {
 			code: self.code.to_string(),
-			context: self.context.unwrap_or_else(HashMap::new),
+			context: self.context.unwrap_or_default(),
 			metadata: self.metadata.map(|m| m.to_string()),
 		}
 	}

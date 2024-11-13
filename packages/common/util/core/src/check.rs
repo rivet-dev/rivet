@@ -76,7 +76,7 @@ fn display_name_with_len(s: impl AsRef<str>, len: usize) -> bool {
 		return false;
 	}
 
-	let chars: Vec<char> = s.chars().into_iter().collect();
+	let chars: Vec<char> = s.chars().collect();
 
 	// Check for non-space whitespace
 	if chars.iter().any(|c| c != &' ' && c.is_whitespace()) {
@@ -115,7 +115,7 @@ pub fn biography(s: impl AsRef<str>) -> bool {
 		return false;
 	}
 
-	let chars: Vec<char> = s.chars().into_iter().collect();
+	let chars: Vec<char> = s.chars().collect();
 
 	// Check for whitespace that isn't a space or new line
 	if chars

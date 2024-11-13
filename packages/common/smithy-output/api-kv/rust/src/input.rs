@@ -72,12 +72,12 @@ impl DeleteInput {
 			) -> Result<(), aws_smithy_http::operation::BuildError> {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_1) = &_input.key {
-					query.push_kv("key", &aws_smithy_http::query::fmt_string(&inner_1));
+					query.push_kv("key", &aws_smithy_http::query::fmt_string(inner_1));
 				}
 				if let Some(inner_2) = &_input.namespace_id {
 					query.push_kv(
 						"namespace_id",
-						&aws_smithy_http::query::fmt_string(&inner_2),
+						&aws_smithy_http::query::fmt_string(inner_2),
 					);
 				}
 				Ok(())
@@ -209,13 +209,13 @@ impl DeleteBatchInput {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_3) = &_input.keys {
 					for inner_4 in inner_3 {
-						query.push_kv("keys", &aws_smithy_http::query::fmt_string(&inner_4));
+						query.push_kv("keys", &aws_smithy_http::query::fmt_string(inner_4));
 					}
 				}
 				if let Some(inner_5) = &_input.namespace_id {
 					query.push_kv(
 						"namespace_id",
-						&aws_smithy_http::query::fmt_string(&inner_5),
+						&aws_smithy_http::query::fmt_string(inner_5),
 					);
 				}
 				Ok(())
@@ -348,15 +348,15 @@ impl GetInput {
 			) -> Result<(), aws_smithy_http::operation::BuildError> {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_6) = &_input.key {
-					query.push_kv("key", &aws_smithy_http::query::fmt_string(&inner_6));
+					query.push_kv("key", &aws_smithy_http::query::fmt_string(inner_6));
 				}
 				if let Some(inner_7) = &_input.watch_index {
-					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(&inner_7));
+					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(inner_7));
 				}
 				if let Some(inner_8) = &_input.namespace_id {
 					query.push_kv(
 						"namespace_id",
-						&aws_smithy_http::query::fmt_string(&inner_8),
+						&aws_smithy_http::query::fmt_string(inner_8),
 					);
 				}
 				Ok(())
@@ -497,19 +497,19 @@ impl GetBatchInput {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_9) = &_input.keys {
 					for inner_10 in inner_9 {
-						query.push_kv("keys", &aws_smithy_http::query::fmt_string(&inner_10));
+						query.push_kv("keys", &aws_smithy_http::query::fmt_string(inner_10));
 					}
 				}
 				if let Some(inner_11) = &_input.watch_index {
 					query.push_kv(
 						"watch_index",
-						&aws_smithy_http::query::fmt_string(&inner_11),
+						&aws_smithy_http::query::fmt_string(inner_11),
 					);
 				}
 				if let Some(inner_12) = &_input.namespace_id {
 					query.push_kv(
 						"namespace_id",
-						&aws_smithy_http::query::fmt_string(&inner_12),
+						&aws_smithy_http::query::fmt_string(inner_12),
 					);
 				}
 				Ok(())

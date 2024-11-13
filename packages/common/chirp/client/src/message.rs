@@ -88,7 +88,7 @@ where
 			ray_id,
 			req_id,
 			ts: message.ts,
-			trace: trace,
+			trace,
 			body,
 		})
 	}

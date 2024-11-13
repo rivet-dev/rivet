@@ -29,7 +29,7 @@ pub fn parse_ban_group_identity_error(
 						.map_err(crate::error::BanGroupIdentityError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -47,7 +47,7 @@ pub fn parse_ban_group_identity_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::BanGroupIdentityError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -66,7 +66,7 @@ pub fn parse_ban_group_identity_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::BanGroupIdentityError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -85,7 +85,7 @@ pub fn parse_ban_group_identity_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::BanGroupIdentityError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -104,7 +104,7 @@ pub fn parse_ban_group_identity_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::BanGroupIdentityError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -123,7 +123,7 @@ pub fn parse_ban_group_identity_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::BanGroupIdentityError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -183,7 +183,7 @@ pub fn parse_complete_group_avatar_upload_error(
 						.map_err(crate::error::CompleteGroupAvatarUploadError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -201,7 +201,7 @@ pub fn parse_complete_group_avatar_upload_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::CompleteGroupAvatarUploadError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -220,7 +220,7 @@ pub fn parse_complete_group_avatar_upload_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::CompleteGroupAvatarUploadError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -239,7 +239,7 @@ pub fn parse_complete_group_avatar_upload_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::CompleteGroupAvatarUploadError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -258,7 +258,7 @@ pub fn parse_complete_group_avatar_upload_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::CompleteGroupAvatarUploadError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -277,7 +277,7 @@ pub fn parse_complete_group_avatar_upload_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::CompleteGroupAvatarUploadError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -335,7 +335,7 @@ pub fn parse_consume_group_invite_error(
 						.map_err(crate::error::ConsumeGroupInviteError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -353,7 +353,7 @@ pub fn parse_consume_group_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::ConsumeGroupInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -372,7 +372,7 @@ pub fn parse_consume_group_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::ConsumeGroupInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -391,7 +391,7 @@ pub fn parse_consume_group_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::ConsumeGroupInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -410,7 +410,7 @@ pub fn parse_consume_group_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::ConsumeGroupInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -429,7 +429,7 @@ pub fn parse_consume_group_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::ConsumeGroupInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -489,7 +489,7 @@ pub fn parse_create_group_error(
 						.map_err(crate::error::CreateGroupError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -507,7 +507,7 @@ pub fn parse_create_group_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::CreateGroupError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -526,7 +526,7 @@ pub fn parse_create_group_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::CreateGroupError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -545,7 +545,7 @@ pub fn parse_create_group_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::CreateGroupError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -564,7 +564,7 @@ pub fn parse_create_group_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::CreateGroupError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -583,7 +583,7 @@ pub fn parse_create_group_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::CreateGroupError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -641,7 +641,7 @@ pub fn parse_create_group_invite_error(
 						.map_err(crate::error::CreateGroupInviteError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -659,7 +659,7 @@ pub fn parse_create_group_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::CreateGroupInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -678,7 +678,7 @@ pub fn parse_create_group_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::CreateGroupInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -697,7 +697,7 @@ pub fn parse_create_group_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::CreateGroupInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -716,7 +716,7 @@ pub fn parse_create_group_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::CreateGroupInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -735,7 +735,7 @@ pub fn parse_create_group_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::CreateGroupInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -800,7 +800,7 @@ pub fn parse_create_group_join_request_error(
 						.map_err(crate::error::CreateGroupJoinRequestError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -818,7 +818,7 @@ pub fn parse_create_group_join_request_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::CreateGroupJoinRequestError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -837,7 +837,7 @@ pub fn parse_create_group_join_request_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::CreateGroupJoinRequestError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -856,7 +856,7 @@ pub fn parse_create_group_join_request_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::CreateGroupJoinRequestError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -875,7 +875,7 @@ pub fn parse_create_group_join_request_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::CreateGroupJoinRequestError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -894,7 +894,7 @@ pub fn parse_create_group_join_request_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::CreateGroupJoinRequestError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -949,7 +949,7 @@ pub fn parse_get_group_bans_error(
 						.map_err(crate::error::GetGroupBansError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -967,7 +967,7 @@ pub fn parse_get_group_bans_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupBansError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -986,7 +986,7 @@ pub fn parse_get_group_bans_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupBansError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1005,7 +1005,7 @@ pub fn parse_get_group_bans_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupBansError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1024,7 +1024,7 @@ pub fn parse_get_group_bans_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupBansError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1043,7 +1043,7 @@ pub fn parse_get_group_bans_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupBansError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1100,7 +1100,7 @@ pub fn parse_get_group_invite_error(
 						.map_err(crate::error::GetGroupInviteError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -1118,7 +1118,7 @@ pub fn parse_get_group_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1137,7 +1137,7 @@ pub fn parse_get_group_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1156,7 +1156,7 @@ pub fn parse_get_group_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1175,7 +1175,7 @@ pub fn parse_get_group_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1194,7 +1194,7 @@ pub fn parse_get_group_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1254,7 +1254,7 @@ pub fn parse_get_group_join_requests_error(
 						.map_err(crate::error::GetGroupJoinRequestsError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -1272,7 +1272,7 @@ pub fn parse_get_group_join_requests_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupJoinRequestsError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1291,7 +1291,7 @@ pub fn parse_get_group_join_requests_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupJoinRequestsError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1310,7 +1310,7 @@ pub fn parse_get_group_join_requests_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupJoinRequestsError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1329,7 +1329,7 @@ pub fn parse_get_group_join_requests_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupJoinRequestsError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1348,7 +1348,7 @@ pub fn parse_get_group_join_requests_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupJoinRequestsError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1408,7 +1408,7 @@ pub fn parse_get_group_members_error(
 						.map_err(crate::error::GetGroupMembersError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -1426,7 +1426,7 @@ pub fn parse_get_group_members_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupMembersError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1445,7 +1445,7 @@ pub fn parse_get_group_members_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupMembersError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1464,7 +1464,7 @@ pub fn parse_get_group_members_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupMembersError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1483,7 +1483,7 @@ pub fn parse_get_group_members_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupMembersError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1502,7 +1502,7 @@ pub fn parse_get_group_members_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupMembersError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1559,7 +1559,7 @@ pub fn parse_get_group_profile_error(
 						.map_err(crate::error::GetGroupProfileError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -1577,7 +1577,7 @@ pub fn parse_get_group_profile_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupProfileError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1596,7 +1596,7 @@ pub fn parse_get_group_profile_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupProfileError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1615,7 +1615,7 @@ pub fn parse_get_group_profile_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupProfileError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1634,7 +1634,7 @@ pub fn parse_get_group_profile_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupProfileError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1653,7 +1653,7 @@ pub fn parse_get_group_profile_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupProfileError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1710,7 +1710,7 @@ pub fn parse_get_group_summary_error(
 						.map_err(crate::error::GetGroupSummaryError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -1728,7 +1728,7 @@ pub fn parse_get_group_summary_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupSummaryError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1747,7 +1747,7 @@ pub fn parse_get_group_summary_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupSummaryError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1766,7 +1766,7 @@ pub fn parse_get_group_summary_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupSummaryError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1785,7 +1785,7 @@ pub fn parse_get_group_summary_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupSummaryError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1804,7 +1804,7 @@ pub fn parse_get_group_summary_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetGroupSummaryError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1861,7 +1861,7 @@ pub fn parse_kick_group_member_error(
 						.map_err(crate::error::KickGroupMemberError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -1879,7 +1879,7 @@ pub fn parse_kick_group_member_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::KickGroupMemberError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1898,7 +1898,7 @@ pub fn parse_kick_group_member_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::KickGroupMemberError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1917,7 +1917,7 @@ pub fn parse_kick_group_member_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::KickGroupMemberError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1936,7 +1936,7 @@ pub fn parse_kick_group_member_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::KickGroupMemberError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1955,7 +1955,7 @@ pub fn parse_kick_group_member_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::KickGroupMemberError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2007,7 +2007,7 @@ pub fn parse_leave_group_error(
 						.map_err(crate::error::LeaveGroupError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -2025,7 +2025,7 @@ pub fn parse_leave_group_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::LeaveGroupError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2044,7 +2044,7 @@ pub fn parse_leave_group_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::LeaveGroupError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2063,7 +2063,7 @@ pub fn parse_leave_group_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::LeaveGroupError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2082,7 +2082,7 @@ pub fn parse_leave_group_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::LeaveGroupError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2101,7 +2101,7 @@ pub fn parse_leave_group_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::LeaveGroupError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2156,7 +2156,7 @@ pub fn parse_list_suggested_groups_error(
 						.map_err(crate::error::ListSuggestedGroupsError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -2174,7 +2174,7 @@ pub fn parse_list_suggested_groups_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::ListSuggestedGroupsError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2193,7 +2193,7 @@ pub fn parse_list_suggested_groups_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::ListSuggestedGroupsError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2212,7 +2212,7 @@ pub fn parse_list_suggested_groups_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::ListSuggestedGroupsError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2231,7 +2231,7 @@ pub fn parse_list_suggested_groups_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::ListSuggestedGroupsError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2250,7 +2250,7 @@ pub fn parse_list_suggested_groups_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::ListSuggestedGroupsError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2317,7 +2317,7 @@ pub fn parse_prepare_group_avatar_upload_error(
 						.map_err(crate::error::PrepareGroupAvatarUploadError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -2335,7 +2335,7 @@ pub fn parse_prepare_group_avatar_upload_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::PrepareGroupAvatarUploadError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2354,7 +2354,7 @@ pub fn parse_prepare_group_avatar_upload_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::PrepareGroupAvatarUploadError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2373,7 +2373,7 @@ pub fn parse_prepare_group_avatar_upload_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::PrepareGroupAvatarUploadError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2392,7 +2392,7 @@ pub fn parse_prepare_group_avatar_upload_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::PrepareGroupAvatarUploadError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2411,7 +2411,7 @@ pub fn parse_prepare_group_avatar_upload_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::PrepareGroupAvatarUploadError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2478,7 +2478,7 @@ pub fn parse_resolve_group_join_request_error(
 						.map_err(crate::error::ResolveGroupJoinRequestError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -2496,7 +2496,7 @@ pub fn parse_resolve_group_join_request_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::ResolveGroupJoinRequestError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2515,7 +2515,7 @@ pub fn parse_resolve_group_join_request_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::ResolveGroupJoinRequestError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2534,7 +2534,7 @@ pub fn parse_resolve_group_join_request_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::ResolveGroupJoinRequestError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2553,7 +2553,7 @@ pub fn parse_resolve_group_join_request_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::ResolveGroupJoinRequestError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2572,7 +2572,7 @@ pub fn parse_resolve_group_join_request_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::ResolveGroupJoinRequestError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2627,7 +2627,7 @@ pub fn parse_search_groups_error(
 						.map_err(crate::error::SearchGroupsError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -2645,7 +2645,7 @@ pub fn parse_search_groups_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::SearchGroupsError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2664,7 +2664,7 @@ pub fn parse_search_groups_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::SearchGroupsError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2683,7 +2683,7 @@ pub fn parse_search_groups_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::SearchGroupsError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2702,7 +2702,7 @@ pub fn parse_search_groups_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::SearchGroupsError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2721,7 +2721,7 @@ pub fn parse_search_groups_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::SearchGroupsError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2785,7 +2785,7 @@ pub fn parse_transfer_group_ownership_error(
 						.map_err(crate::error::TransferGroupOwnershipError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -2803,7 +2803,7 @@ pub fn parse_transfer_group_ownership_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::TransferGroupOwnershipError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2822,7 +2822,7 @@ pub fn parse_transfer_group_ownership_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::TransferGroupOwnershipError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2841,7 +2841,7 @@ pub fn parse_transfer_group_ownership_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::TransferGroupOwnershipError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2860,7 +2860,7 @@ pub fn parse_transfer_group_ownership_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::TransferGroupOwnershipError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2879,7 +2879,7 @@ pub fn parse_transfer_group_ownership_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::TransferGroupOwnershipError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2937,7 +2937,7 @@ pub fn parse_unban_group_identity_error(
 						.map_err(crate::error::UnbanGroupIdentityError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -2955,7 +2955,7 @@ pub fn parse_unban_group_identity_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::UnbanGroupIdentityError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2974,7 +2974,7 @@ pub fn parse_unban_group_identity_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::UnbanGroupIdentityError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2993,7 +2993,7 @@ pub fn parse_unban_group_identity_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::UnbanGroupIdentityError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -3012,7 +3012,7 @@ pub fn parse_unban_group_identity_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::UnbanGroupIdentityError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -3031,7 +3031,7 @@ pub fn parse_unban_group_identity_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::UnbanGroupIdentityError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -3089,7 +3089,7 @@ pub fn parse_update_group_profile_error(
 						.map_err(crate::error::UpdateGroupProfileError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -3107,7 +3107,7 @@ pub fn parse_update_group_profile_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::UpdateGroupProfileError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -3126,7 +3126,7 @@ pub fn parse_update_group_profile_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::UpdateGroupProfileError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -3145,7 +3145,7 @@ pub fn parse_update_group_profile_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::UpdateGroupProfileError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -3164,7 +3164,7 @@ pub fn parse_update_group_profile_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::UpdateGroupProfileError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -3183,7 +3183,7 @@ pub fn parse_update_group_profile_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::UpdateGroupProfileError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -3241,7 +3241,7 @@ pub fn parse_validate_group_profile_error(
 						.map_err(crate::error::ValidateGroupProfileError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -3259,7 +3259,7 @@ pub fn parse_validate_group_profile_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::ValidateGroupProfileError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -3278,7 +3278,7 @@ pub fn parse_validate_group_profile_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::ValidateGroupProfileError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -3297,7 +3297,7 @@ pub fn parse_validate_group_profile_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::ValidateGroupProfileError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -3316,7 +3316,7 @@ pub fn parse_validate_group_profile_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::ValidateGroupProfileError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -3335,7 +3335,7 @@ pub fn parse_validate_group_profile_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::ValidateGroupProfileError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp

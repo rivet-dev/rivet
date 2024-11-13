@@ -43,7 +43,7 @@ pub async fn up(config: rivet_config::Config, services: &[SqlService]) -> Result
 				crdb_pre_queries.push(query);
 
 				// Create users
-				for (_, user) in &server_config.cockroachdb.provision_users {
+				for user in server_config.cockroachdb.provision_users.values() {
 					let username = &user.username;
 					let password = user.password.read();
 					let query = match user.role {
@@ -124,9 +124,9 @@ pub async fn up(config: rivet_config::Config, services: &[SqlService]) -> Result
 					"
 				));
 
-				for (_, user) in &clickhouse_config.provision_users {
+				for user in clickhouse_config.provision_users.values() {
 					let username = &user.username;
-					let password = &*user.password.read();
+					let password = user.password.read();
 
 					clickhouse_pre_queries.push(formatdoc!(
 						"
@@ -371,7 +371,7 @@ async fn migrate_db_url(config: rivet_config::Config, service: &SqlService) -> R
 
 			let mut url = url::Url::parse(&format!(
 				"cockroach://{auth}@{crdb_host}:{crdb_port}/{}",
-				encode(&service.db_name)
+				encode(service.db_name)
 			))?;
 
 			if let Some(sslmode) = crdb_url_parsed.query_pairs().find(|(k, _)| k == "sslmode") {
@@ -395,7 +395,7 @@ async fn migrate_db_url(config: rivet_config::Config, service: &SqlService) -> R
 
 			let mut query = format!(
 				"database={db}&username={username}&x-multi-statement=true&x-migrations-table-engine=ReplicatedMergeTree&secure=true&skip_verify=true",
-				db = encode(&service.db_name),
+				db = encode(service.db_name),
 				username = encode(&clickhouse_config.username),
 			);
 			if let Some(password) = &clickhouse_config.password {

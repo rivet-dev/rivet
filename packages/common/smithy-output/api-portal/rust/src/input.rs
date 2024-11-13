@@ -93,7 +93,7 @@ impl GetGameProfileInput {
 			) -> Result<(), aws_smithy_http::operation::BuildError> {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_2) = &_input.watch_index {
-					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(&inner_2));
+					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(inner_2));
 				}
 				Ok(())
 			}
@@ -204,7 +204,7 @@ impl GetSuggestedGamesInput {
 			) -> Result<(), aws_smithy_http::operation::BuildError> {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_3) = &_input.watch_index {
-					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(&inner_3));
+					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(inner_3));
 				}
 				Ok(())
 			}
@@ -585,7 +585,7 @@ impl UnregisterNotificationsInput {
 			) -> Result<(), aws_smithy_http::operation::BuildError> {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_5) = &_input.service {
-					query.push_kv("service", &aws_smithy_http::query::fmt_string(&inner_5));
+					query.push_kv("service", &aws_smithy_http::query::fmt_string(inner_5));
 				}
 				Ok(())
 			}

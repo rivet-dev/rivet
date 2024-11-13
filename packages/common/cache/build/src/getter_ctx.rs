@@ -120,7 +120,7 @@ where
 {
 	/// Sets a value with the value provided from the cache.
 	pub(super) fn resolve_from_cache(&mut self, idx: usize, value: V) {
-		if let Some(key) = self.keys.iter_mut().nth(idx) {
+		if let Some(key) = self.keys.get_mut(idx) {
 			key.value = Some(value);
 			key.from_cache = true;
 		} else {
@@ -144,7 +144,7 @@ where
 
 	/// Sets a value with the value provided from the getter function.
 	pub fn resolve(&mut self, key: &K, value: V) {
-		self.get_key_for_resolve(&key, |key| key.value = Some(value));
+		self.get_key_for_resolve(key, |key| key.value = Some(value));
 	}
 
 	pub fn resolve_with_topic<T>(

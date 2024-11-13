@@ -1206,7 +1206,7 @@ impl Client {
 			// it's faster.
 			if M::HISTORY && config.message_limit != 1 {
 				// Fetch message
-				let history_key = redis_keys::message_history::<M, _>(&params);
+				let history_key = redis_keys::message_history::<M, _>(params);
 				let msg_bufs = conn
 					.zrangebyscore_limit::<_, _, _, Vec<Vec<u8>>>(
 						&history_key,
@@ -1224,7 +1224,7 @@ impl Client {
 				}
 			} else {
 				// Fetch message
-				let tail_key = redis_keys::message_tail::<M, _>(&params);
+				let tail_key = redis_keys::message_tail::<M, _>(params);
 				let msg_buf = conn
 					.hget::<_, _, Option<Vec<u8>>>(&tail_key, redis_keys::message_tail::BODY)
 					.await?;

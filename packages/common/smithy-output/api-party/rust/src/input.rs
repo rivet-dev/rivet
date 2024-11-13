@@ -354,10 +354,10 @@ impl GetPartyFromInviteInput {
 			) -> Result<(), aws_smithy_http::operation::BuildError> {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_1) = &_input.token {
-					query.push_kv("token", &aws_smithy_http::query::fmt_string(&inner_1));
+					query.push_kv("token", &aws_smithy_http::query::fmt_string(inner_1));
 				}
 				if let Some(inner_2) = &_input.alias {
-					query.push_kv("alias", &aws_smithy_http::query::fmt_string(&inner_2));
+					query.push_kv("alias", &aws_smithy_http::query::fmt_string(inner_2));
 				}
 				Ok(())
 			}
@@ -495,7 +495,7 @@ impl GetPartyProfileInput {
 			) -> Result<(), aws_smithy_http::operation::BuildError> {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_4) = &_input.watch_index {
-					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(&inner_4));
+					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(inner_4));
 				}
 				Ok(())
 			}
@@ -606,7 +606,7 @@ impl GetPartySelfProfileInput {
 			) -> Result<(), aws_smithy_http::operation::BuildError> {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_5) = &_input.watch_index {
-					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(&inner_5));
+					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(inner_5));
 				}
 				Ok(())
 			}
@@ -717,7 +717,7 @@ impl GetPartySelfSummaryInput {
 			) -> Result<(), aws_smithy_http::operation::BuildError> {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_6) = &_input.watch_index {
-					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(&inner_6));
+					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(inner_6));
 				}
 				Ok(())
 			}
@@ -855,7 +855,7 @@ impl GetPartySummaryInput {
 			) -> Result<(), aws_smithy_http::operation::BuildError> {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_8) = &_input.watch_index {
-					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(&inner_8));
+					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(inner_8));
 				}
 				Ok(())
 			}

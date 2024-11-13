@@ -115,7 +115,7 @@ impl Parse for EndpointRouter {
 			None => {
 				return Err(syn::Error::new(
 					input.span(),
-					format!("Missing key `routes`."),
+					"Missing key `routes`.".to_string(),
 				));
 			}
 		};
@@ -335,7 +335,7 @@ impl Parse for Mount {
 			None => {
 				return Err(syn::Error::new(
 					input.span(),
-					format!("Missing key `path`."),
+					"Missing key `path`.".to_string(),
 				));
 			}
 		};
@@ -369,10 +369,10 @@ impl Parse for RequestPathSegment {
 		if let Ok(lit) = fork.parse::<syn::LitStr>() {
 			input.advance_to(&fork);
 			if lit.value().is_empty() {
-				return Err(syn::Error::new(
+				Err(syn::Error::new(
 					lit.span(),
-					format!("Empty segment not allowed"),
-				));
+					"Empty segment not allowed".to_string(),
+				))
 			} else {
 				Ok(RequestPathSegment::LitStr(lit))
 			}
@@ -614,7 +614,7 @@ impl Parse for EndpointFunction {
 		// Check for body
 		let (mut bodies, args) = args
 			.into_iter()
-			.partition::<Vec<_>, _>(|arg| arg.label.to_string() == "body");
+			.partition::<Vec<_>, _>(|arg| arg.label == "body");
 		let body = bodies
 			.pop()
 			.map(|arg| arg.value.expect_expr().cloned())
@@ -663,8 +663,7 @@ impl EndpointFunction {
 		if self
 			.args
 			.iter()
-			.find(|arg| arg.label == "with_response")
-			.is_some()
+			.any(|arg| arg.label == "with_response")
 		{
 			arg_list.insert(0, quote! { response });
 		}

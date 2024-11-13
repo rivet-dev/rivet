@@ -1,4 +1,3 @@
-use types_proto_build;
 
 fn main() -> std::io::Result<()> {
 	// Build schema

@@ -88,7 +88,7 @@ impl Client {
 	) -> Result<Self, ClientError> {
 		let s3_config = &config.server().map_err(ClientError::Global)?.s3;
 
-		let bucket = namespaced_bucket_name(config, &svc_name)?;
+		let bucket = namespaced_bucket_name(config, svc_name)?;
 
 		let endpoint = match endpoint_kind {
 			EndpointKind::Internal => s3_config.endpoint_internal.to_string(),
@@ -104,8 +104,8 @@ impl Client {
 			&bucket,
 			&endpoint,
 			&s3_config.region,
-			&s3_config.access_key_id.read(),
-			&s3_config.secret_access_key.read(),
+			s3_config.access_key_id.read(),
+			s3_config.secret_access_key.read(),
 		)
 	}
 

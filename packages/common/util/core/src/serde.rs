@@ -176,9 +176,9 @@ impl<K: Eq + Clone + Hash, V: Clone + Hash> AsHashableExt<K, V> for HashMap<K, V
 	}
 }
 
-impl<K: Eq + Clone + Hash, V: Clone + Hash> Into<HashableMap<K, V>> for HashMap<K, V> {
-	fn into(self) -> HashableMap<K, V> {
-		HashableMap(self.into_iter().collect())
+impl<K: Eq + Clone + Hash, V: Clone + Hash> From<HashMap<K, V>> for HashableMap<K, V> {
+	fn from(val: HashMap<K, V>) -> Self {
+		HashableMap(val.into_iter().collect())
 	}
 }
 

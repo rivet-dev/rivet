@@ -28,7 +28,7 @@ pub fn parse_create_party_error(
 						.map_err(crate::error::CreatePartyError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -46,7 +46,7 @@ pub fn parse_create_party_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::CreatePartyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -65,7 +65,7 @@ pub fn parse_create_party_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::CreatePartyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -84,7 +84,7 @@ pub fn parse_create_party_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::CreatePartyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -103,7 +103,7 @@ pub fn parse_create_party_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::CreatePartyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -122,7 +122,7 @@ pub fn parse_create_party_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::CreatePartyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -180,7 +180,7 @@ pub fn parse_create_party_invite_error(
 						.map_err(crate::error::CreatePartyInviteError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -198,7 +198,7 @@ pub fn parse_create_party_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::CreatePartyInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -217,7 +217,7 @@ pub fn parse_create_party_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::CreatePartyInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -236,7 +236,7 @@ pub fn parse_create_party_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::CreatePartyInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -255,7 +255,7 @@ pub fn parse_create_party_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::CreatePartyInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -274,7 +274,7 @@ pub fn parse_create_party_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::CreatePartyInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -335,7 +335,7 @@ pub fn parse_get_party_from_invite_error(
 						.map_err(crate::error::GetPartyFromInviteError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -353,7 +353,7 @@ pub fn parse_get_party_from_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetPartyFromInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -372,7 +372,7 @@ pub fn parse_get_party_from_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetPartyFromInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -391,7 +391,7 @@ pub fn parse_get_party_from_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetPartyFromInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -410,7 +410,7 @@ pub fn parse_get_party_from_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetPartyFromInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -429,7 +429,7 @@ pub fn parse_get_party_from_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetPartyFromInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -489,7 +489,7 @@ pub fn parse_get_party_profile_error(
 						.map_err(crate::error::GetPartyProfileError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -507,7 +507,7 @@ pub fn parse_get_party_profile_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetPartyProfileError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -526,7 +526,7 @@ pub fn parse_get_party_profile_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetPartyProfileError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -545,7 +545,7 @@ pub fn parse_get_party_profile_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetPartyProfileError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -564,7 +564,7 @@ pub fn parse_get_party_profile_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetPartyProfileError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -583,7 +583,7 @@ pub fn parse_get_party_profile_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetPartyProfileError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -643,7 +643,7 @@ pub fn parse_get_party_self_profile_error(
 						.map_err(crate::error::GetPartySelfProfileError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -661,7 +661,7 @@ pub fn parse_get_party_self_profile_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetPartySelfProfileError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -680,7 +680,7 @@ pub fn parse_get_party_self_profile_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetPartySelfProfileError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -699,7 +699,7 @@ pub fn parse_get_party_self_profile_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetPartySelfProfileError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -718,7 +718,7 @@ pub fn parse_get_party_self_profile_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetPartySelfProfileError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -737,7 +737,7 @@ pub fn parse_get_party_self_profile_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetPartySelfProfileError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -800,7 +800,7 @@ pub fn parse_get_party_self_summary_error(
 						.map_err(crate::error::GetPartySelfSummaryError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -818,7 +818,7 @@ pub fn parse_get_party_self_summary_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetPartySelfSummaryError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -837,7 +837,7 @@ pub fn parse_get_party_self_summary_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetPartySelfSummaryError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -856,7 +856,7 @@ pub fn parse_get_party_self_summary_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetPartySelfSummaryError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -875,7 +875,7 @@ pub fn parse_get_party_self_summary_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetPartySelfSummaryError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -894,7 +894,7 @@ pub fn parse_get_party_self_summary_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetPartySelfSummaryError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -954,7 +954,7 @@ pub fn parse_get_party_summary_error(
 						.map_err(crate::error::GetPartySummaryError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -972,7 +972,7 @@ pub fn parse_get_party_summary_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetPartySummaryError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -991,7 +991,7 @@ pub fn parse_get_party_summary_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetPartySummaryError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1010,7 +1010,7 @@ pub fn parse_get_party_summary_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetPartySummaryError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1029,7 +1029,7 @@ pub fn parse_get_party_summary_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetPartySummaryError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1048,7 +1048,7 @@ pub fn parse_get_party_summary_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::GetPartySummaryError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1105,7 +1105,7 @@ pub fn parse_join_party_error(
 						.map_err(crate::error::JoinPartyError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -1123,7 +1123,7 @@ pub fn parse_join_party_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::JoinPartyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1142,7 +1142,7 @@ pub fn parse_join_party_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::JoinPartyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1161,7 +1161,7 @@ pub fn parse_join_party_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::JoinPartyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1180,7 +1180,7 @@ pub fn parse_join_party_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::JoinPartyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1199,7 +1199,7 @@ pub fn parse_join_party_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::JoinPartyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1256,7 +1256,7 @@ pub fn parse_kick_member_error(
 						.map_err(crate::error::KickMemberError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -1274,7 +1274,7 @@ pub fn parse_kick_member_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::KickMemberError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1293,7 +1293,7 @@ pub fn parse_kick_member_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::KickMemberError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1312,7 +1312,7 @@ pub fn parse_kick_member_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::KickMemberError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1331,7 +1331,7 @@ pub fn parse_kick_member_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::KickMemberError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1350,7 +1350,7 @@ pub fn parse_kick_member_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::KickMemberError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1402,7 +1402,7 @@ pub fn parse_leave_party_error(
 						.map_err(crate::error::LeavePartyError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -1420,7 +1420,7 @@ pub fn parse_leave_party_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::LeavePartyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1439,7 +1439,7 @@ pub fn parse_leave_party_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::LeavePartyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1458,7 +1458,7 @@ pub fn parse_leave_party_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::LeavePartyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1477,7 +1477,7 @@ pub fn parse_leave_party_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::LeavePartyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1496,7 +1496,7 @@ pub fn parse_leave_party_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::LeavePartyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1549,7 +1549,7 @@ pub fn parse_revoke_party_invite_error(
 						.map_err(crate::error::RevokePartyInviteError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -1567,7 +1567,7 @@ pub fn parse_revoke_party_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::RevokePartyInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1586,7 +1586,7 @@ pub fn parse_revoke_party_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::RevokePartyInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1605,7 +1605,7 @@ pub fn parse_revoke_party_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::RevokePartyInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1624,7 +1624,7 @@ pub fn parse_revoke_party_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::RevokePartyInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1643,7 +1643,7 @@ pub fn parse_revoke_party_invite_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::RevokePartyInviteError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1696,7 +1696,7 @@ pub fn parse_send_join_request_error(
 						.map_err(crate::error::SendJoinRequestError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -1714,7 +1714,7 @@ pub fn parse_send_join_request_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::SendJoinRequestError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1733,7 +1733,7 @@ pub fn parse_send_join_request_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::SendJoinRequestError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1752,7 +1752,7 @@ pub fn parse_send_join_request_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::SendJoinRequestError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1771,7 +1771,7 @@ pub fn parse_send_join_request_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::SendJoinRequestError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1790,7 +1790,7 @@ pub fn parse_send_join_request_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::SendJoinRequestError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1843,7 +1843,7 @@ pub fn parse_set_party_publicity_error(
 						.map_err(crate::error::SetPartyPublicityError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -1861,7 +1861,7 @@ pub fn parse_set_party_publicity_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::SetPartyPublicityError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1880,7 +1880,7 @@ pub fn parse_set_party_publicity_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::SetPartyPublicityError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1899,7 +1899,7 @@ pub fn parse_set_party_publicity_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::SetPartyPublicityError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1918,7 +1918,7 @@ pub fn parse_set_party_publicity_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::SetPartyPublicityError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1937,7 +1937,7 @@ pub fn parse_set_party_publicity_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::SetPartyPublicityError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -1997,7 +1997,7 @@ pub fn parse_transfer_party_ownership_error(
 						.map_err(crate::error::TransferPartyOwnershipError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -2015,7 +2015,7 @@ pub fn parse_transfer_party_ownership_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::TransferPartyOwnershipError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2034,7 +2034,7 @@ pub fn parse_transfer_party_ownership_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::TransferPartyOwnershipError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2053,7 +2053,7 @@ pub fn parse_transfer_party_ownership_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::TransferPartyOwnershipError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2072,7 +2072,7 @@ pub fn parse_transfer_party_ownership_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::TransferPartyOwnershipError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2091,7 +2091,7 @@ pub fn parse_transfer_party_ownership_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::TransferPartyOwnershipError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2153,7 +2153,7 @@ pub fn parse_find_matchmaker_lobby_for_party_error(
 						.map_err(crate::error::FindMatchmakerLobbyForPartyError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -2171,7 +2171,7 @@ pub fn parse_find_matchmaker_lobby_for_party_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::FindMatchmakerLobbyForPartyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2190,7 +2190,7 @@ pub fn parse_find_matchmaker_lobby_for_party_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::FindMatchmakerLobbyForPartyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2209,7 +2209,7 @@ pub fn parse_find_matchmaker_lobby_for_party_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::FindMatchmakerLobbyForPartyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2228,7 +2228,7 @@ pub fn parse_find_matchmaker_lobby_for_party_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::FindMatchmakerLobbyForPartyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2247,7 +2247,7 @@ pub fn parse_find_matchmaker_lobby_for_party_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::FindMatchmakerLobbyForPartyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2309,7 +2309,7 @@ pub fn parse_join_matchmaker_lobby_for_party_error(
 						.map_err(crate::error::JoinMatchmakerLobbyForPartyError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -2327,7 +2327,7 @@ pub fn parse_join_matchmaker_lobby_for_party_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::JoinMatchmakerLobbyForPartyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2346,7 +2346,7 @@ pub fn parse_join_matchmaker_lobby_for_party_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::JoinMatchmakerLobbyForPartyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2365,7 +2365,7 @@ pub fn parse_join_matchmaker_lobby_for_party_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::JoinMatchmakerLobbyForPartyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2384,7 +2384,7 @@ pub fn parse_join_matchmaker_lobby_for_party_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::JoinMatchmakerLobbyForPartyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2403,7 +2403,7 @@ pub fn parse_join_matchmaker_lobby_for_party_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::JoinMatchmakerLobbyForPartyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2461,7 +2461,7 @@ pub fn parse_matchmaker_self_ready_error(
 						.map_err(crate::error::MatchmakerSelfReadyError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -2479,7 +2479,7 @@ pub fn parse_matchmaker_self_ready_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::MatchmakerSelfReadyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2498,7 +2498,7 @@ pub fn parse_matchmaker_self_ready_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::MatchmakerSelfReadyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2517,7 +2517,7 @@ pub fn parse_matchmaker_self_ready_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::MatchmakerSelfReadyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2536,7 +2536,7 @@ pub fn parse_matchmaker_self_ready_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::MatchmakerSelfReadyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2555,7 +2555,7 @@ pub fn parse_matchmaker_self_ready_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::MatchmakerSelfReadyError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2610,7 +2610,7 @@ pub fn parse_set_party_to_idle_error(
 						.map_err(crate::error::SetPartyToIdleError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -2628,7 +2628,7 @@ pub fn parse_set_party_to_idle_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::SetPartyToIdleError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2647,7 +2647,7 @@ pub fn parse_set_party_to_idle_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::SetPartyToIdleError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2666,7 +2666,7 @@ pub fn parse_set_party_to_idle_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::SetPartyToIdleError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2685,7 +2685,7 @@ pub fn parse_set_party_to_idle_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::SetPartyToIdleError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2704,7 +2704,7 @@ pub fn parse_set_party_to_idle_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::SetPartyToIdleError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2756,7 +2756,7 @@ pub fn parse_set_self_inactive_error(
 						.map_err(crate::error::SetSelfInactiveError::unhandled)?;
 					output.build()
 				};
-				if (&tmp.message).is_none() {
+				if tmp.message.is_none() {
 					tmp.message = _error_message;
 				}
 				tmp
@@ -2774,7 +2774,7 @@ pub fn parse_set_self_inactive_error(
 						output = crate::json_deser::deser_structure_crate_error_rate_limit_error_json_err(response.body().as_ref(), output).map_err(crate::error::SetSelfInactiveError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2793,7 +2793,7 @@ pub fn parse_set_self_inactive_error(
 						output = crate::json_deser::deser_structure_crate_error_forbidden_error_json_err(response.body().as_ref(), output).map_err(crate::error::SetSelfInactiveError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2812,7 +2812,7 @@ pub fn parse_set_self_inactive_error(
 						output = crate::json_deser::deser_structure_crate_error_unauthorized_error_json_err(response.body().as_ref(), output).map_err(crate::error::SetSelfInactiveError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2831,7 +2831,7 @@ pub fn parse_set_self_inactive_error(
 						output = crate::json_deser::deser_structure_crate_error_not_found_error_json_err(response.body().as_ref(), output).map_err(crate::error::SetSelfInactiveError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp
@@ -2850,7 +2850,7 @@ pub fn parse_set_self_inactive_error(
 						output = crate::json_deser::deser_structure_crate_error_bad_request_error_json_err(response.body().as_ref(), output).map_err(crate::error::SetSelfInactiveError::unhandled)?;
 						output.build()
 					};
-					if (&tmp.message).is_none() {
+					if tmp.message.is_none() {
 						tmp.message = _error_message;
 					}
 					tmp

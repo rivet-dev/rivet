@@ -914,7 +914,7 @@ impl GetGroupBansInput {
 			) -> Result<(), aws_smithy_http::operation::BuildError> {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_9) = &_input.anchor {
-					query.push_kv("anchor", &aws_smithy_http::query::fmt_string(&inner_9));
+					query.push_kv("anchor", &aws_smithy_http::query::fmt_string(inner_9));
 				}
 				if let Some(inner_10) = &_input.count {
 					query.push_kv(
@@ -925,7 +925,7 @@ impl GetGroupBansInput {
 				if let Some(inner_11) = &_input.watch_index {
 					query.push_kv(
 						"watch_index",
-						&aws_smithy_http::query::fmt_string(&inner_11),
+						&aws_smithy_http::query::fmt_string(inner_11),
 					);
 				}
 				Ok(())
@@ -1214,7 +1214,7 @@ impl GetGroupJoinRequestsInput {
 			) -> Result<(), aws_smithy_http::operation::BuildError> {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_14) = &_input.anchor {
-					query.push_kv("anchor", &aws_smithy_http::query::fmt_string(&inner_14));
+					query.push_kv("anchor", &aws_smithy_http::query::fmt_string(inner_14));
 				}
 				if let Some(inner_15) = &_input.count {
 					query.push_kv(
@@ -1225,7 +1225,7 @@ impl GetGroupJoinRequestsInput {
 				if let Some(inner_16) = &_input.watch_index {
 					query.push_kv(
 						"watch_index",
-						&aws_smithy_http::query::fmt_string(&inner_16),
+						&aws_smithy_http::query::fmt_string(inner_16),
 					);
 				}
 				Ok(())
@@ -1388,7 +1388,7 @@ impl GetGroupMembersInput {
 			) -> Result<(), aws_smithy_http::operation::BuildError> {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_18) = &_input.anchor {
-					query.push_kv("anchor", &aws_smithy_http::query::fmt_string(&inner_18));
+					query.push_kv("anchor", &aws_smithy_http::query::fmt_string(inner_18));
 				}
 				if let Some(inner_19) = &_input.count {
 					query.push_kv(
@@ -1399,7 +1399,7 @@ impl GetGroupMembersInput {
 				if let Some(inner_20) = &_input.watch_index {
 					query.push_kv(
 						"watch_index",
-						&aws_smithy_http::query::fmt_string(&inner_20),
+						&aws_smithy_http::query::fmt_string(inner_20),
 					);
 				}
 				Ok(())
@@ -1540,7 +1540,7 @@ impl GetGroupProfileInput {
 				if let Some(inner_22) = &_input.watch_index {
 					query.push_kv(
 						"watch_index",
-						&aws_smithy_http::query::fmt_string(&inner_22),
+						&aws_smithy_http::query::fmt_string(inner_22),
 					);
 				}
 				Ok(())
@@ -2030,7 +2030,7 @@ impl ListSuggestedGroupsInput {
 				if let Some(inner_27) = &_input.watch_index {
 					query.push_kv(
 						"watch_index",
-						&aws_smithy_http::query::fmt_string(&inner_27),
+						&aws_smithy_http::query::fmt_string(inner_27),
 					);
 				}
 				Ok(())
@@ -2482,10 +2482,10 @@ impl SearchGroupsInput {
 			) -> Result<(), aws_smithy_http::operation::BuildError> {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_30) = &_input.query {
-					query.push_kv("query", &aws_smithy_http::query::fmt_string(&inner_30));
+					query.push_kv("query", &aws_smithy_http::query::fmt_string(inner_30));
 				}
 				if let Some(inner_31) = &_input.anchor {
-					query.push_kv("anchor", &aws_smithy_http::query::fmt_string(&inner_31));
+					query.push_kv("anchor", &aws_smithy_http::query::fmt_string(inner_31));
 				}
 				if let Some(inner_32) = &_input.limit {
 					query.push_kv(

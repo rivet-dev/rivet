@@ -1,4 +1,4 @@
-use std::{env, fmt::Debug, sync::Arc};
+use std::{fmt::Debug, sync::Arc};
 
 use rivet_pools::prelude::*;
 
@@ -27,7 +27,7 @@ impl CacheInner {
 	pub fn from_env(pools: rivet_pools::Pools) -> Result<Cache, Error> {
 		let service_name = rivet_env::service_name();
 		let service_source_hash = rivet_env::source_hash().to_string();
-		let redis_cache = pools.redis_cache().map_err(|err| Error::Pools(err))?;
+		let redis_cache = pools.redis_cache().map_err(Error::Pools)?;
 
 		Ok(Self::new(
 			service_name.to_string(),

@@ -8,7 +8,7 @@ pub(crate) fn render_template(template: &'static str, context: &HashMap<String, 
 	template
 		.chars()
 		.enumerate()
-		.map(|(i, c)| {
+		.filter_map(|(i, c)| {
 			if c == '{' {
 				// Double opening bracket (escaped)
 				if potential_replace && i == start_index + 1 {
@@ -50,6 +50,5 @@ pub(crate) fn render_template(template: &'static str, context: &HashMap<String, 
 				Some(c.to_string())
 			}
 		})
-		.flatten()
 		.collect::<String>()
 }

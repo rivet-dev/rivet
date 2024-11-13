@@ -25,7 +25,7 @@ impl<T: FromRedisValue> FromRedisValue for RedisResult<T> {
 	fn from_redis_value(v: &Value) -> Result<RedisResult<T>, RedisError> {
 		match *v {
 			Value::Bulk(ref items) => {
-				let mut items = items.into_iter();
+				let mut items = items.iter();
 
 				let status_raw = items
 					.next()
@@ -33,7 +33,7 @@ impl<T: FromRedisValue> FromRedisValue for RedisResult<T> {
 				let status = String::from_redis_value(status_raw)?;
 				match status.as_str() {
 					"ok" => {
-						let data_raw = items.next().unwrap_or_else(|| &redis::Value::Nil);
+						let data_raw = items.next().unwrap_or(&redis::Value::Nil);
 						let data = FromRedisValue::from_redis_value(data_raw)?;
 						Ok(RedisResult(Ok(data)))
 					}
@@ -44,7 +44,7 @@ impl<T: FromRedisValue> FromRedisValue for RedisResult<T> {
 						let err = String::from_redis_value(err_raw)?;
 						Ok(RedisResult(Err(err)))
 					}
-					status @ _ => Err(invalid_type_error!(status, "Status was not `ok` or `err`.")),
+					status => Err(invalid_type_error!(status, "Status was not `ok` or `err`.")),
 				}
 			}
 			_ => Err(invalid_type_error!(v, "Not bulk data")),
@@ -135,7 +135,7 @@ impl FromRedisValue for SearchResultNoContent {
 			.ok_or_else(|| invalid_type_error!(root, "Missing count."))?;
 
 		let keys = root_iter
-			.map(|entry| from_redis_value::<String>(entry))
+			.map(from_redis_value::<String>)
 			.collect::<Result<Vec<_>, _>>()?;
 
 		Ok(SearchResultNoContent {

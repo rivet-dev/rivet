@@ -240,7 +240,7 @@ fn parse_trait_fn(
 			&format!(
 				"{} function must have exactly two parameters: ctx: {} and input: &YourInputType",
 				trait_name,
-				ctx_ty.to_token_stream().to_string()
+				ctx_ty.to_token_stream()
 			),
 		));
 	}

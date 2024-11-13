@@ -157,7 +157,7 @@ impl RequestConfig {
 		//
 		// Drop `keys` bc this is not the same as the keys list in `ctx`, so it should not be used
 		// again.
-		let mut ctx = GetterCtx::new(base_key.clone().into(), keys);
+		let mut ctx = GetterCtx::new(base_key.clone(), keys);
 
 		// Build keys to look up values in Redis
 		let redis_keys = ctx
@@ -558,10 +558,10 @@ impl RequestConfig {
 			.collect::<Vec<_>>();
 
 		metrics::CACHE_PURGE_REQUEST_TOTAL
-			.with_label_values(&[&base_key])
+			.with_label_values(&[base_key])
 			.inc();
 		metrics::CACHE_PURGE_VALUE_TOTAL
-			.with_label_values(&[&base_key])
+			.with_label_values(&[base_key])
 			.inc_by(redis_keys.len() as u64);
 
 		// Delete keys

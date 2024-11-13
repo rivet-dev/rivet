@@ -18,7 +18,7 @@ pub enum Error {
 
 #[derive(Default)]
 pub struct RunConfig {
-	pub customize_tokio_runtime: Option<Box<dyn FnOnce(&mut tokio::runtime::Builder) -> ()>>,
+	pub customize_tokio_runtime: Option<Box<dyn FnOnce(&mut tokio::runtime::Builder)>>,
 	pub pretty_logs: bool,
 }
 
@@ -60,49 +60,47 @@ impl RunConfig {
 					.pretty()
 					.with_env_filter(env_filter)
 					.init();
-			} else {
-				if std::env::var("TOKIO_CONSOLE_ENABLE").is_ok() {
-					// logfmt + tokio-console
-					tracing_subscriber::registry()
-						.with(
-							console_subscriber::ConsoleLayer::builder()
-								.retention(std::time::Duration::from_secs(60))
-								.with_default_env()
-								.spawn(),
-						)
-						.with(tracing_logfmt::builder().layer().with_filter(env_filter))
-						.init();
-				} else {
-					// logfmt
-					tracing_subscriber::registry()
-						.with(
-							tracing_logfmt::builder()
-								.with_span_name(
-									std::env::var("RUST_LOG_SPAN_NAME").map_or(false, |x| x == "1"),
-								)
-								.with_span_path(
-									std::env::var("RUST_LOG_SPAN_PATH").map_or(false, |x| x == "1"),
-								)
-								.with_target(
-									std::env::var("RUST_LOG_TARGET").map_or(false, |x| x == "1"),
-								)
-								.with_location(
-									std::env::var("RUST_LOG_LOCATION").map_or(false, |x| x == "1"),
-								)
-								.with_module_path(
-									std::env::var("RUST_LOG_MODULE_PATH")
-										.map_or(false, |x| x == "1"),
-								)
-								.with_ansi_color(
-									std::env::var("RUST_LOG_ANSI_COLOR")
-										.map_or(false, |x| x == "1"),
-								)
-								.layer()
-								.with_filter(env_filter),
-						)
-						.init();
-				}
-			}
+			} else if std::env::var("TOKIO_CONSOLE_ENABLE").is_ok() {
+   					// logfmt + tokio-console
+   					tracing_subscriber::registry()
+   						.with(
+   							console_subscriber::ConsoleLayer::builder()
+   								.retention(std::time::Duration::from_secs(60))
+   								.with_default_env()
+   								.spawn(),
+   						)
+   						.with(tracing_logfmt::builder().layer().with_filter(env_filter))
+   						.init();
+   				} else {
+   					// logfmt
+   					tracing_subscriber::registry()
+   						.with(
+   							tracing_logfmt::builder()
+   								.with_span_name(
+   									std::env::var("RUST_LOG_SPAN_NAME").map_or(false, |x| x == "1"),
+   								)
+   								.with_span_path(
+   									std::env::var("RUST_LOG_SPAN_PATH").map_or(false, |x| x == "1"),
+   								)
+   								.with_target(
+   									std::env::var("RUST_LOG_TARGET").map_or(false, |x| x == "1"),
+   								)
+   								.with_location(
+   									std::env::var("RUST_LOG_LOCATION").map_or(false, |x| x == "1"),
+   								)
+   								.with_module_path(
+   									std::env::var("RUST_LOG_MODULE_PATH")
+   										.map_or(false, |x| x == "1"),
+   								)
+   								.with_ansi_color(
+   									std::env::var("RUST_LOG_ANSI_COLOR")
+   										.map_or(false, |x| x == "1"),
+   								)
+   								.layer()
+   								.with_filter(env_filter),
+   						)
+   						.init();
+   				}
 		})
 	}
 

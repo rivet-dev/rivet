@@ -142,7 +142,7 @@ impl Monitor {
 			// Update index
 			if let Some(last) = events.last() {
 				tracing::trace!(?last.index, "writing index");
-				match redis_conn.set(&redis_index_key, last.index).await {
+				match redis_conn.set(redis_index_key, last.index).await {
 					Ok(()) => {}
 					Err(err) => {
 						tracing::error!(?err, "error setting start index");

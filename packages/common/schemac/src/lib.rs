@@ -51,6 +51,7 @@ pub trait CompilePlugin: fmt::Debug {
 	fn module_pass(&self, file_contents: &mut String, meta: &ModuleMeta) -> io::Result<()>;
 }
 
+#[derive(Default)]
 pub struct CompileOpts {
 	root_path: PathBuf,
 	input_paths: Vec<PathBuf>,
@@ -73,19 +74,6 @@ impl fmt::Debug for CompileOpts {
 	}
 }
 
-impl Default for CompileOpts {
-	fn default() -> Self {
-		CompileOpts {
-			root_path: PathBuf::default(),
-			input_paths: Vec::new(),
-			plugins: Vec::new(),
-			service_generator: None,
-			extern_paths: Vec::new(),
-			type_attributes: Vec::new(),
-			skip_cargo_instructions: false,
-		}
-	}
-}
 
 impl CompileOpts {
 	pub fn root(mut self, root: &Path) -> Self {
@@ -163,19 +151,12 @@ impl CompileOpts {
 
 /// Represents a module inside the protobuf module. We use this to combine multiple outputted
 /// protobuf files in to one schema file.
+#[derive(Default)]
 struct SchemaNode {
 	children: HashMap<String, SchemaNode>,
 	code: Option<String>,
 }
 
-impl Default for SchemaNode {
-	fn default() -> Self {
-		SchemaNode {
-			children: HashMap::new(),
-			code: None,
-		}
-	}
-}
 
 impl SchemaNode {
 	fn insert(&mut self, module_name: &[String], code: String) {
@@ -196,7 +177,7 @@ impl SchemaNode {
 	fn gen_code(&self, buf: &mut String) {
 		// Add code
 		if let Some(code) = &self.code {
-			buf.push_str(&code);
+			buf.push_str(code);
 		}
 
 		// Generate child modules in alphabetical order
@@ -207,10 +188,10 @@ impl SchemaNode {
 		children.sort_by_key(|p| p.0);
 		for (name, node) in children {
 			buf.push_str("pub mod ");
-			buf.push_str(&name);
+			buf.push_str(name);
 			buf.push_str(" {");
 			node.gen_code(buf);
-			buf.push_str("}");
+			buf.push('}');
 		}
 	}
 }
@@ -245,19 +226,16 @@ pub fn compile(opts: CompileOpts) -> io::Result<String> {
 	}
 
 	let res = build_config.compile_protos(&opts.input_paths, &[opts.root_path.clone()]);
-	match res {
-		Err(err) => {
-			let err_kind = err.kind();
+	if let Err(err) = res {
+ 			let err_kind = err.kind();
 
-			if let Some(inner) = err.into_inner() {
-				eprintln!("{}", inner);
-				return Err(io::Error::new(io::ErrorKind::Other, "protoc failed"));
-			} else {
-				return Err(io::Error::new(err_kind, "failed to get inner error"));
-			}
-		}
-		_ => {}
-	}
+ 			if let Some(inner) = err.into_inner() {
+ 				eprintln!("{}", inner);
+ 				return Err(io::Error::new(io::ErrorKind::Other, "protoc failed"));
+ 			} else {
+ 				return Err(io::Error::new(err_kind, "failed to get inner error"));
+ 			}
+ 		}
 
 	// Build schema graph
 	println!("  * Building schema graph");
@@ -381,7 +359,7 @@ fn list_all_proto_paths(
 	// Read the file
 	println!("Parsing imports {}...", proto_path.display());
 	let proto_source = if proto_path.exists() {
-		fs::read_to_string(&proto_path)?
+		fs::read_to_string(proto_path)?
 	} else {
 		println!("Proto at {} does not exist.", proto_path.display());
 		return Ok(());
@@ -417,7 +395,7 @@ mod tests {
 
 		let output = compile(
 			CompileOpts::default()
-				.root(&project_root)
+				.root(project_root)
 				.include_dir(&proto_dir)
 				.unwrap(),
 		)

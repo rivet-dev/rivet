@@ -62,7 +62,7 @@ impl MatchmakerInput {
 			) -> Result<(), aws_smithy_http::operation::BuildError> {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_1) = &_input.region {
-					query.push_kv("region", &aws_smithy_http::query::fmt_string(&inner_1));
+					query.push_kv("region", &aws_smithy_http::query::fmt_string(inner_1));
 				}
 				Ok(())
 			}

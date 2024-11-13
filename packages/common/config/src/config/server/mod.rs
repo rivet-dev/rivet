@@ -11,6 +11,7 @@ pub use rivet::*;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
+#[derive(Default)]
 pub struct Server {
 	// Secrets
 	pub jwt: JwtKey,
@@ -64,32 +65,6 @@ pub struct Server {
 	pub nomad: Option<Nomad>,
 }
 
-impl Default for Server {
-	fn default() -> Self {
-		Self {
-			jwt: JwtKey::default(),
-			tls: None,
-			ssh: None,
-			rivet: rivet::Rivet::default(),
-			cockroachdb: CockroachDb::default(),
-			redis: RedisTypes::default(),
-			clickhouse: None,
-			prometheus: None,
-			cloudflare: None,
-			nats: Nats::default(),
-			s3: S3::default(),
-			sendgrid: None,
-			loops: None,
-			ip_info: None,
-			hcaptcha: None,
-			turnstile: None,
-			stripe: None,
-			neon: None,
-			linode: None,
-			nomad: None,
-		}
-	}
-}
 
 impl Server {
 	pub fn tls(&self) -> GlobalResult<&Tls> {

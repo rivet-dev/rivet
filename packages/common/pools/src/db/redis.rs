@@ -7,7 +7,7 @@ use crate::Error;
 
 pub type RedisPool = redis::aio::ConnectionManager;
 
-//// Connection timeout for the first connection.
+/// Connection timeout for the first connection.
 ///
 /// This does not affect reconnection attempts.
 const INITIAL_CONNECTION_TIMEOUT: Duration = Duration::from_secs(5);

@@ -96,7 +96,7 @@ fn update_compile_opts(mut base: schemac::CompileOpts) -> io::Result<schemac::Co
 	base = base
 		.root(&project_roots[0])
 		.plugin(Box::new(plugins::CommonPlugin::default()))
-		.plugin(Box::new(plugins::BackendMessagePlugin::default()));
+		.plugin(Box::new(plugins::BackendMessagePlugin));
 
 	Ok(base)
 }
@@ -125,13 +125,12 @@ fn seek_project_roots() -> io::Result<Vec<PathBuf>> {
 
 fn find_all_proto(path: &Path) -> io::Result<Vec<PathBuf>> {
 	Ok(fs::read_dir(path)?
-		.into_iter()
 		.map(|entry| {
 			let entry = entry?;
 			let path = entry.path();
 
 			if path.is_dir() {
-				return Ok(find_all_proto(&path)?);
+				return find_all_proto(&path);
 			} else if let Some(extension) = path.extension() {
 				if extension == "proto" {
 					return Ok(vec![path]);

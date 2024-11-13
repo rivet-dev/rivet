@@ -3280,7 +3280,7 @@ impl GetGameByIdInput {
 				if let Some(inner_32) = &_input.watch_index {
 					query.push_kv(
 						"watch_index",
-						&aws_smithy_http::query::fmt_string(&inner_32),
+						&aws_smithy_http::query::fmt_string(inner_32),
 					);
 				}
 				Ok(())
@@ -3538,7 +3538,7 @@ impl GetGamesInput {
 				if let Some(inner_35) = &_input.watch_index {
 					query.push_kv(
 						"watch_index",
-						&aws_smithy_http::query::fmt_string(&inner_35),
+						&aws_smithy_http::query::fmt_string(inner_35),
 					);
 				}
 				Ok(())
@@ -4142,12 +4142,12 @@ impl GetLobbyLogsInput {
 			) -> Result<(), aws_smithy_http::operation::BuildError> {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_44) = &_input.stream {
-					query.push_kv("stream", &aws_smithy_http::query::fmt_string(&inner_44));
+					query.push_kv("stream", &aws_smithy_http::query::fmt_string(inner_44));
 				}
 				if let Some(inner_45) = &_input.watch_index {
 					query.push_kv(
 						"watch_index",
-						&aws_smithy_http::query::fmt_string(&inner_45),
+						&aws_smithy_http::query::fmt_string(inner_45),
 					);
 				}
 				Ok(())

@@ -552,11 +552,11 @@ impl GetGameLinkInput {
 				if let Some(inner_3) = &_input.identity_link_token {
 					query.push_kv(
 						"identity_link_token",
-						&aws_smithy_http::query::fmt_string(&inner_3),
+						&aws_smithy_http::query::fmt_string(inner_3),
 					);
 				}
 				if let Some(inner_4) = &_input.watch_index {
-					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(&inner_4));
+					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(inner_4));
 				}
 				Ok(())
 			}
@@ -679,7 +679,7 @@ impl GetIdentityHandlesInput {
 					for inner_6 in inner_5 {
 						query.push_kv(
 							"identity_ids",
-							&aws_smithy_http::query::fmt_string(&inner_6),
+							&aws_smithy_http::query::fmt_string(inner_6),
 						);
 					}
 				}
@@ -823,7 +823,7 @@ impl GetIdentityProfileInput {
 			) -> Result<(), aws_smithy_http::operation::BuildError> {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_8) = &_input.watch_index {
-					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(&inner_8));
+					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(inner_8));
 				}
 				Ok(())
 			}
@@ -934,7 +934,7 @@ impl GetIdentitySelfProfileInput {
 			) -> Result<(), aws_smithy_http::operation::BuildError> {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_9) = &_input.watch_index {
-					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(&inner_9));
+					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(inner_9));
 				}
 				Ok(())
 			}
@@ -1057,7 +1057,7 @@ impl GetIdentitySummariesInput {
 					for inner_11 in inner_10 {
 						query.push_kv(
 							"identity_ids",
-							&aws_smithy_http::query::fmt_string(&inner_11),
+							&aws_smithy_http::query::fmt_string(inner_11),
 						);
 					}
 				}
@@ -1172,7 +1172,7 @@ impl ListActivitiesInput {
 				if let Some(inner_12) = &_input.watch_index {
 					query.push_kv(
 						"watch_index",
-						&aws_smithy_http::query::fmt_string(&inner_12),
+						&aws_smithy_http::query::fmt_string(inner_12),
 					);
 				}
 				Ok(())
@@ -1339,7 +1339,7 @@ impl ListFollowersInput {
 			) -> Result<(), aws_smithy_http::operation::BuildError> {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_14) = &_input.anchor {
-					query.push_kv("anchor", &aws_smithy_http::query::fmt_string(&inner_14));
+					query.push_kv("anchor", &aws_smithy_http::query::fmt_string(inner_14));
 				}
 				if let Some(inner_15) = &_input.count {
 					query.push_kv(
@@ -1350,7 +1350,7 @@ impl ListFollowersInput {
 				if let Some(inner_16) = &_input.watch_index {
 					query.push_kv(
 						"watch_index",
-						&aws_smithy_http::query::fmt_string(&inner_16),
+						&aws_smithy_http::query::fmt_string(inner_16),
 					);
 				}
 				Ok(())
@@ -1517,7 +1517,7 @@ impl ListFollowingInput {
 			) -> Result<(), aws_smithy_http::operation::BuildError> {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_18) = &_input.anchor {
-					query.push_kv("anchor", &aws_smithy_http::query::fmt_string(&inner_18));
+					query.push_kv("anchor", &aws_smithy_http::query::fmt_string(inner_18));
 				}
 				if let Some(inner_19) = &_input.count {
 					query.push_kv(
@@ -1528,7 +1528,7 @@ impl ListFollowingInput {
 				if let Some(inner_20) = &_input.watch_index {
 					query.push_kv(
 						"watch_index",
-						&aws_smithy_http::query::fmt_string(&inner_20),
+						&aws_smithy_http::query::fmt_string(inner_20),
 					);
 				}
 				Ok(())
@@ -1664,7 +1664,7 @@ impl ListFriendsInput {
 			) -> Result<(), aws_smithy_http::operation::BuildError> {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_21) = &_input.anchor {
-					query.push_kv("anchor", &aws_smithy_http::query::fmt_string(&inner_21));
+					query.push_kv("anchor", &aws_smithy_http::query::fmt_string(inner_21));
 				}
 				if let Some(inner_22) = &_input.count {
 					query.push_kv(
@@ -1675,7 +1675,7 @@ impl ListFriendsInput {
 				if let Some(inner_23) = &_input.watch_index {
 					query.push_kv(
 						"watch_index",
-						&aws_smithy_http::query::fmt_string(&inner_23),
+						&aws_smithy_http::query::fmt_string(inner_23),
 					);
 				}
 				Ok(())
@@ -1830,7 +1830,7 @@ impl ListMutualFriendsInput {
 			) -> Result<(), aws_smithy_http::operation::BuildError> {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_25) = &_input.anchor {
-					query.push_kv("anchor", &aws_smithy_http::query::fmt_string(&inner_25));
+					query.push_kv("anchor", &aws_smithy_http::query::fmt_string(inner_25));
 				}
 				if let Some(inner_26) = &_input.count {
 					query.push_kv(
@@ -1972,7 +1972,7 @@ impl ListRecentFollowersInput {
 			) -> Result<(), aws_smithy_http::operation::BuildError> {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_27) = &_input.anchor {
-					query.push_kv("anchor", &aws_smithy_http::query::fmt_string(&inner_27));
+					query.push_kv("anchor", &aws_smithy_http::query::fmt_string(inner_27));
 				}
 				if let Some(inner_28) = &_input.count {
 					query.push_kv(
@@ -1983,7 +1983,7 @@ impl ListRecentFollowersInput {
 				if let Some(inner_29) = &_input.watch_index {
 					query.push_kv(
 						"watch_index",
-						&aws_smithy_http::query::fmt_string(&inner_29),
+						&aws_smithy_http::query::fmt_string(inner_29),
 					);
 				}
 				Ok(())
@@ -2782,10 +2782,10 @@ impl SearchIdentitiesInput {
 			) -> Result<(), aws_smithy_http::operation::BuildError> {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_32) = &_input.query {
-					query.push_kv("query", &aws_smithy_http::query::fmt_string(&inner_32));
+					query.push_kv("query", &aws_smithy_http::query::fmt_string(inner_32));
 				}
 				if let Some(inner_33) = &_input.anchor {
-					query.push_kv("anchor", &aws_smithy_http::query::fmt_string(&inner_33));
+					query.push_kv("anchor", &aws_smithy_http::query::fmt_string(inner_33));
 				}
 				if let Some(inner_34) = &_input.limit {
 					query.push_kv(
@@ -3913,7 +3913,7 @@ impl WatchEventsInput {
 				if let Some(inner_36) = &_input.watch_index {
 					query.push_kv(
 						"watch_index",
-						&aws_smithy_http::query::fmt_string(&inner_36),
+						&aws_smithy_http::query::fmt_string(inner_36),
 					);
 				}
 				Ok(())

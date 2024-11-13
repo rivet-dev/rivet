@@ -699,7 +699,7 @@ fn decode_proto(
 		bail_with!(TOKEN_INVALID, reason = "invalid signature");
 	}
 
-	let claims_buf = match base64::decode_config(&claims, base64::URL_SAFE_NO_PAD) {
+	let claims_buf = match base64::decode_config(claims, base64::URL_SAFE_NO_PAD) {
 		Ok(claims_buf) => claims_buf,
 		Err(err) => bail_with!(TOKEN_INVALID, reason = err),
 	};

@@ -120,11 +120,11 @@ impl Backoff {
 			return false;
 		}
 
-		tokio::time::sleep_until(self.sleep_until.into()).await;
+		tokio::time::sleep_until(self.sleep_until).await;
 
 		let next_wait = self.wait * 2usize.pow(self.i.min(self.max_exponent) as u32)
 			+ rand::thread_rng().gen_range(0..self.randomness);
-		self.sleep_until = self.sleep_until + Duration::from_millis(next_wait as u64);
+		self.sleep_until += Duration::from_millis(next_wait as u64);
 
 		self.i += 1;
 
@@ -159,6 +159,10 @@ impl Default for Backoff {
 	}
 }
 
+/// Used to statically assert a clean exit. See
+/// https://stackoverflow.com/a/62408044
+pub struct CleanExit;
+
 #[cfg(test)]
 mod tests {
 	use std::time::Instant;
@@ -183,7 +187,3 @@ mod tests {
 		}
 	}
 }
-
-/// Used to statically assert a clean exit. See
-/// https://stackoverflow.com/a/62408044
-pub struct CleanExit;

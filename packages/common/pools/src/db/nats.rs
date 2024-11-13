@@ -18,7 +18,7 @@ pub async fn setup(config: Config, client_name: String) -> Result<NatsPool, Erro
 	// Parse nodes
 	let server_addrs = shuffled_urls
 		.iter()
-		.map(|url| async_nats::ServerAddr::from_str(&url.to_string()))
+		.map(|url| async_nats::ServerAddr::from_str(url.as_ref()))
 		.collect::<Result<Vec<_>, _>>()
 		.map_err(Error::BuildNatsIo)?;
 
