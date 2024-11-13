@@ -52,36 +52,6 @@ type SignupForBetaRequest struct {
 	Goals          string  `json:"goals"`
 }
 
-// An identity's access token identity.
-type AccessTokenLinkedAccount struct {
-	Name string `json:"name"`
-
-	_rawJSON json.RawMessage
-}
-
-func (a *AccessTokenLinkedAccount) UnmarshalJSON(data []byte) error {
-	type unmarshaler AccessTokenLinkedAccount
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*a = AccessTokenLinkedAccount(value)
-	a._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (a *AccessTokenLinkedAccount) String() string {
-	if len(a._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(a._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(a); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", a)
-}
-
 // The state of the given identity's developer status.
 type DevState string
 
@@ -376,8 +346,8 @@ func (g *Group) String() string {
 
 // A union representing an identity's linked accounts.
 type LinkedAccount struct {
-	Email       *EmailLinkedAccount       `json:"email,omitempty"`
-	AccessToken *AccessTokenLinkedAccount `json:"access_token,omitempty"`
+	Email       *EmailLinkedAccount `json:"email,omitempty"`
+	DefaultUser *bool               `json:"default_user,omitempty"`
 
 	_rawJSON json.RawMessage
 }

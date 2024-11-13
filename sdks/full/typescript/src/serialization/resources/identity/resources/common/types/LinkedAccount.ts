@@ -6,7 +6,6 @@ import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
 import { EmailLinkedAccount as identity_common$$emailLinkedAccount } from "./EmailLinkedAccount";
-import { AccessTokenLinkedAccount as identity_common$$accessTokenLinkedAccount } from "./AccessTokenLinkedAccount";
 import { identity } from "../../../../index";
 
 export const LinkedAccount: core.serialization.ObjectSchema<
@@ -14,12 +13,12 @@ export const LinkedAccount: core.serialization.ObjectSchema<
     Rivet.identity.LinkedAccount
 > = core.serialization.object({
     email: identity_common$$emailLinkedAccount.optional(),
-    accessToken: core.serialization.property("access_token", identity_common$$accessTokenLinkedAccount.optional()),
+    defaultUser: core.serialization.property("default_user", core.serialization.boolean().optional()),
 });
 
 export declare namespace LinkedAccount {
     interface Raw {
         email?: identity.EmailLinkedAccount.Raw | null;
-        access_token?: identity.AccessTokenLinkedAccount.Raw | null;
+        default_user?: boolean | null;
     }
 }

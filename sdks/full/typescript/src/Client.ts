@@ -5,7 +5,6 @@
 import * as environments from "./environments";
 import * as core from "./core";
 import { Actor } from "./api/resources/actor/client/Client";
-import { Admin } from "./api/resources/admin/client/Client";
 import { Cloud } from "./api/resources/cloud/client/Client";
 import { Group } from "./api/resources/group/client/Client";
 import { Identity } from "./api/resources/identity/client/Client";
@@ -40,12 +39,6 @@ export class RivetClient {
 
     public get actor(): Actor {
         return (this._actor ??= new Actor(this._options));
-    }
-
-    protected _admin: Admin | undefined;
-
-    public get admin(): Admin {
-        return (this._admin ??= new Admin(this._options));
     }
 
     protected _cloud: Cloud | undefined;

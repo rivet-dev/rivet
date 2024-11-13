@@ -36,18 +36,6 @@ Class | Method | HTTP request | Description
 *ActorBuildsApi* | [**actor_builds_prepare**](docs/ActorBuildsApi.md#actor_builds_prepare) | **POST** /games/{game_id}/environments/{environment_id}/builds/prepare | 
 *ActorDatacentersApi* | [**actor_datacenters_list**](docs/ActorDatacentersApi.md#actor_datacenters_list) | **GET** /games/{game_id}/environments/{environment_id}/datacenters | 
 *ActorLogsApi* | [**actor_logs_get**](docs/ActorLogsApi.md#actor_logs_get) | **GET** /games/{game_id}/environments/{environment_id}/actors/{actor_id}/logs | 
-*AdminApi* | [**admin_login**](docs/AdminApi.md#admin_login) | **POST** /admin/login | 
-*AdminClustersApi* | [**admin_clusters_create**](docs/AdminClustersApi.md#admin_clusters_create) | **POST** /admin/clusters | 
-*AdminClustersApi* | [**admin_clusters_list**](docs/AdminClustersApi.md#admin_clusters_list) | **GET** /admin/clusters | 
-*AdminClustersDatacentersApi* | [**admin_clusters_datacenters_create**](docs/AdminClustersDatacentersApi.md#admin_clusters_datacenters_create) | **POST** /admin/clusters/{cluster_id}/datacenters | 
-*AdminClustersDatacentersApi* | [**admin_clusters_datacenters_list**](docs/AdminClustersDatacentersApi.md#admin_clusters_datacenters_list) | **GET** /admin/clusters/{cluster_id}/datacenters | 
-*AdminClustersDatacentersApi* | [**admin_clusters_datacenters_update**](docs/AdminClustersDatacentersApi.md#admin_clusters_datacenters_update) | **PATCH** /admin/clusters/{cluster_id}/datacenters/{datacenter_id} | 
-*AdminClustersServersApi* | [**admin_clusters_servers_destroy**](docs/AdminClustersServersApi.md#admin_clusters_servers_destroy) | **POST** /admin/clusters/{cluster_id}/servers/destroy | 
-*AdminClustersServersApi* | [**admin_clusters_servers_list**](docs/AdminClustersServersApi.md#admin_clusters_servers_list) | **GET** /admin/clusters/{cluster_id}/servers | 
-*AdminClustersServersApi* | [**admin_clusters_servers_list_lost**](docs/AdminClustersServersApi.md#admin_clusters_servers_list_lost) | **GET** /admin/clusters/{cluster_id}/servers/lost | 
-*AdminClustersServersApi* | [**admin_clusters_servers_prune**](docs/AdminClustersServersApi.md#admin_clusters_servers_prune) | **POST** /admin/clusters/{cluster_id}/servers/prune | 
-*AdminClustersServersApi* | [**admin_clusters_servers_taint**](docs/AdminClustersServersApi.md#admin_clusters_servers_taint) | **POST** /admin/clusters/{cluster_id}/servers/taint | 
-*AuthIdentityAccessTokenApi* | [**auth_identity_access_token_complete_access_token_verification**](docs/AuthIdentityAccessTokenApi.md#auth_identity_access_token_complete_access_token_verification) | **POST** /auth/identity/access-token/complete-verification | 
 *AuthIdentityEmailApi* | [**auth_identity_email_complete_email_verification**](docs/AuthIdentityEmailApi.md#auth_identity_email_complete_email_verification) | **POST** /auth/identity/email/complete-verification | 
 *AuthIdentityEmailApi* | [**auth_identity_email_start_email_verification**](docs/AuthIdentityEmailApi.md#auth_identity_email_start_email_verification) | **POST** /auth/identity/email/start-verification | 
 *AuthTokensApi* | [**auth_tokens_refresh_identity_token**](docs/AuthTokensApi.md#auth_tokens_refresh_identity_token) | **POST** /auth/tokens/identity | 
@@ -193,27 +181,7 @@ Class | Method | HTTP request | Description
  - [ActorPortRouting](docs/ActorPortRouting.md)
  - [ActorResources](docs/ActorResources.md)
  - [ActorRuntime](docs/ActorRuntime.md)
- - [AdminClustersBuildDeliveryMethod](docs/AdminClustersBuildDeliveryMethod.md)
- - [AdminClustersCluster](docs/AdminClustersCluster.md)
- - [AdminClustersCreateClusterRequest](docs/AdminClustersCreateClusterRequest.md)
- - [AdminClustersCreateClusterResponse](docs/AdminClustersCreateClusterResponse.md)
- - [AdminClustersCreateDatacenterRequest](docs/AdminClustersCreateDatacenterRequest.md)
- - [AdminClustersCreateDatacenterResponse](docs/AdminClustersCreateDatacenterResponse.md)
- - [AdminClustersDatacenter](docs/AdminClustersDatacenter.md)
- - [AdminClustersHardware](docs/AdminClustersHardware.md)
- - [AdminClustersListClustersResponse](docs/AdminClustersListClustersResponse.md)
- - [AdminClustersListDatacentersResponse](docs/AdminClustersListDatacentersResponse.md)
- - [AdminClustersListServersResponse](docs/AdminClustersListServersResponse.md)
- - [AdminClustersPool](docs/AdminClustersPool.md)
- - [AdminClustersPoolType](docs/AdminClustersPoolType.md)
- - [AdminClustersPoolUpdate](docs/AdminClustersPoolUpdate.md)
- - [AdminClustersProvider](docs/AdminClustersProvider.md)
- - [AdminClustersServer](docs/AdminClustersServer.md)
- - [AdminClustersUpdateDatacenterRequest](docs/AdminClustersUpdateDatacenterRequest.md)
- - [AdminLoginRequest](docs/AdminLoginRequest.md)
- - [AdminLoginResponse](docs/AdminLoginResponse.md)
  - [AuthCompleteStatus](docs/AuthCompleteStatus.md)
- - [AuthIdentityCompleteAccessTokenVerificationRequest](docs/AuthIdentityCompleteAccessTokenVerificationRequest.md)
  - [AuthIdentityCompleteEmailVerificationRequest](docs/AuthIdentityCompleteEmailVerificationRequest.md)
  - [AuthIdentityCompleteEmailVerificationResponse](docs/AuthIdentityCompleteEmailVerificationResponse.md)
  - [AuthIdentityStartEmailVerificationRequest](docs/AuthIdentityStartEmailVerificationRequest.md)
@@ -415,7 +383,6 @@ Class | Method | HTTP request | Description
  - [GroupUpdateProfileRequest](docs/GroupUpdateProfileRequest.md)
  - [GroupValidateProfileRequest](docs/GroupValidateProfileRequest.md)
  - [GroupValidateProfileResponse](docs/GroupValidateProfileResponse.md)
- - [IdentityAccessTokenLinkedAccount](docs/IdentityAccessTokenLinkedAccount.md)
  - [IdentityDevState](docs/IdentityDevState.md)
  - [IdentityEmailLinkedAccount](docs/IdentityEmailLinkedAccount.md)
  - [IdentityExternalLinks](docs/IdentityExternalLinks.md)

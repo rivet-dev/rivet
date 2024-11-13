@@ -6,5 +6,5 @@ import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
 export declare const BootstrapAccess: core.serialization.Schema<serializers.cloud.BootstrapAccess.Raw, Rivet.cloud.BootstrapAccess>;
 export declare namespace BootstrapAccess {
-    type Raw = "public" | "private";
+    type Raw = "public" | "private" | "development";
 }

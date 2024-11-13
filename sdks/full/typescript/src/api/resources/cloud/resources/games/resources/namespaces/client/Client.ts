@@ -1686,9 +1686,18 @@ export class Namespaces {
      *     await client.cloud.games.namespaces.createGameNamespaceTokenDevelopment("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
      *         hostname: "string",
      *         ports: {
-     *             "string": {}
+     *             "string": {
+     *                 port: undefined,
+     *                 portRange: undefined,
+     *                 protocol: Rivet.cloud.version.matchmaker.PortProtocol.Http
+     *             }
      *         },
-     *         lobbyPorts: [{}]
+     *         lobbyPorts: [{
+     *                 label: "string",
+     *                 targetPort: undefined,
+     *                 portRange: undefined,
+     *                 proxyProtocol: Rivet.cloud.version.matchmaker.PortProtocol.Http
+     *             }]
      *     })
      */
     public async createGameNamespaceTokenDevelopment(
@@ -1833,7 +1842,12 @@ export class Namespaces {
      * @example
      *     await client.cloud.games.namespaces.validateGameNamespaceTokenDevelopment("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
      *         hostname: "string",
-     *         lobbyPorts: [{}]
+     *         lobbyPorts: [{
+     *                 label: "string",
+     *                 targetPort: undefined,
+     *                 portRange: undefined,
+     *                 proxyProtocol: Rivet.cloud.version.matchmaker.PortProtocol.Http
+     *             }]
      *     })
      */
     public async validateGameNamespaceTokenDevelopment(

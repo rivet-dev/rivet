@@ -10,13 +10,11 @@ export const BootstrapLoginMethods: core.serialization.ObjectSchema<
     serializers.cloud.BootstrapLoginMethods.Raw,
     Rivet.cloud.BootstrapLoginMethods
 > = core.serialization.object({
-    accessToken: core.serialization.property("access_token", core.serialization.boolean()),
     email: core.serialization.boolean(),
 });
 
 export declare namespace BootstrapLoginMethods {
     interface Raw {
-        access_token: boolean;
         email: boolean;
     }
 }

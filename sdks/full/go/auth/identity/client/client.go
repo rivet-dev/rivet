@@ -4,7 +4,6 @@ package client
 
 import (
 	http "net/http"
-	accesstoken "sdk/auth/identity/accesstoken"
 	email "sdk/auth/identity/email"
 	core "sdk/core"
 )
@@ -14,8 +13,7 @@ type Client struct {
 	caller  *core.Caller
 	header  http.Header
 
-	AccessToken *accesstoken.Client
-	Email       *email.Client
+	Email *email.Client
 }
 
 func NewClient(opts ...core.ClientOption) *Client {
@@ -24,10 +22,9 @@ func NewClient(opts ...core.ClientOption) *Client {
 		opt(options)
 	}
 	return &Client{
-		baseURL:     options.BaseURL,
-		caller:      core.NewCaller(options.HTTPClient),
-		header:      options.ToHeader(),
-		AccessToken: accesstoken.NewClient(opts...),
-		Email:       email.NewClient(opts...),
+		baseURL: options.BaseURL,
+		caller:  core.NewCaller(options.HTTPClient),
+		header:  options.ToHeader(),
+		Email:   email.NewClient(opts...),
 	}
 }

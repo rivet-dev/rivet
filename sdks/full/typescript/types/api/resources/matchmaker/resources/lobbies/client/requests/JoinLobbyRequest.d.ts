@@ -7,8 +7,12 @@ import * as Rivet from "../../../../../../index";
  *     {
  *         lobbyId: "string",
  *         captcha: {
- *             hcaptcha: {},
- *             turnstile: {}
+ *             hcaptcha: {
+ *                 clientResponse: "string"
+ *             },
+ *             turnstile: {
+ *                 clientResponse: "string"
+ *             }
  *         },
  *         verificationData: {
  *             "key": "value"

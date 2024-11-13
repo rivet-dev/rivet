@@ -56,7 +56,11 @@ export declare class Cdn {
      * @example
      *     await client.cloud.games.cdn.createGameCdnSite("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
      *         displayName: "string",
-     *         files: [{}]
+     *         files: [{
+     *                 path: "string",
+     *                 contentType: "string",
+     *                 contentLength: 1000000
+     *             }]
      *     })
      */
     createGameCdnSite(gameId: string, request: Rivet.cloud.games.CreateGameCdnSiteRequest, requestOptions?: Cdn.RequestOptions): Promise<Rivet.cloud.games.CreateGameCdnSiteResponse>;

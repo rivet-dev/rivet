@@ -3,6 +3,5 @@
  */
 
 export interface BootstrapLoginMethods {
-    accessToken: boolean;
     email: boolean;
 }

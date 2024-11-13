@@ -13,16 +13,13 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudBootstrapLoginMethods {
-    #[serde(rename = "access_token")]
-    pub access_token: bool,
     #[serde(rename = "email")]
     pub email: bool,
 }
 
 impl CloudBootstrapLoginMethods {
-    pub fn new(access_token: bool, email: bool) -> CloudBootstrapLoginMethods {
+    pub fn new(email: bool) -> CloudBootstrapLoginMethods {
         CloudBootstrapLoginMethods {
-            access_token,
             email,
         }
     }

@@ -45,7 +45,14 @@ export class Email {
      * @example
      *     await client.auth.identity.email.startEmailVerification({
      *         email: "string",
-     *         captcha: {},
+     *         captcha: {
+     *             hcaptcha: {
+     *                 clientResponse: "string"
+     *             },
+     *             turnstile: {
+     *                 clientResponse: "string"
+     *             }
+     *         },
      *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
      *     })
      */

@@ -50,8 +50,6 @@ pub async fn build_bootstrap_data(
 		}),
 		login_methods: Box::new(models::CloudBootstrapLoginMethods {
 			email: server_config.sendgrid.is_some(),
-			// Deprecated
-			access_token: false,
 		}),
 		deploy_hash: rivet_env::source_hash().to_string(),
 	})

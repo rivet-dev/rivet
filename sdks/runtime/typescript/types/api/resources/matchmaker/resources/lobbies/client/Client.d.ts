@@ -144,8 +144,12 @@ export declare class Lobbies {
      *         },
      *         maxPlayers: 1,
      *         captcha: {
-     *             hcaptcha: {},
-     *             turnstile: {}
+     *             hcaptcha: {
+     *                 clientResponse: "string"
+     *             },
+     *             turnstile: {
+     *                 clientResponse: "string"
+     *             }
      *         },
      *         verificationData: {
      *             "key": "value"
@@ -178,8 +182,12 @@ export declare class Lobbies {
      *     await client.matchmaker.lobbies.join({
      *         lobbyId: "string",
      *         captcha: {
-     *             hcaptcha: {},
-     *             turnstile: {}
+     *             hcaptcha: {
+     *                 clientResponse: "string"
+     *             },
+     *             turnstile: {
+     *                 clientResponse: "string"
+     *             }
      *         },
      *         verificationData: {
      *             "key": "value"
@@ -219,8 +227,12 @@ export declare class Lobbies {
      *             "key": "value"
      *         },
      *         captcha: {
-     *             hcaptcha: {},
-     *             turnstile: {}
+     *             hcaptcha: {
+     *                 clientResponse: "string"
+     *             },
+     *             turnstile: {
+     *                 clientResponse: "string"
+     *             }
      *         },
      *         verificationData: {
      *             "key": "value"

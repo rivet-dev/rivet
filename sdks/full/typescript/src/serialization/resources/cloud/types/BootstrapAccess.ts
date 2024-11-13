@@ -9,8 +9,8 @@ import * as core from "../../../../core";
 export const BootstrapAccess: core.serialization.Schema<
     serializers.cloud.BootstrapAccess.Raw,
     Rivet.cloud.BootstrapAccess
-> = core.serialization.enum_(["public", "private"]);
+> = core.serialization.enum_(["public", "private", "development"]);
 
 export declare namespace BootstrapAccess {
-    type Raw = "public" | "private";
+    type Raw = "public" | "private" | "development";
 }

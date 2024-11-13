@@ -107,7 +107,11 @@ export declare class Builds {
      *     await client.actor.builds.prepare("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
      *         name: "string",
      *         imageTag: "string",
-     *         imageFile: {},
+     *         imageFile: {
+     *             path: "string",
+     *             contentType: "string",
+     *             contentLength: 1000000
+     *         },
      *         multipartUpload: true,
      *         kind: Rivet.actor.BuildKind.DockerImage,
      *         compression: Rivet.actor.BuildCompression.None,

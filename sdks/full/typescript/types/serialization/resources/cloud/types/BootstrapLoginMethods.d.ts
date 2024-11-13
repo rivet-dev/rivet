@@ -7,7 +7,6 @@ import * as core from "../../../../core";
 export declare const BootstrapLoginMethods: core.serialization.ObjectSchema<serializers.cloud.BootstrapLoginMethods.Raw, Rivet.cloud.BootstrapLoginMethods>;
 export declare namespace BootstrapLoginMethods {
     interface Raw {
-        access_token: boolean;
         email: boolean;
     }
 }

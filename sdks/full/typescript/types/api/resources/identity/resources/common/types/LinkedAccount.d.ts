@@ -7,5 +7,5 @@ import * as Rivet from "../../../../../index";
  */
 export interface LinkedAccount {
     email?: Rivet.identity.EmailLinkedAccount;
-    accessToken?: Rivet.identity.AccessTokenLinkedAccount;
+    defaultUser?: boolean;
 }

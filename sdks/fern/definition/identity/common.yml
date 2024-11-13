@@ -186,7 +186,7 @@ types:
     docs: A union representing an identity's linked accounts.
     properties:
       email: optional<EmailLinkedAccount>
-      default_user: optional<bool>
+      default_user: optional<boolean>
 
   EmailLinkedAccount:
     docs: An identity's linked email.

@@ -88,10 +88,35 @@ export declare class Actor {
      *         tags: {
      *             "key": "value"
      *         },
-     *         runtime: {},
-     *         network: {},
-     *         resources: {},
-     *         lifecycle: {}
+     *         runtime: {
+     *             build: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *             arguments: ["string"],
+     *             environment: {
+     *                 "string": "string"
+     *             }
+     *         },
+     *         network: {
+     *             mode: Rivet.actor.NetworkMode.Bridge,
+     *             ports: {
+     *                 "string": {
+     *                     protocol: Rivet.actor.PortProtocol.Http,
+     *                     internalPort: 1,
+     *                     routing: {
+     *                         gameGuard: {
+     *                             authorization: undefined
+     *                         },
+     *                         host: {}
+     *                     }
+     *                 }
+     *             }
+     *         },
+     *         resources: {
+     *             cpu: 1,
+     *             memory: 1
+     *         },
+     *         lifecycle: {
+     *             killTimeout: 1000000
+     *         }
      *     })
      */
     create(gameId: string, environmentId: string, request: Rivet.actor.CreateActorRequest, requestOptions?: Actor.RequestOptions): Promise<Rivet.actor.CreateActorResponse>;

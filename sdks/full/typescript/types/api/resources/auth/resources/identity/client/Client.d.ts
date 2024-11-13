@@ -3,7 +3,6 @@
  */
 import * as environments from "../../../../../../environments";
 import * as core from "../../../../../../core";
-import { AccessToken } from "../resources/accessToken/client/Client";
 import { Email } from "../resources/email/client/Client";
 export declare namespace Identity {
     interface Options {
@@ -23,8 +22,6 @@ export declare namespace Identity {
 export declare class Identity {
     protected readonly _options: Identity.Options;
     constructor(_options?: Identity.Options);
-    protected _accessToken: AccessToken | undefined;
-    get accessToken(): AccessToken;
     protected _email: Email | undefined;
     get email(): Email;
 }

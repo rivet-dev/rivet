@@ -1337,8 +1337,9 @@ func (u UniversalRegion) Ptr() *UniversalRegion {
 type BootstrapAccess string
 
 const (
-	BootstrapAccessPublic  BootstrapAccess = "public"
-	BootstrapAccessPrivate BootstrapAccess = "private"
+	BootstrapAccessPublic      BootstrapAccess = "public"
+	BootstrapAccessPrivate     BootstrapAccess = "private"
+	BootstrapAccessDevelopment BootstrapAccess = "development"
 )
 
 func NewBootstrapAccessFromString(s string) (BootstrapAccess, error) {
@@ -1347,6 +1348,8 @@ func NewBootstrapAccessFromString(s string) (BootstrapAccess, error) {
 		return BootstrapAccessPublic, nil
 	case "private":
 		return BootstrapAccessPrivate, nil
+	case "development":
+		return BootstrapAccessDevelopment, nil
 	}
 	var t BootstrapAccess
 	return "", fmt.Errorf("%s is not a valid %T", s, t)
@@ -1470,8 +1473,7 @@ func (b *BootstrapDomains) String() string {
 }
 
 type BootstrapLoginMethods struct {
-	AccessToken bool `json:"access_token"`
-	Email       bool `json:"email"`
+	Email bool `json:"email"`
 
 	_rawJSON json.RawMessage
 }

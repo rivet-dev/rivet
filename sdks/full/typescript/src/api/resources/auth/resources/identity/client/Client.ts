@@ -4,7 +4,6 @@
 
 import * as environments from "../../../../../../environments";
 import * as core from "../../../../../../core";
-import { AccessToken } from "../resources/accessToken/client/Client";
 import { Email } from "../resources/email/client/Client";
 
 export declare namespace Identity {
@@ -26,12 +25,6 @@ export declare namespace Identity {
 
 export class Identity {
     constructor(protected readonly _options: Identity.Options = {}) {}
-
-    protected _accessToken: AccessToken | undefined;
-
-    public get accessToken(): AccessToken {
-        return (this._accessToken ??= new AccessToken(this._options));
-    }
 
     protected _email: Email | undefined;
 

@@ -5,7 +5,6 @@ package client
 import (
 	http "net/http"
 	actorclient "sdk/actor/client"
-	adminclient "sdk/admin/client"
 	authclient "sdk/auth/client"
 	cloudclient "sdk/cloud/client"
 	core "sdk/core"
@@ -24,7 +23,6 @@ type Client struct {
 	header  http.Header
 
 	Actor      *actorclient.Client
-	Admin      *adminclient.Client
 	Cloud      *cloudclient.Client
 	Group      *groupclient.Client
 	Identity   *identityclient.Client
@@ -46,7 +44,6 @@ func NewClient(opts ...core.ClientOption) *Client {
 		caller:     core.NewCaller(options.HTTPClient),
 		header:     options.ToHeader(),
 		Actor:      actorclient.NewClient(opts...),
-		Admin:      adminclient.NewClient(opts...),
 		Cloud:      cloudclient.NewClient(opts...),
 		Group:      groupclient.NewClient(opts...),
 		Identity:   identityclient.NewClient(opts...),

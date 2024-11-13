@@ -12,6 +12,5 @@ export * from "./GameActivity";
 export * from "./Group";
 export * from "./LinkedAccount";
 export * from "./EmailLinkedAccount";
-export * from "./AccessTokenLinkedAccount";
 export * from "./DevState";
 export * from "./GameLinkStatus";
