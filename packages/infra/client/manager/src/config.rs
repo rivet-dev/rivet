@@ -145,10 +145,10 @@ impl ActorNetwork {
 #[derive(Clone, Deserialize, Default)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Cni {
+	pub network_interface: String,
 	pub network_name: Option<String>,
 	pub bin_path: Option<String>,
 	pub config_path: Option<String>,
-	pub network_interface: Option<String>,
 }
 
 impl Cni {
@@ -168,12 +168,6 @@ impl Cni {
 		self.config_path
 			.clone()
 			.unwrap_or_else(|| "/opt/cni/config".into())
-	}
-
-	pub fn network_interface(&self) -> String {
-		self.network_interface
-			.clone()
-			.unwrap_or_else(|| "eth0".into())
 	}
 }
 

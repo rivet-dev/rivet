@@ -496,7 +496,7 @@ impl Actor {
 			.arg(netns_path)
 			.env("CNI_PATH", &ctx.config().cni.bin_path())
 			.env("NETCONFPATH", &ctx.config().cni.config_path())
-			.env("CNI_IFNAME", &ctx.config().cni.network_interface())
+			.env("CNI_IFNAME", &ctx.config().cni.network_interface)
 			.env("CAP_ARGS", cni_params_json)
 			.output()
 			.await?;
@@ -521,12 +521,19 @@ impl Actor {
 
 		// TODO: Could combine these into one query
 		let (mut gg_port_rows, mut host_port_rows) = tokio::try_join!(
-			bind_ports_inner(ctx, self.actor_id, &gg_ports, ctx.config().actor.network.lan_port_range_min()..=ctx.config().actor.network.lan_port_range_max()),
+			bind_ports_inner(
+				ctx,
+				self.actor_id,
+				&gg_ports,
+				ctx.config().actor.network.lan_port_range_min()
+					..=ctx.config().actor.network.lan_port_range_max()
+			),
 			bind_ports_inner(
 				ctx,
 				self.actor_id,
 				&host_ports,
-				ctx.config().actor.network.wan_port_range_min()..=ctx.config().actor.network.wan_port_range_max()
+				ctx.config().actor.network.wan_port_range_min()
+					..=ctx.config().actor.network.wan_port_range_max()
 			),
 		)?;
 
@@ -615,7 +622,7 @@ impl Actor {
 								.arg(netns_path)
 								.env("CNI_PATH", &ctx.config().cni.bin_path())
 								.env("NETCONFPATH", &ctx.config().cni.config_path())
-								.env("CNI_IFNAME", &ctx.config().cni.network_interface())
+								.env("CNI_IFNAME", &ctx.config().cni.network_interface)
 								.env("CAP_ARGS", cni_params_json)
 								.output()
 								.await

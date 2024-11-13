@@ -17,6 +17,8 @@ client:
       # Corresponds to the port range configured in the `docker-compose.yml`
       wan_port_range_min: 20000
       wan_port_range_max: 20100
+  cni:
+    network_interface: eth0
   # Don't reserve any resources on dev instances
   reserved_resources:
     cpu: 0
