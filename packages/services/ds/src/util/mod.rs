@@ -27,7 +27,18 @@ pub fn build_ds_hostname(
 	datacenter_id: Uuid,
 ) -> GlobalResult<String> {
 	// TODO: Change lobby -> server
-	let domain_job = unwrap_ref!(config.server()?.rivet.dns()?.domain_job);
+	let Some(domain_job) = config
+		.server()?
+		.rivet
+		.dns
+		.as_ref()
+		.and_then(|x| x.domain_job.as_ref())
+	else {
+		tracing::warn!(
+			"unable to get dns.domain_job to build actor hostname, returning invalid hostname. configure dns or switch to host networking."
+		);
+		return Ok("rivet-dns-not-configured.invalid".into());
+	};
 	Ok(format!(
 		"{}-{}.lobby.{}.{}",
 		server_id, port_name, datacenter_id, domain_job
