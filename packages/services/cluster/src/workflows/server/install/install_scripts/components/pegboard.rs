@@ -29,9 +29,22 @@ pub fn configure(
 		.public_origin()
 		.to_string();
 
+	let pb_reserved_memory = match flavor {
+		pegboard::protocol::ClientFlavor::Container => {
+			server_spec::PEGBOARD_CONTAINER_RESERVE_MEMORY_MIB
+		}
+		pegboard::protocol::ClientFlavor::Isolate => {
+			server_spec::PEGBOARD_ISOLATE_RESERVE_MEMORY_MIB
+		}
+	};
+
 	Ok(include_str!("../files/pegboard_configure.sh")
 		.replace("__FLAVOR__", &flavor.to_string())
 		.replace("__ORIGIN_API__", &origin_api)
+		.replace(
+			"__RESERVED_MEMORY__",
+			&(server_spec::RESERVE_LB_MEMORY_MIB + pb_reserved_memory).to_string(),
+		)
 		// HACK: Hardcoded to Linode
 		.replace("__PUBLIC_IFACE__", "eth0")
 		// HACK: Hardcoded to Linode

@@ -42,6 +42,7 @@ impl ToClient {
 pub enum ToServer {
 	Init {
 		last_command_idx: i64,
+		config: crate::client_config::ClientConfig,
 		system: crate::system_info::SystemInfo,
 	},
 	Events(Vec<EventWrapper>),

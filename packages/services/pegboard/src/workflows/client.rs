@@ -29,11 +29,13 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 					match sig {
 						protocol::ToServer::Init {
 							last_command_idx,
+							config,
 							system,
 						} => {
 							let init_data = ctx
 								.activity(ProcessInitInput {
 									client_id,
+									config,
 									system,
 									last_command_idx,
 								})
@@ -154,6 +156,7 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 struct ProcessInitInput {
 	client_id: Uuid,
 	last_command_idx: i64,
+	config: crate::client_config::ClientConfig,
 	system: crate::system_info::SystemInfo,
 }
 
@@ -173,11 +176,12 @@ async fn process_init(
 			[ctx, (i64,)]
 			"
 			UPDATE db_pegboard.clients
-			SET system_info = $2
+			SET config = $2, system_info = $3
 			WHERE client_id = $1
 			RETURNING last_event_idx
 			",
 			input.client_id,
+			serde_json::to_value(&input.config)?,
 			serde_json::to_value(&input.system)?,
 		),
 		sql_fetch_all!(

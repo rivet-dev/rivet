@@ -1,6 +1,6 @@
 use crate::{
-	LINODE_CPU_PER_CORE, LINODE_DISK_PER_CORE, NOMAD_RESERVE_MEMORY, PEGBOARD_RESERVE_MEMORY,
-	RESERVE_LB_MEMORY,
+	LINODE_CPU_PER_CORE, LINODE_DISK_PER_CORE, NOMAD_RESERVE_MEMORY_MIB,
+	PEGBOARD_CONTAINER_RESERVE_MEMORY_MIB, RESERVE_LB_MEMORY_MIB,
 };
 
 /// Provider agnostic hardware specs.
@@ -23,7 +23,7 @@ impl ServerSpec {
 		// https://www.linode.com/community/questions/17791/why-doesnt-free-m-match-the-full-amount-of-ram-of-my-nanode-plan
 		let memory = instance_type.memory * 95 / 100;
 		// Remove reserved resources
-		let memory = memory - RESERVE_LB_MEMORY;
+		let memory = memory - RESERVE_LB_MEMORY_MIB;
 
 		ServerSpec {
 			cpu_cores: instance_type.vcpus,
@@ -41,11 +41,11 @@ impl ServerSpec {
 	}
 
 	pub fn memory_per_core_nomad(&self) -> u32 {
-		(self.memory - NOMAD_RESERVE_MEMORY) / self.cpu_cores
+		(self.memory - NOMAD_RESERVE_MEMORY_MIB) / self.cpu_cores
 	}
 
-	pub fn memory_per_core_pb(&self) -> u32 {
-		(self.memory - PEGBOARD_RESERVE_MEMORY) / self.cpu_cores
+	pub fn memory_per_core_pb_container(&self) -> u32 {
+		(self.memory - PEGBOARD_CONTAINER_RESERVE_MEMORY_MIB) / self.cpu_cores
 	}
 
 	pub fn disk_per_core(&self) -> u32 {

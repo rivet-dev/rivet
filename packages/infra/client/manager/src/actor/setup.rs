@@ -588,30 +588,30 @@ impl Actor {
 	pub async fn cleanup_setup(&self, ctx: &Ctx) -> Result<()> {
 		use std::result::Result::{Err, Ok};
 
-		match Command::new("runc")
-			.arg("delete")
-			.arg("--force")
-			.arg(self.actor_id.to_string())
-			.output()
-			.await
-		{
-			Ok(cmd_out) => {
-				if !cmd_out.status.success() {
-					tracing::error!(
-						stdout=%std::str::from_utf8(&cmd_out.stdout)?,
-						stderr=%std::str::from_utf8(&cmd_out.stderr)?,
-						"failed `runc` delete command",
-					);
-				}
-			}
-			Err(err) => tracing::error!(?err, "failed to run `runc` command"),
-		}
-
 		let actor_path = ctx.actor_path(self.actor_id);
 		let netns_path = self.netns_path();
 
 		match self.config.image.kind {
 			protocol::ImageKind::DockerImage | protocol::ImageKind::OciBundle => {
+				match Command::new("runc")
+					.arg("delete")
+					.arg("--force")
+					.arg(self.actor_id.to_string())
+					.output()
+					.await
+				{
+					Ok(cmd_out) => {
+						if !cmd_out.status.success() {
+							tracing::error!(
+								stdout=%std::str::from_utf8(&cmd_out.stdout)?,
+								stderr=%std::str::from_utf8(&cmd_out.stderr)?,
+								"failed `runc` delete command",
+							);
+						}
+					}
+					Err(err) => tracing::error!(?err, "failed to run `runc` command"),
+				}
+
 				if let protocol::NetworkMode::Bridge = self.config.network_mode {
 					match fs::read_to_string(actor_path.join("cni-cap-args.json")).await {
 						Ok(cni_params_json) => {

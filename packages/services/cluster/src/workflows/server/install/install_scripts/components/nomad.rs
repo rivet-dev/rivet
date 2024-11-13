@@ -33,7 +33,7 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 		)
 		.replace(
 			"__RESERVE_MEMORY__",
-			&server_spec::NOMAD_RESERVE_MEMORY.to_string(),
+			&server_spec::NOMAD_RESERVE_MEMORY_MIB.to_string(),
 		)
 		.replace(
 			"__GG_VLAN_SUBNET__",

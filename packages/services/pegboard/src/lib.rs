@@ -1,6 +1,7 @@
 #[cfg(feature = "chirp")]
 use chirp_workflow::prelude::*;
 
+pub mod client_config;
 #[cfg(feature = "ops")]
 pub mod ops;
 pub mod protocol;

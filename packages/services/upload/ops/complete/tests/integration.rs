@@ -63,7 +63,6 @@ async fn basic(ctx: TestCtx) {
 	let _upload_data = upload_res.uploads.first().expect("upload not created");
 }
 
-
 // #[worker_test]
 // #[ignore]
 // async fn many_files(ctx: TestCtx) {

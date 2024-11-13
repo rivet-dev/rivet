@@ -57,7 +57,7 @@ fn generate_tier(
 	denominator: u32,
 ) -> Tier {
 	let memory_per_core = if pegboard {
-		c.memory_per_core_pb()
+		c.memory_per_core_pb_container()
 	} else {
 		c.memory_per_core_nomad()
 	};

@@ -212,6 +212,7 @@ impl Ctx {
 
 			self.send_packet(protocol::ToServer::Init {
 				last_command_idx,
+				config: self.config.build_client_config(),
 				system: self.system.clone(),
 			})
 			.await?;

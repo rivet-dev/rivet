@@ -799,7 +799,7 @@ async fn resolve_image_artifact_url(
 			let s3_client = s3_util::Client::with_bucket_and_endpoint(
 				ctx.config(),
 				bucket,
-				s3_util::EndpointKind::External,
+				s3_util::EndpointKind::EdgeInternal,
 			)
 			.await?;
 

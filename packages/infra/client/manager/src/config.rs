@@ -27,6 +27,23 @@ pub struct Config {
 	pub container_runner_binary_path: PathBuf,
 	#[serde(default = "default_isolate_runner_binary_path")]
 	pub isolate_runner_binary_path: PathBuf,
+
+	#[serde(default = "default_reserved_cpu")]
+	pub reserved_cpu: u64,
+	#[serde(default = "default_reserved_memory")]
+	pub reserved_memory: u64,
+}
+
+impl Config {
+	/// Builds a config that will be sent to the server.
+	///
+	/// This holds information that the server needs in order to orchestrate nodes.
+	pub fn build_client_config(&self) -> pegboard::client_config::ClientConfig {
+		pegboard::client_config::ClientConfig {
+			reserved_cpu: self.reserved_cpu,
+			reserved_memory: self.reserved_memory,
+		}
+	}
 }
 
 fn default_working_path() -> PathBuf {
@@ -43,4 +60,12 @@ fn default_isolate_runner_binary_path() -> PathBuf {
 
 fn default_redirect_logs() -> bool {
 	true
+}
+
+fn default_reserved_cpu() -> u64 {
+	0
+}
+
+fn default_reserved_memory() -> u64 {
+	128
 }

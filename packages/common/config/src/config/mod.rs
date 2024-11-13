@@ -215,6 +215,8 @@ pub struct Linode {
 pub struct S3 {
 	pub region: String,
 	pub endpoint_internal: Url,
+	/// If not defined, will default to endpoint_external.
+	pub endpoint_edge_internal: Option<Url>,
 	pub endpoint_external: Url,
 	pub access_key_id: Secret<String>,
 	pub secret_access_key: Secret<String>,
@@ -225,6 +227,7 @@ impl Default for S3 {
 		Self {
 			region: "us-east-1".into(),
 			endpoint_internal: Url::parse("http://127.0.0.1:9000").unwrap(),
+			endpoint_edge_internal: None,
 			endpoint_external: Url::parse("http://127.0.0.1:9000").unwrap(),
 			access_key_id: Secret::new("root".into()),
 			secret_access_key: Secret::new("root".into()),

@@ -17,11 +17,12 @@ pub enum EndpointKind {
 	/// This should be used for all API calls.
 	Internal,
 
-	/// Used for making calls within the cluster, but without access to the internal DNS server. This will
-	/// resolve the IP address on the machine building the presigned request.
+	/// Used for making calls from internal services on edge nodes.
 	///
-	/// Should be used sparingly, incredibly hacky.
-	InternalResolved,
+	/// Falls back to `External` if not defined.
+	///
+	/// This should be used for requests to S3 from the edge.
+	EdgeInternal,
 
 	/// Used for making calls from outside of the cluster.
 	///
@@ -91,36 +92,11 @@ impl Client {
 
 		let endpoint = match endpoint_kind {
 			EndpointKind::Internal => s3_config.endpoint_internal.to_string(),
-			EndpointKind::InternalResolved => {
-				let mut endpoint = s3_config.endpoint_internal.to_string();
-
-				// HACK: Resolve Minio DNS address to schedule the job with. We
-				// do this since the job servers don't have the internal DNS servers
-				// to resolve the Minio endpoint.
-				//
-				// This has issues if there's a race condition with changing the
-				// Minio address.
-				//
-				// We can't resolve the presigned URL, since the host's presigned
-				// host is part of the signature.
-				const MINIO_K8S_HOST: &str = "minio.minio.svc.cluster.local:9200";
-				if endpoint.contains(MINIO_K8S_HOST) {
-					tracing::info!(host = %MINIO_K8S_HOST, "looking up dns");
-
-					// Resolve IP
-					let mut hosts = tokio::net::lookup_host(MINIO_K8S_HOST)
-						.await
-						.map_err(ClientError::LookupHost)?;
-					let Some(host) = hosts.next() else {
-						return Err(ClientError::UnresolvedHost);
-					};
-
-					// Substitute endpoint with IP
-					endpoint = endpoint.replace(MINIO_K8S_HOST, &host.to_string());
-				}
-
-				endpoint
-			}
+			EndpointKind::EdgeInternal => s3_config
+				.endpoint_edge_internal
+				.as_ref()
+				.unwrap_or(&s3_config.endpoint_external)
+				.to_string(),
 			EndpointKind::External => s3_config.endpoint_external.to_string(),
 		};
 

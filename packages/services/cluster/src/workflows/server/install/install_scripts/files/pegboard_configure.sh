@@ -9,7 +9,9 @@ cat << 'EOF' > /etc/rivet-client/config.json
 	"vector_socket_addr": "127.0.0.1:5021",
 	"flavor": "__FLAVOR__",
 	"pegboard_ws_endpoint": "127.0.0.1:5030"
-	"api_public_endpoint": "__ORIGIN_API__"
+	"api_public_endpoint": "__ORIGIN_API__",
+	"reserved_cpu": 0,
+	"reserved_memory": __RESERVED_MEMORY__
 }
 EOF
 

@@ -26,7 +26,9 @@ pub struct Cpu {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct Memory {
+	// Bytes
 	pub total_memory: u64,
+	// Bytes
 	pub total_swap: u64,
 }
 

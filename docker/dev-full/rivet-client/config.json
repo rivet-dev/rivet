@@ -6,5 +6,7 @@
 	"flavor": "isolate",
 	"redirect_logs": false,
 	"pegboard_ws_endpoint": "ws://rivet-server:8082",
-	"api_public_endpoint": "http://rivet-server:8080"
+	"api_public_endpoint": "http://rivet-server:8080",
+	"reserved_cpu": 0,
+	"reserved_memory": 0
 }

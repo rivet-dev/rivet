@@ -96,8 +96,6 @@ async fn allocate_actor(
 	let current_time = util::timestamp::now();
 	let client_eligible_time = current_time - CLIENT_ELIGIBLE_THRESHOLD_MS;
 	let actor_id = input.actor_id;
-	let config_json = serde_json::to_string(&input.config)?;
-	let create_ts = current_time;
 	let allocated_cpu = input.config.resources.cpu as i64;
 	let allocated_memory_mib = (input.config.resources.memory / 1024 / 1024) as i64;
 	let client_flavor = match input.config.image.kind {
@@ -106,20 +104,15 @@ async fn allocate_actor(
 		}
 		protocol::ImageKind::JavaScript => protocol::ClientFlavor::Isolate,
 	} as i32;
-	let reserve_memory =
-		(server_spec::RESERVE_LB_MEMORY + server_spec::PEGBOARD_RESERVE_MEMORY) as i32;
 
 	tracing::debug!(
 		?datacenter_id,
 		?current_time,
 		?client_eligible_time,
 		?actor_id,
-		?config_json,
-		?create_ts,
 		?allocated_cpu,
 		?allocated_memory_mib,
 		?client_flavor,
-		?reserve_memory,
 		"allocating actor"
 	);
 
@@ -130,13 +123,20 @@ async fn allocate_actor(
 			SELECT
 				c.client_id,
 				-- Millicores
-				(c.system_info->'cpu'->'physical_core_count')::INT * 1000 AS available_cpu,
+				(
+					COALESCE((c.system_info->'cpu'->'physical_core_count')::INT, 0) * 1000 -
+					COALESCE((c.config->'reserved_cpu')::INT, 0)
+				) AS available_cpu,
 				-- MiB
-				(c.system_info->'memory'->'total_memory')::INT - $9 AS available_memory,
+				(
+					-- Convert bytes to MiB
+					COALESCE(((c.system_info->'memory'->'total_memory')::INT), 0) // 1048576 - 
+					COALESCE(((c.config->'reserved_memory')::INT), 0) 
+				) AS available_memory,
 				-- Millicores
-				COALESCE(SUM_INT((a.config->'resources'->>'cpu')::INT), 0) AS allocated_cpu,
+				COALESCE(SUM_INT((a.config->'resources'->'cpu')::INT), 0) AS allocated_cpu,
 				-- MiB
-				COALESCE(SUM_INT((a.config->'resources'->>'memory')::INT // 1024 // 1024), 0) AS allocated_memory
+				COALESCE(SUM_INT((a.config->'resources'->'memory')::INT // 1024 // 1024), 0) AS allocated_memory
 			FROM db_pegboard.clients AS c
 			LEFT JOIN db_pegboard.actors AS a
 			ON
@@ -170,12 +170,11 @@ async fn allocate_actor(
 		datacenter_id,
 		client_eligible_time,
 		actor_id,
-		config_json,
-		create_ts,
+		serde_json::to_value(&input.config)?,
+		current_time,
 		allocated_cpu,
 		allocated_memory_mib,
 		client_flavor,
-		reserve_memory,
 	)
 	.await?
 	.map(|(client_id,)| client_id);
