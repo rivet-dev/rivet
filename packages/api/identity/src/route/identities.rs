@@ -5,7 +5,7 @@ use api_helper::{
 use futures_util::FutureExt;
 use proto::backend::{self, pkg::*};
 use rivet_api::models;
-use rivet_convert::{convert, fetch, ApiInto, ApiTryInto};
+use rivet_convert::{fetch, ApiInto, ApiTryInto};
 use rivet_operation::prelude::*;
 use serde::{Deserialize, Serialize};
 

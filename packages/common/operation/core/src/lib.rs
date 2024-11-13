@@ -109,14 +109,14 @@ where
 				Err(GlobalError::Internal { ty, .. }) => {
 					let err_code_str = "__UNKNOWN__".to_string();
 					metrics::CHIRP_REQUEST_ERRORS
-						.with_label_values(&[O::NAME, &err_code_str, &ty])
+						.with_label_values(&[O::NAME, &err_code_str, ty])
 						.inc();
 
 					err_code_str
 				}
 				Err(GlobalError::BadRequest { code, .. }) => {
 					metrics::CHIRP_REQUEST_ERRORS
-						.with_label_values(&[O::NAME, &code, "bad_request"])
+						.with_label_values(&[O::NAME, code, "bad_request"])
 						.inc();
 
 					code.clone()
@@ -217,7 +217,7 @@ where
 	}
 
 	pub fn op_ctx(&self) -> &OperationContext<B> {
-		&self
+		self
 	}
 
 	pub fn config(&self) -> &Config {

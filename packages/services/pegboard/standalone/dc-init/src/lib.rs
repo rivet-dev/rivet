@@ -16,12 +16,12 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> G
 	// Read config from env
 	let cluster_configs = &ctx.config().server()?.rivet.clusters();
 
-	for (_, cluster_config) in cluster_configs {
+	for cluster_config in cluster_configs.values() {
 		// Find datacenter ids with pegboard pools
 		let datacenter_ids = cluster_config
 			.datacenters
-			.iter()
-			.map(|(_, x)| x.id)
+			.values()
+			.map(|x| x.id)
 			.collect::<Vec<_>>();
 
 		let rows = sql_fetch_all!(

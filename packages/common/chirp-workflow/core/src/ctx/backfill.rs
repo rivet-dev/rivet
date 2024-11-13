@@ -27,6 +27,12 @@ pub struct BackfillCtx {
 	queries: Vec<Query>,
 }
 
+impl Default for BackfillCtx {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
 impl BackfillCtx {
 	pub fn new() -> Self {
 		BackfillCtx {
@@ -128,9 +134,9 @@ impl WorkflowBackfillCtx {
 
 		let workflow_id = self.workflow_id;
 		let workflow_name = self.workflow_name.clone();
-		let tags = std::mem::replace(&mut self.tags, Default::default());
-		let input = std::mem::replace(&mut self.input, Default::default());
-		let output = std::mem::replace(&mut self.output, Default::default());
+		let tags = std::mem::take(&mut self.tags);
+		let input = std::mem::take(&mut self.input);
+		let output = std::mem::take(&mut self.output);
 
 		self.queries.push(Box::new(move |tx| {
 			async move {

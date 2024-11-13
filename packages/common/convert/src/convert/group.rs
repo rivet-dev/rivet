@@ -15,7 +15,7 @@ pub fn handle(
 	Ok(models::GroupHandle {
 		group_id: team_id,
 		display_name: team.display_name.to_owned(),
-		avatar_url: util::route::team_avatar(config, &team),
+		avatar_url: util::route::team_avatar(config, team),
 		external: Box::new(models::GroupExternalLinks {
 			profile: util::route::team_profile(config, team_id),
 		}),
@@ -43,7 +43,7 @@ pub fn summary(
 		group_id: team_id,
 		display_name: team.display_name.clone(),
 		bio: team.bio.clone(),
-		avatar_url: util::route::team_avatar(config, &team),
+		avatar_url: util::route::team_avatar(config, team),
 		external: Box::new(models::GroupExternalLinks {
 			profile: util::route::team_profile(config, team_id),
 		}),

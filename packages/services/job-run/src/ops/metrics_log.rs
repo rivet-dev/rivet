@@ -57,7 +57,7 @@ async fn handle(
 		// relabel action in the Kubernetes config.
 		let (mem_allocated, cpu_usage, mem_usage) = tokio::try_join!(
 			handle_request(
-				&prometheus_url,
+				prometheus_url,
 				None,
 				formatdoc!(
 					"
@@ -71,7 +71,7 @@ async fn handle(
 				)
 			),
 			handle_request(
-				&prometheus_url,
+				prometheus_url,
 				query_timing.as_ref(),
 				formatdoc!(
 					"
@@ -85,7 +85,7 @@ async fn handle(
 				)
 			),
 			handle_request(
-				&prometheus_url,
+				prometheus_url,
 				query_timing.as_ref(),
 				// Fall back to `nomad_client_allocs_memory_rss` since `nomad_client_allocs_memory_usage` is
 				// not available in `raw_exec`.

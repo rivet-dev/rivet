@@ -38,7 +38,10 @@ impl ApiAuth for Auth {
 		})
 	}
 
-	async fn rate_limit(config: &rivet_config::Config, rate_limit_ctx: AuthRateLimitCtx<'_>) -> GlobalResult<()> {
+	async fn rate_limit(
+		config: &rivet_config::Config,
+		rate_limit_ctx: AuthRateLimitCtx<'_>,
+	) -> GlobalResult<()> {
 		basic_rate_limit(config, rate_limit_ctx).await
 	}
 }

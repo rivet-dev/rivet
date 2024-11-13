@@ -46,7 +46,7 @@ impl<T: Signal + Serialize> SignalBuilder<T> {
 			serde_json::Value::Object(map) => {
 				self.tags.extend(map);
 			}
-			_ => self.error = Some(BuilderError::TagsNotMap.into()),
+			_ => self.error = Some(BuilderError::TagsNotMap),
 		}
 
 		self

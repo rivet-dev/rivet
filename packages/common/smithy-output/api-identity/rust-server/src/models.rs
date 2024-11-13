@@ -908,8 +908,7 @@ pub struct MatchmakerLobbyJoinInfo {
 	/// A matchmaker lobby region.
 	pub region: MatchmakerLobbyJoinInfoRegion,
 	/// A list of lobby ports.
-	pub ports:
-		std::collections::HashMap<std::string::String, MatchmakerLobbyJoinInfoPort>,
+	pub ports: std::collections::HashMap<std::string::String, MatchmakerLobbyJoinInfoPort>,
 	/// A matchmaker lobby player.
 	pub player: MatchmakerLobbyJoinInfoPlayer,
 }
@@ -1630,4 +1629,3 @@ pub struct SetupIdentityResponse {
 	/// A universally unique identifier.
 	pub game_id: std::string::String,
 }
-

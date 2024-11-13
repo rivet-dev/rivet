@@ -19,7 +19,10 @@ impl ApiAuth for Auth {
 		Ok(Auth { _claims: None })
 	}
 
-	async fn rate_limit(config: &rivet_config::Config, _rate_limit_ctx: AuthRateLimitCtx<'_>) -> GlobalResult<()> {
+	async fn rate_limit(
+		config: &rivet_config::Config,
+		_rate_limit_ctx: AuthRateLimitCtx<'_>,
+	) -> GlobalResult<()> {
 		Ok(())
 	}
 }

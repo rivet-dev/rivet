@@ -101,4 +101,3 @@ pub struct GetResponse {
 	/// Provided by watchable endpoints used in blocking loops.
 	pub watch: WatchResponse,
 }
-

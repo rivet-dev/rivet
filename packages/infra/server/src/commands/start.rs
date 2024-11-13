@@ -23,10 +23,10 @@ enum ServiceKind {
 	Cron,
 }
 
-impl Into<rivet_service_manager::ServiceKind> for ServiceKind {
-	fn into(self) -> rivet_service_manager::ServiceKind {
+impl From<ServiceKind> for rivet_service_manager::ServiceKind {
+	fn from(val: ServiceKind) -> Self {
 		use ServiceKind::*;
-		match self {
+		match val {
 			ApiPublic => rivet_service_manager::ServiceKind::ApiPublic,
 			ApiEdge => rivet_service_manager::ServiceKind::ApiEdge,
 			ApiPrivate => rivet_service_manager::ServiceKind::ApiPrivate,

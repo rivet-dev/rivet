@@ -1,8 +1,5 @@
 use chirp_workflow::prelude::*;
-use nomad_client::{
-	apis::{configuration::Configuration, nodes_api},
-	models,
-};
+use nomad_client::{apis::nodes_api, models};
 use rivet_operation::prelude::proto::backend::pkg::*;
 
 use crate::types::PoolType;

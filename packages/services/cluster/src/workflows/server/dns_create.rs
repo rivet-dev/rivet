@@ -102,12 +102,12 @@ async fn create_dns_record(
 	ctx: &ActivityCtx,
 	input: &CreateDnsRecordInput,
 ) -> GlobalResult<String> {
-	let cf_token = &*ctx.config().server()?.cloudflare()?.auth_token.read();
-	let client = cf_client(ctx.config(), Some(&cf_token)).await?;
+	let cf_token = ctx.config().server()?.cloudflare()?.auth_token.read();
+	let client = cf_client(ctx.config(), Some(cf_token)).await?;
 
 	let record_id = create_dns_record(
 		&client,
-		&cf_token,
+		cf_token,
 		&input.zone_id,
 		&input.record_name,
 		cf::dns::DnsContent::A {

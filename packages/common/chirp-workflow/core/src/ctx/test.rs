@@ -35,11 +35,7 @@ pub struct TestCtx {
 
 impl TestCtx {
 	pub async fn from_env(test_name: &str) -> TestCtx {
-		let service_name = format!(
-			"{}-test--{}",
-			rivet_env::service_name().to_string(),
-			test_name
-		);
+		let service_name = format!("{}-test--{}", rivet_env::service_name(), test_name);
 
 		let ray_id = Uuid::new_v4();
 		let config = rivet_config::Config::load::<String>(&[]).await.unwrap();

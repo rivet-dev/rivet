@@ -23,7 +23,6 @@ async fn handle(
 		if !teams_res.teams.is_empty() {
 			errors.push(util::err_path!["not-unique"]);
 		}
-
 	} else {
 		errors.push(util::err_path!["display-name-invalid"]);
 	}

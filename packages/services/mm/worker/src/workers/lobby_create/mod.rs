@@ -309,7 +309,7 @@ async fn fetch_tiers(
 	region_id: Uuid,
 ) -> GlobalResult<Vec<tier::types::Tier>> {
 	let tier_res = chirp_workflow::compat::op(
-		&ctx,
+		ctx,
 		tier::ops::list::Input {
 			datacenter_ids: vec![region_id],
 			pegboard: false,
@@ -815,7 +815,7 @@ async fn resolve_image_artifact_url(
 				)
 				.await?;
 
-			let addr = presigned_req.uri().clone();
+			let addr = presigned_req.uri();
 
 			let addr_str = addr.to_string();
 			tracing::info!(addr = %addr_str, "resolved artifact s3 presigned request");

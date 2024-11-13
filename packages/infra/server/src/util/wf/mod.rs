@@ -239,7 +239,7 @@ pub async fn print_workflows(workflows: Vec<WorkflowRow>, pretty: bool) -> Resul
 
 	if pretty {
 		for workflow in workflows {
-			println!("");
+			println!();
 
 			println!("{}", style(workflow.workflow_name).bold());
 
@@ -428,7 +428,7 @@ pub async fn print_history(
 
 	// Print header
 	{
-		println!("");
+		println!();
 
 		println!(
 			"{} {}",
@@ -474,7 +474,7 @@ pub async fn print_history(
 			print!(" {}", style(name));
 		}
 
-		println!("");
+		println!();
 
 		if let Some(input) = &event.input {
 			print!("{}", "  ".repeat(event.location.len()));
@@ -500,7 +500,7 @@ pub async fn print_history(
 				print!(" {}", style("...").dim());
 			}
 
-			println!("");
+			println!();
 		}
 
 		if let Some(output) = &event.output {
@@ -523,7 +523,7 @@ pub async fn print_history(
 				print!(" {}", style("...").dim());
 			}
 
-			println!("");
+			println!();
 		}
 
 		if !errors.is_empty() {
@@ -564,7 +564,7 @@ pub async fn print_history(
 		}
 
 		if !matches!(t, EventType::Loop) {
-			println!("");
+			println!();
 		}
 
 		let next_event = events.get(i + 1);
@@ -637,7 +637,7 @@ pub async fn print_history(
 			print!(" {}", style("...").green().dim());
 		}
 
-		println!("");
+		println!();
 	}
 
 	Ok(())

@@ -33,7 +33,7 @@ impl<'a, M: Message> MessageBuilder<'a, M> {
 			serde_json::Value::Object(map) => {
 				self.tags.extend(map);
 			}
-			_ => self.error = Some(BuilderError::TagsNotMap.into()),
+			_ => self.error = Some(BuilderError::TagsNotMap),
 		}
 
 		self

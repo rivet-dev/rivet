@@ -46,7 +46,7 @@ impl<A: auth::ApiAuth> Ctx<A> {
 	}
 
 	pub fn user_agent(&self) -> Option<&str> {
-		self.user_agent.as_ref().map(String::as_str)
+		self.user_agent.as_deref()
 	}
 
 	pub fn origin(&self) -> Option<&Url> {

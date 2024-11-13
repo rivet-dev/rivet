@@ -299,8 +299,8 @@ where
 				// Fetch pending messages
 				tracing::trace!("fetching pending messages");
 				let pending_msgs = match redis::cmd("XPENDING")
-					.arg(&topic_key)
-					.arg(&group)
+					.arg(topic_key)
+					.arg(group)
 					.arg("IDLE")
 					.arg(pending_retry_time.as_millis() as i64)
 					.arg("-")
@@ -478,7 +478,7 @@ where
 			// Read a message from the Redis stream
 			let keys = &[&topic_key];
 			let read_options = redis::streams::StreamReadOptions::default()
-				.group(&group, &consumer)
+				.group(group, consumer)
 				.block(30_000)
 				.count(16);
 			let res = match redis_chirp_conn
@@ -716,7 +716,7 @@ where
 				let mut x = trace.clone();
 				x.push(chirp::TraceEntry {
 					context_name: worker_name.clone(),
-					req_id: req_id_proto.clone(),
+					req_id: req_id_proto,
 					ts,
 				});
 				x

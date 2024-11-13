@@ -15,7 +15,7 @@ pub fn handle(
 		identity_id: user_id,
 		display_name: user.display_name.clone(),
 		account_number: user.account_number as i32,
-		avatar_url: util::route::user_avatar(config, &user),
+		avatar_url: util::route::user_avatar(config, user),
 		is_registered: true, // TODO:
 		external: Box::new(models::IdentityExternalLinks {
 			profile: util::route::user_profile(config, user_id),
@@ -36,7 +36,7 @@ pub fn summary(
 		identity_id: user_id,
 		display_name: user.display_name.clone(),
 		account_number: user.account_number as i32,
-		avatar_url: util::route::user_avatar(config, &user),
+		avatar_url: util::route::user_avatar(config, user),
 		is_registered: true, // TODO:
 		external: Box::new(models::IdentityExternalLinks {
 			profile: util::route::user_profile(config, user_id),
@@ -108,7 +108,7 @@ pub fn profile(
 		identity_id: user_id,
 		display_name: user.display_name.to_owned(),
 		account_number: user.account_number as i32,
-		avatar_url: util::route::user_avatar(config, &user),
+		avatar_url: util::route::user_avatar(config, user),
 		is_registered,
 		external: Box::new(models::IdentityExternalLinks {
 			profile: util::route::user_profile(config, user_id),

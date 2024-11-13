@@ -16,8 +16,8 @@ use rivet_claims::ClaimsDecode;
 pub fn hub_origin_regex(config: &rivet_config::Config) -> Regex {
 	// TODO: Make this lazy static to prevent reparsing regex for every request
 	let regex_str = &config.server().unwrap().rivet.ui.public_origin_regex();
-	let regex = Regex::new(&regex_str).expect("failed to build hub origin regex");
-	regex
+
+	Regex::new(regex_str).expect("failed to build hub origin regex")
 }
 
 #[derive(Default)]
@@ -98,13 +98,13 @@ impl CorsConfigBuilder {
 		let allowed_methods = self
 			.methods
 			.iter()
-			.map(|m| http::Method::from_str(&m))
+			.map(|m| http::Method::from_str(m))
 			.collect::<Result<Vec<_>, _>>()
 			.expect("invalid method");
 		let allowed_headers = self
 			.headers
 			.iter()
-			.map(|h| HeaderName::from_str(&h))
+			.map(|h| HeaderName::from_str(h))
 			.collect::<Result<Vec<_>, _>>()
 			.expect("invalid header");
 
@@ -322,5 +322,5 @@ pub async fn basic_rate_limit(
 		}
 	}
 
-	return Ok(());
+	Ok(())
 }

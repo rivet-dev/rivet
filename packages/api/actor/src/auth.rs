@@ -42,7 +42,7 @@ impl ApiAuth for Auth {
 		config: &rivet_config::Config,
 		rate_limit_ctx: AuthRateLimitCtx<'_>,
 	) -> GlobalResult<()> {
-		basic_rate_limit(&config, rate_limit_ctx).await
+		basic_rate_limit(config, rate_limit_ctx).await
 	}
 }
 

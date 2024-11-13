@@ -43,7 +43,7 @@ where
 			serde_json::Value::Object(map) => {
 				self.tags.extend(map);
 			}
-			_ => self.error = Some(BuilderError::TagsNotMap.into()),
+			_ => self.error = Some(BuilderError::TagsNotMap),
 		}
 
 		self
@@ -90,7 +90,7 @@ where
 			.map_err(GlobalError::raw)?;
 
 		self.db
-			.dispatch_workflow(self.ray_id, workflow_id, &workflow_name, tags, &input_val)
+			.dispatch_workflow(self.ray_id, workflow_id, workflow_name, tags, &input_val)
 			.await
 			.map_err(GlobalError::raw)?;
 

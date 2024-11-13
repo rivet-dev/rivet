@@ -70,7 +70,7 @@ impl FromIterator<Vec<usize>> for Location {
 
 impl FromIterator<Box<[usize]>> for Location {
 	fn from_iter<I: IntoIterator<Item = Box<[usize]>>>(iter: I) -> Self {
-		Location(iter.into_iter().map(|v| Coordinate::new(v)).collect())
+		Location(iter.into_iter().map(Coordinate::new).collect())
 	}
 }
 

@@ -112,7 +112,7 @@ impl MessageCtx {
 		// Serialize message
 		let req_id = Uuid::new_v4();
 		let message = NatsMessageWrapper {
-			req_id: req_id,
+			req_id,
 			ray_id: self.ray_id,
 			tags: tags.as_tags()?,
 			ts,

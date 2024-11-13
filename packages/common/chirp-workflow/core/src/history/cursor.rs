@@ -89,7 +89,7 @@ impl Cursor {
 					// 1.1 vs 1.1.1
 					Ordering::Less => {
 						// prev + .0.1 (2.3 -> 2.3.0.1)
-						prev.into_iter()
+						prev.iter()
 							.cloned()
 							.chain(std::iter::once(0))
 							.chain(std::iter::once(1))
@@ -98,7 +98,7 @@ impl Cursor {
 					// 1.1 vs 1.2
 					Ordering::Equal => {
 						// prev + .1 (8 -> 8.1)
-						prev.into_iter()
+						prev.iter()
 							.cloned()
 							.chain(std::iter::once(1))
 							.collect::<Coordinate>()
@@ -648,7 +648,7 @@ mod tests {
 		)]
 		.into_iter()
 		.collect();
-		let mut cursor = Cursor::new(Arc::new(events), Location::empty());
+		let cursor = Cursor::new(Arc::new(events), Location::empty());
 
 		assert_eq!(coord![2, 1], cursor.coord_at(0));
 		assert_eq!(coord![5], cursor.coord_at(2));

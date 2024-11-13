@@ -50,7 +50,7 @@ impl<'a> ListenCtx<'a> {
 			.pull_next_signal(
 				self.ctx.workflow_id(),
 				signal_names,
-				&self.location,
+				self.location,
 				self.ctx.version(),
 				self.ctx.loop_location(),
 			)
@@ -59,7 +59,7 @@ impl<'a> ListenCtx<'a> {
 		let dt = start_instant.elapsed().as_secs_f64();
 		metrics::SIGNAL_PULL_DURATION
 			.with_label_values(&[
-				&self.ctx.name(),
+				self.ctx.name(),
 				signal
 					.as_ref()
 					.map(|signal| signal.signal_name.as_str())
@@ -73,7 +73,7 @@ impl<'a> ListenCtx<'a> {
 
 		let recv_lag = (rivet_util::timestamp::now() as f64 - signal.create_ts as f64) / 1000.;
 		crate::metrics::SIGNAL_RECV_LAG
-			.with_label_values(&[&self.ctx.name(), &signal.signal_name])
+			.with_label_values(&[self.ctx.name(), &signal.signal_name])
 			.observe(recv_lag);
 
 		tracing::info!(

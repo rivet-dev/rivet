@@ -148,7 +148,7 @@ pub async fn status(
 	};
 
 	// Test connection, defer error
-	let lobby_id = res.lobby.lobby_id.clone();
+	let lobby_id = res.lobby.lobby_id;
 	let test_res = tokio::time::timeout(
 		Duration::from_secs(15),
 		test_lobby_connection(res.lobby, res.player),

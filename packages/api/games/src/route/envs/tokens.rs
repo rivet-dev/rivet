@@ -3,7 +3,7 @@ use proto::backend::pkg::*;
 use rivet_api::models;
 use rivet_operation::prelude::*;
 
-use crate::{assert, auth::Auth};
+use crate::auth::Auth;
 
 // MARK: POST /games/{}/environments/{}/tokens/service
 pub async fn create_service(

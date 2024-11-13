@@ -9,6 +9,7 @@ async fn handle(
 	let req_game_id = unwrap_ref!(ctx.game_id);
 	let game_id = req_game_id.as_uuid();
 	let config = unwrap_ref!(ctx.config);
+	let creator_user_id = ctx.creator_user_id.as_ref().map(common::Uuid::as_uuid);
 
 	let game_res = op!([ctx] game_get {
 		game_ids: vec![game_id.into()],
@@ -110,8 +111,8 @@ async fn handle(
 			analytics::msg::event_create::Event {
 				event_id: Some(Uuid::new_v4().into()),
 				name: "game.version.publish".into(),
-				user_id: ctx.creator_user_id,
 				properties_json: Some(serde_json::to_string(&json!({
+					"user_id": creator_user_id,
 					"developer_team_id": developer_team_id,
 					"game_id": game_id,
 					"version_id": version_id,

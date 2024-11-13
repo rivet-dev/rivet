@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use api_helper::ctx::Ctx;
 use proto::{
 	backend::{self, pkg::*},
@@ -65,4 +63,3 @@ async fn games(
 
 	Ok((games_res.games, games_with_namespace_ids))
 }
-

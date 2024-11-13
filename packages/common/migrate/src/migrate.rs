@@ -288,7 +288,7 @@ async fn run_migrations(config: rivet_config::Config, migration_cmds: &[MigrateC
 		.await
 		// Convert to error
 		.into_iter()
-		.collect::<Result<_, _>>()?;
+		.collect::<Result<Vec<()>, _>>()?;
 
 	Ok(())
 }

@@ -160,7 +160,7 @@ pub async fn print_signals(signals: Vec<SignalRow>, pretty: bool) -> Result<()> 
 
 	if pretty {
 		for signal in signals {
-			println!("");
+			println!();
 
 			println!("{}", style(signal.signal_name).bold());
 

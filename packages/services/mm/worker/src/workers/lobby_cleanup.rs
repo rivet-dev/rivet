@@ -268,7 +268,7 @@ async fn remove_from_redis_without_config(
 		.unlink(util_mm::key::lobby_config(lobby_id))
 		.unlink(util_mm::key::lobby_tags(lobby_id))
 		.zrem(util_mm::key::lobby_unready(), lobby_id.to_string())
-		.query_async(redis_mm)
+		.query_async::<_, ()>(redis_mm)
 		.await?;
 
 	Ok(())

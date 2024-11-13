@@ -74,7 +74,6 @@ impl fmt::Debug for CompileOpts {
 	}
 }
 
-
 impl CompileOpts {
 	pub fn root(mut self, root: &Path) -> Self {
 		self.root_path = root.to_path_buf();
@@ -157,7 +156,6 @@ struct SchemaNode {
 	code: Option<String>,
 }
 
-
 impl SchemaNode {
 	fn insert(&mut self, module_name: &[String], code: String) {
 		assert_ne!(module_name.len(), 0);
@@ -227,15 +225,15 @@ pub fn compile(opts: CompileOpts) -> io::Result<String> {
 
 	let res = build_config.compile_protos(&opts.input_paths, &[opts.root_path.clone()]);
 	if let Err(err) = res {
- 			let err_kind = err.kind();
+		let err_kind = err.kind();
 
- 			if let Some(inner) = err.into_inner() {
- 				eprintln!("{}", inner);
- 				return Err(io::Error::new(io::ErrorKind::Other, "protoc failed"));
- 			} else {
- 				return Err(io::Error::new(err_kind, "failed to get inner error"));
- 			}
- 		}
+		if let Some(inner) = err.into_inner() {
+			eprintln!("{}", inner);
+			return Err(io::Error::new(io::ErrorKind::Other, "protoc failed"));
+		} else {
+			return Err(io::Error::new(err_kind, "failed to get inner error"));
+		}
+	}
 
 	// Build schema graph
 	println!("  * Building schema graph");

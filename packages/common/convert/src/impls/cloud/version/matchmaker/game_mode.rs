@@ -36,7 +36,7 @@ pub fn game_mode_to_proto(
 	let max_players_normal = game_mode
 		.max_players
 		.or(matchmaker.max_players)
-		.unwrap_or_else(|| util_mm::defaults::MAX_PLAYERS_NORMAL as i32);
+		.unwrap_or(util_mm::defaults::MAX_PLAYERS_NORMAL as i32);
 	let max_players_direct = game_mode
 		.max_players_direct
 		.or(matchmaker.max_players_direct)

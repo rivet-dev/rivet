@@ -660,11 +660,7 @@ impl EndpointFunction {
 		let metrics_method = Literal::string(&self.req_type);
 
 		// Check if response builder is to be included in the endpoint function arguments
-		if self
-			.args
-			.iter()
-			.any(|arg| arg.label == "with_response")
-		{
+		if self.args.iter().any(|arg| arg.label == "with_response") {
 			arg_list.insert(0, quote! { response });
 		}
 

@@ -27,7 +27,7 @@ impl GlobalQuery {
 	/// Validates that the project can only be specified with the environment.
 	pub fn project_and_env(&self) -> GlobalResult<(Option<&str>, Option<&str>)> {
 		if let Some(environment) = &self.environment {
-			Ok((self.project.as_ref().map(|x| x.as_str()), Some(environment)))
+			Ok((self.project.as_deref(), Some(environment)))
 		} else {
 			// Don't allow just the project
 			if self.project.is_some() {

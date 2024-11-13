@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use chirp_worker::prelude::*;
 use futures_util::stream::{StreamExt, TryStreamExt};
-use proto::backend::{self, pkg::*};
+use proto::backend::pkg::*;
 
 #[derive(sqlx::FromRow)]
 struct UploadRow {
@@ -87,8 +87,8 @@ async fn worker(ctx: &OperationContext<upload::msg::delete::Message>) -> GlobalR
 	tracing::info!(deletions=?counts, "deleting");
 
 	let deletions = deletions
-		.into_iter()
-		.map(|(_, deletion)| {
+		.into_values()
+		.map(|deletion| {
 			let delete = s3_util::aws_sdk_s3::types::Delete::builder()
 				.set_objects(Some(
 					deletion

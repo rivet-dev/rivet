@@ -333,7 +333,7 @@ fn create_port_host(
 	Ok(Port {
 		internal_port: None,
 		public_hostname: if is_connectable {
-			proxied_port.and_then(|_| public_ip).map(|x| x.to_string())
+			proxied_port.and(public_ip).map(|x| x.to_string())
 		} else {
 			None
 		},

@@ -16,16 +16,17 @@ pub async fn run_from_env(
 	let client =
 		chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("user-delete-pending");
 	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
-let ctx = OperationContext::new(
-	"user-delete-pending".into(),
-	std::time::Duration::from_secs(60),
-	config,rivet_connection::Connection::new(client, pools, cache),
-	Uuid::new_v4(),
-	Uuid::new_v4(),
-	util::timestamp::now(),
-	util::timestamp::now(),
-	(),
-);
+	let ctx = OperationContext::new(
+		"user-delete-pending".into(),
+		std::time::Duration::from_secs(60),
+		config,
+		rivet_connection::Connection::new(client, pools, cache),
+		Uuid::new_v4(),
+		Uuid::new_v4(),
+		util::timestamp::now(),
+		util::timestamp::now(),
+		(),
+	);
 
 	let user_ids = sql_fetch_all!(
 		[ctx, (Uuid,)]

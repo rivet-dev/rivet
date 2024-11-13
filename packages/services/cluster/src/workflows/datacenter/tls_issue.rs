@@ -108,8 +108,8 @@ struct OrderOutput {
 #[activity(Order)]
 #[timeout = 130]
 async fn order(ctx: &ActivityCtx, input: &OrderInput) -> GlobalResult<OrderOutput> {
-	let cf_token = &*ctx.config().server()?.cloudflare()?.auth_token.read();
-	let client = cf_client(ctx.config(), Some(&cf_token)).await?;
+	let cf_token = ctx.config().server()?.cloudflare()?.auth_token.read();
+	let client = cf_client(ctx.config(), Some(cf_token)).await?;
 
 	// Fetch ACME account registration
 	let account = acme_account(ctx.config()).await?;

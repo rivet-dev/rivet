@@ -370,7 +370,7 @@ pub async fn cluster_datacenter_topology_get(
 					get_hardware_specs_or_default(
 						&hardware_specs,
 						server.provider_hardware.as_deref(),
-						&default_provider_hardware,
+						default_provider_hardware,
 					)?,
 				)
 			}
@@ -392,7 +392,7 @@ pub async fn cluster_datacenter_topology_get(
 					get_hardware_specs_or_default(
 						&hardware_specs,
 						server.provider_hardware.as_deref(),
-						&default_provider_hardware,
+						default_provider_hardware,
 					)?,
 				)
 			}

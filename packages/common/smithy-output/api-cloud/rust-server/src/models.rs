@@ -2012,4 +2012,3 @@ pub struct InspectResponse {
 	/// The current authenticated agent.
 	pub agent: AuthAgent,
 }
-

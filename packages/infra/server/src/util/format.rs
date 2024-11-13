@@ -9,8 +9,8 @@ pub fn indent_string(s: &str, indent: &str) -> String {
 		out.push_str(chunk);
 	}
 
-	while let Some(chunk) = iter.next() {
-		out.push_str("\n");
+	for chunk in iter {
+		out.push('\n');
 		out.push_str(indent);
 		out.push_str(chunk);
 	}

@@ -579,7 +579,8 @@ impl TraefikMiddlewareHeaders {
 	#[allow(missing_docs)] // documentation missing in model
 	pub fn custom_response_headers(
 		&self,
-	) -> std::option::Option<&std::collections::HashMap<std::string::String, std::string::String>> {
+	) -> std::option::Option<&std::collections::HashMap<std::string::String, std::string::String>>
+	{
 		self.custom_response_headers.as_ref()
 	}
 }

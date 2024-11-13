@@ -663,4 +663,3 @@ pub struct GetPartySummaryResponse {
 	/// Provided by watchable endpoints used in blocking loops.
 	pub watch: WatchResponse,
 }
-

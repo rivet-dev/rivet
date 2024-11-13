@@ -66,7 +66,8 @@ pub async fn run_from_env(
 	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
 	let ctx = StandaloneCtx::new(
 		chirp_workflow::compat::db_from_pools(&pools).await?,
-		config, rivet_connection::Connection::new(client, pools, cache),
+		config,
+		rivet_connection::Connection::new(client, pools, cache),
 		"cluster-metrics-publish",
 	)
 	.await?;

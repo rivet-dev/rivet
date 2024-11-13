@@ -108,7 +108,7 @@ impl Worker {
 			.await?;
 		for workflow in workflows {
 			let conn = utils::new_conn(
-				&shared_client,
+				shared_client,
 				pools,
 				cache,
 				workflow.ray_id,

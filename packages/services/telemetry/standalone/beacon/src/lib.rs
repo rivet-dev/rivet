@@ -103,10 +103,9 @@ fn os_report() -> serde_json::Value {
 
 	// Gather OS information
 	let os_name = std::env::consts::OS;
-	let os_version = format!(
-		"{}",
-		System::os_version().unwrap_or_else(|| String::from("Unknown"))
-	);
+	let os_version = System::os_version()
+		.unwrap_or_else(|| String::from("Unknown"))
+		.to_string();
 	let architecture = std::env::consts::ARCH;
 	let hostname = System::host_name().unwrap_or_else(|| String::from("unknown"));
 
@@ -117,7 +116,7 @@ fn os_report() -> serde_json::Value {
 	// Gather CPU information
 	let cpu_info = system.cpus();
 	let cpu_model = cpu_info
-		.get(0)
+		.first()
 		.map(|p| p.brand().to_string())
 		.unwrap_or_else(|| String::from("Unknown CPU"));
 
@@ -273,10 +272,13 @@ async fn get_pegboard_data(ctx: &OperationContext<()>) -> GlobalResult<serde_jso
 		.await?;
 		let cpu_archs: HashMap<String, i64> = cpu_arch_counts.into_iter().collect();
 
-		clients.insert(flavor.to_string(), json!({
-			"aggregates": row,
-			"cpu_archs": cpu_archs
-		}));
+		clients.insert(
+			flavor.to_string(),
+			json!({
+				"aggregates": row,
+				"cpu_archs": cpu_archs
+			}),
+		);
 	}
 
 	let (total_count, running_count) = sql_fetch_one!(

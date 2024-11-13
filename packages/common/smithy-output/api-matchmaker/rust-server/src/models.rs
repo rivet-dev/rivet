@@ -9,8 +9,7 @@ pub struct RegionStatistics {
 	/// Unsigned 64 bit integer.
 	pub player_count: i64,
 	#[allow(missing_docs)] // documentation missing in model
-	pub game_modes:
-		std::collections::HashMap<std::string::String, GameModeStatistics>,
+	pub game_modes: std::collections::HashMap<std::string::String, GameModeStatistics>,
 }
 
 /// Game mode statistics
@@ -26,8 +25,7 @@ pub struct NamespaceStatistics {
 	/// Unsigned 64 bit integer.
 	pub player_count: i64,
 	#[allow(missing_docs)] // documentation missing in model
-	pub game_modes:
-		std::collections::HashMap<std::string::String, GameModeStatistics>,
+	pub game_modes: std::collections::HashMap<std::string::String, GameModeStatistics>,
 }
 
 /// A region that the player can connect to.
@@ -97,8 +95,7 @@ pub struct MatchmakerLobbyJoinInfo {
 	/// A matchmaker lobby region.
 	pub region: MatchmakerLobbyJoinInfoRegion,
 	/// A list of lobby ports.
-	pub ports:
-		std::collections::HashMap<std::string::String, MatchmakerLobbyJoinInfoPort>,
+	pub ports: std::collections::HashMap<std::string::String, MatchmakerLobbyJoinInfoPort>,
 	/// A matchmaker lobby player.
 	pub player: MatchmakerLobbyJoinInfoPlayer,
 }
@@ -232,8 +229,7 @@ pub struct GetGameStatisticsResponse {
 	/// Unsigned 64 bit integer.
 	pub player_count: i64,
 	#[allow(missing_docs)] // documentation missing in model
-	pub namespaces:
-		std::collections::HashMap<std::string::String, NamespaceStatistics>,
+	pub namespaces: std::collections::HashMap<std::string::String, NamespaceStatistics>,
 	#[allow(missing_docs)] // documentation missing in model
 	pub regions: std::collections::HashMap<std::string::String, RegionStatistics>,
 }
@@ -285,4 +281,3 @@ pub struct JoinLobbyResponse {
 #[allow(missing_docs)] // documentation missing in model
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct LobbyReadyResponse {}
-

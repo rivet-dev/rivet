@@ -3,7 +3,7 @@ use api_helper::{
 	ctx::Ctx,
 	util::{as_auth_expired, basic_rate_limit},
 };
-use proto::{backend::pkg::*, claims::Claims};
+use proto::claims::Claims;
 use rivet_claims::ClaimsDecode;
 use rivet_operation::prelude::*;
 

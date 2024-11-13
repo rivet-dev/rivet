@@ -148,4 +148,3 @@ pub struct RefreshIdentityTokenResponse {
 	/// A universally unique identifier.
 	pub identity_id: std::string::String,
 }
-

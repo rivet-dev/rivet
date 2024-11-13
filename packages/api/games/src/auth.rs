@@ -2,7 +2,7 @@ use api_helper::{
 	auth::{ApiAuth, AuthRateLimitCtx},
 	util::{as_auth_expired, basic_rate_limit},
 };
-use proto::{backend, claims::Claims};
+use proto::claims::Claims;
 use rivet_claims::ClaimsDecode;
 use rivet_operation::prelude::*;
 
@@ -33,7 +33,10 @@ impl ApiAuth for Auth {
 		})
 	}
 
-	async fn rate_limit(config: &rivet_config::Config, rate_limit_ctx: AuthRateLimitCtx<'_>) -> GlobalResult<()> {
+	async fn rate_limit(
+		config: &rivet_config::Config,
+		rate_limit_ctx: AuthRateLimitCtx<'_>,
+	) -> GlobalResult<()> {
 		basic_rate_limit(config, rate_limit_ctx).await
 	}
 }

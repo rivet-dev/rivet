@@ -1,6 +1,5 @@
 use api_helper::{define_router, util::CorsConfigBuilder};
 use hyper::{Body, Request, Response};
-use rivet_api::models;
 use uuid::Uuid;
 
 pub mod envs;

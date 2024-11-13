@@ -27,7 +27,7 @@ impl<T: Display + Send + Sync, U: Serialize + Send + Sync> AsTags for (T, U) {
 		Ok(serde_json::Value::Object(
 			IntoIterator::into_iter([(
 				k.to_string(),
-				serde_json::to_value(&v).map_err(WorkflowError::SerializeTags)?,
+				serde_json::to_value(v).map_err(WorkflowError::SerializeTags)?,
 			)])
 			.collect(),
 		))

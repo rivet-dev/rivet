@@ -333,7 +333,6 @@ impl ApiEdge {
 #[derive(Default)]
 pub struct Cdn {}
 
-
 /// Configuration for DNS management.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
@@ -577,7 +576,6 @@ pub struct Tokens {
 	/// Token for API status checks.
 	pub status: Option<Secret<String>>,
 }
-
 
 /// Configuration for the health check service.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]

@@ -1,13 +1,13 @@
 use std::{
 	collections::hash_map::DefaultHasher,
-	hash::{Hash, Hasher},
 	fmt::Write,
+	hash::{Hash, Hasher},
 };
 
 use api_helper::ctx::Ctx;
+use ds::types::{GameGuardProtocol, PortAuthorization, PortAuthorizationType};
 use rivet_operation::prelude::*;
 use serde::{Deserialize, Serialize};
-use ds::types::{PortAuthorizationType, PortAuthorization, GameGuardProtocol};
 
 use crate::{auth::Auth, types};
 
@@ -15,7 +15,7 @@ use crate::{auth::Auth, types};
 struct DynamicServerProxiedPort {
 	server_id: Uuid,
 	datacenter_id: Uuid,
-	
+
 	label: String,
 	ip: String,
 
@@ -324,20 +324,29 @@ fn format_http_rule(
 	};
 
 	let mut rule = "(".to_string();
-	
+
 	write!(&mut rule, "Host(`{}`)", proxied_port.hostname(config)?)?;
 
 	match authorization {
 		PortAuthorization::None => {}
 		PortAuthorization::Bearer(token) => {
-			write!(&mut rule, "&& Header(`Authorization`, `Bearer {}`)", escape_input(&token))?;
+			write!(
+				&mut rule,
+				"&& Header(`Authorization`, `Bearer {}`)",
+				escape_input(&token)
+			)?;
 		}
 		PortAuthorization::Query(key, value) => {
-			write!(&mut rule, "&& Query(`{}`, `{}`)", escape_input(&key), escape_input(&value))?;
+			write!(
+				&mut rule,
+				"&& Query(`{}`, `{}`)",
+				escape_input(&key),
+				escape_input(&value)
+			)?;
 		}
 	}
 
-	rule.push_str(")");
+	rule.push(')');
 
 	Ok(rule)
 }

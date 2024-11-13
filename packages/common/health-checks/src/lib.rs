@@ -32,7 +32,7 @@ pub async fn run_standalone(config: Config) -> GlobalResult<()> {
 			let config = config.clone();
 			Ok::<_, Infallible>(service_fn(move |req: Request<Body>| {
 				let config = config.clone();
-				async move { handle_infallible(&*config, req).await }
+				async move { handle_infallible(&config, req).await }
 			}))
 		}
 	});

@@ -1,6 +1,6 @@
 use api_helper::ctx::Ctx;
 use rivet_api::models;
-use rivet_operation::prelude::{proto::backend::pkg::token, *};
+use rivet_operation::prelude::*;
 
 use crate::auth::Auth;
 

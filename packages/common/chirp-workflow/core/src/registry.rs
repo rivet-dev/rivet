@@ -16,6 +16,12 @@ pub struct Registry {
 	pub(crate) workflows: HashMap<String, Arc<RegistryWorkflow>>,
 }
 
+impl Default for Registry {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
 impl Registry {
 	pub fn new() -> Self {
 		Registry {
@@ -29,7 +35,7 @@ impl Registry {
 
 	pub fn merge(mut self, registry: Registry) -> WorkflowResult<Registry> {
 		// Check for duplicates
-		for (workflow_name, _) in &registry.workflows {
+		for workflow_name in registry.workflows.keys() {
 			if self.workflows.contains_key(workflow_name.as_str()) {
 				return Err(WorkflowError::DuplicateRegisteredWorkflow(
 					workflow_name.clone(),
@@ -37,7 +43,7 @@ impl Registry {
 			}
 		}
 
-		self.workflows.extend(registry.workflows.into_iter());
+		self.workflows.extend(registry.workflows);
 
 		Ok(self)
 	}

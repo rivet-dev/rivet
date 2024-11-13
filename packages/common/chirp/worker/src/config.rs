@@ -1,4 +1,4 @@
-use std::{env, fmt::Debug};
+use std::fmt::Debug;
 
 use crate::error::ManagerError;
 

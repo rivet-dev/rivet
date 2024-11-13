@@ -1,13 +1,8 @@
-set -e
+#!/bin/bash
 
-# Clean svc and libs
-(cd svc && cargo fix --workspace --allow-dirty)
-(cd lib/bolt && cargo fix --workspace --allow-dirty)
-(cd lib/convert && cargo fix --workspace --allow-dirty)
-(cd lib/util && cargo fix --workspace --allow-dirty)
+# This will log errors for tests that have not been fixed. The --keep-going flag
+# will ignore them.
 
-# Format svc and libs
-(cd svc && cargo fmt)
-(cd lib/bolt && cargo fmt)
-(cd lib/convert && cargo fmt)
-(cd lib/util && cargo fmt)
+cargo clippy --fix --keep-going -- -W warnings
+cargo fmt
+

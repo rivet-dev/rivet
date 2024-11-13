@@ -2,7 +2,7 @@ use rivet_api::models;
 use rivet_operation::prelude::*;
 use types_proto::rivet::backend;
 
-use crate::{convert, fetch, ApiTryInto};
+use crate::convert;
 
 pub fn handle(
 	config: &rivet_config::Config,
@@ -12,8 +12,8 @@ pub fn handle(
 		game_id: unwrap_ref!(game.game_id).as_uuid(),
 		name_id: game.name_id.to_owned(),
 		display_name: game.display_name.to_owned(),
-		logo_url: util::route::game_logo(config, &game),
-		banner_url: util::route::game_banner(config, &game),
+		logo_url: util::route::game_logo(config, game),
+		banner_url: util::route::game_banner(config, game),
 	})
 }
 
@@ -26,8 +26,8 @@ pub fn summary(
 		game_id: unwrap_ref!(game.game_id).as_uuid(),
 		name_id: game.name_id.to_owned(),
 		display_name: game.display_name.to_owned(),
-		logo_url: util::route::game_logo(config, &game),
-		banner_url: util::route::game_banner(config, &game),
+		logo_url: util::route::game_logo(config, game),
+		banner_url: util::route::game_banner(config, game),
 		developer: Box::new(convert::group::handle(config, dev_team)?),
 		// Deprecated
 		total_player_count: 0,

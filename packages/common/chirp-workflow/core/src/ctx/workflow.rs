@@ -111,7 +111,7 @@ impl WorkflowCtx {
 	}
 
 	/// Creates a workflow ctx reference with a given version.
-	pub fn v<'a>(&'a mut self, version: usize) -> VersionedWorkflowCtx<'a> {
+	pub fn v(&mut self, version: usize) -> VersionedWorkflowCtx<'_> {
 		VersionedWorkflowCtx::new(self, version)
 	}
 
@@ -164,7 +164,7 @@ impl WorkflowCtx {
 					// Write output
 					if let Err(err) = self.db.commit_workflow(self.workflow_id, &output).await {
 						if retries > MAX_DB_ACTION_RETRIES {
-							return Err(err.into());
+							return Err(err);
 						}
 						retries += 1;
 					} else {
@@ -225,7 +225,7 @@ impl WorkflowCtx {
 
 					if let Err(err) = res {
 						if retries > MAX_DB_ACTION_RETRIES {
-							return Err(err.into());
+							return Err(err);
 						}
 						retries += 1;
 					} else {
@@ -458,8 +458,9 @@ impl WorkflowCtx {
 				return Ok(output);
 			} else {
 				if retries > MAX_SUB_WORKFLOW_RETRIES {
-					return Err(WorkflowError::SubWorkflowIncomplete(sub_workflow_id))
-						.map_err(GlobalError::raw);
+					return Err(GlobalError::raw(WorkflowError::SubWorkflowIncomplete(
+						sub_workflow_id,
+					)));
 				}
 				retries += 1;
 			}
@@ -587,14 +588,12 @@ impl WorkflowCtx {
 						{
 							self.cursor.inc();
 
-							return Ok(Err(GlobalError::Raw(inner_err)));
+							Ok(Err(GlobalError::Raw(inner_err)))
 						} else {
-							return Err(GlobalError::Raw(inner_err));
+							Err(GlobalError::Raw(inner_err))
 						}
 					}
-					Err(err) => {
-						return Err(GlobalError::Raw(err));
-					}
+					Err(err) => Err(GlobalError::Raw(err)),
 				}
 			}
 			Err(err) => Err(err),
@@ -645,7 +644,7 @@ impl WorkflowCtx {
 					Ok(res) => break res,
 					Err(err) if matches!(err, WorkflowError::NoSignalFound(_)) => {
 						if retries > MAX_SIGNAL_RETRIES {
-							return Err(err).map_err(GlobalError::raw);
+							return Err(GlobalError::raw(err));
 						}
 						retries += 1;
 					}
@@ -700,7 +699,7 @@ impl WorkflowCtx {
 					Ok(res) => break res,
 					Err(err) if matches!(err, WorkflowError::NoSignalFound(_)) => {
 						if retries > MAX_SIGNAL_RETRIES {
-							return Err(err).map_err(GlobalError::raw);
+							return Err(GlobalError::raw(err));
 						}
 						retries += 1;
 					}
@@ -952,7 +951,7 @@ impl WorkflowCtx {
 		else {
 			tracing::info!(name=%self.name, id=%self.workflow_id, %deadline_ts, "sleeping");
 
-			return Err(WorkflowError::Sleep(deadline_ts)).map_err(GlobalError::raw);
+			return Err(GlobalError::raw(WorkflowError::Sleep(deadline_ts)));
 		}
 
 		// Move to next event
@@ -1029,11 +1028,10 @@ impl WorkflowCtx {
 				// Short circuit
 				return Ok(Some(signal));
 			} else {
-				return Err(WorkflowError::HistoryDiverged(format!(
+				return Err(GlobalError::raw(WorkflowError::HistoryDiverged(format!(
 					"expected signal at {}, found nothing",
 					location,
-				)))
-				.map_err(GlobalError::raw);
+				))));
 			}
 		}
 
@@ -1118,8 +1116,10 @@ impl WorkflowCtx {
 					Ok(res) => break Some(res),
 					Err(WorkflowError::NoSignalFound(signals)) => {
 						if retries > MAX_SIGNAL_RETRIES {
-							return Err(WorkflowError::NoSignalFoundAndSleep(signals, deadline_ts))
-								.map_err(GlobalError::raw);
+							return Err(GlobalError::raw(WorkflowError::NoSignalFoundAndSleep(
+								signals,
+								deadline_ts,
+							)));
 						}
 						retries += 1;
 					}

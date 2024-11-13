@@ -7,6 +7,7 @@ async fn handle(
 	ctx: OperationContext<cloud::namespace_create::Request>,
 ) -> GlobalResult<cloud::namespace_create::Response> {
 	let namespace_id = unwrap_ref!(ctx.namespace_id).as_uuid();
+	let creator_user_id = ctx.creator_user_id.as_ref().map(common::Uuid::as_uuid);
 
 	let ns_res = op!([ctx] game_namespace_get {
 		namespace_ids: vec![namespace_id.into()],
@@ -55,8 +56,8 @@ async fn handle(
 			analytics::msg::event_create::Event {
 				event_id: Some(Uuid::new_v4().into()),
 				name: "game.namespace.create".into(),
-				user_id: ctx.creator_user_id,
 				properties_json: Some(serde_json::to_string(&json!({
+					"user_id": creator_user_id,
 					"developer_team_id": developer_team_id,
 					"game_id": game_id,
 					"namespace_id": namespace_id,

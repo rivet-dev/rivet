@@ -75,10 +75,7 @@ impl DeleteInput {
 					query.push_kv("key", &aws_smithy_http::query::fmt_string(inner_1));
 				}
 				if let Some(inner_2) = &_input.namespace_id {
-					query.push_kv(
-						"namespace_id",
-						&aws_smithy_http::query::fmt_string(inner_2),
-					);
+					query.push_kv("namespace_id", &aws_smithy_http::query::fmt_string(inner_2));
 				}
 				Ok(())
 			}
@@ -213,10 +210,7 @@ impl DeleteBatchInput {
 					}
 				}
 				if let Some(inner_5) = &_input.namespace_id {
-					query.push_kv(
-						"namespace_id",
-						&aws_smithy_http::query::fmt_string(inner_5),
-					);
+					query.push_kv("namespace_id", &aws_smithy_http::query::fmt_string(inner_5));
 				}
 				Ok(())
 			}
@@ -354,10 +348,7 @@ impl GetInput {
 					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(inner_7));
 				}
 				if let Some(inner_8) = &_input.namespace_id {
-					query.push_kv(
-						"namespace_id",
-						&aws_smithy_http::query::fmt_string(inner_8),
-					);
+					query.push_kv("namespace_id", &aws_smithy_http::query::fmt_string(inner_8));
 				}
 				Ok(())
 			}
@@ -501,10 +492,7 @@ impl GetBatchInput {
 					}
 				}
 				if let Some(inner_11) = &_input.watch_index {
-					query.push_kv(
-						"watch_index",
-						&aws_smithy_http::query::fmt_string(inner_11),
-					);
+					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(inner_11));
 				}
 				if let Some(inner_12) = &_input.namespace_id {
 					query.push_kv(

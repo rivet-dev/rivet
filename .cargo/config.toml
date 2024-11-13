@@ -7,5 +7,3 @@
 # don't use a Cargo workspace since that causes issues with Cargo chef.
 target-dir = "./target"
 
-# NOTE: DO NOT set rustflags in this file. Use bolt.
-

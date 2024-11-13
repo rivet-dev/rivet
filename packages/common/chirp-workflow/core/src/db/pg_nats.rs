@@ -166,7 +166,7 @@ impl Database for DatabasePgNats {
 			.bind(workflow_name)
 			.bind(rivet_util::timestamp::now())
 			.bind(ray_id)
-			.bind(&tags)
+			.bind(tags)
 			.bind(sqlx::types::Json(input))
 			.execute(&mut *self.conn().await?)
 			.await
@@ -1181,7 +1181,7 @@ impl Database for DatabasePgNats {
 				",
 			))
 			.bind(workflow_id)
-			.bind(&location)
+			.bind(location)
 			.bind(version as i64)
 			.bind(iteration as i64)
 			.bind(output.map(sqlx::types::Json))
@@ -1280,7 +1280,7 @@ impl Database for DatabasePgNats {
 					",
 				))
 				.bind(workflow_id)
-				.bind(hash_location(&location)?)
+				.bind(hash_location(location)?)
 				.execute(&mut *tx)
 				.await
 				.map_err(WorkflowError::Sqlx)?;
@@ -1828,7 +1828,6 @@ mod types {
 						let mut last_coord = Coordinate::simple(0);
 						*events = events
 							.drain(..)
-							.into_iter()
 							.flat_map(|event| {
 								let last = last_coord.head();
 								let curr = event.coordinate.head();

@@ -1,7 +1,7 @@
-use std::{collections::HashMap, time::Duration};
+use std::time::Duration;
 
 use futures_util::stream::{StreamExt, TryStreamExt};
-use proto::backend::{self, pkg::*};
+use proto::backend::pkg::*;
 use rivet_operation::prelude::*;
 use serde_json::json;
 
@@ -9,7 +9,6 @@ use serde_json::json;
 struct UploadRow {
 	bucket: String,
 	user_id: Option<Uuid>,
-	provider: i64,
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -84,7 +83,7 @@ async fn fetch_files(
 		sql_fetch_one!(
 			[ctx, UploadRow]
 			"
-			SELECT bucket, provider, user_id
+			SELECT bucket, user_id
 			FROM db_upload.uploads
 			WHERE upload_id = $1
 			",

@@ -18,7 +18,7 @@ fn build_cookie_header(
 	// Localhost domains are considered secure, so we can leave `Secure` enabled even for local
 	// development.
 	let api_host = config.server()?.rivet.api_host()?;
-	let mut header = format!(
+	let header = format!(
 		"{USER_REFRESH_TOKEN_COOKIE}={refresh_token}; Max-Age={max_age}; HttpOnly; Path=/; SameSite=None; Secure; Domain={api_host}",
 	);
 

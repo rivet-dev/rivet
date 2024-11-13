@@ -65,7 +65,6 @@ pub struct Server {
 	pub nomad: Option<Nomad>,
 }
 
-
 impl Server {
 	pub fn tls(&self) -> GlobalResult<&Tls> {
 		Ok(unwrap_ref!(self.tls, "tls disabled"))

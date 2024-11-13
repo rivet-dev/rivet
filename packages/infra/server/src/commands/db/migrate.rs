@@ -47,7 +47,7 @@ impl SubCommand {
 					.iter()
 					.find(|x| x.db_name == service)
 					.context("service not found")?;
-				rivet_migrate::force(config, &service, num).await?;
+				rivet_migrate::force(config, service, num).await?;
 			}
 			Self::Drop { service } => {
 				let service = run_config
@@ -55,7 +55,7 @@ impl SubCommand {
 					.iter()
 					.find(|x| x.db_name == service)
 					.context("service not found")?;
-				rivet_migrate::drop(config, &service).await?;
+				rivet_migrate::drop(config, service).await?;
 			}
 		}
 

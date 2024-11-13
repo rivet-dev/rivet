@@ -7,17 +7,13 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TraefikHttpNullified {
 	#[allow(missing_docs)] // documentation missing in model
-	pub services: std::option::Option<
-		std::collections::HashMap<std::string::String, TraefikService>,
-	>,
+	pub services:
+		std::option::Option<std::collections::HashMap<std::string::String, TraefikService>>,
 	#[allow(missing_docs)] // documentation missing in model
-	pub routers: std::option::Option<
-		std::collections::HashMap<std::string::String, TraefikRouter>,
-	>,
+	pub routers: std::option::Option<std::collections::HashMap<std::string::String, TraefikRouter>>,
 	#[allow(missing_docs)] // documentation missing in model
-	pub middlewares: std::option::Option<
-		std::collections::HashMap<std::string::String, TraefikMiddleware>,
-	>,
+	pub middlewares:
+		std::option::Option<std::collections::HashMap<std::string::String, TraefikMiddleware>>,
 }
 
 #[allow(missing_docs)] // documentation missing in model
@@ -264,4 +260,3 @@ pub struct TraefikConfigResponse {
 	#[allow(missing_docs)] // documentation missing in model
 	pub http: TraefikHttpNullified,
 }
-

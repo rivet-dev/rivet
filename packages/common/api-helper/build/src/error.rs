@@ -72,33 +72,29 @@ pub fn handle_rejection(
 	};
 
 	// Modify request based on error
-	match &err {
-		GlobalError::BadRequest { code, metadata, .. } => {
-			if code == formatted_error::code::API_RATE_LIMIT {
-				if let Some(ts) = metadata
-					.as_ref()
-					.map(|m| serde_json::from_str::<i64>(m).ok())
-					.flatten()
+	if let GlobalError::BadRequest { code, metadata, .. } = &err {
+		if code == formatted_error::code::API_RATE_LIMIT {
+			if let Some(ts) = metadata
+				.as_ref()
+				.and_then(|m| serde_json::from_str::<i64>(m).ok())
+			{
+				if let chrono::LocalResult::Single(retry_after_ts) =
+					chrono::Utc.timestamp_millis_opt(ts)
 				{
-					if let chrono::LocalResult::Single(retry_after_ts) =
-						chrono::Utc.timestamp_millis_opt(ts)
-					{
-						// Add retry-after header
-						if let (Some(headers), Ok(retry_after)) = (
-							response.headers_mut(),
-							HeaderValue::from_str(retry_after_ts.to_rfc7231().as_str()),
-						) {
-							headers.insert("retry-after", retry_after);
-						} else {
-							tracing::error!("failed to get response headers");
-						}
+					// Add retry-after header
+					if let (Some(headers), Ok(retry_after)) = (
+						response.headers_mut(),
+						HeaderValue::from_str(retry_after_ts.to_rfc7231().as_str()),
+					) {
+						headers.insert("retry-after", retry_after);
+					} else {
+						tracing::error!("failed to get response headers");
 					}
-				} else {
-					tracing::error!("failed to get/parse API_RATE_LIMIT metadata");
 				}
+			} else {
+				tracing::error!("failed to get/parse API_RATE_LIMIT metadata");
 			}
 		}
-		_ => {}
 	};
 
 	// Build response

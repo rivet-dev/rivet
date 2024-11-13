@@ -52,6 +52,7 @@ async fn handle(
 						custom_header,
 					})
 				}
+				#[allow(unreachable_patterns)]
 				_ => Either::Right(()),
 			});
 

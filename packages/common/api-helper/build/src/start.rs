@@ -67,7 +67,7 @@ where
 			async move {
 				let method = req.method().clone();
 				let uri = req.uri().clone();
-				let protocol = req.version().clone();
+				let protocol = req.version();
 
 				let headers = req.headers();
 				let referrer = headers
@@ -114,16 +114,16 @@ where
 						},
 						Err(_) => {
 							tracing::error!("http error");
-							return Ok(Response::builder()
+							return Response::builder()
 								.status(http::StatusCode::INTERNAL_SERVER_ERROR)
-								.body(Body::empty())?);
+								.body(Body::empty());
 						}
 					},
 					Err(err) => {
 						tracing::error!(?err, "tokio spawn error");
-						return Ok(Response::builder()
+						return Response::builder()
 							.status(http::StatusCode::INTERNAL_SERVER_ERROR)
-							.body(Body::empty())?);
+							.body(Body::empty());
 					}
 				};
 

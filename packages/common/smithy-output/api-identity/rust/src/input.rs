@@ -677,10 +677,7 @@ impl GetIdentityHandlesInput {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_5) = &_input.identity_ids {
 					for inner_6 in inner_5 {
-						query.push_kv(
-							"identity_ids",
-							&aws_smithy_http::query::fmt_string(inner_6),
-						);
+						query.push_kv("identity_ids", &aws_smithy_http::query::fmt_string(inner_6));
 					}
 				}
 				Ok(())
@@ -1170,10 +1167,7 @@ impl ListActivitiesInput {
 			) -> Result<(), aws_smithy_http::operation::BuildError> {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_12) = &_input.watch_index {
-					query.push_kv(
-						"watch_index",
-						&aws_smithy_http::query::fmt_string(inner_12),
-					);
+					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(inner_12));
 				}
 				Ok(())
 			}
@@ -1348,10 +1342,7 @@ impl ListFollowersInput {
 					);
 				}
 				if let Some(inner_16) = &_input.watch_index {
-					query.push_kv(
-						"watch_index",
-						&aws_smithy_http::query::fmt_string(inner_16),
-					);
+					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(inner_16));
 				}
 				Ok(())
 			}
@@ -1526,10 +1517,7 @@ impl ListFollowingInput {
 					);
 				}
 				if let Some(inner_20) = &_input.watch_index {
-					query.push_kv(
-						"watch_index",
-						&aws_smithy_http::query::fmt_string(inner_20),
-					);
+					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(inner_20));
 				}
 				Ok(())
 			}
@@ -1673,10 +1661,7 @@ impl ListFriendsInput {
 					);
 				}
 				if let Some(inner_23) = &_input.watch_index {
-					query.push_kv(
-						"watch_index",
-						&aws_smithy_http::query::fmt_string(inner_23),
-					);
+					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(inner_23));
 				}
 				Ok(())
 			}
@@ -1981,10 +1966,7 @@ impl ListRecentFollowersInput {
 					);
 				}
 				if let Some(inner_29) = &_input.watch_index {
-					query.push_kv(
-						"watch_index",
-						&aws_smithy_http::query::fmt_string(inner_29),
-					);
+					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(inner_29));
 				}
 				Ok(())
 			}
@@ -3911,10 +3893,7 @@ impl WatchEventsInput {
 			) -> Result<(), aws_smithy_http::operation::BuildError> {
 				let mut query = aws_smithy_http::query::Writer::new(&mut output);
 				if let Some(inner_36) = &_input.watch_index {
-					query.push_kv(
-						"watch_index",
-						&aws_smithy_http::query::fmt_string(inner_36),
-					);
+					query.push_kv("watch_index", &aws_smithy_http::query::fmt_string(inner_36));
 				}
 				Ok(())
 			}

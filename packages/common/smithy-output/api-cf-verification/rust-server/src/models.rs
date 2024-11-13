@@ -13,4 +13,3 @@ pub struct VerifyCustomHostnameResponse {
 	#[allow(missing_docs)] // documentation missing in model
 	pub body: std::string::String,
 }
-

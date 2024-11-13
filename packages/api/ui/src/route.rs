@@ -69,7 +69,7 @@ impl Router {
 
 		match content {
 			Some(content) => {
-				let content_type = mime_guess::from_path(&path).first_or_octet_stream();
+				let content_type = mime_guess::from_path(path).first_or_octet_stream();
 				tracing::info!(
 					path = ?path,
 					?content_type,

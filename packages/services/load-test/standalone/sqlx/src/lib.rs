@@ -19,7 +19,8 @@ pub async fn run_from_env(
 	let ctx = OperationContext::new(
 		"load-test-sqlx".into(),
 		std::time::Duration::from_secs(60),
-		config,rivet_connection::Connection::new(client, pools, cache),
+		config,
+		rivet_connection::Connection::new(client, pools, cache),
 		Uuid::new_v4(),
 		Uuid::new_v4(),
 		util::timestamp::now(),

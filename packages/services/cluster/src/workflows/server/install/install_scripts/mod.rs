@@ -104,7 +104,7 @@ pub async fn gen_initialize(
 	// MARK: Specific pool components
 	match pool_type {
 		PoolType::Job => {
-			script.push(components::nomad::configure(&config)?);
+			script.push(components::nomad::configure(config)?);
 
 			prometheus_targets.insert(
 				"nomad".into(),

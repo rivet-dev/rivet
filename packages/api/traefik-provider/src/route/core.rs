@@ -32,7 +32,7 @@ pub async fn config(
 ) -> GlobalResult<types::TraefikConfigResponseNullified> {
 	ctx.auth().token(&token).await?;
 
-	let mut config = types::TraefikConfigResponse::default();
+	let config = types::TraefikConfigResponse::default();
 
 	// Fetch configs and catch any errors
 	// build_cdn(&ctx, &mut config).await?;

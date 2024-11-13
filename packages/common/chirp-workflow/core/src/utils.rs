@@ -167,7 +167,7 @@ pub fn format_location(loc: &Location) -> String {
 		s.push_str(&x.to_string());
 	}
 
-	s.push_str("}");
+	s.push('}');
 
 	s
 }

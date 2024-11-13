@@ -7,7 +7,6 @@ use proto::backend::{self, pkg::*};
 use rivet_api::models;
 use rivet_convert::ApiTryInto;
 use rivet_operation::prelude::*;
-use serde_json::json;
 
 use crate::{auth::Auth, utils::refresh_token_header};
 

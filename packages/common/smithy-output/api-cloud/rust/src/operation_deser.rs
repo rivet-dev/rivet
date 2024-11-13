@@ -1518,7 +1518,8 @@ pub fn parse_create_game_namespace_token_development_response(
 > {
 	Ok({
 		#[allow(unused_mut)]
-		let mut output = crate::output::create_game_namespace_token_development_output::Builder::default();
+		let mut output =
+			crate::output::create_game_namespace_token_development_output::Builder::default();
 		let _ = response;
 		output = crate::json_deser::deser_operation_crate_operation_create_game_namespace_token_development(response.body().as_ref(), output).map_err(crate::error::CreateGameNamespaceTokenDevelopmentError::unhandled)?;
 		output.build()
@@ -4473,7 +4474,8 @@ pub fn parse_get_namespace_analytics_matchmaker_live_response(
 > {
 	Ok({
 		#[allow(unused_mut)]
-		let mut output = crate::output::get_namespace_analytics_matchmaker_live_output::Builder::default();
+		let mut output =
+			crate::output::get_namespace_analytics_matchmaker_live_output::Builder::default();
 		let _ = response;
 		output = crate::json_deser::deser_operation_crate_operation_get_namespace_analytics_matchmaker_live(response.body().as_ref(), output).map_err(crate::error::GetNamespaceAnalyticsMatchmakerLiveError::unhandled)?;
 		output.build()
@@ -6944,7 +6946,8 @@ pub fn parse_update_game_namespace_matchmaker_config_response(
 > {
 	Ok({
 		#[allow(unused_mut)]
-		let mut output = crate::output::update_game_namespace_matchmaker_config_output::Builder::default();
+		let mut output =
+			crate::output::update_game_namespace_matchmaker_config_output::Builder::default();
 		let _ = response;
 		output.build()
 	})

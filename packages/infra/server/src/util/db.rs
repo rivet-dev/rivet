@@ -33,7 +33,7 @@ pub async fn redis_shell(config: rivet_config::Config, shell_ctx: ShellContext<'
 		let port = parsed_url.port().unwrap_or(6379);
 
 		let mut cmd = std::process::Command::new("redis-cli");
-		cmd.args(&["-h", hostname, "-p", &port.to_string(), "-c", "--tls"]);
+		cmd.args(["-h", hostname, "-p", &port.to_string(), "-c", "--tls"]);
 		if let Some(username) = &redis_config.username {
 			cmd.arg("--user").arg(username);
 		}
@@ -98,7 +98,7 @@ pub async fn cockroachdb_shell(
 		cmd.arg(&db_url);
 
 		if let Some(query) = query {
-			cmd.args(&["-c", query]);
+			cmd.args(["-c", query]);
 		}
 
 		// See https://github.com/cockroachdb/cockroach/issues/37129#issuecomment-600115995
