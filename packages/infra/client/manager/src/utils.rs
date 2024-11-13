@@ -28,46 +28,48 @@ const TXN_RETRY: Duration = Duration::from_millis(250);
 pub const CGROUP_PATH: &str = "/sys/fs/cgroup/pegboard_runners";
 
 pub async fn init_dir(config: &Config) -> Result<()> {
-	if fs::metadata(&config.data_dir).await.is_err() {
-		bail!("data dir `{}` does not exist", config.data_dir.display());
+	let data_dir = config.client.runtime.data_dir();
+
+	if fs::metadata(&data_dir).await.is_err() {
+		bail!("data dir `{}` does not exist", data_dir.display());
 	}
 
-	if config.flavor == protocol::ClientFlavor::Container
-		&& fs::metadata(&config.container_runner_binary_path)
+	if config.client.runtime.flavor == protocol::ClientFlavor::Container
+		&& fs::metadata(&config.client.runtime.container_runner_binary_path())
 			.await
 			.is_err()
 	{
 		bail!(
 			"container runner binary `{}` does not exist",
-			config.container_runner_binary_path.display()
+			config.client.runtime.container_runner_binary_path().display()
 		);
 	}
 
-	if config.flavor == protocol::ClientFlavor::Isolate
-		&& fs::metadata(&config.isolate_runner_binary_path)
+	if config.client.runtime.flavor == protocol::ClientFlavor::Isolate
+		&& fs::metadata(&config.client.runtime.isolate_runner_binary_path())
 			.await
 			.is_err()
 	{
 		bail!(
 			"isolate runner binary `{}` does not exist",
-			config.isolate_runner_binary_path.display()
+			config.client.runtime.isolate_runner_binary_path().display()
 		);
 	}
 
 	// Create actors dir
-	match fs::create_dir(config.data_dir.join("actors")).await {
+	match fs::create_dir(data_dir.join("actors")).await {
 		Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
 		x => x.context("failed to create /actors dir in data dir")?,
 	}
 
 	// Create runner dir
-	match fs::create_dir(config.data_dir.join("runner")).await {
+	match fs::create_dir(data_dir.join("runner")).await {
 		Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
 		x => x.context("failed to create /runner dir in data dir")?,
 	}
 
 	// Create db dir
-	match fs::create_dir(config.data_dir.join("db")).await {
+	match fs::create_dir(data_dir.join("db")).await {
 		Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
 		x => x.context("failed to create /db dir in data dir")?,
 	}
@@ -229,7 +231,7 @@ where
 				use sqlx::Error::*;
 
 				if i > MAX_QUERY_RETRIES {
-					bail!("max sql retries: {err}");
+					bail!("max sql retries: {err:?}");
 				}
 				i += 1;
 

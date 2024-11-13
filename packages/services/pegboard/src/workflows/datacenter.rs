@@ -125,13 +125,13 @@ async fn allocate_actor(
 				-- Millicores
 				(
 					COALESCE((c.system_info->'cpu'->'physical_core_count')::INT, 0) * 1000 -
-					COALESCE((c.config->'reserved_cpu')::INT, 0)
+					COALESCE((c.config->'reserved_resources'->'cpu')::INT, 0)
 				) AS available_cpu,
 				-- MiB
 				(
 					-- Convert bytes to MiB
 					COALESCE(((c.system_info->'memory'->'total_memory')::INT), 0) // 1048576 - 
-					COALESCE(((c.config->'reserved_memory')::INT), 0) 
+					COALESCE(((c.config->'reserved_resources'->'memory')::INT), 0) 
 				) AS available_memory,
 				-- Millicores
 				COALESCE(SUM_INT((a.config->'resources'->'cpu')::INT), 0) AS allocated_cpu,

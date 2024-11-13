@@ -20,6 +20,7 @@ pub struct Input {
 	pub api_token: Option<String>,
 	pub firewall_preset: FirewallPreset,
 	pub vlan_ip: Option<Ipv4Addr>,
+	pub vlan_ip_net: Option<ipnet::Ipv4Net>,
 	pub tags: Vec<String>,
 }
 
@@ -179,6 +180,7 @@ async fn provision(
 	ctx.activity(CreateInstanceConfigInput {
 		api_token: input.api_token.clone(),
 		vlan_ip: input.vlan_ip,
+		vlan_ip_net: input.vlan_ip_net,
 		linode_id: create_instance_res.linode_id,
 		boot_disk_id,
 		swap_disk_id,
@@ -362,6 +364,7 @@ async fn create_swap_disk(ctx: &ActivityCtx, input: &CreateSwapDiskInput) -> Glo
 struct CreateInstanceConfigInput {
 	api_token: Option<String>,
 	vlan_ip: Option<Ipv4Addr>,
+	vlan_ip_net: Option<ipnet::Ipv4Net>,
 	linode_id: u64,
 	boot_disk_id: u64,
 	swap_disk_id: u64,
@@ -377,7 +380,8 @@ async fn create_instance_config(
 	api::create_instance_config(
 		ctx.config(),
 		&client,
-		input.vlan_ip.as_ref(),
+		input.vlan_ip,
+		input.vlan_ip_net,
 		input.linode_id,
 		input.boot_disk_id,
 		input.swap_disk_id,

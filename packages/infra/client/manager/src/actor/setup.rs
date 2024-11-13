@@ -20,13 +20,6 @@ use uuid::Uuid;
 use super::{oci_config, Actor};
 use crate::{ctx::Ctx, utils};
 
-const NETWORK_NAME: &str = "rivet-pegboard";
-// Should match util::net::job
-const MIN_GG_PORT: u16 = 20000;
-const MAX_GG_PORT: u16 = 25999;
-const MIN_HOST_PORT: u16 = 26000;
-const MAX_HOST_PORT: u16 = 31999;
-
 impl Actor {
 	pub async fn download_image(&self, ctx: &Ctx) -> Result<()> {
 		tracing::info!(actor_id=?self.actor_id, "downloading artifact");
@@ -288,7 +281,7 @@ impl Actor {
 				.map(|(label, port)| format!("PORT_{}={}", label.replace('-', "_"), port.target))
 				.chain(std::iter::once(format!(
 					"RIVET_API_ENDPOINT={}",
-					ctx.config().api_public_endpoint
+					ctx.config().cluster.api_endpoint
 				)))
 				.collect(),
 		);
@@ -413,10 +406,10 @@ impl Actor {
 						port.target.to_string(),
 					)
 				}))
-				.chain(std::iter::once(("RIVET_API_ENDPOINT".to_string(), ctx.config().api_public_endpoint.to_string())))
+				.chain(std::iter::once(("RIVET_API_ENDPOINT".to_string(), ctx.config().cluster.api_endpoint.to_string())))
 				.collect::<HashMap<_, _>>(),
 			"stakeholder": self.config.stakeholder,
-			"vector_socket_addr": ctx.config().vector_socket_addr,
+			"vector_socket_addr": ctx.config().logs.vector_address,
 		});
 		fs::write(
 			actor_path.join("config.json"),
@@ -478,6 +471,7 @@ impl Actor {
 		// Name of the network in /opt/cni/config/$NETWORK_NAME.conflist
 		tracing::info!(actor_id=?self.actor_id, "creating network");
 
+		let cni_network_name = &ctx.config().cni.network_name();
 		let cmd_out = Command::new("ip")
 			.arg("netns")
 			.arg("add")
@@ -490,19 +484,19 @@ impl Actor {
 			std::str::from_utf8(&cmd_out.stderr)?
 		);
 
-		tracing::info!(actor_id=?self.actor_id, "adding network {NETWORK_NAME} to namespace {}", netns_path.display());
+		tracing::info!(actor_id=?self.actor_id, "adding network {cni_network_name} to namespace {}", netns_path.display());
 		tracing::debug!(
 			"Adding network {} to namespace {}",
-			NETWORK_NAME,
+			cni_network_name,
 			netns_path.display(),
 		);
 		let cmd_out = Command::new("cnitool")
 			.arg("add")
-			.arg(NETWORK_NAME)
+			.arg(cni_network_name)
 			.arg(netns_path)
-			.env("CNI_PATH", "/opt/cni/bin")
-			.env("NETCONFPATH", "/opt/cni/config")
-			.env("CNI_IFNAME", "eth0")
+			.env("CNI_PATH", &ctx.config().cni.bin_path())
+			.env("NETCONFPATH", &ctx.config().cni.config_path())
+			.env("CNI_IFNAME", &ctx.config().cni.network_interface())
 			.env("CAP_ARGS", cni_params_json)
 			.output()
 			.await?;
@@ -527,12 +521,12 @@ impl Actor {
 
 		// TODO: Could combine these into one query
 		let (mut gg_port_rows, mut host_port_rows) = tokio::try_join!(
-			bind_ports_inner(ctx, self.actor_id, &gg_ports, MIN_GG_PORT..=MAX_GG_PORT),
+			bind_ports_inner(ctx, self.actor_id, &gg_ports, ctx.config().actor.network.lan_port_range_min()..=ctx.config().actor.network.lan_port_range_max()),
 			bind_ports_inner(
 				ctx,
 				self.actor_id,
 				&host_ports,
-				MIN_HOST_PORT..=MAX_HOST_PORT
+				ctx.config().actor.network.wan_port_range_min()..=ctx.config().actor.network.wan_port_range_max()
 			),
 		)?;
 
@@ -557,7 +551,7 @@ impl Actor {
 							source: host_port,
 							// When no target port was selected, default to randomly selected host port
 							target: port.target.unwrap_or(host_port),
-							ip: ctx.config().actor_network_ip,
+							ip: ctx.config().actor.network.bind_ip,
 							protocol: port.protocol,
 						},
 					)
@@ -573,7 +567,7 @@ impl Actor {
 								source: host_port,
 								// When no target port was selected, default to randomly selected host port
 								target: port.target.unwrap_or(host_port),
-								ip: ctx.config().actor_network_ip,
+								ip: ctx.config().actor.network.bind_ip,
 								protocol: port.protocol,
 							},
 						)
@@ -617,11 +611,11 @@ impl Actor {
 						Ok(cni_params_json) => {
 							match Command::new("cnitool")
 								.arg("del")
-								.arg(NETWORK_NAME)
+								.arg(&ctx.config().cni.network_name())
 								.arg(netns_path)
-								.env("CNI_PATH", "/opt/cni/bin")
-								.env("NETCONFPATH", "/opt/cni/config")
-								.env("CNI_IFNAME", "eth0")
+								.env("CNI_PATH", &ctx.config().cni.bin_path())
+								.env("NETCONFPATH", &ctx.config().cni.config_path())
+								.env("CNI_IFNAME", &ctx.config().cni.network_interface())
 								.env("CAP_ARGS", cni_params_json)
 								.output()
 								.await

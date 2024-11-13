@@ -78,7 +78,7 @@ async function createActor(datacenterId: string, buildId: string) {
     network: {
       mode: "host",
       ports: {
-        http: { protocol: "tcp" },
+        http: { protocol: "tcp", routing: { host: {} } },
       },
     },
     resources: { cpu: 1000, memory: 1000 },
@@ -88,13 +88,50 @@ async function createActor(datacenterId: string, buildId: string) {
   });
 
   while (true) {
-    const { actor } = await httpRequest("GET", `${ENDPOINT}/actors/${createResponse.actor.id}`);
+    const { actor } = await httpRequest(
+      "GET",
+      `${ENDPOINT}/actors/${createResponse.actor.id}`,
+    );
     if (actor.network.ports.http.public_hostname != null) {
       return actor;
     } else {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
   }
+}
+
+async function pingActor(actor) {
+  while (true) {
+    try {
+      console.log("Pinging actor");
+
+      const response = await fetch(
+        `http://${actor.network.ports.http.public_hostname}:${actor.network.ports.http.public_port}`,
+        {
+          method: "POST",
+          body: "foo",
+        },
+      );
+      const responseBody = await response.text();
+      // Validate the response
+      if (responseBody === "foo") {
+        console.log("Response validated successfully.");
+      } else {
+        console.error("Response validation failed.");
+      }
+
+      console.log();
+
+      break;
+    } catch (err) {
+      console.log("Failed to ping actor:", err);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+  }
+}
+
+async function destroyActor(actor) {
+  await httpRequest("DELETE", `${ENDPOINT}/actors/${actor.id}`);
 }
 
 async function main() {
@@ -103,21 +140,9 @@ async function main() {
   const datacenters = await listDatacenters();
   const actor = await createActor(datacenters[0].id, buildId);
 
-  const response = await fetch(
-    `http://${actor.network.ports.http.public_hostname}:${actor.network.ports.http.public_port}`,
-    {
-      method: "POST",
-      body: "foo",
-    },
-  );
-  const responseBody = await response.text();
+  await pingActor(actor);
 
-  // Validate the response
-  if (responseBody === "foo") {
-    console.log("Response validated successfully.");
-  } else {
-    console.error("Response validation failed.");
-  }
+  await destroyActor(actor);
 }
 
 await main();

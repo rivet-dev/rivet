@@ -337,6 +337,8 @@ async fn choose_ingress_port(
 ) -> GlobalResult<i32> {
 	use backend::job::ProxyProtocol;
 
+	let gg_config = &ctx.config().server()?.rivet.game_guard;
+
 	let ingress_port = if let Some(ingress_port) = proxied_port.ingress_port {
 		ingress_port as i32
 	} else {
@@ -347,19 +349,19 @@ async fn choose_ingress_port(
 			ProxyProtocol::Https => 443,
 			ProxyProtocol::Tcp | ProxyProtocol::TcpTls => {
 				bind_with_retries(
-					ctx,
+					ctx.clone(),
 					tx,
 					proxied_port.proxy_protocol,
-					util::net::job::MIN_INGRESS_PORT_TCP..=util::net::job::MAX_INGRESS_PORT_TCP,
+					gg_config.min_ingress_port_tcp()..=gg_config.max_ingress_port_tcp(),
 				)
 				.await?
 			}
 			ProxyProtocol::Udp => {
 				bind_with_retries(
-					ctx,
+					ctx.clone(),
 					tx,
 					proxied_port.proxy_protocol,
-					util::net::job::MIN_INGRESS_PORT_UDP..=util::net::job::MAX_INGRESS_PORT_UDP,
+					gg_config.min_ingress_port_udp()..=gg_config.max_ingress_port_udp(),
 				)
 				.await?
 			}

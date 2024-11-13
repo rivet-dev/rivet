@@ -7,6 +7,12 @@ use uuid::Uuid;
 
 use crate::secret::Secret;
 
+pub mod cluster_provision;
+pub mod dc_provision;
+
+pub use cluster_provision::*;
+pub use dc_provision::*;
+
 pub mod default_dev_cluster {
 	use uuid::{uuid, Uuid};
 
@@ -61,10 +67,13 @@ pub struct Rivet {
 	///
 	/// Enterprise only.
 	#[serde(default)]
-	pub provision: Option<ClusterProvision>,
+	pub provision: Option<cluster_provision::ClusterProvision>,
 
 	#[serde(default, rename = "orchestrator")]
 	pub pegboard: Pegboard,
+
+	#[serde(default)]
+	pub game_guard: GameGuard,
 
 	#[serde(default)]
 	pub auth: Auth,
@@ -123,6 +132,7 @@ impl Default for Rivet {
 			tunnel: Default::default(),
 			ui: Default::default(),
 			pegboard: Pegboard::default(),
+			game_guard: GameGuard::default(),
 			job_run: None,
 			auth: Auth::default(),
 			token: Tokens::default(),
@@ -185,7 +195,7 @@ impl Rivet {
 		}
 	}
 
-	pub fn provision(&self) -> GlobalResult<&ClusterProvision> {
+	pub fn provision(&self) -> GlobalResult<&cluster_provision::ClusterProvision> {
 		Ok(unwrap_ref!(self.provision, "provision disabled"))
 	}
 
@@ -380,35 +390,6 @@ impl Cluster {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct ClusterProvision {
-	/// Configuration for server pools that use a margin for scaling.
-	pub pools: ClusterPools,
-
-	/// The URL for the manager binary.
-	pub manager_binary_url: Url,
-
-	/// The URL for the container runner binary.
-	pub container_runner_binary_url: Url,
-
-	/// The URL for the isolate runner binary.
-	pub isolate_runner_binary_url: Url,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct ClusterPools {
-	pub job: ClusterPool,
-	pub pegboard: ClusterPool,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct ClusterPool {
-	pub provision_margin: u32,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Datacenter {
 	/// This ID must not change.
 	pub id: Uuid,
@@ -431,11 +412,11 @@ pub struct Datacenter {
 	///
 	/// Enterprise only.
 	#[serde(default)]
-	pub provision: Option<DatacenterProvision>,
+	pub provision: Option<dc_provision::DatacenterProvision>,
 }
 
 impl Datacenter {
-	pub fn pools(&self) -> HashMap<PoolType, Pool> {
+	pub fn pools(&self) -> HashMap<dc_provision::PoolType, dc_provision::Pool> {
 		self.provision
 			.as_ref()
 			.map_or_else(|| HashMap::new(), |x| x.pools.clone())
@@ -462,47 +443,6 @@ pub struct DatacenterHardware {
 	pub bandwidth: u32,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct DatacenterProvision {
-	pub provider: Provider,
-	pub provider_datacenter_id: String,
-	pub pools: HashMap<PoolType, Pool>,
-	pub prebakes_enabled: bool,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub enum Provider {
-	Linode,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct Pool {
-	pub hardware: Vec<Hardware>,
-	pub desired_count: u32,
-	pub min_count: u32,
-	pub max_count: u32,
-	pub drain_timeout: u64,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub enum PoolType {
-	Job,
-	Gg,
-	Ats,
-	Pegboard,
-	PegboardIsolate,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct Hardware {
-	pub name: String,
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum BuildDeliveryMethod {
@@ -527,6 +467,35 @@ impl Pegboard {
 
 	pub fn port(&self) -> u16 {
 		self.port.unwrap_or(default_ports::PEGBOARD)
+	}
+}
+
+/// The port ranges define what ports Game Guard will allocate ports on. If using cluster
+/// provisioning, these are also used for firewall rules.
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct GameGuard {
+	pub min_ingress_port_tcp: Option<u16>,
+	pub max_ingress_port_tcp: Option<u16>,
+	pub min_ingress_port_udp: Option<u16>,
+	pub max_ingress_port_udp: Option<u16>,
+}
+
+impl GameGuard {
+	pub fn min_ingress_port_tcp(&self) -> u16 {
+		self.min_ingress_port_tcp.unwrap_or(20000)
+	}
+
+	pub fn max_ingress_port_tcp(&self) -> u16 {
+		self.max_ingress_port_tcp.unwrap_or(31999)
+	}
+
+	pub fn min_ingress_port_udp(&self) -> u16 {
+		self.min_ingress_port_udp.unwrap_or(20000)
+	}
+
+	pub fn max_ingress_port_udp(&self) -> u16 {
+		self.max_ingress_port_udp.unwrap_or(31999)
 	}
 }
 

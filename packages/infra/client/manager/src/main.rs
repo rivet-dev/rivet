@@ -92,17 +92,24 @@ async fn init() -> Result<Init> {
 	let config_data = fs::read_to_string(&config_path)
 		.await
 		.with_context(|| format!("Failed to read config file at {}", config_path.display()))?;
-	let config = serde_json::from_str::<Config>(&config_data)
-		.with_context(|| format!("Failed to parse config file at {}", config_path.display()))?;
 
-	if config.redirect_logs {
-		redirect_logs(config.data_dir.join("log")).await?;
+	// Determine config format and parse
+	let config = match config_path.extension().and_then(|s| s.to_str()) {
+		Some("json") => serde_json::from_str::<Config>(&config_data)
+			.with_context(|| format!("Failed to parse JSON config file at {}", config_path.display()))?,
+		Some("yaml") | Some("yml") => serde_yaml::from_str::<Config>(&config_data)
+			.with_context(|| format!("Failed to parse YAML config file at {}", config_path.display()))?,
+		_ => bail!("unrecognized config file extension at {}", config_path.display()),
+	};
+
+	if config.client.logs.redirect_logs() {
+		redirect_logs(config.client.runtime.data_dir().join("log")).await?;
 	}
 
 	// SAFETY: No other task has spawned yet.
 	// Set client_id env var so it can be read by the prometheus registry
 	unsafe {
-		std::env::set_var("CLIENT_ID", config.client_id.to_string());
+		std::env::set_var("CLIENT_ID", config.client.cluster.client_id.to_string());
 	}
 
 	// Read system metrics
@@ -114,7 +121,7 @@ async fn init() -> Result<Init> {
 	// Init sqlite db
 	let sqlite_db_url = format!(
 		"sqlite://{}",
-		config.data_dir.join("db").join("database.db").display()
+		config.client.runtime.data_dir().join("db").join("database.db").display()
 	);
 	utils::init_sqlite_db(&sqlite_db_url).await?;
 
@@ -123,12 +130,12 @@ async fn init() -> Result<Init> {
 	utils::init_sqlite_schema(&pool).await?;
 
 	// Build WS connection URL
-	let mut url = config.pegboard_ws_endpoint.clone();
+	let mut url = config.client.cluster.pegboard_endpoint.clone();
 	url.set_path(&format!("/v{PROTOCOL_VERSION}"));
 	url.query_pairs_mut()
-		.append_pair("client_id", &config.client_id.to_string())
-		.append_pair("datacenter_id", &config.datacenter_id.to_string())
-		.append_pair("flavor", &config.flavor.to_string());
+		.append_pair("client_id", &config.client.cluster.client_id.to_string())
+		.append_pair("datacenter_id", &config.client.cluster.datacenter_id.to_string())
+		.append_pair("flavor", &config.client.runtime.flavor.to_string());
 
 	Ok(Init {
 		config,

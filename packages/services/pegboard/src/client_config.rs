@@ -1,20 +1,32 @@
 use serde::{Deserialize, Serialize};
-use std::net::{IpAddr, Ipv4Addr};
 
+/// See corresponding documentation in `pegboard_manager::config::Config`
 #[derive(Debug, Serialize, Deserialize, Hash)]
 pub struct ClientConfig {
-	/// See pegboard_manager::config::Config::actor_network_ip.
-	pub actor_network_ip: Ipv4Addr,
+	pub actor: Actor,
+	pub reserved_resources: ReservedResources,
+}
 
-	/// See pegboard_manager::config::Config::actor_vlan_ip.
-	pub actor_vlan_ip: IpAddr,
+#[derive(Debug, Serialize, Deserialize, Hash)]
+pub struct Actor {
+	pub network: ActorNetwork,
+}
 
-	/// See pegboard_manager::config::Config::actor_public_ip.
-	pub actor_public_ip: IpAddr,
+#[derive(Debug, Serialize, Deserialize, Hash)]
+pub struct ActorNetwork {
+	pub bind_ip: String,
+	pub lan_ip: String,
+	pub wan_ip: String,
+	pub lan_port_range_min: u16,
+	pub lan_port_range_max: u16,
+	pub wan_port_range_min: u16,
+	pub wan_port_range_max: u16,
+}
 
+#[derive(Debug, Serialize, Deserialize, Hash)]
+pub struct ReservedResources {
 	// Millicores
-	pub reserved_cpu: u64,
-
-	// MiB
-	pub reserved_memory: u64,
+	pub cpu: u64,
+	// Mib
+	pub memory: u64,
 }

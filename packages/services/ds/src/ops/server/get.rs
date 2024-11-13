@@ -176,7 +176,7 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 			SELECT
 				ds.server_id AS server_id,
 				a.running_ts AS running_ts,
-				(c.config->>'actor_public_ip') AS public_ip
+				(c.config->'actor'->'network'->>'wan_ip') AS public_ip
 			FROM db_ds.servers_pegboard AS ds
 			JOIN db_pegboard.actors AS a
 			ON ds.pegboard_actor_id = a.actor_id

@@ -57,13 +57,25 @@ services:
     build:
       context: ../..
       dockerfile: docker/dev-full/client.Dockerfile
+    command: -c /etc/rivet-client/config.yaml
     environment:
       - RUST_BACKTRACE=1
     privileged: true
     stop_grace_period: 0s
     volumes:
-      - ./rivet-client:/etc/rivet-client
+      - ./rivet-client:/etc/rivet-client:ro
       - client-data:/var/lib/rivet-client
+    ports:
+      # Enable host networking for actors
+      #
+      # Corresponds to `actor.network.wan_port_range_min` and
+      # `actor.network.wan_port_range_max` in `rivet-client/config.yaml`.
+      #
+      # We only reserve 100 ports instead of the default 22,000 since each
+      # individual port converts to an iptable rule when using Docker, which
+      # can cause unexpected side effects. This limits the number of actors
+      # using host networking to 100.
+     - "20000-20100:20000-20100"
     networks:
       - rivet-network
 

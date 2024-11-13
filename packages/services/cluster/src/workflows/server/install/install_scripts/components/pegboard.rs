@@ -22,6 +22,8 @@ pub fn configure(
 	config: &rivet_config::Config,
 	flavor: pegboard::protocol::ClientFlavor,
 ) -> GlobalResult<String> {
+	let provision_config = config.server()?.rivet.provision()?;
+
 	let origin_api = config
 		.server()?
 		.rivet
@@ -51,18 +53,18 @@ pub fn configure(
 		.replace("__VLAN_IFACE__", "eth1")
 		.replace(
 			"__GG_VLAN_SUBNET__",
-			&util::net::gg::vlan_ip_net().to_string(),
+			&provision_config.pools.gg.vlan_ip_net().to_string(),
 		)
 		.replace(
 			"__ATS_VLAN_SUBNET__",
-			&util::net::ats::vlan_ip_net().to_string(),
+			&provision_config.pools.ats.vlan_ip_net().to_string(),
 		)
 		.replace(
-			"__MIN_HOST_PORT__",
-			&util::net::job::MIN_HOST_PORT_TCP.to_string(),
+			"__MIN_WAN_PORT__",
+			&provision_config.pools.pegboard.min_wan_port().to_string(),
 		)
 		.replace(
-			"__MAX_HOST_PORT__",
-			&util::net::job::MAX_HOST_PORT_TCP.to_string(),
+			"__MAX_WAN_PORT__",
+			&provision_config.pools.pegboard.max_wan_port().to_string(),
 		))
 }

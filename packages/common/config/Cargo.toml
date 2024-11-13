@@ -8,6 +8,7 @@ config = { version = "0.14.0", default-features = false, features = ["async", "j
 dirs = "5.0.1"
 glob = "0.3.1"
 global-error = { version = "0.1.5", path = "../global-error" }
+ipnet = { version = "2.10.1", features = ["serde"] }
 maplit = "1.0.2"
 serde = { version = "1.0.210", features = ["derive"] }
 serde_json = "1.0.129"

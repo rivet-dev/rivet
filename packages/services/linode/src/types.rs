@@ -20,12 +20,19 @@ pub enum FirewallPreset {
 }
 
 impl FirewallPreset {
-	pub fn rules(&self) -> Vec<util::net::FirewallRule> {
-		match self {
-			FirewallPreset::Job => util::net::job::firewall(),
-			FirewallPreset::Gg => util::net::gg::firewall(),
-			FirewallPreset::Ats => util::net::ats::firewall(),
-		}
+	pub fn rules(
+		&self,
+		config: &rivet_config::Config,
+	) -> GlobalResult<Vec<rivet_config::config::rivet::cluster_provision::FirewallRule>> {
+		let provision_config = config.server()?.rivet.provision()?;
+		Ok(match self {
+			FirewallPreset::Job => provision_config.pools.pegboard.firewall_rules(),
+			FirewallPreset::Gg => provision_config
+				.pools
+				.gg
+				.firewall_rules(&config.server()?.rivet.game_guard),
+			FirewallPreset::Ats => provision_config.pools.ats.firewall_rules(),
+		})
 	}
 }
 

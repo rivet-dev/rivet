@@ -79,7 +79,7 @@ async fn retry_connection(
 			Ok((socket, _)) => {
 				handle_connection(actors_path, actors, fatal_tx.clone(), socket).await?
 			}
-			Err(err) => eprintln!("Failed to connect: {err}"),
+			Err(err) => eprintln!("Failed to connect: {err:?}"),
 		}
 
 		eprintln!("Retrying connection");
@@ -170,7 +170,7 @@ async fn read_packet(
 		}
 		Some(Ok(msg)) => bail!("unexpected message: {msg:?}"),
 		Some(Err(err)) => {
-			eprintln!("Connection failed: {err}");
+			eprintln!("Connection failed: {err:?}");
 			return Ok(None);
 		}
 		None => {

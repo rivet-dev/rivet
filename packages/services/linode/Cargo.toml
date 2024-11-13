@@ -8,6 +8,7 @@ license = "Apache-2.0"
 [dependencies]
 chirp-workflow = { path = "../../common/chirp-workflow/core" }
 chrono = "0.4"
+ipnet = "2.10.1"
 rand = "0.8"
 reqwest = { version = "0.11", features = ["json"] }
 rivet-config = { version = "0.1.0", path = "../../common/config" }

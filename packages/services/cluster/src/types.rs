@@ -39,10 +39,10 @@ pub enum Provider {
 	Linode = 0,
 }
 
-impl From<rivet_config::config::rivet::Provider> for Provider {
-	fn from(value: rivet_config::config::rivet::Provider) -> Provider {
+impl From<rivet_config::config::rivet::dc_provision::Provider> for Provider {
+	fn from(value: rivet_config::config::rivet::dc_provision::Provider) -> Provider {
 		match value {
-			rivet_config::config::rivet::Provider::Linode => Provider::Linode,
+			rivet_config::config::rivet::dc_provision::Provider::Linode => Provider::Linode,
 		}
 	}
 }
@@ -101,14 +101,16 @@ impl std::fmt::Display for PoolType {
 	}
 }
 
-impl From<rivet_config::config::rivet::PoolType> for PoolType {
-	fn from(value: rivet_config::config::rivet::PoolType) -> PoolType {
+impl From<rivet_config::config::rivet::dc_provision::PoolType> for PoolType {
+	fn from(value: rivet_config::config::rivet::dc_provision::PoolType) -> PoolType {
 		match value {
-			rivet_config::config::rivet::PoolType::Job => PoolType::Job,
-			rivet_config::config::rivet::PoolType::Gg => PoolType::Gg,
-			rivet_config::config::rivet::PoolType::Ats => PoolType::Ats,
-			rivet_config::config::rivet::PoolType::Pegboard => PoolType::Pegboard,
-			rivet_config::config::rivet::PoolType::PegboardIsolate => PoolType::PegboardIsolate,
+			rivet_config::config::rivet::dc_provision::PoolType::Job => PoolType::Job,
+			rivet_config::config::rivet::dc_provision::PoolType::Gg => PoolType::Gg,
+			rivet_config::config::rivet::dc_provision::PoolType::Ats => PoolType::Ats,
+			rivet_config::config::rivet::dc_provision::PoolType::Pegboard => PoolType::Pegboard,
+			rivet_config::config::rivet::dc_provision::PoolType::PegboardIsolate => {
+				PoolType::PegboardIsolate
+			}
 		}
 	}
 }
@@ -118,8 +120,8 @@ pub struct Hardware {
 	pub provider_hardware: String,
 }
 
-impl From<rivet_config::config::rivet::Hardware> for Hardware {
-	fn from(value: rivet_config::config::rivet::Hardware) -> Hardware {
+impl From<rivet_config::config::rivet::dc_provision::Hardware> for Hardware {
+	fn from(value: rivet_config::config::rivet::dc_provision::Hardware) -> Hardware {
 		Hardware {
 			provider_hardware: value.name,
 		}

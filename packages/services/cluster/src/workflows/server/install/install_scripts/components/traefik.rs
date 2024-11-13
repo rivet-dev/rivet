@@ -223,6 +223,9 @@ fn tunnel_dynamic_config(host_tunnel: &str) -> String {
 }
 
 pub async fn gg_static_config(config: &rivet_config::Config) -> GlobalResult<String> {
+	let provision_config = config.server()?.rivet.provision()?;
+	let gg_config = &config.server()?.rivet.game_guard;
+
 	let http_provider_endpoint = if let Some(api_traefik_provider_token) =
 		&config.server()?.rivet.token.traefik_provider
 	{
@@ -266,7 +269,7 @@ pub async fn gg_static_config(config: &rivet_config::Config) -> GlobalResult<Str
 	);
 
 	// TCP ports
-	for port in util::net::job::MIN_INGRESS_PORT_TCP..=util::net::job::MAX_INGRESS_PORT_TCP {
+	for port in gg_config.min_ingress_port_tcp()..=gg_config.max_ingress_port_tcp() {
 		config.push_str(&formatdoc!(
 			r#"
 			[entryPoints.lb-{port}-tcp]
@@ -282,7 +285,7 @@ pub async fn gg_static_config(config: &rivet_config::Config) -> GlobalResult<Str
 	}
 
 	// UDP ports
-	for port in util::net::job::MIN_INGRESS_PORT_UDP..=util::net::job::MAX_INGRESS_PORT_UDP {
+	for port in gg_config.min_ingress_port_udp()..=gg_config.max_ingress_port_udp() {
 		config.push_str(&formatdoc!(
 			r#"
 			[entryPoints.lb-{port}-udp]

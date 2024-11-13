@@ -1,11 +1,11 @@
+use chirp_workflow::prelude::*;
+use ipnet::Ipv4Net;
+use rand::Rng;
+use serde_json::json;
 use std::{
 	convert::TryInto,
 	net::{IpAddr, Ipv4Addr},
 };
-
-use chirp_workflow::prelude::*;
-use rand::Rng;
-use serde_json::json;
 
 pub(crate) mod dns_create;
 pub(crate) mod dns_delete;
@@ -109,7 +109,8 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 							PoolType::Gg => linode::types::FirewallPreset::Gg,
 							PoolType::Ats => linode::types::FirewallPreset::Ats,
 						},
-						vlan_ip: Some(vlan_ip),
+						vlan_ip: Some(vlan_ip.ip()),
+						vlan_ip_net: Some(vlan_ip.ip_net()),
 						tags: input.tags.clone(),
 					})
 					.tag("server_id", input.server_id)
@@ -343,15 +344,46 @@ struct GetVlanIpInput {
 	pool_type: PoolType,
 }
 
+#[derive(Debug, Serialize, Deserialize, Hash)]
+#[serde(untagged)]
+enum GetVlanIpOutput {
+	Current {
+		vlan_ip: Ipv4Addr,
+		vlan_ip_net: ipnet::Ipv4Net,
+	},
+	Deprecated(Ipv4Addr),
+}
+
+impl GetVlanIpOutput {
+	fn ip(&self) -> Ipv4Addr {
+		match self {
+			Self::Current { vlan_ip, .. } => *vlan_ip,
+			Self::Deprecated(vlan_ip) => *vlan_ip,
+		}
+	}
+
+	fn ip_net(&self) -> Ipv4Net {
+		match self {
+			Self::Current { vlan_ip_net, .. } => *vlan_ip_net,
+			Self::Deprecated(_) => {
+				// Fall back to default VLAN IP
+				Ipv4Net::new(Ipv4Addr::new(10, 0, 0, 0), 16).unwrap()
+			}
+		}
+	}
+}
+
 #[activity(GetVlanIp)]
-async fn get_vlan_ip(ctx: &ActivityCtx, input: &GetVlanIpInput) -> GlobalResult<Ipv4Addr> {
+async fn get_vlan_ip(ctx: &ActivityCtx, input: &GetVlanIpInput) -> GlobalResult<GetVlanIpOutput> {
+	let provision_config = &ctx.config().server()?.rivet.provision()?;
+
 	// Find next available vlan index
 	let mut vlan_addr_range = match input.pool_type {
 		PoolType::Job | PoolType::Pegboard | PoolType::PegboardIsolate => {
-			util::net::job::vlan_addr_range()
+			provision_config.pools.pegboard.vlan_addr_range()
 		}
-		PoolType::Gg => util::net::gg::vlan_addr_range(),
-		PoolType::Ats => util::net::ats::vlan_addr_range(),
+		PoolType::Gg => provision_config.pools.gg.vlan_addr_range(),
+		PoolType::Ats => provision_config.pools.ats.vlan_addr_range(),
 	};
 	let max_idx = vlan_addr_range.count() as i64;
 
@@ -408,7 +440,10 @@ async fn get_vlan_ip(ctx: &ActivityCtx, input: &GetVlanIpInput) -> GlobalResult<
 	)
 	.await?;
 
-	Ok(vlan_ip)
+	Ok(GetVlanIpOutput::Current {
+		vlan_ip,
+		vlan_ip_net: provision_config.vlan_ip_net(),
+	})
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]

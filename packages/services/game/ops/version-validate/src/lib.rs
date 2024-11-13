@@ -919,9 +919,7 @@ async fn handle(
 								}
 
 								// Validate ranges
-								if port_range.min < util::net::job::MIN_HOST_PORT_TCP as u32
-									|| port_range.max > util::net::job::MAX_HOST_PORT_TCP as u32
-								{
+								if port_range.min < 20000 || port_range.max > 31999 {
 									errors.push(util::err_path![
 										"config",
 										"matchmaker",

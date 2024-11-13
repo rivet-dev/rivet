@@ -34,6 +34,7 @@ server-spec = { path = "../server-spec" }
 pegboard = { path = "../pegboard" }
 token-create = { path = "../token/ops/create" }
 rivet-config = { version = "0.1.0", path = "../../common/config" }
+ipnet = "2.10.1"
 
 [dependencies.nomad_client]
 git = "https://github.com/rivet-gg/nomad-client"

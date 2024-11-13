@@ -29,7 +29,7 @@ impl RunConfigData {
 }
 
 pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
-	let server_config = rivet_config.server().map_err(|err| anyhow!("{err}"))?;
+	let server_config = rivet_config.server().map_err(|err| anyhow!("{err:?}"))?;
 
 	let mut services = vec![
 		// API

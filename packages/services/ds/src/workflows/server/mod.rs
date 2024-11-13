@@ -478,6 +478,8 @@ pub(crate) async fn resolve_image_artifact_url(
 /// - TCP/TLS: random
 /// - UDP: random
 async fn choose_ingress_port(ctx: &ActivityCtx, protocol: GameGuardProtocol) -> GlobalResult<u16> {
+	let gg_config = &ctx.config().server()?.rivet.game_guard;
+
 	match protocol {
 		GameGuardProtocol::Http => Ok(80),
 		GameGuardProtocol::Https => Ok(443),
@@ -485,7 +487,7 @@ async fn choose_ingress_port(ctx: &ActivityCtx, protocol: GameGuardProtocol) -> 
 			bind_with_retries(
 				ctx,
 				protocol,
-				util::net::job::MIN_INGRESS_PORT_TCP..=util::net::job::MAX_INGRESS_PORT_TCP,
+				gg_config.min_ingress_port_tcp()..=gg_config.max_ingress_port_tcp(),
 			)
 			.await
 		}
@@ -493,7 +495,7 @@ async fn choose_ingress_port(ctx: &ActivityCtx, protocol: GameGuardProtocol) -> 
 			bind_with_retries(
 				ctx,
 				protocol,
-				util::net::job::MIN_INGRESS_PORT_UDP..=util::net::job::MAX_INGRESS_PORT_UDP,
+				gg_config.min_ingress_port_udp()..=gg_config.max_ingress_port_udp(),
 			)
 			.await
 		}

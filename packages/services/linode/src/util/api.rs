@@ -2,6 +2,7 @@ use std::{net::Ipv4Addr, str, time::Duration};
 
 use chirp_workflow::prelude::*;
 use chrono::{DateTime, Utc};
+use ipnet::Ipv4Net;
 use serde::{Deserialize, Deserializer};
 use serde_json::json;
 use ssh_key::PrivateKey;
@@ -153,7 +154,8 @@ pub async fn create_swap_disk(client: &Client, linode_id: u64) -> GlobalResult<u
 pub async fn create_instance_config(
 	config: &rivet_config::Config,
 	client: &Client,
-	vlan_ip: Option<&Ipv4Addr>,
+	vlan_ip: Option<Ipv4Addr>,
+	vlan_ip_net: Option<Ipv4Net>,
 	linode_id: u64,
 	boot_disk_id: u64,
 	swap_disk_id: u64,
@@ -163,8 +165,16 @@ pub async fn create_instance_config(
 	let ns = &config.server()?.rivet.namespace;
 
 	let interfaces = if let Some(vlan_ip) = vlan_ip {
-		let region_vlan = util::net::region::vlan_ip_net();
-		let ipam_address = format!("{}/{}", vlan_ip, region_vlan.prefix_len());
+		let ip_net = if let Some(vlan_ip_net) = vlan_ip_net {
+			vlan_ip_net
+		} else {
+			tracing::warn!(
+				"missing vlan ip net when provisioning instance, falling back to 10.0.0.0/16"
+			);
+			Ipv4Net::new(Ipv4Addr::new(10, 0, 0, 0), 16).unwrap()
+		};
+
+		let ipam_address = format!("{}/{}", vlan_ip, ip_net.prefix_len());
 
 		json!([
 			{
@@ -223,7 +233,7 @@ pub async fn create_firewall(
 	let ns = &config.server()?.rivet.namespace;
 
 	let firewall_inbound = firewall
-		.rules()
+		.rules(config)?
 		.iter()
 		.map(|rule| {
 			json!({

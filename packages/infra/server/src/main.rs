@@ -25,7 +25,7 @@ async fn main_inner() -> Result<()> {
 	// Load config
 	let config = rivet_config::Config::load(&cli.config)
 		.await
-		.map_err(|err| anyhow!("{err}"))?;
+		.map_err(|err| anyhow!("{err:?}"))?;
 
 	// Build run config
 	let run_config = Arc::new(rivet_server::run_config::config(config.clone())?);

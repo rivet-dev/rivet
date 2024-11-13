@@ -351,7 +351,7 @@ impl Ctx {
 
 			let runner = runner::Handle::spawn_orphaned(
 				runner::Comms::socket(),
-				&self.config.isolate_runner_binary_path,
+				&self.config().runtime.isolate_runner_binary_path(),
 				working_path,
 				&env,
 			)?;
@@ -582,12 +582,12 @@ impl Ctx {
 }
 
 impl Ctx {
-	pub fn config(&self) -> &Config {
-		&self.config
+	pub fn config(&self) -> &crate::config::Client {
+		&self.config.client
 	}
 
 	pub fn actors_path(&self) -> PathBuf {
-		self.config.data_dir.join("actors")
+		self.config().runtime.data_dir().join("actors")
 	}
 
 	pub fn actor_path(&self, actor_id: Uuid) -> PathBuf {
@@ -595,7 +595,7 @@ impl Ctx {
 	}
 
 	pub fn isolate_runner_path(&self) -> PathBuf {
-		self.config.data_dir.join("runner")
+		self.config().runtime.data_dir().join("runner")
 	}
 }
 

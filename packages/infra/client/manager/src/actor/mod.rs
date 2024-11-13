@@ -156,8 +156,8 @@ impl Actor {
 			"ROOT_USER_ENABLED",
 			self.config.root_user_enabled.to_string(),
 		)];
-		if let Some(vector_socket_addr) = ctx.config().vector_socket_addr {
-			runner_env.push(("VECTOR_SOCKET_ADDR", vector_socket_addr.to_string()));
+		if let Some(vector_address) = &ctx.config().logs.vector_address {
+			runner_env.push(("VECTOR_SOCKET_ADDR", vector_address.to_string()));
 		}
 		runner_env.extend(self.config.stakeholder.env());
 
@@ -166,7 +166,7 @@ impl Actor {
 			protocol::ImageKind::DockerImage | protocol::ImageKind::OciBundle => {
 				runner::Handle::spawn_orphaned(
 					runner::Comms::Basic,
-					&ctx.config().container_runner_binary_path,
+					&ctx.config().runtime.container_runner_binary_path(),
 					ctx.actor_path(self.actor_id),
 					&runner_env,
 				)?

@@ -5,6 +5,8 @@ pub fn install() -> String {
 }
 
 pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
+	let provision_config = config.server()?.rivet.provision()?;
+
 	let nomad_server_count = config.server()?.nomad()?.server_count;
 	let servers = (0..nomad_server_count)
 		.map(|idx| format!("127.0.0.1:{}", 5000 + idx))
@@ -17,11 +19,11 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 		.replace("__VLAN_IFACE__", "eth1")
 		.replace(
 			"__MIN_DYNAMIC_PORT__",
-			&util::net::job::MIN_GG_PORT_TCP.to_string(),
+			&provision_config.pools.pegboard.min_lan_port().to_string(),
 		)
 		.replace(
 			"__MAX_DYNAMIC_PORT__",
-			&util::net::job::MAX_GG_PORT_TCP.to_string(),
+			&provision_config.pools.pegboard.max_lan_port().to_string(),
 		)
 		.replace(
 			"__SERVER_JOIN__",
@@ -37,10 +39,10 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 		)
 		.replace(
 			"__GG_VLAN_SUBNET__",
-			&util::net::gg::vlan_ip_net().to_string(),
+			&provision_config.pools.gg.vlan_ip_net().to_string(),
 		)
 		.replace(
 			"__ATS_VLAN_SUBNET__",
-			&util::net::ats::vlan_ip_net().to_string(),
+			&provision_config.pools.ats.vlan_ip_net().to_string(),
 		))
 }

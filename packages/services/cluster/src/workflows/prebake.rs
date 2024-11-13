@@ -48,6 +48,7 @@ pub async fn cluster_prebake(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 						PoolType::Ats => linode::types::FirewallPreset::Ats,
 					},
 					vlan_ip: None,
+					vlan_ip_net: None,
 					tags,
 				})
 				.tag("server_id", prebake_server_id)

@@ -6,8 +6,8 @@ cat << 'EOF' > /etc/rivet-client/config.json
 	"client_id": "___SERVER_ID___",
 	"datacenter_id": "___DATACENTER_ID___",
 	"actor_network_ip": "___VLAN_IP___",
-	"actor_vlan_ip": "___VLAN_IP___",
-	"actor_public_ip": "___PUBLIC_IP___",
+	"actor_lan_ip": "___VLAN_IP___",
+	"actor_wan_ip": "___PUBLIC_IP___",
 	"vector_socket_addr": "127.0.0.1:5021",
 	"flavor": "__FLAVOR__",
 	"pegboard_ws_endpoint": "127.0.0.1:5030"
@@ -222,8 +222,8 @@ for ipt in iptables ip6tables; do
 	add_ipt_rule "\$ipt" "filter" "$ADMIN_CHAIN" "-s \$SUBNET_VAR -o __PUBLIC_IFACE__ -j ACCEPT"
 
 	# Allow public ingress traffic ONLY on host ports
-	add_ipt_rule "\$ipt" "filter" "$ADMIN_CHAIN" "-p tcp --dport __MIN_HOST_PORT__:__MAX_HOST_PORT__ -d \$SUBNET_VAR -i __PUBLIC_IFACE__ -j ACCEPT"
-	add_ipt_rule "\$ipt" "filter" "$ADMIN_CHAIN" "-p udp --dport __MIN_HOST_PORT__:__MAX_HOST_PORT__ -d \$SUBNET_VAR -i __PUBLIC_IFACE__ -j ACCEPT"
+	add_ipt_rule "\$ipt" "filter" "$ADMIN_CHAIN" "-p tcp --dport __MIN_WAN_PORT__:__MAX_WAN_PORT__ -d \$SUBNET_VAR -i __PUBLIC_IFACE__ -j ACCEPT"
+	add_ipt_rule "\$ipt" "filter" "$ADMIN_CHAIN" "-p udp --dport __MIN_WAN_PORT__:__MAX_WAN_PORT__ -d \$SUBNET_VAR -i __PUBLIC_IFACE__ -j ACCEPT"
 
 	# MARK: Deny
     # Deny all other egress traffic
@@ -255,10 +255,10 @@ systemctl start setup_pegboard_networking
 # We use ptp instead of bridge networking in order to isolate the pod's traffic. It's also more performant than bridge networking.
 #
 # See default Nomad configuration: https://github.com/hashicorp/nomad/blob/a8f0f2612ef9d283ed903721f8453a0c0c3f51c5/client/allocrunner/networking_bridge_linux.go#L152
-cat << EOF > /opt/cni/config/rivet-pegboard.conflist
+cat << EOF > /opt/cni/config/rivet-actor.conflist
 {
 	"cniVersion": "0.4.0",
-	"name": "rivet-pegboard",
+	"name": "rivet-actor",
 	"plugins": [
 		{
 			"type": "loopback"

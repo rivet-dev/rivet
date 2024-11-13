@@ -1,12 +1,9 @@
 console.log(Deno.env.toObject());
 
-const port = Deno.env.get("PORT_ds_http");
-if (!port) throw new Error("missing PORT_ds_http");
-
-console.log(`Starting server on ${port}`);
 let server = Deno.serve({
 	handler,
-	port: parseInt(port),
+	port: parseInt(Deno.env.get("PORT_ds_http") ?? Deno.env.get("HTTP_PORT")),
+	hostname: "0.0.0.0",
 });
 
 await server.finished;
