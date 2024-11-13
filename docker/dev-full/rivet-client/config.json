@@ -1,6 +1,6 @@
 {
 	"client_id": "fc67e54e-5d6a-4726-ab23-77b0e54f068f",
-	"datacenter_id": "d3dcbe9e-2c0d-4dae-b147-cd6e7c725616",
+	"datacenter_id": "f288913c-735d-4188-bf9b-2fcf6eac7b9c",
 	"network_ip": "127.0.0.1",
 	"vector_socket_addr": "127.0.0.1:5030",
 	"flavor": "isolate",

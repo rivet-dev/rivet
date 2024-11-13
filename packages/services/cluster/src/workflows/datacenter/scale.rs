@@ -368,7 +368,10 @@ async fn scale_down_job_servers(
 	let diff = nomad_servers.len().saturating_sub(pctx.desired_count);
 
 	let destroy_count = match pctx.provider {
-		// Never destroy servers when scaling down with Linode, always drain
+		Provider::Manual => unreachable!("cannot scale manual cluster"),
+		// Never destroy servers when scaling down with Linode, always drain.
+		//
+		// See _Provider Billing Internals_ in docs
 		Provider::Linode => 0,
 		#[allow(unreachable_patterns)]
 		_ => diff.min(without_nomad_servers.len()),
@@ -485,7 +488,10 @@ async fn scale_down_pb_servers(
 	let diff = pb_servers.len().saturating_sub(pctx.desired_count);
 
 	let destroy_count = match pctx.provider {
+		Provider::Manual => unreachable!("cannot scale manual cluster"),
 		// Never destroy servers when scaling down with Linode, always drain
+		//
+		// See _Provider Billing Internals_ in docs
 		Provider::Linode => 0,
 		#[allow(unreachable_patterns)]
 		_ => diff.min(without_pb_servers.len()),

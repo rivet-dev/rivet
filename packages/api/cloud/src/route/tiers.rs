@@ -10,9 +10,11 @@ pub async fn list_tiers(
 	ctx: Ctx<Auth>,
 	_watch_index: WatchIndexQuery,
 ) -> GlobalResult<models::CloudGetRegionTiersResponse> {
+	let default_cluster_id = ctx.config().server()?.rivet.default_cluster_id()?;
+
 	let datacenters_res = ctx
 		.op(cluster::ops::datacenter::list::Input {
-			cluster_ids: vec![cluster::util::default_cluster_id()],
+			cluster_ids: vec![default_cluster_id],
 		})
 		.await?;
 	let cluster = unwrap!(datacenters_res.clusters.first());

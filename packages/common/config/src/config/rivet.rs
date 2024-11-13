@@ -1,10 +1,20 @@
 use global_error::prelude::*;
+use maplit::hashmap;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, net::IpAddr, path::PathBuf};
 use url::Url;
 use uuid::Uuid;
 
 use crate::secret::Secret;
+
+pub mod default_dev_cluster {
+	use uuid::{uuid, Uuid};
+
+	// These are intentionally hardcoded in order to simplify default dev configuration.
+
+	pub const CLUSTER_ID: Uuid = uuid!("11ca8960-acab-4963-909c-99d72af3e1cb");
+	pub const DATACENTER_ID: Uuid = uuid!("f288913c-735d-4188-bf9b-2fcf6eac7b9c");
+}
 
 pub mod default_hosts {
 	use std::net::{IpAddr, Ipv4Addr};
@@ -45,7 +55,13 @@ pub struct Rivet {
 	pub default_cluster_id: Option<Uuid>,
 
 	#[serde(default)]
-	pub cluster: Option<Cluster>,
+	pub clusters: Option<HashMap<String, Cluster>>,
+
+	/// Configures how servers are provisioned.
+	///
+	/// Enterprise only.
+	#[serde(default)]
+	pub provision: Option<ClusterProvision>,
 
 	#[serde(default, rename = "orchestrator")]
 	pub pegboard: Pegboard,
@@ -102,7 +118,8 @@ impl Default for Rivet {
 		Self {
 			namespace: Self::default_namespace(),
 			default_cluster_id: None,
-			cluster: None,
+			clusters: None,
+			provision: None,
 			tunnel: Default::default(),
 			ui: Default::default(),
 			pegboard: Pegboard::default(),
@@ -130,8 +147,46 @@ impl Rivet {
 }
 
 impl Rivet {
-	pub fn cluster(&self) -> GlobalResult<&Cluster> {
-		Ok(unwrap_ref!(self.cluster, "cluster disabled"))
+	pub fn default_cluster_id(&self) -> GlobalResult<Uuid> {
+		if let Some(default_cluster_id) = self.default_cluster_id {
+			ensure!(
+				self.clusters().values().any(|x| x.id == default_cluster_id),
+				"default cluster id does not specify a configured cluster"
+			);
+			Ok(default_cluster_id)
+		} else {
+			match self.auth.access_kind {
+				// Return default development clusters
+				AccessKind::Development => Ok(default_dev_cluster::CLUSTER_ID),
+				// No cluster configured
+				AccessKind::Public | AccessKind::Private => {
+					bail!("`default_cluster_id` not configured")
+				}
+			}
+		}
+	}
+
+	pub fn clusters(&self) -> HashMap<String, Cluster> {
+		if let Some(clusters) = self.clusters.clone() {
+			// Return configured clusters
+			clusters
+		} else {
+			match self.auth.access_kind {
+				// Return default development clusters
+				AccessKind::Development => {
+					// TODO: pull this from util::dev_defaults::CLUSTER_SLUG
+					maplit::hashmap! {
+						"default".into() => Cluster::build_dev_cluster(),
+					}
+				}
+				// No cluster configured
+				AccessKind::Public | AccessKind::Private => HashMap::new(),
+			}
+		}
+	}
+
+	pub fn provision(&self) -> GlobalResult<&ClusterProvision> {
+		Ok(unwrap_ref!(self.provision, "provision disabled"))
 	}
 
 	pub fn job_run(&self) -> GlobalResult<&JobRun> {
@@ -297,9 +352,35 @@ pub enum DnsProvider {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Cluster {
-	pub name_id: String,
+	/// This ID must not change.
+	pub id: Uuid,
 	pub datacenters: HashMap<String, Datacenter>,
+}
 
+impl Cluster {
+	fn build_dev_cluster() -> Self {
+		Cluster {
+			id: default_dev_cluster::CLUSTER_ID,
+			datacenters: hashmap! {
+				"local".into() => Datacenter {
+					// Intentionally hardcoded in order to simplify default dev configuration
+					id: default_dev_cluster::DATACENTER_ID,
+					// TODO: Pull from dev_defaults
+					name: "Local".into(),
+					// ATS is not running in local dev
+					build_delivery_method: BuildDeliveryMethod::S3Direct,
+					// Placeholder values for the dev node
+					hardware: Some(DatacenterHardware { cpu_cores: 4, cpu: 3_000 * 4, memory: 8_192, disk: 32_768, bandwidth: 1_000_000 }),
+					provision: None,
+				},
+			},
+		}
+	}
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct ClusterProvision {
 	/// Configuration for server pools that use a margin for scaling.
 	pub pools: ClusterPools,
 
@@ -315,13 +396,76 @@ pub struct Cluster {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct ClusterPools {
+	pub job: ClusterPool,
+	pub pegboard: ClusterPool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct ClusterPool {
+	pub provision_margin: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Datacenter {
-	pub datacenter_id: Uuid,
-	pub display_name: String,
-	pub provider: Provider,
-	pub provider_datacenter_name: String,
-	pub pools: HashMap<PoolType, Pool>,
+	/// This ID must not change.
+	pub id: Uuid,
+
+	pub name: String,
+
 	pub build_delivery_method: BuildDeliveryMethod,
+
+	/// Hardware specs used to orchestrate jobs.
+	///
+	/// This is only used if `provision` is not provided.
+	///
+	/// This will be automatically determined in development mode.
+	#[serde(default)]
+	pub hardware: Option<DatacenterHardware>,
+
+	/// Configures how servers are provisioned.
+	///
+	/// Enterprise only.
+	#[serde(default)]
+	pub provision: Option<DatacenterProvision>,
+}
+
+impl Datacenter {
+	pub fn pools(&self) -> HashMap<PoolType, Pool> {
+		self.provision
+			.as_ref()
+			.map_or_else(|| HashMap::new(), |x| x.pools.clone())
+	}
+
+	pub fn prebakes_enabled(&self) -> bool {
+		self.provision
+			.as_ref()
+			.map_or(false, |x| x.prebakes_enabled)
+	}
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct DatacenterHardware {
+	pub cpu_cores: u32,
+	/// Mhz
+	pub cpu: u32,
+	/// MiB
+	pub memory: u32,
+	/// MiB
+	pub disk: u32,
+	/// Kibps
+	pub bandwidth: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct DatacenterProvision {
+	pub provider: Provider,
+	pub provider_datacenter_id: String,
+	pub pools: HashMap<PoolType, Pool>,
 	pub prebakes_enabled: bool,
 }
 
@@ -362,19 +506,6 @@ pub struct Hardware {
 pub enum BuildDeliveryMethod {
 	TrafficServer,
 	S3Direct,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct ClusterPools {
-	pub job: ClusterPool,
-	pub pegboard: ClusterPool,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct ClusterPool {
-	pub provision_margin: u32,
 }
 
 /// The service that manages Rivet Actors.

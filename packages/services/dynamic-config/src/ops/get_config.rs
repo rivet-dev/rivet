@@ -14,6 +14,9 @@ pub struct Output {
 
 #[operation]
 pub async fn get_cluster_id(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
+	// IMPORTANT: This is not the same as the cluster ID from the `cluster` package. This is used
+	// for unqiuely identifying the entire Rivet cluster.
+
 	// Pick a cluster ID to insert if none exists. If this is specified in the config. fall back to
 	// this.
 	let default_cluster_id =

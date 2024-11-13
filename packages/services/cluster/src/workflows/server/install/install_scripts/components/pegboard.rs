@@ -1,20 +1,20 @@
 use chirp_workflow::prelude::*;
 
 pub async fn install(config: &rivet_config::Config) -> GlobalResult<String> {
-	let cluster_config = &config.server()?.rivet.cluster()?;
+	let provision_config = &config.server()?.rivet.provision()?;
 
 	Ok(include_str!("../files/pegboard_install.sh")
 		.replace(
 			"__PEGBOARD_MANAGER_BINARY_URL__",
-			&cluster_config.manager_binary_url.to_string(),
+			&provision_config.manager_binary_url.to_string(),
 		)
 		.replace(
 			"__CONTAINER_RUNNER_BINARY_URL__",
-			&cluster_config.container_runner_binary_url.to_string(),
+			&provision_config.container_runner_binary_url.to_string(),
 		)
 		.replace(
 			"__V8_ISOLATE_BINARY_URL__",
-			&cluster_config.isolate_runner_binary_url.to_string(),
+			&provision_config.isolate_runner_binary_url.to_string(),
 		))
 }
 

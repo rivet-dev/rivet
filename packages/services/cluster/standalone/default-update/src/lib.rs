@@ -1,4 +1,5 @@
 use chirp_workflow::prelude::*;
+use rivet_config::config;
 
 pub async fn start(
 	config: rivet_config::Config,
@@ -30,143 +31,229 @@ pub async fn start_inner(
 	)
 	.await?;
 
-	// Read config from env
-	let Ok(config) = &ctx
-		.config()
-		.server()?
-		.rivet
-		.cluster()
-	else {
-		tracing::warn!("no cluster config set in namespace config");
-		return Ok(());
-	};
+	let rivet_config = &ctx.config().server()?.rivet;
 
-	// HACK: When deploying both monolith worker and this service for the first time, there is a race
-	// condition which might result in the message being published from here but not caught by
-	// monolith-worker, resulting in nothing happening.
-	tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+	let cluster_configs = rivet_config.clusters();
 
-	let cluster_id = cluster::util::default_cluster_id();
-
-	let (cluster_res, datacenter_list_res) = tokio::try_join!(
-		// Check if cluster already exists
-		ctx.op(cluster::ops::get::Input {
-			cluster_ids: vec![cluster_id],
-		}),
-		ctx.op(cluster::ops::datacenter::list::Input {
-			cluster_ids: vec![cluster_id],
-		}),
-	)?;
-
-	// Get all datacenters
-	let cluster = unwrap!(datacenter_list_res.clusters.first());
-	let datacenters_res = ctx
-		.op(cluster::ops::datacenter::get::Input {
-			datacenter_ids: cluster.datacenter_ids.clone(),
-		})
-		.await?;
-
-	if cluster_res.clusters.is_empty() {
-		tracing::warn!("creating default cluster");
-
-		ctx.workflow(cluster::workflows::cluster::Input {
-			cluster_id,
-			name_id: config.name_id.clone(),
-			owner_team_id: None,
-		})
-		.tag("cluster_id", cluster_id)
-		.dispatch()
-		.await?;
+	for (cluster_slug, cluster) in cluster_configs.iter() {
+		upsert_cluster(&ctx, use_autoscaler, cluster_slug, cluster).await?;
 	}
 
+	Ok(())
+}
+
+/// Creates or updates an existing cluster.
+async fn upsert_cluster(
+	ctx: &StandaloneCtx,
+	use_autoscaler: bool,
+	cluster_slug: &str,
+	cluster_config: &config::rivet::Cluster,
+) -> GlobalResult<()> {
+	// Fetch cluster data
+	let cluster_res = ctx
+		.op(cluster::ops::get::Input {
+			cluster_ids: vec![cluster_config.id],
+		})
+		.await?;
+
+	// Create cluster if needed
+	let cluster = if let Some(cluster) = cluster_res.clusters.first() {
+		// Validate the cluster config has not changed
+		ensure_eq!(
+			cluster_slug,
+			cluster.name_id,
+			"cluster id does not match config"
+		);
+
+		cluster.clone()
+	} else {
+		tracing::debug!("creating default cluster");
+
+		let mut create_sub = ctx
+			.subscribe::<cluster::workflows::cluster::CreateComplete>((
+				"cluster_id",
+				cluster_config.id,
+			))
+			.await?;
+		ctx.workflow(cluster::workflows::cluster::Input {
+			cluster_id: cluster_config.id,
+			name_id: cluster_slug.to_string(),
+			owner_team_id: None,
+		})
+		.tag("cluster_id", cluster_config.id)
+		.dispatch()
+		.await?;
+		create_sub.next().await?;
+
+		let cluster_res = ctx
+			.op(cluster::ops::get::Input {
+				cluster_ids: vec![cluster_config.id],
+			})
+			.await?;
+
+		unwrap!(cluster_res.clusters.first().cloned())
+	};
+
+	// Get all datacenters
+	let datacenter_list_res = ctx
+		.op(cluster::ops::datacenter::list::Input {
+			cluster_ids: vec![cluster_config.id],
+		})
+		.await?;
+	let datacenter_ids = unwrap!(datacenter_list_res.clusters.first())
+		.datacenter_ids
+		.clone();
+	let datacenters_res = ctx
+		.op(cluster::ops::datacenter::get::Input { datacenter_ids })
+		.await?;
+
+	// Log dcs that are trying to be deleted
 	for existing_datacenter in &datacenters_res.datacenters {
-		if !config
+		if !cluster_config
 			.datacenters
-			.iter()
-			.any(|(_, dc)| dc.datacenter_id == existing_datacenter.datacenter_id)
+			.contains_key(&existing_datacenter.name_id)
 		{
-			// TODO: Delete datacenters
+			// Warn about removing datacenter
+			tracing::warn!(
+				dc_id = ?existing_datacenter.datacenter_id,
+				dc_name = existing_datacenter.name_id,
+				"deleting datacenters is currently unimplemented"
+			);
 		}
 	}
 
-	for (name_id, datacenter) in &config.datacenters {
+	// Upsert datacenters
+	for (dc_slug, dc_config) in &cluster_config.datacenters {
 		let existing_datacenter = datacenters_res
 			.datacenters
 			.iter()
-			.any(|dc| dc.datacenter_id == datacenter.datacenter_id);
+			.find(|x| x.datacenter_id == dc_config.id);
+		upsert_datacenter(
+			ctx,
+			UpsertDatacenterArgs {
+				use_autoscaler,
+				cluster_id: cluster.cluster_id,
+				dc_slug,
+				dc_config,
+				existing_datacenter,
+			},
+		)
+		.await?;
+	}
+
+	Ok(())
+}
+
+struct UpsertDatacenterArgs<'a> {
+	use_autoscaler: bool,
+	cluster_id: Uuid,
+	dc_slug: &'a str,
+	dc_config: &'a config::rivet::Datacenter,
+	existing_datacenter: Option<&'a cluster::types::Datacenter>,
+}
+
+/// Create or update an existing cluster.
+async fn upsert_datacenter(
+	ctx: &StandaloneCtx,
+	UpsertDatacenterArgs {
+		use_autoscaler,
+		cluster_id,
+		dc_slug,
+		dc_config,
+		existing_datacenter,
+	}: UpsertDatacenterArgs<'_>,
+) -> GlobalResult<()> {
+	if let Some(existing_datacenter) = existing_datacenter {
+		// Validate IDs match
+		ensure_eq!(
+			dc_slug,
+			existing_datacenter.name_id,
+			"datacenter id does not match config"
+		);
 
 		// Update existing datacenter
-		if existing_datacenter {
-			let new_pools = datacenter
-				.pools
-				.iter()
-				.map(|(pool_type, pool)| {
-					let desired_count = if use_autoscaler {
-						None
-					} else {
-						Some(pool.desired_count)
-					};
+		let pools = dc_config
+			.pools()
+			.into_iter()
+			.map(|(pool_type, pool)| {
+				let desired_count = if use_autoscaler {
+					None
+				} else {
+					Some(pool.desired_count)
+				};
 
-					cluster::types::PoolUpdate {
-						pool_type: (*pool_type).into(),
-						hardware: pool
-							.hardware
-							.iter()
-							.cloned()
-							.map(Into::into)
-							.collect::<Vec<_>>(),
-						desired_count,
-						min_count: Some(pool.min_count),
-						max_count: Some(pool.max_count),
-						drain_timeout: Some(pool.drain_timeout),
-					}
-				})
-				.collect::<Vec<_>>();
-
-			ctx.signal(cluster::workflows::datacenter::Update {
-				pools: new_pools,
-				prebakes_enabled: Some(datacenter.prebakes_enabled),
+				cluster::types::PoolUpdate {
+					pool_type: pool_type.into(),
+					hardware: pool
+						.hardware
+						.into_iter()
+						.map(Into::into)
+						.collect::<Vec<_>>(),
+					desired_count,
+					min_count: Some(pool.min_count),
+					max_count: Some(pool.max_count),
+					drain_timeout: Some(pool.drain_timeout),
+				}
 			})
-			.tag("datacenter_id", datacenter.datacenter_id)
-			.send()
-			.await?;
-		}
+			.collect::<Vec<_>>();
+
+		ctx.signal(cluster::workflows::datacenter::Update {
+			pools,
+			prebakes_enabled: Some(dc_config.prebakes_enabled()),
+		})
+		.tag("datacenter_id", existing_datacenter.datacenter_id)
+		.send()
+		.await?;
+	} else {
 		// Create new datacenter
-		else {
-			ctx.signal(cluster::workflows::cluster::DatacenterCreate {
-				datacenter_id: datacenter.datacenter_id,
-				name_id: name_id.clone(),
-				display_name: datacenter.display_name.clone(),
 
-				provider: datacenter.provider.into(),
-				provider_datacenter_id: datacenter.provider_datacenter_name.clone(),
-				provider_api_token: None,
+		let datacenter_id = dc_config.id;
 
-				pools: datacenter
-					.pools
-					.iter()
-					.map(|(pool_type, pool)| cluster::types::Pool {
-						pool_type: (*pool_type).into(),
-						hardware: pool
-							.hardware
-							.iter()
-							.cloned()
-							.map(Into::into)
-							.collect::<Vec<_>>(),
-						desired_count: pool.desired_count,
-						min_count: pool.min_count,
-						max_count: pool.max_count,
-						drain_timeout: pool.drain_timeout,
-					})
+		let (provider, provider_datacenter_id) = if let Some(provision) = &dc_config.provision {
+			// Automatically provisioned
+			(
+				cluster::types::Provider::from(provision.provider),
+				provision.provider_datacenter_id.clone(),
+			)
+		} else {
+			// Manual node config
+			(cluster::types::Provider::Manual, "dev".to_string())
+		};
+
+		let pools = dc_config
+			.pools()
+			.into_iter()
+			.map(|(pool_type, pool)| cluster::types::Pool {
+				pool_type: pool_type.into(),
+				hardware: pool
+					.hardware
+					.into_iter()
+					.map(Into::into)
 					.collect::<Vec<_>>(),
-
-				build_delivery_method: datacenter.build_delivery_method.into(),
-				prebakes_enabled: datacenter.prebakes_enabled,
+				desired_count: pool.desired_count,
+				min_count: pool.min_count,
+				max_count: pool.max_count,
+				drain_timeout: pool.drain_timeout,
 			})
-			.tag("cluster_id", cluster_id)
-			.send()
-			.await?;
-		}
+			.collect::<Vec<_>>();
+
+		ctx.signal(cluster::workflows::cluster::DatacenterCreate {
+			datacenter_id,
+			name_id: dc_slug.to_string(),
+			display_name: dc_config.name.clone(),
+
+			provider,
+			provider_datacenter_id,
+			provider_api_token: None,
+
+			pools,
+
+			build_delivery_method: dc_config.build_delivery_method.into(),
+			prebakes_enabled: dc_config.prebakes_enabled(),
+		})
+		.tag("cluster_id", cluster_id)
+		.send()
+		.await?;
 	}
 
 	Ok(())

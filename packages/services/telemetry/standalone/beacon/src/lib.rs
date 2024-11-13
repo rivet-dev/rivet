@@ -143,10 +143,40 @@ fn os_report() -> serde_json::Value {
 /// are causing crashes.
 fn get_config_data(ctx: &OperationContext<()>) -> GlobalResult<serde_json::Value> {
 	let server_config = ctx.config().server()?;
+
+	let clusters = server_config.rivet.clusters().iter().map(|(name, cluster)| {
+		let datacenters = cluster.datacenters.iter().map(|(dc_name, datacenter)| {
+			json!({
+				"name": dc_name,
+				"build_delivery_method": format!("{:?}", datacenter.build_delivery_method),
+				"provision": datacenter.provision.as_ref().map(|provision| json!({
+					"provider": format!("{:?}", provision.provider),
+					"provider_datacenter_id": provision.provider_datacenter_id,
+					"pools": provision.pools.iter().map(|(pool_type, pool)| {
+						json!({
+							"type": format!("{:?}", pool_type),
+							"hardware": pool.hardware.iter().map(|hw| hw.name.clone()).collect::<Vec<_>>(),
+							"desired_count": pool.desired_count,
+							"min_count": pool.min_count,
+							"max_count": pool.max_count,
+							"drain_timeout": pool.drain_timeout,
+						})
+					}).collect::<Vec<_>>(),
+					"prebakes_enabled": provision.prebakes_enabled,
+				})),
+			})
+		}).collect::<Vec<_>>();
+
+		json!({
+			"name": name,
+			"datacenters": datacenters,
+		})
+	}).collect::<Vec<_>>();
+
 	Ok(json!({
 		"rivet": {
 			"namespace": server_config.rivet.namespace,
-			"cluster_enabled": server_config.rivet.cluster.is_some(),
+			"clusters": clusters,
 			"auth_access_kind": format!("{:?}", server_config.rivet.auth.access_kind),
 			"dns_enabled": server_config.rivet.dns.is_some(),
 			"job_run_enabled": server_config.rivet.job_run.is_some(),

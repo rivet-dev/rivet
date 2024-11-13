@@ -59,6 +59,9 @@ pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 		Service::new("pegboard_gc", ServiceKind::Singleton, |config, pools| {
 			Box::pin(pegboard_gc::start(config, pools))
 		}),
+		Service::new("pegboard_dc_init", ServiceKind::Oneshot, |config, pools| {
+			Box::pin(pegboard_dc_init::start(config, pools))
+		}),
 		Service::new(
 			"workflow_metrics_publish",
 			ServiceKind::Singleton,
@@ -83,6 +86,24 @@ pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			}),
 			|config, pools| Box::pin(user_delete_pending::start(config, pools)),
 		),
+		Service::new(
+			"cluster_metrics_publish",
+			ServiceKind::Singleton,
+			|config, pools| Box::pin(cluster_metrics_publish::start(config, pools)),
+		),
+		Service::new("cluster_gc", ServiceKind::Singleton, |config, pools| {
+			Box::pin(cluster_gc::start(config, pools))
+		}),
+		Service::new(
+			"cluster_datacenter_tls_renew",
+			ServiceKind::Singleton,
+			|config, pools| Box::pin(cluster_datacenter_tls_renew::start(config, pools)),
+		),
+		Service::new(
+			"cluster_default_update",
+			ServiceKind::Oneshot,
+			|config, pools| Box::pin(cluster_default_update::start(config, pools, false)),
+		),
 	];
 
 	if server_config.rivet.auth.access_kind == rivet_config::config::rivet::AccessKind::Development
@@ -99,34 +120,6 @@ pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			"linode_gc",
 			ServiceKind::Singleton,
 			|config, pools| Box::pin(linode_gc::start(config, pools)),
-		));
-	}
-
-	if server_config.rivet.cluster.is_some() {
-		services.push(Service::new(
-			"cluster_metrics_publish",
-			ServiceKind::Singleton,
-			|config, pools| Box::pin(cluster_metrics_publish::start(config, pools)),
-		));
-		services.push(Service::new(
-			"cluster_gc",
-			ServiceKind::Singleton,
-			|config, pools| Box::pin(cluster_gc::start(config, pools)),
-		));
-		services.push(Service::new(
-			"cluster_datacenter_tls_renew",
-			ServiceKind::Singleton,
-			|config, pools| Box::pin(cluster_datacenter_tls_renew::start(config, pools)),
-		));
-		services.push(Service::new(
-			"pegboard_dc_init",
-			ServiceKind::Oneshot,
-			|config, pools| Box::pin(pegboard_dc_init::start(config, pools)),
-		));
-		services.push(Service::new(
-			"cluster_default_update",
-			ServiceKind::Oneshot,
-			|config, pools| Box::pin(cluster_default_update::start(config, pools, false)),
 		));
 	}
 

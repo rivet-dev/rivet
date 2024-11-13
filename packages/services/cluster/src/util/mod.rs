@@ -13,11 +13,6 @@ pub const INSTALL_SCRIPT_HASH: &str = include_str!(concat!(env!("OUT_DIR"), "/ha
 // TTL of the token written to prebake images. Prebake images are renewed before the token would expire
 pub const SERVER_TOKEN_TTL: i64 = util::duration::days(30 * 6);
 
-// Cluster id for provisioning servers
-pub fn default_cluster_id() -> Uuid {
-	Uuid::nil()
-}
-
 pub fn server_name(
 	config: &rivet_config::Config,
 	provider_datacenter_id: &str,

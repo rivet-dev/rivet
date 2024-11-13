@@ -91,6 +91,9 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 		);
 
 		match dc.provider {
+			Provider::Manual => {
+				// Noop
+			}
 			Provider::Linode => {
 				let workflow_id = ctx
 					.workflow(linode::workflows::server::Input {
@@ -732,6 +735,9 @@ async fn cleanup(
 
 	// Cleanup server
 	match provider {
+		Provider::Manual => {
+			// Noop
+		}
 		Provider::Linode => {
 			tracing::info!(server_id=?input.server_id, "destroying linode server");
 

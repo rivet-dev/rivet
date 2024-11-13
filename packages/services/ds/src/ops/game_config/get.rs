@@ -14,7 +14,7 @@ pub struct Output {
 	pub game_configs: Vec<GameConfig>,
 }
 
-#[derive(sqlx::FromRow)]
+#[derive(sqlx::FromRow, Clone)]
 struct GameConfigRow {
 	game_id: Uuid,
 	host_networking_enabled: bool,
@@ -37,7 +37,7 @@ impl TryFrom<GameConfigRow> for GameConfig {
 
 #[operation]
 pub async fn ds_game_config_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
-	let game_configs = sql_fetch_all!(
+	let rows = sql_fetch_all!(
 		[ctx, GameConfigRow]
 		"
 		SELECT game_id, host_networking_enabled, root_user_enabled, runtime
@@ -46,10 +46,19 @@ pub async fn ds_game_config_get(ctx: &OperationCtx, input: &Input) -> GlobalResu
 		",
 		&input.game_ids,
 	)
-	.await?
-	.into_iter()
-	.map(TryInto::try_into)
-	.collect::<GlobalResult<_>>()?;
+	.await?;
+
+	let game_configs = input
+		.game_ids
+		.iter()
+		.map(|game_id| {
+			if let Some(row) = rows.iter().find(|x| x.game_id == *game_id) {
+				row.clone().try_into()
+			} else {
+				Ok(GameConfig::default(*game_id))
+			}
+		})
+		.collect::<GlobalResult<Vec<_>>>()?;
 
 	Ok(Output { game_configs })
 }

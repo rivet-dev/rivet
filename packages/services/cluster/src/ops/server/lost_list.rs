@@ -72,6 +72,9 @@ pub async fn cluster_server_lost_list(ctx: &OperationCtx, input: &Input) -> Glob
 	let mut servers = Vec::new();
 	for (provider, api_token) in accounts {
 		match provider {
+			Provider::Manual => {
+				// Noop
+			}
 			Provider::Linode => {
 				servers.extend(
 					run_for_linode_account(ctx, &input.filter, &api_token, &headers).await?,

@@ -70,6 +70,9 @@ pub async fn cluster_server_prune_with_filter(
 
 	for (provider, api_token) in accounts {
 		match provider {
+			Provider::Manual => {
+				// Noop
+			}
 			Provider::Linode => {
 				run_for_linode_account(&servers_res.servers, &api_token, &headers).await?;
 			}

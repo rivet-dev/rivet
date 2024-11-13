@@ -7959,6 +7959,7 @@ dependencies = [
  "dirs",
  "glob",
  "global-error",
+ "maplit",
  "serde",
  "serde_json",
  "url",

@@ -50,8 +50,6 @@ pub async fn redis_shell(config: rivet_config::Config, shell_ctx: ShellContext<'
 			cmd.env("REDISCLI_AUTH", password);
 		}
 
-		dbg!(&cmd);
-
 		cmd.status()?;
 	}
 
@@ -105,8 +103,6 @@ pub async fn cockroachdb_shell(
 
 		// See https://github.com/cockroachdb/cockroach/issues/37129#issuecomment-600115995
 		cmd.env("PGCLIENTENCODING", "utf-8");
-
-		dbg!(&cmd);
 
 		cmd.status()?;
 	}
@@ -176,8 +172,6 @@ pub async fn clickhouse_shell(
 		if let Some(query) = query {
 			cmd.arg("--multiquery").arg(query);
 		}
-
-		dbg!(&cmd);
 
 		cmd.status()?;
 	}

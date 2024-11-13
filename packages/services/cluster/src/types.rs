@@ -34,6 +34,8 @@ pub struct Datacenter {
 
 #[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
 pub enum Provider {
+	/// Servers are manually provisioned and connected.
+	Manual = 1,
 	Linode = 0,
 }
 
@@ -148,7 +150,9 @@ impl From<rivet_config::config::rivet::BuildDeliveryMethod> for BuildDeliveryMet
 			rivet_config::config::rivet::BuildDeliveryMethod::TrafficServer => {
 				BuildDeliveryMethod::TrafficServer
 			}
-			rivet_config::config::rivet::BuildDeliveryMethod::S3Direct => BuildDeliveryMethod::S3Direct,
+			rivet_config::config::rivet::BuildDeliveryMethod::S3Direct => {
+				BuildDeliveryMethod::S3Direct
+			}
 		}
 	}
 }

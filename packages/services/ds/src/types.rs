@@ -102,6 +102,17 @@ pub struct GameConfig {
 	pub runtime: ServerRuntime,
 }
 
+impl GameConfig {
+	pub fn default(game_id: Uuid) -> Self {
+		GameConfig {
+			game_id,
+			host_networking_enabled: false,
+			root_user_enabled: false,
+			runtime: ServerRuntime::Pegboard,
+		}
+	}
+}
+
 impl ApiTryFrom<Server> for models::ActorActor {
 	type Error = GlobalError;
 

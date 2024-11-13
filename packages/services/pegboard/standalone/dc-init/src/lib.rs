@@ -1,5 +1,4 @@
 use chirp_workflow::prelude::*;
-use cluster::types::PoolType;
 
 // TODO: This is not idempotent.
 #[tracing::instrument(skip_all)]
@@ -15,49 +14,40 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> G
 	.await?;
 
 	// Read config from env
-	let Ok(cluster_config) = &ctx
-		.config()
-		.server()?
-		.rivet
-		.cluster()
-	else {
-		tracing::warn!("no cluster config set in namespace config");
-		return Ok(());
-	};
+	let cluster_configs = &ctx.config().server()?.rivet.clusters();
 
-	// Find datacenter ids with pegboard pools
-	let datacenter_ids = cluster_config
-		.datacenters
-		.iter()
-		.flat_map(|(_, dc)| {
-			dc.pools
-				.iter()
-				.any(|(pool_type, _)| matches!((*pool_type).into(), PoolType::Pegboard))
-				.then_some(dc.datacenter_id)
-		})
-		.collect::<Vec<_>>();
+	for (_, cluster_config) in cluster_configs {
+		// Find datacenter ids with pegboard pools
+		let datacenter_ids = cluster_config
+			.datacenters
+			.iter()
+			.map(|(_, x)| x.id)
+			.collect::<Vec<_>>();
 
-	let rows = sql_fetch_all!(
-		[ctx, (Uuid,)]
-		"
-		SELECT dc_id
-		FROM UNNEST($1) AS dc(dc_id)
-		WHERE EXISTS(
-			SELECT 1
-			FROM db_workflow.workflows
-			WHERE (tags->>'datacenter_id')::UUID = dc_id
+		let rows = sql_fetch_all!(
+			[ctx, (Uuid,)]
+			"
+			SELECT dc_id
+			FROM UNNEST($1) AS dc(dc_id)
+			WHERE NOT EXISTS(
+				SELECT 1
+				FROM db_workflow.workflows
+				WHERE
+					workflow_name = 'pegboard_datacenter' AND
+					(tags->>'datacenter_id')::UUID = dc_id
+			)
+			",
+			datacenter_ids,
 		)
-		",
-		datacenter_ids,
-	)
-	.await?;
+		.await?;
 
-	// Create missing datacenters
-	for (datacenter_id,) in rows {
-		ctx.workflow(pegboard::workflows::datacenter::Input { datacenter_id })
-			.tag("datacenter_id", datacenter_id)
-			.dispatch()
-			.await?;
+		// Create missing datacenters
+		for (datacenter_id,) in rows {
+			ctx.workflow(pegboard::workflows::datacenter::Input { datacenter_id })
+				.tag("datacenter_id", datacenter_id)
+				.dispatch()
+				.await?;
+		}
 	}
 
 	Ok(())

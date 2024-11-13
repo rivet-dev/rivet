@@ -5,10 +5,12 @@ use rivet_operation::prelude::*;
 async fn handle(
 	ctx: OperationContext<region::list::Request>,
 ) -> GlobalResult<region::list::Response> {
+	let default_cluster_id = ctx.config().server()?.rivet.default_cluster_id()?;
+
 	let datacenter_list_res = chirp_workflow::compat::op(
 		&ctx,
 		cluster::ops::datacenter::list::Input {
-			cluster_ids: vec![cluster::util::default_cluster_id()],
+			cluster_ids: vec![default_cluster_id],
 		},
 	)
 	.await?;

@@ -18,6 +18,8 @@ pub struct Game {
 
 #[operation]
 pub async fn cluster_get_for_game(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
+	let default_cluster_id = ctx.config().server()?.rivet.default_cluster_id()?;
+
 	let rows = sql_fetch_optional!(
 		[ctx, (Uuid, Option<Uuid>)]
 		"
@@ -36,7 +38,7 @@ pub async fn cluster_get_for_game(ctx: &OperationCtx, input: &Input) -> GlobalRe
 			.into_iter()
 			.map(|(game_id, cluster_id)| Game {
 				game_id,
-				cluster_id: cluster_id.unwrap_or_else(crate::util::default_cluster_id),
+				cluster_id: cluster_id.unwrap_or(default_cluster_id),
 			})
 			.collect::<Vec<_>>(),
 	})

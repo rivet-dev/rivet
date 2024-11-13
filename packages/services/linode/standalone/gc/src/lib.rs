@@ -58,6 +58,9 @@ pub async fn run_from_env(
 		let provider = unwrap!(Provider::from_repr(provider.try_into()?));
 
 		match provider {
+			Provider::Manual => {
+				// Noop
+			}
 			Provider::Linode => {
 				run_for_linode_account(ctx.clone(), api_token.clone(), &headers).await?
 			}

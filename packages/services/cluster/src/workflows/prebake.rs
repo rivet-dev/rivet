@@ -29,6 +29,9 @@ pub async fn cluster_prebake(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 	tags.push("prebake".to_string());
 
 	match input.provider {
+		Provider::Manual => {
+			// Noop
+		}
 		Provider::Linode => {
 			let workflow_id = ctx
 				.workflow(linode::workflows::server::Input {

@@ -2,9 +2,16 @@ use chirp_workflow::prelude::*;
 
 #[workflow_test]
 async fn list(ctx: TestCtx) {
+	let default_cluster_id = ctx
+		.config()
+		.server()
+		.unwrap()
+		.rivet
+		.default_cluster_id()
+		.unwrap();
 	let datacenters_res = ctx
 		.op(cluster::ops::datacenter::list::Input {
-			cluster_ids: vec![cluster::util::default_cluster_id()],
+			cluster_ids: vec![default_cluster_id],
 		})
 		.await
 		.unwrap();
