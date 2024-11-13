@@ -32,10 +32,8 @@ export class Logs {
     /**
      * Returns the logs for a given actor.
      *
-     * @param {string} gameId
-     * @param {string} environmentId
      * @param {string} actorId
-     * @param {Rivet.actor.GetActorLogsRequest} request
+     * @param {Rivet.actor.GetActorLogsRequestQuery} request
      * @param {Logs.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @throws {@link Rivet.InternalError}
@@ -46,20 +44,28 @@ export class Logs {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.actor.logs.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *     await client.actor.logs.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
      *         stream: Rivet.actor.LogStream.StdOut,
      *         watchIndex: "string"
      *     })
      */
     public async get(
-        gameId: string,
-        environmentId: string,
         actorId: string,
-        request: Rivet.actor.GetActorLogsRequest,
+        request: Rivet.actor.GetActorLogsRequestQuery,
         requestOptions?: Logs.RequestOptions
     ): Promise<Rivet.actor.GetActorLogsResponse> {
-        const { stream, watchIndex } = request;
+        const { gameId, environmentId, stream, watchIndex } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        if (gameId != null) {
+            _queryParams["game_id"] = gameId;
+        }
+
+        if (environmentId != null) {
+            _queryParams["environment_id"] = environmentId;
+        }
+
         _queryParams["stream"] = stream;
         if (watchIndex != null) {
             _queryParams["watch_index"] = watchIndex;
@@ -68,9 +74,7 @@ export class Logs {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(
-                    environmentId
-                )}/actors/${encodeURIComponent(actorId)}/logs`
+                `/actors/${encodeURIComponent(actorId)}/logs`
             ),
             method: "GET",
             headers: {

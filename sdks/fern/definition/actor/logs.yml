@@ -5,10 +5,7 @@ imports:
 
 service:
   auth: true
-  base-path: /games/{game_id}/environments/{environment_id}/actors
-  path-parameters:
-    game_id: uuid
-    environment_id: uuid
+  base-path: /actors
   endpoints:
     get:
       path: /{actor_id}/logs
@@ -19,8 +16,10 @@ service:
         actor_id:
           type: uuid
       request:
-        name: GetActorLogsRequest
+        name: GetActorLogsRequestQuery
         query-parameters:
+          game_id: optional<uuid>
+          environment_id: optional<uuid>
           stream: LogStream
           watch_index:
             docs: A query parameter denoting the requests watch index.

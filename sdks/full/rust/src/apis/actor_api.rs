@@ -69,12 +69,12 @@ pub enum ActorListError {
 
 
 /// Create a new dynamic actor.
-pub async fn actor_create(configuration: &configuration::Configuration, game_id: &str, environment_id: &str, actor_create_actor_request: crate::models::ActorCreateActorRequest) -> Result<crate::models::ActorCreateActorResponse, Error<ActorCreateError>> {
+pub async fn actor_create(configuration: &configuration::Configuration, actor_create_actor_request: crate::models::ActorCreateActorRequest) -> Result<crate::models::ActorCreateActorResponse, Error<ActorCreateError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/environments/{environment_id}/actors", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), environment_id=crate::apis::urlencode(environment_id));
+    let local_var_uri_str = format!("{}/actors", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
@@ -101,14 +101,20 @@ pub async fn actor_create(configuration: &configuration::Configuration, game_id:
 }
 
 /// Destroy a dynamic actor.
-pub async fn actor_destroy(configuration: &configuration::Configuration, game_id: &str, environment_id: &str, actor_id: &str, override_kill_timeout: Option<i64>) -> Result<serde_json::Value, Error<ActorDestroyError>> {
+pub async fn actor_destroy(configuration: &configuration::Configuration, actor_id: &str, game_id: Option<&str>, environment_id: Option<&str>, override_kill_timeout: Option<i64>) -> Result<serde_json::Value, Error<ActorDestroyError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/environments/{environment_id}/actors/{actor_id}", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), environment_id=crate::apis::urlencode(environment_id), actor_id=crate::apis::urlencode(actor_id));
+    let local_var_uri_str = format!("{}/actors/{actor_id}", local_var_configuration.base_path, actor_id=crate::apis::urlencode(actor_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::DELETE, local_var_uri_str.as_str());
 
+    if let Some(ref local_var_str) = game_id {
+        local_var_req_builder = local_var_req_builder.query(&[("game_id", &local_var_str.to_string())]);
+    }
+    if let Some(ref local_var_str) = environment_id {
+        local_var_req_builder = local_var_req_builder.query(&[("environment_id", &local_var_str.to_string())]);
+    }
     if let Some(ref local_var_str) = override_kill_timeout {
         local_var_req_builder = local_var_req_builder.query(&[("override_kill_timeout", &local_var_str.to_string())]);
     }
@@ -135,14 +141,20 @@ pub async fn actor_destroy(configuration: &configuration::Configuration, game_id
 }
 
 /// Gets a dynamic actor.
-pub async fn actor_get(configuration: &configuration::Configuration, game_id: &str, environment_id: &str, actor_id: &str) -> Result<crate::models::ActorGetActorResponse, Error<ActorGetError>> {
+pub async fn actor_get(configuration: &configuration::Configuration, actor_id: &str, game_id: Option<&str>, environment_id: Option<&str>) -> Result<crate::models::ActorGetActorResponse, Error<ActorGetError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/environments/{environment_id}/actors/{actor_id}", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), environment_id=crate::apis::urlencode(environment_id), actor_id=crate::apis::urlencode(actor_id));
+    let local_var_uri_str = format!("{}/actors/{actor_id}", local_var_configuration.base_path, actor_id=crate::apis::urlencode(actor_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
+    if let Some(ref local_var_str) = game_id {
+        local_var_req_builder = local_var_req_builder.query(&[("game_id", &local_var_str.to_string())]);
+    }
+    if let Some(ref local_var_str) = environment_id {
+        local_var_req_builder = local_var_req_builder.query(&[("environment_id", &local_var_str.to_string())]);
+    }
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
         local_var_req_builder = local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
     }
@@ -166,14 +178,20 @@ pub async fn actor_get(configuration: &configuration::Configuration, game_id: &s
 }
 
 /// Lists all actors associated with the token used. Can be filtered by tags in the query string.
-pub async fn actor_list(configuration: &configuration::Configuration, game_id: &str, environment_id: &str, tags_json: Option<&str>, include_destroyed: Option<bool>, cursor: Option<&str>) -> Result<crate::models::ActorListActorsResponse, Error<ActorListError>> {
+pub async fn actor_list(configuration: &configuration::Configuration, game_id: Option<&str>, environment_id: Option<&str>, tags_json: Option<&str>, include_destroyed: Option<bool>, cursor: Option<&str>) -> Result<crate::models::ActorListActorsResponse, Error<ActorListError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/environments/{environment_id}/actors", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), environment_id=crate::apis::urlencode(environment_id));
+    let local_var_uri_str = format!("{}/actors", local_var_configuration.base_path);
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
+    if let Some(ref local_var_str) = game_id {
+        local_var_req_builder = local_var_req_builder.query(&[("game_id", &local_var_str.to_string())]);
+    }
+    if let Some(ref local_var_str) = environment_id {
+        local_var_req_builder = local_var_req_builder.query(&[("environment_id", &local_var_str.to_string())]);
+    }
     if let Some(ref local_var_str) = tags_json {
         local_var_req_builder = local_var_req_builder.query(&[("tags_json", &local_var_str.to_string())]);
     }

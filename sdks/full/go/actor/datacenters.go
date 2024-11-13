@@ -5,8 +5,14 @@ package actor
 import (
 	json "encoding/json"
 	fmt "fmt"
+	uuid "github.com/google/uuid"
 	core "sdk/core"
 )
+
+type ListDatacentersRequestQuery struct {
+	GameId        *uuid.UUID `json:"-"`
+	EnvironmentId *uuid.UUID `json:"-"`
+}
 
 type ListDatacentersResponse struct {
 	Datacenters []*Datacenter `json:"datacenters,omitempty"`

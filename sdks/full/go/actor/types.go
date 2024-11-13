@@ -10,12 +10,21 @@ import (
 	core "sdk/core"
 )
 
-type DestroyActorRequest struct {
+type DestroyActorRequestQuery struct {
+	GameId        *uuid.UUID `json:"-"`
+	EnvironmentId *uuid.UUID `json:"-"`
 	// The duration to wait for in milliseconds before killing the actor. This should be used to override the default kill timeout if a faster time is needed, say for ignoring a graceful shutdown.
 	OverrideKillTimeout *int64 `json:"-"`
 }
 
-type GetActorsRequest struct {
+type ListActorsRequestQuery struct {
+	GameId        *uuid.UUID `json:"-"`
+	EnvironmentId *uuid.UUID `json:"-"`
+}
+
+type GetActorsRequestQuery struct {
+	GameId           *uuid.UUID `json:"-"`
+	EnvironmentId    *uuid.UUID `json:"-"`
 	TagsJson         *string    `json:"-"`
 	IncludeDestroyed *bool      `json:"-"`
 	Cursor           *uuid.UUID `json:"-"`

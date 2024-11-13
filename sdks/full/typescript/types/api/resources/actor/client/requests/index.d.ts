@@ -1,2 +1,3 @@
-export { type GetActorsRequest } from "./GetActorsRequest";
-export { type DestroyActorRequest } from "./DestroyActorRequest";
+export { type ListActorsRequestQuery } from "./ListActorsRequestQuery";
+export { type GetActorsRequestQuery } from "./GetActorsRequestQuery";
+export { type DestroyActorRequestQuery } from "./DestroyActorRequestQuery";

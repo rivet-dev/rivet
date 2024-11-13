@@ -45,9 +45,12 @@ pub async fn get_deprecated(
 	env_id: Uuid,
 	actor_id: Uuid,
 	watch_index: WatchIndexQuery,
-) -> GlobalResult<models::ActorGetActorResponse> {
+) -> GlobalResult<models::ServersGetServerResponse> {
 	let global = build_global_query_compat(&ctx, game_id, env_id).await?;
-	get(ctx, actor_id, watch_index, global).await
+	let get_res = get(ctx, actor_id, watch_index, global).await?;
+	Ok(models::ServersGetServerResponse {
+		server: Box::new(legacy_convert_actor_to_server(*get_res.actor)),
+	})
 }
 
 // MARK: POST /actors
@@ -190,10 +193,79 @@ pub async fn create_deprecated(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
 	env_id: Uuid,
-	body: models::ActorCreateActorRequest,
-) -> GlobalResult<models::ActorCreateActorResponse> {
+	body: models::ServersCreateServerRequest,
+) -> GlobalResult<models::ServersCreateServerResponse> {
 	let global = build_global_query_compat(&ctx, game_id, env_id).await?;
-	create(ctx, body, global).await
+	let create_res = create(
+		ctx,
+		models::ActorCreateActorRequest {
+			datacenter: body.datacenter,
+			lifecycle: body.lifecycle.map(|l| {
+				Box::new(models::ActorLifecycle {
+					kill_timeout: l.kill_timeout,
+				})
+			}),
+			network: Box::new(models::ActorCreateActorNetworkRequest {
+				mode: body.network.mode.map(|n| match n {
+					models::ServersNetworkMode::Host => models::ActorNetworkMode::Host,
+					models::ServersNetworkMode::Bridge => models::ActorNetworkMode::Bridge,
+				}),
+				ports: body
+					.network
+					.ports
+					.into_iter()
+					.map(|(k, p)| {
+						(
+							k,
+							models::ActorCreateActorPortRequest {
+								internal_port: p.internal_port,
+								protocol: match p.protocol {
+									models::ServersPortProtocol::Http => {
+										models::ActorPortProtocol::Http
+									}
+									models::ServersPortProtocol::Https => {
+										models::ActorPortProtocol::Https
+									}
+									models::ServersPortProtocol::Tcp => {
+										models::ActorPortProtocol::Tcp
+									}
+									models::ServersPortProtocol::TcpTls => {
+										models::ActorPortProtocol::TcpTls
+									}
+									models::ServersPortProtocol::Udp => {
+										models::ActorPortProtocol::Udp
+									}
+								},
+								routing: p.routing.map(|r| {
+									Box::new(models::ActorPortRouting {
+										game_guard: r.game_guard.map(|_| {
+											Box::new(models::ActorGameGuardRouting::default())
+										}),
+										host: r.host.map(|_| json!({})),
+									})
+								}),
+							},
+						)
+					})
+					.collect(),
+			}),
+			resources: Box::new(models::ActorResources {
+				cpu: body.resources.cpu,
+				memory: body.resources.memory,
+			}),
+			runtime: Box::new(models::ActorCreateActorRuntimeRequest {
+				arguments: body.runtime.arguments,
+				environment: body.runtime.environment,
+				build: body.runtime.build,
+			}),
+			tags: body.tags,
+		},
+		global,
+	)
+	.await?;
+	Ok(models::ServersCreateServerResponse {
+		server: Box::new(legacy_convert_actor_to_server(*create_res.actor)),
+	})
 }
 
 // MARK: DELETE /actors/{}
@@ -306,13 +378,82 @@ pub async fn list_actors(
 	Ok(models::ActorListActorsResponse { actors: servers })
 }
 
-pub async fn list_actors_deprecated(
+pub async fn list_servers_deprecated(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
 	env_id: Uuid,
 	watch_index: WatchIndexQuery,
 	query: ListQuery,
-) -> GlobalResult<models::ActorListActorsResponse> {
+) -> GlobalResult<models::ServersListServersResponse> {
 	let global = build_global_query_compat(&ctx, game_id, env_id).await?;
-	list_actors(ctx, watch_index, ListQuery { global, ..query }).await
+	let actors_res = list_actors(ctx, watch_index, ListQuery { global, ..query }).await?;
+	Ok(models::ServersListServersResponse {
+		servers: actors_res
+			.actors
+			.into_iter()
+			.map(legacy_convert_actor_to_server)
+			.collect(),
+	})
+}
+
+fn legacy_convert_actor_to_server(a: models::ActorActor) -> models::ServersServer {
+	models::ServersServer {
+		created_at: a.created_at,
+		datacenter: a.datacenter,
+		destroyed_at: a.destroyed_at,
+		environment: a.environment,
+		id: a.id,
+		lifecycle: Box::new(models::ServersLifecycle {
+			kill_timeout: a.lifecycle.kill_timeout,
+		}),
+		network: Box::new(models::ServersNetwork {
+			mode: a.network.mode.map(|n| match n {
+				models::ActorNetworkMode::Host => models::ServersNetworkMode::Host,
+				models::ActorNetworkMode::Bridge => models::ServersNetworkMode::Bridge,
+			}),
+			ports: a
+				.network
+				.ports
+				.into_iter()
+				.map(|(k, p)| {
+					(
+						k,
+						models::ServersPort {
+							internal_port: p.internal_port,
+							protocol: match p.protocol {
+								models::ActorPortProtocol::Http => {
+									models::ServersPortProtocol::Http
+								}
+								models::ActorPortProtocol::Https => {
+									models::ServersPortProtocol::Https
+								}
+								models::ActorPortProtocol::Tcp => models::ServersPortProtocol::Tcp,
+								models::ActorPortProtocol::TcpTls => {
+									models::ServersPortProtocol::TcpTls
+								}
+								models::ActorPortProtocol::Udp => models::ServersPortProtocol::Udp,
+							},
+							public_hostname: p.public_hostname,
+							public_port: p.public_port,
+							routing: Box::new(models::ServersPortRouting {
+								game_guard: p.routing.game_guard.map(|_| json!({})),
+								host: p.routing.host.map(|_| json!({})),
+							}),
+						},
+					)
+				})
+				.collect(),
+		}),
+		resources: Box::new(models::ServersResources {
+			cpu: a.resources.cpu,
+			memory: a.resources.memory,
+		}),
+		runtime: Box::new(models::ServersRuntime {
+			arguments: a.runtime.arguments,
+			build: a.runtime.build,
+			environment: a.runtime.environment,
+		}),
+		started_at: a.started_at,
+		tags: a.tags,
+	}
 }

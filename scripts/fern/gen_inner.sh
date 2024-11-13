@@ -2,7 +2,6 @@
 set -euf -o pipefail
 
 # Generate Fern libraries
-echo "Using Fern"
 (cd sdks && FERN_NO_VERSION_REDIRECTION=true FERN_DISABLE_TELEMETRY=true npx -p fern-api fern generate --local --group $FERN_GROUP --log-level debug)
 
 # Add missing deps

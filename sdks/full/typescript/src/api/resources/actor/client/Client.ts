@@ -35,9 +35,8 @@ export class Actor {
     /**
      * Gets a dynamic actor.
      *
-     * @param {string} gameId
-     * @param {string} environmentId
      * @param {string} actorId - The id of the actor to destroy
+     * @param {Rivet.actor.ListActorsRequestQuery} request
      * @param {Actor.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @throws {@link Rivet.InternalError}
@@ -48,26 +47,37 @@ export class Actor {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.actor.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
+     *     await client.actor.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
+     *     })
      */
     public async get(
-        gameId: string,
-        environmentId: string,
         actorId: string,
+        request: Rivet.actor.ListActorsRequestQuery = {},
         requestOptions?: Actor.RequestOptions
     ): Promise<Rivet.actor.GetActorResponse> {
+        const { gameId, environmentId } = request;
+        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        if (gameId != null) {
+            _queryParams["game_id"] = gameId;
+        }
+
+        if (environmentId != null) {
+            _queryParams["environment_id"] = environmentId;
+        }
+
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(
-                    environmentId
-                )}/actors/${encodeURIComponent(actorId)}`
+                `/actors/${encodeURIComponent(actorId)}`
             ),
             method: "GET",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
             },
             contentType: "application/json",
+            queryParameters: _queryParams,
             requestType: "json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
             maxRetries: requestOptions?.maxRetries,
@@ -171,9 +181,7 @@ export class Actor {
     /**
      * Lists all actors associated with the token used. Can be filtered by tags in the query string.
      *
-     * @param {string} gameId
-     * @param {string} environmentId
-     * @param {Rivet.actor.GetActorsRequest} request
+     * @param {Rivet.actor.GetActorsRequestQuery} request
      * @param {Actor.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @throws {@link Rivet.InternalError}
@@ -184,20 +192,28 @@ export class Actor {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.actor.list("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *     await client.actor.list({
+     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
      *         tagsJson: "string",
      *         includeDestroyed: true,
      *         cursor: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
      *     })
      */
     public async list(
-        gameId: string,
-        environmentId: string,
-        request: Rivet.actor.GetActorsRequest = {},
+        request: Rivet.actor.GetActorsRequestQuery = {},
         requestOptions?: Actor.RequestOptions
     ): Promise<Rivet.actor.ListActorsResponse> {
-        const { tagsJson, includeDestroyed, cursor } = request;
+        const { gameId, environmentId, tagsJson, includeDestroyed, cursor } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        if (gameId != null) {
+            _queryParams["game_id"] = gameId;
+        }
+
+        if (environmentId != null) {
+            _queryParams["environment_id"] = environmentId;
+        }
+
         if (tagsJson != null) {
             _queryParams["tags_json"] = tagsJson;
         }
@@ -213,7 +229,7 @@ export class Actor {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(environmentId)}/actors`
+                "/actors"
             ),
             method: "GET",
             headers: {
@@ -324,8 +340,6 @@ export class Actor {
     /**
      * Create a new dynamic actor.
      *
-     * @param {string} gameId
-     * @param {string} environmentId
      * @param {Rivet.actor.CreateActorRequest} request
      * @param {Actor.RequestOptions} requestOptions - Request-specific configuration.
      *
@@ -337,7 +351,7 @@ export class Actor {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.actor.create("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *     await client.actor.create({
      *         datacenter: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
      *         tags: {
      *             "key": "value"
@@ -374,15 +388,13 @@ export class Actor {
      *     })
      */
     public async create(
-        gameId: string,
-        environmentId: string,
         request: Rivet.actor.CreateActorRequest,
         requestOptions?: Actor.RequestOptions
     ): Promise<Rivet.actor.CreateActorResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(environmentId)}/actors`
+                "/actors"
             ),
             method: "POST",
             headers: {
@@ -493,10 +505,8 @@ export class Actor {
     /**
      * Destroy a dynamic actor.
      *
-     * @param {string} gameId
-     * @param {string} environmentId
      * @param {string} actorId - The id of the actor to destroy
-     * @param {Rivet.actor.DestroyActorRequest} request
+     * @param {Rivet.actor.DestroyActorRequestQuery} request
      * @param {Actor.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @throws {@link Rivet.InternalError}
@@ -507,19 +517,27 @@ export class Actor {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.actor.destroy("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *     await client.actor.destroy("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
      *         overrideKillTimeout: 1000000
      *     })
      */
     public async destroy(
-        gameId: string,
-        environmentId: string,
         actorId: string,
-        request: Rivet.actor.DestroyActorRequest = {},
+        request: Rivet.actor.DestroyActorRequestQuery = {},
         requestOptions?: Actor.RequestOptions
     ): Promise<Rivet.actor.DestroyActorResponse> {
-        const { overrideKillTimeout } = request;
+        const { gameId, environmentId, overrideKillTimeout } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        if (gameId != null) {
+            _queryParams["game_id"] = gameId;
+        }
+
+        if (environmentId != null) {
+            _queryParams["environment_id"] = environmentId;
+        }
+
         if (overrideKillTimeout != null) {
             _queryParams["override_kill_timeout"] = overrideKillTimeout.toString();
         }
@@ -527,9 +545,7 @@ export class Actor {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(
-                    environmentId
-                )}/actors/${encodeURIComponent(actorId)}`
+                `/actors/${encodeURIComponent(actorId)}`
             ),
             method: "DELETE",
             headers: {

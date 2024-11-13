@@ -58,7 +58,18 @@ pub async fn list_deprecated(
 	game_id: Uuid,
 	env_id: Uuid,
 	watch_index: WatchIndexQuery,
-) -> GlobalResult<models::ActorListDatacentersResponse> {
+) -> GlobalResult<models::ServersListDatacentersResponse> {
 	let global = build_global_query_compat(&ctx, game_id, env_id).await?;
-	list(ctx, watch_index, global).await
+	let dc_res = list(ctx, watch_index, global).await?;
+	Ok(models::ServersListDatacentersResponse {
+		datacenters: dc_res
+			.datacenters
+			.into_iter()
+			.map(|dc| models::ServersDatacenter {
+				id: dc.id,
+				name: dc.name,
+				slug: dc.slug,
+			})
+			.collect(),
+	})
 }

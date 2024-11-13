@@ -25,10 +25,8 @@ export declare class Builds {
     /**
      * Lists all builds of the game associated with the token used. Can be filtered by tags in the query string.
      *
-     * @param {string} gameId
-     * @param {string} environmentId
      * @param {string} buildId
-     * @param {Rivet.actor.GetBuildRequest} request
+     * @param {Rivet.actor.GetBuildRequestQuery} request
      * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @throws {@link Rivet.InternalError}
@@ -39,17 +37,17 @@ export declare class Builds {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.actor.builds.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *     await client.actor.builds.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
      *         tagsJson: "string"
      *     })
      */
-    get(gameId: string, environmentId: string, buildId: string, request?: Rivet.actor.GetBuildRequest, requestOptions?: Builds.RequestOptions): Promise<Rivet.actor.GetBuildResponse>;
+    get(buildId: string, request?: Rivet.actor.GetBuildRequestQuery, requestOptions?: Builds.RequestOptions): Promise<Rivet.actor.GetBuildResponse>;
     /**
      * Lists all builds of the game associated with the token used. Can be filtered by tags in the query string.
      *
-     * @param {string} gameId
-     * @param {string} environmentId
-     * @param {Rivet.actor.ListBuildsRequest} request
+     * @param {Rivet.actor.ListBuildsRequestQuery} request
      * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @throws {@link Rivet.InternalError}
@@ -60,16 +58,16 @@ export declare class Builds {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.actor.builds.list("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *     await client.actor.builds.list({
+     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
      *         tagsJson: "string"
      *     })
      */
-    list(gameId: string, environmentId: string, request?: Rivet.actor.ListBuildsRequest, requestOptions?: Builds.RequestOptions): Promise<Rivet.actor.ListBuildsResponse>;
+    list(request?: Rivet.actor.ListBuildsRequestQuery, requestOptions?: Builds.RequestOptions): Promise<Rivet.actor.ListBuildsResponse>;
     /**
-     * @param {string} gameId
-     * @param {string} environmentId
      * @param {string} buildId
-     * @param {Rivet.actor.PatchBuildTagsRequest} request
+     * @param {Rivet.actor.PatchBuildTagsRequestQuery} request
      * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @throws {@link Rivet.InternalError}
@@ -80,20 +78,22 @@ export declare class Builds {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.actor.builds.patchTags("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         tags: {
-     *             "key": "value"
-     *         },
-     *         exclusiveTags: ["string"]
+     *     await client.actor.builds.patchTags("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         body: {
+     *             tags: {
+     *                 "key": "value"
+     *             },
+     *             exclusiveTags: ["string"]
+     *         }
      *     })
      */
-    patchTags(gameId: string, environmentId: string, buildId: string, request: Rivet.actor.PatchBuildTagsRequest, requestOptions?: Builds.RequestOptions): Promise<Rivet.actor.PatchBuildTagsResponse>;
+    patchTags(buildId: string, request: Rivet.actor.PatchBuildTagsRequestQuery, requestOptions?: Builds.RequestOptions): Promise<Rivet.actor.PatchBuildTagsResponse>;
     /**
      * Creates a new game build for the given game.
      *
-     * @param {string} gameId
-     * @param {string} environmentId
-     * @param {Rivet.actor.CreateBuildRequest} request
+     * @param {Rivet.actor.PrepareBuildRequestQuery} request
      * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @throws {@link Rivet.InternalError}
@@ -104,27 +104,30 @@ export declare class Builds {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.actor.builds.prepare("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         name: "string",
-     *         imageTag: "string",
-     *         imageFile: {
-     *             path: "string",
-     *             contentType: "string",
-     *             contentLength: 1000000
-     *         },
-     *         multipartUpload: true,
-     *         kind: Rivet.actor.BuildKind.DockerImage,
-     *         compression: Rivet.actor.BuildCompression.None,
-     *         prewarmDatacenters: ["d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"]
+     *     await client.actor.builds.prepare({
+     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         body: {
+     *             name: "string",
+     *             imageTag: "string",
+     *             imageFile: {
+     *                 path: "string",
+     *                 contentType: "string",
+     *                 contentLength: 1000000
+     *             },
+     *             multipartUpload: true,
+     *             kind: Rivet.actor.BuildKind.DockerImage,
+     *             compression: Rivet.actor.BuildCompression.None,
+     *             prewarmDatacenters: ["d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"]
+     *         }
      *     })
      */
-    prepare(gameId: string, environmentId: string, request: Rivet.actor.CreateBuildRequest, requestOptions?: Builds.RequestOptions): Promise<Rivet.actor.CreateBuildResponse>;
+    prepare(request: Rivet.actor.PrepareBuildRequestQuery, requestOptions?: Builds.RequestOptions): Promise<Rivet.actor.PrepareBuildResponse>;
     /**
      * Marks an upload as complete.
      *
-     * @param {string} gameId
-     * @param {string} environmentId
      * @param {string} buildId
+     * @param {Rivet.actor.CompleteBuildRequestQuery} request
      * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @throws {@link Rivet.InternalError}
@@ -135,8 +138,11 @@ export declare class Builds {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.actor.builds.complete("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
+     *     await client.actor.builds.complete("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
+     *     })
      */
-    complete(gameId: string, environmentId: string, buildId: string, requestOptions?: Builds.RequestOptions): Promise<void>;
+    complete(buildId: string, request?: Rivet.actor.CompleteBuildRequestQuery, requestOptions?: Builds.RequestOptions): Promise<void>;
     protected _getAuthorizationHeader(): Promise<string | undefined>;
 }

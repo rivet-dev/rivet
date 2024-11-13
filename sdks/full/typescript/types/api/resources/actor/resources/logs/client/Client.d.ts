@@ -25,10 +25,8 @@ export declare class Logs {
     /**
      * Returns the logs for a given actor.
      *
-     * @param {string} gameId
-     * @param {string} environmentId
      * @param {string} actorId
-     * @param {Rivet.actor.GetActorLogsRequest} request
+     * @param {Rivet.actor.GetActorLogsRequestQuery} request
      * @param {Logs.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @throws {@link Rivet.InternalError}
@@ -39,11 +37,13 @@ export declare class Logs {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.actor.logs.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *     await client.actor.logs.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
      *         stream: Rivet.actor.LogStream.StdOut,
      *         watchIndex: "string"
      *     })
      */
-    get(gameId: string, environmentId: string, actorId: string, request: Rivet.actor.GetActorLogsRequest, requestOptions?: Logs.RequestOptions): Promise<Rivet.actor.GetActorLogsResponse>;
+    get(actorId: string, request: Rivet.actor.GetActorLogsRequestQuery, requestOptions?: Logs.RequestOptions): Promise<Rivet.actor.GetActorLogsResponse>;
     protected _getAuthorizationHeader(): Promise<string | undefined>;
 }

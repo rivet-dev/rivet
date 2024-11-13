@@ -7,10 +7,7 @@ imports:
 
 service:
   auth: true
-  base-path: /games/{game_id}/environments/{environment_id}/builds
-  path-parameters:
-    game_id: uuid
-    environment_id: uuid
+  base-path: /builds
   endpoints:
     get:
       path: /{build_id}
@@ -21,8 +18,10 @@ service:
       path-parameters:
         build_id: uuid
       request:
-        name: GetBuildRequest
+        name: GetBuildRequestQuery
         query-parameters:
+          game_id: optional<uuid>
+          environment_id: optional<uuid>
           tags_json: optional<string>
       response: GetBuildResponse
 
@@ -33,8 +32,10 @@ service:
         Lists all builds of the game associated with the token used. Can be
         filtered by tags in the query string.
       request:
-        name: ListBuildsRequest
+        name: ListBuildsRequestQuery
         query-parameters:
+          game_id: optional<uuid>
+          environment_id: optional<uuid>
           tags_json: optional<string>
       response: ListBuildsResponse
 
@@ -44,7 +45,11 @@ service:
       path-parameters:
         build_id: uuid
       request:
+        name: PatchBuildTagsRequestQuery
         body: PatchBuildTagsRequest
+        query-parameters:
+          game_id: optional<uuid>
+          environment_id: optional<uuid>
       response: PatchBuildTagsResponse
 
     prepare:
@@ -52,8 +57,12 @@ service:
       method: POST
       docs: Creates a new game build for the given game.
       request:
-        body: CreateBuildRequest
-      response: CreateBuildResponse
+        name: PrepareBuildRequestQuery
+        body: PrepareBuildRequest
+        query-parameters:
+          game_id: optional<uuid>
+          environment_id: optional<uuid>
+      response: PrepareBuildResponse
 
     complete:
       path: /{build_id}/complete
@@ -61,6 +70,11 @@ service:
       docs: Marks an upload as complete.
       path-parameters:
         build_id: uuid
+      request:
+        name: CompleteBuildRequestQuery
+        query-parameters:
+          game_id: optional<uuid>
+          environment_id: optional<uuid>
 
 types:
   GetBuildResponse:
@@ -83,7 +97,7 @@ types:
   PatchBuildTagsResponse:
     properties: {}
 
-  CreateBuildRequest:
+  PrepareBuildRequest:
     properties:
       name: string
       image_tag:
@@ -96,7 +110,7 @@ types:
       compression: optional<BuildCompression>
       prewarm_datacenters: optional<list<uuid>>
 
-  CreateBuildResponse:
+  PrepareBuildResponse:
     properties:
       build: uuid
       image_presigned_request: optional<uploadCommons.PresignedRequest>

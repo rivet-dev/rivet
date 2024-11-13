@@ -4,17 +4,17 @@ All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**actor_builds_complete**](ActorBuildsApi.md#actor_builds_complete) | **POST** /games/{game_id}/environments/{environment_id}/builds/{build_id}/complete | 
-[**actor_builds_get**](ActorBuildsApi.md#actor_builds_get) | **GET** /games/{game_id}/environments/{environment_id}/builds/{build_id} | 
-[**actor_builds_list**](ActorBuildsApi.md#actor_builds_list) | **GET** /games/{game_id}/environments/{environment_id}/builds | 
-[**actor_builds_patch_tags**](ActorBuildsApi.md#actor_builds_patch_tags) | **PATCH** /games/{game_id}/environments/{environment_id}/builds/{build_id}/tags | 
-[**actor_builds_prepare**](ActorBuildsApi.md#actor_builds_prepare) | **POST** /games/{game_id}/environments/{environment_id}/builds/prepare | 
+[**actor_builds_complete**](ActorBuildsApi.md#actor_builds_complete) | **POST** /builds/{build_id}/complete | 
+[**actor_builds_get**](ActorBuildsApi.md#actor_builds_get) | **GET** /builds/{build_id} | 
+[**actor_builds_list**](ActorBuildsApi.md#actor_builds_list) | **GET** /builds | 
+[**actor_builds_patch_tags**](ActorBuildsApi.md#actor_builds_patch_tags) | **PATCH** /builds/{build_id}/tags | 
+[**actor_builds_prepare**](ActorBuildsApi.md#actor_builds_prepare) | **POST** /builds/prepare | 
 
 
 
 ## actor_builds_complete
 
-> actor_builds_complete(game_id, environment_id, build_id)
+> actor_builds_complete(build_id, game_id, environment_id)
 
 
 Marks an upload as complete.
@@ -24,9 +24,9 @@ Marks an upload as complete.
 
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
-**game_id** | **uuid::Uuid** |  | [required] |
-**environment_id** | **uuid::Uuid** |  | [required] |
 **build_id** | **uuid::Uuid** |  | [required] |
+**game_id** | Option<**uuid::Uuid**> |  |  |
+**environment_id** | Option<**uuid::Uuid**> |  |  |
 
 ### Return type
 
@@ -46,7 +46,7 @@ Name | Type | Description  | Required | Notes
 
 ## actor_builds_get
 
-> crate::models::ActorGetBuildResponse actor_builds_get(game_id, environment_id, build_id, tags_json)
+> crate::models::ActorGetBuildResponse actor_builds_get(build_id, game_id, environment_id, tags_json)
 
 
 Lists all builds of the game associated with the token used. Can be filtered by tags in the query string.
@@ -56,9 +56,9 @@ Lists all builds of the game associated with the token used. Can be filtered by 
 
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
-**game_id** | **uuid::Uuid** |  | [required] |
-**environment_id** | **uuid::Uuid** |  | [required] |
 **build_id** | **uuid::Uuid** |  | [required] |
+**game_id** | Option<**uuid::Uuid**> |  |  |
+**environment_id** | Option<**uuid::Uuid**> |  |  |
 **tags_json** | Option<**String**> |  |  |
 
 ### Return type
@@ -89,8 +89,8 @@ Lists all builds of the game associated with the token used. Can be filtered by 
 
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
-**game_id** | **uuid::Uuid** |  | [required] |
-**environment_id** | **uuid::Uuid** |  | [required] |
+**game_id** | Option<**uuid::Uuid**> |  |  |
+**environment_id** | Option<**uuid::Uuid**> |  |  |
 **tags_json** | Option<**String**> |  |  |
 
 ### Return type
@@ -111,7 +111,7 @@ Name | Type | Description  | Required | Notes
 
 ## actor_builds_patch_tags
 
-> serde_json::Value actor_builds_patch_tags(game_id, environment_id, build_id, actor_patch_build_tags_request)
+> serde_json::Value actor_builds_patch_tags(build_id, actor_patch_build_tags_request, game_id, environment_id)
 
 
 ### Parameters
@@ -119,10 +119,10 @@ Name | Type | Description  | Required | Notes
 
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
-**game_id** | **uuid::Uuid** |  | [required] |
-**environment_id** | **uuid::Uuid** |  | [required] |
 **build_id** | **uuid::Uuid** |  | [required] |
 **actor_patch_build_tags_request** | [**ActorPatchBuildTagsRequest**](ActorPatchBuildTagsRequest.md) |  | [required] |
+**game_id** | Option<**uuid::Uuid**> |  |  |
+**environment_id** | Option<**uuid::Uuid**> |  |  |
 
 ### Return type
 
@@ -142,7 +142,7 @@ Name | Type | Description  | Required | Notes
 
 ## actor_builds_prepare
 
-> crate::models::ActorCreateBuildResponse actor_builds_prepare(game_id, environment_id, actor_create_build_request)
+> crate::models::ActorPrepareBuildResponse actor_builds_prepare(actor_prepare_build_request, game_id, environment_id)
 
 
 Creates a new game build for the given game.
@@ -152,13 +152,13 @@ Creates a new game build for the given game.
 
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
-**game_id** | **uuid::Uuid** |  | [required] |
-**environment_id** | **uuid::Uuid** |  | [required] |
-**actor_create_build_request** | [**ActorCreateBuildRequest**](ActorCreateBuildRequest.md) |  | [required] |
+**actor_prepare_build_request** | [**ActorPrepareBuildRequest**](ActorPrepareBuildRequest.md) |  | [required] |
+**game_id** | Option<**uuid::Uuid**> |  |  |
+**environment_id** | Option<**uuid::Uuid**> |  |  |
 
 ### Return type
 
-[**crate::models::ActorCreateBuildResponse**](ActorCreateBuildResponse.md)
+[**crate::models::ActorPrepareBuildResponse**](ActorPrepareBuildResponse.md)
 
 ### Authorization
 

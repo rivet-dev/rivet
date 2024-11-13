@@ -4,13 +4,13 @@ All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**actor_logs_get**](ActorLogsApi.md#actor_logs_get) | **GET** /games/{game_id}/environments/{environment_id}/actors/{actor_id}/logs | 
+[**actor_logs_get**](ActorLogsApi.md#actor_logs_get) | **GET** /actors/{actor_id}/logs | 
 
 
 
 ## actor_logs_get
 
-> crate::models::ActorGetActorLogsResponse actor_logs_get(game_id, environment_id, actor_id, stream, watch_index)
+> crate::models::ActorGetActorLogsResponse actor_logs_get(actor_id, stream, game_id, environment_id, watch_index)
 
 
 Returns the logs for a given actor.
@@ -20,10 +20,10 @@ Returns the logs for a given actor.
 
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
-**game_id** | **uuid::Uuid** |  | [required] |
-**environment_id** | **uuid::Uuid** |  | [required] |
 **actor_id** | **uuid::Uuid** |  | [required] |
 **stream** | [**ActorLogStream**](.md) |  | [required] |
+**game_id** | Option<**uuid::Uuid**> |  |  |
+**environment_id** | Option<**uuid::Uuid**> |  |  |
 **watch_index** | Option<**String**> | A query parameter denoting the requests watch index. |  |
 
 ### Return type

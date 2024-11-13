@@ -1,1 +1,1 @@
-export { type GetActorLogsRequest } from "./GetActorLogsRequest";
+export { type GetActorLogsRequestQuery } from "./GetActorLogsRequestQuery";

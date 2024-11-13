@@ -28,9 +28,8 @@ export declare class Actor {
     /**
      * Gets a dynamic actor.
      *
-     * @param {string} gameId
-     * @param {string} environmentId
      * @param {string} actorId - The id of the actor to destroy
+     * @param {Rivet.actor.ListActorsRequestQuery} request
      * @param {Actor.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @throws {@link Rivet.InternalError}
@@ -41,15 +40,16 @@ export declare class Actor {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.actor.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
+     *     await client.actor.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
+     *     })
      */
-    get(gameId: string, environmentId: string, actorId: string, requestOptions?: Actor.RequestOptions): Promise<Rivet.actor.GetActorResponse>;
+    get(actorId: string, request?: Rivet.actor.ListActorsRequestQuery, requestOptions?: Actor.RequestOptions): Promise<Rivet.actor.GetActorResponse>;
     /**
      * Lists all actors associated with the token used. Can be filtered by tags in the query string.
      *
-     * @param {string} gameId
-     * @param {string} environmentId
-     * @param {Rivet.actor.GetActorsRequest} request
+     * @param {Rivet.actor.GetActorsRequestQuery} request
      * @param {Actor.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @throws {@link Rivet.InternalError}
@@ -60,18 +60,18 @@ export declare class Actor {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.actor.list("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *     await client.actor.list({
+     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
      *         tagsJson: "string",
      *         includeDestroyed: true,
      *         cursor: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
      *     })
      */
-    list(gameId: string, environmentId: string, request?: Rivet.actor.GetActorsRequest, requestOptions?: Actor.RequestOptions): Promise<Rivet.actor.ListActorsResponse>;
+    list(request?: Rivet.actor.GetActorsRequestQuery, requestOptions?: Actor.RequestOptions): Promise<Rivet.actor.ListActorsResponse>;
     /**
      * Create a new dynamic actor.
      *
-     * @param {string} gameId
-     * @param {string} environmentId
      * @param {Rivet.actor.CreateActorRequest} request
      * @param {Actor.RequestOptions} requestOptions - Request-specific configuration.
      *
@@ -83,7 +83,7 @@ export declare class Actor {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.actor.create("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *     await client.actor.create({
      *         datacenter: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
      *         tags: {
      *             "key": "value"
@@ -119,14 +119,12 @@ export declare class Actor {
      *         }
      *     })
      */
-    create(gameId: string, environmentId: string, request: Rivet.actor.CreateActorRequest, requestOptions?: Actor.RequestOptions): Promise<Rivet.actor.CreateActorResponse>;
+    create(request: Rivet.actor.CreateActorRequest, requestOptions?: Actor.RequestOptions): Promise<Rivet.actor.CreateActorResponse>;
     /**
      * Destroy a dynamic actor.
      *
-     * @param {string} gameId
-     * @param {string} environmentId
      * @param {string} actorId - The id of the actor to destroy
-     * @param {Rivet.actor.DestroyActorRequest} request
+     * @param {Rivet.actor.DestroyActorRequestQuery} request
      * @param {Actor.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @throws {@link Rivet.InternalError}
@@ -137,11 +135,13 @@ export declare class Actor {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.actor.destroy("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *     await client.actor.destroy("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
      *         overrideKillTimeout: 1000000
      *     })
      */
-    destroy(gameId: string, environmentId: string, actorId: string, request?: Rivet.actor.DestroyActorRequest, requestOptions?: Actor.RequestOptions): Promise<Rivet.actor.DestroyActorResponse>;
+    destroy(actorId: string, request?: Rivet.actor.DestroyActorRequestQuery, requestOptions?: Actor.RequestOptions): Promise<Rivet.actor.DestroyActorResponse>;
     protected _builds: Builds | undefined;
     get builds(): Builds;
     protected _datacenters: Datacenters | undefined;

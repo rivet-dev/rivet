@@ -36,14 +36,20 @@ func NewClient(opts ...core.ClientOption) *Client {
 }
 
 // Lists all builds of the game associated with the token used. Can be filtered by tags in the query string.
-func (c *Client) Get(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, buildId uuid.UUID, request *actor.GetBuildRequest) (*actor.GetBuildResponse, error) {
+func (c *Client) Get(ctx context.Context, buildId uuid.UUID, request *actor.GetBuildRequestQuery) (*actor.GetBuildResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/environments/%v/builds/%v", gameId, environmentId, buildId)
+	endpointURL := fmt.Sprintf(baseURL+"/"+"builds/%v", buildId)
 
 	queryParams := make(url.Values)
+	if request.GameId != nil {
+		queryParams.Add("game_id", fmt.Sprintf("%v", *request.GameId))
+	}
+	if request.EnvironmentId != nil {
+		queryParams.Add("environment_id", fmt.Sprintf("%v", *request.EnvironmentId))
+	}
 	if request.TagsJson != nil {
 		queryParams.Add("tags_json", fmt.Sprintf("%v", *request.TagsJson))
 	}
@@ -122,14 +128,20 @@ func (c *Client) Get(ctx context.Context, gameId uuid.UUID, environmentId uuid.U
 }
 
 // Lists all builds of the game associated with the token used. Can be filtered by tags in the query string.
-func (c *Client) List(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, request *actor.ListBuildsRequest) (*actor.ListBuildsResponse, error) {
+func (c *Client) List(ctx context.Context, request *actor.ListBuildsRequestQuery) (*actor.ListBuildsResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/environments/%v/builds", gameId, environmentId)
+	endpointURL := baseURL + "/" + "builds"
 
 	queryParams := make(url.Values)
+	if request.GameId != nil {
+		queryParams.Add("game_id", fmt.Sprintf("%v", *request.GameId))
+	}
+	if request.EnvironmentId != nil {
+		queryParams.Add("environment_id", fmt.Sprintf("%v", *request.EnvironmentId))
+	}
 	if request.TagsJson != nil {
 		queryParams.Add("tags_json", fmt.Sprintf("%v", *request.TagsJson))
 	}
@@ -207,12 +219,23 @@ func (c *Client) List(ctx context.Context, gameId uuid.UUID, environmentId uuid.
 	return response, nil
 }
 
-func (c *Client) PatchTags(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, buildId uuid.UUID, request *actor.PatchBuildTagsRequest) (*actor.PatchBuildTagsResponse, error) {
+func (c *Client) PatchTags(ctx context.Context, buildId uuid.UUID, request *actor.PatchBuildTagsRequestQuery) (*actor.PatchBuildTagsResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/environments/%v/builds/%v/tags", gameId, environmentId, buildId)
+	endpointURL := fmt.Sprintf(baseURL+"/"+"builds/%v/tags", buildId)
+
+	queryParams := make(url.Values)
+	if request.GameId != nil {
+		queryParams.Add("game_id", fmt.Sprintf("%v", *request.GameId))
+	}
+	if request.EnvironmentId != nil {
+		queryParams.Add("environment_id", fmt.Sprintf("%v", *request.EnvironmentId))
+	}
+	if len(queryParams) > 0 {
+		endpointURL += "?" + queryParams.Encode()
+	}
 
 	errorDecoder := func(statusCode int, body io.Reader) error {
 		raw, err := io.ReadAll(body)
@@ -286,12 +309,23 @@ func (c *Client) PatchTags(ctx context.Context, gameId uuid.UUID, environmentId 
 }
 
 // Creates a new game build for the given game.
-func (c *Client) Prepare(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, request *actor.CreateBuildRequest) (*actor.CreateBuildResponse, error) {
+func (c *Client) Prepare(ctx context.Context, request *actor.PrepareBuildRequestQuery) (*actor.PrepareBuildResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/environments/%v/builds/prepare", gameId, environmentId)
+	endpointURL := baseURL + "/" + "builds/prepare"
+
+	queryParams := make(url.Values)
+	if request.GameId != nil {
+		queryParams.Add("game_id", fmt.Sprintf("%v", *request.GameId))
+	}
+	if request.EnvironmentId != nil {
+		queryParams.Add("environment_id", fmt.Sprintf("%v", *request.EnvironmentId))
+	}
+	if len(queryParams) > 0 {
+		endpointURL += "?" + queryParams.Encode()
+	}
 
 	errorDecoder := func(statusCode int, body io.Reader) error {
 		raw, err := io.ReadAll(body)
@@ -347,7 +381,7 @@ func (c *Client) Prepare(ctx context.Context, gameId uuid.UUID, environmentId uu
 		return apiError
 	}
 
-	var response *actor.CreateBuildResponse
+	var response *actor.PrepareBuildResponse
 	if err := c.caller.Call(
 		ctx,
 		&core.CallParams{
@@ -365,12 +399,23 @@ func (c *Client) Prepare(ctx context.Context, gameId uuid.UUID, environmentId uu
 }
 
 // Marks an upload as complete.
-func (c *Client) Complete(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, buildId uuid.UUID) error {
+func (c *Client) Complete(ctx context.Context, buildId uuid.UUID, request *actor.CompleteBuildRequestQuery) error {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/environments/%v/builds/%v/complete", gameId, environmentId, buildId)
+	endpointURL := fmt.Sprintf(baseURL+"/"+"builds/%v/complete", buildId)
+
+	queryParams := make(url.Values)
+	if request.GameId != nil {
+		queryParams.Add("game_id", fmt.Sprintf("%v", *request.GameId))
+	}
+	if request.EnvironmentId != nil {
+		queryParams.Add("environment_id", fmt.Sprintf("%v", *request.EnvironmentId))
+	}
+	if len(queryParams) > 0 {
+		endpointURL += "?" + queryParams.Encode()
+	}
 
 	errorDecoder := func(statusCode int, body io.Reader) error {
 		raw, err := io.ReadAll(body)

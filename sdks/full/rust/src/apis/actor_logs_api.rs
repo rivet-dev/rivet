@@ -30,14 +30,20 @@ pub enum ActorLogsGetError {
 
 
 /// Returns the logs for a given actor.
-pub async fn actor_logs_get(configuration: &configuration::Configuration, game_id: &str, environment_id: &str, actor_id: &str, stream: crate::models::ActorLogStream, watch_index: Option<&str>) -> Result<crate::models::ActorGetActorLogsResponse, Error<ActorLogsGetError>> {
+pub async fn actor_logs_get(configuration: &configuration::Configuration, actor_id: &str, stream: crate::models::ActorLogStream, game_id: Option<&str>, environment_id: Option<&str>, watch_index: Option<&str>) -> Result<crate::models::ActorGetActorLogsResponse, Error<ActorLogsGetError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;
 
-    let local_var_uri_str = format!("{}/games/{game_id}/environments/{environment_id}/actors/{actor_id}/logs", local_var_configuration.base_path, game_id=crate::apis::urlencode(game_id), environment_id=crate::apis::urlencode(environment_id), actor_id=crate::apis::urlencode(actor_id));
+    let local_var_uri_str = format!("{}/actors/{actor_id}/logs", local_var_configuration.base_path, actor_id=crate::apis::urlencode(actor_id));
     let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
+    if let Some(ref local_var_str) = game_id {
+        local_var_req_builder = local_var_req_builder.query(&[("game_id", &local_var_str.to_string())]);
+    }
+    if let Some(ref local_var_str) = environment_id {
+        local_var_req_builder = local_var_req_builder.query(&[("environment_id", &local_var_str.to_string())]);
+    }
     local_var_req_builder = local_var_req_builder.query(&[("stream", &stream.to_string())]);
     if let Some(ref local_var_str) = watch_index {
         local_var_req_builder = local_var_req_builder.query(&[("watch_index", &local_var_str.to_string())]);

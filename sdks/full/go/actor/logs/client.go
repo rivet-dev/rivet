@@ -36,14 +36,20 @@ func NewClient(opts ...core.ClientOption) *Client {
 }
 
 // Returns the logs for a given actor.
-func (c *Client) Get(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, actorId uuid.UUID, request *actor.GetActorLogsRequest) (*actor.GetActorLogsResponse, error) {
+func (c *Client) Get(ctx context.Context, actorId uuid.UUID, request *actor.GetActorLogsRequestQuery) (*actor.GetActorLogsResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/environments/%v/actors/%v/logs", gameId, environmentId, actorId)
+	endpointURL := fmt.Sprintf(baseURL+"/"+"actors/%v/logs", actorId)
 
 	queryParams := make(url.Values)
+	if request.GameId != nil {
+		queryParams.Add("game_id", fmt.Sprintf("%v", *request.GameId))
+	}
+	if request.EnvironmentId != nil {
+		queryParams.Add("environment_id", fmt.Sprintf("%v", *request.EnvironmentId))
+	}
 	queryParams.Add("stream", fmt.Sprintf("%v", request.Stream))
 	if request.WatchIndex != nil {
 		queryParams.Add("watch_index", fmt.Sprintf("%v", *request.WatchIndex))

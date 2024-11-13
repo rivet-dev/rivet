@@ -5,10 +5,7 @@ imports:
 
 service:
   auth: true
-  base-path: /games/{game_id}/environments/{environment_id}/actors
-  path-parameters:
-    game_id: uuid
-    environment_id: uuid
+  base-path: /actors
   endpoints:
     get:
       path: /{actor_id}
@@ -18,6 +15,11 @@ service:
         actor_id:
           docs: The id of the actor to destroy
           type: uuid
+      request:
+        name: ListActorsRequestQuery
+        query-parameters:
+          game_id: optional<uuid>
+          environment_id: optional<uuid>
       response: GetActorResponse
 
     list:
@@ -27,8 +29,10 @@ service:
         Lists all actors associated with the token used. Can be filtered by
         tags in the query string.
       request:
-        name: GetActorsRequest
+        name: GetActorsRequestQuery
         query-parameters:
+          game_id: optional<uuid>
+          environment_id: optional<uuid>
           tags_json: optional<string>
           include_destroyed: optional<boolean>
           cursor: optional<uuid>
@@ -51,8 +55,10 @@ service:
           docs: The id of the actor to destroy
           type: uuid
       request:
-        name: DestroyActorRequest
+        name: DestroyActorRequestQuery
         query-parameters:
+          game_id: optional<uuid>
+          environment_id: optional<uuid>
           override_kill_timeout:
             docs: >-
               The duration to wait for in milliseconds before killing the actor.

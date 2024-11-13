@@ -32,10 +32,8 @@ export class Builds {
     /**
      * Lists all builds of the game associated with the token used. Can be filtered by tags in the query string.
      *
-     * @param {string} gameId
-     * @param {string} environmentId
      * @param {string} buildId
-     * @param {Rivet.actor.GetBuildRequest} request
+     * @param {Rivet.actor.GetBuildRequestQuery} request
      * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @throws {@link Rivet.InternalError}
@@ -46,19 +44,27 @@ export class Builds {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.actor.builds.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *     await client.actor.builds.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
      *         tagsJson: "string"
      *     })
      */
     public async get(
-        gameId: string,
-        environmentId: string,
         buildId: string,
-        request: Rivet.actor.GetBuildRequest = {},
+        request: Rivet.actor.GetBuildRequestQuery = {},
         requestOptions?: Builds.RequestOptions
     ): Promise<Rivet.actor.GetBuildResponse> {
-        const { tagsJson } = request;
+        const { gameId, environmentId, tagsJson } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        if (gameId != null) {
+            _queryParams["game_id"] = gameId;
+        }
+
+        if (environmentId != null) {
+            _queryParams["environment_id"] = environmentId;
+        }
+
         if (tagsJson != null) {
             _queryParams["tags_json"] = tagsJson;
         }
@@ -66,9 +72,7 @@ export class Builds {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(
-                    environmentId
-                )}/builds/${encodeURIComponent(buildId)}`
+                `/builds/${encodeURIComponent(buildId)}`
             ),
             method: "GET",
             headers: {
@@ -179,9 +183,7 @@ export class Builds {
     /**
      * Lists all builds of the game associated with the token used. Can be filtered by tags in the query string.
      *
-     * @param {string} gameId
-     * @param {string} environmentId
-     * @param {Rivet.actor.ListBuildsRequest} request
+     * @param {Rivet.actor.ListBuildsRequestQuery} request
      * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @throws {@link Rivet.InternalError}
@@ -192,18 +194,26 @@ export class Builds {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.actor.builds.list("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *     await client.actor.builds.list({
+     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
      *         tagsJson: "string"
      *     })
      */
     public async list(
-        gameId: string,
-        environmentId: string,
-        request: Rivet.actor.ListBuildsRequest = {},
+        request: Rivet.actor.ListBuildsRequestQuery = {},
         requestOptions?: Builds.RequestOptions
     ): Promise<Rivet.actor.ListBuildsResponse> {
-        const { tagsJson } = request;
+        const { gameId, environmentId, tagsJson } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        if (gameId != null) {
+            _queryParams["game_id"] = gameId;
+        }
+
+        if (environmentId != null) {
+            _queryParams["environment_id"] = environmentId;
+        }
+
         if (tagsJson != null) {
             _queryParams["tags_json"] = tagsJson;
         }
@@ -211,7 +221,7 @@ export class Builds {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(environmentId)}/builds`
+                "/builds"
             ),
             method: "GET",
             headers: {
@@ -320,10 +330,8 @@ export class Builds {
     }
 
     /**
-     * @param {string} gameId
-     * @param {string} environmentId
      * @param {string} buildId
-     * @param {Rivet.actor.PatchBuildTagsRequest} request
+     * @param {Rivet.actor.PatchBuildTagsRequestQuery} request
      * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @throws {@link Rivet.InternalError}
@@ -334,34 +342,45 @@ export class Builds {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.actor.builds.patchTags("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         tags: {
-     *             "key": "value"
-     *         },
-     *         exclusiveTags: ["string"]
+     *     await client.actor.builds.patchTags("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         body: {
+     *             tags: {
+     *                 "key": "value"
+     *             },
+     *             exclusiveTags: ["string"]
+     *         }
      *     })
      */
     public async patchTags(
-        gameId: string,
-        environmentId: string,
         buildId: string,
-        request: Rivet.actor.PatchBuildTagsRequest,
+        request: Rivet.actor.PatchBuildTagsRequestQuery,
         requestOptions?: Builds.RequestOptions
     ): Promise<Rivet.actor.PatchBuildTagsResponse> {
+        const { gameId, environmentId, body: _body } = request;
+        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        if (gameId != null) {
+            _queryParams["game_id"] = gameId;
+        }
+
+        if (environmentId != null) {
+            _queryParams["environment_id"] = environmentId;
+        }
+
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(
-                    environmentId
-                )}/builds/${encodeURIComponent(buildId)}/tags`
+                `/builds/${encodeURIComponent(buildId)}/tags`
             ),
             method: "PATCH",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
             },
             contentType: "application/json",
+            queryParameters: _queryParams,
             requestType: "json",
-            body: serializers.actor.PatchBuildTagsRequest.jsonOrThrow(request, { unrecognizedObjectKeys: "strip" }),
+            body: serializers.actor.PatchBuildTagsRequest.jsonOrThrow(_body, { unrecognizedObjectKeys: "strip" }),
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
             maxRetries: requestOptions?.maxRetries,
             abortSignal: requestOptions?.abortSignal,
@@ -464,9 +483,7 @@ export class Builds {
     /**
      * Creates a new game build for the given game.
      *
-     * @param {string} gameId
-     * @param {string} environmentId
-     * @param {Rivet.actor.CreateBuildRequest} request
+     * @param {Rivet.actor.PrepareBuildRequestQuery} request
      * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @throws {@link Rivet.InternalError}
@@ -477,44 +494,57 @@ export class Builds {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.actor.builds.prepare("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         name: "string",
-     *         imageTag: "string",
-     *         imageFile: {
-     *             path: "string",
-     *             contentType: "string",
-     *             contentLength: 1000000
-     *         },
-     *         multipartUpload: true,
-     *         kind: Rivet.actor.BuildKind.DockerImage,
-     *         compression: Rivet.actor.BuildCompression.None,
-     *         prewarmDatacenters: ["d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"]
+     *     await client.actor.builds.prepare({
+     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         body: {
+     *             name: "string",
+     *             imageTag: "string",
+     *             imageFile: {
+     *                 path: "string",
+     *                 contentType: "string",
+     *                 contentLength: 1000000
+     *             },
+     *             multipartUpload: true,
+     *             kind: Rivet.actor.BuildKind.DockerImage,
+     *             compression: Rivet.actor.BuildCompression.None,
+     *             prewarmDatacenters: ["d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"]
+     *         }
      *     })
      */
     public async prepare(
-        gameId: string,
-        environmentId: string,
-        request: Rivet.actor.CreateBuildRequest,
+        request: Rivet.actor.PrepareBuildRequestQuery,
         requestOptions?: Builds.RequestOptions
-    ): Promise<Rivet.actor.CreateBuildResponse> {
+    ): Promise<Rivet.actor.PrepareBuildResponse> {
+        const { gameId, environmentId, body: _body } = request;
+        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        if (gameId != null) {
+            _queryParams["game_id"] = gameId;
+        }
+
+        if (environmentId != null) {
+            _queryParams["environment_id"] = environmentId;
+        }
+
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(environmentId)}/builds/prepare`
+                "/builds/prepare"
             ),
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
             },
             contentType: "application/json",
+            queryParameters: _queryParams,
             requestType: "json",
-            body: serializers.actor.CreateBuildRequest.jsonOrThrow(request, { unrecognizedObjectKeys: "strip" }),
+            body: serializers.actor.PrepareBuildRequest.jsonOrThrow(_body, { unrecognizedObjectKeys: "strip" }),
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
             maxRetries: requestOptions?.maxRetries,
             abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
-            return serializers.actor.CreateBuildResponse.parseOrThrow(_response.body, {
+            return serializers.actor.PrepareBuildResponse.parseOrThrow(_response.body, {
                 unrecognizedObjectKeys: "passthrough",
                 allowUnrecognizedUnionMembers: true,
                 allowUnrecognizedEnumValues: true,
@@ -611,9 +641,8 @@ export class Builds {
     /**
      * Marks an upload as complete.
      *
-     * @param {string} gameId
-     * @param {string} environmentId
      * @param {string} buildId
+     * @param {Rivet.actor.CompleteBuildRequestQuery} request
      * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @throws {@link Rivet.InternalError}
@@ -624,26 +653,37 @@ export class Builds {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.actor.builds.complete("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
+     *     await client.actor.builds.complete("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
+     *     })
      */
     public async complete(
-        gameId: string,
-        environmentId: string,
         buildId: string,
+        request: Rivet.actor.CompleteBuildRequestQuery = {},
         requestOptions?: Builds.RequestOptions
     ): Promise<void> {
+        const { gameId, environmentId } = request;
+        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        if (gameId != null) {
+            _queryParams["game_id"] = gameId;
+        }
+
+        if (environmentId != null) {
+            _queryParams["environment_id"] = environmentId;
+        }
+
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(
-                    environmentId
-                )}/builds/${encodeURIComponent(buildId)}/complete`
+                `/builds/${encodeURIComponent(buildId)}/complete`
             ),
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
             },
             contentType: "application/json",
+            queryParameters: _queryParams,
             requestType: "json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
             maxRetries: requestOptions?.maxRetries,

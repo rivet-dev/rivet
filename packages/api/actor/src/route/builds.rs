@@ -64,9 +64,18 @@ pub async fn get_deprecated(
 	env_id: Uuid,
 	build_id: Uuid,
 	watch_index: WatchIndexQuery,
-) -> GlobalResult<models::ActorGetBuildResponse> {
+) -> GlobalResult<models::ServersGetBuildResponse> {
 	let global = build_global_query_compat(&ctx, game_id, env_id).await?;
-	get(ctx, build_id, watch_index, global).await
+	let builds_res = get(ctx, build_id, watch_index, global).await?;
+	Ok(models::ServersGetBuildResponse {
+		build: Box::new(models::ServersBuild {
+			content_length: builds_res.build.content_length,
+			created_at: builds_res.build.created_at,
+			id: builds_res.build.id,
+			name: builds_res.build.name,
+			tags: builds_res.build.tags,
+		}),
+	})
 }
 
 // MARK: GET /builds
@@ -144,9 +153,9 @@ pub async fn list_deprecated(
 	env_id: Uuid,
 	watch_index: WatchIndexQuery,
 	query: ListQuery,
-) -> GlobalResult<models::ActorListBuildsResponse> {
+) -> GlobalResult<models::ServersListBuildsResponse> {
 	let global = build_global_query_compat(&ctx, game_id, env_id).await?;
-	list(
+	let builds_res = list(
 		ctx,
 		watch_index,
 		ListQuery {
@@ -155,7 +164,20 @@ pub async fn list_deprecated(
 			tags_json: query.tags_json,
 		},
 	)
-	.await
+	.await?;
+	Ok(models::ServersListBuildsResponse {
+		builds: builds_res
+			.builds
+			.into_iter()
+			.map(|b| models::ServersBuild {
+				content_length: b.content_length,
+				created_at: b.created_at,
+				id: b.id,
+				name: b.name,
+				tags: b.tags,
+			})
+			.collect(),
+	})
 }
 
 // MARK: PATCH /builds/{}/tags
@@ -195,18 +217,27 @@ pub async fn patch_tags_deprecated(
 	game_id: Uuid,
 	env_id: Uuid,
 	build_id: Uuid,
-	body: models::ActorPatchBuildTagsRequest,
+	body: models::ServersPatchBuildTagsRequest,
 ) -> GlobalResult<serde_json::Value> {
 	let global = build_global_query_compat(&ctx, game_id, env_id).await?;
-	patch_tags(ctx, build_id, body, global).await
+	patch_tags(
+		ctx,
+		build_id,
+		models::ActorPatchBuildTagsRequest {
+			exclusive_tags: body.exclusive_tags,
+			tags: body.tags,
+		},
+		global,
+	)
+	.await
 }
 
 // MARK: POST /builds/prepare
 pub async fn create_build(
 	ctx: Ctx<Auth>,
-	body: models::ActorCreateBuildRequest,
+	body: models::ActorPrepareBuildRequest,
 	query: GlobalQuery,
-) -> GlobalResult<models::ActorCreateBuildResponse> {
+) -> GlobalResult<models::ActorPrepareBuildResponse> {
 	let CheckOutput { game_id, env_id } = ctx.auth().check(ctx.op_ctx(), &query, false).await?;
 
 	// TODO: Read and validate image file
@@ -293,7 +324,7 @@ pub async fn create_build(
 		None
 	};
 
-	Ok(models::ActorCreateBuildResponse {
+	Ok(models::ActorPrepareBuildResponse {
 		build: build_id,
 		image_presigned_request,
 		image_presigned_requests,
@@ -304,10 +335,34 @@ pub async fn create_build_deprecated(
 	ctx: Ctx<Auth>,
 	game_id: Uuid,
 	env_id: Uuid,
-	body: models::ActorCreateBuildRequest,
-) -> GlobalResult<models::ActorCreateBuildResponse> {
+	body: models::ServersCreateBuildRequest,
+) -> GlobalResult<models::ServersCreateBuildResponse> {
 	let global = build_global_query_compat(&ctx, game_id, env_id).await?;
-	create_build(ctx, body, global).await
+	let build_res = create_build(
+		ctx,
+		models::ActorPrepareBuildRequest {
+			compression: body.compression.map(|c| match c {
+				models::ServersBuildCompression::None => models::ActorBuildCompression::None,
+				models::ServersBuildCompression::Lz4 => models::ActorBuildCompression::Lz4,
+			}),
+			image_file: body.image_file,
+			image_tag: body.image_tag,
+			kind: body.kind.map(|k| match k {
+				models::ServersBuildKind::DockerImage => models::ActorBuildKind::DockerImage,
+				models::ServersBuildKind::OciBundle => models::ActorBuildKind::OciBundle,
+			}),
+			multipart_upload: body.multipart_upload,
+			name: body.name,
+			prewarm_datacenters: body.prewarm_datacenters,
+		},
+		global,
+	)
+	.await?;
+	Ok(models::ServersCreateBuildResponse {
+		build: build_res.build,
+		image_presigned_request: build_res.image_presigned_request,
+		image_presigned_requests: build_res.image_presigned_requests,
+	})
 }
 
 // MARK: POST /builds/{}/complete

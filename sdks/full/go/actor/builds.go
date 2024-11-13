@@ -10,79 +10,59 @@ import (
 	upload "sdk/upload"
 )
 
-type GetBuildRequest struct {
-	TagsJson *string `json:"-"`
+type CompleteBuildRequestQuery struct {
+	GameId        *uuid.UUID `json:"-"`
+	EnvironmentId *uuid.UUID `json:"-"`
 }
 
-type ListBuildsRequest struct {
-	TagsJson *string `json:"-"`
+type GetBuildRequestQuery struct {
+	GameId        *uuid.UUID `json:"-"`
+	EnvironmentId *uuid.UUID `json:"-"`
+	TagsJson      *string    `json:"-"`
 }
 
-type CreateBuildRequest struct {
-	Name string `json:"name"`
-	// A tag given to the game build.
-	ImageTag           string              `json:"image_tag"`
-	ImageFile          *upload.PrepareFile `json:"image_file,omitempty"`
-	MultipartUpload    *bool               `json:"multipart_upload,omitempty"`
-	Kind               *BuildKind          `json:"kind,omitempty"`
-	Compression        *BuildCompression   `json:"compression,omitempty"`
-	PrewarmDatacenters []uuid.UUID         `json:"prewarm_datacenters,omitempty"`
-
-	_rawJSON json.RawMessage
+type ListBuildsRequestQuery struct {
+	GameId        *uuid.UUID `json:"-"`
+	EnvironmentId *uuid.UUID `json:"-"`
+	TagsJson      *string    `json:"-"`
 }
 
-func (c *CreateBuildRequest) UnmarshalJSON(data []byte) error {
-	type unmarshaler CreateBuildRequest
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
+type PatchBuildTagsRequestQuery struct {
+	GameId        *uuid.UUID             `json:"-"`
+	EnvironmentId *uuid.UUID             `json:"-"`
+	Body          *PatchBuildTagsRequest `json:"-"`
+}
+
+func (p *PatchBuildTagsRequestQuery) UnmarshalJSON(data []byte) error {
+	body := new(PatchBuildTagsRequest)
+	if err := json.Unmarshal(data, &body); err != nil {
 		return err
 	}
-	*c = CreateBuildRequest(value)
-	c._rawJSON = json.RawMessage(data)
+	p.Body = body
 	return nil
 }
 
-func (c *CreateBuildRequest) String() string {
-	if len(c._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(c._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(c); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", c)
+func (p *PatchBuildTagsRequestQuery) MarshalJSON() ([]byte, error) {
+	return json.Marshal(p.Body)
 }
 
-type CreateBuildResponse struct {
-	Build                  uuid.UUID                  `json:"build"`
-	ImagePresignedRequest  *upload.PresignedRequest   `json:"image_presigned_request,omitempty"`
-	ImagePresignedRequests []*upload.PresignedRequest `json:"image_presigned_requests,omitempty"`
-
-	_rawJSON json.RawMessage
+type PrepareBuildRequestQuery struct {
+	GameId        *uuid.UUID           `json:"-"`
+	EnvironmentId *uuid.UUID           `json:"-"`
+	Body          *PrepareBuildRequest `json:"-"`
 }
 
-func (c *CreateBuildResponse) UnmarshalJSON(data []byte) error {
-	type unmarshaler CreateBuildResponse
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
+func (p *PrepareBuildRequestQuery) UnmarshalJSON(data []byte) error {
+	body := new(PrepareBuildRequest)
+	if err := json.Unmarshal(data, &body); err != nil {
 		return err
 	}
-	*c = CreateBuildResponse(value)
-	c._rawJSON = json.RawMessage(data)
+	p.Body = body
 	return nil
 }
 
-func (c *CreateBuildResponse) String() string {
-	if len(c._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(c._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(c); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", c)
+func (p *PrepareBuildRequestQuery) MarshalJSON() ([]byte, error) {
+	return json.Marshal(p.Body)
 }
 
 type GetBuildResponse struct {
@@ -191,6 +171,73 @@ func (p *PatchBuildTagsResponse) UnmarshalJSON(data []byte) error {
 }
 
 func (p *PatchBuildTagsResponse) String() string {
+	if len(p._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(p._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(p); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", p)
+}
+
+type PrepareBuildRequest struct {
+	Name string `json:"name"`
+	// A tag given to the game build.
+	ImageTag           string              `json:"image_tag"`
+	ImageFile          *upload.PrepareFile `json:"image_file,omitempty"`
+	MultipartUpload    *bool               `json:"multipart_upload,omitempty"`
+	Kind               *BuildKind          `json:"kind,omitempty"`
+	Compression        *BuildCompression   `json:"compression,omitempty"`
+	PrewarmDatacenters []uuid.UUID         `json:"prewarm_datacenters,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (p *PrepareBuildRequest) UnmarshalJSON(data []byte) error {
+	type unmarshaler PrepareBuildRequest
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*p = PrepareBuildRequest(value)
+	p._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (p *PrepareBuildRequest) String() string {
+	if len(p._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(p._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(p); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", p)
+}
+
+type PrepareBuildResponse struct {
+	Build                  uuid.UUID                  `json:"build"`
+	ImagePresignedRequest  *upload.PresignedRequest   `json:"image_presigned_request,omitempty"`
+	ImagePresignedRequests []*upload.PresignedRequest `json:"image_presigned_requests,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (p *PrepareBuildResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler PrepareBuildResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*p = PrepareBuildResponse(value)
+	p._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (p *PrepareBuildResponse) String() string {
 	if len(p._rawJSON) > 0 {
 		if value, err := core.StringifyJSON(p._rawJSON); err == nil {
 			return value

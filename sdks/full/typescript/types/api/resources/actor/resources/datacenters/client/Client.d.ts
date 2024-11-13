@@ -23,8 +23,7 @@ export declare class Datacenters {
     protected readonly _options: Datacenters.Options;
     constructor(_options?: Datacenters.Options);
     /**
-     * @param {string} gameId
-     * @param {string} environmentId
+     * @param {Rivet.actor.ListDatacentersRequestQuery} request
      * @param {Datacenters.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @throws {@link Rivet.InternalError}
@@ -35,8 +34,11 @@ export declare class Datacenters {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.actor.datacenters.list("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
+     *     await client.actor.datacenters.list({
+     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
+     *     })
      */
-    list(gameId: string, environmentId: string, requestOptions?: Datacenters.RequestOptions): Promise<Rivet.actor.ListDatacentersResponse>;
+    list(request?: Rivet.actor.ListDatacentersRequestQuery, requestOptions?: Datacenters.RequestOptions): Promise<Rivet.actor.ListDatacentersResponse>;
     protected _getAuthorizationHeader(): Promise<string | undefined>;
 }

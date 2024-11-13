@@ -134,7 +134,7 @@ define_router! {
 		"builds" / "prepare": {
 			POST: builds::create_build(
 				query: GlobalQuery,
-				body: models::ActorCreateBuildRequest,
+				body: models::ActorPrepareBuildRequest,
 				opt_auth: true,
 			),
 		},
@@ -162,7 +162,7 @@ define_router! {
 
 		// MARK: Deprecated
 		"games" / Uuid / "environments" / Uuid / "servers": {
-			GET: actors::list_actors_deprecated(
+			GET: actors::list_servers_deprecated(
 				query: actors::ListQuery,
 				rate_limit: {
 					buckets: [
@@ -171,7 +171,7 @@ define_router! {
 				},
 			),
 			POST: actors::create_deprecated(
-				body: models::ActorCreateActorRequest,
+				body: models::ServersCreateServerRequest,
 				rate_limit: {
 					buckets: [
 						{ count: 1_000, bucket: duration::minutes(1) },
@@ -227,11 +227,11 @@ define_router! {
 		},
 
 		"games" / Uuid / "environments" / Uuid / "builds" / Uuid / "tags": {
-			PATCH: builds::patch_tags_deprecated(body: models::ActorPatchBuildTagsRequest),
+			PATCH: builds::patch_tags_deprecated(body: models::ServersPatchBuildTagsRequest),
 		},
 
 		"games" / Uuid / "environments" / Uuid / "builds" / "prepare": {
-			POST: builds::create_build_deprecated(body: models::ActorCreateBuildRequest),
+			POST: builds::create_build_deprecated(body: models::ServersCreateBuildRequest),
 		},
 
 		"games" / Uuid / "environments" / Uuid / "builds" / Uuid / "complete": {

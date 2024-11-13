@@ -25,17 +25,17 @@ All URIs are relative to *https://api.rivet.gg*
 
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
-*ActorApi* | [**actor_create**](docs/ActorApi.md#actor_create) | **POST** /games/{game_id}/environments/{environment_id}/actors | 
-*ActorApi* | [**actor_destroy**](docs/ActorApi.md#actor_destroy) | **DELETE** /games/{game_id}/environments/{environment_id}/actors/{actor_id} | 
-*ActorApi* | [**actor_get**](docs/ActorApi.md#actor_get) | **GET** /games/{game_id}/environments/{environment_id}/actors/{actor_id} | 
-*ActorApi* | [**actor_list**](docs/ActorApi.md#actor_list) | **GET** /games/{game_id}/environments/{environment_id}/actors | 
-*ActorBuildsApi* | [**actor_builds_complete**](docs/ActorBuildsApi.md#actor_builds_complete) | **POST** /games/{game_id}/environments/{environment_id}/builds/{build_id}/complete | 
-*ActorBuildsApi* | [**actor_builds_get**](docs/ActorBuildsApi.md#actor_builds_get) | **GET** /games/{game_id}/environments/{environment_id}/builds/{build_id} | 
-*ActorBuildsApi* | [**actor_builds_list**](docs/ActorBuildsApi.md#actor_builds_list) | **GET** /games/{game_id}/environments/{environment_id}/builds | 
-*ActorBuildsApi* | [**actor_builds_patch_tags**](docs/ActorBuildsApi.md#actor_builds_patch_tags) | **PATCH** /games/{game_id}/environments/{environment_id}/builds/{build_id}/tags | 
-*ActorBuildsApi* | [**actor_builds_prepare**](docs/ActorBuildsApi.md#actor_builds_prepare) | **POST** /games/{game_id}/environments/{environment_id}/builds/prepare | 
-*ActorDatacentersApi* | [**actor_datacenters_list**](docs/ActorDatacentersApi.md#actor_datacenters_list) | **GET** /games/{game_id}/environments/{environment_id}/datacenters | 
-*ActorLogsApi* | [**actor_logs_get**](docs/ActorLogsApi.md#actor_logs_get) | **GET** /games/{game_id}/environments/{environment_id}/actors/{actor_id}/logs | 
+*ActorApi* | [**actor_create**](docs/ActorApi.md#actor_create) | **POST** /actors | 
+*ActorApi* | [**actor_destroy**](docs/ActorApi.md#actor_destroy) | **DELETE** /actors/{actor_id} | 
+*ActorApi* | [**actor_get**](docs/ActorApi.md#actor_get) | **GET** /actors/{actor_id} | 
+*ActorApi* | [**actor_list**](docs/ActorApi.md#actor_list) | **GET** /actors | 
+*ActorBuildsApi* | [**actor_builds_complete**](docs/ActorBuildsApi.md#actor_builds_complete) | **POST** /builds/{build_id}/complete | 
+*ActorBuildsApi* | [**actor_builds_get**](docs/ActorBuildsApi.md#actor_builds_get) | **GET** /builds/{build_id} | 
+*ActorBuildsApi* | [**actor_builds_list**](docs/ActorBuildsApi.md#actor_builds_list) | **GET** /builds | 
+*ActorBuildsApi* | [**actor_builds_patch_tags**](docs/ActorBuildsApi.md#actor_builds_patch_tags) | **PATCH** /builds/{build_id}/tags | 
+*ActorBuildsApi* | [**actor_builds_prepare**](docs/ActorBuildsApi.md#actor_builds_prepare) | **POST** /builds/prepare | 
+*ActorDatacentersApi* | [**actor_datacenters_list**](docs/ActorDatacentersApi.md#actor_datacenters_list) | **GET** /datacenters | 
+*ActorLogsApi* | [**actor_logs_get**](docs/ActorLogsApi.md#actor_logs_get) | **GET** /actors/{actor_id}/logs | 
 *AuthIdentityEmailApi* | [**auth_identity_email_complete_email_verification**](docs/AuthIdentityEmailApi.md#auth_identity_email_complete_email_verification) | **POST** /auth/identity/email/complete-verification | 
 *AuthIdentityEmailApi* | [**auth_identity_email_start_email_verification**](docs/AuthIdentityEmailApi.md#auth_identity_email_start_email_verification) | **POST** /auth/identity/email/start-verification | 
 *AuthTokensApi* | [**auth_tokens_refresh_identity_token**](docs/AuthTokensApi.md#auth_tokens_refresh_identity_token) | **POST** /auth/tokens/identity | 
@@ -146,6 +146,17 @@ Class | Method | HTTP request | Description
 *PortalGamesApi* | [**portal_games_get_game_profile**](docs/PortalGamesApi.md#portal_games_get_game_profile) | **GET** /portal/games/{game_name_id}/profile | 
 *ProvisionDatacentersApi* | [**provision_datacenters_get_tls**](docs/ProvisionDatacentersApi.md#provision_datacenters_get_tls) | **GET** /datacenters/{datacenter_id}/tls | 
 *ProvisionServersApi* | [**provision_servers_get_info**](docs/ProvisionServersApi.md#provision_servers_get_info) | **GET** /servers/{ip} | 
+*ServersApi* | [**servers_create**](docs/ServersApi.md#servers_create) | **POST** /games/{game_id}/environments/{environment_id}/servers | 
+*ServersApi* | [**servers_destroy**](docs/ServersApi.md#servers_destroy) | **DELETE** /games/{game_id}/environments/{environment_id}/servers/{server_id} | 
+*ServersApi* | [**servers_get**](docs/ServersApi.md#servers_get) | **GET** /games/{game_id}/environments/{environment_id}/servers/{server_id} | 
+*ServersApi* | [**servers_list**](docs/ServersApi.md#servers_list) | **GET** /games/{game_id}/environments/{environment_id}/servers | 
+*ServersBuildsApi* | [**servers_builds_complete**](docs/ServersBuildsApi.md#servers_builds_complete) | **POST** /games/{game_id}/environments/{environment_id}/builds/{build_id}/complete | 
+*ServersBuildsApi* | [**servers_builds_get**](docs/ServersBuildsApi.md#servers_builds_get) | **GET** /games/{game_id}/environments/{environment_id}/builds/{build_id} | 
+*ServersBuildsApi* | [**servers_builds_list**](docs/ServersBuildsApi.md#servers_builds_list) | **GET** /games/{game_id}/environments/{environment_id}/builds | 
+*ServersBuildsApi* | [**servers_builds_patch_tags**](docs/ServersBuildsApi.md#servers_builds_patch_tags) | **PATCH** /games/{game_id}/environments/{environment_id}/builds/{build_id}/tags | 
+*ServersBuildsApi* | [**servers_builds_prepare**](docs/ServersBuildsApi.md#servers_builds_prepare) | **POST** /games/{game_id}/environments/{environment_id}/builds/prepare | 
+*ServersDatacentersApi* | [**servers_datacenters_list**](docs/ServersDatacentersApi.md#servers_datacenters_list) | **GET** /games/{game_id}/environments/{environment_id}/datacenters | 
+*ServersLogsApi* | [**servers_logs_get**](docs/ServersLogsApi.md#servers_logs_get) | **GET** /games/{game_id}/environments/{environment_id}/servers/{server_id}/logs | 
 
 
 ## Documentation For Models
@@ -159,8 +170,6 @@ Class | Method | HTTP request | Description
  - [ActorCreateActorRequest](docs/ActorCreateActorRequest.md)
  - [ActorCreateActorResponse](docs/ActorCreateActorResponse.md)
  - [ActorCreateActorRuntimeRequest](docs/ActorCreateActorRuntimeRequest.md)
- - [ActorCreateBuildRequest](docs/ActorCreateBuildRequest.md)
- - [ActorCreateBuildResponse](docs/ActorCreateBuildResponse.md)
  - [ActorDatacenter](docs/ActorDatacenter.md)
  - [ActorGameGuardRouting](docs/ActorGameGuardRouting.md)
  - [ActorGetActorLogsResponse](docs/ActorGetActorLogsResponse.md)
@@ -179,6 +188,8 @@ Class | Method | HTTP request | Description
  - [ActorPortProtocol](docs/ActorPortProtocol.md)
  - [ActorPortQueryAuthorization](docs/ActorPortQueryAuthorization.md)
  - [ActorPortRouting](docs/ActorPortRouting.md)
+ - [ActorPrepareBuildRequest](docs/ActorPrepareBuildRequest.md)
+ - [ActorPrepareBuildResponse](docs/ActorPrepareBuildResponse.md)
  - [ActorResources](docs/ActorResources.md)
  - [ActorRuntime](docs/ActorRuntime.md)
  - [AuthCompleteStatus](docs/AuthCompleteStatus.md)
@@ -442,6 +453,34 @@ Class | Method | HTTP request | Description
  - [PortalNotificationUnregisterService](docs/PortalNotificationUnregisterService.md)
  - [ProvisionDatacentersGetTlsResponse](docs/ProvisionDatacentersGetTlsResponse.md)
  - [ProvisionServersGetInfoResponse](docs/ProvisionServersGetInfoResponse.md)
+ - [ServersBuild](docs/ServersBuild.md)
+ - [ServersBuildCompression](docs/ServersBuildCompression.md)
+ - [ServersBuildKind](docs/ServersBuildKind.md)
+ - [ServersCreateBuildRequest](docs/ServersCreateBuildRequest.md)
+ - [ServersCreateBuildResponse](docs/ServersCreateBuildResponse.md)
+ - [ServersCreateServerNetworkRequest](docs/ServersCreateServerNetworkRequest.md)
+ - [ServersCreateServerPortRequest](docs/ServersCreateServerPortRequest.md)
+ - [ServersCreateServerRequest](docs/ServersCreateServerRequest.md)
+ - [ServersCreateServerResponse](docs/ServersCreateServerResponse.md)
+ - [ServersCreateServerRuntimeRequest](docs/ServersCreateServerRuntimeRequest.md)
+ - [ServersDatacenter](docs/ServersDatacenter.md)
+ - [ServersGetBuildResponse](docs/ServersGetBuildResponse.md)
+ - [ServersGetServerLogsResponse](docs/ServersGetServerLogsResponse.md)
+ - [ServersGetServerResponse](docs/ServersGetServerResponse.md)
+ - [ServersLifecycle](docs/ServersLifecycle.md)
+ - [ServersListBuildsResponse](docs/ServersListBuildsResponse.md)
+ - [ServersListDatacentersResponse](docs/ServersListDatacentersResponse.md)
+ - [ServersListServersResponse](docs/ServersListServersResponse.md)
+ - [ServersLogStream](docs/ServersLogStream.md)
+ - [ServersNetwork](docs/ServersNetwork.md)
+ - [ServersNetworkMode](docs/ServersNetworkMode.md)
+ - [ServersPatchBuildTagsRequest](docs/ServersPatchBuildTagsRequest.md)
+ - [ServersPort](docs/ServersPort.md)
+ - [ServersPortProtocol](docs/ServersPortProtocol.md)
+ - [ServersPortRouting](docs/ServersPortRouting.md)
+ - [ServersResources](docs/ServersResources.md)
+ - [ServersRuntime](docs/ServersRuntime.md)
+ - [ServersServer](docs/ServersServer.md)
  - [UploadPrepareFile](docs/UploadPrepareFile.md)
  - [UploadPresignedRequest](docs/UploadPresignedRequest.md)
  - [ValidationError](docs/ValidationError.md)

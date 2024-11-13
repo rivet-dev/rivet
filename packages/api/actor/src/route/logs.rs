@@ -139,9 +139,9 @@ pub async fn get_logs_deprecated(
 	server_id: Uuid,
 	watch_index: WatchIndexQuery,
 	query: GetActorLogsQuery,
-) -> GlobalResult<models::ActorGetActorLogsResponse> {
+) -> GlobalResult<models::ServersGetServerLogsResponse> {
 	let global = build_global_query_compat(&ctx, game_id, env_id).await?;
-	get_logs(
+	let logs_res = get_logs(
 		ctx,
 		server_id,
 		watch_index,
@@ -150,5 +150,10 @@ pub async fn get_logs_deprecated(
 			stream: query.stream,
 		},
 	)
-	.await
+	.await?;
+	Ok(models::ServersGetServerLogsResponse {
+		lines: logs_res.lines,
+		timestamps: logs_res.timestamps,
+		watch: logs_res.watch,
+	})
 }

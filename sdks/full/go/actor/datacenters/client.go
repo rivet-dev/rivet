@@ -8,9 +8,9 @@ import (
 	json "encoding/json"
 	errors "errors"
 	fmt "fmt"
-	uuid "github.com/google/uuid"
 	io "io"
 	http "net/http"
+	url "net/url"
 	sdk "sdk"
 	actor "sdk/actor"
 	core "sdk/core"
@@ -34,12 +34,23 @@ func NewClient(opts ...core.ClientOption) *Client {
 	}
 }
 
-func (c *Client) List(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID) (*actor.ListDatacentersResponse, error) {
+func (c *Client) List(ctx context.Context, request *actor.ListDatacentersRequestQuery) (*actor.ListDatacentersResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/environments/%v/datacenters", gameId, environmentId)
+	endpointURL := baseURL + "/" + "datacenters"
+
+	queryParams := make(url.Values)
+	if request.GameId != nil {
+		queryParams.Add("game_id", fmt.Sprintf("%v", *request.GameId))
+	}
+	if request.EnvironmentId != nil {
+		queryParams.Add("environment_id", fmt.Sprintf("%v", *request.EnvironmentId))
+	}
+	if len(queryParams) > 0 {
+		endpointURL += "?" + queryParams.Encode()
+	}
 
 	errorDecoder := func(statusCode int, body io.Reader) error {
 		raw, err := io.ReadAll(body)

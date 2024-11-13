@@ -48,12 +48,23 @@ func NewClient(opts ...core.ClientOption) *Client {
 // Gets a dynamic actor.
 //
 // The id of the actor to destroy
-func (c *Client) Get(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, actorId uuid.UUID) (*actor.GetActorResponse, error) {
+func (c *Client) Get(ctx context.Context, actorId uuid.UUID, request *actor.ListActorsRequestQuery) (*actor.GetActorResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/environments/%v/actors/%v", gameId, environmentId, actorId)
+	endpointURL := fmt.Sprintf(baseURL+"/"+"actors/%v", actorId)
+
+	queryParams := make(url.Values)
+	if request.GameId != nil {
+		queryParams.Add("game_id", fmt.Sprintf("%v", *request.GameId))
+	}
+	if request.EnvironmentId != nil {
+		queryParams.Add("environment_id", fmt.Sprintf("%v", *request.EnvironmentId))
+	}
+	if len(queryParams) > 0 {
+		endpointURL += "?" + queryParams.Encode()
+	}
 
 	errorDecoder := func(statusCode int, body io.Reader) error {
 		raw, err := io.ReadAll(body)
@@ -126,14 +137,20 @@ func (c *Client) Get(ctx context.Context, gameId uuid.UUID, environmentId uuid.U
 }
 
 // Lists all actors associated with the token used. Can be filtered by tags in the query string.
-func (c *Client) List(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, request *actor.GetActorsRequest) (*actor.ListActorsResponse, error) {
+func (c *Client) List(ctx context.Context, request *actor.GetActorsRequestQuery) (*actor.ListActorsResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/environments/%v/actors", gameId, environmentId)
+	endpointURL := baseURL + "/" + "actors"
 
 	queryParams := make(url.Values)
+	if request.GameId != nil {
+		queryParams.Add("game_id", fmt.Sprintf("%v", *request.GameId))
+	}
+	if request.EnvironmentId != nil {
+		queryParams.Add("environment_id", fmt.Sprintf("%v", *request.EnvironmentId))
+	}
 	if request.TagsJson != nil {
 		queryParams.Add("tags_json", fmt.Sprintf("%v", *request.TagsJson))
 	}
@@ -218,12 +235,12 @@ func (c *Client) List(ctx context.Context, gameId uuid.UUID, environmentId uuid.
 }
 
 // Create a new dynamic actor.
-func (c *Client) Create(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, request *actor.CreateActorRequest) (*actor.CreateActorResponse, error) {
+func (c *Client) Create(ctx context.Context, request *actor.CreateActorRequest) (*actor.CreateActorResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/environments/%v/actors", gameId, environmentId)
+	endpointURL := baseURL + "/" + "actors"
 
 	errorDecoder := func(statusCode int, body io.Reader) error {
 		raw, err := io.ReadAll(body)
@@ -299,14 +316,20 @@ func (c *Client) Create(ctx context.Context, gameId uuid.UUID, environmentId uui
 // Destroy a dynamic actor.
 //
 // The id of the actor to destroy
-func (c *Client) Destroy(ctx context.Context, gameId uuid.UUID, environmentId uuid.UUID, actorId uuid.UUID, request *actor.DestroyActorRequest) (*actor.DestroyActorResponse, error) {
+func (c *Client) Destroy(ctx context.Context, actorId uuid.UUID, request *actor.DestroyActorRequestQuery) (*actor.DestroyActorResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"games/%v/environments/%v/actors/%v", gameId, environmentId, actorId)
+	endpointURL := fmt.Sprintf(baseURL+"/"+"actors/%v", actorId)
 
 	queryParams := make(url.Values)
+	if request.GameId != nil {
+		queryParams.Add("game_id", fmt.Sprintf("%v", *request.GameId))
+	}
+	if request.EnvironmentId != nil {
+		queryParams.Add("environment_id", fmt.Sprintf("%v", *request.EnvironmentId))
+	}
 	if request.OverrideKillTimeout != nil {
 		queryParams.Add("override_kill_timeout", fmt.Sprintf("%v", *request.OverrideKillTimeout))
 	}

@@ -30,8 +30,7 @@ export class Datacenters {
     constructor(protected readonly _options: Datacenters.Options = {}) {}
 
     /**
-     * @param {string} gameId
-     * @param {string} environmentId
+     * @param {Rivet.actor.ListDatacentersRequestQuery} request
      * @param {Datacenters.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @throws {@link Rivet.InternalError}
@@ -42,23 +41,36 @@ export class Datacenters {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.actor.datacenters.list("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
+     *     await client.actor.datacenters.list({
+     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
+     *     })
      */
     public async list(
-        gameId: string,
-        environmentId: string,
+        request: Rivet.actor.ListDatacentersRequestQuery = {},
         requestOptions?: Datacenters.RequestOptions
     ): Promise<Rivet.actor.ListDatacentersResponse> {
+        const { gameId, environmentId } = request;
+        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        if (gameId != null) {
+            _queryParams["game_id"] = gameId;
+        }
+
+        if (environmentId != null) {
+            _queryParams["environment_id"] = environmentId;
+        }
+
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(environmentId)}/datacenters`
+                "/datacenters"
             ),
             method: "GET",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
             },
             contentType: "application/json",
+            queryParameters: _queryParams,
             requestType: "json",
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
             maxRetries: requestOptions?.maxRetries,

@@ -4,7 +4,7 @@ All URIs are relative to *https://api.rivet.gg*
 
 Method | HTTP request | Description
 ------------- | ------------- | -------------
-[**actor_datacenters_list**](ActorDatacentersApi.md#actor_datacenters_list) | **GET** /games/{game_id}/environments/{environment_id}/datacenters | 
+[**actor_datacenters_list**](ActorDatacentersApi.md#actor_datacenters_list) | **GET** /datacenters | 
 
 
 
@@ -18,8 +18,8 @@ Method | HTTP request | Description
 
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
-**game_id** | **uuid::Uuid** |  | [required] |
-**environment_id** | **uuid::Uuid** |  | [required] |
+**game_id** | Option<**uuid::Uuid**> |  |  |
+**environment_id** | Option<**uuid::Uuid**> |  |  |
 
 ### Return type
 

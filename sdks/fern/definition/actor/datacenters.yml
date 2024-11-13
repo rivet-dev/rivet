@@ -7,16 +7,16 @@ imports:
 
 service:
   auth: true
-  base-path: /games/{game_id}/environments/{environment_id}/datacenters
-  path-parameters:
-    game_id: uuid
-    environment_id: uuid
+  base-path: /datacenters
   endpoints:
     list:
       path: ""
       method: GET
       request:
-        name: ListDatacentersRequest
+        name: ListDatacentersRequestQuery
+        query-parameters:
+          game_id: optional<uuid>
+          environment_id: optional<uuid>
       response: ListDatacentersResponse
 
 types:
