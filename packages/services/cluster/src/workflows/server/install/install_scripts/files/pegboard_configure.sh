@@ -3,17 +3,34 @@ PUBLIC_IP=$(ip -4 route get 1.0.0.0 | awk '{print $7; exit}')
 # MARK: Pegboard config
 cat << 'EOF' > /etc/rivet-client/config.json
 {
-	"client_id": "___SERVER_ID___",
-	"datacenter_id": "___DATACENTER_ID___",
-	"actor_network_ip": "___VLAN_IP___",
-	"actor_lan_ip": "___VLAN_IP___",
-	"actor_wan_ip": "___PUBLIC_IP___",
-	"vector_socket_addr": "127.0.0.1:5021",
-	"flavor": "__FLAVOR__",
-	"pegboard_ws_endpoint": "127.0.0.1:5030"
-	"api_public_endpoint": "__ORIGIN_API__",
-	"reserved_cpu": 0,
-	"reserved_memory": __RESERVED_MEMORY__
+	"client": {
+		"cluster": {
+			"client_id": "___SERVER_ID___",
+			"datacenter_id": "___DATACENTER_ID___",
+			"api_endpoint": "__ORIGIN_API__",
+			"pegboard_endpoint": "127.0.0.1:5030"
+		},
+		"runtime": {
+			"flavor": "__FLAVOR__"
+		},
+		"actor": {
+			"network": {
+				"bind_ip": "___VLAN_IP___",
+				"lan_ip": "___VLAN_IP___",
+				"wan_ip": "___PUBLIC_IP___"
+			}
+		},
+		"cni": {
+			"network_interface": "eth0"
+		},
+		"reserved_resources": {
+			"cpu": 0,
+			"reserved_memory": "__RESERVED_MEMORY__"
+		},
+		"logs": {
+			"vector_address": "127.0.0.1:5021"
+		}
+	}
 }
 EOF
 
