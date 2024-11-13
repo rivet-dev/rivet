@@ -6,9 +6,8 @@ use std::{
 
 use anyhow::*;
 use futures_util::StreamExt;
-use pegboard::protocol;
+use pegboard::system_info::SystemInfo;
 use sqlx::sqlite::SqlitePool;
-use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 use tokio::{
 	fs,
 	runtime::{Builder, Runtime},
@@ -17,6 +16,7 @@ use tracing_subscriber::prelude::*;
 use url::Url;
 
 mod actor;
+mod system_info;
 mod config;
 mod ctx;
 mod metrics;
@@ -31,7 +31,7 @@ const PROTOCOL_VERSION: u16 = 1;
 #[derive(Clone)]
 struct Init {
 	config: Config,
-	system: protocol::SystemInfo,
+	system: SystemInfo,
 	pool: SqlitePool,
 	url: Url,
 }
@@ -106,16 +106,7 @@ async fn init() -> Result<Init> {
 	}
 
 	// Read system metrics
-	let system = System::new_with_specifics(
-		RefreshKind::new()
-			.with_cpu(CpuRefreshKind::new().with_frequency())
-			.with_memory(MemoryRefreshKind::new().with_ram()),
-	);
-	let system = protocol::SystemInfo {
-		// Sum of cpu frequency
-		cpu: system.cpus().iter().fold(0, |s, cpu| s + cpu.frequency()),
-		memory: system.total_memory() / (1024 * 1024),
-	};
+	let system = crate::system_info::fetch().await?;
 
 	// Init project directories
 	utils::init_dir(&config).await?;

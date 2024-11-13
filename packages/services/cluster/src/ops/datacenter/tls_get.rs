@@ -54,6 +54,8 @@ pub struct DatacenterTls {
 
 #[operation]
 pub async fn cluster_datacenter_tls_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
+	ensure!(ctx.config().server()?.is_tls_enabled(), "dns not enabled");
+
 	let rows = sql_fetch_all!(
 		[ctx, DatacenterTlsRow]
 		"

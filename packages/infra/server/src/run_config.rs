@@ -95,16 +95,19 @@ pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			Box::pin(cluster_gc::start(config, pools))
 		}),
 		Service::new(
-			"cluster_datacenter_tls_renew",
-			ServiceKind::Singleton,
-			|config, pools| Box::pin(cluster_datacenter_tls_renew::start(config, pools)),
-		),
-		Service::new(
 			"cluster_default_update",
 			ServiceKind::Oneshot,
 			|config, pools| Box::pin(cluster_default_update::start(config, pools, false)),
 		),
 	];
+
+	if server_config.is_tls_enabled() {
+		services.push(Service::new(
+			"cluster_datacenter_tls_renew",
+			ServiceKind::Singleton,
+			|config, pools| Box::pin(cluster_datacenter_tls_renew::start(config, pools)),
+		));
+	}
 
 	if server_config.rivet.auth.access_kind == rivet_config::config::rivet::AccessKind::Development
 	{

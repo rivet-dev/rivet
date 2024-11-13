@@ -33,6 +33,8 @@ pub(crate) async fn cluster_datacenter_tls_issue(
 	ctx: &mut WorkflowCtx,
 	input: &Input,
 ) -> GlobalResult<()> {
+	ensure!(ctx.config().server()?.is_tls_enabled(), "dns not enabled");
+
 	let datacenter_id = input.datacenter_id;
 
 	let main_zone_id = unwrap!(

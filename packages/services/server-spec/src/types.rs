@@ -1,5 +1,6 @@
 use crate::{
-	CPU_PER_CORE, DISK_PER_CORE, NOMAD_RESERVE_MEMORY, PEGBOARD_RESERVE_MEMORY, RESERVE_LB_MEMORY,
+	LINODE_CPU_PER_CORE, LINODE_DISK_PER_CORE, NOMAD_RESERVE_MEMORY, PEGBOARD_RESERVE_MEMORY,
+	RESERVE_LB_MEMORY,
 };
 
 /// Provider agnostic hardware specs.
@@ -26,7 +27,7 @@ impl ServerSpec {
 
 		ServerSpec {
 			cpu_cores: instance_type.vcpus,
-			cpu: instance_type.vcpus * CPU_PER_CORE,
+			cpu: instance_type.vcpus * LINODE_CPU_PER_CORE,
 			memory,
 			// MB to MiB
 			disk: instance_type.disk * 1000 / 1024 * 1000 / 1024,
@@ -36,7 +37,7 @@ impl ServerSpec {
 	}
 
 	pub fn cpu_per_core(&self) -> u32 {
-		CPU_PER_CORE
+		LINODE_CPU_PER_CORE
 	}
 
 	pub fn memory_per_core_nomad(&self) -> u32 {
@@ -48,7 +49,7 @@ impl ServerSpec {
 	}
 
 	pub fn disk_per_core(&self) -> u32 {
-		DISK_PER_CORE
+		LINODE_DISK_PER_CORE
 	}
 
 	pub fn bandwidth_per_core(&self) -> u32 {

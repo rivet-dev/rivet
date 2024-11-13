@@ -7,5 +7,5 @@ pub const RESERVE_LB_MEMORY: u32 = 512;
 pub const NOMAD_RESERVE_MEMORY: u32 = 512;
 pub const PEGBOARD_RESERVE_MEMORY: u32 = 0;
 
-pub const CPU_PER_CORE: u32 = 1999;
-pub const DISK_PER_CORE: u32 = 8192;
+pub const LINODE_CPU_PER_CORE: u32 = 1999;
+pub const LINODE_DISK_PER_CORE: u32 = 8192;

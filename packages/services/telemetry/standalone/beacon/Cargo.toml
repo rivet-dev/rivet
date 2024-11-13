@@ -38,6 +38,7 @@ chirp-workflow = { version = "0.1.0", path = "../../../../common/chirp-workflow/
 sysinfo = "0.32.0"
 rivet-env = { version = "0.1.0", path = "../../../../common/env" }
 pegboard = { version = "0.0.1", path = "../../../pegboard" }
+serde = { version = "1.0.214", features = ["derive"] }
 
 [dependencies.sqlx]
 git = "https://github.com/rivet-gg/sqlx"

@@ -31,6 +31,8 @@ async function httpRequest(method: string, url: string, body?: any) {
     );
   }
 
+  console.log();
+
   return JSON.parse(responseText);
 }
 
@@ -61,7 +63,6 @@ async function uploadBuild() {
 
   await fetch(image_presigned_request.url, {
     method: "PUT",
-    // headers: { "Content-Type": "application/javascript" },
     body: buildContent,
   });
 
@@ -71,7 +72,7 @@ async function uploadBuild() {
 }
 
 async function createActor(datacenterId: string, buildId: string) {
-  const response = await httpRequest("POST", `${ENDPOINT}/actors`, {
+  const createResponse = await httpRequest("POST", `${ENDPOINT}/actors`, {
     tags: {},
     datacenter: datacenterId,
     network: {
@@ -85,7 +86,15 @@ async function createActor(datacenterId: string, buildId: string) {
       build: buildId,
     },
   });
-  return response.actor;
+
+  while (true) {
+    const { actor } = await httpRequest("GET", `${ENDPOINT}/actors/${createResponse.actor.id}`);
+    if (actor.network.ports.http.public_hostname != null) {
+      return actor;
+    } else {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
 }
 
 async function main() {

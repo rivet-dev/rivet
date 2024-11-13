@@ -154,7 +154,7 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 struct ProcessInitInput {
 	client_id: Uuid,
 	last_command_idx: i64,
-	system: protocol::SystemInfo,
+	system: crate::system_info::SystemInfo,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -173,15 +173,12 @@ async fn process_init(
 			[ctx, (i64,)]
 			"
 			UPDATE db_pegboard.clients
-			SET
-				cpu = $2,
-				memory = $3
+			SET system_info = $2
 			WHERE client_id = $1
 			RETURNING last_event_idx
 			",
 			input.client_id,
-			input.system.cpu as i64,
-			input.system.memory as i64
+			serde_json::to_value(&input.system)?,
 		),
 		sql_fetch_all!(
 			[ctx, (i64, String)]

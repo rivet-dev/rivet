@@ -42,7 +42,7 @@ impl ToClient {
 pub enum ToServer {
 	Init {
 		last_command_idx: i64,
-		system: SystemInfo,
+		system: crate::system_info::SystemInfo,
 	},
 	Events(Vec<EventWrapper>),
 	FetchStateResponse {},
@@ -56,14 +56,6 @@ impl ToServer {
 	pub fn deserialize(_protocol_version: u16, buf: &[u8]) -> Result<Self, PegboardProtocolError> {
 		serde_json::from_slice(buf).map_err(PegboardProtocolError::Serde)
 	}
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
-pub struct SystemInfo {
-	// MHz
-	pub cpu: u64,
-	// MiB
-	pub memory: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

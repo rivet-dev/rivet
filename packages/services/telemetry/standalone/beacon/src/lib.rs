@@ -1,5 +1,6 @@
 use indoc::indoc;
 use rivet_operation::prelude::*;
+use serde::Serialize;
 use serde_json::json;
 use std::{collections::HashMap, time::Duration};
 use sysinfo::System;
@@ -144,34 +145,43 @@ fn os_report() -> serde_json::Value {
 fn get_config_data(ctx: &OperationContext<()>) -> GlobalResult<serde_json::Value> {
 	let server_config = ctx.config().server()?;
 
-	let clusters = server_config.rivet.clusters().iter().map(|(name, cluster)| {
-		let datacenters = cluster.datacenters.iter().map(|(dc_name, datacenter)| {
-			json!({
-				"name": dc_name,
-				"build_delivery_method": format!("{:?}", datacenter.build_delivery_method),
-				"provision": datacenter.provision.as_ref().map(|provision| json!({
-					"provider": format!("{:?}", provision.provider),
-					"provider_datacenter_id": provision.provider_datacenter_id,
-					"pools": provision.pools.iter().map(|(pool_type, pool)| {
-						json!({
-							"type": format!("{:?}", pool_type),
-							"hardware": pool.hardware.iter().map(|hw| hw.name.clone()).collect::<Vec<_>>(),
-							"desired_count": pool.desired_count,
-							"min_count": pool.min_count,
-							"max_count": pool.max_count,
-							"drain_timeout": pool.drain_timeout,
-						})
-					}).collect::<Vec<_>>(),
-					"prebakes_enabled": provision.prebakes_enabled,
-				})),
-			})
-		}).collect::<Vec<_>>();
+	let clusters = server_config
+		.rivet
+		.clusters()
+		.iter()
+		.map(|(name, cluster)| {
+			let datacenters = cluster
+				.datacenters
+				.iter()
+				.map(|(dc_name, datacenter)| {
+					json!({
+						"name": dc_name,
+						"build_delivery_method": format!("{:?}", datacenter.build_delivery_method),
+						"provision": datacenter.provision.as_ref().map(|provision| json!({
+							"provider": format!("{:?}", provision.provider),
+							"provider_datacenter_id": provision.provider_datacenter_id,
+							"pools": provision.pools.iter().map(|(pool_type, pool)| {
+								json!({
+									"type": format!("{:?}", pool_type),
+									"hardware": pool.hardware.iter().map(|hw| hw.name.clone()).collect::<Vec<_>>(),
+									"desired_count": pool.desired_count,
+									"min_count": pool.min_count,
+									"max_count": pool.max_count,
+									"drain_timeout": pool.drain_timeout,
+								})
+							}).collect::<Vec<_>>(),
+							"prebakes_enabled": provision.prebakes_enabled,
+						})),
+					})
+				})
+				.collect::<Vec<_>>();
 
-		json!({
-			"name": name,
-			"datacenters": datacenters,
+			json!({
+				"name": name,
+				"datacenters": datacenters,
+			})
 		})
-	}).collect::<Vec<_>>();
+		.collect::<Vec<_>>();
 
 	Ok(json!({
 		"rivet": {
@@ -209,6 +219,15 @@ fn get_infrastructure_data(ctx: &OperationContext<()>) -> GlobalResult<serde_jso
 	}))
 }
 
+#[derive(sqlx::FromRow, Serialize)]
+struct ResourceAggregateRow {
+	count: i64,
+	cpu_core_sum: i64,
+	cpu_frequency_sum: i64,
+	memory_sum: i64,
+	swap_sum: i64,
+}
+
 /// Returns information about the pegboard configuration.
 ///
 /// This is helpful for diagnosing issues with the self-hosted clusters under
@@ -219,10 +238,15 @@ async fn get_pegboard_data(ctx: &OperationContext<()>) -> GlobalResult<serde_jso
 
 	let mut clients = HashMap::new();
 	for flavor in [ClientFlavor::Container, ClientFlavor::Isolate] {
-		let (count, cpu_sum, memory_sum) = sql_fetch_one!(
-			[ctx, (i64, i64, i64,)]
+		let row = sql_fetch_one!(
+			[ctx, ResourceAggregateRow]
 			"
-			SELECT count(*)::int, coalesce(sum(cpu), 0)::int, coalesce(sum(memory), 0)::int
+			SELECT
+				count(*)::int AS count,
+				coalesce(sum((system_info->'cpu'->'physical_core_count')::int), 0)::int AS cpu_core_sum,
+				coalesce(sum((system_info->'cpu'->'frequency')::int), 0)::int AS cpu_frequency_sum,
+				coalesce(sum((system_info->'memory'->'total_memory')::int), 0)::int AS memory_sum,
+				coalesce(sum((system_info->'memory'->'total_swap')::int), 0)::int AS swap_sum
 			FROM db_pegboard.clients AS OF SYSTEM TIME '-5s'
 			WHERE
 				delete_ts IS NULL
@@ -231,14 +255,28 @@ async fn get_pegboard_data(ctx: &OperationContext<()>) -> GlobalResult<serde_jso
 			flavor as i32,
 		)
 		.await?;
-		clients.insert(
-			flavor.to_string(),
-			json!({
-				"count": count,
-				"cpu_sum": cpu_sum,
-				"memory_sum": memory_sum,
-			}),
-		);
+
+		let cpu_arch_counts = sql_fetch_all!(
+			[ctx, (String, i64)]
+			"
+			SELECT
+				system_info->'cpu'->>'cpu_arch' AS cpu_arch,
+				count(*)::int AS count
+			FROM db_pegboard.clients AS OF SYSTEM TIME '-5s'
+			WHERE
+				delete_ts IS NULL
+				AND flavor = $1
+			GROUP BY cpu_arch
+			",
+			flavor as i32,
+		)
+		.await?;
+		let cpu_archs: HashMap<String, i64> = cpu_arch_counts.into_iter().collect();
+
+		clients.insert(flavor.to_string(), json!({
+			"aggregates": row,
+			"cpu_archs": cpu_archs
+		}));
 	}
 
 	let (total_count, running_count) = sql_fetch_one!(

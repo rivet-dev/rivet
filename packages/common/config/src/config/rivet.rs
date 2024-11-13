@@ -425,6 +425,8 @@ pub struct Datacenter {
 	#[serde(default)]
 	pub hardware: Option<DatacenterHardware>,
 
+	// #[serde(default)]
+	// pub reserve_resources: Option<ReserveResources>,
 	/// Configures how servers are provisioned.
 	///
 	/// Enterprise only.

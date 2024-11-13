@@ -4,7 +4,7 @@ use std::{
 };
 
 use chirp_workflow::prelude::*;
-use nomad_client::apis::{allocations_api, configuration::Configuration, nodes_api};
+use nomad_client::apis::{allocations_api, nodes_api};
 use server_spec::types::ServerSpec;
 
 use crate::types::PoolType;
@@ -148,8 +148,8 @@ pub async fn cluster_datacenter_topology_get(
 		}),
 		async {
 			// Fetch hardware for each server
-			let instance_types_res = ctx
-				.op(linode::ops::instance_type_get::Input {
+			let instance_types = if ctx.config().server()?.linode.is_some() {
+				ctx.op(linode::ops::instance_type_get::Input {
 					hardware_ids: servers
 						.iter()
 						.filter_map(|s| s.provider_hardware.clone())
@@ -157,11 +157,14 @@ pub async fn cluster_datacenter_topology_get(
 						.into_iter()
 						.collect::<Vec<_>>(),
 				})
-				.await?;
+				.await?
+				.instance_types
+			} else {
+				Vec::new()
+			};
 
 			// Make the hardware data agnostic and put it into a hashmap for better reads
-			let hardware_specs = instance_types_res
-				.instance_types
+			let hardware_specs = instance_types
 				.iter()
 				.map(|instance_type| {
 					(
@@ -194,43 +197,51 @@ pub async fn cluster_datacenter_topology_get(
 			Ok((hardware_specs, prometheus_metrics))
 		},
 		async {
-			// Request is not paginated
-			let nomad_config = nomad_util::new_build_config(ctx.config())?;
-			allocations_api::get_allocations(
-				&nomad_config,
-				None,
-				None,
-				None,
-				None,
-				None,
-				None,
-				None,
-				None,
-				None,
-				Some(true),
-				None,
-			)
-			.await
-			.map_err(Into::<GlobalError>::into)
+			if ctx.config().server()?.nomad.is_some() {
+				// Request is not paginated
+				let nomad_config = nomad_util::new_build_config(ctx.config())?;
+				allocations_api::get_allocations(
+					&nomad_config,
+					None,
+					None,
+					None,
+					None,
+					None,
+					None,
+					None,
+					None,
+					None,
+					Some(true),
+					None,
+				)
+				.await
+				.map_err(Into::<GlobalError>::into)
+			} else {
+				Ok(Vec::new())
+			}
 		},
 		async {
-			// Request is not paginated
-			let nomad_config = nomad_util::new_build_config(ctx.config())?;
-			nodes_api::get_nodes(
-				&nomad_config,
-				None,
-				None,
-				None,
-				None,
-				None,
-				None,
-				None,
-				None,
-				None,
-				Some(true),
-			)
-			.await
-			.map_err(Into::<GlobalError>::into)
+			if ctx.config().server()?.nomad.is_some() {
+				// Request is not paginated
+				let nomad_config = nomad_util::new_build_config(ctx.config())?;
+				nodes_api::get_nodes(
+					&nomad_config,
+					None,
+					None,
+					None,
+					None,
+					None,
+					None,
+					None,
+					None,
+					None,
+					Some(true),
+				)
+				.await
+				.map_err(Into::<GlobalError>::into)
+			} else {
+				Ok(Vec::new())
+			}
 		},
 	)?;
 

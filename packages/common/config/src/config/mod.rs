@@ -153,6 +153,18 @@ impl Server {
 	pub fn hcaptcha(&self) -> GlobalResult<&Hcaptcha> {
 		Ok(unwrap_ref!(self.hcaptcha, "hcaptcha disabled"))
 	}
+
+	/// If automatically issuing TLS certs is enabled.
+	pub fn is_tls_enabled(&self) -> bool {
+		self.rivet
+			.dns
+			.as_ref()
+			.map_or(false, |x| x.domain_main.is_some() && x.domain_job.is_some())
+			&& self
+				.cloudflare
+				.as_ref()
+				.map_or(false, |x| x.zone.main.is_some() && x.zone.job.is_some())
+	}
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

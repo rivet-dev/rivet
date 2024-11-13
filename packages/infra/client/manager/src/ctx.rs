@@ -7,7 +7,7 @@ use futures_util::{
 };
 use indoc::indoc;
 use nix::unistd::Pid;
-use pegboard::protocol;
+use pegboard::{protocol, system_info::SystemInfo};
 use sqlx::{pool::PoolConnection, Sqlite, SqlitePool};
 use tokio::{
 	net::{TcpListener, TcpStream},
@@ -53,7 +53,7 @@ pub struct Ctx {
 	pool: SqlitePool,
 	tx: Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>,
 
-	system: protocol::SystemInfo,
+	system: SystemInfo,
 	pub(crate) actors: RwLock<HashMap<Uuid, Arc<Actor>>>,
 	isolate_runner: RwLock<Option<runner::Handle>>,
 }
@@ -61,7 +61,7 @@ pub struct Ctx {
 impl Ctx {
 	pub fn new(
 		config: Config,
-		system: protocol::SystemInfo,
+		system: SystemInfo,
 		pool: SqlitePool,
 		tx: SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
 	) -> Arc<Self> {

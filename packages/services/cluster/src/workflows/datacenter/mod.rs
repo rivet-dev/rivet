@@ -42,13 +42,15 @@ pub(crate) async fn cluster_datacenter(ctx: &mut WorkflowCtx, input: &Input) -> 
 	})
 	.await?;
 
-	// Wait for TLS issuing process
-	ctx.workflow(tls_issue::Input {
-		datacenter_id: input.datacenter_id,
-		renew: false,
-	})
-	.output()
-	.await?;
+	// Issue TLS
+	if ctx.config().server()?.is_tls_enabled() {
+		ctx.workflow(tls_issue::Input {
+			datacenter_id: input.datacenter_id,
+			renew: false,
+		})
+		.output()
+		.await?;
+	}
 
 	ctx.msg(CreateComplete {})
 		.tag("datacenter_id", input.datacenter_id)
@@ -97,12 +99,14 @@ pub(crate) async fn cluster_datacenter(ctx: &mut WorkflowCtx, input: &Input) -> 
 					.await?;
 				}
 				Main::TlsRenew(_) => {
-					ctx.workflow(tls_issue::Input {
-						datacenter_id,
-						renew: true,
-					})
-					.dispatch()
-					.await?;
+					if ctx.config().server()?.is_tls_enabled() {
+						ctx.workflow(tls_issue::Input {
+							datacenter_id,
+							renew: true,
+						})
+						.dispatch()
+						.await?;
+					}
 				}
 			}
 			Ok(Loop::Continue)
