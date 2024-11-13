@@ -49,6 +49,7 @@ define_router! {
 		"actors": {
 			GET: actors::list_actors(
 				query: actors::ListQuery,
+				opt_auth: true,
 				rate_limit: {
 					buckets: [
 						{ count: 60_000, bucket: duration::minutes(1) },
@@ -58,6 +59,7 @@ define_router! {
 			POST: actors::create(
 				query: GlobalQuery,
 				body: models::ActorCreateActorRequest,
+				opt_auth: true,
 				rate_limit: {
 					buckets: [
 						{ count: 1_000, bucket: duration::minutes(1) },
@@ -70,6 +72,7 @@ define_router! {
 		"actors" / Uuid: {
 			GET: actors::get(
 				query: GlobalQuery,
+				opt_auth: true,
 				rate_limit: {
 					buckets: [
 						{ count: 60_000, bucket: duration::minutes(1) },
@@ -79,6 +82,7 @@ define_router! {
 			),
 			DELETE: actors::destroy(
 				query: actors::DeleteQuery,
+				opt_auth: true,
 				rate_limit: {
 					buckets: [
 						{ count: 10_000, bucket: duration::minutes(1) },
@@ -90,6 +94,7 @@ define_router! {
 		"actors" / Uuid / "logs" : {
 			GET: logs::get_logs(
 				query: logs::GetActorLogsQuery,
+				opt_auth: true,
 			),
 		},
 
@@ -97,6 +102,7 @@ define_router! {
 		"builds": {
 			GET: builds::list(
 				query: builds::ListQuery,
+				opt_auth: true,
 				rate_limit: {
 					buckets: [
 						{ count: 60_000, bucket: duration::minutes(1) },
@@ -108,6 +114,7 @@ define_router! {
 		"builds" / Uuid: {
 			GET: builds::get(
 				query: GlobalQuery,
+				opt_auth: true,
 				rate_limit: {
 					buckets: [
 						{ count: 60_000, bucket: duration::minutes(1) },
@@ -119,21 +126,24 @@ define_router! {
 		"builds" / Uuid / "tags": {
 			PATCH: builds::patch_tags(
 				query: GlobalQuery,
-				body: models::ActorPatchBuildTagsRequest
+				body: models::ActorPatchBuildTagsRequest,
+				opt_auth: true,
 			),
 		},
 
 		"builds" / "prepare": {
 			POST: builds::create_build(
 				query: GlobalQuery,
-				body: models::ActorCreateBuildRequest
+				body: models::ActorCreateBuildRequest,
+				opt_auth: true,
 			),
 		},
 
 		"builds" / Uuid / "complete": {
 			POST: builds::complete_build(
 				query: GlobalQuery,
-				body: serde_json::Value
+				body: serde_json::Value,
+				opt_auth: true,
 			),
 		},
 
@@ -141,6 +151,7 @@ define_router! {
 		"datacenters": {
 			GET: dc::list(
 				query: GlobalQuery,
+				opt_auth: true,
 				rate_limit: {
 					buckets: [
 						{ count: 60_000, bucket: duration::minutes(1) },
