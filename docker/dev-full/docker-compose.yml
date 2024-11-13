@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   rivet-server:
     build:
@@ -162,6 +160,9 @@ services:
     volumes:
       - ./seaweedfs:/etc/seaweedfs:ro
       - seaweedfs-data:/var/lib/seaweedfs
+    ports:
+      # S3
+      - "8000:8000"
     networks:
       - rivet-network
     healthcheck:

@@ -34,7 +34,7 @@ server:
   s3:
     region: us-east-1
     endpoint_internal: http://seaweedfs:8000
-    endpoint_external: http://seaweedfs:8000
+    endpoint_external: http://127.0.0.1:8000
     access_key_id: admin
     secret_access_key: admin
   nats:
