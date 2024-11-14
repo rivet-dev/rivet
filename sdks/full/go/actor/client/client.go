@@ -13,10 +13,10 @@ import (
 	http "net/http"
 	url "net/url"
 	sdk "sdk"
-	actor "sdk/actor"
+	sdkactor "sdk/actor"
 	builds "sdk/actor/builds"
-	datacenters "sdk/actor/datacenters"
 	logs "sdk/actor/logs"
+	regions "sdk/actor/regions"
 	core "sdk/core"
 )
 
@@ -25,9 +25,9 @@ type Client struct {
 	caller  *core.Caller
 	header  http.Header
 
-	Builds      *builds.Client
-	Datacenters *datacenters.Client
-	Logs        *logs.Client
+	Builds  *builds.Client
+	Logs    *logs.Client
+	Regions *regions.Client
 }
 
 func NewClient(opts ...core.ClientOption) *Client {
@@ -36,31 +36,31 @@ func NewClient(opts ...core.ClientOption) *Client {
 		opt(options)
 	}
 	return &Client{
-		baseURL:     options.BaseURL,
-		caller:      core.NewCaller(options.HTTPClient),
-		header:      options.ToHeader(),
-		Builds:      builds.NewClient(opts...),
-		Datacenters: datacenters.NewClient(opts...),
-		Logs:        logs.NewClient(opts...),
+		baseURL: options.BaseURL,
+		caller:  core.NewCaller(options.HTTPClient),
+		header:  options.ToHeader(),
+		Builds:  builds.NewClient(opts...),
+		Logs:    logs.NewClient(opts...),
+		Regions: regions.NewClient(opts...),
 	}
 }
 
 // Gets a dynamic actor.
 //
 // The id of the actor to destroy
-func (c *Client) Get(ctx context.Context, actorId uuid.UUID, request *actor.ListActorsRequestQuery) (*actor.GetActorResponse, error) {
+func (c *Client) Get(ctx context.Context, actor uuid.UUID, request *sdkactor.ListActorsRequestQuery) (*sdkactor.GetActorResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"actors/%v", actorId)
+	endpointURL := fmt.Sprintf(baseURL+"/"+"actors/%v", actor)
 
 	queryParams := make(url.Values)
-	if request.GameId != nil {
-		queryParams.Add("game_id", fmt.Sprintf("%v", *request.GameId))
+	if request.Project != nil {
+		queryParams.Add("project", fmt.Sprintf("%v", *request.Project))
 	}
-	if request.EnvironmentId != nil {
-		queryParams.Add("environment_id", fmt.Sprintf("%v", *request.EnvironmentId))
+	if request.Environment != nil {
+		queryParams.Add("environment", fmt.Sprintf("%v", *request.Environment))
 	}
 	if len(queryParams) > 0 {
 		endpointURL += "?" + queryParams.Encode()
@@ -120,7 +120,7 @@ func (c *Client) Get(ctx context.Context, actorId uuid.UUID, request *actor.List
 		return apiError
 	}
 
-	var response *actor.GetActorResponse
+	var response *sdkactor.GetActorResponse
 	if err := c.caller.Call(
 		ctx,
 		&core.CallParams{
@@ -137,7 +137,7 @@ func (c *Client) Get(ctx context.Context, actorId uuid.UUID, request *actor.List
 }
 
 // Lists all actors associated with the token used. Can be filtered by tags in the query string.
-func (c *Client) List(ctx context.Context, request *actor.GetActorsRequestQuery) (*actor.ListActorsResponse, error) {
+func (c *Client) List(ctx context.Context, request *sdkactor.GetActorsRequestQuery) (*sdkactor.ListActorsResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
@@ -145,11 +145,11 @@ func (c *Client) List(ctx context.Context, request *actor.GetActorsRequestQuery)
 	endpointURL := baseURL + "/" + "actors"
 
 	queryParams := make(url.Values)
-	if request.GameId != nil {
-		queryParams.Add("game_id", fmt.Sprintf("%v", *request.GameId))
+	if request.Project != nil {
+		queryParams.Add("project", fmt.Sprintf("%v", *request.Project))
 	}
-	if request.EnvironmentId != nil {
-		queryParams.Add("environment_id", fmt.Sprintf("%v", *request.EnvironmentId))
+	if request.Environment != nil {
+		queryParams.Add("environment", fmt.Sprintf("%v", *request.Environment))
 	}
 	if request.TagsJson != nil {
 		queryParams.Add("tags_json", fmt.Sprintf("%v", *request.TagsJson))
@@ -218,7 +218,7 @@ func (c *Client) List(ctx context.Context, request *actor.GetActorsRequestQuery)
 		return apiError
 	}
 
-	var response *actor.ListActorsResponse
+	var response *sdkactor.ListActorsResponse
 	if err := c.caller.Call(
 		ctx,
 		&core.CallParams{
@@ -235,7 +235,7 @@ func (c *Client) List(ctx context.Context, request *actor.GetActorsRequestQuery)
 }
 
 // Create a new dynamic actor.
-func (c *Client) Create(ctx context.Context, request *actor.CreateActorRequest) (*actor.CreateActorResponse, error) {
+func (c *Client) Create(ctx context.Context, request *sdkactor.CreateActorRequest) (*sdkactor.CreateActorResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
@@ -296,7 +296,7 @@ func (c *Client) Create(ctx context.Context, request *actor.CreateActorRequest) 
 		return apiError
 	}
 
-	var response *actor.CreateActorResponse
+	var response *sdkactor.CreateActorResponse
 	if err := c.caller.Call(
 		ctx,
 		&core.CallParams{
@@ -316,19 +316,19 @@ func (c *Client) Create(ctx context.Context, request *actor.CreateActorRequest) 
 // Destroy a dynamic actor.
 //
 // The id of the actor to destroy
-func (c *Client) Destroy(ctx context.Context, actorId uuid.UUID, request *actor.DestroyActorRequestQuery) (*actor.DestroyActorResponse, error) {
+func (c *Client) Destroy(ctx context.Context, actor uuid.UUID, request *sdkactor.DestroyActorRequestQuery) (*sdkactor.DestroyActorResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"actors/%v", actorId)
+	endpointURL := fmt.Sprintf(baseURL+"/"+"actors/%v", actor)
 
 	queryParams := make(url.Values)
-	if request.GameId != nil {
-		queryParams.Add("game_id", fmt.Sprintf("%v", *request.GameId))
+	if request.Project != nil {
+		queryParams.Add("project", fmt.Sprintf("%v", *request.Project))
 	}
-	if request.EnvironmentId != nil {
-		queryParams.Add("environment_id", fmt.Sprintf("%v", *request.EnvironmentId))
+	if request.Environment != nil {
+		queryParams.Add("environment", fmt.Sprintf("%v", *request.Environment))
 	}
 	if request.OverrideKillTimeout != nil {
 		queryParams.Add("override_kill_timeout", fmt.Sprintf("%v", *request.OverrideKillTimeout))
@@ -391,7 +391,7 @@ func (c *Client) Destroy(ctx context.Context, actorId uuid.UUID, request *actor.
 		return apiError
 	}
 
-	var response *actor.DestroyActorResponse
+	var response *sdkactor.DestroyActorResponse
 	if err := c.caller.Call(
 		ctx,
 		&core.CallParams{

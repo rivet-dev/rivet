@@ -7,8 +7,8 @@ import * as Rivet from "../../../../../../index";
 /**
  * @example
  *     {
- *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
- *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+ *         project: "string",
+ *         environment: "string",
  *         body: {
  *             tags: {
  *                 "key": "value"
@@ -18,7 +18,7 @@ import * as Rivet from "../../../../../../index";
  *     }
  */
 export interface PatchBuildTagsRequestQuery {
-    gameId?: string;
-    environmentId?: string;
+    project?: string;
+    environment?: string;
     body: Rivet.actor.PatchBuildTagsRequest;
 }

@@ -32,7 +32,7 @@ export class Logs {
     /**
      * Returns the logs for a given actor.
      *
-     * @param {string} actorId
+     * @param {string} actor
      * @param {Rivet.actor.GetActorLogsRequestQuery} request
      * @param {Logs.RequestOptions} requestOptions - Request-specific configuration.
      *
@@ -45,25 +45,25 @@ export class Logs {
      *
      * @example
      *     await client.actor.logs.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
-     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         project: "string",
+     *         environment: "string",
      *         stream: Rivet.actor.LogStream.StdOut,
      *         watchIndex: "string"
      *     })
      */
     public async get(
-        actorId: string,
+        actor: string,
         request: Rivet.actor.GetActorLogsRequestQuery,
         requestOptions?: Logs.RequestOptions
     ): Promise<Rivet.actor.GetActorLogsResponse> {
-        const { gameId, environmentId, stream, watchIndex } = request;
+        const { project, environment, stream, watchIndex } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
-        if (gameId != null) {
-            _queryParams["game_id"] = gameId;
+        if (project != null) {
+            _queryParams["project"] = project;
         }
 
-        if (environmentId != null) {
-            _queryParams["environment_id"] = environmentId;
+        if (environment != null) {
+            _queryParams["environment"] = environment;
         }
 
         _queryParams["stream"] = stream;
@@ -74,7 +74,7 @@ export class Logs {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/actors/${encodeURIComponent(actorId)}/logs`
+                `/actors/${encodeURIComponent(actor)}/logs`
             ),
             method: "GET",
             headers: {

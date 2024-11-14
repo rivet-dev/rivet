@@ -5,15 +5,14 @@ package actor
 import (
 	json "encoding/json"
 	fmt "fmt"
-	uuid "github.com/google/uuid"
 	sdk "sdk"
 	core "sdk/core"
 )
 
 type GetActorLogsRequestQuery struct {
-	GameId        *uuid.UUID `json:"-"`
-	EnvironmentId *uuid.UUID `json:"-"`
-	Stream        LogStream  `json:"-"`
+	Project     *string   `json:"-"`
+	Environment *string   `json:"-"`
+	Stream      LogStream `json:"-"`
 	// A query parameter denoting the requests watch index.
 	WatchIndex *string `json:"-"`
 }

@@ -9,8 +9,8 @@ import urlJoin from "url-join";
 import * as serializers from "../../../../serialization/index";
 import * as errors from "../../../../errors/index";
 import { Builds } from "../resources/builds/client/Client";
-import { Datacenters } from "../resources/datacenters/client/Client";
 import { Logs } from "../resources/logs/client/Client";
+import { Regions } from "../resources/regions/client/Client";
 
 export declare namespace Actor {
     interface Options {
@@ -35,7 +35,7 @@ export class Actor {
     /**
      * Gets a dynamic actor.
      *
-     * @param {string} actorId - The id of the actor to destroy
+     * @param {string} actor - The id of the actor to destroy
      * @param {Rivet.actor.ListActorsRequestQuery} request
      * @param {Actor.RequestOptions} requestOptions - Request-specific configuration.
      *
@@ -48,29 +48,29 @@ export class Actor {
      *
      * @example
      *     await client.actor.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
-     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
+     *         project: "string",
+     *         environment: "string"
      *     })
      */
     public async get(
-        actorId: string,
+        actor: string,
         request: Rivet.actor.ListActorsRequestQuery = {},
         requestOptions?: Actor.RequestOptions
     ): Promise<Rivet.actor.GetActorResponse> {
-        const { gameId, environmentId } = request;
+        const { project, environment } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
-        if (gameId != null) {
-            _queryParams["game_id"] = gameId;
+        if (project != null) {
+            _queryParams["project"] = project;
         }
 
-        if (environmentId != null) {
-            _queryParams["environment_id"] = environmentId;
+        if (environment != null) {
+            _queryParams["environment"] = environment;
         }
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/actors/${encodeURIComponent(actorId)}`
+                `/actors/${encodeURIComponent(actor)}`
             ),
             method: "GET",
             headers: {
@@ -193,8 +193,8 @@ export class Actor {
      *
      * @example
      *     await client.actor.list({
-     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
-     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         project: "string",
+     *         environment: "string",
      *         tagsJson: "string",
      *         includeDestroyed: true,
      *         cursor: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
@@ -204,14 +204,14 @@ export class Actor {
         request: Rivet.actor.GetActorsRequestQuery = {},
         requestOptions?: Actor.RequestOptions
     ): Promise<Rivet.actor.ListActorsResponse> {
-        const { gameId, environmentId, tagsJson, includeDestroyed, cursor } = request;
+        const { project, environment, tagsJson, includeDestroyed, cursor } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
-        if (gameId != null) {
-            _queryParams["game_id"] = gameId;
+        if (project != null) {
+            _queryParams["project"] = project;
         }
 
-        if (environmentId != null) {
-            _queryParams["environment_id"] = environmentId;
+        if (environment != null) {
+            _queryParams["environment"] = environment;
         }
 
         if (tagsJson != null) {
@@ -352,7 +352,7 @@ export class Actor {
      *
      * @example
      *     await client.actor.create({
-     *         datacenter: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         region: "string",
      *         tags: {
      *             "key": "value"
      *         },
@@ -505,7 +505,7 @@ export class Actor {
     /**
      * Destroy a dynamic actor.
      *
-     * @param {string} actorId - The id of the actor to destroy
+     * @param {string} actor - The id of the actor to destroy
      * @param {Rivet.actor.DestroyActorRequestQuery} request
      * @param {Actor.RequestOptions} requestOptions - Request-specific configuration.
      *
@@ -518,24 +518,24 @@ export class Actor {
      *
      * @example
      *     await client.actor.destroy("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
-     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         project: "string",
+     *         environment: "string",
      *         overrideKillTimeout: 1000000
      *     })
      */
     public async destroy(
-        actorId: string,
+        actor: string,
         request: Rivet.actor.DestroyActorRequestQuery = {},
         requestOptions?: Actor.RequestOptions
     ): Promise<Rivet.actor.DestroyActorResponse> {
-        const { gameId, environmentId, overrideKillTimeout } = request;
+        const { project, environment, overrideKillTimeout } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
-        if (gameId != null) {
-            _queryParams["game_id"] = gameId;
+        if (project != null) {
+            _queryParams["project"] = project;
         }
 
-        if (environmentId != null) {
-            _queryParams["environment_id"] = environmentId;
+        if (environment != null) {
+            _queryParams["environment"] = environment;
         }
 
         if (overrideKillTimeout != null) {
@@ -545,7 +545,7 @@ export class Actor {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/actors/${encodeURIComponent(actorId)}`
+                `/actors/${encodeURIComponent(actor)}`
             ),
             method: "DELETE",
             headers: {
@@ -659,16 +659,16 @@ export class Actor {
         return (this._builds ??= new Builds(this._options));
     }
 
-    protected _datacenters: Datacenters | undefined;
-
-    public get datacenters(): Datacenters {
-        return (this._datacenters ??= new Datacenters(this._options));
-    }
-
     protected _logs: Logs | undefined;
 
     public get logs(): Logs {
         return (this._logs ??= new Logs(this._options));
+    }
+
+    protected _regions: Regions | undefined;
+
+    public get regions(): Regions {
+        return (this._regions ??= new Regions(this._options));
     }
 
     protected async _getAuthorizationHeader(): Promise<string | undefined> {

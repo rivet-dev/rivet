@@ -30,9 +30,9 @@ export class Builds {
     constructor(protected readonly _options: Builds.Options = {}) {}
 
     /**
-     * Lists all builds of the game associated with the token used. Can be filtered by tags in the query string.
+     * Lists all builds of the project associated with the token used. Can be filtered by tags in the query string.
      *
-     * @param {string} buildId
+     * @param {string} build
      * @param {Rivet.actor.GetBuildRequestQuery} request
      * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
      *
@@ -45,24 +45,24 @@ export class Builds {
      *
      * @example
      *     await client.actor.builds.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
-     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         project: "string",
+     *         environment: "string",
      *         tagsJson: "string"
      *     })
      */
     public async get(
-        buildId: string,
+        build: string,
         request: Rivet.actor.GetBuildRequestQuery = {},
         requestOptions?: Builds.RequestOptions
     ): Promise<Rivet.actor.GetBuildResponse> {
-        const { gameId, environmentId, tagsJson } = request;
+        const { project, environment, tagsJson } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
-        if (gameId != null) {
-            _queryParams["game_id"] = gameId;
+        if (project != null) {
+            _queryParams["project"] = project;
         }
 
-        if (environmentId != null) {
-            _queryParams["environment_id"] = environmentId;
+        if (environment != null) {
+            _queryParams["environment"] = environment;
         }
 
         if (tagsJson != null) {
@@ -72,7 +72,7 @@ export class Builds {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/builds/${encodeURIComponent(buildId)}`
+                `/builds/${encodeURIComponent(build)}`
             ),
             method: "GET",
             headers: {
@@ -181,7 +181,7 @@ export class Builds {
     }
 
     /**
-     * Lists all builds of the game associated with the token used. Can be filtered by tags in the query string.
+     * Lists all builds of the project associated with the token used. Can be filtered by tags in the query string.
      *
      * @param {Rivet.actor.ListBuildsRequestQuery} request
      * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
@@ -195,8 +195,8 @@ export class Builds {
      *
      * @example
      *     await client.actor.builds.list({
-     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
-     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         project: "string",
+     *         environment: "string",
      *         tagsJson: "string"
      *     })
      */
@@ -204,14 +204,14 @@ export class Builds {
         request: Rivet.actor.ListBuildsRequestQuery = {},
         requestOptions?: Builds.RequestOptions
     ): Promise<Rivet.actor.ListBuildsResponse> {
-        const { gameId, environmentId, tagsJson } = request;
+        const { project, environment, tagsJson } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
-        if (gameId != null) {
-            _queryParams["game_id"] = gameId;
+        if (project != null) {
+            _queryParams["project"] = project;
         }
 
-        if (environmentId != null) {
-            _queryParams["environment_id"] = environmentId;
+        if (environment != null) {
+            _queryParams["environment"] = environment;
         }
 
         if (tagsJson != null) {
@@ -330,7 +330,7 @@ export class Builds {
     }
 
     /**
-     * @param {string} buildId
+     * @param {string} build
      * @param {Rivet.actor.PatchBuildTagsRequestQuery} request
      * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
      *
@@ -343,8 +343,8 @@ export class Builds {
      *
      * @example
      *     await client.actor.builds.patchTags("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
-     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         project: "string",
+     *         environment: "string",
      *         body: {
      *             tags: {
      *                 "key": "value"
@@ -354,24 +354,24 @@ export class Builds {
      *     })
      */
     public async patchTags(
-        buildId: string,
+        build: string,
         request: Rivet.actor.PatchBuildTagsRequestQuery,
         requestOptions?: Builds.RequestOptions
     ): Promise<Rivet.actor.PatchBuildTagsResponse> {
-        const { gameId, environmentId, body: _body } = request;
+        const { project, environment, body: _body } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
-        if (gameId != null) {
-            _queryParams["game_id"] = gameId;
+        if (project != null) {
+            _queryParams["project"] = project;
         }
 
-        if (environmentId != null) {
-            _queryParams["environment_id"] = environmentId;
+        if (environment != null) {
+            _queryParams["environment"] = environment;
         }
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/builds/${encodeURIComponent(buildId)}/tags`
+                `/builds/${encodeURIComponent(build)}/tags`
             ),
             method: "PATCH",
             headers: {
@@ -481,7 +481,7 @@ export class Builds {
     }
 
     /**
-     * Creates a new game build for the given game.
+     * Creates a new project build for the given project.
      *
      * @param {Rivet.actor.PrepareBuildRequestQuery} request
      * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
@@ -495,8 +495,8 @@ export class Builds {
      *
      * @example
      *     await client.actor.builds.prepare({
-     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
-     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         project: "string",
+     *         environment: "string",
      *         body: {
      *             name: "string",
      *             imageTag: "string",
@@ -508,7 +508,7 @@ export class Builds {
      *             multipartUpload: true,
      *             kind: Rivet.actor.BuildKind.DockerImage,
      *             compression: Rivet.actor.BuildCompression.None,
-     *             prewarmDatacenters: ["d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"]
+     *             prewarmRegions: ["string"]
      *         }
      *     })
      */
@@ -516,14 +516,14 @@ export class Builds {
         request: Rivet.actor.PrepareBuildRequestQuery,
         requestOptions?: Builds.RequestOptions
     ): Promise<Rivet.actor.PrepareBuildResponse> {
-        const { gameId, environmentId, body: _body } = request;
+        const { project, environment, body: _body } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
-        if (gameId != null) {
-            _queryParams["game_id"] = gameId;
+        if (project != null) {
+            _queryParams["project"] = project;
         }
 
-        if (environmentId != null) {
-            _queryParams["environment_id"] = environmentId;
+        if (environment != null) {
+            _queryParams["environment"] = environment;
         }
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
@@ -641,7 +641,7 @@ export class Builds {
     /**
      * Marks an upload as complete.
      *
-     * @param {string} buildId
+     * @param {string} build
      * @param {Rivet.actor.CompleteBuildRequestQuery} request
      * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
      *
@@ -654,29 +654,29 @@ export class Builds {
      *
      * @example
      *     await client.actor.builds.complete("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
-     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
+     *         project: "string",
+     *         environment: "string"
      *     })
      */
     public async complete(
-        buildId: string,
+        build: string,
         request: Rivet.actor.CompleteBuildRequestQuery = {},
         requestOptions?: Builds.RequestOptions
     ): Promise<void> {
-        const { gameId, environmentId } = request;
+        const { project, environment } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
-        if (gameId != null) {
-            _queryParams["game_id"] = gameId;
+        if (project != null) {
+            _queryParams["project"] = project;
         }
 
-        if (environmentId != null) {
-            _queryParams["environment_id"] = environmentId;
+        if (environment != null) {
+            _queryParams["environment"] = environment;
         }
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/builds/${encodeURIComponent(buildId)}/complete`
+                `/builds/${encodeURIComponent(build)}/complete`
             ),
             method: "POST",
             headers: {

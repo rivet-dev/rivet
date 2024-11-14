@@ -5,14 +5,14 @@
 /**
  * @example
  *     {
- *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
- *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+ *         project: "string",
+ *         environment: "string",
  *         overrideKillTimeout: 1000000
  *     }
  */
 export interface DestroyActorRequestQuery {
-    gameId?: string;
-    environmentId?: string;
+    project?: string;
+    environment?: string;
     /**
      * The duration to wait for in milliseconds before killing the actor. This should be used to override the default kill timeout if a faster time is needed, say for ignoring a graceful shutdown.
      */

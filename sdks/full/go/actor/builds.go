@@ -11,26 +11,26 @@ import (
 )
 
 type CompleteBuildRequestQuery struct {
-	GameId        *uuid.UUID `json:"-"`
-	EnvironmentId *uuid.UUID `json:"-"`
+	Project     *string `json:"-"`
+	Environment *string `json:"-"`
 }
 
 type GetBuildRequestQuery struct {
-	GameId        *uuid.UUID `json:"-"`
-	EnvironmentId *uuid.UUID `json:"-"`
-	TagsJson      *string    `json:"-"`
+	Project     *string `json:"-"`
+	Environment *string `json:"-"`
+	TagsJson    *string `json:"-"`
 }
 
 type ListBuildsRequestQuery struct {
-	GameId        *uuid.UUID `json:"-"`
-	EnvironmentId *uuid.UUID `json:"-"`
-	TagsJson      *string    `json:"-"`
+	Project     *string `json:"-"`
+	Environment *string `json:"-"`
+	TagsJson    *string `json:"-"`
 }
 
 type PatchBuildTagsRequestQuery struct {
-	GameId        *uuid.UUID             `json:"-"`
-	EnvironmentId *uuid.UUID             `json:"-"`
-	Body          *PatchBuildTagsRequest `json:"-"`
+	Project     *string                `json:"-"`
+	Environment *string                `json:"-"`
+	Body        *PatchBuildTagsRequest `json:"-"`
 }
 
 func (p *PatchBuildTagsRequestQuery) UnmarshalJSON(data []byte) error {
@@ -47,9 +47,9 @@ func (p *PatchBuildTagsRequestQuery) MarshalJSON() ([]byte, error) {
 }
 
 type PrepareBuildRequestQuery struct {
-	GameId        *uuid.UUID           `json:"-"`
-	EnvironmentId *uuid.UUID           `json:"-"`
-	Body          *PrepareBuildRequest `json:"-"`
+	Project     *string              `json:"-"`
+	Environment *string              `json:"-"`
+	Body        *PrepareBuildRequest `json:"-"`
 }
 
 func (p *PrepareBuildRequestQuery) UnmarshalJSON(data []byte) error {
@@ -95,7 +95,7 @@ func (g *GetBuildResponse) String() string {
 }
 
 type ListBuildsResponse struct {
-	// A list of builds for the game associated with the token.
+	// A list of builds for the project associated with the token.
 	Builds []*Build `json:"builds,omitempty"`
 
 	_rawJSON json.RawMessage
@@ -184,13 +184,13 @@ func (p *PatchBuildTagsResponse) String() string {
 
 type PrepareBuildRequest struct {
 	Name string `json:"name"`
-	// A tag given to the game build.
-	ImageTag           string              `json:"image_tag"`
-	ImageFile          *upload.PrepareFile `json:"image_file,omitempty"`
-	MultipartUpload    *bool               `json:"multipart_upload,omitempty"`
-	Kind               *BuildKind          `json:"kind,omitempty"`
-	Compression        *BuildCompression   `json:"compression,omitempty"`
-	PrewarmDatacenters []uuid.UUID         `json:"prewarm_datacenters,omitempty"`
+	// A tag given to the project build.
+	ImageTag        string              `json:"image_tag"`
+	ImageFile       *upload.PrepareFile `json:"image_file,omitempty"`
+	MultipartUpload *bool               `json:"multipart_upload,omitempty"`
+	Kind            *BuildKind          `json:"kind,omitempty"`
+	Compression     *BuildCompression   `json:"compression,omitempty"`
+	PrewarmRegions  []string            `json:"prewarm_regions,omitempty"`
 
 	_rawJSON json.RawMessage
 }

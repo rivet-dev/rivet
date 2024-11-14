@@ -66,12 +66,12 @@ impl Auth {
 			namespace_ids: vec![env_id.into()],
 		})
 		.await?;
-		let env = unwrap_with!(ns_res.namespaces.first(), GAME_ENVIRONMENT_NOT_FOUND);
+		let env = unwrap_with!(ns_res.namespaces.first(), ENVIRONMENT_NOT_FOUND);
 
 		// Ensure belongs to game
 		ensure_with!(
 			unwrap!(env.game_id).as_uuid() == game_id,
-			GAME_ENVIRONMENT_NOT_FOUND
+			ENVIRONMENT_NOT_FOUND
 		);
 
 		// Validate token
@@ -108,7 +108,7 @@ impl Auth {
 				}),
 			)?;
 			let user = unwrap!(user_res.users.first());
-			let game = unwrap_with!(game_res.games.first(), GAME_NOT_FOUND);
+			let game = unwrap_with!(game_res.games.first(), PROJECT_NOT_FOUND);
 			let user_teams = unwrap!(team_list_res.users.first());
 			let dev_team_id = unwrap_ref!(game.developer_team_id).as_uuid();
 

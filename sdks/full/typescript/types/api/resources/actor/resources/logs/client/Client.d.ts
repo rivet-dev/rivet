@@ -25,7 +25,7 @@ export declare class Logs {
     /**
      * Returns the logs for a given actor.
      *
-     * @param {string} actorId
+     * @param {string} actor
      * @param {Rivet.actor.GetActorLogsRequestQuery} request
      * @param {Logs.RequestOptions} requestOptions - Request-specific configuration.
      *
@@ -38,12 +38,12 @@ export declare class Logs {
      *
      * @example
      *     await client.actor.logs.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
-     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         project: "string",
+     *         environment: "string",
      *         stream: Rivet.actor.LogStream.StdOut,
      *         watchIndex: "string"
      *     })
      */
-    get(actorId: string, request: Rivet.actor.GetActorLogsRequestQuery, requestOptions?: Logs.RequestOptions): Promise<Rivet.actor.GetActorLogsResponse>;
+    get(actor: string, request: Rivet.actor.GetActorLogsRequestQuery, requestOptions?: Logs.RequestOptions): Promise<Rivet.actor.GetActorLogsResponse>;
     protected _getAuthorizationHeader(): Promise<string | undefined>;
 }

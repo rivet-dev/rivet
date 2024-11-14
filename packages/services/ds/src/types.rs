@@ -113,40 +113,38 @@ impl GameConfig {
 	}
 }
 
-impl ApiTryFrom<Server> for models::ActorActor {
-	type Error = GlobalError;
-
-	fn api_try_from(value: Server) -> GlobalResult<models::ActorActor> {
-		Ok(models::ActorActor {
-			id: value.server_id,
-			environment: value.env_id,
-			datacenter: value.datacenter_id,
-			created_at: value.create_ts,
-			// `started_at` -> `connectable_ts` is intentional. We don't expose the internal
-			// workings of DS to the API, so we need to return the timestamp at which the serer can
-			// actually do anything useful.
-			started_at: value.connectable_ts,
-			destroyed_at: value.destroy_ts,
-			tags: Some(serde_json::to_value(value.tags)?),
-			runtime: Box::new(models::ActorRuntime {
-				build: value.image_id,
-				arguments: Some(value.args),
-				environment: Some(value.environment),
-			}),
-			network: Box::new(models::ActorNetwork {
-				mode: Some(value.network_mode.api_into()),
-				ports: value
-					.network_ports
-					.into_iter()
-					.map(|(s, p)| (s, p.api_into()))
-					.collect::<HashMap<_, _>>(),
-			}),
-			lifecycle: Box::new(models::ActorLifecycle {
-				kill_timeout: Some(value.kill_timeout_ms),
-			}),
-			resources: Box::new(value.resources.api_into()),
-		})
-	}
+pub fn convert_actor_to_api(
+	value: Server,
+	datacenter: &cluster::types::Datacenter,
+) -> GlobalResult<models::ActorActor> {
+	Ok(models::ActorActor {
+		id: value.server_id,
+		region: datacenter.name_id.clone(),
+		created_at: value.create_ts,
+		// `started_at` -> `connectable_ts` is intentional. We don't expose the internal
+		// workings of DS to the API, so we need to return the timestamp at which the serer can
+		// actually do anything useful.
+		started_at: value.connectable_ts,
+		destroyed_at: value.destroy_ts,
+		tags: Some(serde_json::to_value(value.tags)?),
+		runtime: Box::new(models::ActorRuntime {
+			build: value.image_id,
+			arguments: Some(value.args),
+			environment: Some(value.environment),
+		}),
+		network: Box::new(models::ActorNetwork {
+			mode: Some(value.network_mode.api_into()),
+			ports: value
+				.network_ports
+				.into_iter()
+				.map(|(s, p)| (s, p.api_into()))
+				.collect::<HashMap<_, _>>(),
+		}),
+		lifecycle: Box::new(models::ActorLifecycle {
+			kill_timeout: Some(value.kill_timeout_ms),
+		}),
+		resources: Box::new(value.resources.api_into()),
+	})
 }
 
 impl ApiFrom<models::ActorResources> for ServerResources {

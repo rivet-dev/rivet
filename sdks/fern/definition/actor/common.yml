@@ -7,8 +7,7 @@ types:
   Actor:
     properties:
       id: uuid
-      environment: uuid
-      datacenter: uuid
+      region: string
       tags: unknown
       runtime: Runtime
       network: Network
@@ -105,8 +104,7 @@ types:
         docs: Tags of this build
         type: map<string, string>
 
-  Datacenter:
+  Region:
     properties:
-      id: uuid
-      slug: string
+      id: string
       name: string

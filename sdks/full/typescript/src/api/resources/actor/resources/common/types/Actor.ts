@@ -6,8 +6,7 @@ import * as Rivet from "../../../../../index";
 
 export interface Actor {
     id: string;
-    environment: string;
-    datacenter: string;
+    region: string;
     tags?: unknown;
     runtime: Rivet.actor.Runtime;
     network: Rivet.actor.Network;

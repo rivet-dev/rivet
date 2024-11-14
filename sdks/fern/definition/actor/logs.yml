@@ -8,18 +8,18 @@ service:
   base-path: /actors
   endpoints:
     get:
-      path: /{actor_id}/logs
+      path: /{actor}/logs
       method: GET
       docs: >-
         Returns the logs for a given actor.
       path-parameters:
-        actor_id:
+        actor:
           type: uuid
       request:
         name: GetActorLogsRequestQuery
         query-parameters:
-          game_id: optional<uuid>
-          environment_id: optional<uuid>
+          project: optional<string>
+          environment: optional<string>
           stream: LogStream
           watch_index:
             docs: A query parameter denoting the requests watch index.

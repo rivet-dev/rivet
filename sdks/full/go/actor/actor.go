@@ -5,17 +5,16 @@ package actor
 import (
 	json "encoding/json"
 	fmt "fmt"
-	uuid "github.com/google/uuid"
 	core "sdk/core"
 )
 
 type CreateActorRequest struct {
-	Datacenter uuid.UUID                  `json:"datacenter"`
-	Tags       interface{}                `json:"tags,omitempty"`
-	Runtime    *CreateActorRuntimeRequest `json:"runtime,omitempty"`
-	Network    *CreateActorNetworkRequest `json:"network,omitempty"`
-	Resources  *Resources                 `json:"resources,omitempty"`
-	Lifecycle  *Lifecycle                 `json:"lifecycle,omitempty"`
+	Region    string                     `json:"region"`
+	Tags      interface{}                `json:"tags,omitempty"`
+	Runtime   *CreateActorRuntimeRequest `json:"runtime,omitempty"`
+	Network   *CreateActorNetworkRequest `json:"network,omitempty"`
+	Resources *Resources                 `json:"resources,omitempty"`
+	Lifecycle *Lifecycle                 `json:"lifecycle,omitempty"`
 
 	_rawJSON json.RawMessage
 }
@@ -130,7 +129,7 @@ func (g *GetActorResponse) String() string {
 }
 
 type ListActorsResponse struct {
-	// A list of actors for the game associated with the token.
+	// A list of actors for the project associated with the token.
 	Actors []*Actor `json:"actors,omitempty"`
 
 	_rawJSON json.RawMessage

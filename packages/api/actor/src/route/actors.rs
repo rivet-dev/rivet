@@ -4,7 +4,7 @@ use rivet_convert::{ApiInto, ApiTryInto};
 use rivet_operation::prelude::*;
 use serde::Deserialize;
 use serde_json::json;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::{
 	assert,
@@ -17,6 +17,15 @@ use super::GlobalQuery;
 // MARK: GET /actors/{}
 pub async fn get(
 	ctx: Ctx<Auth>,
+	actor_id: Uuid,
+	watch_index: WatchIndexQuery,
+	query: GlobalQuery,
+) -> GlobalResult<models::ActorGetActorResponse> {
+	get_inner(&ctx, actor_id, watch_index, query).await
+}
+
+async fn get_inner(
+	ctx: &Ctx<Auth>,
 	actor_id: Uuid,
 	_watch_index: WatchIndexQuery,
 	query: GlobalQuery,
@@ -31,11 +40,19 @@ pub async fn get(
 		.await?;
 	let server = unwrap_with!(servers_res.servers.first(), SERVERS_SERVER_NOT_FOUND);
 
+	// Get the datacenter
+	let dc_res = ctx
+		.op(cluster::ops::datacenter::get::Input {
+			datacenter_ids: vec![server.datacenter_id],
+		})
+		.await?;
+	let dc = unwrap!(dc_res.datacenters.first());
+
 	// Validate token can access server
 	ensure_with!(server.env_id == env_id, SERVERS_SERVER_NOT_FOUND);
 
 	Ok(models::ActorGetActorResponse {
-		actor: Box::new(server.clone().api_try_into()?),
+		actor: Box::new(ds::types::convert_actor_to_api(server.clone(), dc)?),
 	})
 }
 
@@ -47,9 +64,32 @@ pub async fn get_deprecated(
 	watch_index: WatchIndexQuery,
 ) -> GlobalResult<models::ServersGetServerResponse> {
 	let global = build_global_query_compat(&ctx, game_id, env_id).await?;
-	let get_res = get(ctx, actor_id, watch_index, global).await?;
+	let get_res = get_inner(&ctx, actor_id, watch_index, global).await?;
+
+	let game_res = ctx
+		.op(cluster::ops::get_for_game::Input {
+			game_ids: vec![game_id],
+		})
+		.await?;
+	let game = unwrap!(game_res.games.first());
+
+	let dc_resolve_res = ctx
+		.op(cluster::ops::datacenter::resolve_for_name_id::Input {
+			cluster_id: game.cluster_id,
+			name_ids: vec![get_res.actor.region.clone()],
+		})
+		.await?;
+	let dc_id = unwrap!(dc_resolve_res.datacenters.first()).datacenter_id;
+
+	let dc_res = ctx
+		.op(cluster::ops::datacenter::get::Input {
+			datacenter_ids: vec![dc_id],
+		})
+		.await?;
+	let dc = unwrap!(dc_res.datacenters.first());
+
 	Ok(models::ServersGetServerResponse {
-		server: Box::new(legacy_convert_actor_to_server(*get_res.actor)),
+		server: Box::new(legacy_convert_actor_to_server(*get_res.actor, dc)),
 	})
 }
 
@@ -72,17 +112,13 @@ pub async fn create(
 	let cluster_id = unwrap!(clusters_res.games.first()).cluster_id;
 	let game_config = unwrap!(game_configs_res.game_configs.first());
 
-	let datacenters = ctx
-		.op(cluster::ops::datacenter::list::Input {
-			cluster_ids: vec![cluster_id],
+	let resolved_dc_ids = ctx
+		.op(cluster::ops::datacenter::resolve_for_name_id::Input {
+			cluster_id,
+			name_ids: vec![body.region.clone()],
 		})
 		.await?;
-	ensure_with!(
-		unwrap!(datacenters.clusters.first())
-			.datacenter_ids
-			.contains(&body.datacenter),
-		CLUSTER_DATACENTER_NOT_FOUND
-	);
+	let datacenter_id = unwrap!(resolved_dc_ids.datacenters.first()).datacenter_id;
 
 	let tags = serde_json::from_value(body.tags.unwrap_or_default())?;
 
@@ -100,7 +136,7 @@ pub async fn create(
 	ctx.workflow(ds::workflows::server::Input {
 		server_id,
 		env_id,
-		datacenter_id: body.datacenter,
+		datacenter_id,
 		cluster_id,
 		runtime: game_config.runtime,
 		tags,
@@ -184,8 +220,15 @@ pub async fn create(
 		.await?;
 	let server = unwrap_with!(servers_res.servers.first(), SERVERS_SERVER_NOT_FOUND);
 
+	let dc_res = ctx
+		.op(cluster::ops::datacenter::get::Input {
+			datacenter_ids: vec![server.datacenter_id],
+		})
+		.await?;
+	let dc = unwrap!(dc_res.datacenters.first());
+
 	Ok(models::ActorCreateActorResponse {
-		actor: Box::new(server.clone().api_try_into()?),
+		actor: Box::new(ds::types::convert_actor_to_api(server.clone(), dc)?),
 	})
 }
 
@@ -195,11 +238,19 @@ pub async fn create_deprecated(
 	env_id: Uuid,
 	body: models::ServersCreateServerRequest,
 ) -> GlobalResult<models::ServersCreateServerResponse> {
+	// Resolve region slug
+	let dc_res = ctx
+		.op(cluster::ops::datacenter::get::Input {
+			datacenter_ids: vec![body.datacenter],
+		})
+		.await?;
+	let dc = unwrap!(dc_res.datacenters.first());
+
 	let global = build_global_query_compat(&ctx, game_id, env_id).await?;
 	let create_res = create(
 		ctx,
 		models::ActorCreateActorRequest {
-			datacenter: body.datacenter,
+			region: dc.name_id.clone(),
 			lifecycle: body.lifecycle.map(|l| {
 				Box::new(models::ActorLifecycle {
 					kill_timeout: l.kill_timeout,
@@ -263,8 +314,9 @@ pub async fn create_deprecated(
 		global,
 	)
 	.await?;
+
 	Ok(models::ServersCreateServerResponse {
-		server: Box::new(legacy_convert_actor_to_server(*create_res.actor)),
+		server: Box::new(legacy_convert_actor_to_server(*create_res.actor, &dc)),
 	})
 }
 
@@ -346,6 +398,14 @@ pub struct ListQuery {
 
 pub async fn list_actors(
 	ctx: Ctx<Auth>,
+	watch_index: WatchIndexQuery,
+	query: ListQuery,
+) -> GlobalResult<models::ActorListActorsResponse> {
+	list_actors_inner(&ctx, watch_index, query).await
+}
+
+async fn list_actors_inner(
+	ctx: &Ctx<Auth>,
 	_watch_index: WatchIndexQuery,
 	query: ListQuery,
 ) -> GlobalResult<models::ActorListActorsResponse> {
@@ -369,10 +429,27 @@ pub async fn list_actors(
 		})
 		.await?;
 
+	let datacenter_ids = servers_res
+		.servers
+		.iter()
+		.map(|s| s.datacenter_id)
+		.collect::<HashSet<Uuid>>()
+		.into_iter()
+		.collect::<Vec<_>>();
+	let dc_res = ctx
+		.op(cluster::ops::datacenter::get::Input { datacenter_ids })
+		.await?;
+
 	let servers = servers_res
 		.servers
 		.into_iter()
-		.map(ApiTryInto::api_try_into)
+		.map(|a| {
+			let dc = unwrap!(dc_res
+				.datacenters
+				.iter()
+				.find(|dc| dc.datacenter_id == a.datacenter_id));
+			ds::types::convert_actor_to_api(a, &dc)
+		})
 		.collect::<GlobalResult<Vec<_>>>()?;
 
 	Ok(models::ActorListActorsResponse { actors: servers })
@@ -386,22 +463,60 @@ pub async fn list_servers_deprecated(
 	query: ListQuery,
 ) -> GlobalResult<models::ServersListServersResponse> {
 	let global = build_global_query_compat(&ctx, game_id, env_id).await?;
-	let actors_res = list_actors(ctx, watch_index, ListQuery { global, ..query }).await?;
+	let actors_res = list_actors_inner(&ctx, watch_index, ListQuery { global, ..query }).await?;
+
+	let clusters_res = ctx
+		.op(cluster::ops::get_for_game::Input {
+			game_ids: vec![game_id],
+		})
+		.await?;
+	let cluster_id = unwrap!(clusters_res.games.first()).cluster_id;
+
+	let dc_name_ids = actors_res
+		.actors
+		.iter()
+		.map(|s| s.region.clone())
+		.collect::<HashSet<String>>()
+		.into_iter()
+		.collect::<Vec<_>>();
+	let dc_resolve_res = ctx
+		.op(cluster::ops::datacenter::resolve_for_name_id::Input {
+			cluster_id,
+			name_ids: dc_name_ids,
+		})
+		.await?;
+
+	let dc_res = ctx
+		.op(cluster::ops::datacenter::get::Input {
+			datacenter_ids: dc_resolve_res
+				.datacenters
+				.iter()
+				.map(|x| x.datacenter_id)
+				.collect::<Vec<_>>(),
+		})
+		.await?;
+
 	Ok(models::ServersListServersResponse {
 		servers: actors_res
 			.actors
 			.into_iter()
-			.map(legacy_convert_actor_to_server)
-			.collect(),
+			.map(|a| {
+				let dc = unwrap!(dc_res.datacenters.iter().find(|dc| dc.name_id == a.region));
+				GlobalResult::Ok(legacy_convert_actor_to_server(a, dc))
+			})
+			.collect::<Result<Vec<_>, _>>()?,
 	})
 }
 
-fn legacy_convert_actor_to_server(a: models::ActorActor) -> models::ServersServer {
+fn legacy_convert_actor_to_server(
+	a: models::ActorActor,
+	datacenter: &cluster::types::Datacenter,
+) -> models::ServersServer {
 	models::ServersServer {
 		created_at: a.created_at,
-		datacenter: a.datacenter,
+		datacenter: datacenter.datacenter_id,
 		destroyed_at: a.destroyed_at,
-		environment: a.environment,
+		environment: Uuid::nil(),
 		id: a.id,
 		lifecycle: Box::new(models::ServersLifecycle {
 			kill_timeout: a.lifecycle.kill_timeout,

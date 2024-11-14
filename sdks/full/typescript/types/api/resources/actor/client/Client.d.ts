@@ -5,8 +5,8 @@ import * as environments from "../../../../environments";
 import * as core from "../../../../core";
 import * as Rivet from "../../../index";
 import { Builds } from "../resources/builds/client/Client";
-import { Datacenters } from "../resources/datacenters/client/Client";
 import { Logs } from "../resources/logs/client/Client";
+import { Regions } from "../resources/regions/client/Client";
 export declare namespace Actor {
     interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
@@ -28,7 +28,7 @@ export declare class Actor {
     /**
      * Gets a dynamic actor.
      *
-     * @param {string} actorId - The id of the actor to destroy
+     * @param {string} actor - The id of the actor to destroy
      * @param {Rivet.actor.ListActorsRequestQuery} request
      * @param {Actor.RequestOptions} requestOptions - Request-specific configuration.
      *
@@ -41,11 +41,11 @@ export declare class Actor {
      *
      * @example
      *     await client.actor.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
-     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
+     *         project: "string",
+     *         environment: "string"
      *     })
      */
-    get(actorId: string, request?: Rivet.actor.ListActorsRequestQuery, requestOptions?: Actor.RequestOptions): Promise<Rivet.actor.GetActorResponse>;
+    get(actor: string, request?: Rivet.actor.ListActorsRequestQuery, requestOptions?: Actor.RequestOptions): Promise<Rivet.actor.GetActorResponse>;
     /**
      * Lists all actors associated with the token used. Can be filtered by tags in the query string.
      *
@@ -61,8 +61,8 @@ export declare class Actor {
      *
      * @example
      *     await client.actor.list({
-     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
-     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         project: "string",
+     *         environment: "string",
      *         tagsJson: "string",
      *         includeDestroyed: true,
      *         cursor: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
@@ -84,7 +84,7 @@ export declare class Actor {
      *
      * @example
      *     await client.actor.create({
-     *         datacenter: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         region: "string",
      *         tags: {
      *             "key": "value"
      *         },
@@ -123,7 +123,7 @@ export declare class Actor {
     /**
      * Destroy a dynamic actor.
      *
-     * @param {string} actorId - The id of the actor to destroy
+     * @param {string} actor - The id of the actor to destroy
      * @param {Rivet.actor.DestroyActorRequestQuery} request
      * @param {Actor.RequestOptions} requestOptions - Request-specific configuration.
      *
@@ -136,17 +136,17 @@ export declare class Actor {
      *
      * @example
      *     await client.actor.destroy("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
-     *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *         project: "string",
+     *         environment: "string",
      *         overrideKillTimeout: 1000000
      *     })
      */
-    destroy(actorId: string, request?: Rivet.actor.DestroyActorRequestQuery, requestOptions?: Actor.RequestOptions): Promise<Rivet.actor.DestroyActorResponse>;
+    destroy(actor: string, request?: Rivet.actor.DestroyActorRequestQuery, requestOptions?: Actor.RequestOptions): Promise<Rivet.actor.DestroyActorResponse>;
     protected _builds: Builds | undefined;
     get builds(): Builds;
-    protected _datacenters: Datacenters | undefined;
-    get datacenters(): Datacenters;
     protected _logs: Logs | undefined;
     get logs(): Logs;
+    protected _regions: Regions | undefined;
+    get regions(): Regions;
     protected _getAuthorizationHeader(): Promise<string | undefined>;
 }

@@ -77,27 +77,27 @@ impl Auth {
 		let project = if is_development {
 			project_query.unwrap_or(util::dev_defaults::PROJECT_SLUG)
 		} else {
-			unwrap_with!(project_query, GAME_NOT_FOUND)
+			unwrap_with!(project_query, PROJECT_NOT_FOUND)
 		};
 		let game_res = op!([ctx] game_resolve_name_id {
 			name_ids: vec![project.to_string()],
 		})
 		.await?;
-		let game = unwrap_with!(game_res.games.first(), GAME_NOT_FOUND);
+		let game = unwrap_with!(game_res.games.first(), PROJECT_NOT_FOUND);
 		let game_id = unwrap!(game.game_id).as_uuid();
 
 		// Lookup environment name ID
 		let environment = if is_development {
 			environment_query.unwrap_or(util::dev_defaults::ENVIRONMENT_SLUG)
 		} else {
-			unwrap_with!(environment_query, GAME_ENVIRONMENT_NOT_FOUND)
+			unwrap_with!(environment_query, ENVIRONMENT_NOT_FOUND)
 		};
 		let env_res = op!([ctx] game_namespace_resolve_name_id {
 			game_id: game.game_id,
 			name_ids: vec![environment.to_string()],
 		})
 		.await?;
-		let env = unwrap_with!(env_res.namespaces.first(), GAME_ENVIRONMENT_NOT_FOUND);
+		let env = unwrap_with!(env_res.namespaces.first(), ENVIRONMENT_NOT_FOUND);
 		let env_id = unwrap!(env.namespace_id).as_uuid();
 
 		// Get the game this env belongs to
@@ -105,12 +105,12 @@ impl Auth {
 			namespace_ids: vec![env_id.into()],
 		})
 		.await?;
-		let env = unwrap_with!(ns_res.namespaces.first(), GAME_ENVIRONMENT_NOT_FOUND);
+		let env = unwrap_with!(ns_res.namespaces.first(), ENVIRONMENT_NOT_FOUND);
 
 		// Ensure belongs to game
 		ensure_with!(
 			unwrap!(env.game_id).as_uuid() == game_id,
-			GAME_ENVIRONMENT_NOT_FOUND
+			ENVIRONMENT_NOT_FOUND
 		);
 
 		// Build output
@@ -158,7 +158,7 @@ impl Auth {
 				}),
 			)?;
 			let user = unwrap!(user_res.users.first());
-			let game = unwrap_with!(game_res.games.first(), GAME_NOT_FOUND);
+			let game = unwrap_with!(game_res.games.first(), PROJECT_NOT_FOUND);
 			let user_teams = unwrap!(team_list_res.users.first());
 			let dev_team_id = unwrap_ref!(game.developer_team_id).as_uuid();
 

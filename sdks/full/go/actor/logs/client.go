@@ -13,7 +13,7 @@ import (
 	http "net/http"
 	url "net/url"
 	sdk "sdk"
-	actor "sdk/actor"
+	sdkactor "sdk/actor"
 	core "sdk/core"
 )
 
@@ -36,19 +36,19 @@ func NewClient(opts ...core.ClientOption) *Client {
 }
 
 // Returns the logs for a given actor.
-func (c *Client) Get(ctx context.Context, actorId uuid.UUID, request *actor.GetActorLogsRequestQuery) (*actor.GetActorLogsResponse, error) {
+func (c *Client) Get(ctx context.Context, actor uuid.UUID, request *sdkactor.GetActorLogsRequestQuery) (*sdkactor.GetActorLogsResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
-	endpointURL := fmt.Sprintf(baseURL+"/"+"actors/%v/logs", actorId)
+	endpointURL := fmt.Sprintf(baseURL+"/"+"actors/%v/logs", actor)
 
 	queryParams := make(url.Values)
-	if request.GameId != nil {
-		queryParams.Add("game_id", fmt.Sprintf("%v", *request.GameId))
+	if request.Project != nil {
+		queryParams.Add("project", fmt.Sprintf("%v", *request.Project))
 	}
-	if request.EnvironmentId != nil {
-		queryParams.Add("environment_id", fmt.Sprintf("%v", *request.EnvironmentId))
+	if request.Environment != nil {
+		queryParams.Add("environment", fmt.Sprintf("%v", *request.Environment))
 	}
 	queryParams.Add("stream", fmt.Sprintf("%v", request.Stream))
 	if request.WatchIndex != nil {
@@ -112,7 +112,7 @@ func (c *Client) Get(ctx context.Context, actorId uuid.UUID, request *actor.GetA
 		return apiError
 	}
 
-	var response *actor.GetActorLogsResponse
+	var response *sdkactor.GetActorLogsResponse
 	if err := c.caller.Call(
 		ctx,
 		&core.CallParams{

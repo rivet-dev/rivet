@@ -5,6 +5,6 @@
 import * as Rivet from "../../../../../index";
 
 export interface ListBuildsResponse {
-    /** A list of builds for the game associated with the token. */
+    /** A list of builds for the project associated with the token. */
     builds: Rivet.actor.Build[];
 }

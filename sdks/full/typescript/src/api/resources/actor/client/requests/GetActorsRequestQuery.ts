@@ -5,16 +5,16 @@
 /**
  * @example
  *     {
- *         gameId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
- *         environmentId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+ *         project: "string",
+ *         environment: "string",
  *         tagsJson: "string",
  *         includeDestroyed: true,
  *         cursor: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
  *     }
  */
 export interface GetActorsRequestQuery {
-    gameId?: string;
-    environmentId?: string;
+    project?: string;
+    environment?: string;
     tagsJson?: string;
     includeDestroyed?: boolean;
     cursor?: string;

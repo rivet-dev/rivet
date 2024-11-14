@@ -43,7 +43,7 @@ async fn handle(
 			game_ids: vec![game_id],
 		})
 		.await?;
-		let game = unwrap_with!(games_res.games.first(), GAME_NOT_FOUND);
+		let game = unwrap_with!(games_res.games.first(), PROJECT_NOT_FOUND);
 
 		(
 			"d-a742c54153a6436694516fc58cb6eabf".to_string(),

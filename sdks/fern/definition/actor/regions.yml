@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+imports:
+  commons: ../common.yml
+  localCommons: common.yml
+  uploadCommons: ../upload/common.yml
+
+service:
+  auth: true
+  base-path: /regions
+  endpoints:
+    list:
+      path: ""
+      method: GET
+      request:
+        name: ListRegionsRequestQuery
+        query-parameters:
+          project: optional<string>
+          environment: optional<string>
+      response: ListRegionsResponse
+
+types:
+  ListRegionsResponse:
+    properties:
+      regions:
+        type: list<localCommons.Region>
+

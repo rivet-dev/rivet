@@ -15,7 +15,7 @@ export const CreateActorRequest: core.serialization.ObjectSchema<
     serializers.actor.CreateActorRequest.Raw,
     Rivet.actor.CreateActorRequest
 > = core.serialization.object({
-    datacenter: core.serialization.string(),
+    region: core.serialization.string(),
     tags: core.serialization.unknown(),
     runtime: actor$$createActorRuntimeRequest,
     network: actor$$createActorNetworkRequest,
@@ -25,7 +25,7 @@ export const CreateActorRequest: core.serialization.ObjectSchema<
 
 export declare namespace CreateActorRequest {
     interface Raw {
-        datacenter: string;
+        region: string;
         tags?: unknown;
         runtime: actor.CreateActorRuntimeRequest.Raw;
         network: actor.CreateActorNetworkRequest.Raw;

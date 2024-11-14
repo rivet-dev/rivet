@@ -7,8 +7,8 @@ use uuid::Uuid;
 
 pub mod actors;
 pub mod builds;
-pub mod dc;
 pub mod logs;
+pub mod regions;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct GlobalQuery {
@@ -147,9 +147,9 @@ define_router! {
 			),
 		},
 
-		// MARK: Datacenters
-		"datacenters": {
-			GET: dc::list(
+		// MARK: Regions
+		"regions": {
+			GET: regions::list(
 				query: GlobalQuery,
 				opt_auth: true,
 				rate_limit: {
@@ -239,7 +239,7 @@ define_router! {
 		},
 
 		"games" / Uuid / "environments" / Uuid / "datacenters": {
-			GET: dc::list_deprecated(
+			GET: regions::list_deprecated(
 				rate_limit: {
 					buckets: [
 						{ count: 60_000, bucket: duration::minutes(1) },

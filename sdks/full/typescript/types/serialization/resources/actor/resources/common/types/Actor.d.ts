@@ -9,8 +9,7 @@ export declare const Actor: core.serialization.ObjectSchema<serializers.actor.Ac
 export declare namespace Actor {
     interface Raw {
         id: string;
-        environment: string;
-        datacenter: string;
+        region: string;
         tags?: unknown;
         runtime: actor.Runtime.Raw;
         network: actor.Network.Raw;

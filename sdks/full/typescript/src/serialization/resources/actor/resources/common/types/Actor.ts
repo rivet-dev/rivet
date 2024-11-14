@@ -14,8 +14,7 @@ import { actor } from "../../../../index";
 export const Actor: core.serialization.ObjectSchema<serializers.actor.Actor.Raw, Rivet.actor.Actor> =
     core.serialization.object({
         id: core.serialization.string(),
-        environment: core.serialization.string(),
-        datacenter: core.serialization.string(),
+        region: core.serialization.string(),
         tags: core.serialization.unknown(),
         runtime: actor_common$$runtime,
         network: actor_common$$network,
@@ -29,8 +28,7 @@ export const Actor: core.serialization.ObjectSchema<serializers.actor.Actor.Raw,
 export declare namespace Actor {
     interface Raw {
         id: string;
-        environment: string;
-        datacenter: string;
+        region: string;
         tags?: unknown;
         runtime: actor.Runtime.Raw;
         network: actor.Network.Raw;

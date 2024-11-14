@@ -3,7 +3,7 @@
  */
 import * as Rivet from "../../../index";
 export interface CreateActorRequest {
-    datacenter: string;
+    region: string;
     tags?: unknown;
     runtime: Rivet.actor.CreateActorRuntimeRequest;
     network: Rivet.actor.CreateActorNetworkRequest;

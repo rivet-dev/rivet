@@ -3,32 +3,30 @@ info:
   title: Rivet API
   version: ''
 paths:
-  /actors/{actor_id}:
+  /actors/{actor}:
     get:
       description: Gets a dynamic actor.
       operationId: actor_get
       tags:
         - Actor
       parameters:
-        - name: actor_id
+        - name: actor
           in: path
           description: The id of the actor to destroy
           required: true
           schema:
             type: string
             format: uuid
-        - name: game_id
+        - name: project
           in: query
           required: false
           schema:
             type: string
-            format: uuid
-        - name: environment_id
+        - name: environment
           in: query
           required: false
           schema:
             type: string
-            format: uuid
       responses:
         '200':
           description: ''
@@ -80,25 +78,23 @@ paths:
       tags:
         - Actor
       parameters:
-        - name: actor_id
+        - name: actor
           in: path
           description: The id of the actor to destroy
           required: true
           schema:
             type: string
             format: uuid
-        - name: game_id
+        - name: project
           in: query
           required: false
           schema:
             type: string
-            format: uuid
-        - name: environment_id
+        - name: environment
           in: query
           required: false
           schema:
             type: string
-            format: uuid
         - name: override_kill_timeout
           in: query
           description: >-
@@ -162,18 +158,16 @@ paths:
       tags:
         - Actor
       parameters:
-        - name: game_id
+        - name: project
           in: query
           required: false
           schema:
             type: string
-            format: uuid
-        - name: environment_id
+        - name: environment
           in: query
           required: false
           schema:
             type: string
-            format: uuid
         - name: tags_json
           in: query
           required: false
@@ -4196,33 +4190,31 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ServersCreateServerRequest'
-  /builds/{build_id}:
+  /builds/{build}:
     get:
       description: >-
-        Lists all builds of the game associated with the token used. Can be
+        Lists all builds of the project associated with the token used. Can be
         filtered by tags in the query string.
       operationId: actor_builds_get
       tags:
         - ActorBuilds
       parameters:
-        - name: build_id
+        - name: build
           in: path
           required: true
           schema:
             type: string
             format: uuid
-        - name: game_id
+        - name: project
           in: query
           required: false
           schema:
             type: string
-            format: uuid
-        - name: environment_id
+        - name: environment
           in: query
           required: false
           schema:
             type: string
-            format: uuid
         - name: tags_json
           in: query
           required: false
@@ -4275,24 +4267,22 @@ paths:
   /builds:
     get:
       description: >-
-        Lists all builds of the game associated with the token used. Can be
+        Lists all builds of the project associated with the token used. Can be
         filtered by tags in the query string.
       operationId: actor_builds_list
       tags:
         - ActorBuilds
       parameters:
-        - name: game_id
+        - name: project
           in: query
           required: false
           schema:
             type: string
-            format: uuid
-        - name: environment_id
+        - name: environment
           in: query
           required: false
           schema:
             type: string
-            format: uuid
         - name: tags_json
           in: query
           required: false
@@ -4342,30 +4332,28 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
       security: *ref_0
-  /builds/{build_id}/tags:
+  /builds/{build}/tags:
     patch:
       operationId: actor_builds_patchTags
       tags:
         - ActorBuilds
       parameters:
-        - name: build_id
+        - name: build
           in: path
           required: true
           schema:
             type: string
             format: uuid
-        - name: game_id
+        - name: project
           in: query
           required: false
           schema:
             type: string
-            format: uuid
-        - name: environment_id
+        - name: environment
           in: query
           required: false
           schema:
             type: string
-            format: uuid
       responses:
         '200':
           description: ''
@@ -4418,23 +4406,21 @@ paths:
               $ref: '#/components/schemas/ActorPatchBuildTagsRequest'
   /builds/prepare:
     post:
-      description: Creates a new game build for the given game.
+      description: Creates a new project build for the given project.
       operationId: actor_builds_prepare
       tags:
         - ActorBuilds
       parameters:
-        - name: game_id
+        - name: project
           in: query
           required: false
           schema:
             type: string
-            format: uuid
-        - name: environment_id
+        - name: environment
           in: query
           required: false
           schema:
             type: string
-            format: uuid
       responses:
         '200':
           description: ''
@@ -4485,31 +4471,29 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ActorPrepareBuildRequest'
-  /builds/{build_id}/complete:
+  /builds/{build}/complete:
     post:
       description: Marks an upload as complete.
       operationId: actor_builds_complete
       tags:
         - ActorBuilds
       parameters:
-        - name: build_id
+        - name: build
           in: path
           required: true
           schema:
             type: string
             format: uuid
-        - name: game_id
+        - name: project
           in: query
           required: false
           schema:
             type: string
-            format: uuid
-        - name: environment_id
+        - name: environment
           in: query
           required: false
           schema:
             type: string
-            format: uuid
       responses:
         '204':
           description: ''
@@ -4550,31 +4534,47 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
       security: *ref_0
-  /datacenters:
+  /actors/{actor}/logs:
     get:
-      operationId: actor_datacenters_list
+      description: Returns the logs for a given actor.
+      operationId: actor_logs_get
       tags:
-        - ActorDatacenters
+        - ActorLogs
       parameters:
-        - name: game_id
+        - name: actor
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: project
           in: query
           required: false
           schema:
             type: string
-            format: uuid
-        - name: environment_id
+        - name: environment
           in: query
           required: false
           schema:
             type: string
-            format: uuid
+        - name: stream
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/ActorLogStream'
+        - name: watch_index
+          in: query
+          description: A query parameter denoting the requests watch index.
+          required: false
+          schema:
+            type: string
       responses:
         '200':
           description: ''
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ActorListDatacentersResponse'
+                $ref: '#/components/schemas/ActorGetActorLogsResponse'
         '400':
           description: ''
           content:
@@ -4612,39 +4612,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
       security: *ref_0
-  /actors/{actor_id}/logs:
+  /regions:
     get:
-      description: Returns the logs for a given actor.
-      operationId: actor_logs_get
+      operationId: actor_regions_list
       tags:
-        - ActorLogs
+        - ActorRegions
       parameters:
-        - name: actor_id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: game_id
+        - name: project
           in: query
           required: false
           schema:
             type: string
-            format: uuid
-        - name: environment_id
+        - name: environment
           in: query
-          required: false
-          schema:
-            type: string
-            format: uuid
-        - name: stream
-          in: query
-          required: true
-          schema:
-            $ref: '#/components/schemas/ActorLogStream'
-        - name: watch_index
-          in: query
-          description: A query parameter denoting the requests watch index.
           required: false
           schema:
             type: string
@@ -4654,7 +4634,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ActorGetActorLogsResponse'
+                $ref: '#/components/schemas/ActorListRegionsResponse'
         '400':
           description: ''
           content:
@@ -8526,9 +8506,8 @@ components:
     ActorCreateActorRequest:
       type: object
       properties:
-        datacenter:
+        region:
           type: string
-          format: uuid
         tags: {}
         runtime:
           $ref: '#/components/schemas/ActorCreateActorRuntimeRequest'
@@ -8539,7 +8518,7 @@ components:
         lifecycle:
           $ref: '#/components/schemas/ActorLifecycle'
       required:
-        - datacenter
+        - region
         - tags
         - runtime
         - network
@@ -8600,7 +8579,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ActorActor'
-          description: A list of actors for the game associated with the token.
+          description: A list of actors for the project associated with the token.
       required:
         - actors
     CloudBootstrapResponse:
@@ -9635,7 +9614,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ActorBuild'
-          description: A list of builds for the game associated with the token.
+          description: A list of builds for the project associated with the token.
       required:
         - builds
     ActorPatchBuildTagsRequest:
@@ -9659,7 +9638,7 @@ components:
           type: string
         image_tag:
           type: string
-          description: A tag given to the game build.
+          description: A tag given to the project build.
         image_file:
           $ref: '#/components/schemas/UploadPrepareFile'
         multipart_upload:
@@ -9668,11 +9647,10 @@ components:
           $ref: '#/components/schemas/ActorBuildKind'
         compression:
           $ref: '#/components/schemas/ActorBuildCompression'
-        prewarm_datacenters:
+        prewarm_regions:
           type: array
           items:
             type: string
-            format: uuid
       required:
         - name
         - image_tag
@@ -9708,12 +9686,8 @@ components:
         id:
           type: string
           format: uuid
-        environment:
+        region:
           type: string
-          format: uuid
-        datacenter:
-          type: string
-          format: uuid
         tags: {}
         runtime:
           $ref: '#/components/schemas/ActorRuntime'
@@ -9734,8 +9708,7 @@ components:
           format: int64
       required:
         - id
-        - environment
-        - datacenter
+        - region
         - tags
         - runtime
         - network
@@ -9883,29 +9856,16 @@ components:
         - created_at
         - content_length
         - tags
-    ActorDatacenter:
+    ActorRegion:
       type: object
       properties:
         id:
-          type: string
-          format: uuid
-        slug:
           type: string
         name:
           type: string
       required:
         - id
-        - slug
         - name
-    ActorListDatacentersResponse:
-      type: object
-      properties:
-        datacenters:
-          type: array
-          items:
-            $ref: '#/components/schemas/ActorDatacenter'
-      required:
-        - datacenters
     ActorGetActorLogsResponse:
       type: object
       properties:
@@ -9930,6 +9890,15 @@ components:
       enum:
         - std_out
         - std_err
+    ActorListRegionsResponse:
+      type: object
+      properties:
+        regions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActorRegion'
+      required:
+        - regions
     AuthCompleteStatus:
       type: string
       enum:

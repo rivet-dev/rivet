@@ -5,6 +5,6 @@
 import * as Rivet from "../../../index";
 
 export interface ListActorsResponse {
-    /** A list of actors for the game associated with the token. */
+    /** A list of actors for the project associated with the token. */
     actors: Rivet.actor.Actor[];
 }

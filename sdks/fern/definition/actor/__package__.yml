@@ -8,18 +8,18 @@ service:
   base-path: /actors
   endpoints:
     get:
-      path: /{actor_id}
+      path: /{actor}
       method: GET
       docs: Gets a dynamic actor.
       path-parameters:
-        actor_id:
+        actor:
           docs: The id of the actor to destroy
           type: uuid
       request:
         name: ListActorsRequestQuery
         query-parameters:
-          game_id: optional<uuid>
-          environment_id: optional<uuid>
+          project: optional<string>
+          environment: optional<string>
       response: GetActorResponse
 
     list:
@@ -31,8 +31,8 @@ service:
       request:
         name: GetActorsRequestQuery
         query-parameters:
-          game_id: optional<uuid>
-          environment_id: optional<uuid>
+          project: optional<string>
+          environment: optional<string>
           tags_json: optional<string>
           include_destroyed: optional<boolean>
           cursor: optional<uuid>
@@ -47,18 +47,18 @@ service:
       response: CreateActorResponse
 
     destroy:
-      path: /{actor_id}
+      path: /{actor}
       method: DELETE
       docs: Destroy a dynamic actor.
       path-parameters:
-        actor_id:
+        actor:
           docs: The id of the actor to destroy
           type: uuid
       request:
         name: DestroyActorRequestQuery
         query-parameters:
-          game_id: optional<uuid>
-          environment_id: optional<uuid>
+          project: optional<string>
+          environment: optional<string>
           override_kill_timeout:
             docs: >-
               The duration to wait for in milliseconds before killing the actor.
@@ -74,7 +74,7 @@ types:
 
   CreateActorRequest:
     properties:
-      datacenter: uuid
+      region: string
       tags: unknown
       runtime: CreateActorRuntimeRequest
       network: CreateActorNetworkRequest
@@ -110,5 +110,5 @@ types:
   ListActorsResponse:
     properties:
       actors:
-        docs: A list of actors for the game associated with the token.
+        docs: A list of actors for the project associated with the token.
         type: list<commons.Actor>

@@ -10,18 +10,18 @@ service:
   base-path: /builds
   endpoints:
     get:
-      path: /{build_id}
+      path: /{build}
       method: GET
       docs: >-
-        Lists all builds of the game associated with the token used. Can be
+        Lists all builds of the project associated with the token used. Can be
         filtered by tags in the query string.
       path-parameters:
-        build_id: uuid
+        build: uuid
       request:
         name: GetBuildRequestQuery
         query-parameters:
-          game_id: optional<uuid>
-          environment_id: optional<uuid>
+          project: optional<string>
+          environment: optional<string>
           tags_json: optional<string>
       response: GetBuildResponse
 
@@ -29,52 +29,52 @@ service:
       path: ""
       method: GET
       docs: >-
-        Lists all builds of the game associated with the token used. Can be
+        Lists all builds of the project associated with the token used. Can be
         filtered by tags in the query string.
       request:
         name: ListBuildsRequestQuery
         query-parameters:
-          game_id: optional<uuid>
-          environment_id: optional<uuid>
+          project: optional<string>
+          environment: optional<string>
           tags_json: optional<string>
       response: ListBuildsResponse
 
     patchTags:
-      path: /{build_id}/tags
+      path: /{build}/tags
       method: PATCH
       path-parameters:
-        build_id: uuid
+        build: uuid
       request:
         name: PatchBuildTagsRequestQuery
         body: PatchBuildTagsRequest
         query-parameters:
-          game_id: optional<uuid>
-          environment_id: optional<uuid>
+          project: optional<string>
+          environment: optional<string>
       response: PatchBuildTagsResponse
 
     prepare:
       path: /prepare
       method: POST
-      docs: Creates a new game build for the given game.
+      docs: Creates a new project build for the given project.
       request:
         name: PrepareBuildRequestQuery
         body: PrepareBuildRequest
         query-parameters:
-          game_id: optional<uuid>
-          environment_id: optional<uuid>
+          project: optional<string>
+          environment: optional<string>
       response: PrepareBuildResponse
 
     complete:
-      path: /{build_id}/complete
+      path: /{build}/complete
       method: POST
       docs: Marks an upload as complete.
       path-parameters:
-        build_id: uuid
+        build: uuid
       request:
         name: CompleteBuildRequestQuery
         query-parameters:
-          game_id: optional<uuid>
-          environment_id: optional<uuid>
+          project: optional<string>
+          environment: optional<string>
 
 types:
   GetBuildResponse:
@@ -84,7 +84,7 @@ types:
   ListBuildsResponse:
     properties:
       builds:
-        docs: A list of builds for the game associated with the token.
+        docs: A list of builds for the project associated with the token.
         type: list<localCommons.Build>
 
   PatchBuildTagsRequest:
@@ -101,14 +101,14 @@ types:
     properties:
       name: string
       image_tag:
-        docs: A tag given to the game build.
+        docs: A tag given to the project build.
         type: string
       image_file: uploadCommons.PrepareFile
       multipart_upload:
         type: optional<boolean>
       kind: optional<BuildKind>
       compression: optional<BuildCompression>
-      prewarm_datacenters: optional<list<uuid>>
+      prewarm_regions: optional<list<string>>
 
   PrepareBuildResponse:
     properties:

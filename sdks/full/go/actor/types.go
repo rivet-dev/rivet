@@ -11,20 +11,20 @@ import (
 )
 
 type DestroyActorRequestQuery struct {
-	GameId        *uuid.UUID `json:"-"`
-	EnvironmentId *uuid.UUID `json:"-"`
+	Project     *string `json:"-"`
+	Environment *string `json:"-"`
 	// The duration to wait for in milliseconds before killing the actor. This should be used to override the default kill timeout if a faster time is needed, say for ignoring a graceful shutdown.
 	OverrideKillTimeout *int64 `json:"-"`
 }
 
 type ListActorsRequestQuery struct {
-	GameId        *uuid.UUID `json:"-"`
-	EnvironmentId *uuid.UUID `json:"-"`
+	Project     *string `json:"-"`
+	Environment *string `json:"-"`
 }
 
 type GetActorsRequestQuery struct {
-	GameId           *uuid.UUID `json:"-"`
-	EnvironmentId    *uuid.UUID `json:"-"`
+	Project          *string    `json:"-"`
+	Environment      *string    `json:"-"`
 	TagsJson         *string    `json:"-"`
 	IncludeDestroyed *bool      `json:"-"`
 	Cursor           *uuid.UUID `json:"-"`
@@ -84,8 +84,7 @@ func (b BuildKind) Ptr() *BuildKind {
 
 type Actor struct {
 	Id          uuid.UUID   `json:"id"`
-	Environment uuid.UUID   `json:"environment"`
-	Datacenter  uuid.UUID   `json:"datacenter"`
+	Region      string      `json:"region"`
 	Tags        interface{} `json:"tags,omitempty"`
 	Runtime     *Runtime    `json:"runtime,omitempty"`
 	Network     *Network    `json:"network,omitempty"`
@@ -154,37 +153,6 @@ func (b *Build) String() string {
 		return value
 	}
 	return fmt.Sprintf("%#v", b)
-}
-
-type Datacenter struct {
-	Id   uuid.UUID `json:"id"`
-	Slug string    `json:"slug"`
-	Name string    `json:"name"`
-
-	_rawJSON json.RawMessage
-}
-
-func (d *Datacenter) UnmarshalJSON(data []byte) error {
-	type unmarshaler Datacenter
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*d = Datacenter(value)
-	d._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (d *Datacenter) String() string {
-	if len(d._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(d._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(d); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", d)
 }
 
 type GameGuardRouting struct {
@@ -477,6 +445,36 @@ func (p *PortRouting) String() string {
 		return value
 	}
 	return fmt.Sprintf("%#v", p)
+}
+
+type Region struct {
+	Id   string `json:"id"`
+	Name string `json:"name"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *Region) UnmarshalJSON(data []byte) error {
+	type unmarshaler Region
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = Region(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *Region) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
 }
 
 type Resources struct {

@@ -12,4 +12,4 @@ export * from "./PortAuthorization";
 export * from "./PortQueryAuthorization";
 export * from "./HostRouting";
 export * from "./Build";
-export * from "./Datacenter";
+export * from "./Region";

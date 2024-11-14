@@ -8,7 +8,7 @@ import { actor } from "../../index";
 export declare const CreateActorRequest: core.serialization.ObjectSchema<serializers.actor.CreateActorRequest.Raw, Rivet.actor.CreateActorRequest>;
 export declare namespace CreateActorRequest {
     interface Raw {
-        datacenter: string;
+        region: string;
         tags?: unknown;
         runtime: actor.CreateActorRuntimeRequest.Raw;
         network: actor.CreateActorNetworkRequest.Raw;
