@@ -28,7 +28,8 @@ server:
       url: redis://redis:6379
       password: password
   clickhouse:
-    url: clickhouse://clickhouse:8123
+    http_url: clickhouse://clickhouse:8123
+    native_url: clickhouse://clickhouse:9000
     username: default
     password: default
   s3:

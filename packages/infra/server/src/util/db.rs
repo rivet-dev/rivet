@@ -129,7 +129,7 @@ pub async fn clickhouse_shell(
 			.clickhouse
 			.as_ref()
 			.context("clickhouse disabled")?;
-		let parsed_url = clickhouse_config.url.clone();
+		let parsed_url = clickhouse_config.native_url.clone();
 
 		let hostname = parsed_url.host_str().unwrap_or("localhost");
 		let port = parsed_url.port().unwrap_or(9440).to_string();
@@ -138,7 +138,6 @@ pub async fn clickhouse_shell(
 		let config = json!({
 			"user": clickhouse_config.username,
 			"password": clickhouse_config.password.as_ref().map(|x| x.read().clone()),
-			"secure": true,
 			"openSSL": if Path::new(&ca_path).exists() {
 				json!({
 					"client": {
@@ -150,7 +149,7 @@ pub async fn clickhouse_shell(
 			}
 		});
 
-		let mut config_file = tempfile::NamedTempFile::new()?;
+		let mut config_file = tempfile::Builder::new().suffix(".yaml").tempfile()?;
 		serde_yaml::to_writer(&mut config_file, &config)?;
 
 		let mut cmd = std::process::Command::new("clickhouse-client");
@@ -160,7 +159,6 @@ pub async fn clickhouse_shell(
 			.arg(&port)
 			.arg("--user")
 			.arg(&clickhouse_config.username)
-			.arg("--secure")
 			.arg("--database")
 			.arg(db_name)
 			.arg("--config-file")

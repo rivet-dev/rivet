@@ -21,7 +21,7 @@ pub fn setup(config: Config) -> Result<Option<ClickHousePool>, Error> {
 
 		// Build ClickHouse client
 		let mut client = clickhouse::Client::with_http_client(http_client)
-			.with_url(clickhouse.url.to_string())
+			.with_url(clickhouse.http_url.to_string())
 			.with_user(&clickhouse.username);
 		if let Some(password) = &clickhouse.password {
 			client = client.with_password(password.read());

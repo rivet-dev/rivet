@@ -19,7 +19,11 @@ RUN apt-get update && \
     curl \
     redis-tools \
     postgresql-client \
-    clickhouse-client && \
+    gpg && \
+    curl -fsSL 'https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml.key' | gpg --dearmor -o /usr/share/keyrings/clickhouse-keyring.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/clickhouse-keyring.gpg] https://packages.clickhouse.com/deb stable main" | tee /etc/apt/sources.list.d/clickhouse.list && \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y clickhouse-client && \
     (curl -L https://github.com/golang-migrate/migrate/releases/download/v4.18.1/migrate.linux-amd64.tar.gz | tar xvz) && \
     mv migrate /usr/local/bin/migrate
 

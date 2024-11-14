@@ -183,8 +183,6 @@ pub async fn up(config: rivet_config::Config, services: &[SqlService]) -> Result
 
 	let migrations = services
 		.iter()
-		// TODO: Remove this. Disable ClickHouse since it's not working at the moment.
-		.filter(|svc| !matches!(&svc.kind, SqlServiceKind::ClickHouse))
 		// Exclude ClickHouse if needed
 		.filter(|svc| clickhouse.is_some() || !matches!(&svc.kind, SqlServiceKind::ClickHouse))
 		// Create command
@@ -385,7 +383,7 @@ async fn migrate_db_url(config: rivet_config::Config, service: &SqlService) -> R
 				.clickhouse
 				.as_ref()
 				.context("missing clickhouse")?;
-			let clickhouse_url_parsed = clickhouse_config.url.clone();
+			let clickhouse_url_parsed = clickhouse_config.native_url.clone();
 			let clickhouse_host = clickhouse_url_parsed
 				.host_str()
 				.context("clickhouse missing host")?;
@@ -394,7 +392,7 @@ async fn migrate_db_url(config: rivet_config::Config, service: &SqlService) -> R
 				.context("clickhouse missing port")?;
 
 			let mut query = format!(
-				"database={db}&username={username}&x-multi-statement=true&x-migrations-table-engine=ReplicatedMergeTree&secure=true&skip_verify=true",
+				"database={db}&username={username}&x-multi-statement=true&x-migrations-table-engine=ReplicatedMergeTree&secure=false&skip_verify=true",
 				db = encode(service.db_name),
 				username = encode(&clickhouse_config.username),
 			);
