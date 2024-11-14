@@ -133,37 +133,6 @@ services:
       timeout: 10s
       retries: 10
 
-  prometheus:
-    image: bitnami/prometheus:2.55.0
-    volumes:
-      - prometheus-data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-    networks:
-      - rivet-network
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9090/-/healthy"]
-      interval: 2s
-      timeout: 10s
-      retries: 10
-
-  grafana:
-    image: grafana/grafana:11.3.0
-    volumes:
-      - grafana-data:/var/lib/grafana
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-    depends_on:
-      - prometheus
-    networks:
-      - rivet-network
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/api/health"]
-      interval: 2s
-      timeout: 10s
-      retries: 10
-
   seaweedfs:
     image: bitnami/seaweedfs:3.78.0
     # TODO: Remove root user
@@ -212,7 +181,5 @@ volumes:
   cockroach-data:
   redis-data:
   clickhouse-data:
-  prometheus-data:
-  grafana-data:
   seaweedfs-data:
   vector-data:
