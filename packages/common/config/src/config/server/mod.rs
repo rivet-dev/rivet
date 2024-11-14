@@ -357,7 +357,7 @@ impl Default for CockroachDb {
 
 impl CockroachDb {
 	fn default_min_connections() -> u32 {
-		1
+		4
 	}
 
 	fn default_max_connections() -> u32 {
