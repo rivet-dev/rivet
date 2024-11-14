@@ -24,6 +24,7 @@ client:
     cpu: 0
     memory: 0
   logs:
-    vector_address: 127.0.0.1:5030
     redirect_logs: false
+  vector:
+    address: vector-server:6100
 

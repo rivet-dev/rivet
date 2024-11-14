@@ -1,6 +1,6 @@
 use std::{
 	io::{BufRead, Write},
-	net::{SocketAddr, TcpStream},
+	net::{ TcpStream},
 	sync::mpsc,
 	thread::JoinHandle,
 	time::{Duration, SystemTime, UNIX_EPOCH},
@@ -55,7 +55,7 @@ pub struct LogShipper {
 	/// trying to send to this channel.
 	pub msg_rx: mpsc::Receiver<ReceivedMessage>,
 
-	pub vector_socket_addr: SocketAddr,
+	pub vector_socket_addr: String,
 
 	pub owner: ActorOwner,
 }
@@ -108,7 +108,7 @@ impl LogShipper {
 			self.actor_id, self.vector_socket_addr
 		);
 
-		let mut stream = TcpStream::connect(self.vector_socket_addr)?;
+		let mut stream = TcpStream::connect(&self.vector_socket_addr)?;
 
 		println!("{}: Log shipper connected", self.actor_id);
 

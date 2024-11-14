@@ -156,8 +156,8 @@ impl Actor {
 			"ROOT_USER_ENABLED",
 			self.config.root_user_enabled.to_string(),
 		)];
-		if let Some(vector_address) = &ctx.config().logs.vector_address {
-			runner_env.push(("VECTOR_SOCKET_ADDR", vector_address.to_string()));
+		if let Some(vector) = &ctx.config().vector {
+			runner_env.push(("VECTOR_SOCKET_ADDR", vector.address.to_string()));
 		}
 		runner_env.extend(self.config.owner.env());
 

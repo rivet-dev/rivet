@@ -1,6 +1,5 @@
 use std::{
 	fs,
-	net::SocketAddr,
 	os::fd::AsRawFd,
 	path::{Path, PathBuf},
 	sync::mpsc,
@@ -36,7 +35,7 @@ fn main() -> Result<()> {
 	)?;
 
 	let root_user_enabled = var("ROOT_USER_ENABLED")? == "1";
-	let vector_socket_addr: Option<SocketAddr> = var("VECTOR_SOCKET_ADDR")
+	let vector_socket_addr: Option<String> = var("VECTOR_SOCKET_ADDR")
 		.ok()
 		.map(|x| x.parse())
 		.transpose()

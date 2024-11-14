@@ -409,7 +409,7 @@ impl Actor {
 				.chain(std::iter::once(("RIVET_API_ENDPOINT".to_string(), ctx.config().cluster.api_endpoint.to_string())))
 				.collect::<HashMap<_, _>>(),
 			"owner": self.config.owner,
-			"vector_socket_addr": ctx.config().logs.vector_address,
+			"vector_socket_addr": ctx.config().vector.as_ref().map(|x| &x.address),
 		});
 		fs::write(
 			actor_path.join("config.json"),

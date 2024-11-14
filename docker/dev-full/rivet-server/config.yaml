@@ -32,6 +32,11 @@ server:
     native_url: clickhouse://clickhouse:9000
     username: default
     password: default
+    provision_users:
+      vector:
+        username: vector
+        password: vector
+        role: write
   s3:
     region: us-east-1
     endpoint_internal: http://seaweedfs:8000

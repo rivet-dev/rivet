@@ -1,4 +1,4 @@
-use std::{io::Write, net::SocketAddr, net::TcpStream, sync::mpsc, thread::JoinHandle};
+use std::{io::Write, net::TcpStream, sync::mpsc, thread::JoinHandle};
 
 use anyhow::*;
 use serde::Serialize;
@@ -36,7 +36,7 @@ pub struct LogShipper {
 	/// trying to send to this channel.
 	pub msg_rx: mpsc::Receiver<ReceivedMessage>,
 
-	pub vector_socket_addr: SocketAddr,
+	pub vector_socket_addr: String,
 
 	pub owner: ActorOwner,
 }
@@ -86,7 +86,7 @@ impl LogShipper {
 			self.vector_socket_addr
 		);
 
-		let mut stream = TcpStream::connect(self.vector_socket_addr)?;
+		let mut stream = TcpStream::connect(&self.vector_socket_addr)?;
 
 		println!("Log shipper connected");
 

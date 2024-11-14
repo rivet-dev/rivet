@@ -130,7 +130,7 @@ pub fn configure(config: &Config, pool_type: PoolType) -> GlobalResult<String> {
 				"source": formatdoc!(
 					r#"
 					.source = "pegboard_container_runner"
-					.actor_id, err = parse_regex(.file, r'/var/lib/rivet-client/actors/(?P<actor_id>[0-9a-fA-F-]+)/log').actor_id
+					.actor_id = parse_regex!(.file, r'/var/lib/rivet-client/actors/(?P<actor_id>[0-9a-fA-F-]+)/log').actor_id
 
 					.client_id = "___SERVER_ID___"
 					.server_id = "___SERVER_ID___"

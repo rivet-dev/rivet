@@ -1,5 +1,5 @@
 use std::{
-	net::{IpAddr, Ipv4Addr, SocketAddr},
+	net::{IpAddr, Ipv4Addr},
 	path::{Path, PathBuf},
 };
 
@@ -53,6 +53,8 @@ pub struct Client {
 	pub reserved_resources: ReservedResources,
 	#[serde(default)]
 	pub logs: Logs,
+	#[serde(default)]
+	pub vector: Option<Vector>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -193,7 +195,6 @@ impl ReservedResources {
 #[derive(Clone, Deserialize, Default)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Logs {
-	pub vector_address: Option<SocketAddr>,
 	pub redirect_logs: Option<bool>,
 }
 
@@ -201,4 +202,10 @@ impl Logs {
 	pub fn redirect_logs(&self) -> bool {
 		self.redirect_logs.unwrap_or(true)
 	}
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct Vector {
+	pub address: String,
 }

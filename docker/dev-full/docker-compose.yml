@@ -28,7 +28,7 @@ services:
         condition: service_healthy
       seaweedfs:
         condition: service_healthy
-      vector:
+      vector-server:
         condition: service_started
     volumes:
       - ./rivet-server:/etc/rivet-server:ro
@@ -113,7 +113,8 @@ services:
       - CLICKHOUSE_ADMIN_PASSWORD=default
     volumes:
       - clickhouse-data:/var/lib/clickhouse
-      - ./clickhouse/users.xml:/etc/clickhouse-server/users.d/users.xml:ro
+      - ./clickhouse/config.xml:/bitnami/clickhouse/etc/conf.d/config.xml
+      - ./clickhouse/users.xml:/bitnami/clickhouse/etc/users.d/users.xml
     networks:
       - rivet-network
     healthcheck:
@@ -183,10 +184,22 @@ services:
       # SeaweedFS takes a long time to start
       retries: 30
 
-  vector:
+  vector-client:
     image: timberio/vector:0.42.0-distroless-static
+    command: -C /etc/vector
+    volumes:
+      - ./vector-client:/etc/vector
+      # Mount client data to read logs
+      - client-data:/var/lib/rivet-client
+    networks:
+      - rivet-network
+
+  vector-server:
+    image: timberio/vector:0.42.0-distroless-static
+    command: -C /etc/vector
     volumes:
       - vector-data:/var/lib/vector
+      - ./vector-server:/etc/vector
     networks:
       - rivet-network
 

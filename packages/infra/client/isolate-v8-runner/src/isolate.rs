@@ -40,7 +40,7 @@ pub fn run(actors_path: PathBuf, actor_id: Uuid, stop_rx: watch::Receiver<()>) -
 	let (shutdown_tx, shutdown_rx) = mpsc::sync_channel(1);
 
 	// Start log shipper
-	let (msg_tx, log_shipper_thread) = if let Some(vector_socket_addr) = config.vector_socket_addr {
+	let (msg_tx, log_shipper_thread) = if let Some(vector_socket_addr) = &config.vector_socket_addr {
 		let (msg_tx, msg_rx) = mpsc::sync_channel::<log_shipper::ReceivedMessage>(
 			log_shipper::MAX_BUFFER_BYTES / log_shipper::MAX_LINE_BYTES,
 		);
@@ -48,7 +48,7 @@ pub fn run(actors_path: PathBuf, actor_id: Uuid, stop_rx: watch::Receiver<()>) -
 			actor_id,
 			shutdown_rx,
 			msg_rx,
-			vector_socket_addr,
+			vector_socket_addr: vector_socket_addr.clone(),
 			owner: config.owner.clone(),
 		};
 		let log_shipper_thread = log_shipper.spawn();

@@ -142,6 +142,8 @@ async function main() {
 
   await pingActor(actor);
 
+  await new Promise(resolve => setTimeout(resolve, 5000));
+
   await destroyActor(actor);
 }
 
