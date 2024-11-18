@@ -1,6 +1,6 @@
 use std::{
 	io::{BufRead, Write},
-	net::{ TcpStream},
+	net::TcpStream,
 	sync::mpsc,
 	thread::JoinHandle,
 	time::{Duration, SystemTime, UNIX_EPOCH},

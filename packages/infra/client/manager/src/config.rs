@@ -22,16 +22,14 @@ impl Config {
 	/// This holds information that the server needs in order to orchestrate nodes.
 	pub fn build_client_config(&self) -> pegboard::client_config::ClientConfig {
 		pegboard::client_config::ClientConfig {
-			actor: pegboard::client_config::Actor {
-				network: pegboard::client_config::ActorNetwork {
-					bind_ip: self.client.actor.network.bind_ip.to_string(),
-					lan_ip: self.client.actor.network.lan_ip.to_string(),
-					wan_ip: self.client.actor.network.wan_ip.to_string(),
-					lan_port_range_min: self.client.actor.network.lan_port_range_min(),
-					lan_port_range_max: self.client.actor.network.lan_port_range_max(),
-					wan_port_range_min: self.client.actor.network.wan_port_range_min(),
-					wan_port_range_max: self.client.actor.network.wan_port_range_max(),
-				},
+			network: pegboard::client_config::Network {
+				bind_ip: self.client.network.bind_ip.to_string(),
+				lan_ip: self.client.network.lan_ip.to_string(),
+				wan_ip: self.client.network.wan_ip.to_string(),
+				lan_port_range_min: self.client.network.lan_port_range_min(),
+				lan_port_range_max: self.client.network.lan_port_range_max(),
+				wan_port_range_min: self.client.network.wan_port_range_min(),
+				wan_port_range_max: self.client.network.wan_port_range_max(),
 			},
 			reserved_resources: pegboard::client_config::ReservedResources {
 				cpu: self.client.reserved_resources.cpu(),
@@ -44,9 +42,10 @@ impl Config {
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Client {
+	pub data_dir: Option<PathBuf>,
 	pub cluster: Cluster,
-	pub runtime: Runtime,
-	pub actor: Actor,
+	pub runner: Runner,
+	pub network: Network,
 	#[serde(default)]
 	pub cni: Cni,
 	#[serde(default)]
@@ -57,6 +56,14 @@ pub struct Client {
 	pub metrics: Metrics,
 	#[serde(default)]
 	pub vector: Option<Vector>,
+}
+
+impl Client {
+	pub fn data_dir(&self) -> PathBuf {
+		self.data_dir
+			.clone()
+			.unwrap_or_else(|| Path::new("/var/lib/rivet-client").to_path_buf())
+	}
 }
 
 #[derive(Clone, Deserialize)]
@@ -70,18 +77,28 @@ pub struct Cluster {
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct Runtime {
+pub struct Runner {
 	pub flavor: protocol::ClientFlavor,
-	pub data_dir: Option<PathBuf>,
+
+	/// WebSocket Port for runners on this machine to connect to.
+	pub port: Option<u16>,
+
+	/// If true, a cgroup will be created for the runners.
+	///
+	/// This should only be disabled for testing & development.
+	pub use_cgroup: Option<bool>,
+
 	pub container_runner_binary_path: Option<PathBuf>,
 	pub isolate_runner_binary_path: Option<PathBuf>,
 }
 
-impl Runtime {
-	pub fn data_dir(&self) -> PathBuf {
-		self.data_dir
-			.clone()
-			.unwrap_or_else(|| Path::new("/var/lib/rivet-client").to_path_buf())
+impl Runner {
+	pub fn port(&self) -> u16 {
+		self.port.unwrap_or(7080)
+	}
+
+	pub fn use_cgroup(&self) -> bool {
+		self.use_cgroup.unwrap_or(true)
 	}
 
 	pub fn container_runner_binary_path(&self) -> PathBuf {
@@ -99,22 +116,7 @@ impl Runtime {
 
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct Actor {
-	pub network: ActorNetwork,
-
-	/// WebSocket Port for runners on this machine to connect to.
-	pub runner_port: Option<u16>,
-}
-
-impl Actor {
-	pub fn runner_port(&self) -> u16 {
-		self.runner_port.unwrap_or(7080)
-	}
-}
-
-#[derive(Clone, Deserialize)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct ActorNetwork {
+pub struct Network {
 	/// Address to serve actor traffic on.
 	///
 	/// This will usually be the same as `actor_lan_ip` unless the node is accessed within the
@@ -137,7 +139,7 @@ pub struct ActorNetwork {
 	pub wan_port_range_max: Option<u16>,
 }
 
-impl ActorNetwork {
+impl Network {
 	pub fn lan_port_range_min(&self) -> u16 {
 		self.lan_port_range_min.unwrap_or(20000)
 	}

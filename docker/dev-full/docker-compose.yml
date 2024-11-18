@@ -60,7 +60,6 @@ services:
     command: -c /etc/rivet-client/config.yaml
     environment:
       - RUST_BACKTRACE=1
-    privileged: true
     stop_grace_period: 0s
     volumes:
       - ./rivet-client:/etc/rivet-client:ro

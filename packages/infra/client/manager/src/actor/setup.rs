@@ -525,15 +525,15 @@ impl Actor {
 				ctx,
 				self.actor_id,
 				&gg_ports,
-				ctx.config().actor.network.lan_port_range_min()
-					..=ctx.config().actor.network.lan_port_range_max()
+				ctx.config().network.lan_port_range_min()
+					..=ctx.config().network.lan_port_range_max()
 			),
 			bind_ports_inner(
 				ctx,
 				self.actor_id,
 				&host_ports,
-				ctx.config().actor.network.wan_port_range_min()
-					..=ctx.config().actor.network.wan_port_range_max()
+				ctx.config().network.wan_port_range_min()
+					..=ctx.config().network.wan_port_range_max()
 			),
 		)?;
 
@@ -558,7 +558,7 @@ impl Actor {
 							source: host_port,
 							// When no target port was selected, default to randomly selected host port
 							target: port.target.unwrap_or(host_port),
-							ip: ctx.config().actor.network.bind_ip,
+							ip: ctx.config().network.bind_ip,
 							protocol: port.protocol,
 						},
 					)
@@ -574,7 +574,7 @@ impl Actor {
 								source: host_port,
 								// When no target port was selected, default to randomly selected host port
 								target: port.target.unwrap_or(host_port),
-								ip: ctx.config().actor.network.bind_ip,
+								ip: ctx.config().network.bind_ip,
 								protocol: port.protocol,
 							},
 						)

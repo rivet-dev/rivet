@@ -1,6 +1,8 @@
 client:
-  runtime:
+  runner:
     flavor: isolate
+    # Cgroups require privileged containers
+    use_cgroup: false
   cluster:
     # This is safe to hardcode
     client_id: fc67e54e-5d6a-4726-ab23-77b0e54f068f
@@ -8,15 +10,14 @@ client:
     datacenter_id: f288913c-735d-4188-bf9b-2fcf6eac7b9c
     api_endpoint: http://rivet-server:8080
     pegboard_endpoint: ws://rivet-server:8082
-  actor:
-    network:
-      bind_ip: 127.0.0.1
-      lan_ip: 127.0.0.1
-      # Point to lcoalhost since this is a dev instance
-      wan_ip: 127.0.0.1
-      # Corresponds to the port range configured in the `docker-compose.yml`
-      wan_port_range_min: 20000
-      wan_port_range_max: 20100
+  network:
+    bind_ip: 127.0.0.1
+    lan_ip: 127.0.0.1
+    # Point to lcoalhost since this is a dev instance
+    wan_ip: 127.0.0.1
+    # Corresponds to the port range configured in the `docker-compose.yml`
+    wan_port_range_min: 20000
+    wan_port_range_max: 20100
   cni:
     network_interface: eth0
   # Don't reserve any resources on dev instances

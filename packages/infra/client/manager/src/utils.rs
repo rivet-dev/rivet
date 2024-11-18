@@ -28,31 +28,35 @@ const TXN_RETRY: Duration = Duration::from_millis(250);
 pub const CGROUP_PATH: &str = "/sys/fs/cgroup/pegboard_runners";
 
 pub async fn init_dir(config: &Config) -> Result<()> {
-	let data_dir = config.client.runtime.data_dir();
+	let data_dir = config.client.data_dir();
 
 	if fs::metadata(&data_dir).await.is_err() {
 		bail!("data dir `{}` does not exist", data_dir.display());
 	}
 
-	if config.client.runtime.flavor == protocol::ClientFlavor::Container
-		&& fs::metadata(&config.client.runtime.container_runner_binary_path())
+	if config.client.runner.flavor == protocol::ClientFlavor::Container
+		&& fs::metadata(&config.client.runner.container_runner_binary_path())
 			.await
 			.is_err()
 	{
 		bail!(
 			"container runner binary `{}` does not exist",
-			config.client.runtime.container_runner_binary_path().display()
+			config
+				.client
+				.runner
+				.container_runner_binary_path()
+				.display()
 		);
 	}
 
-	if config.client.runtime.flavor == protocol::ClientFlavor::Isolate
-		&& fs::metadata(&config.client.runtime.isolate_runner_binary_path())
+	if config.client.runner.flavor == protocol::ClientFlavor::Isolate
+		&& fs::metadata(&config.client.runner.isolate_runner_binary_path())
 			.await
 			.is_err()
 	{
 		bail!(
 			"isolate runner binary `{}` does not exist",
-			config.client.runtime.isolate_runner_binary_path().display()
+			config.client.runner.isolate_runner_binary_path().display()
 		);
 	}
 
@@ -74,10 +78,12 @@ pub async fn init_dir(config: &Config) -> Result<()> {
 		x => x.context("failed to create /db dir in data dir")?,
 	}
 
-	// Create cgroup folder for runners
-	match fs::create_dir(CGROUP_PATH).await {
-		Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-		x => x.context("failed to create cgroup dir for runners")?,
+	if config.client.runner.use_cgroup() {
+		// Create cgroup folder for runners
+		match fs::create_dir(CGROUP_PATH).await {
+			Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+			x => x.context("failed to create cgroup dir for runners")?,
+		}
 	}
 
 	Ok(())

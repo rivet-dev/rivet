@@ -1,7 +1,6 @@
 #!/usr/bin/env -S deno run --allow-net --allow-env --allow-read --allow-write
 
 import { resolve } from "@std/path";
-import { exists } from "@std/fs";
 import dedent from "dedent";
 
 interface Service {

@@ -168,9 +168,9 @@ impl Ctx {
 		// Start runner socket
 		let self2 = self.clone();
 		let runner_socket = tokio::spawn(async move {
-			tracing::warn!(port=%self2.config().actor.runner_port(), "listening for runner sockets");
+			tracing::warn!(port=%self2.config().runner.port(), "listening for runner sockets");
 
-			let listener = TcpListener::bind(("0.0.0.0", self2.config().actor.runner_port()))
+			let listener = TcpListener::bind(("0.0.0.0", self2.config().runner.port()))
 				.await
 				.map_err(RuntimeError::RunnerSocketListenFailed)?;
 
@@ -341,17 +341,24 @@ impl Ctx {
 		} else {
 			tracing::info!("spawning new isolate runner");
 
-			let env = vec![(
-				"ACTORS_PATH",
-				self.actors_path().to_str().context("bad path")?.to_string(),
-			), ("RUNNER_ADDR", format!("127.0.0.1:{}", self.config().actor.runner_port()))];
+			let env = vec![
+				(
+					"ACTORS_PATH",
+					self.actors_path().to_str().context("bad path")?.to_string(),
+				),
+				(
+					"RUNNER_ADDR",
+					format!("127.0.0.1:{}", self.config().runner.port()),
+				),
+			];
 			let working_path = self.isolate_runner_path();
 
 			let runner = runner::Handle::spawn_orphaned(
 				runner::Comms::socket(),
-				&self.config().runtime.isolate_runner_binary_path(),
+				&self.config().runner.isolate_runner_binary_path(),
 				working_path,
 				&env,
+				self.config().runner.use_cgroup(),
 			)?;
 			let pid = runner.pid();
 
@@ -585,7 +592,7 @@ impl Ctx {
 	}
 
 	pub fn actors_path(&self) -> PathBuf {
-		self.config().runtime.data_dir().join("actors")
+		self.config().data_dir().join("actors")
 	}
 
 	pub fn actor_path(&self, actor_id: Uuid) -> PathBuf {
@@ -593,7 +600,7 @@ impl Ctx {
 	}
 
 	pub fn isolate_runner_path(&self) -> PathBuf {
-		self.config().runtime.data_dir().join("runner")
+		self.config().data_dir().join("runner")
 	}
 }
 

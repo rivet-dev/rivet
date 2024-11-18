@@ -10,16 +10,14 @@ cat << 'EOF' > /etc/rivet-client/config.json
 			"api_endpoint": "__ORIGIN_API__",
 			"pegboard_endpoint": "127.0.0.1:5030"
 		},
-		"runtime": {
+		"runner": {
 			"flavor": "__FLAVOR__"
 		},
-		"actor": {
-			"network": {
-				"bind_ip": "___VLAN_IP___",
-				"lan_ip": "___VLAN_IP___",
-				"wan_ip": "___PUBLIC_IP___"
-			}
-		},
+		"network": {
+			"bind_ip": "___VLAN_IP___",
+			"lan_ip": "___VLAN_IP___",
+			"wan_ip": "___PUBLIC_IP___"
+		}
 		"cni": {
 			"network_interface": "eth0"
 		},
