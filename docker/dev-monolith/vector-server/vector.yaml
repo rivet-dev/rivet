@@ -2,6 +2,11 @@
 
 data_dir: /data/vector-server
 
+api:
+  enabled: true
+  address: 0.0.0.0:9500
+  playground: false
+
 sources:
   vector:
     type: vector
@@ -76,7 +81,7 @@ sinks:
       - dynamic_servers
     compression: gzip
     database: db_ds_log
-    endpoint: http://clickhouse:8123
+    endpoint: http://clickhouse:9300
     table: server_logs
     auth:
       strategy: basic
@@ -91,7 +96,7 @@ sinks:
       - job_run
     compression: gzip
     database: db_job_log
-    endpoint: http://clickhouse:8123
+    endpoint: http://clickhouse:9300
     table: run_logs
     auth:
       strategy: basic

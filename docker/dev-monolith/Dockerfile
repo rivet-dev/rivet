@@ -66,11 +66,14 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
     postgresql-client \
     gpg \
     xz-utils \
+	unzip \
     apt-transport-https \
     dirmngr \
 	netcat-openbsd && \
     (curl -L https://github.com/golang-migrate/migrate/releases/download/v4.18.1/migrate.linux-$(cat /tmp/arch).tar.gz | tar xvz) && \
-    mv migrate /usr/local/bin/migrate
+    mv migrate /usr/local/bin/migrate && \
+    curl -fsSL https://deno.land/x/install/install.sh | sh && \
+    ln -s /root/.deno/bin/deno /usr/local/bin/deno
 
 # === CockroachDB ===
 RUN useradd -m -s /bin/bash cockroachdb && \
@@ -116,7 +119,10 @@ RUN curl -sSLf https://github.com/just-containers/s6-overlay/releases/download/v
     tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz && \
     curl -sSLf https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-$(uname -m).tar.xz -o /tmp/s6-overlay-$(uname -m).tar.xz && \
     tar -C / -Jxpf /tmp/s6-overlay-$(uname -m).tar.xz
-COPY ./docker/dev-monolith/s6-overlay /etc/s6-overlay
+
+# Setup S6
+COPY ./docker/dev-monolith/scripts /tmp/scripts
+RUN deno run --allow-read --allow-write /tmp/scripts/setup_s6.ts
 
 # === Rivet Server ===
 RUN useradd -m -s /bin/bash rivet-server

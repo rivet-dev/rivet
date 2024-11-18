@@ -108,7 +108,7 @@ pub struct Actor {
 
 impl Actor {
 	pub fn runner_port(&self) -> u16 {
-		self.runner_port.unwrap_or(54321)
+		self.runner_port.unwrap_or(7080)
 	}
 }
 
@@ -223,7 +223,7 @@ pub struct Metrics {
 
 impl Metrics {
 	pub fn port(&self) -> u16 {
-		self.port.unwrap_or(6000)
+		self.port.unwrap_or(7090)
 	}
 }
 

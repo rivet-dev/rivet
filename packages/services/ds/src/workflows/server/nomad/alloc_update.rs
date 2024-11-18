@@ -33,7 +33,7 @@ pub async fn ds_server_nomad_alloc_update(
 	let main_task = unwrap!(main_task, "could not find main task");
 	let main_task_state_raw = unwrap_ref!(main_task.state);
 
-	tracing::info!(
+	tracing::debug!(
 		?client_status,
 		?alloc_id,
 		?eval_id,

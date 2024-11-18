@@ -26,8 +26,8 @@ services:
         condition: service_healthy
       nats:
         condition: service_healthy
-      seaweedfs:
-        condition: service_healthy
+      # seaweedfs:
+      #   condition: service_healthy
       vector-server:
         condition: service_started
     volumes:
@@ -134,10 +134,15 @@ services:
       retries: 10
 
   seaweedfs:
-    image: bitnami/seaweedfs:3.78.0
+    image: chrislusf/seaweedfs:3.79
     # TODO: Remove root user
     user: root
-    command: server -dir /var/lib/seaweedfs -s3 -s3.config /etc/seaweedfs/s3.json -s3.port=9000 -s3.allowEmptyFolder=false -s3.allowDeleteBucketNotEmpty=false
+    # `raftHashicorp` speeds up initial leader election
+    command: |
+      server \
+        -dir /var/lib/seaweedfs \
+        -master.raftHashicorp \
+        -s3 -s3.config /etc/seaweedfs/s3.json -s3.port=9000 -s3.allowEmptyFolder=false -s3.allowDeleteBucketNotEmpty=false
     volumes:
       - ./seaweedfs:/etc/seaweedfs:ro
       - seaweedfs-data:/var/lib/seaweedfs
@@ -147,11 +152,9 @@ services:
     networks:
       - rivet-network
     healthcheck:
-      test: ["CMD", "bash", "-c", ">/dev/tcp/127.0.0.1/9000"]
+      test: ["CMD", "nc", "-z", "127.0.0.1", "9000"]
       interval: 2s
       timeout: 10s
-      # SeaweedFS takes a long time to start
-      retries: 30
 
   vector-client:
     image: timberio/vector:0.42.0-distroless-static

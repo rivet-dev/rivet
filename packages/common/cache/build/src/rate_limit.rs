@@ -85,7 +85,7 @@ impl CacheInner {
 			.iter()
 			.map(|(result, incr)| format!("(incr = {}, result = {})", incr, result))
 			.collect::<Vec<_>>();
-		tracing::info!(
+		tracing::trace!(
 			?key,
 			?remote_address,
 			results=?formatted_results,

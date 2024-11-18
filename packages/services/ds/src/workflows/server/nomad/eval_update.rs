@@ -31,7 +31,7 @@ pub async fn ds_server_nomad_eval_update(
 		}
 		("complete", _) => EvalStatus::Complete,
 		_ => {
-			tracing::info!(
+			tracing::debug!(
 				server_id=%input.server_id,
 				?eval_status,
 				?failed_tg_allocs,

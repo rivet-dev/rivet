@@ -22,7 +22,7 @@ pub async fn up(config: rivet_config::Config, services: &[SqlService]) -> Result
 	tracing::info!(sql_services = ?services.len(), "running sql migrations");
 
 	let server_config = config.server.as_ref().context("missing server")?;
-	let is_deveopment = server_config.rivet.auth.access_kind
+	let is_development = server_config.rivet.auth.access_kind
 		== rivet_config::config::rivet::AccessKind::Development;
 
 	let crdb = rivet_pools::db::crdb::setup(config.clone())
@@ -40,24 +40,24 @@ pub async fn up(config: rivet_config::Config, services: &[SqlService]) -> Result
 	// migrations apply immediately.
 	//
 	// https://www.cockroachlabs.com/docs/stable/local-testing.html#use-a-local-single-node-cluster-with-in-memory-storage
-	if is_deveopment {
-		crdb_pre_queries
-			.push("SET CLUSTER SETTING kv.range_merge.queue_interval = '50ms';".to_string());
-		crdb_pre_queries.push("SET CLUSTER SETTING jobs.registry.interval.gc = '30s';".to_string());
-		crdb_pre_queries
-			.push("SET CLUSTER SETTING jobs.registry.interval.cancel = '180s';".to_string());
-		crdb_pre_queries.push("SET CLUSTER SETTING jobs.retention_time = '15s';".to_string());
-		crdb_pre_queries.push(
-			"SET CLUSTER SETTING sql.stats.automatic_collection.enabled = false;".to_string(),
-		);
-		crdb_pre_queries
-			.push("SET CLUSTER SETTING kv.range_split.by_load_merge_delay = '5s';".to_string());
-		crdb_pre_queries
-			.push("ALTER RANGE default CONFIGURE ZONE USING \"gc.ttlseconds\" = 600;".to_string());
-		crdb_pre_queries.push(
-			"ALTER DATABASE system CONFIGURE ZONE USING \"gc.ttlseconds\" = 600;".to_string(),
-		);
-	}
+	// if is_development {
+	// 	crdb_pre_queries
+	// 		.push("SET CLUSTER SETTING kv.range_merge.queue_interval = '50ms';".to_string());
+	// 	crdb_pre_queries.push("SET CLUSTER SETTING jobs.registry.interval.gc = '30s';".to_string());
+	// 	crdb_pre_queries
+	// 		.push("SET CLUSTER SETTING jobs.registry.interval.cancel = '180s';".to_string());
+	// 	crdb_pre_queries.push("SET CLUSTER SETTING jobs.retention_time = '15s';".to_string());
+	// 	crdb_pre_queries.push(
+	// 		"SET CLUSTER SETTING sql.stats.automatic_collection.enabled = false;".to_string(),
+	// 	);
+	// 	crdb_pre_queries
+	// 		.push("SET CLUSTER SETTING kv.range_split.by_load_merge_delay = '5s';".to_string());
+	// 	crdb_pre_queries
+	// 		.push("ALTER RANGE default CONFIGURE ZONE USING \"gc.ttlseconds\" = 600;".to_string());
+	// 	crdb_pre_queries.push(
+	// 		"ALTER DATABASE system CONFIGURE ZONE USING \"gc.ttlseconds\" = 600;".to_string(),
+	// 	);
+	// }
 
 	// Run migrations
 	for svc in services {
@@ -242,15 +242,10 @@ pub async fn up(config: rivet_config::Config, services: &[SqlService]) -> Result
 		}
 	)?;
 
+	wait_for_crdb_schema_migrations(&crdb).await?;
+
 	tracing::debug!("shutting down pools");
 	crdb.close().await;
-
-	if is_deveopment {
-		tracing::debug!("sleeping for dev migrations");
-
-		// HACK: Wait for schemas to finish applying. Schema changes are not available immediately.
-		tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-	}
 
 	tracing::debug!("migrated");
 
@@ -437,4 +432,28 @@ async fn migrate_db_url(config: rivet_config::Config, service: &SqlService) -> R
 			))
 		}
 	}
+}
+
+/// Wait until all pending schema changes have finished applying.
+async fn wait_for_crdb_schema_migrations(crdb: &rivet_pools::db::crdb::CrdbPool) -> Result<()> {
+	tracing::debug!("waiting for crdb migrations to finish applying");
+
+	loop {
+		let mut conn = crdb.acquire().await.context("can't acquire crdb")?;
+		let rows: Vec<(String,)> = sqlx::query_as(
+            "WITH jobs AS (SHOW JOBS) SELECT job_id FROM jobs WHERE (job_type = 'SCHEMA CHANGE' OR job_type = 'NEW SCHEMA_CHANGE') AND finished IS NULL;"
+        )
+        .fetch_all(&mut *conn)
+        .await
+        .context("failed to fetch schema change jobs")?;
+
+		if rows.is_empty() {
+			break;
+		}
+
+		tracing::info!("waiting for {} schema change jobs to finish", rows.len());
+		tokio::time::sleep(tokio::time::Duration::from_millis(5000)).await;
+	}
+
+	Ok(())
 }

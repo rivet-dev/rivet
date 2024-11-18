@@ -1,3 +1,0 @@
-#!/bin/sh
-exec 2>&1
-exec su redis -c 'redis-server --dir /data/redis --requirepass password --save 60 1 --appendonly yes'

@@ -93,7 +93,7 @@ pub(crate) async fn ds_server_nomad(ctx: &mut WorkflowCtx, input: &Input) -> Glo
 				.await?;
 
 			if let EvalStatus::Failed = eval_status {
-				tracing::info!("destroying after failed evaluation");
+				tracing::debug!("destroying after failed evaluation");
 
 				ctx.workflow(destroy::Input {
 					server_id: input.server_id,
@@ -104,7 +104,7 @@ pub(crate) async fn ds_server_nomad(ctx: &mut WorkflowCtx, input: &Input) -> Glo
 			}
 		}
 		Init::Destroy(sig) => {
-			tracing::info!("destroying before evaluation");
+			tracing::debug!("destroying before evaluation");
 
 			ctx.workflow(destroy::Input {
 				server_id: input.server_id,
@@ -142,7 +142,7 @@ pub(crate) async fn ds_server_nomad(ctx: &mut WorkflowCtx, input: &Input) -> Glo
 							.await?;
 
 						if finished {
-							tracing::info!("alloc finished");
+							tracing::debug!("alloc finished");
 							return Ok(Loop::Break(None));
 						}
 					}
@@ -673,7 +673,7 @@ async fn submit_job(ctx: &ActivityCtx, input: &SubmitJobInput) -> GlobalResult<S
 	job_spec.ID = Some(job_id.clone());
 	job_spec.name = Some(job_id.clone());
 
-	tracing::info!("submitting job");
+	tracing::debug!("submitting job");
 
 	nomad_client::apis::jobs_api::post_job(
 		&nomad_util::new_build_config(ctx.config())?,

@@ -26,8 +26,6 @@ client:
     memory: 0
   logs:
     redirect_logs: false
-  metrics:
-    port: 6001
   vector:
     address: vector-server:6100
 

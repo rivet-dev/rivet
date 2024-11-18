@@ -153,7 +153,7 @@ async fn delete_job(ctx: &ActivityCtx, input: &DeleteJobInput) -> GlobalResult<D
 	.await
 	{
 		Ok(_) => {
-			tracing::info!("job stopped");
+			tracing::debug!("job stopped");
 			Ok(DeleteJobOutput { job_exists: true })
 		}
 		Err(err) => {

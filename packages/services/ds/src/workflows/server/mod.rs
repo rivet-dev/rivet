@@ -389,7 +389,7 @@ pub(crate) async fn resolve_image_artifact_url(
 	// Build URL
 	match build_delivery_method {
 		BuildDeliveryMethod::S3Direct => {
-			tracing::info!("using s3 direct delivery");
+			tracing::debug!("using s3 direct delivery");
 
 			// Build client
 			let s3_client = s3_util::Client::with_bucket_and_endpoint(
@@ -411,12 +411,12 @@ pub(crate) async fn resolve_image_artifact_url(
 				.await?;
 
 			let addr_str = presigned_req.uri().to_string();
-			tracing::info!(addr = %addr_str, "resolved artifact s3 presigned request");
+			tracing::debug!(addr = %addr_str, "resolved artifact s3 presigned request");
 
 			Ok(addr_str)
 		}
 		BuildDeliveryMethod::TrafficServer => {
-			tracing::info!("using traffic server delivery");
+			tracing::debug!("using traffic server delivery");
 
 			// Hash build so that the ATS server that we download the build from is always the same one. This
 			// improves cache hit rates and reduces download times.
@@ -462,7 +462,7 @@ pub(crate) async fn resolve_image_artifact_url(
 				upload_id = upload_id,
 			);
 
-			tracing::info!(%addr, "resolved artifact s3 url");
+			tracing::debug!(%addr, "resolved artifact s3 url");
 
 			Ok(addr)
 		}
@@ -544,6 +544,6 @@ async fn bind_with_retries(
 			break Ok(port);
 		}
 
-		tracing::info!(?port, ?attempts, "port collision, retrying");
+		tracing::debug!(?port, ?attempts, "port collision, retrying");
 	}
 }

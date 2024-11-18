@@ -14,17 +14,17 @@ interface Service {
 	/** If a dir should be created in `/data/{service}`. */
 	dataDir?: boolean;
 
-	/** 
+	/**
 	 * If this needs to run as root user. This will prevent creating a
 	 * dedicated user for the service.
-	 **/
+	 */
 	rootUser?: boolean;
 
-	/** 
+	/**
 	 * Command to run to check this service's health. Will prevent services
 	 * that depend on this service from starting until this command has
 	 * succeeded.
-	 **/
+	 */
 	healthCheckCommand?: string;
 
 	/**
@@ -43,6 +43,18 @@ interface Service {
 }
 
 const services: Service[] = [
+	// Dependencies take a long time to start, so let the user know that
+	// something is happening
+	{
+		name: "rivet-start-message",
+		// Sleep for infinity since this service will be restarted if it exits
+		command:
+			"echo 'Starting...'; sleep infinity",
+		noRedirectLogs: true,
+		rootUser: true,
+		ports: {},
+	},
+
 	{
 		name: "rivet-server",
 		command: "rivet-server start",
@@ -63,19 +75,21 @@ const services: Service[] = [
 			metrics: 8091,
 		},
 	},
+
 	{
 		name: "rivet-client",
 		command: "rivet-client -c /etc/rivet-client/config.yaml",
 		dependencies: [
-			"rivet-server"
+			"rivet-server",
 		],
 		dataDir: true,
 		rootUser: true,
 		ports: {
-			runner: 54321,
-			metrics: 6001,
+			runner: 7080,
+			metrics: 7090,
 		},
 	},
+
 	{
 		name: "cockroachdb",
 		command:
@@ -84,6 +98,7 @@ const services: Service[] = [
 		healthCheckCommand: "curl -f http://127.0.0.1:9200/health?ready=1",
 		ports: { http: 9200, sql: 26257 },
 	},
+
 	{
 		name: "redis",
 		command:
@@ -92,6 +107,7 @@ const services: Service[] = [
 		healthCheckCommand: "redis-cli ping",
 		ports: { default: 6379 },
 	},
+
 	{
 		name: "clickhouse",
 		command:
@@ -111,26 +127,30 @@ const services: Service[] = [
 			raft: 9308,
 		},
 	},
+
 	{
 		name: "nats",
 		command: "nats-server",
 		healthCheckCommand: "nc -z -w 1 127.0.0.1 4222",
 		ports: { default: 4222 },
 	},
+
 	{
 		name: "seaweedfs",
+		// raftHashicorp speeds up initial leader election
 		command: `
             weed server \
                 -dir /data/seaweedfs \
+                -master.port=9402 \
+				-master.raftHashicorp \
                 -volume.port 9400 \
+                -filer.port=9403 \
                 -s3 \
                 -s3.config /etc/seaweedfs/s3.json \
                 -s3.port=9000 \
                 -s3.allowEmptyFolder=false \
-                -s3.allowDeleteBucketNotEmpty=false \
-                -master.port=9402 \
-                -filer.port=9403
-            `,
+                -s3.allowDeleteBucketNotEmpty=false
+		`,
 		dataDir: true,
 		healthCheckCommand: "curl -f http://127.0.0.1:9000/healthz",
 		ports: {
@@ -142,25 +162,32 @@ const services: Service[] = [
 			s3: 9000,
 		},
 	},
-	{
-		name: "vector-client",
-		command: "vector -C /etc/vector-client",
-		dataDir: true,
-		ports: {},
-	},
+
 	{
 		name: "vector-server",
 		command: "vector -C /etc/vector-server",
 		dataDir: true,
-		ports: { api: 6100, metrics: 9598, default: 6000 },
+		ports: {
+			api: 9500,
+			source_vector: 6000,
+			source_tcp_json: 6100,
+			sink_prometheus_metrics: 9598,
+		},
+	},
+
+	{
+		name: "vector-client",
+		command: "vector -C /etc/vector-client",
+		dataDir: true,
+		ports: {
+			api: 9510,
+		},
 	},
 ];
 
-const basePath = resolve(
-	import.meta.dirname!,
-	"../../docker/dev-monolith/s6-overlay",
-);
+const basePath = "/etc/s6-overlay";
 const rcPath = resolve(basePath, "s6-rc.d");
+const scriptsPath = resolve(basePath, "scripts");
 
 /**
  * Create the `fs-setup` service.
@@ -179,7 +206,7 @@ async function createFsSetupService() {
 
 	await Deno.writeTextFile(
 		`${servicePath}/up`,
-		"/etc/s6-overlay/scripts/fs-setup.sh",
+		`${scriptsPath}/fs-setup.sh`,
 	);
 
 	// MARK: Script
@@ -203,10 +230,10 @@ async function createFsSetupService() {
 		}
 	}
 	await Deno.writeTextFile(
-		`${basePath}/scripts/fs-setup.sh`,
+		`${scriptsPath}/fs-setup.sh`,
 		scriptContent,
 	);
-	await Deno.chmod(`${basePath}/scripts/fs-setup.sh`, 0o755);
+	await Deno.chmod(`${scriptsPath}/fs-setup.sh`, 0o755);
 }
 
 /**
@@ -229,7 +256,7 @@ async function createHostsSetupService() {
 
 	await Deno.writeTextFile(
 		`${servicePath}/up`,
-		"/etc/s6-overlay/scripts/hosts-setup.sh",
+		`${scriptsPath}/hosts-setup.sh`,
 	);
 
 	// MARK: Script
@@ -239,10 +266,10 @@ async function createHostsSetupService() {
 		scriptContent += `echo "127.0.0.1 ${service.name}" >> /etc/hosts\n`;
 	}
 	await Deno.writeTextFile(
-		`${basePath}/scripts/hosts-setup.sh`,
+		`${scriptsPath}/hosts-setup.sh`,
 		scriptContent,
 	);
-	await Deno.chmod(`${basePath}/scripts/hosts-setup.sh`, 0o755);
+	await Deno.chmod(`${scriptsPath}/hosts-setup.sh`, 0o755);
 }
 
 /**
@@ -293,7 +320,7 @@ async function createServiceFiles(service: Service) {
 			`${servicePath}/run`,
 			dedent`#!/bin/sh
 			exec 2>&1
-			exec ${service.command}
+			exec "${scriptsPath}/${service.name}-run.sh"
 			`,
 		);
 	} else {
@@ -301,11 +328,19 @@ async function createServiceFiles(service: Service) {
 			`${servicePath}/run`,
 			dedent`#!/bin/sh
 			exec 2>&1
-			exec su ${service.name} -c '${service.command}'
+			exec su ${service.name} -c "${scriptsPath}/${service.name}-run.sh"
 			`,
 		);
 	}
 	await Deno.chmod(`${servicePath}/run`, 0o755);
+
+	// Write script
+	const runScriptPath = `${scriptsPath}/${service.name}-run.sh`;
+	await Deno.writeTextFile(
+		runScriptPath,
+		`#!/bin/sh\n${service.command}`,
+	);
+	await Deno.chmod(runScriptPath, 0o755);
 
 	// MARK: Logger
 	if (!service.noRedirectLogs) {
@@ -348,14 +383,14 @@ async function createServiceFiles(service: Service) {
 		await Deno.writeTextFile(
 			`${healthcheckPath}/up`,
 			dedent`
-			/etc/s6-overlay/scripts/${service.name}-healthcheck-loop.sh
+			${scriptsPath}/${service.name}-healthcheck-loop.sh
             `,
 		);
 		await Deno.chmod(`${healthcheckPath}/up`, 0o755);
 
 		// Write script
 		const healthcheckScriptPath =
-			`${basePath}/scripts/${service.name}-healthcheck.sh`;
+			`${scriptsPath}/${service.name}-healthcheck.sh`;
 		await Deno.writeTextFile(
 			healthcheckScriptPath,
 			dedent`
@@ -367,7 +402,7 @@ async function createServiceFiles(service: Service) {
 
 		// Write checker loop
 		const healthcheckLoopScriptPath =
-			`${basePath}/scripts/${service.name}-healthcheck-loop.sh`;
+			`${scriptsPath}/${service.name}-healthcheck-loop.sh`;
 		await Deno.writeTextFile(
 			healthcheckLoopScriptPath,
 			dedent`
@@ -375,7 +410,7 @@ async function createServiceFiles(service: Service) {
 			exec > /var/log/${service.name}-health.log 2>&1
 
 			start_time=\$(date +%s%3N)
-            while ! (echo 'Running health check'; /etc/s6-overlay/scripts/${service.name}-healthcheck.sh); do
+            while ! (echo 'Running health check'; ${scriptsPath}/${service.name}-healthcheck.sh); do
 				echo 'Health check failed'
                 sleep 0.25
             done
@@ -405,10 +440,6 @@ async function createServiceFiles(service: Service) {
 }
 
 async function generateConfigurations() {
-	if (await exists(basePath)) {
-		await Deno.remove(basePath, { recursive: true });
-	}
-
 	await Deno.mkdir(`${rcPath}/user/contents.d`, { recursive: true });
 	await Deno.mkdir(`${basePath}/scripts`, { recursive: true });
 

@@ -45,7 +45,7 @@ pub async fn ds_server_nomad_alloc_plan(ctx: &mut WorkflowCtx, input: &Input) ->
 			}
 		}
 	} else {
-		tracing::info!("no network on alloc");
+		tracing::debug!("no network on alloc");
 	}
 
 	let db_res = ctx

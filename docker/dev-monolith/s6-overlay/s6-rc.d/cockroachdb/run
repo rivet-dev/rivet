@@ -1,3 +1,0 @@
-#!/bin/sh
-exec 2>&1
-exec su cockroachdb -c 'cockroach start-single-node --insecure --store=/data/cockroachdb --http-port 9200'

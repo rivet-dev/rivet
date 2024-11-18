@@ -76,7 +76,7 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 			state => bail!("unexpected actor state: {state:?}"),
 		},
 		Init::Destroy(sig) => {
-			tracing::info!("destroying before actor start");
+			tracing::debug!("destroying before actor start");
 
 			ctx.workflow(destroy::Input {
 				server_id: input.server_id,
@@ -116,7 +116,7 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 						pp::ActorState::Stopping
 						| pp::ActorState::Stopped
 						| pp::ActorState::Exited { .. } => {
-							tracing::info!("actor stopped");
+							tracing::debug!("actor stopped");
 
 							ctx.activity(SetFinishedInput { server_id }).await?;
 

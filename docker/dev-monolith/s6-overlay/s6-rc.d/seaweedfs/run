@@ -1,5 +1,0 @@
-#!/bin/sh
-exec 2>&1
-exec su seaweedfs -c '
-         weed server                 -dir /data/seaweedfs                 -volume.port 9400                 -s3                 -s3.config /etc/seaweedfs/s3.json                 -s3.port=9000                 -s3.allowEmptyFolder=false                 -s3.allowDeleteBucketNotEmpty=false                 -master.port=9402                 -filer.port=9403
-         '

@@ -46,10 +46,24 @@ You can read the logs by running:
 docker exec mycontainer cat /var/log/rivet-server/current
 ```
 
+## Monitoring Vector
+
+Monitor `vector-server`:
+
+```bash
+vector top --url http://0.0.0.0:9500/graphql
+```
+
+Monitor `vector-client`:
+
+```bash
+vector top --url http://0.0.0.0:9510/graphql
+```
+
 ## Testing
 
 ```bash
-./scripts/docker/template.ts && docker build -f docker/dev-monolith/Dockerfile -t rivet . && docker run --name rivet --rm -v "/tmp/rivet-data:/data" -p 8080:8080 -p 9000:9000 -p 20000-20100:20000-20100 --privileged rivet
+docker build -f docker/dev-monolith/Dockerfile -t rivet . && docker run --name rivet --rm -v "/tmp/rivet-data:/data" -p 8080:8080 -p 9000:9000 -p 20000-20100:20000-20100 --privileged rivet
 ```
 
 ## Port collisions
