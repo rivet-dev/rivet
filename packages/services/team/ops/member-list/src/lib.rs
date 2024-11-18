@@ -18,8 +18,6 @@ async fn handle(
 		.map(common::Uuid::as_uuid)
 		.collect::<Vec<_>>();
 
-	tracing::info!(anchor=?ctx.anchor, limit=?ctx.limit);
-
 	let members = sql_fetch_all!(
 		[ctx, TeamMember]
 		"

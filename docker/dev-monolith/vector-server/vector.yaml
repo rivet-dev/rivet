@@ -1,0 +1,116 @@
+# See production config at ee/infra/tf/vector/vector.tf
+
+data_dir: /data/vector-server
+
+sources:
+  vector:
+    type: vector
+    address: 0.0.0.0:6000
+  
+  tcp_json:
+    type: socket
+    mode: tcp
+    address: 0.0.0.0:6100
+    decoding:
+      codec: json
+  
+  vector_metrics:
+    type: internal_metrics
+  
+  vector_logs:
+    type: internal_logs
+
+transforms:
+  dynamic_servers:
+    type: filter
+    inputs:
+      - vector
+      - tcp_json
+    condition:
+      type: vrl
+      source: .source == "dynamic_servers"
+  
+  job_run:
+    type: filter
+    inputs:
+      - vector
+      - tcp_json
+    condition:
+      type: vrl
+      source: .source == "job_run"
+  
+  pegboard:
+    type: filter
+    inputs:
+      - vector
+    condition:
+      type: vrl
+      source: .source == "pegboard_manager" || .source == "pegboard_v8_isolate_runner"
+  
+  pegboard_container_runner:
+    type: filter
+    inputs:
+      - vector
+    condition:
+      type: vrl
+      source: .source == "pegboard_container_runner"
+
+sinks:
+  prom_exporter:
+    type: prometheus_exporter
+    inputs:
+      - vector
+      - vector_metrics
+    address: 0.0.0.0:9598
+  
+  console:
+    type: console
+    inputs:
+      - vector_logs
+    encoding:
+      codec: text
+  
+  clickhouse_ds_logs:
+    type: clickhouse
+    inputs:
+      - dynamic_servers
+    compression: gzip
+    database: db_ds_log
+    endpoint: http://clickhouse:8123
+    table: server_logs
+    auth:
+      strategy: basic
+      user: vector
+      password: vector
+    batch:
+      timeout_secs: 1.0
+  
+  clickhouse_job_run_logs:
+    type: clickhouse
+    inputs:
+      - job_run
+    compression: gzip
+    database: db_job_log
+    endpoint: http://clickhouse:8123
+    table: run_logs
+    auth:
+      strategy: basic
+      user: vector
+      password: vector
+    batch:
+      timeout_secs: 1.0
+
+  pegboard_logs:
+    type: "file"
+    inputs: ["pegboard"]
+    path: "/var/log/vector/pegboard/%Y-%m-%d.log"
+    encoding:
+      codec: "text"
+    
+  pegboard_container_runner_logs:
+    type: "file"
+    inputs: ["pegboard_container_runner"]
+    path: "/var/log/vector/pegboard_container_runner/%Y-%m-%d.log"
+    encoding:
+      codec: "text"
+

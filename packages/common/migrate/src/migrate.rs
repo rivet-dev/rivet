@@ -22,6 +22,8 @@ pub async fn up(config: rivet_config::Config, services: &[SqlService]) -> Result
 	tracing::info!(sql_services = ?services.len(), "running sql migrations");
 
 	let server_config = config.server.as_ref().context("missing server")?;
+	let is_deveopment = server_config.rivet.auth.access_kind
+		== rivet_config::config::rivet::AccessKind::Development;
 
 	let crdb = rivet_pools::db::crdb::setup(config.clone())
 		.await
@@ -38,14 +40,7 @@ pub async fn up(config: rivet_config::Config, services: &[SqlService]) -> Result
 	// migrations apply immediately.
 	//
 	// https://www.cockroachlabs.com/docs/stable/local-testing.html#use-a-local-single-node-cluster-with-in-memory-storage
-	if config
-		.server()
-		.map_err(|err| anyhow!("{err}"))?
-		.rivet
-		.auth
-		.access_kind
-		== rivet_config::config::rivet::AccessKind::Development
-	{
+	if is_deveopment {
 		crdb_pre_queries
 			.push("SET CLUSTER SETTING kv.range_merge.queue_interval = '50ms';".to_string());
 		crdb_pre_queries.push("SET CLUSTER SETTING jobs.registry.interval.gc = '30s';".to_string());
@@ -249,6 +244,13 @@ pub async fn up(config: rivet_config::Config, services: &[SqlService]) -> Result
 
 	tracing::debug!("shutting down pools");
 	crdb.close().await;
+
+	if is_deveopment {
+		tracing::debug!("sleeping for dev migrations");
+
+		// HACK: Wait for schemas to finish applying. Schema changes are not available immediately.
+		tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+	}
 
 	tracing::debug!("migrated");
 

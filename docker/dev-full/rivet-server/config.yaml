@@ -27,9 +27,9 @@ server:
         role: write
   s3:
     region: us-east-1
-    endpoint_internal: http://seaweedfs:8000
-    endpoint_edge_internal: http://seaweedfs:8000
-    endpoint_external: http://127.0.0.1:8000
+    endpoint_internal: http://seaweedfs:9000
+    endpoint_edge_internal: http://seaweedfs:9000
+    endpoint_external: http://127.0.0.1:9000
     access_key_id: admin
     secret_access_key: admin
   nats:

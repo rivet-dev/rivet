@@ -41,7 +41,7 @@ async fn worker(ctx: &OperationContext<cdn::msg::ns_config_update::Message>) -> 
 			auth_user_list: cdn_ns_config.auth_user_list.clone(),
 			routes,
 		};
-		tracing::info!(?config, "cdn namespace config");
+		tracing::debug!(?config, "cdn namespace config");
 
 		let mut buf = Vec::with_capacity(config.encoded_len());
 		config.encode(&mut buf)?;
@@ -56,7 +56,8 @@ async fn worker(ctx: &OperationContext<cdn::msg::ns_config_update::Message>) -> 
 			)
 			.await?;
 	} else {
-		tracing::info!("removing cdn config");
+		tracing::debug!("removing cdn config");
+
 		// Remove CDN config
 		ctx.redis_cdn()
 			.await?
@@ -99,7 +100,7 @@ async fn get_cdn_version(
 	let cdn_ns = if let Some(x) = cdn_ns_res.namespaces.first() {
 		x
 	} else {
-		tracing::info!("missing cdn namespace");
+		tracing::debug!("missing cdn namespace");
 		return Ok(None);
 	};
 	let cdn_ns_config = unwrap_ref!(cdn_ns.config);
@@ -117,7 +118,7 @@ async fn get_cdn_version(
 			version.clone(),
 		)))
 	} else {
-		tracing::info!("missing cdn version");
+		tracing::debug!("missing cdn version");
 		Ok(None)
 	}
 }

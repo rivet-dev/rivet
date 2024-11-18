@@ -71,10 +71,78 @@ async function uploadBuild() {
   return { buildId: build };
 }
 
-async function createActor(datacenterId: string, buildId: string) {
+async function createactorwithtags() {
+ //  const { builds } = await httpRequest("GET", `${ENDPOINT}/builds`, {
+	//   tags: { current: true, build: "mybuild" },
+ //  });
+	//
+ //  const createResponse = await httpRequest("POST", `${ENDPOINT}/actors`, {
+ //    tags: {
+	// 	pool: "foo"
+	// },
+ //    datacenter: "local",
+ //    network: {
+ //      mode: "host",
+ //      ports: {
+ //        http: { protocol: "tcp", routing: { host: {} } },
+ //      },
+ //    },
+ //    resources: { cpu: 1000, memory: 1000 },
+ //    runtime: {
+ //      build: builds[0].id,
+ //    },
+ //  });
+
   const createResponse = await httpRequest("POST", `${ENDPOINT}/actors`, {
-    tags: {},
-    datacenter: datacenterId,
+    tags: {
+      service: "matchmaker"
+    },
+    buildTags: { service: "matchmaker", current: true },
+    datacenter: "local",
+    network: {
+      mode: "host",
+      ports: {
+        http: { protocol: "tcp", routing: { host: {} } },
+      },
+    },
+    resources: { cpu: 1000, memory: 1000 },
+  });
+}
+
+async function publishnewactorversion() {
+  // const { id } = await httpRequest("POST", `${ENDPOINT}/builds`, {
+	 //  // ...
+  // });
+  //
+  // const { id } = await httpRequest("POST", `${ENDPOINT}/actors/upgrade`, {
+	 //  tags: { pool: "foo" },
+	 //  buildId: id
+  // });
+
+  // Handled by the CLI
+  const { id } = await httpRequest("POST", `${ENDPOINT}/builds`, {
+    tags: { pool: "matchmaker" },
+  });
+
+  // TODO:
+  await httpRequest("POST", `${ENDPOINT}/actors/upgrade`, {
+    tags: { pool: "foo" },
+    build: id,
+  });
+}
+
+async function actorlifecycle() {
+  await httpRequest("POST", `${ENDPOINT}/builds`, {
+	  // ...
+    name: "mybuild",
+    version: "0.2.0", // optional
+  });
+
+  await httpRequest("POST", `${ENDPOINT}/actors`, {
+    tags: {
+      pool: "foo"
+    },
+    datacenter: "local",
     network: {
       mode: "host",
       ports: {
@@ -83,8 +151,36 @@ async function createActor(datacenterId: string, buildId: string) {
     },
     resources: { cpu: 1000, memory: 1000 },
     runtime: {
-      build: buildId,
+      build: "mybuild",
+      // version: "0.2.0",  //optional (can this be upgraded?)
     },
+  });
+
+
+  await httpRequest("POST", `${ENDPOINT}/builds`, {
+	  // ...
+    name: "mybuild",
+    version: "0.3.0",
+    makeCurrent: true,
+  });
+}
+
+async function createActor(datacenterId: string, buildId: string) {
+  const createResponse = await httpRequest("POST", `${ENDPOINT}/actors`, {
+    tags: {},
+    datacenter: "local",
+    network: {
+      mode: "host",
+      ports: {
+        http: { protocol: "tcp", routing: { host: {} } },
+      },
+    },
+    resources: { cpu: 1000, memory: 1000 },
+	build: "mybuild",
+	buildRevion: "2024-10-5",
+    // runtime: {
+    //   build: buildId,
+    // },
   });
 
   while (true) {

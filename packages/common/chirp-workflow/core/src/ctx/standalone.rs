@@ -216,6 +216,10 @@ impl StandaloneCtx {
 		self.conn.crdb().await
 	}
 
+	pub async fn redis_chirp(&self) -> Result<RedisPool, rivet_pools::Error> {
+		self.conn.redis_chirp().await
+	}
+
 	pub async fn redis_cache(&self) -> Result<RedisPool, rivet_pools::Error> {
 		self.conn.redis_cache().await
 	}

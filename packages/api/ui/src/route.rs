@@ -49,7 +49,7 @@ impl Router {
 
 		// Redirect to UI
 		if path == "/" || path == "/index.html" {
-			tracing::info!(path = ?path, "redirecting to /ui/");
+			tracing::debug!(path = ?path, "redirecting to /ui/");
 			*response = std::mem::take(response)
 				.status(hyper::StatusCode::TEMPORARY_REDIRECT)
 				.header(hyper::header::LOCATION, "/ui/");
@@ -70,7 +70,7 @@ impl Router {
 		match content {
 			Some(content) => {
 				let content_type = mime_guess::from_path(path).first_or_octet_stream();
-				tracing::info!(
+				tracing::debug!(
 					path = ?path,
 					?content_type,
 					length = ?content.len(),
@@ -94,7 +94,7 @@ impl Router {
 			}
 			None => {
 				if path.ends_with(".html") || !path.contains('.') {
-					tracing::info!(
+					tracing::debug!(
 						path = ?path,
 						"file not found, serving index.html"
 					);
@@ -117,7 +117,7 @@ impl Router {
 
 					Ok(Some(index_content))
 				} else {
-					tracing::info!(
+					tracing::debug!(
 						path = ?path,
 						"file not found, returning 404"
 					);
@@ -139,7 +139,7 @@ impl Router {
 		mut request: Request<Body>,
 		mut response: http::response::Builder,
 	) -> Result<Response<Body>, http::Error> {
-		tracing::info!(
+		tracing::debug!(
 			method = ?request.method(),
 			uri = ?request.uri(),
 			"received request"

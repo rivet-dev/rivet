@@ -42,8 +42,8 @@ pub mod default_ports {
 	pub const PEGBOARD: u16 = 8082;
 	pub const TUNNEL: u16 = 8003;
 
-	pub const HEALTH: u16 = 9000;
-	pub const METRICS: u16 = 9001;
+	pub const HEALTH: u16 = 8090;
+	pub const METRICS: u16 = 8091;
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

@@ -66,6 +66,10 @@ impl Connection {
 		self.pools.crdb()
 	}
 
+	pub async fn redis_chirp(&self) -> Result<RedisPool, rivet_pools::Error> {
+		self.pools.redis_chirp()
+	}
+
 	pub async fn redis_cache(&self) -> Result<RedisPool, rivet_pools::Error> {
 		self.pools.redis_cache()
 	}

@@ -35,7 +35,7 @@ services:
     networks:
       - rivet-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/health"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8090/health"]
       interval: 2s
       timeout: 10s
       retries: 10
@@ -137,17 +137,17 @@ services:
     image: bitnami/seaweedfs:3.78.0
     # TODO: Remove root user
     user: root
-    command: server -dir /var/lib/seaweedfs -s3 -s3.config /etc/seaweedfs/s3.json -s3.port=8000 -s3.allowEmptyFolder=false -s3.allowDeleteBucketNotEmpty=false
+    command: server -dir /var/lib/seaweedfs -s3 -s3.config /etc/seaweedfs/s3.json -s3.port=9000 -s3.allowEmptyFolder=false -s3.allowDeleteBucketNotEmpty=false
     volumes:
       - ./seaweedfs:/etc/seaweedfs:ro
       - seaweedfs-data:/var/lib/seaweedfs
     ports:
       # S3
-      - "8000:8000"
+      - "9000:9000"
     networks:
       - rivet-network
     healthcheck:
-      test: ["CMD", "bash", "-c", ">/dev/tcp/127.0.0.1/8000"]
+      test: ["CMD", "bash", "-c", ">/dev/tcp/127.0.0.1/9000"]
       interval: 2s
       timeout: 10s
       # SeaweedFS takes a long time to start

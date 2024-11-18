@@ -212,7 +212,7 @@ impl EndpointRouter {
 					mut request: Request<Body>,
 					mut response: http::response::Builder,
 				) -> Result<Response<Body>, http::Error> {
-					tracing::info!(method=?request.method(), uri=?request.uri(), "received request");
+					tracing::debug!(method=?request.method(), uri=?request.uri(), "received request");
 
 					// Create router config for complex nested routers
 					let mut router_config = match api_helper::macro_util::__RouterConfig::new(&config, request.uri()) {

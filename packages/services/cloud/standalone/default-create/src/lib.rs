@@ -21,6 +21,8 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> G
 		"access kind must be development"
 	);
 
+	wait_for_consumers(&ctx).await?;
+
 	// Create user
 	let user_resolve_res = ctx
 		.op(::user::ops::resolve_display_name::Input {
@@ -119,6 +121,52 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> G
 			namespace_id: Some(namespace_id.into()),
 		})
 		.await?;
+	}
+
+	Ok(())
+}
+
+/// Keys that must have consumers before proceeding.
+const REQUIRED_CONSUMER_KEYS: &[&str] = &[
+	"{topic:msg-user-create}:topic",
+	"{topic:msg-team-create}:topic",
+];
+
+/// HACK: Wait until there has been a consumer created before publishing messages. This is
+/// required because `chirp-worker` must create the consumers before they can start accepting
+/// messages.
+async fn wait_for_consumers(ctx: &StandaloneCtx) -> GlobalResult<()> {
+	let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
+	'poll: loop {
+		interval.tick().await;
+
+		for key in REQUIRED_CONSUMER_KEYS {
+			// Check if the stream key exists
+			let exists: bool = redis::cmd("EXISTS")
+				.arg(&key)
+				.query_async(&mut ctx.redis_chirp().await?)
+				.await?;
+
+			if !exists {
+				tracing::debug!(?key, "key does not exist");
+				continue 'poll;
+			}
+
+			// Check if there are consumers for the stream
+			let groups: Vec<redis::Value> = redis::cmd("XINFO")
+				.arg("GROUPS")
+				.arg(&key)
+				.query_async(&mut ctx.redis_chirp().await?)
+				.await?;
+
+			if groups.is_empty() {
+				tracing::debug!(?key, "missing consumers");
+				continue 'poll;
+			}
+		}
+
+		tracing::debug!("all consumers found");
+		break;
 	}
 
 	Ok(())

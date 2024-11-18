@@ -1,0 +1,36 @@
+{
+  "version": "3",
+  "packages": {
+    "specifiers": {
+      "jsr:@std/fs@^1.0.5": "jsr:@std/fs@1.0.5",
+      "jsr:@std/path@^1.0.7": "jsr:@std/path@1.0.8",
+      "jsr:@std/path@^1.0.8": "jsr:@std/path@1.0.8",
+      "npm:dedent@^1.5.3": "npm:dedent@1.5.3"
+    },
+    "jsr": {
+      "@std/fs@1.0.5": {
+        "integrity": "41806ad6823d0b5f275f9849a2640d87e4ef67c51ee1b8fb02426f55e02fd44e",
+        "dependencies": [
+          "jsr:@std/path@^1.0.7"
+        ]
+      },
+      "@std/path@1.0.8": {
+        "integrity": "548fa456bb6a04d3c1a1e7477986b6cffbce95102d0bb447c67c4ee70e0364be"
+      }
+    },
+    "npm": {
+      "dedent@1.5.3": {
+        "integrity": "sha512-NHQtfOOW68WD8lgypbLA5oT+Bt0xXJhiYvoR6SmmNXZfpzOGXwdKWmcwG8N7PwVVWV3eF/68nmD9BaJSsTBhyQ==",
+        "dependencies": {}
+      }
+    }
+  },
+  "remote": {},
+  "workspace": {
+    "dependencies": [
+      "jsr:@std/fs@^1.0.5",
+      "jsr:@std/path@^1.0.8",
+      "npm:dedent@^1.5.3"
+    ]
+  }
+}
