@@ -81,7 +81,7 @@ async fn handle_connection(
 	raw_stream: TcpStream,
 	addr: SocketAddr,
 ) {
-	tracing::info!(?addr, "new connection");
+	tracing::debug!(?addr, "new connection");
 
 	let ctx = ctx.clone();
 
@@ -119,7 +119,7 @@ async fn setup_connection(
 			// Bootleg way of reading the uri
 			uri = Some(req.uri().clone());
 
-			tracing::info!(?addr, ?uri, "handshake");
+			tracing::debug!(?addr, ?uri, "handshake");
 
 			Ok(res)
 		},
@@ -270,7 +270,7 @@ async fn upsert_client(
 	}
 
 	if exists == deleted {
-		tracing::info!(?client_id, "new client");
+		tracing::info!(?client_id, ?datacenter_id, ?flavor, "new client");
 
 		// Spawn a new client workflow
 		ctx.workflow(pegboard::workflows::client::Input { client_id })
