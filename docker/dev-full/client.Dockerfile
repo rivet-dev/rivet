@@ -17,10 +17,8 @@ RUN \
 	mv target/debug/rivet-client target/debug/rivet-isolate-v8-runner target/debug/rivet-container-runner /app/dist/
 
 # MARK: Runner
-#
-# Requires OpenSSL 1.1, so we pin this to Debian 11 instead of 12 (which uses OpenSSL 3).
-FROM debian:11-slim
-RUN DEBIAN_FRONTEND=noninteractive apt-get update -y && apt-get install -y --no-install-recommends ca-certificates openssl
+FROM debian:12-slim
+RUN DEBIAN_FRONTEND=noninteractive apt-get update -y && apt-get install -y --no-install-recommends ca-certificates
 COPY --from=builder /app/dist/rivet-client /app/dist/rivet-isolate-v8-runner /app/dist/rivet-container-runner /usr/local/bin/
 ENTRYPOINT ["rivet-client"]
 CMD ["-c", "/etc/rivet-client/config.json"]
