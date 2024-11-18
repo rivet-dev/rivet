@@ -55,7 +55,9 @@ impl Auth {
 			user_ids: vec![user_ent.user_id.into()],
 		})
 		.await?;
-		let user = unwrap!(user_res.users.first());
+		let Some(user) = user_res.users.first() else {
+			bail_with!(TOKEN_REVOKED)
+		};
 
 		// Verify user is not deleted
 		if user.delete_complete_ts.is_some() {

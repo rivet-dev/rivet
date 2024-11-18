@@ -107,7 +107,9 @@ impl Auth {
 					user_ids: vec![user_ent.user_id.into()],
 				}),
 			)?;
-			let user = unwrap!(user_res.users.first());
+			let Some(user) = user_res.users.first() else {
+				bail_with!(TOKEN_REVOKED)
+			};
 			let game = unwrap_with!(game_res.games.first(), PROJECT_NOT_FOUND);
 			let user_teams = unwrap!(team_list_res.users.first());
 			let dev_team_id = unwrap_ref!(game.developer_team_id).as_uuid();
