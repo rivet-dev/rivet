@@ -20,8 +20,6 @@ use uuid::Uuid;
 use crate::{actor::Actor, config::Config, metrics, runner, utils};
 
 const PING_INTERVAL: Duration = Duration::from_secs(1);
-/// TCP Port for runners to connect to.
-const RUNNER_PORT: u16 = 54321;
 
 #[derive(thiserror::Error, Debug)]
 pub enum RuntimeError {
@@ -170,9 +168,9 @@ impl Ctx {
 		// Start runner socket
 		let self2 = self.clone();
 		let runner_socket = tokio::spawn(async move {
-			tracing::warn!(port=%RUNNER_PORT, "listening for runner sockets");
+			tracing::warn!(port=%self2.config().actor.runner_port(), "listening for runner sockets");
 
-			let listener = TcpListener::bind(("0.0.0.0", RUNNER_PORT))
+			let listener = TcpListener::bind(("0.0.0.0", self2.config().actor.runner_port()))
 				.await
 				.map_err(RuntimeError::RunnerSocketListenFailed)?;
 
@@ -346,7 +344,7 @@ impl Ctx {
 			let env = vec![(
 				"ACTORS_PATH",
 				self.actors_path().to_str().context("bad path")?.to_string(),
-			)];
+			), ("RUNNER_ADDR", format!("127.0.0.1:{}", self.config().actor.runner_port()))];
 			let working_path = self.isolate_runner_path();
 
 			let runner = runner::Handle::spawn_orphaned(

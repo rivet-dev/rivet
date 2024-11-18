@@ -24,7 +24,6 @@ mod throttle;
 mod utils;
 
 /// Manager port to connect to.
-const RUNNER_PORT: u16 = 54321;
 const THREAD_STATUS_POLL: Duration = Duration::from_millis(500);
 
 #[tokio::main(flavor = "current_thread")]
@@ -45,6 +44,7 @@ async fn main() -> Result<()> {
 	.await?;
 
 	let actors_path = var("ACTORS_PATH")?;
+	let runner_addr = var("RUNNER_ADDR")?;
 	let actors_path = Path::new(&actors_path);
 
 	// Explicitly start runtime on current thread
@@ -56,7 +56,7 @@ async fn main() -> Result<()> {
 	let (fatal_tx, mut fatal_rx) = tokio::sync::mpsc::channel::<()>(1);
 
 	let res = tokio::select! {
-		res = retry_connection(actors_path,  &mut actors, fatal_tx) => res,
+		res = retry_connection(actors_path, &runner_addr,  &mut actors, fatal_tx) => res,
 		// If any fatal error occurs in the isolate threads, kill the entire program
 		_ = fatal_rx.recv() => Err(anyhow!("Fatal error")),
 	};
@@ -70,12 +70,13 @@ async fn main() -> Result<()> {
 
 async fn retry_connection(
 	actors_path: &Path,
+	runner_addr: &str,
 	actors: &mut HashMap<Uuid, watch::Sender<()>>,
 	fatal_tx: mpsc::Sender<()>,
 ) -> Result<()> {
 	loop {
 		use std::result::Result::{Err, Ok};
-		match tokio_tungstenite::connect_async(format!("ws://0.0.0.0:{RUNNER_PORT}")).await {
+		match tokio_tungstenite::connect_async(format!("ws://{runner_addr}")).await {
 			Ok((socket, _)) => {
 				handle_connection(actors_path, actors, fatal_tx.clone(), socket).await?
 			}

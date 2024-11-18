@@ -54,6 +54,8 @@ pub struct Client {
 	#[serde(default)]
 	pub logs: Logs,
 	#[serde(default)]
+	pub metrics: Metrics,
+	#[serde(default)]
 	pub vector: Option<Vector>,
 }
 
@@ -99,6 +101,15 @@ impl Runtime {
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Actor {
 	pub network: ActorNetwork,
+
+	/// WebSocket Port for runners on this machine to connect to.
+	pub runner_port: Option<u16>,
+}
+
+impl Actor {
+	pub fn runner_port(&self) -> u16 {
+		self.runner_port.unwrap_or(54321)
+	}
 }
 
 #[derive(Clone, Deserialize)]
@@ -201,6 +212,18 @@ pub struct Logs {
 impl Logs {
 	pub fn redirect_logs(&self) -> bool {
 		self.redirect_logs.unwrap_or(true)
+	}
+}
+
+#[derive(Clone, Deserialize, Default)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct Metrics {
+	pub port: Option<u16>,
+}
+
+impl Metrics {
+	pub fn port(&self) -> u16 {
+		self.port.unwrap_or(6000)
 	}
 }
 

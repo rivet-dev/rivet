@@ -147,7 +147,7 @@ async fn init() -> Result<Init> {
 
 async fn run(init: Init) -> Result<()> {
 	// Start metrics server
-	let metrics_thread = tokio::spawn(metrics::run_standalone());
+	let metrics_thread = tokio::spawn(metrics::run_standalone(init.config.client.metrics.port()));
 
 	tracing::info!("connecting to ws: {}", &init.url);
 

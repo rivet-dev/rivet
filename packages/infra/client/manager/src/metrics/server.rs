@@ -7,11 +7,9 @@ use hyper::{
 };
 use prometheus::{Encoder, TextEncoder};
 
-const METRICS_PORT: u16 = 6000;
-
 #[tracing::instrument(skip_all)]
-pub async fn run_standalone() -> anyhow::Result<()> {
-	let addr = SocketAddr::from(([0, 0, 0, 0], METRICS_PORT));
+pub async fn run_standalone(port: u16) -> anyhow::Result<()> {
+	let addr = SocketAddr::from(([0, 0, 0, 0], port));
 
 	let server = Server::try_bind(&addr)?;
 
