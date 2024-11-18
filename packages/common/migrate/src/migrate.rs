@@ -34,6 +34,36 @@ pub async fn up(config: rivet_config::Config, services: &[SqlService]) -> Result
 	let mut clickhouse_pre_queries = Vec::new();
 	let clickhouse_post_queries = Vec::<String>::new();
 
+	// Schemas often take too long to apply. These settings will make the
+	// migrations apply immediately.
+	//
+	// https://www.cockroachlabs.com/docs/stable/local-testing.html#use-a-local-single-node-cluster-with-in-memory-storage
+	if config
+		.server()
+		.map_err(|err| anyhow!("{err}"))?
+		.rivet
+		.auth
+		.access_kind
+		== rivet_config::config::rivet::AccessKind::Development
+	{
+		crdb_pre_queries
+			.push("SET CLUSTER SETTING kv.range_merge.queue_interval = '50ms';".to_string());
+		crdb_pre_queries.push("SET CLUSTER SETTING jobs.registry.interval.gc = '30s';".to_string());
+		crdb_pre_queries
+			.push("SET CLUSTER SETTING jobs.registry.interval.cancel = '180s';".to_string());
+		crdb_pre_queries.push("SET CLUSTER SETTING jobs.retention_time = '15s';".to_string());
+		crdb_pre_queries.push(
+			"SET CLUSTER SETTING sql.stats.automatic_collection.enabled = false;".to_string(),
+		);
+		crdb_pre_queries
+			.push("SET CLUSTER SETTING kv.range_split.by_load_merge_delay = '5s';".to_string());
+		crdb_pre_queries
+			.push("ALTER RANGE default CONFIGURE ZONE USING \"gc.ttlseconds\" = 600;".to_string());
+		crdb_pre_queries.push(
+			"ALTER DATABASE system CONFIGURE ZONE USING \"gc.ttlseconds\" = 600;".to_string(),
+		);
+	}
+
 	// Run migrations
 	for svc in services {
 		match &svc.kind {
