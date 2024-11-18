@@ -35,7 +35,7 @@ impl Worker {
 		config: rivet_config::Config,
 		pools: rivet_pools::Pools,
 	) -> GlobalResult<()> {
-		tracing::info!(
+		tracing::debug!(
 			worker_instance_id = ?self.worker_instance_id,
 			registered_workflows = ?self.registry.size(),
 			"started worker instance",
@@ -60,7 +60,7 @@ impl Worker {
 		config: rivet_config::Config,
 		pools: rivet_pools::Pools,
 	) -> GlobalResult<()> {
-		tracing::info!(
+		tracing::debug!(
 			worker_instance_id = ?self.worker_instance_id,
 			registered_workflows = ?self.registry.size(),
 			"started worker instance",

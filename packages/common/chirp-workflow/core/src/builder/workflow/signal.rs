@@ -113,7 +113,7 @@ impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
 
 			match (self.to_workflow_id, self.tags.is_empty()) {
 				(Some(workflow_id), true) => {
-					tracing::info!(
+					tracing::debug!(
 						name=%self.ctx.name(),
 						id=%self.ctx.workflow_id(),
 						signal_name=%T::NAME,
@@ -139,7 +139,7 @@ impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
 						.map_err(GlobalError::raw)?;
 				}
 				(None, false) => {
-					tracing::info!(
+					tracing::debug!(
 						name=%self.ctx.name(),
 						id=%self.ctx.workflow_id(),
 						signal_name=%T::NAME,

@@ -76,7 +76,7 @@ where
 		let tags = serde_json::Value::Object(self.tags);
 		let tags = if no_tags { None } else { Some(&tags) };
 
-		tracing::info!(
+		tracing::debug!(
 			%workflow_name,
 			%workflow_id,
 			?tags,

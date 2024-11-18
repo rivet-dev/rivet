@@ -95,7 +95,7 @@ impl<'a, M: Message> MessageBuilder<'a, M> {
 		}
 		// Send message
 		else {
-			tracing::info!(name=%self.ctx.name(), id=%self.ctx.workflow_id(), msg_name=%M::NAME, tags=?self.tags, "dispatching message");
+			tracing::debug!(name=%self.ctx.name(), id=%self.ctx.workflow_id(), msg_name=%M::NAME, tags=?self.tags, "dispatching message");
 
 			// Serialize body
 			let body_val = serde_json::value::to_raw_value(&self.body)

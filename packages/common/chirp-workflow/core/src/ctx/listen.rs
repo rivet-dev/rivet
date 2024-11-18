@@ -76,7 +76,7 @@ impl<'a> ListenCtx<'a> {
 			.with_label_values(&[self.ctx.name(), &signal.signal_name])
 			.observe(recv_lag);
 
-		tracing::info!(
+		tracing::debug!(
 			workflow_name=%self.ctx.name(),
 			workflow_id=%self.ctx.workflow_id(),
 			signal_id=%signal.signal_id,

@@ -115,7 +115,7 @@ where
 			.await
 			.map_err(GlobalError::raw)?;
 
-		tracing::info!(name=%self.ctx.name(), id=%self.ctx.workflow_id(), sub_workflow_name=%I::Workflow::NAME, "running sub workflow");
+		tracing::debug!(name=%self.ctx.name(), id=%self.ctx.workflow_id(), sub_workflow_name=%I::Workflow::NAME, "running sub workflow");
 		// Run workflow
 		let output =
 			<<I as WorkflowInput>::Workflow as Workflow>::run(&mut branch, &self.input).await?;
@@ -161,7 +161,7 @@ where
 			let sub_workflow_name = I::Workflow::NAME;
 			let sub_workflow_id = Uuid::new_v4();
 
-			tracing::info!(
+			tracing::debug!(
 				name=%ctx.name(),
 				id=%ctx.workflow_id(),
 				%sub_workflow_name,
@@ -189,7 +189,7 @@ where
 				)
 				.await?;
 
-			tracing::info!(
+			tracing::debug!(
 				name=%ctx.name(),
 				id=%ctx.workflow_id(),
 				%sub_workflow_name,

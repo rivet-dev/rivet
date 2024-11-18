@@ -69,7 +69,7 @@ impl<'a, M: Message> MessageBuilder<'a, M> {
 			return Err(err.into());
 		}
 
-		tracing::info!(msg_name=%M::NAME, tags=?self.tags, "dispatching message");
+		tracing::debug!(msg_name=%M::NAME, tags=?self.tags, "dispatching message");
 
 		let tags = serde_json::Value::Object(self.tags);
 

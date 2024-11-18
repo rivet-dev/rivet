@@ -81,7 +81,7 @@ impl<T: Signal + Serialize> SignalBuilder<T> {
 
 		match (self.to_workflow_id, self.tags.is_empty()) {
 			(Some(workflow_id), true) => {
-				tracing::info!(signal_name=%T::NAME, to_workflow_id=%workflow_id, %signal_id, "dispatching signal");
+				tracing::debug!(signal_name=%T::NAME, to_workflow_id=%workflow_id, %signal_id, "dispatching signal");
 
 				self.db
 					.publish_signal(self.ray_id, workflow_id, signal_id, T::NAME, &input_val)
@@ -89,7 +89,7 @@ impl<T: Signal + Serialize> SignalBuilder<T> {
 					.map_err(GlobalError::raw)?;
 			}
 			(None, false) => {
-				tracing::info!(signal_name=%T::NAME, tags=?self.tags, %signal_id, "dispatching tagged signal");
+				tracing::debug!(signal_name=%T::NAME, tags=?self.tags, %signal_id, "dispatching tagged signal");
 
 				self.db
 					.publish_tagged_signal(

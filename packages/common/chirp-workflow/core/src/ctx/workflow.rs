@@ -134,7 +134,7 @@ impl WorkflowCtx {
 	}
 
 	pub(crate) async fn run(mut self) -> WorkflowResult<()> {
-		tracing::info!(name=%self.name, id=%self.workflow_id, "running workflow");
+		tracing::debug!(name=%self.name, id=%self.workflow_id, "running workflow");
 
 		// Lookup workflow
 		let workflow = self.registry.get_workflow(&self.name)?;
@@ -151,7 +151,7 @@ impl WorkflowCtx {
 
 		match res {
 			Ok(output) => {
-				tracing::info!(name=%self.name, id=%self.workflow_id, "workflow completed");
+				tracing::debug!(name=%self.name, id=%self.workflow_id, "workflow completed");
 
 				let mut retries = 0;
 				let mut interval = tokio::time::interval(DB_ACTION_RETRY);
@@ -191,7 +191,7 @@ impl WorkflowCtx {
 				let wake_sub_workflow = err.sub_workflow();
 
 				if err.is_recoverable() && !err.is_retryable() {
-					tracing::info!(name=%self.name, id=%self.workflow_id, ?err, "workflow sleeping");
+					tracing::debug!(name=%self.name, id=%self.workflow_id, ?err, "workflow sleeping");
 				} else {
 					tracing::error!(name=%self.name, id=%self.workflow_id, ?err, "workflow error");
 
@@ -436,7 +436,7 @@ impl WorkflowCtx {
 		&self,
 		sub_workflow_id: Uuid,
 	) -> GlobalResult<W::Output> {
-		tracing::info!(name=%self.name, id=%self.workflow_id, sub_workflow_name=%W::NAME, ?sub_workflow_id, "waiting for workflow");
+		tracing::debug!(name=%self.name, id=%self.workflow_id, sub_workflow_name=%W::NAME, ?sub_workflow_id, "waiting for workflow");
 
 		let mut retries = 0;
 		let mut interval = tokio::time::interval(SUB_WORKFLOW_RETRY);
@@ -628,7 +628,7 @@ impl WorkflowCtx {
 		}
 		// Listen for new messages
 		else {
-			tracing::info!(name=%self.name, id=%self.workflow_id, "listening for signal");
+			tracing::debug!(name=%self.name, id=%self.workflow_id, "listening for signal");
 
 			let mut retries = 0;
 			let mut interval = tokio::time::interval(SIGNAL_RETRY);
@@ -683,7 +683,7 @@ impl WorkflowCtx {
 		}
 		// Listen for new messages
 		else {
-			tracing::info!(name=%self.name, id=%self.workflow_id, "listening for signal");
+			tracing::debug!(name=%self.name, id=%self.workflow_id, "listening for signal");
 
 			let mut retries = 0;
 			let mut interval = tokio::time::interval(SIGNAL_RETRY);
@@ -807,7 +807,7 @@ impl WorkflowCtx {
 		}
 		// Run loop
 		else {
-			tracing::info!(name=%self.name, id=%self.workflow_id, "running loop");
+			tracing::debug!(name=%self.name, id=%self.workflow_id, "running loop");
 
 			loop {
 				// Create a new branch for each iteration of the loop at location {...loop location, iteration idx}
@@ -943,13 +943,13 @@ impl WorkflowCtx {
 		}
 		// Sleep in memory if duration is shorter than the worker tick
 		else if duration < worker::TICK_INTERVAL.as_millis() as i64 + 1 {
-			tracing::info!(name=%self.name, id=%self.workflow_id, %deadline_ts, "sleeping in memory");
+			tracing::debug!(name=%self.name, id=%self.workflow_id, %deadline_ts, "sleeping in memory");
 
 			tokio::time::sleep(std::time::Duration::from_millis(duration.try_into()?)).await;
 		}
 		// Workflow sleep
 		else {
-			tracing::info!(name=%self.name, id=%self.workflow_id, %deadline_ts, "sleeping");
+			tracing::debug!(name=%self.name, id=%self.workflow_id, %deadline_ts, "sleeping");
 
 			return Err(GlobalError::raw(WorkflowError::Sleep(deadline_ts)));
 		}
@@ -1063,12 +1063,12 @@ impl WorkflowCtx {
 		}
 		// Sleep in memory if duration is shorter than the worker tick
 		else if duration < worker::TICK_INTERVAL.as_millis() as i64 + 1 {
-			tracing::info!(name=%self.name, id=%self.workflow_id, %deadline_ts, "sleeping in memory");
+			tracing::debug!(name=%self.name, id=%self.workflow_id, %deadline_ts, "sleeping in memory");
 
 			let res = tokio::time::timeout(
 				std::time::Duration::from_millis(duration.try_into()?),
 				async {
-					tracing::info!(name=%self.name, id=%self.workflow_id, "listening for signal with timeout");
+					tracing::debug!(name=%self.name, id=%self.workflow_id, "listening for signal with timeout");
 
 					let mut interval = tokio::time::interval(SIGNAL_RETRY);
 					interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -1092,7 +1092,7 @@ impl WorkflowCtx {
 			match res {
 				Ok(res) => Some(res.map_err(GlobalError::raw)?),
 				Err(_) => {
-					tracing::info!(name=%self.name, id=%self.workflow_id, "timed out listening for signal");
+					tracing::debug!(name=%self.name, id=%self.workflow_id, "timed out listening for signal");
 
 					None
 				}
@@ -1100,7 +1100,7 @@ impl WorkflowCtx {
 		}
 		// Workflow sleep for long durations
 		else {
-			tracing::info!(name=%self.name, id=%self.workflow_id, "listening for signal with timeout");
+			tracing::debug!(name=%self.name, id=%self.workflow_id, "listening for signal with timeout");
 
 			let mut retries = 0;
 			let mut interval = tokio::time::interval(SIGNAL_RETRY);
