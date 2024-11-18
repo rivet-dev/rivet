@@ -192,7 +192,8 @@ pub async fn cluster_datacenter_topology_get(
 						None
 					},
 					Some,
-				);
+				)
+				.flatten();
 
 			Ok((hardware_specs, prometheus_metrics))
 		},
@@ -436,7 +437,12 @@ async fn fetch_server_metrics(
 	config: &rivet_config::Config,
 	servers: &[&ServerRowStructured],
 	hardware_specs: &HashMap<String, ServerSpec>,
-) -> GlobalResult<HashMap<Uuid, Stats>> {
+) -> GlobalResult<Option<HashMap<Uuid, Stats>>> {
+	if config.server()?.prometheus.is_none() {
+		tracing::debug!("prometheus disabled");
+		return Ok(None);
+	};
+
 	let prom_res = handle_request(
 		&config.server()?.prometheus()?.url.to_string(),
 		formatdoc!(
@@ -554,7 +560,7 @@ async fn fetch_server_metrics(
 		}
 	}
 
-	Ok(stats_by_server_id)
+	Ok(Some(stats_by_server_id))
 }
 
 #[derive(Debug, Deserialize)]
