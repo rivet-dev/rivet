@@ -170,7 +170,7 @@ async fn run(init: Init) -> Result<()> {
 	// Start metrics server
 	let metrics_thread = tokio::spawn(metrics::run_standalone(init.config.client.metrics.port()));
 
-	tracing::info!("connecting to ws: {}", &init.url);
+	tracing::info!("connecting to pegboard ws: {}", &init.url);
 
 	// Connect to WS
 	let (ws_stream, _) = tokio_tungstenite::connect_async(init.url.to_string())
@@ -181,7 +181,7 @@ async fn run(init: Init) -> Result<()> {
 		})?;
 	let (tx, rx) = ws_stream.split();
 
-	tracing::info!("connected");
+	tracing::info!("connected to pegboard ws");
 
 	let ctx = Ctx::new(init.config, init.system, init.pool, tx);
 
