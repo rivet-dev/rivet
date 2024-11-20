@@ -34,9 +34,9 @@ COPY . .
 # Build and copy all binaries from target directory into an empty image (it is not
 # included in the output because of cache mount)
 RUN \
-	--mount=type=cache,target=/usr/local/cargo/git \
-	--mount=type=cache,target=/usr/local/cargo/registry \
-	--mount=type=cache,target=/app/target \
+	--mount=type=cache,target=/usr/local/cargo/git,id=dev-full-server-cargo-git \
+	--mount=type=cache,target=/usr/local/cargo/registry,id=dev-full-server-cargo-registry \
+	--mount=type=cache,target=/app/target,id=dev-full-server-target \
 	RUSTFLAGS="--cfg tokio_unstable" cargo build --bin rivet-server && \
 	mv target/debug/rivet-server /usr/bin/rivet-server && \
 	mkdir /etc/rivet-server

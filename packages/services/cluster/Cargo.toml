@@ -10,7 +10,7 @@ acme-lib = "0.9"
 anyhow = "1.0"
 chirp-workflow = { path = "../../common/chirp-workflow/core" }
 chrono = "0.4"
-cloudflare = { git = "https://github.com/cloudflare/cloudflare-rs.git", rev = "f14720e42184ee176a97676e85ef2d2d85bc3aae" }
+cloudflare = { path = "../../../externals/cloudflare-rs/cloudflare" }
 http = "0.2"
 include_dir = "0.7.3"
 indoc = "1.0"
@@ -37,12 +37,10 @@ rivet-config = { version = "0.1.0", path = "../../common/config" }
 ipnet = "2.10.1"
 
 [dependencies.nomad_client]
-git = "https://github.com/rivet-gg/nomad-client"
-rev = "abb66bf0c30c7ff5b0c695dae952481c33e538b5" # pragma: allowlist secret
+path = "../../../externals/nomad-client"
 
 [dependencies.sqlx]
-git = "https://github.com/rivet-gg/sqlx"
-rev = "e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
+path = "../../../externals/sqlx"
 default-features = false
 features = [ "json", "ipnetwork" ]
 

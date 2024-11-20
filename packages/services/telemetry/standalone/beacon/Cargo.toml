@@ -6,7 +6,7 @@ authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 license = "Apache-2.0"
 
 [dependencies]
-async-posthog = { git = "https://github.com/rivet-gg/posthog-rs.git", rev = "ef4e80e" }
+async-posthog = { path = "../../../../../externals/posthog-rs/async" }
 chirp-client = { path = "../../../../common/chirp/client" }
 futures-util = "0.3"
 indoc = "1.0"
@@ -41,8 +41,7 @@ pegboard = { version = "0.0.1", path = "../../../pegboard" }
 serde = { version = "1.0.214", features = ["derive"] }
 
 [dependencies.sqlx]
-git = "https://github.com/rivet-gg/sqlx"
-rev = "e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
+path = "../../../../../externals/sqlx"
 default-features = false
 
 [dev-dependencies]

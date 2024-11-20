@@ -1,26 +1,80 @@
 name: rust
 
-on: push
+on:
+  pull_request:
+  push:
+    branches:
+      - main
 
 concurrency:
   group: rust-${{ github.ref }}
   cancel-in-progress: true
+
+permissions: {}
 
 defaults:
   run:
     # Enable fail-fast behavior
     shell: bash -e {0}
 
+env:
+  # Disable incremental compilation for faster from-scratch builds
+  CARGO_INCREMENTAL: 0
+  RUSTFLAGS: "--cfg tokio_unstable"
+
 jobs:
-  cargo-deny:
-    runs-on: ubuntu-latest
+  cargo-fmt:
+    runs-on: ubuntu-20.04
+    container:
+      image: rust:1.82.0
     steps:
       - uses: actions/checkout@v4
-      - name: cargo deny (svc)
+        with:
+          submodules: true
+      - run: rustup component add rustfmt
+      - run: cargo fmt --check
+      - run: cd packages/infra/client && cargo fmt --check
+
+  cargo-check-main:
+    runs-on: [self-hosted, Linux]
+    container:
+      image: rust:1.82.0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y protobuf-compiler libpq-dev
+      - run: RUSTFLAGS="--cfg tokio_unstable" cargo check --release
+
+  cargo-check-infra:
+    runs-on: [self-hosted, Linux]
+    container:
+      image: rust:1.82.0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y protobuf-compiler libpq-dev
+      - run: cd packages/infra/client && RUSTFLAGS="--cfg tokio_unstable" cargo check --release
+
+  cargo-deny:
+    runs-on: ubuntu-20.04
+    container:
+      image: rust:1.82.0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: cargo deny
+        uses: EmbarkStudios/cargo-deny-action@v1
+      - name: cargo deny (packages/infra/client)
         uses: EmbarkStudios/cargo-deny-action@v1
         with:
-          manifest-path: svc/Cargo.toml
-      - name: cargo deny (lib/bolt)
-        uses: EmbarkStudios/cargo-deny-action@v1
-        with:
-          manifest-path: lib/bolt/Cargo.toml
+          manifest-path: packages/infra/client/Cargo.toml
+

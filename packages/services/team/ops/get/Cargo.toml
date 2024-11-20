@@ -14,8 +14,7 @@ upload-file-list = { path = "../../../upload/ops/file-list" }
 upload-get = { path = "../../../upload/ops/get" }
 
 [dependencies.sqlx]
-git = "https://github.com/rivet-gg/sqlx"
-rev = "e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
+path = "../../../../../externals/sqlx"
 default-features = false
 
 [dev-dependencies]

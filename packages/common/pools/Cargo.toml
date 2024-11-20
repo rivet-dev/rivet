@@ -24,8 +24,7 @@ url = "2.4"
 rivet-config = { version = "0.1.0", path = "../config" }
 
 [dependencies.sqlx]
-git = "https://github.com/rivet-gg/sqlx"
-rev = "e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
+path = "../../../externals/sqlx"
 default-features = false
 features = [
 	"runtime-tokio",
@@ -40,8 +39,7 @@ features = [
 
 [dependencies.redis]
 # TODO: https://github.com/rivet-gg/rivet/issues/508
-git = "https://github.com/rivet-gg/redis-rs.git"
-rev = "ac3e27fa1d133847db54354493f4d25957ad3466"
+path = "../../../externals/redis-rs/redis"
 default-features = false
 features = [
 	"keep-alive",

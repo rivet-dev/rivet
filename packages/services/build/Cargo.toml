@@ -9,7 +9,7 @@ license = "Apache-2.0"
 acme-lib = "0.9"
 anyhow = "1.0"
 chirp-workflow = { path = "../../common/chirp-workflow/core" }
-cloudflare = { git = "https://github.com/cloudflare/cloudflare-rs.git", rev = "f14720e42184ee176a97676e85ef2d2d85bc3aae" }
+cloudflare = { path = "../../../externals/cloudflare-rs/cloudflare" }
 heck = "0.3"
 http = "0.2"
 include_dir = "0.7.3"
@@ -38,8 +38,7 @@ upload-get = { path = "../upload/ops/get" }
 rivet-config = { version = "0.1.0", path = "../../common/config" }
 
 [dependencies.sqlx]
-git = "https://github.com/rivet-gg/sqlx"
-rev = "e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
+path = "../../../externals/sqlx"
 default-features = false
 features = [ "json" ]
 

@@ -27,10 +27,7 @@ uuid = { version = "1.6.1", features = ["v4"] }
 runner-protocol = { path = "../runner-protocol", package = "pegboard-runner-protocol" }
 
 [dependencies.deno_runtime]
-# path = "../../../../../deno/runtime"
-git = "https://github.com/rivet-gg/deno"
-rev = "bd98563214c532c8dae97d918edb501fe1c72dbc"
-package = "deno_runtime"
+path = "../../../../externals/deno/runtime"
 
 [dev-dependencies]
 portpicker = "0.1.1"

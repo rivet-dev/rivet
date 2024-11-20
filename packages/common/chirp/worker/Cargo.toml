@@ -50,8 +50,7 @@ features = ["v4", "serde"]
 
 [dependencies.redis]
 # TODO: https://github.com/rivet-gg/rivet/issues/508
-git = "https://github.com/rivet-gg/redis-rs.git"
-rev = "ac3e27fa1d133847db54354493f4d25957ad3466"
+path = "../../../../externals/redis-rs/redis"
 default-features = false
 features = [
 	"keep-alive",

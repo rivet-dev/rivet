@@ -1,0 +1,214 @@
+name: docker
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - '*'
+  # For testing:
+  # pull_request:
+
+jobs:
+  build-and-push-server:
+    strategy:
+      matrix:
+        include:
+          - platform: linux/arm64
+            runner: [self-hosted, Linux, ARM64]
+          - platform: linux/x86_64
+            runner: [self-hosted, Linux, X64]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Setup Docker on macOS
+        if: runner.os == 'macOS'
+        uses: douglascamata/setup-docker-macos-action@v1-alpha
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+  
+      - uses: ./.github/actions/docker-setup
+        with:
+          docker_username: ${{ secrets.DOCKER_CI_USERNAME }}
+          docker_password: ${{ secrets.DOCKER_CI_ACCESS_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN}}
+  
+      - name: Metadata (rivetgg/server:full)
+        id: meta-full
+        uses: docker/metadata-action@v4
+        with:
+          images: rivetgg/rivet-server
+          tags: |
+            type=sha,prefix=full-
+            type=ref,event=branch,prefix=full-
+            type=ref,event=tag,prefix=full-
+  
+      - name: Build & Push (rivetgg/server:full)
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta-full.outputs.tags }}
+          file: docker/server/Dockerfile
+          target: full
+          platforms: ${{ matrix.platform }}
+          secret-files: |
+            netrc=${{ runner.temp }}/netrc
+  
+      - name: Metadata (rivetgg/server:slim)
+        id: meta-slim
+        uses: docker/metadata-action@v4
+        with:
+          images: rivetgg/rivet-server
+          tags: |
+            type=sha,prefix=slim-
+            type=ref,event=branch,prefix=slim-
+            type=ref,event=tag,prefix=slim-
+  
+      - name: Build & Push (rivetgg/server:slim)
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta-slim.outputs.tags }}
+          file: docker/server/Dockerfile
+          target: slim
+          platforms: ${{ matrix.platform }}
+          secret-files: |
+            netrc=${{ runner.temp }}/netrc
+  
+  build-and-push-client:
+    strategy:
+      matrix:
+        include:
+          - platform: linux/arm64
+            runner: [self-hosted, Linux, ARM64]
+          - platform: linux/x86_64
+            runner: [self-hosted, Linux, X64]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Setup Docker on macOS
+        if: runner.os == 'macOS'
+        uses: douglascamata/setup-docker-macos-action@v1-alpha
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+  
+      - uses: ./.github/actions/docker-setup
+        with:
+          docker_username: ${{ secrets.DOCKER_CI_USERNAME }}
+          docker_password: ${{ secrets.DOCKER_CI_ACCESS_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN}}
+  
+      - name: Metadata (rivetgg/client:full-runner)
+        id: meta-full-runner
+        uses: docker/metadata-action@v4
+        with:
+          images: rivetgg/rivet-client
+          tags: |
+            type=sha,prefix=full-runner-
+            type=ref,event=branch,prefix=full-runner-
+            type=ref,event=tag,prefix=full-runner-
+  
+      - name: Build & Push (rivetgg/client:full-runner)
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta-full-runner.outputs.tags }}
+          file: docker/client/Dockerfile
+          target: full-runner
+          platforms: ${{ matrix.platform }}
+          secret-files: |
+            netrc=${{ runner.temp }}/netrc
+  
+      - name: Metadata (rivetgg/client:isolate-v8-runner)
+        id: meta-isolate-v8-runner
+        uses: docker/metadata-action@v4
+        with:
+          images: rivetgg/rivet-client
+          tags: |
+            type=sha,prefix=isolate-v8-runner-
+            type=ref,event=branch,prefix=isolate-v8-runner-
+            type=ref,event=tag,prefix=isolate-v8-runner-
+  
+      - name: Build & Push (rivetgg/client:isolate-v8-runner)
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta-isolate-v8-runner.outputs.tags }}
+          file: docker/client/Dockerfile
+          target: isolate-v8-runner
+          platforms: ${{ matrix.platform }}
+          secret-files: |
+            netrc=${{ runner.temp }}/netrc
+  
+      - name: Metadata (rivetgg/client:container-runner)
+        id: meta-container-runner
+        uses: docker/metadata-action@v4
+        with:
+          images: rivetgg/rivet-client
+          tags: |
+            type=sha,prefix=container-runner-
+            type=ref,event=branch,prefix=container-runner-
+            type=ref,event=tag,prefix=container-runner-
+  
+      - name: Build & Push (rivetgg/client:container-runner)
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta-container-runner.outputs.tags }}
+          file: docker/client/Dockerfile
+          target: container-runner
+          platforms: ${{ matrix.platform }}
+          secret-files: |
+            netrc=${{ runner.temp }}/netrc
+  
+  build-and-push-monolith:
+    strategy:
+      matrix:
+        include:
+          - platform: linux/arm64
+            runner: [self-hosted, Linux, ARM64]
+          - platform: linux/x86_64
+            runner: [self-hosted, Linux, X64]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Setup Docker on macOS
+        if: runner.os == 'macOS'
+        uses: douglascamata/setup-docker-macos-action@v1-alpha
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+  
+      - uses: ./.github/actions/docker-setup
+        with:
+          docker_username: ${{ secrets.DOCKER_CI_USERNAME }}
+          docker_password: ${{ secrets.DOCKER_CI_ACCESS_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN}}
+  
+      - name: Metadata (rivetgg/rivet)
+        id: meta-monolith
+        uses: docker/metadata-action@v4
+        with:
+          images: rivetgg/rivet
+          tags: |
+            type=sha,prefix=monolith-
+            type=ref,event=branch,prefix=monolith-
+            type=ref,event=tag,prefix=monolith-
+  
+      - name: Build & Push (rivetgg/rivet)
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta-monolith.outputs.tags }}
+          file: docker/monolith/Dockerfile
+          platforms: ${{ matrix.platform }}
+          secret-files: |
+            netrc=${{ runner.temp }}/netrc

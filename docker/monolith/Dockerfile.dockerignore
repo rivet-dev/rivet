@@ -1,0 +1,17 @@
+*
+
+!Cargo.lock
+!Cargo.toml
+!sdks/full/rust/Cargo.toml
+!sdks/full/rust/src
+!packages
+!resources/legacy/proto
+!externals/
+
+!docker/monolith
+docker/monolith/Dockerfile
+docker/monolith/Dockerfile.dockerignore
+docker/monolith/*.md
+
+sdks/runtime
+

@@ -22,8 +22,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      clickhouse:
-        condition: service_healthy
+      # clickhouse:
+      #   condition: service_healthy
       nats:
         condition: service_healthy
       # seaweedfs:
@@ -35,7 +35,7 @@ services:
     networks:
       - rivet-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:8090/health"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8090/health/liveness"]
       interval: 2s
       timeout: 10s
       retries: 10
@@ -140,7 +140,7 @@ services:
     command: |
       server \
         -dir /var/lib/seaweedfs \
-        -master.raftHashicorp \
+        -master.raftBootstrap -master.raftHashicorp \
         -s3 -s3.config /etc/seaweedfs/s3.json -s3.port=9000 -s3.allowEmptyFolder=false -s3.allowDeleteBucketNotEmpty=false
     volumes:
       - ./seaweedfs:/etc/seaweedfs:ro

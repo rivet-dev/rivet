@@ -8,8 +8,8 @@ function Subnav({ slug }) {
   const fullPath = `/docs/${slug.join('/')}`;
   return (
     <div className='-mx-8 -mb-[9px] hidden min-h-10 items-center px-8 empty:hidden md:flex'>
-	  {sitemap.map(({ title, href, sidebar }) => (
-		  <ModulePageLink href={href} isActive={pagesContainsHref(fullPath, sidebar)}>{title}</ModulePageLink>
+	  {sitemap.map(({ title, href, sidebar }, i) => (
+		  <ModulePageLink key={i} href={href} isActive={pagesContainsHref(fullPath, sidebar)}>{title}</ModulePageLink>
 	  ))}
     </div>
   );

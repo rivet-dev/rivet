@@ -10,7 +10,7 @@ import { Sitemap, SiteTab } from '@/lib/sitemap';
 //	- Does it work for my use cases -> Use Cases
 //	- Curious about the technology -> Build with Rivet
 // - Just want to jump in
-// - Poeple who want to run Open Source
+// - People who want to run Open Source
 
 export const sitemap = [
 	{

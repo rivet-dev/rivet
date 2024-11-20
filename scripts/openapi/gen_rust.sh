@@ -30,3 +30,7 @@ if [ "$FERN_GROUP" == "full" ]; then
 	# HACK: Modify libraries to disallow unknown fields in config
 	find $GEN_PATH_RUST_CLI -name "cloud_version_*.rs" -exec sed -i 's/\(#\[derive.*Deserialize.*\]\)/\1\n#[serde(deny_unknown_fields)]/g' {} \;
 fi
+
+# Format SDKs
+cargo fmt
+

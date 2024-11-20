@@ -1,0 +1,41 @@
+[advisories]
+ignore = [
+	# TODO(RVT-4096):
+	"RUSTSEC-2023-0071",
+	# Unmaintained, low-impact crates
+	"RUSTSEC-2024-0370",
+]
+
+[licenses]
+allow = [
+	"Apache-2.0",
+	"BSD-2-Clause",
+	"BSD-3-Clause",
+	"ISC",
+	"MIT",
+	"MPL-2.0",
+	"CC0-1.0",
+	"Unicode-DFS-2016",
+	"Unicode-3.0",
+	"Zlib",
+	"EPL-2.0",
+]
+unused-allowed-license = "allow"
+
+[[licenses.exceptions]]
+name = "ring"
+allow = ["OpenSSL"]
+
+[[licenses.exceptions]]
+name = "clipboard-win"
+allow = ["BSL-1.0"]  # Boost Software License, not Business Source License
+
+[[licenses.exceptions]]
+name = "error-code"
+allow = ["BSL-1.0"]  # Boost Software License, not Business Source License
+
+# See https://github.com/EmbarkStudios/buildkite-jobify/blob/a1b953b03f3330e499b1af47cc2dc38bd777da7c/deny.toml#LL27C1-L38C1
+[[licenses.clarify]]
+name = "ring"
+expression = "ISC AND MIT AND OpenSSL"
+license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]

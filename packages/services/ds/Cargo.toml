@@ -59,14 +59,12 @@ user-identity-get = { path = "../user-identity/ops/get" }
 rivet-config = { version = "0.1.0", path = "../../common/config" }
 
 [dependencies.sqlx]
-git = "https://github.com/rivet-gg/sqlx"
-rev = "e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
+path = "../../../externals/sqlx"
 default-features = false
 
 [dependencies.nomad_client]
 package = "nomad_client"
-git = "https://github.com/rivet-gg/nomad-client"
-rev = "abb66bf0c30c7ff5b0c695dae952481c33e538b5" # pragma: allowlist secret
+path = "../../../externals/nomad-client"
 
 [dev-dependencies]
 cluster = { path = "../cluster" }

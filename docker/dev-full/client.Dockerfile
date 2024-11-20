@@ -8,9 +8,10 @@ RUN apt-get update && apt-get install --yes protobuf-compiler pkg-config libssl-
 WORKDIR /app
 COPY . .
 RUN \
-	--mount=type=cache,target=/usr/local/cargo/git \
-	--mount=type=cache,target=/usr/local/cargo/registry \
-	--mount=type=cache,target=/app/packages/infra/client/target \
+	--mount=type=secret,id=netrc,target=/root/.netrc,mode=0600 \
+	--mount=type=cache,target=/usr/local/cargo/git,id=dev-full-client-cargo-git \
+	--mount=type=cache,target=/usr/local/cargo/registry,id=dev-full-client-cargo-registry \
+	--mount=type=cache,target=/app/packages/infra/client/target,id=dev-full-client-target \
 	cd packages/infra/client && \
 	RUSTFLAGS="--cfg tokio_unstable" cargo build --bin rivet-client --bin rivet-isolate-v8-runner --bin rivet-container-runner && \
 	mkdir -p /app/dist && \

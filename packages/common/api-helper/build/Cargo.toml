@@ -51,8 +51,7 @@ url = "2.2.2"
 uuid = { version = "1", features = ["v4"] }
 
 [dependencies.serde_array_query]
-git = "https://github.com/rivet-gg/serde_array_query.git"
-rev = "b9f8bfad77aea6f01dccc6cb77146b8c5daecaa3" # pragma: allowlist secret
+path = "../../../../externals/serde_array_query"
 
 [dev-dependencies]
 chirp-worker = { path = "../../chirp/worker" }

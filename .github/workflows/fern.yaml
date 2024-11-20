@@ -11,22 +11,16 @@ jobs:
   fern-check:
     runs-on: ubuntu-20.04
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Install Fern
-        run: npm install -g fern-api
-
+      - uses: actions/checkout@v4
+      - run: npm install -g fern-api
       - name: Check Fern API is valid
-        run: fern check
-
-      # TODO: Re-enable once https://github.com/fern-api/fern/pull/2551 is resolved
-      # - name: Verify generated code is up to date
-      #   env:
-      #     FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
-      #   run: |
-      #     ./scripts/fern/gen.sh
-      #     git --no-pager diff --exit-code
+        run: ./scripts/fern/check.sh
+      - name: Verify generated code is up to date
+        env:
+          FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
+        run: |
+          ./scripts/fern/gen.sh
+          git --no-pager diff --exit-code
 
   fern-publish:
     runs-on: ubuntu-20.04

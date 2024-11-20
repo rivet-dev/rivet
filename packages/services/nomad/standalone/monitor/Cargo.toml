@@ -37,8 +37,7 @@ ds = { path = "../../../ds" }
 rivet-config = { version = "0.1.0", path = "../../../../common/config" }
 
 [dependencies.nomad_client]
-git = "https://github.com/rivet-gg/nomad-client"
-rev = "abb66bf0c30c7ff5b0c695dae952481c33e538b5" # pragma: allowlist secret
+path = "../../../../../externals/nomad-client"
 
 [dev-dependencies]
 chirp-worker = { path = "../../../../common/chirp/worker" }

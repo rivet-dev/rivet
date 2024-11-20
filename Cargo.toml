@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-# Find all packages with: find . -name Cargo.toml | grep -v resources | grep -v "sdks/runtime" | grep -v "sdks/full/rust-cli" | grep -v "infra/client/" | grep -v "infra/legacy/job-runner" | sed -E 's|^./(.*)Cargo\.toml$|"\1",|'
+# Find all packages with: find . -name Cargo.toml | grep -v resources | grep -v externals | grep -v "sdks/runtime" | grep -v "sdks/full/rust-cli" | grep -v "infra/client/" | grep -v "infra/legacy/job-runner" | sed -E 's|^./(.*)Cargo\.toml$|"\1",|'
 members = [
 "sdks/full/rust/",
 "packages/infra/server/",
@@ -281,8 +281,20 @@ members = [
 "packages/services/custom-user-avatar/ops/list-for-game/",
 "packages/services/custom-user-avatar/ops/upload-complete/",
 "packages/services/debug/ops/email-res/",
-"packages/services/tier/", "packages/services/cloud/standalone/default-create"
-, "packages/services/user"]
+"packages/services/tier/",
+"packages/services/cloud/standalone/default-create",
+"packages/services/user",
+]
+exclude = [
+"externals/cloudflare-rs",
+"externals/deno",
+"externals/nomad-client",
+"externals/posthog-rs",
+"externals/redis-rs",
+"externals/rivet-term",
+"externals/serde_array_query",
+"externals/sqlx",
+]
 
 # Speed up compilation
 [profile.dev]

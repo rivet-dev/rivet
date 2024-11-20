@@ -7,6 +7,5 @@
 !resources/legacy/proto
 !sdks/full/rust/Cargo.toml
 !sdks/full/rust/src
-!svc
 
 sdks/runtime

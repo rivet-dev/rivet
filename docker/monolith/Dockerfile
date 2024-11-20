@@ -20,11 +20,12 @@ WORKDIR /app
 COPY . .
 
 RUN \
-    --mount=type=cache,target=/usr/local/cargo/git \
-    --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/app/target \
-    RUSTFLAGS="--cfg tokio_unstable" cargo build --bin rivet-server && \
-    mv target/debug/rivet-server /usr/bin/rivet-server
+	--mount=type=secret,id=netrc,target=/root/.netrc,mode=0600 \
+    --mount=type=cache,target=/usr/local/cargo/git,id=monolith-server-cargo-git \
+    --mount=type=cache,target=/usr/local/cargo/registry,id=monolith-server-cargo-registry \
+    --mount=type=cache,target=/app/target,id=monolith-server-target \
+    RUSTFLAGS="--cfg tokio_unstable" cargo build -vv --release --bin rivet-server && \
+    mv target/release/rivet-server /usr/bin/rivet-server
 
 # MARK: Rivet Client Builder
 FROM rust:1.82.0-bullseye AS client-builder
@@ -36,13 +37,14 @@ RUN apt-get update && apt-get install --yes protobuf-compiler pkg-config libssl-
 WORKDIR /app
 COPY . .
 RUN \
-    --mount=type=cache,target=/usr/local/cargo/git \
-    --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/app/packages/infra/client/target \
+	--mount=type=secret,id=netrc,target=/root/.netrc,mode=0600 \
+    --mount=type=cache,target=/usr/local/cargo/git,id=monolith-client-cargo-git \
+    --mount=type=cache,target=/usr/local/cargo/registry,id=monolith-client-cargo-registry \
+    --mount=type=cache,target=/app/packages/infra/client/target,id=monolith-client-target \
     cd packages/infra/client && \
-    RUSTFLAGS="--cfg tokio_unstable" cargo build --bin rivet-client --bin rivet-isolate-v8-runner --bin rivet-container-runner && \
+    RUSTFLAGS="--cfg tokio_unstable" cargo build -vv --release --bin rivet-client --bin rivet-isolate-v8-runner --bin rivet-container-runner && \
     mkdir -p /app/dist && \
-    mv target/debug/rivet-client target/debug/rivet-isolate-v8-runner target/debug/rivet-container-runner /app/dist/
+    mv target/release/rivet-client target/release/rivet-isolate-v8-runner target/release/rivet-container-runner /app/dist/
 
 # MARK: Runner
 #
@@ -92,8 +94,8 @@ RUN useradd -m -s /bin/bash clickhouse && \
     echo "deb [signed-by=/usr/share/keyrings/clickhouse-keyring.gpg] https://packages.clickhouse.com/deb stable main" | tee /etc/apt/sources.list.d/clickhouse.list && \
     apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y clickhouse-client clickhouse-server
-COPY ./docker/dev-monolith/clickhouse/config.xml /etc/clickhouse-server/config.d/config.xml
-COPY ./docker/dev-monolith/clickhouse/users.xml /etc/clickhouse-server/users.d/users.xml
+COPY ./docker/monolith/clickhouse/config.xml /etc/clickhouse-server/config.d/config.xml
+COPY ./docker/monolith/clickhouse/users.xml /etc/clickhouse-server/users.d/users.xml
 
 # === NATS ===
 RUN useradd -m -s /bin/bash nats && \
@@ -103,7 +105,7 @@ RUN useradd -m -s /bin/bash nats && \
 # === SeaweedFS ===
 RUN useradd -m -s /bin/bash seaweedfs && \
     curl -sSLf https://github.com/seaweedfs/seaweedfs/releases/download/${SEAWEEDFS_VERSION}/linux_$(cat /tmp/arch).tar.gz | tar xz -C /usr/local/bin/
-COPY ./docker/dev-monolith/seaweedfs /etc/seaweedfs
+COPY ./docker/monolith/seaweedfs /etc/seaweedfs
 
 # === Vector ===
 RUN useradd -m -s /bin/bash vector-client && \
@@ -111,8 +113,8 @@ RUN useradd -m -s /bin/bash vector-client && \
     curl -sSLf https://packages.timber.io/vector/${VECTOR_VERSION}/vector_${VECTOR_VERSION}-1_$(cat /tmp/arch).deb -o /tmp/vector.deb && \
     dpkg -i /tmp/vector.deb && \
     rm /tmp/vector.deb
-COPY ./docker/dev-monolith/vector-client /etc/vector-client
-COPY ./docker/dev-monolith/vector-server /etc/vector-server
+COPY ./docker/monolith/vector-client /etc/vector-client
+COPY ./docker/monolith/vector-server /etc/vector-server
 
 # === S6 Overlay ===
 RUN curl -sSLf https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz -o /tmp/s6-overlay-noarch.tar.xz && \
@@ -121,29 +123,23 @@ RUN curl -sSLf https://github.com/just-containers/s6-overlay/releases/download/v
     tar -C / -Jxpf /tmp/s6-overlay-$(uname -m).tar.xz
 
 # Setup S6
-COPY ./docker/dev-monolith/scripts /tmp/scripts
+COPY ./docker/monolith/scripts /tmp/scripts
 RUN deno run --allow-read --allow-write /tmp/scripts/setup_s6.ts
 
 # === Rivet Server ===
 RUN useradd -m -s /bin/bash rivet-server
-COPY ./docker/dev-monolith/rivet-server /etc/rivet-server
+COPY ./docker/monolith/rivet-server /etc/rivet-server
 
 # === Rivet Client ===
 #
 # Rivet Client runs as root.
-COPY ./docker/dev-monolith/rivet-client /etc/rivet-client
+COPY ./docker/monolith/rivet-client /etc/rivet-client
 
 # === Copy Build Artifacts === 
 COPY --from=server-builder /usr/bin/rivet-server /usr/local/bin/
 COPY --from=client-builder /app/dist/rivet-client /usr/local/bin/
 COPY --from=client-builder /app/dist/rivet-isolate-v8-runner /usr/local/bin/
 COPY --from=client-builder /app/dist/rivet-container-runner /usr/local/bin/
-
-# Default environment variables
-ENV RUST_BACKTRACE=1 \
-    RUST_LOG=debug,hyper=info \
-    RUST_LOG_TARGET=1 \
-    RUST_LOG_SPAN_PATH=1
 
 # Expose ports
 VOLUME ["/data"]

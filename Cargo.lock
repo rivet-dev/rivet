@@ -1105,7 +1105,6 @@ dependencies = [
 [[package]]
 name = "async-posthog"
 version = "0.2.3"
-source = "git+https://github.com/rivet-gg/posthog-rs.git?rev=ef4e80e#ef4e80e57747ea7204794bce9a103bfeccefabf1"
 dependencies = [
  "posthog-core",
  "reqwest 0.11.27",
@@ -1202,9 +1201,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-s3"
-version = "1.60.0"
+version = "1.61.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0506cc60e392e33712d47717d5ae5760a3b134bf8ee7aea7e43df3d7e2669ae0"
+checksum = "0e531658a0397d22365dfe26c3e1c0c8448bf6a3a2d8a098ded802f2b1261615"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -1705,9 +1704,9 @@ dependencies = [
 
 [[package]]
 name = "bstr"
-version = "1.10.0"
+version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40723b8fb387abc38f4f4a37c09073622e41dd12327033091ef8950659e6dc0c"
+checksum = "1a68f1f47cdf0ec8ee4b941b2eee2a80cb796db73118c0dd09ac63fbe405be22"
 dependencies = [
  "memchr",
 ]
@@ -1979,9 +1978,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.1.37"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40545c26d092346d8a8dab71ee48e7685a7a9cba76e634790c215b41a4a7b4cf"
+checksum = "fd9de9f2205d5ef3fd67e685b0df337994ddd4495e2a28d185500d0e1edfea47"
 dependencies = [
  "jobserver",
  "libc",
@@ -2465,9 +2464,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.20"
+version = "4.5.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b97f376d85a664d5837dbae44bf546e6477a679ff6610010f17276f686d867e8"
+checksum = "fb3b4b9e5a7c7514dfa52869339ee98b3156b0bfb4e8a77c4ff4babb64b1604f"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -2475,9 +2474,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.20"
+version = "4.5.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19bc80abd44e4bed93ca373a0704ccbd1b710dc5749406201bb018272808dc54"
+checksum = "b17a95aa67cc7b5ebd32aa5370189aa0d79069ef1c64ce893bd30fb24bff20ec"
 dependencies = [
  "anstream",
  "anstyle",
@@ -2499,9 +2498,9 @@ dependencies = [
 
 [[package]]
 name = "clap_lex"
-version = "0.7.2"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1462739cb27611015575c0c11df5df7601141071f07518d56fcc1be504cbec97"
+checksum = "afb84c814227b90d6895e01398aee0d8033c00e7466aca416fb6a8e0eb19d8a7"
 
 [[package]]
 name = "clickhouse"
@@ -2747,7 +2746,6 @@ dependencies = [
 [[package]]
 name = "cloudflare"
 version = "0.12.0"
-source = "git+https://github.com/cloudflare/cloudflare-rs.git?rev=f14720e42184ee176a97676e85ef2d2d85bc3aae#f14720e42184ee176a97676e85ef2d2d85bc3aae"
 dependencies = [
  "chrono",
  "http 0.2.12",
@@ -4096,9 +4094,9 @@ checksum = "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80"
 
 [[package]]
 name = "flate2"
-version = "1.0.34"
+version = "1.0.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1b589b4dc103969ad3cf85c950899926ec64300a1a46d76c03a6072957036f0"
+checksum = "c936bfdafb507ebbf50b8074c54fa31c5be9a1e7e5f467dd659697041407d07c"
 dependencies = [
  "crc32fast",
  "miniz_oxide",
@@ -5082,7 +5080,7 @@ dependencies = [
  "http 1.1.0",
  "hyper 1.5.0",
  "hyper-util",
- "rustls 0.23.16",
+ "rustls 0.23.17",
  "rustls-pki-types",
  "tokio",
  "tokio-rustls 0.26.0",
@@ -5571,7 +5569,7 @@ dependencies = [
  "rivet-runtime",
  "rivet-test",
  "rivet-util-job",
- "rustls 0.20.9",
+ "rustls 0.21.12",
  "serde",
  "serde_json",
  "serde_urlencoded",
@@ -5625,9 +5623,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.162"
+version = "0.2.164"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18d287de67fe55fd7e1581fe933d965a5a9477b38e949cfa9f8574ef01506398"
+checksum = "433bfe06b8c75da9b2e3fbea6e5329ff87748f0b144ef75306e674c3f6f7c13f"
 
 [[package]]
 name = "libgit2-sys"
@@ -6698,7 +6696,6 @@ dependencies = [
 [[package]]
 name = "nomad_client"
 version = "1.1.4"
-source = "git+https://github.com/rivet-gg/nomad-client?rev=abb66bf0c30c7ff5b0c695dae952481c33e538b5#abb66bf0c30c7ff5b0c695dae952481c33e538b5"
 dependencies = [
  "reqwest 0.11.27",
  "serde",
@@ -7282,7 +7279,6 @@ checksum = "cc9c68a3f6da06753e9335d63e27f6b9754dd1920d941135b7ea8224f141adb2"
 [[package]]
 name = "posthog-core"
 version = "0.1.0"
-source = "git+https://github.com/rivet-gg/posthog-rs.git?rev=ef4e80e#ef4e80e57747ea7204794bce9a103bfeccefabf1"
 dependencies = [
  "chrono",
  "serde",
@@ -7607,7 +7603,6 @@ dependencies = [
 [[package]]
 name = "redis"
 version = "0.23.3"
-source = "git+https://github.com/rivet-gg/redis-rs.git?rev=ac3e27fa1d133847db54354493f4d25957ad3466#ac3e27fa1d133847db54354493f4d25957ad3466"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -8571,7 +8566,6 @@ dependencies = [
 [[package]]
 name = "rivet-term"
 version = "0.1.0"
-source = "git+https://github.com/rivet-gg/rivet-term.git?rev=d539a07d2920d47b88410f20e6d106b497cff1f5#d539a07d2920d47b88410f20e6d106b497cff1f5"
 dependencies = [
  "console",
  "derive_builder 0.12.0",
@@ -8764,18 +8758,6 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.20.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b80e3dec595989ea8510028f30c408a4630db12c9cbb8de34203b89d6577e99"
-dependencies = [
- "log",
- "ring 0.16.20",
- "sct 0.7.1",
- "webpki 0.22.4",
-]
-
-[[package]]
-name = "rustls"
 version = "0.21.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f56a14d1f48b391359b22f731fd4bd7e43c97f3c50eee276f3aa09c94784d3e"
@@ -8788,9 +8770,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.16"
+version = "0.23.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eee87ff5d9b36712a58574e12e9f0ea80f915a5b0ac518d322b24a465617925e"
+checksum = "7f1a745511c54ba6d4465e8d5dfbd81b45791756de28d4981af70d6dca128f1e"
 dependencies = [
  "log",
  "once_cell",
@@ -9025,7 +9007,6 @@ dependencies = [
 [[package]]
 name = "serde_array_query"
 version = "0.2.0"
-source = "git+https://github.com/rivet-gg/serde_array_query.git?rev=b9f8bfad77aea6f01dccc6cb77146b8c5daecaa3#b9f8bfad77aea6f01dccc6cb77146b8c5daecaa3"
 dependencies = [
  "serde",
  "serde_urlencoded",
@@ -9055,9 +9036,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.132"
+version = "1.0.133"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d726bfaff4b320266d395898905d0eba0345aae23b54aee3a737e260fd46db03"
+checksum = "c7fceb2473b9166b2294ef05efcb65a3db80803f0b03ef86a5fc88a2b85ee377"
 dependencies = [
  "indexmap 2.6.0",
  "itoa 1.0.11",
@@ -9357,7 +9338,6 @@ dependencies = [
 [[package]]
 name = "sqlx"
 version = "0.8.2"
-source = "git+https://github.com/rivet-gg/sqlx?rev=e7120f59b74fb6d83ac9b1d899b166bab31ba1d6#e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
 dependencies = [
  "sqlx-core",
  "sqlx-macros",
@@ -9369,7 +9349,6 @@ dependencies = [
 [[package]]
 name = "sqlx-core"
 version = "0.8.2"
-source = "git+https://github.com/rivet-gg/sqlx?rev=e7120f59b74fb6d83ac9b1d899b166bab31ba1d6#e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
 dependencies = [
  "bit-vec",
  "bytes",
@@ -9406,7 +9385,6 @@ dependencies = [
 [[package]]
 name = "sqlx-macros"
 version = "0.8.2"
-source = "git+https://github.com/rivet-gg/sqlx?rev=e7120f59b74fb6d83ac9b1d899b166bab31ba1d6#e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -9418,7 +9396,6 @@ dependencies = [
 [[package]]
 name = "sqlx-macros-core"
 version = "0.8.2"
-source = "git+https://github.com/rivet-gg/sqlx?rev=e7120f59b74fb6d83ac9b1d899b166bab31ba1d6#e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
 dependencies = [
  "dotenvy",
  "either",
@@ -9443,7 +9420,6 @@ dependencies = [
 [[package]]
 name = "sqlx-mysql"
 version = "0.8.2"
-source = "git+https://github.com/rivet-gg/sqlx?rev=e7120f59b74fb6d83ac9b1d899b166bab31ba1d6#e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
 dependencies = [
  "atoi",
  "base64 0.22.1",
@@ -9485,7 +9461,6 @@ dependencies = [
 [[package]]
 name = "sqlx-postgres"
 version = "0.8.2"
-source = "git+https://github.com/rivet-gg/sqlx?rev=e7120f59b74fb6d83ac9b1d899b166bab31ba1d6#e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
 dependencies = [
  "atoi",
  "base64 0.22.1",
@@ -9524,7 +9499,6 @@ dependencies = [
 [[package]]
 name = "sqlx-sqlite"
 version = "0.8.2"
-source = "git+https://github.com/rivet-gg/sqlx?rev=e7120f59b74fb6d83ac9b1d899b166bab31ba1d6#e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
 dependencies = [
  "atoi",
  "flume",
@@ -10357,7 +10331,7 @@ version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c7bc40d0e5a97695bb96e27995cd3a08538541b0a846f65bba7a359f36700d4"
 dependencies = [
- "rustls 0.23.16",
+ "rustls 0.23.17",
  "rustls-pki-types",
  "tokio",
 ]
@@ -10933,7 +10907,7 @@ dependencies = [
  "flate2",
  "log",
  "once_cell",
- "rustls 0.23.16",
+ "rustls 0.23.17",
  "rustls-pki-types",
  "url",
  "webpki-roots 0.26.6",

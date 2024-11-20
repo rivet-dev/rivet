@@ -34,18 +34,16 @@ rivet-config = { version = "0.1.0", path = "../../common/config" }
 
 [dependencies.nomad_client_new]
 package = "nomad_client"
-git = "https://github.com/rivet-gg/nomad-client"
-rev = "abb66bf0c30c7ff5b0c695dae952481c33e538b5" # pragma: allowlist secret
+path = "../../../externals/nomad-client"
 
 [dependencies.sqlx]
-git = "https://github.com/rivet-gg/sqlx"
-rev = "e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
+path = "../../../externals/sqlx"
 default-features = false
 features = [ "json" ]
 
 [dev-dependencies]
 rivet-test = { version = "0.1.0", path = "../../common/test" }
-rustls = "0.20"
+rustls = "0.21"
 webpki = "0.22"
 webpki-roots = "0.22"
 

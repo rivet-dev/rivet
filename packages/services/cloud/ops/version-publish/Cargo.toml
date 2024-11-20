@@ -19,8 +19,7 @@ mm-config-version-prepare = { path = "../../../mm-config/ops/version-prepare" }
 mm-config-version-publish = { path = "../../../mm-config/ops/version-publish" }
 
 [dependencies.sqlx]
-git = "https://github.com/rivet-gg/sqlx"
-rev = "e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
+path = "../../../../../externals/sqlx"
 default-features = false
 
 [dev-dependencies]
