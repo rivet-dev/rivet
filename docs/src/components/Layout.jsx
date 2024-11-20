@@ -48,9 +48,9 @@ export function Layout({
             className={clsx(
               {
                 'lg:px-8': navigation.sidebar,
-                'lg:max-w-3xl': !fullWidth
+                'lg:max-w-3xl mt-9': !fullWidth
               },
-              'mx-auto mt-9 w-full flex-1'
+              'mx-auto w-full flex-1'
             )}>
             {prose ? <Prose as='article'>{children}</Prose> : children}
 

@@ -8,7 +8,8 @@
     "lint": "next lint",
     "format": "prettier --write .",
     "create-article": "vite-node scripts/generateArticle.ts",
-    "generate-favicon": "npx cli-real-favicon generate scripts/faviconConfig.json faviconData.json public/icons"
+    "generate-favicon": "npx cli-real-favicon generate scripts/faviconConfig.json faviconData.json public/icons",
+	"update-framer": "unframer"
   },
   "browserslist": "defaults, not ie <= 11",
   "workspaces": [
@@ -77,6 +78,7 @@
     "socket.io": "^4.7.1",
     "socket.io-client": "^4.7.1",
     "tailwindcss": "^3.3.0",
+    "unframer": "^2.6.5",
     "unified": "^10.1.2",
     "unist-util-filter": "^4.0.1",
     "unist-util-visit": "^4.1.1",
