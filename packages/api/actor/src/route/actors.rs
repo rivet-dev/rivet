@@ -120,7 +120,11 @@ pub async fn create(
 		.await?;
 	let datacenter_id = unwrap!(resolved_dc_ids.datacenters.first()).datacenter_id;
 
-	let tags = serde_json::from_value(body.tags.unwrap_or_default())?;
+	let tags = unwrap_with!(
+		serde_json::from_value(body.tags.unwrap_or_default()).ok(),
+		API_BAD_BODY,
+		error = "`tags` must be `Map<String, String>`"
+	);
 
 	tracing::info!(?tags, "creating server with tags");
 
@@ -132,6 +136,8 @@ pub async fn create(
 	let mut fail_sub = ctx
 		.subscribe::<ds::workflows::server::CreateFailed>(("server_id", server_id))
 		.await?;
+
+	let network = body.network.unwrap_or_default();
 
 	ctx.workflow(ds::workflows::server::Input {
 		server_id,
@@ -149,11 +155,11 @@ pub async fn create(
 		image_id: body.runtime.build,
 		root_user_enabled: game_config.root_user_enabled,
 		args: body.runtime.arguments.unwrap_or_default(),
-		network_mode: body.network.mode.unwrap_or_default().api_into(),
+		network_mode: network.mode.unwrap_or_default().api_into(),
 		environment: body.runtime.environment.unwrap_or_default(),
-		network_ports: unwrap!(body
-			.network
+		network_ports: unwrap!(network
 			.ports
+			.unwrap_or_default()
 			.into_iter()
 			.map(|(s, p)| Ok((
 				s,
@@ -256,50 +262,51 @@ pub async fn create_deprecated(
 					kill_timeout: l.kill_timeout,
 				})
 			}),
-			network: Box::new(models::ActorCreateActorNetworkRequest {
+			network: Some(Box::new(models::ActorCreateActorNetworkRequest {
 				mode: body.network.mode.map(|n| match n {
 					models::ServersNetworkMode::Host => models::ActorNetworkMode::Host,
 					models::ServersNetworkMode::Bridge => models::ActorNetworkMode::Bridge,
 				}),
-				ports: body
-					.network
-					.ports
-					.into_iter()
-					.map(|(k, p)| {
-						(
-							k,
-							models::ActorCreateActorPortRequest {
-								internal_port: p.internal_port,
-								protocol: match p.protocol {
-									models::ServersPortProtocol::Http => {
-										models::ActorPortProtocol::Http
-									}
-									models::ServersPortProtocol::Https => {
-										models::ActorPortProtocol::Https
-									}
-									models::ServersPortProtocol::Tcp => {
-										models::ActorPortProtocol::Tcp
-									}
-									models::ServersPortProtocol::TcpTls => {
-										models::ActorPortProtocol::TcpTls
-									}
-									models::ServersPortProtocol::Udp => {
-										models::ActorPortProtocol::Udp
-									}
+				ports: Some(
+					body.network
+						.ports
+						.into_iter()
+						.map(|(k, p)| {
+							(
+								k,
+								models::ActorCreateActorPortRequest {
+									internal_port: p.internal_port,
+									protocol: match p.protocol {
+										models::ServersPortProtocol::Http => {
+											models::ActorPortProtocol::Http
+										}
+										models::ServersPortProtocol::Https => {
+											models::ActorPortProtocol::Https
+										}
+										models::ServersPortProtocol::Tcp => {
+											models::ActorPortProtocol::Tcp
+										}
+										models::ServersPortProtocol::TcpTls => {
+											models::ActorPortProtocol::TcpTls
+										}
+										models::ServersPortProtocol::Udp => {
+											models::ActorPortProtocol::Udp
+										}
+									},
+									routing: p.routing.map(|r| {
+										Box::new(models::ActorPortRouting {
+											game_guard: r.game_guard.map(|_| {
+												Box::new(models::ActorGameGuardRouting::default())
+											}),
+											host: r.host.map(|_| json!({})),
+										})
+									}),
 								},
-								routing: p.routing.map(|r| {
-									Box::new(models::ActorPortRouting {
-										game_guard: r.game_guard.map(|_| {
-											Box::new(models::ActorGameGuardRouting::default())
-										}),
-										host: r.host.map(|_| json!({})),
-									})
-								}),
-							},
-						)
-					})
-					.collect(),
-			}),
+							)
+						})
+						.collect(),
+				),
+			})),
 			resources: Box::new(models::ActorResources {
 				cpu: body.resources.cpu,
 				memory: body.resources.memory,
@@ -522,7 +529,7 @@ fn legacy_convert_actor_to_server(
 			kill_timeout: a.lifecycle.kill_timeout,
 		}),
 		network: Box::new(models::ServersNetwork {
-			mode: a.network.mode.map(|n| match n {
+			mode: Some(match a.network.mode {
 				models::ActorNetworkMode::Host => models::ServersNetworkMode::Host,
 				models::ActorNetworkMode::Bridge => models::ServersNetworkMode::Bridge,
 			}),

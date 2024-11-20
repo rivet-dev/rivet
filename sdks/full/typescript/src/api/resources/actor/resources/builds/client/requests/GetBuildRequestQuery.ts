@@ -6,12 +6,10 @@
  * @example
  *     {
  *         project: "string",
- *         environment: "string",
- *         tagsJson: "string"
+ *         environment: "string"
  *     }
  */
 export interface GetBuildRequestQuery {
     project?: string;
     environment?: string;
-    tagsJson?: string;
 }

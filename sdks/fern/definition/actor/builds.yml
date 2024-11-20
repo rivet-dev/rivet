@@ -13,8 +13,7 @@ service:
       path: /{build}
       method: GET
       docs: >-
-        Lists all builds of the project associated with the token used. Can be
-        filtered by tags in the query string.
+        Get a build.
       path-parameters:
         build: uuid
       request:
@@ -22,7 +21,6 @@ service:
         query-parameters:
           project: optional<string>
           environment: optional<string>
-          tags_json: optional<string>
       response: GetBuildResponse
 
     list:
@@ -102,7 +100,7 @@ types:
       name: string
       image_tag:
         docs: A tag given to the project build.
-        type: string
+        type: optional<string>
       image_file: uploadCommons.PrepareFile
       multipart_upload:
         type: optional<boolean>

@@ -9,6 +9,6 @@ export declare const CreateActorNetworkRequest: core.serialization.ObjectSchema<
 export declare namespace CreateActorNetworkRequest {
     interface Raw {
         mode?: actor.NetworkMode.Raw | null;
-        ports: Record<string, actor.CreateActorPortRequest.Raw>;
+        ports?: Record<string, actor.CreateActorPortRequest.Raw> | null;
     }
 }

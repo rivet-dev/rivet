@@ -23,7 +23,7 @@ export declare class Builds {
     protected readonly _options: Builds.Options;
     constructor(_options?: Builds.Options);
     /**
-     * Lists all builds of the project associated with the token used. Can be filtered by tags in the query string.
+     * Get a build.
      *
      * @param {string} build
      * @param {Rivet.actor.GetBuildRequestQuery} request
@@ -39,8 +39,7 @@ export declare class Builds {
      * @example
      *     await client.actor.builds.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
      *         project: "string",
-     *         environment: "string",
-     *         tagsJson: "string"
+     *         environment: "string"
      *     })
      */
     get(build: string, request?: Rivet.actor.GetBuildRequestQuery, requestOptions?: Builds.RequestOptions): Promise<Rivet.actor.GetBuildResponse>;

@@ -18,7 +18,7 @@ export const CreateActorRequest: core.serialization.ObjectSchema<
     region: core.serialization.string(),
     tags: core.serialization.unknown(),
     runtime: actor$$createActorRuntimeRequest,
-    network: actor$$createActorNetworkRequest,
+    network: actor$$createActorNetworkRequest.optional(),
     resources: actor_common$$resources,
     lifecycle: actor_common$$lifecycle.optional(),
 });
@@ -28,7 +28,7 @@ export declare namespace CreateActorRequest {
         region: string;
         tags?: unknown;
         runtime: actor.CreateActorRuntimeRequest.Raw;
-        network: actor.CreateActorNetworkRequest.Raw;
+        network?: actor.CreateActorNetworkRequest.Raw | null;
         resources: actor.Resources.Raw;
         lifecycle?: actor.Lifecycle.Raw | null;
     }

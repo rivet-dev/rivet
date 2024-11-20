@@ -12,14 +12,16 @@
 pub struct ActorCreateActorNetworkRequest {
 	#[serde(rename = "mode", skip_serializing_if = "Option::is_none")]
 	pub mode: Option<crate::models::ActorNetworkMode>,
-	#[serde(rename = "ports")]
-	pub ports: ::std::collections::HashMap<String, crate::models::ActorCreateActorPortRequest>,
+	#[serde(rename = "ports", skip_serializing_if = "Option::is_none")]
+	pub ports:
+		Option<::std::collections::HashMap<String, crate::models::ActorCreateActorPortRequest>>,
 }
 
 impl ActorCreateActorNetworkRequest {
-	pub fn new(
-		ports: ::std::collections::HashMap<String, crate::models::ActorCreateActorPortRequest>,
-	) -> ActorCreateActorNetworkRequest {
-		ActorCreateActorNetworkRequest { mode: None, ports }
+	pub fn new() -> ActorCreateActorNetworkRequest {
+		ActorCreateActorNetworkRequest {
+			mode: None,
+			ports: None,
+		}
 	}
 }

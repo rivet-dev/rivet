@@ -5,7 +5,7 @@
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **lifecycle** | Option<[**crate::models::ActorLifecycle**](ActorLifecycle.md)> |  | [optional]
-**network** | [**crate::models::ActorCreateActorNetworkRequest**](ActorCreateActorNetworkRequest.md) |  | 
+**network** | Option<[**crate::models::ActorCreateActorNetworkRequest**](ActorCreateActorNetworkRequest.md)> |  | [optional]
 **region** | **String** |  | 
 **resources** | [**crate::models::ActorResources**](ActorResources.md) |  | 
 **runtime** | [**crate::models::ActorCreateActorRuntimeRequest**](ActorCreateActorRuntimeRequest.md) |  | 

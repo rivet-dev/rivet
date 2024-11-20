@@ -43,7 +43,11 @@ service:
       method: POST
       docs: Create a new dynamic actor.
       request:
+        name: CreateActorRequestQuery
         body: CreateActorRequest
+        query-parameters:
+          project: optional<string>
+          environment: optional<string>
       response: CreateActorResponse
 
     destroy:
@@ -77,7 +81,7 @@ types:
       region: string
       tags: unknown
       runtime: CreateActorRuntimeRequest
-      network: CreateActorNetworkRequest
+      network: optional<CreateActorNetworkRequest>
       resources: commons.Resources
       lifecycle: optional<commons.Lifecycle>
 
@@ -90,7 +94,7 @@ types:
   CreateActorNetworkRequest:
     properties:
       mode: optional<commons.NetworkMode>
-      ports: map<string, CreateActorPortRequest>
+      ports: optional<map<string, CreateActorPortRequest>>
 
   CreateActorPortRequest:
     properties:

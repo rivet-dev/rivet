@@ -118,8 +118,8 @@ pub async fn actor_builds_complete(configuration: &configuration::Configuration,
     }
 }
 
-/// Lists all builds of the project associated with the token used. Can be filtered by tags in the query string.
-pub async fn actor_builds_get(configuration: &configuration::Configuration, build: &str, project: Option<&str>, environment: Option<&str>, tags_json: Option<&str>) -> Result<crate::models::ActorGetBuildResponse, Error<ActorBuildsGetError>> {
+/// Get a build.
+pub async fn actor_builds_get(configuration: &configuration::Configuration, build: &str, project: Option<&str>, environment: Option<&str>) -> Result<crate::models::ActorGetBuildResponse, Error<ActorBuildsGetError>> {
     let local_var_configuration = configuration;
 
     let local_var_client = &local_var_configuration.client;
@@ -132,9 +132,6 @@ pub async fn actor_builds_get(configuration: &configuration::Configuration, buil
     }
     if let Some(ref local_var_str) = environment {
         local_var_req_builder = local_var_req_builder.query(&[("environment", &local_var_str.to_string())]);
-    }
-    if let Some(ref local_var_str) = tags_json {
-        local_var_req_builder = local_var_req_builder.query(&[("tags_json", &local_var_str.to_string())]);
     }
     if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
         local_var_req_builder = local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());

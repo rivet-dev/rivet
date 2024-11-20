@@ -244,12 +244,27 @@ pub async fn create_build(
 
 	let multipart_upload = body.multipart_upload.unwrap_or(false);
 
-	let kind = match body.kind {
-		Option::None | Some(models::ActorBuildKind::DockerImage) => {
-			backend::build::BuildKind::DockerImage
-		}
-		Some(models::ActorBuildKind::OciBundle) => backend::build::BuildKind::OciBundle,
-		Some(models::ActorBuildKind::Javascript) => backend::build::BuildKind::JavaScript,
+	let (kind, image_tag) = match body.kind {
+		Option::None | Some(models::ActorBuildKind::DockerImage) => (
+			backend::build::BuildKind::DockerImage,
+			unwrap_with!(
+				body.image_tag,
+				API_BAD_BODY,
+				error = "missing field `image_tag`"
+			),
+		),
+		Some(models::ActorBuildKind::OciBundle) => (
+			backend::build::BuildKind::OciBundle,
+			// HACK(RVT-4125): Generate nonexistent image tag
+			body.image_tag
+				.unwrap_or_else(|| format!("nonexistent:{}", Uuid::new_v4())),
+		),
+		Some(models::ActorBuildKind::Javascript) => (
+			backend::build::BuildKind::JavaScript,
+			// HACK(RVT-4125): Generate nonexistent image tag
+			body.image_tag
+				.unwrap_or_else(|| format!("nonexistent:{}", Uuid::new_v4())),
+		),
 	};
 
 	let compression = match body.compression {
@@ -262,7 +277,7 @@ pub async fn create_build(
 	let create_res = op!([ctx] build_create {
 		env_id: Some(env_id.into()),
 		display_name: body.name,
-		image_tag: Some(body.image_tag),
+		image_tag: Some(image_tag),
 		image_file: Some((*body.image_file).api_try_into()?),
 		multipart: multipart_upload,
 		kind: kind as i32,
@@ -373,7 +388,7 @@ pub async fn create_build_deprecated(
 				models::ServersBuildCompression::Lz4 => models::ActorBuildCompression::Lz4,
 			}),
 			image_file: body.image_file,
-			image_tag: body.image_tag,
+			image_tag: Some(body.image_tag),
 			kind: body.kind.map(|k| match k {
 				models::ServersBuildKind::DockerImage => models::ActorBuildKind::DockerImage,
 				models::ServersBuildKind::OciBundle => models::ActorBuildKind::OciBundle,

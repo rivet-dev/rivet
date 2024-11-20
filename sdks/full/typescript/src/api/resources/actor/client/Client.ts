@@ -340,7 +340,7 @@ export class Actor {
     /**
      * Create a new dynamic actor.
      *
-     * @param {Rivet.actor.CreateActorRequest} request
+     * @param {Rivet.actor.CreateActorRequestQuery} request
      * @param {Actor.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @throws {@link Rivet.InternalError}
@@ -352,45 +352,48 @@ export class Actor {
      *
      * @example
      *     await client.actor.create({
-     *         region: "string",
-     *         tags: {
-     *             "key": "value"
-     *         },
-     *         runtime: {
-     *             build: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
-     *             arguments: ["string"],
-     *             environment: {
-     *                 "string": "string"
-     *             }
-     *         },
-     *         network: {
-     *             mode: Rivet.actor.NetworkMode.Bridge,
-     *             ports: {
-     *                 "string": {
-     *                     protocol: Rivet.actor.PortProtocol.Http,
-     *                     internalPort: 1,
-     *                     routing: {
-     *                         gameGuard: {
-     *                             authorization: undefined
-     *                         },
-     *                         host: {}
-     *                     }
+     *         project: "string",
+     *         environment: "string",
+     *         body: {
+     *             region: "string",
+     *             tags: {
+     *                 "key": "value"
+     *             },
+     *             runtime: {
+     *                 build: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *                 arguments: ["string"],
+     *                 environment: {
+     *                     "string": "string"
      *                 }
+     *             },
+     *             network: {
+     *                 mode: Rivet.actor.NetworkMode.Bridge,
+     *                 ports: {}
+     *             },
+     *             resources: {
+     *                 cpu: 1,
+     *                 memory: 1
+     *             },
+     *             lifecycle: {
+     *                 killTimeout: 1000000
      *             }
-     *         },
-     *         resources: {
-     *             cpu: 1,
-     *             memory: 1
-     *         },
-     *         lifecycle: {
-     *             killTimeout: 1000000
      *         }
      *     })
      */
     public async create(
-        request: Rivet.actor.CreateActorRequest,
+        request: Rivet.actor.CreateActorRequestQuery,
         requestOptions?: Actor.RequestOptions
     ): Promise<Rivet.actor.CreateActorResponse> {
+        const { project, environment, body: _body } = request;
+        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        if (project != null) {
+            _queryParams["project"] = project;
+        }
+
+        if (environment != null) {
+            _queryParams["environment"] = environment;
+        }
+
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
@@ -401,8 +404,9 @@ export class Actor {
                 Authorization: await this._getAuthorizationHeader(),
             },
             contentType: "application/json",
+            queryParameters: _queryParams,
             requestType: "json",
-            body: serializers.actor.CreateActorRequest.jsonOrThrow(request, { unrecognizedObjectKeys: "strip" }),
+            body: serializers.actor.CreateActorRequest.jsonOrThrow(_body, { unrecognizedObjectKeys: "strip" }),
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
             maxRetries: requestOptions?.maxRetries,
             abortSignal: requestOptions?.abortSignal,

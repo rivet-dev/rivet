@@ -11,7 +11,7 @@ export declare namespace CreateActorRequest {
         region: string;
         tags?: unknown;
         runtime: actor.CreateActorRuntimeRequest.Raw;
-        network: actor.CreateActorNetworkRequest.Raw;
+        network?: actor.CreateActorNetworkRequest.Raw | null;
         resources: actor.Resources.Raw;
         lifecycle?: actor.Lifecycle.Raw | null;
     }

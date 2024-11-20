@@ -133,7 +133,7 @@ pub fn convert_actor_to_api(
 			environment: Some(value.environment),
 		}),
 		network: Box::new(models::ActorNetwork {
-			mode: Some(value.network_mode.api_into()),
+			mode: value.network_mode.api_into(),
 			ports: value
 				.network_ports
 				.into_iter()

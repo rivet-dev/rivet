@@ -8,7 +8,7 @@ export interface CreateActorRequest {
     region: string;
     tags?: unknown;
     runtime: Rivet.actor.CreateActorRuntimeRequest;
-    network: Rivet.actor.CreateActorNetworkRequest;
+    network?: Rivet.actor.CreateActorNetworkRequest;
     resources: Rivet.actor.Resources;
     lifecycle?: Rivet.actor.Lifecycle;
 }

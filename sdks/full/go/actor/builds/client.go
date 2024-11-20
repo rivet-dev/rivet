@@ -35,7 +35,7 @@ func NewClient(opts ...core.ClientOption) *Client {
 	}
 }
 
-// Lists all builds of the project associated with the token used. Can be filtered by tags in the query string.
+// Get a build.
 func (c *Client) Get(ctx context.Context, build uuid.UUID, request *actor.GetBuildRequestQuery) (*actor.GetBuildResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
@@ -49,9 +49,6 @@ func (c *Client) Get(ctx context.Context, build uuid.UUID, request *actor.GetBui
 	}
 	if request.Environment != nil {
 		queryParams.Add("environment", fmt.Sprintf("%v", *request.Environment))
-	}
-	if request.TagsJson != nil {
-		queryParams.Add("tags_json", fmt.Sprintf("%v", *request.TagsJson))
 	}
 	if len(queryParams) > 0 {
 		endpointURL += "?" + queryParams.Encode()

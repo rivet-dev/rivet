@@ -69,6 +69,8 @@ pub enum ActorListError {
 pub async fn actor_create(
 	configuration: &configuration::Configuration,
 	actor_create_actor_request: crate::models::ActorCreateActorRequest,
+	project: Option<&str>,
+	environment: Option<&str>,
 ) -> Result<crate::models::ActorCreateActorResponse, Error<ActorCreateError>> {
 	let local_var_configuration = configuration;
 
@@ -78,6 +80,14 @@ pub async fn actor_create(
 	let mut local_var_req_builder =
 		local_var_client.request(reqwest::Method::POST, local_var_uri_str.as_str());
 
+	if let Some(ref local_var_str) = project {
+		local_var_req_builder =
+			local_var_req_builder.query(&[("project", &local_var_str.to_string())]);
+	}
+	if let Some(ref local_var_str) = environment {
+		local_var_req_builder =
+			local_var_req_builder.query(&[("environment", &local_var_str.to_string())]);
+	}
 	if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
 		local_var_req_builder =
 			local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());

@@ -18,8 +18,8 @@ pub struct ActorPrepareBuildRequest {
     #[serde(rename = "image_file")]
     pub image_file: Box<crate::models::UploadPrepareFile>,
     /// A tag given to the project build.
-    #[serde(rename = "image_tag")]
-    pub image_tag: String,
+    #[serde(rename = "image_tag", skip_serializing_if = "Option::is_none")]
+    pub image_tag: Option<String>,
     #[serde(rename = "kind", skip_serializing_if = "Option::is_none")]
     pub kind: Option<crate::models::ActorBuildKind>,
     #[serde(rename = "multipart_upload", skip_serializing_if = "Option::is_none")]
@@ -31,11 +31,11 @@ pub struct ActorPrepareBuildRequest {
 }
 
 impl ActorPrepareBuildRequest {
-    pub fn new(image_file: crate::models::UploadPrepareFile, image_tag: String, name: String) -> ActorPrepareBuildRequest {
+    pub fn new(image_file: crate::models::UploadPrepareFile, name: String) -> ActorPrepareBuildRequest {
         ActorPrepareBuildRequest {
             compression: None,
             image_file: Box::new(image_file),
-            image_tag,
+            image_tag: None,
             kind: None,
             multipart_upload: None,
             name,

@@ -28,10 +28,10 @@ struct MultipartUpdate {
 async fn handle(
 	ctx: OperationContext<upload::prepare::Request>,
 ) -> GlobalResult<upload::prepare::Response> {
-	let s3_client_external = s3_util::Client::with_bucket_and_endpoint(
+	let s3_client = s3_util::Client::with_bucket_and_endpoint(
 		ctx.config(),
 		&ctx.bucket,
-		s3_util::EndpointKind::External,
+		s3_util::EndpointKind::Internal,
 	)
 	.await?;
 
@@ -122,7 +122,7 @@ async fn handle(
 	let (presigned_requests_init, multipart_updates) =
 		futures_util::stream::iter(ctx.files.iter().cloned())
 			.map(move |file| {
-				let s3_client = s3_client_external.clone();
+				let s3_client = s3_client.clone();
 
 				if file.multipart {
 					handle_multipart_upload(s3_client, upload_id, file).boxed()
@@ -238,18 +238,22 @@ async fn handle_upload(
 	}])
 }
 
+/// Minimum size for AWS multipart file uploads.
+///
+/// See AWS error code `EntityTooSmall`
+///
+/// https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html
+const MIN_MULTIPART_FILE_SIZE: u64 = util::file_size::mebibytes(5);
+
 async fn handle_multipart_upload(
 	s3_client: s3_util::Client,
 	upload_id: Uuid,
 	file: backend::upload::PrepareFile,
 ) -> GlobalResult<Vec<PrepareResult>> {
-	// NOTE: https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html. See error
-	// code `EntityTooSmall`
-	ensure_with!(
-		file.content_length >= util::file_size::mebibytes(5),
-		UPLOAD_INVALID,
-		reason = "upload too small for multipart (< 5MiB)"
-	);
+	// If the file is too small for multipart uploads, fallback to normal file uploads
+	if file.content_length < MIN_MULTIPART_FILE_SIZE {
+		return Ok(handle_upload(s3_client, upload_id, file).await?);
+	}
 
 	// Create multipart upload
 	let mut multipart_builder = s3_client

@@ -14,12 +14,12 @@ export const CreateActorNetworkRequest: core.serialization.ObjectSchema<
     Rivet.actor.CreateActorNetworkRequest
 > = core.serialization.object({
     mode: actor_common$$networkMode.optional(),
-    ports: core.serialization.record(core.serialization.string(), actor$$createActorPortRequest),
+    ports: core.serialization.record(core.serialization.string(), actor$$createActorPortRequest).optional(),
 });
 
 export declare namespace CreateActorNetworkRequest {
     interface Raw {
         mode?: actor.NetworkMode.Raw | null;
-        ports: Record<string, actor.CreateActorPortRequest.Raw>;
+        ports?: Record<string, actor.CreateActorPortRequest.Raw> | null;
     }
 }

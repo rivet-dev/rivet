@@ -13,7 +13,7 @@ Method | HTTP request | Description
 
 ## actor_create
 
-> crate::models::ActorCreateActorResponse actor_create(actor_create_actor_request)
+> crate::models::ActorCreateActorResponse actor_create(actor_create_actor_request, project, environment)
 
 
 Create a new dynamic actor.
@@ -24,6 +24,8 @@ Create a new dynamic actor.
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **actor_create_actor_request** | [**ActorCreateActorRequest**](ActorCreateActorRequest.md) |  | [required] |
+**project** | Option<**String**> |  |  |
+**environment** | Option<**String**> |  |  |
 
 ### Return type
 

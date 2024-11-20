@@ -81,8 +81,6 @@ components:
           additionalProperties:
             $ref: '#/components/schemas/ActorCreateActorPortRequest'
           type: object
-      required:
-      - ports
       type: object
     ActorCreateActorPortRequest:
       properties:
@@ -112,7 +110,6 @@ components:
       - region
       - tags
       - runtime
-      - network
       - resources
       type: object
     ActorCreateActorResponse:
@@ -235,6 +232,7 @@ components:
             $ref: '#/components/schemas/ActorPort'
           type: object
       required:
+      - mode
       - ports
       type: object
     ActorNetworkMode:
@@ -325,7 +323,6 @@ components:
           type: array
       required:
       - name
-      - image_tag
       - image_file
       type: object
     ActorPrepareBuildResponse:
@@ -4783,7 +4780,17 @@ paths:
     post:
       description: Create a new dynamic actor.
       operationId: actor_create
-      parameters: []
+      parameters:
+      - in: query
+        name: project
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: environment
+        required: false
+        schema:
+          type: string
       requestBody:
         content:
           application/json:
@@ -5366,8 +5373,7 @@ paths:
       - ActorBuilds
   /builds/{build}:
     get:
-      description: Lists all builds of the project associated with the token used.
-        Can be filtered by tags in the query string.
+      description: Get a build.
       operationId: actor_builds_get
       parameters:
       - in: path
@@ -5383,11 +5389,6 @@ paths:
           type: string
       - in: query
         name: environment
-        required: false
-        schema:
-          type: string
-      - in: query
-        name: tags_json
         required: false
         schema:
           type: string

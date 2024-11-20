@@ -30,7 +30,7 @@ export class Builds {
     constructor(protected readonly _options: Builds.Options = {}) {}
 
     /**
-     * Lists all builds of the project associated with the token used. Can be filtered by tags in the query string.
+     * Get a build.
      *
      * @param {string} build
      * @param {Rivet.actor.GetBuildRequestQuery} request
@@ -46,8 +46,7 @@ export class Builds {
      * @example
      *     await client.actor.builds.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
      *         project: "string",
-     *         environment: "string",
-     *         tagsJson: "string"
+     *         environment: "string"
      *     })
      */
     public async get(
@@ -55,7 +54,7 @@ export class Builds {
         request: Rivet.actor.GetBuildRequestQuery = {},
         requestOptions?: Builds.RequestOptions
     ): Promise<Rivet.actor.GetBuildResponse> {
-        const { project, environment, tagsJson } = request;
+        const { project, environment } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
         if (project != null) {
             _queryParams["project"] = project;
@@ -63,10 +62,6 @@ export class Builds {
 
         if (environment != null) {
             _queryParams["environment"] = environment;
-        }
-
-        if (tagsJson != null) {
-            _queryParams["tags_json"] = tagsJson;
         }
 
         const _response = await (this._options.fetcher ?? core.fetcher)({

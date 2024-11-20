@@ -3,6 +3,6 @@
  */
 import * as Rivet from "../../../../../index";
 export interface Network {
-    mode?: Rivet.actor.NetworkMode;
+    mode: Rivet.actor.NetworkMode;
     ports: Record<string, Rivet.actor.Port>;
 }

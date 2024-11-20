@@ -19,6 +19,9 @@ docker run --rm \
 	-p packageName=rivet-api
 
 if [ "$FERN_GROUP" == "full" ]; then
+	# Improve error output
+	sed -i 's/format!("status code {}", e\.status)/format!("status code {}\\n{}", e.status, e.content)/' "$GEN_PATH_RUST/src/apis/mod.rs"
+
 	# Fix OpenAPI bug (https://github.com/OpenAPITools/openapi-generator/issues/14171)
 	sed -i 's/CloudGamesLogStream/crate::models::CloudGamesLogStream/' "$GEN_PATH_RUST/src/apis/cloud_games_matchmaker_api.rs"
 	sed -i 's/ActorLogStream/crate::models::ActorLogStream/' "$GEN_PATH_RUST/src/apis/actor_logs_api.rs"

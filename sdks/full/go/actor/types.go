@@ -10,6 +10,25 @@ import (
 	core "sdk/core"
 )
 
+type CreateActorRequestQuery struct {
+	Project     *string             `json:"-"`
+	Environment *string             `json:"-"`
+	Body        *CreateActorRequest `json:"-"`
+}
+
+func (c *CreateActorRequestQuery) UnmarshalJSON(data []byte) error {
+	body := new(CreateActorRequest)
+	if err := json.Unmarshal(data, &body); err != nil {
+		return err
+	}
+	c.Body = body
+	return nil
+}
+
+func (c *CreateActorRequestQuery) MarshalJSON() ([]byte, error) {
+	return json.Marshal(c.Body)
+}
+
 type DestroyActorRequestQuery struct {
 	Project     *string `json:"-"`
 	Environment *string `json:"-"`
@@ -242,7 +261,7 @@ func (l *Lifecycle) String() string {
 }
 
 type Network struct {
-	Mode  *NetworkMode     `json:"mode,omitempty"`
+	Mode  NetworkMode      `json:"mode,omitempty"`
 	Ports map[string]*Port `json:"ports,omitempty"`
 
 	_rawJSON json.RawMessage

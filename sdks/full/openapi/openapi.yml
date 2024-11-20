@@ -233,7 +233,17 @@ paths:
       operationId: actor_create
       tags:
         - Actor
-      parameters: []
+      parameters:
+        - name: project
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: environment
+          in: query
+          required: false
+          schema:
+            type: string
       responses:
         '200':
           description: ''
@@ -4192,9 +4202,7 @@ paths:
               $ref: '#/components/schemas/ServersCreateServerRequest'
   /builds/{build}:
     get:
-      description: >-
-        Lists all builds of the project associated with the token used. Can be
-        filtered by tags in the query string.
+      description: Get a build.
       operationId: actor_builds_get
       tags:
         - ActorBuilds
@@ -4211,11 +4219,6 @@ paths:
           schema:
             type: string
         - name: environment
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: tags_json
           in: query
           required: false
           schema:
@@ -8521,7 +8524,6 @@ components:
         - region
         - tags
         - runtime
-        - network
         - resources
     ActorCreateActorRuntimeRequest:
       type: object
@@ -8548,8 +8550,6 @@ components:
           type: object
           additionalProperties:
             $ref: '#/components/schemas/ActorCreateActorPortRequest'
-      required:
-        - ports
     ActorCreateActorPortRequest:
       type: object
       properties:
@@ -9653,7 +9653,6 @@ components:
             type: string
       required:
         - name
-        - image_tag
         - image_file
     ActorPrepareBuildResponse:
       type: object
@@ -9769,6 +9768,7 @@ components:
           additionalProperties:
             $ref: '#/components/schemas/ActorPort'
       required:
+        - mode
         - ports
     ActorNetworkMode:
       type: string

@@ -8,7 +8,7 @@ import { actor } from "../../../../index";
 export declare const Network: core.serialization.ObjectSchema<serializers.actor.Network.Raw, Rivet.actor.Network>;
 export declare namespace Network {
     interface Raw {
-        mode?: actor.NetworkMode.Raw | null;
+        mode: actor.NetworkMode.Raw;
         ports: Record<string, actor.Port.Raw>;
     }
 }

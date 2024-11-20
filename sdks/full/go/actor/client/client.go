@@ -235,12 +235,23 @@ func (c *Client) List(ctx context.Context, request *sdkactor.GetActorsRequestQue
 }
 
 // Create a new dynamic actor.
-func (c *Client) Create(ctx context.Context, request *sdkactor.CreateActorRequest) (*sdkactor.CreateActorResponse, error) {
+func (c *Client) Create(ctx context.Context, request *sdkactor.CreateActorRequestQuery) (*sdkactor.CreateActorResponse, error) {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
 	}
 	endpointURL := baseURL + "/" + "actors"
+
+	queryParams := make(url.Values)
+	if request.Project != nil {
+		queryParams.Add("project", fmt.Sprintf("%v", *request.Project))
+	}
+	if request.Environment != nil {
+		queryParams.Add("environment", fmt.Sprintf("%v", *request.Environment))
+	}
+	if len(queryParams) > 0 {
+		endpointURL += "?" + queryParams.Encode()
+	}
 
 	errorDecoder := func(statusCode int, body io.Reader) error {
 		raw, err := io.ReadAll(body)

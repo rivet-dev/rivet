@@ -10,16 +10,17 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct ActorNetwork {
-	#[serde(rename = "mode", skip_serializing_if = "Option::is_none")]
-	pub mode: Option<crate::models::ActorNetworkMode>,
+	#[serde(rename = "mode")]
+	pub mode: crate::models::ActorNetworkMode,
 	#[serde(rename = "ports")]
 	pub ports: ::std::collections::HashMap<String, crate::models::ActorPort>,
 }
 
 impl ActorNetwork {
 	pub fn new(
+		mode: crate::models::ActorNetworkMode,
 		ports: ::std::collections::HashMap<String, crate::models::ActorPort>,
 	) -> ActorNetwork {
-		ActorNetwork { mode: None, ports }
+		ActorNetwork { mode, ports }
 	}
 }

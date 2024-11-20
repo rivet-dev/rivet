@@ -46,10 +46,10 @@ Name | Type | Description  | Required | Notes
 
 ## actor_builds_get
 
-> crate::models::ActorGetBuildResponse actor_builds_get(build, project, environment, tags_json)
+> crate::models::ActorGetBuildResponse actor_builds_get(build, project, environment)
 
 
-Lists all builds of the project associated with the token used. Can be filtered by tags in the query string.
+Get a build.
 
 ### Parameters
 
@@ -59,7 +59,6 @@ Name | Type | Description  | Required | Notes
 **build** | **uuid::Uuid** |  | [required] |
 **project** | Option<**String**> |  |  |
 **environment** | Option<**String**> |  |  |
-**tags_json** | Option<**String**> |  |  |
 
 ### Return type
 

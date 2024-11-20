@@ -46,7 +46,7 @@ types:
 
   Network:
     properties:
-      mode: optional<NetworkMode>
+      mode: NetworkMode
       ports: map<string, Port>
 
   NetworkMode:

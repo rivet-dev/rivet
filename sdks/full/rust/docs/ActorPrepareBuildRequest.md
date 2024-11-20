@@ -6,7 +6,7 @@ Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **compression** | Option<[**crate::models::ActorBuildCompression**](ActorBuildCompression.md)> |  | [optional]
 **image_file** | [**crate::models::UploadPrepareFile**](UploadPrepareFile.md) |  | 
-**image_tag** | **String** | A tag given to the project build. | 
+**image_tag** | Option<**String**> | A tag given to the project build. | [optional]
 **kind** | Option<[**crate::models::ActorBuildKind**](ActorBuildKind.md)> |  | [optional]
 **multipart_upload** | Option<**bool**> |  | [optional]
 **name** | **String** |  | 

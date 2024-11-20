@@ -56,8 +56,6 @@ async function uploadBuild() {
       },
       kind: "javascript",
       name: `build-${randomString}`,
-      // TODO: Remove
-      image_tag: `actor:${randomString}`,
     },
   );
 
