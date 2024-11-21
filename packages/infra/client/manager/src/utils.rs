@@ -227,6 +227,11 @@ pub async fn init_fdb_config(config: &Config) -> Result<()> {
 	let ips = match &config.client.cluster.foundationdb {
 		FoundationDb::Dynamic { fetch_endpoint } => {
 			#[derive(Deserialize)]
+			struct Response {
+				servers: Vec<Server>,
+			}
+
+			#[derive(Deserialize)]
 			struct Server {
 				vlan_ip: Option<Ipv4Addr>,
 			}
@@ -234,8 +239,9 @@ pub async fn init_fdb_config(config: &Config) -> Result<()> {
 			reqwest::get(fetch_endpoint.clone())
 				.await?
 				.error_for_status()?
-				.json::<Vec<Server>>()
+				.json::<Response>()
 				.await?
+				.servers
 				.into_iter()
 				.filter_map(|server| server.vlan_ip)
 				.map(|vlan_ip| SocketAddr::V4(SocketAddrV4::new(vlan_ip, 4500)))

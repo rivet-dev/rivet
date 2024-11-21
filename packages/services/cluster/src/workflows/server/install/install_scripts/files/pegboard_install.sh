@@ -7,7 +7,7 @@ EOF
 
 sysctl --system
 
-mkdir -p /etc/rivet-client
+mkdir -p /etc/rivet-client /var/lib/rivet-client
 
 curl -Lf -o /usr/local/bin/rivet-client "__PEGBOARD_MANAGER_BINARY_URL__"
 chmod +x /usr/local/bin/rivet-client
@@ -18,6 +18,6 @@ if [ "__FLAVOR__" = "container" ]; then
 fi
 
 if [ "__FLAVOR__" = "isolate" ]; then
-	curl -Lf -o /usr/local/bin/rivet-isolate-v8-runner "__V8_ISOLATE_BINARY_URL__"
+	curl -Lf -o /usr/local/bin/rivet-isolate-v8-runner "__ISOLATE_V8_RUNNER_BINARY_URL__"
 	chmod +x /usr/local/bin/rivet-isolate-v8-runner
 fi

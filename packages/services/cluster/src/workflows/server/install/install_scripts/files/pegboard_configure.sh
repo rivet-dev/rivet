@@ -11,7 +11,7 @@ cat << 'EOF' > /etc/rivet-client/config.json
 			"pegboard_endpoint": "__PEGBOARD_ENDPOINT__",
 			"foundationdb": {
 				"dynamic": {
-					"fetch_endpoint": "__TUNNEL_API_EDGE_API__/provision/datacenters/___DATACENTER_ID___/servers?pool=fdb"
+					"fetch_endpoint": "__TUNNEL_API_EDGE_API__/provision/datacenters/___DATACENTER_ID___/servers?pools=fdb"
 				}
 			}
 		},
@@ -28,7 +28,7 @@ cat << 'EOF' > /etc/rivet-client/config.json
 		},
 		"reserved_resources": {
 			"cpu": 0,
-			"reserved_memory": "__RESERVED_MEMORY__"
+			"memory": "__RESERVED_MEMORY__"
 		},
 		"vector": {
 			"address": "127.0.0.1:5021"
@@ -335,7 +335,7 @@ After=network-online.target setup_pegboard_networking.service
 ConditionPathExists=/etc/rivet-client/
 
 [Service]
-ExecStart=/usr/bin/rivet-client -c /etc/rivet-client/config.json
+ExecStart=/usr/local/bin/rivet-client -c /etc/rivet-client/config.json
 Restart=always
 RestartSec=2
 TasksMax=infinity

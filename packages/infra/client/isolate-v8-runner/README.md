@@ -1,4 +1,4 @@
-# v8-isolate-runner
+# isolate-v8-runner
 
 This crate is used to run JavaScript on the pegboard servers themselves. This takes care of log shipping, rate
 limiting logs, and more.

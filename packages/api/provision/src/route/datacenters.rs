@@ -45,15 +45,11 @@ pub async fn servers(
 	_watch_index: WatchIndexQuery,
 	query: ServerFilterQuery,
 ) -> GlobalResult<models::ProvisionDatacentersGetServersResponse> {
-	ctx.auth().server()?;
-
 	// Find server based on public ip
 	let servers_res = ctx
 		.op(cluster::ops::server::list::Input {
 			filter: cluster::types::Filter {
-				pool_types: query
-					.pools
-					.is_empty()
+				pool_types: (!query.pools.is_empty())
 					.then(|| query.pools.into_iter().map(ApiInto::api_into).collect()),
 				..Default::default()
 			},

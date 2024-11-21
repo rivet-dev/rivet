@@ -329,7 +329,7 @@ impl Actor {
 	) -> Result<()> {
 		let actor_path = ctx.actor_path(self.actor_id);
 
-		// TODO: Use schema in v8-isolate-runner (don't import v8-isolate-runner because its fat)
+		// TODO: Use schema in isolate-v8-runner (don't import isolate-v8-runner because its fat)
 		let config = json!({
 			"resources": {
 				"memory": self.config.resources.memory,

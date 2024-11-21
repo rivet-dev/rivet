@@ -19,6 +19,7 @@ define_router! {
 			GET: datacenters::servers(
 				query: datacenters::ServerFilterQuery,
 				internal_endpoint: true,
+				opt_auth: true,
 			),
 		},
 

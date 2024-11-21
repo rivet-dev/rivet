@@ -187,7 +187,7 @@ pub async fn init_client(gen_path: &Path, working_path: &Path) -> Config {
 	.await
 	.unwrap();
 	tokio::fs::copy(
-		v8_isolate_runner_path(gen_path),
+		isolate_v8_runner_path(gen_path),
 		&isolate_runner_binary_path,
 	)
 	.await
@@ -408,7 +408,7 @@ async fn build_runner(gen_path: &Path, variant: &str) {
 		.arg(if variant == "container" {
 			container_runner_path(gen_path)
 		} else {
-			v8_isolate_runner_path(gen_path)
+			isolate_v8_runner_path(gen_path)
 		})
 		.status()
 		.await
@@ -580,7 +580,7 @@ pub fn container_runner_path(gen_path: &Path) -> PathBuf {
 	gen_path.join("pegboard-container-runner").to_path_buf()
 }
 
-pub fn v8_isolate_runner_path(gen_path: &Path) -> PathBuf {
+pub fn isolate_v8_runner_path(gen_path: &Path) -> PathBuf {
 	gen_path.join("pegboard-isolate-v8-runner").to_path_buf()
 }
 

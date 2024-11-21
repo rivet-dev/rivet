@@ -97,17 +97,17 @@ pub fn configure(config: &Config, pool_type: PoolType) -> GlobalResult<String> {
 				),
 			});
 
-			config_json["sources"]["pegboard_v8_isolate_runner"] = json!({
+			config_json["sources"]["pegboard_isolate_v8_runner"] = json!({
 				"type": "file",
 				"include": ["/var/lib/rivet-client/runner/log"]
 			});
 
-			config_json["transforms"]["pegboard_v8_isolate_runner_add_meta"] = json!({
+			config_json["transforms"]["pegboard_isolate_v8_runner_add_meta"] = json!({
 				"type": "remap",
-				"inputs": ["pegboard_v8_isolate_runner"],
+				"inputs": ["pegboard_isolate_v8_runner"],
 				"source": formatdoc!(
 					r#"
-					.source = "pegboard_v8_isolate_runner"
+					.source = "pegboard_isolate_v8_runner"
 
 					.client_id = "___SERVER_ID___"
 					.server_id = "___SERVER_ID___"
@@ -144,7 +144,7 @@ pub fn configure(config: &Config, pool_type: PoolType) -> GlobalResult<String> {
 
 			let inputs = unwrap!(config_json["sinks"]["vector_sink"]["inputs"].as_array_mut());
 			inputs.push(json!("pegboard_manager_add_meta"));
-			inputs.push(json!("pegboard_v8_isolate_runner_add_meta"));
+			inputs.push(json!("pegboard_isolate_v8_runner_add_meta"));
 			inputs.push(json!("pegboard_container_runner_add_meta"));
 		}
 		_ => {}

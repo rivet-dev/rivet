@@ -21,7 +21,7 @@ pub async fn install(
 			provision_config.container_runner_binary_url.as_ref(),
 		)
 		.replace(
-			"__V8_ISOLATE_BINARY_URL__",
+			"__ISOLATE_V8_RUNNER_BINARY_URL__",
 			provision_config.isolate_runner_binary_url.as_ref(),
 		))
 }
