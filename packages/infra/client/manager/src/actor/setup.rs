@@ -297,7 +297,7 @@ impl Actor {
 
 		// resolv.conf
 		//
-		// See also rivet-job.conflist in lib/bolt/core/src/dep/terraform/install_scripts/files/nomad.sh
+		// See also rivet-actor.conflist in packages/services/cluster/src/workflows/server/install/install_scripts/files/pegboard_configure.sh
 		fs::write(
 			actor_path.join("resolv.conf"),
 			indoc!(
@@ -309,6 +309,18 @@ impl Actor {
 				options rotate
 				options edns0
 				options attempts:2
+				"
+			),
+		)
+		.await?;
+
+		// hosts
+		fs::write(
+			actor_path.join("hosts"),
+			indoc!(
+				"
+				127.0.0.1	localhost
+				::1			localhost ip6-localhost ip6-loopback
 				"
 			),
 		)

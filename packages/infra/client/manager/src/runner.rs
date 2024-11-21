@@ -1,5 +1,4 @@
 use std::{
-	io::Write,
 	os::unix::process::CommandExt,
 	path::{Path, PathBuf},
 	process::Stdio,
