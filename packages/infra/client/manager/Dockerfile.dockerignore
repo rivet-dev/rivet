@@ -1,13 +1,12 @@
 *
 
-!Bolt.toml
 !Cargo.lock
 !Cargo.toml
 !packages
 !resources/legacy/proto
 !sdks/full/rust/Cargo.toml
 !sdks/full/rust/src
-!svc
+!externals/
 
 sdks/runtime
 svc/**/*.md

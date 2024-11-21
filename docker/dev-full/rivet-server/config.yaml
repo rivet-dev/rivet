@@ -15,16 +15,16 @@ server:
     persistent:
       url: redis://redis:6379
       password: password
-  # clickhouse:
-  #   http_url: http://clickhouse:8123
-  #   native_url: clickhouse://clickhouse:9000
-  #   username: default
-  #   password: default
-  #   provision_users:
-  #     vector:
-  #       username: vector
-  #       password: vector
-  #       role: write
+  clickhouse:
+    http_url: http://clickhouse:8123
+    native_url: clickhouse://clickhouse:9000
+    username: default
+    password: default
+    provision_users:
+      vector:
+        username: vector
+        password: vector
+        role: write
   s3:
     region: us-east-1
     endpoint_internal: http://seaweedfs:9000

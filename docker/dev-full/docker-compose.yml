@@ -22,12 +22,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      # clickhouse:
-      #   condition: service_healthy
+      clickhouse:
+        condition: service_healthy
       nats:
         condition: service_healthy
-      # seaweedfs:
-      #   condition: service_healthy
+      seaweedfs:
+        condition: service_healthy
       vector-server:
         condition: service_started
     volumes:
