@@ -3,5 +3,4 @@
 !packages/infra/pegboard/runner-protocol
 !packages/infra/pegboard/v8-isolate-runner/Cargo.toml
 !packages/infra/pegboard/v8-isolate-runner/src
-!externals/
 

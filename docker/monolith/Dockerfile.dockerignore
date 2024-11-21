@@ -6,7 +6,6 @@
 !sdks/full/rust/src
 !packages
 !resources/legacy/proto
-!externals/
 
 !docker/monolith
 docker/monolith/Dockerfile
