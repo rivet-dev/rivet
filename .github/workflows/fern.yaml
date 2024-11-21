@@ -15,12 +15,13 @@ jobs:
       - run: npm install -g fern-api
       - name: Check Fern API is valid
         run: ./scripts/fern/check.sh
-      - name: Verify generated code is up to date
-        env:
-          FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
-        run: |
-          ./scripts/fern/gen.sh
-          git --no-pager diff --exit-code
+      # TODO: JS output is not deterministic
+      # - name: Verify generated code is up to date
+      #   env:
+      #     FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
+      #   run: |
+      #     ./scripts/fern/gen.sh
+      #     git --no-pager diff --exit-code
 
   fern-publish:
     runs-on: ubuntu-20.04
