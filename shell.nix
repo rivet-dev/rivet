@@ -8,6 +8,11 @@ let
 	pkgs = import (fetchTarball {
 		url = "https://github.com/NixOS/nixpkgs/archive/refs/tags/23.05.tar.gz";
 	}) { overlays = [ moz_overlay ]; };
+	
+	foundationDbShellHook = ''
+		# Set LIBCLANG_PATH to point directly to the library
+		export LIBCLANG_PATH="${pkgs.llvmPackages.libclang.lib}/lib"
+	'';
 in
 	pkgs.mkShell {
 		name = "rivet";
@@ -40,10 +45,13 @@ in
 			# Utilities
 			netcat
 
+			# FoundationDB
+			llvmPackages.libclang
+			fdbPackages.foundationdb71
+
 			# Fixes "cannot change locale" warning
 			glibcLocales
 		]
-			++ extraInputs
 			++ (
 				pkgs.lib.optionals stdenv.isDarwin [
 					libiconv  # See https://stackoverflow.com/a/69732679
@@ -60,12 +68,14 @@ in
 			# Install autocomplete
 			source ${pkgs.bash-completion}/share/bash-completion/bash_completion
 
-			# Fix dynamic library path to fix issue with Python
-			export LD_LIBRARY_PATH="${pkgs.clang}/resource-root/lib:${pkgs.lib.strings.makeLibraryPath [ pkgs.openssl ]}"
+			# Fix dynamic library path to fix issue with Python and FoundationDB
+			export LD_LIBRARY_PATH="${pkgs.clang}/resource-root/lib:${pkgs.lib.strings.makeLibraryPath [ pkgs.openssl ]}:${pkgs.lib.strings.makeLibraryPath [ pkgs.fdbPackages.foundationdb71 ]}"
 
 			# Set default Rust flags to match the Rust flags used inside of Bolt.
 			#
 			# If these don't match, then the build cache is purged any time Rust is ran from Bolt.
 			export RUSTFLAGS="--cfg tokio_unstable"
+
+			${foundationDbShellHook}
 		'';
 	}

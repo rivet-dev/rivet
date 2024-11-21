@@ -21,7 +21,7 @@ use nix::{libc, unistd::pipe};
 use tokio::{fs, sync::watch};
 use uuid::Uuid;
 
-use crate::{config::Config, utils, log_shipper};
+use crate::{config::Config, log_shipper, utils};
 
 pub fn run(actors_path: PathBuf, actor_id: Uuid, stop_rx: watch::Receiver<()>) -> Result<()> {
 	let actor_path = actors_path.join(actor_id.to_string());

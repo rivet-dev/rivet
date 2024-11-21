@@ -2,11 +2,11 @@ use std::{
 	convert::Infallible,
 	net::SocketAddr,
 	path::{Path, PathBuf},
-	time::Duration,
 	sync::{
 		atomic::{AtomicBool, Ordering},
 		Arc, Once,
 	},
+	time::Duration,
 };
 
 use anyhow::Context;
