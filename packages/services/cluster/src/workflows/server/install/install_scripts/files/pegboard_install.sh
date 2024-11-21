@@ -12,8 +12,12 @@ mkdir -p /etc/rivet-client
 curl -Lf -o /usr/local/bin/rivet-client "__PEGBOARD_MANAGER_BINARY_URL__"
 chmod +x /usr/local/bin/rivet-client
 
-curl -Lf -o /usr/local/bin/rivet-container-runner "__CONTAINER_RUNNER_BINARY_URL__"
-chmod +x /usr/local/bin/rivet-container-runner
+if [ "__FLAVOR__" = "container" ]; then
+	curl -Lf -o /usr/local/bin/rivet-container-runner "__CONTAINER_RUNNER_BINARY_URL__"
+	chmod +x /usr/local/bin/rivet-container-runner
+fi
 
-curl -Lf -o /usr/local/bin/rivet-isolate-v8-runner "__V8_ISOLATE_BINARY_URL__"
-chmod +x /usr/local/bin/rivet-isolate-v8-runner
+if [ "__FLAVOR__" = "isolate" ]; then
+	curl -Lf -o /usr/local/bin/rivet-isolate-v8-runner "__V8_ISOLATE_BINARY_URL__"
+	chmod +x /usr/local/bin/rivet-isolate-v8-runner
+fi

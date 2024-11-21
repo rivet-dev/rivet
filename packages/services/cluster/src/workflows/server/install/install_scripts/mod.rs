@@ -59,7 +59,13 @@ pub async fn gen_install(
 			script.push(components::umoci::install());
 			script.push(components::cni::tool());
 			script.push(components::cni::plugins());
-			script.push(components::pegboard::install(config).await?);
+
+			let flavor = match pool_type {
+				PoolType::Pegboard => pegboard::protocol::ClientFlavor::Container,
+				PoolType::PegboardIsolate => pegboard::protocol::ClientFlavor::Isolate,
+				_ => unreachable!(),
+			};
+			script.push(components::pegboard::install(config, flavor).await?);
 		}
 		PoolType::Fdb => {
 			script.push(components::python::install());

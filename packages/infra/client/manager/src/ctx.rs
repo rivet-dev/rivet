@@ -1,4 +1,10 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+	collections::HashMap,
+	path::PathBuf,
+	result::Result::{Err, Ok},
+	sync::Arc,
+	time::Duration,
+};
 
 use anyhow::*;
 use futures_util::{
@@ -10,6 +16,7 @@ use nix::unistd::Pid;
 use pegboard::{protocol, system_info::SystemInfo};
 use sqlx::{pool::PoolConnection, Sqlite, SqlitePool};
 use tokio::{
+	fs,
 	net::{TcpListener, TcpStream},
 	sync::{Mutex, RwLock},
 };
@@ -150,7 +157,7 @@ impl Ctx {
 	) -> Result<()> {
 		// Start ping thread
 		let self2 = self.clone();
-		let ping_thread = tokio::spawn(async move {
+		let ping_thread: tokio::task::JoinHandle<Result<()>> = tokio::spawn(async move {
 			loop {
 				tokio::time::sleep(PING_INTERVAL).await;
 				self2
@@ -160,22 +167,18 @@ impl Ctx {
 					.send(Message::Ping(Vec::new()))
 					.await?;
 			}
-
-			#[allow(unreachable_code)]
-			Ok(())
 		});
 
 		// Start runner socket
 		let self2 = self.clone();
-		let runner_socket = tokio::spawn(async move {
-			tracing::warn!(port=%self2.config().runner.port(), "listening for runner sockets");
+		let runner_socket: tokio::task::JoinHandle<Result<()>> = tokio::spawn(async move {
+			tracing::info!(port=%self2.config().runner.port(), "listening for runner sockets");
 
 			let listener = TcpListener::bind(("0.0.0.0", self2.config().runner.port()))
 				.await
 				.map_err(RuntimeError::RunnerSocketListenFailed)?;
 
 			loop {
-				use std::result::Result::{Err, Ok};
 				match listener.accept().await {
 					Ok((stream, _)) => {
 						let mut socket = tokio_tungstenite::accept_async(stream).await?;
@@ -190,9 +193,6 @@ impl Ctx {
 					Err(err) => tracing::error!(?err, "failed to connect websocket"),
 				}
 			}
-
-			#[allow(unreachable_code)]
-			Ok(())
 		});
 
 		// Send init packet
@@ -253,9 +253,22 @@ impl Ctx {
 		tracing::debug!(?packet, "received packet");
 
 		match packet {
-			protocol::ToClient::Init { last_event_idx } => {
+			protocol::ToClient::Init {
+				last_event_idx,
+				fdb_cluster_ips,
+			} => {
 				// Send out all missed events
 				self.rebroadcast(last_event_idx).await?;
+
+				// Update FDB clusters file
+				if !fdb_cluster_ips.is_empty() {
+					let joined = fdb_cluster_ips
+						.into_iter()
+						.map(|x| x.to_string())
+						.collect::<Vec<_>>()
+						.join(",");
+					fs::write(self.fdb_cluster_path(), format!("fdb:fdb@{joined}")).await?;
+				}
 
 				// Rebuild state only after the init packet is received and processed so that we don't emit
 				// any new events before the missed events are rebroadcast
@@ -297,7 +310,6 @@ impl Ctx {
 		}
 
 		// Ack command
-		use std::result::Result::{Err, Ok};
 		tokio::try_join!(
 			utils::query(|| async {
 				sqlx::query(indoc!(
@@ -347,6 +359,13 @@ impl Ctx {
 					self.actors_path().to_str().context("bad path")?.to_string(),
 				),
 				(
+					"FDB_CLUSTER_PATH",
+					self.fdb_cluster_path()
+						.to_str()
+						.context("bad path")?
+						.to_string(),
+				),
+				(
 					"RUNNER_ADDR",
 					format!("127.0.0.1:{}", self.config().runner.port()),
 				),
@@ -391,8 +410,6 @@ impl Ctx {
 		let self2 = self.clone();
 		let runner2 = runner.clone();
 		tokio::spawn(async move {
-			use std::result::Result::{Err, Ok};
-
 			let exit_code = match runner2.observe().await {
 				Ok(exit_code) => exit_code,
 				Err(err) => {
@@ -423,7 +440,7 @@ impl Ctx {
 
 			if let Err(err) = res {
 				// TODO: This should hard error the manager
-				tracing::error!(%err, "failed to write isolate runner pid");
+				tracing::error!(%err, "failed to write isolate runner");
 			}
 		});
 	}
@@ -461,7 +478,6 @@ impl Ctx {
 
 	// Rebuilds state from DB
 	async fn rebuild(self: &Arc<Self>) -> Result<()> {
-		use std::result::Result::{Err, Ok};
 		let (actor_rows, isolate_runner_pid) = tokio::try_join!(
 			utils::query(|| async {
 				sqlx::query_as::<_, ActorRow>(indoc!(
@@ -589,6 +605,10 @@ impl Ctx {
 impl Ctx {
 	pub fn config(&self) -> &crate::config::Client {
 		&self.config.client
+	}
+
+	pub fn fdb_cluster_path(&self) -> PathBuf {
+		self.config.data_dir.join("fdb.cluster")
 	}
 
 	pub fn actors_path(&self) -> PathBuf {

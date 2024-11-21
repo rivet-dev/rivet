@@ -1,6 +1,6 @@
 use std::{
 	convert::Infallible,
-	net::SocketAddr,
+	net::{Ipv4Addr, SocketAddr, SocketAddrV4},
 	path::{Path, PathBuf},
 	sync::{
 		atomic::{AtomicBool, Ordering},
@@ -59,6 +59,7 @@ pub async fn send_init_packet(tx: &mut SplitSink<WebSocketStream<tokio::net::Tcp
 		tx,
 		protocol::ToClient::Init {
 			last_event_idx: utils::now(),
+			fdb_cluster_ips: vec![SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 4500)],
 		},
 	)
 	.await

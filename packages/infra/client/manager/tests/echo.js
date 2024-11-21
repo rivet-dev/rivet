@@ -1,5 +1,12 @@
 console.log(Deno.env.toObject());
 
+// let worker = new Worker(
+// 	new URL("./worker.ts", import.meta.url).href,
+// 	{
+// 		type: "module",
+// 	},
+// );
+
 let server = Deno.serve({
 	handler,
 	port: parseInt(Deno.env.get("PORT_main")),

@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::net::Ipv4Addr;
+use std::net::{Ipv4Addr, SocketAddrV4};
 use strum::FromRepr;
 use uuid::Uuid;
 
@@ -20,7 +20,7 @@ pub enum PegboardProtocolError {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ToClient {
-	Init { last_event_idx: i64 },
+	Init { last_event_idx: i64, fdb_cluster_ips: Vec<SocketAddrV4> },
 	Commands(Vec<CommandWrapper>),
 	FetchStateRequest {},
 }

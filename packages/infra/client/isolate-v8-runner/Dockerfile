@@ -5,9 +5,11 @@ WORKDIR /app
 COPY packages/infra/client/runner-protocol/ runner-protocol/
 COPY packages/infra/client/isolate-v8-runner/Cargo.toml isolate-v8-runner/Cargo.toml
 COPY packages/infra/client/isolate-v8-runner/src/ isolate-v8-runner/src/
+COPY packages/infra/client/isolate-v8-runner/js/ isolate-v8-runner/js/
 
 # Installs shared libs
 RUN apt-get update && apt-get install -y libclang-dev
+RUN curl -Lo /tmp/fdb-clients.deb https://github.com/apple/foundationdb/releases/download/7.3.55/foundationdb-clients_7.3.55-1_amd64.deb && dpkg -i /tmp/fdb-clients.deb
 
 RUN \
 	--mount=type=cache,target=/root/.cargo/git \

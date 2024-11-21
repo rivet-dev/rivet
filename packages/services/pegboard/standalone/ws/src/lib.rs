@@ -205,7 +205,6 @@ async fn handle_connection_inner(
 			}
 			Message::Ping(_) => {
 				conn.update_ping.store(true, Ordering::Relaxed);
-				conn.tx.lock().await.send(Message::Pong(Vec::new())).await?;
 			}
 			Message::Close(_) => {
 				bail!("socket closed {client_id}");

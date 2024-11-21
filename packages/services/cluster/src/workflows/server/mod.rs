@@ -311,7 +311,7 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 				}
 
 				break;
-			},
+			}
 		}
 	}
 

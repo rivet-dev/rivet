@@ -1,6 +1,7 @@
 use std::{
 	os::fd::AsRawFd,
 	path::{Path, PathBuf},
+	result::Result::{Err, Ok},
 	time::Duration,
 };
 
@@ -37,13 +38,14 @@ struct Init {
 }
 
 fn main() -> Result<()> {
+	init_tracing();
+
 	let init = { Runtime::new()?.block_on(init())? };
 
 	// Retry loop
 	loop {
 		let runtime = Builder::new_multi_thread().enable_all().build()?;
 
-		use std::result::Result::{Err, Ok};
 		match runtime.block_on(run(init.clone())) {
 			Ok(_) => return Ok(()),
 			Err(err) => {
@@ -62,8 +64,6 @@ fn main() -> Result<()> {
 }
 
 async fn init() -> Result<Init> {
-	init_tracing();
-
 	// Read args
 	let mut config_flag = false;
 	let mut args = std::env::args();

@@ -5,7 +5,7 @@ use std::{
 	path::{Path, PathBuf},
 	rc::Rc,
 	result::Result::{Err, Ok},
-	sync::{mpsc, Arc},
+	sync::{mpsc as smpsc, Arc},
 };
 
 use anyhow::*;
@@ -15,15 +15,19 @@ use deno_runtime::{
 	deno_io::{Stdio, StdioPipe},
 	deno_permissions::{NetListenDescriptor, Permissions, PermissionsContainer, UnaryPermission},
 	permissions::RuntimePermissionDescriptorParser,
-	worker::{MainWorker, WorkerOptions, WorkerServiceOptions},
+	worker::{MainWorker, MainWorkerTerminateHandle, WorkerOptions, WorkerServiceOptions},
 };
 use nix::{libc, unistd::pipe};
-use tokio::{fs, sync::watch};
+use tokio::{fs, sync::mpsc};
 use uuid::Uuid;
 
-use crate::{config::Config, log_shipper, utils};
+use crate::{config::Config, ext, log_shipper, utils};
 
-pub fn run(actors_path: PathBuf, actor_id: Uuid, stop_rx: watch::Receiver<()>) -> Result<()> {
+pub fn run(
+	actors_path: PathBuf,
+	actor_id: Uuid,
+	terminate_tx: mpsc::Sender<MainWorkerTerminateHandle>,
+) -> Result<()> {
 	let actor_path = actors_path.join(actor_id.to_string());
 
 	// Write PID to file
@@ -38,12 +42,12 @@ pub fn run(actors_path: PathBuf, actor_id: Uuid, stop_rx: watch::Receiver<()>) -
 	let config =
 		serde_json::from_str::<Config>(&config_data).context("Failed to parse config file")?;
 
-	let (shutdown_tx, shutdown_rx) = mpsc::sync_channel(1);
+	let (shutdown_tx, shutdown_rx) = smpsc::sync_channel(1);
 
 	// Start log shipper
 	let (msg_tx, log_shipper_thread) = if let Some(vector_socket_addr) = &config.vector_socket_addr
 	{
-		let (msg_tx, msg_rx) = mpsc::sync_channel::<log_shipper::ReceivedMessage>(
+		let (msg_tx, msg_rx) = smpsc::sync_channel::<log_shipper::ReceivedMessage>(
 			log_shipper::MAX_BUFFER_BYTES / log_shipper::MAX_LINE_BYTES,
 		);
 		let log_shipper = log_shipper::LogShipper {
@@ -64,13 +68,13 @@ pub fn run(actors_path: PathBuf, actor_id: Uuid, stop_rx: watch::Receiver<()>) -
 	let exit_code = match create_and_run_current_thread(run_inner(
 		actor_id,
 		actor_path.clone(),
-		stop_rx,
+		terminate_tx,
 		msg_tx.clone(),
 		config,
 	))? {
 		Result::Ok(exit_code) => exit_code,
 		Err(err) => {
-			eprintln!("{actor_id}: Run isolate failed: {err:?}");
+			tracing::error!(?actor_id, "Run isolate failed: {err:?}");
 			log_shipper::send_message(
 				actor_id,
 				&msg_tx,
@@ -86,10 +90,10 @@ pub fn run(actors_path: PathBuf, actor_id: Uuid, stop_rx: watch::Receiver<()>) -
 	// Shutdown all threads
 	match shutdown_tx.send(()) {
 		Result::Ok(_) => {
-			println!("{actor_id}: Sent shutdown signal");
+			tracing::info!(?actor_id, "Sent shutdown signal");
 		}
 		Err(err) => {
-			eprintln!("{actor_id}: Failed to send shutdown signal: {err:?}");
+			tracing::error!(?actor_id, "Failed to send shutdown signal: {err:?}");
 		}
 	}
 
@@ -99,7 +103,7 @@ pub fn run(actors_path: PathBuf, actor_id: Uuid, stop_rx: watch::Receiver<()>) -
 		match log_shipper_thread.join() {
 			Result::Ok(_) => {}
 			Err(err) => {
-				eprintln!("{actor_id}: Log shipper failed: {err:?}")
+				tracing::error!(?actor_id, "Log shipper failed: {err:?}")
 			}
 		}
 	}
@@ -113,29 +117,14 @@ pub fn run(actors_path: PathBuf, actor_id: Uuid, stop_rx: watch::Receiver<()>) -
 	Ok(())
 }
 
-async fn run_inner(
+pub async fn run_inner(
 	actor_id: Uuid,
 	actor_path: PathBuf,
-	mut stop_rx: watch::Receiver<()>,
-	msg_tx: Option<mpsc::SyncSender<log_shipper::ReceivedMessage>>,
+	terminate_tx: mpsc::Sender<MainWorkerTerminateHandle>,
+	msg_tx: Option<smpsc::SyncSender<log_shipper::ReceivedMessage>>,
 	config: Config,
 ) -> Result<i32> {
-	println!("{actor_id}: Starting isolate");
-
-	// let db = utils::fdb_handle()?;
-
-	// db.run(|trx, _maybe_committed| async move {
-	// 	trx.set(b"hello", b"world");
-
-	// 	Ok(())
-	// })
-	// .await?;
-
-	// let res = db
-	// 	.run(|trx, _maybe_committed| async move { Ok(trx.get(b"hello", false).await?) })
-	// 	.await?;
-
-	// println!("{actor_id}: hello {:?}", std::str::from_utf8(&res.unwrap())?);
+	tracing::info!(?actor_id, "Starting isolate");
 
 	// Load script into a static module loader. No dynamic scripts can be loaded this way.
 	let script_content = fs::read_to_string(actor_path.join("index.js"))
@@ -221,6 +210,10 @@ async fn run_inner(
 			fs,
 		},
 		WorkerOptions {
+			extensions: vec![
+				ext::kv::rivet_kv::init_ops_and_esm(utils::fdb_handle()?),
+				ext::runtime::rivet_runtime::init_ops_and_esm(),
+			],
 			// Configure memory limits
 			create_params: {
 				fn floor_align(value: usize, alignment: usize) -> usize {
@@ -245,88 +238,84 @@ async fn run_inner(
 		},
 	);
 
-	// TODO: dispatch_load_event and dispatch_unload_event
-	// Load module
+	// Send terminate handle to main thread
+	terminate_tx.send(worker.terminate_handle().clone()).await?;
+	drop(terminate_tx);
+
 	let module_id = worker.preload_main_module(&main_module).await?;
 
-	println!("{actor_id}: Isolate ready");
+	tracing::info!(?actor_id, "Isolate ready");
 
-	// First step evaluates the module and possibly runs it. I don't know why sometimes the event loop
-	// continues running and sometimes it doesn't
-	let stopped = 'block: {
-		tokio::select! {
-			biased;
+	// First step evaluates the module and possibly runs it. Sometimes the event loop continues running and
+	// sometimes it doesn't
+	let res = worker.evaluate_module(module_id).await;
+	if worker.is_terminated() {
+		tracing::info!(?actor_id, "Isolate terminated");
+	} else {
+		if let Err(err) = res {
+			tracing::info!(?actor_id, "Isolate execution failed");
 
-			// Wait for stop signal
-			_ = stop_rx.changed() => {
-				println!("{actor_id}: Forcefully stopping isolate");
-				break 'block true;
-			},
-			// Evalulate module and run event loop
-			res = worker.evaluate_module_with_exit(module_id) => {
-				let Some(res) = res else {
-					// Explicit exit
-					break 'block true;
-				};
+			// Write error to stderr
+			stderr_writer2.write_all(err.to_string().as_bytes())?;
 
-				if let Err(err) = res {
-					eprintln!("{actor_id}: Isolate execution failed");
-
-					// Write final error to stderr
-					stderr_writer2.write_all(err.to_string().as_bytes())?;
-				}
-
-				let web_continue = worker.dispatch_beforeunload_event()?;
-				if !web_continue {
-					break 'block true;
-				}
+			if worker.exit_code() == 0 {
+				worker.set_exit_code(1);
 			}
 		}
 
-		false
-	};
-
-	// Second step continues running the event loop if not stopped
-	if !stopped {
+		// Second step continues running the event loop until stopped
 		loop {
-			tokio::select! {
-				biased;
+			let res = worker.run_event_loop(Default::default()).await;
 
-				// Wait for stop signal
-				_ = stop_rx.changed() => {
-					println!("{actor_id}: Forcefully stopping isolate");
-					break;
-				},
-				res = worker.run_event_loop_with_exit() => {
-					let Some(res) = res else {
-						// Explicit exit
-						break;
-					};
+			if worker.is_terminated() {
+				tracing::info!(?actor_id, "Isolate terminated");
+				break;
+			}
 
-					if let Err(err) = res {
-						eprintln!("{actor_id}: Isolate execution failed");
+			if let Err(err) = res {
+				tracing::info!(?actor_id, "Isolate execution failed");
 
-						// Write final error to stderr
-						stderr_writer2.write_all(err.to_string().as_bytes())?;
-					}
+				// Write final error to stderr
+				stderr_writer2.write_all(err.to_string().as_bytes())?;
 
-					let web_continue = worker.dispatch_beforeunload_event()?;
+				if worker.exit_code() == 0 {
+					worker.set_exit_code(1);
+				}
+			}
+
+			// We dispatch the beforeunload event then run the event loop again
+			match worker.dispatch_beforeunload_event() {
+				Ok(web_continue) => {
 					if !web_continue {
 						break;
 					}
+				}
+				Err(err) => {
+					tracing::info!(?actor_id, "Dispatch beforeunload event failed");
+
+					// Write final error to stderr
+					stderr_writer2.write_all(err.to_string().as_bytes())?;
+
+					if worker.exit_code() == 0 {
+						worker.set_exit_code(1);
+					}
+
+					break;
 				}
 			}
 		}
 	}
 
-	worker.terminate_execution();
+	// For good measure
+	worker.v8_isolate().terminate_execution();
 
-	println!("{actor_id}: Isolate complete");
+	tracing::info!(?actor_id, "Isolate complete");
 
 	let exit_code = worker.exit_code();
 
 	// Drop worker and writer so the stdout and stderr pipes close
 	drop(worker);
+
 	stderr_writer2.flush()?;
 	drop(stderr_writer2);
 
@@ -334,13 +323,13 @@ async fn run_inner(
 	match stdout_handle.join() {
 		Result::Ok(_) => {}
 		Err(err) => {
-			eprintln!("{actor_id}: stdout thread panicked: {err:?}");
+			tracing::error!(?actor_id, "stdout thread panicked: {err:?}");
 		}
 	}
 	match stderr_handle.join() {
 		Result::Ok(_) => {}
 		Err(err) => {
-			eprintln!("{actor_id}: stderr thread panicked: {err:?}");
+			tracing::error!(?actor_id, "stderr thread panicked: {err:?}");
 		}
 	}
 
@@ -371,7 +360,7 @@ fn create_basic_runtime() -> Result<tokio::runtime::Runtime> {
 
 // Copied from deno-runtime tokio_util.rs
 #[inline(always)]
-fn create_and_run_current_thread<F, R>(future: F) -> anyhow::Result<R>
+fn create_and_run_current_thread<F, R>(future: F) -> Result<R>
 where
 	F: std::future::Future<Output = R> + 'static,
 	R: Send + 'static,

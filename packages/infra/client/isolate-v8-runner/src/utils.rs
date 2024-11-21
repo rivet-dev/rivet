@@ -1,15 +1,16 @@
-use std::{path::Path, result::Result::Ok, time::Duration};
+use std::{result::Result::Ok, time::Duration};
 
 use anyhow::*;
 use foundationdb::{self as fdb, options::DatabaseOption};
 
 pub fn var(name: &str) -> Result<String> {
-	std::env::var(name).context(name.to_string())
+	std::env::var(name).with_context(|| format!("missing env var: {name}"))
 }
 
-pub fn fdb_handle() -> fdb::FdbResult<fdb::Database> {
-	let cluster_file_path = Path::new("/etc/foundationdb/fdb.cluster");
-	let db = fdb::Database::from_path(&cluster_file_path.display().to_string())?;
+pub fn fdb_handle() -> Result<fdb::Database> {
+	let fdb_cluster_path = var("FDB_CLUSTER_PATH")?;
+	let db =
+		fdb::Database::from_path(&fdb_cluster_path).context("failed to create FDB database")?;
 	db.set_option(DatabaseOption::TransactionRetryLimit(10))?;
 
 	Ok(db)
@@ -28,7 +29,7 @@ pub async fn fdb_health_check() -> Result<()> {
 			Ok(res) => {
 				res?;
 			}
-			Err(_) => eprintln!("db missed ping"),
+			Err(_) => tracing::error!("fdb missed ping"),
 		}
 
 		tokio::time::sleep(Duration::from_secs(3)).await;

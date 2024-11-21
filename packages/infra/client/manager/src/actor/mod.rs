@@ -1,11 +1,12 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+	result::Result::{Err, Ok},
+	sync::Arc,
+	time::Duration,
+};
 
 use anyhow::*;
 use indoc::indoc;
-use nix::{
-	errno::Errno,
-	sys::signal::{kill, Signal},
-};
+use nix::sys::signal::Signal;
 use pegboard::protocol;
 use tokio::{fs, sync::Mutex};
 use uuid::Uuid;
@@ -92,8 +93,6 @@ impl Actor {
 		let self2 = self.clone();
 		let ctx2 = ctx.clone();
 		tokio::spawn(async move {
-			use std::result::Result::{Err, Ok};
-
 			match self2.setup(&ctx2).await {
 				Ok(proxied_ports) => match self2.run(&ctx2, proxied_ports).await {
 					Ok(_) => {
@@ -249,7 +248,6 @@ impl Actor {
 					res = utils::wait_for_write(&exit_code_path) => {
 						res?;
 
-						use std::result::Result::{Err, Ok};
 						let exit_code = match fs::read_to_string(&exit_code_path).await {
 							Ok(contents) => match contents.trim().parse::<i32>() {
 								Ok(x) => Some(x),
@@ -320,7 +318,7 @@ impl Actor {
 
 		let has_runner = runner_guard.is_some();
 
-		// Kill if PID set
+		// Kill if runner exists
 		if let Some(runner) = runner_guard {
 			let runner = &*runner.as_ref().expect("must exist");
 
@@ -335,17 +333,7 @@ impl Actor {
 			}
 			// Send signal
 			else {
-				use std::result::Result::{Err, Ok};
-
-				let pid = runner.pid().clone();
-
-				match kill(pid, signal) {
-					Ok(_) => {}
-					Err(Errno::ESRCH) => {
-						tracing::warn!(actor_id=?self.actor_id, ?pid, "pid not found for signalling")
-					}
-					Err(err) => return Err(err.into()),
-				}
+				runner.signal(signal)?;
 			}
 		}
 

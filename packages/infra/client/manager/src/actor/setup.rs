@@ -8,6 +8,7 @@ use std::{
 	collections::HashMap,
 	path::{Path, PathBuf},
 	process::Stdio,
+	result::Result::{Err, Ok},
 };
 use tokio::{
 	fs::{self, File},
@@ -60,7 +61,6 @@ impl Actor {
 						// Take the stdin of lz4
 						let mut lz4_stdin = lz4_child.stdin.take().context("lz4 stdin")?;
 
-						use std::result::Result::{Err, Ok};
 						tokio::try_join!(
 							// Pipe the response body to lz4 stdin
 							async move {
@@ -112,7 +112,6 @@ impl Actor {
 				let mut lz4_stdout = lz4_child.stdout.take().context("lz4 stdout")?;
 				let mut tar_stdin = tar_child.stdin.take().context("tar stdin")?;
 
-				use std::result::Result::{Err, Ok};
 				tokio::try_join!(
 					// Pipe the response body to lz4 stdin
 					async move {
@@ -189,7 +188,6 @@ impl Actor {
 						// Take the stdin of lz4
 						let mut lz4_stdin = lz4_child.stdin.take().context("lz4 stdin")?;
 
-						use std::result::Result::{Err, Ok};
 						tokio::try_join!(
 							// Pipe the response body to lz4 stdin
 							async move {
@@ -527,8 +525,6 @@ impl Actor {
 
 	#[tracing::instrument(skip_all)]
 	pub async fn cleanup_setup(&self, ctx: &Ctx) -> Result<()> {
-		use std::result::Result::{Err, Ok};
-
 		let actor_path = ctx.actor_path(self.actor_id);
 		let netns_path = self.netns_path();
 

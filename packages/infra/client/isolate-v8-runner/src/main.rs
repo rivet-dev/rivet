@@ -2,34 +2,48 @@ use std::{
 	collections::HashMap,
 	os::fd::AsRawFd,
 	path::{Path, PathBuf},
+	result::Result::{Err, Ok},
+	sync::Arc,
+	thread::JoinHandle,
 	time::Duration,
 };
 
 use anyhow::*;
 use deno_runtime::deno_core::{v8_set_flags, JsRuntime};
-use deno_runtime::deno_core::JsRuntime;
+use deno_runtime::worker::MainWorkerTerminateHandle;
 use foundationdb as fdb;
-use futures_util::{stream::SplitStream, StreamExt};
+use futures_util::{stream::SplitStream, SinkExt, StreamExt};
 use tokio::{
 	fs,
 	net::TcpStream,
-	sync::{mpsc, watch},
+	sync::{mpsc, RwLock},
 };
 use tokio_tungstenite::{tungstenite::protocol::Message, MaybeTlsStream, WebSocketStream};
+use tracing_subscriber::prelude::*;
 use utils::var;
 use uuid::Uuid;
 
 mod config;
+mod ext;
 mod isolate;
 mod log_shipper;
 mod throttle;
 mod utils;
 
-/// Manager port to connect to.
-const THREAD_STATUS_POLL: Duration = Duration::from_millis(500);
+enum Packet {
+	Msg(runner_protocol::ToRunner),
+	Pong,
+	None,
+}
 
-#[tokio::main(flavor = "current_thread")]
+/// Manager port to connect to.
+const THREAD_STATUS_POLL_INTERVAL: Duration = Duration::from_millis(500);
+const PING_INTERVAL: Duration = Duration::from_secs(1);
+
+#[tokio::main]
 async fn main() -> Result<()> {
+	init_tracing();
+
 	let working_path = std::env::args()
 		.skip(1)
 		.next()
@@ -69,17 +83,18 @@ async fn main() -> Result<()> {
 	// Explicitly start runtime on current thread
 	JsRuntime::init_platform(None, false);
 
-	let mut actors = HashMap::new();
+	let actors = Arc::new(RwLock::new(HashMap::new()));
 	// TODO: Should be a `watch::channel` but the tokio version used by deno is old and doesn't implement
 	// `Clone` for `watch::Sender`
 	let (fatal_tx, mut fatal_rx) = tokio::sync::mpsc::channel::<()>(1);
 
 	let res = tokio::select! {
-		res = retry_connection(actors_path, &runner_addr,  &mut actors, fatal_tx) => res,
+		res = retry_connection(actors_path, actors, fatal_tx) => res,
 		// If any fatal error occurs in the isolate threads, kill the entire program
 		_ = fatal_rx.recv() => Err(anyhow!("Fatal error")),
 	};
 
+	// Write exit code
 	if res.is_err() {
 		fs::write(working_path.join("exit-code"), 1.to_string().as_bytes()).await?;
 	}
@@ -89,89 +104,114 @@ async fn main() -> Result<()> {
 
 async fn retry_connection(
 	actors_path: &Path,
-	runner_addr: &str,
-	actors: &mut HashMap<Uuid, watch::Sender<()>>,
+	actors: Arc<RwLock<HashMap<Uuid, mpsc::Sender<i32>>>>,
 	fatal_tx: mpsc::Sender<()>,
 ) -> Result<()> {
 	loop {
 		use std::result::Result::{Err, Ok};
-		match tokio_tungstenite::connect_async(format!("ws://{runner_addr}")).await {
+		match tokio_tungstenite::connect_async(format!("ws://{}", config.runner_addr)).await {
 			Ok((socket, _)) => {
-				handle_connection(actors_path, actors, fatal_tx.clone(), socket).await?
+				handle_connection(actors_path, actors.clone(), fatal_tx.clone(), socket).await?
 			}
-			Err(err) => eprintln!("Failed to connect: {err:?}"),
+			Err(err) => tracing::error!("Failed to connect: {err}"),
 		}
 
-		eprintln!("Retrying connection");
+		tracing::info!("Retrying connection");
 		std::thread::sleep(Duration::from_secs(1));
 	}
 }
 
 async fn handle_connection(
 	actors_path: &Path,
-	actors: &mut HashMap<Uuid, watch::Sender<()>>,
+	actors: Arc<RwLock<HashMap<Uuid, mpsc::Sender<i32>>>>,
 	fatal_tx: mpsc::Sender<()>,
 	socket: WebSocketStream<MaybeTlsStream<TcpStream>>,
 ) -> Result<()> {
-	println!("Connected");
+	tracing::info!("Connected");
 
-	let (_tx, mut rx) = socket.split();
+	let (mut tx, mut rx) = socket.split();
+
+	// NOTE: Currently, the error from the ping thread is not caught but we assume error handling elsewhere
+	// will catch any connection issues.
+	// Start ping thread
+	let _: tokio::task::JoinHandle<Result<()>> = tokio::spawn(async move {
+		loop {
+			tokio::time::sleep(PING_INTERVAL).await;
+			tx.send(Message::Ping(Vec::new())).await?;
+		}
+	});
 
 	loop {
-		let Some(packet) = read_packet(&mut rx).await? else {
-			return Ok(());
+		let packet = match read_packet(&mut rx).await? {
+			Packet::Msg(packet) => packet,
+			Packet::Pong => continue,
+			Packet::None => return Ok(()),
 		};
 
 		match packet {
 			runner_protocol::ToRunner::Start { actor_id } => {
-				if actors.contains_key(&actor_id) {
-					eprintln!("Actor {actor_id} already exists, ignoring new start packet");
+				let mut guard = actors.write().await;
+
+				if guard.contains_key(&actor_id) {
+					tracing::warn!("Actor {actor_id} already exists, ignoring new start packet");
 				} else {
-					// For signalling an isolate to stop
-					let (stop_tx, stop_rx) = tokio::sync::watch::channel(());
+					// For receiving the terminate handle
+					let (terminate_tx, mut terminate_rx) =
+						tokio::sync::mpsc::channel::<MainWorkerTerminateHandle>(1);
+					let (signal_tx, mut signal_rx) = tokio::sync::mpsc::channel(1);
+
+					// Store actor stop sender
+					guard.insert(actor_id, signal_tx);
+					drop(guard);
 
 					// Spawn a new thread for the isolate
 					let actors_path = actors_path.to_path_buf();
 					let handle = std::thread::Builder::new()
 						.name(actor_id.to_string())
-						.spawn(move || isolate::run(actors_path, actor_id, stop_rx))?;
+						.spawn(move || isolate::run(actors_path, actor_id, terminate_tx))?;
 
-					// This task polls the isolate thread we just spawned to see if it errored
+					// Alerts the main thread if any child threads had a fatal error
 					let fatal_tx = fatal_tx.clone();
+
+					// This task polls the isolate thread we just spawned to see if it errored. Should handle
+					// all errors gracefully.
+					let actors = actors.clone();
 					tokio::task::spawn(async move {
-						loop {
-							if handle.is_finished() {
-								let res = handle.join();
+						let Some(terminate_handle) = terminate_rx.recv().await else {
+							// If the transmitting end of the terminate handle was dropped (`recv` returned
+							// `None`), it must be that the thread stopped
+							tracing::error!("failed to receive terminate handle");
+							cleanup_thread(actor_id, handle, fatal_tx);
+							return;
+						};
 
-								use std::result::Result::{Err, Ok};
-								match res {
-									Ok(Err(err)) => {
-										eprintln!("Isolate thread failed ({actor_id}):\n{err:?}");
-										fatal_tx.try_send(()).expect("receiver cannot be dropped")
-									}
-									Err(_) => {
-										fatal_tx.try_send(()).expect("receiver cannot be dropped")
-									}
-									_ => {}
-								}
+						drop(terminate_rx);
 
-								break;
+						tokio::select! {
+							biased;
+							_ = poll_thread(&handle) => cleanup_thread(actor_id, handle, fatal_tx),
+							res = signal_rx.recv() => {
+								let Some(_signal) = res else {
+									tracing::error!("failed to receive signal");
+									fatal_tx.try_send(()).expect("receiver cannot be dropped");
+									return;
+								};
+
+								terminate_handle.terminate();
 							}
-
-							tokio::time::sleep(THREAD_STATUS_POLL).await
 						}
-					});
 
-					// Store actor stop sender
-					actors.insert(actor_id, stop_tx);
+						// Remove actor
+						actors.write().await.remove(&actor_id);
+					});
 				}
 			}
-			runner_protocol::ToRunner::Signal { actor_id, .. } => {
-				if let Some(stop_tx) = actors.get(&actor_id) {
-					// Tell actor thread to stop (cleanup is handled above)
-					stop_tx.send(())?;
+			runner_protocol::ToRunner::Signal { actor_id, signal } => {
+				if let Some(signal_tx) = actors.read().await.get(&actor_id) {
+					// Tell actor thread to stop. Removing the actor is handled in the tokio task above.
+					signal_tx.try_send(signal).context("failed to send stop signal to actor poll task")?;
 				} else {
-					eprintln!("Actor {actor_id} not found for stopping");
+					tracing::warn!("Actor {actor_id} not found for stopping");
 				}
 			}
 		}
@@ -180,32 +220,58 @@ async fn handle_connection(
 
 async fn read_packet(
 	socket: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
-) -> Result<Option<runner_protocol::ToRunner>> {
-	use std::result::Result::{Err, Ok};
+) -> Result<Packet> {
 	let buf = match socket.next().await {
 		Some(Ok(Message::Binary(buf))) => buf,
 		Some(Ok(Message::Close(_))) => {
-			println!("Connection closed");
-			return Ok(None);
+			tracing::error!("Connection closed");
+			return Ok(Packet::None);
+		}
+		Some(Ok(Message::Pong(_))) => {
+			tracing::debug!("received pong");
+			return Ok(Packet::Pong);
 		}
 		Some(Ok(msg)) => bail!("unexpected message: {msg:?}"),
 		Some(Err(err)) => {
-			eprintln!("Connection failed: {err:?}");
-			return Ok(None);
+			tracing::error!("Connection failed: {err}");
+			return Ok(Packet::None);
 		}
 		None => {
-			println!("Stream closed");
-			return Ok(None);
+			tracing::error!("Stream closed");
+			return Ok(Packet::None);
 		}
 	};
 
 	let packet = serde_json::from_slice(&buf)?;
 
-	Ok(Some(packet))
+	Ok(Packet::Msg(packet))
+}
+
+async fn poll_thread(handle: &JoinHandle<Result<()>>) {
+	loop {
+		if handle.is_finished() {
+			return;
+		}
+
+		tokio::time::sleep(THREAD_STATUS_POLL_INTERVAL).await;
+	}
+}
+
+fn cleanup_thread(actor_id: Uuid, handle: JoinHandle<Result<()>>, fatal_tx: mpsc::Sender<()>) {
+	let res = handle.join();
+
+	match res {
+		Ok(Err(err)) => {
+			tracing::error!(?actor_id, "Isolate thread failed:\n{err:?}");
+			fatal_tx.try_send(()).expect("receiver cannot be dropped")
+		}
+		Err(_) => fatal_tx.try_send(()).expect("receiver cannot be dropped"),
+		_ => {}
+	}
 }
 
 async fn redirect_logs(log_file_path: PathBuf) -> Result<()> {
-	println!("Redirecting all logs to {}", log_file_path.display());
+	tracing::info!("Redirecting all logs to {}", log_file_path.display());
 	let log_file = fs::OpenOptions::new()
 		.write(true)
 		.create(true)
@@ -218,4 +284,14 @@ async fn redirect_logs(log_file_path: PathBuf) -> Result<()> {
 	nix::unistd::dup2(log_fd, nix::libc::STDERR_FILENO)?;
 
 	Ok(())
+}
+
+fn init_tracing() {
+	tracing_subscriber::registry()
+		.with(
+			tracing_logfmt::builder()
+				.layer()
+				.with_filter(tracing_subscriber::filter::LevelFilter::INFO),
+		)
+		.init();
 }

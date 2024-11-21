@@ -70,11 +70,11 @@ impl LogShipper {
 		loop {
 			match self.run_inner() {
 				Result::Ok(()) => {
-					println!("{}: Exiting log shipper", self.actor_id);
+					tracing::info!(actor_id=?self.actor_id, "Exiting log shipper");
 					break;
 				}
 				Err(err) => {
-					eprintln!("{}: Log shipper error: {err:?}", self.actor_id);
+					tracing::error!(actor_id=?self.actor_id, "Log shipper error: {err:?}");
 
 					// Wait before attempting to reconnect. Wait for disconnect in this time
 					// period.
@@ -83,14 +83,11 @@ impl LogShipper {
 						.recv_timeout(std::time::Duration::from_secs(15))
 					{
 						Result::Ok(_) => {
-							println!("{}: Log shipper received shutdown", self.actor_id);
+							tracing::info!(actor_id=?self.actor_id, "Log shipper received shutdown");
 							break;
 						}
 						Err(mpsc::RecvTimeoutError::Disconnected) => {
-							eprintln!(
-								"{}: Log shipper shutdown unexpectedly disconnected",
-								self.actor_id
-							);
+							tracing::error!(actor_id=?self.actor_id, "Log shipper shutdown unexpectedly disconnected");
 							break;
 						}
 						Err(mpsc::RecvTimeoutError::Timeout) => {
@@ -103,14 +100,11 @@ impl LogShipper {
 	}
 
 	fn run_inner(&self) -> Result<()> {
-		println!(
-			"{}: Connecting log shipper to Vector at {}",
-			self.actor_id, self.vector_socket_addr
-		);
+		tracing::info!(actor_id=?self.actor_id, "Connecting log shipper to Vector at {}", self.vector_socket_addr);
 
 		let mut stream = TcpStream::connect(&self.vector_socket_addr)?;
 
-		println!("{}: Log shipper connected", self.actor_id);
+		tracing::info!(actor_id=?self.actor_id, "Log shipper connected");
 
 		while let Result::Ok(message) = self.msg_rx.recv() {
 			let vector_message = match &self.owner {
@@ -127,7 +121,7 @@ impl LogShipper {
 			stream.write_all(b"\n")?;
 		}
 
-		println!("{}: Log shipper msg_rx disconnected", self.actor_id);
+		tracing::info!(actor_id=?self.actor_id, "Log shipper msg_rx disconnected");
 
 		Ok(())
 	}
@@ -221,15 +215,17 @@ pub fn ship_logs(
 			// Log preview of lines from the program for easy debugging from Pegboard
 			if preview_iine_count < MAX_PREVIEW_LINES {
 				preview_iine_count += 1;
-				println!(
-					"{actor_id}: {stream_type:?}: {message}",
+				tracing::info!(
+					?actor_id,
+					"{stream_type:?}: {message}",
 					stream_type = stream_type,
 					message = message,
 				);
 
 				if preview_iine_count == MAX_PREVIEW_LINES {
-					println!(
-						"{actor_id}: {stream_type:?}: ...not logging any more lines...",
+					tracing::warn!(
+						?actor_id,
+						"{stream_type:?}: ...not logging any more lines...",
 						stream_type = stream_type,
 					);
 				}
@@ -246,7 +242,7 @@ pub fn ship_logs(
 			}
 		}
 
-		println!("{actor_id}: Ship {stream_type:?} logs thread exiting");
+		tracing::info!(?actor_id, "Ship {stream_type:?} logs thread exiting");
 	})
 }
 
@@ -281,11 +277,11 @@ pub fn send_message(
 		Result::Ok(_) => {}
 		Err(mpsc::TrySendError::Full(_)) => {
 			if throttle_error.map_or(true, |x| x.tick().is_ok()) {
-				eprintln!("{actor_id}: log shipper buffer full, logs are being dropped");
+				tracing::error!(?actor_id, "log shipper buffer full, logs are being dropped");
 			}
 		}
 		Err(mpsc::TrySendError::Disconnected(_)) => {
-			eprintln!("{actor_id}: log shipper unexpectedly disconnected, exiting");
+			tracing::error!(?actor_id, "log shipper unexpectedly disconnected, exiting");
 			return true;
 		}
 	}

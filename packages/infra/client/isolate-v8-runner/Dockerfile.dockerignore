@@ -3,4 +3,5 @@
 !packages/infra/client/runner-protocol
 !packages/infra/client/isolate-v8-runner/Cargo.toml
 !packages/infra/client/isolate-v8-runner/src
+!packages/infra/client/isolate-v8-runner/js
 

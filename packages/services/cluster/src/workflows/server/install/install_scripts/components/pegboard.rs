@@ -1,9 +1,13 @@
 use chirp_workflow::prelude::*;
 
-pub async fn install(config: &rivet_config::Config) -> GlobalResult<String> {
+pub async fn install(
+	config: &rivet_config::Config,
+	flavor: pegboard::protocol::ClientFlavor,
+) -> GlobalResult<String> {
 	let provision_config = &config.server()?.rivet.provision()?;
 
 	Ok(include_str!("../files/pegboard_install.sh")
+		.replace("__FLAVOR__", &flavor.to_string())
 		.replace(
 			"__PEGBOARD_MANAGER_BINARY_URL__",
 			provision_config.manager_binary_url.as_ref(),

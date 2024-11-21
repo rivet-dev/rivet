@@ -136,7 +136,7 @@ async fn allocate_actor(
 				-- Millicores
 				COALESCE(SUM_INT((a.config->'resources'->'cpu')::INT), 0) AS allocated_cpu,
 				-- MiB
-				COALESCE(SUM_INT((a.config->'resources'->'memory')::INT // 1024 // 1024), 0) AS allocated_memory
+				COALESCE(SUM_INT((a.config->'resources'->'memory')::INT // 1048576), 0) AS allocated_memory
 			FROM db_pegboard.clients AS c
 			LEFT JOIN db_pegboard.actors AS a
 			ON

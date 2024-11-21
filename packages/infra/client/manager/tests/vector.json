@@ -29,7 +29,7 @@
 		"add_prefix": {
 			"type": "remap",
 			"inputs": ["dynamic_servers"],
-			"source": ".message = \"\u001b[2m\" + \"actor_id=\" + .server_id + \"\u001b[0m \" + .message"
+			"source": ".message, err = \"\u001b[2m\" + \"actor_id=\" + .server_id + \"\u001b[0m \" + .message"
 		}
 	},
 	"sinks": {

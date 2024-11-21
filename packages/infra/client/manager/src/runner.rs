@@ -3,14 +3,22 @@ use std::{
 	os::unix::process::CommandExt,
 	path::{Path, PathBuf},
 	process::Stdio,
+	result::Result::{Err, Ok},
 	sync::Arc,
 	time::Duration,
 };
 
 use anyhow::*;
-use futures_util::{stream::FuturesUnordered, FutureExt, SinkExt, StreamExt};
+use futures_util::{
+	stream::{FuturesUnordered, SplitSink},
+	FutureExt, SinkExt, StreamExt,
+};
 use nix::{
-	sys::wait::{waitpid, WaitStatus},
+	errno::Errno,
+	sys::{
+		signal::{kill, Signal},
+		wait::{waitpid, WaitStatus},
+	},
 	unistd::{fork, pipe, read, setsid, write, ForkResult, Pid},
 };
 use tokio::{fs, net::TcpStream, sync::Mutex};
@@ -19,7 +27,9 @@ use tokio_tungstenite::{tungstenite::protocol::Message, WebSocketStream};
 use crate::utils;
 
 /// How often to check that a PID is still running when observing actor state.
-const PID_POLL_INTERVAL: Duration = std::time::Duration::from_millis(1000);
+const PID_POLL_INTERVAL: Duration = Duration::from_millis(1000);
+/// How long before killing a runner with a socket if it has not pinged.
+const PING_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug)]
 enum ObservationState {
@@ -45,17 +55,54 @@ impl Handle {
 		}
 	}
 
-	pub async fn attach_socket(&self, new_socket: WebSocketStream<TcpStream>) -> Result<()> {
+	pub async fn attach_socket(&self, ws_stream: WebSocketStream<TcpStream>) -> Result<()> {
 		match &self.comms {
 			Comms::Basic => bail!("attempt to attach socket to basic runner"),
-			Comms::Socket(socket) => {
-				let mut guard = socket.lock().await;
+			Comms::Socket(tx) => {
+				let mut guard = tx.lock().await;
 
 				if guard.is_some() {
 					tracing::warn!(pid=?self.pid, "runner received another socket");
 				}
 
-				*guard = Some(new_socket);
+				let (ws_tx, mut ws_rx) = ws_stream.split();
+
+				*guard = Some(ws_tx);
+
+				// Spawn a new thread to handle incoming messages
+				let self2 = self.clone();
+				tokio::task::spawn(async move {
+					let kill = loop {
+						match tokio::time::timeout(PING_TIMEOUT, ws_rx.next()).await {
+							Ok(msg) => match msg {
+								Some(Ok(Message::Ping(_))) => {}
+								Some(Ok(Message::Close(_))) | None => {
+									tracing::debug!(pid=?self2.pid, "runner socket closed");
+									break false;
+								}
+								Some(Ok(msg)) => {
+									tracing::warn!(pid=?self2.pid, ?msg, "unexpected message in runner socket")
+								}
+								Some(Err(err)) => {
+									tracing::error!(pid=?self2.pid, ?err, "runner socket error");
+									break true;
+								}
+							},
+							Err(_) => {
+								tracing::error!(pid=?self2.pid, "socket timed out, killing runner");
+
+								break true;
+							}
+						}
+					};
+
+					if kill {
+						if let Err(err) = self2.signal(Signal::SIGKILL) {
+							// TODO: This should hard error the manager?
+							tracing::error!(pid=?self2.pid, %err, "failed to kill runner");
+						}
+					}
+				});
 			}
 		}
 
@@ -190,7 +237,7 @@ impl Handle {
 			async {
 				utils::wait_for_write(&exit_code_path).await?;
 
-				Ok(ObservationState::Exited)
+				anyhow::Ok(ObservationState::Exited)
 			}
 			.boxed(),
 		);
@@ -201,9 +248,9 @@ impl Handle {
 				tokio::time::sleep(PID_POLL_INTERVAL).await;
 
 				if fs::metadata(&proc_path).await.is_ok() {
-					Ok(ObservationState::Running)
+					anyhow::Ok(ObservationState::Running)
 				} else {
-					Ok(ObservationState::Dead)
+					anyhow::Ok(ObservationState::Dead)
 				}
 			}
 			.boxed(),
@@ -263,6 +310,23 @@ impl Handle {
 
 		Ok(exit_code)
 	}
+
+	pub fn signal(&self, signal: Signal) -> Result<()> {
+		// https://pubs.opengroup.org/onlinepubs/9699919799/functions/kill.html
+		if (signal as i32) < 1 {
+			bail!("signals < 1 not allowed");
+		}
+
+		match kill(self.pid, signal) {
+			Ok(_) => {}
+			Err(Errno::ESRCH) => {
+				tracing::warn!(pid=?self.pid, "pid not found for signalling")
+			}
+			Err(err) => return Err(err.into()),
+		}
+
+		Ok(())
+	}
 }
 
 impl Handle {
@@ -278,7 +342,7 @@ impl Handle {
 #[derive(Clone)]
 pub enum Comms {
 	Basic,
-	Socket(Arc<Mutex<Option<WebSocketStream<TcpStream>>>>),
+	Socket(Arc<Mutex<Option<SplitSink<WebSocketStream<TcpStream>, Message>>>>),
 }
 
 impl Comms {
