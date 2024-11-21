@@ -107,13 +107,11 @@ services:
       retries: 10
 
   clickhouse:
-    image: bitnami/clickhouse:23.10.1
-    environment:
-      - CLICKHOUSE_ADMIN_PASSWORD=default
+    image: clickhouse/clickhouse-server:23.10.1
     volumes:
       - clickhouse-data:/var/lib/clickhouse
-      - ./clickhouse/config.xml:/bitnami/clickhouse/etc/conf.d/config.xml
-      - ./clickhouse/users.xml:/bitnami/clickhouse/etc/users.d/users.xml
+      - ./clickhouse/config.xml:/etc/clickhouse-server/config.d/config.xml
+      - ./clickhouse/users.xml:/etc/clickhouse-server/users.d/users.xml
     networks:
       - rivet-network
     healthcheck:
