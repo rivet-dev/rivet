@@ -13,6 +13,7 @@ path = "src/main.rs"
 anyhow = "1.0.79"
 deno_ast = "0.42.1"
 deno_core = "0.312.0"
+foundationdb = {version = "0.9.1", features = [ "fdb-7_1", "embedded-fdb-include" ] }
 futures-util = { version = "0.3" }
 netif = "0.1.6"
 nix = { version = "0.27", default-features = false, features = ["user", "signal"] }

@@ -311,22 +311,20 @@ async fn scale_servers(
 				.await?;
 			}
 		}
-		PoolType::Gg => {
+		PoolType::Gg | PoolType::Ats | PoolType::Fdb => {
 			let installed_servers = active_servers.filter(|server| server.is_installed);
 			let installed_count = installed_servers.clone().count();
 
 			if pctx.desired_count < installed_count {
-				scale_down_gg_servers(ctx, tx, actions, pctx, installed_servers, installed_count)
-					.await?;
-			}
-		}
-		PoolType::Ats => {
-			let installed_servers = active_servers.filter(|server| server.is_installed);
-			let installed_count = installed_servers.clone().count();
-
-			if pctx.desired_count < installed_count {
-				scale_down_ats_servers(ctx, tx, actions, pctx, installed_servers, installed_count)
-					.await?;
+				scale_down_servers_basic(
+					ctx,
+					tx,
+					actions,
+					pctx,
+					installed_servers,
+					installed_count,
+				)
+				.await?;
 			}
 		}
 		PoolType::Pegboard | PoolType::PegboardIsolate => {
@@ -345,6 +343,40 @@ async fn scale_servers(
 	match pctx.pool_type {
 		PoolType::Job => cleanup_tainted_job_servers(ctx, tx, actions, servers, pctx).await?,
 		_ => cleanup_tainted_servers(ctx, tx, actions, servers, pctx).await?,
+	}
+
+	Ok(())
+}
+
+async fn scale_down_servers_basic<
+	'a,
+	I: Iterator<Item = &'a Server> + DoubleEndedIterator + Clone,
+>(
+	ctx: &ActivityCtx,
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	actions: &mut Vec<Action>,
+	pctx: &PoolCtx,
+	installed_servers: I,
+	installed_count: usize,
+) -> GlobalResult<()> {
+	tracing::info!(
+		datacenter_id=?pctx.datacenter_id,
+		desired=%pctx.desired_count,
+		installed=%installed_count,
+		"scaling down {}", pctx.pool_type
+	);
+
+	let drain_count = installed_count.saturating_sub(pctx.desired_count);
+
+	// Drain servers
+	if drain_count != 0 {
+		tracing::info!(count=%drain_count, "draining {} servers", pctx.pool_type);
+
+		let drain_candidates = installed_servers
+			.take(drain_count)
+			.map(|server| server.server_id);
+
+		drain_servers(ctx, tx, actions, drain_candidates).await?;
 	}
 
 	Ok(())
@@ -396,71 +428,6 @@ async fn scale_down_job_servers(
 
 		let drain_candidates = nomad_servers
 			.iter()
-			.take(drain_count)
-			.map(|server| server.server_id);
-
-		drain_servers(ctx, tx, actions, drain_candidates).await?;
-	}
-
-	Ok(())
-}
-
-async fn scale_down_gg_servers<'a, I: Iterator<Item = &'a Server> + DoubleEndedIterator + Clone>(
-	ctx: &ActivityCtx,
-	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-	actions: &mut Vec<Action>,
-	pctx: &PoolCtx,
-	installed_servers: I,
-	installed_count: usize,
-) -> GlobalResult<()> {
-	tracing::info!(
-		datacenter_id=?pctx.datacenter_id,
-		desired=%pctx.desired_count,
-		installed=%installed_count,
-		"scaling down gg"
-	);
-
-	let drain_count = installed_count.saturating_sub(pctx.desired_count);
-
-	// Drain servers
-	if drain_count != 0 {
-		tracing::info!(count=%drain_count, "draining gg servers");
-
-		let drain_candidates = installed_servers
-			.take(drain_count)
-			.map(|server| server.server_id);
-
-		drain_servers(ctx, tx, actions, drain_candidates).await?;
-	}
-
-	Ok(())
-}
-
-async fn scale_down_ats_servers<
-	'a,
-	I: Iterator<Item = &'a Server> + DoubleEndedIterator + Clone,
->(
-	ctx: &ActivityCtx,
-	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-	actions: &mut Vec<Action>,
-	pctx: &PoolCtx,
-	installed_servers: I,
-	installed_count: usize,
-) -> GlobalResult<()> {
-	tracing::info!(
-		datacenter_id=?pctx.datacenter_id,
-		desired=%pctx.desired_count,
-		installed=%installed_count,
-		"scaling down ats"
-	);
-
-	let drain_count = installed_count.saturating_sub(pctx.desired_count);
-
-	// Drain servers
-	if drain_count != 0 {
-		tracing::info!(count=%drain_count, "draining ats servers");
-
-		let drain_candidates = installed_servers
 			.take(drain_count)
 			.map(|server| server.server_id);
 

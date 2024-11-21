@@ -2,7 +2,7 @@ FROM clux/muslrust:1.81.0-stable AS rust
 
 WORKDIR /app
 COPY . .
-RUN cargo build --release --bin echo-server
+RUN cargo build --release --bin pegboard-echo-server
 
 # Create non-root user and group
 RUN useradd -m -d /home/nonroot -s /bin/sh nonroot
@@ -18,9 +18,9 @@ FROM scratch
 COPY --from=rust /passwd /etc/passwd
 COPY --from=rust /group /etc/group
 
-COPY --from=rust /app/target/x86_64-unknown-linux-musl/release/echo-server /echo-server
+COPY --from=rust /app/target/x86_64-unknown-linux-musl/release/pegboard-echo-server /pegboard-echo-server
 
 # Switch to the non-root user
 USER nonroot
 
-CMD ["/echo-server"]
+CMD ["/pegboard-echo-server"]

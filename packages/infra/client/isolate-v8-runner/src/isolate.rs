@@ -4,6 +4,7 @@ use std::{
 	os::fd::FromRawFd,
 	path::{Path, PathBuf},
 	rc::Rc,
+	result::Result::{Err, Ok},
 	sync::{mpsc, Arc},
 };
 
@@ -20,7 +21,7 @@ use nix::{libc, unistd::pipe};
 use tokio::{fs, sync::watch};
 use uuid::Uuid;
 
-use crate::{config::Config, log_shipper};
+use crate::{config::Config, utils, log_shipper};
 
 pub fn run(actors_path: PathBuf, actor_id: Uuid, stop_rx: watch::Receiver<()>) -> Result<()> {
 	let actor_path = actors_path.join(actor_id.to_string());
@@ -120,6 +121,21 @@ async fn run_inner(
 	config: Config,
 ) -> Result<i32> {
 	println!("{actor_id}: Starting isolate");
+
+	// let db = utils::fdb_handle()?;
+
+	// db.run(|trx, _maybe_committed| async move {
+	// 	trx.set(b"hello", b"world");
+
+	// 	Ok(())
+	// })
+	// .await?;
+
+	// let res = db
+	// 	.run(|trx, _maybe_committed| async move { Ok(trx.get(b"hello", false).await?) })
+	// 	.await?;
+
+	// println!("{actor_id}: hello {:?}", std::str::from_utf8(&res.unwrap())?);
 
 	// Load script into a static module loader. No dynamic scripts can be loaded this way.
 	let script_content = fs::read_to_string(actor_path.join("index.js"))

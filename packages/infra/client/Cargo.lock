@@ -262,6 +262,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-recursion"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b43422f69d8ff38f95f1b2bb76517c91589a924d1559a0e935d7c8ce0274c11"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.82",
+]
+
+[[package]]
 name = "async-stream"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -436,6 +447,26 @@ dependencies = [
  "shlex",
  "syn 2.0.87",
  "which 4.4.2",
+]
+
+[[package]]
+name = "bindgen"
+version = "0.70.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f49d8fed880d473ea71efb9bf597651e77201bdd4893efe54c9e5d65ae04ce6f"
+dependencies = [
+ "bitflags 2.6.0",
+ "cexpr",
+ "clang-sys",
+ "itertools 0.12.1",
+ "log",
+ "prettyplease 0.2.24",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "rustc-hash",
+ "shlex",
+ "syn 2.0.82",
 ]
 
 [[package]]
@@ -2349,6 +2380,58 @@ dependencies = [
 ]
 
 [[package]]
+name = "foundationdb"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c30b4254cb4c01b50a74dad6aa48e17666726300b3adddb3c959a7e852f286bd"
+dependencies = [
+ "async-recursion",
+ "async-trait",
+ "foundationdb-gen",
+ "foundationdb-macros",
+ "foundationdb-sys",
+ "futures",
+ "memchr",
+ "rand",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "static_assertions",
+ "uuid",
+]
+
+[[package]]
+name = "foundationdb-gen"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93b9deedf92107a1076e518d60931b6ed1a632ae0c51e7b491bfd42edb4148ce"
+dependencies = [
+ "xml-rs",
+]
+
+[[package]]
+name = "foundationdb-macros"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "afc84a5ff0dba78222551017f5625f3365aa09551c78cfaa44136fc6818c2611"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.82",
+ "try_map",
+]
+
+[[package]]
+name = "foundationdb-sys"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3bae14dba30b8dcc4905a9189ebb18bc9db9744ef0ad8f2b94ef00d21e176964"
+dependencies = [
+ "bindgen 0.70.1",
+ "libc",
+]
+
+[[package]]
 name = "fqdn"
 version = "0.3.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4083,6 +4166,7 @@ dependencies = [
  "deno_ast",
  "deno_core",
  "deno_runtime",
+ "foundationdb",
  "futures-util",
  "netif",
  "nix 0.27.1",
@@ -6811,6 +6895,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
+name = "try_map"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb1626d07cb5c1bb2cf17d94c0be4852e8a7c02b041acec9a8c5bdda99f9d580"
+
+[[package]]
 name = "tungstenite"
 version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7051,7 +7141,7 @@ version = "0.106.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a381badc47c6f15acb5fe0b5b40234162349ed9d4e4fd7c83a7f5547c0fc69c5"
 dependencies = [
- "bindgen",
+ "bindgen 0.69.5",
  "bitflags 2.6.0",
  "fslock",
  "gzip-header",

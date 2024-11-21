@@ -382,6 +382,247 @@ components:
       required:
       - build
       type: object
+    AdminClustersBuildDeliveryMethod:
+      enum:
+      - traffic_server
+      - s3_direct
+      type: string
+    AdminClustersCluster:
+      properties:
+        cluster_id:
+          format: uuid
+          type: string
+        create_ts:
+          format: int64
+          type: integer
+        name_id:
+          type: string
+        owner_team_id:
+          format: uuid
+          type: string
+      required:
+      - cluster_id
+      - name_id
+      - create_ts
+      type: object
+    AdminClustersCreateClusterRequest:
+      properties:
+        name_id:
+          type: string
+        owner_team_id:
+          format: uuid
+          type: string
+      required:
+      - name_id
+      type: object
+    AdminClustersCreateClusterResponse:
+      properties:
+        cluster_id:
+          format: uuid
+          type: string
+      required:
+      - cluster_id
+      type: object
+    AdminClustersCreateDatacenterRequest:
+      properties:
+        build_delivery_method:
+          $ref: '#/components/schemas/AdminClustersBuildDeliveryMethod'
+        display_name:
+          type: string
+        name_id:
+          type: string
+        prebakes_enabled:
+          type: boolean
+        provider:
+          $ref: '#/components/schemas/AdminClustersProvider'
+        provider_datacenter_id:
+          type: string
+      required:
+      - display_name
+      - name_id
+      - provider
+      - provider_datacenter_id
+      - build_delivery_method
+      - prebakes_enabled
+      type: object
+    AdminClustersCreateDatacenterResponse:
+      properties:
+        datacenter_id:
+          format: uuid
+          type: string
+      required:
+      - datacenter_id
+      type: object
+    AdminClustersDatacenter:
+      properties:
+        build_delivery_method:
+          $ref: '#/components/schemas/AdminClustersBuildDeliveryMethod'
+        cluster_id:
+          format: uuid
+          type: string
+        datacenter_id:
+          format: uuid
+          type: string
+        display_name:
+          type: string
+        name_id:
+          type: string
+        pools:
+          items:
+            $ref: '#/components/schemas/AdminClustersPool'
+          type: array
+        prebakes_enabled:
+          type: boolean
+        provider:
+          $ref: '#/components/schemas/AdminClustersProvider'
+        provider_datacenter_id:
+          type: string
+      required:
+      - datacenter_id
+      - cluster_id
+      - name_id
+      - display_name
+      - provider
+      - provider_datacenter_id
+      - pools
+      - build_delivery_method
+      - prebakes_enabled
+      type: object
+    AdminClustersHardware:
+      properties:
+        provider_hardware:
+          type: string
+      required:
+      - provider_hardware
+      type: object
+    AdminClustersListClustersResponse:
+      properties:
+        clusters:
+          items:
+            $ref: '#/components/schemas/AdminClustersCluster'
+          type: array
+      required:
+      - clusters
+      type: object
+    AdminClustersListDatacentersResponse:
+      properties:
+        datacenters:
+          items:
+            $ref: '#/components/schemas/AdminClustersDatacenter'
+          type: array
+      required:
+      - datacenters
+      type: object
+    AdminClustersListServersResponse:
+      properties:
+        servers:
+          items:
+            $ref: '#/components/schemas/AdminClustersServer'
+          type: array
+      required:
+      - servers
+      type: object
+    AdminClustersPool:
+      properties:
+        desired_count:
+          type: integer
+        drain_timeout_ms:
+          format: int64
+          type: integer
+        hardware:
+          items:
+            $ref: '#/components/schemas/AdminClustersHardware'
+          type: array
+        max_count:
+          type: integer
+        min_count:
+          type: integer
+        pool_type:
+          $ref: '#/components/schemas/AdminClustersPoolType'
+      required:
+      - pool_type
+      - hardware
+      - desired_count
+      - min_count
+      - max_count
+      - drain_timeout_ms
+      type: object
+    AdminClustersPoolType:
+      enum:
+      - job
+      - gg
+      - ats
+      - pegboard
+      - pegboard_isolate
+      - fdb
+      type: string
+    AdminClustersPoolUpdate:
+      properties:
+        desired_count:
+          type: integer
+        drain_timeout:
+          format: int64
+          type: integer
+        hardware:
+          items:
+            $ref: '#/components/schemas/AdminClustersHardware'
+          type: array
+        max_count:
+          type: integer
+        min_count:
+          type: integer
+        pool_type:
+          $ref: '#/components/schemas/AdminClustersPoolType'
+      required:
+      - pool_type
+      - hardware
+      type: object
+    AdminClustersProvider:
+      enum:
+      - linode
+      type: string
+    AdminClustersServer:
+      properties:
+        datacenter_id:
+          format: uuid
+          type: string
+        pool_type:
+          $ref: '#/components/schemas/AdminClustersPoolType'
+        public_ip:
+          type: string
+        server_id:
+          format: uuid
+          type: string
+      required:
+      - server_id
+      - datacenter_id
+      - pool_type
+      type: object
+    AdminClustersUpdateDatacenterRequest:
+      properties:
+        pools:
+          items:
+            $ref: '#/components/schemas/AdminClustersPoolUpdate'
+          type: array
+        prebakes_enabled:
+          type: boolean
+      required:
+      - pools
+      type: object
+    AdminLoginRequest:
+      properties:
+        name:
+          type: string
+      required:
+      - name
+      type: object
+    AdminLoginResponse:
+      properties:
+        url:
+          type: string
+      required:
+      - url
+      type: object
     AuthCompleteStatus:
       description: Represents the state of an external account linking process.
       enum:

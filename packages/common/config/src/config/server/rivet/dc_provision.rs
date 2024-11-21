@@ -34,6 +34,7 @@ pub enum PoolType {
 	Ats,
 	Pegboard,
 	PegboardIsolate,
+	Fdb,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

@@ -108,6 +108,7 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 							}
 							PoolType::Gg => linode::types::FirewallPreset::Gg,
 							PoolType::Ats => linode::types::FirewallPreset::Ats,
+							PoolType::Fdb => linode::types::FirewallPreset::Fdb,
 						},
 						vlan_ip: Some(vlan_ip.ip()),
 						vlan_ip_net: Some(vlan_ip.ip_net()),
@@ -304,7 +305,13 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 				.await?;
 			}
 			Main::Taint(_) => {} // Only for state
-			Main::Destroy(_) => break,
+			Main::Destroy(_) => {
+				if let PoolType::Fdb = input.pool_type {
+					bail!("you cant kill fdb you stupid chud");
+				}
+
+				break;
+			},
 		}
 	}
 
@@ -384,8 +391,25 @@ async fn get_vlan_ip(ctx: &ActivityCtx, input: &GetVlanIpInput) -> GlobalResult<
 		}
 		PoolType::Gg => provision_config.pools.gg.vlan_addr_range(),
 		PoolType::Ats => provision_config.pools.ats.vlan_addr_range(),
+		PoolType::Fdb => provision_config.pools.fdb.vlan_addr_range(),
 	};
 	let max_idx = vlan_addr_range.count() as i64;
+
+	// HACK: We should be storing `FirewallPreset` in the database and comparing against that instead of pool
+	// type since certain pool types share vlan ip networks. This converts the actual pool type to the pool
+	// types that share the ip network.
+	let shared_net_pool_types = match input.pool_type {
+		PoolType::Job | PoolType::Pegboard | PoolType::PegboardIsolate => {
+			vec![
+				PoolType::Job as i32,
+				PoolType::Pegboard as i32,
+				PoolType::PegboardIsolate as i32,
+			]
+		}
+		PoolType::Gg => vec![PoolType::Gg as i32],
+		PoolType::Ats => vec![PoolType::Ats as i32],
+		PoolType::Fdb => vec![PoolType::Fdb as i32],
+	};
 
 	let (network_idx,) = sql_fetch_one!(
 		[ctx, (i64,)]
@@ -398,7 +422,7 @@ async fn get_vlan_ip(ctx: &ActivityCtx, input: &GetVlanIpInput) -> GlobalResult<
 					SELECT 1
 					FROM db_cluster.servers
 					WHERE
-						pool_type = $3 AND
+						pool_type = ANY($3) AND
 						-- Technically this should check all servers where their datacenter's provider and
 						-- provider_datacenter_id are the same because VLAN is separated by irl datacenter
 						-- but this is good enough
@@ -419,7 +443,7 @@ async fn get_vlan_ip(ctx: &ActivityCtx, input: &GetVlanIpInput) -> GlobalResult<
 		// Choose a random index to start from for better index spread
 		rand::thread_rng().gen_range(0i64..max_idx),
 		max_idx,
-		input.pool_type as i32,
+		shared_net_pool_types,
 		input.datacenter_id,
 		input.server_id,
 	)

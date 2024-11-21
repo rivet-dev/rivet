@@ -1,5 +1,6 @@
 use indoc::indoc;
 
+pub mod fdb;
 pub mod nomad;
 pub mod ok_server;
 pub mod pegboard;
@@ -77,5 +78,11 @@ pub mod cni {
 
 	pub fn plugins() -> String {
 		include_str!("../files/cni_plugins.sh").to_string()
+	}
+}
+
+pub mod python {
+	pub fn install() -> String {
+		"apt-get install -y python3 pip".to_string()
 	}
 }

@@ -6,5 +6,5 @@ import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
 export declare const PoolType: core.serialization.Schema<serializers.admin.clusters.PoolType.Raw, Rivet.admin.clusters.PoolType>;
 export declare namespace PoolType {
-    type Raw = "job" | "gg" | "ats" | "pegboard" | "pegboard_isolate";
+    type Raw = "job" | "gg" | "ats" | "pegboard" | "pegboard_isolate" | "fdb";
 }

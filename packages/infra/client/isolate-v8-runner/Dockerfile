@@ -5,6 +5,10 @@ WORKDIR /app
 COPY packages/infra/client/runner-protocol/ runner-protocol/
 COPY packages/infra/client/isolate-v8-runner/Cargo.toml isolate-v8-runner/Cargo.toml
 COPY packages/infra/client/isolate-v8-runner/src/ isolate-v8-runner/src/
+
+# Installs shared libs
+RUN apt-get update && apt-get install -y libclang-dev
+
 RUN \
 	--mount=type=cache,target=/root/.cargo/git \
 	--mount=type=cache,target=/root/.cargo/registry \
@@ -12,7 +16,7 @@ RUN \
 	cd isolate-v8-runner && \
 	cargo build --release --target x86_64-unknown-linux-gnu && \
 	mkdir -p /app/dist && \
-	mv /app/isolate-v8-runner/target/x86_64-unknown-linux-gnu/release/isolate-v8-runner /app/dist/isolate-v8-runner
+	mv /app/isolate-v8-runner/target/x86_64-unknown-linux-gnu/release/rivet-isolate-v8-runner /app/dist/rivet-isolate-v8-runner
 
 # Create an empty image and copy binaries into it to minimize the size of the image
 FROM scratch

@@ -35,7 +35,6 @@ pub(crate) async fn cluster_server_drain(ctx: &mut WorkflowCtx, input: &Input) -
 				.send()
 				.await?;
 		}
-		PoolType::Ats => {}
 		PoolType::Pegboard | PoolType::PegboardIsolate => {
 			let pegboard_client_id = ctx
 				.activity(DrainPegboardClientInput {
@@ -51,6 +50,7 @@ pub(crate) async fn cluster_server_drain(ctx: &mut WorkflowCtx, input: &Input) -
 					.await?;
 			}
 		}
+		PoolType::Ats | PoolType::Fdb => {}
 	}
 
 	Ok(())

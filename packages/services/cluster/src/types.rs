@@ -89,6 +89,7 @@ pub enum PoolType {
 	Ats = 2,
 	Pegboard = 3,
 	PegboardIsolate = 4,
+	Fdb = 5,
 }
 
 impl std::fmt::Display for PoolType {
@@ -99,6 +100,7 @@ impl std::fmt::Display for PoolType {
 			PoolType::Ats => write!(f, "ats"),
 			PoolType::Pegboard => write!(f, "pegboard"),
 			PoolType::PegboardIsolate => write!(f, "pegboard-isolate"),
+			PoolType::Fdb => write!(f, "fdb"),
 		}
 	}
 }
@@ -113,6 +115,7 @@ impl From<rivet_config::config::rivet::dc_provision::PoolType> for PoolType {
 			rivet_config::config::rivet::dc_provision::PoolType::PegboardIsolate => {
 				PoolType::PegboardIsolate
 			}
+			rivet_config::config::rivet::dc_provision::PoolType::Fdb => PoolType::Fdb,
 		}
 	}
 }

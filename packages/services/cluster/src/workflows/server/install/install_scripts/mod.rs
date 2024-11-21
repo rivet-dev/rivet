@@ -61,6 +61,10 @@ pub async fn gen_install(
 			script.push(components::cni::plugins());
 			script.push(components::pegboard::install(config).await?);
 		}
+		PoolType::Fdb => {
+			script.push(components::python::install());
+			script.push(components::fdb::install(initialize_immediately));
+		}
 	}
 
 	// MARK: Common (post)
@@ -151,6 +155,16 @@ pub async fn gen_initialize(
 				"pegboard".into(),
 				components::vector::PrometheusTarget {
 					endpoint: "http://127.0.0.1:6000".into(),
+					scrape_interval: 15,
+				},
+			);
+		}
+		PoolType::Fdb => {
+			script.push(components::fdb::configure());
+			prometheus_targets.insert(
+				"pegboard".into(),
+				components::vector::PrometheusTarget {
+					endpoint: "http://127.0.0.1:9161".into(),
 					scrape_interval: 15,
 				},
 			);

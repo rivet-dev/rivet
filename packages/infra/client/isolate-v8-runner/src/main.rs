@@ -7,6 +7,8 @@ use std::{
 
 use anyhow::*;
 use deno_runtime::deno_core::{v8_set_flags, JsRuntime};
+use deno_runtime::deno_core::JsRuntime;
+use foundationdb as fdb;
 use futures_util::{stream::SplitStream, StreamExt};
 use tokio::{
 	fs,
@@ -35,6 +37,10 @@ async fn main() -> Result<()> {
 	let working_path = Path::new(&working_path);
 
 	redirect_logs(working_path.join("log")).await?;
+
+	// Start FDB network thread
+	let _network = unsafe { fdb::boot() };
+	tokio::spawn(utils::fdb_health_check());
 
 	// Write PID to file
 	fs::write(

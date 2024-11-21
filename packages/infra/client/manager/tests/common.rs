@@ -2,6 +2,7 @@ use std::{
 	convert::Infallible,
 	net::SocketAddr,
 	path::{Path, PathBuf},
+	time::Duration,
 	sync::{
 		atomic::{AtomicBool, Ordering},
 		Arc, Once,
@@ -197,15 +198,16 @@ pub async fn init_client(gen_path: &Path, working_path: &Path) -> Config {
 		client_id: Uuid::new_v4(),
 		datacenter_id: Uuid::new_v4(),
 		network_ip: "127.0.0.1".parse().unwrap(),
-		vector_socket_addr: "127.0.0.1:5021".parse().unwrap(),
+		vector_socket_addr: Some("127.0.0.1:5021".parse().unwrap()),
 		// Not necessary for the test
 		flavor: protocol::ClientFlavor::Container,
 		redirect_logs: false,
 
+		pegboard_ws_endpoint: Url::parse("http://127.0.0.1:5030").unwrap(),
 		// Not necessary for the test
-		api_endpoint: "".to_string(),
+		api_public_endpoint: Url::parse("http://127.0.0.1").unwrap(),
 
-		working_path: working_path.to_path_buf(),
+		data_dir: working_path.to_path_buf(),
 		container_runner_binary_path,
 		isolate_runner_binary_path,
 	};
@@ -326,7 +328,7 @@ pub async fn build_binaries(gen_path: &Path) {
 	.unwrap();
 
 	build_runner(gen_path, "container").await;
-	build_runner(gen_path, "v8-isolate").await;
+	build_runner(gen_path, "isolate-v8").await;
 }
 
 async fn build_runner(gen_path: &Path, variant: &str) {
@@ -363,9 +365,9 @@ async fn build_runner(gen_path: &Path, variant: &str) {
 
 	let container_name = format!("temp-pegboard-{variant}-runner-container");
 	let binary_path_in_container = if variant == "container" {
-		format!("/app/target/x86_64-unknown-linux-musl/release/{variant}-runner")
+		format!("/app/target/x86_64-unknown-linux-musl/release/rivet-{variant}-runner")
 	} else {
-		format!("/{variant}-runner")
+		format!("/rivet-{variant}-runner")
 	};
 
 	// Create a temporary container
@@ -443,7 +445,13 @@ pub async fn start_vector() {
 		.join("tests")
 		.join("vector.json");
 
-	tracing::info!("{}", config_path.display());
+	Command::new("docker")
+		.arg("rm")
+		.arg("test-vector")
+		.arg("--force")
+		.status()
+		.await
+		.unwrap();
 
 	let status = Command::new("docker")
 		.arg("run")
@@ -469,6 +477,53 @@ pub async fn start_vector() {
 	assert!(status.success());
 }
 
+pub async fn start_fdb() {
+	Command::new("docker")
+		.arg("rm")
+		.arg("test-fdb")
+		.arg("--force")
+		.status()
+		.await
+		.unwrap();
+
+	let status = Command::new("docker")
+		.arg("run")
+		.arg("--rm")
+		.arg("-p")
+		.arg("4500:4500")
+		.arg("--name")
+		.arg("test-fdb")
+		.arg("foundationdb/foundationdb:7.1.19")
+		.status()
+		.await
+		.unwrap();
+
+	assert!(status.success());
+}
+
+pub async fn create_fdb_db() {
+	loop {
+		// Create db
+		let status = Command::new("docker")
+			.arg("exec")
+			.arg("test-fdb")
+			.arg("fdbcli")
+			.arg("--exec")
+			.arg(r#"configure new single ssd"#)
+			.status()
+			.await
+			.unwrap();
+
+		if status.success() {
+			break;
+		} else {
+			tracing::error!("failed to create fdb database");
+		}
+
+		tokio::time::sleep(Duration::from_secs(1)).await;
+	}
+}
+
 static SETUP_DEPENDENCIES: AtomicBool = AtomicBool::new(false);
 static mut TEMP_DIR_PATH: Option<PathBuf> = None;
 
@@ -489,6 +544,9 @@ pub async fn setup_dependencies() -> (Option<tempfile::TempDir>, PathBuf) {
 
 		tokio::spawn(start_vector());
 
+		tokio::spawn(start_fdb());
+		create_fdb_db().await;
+
 		(Some(tmp_dir), tmp_dir_path)
 	} else {
 		// SAFETY: Once SETUP_DEPENDENCIES is true, TEMP_DIR_PATH is guaranteed to be initialized.
@@ -501,7 +559,7 @@ pub fn container_runner_path(gen_path: &Path) -> PathBuf {
 }
 
 pub fn v8_isolate_runner_path(gen_path: &Path) -> PathBuf {
-	gen_path.join("pegboard-v8-isolate-runner").to_path_buf()
+	gen_path.join("pegboard-isolate-v8-runner").to_path_buf()
 }
 
 pub fn image_path(gen_path: &Path) -> PathBuf {

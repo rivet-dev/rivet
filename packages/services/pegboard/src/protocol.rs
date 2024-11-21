@@ -83,7 +83,6 @@ pub enum Command {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash)]
 pub struct ActorConfig {
-	// pub driver: Driver,
 	pub image: Image,
 	pub root_user_enabled: bool,
 	pub resources: Resources,

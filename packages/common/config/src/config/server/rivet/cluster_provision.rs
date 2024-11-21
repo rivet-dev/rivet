@@ -35,6 +35,7 @@ pub struct ClusterPools {
 	pub pegboard: ClusterPoolPegboard,
 	pub gg: ClusterPoolGg,
 	pub ats: ClusterPoolAts,
+	pub fdb: ClusterPoolFdb,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -207,6 +208,27 @@ pub struct ClusterPoolAts {
 impl ClusterPoolAts {
 	pub fn vlan_ip_net(&self) -> Ipv4Net {
 		Ipv4Net::new(Ipv4Addr::new(10, 0, 0, 64), 26).unwrap()
+	}
+
+	pub fn vlan_addr_range(&self) -> Ipv4AddrRange {
+		self.vlan_ip_net().hosts()
+	}
+
+	pub fn firewall_rules(&self) -> Vec<FirewallRule> {
+		FirewallRule::base_rules()
+	}
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct ClusterPoolFdb {
+	pub vlan_ip_net: Option<Ipv4Net>,
+	pub firewall_rules: Option<Vec<FirewallRule>>,
+}
+
+impl ClusterPoolFdb {
+	pub fn vlan_ip_net(&self) -> Ipv4Net {
+		Ipv4Net::new(Ipv4Addr::new(10, 0, 2, 0), 26).unwrap()
 	}
 
 	pub fn vlan_addr_range(&self) -> Ipv4AddrRange {
