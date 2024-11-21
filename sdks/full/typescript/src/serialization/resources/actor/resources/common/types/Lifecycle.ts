@@ -9,10 +9,12 @@ import * as core from "../../../../../../core";
 export const Lifecycle: core.serialization.ObjectSchema<serializers.actor.Lifecycle.Raw, Rivet.actor.Lifecycle> =
     core.serialization.object({
         killTimeout: core.serialization.property("kill_timeout", core.serialization.number().optional()),
+        durable: core.serialization.boolean().optional(),
     });
 
 export declare namespace Lifecycle {
     interface Raw {
         kill_timeout?: number | null;
+        durable?: boolean | null;
     }
 }

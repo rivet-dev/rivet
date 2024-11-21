@@ -171,7 +171,7 @@ async fn allocate_actor(
 		WHERE
 			allocated_cpu + $6 <= available_cpu AND
 			allocated_memory + $7 <= available_memory
-		ORDER BY allocated_cpu, allocated_memory DESC
+		ORDER BY allocated_cpu DESC, allocated_memory DESC
 		LIMIT 1
 		RETURNING client_id
 		",

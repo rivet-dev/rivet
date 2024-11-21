@@ -14,22 +14,24 @@ use deno_core::{unsync::MaskFutureAsSend, v8::CreateParams, ModuleSpecifier, Sta
 use deno_runtime::{
 	deno_fs::InMemoryFs,
 	deno_io::{Stdio, StdioPipe},
-	deno_permissions::{NetListenDescriptor, Permissions, PermissionsContainer, UnaryPermission},
+	deno_permissions::{
+		self, NetListenDescriptor, Permissions, PermissionsContainer, UnaryPermission,
+	},
 	permissions::RuntimePermissionDescriptorParser,
 	worker::{MainWorker, MainWorkerTerminateHandle, WorkerOptions, WorkerServiceOptions},
 };
 use nix::{libc, unistd::pipe};
+use pegboard::protocol;
+use pegboard_config::isolate_runner as config;
 use tokio::{fs, sync::mpsc};
 use uuid::Uuid;
 
-use crate::{
-	config::{ActorConfig, Config},
-	ext, log_shipper, utils,
-};
+use crate::{ext, log_shipper, utils};
 
 pub fn run(
-	config: Config,
+	config: config::Config,
 	actor_id: Uuid,
+	owner_tx: mpsc::Sender<protocol::ActorOwner>,
 	terminate_tx: mpsc::Sender<MainWorkerTerminateHandle>,
 ) -> Result<()> {
 	let actor_path = config.actors_path.join(actor_id.to_string());
@@ -43,8 +45,10 @@ pub fn run(
 	// Read config
 	let config_data = std::fs::read_to_string(actor_path.join("config.json"))
 		.context("Failed to read config file")?;
-	let actor_config =
-		serde_json::from_str::<ActorConfig>(&config_data).context("Failed to parse config file")?;
+	let actor_config = serde_json::from_str::<config::actor::Config>(&config_data)
+		.context("Failed to parse config file")?;
+
+	owner_tx.try_send(actor_config.owner.clone())?;
 
 	let (shutdown_tx, shutdown_rx) = smpsc::sync_channel(1);
 
@@ -123,17 +127,17 @@ pub fn run(
 }
 
 pub async fn run_inner(
-	config: Config,
+	config: config::Config,
 	actor_path: PathBuf,
 	actor_id: Uuid,
 	terminate_tx: mpsc::Sender<MainWorkerTerminateHandle>,
 	msg_tx: Option<smpsc::SyncSender<log_shipper::ReceivedMessage>>,
-	actor_config: ActorConfig,
+	actor_config: config::actor::Config,
 ) -> Result<i32> {
 	tracing::info!(?actor_id, "Starting isolate");
 
 	// Init KV store (create or open)
-	let mut kv = ActorKv::new(utils::fdb_handle(&config)?, actor_id);
+	let mut kv = ActorKv::new(utils::fdb_handle(&config)?, actor_config.owner.clone());
 	kv.init().await?;
 
 	tracing::info!(?actor_id, "Isolate KV initialized");
@@ -165,7 +169,10 @@ pub async fn run_inner(
 					NetListenDescriptor::from_ipv4(
 						loopback,
 						Some(port.target),
-						port.protocol.into(),
+						match port.protocol {
+							protocol::TransportProtocol::Tcp => deno_permissions::Protocol::Tcp,
+							protocol::TransportProtocol::Udp => deno_permissions::Protocol::Udp,
+						},
 					)
 				})
 				.collect(),

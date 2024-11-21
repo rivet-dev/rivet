@@ -3,8 +3,6 @@
 #[cfg(feature = "test")]
 mod actor;
 #[cfg(feature = "test")]
-pub mod config;
-#[cfg(feature = "test")]
 mod ctx;
 #[cfg(feature = "test")]
 mod metrics;

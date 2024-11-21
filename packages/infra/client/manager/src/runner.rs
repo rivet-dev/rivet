@@ -21,6 +21,7 @@ use nix::{
 	},
 	unistd::{fork, pipe, read, setsid, write, ForkResult, Pid},
 };
+use pegboard_config::runner_protocol;
 use tokio::{fs, net::TcpStream, sync::Mutex};
 use tokio_tungstenite::{tungstenite::protocol::Message, WebSocketStream};
 

@@ -14,7 +14,7 @@ use futures_util::{
 use indoc::indoc;
 use nix::unistd::Pid;
 use pegboard::{protocol, system_info::SystemInfo};
-use serde_json::json;
+use pegboard_config::{isolate_runner::Config as IsolateRunnerConfig, Client, Config};
 use sqlx::{pool::PoolConnection, Sqlite, SqlitePool};
 use tokio::{
 	fs,
@@ -25,7 +25,7 @@ use tokio_tungstenite::{tungstenite::protocol::Message, MaybeTlsStream, WebSocke
 use url::Url;
 use uuid::Uuid;
 
-use crate::{actor::Actor, config::Config, metrics, runner, utils};
+use crate::{actor::Actor, metrics, runner, utils};
 
 const PING_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -349,12 +349,11 @@ impl Ctx {
 
 			let working_path = self.isolate_runner_path();
 
-			// TODO: Use schema in isolate-v8-runner (don't import isolate-v8-runner because its fat)
-			let config = json!({
-				"actors_path": self.actors_path(),
-				"fdb_cluster_path": self.fdb_cluster_path(),
-				"runner_addr": format!("127.0.0.1:{}", self.config().runner.port()),
-			});
+			let config = IsolateRunnerConfig {
+				actors_path: self.actors_path(),
+				fdb_cluster_path: self.fdb_cluster_path(),
+				runner_addr: SocketAddr::from([127, 0, 0, 1], self.config().runner.port()),
+			};
 
 			// Write isolate runner config
 			fs::write(
@@ -595,7 +594,7 @@ impl Ctx {
 }
 
 impl Ctx {
-	pub fn config(&self) -> &crate::config::Client {
+	pub fn config(&self) -> &Client {
 		&self.config.client
 	}
 

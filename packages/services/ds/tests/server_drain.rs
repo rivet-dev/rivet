@@ -75,7 +75,10 @@ async fn server_drain(ctx: TestCtx) {
 			cpu_millicores: 50,
 			memory_mib: 50,
 		},
-		kill_timeout_ms: 10000,
+		lifecycle: ds::types::ServerLifecycle {
+			kill_timeout_ms: 10000,
+			durable: false,
+		},
 		tags: vec![(String::from("test"), String::from("123"))]
 			.into_iter()
 			.collect(),

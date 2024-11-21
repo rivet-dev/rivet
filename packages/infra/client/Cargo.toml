@@ -5,7 +5,7 @@ members = [
 	"isolate-v8-runner",
 	"actor-kv",
 	"manager",
-	"runner-protocol",
+	"config",
 ]
 
 [workspace.package]
@@ -18,7 +18,7 @@ license = "Apache-2.0"
 container-runner = { path = "container-runner" }
 echo = { path = "echo" }
 isolate-v8-runner = { path = "isolate-v8-runner" }
-runner-protocol = { path = "runner-protocol", package = "pegboard-runner-protocol" }
+pegboard-config = { path = "config" }
 actor-kv = { path = "actor-kv", package = "pegboard-actor-kv" }
 
 [workspace.dependencies.sqlx]

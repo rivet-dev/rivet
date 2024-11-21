@@ -15,7 +15,7 @@ use rivet_operation::prelude::proto::backend;
 
 use crate::types::{
 	GameGuardProtocol, NetworkMode, PortAuthorization, PortAuthorizationType, Routing,
-	ServerResources, ServerRuntime,
+	ServerLifecycle, ServerResources, ServerRuntime,
 };
 
 pub mod nomad;
@@ -37,7 +37,7 @@ pub struct Input {
 	pub runtime: ServerRuntime,
 	pub tags: HashMap<String, String>,
 	pub resources: ServerResources,
-	pub kill_timeout_ms: i64,
+	pub lifecycle: ServerLifecycle,
 	pub image_id: Uuid,
 	pub root_user_enabled: bool,
 	pub args: Vec<String>,
@@ -64,7 +64,7 @@ pub async fn ds_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()>
 				cluster_id: input.cluster_id,
 				tags: input.tags.clone(),
 				resources: input.resources.clone(),
-				kill_timeout_ms: input.kill_timeout_ms,
+				lifecycle: input.lifecycle.clone(),
 				image_id: input.image_id,
 				root_user_enabled: input.root_user_enabled,
 				args: input.args.clone(),
@@ -83,7 +83,7 @@ pub async fn ds_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()>
 				cluster_id: input.cluster_id,
 				tags: input.tags.clone(),
 				resources: input.resources.clone(),
-				kill_timeout_ms: input.kill_timeout_ms,
+				lifecycle: input.lifecycle.clone(),
 				image_id: input.image_id,
 				root_user_enabled: input.root_user_enabled,
 				args: input.args.clone(),
@@ -98,7 +98,7 @@ pub async fn ds_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()>
 }
 
 #[derive(Clone, Debug, Default)]
-pub(crate) struct GameGuardUnnest {
+struct GameGuardUnnest {
 	pub port_names: Vec<String>,
 	pub port_numbers: Vec<Option<i32>>,
 	pub protocols: Vec<i32>,
@@ -106,7 +106,7 @@ pub(crate) struct GameGuardUnnest {
 }
 
 #[derive(Clone, Debug, Default)]
-pub(crate) struct GameGuardAuthUnnest {
+struct GameGuardAuthUnnest {
 	pub port_names: Vec<String>,
 	pub port_auth_types: Vec<i32>,
 	pub port_auth_keys: Vec<Option<String>>,
@@ -114,21 +114,21 @@ pub(crate) struct GameGuardAuthUnnest {
 }
 
 #[derive(Clone, Debug, Default)]
-pub(crate) struct HostUnnest {
+struct HostUnnest {
 	pub port_names: Vec<String>,
 	pub port_numbers: Vec<Option<i32>>,
 	pub protocols: Vec<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
-pub(crate) struct InsertDbInput {
+struct InsertDbInput {
 	server_id: Uuid,
 	env_id: Uuid,
 	datacenter_id: Uuid,
 	cluster_id: Uuid,
 	tags: util::serde::HashableMap<String, String>,
 	resources: ServerResources,
-	kill_timeout_ms: i64,
+	lifecycle: ServerLifecycle,
 	image_id: Uuid,
 	args: Vec<String>,
 	network_mode: NetworkMode,
@@ -137,7 +137,7 @@ pub(crate) struct InsertDbInput {
 }
 
 #[activity(InsertDb)]
-pub(crate) async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<()> {
+async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<()> {
 	let mut gg_unnest = GameGuardUnnest::default();
 	let mut gg_auth_unnest = GameGuardAuthUnnest::default();
 	let mut host_unnest = HostUnnest::default();
@@ -209,14 +209,15 @@ pub(crate) async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> Globa
 							tags,
 							resources_cpu_millicores,
 							resources_memory_mib,
-							kill_timeout_ms,
+							lifecycle_kill_timeout_ms,
+							lifecycle_durable,
 							create_ts,
 							image_id,
 							args,
 							network_mode,
 							environment
 						)
-						VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+						VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 						RETURNING 1
 					),
 					host_port AS (
@@ -227,7 +228,7 @@ pub(crate) async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> Globa
 							protocol
 						)
 						SELECT $1, t.*
-						FROM unnest($14, $15, $16) AS t(port_name, port_number, protocol)
+						FROM unnest($15, $16, $17) AS t(port_name, port_number, protocol)
 						RETURNING 1
 					),
 					gg_port AS (
@@ -239,7 +240,7 @@ pub(crate) async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> Globa
 							gg_port
 						)
 						SELECT $1, t.*
-						FROM unnest($17, $18, $19, $20) AS t(port_name, port_number, protocol, gg_port)
+						FROM unnest($18, $19, $20, $21) AS t(port_name, port_number, protocol, gg_port)
 						RETURNING 1
 					),
 					gg_port_auth AS (
@@ -251,7 +252,7 @@ pub(crate) async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> Globa
 							value
 						)
 						SELECT $1, t.*
-						FROM unnest($21, $22, $23, $24) AS t(port_name, auth_type, auth_key, auth_value)
+						FROM unnest($22, $23, $24, $25) AS t(port_name, auth_type, auth_key, auth_value)
 						RETURNING 1
 					)
 				SELECT 1
@@ -263,23 +264,24 @@ pub(crate) async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> Globa
 				serde_json::to_string(&input.tags)?, // 5
 				input.resources.cpu_millicores as i32,
 				input.resources.memory_mib as i32,
-				input.kill_timeout_ms,
-				ctx.ts(),
-				input.image_id, // 10
+				input.lifecycle.kill_timeout_ms,
+				input.lifecycle.durable,
+				ctx.ts(), // 10
+				input.image_id,
 				&input.args,
 				input.network_mode as i32,
 				serde_json::to_string(&input.environment)?,
-				host_unnest.port_names,
-				host_unnest.port_numbers, // 15
+				host_unnest.port_names, // 15
+				host_unnest.port_numbers,
 				host_unnest.protocols,
 				gg_unnest.port_names,
 				gg_unnest.port_numbers,
-				gg_unnest.protocols,
-				gg_unnest.gg_ports, // 20
+				gg_unnest.protocols, // 20
+				gg_unnest.gg_ports,
 				gg_auth_unnest.port_names,
 				gg_auth_unnest.port_auth_types,
-				gg_auth_unnest.port_auth_keys,
-				gg_auth_unnest.port_auth_values, // 20
+				gg_auth_unnest.port_auth_keys, // 20
+				gg_auth_unnest.port_auth_values,
 			)
 			.await
 		}
@@ -298,13 +300,13 @@ pub(crate) async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> Globa
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-pub(crate) struct GetBuildAndDcInput {
+struct GetBuildAndDcInput {
 	datacenter_id: Uuid,
 	image_id: Uuid,
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-pub(crate) struct GetBuildAndDcOutput {
+struct GetBuildAndDcOutput {
 	build_upload_id: Uuid,
 	build_file_name: String,
 	build_kind: BuildKind,
@@ -314,7 +316,7 @@ pub(crate) struct GetBuildAndDcOutput {
 }
 
 #[activity(GetBuildAndDc)]
-pub(crate) async fn get_build_and_dc(
+async fn get_build_and_dc(
 	ctx: &ActivityCtx,
 	input: &GetBuildAndDcInput,
 ) -> GlobalResult<GetBuildAndDcOutput> {
@@ -346,11 +348,38 @@ pub(crate) async fn get_build_and_dc(
 	})
 }
 
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct SetConnectableInput {
+	server_id: Uuid,
+}
+
+#[activity(SetConnectable)]
+async fn set_connectable(ctx: &ActivityCtx, input: &SetConnectableInput) -> GlobalResult<bool> {
+	let res = sql_execute!(
+		[ctx]
+		"
+		UPDATE db_ds.servers
+		SET connectable_ts = $2
+		WHERE
+			server_id = $1 AND
+			connectable_ts IS NULL
+		",
+		input.server_id,
+		util::timestamp::now(),
+	)
+	.await?;
+
+	Ok(res.rows_affected() > 0)
+}
+
 #[message("ds_server_create_complete")]
 pub struct CreateComplete {}
 
 #[message("ds_server_create_failed")]
 pub struct CreateFailed {}
+
+#[message("ds_server_ready")]
+pub struct Ready {}
 
 #[signal("ds_server_destroy")]
 pub struct Destroy {
@@ -378,7 +407,7 @@ join_signal!(DrainState {
 });
 
 /// Generates a presigned URL for the build image.
-pub(crate) async fn resolve_image_artifact_url(
+async fn resolve_image_artifact_url(
 	ctx: &ActivityCtx,
 	datacenter_id: Uuid,
 	build_file_name: String,

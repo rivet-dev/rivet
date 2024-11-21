@@ -71,12 +71,15 @@ async fn server_create(ctx: TestCtx) {
 		env_id: *env_id,
 		datacenter_id: faker_region.region_id.unwrap().as_uuid(),
 		cluster_id,
-		runtime: ds::types::ServerRuntime::Nomad,
+		runtime: ds::types::ServerRuntime::Pegboard,
 		resources: ds::types::ServerResources {
 			cpu_millicores: 100,
 			memory_mib: 200,
 		},
-		kill_timeout_ms: 0,
+		lifecycle: ds::types::ServerLifecycle {
+			kill_timeout_ms: 0,
+			durable: false,
+		},
 		tags: vec![(String::from("test"), String::from("123"))]
 			.into_iter()
 			.collect(),

@@ -124,7 +124,10 @@ impl Setup {
 				cpu_millicores: 100,
 				memory_mib: 200,
 			},
-			kill_timeout_ms: 0,
+			lifecycle: ds::types::ServerLifecycle {
+				kill_timeout_ms: 0,
+				durable: false,
+			},
 			tags: HashMap::new(),
 			root_user_enabled: false,
 			args: Vec::new(),

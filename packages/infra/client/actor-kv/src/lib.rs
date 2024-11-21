@@ -5,16 +5,21 @@ use std::{
 
 use anyhow::*;
 use deno_core::JsBuffer;
+pub use entry::Entry;
+use entry::{EntryBuilder, SubKey};
 use foundationdb::{self as fdb, directory::Directory, tuple::Subspace};
 use futures_util::{StreamExt, TryStreamExt};
-use key::{Key, ListKey};
+use key::Key;
+use list_query::ListLimitReached;
+pub use list_query::ListQuery;
 pub use metadata::Metadata;
+use pegboard::protocol;
 use prost::Message;
-use serde::{Deserialize, Serialize};
-use utils::{validate_entries, validate_keys, TransactionExt};
-use uuid::Uuid;
+use utils::{owner_segment, validate_entries, validate_keys, TransactionExt};
 
+mod entry;
 pub mod key;
+mod list_query;
 mod metadata;
 mod utils;
 
@@ -29,16 +34,16 @@ const VALUE_CHUNK_SIZE: usize = 1000; // 1 KB, not KiB
 pub struct ActorKv {
 	version: &'static str,
 	db: fdb::Database,
-	actor_id: Uuid,
+	owner: protocol::ActorOwner,
 	subspace: Option<Subspace>,
 }
 
 impl ActorKv {
-	pub fn new(db: fdb::Database, actor_id: Uuid) -> Self {
+	pub fn new(db: fdb::Database, owner: protocol::ActorOwner) -> Self {
 		Self {
 			version: env!("CARGO_PKG_VERSION"),
 			db,
-			actor_id,
+			owner,
 			subspace: None,
 		}
 	}
@@ -50,7 +55,7 @@ impl ActorKv {
 		let actor_dir = root
 			.create_or_open(
 				&tx,
-				&["pegboard".into(), self.actor_id.into()],
+				&["pegboard".into(), owner_segment(&self.owner)],
 				None,
 				Some(b"partition"),
 			)
@@ -398,7 +403,7 @@ impl ActorKv {
 		let root = fdb::directory::DirectoryLayer::default();
 
 		let tx = self.db.create_trx()?;
-		root.remove_if_exists(&tx, &["pegboard".into(), self.actor_id.into()])
+		root.remove_if_exists(&tx, &["pegboard".into(), owner_segment(&self.owner)])
 			.await
 			.map_err(|err| anyhow!("{err:?}"))?;
 		tx.commit().await.map_err(|err| anyhow!("{err:?}"))?;
@@ -406,136 +411,3 @@ impl ActorKv {
 		Ok(())
 	}
 }
-
-#[derive(Default)]
-struct EntryBuilder {
-	metadata: Option<Metadata>,
-	value: Vec<u8>,
-	next_idx: usize,
-}
-
-impl EntryBuilder {
-	fn add_sub_key(&mut self, sub_key: SubKey) -> Result<()> {
-		match sub_key {
-			SubKey::Metadata(value) => {
-				// We ignore setting the metadata again because it means the same key was given twice in the
-				// input keys for `ActorKv::get`. We don't perform automatic deduplication.
-				if self.metadata.is_none() {
-					self.metadata = Some(Metadata::decode(value.value())?);
-				}
-			}
-			SubKey::Chunk(idx, value) => {
-				// We don't perform deduplication on the input keys for `ActorKv::get` so we might have
-				// duplicate data chunks. This idx check ignores chunks that were already passed and ensures
-				// contiguity.
-				if idx == self.next_idx {
-					self.value.extend(value.value());
-					self.next_idx = idx + 1;
-				}
-			}
-		}
-
-		Ok(())
-	}
-
-	fn build(self, key: &Key) -> Result<Entry> {
-		ensure!(!self.value.is_empty(), "empty value at key {key:?}");
-
-		Ok(Entry {
-			metadata: self
-				.metadata
-				.with_context(|| format!("no metadata for key {key:?}"))?,
-			value: self.value,
-		})
-	}
-}
-
-/// Represents a Rivet KV value.
-#[derive(Serialize)]
-pub struct Entry {
-	pub metadata: Metadata,
-	pub value: Vec<u8>,
-}
-
-/// Represents FDB keys within a Rivet KV key.
-enum SubKey {
-	Metadata(fdb::future::FdbValue),
-	Chunk(usize, fdb::future::FdbValue),
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum ListQuery {
-	All,
-	RangeInclusive(ListKey, Key),
-	RangeExclusive(ListKey, Key),
-	Prefix(ListKey),
-}
-
-impl ListQuery {
-	fn range(&self, subspace: &Subspace) -> (Vec<u8>, Vec<u8>) {
-		match self {
-			ListQuery::All => subspace.range(),
-			ListQuery::RangeInclusive(start, end) => (
-				subspace.subspace(&start).range().0,
-				subspace.subspace(&end).range().1,
-			),
-			ListQuery::RangeExclusive(start, end) => (
-				subspace.subspace(&start).range().0,
-				subspace.subspace(&end).range().1,
-			),
-			ListQuery::Prefix(prefix) => subspace.subspace(&prefix).range(),
-		}
-	}
-
-	fn validate(&self) -> Result<()> {
-		match self {
-			ListQuery::All => {}
-			ListQuery::RangeInclusive(start, end) => {
-				ensure!(
-					start.len() <= MAX_KEY_SIZE,
-					"start key is too long (max 2048 bytes)"
-				);
-				ensure!(
-					end.len() <= MAX_KEY_SIZE,
-					"end key is too long (max 2048 bytes)"
-				);
-			}
-			ListQuery::RangeExclusive(start, end) => {
-				ensure!(
-					start.len() <= MAX_KEY_SIZE,
-					"startAfter key is too long (max 2048 bytes)"
-				);
-				ensure!(
-					end.len() <= MAX_KEY_SIZE,
-					"end key is too long (max 2048 bytes)"
-				);
-			}
-			ListQuery::Prefix(prefix) => {
-				ensure!(
-					prefix.len() <= MAX_KEY_SIZE,
-					"prefix key is too long (max 2048 bytes)"
-				);
-			}
-		}
-
-		Ok(())
-	}
-}
-
-// Used to short circuit after the
-struct ListLimitReached(HashMap<Key, EntryBuilder>);
-
-impl std::fmt::Debug for ListLimitReached {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "ListLimitReached")
-	}
-}
-
-impl std::fmt::Display for ListLimitReached {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "List limit reached")
-	}
-}
-
-impl std::error::Error for ListLimitReached {}

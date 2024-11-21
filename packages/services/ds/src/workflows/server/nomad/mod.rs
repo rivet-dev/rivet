@@ -15,7 +15,7 @@ use super::{
 	GetBuildAndDcInput, InsertDbInput, Port, DRAIN_PADDING_MS,
 };
 use crate::{
-	types::{NetworkMode, Routing, ServerResources},
+	types::{NetworkMode, Routing, ServerLifecycle, ServerResources},
 	util::{
 		nomad_job::{
 			escape_go_template, gen_oci_bundle_config, inject_consul_env_template,
@@ -46,7 +46,7 @@ pub(crate) struct Input {
 	pub cluster_id: Uuid,
 	pub tags: HashMap<String, String>,
 	pub resources: ServerResources,
-	pub kill_timeout_ms: i64,
+	pub lifecycle: ServerLifecycle,
 	pub image_id: Uuid,
 	pub root_user_enabled: bool,
 	pub args: Vec<String>,
@@ -64,12 +64,17 @@ pub(crate) async fn ds_server_nomad(ctx: &mut WorkflowCtx, input: &Input) -> Glo
 		Err(err) => {
 			tracing::warn!(?err, "unrecoverable setup");
 
-			// TODO: Cleanup
-
 			ctx.msg(CreateFailed {})
 				.tag("server_id", input.server_id)
 				.send()
 				.await?;
+
+			ctx.workflow(destroy::Input {
+				server_id: input.server_id,
+				override_kill_timeout_ms: None,
+			})
+			.output()
+			.await?;
 
 			// Throw the original error from the setup activities
 			return Err(err);
@@ -117,10 +122,11 @@ pub(crate) async fn ds_server_nomad(ctx: &mut WorkflowCtx, input: &Input) -> Glo
 		}
 	}
 
+	// State loop
 	let override_kill_timeout_ms = ctx
 		.repeat(|ctx| {
 			let server_id = input.server_id;
-			let kill_timeout_ms = input.kill_timeout_ms;
+			let kill_timeout_ms = input.lifecycle.kill_timeout_ms;
 
 			async move {
 				match ctx.listen::<Main>().await? {
@@ -196,7 +202,7 @@ async fn setup(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
 				cluster_id: input.cluster_id,
 				tags: input.tags.as_hashable(),
 				resources: input.resources.clone(),
-				kill_timeout_ms: input.kill_timeout_ms,
+				lifecycle: input.lifecycle.clone(),
 				image_id: input.image_id,
 				args: input.args.clone(),
 				network_mode: input.network_mode,

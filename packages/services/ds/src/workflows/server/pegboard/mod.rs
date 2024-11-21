@@ -10,19 +10,22 @@ use util::serde::AsHashableExt;
 
 use super::{
 	resolve_image_artifact_url, CreateComplete, CreateFailed, Destroy, Drain, DrainState,
-	GetBuildAndDcInput, InsertDbInput, Port, DRAIN_PADDING_MS, TRAEFIK_GRACE_PERIOD,
+	GetBuildAndDcInput, InsertDbInput, Port, Ready, SetConnectableInput, DRAIN_PADDING_MS,
+	TRAEFIK_GRACE_PERIOD,
 };
-use crate::types::{GameGuardProtocol, HostProtocol, NetworkMode, Routing, ServerResources};
+use crate::types::{
+	GameGuardProtocol, HostProtocol, NetworkMode, Routing, ServerLifecycle, ServerResources,
+};
 
 pub mod destroy;
 
 #[derive(Serialize, Deserialize)]
 struct StateRes {
-	signal: bool,
+	signal_actor: bool,
 	override_kill_timeout_ms: Option<i64>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Input {
 	pub server_id: Uuid,
 	pub env_id: Uuid,
@@ -30,7 +33,7 @@ pub(crate) struct Input {
 	pub cluster_id: Uuid,
 	pub tags: HashMap<String, String>,
 	pub resources: ServerResources,
-	pub kill_timeout_ms: i64,
+	pub lifecycle: ServerLifecycle,
 	pub image_id: Uuid,
 	pub root_user_enabled: bool,
 	pub args: Vec<String>,
@@ -41,19 +44,24 @@ pub(crate) struct Input {
 
 #[workflow]
 pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
-	let res = setup(ctx, input).await;
+	let res = setup(ctx, input, true).await;
 	match ctx.catch_unrecoverable(res)? {
-		Ok(x) => x,
-		// If we cannot recover a setup error, send a failed signal
+		Ok(_actor_id) => {}
 		Err(err) => {
-			tracing::warn!(?err, "unrecoverable setup");
-
-			// TODO: Cleanup
+			tracing::error!(?err, "unrecoverable setup");
 
 			ctx.msg(CreateFailed {})
 				.tag("server_id", input.server_id)
 				.send()
 				.await?;
+
+			ctx.workflow(destroy::Input {
+				server_id: input.server_id,
+				override_kill_timeout_ms: None,
+				signal_actor: false,
+			})
+			.output()
+			.await?;
 
 			// Throw the original error from the setup activities
 			return Err(err);
@@ -65,100 +73,145 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 		.send()
 		.await?;
 
-	// Wait for actor start
-	match ctx.listen::<Init>().await? {
-		Init::ActorStateUpdate(sig) => match sig.state {
-			pp::ActorState::Allocated { client_id } => client_id,
-			pp::ActorState::FailedToAllocate => {
-				// TODO: Return error from wf
-				bail!("failed to allocate actor");
-			}
-			state => bail!("unexpected actor state: {state:?}"),
-		},
-		Init::Destroy(sig) => {
-			tracing::debug!("destroying before actor start");
+	if let Some(sig) = wait_actor_ready(ctx, input.server_id).await? {
+		// Destroyed early
+		ctx.workflow(destroy::Input {
+			server_id: input.server_id,
+			override_kill_timeout_ms: sig.override_kill_timeout_ms,
+			signal_actor: true,
+		})
+		.output()
+		.await?;
 
-			ctx.workflow(destroy::Input {
-				server_id: input.server_id,
-				override_kill_timeout_ms: sig.override_kill_timeout_ms,
-				signal: true,
-			})
-			.output()
-			.await?;
-
-			return Ok(());
-		}
-	};
+		return Ok(());
+	}
 
 	let state_res = ctx
 		.repeat(|ctx| {
-			let server_id = input.server_id;
-			let datacenter_id = input.datacenter_id;
-			let kill_timeout_ms = input.kill_timeout_ms;
+			let input = input.clone();
 
 			async move {
 				match ctx.listen::<Main>().await? {
 					Main::ActorStateUpdate(sig) => match sig.state {
 						pp::ActorState::Starting => {
-							ctx.activity(SetStartedInput { server_id }).await?;
-						}
-						pp::ActorState::Running { ports, .. } => {
-							// Wait for Traefik to be ready
-							ctx.sleep(TRAEFIK_GRACE_PERIOD).await?;
-
-							ctx.activity(UpdatePortsInput {
-								server_id,
-								datacenter_id,
-								ports,
+							ctx.activity(SetStartedInput {
+								server_id: input.server_id,
 							})
 							.await?;
 						}
-						pp::ActorState::Stopping
-						| pp::ActorState::Stopped
-						| pp::ActorState::Exited { .. } => {
-							tracing::debug!("actor stopped");
+						pp::ActorState::Running { ports, .. } => {
+							ctx.activity(UpdatePortsInput {
+								server_id: input.server_id,
+								datacenter_id: input.datacenter_id,
+								ports,
+							})
+							.await?;
 
-							ctx.activity(SetFinishedInput { server_id }).await?;
+							// Wait for Traefik to be ready
+							ctx.sleep(TRAEFIK_GRACE_PERIOD).await?;
 
-							return Ok(Loop::Break(StateRes {
-								signal: false,
-								override_kill_timeout_ms: None,
-							}));
+							let updated = ctx
+								.activity(SetConnectableInput {
+									server_id: input.server_id,
+								})
+								.await?;
+
+							if updated {
+								ctx.msg(Ready {})
+									.tag("server_id", input.server_id)
+									.send()
+									.await?;
+							}
+						}
+						pp::ActorState::Stopping | pp::ActorState::Stopped => {}
+						pp::ActorState::Exited { exit_code } => {
+							tracing::debug!(?exit_code, "actor stopped");
+
+							// Reschedule durable actor if it errored
+							if input.lifecycle.durable && exit_code.unwrap_or(1) != 0 {
+								if let Some(sig) = reschedule_actor(ctx, &input).await? {
+									// Destroyed early
+									return Ok(Loop::Break(StateRes {
+										signal_actor: true,
+										override_kill_timeout_ms: sig.override_kill_timeout_ms,
+									}));
+								}
+							} else {
+								ctx.activity(SetFinishedInput {
+									server_id: input.server_id,
+								})
+								.await?;
+
+								return Ok(Loop::Break(StateRes {
+									signal_actor: false,
+									override_kill_timeout_ms: None,
+								}));
+							}
 						}
 						state => bail!("unexpected actor state: {state:?}"),
 					},
 					Main::Drain(sig) => {
 						let drain_timeout = sig.drain_timeout.saturating_sub(DRAIN_PADDING_MS);
-						let sleep_for = if drain_timeout < kill_timeout_ms {
+						let sleep_for = if drain_timeout < input.lifecycle.kill_timeout_ms {
 							0
 						} else {
-							drain_timeout - kill_timeout_ms
+							drain_timeout - input.lifecycle.kill_timeout_ms
 						};
 
 						match ctx.listen_with_timeout::<DrainState>(sleep_for).await? {
 							Some(DrainState::Undrain(_)) => {}
-							// TODO: Compare the override timeout to the remaining drain timeout and choose the
-							// smaller one
+							// Destroyed early
 							Some(DrainState::Destroy(sig)) => {
+								// TODO: Compare the override timeout to the remaining drain timeout and choose the
+								// smaller one
 								return Ok(Loop::Break(StateRes {
-									signal: true,
+									signal_actor: true,
 									override_kill_timeout_ms: sig.override_kill_timeout_ms,
 								}));
 							}
 							// Drain timeout complete
 							None => {
-								return Ok(Loop::Break(StateRes {
-									signal: true,
-									override_kill_timeout_ms: Some(
-										kill_timeout_ms.min(drain_timeout),
-									),
-								}));
+								// Reschedule durable actor on drain end
+								if input.lifecycle.durable {
+									// Important that we get the current actor id as durable actors can be
+									// rescheduled many times
+									let actor_id = ctx
+										.activity(GetActorIdInput {
+											server_id: input.server_id,
+										})
+										.await?;
+
+									// Kill old actor immediately
+									destroy::destroy_actor(
+										ctx,
+										input.datacenter_id,
+										0,
+										true,
+										actor_id,
+									)
+									.await?;
+
+									if let Some(sig) = reschedule_actor(ctx, &input).await? {
+										// Destroyed early
+										return Ok(Loop::Break(StateRes {
+											signal_actor: true,
+											override_kill_timeout_ms: sig.override_kill_timeout_ms,
+										}));
+									}
+								} else {
+									return Ok(Loop::Break(StateRes {
+										signal_actor: true,
+										override_kill_timeout_ms: Some(
+											input.lifecycle.kill_timeout_ms.min(drain_timeout),
+										),
+									}));
+								}
 							}
 						}
 					}
 					Main::Destroy(sig) => {
 						return Ok(Loop::Break(StateRes {
-							signal: true,
+							signal_actor: true,
 							override_kill_timeout_ms: sig.override_kill_timeout_ms,
 						}))
 					}
@@ -173,7 +226,7 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 	ctx.workflow(destroy::Input {
 		server_id: input.server_id,
 		override_kill_timeout_ms: state_res.override_kill_timeout_ms,
-		signal: state_res.signal,
+		signal_actor: state_res.signal_actor,
 	})
 	.output()
 	.await?;
@@ -181,28 +234,30 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 	Ok(())
 }
 
-async fn setup(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<Uuid> {
-	let (_, build_dc) = ctx
-		.join((
-			activity(InsertDbInput {
-				server_id: input.server_id,
-				env_id: input.env_id,
-				datacenter_id: input.datacenter_id,
-				cluster_id: input.cluster_id,
-				tags: input.tags.as_hashable(),
-				resources: input.resources.clone(),
-				kill_timeout_ms: input.kill_timeout_ms,
-				image_id: input.image_id,
-				args: input.args.clone(),
-				network_mode: input.network_mode,
-				environment: input.environment.as_hashable(),
-				network_ports: input.network_ports.as_hashable(),
-			}),
-			activity(GetBuildAndDcInput {
-				image_id: input.image_id,
-				datacenter_id: input.datacenter_id,
-			}),
-		))
+async fn setup(ctx: &mut WorkflowCtx, input: &Input, insert_db: bool) -> GlobalResult<Uuid> {
+	if insert_db {
+		ctx.activity(InsertDbInput {
+			server_id: input.server_id,
+			env_id: input.env_id,
+			datacenter_id: input.datacenter_id,
+			cluster_id: input.cluster_id,
+			tags: input.tags.as_hashable(),
+			resources: input.resources.clone(),
+			lifecycle: input.lifecycle.clone(),
+			image_id: input.image_id,
+			args: input.args.clone(),
+			network_mode: input.network_mode,
+			environment: input.environment.as_hashable(),
+			network_ports: input.network_ports.as_hashable(),
+		})
+		.await?;
+	}
+
+	let build_dc = ctx
+		.activity(GetBuildAndDcInput {
+			image_id: input.image_id,
+			datacenter_id: input.datacenter_id,
+		})
 		.await?;
 
 	let (actor_id, resources, image_artifact_url) = ctx
@@ -302,7 +357,8 @@ async fn select_actor_id(ctx: &ActivityCtx, input: &SelectActorIdInput) -> Globa
 	sql_execute!(
 		[ctx]
 		"
-		INSERT INTO db_ds.servers_pegboard (server_id, pegboard_actor_id)
+		-- NOTE: We upsert here because the actor can be reassigned in the event of a reschedule
+		UPSERT INTO db_ds.servers_pegboard (server_id, pegboard_actor_id)
 		VALUES ($1, $2)
 		",
 		input.server_id,
@@ -360,69 +416,29 @@ async fn select_resources(
 	})
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
-struct UpdatePortsInput {
-	server_id: Uuid,
-	datacenter_id: Uuid,
-	ports: util::serde::HashableMap<String, pp::ProxiedPort>,
-}
+/// Returns true if the dynamic server was destroyed.
+async fn wait_actor_ready(ctx: &mut WorkflowCtx, server_id: Uuid) -> GlobalResult<Option<Destroy>> {
+	let _client_id = match ctx.listen::<Init>().await? {
+		Init::ActorStateUpdate(sig) => match sig.state {
+			pp::ActorState::Allocated { client_id } => client_id,
+			pp::ActorState::FailedToAllocate => {
+				ctx.msg(CreateFailed {})
+					.tag("server_id", server_id)
+					.send()
+					.await?;
 
-#[activity(UpdatePorts)]
-async fn update_ports(ctx: &ActivityCtx, input: &UpdatePortsInput) -> GlobalResult<()> {
-	let mut flat_port_labels = Vec::new();
-	let mut flat_port_sources = Vec::new();
-	let mut flat_port_ips = Vec::new();
+				bail!("failed to allocate actor");
+			}
+			state => bail!("unexpected actor state: {state:?}"),
+		},
+		Init::Destroy(sig) => {
+			tracing::debug!("destroying before actor start");
 
-	for (label, port) in &input.ports {
-		flat_port_labels.push(label.as_str());
-		flat_port_sources.push(port.source as i64);
-		flat_port_ips.push(port.ip.to_string());
-	}
+			return Ok(Some(sig));
+		}
+	};
 
-	sql_execute!(
-		[ctx]
-		"
-		WITH
-			update_server AS (
-				UPDATE db_ds.servers
-				SET connectable_ts = $2
-				WHERE
-					server_id = $1 AND
-					connectable_ts IS NULL
-				RETURNING 1
-			),
-			insert_ports AS (
-				INSERT INTO db_ds.server_proxied_ports (
-					server_id,
-					label,
-					source,
-					ip
-				)
-				SELECT $1, label, source, ip
-				FROM unnest($3, $4, $5) AS n(label, source, ip)
-				WHERE EXISTS(
-					SELECT 1 FROM update_server
-				)
-				RETURNING 1
-			)
-		SELECT 1
-		",
-		input.server_id,
-		util::timestamp::now(),
-		flat_port_labels,
-		flat_port_sources,
-		flat_port_ips,
-	)
-	.await?;
-
-	// Invalidate cache when ports are updated
-	if !input.ports.is_empty() {
-		ctx.cache()
-			.purge("ds_proxied_ports", [input.datacenter_id])
-			.await?;
-	}
-
-	Ok(())
+	Ok(None)
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
@@ -471,10 +487,112 @@ async fn set_started(ctx: &ActivityCtx, input: &SetStartedInput) -> GlobalResult
 		"
 		UPDATE db_ds.servers
 		SET start_ts = $2
-		WHERE server_id = $1
+		WHERE
+			server_id = $1 AND
+			start_ts IS NULL
 		",
 		input.server_id,
 		util::timestamp::now(),
+	)
+	.await?;
+
+	Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct UpdatePortsInput {
+	server_id: Uuid,
+	datacenter_id: Uuid,
+	ports: util::serde::HashableMap<String, pp::ProxiedPort>,
+}
+
+#[activity(UpdatePorts)]
+async fn update_ports(ctx: &ActivityCtx, input: &UpdatePortsInput) -> GlobalResult<()> {
+	let mut flat_port_labels = Vec::new();
+	let mut flat_port_sources = Vec::new();
+	let mut flat_port_ips = Vec::new();
+
+	for (label, port) in &input.ports {
+		flat_port_labels.push(label.as_str());
+		flat_port_sources.push(port.source as i64);
+		flat_port_ips.push(port.ip.to_string());
+	}
+
+	sql_execute!(
+		[ctx]
+		"
+		INSERT INTO db_ds.server_proxied_ports (
+			server_id,
+			label,
+			source,
+			ip
+		)
+		SELECT $1, label, source, ip
+		FROM unnest($2, $3, $4) AS n(label, source, ip)
+		",
+		input.server_id,
+		flat_port_labels,
+		flat_port_sources,
+		flat_port_ips,
+	)
+	.await?;
+
+	// Invalidate cache when ports are updated
+	if !input.ports.is_empty() {
+		ctx.cache()
+			.purge("ds_proxied_ports", [input.datacenter_id])
+			.await?;
+	}
+
+	Ok(())
+}
+
+async fn reschedule_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<Option<Destroy>> {
+	tracing::info!("rescheduling actor");
+
+	// Remove old proxied ports
+	ctx.activity(ClearPortsInput {
+		server_id: input.server_id,
+	})
+	.await?;
+
+	let res = setup(ctx, &input, false).await;
+	match ctx.catch_unrecoverable(res)? {
+		Ok(_actor_id) => {}
+		Err(err) => {
+			tracing::error!(?err, "unrecoverable reschedule");
+
+			ctx.workflow(destroy::Input {
+				server_id: input.server_id,
+				override_kill_timeout_ms: None,
+				signal_actor: false,
+			})
+			.output()
+			.await?;
+
+			// Throw the original error from the setup activities
+			return Err(err);
+		}
+	};
+
+	// Wait for new actor to be ready
+	wait_actor_ready(ctx, input.server_id).await
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct ClearPortsInput {
+	server_id: Uuid,
+}
+
+#[activity(ClearPorts)]
+async fn clear_ports(ctx: &ActivityCtx, input: &ClearPortsInput) -> GlobalResult<()> {
+	sql_execute!(
+		[ctx]
+		"
+		DELETE FROM db_ds.server_proxied_ports
+		WHERE server_id = $1
+		",
+		input.server_id,
 	)
 	.await?;
 
@@ -501,6 +619,27 @@ async fn set_finished(ctx: &ActivityCtx, input: &SetFinishedInput) -> GlobalResu
 	.await?;
 
 	Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct GetActorIdInput {
+	server_id: Uuid,
+}
+
+#[activity(GetActorId)]
+async fn get_actor_id(ctx: &ActivityCtx, input: &GetActorIdInput) -> GlobalResult<Uuid> {
+	let (actor_id,) = sql_fetch_one!(
+		[ctx, (Uuid,)]
+		"
+		SELECT pegboard_actor_id
+		FROM db_ds.servers_pegboard
+		WHERE server_id = $1
+		",
+		input.server_id,
+	)
+	.await?;
+
+	Ok(actor_id)
 }
 
 join_signal!(Init {

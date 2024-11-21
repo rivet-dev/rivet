@@ -8,5 +8,6 @@ export declare const Lifecycle: core.serialization.ObjectSchema<serializers.acto
 export declare namespace Lifecycle {
     interface Raw {
         kill_timeout?: number | null;
+        durable?: boolean | null;
     }
 }

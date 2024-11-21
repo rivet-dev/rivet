@@ -2,14 +2,9 @@ use anyhow::*;
 use futures_util::StreamExt;
 use indoc::indoc;
 use pegboard::protocol;
+use pegboard_config::isolate_runner::actor as actor_config;
 use rand::Rng;
-use serde_json::json;
-use std::{
-	collections::HashMap,
-	path::{Path, PathBuf},
-	process::Stdio,
-	result::Result::{Err, Ok},
-};
+use serde_json::{json, Value};
 use tokio::{
 	fs::{self, File},
 	io::{AsyncReadExt, AsyncWriteExt},
@@ -329,26 +324,24 @@ impl Actor {
 	) -> Result<()> {
 		let actor_path = ctx.actor_path(self.actor_id);
 
-		// TODO: Use schema in isolate-v8-runner (don't import isolate-v8-runner because its fat)
-		let config = json!({
-			"resources": {
-				"memory": self.config.resources.memory,
-				"memory_max": self.config.resources.memory_max,
+		let config = actor_config::Config {
+			resources: actor_config::Resources {
+				memory: self.config.resources.memory,
+				memory_max: self.config.resources.memory_max,
 			},
 			// TODO:
-			"ports": ports
+			ports: ports
 				.values()
-				.map(|port| {
-					json!({
-						"target": port.target,
-						"protocol": port.protocol,
-					})
+				.map(|port| actor_config::Port {
+					target: port.target,
+					protocol: port.protocol,
 				})
 				.collect::<Vec<_>>(),
-			"env": build_default_env(ctx, &self.config.env, &ports),
-			"owner": self.config.owner,
-			"vector_socket_addr": ctx.config().vector.as_ref().map(|x| &x.address),
-		});
+			env: build_default_env(ctx, &self.config.env, &ports),
+			owner: self.config.owner.clone(),
+			vector_socket_addr: ctx.config().vector.clone().map(|x| x.address),
+		};
+
 		fs::write(
 			actor_path.join("config.json"),
 			&serde_json::to_vec(&config)?,

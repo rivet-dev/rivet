@@ -130,8 +130,8 @@ pub async fn create(
 
 	let server_id = Uuid::new_v4();
 
-	let mut create_sub = ctx
-		.subscribe::<ds::workflows::server::CreateComplete>(("server_id", server_id))
+	let mut ready_sub = ctx
+		.subscribe::<ds::workflows::server::Ready>(("server_id", server_id))
 		.await?;
 	let mut fail_sub = ctx
 		.subscribe::<ds::workflows::server::CreateFailed>(("server_id", server_id))
@@ -147,11 +147,12 @@ pub async fn create(
 		runtime: game_config.runtime,
 		tags,
 		resources: (*body.resources).api_into(),
-		kill_timeout_ms: body
-			.lifecycle
-			.as_ref()
-			.and_then(|x| x.kill_timeout)
-			.unwrap_or_default(),
+		lifecycle: body.lifecycle.map(|x| (*x).api_into()).unwrap_or_else(|| {
+			ds::types::ServerLifecycle {
+				kill_timeout_ms: 0,
+				durable: false,
+			}
+		}),
 		image_id: body.runtime.build,
 		root_user_enabled: game_config.root_user_enabled,
 		args: body.runtime.arguments.unwrap_or_default(),
@@ -211,8 +212,9 @@ pub async fn create(
 	.dispatch()
 	.await?;
 
+	// Wait for ready or fail
 	tokio::select! {
-		res = create_sub.next() => { res?; },
+		res = ready_sub.next() => { res?; },
 		res = fail_sub.next() => {
 			res?;
 			bail_with!(SERVERS_SERVER_FAILED_TO_CREATE);
@@ -260,6 +262,7 @@ pub async fn create_deprecated(
 			lifecycle: body.lifecycle.map(|l| {
 				Box::new(models::ActorLifecycle {
 					kill_timeout: l.kill_timeout,
+					durable: Some(false),
 				})
 			}),
 			network: Some(Box::new(models::ActorCreateActorNetworkRequest {

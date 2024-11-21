@@ -233,6 +233,8 @@ func (h *HostRouting) String() string {
 type Lifecycle struct {
 	// The duration to wait for in milliseconds before killing the actor. This should be set to a safe default, and can be overridden during a DELETE request if needed.
 	KillTimeout *int64 `json:"kill_timeout,omitempty"`
+	// If true, the actor will try to reschedule itself automatically in the event of a crash or a datacenter failover. The actor will not reschedule if it exits successfully.
+	Durable *bool `json:"durable,omitempty"`
 
 	_rawJSON json.RawMessage
 }

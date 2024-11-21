@@ -218,7 +218,7 @@ export declare class Lobbies {
      *     await client.matchmaker.lobbies.create({
      *         gameMode: "string",
      *         region: "string",
-     *         publicity: Rivet.matchmaker.CustomLobbyPublicity.Public,
+     *         publicity: "public",
      *         tags: {
      *             "string": "string"
      *         },

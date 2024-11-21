@@ -11,7 +11,7 @@ pub(crate) struct Input {
 	pub override_kill_timeout_ms: Option<i64>,
 	/// Whether or not to send signals to the actor. In the case that the actor was already stopped
 	/// or exited, signals are unnecessary.
-	pub signal: bool,
+	pub signal_actor: bool,
 }
 
 #[workflow]
@@ -30,28 +30,17 @@ pub(crate) async fn ds_server_pegboard_destroy(
 		.send()
 		.await?;
 
-	if input.signal {
-		ctx.signal(pp::Command::SignalActor {
-			actor_id: ds.actor_id,
-			signal: Signal::SIGTERM as i32,
-			persist_state: false,
-		})
-		.tag("datacenter_id", ds.datacenter_id)
-		.send()
-		.await?;
-
-		// See `docs/packages/job/JOB_DRAINING_AND_KILL_TIMEOUTS.md`
-		ctx.sleep(input.override_kill_timeout_ms.unwrap_or(ds.kill_timeout_ms))
+	if let Some(ds) = ds {
+		if let (Some(actor_id), true) = (ds.actor_id, input.signal_actor) {
+			destroy_actor(
+				ctx,
+				ds.datacenter_id,
+				input.override_kill_timeout_ms.unwrap_or(ds.kill_timeout_ms),
+				false,
+				actor_id,
+			)
 			.await?;
-
-		ctx.signal(pp::Command::SignalActor {
-			actor_id: ds.actor_id,
-			signal: Signal::SIGKILL as i32,
-			persist_state: false,
-		})
-		.tag("datacenter_id", ds.datacenter_id)
-		.send()
-		.await?;
+		}
 	}
 
 	ctx.msg(DestroyComplete {})
@@ -71,24 +60,27 @@ struct UpdateDbInput {
 struct UpdateDbOutput {
 	datacenter_id: Uuid,
 	kill_timeout_ms: i64,
-	actor_id: Uuid,
+	actor_id: Option<Uuid>,
 }
 
 #[activity(UpdateDb)]
-async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<UpdateDbOutput> {
+async fn update_db(
+	ctx: &ActivityCtx,
+	input: &UpdateDbInput,
+) -> GlobalResult<Option<UpdateDbOutput>> {
 	// Run in transaction for internal retryability
 	let db_output = rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| {
 		let ctx = ctx.clone();
 		let server_id = input.server_id;
 
 		async move {
-			sql_fetch_one!(
+			sql_fetch_optional!(
 				[ctx, UpdateDbOutput, @tx tx]
 				"
 				UPDATE db_ds.servers AS s1
 				SET destroy_ts = $2
 				FROM db_ds.servers AS s2
-				JOIN db_ds.servers_pegboard AS spb
+				LEFT JOIN db_ds.servers_pegboard AS spb
 				ON s2.server_id = spb.server_id
 				WHERE
 					s1.server_id = $1 AND
@@ -96,7 +88,7 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<Upd
 					s2.destroy_ts IS NULL
 				RETURNING
 					s1.datacenter_id,
-					s1.kill_timeout_ms,
+					s1.lifecycle_kill_timeout_ms AS kill_timeout_ms,
 					spb.pegboard_actor_id AS actor_id
 				",
 				server_id,
@@ -108,12 +100,47 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<Upd
 	})
 	.await?;
 
-	// NOTE: This call is infallible because redis is infallible. If it was not, it would be put in its own
-	// workflow step
-	// Invalidate cache when server is destroyed
-	ctx.cache()
-		.purge("ds_proxied_ports", [db_output.datacenter_id])
-		.await?;
+	if let Some(db_output) = &db_output {
+		// NOTE: This call is infallible because redis is infallible. If it was not, it would be put in its own
+		// workflow step
+		// Invalidate cache when server is destroyed
+		ctx.cache()
+			.purge("ds_proxied_ports", [db_output.datacenter_id])
+			.await?;
+	}
 
 	Ok(db_output)
+}
+
+pub(crate) async fn destroy_actor(
+	ctx: &mut WorkflowCtx,
+	datacenter_id: Uuid,
+	kill_timeout_ms: i64,
+	persist_state: bool,
+	actor_id: Uuid,
+) -> GlobalResult<()> {
+	if kill_timeout_ms != 0 {
+		ctx.signal(pp::Command::SignalActor {
+			actor_id,
+			signal: Signal::SIGTERM as i32,
+			persist_state,
+		})
+		.tag("datacenter_id", datacenter_id)
+		.send()
+		.await?;
+
+		// See `docs/packages/job/JOB_DRAINING_AND_KILL_TIMEOUTS.md`
+		ctx.sleep(kill_timeout_ms).await?;
+	}
+
+	ctx.signal(pp::Command::SignalActor {
+		actor_id,
+		signal: Signal::SIGKILL as i32,
+		persist_state,
+	})
+	.tag("datacenter_id", datacenter_id)
+	.send()
+	.await?;
+
+	Ok(())
 }

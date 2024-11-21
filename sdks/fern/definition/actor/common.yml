@@ -31,6 +31,11 @@ types:
           This should be set to a safe default, and can be overridden during a
           DELETE request if needed.
         type: optional<long>
+      durable:
+        docs: >-
+          If true, the actor will try to reschedule itself automatically in the event of a crash or a
+          datacenter failover. The actor will not reschedule if it exits successfully.
+        type: optional<boolean>
 
   Resources:
     properties:

@@ -4,4 +4,6 @@
 export interface Lifecycle {
     /** The duration to wait for in milliseconds before killing the actor. This should be set to a safe default, and can be overridden during a DELETE request if needed. */
     killTimeout?: number;
+    /** If true, the actor will try to reschedule itself automatically in the event of a crash or a datacenter failover. The actor will not reschedule if it exits successfully. */
+    durable?: boolean;
 }

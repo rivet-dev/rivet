@@ -95,9 +95,15 @@ pub async fn run_from_env(
 		if row.failed_stop {
 			tracing::warn!(actor_id=?row.actor_id, "actor failed to stop");
 
-			// Manually set stopped state
 			ctx.signal(pegboard::workflows::client::ActorStateUpdate {
 				state: protocol::ActorState::Stopped,
+			})
+			.tag("actor_id", row.actor_id)
+			.send()
+			.await?;
+
+			ctx.signal(pegboard::workflows::client::ActorStateUpdate {
+				state: protocol::ActorState::Exited { exit_code: None },
 			})
 			.tag("actor_id", row.actor_id)
 			.send()

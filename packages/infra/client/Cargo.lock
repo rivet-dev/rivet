@@ -4145,6 +4145,7 @@ dependencies = [
  "deno_core",
  "foundationdb",
  "futures-util",
+ "pegboard",
  "prost 0.13.3",
  "serde",
  "serde_json",
@@ -4153,6 +4154,16 @@ dependencies = [
  "tracing",
  "tracing-logfmt",
  "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "pegboard-config"
+version = "0.0.1"
+dependencies = [
+ "pegboard",
+ "serde",
+ "url",
  "uuid",
 ]
 
@@ -4189,8 +4200,9 @@ dependencies = [
  "futures-util",
  "netif",
  "nix 0.27.1",
+ "pegboard",
  "pegboard-actor-kv",
- "pegboard-runner-protocol",
+ "pegboard-config",
  "portpicker",
  "serde",
  "serde_json",
@@ -4217,7 +4229,7 @@ dependencies = [
  "nix 0.27.1",
  "notify",
  "pegboard",
- "pegboard-runner-protocol",
+ "pegboard-config",
  "portpicker",
  "prometheus",
  "rand",
@@ -4236,14 +4248,6 @@ dependencies = [
  "tracing-logfmt",
  "tracing-subscriber",
  "url",
- "uuid",
-]
-
-[[package]]
-name = "pegboard-runner-protocol"
-version = "0.0.1"
-dependencies = [
- "serde",
  "uuid",
 ]
 

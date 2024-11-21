@@ -2,8 +2,7 @@ use std::{result::Result::Ok, time::Duration};
 
 use anyhow::*;
 use foundationdb::{self as fdb, options::DatabaseOption};
-
-use crate::config::Config;
+use pegboard_config::isolate_runner::Config;
 
 pub fn fdb_handle(config: &Config) -> Result<fdb::Database> {
 	let db = fdb::Database::from_path(

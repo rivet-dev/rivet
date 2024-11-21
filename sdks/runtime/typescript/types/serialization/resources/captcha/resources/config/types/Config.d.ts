@@ -4,11 +4,12 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { captcha } from "../../../../index";
+import { ConfigHcaptcha } from "./ConfigHcaptcha";
+import { ConfigTurnstile } from "./ConfigTurnstile";
 export declare const Config: core.serialization.ObjectSchema<serializers.captcha.Config.Raw, Rivet.captcha.Config>;
 export declare namespace Config {
     interface Raw {
-        hcaptcha?: captcha.ConfigHcaptcha.Raw | null;
-        turnstile?: captcha.ConfigTurnstile.Raw | null;
+        hcaptcha?: ConfigHcaptcha.Raw | null;
+        turnstile?: ConfigTurnstile.Raw | null;
     }
 }

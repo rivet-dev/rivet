@@ -30,7 +30,8 @@ import * as Rivet from "../../../../index";
  *                 memory: 1
  *             },
  *             lifecycle: {
- *                 killTimeout: 1000000
+ *                 killTimeout: 1000000,
+ *                 durable: true
  *             }
  *         }
  *     }

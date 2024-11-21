@@ -176,7 +176,10 @@ async fn print_test_data(ctx: TestCtx) {
 			cpu_millicores: 100,
 			memory_mib: 200,
 		},
-		kill_timeout_ms: 0,
+		lifecycle: ds::types::ServerLifecycle {
+			kill_timeout_ms: 0,
+			durable: false,
+		},
 		tags: vec![(String::from("test"), String::from("123"))]
 			.into_iter()
 			.collect(),

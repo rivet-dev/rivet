@@ -26,30 +26,36 @@ pub(crate) async fn ds_server_nomad_destroy(
 		.send()
 		.await?;
 
-	if let Some(job_id) = &ds.dispatched_job_id {
-		let delete_output = ctx
-			.activity(DeleteJobInput {
-				job_id: job_id.clone(),
-			})
-			.await?;
-
-		if delete_output.job_exists {
-			if let Some(alloc_id) = &ds.alloc_id {
-				ctx.activity(SignalAllocInput {
-					alloc_id: alloc_id.clone(),
-					signal: "SIGTERM".to_string(),
+	if let Some(ds) = ds {
+		if let Some(job_id) = ds.dispatched_job_id {
+			let delete_output = ctx
+				.activity(DeleteJobInput {
+					job_id: job_id.clone(),
 				})
 				.await?;
 
-				// See `docs/packages/job/JOB_DRAINING_AND_KILL_TIMEOUTS.md`
-				ctx.sleep(input.override_kill_timeout_ms.unwrap_or(ds.kill_timeout_ms))
+			if delete_output.job_exists {
+				if let Some(alloc_id) = &ds.alloc_id {
+					let kill_timeout_ms =
+						input.override_kill_timeout_ms.unwrap_or(ds.kill_timeout_ms);
+
+					if kill_timeout_ms != 0 {
+						ctx.activity(SignalAllocInput {
+							alloc_id: alloc_id.clone(),
+							signal: "SIGTERM".to_string(),
+						})
+						.await?;
+
+						// See `docs/packages/job/JOB_DRAINING_AND_KILL_TIMEOUTS.md`
+						ctx.sleep(kill_timeout_ms).await?;
+					}
+
+					ctx.activity(SignalAllocInput {
+						alloc_id: alloc_id.clone(),
+						signal: "SIGKILL".to_string(),
+					})
 					.await?;
-
-				ctx.activity(SignalAllocInput {
-					alloc_id: alloc_id.clone(),
-					signal: "SIGKILL".to_string(),
-				})
-				.await?;
+				}
 			}
 		}
 	}
@@ -76,20 +82,23 @@ struct UpdateDbOutput {
 }
 
 #[activity(UpdateDb)]
-async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<UpdateDbOutput> {
+async fn update_db(
+	ctx: &ActivityCtx,
+	input: &UpdateDbInput,
+) -> GlobalResult<Option<UpdateDbOutput>> {
 	// Run in transaction for internal retryability
 	let db_output = rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| {
 		let ctx = ctx.clone();
 		let server_id = input.server_id;
 
 		async move {
-			sql_fetch_one!(
+			sql_fetch_optional!(
 				[ctx, UpdateDbOutput, @tx tx]
 				"
 				UPDATE db_ds.servers AS s1
 				SET destroy_ts = $2
 				FROM db_ds.servers AS s2
-				JOIN db_ds.server_nomad AS sn
+				LEFT JOIN db_ds.server_nomad AS sn
 				ON s2.server_id = sn.server_id
 				WHERE
 					s1.server_id = $1 AND
@@ -97,7 +106,7 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<Upd
 					s2.destroy_ts IS NULL
 				RETURNING
 					s1.datacenter_id,
-					s1.kill_timeout_ms,
+					s1.lifecycle_kill_timeout_ms,
 					sn.nomad_dispatched_job_id AS dispatched_job_id,
 					sn.nomad_alloc_id AS alloc_id
 				",
@@ -110,12 +119,14 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<Upd
 	})
 	.await?;
 
-	// NOTE: This call is infallible because redis is infallible. If it was not, it would be put in its own
-	// workflow step
-	// Invalidate cache when server is destroyed
-	ctx.cache()
-		.purge("ds_proxied_ports", [db_output.datacenter_id])
-		.await?;
+	if let Some(db_output) = &db_output {
+		// NOTE: This call is infallible because redis is infallible. If it was not, it would be put in its own
+		// workflow step
+		// Invalidate cache when server is destroyed
+		ctx.cache()
+			.purge("ds_proxied_ports", [db_output.datacenter_id])
+			.await?;
+	}
 
 	Ok(db_output)
 }

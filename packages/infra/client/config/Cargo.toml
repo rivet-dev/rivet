@@ -1,5 +1,5 @@
 [package]
-name = "pegboard-runner-protocol"
+name = "pegboard-config"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -8,3 +8,6 @@ edition.workspace = true
 [dependencies]
 serde = { version = "1.0.195", features = ["derive"] }
 uuid = { version = "1.6.1", features = ["v4"] }
+url = "2.2.2"
+
+pegboard = { path = "../../../services/pegboard", default-features = false }

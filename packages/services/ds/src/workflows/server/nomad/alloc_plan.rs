@@ -1,6 +1,6 @@
 use chirp_workflow::prelude::*;
 
-use super::super::TRAEFIK_GRACE_PERIOD;
+use super::super::{Ready, SetConnectableInput, TRAEFIK_GRACE_PERIOD};
 use crate::util::NOMAD_REGION;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -20,9 +20,6 @@ pub async fn ds_server_nomad_alloc_plan(ctx: &mut WorkflowCtx, input: &Input) ->
 			nomad_node_id: nomad_node_id.clone(),
 		})
 		.await?;
-
-	// Wait for Traefik to be ready
-	ctx.sleep(TRAEFIK_GRACE_PERIOD).await?;
 
 	// Read ports
 	let mut ports = Vec::new();
@@ -65,6 +62,21 @@ pub async fn ds_server_nomad_alloc_plan(ctx: &mut WorkflowCtx, input: &Input) ->
 			job_id: job_id.clone(),
 		})
 		.await?;
+	}
+
+	// Wait for Traefik to be ready
+	ctx.sleep(TRAEFIK_GRACE_PERIOD).await?;
+
+	if !db_res.connectable {
+		ctx.activity(SetConnectableInput {
+			server_id: input.server_id,
+		})
+		.await?;
+
+		ctx.msg(Ready {})
+			.tag("server_id", input.server_id)
+			.send()
+			.await?;
 	}
 
 	Ok(())
@@ -132,7 +144,16 @@ struct Port {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct UpdateDbOutput {
+	connectable: bool,
 	kill_alloc: bool,
+}
+
+#[derive(sqlx::FromRow)]
+struct UpdateDbRow {
+	datacenter_id: Uuid,
+	connectable: bool,
+	nomad_alloc_id: Option<String>,
+	updated: bool,
 }
 
 #[activity(UpdateDb)]
@@ -147,24 +168,16 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<Upd
 		flat_port_ips.push(port.ip.as_str());
 	}
 
-	let (datacenter_id, nomad_alloc_id, updated) = sql_fetch_one!(
-		[ctx, (Uuid, Option<String>, bool)]
+	let row = sql_fetch_one!(
+		[ctx, UpdateDbRow]
 		"
 		WITH
 			select_server AS (
-				SELECT s.datacenter_id, sn.nomad_alloc_id
+				SELECT s.datacenter_id, s.connectable_ts IS NOT NULL AS connectable, sn.nomad_alloc_id
 				FROM db_ds.server_nomad AS sn
 				INNER JOIN db_ds.servers AS s
 				ON s.server_id = sn.server_id
 				WHERE sn.server_id = $1
-			),
-			update_server AS (
-				UPDATE db_ds.servers
-				SET connectable_ts = $2
-				WHERE
-					server_id = $1 AND
-					connectable_ts IS NULL
-				RETURNING 1
 			),
 			update_server_nomad AS (
 				UPDATE db_ds.server_nomad
@@ -194,7 +207,11 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<Upd
 				)
 				RETURNING 1
 			)
-		SELECT datacenter_id, nomad_alloc_id, EXISTS(SELECT 1 FROM update_server_nomad) AS updated
+		SELECT
+			datacenter_id,
+			connectable,
+			nomad_alloc_id,
+			EXISTS(SELECT 1 FROM update_server_nomad) AS updated
 		FROM select_server
 		",
 		input.server_id,
@@ -210,26 +227,30 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<Upd
 	)
 	.await?;
 
-	if !updated {
+	if !row.updated {
 		tracing::warn!("alloc was already planned");
 	}
 	// Invalidate cache when ports are updated
 	else if !input.ports.is_empty() {
 		ctx.cache()
-			.purge("ds_proxied_ports", [datacenter_id])
+			.purge("ds_proxied_ports", [row.datacenter_id])
 			.await?;
 	}
 
-	let kill_alloc = nomad_alloc_id
+	let kill_alloc = row
+		.nomad_alloc_id
 		.as_ref()
 		.map(|id| id != &input.alloc_id)
 		.unwrap_or_default();
 
 	if kill_alloc {
-		tracing::warn!(server_id=%input.server_id, existing_alloc_id=?nomad_alloc_id, new_alloc_id=%input.alloc_id, "different allocation id given, killing job");
+		tracing::warn!(server_id=%input.server_id, existing_alloc_id=?row.nomad_alloc_id, new_alloc_id=%input.alloc_id, "different allocation id given, killing job");
 	}
 
-	Ok(UpdateDbOutput { kill_alloc })
+	Ok(UpdateDbOutput {
+		connectable: row.connectable,
+		kill_alloc,
+	})
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]

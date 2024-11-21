@@ -4,7 +4,7 @@
 import * as serializers from "../../../../../../index";
 import * as Rivet from "../../../../../../../api/index";
 import * as core from "../../../../../../../core";
-import { captcha } from "../../../../../index";
+import { Config } from "../../../../../captcha/resources/config/types/Config";
 export declare const FindLobbyRequest: core.serialization.Schema<serializers.matchmaker.FindLobbyRequest.Raw, Omit<Rivet.matchmaker.FindLobbyRequest, "origin">>;
 export declare namespace FindLobbyRequest {
     interface Raw {
@@ -13,7 +13,7 @@ export declare namespace FindLobbyRequest {
         prevent_auto_create_lobby?: boolean | null;
         tags?: Record<string, string> | null;
         max_players?: number | null;
-        captcha?: captcha.Config.Raw | null;
+        captcha?: Config.Raw | null;
         verification_data?: unknown | null;
     }
 }

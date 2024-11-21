@@ -8,6 +8,7 @@ use anyhow::*;
 use indoc::indoc;
 use nix::sys::signal::Signal;
 use pegboard::protocol;
+use pegboard_config::runner_protocol;
 use tokio::{fs, sync::Mutex};
 use uuid::Uuid;
 

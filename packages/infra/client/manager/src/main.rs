@@ -8,6 +8,7 @@ use std::{
 use anyhow::*;
 use futures_util::StreamExt;
 use pegboard::system_info::SystemInfo;
+use pegboard_config::Config;
 use sqlx::sqlite::SqlitePool;
 use tokio::{
 	fs,
@@ -17,14 +18,12 @@ use tracing_subscriber::prelude::*;
 use url::Url;
 
 mod actor;
-mod config;
 mod ctx;
 mod metrics;
 mod runner;
 mod system_info;
 mod utils;
 
-use config::Config;
 use ctx::Ctx;
 
 const PROTOCOL_VERSION: u16 = 1;

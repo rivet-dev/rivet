@@ -4,10 +4,10 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { matchmaker } from "../../../../index";
+import { RegionInfo } from "../../common/types/RegionInfo";
 export declare const ListRegionsResponse: core.serialization.ObjectSchema<serializers.matchmaker.ListRegionsResponse.Raw, Rivet.matchmaker.ListRegionsResponse>;
 export declare namespace ListRegionsResponse {
     interface Raw {
-        regions: matchmaker.RegionInfo.Raw[];
+        regions: RegionInfo.Raw[];
     }
 }

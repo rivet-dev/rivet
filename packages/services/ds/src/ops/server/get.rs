@@ -4,7 +4,7 @@ use chirp_workflow::prelude::*;
 
 use crate::types::{
 	GameGuardProtocol, HostProtocol, NetworkMode, Port, PortAuthorization, PortAuthorizationType,
-	Routing, Server, ServerResources,
+	Routing, Server, ServerLifecycle, ServerResources,
 };
 
 #[derive(sqlx::FromRow)]
@@ -16,7 +16,8 @@ struct ServerRow {
 	tags: sqlx::types::Json<HashMap<String, String>>,
 	resources_cpu_millicores: i64,
 	resources_memory_mib: i64,
-	kill_timeout_ms: i64,
+	lifecycle_kill_timeout_ms: i64,
+	lifecycle_durable: bool,
 	create_ts: i64,
 	start_ts: Option<i64>,
 	connectable_ts: Option<i64>,
@@ -99,7 +100,8 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 				tags,
 				resources_cpu_millicores,
 				resources_memory_mib,
-				kill_timeout_ms,
+				lifecycle_kill_timeout_ms,
+				lifecycle_durable,
 				create_ts,
 				start_ts,
 				connectable_ts,
@@ -277,7 +279,10 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 					cpu_millicores: server.resources_cpu_millicores.try_into()?,
 					memory_mib: server.resources_memory_mib.try_into()?,
 				},
-				kill_timeout_ms: server.kill_timeout_ms,
+				lifecycle: ServerLifecycle {
+					kill_timeout_ms: server.lifecycle_kill_timeout_ms,
+					durable: server.lifecycle_durable,
+				},
 				args: server.args.clone(),
 				environment: server.environment.0.clone(),
 				image_id: server.image_id,

@@ -15,6 +15,8 @@ use config::Config;
 use deno_runtime::worker::MainWorkerTerminateHandle;
 use foundationdb as fdb;
 use futures_util::{stream::SplitStream, SinkExt, StreamExt};
+use pegboard::protocol;
+use pegboard_config::{isolate_runner::Config, runner_protocol};
 use tokio::{
 	fs,
 	net::TcpStream,
@@ -24,7 +26,6 @@ use tokio_tungstenite::{tungstenite::protocol::Message, MaybeTlsStream, WebSocke
 use tracing_subscriber::prelude::*;
 use uuid::Uuid;
 
-mod config;
 mod ext;
 mod isolate;
 mod log_shipper;
@@ -159,6 +160,8 @@ async fn handle_connection(
 				if guard.contains_key(&actor_id) {
 					tracing::warn!("Actor {actor_id} already exists, ignoring new start packet");
 				} else {
+					// For receiving the owner from the isolate thread
+					let (owner_tx, owner_rx) = mpsc::channel::<protocol::ActorOwner>(1);
 					// For receiving the terminate handle from the isolate thread
 					let (terminate_tx, terminate_rx) =
 						mpsc::channel::<MainWorkerTerminateHandle>(1);
@@ -172,13 +175,14 @@ async fn handle_connection(
 					let config2 = config.clone();
 					let handle = std::thread::Builder::new()
 						.name(actor_id.to_string())
-						.spawn(move || isolate::run(config2, actor_id, terminate_tx))?;
+						.spawn(move || isolate::run(config2, actor_id, owner_tx, terminate_tx))?;
 
 					tokio::task::spawn(watch_thread(
 						config.clone(),
 						actors.clone(),
 						fatal_tx.clone(),
 						actor_id,
+						owner_rx,
 						terminate_rx,
 						signal_rx,
 						handle,
@@ -238,10 +242,22 @@ async fn watch_thread(
 	actors: Arc<RwLock<HashMap<Uuid, mpsc::Sender<(i32, bool)>>>>,
 	fatal_tx: mpsc::Sender<()>,
 	actor_id: Uuid,
+	mut owner_rx: mpsc::Receiver<protocol::ActorOwner>,
 	mut terminate_rx: mpsc::Receiver<MainWorkerTerminateHandle>,
 	mut signal_rx: mpsc::Receiver<(i32, bool)>,
 	handle: JoinHandle<Result<()>>,
 ) {
+	// Await actor owner
+	let Some(actor_owner) = owner_rx.recv().await else {
+		// If the transmitting end of the terminate handle was dropped (`recv` returned `None`), it must be
+		// that the thread stopped
+		tracing::error!(?actor_id, "failed to receive actor owner");
+		fatal_tx.try_send(()).expect("receiver cannot be dropped");
+		return;
+	};
+
+	drop(owner_rx);
+
 	// Await terminate handle
 	let Some(terminate_handle) = terminate_rx.recv().await else {
 		// If the transmitting end of the terminate handle was dropped (`recv` returned `None`), it must be
@@ -287,7 +303,7 @@ async fn watch_thread(
 			}
 		};
 
-		if let Err(err) = ActorKv::new(db, actor_id).destroy().await {
+		if let Err(err) = ActorKv::new(db, actor_owner).destroy().await {
 			tracing::error!(?err, ?actor_id, "failed to destroy actor kv");
 			fatal_tx.try_send(()).expect("receiver cannot be dropped");
 			return;

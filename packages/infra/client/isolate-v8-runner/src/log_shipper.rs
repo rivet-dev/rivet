@@ -7,11 +7,12 @@ use std::{
 };
 
 use anyhow::*;
+use pegboard::protocol;
 use serde::Serialize;
 use serde_json;
 use uuid::Uuid;
 
-use crate::{config::ActorOwner, throttle};
+use crate::throttle;
 
 /// Maximum length of a single log line
 pub const MAX_LINE_BYTES: usize = 1024;
@@ -57,7 +58,7 @@ pub struct LogShipper {
 
 	pub vector_socket_addr: String,
 
-	pub owner: ActorOwner,
+	pub owner: protocol::ActorOwner,
 }
 
 impl LogShipper {
@@ -108,13 +109,15 @@ impl LogShipper {
 
 		while let Result::Ok(message) = self.msg_rx.recv() {
 			let vector_message = match &self.owner {
-				ActorOwner::DynamicServer { server_id } => VectorMessage::DynamicServers {
-					server_id: server_id.as_str(),
-					task: "main", // Backwards compatibility with logs
-					stream_type: message.stream_type as u8,
-					ts: message.ts,
-					message: message.message.as_str(),
-				},
+				protocol::ActorOwner::DynamicServer { server_id } => {
+					VectorMessage::DynamicServers {
+						server_id: server_id.to_string(),
+						task: "main", // Backwards compatibility with logs
+						stream_type: message.stream_type as u8,
+						ts: message.ts,
+						message: message.message.as_str(),
+					}
+				}
 			};
 
 			serde_json::to_writer(&mut stream, &vector_message)?;
@@ -133,7 +136,7 @@ impl LogShipper {
 enum VectorMessage<'a> {
 	#[serde(rename = "dynamic_servers")]
 	DynamicServers {
-		server_id: &'a str,
+		server_id: String,
 		task: &'a str,
 		stream_type: u8,
 		ts: u64,

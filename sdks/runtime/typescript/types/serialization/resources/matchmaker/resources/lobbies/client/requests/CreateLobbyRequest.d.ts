@@ -4,17 +4,18 @@
 import * as serializers from "../../../../../../index";
 import * as Rivet from "../../../../../../../api/index";
 import * as core from "../../../../../../../core";
-import { matchmaker, captcha } from "../../../../../index";
+import { CustomLobbyPublicity } from "../../../common/types/CustomLobbyPublicity";
+import { Config } from "../../../../../captcha/resources/config/types/Config";
 export declare const CreateLobbyRequest: core.serialization.Schema<serializers.matchmaker.CreateLobbyRequest.Raw, Rivet.matchmaker.CreateLobbyRequest>;
 export declare namespace CreateLobbyRequest {
     interface Raw {
         game_mode: string;
         region?: string | null;
-        publicity?: matchmaker.CustomLobbyPublicity.Raw | null;
+        publicity?: CustomLobbyPublicity.Raw | null;
         tags?: Record<string, string> | null;
         max_players?: number | null;
         lobby_config?: unknown | null;
-        captcha?: captcha.Config.Raw | null;
+        captcha?: Config.Raw | null;
         verification_data?: unknown | null;
     }
 }

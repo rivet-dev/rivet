@@ -15,7 +15,7 @@ pub struct Server {
 	pub cluster_id: Uuid,
 	pub tags: HashMap<String, String>,
 	pub resources: ServerResources,
-	pub kill_timeout_ms: i64,
+	pub lifecycle: ServerLifecycle,
 	pub create_ts: i64,
 	pub start_ts: Option<i64>,
 	pub connectable_ts: Option<i64>,
@@ -31,6 +31,12 @@ pub struct Server {
 pub struct ServerResources {
 	pub cpu_millicores: u32,
 	pub memory_mib: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+pub struct ServerLifecycle {
+	pub kill_timeout_ms: i64,
+	pub durable: bool,
 }
 
 #[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
@@ -141,9 +147,7 @@ pub fn convert_actor_to_api(
 				.map(|(s, p)| (s, p.api_into()))
 				.collect::<HashMap<_, _>>(),
 		}),
-		lifecycle: Box::new(models::ActorLifecycle {
-			kill_timeout: Some(value.kill_timeout_ms),
-		}),
+		lifecycle: Box::new(value.lifecycle.api_into()),
 		resources: Box::new(value.resources.api_into()),
 	})
 }
@@ -162,6 +166,24 @@ impl ApiFrom<ServerResources> for models::ActorResources {
 		models::ActorResources {
 			cpu: value.cpu_millicores as i32,
 			memory: value.memory_mib as i32,
+		}
+	}
+}
+
+impl ApiFrom<models::ActorLifecycle> for ServerLifecycle {
+	fn api_from(value: models::ActorLifecycle) -> ServerLifecycle {
+		ServerLifecycle {
+			kill_timeout_ms: value.kill_timeout.unwrap_or_default(),
+			durable: value.durable.unwrap_or_default(),
+		}
+	}
+}
+
+impl ApiFrom<ServerLifecycle> for models::ActorLifecycle {
+	fn api_from(value: ServerLifecycle) -> models::ActorLifecycle {
+		models::ActorLifecycle {
+			kill_timeout: Some(value.kill_timeout_ms),
+			durable: Some(value.durable),
 		}
 	}
 }

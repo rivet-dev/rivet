@@ -107,7 +107,8 @@ export declare class Actor {
      *                 memory: 1
      *             },
      *             lifecycle: {
-     *                 killTimeout: 1000000
+     *                 killTimeout: 1000000,
+     *                 durable: true
      *             }
      *         }
      *     })

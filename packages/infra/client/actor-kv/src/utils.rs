@@ -4,6 +4,7 @@ use anyhow::*;
 use deno_core::JsBuffer;
 use foundationdb as fdb;
 use futures_util::{FutureExt, TryStreamExt};
+use pegboard::protocol;
 
 use crate::{
 	key::Key, MAX_KEYS, MAX_KEY_SIZE, MAX_PUT_PAYLOAD_SIZE, MAX_STORAGE_SIZE, MAX_VALUE_SIZE,
@@ -75,6 +76,12 @@ pub fn now() -> i64 {
 		.as_millis()
 		.try_into()
 		.expect("now doesn't fit in i64")
+}
+
+pub fn owner_segment(owner: &protocol::ActorOwner) -> String {
+	match owner {
+		protocol::ActorOwner::DynamicServer { server_id } => (*server_id).into(),
+	}
 }
 
 pub fn validate_keys(keys: &[Key]) -> Result<()> {

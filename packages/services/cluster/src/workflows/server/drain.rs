@@ -37,17 +37,23 @@ pub(crate) async fn cluster_server_drain(ctx: &mut WorkflowCtx, input: &Input) -
 		}
 		PoolType::Pegboard | PoolType::PegboardIsolate => {
 			let pegboard_client_id = ctx
-				.activity(DrainPegboardClientInput {
+				.activity(GetPegboardClientInput {
 					server_id: input.server_id,
-					drain_timeout,
 				})
 				.await?;
 
 			if let Some(pegboard_client_id) = pegboard_client_id {
+				// Important that the pegboard client is set to draining first
 				ctx.signal(pegboard::workflows::client::Drain {})
 					.tag("client_id", pegboard_client_id)
 					.send()
 					.await?;
+
+				ctx.activity(DrainDynamicServersInput {
+					pegboard_client_id,
+					drain_timeout,
+				})
+				.await?;
 			}
 		}
 		PoolType::Ats | PoolType::Fdb => {}
@@ -159,15 +165,14 @@ async fn drain_node(ctx: &ActivityCtx, input: &DrainNodeInput) -> GlobalResult<(
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-struct DrainPegboardClientInput {
+struct GetPegboardClientInput {
 	server_id: Uuid,
-	drain_timeout: u64,
 }
 
-#[activity(DrainPegboardClient)]
-async fn drain_pegboard_client(
+#[activity(GetPegboardClient)]
+async fn get_pegboard_client(
 	ctx: &ActivityCtx,
-	input: &DrainPegboardClientInput,
+	input: &GetPegboardClientInput,
 ) -> GlobalResult<Option<Uuid>> {
 	let (pegboard_client_id,) = sql_fetch_one!(
 		[ctx, (Option<Uuid>,)]
@@ -180,15 +185,26 @@ async fn drain_pegboard_client(
 	)
 	.await?;
 
-	// Drain dynamic servers
-	if let Some(pegboard_client_id) = pegboard_client_id {
-		msg!([ctx] ds::msg::drain_all(&pegboard_client_id) {
-			nomad_node_id: None,
-			pegboard_client_id: Some(pegboard_client_id.into()),
-			drain_timeout: input.drain_timeout,
-		})
-		.await?;
-	}
-
 	Ok(pegboard_client_id)
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct DrainDynamicServersInput {
+	pegboard_client_id: Uuid,
+	drain_timeout: u64,
+}
+
+#[activity(DrainDynamicServers)]
+async fn drain_dynamic_servers(
+	ctx: &ActivityCtx,
+	input: &DrainDynamicServersInput,
+) -> GlobalResult<()> {
+	msg!([ctx] ds::msg::drain_all(&input.pegboard_client_id) {
+		nomad_node_id: None,
+		pegboard_client_id: Some(input.pegboard_client_id.into()),
+		drain_timeout: input.drain_timeout,
+	})
+	.await?;
+
+	Ok(())
 }

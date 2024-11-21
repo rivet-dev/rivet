@@ -22,7 +22,7 @@ use tokio::{
 	sync::mpsc::{channel, Receiver},
 };
 
-use crate::config::{Config, FoundationDb};
+use pegboard_config::{Config, FoundationDb};
 
 const MAX_QUERY_RETRIES: usize = 16;
 const QUERY_RETRY: Duration = Duration::from_millis(500);

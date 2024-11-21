@@ -42,8 +42,8 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 url = "2.4"
 uuid = { version = "1.6.1", features = ["v4"] }
 
-runner-protocol.workspace = true
 pegboard = { path = "../../../services/pegboard", default-features = false }
+pegboard-config = { path = "../config" }
 serde_yaml = "0.9.34"
 
 [dependencies.sqlx]

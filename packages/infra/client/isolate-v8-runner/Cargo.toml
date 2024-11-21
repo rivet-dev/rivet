@@ -32,8 +32,9 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 twox-hash = "1.6.3"
 uuid = { version = "1.6.1", features = ["v4"] }
 
-runner-protocol.workspace = true
+pegboard-config.workspace = true
 actor-kv.workspace = true
+pegboard = { path = "../../../services/pegboard", default-features = false }
 
 [dependencies.deno_runtime]
 workspace = true
