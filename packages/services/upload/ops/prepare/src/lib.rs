@@ -28,10 +28,19 @@ struct MultipartUpdate {
 async fn handle(
 	ctx: OperationContext<upload::prepare::Request>,
 ) -> GlobalResult<upload::prepare::Response> {
-	let s3_client = s3_util::Client::with_bucket_and_endpoint(
+	// This client is used for making requests directly to S3
+	let s3_client_internal = s3_util::Client::with_bucket_and_endpoint(
 		ctx.config(),
 		&ctx.bucket,
 		s3_util::EndpointKind::Internal,
+	)
+	.await?;
+
+	// This client is used for presigning requests using the public endopint
+	let s3_client_external = s3_util::Client::with_bucket_and_endpoint(
+		ctx.config(),
+		&ctx.bucket,
+		s3_util::EndpointKind::External,
 	)
 	.await?;
 
@@ -122,12 +131,14 @@ async fn handle(
 	let (presigned_requests_init, multipart_updates) =
 		futures_util::stream::iter(ctx.files.iter().cloned())
 			.map(move |file| {
-				let s3_client = s3_client.clone();
+				let s3_client_internal = s3_client_internal.clone();
+				let s3_client_external = s3_client_external.clone();
 
 				if file.multipart {
-					handle_multipart_upload(s3_client, upload_id, file).boxed()
+					handle_multipart_upload(s3_client_internal, s3_client_external, upload_id, file)
+						.boxed()
 				} else {
-					handle_upload(s3_client, upload_id, file).boxed()
+					handle_upload(s3_client_external, upload_id, file).boxed()
 				}
 			})
 			.buffer_unordered(16)
@@ -200,15 +211,15 @@ async fn handle(
 }
 
 async fn handle_upload(
-	s3_client: s3_util::Client,
+	s3_client_external: s3_util::Client,
 	upload_id: Uuid,
 	file: backend::upload::PrepareFile,
 ) -> GlobalResult<Vec<PrepareResult>> {
 	let fut = async move {
 		// Sign an upload request
-		let mut put_obj_builder = s3_client
+		let mut put_obj_builder = s3_client_external
 			.put_object()
-			.bucket(s3_client.bucket())
+			.bucket(s3_client_external.bucket())
 			.key(format!("{}/{}", upload_id, file.path))
 			.content_length(file.content_length as i64);
 		if let Some(mime) = &file.mime {
@@ -246,19 +257,20 @@ async fn handle_upload(
 const MIN_MULTIPART_FILE_SIZE: u64 = util::file_size::mebibytes(5);
 
 async fn handle_multipart_upload(
-	s3_client: s3_util::Client,
+	s3_client_internal: s3_util::Client,
+	s3_client_external: s3_util::Client,
 	upload_id: Uuid,
 	file: backend::upload::PrepareFile,
 ) -> GlobalResult<Vec<PrepareResult>> {
 	// If the file is too small for multipart uploads, fallback to normal file uploads
 	if file.content_length < MIN_MULTIPART_FILE_SIZE {
-		return Ok(handle_upload(s3_client, upload_id, file).await?);
+		return Ok(handle_upload(s3_client_external, upload_id, file).await?);
 	}
 
 	// Create multipart upload
-	let mut multipart_builder = s3_client
+	let mut multipart_builder = s3_client_internal
 		.create_multipart_upload()
-		.bucket(s3_client.bucket())
+		.bucket(s3_client_internal.bucket())
 		.key(format!("{}/{}", upload_id, file.path));
 	if let Some(mime) = &file.mime {
 		multipart_builder = multipart_builder.content_type(mime.clone());
@@ -273,7 +285,7 @@ async fn handle_multipart_upload(
 	// S3's part number is 1-based
 	Ok((1..=part_count)
 		.map(|part_number| {
-			let s3_client = s3_client.clone();
+			let s3_client_external = s3_client_external.clone();
 			let file = file.clone();
 			let multipart_upload_id2 = multipart_upload_id.clone();
 			let path = file.path.clone();
@@ -283,9 +295,9 @@ async fn handle_multipart_upload(
 				let offset = (part_number - 1) * CHUNK_SIZE;
 				let content_length = (file.content_length - offset).min(CHUNK_SIZE);
 
-				let upload_part_builder = s3_client
+				let upload_part_builder = s3_client_external
 					.upload_part()
-					.bucket(s3_client.bucket())
+					.bucket(s3_client_external.bucket())
 					.key(format!("{}/{}", upload_id, file.path))
 					.content_length(content_length as i64)
 					.upload_id(multipart_upload_id2)
