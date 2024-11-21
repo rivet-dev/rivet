@@ -1,5 +1,6 @@
 use std::{
 	collections::HashMap,
+	net::SocketAddr,
 	path::PathBuf,
 	result::Result::{Err, Ok},
 	sync::Arc,
@@ -495,7 +496,7 @@ impl Ctx {
 			let config = IsolateRunnerConfig {
 				actors_path: self.actors_path(),
 				fdb_cluster_path: self.fdb_cluster_path(),
-				runner_addr: SocketAddr::from([127, 0, 0, 1], self.config().runner.port()),
+				runner_addr: SocketAddr::from(([127, 0, 0, 1], self.config().runner.port())),
 			};
 
 			// Write isolate runner config
@@ -618,7 +619,7 @@ impl Ctx {
 	}
 
 	pub fn fdb_cluster_path(&self) -> PathBuf {
-		self.config().runtime.data_dir().join("fdb.cluster")
+		self.config().data_dir().join("fdb.cluster")
 	}
 
 	pub fn actors_path(&self) -> PathBuf {

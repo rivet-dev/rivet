@@ -21,6 +21,7 @@ struct ActorRow {
 	client_id: Uuid,
 	failed_start: bool,
 	failed_stop: bool,
+	failed_exit: bool,
 }
 
 pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> GlobalResult<()> {
