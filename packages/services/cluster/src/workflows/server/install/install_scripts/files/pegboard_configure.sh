@@ -28,7 +28,7 @@ cat << 'EOF' > /etc/rivet-client/config.json
 		},
 		"reserved_resources": {
 			"cpu": 0,
-			"memory": "__RESERVED_MEMORY__"
+			"memory": __RESERVED_MEMORY__
 		},
 		"vector": {
 			"address": "127.0.0.1:5021"

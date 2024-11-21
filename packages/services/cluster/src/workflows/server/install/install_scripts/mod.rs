@@ -168,7 +168,7 @@ pub async fn gen_initialize(
 		PoolType::Fdb => {
 			script.push(components::fdb::configure());
 			prometheus_targets.insert(
-				"pegboard".into(),
+				"foundationdb".into(),
 				components::vector::PrometheusTarget {
 					endpoint: "http://127.0.0.1:9161".into(),
 					scrape_interval: 15,

@@ -21,3 +21,9 @@ if [ "__FLAVOR__" = "isolate" ]; then
 	curl -Lf -o /usr/local/bin/rivet-isolate-v8-runner "__ISOLATE_V8_RUNNER_BINARY_URL__"
 	chmod +x /usr/local/bin/rivet-isolate-v8-runner
 fi
+
+# For clarity
+FDB_VERSION="__FDB_VERSION__"
+
+# Shared object for fdb client
+curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/${FDB_VERSION}/libfdb_c.x86_64.so"

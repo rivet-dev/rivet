@@ -1,8 +1,12 @@
+pub const FDB_VERSION: &str = "7.1.60";
+
 pub fn install(initialize_immediately: bool) -> String {
-	let mut script = include_str!("../files/fdb_install.sh").replace(
-		"__PROMETHEUS_PROXY_SCRIPT__",
-		include_str!("../files/fdp_prometheus_proxy.py"),
-	);
+	let mut script = include_str!("../files/fdb_install.sh")
+		.replace("__FDB_VERSION__", FDB_VERSION)
+		.replace(
+			"__PROMETHEUS_PROXY_SCRIPT__",
+			include_str!("../files/fdp_prometheus_proxy.py"),
+		);
 
 	if initialize_immediately {
 		// Run script immediately

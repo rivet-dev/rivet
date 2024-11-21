@@ -97,7 +97,7 @@ async fn upload_build(
 			backend::upload::PrepareFile {
 				path: unwrap!(unwrap!(build.key.file_name(), "should have file name").to_str()).to_string(),
 				content_length: len,
-				multipart: false,
+				multipart: len > util::file_size::mebibytes(100),
 				..Default::default()
 			},
 		],

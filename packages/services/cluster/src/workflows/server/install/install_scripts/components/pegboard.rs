@@ -1,6 +1,6 @@
 use chirp_workflow::prelude::*;
 
-use super::TUNNEL_API_EDGE_PORT;
+use super::{fdb::FDB_VERSION, TUNNEL_API_EDGE_PORT};
 
 pub const TUNNEL_PEGBOARD_WS_PORT: u16 = 5030;
 
@@ -23,7 +23,8 @@ pub async fn install(
 		.replace(
 			"__ISOLATE_V8_RUNNER_BINARY_URL__",
 			provision_config.isolate_runner_binary_url.as_ref(),
-		))
+		)
+		.replace("__FDB_VERSION__", FDB_VERSION))
 }
 
 pub fn configure(

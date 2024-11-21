@@ -998,7 +998,7 @@ def main():
         status_file = args.status_file
     else:
         assert args.fdb_cluster_file
-        fdb.api_version(730)
+        fdb.api_version(710)
         try:
             db = fdb.open(cluster_file=cluster_file_path)
         except Exception:

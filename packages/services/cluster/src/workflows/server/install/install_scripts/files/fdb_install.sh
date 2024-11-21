@@ -1,27 +1,35 @@
 sysctl --system
 
+# For clarity
+FDB_VERSION="__FDB_VERSION__"
+
 mkdir -p /etc/foundationdb
 
-curl -Lf -o /tmp/foundationdb-clients_OFF-1_amd64.deb "https://github.com/apple/foundationdb/releases/download/7.3.43/foundationdb-clients_7.3.43-1_amd64.deb"
-dpkg -i /tmp/foundationdb-clients_OFF-1_amd64.deb
+# Custom cluster description and ID (https://apple.github.io/foundationdb/administration.html#cluster-file-format)
+cat << 'EOF' > /etc/foundationdb/fdb.cluster
+fdb:fdb@127.0.0.1:4500
+EOF
+
+curl -Lf -o "/tmp/foundationdb-clients_${FDB_VERSION}-1_amd64.deb" "https://github.com/apple/foundationdb/releases/download/${FDB_VERSION}/foundationdb-clients_${FDB_VERSION}-1_amd64.deb"
+dpkg -i "/tmp/foundationdb-clients_${FDB_VERSION}-1_amd64.deb"
 
 # Verify installation
 fdbcli --version
 
-curl -Lf -o /tmp/foundationdb-server_OFF-1_amd64.deb "https://github.com/apple/foundationdb/releases/download/7.3.43/foundationdb-server_7.3.43-1_amd64.deb"
-dpkg -i /tmp/foundationdb-server_OFF-1_amd64.deb
+curl -Lf -o "/tmp/foundationdb-server_${FDB_VERSION}-1_amd64.deb" "https://github.com/apple/foundationdb/releases/download/${FDB_VERSION}/foundationdb-server_${FDB_VERSION}-1_amd64.deb"
+dpkg -i "/tmp/foundationdb-server_${FDB_VERSION}-1_amd64.deb"
 
 # Verify installation
 fdbserver --version
 
+# Required for 7.3
+# fdbcli --exec "configure perpetual_storage_wiggle=1 storage_migration_type=gradual"
+
 # https://apple.github.io/foundationdb/administration.html#administration-running-foundationdb
 # Configure redundancy and storage engine
-fdbcli --exec "configure perpetual_storage_wiggle=1 storage_migration_type=gradual"
-fdbcli --exec "configure single ssd"
-service foundationdb stop
+fdbcli --exec "configure new single ssd"
 
-
-pip install wheel foundationdb prometheus_client
+pip install wheel "foundationdb==${FDB_VERSION}" prometheus_client
 
 cat << 'EOF' > /usr/local/bin/fdb_prometheus_proxy.py
 __PROMETHEUS_PROXY_SCRIPT__
@@ -46,5 +54,5 @@ EOF
 systemctl daemon-reload
 systemctl enable fdb_prometheus_proxy
 
-# NOTE: we dont have a systemd service for fdbserver because it uses `service`:
+# NOTE: systemd service for foundationdb automatically created from dpkg:
 # https://apple.github.io/foundationdb/administration.html#administration-running-foundationdb
