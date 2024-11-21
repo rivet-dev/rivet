@@ -146,7 +146,6 @@ impl Handle {
 		runner_binary_path: &Path,
 		working_path: PathBuf,
 		env: &[(&str, String)],
-		use_cgroup: bool,
 	) -> Result<Self> {
 		// Prepare the arguments for the runner
 		let runner_args = vec![working_path.to_str().context("bad path")?];
@@ -188,16 +187,6 @@ impl Handle {
 						// Write the second child's PID to the pipe
 						let orphan_pid_bytes = child.as_raw().to_le_bytes();
 						write(pipe_write, &orphan_pid_bytes)?;
-
-						if use_cgroup {
-							// Write orphan PID to the runners cgroup so that it is no longer part of the parent
-							// cgroup. This is important for allowing systemd to restart pegboard without
-							// restarting orphans.
-							let mut cgroup_procs = std::fs::File::options()
-								.append(true)
-								.open(Path::new(utils::CGROUP_PATH).join("cgroup.procs"))?;
-							cgroup_procs.write_all(format!("{}\n", child.as_raw()).as_bytes())?;
-						}
 
 						// Exit the intermediate child
 						std::process::exit(0);

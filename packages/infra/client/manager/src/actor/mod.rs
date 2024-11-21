@@ -170,7 +170,6 @@ impl Actor {
 					&ctx.config().runner.container_runner_binary_path(),
 					ctx.actor_path(self.actor_id),
 					&runner_env,
-					ctx.config().runner.use_cgroup(),
 				)?
 			}
 			// Shared runner

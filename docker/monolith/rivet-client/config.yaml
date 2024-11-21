@@ -2,8 +2,6 @@ client:
   data_dir: /data/rivet-client
   runner:
     flavor: isolate
-    # Cgroups require privileged containers
-    use_cgroup: false
   cluster:
     # This is safe to hardcode
     client_id: fc67e54e-5d6a-4726-ab23-77b0e54f068f
@@ -29,4 +27,3 @@ client:
     redirect_logs: false
   vector:
     address: vector-server:6100
-

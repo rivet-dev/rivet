@@ -91,11 +91,6 @@ pub struct Runner {
 	/// WebSocket Port for runners on this machine to connect to.
 	pub port: Option<u16>,
 
-	/// If true, a cgroup will be created for the runners.
-	///
-	/// This should not be disabled if running the client with a daemon.
-	pub use_cgroup: Option<bool>,
-
 	pub container_runner_binary_path: Option<PathBuf>,
 	pub isolate_runner_binary_path: Option<PathBuf>,
 }
@@ -103,10 +98,6 @@ pub struct Runner {
 impl Runner {
 	pub fn port(&self) -> u16 {
 		self.port.unwrap_or(7080)
-	}
-
-	pub fn use_cgroup(&self) -> bool {
-		self.use_cgroup.unwrap_or(true)
 	}
 
 	pub fn container_runner_binary_path(&self) -> PathBuf {

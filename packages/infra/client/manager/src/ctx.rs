@@ -511,7 +511,6 @@ impl Ctx {
 				&self.config().runner.isolate_runner_binary_path(),
 				working_path,
 				&[],
-				self.config().runner.use_cgroup(),
 			)?;
 			let pid = runner.pid();
 

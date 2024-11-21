@@ -29,7 +29,6 @@ pub mod sql;
 const MAX_QUERY_RETRIES: usize = 16;
 const QUERY_RETRY: Duration = Duration::from_millis(500);
 const TXN_RETRY: Duration = Duration::from_millis(250);
-pub const CGROUP_PATH: &str = "/sys/fs/cgroup/pegboard_runners";
 
 pub async fn init_dir(config: &Config) -> Result<()> {
 	let data_dir = config.client.data_dir();
@@ -80,14 +79,6 @@ pub async fn init_dir(config: &Config) -> Result<()> {
 	match fs::create_dir(data_dir.join("db")).await {
 		Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
 		x => x.context("failed to create /db dir in data dir")?,
-	}
-
-	if config.client.runner.use_cgroup() {
-		// Create cgroup folder for runners
-		match fs::create_dir(CGROUP_PATH).await {
-			Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-			x => x.context("failed to create cgroup dir for runners")?,
-		}
 	}
 
 	Ok(())
