@@ -1,6 +1,9 @@
 use std::{collections::HashMap, future::Future, sync::Arc};
 
-use deno_core::{error::AnyError, op2, JsBuffer, OpState};
+use deno_core::{error::AnyError, op2, JsBuffer, OpState, ToJsBuffer};
+use serde::Serialize;
+
+type FakeMap<T, U> = Box<[(T, U)]>;
 
 deno_core::extension!(
   rivet_kv,
@@ -12,6 +15,7 @@ deno_core::extension!(
 	op_rivet_kv_put_batch,
 	op_rivet_kv_delete,
 	op_rivet_kv_delete_batch,
+	op_rivet_kv_delete_all,
   ],
   esm = [
 	dir "js",
@@ -25,26 +29,72 @@ deno_core::extension!(
   },
 );
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+enum Key {
+	InKey(Vec<JsBuffer>),
+	OutKey(Vec<ToJsBuffer>),
+}
+
+impl From<actor_kv::key::Key> for Key {
+	fn from(value: actor_kv::key::Key) -> Self {
+		match value {
+			actor_kv::key::Key::JsInKey(tuple) => Key::InKey(tuple),
+			actor_kv::key::Key::JsOutKey(tuple) => {
+				Key::OutKey(tuple.into_iter().map(Into::into).collect())
+			}
+		}
+	}
+}
+
+#[derive(Serialize)]
+struct Entry {
+	metadata: actor_kv::Metadata,
+	value: ToJsBuffer,
+}
+
+impl From<actor_kv::Entry> for Entry {
+	fn from(value: actor_kv::Entry) -> Self {
+		Entry {
+			metadata: value.metadata,
+			value: value.value.into(),
+		}
+	}
+}
+
 #[op2(async)]
 #[serde]
 pub fn op_rivet_kv_get(
 	state: &mut OpState,
-	#[string] key: String,
-) -> Result<impl Future<Output = Result<Option<actor_kv::Entry>, AnyError>>, AnyError> {
+	#[serde] key: actor_kv::key::Key,
+) -> Result<impl Future<Output = Result<Option<Entry>, AnyError>>, AnyError> {
 	let kv = state.borrow::<Arc<actor_kv::ActorKv>>().clone();
 
-	Ok(async move { kv.get(vec![key]).await.map(|res| res.into_values().next()) })
+	Ok(async move {
+		let res = kv.get(vec![key.into()]).await?;
+
+		Ok(res.into_values().next().map(Into::into))
+	})
 }
 
 #[op2(async)]
 #[serde]
 pub fn op_rivet_kv_get_batch(
 	state: &mut OpState,
-	#[serde] keys: Vec<String>,
-) -> Result<impl Future<Output = Result<HashMap<String, actor_kv::Entry>, AnyError>>, AnyError> {
+	#[serde] keys: Vec<actor_kv::key::Key>,
+) -> Result<impl Future<Output = Result<FakeMap<Key, Entry>, AnyError>>, AnyError> {
 	let kv = state.borrow::<Arc<actor_kv::ActorKv>>().clone();
 
-	Ok(async move { kv.get(keys).await })
+	Ok(async move {
+		let res = kv
+			.get(keys.into_iter().map(Into::into).collect())
+			.await?
+			.into_iter()
+			.map(|(k, v)| (k.into(), v.into()))
+			.collect();
+
+		Ok(res)
+	})
 }
 
 #[op2(async)]
@@ -54,16 +104,25 @@ pub fn op_rivet_kv_list(
 	#[serde] query: actor_kv::ListQuery,
 	reverse: bool,
 	limit: Option<u32>,
-) -> Result<impl Future<Output = Result<HashMap<String, actor_kv::Entry>, AnyError>>, AnyError> {
+) -> Result<impl Future<Output = Result<FakeMap<Key, Entry>, AnyError>>, AnyError> {
 	let kv = state.borrow::<Arc<actor_kv::ActorKv>>().clone();
 
-	Ok(async move { kv.list(query, reverse, limit.map(|x| x as usize)).await })
+	Ok(async move {
+		let res = kv
+			.list(query.into(), reverse, limit.map(|x| x as usize))
+			.await?
+			.into_iter()
+			.map(|(k, v)| (k.into(), v.into()))
+			.collect();
+
+		Ok(res)
+	})
 }
 
 #[op2(async)]
 pub fn op_rivet_kv_put(
 	state: &mut OpState,
-	#[string] key: String,
+	#[serde] key: actor_kv::key::Key,
 	#[buffer] value: JsBuffer,
 ) -> Result<impl Future<Output = Result<(), AnyError>>, AnyError> {
 	let kv = state.borrow::<Arc<actor_kv::ActorKv>>().clone();
@@ -74,7 +133,7 @@ pub fn op_rivet_kv_put(
 #[op2(async)]
 pub fn op_rivet_kv_put_batch(
 	state: &mut OpState,
-	#[serde] obj: HashMap<String, JsBuffer>,
+	#[serde] obj: HashMap<actor_kv::key::Key, JsBuffer>,
 ) -> Result<impl Future<Output = Result<(), AnyError>>, AnyError> {
 	let kv = state.borrow::<Arc<actor_kv::ActorKv>>().clone();
 
@@ -84,14 +143,14 @@ pub fn op_rivet_kv_put_batch(
 #[op2(async)]
 pub fn op_rivet_kv_delete(
 	state: &mut OpState,
-	#[string] key: String,
+	#[serde] key: actor_kv::key::Key,
 ) -> Result<impl Future<Output = Result<bool, AnyError>>, AnyError> {
 	let kv = state.borrow::<Arc<actor_kv::ActorKv>>().clone();
 
 	Ok(async move {
-		kv.delete(vec![key])
-			.await
-			.map(|res| res.into_values().next().unwrap_or_default())
+		let res = kv.delete(vec![key]).await?;
+
+		Ok(res.into_values().next().unwrap_or_default())
 	})
 }
 
@@ -99,9 +158,27 @@ pub fn op_rivet_kv_delete(
 #[serde]
 pub fn op_rivet_kv_delete_batch(
 	state: &mut OpState,
-	#[serde] keys: Vec<String>,
-) -> Result<impl Future<Output = Result<HashMap<String, bool>, AnyError>>, AnyError> {
+	#[serde] keys: Vec<actor_kv::key::Key>,
+) -> Result<impl Future<Output = Result<FakeMap<Key, bool>, AnyError>>, AnyError> {
 	let kv = state.borrow::<Arc<actor_kv::ActorKv>>().clone();
 
-	Ok(async move { kv.delete(keys).await })
+	Ok(async move {
+		let res = kv
+			.delete(keys)
+			.await?
+			.into_iter()
+			.map(|(k, v)| (k.into(), v.into()))
+			.collect();
+
+		Ok(res)
+	})
+}
+
+#[op2(async)]
+pub fn op_rivet_kv_delete_all(
+	state: &mut OpState,
+) -> Result<impl Future<Output = Result<(), AnyError>>, AnyError> {
+	let kv = state.borrow::<Arc<actor_kv::ActorKv>>().clone();
+
+	Ok(async move { kv.delete_all().await })
 }

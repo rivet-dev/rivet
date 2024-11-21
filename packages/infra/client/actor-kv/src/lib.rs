@@ -4,15 +4,17 @@ use std::{
 };
 
 use anyhow::*;
-use deno_core::{JsBuffer, ToJsBuffer};
-use foundationdb::{self as fdb, directory::Directory};
+use deno_core::JsBuffer;
+use foundationdb::{self as fdb, directory::Directory, tuple::Subspace};
 use futures_util::{StreamExt, TryStreamExt};
-use metadata::Metadata;
+use key::{Key, ListKey};
+pub use metadata::Metadata;
 use prost::Message;
 use serde::{Deserialize, Serialize};
-use utils::TransactionExt;
+use utils::{validate_entries, validate_keys, TransactionExt};
 use uuid::Uuid;
 
+pub mod key;
 mod metadata;
 mod utils;
 
@@ -23,11 +25,12 @@ const MAX_PUT_PAYLOAD_SIZE: usize = 976 * 1024;
 const MAX_STORAGE_SIZE: usize = 1024 * 1024 * 1024; // 1 GiB
 const VALUE_CHUNK_SIZE: usize = 1000; // 1 KB, not KiB
 
+// Currently designed largely around the Deno runtime. More abstractions can be made later.
 pub struct ActorKv {
 	version: &'static str,
 	db: fdb::Database,
 	actor_id: Uuid,
-	subspace: Option<fdb::tuple::Subspace>,
+	subspace: Option<Subspace>,
 }
 
 impl ActorKv {
@@ -65,7 +68,7 @@ impl ActorKv {
 	}
 
 	/// Returns estimated size of the given subspace.
-	pub async fn get_subspace_size(&self, subspace: &fdb::tuple::Subspace) -> Result<i64> {
+	pub async fn get_subspace_size(&self, subspace: &Subspace) -> Result<i64> {
 		let (start, end) = subspace.range();
 
 		// This txn does not have to be committed because we are not modifying any data
@@ -76,7 +79,7 @@ impl ActorKv {
 	}
 
 	/// Gets keys from the KV store.
-	pub async fn get(&self, keys: Vec<String>) -> Result<HashMap<String, Entry>> {
+	pub async fn get(&self, keys: Vec<Key>) -> Result<HashMap<Key, Entry>> {
 		let subspace = self
 			.subspace
 			.as_ref()
@@ -114,19 +117,13 @@ impl ActorKv {
 													bail!("unexpected sub key: {sub_key:?}");
 												}
 
-												Ok(SubKey {
-													key: key.clone(),
-													data: SubKeyData::Metadata(value),
-												})
+												Ok((key.clone(), SubKey::Metadata(value)))
 											} else {
 												// Parse sub key as idx
 												let (_, idx) = key_subspace
 													.unpack::<(String, usize)>(value.key())?;
 
-												Ok(SubKey {
-													key: key.clone(),
-													data: SubKeyData::Chunk(idx, value),
-												})
+												Ok((key.clone(), SubKey::Chunk(idx, value)))
 											}
 										}
 										Err(err) => Err(err.into()),
@@ -137,8 +134,8 @@ impl ActorKv {
 						// Should remain in order
 						.buffered(32)
 						.flatten()
-						.try_fold(HashMap::new(), |mut acc, sub_key| async {
-							acc.entry(sub_key.key.clone())
+						.try_fold(HashMap::new(), |mut acc, (key, sub_key)| async {
+							acc.entry(key)
 								.or_insert_with(EntryBuilder::default)
 								.add_sub_key(sub_key)?;
 
@@ -165,7 +162,7 @@ impl ActorKv {
 		query: ListQuery,
 		reverse: bool,
 		limit: Option<usize>,
-	) -> Result<HashMap<String, Entry>> {
+	) -> Result<HashMap<Key, Entry>> {
 		let subspace = self
 			.subspace
 			.as_ref()
@@ -200,39 +197,34 @@ impl ActorKv {
 							Ok(value) => {
 								// Parse key as string
 								if let Ok((key, sub_key)) =
-									subspace.unpack::<(String, String)>(value.key())
+									subspace.unpack::<(Key, String)>(value.key())
 								{
 									if sub_key != "metadata" {
 										bail!("unexpected sub key: {sub_key:?}");
 									}
 
-									Ok(SubKey {
-										key,
-										data: SubKeyData::Metadata(value),
-									})
+									Ok((key, SubKey::Metadata(value)))
 								} else {
 									// Parse sub key as idx
 									let (key, _, idx) =
-										subspace.unpack::<(String, String, usize)>(value.key())?;
+										subspace.unpack::<(Key, String, usize)>(value.key())?;
 
-									Ok(SubKey {
-										key,
-										data: SubKeyData::Chunk(idx, value),
-									})
+									Ok((key, SubKey::Chunk(idx, value)))
 								}
 							}
 							Err(err) => Err(err.into()),
 						}
 					});
 
+					// With a limit, we short circuit out of the `try_fold` once the limit is reached
 					if let Some(limit) = limit {
 						stream
-							.try_fold(HashMap::new(), |mut acc, sub_key| async {
+							.try_fold(HashMap::new(), |mut acc, (key, sub_key)| async {
 								let size = acc.len();
-								let entry = acc.entry(sub_key.key.clone());
+								let entry = acc.entry(key);
 
-								// Short circuit when limit is reached. This relies on data from the stream being
-								// in order.
+								// Short circuit when limit is reached. This relies on data from the stream
+								// being in order.
 								if size == limit && matches!(entry, hash_map::Entry::Vacant(_)) {
 									return Err(ListLimitReached(acc).into());
 								}
@@ -251,8 +243,8 @@ impl ActorKv {
 							})
 					} else {
 						stream
-							.try_fold(HashMap::new(), |mut acc, sub_key| async {
-								acc.entry(sub_key.key.clone())
+							.try_fold(HashMap::new(), |mut acc, (key, sub_key)| async {
+								acc.entry(key)
 									.or_insert_with(EntryBuilder::default)
 									.add_sub_key(sub_key)?;
 
@@ -288,7 +280,7 @@ impl ActorKv {
 	}
 
 	/// Puts keys into the KV store.
-	pub async fn put(&self, entries: HashMap<String, JsBuffer>) -> Result<()> {
+	pub async fn put(&self, entries: HashMap<Key, JsBuffer>) -> Result<()> {
 		let subspace = self
 			.subspace
 			.as_ref()
@@ -351,7 +343,7 @@ impl ActorKv {
 	}
 
 	/// Deletes keys from the KV store. Returns true for keys that existed before deletion.
-	pub async fn delete(&self, keys: Vec<String>) -> Result<HashMap<String, bool>> {
+	pub async fn delete(&self, keys: Vec<Key>) -> Result<HashMap<Key, bool>> {
 		let subspace = self
 			.subspace
 			.as_ref()
@@ -385,6 +377,22 @@ impl ActorKv {
 			.map_err(Into::into)
 	}
 
+	/// Deletes all keys from the KV store.
+	pub async fn delete_all(&self) -> Result<()> {
+		let subspace = self
+			.subspace
+			.as_ref()
+			.context("must call `ActorKv::init` before using KV operations")?;
+
+		self.db
+			.run(|tx, _mc| async move {
+				tx.clear_subspace_range(&subspace);
+				Ok(())
+			})
+			.await
+			.map_err(Into::into)
+	}
+
 	/// **Destroys entire actor's KV. Cannot be undone.**
 	pub async fn destroy(self) -> Result<()> {
 		let root = fdb::directory::DirectoryLayer::default();
@@ -408,15 +416,15 @@ struct EntryBuilder {
 
 impl EntryBuilder {
 	fn add_sub_key(&mut self, sub_key: SubKey) -> Result<()> {
-		match sub_key.data {
-			SubKeyData::Metadata(value) => {
+		match sub_key {
+			SubKey::Metadata(value) => {
 				// We ignore setting the metadata again because it means the same key was given twice in the
 				// input keys for `ActorKv::get`. We don't perform automatic deduplication.
 				if self.metadata.is_none() {
 					self.metadata = Some(Metadata::decode(value.value())?);
 				}
 			}
-			SubKeyData::Chunk(idx, value) => {
+			SubKey::Chunk(idx, value) => {
 				// We don't perform deduplication on the input keys for `ActorKv::get` so we might have
 				// duplicate data chunks. This idx check ignores chunks that were already passed and ensures
 				// contiguity.
@@ -430,14 +438,14 @@ impl EntryBuilder {
 		Ok(())
 	}
 
-	fn build(self, key: &str) -> Result<Entry> {
+	fn build(self, key: &Key) -> Result<Entry> {
 		ensure!(!self.value.is_empty(), "empty value at key {key:?}");
 
 		Ok(Entry {
 			metadata: self
 				.metadata
 				.with_context(|| format!("no metadata for key {key:?}"))?,
-			value: self.value.into(),
+			value: self.value,
 		})
 	}
 }
@@ -445,17 +453,12 @@ impl EntryBuilder {
 /// Represents a Rivet KV value.
 #[derive(Serialize)]
 pub struct Entry {
-	metadata: Metadata,
-	value: ToJsBuffer,
+	pub metadata: Metadata,
+	pub value: Vec<u8>,
 }
 
 /// Represents FDB keys within a Rivet KV key.
-struct SubKey {
-	key: String,
-	data: SubKeyData,
-}
-
-enum SubKeyData {
+enum SubKey {
 	Metadata(fdb::future::FdbValue),
 	Chunk(usize, fdb::future::FdbValue),
 }
@@ -464,13 +467,13 @@ enum SubKeyData {
 #[serde(rename_all = "camelCase")]
 pub enum ListQuery {
 	All,
-	RangeInclusive(String, String),
-	RangeExclusive(String, String),
-	Prefix(String),
+	RangeInclusive(ListKey, Key),
+	RangeExclusive(ListKey, Key),
+	Prefix(ListKey),
 }
 
 impl ListQuery {
-	fn range(&self, subspace: &fdb::tuple::Subspace) -> (Vec<u8>, Vec<u8>) {
+	fn range(&self, subspace: &Subspace) -> (Vec<u8>, Vec<u8>) {
 		match self {
 			ListQuery::All => subspace.range(),
 			ListQuery::RangeInclusive(start, end) => (
@@ -521,7 +524,7 @@ impl ListQuery {
 }
 
 // Used to short circuit after the
-struct ListLimitReached(HashMap<String, EntryBuilder>);
+struct ListLimitReached(HashMap<Key, EntryBuilder>);
 
 impl std::fmt::Debug for ListLimitReached {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -536,49 +539,3 @@ impl std::fmt::Display for ListLimitReached {
 }
 
 impl std::error::Error for ListLimitReached {}
-
-fn validate_keys(keys: &[String]) -> Result<()> {
-	ensure!(keys.len() <= MAX_KEYS, "a maximum of 128 keys is allowed");
-
-	for key in keys {
-		ensure!(
-			key.len() <= MAX_KEY_SIZE,
-			"key is too long (max 2048 bytes)"
-		);
-	}
-
-	Ok(())
-}
-
-fn validate_entries(entries: &HashMap<String, JsBuffer>, total_size: usize) -> Result<()> {
-	ensure!(
-		entries.len() <= MAX_KEYS,
-		"A maximum of 128 key-value entries is allowed"
-	);
-	let payload_size = entries
-		.iter()
-		.fold(0, |acc, (k, v)| acc + k.len() + v.len());
-	ensure!(
-		payload_size <= MAX_PUT_PAYLOAD_SIZE,
-		"total payload is too large (max 976 KiB)"
-	);
-
-	let storage_remaining = MAX_STORAGE_SIZE.saturating_sub(total_size);
-	ensure!(
-		payload_size <= storage_remaining,
-		"not enough space left in storage ({storage_remaining} bytes remaining, current payload is {payload_size} bytes)"
-	);
-
-	for (key, value) in entries {
-		ensure!(
-			key.len() <= MAX_KEY_SIZE,
-			"key is too long (max 2048 bytes)"
-		);
-		ensure!(
-			value.len() <= MAX_VALUE_SIZE,
-			"value for key {key:?} is too large (max 128 KiB)"
-		);
-	}
-
-	Ok(())
-}

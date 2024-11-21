@@ -9,6 +9,7 @@ const rivetNs = {
 		putBatch: kv.putBatch,
 		delete: kv.delete_,
 		deleteBatch: kv.deleteBatch,
+		deleteAll: kv.deleteAll,
 	},
 };
 
