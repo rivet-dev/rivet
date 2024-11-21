@@ -29,8 +29,6 @@ jobs:
       image: rust:1.82.0
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: true
       - run: rustup component add rustfmt
       - run: cargo fmt --check
       - run: cd packages/infra/client && cargo fmt --check
@@ -41,8 +39,6 @@ jobs:
       image: rust:1.82.0
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: true
       - name: Install dependencies
         run: |
           apt-get update
@@ -55,8 +51,6 @@ jobs:
       image: rust:1.82.0
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: true
       - name: Install dependencies
         run: |
           apt-get update
@@ -69,8 +63,6 @@ jobs:
       image: rust:1.82.0
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: true
       - name: cargo deny
         uses: EmbarkStudios/cargo-deny-action@v1
       - name: cargo deny (packages/infra/client)
