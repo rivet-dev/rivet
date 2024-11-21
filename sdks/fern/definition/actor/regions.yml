@@ -8,6 +8,8 @@ imports:
 service:
   auth: true
   base-path: /regions
+  audiences:
+    - runtime
   endpoints:
     list:
       path: ""
@@ -24,4 +26,3 @@ types:
     properties:
       regions:
         type: list<localCommons.Region>
-

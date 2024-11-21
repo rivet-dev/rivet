@@ -6,6 +6,8 @@ imports:
 service:
   auth: true
   base-path: /actors
+  audiences:
+    - runtime
   endpoints:
     get:
       path: /{actor}

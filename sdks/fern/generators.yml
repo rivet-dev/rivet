@@ -10,8 +10,7 @@ groups:
           location: local-file-system
           path: ../../sdks/runtime/openapi
       - name: fernapi/fern-typescript-browser-sdk
-        # Custom version that we generate locally
-        version: 999.999.999
+        version: 0.41.1
         ir-version: v53
         output:
           location: local-file-system
@@ -35,8 +34,7 @@ groups:
           location: local-file-system
           path: ../../sdks/full/openapi
       - name: fernapi/fern-typescript-browser-sdk
-        # Custom version that we generate locally
-        version: 999.999.999
+        version: 0.41.1
         ir-version: v53
         output:
           location: local-file-system

@@ -8,6 +8,8 @@ imports:
 service:
   auth: true
   base-path: /builds
+  audiences:
+    - runtime
   endpoints:
     get:
       path: /{build}
