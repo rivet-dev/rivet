@@ -30,5 +30,5 @@ rivet-config.workspace = true
 chirp-worker.workspace = true
 
 [dependencies.sqlx]
-path = "../../../../../externals/sqlx"
+workspace = true
 default-features = false

@@ -17,7 +17,7 @@ serde_json = "1.0"
 ssh-key = "0.6.3"
 
 [dependencies.sqlx]
-path = "../../../externals/sqlx"
+workspace = true
 default-features = false
 
 [dev-dependencies]

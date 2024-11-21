@@ -25,8 +25,7 @@ types-proto.workspace = true
 uuid = { version = "1", features = ["v4"] }
 
 [dependencies.redis]
-# TODO: https://github.com/rivet-gg/rivet/issues/508
-path = "../../../../externals/redis-rs/redis"
+workspace = true
 default-features = false
 features = [
 	"keep-alive",

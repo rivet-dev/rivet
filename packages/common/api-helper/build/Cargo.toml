@@ -51,7 +51,7 @@ url = "2.2.2"
 uuid = { version = "1", features = ["v4"] }
 
 [dependencies.serde_array_query]
-path = "../../../../externals/serde_array_query"
+workspace = true
 
 [dev-dependencies]
 chirp-worker.workspace = true

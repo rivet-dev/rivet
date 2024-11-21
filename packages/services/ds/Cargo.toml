@@ -59,12 +59,11 @@ user-identity-get.workspace = true
 rivet-config.workspace = true
 
 [dependencies.sqlx]
-path = "../../../externals/sqlx"
+workspace = true
 default-features = false
 
 [dependencies.nomad_client]
-package = "nomad_client"
-path = "../../../externals/nomad-client"
+workspace = true
 
 [dev-dependencies]
 cluster.workspace = true

@@ -18,7 +18,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
 
 [dependencies.sqlx]
-path = "../../../../../externals/sqlx"
+workspace = true
 default-features = false
 
 [dev-dependencies]

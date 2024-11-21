@@ -19,3 +19,11 @@ echo = { path = "echo" }
 isolate-v8-runner = { path = "isolate-v8-runner" }
 runner-protocol = { path = "runner-protocol", package = "pegboard-runner-protocol" }
 
+[workspace.dependencies.sqlx]
+git = "https://github.com/rivet-gg/sqlx"
+rev = "e7120f59"
+
+[workspace.dependencies.deno_runtime]
+git = "https://github.com/rivet-gg/deno"
+rev = "bd9856321"
+

@@ -39,7 +39,7 @@ types-proto.workspace = true
 uuid = { version = "1", features = ["v4", "serde"] }
 
 [dependencies.sqlx]
-path = "../../../../externals/sqlx"
+workspace = true
 default-features = false
 features = [
 	"runtime-tokio",

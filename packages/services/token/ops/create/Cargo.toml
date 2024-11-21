@@ -16,7 +16,7 @@ jsonwebtoken = "8.2.0"
 lazy_static = "1.4"
 
 [dependencies.sqlx]
-path = "../../../../../externals/sqlx"
+workspace = true
 default-features = false
 
 [dev-dependencies]

@@ -16,7 +16,7 @@ cdn-namespace-create.workspace = true
 mm-config-namespace-create.workspace = true
 
 [dependencies.sqlx]
-path = "../../../../../externals/sqlx"
+workspace = true
 default-features = false
 
 [dev-dependencies]

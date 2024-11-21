@@ -10,7 +10,7 @@ acme-lib = "0.9"
 anyhow = "1.0"
 chirp-workflow.workspace = true
 chrono = "0.4"
-cloudflare = { path = "../../../externals/cloudflare-rs/cloudflare" }
+cloudflare.workspace = true
 http = "0.2"
 include_dir = "0.7.3"
 indoc = "1.0"
@@ -37,10 +37,10 @@ rivet-config.workspace = true
 ipnet = "2.10.1"
 
 [dependencies.nomad_client]
-path = "../../../externals/nomad-client"
+workspace = true
 
 [dependencies.sqlx]
-path = "../../../externals/sqlx"
+workspace = true
 default-features = false
 features = [ "json", "ipnetwork" ]
 

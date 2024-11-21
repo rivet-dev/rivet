@@ -19,7 +19,7 @@ mm-config-version-prepare.workspace = true
 mm-config-version-publish.workspace = true
 
 [dependencies.sqlx]
-path = "../../../../../externals/sqlx"
+workspace = true
 default-features = false
 
 [dev-dependencies]

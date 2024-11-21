@@ -38,7 +38,7 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 uuid = { version = "1.8.0", features = ["v4", "serde"] }
 
 [dependencies.sqlx]
-path = "../../../../externals/sqlx"
+workspace = true
 default-features = false
 features = [
 	"runtime-tokio",

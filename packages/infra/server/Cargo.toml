@@ -22,7 +22,7 @@ rivet-migrate.workspace = true
 rivet-pools.workspace = true
 rivet-runtime.workspace = true
 rivet-service-manager.workspace = true
-rivet-term = { path = "../../../externals/rivet-term" }
+rivet-term.workspace = true
 s3-util.workspace = true
 serde = { version = "1.0.210", features = ["derive"] }
 serde_json = "1.0.128"
@@ -78,7 +78,7 @@ cloud-default-create.workspace = true
 
 
 [dependencies.sqlx]
-path = "../../../externals/sqlx"
+workspace = true
 default-features = false
 features = ["runtime-tokio", "postgres"]
 

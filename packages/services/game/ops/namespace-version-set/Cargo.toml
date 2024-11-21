@@ -16,7 +16,7 @@ region-list-for-game.workspace = true
 mm-lobby-idle-update.workspace = true
 
 [dependencies.sqlx]
-path = "../../../../../externals/sqlx"
+workspace = true
 default-features = false
 
 [dev-dependencies]

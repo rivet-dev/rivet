@@ -13,7 +13,7 @@ prost = "0.10"
 token-create.workspace = true
 
 [dependencies.sqlx]
-path = "../../../../../externals/sqlx"
+workspace = true
 default-features = false
 
 [dev-dependencies]

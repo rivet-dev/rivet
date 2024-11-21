@@ -21,7 +21,7 @@ cluster.workspace = true
 rivet-config.workspace = true
 
 [dependencies.sqlx]
-path = "../../../../../externals/sqlx"
+workspace = true
 default-features = false
 
 [dev-dependencies]

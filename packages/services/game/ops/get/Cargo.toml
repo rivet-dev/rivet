@@ -14,7 +14,7 @@ upload-file-list.workspace = true
 upload-get.workspace = true
 
 [dependencies.sqlx]
-path = "../../../../../externals/sqlx"
+workspace = true
 default-features = false
 
 [dev-dependencies]

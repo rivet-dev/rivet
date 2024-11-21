@@ -9,7 +9,7 @@ edition.workspace = true
 acme-lib = "0.9"
 anyhow = "1.0"
 chirp-workflow.workspace = true
-cloudflare = { path = "../../../externals/cloudflare-rs/cloudflare" }
+cloudflare.workspace = true
 heck = "0.3"
 http = "0.2"
 include_dir = "0.7.3"
@@ -38,7 +38,7 @@ upload-get.workspace = true
 rivet-config.workspace = true
 
 [dependencies.sqlx]
-path = "../../../externals/sqlx"
+workspace = true
 default-features = false
 features = [ "json" ]
 

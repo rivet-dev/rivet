@@ -43,7 +43,7 @@ rivet-config.workspace = true
 rivet-env.workspace = true
 
 [dependencies.sqlx]
-path = "../../../externals/sqlx"
+workspace = true
 default-features = false
 features = ["json"]
 

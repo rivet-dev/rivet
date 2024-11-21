@@ -14,7 +14,7 @@ s3-util.workspace = true
 url = "2.2"
 
 [dependencies.sqlx]
-path = "../../../../../externals/sqlx"
+workspace = true
 default-features = false
 
 [dev-dependencies]

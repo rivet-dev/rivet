@@ -13,7 +13,7 @@ unzip-n = "0.1.2"
 itertools = "0.10.5"
 
 [dependencies.sqlx]
-path = "../../../../../externals/sqlx"
+workspace = true
 default-features = false
 
 [dev-dependencies]

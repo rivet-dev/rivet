@@ -11,6 +11,6 @@ regex = "1.5"
 
 [dependencies.redis]
 # TODO: https://github.com/rivet-gg/rivet/issues/508
-path = "../../../externals/redis-rs/redis"
+workspace = true
 default-features = false
 

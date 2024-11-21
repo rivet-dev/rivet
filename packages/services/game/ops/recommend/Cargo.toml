@@ -11,7 +11,7 @@ chirp-client.workspace = true
 prost = "0.10"
 
 [dependencies.sqlx]
-path = "../../../../../externals/sqlx"
+workspace = true
 default-features = false
 
 [dev-dependencies]

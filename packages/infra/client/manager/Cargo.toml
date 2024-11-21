@@ -47,7 +47,7 @@ pegboard = { path = "../../../services/pegboard", default-features = false }
 serde_yaml = "0.9.34"
 
 [dependencies.sqlx]
-path = "../../../../externals/sqlx"
+workspace = true
 default-features = false
 features = [
 	"runtime-tokio",

@@ -24,7 +24,7 @@ url = "2.4"
 rivet-config.workspace = true
 
 [dependencies.sqlx]
-path = "../../../externals/sqlx"
+workspace = true
 default-features = false
 features = [
 	"runtime-tokio",
@@ -39,7 +39,7 @@ features = [
 
 [dependencies.redis]
 # TODO: https://github.com/rivet-gg/rivet/issues/508
-path = "../../../externals/redis-rs/redis"
+workspace = true
 default-features = false
 features = [
 	"keep-alive",

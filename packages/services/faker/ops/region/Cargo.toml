@@ -14,7 +14,7 @@ region-get.workspace = true
 region-list.workspace = true
 
 [dependencies.sqlx]
-path = "../../../../../externals/sqlx"
+workspace = true
 default-features = false
 
 [dev-dependencies]

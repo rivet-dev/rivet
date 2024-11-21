@@ -37,7 +37,7 @@ ds.workspace = true
 rivet-config.workspace = true
 
 [dependencies.nomad_client]
-path = "../../../../../externals/nomad-client"
+workspace = true
 
 [dev-dependencies]
 chirp-worker.workspace = true

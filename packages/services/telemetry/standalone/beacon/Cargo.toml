@@ -6,7 +6,7 @@ license.workspace = true
 edition.workspace = true
 
 [dependencies]
-async-posthog = { path = "../../../../../externals/posthog-rs/async" }
+async-posthog.workspace = true
 chirp-client.workspace = true
 futures-util = "0.3"
 indoc = "1.0"
@@ -41,7 +41,7 @@ pegboard = { version = "0.0.1", workspace = true }
 serde = { version = "1.0.214", features = ["derive"] }
 
 [dependencies.sqlx]
-path = "../../../../../externals/sqlx"
+workspace = true
 default-features = false
 
 [dev-dependencies]

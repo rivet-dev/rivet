@@ -33,11 +33,10 @@ token-create.workspace = true
 rivet-config.workspace = true
 
 [dependencies.nomad_client_new]
-package = "nomad_client"
-path = "../../../externals/nomad-client"
+workspace = true
 
 [dependencies.sqlx]
-path = "../../../externals/sqlx"
+workspace = true
 default-features = false
 features = [ "json" ]
 

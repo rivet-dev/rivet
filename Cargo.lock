@@ -1105,6 +1105,7 @@ dependencies = [
 [[package]]
 name = "async-posthog"
 version = "0.2.3"
+source = "git+https://github.com/rivet-gg/posthog-rs?rev=ef4e80e#ef4e80e57747ea7204794bce9a103bfeccefabf1"
 dependencies = [
  "posthog-core",
  "reqwest 0.11.27",
@@ -2747,6 +2748,7 @@ dependencies = [
 [[package]]
 name = "cloudflare"
 version = "0.12.0"
+source = "git+https://github.com/cloudflare/cloudflare-rs?rev=f14720e#f14720e42184ee176a97676e85ef2d2d85bc3aae"
 dependencies = [
  "chrono",
  "http 0.2.12",
@@ -6710,6 +6712,7 @@ dependencies = [
 [[package]]
 name = "nomad_client"
 version = "1.1.4"
+source = "git+https://github.com/rivet-gg/nomad-client?rev=abb66bf#abb66bf0c30c7ff5b0c695dae952481c33e538b5"
 dependencies = [
  "reqwest 0.11.27",
  "serde",
@@ -7302,6 +7305,7 @@ dependencies = [
 [[package]]
 name = "posthog-core"
 version = "0.1.0"
+source = "git+https://github.com/rivet-gg/posthog-rs?rev=ef4e80e#ef4e80e57747ea7204794bce9a103bfeccefabf1"
 dependencies = [
  "chrono",
  "serde",
@@ -7626,6 +7630,7 @@ dependencies = [
 [[package]]
 name = "redis"
 version = "0.23.3"
+source = "git+https://github.com/rivet-gg/redis-rs?rev=ac3e27f#ac3e27fa1d133847db54354493f4d25957ad3466"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -8589,6 +8594,7 @@ dependencies = [
 [[package]]
 name = "rivet-term"
 version = "0.1.0"
+source = "git+https://github.com/rivet-gg/rivet-term?rev=d539a07#d539a07d2920d47b88410f20e6d106b497cff1f5"
 dependencies = [
  "console",
  "derive_builder 0.12.0",
@@ -9030,6 +9036,7 @@ dependencies = [
 [[package]]
 name = "serde_array_query"
 version = "0.2.0"
+source = "git+https://github.com/rivet-gg/serde_array_query?rev=b9f8bfa#b9f8bfad77aea6f01dccc6cb77146b8c5daecaa3"
 dependencies = [
  "serde",
  "serde_urlencoded",
@@ -9371,6 +9378,7 @@ dependencies = [
 [[package]]
 name = "sqlx"
 version = "0.8.2"
+source = "git+https://github.com/rivet-gg/sqlx?rev=e7120f59#e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
 dependencies = [
  "sqlx-core",
  "sqlx-macros",
@@ -9382,6 +9390,7 @@ dependencies = [
 [[package]]
 name = "sqlx-core"
 version = "0.8.2"
+source = "git+https://github.com/rivet-gg/sqlx?rev=e7120f59#e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
 dependencies = [
  "bit-vec",
  "bytes",
@@ -9418,6 +9427,7 @@ dependencies = [
 [[package]]
 name = "sqlx-macros"
 version = "0.8.2"
+source = "git+https://github.com/rivet-gg/sqlx?rev=e7120f59#e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -9429,6 +9439,7 @@ dependencies = [
 [[package]]
 name = "sqlx-macros-core"
 version = "0.8.2"
+source = "git+https://github.com/rivet-gg/sqlx?rev=e7120f59#e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
 dependencies = [
  "dotenvy",
  "either",
@@ -9453,6 +9464,7 @@ dependencies = [
 [[package]]
 name = "sqlx-mysql"
 version = "0.8.2"
+source = "git+https://github.com/rivet-gg/sqlx?rev=e7120f59#e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
 dependencies = [
  "atoi",
  "base64 0.22.1",
@@ -9494,6 +9506,7 @@ dependencies = [
 [[package]]
 name = "sqlx-postgres"
 version = "0.8.2"
+source = "git+https://github.com/rivet-gg/sqlx?rev=e7120f59#e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
 dependencies = [
  "atoi",
  "base64 0.22.1",
@@ -9532,6 +9545,7 @@ dependencies = [
 [[package]]
 name = "sqlx-sqlite"
 version = "0.8.2"
+source = "git+https://github.com/rivet-gg/sqlx?rev=e7120f59#e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
 dependencies = [
  "atoi",
  "flume",

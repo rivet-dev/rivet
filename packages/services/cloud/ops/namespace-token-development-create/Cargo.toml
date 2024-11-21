@@ -15,7 +15,7 @@ game-token-development-validate.workspace = true
 token-create.workspace = true
 
 [dependencies.sqlx]
-path = "../../../../../externals/sqlx"
+workspace = true
 default-features = false
 
 [dev-dependencies]

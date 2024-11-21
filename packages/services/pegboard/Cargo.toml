@@ -26,6 +26,6 @@ rivet-config.workspace = true
 
 [dependencies.sqlx]
 optional = true
-path = "../../../externals/sqlx"
+workspace = true
 default-features = false
 features = [ "json", "ipnetwork" ]

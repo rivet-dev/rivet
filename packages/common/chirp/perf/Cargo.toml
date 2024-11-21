@@ -22,7 +22,7 @@ features = ["v4", "serde"]
 
 [dependencies.redis]
 # TODO: https://github.com/rivet-gg/rivet/issues/508
-path = "../../../../externals/redis-rs/redis"
+workspace = true
 default-features = false
 features = [
 	"keep-alive",

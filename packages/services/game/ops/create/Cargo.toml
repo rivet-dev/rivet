@@ -17,7 +17,7 @@ game-validate.workspace = true
 team-get.workspace = true
 
 [dependencies.sqlx]
-path = "../../../../../externals/sqlx"
+workspace = true
 default-features = false
 
 [dev-dependencies]

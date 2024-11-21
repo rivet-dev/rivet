@@ -17,7 +17,7 @@ game-namespace-get.workspace = true
 mm-config-version-get.workspace = true
 
 [dependencies.sqlx]
-path = "../../../../../externals/sqlx"
+workspace = true
 default-features = false
 
 [dev-dependencies]

@@ -27,7 +27,7 @@ uuid = { version = "1.6.1", features = ["v4"] }
 runner-protocol.workspace = true
 
 [dependencies.deno_runtime]
-path = "../../../../externals/deno/runtime"
+workspace = true
 
 [dev-dependencies]
 portpicker = "0.1.1"
