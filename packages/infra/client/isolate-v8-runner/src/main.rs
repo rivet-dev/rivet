@@ -209,7 +209,9 @@ async fn handle_connection(
 			runner_protocol::ToRunner::Signal { actor_id, signal } => {
 				if let Some(signal_tx) = actors.read().await.get(&actor_id) {
 					// Tell actor thread to stop. Removing the actor is handled in the tokio task above.
-					signal_tx.try_send(signal).context("failed to send stop signal to actor poll task")?;
+					signal_tx
+						.try_send(signal)
+						.context("failed to send stop signal to actor poll task")?;
 				} else {
 					tracing::warn!("Actor {actor_id} not found for stopping");
 				}

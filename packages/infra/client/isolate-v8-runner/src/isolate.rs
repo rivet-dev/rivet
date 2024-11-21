@@ -66,8 +66,8 @@ pub fn run(
 
 	// Run the isolate
 	let exit_code = match create_and_run_current_thread(run_inner(
-		actor_id,
 		actor_path.clone(),
+		actor_id,
 		terminate_tx,
 		msg_tx.clone(),
 		config,
@@ -118,8 +118,8 @@ pub fn run(
 }
 
 pub async fn run_inner(
-	actor_id: Uuid,
 	actor_path: PathBuf,
+	actor_id: Uuid,
 	terminate_tx: mpsc::Sender<MainWorkerTerminateHandle>,
 	msg_tx: Option<smpsc::SyncSender<log_shipper::ReceivedMessage>>,
 	config: Config,
@@ -129,7 +129,7 @@ pub async fn run_inner(
 	// Load script into a static module loader. No dynamic scripts can be loaded this way.
 	let script_content = fs::read_to_string(actor_path.join("index.js"))
 		.await
-		.context("failed to load index.js")?;
+		.with_context(|| format!("failed to load {}", actor_path.join("index.js").display()))?;
 	let main_module = ModuleSpecifier::from_file_path(Path::new("/index.js"))
 		.map_err(|_| anyhow!("invalid file name"))?;
 	let loader = StaticModuleLoader::new([(main_module.clone(), script_content)]);

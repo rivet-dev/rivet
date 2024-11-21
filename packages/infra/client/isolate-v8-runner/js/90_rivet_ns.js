@@ -4,6 +4,10 @@ const rivetNs = {
 	kv: {
 		get: kv.get,
 		getBatch: kv.getBatch,
+		put: kv.put,
+		putBatch: kv.putBatch,
+		delete: kv.delete_,
+		deleteBatch: kv.deleteBatch,
 	},
 };
 
