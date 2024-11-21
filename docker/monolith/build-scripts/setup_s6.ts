@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-net --allow-env --allow-read --allow-write
+#!/usr/bin/env -S deno run --vendor --allow-net --allow-env --allow-read --allow-write
 
 import { resolve } from "@std/path";
 import dedent from "dedent";
@@ -48,15 +48,15 @@ interface Service {
 const services: Service[] = [
 	{
 		name: "rivet-prestart",
-		command:
-			`${scriptsPath}/scripts/prestart.sh`,
+		command: "/root/run-scripts/prestart.sh",
+		noRedirectLogs: true,
 		rootUser: true,
 		ports: {},
 	},
 	{
 		name: "rivet-poststart",
-		command:
-			`${scriptsPath}/scripts/poststart.sh`,
+		command: "/root/run-scripts/poststart.sh",
+		noRedirectLogs: true,
 		dependencies: ["rivet-server"],
 		rootUser: true,
 		ports: {},
@@ -148,6 +148,7 @@ const services: Service[] = [
             weed server \
                 -dir /data/seaweedfs \
                 -master.port=9402 \
+				-master.raftBootstrap \
 				-master.raftHashicorp \
                 -volume.port 9400 \
                 -filer.port=9403 \

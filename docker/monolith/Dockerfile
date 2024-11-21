@@ -60,10 +60,13 @@ ARG VECTOR_VERSION=0.42.0
 ARG S6_OVERLAY_VERSION=3.2.0.2
 
 # === Install ===
-COPY ./docker/monolith/scripts /tmp/scripts
-RUN /tmp/scripts/install.sh
+COPY ./docker/monolith/build-scripts /tmp/build-scripts
+# Remove the scripts after running since this pulls dependencies for Deno.
+RUN /tmp/build-scripts/install.sh && rm -r /tmp/build-scripts
 
 # === Copy Configs ===
+COPY ./docker/monolith/run-scripts/ /root/run-scripts
+
 COPY ./docker/monolith/clickhouse/config.xml /etc/clickhouse-server/config.d/config.xml
 COPY ./docker/monolith/clickhouse/users.xml /etc/clickhouse-server/users.d/users.xml
 

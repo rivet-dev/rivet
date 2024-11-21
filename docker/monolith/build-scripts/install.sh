@@ -58,7 +58,7 @@ curl -sSLf https://github.com/just-containers/s6-overlay/releases/download/v${S6
     tar -C / -Jxpf /tmp/s6-overlay-$(uname -m).tar.xz
 
 # Setup S6
-deno run --allow-read --allow-write /tmp/scripts/setup_s6.ts
+deno run --allow-read --allow-write /tmp/build-scripts/setup_s6.ts
 
 # === Rivet Server ===
 useradd -m -s /bin/bash rivet-server
