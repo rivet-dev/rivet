@@ -4,11 +4,12 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { common, upload } from "../../../../../../index";
+import { DisplayName } from "../../../../../../common/types/DisplayName";
+import { PrepareFile } from "../../../../../../upload/resources/common/types/PrepareFile";
 export declare const CreateGameCdnSiteRequest: core.serialization.ObjectSchema<serializers.cloud.games.CreateGameCdnSiteRequest.Raw, Rivet.cloud.games.CreateGameCdnSiteRequest>;
 export declare namespace CreateGameCdnSiteRequest {
     interface Raw {
-        display_name: common.DisplayName.Raw;
-        files: upload.PrepareFile.Raw[];
+        display_name: DisplayName.Raw;
+        files: PrepareFile.Raw[];
     }
 }

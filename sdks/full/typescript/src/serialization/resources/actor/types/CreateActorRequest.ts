@@ -5,11 +5,10 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { CreateActorRuntimeRequest as actor$$createActorRuntimeRequest } from "./CreateActorRuntimeRequest";
-import { CreateActorNetworkRequest as actor$$createActorNetworkRequest } from "./CreateActorNetworkRequest";
-import { Resources as actor_common$$resources } from "../resources/common/types/Resources";
-import { Lifecycle as actor_common$$lifecycle } from "../resources/common/types/Lifecycle";
-import { actor } from "../../index";
+import { CreateActorRuntimeRequest } from "./CreateActorRuntimeRequest";
+import { CreateActorNetworkRequest } from "./CreateActorNetworkRequest";
+import { Resources } from "../resources/common/types/Resources";
+import { Lifecycle } from "../resources/common/types/Lifecycle";
 
 export const CreateActorRequest: core.serialization.ObjectSchema<
     serializers.actor.CreateActorRequest.Raw,
@@ -17,19 +16,19 @@ export const CreateActorRequest: core.serialization.ObjectSchema<
 > = core.serialization.object({
     region: core.serialization.string(),
     tags: core.serialization.unknown(),
-    runtime: actor$$createActorRuntimeRequest,
-    network: actor$$createActorNetworkRequest.optional(),
-    resources: actor_common$$resources,
-    lifecycle: actor_common$$lifecycle.optional(),
+    runtime: CreateActorRuntimeRequest,
+    network: CreateActorNetworkRequest.optional(),
+    resources: Resources,
+    lifecycle: Lifecycle.optional(),
 });
 
 export declare namespace CreateActorRequest {
     interface Raw {
         region: string;
         tags?: unknown;
-        runtime: actor.CreateActorRuntimeRequest.Raw;
-        network?: actor.CreateActorNetworkRequest.Raw | null;
-        resources: actor.Resources.Raw;
-        lifecycle?: actor.Lifecycle.Raw | null;
+        runtime: CreateActorRuntimeRequest.Raw;
+        network?: CreateActorNetworkRequest.Raw | null;
+        resources: Resources.Raw;
+        lifecycle?: Lifecycle.Raw | null;
     }
 }

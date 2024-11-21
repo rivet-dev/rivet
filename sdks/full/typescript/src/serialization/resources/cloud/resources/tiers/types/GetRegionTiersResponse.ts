@@ -5,18 +5,17 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { RegionTier as cloud_common$$regionTier } from "../../common/types/RegionTier";
-import { cloud } from "../../../../index";
+import { RegionTier } from "../../common/types/RegionTier";
 
 export const GetRegionTiersResponse: core.serialization.ObjectSchema<
     serializers.cloud.GetRegionTiersResponse.Raw,
     Rivet.cloud.GetRegionTiersResponse
 > = core.serialization.object({
-    tiers: core.serialization.list(cloud_common$$regionTier),
+    tiers: core.serialization.list(RegionTier),
 });
 
 export declare namespace GetRegionTiersResponse {
     interface Raw {
-        tiers: cloud.RegionTier.Raw[];
+        tiers: RegionTier.Raw[];
     }
 }

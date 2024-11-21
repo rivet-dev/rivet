@@ -5,20 +5,19 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { EmailLinkedAccount as identity_common$$emailLinkedAccount } from "./EmailLinkedAccount";
-import { identity } from "../../../../index";
+import { EmailLinkedAccount } from "./EmailLinkedAccount";
 
 export const LinkedAccount: core.serialization.ObjectSchema<
     serializers.identity.LinkedAccount.Raw,
     Rivet.identity.LinkedAccount
 > = core.serialization.object({
-    email: identity_common$$emailLinkedAccount.optional(),
+    email: EmailLinkedAccount.optional(),
     defaultUser: core.serialization.property("default_user", core.serialization.boolean().optional()),
 });
 
 export declare namespace LinkedAccount {
     interface Raw {
-        email?: identity.EmailLinkedAccount.Raw | null;
+        email?: EmailLinkedAccount.Raw | null;
         default_user?: boolean | null;
     }
 }

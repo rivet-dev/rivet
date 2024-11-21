@@ -4,12 +4,12 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { common } from "../../../../index";
+import { WatchResponse } from "../../../../common/types/WatchResponse";
 export declare const GetActorLogsResponse: core.serialization.ObjectSchema<serializers.actor.GetActorLogsResponse.Raw, Rivet.actor.GetActorLogsResponse>;
 export declare namespace GetActorLogsResponse {
     interface Raw {
         lines: string[];
         timestamps: string[];
-        watch: common.WatchResponse.Raw;
+        watch: WatchResponse.Raw;
     }
 }

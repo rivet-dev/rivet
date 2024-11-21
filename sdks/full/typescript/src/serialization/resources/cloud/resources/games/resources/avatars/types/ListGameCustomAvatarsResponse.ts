@@ -5,21 +5,17 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { CustomAvatarSummary as cloud_common$$customAvatarSummary } from "../../../../common/types/CustomAvatarSummary";
-import { cloud } from "../../../../../../index";
+import { CustomAvatarSummary } from "../../../../common/types/CustomAvatarSummary";
 
 export const ListGameCustomAvatarsResponse: core.serialization.ObjectSchema<
     serializers.cloud.games.ListGameCustomAvatarsResponse.Raw,
     Rivet.cloud.games.ListGameCustomAvatarsResponse
 > = core.serialization.object({
-    customAvatars: core.serialization.property(
-        "custom_avatars",
-        core.serialization.list(cloud_common$$customAvatarSummary)
-    ),
+    customAvatars: core.serialization.property("custom_avatars", core.serialization.list(CustomAvatarSummary)),
 });
 
 export declare namespace ListGameCustomAvatarsResponse {
     interface Raw {
-        custom_avatars: cloud.CustomAvatarSummary.Raw[];
+        custom_avatars: CustomAvatarSummary.Raw[];
     }
 }

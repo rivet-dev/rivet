@@ -337,7 +337,7 @@ async fn choose_ingress_port(
 ) -> GlobalResult<i32> {
 	use backend::job::ProxyProtocol;
 
-	let gg_config = &ctx.config().server()?.rivet.game_guard;
+	let gg_config = &ctx.config().server()?.rivet.guard;
 
 	let ingress_port = if let Some(ingress_port) = proxied_port.ingress_port {
 		ingress_port as i32

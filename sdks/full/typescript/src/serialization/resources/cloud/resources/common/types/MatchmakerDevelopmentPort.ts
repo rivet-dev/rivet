@@ -5,23 +5,22 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { PortRange as cloud_version_matchmaker_common$$portRange } from "../../version/resources/matchmaker/resources/common/types/PortRange";
-import { PortProtocol as cloud_version_matchmaker_common$$portProtocol } from "../../version/resources/matchmaker/resources/common/types/PortProtocol";
-import { cloud } from "../../../../index";
+import { PortRange } from "../../version/resources/matchmaker/resources/common/types/PortRange";
+import { PortProtocol } from "../../version/resources/matchmaker/resources/common/types/PortProtocol";
 
 export const MatchmakerDevelopmentPort: core.serialization.ObjectSchema<
     serializers.cloud.MatchmakerDevelopmentPort.Raw,
     Rivet.cloud.MatchmakerDevelopmentPort
 > = core.serialization.object({
     port: core.serialization.number().optional(),
-    portRange: core.serialization.property("port_range", cloud_version_matchmaker_common$$portRange.optional()),
-    protocol: cloud_version_matchmaker_common$$portProtocol,
+    portRange: core.serialization.property("port_range", PortRange.optional()),
+    protocol: PortProtocol,
 });
 
 export declare namespace MatchmakerDevelopmentPort {
     interface Raw {
         port?: number | null;
-        port_range?: cloud.version.matchmaker.PortRange.Raw | null;
-        protocol: cloud.version.matchmaker.PortProtocol.Raw;
+        port_range?: PortRange.Raw | null;
+        protocol: PortProtocol.Raw;
     }
 }

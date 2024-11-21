@@ -5,26 +5,22 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { BannedIdentity as group_common$$bannedIdentity } from "../resources/common/types/BannedIdentity";
-import { WatchResponse as common$$watchResponse } from "../../common/types/WatchResponse";
-import { group, common } from "../../index";
+import { BannedIdentity } from "../resources/common/types/BannedIdentity";
+import { WatchResponse } from "../../common/types/WatchResponse";
 
 export const GetBansResponse: core.serialization.ObjectSchema<
     serializers.group.GetBansResponse.Raw,
     Rivet.group.GetBansResponse
 > = core.serialization.object({
-    bannedIdentities: core.serialization.property(
-        "banned_identities",
-        core.serialization.list(group_common$$bannedIdentity)
-    ),
+    bannedIdentities: core.serialization.property("banned_identities", core.serialization.list(BannedIdentity)),
     anchor: core.serialization.string().optional(),
-    watch: common$$watchResponse,
+    watch: WatchResponse,
 });
 
 export declare namespace GetBansResponse {
     interface Raw {
-        banned_identities: group.BannedIdentity.Raw[];
+        banned_identities: BannedIdentity.Raw[];
         anchor?: string | null;
-        watch: common.WatchResponse.Raw;
+        watch: WatchResponse.Raw;
     }
 }

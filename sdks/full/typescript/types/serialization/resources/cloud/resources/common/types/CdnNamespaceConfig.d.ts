@@ -4,13 +4,15 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { cloud } from "../../../../index";
+import { CdnNamespaceDomain } from "./CdnNamespaceDomain";
+import { CdnAuthType } from "./CdnAuthType";
+import { CdnNamespaceAuthUser } from "./CdnNamespaceAuthUser";
 export declare const CdnNamespaceConfig: core.serialization.ObjectSchema<serializers.cloud.CdnNamespaceConfig.Raw, Rivet.cloud.CdnNamespaceConfig>;
 export declare namespace CdnNamespaceConfig {
     interface Raw {
         enable_domain_public_auth: boolean;
-        domains: cloud.CdnNamespaceDomain.Raw[];
-        auth_type: cloud.CdnAuthType.Raw;
-        auth_user_list: cloud.CdnNamespaceAuthUser.Raw[];
+        domains: CdnNamespaceDomain.Raw[];
+        auth_type: CdnAuthType.Raw;
+        auth_user_list: CdnNamespaceAuthUser.Raw[];
     }
 }

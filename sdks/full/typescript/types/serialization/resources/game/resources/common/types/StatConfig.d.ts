@@ -4,17 +4,20 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { game, common } from "../../../../index";
+import { StatFormatMethod } from "./StatFormatMethod";
+import { StatAggregationMethod } from "./StatAggregationMethod";
+import { StatSortingMethod } from "./StatSortingMethod";
+import { DisplayName } from "../../../../common/types/DisplayName";
 export declare const StatConfig: core.serialization.ObjectSchema<serializers.game.StatConfig.Raw, Rivet.game.StatConfig>;
 export declare namespace StatConfig {
     interface Raw {
         record_id: string;
         icon_id: string;
-        format: game.StatFormatMethod.Raw;
-        aggregation: game.StatAggregationMethod.Raw;
-        sorting: game.StatSortingMethod.Raw;
+        format: StatFormatMethod.Raw;
+        aggregation: StatAggregationMethod.Raw;
+        sorting: StatSortingMethod.Raw;
         priority: number;
-        display_name: common.DisplayName.Raw;
+        display_name: DisplayName.Raw;
         postfix_singular?: string | null;
         postfix_plural?: string | null;
         prefix_singular?: string | null;

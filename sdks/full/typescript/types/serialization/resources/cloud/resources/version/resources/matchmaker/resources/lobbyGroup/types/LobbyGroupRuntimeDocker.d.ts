@@ -4,14 +4,16 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { cloud } from "../../../../../../../../index";
+import { LobbyGroupRuntimeDockerEnvVar } from "./LobbyGroupRuntimeDockerEnvVar";
+import { NetworkMode } from "../../common/types/NetworkMode";
+import { LobbyGroupRuntimeDockerPort } from "./LobbyGroupRuntimeDockerPort";
 export declare const LobbyGroupRuntimeDocker: core.serialization.ObjectSchema<serializers.cloud.version.matchmaker.LobbyGroupRuntimeDocker.Raw, Rivet.cloud.version.matchmaker.LobbyGroupRuntimeDocker>;
 export declare namespace LobbyGroupRuntimeDocker {
     interface Raw {
         build_id?: string | null;
         args: string[];
-        env_vars: cloud.version.matchmaker.LobbyGroupRuntimeDockerEnvVar.Raw[];
-        network_mode?: cloud.version.matchmaker.NetworkMode.Raw | null;
-        ports: cloud.version.matchmaker.LobbyGroupRuntimeDockerPort.Raw[];
+        env_vars: LobbyGroupRuntimeDockerEnvVar.Raw[];
+        network_mode?: NetworkMode.Raw | null;
+        ports: LobbyGroupRuntimeDockerPort.Raw[];
     }
 }

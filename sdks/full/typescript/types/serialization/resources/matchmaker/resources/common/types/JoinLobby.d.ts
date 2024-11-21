@@ -4,13 +4,15 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { matchmaker } from "../../../../index";
+import { JoinRegion } from "./JoinRegion";
+import { JoinPort } from "./JoinPort";
+import { JoinPlayer } from "./JoinPlayer";
 export declare const JoinLobby: core.serialization.ObjectSchema<serializers.matchmaker.JoinLobby.Raw, Rivet.matchmaker.JoinLobby>;
 export declare namespace JoinLobby {
     interface Raw {
         lobby_id: string;
-        region: matchmaker.JoinRegion.Raw;
-        ports: Record<string, matchmaker.JoinPort.Raw>;
-        player: matchmaker.JoinPlayer.Raw;
+        region: JoinRegion.Raw;
+        ports: Record<string, JoinPort.Raw>;
+        player: JoinPlayer.Raw;
     }
 }

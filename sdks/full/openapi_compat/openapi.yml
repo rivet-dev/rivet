@@ -139,11 +139,6 @@ components:
     ActorDestroyActorResponse:
       properties: {}
       type: object
-    ActorGameGuardRouting:
-      properties:
-        authorization:
-          $ref: '#/components/schemas/ActorPortAuthorization'
-      type: object
     ActorGetActorLogsResponse:
       properties:
         lines:
@@ -176,6 +171,11 @@ components:
           $ref: '#/components/schemas/ActorBuild'
       required:
       - build
+      type: object
+    ActorGuardRouting:
+      properties:
+        authorization:
+          $ref: '#/components/schemas/ActorPortAuthorization'
       type: object
     ActorHostRouting:
       properties: {}
@@ -297,8 +297,8 @@ components:
       type: object
     ActorPortRouting:
       properties:
-        game_guard:
-          $ref: '#/components/schemas/ActorGameGuardRouting'
+        guard:
+          $ref: '#/components/schemas/ActorGuardRouting'
         host:
           $ref: '#/components/schemas/ActorHostRouting'
       type: object

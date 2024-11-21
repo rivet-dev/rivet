@@ -1,5 +1,5 @@
 /// <reference types="node" />
-import type { Readable, Writable } from "stream";
+import type { Readable, Writable } from "readable-stream";
 import { EventCallback, StreamWrapper } from "./chooseStreamWrapper";
 export declare class NodePre18StreamWrapper implements StreamWrapper<Writable, Buffer> {
     private readableStream;
@@ -18,4 +18,5 @@ export declare class NodePre18StreamWrapper implements StreamWrapper<Writable, B
     setEncoding(encoding?: string): void;
     text(): Promise<string>;
     json<T>(): Promise<T>;
+    [Symbol.asyncIterator](): AsyncIterableIterator<Buffer>;
 }

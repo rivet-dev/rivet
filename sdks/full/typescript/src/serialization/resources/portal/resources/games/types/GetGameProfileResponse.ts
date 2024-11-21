@@ -5,21 +5,20 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Profile as game_common$$profile } from "../../../../game/resources/common/types/Profile";
-import { WatchResponse as common$$watchResponse } from "../../../../common/types/WatchResponse";
-import { game, common } from "../../../../index";
+import { Profile } from "../../../../game/resources/common/types/Profile";
+import { WatchResponse } from "../../../../common/types/WatchResponse";
 
 export const GetGameProfileResponse: core.serialization.ObjectSchema<
     serializers.portal.GetGameProfileResponse.Raw,
     Rivet.portal.GetGameProfileResponse
 > = core.serialization.object({
-    game: game_common$$profile,
-    watch: common$$watchResponse,
+    game: Profile,
+    watch: WatchResponse,
 });
 
 export declare namespace GetGameProfileResponse {
     interface Raw {
-        game: game.Profile.Raw;
-        watch: common.WatchResponse.Raw;
+        game: Profile.Raw;
+        watch: WatchResponse.Raw;
     }
 }

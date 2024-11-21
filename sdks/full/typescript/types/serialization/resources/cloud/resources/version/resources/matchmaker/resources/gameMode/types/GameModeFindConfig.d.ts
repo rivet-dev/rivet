@@ -4,12 +4,13 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { cloud } from "../../../../../../../../index";
+import { GameModeIdentityRequirement } from "./GameModeIdentityRequirement";
+import { GameModeVerificationConfig } from "./GameModeVerificationConfig";
 export declare const GameModeFindConfig: core.serialization.ObjectSchema<serializers.cloud.version.matchmaker.GameModeFindConfig.Raw, Rivet.cloud.version.matchmaker.GameModeFindConfig>;
 export declare namespace GameModeFindConfig {
     interface Raw {
         enabled: boolean;
-        identity_requirement?: cloud.version.matchmaker.GameModeIdentityRequirement.Raw | null;
-        verification?: cloud.version.matchmaker.GameModeVerificationConfig.Raw | null;
+        identity_requirement?: GameModeIdentityRequirement.Raw | null;
+        verification?: GameModeVerificationConfig.Raw | null;
     }
 }

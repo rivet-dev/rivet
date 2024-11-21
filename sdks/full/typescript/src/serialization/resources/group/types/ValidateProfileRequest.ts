@@ -5,23 +5,22 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { DisplayName as common$$displayName } from "../../common/types/DisplayName";
-import { Publicity as group_common$$publicity } from "../resources/common/types/Publicity";
-import { common, group } from "../../index";
+import { DisplayName } from "../../common/types/DisplayName";
+import { Publicity } from "../resources/common/types/Publicity";
 
 export const ValidateProfileRequest: core.serialization.ObjectSchema<
     serializers.group.ValidateProfileRequest.Raw,
     Rivet.group.ValidateProfileRequest
 > = core.serialization.object({
-    displayName: core.serialization.property("display_name", common$$displayName.optional()),
-    bio: common$$displayName.optional(),
-    publicity: group_common$$publicity.optional(),
+    displayName: core.serialization.property("display_name", DisplayName.optional()),
+    bio: DisplayName.optional(),
+    publicity: Publicity.optional(),
 });
 
 export declare namespace ValidateProfileRequest {
     interface Raw {
-        display_name?: common.DisplayName.Raw | null;
-        bio?: common.DisplayName.Raw | null;
-        publicity?: group.Publicity.Raw | null;
+        display_name?: DisplayName.Raw | null;
+        bio?: DisplayName.Raw | null;
+        publicity?: Publicity.Raw | null;
     }
 }

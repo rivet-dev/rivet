@@ -5,35 +5,34 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { BootstrapCluster as cloud$$bootstrapCluster } from "./BootstrapCluster";
-import { BootstrapAccess as cloud$$bootstrapAccess } from "./BootstrapAccess";
-import { BootstrapDomains as cloud$$bootstrapDomains } from "./BootstrapDomains";
-import { BootstrapOrigins as cloud$$bootstrapOrigins } from "./BootstrapOrigins";
-import { BootstrapCaptcha as cloud$$bootstrapCaptcha } from "./BootstrapCaptcha";
-import { BootstrapLoginMethods as cloud$$bootstrapLoginMethods } from "./BootstrapLoginMethods";
-import { cloud } from "../../index";
+import { BootstrapCluster } from "./BootstrapCluster";
+import { BootstrapAccess } from "./BootstrapAccess";
+import { BootstrapDomains } from "./BootstrapDomains";
+import { BootstrapOrigins } from "./BootstrapOrigins";
+import { BootstrapCaptcha } from "./BootstrapCaptcha";
+import { BootstrapLoginMethods } from "./BootstrapLoginMethods";
 
 export const BootstrapResponse: core.serialization.ObjectSchema<
     serializers.cloud.BootstrapResponse.Raw,
     Rivet.cloud.BootstrapResponse
 > = core.serialization.object({
-    cluster: cloud$$bootstrapCluster,
-    access: cloud$$bootstrapAccess,
-    domains: cloud$$bootstrapDomains,
-    origins: cloud$$bootstrapOrigins,
-    captcha: cloud$$bootstrapCaptcha,
-    loginMethods: core.serialization.property("login_methods", cloud$$bootstrapLoginMethods),
+    cluster: BootstrapCluster,
+    access: BootstrapAccess,
+    domains: BootstrapDomains,
+    origins: BootstrapOrigins,
+    captcha: BootstrapCaptcha,
+    loginMethods: core.serialization.property("login_methods", BootstrapLoginMethods),
     deployHash: core.serialization.property("deploy_hash", core.serialization.string()),
 });
 
 export declare namespace BootstrapResponse {
     interface Raw {
-        cluster: cloud.BootstrapCluster.Raw;
-        access: cloud.BootstrapAccess.Raw;
-        domains: cloud.BootstrapDomains.Raw;
-        origins: cloud.BootstrapOrigins.Raw;
-        captcha: cloud.BootstrapCaptcha.Raw;
-        login_methods: cloud.BootstrapLoginMethods.Raw;
+        cluster: BootstrapCluster.Raw;
+        access: BootstrapAccess.Raw;
+        domains: BootstrapDomains.Raw;
+        origins: BootstrapOrigins.Raw;
+        captcha: BootstrapCaptcha.Raw;
+        login_methods: BootstrapLoginMethods.Raw;
         deploy_hash: string;
     }
 }

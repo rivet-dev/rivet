@@ -4,11 +4,11 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { common } from "../../../../index";
+import { DisplayName } from "../../../../common/types/DisplayName";
 export declare const PlatformLink: core.serialization.ObjectSchema<serializers.game.PlatformLink.Raw, Rivet.game.PlatformLink>;
 export declare namespace PlatformLink {
     interface Raw {
-        display_name: common.DisplayName.Raw;
+        display_name: DisplayName.Raw;
         url: string;
     }
 }

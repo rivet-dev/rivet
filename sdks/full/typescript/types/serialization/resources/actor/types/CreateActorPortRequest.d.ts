@@ -4,12 +4,13 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { actor } from "../../index";
+import { PortProtocol } from "../resources/common/types/PortProtocol";
+import { PortRouting } from "../resources/common/types/PortRouting";
 export declare const CreateActorPortRequest: core.serialization.ObjectSchema<serializers.actor.CreateActorPortRequest.Raw, Rivet.actor.CreateActorPortRequest>;
 export declare namespace CreateActorPortRequest {
     interface Raw {
-        protocol: actor.PortProtocol.Raw;
+        protocol: PortProtocol.Raw;
         internal_port?: number | null;
-        routing?: actor.PortRouting.Raw | null;
+        routing?: PortRouting.Raw | null;
     }
 }

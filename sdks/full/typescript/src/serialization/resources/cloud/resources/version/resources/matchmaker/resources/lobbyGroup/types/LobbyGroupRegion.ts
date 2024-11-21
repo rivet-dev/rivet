@@ -5,8 +5,7 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { LobbyGroupIdleLobbiesConfig as cloud_version_matchmaker_lobby_group$$lobbyGroupIdleLobbiesConfig } from "./LobbyGroupIdleLobbiesConfig";
-import { cloud } from "../../../../../../../../index";
+import { LobbyGroupIdleLobbiesConfig } from "./LobbyGroupIdleLobbiesConfig";
 
 export const LobbyGroupRegion: core.serialization.ObjectSchema<
     serializers.cloud.version.matchmaker.LobbyGroupRegion.Raw,
@@ -14,16 +13,13 @@ export const LobbyGroupRegion: core.serialization.ObjectSchema<
 > = core.serialization.object({
     regionId: core.serialization.property("region_id", core.serialization.string()),
     tierNameId: core.serialization.property("tier_name_id", core.serialization.string()),
-    idleLobbies: core.serialization.property(
-        "idle_lobbies",
-        cloud_version_matchmaker_lobby_group$$lobbyGroupIdleLobbiesConfig.optional()
-    ),
+    idleLobbies: core.serialization.property("idle_lobbies", LobbyGroupIdleLobbiesConfig.optional()),
 });
 
 export declare namespace LobbyGroupRegion {
     interface Raw {
         region_id: string;
         tier_name_id: string;
-        idle_lobbies?: cloud.version.matchmaker.LobbyGroupIdleLobbiesConfig.Raw | null;
+        idle_lobbies?: LobbyGroupIdleLobbiesConfig.Raw | null;
     }
 }

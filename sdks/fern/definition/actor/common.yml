@@ -72,10 +72,10 @@ types:
 
   PortRouting:
     properties:
-      game_guard: optional<GameGuardRouting>
+      guard: optional<GuardRouting>
       host: optional<HostRouting>
 
-  GameGuardRouting:
+  GuardRouting:
     properties:
       authorization: optional<PortAuthorization>
 

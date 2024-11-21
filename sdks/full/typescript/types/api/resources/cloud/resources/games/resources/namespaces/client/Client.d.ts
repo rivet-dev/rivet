@@ -143,7 +143,7 @@ export declare class Namespaces {
      *
      * @example
      *     await client.cloud.games.namespaces.setNamespaceCdnAuthType("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         authType: Rivet.cloud.CdnAuthType.None
+     *         authType: "none"
      *     })
      */
     setNamespaceCdnAuthType(gameId: string, namespaceId: string, request: Rivet.cloud.games.namespaces.SetNamespaceCdnAuthTypeRequest, requestOptions?: Namespaces.RequestOptions): Promise<void>;
@@ -296,14 +296,14 @@ export declare class Namespaces {
      *             "string": {
      *                 port: undefined,
      *                 portRange: undefined,
-     *                 protocol: Rivet.cloud.version.matchmaker.PortProtocol.Http
+     *                 protocol: "http"
      *             }
      *         },
      *         lobbyPorts: [{
      *                 label: "string",
      *                 targetPort: undefined,
      *                 portRange: undefined,
-     *                 proxyProtocol: Rivet.cloud.version.matchmaker.PortProtocol.Http
+     *                 proxyProtocol: "http"
      *             }]
      *     })
      */
@@ -330,7 +330,7 @@ export declare class Namespaces {
      *                 label: "string",
      *                 targetPort: undefined,
      *                 portRange: undefined,
-     *                 proxyProtocol: Rivet.cloud.version.matchmaker.PortProtocol.Http
+     *                 proxyProtocol: "http"
      *             }]
      *     })
      */

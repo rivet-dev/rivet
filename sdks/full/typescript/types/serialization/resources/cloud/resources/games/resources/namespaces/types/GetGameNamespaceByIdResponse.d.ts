@@ -4,10 +4,10 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { cloud } from "../../../../../../index";
+import { NamespaceFull } from "../../../../common/types/NamespaceFull";
 export declare const GetGameNamespaceByIdResponse: core.serialization.ObjectSchema<serializers.cloud.games.namespaces.GetGameNamespaceByIdResponse.Raw, Rivet.cloud.games.namespaces.GetGameNamespaceByIdResponse>;
 export declare namespace GetGameNamespaceByIdResponse {
     interface Raw {
-        namespace: cloud.NamespaceFull.Raw;
+        namespace: NamespaceFull.Raw;
     }
 }

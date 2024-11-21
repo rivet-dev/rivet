@@ -4,11 +4,12 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { game, common } from "../../../../index";
+import { Summary } from "../../../../game/resources/common/types/Summary";
+import { WatchResponse } from "../../../../common/types/WatchResponse";
 export declare const GetSuggestedGamesResponse: core.serialization.ObjectSchema<serializers.portal.GetSuggestedGamesResponse.Raw, Rivet.portal.GetSuggestedGamesResponse>;
 export declare namespace GetSuggestedGamesResponse {
     interface Raw {
-        games: game.Summary.Raw[];
-        watch: common.WatchResponse.Raw;
+        games: Summary.Raw[];
+        watch: WatchResponse.Raw;
     }
 }

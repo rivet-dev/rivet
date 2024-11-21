@@ -5,23 +5,22 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { PortProtocol as actor_common$$portProtocol } from "../resources/common/types/PortProtocol";
-import { PortRouting as actor_common$$portRouting } from "../resources/common/types/PortRouting";
-import { actor } from "../../index";
+import { PortProtocol } from "../resources/common/types/PortProtocol";
+import { PortRouting } from "../resources/common/types/PortRouting";
 
 export const CreateActorPortRequest: core.serialization.ObjectSchema<
     serializers.actor.CreateActorPortRequest.Raw,
     Rivet.actor.CreateActorPortRequest
 > = core.serialization.object({
-    protocol: actor_common$$portProtocol,
+    protocol: PortProtocol,
     internalPort: core.serialization.property("internal_port", core.serialization.number().optional()),
-    routing: actor_common$$portRouting.optional(),
+    routing: PortRouting.optional(),
 });
 
 export declare namespace CreateActorPortRequest {
     interface Raw {
-        protocol: actor.PortProtocol.Raw;
+        protocol: PortProtocol.Raw;
         internal_port?: number | null;
-        routing?: actor.PortRouting.Raw | null;
+        routing?: PortRouting.Raw | null;
     }
 }

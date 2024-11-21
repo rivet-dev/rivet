@@ -4,16 +4,18 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { cloud } from "../../../../../../../../index";
+import { PortRange } from "../../common/types/PortRange";
+import { PortProtocol } from "../../common/types/PortProtocol";
+import { ProxyKind } from "../../common/types/ProxyKind";
 export declare const GameModeRuntimeDockerPort: core.serialization.ObjectSchema<serializers.cloud.version.matchmaker.GameModeRuntimeDockerPort.Raw, Rivet.cloud.version.matchmaker.GameModeRuntimeDockerPort>;
 export declare namespace GameModeRuntimeDockerPort {
     interface Raw {
         port?: number | null;
-        port_range?: cloud.version.matchmaker.PortRange.Raw | null;
-        protocol?: cloud.version.matchmaker.PortProtocol.Raw | null;
-        proxy?: cloud.version.matchmaker.ProxyKind.Raw | null;
+        port_range?: PortRange.Raw | null;
+        protocol?: PortProtocol.Raw | null;
+        proxy?: ProxyKind.Raw | null;
         dev_port?: number | null;
-        dev_port_range?: cloud.version.matchmaker.PortRange.Raw | null;
-        dev_protocol?: cloud.version.matchmaker.PortProtocol.Raw | null;
+        dev_port_range?: PortRange.Raw | null;
+        dev_protocol?: PortProtocol.Raw | null;
     }
 }

@@ -4,7 +4,7 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { cloud } from "../../../../../../index";
+import { Route } from "./Route";
 export declare const Config: core.serialization.ObjectSchema<serializers.cloud.version.cdn.Config.Raw, Rivet.cloud.version.cdn.Config>;
 export declare namespace Config {
     interface Raw {
@@ -12,6 +12,6 @@ export declare namespace Config {
         build_output?: string | null;
         build_env?: Record<string, string> | null;
         site_id?: string | null;
-        routes?: cloud.version.cdn.Route.Raw[] | null;
+        routes?: Route.Raw[] | null;
     }
 }

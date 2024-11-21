@@ -4,22 +4,25 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { common, group, game } from "../../../../index";
+import { DisplayName } from "../../../../common/types/DisplayName";
+import { Summary } from "../../../../group/resources/common/types/Summary";
+import { PlatformLink } from "./PlatformLink";
+import { LeaderboardCategory } from "./LeaderboardCategory";
 export declare const Profile: core.serialization.ObjectSchema<serializers.game.Profile.Raw, Rivet.game.Profile>;
 export declare namespace Profile {
     interface Raw {
         game_id: string;
         name_id: string;
-        display_name: common.DisplayName.Raw;
+        display_name: DisplayName.Raw;
         logo_url?: string | null;
         banner_url?: string | null;
         url: string;
-        developer: group.Summary.Raw;
+        developer: Summary.Raw;
         tags: string[];
         description: string;
-        platforms: game.PlatformLink.Raw[];
-        recommended_groups: group.Summary.Raw[];
-        identity_leaderboard_categories: game.LeaderboardCategory.Raw[];
-        group_leaderboard_categories: game.LeaderboardCategory.Raw[];
+        platforms: PlatformLink.Raw[];
+        recommended_groups: Summary.Raw[];
+        identity_leaderboard_categories: LeaderboardCategory.Raw[];
+        group_leaderboard_categories: LeaderboardCategory.Raw[];
     }
 }

@@ -4,18 +4,21 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { common, group } from "../../../../index";
+import { DisplayName } from "../../../../common/types/DisplayName";
+import { ExternalLinks } from "./ExternalLinks";
+import { Bio } from "../../../../common/types/Bio";
+import { Publicity } from "./Publicity";
 export declare const Summary: core.serialization.ObjectSchema<serializers.group.Summary.Raw, Rivet.group.Summary>;
 export declare namespace Summary {
     interface Raw {
         group_id: string;
-        display_name: common.DisplayName.Raw;
+        display_name: DisplayName.Raw;
         avatar_url?: string | null;
-        external: group.ExternalLinks.Raw;
+        external: ExternalLinks.Raw;
         is_developer: boolean;
-        bio: common.Bio.Raw;
+        bio: Bio.Raw;
         is_current_identity_member: boolean;
-        publicity: group.Publicity.Raw;
+        publicity: Publicity.Raw;
         member_count: number;
         owner_identity_id: string;
     }

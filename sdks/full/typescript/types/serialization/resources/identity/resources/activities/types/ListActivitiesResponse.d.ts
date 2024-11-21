@@ -4,14 +4,16 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { identity, game, group, common } from "../../../../index";
+import { Handle } from "../../common/types/Handle";
+import { Summary } from "../../../../game/resources/common/types/Summary";
+import { WatchResponse } from "../../../../common/types/WatchResponse";
 export declare const ListActivitiesResponse: core.serialization.ObjectSchema<serializers.identity.ListActivitiesResponse.Raw, Rivet.identity.ListActivitiesResponse>;
 export declare namespace ListActivitiesResponse {
     interface Raw {
-        identities: identity.Handle.Raw[];
-        games: game.Summary.Raw[];
-        suggested_groups: group.Summary.Raw[];
-        suggested_players: identity.Handle.Raw[];
-        watch: common.WatchResponse.Raw;
+        identities: Handle.Raw[];
+        games: Summary.Raw[];
+        suggested_groups: Summary.Raw[];
+        suggested_players: Handle.Raw[];
+        watch: WatchResponse.Raw;
     }
 }

@@ -4,11 +4,12 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { identity, common } from "../../index";
+import { Handle } from "../resources/common/types/Handle";
+import { WatchResponse } from "../../common/types/WatchResponse";
 export declare const GetHandlesResponse: core.serialization.ObjectSchema<serializers.identity.GetHandlesResponse.Raw, Rivet.identity.GetHandlesResponse>;
 export declare namespace GetHandlesResponse {
     interface Raw {
-        identities: identity.Handle.Raw[];
-        watch: common.WatchResponse.Raw;
+        identities: Handle.Raw[];
+        watch: WatchResponse.Raw;
     }
 }

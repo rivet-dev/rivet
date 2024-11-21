@@ -5,8 +5,7 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { PresignedRequest as upload_common$$presignedRequest } from "../../../../../../upload/resources/common/types/PresignedRequest";
-import { upload } from "../../../../../../index";
+import { PresignedRequest } from "../../../../../../upload/resources/common/types/PresignedRequest";
 
 export const CreateGameCdnSiteResponse: core.serialization.ObjectSchema<
     serializers.cloud.games.CreateGameCdnSiteResponse.Raw,
@@ -14,16 +13,13 @@ export const CreateGameCdnSiteResponse: core.serialization.ObjectSchema<
 > = core.serialization.object({
     siteId: core.serialization.property("site_id", core.serialization.string()),
     uploadId: core.serialization.property("upload_id", core.serialization.string()),
-    presignedRequests: core.serialization.property(
-        "presigned_requests",
-        core.serialization.list(upload_common$$presignedRequest)
-    ),
+    presignedRequests: core.serialization.property("presigned_requests", core.serialization.list(PresignedRequest)),
 });
 
 export declare namespace CreateGameCdnSiteResponse {
     interface Raw {
         site_id: string;
         upload_id: string;
-        presigned_requests: upload.PresignedRequest.Raw[];
+        presigned_requests: PresignedRequest.Raw[];
     }
 }

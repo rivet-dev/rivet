@@ -4,20 +4,25 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { cloud } from "../../../../../../index";
+import { GameMode } from "../resources/gameMode/types/GameMode";
+import { Captcha } from "../resources/common/types/Captcha";
+import { GameModeRegion } from "../resources/gameMode/types/GameModeRegion";
+import { GameModeRuntimeDocker } from "../resources/gameMode/types/GameModeRuntimeDocker";
+import { GameModeIdleLobbiesConfig } from "../resources/gameMode/types/GameModeIdleLobbiesConfig";
+import { LobbyGroup } from "../resources/lobbyGroup/types/LobbyGroup";
 export declare const Config: core.serialization.ObjectSchema<serializers.cloud.version.matchmaker.Config.Raw, Rivet.cloud.version.matchmaker.Config>;
 export declare namespace Config {
     interface Raw {
-        game_modes?: Record<string, cloud.version.matchmaker.GameMode.Raw> | null;
-        captcha?: cloud.version.matchmaker.Captcha.Raw | null;
+        game_modes?: Record<string, GameMode.Raw> | null;
+        captcha?: Captcha.Raw | null;
         dev_hostname?: string | null;
-        regions?: Record<string, cloud.version.matchmaker.GameModeRegion.Raw> | null;
+        regions?: Record<string, GameModeRegion.Raw> | null;
         max_players?: number | null;
         max_players_direct?: number | null;
         max_players_party?: number | null;
-        docker?: cloud.version.matchmaker.GameModeRuntimeDocker.Raw | null;
+        docker?: GameModeRuntimeDocker.Raw | null;
         tier?: string | null;
-        idle_lobbies?: cloud.version.matchmaker.GameModeIdleLobbiesConfig.Raw | null;
-        lobby_groups?: cloud.version.matchmaker.LobbyGroup.Raw[] | null;
+        idle_lobbies?: GameModeIdleLobbiesConfig.Raw | null;
+        lobby_groups?: LobbyGroup.Raw[] | null;
     }
 }

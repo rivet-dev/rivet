@@ -478,7 +478,7 @@ pub(crate) async fn resolve_image_artifact_url(
 /// - TCP/TLS: random
 /// - UDP: random
 async fn choose_ingress_port(ctx: &ActivityCtx, protocol: GameGuardProtocol) -> GlobalResult<u16> {
-	let gg_config = &ctx.config().server()?.rivet.game_guard;
+	let gg_config = &ctx.config().server()?.rivet.guard;
 
 	match protocol {
 		GameGuardProtocol::Http => Ok(80),

@@ -5,9 +5,8 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { NetworkMode as cloud_version_matchmaker_common$$networkMode } from "../../common/types/NetworkMode";
-import { GameModeRuntimeDockerPort as cloud_version_matchmaker_game_mode$$gameModeRuntimeDockerPort } from "./GameModeRuntimeDockerPort";
-import { cloud } from "../../../../../../../../index";
+import { NetworkMode } from "../../common/types/NetworkMode";
+import { GameModeRuntimeDockerPort } from "./GameModeRuntimeDockerPort";
 
 export const GameModeRuntimeDocker: core.serialization.ObjectSchema<
     serializers.cloud.version.matchmaker.GameModeRuntimeDocker.Raw,
@@ -22,10 +21,8 @@ export const GameModeRuntimeDocker: core.serialization.ObjectSchema<
     imageId: core.serialization.property("image_id", core.serialization.string().optional()),
     args: core.serialization.list(core.serialization.string()).optional(),
     env: core.serialization.record(core.serialization.string(), core.serialization.string()).optional(),
-    networkMode: core.serialization.property("network_mode", cloud_version_matchmaker_common$$networkMode.optional()),
-    ports: core.serialization
-        .record(core.serialization.string(), cloud_version_matchmaker_game_mode$$gameModeRuntimeDockerPort)
-        .optional(),
+    networkMode: core.serialization.property("network_mode", NetworkMode.optional()),
+    ports: core.serialization.record(core.serialization.string(), GameModeRuntimeDockerPort).optional(),
 });
 
 export declare namespace GameModeRuntimeDocker {
@@ -36,7 +33,7 @@ export declare namespace GameModeRuntimeDocker {
         image_id?: string | null;
         args?: string[] | null;
         env?: Record<string, string> | null;
-        network_mode?: cloud.version.matchmaker.NetworkMode.Raw | null;
-        ports?: Record<string, cloud.version.matchmaker.GameModeRuntimeDockerPort.Raw> | null;
+        network_mode?: NetworkMode.Raw | null;
+        ports?: Record<string, GameModeRuntimeDockerPort.Raw> | null;
     }
 }

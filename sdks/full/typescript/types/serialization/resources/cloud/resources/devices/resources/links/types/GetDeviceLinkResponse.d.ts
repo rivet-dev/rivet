@@ -4,11 +4,11 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { common } from "../../../../../../index";
+import { WatchResponse } from "../../../../../../common/types/WatchResponse";
 export declare const GetDeviceLinkResponse: core.serialization.ObjectSchema<serializers.cloud.devices.GetDeviceLinkResponse.Raw, Rivet.cloud.devices.GetDeviceLinkResponse>;
 export declare namespace GetDeviceLinkResponse {
     interface Raw {
         cloud_token?: string | null;
-        watch: common.WatchResponse.Raw;
+        watch: WatchResponse.Raw;
     }
 }

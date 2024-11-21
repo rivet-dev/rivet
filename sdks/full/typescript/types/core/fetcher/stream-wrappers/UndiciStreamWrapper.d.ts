@@ -12,7 +12,7 @@ export declare class UndiciStreamWrapper<ReadFormat extends Uint8Array | Uint16A
     off(event: string, callback: EventCallback): void;
     pipe(dest: UndiciStreamWrapper<ReadFormat> | WritableStream<ReadFormat>): UndiciStreamWrapper<ReadFormat> | WritableStream<ReadFormat>;
     pipeTo(dest: UndiciStreamWrapper<ReadFormat> | WritableStream<ReadFormat>): UndiciStreamWrapper<ReadFormat> | WritableStream<ReadFormat>;
-    unpipe(dest: UndiciStreamWrapper<ReadFormat> | WritableStream<any>): void;
+    unpipe(dest: UndiciStreamWrapper<ReadFormat> | WritableStream): void;
     destroy(error?: Error): void;
     pause(): void;
     resume(): void;
@@ -26,5 +26,6 @@ export declare class UndiciStreamWrapper<ReadFormat extends Uint8Array | Uint16A
     private _error;
     private _emit;
     private _startReading;
+    [Symbol.asyncIterator](): AsyncIterableIterator<ReadFormat>;
 }
 export {};

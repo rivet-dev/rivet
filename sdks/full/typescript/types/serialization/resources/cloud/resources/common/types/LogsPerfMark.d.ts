@@ -4,12 +4,12 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { common } from "../../../../index";
+import { Timestamp } from "../../../../common/types/Timestamp";
 export declare const LogsPerfMark: core.serialization.ObjectSchema<serializers.cloud.LogsPerfMark.Raw, Rivet.cloud.LogsPerfMark>;
 export declare namespace LogsPerfMark {
     interface Raw {
         label: string;
-        ts: common.Timestamp.Raw;
+        ts: Timestamp.Raw;
         ray_id?: string | null;
         req_id?: string | null;
     }

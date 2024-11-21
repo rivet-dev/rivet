@@ -4,10 +4,10 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { common } from "../../index";
+import { ValidationError } from "../../common/types/ValidationError";
 export declare const ValidateProfileResponse: core.serialization.ObjectSchema<serializers.identity.ValidateProfileResponse.Raw, Rivet.identity.ValidateProfileResponse>;
 export declare namespace ValidateProfileResponse {
     interface Raw {
-        errors: common.ValidationError.Raw[];
+        errors: ValidationError.Raw[];
     }
 }

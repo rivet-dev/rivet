@@ -5,20 +5,19 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { WatchResponse as common$$watchResponse } from "../../../../../../common/types/WatchResponse";
-import { common } from "../../../../../../index";
+import { WatchResponse } from "../../../../../../common/types/WatchResponse";
 
 export const GetDeviceLinkResponse: core.serialization.ObjectSchema<
     serializers.cloud.devices.GetDeviceLinkResponse.Raw,
     Rivet.cloud.devices.GetDeviceLinkResponse
 > = core.serialization.object({
     cloudToken: core.serialization.property("cloud_token", core.serialization.string().optional()),
-    watch: common$$watchResponse,
+    watch: WatchResponse,
 });
 
 export declare namespace GetDeviceLinkResponse {
     interface Raw {
         cloud_token?: string | null;
-        watch: common.WatchResponse.Raw;
+        watch: WatchResponse.Raw;
     }
 }

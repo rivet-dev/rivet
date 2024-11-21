@@ -40,7 +40,7 @@ export declare class Logs {
      *     await client.actor.logs.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
      *         project: "string",
      *         environment: "string",
-     *         stream: Rivet.actor.LogStream.StdOut,
+     *         stream: "std_out",
      *         watchIndex: "string"
      *     })
      */

@@ -5,18 +5,17 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { LobbyGroupRuntimeDocker as cloud_version_matchmaker_lobby_group$$lobbyGroupRuntimeDocker } from "./LobbyGroupRuntimeDocker";
-import { cloud } from "../../../../../../../../index";
+import { LobbyGroupRuntimeDocker } from "./LobbyGroupRuntimeDocker";
 
 export const LobbyGroupRuntime: core.serialization.ObjectSchema<
     serializers.cloud.version.matchmaker.LobbyGroupRuntime.Raw,
     Rivet.cloud.version.matchmaker.LobbyGroupRuntime
 > = core.serialization.object({
-    docker: cloud_version_matchmaker_lobby_group$$lobbyGroupRuntimeDocker.optional(),
+    docker: LobbyGroupRuntimeDocker.optional(),
 });
 
 export declare namespace LobbyGroupRuntime {
     interface Raw {
-        docker?: cloud.version.matchmaker.LobbyGroupRuntimeDocker.Raw | null;
+        docker?: LobbyGroupRuntimeDocker.Raw | null;
     }
 }

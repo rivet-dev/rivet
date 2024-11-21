@@ -4,11 +4,12 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { identity, common } from "../../index";
+import { Profile } from "../resources/common/types/Profile";
+import { WatchResponse } from "../../common/types/WatchResponse";
 export declare const GetProfileResponse: core.serialization.ObjectSchema<serializers.identity.GetProfileResponse.Raw, Rivet.identity.GetProfileResponse>;
 export declare namespace GetProfileResponse {
     interface Raw {
-        identity: identity.Profile.Raw;
-        watch: common.WatchResponse.Raw;
+        identity: Profile.Raw;
+        watch: WatchResponse.Raw;
     }
 }

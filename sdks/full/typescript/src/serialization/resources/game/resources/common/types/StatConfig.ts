@@ -5,21 +5,20 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { StatFormatMethod as game_common$$statFormatMethod } from "./StatFormatMethod";
-import { StatAggregationMethod as game_common$$statAggregationMethod } from "./StatAggregationMethod";
-import { StatSortingMethod as game_common$$statSortingMethod } from "./StatSortingMethod";
-import { DisplayName as common$$displayName } from "../../../../common/types/DisplayName";
-import { game, common } from "../../../../index";
+import { StatFormatMethod } from "./StatFormatMethod";
+import { StatAggregationMethod } from "./StatAggregationMethod";
+import { StatSortingMethod } from "./StatSortingMethod";
+import { DisplayName } from "../../../../common/types/DisplayName";
 
 export const StatConfig: core.serialization.ObjectSchema<serializers.game.StatConfig.Raw, Rivet.game.StatConfig> =
     core.serialization.object({
         recordId: core.serialization.property("record_id", core.serialization.string()),
         iconId: core.serialization.property("icon_id", core.serialization.string()),
-        format: game_common$$statFormatMethod,
-        aggregation: game_common$$statAggregationMethod,
-        sorting: game_common$$statSortingMethod,
+        format: StatFormatMethod,
+        aggregation: StatAggregationMethod,
+        sorting: StatSortingMethod,
         priority: core.serialization.number(),
-        displayName: core.serialization.property("display_name", common$$displayName),
+        displayName: core.serialization.property("display_name", DisplayName),
         postfixSingular: core.serialization.property("postfix_singular", core.serialization.string().optional()),
         postfixPlural: core.serialization.property("postfix_plural", core.serialization.string().optional()),
         prefixSingular: core.serialization.property("prefix_singular", core.serialization.string().optional()),
@@ -30,11 +29,11 @@ export declare namespace StatConfig {
     interface Raw {
         record_id: string;
         icon_id: string;
-        format: game.StatFormatMethod.Raw;
-        aggregation: game.StatAggregationMethod.Raw;
-        sorting: game.StatSortingMethod.Raw;
+        format: StatFormatMethod.Raw;
+        aggregation: StatAggregationMethod.Raw;
+        sorting: StatSortingMethod.Raw;
         priority: number;
-        display_name: common.DisplayName.Raw;
+        display_name: DisplayName.Raw;
         postfix_singular?: string | null;
         postfix_plural?: string | null;
         prefix_singular?: string | null;

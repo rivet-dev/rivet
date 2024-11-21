@@ -4,11 +4,12 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { cloud, common } from "../../../../index";
+import { GameFull } from "../../common/types/GameFull";
+import { WatchResponse } from "../../../../common/types/WatchResponse";
 export declare const GetGameByIdResponse: core.serialization.ObjectSchema<serializers.cloud.games.GetGameByIdResponse.Raw, Rivet.cloud.games.GetGameByIdResponse>;
 export declare namespace GetGameByIdResponse {
     interface Raw {
-        game: cloud.GameFull.Raw;
-        watch: common.WatchResponse.Raw;
+        game: GameFull.Raw;
+        watch: WatchResponse.Raw;
     }
 }

@@ -5,21 +5,20 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Summary as game_common$$summary } from "../../../../game/resources/common/types/Summary";
-import { WatchResponse as common$$watchResponse } from "../../../../common/types/WatchResponse";
-import { game, common } from "../../../../index";
+import { Summary } from "../../../../game/resources/common/types/Summary";
+import { WatchResponse } from "../../../../common/types/WatchResponse";
 
 export const GetSuggestedGamesResponse: core.serialization.ObjectSchema<
     serializers.portal.GetSuggestedGamesResponse.Raw,
     Rivet.portal.GetSuggestedGamesResponse
 > = core.serialization.object({
-    games: core.serialization.list(game_common$$summary),
-    watch: common$$watchResponse,
+    games: core.serialization.list(Summary),
+    watch: WatchResponse,
 });
 
 export declare namespace GetSuggestedGamesResponse {
     interface Raw {
-        games: game.Summary.Raw[];
-        watch: common.WatchResponse.Raw;
+        games: Summary.Raw[];
+        watch: WatchResponse.Raw;
     }
 }

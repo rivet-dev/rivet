@@ -4,12 +4,13 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { group, common } from "../../index";
+import { JoinRequest } from "../resources/common/types/JoinRequest";
+import { WatchResponse } from "../../common/types/WatchResponse";
 export declare const GetJoinRequestsResponse: core.serialization.ObjectSchema<serializers.group.GetJoinRequestsResponse.Raw, Rivet.group.GetJoinRequestsResponse>;
 export declare namespace GetJoinRequestsResponse {
     interface Raw {
-        join_requests: group.JoinRequest.Raw[];
+        join_requests: JoinRequest.Raw[];
         anchor?: string | null;
-        watch: common.WatchResponse.Raw;
+        watch: WatchResponse.Raw;
     }
 }

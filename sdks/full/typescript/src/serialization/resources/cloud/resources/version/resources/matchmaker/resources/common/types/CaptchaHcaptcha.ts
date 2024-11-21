@@ -5,21 +5,20 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { CaptchaHcaptchaLevel as cloud_version_matchmaker_common$$captchaHcaptchaLevel } from "./CaptchaHcaptchaLevel";
-import { cloud } from "../../../../../../../../index";
+import { CaptchaHcaptchaLevel } from "./CaptchaHcaptchaLevel";
 
 export const CaptchaHcaptcha: core.serialization.ObjectSchema<
     serializers.cloud.version.matchmaker.CaptchaHcaptcha.Raw,
     Rivet.cloud.version.matchmaker.CaptchaHcaptcha
 > = core.serialization.object({
-    level: cloud_version_matchmaker_common$$captchaHcaptchaLevel.optional(),
+    level: CaptchaHcaptchaLevel.optional(),
     siteKey: core.serialization.property("site_key", core.serialization.string().optional()),
     secretKey: core.serialization.property("secret_key", core.serialization.string().optional()),
 });
 
 export declare namespace CaptchaHcaptcha {
     interface Raw {
-        level?: cloud.version.matchmaker.CaptchaHcaptchaLevel.Raw | null;
+        level?: CaptchaHcaptchaLevel.Raw | null;
         site_key?: string | null;
         secret_key?: string | null;
     }

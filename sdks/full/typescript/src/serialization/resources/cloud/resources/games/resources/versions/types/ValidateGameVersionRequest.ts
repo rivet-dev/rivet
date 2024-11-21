@@ -5,21 +5,20 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { DisplayName as common$$displayName } from "../../../../../../common/types/DisplayName";
-import { Config as cloud_version$$config } from "../../../../version/types/Config";
-import { common, cloud } from "../../../../../../index";
+import { DisplayName } from "../../../../../../common/types/DisplayName";
+import { Config } from "../../../../version/types/Config";
 
 export const ValidateGameVersionRequest: core.serialization.ObjectSchema<
     serializers.cloud.games.ValidateGameVersionRequest.Raw,
     Rivet.cloud.games.ValidateGameVersionRequest
 > = core.serialization.object({
-    displayName: core.serialization.property("display_name", common$$displayName),
-    config: cloud_version$$config,
+    displayName: core.serialization.property("display_name", DisplayName),
+    config: Config,
 });
 
 export declare namespace ValidateGameVersionRequest {
     interface Raw {
-        display_name: common.DisplayName.Raw;
-        config: cloud.version.Config.Raw;
+        display_name: DisplayName.Raw;
+        config: Config.Raw;
     }
 }

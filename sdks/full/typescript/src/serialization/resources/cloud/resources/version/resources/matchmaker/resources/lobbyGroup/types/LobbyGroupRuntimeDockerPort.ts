@@ -5,9 +5,8 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { PortRange as cloud_version_matchmaker_common$$portRange } from "../../common/types/PortRange";
-import { PortProtocol as cloud_version_matchmaker_common$$portProtocol } from "../../common/types/PortProtocol";
-import { cloud } from "../../../../../../../../index";
+import { PortRange } from "../../common/types/PortRange";
+import { PortProtocol } from "../../common/types/PortProtocol";
 
 export const LobbyGroupRuntimeDockerPort: core.serialization.ObjectSchema<
     serializers.cloud.version.matchmaker.LobbyGroupRuntimeDockerPort.Raw,
@@ -15,15 +14,15 @@ export const LobbyGroupRuntimeDockerPort: core.serialization.ObjectSchema<
 > = core.serialization.object({
     label: core.serialization.string(),
     targetPort: core.serialization.property("target_port", core.serialization.number().optional()),
-    portRange: core.serialization.property("port_range", cloud_version_matchmaker_common$$portRange.optional()),
-    proxyProtocol: core.serialization.property("proxy_protocol", cloud_version_matchmaker_common$$portProtocol),
+    portRange: core.serialization.property("port_range", PortRange.optional()),
+    proxyProtocol: core.serialization.property("proxy_protocol", PortProtocol),
 });
 
 export declare namespace LobbyGroupRuntimeDockerPort {
     interface Raw {
         label: string;
         target_port?: number | null;
-        port_range?: cloud.version.matchmaker.PortRange.Raw | null;
-        proxy_protocol: cloud.version.matchmaker.PortProtocol.Raw;
+        port_range?: PortRange.Raw | null;
+        proxy_protocol: PortProtocol.Raw;
     }
 }

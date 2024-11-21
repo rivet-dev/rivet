@@ -4,12 +4,14 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { game, cloud } from "../../../../index";
+import { Handle } from "../../../../game/resources/common/types/Handle";
+import { NamespaceSummary } from "./NamespaceSummary";
+import { RegionTierExpenses } from "./RegionTierExpenses";
 export declare const GameLobbyExpenses: core.serialization.ObjectSchema<serializers.cloud.GameLobbyExpenses.Raw, Rivet.cloud.GameLobbyExpenses>;
 export declare namespace GameLobbyExpenses {
     interface Raw {
-        game: game.Handle.Raw;
-        namespaces: cloud.NamespaceSummary.Raw[];
-        expenses: cloud.RegionTierExpenses.Raw[];
+        game: Handle.Raw;
+        namespaces: NamespaceSummary.Raw[];
+        expenses: RegionTierExpenses.Raw[];
     }
 }

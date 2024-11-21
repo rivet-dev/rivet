@@ -5,18 +5,17 @@
 import * as serializers from "../../../../index";
 import * as Rivet from "../../../../../api/index";
 import * as core from "../../../../../core";
-import { Jwt as common$$jwt } from "../../../common/types/Jwt";
-import { common } from "../../../index";
+import { Jwt } from "../../../common/types/Jwt";
 
 export const SetupRequest: core.serialization.Schema<
     serializers.identity.SetupRequest.Raw,
     Rivet.identity.SetupRequest
 > = core.serialization.object({
-    existingIdentityToken: core.serialization.property("existing_identity_token", common$$jwt.optional()),
+    existingIdentityToken: core.serialization.property("existing_identity_token", Jwt.optional()),
 });
 
 export declare namespace SetupRequest {
     interface Raw {
-        existing_identity_token?: common.Jwt.Raw | null;
+        existing_identity_token?: Jwt.Raw | null;
     }
 }

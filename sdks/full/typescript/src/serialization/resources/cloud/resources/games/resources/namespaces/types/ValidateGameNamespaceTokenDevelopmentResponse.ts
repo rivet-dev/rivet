@@ -5,18 +5,17 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { ValidationError as common$$validationError } from "../../../../../../common/types/ValidationError";
-import { common } from "../../../../../../index";
+import { ValidationError } from "../../../../../../common/types/ValidationError";
 
 export const ValidateGameNamespaceTokenDevelopmentResponse: core.serialization.ObjectSchema<
     serializers.cloud.games.namespaces.ValidateGameNamespaceTokenDevelopmentResponse.Raw,
     Rivet.cloud.games.namespaces.ValidateGameNamespaceTokenDevelopmentResponse
 > = core.serialization.object({
-    errors: core.serialization.list(common$$validationError),
+    errors: core.serialization.list(ValidationError),
 });
 
 export declare namespace ValidateGameNamespaceTokenDevelopmentResponse {
     interface Raw {
-        errors: common.ValidationError.Raw[];
+        errors: ValidationError.Raw[];
     }
 }

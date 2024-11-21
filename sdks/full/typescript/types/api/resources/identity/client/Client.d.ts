@@ -226,7 +226,7 @@ export declare class Identity {
      *
      * @example
      *     await client.identity.updateStatus({
-     *         status: Rivet.identity.Status.Online
+     *         status: "online"
      *     })
      */
     updateStatus(request: Rivet.identity.UpdateStatusRequest, requestOptions?: Identity.RequestOptions): Promise<void>;

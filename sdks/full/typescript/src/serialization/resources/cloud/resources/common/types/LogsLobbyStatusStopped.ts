@@ -5,21 +5,20 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Timestamp as common$$timestamp } from "../../../../common/types/Timestamp";
-import { common } from "../../../../index";
+import { Timestamp } from "../../../../common/types/Timestamp";
 
 export const LogsLobbyStatusStopped: core.serialization.ObjectSchema<
     serializers.cloud.LogsLobbyStatusStopped.Raw,
     Rivet.cloud.LogsLobbyStatusStopped
 > = core.serialization.object({
-    stopTs: core.serialization.property("stop_ts", common$$timestamp),
+    stopTs: core.serialization.property("stop_ts", Timestamp),
     failed: core.serialization.boolean(),
     exitCode: core.serialization.property("exit_code", core.serialization.number()),
 });
 
 export declare namespace LogsLobbyStatusStopped {
     interface Raw {
-        stop_ts: common.Timestamp.Raw;
+        stop_ts: Timestamp.Raw;
         failed: boolean;
         exit_code: number;
     }

@@ -12,6 +12,7 @@ export interface BaseSchema<Raw, Parsed> {
 }
 
 export const SchemaType = {
+    BIGINT: "bigint",
     DATE: "date",
     ENUM: "enum",
     LIST: "list",

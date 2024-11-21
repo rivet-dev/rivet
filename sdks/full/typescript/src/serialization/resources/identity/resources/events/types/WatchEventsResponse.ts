@@ -5,21 +5,20 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { GlobalEvent as identity_common$$globalEvent } from "../../common/types/GlobalEvent";
-import { WatchResponse as common$$watchResponse } from "../../../../common/types/WatchResponse";
-import { identity, common } from "../../../../index";
+import { GlobalEvent } from "../../common/types/GlobalEvent";
+import { WatchResponse } from "../../../../common/types/WatchResponse";
 
 export const WatchEventsResponse: core.serialization.ObjectSchema<
     serializers.identity.WatchEventsResponse.Raw,
     Rivet.identity.WatchEventsResponse
 > = core.serialization.object({
-    events: core.serialization.list(identity_common$$globalEvent),
-    watch: common$$watchResponse,
+    events: core.serialization.list(GlobalEvent),
+    watch: WatchResponse,
 });
 
 export declare namespace WatchEventsResponse {
     interface Raw {
-        events: identity.GlobalEvent.Raw[];
-        watch: common.WatchResponse.Raw;
+        events: GlobalEvent.Raw[];
+        watch: WatchResponse.Raw;
     }
 }

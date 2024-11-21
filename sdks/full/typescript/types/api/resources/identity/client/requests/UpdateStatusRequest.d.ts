@@ -5,7 +5,7 @@ import * as Rivet from "../../../../index";
 /**
  * @example
  *     {
- *         status: Rivet.identity.Status.Online
+ *         status: "online"
  *     }
  */
 export interface UpdateStatusRequest {

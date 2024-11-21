@@ -5,30 +5,29 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { UnityConfig as cloud_version_engine_unity$$unityConfig } from "../resources/unity/types/UnityConfig";
-import { UnrealConfig as cloud_version_engine_unreal$$unrealConfig } from "../resources/unreal/types/UnrealConfig";
-import { GodotConfig as cloud_version_engine_godot$$godotConfig } from "../resources/godot/types/GodotConfig";
-import { Html5Config as cloud_version_engine_html_5$$html5Config } from "../resources/html5/types/Html5Config";
-import { CustomConfig as cloud_version_engine_custom$$customConfig } from "../resources/custom/types/CustomConfig";
-import { cloud } from "../../../../../../index";
+import { UnityConfig } from "../resources/unity/types/UnityConfig";
+import { UnrealConfig } from "../resources/unreal/types/UnrealConfig";
+import { GodotConfig } from "../resources/godot/types/GodotConfig";
+import { Html5Config } from "../resources/html5/types/Html5Config";
+import { CustomConfig } from "../resources/custom/types/CustomConfig";
 
 export const Config: core.serialization.ObjectSchema<
     serializers.cloud.version.engine.Config.Raw,
     Rivet.cloud.version.engine.Config
 > = core.serialization.object({
-    unity: cloud_version_engine_unity$$unityConfig.optional(),
-    unreal: cloud_version_engine_unreal$$unrealConfig.optional(),
-    godot: cloud_version_engine_godot$$godotConfig.optional(),
-    html5: cloud_version_engine_html_5$$html5Config.optional(),
-    custom: cloud_version_engine_custom$$customConfig.optional(),
+    unity: UnityConfig.optional(),
+    unreal: UnrealConfig.optional(),
+    godot: GodotConfig.optional(),
+    html5: Html5Config.optional(),
+    custom: CustomConfig.optional(),
 });
 
 export declare namespace Config {
     interface Raw {
-        unity?: cloud.version.engine.UnityConfig.Raw | null;
-        unreal?: cloud.version.engine.UnrealConfig.Raw | null;
-        godot?: cloud.version.engine.GodotConfig.Raw | null;
-        html5?: cloud.version.engine.Html5Config.Raw | null;
-        custom?: cloud.version.engine.CustomConfig.Raw | null;
+        unity?: UnityConfig.Raw | null;
+        unreal?: UnrealConfig.Raw | null;
+        godot?: GodotConfig.Raw | null;
+        html5?: Html5Config.Raw | null;
+        custom?: CustomConfig.Raw | null;
     }
 }

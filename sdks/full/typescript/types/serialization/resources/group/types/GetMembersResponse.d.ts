@@ -4,12 +4,13 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { group, common } from "../../index";
+import { Member } from "../resources/common/types/Member";
+import { WatchResponse } from "../../common/types/WatchResponse";
 export declare const GetMembersResponse: core.serialization.ObjectSchema<serializers.group.GetMembersResponse.Raw, Rivet.group.GetMembersResponse>;
 export declare namespace GetMembersResponse {
     interface Raw {
-        members: group.Member.Raw[];
+        members: Member.Raw[];
         anchor?: string | null;
-        watch: common.WatchResponse.Raw;
+        watch: WatchResponse.Raw;
     }
 }

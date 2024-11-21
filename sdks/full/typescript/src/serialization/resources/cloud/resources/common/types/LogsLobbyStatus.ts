@@ -5,21 +5,20 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { EmptyObject as common$$emptyObject } from "../../../../common/types/EmptyObject";
-import { LogsLobbyStatusStopped as cloud_common$$logsLobbyStatusStopped } from "./LogsLobbyStatusStopped";
-import { common, cloud } from "../../../../index";
+import { EmptyObject } from "../../../../common/types/EmptyObject";
+import { LogsLobbyStatusStopped } from "./LogsLobbyStatusStopped";
 
 export const LogsLobbyStatus: core.serialization.ObjectSchema<
     serializers.cloud.LogsLobbyStatus.Raw,
     Rivet.cloud.LogsLobbyStatus
 > = core.serialization.object({
-    running: common$$emptyObject,
-    stopped: cloud_common$$logsLobbyStatusStopped.optional(),
+    running: EmptyObject,
+    stopped: LogsLobbyStatusStopped.optional(),
 });
 
 export declare namespace LogsLobbyStatus {
     interface Raw {
-        running: common.EmptyObject.Raw;
-        stopped?: cloud.LogsLobbyStatusStopped.Raw | null;
+        running: EmptyObject.Raw;
+        stopped?: LogsLobbyStatusStopped.Raw | null;
     }
 }

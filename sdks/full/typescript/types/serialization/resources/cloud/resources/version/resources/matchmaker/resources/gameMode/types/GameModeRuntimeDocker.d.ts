@@ -4,7 +4,8 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { cloud } from "../../../../../../../../index";
+import { NetworkMode } from "../../common/types/NetworkMode";
+import { GameModeRuntimeDockerPort } from "./GameModeRuntimeDockerPort";
 export declare const GameModeRuntimeDocker: core.serialization.ObjectSchema<serializers.cloud.version.matchmaker.GameModeRuntimeDocker.Raw, Rivet.cloud.version.matchmaker.GameModeRuntimeDocker>;
 export declare namespace GameModeRuntimeDocker {
     interface Raw {
@@ -14,7 +15,7 @@ export declare namespace GameModeRuntimeDocker {
         image_id?: string | null;
         args?: string[] | null;
         env?: Record<string, string> | null;
-        network_mode?: cloud.version.matchmaker.NetworkMode.Raw | null;
-        ports?: Record<string, cloud.version.matchmaker.GameModeRuntimeDockerPort.Raw> | null;
+        network_mode?: NetworkMode.Raw | null;
+        ports?: Record<string, GameModeRuntimeDockerPort.Raw> | null;
     }
 }

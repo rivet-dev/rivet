@@ -4,20 +4,24 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { common, cloud } from "../../../../index";
+import { Timestamp } from "../../../../common/types/Timestamp";
+import { DisplayName } from "../../../../common/types/DisplayName";
+import { NamespaceSummary } from "./NamespaceSummary";
+import { Summary } from "../../version/types/Summary";
+import { RegionSummary } from "./RegionSummary";
 export declare const GameFull: core.serialization.ObjectSchema<serializers.cloud.GameFull.Raw, Rivet.cloud.GameFull>;
 export declare namespace GameFull {
     interface Raw {
         game_id: string;
-        create_ts: common.Timestamp.Raw;
+        create_ts: Timestamp.Raw;
         name_id: string;
-        display_name: common.DisplayName.Raw;
+        display_name: DisplayName.Raw;
         developer_group_id: string;
         total_player_count: number;
         logo_url?: string | null;
         banner_url?: string | null;
-        namespaces: cloud.NamespaceSummary.Raw[];
-        versions: cloud.version.Summary.Raw[];
-        available_regions: cloud.RegionSummary.Raw[];
+        namespaces: NamespaceSummary.Raw[];
+        versions: Summary.Raw[];
+        available_regions: RegionSummary.Raw[];
     }
 }

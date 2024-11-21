@@ -5,19 +5,18 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { DisplayName as common$$displayName } from "../../../../common/types/DisplayName";
-import { AccountNumber as common$$accountNumber } from "../../../../common/types/AccountNumber";
-import { ExternalLinks as identity_common$$externalLinks } from "./ExternalLinks";
-import { common, identity } from "../../../../index";
+import { DisplayName } from "../../../../common/types/DisplayName";
+import { AccountNumber } from "../../../../common/types/AccountNumber";
+import { ExternalLinks } from "./ExternalLinks";
 
 export const Summary: core.serialization.ObjectSchema<serializers.identity.Summary.Raw, Rivet.identity.Summary> =
     core.serialization.object({
         identityId: core.serialization.property("identity_id", core.serialization.string()),
-        displayName: core.serialization.property("display_name", common$$displayName),
-        accountNumber: core.serialization.property("account_number", common$$accountNumber),
+        displayName: core.serialization.property("display_name", DisplayName),
+        accountNumber: core.serialization.property("account_number", AccountNumber),
         avatarUrl: core.serialization.property("avatar_url", core.serialization.string()),
         isRegistered: core.serialization.property("is_registered", core.serialization.boolean()),
-        external: identity_common$$externalLinks,
+        external: ExternalLinks,
         following: core.serialization.boolean(),
         isFollowingMe: core.serialization.property("is_following_me", core.serialization.boolean()),
         isMutualFollowing: core.serialization.property("is_mutual_following", core.serialization.boolean()),
@@ -26,11 +25,11 @@ export const Summary: core.serialization.ObjectSchema<serializers.identity.Summa
 export declare namespace Summary {
     interface Raw {
         identity_id: string;
-        display_name: common.DisplayName.Raw;
-        account_number: common.AccountNumber.Raw;
+        display_name: DisplayName.Raw;
+        account_number: AccountNumber.Raw;
         avatar_url: string;
         is_registered: boolean;
-        external: identity.ExternalLinks.Raw;
+        external: ExternalLinks.Raw;
         following: boolean;
         is_following_me: boolean;
         is_mutual_following: boolean;

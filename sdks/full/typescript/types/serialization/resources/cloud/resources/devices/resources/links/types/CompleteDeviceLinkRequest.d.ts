@@ -4,11 +4,11 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { common } from "../../../../../../index";
+import { Jwt } from "../../../../../../common/types/Jwt";
 export declare const CompleteDeviceLinkRequest: core.serialization.ObjectSchema<serializers.cloud.devices.CompleteDeviceLinkRequest.Raw, Rivet.cloud.devices.CompleteDeviceLinkRequest>;
 export declare namespace CompleteDeviceLinkRequest {
     interface Raw {
-        device_link_token: common.Jwt.Raw;
+        device_link_token: Jwt.Raw;
         game_id: string;
     }
 }

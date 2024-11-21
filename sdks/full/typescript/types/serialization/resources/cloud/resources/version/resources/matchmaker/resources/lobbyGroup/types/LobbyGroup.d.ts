@@ -4,15 +4,16 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { cloud } from "../../../../../../../../index";
+import { LobbyGroupRegion } from "./LobbyGroupRegion";
+import { LobbyGroupRuntime } from "./LobbyGroupRuntime";
 export declare const LobbyGroup: core.serialization.ObjectSchema<serializers.cloud.version.matchmaker.LobbyGroup.Raw, Rivet.cloud.version.matchmaker.LobbyGroup>;
 export declare namespace LobbyGroup {
     interface Raw {
         name_id: string;
-        regions: cloud.version.matchmaker.LobbyGroupRegion.Raw[];
+        regions: LobbyGroupRegion.Raw[];
         max_players_normal: number;
         max_players_direct: number;
         max_players_party: number;
-        runtime: cloud.version.matchmaker.LobbyGroupRuntime.Raw;
+        runtime: LobbyGroupRuntime.Raw;
     }
 }

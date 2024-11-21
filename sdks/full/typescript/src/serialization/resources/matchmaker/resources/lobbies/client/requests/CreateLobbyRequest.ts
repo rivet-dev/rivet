@@ -5,9 +5,8 @@
 import * as serializers from "../../../../../../index";
 import * as Rivet from "../../../../../../../api/index";
 import * as core from "../../../../../../../core";
-import { CustomLobbyPublicity as matchmaker_common$$customLobbyPublicity } from "../../../common/types/CustomLobbyPublicity";
-import { Config as captcha_config$$config } from "../../../../../captcha/resources/config/types/Config";
-import { matchmaker, captcha } from "../../../../../index";
+import { CustomLobbyPublicity } from "../../../common/types/CustomLobbyPublicity";
+import { Config } from "../../../../../captcha/resources/config/types/Config";
 
 export const CreateLobbyRequest: core.serialization.Schema<
     serializers.matchmaker.CreateLobbyRequest.Raw,
@@ -15,11 +14,11 @@ export const CreateLobbyRequest: core.serialization.Schema<
 > = core.serialization.object({
     gameMode: core.serialization.property("game_mode", core.serialization.string()),
     region: core.serialization.string().optional(),
-    publicity: matchmaker_common$$customLobbyPublicity.optional(),
+    publicity: CustomLobbyPublicity.optional(),
     tags: core.serialization.record(core.serialization.string(), core.serialization.string()).optional(),
     maxPlayers: core.serialization.property("max_players", core.serialization.number().optional()),
     lobbyConfig: core.serialization.property("lobby_config", core.serialization.unknown().optional()),
-    captcha: captcha_config$$config.optional(),
+    captcha: Config.optional(),
     verificationData: core.serialization.property("verification_data", core.serialization.unknown().optional()),
 });
 
@@ -27,11 +26,11 @@ export declare namespace CreateLobbyRequest {
     interface Raw {
         game_mode: string;
         region?: string | null;
-        publicity?: matchmaker.CustomLobbyPublicity.Raw | null;
+        publicity?: CustomLobbyPublicity.Raw | null;
         tags?: Record<string, string> | null;
         max_players?: number | null;
         lobby_config?: unknown | null;
-        captcha?: captcha.Config.Raw | null;
+        captcha?: Config.Raw | null;
         verification_data?: unknown | null;
     }
 }

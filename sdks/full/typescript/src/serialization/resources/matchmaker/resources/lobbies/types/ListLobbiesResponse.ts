@@ -5,24 +5,23 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { GameModeInfo as matchmaker_common$$gameModeInfo } from "../../common/types/GameModeInfo";
-import { RegionInfo as matchmaker_common$$regionInfo } from "../../common/types/RegionInfo";
-import { LobbyInfo as matchmaker_common$$lobbyInfo } from "../../common/types/LobbyInfo";
-import { matchmaker } from "../../../../index";
+import { GameModeInfo } from "../../common/types/GameModeInfo";
+import { RegionInfo } from "../../common/types/RegionInfo";
+import { LobbyInfo } from "../../common/types/LobbyInfo";
 
 export const ListLobbiesResponse: core.serialization.ObjectSchema<
     serializers.matchmaker.ListLobbiesResponse.Raw,
     Rivet.matchmaker.ListLobbiesResponse
 > = core.serialization.object({
-    gameModes: core.serialization.property("game_modes", core.serialization.list(matchmaker_common$$gameModeInfo)),
-    regions: core.serialization.list(matchmaker_common$$regionInfo),
-    lobbies: core.serialization.list(matchmaker_common$$lobbyInfo),
+    gameModes: core.serialization.property("game_modes", core.serialization.list(GameModeInfo)),
+    regions: core.serialization.list(RegionInfo),
+    lobbies: core.serialization.list(LobbyInfo),
 });
 
 export declare namespace ListLobbiesResponse {
     interface Raw {
-        game_modes: matchmaker.GameModeInfo.Raw[];
-        regions: matchmaker.RegionInfo.Raw[];
-        lobbies: matchmaker.LobbyInfo.Raw[];
+        game_modes: GameModeInfo.Raw[];
+        regions: RegionInfo.Raw[];
+        lobbies: LobbyInfo.Raw[];
     }
 }

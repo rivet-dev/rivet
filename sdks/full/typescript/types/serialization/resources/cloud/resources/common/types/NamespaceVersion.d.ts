@@ -4,12 +4,12 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { common } from "../../../../index";
+import { Timestamp } from "../../../../common/types/Timestamp";
 export declare const NamespaceVersion: core.serialization.ObjectSchema<serializers.cloud.NamespaceVersion.Raw, Rivet.cloud.NamespaceVersion>;
 export declare namespace NamespaceVersion {
     interface Raw {
         namespace_id: string;
         version_id: string;
-        deploy_ts: common.Timestamp.Raw;
+        deploy_ts: Timestamp.Raw;
     }
 }

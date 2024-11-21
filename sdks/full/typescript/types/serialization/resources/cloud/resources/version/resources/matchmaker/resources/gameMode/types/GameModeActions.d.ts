@@ -4,12 +4,14 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { cloud } from "../../../../../../../../index";
+import { GameModeFindConfig } from "./GameModeFindConfig";
+import { GameModeJoinConfig } from "./GameModeJoinConfig";
+import { GameModeCreateConfig } from "./GameModeCreateConfig";
 export declare const GameModeActions: core.serialization.ObjectSchema<serializers.cloud.version.matchmaker.GameModeActions.Raw, Rivet.cloud.version.matchmaker.GameModeActions>;
 export declare namespace GameModeActions {
     interface Raw {
-        find?: cloud.version.matchmaker.GameModeFindConfig.Raw | null;
-        join?: cloud.version.matchmaker.GameModeJoinConfig.Raw | null;
-        create?: cloud.version.matchmaker.GameModeCreateConfig.Raw | null;
+        find?: GameModeFindConfig.Raw | null;
+        join?: GameModeJoinConfig.Raw | null;
+        create?: GameModeCreateConfig.Raw | null;
     }
 }

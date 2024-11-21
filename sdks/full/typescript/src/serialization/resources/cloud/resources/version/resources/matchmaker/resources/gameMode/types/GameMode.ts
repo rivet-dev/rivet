@@ -5,49 +5,43 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { GameModeRegion as cloud_version_matchmaker_game_mode$$gameModeRegion } from "./GameModeRegion";
-import { GameModeRuntimeDocker as cloud_version_matchmaker_game_mode$$gameModeRuntimeDocker } from "./GameModeRuntimeDocker";
-import { GameModeActions as cloud_version_matchmaker_game_mode$$gameModeActions } from "./GameModeActions";
-import { GameModeIdleLobbiesConfig as cloud_version_matchmaker_game_mode$$gameModeIdleLobbiesConfig } from "./GameModeIdleLobbiesConfig";
-import { cloud } from "../../../../../../../../index";
+import { GameModeRegion } from "./GameModeRegion";
+import { GameModeRuntimeDocker } from "./GameModeRuntimeDocker";
+import { GameModeActions } from "./GameModeActions";
+import { GameModeIdleLobbiesConfig } from "./GameModeIdleLobbiesConfig";
 
 export const GameMode: core.serialization.ObjectSchema<
     serializers.cloud.version.matchmaker.GameMode.Raw,
     Rivet.cloud.version.matchmaker.GameMode
 > = core.serialization.object({
-    regions: core.serialization
-        .record(core.serialization.string(), cloud_version_matchmaker_game_mode$$gameModeRegion)
-        .optional(),
+    regions: core.serialization.record(core.serialization.string(), GameModeRegion).optional(),
     maxPlayers: core.serialization.property("max_players", core.serialization.number().optional()),
     maxPlayersDirect: core.serialization.property("max_players_direct", core.serialization.number().optional()),
     maxPlayersParty: core.serialization.property("max_players_party", core.serialization.number().optional()),
-    docker: cloud_version_matchmaker_game_mode$$gameModeRuntimeDocker.optional(),
+    docker: GameModeRuntimeDocker.optional(),
     listable: core.serialization.boolean().optional(),
     taggable: core.serialization.boolean().optional(),
     allowDynamicMaxPlayers: core.serialization.property(
         "allow_dynamic_max_players",
         core.serialization.boolean().optional()
     ),
-    actions: cloud_version_matchmaker_game_mode$$gameModeActions.optional(),
+    actions: GameModeActions.optional(),
     tier: core.serialization.string().optional(),
-    idleLobbies: core.serialization.property(
-        "idle_lobbies",
-        cloud_version_matchmaker_game_mode$$gameModeIdleLobbiesConfig.optional()
-    ),
+    idleLobbies: core.serialization.property("idle_lobbies", GameModeIdleLobbiesConfig.optional()),
 });
 
 export declare namespace GameMode {
     interface Raw {
-        regions?: Record<string, cloud.version.matchmaker.GameModeRegion.Raw> | null;
+        regions?: Record<string, GameModeRegion.Raw> | null;
         max_players?: number | null;
         max_players_direct?: number | null;
         max_players_party?: number | null;
-        docker?: cloud.version.matchmaker.GameModeRuntimeDocker.Raw | null;
+        docker?: GameModeRuntimeDocker.Raw | null;
         listable?: boolean | null;
         taggable?: boolean | null;
         allow_dynamic_max_players?: boolean | null;
-        actions?: cloud.version.matchmaker.GameModeActions.Raw | null;
+        actions?: GameModeActions.Raw | null;
         tier?: string | null;
-        idle_lobbies?: cloud.version.matchmaker.GameModeIdleLobbiesConfig.Raw | null;
+        idle_lobbies?: GameModeIdleLobbiesConfig.Raw | null;
     }
 }

@@ -4,11 +4,12 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { common, cloud } from "../../../../index";
+import { EmptyObject } from "../../../../common/types/EmptyObject";
+import { LogsLobbyStatusStopped } from "./LogsLobbyStatusStopped";
 export declare const LogsLobbyStatus: core.serialization.ObjectSchema<serializers.cloud.LogsLobbyStatus.Raw, Rivet.cloud.LogsLobbyStatus>;
 export declare namespace LogsLobbyStatus {
     interface Raw {
-        running: common.EmptyObject.Raw;
-        stopped?: cloud.LogsLobbyStatusStopped.Raw | null;
+        running: EmptyObject.Raw;
+        stopped?: LogsLobbyStatusStopped.Raw | null;
     }
 }

@@ -66,6 +66,9 @@ export class Servers {
             method: "GET",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
             requestType: "json",
@@ -218,6 +221,9 @@ export class Servers {
             method: "GET",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
             queryParameters: _queryParams,
@@ -350,10 +356,10 @@ export class Servers {
      *             }
      *         },
      *         network: {
-     *             mode: Rivet.servers.NetworkMode.Bridge,
+     *             mode: "bridge",
      *             ports: {
      *                 "string": {
-     *                     protocol: Rivet.servers.PortProtocol.Http,
+     *                     protocol: "http",
      *                     internalPort: 1,
      *                     routing: {
      *                         gameGuard: {},
@@ -385,6 +391,9 @@ export class Servers {
             method: "POST",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
             requestType: "json",
@@ -532,6 +541,9 @@ export class Servers {
             method: "DELETE",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
             queryParameters: _queryParams,

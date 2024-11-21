@@ -4,12 +4,13 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { common, group } from "../../index";
+import { DisplayName } from "../../common/types/DisplayName";
+import { Publicity } from "../resources/common/types/Publicity";
 export declare const ValidateProfileRequest: core.serialization.ObjectSchema<serializers.group.ValidateProfileRequest.Raw, Rivet.group.ValidateProfileRequest>;
 export declare namespace ValidateProfileRequest {
     interface Raw {
-        display_name?: common.DisplayName.Raw | null;
-        bio?: common.DisplayName.Raw | null;
-        publicity?: group.Publicity.Raw | null;
+        display_name?: DisplayName.Raw | null;
+        bio?: DisplayName.Raw | null;
+        publicity?: Publicity.Raw | null;
     }
 }

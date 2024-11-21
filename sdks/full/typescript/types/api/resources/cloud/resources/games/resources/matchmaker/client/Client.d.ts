@@ -78,7 +78,7 @@ export declare class Matchmaker {
      *
      * @example
      *     await client.cloud.games.matchmaker.getLobbyLogs("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         stream: Rivet.cloud.games.LogStream.StdOut,
+     *         stream: "std_out",
      *         watchIndex: "string"
      *     })
      */
@@ -100,7 +100,7 @@ export declare class Matchmaker {
      *
      * @example
      *     await client.cloud.games.matchmaker.exportLobbyLogs("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         stream: Rivet.cloud.games.LogStream.StdOut
+     *         stream: "std_out"
      *     })
      */
     exportLobbyLogs(gameId: string, lobbyId: string, request: Rivet.cloud.games.ExportLobbyLogsRequest, requestOptions?: Matchmaker.RequestOptions): Promise<Rivet.cloud.games.ExportLobbyLogsResponse>;

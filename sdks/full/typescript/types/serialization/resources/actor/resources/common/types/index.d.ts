@@ -7,7 +7,7 @@ export * from "./NetworkMode";
 export * from "./Port";
 export * from "./PortProtocol";
 export * from "./PortRouting";
-export * from "./GameGuardRouting";
+export * from "./GuardRouting";
 export * from "./PortAuthorization";
 export * from "./PortQueryAuthorization";
 export * from "./HostRouting";

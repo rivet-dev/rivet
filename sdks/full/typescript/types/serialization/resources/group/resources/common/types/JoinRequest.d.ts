@@ -4,11 +4,12 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { identity, common } from "../../../../index";
+import { Handle } from "../../../../identity/resources/common/types/Handle";
+import { Timestamp } from "../../../../common/types/Timestamp";
 export declare const JoinRequest: core.serialization.ObjectSchema<serializers.group.JoinRequest.Raw, Rivet.group.JoinRequest>;
 export declare namespace JoinRequest {
     interface Raw {
-        identity: identity.Handle.Raw;
-        ts: common.Timestamp.Raw;
+        identity: Handle.Raw;
+        ts: Timestamp.Raw;
     }
 }

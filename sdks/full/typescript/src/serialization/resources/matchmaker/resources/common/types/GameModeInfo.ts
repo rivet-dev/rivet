@@ -5,18 +5,17 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Identifier as common$$identifier } from "../../../../common/types/Identifier";
-import { common } from "../../../../index";
+import { Identifier } from "../../../../common/types/Identifier";
 
 export const GameModeInfo: core.serialization.ObjectSchema<
     serializers.matchmaker.GameModeInfo.Raw,
     Rivet.matchmaker.GameModeInfo
 > = core.serialization.object({
-    gameModeId: core.serialization.property("game_mode_id", common$$identifier),
+    gameModeId: core.serialization.property("game_mode_id", Identifier),
 });
 
 export declare namespace GameModeInfo {
     interface Raw {
-        game_mode_id: common.Identifier.Raw;
+        game_mode_id: Identifier.Raw;
     }
 }

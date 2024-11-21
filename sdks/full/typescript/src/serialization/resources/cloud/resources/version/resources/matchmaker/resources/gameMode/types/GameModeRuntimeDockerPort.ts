@@ -5,32 +5,31 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { PortRange as cloud_version_matchmaker_common$$portRange } from "../../common/types/PortRange";
-import { PortProtocol as cloud_version_matchmaker_common$$portProtocol } from "../../common/types/PortProtocol";
-import { ProxyKind as cloud_version_matchmaker_common$$proxyKind } from "../../common/types/ProxyKind";
-import { cloud } from "../../../../../../../../index";
+import { PortRange } from "../../common/types/PortRange";
+import { PortProtocol } from "../../common/types/PortProtocol";
+import { ProxyKind } from "../../common/types/ProxyKind";
 
 export const GameModeRuntimeDockerPort: core.serialization.ObjectSchema<
     serializers.cloud.version.matchmaker.GameModeRuntimeDockerPort.Raw,
     Rivet.cloud.version.matchmaker.GameModeRuntimeDockerPort
 > = core.serialization.object({
     port: core.serialization.number().optional(),
-    portRange: core.serialization.property("port_range", cloud_version_matchmaker_common$$portRange.optional()),
-    protocol: cloud_version_matchmaker_common$$portProtocol.optional(),
-    proxy: cloud_version_matchmaker_common$$proxyKind.optional(),
+    portRange: core.serialization.property("port_range", PortRange.optional()),
+    protocol: PortProtocol.optional(),
+    proxy: ProxyKind.optional(),
     devPort: core.serialization.property("dev_port", core.serialization.number().optional()),
-    devPortRange: core.serialization.property("dev_port_range", cloud_version_matchmaker_common$$portRange.optional()),
-    devProtocol: core.serialization.property("dev_protocol", cloud_version_matchmaker_common$$portProtocol.optional()),
+    devPortRange: core.serialization.property("dev_port_range", PortRange.optional()),
+    devProtocol: core.serialization.property("dev_protocol", PortProtocol.optional()),
 });
 
 export declare namespace GameModeRuntimeDockerPort {
     interface Raw {
         port?: number | null;
-        port_range?: cloud.version.matchmaker.PortRange.Raw | null;
-        protocol?: cloud.version.matchmaker.PortProtocol.Raw | null;
-        proxy?: cloud.version.matchmaker.ProxyKind.Raw | null;
+        port_range?: PortRange.Raw | null;
+        protocol?: PortProtocol.Raw | null;
+        proxy?: ProxyKind.Raw | null;
         dev_port?: number | null;
-        dev_port_range?: cloud.version.matchmaker.PortRange.Raw | null;
-        dev_protocol?: cloud.version.matchmaker.PortProtocol.Raw | null;
+        dev_port_range?: PortRange.Raw | null;
+        dev_protocol?: PortProtocol.Raw | null;
     }
 }

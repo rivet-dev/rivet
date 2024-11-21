@@ -4,12 +4,14 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { matchmaker } from "../../../../index";
+import { GameModeInfo } from "../../common/types/GameModeInfo";
+import { RegionInfo } from "../../common/types/RegionInfo";
+import { LobbyInfo } from "../../common/types/LobbyInfo";
 export declare const ListLobbiesResponse: core.serialization.ObjectSchema<serializers.matchmaker.ListLobbiesResponse.Raw, Rivet.matchmaker.ListLobbiesResponse>;
 export declare namespace ListLobbiesResponse {
     interface Raw {
-        game_modes: matchmaker.GameModeInfo.Raw[];
-        regions: matchmaker.RegionInfo.Raw[];
-        lobbies: matchmaker.LobbyInfo.Raw[];
+        game_modes: GameModeInfo.Raw[];
+        regions: RegionInfo.Raw[];
+        lobbies: LobbyInfo.Raw[];
     }
 }

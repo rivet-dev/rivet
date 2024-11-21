@@ -5,19 +5,18 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { ConfigHcaptcha as captcha_config$$configHcaptcha } from "./ConfigHcaptcha";
-import { ConfigTurnstile as captcha_config$$configTurnstile } from "./ConfigTurnstile";
-import { captcha } from "../../../../index";
+import { ConfigHcaptcha } from "./ConfigHcaptcha";
+import { ConfigTurnstile } from "./ConfigTurnstile";
 
 export const Config: core.serialization.ObjectSchema<serializers.captcha.Config.Raw, Rivet.captcha.Config> =
     core.serialization.object({
-        hcaptcha: captcha_config$$configHcaptcha.optional(),
-        turnstile: captcha_config$$configTurnstile.optional(),
+        hcaptcha: ConfigHcaptcha.optional(),
+        turnstile: ConfigTurnstile.optional(),
     });
 
 export declare namespace Config {
     interface Raw {
-        hcaptcha?: captcha.ConfigHcaptcha.Raw | null;
-        turnstile?: captcha.ConfigTurnstile.Raw | null;
+        hcaptcha?: ConfigHcaptcha.Raw | null;
+        turnstile?: ConfigTurnstile.Raw | null;
     }
 }

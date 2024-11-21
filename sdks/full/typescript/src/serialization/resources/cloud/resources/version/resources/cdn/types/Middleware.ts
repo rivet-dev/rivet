@@ -5,18 +5,17 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { MiddlewareKind as cloud_version_cdn$$middlewareKind } from "./MiddlewareKind";
-import { cloud } from "../../../../../../index";
+import { MiddlewareKind } from "./MiddlewareKind";
 
 export const Middleware: core.serialization.ObjectSchema<
     serializers.cloud.version.cdn.Middleware.Raw,
     Rivet.cloud.version.cdn.Middleware
 > = core.serialization.object({
-    kind: cloud_version_cdn$$middlewareKind,
+    kind: MiddlewareKind,
 });
 
 export declare namespace Middleware {
     interface Raw {
-        kind: cloud.version.cdn.MiddlewareKind.Raw;
+        kind: MiddlewareKind.Raw;
     }
 }

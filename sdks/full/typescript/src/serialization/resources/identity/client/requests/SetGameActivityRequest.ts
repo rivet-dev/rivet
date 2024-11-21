@@ -5,18 +5,17 @@
 import * as serializers from "../../../../index";
 import * as Rivet from "../../../../../api/index";
 import * as core from "../../../../../core";
-import { UpdateGameActivity as identity_common$$updateGameActivity } from "../../resources/common/types/UpdateGameActivity";
-import { identity } from "../../../index";
+import { UpdateGameActivity } from "../../resources/common/types/UpdateGameActivity";
 
 export const SetGameActivityRequest: core.serialization.Schema<
     serializers.identity.SetGameActivityRequest.Raw,
     Rivet.identity.SetGameActivityRequest
 > = core.serialization.object({
-    gameActivity: core.serialization.property("game_activity", identity_common$$updateGameActivity),
+    gameActivity: core.serialization.property("game_activity", UpdateGameActivity),
 });
 
 export declare namespace SetGameActivityRequest {
     interface Raw {
-        game_activity: identity.UpdateGameActivity.Raw;
+        game_activity: UpdateGameActivity.Raw;
     }
 }

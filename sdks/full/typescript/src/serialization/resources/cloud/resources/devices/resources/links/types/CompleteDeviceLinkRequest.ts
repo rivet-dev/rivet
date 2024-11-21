@@ -5,20 +5,19 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { Jwt as common$$jwt } from "../../../../../../common/types/Jwt";
-import { common } from "../../../../../../index";
+import { Jwt } from "../../../../../../common/types/Jwt";
 
 export const CompleteDeviceLinkRequest: core.serialization.ObjectSchema<
     serializers.cloud.devices.CompleteDeviceLinkRequest.Raw,
     Rivet.cloud.devices.CompleteDeviceLinkRequest
 > = core.serialization.object({
-    deviceLinkToken: core.serialization.property("device_link_token", common$$jwt),
+    deviceLinkToken: core.serialization.property("device_link_token", Jwt),
     gameId: core.serialization.property("game_id", core.serialization.string()),
 });
 
 export declare namespace CompleteDeviceLinkRequest {
     interface Raw {
-        device_link_token: common.Jwt.Raw;
+        device_link_token: Jwt.Raw;
         game_id: string;
     }
 }

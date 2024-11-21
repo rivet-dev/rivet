@@ -5,6 +5,6 @@
 import * as Rivet from "../../../../../index";
 
 export interface PortRouting {
-    gameGuard?: Rivet.actor.GameGuardRouting;
+    guard?: Rivet.actor.GuardRouting;
     host?: Rivet.actor.HostRouting;
 }

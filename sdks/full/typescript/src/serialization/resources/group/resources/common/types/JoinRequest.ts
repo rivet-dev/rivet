@@ -5,19 +5,18 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Handle as identity_common$$handle } from "../../../../identity/resources/common/types/Handle";
-import { Timestamp as common$$timestamp } from "../../../../common/types/Timestamp";
-import { identity, common } from "../../../../index";
+import { Handle } from "../../../../identity/resources/common/types/Handle";
+import { Timestamp } from "../../../../common/types/Timestamp";
 
 export const JoinRequest: core.serialization.ObjectSchema<serializers.group.JoinRequest.Raw, Rivet.group.JoinRequest> =
     core.serialization.object({
-        identity: identity_common$$handle,
-        ts: common$$timestamp,
+        identity: Handle,
+        ts: Timestamp,
     });
 
 export declare namespace JoinRequest {
     interface Raw {
-        identity: identity.Handle.Raw;
-        ts: common.Timestamp.Raw;
+        identity: Handle.Raw;
+        ts: Timestamp.Raw;
     }
 }

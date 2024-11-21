@@ -5,24 +5,23 @@
 import * as serializers from "../../../../index";
 import * as Rivet from "../../../../../api/index";
 import * as core from "../../../../../core";
-import { DisplayName as common$$displayName } from "../../../common/types/DisplayName";
-import { AccountNumber as common$$accountNumber } from "../../../common/types/AccountNumber";
-import { Bio as common$$bio } from "../../../common/types/Bio";
-import { common } from "../../../index";
+import { DisplayName } from "../../../common/types/DisplayName";
+import { AccountNumber } from "../../../common/types/AccountNumber";
+import { Bio } from "../../../common/types/Bio";
 
 export const UpdateProfileRequest: core.serialization.Schema<
     serializers.identity.UpdateProfileRequest.Raw,
     Rivet.identity.UpdateProfileRequest
 > = core.serialization.object({
-    displayName: core.serialization.property("display_name", common$$displayName.optional()),
-    accountNumber: core.serialization.property("account_number", common$$accountNumber.optional()),
-    bio: common$$bio.optional(),
+    displayName: core.serialization.property("display_name", DisplayName.optional()),
+    accountNumber: core.serialization.property("account_number", AccountNumber.optional()),
+    bio: Bio.optional(),
 });
 
 export declare namespace UpdateProfileRequest {
     interface Raw {
-        display_name?: common.DisplayName.Raw | null;
-        account_number?: common.AccountNumber.Raw | null;
-        bio?: common.Bio.Raw | null;
+        display_name?: DisplayName.Raw | null;
+        account_number?: AccountNumber.Raw | null;
+        bio?: Bio.Raw | null;
     }
 }

@@ -4,11 +4,12 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { common, cloud } from "../../../../../../index";
+import { DisplayName } from "../../../../../../common/types/DisplayName";
+import { Config } from "../../../../version/types/Config";
 export declare const CreateGameVersionRequest: core.serialization.ObjectSchema<serializers.cloud.games.CreateGameVersionRequest.Raw, Rivet.cloud.games.CreateGameVersionRequest>;
 export declare namespace CreateGameVersionRequest {
     interface Raw {
-        display_name: common.DisplayName.Raw;
-        config: cloud.version.Config.Raw;
+        display_name: DisplayName.Raw;
+        config: Config.Raw;
     }
 }

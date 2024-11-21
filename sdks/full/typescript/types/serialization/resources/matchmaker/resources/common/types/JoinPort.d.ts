@@ -4,14 +4,14 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { matchmaker } from "../../../../index";
+import { JoinPortRange } from "./JoinPortRange";
 export declare const JoinPort: core.serialization.ObjectSchema<serializers.matchmaker.JoinPort.Raw, Rivet.matchmaker.JoinPort>;
 export declare namespace JoinPort {
     interface Raw {
         host?: string | null;
         hostname: string;
         port?: number | null;
-        port_range?: matchmaker.JoinPortRange.Raw | null;
+        port_range?: JoinPortRange.Raw | null;
         is_tls: boolean;
     }
 }

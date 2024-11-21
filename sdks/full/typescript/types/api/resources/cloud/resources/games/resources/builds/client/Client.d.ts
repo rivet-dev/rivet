@@ -63,8 +63,8 @@ export declare class Builds {
      *             contentLength: 1000000
      *         },
      *         multipartUpload: true,
-     *         kind: Rivet.cloud.games.BuildKind.DockerImage,
-     *         compression: Rivet.cloud.games.BuildCompression.None
+     *         kind: "docker_image",
+     *         compression: "none"
      *     })
      */
     createGameBuild(gameId: string, request: Rivet.cloud.games.CreateGameBuildRequest, requestOptions?: Builds.RequestOptions): Promise<Rivet.cloud.games.CreateGameBuildResponse>;

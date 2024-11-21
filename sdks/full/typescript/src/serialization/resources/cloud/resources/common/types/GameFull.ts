@@ -5,43 +5,39 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Timestamp as common$$timestamp } from "../../../../common/types/Timestamp";
-import { DisplayName as common$$displayName } from "../../../../common/types/DisplayName";
-import { NamespaceSummary as cloud_common$$namespaceSummary } from "./NamespaceSummary";
-import { Summary as cloud_version$$summary } from "../../version/types/Summary";
-import { RegionSummary as cloud_common$$regionSummary } from "./RegionSummary";
-import { common, cloud } from "../../../../index";
+import { Timestamp } from "../../../../common/types/Timestamp";
+import { DisplayName } from "../../../../common/types/DisplayName";
+import { NamespaceSummary } from "./NamespaceSummary";
+import { Summary } from "../../version/types/Summary";
+import { RegionSummary } from "./RegionSummary";
 
 export const GameFull: core.serialization.ObjectSchema<serializers.cloud.GameFull.Raw, Rivet.cloud.GameFull> =
     core.serialization.object({
         gameId: core.serialization.property("game_id", core.serialization.string()),
-        createTs: core.serialization.property("create_ts", common$$timestamp),
+        createTs: core.serialization.property("create_ts", Timestamp),
         nameId: core.serialization.property("name_id", core.serialization.string()),
-        displayName: core.serialization.property("display_name", common$$displayName),
+        displayName: core.serialization.property("display_name", DisplayName),
         developerGroupId: core.serialization.property("developer_group_id", core.serialization.string()),
         totalPlayerCount: core.serialization.property("total_player_count", core.serialization.number()),
         logoUrl: core.serialization.property("logo_url", core.serialization.string().optional()),
         bannerUrl: core.serialization.property("banner_url", core.serialization.string().optional()),
-        namespaces: core.serialization.list(cloud_common$$namespaceSummary),
-        versions: core.serialization.list(cloud_version$$summary),
-        availableRegions: core.serialization.property(
-            "available_regions",
-            core.serialization.list(cloud_common$$regionSummary)
-        ),
+        namespaces: core.serialization.list(NamespaceSummary),
+        versions: core.serialization.list(Summary),
+        availableRegions: core.serialization.property("available_regions", core.serialization.list(RegionSummary)),
     });
 
 export declare namespace GameFull {
     interface Raw {
         game_id: string;
-        create_ts: common.Timestamp.Raw;
+        create_ts: Timestamp.Raw;
         name_id: string;
-        display_name: common.DisplayName.Raw;
+        display_name: DisplayName.Raw;
         developer_group_id: string;
         total_player_count: number;
         logo_url?: string | null;
         banner_url?: string | null;
-        namespaces: cloud.NamespaceSummary.Raw[];
-        versions: cloud.version.Summary.Raw[];
-        available_regions: cloud.RegionSummary.Raw[];
+        namespaces: NamespaceSummary.Raw[];
+        versions: Summary.Raw[];
+        available_regions: RegionSummary.Raw[];
     }
 }

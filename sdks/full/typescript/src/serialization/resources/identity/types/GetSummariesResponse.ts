@@ -5,21 +5,20 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { Summary as identity_common$$summary } from "../resources/common/types/Summary";
-import { WatchResponse as common$$watchResponse } from "../../common/types/WatchResponse";
-import { identity, common } from "../../index";
+import { Summary } from "../resources/common/types/Summary";
+import { WatchResponse } from "../../common/types/WatchResponse";
 
 export const GetSummariesResponse: core.serialization.ObjectSchema<
     serializers.identity.GetSummariesResponse.Raw,
     Rivet.identity.GetSummariesResponse
 > = core.serialization.object({
-    identities: core.serialization.list(identity_common$$summary),
-    watch: common$$watchResponse,
+    identities: core.serialization.list(Summary),
+    watch: WatchResponse,
 });
 
 export declare namespace GetSummariesResponse {
     interface Raw {
-        identities: identity.Summary.Raw[];
-        watch: common.WatchResponse.Raw;
+        identities: Summary.Raw[];
+        watch: WatchResponse.Raw;
     }
 }

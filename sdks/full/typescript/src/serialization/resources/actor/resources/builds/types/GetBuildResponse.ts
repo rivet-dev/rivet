@@ -5,18 +5,17 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Build as actor_common$$build } from "../../common/types/Build";
-import { actor } from "../../../../index";
+import { Build } from "../../common/types/Build";
 
 export const GetBuildResponse: core.serialization.ObjectSchema<
     serializers.actor.GetBuildResponse.Raw,
     Rivet.actor.GetBuildResponse
 > = core.serialization.object({
-    build: actor_common$$build,
+    build: Build,
 });
 
 export declare namespace GetBuildResponse {
     interface Raw {
-        build: actor.Build.Raw;
+        build: Build.Raw;
     }
 }

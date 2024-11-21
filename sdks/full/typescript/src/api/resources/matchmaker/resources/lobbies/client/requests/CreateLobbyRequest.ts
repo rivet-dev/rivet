@@ -9,7 +9,7 @@ import * as Rivet from "../../../../../../index";
  *     {
  *         gameMode: "string",
  *         region: "string",
- *         publicity: Rivet.matchmaker.CustomLobbyPublicity.Public,
+ *         publicity: "public",
  *         tags: {
  *             "string": "string"
  *         },

@@ -30,7 +30,7 @@ impl FirewallPreset {
 			FirewallPreset::Gg => provision_config
 				.pools
 				.gg
-				.firewall_rules(&config.server()?.rivet.game_guard),
+				.firewall_rules(&config.server()?.rivet.guard),
 			FirewallPreset::Ats => provision_config.pools.ats.firewall_rules(),
 		})
 	}

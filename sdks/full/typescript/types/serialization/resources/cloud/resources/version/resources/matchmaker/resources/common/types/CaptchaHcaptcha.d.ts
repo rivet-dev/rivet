@@ -4,11 +4,11 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { cloud } from "../../../../../../../../index";
+import { CaptchaHcaptchaLevel } from "./CaptchaHcaptchaLevel";
 export declare const CaptchaHcaptcha: core.serialization.ObjectSchema<serializers.cloud.version.matchmaker.CaptchaHcaptcha.Raw, Rivet.cloud.version.matchmaker.CaptchaHcaptcha>;
 export declare namespace CaptchaHcaptcha {
     interface Raw {
-        level?: cloud.version.matchmaker.CaptchaHcaptchaLevel.Raw | null;
+        level?: CaptchaHcaptchaLevel.Raw | null;
         site_key?: string | null;
         secret_key?: string | null;
     }

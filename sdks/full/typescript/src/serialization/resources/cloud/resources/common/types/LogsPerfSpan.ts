@@ -5,24 +5,23 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Timestamp as common$$timestamp } from "../../../../common/types/Timestamp";
-import { common } from "../../../../index";
+import { Timestamp } from "../../../../common/types/Timestamp";
 
 export const LogsPerfSpan: core.serialization.ObjectSchema<
     serializers.cloud.LogsPerfSpan.Raw,
     Rivet.cloud.LogsPerfSpan
 > = core.serialization.object({
     label: core.serialization.string(),
-    startTs: core.serialization.property("start_ts", common$$timestamp),
-    finishTs: core.serialization.property("finish_ts", common$$timestamp.optional()),
+    startTs: core.serialization.property("start_ts", Timestamp),
+    finishTs: core.serialization.property("finish_ts", Timestamp.optional()),
     reqId: core.serialization.property("req_id", core.serialization.string().optional()),
 });
 
 export declare namespace LogsPerfSpan {
     interface Raw {
         label: string;
-        start_ts: common.Timestamp.Raw;
-        finish_ts?: common.Timestamp.Raw | null;
+        start_ts: Timestamp.Raw;
+        finish_ts?: Timestamp.Raw | null;
         req_id?: string | null;
     }
 }

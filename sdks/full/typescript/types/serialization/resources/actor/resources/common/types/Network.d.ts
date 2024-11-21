@@ -4,11 +4,12 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { actor } from "../../../../index";
+import { NetworkMode } from "./NetworkMode";
+import { Port } from "./Port";
 export declare const Network: core.serialization.ObjectSchema<serializers.actor.Network.Raw, Rivet.actor.Network>;
 export declare namespace Network {
     interface Raw {
-        mode: actor.NetworkMode.Raw;
-        ports: Record<string, actor.Port.Raw>;
+        mode: NetworkMode.Raw;
+        ports: Record<string, Port.Raw>;
     }
 }

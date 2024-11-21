@@ -5,9 +5,8 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { CustomDisplayName as cloud_version_identity$$customDisplayName } from "./CustomDisplayName";
-import { CustomAvatar as cloud_version_identity$$customAvatar } from "./CustomAvatar";
-import { cloud } from "../../../../../../index";
+import { CustomDisplayName } from "./CustomDisplayName";
+import { CustomAvatar } from "./CustomAvatar";
 
 export const Config: core.serialization.ObjectSchema<
     serializers.cloud.version.identity.Config.Raw,
@@ -20,19 +19,16 @@ export const Config: core.serialization.ObjectSchema<
     avatars: core.serialization.list(core.serialization.string()).optional(),
     customDisplayNames: core.serialization.property(
         "custom_display_names",
-        core.serialization.list(cloud_version_identity$$customDisplayName).optional()
+        core.serialization.list(CustomDisplayName).optional()
     ),
-    customAvatars: core.serialization.property(
-        "custom_avatars",
-        core.serialization.list(cloud_version_identity$$customAvatar).optional()
-    ),
+    customAvatars: core.serialization.property("custom_avatars", core.serialization.list(CustomAvatar).optional()),
 });
 
 export declare namespace Config {
     interface Raw {
         display_names?: string[] | null;
         avatars?: string[] | null;
-        custom_display_names?: cloud.version.identity.CustomDisplayName.Raw[] | null;
-        custom_avatars?: cloud.version.identity.CustomAvatar.Raw[] | null;
+        custom_display_names?: CustomDisplayName.Raw[] | null;
+        custom_avatars?: CustomAvatar.Raw[] | null;
     }
 }

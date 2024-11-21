@@ -5,15 +5,14 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Timestamp as common$$timestamp } from "../../../../common/types/Timestamp";
-import { common } from "../../../../index";
+import { Timestamp } from "../../../../common/types/Timestamp";
 
 export const LogsPerfMark: core.serialization.ObjectSchema<
     serializers.cloud.LogsPerfMark.Raw,
     Rivet.cloud.LogsPerfMark
 > = core.serialization.object({
     label: core.serialization.string(),
-    ts: common$$timestamp,
+    ts: Timestamp,
     rayId: core.serialization.property("ray_id", core.serialization.string().optional()),
     reqId: core.serialization.property("req_id", core.serialization.string().optional()),
 });
@@ -21,7 +20,7 @@ export const LogsPerfMark: core.serialization.ObjectSchema<
 export declare namespace LogsPerfMark {
     interface Raw {
         label: string;
-        ts: common.Timestamp.Raw;
+        ts: Timestamp.Raw;
         ray_id?: string | null;
         req_id?: string | null;
     }

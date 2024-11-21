@@ -5,18 +5,17 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { DisplayName as common$$displayName } from "../../../../../../common/types/DisplayName";
-import { common } from "../../../../../../index";
+import { DisplayName } from "../../../../../../common/types/DisplayName";
 
 export const CustomDisplayName: core.serialization.ObjectSchema<
     serializers.cloud.version.identity.CustomDisplayName.Raw,
     Rivet.cloud.version.identity.CustomDisplayName
 > = core.serialization.object({
-    displayName: core.serialization.property("display_name", common$$displayName),
+    displayName: core.serialization.property("display_name", DisplayName),
 });
 
 export declare namespace CustomDisplayName {
     interface Raw {
-        display_name: common.DisplayName.Raw;
+        display_name: DisplayName.Raw;
     }
 }

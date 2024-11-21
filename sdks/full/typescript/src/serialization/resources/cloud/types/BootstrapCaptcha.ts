@@ -5,18 +5,17 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { BootstrapCaptchaTurnstile as cloud$$bootstrapCaptchaTurnstile } from "./BootstrapCaptchaTurnstile";
-import { cloud } from "../../index";
+import { BootstrapCaptchaTurnstile } from "./BootstrapCaptchaTurnstile";
 
 export const BootstrapCaptcha: core.serialization.ObjectSchema<
     serializers.cloud.BootstrapCaptcha.Raw,
     Rivet.cloud.BootstrapCaptcha
 > = core.serialization.object({
-    turnstile: cloud$$bootstrapCaptchaTurnstile.optional(),
+    turnstile: BootstrapCaptchaTurnstile.optional(),
 });
 
 export declare namespace BootstrapCaptcha {
     interface Raw {
-        turnstile?: cloud.BootstrapCaptchaTurnstile.Raw | null;
+        turnstile?: BootstrapCaptchaTurnstile.Raw | null;
     }
 }

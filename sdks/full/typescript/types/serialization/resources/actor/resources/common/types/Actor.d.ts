@@ -4,17 +4,20 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { actor } from "../../../../index";
+import { Runtime } from "./Runtime";
+import { Network } from "./Network";
+import { Resources } from "./Resources";
+import { Lifecycle } from "./Lifecycle";
 export declare const Actor: core.serialization.ObjectSchema<serializers.actor.Actor.Raw, Rivet.actor.Actor>;
 export declare namespace Actor {
     interface Raw {
         id: string;
         region: string;
         tags?: unknown;
-        runtime: actor.Runtime.Raw;
-        network: actor.Network.Raw;
-        resources: actor.Resources.Raw;
-        lifecycle: actor.Lifecycle.Raw;
+        runtime: Runtime.Raw;
+        network: Network.Raw;
+        resources: Resources.Raw;
+        lifecycle: Lifecycle.Raw;
         created_at: number;
         started_at?: number | null;
         destroyed_at?: number | null;

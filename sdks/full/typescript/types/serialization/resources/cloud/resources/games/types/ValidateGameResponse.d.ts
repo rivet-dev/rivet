@@ -4,10 +4,10 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { common } from "../../../../index";
+import { ValidationError } from "../../../../common/types/ValidationError";
 export declare const ValidateGameResponse: core.serialization.ObjectSchema<serializers.cloud.games.ValidateGameResponse.Raw, Rivet.cloud.games.ValidateGameResponse>;
 export declare namespace ValidateGameResponse {
     interface Raw {
-        errors: common.ValidationError.Raw[];
+        errors: ValidationError.Raw[];
     }
 }

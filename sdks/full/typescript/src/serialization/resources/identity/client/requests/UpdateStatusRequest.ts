@@ -5,18 +5,17 @@
 import * as serializers from "../../../../index";
 import * as Rivet from "../../../../../api/index";
 import * as core from "../../../../../core";
-import { Status as identity_common$$status } from "../../resources/common/types/Status";
-import { identity } from "../../../index";
+import { Status } from "../../resources/common/types/Status";
 
 export const UpdateStatusRequest: core.serialization.Schema<
     serializers.identity.UpdateStatusRequest.Raw,
     Rivet.identity.UpdateStatusRequest
 > = core.serialization.object({
-    status: identity_common$$status,
+    status: Status,
 });
 
 export declare namespace UpdateStatusRequest {
     interface Raw {
-        status: identity.Status.Raw;
+        status: Status.Raw;
     }
 }

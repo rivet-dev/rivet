@@ -1,5 +1,4 @@
-export * as captcha from "./captcha";
+export * as actor from "./actor";
 export * as common from "./common";
 export * from "./common/types";
-export * as geo from "./geo";
-export * as matchmaker from "./matchmaker";
+export * as upload from "./upload";

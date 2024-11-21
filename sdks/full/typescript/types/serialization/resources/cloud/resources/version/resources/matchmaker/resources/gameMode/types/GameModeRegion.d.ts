@@ -4,11 +4,11 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { cloud } from "../../../../../../../../index";
+import { GameModeIdleLobbiesConfig } from "./GameModeIdleLobbiesConfig";
 export declare const GameModeRegion: core.serialization.ObjectSchema<serializers.cloud.version.matchmaker.GameModeRegion.Raw, Rivet.cloud.version.matchmaker.GameModeRegion>;
 export declare namespace GameModeRegion {
     interface Raw {
         tier?: string | null;
-        idle_lobbies?: cloud.version.matchmaker.GameModeIdleLobbiesConfig.Raw | null;
+        idle_lobbies?: GameModeIdleLobbiesConfig.Raw | null;
     }
 }

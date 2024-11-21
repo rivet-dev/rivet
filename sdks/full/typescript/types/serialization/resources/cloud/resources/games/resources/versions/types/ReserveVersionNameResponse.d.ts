@@ -4,10 +4,10 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { common } from "../../../../../../index";
+import { DisplayName } from "../../../../../../common/types/DisplayName";
 export declare const ReserveVersionNameResponse: core.serialization.ObjectSchema<serializers.cloud.games.ReserveVersionNameResponse.Raw, Rivet.cloud.games.ReserveVersionNameResponse>;
 export declare namespace ReserveVersionNameResponse {
     interface Raw {
-        version_display_name: common.DisplayName.Raw;
+        version_display_name: DisplayName.Raw;
     }
 }

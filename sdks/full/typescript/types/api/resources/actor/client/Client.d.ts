@@ -99,7 +99,7 @@ export declare class Actor {
      *                 }
      *             },
      *             network: {
-     *                 mode: Rivet.actor.NetworkMode.Bridge,
+     *                 mode: "bridge",
      *                 ports: {}
      *             },
      *             resources: {

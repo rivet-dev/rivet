@@ -5,21 +5,20 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Runtime as actor_common$$runtime } from "./Runtime";
-import { Network as actor_common$$network } from "./Network";
-import { Resources as actor_common$$resources } from "./Resources";
-import { Lifecycle as actor_common$$lifecycle } from "./Lifecycle";
-import { actor } from "../../../../index";
+import { Runtime } from "./Runtime";
+import { Network } from "./Network";
+import { Resources } from "./Resources";
+import { Lifecycle } from "./Lifecycle";
 
 export const Actor: core.serialization.ObjectSchema<serializers.actor.Actor.Raw, Rivet.actor.Actor> =
     core.serialization.object({
         id: core.serialization.string(),
         region: core.serialization.string(),
         tags: core.serialization.unknown(),
-        runtime: actor_common$$runtime,
-        network: actor_common$$network,
-        resources: actor_common$$resources,
-        lifecycle: actor_common$$lifecycle,
+        runtime: Runtime,
+        network: Network,
+        resources: Resources,
+        lifecycle: Lifecycle,
         createdAt: core.serialization.property("created_at", core.serialization.number()),
         startedAt: core.serialization.property("started_at", core.serialization.number().optional()),
         destroyedAt: core.serialization.property("destroyed_at", core.serialization.number().optional()),
@@ -30,10 +29,10 @@ export declare namespace Actor {
         id: string;
         region: string;
         tags?: unknown;
-        runtime: actor.Runtime.Raw;
-        network: actor.Network.Raw;
-        resources: actor.Resources.Raw;
-        lifecycle: actor.Lifecycle.Raw;
+        runtime: Runtime.Raw;
+        network: Network.Raw;
+        resources: Resources.Raw;
+        lifecycle: Lifecycle.Raw;
         created_at: number;
         started_at?: number | null;
         destroyed_at?: number | null;

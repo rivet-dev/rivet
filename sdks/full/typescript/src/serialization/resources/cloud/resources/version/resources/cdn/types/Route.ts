@@ -5,8 +5,7 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { Middleware as cloud_version_cdn$$middleware } from "./Middleware";
-import { cloud } from "../../../../../../index";
+import { Middleware } from "./Middleware";
 
 export const Route: core.serialization.ObjectSchema<
     serializers.cloud.version.cdn.Route.Raw,
@@ -14,13 +13,13 @@ export const Route: core.serialization.ObjectSchema<
 > = core.serialization.object({
     glob: core.serialization.string(),
     priority: core.serialization.number(),
-    middlewares: core.serialization.list(cloud_version_cdn$$middleware),
+    middlewares: core.serialization.list(Middleware),
 });
 
 export declare namespace Route {
     interface Raw {
         glob: string;
         priority: number;
-        middlewares: cloud.version.cdn.Middleware.Raw[];
+        middlewares: Middleware.Raw[];
     }
 }

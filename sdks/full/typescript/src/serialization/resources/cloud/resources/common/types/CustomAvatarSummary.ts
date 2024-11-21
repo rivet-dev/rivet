@@ -5,17 +5,16 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { DisplayName as common$$displayName } from "../../../../common/types/DisplayName";
-import { Timestamp as common$$timestamp } from "../../../../common/types/Timestamp";
-import { common } from "../../../../index";
+import { DisplayName } from "../../../../common/types/DisplayName";
+import { Timestamp } from "../../../../common/types/Timestamp";
 
 export const CustomAvatarSummary: core.serialization.ObjectSchema<
     serializers.cloud.CustomAvatarSummary.Raw,
     Rivet.cloud.CustomAvatarSummary
 > = core.serialization.object({
     uploadId: core.serialization.property("upload_id", core.serialization.string()),
-    displayName: core.serialization.property("display_name", common$$displayName),
-    createTs: core.serialization.property("create_ts", common$$timestamp),
+    displayName: core.serialization.property("display_name", DisplayName),
+    createTs: core.serialization.property("create_ts", Timestamp),
     url: core.serialization.string().optional(),
     contentLength: core.serialization.property("content_length", core.serialization.number()),
     complete: core.serialization.boolean(),
@@ -24,8 +23,8 @@ export const CustomAvatarSummary: core.serialization.ObjectSchema<
 export declare namespace CustomAvatarSummary {
     interface Raw {
         upload_id: string;
-        display_name: common.DisplayName.Raw;
-        create_ts: common.Timestamp.Raw;
+        display_name: DisplayName.Raw;
+        create_ts: Timestamp.Raw;
         url?: string | null;
         content_length: number;
         complete: boolean;

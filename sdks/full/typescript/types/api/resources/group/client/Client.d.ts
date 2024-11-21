@@ -101,7 +101,7 @@ export declare class Group {
      *     await client.group.validateProfile({
      *         displayName: "string",
      *         bio: "string",
-     *         publicity: Rivet.group.Publicity.Open
+     *         publicity: "open"
      *     })
      */
     validateProfile(request: Rivet.group.ValidateProfileRequest, requestOptions?: Group.RequestOptions): Promise<Rivet.group.ValidateProfileResponse>;
@@ -298,7 +298,7 @@ export declare class Group {
      *     await client.group.updateProfile("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
      *         displayName: "string",
      *         bio: "string",
-     *         publicity: Rivet.group.Publicity.Open
+     *         publicity: "open"
      *     })
      */
     updateProfile(groupId: string, request: Rivet.group.UpdateProfileRequest, requestOptions?: Group.RequestOptions): Promise<void>;

@@ -5,26 +5,25 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { MatchmakerDevelopmentPort as cloud_common$$matchmakerDevelopmentPort } from "../../../../common/types/MatchmakerDevelopmentPort";
-import { LobbyGroupRuntimeDockerPort as cloud_version_matchmaker_lobby_group$$lobbyGroupRuntimeDockerPort } from "../../../../version/resources/matchmaker/resources/lobbyGroup/types/LobbyGroupRuntimeDockerPort";
-import { cloud } from "../../../../../../index";
+import { MatchmakerDevelopmentPort } from "../../../../common/types/MatchmakerDevelopmentPort";
+import { LobbyGroupRuntimeDockerPort } from "../../../../version/resources/matchmaker/resources/lobbyGroup/types/LobbyGroupRuntimeDockerPort";
 
 export const CreateGameNamespaceTokenDevelopmentRequest: core.serialization.ObjectSchema<
     serializers.cloud.games.namespaces.CreateGameNamespaceTokenDevelopmentRequest.Raw,
     Rivet.cloud.games.namespaces.CreateGameNamespaceTokenDevelopmentRequest
 > = core.serialization.object({
     hostname: core.serialization.string(),
-    ports: core.serialization.record(core.serialization.string(), cloud_common$$matchmakerDevelopmentPort).optional(),
+    ports: core.serialization.record(core.serialization.string(), MatchmakerDevelopmentPort).optional(),
     lobbyPorts: core.serialization.property(
         "lobby_ports",
-        core.serialization.list(cloud_version_matchmaker_lobby_group$$lobbyGroupRuntimeDockerPort).optional()
+        core.serialization.list(LobbyGroupRuntimeDockerPort).optional()
     ),
 });
 
 export declare namespace CreateGameNamespaceTokenDevelopmentRequest {
     interface Raw {
         hostname: string;
-        ports?: Record<string, cloud.MatchmakerDevelopmentPort.Raw> | null;
-        lobby_ports?: cloud.version.matchmaker.LobbyGroupRuntimeDockerPort.Raw[] | null;
+        ports?: Record<string, MatchmakerDevelopmentPort.Raw> | null;
+        lobby_ports?: LobbyGroupRuntimeDockerPort.Raw[] | null;
     }
 }

@@ -4,11 +4,12 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { actor } from "../../../../index";
+import { GuardRouting } from "./GuardRouting";
+import { HostRouting } from "./HostRouting";
 export declare const PortRouting: core.serialization.ObjectSchema<serializers.actor.PortRouting.Raw, Rivet.actor.PortRouting>;
 export declare namespace PortRouting {
     interface Raw {
-        game_guard?: actor.GameGuardRouting.Raw | null;
-        host?: actor.HostRouting.Raw | null;
+        guard?: GuardRouting.Raw | null;
+        host?: HostRouting.Raw | null;
     }
 }

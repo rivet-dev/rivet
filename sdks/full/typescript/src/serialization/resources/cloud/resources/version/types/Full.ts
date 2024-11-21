@@ -5,24 +5,23 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Timestamp as common$$timestamp } from "../../../../common/types/Timestamp";
-import { DisplayName as common$$displayName } from "../../../../common/types/DisplayName";
-import { Config as cloud_version$$config } from "./Config";
-import { common, cloud } from "../../../../index";
+import { Timestamp } from "../../../../common/types/Timestamp";
+import { DisplayName } from "../../../../common/types/DisplayName";
+import { Config } from "./Config";
 
 export const Full: core.serialization.ObjectSchema<serializers.cloud.version.Full.Raw, Rivet.cloud.version.Full> =
     core.serialization.object({
         versionId: core.serialization.property("version_id", core.serialization.string()),
-        createTs: core.serialization.property("create_ts", common$$timestamp),
-        displayName: core.serialization.property("display_name", common$$displayName),
-        config: cloud_version$$config,
+        createTs: core.serialization.property("create_ts", Timestamp),
+        displayName: core.serialization.property("display_name", DisplayName),
+        config: Config,
     });
 
 export declare namespace Full {
     interface Raw {
         version_id: string;
-        create_ts: common.Timestamp.Raw;
-        display_name: common.DisplayName.Raw;
-        config: cloud.version.Config.Raw;
+        create_ts: Timestamp.Raw;
+        display_name: DisplayName.Raw;
+        config: Config.Raw;
     }
 }

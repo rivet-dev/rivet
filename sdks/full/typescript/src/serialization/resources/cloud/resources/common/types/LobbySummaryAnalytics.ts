@@ -5,8 +5,7 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Timestamp as common$$timestamp } from "../../../../common/types/Timestamp";
-import { common } from "../../../../index";
+import { Timestamp } from "../../../../common/types/Timestamp";
 
 export const LobbySummaryAnalytics: core.serialization.ObjectSchema<
     serializers.cloud.LobbySummaryAnalytics.Raw,
@@ -16,7 +15,7 @@ export const LobbySummaryAnalytics: core.serialization.ObjectSchema<
     lobbyGroupId: core.serialization.property("lobby_group_id", core.serialization.string()),
     lobbyGroupNameId: core.serialization.property("lobby_group_name_id", core.serialization.string()),
     regionId: core.serialization.property("region_id", core.serialization.string()),
-    createTs: core.serialization.property("create_ts", common$$timestamp),
+    createTs: core.serialization.property("create_ts", Timestamp),
     isReady: core.serialization.property("is_ready", core.serialization.boolean()),
     isIdle: core.serialization.property("is_idle", core.serialization.boolean()),
     isClosed: core.serialization.property("is_closed", core.serialization.boolean()),
@@ -34,7 +33,7 @@ export declare namespace LobbySummaryAnalytics {
         lobby_group_id: string;
         lobby_group_name_id: string;
         region_id: string;
-        create_ts: common.Timestamp.Raw;
+        create_ts: Timestamp.Raw;
         is_ready: boolean;
         is_idle: boolean;
         is_closed: boolean;

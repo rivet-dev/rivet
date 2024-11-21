@@ -4,14 +4,15 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { common, group } from "../../../../index";
+import { DisplayName } from "../../../../common/types/DisplayName";
+import { ExternalLinks } from "./ExternalLinks";
 export declare const Handle: core.serialization.ObjectSchema<serializers.group.Handle.Raw, Rivet.group.Handle>;
 export declare namespace Handle {
     interface Raw {
         group_id: string;
-        display_name: common.DisplayName.Raw;
+        display_name: DisplayName.Raw;
         avatar_url?: string | null;
-        external: group.ExternalLinks.Raw;
+        external: ExternalLinks.Raw;
         is_developer?: boolean | null;
     }
 }

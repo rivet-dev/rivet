@@ -134,7 +134,7 @@ impl ClusterPoolGg {
 		self.vlan_ip_net().hosts()
 	}
 
-	pub fn firewall_rules(&self, gg: &super::GameGuard) -> Vec<FirewallRule> {
+	pub fn firewall_rules(&self, gg: &super::Guard) -> Vec<FirewallRule> {
 		[
 			FirewallRule::base_rules(),
 			vec![

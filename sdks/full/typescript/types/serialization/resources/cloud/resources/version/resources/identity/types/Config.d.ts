@@ -4,13 +4,14 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { cloud } from "../../../../../../index";
+import { CustomDisplayName } from "./CustomDisplayName";
+import { CustomAvatar } from "./CustomAvatar";
 export declare const Config: core.serialization.ObjectSchema<serializers.cloud.version.identity.Config.Raw, Rivet.cloud.version.identity.Config>;
 export declare namespace Config {
     interface Raw {
         display_names?: string[] | null;
         avatars?: string[] | null;
-        custom_display_names?: cloud.version.identity.CustomDisplayName.Raw[] | null;
-        custom_avatars?: cloud.version.identity.CustomAvatar.Raw[] | null;
+        custom_display_names?: CustomDisplayName.Raw[] | null;
+        custom_avatars?: CustomAvatar.Raw[] | null;
     }
 }

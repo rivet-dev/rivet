@@ -4,15 +4,18 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { actor } from "../../index";
+import { CreateActorRuntimeRequest } from "./CreateActorRuntimeRequest";
+import { CreateActorNetworkRequest } from "./CreateActorNetworkRequest";
+import { Resources } from "../resources/common/types/Resources";
+import { Lifecycle } from "../resources/common/types/Lifecycle";
 export declare const CreateActorRequest: core.serialization.ObjectSchema<serializers.actor.CreateActorRequest.Raw, Rivet.actor.CreateActorRequest>;
 export declare namespace CreateActorRequest {
     interface Raw {
         region: string;
         tags?: unknown;
-        runtime: actor.CreateActorRuntimeRequest.Raw;
-        network?: actor.CreateActorNetworkRequest.Raw | null;
-        resources: actor.Resources.Raw;
-        lifecycle?: actor.Lifecycle.Raw | null;
+        runtime: CreateActorRuntimeRequest.Raw;
+        network?: CreateActorNetworkRequest.Raw | null;
+        resources: Resources.Raw;
+        lifecycle?: Lifecycle.Raw | null;
     }
 }

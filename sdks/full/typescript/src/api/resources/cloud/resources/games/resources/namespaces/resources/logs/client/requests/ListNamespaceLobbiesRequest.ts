@@ -7,7 +7,7 @@ import * as Rivet from "../../../../../../../../../../index";
 /**
  * @example
  *     {
- *         beforeCreateTs: new Date("2024-01-15T09:30:00.000Z")
+ *         beforeCreateTs: "2024-01-15T09:30:00Z"
  *     }
  */
 export interface ListNamespaceLobbiesRequest {

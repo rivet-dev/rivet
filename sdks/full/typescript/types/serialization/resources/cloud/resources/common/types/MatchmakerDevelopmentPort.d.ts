@@ -4,12 +4,13 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { cloud } from "../../../../index";
+import { PortRange } from "../../version/resources/matchmaker/resources/common/types/PortRange";
+import { PortProtocol } from "../../version/resources/matchmaker/resources/common/types/PortProtocol";
 export declare const MatchmakerDevelopmentPort: core.serialization.ObjectSchema<serializers.cloud.MatchmakerDevelopmentPort.Raw, Rivet.cloud.MatchmakerDevelopmentPort>;
 export declare namespace MatchmakerDevelopmentPort {
     interface Raw {
         port?: number | null;
-        port_range?: cloud.version.matchmaker.PortRange.Raw | null;
-        protocol: cloud.version.matchmaker.PortProtocol.Raw;
+        port_range?: PortRange.Raw | null;
+        protocol: PortProtocol.Raw;
     }
 }

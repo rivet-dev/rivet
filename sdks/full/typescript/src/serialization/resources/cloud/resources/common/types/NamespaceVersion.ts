@@ -5,8 +5,7 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Timestamp as common$$timestamp } from "../../../../common/types/Timestamp";
-import { common } from "../../../../index";
+import { Timestamp } from "../../../../common/types/Timestamp";
 
 export const NamespaceVersion: core.serialization.ObjectSchema<
     serializers.cloud.NamespaceVersion.Raw,
@@ -14,13 +13,13 @@ export const NamespaceVersion: core.serialization.ObjectSchema<
 > = core.serialization.object({
     namespaceId: core.serialization.property("namespace_id", core.serialization.string()),
     versionId: core.serialization.property("version_id", core.serialization.string()),
-    deployTs: core.serialization.property("deploy_ts", common$$timestamp),
+    deployTs: core.serialization.property("deploy_ts", Timestamp),
 });
 
 export declare namespace NamespaceVersion {
     interface Raw {
         namespace_id: string;
         version_id: string;
-        deploy_ts: common.Timestamp.Raw;
+        deploy_ts: Timestamp.Raw;
     }
 }

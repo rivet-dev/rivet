@@ -4,10 +4,10 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { cloud } from "../../../../index";
+import { SvcPerf } from "../../common/types/SvcPerf";
 export declare const GetRayPerfLogsResponse: core.serialization.ObjectSchema<serializers.cloud.GetRayPerfLogsResponse.Raw, Rivet.cloud.GetRayPerfLogsResponse>;
 export declare namespace GetRayPerfLogsResponse {
     interface Raw {
-        perf_lists: cloud.SvcPerf.Raw[];
+        perf_lists: SvcPerf.Raw[];
     }
 }

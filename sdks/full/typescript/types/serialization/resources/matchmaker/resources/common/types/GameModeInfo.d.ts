@@ -4,10 +4,10 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { common } from "../../../../index";
+import { Identifier } from "../../../../common/types/Identifier";
 export declare const GameModeInfo: core.serialization.ObjectSchema<serializers.matchmaker.GameModeInfo.Raw, Rivet.matchmaker.GameModeInfo>;
 export declare namespace GameModeInfo {
     interface Raw {
-        game_mode_id: common.Identifier.Raw;
+        game_mode_id: Identifier.Raw;
     }
 }

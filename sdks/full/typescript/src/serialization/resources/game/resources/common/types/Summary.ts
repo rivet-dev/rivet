@@ -5,32 +5,31 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Identifier as common$$identifier } from "../../../../common/types/Identifier";
-import { DisplayName as common$$displayName } from "../../../../common/types/DisplayName";
-import { Handle as group_common$$handle } from "../../../../group/resources/common/types/Handle";
-import { common, group } from "../../../../index";
+import { Identifier } from "../../../../common/types/Identifier";
+import { DisplayName } from "../../../../common/types/DisplayName";
+import { Handle } from "../../../../group/resources/common/types/Handle";
 
 export const Summary: core.serialization.ObjectSchema<serializers.game.Summary.Raw, Rivet.game.Summary> =
     core.serialization.object({
         gameId: core.serialization.property("game_id", core.serialization.string()),
-        nameId: core.serialization.property("name_id", common$$identifier),
-        displayName: core.serialization.property("display_name", common$$displayName),
+        nameId: core.serialization.property("name_id", Identifier),
+        displayName: core.serialization.property("display_name", DisplayName),
         logoUrl: core.serialization.property("logo_url", core.serialization.string().optional()),
         bannerUrl: core.serialization.property("banner_url", core.serialization.string().optional()),
         url: core.serialization.string(),
-        developer: group_common$$handle,
+        developer: Handle,
         totalPlayerCount: core.serialization.property("total_player_count", core.serialization.number()),
     });
 
 export declare namespace Summary {
     interface Raw {
         game_id: string;
-        name_id: common.Identifier.Raw;
-        display_name: common.DisplayName.Raw;
+        name_id: Identifier.Raw;
+        display_name: DisplayName.Raw;
         logo_url?: string | null;
         banner_url?: string | null;
         url: string;
-        developer: group.Handle.Raw;
+        developer: Handle.Raw;
         total_player_count: number;
     }
 }

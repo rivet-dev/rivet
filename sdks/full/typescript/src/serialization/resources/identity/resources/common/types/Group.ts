@@ -5,16 +5,15 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Handle as group_common$$handle } from "../../../../group/resources/common/types/Handle";
-import { group } from "../../../../index";
+import { Handle } from "../../../../group/resources/common/types/Handle";
 
 export const Group: core.serialization.ObjectSchema<serializers.identity.Group.Raw, Rivet.identity.Group> =
     core.serialization.object({
-        group: group_common$$handle,
+        group: Handle,
     });
 
 export declare namespace Group {
     interface Raw {
-        group: group.Handle.Raw;
+        group: Handle.Raw;
     }
 }

@@ -5,9 +5,8 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Timestamp as common$$timestamp } from "../../../../common/types/Timestamp";
-import { LogsLobbyStatus as cloud_common$$logsLobbyStatus } from "./LogsLobbyStatus";
-import { common, cloud } from "../../../../index";
+import { Timestamp } from "../../../../common/types/Timestamp";
+import { LogsLobbyStatus } from "./LogsLobbyStatus";
 
 export const LogsLobbySummary: core.serialization.ObjectSchema<
     serializers.cloud.LogsLobbySummary.Raw,
@@ -17,10 +16,10 @@ export const LogsLobbySummary: core.serialization.ObjectSchema<
     namespaceId: core.serialization.property("namespace_id", core.serialization.string()),
     lobbyGroupNameId: core.serialization.property("lobby_group_name_id", core.serialization.string()),
     regionId: core.serialization.property("region_id", core.serialization.string()),
-    createTs: core.serialization.property("create_ts", common$$timestamp),
-    startTs: core.serialization.property("start_ts", common$$timestamp.optional()),
-    readyTs: core.serialization.property("ready_ts", common$$timestamp.optional()),
-    status: cloud_common$$logsLobbyStatus,
+    createTs: core.serialization.property("create_ts", Timestamp),
+    startTs: core.serialization.property("start_ts", Timestamp.optional()),
+    readyTs: core.serialization.property("ready_ts", Timestamp.optional()),
+    status: LogsLobbyStatus,
 });
 
 export declare namespace LogsLobbySummary {
@@ -29,9 +28,9 @@ export declare namespace LogsLobbySummary {
         namespace_id: string;
         lobby_group_name_id: string;
         region_id: string;
-        create_ts: common.Timestamp.Raw;
-        start_ts?: common.Timestamp.Raw | null;
-        ready_ts?: common.Timestamp.Raw | null;
-        status: cloud.LogsLobbyStatus.Raw;
+        create_ts: Timestamp.Raw;
+        start_ts?: Timestamp.Raw | null;
+        ready_ts?: Timestamp.Raw | null;
+        status: LogsLobbyStatus.Raw;
     }
 }

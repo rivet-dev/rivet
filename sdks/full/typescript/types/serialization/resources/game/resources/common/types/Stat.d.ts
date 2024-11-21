@@ -4,11 +4,11 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { game } from "../../../../index";
+import { StatConfig } from "./StatConfig";
 export declare const Stat: core.serialization.ObjectSchema<serializers.game.Stat.Raw, Rivet.game.Stat>;
 export declare namespace Stat {
     interface Raw {
-        config: game.StatConfig.Raw;
+        config: StatConfig.Raw;
         overall_value: number;
     }
 }

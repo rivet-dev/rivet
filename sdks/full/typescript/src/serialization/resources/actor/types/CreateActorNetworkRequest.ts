@@ -5,21 +5,20 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { NetworkMode as actor_common$$networkMode } from "../resources/common/types/NetworkMode";
-import { CreateActorPortRequest as actor$$createActorPortRequest } from "./CreateActorPortRequest";
-import { actor } from "../../index";
+import { NetworkMode } from "../resources/common/types/NetworkMode";
+import { CreateActorPortRequest } from "./CreateActorPortRequest";
 
 export const CreateActorNetworkRequest: core.serialization.ObjectSchema<
     serializers.actor.CreateActorNetworkRequest.Raw,
     Rivet.actor.CreateActorNetworkRequest
 > = core.serialization.object({
-    mode: actor_common$$networkMode.optional(),
-    ports: core.serialization.record(core.serialization.string(), actor$$createActorPortRequest).optional(),
+    mode: NetworkMode.optional(),
+    ports: core.serialization.record(core.serialization.string(), CreateActorPortRequest).optional(),
 });
 
 export declare namespace CreateActorNetworkRequest {
     interface Raw {
-        mode?: actor.NetworkMode.Raw | null;
-        ports?: Record<string, actor.CreateActorPortRequest.Raw> | null;
+        mode?: NetworkMode.Raw | null;
+        ports?: Record<string, CreateActorPortRequest.Raw> | null;
     }
 }

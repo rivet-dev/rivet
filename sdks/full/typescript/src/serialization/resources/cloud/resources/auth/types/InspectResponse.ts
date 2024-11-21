@@ -5,18 +5,17 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { AuthAgent as cloud_common$$authAgent } from "../../common/types/AuthAgent";
-import { cloud } from "../../../../index";
+import { AuthAgent } from "../../common/types/AuthAgent";
 
 export const InspectResponse: core.serialization.ObjectSchema<
     serializers.cloud.InspectResponse.Raw,
     Rivet.cloud.InspectResponse
 > = core.serialization.object({
-    agent: cloud_common$$authAgent,
+    agent: AuthAgent,
 });
 
 export declare namespace InspectResponse {
     interface Raw {
-        agent: cloud.AuthAgent.Raw;
+        agent: AuthAgent.Raw;
     }
 }

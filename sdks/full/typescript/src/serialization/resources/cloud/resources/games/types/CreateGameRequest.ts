@@ -5,23 +5,22 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Identifier as common$$identifier } from "../../../../common/types/Identifier";
-import { DisplayName as common$$displayName } from "../../../../common/types/DisplayName";
-import { common } from "../../../../index";
+import { Identifier } from "../../../../common/types/Identifier";
+import { DisplayName } from "../../../../common/types/DisplayName";
 
 export const CreateGameRequest: core.serialization.ObjectSchema<
     serializers.cloud.games.CreateGameRequest.Raw,
     Rivet.cloud.games.CreateGameRequest
 > = core.serialization.object({
-    nameId: core.serialization.property("name_id", common$$identifier.optional()),
-    displayName: core.serialization.property("display_name", common$$displayName),
+    nameId: core.serialization.property("name_id", Identifier.optional()),
+    displayName: core.serialization.property("display_name", DisplayName),
     developerGroupId: core.serialization.property("developer_group_id", core.serialization.string()),
 });
 
 export declare namespace CreateGameRequest {
     interface Raw {
-        name_id?: common.Identifier.Raw | null;
-        display_name: common.DisplayName.Raw;
+        name_id?: Identifier.Raw | null;
+        display_name: DisplayName.Raw;
         developer_group_id: string;
     }
 }

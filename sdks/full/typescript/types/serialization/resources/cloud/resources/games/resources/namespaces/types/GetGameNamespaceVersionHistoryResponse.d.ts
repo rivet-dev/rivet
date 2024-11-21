@@ -4,10 +4,10 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { cloud } from "../../../../../../index";
+import { NamespaceVersion } from "../../../../common/types/NamespaceVersion";
 export declare const GetGameNamespaceVersionHistoryResponse: core.serialization.ObjectSchema<serializers.cloud.games.namespaces.GetGameNamespaceVersionHistoryResponse.Raw, Rivet.cloud.games.namespaces.GetGameNamespaceVersionHistoryResponse>;
 export declare namespace GetGameNamespaceVersionHistoryResponse {
     interface Raw {
-        versions: cloud.NamespaceVersion.Raw[];
+        versions: NamespaceVersion.Raw[];
     }
 }

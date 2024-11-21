@@ -5,8 +5,7 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { Route as cloud_version_cdn$$route } from "./Route";
-import { cloud } from "../../../../../../index";
+import { Route } from "./Route";
 
 export const Config: core.serialization.ObjectSchema<
     serializers.cloud.version.cdn.Config.Raw,
@@ -19,7 +18,7 @@ export const Config: core.serialization.ObjectSchema<
         core.serialization.record(core.serialization.string(), core.serialization.string()).optional()
     ),
     siteId: core.serialization.property("site_id", core.serialization.string().optional()),
-    routes: core.serialization.list(cloud_version_cdn$$route).optional(),
+    routes: core.serialization.list(Route).optional(),
 });
 
 export declare namespace Config {
@@ -28,6 +27,6 @@ export declare namespace Config {
         build_output?: string | null;
         build_env?: Record<string, string> | null;
         site_id?: string | null;
-        routes?: cloud.version.cdn.Route.Raw[] | null;
+        routes?: Route.Raw[] | null;
     }
 }

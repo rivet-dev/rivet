@@ -5,31 +5,30 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { DisplayName as common$$displayName } from "../../../../../../common/types/DisplayName";
-import { PrepareFile as upload_common$$prepareFile } from "../../../../../../upload/resources/common/types/PrepareFile";
-import { BuildKind as cloud_games_builds$$buildKind } from "./BuildKind";
-import { BuildCompression as cloud_games_builds$$buildCompression } from "./BuildCompression";
-import { common, upload, cloud } from "../../../../../../index";
+import { DisplayName } from "../../../../../../common/types/DisplayName";
+import { PrepareFile } from "../../../../../../upload/resources/common/types/PrepareFile";
+import { BuildKind } from "./BuildKind";
+import { BuildCompression } from "./BuildCompression";
 
 export const CreateGameBuildRequest: core.serialization.ObjectSchema<
     serializers.cloud.games.CreateGameBuildRequest.Raw,
     Rivet.cloud.games.CreateGameBuildRequest
 > = core.serialization.object({
-    displayName: core.serialization.property("display_name", common$$displayName),
+    displayName: core.serialization.property("display_name", DisplayName),
     imageTag: core.serialization.property("image_tag", core.serialization.string()),
-    imageFile: core.serialization.property("image_file", upload_common$$prepareFile),
+    imageFile: core.serialization.property("image_file", PrepareFile),
     multipartUpload: core.serialization.property("multipart_upload", core.serialization.boolean().optional()),
-    kind: cloud_games_builds$$buildKind.optional(),
-    compression: cloud_games_builds$$buildCompression.optional(),
+    kind: BuildKind.optional(),
+    compression: BuildCompression.optional(),
 });
 
 export declare namespace CreateGameBuildRequest {
     interface Raw {
-        display_name: common.DisplayName.Raw;
+        display_name: DisplayName.Raw;
         image_tag: string;
-        image_file: upload.PrepareFile.Raw;
+        image_file: PrepareFile.Raw;
         multipart_upload?: boolean | null;
-        kind?: cloud.games.BuildKind.Raw | null;
-        compression?: cloud.games.BuildCompression.Raw | null;
+        kind?: BuildKind.Raw | null;
+        compression?: BuildCompression.Raw | null;
     }
 }

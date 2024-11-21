@@ -4,13 +4,13 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { upload } from "../../../../../../index";
+import { PresignedRequest } from "../../../../../../upload/resources/common/types/PresignedRequest";
 export declare const CreateGameBuildResponse: core.serialization.ObjectSchema<serializers.cloud.games.CreateGameBuildResponse.Raw, Rivet.cloud.games.CreateGameBuildResponse>;
 export declare namespace CreateGameBuildResponse {
     interface Raw {
         build_id: string;
         upload_id: string;
-        image_presigned_request?: upload.PresignedRequest.Raw | null;
-        image_presigned_requests?: upload.PresignedRequest.Raw[] | null;
+        image_presigned_request?: PresignedRequest.Raw | null;
+        image_presigned_requests?: PresignedRequest.Raw[] | null;
     }
 }

@@ -4,10 +4,10 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { group } from "../../index";
+import { Summary } from "../resources/common/types/Summary";
 export declare const GetSummaryResponse: core.serialization.ObjectSchema<serializers.group.GetSummaryResponse.Raw, Rivet.group.GetSummaryResponse>;
 export declare namespace GetSummaryResponse {
     interface Raw {
-        group: group.Summary.Raw;
+        group: Summary.Raw;
     }
 }

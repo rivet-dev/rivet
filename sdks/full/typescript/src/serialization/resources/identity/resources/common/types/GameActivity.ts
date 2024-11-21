@@ -5,14 +5,13 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Handle as game_common$$handle } from "../../../../game/resources/common/types/Handle";
-import { game } from "../../../../index";
+import { Handle } from "../../../../game/resources/common/types/Handle";
 
 export const GameActivity: core.serialization.ObjectSchema<
     serializers.identity.GameActivity.Raw,
     Rivet.identity.GameActivity
 > = core.serialization.object({
-    game: game_common$$handle,
+    game: Handle,
     message: core.serialization.string(),
     publicMetadata: core.serialization.property("public_metadata", core.serialization.unknown().optional()),
     mutualMetadata: core.serialization.property("mutual_metadata", core.serialization.unknown().optional()),
@@ -20,7 +19,7 @@ export const GameActivity: core.serialization.ObjectSchema<
 
 export declare namespace GameActivity {
     interface Raw {
-        game: game.Handle.Raw;
+        game: Handle.Raw;
         message: string;
         public_metadata?: unknown | null;
         mutual_metadata?: unknown | null;

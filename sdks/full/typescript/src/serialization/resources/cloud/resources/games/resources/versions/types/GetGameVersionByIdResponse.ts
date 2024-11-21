@@ -5,18 +5,17 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { Full as cloud_version$$full } from "../../../../version/types/Full";
-import { cloud } from "../../../../../../index";
+import { Full } from "../../../../version/types/Full";
 
 export const GetGameVersionByIdResponse: core.serialization.ObjectSchema<
     serializers.cloud.games.GetGameVersionByIdResponse.Raw,
     Rivet.cloud.games.GetGameVersionByIdResponse
 > = core.serialization.object({
-    version: cloud_version$$full,
+    version: Full,
 });
 
 export declare namespace GetGameVersionByIdResponse {
     interface Raw {
-        version: cloud.version.Full.Raw;
+        version: Full.Raw;
     }
 }

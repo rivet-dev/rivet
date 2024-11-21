@@ -4,11 +4,11 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { upload } from "../../../../index";
+import { PresignedRequest } from "../../../../upload/resources/common/types/PresignedRequest";
 export declare const GameBannerUploadPrepareResponse: core.serialization.ObjectSchema<serializers.cloud.games.GameBannerUploadPrepareResponse.Raw, Rivet.cloud.games.GameBannerUploadPrepareResponse>;
 export declare namespace GameBannerUploadPrepareResponse {
     interface Raw {
         upload_id: string;
-        presigned_request: upload.PresignedRequest.Raw;
+        presigned_request: PresignedRequest.Raw;
     }
 }

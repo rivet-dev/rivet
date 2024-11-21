@@ -5,29 +5,25 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { CdnNamespaceDomain as cloud_common$$cdnNamespaceDomain } from "./CdnNamespaceDomain";
-import { CdnAuthType as cloud_common$$cdnAuthType } from "./CdnAuthType";
-import { CdnNamespaceAuthUser as cloud_common$$cdnNamespaceAuthUser } from "./CdnNamespaceAuthUser";
-import { cloud } from "../../../../index";
+import { CdnNamespaceDomain } from "./CdnNamespaceDomain";
+import { CdnAuthType } from "./CdnAuthType";
+import { CdnNamespaceAuthUser } from "./CdnNamespaceAuthUser";
 
 export const CdnNamespaceConfig: core.serialization.ObjectSchema<
     serializers.cloud.CdnNamespaceConfig.Raw,
     Rivet.cloud.CdnNamespaceConfig
 > = core.serialization.object({
     enableDomainPublicAuth: core.serialization.property("enable_domain_public_auth", core.serialization.boolean()),
-    domains: core.serialization.list(cloud_common$$cdnNamespaceDomain),
-    authType: core.serialization.property("auth_type", cloud_common$$cdnAuthType),
-    authUserList: core.serialization.property(
-        "auth_user_list",
-        core.serialization.list(cloud_common$$cdnNamespaceAuthUser)
-    ),
+    domains: core.serialization.list(CdnNamespaceDomain),
+    authType: core.serialization.property("auth_type", CdnAuthType),
+    authUserList: core.serialization.property("auth_user_list", core.serialization.list(CdnNamespaceAuthUser)),
 });
 
 export declare namespace CdnNamespaceConfig {
     interface Raw {
         enable_domain_public_auth: boolean;
-        domains: cloud.CdnNamespaceDomain.Raw[];
-        auth_type: cloud.CdnAuthType.Raw;
-        auth_user_list: cloud.CdnNamespaceAuthUser.Raw[];
+        domains: CdnNamespaceDomain.Raw[];
+        auth_type: CdnAuthType.Raw;
+        auth_user_list: CdnNamespaceAuthUser.Raw[];
     }
 }

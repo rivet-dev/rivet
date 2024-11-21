@@ -4,14 +4,18 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { cloud } from "../../../../../../index";
+import { UnityConfig } from "../resources/unity/types/UnityConfig";
+import { UnrealConfig } from "../resources/unreal/types/UnrealConfig";
+import { GodotConfig } from "../resources/godot/types/GodotConfig";
+import { Html5Config } from "../resources/html5/types/Html5Config";
+import { CustomConfig } from "../resources/custom/types/CustomConfig";
 export declare const Config: core.serialization.ObjectSchema<serializers.cloud.version.engine.Config.Raw, Rivet.cloud.version.engine.Config>;
 export declare namespace Config {
     interface Raw {
-        unity?: cloud.version.engine.UnityConfig.Raw | null;
-        unreal?: cloud.version.engine.UnrealConfig.Raw | null;
-        godot?: cloud.version.engine.GodotConfig.Raw | null;
-        html5?: cloud.version.engine.Html5Config.Raw | null;
-        custom?: cloud.version.engine.CustomConfig.Raw | null;
+        unity?: UnityConfig.Raw | null;
+        unreal?: UnrealConfig.Raw | null;
+        godot?: GodotConfig.Raw | null;
+        html5?: Html5Config.Raw | null;
+        custom?: CustomConfig.Raw | null;
     }
 }

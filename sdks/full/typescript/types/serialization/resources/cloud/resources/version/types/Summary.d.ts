@@ -4,12 +4,13 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { common } from "../../../../index";
+import { Timestamp } from "../../../../common/types/Timestamp";
+import { DisplayName } from "../../../../common/types/DisplayName";
 export declare const Summary: core.serialization.ObjectSchema<serializers.cloud.version.Summary.Raw, Rivet.cloud.version.Summary>;
 export declare namespace Summary {
     interface Raw {
         version_id: string;
-        create_ts: common.Timestamp.Raw;
-        display_name: common.DisplayName.Raw;
+        create_ts: Timestamp.Raw;
+        display_name: DisplayName.Raw;
     }
 }

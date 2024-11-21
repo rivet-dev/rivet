@@ -46,7 +46,7 @@ export class Logs {
      *
      * @example
      *     await client.cloud.games.namespaces.logs.listNamespaceLobbies("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         beforeCreateTs: new Date("2024-01-15T09:30:00.000Z")
+     *         beforeCreateTs: "2024-01-15T09:30:00Z"
      *     })
      */
     public async listNamespaceLobbies(
@@ -69,6 +69,9 @@ export class Logs {
             method: "GET",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
             queryParameters: _queryParams,
@@ -206,6 +209,9 @@ export class Logs {
             method: "GET",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
             requestType: "json",

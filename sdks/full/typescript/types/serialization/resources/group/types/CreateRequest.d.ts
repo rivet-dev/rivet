@@ -4,10 +4,10 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { common } from "../../index";
+import { DisplayName } from "../../common/types/DisplayName";
 export declare const CreateRequest: core.serialization.ObjectSchema<serializers.group.CreateRequest.Raw, Rivet.group.CreateRequest>;
 export declare namespace CreateRequest {
     interface Raw {
-        display_name: common.DisplayName.Raw;
+        display_name: DisplayName.Raw;
     }
 }

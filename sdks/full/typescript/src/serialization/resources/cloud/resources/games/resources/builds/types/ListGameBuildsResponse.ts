@@ -5,18 +5,17 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { BuildSummary as cloud_common$$buildSummary } from "../../../../common/types/BuildSummary";
-import { cloud } from "../../../../../../index";
+import { BuildSummary } from "../../../../common/types/BuildSummary";
 
 export const ListGameBuildsResponse: core.serialization.ObjectSchema<
     serializers.cloud.games.ListGameBuildsResponse.Raw,
     Rivet.cloud.games.ListGameBuildsResponse
 > = core.serialization.object({
-    builds: core.serialization.list(cloud_common$$buildSummary),
+    builds: core.serialization.list(BuildSummary),
 });
 
 export declare namespace ListGameBuildsResponse {
     interface Raw {
-        builds: cloud.BuildSummary.Raw[];
+        builds: BuildSummary.Raw[];
     }
 }

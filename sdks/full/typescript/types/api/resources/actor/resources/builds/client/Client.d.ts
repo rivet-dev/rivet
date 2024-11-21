@@ -115,8 +115,8 @@ export declare class Builds {
      *                 contentLength: 1000000
      *             },
      *             multipartUpload: true,
-     *             kind: Rivet.actor.BuildKind.DockerImage,
-     *             compression: Rivet.actor.BuildCompression.None,
+     *             kind: "docker_image",
+     *             compression: "none",
      *             prewarmRegions: ["string"]
      *         }
      *     })

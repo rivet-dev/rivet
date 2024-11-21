@@ -5,23 +5,19 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { GameModeIdleLobbiesConfig as cloud_version_matchmaker_game_mode$$gameModeIdleLobbiesConfig } from "./GameModeIdleLobbiesConfig";
-import { cloud } from "../../../../../../../../index";
+import { GameModeIdleLobbiesConfig } from "./GameModeIdleLobbiesConfig";
 
 export const GameModeRegion: core.serialization.ObjectSchema<
     serializers.cloud.version.matchmaker.GameModeRegion.Raw,
     Rivet.cloud.version.matchmaker.GameModeRegion
 > = core.serialization.object({
     tier: core.serialization.string().optional(),
-    idleLobbies: core.serialization.property(
-        "idle_lobbies",
-        cloud_version_matchmaker_game_mode$$gameModeIdleLobbiesConfig.optional()
-    ),
+    idleLobbies: core.serialization.property("idle_lobbies", GameModeIdleLobbiesConfig.optional()),
 });
 
 export declare namespace GameModeRegion {
     interface Raw {
         tier?: string | null;
-        idle_lobbies?: cloud.version.matchmaker.GameModeIdleLobbiesConfig.Raw | null;
+        idle_lobbies?: GameModeIdleLobbiesConfig.Raw | null;
     }
 }

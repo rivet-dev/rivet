@@ -25,50 +25,56 @@ All URIs are relative to *https://api.rivet.gg*
 
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
-*MatchmakerLobbiesApi* | [**matchmaker_lobbies_create**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_create) | **POST** /matchmaker/lobbies/create | 
-*MatchmakerLobbiesApi* | [**matchmaker_lobbies_find**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_find) | **POST** /matchmaker/lobbies/find | 
-*MatchmakerLobbiesApi* | [**matchmaker_lobbies_get_state**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_get_state) | **GET** /matchmaker/lobbies/{lobby_id}/state | 
-*MatchmakerLobbiesApi* | [**matchmaker_lobbies_join**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_join) | **POST** /matchmaker/lobbies/join | 
-*MatchmakerLobbiesApi* | [**matchmaker_lobbies_list**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_list) | **GET** /matchmaker/lobbies/list | 
-*MatchmakerLobbiesApi* | [**matchmaker_lobbies_ready**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_ready) | **POST** /matchmaker/lobbies/ready | 
-*MatchmakerLobbiesApi* | [**matchmaker_lobbies_set_closed**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_set_closed) | **PUT** /matchmaker/lobbies/closed | 
-*MatchmakerLobbiesApi* | [**matchmaker_lobbies_set_state**](docs/MatchmakerLobbiesApi.md#matchmaker_lobbies_set_state) | **PUT** /matchmaker/lobbies/state | 
-*MatchmakerPlayersApi* | [**matchmaker_players_connected**](docs/MatchmakerPlayersApi.md#matchmaker_players_connected) | **POST** /matchmaker/players/connected | 
-*MatchmakerPlayersApi* | [**matchmaker_players_disconnected**](docs/MatchmakerPlayersApi.md#matchmaker_players_disconnected) | **POST** /matchmaker/players/disconnected | 
-*MatchmakerPlayersApi* | [**matchmaker_players_get_statistics**](docs/MatchmakerPlayersApi.md#matchmaker_players_get_statistics) | **GET** /matchmaker/players/statistics | 
-*MatchmakerRegionsApi* | [**matchmaker_regions_list**](docs/MatchmakerRegionsApi.md#matchmaker_regions_list) | **GET** /matchmaker/regions | 
+*ActorApi* | [**actor_create**](docs/ActorApi.md#actor_create) | **POST** /actors | 
+*ActorApi* | [**actor_destroy**](docs/ActorApi.md#actor_destroy) | **DELETE** /actors/{actor} | 
+*ActorApi* | [**actor_get**](docs/ActorApi.md#actor_get) | **GET** /actors/{actor} | 
+*ActorApi* | [**actor_list**](docs/ActorApi.md#actor_list) | **GET** /actors | 
+*ActorBuildsApi* | [**actor_builds_complete**](docs/ActorBuildsApi.md#actor_builds_complete) | **POST** /builds/{build}/complete | 
+*ActorBuildsApi* | [**actor_builds_get**](docs/ActorBuildsApi.md#actor_builds_get) | **GET** /builds/{build} | 
+*ActorBuildsApi* | [**actor_builds_list**](docs/ActorBuildsApi.md#actor_builds_list) | **GET** /builds | 
+*ActorBuildsApi* | [**actor_builds_patch_tags**](docs/ActorBuildsApi.md#actor_builds_patch_tags) | **PATCH** /builds/{build}/tags | 
+*ActorBuildsApi* | [**actor_builds_prepare**](docs/ActorBuildsApi.md#actor_builds_prepare) | **POST** /builds/prepare | 
+*ActorLogsApi* | [**actor_logs_get**](docs/ActorLogsApi.md#actor_logs_get) | **GET** /actors/{actor}/logs | 
+*ActorRegionsApi* | [**actor_regions_list**](docs/ActorRegionsApi.md#actor_regions_list) | **GET** /regions | 
 
 
 ## Documentation For Models
 
- - [CaptchaConfig](docs/CaptchaConfig.md)
- - [CaptchaConfigHcaptcha](docs/CaptchaConfigHcaptcha.md)
- - [CaptchaConfigTurnstile](docs/CaptchaConfigTurnstile.md)
+ - [ActorActor](docs/ActorActor.md)
+ - [ActorBuild](docs/ActorBuild.md)
+ - [ActorBuildCompression](docs/ActorBuildCompression.md)
+ - [ActorBuildKind](docs/ActorBuildKind.md)
+ - [ActorCreateActorNetworkRequest](docs/ActorCreateActorNetworkRequest.md)
+ - [ActorCreateActorPortRequest](docs/ActorCreateActorPortRequest.md)
+ - [ActorCreateActorRequest](docs/ActorCreateActorRequest.md)
+ - [ActorCreateActorResponse](docs/ActorCreateActorResponse.md)
+ - [ActorCreateActorRuntimeRequest](docs/ActorCreateActorRuntimeRequest.md)
+ - [ActorGetActorLogsResponse](docs/ActorGetActorLogsResponse.md)
+ - [ActorGetActorResponse](docs/ActorGetActorResponse.md)
+ - [ActorGetBuildResponse](docs/ActorGetBuildResponse.md)
+ - [ActorGuardRouting](docs/ActorGuardRouting.md)
+ - [ActorLifecycle](docs/ActorLifecycle.md)
+ - [ActorListActorsResponse](docs/ActorListActorsResponse.md)
+ - [ActorListBuildsResponse](docs/ActorListBuildsResponse.md)
+ - [ActorListRegionsResponse](docs/ActorListRegionsResponse.md)
+ - [ActorLogStream](docs/ActorLogStream.md)
+ - [ActorNetwork](docs/ActorNetwork.md)
+ - [ActorNetworkMode](docs/ActorNetworkMode.md)
+ - [ActorPatchBuildTagsRequest](docs/ActorPatchBuildTagsRequest.md)
+ - [ActorPort](docs/ActorPort.md)
+ - [ActorPortAuthorization](docs/ActorPortAuthorization.md)
+ - [ActorPortProtocol](docs/ActorPortProtocol.md)
+ - [ActorPortQueryAuthorization](docs/ActorPortQueryAuthorization.md)
+ - [ActorPortRouting](docs/ActorPortRouting.md)
+ - [ActorPrepareBuildRequest](docs/ActorPrepareBuildRequest.md)
+ - [ActorPrepareBuildResponse](docs/ActorPrepareBuildResponse.md)
+ - [ActorRegion](docs/ActorRegion.md)
+ - [ActorResources](docs/ActorResources.md)
+ - [ActorRuntime](docs/ActorRuntime.md)
  - [ErrorBody](docs/ErrorBody.md)
- - [GeoCoord](docs/GeoCoord.md)
- - [GeoDistance](docs/GeoDistance.md)
- - [MatchmakerCreateLobbyResponse](docs/MatchmakerCreateLobbyResponse.md)
- - [MatchmakerCustomLobbyPublicity](docs/MatchmakerCustomLobbyPublicity.md)
- - [MatchmakerFindLobbyResponse](docs/MatchmakerFindLobbyResponse.md)
- - [MatchmakerGameModeInfo](docs/MatchmakerGameModeInfo.md)
- - [MatchmakerGameModeStatistics](docs/MatchmakerGameModeStatistics.md)
- - [MatchmakerGetStatisticsResponse](docs/MatchmakerGetStatisticsResponse.md)
- - [MatchmakerJoinLobby](docs/MatchmakerJoinLobby.md)
- - [MatchmakerJoinLobbyResponse](docs/MatchmakerJoinLobbyResponse.md)
- - [MatchmakerJoinPlayer](docs/MatchmakerJoinPlayer.md)
- - [MatchmakerJoinPort](docs/MatchmakerJoinPort.md)
- - [MatchmakerJoinPortRange](docs/MatchmakerJoinPortRange.md)
- - [MatchmakerJoinRegion](docs/MatchmakerJoinRegion.md)
- - [MatchmakerListLobbiesResponse](docs/MatchmakerListLobbiesResponse.md)
- - [MatchmakerListRegionsResponse](docs/MatchmakerListRegionsResponse.md)
- - [MatchmakerLobbiesCreateRequest](docs/MatchmakerLobbiesCreateRequest.md)
- - [MatchmakerLobbiesFindRequest](docs/MatchmakerLobbiesFindRequest.md)
- - [MatchmakerLobbiesJoinRequest](docs/MatchmakerLobbiesJoinRequest.md)
- - [MatchmakerLobbiesSetClosedRequest](docs/MatchmakerLobbiesSetClosedRequest.md)
- - [MatchmakerLobbyInfo](docs/MatchmakerLobbyInfo.md)
- - [MatchmakerPlayersConnectedRequest](docs/MatchmakerPlayersConnectedRequest.md)
- - [MatchmakerRegionInfo](docs/MatchmakerRegionInfo.md)
- - [MatchmakerRegionStatistics](docs/MatchmakerRegionStatistics.md)
+ - [UploadPrepareFile](docs/UploadPrepareFile.md)
+ - [UploadPresignedRequest](docs/UploadPresignedRequest.md)
+ - [WatchResponse](docs/WatchResponse.md)
 
 
 To get access to the crate's generated documentation, use:

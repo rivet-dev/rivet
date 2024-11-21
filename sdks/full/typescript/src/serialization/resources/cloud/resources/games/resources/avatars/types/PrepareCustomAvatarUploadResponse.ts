@@ -5,20 +5,19 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { PresignedRequest as upload_common$$presignedRequest } from "../../../../../../upload/resources/common/types/PresignedRequest";
-import { upload } from "../../../../../../index";
+import { PresignedRequest } from "../../../../../../upload/resources/common/types/PresignedRequest";
 
 export const PrepareCustomAvatarUploadResponse: core.serialization.ObjectSchema<
     serializers.cloud.games.PrepareCustomAvatarUploadResponse.Raw,
     Rivet.cloud.games.PrepareCustomAvatarUploadResponse
 > = core.serialization.object({
     uploadId: core.serialization.property("upload_id", core.serialization.string()),
-    presignedRequest: core.serialization.property("presigned_request", upload_common$$presignedRequest),
+    presignedRequest: core.serialization.property("presigned_request", PresignedRequest),
 });
 
 export declare namespace PrepareCustomAvatarUploadResponse {
     interface Raw {
         upload_id: string;
-        presigned_request: upload.PresignedRequest.Raw;
+        presigned_request: PresignedRequest.Raw;
     }
 }

@@ -4,7 +4,8 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { common, cloud } from "../../../../index";
+import { Timestamp } from "../../../../common/types/Timestamp";
+import { LogsLobbyStatus } from "./LogsLobbyStatus";
 export declare const LogsLobbySummary: core.serialization.ObjectSchema<serializers.cloud.LogsLobbySummary.Raw, Rivet.cloud.LogsLobbySummary>;
 export declare namespace LogsLobbySummary {
     interface Raw {
@@ -12,9 +13,9 @@ export declare namespace LogsLobbySummary {
         namespace_id: string;
         lobby_group_name_id: string;
         region_id: string;
-        create_ts: common.Timestamp.Raw;
-        start_ts?: common.Timestamp.Raw | null;
-        ready_ts?: common.Timestamp.Raw | null;
-        status: cloud.LogsLobbyStatus.Raw;
+        create_ts: Timestamp.Raw;
+        start_ts?: Timestamp.Raw | null;
+        ready_ts?: Timestamp.Raw | null;
+        status: LogsLobbyStatus.Raw;
     }
 }

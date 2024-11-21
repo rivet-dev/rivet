@@ -4,20 +4,23 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { cloud } from "../../../../../../../../index";
+import { GameModeRegion } from "./GameModeRegion";
+import { GameModeRuntimeDocker } from "./GameModeRuntimeDocker";
+import { GameModeActions } from "./GameModeActions";
+import { GameModeIdleLobbiesConfig } from "./GameModeIdleLobbiesConfig";
 export declare const GameMode: core.serialization.ObjectSchema<serializers.cloud.version.matchmaker.GameMode.Raw, Rivet.cloud.version.matchmaker.GameMode>;
 export declare namespace GameMode {
     interface Raw {
-        regions?: Record<string, cloud.version.matchmaker.GameModeRegion.Raw> | null;
+        regions?: Record<string, GameModeRegion.Raw> | null;
         max_players?: number | null;
         max_players_direct?: number | null;
         max_players_party?: number | null;
-        docker?: cloud.version.matchmaker.GameModeRuntimeDocker.Raw | null;
+        docker?: GameModeRuntimeDocker.Raw | null;
         listable?: boolean | null;
         taggable?: boolean | null;
         allow_dynamic_max_players?: boolean | null;
-        actions?: cloud.version.matchmaker.GameModeActions.Raw | null;
+        actions?: GameModeActions.Raw | null;
         tier?: string | null;
-        idle_lobbies?: cloud.version.matchmaker.GameModeIdleLobbiesConfig.Raw | null;
+        idle_lobbies?: GameModeIdleLobbiesConfig.Raw | null;
     }
 }

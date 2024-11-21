@@ -5,18 +5,17 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { LogsLobbySummary as cloud_common$$logsLobbySummary } from "../../../../../../common/types/LogsLobbySummary";
-import { cloud } from "../../../../../../../../index";
+import { LogsLobbySummary } from "../../../../../../common/types/LogsLobbySummary";
 
 export const ListNamespaceLobbiesResponse: core.serialization.ObjectSchema<
     serializers.cloud.games.namespaces.ListNamespaceLobbiesResponse.Raw,
     Rivet.cloud.games.namespaces.ListNamespaceLobbiesResponse
 > = core.serialization.object({
-    lobbies: core.serialization.list(cloud_common$$logsLobbySummary),
+    lobbies: core.serialization.list(LogsLobbySummary),
 });
 
 export declare namespace ListNamespaceLobbiesResponse {
     interface Raw {
-        lobbies: cloud.LogsLobbySummary.Raw[];
+        lobbies: LogsLobbySummary.Raw[];
     }
 }

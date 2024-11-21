@@ -4,10 +4,10 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { cloud } from "../../../../index";
+import { RegionTier } from "../../common/types/RegionTier";
 export declare const GetRegionTiersResponse: core.serialization.ObjectSchema<serializers.cloud.GetRegionTiersResponse.Raw, Rivet.cloud.GetRegionTiersResponse>;
 export declare namespace GetRegionTiersResponse {
     interface Raw {
-        tiers: cloud.RegionTier.Raw[];
+        tiers: RegionTier.Raw[];
     }
 }

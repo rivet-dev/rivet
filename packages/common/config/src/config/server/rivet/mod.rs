@@ -73,7 +73,7 @@ pub struct Rivet {
 	pub pegboard: Pegboard,
 
 	#[serde(default)]
-	pub game_guard: GameGuard,
+	pub guard: Guard,
 
 	#[serde(default)]
 	pub auth: Auth,
@@ -132,7 +132,7 @@ impl Default for Rivet {
 			tunnel: Default::default(),
 			ui: Default::default(),
 			pegboard: Pegboard::default(),
-			game_guard: GameGuard::default(),
+			guard: Guard::default(),
 			job_run: None,
 			auth: Auth::default(),
 			token: Tokens::default(),
@@ -465,18 +465,18 @@ impl Pegboard {
 	}
 }
 
-/// The port ranges define what ports Game Guard will allocate ports on. If using cluster
+/// The port ranges define what ports Guard will allocate ports on. If using cluster
 /// provisioning, these are also used for firewall rules.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct GameGuard {
+pub struct Guard {
 	pub min_ingress_port_tcp: Option<u16>,
 	pub max_ingress_port_tcp: Option<u16>,
 	pub min_ingress_port_udp: Option<u16>,
 	pub max_ingress_port_udp: Option<u16>,
 }
 
-impl GameGuard {
+impl Guard {
 	pub fn min_ingress_port_tcp(&self) -> u16 {
 		self.min_ingress_port_tcp.unwrap_or(20000)
 	}

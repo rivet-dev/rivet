@@ -5,35 +5,31 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { DisplayName as common$$displayName } from "../../../../common/types/DisplayName";
-import { Summary as group_common$$summary } from "../../../../group/resources/common/types/Summary";
-import { PlatformLink as game_common$$platformLink } from "./PlatformLink";
-import { LeaderboardCategory as game_common$$leaderboardCategory } from "./LeaderboardCategory";
-import { common, group, game } from "../../../../index";
+import { DisplayName } from "../../../../common/types/DisplayName";
+import { Summary } from "../../../../group/resources/common/types/Summary";
+import { PlatformLink } from "./PlatformLink";
+import { LeaderboardCategory } from "./LeaderboardCategory";
 
 export const Profile: core.serialization.ObjectSchema<serializers.game.Profile.Raw, Rivet.game.Profile> =
     core.serialization.object({
         gameId: core.serialization.property("game_id", core.serialization.string()),
         nameId: core.serialization.property("name_id", core.serialization.string()),
-        displayName: core.serialization.property("display_name", common$$displayName),
+        displayName: core.serialization.property("display_name", DisplayName),
         logoUrl: core.serialization.property("logo_url", core.serialization.string().optional()),
         bannerUrl: core.serialization.property("banner_url", core.serialization.string().optional()),
         url: core.serialization.string(),
-        developer: group_common$$summary,
+        developer: Summary,
         tags: core.serialization.list(core.serialization.string()),
         description: core.serialization.string(),
-        platforms: core.serialization.list(game_common$$platformLink),
-        recommendedGroups: core.serialization.property(
-            "recommended_groups",
-            core.serialization.list(group_common$$summary)
-        ),
+        platforms: core.serialization.list(PlatformLink),
+        recommendedGroups: core.serialization.property("recommended_groups", core.serialization.list(Summary)),
         identityLeaderboardCategories: core.serialization.property(
             "identity_leaderboard_categories",
-            core.serialization.list(game_common$$leaderboardCategory)
+            core.serialization.list(LeaderboardCategory)
         ),
         groupLeaderboardCategories: core.serialization.property(
             "group_leaderboard_categories",
-            core.serialization.list(game_common$$leaderboardCategory)
+            core.serialization.list(LeaderboardCategory)
         ),
     });
 
@@ -41,16 +37,16 @@ export declare namespace Profile {
     interface Raw {
         game_id: string;
         name_id: string;
-        display_name: common.DisplayName.Raw;
+        display_name: DisplayName.Raw;
         logo_url?: string | null;
         banner_url?: string | null;
         url: string;
-        developer: group.Summary.Raw;
+        developer: Summary.Raw;
         tags: string[];
         description: string;
-        platforms: game.PlatformLink.Raw[];
-        recommended_groups: group.Summary.Raw[];
-        identity_leaderboard_categories: game.LeaderboardCategory.Raw[];
-        group_leaderboard_categories: game.LeaderboardCategory.Raw[];
+        platforms: PlatformLink.Raw[];
+        recommended_groups: Summary.Raw[];
+        identity_leaderboard_categories: LeaderboardCategory.Raw[];
+        group_leaderboard_categories: LeaderboardCategory.Raw[];
     }
 }

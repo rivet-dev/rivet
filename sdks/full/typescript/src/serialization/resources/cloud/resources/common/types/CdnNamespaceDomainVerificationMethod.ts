@@ -5,21 +5,20 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { EmptyObject as common$$emptyObject } from "../../../../common/types/EmptyObject";
-import { CdnNamespaceDomainVerificationMethodHttp as cloud_common$$cdnNamespaceDomainVerificationMethodHttp } from "./CdnNamespaceDomainVerificationMethodHttp";
-import { common, cloud } from "../../../../index";
+import { EmptyObject } from "../../../../common/types/EmptyObject";
+import { CdnNamespaceDomainVerificationMethodHttp } from "./CdnNamespaceDomainVerificationMethodHttp";
 
 export const CdnNamespaceDomainVerificationMethod: core.serialization.ObjectSchema<
     serializers.cloud.CdnNamespaceDomainVerificationMethod.Raw,
     Rivet.cloud.CdnNamespaceDomainVerificationMethod
 > = core.serialization.object({
-    invalid: common$$emptyObject.optional(),
-    http: cloud_common$$cdnNamespaceDomainVerificationMethodHttp.optional(),
+    invalid: EmptyObject.optional(),
+    http: CdnNamespaceDomainVerificationMethodHttp.optional(),
 });
 
 export declare namespace CdnNamespaceDomainVerificationMethod {
     interface Raw {
-        invalid?: common.EmptyObject.Raw | null;
-        http?: cloud.CdnNamespaceDomainVerificationMethodHttp.Raw | null;
+        invalid?: EmptyObject.Raw | null;
+        http?: CdnNamespaceDomainVerificationMethodHttp.Raw | null;
     }
 }

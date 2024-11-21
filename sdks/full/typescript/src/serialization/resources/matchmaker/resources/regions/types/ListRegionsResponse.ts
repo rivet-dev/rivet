@@ -5,18 +5,17 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { RegionInfo as matchmaker_common$$regionInfo } from "../../common/types/RegionInfo";
-import { matchmaker } from "../../../../index";
+import { RegionInfo } from "../../common/types/RegionInfo";
 
 export const ListRegionsResponse: core.serialization.ObjectSchema<
     serializers.matchmaker.ListRegionsResponse.Raw,
     Rivet.matchmaker.ListRegionsResponse
 > = core.serialization.object({
-    regions: core.serialization.list(matchmaker_common$$regionInfo),
+    regions: core.serialization.list(RegionInfo),
 });
 
 export declare namespace ListRegionsResponse {
     interface Raw {
-        regions: matchmaker.RegionInfo.Raw[];
+        regions: RegionInfo.Raw[];
     }
 }

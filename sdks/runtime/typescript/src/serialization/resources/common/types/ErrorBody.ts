@@ -5,8 +5,7 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { ErrorMetadata as common$$errorMetadata } from "./ErrorMetadata";
-import { common } from "../../index";
+import { ErrorMetadata } from "./ErrorMetadata";
 
 export const ErrorBody: core.serialization.ObjectSchema<serializers.ErrorBody.Raw, Rivet.ErrorBody> =
     core.serialization.object({
@@ -14,7 +13,7 @@ export const ErrorBody: core.serialization.ObjectSchema<serializers.ErrorBody.Ra
         message: core.serialization.string(),
         rayId: core.serialization.property("ray_id", core.serialization.string()),
         documentation: core.serialization.string().optional(),
-        metadata: common$$errorMetadata.optional(),
+        metadata: ErrorMetadata.optional(),
     });
 
 export declare namespace ErrorBody {
@@ -23,6 +22,6 @@ export declare namespace ErrorBody {
         message: string;
         ray_id: string;
         documentation?: string | null;
-        metadata?: (common.ErrorMetadata.Raw | undefined) | null;
+        metadata?: (ErrorMetadata.Raw | undefined) | null;
     }
 }

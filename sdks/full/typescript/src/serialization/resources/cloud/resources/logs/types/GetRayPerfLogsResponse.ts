@@ -5,18 +5,17 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { SvcPerf as cloud_common$$svcPerf } from "../../common/types/SvcPerf";
-import { cloud } from "../../../../index";
+import { SvcPerf } from "../../common/types/SvcPerf";
 
 export const GetRayPerfLogsResponse: core.serialization.ObjectSchema<
     serializers.cloud.GetRayPerfLogsResponse.Raw,
     Rivet.cloud.GetRayPerfLogsResponse
 > = core.serialization.object({
-    perfLists: core.serialization.property("perf_lists", core.serialization.list(cloud_common$$svcPerf)),
+    perfLists: core.serialization.property("perf_lists", core.serialization.list(SvcPerf)),
 });
 
 export declare namespace GetRayPerfLogsResponse {
     interface Raw {
-        perf_lists: cloud.SvcPerf.Raw[];
+        perf_lists: SvcPerf.Raw[];
     }
 }

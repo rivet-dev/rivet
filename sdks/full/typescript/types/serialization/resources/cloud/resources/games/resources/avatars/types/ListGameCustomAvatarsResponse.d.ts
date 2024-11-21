@@ -4,10 +4,10 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { cloud } from "../../../../../../index";
+import { CustomAvatarSummary } from "../../../../common/types/CustomAvatarSummary";
 export declare const ListGameCustomAvatarsResponse: core.serialization.ObjectSchema<serializers.cloud.games.ListGameCustomAvatarsResponse.Raw, Rivet.cloud.games.ListGameCustomAvatarsResponse>;
 export declare namespace ListGameCustomAvatarsResponse {
     interface Raw {
-        custom_avatars: cloud.CustomAvatarSummary.Raw[];
+        custom_avatars: CustomAvatarSummary.Raw[];
     }
 }

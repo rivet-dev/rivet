@@ -4,10 +4,10 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { cloud } from "../../../../../../../../index";
+import { LobbySummaryAnalytics } from "../../../../../../common/types/LobbySummaryAnalytics";
 export declare const GetAnalyticsMatchmakerLiveResponse: core.serialization.ObjectSchema<serializers.cloud.games.namespaces.GetAnalyticsMatchmakerLiveResponse.Raw, Rivet.cloud.games.namespaces.GetAnalyticsMatchmakerLiveResponse>;
 export declare namespace GetAnalyticsMatchmakerLiveResponse {
     interface Raw {
-        lobbies: cloud.LobbySummaryAnalytics.Raw[];
+        lobbies: LobbySummaryAnalytics.Raw[];
     }
 }

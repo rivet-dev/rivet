@@ -5,23 +5,22 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Timestamp as common$$timestamp } from "../../../../common/types/Timestamp";
-import { DisplayName as common$$displayName } from "../../../../common/types/DisplayName";
-import { common } from "../../../../index";
+import { Timestamp } from "../../../../common/types/Timestamp";
+import { DisplayName } from "../../../../common/types/DisplayName";
 
 export const Summary: core.serialization.ObjectSchema<
     serializers.cloud.version.Summary.Raw,
     Rivet.cloud.version.Summary
 > = core.serialization.object({
     versionId: core.serialization.property("version_id", core.serialization.string()),
-    createTs: core.serialization.property("create_ts", common$$timestamp),
-    displayName: core.serialization.property("display_name", common$$displayName),
+    createTs: core.serialization.property("create_ts", Timestamp),
+    displayName: core.serialization.property("display_name", DisplayName),
 });
 
 export declare namespace Summary {
     interface Raw {
         version_id: string;
-        create_ts: common.Timestamp.Raw;
-        display_name: common.DisplayName.Raw;
+        create_ts: Timestamp.Raw;
+        display_name: DisplayName.Raw;
     }
 }

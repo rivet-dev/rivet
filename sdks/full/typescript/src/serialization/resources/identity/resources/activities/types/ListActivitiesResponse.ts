@@ -5,32 +5,28 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Handle as identity_common$$handle } from "../../common/types/Handle";
-import { Summary as game_common$$summary } from "../../../../game/resources/common/types/Summary";
-import { Summary as group_common$$summary } from "../../../../group/resources/common/types/Summary";
-import { WatchResponse as common$$watchResponse } from "../../../../common/types/WatchResponse";
-import { identity, game, group, common } from "../../../../index";
+import { Handle } from "../../common/types/Handle";
+import { Summary } from "../../../../game/resources/common/types/Summary";
+import { Summary } from "../../../../group/resources/common/types/Summary";
+import { WatchResponse } from "../../../../common/types/WatchResponse";
 
 export const ListActivitiesResponse: core.serialization.ObjectSchema<
     serializers.identity.ListActivitiesResponse.Raw,
     Rivet.identity.ListActivitiesResponse
 > = core.serialization.object({
-    identities: core.serialization.list(identity_common$$handle),
-    games: core.serialization.list(game_common$$summary),
-    suggestedGroups: core.serialization.property("suggested_groups", core.serialization.list(group_common$$summary)),
-    suggestedPlayers: core.serialization.property(
-        "suggested_players",
-        core.serialization.list(identity_common$$handle)
-    ),
-    watch: common$$watchResponse,
+    identities: core.serialization.list(Handle),
+    games: core.serialization.list(Summary),
+    suggestedGroups: core.serialization.property("suggested_groups", core.serialization.list(Summary)),
+    suggestedPlayers: core.serialization.property("suggested_players", core.serialization.list(Handle)),
+    watch: WatchResponse,
 });
 
 export declare namespace ListActivitiesResponse {
     interface Raw {
-        identities: identity.Handle.Raw[];
-        games: game.Summary.Raw[];
-        suggested_groups: group.Summary.Raw[];
-        suggested_players: identity.Handle.Raw[];
-        watch: common.WatchResponse.Raw;
+        identities: Handle.Raw[];
+        games: Summary.Raw[];
+        suggested_groups: Summary.Raw[];
+        suggested_players: Handle.Raw[];
+        watch: WatchResponse.Raw;
     }
 }

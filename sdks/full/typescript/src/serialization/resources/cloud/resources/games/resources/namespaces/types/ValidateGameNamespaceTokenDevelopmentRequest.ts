@@ -5,23 +5,19 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { LobbyGroupRuntimeDockerPort as cloud_version_matchmaker_lobby_group$$lobbyGroupRuntimeDockerPort } from "../../../../version/resources/matchmaker/resources/lobbyGroup/types/LobbyGroupRuntimeDockerPort";
-import { cloud } from "../../../../../../index";
+import { LobbyGroupRuntimeDockerPort } from "../../../../version/resources/matchmaker/resources/lobbyGroup/types/LobbyGroupRuntimeDockerPort";
 
 export const ValidateGameNamespaceTokenDevelopmentRequest: core.serialization.ObjectSchema<
     serializers.cloud.games.namespaces.ValidateGameNamespaceTokenDevelopmentRequest.Raw,
     Rivet.cloud.games.namespaces.ValidateGameNamespaceTokenDevelopmentRequest
 > = core.serialization.object({
     hostname: core.serialization.string(),
-    lobbyPorts: core.serialization.property(
-        "lobby_ports",
-        core.serialization.list(cloud_version_matchmaker_lobby_group$$lobbyGroupRuntimeDockerPort)
-    ),
+    lobbyPorts: core.serialization.property("lobby_ports", core.serialization.list(LobbyGroupRuntimeDockerPort)),
 });
 
 export declare namespace ValidateGameNamespaceTokenDevelopmentRequest {
     interface Raw {
         hostname: string;
-        lobby_ports: cloud.version.matchmaker.LobbyGroupRuntimeDockerPort.Raw[];
+        lobby_ports: LobbyGroupRuntimeDockerPort.Raw[];
     }
 }

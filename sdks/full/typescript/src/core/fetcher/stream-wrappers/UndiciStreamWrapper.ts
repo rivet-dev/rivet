@@ -78,7 +78,7 @@ export class UndiciStreamWrapper<ReadFormat extends Uint8Array | Uint16Array | U
         return this.pipe(dest);
     }
 
-    public unpipe(dest: UndiciStreamWrapper<ReadFormat> | WritableStream<any>): void {
+    public unpipe(dest: UndiciStreamWrapper<ReadFormat> | WritableStream): void {
         this.off("data", (chunk) => {
             if (dest instanceof UndiciStreamWrapper) {
                 dest._write(chunk);
@@ -160,8 +160,12 @@ export class UndiciStreamWrapper<ReadFormat extends Uint8Array | Uint16Array | U
 
         while (true) {
             const { done, value } = await this.reader.read();
-            if (done) break;
-            if (value) chunks.push(value);
+            if (done) {
+                break;
+            }
+            if (value) {
+                chunks.push(value);
+            }
         }
 
         const decoder = new TextDecoder(this.encoding || "utf-8");
@@ -215,5 +219,25 @@ export class UndiciStreamWrapper<ReadFormat extends Uint8Array | Uint16Array | U
         } catch (error) {
             this._emit("error", error);
         }
+    }
+
+    [Symbol.asyncIterator](): AsyncIterableIterator<ReadFormat> {
+        return {
+            next: async () => {
+                if (this.paused) {
+                    await new Promise((resolve) => {
+                        this.resumeCallback = resolve;
+                    });
+                }
+                const { done, value } = await this.reader.read();
+                if (done) {
+                    return { done: true, value: undefined };
+                }
+                return { done: false, value };
+            },
+            [Symbol.asyncIterator]() {
+                return this;
+            },
+        };
     }
 }

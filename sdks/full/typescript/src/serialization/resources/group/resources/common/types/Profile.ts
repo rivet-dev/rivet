@@ -5,29 +5,28 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { DisplayName as common$$displayName } from "../../../../common/types/DisplayName";
-import { ExternalLinks as group_common$$externalLinks } from "./ExternalLinks";
-import { Publicity as group_common$$publicity } from "./Publicity";
-import { Member as group_common$$member } from "./Member";
-import { JoinRequest as group_common$$joinRequest } from "./JoinRequest";
-import { common, group } from "../../../../index";
+import { DisplayName } from "../../../../common/types/DisplayName";
+import { ExternalLinks } from "./ExternalLinks";
+import { Publicity } from "./Publicity";
+import { Member } from "./Member";
+import { JoinRequest } from "./JoinRequest";
 
 export const Profile: core.serialization.ObjectSchema<serializers.group.Profile.Raw, Rivet.group.Profile> =
     core.serialization.object({
         groupId: core.serialization.property("group_id", core.serialization.string()),
-        displayName: core.serialization.property("display_name", common$$displayName),
+        displayName: core.serialization.property("display_name", DisplayName),
         avatarUrl: core.serialization.property("avatar_url", core.serialization.string().optional()),
-        external: group_common$$externalLinks,
+        external: ExternalLinks,
         isDeveloper: core.serialization.property("is_developer", core.serialization.boolean().optional()),
         bio: core.serialization.string(),
         isCurrentIdentityMember: core.serialization.property(
             "is_current_identity_member",
             core.serialization.boolean().optional()
         ),
-        publicity: group_common$$publicity,
+        publicity: Publicity,
         memberCount: core.serialization.property("member_count", core.serialization.number().optional()),
-        members: core.serialization.list(group_common$$member),
-        joinRequests: core.serialization.property("join_requests", core.serialization.list(group_common$$joinRequest)),
+        members: core.serialization.list(Member),
+        joinRequests: core.serialization.property("join_requests", core.serialization.list(JoinRequest)),
         isCurrentIdentityRequestingJoin: core.serialization.property(
             "is_current_identity_requesting_join",
             core.serialization.boolean().optional()
@@ -38,16 +37,16 @@ export const Profile: core.serialization.ObjectSchema<serializers.group.Profile.
 export declare namespace Profile {
     interface Raw {
         group_id: string;
-        display_name: common.DisplayName.Raw;
+        display_name: DisplayName.Raw;
         avatar_url?: string | null;
-        external: group.ExternalLinks.Raw;
+        external: ExternalLinks.Raw;
         is_developer?: boolean | null;
         bio: string;
         is_current_identity_member?: boolean | null;
-        publicity: group.Publicity.Raw;
+        publicity: Publicity.Raw;
         member_count?: number | null;
-        members: group.Member.Raw[];
-        join_requests: group.JoinRequest.Raw[];
+        members: Member.Raw[];
+        join_requests: JoinRequest.Raw[];
         is_current_identity_requesting_join?: boolean | null;
         owner_identity_id: string;
     }

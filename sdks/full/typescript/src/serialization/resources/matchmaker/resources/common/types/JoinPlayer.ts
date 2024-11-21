@@ -5,18 +5,17 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Jwt as common$$jwt } from "../../../../common/types/Jwt";
-import { common } from "../../../../index";
+import { Jwt } from "../../../../common/types/Jwt";
 
 export const JoinPlayer: core.serialization.ObjectSchema<
     serializers.matchmaker.JoinPlayer.Raw,
     Rivet.matchmaker.JoinPlayer
 > = core.serialization.object({
-    token: common$$jwt,
+    token: Jwt,
 });
 
 export declare namespace JoinPlayer {
     interface Raw {
-        token: common.Jwt.Raw;
+        token: Jwt.Raw;
     }
 }

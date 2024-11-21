@@ -4,14 +4,16 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { common, cloud } from "../../../../index";
+import { Timestamp } from "../../../../common/types/Timestamp";
+import { CdnNamespaceDomainVerificationStatus } from "./CdnNamespaceDomainVerificationStatus";
+import { CdnNamespaceDomainVerificationMethod } from "./CdnNamespaceDomainVerificationMethod";
 export declare const CdnNamespaceDomain: core.serialization.ObjectSchema<serializers.cloud.CdnNamespaceDomain.Raw, Rivet.cloud.CdnNamespaceDomain>;
 export declare namespace CdnNamespaceDomain {
     interface Raw {
         domain: string;
-        create_ts: common.Timestamp.Raw;
-        verification_status: cloud.CdnNamespaceDomainVerificationStatus.Raw;
-        verification_method: cloud.CdnNamespaceDomainVerificationMethod.Raw;
+        create_ts: Timestamp.Raw;
+        verification_status: CdnNamespaceDomainVerificationStatus.Raw;
+        verification_method: CdnNamespaceDomainVerificationMethod.Raw;
         verification_errors: string[];
     }
 }

@@ -4,10 +4,10 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { cloud } from "../../../../../../index";
+import { CustomHeadersMiddleware } from "./CustomHeadersMiddleware";
 export declare const MiddlewareKind: core.serialization.ObjectSchema<serializers.cloud.version.cdn.MiddlewareKind.Raw, Rivet.cloud.version.cdn.MiddlewareKind>;
 export declare namespace MiddlewareKind {
     interface Raw {
-        custom_headers?: cloud.version.cdn.CustomHeadersMiddleware.Raw | null;
+        custom_headers?: CustomHeadersMiddleware.Raw | null;
     }
 }

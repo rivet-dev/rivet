@@ -4,11 +4,12 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { actor } from "../../index";
+import { NetworkMode } from "../resources/common/types/NetworkMode";
+import { CreateActorPortRequest } from "./CreateActorPortRequest";
 export declare const CreateActorNetworkRequest: core.serialization.ObjectSchema<serializers.actor.CreateActorNetworkRequest.Raw, Rivet.actor.CreateActorNetworkRequest>;
 export declare namespace CreateActorNetworkRequest {
     interface Raw {
-        mode?: actor.NetworkMode.Raw | null;
-        ports?: Record<string, actor.CreateActorPortRequest.Raw> | null;
+        mode?: NetworkMode.Raw | null;
+        ports?: Record<string, CreateActorPortRequest.Raw> | null;
     }
 }

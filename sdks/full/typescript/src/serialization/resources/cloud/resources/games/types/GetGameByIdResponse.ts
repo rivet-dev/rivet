@@ -5,21 +5,20 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { GameFull as cloud_common$$gameFull } from "../../common/types/GameFull";
-import { WatchResponse as common$$watchResponse } from "../../../../common/types/WatchResponse";
-import { cloud, common } from "../../../../index";
+import { GameFull } from "../../common/types/GameFull";
+import { WatchResponse } from "../../../../common/types/WatchResponse";
 
 export const GetGameByIdResponse: core.serialization.ObjectSchema<
     serializers.cloud.games.GetGameByIdResponse.Raw,
     Rivet.cloud.games.GetGameByIdResponse
 > = core.serialization.object({
-    game: cloud_common$$gameFull,
-    watch: common$$watchResponse,
+    game: GameFull,
+    watch: WatchResponse,
 });
 
 export declare namespace GetGameByIdResponse {
     interface Raw {
-        game: cloud.GameFull.Raw;
-        watch: common.WatchResponse.Raw;
+        game: GameFull.Raw;
+        watch: WatchResponse.Raw;
     }
 }

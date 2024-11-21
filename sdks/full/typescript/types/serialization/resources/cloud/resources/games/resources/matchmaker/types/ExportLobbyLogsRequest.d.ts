@@ -4,10 +4,10 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { cloud } from "../../../../../../index";
+import { LogStream } from "./LogStream";
 export declare const ExportLobbyLogsRequest: core.serialization.ObjectSchema<serializers.cloud.games.ExportLobbyLogsRequest.Raw, Rivet.cloud.games.ExportLobbyLogsRequest>;
 export declare namespace ExportLobbyLogsRequest {
     interface Raw {
-        stream: cloud.games.LogStream.Raw;
+        stream: LogStream.Raw;
     }
 }

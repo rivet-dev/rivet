@@ -5,7 +5,7 @@ import * as Rivet from "../../../../../../../../index";
 /**
  * @example
  *     {
- *         stream: Rivet.cloud.games.LogStream.StdOut,
+ *         stream: "std_out",
  *         watchIndex: "string"
  *     }
  */

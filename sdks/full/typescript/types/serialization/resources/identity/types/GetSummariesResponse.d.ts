@@ -4,11 +4,12 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { identity, common } from "../../index";
+import { Summary } from "../resources/common/types/Summary";
+import { WatchResponse } from "../../common/types/WatchResponse";
 export declare const GetSummariesResponse: core.serialization.ObjectSchema<serializers.identity.GetSummariesResponse.Raw, Rivet.identity.GetSummariesResponse>;
 export declare namespace GetSummariesResponse {
     interface Raw {
-        identities: identity.Summary.Raw[];
-        watch: common.WatchResponse.Raw;
+        identities: Summary.Raw[];
+        watch: WatchResponse.Raw;
     }
 }

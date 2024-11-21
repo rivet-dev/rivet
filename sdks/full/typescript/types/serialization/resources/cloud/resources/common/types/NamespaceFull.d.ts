@@ -4,15 +4,17 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { common, cloud } from "../../../../index";
+import { Timestamp } from "../../../../common/types/Timestamp";
+import { DisplayName } from "../../../../common/types/DisplayName";
+import { NamespaceConfig } from "./NamespaceConfig";
 export declare const NamespaceFull: core.serialization.ObjectSchema<serializers.cloud.NamespaceFull.Raw, Rivet.cloud.NamespaceFull>;
 export declare namespace NamespaceFull {
     interface Raw {
         namespace_id: string;
-        create_ts: common.Timestamp.Raw;
-        display_name: common.DisplayName.Raw;
+        create_ts: Timestamp.Raw;
+        display_name: DisplayName.Raw;
         version_id: string;
         name_id: string;
-        config: cloud.NamespaceConfig.Raw;
+        config: NamespaceConfig.Raw;
     }
 }

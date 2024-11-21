@@ -5,22 +5,21 @@
 import * as serializers from "../../../../../../index";
 import * as Rivet from "../../../../../../../api/index";
 import * as core from "../../../../../../../core";
-import { Config as captcha_config$$config } from "../../../../../captcha/resources/config/types/Config";
-import { captcha } from "../../../../../index";
+import { Config } from "../../../../../captcha/resources/config/types/Config";
 
 export const JoinLobbyRequest: core.serialization.Schema<
     serializers.matchmaker.JoinLobbyRequest.Raw,
     Rivet.matchmaker.JoinLobbyRequest
 > = core.serialization.object({
     lobbyId: core.serialization.property("lobby_id", core.serialization.string()),
-    captcha: captcha_config$$config.optional(),
+    captcha: Config.optional(),
     verificationData: core.serialization.property("verification_data", core.serialization.unknown().optional()),
 });
 
 export declare namespace JoinLobbyRequest {
     interface Raw {
         lobby_id: string;
-        captcha?: captcha.Config.Raw | null;
+        captcha?: Config.Raw | null;
         verification_data?: unknown | null;
     }
 }

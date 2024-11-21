@@ -9802,11 +9802,11 @@ components:
     ActorPortRouting:
       type: object
       properties:
-        game_guard:
-          $ref: '#/components/schemas/ActorGameGuardRouting'
+        guard:
+          $ref: '#/components/schemas/ActorGuardRouting'
         host:
           $ref: '#/components/schemas/ActorHostRouting'
-    ActorGameGuardRouting:
+    ActorGuardRouting:
       type: object
       properties:
         authorization:

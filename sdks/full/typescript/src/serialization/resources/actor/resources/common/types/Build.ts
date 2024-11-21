@@ -5,14 +5,13 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Timestamp as common$$timestamp } from "../../../../common/types/Timestamp";
-import { common } from "../../../../index";
+import { Timestamp } from "../../../../common/types/Timestamp";
 
 export const Build: core.serialization.ObjectSchema<serializers.actor.Build.Raw, Rivet.actor.Build> =
     core.serialization.object({
         id: core.serialization.string(),
         name: core.serialization.string(),
-        createdAt: core.serialization.property("created_at", common$$timestamp),
+        createdAt: core.serialization.property("created_at", Timestamp),
         contentLength: core.serialization.property("content_length", core.serialization.number()),
         tags: core.serialization.record(core.serialization.string(), core.serialization.string()),
     });
@@ -21,7 +20,7 @@ export declare namespace Build {
     interface Raw {
         id: string;
         name: string;
-        created_at: common.Timestamp.Raw;
+        created_at: Timestamp.Raw;
         content_length: number;
         tags: Record<string, string>;
     }

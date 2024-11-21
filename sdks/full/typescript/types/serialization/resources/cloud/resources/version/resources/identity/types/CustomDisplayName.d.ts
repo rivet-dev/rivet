@@ -4,10 +4,10 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { common } from "../../../../../../index";
+import { DisplayName } from "../../../../../../common/types/DisplayName";
 export declare const CustomDisplayName: core.serialization.ObjectSchema<serializers.cloud.version.identity.CustomDisplayName.Raw, Rivet.cloud.version.identity.CustomDisplayName>;
 export declare namespace CustomDisplayName {
     interface Raw {
-        display_name: common.DisplayName.Raw;
+        display_name: DisplayName.Raw;
     }
 }

@@ -4,11 +4,12 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { game } from "../../../../index";
+import { Handle } from "./Handle";
+import { Stat } from "./Stat";
 export declare const StatSummary: core.serialization.ObjectSchema<serializers.game.StatSummary.Raw, Rivet.game.StatSummary>;
 export declare namespace StatSummary {
     interface Raw {
-        game: game.Handle.Raw;
-        stats: game.Stat.Raw[];
+        game: Handle.Raw;
+        stats: Stat.Raw[];
     }
 }

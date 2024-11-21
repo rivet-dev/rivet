@@ -5,18 +5,17 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { LobbySummaryAnalytics as cloud_common$$lobbySummaryAnalytics } from "../../../../../../common/types/LobbySummaryAnalytics";
-import { cloud } from "../../../../../../../../index";
+import { LobbySummaryAnalytics } from "../../../../../../common/types/LobbySummaryAnalytics";
 
 export const GetAnalyticsMatchmakerLiveResponse: core.serialization.ObjectSchema<
     serializers.cloud.games.namespaces.GetAnalyticsMatchmakerLiveResponse.Raw,
     Rivet.cloud.games.namespaces.GetAnalyticsMatchmakerLiveResponse
 > = core.serialization.object({
-    lobbies: core.serialization.list(cloud_common$$lobbySummaryAnalytics),
+    lobbies: core.serialization.list(LobbySummaryAnalytics),
 });
 
 export declare namespace GetAnalyticsMatchmakerLiveResponse {
     interface Raw {
-        lobbies: cloud.LobbySummaryAnalytics.Raw[];
+        lobbies: LobbySummaryAnalytics.Raw[];
     }
 }

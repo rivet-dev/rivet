@@ -5,26 +5,25 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { Jwt as common$$jwt } from "../../common/types/Jwt";
-import { Timestamp as common$$timestamp } from "../../common/types/Timestamp";
-import { Profile as identity_common$$profile } from "../resources/common/types/Profile";
-import { common, identity } from "../../index";
+import { Jwt } from "../../common/types/Jwt";
+import { Timestamp } from "../../common/types/Timestamp";
+import { Profile } from "../resources/common/types/Profile";
 
 export const SetupResponse: core.serialization.ObjectSchema<
     serializers.identity.SetupResponse.Raw,
     Rivet.identity.SetupResponse
 > = core.serialization.object({
-    identityToken: core.serialization.property("identity_token", common$$jwt),
-    identityTokenExpireTs: core.serialization.property("identity_token_expire_ts", common$$timestamp),
-    identity: identity_common$$profile,
+    identityToken: core.serialization.property("identity_token", Jwt),
+    identityTokenExpireTs: core.serialization.property("identity_token_expire_ts", Timestamp),
+    identity: Profile,
     gameId: core.serialization.property("game_id", core.serialization.string()),
 });
 
 export declare namespace SetupResponse {
     interface Raw {
-        identity_token: common.Jwt.Raw;
-        identity_token_expire_ts: common.Timestamp.Raw;
-        identity: identity.Profile.Raw;
+        identity_token: Jwt.Raw;
+        identity_token_expire_ts: Timestamp.Raw;
+        identity: Profile.Raw;
         game_id: string;
     }
 }

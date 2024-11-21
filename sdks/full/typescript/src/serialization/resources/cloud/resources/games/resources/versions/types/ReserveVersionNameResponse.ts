@@ -5,18 +5,17 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { DisplayName as common$$displayName } from "../../../../../../common/types/DisplayName";
-import { common } from "../../../../../../index";
+import { DisplayName } from "../../../../../../common/types/DisplayName";
 
 export const ReserveVersionNameResponse: core.serialization.ObjectSchema<
     serializers.cloud.games.ReserveVersionNameResponse.Raw,
     Rivet.cloud.games.ReserveVersionNameResponse
 > = core.serialization.object({
-    versionDisplayName: core.serialization.property("version_display_name", common$$displayName),
+    versionDisplayName: core.serialization.property("version_display_name", DisplayName),
 });
 
 export declare namespace ReserveVersionNameResponse {
     interface Raw {
-        version_display_name: common.DisplayName.Raw;
+        version_display_name: DisplayName.Raw;
     }
 }

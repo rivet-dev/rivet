@@ -5,8 +5,7 @@
 import * as serializers from "../../../../../../index";
 import * as Rivet from "../../../../../../../api/index";
 import * as core from "../../../../../../../core";
-import { Config as captcha_config$$config } from "../../../../../captcha/resources/config/types/Config";
-import { captcha } from "../../../../../index";
+import { Config } from "../../../../../captcha/resources/config/types/Config";
 
 export const FindLobbyRequest: core.serialization.Schema<
     serializers.matchmaker.FindLobbyRequest.Raw,
@@ -20,7 +19,7 @@ export const FindLobbyRequest: core.serialization.Schema<
     ),
     tags: core.serialization.record(core.serialization.string(), core.serialization.string()).optional(),
     maxPlayers: core.serialization.property("max_players", core.serialization.number().optional()),
-    captcha: captcha_config$$config.optional(),
+    captcha: Config.optional(),
     verificationData: core.serialization.property("verification_data", core.serialization.unknown().optional()),
 });
 
@@ -31,7 +30,7 @@ export declare namespace FindLobbyRequest {
         prevent_auto_create_lobby?: boolean | null;
         tags?: Record<string, string> | null;
         max_players?: number | null;
-        captcha?: captcha.Config.Raw | null;
+        captcha?: Config.Raw | null;
         verification_data?: unknown | null;
     }
 }

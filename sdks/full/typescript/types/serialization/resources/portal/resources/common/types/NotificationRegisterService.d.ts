@@ -4,10 +4,10 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { portal } from "../../../../index";
+import { NotificationRegisterFirebaseService } from "./NotificationRegisterFirebaseService";
 export declare const NotificationRegisterService: core.serialization.ObjectSchema<serializers.portal.NotificationRegisterService.Raw, Rivet.portal.NotificationRegisterService>;
 export declare namespace NotificationRegisterService {
     interface Raw {
-        firebase?: portal.NotificationRegisterFirebaseService.Raw | null;
+        firebase?: NotificationRegisterFirebaseService.Raw | null;
     }
 }

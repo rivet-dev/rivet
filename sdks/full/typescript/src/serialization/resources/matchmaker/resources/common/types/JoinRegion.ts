@@ -5,21 +5,20 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Identifier as common$$identifier } from "../../../../common/types/Identifier";
-import { DisplayName as common$$displayName } from "../../../../common/types/DisplayName";
-import { common } from "../../../../index";
+import { Identifier } from "../../../../common/types/Identifier";
+import { DisplayName } from "../../../../common/types/DisplayName";
 
 export const JoinRegion: core.serialization.ObjectSchema<
     serializers.matchmaker.JoinRegion.Raw,
     Rivet.matchmaker.JoinRegion
 > = core.serialization.object({
-    regionId: core.serialization.property("region_id", common$$identifier),
-    displayName: core.serialization.property("display_name", common$$displayName),
+    regionId: core.serialization.property("region_id", Identifier),
+    displayName: core.serialization.property("display_name", DisplayName),
 });
 
 export declare namespace JoinRegion {
     interface Raw {
-        region_id: common.Identifier.Raw;
-        display_name: common.DisplayName.Raw;
+        region_id: Identifier.Raw;
+        display_name: DisplayName.Raw;
     }
 }

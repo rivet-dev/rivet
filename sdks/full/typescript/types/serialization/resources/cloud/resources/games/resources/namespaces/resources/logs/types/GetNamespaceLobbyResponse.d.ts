@@ -4,14 +4,16 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { cloud } from "../../../../../../../../index";
+import { LogsLobbySummary } from "../../../../../../common/types/LogsLobbySummary";
+import { SvcMetrics } from "../../../../../../common/types/SvcMetrics";
+import { SvcPerf } from "../../../../../../common/types/SvcPerf";
 export declare const GetNamespaceLobbyResponse: core.serialization.ObjectSchema<serializers.cloud.games.namespaces.GetNamespaceLobbyResponse.Raw, Rivet.cloud.games.namespaces.GetNamespaceLobbyResponse>;
 export declare namespace GetNamespaceLobbyResponse {
     interface Raw {
-        lobby: cloud.LogsLobbySummary.Raw;
-        metrics?: cloud.SvcMetrics.Raw | null;
+        lobby: LogsLobbySummary.Raw;
+        metrics?: SvcMetrics.Raw | null;
         stdout_presigned_urls: string[];
         stderr_presigned_urls: string[];
-        perf_lists: cloud.SvcPerf.Raw[];
+        perf_lists: SvcPerf.Raw[];
     }
 }

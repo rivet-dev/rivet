@@ -5,18 +5,17 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { CdnSiteSummary as cloud_common$$cdnSiteSummary } from "../../../../common/types/CdnSiteSummary";
-import { cloud } from "../../../../../../index";
+import { CdnSiteSummary } from "../../../../common/types/CdnSiteSummary";
 
 export const ListGameCdnSitesResponse: core.serialization.ObjectSchema<
     serializers.cloud.games.ListGameCdnSitesResponse.Raw,
     Rivet.cloud.games.ListGameCdnSitesResponse
 > = core.serialization.object({
-    sites: core.serialization.list(cloud_common$$cdnSiteSummary),
+    sites: core.serialization.list(CdnSiteSummary),
 });
 
 export declare namespace ListGameCdnSitesResponse {
     interface Raw {
-        sites: cloud.CdnSiteSummary.Raw[];
+        sites: CdnSiteSummary.Raw[];
     }
 }

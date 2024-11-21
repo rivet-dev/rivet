@@ -5,18 +5,17 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { NamespaceFull as cloud_common$$namespaceFull } from "../../../../common/types/NamespaceFull";
-import { cloud } from "../../../../../../index";
+import { NamespaceFull } from "../../../../common/types/NamespaceFull";
 
 export const GetGameNamespaceByIdResponse: core.serialization.ObjectSchema<
     serializers.cloud.games.namespaces.GetGameNamespaceByIdResponse.Raw,
     Rivet.cloud.games.namespaces.GetGameNamespaceByIdResponse
 > = core.serialization.object({
-    namespace: cloud_common$$namespaceFull,
+    namespace: NamespaceFull,
 });
 
 export declare namespace GetGameNamespaceByIdResponse {
     interface Raw {
-        namespace: cloud.NamespaceFull.Raw;
+        namespace: NamespaceFull.Raw;
     }
 }

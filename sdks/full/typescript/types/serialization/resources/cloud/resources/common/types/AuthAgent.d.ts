@@ -4,11 +4,12 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { cloud } from "../../../../index";
+import { AuthAgentIdentity } from "./AuthAgentIdentity";
+import { AuthAgentGameCloud } from "./AuthAgentGameCloud";
 export declare const AuthAgent: core.serialization.ObjectSchema<serializers.cloud.AuthAgent.Raw, Rivet.cloud.AuthAgent>;
 export declare namespace AuthAgent {
     interface Raw {
-        identity?: cloud.AuthAgentIdentity.Raw | null;
-        game_cloud?: cloud.AuthAgentGameCloud.Raw | null;
+        identity?: AuthAgentIdentity.Raw | null;
+        game_cloud?: AuthAgentGameCloud.Raw | null;
     }
 }

@@ -5,24 +5,23 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Timestamp as common$$timestamp } from "../../../../common/types/Timestamp";
-import { GlobalEventKind as identity_common$$globalEventKind } from "./GlobalEventKind";
-import { GlobalEventNotification as identity_common$$globalEventNotification } from "./GlobalEventNotification";
-import { common, identity } from "../../../../index";
+import { Timestamp } from "../../../../common/types/Timestamp";
+import { GlobalEventKind } from "./GlobalEventKind";
+import { GlobalEventNotification } from "./GlobalEventNotification";
 
 export const GlobalEvent: core.serialization.ObjectSchema<
     serializers.identity.GlobalEvent.Raw,
     Rivet.identity.GlobalEvent
 > = core.serialization.object({
-    ts: common$$timestamp,
-    kind: identity_common$$globalEventKind,
-    notification: identity_common$$globalEventNotification.optional(),
+    ts: Timestamp,
+    kind: GlobalEventKind,
+    notification: GlobalEventNotification.optional(),
 });
 
 export declare namespace GlobalEvent {
     interface Raw {
-        ts: common.Timestamp.Raw;
-        kind: identity.GlobalEventKind.Raw;
-        notification?: identity.GlobalEventNotification.Raw | null;
+        ts: Timestamp.Raw;
+        kind: GlobalEventKind.Raw;
+        notification?: GlobalEventNotification.Raw | null;
     }
 }

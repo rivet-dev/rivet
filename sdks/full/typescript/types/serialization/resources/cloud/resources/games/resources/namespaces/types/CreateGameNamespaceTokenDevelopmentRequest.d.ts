@@ -4,12 +4,13 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { cloud } from "../../../../../../index";
+import { MatchmakerDevelopmentPort } from "../../../../common/types/MatchmakerDevelopmentPort";
+import { LobbyGroupRuntimeDockerPort } from "../../../../version/resources/matchmaker/resources/lobbyGroup/types/LobbyGroupRuntimeDockerPort";
 export declare const CreateGameNamespaceTokenDevelopmentRequest: core.serialization.ObjectSchema<serializers.cloud.games.namespaces.CreateGameNamespaceTokenDevelopmentRequest.Raw, Rivet.cloud.games.namespaces.CreateGameNamespaceTokenDevelopmentRequest>;
 export declare namespace CreateGameNamespaceTokenDevelopmentRequest {
     interface Raw {
         hostname: string;
-        ports?: Record<string, cloud.MatchmakerDevelopmentPort.Raw> | null;
-        lobby_ports?: cloud.version.matchmaker.LobbyGroupRuntimeDockerPort.Raw[] | null;
+        ports?: Record<string, MatchmakerDevelopmentPort.Raw> | null;
+        lobby_ports?: LobbyGroupRuntimeDockerPort.Raw[] | null;
     }
 }

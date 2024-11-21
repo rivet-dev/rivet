@@ -5,19 +5,18 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { AuthAgentIdentity as cloud_common$$authAgentIdentity } from "./AuthAgentIdentity";
-import { AuthAgentGameCloud as cloud_common$$authAgentGameCloud } from "./AuthAgentGameCloud";
-import { cloud } from "../../../../index";
+import { AuthAgentIdentity } from "./AuthAgentIdentity";
+import { AuthAgentGameCloud } from "./AuthAgentGameCloud";
 
 export const AuthAgent: core.serialization.ObjectSchema<serializers.cloud.AuthAgent.Raw, Rivet.cloud.AuthAgent> =
     core.serialization.object({
-        identity: cloud_common$$authAgentIdentity.optional(),
-        gameCloud: core.serialization.property("game_cloud", cloud_common$$authAgentGameCloud.optional()),
+        identity: AuthAgentIdentity.optional(),
+        gameCloud: core.serialization.property("game_cloud", AuthAgentGameCloud.optional()),
     });
 
 export declare namespace AuthAgent {
     interface Raw {
-        identity?: cloud.AuthAgentIdentity.Raw | null;
-        game_cloud?: cloud.AuthAgentGameCloud.Raw | null;
+        identity?: AuthAgentIdentity.Raw | null;
+        game_cloud?: AuthAgentGameCloud.Raw | null;
     }
 }

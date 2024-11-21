@@ -4,10 +4,10 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { group } from "../../../../index";
+import { Handle } from "../../common/types/Handle";
 export declare const GetInviteResponse: core.serialization.ObjectSchema<serializers.group.GetInviteResponse.Raw, Rivet.group.GetInviteResponse>;
 export declare namespace GetInviteResponse {
     interface Raw {
-        group: group.Handle.Raw;
+        group: Handle.Raw;
     }
 }

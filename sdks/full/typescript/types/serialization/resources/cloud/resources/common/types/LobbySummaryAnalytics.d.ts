@@ -4,7 +4,7 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { common } from "../../../../index";
+import { Timestamp } from "../../../../common/types/Timestamp";
 export declare const LobbySummaryAnalytics: core.serialization.ObjectSchema<serializers.cloud.LobbySummaryAnalytics.Raw, Rivet.cloud.LobbySummaryAnalytics>;
 export declare namespace LobbySummaryAnalytics {
     interface Raw {
@@ -12,7 +12,7 @@ export declare namespace LobbySummaryAnalytics {
         lobby_group_id: string;
         lobby_group_name_id: string;
         region_id: string;
-        create_ts: common.Timestamp.Raw;
+        create_ts: Timestamp.Raw;
         is_ready: boolean;
         is_idle: boolean;
         is_closed: boolean;

@@ -4,10 +4,10 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { common } from "../../../../index";
+import { ValidationError } from "../../../../common/types/ValidationError";
 export declare const ValidateGroupResponse: core.serialization.ObjectSchema<serializers.cloud.ValidateGroupResponse.Raw, Rivet.cloud.ValidateGroupResponse>;
 export declare namespace ValidateGroupResponse {
     interface Raw {
-        errors: common.ValidationError.Raw[];
+        errors: ValidationError.Raw[];
     }
 }

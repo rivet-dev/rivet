@@ -4,10 +4,10 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { identity } from "../../../../index";
+import { Profile } from "./Profile";
 export declare const GlobalEventIdentityUpdate: core.serialization.ObjectSchema<serializers.identity.GlobalEventIdentityUpdate.Raw, Rivet.identity.GlobalEventIdentityUpdate>;
 export declare namespace GlobalEventIdentityUpdate {
     interface Raw {
-        identity: identity.Profile.Raw;
+        identity: Profile.Raw;
     }
 }

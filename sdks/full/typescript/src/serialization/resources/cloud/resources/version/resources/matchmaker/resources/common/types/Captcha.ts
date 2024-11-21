@@ -5,9 +5,8 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { CaptchaHcaptcha as cloud_version_matchmaker_common$$captchaHcaptcha } from "./CaptchaHcaptcha";
-import { CaptchaTurnstile as cloud_version_matchmaker_common$$captchaTurnstile } from "./CaptchaTurnstile";
-import { cloud } from "../../../../../../../../index";
+import { CaptchaHcaptcha } from "./CaptchaHcaptcha";
+import { CaptchaTurnstile } from "./CaptchaTurnstile";
 
 export const Captcha: core.serialization.ObjectSchema<
     serializers.cloud.version.matchmaker.Captcha.Raw,
@@ -15,15 +14,15 @@ export const Captcha: core.serialization.ObjectSchema<
 > = core.serialization.object({
     requestsBeforeReverify: core.serialization.property("requests_before_reverify", core.serialization.number()),
     verificationTtl: core.serialization.property("verification_ttl", core.serialization.number()),
-    hcaptcha: cloud_version_matchmaker_common$$captchaHcaptcha.optional(),
-    turnstile: cloud_version_matchmaker_common$$captchaTurnstile.optional(),
+    hcaptcha: CaptchaHcaptcha.optional(),
+    turnstile: CaptchaTurnstile.optional(),
 });
 
 export declare namespace Captcha {
     interface Raw {
         requests_before_reverify: number;
         verification_ttl: number;
-        hcaptcha?: cloud.version.matchmaker.CaptchaHcaptcha.Raw | null;
-        turnstile?: cloud.version.matchmaker.CaptchaTurnstile.Raw | null;
+        hcaptcha?: CaptchaHcaptcha.Raw | null;
+        turnstile?: CaptchaTurnstile.Raw | null;
     }
 }

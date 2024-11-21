@@ -4,10 +4,10 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { identity } from "../../../../index";
+import { Handle } from "../../../../identity/resources/common/types/Handle";
 export declare const Member: core.serialization.ObjectSchema<serializers.group.Member.Raw, Rivet.group.Member>;
 export declare namespace Member {
     interface Raw {
-        identity: identity.Handle.Raw;
+        identity: Handle.Raw;
     }
 }

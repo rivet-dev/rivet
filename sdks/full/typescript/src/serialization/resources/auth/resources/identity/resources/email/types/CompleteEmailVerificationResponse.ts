@@ -5,18 +5,17 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { CompleteStatus as auth_common$$completeStatus } from "../../../../common/types/CompleteStatus";
-import { auth } from "../../../../../../index";
+import { CompleteStatus } from "../../../../common/types/CompleteStatus";
 
 export const CompleteEmailVerificationResponse: core.serialization.ObjectSchema<
     serializers.auth.identity.CompleteEmailVerificationResponse.Raw,
     Rivet.auth.identity.CompleteEmailVerificationResponse
 > = core.serialization.object({
-    status: auth_common$$completeStatus,
+    status: CompleteStatus,
 });
 
 export declare namespace CompleteEmailVerificationResponse {
     interface Raw {
-        status: auth.CompleteStatus.Raw;
+        status: CompleteStatus.Raw;
     }
 }

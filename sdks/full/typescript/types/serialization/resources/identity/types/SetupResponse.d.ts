@@ -4,13 +4,15 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { common, identity } from "../../index";
+import { Jwt } from "../../common/types/Jwt";
+import { Timestamp } from "../../common/types/Timestamp";
+import { Profile } from "../resources/common/types/Profile";
 export declare const SetupResponse: core.serialization.ObjectSchema<serializers.identity.SetupResponse.Raw, Rivet.identity.SetupResponse>;
 export declare namespace SetupResponse {
     interface Raw {
-        identity_token: common.Jwt.Raw;
-        identity_token_expire_ts: common.Timestamp.Raw;
-        identity: identity.Profile.Raw;
+        identity_token: Jwt.Raw;
+        identity_token_expire_ts: Timestamp.Raw;
+        identity: Profile.Raw;
         game_id: string;
     }
 }

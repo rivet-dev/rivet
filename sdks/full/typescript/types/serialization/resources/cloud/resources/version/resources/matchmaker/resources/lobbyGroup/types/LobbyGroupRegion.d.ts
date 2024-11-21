@@ -4,12 +4,12 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { cloud } from "../../../../../../../../index";
+import { LobbyGroupIdleLobbiesConfig } from "./LobbyGroupIdleLobbiesConfig";
 export declare const LobbyGroupRegion: core.serialization.ObjectSchema<serializers.cloud.version.matchmaker.LobbyGroupRegion.Raw, Rivet.cloud.version.matchmaker.LobbyGroupRegion>;
 export declare namespace LobbyGroupRegion {
     interface Raw {
         region_id: string;
         tier_name_id: string;
-        idle_lobbies?: cloud.version.matchmaker.LobbyGroupIdleLobbiesConfig.Raw | null;
+        idle_lobbies?: LobbyGroupIdleLobbiesConfig.Raw | null;
     }
 }

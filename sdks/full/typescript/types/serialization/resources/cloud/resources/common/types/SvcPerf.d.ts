@@ -4,15 +4,17 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { common, cloud } from "../../../../index";
+import { Timestamp } from "../../../../common/types/Timestamp";
+import { LogsPerfSpan } from "./LogsPerfSpan";
+import { LogsPerfMark } from "./LogsPerfMark";
 export declare const SvcPerf: core.serialization.ObjectSchema<serializers.cloud.SvcPerf.Raw, Rivet.cloud.SvcPerf>;
 export declare namespace SvcPerf {
     interface Raw {
         svc_name: string;
-        ts: common.Timestamp.Raw;
+        ts: Timestamp.Raw;
         duration: number;
         req_id?: string | null;
-        spans: cloud.LogsPerfSpan.Raw[];
-        marks: cloud.LogsPerfMark.Raw[];
+        spans: LogsPerfSpan.Raw[];
+        marks: LogsPerfMark.Raw[];
     }
 }

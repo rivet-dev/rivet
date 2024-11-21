@@ -4,13 +4,14 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { common } from "../../../../index";
+import { DisplayName } from "../../../../common/types/DisplayName";
+import { Timestamp } from "../../../../common/types/Timestamp";
 export declare const CustomAvatarSummary: core.serialization.ObjectSchema<serializers.cloud.CustomAvatarSummary.Raw, Rivet.cloud.CustomAvatarSummary>;
 export declare namespace CustomAvatarSummary {
     interface Raw {
         upload_id: string;
-        display_name: common.DisplayName.Raw;
-        create_ts: common.Timestamp.Raw;
+        display_name: DisplayName.Raw;
+        create_ts: Timestamp.Raw;
         url?: string | null;
         content_length: number;
         complete: boolean;

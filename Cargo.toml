@@ -9,6 +9,39 @@ edition = "2021"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 license = "Apache-2.0"
 
+[workspace.dependencies.sqlx]
+git = "https://github.com/rivet-gg/sqlx"
+rev = "e7120f59"
+
+[workspace.dependencies.nomad_client]
+git = "https://github.com/rivet-gg/nomad-client"
+rev = "abb66bf"
+
+[workspace.dependencies.nomad_client_new]
+git = "https://github.com/rivet-gg/nomad-client"
+rev = "abb66bf"
+package = "nomad_client"
+
+[workspace.dependencies.async-posthog]
+git = "https://github.com/rivet-gg/posthog-rs"
+rev = "ef4e80e"
+
+[workspace.dependencies.cloudflare]
+git = "https://github.com/cloudflare/cloudflare-rs"
+rev = "f14720e"
+
+[workspace.dependencies.rivet-term]
+git = "https://github.com/rivet-gg/rivet-term"
+rev = "d539a07"
+
+[workspace.dependencies.redis]
+git = "https://github.com/rivet-gg/redis-rs"
+rev = "ac3e27f"
+
+[workspace.dependencies.serde_array_query]
+git = "https://github.com/rivet-gg/serde_array_query"
+rev = "b9f8bfa"
+
 [workspace.dependencies.job-runner]
 path = "packages/infra/legacy/job-runner"
 
@@ -889,40 +922,6 @@ path = "packages/services/tier"
 
 [workspace.dependencies.rivet-api]
 path = "sdks/full/rust"
-
-[workspace.dependencies.sqlx]
-git = "https://github.com/rivet-gg/sqlx"
-rev = "e7120f59"
-
-[workspace.dependencies.nomad_client]
-git = "https://github.com/rivet-gg/nomad-client"
-rev = "abb66bf"
-
-[workspace.dependencies.nomad_client_new]
-git = "https://github.com/rivet-gg/nomad-client"
-rev = "abb66bf"
-package = "nomad_client"
-
-[workspace.dependencies.async-posthog]
-git = "https://github.com/rivet-gg/posthog-rs"
-rev = "ef4e80e"
-
-[workspace.dependencies.cloudflare]
-git = "https://github.com/cloudflare/cloudflare-rs"
-rev = "f14720e"
-
-[workspace.dependencies.rivet-term]
-git = "https://github.com/rivet-gg/rivet-term"
-rev = "d539a07"
-
-[workspace.dependencies.redis]
-# TODO: https://github.com/rivet-gg/rivet/issues/508
-git = "https://github.com/rivet-gg/redis-rs"
-rev = "ac3e27f"
-
-[workspace.dependencies.serde_array_query]
-git = "https://github.com/rivet-gg/serde_array_query"
-rev = "b9f8bfa"
 
 [profile.dev]
 overflow-checks = false

@@ -4,13 +4,16 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { cloud } from "../../../../index";
+import { CdnNamespaceConfig } from "./CdnNamespaceConfig";
+import { MatchmakerNamespaceConfig } from "./MatchmakerNamespaceConfig";
+import { KvNamespaceConfig } from "./KvNamespaceConfig";
+import { IdentityNamespaceConfig } from "./IdentityNamespaceConfig";
 export declare const NamespaceConfig: core.serialization.ObjectSchema<serializers.cloud.NamespaceConfig.Raw, Rivet.cloud.NamespaceConfig>;
 export declare namespace NamespaceConfig {
     interface Raw {
-        cdn: cloud.CdnNamespaceConfig.Raw;
-        matchmaker: cloud.MatchmakerNamespaceConfig.Raw;
-        kv: cloud.KvNamespaceConfig.Raw;
-        identity: cloud.IdentityNamespaceConfig.Raw;
+        cdn: CdnNamespaceConfig.Raw;
+        matchmaker: MatchmakerNamespaceConfig.Raw;
+        kv: KvNamespaceConfig.Raw;
+        identity: IdentityNamespaceConfig.Raw;
     }
 }

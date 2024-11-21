@@ -5,18 +5,17 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { NamespaceVersion as cloud_common$$namespaceVersion } from "../../../../common/types/NamespaceVersion";
-import { cloud } from "../../../../../../index";
+import { NamespaceVersion } from "../../../../common/types/NamespaceVersion";
 
 export const GetGameNamespaceVersionHistoryResponse: core.serialization.ObjectSchema<
     serializers.cloud.games.namespaces.GetGameNamespaceVersionHistoryResponse.Raw,
     Rivet.cloud.games.namespaces.GetGameNamespaceVersionHistoryResponse
 > = core.serialization.object({
-    versions: core.serialization.list(cloud_common$$namespaceVersion),
+    versions: core.serialization.list(NamespaceVersion),
 });
 
 export declare namespace GetGameNamespaceVersionHistoryResponse {
     interface Raw {
-        versions: cloud.NamespaceVersion.Raw[];
+        versions: NamespaceVersion.Raw[];
     }
 }

@@ -4,13 +4,14 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { cloud } from "../../../../../../../../index";
+import { PortRange } from "../../common/types/PortRange";
+import { PortProtocol } from "../../common/types/PortProtocol";
 export declare const LobbyGroupRuntimeDockerPort: core.serialization.ObjectSchema<serializers.cloud.version.matchmaker.LobbyGroupRuntimeDockerPort.Raw, Rivet.cloud.version.matchmaker.LobbyGroupRuntimeDockerPort>;
 export declare namespace LobbyGroupRuntimeDockerPort {
     interface Raw {
         label: string;
         target_port?: number | null;
-        port_range?: cloud.version.matchmaker.PortRange.Raw | null;
-        proxy_protocol: cloud.version.matchmaker.PortProtocol.Raw;
+        port_range?: PortRange.Raw | null;
+        proxy_protocol: PortProtocol.Raw;
     }
 }

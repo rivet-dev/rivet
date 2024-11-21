@@ -193,7 +193,7 @@ impl ApiFrom<Port> for models::ActorPort {
 			} => (
 				(*protocol).api_into(),
 				models::ActorPortRouting {
-					game_guard: Some(Box::new(models::ActorGameGuardRouting {
+					guard: Some(Box::new(models::ActorGuardRouting {
 						authorization: match authorization {
 							PortAuthorization::None => None,
 							PortAuthorization::Bearer(token) => {

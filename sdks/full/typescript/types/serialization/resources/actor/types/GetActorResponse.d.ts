@@ -4,10 +4,10 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { actor } from "../../index";
+import { Actor } from "../resources/common/types/Actor";
 export declare const GetActorResponse: core.serialization.ObjectSchema<serializers.actor.GetActorResponse.Raw, Rivet.actor.GetActorResponse>;
 export declare namespace GetActorResponse {
     interface Raw {
-        actor: actor.Actor.Raw;
+        actor: Actor.Raw;
     }
 }

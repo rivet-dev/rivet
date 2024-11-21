@@ -4,11 +4,12 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { group, common } from "../../index";
+import { Summary } from "../resources/common/types/Summary";
+import { WatchResponse } from "../../common/types/WatchResponse";
 export declare const ListSuggestedResponse: core.serialization.ObjectSchema<serializers.group.ListSuggestedResponse.Raw, Rivet.group.ListSuggestedResponse>;
 export declare namespace ListSuggestedResponse {
     interface Raw {
-        groups: group.Summary.Raw[];
-        watch: common.WatchResponse.Raw;
+        groups: Summary.Raw[];
+        watch: WatchResponse.Raw;
     }
 }

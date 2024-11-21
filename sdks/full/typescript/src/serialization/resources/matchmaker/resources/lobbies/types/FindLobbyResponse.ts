@@ -5,24 +5,23 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { JoinLobby as matchmaker_common$$joinLobby } from "../../common/types/JoinLobby";
-import { JoinPort as matchmaker_common$$joinPort } from "../../common/types/JoinPort";
-import { JoinPlayer as matchmaker_common$$joinPlayer } from "../../common/types/JoinPlayer";
-import { matchmaker } from "../../../../index";
+import { JoinLobby } from "../../common/types/JoinLobby";
+import { JoinPort } from "../../common/types/JoinPort";
+import { JoinPlayer } from "../../common/types/JoinPlayer";
 
 export const FindLobbyResponse: core.serialization.ObjectSchema<
     serializers.matchmaker.FindLobbyResponse.Raw,
     Rivet.matchmaker.FindLobbyResponse
 > = core.serialization.object({
-    lobby: matchmaker_common$$joinLobby,
-    ports: core.serialization.record(core.serialization.string(), matchmaker_common$$joinPort),
-    player: matchmaker_common$$joinPlayer,
+    lobby: JoinLobby,
+    ports: core.serialization.record(core.serialization.string(), JoinPort),
+    player: JoinPlayer,
 });
 
 export declare namespace FindLobbyResponse {
     interface Raw {
-        lobby: matchmaker.JoinLobby.Raw;
-        ports: Record<string, matchmaker.JoinPort.Raw>;
-        player: matchmaker.JoinPlayer.Raw;
+        lobby: JoinLobby.Raw;
+        ports: Record<string, JoinPort.Raw>;
+        player: JoinPlayer.Raw;
     }
 }

@@ -4,10 +4,10 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { cloud } from "../../../../../../index";
+import { AuthAgent } from "../../../../common/types/AuthAgent";
 export declare const InspectResponse: core.serialization.ObjectSchema<serializers.cloud.games.namespaces.InspectResponse.Raw, Rivet.cloud.games.namespaces.InspectResponse>;
 export declare namespace InspectResponse {
     interface Raw {
-        agent: cloud.AuthAgent.Raw;
+        agent: AuthAgent.Raw;
     }
 }

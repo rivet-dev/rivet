@@ -5,23 +5,22 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { JoinRequest as group_common$$joinRequest } from "../resources/common/types/JoinRequest";
-import { WatchResponse as common$$watchResponse } from "../../common/types/WatchResponse";
-import { group, common } from "../../index";
+import { JoinRequest } from "../resources/common/types/JoinRequest";
+import { WatchResponse } from "../../common/types/WatchResponse";
 
 export const GetJoinRequestsResponse: core.serialization.ObjectSchema<
     serializers.group.GetJoinRequestsResponse.Raw,
     Rivet.group.GetJoinRequestsResponse
 > = core.serialization.object({
-    joinRequests: core.serialization.property("join_requests", core.serialization.list(group_common$$joinRequest)),
+    joinRequests: core.serialization.property("join_requests", core.serialization.list(JoinRequest)),
     anchor: core.serialization.string().optional(),
-    watch: common$$watchResponse,
+    watch: WatchResponse,
 });
 
 export declare namespace GetJoinRequestsResponse {
     interface Raw {
-        join_requests: group.JoinRequest.Raw[];
+        join_requests: JoinRequest.Raw[];
         anchor?: string | null;
-        watch: common.WatchResponse.Raw;
+        watch: WatchResponse.Raw;
     }
 }

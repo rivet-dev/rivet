@@ -5,18 +5,17 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { NotificationRegisterFirebaseService as portal_common$$notificationRegisterFirebaseService } from "./NotificationRegisterFirebaseService";
-import { portal } from "../../../../index";
+import { NotificationRegisterFirebaseService } from "./NotificationRegisterFirebaseService";
 
 export const NotificationRegisterService: core.serialization.ObjectSchema<
     serializers.portal.NotificationRegisterService.Raw,
     Rivet.portal.NotificationRegisterService
 > = core.serialization.object({
-    firebase: portal_common$$notificationRegisterFirebaseService.optional(),
+    firebase: NotificationRegisterFirebaseService.optional(),
 });
 
 export declare namespace NotificationRegisterService {
     interface Raw {
-        firebase?: portal.NotificationRegisterFirebaseService.Raw | null;
+        firebase?: NotificationRegisterFirebaseService.Raw | null;
     }
 }

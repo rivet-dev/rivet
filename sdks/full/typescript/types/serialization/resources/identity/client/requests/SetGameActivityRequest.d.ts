@@ -4,10 +4,10 @@
 import * as serializers from "../../../../index";
 import * as Rivet from "../../../../../api/index";
 import * as core from "../../../../../core";
-import { identity } from "../../../index";
+import { UpdateGameActivity } from "../../resources/common/types/UpdateGameActivity";
 export declare const SetGameActivityRequest: core.serialization.Schema<serializers.identity.SetGameActivityRequest.Raw, Rivet.identity.SetGameActivityRequest>;
 export declare namespace SetGameActivityRequest {
     interface Raw {
-        game_activity: identity.UpdateGameActivity.Raw;
+        game_activity: UpdateGameActivity.Raw;
     }
 }

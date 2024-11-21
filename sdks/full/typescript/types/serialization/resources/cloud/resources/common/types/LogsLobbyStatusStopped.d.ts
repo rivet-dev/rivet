@@ -4,11 +4,11 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { common } from "../../../../index";
+import { Timestamp } from "../../../../common/types/Timestamp";
 export declare const LogsLobbyStatusStopped: core.serialization.ObjectSchema<serializers.cloud.LogsLobbyStatusStopped.Raw, Rivet.cloud.LogsLobbyStatusStopped>;
 export declare namespace LogsLobbyStatusStopped {
     interface Raw {
-        stop_ts: common.Timestamp.Raw;
+        stop_ts: Timestamp.Raw;
         failed: boolean;
         exit_code: number;
     }

@@ -4,13 +4,14 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { cloud } from "../../../../../../../../index";
+import { CaptchaHcaptcha } from "./CaptchaHcaptcha";
+import { CaptchaTurnstile } from "./CaptchaTurnstile";
 export declare const Captcha: core.serialization.ObjectSchema<serializers.cloud.version.matchmaker.Captcha.Raw, Rivet.cloud.version.matchmaker.Captcha>;
 export declare namespace Captcha {
     interface Raw {
         requests_before_reverify: number;
         verification_ttl: number;
-        hcaptcha?: cloud.version.matchmaker.CaptchaHcaptcha.Raw | null;
-        turnstile?: cloud.version.matchmaker.CaptchaTurnstile.Raw | null;
+        hcaptcha?: CaptchaHcaptcha.Raw | null;
+        turnstile?: CaptchaTurnstile.Raw | null;
     }
 }

@@ -4,14 +4,15 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { common } from "../../../../index";
+import { DisplayName } from "../../../../common/types/DisplayName";
+import { Timestamp } from "../../../../common/types/Timestamp";
 export declare const CdnSiteSummary: core.serialization.ObjectSchema<serializers.cloud.CdnSiteSummary.Raw, Rivet.cloud.CdnSiteSummary>;
 export declare namespace CdnSiteSummary {
     interface Raw {
         site_id: string;
         upload_id: string;
-        display_name: common.DisplayName.Raw;
-        create_ts: common.Timestamp.Raw;
+        display_name: DisplayName.Raw;
+        create_ts: Timestamp.Raw;
         content_length: number;
         complete: boolean;
     }

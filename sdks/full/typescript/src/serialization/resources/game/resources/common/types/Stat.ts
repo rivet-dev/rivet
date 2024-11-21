@@ -5,18 +5,17 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { StatConfig as game_common$$statConfig } from "./StatConfig";
-import { game } from "../../../../index";
+import { StatConfig } from "./StatConfig";
 
 export const Stat: core.serialization.ObjectSchema<serializers.game.Stat.Raw, Rivet.game.Stat> =
     core.serialization.object({
-        config: game_common$$statConfig,
+        config: StatConfig,
         overallValue: core.serialization.property("overall_value", core.serialization.number()),
     });
 
 export declare namespace Stat {
     interface Raw {
-        config: game.StatConfig.Raw;
+        config: StatConfig.Raw;
         overall_value: number;
     }
 }

@@ -5,17 +5,16 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { LogsLobbySummary as cloud_common$$logsLobbySummary } from "../../../../../../common/types/LogsLobbySummary";
-import { SvcMetrics as cloud_common$$svcMetrics } from "../../../../../../common/types/SvcMetrics";
-import { SvcPerf as cloud_common$$svcPerf } from "../../../../../../common/types/SvcPerf";
-import { cloud } from "../../../../../../../../index";
+import { LogsLobbySummary } from "../../../../../../common/types/LogsLobbySummary";
+import { SvcMetrics } from "../../../../../../common/types/SvcMetrics";
+import { SvcPerf } from "../../../../../../common/types/SvcPerf";
 
 export const GetNamespaceLobbyResponse: core.serialization.ObjectSchema<
     serializers.cloud.games.namespaces.GetNamespaceLobbyResponse.Raw,
     Rivet.cloud.games.namespaces.GetNamespaceLobbyResponse
 > = core.serialization.object({
-    lobby: cloud_common$$logsLobbySummary,
-    metrics: cloud_common$$svcMetrics.optional(),
+    lobby: LogsLobbySummary,
+    metrics: SvcMetrics.optional(),
     stdoutPresignedUrls: core.serialization.property(
         "stdout_presigned_urls",
         core.serialization.list(core.serialization.string())
@@ -24,15 +23,15 @@ export const GetNamespaceLobbyResponse: core.serialization.ObjectSchema<
         "stderr_presigned_urls",
         core.serialization.list(core.serialization.string())
     ),
-    perfLists: core.serialization.property("perf_lists", core.serialization.list(cloud_common$$svcPerf)),
+    perfLists: core.serialization.property("perf_lists", core.serialization.list(SvcPerf)),
 });
 
 export declare namespace GetNamespaceLobbyResponse {
     interface Raw {
-        lobby: cloud.LogsLobbySummary.Raw;
-        metrics?: cloud.SvcMetrics.Raw | null;
+        lobby: LogsLobbySummary.Raw;
+        metrics?: SvcMetrics.Raw | null;
         stdout_presigned_urls: string[];
         stderr_presigned_urls: string[];
-        perf_lists: cloud.SvcPerf.Raw[];
+        perf_lists: SvcPerf.Raw[];
     }
 }

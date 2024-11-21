@@ -4,10 +4,10 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { cloud } from "../../../../../../index";
+import { CdnSiteSummary } from "../../../../common/types/CdnSiteSummary";
 export declare const ListGameCdnSitesResponse: core.serialization.ObjectSchema<serializers.cloud.games.ListGameCdnSitesResponse.Raw, Rivet.cloud.games.ListGameCdnSitesResponse>;
 export declare namespace ListGameCdnSitesResponse {
     interface Raw {
-        sites: cloud.CdnSiteSummary.Raw[];
+        sites: CdnSiteSummary.Raw[];
     }
 }

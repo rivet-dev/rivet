@@ -5,18 +5,17 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { ValidationError as common$$validationError } from "../../common/types/ValidationError";
-import { common } from "../../index";
+import { ValidationError } from "../../common/types/ValidationError";
 
 export const ValidateProfileResponse: core.serialization.ObjectSchema<
     serializers.group.ValidateProfileResponse.Raw,
     Rivet.group.ValidateProfileResponse
 > = core.serialization.object({
-    errors: core.serialization.list(common$$validationError),
+    errors: core.serialization.list(ValidationError),
 });
 
 export declare namespace ValidateProfileResponse {
     interface Raw {
-        errors: common.ValidationError.Raw[];
+        errors: ValidationError.Raw[];
     }
 }

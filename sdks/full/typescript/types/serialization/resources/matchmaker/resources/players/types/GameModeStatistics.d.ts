@@ -4,11 +4,12 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { common, matchmaker } from "../../../../index";
+import { Identifier } from "../../../../common/types/Identifier";
+import { RegionStatistics } from "./RegionStatistics";
 export declare const GameModeStatistics: core.serialization.ObjectSchema<serializers.matchmaker.GameModeStatistics.Raw, Rivet.matchmaker.GameModeStatistics>;
 export declare namespace GameModeStatistics {
     interface Raw {
         player_count: number;
-        regions: Record<common.Identifier.Raw, matchmaker.RegionStatistics.Raw>;
+        regions: Record<Identifier.Raw, RegionStatistics.Raw>;
     }
 }

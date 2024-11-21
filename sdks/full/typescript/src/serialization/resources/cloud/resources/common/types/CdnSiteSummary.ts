@@ -5,9 +5,8 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { DisplayName as common$$displayName } from "../../../../common/types/DisplayName";
-import { Timestamp as common$$timestamp } from "../../../../common/types/Timestamp";
-import { common } from "../../../../index";
+import { DisplayName } from "../../../../common/types/DisplayName";
+import { Timestamp } from "../../../../common/types/Timestamp";
 
 export const CdnSiteSummary: core.serialization.ObjectSchema<
     serializers.cloud.CdnSiteSummary.Raw,
@@ -15,8 +14,8 @@ export const CdnSiteSummary: core.serialization.ObjectSchema<
 > = core.serialization.object({
     siteId: core.serialization.property("site_id", core.serialization.string()),
     uploadId: core.serialization.property("upload_id", core.serialization.string()),
-    displayName: core.serialization.property("display_name", common$$displayName),
-    createTs: core.serialization.property("create_ts", common$$timestamp),
+    displayName: core.serialization.property("display_name", DisplayName),
+    createTs: core.serialization.property("create_ts", Timestamp),
     contentLength: core.serialization.property("content_length", core.serialization.number()),
     complete: core.serialization.boolean(),
 });
@@ -25,8 +24,8 @@ export declare namespace CdnSiteSummary {
     interface Raw {
         site_id: string;
         upload_id: string;
-        display_name: common.DisplayName.Raw;
-        create_ts: common.Timestamp.Raw;
+        display_name: DisplayName.Raw;
+        create_ts: Timestamp.Raw;
         content_length: number;
         complete: boolean;
     }

@@ -5,26 +5,22 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { GameModeIdentityRequirement as cloud_version_matchmaker_game_mode$$gameModeIdentityRequirement } from "./GameModeIdentityRequirement";
-import { GameModeVerificationConfig as cloud_version_matchmaker_game_mode$$gameModeVerificationConfig } from "./GameModeVerificationConfig";
-import { cloud } from "../../../../../../../../index";
+import { GameModeIdentityRequirement } from "./GameModeIdentityRequirement";
+import { GameModeVerificationConfig } from "./GameModeVerificationConfig";
 
 export const GameModeFindConfig: core.serialization.ObjectSchema<
     serializers.cloud.version.matchmaker.GameModeFindConfig.Raw,
     Rivet.cloud.version.matchmaker.GameModeFindConfig
 > = core.serialization.object({
     enabled: core.serialization.boolean(),
-    identityRequirement: core.serialization.property(
-        "identity_requirement",
-        cloud_version_matchmaker_game_mode$$gameModeIdentityRequirement.optional()
-    ),
-    verification: cloud_version_matchmaker_game_mode$$gameModeVerificationConfig.optional(),
+    identityRequirement: core.serialization.property("identity_requirement", GameModeIdentityRequirement.optional()),
+    verification: GameModeVerificationConfig.optional(),
 });
 
 export declare namespace GameModeFindConfig {
     interface Raw {
         enabled: boolean;
-        identity_requirement?: cloud.version.matchmaker.GameModeIdentityRequirement.Raw | null;
-        verification?: cloud.version.matchmaker.GameModeVerificationConfig.Raw | null;
+        identity_requirement?: GameModeIdentityRequirement.Raw | null;
+        verification?: GameModeVerificationConfig.Raw | null;
     }
 }

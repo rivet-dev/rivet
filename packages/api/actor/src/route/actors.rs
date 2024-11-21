@@ -168,7 +168,7 @@ pub async fn create(
 					routing: if let Some(routing) = p.routing {
 						match *routing {
 							models::ActorPortRouting {
-								game_guard: Some(gg),
+								guard: Some(gg),
 								host: None,
 							} => ds::types::Routing::GameGuard {
 								protocol: p.protocol.api_into(),
@@ -188,7 +188,7 @@ pub async fn create(
 								},
 							},
 							models::ActorPortRouting {
-								game_guard: None,
+								guard: None,
 								host: Some(_),
 							} => ds::types::Routing::Host {
 								protocol: p.protocol.api_try_into()?,
@@ -295,8 +295,8 @@ pub async fn create_deprecated(
 									},
 									routing: p.routing.map(|r| {
 										Box::new(models::ActorPortRouting {
-											game_guard: r.game_guard.map(|_| {
-												Box::new(models::ActorGameGuardRouting::default())
+											guard: r.game_guard.map(|_| {
+												Box::new(models::ActorGuardRouting::default())
 											}),
 											host: r.host.map(|_| json!({})),
 										})
@@ -558,7 +558,7 @@ fn legacy_convert_actor_to_server(
 							public_hostname: p.public_hostname,
 							public_port: p.public_port,
 							routing: Box::new(models::ServersPortRouting {
-								game_guard: p.routing.game_guard.map(|_| json!({})),
+								game_guard: p.routing.guard.map(|_| json!({})),
 								host: p.routing.host.map(|_| json!({})),
 							}),
 						},

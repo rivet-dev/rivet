@@ -4,10 +4,10 @@
 import * as serializers from "../../../../index";
 import * as Rivet from "../../../../../api/index";
 import * as core from "../../../../../core";
-import { identity } from "../../../index";
+import { Status } from "../../resources/common/types/Status";
 export declare const UpdateStatusRequest: core.serialization.Schema<serializers.identity.UpdateStatusRequest.Raw, Rivet.identity.UpdateStatusRequest>;
 export declare namespace UpdateStatusRequest {
     interface Raw {
-        status: identity.Status.Raw;
+        status: Status.Raw;
     }
 }

@@ -4,10 +4,10 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { cloud } from "../../../../../../index";
+import { CdnAuthType } from "../../../../common/types/CdnAuthType";
 export declare const SetNamespaceCdnAuthTypeRequest: core.serialization.ObjectSchema<serializers.cloud.games.namespaces.SetNamespaceCdnAuthTypeRequest.Raw, Rivet.cloud.games.namespaces.SetNamespaceCdnAuthTypeRequest>;
 export declare namespace SetNamespaceCdnAuthTypeRequest {
     interface Raw {
-        auth_type: cloud.CdnAuthType.Raw;
+        auth_type: CdnAuthType.Raw;
     }
 }

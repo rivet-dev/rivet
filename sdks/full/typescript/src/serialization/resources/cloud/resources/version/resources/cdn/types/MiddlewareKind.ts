@@ -5,18 +5,17 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { CustomHeadersMiddleware as cloud_version_cdn$$customHeadersMiddleware } from "./CustomHeadersMiddleware";
-import { cloud } from "../../../../../../index";
+import { CustomHeadersMiddleware } from "./CustomHeadersMiddleware";
 
 export const MiddlewareKind: core.serialization.ObjectSchema<
     serializers.cloud.version.cdn.MiddlewareKind.Raw,
     Rivet.cloud.version.cdn.MiddlewareKind
 > = core.serialization.object({
-    customHeaders: core.serialization.property("custom_headers", cloud_version_cdn$$customHeadersMiddleware.optional()),
+    customHeaders: core.serialization.property("custom_headers", CustomHeadersMiddleware.optional()),
 });
 
 export declare namespace MiddlewareKind {
     interface Raw {
-        custom_headers?: cloud.version.cdn.CustomHeadersMiddleware.Raw | null;
+        custom_headers?: CustomHeadersMiddleware.Raw | null;
     }
 }

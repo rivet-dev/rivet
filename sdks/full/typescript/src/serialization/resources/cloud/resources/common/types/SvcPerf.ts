@@ -5,28 +5,27 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Timestamp as common$$timestamp } from "../../../../common/types/Timestamp";
-import { LogsPerfSpan as cloud_common$$logsPerfSpan } from "./LogsPerfSpan";
-import { LogsPerfMark as cloud_common$$logsPerfMark } from "./LogsPerfMark";
-import { common, cloud } from "../../../../index";
+import { Timestamp } from "../../../../common/types/Timestamp";
+import { LogsPerfSpan } from "./LogsPerfSpan";
+import { LogsPerfMark } from "./LogsPerfMark";
 
 export const SvcPerf: core.serialization.ObjectSchema<serializers.cloud.SvcPerf.Raw, Rivet.cloud.SvcPerf> =
     core.serialization.object({
         svcName: core.serialization.property("svc_name", core.serialization.string()),
-        ts: common$$timestamp,
+        ts: Timestamp,
         duration: core.serialization.number(),
         reqId: core.serialization.property("req_id", core.serialization.string().optional()),
-        spans: core.serialization.list(cloud_common$$logsPerfSpan),
-        marks: core.serialization.list(cloud_common$$logsPerfMark),
+        spans: core.serialization.list(LogsPerfSpan),
+        marks: core.serialization.list(LogsPerfMark),
     });
 
 export declare namespace SvcPerf {
     interface Raw {
         svc_name: string;
-        ts: common.Timestamp.Raw;
+        ts: Timestamp.Raw;
         duration: number;
         req_id?: string | null;
-        spans: cloud.LogsPerfSpan.Raw[];
-        marks: cloud.LogsPerfMark.Raw[];
+        spans: LogsPerfSpan.Raw[];
+        marks: LogsPerfMark.Raw[];
     }
 }

@@ -3,7 +3,7 @@
  */
 import * as environments from "./environments";
 import * as core from "./core";
-import { Matchmaker } from "./api/resources/matchmaker/client/Client";
+import { Actor } from "./api/resources/actor/client/Client";
 export declare namespace RivetClient {
     interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
@@ -22,6 +22,6 @@ export declare namespace RivetClient {
 export declare class RivetClient {
     protected readonly _options: RivetClient.Options;
     constructor(_options: RivetClient.Options);
-    protected _matchmaker: Matchmaker | undefined;
-    get matchmaker(): Matchmaker;
+    protected _actor: Actor | undefined;
+    get actor(): Actor;
 }

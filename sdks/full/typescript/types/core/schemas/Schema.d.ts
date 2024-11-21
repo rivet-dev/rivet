@@ -8,6 +8,7 @@ export interface BaseSchema<Raw, Parsed> {
     getType: () => SchemaType | SchemaType;
 }
 export declare const SchemaType: {
+    readonly BIGINT: "bigint";
     readonly DATE: "date";
     readonly ENUM: "enum";
     readonly LIST: "list";

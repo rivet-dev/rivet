@@ -4,11 +4,12 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { common, cloud } from "../../../../index";
+import { EmptyObject } from "../../../../common/types/EmptyObject";
+import { CdnNamespaceDomainVerificationMethodHttp } from "./CdnNamespaceDomainVerificationMethodHttp";
 export declare const CdnNamespaceDomainVerificationMethod: core.serialization.ObjectSchema<serializers.cloud.CdnNamespaceDomainVerificationMethod.Raw, Rivet.cloud.CdnNamespaceDomainVerificationMethod>;
 export declare namespace CdnNamespaceDomainVerificationMethod {
     interface Raw {
-        invalid?: common.EmptyObject.Raw | null;
-        http?: cloud.CdnNamespaceDomainVerificationMethodHttp.Raw | null;
+        invalid?: EmptyObject.Raw | null;
+        http?: CdnNamespaceDomainVerificationMethodHttp.Raw | null;
     }
 }

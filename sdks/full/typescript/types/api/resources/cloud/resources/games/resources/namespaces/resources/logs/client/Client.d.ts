@@ -39,7 +39,7 @@ export declare class Logs {
      *
      * @example
      *     await client.cloud.games.namespaces.logs.listNamespaceLobbies("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         beforeCreateTs: new Date("2024-01-15T09:30:00.000Z")
+     *         beforeCreateTs: "2024-01-15T09:30:00Z"
      *     })
      */
     listNamespaceLobbies(gameId: string, namespaceId: string, request?: Rivet.cloud.games.namespaces.ListNamespaceLobbiesRequest, requestOptions?: Logs.RequestOptions): Promise<Rivet.cloud.games.namespaces.ListNamespaceLobbiesResponse>;

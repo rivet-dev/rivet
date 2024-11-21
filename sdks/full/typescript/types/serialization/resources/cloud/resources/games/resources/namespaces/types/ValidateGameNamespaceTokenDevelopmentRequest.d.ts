@@ -4,11 +4,11 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { cloud } from "../../../../../../index";
+import { LobbyGroupRuntimeDockerPort } from "../../../../version/resources/matchmaker/resources/lobbyGroup/types/LobbyGroupRuntimeDockerPort";
 export declare const ValidateGameNamespaceTokenDevelopmentRequest: core.serialization.ObjectSchema<serializers.cloud.games.namespaces.ValidateGameNamespaceTokenDevelopmentRequest.Raw, Rivet.cloud.games.namespaces.ValidateGameNamespaceTokenDevelopmentRequest>;
 export declare namespace ValidateGameNamespaceTokenDevelopmentRequest {
     interface Raw {
         hostname: string;
-        lobby_ports: cloud.version.matchmaker.LobbyGroupRuntimeDockerPort.Raw[];
+        lobby_ports: LobbyGroupRuntimeDockerPort.Raw[];
     }
 }

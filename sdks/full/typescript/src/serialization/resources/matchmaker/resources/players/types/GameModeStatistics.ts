@@ -5,21 +5,20 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Identifier as common$$identifier } from "../../../../common/types/Identifier";
-import { RegionStatistics as matchmaker_players$$regionStatistics } from "./RegionStatistics";
-import { common, matchmaker } from "../../../../index";
+import { Identifier } from "../../../../common/types/Identifier";
+import { RegionStatistics } from "./RegionStatistics";
 
 export const GameModeStatistics: core.serialization.ObjectSchema<
     serializers.matchmaker.GameModeStatistics.Raw,
     Rivet.matchmaker.GameModeStatistics
 > = core.serialization.object({
     playerCount: core.serialization.property("player_count", core.serialization.number()),
-    regions: core.serialization.record(common$$identifier, matchmaker_players$$regionStatistics),
+    regions: core.serialization.record(Identifier, RegionStatistics),
 });
 
 export declare namespace GameModeStatistics {
     interface Raw {
         player_count: number;
-        regions: Record<common.Identifier.Raw, matchmaker.RegionStatistics.Raw>;
+        regions: Record<Identifier.Raw, RegionStatistics.Raw>;
     }
 }

@@ -5,28 +5,27 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { DisplayName as common$$displayName } from "../../../../common/types/DisplayName";
-import { AccountNumber as common$$accountNumber } from "../../../../common/types/AccountNumber";
-import { ExternalLinks as identity_common$$externalLinks } from "./ExternalLinks";
-import { common, identity } from "../../../../index";
+import { DisplayName } from "../../../../common/types/DisplayName";
+import { AccountNumber } from "../../../../common/types/AccountNumber";
+import { ExternalLinks } from "./ExternalLinks";
 
 export const Handle: core.serialization.ObjectSchema<serializers.identity.Handle.Raw, Rivet.identity.Handle> =
     core.serialization.object({
         identityId: core.serialization.property("identity_id", core.serialization.string()),
-        displayName: core.serialization.property("display_name", common$$displayName),
-        accountNumber: core.serialization.property("account_number", common$$accountNumber),
+        displayName: core.serialization.property("display_name", DisplayName),
+        accountNumber: core.serialization.property("account_number", AccountNumber),
         avatarUrl: core.serialization.property("avatar_url", core.serialization.string()),
         isRegistered: core.serialization.property("is_registered", core.serialization.boolean()),
-        external: identity_common$$externalLinks,
+        external: ExternalLinks,
     });
 
 export declare namespace Handle {
     interface Raw {
         identity_id: string;
-        display_name: common.DisplayName.Raw;
-        account_number: common.AccountNumber.Raw;
+        display_name: DisplayName.Raw;
+        account_number: AccountNumber.Raw;
         avatar_url: string;
         is_registered: boolean;
-        external: identity.ExternalLinks.Raw;
+        external: ExternalLinks.Raw;
     }
 }

@@ -5,21 +5,20 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Handle as identity_common$$handle } from "../../../../identity/resources/common/types/Handle";
-import { Timestamp as common$$timestamp } from "../../../../common/types/Timestamp";
-import { identity, common } from "../../../../index";
+import { Handle } from "../../../../identity/resources/common/types/Handle";
+import { Timestamp } from "../../../../common/types/Timestamp";
 
 export const BannedIdentity: core.serialization.ObjectSchema<
     serializers.group.BannedIdentity.Raw,
     Rivet.group.BannedIdentity
 > = core.serialization.object({
-    identity: identity_common$$handle,
-    banTs: core.serialization.property("ban_ts", common$$timestamp),
+    identity: Handle,
+    banTs: core.serialization.property("ban_ts", Timestamp),
 });
 
 export declare namespace BannedIdentity {
     interface Raw {
-        identity: identity.Handle.Raw;
-        ban_ts: common.Timestamp.Raw;
+        identity: Handle.Raw;
+        ban_ts: Timestamp.Raw;
     }
 }

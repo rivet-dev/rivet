@@ -5,22 +5,21 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { Config as captcha_config$$config } from "../../../../../../captcha/resources/config/types/Config";
-import { captcha } from "../../../../../../index";
+import { Config } from "../../../../../../captcha/resources/config/types/Config";
 
 export const StartEmailVerificationRequest: core.serialization.ObjectSchema<
     serializers.auth.identity.StartEmailVerificationRequest.Raw,
     Rivet.auth.identity.StartEmailVerificationRequest
 > = core.serialization.object({
     email: core.serialization.string(),
-    captcha: captcha_config$$config.optional(),
+    captcha: Config.optional(),
     gameId: core.serialization.property("game_id", core.serialization.string().optional()),
 });
 
 export declare namespace StartEmailVerificationRequest {
     interface Raw {
         email: string;
-        captcha?: captcha.Config.Raw | null;
+        captcha?: Config.Raw | null;
         game_id?: string | null;
     }
 }

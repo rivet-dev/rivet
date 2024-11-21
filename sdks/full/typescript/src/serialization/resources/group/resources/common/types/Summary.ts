@@ -5,25 +5,24 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { DisplayName as common$$displayName } from "../../../../common/types/DisplayName";
-import { ExternalLinks as group_common$$externalLinks } from "./ExternalLinks";
-import { Bio as common$$bio } from "../../../../common/types/Bio";
-import { Publicity as group_common$$publicity } from "./Publicity";
-import { common, group } from "../../../../index";
+import { DisplayName } from "../../../../common/types/DisplayName";
+import { ExternalLinks } from "./ExternalLinks";
+import { Bio } from "../../../../common/types/Bio";
+import { Publicity } from "./Publicity";
 
 export const Summary: core.serialization.ObjectSchema<serializers.group.Summary.Raw, Rivet.group.Summary> =
     core.serialization.object({
         groupId: core.serialization.property("group_id", core.serialization.string()),
-        displayName: core.serialization.property("display_name", common$$displayName),
+        displayName: core.serialization.property("display_name", DisplayName),
         avatarUrl: core.serialization.property("avatar_url", core.serialization.string().optional()),
-        external: group_common$$externalLinks,
+        external: ExternalLinks,
         isDeveloper: core.serialization.property("is_developer", core.serialization.boolean()),
-        bio: common$$bio,
+        bio: Bio,
         isCurrentIdentityMember: core.serialization.property(
             "is_current_identity_member",
             core.serialization.boolean()
         ),
-        publicity: group_common$$publicity,
+        publicity: Publicity,
         memberCount: core.serialization.property("member_count", core.serialization.number()),
         ownerIdentityId: core.serialization.property("owner_identity_id", core.serialization.string()),
     });
@@ -31,13 +30,13 @@ export const Summary: core.serialization.ObjectSchema<serializers.group.Summary.
 export declare namespace Summary {
     interface Raw {
         group_id: string;
-        display_name: common.DisplayName.Raw;
+        display_name: DisplayName.Raw;
         avatar_url?: string | null;
-        external: group.ExternalLinks.Raw;
+        external: ExternalLinks.Raw;
         is_developer: boolean;
-        bio: common.Bio.Raw;
+        bio: Bio.Raw;
         is_current_identity_member: boolean;
-        publicity: group.Publicity.Raw;
+        publicity: Publicity.Raw;
         member_count: number;
         owner_identity_id: string;
     }

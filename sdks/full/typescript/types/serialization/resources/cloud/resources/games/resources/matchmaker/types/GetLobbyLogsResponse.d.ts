@@ -4,12 +4,12 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { common } from "../../../../../../index";
+import { WatchResponse } from "../../../../../../common/types/WatchResponse";
 export declare const GetLobbyLogsResponse: core.serialization.ObjectSchema<serializers.cloud.games.GetLobbyLogsResponse.Raw, Rivet.cloud.games.GetLobbyLogsResponse>;
 export declare namespace GetLobbyLogsResponse {
     interface Raw {
         lines: string[];
         timestamps: string[];
-        watch: common.WatchResponse.Raw;
+        watch: WatchResponse.Raw;
     }
 }

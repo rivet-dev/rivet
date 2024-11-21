@@ -4,12 +4,14 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { common, identity } from "../../../../index";
+import { Timestamp } from "../../../../common/types/Timestamp";
+import { GlobalEventKind } from "./GlobalEventKind";
+import { GlobalEventNotification } from "./GlobalEventNotification";
 export declare const GlobalEvent: core.serialization.ObjectSchema<serializers.identity.GlobalEvent.Raw, Rivet.identity.GlobalEvent>;
 export declare namespace GlobalEvent {
     interface Raw {
-        ts: common.Timestamp.Raw;
-        kind: identity.GlobalEventKind.Raw;
-        notification?: identity.GlobalEventNotification.Raw | null;
+        ts: Timestamp.Raw;
+        kind: GlobalEventKind.Raw;
+        notification?: GlobalEventNotification.Raw | null;
     }
 }

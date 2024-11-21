@@ -4,16 +4,18 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { common, identity } from "../../../../index";
+import { DisplayName } from "../../../../common/types/DisplayName";
+import { AccountNumber } from "../../../../common/types/AccountNumber";
+import { ExternalLinks } from "./ExternalLinks";
 export declare const Summary: core.serialization.ObjectSchema<serializers.identity.Summary.Raw, Rivet.identity.Summary>;
 export declare namespace Summary {
     interface Raw {
         identity_id: string;
-        display_name: common.DisplayName.Raw;
-        account_number: common.AccountNumber.Raw;
+        display_name: DisplayName.Raw;
+        account_number: AccountNumber.Raw;
         avatar_url: string;
         is_registered: boolean;
-        external: identity.ExternalLinks.Raw;
+        external: ExternalLinks.Raw;
         following: boolean;
         is_following_me: boolean;
         is_mutual_following: boolean;

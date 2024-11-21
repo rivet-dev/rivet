@@ -47,7 +47,7 @@ export class Logs {
      *
      * @example
      *     await client.servers.logs.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         stream: Rivet.servers.LogStream.StdOut,
+     *         stream: "std_out",
      *         watchIndex: "string"
      *     })
      */
@@ -75,6 +75,9 @@ export class Logs {
             method: "GET",
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
             },
             contentType: "application/json",
             queryParameters: _queryParams,

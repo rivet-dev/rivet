@@ -4,11 +4,11 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { identity } from "../../../../index";
+import { EmailLinkedAccount } from "./EmailLinkedAccount";
 export declare const LinkedAccount: core.serialization.ObjectSchema<serializers.identity.LinkedAccount.Raw, Rivet.identity.LinkedAccount>;
 export declare namespace LinkedAccount {
     interface Raw {
-        email?: identity.EmailLinkedAccount.Raw | null;
+        email?: EmailLinkedAccount.Raw | null;
         default_user?: boolean | null;
     }
 }

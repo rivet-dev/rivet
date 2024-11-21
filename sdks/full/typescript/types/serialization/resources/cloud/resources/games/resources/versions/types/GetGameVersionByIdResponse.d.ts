@@ -4,10 +4,10 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { cloud } from "../../../../../../index";
+import { Full } from "../../../../version/types/Full";
 export declare const GetGameVersionByIdResponse: core.serialization.ObjectSchema<serializers.cloud.games.GetGameVersionByIdResponse.Raw, Rivet.cloud.games.GetGameVersionByIdResponse>;
 export declare namespace GetGameVersionByIdResponse {
     interface Raw {
-        version: cloud.version.Full.Raw;
+        version: Full.Raw;
     }
 }

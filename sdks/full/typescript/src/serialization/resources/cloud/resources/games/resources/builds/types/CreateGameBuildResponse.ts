@@ -5,8 +5,7 @@
 import * as serializers from "../../../../../../../index";
 import * as Rivet from "../../../../../../../../api/index";
 import * as core from "../../../../../../../../core";
-import { PresignedRequest as upload_common$$presignedRequest } from "../../../../../../upload/resources/common/types/PresignedRequest";
-import { upload } from "../../../../../../index";
+import { PresignedRequest } from "../../../../../../upload/resources/common/types/PresignedRequest";
 
 export const CreateGameBuildResponse: core.serialization.ObjectSchema<
     serializers.cloud.games.CreateGameBuildResponse.Raw,
@@ -14,13 +13,10 @@ export const CreateGameBuildResponse: core.serialization.ObjectSchema<
 > = core.serialization.object({
     buildId: core.serialization.property("build_id", core.serialization.string()),
     uploadId: core.serialization.property("upload_id", core.serialization.string()),
-    imagePresignedRequest: core.serialization.property(
-        "image_presigned_request",
-        upload_common$$presignedRequest.optional()
-    ),
+    imagePresignedRequest: core.serialization.property("image_presigned_request", PresignedRequest.optional()),
     imagePresignedRequests: core.serialization.property(
         "image_presigned_requests",
-        core.serialization.list(upload_common$$presignedRequest).optional()
+        core.serialization.list(PresignedRequest).optional()
     ),
 });
 
@@ -28,7 +24,7 @@ export declare namespace CreateGameBuildResponse {
     interface Raw {
         build_id: string;
         upload_id: string;
-        image_presigned_request?: upload.PresignedRequest.Raw | null;
-        image_presigned_requests?: upload.PresignedRequest.Raw[] | null;
+        image_presigned_request?: PresignedRequest.Raw | null;
+        image_presigned_requests?: PresignedRequest.Raw[] | null;
     }
 }

@@ -7,7 +7,7 @@ import * as Rivet from "../../../../../../index";
 /**
  * @example
  *     {
- *         stream: Rivet.servers.LogStream.StdOut,
+ *         stream: "std_out",
  *         watchIndex: "string"
  *     }
  */

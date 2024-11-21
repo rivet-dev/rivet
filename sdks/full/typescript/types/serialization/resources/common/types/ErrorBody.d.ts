@@ -4,7 +4,7 @@
 import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
-import { common } from "../../index";
+import { ErrorMetadata } from "./ErrorMetadata";
 export declare const ErrorBody: core.serialization.ObjectSchema<serializers.ErrorBody.Raw, Rivet.ErrorBody>;
 export declare namespace ErrorBody {
     interface Raw {
@@ -12,6 +12,6 @@ export declare namespace ErrorBody {
         message: string;
         ray_id: string;
         documentation?: string | null;
-        metadata?: (common.ErrorMetadata.Raw | undefined) | null;
+        metadata?: (ErrorMetadata.Raw | undefined) | null;
     }
 }

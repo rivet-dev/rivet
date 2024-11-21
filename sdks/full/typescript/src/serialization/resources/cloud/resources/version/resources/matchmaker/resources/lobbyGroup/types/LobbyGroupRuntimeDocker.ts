@@ -5,10 +5,9 @@
 import * as serializers from "../../../../../../../../../index";
 import * as Rivet from "../../../../../../../../../../api/index";
 import * as core from "../../../../../../../../../../core";
-import { LobbyGroupRuntimeDockerEnvVar as cloud_version_matchmaker_lobby_group$$lobbyGroupRuntimeDockerEnvVar } from "./LobbyGroupRuntimeDockerEnvVar";
-import { NetworkMode as cloud_version_matchmaker_common$$networkMode } from "../../common/types/NetworkMode";
-import { LobbyGroupRuntimeDockerPort as cloud_version_matchmaker_lobby_group$$lobbyGroupRuntimeDockerPort } from "./LobbyGroupRuntimeDockerPort";
-import { cloud } from "../../../../../../../../index";
+import { LobbyGroupRuntimeDockerEnvVar } from "./LobbyGroupRuntimeDockerEnvVar";
+import { NetworkMode } from "../../common/types/NetworkMode";
+import { LobbyGroupRuntimeDockerPort } from "./LobbyGroupRuntimeDockerPort";
 
 export const LobbyGroupRuntimeDocker: core.serialization.ObjectSchema<
     serializers.cloud.version.matchmaker.LobbyGroupRuntimeDocker.Raw,
@@ -16,20 +15,17 @@ export const LobbyGroupRuntimeDocker: core.serialization.ObjectSchema<
 > = core.serialization.object({
     buildId: core.serialization.property("build_id", core.serialization.string().optional()),
     args: core.serialization.list(core.serialization.string()),
-    envVars: core.serialization.property(
-        "env_vars",
-        core.serialization.list(cloud_version_matchmaker_lobby_group$$lobbyGroupRuntimeDockerEnvVar)
-    ),
-    networkMode: core.serialization.property("network_mode", cloud_version_matchmaker_common$$networkMode.optional()),
-    ports: core.serialization.list(cloud_version_matchmaker_lobby_group$$lobbyGroupRuntimeDockerPort),
+    envVars: core.serialization.property("env_vars", core.serialization.list(LobbyGroupRuntimeDockerEnvVar)),
+    networkMode: core.serialization.property("network_mode", NetworkMode.optional()),
+    ports: core.serialization.list(LobbyGroupRuntimeDockerPort),
 });
 
 export declare namespace LobbyGroupRuntimeDocker {
     interface Raw {
         build_id?: string | null;
         args: string[];
-        env_vars: cloud.version.matchmaker.LobbyGroupRuntimeDockerEnvVar.Raw[];
-        network_mode?: cloud.version.matchmaker.NetworkMode.Raw | null;
-        ports: cloud.version.matchmaker.LobbyGroupRuntimeDockerPort.Raw[];
+        env_vars: LobbyGroupRuntimeDockerEnvVar.Raw[];
+        network_mode?: NetworkMode.Raw | null;
+        ports: LobbyGroupRuntimeDockerPort.Raw[];
     }
 }

@@ -5,24 +5,23 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-import { Handle as game_common$$handle } from "../../../../game/resources/common/types/Handle";
-import { NamespaceSummary as cloud_common$$namespaceSummary } from "./NamespaceSummary";
-import { RegionTierExpenses as cloud_common$$regionTierExpenses } from "./RegionTierExpenses";
-import { game, cloud } from "../../../../index";
+import { Handle } from "../../../../game/resources/common/types/Handle";
+import { NamespaceSummary } from "./NamespaceSummary";
+import { RegionTierExpenses } from "./RegionTierExpenses";
 
 export const GameLobbyExpenses: core.serialization.ObjectSchema<
     serializers.cloud.GameLobbyExpenses.Raw,
     Rivet.cloud.GameLobbyExpenses
 > = core.serialization.object({
-    game: game_common$$handle,
-    namespaces: core.serialization.list(cloud_common$$namespaceSummary),
-    expenses: core.serialization.list(cloud_common$$regionTierExpenses),
+    game: Handle,
+    namespaces: core.serialization.list(NamespaceSummary),
+    expenses: core.serialization.list(RegionTierExpenses),
 });
 
 export declare namespace GameLobbyExpenses {
     interface Raw {
-        game: game.Handle.Raw;
-        namespaces: cloud.NamespaceSummary.Raw[];
-        expenses: cloud.RegionTierExpenses.Raw[];
+        game: Handle.Raw;
+        namespaces: NamespaceSummary.Raw[];
+        expenses: RegionTierExpenses.Raw[];
     }
 }
