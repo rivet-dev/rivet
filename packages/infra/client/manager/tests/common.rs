@@ -16,7 +16,8 @@ use hyper::{
 	Body, Response, Server,
 };
 use pegboard::protocol;
-use pegboard_manager::{config::*, system_info, utils, Ctx};
+use pegboard_config::*;
+use pegboard_manager::{system_info, utils, Ctx};
 use tokio::{
 	fs::File,
 	io::BufReader,
@@ -224,9 +225,11 @@ pub async fn init_client(gen_path: &Path, working_path: &Path) -> Config {
 			cni: Default::default(),
 			reserved_resources: Default::default(),
 			logs: Logs {
-				vector_address: Some("127.0.0.1:5021".parse().unwrap()),
 				redirect_logs: Some(false),
 			},
+			vector: Some(Vector {
+				address: "127.0.0.1:5021".into(),
+			}),
 		},
 	};
 

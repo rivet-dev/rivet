@@ -229,6 +229,10 @@ impl<T> Raw<T> {
 			inner: serde_json::value::RawValue::from_string(s)?,
 		})
 	}
+
+	pub fn as_bytes(&self) -> &[u8] {
+		self.inner.get().as_bytes()
+	}
 }
 
 impl<T: Serialize> Raw<T> {

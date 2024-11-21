@@ -24,6 +24,8 @@ use tokio::{
 
 use pegboard_config::{Config, FoundationDb};
 
+pub mod sql;
+
 const MAX_QUERY_RETRIES: usize = 16;
 const QUERY_RETRY: Duration = Duration::from_millis(500);
 const TXN_RETRY: Duration = Duration::from_millis(250);
@@ -106,7 +108,6 @@ pub async fn build_sqlite_pool(db_url: &str) -> Result<SqlitePool> {
 		.map_err(Into::into)
 }
 
-// TODO: Replace with migrations
 pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 	// Attempt to use an existing connection
 	let mut conn = if let Some(conn) = pool.try_acquire() {
@@ -115,6 +116,23 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 		// Create a new connection
 		pool.acquire().await?
 	};
+
+	let settings = [
+		// Set the journal mode to Write-Ahead Logging for concurrency
+		"PRAGMA journal_mode = WAL",
+		// Set synchronous mode to NORMAL for performance and data safety balance
+		"PRAGMA synchronous = NORMAL",
+		// Set busy timeout to 5 seconds to avoid "database is locked" errors
+		"PRAGMA busy_timeout = 5000",
+		// Enable foreign key constraint enforcement
+		"PRAGMA foreign_keys = ON",
+		// Enable auto vacuuming and set it to incremental mode for gradual space reclaiming
+		"PRAGMA auto_vacuum = INCREMENTAL",
+	];
+
+	for setting in settings {
+		sqlx::query(setting).execute(&mut *conn).await?;
+	}
 
 	sqlx::query(indoc!(
 		"
@@ -125,8 +143,8 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 			isolate_runner_pid INTEGER,
 
 			-- Keeps this table having one row
-			_persistence BOOLEAN UNIQUE NOT NULL DEFAULT TRUE
-		)
+			_persistence INTEGER UNIQUE NOT NULL DEFAULT TRUE -- BOOLEAN
+		) STRICT
 		",
 	))
 	.execute(&mut *conn)
@@ -148,7 +166,7 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 			idx INTEGER NOT NULL UNIQUE,
 			payload BLOB NOT NULL,
 			create_ts INTEGER NOT NULL
-		)
+		) STRICT
 		",
 	))
 	.execute(&mut *conn)
@@ -160,7 +178,7 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 			idx INTEGER NOT NULL UNIQUE,
 			payload BLOB NOT NULL,
 			ack_ts INTEGER NOT NULL
-		)
+		) STRICT
 		",
 	))
 	.execute(&mut *conn)
@@ -179,7 +197,7 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 
 			pid INTEGER,
 			exit_code INTEGER
-		)
+		) STRICT
 		",
 	))
 	.execute(&mut *conn)
@@ -187,15 +205,13 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 
 	sqlx::query(indoc!(
 		"
-		-- NOTE: This does not store the actual port, but an offset from the minimum (see MIN_INGRESS_PORT
-		-- in actor/setup.rs)
 		CREATE TABLE IF NOT EXISTS actor_ports (
 			actor_id BLOB NOT NULL, -- UUID
 			port INT NOT NULL,
 			protocol INT NOT NULL, -- protocol::TransportProtocol
 
 			delete_ts INT
-		)
+		) STRICT
 		",
 	))
 	.execute(&mut *conn)

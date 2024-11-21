@@ -25,7 +25,11 @@ use tokio_tungstenite::{tungstenite::protocol::Message, MaybeTlsStream, WebSocke
 use url::Url;
 use uuid::Uuid;
 
-use crate::{actor::Actor, metrics, runner, utils};
+use crate::{
+	actor::Actor,
+	metrics, runner,
+	utils::{self, sql::SqliteConnectionExt},
+};
 
 const PING_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -102,23 +106,24 @@ impl Ctx {
 	}
 
 	async fn write_event(&self, event: &protocol::Event) -> Result<i64> {
+		// Write event to db
+		let event_json = serde_json::to_vec(event)?;
+
 		// Fetch next idx
-		let (index,) = utils::query(|| async {
-			sqlx::query_as::<_, (i64,)>(indoc!(
+		let index = utils::query(|| async {
+			let mut conn = self.sql().await?;
+			let mut txn = conn.begin_immediate().await?;
+
+			let (index,) = sqlx::query_as::<_, (i64,)>(indoc!(
 				"
 				UPDATE state
 				SET last_event_idx = last_event_idx + 1
 				RETURNING last_event_idx
 				",
 			))
-			.fetch_one(&mut *self.sql().await?)
-			.await
-		})
-		.await?;
+			.fetch_one(&mut *txn)
+			.await?;
 
-		// Write event to db
-		let event_json = serde_json::to_vec(event)?;
-		utils::query(|| async {
 			sqlx::query(indoc!(
 				"
 				INSERT INTO events (
@@ -132,8 +137,12 @@ impl Ctx {
 			.bind(index)
 			.bind(&event_json)
 			.bind(utils::now())
-			.execute(&mut *self.sql().await?)
-			.await
+			.execute(&mut *txn)
+			.await?;
+
+			txn.commit().await?;
+
+			Ok(index)
 		})
 		.await?;
 
@@ -331,7 +340,8 @@ impl Ctx {
 					",
 				))
 				.bind(command.index)
-				.bind(&command.inner)
+				// `Raw` is encodable on its own but we need it to be written as a BLOB and not TEXT
+				.bind(command.inner.as_bytes())
 				.bind(utils::now())
 				.execute(&mut *self.sql().await?)
 				.await
