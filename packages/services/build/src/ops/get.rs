@@ -14,7 +14,7 @@ pub struct Output {
 }
 
 #[derive(sqlx::FromRow)]
-struct BuildRow {
+pub(crate) struct BuildRow {
 	build_id: Uuid,
 	game_id: Option<Uuid>,
 	env_id: Option<Uuid>,
@@ -64,10 +64,8 @@ pub async fn get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
 			kind,
 			compression,
 			tags
-		FROM
-			db_build.builds
-		WHERE
-			build_id = ANY($1)
+		FROM db_build.builds
+		WHERE build_id = ANY($1)
 		",
 		&input.build_ids,
 	)

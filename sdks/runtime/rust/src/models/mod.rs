@@ -60,6 +60,8 @@ pub mod actor_resources;
 pub use self::actor_resources::ActorResources;
 pub mod actor_runtime;
 pub use self::actor_runtime::ActorRuntime;
+pub mod actor_upgrade_actor_request;
+pub use self::actor_upgrade_actor_request::ActorUpgradeActorRequest;
 pub mod error_body;
 pub use self::error_body::ErrorBody;
 pub mod upload_prepare_file;

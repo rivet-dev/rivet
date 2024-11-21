@@ -417,3 +417,95 @@ func (c *Client) Destroy(ctx context.Context, actor uuid.UUID, request *sdkactor
 	}
 	return response, nil
 }
+
+// Upgrades a dynamic actor.
+//
+// The id of the actor to upgrade
+func (c *Client) Upgrade(ctx context.Context, actor uuid.UUID, request *sdkactor.UpgradeActorRequestQuery) (*sdkactor.UpgradeActorResponse, error) {
+	baseURL := "https://api.rivet.gg"
+	if c.baseURL != "" {
+		baseURL = c.baseURL
+	}
+	endpointURL := fmt.Sprintf(baseURL+"/"+"actors/%v/upgrade", actor)
+
+	queryParams := make(url.Values)
+	if request.Project != nil {
+		queryParams.Add("project", fmt.Sprintf("%v", *request.Project))
+	}
+	if request.Environment != nil {
+		queryParams.Add("environment", fmt.Sprintf("%v", *request.Environment))
+	}
+	if len(queryParams) > 0 {
+		endpointURL += "?" + queryParams.Encode()
+	}
+
+	errorDecoder := func(statusCode int, body io.Reader) error {
+		raw, err := io.ReadAll(body)
+		if err != nil {
+			return err
+		}
+		apiError := core.NewAPIError(statusCode, errors.New(string(raw)))
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		switch statusCode {
+		case 500:
+			value := new(sdk.InternalError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 429:
+			value := new(sdk.RateLimitError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 403:
+			value := new(sdk.ForbiddenError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 408:
+			value := new(sdk.UnauthorizedError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 404:
+			value := new(sdk.NotFoundError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		case 400:
+			value := new(sdk.BadRequestError)
+			value.APIError = apiError
+			if err := decoder.Decode(value); err != nil {
+				return apiError
+			}
+			return value
+		}
+		return apiError
+	}
+
+	var response *sdkactor.UpgradeActorResponse
+	if err := c.caller.Call(
+		ctx,
+		&core.CallParams{
+			URL:          endpointURL,
+			Method:       http.MethodPost,
+			Headers:      c.header,
+			Request:      request,
+			Response:     &response,
+			ErrorDecoder: errorDecoder,
+		},
+	); err != nil {
+		return nil, err
+	}
+	return response, nil
+}

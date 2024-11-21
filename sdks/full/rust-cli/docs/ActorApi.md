@@ -8,6 +8,7 @@ Method | HTTP request | Description
 [**actor_destroy**](ActorApi.md#actor_destroy) | **DELETE** /actors/{actor} | 
 [**actor_get**](ActorApi.md#actor_get) | **GET** /actors/{actor} | 
 [**actor_list**](ActorApi.md#actor_list) | **GET** /actors | 
+[**actor_upgrade**](ActorApi.md#actor_upgrade) | **POST** /actors/{actor}/upgrade | 
 
 
 
@@ -137,6 +138,39 @@ Name | Type | Description  | Required | Notes
 ### HTTP request headers
 
 - **Content-Type**: Not defined
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## actor_upgrade
+
+> serde_json::Value actor_upgrade(actor, actor_upgrade_actor_request, project, environment)
+
+
+Upgrades a dynamic actor.
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**actor** | **uuid::Uuid** | The id of the actor to upgrade | [required] |
+**actor_upgrade_actor_request** | [**ActorUpgradeActorRequest**](ActorUpgradeActorRequest.md) |  | [required] |
+**project** | Option<**String**> |  |  |
+**environment** | Option<**String**> |  |  |
+
+### Return type
+
+[**serde_json::Value**](serde_json::Value.md)
+
+### Authorization
+
+[BearerAuth](../README.md#BearerAuth)
+
+### HTTP request headers
+
+- **Content-Type**: application/json
 - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)

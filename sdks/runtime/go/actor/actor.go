@@ -5,12 +5,15 @@ package actor
 import (
 	json "encoding/json"
 	fmt "fmt"
+	uuid "github.com/google/uuid"
 	core "sdk/core"
 )
 
 type CreateActorRequest struct {
 	Region    string                     `json:"region"`
 	Tags      interface{}                `json:"tags,omitempty"`
+	Build     *uuid.UUID                 `json:"build,omitempty"`
+	BuildTags interface{}                `json:"buildTags,omitempty"`
 	Runtime   *CreateActorRuntimeRequest `json:"runtime,omitempty"`
 	Network   *CreateActorNetworkRequest `json:"network,omitempty"`
 	Resources *Resources                 `json:"resources,omitempty"`
@@ -156,4 +159,61 @@ func (l *ListActorsResponse) String() string {
 		return value
 	}
 	return fmt.Sprintf("%#v", l)
+}
+
+type UpgradeActorRequest struct {
+	Build     *uuid.UUID  `json:"build,omitempty"`
+	BuildTags interface{} `json:"buildTags,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (u *UpgradeActorRequest) UnmarshalJSON(data []byte) error {
+	type unmarshaler UpgradeActorRequest
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*u = UpgradeActorRequest(value)
+	u._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (u *UpgradeActorRequest) String() string {
+	if len(u._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(u._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(u); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", u)
+}
+
+type UpgradeActorResponse struct {
+	_rawJSON json.RawMessage
+}
+
+func (u *UpgradeActorResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler UpgradeActorResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*u = UpgradeActorResponse(value)
+	u._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (u *UpgradeActorResponse) String() string {
+	if len(u._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(u._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(u); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", u)
 }

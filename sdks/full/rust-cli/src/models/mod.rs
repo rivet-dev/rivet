@@ -60,6 +60,8 @@ pub mod actor_resources;
 pub use self::actor_resources::ActorResources;
 pub mod actor_runtime;
 pub use self::actor_runtime::ActorRuntime;
+pub mod actor_upgrade_actor_request;
+pub use self::actor_upgrade_actor_request::ActorUpgradeActorRequest;
 pub mod auth_complete_status;
 pub use self::auth_complete_status::AuthCompleteStatus;
 pub mod auth_identity_complete_email_verification_request;

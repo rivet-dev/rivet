@@ -12,7 +12,7 @@ use util::serde::AsHashableExt;
 
 use super::{
 	resolve_image_artifact_url, CreateComplete, CreateFailed, Destroy, Drain, DrainState,
-	GetBuildAndDcInput, InsertDbInput, Port, DRAIN_PADDING_MS,
+	GetBuildAndDcInput, InsertDbInput, Port, Upgrade, DRAIN_PADDING_MS,
 };
 use crate::{
 	types::{NetworkMode, Routing, ServerLifecycle, ServerResources},
@@ -176,6 +176,7 @@ pub(crate) async fn ds_server_nomad(ctx: &mut WorkflowCtx, input: &Input) -> Glo
 						}
 					}
 					Main::Destroy(sig) => return Ok(Loop::Break(sig.override_kill_timeout_ms)),
+					Main::Upgrade(_) => bail!("cannot upgrade nomad dynamic server"),
 				}
 
 				Ok(Loop::Continue)
@@ -905,6 +906,7 @@ join_signal!(Init {
 join_signal!(Main {
 	NomadAllocPlan,
 	NomadAllocUpdate,
-	Destroy,
 	Drain,
+	Upgrade,
+	Destroy,
 });

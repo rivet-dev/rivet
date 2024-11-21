@@ -29,6 +29,7 @@ Class | Method | HTTP request | Description
 *ActorApi* | [**actor_destroy**](docs/ActorApi.md#actor_destroy) | **DELETE** /actors/{actor} | 
 *ActorApi* | [**actor_get**](docs/ActorApi.md#actor_get) | **GET** /actors/{actor} | 
 *ActorApi* | [**actor_list**](docs/ActorApi.md#actor_list) | **GET** /actors | 
+*ActorApi* | [**actor_upgrade**](docs/ActorApi.md#actor_upgrade) | **POST** /actors/{actor}/upgrade | 
 *ActorBuildsApi* | [**actor_builds_complete**](docs/ActorBuildsApi.md#actor_builds_complete) | **POST** /builds/{build}/complete | 
 *ActorBuildsApi* | [**actor_builds_get**](docs/ActorBuildsApi.md#actor_builds_get) | **GET** /builds/{build} | 
 *ActorBuildsApi* | [**actor_builds_list**](docs/ActorBuildsApi.md#actor_builds_list) | **GET** /builds | 
@@ -193,6 +194,7 @@ Class | Method | HTTP request | Description
  - [ActorRegion](docs/ActorRegion.md)
  - [ActorResources](docs/ActorResources.md)
  - [ActorRuntime](docs/ActorRuntime.md)
+ - [ActorUpgradeActorRequest](docs/ActorUpgradeActorRequest.md)
  - [AuthCompleteStatus](docs/AuthCompleteStatus.md)
  - [AuthIdentityCompleteEmailVerificationRequest](docs/AuthIdentityCompleteEmailVerificationRequest.md)
  - [AuthIdentityCompleteEmailVerificationResponse](docs/AuthIdentityCompleteEmailVerificationResponse.md)

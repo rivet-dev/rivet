@@ -91,8 +91,11 @@ export declare class Actor {
      *             tags: {
      *                 "key": "value"
      *             },
+     *             build: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *             buildTags: {
+     *                 "key": "value"
+     *             },
      *             runtime: {
-     *                 build: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
      *                 arguments: ["string"],
      *                 environment: {
      *                     "string": "string"
@@ -136,6 +139,33 @@ export declare class Actor {
      *     })
      */
     destroy(actor: string, request?: Rivet.actor.DestroyActorRequestQuery, requestOptions?: Actor.RequestOptions): Promise<Rivet.actor.DestroyActorResponse>;
+    /**
+     * Upgrades a dynamic actor.
+     *
+     * @param {string} actor - The id of the actor to upgrade
+     * @param {Rivet.actor.UpgradeActorRequestQuery} request
+     * @param {Actor.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @throws {@link Rivet.InternalError}
+     * @throws {@link Rivet.RateLimitError}
+     * @throws {@link Rivet.ForbiddenError}
+     * @throws {@link Rivet.UnauthorizedError}
+     * @throws {@link Rivet.NotFoundError}
+     * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.actor.upgrade("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *         project: "string",
+     *         environment: "string",
+     *         body: {
+     *             build: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *             buildTags: {
+     *                 "key": "value"
+     *             }
+     *         }
+     *     })
+     */
+    upgrade(actor: string, request: Rivet.actor.UpgradeActorRequestQuery, requestOptions?: Actor.RequestOptions): Promise<Rivet.actor.UpgradeActorResponse>;
     protected _builds: Builds | undefined;
     get builds(): Builds;
     protected _logs: Logs | undefined;

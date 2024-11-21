@@ -74,7 +74,7 @@ services:
       # individual port converts to an iptable rule when using Docker, which
       # can cause unexpected side effects. This limits the number of actors
       # using host networking to 100.
-     - "20000-20100:20000-20100"
+      - "20000-20100:20000-20100"
     networks:
       - rivet-network
 

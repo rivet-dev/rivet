@@ -23,4 +23,3 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update -y && apt-get install -y --no-
 COPY --from=builder /app/dist/rivet-client /app/dist/rivet-isolate-v8-runner /app/dist/rivet-container-runner /usr/local/bin/
 ENTRYPOINT ["rivet-client"]
 CMD ["-c", "/etc/rivet-client/config.json"]
-

@@ -15,17 +15,14 @@
 pub struct ActorCreateActorRuntimeRequest {
     #[serde(rename = "arguments", skip_serializing_if = "Option::is_none")]
     pub arguments: Option<Vec<String>>,
-    #[serde(rename = "build")]
-    pub build: uuid::Uuid,
     #[serde(rename = "environment", skip_serializing_if = "Option::is_none")]
     pub environment: Option<::std::collections::HashMap<String, String>>,
 }
 
 impl ActorCreateActorRuntimeRequest {
-    pub fn new(build: uuid::Uuid) -> ActorCreateActorRuntimeRequest {
+    pub fn new() -> ActorCreateActorRuntimeRequest {
         ActorCreateActorRuntimeRequest {
             arguments: None,
-            build,
             environment: None,
         }
     }

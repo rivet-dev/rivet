@@ -5,4 +5,6 @@ export * from "./CreateActorNetworkRequest";
 export * from "./CreateActorPortRequest";
 export * from "./CreateActorResponse";
 export * from "./DestroyActorResponse";
+export * from "./UpgradeActorRequest";
+export * from "./UpgradeActorResponse";
 export * from "./ListActorsResponse";

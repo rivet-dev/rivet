@@ -20,6 +20,7 @@ echo = { path = "echo" }
 isolate-v8-runner = { path = "isolate-v8-runner" }
 pegboard-config = { path = "config" }
 actor-kv = { path = "actor-kv", package = "pegboard-actor-kv" }
+manager = { path = "manager", package = "pegboard-manager" }
 
 [workspace.dependencies.sqlx]
 git = "https://github.com/rivet-gg/sqlx"

@@ -7,7 +7,6 @@ import * as core from "../../../../core";
 export declare const CreateActorRuntimeRequest: core.serialization.ObjectSchema<serializers.actor.CreateActorRuntimeRequest.Raw, Rivet.actor.CreateActorRuntimeRequest>;
 export declare namespace CreateActorRuntimeRequest {
     interface Raw {
-        build: string;
         arguments?: string[] | null;
         environment?: Record<string, string> | null;
     }

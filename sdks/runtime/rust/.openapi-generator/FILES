@@ -38,6 +38,7 @@ docs/ActorRegion.md
 docs/ActorRegionsApi.md
 docs/ActorResources.md
 docs/ActorRuntime.md
+docs/ActorUpgradeActorRequest.md
 docs/ErrorBody.md
 docs/UploadPrepareFile.md
 docs/UploadPresignedRequest.md
@@ -81,6 +82,7 @@ src/models/actor_prepare_build_response.rs
 src/models/actor_region.rs
 src/models/actor_resources.rs
 src/models/actor_runtime.rs
+src/models/actor_upgrade_actor_request.rs
 src/models/error_body.rs
 src/models/mod.rs
 src/models/upload_prepare_file.rs

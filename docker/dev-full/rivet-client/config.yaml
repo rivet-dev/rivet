@@ -11,7 +11,7 @@ client:
   network:
     bind_ip: 127.0.0.1
     lan_ip: 127.0.0.1
-    # Point to lcoalhost since this is a dev instance
+    # Point to localhost since this is a dev instance
     wan_ip: 127.0.0.1
     # Corresponds to the port range configured in the `docker-compose.yml`
     wan_port_range_min: 20000
@@ -23,6 +23,6 @@ client:
     cpu: 0
     memory: 0
   logs:
-    redirect_logs: false
+    redirect_logs: true
   vector:
     address: vector-server:6100

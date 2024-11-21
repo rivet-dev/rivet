@@ -10,8 +10,8 @@ use util::serde::AsHashableExt;
 
 use super::{
 	resolve_image_artifact_url, CreateComplete, CreateFailed, Destroy, Drain, DrainState,
-	GetBuildAndDcInput, InsertDbInput, Port, Ready, SetConnectableInput, DRAIN_PADDING_MS,
-	TRAEFIK_GRACE_PERIOD,
+	GetBuildAndDcInput, InsertDbInput, Port, Ready, SetConnectableInput, UpdateImageInput, Upgrade,
+	UpgradeComplete, UpgradeStarted, DRAIN_PADDING_MS, TRAEFIK_GRACE_PERIOD,
 };
 use crate::types::{
 	GameGuardProtocol, HostProtocol, NetworkMode, Routing, ServerLifecycle, ServerResources,
@@ -44,7 +44,7 @@ pub(crate) struct Input {
 
 #[workflow]
 pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
-	let res = setup(ctx, input, true).await;
+	let res = setup(ctx, input, true, None).await;
 	match ctx.catch_unrecoverable(res)? {
 		Ok(_actor_id) => {}
 		Err(err) => {
@@ -138,7 +138,7 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 
 							// Reschedule durable actor if it errored
 							if input.lifecycle.durable && failed {
-								if let Some(sig) = reschedule_actor(ctx, &input).await? {
+								if let Some(sig) = reschedule_actor(ctx, &input, None).await? {
 									// Destroyed early
 									return Ok(Loop::Break(StateRes {
 										signal_actor: true,
@@ -200,7 +200,7 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 									)
 									.await?;
 
-									if let Some(sig) = reschedule_actor(ctx, &input).await? {
+									if let Some(sig) = reschedule_actor(ctx, &input, None).await? {
 										// Destroyed early
 										return Ok(Loop::Break(StateRes {
 											signal_actor: true,
@@ -217,6 +217,37 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 								}
 							}
 						}
+					}
+					Main::Upgrade(sig) => {
+						ctx.msg(UpgradeStarted {})
+							.tag("server_id", input.server_id)
+							.send()
+							.await?;
+
+						// Important that we get the current actor id as durable actors can be
+						// rescheduled many times
+						let actor_id = ctx
+							.activity(GetActorIdInput {
+								server_id: input.server_id,
+							})
+							.await?;
+
+						// Kill old actor immediately
+						destroy::destroy_actor(ctx, input.datacenter_id, 0, true, actor_id).await?;
+
+						if let Some(sig) = reschedule_actor(ctx, &input, Some(sig.image_id)).await?
+						{
+							// Destroyed early
+							return Ok(Loop::Break(StateRes {
+								signal_actor: true,
+								override_kill_timeout_ms: sig.override_kill_timeout_ms,
+							}));
+						}
+
+						ctx.msg(UpgradeComplete {})
+							.tag("server_id", input.server_id)
+							.send()
+							.await?;
 					}
 					Main::Destroy(sig) => {
 						return Ok(Loop::Break(StateRes {
@@ -243,7 +274,12 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 	Ok(())
 }
 
-async fn setup(ctx: &mut WorkflowCtx, input: &Input, insert_db: bool) -> GlobalResult<Uuid> {
+async fn setup(
+	ctx: &mut WorkflowCtx,
+	input: &Input,
+	insert_db: bool,
+	new_image_id: Option<Uuid>,
+) -> GlobalResult<Uuid> {
 	if insert_db {
 		ctx.activity(InsertDbInput {
 			server_id: input.server_id,
@@ -260,11 +296,19 @@ async fn setup(ctx: &mut WorkflowCtx, input: &Input, insert_db: bool) -> GlobalR
 			network_ports: input.network_ports.as_hashable(),
 		})
 		.await?;
+	} else if let Some(image_id) = new_image_id {
+		ctx.activity(UpdateImageInput {
+			server_id: input.server_id,
+			image_id,
+		})
+		.await?;
 	}
+
+	let image_id = new_image_id.unwrap_or(input.image_id);
 
 	let build_dc = ctx
 		.activity(GetBuildAndDcInput {
-			image_id: input.image_id,
+			image_id,
 			datacenter_id: input.datacenter_id,
 		})
 		.await?;
@@ -280,7 +324,7 @@ async fn setup(ctx: &mut WorkflowCtx, input: &Input, insert_db: bool) -> GlobalR
 			}),
 			activity(ResolveArtifactsInput {
 				datacenter_id: input.datacenter_id,
-				image_id: input.image_id,
+				image_id,
 				server_id: input.server_id,
 				build_upload_id: build_dc.build_upload_id,
 				build_file_name: build_dc.build_file_name,
@@ -559,7 +603,11 @@ async fn update_ports(ctx: &ActivityCtx, input: &UpdatePortsInput) -> GlobalResu
 	Ok(())
 }
 
-async fn reschedule_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<Option<Destroy>> {
+async fn reschedule_actor(
+	ctx: &mut WorkflowCtx,
+	input: &Input,
+	new_image_id: Option<Uuid>,
+) -> GlobalResult<Option<Destroy>> {
 	tracing::info!("rescheduling actor");
 
 	// Remove old proxied ports
@@ -568,7 +616,7 @@ async fn reschedule_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<
 	})
 	.await?;
 
-	let res = setup(ctx, &input, false).await;
+	let res = setup(ctx, &input, false, new_image_id).await;
 	match ctx.catch_unrecoverable(res)? {
 		Ok(_actor_id) => {}
 		Err(err) => {
@@ -661,6 +709,7 @@ join_signal!(Init {
 
 join_signal!(Main {
 	ActorStateUpdate(pegboard::workflows::client::ActorStateUpdate),
-	Destroy,
 	Drain,
+	Upgrade,
+	Destroy,
 });

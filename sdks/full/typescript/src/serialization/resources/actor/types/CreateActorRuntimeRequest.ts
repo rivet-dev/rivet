@@ -10,14 +10,12 @@ export const CreateActorRuntimeRequest: core.serialization.ObjectSchema<
     serializers.actor.CreateActorRuntimeRequest.Raw,
     Rivet.actor.CreateActorRuntimeRequest
 > = core.serialization.object({
-    build: core.serialization.string(),
     arguments: core.serialization.list(core.serialization.string()).optional(),
     environment: core.serialization.record(core.serialization.string(), core.serialization.string()).optional(),
 });
 
 export declare namespace CreateActorRuntimeRequest {
     interface Raw {
-        build: string;
         arguments?: string[] | null;
         environment?: Record<string, string> | null;
     }

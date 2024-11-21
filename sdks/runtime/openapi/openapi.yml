@@ -294,6 +294,80 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ActorCreateActorRequest'
+  /actors/{actor}/upgrade:
+    post:
+      description: Upgrades a dynamic actor.
+      operationId: actor_upgrade
+      tags:
+        - Actor
+      parameters:
+        - name: actor
+          in: path
+          description: The id of the actor to upgrade
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: project
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: environment
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActorUpgradeActorResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActorUpgradeActorRequest'
   /builds/{build}:
     get:
       description: Get a build.
@@ -784,6 +858,10 @@ components:
         region:
           type: string
         tags: {}
+        build:
+          type: string
+          format: uuid
+        buildTags: {}
         runtime:
           $ref: '#/components/schemas/ActorCreateActorRuntimeRequest'
         network:
@@ -800,9 +878,6 @@ components:
     ActorCreateActorRuntimeRequest:
       type: object
       properties:
-        build:
-          type: string
-          format: uuid
         arguments:
           type: array
           items:
@@ -811,8 +886,6 @@ components:
           type: object
           additionalProperties:
             type: string
-      required:
-        - build
     ActorCreateActorNetworkRequest:
       type: object
       properties:
@@ -842,6 +915,16 @@ components:
       required:
         - actor
     ActorDestroyActorResponse:
+      type: object
+      properties: {}
+    ActorUpgradeActorRequest:
+      type: object
+      properties:
+        build:
+          type: string
+          format: uuid
+        buildTags: {}
+    ActorUpgradeActorResponse:
       type: object
       properties: {}
     ActorListActorsResponse:

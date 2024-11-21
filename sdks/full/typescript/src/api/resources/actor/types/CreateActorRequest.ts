@@ -7,6 +7,8 @@ import * as Rivet from "../../../index";
 export interface CreateActorRequest {
     region: string;
     tags?: unknown;
+    build?: string;
+    buildTags?: unknown;
     runtime: Rivet.actor.CreateActorRuntimeRequest;
     network?: Rivet.actor.CreateActorNetworkRequest;
     resources: Rivet.actor.Resources;

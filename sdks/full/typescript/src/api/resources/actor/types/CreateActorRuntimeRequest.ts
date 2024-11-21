@@ -3,7 +3,6 @@
  */
 
 export interface CreateActorRuntimeRequest {
-    build: string;
     arguments?: string[];
     environment?: Record<string, string>;
 }

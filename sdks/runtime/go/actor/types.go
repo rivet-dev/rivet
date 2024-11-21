@@ -625,7 +625,6 @@ func (c *CreateActorPortRequest) String() string {
 }
 
 type CreateActorRuntimeRequest struct {
-	Build       uuid.UUID         `json:"build"`
 	Arguments   []string          `json:"arguments,omitempty"`
 	Environment map[string]string `json:"environment,omitempty"`
 
@@ -653,4 +652,23 @@ func (c *CreateActorRuntimeRequest) String() string {
 		return value
 	}
 	return fmt.Sprintf("%#v", c)
+}
+
+type UpgradeActorRequestQuery struct {
+	Project     *string              `json:"-"`
+	Environment *string              `json:"-"`
+	Body        *UpgradeActorRequest `json:"-"`
+}
+
+func (u *UpgradeActorRequestQuery) UnmarshalJSON(data []byte) error {
+	body := new(UpgradeActorRequest)
+	if err := json.Unmarshal(data, &body); err != nil {
+		return err
+	}
+	u.Body = body
+	return nil
+}
+
+func (u *UpgradeActorRequestQuery) MarshalJSON() ([]byte, error) {
+	return json.Marshal(u.Body)
 }

@@ -329,7 +329,7 @@ async fn get_build_and_dc(
 			datacenter_ids: vec![input.datacenter_id],
 		})
 	)?;
-	let build = unwrap!(build_res.builds.first());
+	let build = unwrap_with!(build_res.builds.first(), BUILDS_BUILD_NOT_FOUND);
 	let upload_id = unwrap!(build.upload_id).as_uuid();
 	let build_kind = unwrap!(backend::build::BuildKind::from_i32(build.kind));
 	let build_compression = unwrap!(backend::build::BuildCompression::from_i32(
@@ -372,6 +372,29 @@ async fn set_connectable(ctx: &ActivityCtx, input: &SetConnectableInput) -> Glob
 	Ok(res.rows_affected() > 0)
 }
 
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct UpdateImageInput {
+	server_id: Uuid,
+	image_id: Uuid,
+}
+
+#[activity(UpdateImage)]
+async fn update_image(ctx: &ActivityCtx, input: &UpdateImageInput) -> GlobalResult<()> {
+	sql_execute!(
+		[ctx]
+		"
+		UPDATE db_ds.servers
+		SET image_id = $2
+		WHERE server_id = $1
+		",
+		input.server_id,
+		input.image_id,
+	)
+	.await?;
+
+	Ok(())
+}
+
 #[message("ds_server_create_complete")]
 pub struct CreateComplete {}
 
@@ -391,6 +414,17 @@ pub struct DestroyStarted {}
 
 #[message("ds_server_destroy_complete")]
 pub struct DestroyComplete {}
+
+#[signal("ds_server_upgrade")]
+pub struct Upgrade {
+	pub image_id: Uuid,
+}
+
+#[message("ds_server_upgrade_started")]
+pub struct UpgradeStarted {}
+
+#[message("ds_server_upgrade_complete")]
+pub struct UpgradeComplete {}
 
 #[signal("ds_server_drain")]
 pub struct Drain {

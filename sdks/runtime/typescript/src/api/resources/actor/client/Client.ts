@@ -365,8 +365,11 @@ export class Actor {
      *             tags: {
      *                 "key": "value"
      *             },
+     *             build: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *             buildTags: {
+     *                 "key": "value"
+     *             },
      *             runtime: {
-     *                 build: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
      *                 arguments: ["string"],
      *                 environment: {
      *                     "string": "string"
@@ -577,6 +580,162 @@ export class Actor {
         });
         if (_response.ok) {
             return serializers.actor.DestroyActorResponse.parseOrThrow(_response.body, {
+                unrecognizedObjectKeys: "passthrough",
+                allowUnrecognizedUnionMembers: true,
+                allowUnrecognizedEnumValues: true,
+                skipValidation: true,
+                breadcrumbsPrefix: ["response"],
+            });
+        }
+
+        if (_response.error.reason === "status-code") {
+            switch (_response.error.statusCode) {
+                case 500:
+                    throw new Rivet.InternalError(
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                            unrecognizedObjectKeys: "passthrough",
+                            allowUnrecognizedUnionMembers: true,
+                            allowUnrecognizedEnumValues: true,
+                            skipValidation: true,
+                            breadcrumbsPrefix: ["response"],
+                        })
+                    );
+                case 429:
+                    throw new Rivet.RateLimitError(
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                            unrecognizedObjectKeys: "passthrough",
+                            allowUnrecognizedUnionMembers: true,
+                            allowUnrecognizedEnumValues: true,
+                            skipValidation: true,
+                            breadcrumbsPrefix: ["response"],
+                        })
+                    );
+                case 403:
+                    throw new Rivet.ForbiddenError(
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                            unrecognizedObjectKeys: "passthrough",
+                            allowUnrecognizedUnionMembers: true,
+                            allowUnrecognizedEnumValues: true,
+                            skipValidation: true,
+                            breadcrumbsPrefix: ["response"],
+                        })
+                    );
+                case 408:
+                    throw new Rivet.UnauthorizedError(
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                            unrecognizedObjectKeys: "passthrough",
+                            allowUnrecognizedUnionMembers: true,
+                            allowUnrecognizedEnumValues: true,
+                            skipValidation: true,
+                            breadcrumbsPrefix: ["response"],
+                        })
+                    );
+                case 404:
+                    throw new Rivet.NotFoundError(
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                            unrecognizedObjectKeys: "passthrough",
+                            allowUnrecognizedUnionMembers: true,
+                            allowUnrecognizedEnumValues: true,
+                            skipValidation: true,
+                            breadcrumbsPrefix: ["response"],
+                        })
+                    );
+                case 400:
+                    throw new Rivet.BadRequestError(
+                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
+                            unrecognizedObjectKeys: "passthrough",
+                            allowUnrecognizedUnionMembers: true,
+                            allowUnrecognizedEnumValues: true,
+                            skipValidation: true,
+                            breadcrumbsPrefix: ["response"],
+                        })
+                    );
+                default:
+                    throw new errors.RivetError({
+                        statusCode: _response.error.statusCode,
+                        body: _response.error.body,
+                    });
+            }
+        }
+
+        switch (_response.error.reason) {
+            case "non-json":
+                throw new errors.RivetError({
+                    statusCode: _response.error.statusCode,
+                    body: _response.error.rawBody,
+                });
+            case "timeout":
+                throw new errors.RivetTimeoutError();
+            case "unknown":
+                throw new errors.RivetError({
+                    message: _response.error.errorMessage,
+                });
+        }
+    }
+
+    /**
+     * Upgrades a dynamic actor.
+     *
+     * @param {string} actor - The id of the actor to upgrade
+     * @param {Rivet.actor.UpgradeActorRequestQuery} request
+     * @param {Actor.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @throws {@link Rivet.InternalError}
+     * @throws {@link Rivet.RateLimitError}
+     * @throws {@link Rivet.ForbiddenError}
+     * @throws {@link Rivet.UnauthorizedError}
+     * @throws {@link Rivet.NotFoundError}
+     * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.actor.upgrade("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *         project: "string",
+     *         environment: "string",
+     *         body: {
+     *             build: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *             buildTags: {
+     *                 "key": "value"
+     *             }
+     *         }
+     *     })
+     */
+    public async upgrade(
+        actor: string,
+        request: Rivet.actor.UpgradeActorRequestQuery,
+        requestOptions?: Actor.RequestOptions
+    ): Promise<Rivet.actor.UpgradeActorResponse> {
+        const { project, environment, body: _body } = request;
+        const _queryParams: Record<string, string | string[] | object | object[]> = {};
+        if (project != null) {
+            _queryParams["project"] = project;
+        }
+
+        if (environment != null) {
+            _queryParams["environment"] = environment;
+        }
+
+        const _response = await (this._options.fetcher ?? core.fetcher)({
+            url: urlJoin(
+                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
+                `/actors/${encodeURIComponent(actor)}/upgrade`
+            ),
+            method: "POST",
+            headers: {
+                Authorization: await this._getAuthorizationHeader(),
+                "X-Fern-Language": "JavaScript",
+                "X-Fern-Runtime": core.RUNTIME.type,
+                "X-Fern-Runtime-Version": core.RUNTIME.version,
+            },
+            contentType: "application/json",
+            queryParameters: _queryParams,
+            requestType: "json",
+            body: serializers.actor.UpgradeActorRequest.jsonOrThrow(_body, { unrecognizedObjectKeys: "strip" }),
+            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
+            maxRetries: requestOptions?.maxRetries,
+            abortSignal: requestOptions?.abortSignal,
+        });
+        if (_response.ok) {
+            return serializers.actor.UpgradeActorResponse.parseOrThrow(_response.body, {
                 unrecognizedObjectKeys: "passthrough",
                 allowUnrecognizedUnionMembers: true,
                 allowUnrecognizedEnumValues: true,

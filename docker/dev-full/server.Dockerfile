@@ -40,4 +40,3 @@ RUN \
 	RUSTFLAGS="--cfg tokio_unstable" cargo build --bin rivet-server && \
 	mv target/debug/rivet-server /usr/bin/rivet-server && \
 	mkdir /etc/rivet-server
-

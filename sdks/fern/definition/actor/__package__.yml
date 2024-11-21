@@ -73,6 +73,22 @@ service:
             type: optional<long>
       response: DestroyActorResponse
 
+    upgrade:
+      path: /{actor}/upgrade
+      method: POST
+      docs: Upgrades a dynamic actor.
+      path-parameters:
+        actor:
+          docs: The id of the actor to upgrade
+          type: uuid
+      request:
+        name: UpgradeActorRequestQuery
+        query-parameters:
+          project: optional<string>
+          environment: optional<string>
+        body: UpgradeActorRequest
+      response: UpgradeActorResponse
+
 types:
   GetActorResponse:
     properties:
@@ -82,6 +98,8 @@ types:
     properties:
       region: string
       tags: unknown
+      build: optional<uuid>
+      buildTags: optional<unknown>
       runtime: CreateActorRuntimeRequest
       network: optional<CreateActorNetworkRequest>
       resources: commons.Resources
@@ -89,7 +107,6 @@ types:
 
   CreateActorRuntimeRequest:
     properties:
-      build: uuid
       arguments: optional<list<string>>
       environment: optional<map<string, string>>
 
@@ -111,6 +128,14 @@ types:
         type: commons.Actor
 
   DestroyActorResponse:
+    properties: {}
+
+  UpgradeActorRequest:
+    properties:
+      build: optional<uuid>
+      buildTags: optional<unknown>
+
+  UpgradeActorResponse:
     properties: {}
 
   ListActorsResponse:

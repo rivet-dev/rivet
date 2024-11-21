@@ -101,13 +101,14 @@ pub async fn create(
 ) -> GlobalResult<models::ActorCreateActorResponse> {
 	let CheckOutput { game_id, env_id } = ctx.auth().check(ctx.op_ctx(), &query, false).await?;
 
-	let (clusters_res, game_configs_res) = tokio::try_join!(
+	let (clusters_res, game_configs_res, build_id) = tokio::try_join!(
 		ctx.op(cluster::ops::get_for_game::Input {
 			game_ids: vec![game_id],
 		}),
 		ctx.op(ds::ops::game_config::get::Input {
 			game_ids: vec![game_id],
 		}),
+		resolve_build_id(&ctx, game_id, body.build, body.build_tags.flatten()),
 	)?;
 	let cluster_id = unwrap!(clusters_res.games.first()).cluster_id;
 	let game_config = unwrap!(game_configs_res.game_configs.first());
@@ -153,7 +154,7 @@ pub async fn create(
 				durable: false,
 			}
 		}),
-		image_id: body.runtime.build,
+		image_id: build_id,
 		root_user_enabled: game_config.root_user_enabled,
 		args: body.runtime.arguments.unwrap_or_default(),
 		network_mode: network.mode.unwrap_or_default().api_into(),
@@ -317,8 +318,9 @@ pub async fn create_deprecated(
 			runtime: Box::new(models::ActorCreateActorRuntimeRequest {
 				arguments: body.runtime.arguments,
 				environment: body.runtime.environment,
-				build: body.runtime.build,
 			}),
+			build: Some(body.runtime.build),
+			build_tags: None,
 			tags: body.tags,
 		},
 		global,
@@ -394,6 +396,33 @@ pub async fn destroy_deprecated(
 		},
 	)
 	.await
+}
+
+// MARK: POST /actors/{}/upgrade
+pub async fn upgrade(
+	ctx: Ctx<Auth>,
+	actor_id: Uuid,
+	body: models::ActorUpgradeActorRequest,
+	query: GlobalQuery,
+) -> GlobalResult<serde_json::Value> {
+	let CheckOutput { game_id, env_id } = ctx.auth().check(ctx.op_ctx(), &query, false).await?;
+
+	assert::server_for_env(&ctx, actor_id, game_id, env_id).await?;
+
+	let build_id = resolve_build_id(&ctx, game_id, body.build, body.build_tags.flatten()).await?;
+
+	let mut sub = ctx
+		.subscribe::<ds::workflows::server::UpgradeStarted>(("server_id", actor_id))
+		.await?;
+
+	ctx.signal(ds::workflows::server::Upgrade { image_id: build_id })
+		.tag("server_id", actor_id)
+		.send()
+		.await?;
+
+	sub.next().await?;
+
+	Ok(json!({}))
 }
 
 // MARK: GET /actors
@@ -580,5 +609,35 @@ fn legacy_convert_actor_to_server(
 		}),
 		started_at: a.started_at,
 		tags: a.tags,
+	}
+}
+
+async fn resolve_build_id(
+	ctx: &Ctx<Auth>,
+	game_id: Uuid,
+	build_id: Option<Uuid>,
+	build_tags: Option<serde_json::Value>,
+) -> GlobalResult<Uuid> {
+	match (build_id, build_tags) {
+		(Some(build_id), None) => Ok(build_id),
+		// Resolve build from tags
+		(None, Some(build_tags)) => {
+			let builds_res = ctx
+				.op(build::ops::resolve_for_tags::Input {
+					game_id: Some(game_id),
+					tags: serde_json::from_value(build_tags)?,
+				})
+				.await?;
+
+			let build = unwrap_with!(builds_res.builds.first(), BUILDS_BUILD_NOT_FOUND_WITH_TAGS);
+
+			Ok(build.build_id)
+		}
+		_ => {
+			bail_with!(
+				API_BAD_BODY,
+				error = "must have either `build` or `buildTags`"
+			);
+		}
 	}
 }

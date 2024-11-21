@@ -13,6 +13,8 @@ export declare namespace CreateActorRequest {
     interface Raw {
         region: string;
         tags?: unknown;
+        build?: string | null;
+        buildTags?: unknown | null;
         runtime: CreateActorRuntimeRequest.Raw;
         network?: CreateActorNetworkRequest.Raw | null;
         resources: Resources.Raw;

@@ -93,6 +93,10 @@ components:
       type: object
     ActorCreateActorRequest:
       properties:
+        build:
+          format: uuid
+          type: string
+        buildTags: {}
         lifecycle:
           $ref: '#/components/schemas/ActorLifecycle'
         network:
@@ -124,15 +128,10 @@ components:
           items:
             type: string
           type: array
-        build:
-          format: uuid
-          type: string
         environment:
           additionalProperties:
             type: string
           type: object
-      required:
-      - build
       type: object
     ActorDestroyActorResponse:
       properties: {}
@@ -384,6 +383,16 @@ components:
           type: object
       required:
       - build
+      type: object
+    ActorUpgradeActorRequest:
+      properties:
+        build:
+          format: uuid
+          type: string
+        buildTags: {}
+      type: object
+    ActorUpgradeActorResponse:
+      properties: {}
       type: object
     ErrorBody:
       properties:
@@ -839,6 +848,80 @@ paths:
       security: *id001
       tags:
       - ActorLogs
+  /actors/{actor}/upgrade:
+    post:
+      description: Upgrades a dynamic actor.
+      operationId: actor_upgrade
+      parameters:
+      - description: The id of the actor to upgrade
+        in: path
+        name: actor
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - in: query
+        name: project
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: environment
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActorUpgradeActorRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActorUpgradeActorResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      tags:
+      - Actor
   /builds:
     get:
       description: Lists all builds of the project associated with the token used.

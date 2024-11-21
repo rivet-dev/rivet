@@ -20,7 +20,8 @@ Start the cluster with:
 docker-compose -f docker/dev-full/docker-compose.yml up -d
 ```
 
-This will start the cluster in detached mode. Once complete, visit the dashboard at [http://localhost:8080](http://localhost:8080).
+This will start the cluster in detached mode. Once complete, visit the dashboard at
+[http://localhost:8080](http://localhost:8080).
 
 To test creating an actor end-to-end, run:
 
@@ -83,8 +84,7 @@ docker-compose -f docker/dev-full/docker-compose.yml logs -f {name}
 #### Grep
 
 It's common to use grep (or the more modern
-[ripgrep](https://www.google.com/search?q=ripgrep&oq=ripgrep&sourceid=chrome&ie=UTF-8))
-to filter logs.
+[ripgrep](https://www.google.com/search?q=ripgrep&oq=ripgrep&sourceid=chrome&ie=UTF-8)) to filter logs.
 
 For example, to find all errors in `rivet-server` with the 10 preceding lines, run:
 
@@ -92,7 +92,8 @@ For example, to find all errors in `rivet-server` with the 10 preceding lines, r
 docker-compose -f docker/dev-full/docker-compose.yml logs rivet-server | grep -B 10 level=error
 ```
 
-Logs for `rivet-server` and `rivet-client` can also be configured via the environment. See [here](TODO) for more information.
+Logs for `rivet-server` and `rivet-client` can also be configured via the environment. See [here](TODO) for
+more information.
 
 ## Troubleshooting
 
@@ -105,4 +106,3 @@ docker-compose -f docker/dev-full/docker-compose.yml down -v -t 0
 ```
 
 This will destroy all containers & volumes immediately.
-
