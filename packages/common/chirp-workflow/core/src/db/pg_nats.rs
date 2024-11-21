@@ -715,7 +715,7 @@ impl Database for DatabasePgNats {
 						)
 						VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 						ON CONFLICT (workflow_id, location2_hash) DO UPDATE
-						SET output = excluded.output
+						SET output = EXCLUDED.output
 						",
 					))
 					.bind(workflow_id)

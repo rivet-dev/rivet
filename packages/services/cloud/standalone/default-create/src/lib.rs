@@ -1,3 +1,4 @@
+use ::ds;
 use chirp_workflow::prelude::*;
 use rivet_operation::prelude::proto::backend::{self, pkg::*};
 use util::dev_defaults;
@@ -84,7 +85,17 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> G
 		})
 		.await?;
 
-		unwrap_ref!(create_game_res.game_id).as_uuid()
+		let game_id = unwrap_ref!(create_game_res.game_id).as_uuid();
+
+		ctx.op(ds::ops::game_config::upsert::Input {
+			game_id,
+			host_networking_enabled: Some(true),
+			root_user_enabled: Some(true),
+			..Default::default()
+		})
+		.await?;
+
+		game_id
 	};
 
 	// Create namespace

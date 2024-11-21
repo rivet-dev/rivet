@@ -88,9 +88,10 @@ pub enum HostProtocol {
 	Udp = 1,
 }
 
-#[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
+#[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr, Default)]
 pub enum ServerRuntime {
 	Nomad = 0,
+	#[default]
 	Pegboard = 1,
 }
 
@@ -108,7 +109,7 @@ impl GameConfig {
 			game_id,
 			host_networking_enabled: false,
 			root_user_enabled: false,
-			runtime: ServerRuntime::Pegboard,
+			runtime: ServerRuntime::default(),
 		}
 	}
 }

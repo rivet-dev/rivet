@@ -91,7 +91,7 @@ define_router! {
 			),
 		},
 
-		"actors" / Uuid / "logs" : {
+		"actors" / Uuid / "logs": {
 			GET: logs::get_logs(
 				query: logs::GetActorLogsQuery,
 				opt_auth: true,
