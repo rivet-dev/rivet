@@ -26,6 +26,7 @@ allow = [
 	"Unicode-3.0",
 	"Zlib",
 	"EPL-2.0",
+	"Unlicense",
 ]
 unused-allowed-license = "allow"
 
@@ -46,10 +47,4 @@ allow = ["BSL-1.0"]  # Boost Software License, not Business Source License
 name = "ring"
 expression = "ISC AND MIT AND OpenSSL"
 license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
-
-# The OpenAPI generator is licensed as an Unlicense, so we can't relicense
-# under MIT.
-[[licenses.exceptions]]
-name = "rivet-api"
-allow = ["Unlicense"]
 
