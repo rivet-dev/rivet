@@ -13,6 +13,7 @@ use uuid::Uuid;
 use crate::{ctx::Ctx, runner, utils};
 
 mod oci_config;
+mod partial_oci_config;
 mod seccomp;
 mod setup;
 

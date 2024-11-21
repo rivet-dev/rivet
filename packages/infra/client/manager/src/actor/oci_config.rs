@@ -1,8 +1,25 @@
-use super::seccomp;
+use anyhow::*;
 use serde_json::json;
+use std::path::Path;
+
+use super::seccomp;
+
+pub struct ConfigOpts<'a> {
+	pub actor_path: &'a Path,
+	pub netns_path: &'a Path,
+	pub args: Vec<String>,
+	pub env: Vec<String>,
+	pub user: String,
+	pub cwd: String,
+	pub cpu: u64,
+	pub memory: u64,
+	pub memory_max: u64,
+}
 
 /// Generates base config.json for an OCI bundle.
-pub fn config(cpu: u64, memory: u64, memory_max: u64, env: Vec<String>) -> serde_json::Value {
+///
+/// Sanitize the config.json by copying safe properties from the provided bundle in to our base config.
+pub fn config(opts: ConfigOpts) -> Result<serde_json::Value> {
 	// CPU shares is a relative weight. It doesn't matter what unit we pass here as
 	// long as the ratios between the actors are correct.
 	//
@@ -11,7 +28,7 @@ pub fn config(cpu: u64, memory: u64, memory_max: u64, env: Vec<String>) -> serde
 	// We divide by 8 in order to make sure the CPU shares are within bounds. `cpu` is measured in
 	// millishares, so 1_000 = 1 core. For a range of 32d1 (32_000) to 1d16 (62), we divide by 8
 	// to make the range 3_200 to 6.
-	let mut cpu_shares = cpu / 10;
+	let mut cpu_shares = opts.cpu / 10;
 	if cpu_shares > 10_000 {
 		cpu_shares = 10_000;
 		tracing::warn!(?cpu_shares, "cpu_shares > 10_000");
@@ -29,15 +46,13 @@ pub fn config(cpu: u64, memory: u64, memory_max: u64, env: Vec<String>) -> serde
 	// Generate config.json with actord:
 	// ctr run --rm -t --seccomp docker.io/library/debian:latest debian-actor-id /bin/bash
 	// cat /run/actord/io.actord.runtime.v2.task/default/debian-actor-id/config.json | jq
-	json!({
+	Ok(json!({
 		"ociVersion": "1.0.2-dev",
 		"process": {
-			// user, args, and cwd will be injected at runtime
-
-			// Will be merged with the OCI bundle's env
-			//
-			// These will take priority over the OCI bundle's env
-			"env": env,
+			"args": opts.args,
+			"env": opts.env,
+			"user": opts.user,
+			"cwd": opts.cwd,
 
 			"terminal": false,
 			"capabilities": {
@@ -64,7 +79,7 @@ pub fn config(cpu: u64, memory: u64, memory_max: u64, env: Vec<String>) -> serde
 			// This means we can't reuse the oci-bundle since the rootfs is writable.
 			"readonly": false
 		},
-		"mounts": mounts(),
+		"mounts": mounts(&opts)?,
 		"linux": {
 			"resources": {
 				"devices": linux_resources_devices(),
@@ -84,8 +99,8 @@ pub fn config(cpu: u64, memory: u64, memory_max: u64, env: Vec<String>) -> serde
 				},
 				// Docker: https://github.com/moby/moby/blob/777e9f271095685543f30df0ff7a12397676f938/daemon/daemon_unix.go#L75
 				"memory": {
-					"reservation": memory,
-					"limit": memory_max,
+					"reservation": opts.memory,
+					"limit": opts.memory_max,
 				},
 
 				// TODO: network
@@ -93,20 +108,12 @@ pub fn config(cpu: u64, memory: u64, memory_max: u64, env: Vec<String>) -> serde
 				// TODO: hugepageLimits
 				// TODO: blockIO
 			},
-			// "cgroupsPath": "/default/debian-actor-id",
 			"namespaces": [
-				{
-				"type": "pid"
-				},
-				{
-				"type": "ipc"
-				},
-				{
-				"type": "uts"
-				},
-				{
-				"type": "mount"
-				}
+				{ "type": "pid" },
+				{ "type": "ipc" },
+				{ "type": "uts" },
+				{ "type": "mount" },
+				{ "type": "network", "path": opts.netns_path.to_str().context("netns_path")? },
 			],
 			"maskedPaths": [
 				"/proc/acpi",
@@ -129,7 +136,7 @@ pub fn config(cpu: u64, memory: u64, memory_max: u64, env: Vec<String>) -> serde
 			],
 			"seccomp": seccomp::config()
 		}
-	})
+	}))
 }
 
 // Default Docker capabilities: https://github.com/moby/moby/blob/777e9f271095685543f30df0ff7a12397676f938/oci/caps/defaults.go#L4
@@ -152,87 +159,93 @@ fn capabilities() -> Vec<&'static str> {
 	]
 }
 
-fn mounts() -> serde_json::Value {
-	json!([
+fn mounts(opts: &ConfigOpts) -> Result<serde_json::Value> {
+	Ok(json!([
 		{
-		"destination": "/proc",
-		"type": "proc",
-		"source": "proc",
-		"options": [
-			"nosuid",
-			"noexec",
-			"nodev"
+			"destination": "/proc",
+			"type": "proc",
+			"source": "proc",
+			"options": [
+				"nosuid",
+				"noexec",
+				"nodev"
+			]
+		},
+		{
+			"destination": "/dev",
+			"type": "tmpfs",
+			"source": "tmpfs",
+			"options": [
+				"nosuid",
+				"strictatime",
+				"mode=755",
+				"size=65536k"
+			]
+		},
+		{
+			"destination": "/dev/pts",
+			"type": "devpts",
+			"source": "devpts",
+			"options": [
+				"nosuid",
+				"noexec",
+				"newinstance",
+				"ptmxmode=0666",
+				"mode=0620",
+				"gid=5"
+			]
+		},
+		{
+			"destination": "/dev/shm",
+			"type": "tmpfs",
+			"source": "shm",
+			"options": [
+				"nosuid",
+				"noexec",
+				"nodev",
+				"mode=1777",
+				"size=65536k"
+			]
+		},
+		{
+			"destination": "/dev/mqueue",
+			"type": "mqueue",
+			"source": "mqueue",
+			"options": [
+				"nosuid",
+				"noexec",
+				"nodev"
+			]
+		},
+		{
+			"destination": "/sys",
+			"type": "sysfs",
+			"source": "sysfs",
+			"options": [
+				"nosuid",
+				"noexec",
+				"nodev",
+				"ro"
 		]
 		},
 		{
-		"destination": "/dev",
-		"type": "tmpfs",
-		"source": "tmpfs",
-		"options": [
-			"nosuid",
-			"strictatime",
-			"mode=755",
-			"size=65536k"
-		]
+			"destination": "/run",
+			"type": "tmpfs",
+			"source": "tmpfs",
+			"options": [
+				"nosuid",
+				"strictatime",
+				"mode=755",
+				"size=65536k"
+			]
 		},
 		{
-		"destination": "/dev/pts",
-		"type": "devpts",
-		"source": "devpts",
-		"options": [
-			"nosuid",
-			"noexec",
-			"newinstance",
-			"ptmxmode=0666",
-			"mode=0620",
-			"gid=5"
-		]
-		},
-		{
-		"destination": "/dev/shm",
-		"type": "tmpfs",
-		"source": "shm",
-		"options": [
-			"nosuid",
-			"noexec",
-			"nodev",
-			"mode=1777",
-			"size=65536k"
-		]
-		},
-		{
-		"destination": "/dev/mqueue",
-		"type": "mqueue",
-		"source": "mqueue",
-		"options": [
-			"nosuid",
-			"noexec",
-			"nodev"
-		]
-		},
-		{
-		"destination": "/sys",
-		"type": "sysfs",
-		"source": "sysfs",
-		"options": [
-			"nosuid",
-			"noexec",
-			"nodev",
-			"ro"
-		]
-		},
-		{
-		"destination": "/run",
-		"type": "tmpfs",
-		"source": "tmpfs",
-		"options": [
-			"nosuid",
-			"strictatime",
-			"mode=755",
-			"size=65536k"
-		]
+			"destination": "/etc/resolv.conf",
+			"type": "bind",
+			"source": opts.actor_path.join("resolv.conf").to_str().context("resolv.conf path")?,
+			"options": ["rbind", "rprivate"]
 		}
-	])
+	]))
 }
 
 fn linux_resources_devices() -> serde_json::Value {

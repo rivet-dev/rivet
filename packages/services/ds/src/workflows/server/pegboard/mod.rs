@@ -247,7 +247,7 @@ async fn setup(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<Uuid> {
 				.iter()
 				.map(|(port_label, port)| match port.routing {
 					Routing::GameGuard { protocol, .. } => Ok((
-						crate::util::format_port_label(port_label),
+						crate::util::pegboard_normalize_port_label(port_label),
 						pp::Port {
 							target: port.internal_port,
 							protocol: match protocol {
@@ -261,7 +261,7 @@ async fn setup(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<Uuid> {
 						},
 					)),
 					Routing::Host { protocol } => Ok((
-						crate::util::format_port_label(port_label),
+						crate::util::pegboard_normalize_port_label(port_label),
 						pp::Port {
 							target: port.internal_port,
 							protocol: match protocol {

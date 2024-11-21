@@ -1,15 +1,14 @@
-use std::{
-	collections::HashMap,
-	path::{Path, PathBuf},
-	process::Stdio,
-};
-
 use anyhow::*;
 use futures_util::StreamExt;
 use indoc::indoc;
 use pegboard::protocol;
 use rand::Rng;
-use serde_json::{json, Value};
+use serde_json::json;
+use std::{
+	collections::HashMap,
+	path::{Path, PathBuf},
+	process::Stdio,
+};
 use tokio::{
 	fs::{self, File},
 	io::{AsyncReadExt, AsyncWriteExt},
@@ -269,23 +268,39 @@ impl Actor {
 			);
 		}
 
-		// Write base config
-		let base_config_path = actor_path.join("oci-bundle-config.base.json");
-		let mut base_config = oci_config::config(
-			self.config.resources.cpu,
-			self.config.resources.memory,
-			self.config.resources.memory_max,
-			// Add port env vars and api endpoint
-			ports
-				.iter()
-				.map(|(label, port)| format!("PORT_{}={}", label.replace('-', "_"), port.target))
-				.chain(std::iter::once(format!(
-					"RIVET_API_ENDPOINT={}",
-					ctx.config().cluster.api_endpoint
-				)))
-				.collect(),
-		);
-		fs::write(base_config_path, serde_json::to_vec(&base_config)?).await?;
+		// Read the config.json from the user-provided OCI bundle
+		let oci_bundle_config_path = oci_bundle_path.join("config.json");
+		let user_config_json = fs::read_to_string(&oci_bundle_config_path).await?;
+		let user_config =
+			serde_json::from_str::<super::partial_oci_config::PartialOciConfig>(&user_config_json)?;
+
+		// Build env
+		let env = user_config
+			.process
+			.env
+			.into_iter()
+			.chain(
+				build_default_env(ctx, &self.config.env, &ports)
+					.into_iter()
+					.map(|(k, v)| format!("{k}={v}")),
+			)
+			.collect::<Vec<String>>();
+
+		// Replace the config.json with a new config
+		//
+		// This config selectively uses parts from the user's OCI bundle in order to maintain security
+		let config = oci_config::config(oci_config::ConfigOpts {
+			actor_path: &actor_path,
+			netns_path: &netns_path,
+			args: user_config.process.args,
+			env,
+			user: user_config.process.user,
+			cwd: user_config.process.cwd,
+			cpu: self.config.resources.cpu,
+			memory: self.config.resources.memory,
+			memory_max: self.config.resources.memory_max,
+		})?;
+		fs::write(oci_bundle_config_path, serde_json::to_vec(&config)?).await?;
 
 		// resolv.conf
 		//
@@ -305,68 +320,6 @@ impl Actor {
 			),
 		)
 		.await?;
-
-		// MARK: Config
-		//
-		// Sanitize the config.json by copying safe properties from the provided bundle in to our base config.
-		//
-		// This way, we enforce our own capabilities on the actor instead of trusting the
-		// provided config.json
-		tracing::info!(actor_id=?self.actor_id, "templating config.json");
-		let config_path = oci_bundle_path.join("config.json");
-		let override_config_path = actor_path.join("oci-bundle-config.overrides.json");
-		fs::rename(&config_path, &override_config_path).await?;
-
-		// TODO: get new envb in here somehow
-		// TODO: check bounds
-
-		let override_config_json = fs::read_to_string(&override_config_path).await?;
-		let override_config = serde_json::from_str::<Value>(&override_config_json)?;
-		let override_process = override_config["process"].clone();
-
-		// Template new config
-		base_config["process"]["args"] = override_process["args"].clone();
-		base_config["process"]["env"] = Value::Array(
-			self.config
-				.env
-				.iter()
-				.map(|(k, v)| serde_json::Value::String(format!("{k}={v}")))
-				.chain(
-					override_process["env"]
-						.as_array()
-						.context("override_process.env")?
-						.iter()
-						.cloned(),
-				)
-				.chain(
-					base_config["process"]["env"]
-						.as_array()
-						.context("process.env")?
-						.iter()
-						.cloned(),
-				)
-				.collect(),
-		);
-		base_config["process"]["user"] = override_process["user"].clone();
-		base_config["process"]["cwd"] = override_process["cwd"].clone();
-		base_config["linux"]["namespaces"]
-			.as_array_mut()
-			.context("config.linux.namespaces")?
-			.push(json!({
-				"type": "network",
-				"path": netns_path.to_str().context("netns_path")?,
-			}));
-		base_config["mounts"]
-			.as_array_mut()
-			.context("config.mounts")?
-			.push(json!({
-				"destination": "/etc/resolv.conf",
-				"type": "bind",
-				"source": actor_path.join("resolv.conf").to_str().context("resolv.conf path")?,
-				"options": ["rbind", "rprivate"]
-			}));
-
-		fs::write(&config_path, serde_json::to_vec(&base_config)?).await?;
 
 		Ok(())
 	}
@@ -394,20 +347,7 @@ impl Actor {
 					})
 				})
 				.collect::<Vec<_>>(),
-			"env": self
-				.config
-				.env
-				.iter()
-				.map(|(k, v)| (k.clone(), v.clone()))
-				// Add port env vars and api endpoint
-				.chain(ports.iter().map(|(label, port)| {
-					(
-						format!("PORT_{}", label.replace('-', "_")),
-						port.target.to_string(),
-					)
-				}))
-				.chain(std::iter::once(("RIVET_API_ENDPOINT".to_string(), ctx.config().cluster.api_endpoint.to_string())))
-				.collect::<HashMap<_, _>>(),
+			"env": build_default_env(ctx, &self.config.env, &ports),
 			"owner": self.config.owner,
 			"vector_socket_addr": ctx.config().vector.as_ref().map(|x| &x.address),
 		});
@@ -786,4 +726,26 @@ async fn bind_ports_inner(
 	}
 
 	Ok(rows)
+}
+
+fn build_default_env(
+	ctx: &Ctx,
+	base_env: &protocol::HashableMap<String, String>,
+	ports: &protocol::HashableMap<String, protocol::ProxiedPort>,
+) -> HashMap<String, String> {
+	base_env
+		.iter()
+		.map(|(k, v)| (k.clone(), v.clone()))
+		// Add port env vars and api endpoint
+		.chain(ports.iter().map(|(label, port)| {
+			(
+				format!("PORT_{}", label.replace('-', "_")),
+				port.target.to_string(),
+			)
+		}))
+		.chain(std::iter::once((
+			"RIVET_API_ENDPOINT".to_string(),
+			ctx.config().cluster.api_endpoint.to_string(),
+		)))
+		.collect::<HashMap<_, _>>()
 }

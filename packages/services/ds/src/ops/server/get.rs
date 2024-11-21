@@ -194,11 +194,13 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 		.filter_map(|server_id| server_rows.iter().find(|x| x.server_id == *server_id))
 		.map(|server| {
 			// TODO: Handle timeout to let Traefik pull config
-			let (is_connectable, public_ip) = if let Some(server_nomad) = server_nomad_rows
-				.iter()
-				.find(|x| x.server_id == server.server_id)
+			let (is_nomad, is_connectable, public_ip) = if let Some(server_nomad) =
+				server_nomad_rows
+					.iter()
+					.find(|x| x.server_id == server.server_id)
 			{
 				(
+					true,
 					server_nomad.nomad_alloc_plan_ts.is_some(),
 					server_nomad.nomad_node_public_ipv4.clone(),
 				)
@@ -206,10 +208,14 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 				.iter()
 				.find(|x| x.server_id == server.server_id)
 			{
-				(server_pb.running_ts.is_some(), server_pb.public_ip.clone())
+				(
+					false,
+					server_pb.running_ts.is_some(),
+					server_pb.public_ip.clone(),
+				)
 			} else {
 				// Neither nomad nor pegboard server attached
-				(false, None)
+				(false, false, None)
 			};
 
 			let ports = port_gg_rows
@@ -232,9 +238,20 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 						.filter(|p| p.server_id == server.server_id)
 						.map(|host_port| {
 							let proxied_port = proxied_port_rows.iter().find(|x| {
-								x.server_id == server.server_id
-									&& x.label
-										== crate::util::format_port_label(&host_port.port_name)
+								if x.server_id == server.server_id {
+									// Find the label to compare to based on the driver
+									let transformed_label = if is_nomad {
+										crate::util::nomad_prefix_port_label(&host_port.port_name)
+									} else {
+										crate::util::pegboard_normalize_port_label(
+											&host_port.port_name,
+										)
+									};
+
+									x.label == transformed_label
+								} else {
+									false
+								}
 							});
 
 							Ok((

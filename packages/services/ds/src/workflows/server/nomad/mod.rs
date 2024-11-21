@@ -321,7 +321,7 @@ async fn submit_job(ctx: &ActivityCtx, input: &SubmitJobInput) -> GlobalResult<S
 		.network_ports
 		.iter()
 		.map(|(port_label, _)| nomad_client::models::Port {
-			label: Some(crate::util::format_port_label(port_label)),
+			label: Some(crate::util::nomad_prefix_port_label(port_label)),
 			..nomad_client::models::Port::new()
 		})
 		.collect::<Vec<_>>();
@@ -331,7 +331,7 @@ async fn submit_job(ctx: &ActivityCtx, input: &SubmitJobInput) -> GlobalResult<S
 		.network_ports
 		.iter()
 		.map(|(port_label, port)| {
-			let nomad_port_label = crate::util::format_port_label(port_label);
+			let nomad_port_label = crate::util::nomad_prefix_port_label(port_label);
 			let host_port_template =
 				template_env_var_int(&nomad_host_port_env_var(&nomad_port_label));
 
@@ -361,7 +361,7 @@ async fn submit_job(ctx: &ActivityCtx, input: &SubmitJobInput) -> GlobalResult<S
 		.network_ports
 		.iter()
 		.map(|(port_label, port)| {
-			let nomad_port_label = crate::util::format_port_label(port_label);
+			let nomad_port_label = crate::util::nomad_prefix_port_label(port_label);
 
 			let container_port_value = match input.network_mode {
 				NetworkMode::Bridge => unwrap!(port.internal_port).to_string(),
@@ -399,7 +399,7 @@ async fn submit_job(ctx: &ActivityCtx, input: &SubmitJobInput) -> GlobalResult<S
 		.iter()
 		.map(|(port_label, port)| {
 			let service_name = format!("${{NOMAD_META_LOBBY_ID}}-{}", port_label);
-			let nomad_port_label = crate::util::format_port_label(port_label);
+			let nomad_port_label = crate::util::nomad_prefix_port_label(port_label);
 			let transport_protocol = match port.routing {
 				Routing::GameGuard { protocol, .. } => TransportProtocol::from(protocol),
 				Routing::Host { protocol } => TransportProtocol::from(protocol),
