@@ -2,6 +2,7 @@
 FROM rust:1.82.0-bullseye AS rust
 
 WORKDIR /app
+COPY packages/infra/client/actor-kv/ actor-kv/
 COPY packages/infra/client/runner-protocol/ runner-protocol/
 COPY packages/infra/client/isolate-v8-runner/Cargo.toml isolate-v8-runner/Cargo.toml
 COPY packages/infra/client/isolate-v8-runner/src/ isolate-v8-runner/src/

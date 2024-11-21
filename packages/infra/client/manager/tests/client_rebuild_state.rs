@@ -120,6 +120,7 @@ async fn handle_connection(
 									protocol::Command::SignalActor {
 										actor_id,
 										signal: Signal::SIGKILL as i32,
+										persist_state: false,
 									},
 								)
 								.await;

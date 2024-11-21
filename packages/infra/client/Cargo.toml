@@ -3,6 +3,7 @@ members = [
 	"container-runner",
 	"echo",
 	"isolate-v8-runner",
+	"actor-kv",
 	"manager",
 	"runner-protocol",
 ]
@@ -18,6 +19,7 @@ container-runner = { path = "container-runner" }
 echo = { path = "echo" }
 isolate-v8-runner = { path = "isolate-v8-runner" }
 runner-protocol = { path = "runner-protocol", package = "pegboard-runner-protocol" }
+actor-kv = { path = "actor-kv", package = "pegboard-actor-kv" }
 
 [workspace.dependencies.sqlx]
 git = "https://github.com/rivet-gg/sqlx"

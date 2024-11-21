@@ -8,6 +8,7 @@ use std::{
 	sync::{mpsc as smpsc, Arc},
 };
 
+use actor_kv::ActorKv;
 use anyhow::*;
 use deno_core::{unsync::MaskFutureAsSend, v8::CreateParams, ModuleSpecifier, StaticModuleLoader};
 use deno_runtime::{
@@ -126,6 +127,10 @@ pub async fn run_inner(
 ) -> Result<i32> {
 	tracing::info!(?actor_id, "Starting isolate");
 
+	// Init KV store (create or open)
+	let mut kv = ActorKv::new(utils::fdb_handle()?, actor_id);
+	kv.init().await?;
+
 	// Load script into a static module loader. No dynamic scripts can be loaded this way.
 	let script_content = fs::read_to_string(actor_path.join("index.js"))
 		.await
@@ -211,7 +216,7 @@ pub async fn run_inner(
 		},
 		WorkerOptions {
 			extensions: vec![
-				ext::kv::rivet_kv::init_ops_and_esm(utils::fdb_handle()?),
+				ext::kv::rivet_kv::init_ops_and_esm(kv),
 				ext::runtime::rivet_runtime::init_ops_and_esm(),
 			],
 			// Configure memory limits

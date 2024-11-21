@@ -138,6 +138,7 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 			.map(|actor_id| protocol::Command::SignalActor {
 				actor_id,
 				signal: Signal::SIGKILL as i32,
+				persist_state: false,
 			})
 			.collect(),
 	)
@@ -405,7 +406,7 @@ pub async fn handle_commands(
 
 	// Update actor state based on commands
 	for command in commands {
-		if let protocol::Command::SignalActor { actor_id, signal } = command {
+		if let protocol::Command::SignalActor { actor_id, signal, .. } = command {
 			if matches!(signal.try_into()?, Signal::SIGTERM | Signal::SIGKILL) {
 				let res = ctx
 					.activity(UpdateActorStateInput {

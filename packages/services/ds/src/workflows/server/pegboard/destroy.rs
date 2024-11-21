@@ -34,6 +34,7 @@ pub(crate) async fn ds_server_pegboard_destroy(
 		ctx.signal(pp::Command::SignalActor {
 			actor_id: ds.actor_id,
 			signal: Signal::SIGTERM as i32,
+			persist_state: false,
 		})
 		.tag("datacenter_id", ds.datacenter_id)
 		.send()
@@ -46,6 +47,7 @@ pub(crate) async fn ds_server_pegboard_destroy(
 		ctx.signal(pp::Command::SignalActor {
 			actor_id: ds.actor_id,
 			signal: Signal::SIGKILL as i32,
+			persist_state: false,
 		})
 		.tag("datacenter_id", ds.datacenter_id)
 		.send()

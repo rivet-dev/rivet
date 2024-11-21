@@ -1,54 +1,39 @@
 use std::{collections::HashMap, future::Future, sync::Arc};
 
-use deno_core::{error::AnyError, op2, JsBuffer, OpState, ToJsBuffer};
-use foundationdb as fdb;
-use futures_util::{StreamExt, TryStreamExt};
+use deno_core::{error::AnyError, op2, JsBuffer, OpState};
 
 deno_core::extension!(
   rivet_kv,
   ops = [
 	op_rivet_kv_get,
 	op_rivet_kv_get_batch,
+	op_rivet_kv_list,
 	op_rivet_kv_put,
 	op_rivet_kv_put_batch,
 	op_rivet_kv_delete,
-	// op_rivet_kv_delete_batch,
+	op_rivet_kv_delete_batch,
   ],
   esm = [
 	dir "js",
 	"40_rivet_kv.js",
   ],
   options = {
-	db: fdb::Database,
+	kv: actor_kv::ActorKv,
   },
   state = |state, options| {
-	state.put::<Arc<fdb::Database>>(Arc::new(options.db));
+	state.put::<Arc<actor_kv::ActorKv>>(Arc::new(options.kv));
   },
 );
 
 #[op2(async)]
-#[buffer]
+#[serde]
 pub fn op_rivet_kv_get(
 	state: &mut OpState,
 	#[string] key: String,
-) -> Result<impl Future<Output = Result<Option<Vec<u8>>, AnyError>>, AnyError> {
-	validate_key(&key)?;
+) -> Result<impl Future<Output = Result<Option<actor_kv::Entry>, AnyError>>, AnyError> {
+	let kv = state.borrow::<Arc<actor_kv::ActorKv>>().clone();
 
-	let db = state.borrow::<Arc<fdb::Database>>().clone();
-
-	Ok(async move {
-		let bkey = key.as_bytes();
-
-		let data = db
-			.run(|tx, _maybe_committed| async move { Ok(tx.get(bkey, false).await?) })
-			.await?;
-
-		let Some(data) = data else {
-			return Ok(None);
-		};
-
-		Ok(Some(data.to_vec()))
-	})
+	Ok(async move { kv.get(vec![key]).await.map(|res| res.into_values().next()) })
 }
 
 #[op2(async)]
@@ -56,44 +41,23 @@ pub fn op_rivet_kv_get(
 pub fn op_rivet_kv_get_batch(
 	state: &mut OpState,
 	#[serde] keys: Vec<String>,
-) -> Result<impl Future<Output = Result<HashMap<String, ToJsBuffer>, AnyError>>, AnyError> {
-	anyhow::ensure!(
-		keys.len() <= 128,
-		"a maximum of 128 keys is allowed for `Rivet.getBatch`"
-	);
+) -> Result<impl Future<Output = Result<HashMap<String, actor_kv::Entry>, AnyError>>, AnyError> {
+	let kv = state.borrow::<Arc<actor_kv::ActorKv>>().clone();
 
-	for key in &keys {
-		validate_key(key)?;
-	}
+	Ok(async move { kv.get(keys).await })
+}
 
-	let db = state.borrow::<Arc<fdb::Database>>().clone();
+#[op2(async)]
+#[serde]
+pub fn op_rivet_kv_list(
+	state: &mut OpState,
+	#[serde] query: actor_kv::ListQuery,
+	reverse: bool,
+	limit: Option<u32>,
+) -> Result<impl Future<Output = Result<HashMap<String, actor_kv::Entry>, AnyError>>, AnyError> {
+	let kv = state.borrow::<Arc<actor_kv::ActorKv>>().clone();
 
-	Ok(async move {
-		let data = db
-			.run(|tx, _maybe_committed| {
-				let keys = keys.clone();
-
-				async move {
-					futures_util::stream::iter(keys)
-						.map(|key| {
-							let tx = tx.clone();
-							async move {
-								Ok(tx
-									.get(key.as_bytes(), false)
-									.await?
-									.map(|data| (key, data.to_vec().into())))
-							}
-						})
-						.buffer_unordered(16)
-						.try_filter_map(|x| std::future::ready(Ok(x)))
-						.try_collect::<HashMap<_, _>>()
-						.await
-				}
-			})
-			.await?;
-
-		Ok(data)
-	})
+	Ok(async move { kv.list(query, reverse, limit.map(|x| x as usize)).await })
 }
 
 #[op2(async)]
@@ -102,26 +66,9 @@ pub fn op_rivet_kv_put(
 	#[string] key: String,
 	#[buffer] value: JsBuffer,
 ) -> Result<impl Future<Output = Result<(), AnyError>>, AnyError> {
-	validate_key(&key)?;
-	validate_value(&key, &value)?;
+	let kv = state.borrow::<Arc<actor_kv::ActorKv>>().clone();
 
-	let db = state.borrow::<Arc<fdb::Database>>().clone();
-
-	Ok(async move {
-		let bkey = key.as_bytes();
-
-		db.run(|tx, _maybe_committed| {
-			let value = value.clone(); // Creates a new ref, does not clone data
-
-			async move {
-				tx.set(bkey, &value);
-				Ok(())
-			}
-		})
-		.await?;
-
-		Ok(())
-	})
+	Ok(async move { kv.put([(key, value)].into()).await })
 }
 
 #[op2(async)]
@@ -129,29 +76,9 @@ pub fn op_rivet_kv_put_batch(
 	state: &mut OpState,
 	#[serde] obj: HashMap<String, JsBuffer>,
 ) -> Result<impl Future<Output = Result<(), AnyError>>, AnyError> {
-	for (key, value) in &obj {
-		validate_key(&key)?;
-		validate_value(&key, &value)?;
-	}
+	let kv = state.borrow::<Arc<actor_kv::ActorKv>>().clone();
 
-	let db = state.borrow::<Arc<fdb::Database>>().clone();
-
-	Ok(async move {
-		db.run(|tx, _maybe_committed| {
-			let obj = obj.clone();
-
-			async move {
-				for (key, value) in obj {
-					tx.set(key.as_bytes(), &value);
-				}
-
-				Ok(())
-			}
-		})
-		.await?;
-
-		Ok(())
-	})
+	Ok(async move { kv.put(obj).await })
 }
 
 #[op2(async)]
@@ -159,39 +86,22 @@ pub fn op_rivet_kv_delete(
 	state: &mut OpState,
 	#[string] key: String,
 ) -> Result<impl Future<Output = Result<bool, AnyError>>, AnyError> {
-	validate_key(&key)?;
-
-	let db = state.borrow::<Arc<fdb::Database>>().clone();
+	let kv = state.borrow::<Arc<actor_kv::ActorKv>>().clone();
 
 	Ok(async move {
-		let bkey = key.as_bytes();
-
-		let existed = db
-			.run(|tx, _maybe_committed| async move {
-				let existed = tx.get(bkey, false).await?.is_some();
-
-				tx.clear(bkey);
-				Ok(existed)
-			})
-			.await?;
-
-		Ok(existed)
+		kv.delete(vec![key])
+			.await
+			.map(|res| res.into_values().next().unwrap_or_default())
 	})
 }
 
-fn validate_key(key: &str) -> Result<(), AnyError> {
-	// 2048 bytes
-	anyhow::ensure!(key.len() <= 2048, "key is too long (max 2048 bytes)");
+#[op2(async)]
+#[serde]
+pub fn op_rivet_kv_delete_batch(
+	state: &mut OpState,
+	#[serde] keys: Vec<String>,
+) -> Result<impl Future<Output = Result<HashMap<String, bool>, AnyError>>, AnyError> {
+	let kv = state.borrow::<Arc<actor_kv::ActorKv>>().clone();
 
-	Ok(())
-}
-
-fn validate_value(key: &str, value: &[u8]) -> Result<(), AnyError> {
-	// 2048 bytes
-	anyhow::ensure!(
-		value.len() <= 128 * 1024,
-		"value for key {key:?} is too large (max 128 KiB)"
-	);
-
-	Ok(())
+	Ok(async move { kv.delete(keys).await })
 }

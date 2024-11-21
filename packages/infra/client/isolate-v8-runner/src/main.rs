@@ -8,6 +8,7 @@ use std::{
 	time::Duration,
 };
 
+use actor_kv::ActorKv;
 use anyhow::*;
 use deno_runtime::deno_core::{v8_set_flags, JsRuntime};
 use deno_runtime::worker::MainWorkerTerminateHandle;
@@ -86,7 +87,7 @@ async fn main() -> Result<()> {
 	let actors = Arc::new(RwLock::new(HashMap::new()));
 	// TODO: Should be a `watch::channel` but the tokio version used by deno is old and doesn't implement
 	// `Clone` for `watch::Sender`
-	let (fatal_tx, mut fatal_rx) = tokio::sync::mpsc::channel::<()>(1);
+	let (fatal_tx, mut fatal_rx) = mpsc::channel::<()>(1);
 
 	let res = tokio::select! {
 		res = retry_connection(actors_path, actors, fatal_tx) => res,
@@ -104,7 +105,7 @@ async fn main() -> Result<()> {
 
 async fn retry_connection(
 	actors_path: &Path,
-	actors: Arc<RwLock<HashMap<Uuid, mpsc::Sender<i32>>>>,
+	actors: Arc<RwLock<HashMap<Uuid, mpsc::Sender<(i32, bool)>>>>,
 	fatal_tx: mpsc::Sender<()>,
 ) -> Result<()> {
 	loop {
@@ -123,7 +124,7 @@ async fn retry_connection(
 
 async fn handle_connection(
 	actors_path: &Path,
-	actors: Arc<RwLock<HashMap<Uuid, mpsc::Sender<i32>>>>,
+	actors: Arc<RwLock<HashMap<Uuid, mpsc::Sender<(i32, bool)>>>>,
 	fatal_tx: mpsc::Sender<()>,
 	socket: WebSocketStream<MaybeTlsStream<TcpStream>>,
 ) -> Result<()> {
@@ -155,12 +156,12 @@ async fn handle_connection(
 				if guard.contains_key(&actor_id) {
 					tracing::warn!("Actor {actor_id} already exists, ignoring new start packet");
 				} else {
-					// For receiving the terminate handle
-					let (terminate_tx, mut terminate_rx) =
-						tokio::sync::mpsc::channel::<MainWorkerTerminateHandle>(1);
-					let (signal_tx, mut signal_rx) = tokio::sync::mpsc::channel(1);
+					// For receiving the terminate handle from the isolate thread
+					let (terminate_tx, terminate_rx) =
+						mpsc::channel::<MainWorkerTerminateHandle>(1);
+					let (signal_tx, signal_rx) = mpsc::channel(1);
 
-					// Store actor stop sender
+					// Store actor signal sender
 					guard.insert(actor_id, signal_tx);
 					drop(guard);
 
@@ -170,48 +171,26 @@ async fn handle_connection(
 						.name(actor_id.to_string())
 						.spawn(move || isolate::run(actors_path, actor_id, terminate_tx))?;
 
-					// Alerts the main thread if any child threads had a fatal error
-					let fatal_tx = fatal_tx.clone();
-
-					// This task polls the isolate thread we just spawned to see if it errored. Should handle
-					// all errors gracefully.
-					let actors = actors.clone();
-					tokio::task::spawn(async move {
-						let Some(terminate_handle) = terminate_rx.recv().await else {
-							// If the transmitting end of the terminate handle was dropped (`recv` returned
-							// `None`), it must be that the thread stopped
-							tracing::error!("failed to receive terminate handle");
-							cleanup_thread(actor_id, handle, fatal_tx);
-							return;
-						};
-
-						drop(terminate_rx);
-
-						tokio::select! {
-							biased;
-							_ = poll_thread(&handle) => cleanup_thread(actor_id, handle, fatal_tx),
-							res = signal_rx.recv() => {
-								let Some(_signal) = res else {
-									tracing::error!("failed to receive signal");
-									fatal_tx.try_send(()).expect("receiver cannot be dropped");
-									return;
-								};
-
-								terminate_handle.terminate();
-							}
-						}
-
-						// Remove actor
-						actors.write().await.remove(&actor_id);
-					});
+					tokio::task::spawn(watch_thread(
+						actors.clone(),
+						fatal_tx.clone(),
+						actor_id,
+						terminate_rx,
+						signal_rx,
+						handle,
+					));
 				}
 			}
-			runner_protocol::ToRunner::Signal { actor_id, signal } => {
+			runner_protocol::ToRunner::Signal {
+				actor_id,
+				signal,
+				persist_state,
+			} => {
 				if let Some(signal_tx) = actors.read().await.get(&actor_id) {
 					// Tell actor thread to stop. Removing the actor is handled in the tokio task above.
 					signal_tx
-						.try_send(signal)
-						.context("failed to send stop signal to actor poll task")?;
+						.try_send((signal, persist_state))
+						.context("failed to send stop signal to actor thread watcher")?;
 				} else {
 					tracing::warn!("Actor {actor_id} not found for stopping");
 				}
@@ -249,6 +228,72 @@ async fn read_packet(
 	Ok(Packet::Msg(packet))
 }
 
+/// Polls the isolate thread we just spawned to see if it errored. Should handle all errors gracefully.
+async fn watch_thread(
+	actors: Arc<RwLock<HashMap<Uuid, mpsc::Sender<(i32, bool)>>>>,
+	fatal_tx: mpsc::Sender<()>,
+	actor_id: Uuid,
+	mut terminate_rx: mpsc::Receiver<MainWorkerTerminateHandle>,
+	mut signal_rx: mpsc::Receiver<(i32, bool)>,
+	handle: JoinHandle<Result<()>>,
+) {
+	// Await terminate handle
+	let Some(terminate_handle) = terminate_rx.recv().await else {
+		// If the transmitting end of the terminate handle was dropped (`recv` returned `None`), it must be
+		// that the thread stopped
+		tracing::error!(?actor_id, "failed to receive terminate handle");
+		fatal_tx.try_send(()).expect("receiver cannot be dropped");
+		return;
+	};
+
+	drop(terminate_rx);
+
+	// Wait for either the thread to stop or a signal to be received
+	let persist_state = tokio::select! {
+		biased;
+		_ = poll_thread(&handle) => true,
+		res = signal_rx.recv() => {
+			let Some((_signal, persist_state)) = res else {
+				tracing::error!(?actor_id, "failed to receive signal");
+				fatal_tx.try_send(()).expect("receiver cannot be dropped");
+				return;
+			};
+
+			// Currently, we terminate regardless of what the signal is
+			terminate_handle.terminate();
+
+			persist_state
+		}
+	};
+
+	// Remove actor
+	{
+		actors.write().await.remove(&actor_id);
+	}
+
+	// Remove state
+	if !persist_state {
+		let db = match utils::fdb_handle() {
+			Ok(db) => db,
+			Err(err) => {
+				tracing::error!(?err, ?actor_id, "failed to create fdb handle");
+				fatal_tx.try_send(()).expect("receiver cannot be dropped");
+				return;
+			}
+		};
+
+		if let Err(err) = ActorKv::new(db, actor_id).destroy().await {
+			tracing::error!(?err, ?actor_id, "failed to destroy actor kv");
+			fatal_tx.try_send(()).expect("receiver cannot be dropped");
+			return;
+		};
+	}
+
+	// Cleanup thread
+	poll_thread(&handle).await;
+	cleanup_thread(actor_id, handle, &fatal_tx);
+}
+
 async fn poll_thread(handle: &JoinHandle<Result<()>>) {
 	loop {
 		if handle.is_finished() {
@@ -259,7 +304,7 @@ async fn poll_thread(handle: &JoinHandle<Result<()>>) {
 	}
 }
 
-fn cleanup_thread(actor_id: Uuid, handle: JoinHandle<Result<()>>, fatal_tx: mpsc::Sender<()>) {
+fn cleanup_thread(actor_id: Uuid, handle: JoinHandle<Result<()>>, fatal_tx: &mpsc::Sender<()>) {
 	let res = handle.join();
 
 	match res {

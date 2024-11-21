@@ -78,6 +78,8 @@ pub enum Command {
 		actor_id: Uuid,
 		// See nix::sys::signal::Signal
 		signal: i32,
+		/// Whether or not to delete related data (KV store).
+		persist_state: bool,
 	},
 }
 

@@ -277,13 +277,18 @@ impl Actor {
 		Ok(())
 	}
 
-	pub async fn signal(self: &Arc<Self>, ctx: &Arc<Ctx>, signal: Signal) -> Result<()> {
+	pub async fn signal(
+		self: &Arc<Self>,
+		ctx: &Arc<Ctx>,
+		signal: Signal,
+		persist_state: bool,
+	) -> Result<()> {
 		tracing::info!(actor_id=?self.actor_id, ?signal, "sending signal");
 
 		let self2 = self.clone();
 		let ctx2 = ctx.clone();
 		tokio::spawn(async move {
-			if let Err(err) = self2.signal_inner(&ctx2, signal).await {
+			if let Err(err) = self2.signal_inner(&ctx2, signal, persist_state).await {
 				tracing::error!(?err, "actor signal failed");
 			}
 		});
@@ -291,7 +296,12 @@ impl Actor {
 		Ok(())
 	}
 
-	async fn signal_inner(self: &Arc<Self>, ctx: &Arc<Ctx>, signal: Signal) -> Result<()> {
+	async fn signal_inner(
+		self: &Arc<Self>,
+		ctx: &Arc<Ctx>,
+		signal: Signal,
+		persist_state: bool,
+	) -> Result<()> {
 		let mut i = 0;
 
 		// Signal command might be sent before the actor has a runner. This loop waits for the runner to start
@@ -328,6 +338,7 @@ impl Actor {
 					.send(&runner_protocol::ToRunner::Signal {
 						actor_id: self.actor_id,
 						signal: signal as i32,
+						persist_state,
 					})
 					.await?;
 			}

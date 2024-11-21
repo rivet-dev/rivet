@@ -1,25 +1,18 @@
 [package]
-name = "pegboard-isolate-v8-runner"
-version.workspace = true
-authors.workspace = true
-license.workspace = true
-edition.workspace = true
-
-[[bin]]
-name = "rivet-isolate-v8-runner"
-path = "src/main.rs"
+name = "pegboard-actor-kv"
+version = "0.1.0"
+edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
 
 [dependencies]
 anyhow = "1.0.79"
-deno_ast = "0.42.1"
 deno_core = "0.312.0"
 foundationdb = {version = "0.9.1", features = [ "fdb-7_1", "embedded-fdb-include" ] }
 futures-util = { version = "0.3" }
-netif = "0.1.6"
-nix = { version = "0.27", default-features = false, features = ["user", "signal"] }
+prost = "0.13.3"
 serde = { version = "1.0.195", features = ["derive"] }
 serde_json = "1.0.111"
-signal-hook = "0.3.17"
 tokio = { version = "1.36.0", features = [ "full" ] }
 tokio-tungstenite = "0.23.1"
 tracing = "0.1"
@@ -29,17 +22,4 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
     "fmt",
     "json",
 ] }
-twox-hash = "1.6.3"
 uuid = { version = "1.6.1", features = ["v4"] }
-
-runner-protocol.workspace = true
-actor-kv.workspace = true
-
-[dependencies.deno_runtime]
-workspace = true
-
-[dev-dependencies]
-portpicker = "0.1.1"
-tempfile = "3.9.0"
-uuid = { version = "1.6.1", features = ["v4"] }
-

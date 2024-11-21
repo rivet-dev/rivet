@@ -297,9 +297,15 @@ impl Ctx {
 				// Spawn actor
 				actor.start(&self).await?;
 			}
-			protocol::Command::SignalActor { actor_id, signal } => {
+			protocol::Command::SignalActor {
+				actor_id,
+				signal,
+				persist_state,
+			} => {
 				if let Some(actor) = self.actors.read().await.get(&actor_id) {
-					actor.signal(&self, signal.try_into()?).await?;
+					actor
+						.signal(&self, signal.try_into()?, persist_state)
+						.await?;
 				} else {
 					tracing::warn!(
 						?actor_id,

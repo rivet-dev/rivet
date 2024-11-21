@@ -3268,15 +3268,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "itertools"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
-dependencies = [
- "either",
-]
-
-[[package]]
 name = "itoa"
 version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4147,6 +4138,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "pegboard-actor-kv"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "deno_core",
+ "foundationdb",
+ "futures-util",
+ "prost 0.13.3",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+ "tracing",
+ "tracing-logfmt",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "pegboard-container-runner"
 version = "0.0.1"
 dependencies = [
@@ -4179,6 +4189,7 @@ dependencies = [
  "futures-util",
  "netif",
  "nix 0.27.1",
+ "pegboard-actor-kv",
  "pegboard-runner-protocol",
  "portpicker",
  "serde",
@@ -4619,7 +4630,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e9552f850d5f0964a4e4d0bf306459ac29323ddfbae05e35a7c0d35cb0803cc5"
 dependencies = [
  "anyhow",
- "itertools 0.13.0",
+ "itertools 0.12.1",
  "proc-macro2",
  "quote",
  "syn 2.0.87",
