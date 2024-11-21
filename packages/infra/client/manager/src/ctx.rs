@@ -614,7 +614,7 @@ impl Ctx {
 	}
 
 	pub fn fdb_cluster_path(&self) -> PathBuf {
-		self.config.data_dir.join("fdb.cluster")
+		self.config().runtime.data_dir().join("fdb.cluster")
 	}
 
 	pub fn actors_path(&self) -> PathBuf {

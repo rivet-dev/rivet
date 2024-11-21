@@ -28,7 +28,8 @@ impl PartialEq for Key {
 				.map(|x| x.as_ref())
 				.eq(b.iter().map(|x| x.as_ref())),
 			(Key::JsOutKey(a), Key::JsOutKey(b)) => a == b,
-			_ => false,
+			(Key::JsInKey(a), Key::JsOutKey(b)) => a.iter().map(|x| x.as_ref()).eq(b.iter()),
+			(Key::JsOutKey(a), Key::JsInKey(b)) => a.iter().eq(b.iter().map(|x| x.as_ref())),
 		}
 	}
 }
@@ -55,12 +56,12 @@ impl std::hash::Hash for Key {
 impl Key {
 	pub fn len(&self) -> usize {
 		match self {
-			// Arbitrary 4 accounting for nesting overhead
 			Key::JsInKey(js_in_key) => {
+				// Arbitrary 4 accounting for nesting overhead
 				js_in_key.iter().fold(0, |acc, x| acc + x.len()) + 4 * js_in_key.len()
 			}
-			// Arbitrary 4 accounting for nesting overhead
 			Key::JsOutKey(out_key) => {
+				// Arbitrary 4 accounting for nesting overhead
 				out_key.iter().fold(0, |acc, x| acc + x.len()) + 4 * out_key.len()
 			}
 		}

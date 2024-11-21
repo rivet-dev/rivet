@@ -85,7 +85,7 @@ pub struct Runner {
 
 	/// If true, a cgroup will be created for the runners.
 	///
-	/// This should only be disabled for testing & development.
+	/// This should not be disabled if running the client with a daemon.
 	pub use_cgroup: Option<bool>,
 
 	pub container_runner_binary_path: Option<PathBuf>,
