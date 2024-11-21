@@ -3,6 +3,10 @@
 import { resolve } from "@std/path";
 import dedent from "dedent";
 
+const basePath = "/etc/s6-overlay";
+const rcPath = resolve(basePath, "s6-rc.d");
+const scriptsPath = resolve(basePath, "scripts");
+
 interface Service {
 	name: string;
 	command: string;
@@ -42,14 +46,18 @@ interface Service {
 }
 
 const services: Service[] = [
-	// Dependencies take a long time to start, so let the user know that
-	// something is happening
 	{
-		name: "rivet-start-message",
-		// Sleep for infinity since this service will be restarted if it exits
+		name: "rivet-prestart",
 		command:
-			"echo 'Starting...'; sleep infinity",
-		noRedirectLogs: true,
+			`${scriptsPath}/scripts/prestart.sh`,
+		rootUser: true,
+		ports: {},
+	},
+	{
+		name: "rivet-poststart",
+		command:
+			`${scriptsPath}/scripts/poststart.sh`,
+		dependencies: ["rivet-server"],
 		rootUser: true,
 		ports: {},
 	},
@@ -57,7 +65,6 @@ const services: Service[] = [
 	{
 		name: "rivet-server",
 		command: "rivet-server start",
-		noRedirectLogs: true,
 		healthCheckCommand: "curl -f http://127.0.0.1:8090/health/liveness",
 		dependencies: [
 			"cockroachdb",
@@ -183,10 +190,6 @@ const services: Service[] = [
 		},
 	},
 ];
-
-const basePath = "/etc/s6-overlay";
-const rcPath = resolve(basePath, "s6-rc.d");
-const scriptsPath = resolve(basePath, "scripts");
 
 /**
  * Create the `fs-setup` service.
