@@ -124,11 +124,20 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 							}
 						}
 						pp::ActorState::Stopping | pp::ActorState::Stopped => {}
-						pp::ActorState::Exited { exit_code } => {
+						pp::ActorState::Exited { .. } | pp::ActorState::Lost => {
+							let exit_code = if let pp::ActorState::Exited { exit_code } = sig.state
+							{
+								exit_code
+							} else {
+								None
+							};
+
 							tracing::debug!(?exit_code, "actor stopped");
 
+							let failed = exit_code.map(|exit_code| exit_code != 0).unwrap_or(true);
+
 							// Reschedule durable actor if it errored
-							if input.lifecycle.durable && exit_code.unwrap_or(1) != 0 {
+							if input.lifecycle.durable && failed {
 								if let Some(sig) = reschedule_actor(ctx, &input).await? {
 									// Destroyed early
 									return Ok(Loop::Break(StateRes {

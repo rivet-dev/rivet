@@ -216,13 +216,19 @@ pub enum ActorState {
 	/// Actor planned to stop.
 	/// Sent by pegboard dc.
 	Stopping,
-	/// Actor stopped, process exit not yet received.
-	/// Sent by pegboard client and pegboard gc.
+	/// Actor stopped on client, process not yet exited.
+	/// Sent by pegboard client.
 	Stopped,
+	/// Actor was lost in some way and will never be marked as stopped (if not already) and will never exit.
+	/// Sent by pegboard client and pegboard gc.
+	Lost,
 	/// Actor process exited.
 	/// Sent by pegboard client.
-	Exited { exit_code: Option<i32> },
-	/// Actor failed to allocate to a client.
+	Exited {
+		/// Unset if the exit code could not be read (usually from SIGKILL or lost process)
+		exit_code: Option<i32>,
+	},
+	/// Datacenter failed to allocate the actor to a client.
 	/// Sent by pegboard dc.
 	FailedToAllocate,
 }

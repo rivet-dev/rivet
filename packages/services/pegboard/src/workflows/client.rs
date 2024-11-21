@@ -340,6 +340,20 @@ async fn update_actor_state(
 					)
 					.await?;
 				}
+				Lost => {
+					sql_execute!(
+						[ctx]
+						"
+						UPDATE db_pegboard.actors
+						SET
+							lost_ts = $2
+						WHERE actor_id = $1
+						",
+						actor_id,
+						util::timestamp::now(),
+					)
+					.await?;
+				}
 				Exited { exit_code } => {
 					sql_execute!(
 						[ctx]
@@ -356,6 +370,7 @@ async fn update_actor_state(
 					)
 					.await?;
 				}
+				// These updates should never reach this workflow
 				Allocated { .. } | FailedToAllocate => bail!("invalid state for updating db"),
 			},
 		}

@@ -413,7 +413,7 @@ impl Ctx {
 
 				self.event(protocol::Event::ActorStateUpdate {
 					actor_id: row.actor_id,
-					state: protocol::ActorState::Stopped,
+					state: protocol::ActorState::Lost,
 				})
 				.await?;
 			}

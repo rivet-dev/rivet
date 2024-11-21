@@ -11,6 +11,9 @@ const ACTOR_START_THRESHOLD_MS: i64 = util::duration::seconds(30);
 /// How long to wait after stopping and not receiving a stop state before manually setting actor as
 /// stopped.
 const ACTOR_STOP_THRESHOLD_MS: i64 = util::duration::seconds(30);
+/// How long to wait after stopped and not receiving an exit state before manually setting actor as
+/// exited.
+const ACTOR_EXIT_THRESHOLD_MS: i64 = util::duration::seconds(5);
 
 #[derive(sqlx::FromRow)]
 struct ActorRow {
@@ -67,18 +70,32 @@ pub async fn run_from_env(
 				actor_id,
 				client_id,
 				running_ts IS NULL AS failed_start,
-				stopping_ts IS NOT NULL AS failed_stop
+				stopping_ts IS NOT NULL AS failed_stop,
+				stop_ts IS NOT NULL AS failed_exit
 			FROM db_pegboard.actors
 			WHERE
+				exit_ts IS NULL AND
+				lost_ts IS NULL AND
 				(
-					(create_ts < $1 AND running_ts IS NULL) OR
-					stopping_ts < $2
-				) AND
-				stop_ts IS NULL AND
-				exit_ts IS NULL
+					-- create_ts exceeded threshold and running_ts is null (failed start)
+					(
+						create_ts < $1 AND
+						running_ts IS NULL AND
+						stopping_ts IS NULL AND
+						stop_ts IS NULL
+					) OR
+					-- stopping_ts exceeded threshold and stop_ts is null (failed stop)
+					(
+						stopping_ts < $2 AND
+						stop_ts IS NULL
+					) OR
+					-- stop_ts exceeded threshold and exit_ts is null (failed exit)
+					stop_ts < $3
+				)
 			",
 			ts - ACTOR_START_THRESHOLD_MS,
 			ts - ACTOR_STOP_THRESHOLD_MS,
+			ts - ACTOR_EXIT_THRESHOLD_MS
 		),
 	)?;
 
@@ -92,24 +109,26 @@ pub async fn run_from_env(
 	}
 
 	for row in &failed_actor_rows {
-		if row.failed_stop {
-			tracing::warn!(actor_id=?row.actor_id, "actor failed to stop");
+		if row.failed_exit {
+			tracing::error!(actor_id=?row.actor_id, "actor failed to exit");
 
 			ctx.signal(pegboard::workflows::client::ActorStateUpdate {
-				state: protocol::ActorState::Stopped,
+				state: protocol::ActorState::Lost,
 			})
 			.tag("actor_id", row.actor_id)
 			.send()
 			.await?;
+		} else if row.failed_stop {
+			tracing::error!(actor_id=?row.actor_id, "actor failed to stop");
 
 			ctx.signal(pegboard::workflows::client::ActorStateUpdate {
-				state: protocol::ActorState::Exited { exit_code: None },
+				state: protocol::ActorState::Lost,
 			})
 			.tag("actor_id", row.actor_id)
 			.send()
 			.await?;
 		} else if row.failed_start {
-			tracing::warn!(actor_id=?row.actor_id, "actor failed to start");
+			tracing::error!(actor_id=?row.actor_id, "actor failed to start");
 
 			ctx.signal(protocol::Command::SignalActor {
 				actor_id: row.actor_id,
