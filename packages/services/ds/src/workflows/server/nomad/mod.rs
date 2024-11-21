@@ -106,6 +106,8 @@ pub(crate) async fn ds_server_nomad(ctx: &mut WorkflowCtx, input: &Input) -> Glo
 				})
 				.output()
 				.await?;
+
+				bail!("failed to evaluate");
 			}
 		}
 		Init::Destroy(sig) => {

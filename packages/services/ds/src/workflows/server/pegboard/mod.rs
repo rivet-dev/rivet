@@ -422,10 +422,13 @@ async fn wait_actor_ready(ctx: &mut WorkflowCtx, server_id: Uuid) -> GlobalResul
 		Init::ActorStateUpdate(sig) => match sig.state {
 			pp::ActorState::Allocated { client_id } => client_id,
 			pp::ActorState::FailedToAllocate => {
-				ctx.msg(CreateFailed {})
-					.tag("server_id", server_id)
-					.send()
-					.await?;
+				ctx.workflow(destroy::Input {
+					server_id,
+					override_kill_timeout_ms: None,
+					signal_actor: false,
+				})
+				.output()
+				.await?;
 
 				bail!("failed to allocate actor");
 			}
