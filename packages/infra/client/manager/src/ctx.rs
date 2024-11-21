@@ -14,6 +14,7 @@ use futures_util::{
 use indoc::indoc;
 use nix::unistd::Pid;
 use pegboard::{protocol, system_info::SystemInfo};
+use serde_json::json;
 use sqlx::{pool::PoolConnection, Sqlite, SqlitePool};
 use tokio::{
 	fs,
@@ -253,22 +254,9 @@ impl Ctx {
 		tracing::debug!(?packet, "received packet");
 
 		match packet {
-			protocol::ToClient::Init {
-				last_event_idx,
-				fdb_cluster_ips,
-			} => {
+			protocol::ToClient::Init { last_event_idx } => {
 				// Send out all missed events
 				self.rebroadcast(last_event_idx).await?;
-
-				// Update FDB clusters file
-				if !fdb_cluster_ips.is_empty() {
-					let joined = fdb_cluster_ips
-						.into_iter()
-						.map(|x| x.to_string())
-						.collect::<Vec<_>>()
-						.join(",");
-					fs::write(self.fdb_cluster_path(), format!("fdb:fdb@{joined}")).await?;
-				}
 
 				// Rebuild state only after the init packet is received and processed so that we don't emit
 				// any new events before the missed events are rebroadcast
@@ -359,30 +347,27 @@ impl Ctx {
 		} else {
 			tracing::info!("spawning new isolate runner");
 
-			let env = vec![
-				(
-					"ACTORS_PATH",
-					self.actors_path().to_str().context("bad path")?.to_string(),
-				),
-				(
-					"FDB_CLUSTER_PATH",
-					self.fdb_cluster_path()
-						.to_str()
-						.context("bad path")?
-						.to_string(),
-				),
-				(
-					"RUNNER_ADDR",
-					format!("127.0.0.1:{}", self.config().runner.port()),
-				),
-			];
 			let working_path = self.isolate_runner_path();
+
+			// TODO: Use schema in v8-isolate-runner (don't import v8-isolate-runner because its fat)
+			let config = json!({
+				"actors_path": self.actors_path(),
+				"fdb_cluster_path": self.fdb_cluster_path(),
+				"runner_addr": format!("127.0.0.1:{}", self.config().runner.port()),
+			});
+
+			// Write isolate runner config
+			fs::write(
+				working_path.join("config.json"),
+				serde_json::to_vec(&config)?,
+			)
+			.await?;
 
 			let runner = runner::Handle::spawn_orphaned(
 				runner::Comms::socket(),
 				&self.config().runner.isolate_runner_binary_path(),
 				working_path,
-				&env,
+				&[],
 				self.config().runner.use_cgroup(),
 			)?;
 			let pid = runner.pid();
@@ -451,6 +436,7 @@ impl Ctx {
 		});
 	}
 
+	/// Sends all events after the given idx.
 	async fn rebroadcast(&self, last_event_idx: i64) -> Result<()> {
 		// Fetch all missed events
 		let events = utils::query(|| async {
@@ -482,7 +468,7 @@ impl Ctx {
 		self.send_packet(protocol::ToServer::Events(events)).await
 	}
 
-	// Rebuilds state from DB
+	/// Rebuilds state from DB upon restart.
 	async fn rebuild(self: &Arc<Self>) -> Result<()> {
 		let (actor_rows, isolate_runner_pid) = tokio::try_join!(
 			utils::query(|| async {

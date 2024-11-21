@@ -1,5 +1,6 @@
-use serde::{Deserialize, Serialize};
 use std::hash::Hash;
+
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct SystemInfo {

@@ -329,7 +329,10 @@ docs/PortalNotificationRegisterFirebaseService.md
 docs/PortalNotificationRegisterService.md
 docs/PortalNotificationUnregisterService.md
 docs/ProvisionDatacentersApi.md
+docs/ProvisionDatacentersGetServersResponse.md
 docs/ProvisionDatacentersGetTlsResponse.md
+docs/ProvisionPoolType.md
+docs/ProvisionServer.md
 docs/ProvisionServersApi.md
 docs/ProvisionServersGetInfoResponse.md
 docs/ServersApi.md
@@ -704,7 +707,10 @@ src/models/portal_get_suggested_games_response.rs
 src/models/portal_notification_register_firebase_service.rs
 src/models/portal_notification_register_service.rs
 src/models/portal_notification_unregister_service.rs
+src/models/provision_datacenters_get_servers_response.rs
 src/models/provision_datacenters_get_tls_response.rs
+src/models/provision_pool_type.rs
+src/models/provision_server.rs
 src/models/provision_servers_get_info_response.rs
 src/models/servers_build.rs
 src/models/servers_build_compression.rs

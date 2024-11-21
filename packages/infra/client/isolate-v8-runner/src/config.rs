@@ -1,11 +1,17 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 
 use deno_runtime::deno_permissions;
 use serde::Deserialize;
 
+#[derive(Clone, Deserialize)]
+pub struct Config {
+	pub actors_path: PathBuf,
+	pub fdb_cluster_path: PathBuf,
+}
+
 /// Config for running an isolate. Similar to runc config.
 #[derive(Deserialize)]
-pub struct Config {
+pub struct ActorConfig {
 	pub resources: Resources,
 	pub ports: Vec<Port>,
 	pub env: HashMap<String, String>,

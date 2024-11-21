@@ -1,6 +1,6 @@
 use std::{
 	convert::Infallible,
-	net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+	net::SocketAddr,
 	path::{Path, PathBuf},
 	sync::{
 		atomic::{AtomicBool, Ordering},
@@ -16,8 +16,7 @@ use hyper::{
 	Body, Response, Server,
 };
 use pegboard::protocol;
-use pegboard_manager::{utils, Config, Ctx};
-use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
+use pegboard_manager::{config::*, system_info, utils, Ctx};
 use tokio::{
 	fs::File,
 	io::BufReader,
@@ -59,7 +58,6 @@ pub async fn send_init_packet(tx: &mut SplitSink<WebSocketStream<tokio::net::Tcp
 		tx,
 		protocol::ToClient::Init {
 			last_event_idx: utils::now(),
-			fdb_cluster_ips: vec![SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 4500)],
 		},
 	)
 	.await
@@ -196,21 +194,40 @@ pub async fn init_client(gen_path: &Path, working_path: &Path) -> Config {
 	.unwrap();
 
 	let config = Config {
-		client_id: Uuid::new_v4(),
-		datacenter_id: Uuid::new_v4(),
-		network_ip: "127.0.0.1".parse().unwrap(),
-		vector_socket_addr: Some("127.0.0.1:5021".parse().unwrap()),
-		// Not necessary for the test
-		flavor: protocol::ClientFlavor::Container,
-		redirect_logs: false,
-
-		pegboard_ws_endpoint: Url::parse("http://127.0.0.1:5030").unwrap(),
-		// Not necessary for the test
-		api_public_endpoint: Url::parse("http://127.0.0.1").unwrap(),
-
-		data_dir: working_path.to_path_buf(),
-		container_runner_binary_path,
-		isolate_runner_binary_path,
+		client: Client {
+			cluster: Cluster {
+				client_id: Uuid::new_v4(),
+				datacenter_id: Uuid::new_v4(),
+				pegboard_endpoint: Url::parse("ws://127.0.0.1:5030").unwrap(),
+				// Not necessary for the test
+				api_endpoint: Url::parse("http://127.0.0.1").unwrap(),
+				foundationdb: FoundationDb::Addresses(vec!["127.0.0.1:4500".parse().unwrap()]),
+			},
+			runtime: Runtime {
+				// Not necessary for the test
+				flavor: protocol::ClientFlavor::Container,
+				data_dir: Some(working_path.to_path_buf()),
+				container_runner_binary_path: Some(container_runner_binary_path),
+				isolate_runner_binary_path: Some(isolate_runner_binary_path),
+			},
+			actor: Actor {
+				network: ActorNetwork {
+					bind_ip: "127.0.0.1".parse().unwrap(),
+					lan_ip: "127.0.0.1".parse().unwrap(),
+					wan_ip: "127.0.0.1".parse().unwrap(),
+					lan_port_range_min: None,
+					lan_port_range_max: None,
+					wan_port_range_min: None,
+					wan_port_range_max: None,
+				},
+			},
+			cni: Default::default(),
+			reserved_resources: Default::default(),
+			logs: Logs {
+				vector_address: Some("127.0.0.1:5021".parse().unwrap()),
+				redirect_logs: Some(false),
+			},
+		},
 	};
 
 	utils::init_dir(&config).await.unwrap();
@@ -224,22 +241,18 @@ pub async fn start_client(
 	mut close_rx: tokio::sync::watch::Receiver<()>,
 	port: u16,
 ) {
-	// Read system metrics
-	let system = System::new_with_specifics(
-		RefreshKind::new()
-			.with_cpu(CpuRefreshKind::new().with_frequency())
-			.with_memory(MemoryRefreshKind::new().with_ram()),
-	);
-	let system = protocol::SystemInfo {
-		// Sum of cpu frequency
-		cpu: system.cpus().iter().fold(0, |s, cpu| s + cpu.frequency()),
-		memory: system.total_memory() / (1024 * 1024),
-	};
+	let system = system_info::fetch().await.unwrap();
 
 	// Init sqlite db
 	let sqlite_db_url = format!(
 		"sqlite://{}",
-		config.data_dir.join("db").join("database.db").display()
+		config
+			.client
+			.runtime
+			.data_dir()
+			.join("db")
+			.join("database.db")
+			.display()
 	);
 	utils::init_sqlite_db(&sqlite_db_url).await.unwrap();
 
@@ -247,13 +260,19 @@ pub async fn start_client(
 	let pool = utils::build_sqlite_pool(&sqlite_db_url).await.unwrap();
 	utils::init_sqlite_schema(&pool).await.unwrap();
 
+	// Init FDB config files
+	utils::init_fdb_config(&config).await.unwrap();
+
 	// Build WS connection URL
 	let mut url = Url::parse("ws://127.0.0.1").unwrap();
 	url.set_port(Some(port)).unwrap();
 	url.set_path(&format!("/v{PROTOCOL_VERSION}"));
 	url.query_pairs_mut()
-		.append_pair("client_id", &config.client_id.to_string())
-		.append_pair("datacenter_id", &config.datacenter_id.to_string());
+		.append_pair("client_id", &config.client.cluster.client_id.to_string())
+		.append_pair(
+			"datacenter_id",
+			&config.client.cluster.datacenter_id.to_string(),
+		);
 
 	tracing::info!("connecting to ws: {url}");
 
@@ -494,6 +513,8 @@ pub async fn start_fdb() {
 		.arg("4500:4500")
 		.arg("--name")
 		.arg("test-fdb")
+		.arg("-e")
+		.arg("FDB_CLUSTER_FILE_CONTENTS=fdb:fdb@127.0.0.1:4500")
 		.arg("foundationdb/foundationdb:7.1.19")
 		.status()
 		.await

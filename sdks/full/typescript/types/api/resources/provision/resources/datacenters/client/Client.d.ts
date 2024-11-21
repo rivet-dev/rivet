@@ -37,5 +37,20 @@ export declare class Datacenters {
      *     await client.provision.datacenters.getTls("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
      */
     getTls(datacenterId: string, requestOptions?: Datacenters.RequestOptions): Promise<Rivet.provision.datacenters.GetTlsResponse>;
+    /**
+     * @param {string} datacenterId
+     * @param {Datacenters.RequestOptions} requestOptions - Request-specific configuration.
+     *
+     * @throws {@link Rivet.InternalError}
+     * @throws {@link Rivet.RateLimitError}
+     * @throws {@link Rivet.ForbiddenError}
+     * @throws {@link Rivet.UnauthorizedError}
+     * @throws {@link Rivet.NotFoundError}
+     * @throws {@link Rivet.BadRequestError}
+     *
+     * @example
+     *     await client.provision.datacenters.getServers("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
+     */
+    getServers(datacenterId: string, requestOptions?: Datacenters.RequestOptions): Promise<Rivet.provision.datacenters.GetServersResponse>;
     protected _getAuthorizationHeader(): Promise<string | undefined>;
 }

@@ -46,8 +46,6 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 								client_id,
 								inner: protocol::ToClient::Init {
 									last_event_idx: init_data.last_event_idx,
-									// TODO: 
-									fdb_cluster_ips: Vec::new(),
 								},
 							})
 							.tags(json!({}))
@@ -406,7 +404,10 @@ pub async fn handle_commands(
 
 	// Update actor state based on commands
 	for command in commands {
-		if let protocol::Command::SignalActor { actor_id, signal, .. } = command {
+		if let protocol::Command::SignalActor {
+			actor_id, signal, ..
+		} = command
+		{
 			if matches!(signal.try_into()?, Signal::SIGTERM | Signal::SIGKILL) {
 				let res = ctx
 					.activity(UpdateActorStateInput {

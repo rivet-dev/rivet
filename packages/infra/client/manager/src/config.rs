@@ -23,9 +23,9 @@ impl Config {
 	pub fn build_client_config(&self) -> pegboard::client_config::ClientConfig {
 		pegboard::client_config::ClientConfig {
 			network: pegboard::client_config::Network {
-				bind_ip: self.client.network.bind_ip.to_string(),
-				lan_ip: self.client.network.lan_ip.to_string(),
-				wan_ip: self.client.network.wan_ip.to_string(),
+				bind_ip: IpAddr::V4(self.client.network.bind_ip),
+				lan_ip: self.client.network.lan_ip,
+				wan_ip: self.client.network.wan_ip,
 				lan_port_range_min: self.client.network.lan_port_range_min(),
 				lan_port_range_max: self.client.network.lan_port_range_max(),
 				wan_port_range_min: self.client.network.wan_port_range_min(),
@@ -73,6 +73,14 @@ pub struct Cluster {
 	pub datacenter_id: Uuid,
 	pub api_endpoint: Url,
 	pub pegboard_endpoint: Url,
+	pub foundationdb: FoundationDb,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum FoundationDb {
+	Dynamic { fetch_endpoint: Url },
+	Addresses(Vec<SocketAddr>),
 }
 
 #[derive(Clone, Deserialize)]

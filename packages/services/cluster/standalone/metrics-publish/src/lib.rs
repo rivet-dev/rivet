@@ -122,7 +122,16 @@ fn insert_metrics(dc: &Datacenter, servers: &[Server]) -> GlobalResult<()> {
 	let datacenter_id = dc.datacenter_id.to_string();
 	let cluster_id = dc.cluster_id.to_string();
 
-	let servers_per_pool = [PoolType::Job, PoolType::Gg, PoolType::Ats, PoolType::Pegboard, PoolType::PegboardIsolate, PoolType::Fdb].into_iter().map(|pool_type| {
+	let servers_per_pool = [
+		PoolType::Job,
+		PoolType::Gg,
+		PoolType::Ats,
+		PoolType::Pegboard,
+		PoolType::PegboardIsolate,
+		PoolType::Fdb,
+	]
+	.into_iter()
+	.map(|pool_type| {
 		(
 			pool_type,
 			servers_in_dc
@@ -130,7 +139,8 @@ fn insert_metrics(dc: &Datacenter, servers: &[Server]) -> GlobalResult<()> {
 				.filter(|s| matches!(s.pool_type, pool_type))
 				.collect::<Vec<_>>(),
 		)
-	}).collect::<Vec<_>>();
+	})
+	.collect::<Vec<_>>();
 
 	// Aggregate all states per pool type
 	for (pool_type, servers) in servers_per_pool {

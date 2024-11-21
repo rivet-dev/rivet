@@ -885,6 +885,7 @@ dependencies = [
  "rivet-cache",
  "rivet-claims",
  "rivet-config",
+ "rivet-convert",
  "rivet-env",
  "rivet-health-checks",
  "rivet-operation",

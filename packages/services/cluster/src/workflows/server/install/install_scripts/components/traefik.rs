@@ -5,6 +5,7 @@ use indoc::formatdoc;
 
 use super::{
 	ok_server::OK_SERVER_PORT,
+	pegboard::TUNNEL_PEGBOARD_WS_PORT,
 	vector::{TUNNEL_VECTOR_PORT, TUNNEL_VECTOR_TCP_JSON_PORT},
 	TUNNEL_API_EDGE_PORT,
 };
@@ -36,7 +37,7 @@ pub const TUNNEL_SERVICES: &[TunnelService] = &[
 	},
 	TunnelService {
 		name: "pegboard-server",
-		port: 5030,
+		port: TUNNEL_PEGBOARD_WS_PORT,
 	},
 ];
 
@@ -223,7 +224,6 @@ fn tunnel_dynamic_config(host_tunnel: &str) -> String {
 }
 
 pub async fn gg_static_config(config: &rivet_config::Config) -> GlobalResult<String> {
-	let provision_config = config.server()?.rivet.provision()?;
 	let gg_config = &config.server()?.rivet.guard;
 
 	let http_provider_endpoint = if let Some(api_traefik_provider_token) =

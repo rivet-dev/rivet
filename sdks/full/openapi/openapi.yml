@@ -3847,6 +3847,62 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
       security: *ref_0
+  /datacenters/{datacenter_id}/servers:
+    get:
+      operationId: provision_datacenters_getServers
+      tags:
+        - ProvisionDatacenters
+      parameters:
+        - name: datacenter_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProvisionDatacentersGetServersResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
   /servers/{ip}:
     get:
       operationId: provision_servers_getInfo
@@ -9488,6 +9544,15 @@ components:
       required:
         - job_cert_pem
         - job_private_key_pem
+    ProvisionDatacentersGetServersResponse:
+      type: object
+      properties:
+        servers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProvisionServer'
+      required:
+        - servers
     ProvisionServersGetInfoResponse:
       type: object
       properties:
@@ -9890,206 +9955,15 @@ components:
       enum:
         - std_out
         - std_err
-    AdminClustersPoolType:
-      type: string
-      enum:
-        - job
-        - gg
-        - ats
-        - pegboard
-        - pegboard_isolate
-        - fdb
-    AdminClustersProvider:
-      type: string
-      enum:
-        - linode
-    AdminClustersBuildDeliveryMethod:
-      type: string
-      enum:
-        - traffic_server
-        - s3_direct
-    AdminClustersPool:
+    ActorListRegionsResponse:
       type: object
       properties:
-        pool_type:
-          $ref: '#/components/schemas/AdminClustersPoolType'
-        hardware:
+        regions:
           type: array
           items:
-            $ref: '#/components/schemas/AdminClustersHardware'
-        desired_count:
-          type: integer
-        min_count:
-          type: integer
-        max_count:
-          type: integer
-        drain_timeout_ms:
-          type: integer
-          format: int64
+            $ref: '#/components/schemas/ActorRegion'
       required:
-        - pool_type
-        - hardware
-        - desired_count
-        - min_count
-        - max_count
-        - drain_timeout_ms
-    AdminClustersHardware:
-      type: object
-      properties:
-        provider_hardware:
-          type: string
-      required:
-        - provider_hardware
-    AdminClustersCluster:
-      type: object
-      properties:
-        cluster_id:
-          type: string
-          format: uuid
-        name_id:
-          type: string
-        create_ts:
-          type: integer
-          format: int64
-        owner_team_id:
-          type: string
-          format: uuid
-      required:
-        - cluster_id
-        - name_id
-        - create_ts
-    AdminClustersDatacenter:
-      type: object
-      properties:
-        datacenter_id:
-          type: string
-          format: uuid
-        cluster_id:
-          type: string
-          format: uuid
-        name_id:
-          type: string
-        display_name:
-          type: string
-        provider:
-          $ref: '#/components/schemas/AdminClustersProvider'
-        provider_datacenter_id:
-          type: string
-        pools:
-          type: array
-          items:
-            $ref: '#/components/schemas/AdminClustersPool'
-        build_delivery_method:
-          $ref: '#/components/schemas/AdminClustersBuildDeliveryMethod'
-        prebakes_enabled:
-          type: boolean
-      required:
-        - datacenter_id
-        - cluster_id
-        - name_id
-        - display_name
-        - provider
-        - provider_datacenter_id
-        - pools
-        - build_delivery_method
-        - prebakes_enabled
-    AdminClustersServer:
-      type: object
-      properties:
-        server_id:
-          type: string
-          format: uuid
-        datacenter_id:
-          type: string
-          format: uuid
-        pool_type:
-          $ref: '#/components/schemas/AdminClustersPoolType'
-        public_ip:
-          type: string
-      required:
-        - server_id
-        - datacenter_id
-        - pool_type
-    AdminClustersPoolUpdate:
-      type: object
-      properties:
-        pool_type:
-          $ref: '#/components/schemas/AdminClustersPoolType'
-        hardware:
-          type: array
-          items:
-            $ref: '#/components/schemas/AdminClustersHardware'
-        desired_count:
-          type: integer
-        min_count:
-          type: integer
-        max_count:
-          type: integer
-        drain_timeout:
-          type: integer
-          format: int64
-      required:
-        - pool_type
-        - hardware
-    AdminClustersListDatacentersResponse:
-      type: object
-      properties:
-        datacenters:
-          type: array
-          items:
-            $ref: '#/components/schemas/AdminClustersDatacenter'
-      required:
-        - datacenters
-    AdminClustersCreateDatacenterRequest:
-      type: object
-      properties:
-        display_name:
-          type: string
-        name_id:
-          type: string
-        provider:
-          $ref: '#/components/schemas/AdminClustersProvider'
-        provider_datacenter_id:
-          type: string
-        build_delivery_method:
-          $ref: '#/components/schemas/AdminClustersBuildDeliveryMethod'
-        prebakes_enabled:
-          type: boolean
-      required:
-        - display_name
-        - name_id
-        - provider
-        - provider_datacenter_id
-        - build_delivery_method
-        - prebakes_enabled
-    AdminClustersCreateDatacenterResponse:
-      type: object
-      properties:
-        datacenter_id:
-          type: string
-          format: uuid
-      required:
-        - datacenter_id
-    AdminClustersUpdateDatacenterRequest:
-      type: object
-      properties:
-        pools:
-          type: array
-          items:
-            $ref: '#/components/schemas/AdminClustersPoolUpdate'
-        prebakes_enabled:
-          type: boolean
-      required:
-        - pools
-    AdminClustersListServersResponse:
-      type: object
-      properties:
-        servers:
-          type: array
-          items:
-            $ref: '#/components/schemas/AdminClustersServer'
-      required:
-        - servers
+        - regions
     AuthCompleteStatus:
       type: string
       enum:
@@ -13144,6 +13018,34 @@ components:
       required:
         - game
         - watch
+    ProvisionPoolType:
+      type: string
+      enum:
+        - job
+        - gg
+        - ats
+        - pegboard
+        - pegboard_isolate
+        - fdb
+    ProvisionServer:
+      type: object
+      properties:
+        server_id:
+          type: string
+          format: uuid
+        datacenter_id:
+          type: string
+          format: uuid
+        pool_type:
+          $ref: '#/components/schemas/ProvisionPoolType'
+        vlan_ip:
+          type: string
+        public_ip:
+          type: string
+      required:
+        - server_id
+        - datacenter_id
+        - pool_type
     ServersGetBuildResponse:
       type: object
       properties:

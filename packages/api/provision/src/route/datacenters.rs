@@ -1,6 +1,8 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use rivet_api::models;
+use rivet_convert::ApiInto;
 use rivet_operation::prelude::*;
+use serde::Deserialize;
 
 use crate::auth::Auth;
 
@@ -28,5 +30,42 @@ pub async fn tls(
 	Ok(models::ProvisionDatacentersGetTlsResponse {
 		job_cert_pem: job_cert_pem.clone(),
 		job_private_key_pem: job_private_key_pem.clone(),
+	})
+}
+
+#[derive(Deserialize)]
+pub struct ServerFilterQuery {
+	pools: Vec<models::ProvisionPoolType>,
+}
+
+// MARK: GET /datacenters/{}/servers
+pub async fn servers(
+	ctx: Ctx<Auth>,
+	datacenter_id: Uuid,
+	_watch_index: WatchIndexQuery,
+	query: ServerFilterQuery,
+) -> GlobalResult<models::ProvisionDatacentersGetServersResponse> {
+	ctx.auth().server()?;
+
+	// Find server based on public ip
+	let servers_res = ctx
+		.op(cluster::ops::server::list::Input {
+			filter: cluster::types::Filter {
+				pool_types: query
+					.pools
+					.is_empty()
+					.then(|| query.pools.into_iter().map(ApiInto::api_into).collect()),
+				..Default::default()
+			},
+			include_destroyed: false,
+		})
+		.await?;
+
+	Ok(models::ProvisionDatacentersGetServersResponse {
+		servers: servers_res
+			.servers
+			.into_iter()
+			.map(ApiInto::api_into)
+			.collect(),
 	})
 }

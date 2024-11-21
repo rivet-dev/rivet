@@ -11,6 +11,7 @@ use std::{
 use actor_kv::ActorKv;
 use anyhow::*;
 use deno_runtime::deno_core::{v8_set_flags, JsRuntime};
+use config::Config;
 use deno_runtime::worker::MainWorkerTerminateHandle;
 use foundationdb as fdb;
 use futures_util::{stream::SplitStream, SinkExt, StreamExt};
@@ -21,7 +22,6 @@ use tokio::{
 };
 use tokio_tungstenite::{tungstenite::protocol::Message, MaybeTlsStream, WebSocketStream};
 use tracing_subscriber::prelude::*;
-use utils::var;
 use uuid::Uuid;
 
 mod config;
@@ -53,9 +53,12 @@ async fn main() -> Result<()> {
 
 	redirect_logs(working_path.join("log")).await?;
 
+	let config_data = fs::read_to_string(working_path.join("config.json")).await?;
+	let config = serde_json::from_str::<Config>(&config_data)?;
+
 	// Start FDB network thread
 	let _network = unsafe { fdb::boot() };
-	tokio::spawn(utils::fdb_health_check());
+	tokio::spawn(utils::fdb_health_check(config.clone()));
 
 	// Write PID to file
 	fs::write(
@@ -90,7 +93,7 @@ async fn main() -> Result<()> {
 	let (fatal_tx, mut fatal_rx) = mpsc::channel::<()>(1);
 
 	let res = tokio::select! {
-		res = retry_connection(actors_path, actors, fatal_tx) => res,
+		res = retry_connection(&config, actors, fatal_tx) => res,
 		// If any fatal error occurs in the isolate threads, kill the entire program
 		_ = fatal_rx.recv() => Err(anyhow!("Fatal error")),
 	};
@@ -104,7 +107,7 @@ async fn main() -> Result<()> {
 }
 
 async fn retry_connection(
-	actors_path: &Path,
+	config: &Config,
 	actors: Arc<RwLock<HashMap<Uuid, mpsc::Sender<(i32, bool)>>>>,
 	fatal_tx: mpsc::Sender<()>,
 ) -> Result<()> {
@@ -112,7 +115,7 @@ async fn retry_connection(
 		use std::result::Result::{Err, Ok};
 		match tokio_tungstenite::connect_async(format!("ws://{}", config.runner_addr)).await {
 			Ok((socket, _)) => {
-				handle_connection(actors_path, actors.clone(), fatal_tx.clone(), socket).await?
+				handle_connection(config, actors.clone(), fatal_tx.clone(), socket).await?
 			}
 			Err(err) => tracing::error!("Failed to connect: {err}"),
 		}
@@ -123,7 +126,7 @@ async fn retry_connection(
 }
 
 async fn handle_connection(
-	actors_path: &Path,
+	config: &Config,
 	actors: Arc<RwLock<HashMap<Uuid, mpsc::Sender<(i32, bool)>>>>,
 	fatal_tx: mpsc::Sender<()>,
 	socket: WebSocketStream<MaybeTlsStream<TcpStream>>,
@@ -166,12 +169,13 @@ async fn handle_connection(
 					drop(guard);
 
 					// Spawn a new thread for the isolate
-					let actors_path = actors_path.to_path_buf();
+					let config2 = config.clone();
 					let handle = std::thread::Builder::new()
 						.name(actor_id.to_string())
-						.spawn(move || isolate::run(actors_path, actor_id, terminate_tx))?;
+						.spawn(move || isolate::run(config2, actor_id, terminate_tx))?;
 
 					tokio::task::spawn(watch_thread(
+						config.clone(),
 						actors.clone(),
 						fatal_tx.clone(),
 						actor_id,
@@ -230,6 +234,7 @@ async fn read_packet(
 
 /// Polls the isolate thread we just spawned to see if it errored. Should handle all errors gracefully.
 async fn watch_thread(
+	config: Config,
 	actors: Arc<RwLock<HashMap<Uuid, mpsc::Sender<(i32, bool)>>>>,
 	fatal_tx: mpsc::Sender<()>,
 	actor_id: Uuid,
@@ -273,7 +278,7 @@ async fn watch_thread(
 
 	// Remove state
 	if !persist_state {
-		let db = match utils::fdb_handle() {
+		let db = match utils::fdb_handle(&config) {
 			Ok(db) => db,
 			Err(err) => {
 				tracing::error!(?err, ?actor_id, "failed to create fdb handle");

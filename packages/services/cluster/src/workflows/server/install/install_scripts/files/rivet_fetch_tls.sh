@@ -19,7 +19,7 @@ while true; do
   response=$(
     curl -f \
       -H "Authorization: Bearer __SERVER_TOKEN__" \
-      "http://127.0.0.1:__TUNNEL_API_EDGE_PORT__/provision/datacenters/__DATACENTER_ID__/tls"
+      "__TUNNEL_API_EDGE_API__/provision/datacenters/__DATACENTER_ID__/tls"
   ) && break || sleep 5
 done
 

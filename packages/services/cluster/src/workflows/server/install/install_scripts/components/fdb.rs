@@ -1,5 +1,3 @@
-use chirp_workflow::prelude::*;
-
 pub fn install(initialize_immediately: bool) -> String {
 	let mut script = include_str!("../files/fdb_install.sh").replace(
 		"__PROMETHEUS_PROXY_SCRIPT__",

@@ -17,8 +17,8 @@ pub fn fetch_info(server_token: &str) -> GlobalResult<String> {
 	Ok(include_str!("../files/rivet_fetch_info.sh")
 		.replace("__SERVER_TOKEN__", server_token)
 		.replace(
-			"__TUNNEL_API_EDGE_PORT__",
-			&TUNNEL_API_EDGE_PORT.to_string(),
+			"__TUNNEL_API_EDGE_API__",
+			&format!("http://127.0.0.1:{TUNNEL_API_EDGE_PORT}"),
 		))
 }
 
@@ -32,8 +32,8 @@ pub fn fetch_tls(
 		.replace("__NAME__", traefik_instance_name)
 		.replace("__SERVER_TOKEN__", server_token)
 		.replace(
-			"__TUNNEL_API_EDGE_PORT__",
-			&TUNNEL_API_EDGE_PORT.to_string(),
+			"__TUNNEL_API_EDGE_API__",
+			&format!("http://127.0.0.1:{TUNNEL_API_EDGE_PORT}"),
 		)
 		.replace("__DATACENTER_ID__", &datacenter_id.to_string());
 

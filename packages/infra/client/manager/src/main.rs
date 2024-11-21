@@ -147,6 +147,9 @@ async fn init() -> Result<Init> {
 	let pool = utils::build_sqlite_pool(&sqlite_db_url).await?;
 	utils::init_sqlite_schema(&pool).await?;
 
+	// Init FDB config files
+	utils::init_fdb_config(&config).await?;
+
 	// Build WS connection URL
 	let mut url = config.client.cluster.pegboard_endpoint.clone();
 	url.set_path(&format!("/v{PROTOCOL_VERSION}"));

@@ -144,6 +144,7 @@ Class | Method | HTTP request | Description
 *MatchmakerPlayersApi* | [**matchmaker_players_get_statistics**](docs/MatchmakerPlayersApi.md#matchmaker_players_get_statistics) | **GET** /matchmaker/players/statistics | 
 *MatchmakerRegionsApi* | [**matchmaker_regions_list**](docs/MatchmakerRegionsApi.md#matchmaker_regions_list) | **GET** /matchmaker/regions | 
 *PortalGamesApi* | [**portal_games_get_game_profile**](docs/PortalGamesApi.md#portal_games_get_game_profile) | **GET** /portal/games/{game_name_id}/profile | 
+*ProvisionDatacentersApi* | [**provision_datacenters_get_servers**](docs/ProvisionDatacentersApi.md#provision_datacenters_get_servers) | **GET** /datacenters/{datacenter_id}/servers | 
 *ProvisionDatacentersApi* | [**provision_datacenters_get_tls**](docs/ProvisionDatacentersApi.md#provision_datacenters_get_tls) | **GET** /datacenters/{datacenter_id}/tls | 
 *ProvisionServersApi* | [**provision_servers_get_info**](docs/ProvisionServersApi.md#provision_servers_get_info) | **GET** /servers/{ip} | 
 *ServersApi* | [**servers_create**](docs/ServersApi.md#servers_create) | **POST** /games/{game_id}/environments/{environment_id}/servers | 
@@ -451,7 +452,10 @@ Class | Method | HTTP request | Description
  - [PortalNotificationRegisterFirebaseService](docs/PortalNotificationRegisterFirebaseService.md)
  - [PortalNotificationRegisterService](docs/PortalNotificationRegisterService.md)
  - [PortalNotificationUnregisterService](docs/PortalNotificationUnregisterService.md)
+ - [ProvisionDatacentersGetServersResponse](docs/ProvisionDatacentersGetServersResponse.md)
  - [ProvisionDatacentersGetTlsResponse](docs/ProvisionDatacentersGetTlsResponse.md)
+ - [ProvisionPoolType](docs/ProvisionPoolType.md)
+ - [ProvisionServer](docs/ProvisionServer.md)
  - [ProvisionServersGetInfoResponse](docs/ProvisionServersGetInfoResponse.md)
  - [ServersBuild](docs/ServersBuild.md)
  - [ServersBuildCompression](docs/ServersBuildCompression.md)

@@ -1,4 +1,5 @@
 use std::{
+	net::{Ipv4Addr, SocketAddr, SocketAddrV4},
 	path::Path,
 	time::{self, Duration},
 };
@@ -10,6 +11,7 @@ use notify::{
 	Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
 };
 use pegboard::protocol;
+use serde::Deserialize;
 use sqlx::{
 	migrate::MigrateDatabase,
 	sqlite::{SqlitePool, SqlitePoolOptions},
@@ -20,7 +22,7 @@ use tokio::{
 	sync::mpsc::{channel, Receiver},
 };
 
-use crate::config::Config;
+use crate::config::{Config, FoundationDb};
 
 const MAX_QUERY_RETRIES: usize = 16;
 const QUERY_RETRY: Duration = Duration::from_millis(500);
@@ -216,6 +218,45 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 		",
 	))
 	.execute(&mut *conn)
+	.await?;
+
+	Ok(())
+}
+
+pub async fn init_fdb_config(config: &Config) -> Result<()> {
+	let ips = match &config.client.cluster.foundationdb {
+		FoundationDb::Dynamic { fetch_endpoint } => {
+			#[derive(Deserialize)]
+			struct Server {
+				vlan_ip: Option<Ipv4Addr>,
+			}
+
+			reqwest::get(fetch_endpoint.clone())
+				.await?
+				.error_for_status()?
+				.json::<Vec<Server>>()
+				.await?
+				.into_iter()
+				.filter_map(|server| server.vlan_ip)
+				.map(|vlan_ip| SocketAddr::V4(SocketAddrV4::new(vlan_ip, 4500)))
+				.collect::<Vec<_>>()
+		}
+		FoundationDb::Addresses(addresses) => addresses.clone(),
+	};
+
+	ensure!(!ips.is_empty(), "no fdb clusters found");
+
+	let joined = ips
+		.into_iter()
+		.map(|x| x.to_string())
+		.collect::<Vec<_>>()
+		.join(",");
+
+	// Should match Ctx::fdb_cluster_path
+	fs::write(
+		config.client.runtime.data_dir().join("fdb.cluster"),
+		format!("fdb:fdb@{joined}"),
+	)
 	.await?;
 
 	Ok(())

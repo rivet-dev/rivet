@@ -8,7 +8,12 @@ cat << 'EOF' > /etc/rivet-client/config.json
 			"client_id": "___SERVER_ID___",
 			"datacenter_id": "___DATACENTER_ID___",
 			"api_endpoint": "__ORIGIN_API__",
-			"pegboard_endpoint": "127.0.0.1:5030"
+			"pegboard_endpoint": "__PEGBOARD_ENDPOINT__",
+			"foundationdb": {
+				"dynamic": {
+					"fetch_endpoint": "__TUNNEL_API_EDGE_API__/provision/datacenters/___DATACENTER_ID___/servers?pool=fdb"
+				}
+			}
 		},
 		"runner": {
 			"flavor": "__FLAVOR__"

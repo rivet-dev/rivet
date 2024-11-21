@@ -15,6 +15,13 @@ define_router! {
 			),
 		},
 
+		"datacenters" / Uuid / "servers": {
+			GET: datacenters::servers(
+				query: datacenters::ServerFilterQuery,
+				internal_endpoint: true,
+			),
+		},
+
 		"servers" / Ipv4Addr / "info": {
 			GET: servers::info(
 				internal_endpoint: true,

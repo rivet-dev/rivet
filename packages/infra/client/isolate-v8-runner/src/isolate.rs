@@ -22,14 +22,17 @@ use nix::{libc, unistd::pipe};
 use tokio::{fs, sync::mpsc};
 use uuid::Uuid;
 
-use crate::{config::Config, ext, log_shipper, utils};
+use crate::{
+	config::{ActorConfig, Config},
+	ext, log_shipper, utils,
+};
 
 pub fn run(
-	actors_path: PathBuf,
+	config: Config,
 	actor_id: Uuid,
 	terminate_tx: mpsc::Sender<MainWorkerTerminateHandle>,
 ) -> Result<()> {
-	let actor_path = actors_path.join(actor_id.to_string());
+	let actor_path = config.actors_path.join(actor_id.to_string());
 
 	// Write PID to file
 	std::fs::write(
@@ -40,38 +43,39 @@ pub fn run(
 	// Read config
 	let config_data = std::fs::read_to_string(actor_path.join("config.json"))
 		.context("Failed to read config file")?;
-	let config =
-		serde_json::from_str::<Config>(&config_data).context("Failed to parse config file")?;
+	let actor_config =
+		serde_json::from_str::<ActorConfig>(&config_data).context("Failed to parse config file")?;
 
 	let (shutdown_tx, shutdown_rx) = smpsc::sync_channel(1);
 
 	// Start log shipper
-	let (msg_tx, log_shipper_thread) = if let Some(vector_socket_addr) = &config.vector_socket_addr
-	{
-		let (msg_tx, msg_rx) = smpsc::sync_channel::<log_shipper::ReceivedMessage>(
-			log_shipper::MAX_BUFFER_BYTES / log_shipper::MAX_LINE_BYTES,
-		);
-		let log_shipper = log_shipper::LogShipper {
-			actor_id,
-			shutdown_rx,
-			msg_rx,
-			vector_socket_addr: vector_socket_addr.clone(),
-			owner: config.owner.clone(),
-		};
-		let log_shipper_thread = log_shipper.spawn();
+	let (msg_tx, log_shipper_thread) =
+		if let Some(vector_socket_addr) = &actor_config.vector_socket_addr {
+			let (msg_tx, msg_rx) = smpsc::sync_channel::<log_shipper::ReceivedMessage>(
+				log_shipper::MAX_BUFFER_BYTES / log_shipper::MAX_LINE_BYTES,
+			);
+			let log_shipper = log_shipper::LogShipper {
+				actor_id,
+				shutdown_rx,
+				msg_rx,
+				vector_socket_addr: vector_socket_addr.clone(),
+				owner: actor_config.owner.clone(),
+			};
+			let log_shipper_thread = log_shipper.spawn();
 
-		(Some(msg_tx), Some(log_shipper_thread))
-	} else {
-		(None, None)
-	};
+			(Some(msg_tx), Some(log_shipper_thread))
+		} else {
+			(None, None)
+		};
 
 	// Run the isolate
 	let exit_code = match create_and_run_current_thread(run_inner(
+		config,
 		actor_path.clone(),
 		actor_id,
 		terminate_tx,
 		msg_tx.clone(),
-		config,
+		actor_config,
 	))? {
 		Result::Ok(exit_code) => exit_code,
 		Err(err) => {
@@ -119,17 +123,20 @@ pub fn run(
 }
 
 pub async fn run_inner(
+	config: Config,
 	actor_path: PathBuf,
 	actor_id: Uuid,
 	terminate_tx: mpsc::Sender<MainWorkerTerminateHandle>,
 	msg_tx: Option<smpsc::SyncSender<log_shipper::ReceivedMessage>>,
-	config: Config,
+	actor_config: ActorConfig,
 ) -> Result<i32> {
 	tracing::info!(?actor_id, "Starting isolate");
 
 	// Init KV store (create or open)
-	let mut kv = ActorKv::new(utils::fdb_handle()?, actor_id);
+	let mut kv = ActorKv::new(utils::fdb_handle(&config)?, actor_id);
 	kv.init().await?;
+
+	tracing::info!(?actor_id, "Isolate KV initialized");
 
 	// Load script into a static module loader. No dynamic scripts can be loaded this way.
 	let script_content = fs::read_to_string(actor_path.join("index.js"))
@@ -151,7 +158,7 @@ pub async fn run_inner(
 	let loopback = Ipv4Addr::new(0, 0, 0, 0);
 	permissions.net_listen = Permissions::new_unary::<NetListenDescriptor>(
 		Some(
-			config
+			actor_config
 				.ports
 				.iter()
 				.map(|port| {
@@ -227,8 +234,8 @@ pub async fn run_inner(
 
 				// Memory must be aligned with PAGESIZE
 				let page_size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) }.try_into()?;
-				let mem = floor_align(config.resources.memory.try_into()?, page_size);
-				let mem_max = floor_align(config.resources.memory_max.try_into()?, page_size);
+				let mem = floor_align(actor_config.resources.memory.try_into()?, page_size);
+				let mem_max = floor_align(actor_config.resources.memory_max.try_into()?, page_size);
 
 				Some(CreateParams::default().heap_limits(mem, mem_max))
 			},
@@ -238,7 +245,7 @@ pub async fn run_inner(
 				stdout: StdioPipe::file(stdout_writer),
 				stderr: StdioPipe::file(stderr_writer),
 			},
-			env: config.env,
+			env: actor_config.env,
 			..Default::default()
 		},
 	);

@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
+
+types:
+  PoolType:
+    enum:
+      - job
+      - gg
+      - ats
+      - pegboard
+      - pegboard_isolate
+      - fdb
+
+  Server:
+    properties:
+      server_id: uuid
+      datacenter_id: uuid
+      pool_type: PoolType
+      vlan_ip: optional<string>
+      public_ip: optional<string>

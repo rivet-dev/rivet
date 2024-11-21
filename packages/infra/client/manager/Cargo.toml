@@ -23,7 +23,7 @@ nix = { version = "0.27", default-features = false, features = ["fs", "user", "s
 notify = { version = "6.1.1", default-features = false, features = ["serde", "fsevent-sys"] }
 prometheus = "0.13"
 rand = "0.8"
-reqwest = { version = "0.11", default-features = false, features = ["stream", "rustls-tls"] }
+reqwest = { version = "0.11", default-features = false, features = ["stream", "rustls-tls", "json"] }
 serde = { version = "1.0.195", features = ["derive"] }
 serde_json = "1.0.111"
 sysinfo = "0.31.4" 
