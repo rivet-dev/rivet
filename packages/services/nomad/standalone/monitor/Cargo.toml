@@ -1,25 +1,25 @@
 [package]
 name = "nomad-monitor"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-chirp-client = { path = "../../../../common/chirp/client" }
-chirp-workflow = { path = "../../../../common/chirp-workflow/core" }
+chirp-client.workspace = true
+chirp-workflow.workspace = true
 chrono = "0.4"
 futures-util = "0.3"
 indoc = "1.0"
 lazy_static = "1.4"
-nomad-util = { path = "../../../../common/nomad-util" }
+nomad-util.workspace = true
 prost = "0.10"
-rivet-connection = { path = "../../../../common/connection" }
-rivet-health-checks = { path = "../../../../common/health-checks" }
-rivet-metrics = { path = "../../../../common/metrics" }
-rivet-operation = { path = "../../../../common/operation/core" }
-rivet-pools = { path = "../../../../common/pools" }
-rivet-runtime = { path = "../../../../common/runtime" }
+rivet-connection.workspace = true
+rivet-health-checks.workspace = true
+rivet-metrics.workspace = true
+rivet-operation.workspace = true
+rivet-pools.workspace = true
+rivet-runtime.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.40", features = ["full"] }
@@ -30,14 +30,14 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
     "ansi",
 ] }
 tracing-logfmt = "0.3"
-util-job = { package = "rivet-util-job", path = "../../../job/util" }
+util-job.workspace = true
 
-cluster = { path = "../../../cluster" }
-ds = { path = "../../../ds" }
-rivet-config = { version = "0.1.0", path = "../../../../common/config" }
+cluster.workspace = true
+ds.workspace = true
+rivet-config.workspace = true
 
 [dependencies.nomad_client]
 path = "../../../../../externals/nomad-client"
 
 [dev-dependencies]
-chirp-worker = { path = "../../../../common/chirp/worker" }
+chirp-worker.workspace = true

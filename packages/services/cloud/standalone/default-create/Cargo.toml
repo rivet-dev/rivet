@@ -1,17 +1,16 @@
 [package]
 name = "cloud-default-create"
-version = "0.1.0"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-chirp-client = { path = "../../../../common/chirp/client" }
-chirp-workflow = { path = "../../../../common/chirp-workflow/core" }
+chirp-client.workspace = true
+chirp-workflow.workspace = true
 reqwest = "0.11"
-rivet-config = { version = "0.1.0", path = "../../../../common/config" }
-rivet-connection = { path = "../../../../common/connection" }
-rivet-pools = { path = "../../../../common/pools" }
+rivet-connection.workspace = true
+rivet-pools.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.40", features = ["full"] }
@@ -20,17 +19,18 @@ tracing-logfmt = "0.3"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
 uuid = { version = "1", features = ["v4"] }
 
-cloud-game-config-create = { version = "0.0.1", path = "../../ops/game-config-create" }
-cloud-namespace-create = { version = "0.0.1", path = "../../ops/namespace-create" }
-cloud-version-publish = { version = "0.0.1", path = "../../ops/version-publish" }
-ds = { version = "0.0.1", path = "../../../ds" }
-game-create = { version = "0.0.1", path = "../../../game/ops/create" }
-game-namespace-create = { version = "0.0.1", path = "../../../game/ops/namespace-create" }
-game-namespace-resolve-name-id = { version = "0.0.1", path = "../../../game/ops/namespace-resolve-name-id" }
-game-resolve-name-id = { version = "0.0.1", path = "../../../game/ops/resolve-name-id" }
-rivet-operation = { version = "0.1.0", path = "../../../../common/operation/core" }
-team-resolve-display-name = { version = "0.0.1", path = "../../../team/ops/resolve-display-name" }
-user = { version = "0.1.0", path = "../../../user" }
+cloud-game-config-create.workspace = true
+cloud-namespace-create.workspace = true
+cloud-version-publish.workspace = true
+ds.workspace = true
+game-create.workspace = true
+game-namespace-create.workspace = true
+game-namespace-resolve-name-id.workspace = true
+game-resolve-name-id.workspace = true
+rivet-config.workspace = true
+rivet-operation.workspace = true
+team-resolve-display-name.workspace = true
+user.workspace = true
 
 [dev-dependencies]
-chirp-worker = { path = "../../../../common/chirp/worker" }
+chirp-worker.workspace = true

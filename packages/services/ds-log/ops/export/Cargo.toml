@@ -1,22 +1,22 @@
 [package]
 name = "ds-log-export"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-chirp-client = { path = "../../../../common/chirp/client" }
-rivet-operation = { path = "../../../../common/operation/core" }
+chirp-client.workspace = true
+rivet-operation.workspace = true
 reqwest = "0.11"
 serde = { version = "1.0", features = ["derive"] }
 
-upload-complete = { path = "../../../upload/ops/complete" }
-upload-prepare = { path = "../../../upload/ops/prepare" }
+upload-complete.workspace = true
+upload-prepare.workspace = true
 
 [dependencies.sqlx]
 path = "../../../../../externals/sqlx"
 default-features = false
 
 [dev-dependencies]
-chirp-worker = { path = "../../../../common/chirp/worker" }
+chirp-worker.workspace = true

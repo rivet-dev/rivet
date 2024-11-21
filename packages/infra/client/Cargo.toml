@@ -6,3 +6,16 @@ members = [
 	"manager",
 	"runner-protocol",
 ]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[workspace.dependencies]
+container-runner = { path = "container-runner" }
+echo = { path = "echo" }
+isolate-v8-runner = { path = "isolate-v8-runner" }
+runner-protocol = { path = "runner-protocol", package = "pegboard-runner-protocol" }
+

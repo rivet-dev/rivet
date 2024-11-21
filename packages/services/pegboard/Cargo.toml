@@ -1,9 +1,9 @@
 [package]
 name = "pegboard"
-version = "0.0.1"
-edition = "2018"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [features]
 default = ["workflows", "ops"]
@@ -12,17 +12,17 @@ ops = ["chirp"]
 chirp = ["chirp-workflow", "sqlx", "nix", "server-spec"]
 
 [dependencies]
-chirp-workflow = { path = "../../common/chirp-workflow/core", optional = true }
+chirp-workflow = { workspace = true, optional = true }
 nix = { version = "0.27", default-features = false, features = ["user", "signal"], optional = true }
 serde = { version = "1.0.198", features = ["derive"] }
 serde_json = "1.0.132"
 strum = { version = "0.24", features = ["derive"] }
 thiserror = "1.0"
-util = { version = "0.1.0", package = "rivet-util", path = "../../common/util/core" }
+util.workspace = true
 uuid = "1.11.0"
 
-server-spec = { path = "../server-spec", optional = true }
-rivet-config = { version = "0.1.0", path = "../../common/config" }
+server-spec = { workspace = true, optional = true }
+rivet-config.workspace = true
 
 [dependencies.sqlx]
 optional = true

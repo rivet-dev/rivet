@@ -1,24 +1,24 @@
 [package]
 name = "cluster-datacenter-tls-renew"
-version = "0.0.1"
-edition = "2018"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-chirp-client = { path = "../../../../common/chirp/client" }
-chirp-workflow = { path = "../../../../common/chirp-workflow/core" }
-rivet-connection = { path = "../../../../common/connection" }
-rivet-health-checks = { path = "../../../../common/health-checks" }
-rivet-metrics = { path = "../../../../common/metrics" }
-rivet-runtime = { path = "../../../../common/runtime" }
+chirp-client.workspace = true
+chirp-workflow.workspace = true
+rivet-connection.workspace = true
+rivet-health-checks.workspace = true
+rivet-metrics.workspace = true
+rivet-runtime.workspace = true
 tokio = { version = "1.40", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
 tracing-logfmt = "0.3"
 
-cluster = { path = "../.." }
-rivet-config = { version = "0.1.0", path = "../../../../common/config" }
+cluster.workspace = true
+rivet-config.workspace = true
 
 [dependencies.sqlx]
 path = "../../../../../externals/sqlx"

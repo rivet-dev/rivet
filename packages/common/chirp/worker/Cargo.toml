@@ -1,10 +1,10 @@
 [package]
 name = "chirp-worker"
-version = "0.1.5"
-edition = "2021"
 description = "Server manager for running a Chirp worker."
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [features]
 default = ["attributes"]
@@ -12,36 +12,36 @@ attributes = ["chirp-worker-attributes", "tracing-subscriber"]
 
 [dependencies]
 async-trait = "0.1"
-chirp-client = { path = "../client" }
-global-error = { path = "../../global-error", features = ["chirp"] }
-chirp-metrics = { path = "../metrics" }
-chirp-perf = { path = "../perf" }
-chirp-worker-attributes = { path = "../worker-attributes", optional = true }
+chirp-client.workspace = true
+global-error = { workspace = true, features = ["chirp"] }
+chirp-metrics.workspace = true
+chirp-perf.workspace = true
+chirp-worker-attributes = { workspace = true, optional = true }
 futures-util = "0.3"
-formatted-error = { path = "../../formatted-error" }
+formatted-error.workspace = true
 indoc = "1.0"
 lazy_static = "1.4"
 prost = "0.10"
 rand = "0.8"
-rivet-cache = { path = "../../cache/build" }
-rivet-connection = { path = "../../connection" }
-rivet-metrics = { path = "../../metrics" }
-rivet-operation = { path = "../../operation/core" }
-rivet-pools = { path = "../../pools" }
-rivet-runtime = { path = "../../runtime" }
-rivet-util = { path = "../../util/core" }
+rivet-cache.workspace = true
+rivet-connection.workspace = true
+rivet-metrics.workspace = true
+rivet-operation.workspace = true
+rivet-pools.workspace = true
+rivet-runtime.workspace = true
+rivet-util.workspace = true
 serde_json = "1.0"
 thiserror = "1.0"
 tokio = { version = "1.40", features = ["full", "tracing"] }
 tracing = "0.1"
-types-proto = { path = "../../types-proto/core" }
+types-proto.workspace = true
 tracing-subscriber = { version = "0.3", optional = true, default-features = false, features = [
 	"fmt",
 	"json",
 	"ansi",
 ] } # Used with attribute
-rivet-config = { version = "0.1.0", path = "../../config" }
-rivet-env = { version = "0.1.0", path = "../../env" }
+rivet-config.workspace = true
+rivet-env.workspace = true
 url = "2.4"
 
 [dependencies.uuid]
@@ -64,4 +64,4 @@ features = [
 
 [dev-dependencies]
 testcontainers = "0.12"
-rivet-test-images = { path = "../../test-images" }
+rivet-test-images.workspace = true

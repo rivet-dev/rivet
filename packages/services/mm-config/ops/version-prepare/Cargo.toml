@@ -1,36 +1,36 @@
 [package]
 name = "mm-config-version-prepare"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-chirp-client = { path = "../../../../common/chirp/client" }
-chirp-workflow = { path = "../../../../common/chirp-workflow/core" }
+chirp-client.workspace = true
+chirp-workflow.workspace = true
 heck = "0.3"
 nomad-client = "0.0.9"
 prost = "0.10"
 reqwest = "0.11"
-rivet-operation = { path = "../../../../common/operation/core" }
-s3-util = { path = "../../../../common/s3-util" }
-util-build = { package = "rivet-util-build", path = "../../../build/util" }
-util-job = { package = "rivet-util-job", path = "../../../job/util" }
+rivet-operation.workspace = true
+s3-util.workspace = true
+util-build.workspace = true
+util-job.workspace = true
 
-build-get = { path = "../../../build/ops/get" }
-cluster = { path = "../../../cluster" }
-upload-get = { path = "../../../upload/ops/get" }
-region-get = { path = "../../../region/ops/get" }
-tier = { path = "../../../tier" }
+build-get.workspace = true
+cluster.workspace = true
+upload-get.workspace = true
+region-get.workspace = true
+tier.workspace = true
 
 [dependencies.sqlx]
 path = "../../../../../externals/sqlx"
 default-features = false
 
 [dev-dependencies]
-chirp-worker = { path = "../../../../common/chirp/worker" }
-util-mm = { package = "rivet-util-mm", path = "../../../mm/util" }
+chirp-worker.workspace = true
+util-mm.workspace = true
 
-faker-build = { path = "../../../faker/ops/build" }
-faker-game = { path = "../../../faker/ops/game" }
-faker-region = { path = "../../../faker/ops/region" }
+faker-build.workspace = true
+faker-game.workspace = true
+faker-region.workspace = true

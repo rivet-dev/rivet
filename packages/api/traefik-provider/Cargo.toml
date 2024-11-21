@@ -1,27 +1,27 @@
 [package]
 name = "api-traefik-provider"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-rivet-convert = { path = "../../common/convert" }
-api-helper = { path = "../../common/api-helper/build" }
+rivet-convert.workspace = true
+api-helper.workspace = true
 async_once = "0.2"
 async-trait = "0.1"
-chirp-client = { path = "../../common/chirp/client" }
-rivet-operation = { path = "../../common/operation/core" }
+chirp-client.workspace = true
+rivet-operation.workspace = true
 chrono = "0.4"
 http = "0.2"
 hyper = { version = "0.14", features = ["server", "http1", "stream", "tcp"] }
 lazy_static = "1.4"
 prost = "0.10"
-rivet-cache = { path = "../../common/cache/build" }
-rivet-claims = { path = "../../common/claims" }
-rivet-health-checks = { path = "../../common/health-checks" }
-rivet-pools = { path = "../../common/pools" }
-s3-util = { path = "../../common/s3-util" }
+rivet-cache.workspace = true
+rivet-claims.workspace = true
+rivet-health-checks.workspace = true
+rivet-pools.workspace = true
+s3-util.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0"
@@ -33,14 +33,14 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
     "ansi",
 ] }
 url = "2.2.2"
-util-cdn = { package = "rivet-util-cdn", path = "../../services/cdn/util" }
-util-job = { package = "rivet-util-job", path = "../../services/job/util" }
+util-cdn.workspace = true
+util-job.workspace = true
 uuid = { version = "1", features = ["v4"] }
 
-cluster = { path = "../../services/cluster" }
-ds = { path = "../../services/ds" }
-rivet-config = { version = "0.1.0", path = "../../common/config" }
-rivet-env = { version = "0.1.0", path = "../../common/env" }
+cluster.workspace = true
+ds.workspace = true
+rivet-config.workspace = true
+rivet-env.workspace = true
 
 [dependencies.sqlx]
 path = "../../../externals/sqlx"
@@ -49,17 +49,17 @@ features = ["json"]
 
 
 [dev-dependencies]
-rivet-connection = { path = "../../common/connection" }
-rivet-route = { path = "../../common/smithy-output/api-traefik-provider/rust" }
+rivet-connection.workspace = true
+rivet-route.workspace = true
 base64 = "0.13"
 reqwest = "0.11"
 
-cdn-namespace-auth-user-update = { path = "../../services/cdn/ops/namespace-auth-user-update" }
-cdn-namespace-domain-create = { path = "../../services/cdn/ops/namespace-domain-create" }
-faker-cdn-site = { path = "../../services/faker/ops/cdn-site" }
-faker-game = { path = "../../services/faker/ops/game" }
-faker-game-namespace = { path = "../../services/faker/ops/game-namespace" }
-faker-game-version = { path = "../../services/faker/ops/game-version" }
-faker-job-run = { path = "../../services/faker/ops/job-run" }
-faker-region = { path = "../../services/faker/ops/region" }
-game-get = { path = "../../services/game/ops/get" }
+cdn-namespace-auth-user-update.workspace = true
+cdn-namespace-domain-create.workspace = true
+faker-cdn-site.workspace = true
+faker-game.workspace = true
+faker-game-namespace.workspace = true
+faker-game-version.workspace = true
+faker-job-run.workspace = true
+faker-region.workspace = true
+game-get.workspace = true

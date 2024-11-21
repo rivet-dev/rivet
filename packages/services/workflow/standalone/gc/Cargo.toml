@@ -1,22 +1,22 @@
 [package]
 name = "workflow-gc"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-chirp-client = { path = "../../../../common/chirp/client" }
-rivet-connection = { path = "../../../../common/connection" }
-rivet-health-checks = { path = "../../../../common/health-checks" }
-rivet-metrics = { path = "../../../../common/metrics" }
-rivet-operation = { path = "../../../../common/operation/core" }
-rivet-runtime = { path = "../../../../common/runtime" }
+chirp-client.workspace = true
+rivet-connection.workspace = true
+rivet-health-checks.workspace = true
+rivet-metrics.workspace = true
+rivet-operation.workspace = true
+rivet-runtime.workspace = true
 tokio = { version = "1.40", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
 tracing-logfmt = "0.3"
-rivet-config = { version = "0.1.0", path = "../../../../common/config" }
+rivet-config.workspace = true
 
 [dev-dependencies]
-chirp-worker = { path = "../../../../common/chirp/worker" }
+chirp-worker.workspace = true

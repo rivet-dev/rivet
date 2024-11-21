@@ -1,25 +1,25 @@
 [package]
 name = "job-gc"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-chirp-client = { path = "../../../../common/chirp/client" }
+chirp-client.workspace = true
 chrono = "0.4"
 futures-util = "0.3"
 indoc = "1.0"
 lazy_static = "1.4"
 nomad-client = "0.0.9"
-nomad-util = { path = "../../../../common/nomad-util" }
+nomad-util.workspace = true
 prost = "0.10"
-rivet-connection = { path = "../../../../common/connection" }
-rivet-health-checks = { path = "../../../../common/health-checks" }
-rivet-metrics = { path = "../../../../common/metrics" }
-rivet-operation = { path = "../../../../common/operation/core" }
-rivet-pools = { path = "../../../../common/pools" }
-rivet-runtime = { path = "../../../../common/runtime" }
+rivet-connection.workspace = true
+rivet-health-checks.workspace = true
+rivet-metrics.workspace = true
+rivet-operation.workspace = true
+rivet-pools.workspace = true
+rivet-runtime.workspace = true
 serde_json = "1.0"
 tokio = { version = "1.40", features = ["full"] }
 tracing = "0.1"
@@ -31,16 +31,16 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 tracing-logfmt = "0.3"
 uuid = { version = "1", features = ["serde"] }
 
-mm-lobby-for-run-id = { path = "../../../mm/ops/lobby-for-run-id" }
-mm-lobby-get = { path = "../../../mm/ops/lobby-get" }
-rivet-config = { version = "0.1.0", path = "../../../../common/config" }
+mm-lobby-for-run-id.workspace = true
+mm-lobby-get.workspace = true
+rivet-config.workspace = true
 
 [dependencies.sqlx]
 path = "../../../../../externals/sqlx"
 default-features = false
 
 [dev-dependencies]
-chirp-worker = { path = "../../../../common/chirp/worker" }
+chirp-worker.workspace = true
 
-faker-job-run = { path = "../../../faker/ops/job-run" }
-job-run = { path = "../../../job-run" }
+faker-job-run.workspace = true
+job-run.workspace = true

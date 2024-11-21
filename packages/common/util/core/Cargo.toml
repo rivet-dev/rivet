@@ -1,9 +1,9 @@
 [package]
 name = "rivet-util"
-version = "0.1.0"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [features]
 default = ["macros"]
@@ -13,17 +13,17 @@ macros = []
 async-trait = "0.1"
 bcrypt = "0.13.0"
 chrono = "0.4"
-formatted-error = { path = "../../formatted-error", optional = true }
+formatted-error = { workspace = true, optional = true }
 futures-util = "0.3"
-global-error = { path = "../../global-error" }
+global-error.workspace = true
 indexmap = { version = "2.0", features = ["serde"] }
 ipnet = { version = "2.7", features = ["serde"] }
 lazy_static = "1.4"
 rand = "0.8"
 regex = "1.4"
 reqwest = { version = "0.11", default-features = false }
-rivet-config = { version = "0.1.0", path = "../../config" }
-rivet-util-macros = { path = "../macros" }
+rivet-config.workspace = true
+rivet-util-macros.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 thiserror = "1.0"
@@ -35,7 +35,7 @@ tokio = { version = "1.36", default-features = false, features = [
     "test-util",
     "time",
 ] }
-types-proto = { path = "../../types-proto/core" }
+types-proto.workspace = true
 uuid = { version = "1", features = ["v4", "serde"] }
 
 [dependencies.sqlx]

@@ -1,16 +1,16 @@
 [package]
 name = "api-portal"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-rivet-convert = { path = "../../common/convert" }
-api-helper = { path = "../../common/api-helper/build" }
+rivet-convert.workspace = true
+api-helper.workspace = true
 async-trait = "0.1"
-chirp-client = { path = "../../common/chirp/client" }
-rivet-operation = { path = "../../common/operation/core" }
+chirp-client.workspace = true
+rivet-operation.workspace = true
 chrono = "0.4"
 futures-util = "0.3"
 http = "0.2"
@@ -18,11 +18,11 @@ hyper = { version = "0.14", features = ["server", "http1", "stream", "tcp"] }
 lazy_static = "1.4"
 prost = "0.10"
 rand = { version = "0.8", features = ["small_rng"] }
-rivet-cache = { path = "../../common/cache/build" }
-rivet-claims = { path = "../../common/claims" }
-rivet-health-checks = { path = "../../common/health-checks" }
-rivet-pools = { path = "../../common/pools" }
-rivet-portal-server = { path = "../../common/smithy-output/api-portal/rust-server" }
+rivet-cache.workspace = true
+rivet-claims.workspace = true
+rivet-health-checks.workspace = true
+rivet-pools.workspace = true
+rivet-portal-server.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0"
@@ -36,20 +36,20 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 url = "2.2.2"
 uuid = { version = "1", features = ["v4"] }
 
-game-get = { path = "../../services/game/ops/get" }
-game-resolve-name-id = { path = "../../services/game/ops/resolve-name-id" }
-team-get = { path = "../../services/team/ops/get" }
-team-member-count = { path = "../../services/team/ops/member-count" }
-token-revoke = { path = "../../services/token/ops/revoke" }
-user-get = { path = "../../services/user/ops/get" }
-user-team-list = { path = "../../services/user/ops/team-list" }
-rivet-config = { version = "0.1.0", path = "../../common/config" }
-rivet-env = { version = "0.1.0", path = "../../common/env" }
+game-get.workspace = true
+game-resolve-name-id.workspace = true
+team-get.workspace = true
+team-member-count.workspace = true
+token-revoke.workspace = true
+user-get.workspace = true
+user-team-list.workspace = true
+rivet-config.workspace = true
+rivet-env.workspace = true
 
 [dev-dependencies]
-rivet-connection = { path = "../../common/connection" }
-rivet-portal = { path = "../../common/smithy-output/api-portal/rust" }
+rivet-connection.workspace = true
+rivet-portal.workspace = true
 regex = "1.4"
 
-faker-user = { path = "../../services/faker/ops/user" }
-user-token-create = { path = "../../services/user/ops/token-create" }
+faker-user.workspace = true
+user-token-create.workspace = true

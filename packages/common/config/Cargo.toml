@@ -1,15 +1,15 @@
 [package]
 name = "rivet-config"
-version = "0.1.0"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
 config = { version = "0.14.0", default-features = false, features = ["async", "json", "yaml"] }
 dirs = "5.0.1"
 glob = "0.3.1"
-global-error = { version = "0.1.5", path = "../global-error" }
+global-error.workspace = true
 ipnet = { version = "2.10.1", features = ["serde"] }
 maplit = "1.0.2"
 serde = { version = "1.0.210", features = ["derive"] }

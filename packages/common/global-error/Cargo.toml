@@ -1,9 +1,9 @@
 [package]
 name = "global-error"
-version = "0.1.5"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [features]
 protobuf-src = ["types-proto/protobuf-src"]
@@ -11,8 +11,8 @@ chirp = ["types-proto"]
 
 [dependencies]
 async-trait = "0.1"
-formatted-error = { path = "../formatted-error" }
-types-proto = { path = "../types-proto/core", optional = true }
+formatted-error.workspace = true
+types-proto = { workspace = true, optional = true }
 http = "0.2"
 reqwest = { version = "0.11", default-features = false }
 serde = { version = "1.0", features = ["derive"] }

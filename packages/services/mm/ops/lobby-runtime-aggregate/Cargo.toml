@@ -1,29 +1,29 @@
 [package]
 name = "mm-lobby-runtime-aggregate"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-rivet-operation = { path = "../../../../common/operation/core" }
-chirp-client = { path = "../../../../common/chirp/client" }
+rivet-operation.workspace = true
+chirp-client.workspace = true
 chrono = "0.4"
 prost = "0.10"
-util-mm = { package = "rivet-util-mm", path = "../../util" }
+util-mm.workspace = true
 
-mm-config-lobby-group-resolve-version = { path = "../../../mm-config/ops/lobby-group-resolve-version" }
-mm-config-version-get = { path = "../../../mm-config/ops/version-get" }
+mm-config-lobby-group-resolve-version.workspace = true
+mm-config-version-get.workspace = true
 
 [dependencies.sqlx]
 path = "../../../../../externals/sqlx"
 default-features = false
 
 [dev-dependencies]
-chirp-worker = { path = "../../../../common/chirp/worker" }
+chirp-worker.workspace = true
 
-faker-game = { path = "../../../faker/ops/game" }
-faker-game-version = { path = "../../../faker/ops/game-version" }
-faker-mm-lobby = { path = "../../../faker/ops/mm-lobby" }
-faker-mm-lobby-row = { path = "../../../faker/ops/mm-lobby-row" }
-faker-region = { path = "../../../faker/ops/region" }
+faker-game.workspace = true
+faker-game-version.workspace = true
+faker-mm-lobby.workspace = true
+faker-mm-lobby-row.workspace = true
+faker-region.workspace = true

@@ -629,7 +629,7 @@ checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
 
 [[package]]
 name = "chirp-types"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "prost 0.10.4",
 ]
@@ -2314,7 +2314,7 @@ dependencies = [
 
 [[package]]
 name = "formatted-error"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "gray_matter",
  "hashbrown 0.12.3",
@@ -2536,7 +2536,7 @@ checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 
 [[package]]
 name = "global-error"
-version = "0.1.5"
+version = "0.0.1"
 dependencies = [
  "async-trait",
  "formatted-error",
@@ -4031,7 +4031,7 @@ dependencies = [
 
 [[package]]
 name = "pegboard-container-runner"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "nix 0.27.1",
@@ -4045,14 +4045,14 @@ dependencies = [
 
 [[package]]
 name = "pegboard-echo-server"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "tiny_http",
 ]
 
 [[package]]
 name = "pegboard-isolate-v8-runner"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "deno_ast",
@@ -4075,7 +4075,7 @@ dependencies = [
 
 [[package]]
 name = "pegboard-manager"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -4109,7 +4109,7 @@ dependencies = [
 
 [[package]]
 name = "pegboard-runner-protocol"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "serde",
  "uuid",
@@ -4809,7 +4809,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-config"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "config",
  "dirs",
@@ -4825,7 +4825,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-util"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "async-trait",
  "bcrypt",
@@ -4851,7 +4851,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-util-macros"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5132,7 +5132,7 @@ dependencies = [
 
 [[package]]
 name = "schemac"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "lazy_static",
  "prost-build",
@@ -6821,7 +6821,7 @@ checksum = "42ff0bf0c66b8238c6f3b578df37d0b7848e55df8577b3f74f92a69acceeb825"
 
 [[package]]
 name = "types-proto"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "chirp-types",
  "http 0.2.12",
@@ -6836,7 +6836,7 @@ dependencies = [
 
 [[package]]
 name = "types-proto-build"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "heck 0.3.3",
  "indoc 1.0.9",

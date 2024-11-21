@@ -1,16 +1,16 @@
 [package]
 name = "rivet-health-checks"
-version = "0.1.0"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-chirp-client = { path = "../chirp/client" }
-global-error = { version = "0.1.5", path = "../global-error" }
+chirp-client.workspace = true
+global-error.workspace = true
 hyper = { version = "0.14", features = ["server", "http1", "tcp"] }
-rivet-config = { version = "0.1.0", path = "../config" }
-rivet-pools = { path = "../pools" }
+rivet-config.workspace = true
+rivet-pools.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0"

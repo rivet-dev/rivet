@@ -1,28 +1,28 @@
 [package]
 name = "api-matchmaker"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-rivet-convert = { path = "../../common/convert" }
-api-helper = { path = "../../common/api-helper/build" }
+rivet-convert.workspace = true
+api-helper.workspace = true
 async-trait = "0.1"
 bytes = "1.0"
-chirp-client = { path = "../../common/chirp/client" }
-rivet-operation = { path = "../../common/operation/core" }
+chirp-client.workspace = true
+rivet-operation.workspace = true
 chrono = "0.4"
 http = "0.2"
 hyper = { version = "0.14", features = ["server", "http1", "stream", "tcp"] }
 lazy_static = "1.4"
 prost = "0.10"
-rivet-api = { path = "../../../sdks/full/rust" }
-rivet-cache = { path = "../../common/cache/build" }
-rivet-claims = { path = "../../common/claims" }
-rivet-health-checks = { path = "../../common/health-checks" }
-rivet-matchmaker-server = { path = "../../common/smithy-output/api-matchmaker/rust-server" }
-rivet-pools = { path = "../../common/pools" }
+rivet-api.workspace = true
+rivet-cache.workspace = true
+rivet-claims.workspace = true
+rivet-health-checks.workspace = true
+rivet-matchmaker-server.workspace = true
+rivet-pools.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0"
@@ -34,45 +34,45 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
     "ansi",
 ] }
 url = "2.2.2"
-util-mm = { package = "rivet-util-mm", path = "../../services/mm/util" }
+util-mm.workspace = true
 uuid = { version = "1", features = ["v4"] }
 
-captcha-request = { path = "../../services/captcha/ops/request" }
-captcha-turnstile-config-get = { path = "../../services/captcha/ops/turnstile-config-get" }
-captcha-verify = { path = "../../services/captcha/ops/verify" }
-cdn-namespace-get = { path = "../../services/cdn/ops/namespace-get" }
-game-namespace-get = { path = "../../services/game/ops/namespace-get" }
-game-namespace-resolve-url = { path = "../../services/game/ops/namespace-resolve-url" }
-game-resolve-namespace-id = { path = "../../services/game/ops/resolve-namespace-id" }
-captcha-hcaptcha-config-get = { path = "../../services/captcha/ops/hcaptcha-config-get" }
-job-run = { path = "../../services/job-run" }
-mm-config-lobby-group-resolve-version = { path = "../../services/mm-config/ops/lobby-group-resolve-version" }
-mm-config-version-get = { path = "../../services/mm-config/ops/version-get" }
-mm-dev-player-token-create = { path = "../../services/mm/ops/dev-player-token-create" }
-mm-lobby-get = { path = "../../services/mm/ops/lobby-get" }
-mm-lobby-list-for-namespace = { path = "../../services/mm/ops/lobby-list-for-namespace" }
-mm-lobby-player-count = { path = "../../services/mm/ops/lobby-player-count" }
-mm-lobby-state-get = { path = "../../services/mm/ops/lobby-state-get" }
-region-get = { path = "../../services/region/ops/get" }
-region-recommend = { path = "../../services/region/ops/recommend" }
-region-resolve-for-game = { path = "../../services/region/ops/resolve-for-game" }
-token-create = { path = "../../services/token/ops/create" }
-token-revoke = { path = "../../services/token/ops/revoke" }
-user-identity-get = { path = "../../services/user-identity/ops/get" }
-rivet-config = { version = "0.1.0", path = "../../common/config" }
-rivet-env = { version = "0.1.0", path = "../../common/env" }
+captcha-request.workspace = true
+captcha-turnstile-config-get.workspace = true
+captcha-verify.workspace = true
+cdn-namespace-get.workspace = true
+game-namespace-get.workspace = true
+game-namespace-resolve-url.workspace = true
+game-resolve-namespace-id.workspace = true
+captcha-hcaptcha-config-get.workspace = true
+job-run.workspace = true
+mm-config-lobby-group-resolve-version.workspace = true
+mm-config-version-get.workspace = true
+mm-dev-player-token-create.workspace = true
+mm-lobby-get.workspace = true
+mm-lobby-list-for-namespace.workspace = true
+mm-lobby-player-count.workspace = true
+mm-lobby-state-get.workspace = true
+region-get.workspace = true
+region-recommend.workspace = true
+region-resolve-for-game.workspace = true
+token-create.workspace = true
+token-revoke.workspace = true
+user-identity-get.workspace = true
+rivet-config.workspace = true
+rivet-env.workspace = true
 
 [dev-dependencies]
 reqwest = "0.11"
-rivet-connection = { path = "../../common/connection" }
-util-job = { package = "rivet-util-job", path = "../../services/job/util" }
+rivet-connection.workspace = true
+util-job.workspace = true
 
-cdn-namespace-domain-create = { path = "../../services/cdn/ops/namespace-domain-create" }
-cloud-namespace-token-development-create = { path = "../../services/cloud/ops/namespace-token-development-create" }
-cloud-namespace-token-public-create = { path = "../../services/cloud/ops/namespace-token-public-create" }
-faker-build = { path = "../../services/faker/ops/build" }
-faker-game = { path = "../../services/faker/ops/game" }
-faker-game-namespace = { path = "../../services/faker/ops/game-namespace" }
-faker-game-version = { path = "../../services/faker/ops/game-version" }
-faker-region = { path = "../../services/faker/ops/region" }
-game-get = { path = "../../services/game/ops/get" }
+cdn-namespace-domain-create.workspace = true
+cloud-namespace-token-development-create.workspace = true
+cloud-namespace-token-public-create.workspace = true
+faker-build.workspace = true
+faker-game.workspace = true
+faker-game-namespace.workspace = true
+faker-game-version.workspace = true
+faker-region.workspace = true
+game-get.workspace = true

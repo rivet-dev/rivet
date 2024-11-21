@@ -1,9 +1,9 @@
 [package]
 name = "pegboard-isolate-v8-runner"
-version = "0.1.0"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [[bin]]
 name = "rivet-isolate-v8-runner"
@@ -24,7 +24,7 @@ tokio-tungstenite = "0.23.1"
 twox-hash = "1.6.3"
 uuid = { version = "1.6.1", features = ["v4"] }
 
-runner-protocol = { path = "../runner-protocol", package = "pegboard-runner-protocol" }
+runner-protocol.workspace = true
 
 [dependencies.deno_runtime]
 path = "../../../../externals/deno/runtime"

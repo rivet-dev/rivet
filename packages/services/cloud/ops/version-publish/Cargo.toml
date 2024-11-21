@@ -1,31 +1,31 @@
 [package]
 name = "cloud-version-publish"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-rivet-operation = { path = "../../../../common/operation/core" }
-chirp-client = { path = "../../../../common/chirp/client" }
+rivet-operation.workspace = true
+chirp-client.workspace = true
 prost = "0.10"
 
-cdn-version-prepare = { path = "../../../cdn/ops/version-prepare" }
-cdn-version-publish = { path = "../../../cdn/ops/version-publish" }
-game-get = { path = "../../../game/ops/get" }
-game-version-create = { path = "../../../game/ops/version-create" }
-game-version-validate = { path = "../../../game/ops/version-validate" }
-mm-config-version-prepare = { path = "../../../mm-config/ops/version-prepare" }
-mm-config-version-publish = { path = "../../../mm-config/ops/version-publish" }
+cdn-version-prepare.workspace = true
+cdn-version-publish.workspace = true
+game-get.workspace = true
+game-version-create.workspace = true
+game-version-validate.workspace = true
+mm-config-version-prepare.workspace = true
+mm-config-version-publish.workspace = true
 
 [dependencies.sqlx]
 path = "../../../../../externals/sqlx"
 default-features = false
 
 [dev-dependencies]
-chirp-worker = { path = "../../../../common/chirp/worker" }
-util-mm = { package = "rivet-util-mm", path = "../../../mm/util" }
+chirp-worker.workspace = true
+util-mm.workspace = true
 
-faker-build = { path = "../../../faker/ops/build" }
-faker-game = { path = "../../../faker/ops/game" }
-region-list = { path = "../../../region/ops/list" }
+faker-build.workspace = true
+faker-game.workspace = true
+region-list.workspace = true

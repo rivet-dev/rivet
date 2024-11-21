@@ -1,15 +1,15 @@
 [package]
 name = "ds"
-version = "0.0.1"
-edition = "2018"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
 bit-vec = "0.6"
-chirp-client = { path = "../../common/chirp/client" }
-chirp-worker = { path = "../../common/chirp/worker" }
-chirp-workflow = { path = "../../common/chirp-workflow/core" }
+chirp-client.workspace = true
+chirp-worker.workspace = true
+chirp-workflow.workspace = true
 chrono = "0.4"
 cjson = "0.1"
 heck = "0.3"
@@ -18,18 +18,18 @@ http = "0.2"
 lazy_static = "1.4.0"
 nix = { version = "0.27", default-features = false, features = ["signal"] }
 nomad-client-old = { package = "nomad-client", version = "0.0.9" }
-nomad-util = { path = "../../common/nomad-util" }
+nomad-util.workspace = true
 rand = "0.8"
 regex = "1.10"
 reqwest = { version = "0.12", features = ["json"] }
-rivet-api = { path = "../../../sdks/full/rust" }
-rivet-convert = { path = "../../common/convert" }
-rivet-health-checks = { path = "../../common/health-checks" }
-rivet-metrics = { path = "../../common/metrics" }
-rivet-operation = { path = "../../common/operation/core" }
-rivet-runtime = { path = "../../common/runtime" }
-rivet-util = { path = "../../common/util/core" }
-s3-util = { path = "../../common/s3-util" }
+rivet-api.workspace = true
+rivet-convert.workspace = true
+rivet-health-checks.workspace = true
+rivet-metrics.workspace = true
+rivet-operation.workspace = true
+rivet-runtime.workspace = true
+rivet-util.workspace = true
+s3-util.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["preserve_order"] }
 sha2 = "0.10"
@@ -39,24 +39,24 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
     "json",
     "ansi",
 ] }
-util-build = { package = "rivet-util-build", path = "../build/util" }
-util-job = { package = "rivet-util-job", path = "../job/util" }
+util-build.workspace = true
+util-job.workspace = true
 uuid = { version = "1", features = ["v4", "serde"] }
 
-build = { path = "../build" }
-build-get = { path = "../build/ops/get" }
-cluster = { path = "../cluster" }
-ip-info = { path = "../ip/ops/info" }
-mm-config-version-get = { path = "../mm-config/ops/version-get" }
-mm-lobby-get = { path = "../mm/ops/lobby-get" }
-mm-lobby-list-for-user-id = { path = "../mm/ops/lobby-list-for-user-id" }
-pegboard = { path = "../pegboard" }
-region-get = { path = "../region/ops/get" }
-tier = { path = "../tier" }
-token-create = { path = "../token/ops/create" }
-upload-get = { path = "../upload/ops/get" }
-user-identity-get = { path = "../user-identity/ops/get" }
-rivet-config = { version = "0.1.0", path = "../../common/config" }
+build.workspace = true
+build-get.workspace = true
+cluster.workspace = true
+ip-info.workspace = true
+mm-config-version-get.workspace = true
+mm-lobby-get.workspace = true
+mm-lobby-list-for-user-id.workspace = true
+pegboard.workspace = true
+region-get.workspace = true
+tier.workspace = true
+token-create.workspace = true
+upload-get.workspace = true
+user-identity-get.workspace = true
+rivet-config.workspace = true
 
 [dependencies.sqlx]
 path = "../../../externals/sqlx"
@@ -67,9 +67,9 @@ package = "nomad_client"
 path = "../../../externals/nomad-client"
 
 [dev-dependencies]
-cluster = { path = "../cluster" }
-faker-build = { path = "../faker/ops/build" }
-faker-game = { path = "../faker/ops/game" }
-faker-region = { path = "../faker/ops/region" }
-faker-user = { path = "../faker/ops/user" }
-game-get = { path = "../game/ops/get" }
+cluster.workspace = true
+faker-build.workspace = true
+faker-game.workspace = true
+faker-region.workspace = true
+faker-user.workspace = true
+game-get.workspace = true

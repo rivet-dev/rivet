@@ -1,20 +1,20 @@
 [package]
 name = "faker-build"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-chirp-client = { path = "../../../../common/chirp/client" }
-rivet-operation = { path = "../../../../common/operation/core" }
+chirp-client.workspace = true
+rivet-operation.workspace = true
 prost = "0.10"
 uuid = { version = "1", features = ["v4"] }
 
-build-create = { path = "../../../build/ops/create" }
+build-create.workspace = true
 
 
 [dev-dependencies]
-chirp-worker = { path = "../../../../common/chirp/worker" }
+chirp-worker.workspace = true
 
-faker-game = { path = "../game" }
+faker-game.workspace = true

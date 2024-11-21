@@ -1,17 +1,17 @@
 [package]
 name = "monolith-worker"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-chirp-client = { path = "../../../../common/chirp/client" }
-rivet-connection = { path = "../../../../common/connection" }
-rivet-health-checks = { path = "../../../../common/health-checks" }
-rivet-metrics = { path = "../../../../common/metrics" }
-rivet-operation = { path = "../../../../common/operation/core" }
-rivet-runtime = { path = "../../../../common/runtime" }
+chirp-client.workspace = true
+rivet-connection.workspace = true
+rivet-health-checks.workspace = true
+rivet-metrics.workspace = true
+rivet-operation.workspace = true
+rivet-runtime.workspace = true
 tokio = { version = "1.40", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = [
@@ -20,16 +20,16 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
     "ansi",
 ] }
 
-cdn-worker = { path = "../../../cdn/worker" }
-cf-custom-hostname-worker = { path = "../../../cf-custom-hostname/worker" }
-cloud-worker = { path = "../../../cloud/worker" }
-ds = { path = "../../../ds" }
-external-worker = { path = "../../../external/worker" }
-job-log-worker = { path = "../../../job-log/worker" }
-job-run = { path = "../../../job-run" }
-mm-worker = { path = "../../../mm/worker" }
-team-invite-worker = { path = "../../../team-invite/worker" }
-team-worker = { path = "../../../team/worker" }
-upload-worker = { path = "../../../upload/worker" }
-user-worker = { path = "../../../user/worker" }
-rivet-config = { version = "0.1.0", path = "../../../../common/config" }
+cdn-worker.workspace = true
+cf-custom-hostname-worker.workspace = true
+cloud-worker.workspace = true
+ds.workspace = true
+external-worker.workspace = true
+job-log-worker.workspace = true
+job-run.workspace = true
+mm-worker.workspace = true
+team-invite-worker.workspace = true
+team-worker.workspace = true
+upload-worker.workspace = true
+user-worker.workspace = true
+rivet-config.workspace = true

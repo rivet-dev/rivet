@@ -1,10 +1,10 @@
 [package]
 name = "rivet-util-build"
-version = "0.1.0"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-rivet-operation = { path = "../../../common/operation/core" }
+rivet-operation.workspace = true
 

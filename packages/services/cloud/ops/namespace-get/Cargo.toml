@@ -1,26 +1,26 @@
 [package]
 name = "cloud-namespace-get"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-rivet-operation = { path = "../../../../common/operation/core" }
-chirp-client = { path = "../../../../common/chirp/client" }
+rivet-operation.workspace = true
+chirp-client.workspace = true
 prost = "0.10"
 
-cdn-namespace-get = { path = "../../../cdn/ops/namespace-get" }
-mm-config-namespace-get = { path = "../../../mm-config/ops/namespace-get" }
+cdn-namespace-get.workspace = true
+mm-config-namespace-get.workspace = true
 
 [dependencies.sqlx]
 path = "../../../../../externals/sqlx"
 default-features = false
 
 [dev-dependencies]
-chirp-worker = { path = "../../../../common/chirp/worker" }
+chirp-worker.workspace = true
 
-cloud-namespace-create = { path = "../namespace-create" }
-faker-game = { path = "../../../faker/ops/game" }
-game-namespace-create = { path = "../../../game/ops/namespace-create" }
-game-version-create = { path = "../../../game/ops/version-create" }
+cloud-namespace-create.workspace = true
+faker-game.workspace = true
+game-namespace-create.workspace = true
+game-version-create.workspace = true

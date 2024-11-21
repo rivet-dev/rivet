@@ -1,21 +1,21 @@
 [package]
 name = "telemetry-beacon"
-version = "0.0.38"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
 async-posthog = { path = "../../../../../externals/posthog-rs/async" }
-chirp-client = { path = "../../../../common/chirp/client" }
+chirp-client.workspace = true
 futures-util = "0.3"
 indoc = "1.0"
 lazy_static = "1.4"
 prost = "0.10"
-rivet-connection = { path = "../../../../common/connection" }
-rivet-operation = { path = "../../../../common/operation/core" }
-rivet-pools = { path = "../../../../common/pools" }
-rivet-runtime = { path = "../../../../common/runtime" }
+rivet-connection.workspace = true
+rivet-operation.workspace = true
+rivet-pools.workspace = true
+rivet-runtime.workspace = true
 tokio = { version = "1.40", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = [
@@ -25,19 +25,19 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 ] }
 tracing-logfmt = "0.3"
 
-cloud-version-get = { path = "../../../cloud/ops/version-get" }
-game-get = { path = "../../../game/ops/get" }
-game-namespace-get = { path = "../../../game/ops/namespace-get" }
-game-version-get = { path = "../../../game/ops/version-get" }
-mm-player-count-for-namespace = { path = "../../../mm/ops/player-count-for-namespace" }
-team-get = { path = "../../../team/ops/get" }
-team-member-count = { path = "../../../team/ops/member-count" }
-rivet-config = { version = "0.1.0", path = "../../../../common/config" }
-dynamic-config = { version = "0.1.0", path = "../../../dynamic-config" }
-chirp-workflow = { version = "0.1.0", path = "../../../../common/chirp-workflow/core" }
+cloud-version-get.workspace = true
+game-get.workspace = true
+game-namespace-get.workspace = true
+game-version-get.workspace = true
+mm-player-count-for-namespace.workspace = true
+team-get.workspace = true
+team-member-count.workspace = true
+rivet-config.workspace = true
+dynamic-config.workspace = true
+chirp-workflow.workspace = true
 sysinfo = "0.32.0"
-rivet-env = { version = "0.1.0", path = "../../../../common/env" }
-pegboard = { version = "0.0.1", path = "../../../pegboard" }
+rivet-env.workspace = true
+pegboard = { version = "0.0.1", workspace = true }
 serde = { version = "1.0.214", features = ["derive"] }
 
 [dependencies.sqlx]
@@ -45,5 +45,5 @@ path = "../../../../../externals/sqlx"
 default-features = false
 
 [dev-dependencies]
-chirp-worker = { path = "../../../../common/chirp/worker" }
+chirp-worker.workspace = true
 chrono = "0.4"

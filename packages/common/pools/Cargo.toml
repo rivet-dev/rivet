@@ -1,27 +1,27 @@
 [package]
 name = "rivet-pools"
-version = "0.1.0"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
 async-nats = "0.33"
 clickhouse = { version = "0.11.2" }
 funty = "=1.1.0"  # Fixes issue with sqlx dependency, see https://github.com/bitvecto-rs/bitvec/issues/105#issuecomment-778570981
-global-error = { path = "../global-error" }
+global-error.workspace = true
 hyper = { version = "0.14" }
 hyper-tls = { version = "0.5.0" }
 lazy_static = "1.4"
 rand = "0.8"
-rivet-metrics = { path = "../metrics" }
+rivet-metrics.workspace = true
 thiserror = "1.0"
 tokio = { version = "1.36", features = ["tracing"] }
 tokio-util = "0.7"
 tracing = "0.1"
 governor = "0.6"
 url = "2.4"
-rivet-config = { version = "0.1.0", path = "../config" }
+rivet-config.workspace = true
 
 [dependencies.sqlx]
 path = "../../../externals/sqlx"

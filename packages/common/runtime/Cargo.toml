@@ -1,14 +1,14 @@
 [package]
 name = "rivet-runtime"
-version = "0.1.0"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
 console-subscriber = "0.1"
 lazy_static = "1.4"
-rivet-metrics = { path = "../metrics" }
+rivet-metrics.workspace = true
 thiserror = "1.0"
 tokio = { version = "1.36", features = ["full", "tracing"] }
 tracing = "0.1"

@@ -1,25 +1,25 @@
 [package]
 name = "team-invite-worker"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-chirp-worker = { path = "../../../common/chirp/worker" }
-chirp-client = { path = "../../../common/chirp/client" }
-rivet-health-checks = { path = "../../../common/health-checks" }
-rivet-metrics = { path = "../../../common/metrics" }
-rivet-runtime = { path = "../../../common/runtime" }
+chirp-worker.workspace = true
+chirp-client.workspace = true
+rivet-health-checks.workspace = true
+rivet-metrics.workspace = true
+rivet-runtime.workspace = true
 chrono = "0.4"
 
-team-member-list = { path = "../../team/ops/member-list" }
-team-user-ban-get = { path = "../../team/ops/user-ban-get" }
-rivet-config = { version = "0.1.0", path = "../../../common/config" }
+team-member-list.workspace = true
+team-user-ban-get.workspace = true
+rivet-config.workspace = true
 
 [dependencies.sqlx]
 path = "../../../../externals/sqlx"
 default-features = false
 
 [dev-dependencies]
-chirp-worker = { path = "../../../common/chirp/worker" }
+chirp-worker.workspace = true

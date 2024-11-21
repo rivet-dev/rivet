@@ -1,25 +1,25 @@
 [package]
 name = "upload-prepare"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-chirp-client = { path = "../../../../common/chirp/client" }
-rivet-operation = { path = "../../../../common/operation/core" }
+chirp-client.workspace = true
+rivet-operation.workspace = true
 chrono = "0.4"
 prost = "0.10"
-s3-util = { path = "../../../../common/s3-util" }
+s3-util.workspace = true
 
 [dependencies.sqlx]
 path = "../../../../../externals/sqlx"
 default-features = false
 
 [dev-dependencies]
-chirp-worker = { path = "../../../../common/chirp/worker" }
+chirp-worker.workspace = true
 reqwest = "0.11"
 rand = "0.8"
 
-upload-get = { path = "../get" }
-upload-complete = { path = "../complete" }
+upload-get.workspace = true
+upload-complete.workspace = true

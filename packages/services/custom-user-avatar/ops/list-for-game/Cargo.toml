@@ -1,13 +1,13 @@
 [package]
 name = "custom-user-avatar-list-for-game"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-rivet-operation = { path = "../../../../common/operation/core" }
-chirp-client = { path = "../../../../common/chirp/client" }
+rivet-operation.workspace = true
+chirp-client.workspace = true
 prost = "0.10"
 
 [dependencies.sqlx]
@@ -15,9 +15,9 @@ path = "../../../../../externals/sqlx"
 default-features = false
 
 [dev-dependencies]
-chirp-worker = { path = "../../../../common/chirp/worker" }
+chirp-worker.workspace = true
 reqwest = "0.11"
 
-custom-user-avatar-upload-complete = { path = "../upload-complete" }
-faker-game = { path = "../../../faker/ops/game" }
-upload-prepare = { path = "../../../upload/ops/prepare" }
+custom-user-avatar-upload-complete.workspace = true
+faker-game.workspace = true
+upload-prepare.workspace = true

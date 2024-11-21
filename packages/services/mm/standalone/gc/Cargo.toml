@@ -1,22 +1,22 @@
 [package]
 name = "mm-gc"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
 lazy_static = "1.4"
-chirp-client = { path = "../../../../common/chirp/client" }
-rivet-operation = { path = "../../../../common/operation/core" }
+chirp-client.workspace = true
+rivet-operation.workspace = true
 futures-util = "0.3"
 indoc = "1.0"
 prost = "0.10"
-rivet-connection = { path = "../../../../common/connection" }
-rivet-health-checks = { path = "../../../../common/health-checks" }
-rivet-metrics = { path = "../../../../common/metrics" }
-rivet-pools = { path = "../../../../common/pools" }
-rivet-runtime = { path = "../../../../common/runtime" }
+rivet-connection.workspace = true
+rivet-health-checks.workspace = true
+rivet-metrics.workspace = true
+rivet-pools.workspace = true
+rivet-runtime.workspace = true
 tokio = { version = "1.40", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = [
@@ -25,18 +25,18 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
     "ansi",
 ] }
 tracing-logfmt = "0.3"
-util-mm = { package = "rivet-util-mm", path = "../../util" }
+util-mm.workspace = true
 
-region-list = { path = "../../../region/ops/list" }
-rivet-config = { version = "0.1.0", path = "../../../../common/config" }
+region-list.workspace = true
+rivet-config.workspace = true
 
 [dependencies.sqlx]
 path = "../../../../../externals/sqlx"
 default-features = false
 
 [dev-dependencies]
-chirp-worker = { path = "../../../../common/chirp/worker" }
+chirp-worker.workspace = true
 chrono = "0.4"
 
-faker-mm-lobby = { path = "../../../faker/ops/mm-lobby" }
-mm-lobby-get = { path = "../../ops/lobby-get" }
+faker-mm-lobby.workspace = true
+mm-lobby-get.workspace = true

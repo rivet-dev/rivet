@@ -1,15 +1,15 @@
 [package]
 name = "rivet-connection"
-version = "0.1.0"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-chirp-client = { path = "../chirp/client" }
-chirp-perf = { path = "../chirp/perf" }
-global-error = { path = "../global-error" }
-rivet-cache = { path = "../cache/build" }
-rivet-pools = { path = "../pools" }
-rivet-util = { path = "../util/core" }
+chirp-client.workspace = true
+chirp-perf.workspace = true
+global-error.workspace = true
+rivet-cache.workspace = true
+rivet-pools.workspace = true
+rivet-util.workspace = true
 tracing = "0.1"

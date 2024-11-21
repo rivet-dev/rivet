@@ -1,9 +1,9 @@
 [package]
 name = "rivet-server"
-version = "0.1.0"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [[bin]]
 name = "rivet-server"
@@ -14,16 +14,16 @@ anyhow = "1.0"
 chrono = "0.4.38"
 clap = { version = "4.3", features = ["derive"] }
 colored_json = "5.0.0"
-global-error = { path = "../../common/global-error" }
+global-error.workspace = true
 include_dir = "0.7.4"
 indoc = "2.0.5"
-rivet-api = { path = "../../../sdks/full/rust" }
-rivet-migrate = { path = "../../common/migrate" }
-rivet-pools = { version = "0.1.0", path = "../../common/pools" }
-rivet-runtime = { version = "0.1.0", path = "../../common/runtime" }
-rivet-service-manager = { path = "../../common/service-manager" }
+rivet-api.workspace = true
+rivet-migrate.workspace = true
+rivet-pools.workspace = true
+rivet-runtime.workspace = true
+rivet-service-manager.workspace = true
 rivet-term = { path = "../../../externals/rivet-term" }
-s3-util = { version = "0.1.0", path = "../../common/s3-util" }
+s3-util.workspace = true
 serde = { version = "1.0.210", features = ["derive"] }
 serde_json = "1.0.128"
 serde_yaml = "0.9.34"
@@ -37,44 +37,44 @@ url = "2.4"
 uuid = "1.10.0"
 
 # Standalone
-cluster-datacenter-tls-renew = { path = "../../services/cluster/standalone/datacenter-tls-renew" }
-cluster-gc = { path = "../../services/cluster/standalone/gc" }
-cluster-metrics-publish = { path = "../../services/cluster/standalone/metrics-publish" }
-job-gc = { path = "../../services/job/standalone/gc" }
-linode-gc = { path = "../../services/linode/standalone/gc" }
-load-test-api-cloud = { path = "../../services/load-test/standalone/api-cloud" }
-load-test-mm = { path = "../../services/load-test/standalone/mm" }
-load-test-mm-sustain = { path = "../../services/load-test/standalone/mm-sustain" }
-load-test-sqlx = { path = "../../services/load-test/standalone/sqlx" }
-load-test-watch-requests = { path = "../../services/load-test/standalone/watch-requests" }
-mm-gc = { path = "../../services/mm/standalone/gc" }
-monolith-worker = { path = "../../services/monolith/standalone/worker" }
-monolith-workflow-worker = { path = "../../services/monolith/standalone/workflow-worker" }
-nomad-monitor = { path = "../../services/nomad/standalone/monitor" }
-pegboard-gc = { path = "../../services/pegboard/standalone/gc" }
-pegboard-ws = { path = "../../services/pegboard/standalone/ws" }
-workflow-gc = { path = "../../services/workflow/standalone/gc" }
-workflow-metrics-publish = { path = "../../services/workflow/standalone/metrics-publish" }
+cluster-datacenter-tls-renew.workspace = true
+cluster-gc.workspace = true
+cluster-metrics-publish.workspace = true
+job-gc.workspace = true
+linode-gc.workspace = true
+load-test-api-cloud.workspace = true
+load-test-mm.workspace = true
+load-test-mm-sustain.workspace = true
+load-test-sqlx.workspace = true
+load-test-watch-requests.workspace = true
+mm-gc.workspace = true
+monolith-worker.workspace = true
+monolith-workflow-worker.workspace = true
+nomad-monitor.workspace = true
+pegboard-gc.workspace = true
+pegboard-ws.workspace = true
+workflow-gc.workspace = true
+workflow-metrics-publish.workspace = true
 
 # Cron
-telemetry-beacon = { path = "../../services/telemetry/standalone/beacon" }
-user-delete-pending = { path = "../../services/user/standalone/delete-pending" }
+telemetry-beacon.workspace = true
+user-delete-pending.workspace = true
 
 # API
-api-monolith-edge = { path = "../../api/monolith-edge" }
-api-monolith-public = { path = "../../api/monolith-public" }
+api-monolith-edge.workspace = true
+api-monolith-public.workspace = true
 
 # Oneshot
-build-default-create = { path = "../../services/build/standalone/default-create" }
-cluster-default-update = { path = "../../services/cluster/standalone/default-update" }
-pegboard-dc-init = { path = "../../services/pegboard/standalone/dc-init" }
-rivet-config = { version = "0.1.0", path = "../../common/config" }
+build-default-create.workspace = true
+cluster-default-update.workspace = true
+pegboard-dc-init.workspace = true
+rivet-config.workspace = true
 reqwest = "0.12.9"
-chirp-client = { version = "0.1.0", path = "../../common/chirp/client" }
-rivet-cache = { version = "0.1.0", path = "../../common/cache/build" }
-chirp-workflow = { version = "0.1.0", path = "../../common/chirp-workflow/core" }
-rivet-connection = { version = "0.1.0", path = "../../common/connection" }
-cloud-default-create = { version = "0.1.0", path = "../../services/cloud/standalone/default-create" }
+chirp-client.workspace = true
+rivet-cache.workspace = true
+chirp-workflow.workspace = true
+rivet-connection.workspace = true
+cloud-default-create.workspace = true
 
 
 [dependencies.sqlx]

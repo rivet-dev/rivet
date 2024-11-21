@@ -1,27 +1,27 @@
 [package]
 name = "api-ui"
-version = "0.1.0"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-rivet-convert = { path = "../../common/convert" }
-api-helper = { path = "../../common/api-helper/build" }
+rivet-convert.workspace = true
+api-helper.workspace = true
 async-trait = "0.1"
-chirp-client = { path = "../../common/chirp/client" }
-rivet-operation = { path = "../../common/operation/core" }
+chirp-client.workspace = true
+rivet-operation.workspace = true
 chrono = "0.4"
 headers = "0.3"
 http = "0.2"
 hyper = { version = "0.14", features = ["server", "http1", "stream", "tcp"] }
 lazy_static = "1.4"
 prost = "0.10"
-rivet-auth-server = { path = "../../common/smithy-output/api-auth/rust-server" }
-rivet-cache = { path = "../../common/cache/build" }
-rivet-claims = { path = "../../common/claims" }
-rivet-health-checks = { path = "../../common/health-checks" }
-rivet-pools = { path = "../../common/pools" }
+rivet-auth-server.workspace = true
+rivet-cache.workspace = true
+rivet-claims.workspace = true
+rivet-health-checks.workspace = true
+rivet-pools.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0"
@@ -30,7 +30,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
 url = "2.2.2"
 uuid = { version = "1", features = ["v4"] }
-rivet-hub-embed = { version = "0.1.0", path = "../../common/hub-embed" }
+rivet-hub-embed.workspace = true
 mime_guess = "2.0.5"
-rivet-config = { version = "0.1.0", path = "../../common/config" }
-global-error = { version = "0.1.5", path = "../../common/global-error" }
+rivet-config.workspace = true
+global-error.workspace = true

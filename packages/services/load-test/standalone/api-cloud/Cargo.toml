@@ -1,15 +1,15 @@
 [package]
 name = "load-test-api-cloud"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-chirp-client = { path = "../../../../common/chirp/client" }
-rivet-operation = { path = "../../../../common/operation/core" }
-rivet-connection = { path = "../../../../common/connection" }
-rivet-runtime = { path = "../../../../common/runtime" }
+chirp-client.workspace = true
+rivet-operation.workspace = true
+rivet-connection.workspace = true
+rivet-runtime.workspace = true
 tokio = { version = "1.40", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = [
@@ -18,14 +18,14 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
     "ansi",
 ] }
 tracing-logfmt = "0.3"
-rivet-api = { path = "../../../../../sdks/full/rust" }
+rivet-api.workspace = true
 reqwest = "0.11"
 
-faker-game = { path = "../../../faker/ops/game" }
-faker-team = { path = "../../../faker/ops/team" }
-user-identity-create = { path = "../../../user-identity/ops/create" }
-token-create = { path = "../../../token/ops/create" }
-rivet-config = { version = "0.1.0", path = "../../../../common/config" }
+faker-game.workspace = true
+faker-team.workspace = true
+user-identity-create.workspace = true
+token-create.workspace = true
+rivet-config.workspace = true
 
 [dev-dependencies]
-chirp-worker = { path = "../../../../common/chirp/worker" }
+chirp-worker.workspace = true

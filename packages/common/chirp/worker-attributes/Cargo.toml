@@ -1,10 +1,10 @@
 [package]
 name = "chirp-worker-attributes"
-version = "0.1.0"
-edition = "2021"
 description = "Server manager for running a Chirp worker."
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [lib]
 proc-macro = true
@@ -14,7 +14,7 @@ quote = "1.0"
 proc-macro2 = "1.0"
 
 [dev-dependencies]
-chirp-worker = { path = "../worker" }
+chirp-worker.workspace = true
 prost = "0.10"
 
 [dependencies.syn]

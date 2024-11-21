@@ -1,25 +1,25 @@
 [package]
 name = "faker-mm-lobby"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-chirp-client = { path = "../../../../common/chirp/client" }
-rivet-operation = { path = "../../../../common/operation/core" }
+chirp-client.workspace = true
+rivet-operation.workspace = true
 prost = "0.10"
-util-mm = { package = "rivet-util-mm", path = "../../../mm/util" }
+util-mm.workspace = true
 
-faker-build = { path = "../build" }
-faker-game = { path = "../game" }
-faker-game-version = { path = "../game-version" }
-faker-region = { path = "../region" }
-game-namespace-version-set = { path = "../../../game/ops/namespace-version-set" }
-game-resolve-namespace-id = { path = "../../../game/ops/resolve-namespace-id" }
-mm-config-version-get = { path = "../../../mm-config/ops/version-get" }
-rivet-test = { version = "0.1.0", path = "../../../../common/test" }
+faker-build.workspace = true
+faker-game.workspace = true
+faker-game-version.workspace = true
+faker-region.workspace = true
+game-namespace-version-set.workspace = true
+game-resolve-namespace-id.workspace = true
+mm-config-version-get.workspace = true
+rivet-test.workspace = true
 
 [dev-dependencies]
-chirp-worker = { path = "../../../../common/chirp/worker" }
-rivet-test = { version = "0.1.0", path = "../../../../common/test" }
+chirp-worker.workspace = true
+rivet-test.workspace = true

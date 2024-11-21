@@ -1,17 +1,17 @@
 [package]
 name = "api-monolith-edge"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-api-helper = { path = "../../common/api-helper/build" }
+api-helper.workspace = true
 async-trait = "0.1"
-chirp-client = { path = "../../common/chirp/client" }
+chirp-client.workspace = true
 http = "0.2"
 hyper = { version = "0.14", features = ["server", "http1", "tcp"] }
-rivet-operation = { path = "../../common/operation/core" }
+rivet-operation.workspace = true
 tokio = { version = "1.40" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = [
@@ -21,7 +21,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 ] }
 url = "2.2.2"
 
-api-traefik-provider = { path = "../traefik-provider" }
-api-provision = { path = "../provision" }
-rivet-config = { version = "0.1.0", path = "../../common/config" }
-rivet-env = { version = "0.1.0", path = "../../common/env" }
+api-traefik-provider.workspace = true
+api-provision.workspace = true
+rivet-config.workspace = true
+rivet-env.workspace = true

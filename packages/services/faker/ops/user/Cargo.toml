@@ -1,16 +1,16 @@
 [package]
 name = "faker-user"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-chirp-client = { path = "../../../../common/chirp/client" }
+chirp-client.workspace = true
 prost = "0.10"
-rivet-operation = { path = "../../../../common/operation/core" }
+rivet-operation.workspace = true
 
 [dev-dependencies]
-chirp-worker = { path = "../../../../common/chirp/worker" }
+chirp-worker.workspace = true
 
-user-get = { path = "../../../user/ops/get" }
+user-get.workspace = true

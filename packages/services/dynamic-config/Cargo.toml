@@ -1,13 +1,13 @@
 [package]
 name = "dynamic-config"
-version = "0.1.0"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-chirp-workflow = { version = "0.1.0", path = "../../common/chirp-workflow/core" }
+chirp-workflow.workspace = true
 indoc = "2.0.5"
-rivet-config = { version = "0.1.0", path = "../../common/config" }
-rivet-operation = { version = "0.1.0", path = "../../common/operation/core" }
+rivet-config.workspace = true
+rivet-operation.workspace = true
 tokio = "1.40.0"

@@ -551,7 +551,7 @@ dependencies = [
 
 [[package]]
 name = "api-helper"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "api-helper-macros",
  "async-trait",
@@ -595,7 +595,7 @@ dependencies = [
 
 [[package]]
 name = "api-helper-macros"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",
@@ -997,7 +997,7 @@ dependencies = [
 
 [[package]]
 name = "api-ui"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "api-helper",
  "async-trait",
@@ -2271,7 +2271,7 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "chirp-client"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "chirp-perf",
  "chirp-types",
@@ -2299,7 +2299,7 @@ dependencies = [
 
 [[package]]
 name = "chirp-metrics"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "lazy_static",
  "rivet-metrics",
@@ -2307,7 +2307,7 @@ dependencies = [
 
 [[package]]
 name = "chirp-perf"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "lazy_static",
  "prost 0.10.4",
@@ -2324,14 +2324,14 @@ dependencies = [
 
 [[package]]
 name = "chirp-types"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "prost 0.10.4",
 ]
 
 [[package]]
 name = "chirp-worker"
-version = "0.1.5"
+version = "0.0.1"
 dependencies = [
  "async-trait",
  "chirp-client",
@@ -2369,7 +2369,7 @@ dependencies = [
 
 [[package]]
 name = "chirp-worker-attributes"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "chirp-worker",
  "proc-macro2",
@@ -2380,7 +2380,7 @@ dependencies = [
 
 [[package]]
 name = "chirp-workflow"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2418,7 +2418,7 @@ dependencies = [
 
 [[package]]
 name = "chirp-workflow-macros"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2548,7 +2548,7 @@ dependencies = [
 
 [[package]]
 name = "cloud-default-create"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -2556,6 +2556,7 @@ dependencies = [
  "cloud-game-config-create",
  "cloud-namespace-create",
  "cloud-version-publish",
+ "ds",
  "game-create",
  "game-namespace-create",
  "game-namespace-resolve-name-id",
@@ -3602,7 +3603,7 @@ dependencies = [
 
 [[package]]
 name = "dynamic-config"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "chirp-workflow",
  "indoc 2.0.5",
@@ -4151,7 +4152,7 @@ dependencies = [
 
 [[package]]
 name = "formatted-error"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "gray_matter",
  "hashbrown 0.12.3",
@@ -4649,7 +4650,7 @@ checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 
 [[package]]
 name = "global-error"
-version = "0.1.5"
+version = "0.0.1"
 dependencies = [
  "async-trait",
  "formatted-error",
@@ -5578,6 +5579,19 @@ dependencies = [
  "token-create",
  "webpki 0.22.4",
  "webpki-roots 0.22.6",
+]
+
+[[package]]
+name = "job-runner"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "portpicker",
+ "serde",
+ "serde_json",
+ "signal-hook",
+ "tempfile",
+ "uuid",
 ]
 
 [[package]]
@@ -6675,7 +6689,7 @@ dependencies = [
 
 [[package]]
 name = "nomad-util"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "base64 0.13.1",
  "bytes",
@@ -7277,6 +7291,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc9c68a3f6da06753e9335d63e27f6b9754dd1920d941135b7ea8224f141adb2"
 
 [[package]]
+name = "portpicker"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be97d76faf1bfab666e1375477b23fde79eccf0276e9b63b92a39d676a889ba9"
+dependencies = [
+ "rand",
+]
+
+[[package]]
 name = "posthog-core"
 version = "0.1.0"
 dependencies = [
@@ -7626,7 +7649,7 @@ dependencies = [
 
 [[package]]
 name = "redis-util"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "lazy_static",
  "redis",
@@ -7990,7 +8013,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-cache"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "futures-util",
  "global-error",
@@ -8015,7 +8038,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-cache-result"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "rivet-util",
 ]
@@ -8044,7 +8067,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-claims"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "base64 0.13.1",
  "global-error",
@@ -8083,7 +8106,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-config"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "config",
  "dirs",
@@ -8099,7 +8122,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-connection"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "chirp-client",
  "chirp-perf",
@@ -8112,7 +8135,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-convert"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "cdn-namespace-get",
  "chirp-client",
@@ -8153,7 +8176,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-env"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "lazy_static",
@@ -8185,7 +8208,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-health-checks"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "chirp-client",
  "global-error",
@@ -8202,7 +8225,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-hub-embed"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "include_dir",
  "reqwest 0.12.9",
@@ -8299,7 +8322,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-metrics"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "global-error",
  "hyper 0.14.31",
@@ -8313,7 +8336,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-migrate"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -8331,7 +8354,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-operation"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "async-trait",
  "chirp-client",
@@ -8358,7 +8381,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-operation-macros"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -8389,7 +8412,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-pools"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "async-nats",
  "clickhouse",
@@ -8448,7 +8471,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-runtime"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "console-subscriber",
  "lazy_static",
@@ -8462,7 +8485,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-server"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "api-monolith-edge",
@@ -8526,7 +8549,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-service-manager"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -8577,14 +8600,14 @@ dependencies = [
 
 [[package]]
 name = "rivet-test"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "types-proto",
 ]
 
 [[package]]
 name = "rivet-test-images"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "testcontainers",
 ]
@@ -8600,7 +8623,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-util"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "async-trait",
  "bcrypt",
@@ -8627,14 +8650,14 @@ dependencies = [
 
 [[package]]
 name = "rivet-util-build"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "rivet-operation",
 ]
 
 [[package]]
 name = "rivet-util-captcha"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "global-error",
  "serde_json",
@@ -8642,18 +8665,18 @@ dependencies = [
 
 [[package]]
 name = "rivet-util-cdn"
-version = "0.1.0"
+version = "0.0.1"
 
 [[package]]
 name = "rivet-util-job"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "uuid",
 ]
 
 [[package]]
 name = "rivet-util-macros"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -8662,7 +8685,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-util-mm"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "bit-vec",
  "chirp-client",
@@ -8682,14 +8705,14 @@ dependencies = [
 
 [[package]]
 name = "rivet-util-search"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "uuid",
 ]
 
 [[package]]
 name = "rivet-util-team"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "rivet-operation",
 ]
@@ -8866,7 +8889,7 @@ checksum = "f3cb5ba0dc43242ce17de99c180e96db90b235b8a9fdc9543c96d2209116bd9f"
 
 [[package]]
 name = "s3-util"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "aws-sdk-s3",
  "aws-smithy-async 1.2.1",
@@ -8892,7 +8915,7 @@ dependencies = [
 
 [[package]]
 name = "schemac"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "lazy_static",
  "prost-build",
@@ -9193,6 +9216,16 @@ name = "shlex"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
+
+[[package]]
+name = "signal-hook"
+version = "0.3.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8621587d4798caf8eb44879d42e56b9a93ea5dcd315a6487c357130095b62801"
+dependencies = [
+ "libc",
+ "signal-hook-registry",
+]
 
 [[package]]
 name = "signal-hook-registry"
@@ -9990,7 +10023,7 @@ dependencies = [
 
 [[package]]
 name = "telemetry-beacon"
-version = "0.0.38"
+version = "0.0.1"
 dependencies = [
  "async-posthog",
  "chirp-client",
@@ -10702,7 +10735,7 @@ checksum = "42ff0bf0c66b8238c6f3b578df37d0b7848e55df8577b3f74f92a69acceeb825"
 
 [[package]]
 name = "types-proto"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "chirp-types",
  "http 0.2.12",
@@ -10717,7 +10750,7 @@ dependencies = [
 
 [[package]]
 name = "types-proto-build"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "heck 0.3.3",
  "indoc 1.0.9",
@@ -10853,7 +10886,7 @@ dependencies = [
 
 [[package]]
 name = "upload-list-for-user"
-version = "0.0.34"
+version = "0.0.1"
 dependencies = [
  "chirp-client",
  "chirp-worker",
@@ -10933,7 +10966,7 @@ checksum = "daf8dba3b7eb870caf1ddeed7bc9d2a049f3cfdfae7cb521b087cc33ae4c49da"
 
 [[package]]
 name = "user"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "chirp-workflow",
  "cluster",
@@ -10960,7 +10993,7 @@ dependencies = [
 
 [[package]]
 name = "user-delete-pending"
-version = "0.0.38"
+version = "0.0.1"
 dependencies = [
  "chirp-client",
  "chirp-worker",

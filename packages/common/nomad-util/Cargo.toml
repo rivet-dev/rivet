@@ -1,19 +1,19 @@
 [package]
 name = "nomad-util"
-version = "0.1.0"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
 base64 = "0.13"
 bytes = "1.0"
 futures-util = "0.3"
-global-error = { version = "0.1.5", path = "../global-error" }
+global-error.workspace = true
 nomad-client = "0.0.9"
 reqwest = { version = "0.11", features = ["stream"] }
-rivet-config = { version = "0.1.0", path = "../config" }
-rivet-pools = { path = "../pools" }
+rivet-config.workspace = true
+rivet-pools.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
 thiserror = "1.0"

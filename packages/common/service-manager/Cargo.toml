@@ -1,20 +1,20 @@
 [package]
 name = "rivet-service-manager"
-version = "0.1.0"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
 anyhow = "1.0.89"
-global-error = { path = "../global-error" }
+global-error.workspace = true
 tokio = { version = "1.40", features = ["full", "tracing"] }
-rivet-health-checks = { version = "0.1.0", path = "../health-checks" }
-rivet-metrics = { version = "0.1.0", path = "../metrics" }
-rivet-pools = { version = "0.1.0", path = "../pools" }
+rivet-health-checks.workspace = true
+rivet-metrics.workspace = true
+rivet-pools.workspace = true
 tracing = "0.1.40"
 include_dir = "0.7.4"
-rivet-config = { version = "0.1.0", path = "../config" }
+rivet-config.workspace = true
 tokio-cron-scheduler = "0.13.0"
 chrono = "0.4.38"
 

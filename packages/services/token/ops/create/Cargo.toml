@@ -1,17 +1,17 @@
 [package]
 name = "token-create"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
 base64 = "0.13"
-chirp-client = { path = "../../../../common/chirp/client" }
-rivet-operation = { path = "../../../../common/operation/core" }
+chirp-client.workspace = true
+rivet-operation.workspace = true
 chrono = "0.4"
 prost = "0.10"
-rivet-claims = { path = "../../../../common/claims" }
+rivet-claims.workspace = true
 jsonwebtoken = "8.2.0"
 lazy_static = "1.4"
 
@@ -20,4 +20,4 @@ path = "../../../../../externals/sqlx"
 default-features = false
 
 [dev-dependencies]
-chirp-worker = { path = "../../../../common/chirp/worker" }
+chirp-worker.workspace = true

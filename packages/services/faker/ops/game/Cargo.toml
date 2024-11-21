@@ -1,23 +1,23 @@
 [package]
 name = "faker-game"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-rivet-operation = { path = "../../../../common/operation/core" }
-chirp-client = { path = "../../../../common/chirp/client" }
+rivet-operation.workspace = true
+chirp-client.workspace = true
 prost = "0.10"
 
-cloud-game-config-create = { path = "../../../cloud/ops/game-config-create" }
-faker-game-namespace = { path = "../game-namespace" }
-faker-game-version = { path = "../game-version" }
-faker-team = { path = "../team" }
-game-create = { path = "../../../game/ops/create" }
-mm-config-game-upsert = { path = "../../../mm-config/ops/game-upsert" }
+cloud-game-config-create.workspace = true
+faker-game-namespace.workspace = true
+faker-game-version.workspace = true
+faker-team.workspace = true
+game-create.workspace = true
+mm-config-game-upsert.workspace = true
 
 [dev-dependencies]
-chirp-worker = { path = "../../../../common/chirp/worker" }
+chirp-worker.workspace = true
 
-game-get = { path = "../../../game/ops/get" }
+game-get.workspace = true

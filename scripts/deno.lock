@@ -2,12 +2,17 @@
   "version": "3",
   "packages": {
     "specifiers": {
+      "jsr:@std/collections@^1.0.5": "jsr:@std/collections@1.0.9",
       "jsr:@std/fs@^1.0.5": "jsr:@std/fs@1.0.5",
       "jsr:@std/path@^1.0.7": "jsr:@std/path@1.0.8",
       "jsr:@std/path@^1.0.8": "jsr:@std/path@1.0.8",
+      "jsr:@std/toml@^1.0.1": "jsr:@std/toml@1.0.1",
       "npm:dedent@^1.5.3": "npm:dedent@1.5.3"
     },
     "jsr": {
+      "@std/collections@1.0.9": {
+        "integrity": "4f58104ead08a04a2199374247f07befe50ba01d9cca8cbb23ab9a0419921e71"
+      },
       "@std/fs@1.0.5": {
         "integrity": "41806ad6823d0b5f275f9849a2640d87e4ef67c51ee1b8fb02426f55e02fd44e",
         "dependencies": [
@@ -16,6 +21,12 @@
       },
       "@std/path@1.0.8": {
         "integrity": "548fa456bb6a04d3c1a1e7477986b6cffbce95102d0bb447c67c4ee70e0364be"
+      },
+      "@std/toml@1.0.1": {
+        "integrity": "b55b407159930f338d384b1f8fd317c8e8a35e27ebb8946155f49e3a158d16c4",
+        "dependencies": [
+          "jsr:@std/collections@^1.0.5"
+        ]
       }
     },
     "npm": {
@@ -49,6 +60,7 @@
     "dependencies": [
       "jsr:@std/fs@^1.0.5",
       "jsr:@std/path@^1.0.8",
+      "jsr:@std/toml@^1.0.1",
       "npm:dedent@^1.5.3"
     ]
   }

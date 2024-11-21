@@ -1,36 +1,36 @@
 [package]
 name = "job-run"
-version = "0.0.1"
-edition = "2018"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-chirp-client = { path = "../../common/chirp/client" }
-chirp-worker = { path = "../../common/chirp/worker" }
-chirp-workflow = { path = "../../common/chirp-workflow/core" }
+chirp-client.workspace = true
+chirp-worker.workspace = true
+chirp-workflow.workspace = true
 chrono = "0.4"
 cjson = "0.1"
 hex = "0.4"
 indoc = "1.0"
 lazy_static = "1.4.0"
 nomad-client = "0.0.9"
-nomad-util = { path = "../../common/nomad-util" }
+nomad-util.workspace = true
 rand = "0.8"
 reqwest = "0.11"
-rivet-health-checks = { path = "../../common/health-checks" }
-rivet-metrics = { path = "../../common/metrics" }
-rivet-operation = { path = "../../common/operation/core" }
-rivet-runtime = { path = "../../common/runtime" }
+rivet-health-checks.workspace = true
+rivet-metrics.workspace = true
+rivet-operation.workspace = true
+rivet-runtime.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_urlencoded = "0.7.0"
 sha2 = "0.10"
-util-job = { package = "rivet-util-job", path = "../job/util" }
+util-job.workspace = true
 
-region-get = { path = "../region/ops/get" }
-token-create = { path = "../token/ops/create" }
-rivet-config = { version = "0.1.0", path = "../../common/config" }
+region-get.workspace = true
+token-create.workspace = true
+rivet-config.workspace = true
 
 [dependencies.nomad_client_new]
 package = "nomad_client"
@@ -42,11 +42,11 @@ default-features = false
 features = [ "json" ]
 
 [dev-dependencies]
-rivet-test = { version = "0.1.0", path = "../../common/test" }
+rivet-test.workspace = true
 rustls = "0.21"
 webpki = "0.22"
 webpki-roots = "0.22"
 
-faker-job-run = { path = "../faker/ops/job-run" }
-faker-job-template = { path = "../faker/ops/job-template" }
-faker-region = { path = "../faker/ops/region" }
+faker-job-run.workspace = true
+faker-job-template.workspace = true
+faker-region.workspace = true

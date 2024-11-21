@@ -1,26 +1,26 @@
 [package]
 name = "cdn-site-create"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-rivet-operation = { path = "../../../../common/operation/core" }
-chirp-client = { path = "../../../../common/chirp/client" }
+rivet-operation.workspace = true
+chirp-client.workspace = true
 prost = "0.10"
 
-game-get = { path = "../../../game/ops/get" }
-upload-prepare = { path = "../../../upload/ops/prepare" }
+game-get.workspace = true
+upload-prepare.workspace = true
 
 [dependencies.sqlx]
 path = "../../../../../externals/sqlx"
 default-features = false
 
 [dev-dependencies]
-chirp-worker = { path = "../../../../common/chirp/worker" }
+chirp-worker.workspace = true
 reqwest = "0.11"
 
-faker-game = { path = "../../../faker/ops/game" }
-upload-complete = { path = "../../../upload/ops/complete" }
-upload-get = { path = "../../../upload/ops/get" }
+faker-game.workspace = true
+upload-complete.workspace = true
+upload-get.workspace = true

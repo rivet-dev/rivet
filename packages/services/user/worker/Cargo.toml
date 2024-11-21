@@ -1,34 +1,34 @@
 [package]
 name = "user-worker"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-rivet-convert = { path = "../../../common/convert" }
-chirp-client = { path = "../../../common/chirp/client" }
-chirp-worker = { path = "../../../common/chirp/worker" }
+rivet-convert.workspace = true
+chirp-client.workspace = true
+chirp-worker.workspace = true
 chrono = "0.4"
 lazy_static = "1.4.0"
-rivet-health-checks = { path = "../../../common/health-checks" }
-rivet-metrics = { path = "../../../common/metrics" }
-rivet-runtime = { path = "../../../common/runtime" }
+rivet-health-checks.workspace = true
+rivet-metrics.workspace = true
+rivet-runtime.workspace = true
 
-game-get = { path = "../../game/ops/get" }
-game-namespace-get = { path = "../../game/ops/namespace-get" }
-team-get = { path = "../../team/ops/get" }
-team-member-list = { path = "../../team/ops/member-list" }
-upload-list-for-user = { path = "../../upload/ops/list-for-user" }
-user-get = { path = "../ops/get" }
-user-identity-delete = { path = "../../user-identity/ops/delete" }
-user-profile-validate = { path = "../ops/profile-validate" }
-user-team-list = { path = "../ops/team-list" }
-rivet-config = { version = "0.1.0", path = "../../../common/config" }
+game-get.workspace = true
+game-namespace-get.workspace = true
+team-get.workspace = true
+team-member-list.workspace = true
+upload-list-for-user.workspace = true
+user-get.workspace = true
+user-identity-delete.workspace = true
+user-profile-validate.workspace = true
+user-team-list.workspace = true
+rivet-config.workspace = true
 
 [dev-dependencies]
-chirp-worker = { path = "../../../common/chirp/worker" }
+chirp-worker.workspace = true
 
-faker-user = { path = "../../faker/ops/user" }
-upload-get = { path = "../../upload/ops/get" }
-upload-prepare = { path = "../../upload/ops/prepare" }
+faker-user.workspace = true
+upload-get.workspace = true
+upload-prepare.workspace = true

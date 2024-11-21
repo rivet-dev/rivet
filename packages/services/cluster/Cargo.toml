@@ -1,39 +1,39 @@
 [package]
 name = "cluster"
-version = "0.0.1"
-edition = "2018"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
 acme-lib = "0.9"
 anyhow = "1.0"
-chirp-workflow = { path = "../../common/chirp-workflow/core" }
+chirp-workflow.workspace = true
 chrono = "0.4"
 cloudflare = { path = "../../../externals/cloudflare-rs/cloudflare" }
 http = "0.2"
 include_dir = "0.7.3"
 indoc = "1.0"
 lazy_static = "1.4"
-nomad-util = { path = "../../common/nomad-util" }
+nomad-util.workspace = true
 rand = "0.8"
 reqwest = { version = "0.11", features = ["json"] }
-rivet-metrics = { path = "../../common/metrics" }
-rivet-operation = { path = "../../common/operation/core" }
-rivet-runtime = { path = "../../common/runtime" }
-s3-util = { path = "../../common/s3-util" }
+rivet-metrics.workspace = true
+rivet-operation.workspace = true
+rivet-runtime.workspace = true
+s3-util.workspace = true
 serde = { version = "1.0.198", features = ["derive"] }
 serde_urlencoded = "0.7.0"
 ssh2 = "0.9.4"
 strum = { version = "0.24", features = ["derive"] }
 trust-dns-resolver = { version = "0.23.2", features = ["dns-over-native-tls"] }
 
-ip-info = { path = "../ip/ops/info" }
-linode = { path = "../linode" }
-server-spec = { path = "../server-spec" }
-pegboard = { path = "../pegboard" }
-token-create = { path = "../token/ops/create" }
-rivet-config = { version = "0.1.0", path = "../../common/config" }
+ip-info.workspace = true
+linode.workspace = true
+server-spec.workspace = true
+pegboard.workspace = true
+token-create.workspace = true
+rivet-config.workspace = true
 ipnet = "2.10.1"
 
 [dependencies.nomad_client]

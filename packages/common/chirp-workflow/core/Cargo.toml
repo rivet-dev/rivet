@@ -1,32 +1,32 @@
 [package]
 name = "chirp-workflow"
-version = "0.1.0"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
 async-trait = "0.1.80"
-chirp-client = { path = "../../chirp/client" }
-chirp-workflow-macros = { path = "../macros" }
+chirp-client.workspace = true
+chirp-workflow-macros.workspace = true
 cjson = "0.1"
-formatted-error = { path = "../../formatted-error" }
+formatted-error.workspace = true
 futures-util = "0.3"
-global-error = { path = "../../global-error" }
+global-error.workspace = true
 indoc = "2.0.5"
 lazy_static = "1.4"
 md5 = "0.7.0"
 prost = "0.12.4"
 prost-types = "0.12.4"
-rivet-cache = { path = "../../cache/build" }
-rivet-config = { version = "0.1.0", path = "../../config" }
-rivet-connection = { path = "../../connection" }
-rivet-env = { version = "0.1.0", path = "../../env" }
-rivet-metrics = { path = "../../metrics" }
-rivet-operation = { path = "../../operation/core" }
-rivet-pools = { path = "../../pools" }
-rivet-runtime = { path = "../../runtime" }
-rivet-util = { path = "../../util/core" }
+rivet-cache.workspace = true
+rivet-config.workspace = true
+rivet-connection.workspace = true
+rivet-env.workspace = true
+rivet-metrics.workspace = true
+rivet-operation.workspace = true
+rivet-pools.workspace = true
+rivet-runtime.workspace = true
+rivet-util.workspace = true
 serde = { version = "1.0.198", features = ["derive"] }
 serde_json = "1.0.116"
 strum = { version = "0.26", features = ["derive"] }

@@ -1,25 +1,25 @@
 [package]
 name = "api-games"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-api-helper = { path = "../../common/api-helper/build" }
-chirp-client = { path = "../../common/chirp/client" }
-rivet-operation = { path = "../../common/operation/core" }
+api-helper.workspace = true
+chirp-client.workspace = true
+rivet-operation.workspace = true
 chrono = "0.4"
 http = "0.2"
 hyper = { version = "0.14", features = ["server", "http1", "stream", "tcp"] }
 lazy_static = "1.4"
-rivet-api = { path = "../../../sdks/full/rust" }
-rivet-cache = { path = "../../common/cache/build" }
-rivet-claims = { path = "../../common/claims" }
-rivet-health-checks = { path = "../../common/health-checks" }
-rivet-convert = { path = "../../common/convert" }
-rivet-pools = { path = "../../common/pools" }
-s3-util = { path = "../../common/s3-util" }
+rivet-api.workspace = true
+rivet-cache.workspace = true
+rivet-claims.workspace = true
+rivet-health-checks.workspace = true
+rivet-convert.workspace = true
+rivet-pools.workspace = true
+s3-util.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 base64 = "0.13"
@@ -28,40 +28,40 @@ tracing = "0.1"
 tracing-futures = "0.2"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }
 url = "2.2.2"
-util-team = { package = "rivet-util-team", path = "../../services/team/util" }
+util-team.workspace = true
 uuid = { version = "1", features = ["v4"] }
 
-build-create = { path = "../../services/build/ops/create" }
-build-get = { path = "../../services/build/ops/get" }
-build-list-for-env = { path = "../../services/build/ops/list-for-env" }
-cluster = { path = "../../services/cluster" }
-build = { path = "../../services/build" }
-ds = { path = "../../services/ds" }
-game-get = { path = "../../services/game/ops/get" }
-game-namespace-get = { path = "../../services/game/ops/namespace-get" }
-game-version-get = { path = "../../services/game/ops/version-get" }
-team-get = { path = "../../services/team/ops/get" }
-token-revoke = { path = "../../services/token/ops/revoke" }
-token-create = { path = "../../services/token/ops/create" }
-upload-complete = { path = "../../services/upload/ops/complete" }
-upload-get = { path = "../../services/upload/ops/get" }
-user-get = { path = "../../services/user/ops/get" }
-user-identity-get = { path = "../../services/user-identity/ops/get" }
-user-team-list = { path = "../../services/user/ops/team-list" }
-rivet-config = { version = "0.1.0", path = "../../common/config" }
-rivet-env = { version = "0.1.0", path = "../../common/env" }
+build-create.workspace = true
+build-get.workspace = true
+build-list-for-env.workspace = true
+cluster.workspace = true
+build.workspace = true
+ds.workspace = true
+game-get.workspace = true
+game-namespace-get.workspace = true
+game-version-get.workspace = true
+team-get.workspace = true
+token-revoke.workspace = true
+token-create.workspace = true
+upload-complete.workspace = true
+upload-get.workspace = true
+user-get.workspace = true
+user-identity-get.workspace = true
+user-team-list.workspace = true
+rivet-config.workspace = true
+rivet-env.workspace = true
 
 [dev-dependencies]
-rivet-connection = { path = "../../common/connection" }
+rivet-connection.workspace = true
 reqwest = "0.11"
 
-cdn-namespace-domain-create = { path = "../../services/cdn/ops/namespace-domain-create" }
-cloud-namespace-token-development-create = { path = "../../services/cloud/ops/namespace-token-development-create" }
-cloud-namespace-token-public-create = { path = "../../services/cloud/ops/namespace-token-public-create" }
-faker-build = { path = "../../services/faker/ops/build" }
-faker-game = { path = "../../services/faker/ops/game" }
-faker-game-namespace = { path = "../../services/faker/ops/game-namespace" }
-faker-game-version = { path = "../../services/faker/ops/game-version" }
-faker-region = { path = "../../services/faker/ops/region" }
-game-get = { path = "../../services/game/ops/get" }
-region-get = { path = "../../services/region/ops/get" }
+cdn-namespace-domain-create.workspace = true
+cloud-namespace-token-development-create.workspace = true
+cloud-namespace-token-public-create.workspace = true
+faker-build.workspace = true
+faker-game.workspace = true
+faker-game-namespace.workspace = true
+faker-game-version.workspace = true
+faker-region.workspace = true
+game-get.workspace = true
+region-get.workspace = true

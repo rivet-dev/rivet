@@ -1,28 +1,28 @@
 [package]
 name = "chirp-client"
-version = "0.1.0"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-chirp-perf = { path = "../perf" }
-chirp-types = { path = "../types" }
+chirp-perf.workspace = true
+chirp-types.workspace = true
 chrono = "0.4"
 futures-util = "0.3"
-global-error = { path = "../../global-error", features = ["chirp"] }
+global-error = { workspace = true, features = ["chirp"] }
 lazy_static = "1.4"
 prost = "0.10"
 rand = "0.8"
-rivet-metrics = { path = "../../metrics" }
-rivet-pools = { path = "../../pools" }
-rivet-util = { path = "../../util/core" }
+rivet-metrics.workspace = true
+rivet-pools.workspace = true
+rivet-util.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
 tokio = { version = "1.36", features = ["full"] }
 tokio-util = "0.7"
 tracing = "0.1"
-types-proto = { path = "../../types-proto/core" }
+types-proto.workspace = true
 urlencoding = "2.1"
 uuid = { version = "1", features = ["v4"] }
 
@@ -33,4 +33,4 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 ] }
 
 testcontainers = "0.12"
-rivet-test-images = { path = "../../test-images" }
+rivet-test-images.workspace = true

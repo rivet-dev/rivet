@@ -1,13 +1,13 @@
 [package]
 name = "cdn-version-publish"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-rivet-operation = { path = "../../../../common/operation/core" }
-chirp-client = { path = "../../../../common/chirp/client" }
+rivet-operation.workspace = true
+chirp-client.workspace = true
 prost = "0.10"
 unzip-n = "0.1.2"
 itertools = "0.10.5"
@@ -17,8 +17,8 @@ path = "../../../../../externals/sqlx"
 default-features = false
 
 [dev-dependencies]
-chirp-worker = { path = "../../../../common/chirp/worker" }
+chirp-worker.workspace = true
 
-cdn-version-get = { path = "../version-get" }
-faker-game = { path = "../../../faker/ops/game" }
-faker-cdn-site = { path = "../../../faker/ops/cdn-site" }
+cdn-version-get.workspace = true
+faker-game.workspace = true
+faker-cdn-site.workspace = true

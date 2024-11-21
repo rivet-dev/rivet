@@ -1,29 +1,29 @@
 [package]
 name = "cf-custom-hostname-worker"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-chirp-client = { path = "../../../common/chirp/client" }
-chirp-worker = { path = "../../../common/chirp/worker" }
+chirp-client.workspace = true
+chirp-worker.workspace = true
 reqwest = { version = "0.11", features = ["json"] }
-rivet-health-checks = { path = "../../../common/health-checks" }
-rivet-metrics = { path = "../../../common/metrics" }
-rivet-runtime = { path = "../../../common/runtime" }
+rivet-health-checks.workspace = true
+rivet-metrics.workspace = true
+rivet-runtime.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 
-cf-custom-hostname-list-for-namespace-id = { path = "../ops/list-for-namespace-id" }
-cf-custom-hostname-resolve-hostname = { path = "../ops/resolve-hostname" }
-game-get = { path = "../../game/ops/get" }
-game-namespace-list = { path = "../../game/ops/namespace-list" }
-game-resolve-namespace-id = { path = "../../game/ops/resolve-namespace-id" }
-game-list-for-team = { path = "../../game/ops/list-for-team" }
-rivet-config = { version = "0.1.0", path = "../../../common/config" }
+cf-custom-hostname-list-for-namespace-id.workspace = true
+cf-custom-hostname-resolve-hostname.workspace = true
+game-get.workspace = true
+game-namespace-list.workspace = true
+game-resolve-namespace-id.workspace = true
+game-list-for-team.workspace = true
+rivet-config.workspace = true
 
 [dev-dependencies]
-chirp-worker = { path = "../../../common/chirp/worker" }
+chirp-worker.workspace = true
 
-faker-game = { path = "../../faker/ops/game" }
-cf-custom-hostname-get = { path = "../ops/get" }
+faker-game.workspace = true
+cf-custom-hostname-get.workspace = true

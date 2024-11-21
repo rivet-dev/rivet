@@ -1,24 +1,24 @@
 [package]
 name = "mm-config-version-publish"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-chirp-client = { path = "../../../../common/chirp/client" }
-rivet-operation = { path = "../../../../common/operation/core" }
+chirp-client.workspace = true
+rivet-operation.workspace = true
 prost = "0.10"
-util-mm = { package = "rivet-util-mm", path = "../../../mm/util" }
+util-mm.workspace = true
 
 [dependencies.sqlx]
 path = "../../../../../externals/sqlx"
 default-features = false
 
 [dev-dependencies]
-chirp-worker = { path = "../../../../common/chirp/worker" }
+chirp-worker.workspace = true
 
-faker-build = { path = "../../../faker/ops/build" }
-faker-game = { path = "../../../faker/ops/game" }
-faker-region = { path = "../../../faker/ops/region" }
-mm-config-version-prepare = { path = "../version-prepare" }
+faker-build.workspace = true
+faker-game.workspace = true
+faker-region.workspace = true
+mm-config-version-prepare.workspace = true

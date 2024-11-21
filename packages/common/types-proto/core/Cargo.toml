@@ -1,15 +1,15 @@
 [package]
 name = "types-proto"
-version = "0.1.0"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [features]
 protobuf-src = ["types-proto-build/protobuf-src"]
 
 [dependencies]
-chirp-types = { path = "../../chirp/types" }
+chirp-types.workspace = true
 prost = "0.10"
 prost-types = "0.10"
 uuid = { version = "1", features = ["v4"] }
@@ -19,4 +19,4 @@ thiserror = "1.0"
 http = "0.2"
 
 [build-dependencies]
-types-proto-build = { path = "../build" }
+types-proto-build.workspace = true

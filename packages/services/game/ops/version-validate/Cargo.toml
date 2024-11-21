@@ -1,24 +1,24 @@
 [package]
 name = "game-version-validate"
-version = "0.0.1"
-edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
-license = "Apache-2.0"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
 
 [dependencies]
-chirp-client = { path = "../../../../common/chirp/client" }
-chirp-workflow = { path = "../../../../common/chirp-workflow/core" }
-rivet-operation = { path = "../../../../common/operation/core" }
+chirp-client.workspace = true
+chirp-workflow.workspace = true
+rivet-operation.workspace = true
 prost = "0.10"
-util-mm = { package = "rivet-util-mm", path = "../../../mm/util" }
+util-mm.workspace = true
 
-external-request-validate = { path = "../../../external/ops/request-validate" }
-game-version-get = { path = "../version-get" }
-game-version-list = { path = "../version-list" }
-mm-config-game-get = { path = "../../../mm-config/ops/game-get" }
-region-get = { path = "../../../region/ops/get" }
-tier = { path = "../../../tier" }
+external-request-validate.workspace = true
+game-version-get.workspace = true
+game-version-list.workspace = true
+mm-config-game-get.workspace = true
+region-get.workspace = true
+tier.workspace = true
 
 [dev-dependencies]
-chirp-worker = { path = "../../../../common/chirp/worker" }
-faker-game = { path = "../../../faker/ops/game" }
+chirp-worker.workspace = true
+faker-game.workspace = true
