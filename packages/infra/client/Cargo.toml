@@ -28,5 +28,5 @@ rev = "e7120f59"
 
 [workspace.dependencies.deno_runtime]
 git = "https://github.com/rivet-gg/deno"
-rev = "bd9856321"
+rev = "1f423e6d87792cb761cf0167c7bad5b8553f32a1"
 

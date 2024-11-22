@@ -137,7 +137,7 @@ fn insert_metrics(dc: &Datacenter, servers: &[Server]) -> GlobalResult<()> {
 			pool_type,
 			servers_in_dc
 				.clone()
-				.filter(|s| &s.pool_type == pool_type)
+				.filter(|s| s.pool_type == pool_type)
 				.collect::<Vec<_>>(),
 		)
 	})

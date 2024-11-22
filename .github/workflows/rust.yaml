@@ -46,7 +46,9 @@ jobs:
       - run: RUSTFLAGS="--cfg tokio_unstable" cargo check --release
 
   cargo-check-infra:
-    runs-on: [self-hosted, Linux]
+    # The FDB version should match `cluster::workflows::server::install::install_scripts::components::fdb::FDB_VERSION`
+    # TODO(RVT-4168): Copmile libfdb from scratch for ARM
+    runs-on: [self-hosted, Linux, X64]
     container:
       image: rust:1.82.0
     steps:
@@ -54,7 +56,8 @@ jobs:
       - name: Install dependencies
         run: |
           apt-get update
-          apt-get install -y protobuf-compiler libpq-dev
+          apt-get install -y protobuf-compiler libpq-dev curl libclang-dev
+          curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.1.60/libfdb_c.x86_64.so"
       - run: cd packages/infra/client && RUSTFLAGS="--cfg tokio_unstable" cargo check --release
 
   cargo-deny:

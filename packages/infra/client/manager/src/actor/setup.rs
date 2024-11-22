@@ -4,7 +4,12 @@ use indoc::indoc;
 use pegboard::protocol;
 use pegboard_config::isolate_runner::actor as actor_config;
 use rand::Rng;
-use serde_json::{json, Value};
+use serde_json::json;
+use std::{
+	collections::HashMap,
+	path::{Path, PathBuf},
+	process::Stdio,
+};
 use tokio::{
 	fs::{self, File},
 	io::{AsyncReadExt, AsyncWriteExt},
@@ -542,7 +547,7 @@ impl Actor {
 					.output()
 					.await
 				{
-					Ok(cmd_out) => {
+					Result::Ok(cmd_out) => {
 						if !cmd_out.status.success() {
 							tracing::error!(
 								stdout=%std::str::from_utf8(&cmd_out.stdout)?,
@@ -556,7 +561,7 @@ impl Actor {
 
 				if let protocol::NetworkMode::Bridge = self.config.network_mode {
 					match fs::read_to_string(actor_path.join("cni-cap-args.json")).await {
-						Ok(cni_params_json) => {
+						Result::Ok(cni_params_json) => {
 							match Command::new("cnitool")
 								.arg("del")
 								.arg(&ctx.config().cni.network_name())
@@ -568,7 +573,7 @@ impl Actor {
 								.output()
 								.await
 							{
-								Ok(cmd_out) => {
+								Result::Ok(cmd_out) => {
 									if !cmd_out.status.success() {
 										tracing::error!(
 											stdout=%std::str::from_utf8(&cmd_out.stdout)?,
@@ -592,7 +597,7 @@ impl Actor {
 						.output()
 						.await
 					{
-						Ok(cmd_out) => {
+						Result::Ok(cmd_out) => {
 							if !cmd_out.status.success() {
 								tracing::error!(
 									stdout=%std::str::from_utf8(&cmd_out.stdout)?,

@@ -11,7 +11,6 @@ use std::{
 use actor_kv::ActorKv;
 use anyhow::*;
 use deno_runtime::deno_core::{v8_set_flags, JsRuntime};
-use config::Config;
 use deno_runtime::worker::MainWorkerTerminateHandle;
 use foundationdb as fdb;
 use futures_util::{stream::SplitStream, SinkExt, StreamExt};
@@ -67,10 +66,6 @@ async fn main() -> Result<()> {
 		std::process::id().to_string().as_bytes(),
 	)
 	.await?;
-
-	let actors_path = var("ACTORS_PATH")?;
-	let runner_addr = var("RUNNER_ADDR")?;
-	let actors_path = Path::new(&actors_path);
 
 	// Set v8 flags (https://chromium.googlesource.com/v8/v8/+/refs/heads/main/src/flags/flag-definitions.h)
 	let invalid = v8_set_flags(vec![
