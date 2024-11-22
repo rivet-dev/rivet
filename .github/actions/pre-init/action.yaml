@@ -8,10 +8,6 @@ description: Set up Nix and Bolt
 #     shell: bash -e {0}
 
 inputs:
-  SCCACHE_AWS_SECRET_ACCESS_KEY:
-    required: true
-  SCCACHE_AWS_ACCESS_KEY_ID:
-    required: true
   OP_SERVICE_ACCOUNT_TOKEN:
     required: true
 
@@ -28,18 +24,6 @@ runs:
         restore-keys: |
           ${{ runner.os }}-nix-${{ hashfiles('./shell.nix', './nix/**/*.nix') }}
           ${{ runner.os }}-nix-
-
-    # We can't use the GitHub cache because it has a max size of 10 GB
-    - name: Enable sccache
-      shell: bash -e {0}
-      run: |
-        # Expose sccache config for all future calls of nix-shell, which configures sccache respectively
-        echo 'USE_SCCACHE=1' >> $GITHUB_ENV
-        echo 'SCCACHE_BUCKET=rivet-sccache' >> $GITHUB_ENV
-        echo 'SCCACHE_ENDPOINT=https://2a94c6a0ced8d35ea63cddc86c2681e7.r2.cloudflarestorage.com/rivet-sccache' >> $GITHUB_ENV
-        echo 'SCCACHE_REGION=auto' >> $GITHUB_ENV
-        echo 'AWS_SECRET_ACCESS_KEY=${{ inputs.SCCACHE_AWS_SECRET_ACCESS_KEY }}' >> $GITHUB_ENV
-        echo 'AWS_ACCESS_KEY_ID=${{ inputs.SCCACHE_AWS_ACCESS_KEY_ID }}' >> $GITHUB_ENV
 
     # MARK: Nix
     - uses: cachix/install-nix-action@v22
