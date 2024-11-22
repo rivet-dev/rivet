@@ -311,7 +311,7 @@ impl ActorKv {
 								tx.clear_subspace_range(&key_subspace);
 
 								let metadata = Metadata {
-									kv_version: self.version.to_string(),
+									kv_version: self.version.as_bytes().to_vec(),
 									create_ts: utils::now(),
 								};
 								let mut buf = Vec::new();
