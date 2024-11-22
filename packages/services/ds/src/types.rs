@@ -287,7 +287,12 @@ impl ApiTryFrom<models::ActorPortProtocol> for HostProtocol {
 		Ok(match value {
 			models::ActorPortProtocol::Udp => HostProtocol::Udp,
 			models::ActorPortProtocol::Tcp => HostProtocol::Tcp,
-			_ => bail_with!(SERVERS_UNSUPPORTED_HOST_PROTOCOL),
+			_ => {
+				bail_with!(
+					ACTOR_FAILED_TO_CREATE,
+					error = "Host port protocol must be either TCP or UDP."
+				);
+			}
 		})
 	}
 }

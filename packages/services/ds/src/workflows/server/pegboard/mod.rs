@@ -50,10 +50,12 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 		Err(err) => {
 			tracing::error!(?err, "unrecoverable setup");
 
-			ctx.msg(CreateFailed {})
-				.tag("server_id", input.server_id)
-				.send()
-				.await?;
+			ctx.msg(CreateFailed {
+				message: "failed setup".into(),
+			})
+			.tag("server_id", input.server_id)
+			.send()
+			.await?;
 
 			ctx.workflow(destroy::Input {
 				server_id: input.server_id,
@@ -354,7 +356,7 @@ async fn setup(
 				.network_ports
 				.iter()
 				.map(|(port_label, port)| match port.routing {
-					Routing::GameGuard { protocol, .. } => Ok((
+					Routing::GameGuard { protocol, .. } => (
 						crate::util::pegboard_normalize_port_label(port_label),
 						pp::Port {
 							target: port.internal_port,
@@ -368,7 +370,7 @@ async fn setup(
 							routing: pp::PortRouting::GameGuard,
 						},
 					)),
-					Routing::Host { protocol } => Ok((
+					Routing::Host { protocol } => (
 						crate::util::pegboard_normalize_port_label(port_label),
 						pp::Port {
 							target: port.internal_port,
@@ -378,9 +380,9 @@ async fn setup(
 							},
 							routing: pp::PortRouting::Host,
 						},
-					)),
+					),
 				})
-				.collect::<GlobalResult<_>>()?,
+				.collect(),
 			network_mode: match input.network_mode {
 				NetworkMode::Bridge => pp::NetworkMode::Bridge,
 				NetworkMode::Host => pp::NetworkMode::Host,

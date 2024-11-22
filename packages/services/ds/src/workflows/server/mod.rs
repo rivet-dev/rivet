@@ -12,6 +12,7 @@ use cluster::types::BuildDeliveryMethod;
 use futures_util::FutureExt;
 use rand::Rng;
 use rivet_operation::prelude::proto::backend;
+use util::serde::AsHashableExt;
 
 use crate::types::{
 	GameGuardProtocol, NetworkMode, PortAuthorization, PortAuthorizationType, Routing,
@@ -55,6 +56,33 @@ pub struct Port {
 
 #[workflow]
 pub async fn ds_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
+	let validation_res = ctx
+		.activity(ValidateInput {
+			env_id: input.env_id,
+			datacenter_id: input.datacenter_id,
+			tags: input.tags.as_hashable(),
+			resources: input.resources.clone(),
+			image_id: input.image_id,
+			root_user_enabled: input.root_user_enabled,
+			args: input.args.clone(),
+			network_mode: input.network_mode,
+			environment: input.environment.as_hashable(),
+			network_ports: input.network_ports.as_hashable(),
+		})
+		.await?;
+
+	if let Some(error_message) = validation_res {
+		ctx.msg(CreateFailed {
+			message: error_message,
+		})
+		.tag("server_id", input.server_id)
+		.send()
+		.await?;
+
+		// TODO(RVT-3928): return Ok(Err);
+		return Ok(());
+	}
+
 	match input.runtime {
 		ServerRuntime::Nomad => {
 			ctx.workflow(nomad::Input {
@@ -95,6 +123,210 @@ pub async fn ds_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()>
 			.await
 		}
 	}
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+struct ValidateInput {
+	datacenter_id: Uuid,
+	env_id: Uuid,
+	tags: util::serde::HashableMap<String, String>,
+	resources: ServerResources,
+	image_id: Uuid,
+	root_user_enabled: bool,
+	args: Vec<String>,
+	network_mode: NetworkMode,
+	environment: util::serde::HashableMap<String, String>,
+	network_ports: util::serde::HashableMap<String, Port>,
+}
+
+// TODO: Redo once a solid global error solution is established so we dont have to have validation all in one
+// place.
+#[activity(Validate)]
+async fn validate(ctx: &ActivityCtx, input: &ValidateInput) -> GlobalResult<Option<String>> {
+	let (tier_res, upload_res, game_config_res) = tokio::try_join!(
+		async {
+			let datacenters_res = ctx
+				.op(cluster::ops::datacenter::get::Input {
+					datacenter_ids: vec![input.datacenter_id],
+				})
+				.await?;
+
+			let Some(datacenter) = datacenters_res.datacenters.first() else {
+				return GlobalResult::Ok(None);
+			};
+
+			let tier_res = ctx
+				.op(tier::ops::list::Input {
+					datacenter_ids: vec![datacenter.datacenter_id],
+					pegboard: true,
+				})
+				.await?;
+			let tier_dc = unwrap!(tier_res.datacenters.first());
+
+			// Find any tier that has more CPU and memory than the requested resources
+			Ok(Some(tier_dc.tiers.iter().any(|t| {
+				t.cpu_millicores >= input.resources.cpu_millicores
+					&& t.memory >= input.resources.memory_mib
+			})))
+		},
+		async {
+			let builds_res = ctx
+				.op(build::ops::get::Input {
+					build_ids: vec![input.image_id],
+				})
+				.await?;
+
+			let Some(build) = builds_res.builds.first() else {
+				return Ok(None);
+			};
+
+			let uploads_res = op!([ctx] upload_get {
+				upload_ids: vec![build.upload_id.into()],
+			})
+			.await?;
+
+			Ok(Some(
+				unwrap!(uploads_res.uploads.first()).complete_ts.is_some(),
+			))
+		},
+		async {
+			let games_res = op!([ctx] game_resolve_namespace_id {
+				namespace_ids: vec![input.env_id.into()],
+			})
+			.await?;
+
+			let Some(game) = games_res.games.first() else {
+				return Ok(None);
+			};
+
+			let game_config_res = ctx
+				.op(crate::ops::game_config::get::Input {
+					game_ids: vec![unwrap!(game.game_id).into()],
+				})
+				.await?;
+
+			Ok(Some(unwrap!(game_config_res.game_configs.first()).clone()))
+		}
+	)?;
+
+	let Some(has_tier) = tier_res else {
+		return Ok(Some("Region not found.".into()));
+	};
+
+	if !has_tier {
+		return Ok(Some("Too many resources allocated.".into()));
+	}
+
+	let Some(upload_complete) = upload_res else {
+		return Ok(Some("Build not found.".into()));
+	};
+
+	if !upload_complete {
+		return Ok(Some("Build upload not complete.".into()));
+	}
+
+	let Some(game_config) = game_config_res else {
+		return Ok(Some("Environment not found.".into()));
+	};
+
+	if matches!(input.network_mode, NetworkMode::Host) && !game_config.host_networking_enabled {
+		return Ok(Some("Host networking is not enabled for this game.".into()));
+	}
+
+	if input.root_user_enabled && !game_config.root_user_enabled {
+		return Ok(Some(
+			"Docker root user is not enabled for this game.".into(),
+		));
+	}
+
+	if input.tags.len() > 64 {
+		return Ok(Some("Too many tags (max 64).".into()));
+	}
+
+	for (k, v) in &input.tags {
+		if k.len() > 256 {
+			return Ok(Some(format!(
+				"tags[{:?}]: Tag label too large (max 256 bytes).",
+				&k[..256]
+			)));
+		}
+		if v.len() > 1024 {
+			return Ok(Some(format!(
+				"tags[{k:?}]: Tag value too large (max 1024 bytes)."
+			)));
+		}
+	}
+
+	if input.args.len() > 64 {
+		return Ok(Some("Too many arguments (max 64).".into()));
+	}
+
+	for (i, arg) in input.args.iter().enumerate() {
+		if arg.len() > 256 {
+			return Ok(Some(format!(
+				"runtime.args[{i}]: Argument too large (max 256 bytes)."
+			)));
+		}
+	}
+
+	if input.environment.len() > 64 {
+		return Ok(Some("Too many environment variables (max 64).".into()));
+	}
+
+	for (k, v) in &input.environment {
+		if k.len() > 256 {
+			return Ok(Some(format!(
+				"runtime.environment[{:?}]: Key too large (max 256 bytes).",
+				&k[..256]
+			)));
+		}
+		if v.len() > 1024 {
+			return Ok(Some(format!(
+				"runtime.environment[{k:?}]: Value too large (max 1024 bytes)."
+			)));
+		}
+	}
+
+	if input.network_ports.len() > 64 {
+		return Ok(Some("Too many ports (max 64).".into()));
+	}
+
+	for (name, port) in &input.network_ports {
+		if name.len() > 256 {
+			return Ok(Some(format!(
+				"runtime.ports[{:?}]: Port name too large (max 256 bytes).",
+				&name[..256]
+			)));
+		}
+
+		match &port.routing {
+			Routing::GameGuard { authorization, .. } => match authorization {
+				PortAuthorization::Bearer(token) => {
+					if token.len() > 1024 {
+						return Ok(Some(format!(
+								"runtime.ports[{name:?}].routing.game_guard.authorization.bearer: Bearer authorization too large (max 1024 bytes).",
+							)));
+					}
+				}
+				PortAuthorization::Query(parameter, value) => {
+					if parameter.len() > 128 {
+						return Ok(Some(format!(
+								"runtime.ports[{name:?}].routing.game_guard.authorization.query: Query parameter too large (max 128 bytes).",
+							)));
+					}
+					if value.len() > 1024 {
+						return Ok(Some(format!(
+								"runtime.ports[{name:?}].routing.game_guard.authorization.query: Query value too large (max 1024 bytes).",
+							)));
+					}
+				}
+				PortAuthorization::None => {}
+			},
+			Routing::Host { .. } => {}
+		}
+	}
+
+	Ok(None)
 }
 
 #[derive(Clone, Debug, Default)]
@@ -399,7 +631,9 @@ async fn update_image(ctx: &ActivityCtx, input: &UpdateImageInput) -> GlobalResu
 pub struct CreateComplete {}
 
 #[message("ds_server_create_failed")]
-pub struct CreateFailed {}
+pub struct CreateFailed {
+	pub message: String,
+}
 
 #[message("ds_server_ready")]
 pub struct Ready {}

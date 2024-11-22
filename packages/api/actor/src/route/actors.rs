@@ -38,7 +38,7 @@ async fn get_inner(
 			server_ids: vec![actor_id],
 		})
 		.await?;
-	let server = unwrap_with!(servers_res.servers.first(), SERVERS_SERVER_NOT_FOUND);
+	let server = unwrap_with!(servers_res.servers.first(), ACTOR_NOT_FOUND);
 
 	// Get the datacenter
 	let dc_res = ctx
@@ -49,7 +49,7 @@ async fn get_inner(
 	let dc = unwrap!(dc_res.datacenters.first());
 
 	// Validate token can access server
-	ensure_with!(server.env_id == env_id, SERVERS_SERVER_NOT_FOUND);
+	ensure_with!(server.env_id == env_id, ACTOR_NOT_FOUND);
 
 	Ok(models::ActorGetActorResponse {
 		actor: Box::new(ds::types::convert_actor_to_api(server.clone(), dc)?),
@@ -119,7 +119,12 @@ pub async fn create(
 			name_ids: vec![body.region.clone()],
 		})
 		.await?;
-	let datacenter_id = unwrap!(resolved_dc_ids.datacenters.first()).datacenter_id;
+	let datacenter_id = unwrap_with!(
+		resolved_dc_ids.datacenters.first(),
+		ACTOR_FAILED_TO_CREATE,
+		error = "Region not found."
+	)
+	.datacenter_id;
 
 	let tags = unwrap_with!(
 		serde_json::from_value(body.tags.unwrap_or_default()).ok(),
@@ -163,8 +168,8 @@ pub async fn create(
 			.ports
 			.unwrap_or_default()
 			.into_iter()
-			.map(|(s, p)| Ok((
-				s,
+			.map(|(s, p)| GlobalResult::Ok((
+				s.clone(),
 				ds::workflows::server::Port {
 					internal_port: p.internal_port.map(TryInto::try_into).transpose()?,
 					routing: if let Some(routing) = p.routing {
@@ -193,10 +198,22 @@ pub async fn create(
 								guard: None,
 								host: Some(_),
 							} => ds::types::Routing::Host {
-								protocol: p.protocol.api_try_into()?,
+								protocol: match p.protocol.api_try_into() {
+									Err(err) if GlobalError::is(&err, formatted_error::code::ACTOR_FAILED_TO_CREATE) => {
+										// Add location
+										bail_with!(
+											ACTOR_FAILED_TO_CREATE,
+											error = format!("network.ports[{s:?}].protocol: Host port protocol must be either TCP or UDP.")
+										);
+									}
+									x => x?,
+								},
 							},
 							models::ActorPortRouting { .. } => {
-								bail_with!(SERVERS_MUST_SPECIFY_ROUTING_TYPE)
+								bail_with!(
+									ACTOR_FAILED_TO_CREATE,
+									error = format!("network.ports[{s:?}].routing: Must specify either `game_guard` or `host` routing type.")
+								);
 							}
 						}
 					} else {
@@ -217,8 +234,8 @@ pub async fn create(
 	tokio::select! {
 		res = ready_sub.next() => { res?; },
 		res = fail_sub.next() => {
-			res?;
-			bail_with!(SERVERS_SERVER_FAILED_TO_CREATE);
+			let msg = res?;
+			bail_with!(ACTOR_FAILED_TO_CREATE, error = msg.message);
 		}
 	}
 
@@ -227,7 +244,7 @@ pub async fn create(
 			server_ids: vec![server_id],
 		})
 		.await?;
-	let server = unwrap_with!(servers_res.servers.first(), SERVERS_SERVER_NOT_FOUND);
+	let server = unwrap_with!(servers_res.servers.first(), ACTOR_NOT_FOUND);
 
 	let dc_res = ctx
 		.op(cluster::ops::datacenter::get::Input {
@@ -622,10 +639,35 @@ async fn resolve_build_id(
 		(Some(build_id), None) => Ok(build_id),
 		// Resolve build from tags
 		(None, Some(build_tags)) => {
+			let build_tags = serde_json::from_value::<HashMap<String, String>>(build_tags)?;
+
+			ensure_with!(
+				build_tags.len() < 64,
+				ACTOR_FAILED_TO_CREATE,
+				error = "Too many build tags (max 64)."
+			);
+
+			for (k, v) in &build_tags {
+				ensure_with!(
+					k.len() < 128,
+					ACTOR_FAILED_TO_CREATE,
+					error = format!(
+						"build_tags[{:?}]: Build tag label too large (max 128 bytes).",
+						&k[..128]
+					)
+				);
+				ensure_with!(
+					v.len() < 256,
+					ACTOR_FAILED_TO_CREATE,
+					error =
+						format!("build_tags[{k:?}]: Build tag value too large (max 256 bytes).")
+				);
+			}
+
 			let builds_res = ctx
 				.op(build::ops::resolve_for_tags::Input {
 					env_id,
-					tags: serde_json::from_value(build_tags)?,
+					tags: build_tags,
 				})
 				.await?;
 

@@ -15,10 +15,10 @@ pub async fn server_for_env(
 			server_ids: vec![server_id],
 		})
 		.await?;
-	let server = unwrap_with!(servers_res.servers.first(), SERVERS_SERVER_NOT_FOUND);
+	let server = unwrap_with!(servers_res.servers.first(), ACTOR_NOT_FOUND);
 
 	// Validate token can access server
-	ensure_with!(server.env_id == env_id, SERVERS_SERVER_NOT_FOUND);
+	ensure_with!(server.env_id == env_id, ACTOR_NOT_FOUND);
 
 	Ok(())
 }

@@ -64,10 +64,12 @@ pub(crate) async fn ds_server_nomad(ctx: &mut WorkflowCtx, input: &Input) -> Glo
 		Err(err) => {
 			tracing::warn!(?err, "unrecoverable setup");
 
-			ctx.msg(CreateFailed {})
-				.tag("server_id", input.server_id)
-				.send()
-				.await?;
+			ctx.msg(CreateFailed {
+				message: "failed setup".into(),
+			})
+			.tag("server_id", input.server_id)
+			.send()
+			.await?;
 
 			ctx.workflow(destroy::Input {
 				server_id: input.server_id,

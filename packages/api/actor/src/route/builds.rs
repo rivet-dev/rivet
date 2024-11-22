@@ -191,6 +191,12 @@ pub async fn patch_tags(
 	let tags = unwrap_with!(body.tags, API_BAD_BODY, error = "missing field `tags`");
 	let tags = serde_json::from_value(tags).map_err(|err| err_code!(API_BAD_BODY, error = err))?;
 
+	ensure_with!(
+		tags.as_object().map(|x| x.len()).unwrap_or_default() <= 64,
+		ACTOR_BUILD_INVALID_PATCH_CONFIG,
+		error = "Too many tags (max 64)."
+	);
+
 	let build_res = ctx
 		.op(build::ops::get::Input {
 			build_ids: vec![build_id],
@@ -294,39 +300,6 @@ pub async fn create_build(
 		.await?;
 	let cluster_id = unwrap!(cluster_res.games.first()).cluster_id;
 
-	let prewarm_datacenter_ids = if let Some(prewarm_datacenter_slugs) = body.prewarm_regions {
-		// Resolve datacenter slugs
-		ctx.op(cluster::ops::datacenter::resolve_for_name_id::Input {
-			cluster_id,
-			name_ids: prewarm_datacenter_slugs,
-		})
-		.await?
-		.datacenters
-		.into_iter()
-		.map(|dc| dc.datacenter_id)
-		.collect::<Vec<_>>()
-	} else {
-		// Prewarm all datacenters
-		let cluster_dcs_res = ctx
-			.op(cluster::ops::datacenter::list::Input {
-				cluster_ids: vec![cluster_id],
-			})
-			.await?;
-
-		unwrap!(cluster_dcs_res.clusters.first())
-			.datacenter_ids
-			.clone()
-	};
-
-	// Prewarm build
-	if !prewarm_datacenter_ids.is_empty() {
-		ctx.op(build::ops::prewarm_ats::Input {
-			datacenter_ids: prewarm_datacenter_ids,
-			build_ids: vec![create_res.build_id],
-		})
-		.await?;
-	}
-
 	Ok(models::ActorPrepareBuildResponse {
 		build: create_res.build_id,
 		presigned_requests: create_res
@@ -343,23 +316,6 @@ pub async fn create_build_deprecated(
 	env_id: Uuid,
 	body: models::ServersCreateBuildRequest,
 ) -> GlobalResult<models::ServersCreateBuildResponse> {
-	let prewarm_regions = if let Some(prewarm_datacenters) = body.prewarm_datacenters {
-		let dc_res = ctx
-			.op(cluster::ops::datacenter::get::Input {
-				datacenter_ids: prewarm_datacenters,
-			})
-			.await?;
-		let prewarm_regions = dc_res
-			.datacenters
-			.iter()
-			.map(|dc| dc.name_id.clone())
-			.collect::<Vec<_>>();
-
-		Some(prewarm_regions)
-	} else {
-		None
-	};
-
 	let global = build_global_query_compat(&ctx, game_id, env_id).await?;
 	let build_res = create_build(
 		ctx,
@@ -376,8 +332,6 @@ pub async fn create_build_deprecated(
 			}),
 			multipart_upload: body.multipart_upload,
 			name: body.name,
-			tags: None,
-			prewarm_regions,
 		},
 		global,
 	)

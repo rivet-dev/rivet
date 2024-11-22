@@ -10,6 +10,7 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct ActorPrepareBuildRequest {
+<<<<<<< HEAD
 	#[serde(rename = "compression", skip_serializing_if = "Option::is_none")]
 	pub compression: Option<crate::models::ActorBuildCompression>,
 	#[serde(rename = "image_file")]
@@ -30,6 +31,57 @@ pub struct ActorPrepareBuildRequest {
 }
 
 impl ActorPrepareBuildRequest {
+=======
+<<<<<<< HEAD
+    #[serde(rename = "compression", skip_serializing_if = "Option::is_none")]
+    pub compression: Option<crate::models::ActorBuildCompression>,
+    #[serde(rename = "image_file")]
+    pub image_file: Box<crate::models::UploadPrepareFile>,
+    /// A tag given to the project build.
+    #[serde(rename = "image_tag", skip_serializing_if = "Option::is_none")]
+    pub image_tag: Option<String>,
+    #[serde(rename = "kind", skip_serializing_if = "Option::is_none")]
+    pub kind: Option<crate::models::ActorBuildKind>,
+    #[serde(rename = "multipart_upload", skip_serializing_if = "Option::is_none")]
+    pub multipart_upload: Option<bool>,
+    #[serde(rename = "name")]
+    pub name: String,
+    #[serde(rename = "prewarm_regions", skip_serializing_if = "Option::is_none")]
+    pub prewarm_regions: Option<Vec<String>>,
+}
+
+impl ActorPrepareBuildRequest {
+    pub fn new(image_file: crate::models::UploadPrepareFile, name: String) -> ActorPrepareBuildRequest {
+        ActorPrepareBuildRequest {
+            compression: None,
+            image_file: Box::new(image_file),
+            image_tag: None,
+            kind: None,
+            multipart_upload: None,
+            name,
+            prewarm_regions: None,
+        }
+    }
+=======
+	#[serde(rename = "compression", skip_serializing_if = "Option::is_none")]
+	pub compression: Option<crate::models::ActorBuildCompression>,
+	#[serde(rename = "image_file")]
+	pub image_file: Box<crate::models::UploadPrepareFile>,
+	/// A tag given to the project build.
+	#[serde(rename = "image_tag", skip_serializing_if = "Option::is_none")]
+	pub image_tag: Option<String>,
+	#[serde(rename = "kind", skip_serializing_if = "Option::is_none")]
+	pub kind: Option<crate::models::ActorBuildKind>,
+	#[serde(rename = "multipart_upload", skip_serializing_if = "Option::is_none")]
+	pub multipart_upload: Option<bool>,
+	#[serde(rename = "name")]
+	pub name: String,
+	#[serde(rename = "prewarm_regions", skip_serializing_if = "Option::is_none")]
+	pub prewarm_regions: Option<Vec<String>>,
+}
+
+impl ActorPrepareBuildRequest {
+>>>>>>> 16ffc975b (feat: ds input validation)
 	pub fn new(
 		image_file: crate::models::UploadPrepareFile,
 		name: String,
@@ -46,4 +98,8 @@ impl ActorPrepareBuildRequest {
 			tags,
 		}
 	}
+<<<<<<< HEAD
+=======
+>>>>>>> 5f749cb07 (feat: ds input validation)
+>>>>>>> 16ffc975b (feat: ds input validation)
 }

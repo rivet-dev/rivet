@@ -109,7 +109,6 @@ types:
         type: optional<boolean>
       kind: optional<BuildKind>
       compression: optional<BuildCompression>
-      prewarm_regions: optional<list<string>>
 
   PrepareBuildResponse:
     properties:

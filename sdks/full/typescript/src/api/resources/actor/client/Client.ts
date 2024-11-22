@@ -365,11 +365,24 @@ export class Actor {
      *             tags: {
      *                 "key": "value"
      *             },
+<<<<<<< HEAD
      *             build: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
      *             buildTags: {
      *                 "key": "value"
      *             },
      *             runtime: {
+=======
+<<<<<<< HEAD
+     *             runtime: {
+     *                 build: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+=======
+     *             build: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+     *             buildTags: {
+     *                 "key": "value"
+     *             },
+     *             runtime: {
+>>>>>>> 5f749cb07 (feat: ds input validation)
+>>>>>>> 16ffc975b (feat: ds input validation)
      *                 arguments: ["string"],
      *                 environment: {
      *                     "string": "string"

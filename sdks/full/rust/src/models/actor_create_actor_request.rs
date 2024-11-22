@@ -10,6 +10,7 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct ActorCreateActorRequest {
+<<<<<<< HEAD
 	#[serde(rename = "build", skip_serializing_if = "Option::is_none")]
 	pub build: Option<uuid::Uuid>,
 	#[serde(
@@ -34,6 +35,59 @@ pub struct ActorCreateActorRequest {
 }
 
 impl ActorCreateActorRequest {
+=======
+<<<<<<< HEAD
+    #[serde(rename = "lifecycle", skip_serializing_if = "Option::is_none")]
+    pub lifecycle: Option<Box<crate::models::ActorLifecycle>>,
+    #[serde(rename = "network", skip_serializing_if = "Option::is_none")]
+    pub network: Option<Box<crate::models::ActorCreateActorNetworkRequest>>,
+    #[serde(rename = "region")]
+    pub region: String,
+    #[serde(rename = "resources")]
+    pub resources: Box<crate::models::ActorResources>,
+    #[serde(rename = "runtime")]
+    pub runtime: Box<crate::models::ActorCreateActorRuntimeRequest>,
+    #[serde(rename = "tags", deserialize_with = "Option::deserialize")]
+    pub tags: Option<serde_json::Value>,
+}
+
+impl ActorCreateActorRequest {
+    pub fn new(region: String, resources: crate::models::ActorResources, runtime: crate::models::ActorCreateActorRuntimeRequest, tags: Option<serde_json::Value>) -> ActorCreateActorRequest {
+        ActorCreateActorRequest {
+            lifecycle: None,
+            network: None,
+            region,
+            resources: Box::new(resources),
+            runtime: Box::new(runtime),
+            tags,
+        }
+    }
+=======
+	#[serde(rename = "build", skip_serializing_if = "Option::is_none")]
+	pub build: Option<uuid::Uuid>,
+	#[serde(
+		rename = "buildTags",
+		default,
+		with = "::serde_with::rust::double_option",
+		skip_serializing_if = "Option::is_none"
+	)]
+	pub build_tags: Option<Option<serde_json::Value>>,
+	#[serde(rename = "lifecycle", skip_serializing_if = "Option::is_none")]
+	pub lifecycle: Option<Box<crate::models::ActorLifecycle>>,
+	#[serde(rename = "network", skip_serializing_if = "Option::is_none")]
+	pub network: Option<Box<crate::models::ActorCreateActorNetworkRequest>>,
+	#[serde(rename = "region")]
+	pub region: String,
+	#[serde(rename = "resources")]
+	pub resources: Box<crate::models::ActorResources>,
+	#[serde(rename = "runtime")]
+	pub runtime: Box<crate::models::ActorCreateActorRuntimeRequest>,
+	#[serde(rename = "tags", deserialize_with = "Option::deserialize")]
+	pub tags: Option<serde_json::Value>,
+}
+
+impl ActorCreateActorRequest {
+>>>>>>> 16ffc975b (feat: ds input validation)
 	pub fn new(
 		region: String,
 		resources: crate::models::ActorResources,
@@ -51,4 +105,8 @@ impl ActorCreateActorRequest {
 			tags,
 		}
 	}
+<<<<<<< HEAD
+=======
+>>>>>>> 5f749cb07 (feat: ds input validation)
+>>>>>>> 16ffc975b (feat: ds input validation)
 }
