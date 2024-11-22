@@ -13,11 +13,8 @@ export declare namespace CreateActorRequest {
     interface Raw {
         region: string;
         tags?: unknown;
-<<<<<<< HEAD
         build?: string | null;
         buildTags?: unknown | null;
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
         runtime: CreateActorRuntimeRequest.Raw;
         network?: CreateActorNetworkRequest.Raw | null;
         resources: Resources.Raw;

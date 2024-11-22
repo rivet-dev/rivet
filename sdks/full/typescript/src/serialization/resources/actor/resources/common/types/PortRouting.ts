@@ -5,30 +5,18 @@
 import * as serializers from "../../../../../index";
 import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
-<<<<<<< HEAD
 import { GuardRouting } from "./GuardRouting";
-=======
-import { GameGuardRouting } from "./GameGuardRouting";
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
 import { HostRouting } from "./HostRouting";
 
 export const PortRouting: core.serialization.ObjectSchema<serializers.actor.PortRouting.Raw, Rivet.actor.PortRouting> =
     core.serialization.object({
-<<<<<<< HEAD
         guard: GuardRouting.optional(),
-=======
-        gameGuard: core.serialization.property("game_guard", GameGuardRouting.optional()),
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
         host: HostRouting.optional(),
     });
 
 export declare namespace PortRouting {
     interface Raw {
-<<<<<<< HEAD
         guard?: GuardRouting.Raw | null;
-=======
-        game_guard?: GameGuardRouting.Raw | null;
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
         host?: HostRouting.Raw | null;
     }
 }

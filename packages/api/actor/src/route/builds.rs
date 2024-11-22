@@ -189,13 +189,14 @@ pub async fn patch_tags(
 	let CheckOutput { env_id, .. } = ctx.auth().check(ctx.op_ctx(), &query, false).await?;
 
 	let tags = unwrap_with!(body.tags, API_BAD_BODY, error = "missing field `tags`");
-	let tags = serde_json::from_value(tags).map_err(|err| err_code!(API_BAD_BODY, error = err))?;
 
 	ensure_with!(
 		tags.as_object().map(|x| x.len()).unwrap_or_default() <= 64,
 		ACTOR_BUILD_INVALID_PATCH_CONFIG,
 		error = "Too many tags (max 64)."
 	);
+
+	let tags = serde_json::from_value(tags).map_err(|err| err_code!(API_BAD_BODY, error = err))?;
 
 	let build_res = ctx
 		.op(build::ops::get::Input {
@@ -275,11 +276,6 @@ pub async fn create_build(
 		.op(build::ops::create::Input {
 			game_id: None,
 			env_id: Some(env_id),
-			tags: body
-				.tags
-				.map(serde_json::from_value)
-				.transpose()?
-				.unwrap_or_default(),
 			display_name: body.name,
 			content: build::ops::create::Content::New {
 				image_file: (*body.image_file).api_try_into()?,

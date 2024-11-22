@@ -1,8 +1,4 @@
-<<<<<<<< HEAD:sdks/runtime/rust/docs/ActorBuildCompression.md
 # ActorBuildCompression
-========
-# ActorLogStream
->>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar):sdks/runtime/rust/docs/ActorLogStream.md
 
 ## Properties
 

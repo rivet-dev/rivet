@@ -417,7 +417,6 @@ func (c *Client) Destroy(ctx context.Context, actor uuid.UUID, request *sdkactor
 	}
 	return response, nil
 }
-<<<<<<< HEAD
 
 // Upgrades a dynamic actor.
 //
@@ -510,5 +509,3 @@ func (c *Client) Upgrade(ctx context.Context, actor uuid.UUID, request *sdkactor
 	}
 	return response, nil
 }
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)

@@ -9784,7 +9784,6 @@ components:
       properties:
         name:
           type: string
-        tags: {}
         image_tag:
           type: string
           description: A tag given to the project build.
@@ -9796,13 +9795,8 @@ components:
           $ref: '#/components/schemas/ActorBuildKind'
         compression:
           $ref: '#/components/schemas/ActorBuildCompression'
-        prewarm_regions:
-          type: array
-          items:
-            type: string
       required:
         - name
-        - tags
         - image_file
     ActorPrepareBuildResponse:
       type: object

@@ -6,7 +6,6 @@
 !sdks/full/rust/src
 !packages
 !resources/legacy/proto
-!externals/
 
 sdks/runtime
 svc/**/*.md

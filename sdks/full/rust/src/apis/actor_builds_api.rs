@@ -189,13 +189,6 @@ pub async fn actor_builds_get(
 }
 
 /// Lists all builds of the project associated with the token used. Can be filtered by tags in the query string.
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-pub async fn actor_builds_list(configuration: &configuration::Configuration, project: Option<&str>, environment: Option<&str>, tags_json: Option<&str>) -> Result<crate::models::ActorListBuildsResponse, Error<ActorBuildsListError>> {
-    let local_var_configuration = configuration;
-=======
->>>>>>> 16ffc975b (feat: ds input validation)
 pub async fn actor_builds_list(
 	configuration: &configuration::Configuration,
 	project: Option<&str>,
@@ -203,27 +196,12 @@ pub async fn actor_builds_list(
 	tags_json: Option<&str>,
 ) -> Result<crate::models::ActorListBuildsResponse, Error<ActorBuildsListError>> {
 	let local_var_configuration = configuration;
-<<<<<<< HEAD
-=======
->>>>>>> 5f749cb07 (feat: ds input validation)
->>>>>>> 16ffc975b (feat: ds input validation)
 
 	let local_var_client = &local_var_configuration.client;
 
-<<<<<<< HEAD
 	let local_var_uri_str = format!("{}/builds", local_var_configuration.base_path);
 	let mut local_var_req_builder =
 		local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
-=======
-<<<<<<< HEAD
-    let local_var_uri_str = format!("{}/builds", local_var_configuration.base_path);
-    let mut local_var_req_builder = local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
-=======
-	let local_var_uri_str = format!("{}/builds", local_var_configuration.base_path);
-	let mut local_var_req_builder =
-		local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
->>>>>>> 5f749cb07 (feat: ds input validation)
->>>>>>> 16ffc975b (feat: ds input validation)
 
 	if let Some(ref local_var_str) = project {
 		local_var_req_builder =
@@ -248,13 +226,6 @@ pub async fn actor_builds_list(
 	let local_var_req = local_var_req_builder.build()?;
 	let local_var_resp = local_var_client.execute(local_var_req).await?;
 
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-    let local_var_status = local_var_resp.status();
-    let local_var_content = local_var_resp.text().await?;
-=======
->>>>>>> 16ffc975b (feat: ds input validation)
 	let local_var_status = local_var_resp.status();
 	let local_var_content = local_var_resp.text().await?;
 
@@ -313,10 +284,6 @@ pub async fn actor_builds_patch_tags(
 
 	let local_var_status = local_var_resp.status();
 	let local_var_content = local_var_resp.text().await?;
-<<<<<<< HEAD
-=======
->>>>>>> 5f749cb07 (feat: ds input validation)
->>>>>>> 16ffc975b (feat: ds input validation)
 
 	if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
 		serde_json::from_str(&local_var_content).map_err(Error::from)

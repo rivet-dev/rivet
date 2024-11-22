@@ -503,9 +503,6 @@ export class Builds {
      *         environment: "string",
      *         body: {
      *             name: "string",
-     *             tags: {
-     *                 "key": "value"
-     *             },
      *             imageTag: "string",
      *             imageFile: {
      *                 path: "string",
@@ -514,8 +511,7 @@ export class Builds {
      *             },
      *             multipartUpload: true,
      *             kind: "docker_image",
-     *             compression: "none",
-     *             prewarmRegions: ["string"]
+     *             compression: "none"
      *         }
      *     })
      */

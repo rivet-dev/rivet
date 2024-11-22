@@ -1,7 +1,7 @@
 #!/usr/bin/env -S deno run --allow-net --allow-env --allow-read --allow-write
 
 import { parse, stringify } from "@std/toml";
-import { walk } from "@std/fs";
+import { walk, exists } from "@std/fs";
 import { join, relative } from "@std/path";
 
 const rootDir = join(import.meta.dirname, "../..");
@@ -11,13 +11,29 @@ async function updateCargoToml() {
 	const workspaceTomlContent = await Deno.readTextFile(workspaceTomlPath);
 	const workspaceToml = parse(workspaceTomlContent);
 
+	const entries = async function*() {
+		for await (const entry of walk(join(rootDir, "packages"), {
+			includeDirs: false,
+			exts: ["toml"],
+		})) {
+			yield entry;
+		}
+
+		// Yield from OSS
+		if (await exists(join(rootDir, "oss"))) {
+			for await (const entry of walk(join(rootDir, "oss", "packages"), {
+				includeDirs: false,
+				exts: ["toml"],
+			})) {
+				yield entry;
+			}
+		}
+	}();
+
 	// Find all workspace members
 	const members: string[] = [];
 	for await (
-		const entry of walk(join(rootDir, "packages"), {
-			includeDirs: false,
-			exts: ["toml"],
-		})
+		const entry of entries
 	) {
 		// Exclude infra packages
 		if (

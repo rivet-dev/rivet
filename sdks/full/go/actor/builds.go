@@ -182,15 +182,13 @@ func (p *PatchBuildTagsResponse) String() string {
 }
 
 type PrepareBuildRequest struct {
-	Name string      `json:"name"`
-	Tags interface{} `json:"tags,omitempty"`
+	Name string `json:"name"`
 	// A tag given to the project build.
 	ImageTag        *string             `json:"image_tag,omitempty"`
 	ImageFile       *upload.PrepareFile `json:"image_file,omitempty"`
 	MultipartUpload *bool               `json:"multipart_upload,omitempty"`
 	Kind            *BuildKind          `json:"kind,omitempty"`
 	Compression     *BuildCompression   `json:"compression,omitempty"`
-	PrewarmRegions  []string            `json:"prewarm_regions,omitempty"`
 
 	_rawJSON json.RawMessage
 }

@@ -14,17 +14,10 @@ docs/ActorCreateActorPortRequest.md
 docs/ActorCreateActorRequest.md
 docs/ActorCreateActorResponse.md
 docs/ActorCreateActorRuntimeRequest.md
-<<<<<<< HEAD
 docs/ActorGetActorLogsResponse.md
 docs/ActorGetActorResponse.md
 docs/ActorGetBuildResponse.md
 docs/ActorGuardRouting.md
-=======
-docs/ActorGameGuardRouting.md
-docs/ActorGetActorLogsResponse.md
-docs/ActorGetActorResponse.md
-docs/ActorGetBuildResponse.md
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
 docs/ActorLifecycle.md
 docs/ActorListActorsResponse.md
 docs/ActorListBuildsResponse.md
@@ -45,10 +38,7 @@ docs/ActorRegion.md
 docs/ActorRegionsApi.md
 docs/ActorResources.md
 docs/ActorRuntime.md
-<<<<<<< HEAD
 docs/ActorUpgradeActorRequest.md
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
 docs/ErrorBody.md
 docs/UploadPrepareFile.md
 docs/UploadPresignedRequest.md
@@ -70,17 +60,10 @@ src/models/actor_create_actor_port_request.rs
 src/models/actor_create_actor_request.rs
 src/models/actor_create_actor_response.rs
 src/models/actor_create_actor_runtime_request.rs
-<<<<<<< HEAD
 src/models/actor_get_actor_logs_response.rs
 src/models/actor_get_actor_response.rs
 src/models/actor_get_build_response.rs
 src/models/actor_guard_routing.rs
-=======
-src/models/actor_game_guard_routing.rs
-src/models/actor_get_actor_logs_response.rs
-src/models/actor_get_actor_response.rs
-src/models/actor_get_build_response.rs
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
 src/models/actor_lifecycle.rs
 src/models/actor_list_actors_response.rs
 src/models/actor_list_builds_response.rs
@@ -99,10 +82,7 @@ src/models/actor_prepare_build_response.rs
 src/models/actor_region.rs
 src/models/actor_resources.rs
 src/models/actor_runtime.rs
-<<<<<<< HEAD
 src/models/actor_upgrade_actor_request.rs
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
 src/models/error_body.rs
 src/models/mod.rs
 src/models/upload_prepare_file.rs

@@ -294,7 +294,6 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ActorCreateActorRequest'
-<<<<<<< HEAD
   /actors/{actor}/upgrade:
     post:
       description: Upgrades a dynamic actor.
@@ -305,17 +304,6 @@ paths:
         - name: actor
           in: path
           description: The id of the actor to upgrade
-=======
-  /builds/{build}:
-    get:
-      description: Get a build.
-      operationId: actor_builds_get
-      tags:
-        - ActorBuilds
-      parameters:
-        - name: build
-          in: path
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
           required: true
           schema:
             type: string
@@ -336,145 +324,7 @@ paths:
           content:
             application/json:
               schema:
-<<<<<<< HEAD
                 $ref: '#/components/schemas/ActorUpgradeActorResponse'
-=======
-                $ref: '#/components/schemas/ActorGetBuildResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
-  /builds:
-    get:
-      description: >-
-        Lists all builds of the project associated with the token used. Can be
-        filtered by tags in the query string.
-      operationId: actor_builds_list
-      tags:
-        - ActorBuilds
-      parameters:
-        - name: project
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: environment
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: tags_json
-          in: query
-          required: false
-          schema:
-            type: string
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ActorListBuildsResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
-  /builds/{build}/tags:
-    patch:
-      operationId: actor_builds_patchTags
-      tags:
-        - ActorBuilds
-      parameters:
-        - name: build
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: project
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: environment
-          in: query
-          required: false
-          schema:
-            type: string
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ActorPatchBuildTagsResponse'
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
         '400':
           description: ''
           content:
@@ -517,7 +367,6 @@ paths:
         content:
           application/json:
             schema:
-<<<<<<< HEAD
               $ref: '#/components/schemas/ActorUpgradeActorRequest'
   /builds/{build}:
     get:
@@ -532,16 +381,6 @@ paths:
           schema:
             type: string
             format: uuid
-=======
-              $ref: '#/components/schemas/ActorPatchBuildTagsRequest'
-  /builds/prepare:
-    post:
-      description: Creates a new project build for the given project.
-      operationId: actor_builds_prepare
-      tags:
-        - ActorBuilds
-      parameters:
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
         - name: project
           in: query
           required: false
@@ -558,7 +397,6 @@ paths:
           content:
             application/json:
               schema:
-<<<<<<< HEAD
                 $ref: '#/components/schemas/ActorGetBuildResponse'
         '400':
           description: ''
@@ -694,9 +532,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ActorPatchBuildTagsResponse'
-=======
-                $ref: '#/components/schemas/ActorPrepareBuildResponse'
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
         '400':
           description: ''
           content:
@@ -739,7 +574,6 @@ paths:
         content:
           application/json:
             schema:
-<<<<<<< HEAD
               $ref: '#/components/schemas/ActorPatchBuildTagsRequest'
   /builds/prepare:
     post:
@@ -748,22 +582,6 @@ paths:
       tags:
         - ActorBuilds
       parameters:
-=======
-              $ref: '#/components/schemas/ActorPrepareBuildRequest'
-  /builds/{build}/complete:
-    post:
-      description: Marks an upload as complete.
-      operationId: actor_builds_complete
-      tags:
-        - ActorBuilds
-      parameters:
-        - name: build
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
         - name: project
           in: query
           required: false
@@ -775,15 +593,12 @@ paths:
           schema:
             type: string
       responses:
-        '204':
+        '200':
           description: ''
-<<<<<<< HEAD
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ActorPrepareBuildResponse'
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
         '400':
           description: ''
           content:
@@ -821,7 +636,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
       security: *ref_0
-<<<<<<< HEAD
       requestBody:
         required: true
         content:
@@ -896,13 +710,6 @@ paths:
       description: Returns the logs for a given actor.
       operationId: actor_logs_get
       tags:
-=======
-  /actors/{actor}/logs:
-    get:
-      description: Returns the logs for a given actor.
-      operationId: actor_logs_get
-      tags:
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
         - ActorLogs
       parameters:
         - name: actor
@@ -1051,13 +858,10 @@ components:
         region:
           type: string
         tags: {}
-<<<<<<< HEAD
         build:
           type: string
           format: uuid
         buildTags: {}
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
         runtime:
           $ref: '#/components/schemas/ActorCreateActorRuntimeRequest'
         network:
@@ -1074,12 +878,6 @@ components:
     ActorCreateActorRuntimeRequest:
       type: object
       properties:
-<<<<<<< HEAD
-=======
-        build:
-          type: string
-          format: uuid
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
         arguments:
           type: array
           items:
@@ -1088,11 +886,6 @@ components:
           type: object
           additionalProperties:
             type: string
-<<<<<<< HEAD
-=======
-      required:
-        - build
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
     ActorCreateActorNetworkRequest:
       type: object
       properties:
@@ -1124,7 +917,6 @@ components:
     ActorDestroyActorResponse:
       type: object
       properties: {}
-<<<<<<< HEAD
     ActorUpgradeActorRequest:
       type: object
       properties:
@@ -1135,8 +927,6 @@ components:
     ActorUpgradeActorResponse:
       type: object
       properties: {}
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
     ActorListActorsResponse:
       type: object
       properties:
@@ -1183,10 +973,6 @@ components:
       properties:
         name:
           type: string
-<<<<<<< HEAD
-=======
-        tags: {}
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
         image_tag:
           type: string
           description: A tag given to the project build.
@@ -1198,16 +984,8 @@ components:
           $ref: '#/components/schemas/ActorBuildKind'
         compression:
           $ref: '#/components/schemas/ActorBuildCompression'
-        prewarm_regions:
-          type: array
-          items:
-            type: string
       required:
         - name
-<<<<<<< HEAD
-=======
-        - tags
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
         - image_file
     ActorPrepareBuildResponse:
       type: object
@@ -1215,22 +993,13 @@ components:
         build:
           type: string
           format: uuid
-<<<<<<< HEAD
-        image_presigned_request:
-          $ref: '#/components/schemas/UploadPresignedRequest'
-        image_presigned_requests:
-=======
         presigned_requests:
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
           type: array
           items:
             $ref: '#/components/schemas/UploadPresignedRequest'
       required:
         - build
-<<<<<<< HEAD
-=======
         - presigned_requests
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
     ActorBuildKind:
       type: string
       enum:
@@ -1303,15 +1072,12 @@ components:
             The duration to wait for in milliseconds before killing the actor.
             This should be set to a safe default, and can be overridden during a
             DELETE request if needed.
-<<<<<<< HEAD
         durable:
           type: boolean
           description: >-
             If true, the actor will try to reschedule itself automatically in
             the event of a crash or a datacenter failover. The actor will not
             reschedule if it exits successfully.
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
     ActorResources:
       type: object
       properties:
@@ -1374,19 +1140,11 @@ components:
     ActorPortRouting:
       type: object
       properties:
-<<<<<<< HEAD
         guard:
           $ref: '#/components/schemas/ActorGuardRouting'
         host:
           $ref: '#/components/schemas/ActorHostRouting'
     ActorGuardRouting:
-=======
-        game_guard:
-          $ref: '#/components/schemas/ActorGameGuardRouting'
-        host:
-          $ref: '#/components/schemas/ActorHostRouting'
-    ActorGameGuardRouting:
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
       type: object
       properties:
         authorization:

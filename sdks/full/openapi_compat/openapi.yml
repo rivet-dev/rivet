@@ -321,14 +321,8 @@ components:
           type: boolean
         name:
           type: string
-        prewarm_regions:
-          items:
-            type: string
-          type: array
-        tags: {}
       required:
       - name
-      - tags
       - image_file
       type: object
     ActorPrepareBuildResponse:

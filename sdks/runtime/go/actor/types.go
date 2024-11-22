@@ -174,41 +174,24 @@ func (b *Build) String() string {
 	return fmt.Sprintf("%#v", b)
 }
 
-<<<<<<< HEAD
 type GuardRouting struct {
-=======
-type GameGuardRouting struct {
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
 	Authorization *PortAuthorization `json:"authorization,omitempty"`
 
 	_rawJSON json.RawMessage
 }
 
-<<<<<<< HEAD
 func (g *GuardRouting) UnmarshalJSON(data []byte) error {
 	type unmarshaler GuardRouting
-=======
-func (g *GameGuardRouting) UnmarshalJSON(data []byte) error {
-	type unmarshaler GameGuardRouting
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
 	var value unmarshaler
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
-<<<<<<< HEAD
 	*g = GuardRouting(value)
-=======
-	*g = GameGuardRouting(value)
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
 	g._rawJSON = json.RawMessage(data)
 	return nil
 }
 
-<<<<<<< HEAD
 func (g *GuardRouting) String() string {
-=======
-func (g *GameGuardRouting) String() string {
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
 	if len(g._rawJSON) > 0 {
 		if value, err := core.StringifyJSON(g._rawJSON); err == nil {
 			return value
@@ -250,11 +233,8 @@ func (h *HostRouting) String() string {
 type Lifecycle struct {
 	// The duration to wait for in milliseconds before killing the actor. This should be set to a safe default, and can be overridden during a DELETE request if needed.
 	KillTimeout *int64 `json:"kill_timeout,omitempty"`
-<<<<<<< HEAD
 	// If true, the actor will try to reschedule itself automatically in the event of a crash or a datacenter failover. The actor will not reschedule if it exits successfully.
 	Durable *bool `json:"durable,omitempty"`
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
 
 	_rawJSON json.RawMessage
 }
@@ -459,13 +439,8 @@ func (p *PortQueryAuthorization) String() string {
 }
 
 type PortRouting struct {
-<<<<<<< HEAD
 	Guard *GuardRouting `json:"guard,omitempty"`
 	Host  *HostRouting  `json:"host,omitempty"`
-=======
-	GameGuard *GameGuardRouting `json:"game_guard,omitempty"`
-	Host      *HostRouting      `json:"host,omitempty"`
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
 
 	_rawJSON json.RawMessage
 }
@@ -650,10 +625,6 @@ func (c *CreateActorPortRequest) String() string {
 }
 
 type CreateActorRuntimeRequest struct {
-<<<<<<< HEAD
-=======
-	Build       uuid.UUID         `json:"build"`
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
 	Arguments   []string          `json:"arguments,omitempty"`
 	Environment map[string]string `json:"environment,omitempty"`
 
@@ -682,7 +653,6 @@ func (c *CreateActorRuntimeRequest) String() string {
 	}
 	return fmt.Sprintf("%#v", c)
 }
-<<<<<<< HEAD
 
 type UpgradeActorRequestQuery struct {
 	Project     *string              `json:"-"`
@@ -702,5 +672,3 @@ func (u *UpgradeActorRequestQuery) UnmarshalJSON(data []byte) error {
 func (u *UpgradeActorRequestQuery) MarshalJSON() ([]byte, error) {
 	return json.Marshal(u.Body)
 }
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)

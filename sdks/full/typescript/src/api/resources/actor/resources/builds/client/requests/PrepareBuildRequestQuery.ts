@@ -11,9 +11,6 @@ import * as Rivet from "../../../../../../index";
  *         environment: "string",
  *         body: {
  *             name: "string",
- *             tags: {
- *                 "key": "value"
- *             },
  *             imageTag: "string",
  *             imageFile: {
  *                 path: "string",
@@ -22,8 +19,7 @@ import * as Rivet from "../../../../../../index";
  *             },
  *             multipartUpload: true,
  *             kind: "docker_image",
- *             compression: "none",
- *             prewarmRegions: ["string"]
+ *             compression: "none"
  *         }
  *     }
  */

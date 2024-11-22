@@ -1,8 +1,4 @@
-<<<<<<<< HEAD:sdks/runtime/rust/docs/ActorBuildKind.md
 # ActorBuildKind
-========
-# ActorNetworkMode
->>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar):sdks/runtime/rust/docs/ActorNetworkMode.md
 
 ## Properties
 

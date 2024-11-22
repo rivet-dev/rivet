@@ -13,13 +13,10 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct ActorCreateActorRequest {
-<<<<<<< HEAD
     #[serde(rename = "build", skip_serializing_if = "Option::is_none")]
     pub build: Option<uuid::Uuid>,
     #[serde(rename = "buildTags", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
     pub build_tags: Option<Option<serde_json::Value>>,
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
     #[serde(rename = "lifecycle", skip_serializing_if = "Option::is_none")]
     pub lifecycle: Option<Box<crate::models::ActorLifecycle>>,
     #[serde(rename = "network", skip_serializing_if = "Option::is_none")]
@@ -37,11 +34,8 @@ pub struct ActorCreateActorRequest {
 impl ActorCreateActorRequest {
     pub fn new(region: String, resources: crate::models::ActorResources, runtime: crate::models::ActorCreateActorRuntimeRequest, tags: Option<serde_json::Value>) -> ActorCreateActorRequest {
         ActorCreateActorRequest {
-<<<<<<< HEAD
             build: None,
             build_tags: None,
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
             lifecycle: None,
             network: None,
             region,

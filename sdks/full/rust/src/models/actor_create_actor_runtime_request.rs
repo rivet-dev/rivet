@@ -10,7 +10,6 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct ActorCreateActorRuntimeRequest {
-<<<<<<< HEAD
 	#[serde(rename = "arguments", skip_serializing_if = "Option::is_none")]
 	pub arguments: Option<Vec<String>>,
 	#[serde(rename = "environment", skip_serializing_if = "Option::is_none")]
@@ -18,41 +17,10 @@ pub struct ActorCreateActorRuntimeRequest {
 }
 
 impl ActorCreateActorRuntimeRequest {
-=======
-<<<<<<< HEAD
-    #[serde(rename = "arguments", skip_serializing_if = "Option::is_none")]
-    pub arguments: Option<Vec<String>>,
-    #[serde(rename = "build")]
-    pub build: uuid::Uuid,
-    #[serde(rename = "environment", skip_serializing_if = "Option::is_none")]
-    pub environment: Option<::std::collections::HashMap<String, String>>,
-}
-
-impl ActorCreateActorRuntimeRequest {
-    pub fn new(build: uuid::Uuid) -> ActorCreateActorRuntimeRequest {
-        ActorCreateActorRuntimeRequest {
-            arguments: None,
-            build,
-            environment: None,
-        }
-    }
-=======
-	#[serde(rename = "arguments", skip_serializing_if = "Option::is_none")]
-	pub arguments: Option<Vec<String>>,
-	#[serde(rename = "environment", skip_serializing_if = "Option::is_none")]
-	pub environment: Option<::std::collections::HashMap<String, String>>,
-}
-
-impl ActorCreateActorRuntimeRequest {
->>>>>>> 16ffc975b (feat: ds input validation)
 	pub fn new() -> ActorCreateActorRuntimeRequest {
 		ActorCreateActorRuntimeRequest {
 			arguments: None,
 			environment: None,
 		}
 	}
-<<<<<<< HEAD
-=======
->>>>>>> 5f749cb07 (feat: ds input validation)
->>>>>>> 16ffc975b (feat: ds input validation)
 }

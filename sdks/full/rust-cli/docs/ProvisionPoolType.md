@@ -1,8 +1,4 @@
-<<<<<<<< HEAD:sdks/full/rust-cli/docs/ProvisionPoolType.md
 # ProvisionPoolType
-========
-# ActorBuildCompression
->>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar):sdks/runtime/rust/docs/ActorBuildCompression.md
 
 ## Properties
 

@@ -16,22 +16,14 @@ pub mod actor_create_actor_response;
 pub use self::actor_create_actor_response::ActorCreateActorResponse;
 pub mod actor_create_actor_runtime_request;
 pub use self::actor_create_actor_runtime_request::ActorCreateActorRuntimeRequest;
-<<<<<<< HEAD
-=======
-pub mod actor_game_guard_routing;
-pub use self::actor_game_guard_routing::ActorGameGuardRouting;
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
 pub mod actor_get_actor_logs_response;
 pub use self::actor_get_actor_logs_response::ActorGetActorLogsResponse;
 pub mod actor_get_actor_response;
 pub use self::actor_get_actor_response::ActorGetActorResponse;
 pub mod actor_get_build_response;
 pub use self::actor_get_build_response::ActorGetBuildResponse;
-<<<<<<< HEAD
 pub mod actor_guard_routing;
 pub use self::actor_guard_routing::ActorGuardRouting;
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
 pub mod actor_lifecycle;
 pub use self::actor_lifecycle::ActorLifecycle;
 pub mod actor_list_actors_response;
@@ -68,11 +60,8 @@ pub mod actor_resources;
 pub use self::actor_resources::ActorResources;
 pub mod actor_runtime;
 pub use self::actor_runtime::ActorRuntime;
-<<<<<<< HEAD
 pub mod actor_upgrade_actor_request;
 pub use self::actor_upgrade_actor_request::ActorUpgradeActorRequest;
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
 pub mod error_body;
 pub use self::error_body::ErrorBody;
 pub mod upload_prepare_file;

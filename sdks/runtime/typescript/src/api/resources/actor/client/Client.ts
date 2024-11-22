@@ -6,10 +6,6 @@ import * as environments from "../../../../environments";
 import * as core from "../../../../core";
 import * as Rivet from "../../../index";
 import urlJoin from "url-join";
-<<<<<<< HEAD
-<<<<<<<< HEAD:sdks/runtime/typescript/src/api/resources/actor/client/Client.ts
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
 import * as serializers from "../../../../serialization/index";
 import * as errors from "../../../../errors/index";
 import { Builds } from "../resources/builds/client/Client";
@@ -17,15 +13,6 @@ import { Logs } from "../resources/logs/client/Client";
 import { Regions } from "../resources/regions/client/Client";
 
 export declare namespace Actor {
-<<<<<<< HEAD
-========
-import * as serializers from "../../../../../../serialization/index";
-import * as errors from "../../../../../../errors/index";
-
-export declare namespace Builds {
->>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar):sdks/runtime/typescript/src/api/resources/actor/resources/builds/client/Client.ts
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
     interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
         token: core.Supplier<core.BearerToken>;
@@ -42,10 +29,6 @@ export declare namespace Builds {
     }
 }
 
-<<<<<<< HEAD
-<<<<<<<< HEAD:sdks/runtime/typescript/src/api/resources/actor/client/Client.ts
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
 export class Actor {
     constructor(protected readonly _options: Actor.Options) {}
 
@@ -55,20 +38,6 @@ export class Actor {
      * @param {string} actor - The id of the actor to destroy
      * @param {Rivet.actor.ListActorsRequestQuery} request
      * @param {Actor.RequestOptions} requestOptions - Request-specific configuration.
-<<<<<<< HEAD
-========
-export class Builds {
-    constructor(protected readonly _options: Builds.Options) {}
-
-    /**
-     * Get a build.
-     *
-     * @param {string} build
-     * @param {Rivet.actor.GetBuildRequestQuery} request
-     * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
->>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar):sdks/runtime/typescript/src/api/resources/actor/resources/builds/client/Client.ts
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
      *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
@@ -78,37 +47,16 @@ export class Builds {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-<<<<<<< HEAD
-<<<<<<<< HEAD:sdks/runtime/typescript/src/api/resources/actor/client/Client.ts
      *     await client.actor.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-========
-     *     await client.actor.builds.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
->>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar):sdks/runtime/typescript/src/api/resources/actor/resources/builds/client/Client.ts
-=======
-     *     await client.actor.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
      *         project: "string",
      *         environment: "string"
      *     })
      */
     public async get(
-<<<<<<< HEAD
-<<<<<<<< HEAD:sdks/runtime/typescript/src/api/resources/actor/client/Client.ts
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
         actor: string,
         request: Rivet.actor.ListActorsRequestQuery = {},
         requestOptions?: Actor.RequestOptions
     ): Promise<Rivet.actor.GetActorResponse> {
-<<<<<<< HEAD
-========
-        build: string,
-        request: Rivet.actor.GetBuildRequestQuery = {},
-        requestOptions?: Builds.RequestOptions
-    ): Promise<Rivet.actor.GetBuildResponse> {
->>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar):sdks/runtime/typescript/src/api/resources/actor/resources/builds/client/Client.ts
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
         const { project, environment } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
         if (project != null) {
@@ -122,15 +70,7 @@ export class Builds {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-<<<<<<< HEAD
-<<<<<<<< HEAD:sdks/runtime/typescript/src/api/resources/actor/client/Client.ts
                 `/actors/${encodeURIComponent(actor)}`
-========
-                `/builds/${encodeURIComponent(build)}`
->>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar):sdks/runtime/typescript/src/api/resources/actor/resources/builds/client/Client.ts
-=======
-                `/actors/${encodeURIComponent(actor)}`
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
             ),
             method: "GET",
             headers: {
@@ -147,15 +87,7 @@ export class Builds {
             abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
-<<<<<<< HEAD
-<<<<<<<< HEAD:sdks/runtime/typescript/src/api/resources/actor/client/Client.ts
             return serializers.actor.GetActorResponse.parseOrThrow(_response.body, {
-========
-            return serializers.actor.GetBuildResponse.parseOrThrow(_response.body, {
->>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar):sdks/runtime/typescript/src/api/resources/actor/resources/builds/client/Client.ts
-=======
-            return serializers.actor.GetActorResponse.parseOrThrow(_response.body, {
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
                 unrecognizedObjectKeys: "passthrough",
                 allowUnrecognizedUnionMembers: true,
                 allowUnrecognizedEnumValues: true,
@@ -250,23 +182,10 @@ export class Builds {
     }
 
     /**
-<<<<<<< HEAD
-<<<<<<<< HEAD:sdks/runtime/typescript/src/api/resources/actor/client/Client.ts
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
      * Lists all actors associated with the token used. Can be filtered by tags in the query string.
      *
      * @param {Rivet.actor.GetActorsRequestQuery} request
      * @param {Actor.RequestOptions} requestOptions - Request-specific configuration.
-<<<<<<< HEAD
-========
-     * Lists all builds of the project associated with the token used. Can be filtered by tags in the query string.
-     *
-     * @param {Rivet.actor.ListBuildsRequestQuery} request
-     * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
->>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar):sdks/runtime/typescript/src/api/resources/actor/resources/builds/client/Client.ts
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
      *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
@@ -276,10 +195,6 @@ export class Builds {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-<<<<<<< HEAD
-<<<<<<<< HEAD:sdks/runtime/typescript/src/api/resources/actor/client/Client.ts
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
      *     await client.actor.list({
      *         project: "string",
      *         environment: "string",
@@ -293,22 +208,6 @@ export class Builds {
         requestOptions?: Actor.RequestOptions
     ): Promise<Rivet.actor.ListActorsResponse> {
         const { project, environment, tagsJson, includeDestroyed, cursor } = request;
-<<<<<<< HEAD
-========
-     *     await client.actor.builds.list({
-     *         project: "string",
-     *         environment: "string",
-     *         tagsJson: "string"
-     *     })
-     */
-    public async list(
-        request: Rivet.actor.ListBuildsRequestQuery = {},
-        requestOptions?: Builds.RequestOptions
-    ): Promise<Rivet.actor.ListBuildsResponse> {
-        const { project, environment, tagsJson } = request;
->>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar):sdks/runtime/typescript/src/api/resources/actor/resources/builds/client/Client.ts
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
         if (project != null) {
             _queryParams["project"] = project;
@@ -322,10 +221,6 @@ export class Builds {
             _queryParams["tags_json"] = tagsJson;
         }
 
-<<<<<<< HEAD
-<<<<<<<< HEAD:sdks/runtime/typescript/src/api/resources/actor/client/Client.ts
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
         if (includeDestroyed != null) {
             _queryParams["include_destroyed"] = includeDestroyed.toString();
         }
@@ -338,15 +233,6 @@ export class Builds {
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
                 "/actors"
-<<<<<<< HEAD
-========
-        const _response = await (this._options.fetcher ?? core.fetcher)({
-            url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                "/builds"
->>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar):sdks/runtime/typescript/src/api/resources/actor/resources/builds/client/Client.ts
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
             ),
             method: "GET",
             headers: {
@@ -363,15 +249,7 @@ export class Builds {
             abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
-<<<<<<< HEAD
-<<<<<<<< HEAD:sdks/runtime/typescript/src/api/resources/actor/client/Client.ts
             return serializers.actor.ListActorsResponse.parseOrThrow(_response.body, {
-========
-            return serializers.actor.ListBuildsResponse.parseOrThrow(_response.body, {
->>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar):sdks/runtime/typescript/src/api/resources/actor/resources/builds/client/Client.ts
-=======
-            return serializers.actor.ListActorsResponse.parseOrThrow(_response.body, {
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
                 unrecognizedObjectKeys: "passthrough",
                 allowUnrecognizedUnionMembers: true,
                 allowUnrecognizedEnumValues: true,
@@ -466,22 +344,10 @@ export class Builds {
     }
 
     /**
-<<<<<<< HEAD
-<<<<<<<< HEAD:sdks/runtime/typescript/src/api/resources/actor/client/Client.ts
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
      * Create a new dynamic actor.
      *
      * @param {Rivet.actor.CreateActorRequestQuery} request
      * @param {Actor.RequestOptions} requestOptions - Request-specific configuration.
-<<<<<<< HEAD
-========
-     * @param {string} build
-     * @param {Rivet.actor.PatchBuildTagsRequestQuery} request
-     * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
->>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar):sdks/runtime/typescript/src/api/resources/actor/resources/builds/client/Client.ts
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
      *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
@@ -491,10 +357,6 @@ export class Builds {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-<<<<<<< HEAD
-<<<<<<<< HEAD:sdks/runtime/typescript/src/api/resources/actor/client/Client.ts
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
      *     await client.actor.create({
      *         project: "string",
      *         environment: "string",
@@ -503,16 +365,11 @@ export class Builds {
      *             tags: {
      *                 "key": "value"
      *             },
-<<<<<<< HEAD
      *             build: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
      *             buildTags: {
      *                 "key": "value"
      *             },
      *             runtime: {
-=======
-     *             runtime: {
-     *                 build: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
      *                 arguments: ["string"],
      *                 environment: {
      *                     "string": "string"
@@ -527,12 +384,8 @@ export class Builds {
      *                 memory: 1
      *             },
      *             lifecycle: {
-<<<<<<< HEAD
      *                 killTimeout: 1000000,
      *                 durable: true
-=======
-     *                 killTimeout: 1000000
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
      *             }
      *         }
      *     })
@@ -541,27 +394,6 @@ export class Builds {
         request: Rivet.actor.CreateActorRequestQuery,
         requestOptions?: Actor.RequestOptions
     ): Promise<Rivet.actor.CreateActorResponse> {
-<<<<<<< HEAD
-========
-     *     await client.actor.builds.patchTags("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         project: "string",
-     *         environment: "string",
-     *         body: {
-     *             tags: {
-     *                 "key": "value"
-     *             },
-     *             exclusiveTags: ["string"]
-     *         }
-     *     })
-     */
-    public async patchTags(
-        build: string,
-        request: Rivet.actor.PatchBuildTagsRequestQuery,
-        requestOptions?: Builds.RequestOptions
-    ): Promise<Rivet.actor.PatchBuildTagsResponse> {
->>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar):sdks/runtime/typescript/src/api/resources/actor/resources/builds/client/Client.ts
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
         const { project, environment, body: _body } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
         if (project != null) {
@@ -575,21 +407,9 @@ export class Builds {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-<<<<<<< HEAD
-<<<<<<<< HEAD:sdks/runtime/typescript/src/api/resources/actor/client/Client.ts
                 "/actors"
             ),
             method: "POST",
-========
-                `/builds/${encodeURIComponent(build)}/tags`
-            ),
-            method: "PATCH",
->>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar):sdks/runtime/typescript/src/api/resources/actor/resources/builds/client/Client.ts
-=======
-                "/actors"
-            ),
-            method: "POST",
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
@@ -599,29 +419,13 @@ export class Builds {
             contentType: "application/json",
             queryParameters: _queryParams,
             requestType: "json",
-<<<<<<< HEAD
-<<<<<<<< HEAD:sdks/runtime/typescript/src/api/resources/actor/client/Client.ts
             body: serializers.actor.CreateActorRequest.jsonOrThrow(_body, { unrecognizedObjectKeys: "strip" }),
-========
-            body: serializers.actor.PatchBuildTagsRequest.jsonOrThrow(_body, { unrecognizedObjectKeys: "strip" }),
->>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar):sdks/runtime/typescript/src/api/resources/actor/resources/builds/client/Client.ts
-=======
-            body: serializers.actor.CreateActorRequest.jsonOrThrow(_body, { unrecognizedObjectKeys: "strip" }),
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
             maxRetries: requestOptions?.maxRetries,
             abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
-<<<<<<< HEAD
-<<<<<<<< HEAD:sdks/runtime/typescript/src/api/resources/actor/client/Client.ts
             return serializers.actor.CreateActorResponse.parseOrThrow(_response.body, {
-========
-            return serializers.actor.PatchBuildTagsResponse.parseOrThrow(_response.body, {
->>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar):sdks/runtime/typescript/src/api/resources/actor/resources/builds/client/Client.ts
-=======
-            return serializers.actor.CreateActorResponse.parseOrThrow(_response.body, {
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
                 unrecognizedObjectKeys: "passthrough",
                 allowUnrecognizedUnionMembers: true,
                 allowUnrecognizedEnumValues: true,
@@ -716,24 +520,11 @@ export class Builds {
     }
 
     /**
-<<<<<<< HEAD
-<<<<<<<< HEAD:sdks/runtime/typescript/src/api/resources/actor/client/Client.ts
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
      * Destroy a dynamic actor.
      *
      * @param {string} actor - The id of the actor to destroy
      * @param {Rivet.actor.DestroyActorRequestQuery} request
      * @param {Actor.RequestOptions} requestOptions - Request-specific configuration.
-<<<<<<< HEAD
-========
-     * Creates a new project build for the given project.
-     *
-     * @param {Rivet.actor.PrepareBuildRequestQuery} request
-     * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
->>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar):sdks/runtime/typescript/src/api/resources/actor/resources/builds/client/Client.ts
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
      *
      * @throws {@link Rivet.InternalError}
      * @throws {@link Rivet.RateLimitError}
@@ -743,10 +534,6 @@ export class Builds {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-<<<<<<< HEAD
-<<<<<<<< HEAD:sdks/runtime/typescript/src/api/resources/actor/client/Client.ts
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
      *     await client.actor.destroy("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
      *         project: "string",
      *         environment: "string",
@@ -886,7 +673,6 @@ export class Builds {
         }
     }
 
-<<<<<<< HEAD
     /**
      * Upgrades a dynamic actor.
      *
@@ -918,33 +704,6 @@ export class Builds {
         request: Rivet.actor.UpgradeActorRequestQuery,
         requestOptions?: Actor.RequestOptions
     ): Promise<Rivet.actor.UpgradeActorResponse> {
-========
-     *     await client.actor.builds.prepare({
-     *         project: "string",
-     *         environment: "string",
-     *         body: {
-     *             name: "string",
-     *             tags: {
-     *                 "key": "value"
-     *             },
-     *             imageTag: "string",
-     *             imageFile: {
-     *                 path: "string",
-     *                 contentType: "string",
-     *                 contentLength: 1000000
-     *             },
-     *             multipartUpload: true,
-     *             kind: "docker_image",
-     *             compression: "none",
-     *             prewarmRegions: ["string"]
-     *         }
-     *     })
-     */
-    public async prepare(
-        request: Rivet.actor.PrepareBuildRequestQuery,
-        requestOptions?: Builds.RequestOptions
-    ): Promise<Rivet.actor.PrepareBuildResponse> {
->>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar):sdks/runtime/typescript/src/api/resources/actor/resources/builds/client/Client.ts
         const { project, environment, body: _body } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
         if (project != null) {
@@ -958,11 +717,7 @@ export class Builds {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-<<<<<<<< HEAD:sdks/runtime/typescript/src/api/resources/actor/client/Client.ts
                 `/actors/${encodeURIComponent(actor)}/upgrade`
-========
-                "/builds/prepare"
->>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar):sdks/runtime/typescript/src/api/resources/actor/resources/builds/client/Client.ts
             ),
             method: "POST",
             headers: {
@@ -974,21 +729,13 @@ export class Builds {
             contentType: "application/json",
             queryParameters: _queryParams,
             requestType: "json",
-<<<<<<<< HEAD:sdks/runtime/typescript/src/api/resources/actor/client/Client.ts
             body: serializers.actor.UpgradeActorRequest.jsonOrThrow(_body, { unrecognizedObjectKeys: "strip" }),
-========
-            body: serializers.actor.PrepareBuildRequest.jsonOrThrow(_body, { unrecognizedObjectKeys: "strip" }),
->>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar):sdks/runtime/typescript/src/api/resources/actor/resources/builds/client/Client.ts
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
             maxRetries: requestOptions?.maxRetries,
             abortSignal: requestOptions?.abortSignal,
         });
         if (_response.ok) {
-<<<<<<<< HEAD:sdks/runtime/typescript/src/api/resources/actor/client/Client.ts
             return serializers.actor.UpgradeActorResponse.parseOrThrow(_response.body, {
-========
-            return serializers.actor.PrepareBuildResponse.parseOrThrow(_response.body, {
->>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar):sdks/runtime/typescript/src/api/resources/actor/resources/builds/client/Client.ts
                 unrecognizedObjectKeys: "passthrough",
                 allowUnrecognizedUnionMembers: true,
                 allowUnrecognizedEnumValues: true,
@@ -1082,9 +829,6 @@ export class Builds {
         }
     }
 
-<<<<<<<< HEAD:sdks/runtime/typescript/src/api/resources/actor/client/Client.ts
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
     protected _builds: Builds | undefined;
 
     public get builds(): Builds {
@@ -1101,152 +845,6 @@ export class Builds {
 
     public get regions(): Regions {
         return (this._regions ??= new Regions(this._options));
-<<<<<<< HEAD
-========
-    /**
-     * Marks an upload as complete.
-     *
-     * @param {string} build
-     * @param {Rivet.actor.CompleteBuildRequestQuery} request
-     * @param {Builds.RequestOptions} requestOptions - Request-specific configuration.
-     *
-     * @throws {@link Rivet.InternalError}
-     * @throws {@link Rivet.RateLimitError}
-     * @throws {@link Rivet.ForbiddenError}
-     * @throws {@link Rivet.UnauthorizedError}
-     * @throws {@link Rivet.NotFoundError}
-     * @throws {@link Rivet.BadRequestError}
-     *
-     * @example
-     *     await client.actor.builds.complete("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
-     *         project: "string",
-     *         environment: "string"
-     *     })
-     */
-    public async complete(
-        build: string,
-        request: Rivet.actor.CompleteBuildRequestQuery = {},
-        requestOptions?: Builds.RequestOptions
-    ): Promise<void> {
-        const { project, environment } = request;
-        const _queryParams: Record<string, string | string[] | object | object[]> = {};
-        if (project != null) {
-            _queryParams["project"] = project;
-        }
-
-        if (environment != null) {
-            _queryParams["environment"] = environment;
-        }
-
-        const _response = await (this._options.fetcher ?? core.fetcher)({
-            url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
-                `/builds/${encodeURIComponent(build)}/complete`
-            ),
-            method: "POST",
-            headers: {
-                Authorization: await this._getAuthorizationHeader(),
-                "X-Fern-Language": "JavaScript",
-                "X-Fern-Runtime": core.RUNTIME.type,
-                "X-Fern-Runtime-Version": core.RUNTIME.version,
-            },
-            contentType: "application/json",
-            queryParameters: _queryParams,
-            requestType: "json",
-            timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
-            maxRetries: requestOptions?.maxRetries,
-            abortSignal: requestOptions?.abortSignal,
-        });
-        if (_response.ok) {
-            return;
-        }
-
-        if (_response.error.reason === "status-code") {
-            switch (_response.error.statusCode) {
-                case 500:
-                    throw new Rivet.InternalError(
-                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
-                            unrecognizedObjectKeys: "passthrough",
-                            allowUnrecognizedUnionMembers: true,
-                            allowUnrecognizedEnumValues: true,
-                            skipValidation: true,
-                            breadcrumbsPrefix: ["response"],
-                        })
-                    );
-                case 429:
-                    throw new Rivet.RateLimitError(
-                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
-                            unrecognizedObjectKeys: "passthrough",
-                            allowUnrecognizedUnionMembers: true,
-                            allowUnrecognizedEnumValues: true,
-                            skipValidation: true,
-                            breadcrumbsPrefix: ["response"],
-                        })
-                    );
-                case 403:
-                    throw new Rivet.ForbiddenError(
-                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
-                            unrecognizedObjectKeys: "passthrough",
-                            allowUnrecognizedUnionMembers: true,
-                            allowUnrecognizedEnumValues: true,
-                            skipValidation: true,
-                            breadcrumbsPrefix: ["response"],
-                        })
-                    );
-                case 408:
-                    throw new Rivet.UnauthorizedError(
-                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
-                            unrecognizedObjectKeys: "passthrough",
-                            allowUnrecognizedUnionMembers: true,
-                            allowUnrecognizedEnumValues: true,
-                            skipValidation: true,
-                            breadcrumbsPrefix: ["response"],
-                        })
-                    );
-                case 404:
-                    throw new Rivet.NotFoundError(
-                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
-                            unrecognizedObjectKeys: "passthrough",
-                            allowUnrecognizedUnionMembers: true,
-                            allowUnrecognizedEnumValues: true,
-                            skipValidation: true,
-                            breadcrumbsPrefix: ["response"],
-                        })
-                    );
-                case 400:
-                    throw new Rivet.BadRequestError(
-                        serializers.ErrorBody.parseOrThrow(_response.error.body, {
-                            unrecognizedObjectKeys: "passthrough",
-                            allowUnrecognizedUnionMembers: true,
-                            allowUnrecognizedEnumValues: true,
-                            skipValidation: true,
-                            breadcrumbsPrefix: ["response"],
-                        })
-                    );
-                default:
-                    throw new errors.RivetError({
-                        statusCode: _response.error.statusCode,
-                        body: _response.error.body,
-                    });
-            }
-        }
-
-        switch (_response.error.reason) {
-            case "non-json":
-                throw new errors.RivetError({
-                    statusCode: _response.error.statusCode,
-                    body: _response.error.rawBody,
-                });
-            case "timeout":
-                throw new errors.RivetTimeoutError();
-            case "unknown":
-                throw new errors.RivetError({
-                    message: _response.error.errorMessage,
-                });
-        }
->>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar):sdks/runtime/typescript/src/api/resources/actor/resources/builds/client/Client.ts
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
     }
 
     protected async _getAuthorizationHeader(): Promise<string> {

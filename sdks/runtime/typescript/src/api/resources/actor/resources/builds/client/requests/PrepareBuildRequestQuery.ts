@@ -11,12 +11,6 @@ import * as Rivet from "../../../../../../index";
  *         environment: "string",
  *         body: {
  *             name: "string",
-<<<<<<< HEAD
-=======
- *             tags: {
- *                 "key": "value"
- *             },
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
  *             imageTag: "string",
  *             imageFile: {
  *                 path: "string",
@@ -25,8 +19,7 @@ import * as Rivet from "../../../../../../index";
  *             },
  *             multipartUpload: true,
  *             kind: "docker_image",
- *             compression: "none",
- *             prewarmRegions: ["string"]
+ *             compression: "none"
  *         }
  *     }
  */

@@ -369,7 +369,7 @@ async fn setup(
 							},
 							routing: pp::PortRouting::GameGuard,
 						},
-					)),
+					),
 					Routing::Host { protocol } => (
 						crate::util::pegboard_normalize_port_label(port_label),
 						pp::Port {

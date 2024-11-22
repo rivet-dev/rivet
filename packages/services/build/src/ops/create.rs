@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use chirp_workflow::prelude::*;
 use rivet_operation::prelude::proto::backend;
 
@@ -17,7 +15,6 @@ pub struct Input {
 	pub content: Content,
 	pub kind: BuildKind,
 	pub compression: BuildCompression,
-	pub tags: HashMap<String, String>,
 }
 
 #[derive(Debug)]

@@ -15,20 +15,6 @@
 pub struct ActorPrepareBuildResponse {
     #[serde(rename = "build")]
     pub build: uuid::Uuid,
-<<<<<<< HEAD
-    #[serde(rename = "image_presigned_request", skip_serializing_if = "Option::is_none")]
-    pub image_presigned_request: Option<Box<crate::models::UploadPresignedRequest>>,
-    #[serde(rename = "image_presigned_requests", skip_serializing_if = "Option::is_none")]
-    pub image_presigned_requests: Option<Vec<crate::models::UploadPresignedRequest>>,
-}
-
-impl ActorPrepareBuildResponse {
-    pub fn new(build: uuid::Uuid) -> ActorPrepareBuildResponse {
-        ActorPrepareBuildResponse {
-            build,
-            image_presigned_request: None,
-            image_presigned_requests: None,
-=======
     #[serde(rename = "presigned_requests")]
     pub presigned_requests: Vec<crate::models::UploadPresignedRequest>,
 }
@@ -38,7 +24,6 @@ impl ActorPrepareBuildResponse {
         ActorPrepareBuildResponse {
             build,
             presigned_requests,
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
         }
     }
 }

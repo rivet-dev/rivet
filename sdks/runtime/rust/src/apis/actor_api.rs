@@ -67,7 +67,6 @@ pub enum ActorListError {
     UnknownValue(serde_json::Value),
 }
 
-<<<<<<< HEAD
 /// struct for typed errors of method [`actor_upgrade`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -81,8 +80,6 @@ pub enum ActorUpgradeError {
     UnknownValue(serde_json::Value),
 }
 
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
 
 /// Create a new dynamic actor.
 pub async fn actor_create(configuration: &configuration::Configuration, actor_create_actor_request: crate::models::ActorCreateActorRequest, project: Option<&str>, environment: Option<&str>) -> Result<crate::models::ActorCreateActorResponse, Error<ActorCreateError>> {
@@ -245,7 +242,6 @@ pub async fn actor_list(configuration: &configuration::Configuration, project: O
     }
 }
 
-<<<<<<< HEAD
 /// Upgrades a dynamic actor.
 pub async fn actor_upgrade(configuration: &configuration::Configuration, actor: &str, actor_upgrade_actor_request: crate::models::ActorUpgradeActorRequest, project: Option<&str>, environment: Option<&str>) -> Result<serde_json::Value, Error<ActorUpgradeError>> {
     let local_var_configuration = configuration;
@@ -284,5 +280,3 @@ pub async fn actor_upgrade(configuration: &configuration::Configuration, actor: 
     }
 }
 
-=======
->>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)

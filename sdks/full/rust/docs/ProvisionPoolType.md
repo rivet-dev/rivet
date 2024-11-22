@@ -1,8 +1,4 @@
-<<<<<<<< HEAD:sdks/full/rust/docs/ProvisionPoolType.md
 # ProvisionPoolType
-========
-# ActorBuildKind
->>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar):sdks/runtime/rust/docs/ActorBuildKind.md
 
 ## Properties
 

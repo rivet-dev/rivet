@@ -100,7 +100,6 @@ types:
   PrepareBuildRequest:
     properties:
       name: string
-      tags: unknown
       image_tag:
         docs: A tag given to the project build.
         type: optional<string>
