@@ -11,6 +11,10 @@ Name | Type | Description | Notes
 **multipart_upload** | Option<**bool**> |  | [optional]
 **name** | **String** |  | 
 **prewarm_regions** | Option<**Vec<String>**> |  | [optional]
+<<<<<<< HEAD
+=======
+**tags** | Option<[**serde_json::Value**](.md)> |  | 
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

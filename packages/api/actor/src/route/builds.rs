@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
-use proto::backend;
 use rivet_api::models;
-use rivet_convert::ApiTryInto;
+use rivet_convert::{ApiInto, ApiTryInto};
 use rivet_operation::prelude::*;
 use serde::Deserialize;
 use serde_json::json;
@@ -190,8 +189,7 @@ pub async fn patch_tags(
 	let CheckOutput { env_id, .. } = ctx.auth().check(ctx.op_ctx(), &query, false).await?;
 
 	let tags = unwrap_with!(body.tags, API_BAD_BODY, error = "missing field `tags`");
-	let tags = serde_json::from_value::<HashMap<String, Option<String>>>(tags)
-		.map_err(|err| err_code!(API_BAD_BODY, error = err))?;
+	let tags = serde_json::from_value(tags).map_err(|err| err_code!(API_BAD_BODY, error = err))?;
 
 	let build_res = ctx
 		.op(build::ops::get::Input {
@@ -246,7 +244,7 @@ pub async fn create_build(
 
 	let (kind, image_tag) = match body.kind {
 		Option::None | Some(models::ActorBuildKind::DockerImage) => (
-			backend::build::BuildKind::DockerImage,
+			build::types::BuildKind::DockerImage,
 			unwrap_with!(
 				body.image_tag,
 				API_BAD_BODY,
@@ -254,36 +252,40 @@ pub async fn create_build(
 			),
 		),
 		Some(models::ActorBuildKind::OciBundle) => (
-			backend::build::BuildKind::OciBundle,
+			build::types::BuildKind::OciBundle,
 			// HACK(RVT-4125): Generate nonexistent image tag
 			body.image_tag
 				.unwrap_or_else(|| format!("nonexistent:{}", Uuid::new_v4())),
 		),
 		Some(models::ActorBuildKind::Javascript) => (
-			backend::build::BuildKind::JavaScript,
+			build::types::BuildKind::JavaScript,
 			// HACK(RVT-4125): Generate nonexistent image tag
 			body.image_tag
 				.unwrap_or_else(|| format!("nonexistent:{}", Uuid::new_v4())),
 		),
 	};
 
-	let compression = match body.compression {
-		Option::None | Some(models::ActorBuildCompression::None) => {
-			backend::build::BuildCompression::None
-		}
-		Some(models::ActorBuildCompression::Lz4) => backend::build::BuildCompression::Lz4,
-	};
-
-	let create_res = op!([ctx] build_create {
-		env_id: Some(env_id.into()),
-		display_name: body.name,
-		image_tag: Some(image_tag),
-		image_file: Some((*body.image_file).api_try_into()?),
-		kind: kind as i32,
-		compression: compression as i32,
-	})
-	.await?;
-	let build_id = unwrap_ref!(create_res.build_id).as_uuid();
+	let create_res = ctx
+		.op(build::ops::create::Input {
+			game_id: None,
+			env_id: Some(env_id),
+			tags: body
+				.tags
+				.map(serde_json::from_value)
+				.transpose()?
+				.unwrap_or_default(),
+			display_name: body.name,
+			content: build::ops::create::Content::New {
+				image_file: (*body.image_file).api_try_into()?,
+				image_tag,
+			},
+			kind,
+			compression: body
+				.compression
+				.map(ApiInto::api_into)
+				.unwrap_or(build::types::BuildCompression::None),
+		})
+		.await?;
 
 	let cluster_res = ctx
 		.op(cluster::ops::get_for_game::Input {
@@ -320,38 +322,18 @@ pub async fn create_build(
 	if !prewarm_datacenter_ids.is_empty() {
 		ctx.op(build::ops::prewarm_ats::Input {
 			datacenter_ids: prewarm_datacenter_ids,
-			build_ids: vec![build_id],
+			build_ids: vec![create_res.build_id],
 		})
 		.await?;
 	}
 
-	let image_presigned_request = if !multipart_upload {
-		Some(Box::new(
-			unwrap!(create_res.image_presigned_requests.first())
-				.clone()
-				.api_try_into()?,
-		))
-	} else {
-		None
-	};
-
-	let image_presigned_requests = if multipart_upload {
-		Some(
-			create_res
-				.image_presigned_requests
-				.iter()
-				.cloned()
-				.map(ApiTryInto::api_try_into)
-				.collect::<GlobalResult<Vec<_>>>()?,
-		)
-	} else {
-		None
-	};
-
 	Ok(models::ActorPrepareBuildResponse {
-		build: build_id,
-		image_presigned_request,
-		image_presigned_requests,
+		build: create_res.build_id,
+		presigned_requests: create_res
+			.presigned_requests
+			.into_iter()
+			.map(ApiTryInto::api_try_into)
+			.collect::<GlobalResult<Vec<_>>>()?,
 	})
 }
 
@@ -394,15 +376,31 @@ pub async fn create_build_deprecated(
 			}),
 			multipart_upload: body.multipart_upload,
 			name: body.name,
+			tags: None,
 			prewarm_regions,
 		},
 		global,
 	)
 	.await?;
+
+	let multipart_upload = body.multipart_upload.unwrap_or(false);
+
+	let (image_presigned_request, image_presigned_requests) = if !multipart_upload {
+		(
+			Some(Box::new(unwrap!(build_res
+				.presigned_requests
+				.into_iter()
+				.next()))),
+			None,
+		)
+	} else {
+		(None, Some(build_res.presigned_requests))
+	};
+
 	Ok(models::ServersCreateBuildResponse {
 		build: build_res.build,
-		image_presigned_request: build_res.image_presigned_request,
-		image_presigned_requests: build_res.image_presigned_requests,
+		image_presigned_request,
+		image_presigned_requests,
 	})
 }
 

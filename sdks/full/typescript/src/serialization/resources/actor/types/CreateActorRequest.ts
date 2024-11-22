@@ -16,8 +16,11 @@ export const CreateActorRequest: core.serialization.ObjectSchema<
 > = core.serialization.object({
     region: core.serialization.string(),
     tags: core.serialization.unknown(),
+<<<<<<< HEAD
     build: core.serialization.string().optional(),
     buildTags: core.serialization.unknown().optional(),
+=======
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
     runtime: CreateActorRuntimeRequest,
     network: CreateActorNetworkRequest.optional(),
     resources: Resources,
@@ -28,8 +31,11 @@ export declare namespace CreateActorRequest {
     interface Raw {
         region: string;
         tags?: unknown;
+<<<<<<< HEAD
         build?: string | null;
         buildTags?: unknown | null;
+=======
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
         runtime: CreateActorRuntimeRequest.Raw;
         network?: CreateActorNetworkRequest.Raw | null;
         resources: Resources.Raw;

@@ -8,7 +8,10 @@ Method | HTTP request | Description
 [**actor_destroy**](ActorApi.md#actor_destroy) | **DELETE** /actors/{actor} | 
 [**actor_get**](ActorApi.md#actor_get) | **GET** /actors/{actor} | 
 [**actor_list**](ActorApi.md#actor_list) | **GET** /actors | 
+<<<<<<< HEAD
 [**actor_upgrade**](ActorApi.md#actor_upgrade) | **POST** /actors/{actor}/upgrade | 
+=======
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
 
 
 
@@ -142,6 +145,7 @@ Name | Type | Description  | Required | Notes
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
+<<<<<<< HEAD
 
 ## actor_upgrade
 
@@ -175,3 +179,5 @@ Name | Type | Description  | Required | Notes
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
+=======
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)

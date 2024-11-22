@@ -325,8 +325,10 @@ components:
           items:
             type: string
           type: array
+        tags: {}
       required:
       - name
+      - tags
       - image_file
       type: object
     ActorPrepareBuildResponse:
@@ -334,14 +336,13 @@ components:
         build:
           format: uuid
           type: string
-        image_presigned_request:
-          $ref: '#/components/schemas/UploadPresignedRequest'
-        image_presigned_requests:
+        presigned_requests:
           items:
             $ref: '#/components/schemas/UploadPresignedRequest'
           type: array
       required:
       - build
+      - presigned_requests
       type: object
     ActorRegion:
       properties:

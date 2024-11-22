@@ -1,13 +1,10 @@
-<<<<<<<< HEAD:sdks/runtime/rust/docs/ActorBuildCompression.md
-# ActorBuildCompression
-========
-# ActorLogStream
->>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar):sdks/runtime/rust/docs/ActorLogStream.md
+# ActorGameGuardRouting
 
 ## Properties
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
+**authorization** | Option<[**crate::models::ActorPortAuthorization**](ActorPortAuthorization.md)> |  | [optional]
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

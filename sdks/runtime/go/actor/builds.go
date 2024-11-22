@@ -182,7 +182,12 @@ func (p *PatchBuildTagsResponse) String() string {
 }
 
 type PrepareBuildRequest struct {
+<<<<<<< HEAD
 	Name string `json:"name"`
+=======
+	Name string      `json:"name"`
+	Tags interface{} `json:"tags,omitempty"`
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
 	// A tag given to the project build.
 	ImageTag        *string             `json:"image_tag,omitempty"`
 	ImageFile       *upload.PrepareFile `json:"image_file,omitempty"`
@@ -218,9 +223,14 @@ func (p *PrepareBuildRequest) String() string {
 }
 
 type PrepareBuildResponse struct {
+<<<<<<< HEAD
 	Build                  uuid.UUID                  `json:"build"`
 	ImagePresignedRequest  *upload.PresignedRequest   `json:"image_presigned_request,omitempty"`
 	ImagePresignedRequests []*upload.PresignedRequest `json:"image_presigned_requests,omitempty"`
+=======
+	Build             uuid.UUID                  `json:"build"`
+	PresignedRequests []*upload.PresignedRequest `json:"presigned_requests,omitempty"`
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
 
 	_rawJSON json.RawMessage
 }

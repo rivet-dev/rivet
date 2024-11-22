@@ -29,7 +29,10 @@ Class | Method | HTTP request | Description
 *ActorApi* | [**actor_destroy**](docs/ActorApi.md#actor_destroy) | **DELETE** /actors/{actor} | 
 *ActorApi* | [**actor_get**](docs/ActorApi.md#actor_get) | **GET** /actors/{actor} | 
 *ActorApi* | [**actor_list**](docs/ActorApi.md#actor_list) | **GET** /actors | 
+<<<<<<< HEAD
 *ActorApi* | [**actor_upgrade**](docs/ActorApi.md#actor_upgrade) | **POST** /actors/{actor}/upgrade | 
+=======
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
 *ActorBuildsApi* | [**actor_builds_complete**](docs/ActorBuildsApi.md#actor_builds_complete) | **POST** /builds/{build}/complete | 
 *ActorBuildsApi* | [**actor_builds_get**](docs/ActorBuildsApi.md#actor_builds_get) | **GET** /builds/{build} | 
 *ActorBuildsApi* | [**actor_builds_list**](docs/ActorBuildsApi.md#actor_builds_list) | **GET** /builds | 
@@ -50,10 +53,17 @@ Class | Method | HTTP request | Description
  - [ActorCreateActorRequest](docs/ActorCreateActorRequest.md)
  - [ActorCreateActorResponse](docs/ActorCreateActorResponse.md)
  - [ActorCreateActorRuntimeRequest](docs/ActorCreateActorRuntimeRequest.md)
+<<<<<<< HEAD
  - [ActorGetActorLogsResponse](docs/ActorGetActorLogsResponse.md)
  - [ActorGetActorResponse](docs/ActorGetActorResponse.md)
  - [ActorGetBuildResponse](docs/ActorGetBuildResponse.md)
  - [ActorGuardRouting](docs/ActorGuardRouting.md)
+=======
+ - [ActorGameGuardRouting](docs/ActorGameGuardRouting.md)
+ - [ActorGetActorLogsResponse](docs/ActorGetActorLogsResponse.md)
+ - [ActorGetActorResponse](docs/ActorGetActorResponse.md)
+ - [ActorGetBuildResponse](docs/ActorGetBuildResponse.md)
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
  - [ActorLifecycle](docs/ActorLifecycle.md)
  - [ActorListActorsResponse](docs/ActorListActorsResponse.md)
  - [ActorListBuildsResponse](docs/ActorListBuildsResponse.md)
@@ -72,7 +82,10 @@ Class | Method | HTTP request | Description
  - [ActorRegion](docs/ActorRegion.md)
  - [ActorResources](docs/ActorResources.md)
  - [ActorRuntime](docs/ActorRuntime.md)
+<<<<<<< HEAD
  - [ActorUpgradeActorRequest](docs/ActorUpgradeActorRequest.md)
+=======
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
  - [ErrorBody](docs/ErrorBody.md)
  - [UploadPrepareFile](docs/UploadPrepareFile.md)
  - [UploadPresignedRequest](docs/UploadPresignedRequest.md)

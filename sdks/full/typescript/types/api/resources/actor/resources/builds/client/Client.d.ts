@@ -108,6 +108,9 @@ export declare class Builds {
      *         environment: "string",
      *         body: {
      *             name: "string",
+     *             tags: {
+     *                 "key": "value"
+     *             },
      *             imageTag: "string",
      *             imageFile: {
      *                 path: "string",

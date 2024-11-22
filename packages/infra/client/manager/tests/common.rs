@@ -341,14 +341,17 @@ pub async fn build_binaries(gen_path: &Path) {
 	assert!(status.success());
 
 	// Js image
-	tokio::fs::copy(
-		Path::new(env!("CARGO_MANIFEST_DIR"))
-			.join("tests")
-			.join("echo.js"),
-		js_image_path(gen_path),
-	)
-	.await
-	.unwrap();
+	let status = Command::new("tar")
+		.arg("-czf")
+		.arg(js_image_path(gen_path))
+		.arg("-C")
+		.arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests"))
+		.arg("echo.js")
+		.status()
+		.await
+		.unwrap();
+
+	assert!(status.success());
 
 	build_runner(gen_path, "container").await;
 	build_runner(gen_path, "isolate-v8").await;

@@ -1725,6 +1725,8 @@ dependencies = [
  "faker-build",
  "faker-game",
  "faker-region",
+ "game-get",
+ "game-namespace-get",
  "heck 0.3.3",
  "http 0.2.12",
  "include_dir",
@@ -1736,7 +1738,9 @@ dependencies = [
  "nomad-util",
  "rand",
  "reqwest 0.11.27",
+ "rivet-api",
  "rivet-config",
+ "rivet-convert",
  "rivet-metrics",
  "rivet-operation",
  "rivet-runtime",
@@ -1750,6 +1754,7 @@ dependencies = [
  "token-create",
  "trust-dns-resolver",
  "upload-get",
+ "upload-prepare",
 ]
 
 [[package]]

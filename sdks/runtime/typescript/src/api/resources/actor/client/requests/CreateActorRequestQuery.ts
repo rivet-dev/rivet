@@ -14,11 +14,16 @@ import * as Rivet from "../../../../index";
  *             tags: {
  *                 "key": "value"
  *             },
+<<<<<<< HEAD
  *             build: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
  *             buildTags: {
  *                 "key": "value"
  *             },
  *             runtime: {
+=======
+ *             runtime: {
+ *                 build: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32",
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
  *                 arguments: ["string"],
  *                 environment: {
  *                     "string": "string"
@@ -33,8 +38,12 @@ import * as Rivet from "../../../../index";
  *                 memory: 1
  *             },
  *             lifecycle: {
+<<<<<<< HEAD
  *                 killTimeout: 1000000,
  *                 durable: true
+=======
+ *                 killTimeout: 1000000
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
  *             }
  *         }
  *     }

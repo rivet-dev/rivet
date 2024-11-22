@@ -100,6 +100,7 @@ types:
   PrepareBuildRequest:
     properties:
       name: string
+      tags: unknown
       image_tag:
         docs: A tag given to the project build.
         type: optional<string>
@@ -113,8 +114,7 @@ types:
   PrepareBuildResponse:
     properties:
       build: uuid
-      image_presigned_request: optional<uploadCommons.PresignedRequest>
-      image_presigned_requests: optional<list<uploadCommons.PresignedRequest>>
+      presigned_requests: list<uploadCommons.PresignedRequest>
 
   BuildKind:
     enum:

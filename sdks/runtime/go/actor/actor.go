@@ -5,15 +5,21 @@ package actor
 import (
 	json "encoding/json"
 	fmt "fmt"
+<<<<<<< HEAD
 	uuid "github.com/google/uuid"
+=======
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
 	core "sdk/core"
 )
 
 type CreateActorRequest struct {
 	Region    string                     `json:"region"`
 	Tags      interface{}                `json:"tags,omitempty"`
+<<<<<<< HEAD
 	Build     *uuid.UUID                 `json:"build,omitempty"`
 	BuildTags interface{}                `json:"buildTags,omitempty"`
+=======
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
 	Runtime   *CreateActorRuntimeRequest `json:"runtime,omitempty"`
 	Network   *CreateActorNetworkRequest `json:"network,omitempty"`
 	Resources *Resources                 `json:"resources,omitempty"`
@@ -160,6 +166,7 @@ func (l *ListActorsResponse) String() string {
 	}
 	return fmt.Sprintf("%#v", l)
 }
+<<<<<<< HEAD
 
 type UpgradeActorRequest struct {
 	Build     *uuid.UUID  `json:"build,omitempty"`
@@ -217,3 +224,5 @@ func (u *UpgradeActorResponse) String() string {
 	}
 	return fmt.Sprintf("%#v", u)
 }
+=======
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)

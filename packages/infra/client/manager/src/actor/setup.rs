@@ -26,7 +26,6 @@ impl Actor {
 		tracing::info!(actor_id=?self.actor_id, "downloading artifact");
 
 		let actor_path = ctx.actor_path(self.actor_id);
-		let oci_bundle_path = actor_path.join("oci-bundle");
 
 		let mut stream = reqwest::get(&self.config.image.artifact_url)
 			.await?
@@ -88,10 +87,16 @@ impl Actor {
 					}
 				}
 			}
-			protocol::ImageKind::OciBundle => {
+			protocol::ImageKind::OciBundle | protocol::ImageKind::JavaScript => {
 				tracing::info!(actor_id=?self.actor_id, "decompressing and unarchiving artifact");
 
-				fs::create_dir(&oci_bundle_path).await?;
+				let bundle_path = match self.config.image.kind {
+					protocol::ImageKind::OciBundle => actor_path.join("oci-bundle"),
+					protocol::ImageKind::JavaScript => actor_path.join("js-bundle"),
+					_ => unreachable!(),
+				};
+
+				fs::create_dir(&bundle_path).await?;
 
 				// Spawn the lz4 process
 				let mut lz4_child = Command::new("lz4")
@@ -104,7 +109,7 @@ impl Actor {
 				let mut tar_child = Command::new("tar")
 					.arg("-x")
 					.arg("-C")
-					.arg(&oci_bundle_path)
+					.arg(&bundle_path)
 					.stdin(Stdio::piped())
 					.spawn()?;
 
@@ -153,67 +158,13 @@ impl Actor {
 						let cmd_out = tar_child.wait_with_output().await?;
 						ensure!(
 							cmd_out.status.success(),
-							"failed `lz4` command\n{}",
+							"failed `tar` command\n{}",
 							std::str::from_utf8(&cmd_out.stderr)?
 						);
 
 						Ok(())
 					},
 				)?;
-			}
-			protocol::ImageKind::JavaScript => {
-				let script_path = actor_path.join("index.js");
-
-				match self.config.image.compression {
-					protocol::ImageCompression::None => {
-						tracing::info!(actor_id=?self.actor_id, "saving artifact to file");
-
-						let mut output_file = File::create(&script_path).await?;
-
-						// Write from stream to file
-						while let Some(chunk) = stream.next().await {
-							output_file.write_all(&chunk?).await?;
-						}
-					}
-					protocol::ImageCompression::Lz4 => {
-						tracing::info!(actor_id=?self.actor_id, "decompressing artifact");
-
-						// Spawn the lz4 process
-						let mut lz4_child = Command::new("lz4")
-							.arg("-d")
-							.arg("-")
-							.arg(&script_path)
-							.stdin(Stdio::piped())
-							.spawn()?;
-
-						// Take the stdin of lz4
-						let mut lz4_stdin = lz4_child.stdin.take().context("lz4 stdin")?;
-
-						tokio::try_join!(
-							// Pipe the response body to lz4 stdin
-							async move {
-								while let Some(chunk) = stream.next().await {
-									let data = chunk?;
-									lz4_stdin.write_all(&data).await?;
-								}
-								lz4_stdin.shutdown().await?;
-
-								anyhow::Ok(())
-							},
-							// Wait for child process
-							async {
-								let cmd_out = lz4_child.wait_with_output().await?;
-								ensure!(
-									cmd_out.status.success(),
-									"failed `lz4` command\n{}",
-									std::str::from_utf8(&cmd_out.stderr)?
-								);
-
-								Ok(())
-							},
-						)?;
-					}
-				}
 			}
 		}
 

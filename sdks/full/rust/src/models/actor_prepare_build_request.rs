@@ -25,12 +25,15 @@ pub struct ActorPrepareBuildRequest {
 	pub name: String,
 	#[serde(rename = "prewarm_regions", skip_serializing_if = "Option::is_none")]
 	pub prewarm_regions: Option<Vec<String>>,
+	#[serde(rename = "tags", deserialize_with = "Option::deserialize")]
+	pub tags: Option<serde_json::Value>,
 }
 
 impl ActorPrepareBuildRequest {
 	pub fn new(
 		image_file: crate::models::UploadPrepareFile,
 		name: String,
+		tags: Option<serde_json::Value>,
 	) -> ActorPrepareBuildRequest {
 		ActorPrepareBuildRequest {
 			compression: None,
@@ -40,6 +43,7 @@ impl ActorPrepareBuildRequest {
 			multipart_upload: None,
 			name,
 			prewarm_regions: None,
+			tags,
 		}
 	}
 }

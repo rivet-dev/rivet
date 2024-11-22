@@ -142,10 +142,13 @@ pub async fn run_inner(
 
 	tracing::info!(?actor_id, "Isolate KV initialized");
 
-	// Load script into a static module loader. No dynamic scripts can be loaded this way.
-	let script_content = fs::read_to_string(actor_path.join("index.js"))
+	// Should match the path from `Actor::download_image` in manager/src/actor/setup.rs. index.js might not
+	// exist but thats up to the user to bundle it correctly.
+	let script_content = fs::read_to_string(actor_path.join("js-bundle").join("index.js"))
 		.await
 		.with_context(|| format!("failed to load {}", actor_path.join("index.js").display()))?;
+
+	// Load script into a static module loader. No dynamic scripts can be loaded this way.
 	let main_module = ModuleSpecifier::from_file_path(Path::new("/index.js"))
 		.map_err(|_| anyhow!("invalid file name"))?;
 	let loader = StaticModuleLoader::new([(main_module.clone(), script_content)]);

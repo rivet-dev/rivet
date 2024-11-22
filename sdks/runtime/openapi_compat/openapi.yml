@@ -93,10 +93,13 @@ components:
       type: object
     ActorCreateActorRequest:
       properties:
+<<<<<<< HEAD
         build:
           format: uuid
           type: string
         buildTags: {}
+=======
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
         lifecycle:
           $ref: '#/components/schemas/ActorLifecycle'
         network:
@@ -128,14 +131,33 @@ components:
           items:
             type: string
           type: array
+<<<<<<< HEAD
+=======
+        build:
+          format: uuid
+          type: string
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
         environment:
           additionalProperties:
             type: string
           type: object
+<<<<<<< HEAD
+=======
+      required:
+      - build
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
       type: object
     ActorDestroyActorResponse:
       properties: {}
       type: object
+<<<<<<< HEAD
+=======
+    ActorGameGuardRouting:
+      properties:
+        authorization:
+          $ref: '#/components/schemas/ActorPortAuthorization'
+      type: object
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
     ActorGetActorLogsResponse:
       properties:
         lines:
@@ -169,21 +191,27 @@ components:
       required:
       - build
       type: object
+<<<<<<< HEAD
     ActorGuardRouting:
       properties:
         authorization:
           $ref: '#/components/schemas/ActorPortAuthorization'
       type: object
+=======
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
     ActorHostRouting:
       properties: {}
       type: object
     ActorLifecycle:
       properties:
+<<<<<<< HEAD
         durable:
           description: If true, the actor will try to reschedule itself automatically
             in the event of a crash or a datacenter failover. The actor will not reschedule
             if it exits successfully.
           type: boolean
+=======
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
         kill_timeout:
           description: The duration to wait for in milliseconds before killing the
             actor. This should be set to a safe default, and can be overridden during
@@ -299,8 +327,13 @@ components:
       type: object
     ActorPortRouting:
       properties:
+<<<<<<< HEAD
         guard:
           $ref: '#/components/schemas/ActorGuardRouting'
+=======
+        game_guard:
+          $ref: '#/components/schemas/ActorGameGuardRouting'
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
         host:
           $ref: '#/components/schemas/ActorHostRouting'
       type: object
@@ -323,8 +356,15 @@ components:
           items:
             type: string
           type: array
+<<<<<<< HEAD
       required:
       - name
+=======
+        tags: {}
+      required:
+      - name
+      - tags
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
       - image_file
       type: object
     ActorPrepareBuildResponse:
@@ -332,14 +372,22 @@ components:
         build:
           format: uuid
           type: string
+<<<<<<< HEAD
         image_presigned_request:
           $ref: '#/components/schemas/UploadPresignedRequest'
         image_presigned_requests:
+=======
+        presigned_requests:
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
           items:
             $ref: '#/components/schemas/UploadPresignedRequest'
           type: array
       required:
       - build
+<<<<<<< HEAD
+=======
+      - presigned_requests
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
       type: object
     ActorRegion:
       properties:
@@ -384,6 +432,7 @@ components:
       required:
       - build
       type: object
+<<<<<<< HEAD
     ActorUpgradeActorRequest:
       properties:
         build:
@@ -394,6 +443,8 @@ components:
     ActorUpgradeActorResponse:
       properties: {}
       type: object
+=======
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
     ErrorBody:
       properties:
         code:
@@ -848,6 +899,7 @@ paths:
       security: *id001
       tags:
       - ActorLogs
+<<<<<<< HEAD
   /actors/{actor}/upgrade:
     post:
       description: Upgrades a dynamic actor.
@@ -860,6 +912,80 @@ paths:
         schema:
           format: uuid
           type: string
+=======
+  /builds:
+    get:
+      description: Lists all builds of the project associated with the token used.
+        Can be filtered by tags in the query string.
+      operationId: actor_builds_list
+      parameters:
+      - in: query
+        name: project
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: environment
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: tags_json
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActorListBuildsResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      tags:
+      - ActorBuilds
+  /builds/prepare:
+    post:
+      description: Creates a new project build for the given project.
+      operationId: actor_builds_prepare
+      parameters:
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
       - in: query
         name: project
         required: false
@@ -874,13 +1000,18 @@ paths:
         content:
           application/json:
             schema:
+<<<<<<< HEAD
               $ref: '#/components/schemas/ActorUpgradeActorRequest'
+=======
+              $ref: '#/components/schemas/ActorPrepareBuildRequest'
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
         required: true
       responses:
         '200':
           content:
             application/json:
               schema:
+<<<<<<< HEAD
                 $ref: '#/components/schemas/ActorUpgradeActorResponse'
           description: ''
         '400':
@@ -1015,6 +1146,8 @@ paths:
           content:
             application/json:
               schema:
+=======
+>>>>>>> 73a068837 (feat: revamp actor build endpoint, js builds -> tar)
                 $ref: '#/components/schemas/ActorPrepareBuildResponse'
           description: ''
         '400':

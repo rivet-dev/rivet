@@ -11,6 +11,9 @@ import * as Rivet from "../../../../../../index";
  *         environment: "string",
  *         body: {
  *             name: "string",
+ *             tags: {
+ *                 "key": "value"
+ *             },
  *             imageTag: "string",
  *             imageFile: {
  *                 path: "string",
