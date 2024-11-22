@@ -144,14 +144,10 @@ pub fn op_rivet_kv_put_batch(
 pub fn op_rivet_kv_delete(
 	state: &mut OpState,
 	#[serde] key: actor_kv::key::Key,
-) -> Result<impl Future<Output = Result<bool, AnyError>>, AnyError> {
+) -> Result<impl Future<Output = Result<(), AnyError>>, AnyError> {
 	let kv = state.borrow::<Arc<actor_kv::ActorKv>>().clone();
 
-	Ok(async move {
-		let res = kv.delete(vec![key]).await?;
-
-		Ok(res.into_values().next().unwrap_or_default())
-	})
+	Ok(async move { kv.delete(vec![key]).await })
 }
 
 #[op2(async)]
@@ -159,19 +155,10 @@ pub fn op_rivet_kv_delete(
 pub fn op_rivet_kv_delete_batch(
 	state: &mut OpState,
 	#[serde] keys: Vec<actor_kv::key::Key>,
-) -> Result<impl Future<Output = Result<FakeMap<Key, bool>, AnyError>>, AnyError> {
+) -> Result<impl Future<Output = Result<(), AnyError>>, AnyError> {
 	let kv = state.borrow::<Arc<actor_kv::ActorKv>>().clone();
 
-	Ok(async move {
-		let res = kv
-			.delete(keys)
-			.await?
-			.into_iter()
-			.map(|(k, v)| (k.into(), v.into()))
-			.collect();
-
-		Ok(res)
-	})
+	Ok(async move { kv.delete(keys).await })
 }
 
 #[op2(async)]

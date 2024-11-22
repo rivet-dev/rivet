@@ -347,8 +347,8 @@ impl ActorKv {
 			.map_err(Into::into)
 	}
 
-	/// Deletes keys from the KV store. Returns true for keys that existed before deletion.
-	pub async fn delete(&self, keys: Vec<Key>) -> Result<HashMap<Key, bool>> {
+	/// Deletes keys from the KV store.
+	pub async fn delete(&self, keys: Vec<Key>) -> Result<()> {
 		let subspace = self
 			.subspace
 			.as_ref()
@@ -359,23 +359,14 @@ impl ActorKv {
 		self.db
 			.run(|tx, _mc| {
 				let keys = keys.clone();
-
 				async move {
-					futures_util::stream::iter(keys)
-						.map(|key| async {
-							let key_subspace = subspace.subspace(&key);
+					for key in keys {
+						let key_subspace = subspace.subspace(&key);
 
-							let existed = tx
-								.get(&key_subspace.pack(&"metadata"), false)
-								.await?
-								.is_some();
-							tx.clear_subspace_range(&key_subspace);
+						tx.clear_subspace_range(&key_subspace);
+					}
 
-							Ok((key, existed))
-						})
-						.buffer_unordered(32)
-						.try_collect()
-						.await
+					Ok(())
 				}
 			})
 			.await
