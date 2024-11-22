@@ -245,12 +245,6 @@ fn mounts(opts: &ConfigOpts) -> Result<serde_json::Value> {
 			"source": opts.actor_path.join("resolv.conf").to_str().context("resolv.conf path")?,
 			"options": ["rbind", "rprivate"]
 		},
-		{
-			"destination": "/etc/hosts",
-			"type": "bind",
-			"source": opts.actor_path.join("hosts").to_str().context("hosts path")?,
-			"options": ["rbind", "rprivate"]
-		},
 	]))
 }
 

@@ -321,7 +321,7 @@ impl Actor {
 
 		// hosts
 		fs::write(
-			actor_path.join("hosts"),
+			oci_bundle_path.join("hosts"),
 			indoc!(
 				"
 				127.0.0.1	localhost
