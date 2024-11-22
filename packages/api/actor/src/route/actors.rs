@@ -409,7 +409,7 @@ pub async fn upgrade(
 
 	assert::server_for_env(&ctx, actor_id, game_id, env_id).await?;
 
-	let build_id = resolve_build_id(&ctx, game_id, body.build, body.build_tags.flatten()).await?;
+	let build_id = resolve_build_id(&ctx, env_id, body.build, body.build_tags.flatten()).await?;
 
 	let mut sub = ctx
 		.subscribe::<ds::workflows::server::UpgradeStarted>(("server_id", actor_id))

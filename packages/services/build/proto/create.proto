@@ -7,12 +7,13 @@ import "resources/legacy/proto/backend/upload.proto";
 import "resources/legacy/proto/backend/build.proto";
 
 message Request {
+	reserved 6;
+
 	optional rivet.common.Uuid game_id = 1;
 	optional rivet.common.Uuid env_id = 10;
 	string display_name = 2;
 	optional string image_tag = 4;
 	optional rivet.backend.upload.PrepareFile image_file = 3;
-	bool multipart = 6;
 	rivet.backend.build.BuildKind kind = 7;
 	rivet.backend.build.BuildCompression compression = 8;
 	map<string, string> tags = 9; // JSON

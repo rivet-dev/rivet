@@ -86,8 +86,6 @@ pub async fn create_build(
 
 	// TODO: Read and validate image file
 
-	let multipart_upload = body.multipart_upload.unwrap_or(false);
-
 	let kind = match body.kind {
 		None | Some(models::CloudGamesBuildKind::DockerImage) => {
 			backend::build::BuildKind::DockerImage
@@ -107,40 +105,23 @@ pub async fn create_build(
 		display_name: body.display_name,
 		image_tag: Some(body.image_tag),
 		image_file: Some((*body.image_file).api_try_into()?),
-		multipart: multipart_upload,
 		kind: kind as i32,
 		compression: compression as i32,
 		..Default::default()
 	})
 	.await?;
 
-	let image_presigned_request = if !multipart_upload {
-		Some(Box::new(
-			unwrap!(create_res.image_presigned_requests.first())
-				.clone()
-				.api_try_into()?,
-		))
-	} else {
-		None
-	};
-
-	let image_presigned_requests = if multipart_upload {
-		Some(
+	Ok(models::CloudGamesCreateGameBuildResponse {
+		build_id: unwrap_ref!(create_res.build_id).as_uuid(),
+		upload_id: unwrap_ref!(create_res.upload_id).as_uuid(),
+		image_presigned_request: None,
+		image_presigned_requests: Some(
 			create_res
 				.image_presigned_requests
 				.iter()
 				.cloned()
 				.map(ApiTryInto::api_try_into)
 				.collect::<GlobalResult<Vec<_>>>()?,
-		)
-	} else {
-		None
-	};
-
-	Ok(models::CloudGamesCreateGameBuildResponse {
-		build_id: unwrap_ref!(create_res.build_id).as_uuid(),
-		upload_id: unwrap_ref!(create_res.upload_id).as_uuid(),
-		image_presigned_request,
-		image_presigned_requests,
+		),
 	})
 }

@@ -152,7 +152,6 @@ async fn multipart(ctx: TestCtx) {
 				.fold(0, |acc, x| {
 					acc + x.len()
 				}) as u64,
-			multipart: true,
 			..Default::default()
 		}],
 	})

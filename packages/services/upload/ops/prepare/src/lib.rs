@@ -6,8 +6,13 @@ use rivet_operation::prelude::*;
 use serde_json::json;
 
 pub const CHUNK_SIZE: u64 = util::file_size::mebibytes(100);
-const MAX_UPLOAD_SIZE: u64 = util::file_size::gigabytes(10);
-const MAX_MULTIPART_UPLOAD_SIZE: u64 = util::file_size::gigabytes(100);
+const MAX_UPLOAD_SIZE: u64 = util::file_size::gigabytes(100);
+/// Minimum size for AWS multipart file uploads.
+///
+/// See AWS error code `EntityTooSmall`
+///
+/// https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html
+const MIN_MULTIPART_FILE_SIZE: u64 = util::file_size::mebibytes(5);
 
 struct PrepareResult {
 	multipart: Option<MultipartUpdate>,
@@ -45,24 +50,11 @@ async fn handle(
 	.await?;
 
 	// Validate upload sizes
-	let total_content_length = ctx
-		.files
-		.iter()
-		.filter(|file| !file.multipart)
-		.fold(0, |acc, x| acc + x.content_length);
-	let total_multipart_content_length = ctx
-		.files
-		.iter()
-		.filter(|file| file.multipart)
-		.fold(0, |acc, x| acc + x.content_length);
-	tracing::info!(len=%ctx.files.len(), %total_content_length, %total_multipart_content_length, "file info");
+	let total_content_length = ctx.files.iter().fold(0, |acc, x| acc + x.content_length);
+	tracing::info!(len=%ctx.files.len(), %total_content_length, "file info");
 	ensure!(
 		total_content_length < MAX_UPLOAD_SIZE,
-		"upload size must be < 10 gb"
-	);
-	ensure!(
-		total_content_length < MAX_MULTIPART_UPLOAD_SIZE,
-		"multipart uploads must be < 100 gb"
+		"uploads must be < 100 gb"
 	);
 
 	let user_id = ctx.user_id.map(|x| x.as_uuid());
@@ -134,12 +126,8 @@ async fn handle(
 				let s3_client_internal = s3_client_internal.clone();
 				let s3_client_external = s3_client_external.clone();
 
-				if file.multipart {
-					handle_multipart_upload(s3_client_internal, s3_client_external, upload_id, file)
-						.boxed()
-				} else {
-					handle_upload(s3_client_external, upload_id, file).boxed()
-				}
+				handle_multipart_upload(s3_client_internal, s3_client_external, upload_id, file)
+					.boxed()
 			})
 			.buffer_unordered(16)
 			.try_collect::<Vec<_>>()
@@ -196,7 +184,6 @@ async fn handle(
 					"bucket": ctx.bucket,
 					"files": ctx.files.len(),
 					"total_content_length": total_content_length,
-					"total_multipart_content_length": total_multipart_content_length,
 				}))?),
 				..Default::default()
 			}
@@ -209,52 +196,6 @@ async fn handle(
 		presigned_requests,
 	})
 }
-
-async fn handle_upload(
-	s3_client_external: s3_util::Client,
-	upload_id: Uuid,
-	file: backend::upload::PrepareFile,
-) -> GlobalResult<Vec<PrepareResult>> {
-	let fut = async move {
-		// Sign an upload request
-		let mut put_obj_builder = s3_client_external
-			.put_object()
-			.bucket(s3_client_external.bucket())
-			.key(format!("{}/{}", upload_id, file.path))
-			.content_length(file.content_length as i64);
-		if let Some(mime) = &file.mime {
-			put_obj_builder = put_obj_builder.content_type(mime.clone());
-		}
-		let presigned_upload_req = put_obj_builder
-			.presigned(
-				s3_util::aws_sdk_s3::presigning::PresigningConfig::builder()
-					.expires_in(Duration::from_secs(60 * 60))
-					.build()?,
-			)
-			.await?;
-
-		GlobalResult::Ok(backend::upload::PresignedUploadRequest {
-			path: file.path.clone(),
-			url: presigned_upload_req.uri().to_string(),
-			part_number: 0,
-			byte_offset: 0,
-			content_length: file.content_length,
-		})
-	}
-	.boxed();
-
-	Ok(vec![PrepareResult {
-		multipart: None,
-		fut,
-	}])
-}
-
-/// Minimum size for AWS multipart file uploads.
-///
-/// See AWS error code `EntityTooSmall`
-///
-/// https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html
-const MIN_MULTIPART_FILE_SIZE: u64 = util::file_size::mebibytes(5);
 
 async fn handle_multipart_upload(
 	s3_client_internal: s3_util::Client,
@@ -330,4 +271,43 @@ async fn handle_multipart_upload(
 			}
 		})
 		.collect::<Vec<_>>())
+}
+
+async fn handle_upload(
+	s3_client_external: s3_util::Client,
+	upload_id: Uuid,
+	file: backend::upload::PrepareFile,
+) -> GlobalResult<Vec<PrepareResult>> {
+	let fut = async move {
+		// Sign an upload request
+		let mut put_obj_builder = s3_client_external
+			.put_object()
+			.bucket(s3_client_external.bucket())
+			.key(format!("{}/{}", upload_id, file.path))
+			.content_length(file.content_length as i64);
+		if let Some(mime) = &file.mime {
+			put_obj_builder = put_obj_builder.content_type(mime.clone());
+		}
+		let presigned_upload_req = put_obj_builder
+			.presigned(
+				s3_util::aws_sdk_s3::presigning::PresigningConfig::builder()
+					.expires_in(Duration::from_secs(60 * 60))
+					.build()?,
+			)
+			.await?;
+
+		GlobalResult::Ok(backend::upload::PresignedUploadRequest {
+			path: file.path.clone(),
+			url: presigned_upload_req.uri().to_string(),
+			part_number: 0,
+			byte_offset: 0,
+			content_length: file.content_length,
+		})
+	}
+	.boxed();
+
+	Ok(vec![PrepareResult {
+		multipart: None,
+		fut,
+	}])
 }

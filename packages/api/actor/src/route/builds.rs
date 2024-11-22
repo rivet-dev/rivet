@@ -279,7 +279,6 @@ pub async fn create_build(
 		display_name: body.name,
 		image_tag: Some(image_tag),
 		image_file: Some((*body.image_file).api_try_into()?),
-		multipart: multipart_upload,
 		kind: kind as i32,
 		compression: compression as i32,
 	})

@@ -87,7 +87,6 @@ async fn handle(
 					backend::upload::PrepareFile {
 						path: file_name,
 						content_length: image_file.content_length,
-						multipart: ctx.multipart,
 						..Default::default()
 					},
 				],
