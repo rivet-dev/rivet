@@ -48,7 +48,7 @@ async fn datacenter_tls_issue(ctx: TestCtx) {
 				FROM db_cluster.datacenter_tls
 				WHERE
 					datacenter_id = $1 AND
-					gg_cert_pem IS NOT NULL
+					job_cert_pem IS NOT NULL
 			)
 			",
 			datacenter_id,

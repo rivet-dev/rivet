@@ -60,7 +60,7 @@ async fn empty(ctx: TestCtx) {
 		.unwrap();
 		let datacenter = res.datacenters.first().expect("datacenter not found");
 
-		if datacenter.gg_cert_pem.is_some() {
+		if datacenter.job_cert_pem.is_some() {
 			break;
 		}
 	}

@@ -26,7 +26,7 @@ pub use crate::{
 	operation::Operation as OperationTrait,
 	registry::Registry,
 	signal::{join_signal, Signal as SignalTrait},
-	stub::{activity, closure, v},
+	stub::{activity, closure, v, removed},
 	utils::GlobalErrorExt,
 	worker::Worker,
 	workflow::Workflow as WorkflowTrait,

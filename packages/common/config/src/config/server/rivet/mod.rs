@@ -207,6 +207,15 @@ impl Rivet {
 		Ok(unwrap_ref!(self.dns, "dns disabled"))
 	}
 
+	pub fn domain_job(&self) -> GlobalResult<&str> {
+		let domain_job = unwrap!(
+			self.dns().ok().and_then(|dns| dns.domain_job.as_ref()),
+			"unable to get dns.domain_job to build actor hostname. configure dns or switch to host networking."
+		);
+
+		Ok(domain_job)
+	}
+
 	pub fn billing(&self) -> GlobalResult<&Billing> {
 		Ok(unwrap_ref!(self.billing, "billing disabled"))
 	}
@@ -339,7 +348,7 @@ pub struct Cdn {}
 pub struct Dns {
 	/// The DNS provider used for managing domains.
 	pub provider: DnsProvider,
-	// TODO: Remove this once we can remove the use of `gg_cert`
+	/// The domain used for backend services.
 	pub domain_main: Option<String>,
 	/// The domain used for job-related services.
 	pub domain_job: Option<String>,

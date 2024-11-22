@@ -20,28 +20,26 @@ pub fn is_nomad_ds(job_id: &str) -> bool {
 	job_id.starts_with("ds-") && job_id.contains("/dispatch-")
 }
 
+pub fn build_ds_host(config: &rivet_config::Config, datacenter_id: Uuid) -> GlobalResult<String> {
+	Ok(format!(
+		"actor.{}.{}",
+		datacenter_id,
+		config.server()?.rivet.domain_job()?
+	))
+}
+
 pub fn build_ds_hostname(
 	config: &rivet_config::Config,
 	server_id: Uuid,
 	port_name: &str,
 	datacenter_id: Uuid,
 ) -> GlobalResult<String> {
-	// TODO: Change lobby -> server
-	let Some(domain_job) = config
-		.server()?
-		.rivet
-		.dns
-		.as_ref()
-		.and_then(|x| x.domain_job.as_ref())
-	else {
-		tracing::warn!(
-			"unable to get dns.domain_job to build actor hostname, returning invalid hostname. configure dns or switch to host networking."
-		);
-		return Ok("rivet-dns-not-configured.invalid".into());
-	};
 	Ok(format!(
-		"{}-{}.lobby.{}.{}",
-		server_id, port_name, datacenter_id, domain_job
+		"{}-{}.actor.{}.{}",
+		server_id,
+		port_name,
+		datacenter_id,
+		config.server()?.rivet.domain_job()?,
 	))
 }
 

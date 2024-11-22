@@ -29,20 +29,6 @@ struct DynamicServerProxiedPort {
 	auth_value: Option<String>,
 }
 
-impl DynamicServerProxiedPort {
-	fn parent_host(&self, config: &rivet_config::Config) -> GlobalResult<String> {
-		Ok(format!(
-			"lobby.{}.{}",
-			self.datacenter_id,
-			unwrap_ref!(config.server()?.rivet.dns()?.domain_job),
-		))
-	}
-
-	fn hostname(&self, config: &rivet_config::Config) -> GlobalResult<String> {
-		ds::util::build_ds_hostname(config, self.server_id, &self.port_name, self.datacenter_id)
-	}
-}
-
 pub async fn build_ds(
 	ctx: &Ctx<Auth>,
 	dc_id: Uuid,
@@ -325,7 +311,8 @@ fn format_http_rule(
 
 	let mut rule = "(".to_string();
 
-	write!(&mut rule, "Host(`{}`)", proxied_port.hostname(config)?)?;
+	let hostname = ds::util::build_ds_hostname(config, proxied_port.server_id, &proxied_port.port_name, proxied_port.datacenter_id)?;
+	write!(&mut rule, "Host(`{}`)", hostname)?;
 
 	match authorization {
 		PortAuthorization::None => {}
@@ -361,7 +348,7 @@ fn build_tls_domains(
 	// A parent wildcard SSL mode will use the parent domain as the SSL
 	// name.
 	let mut domains = Vec::new();
-	let parent_host = proxied_port.parent_host(config)?;
+	let parent_host = ds::util::build_ds_host(config, proxied_port.datacenter_id)?;
 	domains.push(types::TraefikTlsDomain {
 		main: parent_host.to_owned(),
 		sans: vec![format!("*.{}", parent_host)],

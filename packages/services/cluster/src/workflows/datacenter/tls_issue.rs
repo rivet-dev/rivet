@@ -45,7 +45,6 @@ pub(crate) async fn cluster_datacenter_tls_issue(
 		ctx.config().server()?.rivet.dns()?.domain_main.clone(),
 		"main domain not enabled"
 	);
-
 	let job_zone_id = unwrap!(
 		ctx.config().server()?.cloudflare()?.zone.job.clone(),
 		"job cloudflare zone not configured"
@@ -55,7 +54,7 @@ pub(crate) async fn cluster_datacenter_tls_issue(
 		"job domain not enabled"
 	);
 
-	let (gg_cert, job_cert) = ctx
+	let (gg_cert, _, job_cert) = ctx
 		.join((
 			activity(OrderInput {
 				renew: input.renew,
@@ -63,12 +62,15 @@ pub(crate) async fn cluster_datacenter_tls_issue(
 				common_name: domain_main.to_string(),
 				subject_alternative_names: vec![format!("*.{datacenter_id}.{domain_main}")],
 			}),
-			activity(OrderInput {
+			removed::<Activity<Order>>(), // Old Job certs
+			// New job certs
+			v(2).activity(OrderInput {
 				renew: input.renew,
 				zone_id: job_zone_id.to_string(),
 				common_name: domain_job.to_string(),
 				subject_alternative_names: vec![
 					format!("*.lobby.{datacenter_id}.{domain_job}"),
+					format!("*.actor.{datacenter_id}.{domain_job}"),
 					format!("*.{datacenter_id}.{domain_job}"),
 				],
 			}),
@@ -81,7 +83,7 @@ pub(crate) async fn cluster_datacenter_tls_issue(
 		gg_private_key: gg_cert.private_key,
 		job_cert: job_cert.cert,
 		job_private_key: job_cert.private_key,
-		expire_ts: gg_cert.expire_ts,
+		expire_ts: job_cert.expire_ts,
 	})
 	.await?;
 

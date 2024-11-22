@@ -2,7 +2,8 @@
 //! execution can be deferred to later
 
 // TODO: Add signal, workflow, message, stubs
-// TODO: Versions for stubs
+
+use std::marker::PhantomData;
 
 use async_trait::async_trait;
 use global_error::GlobalResult;
@@ -10,6 +11,7 @@ use global_error::GlobalResult;
 use crate::{
 	activity::{Activity, ActivityInput},
 	ctx::WorkflowCtx,
+	history::removed::Removed,
 	executable::{AsyncResult, Executable},
 };
 
@@ -28,6 +30,7 @@ where
 	<I as ActivityInput>::Activity: Activity<Input = I>,
 {
 	inner: I,
+	version: Option<usize>,
 }
 
 #[async_trait]
@@ -39,7 +42,11 @@ where
 	type Output = <I::Activity as Activity>::Output;
 
 	async fn execute(self, ctx: &mut WorkflowCtx) -> GlobalResult<Self::Output> {
-		ctx.activity(self.inner).await
+		if let Some(version) = self.version {
+			ctx.v(version).activity(self.inner).await
+		} else {
+			ctx.activity(self.inner).await
+		}
 	}
 }
 
@@ -49,24 +56,38 @@ where
 	I: ActivityInput,
 	<I as ActivityInput>::Activity: Activity<Input = I>,
 {
-	ActivityStub { inner: input }
+	ActivityStub { inner: input, version: None }
 }
 
 pub struct VersionStub {
-	#[allow(dead_code)]
 	version: usize,
 }
 
 impl VersionStub {
-	pub fn activity<I>(_input: I) -> ActivityStub<I>
+	pub fn activity<I>(self, input: I) -> ActivityStub<I>
 	where
 		I: ActivityInput,
 		<I as ActivityInput>::Activity: Activity<Input = I>,
 	{
-		todo!();
+		ActivityStub { inner: input, version: Some(self.version) }
 	}
 }
 
-pub fn v<I>(version: usize) -> VersionStub {
+pub fn v(version: usize) -> VersionStub {
 	VersionStub { version }
+}
+
+pub struct RemovedStub<T: Removed>(PhantomData<T>);
+
+#[async_trait]
+impl<T: Removed + Send> Executable for RemovedStub<T> {
+	type Output = ();
+
+	async fn execute(self, ctx: &mut WorkflowCtx) -> GlobalResult<Self::Output> {
+		ctx.removed::<T>().await
+	}
+}
+
+pub fn removed<T: Removed>() -> RemovedStub<T> {
+	RemovedStub(PhantomData)
 }

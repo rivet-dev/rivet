@@ -198,7 +198,7 @@ async fn print_test_data(ctx: TestCtx) {
 	sub.next().await.unwrap();
 
 	let hostname = format!(
-		"{}-{}.lobby.{}.{}",
+		"{}-{}.actor.{}.{}",
 		server_id,
 		"testing2",
 		faker_region.region_id.unwrap(),
