@@ -108,7 +108,7 @@ pub async fn create(
 		ctx.op(ds::ops::game_config::get::Input {
 			game_ids: vec![game_id],
 		}),
-		resolve_build_id(&ctx, game_id, body.build, body.build_tags.flatten()),
+		resolve_build_id(&ctx, env_id, body.build, body.build_tags.flatten()),
 	)?;
 	let cluster_id = unwrap!(clusters_res.games.first()).cluster_id;
 	let game_config = unwrap!(game_configs_res.game_configs.first());
@@ -614,7 +614,7 @@ fn legacy_convert_actor_to_server(
 
 async fn resolve_build_id(
 	ctx: &Ctx<Auth>,
-	game_id: Uuid,
+	env_id: Uuid,
 	build_id: Option<Uuid>,
 	build_tags: Option<serde_json::Value>,
 ) -> GlobalResult<Uuid> {
@@ -624,7 +624,7 @@ async fn resolve_build_id(
 		(None, Some(build_tags)) => {
 			let builds_res = ctx
 				.op(build::ops::resolve_for_tags::Input {
-					game_id: Some(game_id),
+					env_id,
 					tags: serde_json::from_value(build_tags)?,
 				})
 				.await?;

@@ -7,7 +7,7 @@ use crate::types;
 
 #[derive(Debug)]
 pub struct Input {
-	pub game_id: Option<Uuid>,
+	pub env_id: Uuid,
 	pub tags: HashMap<String, String>,
 }
 
@@ -33,11 +33,9 @@ pub async fn get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
 			compression,
 			tags
 		FROM db_build.builds
-		WHERE
-			($2 IS NULL OR game_id = $2) AND
-			tags @> $1
+		WHERE env_id = $1 AND tags @> $2
 		",
-		input.game_id,
+		input.env_id,
 		serde_json::to_string(&input.tags)?,
 	)
 	.await?
