@@ -35,6 +35,11 @@ ExecStart=/usr/bin/node_exporter --collector.disable-defaults --collector.cpu --
 Restart=always
 RestartSec=2
 
+# Medium CPU priority
+Nice=-10
+# Standard service
+CPUSchedulingPolicy=other
+
 [Install]
 WantedBy=multi-user.target
 EOF

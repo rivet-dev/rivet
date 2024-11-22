@@ -25,6 +25,13 @@ Type=oneshot
 ExecStart=/usr/bin/ok_server.sh
 Type=simple
 
+# High CPU priority
+CPUSchedulingPriority=90
+# Real time service
+CPUSchedulingPolicy=fifo
+# Prevent killing from system OOM
+OOMScoreAdjust=-800
+
 [Install]
 WantedBy=multi-user.target
 EOF

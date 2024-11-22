@@ -16,6 +16,13 @@ RestartSec=1s
 ExecStart=/usr/bin/rivet_hook.sh
 ExecStartPost=/bin/touch /var/tmp/rivet_hook.completed
 
+# High CPU priority
+CPUSchedulingPriority=90
+# Real time service
+CPUSchedulingPolicy=fifo
+# Prevent killing from system OOM
+OOMScoreAdjust=-800
+
 [Install]
 WantedBy=multi-user.target
 EOF

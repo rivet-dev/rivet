@@ -338,6 +338,19 @@ ConditionPathExists=/etc/rivet-client/
 ExecStart=/usr/local/bin/rivet-client -c /etc/rivet-client/config.json
 Restart=always
 RestartSec=2
+
+# High CPU priority
+CPUSchedulingPriority=90
+# Real time service
+CPUSchedulingPolicy=fifo
+# Prevent killing from system OOM
+OOMScoreAdjust=-1000
+# Kill main process, not children
+KillMode=process
+# Increase limit of file watches
+LimitNOFILE=65536
+# Increase max process limits
+LimitNPROC=infinity
 TasksMax=infinity
 
 [Install]
