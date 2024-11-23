@@ -72,7 +72,7 @@ pub async fn ds_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()>
 		.await?;
 
 	if let Some(error_message) = validation_res {
-		ctx.msg(CreateFailed {
+		ctx.msg(Failed {
 			message: error_message,
 		})
 		.tag("server_id", input.server_id)
@@ -630,8 +630,8 @@ async fn update_image(ctx: &ActivityCtx, input: &UpdateImageInput) -> GlobalResu
 #[message("ds_server_create_complete")]
 pub struct CreateComplete {}
 
-#[message("ds_server_create_failed")]
-pub struct CreateFailed {
+#[message("ds_server_failed")]
+pub struct Failed {
 	pub message: String,
 }
 

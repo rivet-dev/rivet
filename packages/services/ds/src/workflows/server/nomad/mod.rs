@@ -11,7 +11,7 @@ use sha2::{Digest, Sha256};
 use util::serde::AsHashableExt;
 
 use super::{
-	resolve_image_artifact_url, CreateComplete, CreateFailed, Destroy, Drain, DrainState,
+	resolve_image_artifact_url, CreateComplete, Destroy, Drain, DrainState, Failed,
 	GetBuildAndDcInput, InsertDbInput, Port, Upgrade, DRAIN_PADDING_MS,
 };
 use crate::{
@@ -64,8 +64,8 @@ pub(crate) async fn ds_server_nomad(ctx: &mut WorkflowCtx, input: &Input) -> Glo
 		Err(err) => {
 			tracing::warn!(?err, "unrecoverable setup");
 
-			ctx.msg(CreateFailed {
-				message: "failed setup".into(),
+			ctx.msg(Failed {
+				message: "Failed setup.".into(),
 			})
 			.tag("server_id", input.server_id)
 			.send()

@@ -140,7 +140,7 @@ pub async fn create(
 		.subscribe::<ds::workflows::server::Ready>(("server_id", server_id))
 		.await?;
 	let mut fail_sub = ctx
-		.subscribe::<ds::workflows::server::CreateFailed>(("server_id", server_id))
+		.subscribe::<ds::workflows::server::Failed>(("server_id", server_id))
 		.await?;
 
 	let network = body.network.unwrap_or_default();

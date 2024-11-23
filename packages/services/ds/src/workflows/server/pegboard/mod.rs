@@ -9,7 +9,7 @@ use serde_json::json;
 use util::serde::AsHashableExt;
 
 use super::{
-	resolve_image_artifact_url, CreateComplete, CreateFailed, Destroy, Drain, DrainState,
+	resolve_image_artifact_url, CreateComplete, Destroy, Drain, DrainState, Failed,
 	GetBuildAndDcInput, InsertDbInput, Port, Ready, SetConnectableInput, UpdateImageInput, Upgrade,
 	UpgradeComplete, UpgradeStarted, DRAIN_PADDING_MS, TRAEFIK_GRACE_PERIOD,
 };
@@ -50,8 +50,8 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 		Err(err) => {
 			tracing::error!(?err, "unrecoverable setup");
 
-			ctx.msg(CreateFailed {
-				message: "failed setup".into(),
+			ctx.msg(Failed {
+				message: "Failed setup.".into(),
 			})
 			.tag("server_id", input.server_id)
 			.send()
@@ -471,12 +471,19 @@ async fn select_resources(
 	})
 }
 
-/// Returns true if the dynamic server was destroyed.
+/// Returns the destroy signal if the dynamic server was destroyed.
 async fn wait_actor_ready(ctx: &mut WorkflowCtx, server_id: Uuid) -> GlobalResult<Option<Destroy>> {
 	let _client_id = match ctx.listen::<Init>().await? {
 		Init::ActorStateUpdate(sig) => match sig.state {
 			pp::ActorState::Allocated { client_id } => client_id,
 			pp::ActorState::FailedToAllocate => {
+				ctx.msg(Failed {
+					message: "Failed to allocate (no availability).".into(),
+				})
+				.tag("server_id", server_id)
+				.send()
+				.await?;
+
 				ctx.workflow(destroy::Input {
 					server_id,
 					override_kill_timeout_ms: None,
