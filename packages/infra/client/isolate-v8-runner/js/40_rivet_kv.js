@@ -239,7 +239,7 @@ function deserializeKey(key) {
 	if ("inKey" in key || "outKey" in key) {
 		let jsKey = key.inKey ?? key.outKey;
 
-		let tuple = jsKey[0].map((x) => core.deserialize(x));
+		let tuple = jsKey.map((x) => core.deserialize(x));
 
 		if (tuple.length == 1) return tuple[0];
 		else return tuple;

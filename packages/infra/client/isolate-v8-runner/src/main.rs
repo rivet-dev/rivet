@@ -10,7 +10,7 @@ use std::{
 
 use actor_kv::ActorKv;
 use anyhow::*;
-use deno_runtime::deno_core::{v8_set_flags, JsRuntime};
+use deno_core::{v8_set_flags, JsRuntime};
 use deno_runtime::worker::MainWorkerTerminateHandle;
 use foundationdb as fdb;
 use futures_util::{stream::SplitStream, SinkExt, StreamExt};
@@ -253,15 +253,9 @@ async fn watch_thread(
 
 	drop(owner_rx);
 
-	// Await terminate handle
-	let Some(terminate_handle) = terminate_rx.recv().await else {
-		// If the transmitting end of the terminate handle was dropped (`recv` returned `None`), it must be
-		// that the thread stopped
-		tracing::error!(?actor_id, "failed to receive terminate handle");
-		fatal_tx.try_send(()).expect("receiver cannot be dropped");
-		return;
-	};
-
+	// Await terminate handle. If the transmitting end of the terminate handle was dropped (`recv` returned
+	// `None`), either the worker failed to create or the thread stopped. The latter is handled later
+	let terminate_handle = terminate_rx.recv().await;
 	drop(terminate_rx);
 
 	// Wait for either the thread to stop or a signal to be received
@@ -275,8 +269,10 @@ async fn watch_thread(
 				return;
 			};
 
-			// Currently, we terminate regardless of what the signal is
-			terminate_handle.terminate();
+			if let Some(terminate_handle) = terminate_handle {
+				// Currently, we terminate regardless of what the signal is
+				terminate_handle.terminate();
+			}
 
 			persist_state
 		}

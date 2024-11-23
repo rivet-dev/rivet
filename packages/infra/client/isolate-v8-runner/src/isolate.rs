@@ -1,4 +1,5 @@
 use std::{
+	fs::File,
 	io::{BufReader, Write},
 	net::Ipv4Addr,
 	os::fd::FromRawFd,
@@ -6,11 +7,14 @@ use std::{
 	rc::Rc,
 	result::Result::{Err, Ok},
 	sync::{mpsc as smpsc, Arc},
+	thread::JoinHandle,
 };
 
 use actor_kv::ActorKv;
 use anyhow::*;
-use deno_core::{unsync::MaskFutureAsSend, v8::CreateParams, ModuleSpecifier, StaticModuleLoader};
+use deno_core::{
+	error::JsError, unsync::MaskFutureAsSend, v8::CreateParams, ModuleSpecifier, StaticModuleLoader,
+};
 use deno_runtime::{
 	deno_fs::InMemoryFs,
 	deno_io::{Stdio, StdioPipe},
@@ -89,7 +93,7 @@ pub fn run(
 				&msg_tx,
 				None,
 				log_shipper::StreamType::StdErr,
-				format!("Aborting"),
+				"Fatal error. Aborting.".into(),
 			);
 
 			1
@@ -142,17 +146,33 @@ pub async fn run_inner(
 
 	tracing::info!(?actor_id, "Isolate KV initialized");
 
-	// Should match the path from `Actor::download_image` in manager/src/actor/setup.rs. index.js might not
-	// exist but thats up to the user to bundle it correctly.
-	let script_content = fs::read_to_string(actor_path.join("js-bundle").join("index.js"))
-		.await
-		.with_context(|| format!("failed to load {}", actor_path.join("index.js").display()))?;
+	// Should match the path from `Actor::download_image` in manager/src/actor/setup.rs
+	let entrypoint = actor_path.join("js-bundle").join("index.js");
+
+	// Load index.js
+	let script_content = match fs::read_to_string(&entrypoint).await {
+		Ok(script_content) => script_content,
+		Err(err) => {
+			tracing::error!(?err, "Failed to load {}", entrypoint.display());
+
+			log_shipper::send_message(
+				actor_id,
+				&msg_tx,
+				None,
+				log_shipper::StreamType::StdErr,
+				"Failed to load /index.js".into(),
+			);
+
+			return Ok(1);
+		}
+	};
 
 	// Load script into a static module loader. No dynamic scripts can be loaded this way.
 	let main_module = ModuleSpecifier::from_file_path(Path::new("/index.js"))
 		.map_err(|_| anyhow!("invalid file name"))?;
 	let loader = StaticModuleLoader::new([(main_module.clone(), script_content)]);
 
+	// TODO(RVT-4192): Replace with a custom fs that only reads from js-bundle
 	let fs = Arc::new(InMemoryFs::default());
 
 	// Build permissions
@@ -214,8 +234,8 @@ pub async fn run_inner(
 		isolate_stderr,
 	);
 
-	// Build worker
-	let mut worker = MainWorker::bootstrap_from_options(
+	// Build worker. If this errors its likely a problem with the runtime and not user input
+	let mut worker = MainWorker::try_bootstrap_from_options(
 		main_module.clone(),
 		WorkerServiceOptions {
 			module_loader: Rc::new(loader),
@@ -258,71 +278,79 @@ pub async fn run_inner(
 			env: actor_config.env,
 			..Default::default()
 		},
-	);
+	)?;
 
-	// Send terminate handle to main thread
+	// Send terminate handle to watcher task
 	terminate_tx.send(worker.terminate_handle().clone()).await?;
 	drop(terminate_tx);
 
-	let module_id = worker.preload_main_module(&main_module).await?;
+	// First step preloads the module. This can throw a JS error from certain syntax.
+	match worker.preload_main_module(&main_module).await {
+		Ok(module_id) => {
+			tracing::info!(?actor_id, "Isolate ready");
 
-	tracing::info!(?actor_id, "Isolate ready");
-
-	// First step evaluates the module and possibly runs it. Sometimes the event loop continues running and
-	// sometimes it doesn't
-	let res = worker.evaluate_module(module_id).await;
-	if worker.is_terminated() {
-		tracing::info!(?actor_id, "Isolate terminated");
-	} else {
-		if let Err(err) = res {
-			tracing::info!(?actor_id, "Isolate execution failed");
-
-			// Write error to stderr
-			stderr_writer2.write_all(err.to_string().as_bytes())?;
-
-			if worker.exit_code() == 0 {
-				worker.set_exit_code(1);
-			}
-		}
-
-		// Second step continues running the event loop until stopped
-		loop {
-			let res = worker.run_event_loop(Default::default()).await;
+			// Second step evaluates the module and possibly runs it. Sometimes the event loop continues
+			// running and sometimes it doesn't
+			let res = worker.evaluate_module(module_id).await;
 
 			if worker.is_terminated() {
 				tracing::info!(?actor_id, "Isolate terminated");
-				break;
-			}
+			} else {
+				if let Err(err) = res {
+					tracing::info!(?actor_id, "Isolate execution failed");
 
-			if let Err(err) = res {
-				tracing::info!(?actor_id, "Isolate execution failed");
-
-				// Write final error to stderr
-				stderr_writer2.write_all(err.to_string().as_bytes())?;
-
-				if worker.exit_code() == 0 {
-					worker.set_exit_code(1);
+					runtime_error(&mut stderr_writer2, &mut worker, err)?;
 				}
-			}
 
-			// We dispatch the beforeunload event then run the event loop again
-			match worker.dispatch_beforeunload_event() {
-				Ok(web_continue) => {
-					if !web_continue {
+				// Third step continues running the event loop until stopped. We do this even after an error
+				// in case a beforeunload event handler was registered.
+				loop {
+					let res = worker.run_event_loop(Default::default()).await;
+
+					if worker.is_terminated() {
+						tracing::info!(?actor_id, "Isolate terminated");
 						break;
 					}
-				}
-				Err(err) => {
-					tracing::info!(?actor_id, "Dispatch beforeunload event failed");
 
-					// Write final error to stderr
-					stderr_writer2.write_all(err.to_string().as_bytes())?;
+					if let Err(err) = res {
+						tracing::info!(?actor_id, "Isolate execution failed");
 
-					if worker.exit_code() == 0 {
-						worker.set_exit_code(1);
+						runtime_error(&mut stderr_writer2, &mut worker, err)?;
 					}
 
-					break;
+					// We dispatch the beforeunload event then run the event loop again
+					match worker.dispatch_beforeunload_event() {
+						Ok(web_continue) => {
+							if !web_continue {
+								break;
+							}
+						}
+						Err(err) => {
+							tracing::info!(?actor_id, "Dispatch beforeunload event failed");
+
+							runtime_error(&mut stderr_writer2, &mut worker, err)?;
+
+							break;
+						}
+					}
+				}
+			}
+		}
+		Err(err) => {
+			tracing::info!(?actor_id, "Isolate preload failed");
+
+			match err.downcast::<JsError>() {
+				// JS error
+				Ok(err) => runtime_error(&mut stderr_writer2, &mut worker, err.into())?,
+				Err(err) => {
+					// Also JS error
+					if deno_core::error::get_custom_error_class(&err).is_some() {
+						runtime_error(&mut stderr_writer2, &mut worker, err)?;
+					}
+					// Fatal error
+					else {
+						return Err(err);
+					}
 				}
 			}
 		}
@@ -338,6 +366,30 @@ pub async fn run_inner(
 	// Drop worker and writer so the stdout and stderr pipes close
 	drop(worker);
 
+	wait_logs_complete(actor_id, stderr_writer2, stdout_handle, stderr_handle)?;
+
+	Ok(exit_code)
+}
+
+fn runtime_error(stderr_writer: &mut File, worker: &mut MainWorker, err: Error) -> Result<()> {
+	// Write final error to stderr
+	stderr_writer.write_all(err.to_string().as_bytes())?;
+
+	// Update error code if not already errored
+	if worker.exit_code() == 0 {
+		worker.set_exit_code(1);
+	}
+
+	Ok(())
+}
+
+/// Waits for logs to be written and log shipper threads to complete.
+fn wait_logs_complete(
+	actor_id: Uuid,
+	mut stderr_writer2: File,
+	stdout_handle: JoinHandle<()>,
+	stderr_handle: JoinHandle<()>,
+) -> Result<()> {
 	stderr_writer2.flush()?;
 	drop(stderr_writer2);
 
@@ -355,7 +407,7 @@ pub async fn run_inner(
 		}
 	}
 
-	Ok(exit_code)
+	Ok(())
 }
 
 // Copied from deno-runtime tokio_util.rs

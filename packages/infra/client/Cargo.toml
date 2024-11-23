@@ -27,6 +27,6 @@ git = "https://github.com/rivet-gg/sqlx"
 rev = "e7120f59"
 
 [workspace.dependencies.deno_runtime]
+# path = "../../../../../deno/runtime"
 git = "https://github.com/rivet-gg/deno"
-rev = "1f423e6d87792cb761cf0167c7bad5b8553f32a1"
-
+rev = "fcb9ac39b25219b9ce51c13442b577e5d2be61ab"
