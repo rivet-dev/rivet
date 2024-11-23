@@ -196,7 +196,23 @@ pub async fn patch_tags(
 		error = "Too many tags (max 64)."
 	);
 
-	let tags = serde_json::from_value(tags).map_err(|err| err_code!(API_BAD_BODY, error = err))?;
+	let tags = serde_json::from_value::<HashMap<String, Option<String>>>(tags)
+		.map_err(|err| err_code!(API_BAD_BODY, error = err))?;
+
+	for (k, v) in &tags {
+		ensure_with!(
+			k.len() <= 256,
+			ACTOR_BUILD_INVALID_PATCH_CONFIG,
+			error = format!("tags[{:?}]: Tag label too large (max 256).", &k[..256])
+		);
+		if let Some(v) = v {
+			ensure_with!(
+				v.len() <= 1024,
+				ACTOR_BUILD_INVALID_PATCH_CONFIG,
+				error = format!("tags[k:?]: Tag value too large (max 1024 bytes).")
+			);
+		}
+	}
 
 	let build_res = ctx
 		.op(build::ops::get::Input {
@@ -245,9 +261,11 @@ pub async fn create_build(
 ) -> GlobalResult<models::ActorPrepareBuildResponse> {
 	let CheckOutput { game_id, env_id } = ctx.auth().check(ctx.op_ctx(), &query, false).await?;
 
-	// TODO: Read and validate image file
-
-	let multipart_upload = body.multipart_upload.unwrap_or(false);
+	ensure_with!(
+		body.name.len() <= 128,
+		ACTOR_BUILD_INVALID_CONFIG,
+		error = "Build name too large (max 128 bytes)."
+	);
 
 	let (kind, image_tag) = match body.kind {
 		Option::None | Some(models::ActorBuildKind::DockerImage) => (

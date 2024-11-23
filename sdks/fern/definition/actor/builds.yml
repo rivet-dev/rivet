@@ -104,8 +104,6 @@ types:
         docs: A tag given to the project build.
         type: optional<string>
       image_file: uploadCommons.PrepareFile
-      multipart_upload:
-        type: optional<boolean>
       kind: optional<BuildKind>
       compression: optional<BuildCompression>
 
