@@ -161,7 +161,8 @@ pub async fn create(
 		}),
 		image_id: build_id,
 		root_user_enabled: game_config.root_user_enabled,
-		args: body.runtime.arguments.unwrap_or_default(),
+		// args: body.runtime.arguments.unwrap_or_default(),
+		args: Vec::new(),
 		network_mode: network.mode.unwrap_or_default().api_into(),
 		environment: body.runtime.environment.unwrap_or_default(),
 		network_ports: unwrap!(network
