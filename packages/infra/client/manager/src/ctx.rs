@@ -28,6 +28,7 @@ use uuid::Uuid;
 
 use crate::{
 	actor::Actor,
+	event_sender::EventSender,
 	metrics, runner,
 	utils::{self, sql::SqliteConnectionExt},
 };
@@ -61,10 +62,12 @@ struct ActorRow {
 
 pub struct Ctx {
 	config: Config,
+	system: SystemInfo,
+
 	pool: SqlitePool,
 	tx: Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>,
+	event_sender: EventSender,
 
-	system: SystemInfo,
 	pub(crate) actors: RwLock<HashMap<Uuid, Arc<Actor>>>,
 	isolate_runner: RwLock<Option<runner::Handle>>,
 }
@@ -78,10 +81,12 @@ impl Ctx {
 	) -> Arc<Self> {
 		Arc::new(Ctx {
 			config,
+			system,
+
 			pool,
 			tx: Mutex::new(tx),
+			event_sender: EventSender::new(),
 
-			system,
 			actors: RwLock::new(HashMap::new()),
 			isolate_runner: RwLock::new(None),
 		})
@@ -97,7 +102,7 @@ impl Ctx {
 		}
 	}
 
-	async fn send_packet(&self, packet: protocol::ToServer) -> Result<()> {
+	pub(crate) async fn send_packet(&self, packet: protocol::ToServer) -> Result<()> {
 		let buf = packet.serialize()?;
 		self.tx.lock().await.send(Message::Binary(buf)).await?;
 
@@ -153,13 +158,7 @@ impl Ctx {
 	pub async fn event(&self, event: protocol::Event) -> Result<()> {
 		let index = self.write_event(&event).await?;
 
-		let wrapped_event = protocol::EventWrapper {
-			index,
-			inner: protocol::Raw::new(&event)?,
-		};
-
-		self.send_packet(protocol::ToServer::Events(vec![wrapped_event]))
-			.await
+		self.event_sender.send(self, event, index).await
 	}
 
 	pub async fn run(
@@ -386,18 +385,32 @@ impl Ctx {
 
 	/// Rebuilds state from DB upon restart.
 	async fn rebuild(self: &Arc<Self>) -> Result<()> {
-		let actor_rows = utils::query(|| async {
-			sqlx::query_as::<_, ActorRow>(indoc!(
-				"
-				SELECT actor_id, config, pid, stop_ts
-				FROM actors
-				WHERE exit_ts IS NULL
-				",
-			))
-			.fetch_all(&mut *self.sql().await?)
-			.await
-		})
-		.await?;
+		let ((last_event_idx,), actor_rows) = tokio::try_join!(
+			// There should not be any database operations going on at this point so it is safe to read this
+			// value
+			utils::query(|| async {
+				sqlx::query_as::<_, (i64,)>(indoc!(
+					"
+					SELECT last_event_idx FROM state
+					",
+				))
+				.fetch_one(&mut *self.sql().await?)
+				.await
+			}),
+			utils::query(|| async {
+				sqlx::query_as::<_, ActorRow>(indoc!(
+					"
+					SELECT actor_id, config, pid, stop_ts
+					FROM actors
+					WHERE exit_ts IS NULL
+					",
+				))
+				.fetch_all(&mut *self.sql().await?)
+				.await
+			})
+		)?;
+
+		self.event_sender.set_idx(last_event_idx + 1);
 
 		let isolate_runner = { self.isolate_runner.read().await.clone() };
 

@@ -1,5 +1,5 @@
 use std::{
-	net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+	net::Ipv4Addr,
 	path::Path,
 	time::{self, Duration},
 };
@@ -269,9 +269,8 @@ pub async fn init_fdb_config(config: &Config) -> Result<()> {
 	fs::write(
 		config.client.data_dir().join("fdb.cluster"),
 		format!(
-			"{username}:{password}@{joined}",
-			username = config.client.foundationdb.username,
-			password = config.client.foundationdb.password,
+			"fdb:{cluster_id}@{joined}",
+			cluster_id = config.client.foundationdb.cluster_id,
 		),
 	)
 	.await?;

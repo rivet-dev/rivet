@@ -14,7 +14,7 @@ RUN \
 	--mount=type=cache,target=/root/.cargo/git \
 	--mount=type=cache,target=/root/.cargo/registry \
 	--mount=type=cache,target=/app/packages/infra/client/target \
-	cd packages/infra/client/isolate-v8-runner && \
+	cd packages/infra/client && \
 	RUSTFLAGS="--cfg tokio_unstable" cargo build --release --target x86_64-unknown-linux-gnu --bin rivet-isolate-v8-runner && \
 	mkdir -p /app/dist && \
 	mv /app/packages/infra/client/target/x86_64-unknown-linux-gnu/release/rivet-isolate-v8-runner /app/dist/rivet-isolate-v8-runner

@@ -1,9 +1,9 @@
 [package]
 name = "pegboard-container-runner"
 version.workspace = true
+edition.workspace = true
 authors.workspace = true
 license.workspace = true
-edition.workspace = true
 
 [[bin]]
 name = "rivet-container-runner"

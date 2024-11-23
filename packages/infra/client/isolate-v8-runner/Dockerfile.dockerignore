@@ -1,8 +1,6 @@
 *
 
-!packages/infra/client/actor-kv
-!packages/infra/client/config
-!packages/infra/client/isolate-v8-runner/Cargo.toml
-!packages/infra/client/isolate-v8-runner/src
-!packages/infra/client/isolate-v8-runner/js
-
+!Cargo.lock
+!Cargo.toml
+!packages
+!resources/legacy/proto

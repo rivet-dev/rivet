@@ -19,6 +19,7 @@ use url::Url;
 
 mod actor;
 mod ctx;
+mod event_sender;
 mod metrics;
 mod runner;
 mod system_info;

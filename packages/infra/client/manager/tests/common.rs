@@ -196,36 +196,39 @@ pub async fn init_client(gen_path: &Path, working_path: &Path) -> Config {
 
 	let config = Config {
 		client: Client {
+			data_dir: Some(working_path.to_path_buf()),
 			cluster: Cluster {
 				client_id: Uuid::new_v4(),
 				datacenter_id: Uuid::new_v4(),
 				pegboard_endpoint: Url::parse("ws://127.0.0.1:5030").unwrap(),
 				// Not necessary for the test
 				api_endpoint: Url::parse("http://127.0.0.1").unwrap(),
-				foundationdb: FoundationDb::Addresses(vec!["127.0.0.1:4500".parse().unwrap()]),
 			},
-			runtime: Runtime {
+			runner: Runner {
 				// Not necessary for the test
 				flavor: protocol::ClientFlavor::Container,
-				data_dir: Some(working_path.to_path_buf()),
+				port: None,
 				container_runner_binary_path: Some(container_runner_binary_path),
 				isolate_runner_binary_path: Some(isolate_runner_binary_path),
 			},
-			actor: Actor {
-				network: ActorNetwork {
-					bind_ip: "127.0.0.1".parse().unwrap(),
-					lan_ip: "127.0.0.1".parse().unwrap(),
-					wan_ip: "127.0.0.1".parse().unwrap(),
-					lan_port_range_min: None,
-					lan_port_range_max: None,
-					wan_port_range_min: None,
-					wan_port_range_max: None,
-				},
+			network: Network {
+				bind_ip: "127.0.0.1".parse().unwrap(),
+				lan_ip: "127.0.0.1".parse().unwrap(),
+				wan_ip: "127.0.0.1".parse().unwrap(),
+				lan_port_range_min: None,
+				lan_port_range_max: None,
+				wan_port_range_min: None,
+				wan_port_range_max: None,
 			},
 			cni: Default::default(),
 			reserved_resources: Default::default(),
 			logs: Logs {
 				redirect_logs: Some(false),
+			},
+			metrics: Default::default(),
+			foundationdb: FoundationDb {
+				cluster_id: "fdb".into(),
+				address: FoundationDbAddress::Static(vec!["127.0.0.1:4500".parse().unwrap()]),
 			},
 			vector: Some(Vector {
 				address: "127.0.0.1:5021".into(),
@@ -251,7 +254,6 @@ pub async fn start_client(
 		"sqlite://{}",
 		config
 			.client
-			.runtime
 			.data_dir()
 			.join("db")
 			.join("database.db")
@@ -342,7 +344,7 @@ pub async fn build_binaries(gen_path: &Path) {
 
 	// Js image
 	let status = Command::new("tar")
-		.arg("-czf")
+		.arg("-cf")
 		.arg(js_image_path(gen_path))
 		.arg("-C")
 		.arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests"))

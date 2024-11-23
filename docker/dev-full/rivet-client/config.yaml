@@ -25,8 +25,7 @@ client:
   logs:
     redirect_logs: true
   foundationdb:
-    username: docker
-    password: docker
+    cluster_id: docker
     address:
       !static
       - "foundationdb:4500"
