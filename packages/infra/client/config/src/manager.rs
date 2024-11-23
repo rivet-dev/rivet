@@ -1,5 +1,5 @@
 use std::{
-	net::{IpAddr, Ipv4Addr, SocketAddr},
+	net::{IpAddr, Ipv4Addr},
 	path::{Path, PathBuf},
 };
 
@@ -54,6 +54,7 @@ pub struct Client {
 	pub logs: Logs,
 	#[serde(default)]
 	pub metrics: Metrics,
+	pub foundationdb: FoundationDb,
 	#[serde(default)]
 	pub vector: Option<Vector>,
 }
@@ -73,14 +74,6 @@ pub struct Cluster {
 	pub datacenter_id: Uuid,
 	pub api_endpoint: Url,
 	pub pegboard_endpoint: Url,
-	pub foundationdb: FoundationDb,
-}
-
-#[derive(Clone, Deserialize)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub enum FoundationDb {
-	Dynamic { fetch_endpoint: Url },
-	Addresses(Vec<SocketAddr>),
 }
 
 #[derive(Clone, Deserialize)]
@@ -226,6 +219,21 @@ impl Metrics {
 	pub fn port(&self) -> u16 {
 		self.port.unwrap_or(7090)
 	}
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct FoundationDb {
+	pub username: String,
+	pub password: String,
+	pub address: FoundationDbAddress,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum FoundationDbAddress {
+	Dynamic { fetch_endpoint: Url },
+	Static(Vec<String>),
 }
 
 #[derive(Clone, Deserialize)]

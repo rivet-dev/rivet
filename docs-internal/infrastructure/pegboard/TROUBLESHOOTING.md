@@ -25,6 +25,18 @@ Common causes:
 
 Trying to manually find and run the binary usually resolves these issues.
 
+## `fdb ping missed`
+
+The `rivet-client` container in `docker/dev-full/docker-compose` has the `fdbcli` CLI installed.
+
+Check that the cluster can be connected to with:
+
+```bash
+fdbcli -C /var/lib/rivet-client/fdb.cluster --exec status
+```
+
+For further troupbleshooting, see [FoundationDB troubleshooting](../fdb/TROUBLESHOOTING.md).
+
 ## Getting logs of crashed client in Docker
 
 If the container crashes, the logs have to be extracted from the volume.

@@ -62,7 +62,7 @@ vector top --url http://0.0.0.0:9510/graphql
 ## Testing
 
 ```bash
-docker build -f docker/monolith/Dockerfile -t rivet . && docker run --name rivet --rm -v "/tmp/rivet-data:/data" -p 8080:8080 -p 9000:9000 -p 20000-20100:20000-20100 rivet
+docker build -f docker/monolith/Dockerfile -t rivet . && docker run --platform linux/amd64 --name rivet --rm -v "/tmp/rivet-data:/data" -p 8080:8080 -p 9000:9000 -p 20000-20100:20000-20100 rivet
 ```
 
 ## Port collisions

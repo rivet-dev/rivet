@@ -1,4 +1,5 @@
-pub const FDB_VERSION: &str = "7.1.60";
+// See docs-internal/infrastructure/fdb/AVX.md
+pub const FDB_VERSION: &str = "7.1.61";
 
 pub fn install(initialize_immediately: bool) -> String {
 	let mut script = include_str!("../files/fdb_install.sh")

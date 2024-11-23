@@ -22,7 +22,7 @@ use tokio::{
 	sync::mpsc::{channel, Receiver},
 };
 
-use pegboard_config::{Config, FoundationDb};
+use pegboard_config::{Config, FoundationDbAddress};
 
 pub mod sql;
 
@@ -231,8 +231,8 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 }
 
 pub async fn init_fdb_config(config: &Config) -> Result<()> {
-	let ips = match &config.client.cluster.foundationdb {
-		FoundationDb::Dynamic { fetch_endpoint } => {
+	let ips = match &config.client.foundationdb.address {
+		FoundationDbAddress::Dynamic { fetch_endpoint } => {
 			#[derive(Deserialize)]
 			struct Response {
 				servers: Vec<Server>,
@@ -251,10 +251,10 @@ pub async fn init_fdb_config(config: &Config) -> Result<()> {
 				.servers
 				.into_iter()
 				.filter_map(|server| server.vlan_ip)
-				.map(|vlan_ip| SocketAddr::V4(SocketAddrV4::new(vlan_ip, 4500)))
+				.map(|vlan_ip| format!("{vlan_ip}:4500"))
 				.collect::<Vec<_>>()
 		}
-		FoundationDb::Addresses(addresses) => addresses.clone(),
+		FoundationDbAddress::Static(addresses) => addresses.clone(),
 	};
 
 	ensure!(!ips.is_empty(), "no fdb clusters found");
@@ -268,7 +268,11 @@ pub async fn init_fdb_config(config: &Config) -> Result<()> {
 	// Should match Ctx::fdb_cluster_path
 	fs::write(
 		config.client.data_dir().join("fdb.cluster"),
-		format!("fdb:fdb@{joined}"),
+		format!(
+			"{username}:{password}@{joined}",
+			username = config.client.foundationdb.username,
+			password = config.client.foundationdb.password,
+		),
 	)
 	.await?;
 

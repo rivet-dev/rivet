@@ -1,9 +1,9 @@
 # MARK: Builder
-FROM rust:1.82.0-bullseye AS builder
+# TODO(RVT-4168): Copmile libfdb from scratch for ARM
+FROM --platform=linux/amd64 rust:1.82.0-bullseye AS builder
 
-RUN apt-get update && apt-get install --yes protobuf-compiler pkg-config libssl-dev g++ git libpq-dev wget && \
-	ln -s /bin/g++ /bin/musl-g++ && \
-	ln -s /bin/gcc-ar /bin/musl-ar
+RUN apt-get update && apt-get install --yes libclang-dev protobuf-compiler pkg-config libssl-dev g++ git wget curl && \
+	curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.1.60/libfdb_c.x86_64.so"
 
 WORKDIR /app
 COPY . .
@@ -18,8 +18,13 @@ RUN \
 	mv target/debug/rivet-client target/debug/rivet-isolate-v8-runner target/debug/rivet-container-runner /app/dist/
 
 # MARK: Runner
-FROM debian:12-slim
-RUN DEBIAN_FRONTEND=noninteractive apt-get update -y && apt-get install -y --no-install-recommends ca-certificates
+FROM --platform=linux/amd64 debian:12-slim
+# The FDB version should match `cluster::workflows::server::install::install_scripts::components::fdb::FDB_VERSION`
+RUN DEBIAN_FRONTEND=noninteractive apt-get update -y && \
+	apt-get install -y --no-install-recommends ca-certificates curl && \
+	curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.1.60/libfdb_c.x86_64.so" && \
+	curl -Lf -o /usr/local/bin/fdbcli "https://github.com/apple/foundationdb/releases/download/7.1.60/fdbcli.x86_64" && \
+	chmod +x /usr/local/bin/fdbcli
 COPY --from=builder /app/dist/rivet-client /app/dist/rivet-isolate-v8-runner /app/dist/rivet-container-runner /usr/local/bin/
 ENTRYPOINT ["rivet-client"]
 CMD ["-c", "/etc/rivet-client/config.json"]

@@ -57,10 +57,15 @@ services:
     build:
       context: ../..
       dockerfile: docker/dev-full/client.Dockerfile
+    # TODO(RVT-4168): Copmile libfdb from scratch for ARM
+    platform: linux/amd64
     command: -c /etc/rivet-client/config.yaml
     environment:
       - RUST_BACKTRACE=1
     stop_grace_period: 0s
+    depends_on:
+      foundationdb:
+        condition: service_healthy
     volumes:
       - ./rivet-client:/etc/rivet-client:ro
       - client-data:/var/lib/rivet-client
@@ -153,6 +158,22 @@ services:
       interval: 2s
       timeout: 10s
 
+  foundationdb:
+    # See docs-internal/infrastructure/fdb/AVX.md
+    image: foundationdb/foundationdb:7.1.60
+    platform: linux/amd64
+    entrypoint: ["/usr/bin/tini", "-g", "--", "/usr/local/bin/entrypoint.sh"]
+    volumes:
+      - ./foundationdb/entrypoint.sh:/usr/local/bin/entrypoint.sh
+      - foundationdb-data:/var/fdb:rw
+    healthcheck:
+      test: ["CMD", "fdbcli", "--exec", "status"]
+      interval: 2s
+      timeout: 10s
+      retries: 10
+    networks:
+      - rivet-network
+
   vector-client:
     image: timberio/vector:0.42.0-distroless-static
     command: -C /etc/vector
@@ -167,7 +188,7 @@ services:
     image: timberio/vector:0.42.0-distroless-static
     command: -C /etc/vector
     volumes:
-      - vector-data:/var/lib/vector
+      - vector-server-data:/var/lib/vector
       - ./vector-server:/etc/vector
     networks:
       - rivet-network
@@ -182,4 +203,5 @@ volumes:
   redis-data:
   clickhouse-data:
   seaweedfs-data:
-  vector-data:
+  vector-server-data:
+  foundationdb-data:

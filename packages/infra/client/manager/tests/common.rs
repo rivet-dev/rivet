@@ -521,7 +521,8 @@ pub async fn start_fdb() {
 		.arg("test-fdb")
 		.arg("-e")
 		.arg("FDB_CLUSTER_FILE_CONTENTS=fdb:fdb@127.0.0.1:4500")
-		.arg("foundationdb/foundationdb:7.1.19")
+		// See docs-internal/infrastructure/fdb/AVX.md
+		.arg("foundationdb/foundationdb:7.1.60")
 		.status()
 		.await
 		.unwrap();

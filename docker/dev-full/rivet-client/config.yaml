@@ -24,5 +24,11 @@ client:
     memory: 0
   logs:
     redirect_logs: true
+  foundationdb:
+    username: docker
+    password: docker
+    address:
+      !static
+      - "foundationdb:4500"
   vector:
     address: vector-server:6100

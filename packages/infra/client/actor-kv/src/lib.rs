@@ -48,7 +48,12 @@ impl ActorKv {
 		}
 	}
 
+	/// Initializes actor's KV.
+	///
+	/// If FDB is down, this will hang indefinitely until connected.
 	pub async fn init(&mut self) -> Result<()> {
+		tracing::info!("initializing actor KV");
+
 		let root = fdb::directory::DirectoryLayer::default();
 
 		let tx = self.db.create_trx()?;
@@ -68,6 +73,8 @@ impl ActorKv {
 		tx.commit().await.map_err(|err| anyhow!("{err:?}"))?;
 
 		self.subspace = Some(kv_dir.subspace(&()).map_err(|err| anyhow!("{err:?}"))?);
+
+		tracing::info!("successfully initialized kv");
 
 		Ok(())
 	}

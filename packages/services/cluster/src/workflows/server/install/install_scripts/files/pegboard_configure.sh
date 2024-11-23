@@ -8,12 +8,7 @@ cat << 'EOF' > /etc/rivet-client/config.json
 			"client_id": "___SERVER_ID___",
 			"datacenter_id": "___DATACENTER_ID___",
 			"api_endpoint": "__ORIGIN_API__",
-			"pegboard_endpoint": "__PEGBOARD_ENDPOINT__",
-			"foundationdb": {
-				"dynamic": {
-					"fetch_endpoint": "__TUNNEL_API_EDGE_API__/provision/datacenters/___DATACENTER_ID___/servers?pools=fdb"
-				}
-			}
+			"pegboard_endpoint": "__PEGBOARD_ENDPOINT__"
 		},
 		"runner": {
 			"flavor": "__FLAVOR__"
@@ -29,6 +24,13 @@ cat << 'EOF' > /etc/rivet-client/config.json
 		"reserved_resources": {
 			"cpu": 0,
 			"memory": __RESERVED_MEMORY__
+		},
+		"foundationdb": {
+			"addresses": {
+				"dynamic": {
+					"fetch_endpoint": "__TUNNEL_API_EDGE_API__/provision/datacenters/___DATACENTER_ID___/servers?pools=fdb"
+				}
+			}
 		},
 		"vector": {
 			"address": "127.0.0.1:5021"

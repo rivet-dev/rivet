@@ -1,7 +1,10 @@
 TARGET_ARCH=$(uname -m | sed 's/aarch64/arm64/' | sed 's/x86_64/amd64/')
 
 # Install required packages
+#
+# The FDB version should match `cluster::workflows::server::install::install_scripts::components::fdb::FDB_VERSION`
 apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+	libclang-dev \
     ca-certificates \
     openssl \
     curl \
@@ -15,7 +18,8 @@ apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
     (curl -L https://github.com/golang-migrate/migrate/releases/download/v4.18.1/migrate.linux-${TARGET_ARCH}.tar.gz | tar xvz) && \
     mv migrate /usr/local/bin/migrate && \
     curl -fsSL https://deno.land/x/install/install.sh | sh && \
-    ln -s /root/.deno/bin/deno /usr/local/bin/deno
+    ln -s /root/.deno/bin/deno /usr/local/bin/deno && \
+	curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.1.60/libfdb_c.x86_64.so"
 
 # === CockroachDB ===
 useradd -m -s /bin/bash cockroachdb && \

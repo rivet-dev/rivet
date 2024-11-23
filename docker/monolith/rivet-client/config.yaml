@@ -25,5 +25,7 @@ client:
     memory: 0
   logs:
     redirect_logs: false
+  foundationdb:
+    address: ["foundationdb:4500"]
   vector:
     address: vector-server:6100
