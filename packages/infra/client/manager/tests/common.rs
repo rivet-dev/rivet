@@ -227,6 +227,7 @@ pub async fn init_client(gen_path: &Path, working_path: &Path) -> Config {
 			},
 			metrics: Default::default(),
 			foundationdb: FoundationDb {
+				cluster_description: "fdb".into(),
 				cluster_id: "fdb".into(),
 				address: FoundationDbAddress::Static(vec!["127.0.0.1:4500".parse().unwrap()]),
 			},

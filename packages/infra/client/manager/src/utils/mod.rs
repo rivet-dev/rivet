@@ -265,11 +265,11 @@ pub async fn init_fdb_config(config: &Config) -> Result<()> {
 		.collect::<Vec<_>>()
 		.join(",");
 
-	// Should match Ctx::fdb_cluster_path
 	fs::write(
 		config.client.data_dir().join("fdb.cluster"),
 		format!(
-			"fdb:{cluster_id}@{joined}",
+			"{cluster_description}:{cluster_id}@{joined}",
+			cluster_description = config.client.foundationdb.cluster_description,
 			cluster_id = config.client.foundationdb.cluster_id,
 		),
 	)

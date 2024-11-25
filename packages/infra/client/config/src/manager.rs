@@ -224,6 +224,7 @@ impl Metrics {
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct FoundationDb {
+	pub cluster_description: String,
 	pub cluster_id: String,
 	pub address: FoundationDbAddress,
 }

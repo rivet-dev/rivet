@@ -25,6 +25,7 @@ client:
   logs:
     redirect_logs: true
   foundationdb:
+    cluster_description: docker
     cluster_id: docker
     address:
       !static
