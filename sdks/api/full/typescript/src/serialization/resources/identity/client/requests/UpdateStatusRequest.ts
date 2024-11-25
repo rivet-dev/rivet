@@ -3,13 +3,13 @@
  */
 
 import * as serializers from "../../../../index";
-import * as Rivet from "../../../../../api/index";
+import * as RivetClient from "../../../../../api/index";
 import * as core from "../../../../../core";
 import { Status } from "../../resources/common/types/Status";
 
 export const UpdateStatusRequest: core.serialization.Schema<
     serializers.identity.UpdateStatusRequest.Raw,
-    Rivet.identity.UpdateStatusRequest
+    RivetClient.identity.UpdateStatusRequest
 > = core.serialization.object({
     status: Status,
 });

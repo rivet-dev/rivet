@@ -6,9 +6,9 @@ import * as environments from "./environments";
 import * as core from "./core";
 import { Actor } from "./api/resources/actor/client/Client";
 
-export declare namespace RivetClient {
+export declare namespace RivetClientClient {
     interface Options {
-        environment?: core.Supplier<environments.RivetEnvironment | string>;
+        environment?: core.Supplier<environments.RivetClientEnvironment | string>;
         token: core.Supplier<core.BearerToken>;
         fetcher?: core.FetchFunction;
     }
@@ -23,8 +23,8 @@ export declare namespace RivetClient {
     }
 }
 
-export class RivetClient {
-    constructor(protected readonly _options: RivetClient.Options) {}
+export class RivetClientClient {
+    constructor(protected readonly _options: RivetClientClient.Options) {}
 
     protected _actor: Actor | undefined;
 

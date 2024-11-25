@@ -3,10 +3,10 @@
  */
 
 import * as errors from "../../../../errors/index";
-import * as Rivet from "../../../index";
+import * as RivetClient from "../../../index";
 
-export class NotFoundError extends errors.RivetError {
-    constructor(body: Rivet.ErrorBody) {
+export class NotFoundError extends errors.RivetClientError {
+    constructor(body: RivetClient.ErrorBody) {
         super({
             message: "NotFoundError",
             statusCode: 404,

@@ -4,14 +4,14 @@
 
 import * as environments from "../../../../../../../../environments";
 import * as core from "../../../../../../../../core";
-import * as Rivet from "../../../../../../../index";
+import * as RivetClient from "../../../../../../../index";
 import urlJoin from "url-join";
 import * as serializers from "../../../../../../../../serialization/index";
 import * as errors from "../../../../../../../../errors/index";
 
 export declare namespace Links {
     interface Options {
-        environment?: core.Supplier<environments.RivetEnvironment | string>;
+        environment?: core.Supplier<environments.RivetClientEnvironment | string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         fetcher?: core.FetchFunction;
     }
@@ -32,22 +32,22 @@ export class Links {
     /**
      * @param {Links.RequestOptions} requestOptions - Request-specific configuration.
      *
-     * @throws {@link Rivet.InternalError}
-     * @throws {@link Rivet.RateLimitError}
-     * @throws {@link Rivet.ForbiddenError}
-     * @throws {@link Rivet.UnauthorizedError}
-     * @throws {@link Rivet.NotFoundError}
-     * @throws {@link Rivet.BadRequestError}
+     * @throws {@link RivetClient.InternalError}
+     * @throws {@link RivetClient.RateLimitError}
+     * @throws {@link RivetClient.ForbiddenError}
+     * @throws {@link RivetClient.UnauthorizedError}
+     * @throws {@link RivetClient.NotFoundError}
+     * @throws {@link RivetClient.BadRequestError}
      *
      * @example
      *     await client.cloud.devices.links.prepare()
      */
     public async prepare(
         requestOptions?: Links.RequestOptions
-    ): Promise<Rivet.cloud.devices.PrepareDeviceLinkResponse> {
+    ): Promise<RivetClient.cloud.devices.PrepareDeviceLinkResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
+                (await core.Supplier.get(this._options.environment)) ?? environments.RivetClientEnvironment.Production,
                 "/cloud/devices/links"
             ),
             method: "POST",
@@ -76,7 +76,7 @@ export class Links {
         if (_response.error.reason === "status-code") {
             switch (_response.error.statusCode) {
                 case 500:
-                    throw new Rivet.InternalError(
+                    throw new RivetClient.InternalError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -86,7 +86,7 @@ export class Links {
                         })
                     );
                 case 429:
-                    throw new Rivet.RateLimitError(
+                    throw new RivetClient.RateLimitError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -96,7 +96,7 @@ export class Links {
                         })
                     );
                 case 403:
-                    throw new Rivet.ForbiddenError(
+                    throw new RivetClient.ForbiddenError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -106,7 +106,7 @@ export class Links {
                         })
                     );
                 case 408:
-                    throw new Rivet.UnauthorizedError(
+                    throw new RivetClient.UnauthorizedError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -116,7 +116,7 @@ export class Links {
                         })
                     );
                 case 404:
-                    throw new Rivet.NotFoundError(
+                    throw new RivetClient.NotFoundError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -126,7 +126,7 @@ export class Links {
                         })
                     );
                 case 400:
-                    throw new Rivet.BadRequestError(
+                    throw new RivetClient.BadRequestError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -136,7 +136,7 @@ export class Links {
                         })
                     );
                 default:
-                    throw new errors.RivetError({
+                    throw new errors.RivetClientError({
                         statusCode: _response.error.statusCode,
                         body: _response.error.body,
                     });
@@ -145,29 +145,29 @@ export class Links {
 
         switch (_response.error.reason) {
             case "non-json":
-                throw new errors.RivetError({
+                throw new errors.RivetClientError({
                     statusCode: _response.error.statusCode,
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetClientTimeoutError();
             case "unknown":
-                throw new errors.RivetError({
+                throw new errors.RivetClientError({
                     message: _response.error.errorMessage,
                 });
         }
     }
 
     /**
-     * @param {Rivet.cloud.devices.GetDeviceLinkRequest} request
+     * @param {RivetClient.cloud.devices.GetDeviceLinkRequest} request
      * @param {Links.RequestOptions} requestOptions - Request-specific configuration.
      *
-     * @throws {@link Rivet.InternalError}
-     * @throws {@link Rivet.RateLimitError}
-     * @throws {@link Rivet.ForbiddenError}
-     * @throws {@link Rivet.UnauthorizedError}
-     * @throws {@link Rivet.NotFoundError}
-     * @throws {@link Rivet.BadRequestError}
+     * @throws {@link RivetClient.InternalError}
+     * @throws {@link RivetClient.RateLimitError}
+     * @throws {@link RivetClient.ForbiddenError}
+     * @throws {@link RivetClient.UnauthorizedError}
+     * @throws {@link RivetClient.NotFoundError}
+     * @throws {@link RivetClient.BadRequestError}
      *
      * @example
      *     await client.cloud.devices.links.get({
@@ -176,9 +176,9 @@ export class Links {
      *     })
      */
     public async get(
-        request: Rivet.cloud.devices.GetDeviceLinkRequest,
+        request: RivetClient.cloud.devices.GetDeviceLinkRequest,
         requestOptions?: Links.RequestOptions
-    ): Promise<Rivet.cloud.devices.GetDeviceLinkResponse> {
+    ): Promise<RivetClient.cloud.devices.GetDeviceLinkResponse> {
         const { deviceLinkToken, watchIndex } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
         _queryParams["device_link_token"] = deviceLinkToken;
@@ -188,7 +188,7 @@ export class Links {
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
+                (await core.Supplier.get(this._options.environment)) ?? environments.RivetClientEnvironment.Production,
                 "/cloud/devices/links"
             ),
             method: "GET",
@@ -218,7 +218,7 @@ export class Links {
         if (_response.error.reason === "status-code") {
             switch (_response.error.statusCode) {
                 case 500:
-                    throw new Rivet.InternalError(
+                    throw new RivetClient.InternalError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -228,7 +228,7 @@ export class Links {
                         })
                     );
                 case 429:
-                    throw new Rivet.RateLimitError(
+                    throw new RivetClient.RateLimitError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -238,7 +238,7 @@ export class Links {
                         })
                     );
                 case 403:
-                    throw new Rivet.ForbiddenError(
+                    throw new RivetClient.ForbiddenError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -248,7 +248,7 @@ export class Links {
                         })
                     );
                 case 408:
-                    throw new Rivet.UnauthorizedError(
+                    throw new RivetClient.UnauthorizedError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -258,7 +258,7 @@ export class Links {
                         })
                     );
                 case 404:
-                    throw new Rivet.NotFoundError(
+                    throw new RivetClient.NotFoundError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -268,7 +268,7 @@ export class Links {
                         })
                     );
                 case 400:
-                    throw new Rivet.BadRequestError(
+                    throw new RivetClient.BadRequestError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -278,7 +278,7 @@ export class Links {
                         })
                     );
                 default:
-                    throw new errors.RivetError({
+                    throw new errors.RivetClientError({
                         statusCode: _response.error.statusCode,
                         body: _response.error.body,
                     });
@@ -287,29 +287,29 @@ export class Links {
 
         switch (_response.error.reason) {
             case "non-json":
-                throw new errors.RivetError({
+                throw new errors.RivetClientError({
                     statusCode: _response.error.statusCode,
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetClientTimeoutError();
             case "unknown":
-                throw new errors.RivetError({
+                throw new errors.RivetClientError({
                     message: _response.error.errorMessage,
                 });
         }
     }
 
     /**
-     * @param {Rivet.cloud.devices.CompleteDeviceLinkRequest} request
+     * @param {RivetClient.cloud.devices.CompleteDeviceLinkRequest} request
      * @param {Links.RequestOptions} requestOptions - Request-specific configuration.
      *
-     * @throws {@link Rivet.InternalError}
-     * @throws {@link Rivet.RateLimitError}
-     * @throws {@link Rivet.ForbiddenError}
-     * @throws {@link Rivet.UnauthorizedError}
-     * @throws {@link Rivet.NotFoundError}
-     * @throws {@link Rivet.BadRequestError}
+     * @throws {@link RivetClient.InternalError}
+     * @throws {@link RivetClient.RateLimitError}
+     * @throws {@link RivetClient.ForbiddenError}
+     * @throws {@link RivetClient.UnauthorizedError}
+     * @throws {@link RivetClient.NotFoundError}
+     * @throws {@link RivetClient.BadRequestError}
      *
      * @example
      *     await client.cloud.devices.links.complete({
@@ -318,12 +318,12 @@ export class Links {
      *     })
      */
     public async complete(
-        request: Rivet.cloud.devices.CompleteDeviceLinkRequest,
+        request: RivetClient.cloud.devices.CompleteDeviceLinkRequest,
         requestOptions?: Links.RequestOptions
     ): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
+                (await core.Supplier.get(this._options.environment)) ?? environments.RivetClientEnvironment.Production,
                 "/cloud/devices/links/complete"
             ),
             method: "POST",
@@ -349,7 +349,7 @@ export class Links {
         if (_response.error.reason === "status-code") {
             switch (_response.error.statusCode) {
                 case 500:
-                    throw new Rivet.InternalError(
+                    throw new RivetClient.InternalError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -359,7 +359,7 @@ export class Links {
                         })
                     );
                 case 429:
-                    throw new Rivet.RateLimitError(
+                    throw new RivetClient.RateLimitError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -369,7 +369,7 @@ export class Links {
                         })
                     );
                 case 403:
-                    throw new Rivet.ForbiddenError(
+                    throw new RivetClient.ForbiddenError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -379,7 +379,7 @@ export class Links {
                         })
                     );
                 case 408:
-                    throw new Rivet.UnauthorizedError(
+                    throw new RivetClient.UnauthorizedError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -389,7 +389,7 @@ export class Links {
                         })
                     );
                 case 404:
-                    throw new Rivet.NotFoundError(
+                    throw new RivetClient.NotFoundError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -399,7 +399,7 @@ export class Links {
                         })
                     );
                 case 400:
-                    throw new Rivet.BadRequestError(
+                    throw new RivetClient.BadRequestError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -409,7 +409,7 @@ export class Links {
                         })
                     );
                 default:
-                    throw new errors.RivetError({
+                    throw new errors.RivetClientError({
                         statusCode: _response.error.statusCode,
                         body: _response.error.body,
                     });
@@ -418,14 +418,14 @@ export class Links {
 
         switch (_response.error.reason) {
             case "non-json":
-                throw new errors.RivetError({
+                throw new errors.RivetClientError({
                     statusCode: _response.error.statusCode,
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetClientTimeoutError();
             case "unknown":
-                throw new errors.RivetError({
+                throw new errors.RivetClientError({
                     message: _response.error.errorMessage,
                 });
         }

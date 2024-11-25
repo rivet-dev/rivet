@@ -8,7 +8,7 @@ import { Environments } from "../resources/environments/client/Client";
 
 export declare namespace Games {
     interface Options {
-        environment?: core.Supplier<environments.RivetEnvironment | string>;
+        environment?: core.Supplier<environments.RivetClientEnvironment | string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         fetcher?: core.FetchFunction;
     }

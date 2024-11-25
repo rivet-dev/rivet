@@ -4,14 +4,14 @@
 
 import * as environments from "../../../../../../environments";
 import * as core from "../../../../../../core";
-import * as Rivet from "../../../../../index";
+import * as RivetClient from "../../../../../index";
 import urlJoin from "url-join";
 import * as serializers from "../../../../../../serialization/index";
 import * as errors from "../../../../../../errors/index";
 
 export declare namespace Invites {
     interface Options {
-        environment?: core.Supplier<environments.RivetEnvironment | string>;
+        environment?: core.Supplier<environments.RivetClientEnvironment | string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         fetcher?: core.FetchFunction;
     }
@@ -35,12 +35,12 @@ export class Invites {
      * @param {string} groupInviteCode - Provided by `rivet.api.group#CreateInviteResponse$code`.
      * @param {Invites.RequestOptions} requestOptions - Request-specific configuration.
      *
-     * @throws {@link Rivet.InternalError}
-     * @throws {@link Rivet.RateLimitError}
-     * @throws {@link Rivet.ForbiddenError}
-     * @throws {@link Rivet.UnauthorizedError}
-     * @throws {@link Rivet.NotFoundError}
-     * @throws {@link Rivet.BadRequestError}
+     * @throws {@link RivetClient.InternalError}
+     * @throws {@link RivetClient.RateLimitError}
+     * @throws {@link RivetClient.ForbiddenError}
+     * @throws {@link RivetClient.UnauthorizedError}
+     * @throws {@link RivetClient.NotFoundError}
+     * @throws {@link RivetClient.BadRequestError}
      *
      * @example
      *     await client.group.invites.getInvite("string")
@@ -48,10 +48,10 @@ export class Invites {
     public async getInvite(
         groupInviteCode: string,
         requestOptions?: Invites.RequestOptions
-    ): Promise<Rivet.group.GetInviteResponse> {
+    ): Promise<RivetClient.group.GetInviteResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
+                (await core.Supplier.get(this._options.environment)) ?? environments.RivetClientEnvironment.Production,
                 `/group/invites/${encodeURIComponent(groupInviteCode)}`
             ),
             method: "GET",
@@ -80,7 +80,7 @@ export class Invites {
         if (_response.error.reason === "status-code") {
             switch (_response.error.statusCode) {
                 case 500:
-                    throw new Rivet.InternalError(
+                    throw new RivetClient.InternalError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -90,7 +90,7 @@ export class Invites {
                         })
                     );
                 case 429:
-                    throw new Rivet.RateLimitError(
+                    throw new RivetClient.RateLimitError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -100,7 +100,7 @@ export class Invites {
                         })
                     );
                 case 403:
-                    throw new Rivet.ForbiddenError(
+                    throw new RivetClient.ForbiddenError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -110,7 +110,7 @@ export class Invites {
                         })
                     );
                 case 408:
-                    throw new Rivet.UnauthorizedError(
+                    throw new RivetClient.UnauthorizedError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -120,7 +120,7 @@ export class Invites {
                         })
                     );
                 case 404:
-                    throw new Rivet.NotFoundError(
+                    throw new RivetClient.NotFoundError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -130,7 +130,7 @@ export class Invites {
                         })
                     );
                 case 400:
-                    throw new Rivet.BadRequestError(
+                    throw new RivetClient.BadRequestError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -140,7 +140,7 @@ export class Invites {
                         })
                     );
                 default:
-                    throw new errors.RivetError({
+                    throw new errors.RivetClientError({
                         statusCode: _response.error.statusCode,
                         body: _response.error.body,
                     });
@@ -149,14 +149,14 @@ export class Invites {
 
         switch (_response.error.reason) {
             case "non-json":
-                throw new errors.RivetError({
+                throw new errors.RivetClientError({
                     statusCode: _response.error.statusCode,
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetClientTimeoutError();
             case "unknown":
-                throw new errors.RivetError({
+                throw new errors.RivetClientError({
                     message: _response.error.errorMessage,
                 });
         }
@@ -168,12 +168,12 @@ export class Invites {
      * @param {string} groupInviteCode - Provided by `rivet.api.group#CreateInviteResponse$code`.
      * @param {Invites.RequestOptions} requestOptions - Request-specific configuration.
      *
-     * @throws {@link Rivet.InternalError}
-     * @throws {@link Rivet.RateLimitError}
-     * @throws {@link Rivet.ForbiddenError}
-     * @throws {@link Rivet.UnauthorizedError}
-     * @throws {@link Rivet.NotFoundError}
-     * @throws {@link Rivet.BadRequestError}
+     * @throws {@link RivetClient.InternalError}
+     * @throws {@link RivetClient.RateLimitError}
+     * @throws {@link RivetClient.ForbiddenError}
+     * @throws {@link RivetClient.UnauthorizedError}
+     * @throws {@link RivetClient.NotFoundError}
+     * @throws {@link RivetClient.BadRequestError}
      *
      * @example
      *     await client.group.invites.consumeInvite("string")
@@ -181,10 +181,10 @@ export class Invites {
     public async consumeInvite(
         groupInviteCode: string,
         requestOptions?: Invites.RequestOptions
-    ): Promise<Rivet.group.ConsumeInviteResponse> {
+    ): Promise<RivetClient.group.ConsumeInviteResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
+                (await core.Supplier.get(this._options.environment)) ?? environments.RivetClientEnvironment.Production,
                 `/group/invites/${encodeURIComponent(groupInviteCode)}/consume`
             ),
             method: "POST",
@@ -213,7 +213,7 @@ export class Invites {
         if (_response.error.reason === "status-code") {
             switch (_response.error.statusCode) {
                 case 500:
-                    throw new Rivet.InternalError(
+                    throw new RivetClient.InternalError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -223,7 +223,7 @@ export class Invites {
                         })
                     );
                 case 429:
-                    throw new Rivet.RateLimitError(
+                    throw new RivetClient.RateLimitError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -233,7 +233,7 @@ export class Invites {
                         })
                     );
                 case 403:
-                    throw new Rivet.ForbiddenError(
+                    throw new RivetClient.ForbiddenError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -243,7 +243,7 @@ export class Invites {
                         })
                     );
                 case 408:
-                    throw new Rivet.UnauthorizedError(
+                    throw new RivetClient.UnauthorizedError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -253,7 +253,7 @@ export class Invites {
                         })
                     );
                 case 404:
-                    throw new Rivet.NotFoundError(
+                    throw new RivetClient.NotFoundError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -263,7 +263,7 @@ export class Invites {
                         })
                     );
                 case 400:
-                    throw new Rivet.BadRequestError(
+                    throw new RivetClient.BadRequestError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -273,7 +273,7 @@ export class Invites {
                         })
                     );
                 default:
-                    throw new errors.RivetError({
+                    throw new errors.RivetClientError({
                         statusCode: _response.error.statusCode,
                         body: _response.error.body,
                     });
@@ -282,14 +282,14 @@ export class Invites {
 
         switch (_response.error.reason) {
             case "non-json":
-                throw new errors.RivetError({
+                throw new errors.RivetClientError({
                     statusCode: _response.error.statusCode,
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetClientTimeoutError();
             case "unknown":
-                throw new errors.RivetError({
+                throw new errors.RivetClientError({
                     message: _response.error.errorMessage,
                 });
         }
@@ -299,15 +299,15 @@ export class Invites {
      * Creates a group invite. Can be shared with other identities to let them join this group.
      *
      * @param {string} groupId
-     * @param {Rivet.group.CreateInviteRequest} request
+     * @param {RivetClient.group.CreateInviteRequest} request
      * @param {Invites.RequestOptions} requestOptions - Request-specific configuration.
      *
-     * @throws {@link Rivet.InternalError}
-     * @throws {@link Rivet.RateLimitError}
-     * @throws {@link Rivet.ForbiddenError}
-     * @throws {@link Rivet.UnauthorizedError}
-     * @throws {@link Rivet.NotFoundError}
-     * @throws {@link Rivet.BadRequestError}
+     * @throws {@link RivetClient.InternalError}
+     * @throws {@link RivetClient.RateLimitError}
+     * @throws {@link RivetClient.ForbiddenError}
+     * @throws {@link RivetClient.UnauthorizedError}
+     * @throws {@link RivetClient.NotFoundError}
+     * @throws {@link RivetClient.BadRequestError}
      *
      * @example
      *     await client.group.invites.createInvite("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
@@ -317,12 +317,12 @@ export class Invites {
      */
     public async createInvite(
         groupId: string,
-        request: Rivet.group.CreateInviteRequest,
+        request: RivetClient.group.CreateInviteRequest,
         requestOptions?: Invites.RequestOptions
-    ): Promise<Rivet.group.CreateInviteResponse> {
+    ): Promise<RivetClient.group.CreateInviteResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
+                (await core.Supplier.get(this._options.environment)) ?? environments.RivetClientEnvironment.Production,
                 `/group/groups/${encodeURIComponent(groupId)}/invites`
             ),
             method: "POST",
@@ -352,7 +352,7 @@ export class Invites {
         if (_response.error.reason === "status-code") {
             switch (_response.error.statusCode) {
                 case 500:
-                    throw new Rivet.InternalError(
+                    throw new RivetClient.InternalError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -362,7 +362,7 @@ export class Invites {
                         })
                     );
                 case 429:
-                    throw new Rivet.RateLimitError(
+                    throw new RivetClient.RateLimitError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -372,7 +372,7 @@ export class Invites {
                         })
                     );
                 case 403:
-                    throw new Rivet.ForbiddenError(
+                    throw new RivetClient.ForbiddenError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -382,7 +382,7 @@ export class Invites {
                         })
                     );
                 case 408:
-                    throw new Rivet.UnauthorizedError(
+                    throw new RivetClient.UnauthorizedError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -392,7 +392,7 @@ export class Invites {
                         })
                     );
                 case 404:
-                    throw new Rivet.NotFoundError(
+                    throw new RivetClient.NotFoundError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -402,7 +402,7 @@ export class Invites {
                         })
                     );
                 case 400:
-                    throw new Rivet.BadRequestError(
+                    throw new RivetClient.BadRequestError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -412,7 +412,7 @@ export class Invites {
                         })
                     );
                 default:
-                    throw new errors.RivetError({
+                    throw new errors.RivetClientError({
                         statusCode: _response.error.statusCode,
                         body: _response.error.body,
                     });
@@ -421,14 +421,14 @@ export class Invites {
 
         switch (_response.error.reason) {
             case "non-json":
-                throw new errors.RivetError({
+                throw new errors.RivetClientError({
                     statusCode: _response.error.statusCode,
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetClientTimeoutError();
             case "unknown":
-                throw new errors.RivetError({
+                throw new errors.RivetClientError({
                     message: _response.error.errorMessage,
                 });
         }

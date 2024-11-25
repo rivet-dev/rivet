@@ -3,12 +3,12 @@
  */
 
 import * as serializers from "../../../../index";
-import * as Rivet from "../../../../../api/index";
+import * as RivetClient from "../../../../../api/index";
 import * as core from "../../../../../core";
 
 export const SignupForBetaRequest: core.serialization.Schema<
     serializers.identity.SignupForBetaRequest.Raw,
-    Rivet.identity.SignupForBetaRequest
+    RivetClient.identity.SignupForBetaRequest
 > = core.serialization.object({
     name: core.serialization.string(),
     companyName: core.serialization.property("company_name", core.serialization.string().optional()),

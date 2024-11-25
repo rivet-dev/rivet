@@ -3,13 +3,13 @@
  */
 
 import * as serializers from "../../../../index";
-import * as Rivet from "../../../../../api/index";
+import * as RivetClient from "../../../../../api/index";
 import * as core from "../../../../../core";
 import { Jwt } from "../../../common/types/Jwt";
 
 export const SetupRequest: core.serialization.Schema<
     serializers.identity.SetupRequest.Raw,
-    Rivet.identity.SetupRequest
+    RivetClient.identity.SetupRequest
 > = core.serialization.object({
     existingIdentityToken: core.serialization.property("existing_identity_token", Jwt.optional()),
 });

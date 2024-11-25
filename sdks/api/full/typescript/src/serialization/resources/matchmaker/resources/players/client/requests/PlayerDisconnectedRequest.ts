@@ -3,12 +3,12 @@
  */
 
 import * as serializers from "../../../../../../index";
-import * as Rivet from "../../../../../../../api/index";
+import * as RivetClient from "../../../../../../../api/index";
 import * as core from "../../../../../../../core";
 
 export const PlayerDisconnectedRequest: core.serialization.Schema<
     serializers.matchmaker.PlayerDisconnectedRequest.Raw,
-    Rivet.matchmaker.PlayerDisconnectedRequest
+    RivetClient.matchmaker.PlayerDisconnectedRequest
 > = core.serialization.object({
     playerToken: core.serialization.property("player_token", core.serialization.string()),
 });

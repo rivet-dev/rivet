@@ -3,13 +3,13 @@
  */
 
 import * as serializers from "../../../../../../index";
-import * as Rivet from "../../../../../../../api/index";
+import * as RivetClient from "../../../../../../../api/index";
 import * as core from "../../../../../../../core";
 import { Config } from "../../../../../captcha/resources/config/types/Config";
 
 export const FindLobbyRequest: core.serialization.Schema<
     serializers.matchmaker.FindLobbyRequest.Raw,
-    Omit<Rivet.matchmaker.FindLobbyRequest, "origin">
+    Omit<RivetClient.matchmaker.FindLobbyRequest, "origin">
 > = core.serialization.object({
     gameModes: core.serialization.property("game_modes", core.serialization.list(core.serialization.string())),
     regions: core.serialization.list(core.serialization.string()).optional(),

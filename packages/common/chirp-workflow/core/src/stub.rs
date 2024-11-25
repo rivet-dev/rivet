@@ -11,8 +11,8 @@ use global_error::GlobalResult;
 use crate::{
 	activity::{Activity, ActivityInput},
 	ctx::WorkflowCtx,
-	history::removed::Removed,
 	executable::{AsyncResult, Executable},
+	history::removed::Removed,
 };
 
 // Must wrap all closures being used as executables in this function due to
@@ -56,7 +56,10 @@ where
 	I: ActivityInput,
 	<I as ActivityInput>::Activity: Activity<Input = I>,
 {
-	ActivityStub { inner: input, version: None }
+	ActivityStub {
+		inner: input,
+		version: None,
+	}
 }
 
 pub struct VersionStub {
@@ -69,7 +72,10 @@ impl VersionStub {
 		I: ActivityInput,
 		<I as ActivityInput>::Activity: Activity<Input = I>,
 	{
-		ActivityStub { inner: input, version: Some(self.version) }
+		ActivityStub {
+			inner: input,
+			version: Some(self.version),
+		}
 	}
 }
 

@@ -311,7 +311,12 @@ fn format_http_rule(
 
 	let mut rule = "(".to_string();
 
-	let hostname = ds::util::build_ds_hostname(config, proxied_port.server_id, &proxied_port.port_name, proxied_port.datacenter_id)?;
+	let hostname = ds::util::build_ds_hostname(
+		config,
+		proxied_port.server_id,
+		&proxied_port.port_name,
+		proxied_port.datacenter_id,
+	)?;
 	write!(&mut rule, "Host(`{}`)", hostname)?;
 
 	match authorization {

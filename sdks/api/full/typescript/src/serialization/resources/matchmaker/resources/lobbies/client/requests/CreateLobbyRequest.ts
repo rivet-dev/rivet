@@ -3,14 +3,14 @@
  */
 
 import * as serializers from "../../../../../../index";
-import * as Rivet from "../../../../../../../api/index";
+import * as RivetClient from "../../../../../../../api/index";
 import * as core from "../../../../../../../core";
 import { CustomLobbyPublicity } from "../../../common/types/CustomLobbyPublicity";
 import { Config } from "../../../../../captcha/resources/config/types/Config";
 
 export const CreateLobbyRequest: core.serialization.Schema<
     serializers.matchmaker.CreateLobbyRequest.Raw,
-    Rivet.matchmaker.CreateLobbyRequest
+    RivetClient.matchmaker.CreateLobbyRequest
 > = core.serialization.object({
     gameMode: core.serialization.property("game_mode", core.serialization.string()),
     region: core.serialization.string().optional(),

@@ -3,13 +3,13 @@
  */
 
 import * as serializers from "../../../../../../index";
-import * as Rivet from "../../../../../../../api/index";
+import * as RivetClient from "../../../../../../../api/index";
 import * as core from "../../../../../../../core";
 import { Config } from "../../../../../captcha/resources/config/types/Config";
 
 export const JoinLobbyRequest: core.serialization.Schema<
     serializers.matchmaker.JoinLobbyRequest.Raw,
-    Rivet.matchmaker.JoinLobbyRequest
+    RivetClient.matchmaker.JoinLobbyRequest
 > = core.serialization.object({
     lobbyId: core.serialization.property("lobby_id", core.serialization.string()),
     captcha: Config.optional(),

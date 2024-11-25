@@ -4,7 +4,7 @@
 
 import * as environments from "../../../../environments";
 import * as core from "../../../../core";
-import * as Rivet from "../../../index";
+import * as RivetClient from "../../../index";
 import urlJoin from "url-join";
 import * as serializers from "../../../../serialization/index";
 import * as errors from "../../../../errors/index";
@@ -14,7 +14,7 @@ import { Logs } from "../resources/logs/client/Client";
 
 export declare namespace Servers {
     interface Options {
-        environment?: core.Supplier<environments.RivetEnvironment | string>;
+        environment?: core.Supplier<environments.RivetClientEnvironment | string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         fetcher?: core.FetchFunction;
     }
@@ -40,12 +40,12 @@ export class Servers {
      * @param {string} serverId - The id of the server to destroy
      * @param {Servers.RequestOptions} requestOptions - Request-specific configuration.
      *
-     * @throws {@link Rivet.InternalError}
-     * @throws {@link Rivet.RateLimitError}
-     * @throws {@link Rivet.ForbiddenError}
-     * @throws {@link Rivet.UnauthorizedError}
-     * @throws {@link Rivet.NotFoundError}
-     * @throws {@link Rivet.BadRequestError}
+     * @throws {@link RivetClient.InternalError}
+     * @throws {@link RivetClient.RateLimitError}
+     * @throws {@link RivetClient.ForbiddenError}
+     * @throws {@link RivetClient.UnauthorizedError}
+     * @throws {@link RivetClient.NotFoundError}
+     * @throws {@link RivetClient.BadRequestError}
      *
      * @example
      *     await client.servers.get("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
@@ -55,10 +55,10 @@ export class Servers {
         environmentId: string,
         serverId: string,
         requestOptions?: Servers.RequestOptions
-    ): Promise<Rivet.servers.GetServerResponse> {
+    ): Promise<RivetClient.servers.GetServerResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
+                (await core.Supplier.get(this._options.environment)) ?? environments.RivetClientEnvironment.Production,
                 `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(
                     environmentId
                 )}/servers/${encodeURIComponent(serverId)}`
@@ -89,7 +89,7 @@ export class Servers {
         if (_response.error.reason === "status-code") {
             switch (_response.error.statusCode) {
                 case 500:
-                    throw new Rivet.InternalError(
+                    throw new RivetClient.InternalError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -99,7 +99,7 @@ export class Servers {
                         })
                     );
                 case 429:
-                    throw new Rivet.RateLimitError(
+                    throw new RivetClient.RateLimitError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -109,7 +109,7 @@ export class Servers {
                         })
                     );
                 case 403:
-                    throw new Rivet.ForbiddenError(
+                    throw new RivetClient.ForbiddenError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -119,7 +119,7 @@ export class Servers {
                         })
                     );
                 case 408:
-                    throw new Rivet.UnauthorizedError(
+                    throw new RivetClient.UnauthorizedError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -129,7 +129,7 @@ export class Servers {
                         })
                     );
                 case 404:
-                    throw new Rivet.NotFoundError(
+                    throw new RivetClient.NotFoundError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -139,7 +139,7 @@ export class Servers {
                         })
                     );
                 case 400:
-                    throw new Rivet.BadRequestError(
+                    throw new RivetClient.BadRequestError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -149,7 +149,7 @@ export class Servers {
                         })
                     );
                 default:
-                    throw new errors.RivetError({
+                    throw new errors.RivetClientError({
                         statusCode: _response.error.statusCode,
                         body: _response.error.body,
                     });
@@ -158,14 +158,14 @@ export class Servers {
 
         switch (_response.error.reason) {
             case "non-json":
-                throw new errors.RivetError({
+                throw new errors.RivetClientError({
                     statusCode: _response.error.statusCode,
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetClientTimeoutError();
             case "unknown":
-                throw new errors.RivetError({
+                throw new errors.RivetClientError({
                     message: _response.error.errorMessage,
                 });
         }
@@ -176,15 +176,15 @@ export class Servers {
      *
      * @param {string} gameId
      * @param {string} environmentId
-     * @param {Rivet.servers.GetServersRequest} request
+     * @param {RivetClient.servers.GetServersRequest} request
      * @param {Servers.RequestOptions} requestOptions - Request-specific configuration.
      *
-     * @throws {@link Rivet.InternalError}
-     * @throws {@link Rivet.RateLimitError}
-     * @throws {@link Rivet.ForbiddenError}
-     * @throws {@link Rivet.UnauthorizedError}
-     * @throws {@link Rivet.NotFoundError}
-     * @throws {@link Rivet.BadRequestError}
+     * @throws {@link RivetClient.InternalError}
+     * @throws {@link RivetClient.RateLimitError}
+     * @throws {@link RivetClient.ForbiddenError}
+     * @throws {@link RivetClient.UnauthorizedError}
+     * @throws {@link RivetClient.NotFoundError}
+     * @throws {@link RivetClient.BadRequestError}
      *
      * @example
      *     await client.servers.list("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
@@ -196,9 +196,9 @@ export class Servers {
     public async list(
         gameId: string,
         environmentId: string,
-        request: Rivet.servers.GetServersRequest = {},
+        request: RivetClient.servers.GetServersRequest = {},
         requestOptions?: Servers.RequestOptions
-    ): Promise<Rivet.servers.ListServersResponse> {
+    ): Promise<RivetClient.servers.ListServersResponse> {
         const { tagsJson, includeDestroyed, cursor } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
         if (tagsJson != null) {
@@ -215,7 +215,7 @@ export class Servers {
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
+                (await core.Supplier.get(this._options.environment)) ?? environments.RivetClientEnvironment.Production,
                 `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(environmentId)}/servers`
             ),
             method: "GET",
@@ -245,7 +245,7 @@ export class Servers {
         if (_response.error.reason === "status-code") {
             switch (_response.error.statusCode) {
                 case 500:
-                    throw new Rivet.InternalError(
+                    throw new RivetClient.InternalError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -255,7 +255,7 @@ export class Servers {
                         })
                     );
                 case 429:
-                    throw new Rivet.RateLimitError(
+                    throw new RivetClient.RateLimitError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -265,7 +265,7 @@ export class Servers {
                         })
                     );
                 case 403:
-                    throw new Rivet.ForbiddenError(
+                    throw new RivetClient.ForbiddenError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -275,7 +275,7 @@ export class Servers {
                         })
                     );
                 case 408:
-                    throw new Rivet.UnauthorizedError(
+                    throw new RivetClient.UnauthorizedError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -285,7 +285,7 @@ export class Servers {
                         })
                     );
                 case 404:
-                    throw new Rivet.NotFoundError(
+                    throw new RivetClient.NotFoundError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -295,7 +295,7 @@ export class Servers {
                         })
                     );
                 case 400:
-                    throw new Rivet.BadRequestError(
+                    throw new RivetClient.BadRequestError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -305,7 +305,7 @@ export class Servers {
                         })
                     );
                 default:
-                    throw new errors.RivetError({
+                    throw new errors.RivetClientError({
                         statusCode: _response.error.statusCode,
                         body: _response.error.body,
                     });
@@ -314,14 +314,14 @@ export class Servers {
 
         switch (_response.error.reason) {
             case "non-json":
-                throw new errors.RivetError({
+                throw new errors.RivetClientError({
                     statusCode: _response.error.statusCode,
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetClientTimeoutError();
             case "unknown":
-                throw new errors.RivetError({
+                throw new errors.RivetClientError({
                     message: _response.error.errorMessage,
                 });
         }
@@ -332,15 +332,15 @@ export class Servers {
      *
      * @param {string} gameId
      * @param {string} environmentId
-     * @param {Rivet.servers.CreateServerRequest} request
+     * @param {RivetClient.servers.CreateServerRequest} request
      * @param {Servers.RequestOptions} requestOptions - Request-specific configuration.
      *
-     * @throws {@link Rivet.InternalError}
-     * @throws {@link Rivet.RateLimitError}
-     * @throws {@link Rivet.ForbiddenError}
-     * @throws {@link Rivet.UnauthorizedError}
-     * @throws {@link Rivet.NotFoundError}
-     * @throws {@link Rivet.BadRequestError}
+     * @throws {@link RivetClient.InternalError}
+     * @throws {@link RivetClient.RateLimitError}
+     * @throws {@link RivetClient.ForbiddenError}
+     * @throws {@link RivetClient.UnauthorizedError}
+     * @throws {@link RivetClient.NotFoundError}
+     * @throws {@link RivetClient.BadRequestError}
      *
      * @example
      *     await client.servers.create("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
@@ -380,12 +380,12 @@ export class Servers {
     public async create(
         gameId: string,
         environmentId: string,
-        request: Rivet.servers.CreateServerRequest,
+        request: RivetClient.servers.CreateServerRequest,
         requestOptions?: Servers.RequestOptions
-    ): Promise<Rivet.servers.CreateServerResponse> {
+    ): Promise<RivetClient.servers.CreateServerResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
+                (await core.Supplier.get(this._options.environment)) ?? environments.RivetClientEnvironment.Production,
                 `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(environmentId)}/servers`
             ),
             method: "POST",
@@ -415,7 +415,7 @@ export class Servers {
         if (_response.error.reason === "status-code") {
             switch (_response.error.statusCode) {
                 case 500:
-                    throw new Rivet.InternalError(
+                    throw new RivetClient.InternalError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -425,7 +425,7 @@ export class Servers {
                         })
                     );
                 case 429:
-                    throw new Rivet.RateLimitError(
+                    throw new RivetClient.RateLimitError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -435,7 +435,7 @@ export class Servers {
                         })
                     );
                 case 403:
-                    throw new Rivet.ForbiddenError(
+                    throw new RivetClient.ForbiddenError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -445,7 +445,7 @@ export class Servers {
                         })
                     );
                 case 408:
-                    throw new Rivet.UnauthorizedError(
+                    throw new RivetClient.UnauthorizedError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -455,7 +455,7 @@ export class Servers {
                         })
                     );
                 case 404:
-                    throw new Rivet.NotFoundError(
+                    throw new RivetClient.NotFoundError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -465,7 +465,7 @@ export class Servers {
                         })
                     );
                 case 400:
-                    throw new Rivet.BadRequestError(
+                    throw new RivetClient.BadRequestError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -475,7 +475,7 @@ export class Servers {
                         })
                     );
                 default:
-                    throw new errors.RivetError({
+                    throw new errors.RivetClientError({
                         statusCode: _response.error.statusCode,
                         body: _response.error.body,
                     });
@@ -484,14 +484,14 @@ export class Servers {
 
         switch (_response.error.reason) {
             case "non-json":
-                throw new errors.RivetError({
+                throw new errors.RivetClientError({
                     statusCode: _response.error.statusCode,
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetClientTimeoutError();
             case "unknown":
-                throw new errors.RivetError({
+                throw new errors.RivetClientError({
                     message: _response.error.errorMessage,
                 });
         }
@@ -503,15 +503,15 @@ export class Servers {
      * @param {string} gameId
      * @param {string} environmentId
      * @param {string} serverId - The id of the server to destroy
-     * @param {Rivet.servers.DestroyServerRequest} request
+     * @param {RivetClient.servers.DestroyServerRequest} request
      * @param {Servers.RequestOptions} requestOptions - Request-specific configuration.
      *
-     * @throws {@link Rivet.InternalError}
-     * @throws {@link Rivet.RateLimitError}
-     * @throws {@link Rivet.ForbiddenError}
-     * @throws {@link Rivet.UnauthorizedError}
-     * @throws {@link Rivet.NotFoundError}
-     * @throws {@link Rivet.BadRequestError}
+     * @throws {@link RivetClient.InternalError}
+     * @throws {@link RivetClient.RateLimitError}
+     * @throws {@link RivetClient.ForbiddenError}
+     * @throws {@link RivetClient.UnauthorizedError}
+     * @throws {@link RivetClient.NotFoundError}
+     * @throws {@link RivetClient.BadRequestError}
      *
      * @example
      *     await client.servers.destroy("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
@@ -522,9 +522,9 @@ export class Servers {
         gameId: string,
         environmentId: string,
         serverId: string,
-        request: Rivet.servers.DestroyServerRequest = {},
+        request: RivetClient.servers.DestroyServerRequest = {},
         requestOptions?: Servers.RequestOptions
-    ): Promise<Rivet.servers.DestroyServerResponse> {
+    ): Promise<RivetClient.servers.DestroyServerResponse> {
         const { overrideKillTimeout } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
         if (overrideKillTimeout != null) {
@@ -533,7 +533,7 @@ export class Servers {
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
+                (await core.Supplier.get(this._options.environment)) ?? environments.RivetClientEnvironment.Production,
                 `/games/${encodeURIComponent(gameId)}/environments/${encodeURIComponent(
                     environmentId
                 )}/servers/${encodeURIComponent(serverId)}`
@@ -565,7 +565,7 @@ export class Servers {
         if (_response.error.reason === "status-code") {
             switch (_response.error.statusCode) {
                 case 500:
-                    throw new Rivet.InternalError(
+                    throw new RivetClient.InternalError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -575,7 +575,7 @@ export class Servers {
                         })
                     );
                 case 429:
-                    throw new Rivet.RateLimitError(
+                    throw new RivetClient.RateLimitError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -585,7 +585,7 @@ export class Servers {
                         })
                     );
                 case 403:
-                    throw new Rivet.ForbiddenError(
+                    throw new RivetClient.ForbiddenError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -595,7 +595,7 @@ export class Servers {
                         })
                     );
                 case 408:
-                    throw new Rivet.UnauthorizedError(
+                    throw new RivetClient.UnauthorizedError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -605,7 +605,7 @@ export class Servers {
                         })
                     );
                 case 404:
-                    throw new Rivet.NotFoundError(
+                    throw new RivetClient.NotFoundError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -615,7 +615,7 @@ export class Servers {
                         })
                     );
                 case 400:
-                    throw new Rivet.BadRequestError(
+                    throw new RivetClient.BadRequestError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -625,7 +625,7 @@ export class Servers {
                         })
                     );
                 default:
-                    throw new errors.RivetError({
+                    throw new errors.RivetClientError({
                         statusCode: _response.error.statusCode,
                         body: _response.error.body,
                     });
@@ -634,14 +634,14 @@ export class Servers {
 
         switch (_response.error.reason) {
             case "non-json":
-                throw new errors.RivetError({
+                throw new errors.RivetClientError({
                     statusCode: _response.error.statusCode,
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetClientTimeoutError();
             case "unknown":
-                throw new errors.RivetError({
+                throw new errors.RivetClientError({
                     message: _response.error.errorMessage,
                 });
         }
