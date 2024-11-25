@@ -334,7 +334,6 @@ pub async fn create_deprecated(
 				memory: body.resources.memory,
 			}),
 			runtime: Box::new(models::ActorCreateActorRuntimeRequest {
-				arguments: body.runtime.arguments,
 				environment: body.runtime.environment,
 			}),
 			build: Some(body.runtime.build),

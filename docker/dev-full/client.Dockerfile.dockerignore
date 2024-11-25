@@ -4,7 +4,7 @@
 !Cargo.toml
 !packages
 !resources/legacy/proto
-!sdks/full/rust/Cargo.toml
-!sdks/full/rust/src
+!sdks/api/full/rust/Cargo.toml
+!sdks/api/full/rust/src
 
 sdks/runtime

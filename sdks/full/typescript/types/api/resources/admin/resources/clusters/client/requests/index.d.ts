@@ -1,1 +1,0 @@
-export { GetServerIpsRequest } from "./GetServerIpsRequest";

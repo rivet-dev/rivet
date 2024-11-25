@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euf -o pipefail
 
-SDKS_PATH="sdks/$FERN_GROUP"
+SDKS_PATH="sdks/api/$FERN_GROUP"
 GEN_PATH_OPENAPI="$SDKS_PATH/openapi_compat/openapi.yml"
 GEN_PATH_RUST="$SDKS_PATH/rust"
 GEN_PATH_RUST_CLI="$SDKS_PATH/rust-cli"

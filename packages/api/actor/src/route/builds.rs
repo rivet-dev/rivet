@@ -344,7 +344,6 @@ pub async fn create_build_deprecated(
 				models::ServersBuildKind::DockerImage => models::ActorBuildKind::DockerImage,
 				models::ServersBuildKind::OciBundle => models::ActorBuildKind::OciBundle,
 			}),
-			multipart_upload: body.multipart_upload,
 			name: body.name,
 		},
 		global,

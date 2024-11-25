@@ -2,8 +2,8 @@
 
 !Cargo.lock
 !Cargo.toml
-!sdks/full/rust/Cargo.toml
-!sdks/full/rust/src
+!sdks/api/full/rust/Cargo.toml
+!sdks/api/full/rust/src
 !packages
 !resources/legacy/proto
 

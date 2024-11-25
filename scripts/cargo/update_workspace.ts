@@ -51,7 +51,7 @@ async function updateCargoToml() {
 	}
 
 	// Hardcode extra workspace members
-	members.push("sdks/full/rust");
+	members.push("sdks/api/full/rust");
 
 	// Remove path dependencies, since we'll replace these. This lets us
 	// preserve existing external dependencies.

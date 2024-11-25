@@ -9,13 +9,13 @@ FERN_GROUP=os.environ.get('FERN_GROUP')
 
 # Create output dir
 print('Creating output dir')
-output_dir=f'sdks/{FERN_GROUP}/openapi_compat'
+output_dir=f'sdks/api/{FERN_GROUP}/openapi_compat'
 if not os.path.exists(output_dir):
 	os.makedirs(output_dir)
 
 # Read spec
 print('Reading spec')
-with open(f'sdks/{FERN_GROUP}/openapi/openapi.yml', 'r') as f:
+with open(f'sdks/api/{FERN_GROUP}/openapi/openapi.yml', 'r') as f:
 	openapi = yaml.safe_load(f.read())
 
 # Modify spec for compatibility
