@@ -1739,7 +1739,6 @@ dependencies = [
  "rand",
  "reqwest 0.11.27",
  "rivet-api",
- "rivet-config",
  "rivet-convert",
  "rivet-metrics",
  "rivet-operation",
@@ -1752,7 +1751,6 @@ dependencies = [
  "ssh2",
  "strum 0.26.3",
  "token-create",
- "trust-dns-resolver",
  "upload-get",
  "upload-prepare",
 ]
@@ -3541,6 +3539,7 @@ dependencies = [
  "faker-region",
  "faker-user",
  "game-get",
+ "game-resolve-namespace-id",
  "heck 0.3.3",
  "hex",
  "http 0.2.12",

@@ -561,7 +561,7 @@ impl Ui {
 
 	pub fn public_origin(&self) -> Url {
 		self.public_origin.clone().unwrap_or_else(|| {
-			Url::parse(&format!("http://127.0.0.1:{}", default_ports::API_PUBLIC)).unwrap()
+			Url::parse(&format!("http://127.0.0.1:{}/ui", default_ports::API_PUBLIC)).unwrap()
 		})
 	}
 

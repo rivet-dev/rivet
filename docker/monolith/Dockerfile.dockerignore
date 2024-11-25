@@ -12,5 +12,3 @@ docker/monolith/Dockerfile
 docker/monolith/Dockerfile.dockerignore
 docker/monolith/*.md
 
-sdks/runtime
-

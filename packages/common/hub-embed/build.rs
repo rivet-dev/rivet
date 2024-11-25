@@ -1,6 +1,6 @@
 use std::{env, fs, path::Path};
 
-const HUB_URL: &str = "https://releases.rivet.gg/hub/2024-11-13-06-23-39-b01b441-embed.zip";
+const HUB_URL: &str = "https://releases.rivet.gg/hub/2024-11-25-00-13-42-34b1869-embed.zip";
 const OUT_DIR: &str = "hub_files";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

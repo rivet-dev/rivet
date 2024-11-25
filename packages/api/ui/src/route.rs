@@ -93,7 +93,9 @@ impl Router {
 				Ok(Some(content))
 			}
 			None => {
-				if path.ends_with(".html") || !path.contains('.') {
+				// HACK(FRONT-545): Paths with tokens in them are interpreted as a file, so we
+				// include certain exceptions
+				if path.ends_with(".html") || !path.contains('.') || path.contains("device.") {
 					tracing::debug!(
 						path = ?path,
 						"file not found, serving index.html"
