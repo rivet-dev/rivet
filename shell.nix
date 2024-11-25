@@ -36,6 +36,7 @@ in
 
 			# Libraries
 			openssl
+			protobuf
 
 			# Autocomplete
 			bashInteractive
@@ -66,6 +67,10 @@ in
 		shellHook = ''
 			# Setup Git LFS
 			git lfs install --manual > /dev/null
+
+			# See https://docs.rs/prost-build/0.8.0/prost_build/#sourcing-protoc
+			export PROTOC="${pkgs.protobuf}/bin/protoc"
+			export PROTOC_INCLUDE="${pkgs.protobuf}/include"
 			
 			# Install autocomplete
 			source ${pkgs.bash-completion}/share/bash-completion/bash_completion
