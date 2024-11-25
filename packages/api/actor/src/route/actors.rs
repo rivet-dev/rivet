@@ -142,6 +142,9 @@ pub async fn create(
 	let mut fail_sub = ctx
 		.subscribe::<ds::workflows::server::Failed>(("server_id", server_id))
 		.await?;
+	let mut destroy_sub = ctx
+		.subscribe::<ds::workflows::server::DestroyStarted>(("server_id", server_id))
+		.await?;
 
 	let network = body.network.unwrap_or_default();
 
@@ -231,12 +234,16 @@ pub async fn create(
 	.dispatch()
 	.await?;
 
-	// Wait for ready or fail
+	// Wait for ready, fail, or destroy
 	tokio::select! {
 		res = ready_sub.next() => { res?; },
 		res = fail_sub.next() => {
 			let msg = res?;
 			bail_with!(ACTOR_FAILED_TO_CREATE, error = msg.message);
+		}
+		res = destroy_sub.next() => {
+			res?;
+			bail_with!(ACTOR_FAILED_TO_CREATE, error = "Actor failed before reaching a ready state.");
 		}
 	}
 
