@@ -142,13 +142,13 @@ async function put(key: Key, value: Entry | ArrayBuffer, options?: PutOptions): 
 
 	let serializedValue;
 	if (format == "value") {
-		value = core.serialize(value, { forStorage: true });
+		serializedValue = core.serialize(value, { forStorage: true });
 	} else if (format == "arrayBuffer") {
-		if (value instanceof ArrayBuffer) value = new Uint8Array(value);
+		if (value instanceof ArrayBuffer) serializedValue = new Uint8Array(value);
 		else throw new Error(`value must be of type \`ArrayBuffer\` if format is "arrayBuffer"`);
 	}
 
-	await op_rivet_kv_put(serializeKey(key), serializedValue);
+	await op_rivet_kv_put(serializeKey(key), serializedValue!);
 }
 
 /**
@@ -174,9 +174,9 @@ async function putBatch(obj: Map<Key, Entry | ArrayBuffer>, options?: PutBatchOp
 
 		let serializedValue;
 		if (format == "value") {
-			value = core.serialize(serializedValue, { forStorage: true });
+			serializedValue = core.serialize(value, { forStorage: true });
 		} else if (format == "arrayBuffer") {
-			if (value instanceof ArrayBuffer) value = new Uint8Array(value);
+			if (value instanceof ArrayBuffer) serializedValue = new Uint8Array(value);
 			else
 				throw new Error(
 					`value in key "${key}" must be of type \`ArrayBuffer\` if format is "arrayBuffer"`

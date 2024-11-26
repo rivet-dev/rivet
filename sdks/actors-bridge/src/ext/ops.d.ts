@@ -12,7 +12,7 @@ declare module "ext:core/ops" {
 		reverse: boolean,
 		limit?: number
 	): Promise<Map<OutKey, OutEntry>>;
-	export function op_rivet_kv_put(key: InKey, value: any): Promise<void>;
+	export function op_rivet_kv_put(key: InKey, value: Uint8Array): Promise<void>;
 	export function op_rivet_kv_put_batch(entries: Map<InKey, Uint8Array>): Promise<void>;
 	export function op_rivet_kv_delete(key: InKey): Promise<void>;
 	export function op_rivet_kv_delete_batch(keys: InKey[]): Promise<void>;

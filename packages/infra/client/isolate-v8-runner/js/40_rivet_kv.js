@@ -90,11 +90,11 @@ async function put(key, value, options) {
     let format = options?.format ?? "value";
     let serializedValue;
     if (format == "value") {
-        value = core.serialize(value, { forStorage: true });
+        serializedValue = core.serialize(value, { forStorage: true });
     }
     else if (format == "arrayBuffer") {
         if (value instanceof ArrayBuffer)
-            value = new Uint8Array(value);
+            serializedValue = new Uint8Array(value);
         else
             throw new Error(`value must be of type \`ArrayBuffer\` if format is "arrayBuffer"`);
     }
@@ -114,11 +114,11 @@ async function putBatch(obj, options) {
         validateType(value, key, format);
         let serializedValue;
         if (format == "value") {
-            value = core.serialize(serializedValue, { forStorage: true });
+            serializedValue = core.serialize(value, { forStorage: true });
         }
         else if (format == "arrayBuffer") {
             if (value instanceof ArrayBuffer)
-                value = new Uint8Array(value);
+                serializedValue = new Uint8Array(value);
             else
                 throw new Error(`value in key "${key}" must be of type \`ArrayBuffer\` if format is "arrayBuffer"`);
         }
