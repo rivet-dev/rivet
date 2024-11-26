@@ -2,6 +2,7 @@ use chirp_workflow::prelude::*;
 use rivet_operation::prelude::proto::backend;
 
 const MAX_UPLOAD_SIZE: u64 = util::file_size::gigabytes(8);
+const MAX_JS_BUILD_UPLOAD_SIZE: u64 = util::file_size::megabytes(10);
 use crate::{
 	types::{upload::PrepareFile, upload::PresignedUploadRequest, BuildCompression, BuildKind},
 	utils,
@@ -86,8 +87,12 @@ pub async fn get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
 			);
 			ensure!(util::check::docker_ident(tag), "invalid tag");
 
+			let max_upload_size = match input.kind {
+				BuildKind::DockerImage | BuildKind::OciBundle => MAX_UPLOAD_SIZE,
+				BuildKind::JavaScript => MAX_JS_BUILD_UPLOAD_SIZE,
+			};
 			ensure_with!(
-				image_file.content_length < MAX_UPLOAD_SIZE,
+				image_file.content_length < max_upload_size,
 				UPLOAD_TOO_LARGE
 			);
 
