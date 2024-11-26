@@ -2,14 +2,14 @@ use anyhow::*;
 use serde_json::json;
 use std::path::Path;
 
-use super::seccomp;
+use super::{partial_oci_config::PartialOciConfigUser, seccomp};
 
 pub struct ConfigOpts<'a> {
 	pub actor_path: &'a Path,
 	pub netns_path: &'a Path,
 	pub args: Vec<String>,
 	pub env: Vec<String>,
-	pub user: String,
+	pub user: PartialOciConfigUser,
 	pub cwd: String,
 	pub cpu: u64,
 	pub memory: u64,

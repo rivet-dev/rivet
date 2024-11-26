@@ -161,10 +161,12 @@ pub enum NetworkMode {
 pub struct Resources {
 	/// Millicore (1/1000 of a core).
 	pub cpu: u64,
-	// Bytes.
+	/// Bytes.
 	pub memory: u64,
-	// Bytes.
+	/// Bytes.
 	pub memory_max: u64,
+	/// MiB.
+	pub disk: u32,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash)]

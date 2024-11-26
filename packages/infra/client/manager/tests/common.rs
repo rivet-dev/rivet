@@ -97,6 +97,7 @@ pub async fn start_echo_actor(
 				cpu: 100,
 				memory: 10 * 1024 * 1024,
 				memory_max: 15 * 1024 * 1024,
+				disk: 15,
 			},
 			owner: protocol::ActorOwner::DynamicServer {
 				server_id: actor_id,
@@ -137,6 +138,7 @@ pub async fn start_js_echo_actor(
 				cpu: 100,
 				memory: 10 * 1024 * 1024,
 				memory_max: 15 * 1024 * 1024,
+				disk: 15,
 			},
 			owner: protocol::ActorOwner::DynamicServer {
 				server_id: actor_id,
@@ -312,17 +314,16 @@ pub async fn start_client(
 }
 
 pub async fn build_binaries(gen_path: &Path) {
-	let echo_server_crate_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-		.join("..")
-		.join("echo");
+	let pkg_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
 	let status = Command::new("docker")
-		.current_dir(&echo_server_crate_path)
 		.arg("build")
 		.arg("--platform")
 		.arg("linux/amd64")
 		.arg("-t")
 		.arg("pegboard-echo-server")
-		.arg(".")
+		.arg("-f")
+		.arg(pkg_path.join(format!("echo")).join("Dockerfile"))
+		.arg(pkg_path.join("..").join("..").join(".."))
 		.status()
 		.await
 		.unwrap();
@@ -332,7 +333,6 @@ pub async fn build_binaries(gen_path: &Path) {
 	tracing::info!("saving echo image");
 
 	let status = Command::new("docker")
-		.current_dir(&echo_server_crate_path)
 		.arg("save")
 		.arg("-o")
 		.arg(image_path(gen_path))
@@ -349,7 +349,7 @@ pub async fn build_binaries(gen_path: &Path) {
 		.arg(js_image_path(gen_path))
 		.arg("-C")
 		.arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests"))
-		.arg("echo.js")
+		.arg("index.js")
 		.status()
 		.await
 		.unwrap();
@@ -379,11 +379,7 @@ async fn build_runner(gen_path: &Path, variant: &str) {
 				.join(format!("{variant}-runner"))
 				.join("Dockerfile"),
 		)
-		.arg(if variant == "container" {
-			pkg_path.join(format!("{variant}-runner"))
-		} else {
-			pkg_path.join("..").join("..").join("..")
-		})
+		.arg(pkg_path.join("..").join("..").join(".."))
 		.status()
 		.await
 		.unwrap();
@@ -393,11 +389,7 @@ async fn build_runner(gen_path: &Path, variant: &str) {
 	tracing::info!("copying runner image");
 
 	let container_name = format!("temp-pegboard-{variant}-runner-container");
-	let binary_path_in_container = if variant == "container" {
-		format!("/app/target/x86_64-unknown-linux-musl/release/rivet-{variant}-runner")
-	} else {
-		format!("/rivet-{variant}-runner")
-	};
+	let binary_path_in_container = format!("/rivet-{variant}-runner");
 
 	// Create a temporary container
 	let status = Command::new("docker")

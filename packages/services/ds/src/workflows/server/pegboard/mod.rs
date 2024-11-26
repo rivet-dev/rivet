@@ -468,6 +468,7 @@ async fn select_resources(
 		cpu,
 		memory,
 		memory_max,
+		disk: tier.disk,
 	})
 }
 

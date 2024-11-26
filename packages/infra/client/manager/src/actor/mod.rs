@@ -126,9 +126,13 @@ impl Actor {
 		// Create actor working dir
 		fs::create_dir(&actor_path).await?;
 
+		// Create fs mount
+		self.make_fs(&ctx).await?;
+
 		// Download artifact
 		self.download_image(&ctx).await?;
 
+		// Bind selected ports
 		let ports = self.bind_ports(ctx).await?;
 
 		match self.config.image.kind {

@@ -32,8 +32,8 @@ pub fn run(
 		.context("empty `actor_path`")?
 		.to_string_lossy()
 		.to_string();
-	let oci_bundle_path = actor_path.join("oci-bundle");
-	let oci_bundle_config_json = oci_bundle_path.join("config.json");
+	let fs_path = actor_path.join("fs");
+	let oci_bundle_config_json = fs_path.join("config.json");
 
 	// Validate OCI bundle
 	let oci_bundle_str =
@@ -66,13 +66,13 @@ pub fn run(
 	println!(
 		"Starting container {} with OCI bundle {}",
 		actor_id,
-		oci_bundle_path.display()
+		fs_path.display()
 	);
 	let mut runc_child = Command::new("runc")
 		.arg("run")
 		.arg(&actor_id)
 		.arg("-b")
-		.arg(oci_bundle_path)
+		.arg(fs_path)
 		.stdout(Stdio::piped())
 		.stderr(Stdio::piped())
 		.spawn()

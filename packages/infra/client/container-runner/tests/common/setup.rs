@@ -72,14 +72,14 @@ pub fn setup(command: &str) -> Setup {
 		.arg("unpack")
 		.arg("--image")
 		.arg("oci-image:latest")
-		.arg("oci-bundle")
+		.arg("fs")
 		.current_dir(actor_dir.path())
 		.status()
 		.unwrap();
 	assert!(status.success());
 
 	// Generate runc container
-	let oci_bundle_path = actor_dir.path().join("oci-bundle");
+	let oci_bundle_path = actor_dir.path().join("fs");
 	let oci_config_path = oci_bundle_path.join("config.json");
 	let mut config =
 		serde_json::from_str::<serde_json::Value>(&fs::read_to_string(&oci_config_path).unwrap())

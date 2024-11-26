@@ -22,10 +22,53 @@ use super::{oci_config, Actor};
 use crate::{ctx::Ctx, utils};
 
 impl Actor {
+	pub async fn make_fs(&self, ctx: &Ctx) -> Result<()> {
+		let actor_path = ctx.actor_path(self.actor_id);
+		let fs_img_path = actor_path.join("fs.img");
+		let fs_path = actor_path.join("fs");
+
+		tracing::info!(actor_id=?self.actor_id, "creating fs");
+
+		// Create a zero-filled file
+		let fs_img = File::create(&fs_img_path).await?;
+		fs_img
+			.set_len(self.config.resources.disk as u64 * 1024 * 1024)
+			.await?;
+
+		// Format file as ext4
+		let cmd_out = Command::new("mkfs.ext4").arg(&fs_img_path).output().await?;
+
+		ensure!(
+			cmd_out.status.success(),
+			"failed `mkfs.ext4` command\n{}",
+			std::str::from_utf8(&cmd_out.stderr)?
+		);
+
+		fs::create_dir(&fs_path).await?;
+
+		// Mount fs img as loop mount
+		let cmd_out = Command::new("mount")
+			.arg("-o")
+			.arg("loop")
+			.arg(&fs_img_path)
+			.arg(&fs_path)
+			.output()
+			.await?;
+
+		ensure!(
+			cmd_out.status.success(),
+			"failed `mount` command\n{}",
+			std::str::from_utf8(&cmd_out.stderr)?
+		);
+
+		Ok(())
+	}
+
 	pub async fn download_image(&self, ctx: &Ctx) -> Result<()> {
 		tracing::info!(actor_id=?self.actor_id, "downloading artifact");
 
 		let actor_path = ctx.actor_path(self.actor_id);
+		let fs_path = actor_path.join("fs");
 
 		let mut stream = reqwest::get(&self.config.image.artifact_url)
 			.await?
@@ -34,7 +77,7 @@ impl Actor {
 
 		match self.config.image.kind {
 			protocol::ImageKind::DockerImage => {
-				let docker_image_path = actor_path.join("docker-image.tar");
+				let docker_image_path = fs_path.join("docker-image.tar");
 
 				match self.config.image.compression {
 					protocol::ImageCompression::None => {
@@ -88,14 +131,6 @@ impl Actor {
 				}
 			}
 			protocol::ImageKind::OciBundle | protocol::ImageKind::JavaScript => {
-				let bundle_path = match self.config.image.kind {
-					protocol::ImageKind::OciBundle => actor_path.join("oci-bundle"),
-					protocol::ImageKind::JavaScript => actor_path.join("js-bundle"),
-					_ => unreachable!(),
-				};
-
-				fs::create_dir(&bundle_path).await?;
-
 				match self.config.image.compression {
 					protocol::ImageCompression::None => {
 						tracing::info!(actor_id=?self.actor_id, "unarchiving artifact");
@@ -104,7 +139,7 @@ impl Actor {
 						let mut tar_child = Command::new("tar")
 							.arg("-x")
 							.arg("-C")
-							.arg(&bundle_path)
+							.arg(&fs_path)
 							.stdin(Stdio::piped())
 							.spawn()?;
 
@@ -137,7 +172,7 @@ impl Actor {
 					}
 					protocol::ImageCompression::Lz4 => {
 						tracing::info!(actor_id=?self.actor_id, "decompressing and unarchiving artifact");
-						
+
 						// Spawn the lz4 process
 						let mut lz4_child = Command::new("lz4")
 							.arg("-d")
@@ -149,7 +184,7 @@ impl Actor {
 						let mut tar_child = Command::new("tar")
 							.arg("-x")
 							.arg("-C")
-							.arg(&bundle_path)
+							.arg(&fs_path)
 							.stdin(Stdio::piped())
 							.spawn()?;
 
@@ -221,14 +256,14 @@ impl Actor {
 		tracing::info!(actor_id=?self.actor_id, "setting up oci bundle");
 
 		let actor_path = ctx.actor_path(self.actor_id);
-		let oci_bundle_path = actor_path.join("oci-bundle");
+		let fs_path = actor_path.join("fs");
 		let netns_path = self.netns_path();
 
 		// We need to convert the Docker image to an OCI bundle in order to run it.
 		// Allows us to work with the build with umoci
 		if let protocol::ImageKind::DockerImage = self.config.image.kind {
-			let docker_image_path = actor_path.join("docker-image.tar");
-			let oci_image_path = actor_path.join("oci-image");
+			let docker_image_path = fs_path.join("docker-image.tar");
+			let oci_image_path = fs_path.join("oci-image");
 
 			tracing::info!(actor_id=?self.actor_id, "converting Docker image -> OCI image");
 			let cmd_out = Command::new("skopeo")
@@ -250,7 +285,7 @@ impl Actor {
 				.arg("unpack")
 				.arg("--image")
 				.arg(format!("{}:default", oci_image_path.display()))
-				.arg(&oci_bundle_path)
+				.arg(&fs_path)
 				.output()
 				.await?;
 			ensure!(
@@ -258,10 +293,16 @@ impl Actor {
 				"failed `umoci` command\n{}",
 				std::str::from_utf8(&cmd_out.stderr)?
 			);
+
+			// Remove artifacts
+			tokio::try_join!(
+				fs::remove_file(&docker_image_path),
+				fs::remove_dir_all(&oci_image_path),
+			)?;
 		}
 
 		// Read the config.json from the user-provided OCI bundle
-		let oci_bundle_config_path = oci_bundle_path.join("config.json");
+		let oci_bundle_config_path = fs_path.join("config.json");
 		let user_config_json = fs::read_to_string(&oci_bundle_config_path).await?;
 		let user_config =
 			serde_json::from_str::<super::partial_oci_config::PartialOciConfig>(&user_config_json)?;
@@ -315,7 +356,7 @@ impl Actor {
 
 		// hosts
 		fs::write(
-			oci_bundle_path.join("hosts"),
+			fs_path.join("hosts"),
 			indoc!(
 				"
 				127.0.0.1	localhost
@@ -531,6 +572,24 @@ impl Actor {
 	pub async fn cleanup_setup(&self, ctx: &Ctx) -> Result<()> {
 		let actor_path = ctx.actor_path(self.actor_id);
 		let netns_path = self.netns_path();
+
+		match Command::new("umount")
+			.arg("-dl")
+			.arg(actor_path.join("fs"))
+			.output()
+			.await
+		{
+			Result::Ok(cmd_out) => {
+				if !cmd_out.status.success() {
+					tracing::error!(
+						stdout=%std::str::from_utf8(&cmd_out.stdout)?,
+						stderr=%std::str::from_utf8(&cmd_out.stderr)?,
+						"failed `umount` command",
+					);
+				}
+			}
+			Err(err) => tracing::error!(?err, "failed to run `umount` command"),
+		}
 
 		match self.config.image.kind {
 			protocol::ImageKind::DockerImage | protocol::ImageKind::OciBundle => {

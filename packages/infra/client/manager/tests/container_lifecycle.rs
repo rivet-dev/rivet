@@ -120,6 +120,11 @@ async fn handle_connection(
 											"actor not in client memory"
 										);
 
+										tokio::time::sleep(std::time::Duration::from_millis(250))
+											.await;
+
+										tracing::info!("sending echo");
+
 										// Send echo test
 										let req = b"hello world";
 										let res = reqwest::Client::new()

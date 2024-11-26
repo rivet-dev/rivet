@@ -1,4 +1,6 @@
 *
+
 !Cargo.lock
 !Cargo.toml
-!src
+!packages
+!resources/legacy/proto

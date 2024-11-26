@@ -146,8 +146,8 @@ pub async fn run_inner(
 
 	tracing::info!(?actor_id, "isolate kv initialized");
 
-	// Should match the path from `Actor::download_image` in manager/src/actor/setup.rs
-	let entrypoint = actor_path.join("js-bundle").join("index.js");
+	// Should match the path from `Actor::make_fs` in manager/src/actor/setup.rs
+	let entrypoint = actor_path.join("fs").join("index.js");
 
 	// Load index.js
 	let script_content = match fs::read_to_string(&entrypoint).await {
@@ -172,7 +172,7 @@ pub async fn run_inner(
 		.map_err(|_| anyhow!("invalid file name"))?;
 	let loader = StaticModuleLoader::new([(main_module.clone(), script_content)]);
 
-	// TODO(RVT-4192): Replace with a custom fs that only reads from js-bundle
+	// TODO(RVT-4192): Replace with a custom fs that only reads from actor_path/fs
 	let fs = Arc::new(InMemoryFs::default());
 
 	// Build permissions
