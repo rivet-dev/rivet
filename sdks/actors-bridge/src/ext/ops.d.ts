@@ -3,22 +3,18 @@
  */
 
 declare module "ext:core/ops" {
-  export type Key = any;
-  export type Entry = any;
-  export type ListQuery = any;
+	import type { InKey, OutKey, OutEntry, ListQuery } from "internal_types";
 
-  export function op_rivet_kv_get(key: Key): Promise<Entry | null>;
-  export function op_rivet_kv_get_batch(keys: Key[]): Promise<Map<Key, Entry>>;
-  export function op_rivet_kv_list(
-    query: ListQuery,
-    reverse: boolean,
-    limit?: number,
-  ): Promise<Map<Key, Entry>>;
-  export function op_rivet_kv_put(key: Key, value: any): Promise<void>;
-  export function op_rivet_kv_put_batch(
-    entries: Map<Key, JsBuffer>,
-  ): Promise<void>;
-  export function op_rivet_kv_delete(key: Key): Promise<void>;
-  export function op_rivet_kv_delete_batch(keys: Key[]): Promise<void>;
-  export function op_rivet_kv_delete_all(): Promise<void>;
+	export function op_rivet_kv_get(key: InKey): Promise<OutEntry | null>;
+	export function op_rivet_kv_get_batch(keys: InKey[]): Promise<Map<OutKey, OutEntry>>;
+	export function op_rivet_kv_list(
+		query: ListQuery,
+		reverse: boolean,
+		limit?: number
+	): Promise<Map<OutKey, OutEntry>>;
+	export function op_rivet_kv_put(key: InKey, value: any): Promise<void>;
+	export function op_rivet_kv_put_batch(entries: Map<InKey, Uint8Array>): Promise<void>;
+	export function op_rivet_kv_delete(key: InKey): Promise<void>;
+	export function op_rivet_kv_delete_batch(keys: InKey[]): Promise<void>;
+	export function op_rivet_kv_delete_all(): Promise<void>;
 }

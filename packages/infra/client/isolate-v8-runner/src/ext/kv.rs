@@ -41,9 +41,9 @@ enum Key {
 impl From<actor_kv::key::Key> for Key {
 	fn from(value: actor_kv::key::Key) -> Self {
 		match value {
+			// actor_kv::key::Key::JsInKey(tuple) => Key::InKey(tuple),
 			// TODO: Currently, JsBuffer cannot be serialized back to v8 as a buffer. We must convert it until
 			// fixed.
-			// actor_kv::key::Key::JsInKey(tuple) => Key::InKey(tuple),
 			actor_kv::key::Key::JsInKey(tuple) => Key::OutKey(
 				tuple
 					.into_iter()
@@ -58,16 +58,33 @@ impl From<actor_kv::key::Key> for Key {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct Entry {
-	metadata: actor_kv::Metadata,
+	metadata: Metadata,
 	value: ToJsBuffer,
 }
 
 impl From<actor_kv::Entry> for Entry {
 	fn from(value: actor_kv::Entry) -> Self {
 		Entry {
-			metadata: value.metadata,
+			metadata: value.metadata.into(),
 			value: value.value.into(),
+		}
+	}
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Metadata {
+	pub kv_version: ToJsBuffer,
+	pub create_ts: i64,
+}
+
+impl From<actor_kv::Metadata> for Metadata {
+	fn from(value: actor_kv::Metadata) -> Self {
+		Metadata {
+			kv_version: value.kv_version.into(),
+			create_ts: value.create_ts,
 		}
 	}
 }

@@ -12,11 +12,12 @@
 import type { RIVET_NAMESPACE } from "./types/90_rivet_ns.d.ts";
 
 const Rivet = (globalThis as any).Rivet as typeof RIVET_NAMESPACE;
+
+// TODO: Replace with polyfill
 if (!Rivet) {
-  throw new Error(
-    "Rivet is not defined in the global scope. This likely means this script is not being ran as a Rivet Actor.",
-  );
+	throw new Error(
+		"Rivet is not defined in the global scope. This likely means this script is not being ran as a Rivet Actor."
+	);
 }
 
 export default Rivet;
-

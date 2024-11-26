@@ -7,20 +7,22 @@ import { core } from "ext:core/mod.js";
 /**
  * Retrieves a value from the key-value store.
  *
- * @param {any|any[]} key - The key to retrieve the value for.
+ * @param {Key} key - The key to retrieve the value for.
  * @param {GetOptions} [options] - Options.
- * @returns {Promise<any|undefined>} The retrieved value, or undefined if the key does not exist.
+ * @returns {Promise<Entry | null>} The retrieved value, or undefined if the key does not exist.
  */
 async function get(key, options) {
-    let entry = (await op_rivet_kv_get(serializeKey(key))) ?? undefined;
+    let entry = await op_rivet_kv_get(serializeKey(key));
+    if (entry == null)
+        return null;
     return deserializeValue(key, entry.value, options?.format);
 }
 /**
  * Retrieves a batch of key-value pairs.
  *
- * @param {string[]} keys - A list of keys to retrieve.
+ * @param {Key[]} keys - A list of keys to retrieve.
  * @param {GetBatchOptions} [options] - Options.
- * @returns {Promise<Map<string, any>>} The retrieved values.
+ * @returns {Promise<Map<Key, Entry>>} The retrieved values.
  */
 async function getBatch(keys, options) {
     let entries = await op_rivet_kv_get_batch(keys.map((x) => serializeKey(x)));
@@ -35,7 +37,7 @@ async function getBatch(keys, options) {
  * Retrieves all key-value pairs in the KV store.
  *
  * @param {ListOptions} [options] - Options.
- * @returns {Promise<Map<string, any>>} The retrieved values.
+ * @returns {Promise<Map<Key, Entry>>} The retrieved values.
  */
 async function list(options) {
     // Build query
@@ -50,10 +52,7 @@ async function list(options) {
             throw new Error("must set options.end with options.start");
         }
         query = {
-            rangeInclusive: [
-                serializeListKey(options.start),
-                serializeKey(options.end),
-            ],
+            rangeInclusive: [serializeListKey(options.start), serializeKey(options.end)],
         };
     }
     else if (options?.startAfter) {
@@ -61,10 +60,7 @@ async function list(options) {
             throw new Error("must set options.end with options.startAfter");
         }
         query = {
-            rangeExclusive: [
-                serializeListKey(options.startAfter),
-                serializeKey(options.end),
-            ],
+            rangeExclusive: [serializeListKey(options.startAfter), serializeKey(options.end)],
         };
     }
     else if (options?.end) {
@@ -84,51 +80,56 @@ async function list(options) {
 /**
  * Stores a key-value pair in the key-value store.
  *
- * @param {any|any[]} key - The key under which the value will be stored.
- * @param {any|ArrayBuffer} value - The value to be stored, which will be serialized.
+ * @param {Key} key - The key under which the value will be stored.
+ * @param {Entry | ArrayBuffer} value - The value to be stored, which will be serialized.
  * @param {PutOptions} [options] - Options.
  * @returns {Promise<void>} A promise that resolves when the operation is complete.
  */
-async function put(key, givenValue, options) {
-    validateType(givenValue, null, options?.format);
+async function put(key, value, options) {
+    validateType(value, null, options?.format);
     let format = options?.format ?? "value";
-    let value;
+    let serializedValue;
     if (format == "value") {
-        value = core.serialize(givenValue, { forStorage: true });
+        value = core.serialize(value, { forStorage: true });
     }
     else if (format == "arrayBuffer") {
-        value = new Uint8Array(givenValue);
+        if (value instanceof ArrayBuffer)
+            value = new Uint8Array(value);
+        else
+            throw new Error(`value must be of type \`ArrayBuffer\` if format is "arrayBuffer"`);
     }
-    await op_rivet_kv_put(serializeKey(key), value);
+    await op_rivet_kv_put(serializeKey(key), serializedValue);
 }
 /**
  * Asynchronously stores a batch of key-value pairs.
  *
- * @param {Record<any, any|ArrayBuffer>} obj - An object containing key-value pairs to be stored.
+ * @param {Record<Key, Entry | ArrayBuffer>} obj - An object containing key-value pairs to be stored.
  * @param {PutBatchOptions} [options] - Options.
  * @returns {Promise<void>} A promise that resolves when the batch operation is complete.
  */
 async function putBatch(obj, options) {
     let serializedObj = new Map();
     let format = options?.format ?? "value";
-    for (let key in obj) {
-        let givenValue = obj[key];
-        validateType(givenValue, key, format);
-        let value;
+    for (let [key, value] of obj) {
+        validateType(value, key, format);
+        let serializedValue;
         if (format == "value") {
-            value = core.serialize(givenValue, { forStorage: true });
+            value = core.serialize(serializedValue, { forStorage: true });
         }
         else if (format == "arrayBuffer") {
-            value = new Uint8Array(givenValue);
+            if (value instanceof ArrayBuffer)
+                value = new Uint8Array(value);
+            else
+                throw new Error(`value in key "${key}" must be of type \`ArrayBuffer\` if format is "arrayBuffer"`);
         }
-        serializedObj.set(serializeKey(key), value);
+        serializedObj.set(serializeKey(key), serializedValue);
     }
     await op_rivet_kv_put_batch(serializedObj);
 }
 /**
  * Deletes a key-value pair from the key-value store.
  *
- * @param {string} key - The key of the key-value pair to delete.
+ * @param {Key} key - The key of the key-value pair to delete.
  * @returns {Promise<void>} A promise that resolves when the operation is complete.
  */
 async function delete_(key) {
@@ -172,7 +173,7 @@ function validateType(value, key, format = "value") {
 }
 function serializeKey(key) {
     if (key instanceof Array) {
-        return { jsInKey: [key.map((x) => core.serialize(x))] };
+        return { jsInKey: key.map((x) => core.serialize(x)) };
     }
     else {
         return { jsInKey: [core.serialize(key)] };
