@@ -8,7 +8,7 @@ Name | Type | Description | Notes
 **build_tags** | Option<[**serde_json::Value**](.md)> |  | [optional]
 **lifecycle** | Option<[**crate::models::ActorLifecycle**](ActorLifecycle.md)> |  | [optional]
 **network** | Option<[**crate::models::ActorCreateActorNetworkRequest**](ActorCreateActorNetworkRequest.md)> |  | [optional]
-**region** | **String** |  | 
+**region** | Option<**String**> |  | [optional]
 **resources** | [**crate::models::ActorResources**](ActorResources.md) |  | 
 **runtime** | [**crate::models::ActorCreateActorRuntimeRequest**](ActorCreateActorRuntimeRequest.md) |  | 
 **tags** | Option<[**serde_json::Value**](.md)> |  | 

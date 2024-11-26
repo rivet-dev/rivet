@@ -1,4 +1,5 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
+use proto::backend;
 use rivet_api::models;
 use rivet_convert::{ApiInto, ApiTryInto};
 use rivet_operation::prelude::*;
@@ -113,18 +114,7 @@ pub async fn create(
 	let cluster_id = unwrap!(clusters_res.games.first()).cluster_id;
 	let game_config = unwrap!(game_configs_res.game_configs.first());
 
-	let resolved_dc_ids = ctx
-		.op(cluster::ops::datacenter::resolve_for_name_id::Input {
-			cluster_id,
-			name_ids: vec![body.region.clone()],
-		})
-		.await?;
-	let datacenter_id = unwrap_with!(
-		resolved_dc_ids.datacenters.first(),
-		ACTOR_FAILED_TO_CREATE,
-		error = "Region not found."
-	)
-	.datacenter_id;
+	let datacenter_id = resolve_dc_id(&ctx, cluster_id, body.region.clone()).await?;
 
 	let tags = unwrap_with!(
 		serde_json::from_value(body.tags.unwrap_or_default()).ok(),
@@ -284,7 +274,7 @@ pub async fn create_deprecated(
 	let create_res = create(
 		ctx,
 		models::ActorCreateActorRequest {
-			region: dc.name_id.clone(),
+			region: Some(dc.name_id.clone()),
 			lifecycle: body.lifecycle.map(|l| {
 				Box::new(models::ActorLifecycle {
 					kill_timeout: l.kill_timeout,
@@ -687,6 +677,68 @@ async fn resolve_build_id(
 				API_BAD_BODY,
 				error = "must have either `build` or `buildTags`"
 			);
+		}
+	}
+}
+
+async fn resolve_dc_id(
+	ctx: &Ctx<Auth>,
+	cluster_id: Uuid,
+	region: Option<String>,
+) -> GlobalResult<Uuid> {
+	if let Some(region) = region {
+		let dcs_res = ctx
+			.op(cluster::ops::datacenter::resolve_for_name_id::Input {
+				cluster_id,
+				name_ids: vec![region],
+			})
+			.await?;
+		let dc = unwrap_with!(
+			dcs_res.datacenters.first(),
+			ACTOR_FAILED_TO_CREATE,
+			error = "Region not found."
+		);
+
+		Ok(dc.datacenter_id)
+	}
+	// Auto-select the closest region
+	else {
+		let clusters_res = ctx
+			.op(cluster::ops::datacenter::list::Input {
+				cluster_ids: vec![cluster_id],
+			})
+			.await?;
+		let cluster = unwrap!(clusters_res.clusters.first());
+
+		if let Some((lat, long)) = ctx.coords() {
+			let recommend_res = op!([ctx] region_recommend {
+				region_ids: cluster
+					.datacenter_ids
+					.iter()
+					.cloned()
+					.map(Into::into)
+					.collect(),
+				coords: Some(backend::net::Coordinates {
+					latitude: lat,
+					longitude: long,
+				}),
+				..Default::default()
+			})
+			.await?;
+			let primary_region = unwrap!(recommend_res.regions.first());
+			let primary_region_id = unwrap_ref!(primary_region.region_id).as_uuid();
+
+			Ok(primary_region_id)
+		} else {
+			tracing::warn!("coords not provided to select region");
+
+			let datacenter_id = *unwrap_with!(
+				cluster.datacenter_ids.first(),
+				ACTOR_FAILED_TO_CREATE,
+				error = "No regions found."
+			);
+
+			Ok(datacenter_id)
 		}
 	}
 }

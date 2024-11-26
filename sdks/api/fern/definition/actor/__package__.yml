@@ -96,7 +96,7 @@ types:
 
   CreateActorRequest:
     properties:
-      region: string
+      region: optional<string>
       tags: unknown
       build: optional<uuid>
       buildTags: optional<unknown>

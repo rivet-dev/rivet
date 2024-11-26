@@ -10,7 +10,7 @@ import (
 )
 
 type CreateActorRequest struct {
-	Region    string                     `json:"region"`
+	Region    *string                    `json:"region,omitempty"`
 	Tags      interface{}                `json:"tags,omitempty"`
 	Build     *uuid.UUID                 `json:"build,omitempty"`
 	BuildTags interface{}                `json:"buildTags,omitempty"`

@@ -259,7 +259,7 @@ pub async fn create_build(
 	body: models::ActorPrepareBuildRequest,
 	query: GlobalQuery,
 ) -> GlobalResult<models::ActorPrepareBuildResponse> {
-	let CheckOutput { game_id, env_id } = ctx.auth().check(ctx.op_ctx(), &query, false).await?;
+	let CheckOutput { env_id, .. } = ctx.auth().check(ctx.op_ctx(), &query, false).await?;
 
 	ensure_with!(
 		body.name.len() <= 128,
@@ -306,13 +306,6 @@ pub async fn create_build(
 				.unwrap_or(build::types::BuildCompression::None),
 		})
 		.await?;
-
-	let cluster_res = ctx
-		.op(cluster::ops::get_for_game::Input {
-			game_ids: vec![game_id],
-		})
-		.await?;
-	let cluster_id = unwrap!(cluster_res.games.first()).cluster_id;
 
 	Ok(models::ActorPrepareBuildResponse {
 		build: create_res.build_id,

@@ -8655,7 +8655,6 @@ components:
         lifecycle:
           $ref: '#/components/schemas/ActorLifecycle'
       required:
-        - region
         - tags
         - runtime
         - resources

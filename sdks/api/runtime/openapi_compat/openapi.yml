@@ -109,7 +109,6 @@ components:
           $ref: '#/components/schemas/ActorCreateActorRuntimeRequest'
         tags: {}
       required:
-      - region
       - tags
       - runtime
       - resources
