@@ -29,37 +29,39 @@ impl Actor {
 
 		tracing::info!(actor_id=?self.actor_id, "creating fs");
 
-		// Create a zero-filled file
-		let fs_img = File::create(&fs_img_path).await?;
-		fs_img
-			.set_len(self.config.resources.disk as u64 * 1024 * 1024)
-			.await?;
-
-		// Format file as ext4
-		let cmd_out = Command::new("mkfs.ext4").arg(&fs_img_path).output().await?;
-
-		ensure!(
-			cmd_out.status.success(),
-			"failed `mkfs.ext4` command\n{}",
-			std::str::from_utf8(&cmd_out.stderr)?
-		);
-
 		fs::create_dir(&fs_path).await?;
 
-		// Mount fs img as loop mount
-		let cmd_out = Command::new("mount")
-			.arg("-o")
-			.arg("loop")
-			.arg(&fs_img_path)
-			.arg(&fs_path)
-			.output()
-			.await?;
+		if ctx.config().runner.use_mounts() {
+			// Create a zero-filled file
+			let fs_img = File::create(&fs_img_path).await?;
+			fs_img
+				.set_len(self.config.resources.disk as u64 * 1024 * 1024)
+				.await?;
 
-		ensure!(
-			cmd_out.status.success(),
-			"failed `mount` command\n{}",
-			std::str::from_utf8(&cmd_out.stderr)?
-		);
+			// Format file as ext4
+			let cmd_out = Command::new("mkfs.ext4").arg(&fs_img_path).output().await?;
+
+			ensure!(
+				cmd_out.status.success(),
+				"failed `mkfs.ext4` command\n{}",
+				std::str::from_utf8(&cmd_out.stderr)?
+			);
+
+			// Mount fs img as loop mount
+			let cmd_out = Command::new("mount")
+				.arg("-o")
+				.arg("loop")
+				.arg(&fs_img_path)
+				.arg(&fs_path)
+				.output()
+				.await?;
+
+			ensure!(
+				cmd_out.status.success(),
+				"failed `mount` command\n{}",
+				std::str::from_utf8(&cmd_out.stderr)?
+			);
+		}
 
 		Ok(())
 	}
@@ -573,22 +575,24 @@ impl Actor {
 		let actor_path = ctx.actor_path(self.actor_id);
 		let netns_path = self.netns_path();
 
-		match Command::new("umount")
-			.arg("-dl")
-			.arg(actor_path.join("fs"))
-			.output()
-			.await
-		{
-			Result::Ok(cmd_out) => {
-				if !cmd_out.status.success() {
-					tracing::error!(
-						stdout=%std::str::from_utf8(&cmd_out.stdout)?,
-						stderr=%std::str::from_utf8(&cmd_out.stderr)?,
-						"failed `umount` command",
-					);
+		if ctx.config().runner.use_mounts() {
+			match Command::new("umount")
+				.arg("-dl")
+				.arg(actor_path.join("fs"))
+				.output()
+				.await
+			{
+				Result::Ok(cmd_out) => {
+					if !cmd_out.status.success() {
+						tracing::error!(
+							stdout=%std::str::from_utf8(&cmd_out.stdout)?,
+							stderr=%std::str::from_utf8(&cmd_out.stderr)?,
+							"failed `umount` command",
+						);
+					}
 				}
+				Err(err) => tracing::error!(?err, "failed to run `umount` command"),
 			}
-			Err(err) => tracing::error!(?err, "failed to run `umount` command"),
 		}
 
 		match self.config.image.kind {

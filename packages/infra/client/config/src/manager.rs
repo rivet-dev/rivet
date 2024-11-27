@@ -80,6 +80,8 @@ pub struct Cluster {
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Runner {
 	pub flavor: protocol::ClientFlavor,
+	/// Whether or not to use a mount for actor file systems.
+	pub use_mounts: Option<bool>,
 
 	/// WebSocket Port for runners on this machine to connect to.
 	pub port: Option<u16>,
@@ -89,6 +91,10 @@ pub struct Runner {
 }
 
 impl Runner {
+	pub fn use_mounts(&self) -> bool {
+		self.use_mounts.unwrap_or(true)
+	}
+
 	pub fn port(&self) -> u16 {
 		self.port.unwrap_or(7080)
 	}
