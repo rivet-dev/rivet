@@ -292,8 +292,7 @@ pub async fn create_build(
 
 	let create_res = ctx
 		.op(build::ops::create::Input {
-			game_id: None,
-			env_id: Some(env_id),
+			owner: build::ops::create::Owner::Env(env_id),
 			display_name: body.name,
 			content: build::ops::create::Content::New {
 				image_file: (*body.image_file).api_try_into()?,

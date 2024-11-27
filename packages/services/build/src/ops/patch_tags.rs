@@ -32,25 +32,40 @@ pub async fn patch_tags(ctx: &OperationCtx, input: &Input) -> GlobalResult<Outpu
 		let exclusive_tags = input.exclusive_tags.clone();
 
 		async move {
-			// Remove the exclusive tag from other builds
+			// Remove the exclusive tag from other builds of the same owner (same game id OR same env id)
 			if let Some(exclusive_tags) = &exclusive_tags {
 				sql_execute!(
 					[ctx, @tx tx]
 					"
-					WITH filter_tags AS (
-						SELECT build_id, jsonb_object_agg(key, value) AS tags
-						FROM db_build.builds AS b
-						JOIN LATERAL jsonb_each(tags)
-						ON key != ANY($2::TEXT[])
-						WHERE
-							b.env_id = (
-								SELECT env_id
-								FROM db_build.builds
-								WHERE build_id = $1
-							)
-							AND tags ?| $2::TEXT[]
-						GROUP BY build_id
-					)
+					WITH
+						build_data AS (
+							SELECT game_id, env_id
+							FROM db_build.builds
+							WHERE build_id = $1
+						),
+						filter_tags AS (
+							SELECT build_id, jsonb_object_agg(key, value) AS tags
+							FROM db_build.builds AS b
+							JOIN LATERAL jsonb_each(tags)
+							ON key != ANY($2::TEXT[])
+							WHERE
+								(
+									(
+										b.game_id IS NULL AND
+										(SELECT game_id FROM build_data) IS NULL
+									) OR
+									b.game_id = (SELECT game_id FROM build_data)
+								) AND
+								(
+									(
+										b.env_id IS NULL AND
+										(SELECT env_id FROM build_data) IS NULL
+									) OR
+									b.env_id = (SELECT env_id FROM build_data)
+								) AND
+								tags ?| $2::TEXT[]
+							GROUP BY build_id
+						)
 					UPDATE db_build.builds AS b
 					SET tags = f2.tags
 					FROM (
@@ -59,12 +74,21 @@ pub async fn patch_tags(ctx: &OperationCtx, input: &Input) -> GlobalResult<Outpu
 						LEFT JOIN filter_tags AS f
 						ON b.build_id = f.build_id
 						WHERE
-							b.env_id = (
-								SELECT env_id
-								FROM db_build.builds
-								WHERE build_id = $1
-							)
-							AND b.tags ?| $2::TEXT[]
+							(
+								(
+									b.game_id IS NULL AND
+									(SELECT game_id FROM build_data) IS NULL
+								) OR
+								b.game_id = (SELECT game_id FROM build_data)
+							) AND
+							(
+								(
+									b.env_id IS NULL AND
+									(SELECT env_id FROM build_data) IS NULL
+								) OR 
+								b.env_id = (SELECT env_id FROM build_data)
+							) AND
+							b.tags ?| $2::TEXT[]
 					) AS f2
 					WHERE b.build_id = f2.build_id
 					",

@@ -10,12 +10,17 @@ use crate::{
 
 #[derive(Debug)]
 pub struct Input {
-	pub game_id: Option<Uuid>,
-	pub env_id: Option<Uuid>,
+	pub owner: Owner,
 	pub display_name: String,
 	pub content: Content,
 	pub kind: BuildKind,
 	pub compression: BuildCompression,
+}
+
+#[derive(Debug)]
+pub enum Owner {
+	Game(Uuid),
+	Env(Uuid),
 }
 
 #[derive(Debug)]
@@ -44,22 +49,28 @@ pub async fn get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
 	);
 
 	// Validate game exists
-	if let Some(game_id) = input.game_id {
-		let game_res = op!([ctx] game_get {
-			game_ids: vec![game_id.into()],
-		})
-		.await?;
-		let game = game_res.games.first();
-		ensure!(game.is_some(), "game not found");
-	}
-	if let Some(env_id) = input.env_id {
-		let env_res = op!([ctx] game_namespace_get {
-			namespace_ids: vec![env_id.into()],
-		})
-		.await?;
-		let env = env_res.namespaces.first();
-		ensure!(env.is_some(), "game not found");
-	}
+	let (game_id, env_id) = match input.owner {
+		Owner::Game(game_id) => {
+			let game_res = op!([ctx] game_get {
+				game_ids: vec![game_id.into()],
+			})
+			.await?;
+			let game = game_res.games.first();
+			ensure!(game.is_some(), "game not found");
+
+			(Some(game_id), None)
+		}
+		Owner::Env(env_id) => {
+			let env_res = op!([ctx] game_namespace_get {
+				namespace_ids: vec![env_id.into()],
+			})
+			.await?;
+			let env = env_res.namespaces.first();
+			ensure!(env.is_some(), "game not found");
+
+			(None, Some(env_id))
+		}
+	};
 
 	let (image_tag, upload_id, presigned_requests) = match &input.content {
 		Content::Default { build_kind } => {
@@ -153,8 +164,8 @@ pub async fn get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
 			($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		",
 		build_id,
-		input.game_id,
-		input.env_id,
+		game_id,
+		env_id,
 		upload_id,
 		&input.display_name,
 		image_tag,

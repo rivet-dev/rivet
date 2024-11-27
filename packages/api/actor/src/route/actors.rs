@@ -207,7 +207,7 @@ pub async fn create(
 							models::ActorPortRouting { .. } => {
 								bail_with!(
 									ACTOR_FAILED_TO_CREATE,
-									error = format!("network.ports[{s:?}].routing: Must specify either `game_guard` or `host` routing type.")
+									error = format!("network.ports[{s:?}].routing: Must specify either `guard` or `host` routing type.")
 								);
 							}
 						}

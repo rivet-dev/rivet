@@ -12,6 +12,8 @@ async fn handle(
 
 	let game_id = ctx.game_id.map(|x| x.as_uuid());
 	let env_id = ctx.env_id.map(|x| x.as_uuid());
+	tracing::warn!(?game_id, ?env_id);
+
 	ensure!(
 		util::check::display_name_long(&ctx.display_name),
 		"invalid display name"
@@ -26,13 +28,15 @@ async fn handle(
 		let game = game_res.games.first();
 		ensure!(game.is_some(), "game not found");
 	}
-	if let Some(env_id) = env_id {
+	else if let Some(env_id) = env_id {
 		let env_res = op!([ctx] game_namespace_get {
 			namespace_ids: vec![env_id.into()],
 		})
 		.await?;
 		let env = env_res.namespaces.first();
 		ensure!(env.is_some(), "game not found");
+	} else {
+		bail!("no `game_id` or `env_id`");
 	}
 
 	let (image_tag, upload_id, image_presigned_requests) =

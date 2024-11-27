@@ -304,19 +304,19 @@ async fn validate(ctx: &ActivityCtx, input: &ValidateInput) -> GlobalResult<Opti
 				PortAuthorization::Bearer(token) => {
 					if token.len() > 1024 {
 						return Ok(Some(format!(
-								"runtime.ports[{name:?}].routing.game_guard.authorization.bearer: Bearer authorization too large (max 1024 bytes).",
+								"runtime.ports[{name:?}].routing.guard.authorization.bearer: Bearer authorization too large (max 1024 bytes).",
 							)));
 					}
 				}
 				PortAuthorization::Query(parameter, value) => {
 					if parameter.len() > 128 {
 						return Ok(Some(format!(
-								"runtime.ports[{name:?}].routing.game_guard.authorization.query: Query parameter too large (max 128 bytes).",
+								"runtime.ports[{name:?}].routing.guard.authorization.query: Query parameter too large (max 128 bytes).",
 							)));
 					}
 					if value.len() > 1024 {
 						return Ok(Some(format!(
-								"runtime.ports[{name:?}].routing.game_guard.authorization.query: Query value too large (max 1024 bytes).",
+								"runtime.ports[{name:?}].routing.guard.authorization.query: Query value too large (max 1024 bytes).",
 							)));
 					}
 				}

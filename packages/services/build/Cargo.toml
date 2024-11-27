@@ -49,4 +49,3 @@ features = [ "json" ]
 faker-build.workspace = true
 faker-game.workspace = true
 faker-region.workspace = true
-
