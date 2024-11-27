@@ -671,3 +671,22 @@ func (u *UpgradeActorRequestQuery) UnmarshalJSON(data []byte) error {
 func (u *UpgradeActorRequestQuery) MarshalJSON() ([]byte, error) {
 	return json.Marshal(u.Body)
 }
+
+type UpgradeAllActorsRequestQuery struct {
+	Project     *string                  `json:"-"`
+	Environment *string                  `json:"-"`
+	Body        *UpgradeAllActorsRequest `json:"-"`
+}
+
+func (u *UpgradeAllActorsRequestQuery) UnmarshalJSON(data []byte) error {
+	body := new(UpgradeAllActorsRequest)
+	if err := json.Unmarshal(data, &body); err != nil {
+		return err
+	}
+	u.Body = body
+	return nil
+}
+
+func (u *UpgradeAllActorsRequestQuery) MarshalJSON() ([]byte, error) {
+	return json.Marshal(u.Body)
+}

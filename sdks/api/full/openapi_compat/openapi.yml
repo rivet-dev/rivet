@@ -384,6 +384,24 @@ components:
     ActorUpgradeActorResponse:
       properties: {}
       type: object
+    ActorUpgradeAllActorsRequest:
+      properties:
+        build:
+          format: uuid
+          type: string
+        buildTags: {}
+        tags: {}
+      required:
+      - tags
+      type: object
+    ActorUpgradeAllActorsResponse:
+      properties:
+        count:
+          format: int64
+          type: integer
+      required:
+      - count
+      type: object
     AuthCompleteStatus:
       description: Represents the state of an external account linking process.
       enum:
@@ -4842,6 +4860,73 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ActorCreateActorResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '408':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+          description: ''
+      security: *id001
+      tags:
+      - Actor
+  /actors/upgrade:
+    post:
+      description: Upgrades a dynamic actor.
+      operationId: actor_upgradeAll
+      parameters:
+      - in: query
+        name: project
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: environment
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActorUpgradeAllActorsRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActorUpgradeAllActorsResponse'
           description: ''
         '400':
           content:

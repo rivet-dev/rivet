@@ -9,6 +9,7 @@ Method | HTTP request | Description
 [**actor_get**](ActorApi.md#actor_get) | **GET** /actors/{actor} | 
 [**actor_list**](ActorApi.md#actor_list) | **GET** /actors | 
 [**actor_upgrade**](ActorApi.md#actor_upgrade) | **POST** /actors/{actor}/upgrade | 
+[**actor_upgrade_all**](ActorApi.md#actor_upgrade_all) | **POST** /actors/upgrade | 
 
 
 
@@ -163,6 +164,38 @@ Name | Type | Description  | Required | Notes
 ### Return type
 
 [**serde_json::Value**](serde_json::Value.md)
+
+### Authorization
+
+[BearerAuth](../README.md#BearerAuth)
+
+### HTTP request headers
+
+- **Content-Type**: application/json
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+
+## actor_upgrade_all
+
+> crate::models::ActorUpgradeAllActorsResponse actor_upgrade_all(actor_upgrade_all_actors_request, project, environment)
+
+
+Upgrades a dynamic actor.
+
+### Parameters
+
+
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+**actor_upgrade_all_actors_request** | [**ActorUpgradeAllActorsRequest**](ActorUpgradeAllActorsRequest.md) |  | [required] |
+**project** | Option<**String**> |  |  |
+**environment** | Option<**String**> |  |  |
+
+### Return type
+
+[**crate::models::ActorUpgradeAllActorsResponse**](ActorUpgradeAllActorsResponse.md)
 
 ### Authorization
 

@@ -68,6 +68,18 @@ define_router! {
 			),
 		},
 
+		"actors" / "upgrade": {
+			POST: actors::upgrade_all(
+				query: GlobalQuery,
+				body: models::ActorUpgradeAllActorsRequest,
+				opt_auth: true,
+				rate_limit: {
+					buckets: [
+						{ count: 1_000, bucket: duration::minutes(1) },
+					],
+				},
+			),
+		},
 
 		"actors" / Uuid: {
 			GET: actors::get(
@@ -86,6 +98,19 @@ define_router! {
 				rate_limit: {
 					buckets: [
 						{ count: 10_000, bucket: duration::minutes(1) },
+					],
+				},
+			),
+		},
+
+		"actors" / Uuid / "upgrade": {
+			POST: actors::upgrade(
+				query: GlobalQuery,
+				body: models::ActorUpgradeActorRequest,
+				opt_auth: true,
+				rate_limit: {
+					buckets: [
+						{ count: 1_000, bucket: duration::minutes(1) },
 					],
 				},
 			),

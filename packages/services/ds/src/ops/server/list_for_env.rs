@@ -8,6 +8,7 @@ pub struct Input {
 	pub tags: HashMap<String, String>,
 	pub include_destroyed: bool,
 	pub cursor: Option<Uuid>,
+	pub limit: usize,
 }
 
 #[derive(Debug)]
@@ -44,7 +45,7 @@ pub async fn ds_server_list_for_env(ctx: &OperationCtx, input: &Input) -> Global
 		input.include_destroyed,
 		input.cursor,
 		// TODO: Add pagination when OpenGB lobbies no longer uses polling RVTEE-492
-		if input.include_destroyed { 64 } else { 10_000 },
+		i64::try_from(input.limit)?,
 	)
 	.await?
 	.into_iter()

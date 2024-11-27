@@ -217,3 +217,63 @@ func (u *UpgradeActorResponse) String() string {
 	}
 	return fmt.Sprintf("%#v", u)
 }
+
+type UpgradeAllActorsRequest struct {
+	Tags      interface{} `json:"tags,omitempty"`
+	Build     *uuid.UUID  `json:"build,omitempty"`
+	BuildTags interface{} `json:"buildTags,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (u *UpgradeAllActorsRequest) UnmarshalJSON(data []byte) error {
+	type unmarshaler UpgradeAllActorsRequest
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*u = UpgradeAllActorsRequest(value)
+	u._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (u *UpgradeAllActorsRequest) String() string {
+	if len(u._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(u._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(u); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", u)
+}
+
+type UpgradeAllActorsResponse struct {
+	Count int64 `json:"count"`
+
+	_rawJSON json.RawMessage
+}
+
+func (u *UpgradeAllActorsResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler UpgradeAllActorsResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*u = UpgradeAllActorsResponse(value)
+	u._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (u *UpgradeAllActorsResponse) String() string {
+	if len(u._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(u._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(u); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", u)
+}

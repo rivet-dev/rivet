@@ -30,6 +30,7 @@ Class | Method | HTTP request | Description
 *ActorApi* | [**actor_get**](docs/ActorApi.md#actor_get) | **GET** /actors/{actor} | 
 *ActorApi* | [**actor_list**](docs/ActorApi.md#actor_list) | **GET** /actors | 
 *ActorApi* | [**actor_upgrade**](docs/ActorApi.md#actor_upgrade) | **POST** /actors/{actor}/upgrade | 
+*ActorApi* | [**actor_upgrade_all**](docs/ActorApi.md#actor_upgrade_all) | **POST** /actors/upgrade | 
 *ActorBuildsApi* | [**actor_builds_complete**](docs/ActorBuildsApi.md#actor_builds_complete) | **POST** /builds/{build}/complete | 
 *ActorBuildsApi* | [**actor_builds_get**](docs/ActorBuildsApi.md#actor_builds_get) | **GET** /builds/{build} | 
 *ActorBuildsApi* | [**actor_builds_list**](docs/ActorBuildsApi.md#actor_builds_list) | **GET** /builds | 
@@ -195,6 +196,8 @@ Class | Method | HTTP request | Description
  - [ActorResources](docs/ActorResources.md)
  - [ActorRuntime](docs/ActorRuntime.md)
  - [ActorUpgradeActorRequest](docs/ActorUpgradeActorRequest.md)
+ - [ActorUpgradeAllActorsRequest](docs/ActorUpgradeAllActorsRequest.md)
+ - [ActorUpgradeAllActorsResponse](docs/ActorUpgradeAllActorsResponse.md)
  - [AuthCompleteStatus](docs/AuthCompleteStatus.md)
  - [AuthIdentityCompleteEmailVerificationRequest](docs/AuthIdentityCompleteEmailVerificationRequest.md)
  - [AuthIdentityCompleteEmailVerificationResponse](docs/AuthIdentityCompleteEmailVerificationResponse.md)

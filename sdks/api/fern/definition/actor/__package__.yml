@@ -89,6 +89,18 @@ service:
         body: UpgradeActorRequest
       response: UpgradeActorResponse
 
+    upgradeAll:
+      path: /upgrade
+      method: POST
+      docs: Upgrades a dynamic actor.
+      request:
+        name: UpgradeAllActorsRequestQuery
+        query-parameters:
+          project: optional<string>
+          environment: optional<string>
+        body: UpgradeAllActorsRequest
+      response: UpgradeAllActorsResponse
+
 types:
   GetActorResponse:
     properties:
@@ -137,6 +149,16 @@ types:
 
   UpgradeActorResponse:
     properties: {}
+
+  UpgradeAllActorsRequest:
+    properties:
+      tags: unknown
+      build: optional<uuid>
+      buildTags: optional<unknown>
+
+  UpgradeAllActorsResponse:
+    properties:
+      count: long
 
   ListActorsResponse:
     properties:

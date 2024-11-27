@@ -39,6 +39,8 @@ docs/ActorRegionsApi.md
 docs/ActorResources.md
 docs/ActorRuntime.md
 docs/ActorUpgradeActorRequest.md
+docs/ActorUpgradeAllActorsRequest.md
+docs/ActorUpgradeAllActorsResponse.md
 docs/AuthCompleteStatus.md
 docs/AuthIdentityCompleteEmailVerificationRequest.md
 docs/AuthIdentityCompleteEmailVerificationResponse.md
@@ -449,6 +451,8 @@ src/models/actor_region.rs
 src/models/actor_resources.rs
 src/models/actor_runtime.rs
 src/models/actor_upgrade_actor_request.rs
+src/models/actor_upgrade_all_actors_request.rs
+src/models/actor_upgrade_all_actors_response.rs
 src/models/auth_complete_status.rs
 src/models/auth_identity_complete_email_verification_request.rs
 src/models/auth_identity_complete_email_verification_response.rs
