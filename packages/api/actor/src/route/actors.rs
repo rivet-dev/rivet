@@ -32,7 +32,7 @@ async fn get_inner(
 	_watch_index: WatchIndexQuery,
 	query: GlobalQuery,
 ) -> GlobalResult<models::ActorGetActorResponse> {
-	let CheckOutput { env_id, .. } = ctx.auth().check(ctx.op_ctx(), &query, false).await?;
+	let CheckOutput { env_id, .. } = ctx.auth().check(ctx.op_ctx(), &query, true).await?;
 
 	// Get the server
 	let servers_res = ctx
@@ -101,7 +101,7 @@ pub async fn create(
 	body: models::ActorCreateActorRequest,
 	query: GlobalQuery,
 ) -> GlobalResult<models::ActorCreateActorResponse> {
-	let CheckOutput { game_id, env_id } = ctx.auth().check(ctx.op_ctx(), &query, false).await?;
+	let CheckOutput { game_id, env_id } = ctx.auth().check(ctx.op_ctx(), &query, true).await?;
 
 	let (clusters_res, game_configs_res, build_id) = tokio::try_join!(
 		ctx.op(cluster::ops::get_for_game::Input {
@@ -361,7 +361,7 @@ pub async fn destroy(
 	query: DeleteQuery,
 ) -> GlobalResult<serde_json::Value> {
 	let CheckOutput { game_id, env_id } =
-		ctx.auth().check(ctx.op_ctx(), &query.global, false).await?;
+		ctx.auth().check(ctx.op_ctx(), &query.global, true).await?;
 
 	assert::server_for_env(&ctx, actor_id, game_id, env_id).await?;
 
@@ -555,7 +555,7 @@ async fn list_actors_inner(
 	_watch_index: WatchIndexQuery,
 	query: ListQuery,
 ) -> GlobalResult<models::ActorListActorsResponse> {
-	let CheckOutput { env_id, .. } = ctx.auth().check(ctx.op_ctx(), &query.global, false).await?;
+	let CheckOutput { env_id, .. } = ctx.auth().check(ctx.op_ctx(), &query.global, true).await?;
 
 	let include_destroyed = query.include_destroyed.unwrap_or(false);
 

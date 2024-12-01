@@ -15,7 +15,7 @@ pub async fn list(
 	_watch_index: WatchIndexQuery,
 	query: GlobalQuery,
 ) -> GlobalResult<models::ActorListRegionsResponse> {
-	let CheckOutput { game_id, .. } = ctx.auth().check(ctx.op_ctx(), &query, false).await?;
+	let CheckOutput { game_id, .. } = ctx.auth().check(ctx.op_ctx(), &query, true).await?;
 
 	let cluster_res = ctx
 		.op(cluster::ops::get_for_game::Input {
@@ -59,7 +59,7 @@ pub async fn list_deprecated(
 	_watch_index: WatchIndexQuery,
 ) -> GlobalResult<models::ServersListDatacentersResponse> {
 	let query = build_global_query_compat(&ctx, game_id, env_id).await?;
-	let CheckOutput { game_id, .. } = ctx.auth().check(ctx.op_ctx(), &query, false).await?;
+	let CheckOutput { game_id, .. } = ctx.auth().check(ctx.op_ctx(), &query, true).await?;
 
 	let cluster_res = ctx
 		.op(cluster::ops::get_for_game::Input {
