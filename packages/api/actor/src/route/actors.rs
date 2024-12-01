@@ -158,7 +158,7 @@ pub async fn create(
 		// args: body.runtime.arguments.unwrap_or_default(),
 		args: Vec::new(),
 		network_mode: network.mode.unwrap_or_default().api_into(),
-		environment: body.runtime.environment.unwrap_or_default(),
+		environment: body.runtime.and_then(|r| r.environment).unwrap_or_default(),
 		network_ports: unwrap!(network
 			.ports
 			.unwrap_or_default()
@@ -331,9 +331,9 @@ pub async fn create_deprecated(
 				cpu: body.resources.cpu,
 				memory: body.resources.memory,
 			}),
-			runtime: Box::new(models::ActorCreateActorRuntimeRequest {
+			runtime: Some(Box::new(models::ActorCreateActorRuntimeRequest {
 				environment: body.runtime.environment,
-			}),
+			})),
 			build: Some(body.runtime.build),
 			build_tags: None,
 			tags: body.tags,

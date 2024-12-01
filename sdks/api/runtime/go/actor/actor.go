@@ -13,7 +13,7 @@ type CreateActorRequest struct {
 	Region    *string                    `json:"region,omitempty"`
 	Tags      interface{}                `json:"tags,omitempty"`
 	Build     *uuid.UUID                 `json:"build,omitempty"`
-	BuildTags interface{}                `json:"buildTags,omitempty"`
+	BuildTags interface{}                `json:"build_tags,omitempty"`
 	Runtime   *CreateActorRuntimeRequest `json:"runtime,omitempty"`
 	Network   *CreateActorNetworkRequest `json:"network,omitempty"`
 	Resources *Resources                 `json:"resources,omitempty"`
@@ -163,7 +163,7 @@ func (l *ListActorsResponse) String() string {
 
 type UpgradeActorRequest struct {
 	Build     *uuid.UUID  `json:"build,omitempty"`
-	BuildTags interface{} `json:"buildTags,omitempty"`
+	BuildTags interface{} `json:"build_tags,omitempty"`
 
 	_rawJSON json.RawMessage
 }
@@ -221,7 +221,7 @@ func (u *UpgradeActorResponse) String() string {
 type UpgradeAllActorsRequest struct {
 	Tags      interface{} `json:"tags,omitempty"`
 	Build     *uuid.UUID  `json:"build,omitempty"`
-	BuildTags interface{} `json:"buildTags,omitempty"`
+	BuildTags interface{} `json:"build_tags,omitempty"`
 
 	_rawJSON json.RawMessage
 }

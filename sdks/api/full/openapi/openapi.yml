@@ -8712,7 +8712,7 @@ components:
         build:
           type: string
           format: uuid
-        buildTags: {}
+        build_tags: {}
         runtime:
           $ref: '#/components/schemas/ActorCreateActorRuntimeRequest'
         network:
@@ -8723,7 +8723,6 @@ components:
           $ref: '#/components/schemas/ActorLifecycle'
       required:
         - tags
-        - runtime
         - resources
     ActorCreateActorRuntimeRequest:
       type: object
@@ -8769,7 +8768,7 @@ components:
         build:
           type: string
           format: uuid
-        buildTags: {}
+        build_tags: {}
     ActorUpgradeActorResponse:
       type: object
       properties: {}
@@ -8780,7 +8779,7 @@ components:
         build:
           type: string
           format: uuid
-        buildTags: {}
+        build_tags: {}
       required:
         - tags
     ActorUpgradeAllActorsResponse:

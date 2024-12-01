@@ -19,9 +19,7 @@ import * as RivetClient from "../../../../index";
  *                 "key": "value"
  *             },
  *             runtime: {
- *                 environment: {
- *                     "string": "string"
- *                 }
+ *                 environment: {}
  *             },
  *             network: {
  *                 mode: "bridge",

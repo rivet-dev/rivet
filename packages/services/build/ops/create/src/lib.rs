@@ -27,8 +27,7 @@ async fn handle(
 		.await?;
 		let game = game_res.games.first();
 		ensure!(game.is_some(), "game not found");
-	}
-	else if let Some(env_id) = env_id {
+	} else if let Some(env_id) = env_id {
 		let env_res = op!([ctx] game_namespace_get {
 			namespace_ids: vec![env_id.into()],
 		})

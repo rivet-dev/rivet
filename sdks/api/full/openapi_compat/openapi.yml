@@ -98,7 +98,7 @@ components:
         build:
           format: uuid
           type: string
-        buildTags: {}
+        build_tags: {}
         lifecycle:
           $ref: '#/components/schemas/ActorLifecycle'
         network:
@@ -112,7 +112,6 @@ components:
         tags: {}
       required:
       - tags
-      - runtime
       - resources
       type: object
     ActorCreateActorResponse:
@@ -379,7 +378,7 @@ components:
         build:
           format: uuid
           type: string
-        buildTags: {}
+        build_tags: {}
       type: object
     ActorUpgradeActorResponse:
       properties: {}
@@ -389,7 +388,7 @@ components:
         build:
           format: uuid
           type: string
-        buildTags: {}
+        build_tags: {}
         tags: {}
       required:
       - tags

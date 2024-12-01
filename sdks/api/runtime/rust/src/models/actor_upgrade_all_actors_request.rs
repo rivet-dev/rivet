@@ -15,7 +15,7 @@
 pub struct ActorUpgradeAllActorsRequest {
     #[serde(rename = "build", skip_serializing_if = "Option::is_none")]
     pub build: Option<uuid::Uuid>,
-    #[serde(rename = "buildTags", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "build_tags", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
     pub build_tags: Option<Option<serde_json::Value>>,
     #[serde(rename = "tags", deserialize_with = "Option::deserialize")]
     pub tags: Option<serde_json::Value>,

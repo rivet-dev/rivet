@@ -370,9 +370,7 @@ export class Actor {
      *                 "key": "value"
      *             },
      *             runtime: {
-     *                 environment: {
-     *                     "string": "string"
-     *                 }
+     *                 environment: {}
      *             },
      *             network: {
      *                 mode: "bridge",

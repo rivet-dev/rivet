@@ -13,7 +13,7 @@ pub struct ActorCreateActorRequest {
 	#[serde(rename = "build", skip_serializing_if = "Option::is_none")]
 	pub build: Option<uuid::Uuid>,
 	#[serde(
-		rename = "buildTags",
+		rename = "build_tags",
 		default,
 		with = "::serde_with::rust::double_option",
 		skip_serializing_if = "Option::is_none"
@@ -27,8 +27,8 @@ pub struct ActorCreateActorRequest {
 	pub region: Option<String>,
 	#[serde(rename = "resources")]
 	pub resources: Box<crate::models::ActorResources>,
-	#[serde(rename = "runtime")]
-	pub runtime: Box<crate::models::ActorCreateActorRuntimeRequest>,
+	#[serde(rename = "runtime", skip_serializing_if = "Option::is_none")]
+	pub runtime: Option<Box<crate::models::ActorCreateActorRuntimeRequest>>,
 	#[serde(rename = "tags", deserialize_with = "Option::deserialize")]
 	pub tags: Option<serde_json::Value>,
 }
@@ -36,7 +36,6 @@ pub struct ActorCreateActorRequest {
 impl ActorCreateActorRequest {
 	pub fn new(
 		resources: crate::models::ActorResources,
-		runtime: crate::models::ActorCreateActorRuntimeRequest,
 		tags: Option<serde_json::Value>,
 	) -> ActorCreateActorRequest {
 		ActorCreateActorRequest {
@@ -46,7 +45,7 @@ impl ActorCreateActorRequest {
 			network: None,
 			region: None,
 			resources: Box::new(resources),
-			runtime: Box::new(runtime),
+			runtime: None,
 			tags,
 		}
 	}

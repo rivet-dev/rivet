@@ -15,7 +15,7 @@
 pub struct ActorCreateActorRequest {
     #[serde(rename = "build", skip_serializing_if = "Option::is_none")]
     pub build: Option<uuid::Uuid>,
-    #[serde(rename = "buildTags", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "build_tags", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
     pub build_tags: Option<Option<serde_json::Value>>,
     #[serde(rename = "lifecycle", skip_serializing_if = "Option::is_none")]
     pub lifecycle: Option<Box<crate::models::ActorLifecycle>>,
@@ -25,14 +25,14 @@ pub struct ActorCreateActorRequest {
     pub region: Option<String>,
     #[serde(rename = "resources")]
     pub resources: Box<crate::models::ActorResources>,
-    #[serde(rename = "runtime")]
-    pub runtime: Box<crate::models::ActorCreateActorRuntimeRequest>,
+    #[serde(rename = "runtime", skip_serializing_if = "Option::is_none")]
+    pub runtime: Option<Box<crate::models::ActorCreateActorRuntimeRequest>>,
     #[serde(rename = "tags", deserialize_with = "Option::deserialize")]
     pub tags: Option<serde_json::Value>,
 }
 
 impl ActorCreateActorRequest {
-    pub fn new(resources: crate::models::ActorResources, runtime: crate::models::ActorCreateActorRuntimeRequest, tags: Option<serde_json::Value>) -> ActorCreateActorRequest {
+    pub fn new(resources: crate::models::ActorResources, tags: Option<serde_json::Value>) -> ActorCreateActorRequest {
         ActorCreateActorRequest {
             build: None,
             build_tags: None,
@@ -40,7 +40,7 @@ impl ActorCreateActorRequest {
             network: None,
             region: None,
             resources: Box::new(resources),
-            runtime: Box::new(runtime),
+            runtime: None,
             tags,
         }
     }

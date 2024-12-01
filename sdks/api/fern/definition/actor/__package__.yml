@@ -111,8 +111,8 @@ types:
       region: optional<string>
       tags: unknown
       build: optional<uuid>
-      buildTags: optional<unknown>
-      runtime: CreateActorRuntimeRequest
+      build_tags: optional<unknown>
+      runtime: optional<CreateActorRuntimeRequest>
       network: optional<CreateActorNetworkRequest>
       resources: commons.Resources
       lifecycle: optional<commons.Lifecycle>
@@ -145,7 +145,7 @@ types:
   UpgradeActorRequest:
     properties:
       build: optional<uuid>
-      buildTags: optional<unknown>
+      build_tags: optional<unknown>
 
   UpgradeActorResponse:
     properties: {}
@@ -154,7 +154,7 @@ types:
     properties:
       tags: unknown
       build: optional<uuid>
-      buildTags: optional<unknown>
+      build_tags: optional<unknown>
 
   UpgradeAllActorsResponse:
     properties:
