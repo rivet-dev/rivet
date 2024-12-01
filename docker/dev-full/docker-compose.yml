@@ -3,6 +3,7 @@ services:
     build:
       context: ../..
       dockerfile: docker/dev-full/server.Dockerfile
+    restart: unless-stopped
     command: /usr/bin/rivet-server start
     environment:
       - RUST_BACKTRACE=1
@@ -44,6 +45,7 @@ services:
     build:
       context: ../..
       dockerfile: docker/dev-full/server.Dockerfile
+    restart: unless-stopped
     command: sleep infinity
     environment:
       - RUST_BACKTRACE=1
@@ -59,6 +61,7 @@ services:
       dockerfile: docker/dev-full/client.Dockerfile
     # TODO(RVT-4168): Copmile libfdb from scratch for ARM
     platform: linux/amd64
+    restart: unless-stopped
     command: -c /etc/rivet-client/config.yaml
     environment:
       - RUST_BACKTRACE=1
@@ -84,6 +87,7 @@ services:
       - rivet-network
 
   cockroachdb:
+    restart: unless-stopped
     image: cockroachdb/cockroach:v24.2.3
     command: start-single-node --insecure
     volumes:
@@ -97,6 +101,7 @@ services:
       retries: 10
 
   redis:
+    restart: unless-stopped
     image: bitnami/valkey:8.0.1
     # TODO: Remove root user
     user: root
@@ -112,6 +117,7 @@ services:
       retries: 10
 
   clickhouse:
+    restart: unless-stopped
     image: clickhouse/clickhouse-server:23.10.1
     volumes:
       - clickhouse-data:/var/lib/clickhouse
@@ -126,6 +132,7 @@ services:
       retries: 10
 
   nats:
+    restart: unless-stopped
     image: nats:2.10.22-scratch
     networks:
       - rivet-network
@@ -136,6 +143,7 @@ services:
       retries: 10
 
   seaweedfs:
+    restart: unless-stopped
     image: chrislusf/seaweedfs:3.79
     # TODO: Remove root user
     user: root
@@ -159,6 +167,7 @@ services:
       timeout: 10s
 
   foundationdb:
+    restart: unless-stopped
     # See docs-internal/infrastructure/fdb/AVX.md
     image: foundationdb/foundationdb:7.1.60
     platform: linux/amd64
@@ -175,6 +184,7 @@ services:
       - rivet-network
 
   vector-client:
+    restart: unless-stopped
     image: timberio/vector:0.42.0-distroless-static
     command: -C /etc/vector
     volumes:
@@ -185,6 +195,7 @@ services:
       - rivet-network
 
   vector-server:
+    restart: unless-stopped
     image: timberio/vector:0.42.0-distroless-static
     command: -C /etc/vector
     volumes:
