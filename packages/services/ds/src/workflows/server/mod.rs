@@ -542,6 +542,7 @@ struct GetBuildAndDcOutput {
 	build_kind: BuildKind,
 	build_compression: BuildCompression,
 	dc_name_id: String,
+	dc_display_name: String,
 	dc_build_delivery_method: BuildDeliveryMethod,
 }
 
@@ -569,6 +570,7 @@ async fn get_build_and_dc(
 		build_kind: build.kind,
 		build_compression: build.compression,
 		dc_name_id: dc.name_id.clone(),
+		dc_display_name: dc.display_name.clone(),
 		dc_build_delivery_method: dc.build_delivery_method,
 	})
 }

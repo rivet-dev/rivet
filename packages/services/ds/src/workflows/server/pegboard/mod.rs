@@ -405,7 +405,8 @@ async fn setup(
 					"id": input.cluster_id
 				},
 				"region": {
-					"name": build_dc.dc_name_id,
+					"id":  build_dc.dc_name_id,
+					"name": build_dc.dc_display_name,
 				},
 				"build": {
 					"id": input.image_id,

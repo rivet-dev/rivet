@@ -16,6 +16,7 @@ export interface Metadata {
 		id: string;
 	};
 	region: {
+		id: string;
 		name: string;
 	};
 	build: {
@@ -44,6 +45,7 @@ function parseMetadata(): Metadata {
 					id: parsedMetadata.cluster.id,
 				},
 				region: {
+					id: parsedMetadata.region.id,
 					name: parsedMetadata.region.name,
 				},
 				build: {
@@ -70,6 +72,7 @@ function parseMetadata(): Metadata {
 				id: null as any,
 			},
 			region: {
+				id: null as any,
 				name: null as any,
 			},
 			build: {
