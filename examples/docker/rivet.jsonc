@@ -1,0 +1,11 @@
+{
+  "version": "2.0",
+  "builds": [
+    {
+      "tags": { "name": "hello-world" },
+      "runtime": "docker",
+      "dockerfile": "Dockerfile"
+    }
+  ]
+}
+

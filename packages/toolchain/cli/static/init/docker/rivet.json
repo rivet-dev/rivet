@@ -1,0 +1,9 @@
+{
+  "builds": [
+    {
+      "tags": { "name": "__NAME__" },
+      "runtime": "docker",
+      "dockerfile": "Dockerfile"
+    }
+  ]
+}

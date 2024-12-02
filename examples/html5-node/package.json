@@ -1,0 +1,21 @@
+{
+  "name": "rivet-example-html5",
+  "version": "1.0.0",
+  "license": "Apache-2.0",
+  "private": true,
+  "scripts": {
+    "rivet:dev": "rivet dev --project rivet.dev.json",
+    "client:dev": "cd packages/client && npm run dev",
+    "game-server:dev": "npx wait-on tcp:6420 && cd packages/game-server && npm run dev",
+    "dev": "concurrently \"npm:rivet:dev\" \"npm:game-server:dev\" \"npm:client:dev\""
+  },
+  "devDependencies": {
+    "concurrently": "^6.2.0"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "dependencies": {
+    "wait-on": "^8.0.1"
+  }
+}

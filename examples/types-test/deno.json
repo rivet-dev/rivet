@@ -1,0 +1,6 @@
+{
+  "imports": {
+    "@rivet-gg/actor-types": "jsr:@rivet-gg/actor-types@^0.0.9",
+    "@std/assert": "jsr:@std/assert@1"
+  }
+}

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Rivet Lobbies Example</title>
+		<style>
+			body {
+				font-family: Arial, sans-serif;
+				background-color: hsl(240 7.14% 5.49%);
+				color: hsl(60 9.1% 97.8%);
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				height: 100vh;
+				margin: 0;
+			}
+			.container {
+				background-color: hsl(0 9.09% 6.47%);
+				border-radius: 8px;
+				padding: 30px;
+				width: 300px;
+				box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+			}
+			h1 {
+				font-size: 24px;
+				margin-bottom: 20px;
+				text-align: center;
+				color: hsl(60 9.1% 97.8%);
+			}
+			select, button {
+				width: 100%;
+				padding: 10px;
+				margin-bottom: 15px;
+				border: none;
+				border-radius: 4px;
+				background-color: hsl(12 6.5% 15.1%);
+				color: hsl(60 9.1% 97.8%);
+				font-size: 14px;
+			}
+			button {
+				background-color: hsl(18.5 100% 50%);
+				cursor: pointer;
+				transition: background-color 0.3s;
+			}
+			button:hover {
+				background-color: hsl(18.5 100% 55%);
+			}
+			.status-field {
+				margin-bottom: 10px;
+			}
+			.status-label {
+				font-weight: bold;
+				margin-right: 5px;
+			}
+			input {
+				width: 100%;
+				padding: 10px;
+				margin-bottom: 15px;
+				border: none;
+				border-radius: 4px;
+				background-color: hsl(12 6.5% 15.1%);
+				color: hsl(60 9.1% 97.8%);
+				font-size: 14px;
+				box-sizing: border-box;
+			}
+			select {
+				appearance: none;
+				-webkit-appearance: none;
+				-moz-appearance: none;
+				background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23ffffff' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+				background-repeat: no-repeat;
+				background-position: right 10px center;
+				padding-right: 30px;
+			}
+			label {
+				font-weight: bold;
+				display: block;
+				margin-bottom: 5px;
+			}
+		</style>
+	</head>
+	<body>
+		<script type="module" src="./index.ts"></script>
+		<div class="container">
+			<h1>Rivet Lobbies Example</h1>
+			<label for="endpointInput">Endpoint</label>
+			<input type="text" id="endpointInput" placeholder="Enter endpoint URL">
+			<label for="gameVersionInput">Game Version</label>
+			<input type="text" id="gameVersionInput" placeholder="Enter game version">
+			<label for="regionSelect">Region</label>
+			<select id="regionSelect"></select>
+			<button onclick="findOrCreateLobby()">Find Or Create Lobby</button>
+
+			<div class="status-field">
+				<span class="status-label">Status</span>
+				<span id="status">Idle</span>
+			</div>
+			<div class="status-field">
+				<span class="status-label">Lobby ID</span>
+				<span id="lobbyId"></span>
+			</div>
+			<div class="status-field">
+				<span class="status-label">Origin</span>
+				<span id="origin"></span>
+			</div>
+			<div class="status-field">
+				<span class="status-label">Region</span>
+				<span id="region"></span>
+			</div>
+			<div class="status-field">
+				<span class="status-label">Public IP</span>
+				<span id="publicIp"></span>
+			</div>
+			<div class="status-field">
+				<span class="status-label">Counter</span>
+				<span id="counter"></span>
+			</div>
+		</div>
+	</body>
+</html>
+

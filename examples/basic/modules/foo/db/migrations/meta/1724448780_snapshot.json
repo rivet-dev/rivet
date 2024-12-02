@@ -1,0 +1,76 @@
+{
+  "id": "23839314-5d54-47b8-a9a0-a1048bd2676d",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "module_foo.db_entry": {
+      "name": "db_entry",
+      "schema": "module_foo",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "test2": {
+          "name": "test2",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "test3": {
+          "name": "test3",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "test5": {
+          "name": "test5",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "module_foo.table6": {
+      "name": "table6",
+      "schema": "module_foo",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "hello2": {
+          "name": "hello2",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    }
+  },
+  "enums": {},
+  "schemas": {
+    "module_foo": "module_foo"
+  },
+  "sequences": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

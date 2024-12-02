@@ -1,0 +1,11 @@
+{
+	"scripts": {
+		"fetch_counter": {
+			"public": true
+		}
+	},
+	"errors": {},
+	"actors": {
+		"counter": {}
+	}
+}

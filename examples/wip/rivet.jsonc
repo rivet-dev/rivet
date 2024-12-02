@@ -1,0 +1,56 @@
+{
+  "version": "2.0",
+  "builds": [
+    // Existing Docker image
+    {
+      "tags": { "name": "party" },
+      "runtime": "docker",
+      "image": "existing image"
+    },
+    // Build Docker image
+    {
+      "tags": { "name": "party" },
+      "runtime": "docker",
+      "dockerfile": "Dockerfile",
+      // Optional:
+      "context": ".",
+      "build_target": "runner",
+      "args": {
+        "MY_ARG": "abc123"
+      },
+      "unstable": {
+        "allow_root": true,
+        "build_method": "native",
+        "build_kind": "oci-bundle",
+        "build_compression": "lz4"
+      }
+    },
+    // Build Deno script
+    // TODO: What build steps do we take?
+    // - Bundle Deno dependencies
+    // - Compile to JS
+    {
+      "tags": { "name": "party" },
+      "runtime": "javascript",
+      "path": "./build.ts",
+      // Optional:
+      "import_map": "/path/to/import-map.json",
+      "deno": {
+        "config": "/path/to/deno.json",
+        "no_lock": false,
+        "no_remote": false
+      },
+      "bundle": {
+        "minify": true
+      }
+    },
+    // Prebuilt JavaScript
+    {
+      "tags": { "name": "party" },
+      "runtime": "javascript",
+      "mode": "raw",
+      "command": "yarn run build",
+      "path": "./build.js"
+    }
+  ]
+}

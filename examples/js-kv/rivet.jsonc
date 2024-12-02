@@ -1,0 +1,11 @@
+{
+  "version": "2.0",
+  "builds": [
+    {
+      "tags": { "name": "kv" },
+      "runtime": "javascript",
+      "bundler": "deno",
+      "script": "index.ts"
+    }
+  ]
+}

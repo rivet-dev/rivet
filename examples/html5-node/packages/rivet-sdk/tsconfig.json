@@ -1,0 +1,13 @@
+{
+	"compilerOptions": {
+		"declaration": true,
+		"target": "esnext",
+		"module": "commonjs",
+		"moduleResolution": "node",
+		"allowImportingTsExtensions": true
+	},
+	"exclude": [
+		"dist",
+		"node_modules"
+	]
+}

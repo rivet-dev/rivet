@@ -1,0 +1,37 @@
+{
+	"registries": {
+		"local": {
+			"local": {
+				"directory": "./modules"
+			}
+		}
+	},
+	"modules": {
+		"users": {},
+		"rate_limit": {},
+		"tokens": {},
+		"foo": {
+			"registry": "local"
+		},
+		"config_test": {
+			"registry": "local",
+			"config": {
+				"foo": "hello world",
+				"bar": 1234
+			}
+		},
+		"friends": {},
+		"rivet": {
+			"config": {
+				"apiEndpoint": "https://api.rivet.gg",
+				"apiEndpointVariable": "RIVET_API_ENDPOINT",
+				"serviceTokenVariable": "RIVET_SERVICE_TOKEN",
+				"gameIdVariable": "RIVET_GAME_ID",
+				"environmentIdVariable": "RIVET_ENVIRONMENT_ID"
+			}
+		},
+		"actors_test": {
+			"registry": "local"
+		}
+	}
+}

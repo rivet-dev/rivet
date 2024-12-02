@@ -1,0 +1,3 @@
+{
+  "imports": { "@std/random": "jsr:@std/random@^0.1.0" }
+}

@@ -1,0 +1,23 @@
+{
+	"status": "preview",
+	"authors": [
+		"NathanFlurry"
+	],
+	"scripts": {
+		"ping": {
+			"public": true
+		},
+		"create_entry": {
+			"public": true
+		},
+		"call_self": {
+			"public": true
+		},
+		"actor": {
+			"public": true
+		}
+	},
+	"errors": {
+		"db_error": {}
+	}
+}

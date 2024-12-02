@@ -1,0 +1,11 @@
+{
+  "version": "2.0",
+  "builds": [
+    {
+      "tags": { "name": "echo-http" },
+      "runtime": "javascript",
+      "bundler": "none",
+      "script": "echo_http.js"
+    }
+  ]
+}

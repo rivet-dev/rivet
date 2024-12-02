@@ -15,6 +15,7 @@ async function updateCargoToml() {
 		for await (const entry of walk(join(rootDir, "packages"), {
 			includeDirs: false,
 			exts: ["toml"],
+			skip: [/node_modules/],
 		})) {
 			yield entry;
 		}
@@ -52,6 +53,9 @@ async function updateCargoToml() {
 
 	// Hardcode extra workspace members
 	members.push("sdks/api/full/rust");
+
+	// Sort deps
+	members.sort();
 
 	// Remove path dependencies, since we'll replace these. This lets us
 	// preserve existing external dependencies.

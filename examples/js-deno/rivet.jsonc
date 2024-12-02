@@ -1,0 +1,10 @@
+{
+  "version": "2.0",
+  "builds": [
+    {
+      "tags": { "name": "rng" },
+      "runtime": "javascript",
+      "script": "rng_http.ts"
+    }
+  ]
+}
