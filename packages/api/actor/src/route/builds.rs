@@ -29,10 +29,7 @@ pub async fn get(
 	})
 	.await?;
 	let build = unwrap_with!(builds_res.builds.first(), BUILD_NOT_FOUND);
-	ensure_with!(
-		unwrap!(build.env_id).as_uuid() == env_id,
-		BUILD_NOT_FOUND
-	);
+	ensure_with!(unwrap!(build.env_id).as_uuid() == env_id, BUILD_NOT_FOUND);
 
 	let uploads_res = op!([ctx] upload_get {
 		upload_ids: builds_res
@@ -378,10 +375,7 @@ pub async fn complete_build(
 	.await?;
 	let build = unwrap_with!(build_res.builds.first(), BUILD_NOT_FOUND);
 
-	ensure_with!(
-		unwrap!(build.env_id).as_uuid() == env_id,
-		BUILD_NOT_FOUND
-	);
+	ensure_with!(unwrap!(build.env_id).as_uuid() == env_id, BUILD_NOT_FOUND);
 
 	op!([ctx] @dont_log_body upload_complete {
 		upload_id: build.upload_id,

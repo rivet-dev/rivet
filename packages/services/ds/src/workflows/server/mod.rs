@@ -1,6 +1,5 @@
 use std::{
 	collections::HashMap,
-	convert::TryInto,
 	hash::{DefaultHasher, Hasher},
 	net::IpAddr,
 	time::Duration,
@@ -11,7 +10,6 @@ use chirp_workflow::prelude::*;
 use cluster::types::BuildDeliveryMethod;
 use futures_util::FutureExt;
 use rand::Rng;
-use rivet_operation::prelude::proto::backend;
 use util::serde::AsHashableExt;
 
 use crate::types::{
@@ -554,27 +552,22 @@ async fn get_build_and_dc(
 ) -> GlobalResult<GetBuildAndDcOutput> {
 	// Validate build exists and belongs to this game
 	let (build_res, dc_res) = tokio::try_join!(
-		op!([ctx] build_get {
-			build_ids: vec![input.image_id.into()],
+		ctx.op(build::ops::get::Input {
+			build_ids: vec![input.image_id],
 		}),
 		ctx.op(cluster::ops::datacenter::get::Input {
 			datacenter_ids: vec![input.datacenter_id],
 		})
 	)?;
 	let build = unwrap_with!(build_res.builds.first(), BUILD_NOT_FOUND);
-	let upload_id = unwrap!(build.upload_id).as_uuid();
-	let build_kind = unwrap!(backend::build::BuildKind::from_i32(build.kind));
-	let build_compression = unwrap!(backend::build::BuildCompression::from_i32(
-		build.compression
-	));
 
 	let dc = unwrap!(dc_res.datacenters.first());
 
 	Ok(GetBuildAndDcOutput {
-		build_upload_id: upload_id,
-		build_file_name: util_build::file_name(build_kind, build_compression),
-		build_kind: unwrap!(BuildKind::from_repr(build.kind.try_into()?)),
-		build_compression: unwrap!(BuildCompression::from_repr(build.compression.try_into()?)),
+		build_upload_id: build.upload_id,
+		build_file_name: build::utils::file_name(build.kind, build.compression),
+		build_kind: build.kind,
+		build_compression: build.compression,
 		dc_name_id: dc.name_id.clone(),
 		dc_build_delivery_method: dc.build_delivery_method,
 	})

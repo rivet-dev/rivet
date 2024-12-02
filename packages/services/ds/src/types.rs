@@ -33,6 +33,15 @@ pub struct ServerResources {
 	pub memory_mib: u32,
 }
 
+impl ServerResources {
+	pub fn default_isolate() -> Self {
+		ServerResources {
+			cpu_millicores: 125,
+			memory_mib: 128,
+		}
+	}
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct ServerLifecycle {
 	pub kill_timeout_ms: i64,
@@ -131,8 +140,14 @@ pub fn convert_actor_to_api(
 		// `started_at` -> `connectable_ts` is intentional. We don't expose the internal
 		// workings of DS to the API, so we need to return the timestamp at which the serer can
 		// actually do anything useful.
-		started_at: value.connectable_ts.map(util::timestamp::to_string).transpose()?,
-		destroyed_at: value.destroy_ts.map(util::timestamp::to_string).transpose()?,
+		started_at: value
+			.connectable_ts
+			.map(util::timestamp::to_string)
+			.transpose()?,
+		destroyed_at: value
+			.destroy_ts
+			.map(util::timestamp::to_string)
+			.transpose()?,
 		tags: Some(serde_json::to_value(value.tags)?),
 		runtime: Box::new(models::ActorRuntime {
 			build: value.image_id,

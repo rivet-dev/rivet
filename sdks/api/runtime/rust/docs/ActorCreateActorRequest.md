@@ -9,7 +9,7 @@ Name | Type | Description | Notes
 **lifecycle** | Option<[**crate::models::ActorLifecycle**](ActorLifecycle.md)> |  | [optional]
 **network** | Option<[**crate::models::ActorCreateActorNetworkRequest**](ActorCreateActorNetworkRequest.md)> |  | [optional]
 **region** | Option<**String**> |  | [optional]
-**resources** | [**crate::models::ActorResources**](ActorResources.md) |  | 
+**resources** | Option<[**crate::models::ActorResources**](ActorResources.md)> |  | [optional]
 **runtime** | Option<[**crate::models::ActorCreateActorRuntimeRequest**](ActorCreateActorRuntimeRequest.md)> |  | [optional]
 **tags** | Option<[**serde_json::Value**](.md)> |  | 
 

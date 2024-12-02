@@ -25,8 +25,8 @@ pub struct ActorCreateActorRequest {
 	pub network: Option<Box<crate::models::ActorCreateActorNetworkRequest>>,
 	#[serde(rename = "region", skip_serializing_if = "Option::is_none")]
 	pub region: Option<String>,
-	#[serde(rename = "resources")]
-	pub resources: Box<crate::models::ActorResources>,
+	#[serde(rename = "resources", skip_serializing_if = "Option::is_none")]
+	pub resources: Option<Box<crate::models::ActorResources>>,
 	#[serde(rename = "runtime", skip_serializing_if = "Option::is_none")]
 	pub runtime: Option<Box<crate::models::ActorCreateActorRuntimeRequest>>,
 	#[serde(rename = "tags", deserialize_with = "Option::deserialize")]
@@ -34,17 +34,14 @@ pub struct ActorCreateActorRequest {
 }
 
 impl ActorCreateActorRequest {
-	pub fn new(
-		resources: crate::models::ActorResources,
-		tags: Option<serde_json::Value>,
-	) -> ActorCreateActorRequest {
+	pub fn new(tags: Option<serde_json::Value>) -> ActorCreateActorRequest {
 		ActorCreateActorRequest {
 			build: None,
 			build_tags: None,
 			lifecycle: None,
 			network: None,
 			region: None,
-			resources: Box::new(resources),
+			resources: None,
 			runtime: None,
 			tags,
 		}

@@ -103,17 +103,26 @@ pub async fn create(
 ) -> GlobalResult<models::ActorCreateActorResponse> {
 	let CheckOutput { game_id, env_id } = ctx.auth().check(ctx.op_ctx(), &query, true).await?;
 
-	let (clusters_res, game_configs_res, build_id) = tokio::try_join!(
+	let (clusters_res, game_configs_res, build_res) = tokio::try_join!(
 		ctx.op(cluster::ops::get_for_game::Input {
 			game_ids: vec![game_id],
 		}),
 		ctx.op(ds::ops::game_config::get::Input {
 			game_ids: vec![game_id],
 		}),
-		resolve_build_id(&ctx, env_id, body.build, body.build_tags.flatten()),
+		async {
+			let build_id =
+				resolve_build_id(&ctx, env_id, body.build, body.build_tags.flatten()).await?;
+
+			ctx.op(build::ops::get::Input {
+				build_ids: vec![build_id],
+			})
+			.await
+		},
 	)?;
 	let cluster_id = unwrap!(clusters_res.games.first()).cluster_id;
 	let game_config = unwrap!(game_configs_res.game_configs.first());
+	let build = unwrap!(build_res.builds.first());
 
 	let datacenter_id = resolve_dc_id(&ctx, cluster_id, body.region.clone()).await?;
 
@@ -122,6 +131,27 @@ pub async fn create(
 		API_BAD_BODY,
 		error = "`tags` must be `Map<String, String>`"
 	);
+
+	let resources = match build.kind {
+		build::types::BuildKind::DockerImage | build::types::BuildKind::OciBundle => {
+			let resources = unwrap_with!(
+				body.resources,
+				API_BAD_BODY,
+				error = "`resources` must be set for actors using Docker builds"
+			);
+
+			(*resources).api_into()
+		}
+		build::types::BuildKind::JavaScript => {
+			ensure_with!(
+				body.resources.is_none(),
+				API_BAD_BODY,
+				error = "actors using JavaScript builds cannot set `resources`"
+			);
+
+			ds::types::ServerResources::default_isolate()
+		}
+	};
 
 	tracing::info!(?tags, "creating server with tags");
 
@@ -146,14 +176,14 @@ pub async fn create(
 		cluster_id,
 		runtime: game_config.runtime,
 		tags,
-		resources: (*body.resources).api_into(),
+		resources,
 		lifecycle: body.lifecycle.map(|x| (*x).api_into()).unwrap_or_else(|| {
 			ds::types::ServerLifecycle {
 				kill_timeout_ms: 0,
 				durable: false,
 			}
 		}),
-		image_id: build_id,
+		image_id: build.build_id,
 		root_user_enabled: game_config.root_user_enabled,
 		// args: body.runtime.arguments.unwrap_or_default(),
 		args: Vec::new(),
@@ -327,10 +357,10 @@ pub async fn create_deprecated(
 						.collect(),
 				),
 			})),
-			resources: Box::new(models::ActorResources {
+			resources: Some(Box::new(models::ActorResources {
 				cpu: body.resources.cpu,
 				memory: body.resources.memory,
-			}),
+			})),
 			runtime: Some(Box::new(models::ActorCreateActorRuntimeRequest {
 				environment: body.runtime.environment,
 			})),

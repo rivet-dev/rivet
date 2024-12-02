@@ -939,7 +939,6 @@ components:
           $ref: '#/components/schemas/ActorLifecycle'
       required:
         - tags
-        - resources
     ActorCreateActorRuntimeRequest:
       type: object
       properties:

@@ -114,7 +114,7 @@ types:
       build_tags: optional<unknown>
       runtime: optional<CreateActorRuntimeRequest>
       network: optional<CreateActorNetworkRequest>
-      resources: commons.Resources
+      resources: optional<commons.Resources>
       lifecycle: optional<commons.Lifecycle>
 
   CreateActorRuntimeRequest:

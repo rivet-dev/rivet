@@ -109,7 +109,6 @@ components:
         tags: {}
       required:
       - tags
-      - resources
       type: object
     ActorCreateActorResponse:
       properties:
