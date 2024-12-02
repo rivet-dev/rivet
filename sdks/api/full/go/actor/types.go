@@ -102,16 +102,16 @@ func (b BuildKind) Ptr() *BuildKind {
 }
 
 type Actor struct {
-	Id          uuid.UUID   `json:"id"`
-	Region      string      `json:"region"`
-	Tags        interface{} `json:"tags,omitempty"`
-	Runtime     *Runtime    `json:"runtime,omitempty"`
-	Network     *Network    `json:"network,omitempty"`
-	Resources   *Resources  `json:"resources,omitempty"`
-	Lifecycle   *Lifecycle  `json:"lifecycle,omitempty"`
-	CreatedAt   int64       `json:"created_at"`
-	StartedAt   *int64      `json:"started_at,omitempty"`
-	DestroyedAt *int64      `json:"destroyed_at,omitempty"`
+	Id          uuid.UUID      `json:"id"`
+	Region      string         `json:"region"`
+	Tags        interface{}    `json:"tags,omitempty"`
+	Runtime     *Runtime       `json:"runtime,omitempty"`
+	Network     *Network       `json:"network,omitempty"`
+	Resources   *Resources     `json:"resources,omitempty"`
+	Lifecycle   *Lifecycle     `json:"lifecycle,omitempty"`
+	CreatedAt   sdk.Timestamp  `json:"created_at"`
+	StartedAt   *sdk.Timestamp `json:"started_at,omitempty"`
+	DestroyedAt *sdk.Timestamp `json:"destroyed_at,omitempty"`
 
 	_rawJSON json.RawMessage
 }

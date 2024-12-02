@@ -21,7 +21,7 @@ type GetActorLogsResponse struct {
 	// Sorted old to new.
 	Lines []string `json:"lines,omitempty"`
 	// Sorted old to new.
-	Timestamps []string           `json:"timestamps,omitempty"`
+	Timestamps []sdk.Timestamp    `json:"timestamps,omitempty"`
 	Watch      *sdk.WatchResponse `json:"watch,omitempty"`
 
 	_rawJSON json.RawMessage

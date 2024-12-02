@@ -127,12 +127,12 @@ pub fn convert_actor_to_api(
 	Ok(models::ActorActor {
 		id: value.server_id,
 		region: datacenter.name_id.clone(),
-		created_at: value.create_ts,
+		created_at: util::timestamp::to_string(value.create_ts)?,
 		// `started_at` -> `connectable_ts` is intentional. We don't expose the internal
 		// workings of DS to the API, so we need to return the timestamp at which the serer can
 		// actually do anything useful.
-		started_at: value.connectable_ts,
-		destroyed_at: value.destroy_ts,
+		started_at: value.connectable_ts.map(util::timestamp::to_string).transpose()?,
+		destroyed_at: value.destroy_ts.map(util::timestamp::to_string).transpose()?,
 		tags: Some(serde_json::to_value(value.tags)?),
 		runtime: Box::new(models::ActorRuntime {
 			build: value.image_id,

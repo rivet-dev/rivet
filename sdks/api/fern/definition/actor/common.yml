@@ -13,9 +13,9 @@ types:
       network: Network
       resources: Resources
       lifecycle: Lifecycle
-      created_at: long
-      started_at: optional<long>
-      destroyed_at: optional<long>
+      created_at: commons.Timestamp
+      started_at: optional<commons.Timestamp>
+      destroyed_at: optional<commons.Timestamp>
 
   Runtime:
     properties:

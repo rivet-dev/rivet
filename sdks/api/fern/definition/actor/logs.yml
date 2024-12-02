@@ -36,7 +36,7 @@ types:
         type: list<string>
       timestamps:
         docs: Sorted old to new.
-        type: list<string>
+        type: list<commons.Timestamp>
       watch: commons.WatchResponse
 
   LogStream:

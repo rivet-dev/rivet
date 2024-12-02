@@ -5,11 +5,9 @@ components:
     ActorActor:
       properties:
         created_at:
-          format: int64
-          type: integer
+          $ref: '#/components/schemas/Timestamp'
         destroyed_at:
-          format: int64
-          type: integer
+          $ref: '#/components/schemas/Timestamp'
         id:
           format: uuid
           type: string
@@ -24,8 +22,7 @@ components:
         runtime:
           $ref: '#/components/schemas/ActorRuntime'
         started_at:
-          format: int64
-          type: integer
+          $ref: '#/components/schemas/Timestamp'
         tags: {}
       required:
       - id
@@ -142,7 +139,7 @@ components:
         timestamps:
           description: Sorted old to new.
           items:
-            type: string
+            $ref: '#/components/schemas/Timestamp'
           type: array
         watch:
           $ref: '#/components/schemas/WatchResponse'

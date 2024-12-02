@@ -1106,14 +1106,11 @@ components:
         lifecycle:
           $ref: '#/components/schemas/ActorLifecycle'
         created_at:
-          type: integer
-          format: int64
+          $ref: '#/components/schemas/Timestamp'
         started_at:
-          type: integer
-          format: int64
+          $ref: '#/components/schemas/Timestamp'
         destroyed_at:
-          type: integer
-          format: int64
+          $ref: '#/components/schemas/Timestamp'
       required:
         - id
         - region
@@ -1292,7 +1289,7 @@ components:
         timestamps:
           type: array
           items:
-            type: string
+            $ref: '#/components/schemas/Timestamp'
           description: Sorted old to new.
         watch:
           $ref: '#/components/schemas/WatchResponse'
