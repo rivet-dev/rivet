@@ -363,8 +363,6 @@ pub async fn destroy(
 	let CheckOutput { game_id, env_id } =
 		ctx.auth().check(ctx.op_ctx(), &query.global, true).await?;
 
-	assert::server_for_env(&ctx, actor_id, game_id, env_id).await?;
-
 	ensure_with!(
 		query.override_kill_timeout.unwrap_or(0) >= 0,
 		API_BAD_QUERY_PARAMETER,
@@ -381,6 +379,14 @@ pub async fn destroy(
 	let mut sub = ctx
 		.subscribe::<ds::workflows::server::DestroyStarted>(("server_id", actor_id))
 		.await?;
+
+	// Get server after sub is created
+	let server = assert::server_for_env(&ctx, actor_id, game_id, env_id).await?;
+
+	// Already destroyed
+	if server.destroy_ts.is_some() {
+		return Ok(json!({}));
+	}
 
 	ctx.signal(ds::workflows::server::Destroy {
 		override_kill_timeout_ms: query.override_kill_timeout,
