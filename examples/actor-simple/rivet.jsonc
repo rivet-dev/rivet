@@ -1,0 +1,12 @@
+{
+	"builds": [
+		{
+			"tags": { "name": "counter" },
+			"runtime": "javascript",
+			"script": "counter.ts",
+			"unstable": {
+				"minify": false
+			}
+		}
+	]
+}

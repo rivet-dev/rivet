@@ -1,0 +1,7 @@
+{
+	"imports": {
+		"hono": "jsr:@hono/hono@^4.6.12",
+		"@rivet-gg/api": "npm:@rivet-gg/api@0.0.1-rc.1",
+		"@std/assert": "jsr:@std/assert@^1.0.8"
+	}
+}

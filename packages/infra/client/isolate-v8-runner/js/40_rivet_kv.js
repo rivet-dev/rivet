@@ -2,6 +2,26 @@
 //
 // Generated with scripts/pegboard/compile_bridge.ts
 
+// DO NOT MODIFY
+//
+// Generated with scripts/pegboard/compile_bridge.ts
+
+// DO NOT MODIFY
+//
+// Generated with scripts/pegboard/compile_bridge.ts
+
+// DO NOT MODIFY
+//
+// Generated with scripts/pegboard/compile_bridge.ts
+
+// DO NOT MODIFY
+//
+// Generated with scripts/pegboard/compile_bridge.ts
+
+// DO NOT MODIFY
+//
+// Generated with scripts/pegboard/compile_bridge.ts
+
 import { op_rivet_kv_delete, op_rivet_kv_delete_all, op_rivet_kv_delete_batch, op_rivet_kv_get, op_rivet_kv_get_batch, op_rivet_kv_list, op_rivet_kv_put, op_rivet_kv_put_batch, } from "ext:core/ops";
 import { core } from "ext:core/mod.js";
 /**

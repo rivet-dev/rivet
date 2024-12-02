@@ -1,7 +1,7 @@
 use anyhow::*;
 use futures_util::{StreamExt, TryStreamExt};
 use rivet_api::{apis, models};
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc, collections::HashMap};
 use tokio::fs;
 use uuid::Uuid;
 
@@ -17,6 +17,7 @@ const BUILD_INDEX_NAME: &str = "index.js";
 
 pub struct BuildAndUploadOpts {
 	pub env: TEMPEnvironment,
+	pub tags: HashMap<String, String>,
 	pub build_config: config::build::javascript::Build,
 	pub version_name: String,
 }
@@ -27,6 +28,8 @@ pub async fn build_and_upload(
 	task: task::TaskCtx,
 	opts: BuildAndUploadOpts,
 ) -> Result<Uuid> {
+	task.log(format!("[Building] {}", kv_str::to_str(&opts.tags)?));
+
 	let project_root = paths::project_root()?;
 
 	// Create dir to write build artifacts to

@@ -1,6 +1,6 @@
 {
   "name": "@rivet-gg/api",
-  "version": "24.1.0",
+  "version": "0.0.1-rc.1",
   "private": false,
   "repository": "https://github.com/rivet-gg/rivet/tree/main/sdks/typescript",
   "files": [
@@ -41,20 +41,22 @@
     "prepack": "yarn run build"
   },
   "dependencies": {
+    "@types/readable-stream": "^4.0.18",
     "form-data": "^4.0.0",
     "js-base64": "^3.7.5",
     "node-fetch": "2",
     "qs": "^6.11.2",
+    "readable-stream": "^4.5.2",
     "url-join": "^5.0.0"
   },
   "devDependencies": {
     "@types/node": "17.0.33",
+    "@types/node-fetch": "2.6.11",
     "@types/qs": "6.9.8",
     "@types/url-join": "4.0.1",
     "esbuild": "^0.19.11",
     "prettier": "2.7.1",
-    "typescript": "4.6.4",
-    "@types/node-fetch": "2.6.11"
+    "typescript": "4.6.4"
   },
   "packageManager": "yarn@1.22.22+sha1.ac34549e6aa8e7ead463a7407e1c7390f61a6610"
 }

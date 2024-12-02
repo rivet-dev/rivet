@@ -1,0 +1,18 @@
+{
+	"tasks": {
+		"check": "deno check --all runtime/**/*.ts client/**/*.ts manager/**/*.ts"
+	},
+	"workspace": [
+		"./bridge",
+		"./client",
+		"./common",
+		"./core",
+		"./manager",
+		"./manager-protocol",
+		"./protocol",
+		"./runtime"
+	],
+	"fmt": {
+		"useTabs": true
+	}
+}

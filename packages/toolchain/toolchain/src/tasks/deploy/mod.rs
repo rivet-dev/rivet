@@ -13,6 +13,7 @@ use crate::{
 
 mod docker;
 mod js;
+mod manager;
 
 #[derive(Deserialize)]
 pub struct Input {
@@ -50,6 +51,23 @@ impl task::Task for Task {
 			.await?;
 		let version_name = reserve_res.version_display_name;
 
+		// Manager
+		let manager_res = if input.config.unstable().manager.enable() {
+			Some(
+				manager::deploy(
+					&ctx,
+					task.clone(),
+					manager::DeployOpts {
+						env: env.clone(),
+						version_name: version_name.clone(),
+					},
+				)
+				.await?,
+			)
+		} else {
+			None
+		};
+
 		// Build
 		let mut build_ids = Vec::new();
 		for build in &input.config.builds {
@@ -59,8 +77,6 @@ impl task::Task for Task {
 					continue;
 				}
 			}
-
-			task.log(format!("[Building] {}", kv_str::to_str(&build.tags)?));
 
 			// Build
 			let build_id = build_and_upload(
@@ -78,6 +94,19 @@ impl task::Task for Task {
 		ensure!(!build_ids.is_empty(), "No builds matched build tags");
 
 		task.log("[Deploy Finished]");
+
+		if let Some(manager_res) = &manager_res {
+			task.log("");
+			task.log(format!("Manager endpoint: {}", manager_res.endpoint));
+			task.log("");
+			task.log("Exapmle code:");
+			task.log("");
+			task.log(r#"  import ActorClient from "@rivet-gg/actors-client";"#);
+			task.log(format!(
+				r#"  const actorClient = new ActorClient("{}");"#,
+				manager_res.endpoint
+			));
+		}
 
 		Ok(Output { build_ids })
 	}
@@ -125,6 +154,7 @@ async fn build_and_upload(
 				docker::BuildAndUploadOpts {
 					env: env.clone(),
 					config: config.clone(),
+					tags: build.tags.clone(),
 					build_config: docker.clone(),
 					version_name: version_name.to_string(),
 				},
@@ -137,6 +167,7 @@ async fn build_and_upload(
 				task.clone(),
 				js::BuildAndUploadOpts {
 					env: env.clone(),
+					tags: build.tags.clone(),
 					build_config: js.clone(),
 					version_name: version_name.to_string(),
 				},

@@ -1,0 +1,14 @@
+{
+	"imports": {
+		"@core/asyncutil": "jsr:@core/asyncutil@^1.2.0",
+		"@rivet-gg/api": "npm:@rivet-gg/api@0.0.1-rc.1",
+		"@std/assert": "jsr:@std/assert@^1.0.8",
+		"@std/async": "jsr:@std/async@^1.0.9",
+		"hono": "jsr:@hono/hono@^4.6.12",
+		"@rivet-gg/actors-core": "jsr:@rivet-gg/actors-core@0.0.1-rc.5",
+		"on-change": "npm:on-change@^5.0.1"
+	},
+	"fmt": {
+		"useTabs": true
+	}
+}

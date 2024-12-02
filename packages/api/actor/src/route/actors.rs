@@ -838,7 +838,7 @@ async fn resolve_build_id(
 		_ => {
 			bail_with!(
 				API_BAD_BODY,
-				error = "must have either `build` or `buildTags`"
+				error = "must have either `build` or `build_tags`"
 			);
 		}
 	}

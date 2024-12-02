@@ -2,6 +2,26 @@
 //
 // Generated with scripts/pegboard/compile_bridge.ts
 
+// DO NOT MODIFY
+//
+// Generated with scripts/pegboard/compile_bridge.ts
+
+// DO NOT MODIFY
+//
+// Generated with scripts/pegboard/compile_bridge.ts
+
+// DO NOT MODIFY
+//
+// Generated with scripts/pegboard/compile_bridge.ts
+
+// DO NOT MODIFY
+//
+// Generated with scripts/pegboard/compile_bridge.ts
+
+// DO NOT MODIFY
+//
+// Generated with scripts/pegboard/compile_bridge.ts
+
 import { KV_NAMESPACE } from "ext:rivet_kv/40_rivet_kv.js";
 import { env } from "ext:runtime/30_os.js";
 function parseMetadata() {

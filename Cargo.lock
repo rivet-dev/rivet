@@ -8494,6 +8494,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "rivet-actors-sdk-embed"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "deno-embed",
+ "fs_extra",
+ "include_dir",
+ "merkle_hash",
+ "sha2 0.10.8",
+ "tempfile",
+ "tokio",
+ "walkdir",
+]
+
+[[package]]
 name = "rivet-api"
 version = "0.0.1"
 dependencies = [
@@ -9183,6 +9198,7 @@ dependencies = [
  "futures-util",
  "humansize",
  "ignore",
+ "include_dir",
  "indicatif",
  "jsonc-parser",
  "kv-str",
@@ -9192,6 +9208,7 @@ dependencies = [
  "pkg-version",
  "regex",
  "reqwest 0.11.27",
+ "rivet-actors-sdk-embed",
  "rivet-api",
  "rivet-js-utils-embed",
  "serde",

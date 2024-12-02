@@ -1,6 +1,7 @@
 use anyhow::*;
 use std::path::Path;
 use uuid::Uuid;
+use std::collections::HashMap;
 
 use crate::{
 	config, paths,
@@ -16,6 +17,7 @@ use crate::{
 pub struct BuildAndUploadOpts {
 	pub env: TEMPEnvironment,
 	pub config: config::Config,
+	pub tags: HashMap<String, String>,
 	pub build_config: config::build::docker::Build,
 	pub version_name: String,
 }
@@ -26,6 +28,8 @@ pub async fn build_and_upload(
 	task: task::TaskCtx,
 	opts: BuildAndUploadOpts,
 ) -> Result<Uuid> {
+	task.log(format!("[Building] {}", kv_str::to_str(&opts.tags)?));
+
 	let project_root = paths::project_root()?;
 
 	// Determine build attributes
