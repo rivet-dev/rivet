@@ -696,7 +696,7 @@ impl Actor {
 			// Add port env vars and api endpoint
 			.chain(ports.iter().map(|(label, port)| {
 				(
-					format!("PORT_{}", label.replace('-', "_")),
+					format!("PORT_{}", label.to_uppercase().replace('-', "_")),
 					port.target.to_string(),
 				)
 			}))

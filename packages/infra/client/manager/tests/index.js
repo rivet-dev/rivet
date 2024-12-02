@@ -11,7 +11,7 @@ console.log(Rivet.metadata);
 
 let server = Deno.serve({
 	handler,
-	port: parseInt(Deno.env.get("PORT_main")),
+	port: parseInt(Deno.env.get("PORT_MAIN")),
 });
 
 await server.finished;

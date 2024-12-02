@@ -2,7 +2,7 @@ console.log(Deno.env.toObject());
 
 let server = Deno.serve({
 	handler,
-	port: parseInt(Deno.env.get("PORT_ds_http") ?? Deno.env.get("HTTP_PORT")),
+	port: parseInt(Deno.env.get("PORT_DS_HTTP") ?? Deno.env.get("HTTP_PORT")),
 	hostname: "0.0.0.0",
 });
 
