@@ -1,5 +1,7 @@
 console.log(Deno.env.toObject());
 
+console.log(Rivet.metadata);
+
 // let worker = new Worker(
 // 	new URL("./worker.ts", import.meta.url).href,
 // 	{

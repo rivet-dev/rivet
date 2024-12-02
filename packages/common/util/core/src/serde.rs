@@ -229,17 +229,13 @@ impl<T> Raw<T> {
 			inner: serde_json::value::RawValue::from_string(s)?,
 		})
 	}
-
-	pub fn as_bytes(&self) -> &[u8] {
-		self.inner.get().as_bytes()
-	}
 }
 
 impl<T: Serialize> Raw<T> {
 	pub fn new(t: &T) -> Result<Self, serde_json::Error> {
 		Ok(Raw {
 			_marker: PhantomData,
-			inner: serde_json::value::RawValue::from_string(serde_json::to_string(&t)?)?,
+			inner: serde_json::value::to_raw_value(t)?,
 		})
 	}
 }

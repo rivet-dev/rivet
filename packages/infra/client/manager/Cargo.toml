@@ -61,3 +61,4 @@ features = [
 
 [dev-dependencies]
 portpicker = "0.1"
+rivet-util = { path = "../../../common/util/core", default-features = false }

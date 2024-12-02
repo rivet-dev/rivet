@@ -92,6 +92,7 @@ pub struct ActorConfig {
 	pub ports: ::util::serde::HashableMap<String, Port>,
 	pub network_mode: NetworkMode,
 	pub owner: ActorOwner,
+	pub metadata: Raw<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash)]

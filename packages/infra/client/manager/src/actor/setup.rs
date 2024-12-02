@@ -315,7 +315,7 @@ impl Actor {
 			.env
 			.into_iter()
 			.chain(
-				build_default_env(ctx, &self.config.env, &ports)
+				self.build_default_env(ctx, &ports)
 					.into_iter()
 					.map(|(k, v)| format!("{k}={v}")),
 			)
@@ -391,7 +391,7 @@ impl Actor {
 					protocol: port.protocol,
 				})
 				.collect::<Vec<_>>(),
-			env: build_default_env(ctx, &self.config.env, &ports),
+			env: self.build_default_env(ctx, &ports),
 			owner: self.config.owner.clone(),
 			vector_socket_addr: ctx.config().vector.clone().map(|x| x.address),
 		};
@@ -683,6 +683,35 @@ impl Actor {
 			Path::new("/var/run/netns").join(self.actor_id.to_string())
 		}
 	}
+
+	fn build_default_env(
+		&self,
+		ctx: &Ctx,
+		ports: &protocol::HashableMap<String, protocol::ProxiedPort>,
+	) -> HashMap<String, String> {
+		self.config
+			.env
+			.iter()
+			.map(|(k, v)| (k.clone(), v.clone()))
+			// Add port env vars and api endpoint
+			.chain(ports.iter().map(|(label, port)| {
+				(
+					format!("PORT_{}", label.replace('-', "_")),
+					port.target.to_string(),
+				)
+			}))
+			.chain([
+				(
+					"RIVET_API_ENDPOINT".to_string(),
+					ctx.config().cluster.api_endpoint.to_string(),
+				),
+				(
+					"RIVET_METADATA".to_string(),
+					self.config.metadata.get().to_string(),
+				),
+			])
+			.collect()
+	}
 }
 
 async fn bind_ports_inner(
@@ -789,26 +818,4 @@ async fn bind_ports_inner(
 	}
 
 	Ok(rows)
-}
-
-fn build_default_env(
-	ctx: &Ctx,
-	base_env: &protocol::HashableMap<String, String>,
-	ports: &protocol::HashableMap<String, protocol::ProxiedPort>,
-) -> HashMap<String, String> {
-	base_env
-		.iter()
-		.map(|(k, v)| (k.clone(), v.clone()))
-		// Add port env vars and api endpoint
-		.chain(ports.iter().map(|(label, port)| {
-			(
-				format!("PORT_{}", label.replace('-', "_")),
-				port.target.to_string(),
-			)
-		}))
-		.chain(std::iter::once((
-			"RIVET_API_ENDPOINT".to_string(),
-			ctx.config().cluster.api_endpoint.to_string(),
-		)))
-		.collect::<HashMap<_, _>>()
 }

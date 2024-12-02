@@ -18,6 +18,7 @@ use hyper::{
 use pegboard::protocol;
 use pegboard_config::*;
 use pegboard_manager::{system_info, utils, Ctx};
+use serde_json::json;
 use tokio::{
 	fs::File,
 	io::BufReader,
@@ -102,6 +103,28 @@ pub async fn start_echo_actor(
 			owner: protocol::ActorOwner::DynamicServer {
 				server_id: actor_id,
 			},
+			metadata: protocol::Raw::new(&json!({
+				"actor": {
+					"id": actor_id,
+					"tags": {
+						"foo": "bar",
+					},
+					"created_at": rivet_util::timestamp::to_string(rivet_util::timestamp::now()).unwrap(),
+				},
+				"env": {
+					"id": Uuid::nil(),
+				},
+				"cluster": {
+					"id": Uuid::nil()
+				},
+				"region": {
+					"name": "local",
+				},
+				"build": {
+					"id": Uuid::nil(),
+				},
+			}))
+			.unwrap(),
 		}),
 	};
 
@@ -143,6 +166,28 @@ pub async fn start_js_echo_actor(
 			owner: protocol::ActorOwner::DynamicServer {
 				server_id: actor_id,
 			},
+			metadata: protocol::Raw::new(&json!({
+				"actor": {
+					"id": actor_id,
+					"tags": {
+						"foo": "bar",
+					},
+					"created_at": rivet_util::timestamp::to_string(rivet_util::timestamp::now()).unwrap(),
+				},
+				"env": {
+					"id": Uuid::nil(),
+				},
+				"cluster": {
+					"id": Uuid::nil()
+				},
+				"region": {
+					"name": "local",
+				},
+				"build": {
+					"id": Uuid::nil(),
+				},
+			}))
+			.unwrap(),
 		}),
 	};
 
@@ -210,6 +255,7 @@ pub async fn init_client(gen_path: &Path, working_path: &Path) -> Config {
 				// Not necessary for the test
 				flavor: protocol::ClientFlavor::Container,
 				port: None,
+				use_mounts: Some(false),
 				container_runner_binary_path: Some(container_runner_binary_path),
 				isolate_runner_binary_path: Some(isolate_runner_binary_path),
 			},

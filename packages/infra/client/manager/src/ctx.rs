@@ -341,7 +341,7 @@ impl Ctx {
 				))
 				.bind(command.index)
 				// `Raw` is encodable on its own but we need it to be written as a BLOB and not TEXT
-				.bind(command.inner.as_bytes())
+				.bind(command.inner.get().as_bytes())
 				.bind(utils::now())
 				.execute(&mut *self.sql().await?)
 				.await
