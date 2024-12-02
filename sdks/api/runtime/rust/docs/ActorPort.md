@@ -4,8 +4,8 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**internal_port** | Option<**i32**> |  | [optional]
 **protocol** | [**crate::models::ActorPortProtocol**](ActorPortProtocol.md) |  | 
+**internal_port** | Option<**i32**> |  | [optional]
 **public_hostname** | Option<**String**> |  | [optional]
 **public_port** | Option<**i32**> |  | [optional]
 **routing** | [**crate::models::ActorPortRouting**](ActorPortRouting.md) |  | 

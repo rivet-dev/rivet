@@ -12,19 +12,19 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct GroupBannedIdentity {
+	#[serde(rename = "identity")]
+	pub identity: Box<crate::models::IdentityHandle>,
 	/// RFC3339 timestamp
 	#[serde(rename = "ban_ts")]
 	pub ban_ts: String,
-	#[serde(rename = "identity")]
-	pub identity: Box<crate::models::IdentityHandle>,
 }
 
 impl GroupBannedIdentity {
 	/// A banned identity.
-	pub fn new(ban_ts: String, identity: crate::models::IdentityHandle) -> GroupBannedIdentity {
+	pub fn new(identity: crate::models::IdentityHandle, ban_ts: String) -> GroupBannedIdentity {
 		GroupBannedIdentity {
-			ban_ts,
 			identity: Box::new(identity),
+			ban_ts,
 		}
 	}
 }

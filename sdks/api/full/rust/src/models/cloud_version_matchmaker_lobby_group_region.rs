@@ -12,13 +12,13 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudVersionMatchmakerLobbyGroupRegion {
-	#[serde(rename = "idle_lobbies", skip_serializing_if = "Option::is_none")]
-	pub idle_lobbies: Option<Box<crate::models::CloudVersionMatchmakerLobbyGroupIdleLobbiesConfig>>,
 	#[serde(rename = "region_id")]
 	pub region_id: uuid::Uuid,
 	/// A human readable short identifier used to references resources. Different than a `rivet.common#Uuid` because this is intended to be human readable. Different than `rivet.common#DisplayName` because this should not include special characters and be short.
 	#[serde(rename = "tier_name_id")]
 	pub tier_name_id: String,
+	#[serde(rename = "idle_lobbies", skip_serializing_if = "Option::is_none")]
+	pub idle_lobbies: Option<Box<crate::models::CloudVersionMatchmakerLobbyGroupIdleLobbiesConfig>>,
 }
 
 impl CloudVersionMatchmakerLobbyGroupRegion {
@@ -28,9 +28,9 @@ impl CloudVersionMatchmakerLobbyGroupRegion {
 		tier_name_id: String,
 	) -> CloudVersionMatchmakerLobbyGroupRegion {
 		CloudVersionMatchmakerLobbyGroupRegion {
-			idle_lobbies: None,
 			region_id,
 			tier_name_id,
+			idle_lobbies: None,
 		}
 	}
 }

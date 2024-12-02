@@ -12,36 +12,36 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudNamespaceSummary {
+	#[serde(rename = "namespace_id")]
+	pub namespace_id: uuid::Uuid,
 	/// RFC3339 timestamp
 	#[serde(rename = "create_ts")]
 	pub create_ts: String,
 	/// Represent a resource's readable display name.
 	#[serde(rename = "display_name")]
 	pub display_name: String,
+	#[serde(rename = "version_id")]
+	pub version_id: uuid::Uuid,
 	/// A human readable short identifier used to references resources. Different than a `rivet.common#Uuid` because this is intended to be human readable. Different than `rivet.common#DisplayName` because this should not include special characters and be short.
 	#[serde(rename = "name_id")]
 	pub name_id: String,
-	#[serde(rename = "namespace_id")]
-	pub namespace_id: uuid::Uuid,
-	#[serde(rename = "version_id")]
-	pub version_id: uuid::Uuid,
 }
 
 impl CloudNamespaceSummary {
 	/// A namespace summary.
 	pub fn new(
+		namespace_id: uuid::Uuid,
 		create_ts: String,
 		display_name: String,
-		name_id: String,
-		namespace_id: uuid::Uuid,
 		version_id: uuid::Uuid,
+		name_id: String,
 	) -> CloudNamespaceSummary {
 		CloudNamespaceSummary {
+			namespace_id,
 			create_ts,
 			display_name,
-			name_id,
-			namespace_id,
 			version_id,
+			name_id,
 		}
 	}
 }

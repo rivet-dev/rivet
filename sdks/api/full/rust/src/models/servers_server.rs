@@ -10,54 +10,54 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct ServersServer {
-	#[serde(rename = "created_at")]
-	pub created_at: i64,
-	#[serde(rename = "datacenter")]
-	pub datacenter: uuid::Uuid,
-	#[serde(rename = "destroyed_at", skip_serializing_if = "Option::is_none")]
-	pub destroyed_at: Option<i64>,
-	#[serde(rename = "environment")]
-	pub environment: uuid::Uuid,
 	#[serde(rename = "id")]
 	pub id: uuid::Uuid,
-	#[serde(rename = "lifecycle")]
-	pub lifecycle: Box<crate::models::ServersLifecycle>,
+	#[serde(rename = "environment")]
+	pub environment: uuid::Uuid,
+	#[serde(rename = "datacenter")]
+	pub datacenter: uuid::Uuid,
+	#[serde(rename = "tags", deserialize_with = "Option::deserialize")]
+	pub tags: Option<serde_json::Value>,
+	#[serde(rename = "runtime")]
+	pub runtime: Box<crate::models::ServersRuntime>,
 	#[serde(rename = "network")]
 	pub network: Box<crate::models::ServersNetwork>,
 	#[serde(rename = "resources")]
 	pub resources: Box<crate::models::ServersResources>,
-	#[serde(rename = "runtime")]
-	pub runtime: Box<crate::models::ServersRuntime>,
+	#[serde(rename = "lifecycle")]
+	pub lifecycle: Box<crate::models::ServersLifecycle>,
+	#[serde(rename = "created_at")]
+	pub created_at: i64,
 	#[serde(rename = "started_at", skip_serializing_if = "Option::is_none")]
 	pub started_at: Option<i64>,
-	#[serde(rename = "tags", deserialize_with = "Option::deserialize")]
-	pub tags: Option<serde_json::Value>,
+	#[serde(rename = "destroyed_at", skip_serializing_if = "Option::is_none")]
+	pub destroyed_at: Option<i64>,
 }
 
 impl ServersServer {
 	pub fn new(
-		created_at: i64,
-		datacenter: uuid::Uuid,
-		environment: uuid::Uuid,
 		id: uuid::Uuid,
-		lifecycle: crate::models::ServersLifecycle,
+		environment: uuid::Uuid,
+		datacenter: uuid::Uuid,
+		tags: Option<serde_json::Value>,
+		runtime: crate::models::ServersRuntime,
 		network: crate::models::ServersNetwork,
 		resources: crate::models::ServersResources,
-		runtime: crate::models::ServersRuntime,
-		tags: Option<serde_json::Value>,
+		lifecycle: crate::models::ServersLifecycle,
+		created_at: i64,
 	) -> ServersServer {
 		ServersServer {
-			created_at,
-			datacenter,
-			destroyed_at: None,
-			environment,
 			id,
-			lifecycle: Box::new(lifecycle),
+			environment,
+			datacenter,
+			tags,
+			runtime: Box::new(runtime),
 			network: Box::new(network),
 			resources: Box::new(resources),
-			runtime: Box::new(runtime),
+			lifecycle: Box::new(lifecycle),
+			created_at,
 			started_at: None,
-			tags,
+			destroyed_at: None,
 		}
 	}
 }

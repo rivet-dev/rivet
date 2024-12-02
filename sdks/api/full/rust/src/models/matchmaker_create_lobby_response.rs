@@ -12,22 +12,22 @@
 pub struct MatchmakerCreateLobbyResponse {
 	#[serde(rename = "lobby")]
 	pub lobby: Box<crate::models::MatchmakerJoinLobby>,
-	#[serde(rename = "player")]
-	pub player: Box<crate::models::MatchmakerJoinPlayer>,
 	#[serde(rename = "ports")]
 	pub ports: ::std::collections::HashMap<String, crate::models::MatchmakerJoinPort>,
+	#[serde(rename = "player")]
+	pub player: Box<crate::models::MatchmakerJoinPlayer>,
 }
 
 impl MatchmakerCreateLobbyResponse {
 	pub fn new(
 		lobby: crate::models::MatchmakerJoinLobby,
-		player: crate::models::MatchmakerJoinPlayer,
 		ports: ::std::collections::HashMap<String, crate::models::MatchmakerJoinPort>,
+		player: crate::models::MatchmakerJoinPlayer,
 	) -> MatchmakerCreateLobbyResponse {
 		MatchmakerCreateLobbyResponse {
 			lobby: Box::new(lobby),
-			player: Box::new(player),
 			ports,
+			player: Box::new(player),
 		}
 	}
 }

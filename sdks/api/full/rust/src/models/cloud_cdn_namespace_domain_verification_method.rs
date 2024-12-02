@@ -12,18 +12,18 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudCdnNamespaceDomainVerificationMethod {
-	#[serde(rename = "http", skip_serializing_if = "Option::is_none")]
-	pub http: Option<Box<crate::models::CloudCdnNamespaceDomainVerificationMethodHttp>>,
 	#[serde(rename = "invalid", skip_serializing_if = "Option::is_none")]
 	pub invalid: Option<serde_json::Value>,
+	#[serde(rename = "http", skip_serializing_if = "Option::is_none")]
+	pub http: Option<Box<crate::models::CloudCdnNamespaceDomainVerificationMethodHttp>>,
 }
 
 impl CloudCdnNamespaceDomainVerificationMethod {
 	/// A union representing the verification method used for this CDN domain.
 	pub fn new() -> CloudCdnNamespaceDomainVerificationMethod {
 		CloudCdnNamespaceDomainVerificationMethod {
-			http: None,
 			invalid: None,
+			http: None,
 		}
 	}
 }

@@ -12,27 +12,27 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudGameLobbyExpenses {
-	/// A list of multiple region tier expenses.
-	#[serde(rename = "expenses")]
-	pub expenses: Vec<crate::models::CloudRegionTierExpenses>,
 	#[serde(rename = "game")]
 	pub game: Box<crate::models::GameHandle>,
 	/// A list of namespace summaries.
 	#[serde(rename = "namespaces")]
 	pub namespaces: Vec<crate::models::CloudNamespaceSummary>,
+	/// A list of multiple region tier expenses.
+	#[serde(rename = "expenses")]
+	pub expenses: Vec<crate::models::CloudRegionTierExpenses>,
 }
 
 impl CloudGameLobbyExpenses {
 	/// Game lobby expenses.
 	pub fn new(
-		expenses: Vec<crate::models::CloudRegionTierExpenses>,
 		game: crate::models::GameHandle,
 		namespaces: Vec<crate::models::CloudNamespaceSummary>,
+		expenses: Vec<crate::models::CloudRegionTierExpenses>,
 	) -> CloudGameLobbyExpenses {
 		CloudGameLobbyExpenses {
-			expenses,
 			game: Box::new(game),
 			namespaces,
+			expenses,
 		}
 	}
 }

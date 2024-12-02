@@ -10,23 +10,23 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudGamesPrepareCustomAvatarUploadRequest {
-	/// Unsigned 64 bit integer.
-	#[serde(rename = "content_length")]
-	pub content_length: i64,
-	/// The MIME type of the custom avatar.
-	#[serde(rename = "mime", skip_serializing_if = "Option::is_none")]
-	pub mime: Option<String>,
 	/// The path/filename of the custom avatar.
 	#[serde(rename = "path")]
 	pub path: String,
+	/// The MIME type of the custom avatar.
+	#[serde(rename = "mime", skip_serializing_if = "Option::is_none")]
+	pub mime: Option<String>,
+	/// Unsigned 64 bit integer.
+	#[serde(rename = "content_length")]
+	pub content_length: i64,
 }
 
 impl CloudGamesPrepareCustomAvatarUploadRequest {
-	pub fn new(content_length: i64, path: String) -> CloudGamesPrepareCustomAvatarUploadRequest {
+	pub fn new(path: String, content_length: i64) -> CloudGamesPrepareCustomAvatarUploadRequest {
 		CloudGamesPrepareCustomAvatarUploadRequest {
-			content_length,
-			mime: None,
 			path,
+			mime: None,
+			content_length,
 		}
 	}
 }

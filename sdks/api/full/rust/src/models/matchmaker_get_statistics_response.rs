@@ -10,24 +10,24 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct MatchmakerGetStatisticsResponse {
+	#[serde(rename = "player_count")]
+	pub player_count: i64,
 	#[serde(rename = "game_modes")]
 	pub game_modes:
 		::std::collections::HashMap<String, crate::models::MatchmakerGameModeStatistics>,
-	#[serde(rename = "player_count")]
-	pub player_count: i64,
 }
 
 impl MatchmakerGetStatisticsResponse {
 	pub fn new(
+		player_count: i64,
 		game_modes: ::std::collections::HashMap<
 			String,
 			crate::models::MatchmakerGameModeStatistics,
 		>,
-		player_count: i64,
 	) -> MatchmakerGetStatisticsResponse {
 		MatchmakerGetStatisticsResponse {
-			game_modes,
 			player_count,
+			game_modes,
 		}
 	}
 }

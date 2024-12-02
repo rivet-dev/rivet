@@ -12,21 +12,21 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudVersionMatchmakerLobbyGroup {
-	/// Unsigned 32 bit integer.
-	#[serde(rename = "max_players_direct")]
-	pub max_players_direct: i32,
-	/// Unsigned 32 bit integer.
-	#[serde(rename = "max_players_normal")]
-	pub max_players_normal: i32,
-	/// Unsigned 32 bit integer.
-	#[serde(rename = "max_players_party")]
-	pub max_players_party: i32,
 	/// **Deprecated: use GameMode instead** A human readable short identifier used to references resources. Different than a `rivet.common#Uuid` because this is intended to be human readable. Different than `rivet.common#DisplayName` because this should not include special characters and be short.
 	#[serde(rename = "name_id")]
 	pub name_id: String,
 	/// A list of game mode regions.
 	#[serde(rename = "regions")]
 	pub regions: Vec<crate::models::CloudVersionMatchmakerLobbyGroupRegion>,
+	/// Unsigned 32 bit integer.
+	#[serde(rename = "max_players_normal")]
+	pub max_players_normal: i32,
+	/// Unsigned 32 bit integer.
+	#[serde(rename = "max_players_direct")]
+	pub max_players_direct: i32,
+	/// Unsigned 32 bit integer.
+	#[serde(rename = "max_players_party")]
+	pub max_players_party: i32,
 	#[serde(rename = "runtime")]
 	pub runtime: Box<crate::models::CloudVersionMatchmakerLobbyGroupRuntime>,
 }
@@ -34,19 +34,19 @@ pub struct CloudVersionMatchmakerLobbyGroup {
 impl CloudVersionMatchmakerLobbyGroup {
 	/// A game mode.
 	pub fn new(
-		max_players_direct: i32,
-		max_players_normal: i32,
-		max_players_party: i32,
 		name_id: String,
 		regions: Vec<crate::models::CloudVersionMatchmakerLobbyGroupRegion>,
+		max_players_normal: i32,
+		max_players_direct: i32,
+		max_players_party: i32,
 		runtime: crate::models::CloudVersionMatchmakerLobbyGroupRuntime,
 	) -> CloudVersionMatchmakerLobbyGroup {
 		CloudVersionMatchmakerLobbyGroup {
-			max_players_direct,
-			max_players_normal,
-			max_players_party,
 			name_id,
 			regions,
+			max_players_normal,
+			max_players_direct,
+			max_players_party,
 			runtime: Box::new(runtime),
 		}
 	}

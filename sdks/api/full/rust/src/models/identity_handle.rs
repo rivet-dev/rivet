@@ -12,40 +12,40 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct IdentityHandle {
+	#[serde(rename = "identity_id")]
+	pub identity_id: uuid::Uuid,
+	/// Represent a resource's readable display name.
+	#[serde(rename = "display_name")]
+	pub display_name: String,
 	#[serde(rename = "account_number")]
 	pub account_number: i32,
 	/// The URL of this identity's avatar image.
 	#[serde(rename = "avatar_url")]
 	pub avatar_url: String,
-	/// Represent a resource's readable display name.
-	#[serde(rename = "display_name")]
-	pub display_name: String,
-	#[serde(rename = "external")]
-	pub external: Box<crate::models::IdentityExternalLinks>,
-	#[serde(rename = "identity_id")]
-	pub identity_id: uuid::Uuid,
 	/// Whether or not this identity is registered with a linked account.
 	#[serde(rename = "is_registered")]
 	pub is_registered: bool,
+	#[serde(rename = "external")]
+	pub external: Box<crate::models::IdentityExternalLinks>,
 }
 
 impl IdentityHandle {
 	/// An identity handle.
 	pub fn new(
+		identity_id: uuid::Uuid,
+		display_name: String,
 		account_number: i32,
 		avatar_url: String,
-		display_name: String,
-		external: crate::models::IdentityExternalLinks,
-		identity_id: uuid::Uuid,
 		is_registered: bool,
+		external: crate::models::IdentityExternalLinks,
 	) -> IdentityHandle {
 		IdentityHandle {
+			identity_id,
+			display_name,
 			account_number,
 			avatar_url,
-			display_name,
-			external: Box::new(external),
-			identity_id,
 			is_registered,
+			external: Box::new(external),
 		}
 	}
 }

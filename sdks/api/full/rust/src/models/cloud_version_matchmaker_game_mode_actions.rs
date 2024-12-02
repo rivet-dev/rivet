@@ -12,21 +12,21 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudVersionMatchmakerGameModeActions {
-	#[serde(rename = "create", skip_serializing_if = "Option::is_none")]
-	pub create: Option<Box<crate::models::CloudVersionMatchmakerGameModeCreateConfig>>,
 	#[serde(rename = "find", skip_serializing_if = "Option::is_none")]
 	pub find: Option<Box<crate::models::CloudVersionMatchmakerGameModeFindConfig>>,
 	#[serde(rename = "join", skip_serializing_if = "Option::is_none")]
 	pub join: Option<Box<crate::models::CloudVersionMatchmakerGameModeJoinConfig>>,
+	#[serde(rename = "create", skip_serializing_if = "Option::is_none")]
+	pub create: Option<Box<crate::models::CloudVersionMatchmakerGameModeCreateConfig>>,
 }
 
 impl CloudVersionMatchmakerGameModeActions {
 	/// Configuration for the connection types allowed for a game mode.
 	pub fn new() -> CloudVersionMatchmakerGameModeActions {
 		CloudVersionMatchmakerGameModeActions {
-			create: None,
 			find: None,
 			join: None,
+			create: None,
 		}
 	}
 }

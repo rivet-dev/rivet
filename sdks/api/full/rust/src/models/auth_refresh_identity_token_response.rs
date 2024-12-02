@@ -10,26 +10,26 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct AuthRefreshIdentityTokenResponse {
+	/// A JSON Web Token. Slightly modified to include a description prefix and use Protobufs of JSON.
+	#[serde(rename = "token")]
+	pub token: String,
 	/// Token expiration time (in milliseconds).
 	#[serde(rename = "exp")]
 	pub exp: String,
 	#[serde(rename = "identity_id")]
 	pub identity_id: uuid::Uuid,
-	/// A JSON Web Token. Slightly modified to include a description prefix and use Protobufs of JSON.
-	#[serde(rename = "token")]
-	pub token: String,
 }
 
 impl AuthRefreshIdentityTokenResponse {
 	pub fn new(
+		token: String,
 		exp: String,
 		identity_id: uuid::Uuid,
-		token: String,
 	) -> AuthRefreshIdentityTokenResponse {
 		AuthRefreshIdentityTokenResponse {
+			token,
 			exp,
 			identity_id,
-			token,
 		}
 	}
 }

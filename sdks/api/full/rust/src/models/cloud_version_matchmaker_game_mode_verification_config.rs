@@ -12,18 +12,18 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudVersionMatchmakerGameModeVerificationConfig {
-	#[serde(rename = "headers")]
-	pub headers: ::std::collections::HashMap<String, String>,
 	#[serde(rename = "url")]
 	pub url: String,
+	#[serde(rename = "headers")]
+	pub headers: ::std::collections::HashMap<String, String>,
 }
 
 impl CloudVersionMatchmakerGameModeVerificationConfig {
 	/// Configuration that tells Rivet where to send validation requests and with what headers. When set, Rivet will send the `verification_data` property (given by the user in the find/join/create endpoint) to the given url along with the headers provided and some information about the requested lobby. The response of this request will determine if the user can join that lobby or not.
 	pub fn new(
-		headers: ::std::collections::HashMap<String, String>,
 		url: String,
+		headers: ::std::collections::HashMap<String, String>,
 	) -> CloudVersionMatchmakerGameModeVerificationConfig {
-		CloudVersionMatchmakerGameModeVerificationConfig { headers, url }
+		CloudVersionMatchmakerGameModeVerificationConfig { url, headers }
 	}
 }

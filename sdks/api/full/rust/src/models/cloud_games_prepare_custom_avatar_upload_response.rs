@@ -10,20 +10,20 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudGamesPrepareCustomAvatarUploadResponse {
-	#[serde(rename = "presigned_request")]
-	pub presigned_request: Box<crate::models::UploadPresignedRequest>,
 	#[serde(rename = "upload_id")]
 	pub upload_id: uuid::Uuid,
+	#[serde(rename = "presigned_request")]
+	pub presigned_request: Box<crate::models::UploadPresignedRequest>,
 }
 
 impl CloudGamesPrepareCustomAvatarUploadResponse {
 	pub fn new(
-		presigned_request: crate::models::UploadPresignedRequest,
 		upload_id: uuid::Uuid,
+		presigned_request: crate::models::UploadPresignedRequest,
 	) -> CloudGamesPrepareCustomAvatarUploadResponse {
 		CloudGamesPrepareCustomAvatarUploadResponse {
-			presigned_request: Box::new(presigned_request),
 			upload_id,
+			presigned_request: Box::new(presigned_request),
 		}
 	}
 }

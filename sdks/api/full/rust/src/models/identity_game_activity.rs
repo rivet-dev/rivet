@@ -17,14 +17,6 @@ pub struct IdentityGameActivity {
 	/// A short activity message about the current game activity.
 	#[serde(rename = "message")]
 	pub message: String,
-	/// JSON data seen only by the given identity and their mutual followers.
-	#[serde(
-		rename = "mutual_metadata",
-		default,
-		with = "::serde_with::rust::double_option",
-		skip_serializing_if = "Option::is_none"
-	)]
-	pub mutual_metadata: Option<Option<serde_json::Value>>,
 	/// JSON data seen by anyone.
 	#[serde(
 		rename = "public_metadata",
@@ -33,6 +25,14 @@ pub struct IdentityGameActivity {
 		skip_serializing_if = "Option::is_none"
 	)]
 	pub public_metadata: Option<Option<serde_json::Value>>,
+	/// JSON data seen only by the given identity and their mutual followers.
+	#[serde(
+		rename = "mutual_metadata",
+		default,
+		with = "::serde_with::rust::double_option",
+		skip_serializing_if = "Option::is_none"
+	)]
+	pub mutual_metadata: Option<Option<serde_json::Value>>,
 }
 
 impl IdentityGameActivity {
@@ -41,8 +41,8 @@ impl IdentityGameActivity {
 		IdentityGameActivity {
 			game: Box::new(game),
 			message,
-			mutual_metadata: None,
 			public_metadata: None,
+			mutual_metadata: None,
 		}
 	}
 }

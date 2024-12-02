@@ -10,24 +10,24 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudGamesCreateGameCdnSiteResponse {
-	#[serde(rename = "presigned_requests")]
-	pub presigned_requests: Vec<crate::models::UploadPresignedRequest>,
 	#[serde(rename = "site_id")]
 	pub site_id: uuid::Uuid,
 	#[serde(rename = "upload_id")]
 	pub upload_id: uuid::Uuid,
+	#[serde(rename = "presigned_requests")]
+	pub presigned_requests: Vec<crate::models::UploadPresignedRequest>,
 }
 
 impl CloudGamesCreateGameCdnSiteResponse {
 	pub fn new(
-		presigned_requests: Vec<crate::models::UploadPresignedRequest>,
 		site_id: uuid::Uuid,
 		upload_id: uuid::Uuid,
+		presigned_requests: Vec<crate::models::UploadPresignedRequest>,
 	) -> CloudGamesCreateGameCdnSiteResponse {
 		CloudGamesCreateGameCdnSiteResponse {
-			presigned_requests,
 			site_id,
 			upload_id,
+			presigned_requests,
 		}
 	}
 }

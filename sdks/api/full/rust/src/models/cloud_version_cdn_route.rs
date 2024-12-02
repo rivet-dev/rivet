@@ -12,24 +12,24 @@
 pub struct CloudVersionCdnRoute {
 	#[serde(rename = "glob")]
 	pub glob: String,
-	/// Multiple CDN version middleware.
-	#[serde(rename = "middlewares")]
-	pub middlewares: Vec<crate::models::CloudVersionCdnMiddleware>,
 	/// Unsigned 32 bit integer.
 	#[serde(rename = "priority")]
 	pub priority: i32,
+	/// Multiple CDN version middleware.
+	#[serde(rename = "middlewares")]
+	pub middlewares: Vec<crate::models::CloudVersionCdnMiddleware>,
 }
 
 impl CloudVersionCdnRoute {
 	pub fn new(
 		glob: String,
-		middlewares: Vec<crate::models::CloudVersionCdnMiddleware>,
 		priority: i32,
+		middlewares: Vec<crate::models::CloudVersionCdnMiddleware>,
 	) -> CloudVersionCdnRoute {
 		CloudVersionCdnRoute {
 			glob,
-			middlewares,
 			priority,
+			middlewares,
 		}
 	}
 }

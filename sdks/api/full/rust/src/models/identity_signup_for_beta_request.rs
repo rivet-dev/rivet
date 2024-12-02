@@ -10,31 +10,31 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct IdentitySignupForBetaRequest {
+	#[serde(rename = "name")]
+	pub name: String,
 	#[serde(rename = "company_name", skip_serializing_if = "Option::is_none")]
 	pub company_name: Option<String>,
 	#[serde(rename = "company_size")]
 	pub company_size: String,
-	#[serde(rename = "goals")]
-	pub goals: String,
-	#[serde(rename = "name")]
-	pub name: String,
 	#[serde(rename = "preferred_tools")]
 	pub preferred_tools: String,
+	#[serde(rename = "goals")]
+	pub goals: String,
 }
 
 impl IdentitySignupForBetaRequest {
 	pub fn new(
-		company_size: String,
-		goals: String,
 		name: String,
+		company_size: String,
 		preferred_tools: String,
+		goals: String,
 	) -> IdentitySignupForBetaRequest {
 		IdentitySignupForBetaRequest {
+			name,
 			company_name: None,
 			company_size,
-			goals,
-			name,
 			preferred_tools,
+			goals,
 		}
 	}
 }

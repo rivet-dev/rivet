@@ -10,21 +10,21 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct AuthIdentityCompleteEmailVerificationRequest {
+	#[serde(rename = "verification_id")]
+	pub verification_id: uuid::Uuid,
 	/// The code sent to the requestee's email.
 	#[serde(rename = "code")]
 	pub code: String,
-	#[serde(rename = "verification_id")]
-	pub verification_id: uuid::Uuid,
 }
 
 impl AuthIdentityCompleteEmailVerificationRequest {
 	pub fn new(
-		code: String,
 		verification_id: uuid::Uuid,
+		code: String,
 	) -> AuthIdentityCompleteEmailVerificationRequest {
 		AuthIdentityCompleteEmailVerificationRequest {
-			code,
 			verification_id,
+			code,
 		}
 	}
 }

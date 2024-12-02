@@ -12,15 +12,15 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudVersionMatchmakerGameModeIdleLobbiesConfig {
-	#[serde(rename = "max")]
-	pub max: i32,
 	#[serde(rename = "min")]
 	pub min: i32,
+	#[serde(rename = "max")]
+	pub max: i32,
 }
 
 impl CloudVersionMatchmakerGameModeIdleLobbiesConfig {
 	/// Configuration for how many idle lobbies a game version should have.
-	pub fn new(max: i32, min: i32) -> CloudVersionMatchmakerGameModeIdleLobbiesConfig {
-		CloudVersionMatchmakerGameModeIdleLobbiesConfig { max, min }
+	pub fn new(min: i32, max: i32) -> CloudVersionMatchmakerGameModeIdleLobbiesConfig {
+		CloudVersionMatchmakerGameModeIdleLobbiesConfig { min, max }
 	}
 }

@@ -12,18 +12,20 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct MatchmakerLobbyInfo {
+	#[serde(rename = "region_id")]
+	pub region_id: String,
 	#[serde(rename = "game_mode_id")]
 	pub game_mode_id: String,
 	#[serde(rename = "lobby_id")]
 	pub lobby_id: uuid::Uuid,
-	#[serde(rename = "max_players_direct")]
-	pub max_players_direct: i32,
 	#[serde(rename = "max_players_normal")]
 	pub max_players_normal: i32,
+	#[serde(rename = "max_players_direct")]
+	pub max_players_direct: i32,
 	#[serde(rename = "max_players_party")]
 	pub max_players_party: i32,
-	#[serde(rename = "region_id")]
-	pub region_id: String,
+	#[serde(rename = "total_player_count")]
+	pub total_player_count: i32,
 	#[serde(
 		rename = "state",
 		default,
@@ -31,30 +33,28 @@ pub struct MatchmakerLobbyInfo {
 		skip_serializing_if = "Option::is_none"
 	)]
 	pub state: Option<Option<serde_json::Value>>,
-	#[serde(rename = "total_player_count")]
-	pub total_player_count: i32,
 }
 
 impl MatchmakerLobbyInfo {
 	/// A public lobby in the lobby list.
 	pub fn new(
+		region_id: String,
 		game_mode_id: String,
 		lobby_id: uuid::Uuid,
-		max_players_direct: i32,
 		max_players_normal: i32,
+		max_players_direct: i32,
 		max_players_party: i32,
-		region_id: String,
 		total_player_count: i32,
 	) -> MatchmakerLobbyInfo {
 		MatchmakerLobbyInfo {
+			region_id,
 			game_mode_id,
 			lobby_id,
-			max_players_direct,
 			max_players_normal,
+			max_players_direct,
 			max_players_party,
-			region_id,
-			state: None,
 			total_player_count,
+			state: None,
 		}
 	}
 }

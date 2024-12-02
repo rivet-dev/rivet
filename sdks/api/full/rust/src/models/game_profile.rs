@@ -12,74 +12,74 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct GameProfile {
-	/// The URL of this game's banner image.
-	#[serde(rename = "banner_url", skip_serializing_if = "Option::is_none")]
-	pub banner_url: Option<String>,
-	/// A description of the given game.
-	#[serde(rename = "description")]
-	pub description: String,
-	#[serde(rename = "developer")]
-	pub developer: Box<crate::models::GroupSummary>,
-	/// Represent a resource's readable display name.
-	#[serde(rename = "display_name")]
-	pub display_name: String,
 	#[serde(rename = "game_id")]
 	pub game_id: uuid::Uuid,
-	/// A list of game leaderboard categories.
-	#[serde(rename = "group_leaderboard_categories")]
-	pub group_leaderboard_categories: Vec<crate::models::GameLeaderboardCategory>,
-	/// A list of game leaderboard categories.
-	#[serde(rename = "identity_leaderboard_categories")]
-	pub identity_leaderboard_categories: Vec<crate::models::GameLeaderboardCategory>,
-	/// The URL of this game's logo image.
-	#[serde(rename = "logo_url", skip_serializing_if = "Option::is_none")]
-	pub logo_url: Option<String>,
 	/// A human readable short identifier used to references resources. Different than a `rivet.common#Uuid` because this is intended to be human readable. Different than `rivet.common#DisplayName` because this should not include special characters and be short.
 	#[serde(rename = "name_id")]
 	pub name_id: String,
+	/// Represent a resource's readable display name.
+	#[serde(rename = "display_name")]
+	pub display_name: String,
+	/// The URL of this game's logo image.
+	#[serde(rename = "logo_url", skip_serializing_if = "Option::is_none")]
+	pub logo_url: Option<String>,
+	/// The URL of this game's banner image.
+	#[serde(rename = "banner_url", skip_serializing_if = "Option::is_none")]
+	pub banner_url: Option<String>,
+	/// The URL to this game's website.
+	#[serde(rename = "url")]
+	pub url: String,
+	#[serde(rename = "developer")]
+	pub developer: Box<crate::models::GroupSummary>,
+	/// A list of game tags.
+	#[serde(rename = "tags")]
+	pub tags: Vec<String>,
+	/// A description of the given game.
+	#[serde(rename = "description")]
+	pub description: String,
 	/// A list of platform links.
 	#[serde(rename = "platforms")]
 	pub platforms: Vec<crate::models::GamePlatformLink>,
 	/// A list of group summaries.
 	#[serde(rename = "recommended_groups")]
 	pub recommended_groups: Vec<crate::models::GroupSummary>,
-	/// A list of game tags.
-	#[serde(rename = "tags")]
-	pub tags: Vec<String>,
-	/// The URL to this game's website.
-	#[serde(rename = "url")]
-	pub url: String,
+	/// A list of game leaderboard categories.
+	#[serde(rename = "identity_leaderboard_categories")]
+	pub identity_leaderboard_categories: Vec<crate::models::GameLeaderboardCategory>,
+	/// A list of game leaderboard categories.
+	#[serde(rename = "group_leaderboard_categories")]
+	pub group_leaderboard_categories: Vec<crate::models::GameLeaderboardCategory>,
 }
 
 impl GameProfile {
 	/// A game profile.
 	pub fn new(
-		description: String,
-		developer: crate::models::GroupSummary,
-		display_name: String,
 		game_id: uuid::Uuid,
-		group_leaderboard_categories: Vec<crate::models::GameLeaderboardCategory>,
-		identity_leaderboard_categories: Vec<crate::models::GameLeaderboardCategory>,
 		name_id: String,
+		display_name: String,
+		url: String,
+		developer: crate::models::GroupSummary,
+		tags: Vec<String>,
+		description: String,
 		platforms: Vec<crate::models::GamePlatformLink>,
 		recommended_groups: Vec<crate::models::GroupSummary>,
-		tags: Vec<String>,
-		url: String,
+		identity_leaderboard_categories: Vec<crate::models::GameLeaderboardCategory>,
+		group_leaderboard_categories: Vec<crate::models::GameLeaderboardCategory>,
 	) -> GameProfile {
 		GameProfile {
-			banner_url: None,
-			description,
-			developer: Box::new(developer),
-			display_name,
 			game_id,
-			group_leaderboard_categories,
-			identity_leaderboard_categories,
-			logo_url: None,
 			name_id,
+			display_name,
+			logo_url: None,
+			banner_url: None,
+			url,
+			developer: Box::new(developer),
+			tags,
+			description,
 			platforms,
 			recommended_groups,
-			tags,
-			url,
+			identity_leaderboard_categories,
+			group_leaderboard_categories,
 		}
 	}
 }

@@ -11,11 +11,11 @@
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct GroupValidateProfileRequest {
 	/// Represent a resource's readable display name.
-	#[serde(rename = "bio", skip_serializing_if = "Option::is_none")]
-	pub bio: Option<String>,
-	/// Represent a resource's readable display name.
 	#[serde(rename = "display_name", skip_serializing_if = "Option::is_none")]
 	pub display_name: Option<String>,
+	/// Represent a resource's readable display name.
+	#[serde(rename = "bio", skip_serializing_if = "Option::is_none")]
+	pub bio: Option<String>,
 	#[serde(rename = "publicity", skip_serializing_if = "Option::is_none")]
 	pub publicity: Option<crate::models::GroupPublicity>,
 }
@@ -23,8 +23,8 @@ pub struct GroupValidateProfileRequest {
 impl GroupValidateProfileRequest {
 	pub fn new() -> GroupValidateProfileRequest {
 		GroupValidateProfileRequest {
-			bio: None,
 			display_name: None,
+			bio: None,
 			publicity: None,
 		}
 	}

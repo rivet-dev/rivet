@@ -12,16 +12,16 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct GroupHandle {
-	/// The URL of this group's avatar image
-	#[serde(rename = "avatar_url", skip_serializing_if = "Option::is_none")]
-	pub avatar_url: Option<String>,
+	#[serde(rename = "group_id")]
+	pub group_id: uuid::Uuid,
 	/// Represent a resource's readable display name.
 	#[serde(rename = "display_name")]
 	pub display_name: String,
+	/// The URL of this group's avatar image
+	#[serde(rename = "avatar_url", skip_serializing_if = "Option::is_none")]
+	pub avatar_url: Option<String>,
 	#[serde(rename = "external")]
 	pub external: Box<crate::models::GroupExternalLinks>,
-	#[serde(rename = "group_id")]
-	pub group_id: uuid::Uuid,
 	/// Whether or not this group is a developer group.
 	#[serde(rename = "is_developer", skip_serializing_if = "Option::is_none")]
 	pub is_developer: Option<bool>,
@@ -30,15 +30,15 @@ pub struct GroupHandle {
 impl GroupHandle {
 	/// A group handle.
 	pub fn new(
+		group_id: uuid::Uuid,
 		display_name: String,
 		external: crate::models::GroupExternalLinks,
-		group_id: uuid::Uuid,
 	) -> GroupHandle {
 		GroupHandle {
-			avatar_url: None,
-			display_name,
-			external: Box::new(external),
 			group_id,
+			display_name,
+			avatar_url: None,
+			external: Box::new(external),
 			is_developer: None,
 		}
 	}

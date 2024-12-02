@@ -4,8 +4,8 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**args** | **Vec<String>** |  | 
 **build_id** | Option<[**uuid::Uuid**](uuid::Uuid.md)> |  | [optional]
+**args** | **Vec<String>** |  | 
 **env_vars** | [**Vec<crate::models::CloudVersionMatchmakerLobbyGroupRuntimeDockerEnvVar>**](CloudVersionMatchmakerLobbyGroupRuntimeDockerEnvVar.md) |  | 
 **network_mode** | Option<[**crate::models::CloudVersionMatchmakerNetworkMode**](CloudVersionMatchmakerNetworkMode.md)> |  | [optional]
 **ports** | [**Vec<crate::models::CloudVersionMatchmakerLobbyGroupRuntimeDockerPort>**](CloudVersionMatchmakerLobbyGroupRuntimeDockerPort.md) |  | 

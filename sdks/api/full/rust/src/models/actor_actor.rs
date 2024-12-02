@@ -10,53 +10,53 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct ActorActor {
+	#[serde(rename = "id")]
+	pub id: uuid::Uuid,
+	#[serde(rename = "region")]
+	pub region: String,
+	#[serde(rename = "tags", deserialize_with = "Option::deserialize")]
+	pub tags: Option<serde_json::Value>,
+	#[serde(rename = "runtime")]
+	pub runtime: Box<crate::models::ActorRuntime>,
+	#[serde(rename = "network")]
+	pub network: Box<crate::models::ActorNetwork>,
+	#[serde(rename = "resources")]
+	pub resources: Box<crate::models::ActorResources>,
+	#[serde(rename = "lifecycle")]
+	pub lifecycle: Box<crate::models::ActorLifecycle>,
 	/// RFC3339 timestamp
 	#[serde(rename = "created_at")]
 	pub created_at: String,
 	/// RFC3339 timestamp
-	#[serde(rename = "destroyed_at", skip_serializing_if = "Option::is_none")]
-	pub destroyed_at: Option<String>,
-	#[serde(rename = "id")]
-	pub id: uuid::Uuid,
-	#[serde(rename = "lifecycle")]
-	pub lifecycle: Box<crate::models::ActorLifecycle>,
-	#[serde(rename = "network")]
-	pub network: Box<crate::models::ActorNetwork>,
-	#[serde(rename = "region")]
-	pub region: String,
-	#[serde(rename = "resources")]
-	pub resources: Box<crate::models::ActorResources>,
-	#[serde(rename = "runtime")]
-	pub runtime: Box<crate::models::ActorRuntime>,
-	/// RFC3339 timestamp
 	#[serde(rename = "started_at", skip_serializing_if = "Option::is_none")]
 	pub started_at: Option<String>,
-	#[serde(rename = "tags", deserialize_with = "Option::deserialize")]
-	pub tags: Option<serde_json::Value>,
+	/// RFC3339 timestamp
+	#[serde(rename = "destroyed_at", skip_serializing_if = "Option::is_none")]
+	pub destroyed_at: Option<String>,
 }
 
 impl ActorActor {
 	pub fn new(
-		created_at: String,
 		id: uuid::Uuid,
-		lifecycle: crate::models::ActorLifecycle,
-		network: crate::models::ActorNetwork,
 		region: String,
-		resources: crate::models::ActorResources,
-		runtime: crate::models::ActorRuntime,
 		tags: Option<serde_json::Value>,
+		runtime: crate::models::ActorRuntime,
+		network: crate::models::ActorNetwork,
+		resources: crate::models::ActorResources,
+		lifecycle: crate::models::ActorLifecycle,
+		created_at: String,
 	) -> ActorActor {
 		ActorActor {
-			created_at,
-			destroyed_at: None,
 			id,
-			lifecycle: Box::new(lifecycle),
-			network: Box::new(network),
 			region,
-			resources: Box::new(resources),
-			runtime: Box::new(runtime),
-			started_at: None,
 			tags,
+			runtime: Box::new(runtime),
+			network: Box::new(network),
+			resources: Box::new(resources),
+			lifecycle: Box::new(lifecycle),
+			created_at,
+			started_at: None,
+			destroyed_at: None,
 		}
 	}
 }

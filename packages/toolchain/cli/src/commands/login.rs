@@ -1,7 +1,6 @@
 use anyhow::*;
 use clap::Parser;
 
-
 /// Login to a project
 #[derive(Parser)]
 pub struct Opts {

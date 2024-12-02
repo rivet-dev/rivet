@@ -10,12 +10,12 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct GroupGetMembersResponse {
-	/// The pagination anchor.
-	#[serde(rename = "anchor", skip_serializing_if = "Option::is_none")]
-	pub anchor: Option<String>,
 	/// A list of group members.
 	#[serde(rename = "members")]
 	pub members: Vec<crate::models::GroupMember>,
+	/// The pagination anchor.
+	#[serde(rename = "anchor", skip_serializing_if = "Option::is_none")]
+	pub anchor: Option<String>,
 	#[serde(rename = "watch")]
 	pub watch: Box<crate::models::WatchResponse>,
 }
@@ -26,8 +26,8 @@ impl GroupGetMembersResponse {
 		watch: crate::models::WatchResponse,
 	) -> GroupGetMembersResponse {
 		GroupGetMembersResponse {
-			anchor: None,
 			members,
+			anchor: None,
 			watch: Box::new(watch),
 		}
 	}

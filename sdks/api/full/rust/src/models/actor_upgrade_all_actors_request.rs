@@ -10,6 +10,8 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct ActorUpgradeAllActorsRequest {
+	#[serde(rename = "tags", deserialize_with = "Option::deserialize")]
+	pub tags: Option<serde_json::Value>,
 	#[serde(rename = "build", skip_serializing_if = "Option::is_none")]
 	pub build: Option<uuid::Uuid>,
 	#[serde(
@@ -19,16 +21,14 @@ pub struct ActorUpgradeAllActorsRequest {
 		skip_serializing_if = "Option::is_none"
 	)]
 	pub build_tags: Option<Option<serde_json::Value>>,
-	#[serde(rename = "tags", deserialize_with = "Option::deserialize")]
-	pub tags: Option<serde_json::Value>,
 }
 
 impl ActorUpgradeAllActorsRequest {
 	pub fn new(tags: Option<serde_json::Value>) -> ActorUpgradeAllActorsRequest {
 		ActorUpgradeAllActorsRequest {
+			tags,
 			build: None,
 			build_tags: None,
-			tags,
 		}
 	}
 }

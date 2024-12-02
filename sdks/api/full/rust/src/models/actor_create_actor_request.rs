@@ -10,6 +10,10 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct ActorCreateActorRequest {
+	#[serde(rename = "region", skip_serializing_if = "Option::is_none")]
+	pub region: Option<String>,
+	#[serde(rename = "tags", deserialize_with = "Option::deserialize")]
+	pub tags: Option<serde_json::Value>,
 	#[serde(rename = "build", skip_serializing_if = "Option::is_none")]
 	pub build: Option<uuid::Uuid>,
 	#[serde(
@@ -19,31 +23,27 @@ pub struct ActorCreateActorRequest {
 		skip_serializing_if = "Option::is_none"
 	)]
 	pub build_tags: Option<Option<serde_json::Value>>,
-	#[serde(rename = "lifecycle", skip_serializing_if = "Option::is_none")]
-	pub lifecycle: Option<Box<crate::models::ActorLifecycle>>,
-	#[serde(rename = "network", skip_serializing_if = "Option::is_none")]
-	pub network: Option<Box<crate::models::ActorCreateActorNetworkRequest>>,
-	#[serde(rename = "region", skip_serializing_if = "Option::is_none")]
-	pub region: Option<String>,
-	#[serde(rename = "resources", skip_serializing_if = "Option::is_none")]
-	pub resources: Option<Box<crate::models::ActorResources>>,
 	#[serde(rename = "runtime", skip_serializing_if = "Option::is_none")]
 	pub runtime: Option<Box<crate::models::ActorCreateActorRuntimeRequest>>,
-	#[serde(rename = "tags", deserialize_with = "Option::deserialize")]
-	pub tags: Option<serde_json::Value>,
+	#[serde(rename = "network", skip_serializing_if = "Option::is_none")]
+	pub network: Option<Box<crate::models::ActorCreateActorNetworkRequest>>,
+	#[serde(rename = "resources", skip_serializing_if = "Option::is_none")]
+	pub resources: Option<Box<crate::models::ActorResources>>,
+	#[serde(rename = "lifecycle", skip_serializing_if = "Option::is_none")]
+	pub lifecycle: Option<Box<crate::models::ActorLifecycle>>,
 }
 
 impl ActorCreateActorRequest {
 	pub fn new(tags: Option<serde_json::Value>) -> ActorCreateActorRequest {
 		ActorCreateActorRequest {
+			region: None,
+			tags,
 			build: None,
 			build_tags: None,
-			lifecycle: None,
-			network: None,
-			region: None,
-			resources: None,
 			runtime: None,
-			tags,
+			network: None,
+			resources: None,
+			lifecycle: None,
 		}
 	}
 }

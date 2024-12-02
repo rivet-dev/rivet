@@ -14,28 +14,28 @@
 pub struct MatchmakerJoinLobby {
 	#[serde(rename = "lobby_id")]
 	pub lobby_id: uuid::Uuid,
-	#[serde(rename = "player")]
-	pub player: Box<crate::models::MatchmakerJoinPlayer>,
+	#[serde(rename = "region")]
+	pub region: Box<crate::models::MatchmakerJoinRegion>,
 	/// **Deprecated**
 	#[serde(rename = "ports")]
 	pub ports: ::std::collections::HashMap<String, crate::models::MatchmakerJoinPort>,
-	#[serde(rename = "region")]
-	pub region: Box<crate::models::MatchmakerJoinRegion>,
+	#[serde(rename = "player")]
+	pub player: Box<crate::models::MatchmakerJoinPlayer>,
 }
 
 impl MatchmakerJoinLobby {
 	/// A matchmaker lobby.
 	pub fn new(
 		lobby_id: uuid::Uuid,
-		player: crate::models::MatchmakerJoinPlayer,
-		ports: ::std::collections::HashMap<String, crate::models::MatchmakerJoinPort>,
 		region: crate::models::MatchmakerJoinRegion,
+		ports: ::std::collections::HashMap<String, crate::models::MatchmakerJoinPort>,
+		player: crate::models::MatchmakerJoinPlayer,
 	) -> MatchmakerJoinLobby {
 		MatchmakerJoinLobby {
 			lobby_id,
-			player: Box::new(player),
-			ports,
 			region: Box::new(region),
+			ports,
+			player: Box::new(player),
 		}
 	}
 }

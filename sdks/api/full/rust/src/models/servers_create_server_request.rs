@@ -12,33 +12,33 @@
 pub struct ServersCreateServerRequest {
 	#[serde(rename = "datacenter")]
 	pub datacenter: uuid::Uuid,
-	#[serde(rename = "lifecycle", skip_serializing_if = "Option::is_none")]
-	pub lifecycle: Option<Box<crate::models::ServersLifecycle>>,
+	#[serde(rename = "tags", deserialize_with = "Option::deserialize")]
+	pub tags: Option<serde_json::Value>,
+	#[serde(rename = "runtime")]
+	pub runtime: Box<crate::models::ServersCreateServerRuntimeRequest>,
 	#[serde(rename = "network")]
 	pub network: Box<crate::models::ServersCreateServerNetworkRequest>,
 	#[serde(rename = "resources")]
 	pub resources: Box<crate::models::ServersResources>,
-	#[serde(rename = "runtime")]
-	pub runtime: Box<crate::models::ServersCreateServerRuntimeRequest>,
-	#[serde(rename = "tags", deserialize_with = "Option::deserialize")]
-	pub tags: Option<serde_json::Value>,
+	#[serde(rename = "lifecycle", skip_serializing_if = "Option::is_none")]
+	pub lifecycle: Option<Box<crate::models::ServersLifecycle>>,
 }
 
 impl ServersCreateServerRequest {
 	pub fn new(
 		datacenter: uuid::Uuid,
+		tags: Option<serde_json::Value>,
+		runtime: crate::models::ServersCreateServerRuntimeRequest,
 		network: crate::models::ServersCreateServerNetworkRequest,
 		resources: crate::models::ServersResources,
-		runtime: crate::models::ServersCreateServerRuntimeRequest,
-		tags: Option<serde_json::Value>,
 	) -> ServersCreateServerRequest {
 		ServersCreateServerRequest {
 			datacenter,
-			lifecycle: None,
+			tags,
+			runtime: Box::new(runtime),
 			network: Box::new(network),
 			resources: Box::new(resources),
-			runtime: Box::new(runtime),
-			tags,
+			lifecycle: None,
 		}
 	}
 }

@@ -10,21 +10,21 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudGamesValidateGameVersionRequest {
-	#[serde(rename = "config")]
-	pub config: Box<crate::models::CloudVersionConfig>,
 	/// Represent a resource's readable display name.
 	#[serde(rename = "display_name")]
 	pub display_name: String,
+	#[serde(rename = "config")]
+	pub config: Box<crate::models::CloudVersionConfig>,
 }
 
 impl CloudGamesValidateGameVersionRequest {
 	pub fn new(
-		config: crate::models::CloudVersionConfig,
 		display_name: String,
+		config: crate::models::CloudVersionConfig,
 	) -> CloudGamesValidateGameVersionRequest {
 		CloudGamesValidateGameVersionRequest {
-			config: Box::new(config),
 			display_name,
+			config: Box::new(config),
 		}
 	}
 }

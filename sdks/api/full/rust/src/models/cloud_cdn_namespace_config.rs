@@ -12,32 +12,32 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudCdnNamespaceConfig {
+	/// Whether or not to allow users to connect to the given namespace via domain name.
+	#[serde(rename = "enable_domain_public_auth")]
+	pub enable_domain_public_auth: bool,
+	/// A list of CDN domains for a given namespace.
+	#[serde(rename = "domains")]
+	pub domains: Vec<crate::models::CloudCdnNamespaceDomain>,
 	#[serde(rename = "auth_type")]
 	pub auth_type: crate::models::CloudCdnAuthType,
 	/// A list of CDN authenticated users for a given namespace.
 	#[serde(rename = "auth_user_list")]
 	pub auth_user_list: Vec<crate::models::CloudCdnNamespaceAuthUser>,
-	/// A list of CDN domains for a given namespace.
-	#[serde(rename = "domains")]
-	pub domains: Vec<crate::models::CloudCdnNamespaceDomain>,
-	/// Whether or not to allow users to connect to the given namespace via domain name.
-	#[serde(rename = "enable_domain_public_auth")]
-	pub enable_domain_public_auth: bool,
 }
 
 impl CloudCdnNamespaceConfig {
 	/// CDN configuration for a given namespace.
 	pub fn new(
+		enable_domain_public_auth: bool,
+		domains: Vec<crate::models::CloudCdnNamespaceDomain>,
 		auth_type: crate::models::CloudCdnAuthType,
 		auth_user_list: Vec<crate::models::CloudCdnNamespaceAuthUser>,
-		domains: Vec<crate::models::CloudCdnNamespaceDomain>,
-		enable_domain_public_auth: bool,
 	) -> CloudCdnNamespaceConfig {
 		CloudCdnNamespaceConfig {
+			enable_domain_public_auth,
+			domains,
 			auth_type,
 			auth_user_list,
-			domains,
-			enable_domain_public_auth,
 		}
 	}
 }

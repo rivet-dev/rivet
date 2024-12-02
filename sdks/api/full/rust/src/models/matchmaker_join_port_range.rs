@@ -12,17 +12,17 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct MatchmakerJoinPortRange {
-	/// Maximum port that can be connected to. Inclusive range.
-	#[serde(rename = "max")]
-	pub max: i32,
 	/// Minimum port that can be connected to. Inclusive range.
 	#[serde(rename = "min")]
 	pub min: i32,
+	/// Maximum port that can be connected to. Inclusive range.
+	#[serde(rename = "max")]
+	pub max: i32,
 }
 
 impl MatchmakerJoinPortRange {
 	/// Inclusive range of ports that can be connected to.
-	pub fn new(max: i32, min: i32) -> MatchmakerJoinPortRange {
-		MatchmakerJoinPortRange { max, min }
+	pub fn new(min: i32, max: i32) -> MatchmakerJoinPortRange {
+		MatchmakerJoinPortRange { min, max }
 	}
 }

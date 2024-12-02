@@ -10,18 +10,18 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct ServersPatchBuildTagsRequest {
+	#[serde(rename = "tags", deserialize_with = "Option::deserialize")]
+	pub tags: Option<serde_json::Value>,
 	/// Removes the given tag keys from all other builds.
 	#[serde(rename = "exclusive_tags", skip_serializing_if = "Option::is_none")]
 	pub exclusive_tags: Option<Vec<String>>,
-	#[serde(rename = "tags", deserialize_with = "Option::deserialize")]
-	pub tags: Option<serde_json::Value>,
 }
 
 impl ServersPatchBuildTagsRequest {
 	pub fn new(tags: Option<serde_json::Value>) -> ServersPatchBuildTagsRequest {
 		ServersPatchBuildTagsRequest {
-			exclusive_tags: None,
 			tags,
+			exclusive_tags: None,
 		}
 	}
 }

@@ -12,27 +12,27 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudLogsPerfSpan {
-	/// RFC3339 timestamp
-	#[serde(rename = "finish_ts", skip_serializing_if = "Option::is_none")]
-	pub finish_ts: Option<String>,
 	/// The label given to this performance span.
 	#[serde(rename = "label")]
 	pub label: String,
-	#[serde(rename = "req_id", skip_serializing_if = "Option::is_none")]
-	pub req_id: Option<uuid::Uuid>,
 	/// RFC3339 timestamp
 	#[serde(rename = "start_ts")]
 	pub start_ts: String,
+	/// RFC3339 timestamp
+	#[serde(rename = "finish_ts", skip_serializing_if = "Option::is_none")]
+	pub finish_ts: Option<String>,
+	#[serde(rename = "req_id", skip_serializing_if = "Option::is_none")]
+	pub req_id: Option<uuid::Uuid>,
 }
 
 impl CloudLogsPerfSpan {
 	/// A performance span.
 	pub fn new(label: String, start_ts: String) -> CloudLogsPerfSpan {
 		CloudLogsPerfSpan {
-			finish_ts: None,
 			label,
-			req_id: None,
 			start_ts,
+			finish_ts: None,
+			req_id: None,
 		}
 	}
 }

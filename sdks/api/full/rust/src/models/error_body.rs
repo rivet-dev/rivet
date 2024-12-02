@@ -12,10 +12,12 @@
 pub struct ErrorBody {
 	#[serde(rename = "code")]
 	pub code: String,
-	#[serde(rename = "documentation", skip_serializing_if = "Option::is_none")]
-	pub documentation: Option<String>,
 	#[serde(rename = "message")]
 	pub message: String,
+	#[serde(rename = "ray_id")]
+	pub ray_id: String,
+	#[serde(rename = "documentation", skip_serializing_if = "Option::is_none")]
+	pub documentation: Option<String>,
 	/// Unstructured metadata relating to an error. Must be manually parsed.
 	#[serde(
 		rename = "metadata",
@@ -24,18 +26,16 @@ pub struct ErrorBody {
 		skip_serializing_if = "Option::is_none"
 	)]
 	pub metadata: Option<Option<serde_json::Value>>,
-	#[serde(rename = "ray_id")]
-	pub ray_id: String,
 }
 
 impl ErrorBody {
 	pub fn new(code: String, message: String, ray_id: String) -> ErrorBody {
 		ErrorBody {
 			code,
-			documentation: None,
 			message,
-			metadata: None,
 			ray_id,
+			documentation: None,
+			metadata: None,
 		}
 	}
 }

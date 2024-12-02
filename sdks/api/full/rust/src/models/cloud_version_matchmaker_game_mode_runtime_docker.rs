@@ -12,21 +12,21 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudVersionMatchmakerGameModeRuntimeDocker {
-	#[serde(rename = "args", skip_serializing_if = "Option::is_none")]
-	pub args: Option<Vec<String>>,
-	/// _Configures Rivet CLI behavior. Has no effect on server behavior._
-	#[serde(rename = "build_args", skip_serializing_if = "Option::is_none")]
-	pub build_args: Option<::std::collections::HashMap<String, String>>,
 	/// _Configures Rivet CLI behavior. Has no effect on server behavior._
 	#[serde(rename = "dockerfile", skip_serializing_if = "Option::is_none")]
 	pub dockerfile: Option<String>,
-	#[serde(rename = "env", skip_serializing_if = "Option::is_none")]
-	pub env: Option<::std::collections::HashMap<String, String>>,
+	/// _Configures Rivet CLI behavior. Has no effect on server behavior._
+	#[serde(rename = "build_args", skip_serializing_if = "Option::is_none")]
+	pub build_args: Option<::std::collections::HashMap<String, String>>,
 	/// _Configures Rivet CLI behavior. Has no effect on server behavior._
 	#[serde(rename = "image", skip_serializing_if = "Option::is_none")]
 	pub image: Option<String>,
 	#[serde(rename = "image_id", skip_serializing_if = "Option::is_none")]
 	pub image_id: Option<uuid::Uuid>,
+	#[serde(rename = "args", skip_serializing_if = "Option::is_none")]
+	pub args: Option<Vec<String>>,
+	#[serde(rename = "env", skip_serializing_if = "Option::is_none")]
+	pub env: Option<::std::collections::HashMap<String, String>>,
 	#[serde(rename = "network_mode", skip_serializing_if = "Option::is_none")]
 	pub network_mode: Option<crate::models::CloudVersionMatchmakerNetworkMode>,
 	#[serde(rename = "ports", skip_serializing_if = "Option::is_none")]
@@ -42,12 +42,12 @@ impl CloudVersionMatchmakerGameModeRuntimeDocker {
 	/// A game mode runtime running through Docker.
 	pub fn new() -> CloudVersionMatchmakerGameModeRuntimeDocker {
 		CloudVersionMatchmakerGameModeRuntimeDocker {
-			args: None,
-			build_args: None,
 			dockerfile: None,
-			env: None,
+			build_args: None,
 			image: None,
 			image_id: None,
+			args: None,
+			env: None,
 			network_mode: None,
 			ports: None,
 		}

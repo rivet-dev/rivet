@@ -12,18 +12,18 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudAuthAgent {
-	#[serde(rename = "game_cloud", skip_serializing_if = "Option::is_none")]
-	pub game_cloud: Option<Box<crate::models::CloudAuthAgentGameCloud>>,
 	#[serde(rename = "identity", skip_serializing_if = "Option::is_none")]
 	pub identity: Option<Box<crate::models::CloudAuthAgentIdentity>>,
+	#[serde(rename = "game_cloud", skip_serializing_if = "Option::is_none")]
+	pub game_cloud: Option<Box<crate::models::CloudAuthAgentGameCloud>>,
 }
 
 impl CloudAuthAgent {
 	/// The current authenticated agent.
 	pub fn new() -> CloudAuthAgent {
 		CloudAuthAgent {
-			game_cloud: None,
 			identity: None,
+			game_cloud: None,
 		}
 	}
 }

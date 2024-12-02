@@ -12,14 +12,14 @@
 pub struct ServersDatacenter {
 	#[serde(rename = "id")]
 	pub id: uuid::Uuid,
-	#[serde(rename = "name")]
-	pub name: String,
 	#[serde(rename = "slug")]
 	pub slug: String,
+	#[serde(rename = "name")]
+	pub name: String,
 }
 
 impl ServersDatacenter {
-	pub fn new(id: uuid::Uuid, name: String, slug: String) -> ServersDatacenter {
-		ServersDatacenter { id, name, slug }
+	pub fn new(id: uuid::Uuid, slug: String, name: String) -> ServersDatacenter {
+		ServersDatacenter { id, slug, name }
 	}
 }

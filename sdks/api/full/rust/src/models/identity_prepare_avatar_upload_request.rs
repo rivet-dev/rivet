@@ -10,25 +10,25 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct IdentityPrepareAvatarUploadRequest {
-	#[serde(rename = "content_length")]
-	pub content_length: i64,
+	#[serde(rename = "path")]
+	pub path: String,
 	/// See https://www.iana.org/assignments/media-types/media-types.xhtml
 	#[serde(rename = "mime")]
 	pub mime: String,
-	#[serde(rename = "path")]
-	pub path: String,
+	#[serde(rename = "content_length")]
+	pub content_length: i64,
 }
 
 impl IdentityPrepareAvatarUploadRequest {
 	pub fn new(
-		content_length: i64,
-		mime: String,
 		path: String,
+		mime: String,
+		content_length: i64,
 	) -> IdentityPrepareAvatarUploadRequest {
 		IdentityPrepareAvatarUploadRequest {
-			content_length,
-			mime,
 			path,
+			mime,
+			content_length,
 		}
 	}
 }

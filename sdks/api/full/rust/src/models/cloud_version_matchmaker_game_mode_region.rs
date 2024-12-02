@@ -12,18 +12,18 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudVersionMatchmakerGameModeRegion {
-	#[serde(rename = "idle_lobbies", skip_serializing_if = "Option::is_none")]
-	pub idle_lobbies: Option<Box<crate::models::CloudVersionMatchmakerGameModeIdleLobbiesConfig>>,
 	#[serde(rename = "tier", skip_serializing_if = "Option::is_none")]
 	pub tier: Option<String>,
+	#[serde(rename = "idle_lobbies", skip_serializing_if = "Option::is_none")]
+	pub idle_lobbies: Option<Box<crate::models::CloudVersionMatchmakerGameModeIdleLobbiesConfig>>,
 }
 
 impl CloudVersionMatchmakerGameModeRegion {
 	/// A game mode region.
 	pub fn new() -> CloudVersionMatchmakerGameModeRegion {
 		CloudVersionMatchmakerGameModeRegion {
-			idle_lobbies: None,
 			tier: None,
+			idle_lobbies: None,
 		}
 	}
 }

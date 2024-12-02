@@ -12,10 +12,10 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudVersionMatchmakerLobbyGroupRuntimeDocker {
-	#[serde(rename = "args")]
-	pub args: Vec<String>,
 	#[serde(rename = "build_id", skip_serializing_if = "Option::is_none")]
 	pub build_id: Option<uuid::Uuid>,
+	#[serde(rename = "args")]
+	pub args: Vec<String>,
 	#[serde(rename = "env_vars")]
 	pub env_vars: Vec<crate::models::CloudVersionMatchmakerLobbyGroupRuntimeDockerEnvVar>,
 	#[serde(rename = "network_mode", skip_serializing_if = "Option::is_none")]
@@ -32,8 +32,8 @@ impl CloudVersionMatchmakerLobbyGroupRuntimeDocker {
 		ports: Vec<crate::models::CloudVersionMatchmakerLobbyGroupRuntimeDockerPort>,
 	) -> CloudVersionMatchmakerLobbyGroupRuntimeDocker {
 		CloudVersionMatchmakerLobbyGroupRuntimeDocker {
-			args,
 			build_id: None,
+			args,
 			env_vars,
 			network_mode: None,
 			ports,

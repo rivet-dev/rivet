@@ -12,41 +12,41 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudSvcPerf {
-	/// Unsigned 64 bit integer.
-	#[serde(rename = "duration")]
-	pub duration: i64,
-	/// A list of performance marks.
-	#[serde(rename = "marks")]
-	pub marks: Vec<crate::models::CloudLogsPerfMark>,
-	#[serde(rename = "req_id", skip_serializing_if = "Option::is_none")]
-	pub req_id: Option<uuid::Uuid>,
-	/// A list of performance spans.
-	#[serde(rename = "spans")]
-	pub spans: Vec<crate::models::CloudLogsPerfSpan>,
 	/// The name of the service.
 	#[serde(rename = "svc_name")]
 	pub svc_name: String,
 	/// RFC3339 timestamp
 	#[serde(rename = "ts")]
 	pub ts: String,
+	/// Unsigned 64 bit integer.
+	#[serde(rename = "duration")]
+	pub duration: i64,
+	#[serde(rename = "req_id", skip_serializing_if = "Option::is_none")]
+	pub req_id: Option<uuid::Uuid>,
+	/// A list of performance spans.
+	#[serde(rename = "spans")]
+	pub spans: Vec<crate::models::CloudLogsPerfSpan>,
+	/// A list of performance marks.
+	#[serde(rename = "marks")]
+	pub marks: Vec<crate::models::CloudLogsPerfMark>,
 }
 
 impl CloudSvcPerf {
 	/// A service performance summary.
 	pub fn new(
-		duration: i64,
-		marks: Vec<crate::models::CloudLogsPerfMark>,
-		spans: Vec<crate::models::CloudLogsPerfSpan>,
 		svc_name: String,
 		ts: String,
+		duration: i64,
+		spans: Vec<crate::models::CloudLogsPerfSpan>,
+		marks: Vec<crate::models::CloudLogsPerfMark>,
 	) -> CloudSvcPerf {
 		CloudSvcPerf {
-			duration,
-			marks,
-			req_id: None,
-			spans,
 			svc_name,
 			ts,
+			duration,
+			req_id: None,
+			spans,
+			marks,
 		}
 	}
 }

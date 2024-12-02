@@ -13,11 +13,11 @@
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudVersionIdentityConfig {
 	/// **Deprecated**
+	#[serde(rename = "display_names", skip_serializing_if = "Option::is_none")]
+	pub display_names: Option<Vec<String>>,
+	/// **Deprecated**
 	#[serde(rename = "avatars", skip_serializing_if = "Option::is_none")]
 	pub avatars: Option<Vec<uuid::Uuid>>,
-	/// **Deprecated**
-	#[serde(rename = "custom_avatars", skip_serializing_if = "Option::is_none")]
-	pub custom_avatars: Option<Vec<crate::models::CloudVersionIdentityCustomAvatar>>,
 	/// **Deprecated**
 	#[serde(
 		rename = "custom_display_names",
@@ -25,18 +25,18 @@ pub struct CloudVersionIdentityConfig {
 	)]
 	pub custom_display_names: Option<Vec<crate::models::CloudVersionIdentityCustomDisplayName>>,
 	/// **Deprecated**
-	#[serde(rename = "display_names", skip_serializing_if = "Option::is_none")]
-	pub display_names: Option<Vec<String>>,
+	#[serde(rename = "custom_avatars", skip_serializing_if = "Option::is_none")]
+	pub custom_avatars: Option<Vec<crate::models::CloudVersionIdentityCustomAvatar>>,
 }
 
 impl CloudVersionIdentityConfig {
 	/// **Deprecated** Identity configuration for a given version.
 	pub fn new() -> CloudVersionIdentityConfig {
 		CloudVersionIdentityConfig {
-			avatars: None,
-			custom_avatars: None,
-			custom_display_names: None,
 			display_names: None,
+			avatars: None,
+			custom_display_names: None,
+			custom_avatars: None,
 		}
 	}
 }

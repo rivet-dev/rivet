@@ -12,35 +12,35 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudCdnNamespaceDomain {
-	/// RFC3339 timestamp
-	#[serde(rename = "create_ts")]
-	pub create_ts: String,
 	/// A valid domain name (no protocol).
 	#[serde(rename = "domain")]
 	pub domain: String,
-	#[serde(rename = "verification_errors")]
-	pub verification_errors: Vec<String>,
-	#[serde(rename = "verification_method")]
-	pub verification_method: Box<crate::models::CloudCdnNamespaceDomainVerificationMethod>,
+	/// RFC3339 timestamp
+	#[serde(rename = "create_ts")]
+	pub create_ts: String,
 	#[serde(rename = "verification_status")]
 	pub verification_status: crate::models::CloudCdnNamespaceDomainVerificationStatus,
+	#[serde(rename = "verification_method")]
+	pub verification_method: Box<crate::models::CloudCdnNamespaceDomainVerificationMethod>,
+	#[serde(rename = "verification_errors")]
+	pub verification_errors: Vec<String>,
 }
 
 impl CloudCdnNamespaceDomain {
 	/// A CDN domain for a given namespace.
 	pub fn new(
-		create_ts: String,
 		domain: String,
-		verification_errors: Vec<String>,
-		verification_method: crate::models::CloudCdnNamespaceDomainVerificationMethod,
+		create_ts: String,
 		verification_status: crate::models::CloudCdnNamespaceDomainVerificationStatus,
+		verification_method: crate::models::CloudCdnNamespaceDomainVerificationMethod,
+		verification_errors: Vec<String>,
 	) -> CloudCdnNamespaceDomain {
 		CloudCdnNamespaceDomain {
-			create_ts,
 			domain,
-			verification_errors,
-			verification_method: Box::new(verification_method),
+			create_ts,
 			verification_status,
+			verification_method: Box::new(verification_method),
+			verification_errors,
 		}
 	}
 }

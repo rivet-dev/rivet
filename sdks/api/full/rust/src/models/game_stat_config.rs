@@ -12,58 +12,58 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct GameStatConfig {
+	#[serde(rename = "record_id")]
+	pub record_id: uuid::Uuid,
+	#[serde(rename = "icon_id")]
+	pub icon_id: uuid::Uuid,
+	#[serde(rename = "format")]
+	pub format: crate::models::GameStatFormatMethod,
 	#[serde(rename = "aggregation")]
 	pub aggregation: crate::models::GameStatAggregationMethod,
+	#[serde(rename = "sorting")]
+	pub sorting: crate::models::GameStatSortingMethod,
+	#[serde(rename = "priority")]
+	pub priority: i32,
 	/// Represent a resource's readable display name.
 	#[serde(rename = "display_name")]
 	pub display_name: String,
-	#[serde(rename = "format")]
-	pub format: crate::models::GameStatFormatMethod,
-	#[serde(rename = "icon_id")]
-	pub icon_id: uuid::Uuid,
-	/// A string appended to the end of a game statistic's value that is not exactly 1. Example: 45 **dollars**.
-	#[serde(rename = "postfix_plural", skip_serializing_if = "Option::is_none")]
-	pub postfix_plural: Option<String>,
 	/// A string appended to the end of a singular game statistic's value. Example: 1 **dollar**.
 	#[serde(rename = "postfix_singular", skip_serializing_if = "Option::is_none")]
 	pub postfix_singular: Option<String>,
-	/// A string prepended to the beginning of a game statistic's value that is not exactly 1. Example: **values** 45.
-	#[serde(rename = "prefix_plural", skip_serializing_if = "Option::is_none")]
-	pub prefix_plural: Option<String>,
+	/// A string appended to the end of a game statistic's value that is not exactly 1. Example: 45 **dollars**.
+	#[serde(rename = "postfix_plural", skip_serializing_if = "Option::is_none")]
+	pub postfix_plural: Option<String>,
 	/// A string appended to the beginning of a singular game statistic's value. Example: **value** 1.
 	#[serde(rename = "prefix_singular", skip_serializing_if = "Option::is_none")]
 	pub prefix_singular: Option<String>,
-	#[serde(rename = "priority")]
-	pub priority: i32,
-	#[serde(rename = "record_id")]
-	pub record_id: uuid::Uuid,
-	#[serde(rename = "sorting")]
-	pub sorting: crate::models::GameStatSortingMethod,
+	/// A string prepended to the beginning of a game statistic's value that is not exactly 1. Example: **values** 45.
+	#[serde(rename = "prefix_plural", skip_serializing_if = "Option::is_none")]
+	pub prefix_plural: Option<String>,
 }
 
 impl GameStatConfig {
 	/// A game statistic config.
 	pub fn new(
-		aggregation: crate::models::GameStatAggregationMethod,
-		display_name: String,
-		format: crate::models::GameStatFormatMethod,
-		icon_id: uuid::Uuid,
-		priority: i32,
 		record_id: uuid::Uuid,
+		icon_id: uuid::Uuid,
+		format: crate::models::GameStatFormatMethod,
+		aggregation: crate::models::GameStatAggregationMethod,
 		sorting: crate::models::GameStatSortingMethod,
+		priority: i32,
+		display_name: String,
 	) -> GameStatConfig {
 		GameStatConfig {
-			aggregation,
-			display_name,
-			format,
-			icon_id,
-			postfix_plural: None,
-			postfix_singular: None,
-			prefix_plural: None,
-			prefix_singular: None,
-			priority,
 			record_id,
+			icon_id,
+			format,
+			aggregation,
 			sorting,
+			priority,
+			display_name,
+			postfix_singular: None,
+			postfix_plural: None,
+			prefix_singular: None,
+			prefix_plural: None,
 		}
 	}
 }

@@ -10,16 +10,16 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct ServersBuild {
-	/// Unsigned 64 bit integer.
-	#[serde(rename = "content_length")]
-	pub content_length: i64,
-	/// RFC3339 timestamp
-	#[serde(rename = "created_at")]
-	pub created_at: String,
 	#[serde(rename = "id")]
 	pub id: uuid::Uuid,
 	#[serde(rename = "name")]
 	pub name: String,
+	/// RFC3339 timestamp
+	#[serde(rename = "created_at")]
+	pub created_at: String,
+	/// Unsigned 64 bit integer.
+	#[serde(rename = "content_length")]
+	pub content_length: i64,
 	/// Tags of this build
 	#[serde(rename = "tags")]
 	pub tags: ::std::collections::HashMap<String, String>,
@@ -27,17 +27,17 @@ pub struct ServersBuild {
 
 impl ServersBuild {
 	pub fn new(
-		content_length: i64,
-		created_at: String,
 		id: uuid::Uuid,
 		name: String,
+		created_at: String,
+		content_length: i64,
 		tags: ::std::collections::HashMap<String, String>,
 	) -> ServersBuild {
 		ServersBuild {
-			content_length,
-			created_at,
 			id,
 			name,
+			created_at,
+			content_length,
 			tags,
 		}
 	}

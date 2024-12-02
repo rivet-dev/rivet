@@ -12,28 +12,28 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct CloudNamespaceVersion {
-	/// RFC3339 timestamp
-	#[serde(rename = "deploy_ts")]
-	pub deploy_ts: String,
 	/// A universally unique identifier.
 	#[serde(rename = "namespace_id")]
 	pub namespace_id: String,
 	/// A universally unique identifier.
 	#[serde(rename = "version_id")]
 	pub version_id: String,
+	/// RFC3339 timestamp
+	#[serde(rename = "deploy_ts")]
+	pub deploy_ts: String,
 }
 
 impl CloudNamespaceVersion {
 	/// A previously deployed namespace version.
 	pub fn new(
-		deploy_ts: String,
 		namespace_id: String,
 		version_id: String,
+		deploy_ts: String,
 	) -> CloudNamespaceVersion {
 		CloudNamespaceVersion {
-			deploy_ts,
 			namespace_id,
 			version_id,
+			deploy_ts,
 		}
 	}
 }
