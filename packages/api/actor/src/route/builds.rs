@@ -28,10 +28,10 @@ pub async fn get(
 		build_ids: vec![build_id.into()],
 	})
 	.await?;
-	let build = unwrap_with!(builds_res.builds.first(), BUILDS_BUILD_NOT_FOUND);
+	let build = unwrap_with!(builds_res.builds.first(), BUILD_NOT_FOUND);
 	ensure_with!(
 		unwrap!(build.env_id).as_uuid() == env_id,
-		BUILDS_BUILD_NOT_FOUND
+		BUILD_NOT_FOUND
 	);
 
 	let uploads_res = op!([ctx] upload_get {
@@ -219,9 +219,9 @@ pub async fn patch_tags(
 			build_ids: vec![build_id],
 		})
 		.await?;
-	let build = unwrap_with!(build_res.builds.first(), BUILDS_BUILD_NOT_FOUND);
+	let build = unwrap_with!(build_res.builds.first(), BUILD_NOT_FOUND);
 
-	ensure_with!(unwrap!(build.env_id) == env_id, BUILDS_BUILD_NOT_FOUND);
+	ensure_with!(unwrap!(build.env_id) == env_id, BUILD_NOT_FOUND);
 
 	ctx.op(build::ops::patch_tags::Input {
 		build_id,
@@ -376,11 +376,11 @@ pub async fn complete_build(
 		build_ids: vec![build_id.into()],
 	})
 	.await?;
-	let build = unwrap_with!(build_res.builds.first(), BUILDS_BUILD_NOT_FOUND);
+	let build = unwrap_with!(build_res.builds.first(), BUILD_NOT_FOUND);
 
 	ensure_with!(
 		unwrap!(build.env_id).as_uuid() == env_id,
-		BUILDS_BUILD_NOT_FOUND
+		BUILD_NOT_FOUND
 	);
 
 	op!([ctx] @dont_log_body upload_complete {

@@ -561,7 +561,7 @@ async fn get_build_and_dc(
 			datacenter_ids: vec![input.datacenter_id],
 		})
 	)?;
-	let build = unwrap_with!(build_res.builds.first(), BUILDS_BUILD_NOT_FOUND);
+	let build = unwrap_with!(build_res.builds.first(), BUILD_NOT_FOUND);
 	let upload_id = unwrap!(build.upload_id).as_uuid();
 	let build_kind = unwrap!(backend::build::BuildKind::from_i32(build.kind));
 	let build_compression = unwrap!(backend::build::BuildCompression::from_i32(

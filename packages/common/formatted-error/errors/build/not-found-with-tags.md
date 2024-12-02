@@ -1,5 +1,5 @@
 ---
-name = "BUILDS_BUILD_NOT_FOUND_WITH_TAGS"
+name = "BUILD_NOT_FOUND_WITH_TAGS"
 description = "Build not found with the given tags."
 http_status = 400
 ---

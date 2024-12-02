@@ -14,6 +14,7 @@ const MAX_TX_RETRIES: usize = 16;
 
 pub type AsyncResult<'a, T> = Pin<Box<dyn Future<Output = GlobalResult<T>> + Send + 'a>>;
 
+// TODO: Make it so you don't have to clone every input that goes in
 /// Runs a transaction. This explicitly handles retry errors.
 ///
 /// See

@@ -776,7 +776,7 @@ async fn resolve_build_id(
 				})
 				.await?;
 
-			let build = unwrap_with!(builds_res.builds.first(), BUILDS_BUILD_NOT_FOUND_WITH_TAGS);
+			let build = unwrap_with!(builds_res.builds.first(), BUILD_NOT_FOUND_WITH_TAGS);
 
 			Ok(build.build_id)
 		}

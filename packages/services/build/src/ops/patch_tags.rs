@@ -15,25 +15,38 @@ pub struct Output {}
 
 #[operation]
 pub async fn patch_tags(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
-	// Validate tags don't overlap
-	if let Some(exclusive_tags) = &input.exclusive_tags {
-		ensure_with!(
-			exclusive_tags.iter().all(|k| input.tags.contains_key(k)),
-			BUILDS_TAGS_MISSING_EXCLUSIVE_KEY
-		);
-	}
+	let exclusive_tags_json = if let Some(exclusive_tags) = &input.exclusive_tags {
+		// Validate tags don't overlap
+		let exclusive_tags_map = exclusive_tags
+			.iter()
+			.map(|tag| {
+				let value = unwrap_with!(
+					unwrap_with!(input.tags.get(tag), BUILD_TAGS_MISSING_EXCLUSIVE_KEY),
+					BUILD_TAGS_NULL_EXCLUSIVE_KEY
+				);
 
-	let tags_json = serde_json::to_value(&input.tags)?;
+				Ok((tag.clone(), value.clone()))
+			})
+			.collect::<GlobalResult<HashMap<_, _>>>()?;
+
+		// TODO: This can just use a raw value instead of `util::serde::Raw` but only after sqlx is updated
+		// past 0.8. Otherwise `RawValue` doesn't implement `sqlx::Encode`
+		Some(util::serde::Raw::new(&exclusive_tags_map)?)
+	} else {
+		None
+	};
+
+	let tags_json = util::serde::Raw::new(&input.tags)?;
 
 	rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| {
 		let ctx = ctx.clone();
 		let build_id = input.build_id;
 		let tags_json = tags_json.clone();
-		let exclusive_tags = input.exclusive_tags.clone();
+		let exclusive_tags_json = exclusive_tags_json.clone();
 
 		async move {
 			// Remove the exclusive tag from other builds of the same owner (same game id OR same env id)
-			if let Some(exclusive_tags) = &exclusive_tags {
+			if let Some(exclusive_tags_json) = exclusive_tags_json {
 				sql_execute!(
 					[ctx, @tx tx]
 					"
@@ -44,11 +57,15 @@ pub async fn patch_tags(ctx: &OperationCtx, input: &Input) -> GlobalResult<Outpu
 							WHERE build_id = $1
 						),
 						filter_tags AS (
+							-- Combine the now filtered kv pairs back into an object
 							SELECT build_id, jsonb_object_agg(key, value) AS tags
 							FROM db_build.builds AS b
-							JOIN LATERAL jsonb_each(tags)
-							ON key != ANY($2::TEXT[])
+							-- Split out each kv pair into a row
+							JOIN LATERAL jsonb_each(b.tags) AS t(key, value)
+							-- Filter out kv pairs that match any pair from the exclusive tags
+							ON NOT jsonb_build_object(key, value) <@ $2
 							WHERE
+								-- Check that game id and env id match 
 								(
 									(
 										b.game_id IS NULL AND
@@ -63,16 +80,20 @@ pub async fn patch_tags(ctx: &OperationCtx, input: &Input) -> GlobalResult<Outpu
 									) OR
 									b.env_id = (SELECT env_id FROM build_data)
 								) AND
-								tags ?| $2::TEXT[]
+								-- Check that build has the exclusive tags to begin with (pre-filtering)
+								b.tags @> $2
 							GROUP BY build_id
 						)
 					UPDATE db_build.builds AS b
 					SET tags = f2.tags
 					FROM (
+						-- Fetch filtered tags or default to an empty object (there won't be a row from
+						-- filter_tags if all tags were removed)
 						SELECT b.build_id, COALESCE(f.tags, '{}'::JSONB) AS tags
 						FROM db_build.builds AS b
 						LEFT JOIN filter_tags AS f
 						ON b.build_id = f.build_id
+						-- Same as the above where clause but we have to do it again because of the LEFT JOIN
 						WHERE
 							(
 								(
@@ -88,12 +109,12 @@ pub async fn patch_tags(ctx: &OperationCtx, input: &Input) -> GlobalResult<Outpu
 								) OR 
 								b.env_id = (SELECT env_id FROM build_data)
 							) AND
-							b.tags ?| $2::TEXT[]
+							b.tags @> $2
 					) AS f2
 					WHERE b.build_id = f2.build_id
 					",
-					&build_id,
-					&exclusive_tags,
+					build_id,
+					exclusive_tags_json,
 				)
 				.await?;
 			}
@@ -106,8 +127,8 @@ pub async fn patch_tags(ctx: &OperationCtx, input: &Input) -> GlobalResult<Outpu
 				SET tags = tags || $2
 				WHERE build_id = $1
 				",
-				&build_id,
-				&tags_json,
+				build_id,
+				tags_json,
 			)
 			.await?;
 

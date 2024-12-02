@@ -1,5 +1,5 @@
 ---
-name = "BUILDS_BUILD_NOT_FOUND"
+name = "BUILD_NOT_FOUND"
 description = "Build not found."
 http_status = 400
 ---
