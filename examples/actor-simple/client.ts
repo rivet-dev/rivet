@@ -1,60 +1,57 @@
-import { ActorClient } from "../../sdks/actors/client/src/mod.ts"
+import { ActorClient, ActorHandle } from "../../sdks/actors/client/src/mod.ts"
+import type { Counter } from "./counter.ts";
 
 async function main() {
-	const actorClient = new ActorClient("http://127.0.0.1:20025");
+	const endpoint = Deno.env.get("MANAGER_ENDPOINT");
+	if (!endpoint) throw new Error("Missing MANAGER_ENDPOINT");
+	const actorClient = new ActorClient(endpoint);
+
 
 	// Broadcast event
-	let broadcastActor;
+	let broadcastActor: ActorHandle<Counter>;
 	{
-		const mod = 3;
 		broadcastActor = await actorClient.withTags({ name: "counter" });
-		broadcastActor.on("directCount", (count: unknown) => {
-			console.log(`Direct (n % ${mod}):`, count);
+		broadcastActor.on("broadcastCount", (count: unknown) => {
+			console.log("Broadcast:", count);
 		});
 	}
 
 	// Direct event
-	let directActor;
+	let directActor: ActorHandle<Counter>;
 	{
 		const mod = 3;
-		directActor = await actorClient.withTags({ name: "counter" });
+		directActor = await actorClient.withTags(
+			{ name: "counter" },
+			{
+				parameters: { mod },
+			}
+		);
 		directActor.on("directCount", (count: unknown) => {
-			console.log(`Broadcast:`, count);
+			console.log(`Direct (n % ${mod}):`, count);
 		});
 	}
 
 	// Simple RPC
 	{
-		const actor = await actorClient.withTags({ name: "counter" })
-		const newCount: number = await actor.rpc("increment", 5);
+		const actor = await actorClient.withTags<Counter>({ name: "counter" });
+		const newCount = await actor.increment(1);
 		console.log('Simple RPC:', newCount);
 		actor.disconnect();
 	}
 
 	// Multiple RPC calls
 	{
-		const actor = await actorClient.withTags({ name: "counter" });
+		const actor = await actorClient.withTags<Counter>({ name: "counter" });
 
 		for (let i = 0; i < 10; i++) {
-			const output = await actor.rpc("increment", 5);
-			console.log('Reusing handle:', output);
+			const output = await actor.increment(1);
+			console.log('Multiple RPC:', output);
 		}
 
 		actor.disconnect();
 	}
 
-	// WebSocket
-	{
-		const actor = await actorClient.withTags({ name: "counter" });
-		for (let i = 0; i < 10; i++) {
-			const newOutput = await actor.rpc("increment", 5);
-			console.log('WebSocket:', newOutput);
-		}
-
-		actor.disconnect();
-	}
-
-	await directActor.rpc("destroyMe");
+	await directActor.destroyMe();
 
 	// Disconnect all actors before 
 	broadcastActor.disconnect();

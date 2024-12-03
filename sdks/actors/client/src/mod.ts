@@ -1,2 +1,3 @@
 export { ActorClient } from "./client.ts";
-export { ActorHandle } from "./handle.ts";
+export type { ActorHandle } from "./client.ts";
+

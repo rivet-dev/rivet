@@ -9,15 +9,20 @@ interface ConnectionData {
 	mod: number;
 }
 
-class Counter extends Actor<State, ConnectionData>  {
-	protected override onConnect(_conn: Connection<ConnectionData>, mod: number): ConnectionData {
-		return { mod };
+interface ConnectionParameters {
+	mod: number;
+}
+
+export class Counter extends Actor<State, ConnectionData, ConnectionParameters>  {
+	protected override onConnect(_conn: Connection<ConnectionData, ConnectionParameters>, parameters?: ConnectionParameters): ConnectionData {
+		return { mod: parameters?.mod ?? 1 };
 	}
 
 	protected override onStateChange(newState: State): void | Promise<void> {
 		this.broadcast("broadcastCount", newState.count);
 
 		for (const conn of this.connections.values()) {
+			console.log('checking mod', conn.id, conn.data);
 			if (newState.count % conn.data!.mod == 0) {
 				conn.send("directCount", newState.count);
 			}
@@ -28,14 +33,14 @@ class Counter extends Actor<State, ConnectionData>  {
         return { count: 0 };
     }
 
-    increment(): number {
-        this.state.count += 1;
+    increment(count: number): number {
+        this.state.count += count;
         return this.state.count;
     }
 
 	destroyMe() {
-		// TODO: Use the destroy API endpoint instead
-		Deno.exit(0);
+		// HACK: Timeout to allow clean disconnect
+		setTimeout(() => Deno.exit(0), 500);
 	}
 }
 

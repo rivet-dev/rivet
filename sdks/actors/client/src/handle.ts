@@ -1,11 +1,11 @@
-import { assertExists, assertEquals } from "@std/assert";
-import { assertUnreachable } from "../../common/src/utils.ts";
+import { assertEquals, assertExists } from "@std/assert";
+import { assertUnreachable, MAX_PARAMS_LEN } from "../../common/src/utils.ts";
 import * as wsToServer from "../../protocol/src/ws/to_server.ts";
 import * as wsToClient from "../../protocol/src/ws/to_client.ts";
 
 interface RpcInFlight {
-	resolve: (response: wsToClient.RpcResponseOk) => void,
-	reject: (error: Error) => void,
+	resolve: (response: wsToClient.RpcResponseOk) => void;
+	reject: (error: Error) => void;
 }
 
 interface EventSubscriptions {
@@ -15,8 +15,12 @@ interface EventSubscriptions {
 
 type EventUnsubscribe = () => void;
 
-export class ActorHandle {
-	#destroyed = false;
+interface SendOpts {
+	ephemeral: boolean;
+}
+
+export class ActorHandleRaw {
+	#disconnected = false;
 
 	#websocket?: WebSocket;
 	#websocketQueue: string[] = [];
@@ -26,33 +30,41 @@ export class ActorHandle {
 
 	// TODO: ws message queue
 
-	constructor(private readonly endpoint: string) {
+	constructor(
+		private readonly endpoint: string,
+		private readonly parameters: unknown,
+	) {
 	}
 
-	#assertUsable() {
-		if (this.#destroyed) throw new Error("Actor destroyed");
-	}
-
-	async rpc<Args extends Array<unknown> = unknown[], Response = unknown>(name: string, ...args: Args): Promise<Response> {
+	async rpc<Args extends Array<unknown> = unknown[], Response = unknown>(
+		name: string,
+		...args: Args
+	): Promise<Response> {
 		assertExists(this.#websocket);
+
+		console.log("rpc", name, args);
 
 		// TODO: Add to queue if socket is not open
 
 		const requestId = crypto.randomUUID();
 
-		const resolvePromise = new Promise<wsToClient.RpcResponseOk>((resolve, reject) => {
-			this.#websocketRpcInFlight.set(requestId, { resolve, reject });
-		});
+		const resolvePromise = new Promise<wsToClient.RpcResponseOk>(
+			(resolve, reject) => {
+				this.#websocketRpcInFlight.set(requestId, { resolve, reject });
+			},
+		);
 
-		this.#webSocketSend({
-			body: {
-				rpcRequest: {
-					id: requestId,
-					name,
-					args,
-				}
-			}
-		} satisfies wsToServer.ToServer);
+		this.#webSocketSend(
+			{
+				body: {
+					rpcRequest: {
+						id: requestId,
+						name,
+						args,
+					},
+				},
+			} satisfies wsToServer.ToServer,
+		);
 
 		// TODO: Throw error if disconnect is called
 
@@ -80,8 +92,23 @@ export class ActorHandle {
 	//	return resJson.output;
 	//}
 
-	connect<Args extends Array<unknown>>(...args: Args) {
-		const url = `${this.endpoint}/connect?args=${encodeURIComponent(JSON.stringify(args))}`;
+	connect() {
+		this.#disconnected = false;
+
+		let url = `${this.endpoint}/connect`;
+
+		if (this.parameters !== undefined) {
+			const paramsStr = JSON.stringify(this.parameters);
+
+			// TODO: This is an imprecise count since it doesn't count the full URL length & URI encoding expansion in the URL size
+			if (paramsStr.length > MAX_PARAMS_LEN) {
+				throw new Error(
+					`Connection parameters must be less than ${MAX_PARAMS_LEN} bytes`,
+				);
+			}
+
+			url += `?params=${encodeURIComponent(paramsStr)}`;
+		}
 
 		const ws = new WebSocket(url);
 		this.#websocket = ws;
@@ -94,10 +121,12 @@ export class ActorHandle {
 			}
 
 			// Flush queue
-			while (this.#websocketQueue.length > 0) {
-				const message = this.#websocketQueue.shift();
-				assertExists(message);
-				ws.send(message);
+			//
+			// If the message fails to send, the message will be re-queued
+			const queue = this.#websocketQueue;
+			this.#websocketQueue = [];
+			for (const msg of queue) {
+				this.#webSocketSendRaw(msg);
 			}
 		};
 		ws.onclose = () => {
@@ -108,7 +137,7 @@ export class ActorHandle {
 			this.#websocket = undefined;
 
 			// Automatically reconnect
-			if (!this.#destroyed) {
+			if (!this.#disconnected) {
 				// TODO: Fetch actor to check if it's destroyed
 
 				// TODO: Add backoff for reconnect
@@ -119,13 +148,14 @@ export class ActorHandle {
 			}
 		};
 		ws.onerror = (ev) => {
-			if (this.#destroyed) return;
+			if (this.#disconnected) return;
 			console.warn("Socket error", ev);
-
 		};
 		ws.onmessage = (ev) => {
 			const rawData = ev.data;
-			if (typeof rawData !== "string") throw new Error("Response data was not string");
+			if (typeof rawData !== "string") {
+				throw new Error("Response data was not string");
+			}
 
 			const response: wsToClient.ToClient = JSON.parse(rawData);
 
@@ -133,12 +163,18 @@ export class ActorHandle {
 				const inFlight = this.#takeRpcInFlight(response.body.rpcResponseOk.id);
 				inFlight.resolve(response.body.rpcResponseOk);
 			} else if ("rpcResponseError" in response.body) {
-				const inFlight = this.#takeRpcInFlight(response.body.rpcResponseError.id);
-				inFlight.reject(new Error(`RPC error: ${response.body.rpcResponseError.message}`));
+				const inFlight = this.#takeRpcInFlight(
+					response.body.rpcResponseError.id,
+				);
+				inFlight.reject(
+					new Error(`RPC error: ${response.body.rpcResponseError.message}`),
+				);
 			} else if ("event" in response.body) {
 				this.#dispatchEvent(response.body.event);
 			} else if ("error" in response.body) {
-				console.warn(`Unhandled error from actor: ${response.body.error.message}`);;
+				console.warn(
+					`Unhandled error from actor: ${response.body.error.message}`,
+				);
 			} else {
 				assertUnreachable(response.body);
 			}
@@ -146,7 +182,7 @@ export class ActorHandle {
 	}
 
 	#takeRpcInFlight(id: string): RpcInFlight {
-		const inFlight = this.#websocketRpcInFlight.get(id)
+		const inFlight = this.#websocketRpcInFlight.get(id);
 		if (!inFlight) throw new Error(`No in flight response for ${id}`);
 		this.#websocketRpcInFlight.delete(id);
 		return inFlight;
@@ -157,9 +193,9 @@ export class ActorHandle {
 		if (!listeners) return;
 
 		// Create a new array to avoid issues with listeners being removed during iteration
-		[...listeners].forEach(listener => {
+		[...listeners].forEach((listener) => {
 			listener.callback(...event.args);
-			
+
 			// Remove if this was a one-time listener
 			if (listener.once) {
 				listeners.delete(listener);
@@ -172,12 +208,14 @@ export class ActorHandle {
 		}
 	}
 
-	#addEventSubscription(eventName: string, callback: (...args: unknown[]) => void, once: boolean): EventUnsubscribe {
-		this.#assertUsable();
-
+	#addEventSubscription(
+		eventName: string,
+		callback: (...args: unknown[]) => void,
+		once: boolean,
+	): EventUnsubscribe {
 		const listener: EventSubscriptions = {
 			callback,
-			once
+			once,
 		};
 
 		const isFirstListener = !this.#eventSubscriptions.has(eventName);
@@ -200,35 +238,49 @@ export class ActorHandle {
 		};
 	}
 
-	on(eventName: string, callback: (...args: unknown[]) => void): EventUnsubscribe {
+	on(
+		eventName: string,
+		callback: (...args: unknown[]) => void,
+	): EventUnsubscribe {
 		return this.#addEventSubscription(eventName, callback, false);
 	}
 
-	once(eventName: string, callback: (...args: unknown[]) => void): EventUnsubscribe {
+	once(
+		eventName: string,
+		callback: (...args: unknown[]) => void,
+	): EventUnsubscribe {
 		return this.#addEventSubscription(eventName, callback, true);
 	}
 
-	#webSocketSend(message: wsToServer.ToServer) {
-		const msgJson = JSON.stringify(message);
+	#webSocketSend(message: wsToServer.ToServer, opts?: SendOpts) {
+		this.#webSocketSendRaw(JSON.stringify(message), opts);
+	}
+
+	#webSocketSendRaw(message: string, opts?: SendOpts) {
 		if (this.#websocket?.readyState == WebSocket.OPEN) {
 			try {
-				this.#websocket.send(msgJson);
+				this.#websocket.send(message);
+				console.log("sent", message);
 			} catch (err) {
-				console.warn("Failed to send message, retrying", err);
+				console.warn("failed to send message, added to queue", err);
 
 				// Assuming the socket is disconnected and will be reconnected soon
 				//
 				// Will attempt to resend soon
-				this.#websocketQueue.unshift(msgJson);
+				this.#websocketQueue.unshift(message);
 			}
 		} else {
-			this.#websocketQueue.push(msgJson);
+			if (!opts?.ephemeral) {
+				this.#websocketQueue.push(message);
+				console.log("queued", message);
+			}
 		}
 	}
 
 	// TODO:Add destructor
 	disconnect() {
 		if (!this.#websocket) return;
+		this.#disconnected = true;
 
 		console.log("Disconnecting");
 
@@ -246,29 +298,13 @@ export class ActorHandle {
 	}
 
 	#sendSubscription(eventName: string, subscribe: boolean) {
-		const msgJson = JSON.stringify({
+		this.#webSocketSend({
 			body: {
 				subscriptionRequest: {
 					eventName,
 					subscribe,
-				}
-			}
-		} satisfies wsToServer.ToServer);
-
-		if (this.#websocket?.readyState == WebSocket.OPEN) {
-			try {
-				this.#websocket.send(msgJson);
-			} catch (err) {
-				console.warn("Failed to send subscription message, retrying", err);
-
-				// Assuming the socket is disconnected and will be reconnected soon
-				//
-				// Will attempt to resend soon
-				this.#websocketQueue.unshift(msgJson);
-			}
-		} else {
-			this.#websocketQueue.push(msgJson);
-		}
+				},
+			},
+		}, { ephemeral: true });
 	}
 }
-
