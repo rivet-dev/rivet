@@ -1,0 +1,98 @@
+# Events
+
+Events are used to receive realtime data from actors.
+
+Only actors can publish events. Clients must call functions to communicate with the actor.
+
+## Publishing from actors
+
+Actors can publish events to clients using `this.broadcast` and `connection.send`.
+
+### Broadcasting events
+
+Actors can publish events to all connected clients with `this.broadcast(name, data)`. For example:
+
+<CodeGroup>
+```typescript {{ "title": "chat_channel.ts" }}
+class ChatChannel extends Actor {
+    sendMessage(message: string) {
+        this.broadcast("newMessage", { message });
+    }
+}
+```
+
+```typescript {{ "title": "client.ts" }}
+const actor = client.withTags<ChatChannel>({ name: "chat_channel" });
+await actor.sendMessage("Hello, world!");
+```
+</CodeGroup>
+
+### Sending events to specific connections
+
+Actors can send messages to specific client connections. All connections are available on the `this.connections` array. For example:
+
+<CodeGroup>
+```typescript {{ "title": "chat_hub.ts" }}
+class ChatHub extends Actor {
+    sendPrivateMessage(connectionId: number, message: string) {
+        const conn = this.connections.find(c => c.id == connectionId);
+        conn.send("newMessage", { message });
+    }
+}
+```
+
+```typescript {{ "title": "client.ts" }}
+const actor = client.withTags<ChatHub>({ name: "chat_hub" });
+await actor.sendPrivateMessage(123, "Hello, world!");
+```
+</CodeGroup>
+
+## Subscribing from clients
+
+Clients can subscribe to events from actors using `on` and `once`.
+
+### `on`
+
+Clients can subscribe to events using `actor.on(name, callback)`. For example:
+
+<CodeGroup>
+```typescript {{ "title": "client.ts" }}
+const actor = client.withTags<ChatChannel>({ name: "chat_channel" });
+actor.on("newMessage", ({ message }) => {
+    console.log("Message", message);
+});
+```
+
+```typescript {{ "title": "chat_channel.ts" }}
+class ChatChannel extends Actor {
+    sendMessage(message: string) {
+        this.broadcast("newMessage", { message });
+    }
+}
+```
+</CodeGroup>
+
+### `once`
+
+Clients can subscribe to a single event with `actor.once(name, callback)`. For example:
+
+<CodeGroup>
+```typescript {{ "title": "client.ts" }}
+const actor = client.withTags<Example>({ name: "example" });
+actor.once("ping", () => {  // This will only be called once
+    console.log("Received ping");
+});
+```
+
+```typescript {{ "title": "example.ts" }}
+class LongTask extends Actor {
+    broadcastPing() {
+        this.broadcast("ping");
+    }
+}
+```
+</CodeGroup>
+
+## Connections
+
+Read more about connections [here](/docs/connections).

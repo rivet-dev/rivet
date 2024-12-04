@@ -308,11 +308,11 @@ export const Version = () => {
   );
 };
 
-export const Card = ({ title, href }) => {
+export const Card = ({ href, ...props }) => {
   if (href) {
     return (
       <Link href={href} className='h-full'>
-        <CtaCard className='h-full' title={title} />
+        <CtaCard className='h-full' {...props} />
       </Link>
     );
   }

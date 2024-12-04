@@ -137,7 +137,7 @@ function Tree({ sections, isActive, depth = 0 }) {
               </div>
 
               {section.children.length > 0 ? (
-                <div className='relative pl-1'>
+                <div className='relative pl-3'>
                   <Tree sections={section.children} isActive={isActive} depth={depth + 1} />
                 </div>
               ) : null}

@@ -1,0 +1,62 @@
+# Initial Setup
+
+This guide will walk you through creating, deploying, and connecting to a simple Rivet Actor.
+
+## Install CLI
+
+```sh
+TODO
+```
+
+## Initialize Project
+
+ Create a new project:
+
+```sh
+rivet init
+```
+
+Follow the instructions to setup your project.
+
+This will create a few files:
+
+- `rivet.json[c]` This configures how your app is deployed to Rivet.
+- `hello_world.ts` This is an example actor. This will be deployed in the next step.
+
+## Deploy project
+
+Deploy your project to Rivet with:
+
+```sh
+rivet deploy
+```
+
+<Note>
+    If self-hosting, this will prompt you to input a custom API address.
+</Note>
+
+This will print an endpoint that you can connect to.
+
+You can test this by using the Rivet CLI:
+
+TODO: This is not implemented yet, find a cleaner way of testing this, maybe just give client code
+
+```sh
+rivet actor connect --tags name=hello_world
+```
+
+## Setup your editor/IDE (optional)
+
+Rivet actors run on the [Deno](https://deno.com/) runtime.  Read their guide on how to configure your IDE [here](https://docs.deno.com/runtime/getting_started/setup_your_environment/#using-an-editoride).
+
+## Setup client
+
+To setup a client, follow the guide for [JavaScript/TypeScript](/docs/javascript).
+
+## Next Steps
+
+<CardGroup>
+    <Card title="What are Actors?" href="/docs/actors" />
+    <Card title="Use Cases" href="/use-cases" />
+    <Card title="Examples" href="/examples" />
+</CardGroup>

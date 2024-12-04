@@ -1,0 +1,508 @@
+# What are Actors?
+
+Actors are a simple - yet powerful - architecture. Think of actors as independent workers that:
+
+- Run in their own isolated, lightweight process
+- Maintain their own isolated, durable state in memory (survives crashes & upgrades)
+- Communicate only through remote function calls - no shared state
+- Scale infinitely, start instantly, and sleep when not in use
+- Deploy globally at the edge (close to users)
+
+These characteristics provide the following benefits:
+
+- Replace the need for complex infrastructure (caches, queues, pubsub) with actors - a simpler architecture
+- Improve performance by combining compute (i.e. "functions") with data (i.e. "state")
+- Provide natural fault tolerance - state is durable & failures don't cascade
+- Lower latency for users by running at the edge & combining compute/data
+- Make large applications more maintainable with clear system boundaries
+
+## Core concepts
+
+- **Functions** (i.e. remote procedure calls) are how clients communicate with actors & how actors communicate with each other.
+- **State** is the data belonging to each actor. State cannot be shared between actors. State is stored in memory (unless it's too large) for fast reads & writes. State is durable and will always survive a crash or upgrade. You can update state without having to do anything special.
+- **Events** are used for realtime communication between clients & actors. Clients can subscribe to events with `actor.on("myEvent")` and actors can publish events with `this.broadcast("myEvent")` or `connection.send("myEvent")`.
+- **Connections** represent a client that's currently connected to the actor. Connections have have their own state, e.g. `userId`. You can use `onConnect` to authenticate connections before they can communicate with the actor.
+- **Tags** are used to identify actors. Read more below.
+
+To read more about architecting actors for scale, see [here](/docs/scaling).
+
+## Builds
+
+Builds contain the code required to run an actor. Builds are uploaded to Rivet when running `rivet deploy`. Each actor is associated with a single build ID.
+
+When a new build is uploaded, all actors are upgraded to use the new build. This process is usually transparent to you, since state is durable.
+
+## Actor & build tags
+
+Tags are a powerful way of managing actors at scale. Tags can be any set of key-value pairs you choose. They allow you to easily choose which actors to communicate with, create fine-grained security rules, and enhances monitoring.
+
+### Structuring tags
+
+While you can choose anything you'd like for your actor's tags, here's a few guidelines to consider:
+
+- Actors & builds almost always have a `name` tag defining what type of actor this is. For example, `name=user`, `name=channel`, or `name=document`. An actor's `name` tag is usually identical to the build's `name` tag.
+- Actors often have unique ID associated with them as a tag. For example, `userId=1234`, `channel=memes`, `documentId=1234`.
+- Actors & builds sometimes have an `owner` tag indicating what service created the actor. For example `owner=api` and `owner=terraform`.
+- For larger projects, actors & builds sometimes have have an `app` tag to group the product an actor belongs to together. For example, `app=social` and `app=store`.
+
+Tags are not intended for storing large amounts of data (e.g. descriptions or long lists of items). They're intended purely for organizing & filtering actors/builds.
+
+## Actors vs. servers/containers
+
+Servers/containers and actors handle state and compute very differently:
+
+| Feature                 | Servers/Containers                                                  | Actors                                                           |
+| ----------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| **Compute and State**   | Separate compute (application layer) from state (databases)         | Keep state and compute together                                  |
+| **Scaling**             | Need external services (load balancers, databases) to scale         | Scale by creating more instances                                 |
+| **High Availability**   | Need manual configuration for high availability and fault tolerance | Provide built-in durability and fault isolation                  |
+| **Cascading Failure**   | Failures can cascade across systems without proper isolation        | Built-in fault isolation prevents cascading failures             |
+| **Resource Efficiency** | Run continuously regardless of load, wasting resources when idle    | Automatically sleep when inactive and wake instantly when needed |
+| **Performance**         | Performance can be limited by network and database latency          | Optimized performance by co-locating compute and state           |
+| **Latency**             | Typically higher latency due to centralized data centers & database | Lower latency by deploying at the edge, closer to users          |
+| **DevOps Overhead**     | Requires significant DevOps effort for setup and maintenance        | Minimal DevOps overhead due to simpler, on-demand architecture   |
+
+## Example architectures
+
+These examples provide an idea of how actor-based applications are architected.
+
+These examples are abbreviated to exclude authentication, etc. See the [examples](/examples) for more comprehensive code.
+
+### Chat app
+
+In this chat example, actors make it simple to create realtime, stateful chat threads, alongside providing a simple mechanism for managing user profiles.
+
+This example has two actors:
+
+- `User` maintains the information of each user
+- `Channel` maintains chat history & broadcasting events
+
+<CodeGroup>
+```typescript {{ "title": "client.ts" }}
+const client = new Client(/* ... */);
+
+const user = await client.withTags<User>({ name: "user", userId: "1234" });
+const username = await user.getUsername();
+
+const chat = await client.withTags<Channel>({ name: "channel", channelId: "hello-world" });
+chat.on("message", ({ username, message }) => {
+console.log(`[${username}] ${message}`);
+})
+await chat.sendMessage(username, "Hello, world!");
+
+````
+
+```typescript {{ "title": "user.ts" }}
+interface State {
+    username: string;
+}
+
+class User extends Actor<State> {
+    initializeState() {
+      return { username: "Guest" };
+    }
+
+    updateUsername(username: string) {
+        this.state.username = username;
+    }
+
+    getUsername(): string {
+        return this.state.username;
+    }
+}
+````
+
+```typescript {{ "title": "channel.ts" }}
+interface State {
+  messages: { username: string; message: string }[];
+}
+
+class Channel extends Actor<State> {
+  initializeState() {
+    return { username: "Guest" };
+  }
+
+  sendMessage(username: string, message: string) {
+    // Save to state
+    this.state.messages.push({ username, message });
+
+    // Relay message to all other clients connected to this actor
+    this.broadcast('message', { username, message });
+  }
+}
+```
+
+</CodeGroup>
+
+Future improvements for this code would include:
+
+- Authentication for users
+- Use `onConnect` and `onDisconnect` for user presence in the channel
+- Permissions for who can join channels
+
+<Tip>Both Discord & WhatsApp are built on the actor pattern.</Tip>
+
+### Collaborative document
+
+In this collaborative document example, actors make managing stateful, realtime documents simple. Actors provide the added benefit of providing a realtime "drive" for a list of all of the user's documents.
+
+This example has three actors:
+
+- `User` maintains the information of each user
+- `Drive` maintains a list of all documents belonging to a user
+- `Document` maintains the contents of a document & location of users' cursors
+
+<CodeGroup>
+```typescript {{ "title": "client.ts" }}
+const client = new Client(/* ... */);
+
+// Get user
+const user = await client.withTags<User>({ name: "user", userId: "1234" });
+const username = user.getUsername();
+
+// Create document
+const drive = await client.withTags<Drive>({ name: "drive", userId: "1234" });
+const docId = drive.createDocument("A very important message");
+
+// Update document
+const doc = await client.withTags<Document>({ name: "document", docId: "sample-doc" });
+
+doc.on("change", ({ username, content }) => {
+console.log(`${username} updated document:`, content);
+});
+
+doc.on("cursor", ({ username, location }) => {
+console.log(`${username} moved to:`, location);
+});
+
+await doc.insertText(username, 0, "Hello!");
+await doc.moveCursor(username, 5);
+await doc.insertText(username, 5, ", world");
+assert(await doc.getContent() == "Hello, world!");
+````
+
+```typescript {{ "title": "user.ts" }}
+interface State {
+    username: string;
+}
+
+class User extends Actor<State> {
+    initializeState() {
+      return { username: "Guest" };
+    }
+
+    getUsername(): string {
+        return this.state.username;
+    }
+}
+````
+
+```typescript {{ "title": "drive.ts" }}
+interface State {
+  documents: { id: string; title: string }[];
+}
+
+class Drive extends Actor<State> {
+  initializeState() {
+    return { documents: [] };
+  }
+
+  listDocuments() {
+    return this.state.documents;
+  }
+
+  createDocument(title: string): string {
+    const id = Math.random().toString(36).slice(2);
+    this.state.documents.push({ id, title });
+    return id;
+  }
+}
+```
+
+```typescript {{ "title": "document.ts" }}
+interface DocumentState {
+  cursors: Record<string, number>;
+  content: string;
+}
+
+class Document extends Actor<DocumentState> {
+  initializeState() {
+    return { cursors: {}, content: "" };
+  }
+
+  insertText(username: string, location: number, text: string) {
+    this.state.content = this.state.content.slice(0, location) + text + this.state.content.slice(location);
+    this.state.cursors[username] = location + text.length;
+    this.broadcast('change', { username, content: newContent });
+  }
+
+  moveCursor(username: string, location: number) {
+    this.cursors[username] = location;
+    this.broadcast('cursor', { username, location });
+  }
+
+  getContent(): string {
+    return this.state.content;
+  }
+}
+```
+
+</CodeGroup>
+
+Future improvements for this code would include:
+
+- Add CRDTs for client-first document editing
+- Authentication for users
+- Use `onConnect` and `onDisconnect` for user presence in documents
+- Local-first CRDTs for text editing
+
+### E-commerce system
+
+In this e-commerce example, actors are ideal for providing real-time updates and managing shopping carts and stock levels. This approach ensures users receive instant feedback on product availability and order status, thereby enhancing the shopping experience and maintaining accurate inventory records.
+
+This example has three actors:
+
+- `ShoppingCart` maintains items in a user's cart and handles checkout
+- `Inventory` tracks product stock levels and reserves items
+- `Order` manages the lifecycle of a placed order
+
+<CodeGroup>
+```typescript {{ "title": "client.ts" }}
+const client = new Client(/* ... */);
+
+// Get cart for user
+const cart = await client.withTags<ShoppingCart>({ name: "cart", userId: "1234" });
+
+// Add items to cart
+await cart.addItem("product-123", 2);
+await cart.addItem("product-456", 1);
+
+// Get cart contents
+const items = await cart.getItems();
+console.log("Cart:", items);
+
+// Checkout
+const orderId = await cart.checkout();
+
+// Track order
+const order = await client.withTags<Order>({ name: "order", orderId });
+order.on("status", ({ status, timestamp }) => {
+    console.log(`Order ${orderId} is now ${status} at ${timestamp}`);
+});
+
+````
+
+```typescript {{ "title": "shopping_cart.ts" }}
+interface State {
+    items: { productId: string; quantity: number; }[];
+}
+
+class ShoppingCart extends Actor<State> {
+    initializeState() {
+        return { items: [] };
+    }
+
+    async addItem(productId: string, quantity: number) {
+        // Check inventory first
+        const inventory = await this.client.withTags<Inventory>({ name: "inventory" });
+        const available = await inventory.checkStock(productId);
+
+        if (available < quantity) {
+            throw new Error("Not enough stock");
+        }
+
+        // Update cart
+        const existingItem = this.state.items.find(i => i.productId === productId);
+        if (existingItem) {
+            existingItem.quantity += quantity;
+        } else {
+            this.state.items.push({ productId, quantity });
+        }
+    }
+
+    async checkout(): Promise<string> {
+        // Reserve inventory
+        const inventory = await this.client.withTags<Inventory>({ name: "inventory" });
+        for (const item of this.state.items) {
+            await inventory.reserveStock(item.productId, item.quantity);
+        }
+
+        // Create order
+        const orderId = Math.random().toString(36).slice(2);
+        const order = await this.client.withTags<Order>({
+            name: "order",
+            orderId
+        });
+        await order.create(this.state.items);
+
+        // Clear cart
+        this.state.items = [];
+
+        return orderId;
+    }
+
+    getItems() {
+        return this.state.items;
+    }
+}
+````
+
+```typescript {{ "title": "inventory.ts" }}
+interface State {
+  stock: Record<string, number>;
+  reserved: Record<string, number>;
+}
+
+class Inventory extends Actor<State> {
+  initializeState() {
+    return { stock: {}, reserved: {} };
+  }
+
+  checkStock(productId: string): number {
+    const available = this.state.stock[productId] || 0;
+    const reserved = this.state.reserved[productId] || 0;
+    return available - reserved;
+  }
+
+  async reserveStock(productId: string, quantity: number) {
+    if (this.checkStock(productId) < quantity) {
+      throw new Error('Not enough stock');
+    }
+
+    this.state.reserved[productId] = (this.state.reserved[productId] || 0) + quantity;
+  }
+
+  async fulfillReservation(productId: string, quantity: number) {
+    this.state.stock[productId] -= quantity;
+    this.state.reserved[productId] -= quantity;
+  }
+}
+```
+
+```typescript {{ "title": "order.ts" }}
+interface OrderState {
+  items: { productId: string; quantity: number }[];
+  status: 'pending' | 'processing' | 'shipped' | 'delivered';
+  timestamps: Record<string, Date>;
+}
+
+class Order extends Actor<OrderState> {
+  initializeState() {
+    return { items: [], status: "pending", timestamps: {} };
+  }
+
+  async create(items: { productId: string; quantity: number }[]) {
+    this.state.items = items;
+    this.state.status = 'pending';
+    this.state.timestamps = {
+      created: new Date()
+    };
+    this.broadcast('status', {
+      status: this.state.status,
+      timestamp: this.state.timestamps.created
+    });
+  }
+
+  async updateStatus(status: OrderState['status']) {
+    this.state.status = status;
+    this.state.timestamps[status] = new Date();
+    this.broadcast('status', {
+      status,
+      timestamp: this.state.timestamps[status]
+    });
+
+    // When shipped, update inventory
+    if (status === 'shipped') {
+      const inventory = await this.client.withTags<Inventory>({ name: 'inventory' });
+      for (const item of this.state.items) {
+        await inventory.fulfillReservation(item.productId, item.quantity);
+      }
+    }
+  }
+}
+```
+
+</CodeGroup>
+
+### Local-first sync
+
+In this sync example, actors provide a very simple way of incrementally syncing data in real time between multiple clients. When a client goes offline and comes back online, all new changes will be pulled.
+
+This example has a single actor: `ContactSync` maintains all of the contacts and sends the updates on change.
+
+<CodeGroup>
+```typescript {{ "title": "client.ts" }}
+// Load contacts from storage
+let localContacts: Record<string, Contact> = JSON.parse(localStorage.getItem("contacts") || "{}");
+async function insertContact(id: string, contact: Contact) {
+  localContact[id] = contact;
+  localStorage.setItem("contacts", JSON.stringify(localContact));
+  localStorage.setItem("lastUpdate", contact.updatedAt);
+  await contactSync.insertContact(contact);
+}
+
+// Connect to sync actor
+const client = new Client(/* ... */);
+const contactSync = await client.withTags<ContactSync>({ name: "contact_sync", userId: "123" });
+
+contactSync.on("contactUpdated", ({ id, contact }) => {
+  const localContact = localContacts[id];
+  if (localContact.updatedAt < contact.updatedAt) {
+    localContact[id] = contact;
+    localStorage.setItem("contacts", JSON.stringify(localContact));
+    localStorage.setItem("lastUpdate", contact.updatedAt);
+  }
+});
+
+// Pull new changes
+let lastUpdate = parseInt(localStorage.getItem("lastUpdate") || "0");
+const newContacts = await contactSync.pullUpdatesAfter(lastUpdate);
+for (const id in newContacts) {
+  localContact[id] = newContacts[id];
+}
+localStorage.setItem("contacts", JSON.stringify(localContact));
+
+// Write a new contact
+await insertContact("1234", {
+  updatedAt: Date.now(),
+  name: "Greg the Egg",
+  email: "gregory@waystarroyco.com"
+});
+```
+
+```typescript {{ "title": "contact_sync.ts" }}
+interface Contact {
+  updatedAt: number;
+  name: string;
+  email: string;
+}
+
+interface State {
+  contacts: Record<string, Contact>;
+}
+
+class ContactSync extends Actor<State> {
+  initializeState() {
+    return { contacts: {} };
+  }
+
+  async insertContact(id: string, contact: Contact) {
+    // Update contact if (a) it's a new contact or (b) update timestamp is newer
+    if (id in this.state.contacts || this.state.contacts[id].updatedAt < contact.updatedAt) {
+      this.state.contacts[id] = contact;
+      this.broadcast("contactUpdated", { id, contact });
+    }
+  }
+
+  async pullUpdatesAfter(timestamp: number): Promise<Record<string, Contact>> {
+    const updatedContacts: Record<string, Contact> = {};
+    for (const id in this.state.contacts) {
+      if (this.state.contacts[id].updatedAt > timestamp) {
+        updatedContacts[id] = this.state.contacts[id];
+      }
+    }
+    return updatedContacts;
+  }
+}
+```
+</CodeGroup>

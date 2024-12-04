@@ -1,0 +1,98 @@
+# Lifecycle
+
+## `Actor` methods
+
+### `initializeState(): State | Promise<State>`
+
+Called when the actor is first created. This method should return the initial state of the actor.
+
+### `onStart(): void | Promise<void>`
+
+Called after the actor has been initialized but before any connections are accepted. If the actor crashes or is upgraded, this method will be called before startup. If you need to upgrade your state, use this method.
+
+Use this to set up any resources or start any background tasks.
+
+### `onConnect(connection: Connection<ConnectionData>, parameters: ConnectionParams): ConnectionData | Promise<ConnectionData>`
+
+Called whenever a new client connects to the actor. Clients can pass parameters when connecting for this function.
+
+Connections will not be able to interact with the actor until this function succeeds. Throwing an error will abort the connection. This can be used for authentication, see [here](/docs/authentication).
+
+The returned value will be associated with the connection and can be accessed later under `conn.data`.
+
+### `onDisconnect(connection: Connection<ConnectionData>): void | Promise<void>`
+
+Called when a client disconnects from the actor. Use this to clean up any connection-specific resources.
+
+### `onStateChange(newState: State): void | Promise<void>`
+
+Called whenever the actor's state changes. This is often used to broadcast state updates.
+
+### Destroy
+
+Actors with a 0 exit code with shut down gracefully. This can be done with `Deno.exit(0)`.
+
+A non-0 exit code will be considered a failure, see [fault tolerance](/docs/fault-tolerance).
+
+TODO: What about draining?
+
+## Example
+
+```typescript
+interface State {
+  count: number;
+}
+
+interface ConnectionData {
+  userId: string;
+}
+
+interface ConnectionParams {
+  authToken: string;
+}
+
+class CounterActor extends Actor<State, ConnectionData, ConnectionParams> {
+  async initializeState(): Promise<State> {
+    // Initialize with a count of 0
+    return {
+      count: 0,
+    };
+  }
+
+  async onStart(): Promise<void> {
+    // Upgrade state if needed
+    console.log("Started");
+  }
+
+  async onConnect(
+    connection: Connection<ConnectionData>,
+    params: ConnectionParams
+  ): Promise<ConnectionData> {
+    // Validate auth token and determine user permissions
+    if (!await validateAuthToken(params.authToken)) {
+      throw new Error("Invalid auth token");
+    }
+
+    // Return connection data that will be available as conn.data
+    return {
+      userId: auth.userId,
+    };
+  }
+
+  async onDisconnect(connection: Connection<ConnectionData>): Promise<void> {
+    console.log(`User ${connection.data.userId} disconnected`);
+  }
+
+  async onStateChange(newState: State): Promise<void> {
+    // Broadcast the new count to all connected clients
+    this.broadcast("countUpdated", {
+      count: newState.count,
+    });
+  }
+
+  // Actor methods
+  async increment() {
+    this.state.count++;
+  }
+}
+```

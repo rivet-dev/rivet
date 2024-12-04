@@ -1,0 +1,105 @@
+# Functions
+
+Remote function calls are how clients communicate with actors. Functions are as simple as writing a method on the actor class, then calling it from the client.
+
+## Writing functions
+
+Functions can be written as native JavaScript methods on the actor class.
+
+For example, the `increment` method is this simple:
+
+```typescript
+interface State {
+    totalCount: number;
+}
+
+export class Counter extends Actor<State> {
+    initializeState() {
+        return { totalCount: 0 };
+    }
+
+    increment(count: number) {
+        this.state.totalCount += count;
+    }
+}
+```
+
+## Calling functions
+
+Calling functions are as simple as calling any other JavaScript function.
+
+```typescript
+import type { Counter } from "./counter.ts";
+
+const actor = client.withTags<Counter>({ name: "counter" });
+await actor.increment(42);
+```
+
+<Warning>
+    Calling functions from the client are async and require an `await`, even if the server function is not async.
+</Warning>
+
+### Type safety
+
+The Rivet client includes type safety out of the box. The first generic parameter in `withTags<Actor>(...)` defines the actor class. You can safely import the actor's type with `import type` in to the client, like this:
+
+<CodeGroup>
+```typescript {{ "title": "client.ts" }}
+import type { Counter } from "./counter.ts";
+// ...setup...
+const actor = client.withTags<Counter>(/* ... */);
+actor.increment(123);  // passes
+actor.increment("non-number type");  // compile error
+actor.nonexistentMethod(123);  // compile error
+```
+
+```typescript {{ "title": "actor.ts" }}
+// ...setup...
+
+export class Counter extends Actor<State> {
+    increment(count: number) {
+        // ...body...
+    }
+
+    // ...etc...
+}
+```
+</CodeGroup>
+
+## Schema validation
+
+Data schemas are not validated by default. For production applications, use a library like [zod](https://zod.dev/) to validate input types.
+
+In the previous example, providing a non-number value to `count` could cause `this.state.totalCount` to become an invalid value. For example, to validate the `increment` request schema:
+
+```typescript
+import { z } from "zod";
+
+interface State {
+    totalCount: 0,
+}
+
+// Define schemas for user requests
+const IncrementOptionsSchema = z.object({
+    count: z.number().int()
+});
+
+type IncrementOptions = z.infer<typeof IncrementOptionsSchema>;
+
+export class Counter extends Actor<State> {
+    initializeState() {
+        return { totalCount: 0 };
+    }
+
+    increment(opts: IncrementOptions) {
+        // Will throw error if input type is invalid
+        const validatedOpts = IncrementOptionsSchema.parse(opts);
+
+        this.state.totalCount += validatedOpts.count;
+    }
+}
+```
+
+## Authentication
+
+By default, clients can call all functions on an actor without restriction. Make sure to implement authentication if needed. Documentation on authentication is available [here](/docs/authentication).

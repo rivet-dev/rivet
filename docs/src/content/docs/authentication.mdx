@@ -1,0 +1,154 @@
+# Authentication
+
+Authentication can be handled through the `onConnect` lifecycle method, which acts as a middleware before allowing clients to interact with your actor.
+
+## Using `onConnect`
+
+The `onConnect` method is called whenever a new client attempts to connect to your actor. It receives two parameters:
+
+- `connection`: The connection object that will be established
+- `parameters`: Custom parameters passed by the client during connection
+
+Here's a basic example:
+
+```typescript
+interface State {
+    // ...
+}
+
+interface ConnectionData {
+    userId: string;
+    role: string;
+}
+
+interface ConnectionParams {
+    authToken: string;
+}
+
+class ExampleActor extends Actor<State, ConnectionData, ConnectionParams> {
+  async onConnect(
+    connection: Connection<ConnectionData>,
+    params: ConnectionParams
+  ): Promise<ConnectionData> {
+    // Validate the auth token
+    if (!params.authToken) {
+      throw new Error("No auth token provided");
+    }
+
+    // Verify the token with your auth system
+    const userData = await validateAuthToken(params.authToken);
+    if (!userData) {
+      throw new Error("Invalid auth token");
+    }
+
+    // Return the user data to store with the connection
+    return {
+      userId: userData.id,
+      role: userData.role,
+    };
+  }
+}
+```
+
+## Accessing Connection Data
+
+TODO: Update to new ctx format
+
+After authentication, you can access the connection data in any actor method using `connection.data`:
+
+```typescript
+class AuthenticatedActor extends Actor<State, ConnectionData, ConnectionParams> {
+  async someProtectedMethod(connection: Connection<ConnectionData>) {
+    // Check if user has required role
+    if (connection.data.role !== 'admin') {
+      throw new Error("Unauthorized");
+    }
+    
+    // Proceed with protected operation
+    // ...
+  }
+}
+```
+
+## Integration Examples
+
+### With API Server Authentication
+
+```typescript
+interface State {
+    // ...
+}
+
+interface ConnectionParams {
+  apiKey: string;
+}
+
+interface ConnectionData {
+  accountId: string;
+  tier: 'free' | 'pro' | 'enterprise';
+}
+
+class APIAuthenticatedActor extends Actor<State, ConnectionData, ConnectionParams> {
+  async onConnect(
+    connection: Connection<ConnectionData>,
+    params: ConnectionParams
+  ): Promise<ConnectionData> {
+    // Validate API key with your server
+    const response = await fetch('https://api.yourserver.com/validate', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${params.apiKey}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error("Invalid API key");
+    }
+
+    const account = await response.json();
+    
+    return {
+      accountId: account.id,
+      tier: account.tier,
+    };
+  }
+}
+```
+
+When authentication fails, throwing an error in `onConnect` will prevent the connection from being established and the client will receive the error message.
+
+### With JWT Authentication
+
+```typescript
+interface State {
+    // ...
+}
+
+interface ConnectionParams {
+  jwt: string;
+}
+
+interface ConnectionData {
+  userId: string;
+  permissions: string[];
+}
+
+class JWTAuthenticatedActor extends Actor<State, ConnectionData, ConnectionParams> {
+  async onConnect(
+    connection: Connection<ConnectionData>,
+    params: ConnectionParams
+  ): Promise<ConnectionData> {
+    try {
+      // Verify JWT token
+      const decoded = jwt.verify(params.jwt, process.env.JWT_SECRET);
+      
+      return {
+        userId: decoded.sub,
+        permissions: decoded.permissions,
+      };
+    } catch (error) {
+      throw new Error("Invalid JWT token");
+    }
+  }
+}
+```

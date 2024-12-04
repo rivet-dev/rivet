@@ -1,0 +1,27 @@
+# Fault Tolerance
+
+Rivet actors are designed to be fault-tolerant and resilient to various types of failures. This guide explains how actors handle different failure scenarios and how to build reliable applications.
+
+## Actor crashes
+
+When an actor crashes, Rivet automatically starts the actor again with a backoff. The actor's state will still be there when it restarts. `onStart` will be called when the actor starts again.
+
+## Hardware and System Faults
+
+While uncommon, hardware faults and system faults can cause an actor to crash. Rivet is designed to handle these scenarios by automatically restarting the actor with a backoff.
+
+## Actor state
+
+Actor state is automatically restored on startup.
+
+## Client connection handling
+
+See [connection docs](/docs/connections).
+
+## Related topics
+
+<CardGroup>
+  <Card title='State Management' href='/docs/state' />
+  <Card title='Actor Lifecycle' href='/docs/lifecycle' />
+  <Card title='Connections' href='/docs/connections' />
+</CardGroup>

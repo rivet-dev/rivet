@@ -1,6 +1,5 @@
 import routes from '@/generated/routes.json';
 import { SidebarItem } from '@/lib/sitemap';
-import { getAliasedHref } from '@/lib/sameAs';
 import { Icon, iconPack } from '@rivet-gg/icons';
 import { PropsWithChildren, ReactNode } from 'react';
 import { cn } from '@rivet-gg/components';
@@ -84,4 +83,9 @@ export function DocsNavigation({ sidebar }: { sidebar: SidebarItem[] }) {
       <Tree pages={sidebar} />
     </div>
   );
+}
+
+export function getAliasedHref(href: string) {
+  const [_, __, ...slug] = href.split('/');
+  return '/docs/' + slug.join('/');
 }

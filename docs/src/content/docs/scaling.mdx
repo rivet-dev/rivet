@@ -1,0 +1,50 @@
+# Scaling & Concurrency
+
+Actors are very easy to scale because they are independent and self-contained. Each actor manages its own state, enabling seamless horizontal scaling across machines.
+
+## How actors scale
+
+Actors scale naturally through these key properties:
+
+- **Independent State**: Each actor maintains its own isolated state, eliminating the need for complex locking mechanisms.
+- **Function-Based Communication**: Actors communicate through asynchronous functions, making it easy to distribute them across different processes or machines.
+- **Location Transparency**: Actors don't need to know where other actors are located. They can run on the same machine or across a network.
+- **Horizontal Scaling**: Add more instances of your application to handle more actors. The actor system automatically distributes the load.
+- **Natural Partitioning**: Since actors map to real-world entities, they provide natural boundaries for distributing your system across multiple machines.
+
+## Architecting actors
+
+Actors should be designed around clear responsibility boundaries. Here are key principles for architecting your actor system:
+
+**Single Responsibility**
+
+Each actor should represent one specific entity or concept from your application (e.g., `User`, `Document`, `ChatRoom`). This makes your system:
+
+- Easier to understand (clear 1:1 mapping with application concepts)
+- Simpler to maintain (isolated responsibilities)
+- Natural to scale (clear boundaries for distribution)
+
+**State Management**
+
+- Each actor owns and manages only its own state
+- Use remote function calls passing to request data from other actors
+- Keep state minimal and relevant to the actor's core responsibility
+
+**Granularity Guidelines**
+
+- Too coarse: Actors handling too many responsibilities become bottlenecks
+- Too fine: Excessive actors create unnecessary communication overhead
+- Aim for actors that can operate independently with minimal cross-actor communication
+
+### Examples
+
+**Good actor boundaries**
+
+- `User`: Manages user profile, preferences, and authentication
+- `Document`: Handles document content, metadata, and versioning
+- `ChatRoom`: Manages participants and message history
+
+**Poor actor boundaries**
+
+- `Application`: Too broad, handles everything
+- `DocumentWordCount`: Too granular, should be part of DocumentActor

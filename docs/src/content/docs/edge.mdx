@@ -1,0 +1,19 @@
+# Edge Networking
+
+Actors can run in many regions around the world. By default, actors will choose the most optimal region based on the client's latency. This can be overridden if needed.
+
+## Available regions
+
+See available regions [here](/docs/regions).
+
+## Region selection
+
+TODO: Validate this
+
+```typescript
+const actor = client.withTags({ name: "example" }, {
+    create: {
+        region: "atl"
+    }
+});
+```

@@ -34,7 +34,7 @@ export function CollapsibleSidebarItem({ item, children }: CollapsibleSidebarIte
         </motion.span>
       </button>
       <motion.div
-        className='overflow-hidden pl-1'
+        className='overflow-hidden pl-3'
         initial={isCurrent ? 'open' : 'closed'}
         variants={{
           open: { height: 'auto', opacity: 1 },

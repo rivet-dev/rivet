@@ -1,0 +1,104 @@
+# Connections
+
+Connections represent client connections to your actor. They provide a way to handle client authentication, manage connection-specific data, and control the connection lifecycle.
+
+## Parameters
+
+When clients connect to an actor, they can pass connection parameters that are handled during the connection process. These parameters are typed using the `ConnectionParams` interface:
+
+```typescript
+interface ConnectionParams {
+  authToken: string;  // Example parameter
+}
+```
+
+## Connection Data
+
+Each connection can store custom data that persists throughout its lifetime. This data is defined using the `ConnectionData` interface and is set during the connection process:
+
+```typescript
+interface ConnectionData {
+  userId: string;    // Example data
+  role: string;      // Example data
+}
+```
+
+The connection data can be accessed in any actor method using `connection.data`.
+
+## onConnection and onDisconnection
+
+### onConnect
+
+The `onConnect` lifecycle method is called whenever a new client attempts to connect. It serves as middleware before allowing clients to interact with your actor:
+
+```typescript
+async onConnect(
+  connection: Connection<ConnectionData>,
+  params: ConnectionParams
+): Promise<ConnectionData> {
+  // Handle connection setup
+  // Return connection data to store with the connection
+  return {
+    userId: "user123",
+    role: "user"
+  };
+}
+```
+
+### onDisconnect
+
+The `onDisconnect` method is called when a client disconnects from the actor:
+
+```typescript
+async onDisconnect(connection: Connection<ConnectionData>): Promise<void> {
+  // Clean up any connection-specific resources
+  console.log(`User ${connection.data.userId} disconnected`);
+}
+```
+
+## Validating Connections & Authentication
+
+Connection validation and authentication are typically handled in the `onConnect` method. You can throw errors to reject connections:
+
+```typescript
+async onConnect(
+  connection: Connection<ConnectionData>,
+  params: ConnectionParams
+): Promise<ConnectionData> {
+  // Validate connection parameters
+  if (!params.authToken) {
+    throw new Error("No auth token provided");
+  }
+
+  // Verify authentication
+  const userData = await validateAuthToken(params.authToken);
+  if (!userData) {
+    throw new Error("Invalid auth token");
+  }
+
+  return {
+    userId: userData.id,
+    role: userData.role
+  };
+}
+```
+
+## Connection List
+
+All active connections can be accessed with `this.connections`.  This is frequently used with `conn.send(name, event)` to send messages directly to clients.
+
+## Disconnecting
+
+TODO: This is not yet implemented
+
+Connections can be disconnected with:
+
+```typescript
+connection.disconnect();
+```
+
+## Offline & reconnection behavior
+
+Clients automatically attempt to reconnect with exponential backoff when disconnected. Function calls while disconnected are queued until reconnected and function promises will hang.
+
+On reconnection, event subscriptions are reestablished & queued function calls are executed.
