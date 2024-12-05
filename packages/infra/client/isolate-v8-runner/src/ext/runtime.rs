@@ -3,10 +3,9 @@ deno_core::extension!(
 	deps = [
 		rivet_kv
 	],
-	esm_entry_point = "ext:rivet_runtime/99_rivet_main.js",
+	esm_entry_point = "ext:rivet_runtime/90_rivet_ns.js",
 	esm = [
 		dir "js",
-		"90_rivet_ns.js",
-		"99_rivet_main.js"
+		"90_rivet_ns.js"
 	],
 );

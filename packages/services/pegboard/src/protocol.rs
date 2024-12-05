@@ -90,11 +90,11 @@ pub struct ActorConfig {
 	pub image: Image,
 	pub root_user_enabled: bool,
 	pub resources: Resources,
-	pub env: ::util::serde::HashableMap<String, String>,
-	pub ports: ::util::serde::HashableMap<String, Port>,
+	pub env: HashableMap<String, String>,
+	pub ports: HashableMap<String, Port>,
 	pub network_mode: NetworkMode,
 	pub owner: ActorOwner,
-	pub metadata: Raw<serde_json::Value>,
+	pub metadata: Raw<ActorMetadata>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash)]
@@ -191,6 +191,37 @@ impl ActorOwner {
 	}
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Hash)]
+pub struct ActorMetadata {
+	pub tags: HashableMap<String, String>,
+	pub create_ts: i64,
+	pub env: ActorMetadataEnv,
+	pub datacenter: ActorMetadataDatacenter,
+	pub cluster: ActorMetadataCluster,
+	pub build: ActorMetadataBuild,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Hash)]
+pub struct ActorMetadataEnv {
+	pub env_id: Uuid,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Hash)]
+pub struct ActorMetadataDatacenter {
+	pub name_id: String,
+	pub display_name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Hash)]
+pub struct ActorMetadataCluster {
+	pub cluster_id: Uuid,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Hash)]
+pub struct ActorMetadataBuild {
+	pub build_id: Uuid,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct EventWrapper {
 	pub index: i64,
@@ -216,7 +247,7 @@ pub enum ActorState {
 	/// Sent by pegboard client.
 	Running {
 		pid: usize,
-		ports: ::util::serde::HashableMap<String, ProxiedPort>,
+		ports: HashableMap<String, ProxiedPort>,
 	},
 	/// Actor planned to stop.
 	/// Sent by pegboard dc.

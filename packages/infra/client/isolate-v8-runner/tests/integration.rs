@@ -2,37 +2,18 @@
 
 // #[cfg(test)]
 // mod tests {
-// 	use std::{
-// 		collections::HashMap,
-// 		net::SocketAddr,
-// 		os::fd::AsRawFd,
-// 		path::{Path, PathBuf},
-// 		result::Result::{Err, Ok},
-// 		sync::Arc,
-// 		thread::JoinHandle,
-// 		time::Duration,
-// 	};
+// 	use std::{net::SocketAddr, path::Path, result::Result::Ok};
 
 // 	use anyhow::*;
-// 	use deno_core::JsRuntime;
 // 	use deno_runtime::worker::MainWorkerTerminateHandle;
 // 	use foundationdb as fdb;
-// 	use futures_util::{stream::SplitStream, SinkExt, StreamExt};
 // 	use pegboard::protocol;
 // 	use pegboard_config::isolate_runner as config;
-// 	use tokio::{
-// 		fs,
-// 		net::TcpStream,
-// 		sync::{mpsc, RwLock},
-// 	};
-// 	use tokio_tungstenite::{tungstenite::protocol::Message, MaybeTlsStream, WebSocketStream};
 // 	use tracing_subscriber::prelude::*;
 // 	use uuid::Uuid;
 
 // 	use super::run_inner;
 // 	use crate::utils;
-
-// 	const THREAD_STATUS_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
 // 	#[tokio::test]
 // 	async fn test_isolate() -> Result<()> {
@@ -77,13 +58,27 @@
 // 			},
 // 			ports: Default::default(),
 // 			env: Default::default(),
+// 			metadata: protocol::Raw::new(&protocol::ActorMetadata {
+// 				tags: [("foo".to_string(), "bar".to_string())]
+// 					.into_iter()
+// 					.collect(),
+// 				create_ts: 0,
+// 				env: protocol::ActorMetadataEnv { id: Uuid::nil() },
+// 				datacenter: protocol::ActorMetadataDatacenter {
+// 					name_id: "local".to_string(),
+// 					display_name: "Local".to_string(),
+// 				},
+// 				cluster: protocol::ActorMetadataCluster { id: Uuid::nil() },
+// 				build: protocol::ActorMetadataBuild { id: Uuid::nil() },
+// 			})
+// 			.unwrap(),
 // 			owner: protocol::ActorOwner::DynamicServer {
 // 				server_id: actor_id,
 // 			},
 // 			vector_socket_addr: Default::default(),
 // 		};
 
-// 		run_inner(
+// 		let exit_code = run_inner(
 // 			config,
 // 			actors_path.join(actor_id.to_string()).to_path_buf(),
 // 			actor_id,
@@ -92,6 +87,8 @@
 // 			actor_config,
 // 		)
 // 		.await?;
+
+// 		ensure!(exit_code == 0);
 
 // 		Ok(())
 // 	}

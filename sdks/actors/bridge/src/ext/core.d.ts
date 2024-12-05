@@ -6,10 +6,9 @@ declare module "ext:core/mod.js" {
 	export const core: {
 		serialize(value: any, options?: { forStorage?: boolean }): Uint8Array;
 		deserialize(value: Uint8Array, options?: { forStorage?: boolean }): any;
-		propReadOnly(value: any): any;
 	};
 	export const primordials: {
-		ObjectDefineProperty: typeof Object.defineProperty;
+		ReflectOwnKeys: typeof Reflect.ownKeys;
 		ObjectFreeze: typeof Object.freeze;
 	};
 }

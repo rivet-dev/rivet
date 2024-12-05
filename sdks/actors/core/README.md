@@ -1,7 +1,7 @@
 # `actor-core`
 
 ```typescript
-import Rivet from "@rivet-gg/actors-core";
+import { ActorContext } from "@rivet-gg/actors-core";
 
 // ...
 ```

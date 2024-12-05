@@ -19,7 +19,7 @@ use pegboard_config::{isolate_runner::Config, runner_protocol};
 use tokio::{
 	fs,
 	net::TcpStream,
-	sync::{mpsc, RwLock},
+	sync::{mpsc, watch, RwLock},
 };
 use tokio_tungstenite::{tungstenite::protocol::Message, MaybeTlsStream, WebSocketStream};
 use tracing_subscriber::prelude::*;
@@ -28,6 +28,7 @@ use uuid::Uuid;
 mod ext;
 mod isolate;
 mod log_shipper;
+mod metadata;
 mod throttle;
 mod utils;
 
@@ -84,14 +85,12 @@ async fn main() -> Result<()> {
 	JsRuntime::init_platform(None, false);
 
 	let actors = Arc::new(RwLock::new(HashMap::new()));
-	// TODO: Should be a `watch::channel` but the tokio version used by deno is old and doesn't implement
-	// `Clone` for `watch::Sender`
-	let (fatal_tx, mut fatal_rx) = mpsc::channel::<()>(1);
+	let (fatal_tx, mut fatal_rx) = watch::channel(());
 
 	let res = tokio::select! {
 		res = retry_connection(&config, actors, fatal_tx) => res,
 		// If any fatal error occurs in the isolate threads, kill the entire program
-		_ = fatal_rx.recv() => Err(anyhow!("Fatal error")),
+		_ = fatal_rx.changed() => Err(anyhow!("Fatal error")),
 	};
 
 	// Write exit code
@@ -105,7 +104,7 @@ async fn main() -> Result<()> {
 async fn retry_connection(
 	config: &Config,
 	actors: Arc<RwLock<HashMap<Uuid, mpsc::Sender<(i32, bool)>>>>,
-	fatal_tx: mpsc::Sender<()>,
+	fatal_tx: watch::Sender<()>,
 ) -> Result<()> {
 	loop {
 		use std::result::Result::{Err, Ok};
@@ -124,7 +123,7 @@ async fn retry_connection(
 async fn handle_connection(
 	config: &Config,
 	actors: Arc<RwLock<HashMap<Uuid, mpsc::Sender<(i32, bool)>>>>,
-	fatal_tx: mpsc::Sender<()>,
+	fatal_tx: watch::Sender<()>,
 	socket: WebSocketStream<MaybeTlsStream<TcpStream>>,
 ) -> Result<()> {
 	tracing::info!("Connected");
@@ -235,7 +234,7 @@ async fn read_packet(
 async fn watch_thread(
 	config: Config,
 	actors: Arc<RwLock<HashMap<Uuid, mpsc::Sender<(i32, bool)>>>>,
-	fatal_tx: mpsc::Sender<()>,
+	fatal_tx: watch::Sender<()>,
 	actor_id: Uuid,
 	mut owner_rx: mpsc::Receiver<protocol::ActorOwner>,
 	mut terminate_rx: mpsc::Receiver<MainWorkerTerminateHandle>,
@@ -247,7 +246,7 @@ async fn watch_thread(
 		// If the transmitting end of the terminate handle was dropped (`recv` returned `None`), it must be
 		// that the thread stopped
 		tracing::error!(?actor_id, "failed to receive actor owner");
-		fatal_tx.try_send(()).expect("receiver cannot be dropped");
+		fatal_tx.send(()).expect("receiver cannot be dropped");
 		return;
 	};
 
@@ -265,7 +264,7 @@ async fn watch_thread(
 		res = signal_rx.recv() => {
 			let Some((_signal, persist_state)) = res else {
 				tracing::error!(?actor_id, "failed to receive signal");
-				fatal_tx.try_send(()).expect("receiver cannot be dropped");
+				fatal_tx.send(()).expect("receiver cannot be dropped");
 				return;
 			};
 
@@ -289,14 +288,14 @@ async fn watch_thread(
 			Ok(db) => db,
 			Err(err) => {
 				tracing::error!(?err, ?actor_id, "failed to create fdb handle");
-				fatal_tx.try_send(()).expect("receiver cannot be dropped");
+				fatal_tx.send(()).expect("receiver cannot be dropped");
 				return;
 			}
 		};
 
 		if let Err(err) = ActorKv::new(db, actor_owner).destroy().await {
 			tracing::error!(?err, ?actor_id, "failed to destroy actor kv");
-			fatal_tx.try_send(()).expect("receiver cannot be dropped");
+			fatal_tx.send(()).expect("receiver cannot be dropped");
 			return;
 		};
 	}
@@ -316,15 +315,15 @@ async fn poll_thread(handle: &JoinHandle<Result<()>>) {
 	}
 }
 
-fn cleanup_thread(actor_id: Uuid, handle: JoinHandle<Result<()>>, fatal_tx: &mpsc::Sender<()>) {
+fn cleanup_thread(actor_id: Uuid, handle: JoinHandle<Result<()>>, fatal_tx: &watch::Sender<()>) {
 	let res = handle.join();
 
 	match res {
 		Ok(Err(err)) => {
 			tracing::error!(?actor_id, "Isolate thread failed:\n{err:?}");
-			fatal_tx.try_send(()).expect("receiver cannot be dropped")
+			fatal_tx.send(()).expect("receiver cannot be dropped")
 		}
-		Err(_) => fatal_tx.try_send(()).expect("receiver cannot be dropped"),
+		Err(_) => fatal_tx.send(()).expect("receiver cannot be dropped"),
 		_ => {}
 	}
 }

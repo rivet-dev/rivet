@@ -1,4 +1,4 @@
-import Rivet from "@rivet-gg/actors-core";
+import { ActorContext } from "@rivet-gg/actors-core";
 import { deadline } from "@std/async/deadline";
 import { Context as HonoContext, Hono } from "hono";
 import { WSEvents } from "hono/ws";
@@ -70,6 +70,7 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 
 	#backgroundPromises: Promise<void>[] = [];
 	#config: ActorConfig;
+	#ctx: ActorContext;
 	#ready: boolean = false;
 
 	#connections = new Set<Connection<ConnectionData>>();
@@ -92,11 +93,17 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 		...args: unknown[]
 	): ConnectionData | Promise<ConnectionData>;
 
-	protected onDisconnect?(
-		connection: Connection<ConnectionData>,
-	): void | Promise<void>;
+	protected onDisconnect?(connection: Connection<ConnectionData>): void | Promise<void>;
 
 	protected onStateChange?(newState: State): void | Promise<void>;
+
+	// TODO: Types
+	public static start(ctx: ActorContext) {
+		let instance = new (this as any)() as Actor;
+		instance.#ctx = ctx;
+
+		return instance.run();
+	}
 
 	public async run() {
 		await this.#initializeState();
@@ -128,9 +135,7 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 
 	#validateStateEnabled() {
 		if (!this.#stateEnabled) {
-			throw new Error(
-				"State not enabled. Must implement initializeState to use state.",
-			);
+			throw new Error("State not enabled. Must implement initializeState to use state.");
 		}
 	}
 
@@ -163,9 +168,7 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 			// deno-lint-ignore no-explicit-any
 			(path: any, value: any, _previousValue: any, _applyData: any) => {
 				if (!isJsonSerializable(value)) {
-					throw new Error(
-						`State value at path "${path}" must be JSON serializable`,
-					);
+					throw new Error(`State value at path "${path}" must be JSON serializable`);
 				}
 				this.#stateChanged = true;
 
@@ -180,7 +183,7 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 			},
 			{
 				ignoreDetached: true,
-			},
+			}
 		);
 	}
 
@@ -192,10 +195,7 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 		assertExists(this.initializeState);
 
 		// Read initial state
-		const getStateBatch = await Rivet.kv.getBatch([
-			KEYS.STATE.INITIALIZED,
-			KEYS.STATE.DATA,
-		]);
+		const getStateBatch = await this.#ctx.kv.getBatch([KEYS.STATE.INITIALIZED, KEYS.STATE.DATA]);
 		const initialized = getStateBatch.get(KEYS.STATE.INITIALIZED);
 		const stateData = getStateBatch.get(KEYS.STATE.DATA);
 
@@ -217,7 +217,7 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 				new Map<unknown, unknown>([
 					[KEYS.STATE.INITIALIZED, true],
 					[KEYS.STATE.DATA, stateData],
-				]),
+				])
 			);
 			this.#setStateWithoutChange(stateData);
 		} else {
@@ -232,17 +232,12 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 
 		app.get("/", (c) => {
 			// TODO: Give the metadata about this actor (ie tags)
-			return c.text(
-				"This is a Rivet Actor\n\nLearn more at https://rivet.gg",
-			);
+			return c.text("This is a Rivet Actor\n\nLearn more at https://rivet.gg");
 		});
 
 		app.post("/rpc/:name", this.#handleRpc.bind(this));
 
-		app.get(
-			"/connect",
-			upgradeWebSocket(this.#handleWebSocket.bind(this)),
-		);
+		app.get("/connect", upgradeWebSocket(this.#handleWebSocket.bind(this)));
 
 		app.all("*", (c) => {
 			return c.text("Not Found", 404);
@@ -323,25 +318,25 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 	#addSubscription(eventName: string, connection: Connection<ConnectionData>) {
 		connection.subscriptions.add(eventName);
 
-        let subscribers = this.#eventSubscriptions.get(eventName);
-        if (!subscribers) {
-            subscribers = new Set();
-            this.#eventSubscriptions.set(eventName, subscribers);
-        }
-        subscribers.add(connection);
-    }
+		let subscribers = this.#eventSubscriptions.get(eventName);
+		if (!subscribers) {
+			subscribers = new Set();
+			this.#eventSubscriptions.set(eventName, subscribers);
+		}
+		subscribers.add(connection);
+	}
 
-    #removeSubscription(eventName: string, connection: Connection<ConnectionData>) {
+	#removeSubscription(eventName: string, connection: Connection<ConnectionData>) {
 		connection.subscriptions.delete(eventName);
 
-        const subscribers = this.#eventSubscriptions.get(eventName);
-        if (subscribers) {
-            subscribers.delete(connection);
-            if (subscribers.size === 0) {
-                this.#eventSubscriptions.delete(eventName);
-            }
-        }
-    }
+		const subscribers = this.#eventSubscriptions.get(eventName);
+		if (subscribers) {
+			subscribers.delete(connection);
+			if (subscribers.size === 0) {
+				this.#eventSubscriptions.delete(eventName);
+			}
+		}
+	}
 
 	// MARK: WebSocket
 	async #handleWebSocket(c: HonoContext): Promise<WSEvents<WebSocket>> {
@@ -406,16 +401,16 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 						const ctx = new RpcContext<ConnectionData>();
 						const output = await this.#executeRpc(ctx, name, args);
 
-						ws.send(JSON.stringify(
-							{
+						ws.send(
+							JSON.stringify({
 								body: {
 									rpcResponseOk: {
 										id,
 										output,
 									},
 								},
-							} satisfies wsToClient.ToClient,
-						));
+							} satisfies wsToClient.ToClient)
+						);
 					} else if ("subscriptionRequest" in message.body) {
 						if (message.body.subscriptionRequest.subscribe) {
 							this.#addSubscription(message.body.subscriptionRequest.eventName, conn);
@@ -427,26 +422,26 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 					}
 				} catch (err) {
 					if (rpcRequestId) {
-						ws.send(JSON.stringify(
-							{
+						ws.send(
+							JSON.stringify({
 								body: {
 									rpcResponseError: {
 										id: rpcRequestId,
 										message: String(err),
 									},
 								},
-							} satisfies wsToClient.ToClient,
-						));
+							} satisfies wsToClient.ToClient)
+						);
 					} else {
-						ws.send(JSON.stringify(
-							{
+						ws.send(
+							JSON.stringify({
 								body: {
 									error: {
 										message: String(err),
 									},
 								},
-							} satisfies wsToClient.ToClient,
-						));
+							} satisfies wsToClient.ToClient)
+						);
 					}
 				}
 			},
@@ -474,9 +469,7 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 	 * This allows the actor runtime to ensure that a promise completes while
 	 * returning from an RPC request early.
 	 */
-	protected runInBackground(
-		promise: Promise<void>,
-	) {
+	protected runInBackground(promise: Promise<void>) {
 		this.#assertReady();
 
 		// TODO: Should we force save the state?
@@ -513,7 +506,7 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 				this.#stateChanged = false;
 
 				// Write to KV
-				await Rivet.kv.put(KEYS.STATE.DATA, this.#stateRaw);
+				await this.#ctx.kv.put(KEYS.STATE.DATA, this.#stateRaw);
 			} else {
 				console.log("skipping save, state not modified");
 			}
@@ -524,11 +517,7 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 		if (!this.#ready) throw new Error("Actor not ready");
 	}
 
-	async #executeRpc(
-		ctx: RpcContext<ConnectionData>,
-		rpcName: string,
-		args: unknown[],
-	): Promise<unknown> {
+	async #executeRpc(ctx: RpcContext<ConnectionData>, rpcName: string, args: unknown[]): Promise<unknown> {
 		// Prevent calling private or reserved methods
 		if (!this.#isValidRpc(rpcName)) {
 			throw new Error(`RPC ${rpcName} is not accessible`);
@@ -547,10 +536,7 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 		try {
 			const outputOrPromise = rpcFunction.call(this, ctx, ...args);
 			if (outputOrPromise instanceof Promise) {
-				return await deadline(
-					outputOrPromise,
-					this.#config.rpc.timeout,
-				);
+				return await deadline(outputOrPromise, this.#config.rpc.timeout);
 			} else {
 				return outputOrPromise;
 			}

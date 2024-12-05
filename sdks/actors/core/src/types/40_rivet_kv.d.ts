@@ -75,7 +75,7 @@ export interface PutBatchOptions {
 /**
  * Asynchronously stores a batch of key-value pairs.
  *
- * @param {Record<Key, Entry | ArrayBuffer>} obj - An object containing key-value pairs to be stored.
+ * @param {Map<Key, Entry | ArrayBuffer>} obj - An object containing key-value pairs to be stored.
  * @param {PutBatchOptions} [options] - Options.
  * @returns {Promise<void>} A promise that resolves when the batch operation is complete.
  */

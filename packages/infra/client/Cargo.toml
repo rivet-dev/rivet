@@ -26,7 +26,12 @@ manager = { path = "manager", package = "pegboard-manager" }
 git = "https://github.com/rivet-gg/sqlx"
 rev = "e7120f59"
 
+[workspace.dependencies.deno_core]
+# path = "../../../../../deno_core/core"
+git = "https://github.com/rivet-gg/deno_core"
+rev = "8a313913fa73d58f4f9532565b0084e723bc34ad"
+
 [workspace.dependencies.deno_runtime]
 # path = "../../../../../deno/runtime"
 git = "https://github.com/rivet-gg/deno"
-rev = "fcb9ac39b25219b9ce51c13442b577e5d2be61ab"
+rev = "9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"

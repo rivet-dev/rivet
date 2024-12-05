@@ -1,20 +1,17 @@
-console.log(Deno.env.toObject());
+export default {
+	async start(ctx) {
+		console.log(Deno.env.toObject());
 
-console.log(Rivet.metadata);
+		console.log(ctx.metadata);
 
-// let worker = new Worker(
-// 	new URL("./worker.ts", import.meta.url).href,
-// 	{
-// 		type: "module",
-// 	},
-// );
+		let server = Deno.serve({
+			handler,
+			port: parseInt(Deno.env.get("PORT_MAIN")),
+		});
 
-let server = Deno.serve({
-	handler,
-	port: parseInt(Deno.env.get("PORT_MAIN")),
-});
-
-await server.finished;
+		await server.finished;
+	},
+};
 
 function handler(req) {
 	console.log("req");

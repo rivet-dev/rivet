@@ -2,7 +2,11 @@
 //
 // Generated from sdks/actors-bridge/
 
-export declare const RIVET_NAMESPACE: {
+import type { Metadata } from "internal_types";
+export type { Metadata } from "internal_types";
+export declare function deepFreeze(object: Record<any, any>): Readonly<Record<any, any>>;
+export declare const ACTOR_CONTEXT: {
+    metadata: Metadata;
     kv: {
         get: (key: import("./40_rivet_kv.d.ts").Key, options?: import("./40_rivet_kv.d.ts").GetOptions) => Promise<import("./40_rivet_kv.d.ts").Entry | null>;
         getBatch: (keys: import("./40_rivet_kv.d.ts").Key[], options?: import("./40_rivet_kv.d.ts").GetBatchOptions) => Promise<Map<import("./40_rivet_kv.d.ts").Key, import("./40_rivet_kv.d.ts").Entry>>;

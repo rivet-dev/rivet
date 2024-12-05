@@ -32,8 +32,6 @@ deno_core::extension!(
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 enum Key {
-	// TODO: See below comment
-	#[allow(dead_code)]
 	InKey(Vec<JsBuffer>),
 	OutKey(Vec<ToJsBuffer>),
 }
@@ -41,15 +39,7 @@ enum Key {
 impl From<actor_kv::key::Key> for Key {
 	fn from(value: actor_kv::key::Key) -> Self {
 		match value {
-			// actor_kv::key::Key::JsInKey(tuple) => Key::InKey(tuple),
-			// TODO: Currently, JsBuffer cannot be serialized back to v8 as a buffer. We must convert it until
-			// fixed.
-			actor_kv::key::Key::JsInKey(tuple) => Key::OutKey(
-				tuple
-					.into_iter()
-					.map(|buf| ToJsBuffer::from(Box::from(&*buf)))
-					.collect(),
-			),
+			actor_kv::key::Key::JsInKey(tuple) => Key::InKey(tuple),
 			actor_kv::key::Key::JsOutKey(tuple) => {
 				Key::OutKey(tuple.into_iter().map(Into::into).collect())
 			}

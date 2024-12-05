@@ -391,27 +391,24 @@ async fn setup(
 			owner: pp::ActorOwner::DynamicServer {
 				server_id: input.server_id,
 			},
-			metadata: util::serde::Raw::new(&json!({
-				"actor": {
-					"id": actor_id,
-					"tags": input.tags,
-					// Represents when the pegboard actor was created, not the ds workflow.
-					"created_at": util::timestamp::to_string(ctx.ts())?,
+			metadata: util::serde::Raw::new(&pp::ActorMetadata {
+				tags: input.tags.as_hashable(),
+				// Represents when the pegboard actor was created, not the ds workflow.
+				create_ts: ctx.ts(),
+				env: pp::ActorMetadataEnv {
+					env_id: input.env_id,
 				},
-				"env": {
-					"id": input.env_id,
+				datacenter: pp::ActorMetadataDatacenter {
+					name_id: build_dc.dc_name_id,
+					display_name: build_dc.dc_display_name,
 				},
-				"cluster": {
-					"id": input.cluster_id
+				cluster: pp::ActorMetadataCluster {
+					cluster_id: input.cluster_id,
 				},
-				"region": {
-					"id":  build_dc.dc_name_id,
-					"name": build_dc.dc_display_name,
+				build: pp::ActorMetadataBuild {
+					build_id: input.image_id,
 				},
-				"build": {
-					"id": input.image_id,
-				},
-			}))?,
+			})?,
 		}),
 	})
 	.tag("datacenter_id", input.datacenter_id)

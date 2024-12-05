@@ -13,7 +13,7 @@ use std::{
 use actor_kv::ActorKv;
 use anyhow::*;
 use deno_core::{
-	error::JsError, unsync::MaskFutureAsSend, v8::CreateParams, ModuleSpecifier, StaticModuleLoader,
+	error::JsError, v8, v8::CreateParams, ModuleId, ModuleSpecifier, StaticModuleLoader,
 };
 use deno_runtime::{
 	deno_fs::InMemoryFs,
@@ -30,7 +30,7 @@ use pegboard_config::isolate_runner as config;
 use tokio::{fs, sync::mpsc};
 use uuid::Uuid;
 
-use crate::{ext, log_shipper, utils};
+use crate::{ext, log_shipper, metadata::JsMetadata, utils};
 
 pub fn run(
 	config: config::Config,
@@ -77,7 +77,7 @@ pub fn run(
 		};
 
 	// Run the isolate
-	let exit_code = match create_and_run_current_thread(run_inner(
+	let exit_code = match utils::tokio::create_and_run_current_thread(run_inner(
 		config,
 		actor_path.clone(),
 		actor_id,
@@ -130,6 +130,7 @@ pub fn run(
 	Ok(())
 }
 
+// TODO: Cleanup this function
 pub async fn run_inner(
 	config: config::Config,
 	actor_path: PathBuf,
@@ -147,13 +148,13 @@ pub async fn run_inner(
 	tracing::info!(?actor_id, "isolate kv initialized");
 
 	// Should match the path from `Actor::make_fs` in manager/src/actor/setup.rs
-	let entrypoint = actor_path.join("fs").join("index.js");
+	let index = actor_path.join("fs").join("index.js");
 
 	// Load index.js
-	let script_content = match fs::read_to_string(&entrypoint).await {
-		Ok(script_content) => script_content,
+	let index_script_content = match fs::read_to_string(&index).await {
+		Ok(c) => c,
 		Err(err) => {
-			tracing::error!(?err, "Failed to load {}", entrypoint.display());
+			tracing::error!(?err, "Failed to load {}", index.display());
 
 			log_shipper::send_message(
 				actor_id,
@@ -168,9 +169,9 @@ pub async fn run_inner(
 	};
 
 	// Load script into a static module loader. No dynamic scripts can be loaded this way.
-	let main_module = ModuleSpecifier::from_file_path(Path::new("/index.js"))
+	let index_module = ModuleSpecifier::from_file_path(Path::new("/index.js"))
 		.map_err(|_| anyhow!("invalid file name"))?;
-	let loader = StaticModuleLoader::new([(main_module.clone(), script_content)]);
+	let loader = StaticModuleLoader::new([(index_module.clone(), index_script_content)]);
 
 	// TODO(RVT-4192): Replace with a custom fs that only reads from actor_path/fs
 	let fs = Arc::new(InMemoryFs::default());
@@ -202,7 +203,7 @@ pub async fn run_inner(
 		),
 		None,
 		false,
-	)?;
+	);
 	// We use a custom in-memory env
 	permissions.env = UnaryPermission::allow_all();
 
@@ -236,7 +237,7 @@ pub async fn run_inner(
 
 	// Build worker. If this errors its likely a problem with the runtime and not user input
 	let mut worker = MainWorker::try_bootstrap_from_options(
-		main_module.clone(),
+		index_module.clone(),
 		WorkerServiceOptions {
 			module_loader: Rc::new(loader),
 			permissions: PermissionsContainer::new(permission_desc_parser, permissions),
@@ -246,6 +247,7 @@ pub async fn run_inner(
 			node_services: Default::default(),
 			npm_process_state_provider: Default::default(),
 			root_cert_store_provider: Default::default(),
+			fetch_dns_resolver: Default::default(),
 			shared_array_buffer_store: Default::default(),
 			compiled_wasm_module_store: Default::default(),
 			v8_code_cache: Default::default(),
@@ -285,53 +287,66 @@ pub async fn run_inner(
 	drop(terminate_tx);
 
 	// First step preloads the module. This can throw a JS error from certain syntax.
-	match worker.preload_main_module(&main_module).await {
+	match worker.preload_main_module(&index_module).await {
 		Ok(module_id) => {
 			tracing::info!(?actor_id, "Isolate ready");
 
-			// Second step evaluates the module and possibly runs it. Sometimes the event loop continues
-			// running and sometimes it doesn't
-			let res = worker.evaluate_module(module_id).await;
+			// Second step evaluates the module but does not run it (because its sync).
+			let res = worker.evaluate_module_sync(module_id);
 
 			if worker.is_terminated() {
 				tracing::info!(?actor_id, "Isolate terminated");
 			} else {
 				if let Err(err) = res {
-					tracing::info!(?actor_id, "Isolate execution failed");
+					tracing::info!(?actor_id, "Isolate evaluation failed");
 
 					runtime_error(&mut stderr_writer2, &mut worker, err)?;
-				}
+				} else {
+					// Call `start`
+					match handle_entrypoint(
+						actor_id,
+						actor_config.metadata.deserialize()?,
+						&mut worker,
+						module_id,
+					) {
+						Ok(()) => {
+							// Third step runs event loop until stopped. We do this even after an error in
+							// case a beforeunload event handler was registered.
+							loop {
+								let res = worker.run_event_loop(Default::default()).await;
 
-				// Third step continues running the event loop until stopped. We do this even after an error
-				// in case a beforeunload event handler was registered.
-				loop {
-					let res = worker.run_event_loop(Default::default()).await;
+								if worker.is_terminated() {
+									tracing::info!(?actor_id, "Isolate terminated");
+									break;
+								}
 
-					if worker.is_terminated() {
-						tracing::info!(?actor_id, "Isolate terminated");
-						break;
-					}
+								if let Err(err) = res {
+									tracing::info!(?actor_id, "Isolate execution failed");
 
-					if let Err(err) = res {
-						tracing::info!(?actor_id, "Isolate execution failed");
+									runtime_error(&mut stderr_writer2, &mut worker, err)?;
+								}
 
-						runtime_error(&mut stderr_writer2, &mut worker, err)?;
-					}
+								// We dispatch the beforeunload event then run the event loop again
+								match worker.dispatch_beforeunload_event() {
+									Ok(web_continue) => {
+										if !web_continue {
+											break;
+										}
+									}
+									Err(err) => {
+										tracing::info!(
+											?actor_id,
+											"Dispatch beforeunload event failed"
+										);
 
-					// We dispatch the beforeunload event then run the event loop again
-					match worker.dispatch_beforeunload_event() {
-						Ok(web_continue) => {
-							if !web_continue {
-								break;
+										runtime_error(&mut stderr_writer2, &mut worker, err)?;
+
+										break;
+									}
+								}
 							}
 						}
-						Err(err) => {
-							tracing::info!(?actor_id, "Dispatch beforeunload event failed");
-
-							runtime_error(&mut stderr_writer2, &mut worker, err)?;
-
-							break;
-						}
+						Err(err) => runtime_error(&mut stderr_writer2, &mut worker, err)?,
 					}
 				}
 			}
@@ -371,6 +386,92 @@ pub async fn run_inner(
 	Ok(exit_code)
 }
 
+// Reads the `start` function from the default export of index.js and calls it.
+fn handle_entrypoint(
+	actor_id: Uuid,
+	actor_metadata: protocol::ActorMetadata,
+	worker: &mut MainWorker,
+	index_module_id: ModuleId,
+) -> Result<()> {
+	let mm = worker.js_runtime.module_map();
+	let scope = &mut worker.js_runtime.handle_scope();
+
+	// Get index.js mod
+	let g_ns = mm.get_module_namespace(scope, index_module_id)?;
+	let ns = v8::Local::new(scope, g_ns);
+
+	// Get default export
+	let default_export_name = v8::String::new(scope, "default").context("v8 primitive")?;
+	let default_export = ns
+		.get(scope, default_export_name.into())
+		.context("default export")?
+		.to_object(scope)
+		.context(
+			"Missing default export at index.js. Try: export default {{ start(ctx) {{ ... }} }}.",
+		)?;
+
+	// Get `start` export
+	let start_export_name = v8::String::new(scope, "start").context("v8 primitive")?;
+	let start_export = default_export
+		.get(scope, start_export_name.into())
+		.context("Invalid `start` function in default export")?;
+
+	// Parse `start` as function
+	let start_func = v8::Local::<v8::Function>::try_from(start_export)
+		.context("Invalid `start` function in default export")?;
+
+	// Get rivet ns
+	let rivet_ns_module_id = mm
+		.get_id(
+			&"ext:rivet_runtime/90_rivet_ns.js",
+			deno_core::RequestedModuleType::None,
+		)
+		.context("ns should be loaded")?;
+	let rivet_g_ns = mm.get_module_namespace(scope, rivet_ns_module_id)?;
+	let rivet_ns = v8::Local::new(scope, rivet_g_ns);
+
+	// Get deep freeze function
+	let deep_freeze_name = v8::String::new(scope, "deepFreeze").context("v8 primitive")?;
+	let deep_freeze = rivet_ns
+		.get(scope, deep_freeze_name.into())
+		.context("deepFreeze")?;
+	let deep_freeze = v8::Local::<v8::Function>::try_from(deep_freeze).context("deepFreeze")?;
+
+	// Get actor context from ns
+	let ctx_export_name = v8::String::new(scope, "ACTOR_CONTEXT").context("v8 primitive")?;
+	let ctx_export = rivet_ns
+		.get(scope, ctx_export_name.into())
+		.context("runtime export")?
+		.to_object(scope)
+		.context("ns is object")?;
+
+	// Serialize metadata
+	let metadata = JsMetadata::from_actor(actor_id, actor_metadata, scope)?;
+	let metadata = deno_core::serde_v8::to_v8(scope, metadata)?;
+
+	// Add metadata
+	let metadata_key = v8::String::new(scope, "metadata")
+		.context("v8 primitive")?
+		.into();
+	ctx_export.set(scope, metadata_key, metadata);
+
+	// Freeze ctx
+	let frozen_ctx = deep_freeze
+		.call(scope, rivet_ns.into(), &[ctx_export.into()])
+		.context("deepFreeze call")?;
+
+	// Call `start` function
+	let res = start_func.call(scope, default_export.into(), &[frozen_ctx]);
+
+	// Make sure `start` function async
+	match res {
+		Some(promise) if promise.is_promise() => {}
+		_ => bail!("`start` function must be async"),
+	}
+
+	Ok(())
+}
+
 fn runtime_error(stderr_writer: &mut File, worker: &mut MainWorker, err: Error) -> Result<()> {
 	// Write final error to stderr
 	stderr_writer.write_all(err.to_string().as_bytes())?;
@@ -408,59 +509,4 @@ fn wait_logs_complete(
 	}
 
 	Ok(())
-}
-
-// Copied from deno-runtime tokio_util.rs
-fn create_basic_runtime() -> Result<tokio::runtime::Runtime> {
-	let event_interval = 61;
-	let global_queue_interval = 31;
-	let max_io_events_per_tick = 1024;
-
-	tokio::runtime::Builder::new_current_thread()
-		.enable_io()
-		.enable_time()
-		.event_interval(event_interval)
-		.global_queue_interval(global_queue_interval)
-		.max_io_events_per_tick(max_io_events_per_tick)
-		// This limits the number of threads for blocking operations (like for
-		// synchronous fs ops) or CPU bound tasks like when we run dprint in
-		// parallel for deno fmt.
-		// The default value is 512, which is an unhelpfully large thread pool. We
-		// don't ever want to have more than a couple dozen threads.
-		.max_blocking_threads(32)
-		.build()
-		.map_err(Into::into)
-}
-
-// Copied from deno-runtime tokio_util.rs
-#[inline(always)]
-fn create_and_run_current_thread<F, R>(future: F) -> Result<R>
-where
-	F: std::future::Future<Output = R> + 'static,
-	R: Send + 'static,
-{
-	let rt = create_basic_runtime()?;
-
-	// Since this is the main future, we want to box it in debug mode because it tends to be fairly
-	// large and the compiler won't optimize repeated copies. We also make this runtime factory
-	// function #[inline(always)] to avoid holding the unboxed, unused future on the stack.
-
-	#[cfg(debug_assertions)]
-	// SAFETY: this is guaranteed to be running on a current-thread executor
-	let future = Box::pin(unsafe { MaskFutureAsSend::new(future) });
-
-	#[cfg(not(debug_assertions))]
-	// SAFETY: this is guaranteed to be running on a current-thread executor
-	let future = unsafe { MaskFutureAsSend::new(future) };
-
-	let join_handle = rt.spawn(future);
-
-	let r = rt.block_on(join_handle)?.into_inner();
-	// Forcefully shutdown the runtime - we're done executing JS code at this
-	// point, but there might be outstanding blocking tasks that were created and
-	// latered "unrefed". They won't terminate on their own, so we're forcing
-	// termination of Tokio runtime at this point.
-	rt.shutdown_background();
-
-	Ok(r)
 }

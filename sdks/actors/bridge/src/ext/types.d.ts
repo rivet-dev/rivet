@@ -1,4 +1,25 @@
 declare module "internal_types" {
+	export interface Metadata {
+		actor: {
+			id: string;
+			tags: Record<string, string>;
+			createdAt: Date;
+		};
+		env: {
+			id: string;
+		};
+		cluster: {
+			id: string;
+		};
+		region: {
+			id: string;
+			name: string;
+		};
+		build: {
+			id: string;
+		};
+	}
+
 	export type InKey = {
 		jsInKey: Uint8Array[];
 	};
@@ -8,9 +29,9 @@ declare module "internal_types" {
 	};
 	export type OutEntry = {
 		value: Uint8Array;
-		metadata: Metadata;
+		metadata: KeyMetadata;
 	};
-	export type Metadata = {
+	export type KeyMetadata = {
 		kvVersion: Uint8Array;
 		createTs: number;
 	};

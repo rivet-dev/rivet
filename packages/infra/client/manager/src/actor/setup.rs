@@ -392,6 +392,7 @@ impl Actor {
 				})
 				.collect::<Vec<_>>(),
 			env: self.build_default_env(ctx, &ports),
+			metadata: self.config.metadata.clone(),
 			owner: self.config.owner.clone(),
 			vector_socket_addr: ctx.config().vector.clone().map(|x| x.address),
 		};
@@ -700,16 +701,10 @@ impl Actor {
 					port.target.to_string(),
 				)
 			}))
-			.chain([
-				(
-					"RIVET_API_ENDPOINT".to_string(),
-					ctx.config().cluster.api_endpoint.to_string(),
-				),
-				(
-					"RIVET_METADATA".to_string(),
-					self.config.metadata.get().to_string(),
-				),
-			])
+			.chain([(
+				"RIVET_API_ENDPOINT".to_string(),
+				ctx.config().cluster.api_endpoint.to_string(),
+			)])
 			.collect()
 	}
 }

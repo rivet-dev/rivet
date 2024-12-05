@@ -103,27 +103,25 @@ pub async fn start_echo_actor(
 			owner: protocol::ActorOwner::DynamicServer {
 				server_id: actor_id,
 			},
-			metadata: protocol::Raw::new(&json!({
-				"actor": {
-					"id": actor_id,
-					"tags": {
-						"foo": "bar",
-					},
-					"created_at": rivet_util::timestamp::to_string(rivet_util::timestamp::now()).unwrap(),
+			metadata: protocol::Raw::new(&protocol::ActorMetadata {
+				tags: [("foo".to_string(), "bar".to_string())]
+					.into_iter()
+					.collect(),
+				create_ts: 0,
+				env: protocol::ActorMetadataEnv {
+					env_id: Uuid::nil(),
 				},
-				"env": {
-					"id": Uuid::nil(),
+				datacenter: protocol::ActorMetadataDatacenter {
+					name_id: "local".to_string(),
+					display_name: "Local".to_string(),
 				},
-				"cluster": {
-					"id": Uuid::nil()
+				cluster: protocol::ActorMetadataCluster {
+					cluster_id: Uuid::nil(),
 				},
-				"region": {
-					"name": "local",
+				build: protocol::ActorMetadataBuild {
+					build_id: Uuid::nil(),
 				},
-				"build": {
-					"id": Uuid::nil(),
-				},
-			}))
+			})
 			.unwrap(),
 		}),
 	};
@@ -166,27 +164,25 @@ pub async fn start_js_echo_actor(
 			owner: protocol::ActorOwner::DynamicServer {
 				server_id: actor_id,
 			},
-			metadata: protocol::Raw::new(&json!({
-				"actor": {
-					"id": actor_id,
-					"tags": {
-						"foo": "bar",
-					},
-					"created_at": rivet_util::timestamp::to_string(rivet_util::timestamp::now()).unwrap(),
+			metadata: protocol::Raw::new(&protocol::ActorMetadata {
+				tags: [("foo".to_string(), "bar".to_string())]
+					.into_iter()
+					.collect(),
+				create_ts: 0,
+				env: protocol::ActorMetadataEnv {
+					env_id: Uuid::nil(),
 				},
-				"env": {
-					"id": Uuid::nil(),
+				datacenter: protocol::ActorMetadataDatacenter {
+					name_id: "local".to_string(),
+					display_name: "Local".to_string(),
 				},
-				"cluster": {
-					"id": Uuid::nil()
+				cluster: protocol::ActorMetadataCluster {
+					cluster_id: Uuid::nil(),
 				},
-				"region": {
-					"name": "local",
+				build: protocol::ActorMetadataBuild {
+					build_id: Uuid::nil(),
 				},
-				"build": {
-					"id": Uuid::nil(),
-				},
-			}))
+			})
 			.unwrap(),
 		}),
 	};
