@@ -1,0 +1,1823 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Server",
+  "type": "object",
+  "required": [
+    "jwt"
+  ],
+  "properties": {
+    "clickhouse": {
+      "default": null,
+      "allOf": [
+        {
+          "$ref": "#/definitions/ClickHouse"
+        }
+      ],
+      "nullable": true
+    },
+    "cloudflare": {
+      "default": null,
+      "allOf": [
+        {
+          "$ref": "#/definitions/Cloudflare"
+        }
+      ],
+      "nullable": true
+    },
+    "cockroachdb": {
+      "default": {
+        "max_connections": 4096,
+        "min_connections": 4,
+        "password": null,
+        "provision_users": {},
+        "url": "postgresql://localhost:26257/defaultdb?sslmode=disable",
+        "username": "root"
+      },
+      "allOf": [
+        {
+          "$ref": "#/definitions/CockroachDb"
+        }
+      ]
+    },
+    "hcaptcha": {
+      "default": null,
+      "allOf": [
+        {
+          "$ref": "#/definitions/Hcaptcha"
+        }
+      ],
+      "nullable": true
+    },
+    "ip_info": {
+      "default": null,
+      "allOf": [
+        {
+          "$ref": "#/definitions/IpInfo"
+        }
+      ],
+      "nullable": true
+    },
+    "jwt": {
+      "$ref": "#/definitions/JwtKey"
+    },
+    "linode": {
+      "default": null,
+      "allOf": [
+        {
+          "$ref": "#/definitions/Linode"
+        }
+      ],
+      "nullable": true
+    },
+    "loops": {
+      "default": null,
+      "allOf": [
+        {
+          "$ref": "#/definitions/Loops"
+        }
+      ],
+      "nullable": true
+    },
+    "nats": {
+      "default": {
+        "password": null,
+        "urls": [
+          "nats://localhost:4222"
+        ],
+        "username": null
+      },
+      "allOf": [
+        {
+          "$ref": "#/definitions/Nats"
+        }
+      ]
+    },
+    "neon": {
+      "default": null,
+      "allOf": [
+        {
+          "$ref": "#/definitions/Neon"
+        }
+      ],
+      "nullable": true
+    },
+    "nomad": {
+      "description": "Deprecated",
+      "default": null,
+      "allOf": [
+        {
+          "$ref": "#/definitions/Nomad"
+        }
+      ],
+      "nullable": true
+    },
+    "prometheus": {
+      "default": null,
+      "allOf": [
+        {
+          "$ref": "#/definitions/Prometheus"
+        }
+      ],
+      "nullable": true
+    },
+    "redis": {
+      "default": {
+        "ephemeral": {
+          "password": null,
+          "url": "redis://127.0.0.1:6379",
+          "username": null
+        },
+        "persistent": {
+          "password": null,
+          "url": "redis://127.0.0.1:6379",
+          "username": null
+        }
+      },
+      "allOf": [
+        {
+          "$ref": "#/definitions/RedisTypes"
+        }
+      ]
+    },
+    "rivet": {
+      "default": {
+        "api_edge": {
+          "host": null,
+          "port": null
+        },
+        "api_public": {
+          "host": null,
+          "port": null,
+          "public_origin": null,
+          "respect_forwarded_for": null,
+          "verbose_errors": null
+        },
+        "auth": {
+          "access_kind": "private"
+        },
+        "backend": null,
+        "billing": null,
+        "cdn": null,
+        "clusters": null,
+        "default_cluster_id": null,
+        "dns": null,
+        "guard": {
+          "max_ingress_port_tcp": null,
+          "max_ingress_port_udp": null,
+          "min_ingress_port_tcp": null,
+          "min_ingress_port_udp": null
+        },
+        "health": {
+          "host": null,
+          "port": null
+        },
+        "job_run": null,
+        "metrics": {
+          "host": null,
+          "port": null
+        },
+        "namespace": "rivet",
+        "orchestrator": {
+          "host": null,
+          "port": null
+        },
+        "provision": null,
+        "telemetry": {
+          "enable": true
+        },
+        "test_builds": {},
+        "token": {
+          "status": null,
+          "traefik_provider": null
+        },
+        "tunnel": {
+          "public_host": "127.0.0.1:8003"
+        },
+        "ui": {
+          "enable": null,
+          "public_origin": null,
+          "public_origin_regex": null
+        }
+      },
+      "allOf": [
+        {
+          "$ref": "#/definitions/Rivet"
+        }
+      ]
+    },
+    "s3": {
+      "default": {
+        "access_key_id": "root",
+        "endpoint_edge_internal": null,
+        "endpoint_external": "http://127.0.0.1:9000/",
+        "endpoint_internal": "http://127.0.0.1:9000/",
+        "region": "us-east-1",
+        "secret_access_key": "root"
+      },
+      "allOf": [
+        {
+          "$ref": "#/definitions/S3"
+        }
+      ]
+    },
+    "sendgrid": {
+      "default": null,
+      "allOf": [
+        {
+          "$ref": "#/definitions/Sendgrid"
+        }
+      ],
+      "nullable": true
+    },
+    "ssh": {
+      "default": null,
+      "allOf": [
+        {
+          "$ref": "#/definitions/Ssh"
+        }
+      ],
+      "nullable": true
+    },
+    "stripe": {
+      "default": null,
+      "allOf": [
+        {
+          "$ref": "#/definitions/Stripe"
+        }
+      ],
+      "nullable": true
+    },
+    "tls": {
+      "default": null,
+      "allOf": [
+        {
+          "$ref": "#/definitions/Tls"
+        }
+      ],
+      "nullable": true
+    },
+    "turnstile": {
+      "default": null,
+      "allOf": [
+        {
+          "$ref": "#/definitions/Turnstile"
+        }
+      ],
+      "nullable": true
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "AccessKind": {
+      "oneOf": [
+        {
+          "description": "Anyone can sign up for an account.",
+          "type": "string",
+          "enum": [
+            "public"
+          ]
+        },
+        {
+          "description": "Only admin users can crate teams & projects.",
+          "type": "string",
+          "enum": [
+            "private"
+          ]
+        },
+        {
+          "description": "Anyone can access the cluster without authorization.\n\nIf enabled: - A default project with slug \"default\" & environment with slug \"default\" will be created automatically - This allows using Rivet without manually creating a new project/environment - Project & environment fields will fallback to \"default\" if not provided - This allows using Rivet with simplfied requests, like `POST /actors` without a query - If no bearer token is provided, authentication will always succeed - This allows setting up development environments without manually creating tokens",
+          "type": "string",
+          "enum": [
+            "development"
+          ]
+        }
+      ]
+    },
+    "ApiEdge": {
+      "description": "Configuration for the edge API service.",
+      "type": "object",
+      "properties": {
+        "host": {
+          "type": "string",
+          "format": "ip",
+          "nullable": true
+        },
+        "port": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0,
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "ApiPublic": {
+      "description": "Configuration for the public API service.",
+      "type": "object",
+      "properties": {
+        "host": {
+          "description": "The host on which the API service listens.",
+          "type": "string",
+          "format": "ip",
+          "nullable": true
+        },
+        "port": {
+          "description": "The port on which the API service listens.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0,
+          "nullable": true
+        },
+        "public_origin": {
+          "description": "The public origin URL for the API.",
+          "type": "string",
+          "format": "uri",
+          "nullable": true
+        },
+        "respect_forwarded_for": {
+          "description": "Flag to respect the X-Forwarded-For header for client IP addresses.\n\nWill be ignored in favor of CF-Connecting-IP if DNS provider is configured as Cloudflare.",
+          "type": "boolean",
+          "nullable": true
+        },
+        "verbose_errors": {
+          "description": "Flag to enable verbose error reporting.",
+          "type": "boolean",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "Auth": {
+      "description": "Configuration for authentication and access control.",
+      "type": "object",
+      "required": [
+        "access_kind"
+      ],
+      "properties": {
+        "access_kind": {
+          "$ref": "#/definitions/AccessKind"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Backend": {
+      "description": "Configuration for backend features (Enterprise Edition).",
+      "type": "object",
+      "required": [
+        "base_domain"
+      ],
+      "properties": {
+        "base_domain": {
+          "description": "Base domain serving the backend endpoints.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Billing": {
+      "description": "Configuration for billing features (Enterprise Edition).",
+      "type": "object",
+      "required": [
+        "indie_price_id",
+        "studio_price_id"
+      ],
+      "properties": {
+        "indie_price_id": {
+          "description": "Price ID for the indie tier.",
+          "type": "string"
+        },
+        "studio_price_id": {
+          "description": "Price ID for the studio tier.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "BuildDeliveryMethod": {
+      "type": "string",
+      "enum": [
+        "traffic_server",
+        "s3_direct"
+      ]
+    },
+    "Cdn": {
+      "description": "Deprecated: Configuration for CDN.",
+      "type": "object",
+      "additionalProperties": false
+    },
+    "ClickHouse": {
+      "type": "object",
+      "required": [
+        "http_url",
+        "native_url",
+        "username"
+      ],
+      "properties": {
+        "http_url": {
+          "description": "URL to the HTTP access port for ClickHouse.",
+          "type": "string",
+          "format": "uri"
+        },
+        "native_url": {
+          "description": "URL to the native access port for ClickHouse.",
+          "type": "string",
+          "format": "uri"
+        },
+        "password": {
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/Secret<String>"
+            }
+          ],
+          "nullable": true
+        },
+        "provision_users": {
+          "default": {},
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/ClickHouseUser"
+          }
+        },
+        "username": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ClickHouseUser": {
+      "type": "object",
+      "required": [
+        "password",
+        "role",
+        "username"
+      ],
+      "properties": {
+        "password": {
+          "$ref": "#/definitions/Secret<String>"
+        },
+        "role": {
+          "$ref": "#/definitions/ClickHouseUserRole"
+        },
+        "username": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ClickHouseUserRole": {
+      "type": "string",
+      "enum": [
+        "admin",
+        "write",
+        "read_only"
+      ]
+    },
+    "Cloudflare": {
+      "type": "object",
+      "required": [
+        "account_id",
+        "auth_token",
+        "backend_dispatcher_namespace",
+        "zone"
+      ],
+      "properties": {
+        "account_id": {
+          "type": "string"
+        },
+        "auth_token": {
+          "$ref": "#/definitions/Secret<String>"
+        },
+        "backend_dispatcher_namespace": {
+          "type": "string"
+        },
+        "zone": {
+          "$ref": "#/definitions/CloudflareZone"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CloudflareZone": {
+      "type": "object",
+      "properties": {
+        "game": {
+          "type": "string",
+          "nullable": true
+        },
+        "job": {
+          "type": "string",
+          "nullable": true
+        },
+        "main": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "Cluster": {
+      "description": "Manages the automatic provisioning of servers that Rivet runs on.",
+      "type": "object",
+      "required": [
+        "datacenters",
+        "id"
+      ],
+      "properties": {
+        "datacenters": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/Datacenter"
+          }
+        },
+        "id": {
+          "description": "This ID must not change.",
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ClusterPoolAts": {
+      "type": "object",
+      "properties": {
+        "firewall_rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FirewallRule"
+          },
+          "nullable": true
+        },
+        "vlan_ip_net": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "ClusterPoolFdb": {
+      "type": "object",
+      "properties": {
+        "firewall_rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FirewallRule"
+          },
+          "nullable": true
+        },
+        "vlan_ip_net": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "ClusterPoolGg": {
+      "type": "object",
+      "properties": {
+        "firewall_rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FirewallRule"
+          },
+          "nullable": true
+        },
+        "vlan_ip_net": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "ClusterPoolJob": {
+      "type": "object",
+      "required": [
+        "provision_margin"
+      ],
+      "properties": {
+        "provision_margin": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "ClusterPoolPegboard": {
+      "description": "These port range values will be pass to the Rivet Clients to choose ports & are used to provision firewalls.",
+      "type": "object",
+      "required": [
+        "provision_margin"
+      ],
+      "properties": {
+        "firewall_rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FirewallRule"
+          },
+          "nullable": true
+        },
+        "max_lan_port": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0,
+          "nullable": true
+        },
+        "max_wan_port": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0,
+          "nullable": true
+        },
+        "min_lan_port": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0,
+          "nullable": true
+        },
+        "min_wan_port": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0,
+          "nullable": true
+        },
+        "provision_margin": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "vlan_addr_range_max": {
+          "type": "string",
+          "format": "ipv4",
+          "nullable": true
+        },
+        "vlan_addr_range_min": {
+          "type": "string",
+          "format": "ipv4",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "ClusterPools": {
+      "type": "object",
+      "required": [
+        "ats",
+        "fdb",
+        "gg",
+        "job",
+        "pegboard"
+      ],
+      "properties": {
+        "ats": {
+          "$ref": "#/definitions/ClusterPoolAts"
+        },
+        "fdb": {
+          "$ref": "#/definitions/ClusterPoolFdb"
+        },
+        "gg": {
+          "$ref": "#/definitions/ClusterPoolGg"
+        },
+        "job": {
+          "$ref": "#/definitions/ClusterPoolJob"
+        },
+        "pegboard": {
+          "$ref": "#/definitions/ClusterPoolPegboard"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ClusterProvision": {
+      "type": "object",
+      "required": [
+        "container_runner_binary_url",
+        "isolate_runner_binary_url",
+        "manager_binary_url",
+        "pools"
+      ],
+      "properties": {
+        "container_runner_binary_url": {
+          "description": "The URL for the container runner binary.",
+          "type": "string",
+          "format": "uri"
+        },
+        "isolate_runner_binary_url": {
+          "description": "The URL for the isolate runner binary.",
+          "type": "string",
+          "format": "uri"
+        },
+        "manager_binary_url": {
+          "description": "The URL for the manager binary.",
+          "type": "string",
+          "format": "uri"
+        },
+        "pools": {
+          "description": "Configuration for server pools that use a margin for scaling.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ClusterPools"
+            }
+          ]
+        },
+        "vlan_ip_net": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "CockroachDb": {
+      "type": "object",
+      "required": [
+        "url",
+        "username"
+      ],
+      "properties": {
+        "max_connections": {
+          "default": 4096,
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "min_connections": {
+          "default": 4,
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "password": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/Secret<String>"
+            }
+          ],
+          "nullable": true
+        },
+        "provision_users": {
+          "description": "Automatically provisions new users when migrating the database.",
+          "default": {},
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/CockroachDbUser"
+          }
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "username": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CockroachDbUser": {
+      "type": "object",
+      "required": [
+        "password",
+        "role",
+        "username"
+      ],
+      "properties": {
+        "password": {
+          "$ref": "#/definitions/Secret<String>"
+        },
+        "role": {
+          "$ref": "#/definitions/CockroachDbUserRole"
+        },
+        "username": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CockroachDbUserRole": {
+      "type": "string",
+      "enum": [
+        "read",
+        "read_write"
+      ]
+    },
+    "Datacenter": {
+      "type": "object",
+      "required": [
+        "build_delivery_method",
+        "id",
+        "name"
+      ],
+      "properties": {
+        "build_delivery_method": {
+          "$ref": "#/definitions/BuildDeliveryMethod"
+        },
+        "hardware": {
+          "description": "Hardware specs used to orchestrate jobs.\n\nThis is only used if `provision` is not provided.\n\nThis will be automatically determined in development mode.",
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/DatacenterHardware"
+            }
+          ],
+          "nullable": true
+        },
+        "id": {
+          "description": "This ID must not change.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string"
+        },
+        "provision": {
+          "description": "Configures how servers are provisioned.\n\nEnterprise only.",
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/DatacenterProvision"
+            }
+          ],
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "DatacenterHardware": {
+      "type": "object",
+      "required": [
+        "bandwidth",
+        "cpu",
+        "cpu_cores",
+        "disk",
+        "memory"
+      ],
+      "properties": {
+        "bandwidth": {
+          "description": "Kibps",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "cpu": {
+          "description": "Mhz",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "cpu_cores": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "disk": {
+          "description": "MiB",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "memory": {
+          "description": "MiB",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "DatacenterProvision": {
+      "type": "object",
+      "required": [
+        "pools",
+        "prebakes_enabled",
+        "provider",
+        "provider_datacenter_id"
+      ],
+      "properties": {
+        "pools": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/Pool"
+          }
+        },
+        "prebakes_enabled": {
+          "type": "boolean"
+        },
+        "provider": {
+          "$ref": "#/definitions/Provider"
+        },
+        "provider_datacenter_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Dns": {
+      "description": "Configuration for DNS management.",
+      "type": "object",
+      "required": [
+        "provider"
+      ],
+      "properties": {
+        "domain_cdn": {
+          "description": "The domain used for CDN-related services.",
+          "type": "string",
+          "nullable": true
+        },
+        "domain_job": {
+          "description": "The domain used for job-related services.",
+          "type": "string",
+          "nullable": true
+        },
+        "domain_main": {
+          "description": "The domain used for backend services.",
+          "type": "string",
+          "nullable": true
+        },
+        "provider": {
+          "description": "The DNS provider used for managing domains.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/DnsProvider"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "DnsProvider": {
+      "type": "string",
+      "enum": [
+        "cloudflare"
+      ]
+    },
+    "FirewallRule": {
+      "type": "object",
+      "required": [
+        "inbound_ipv4_cidr",
+        "inbound_ipv6_cidr",
+        "label",
+        "ports",
+        "protocol"
+      ],
+      "properties": {
+        "inbound_ipv4_cidr": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "inbound_ipv6_cidr": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "label": {
+          "type": "string"
+        },
+        "ports": {
+          "type": "string"
+        },
+        "protocol": {
+          "type": "string"
+        }
+      }
+    },
+    "Guard": {
+      "description": "The port ranges define what ports Guard will allocate ports on. If using cluster provisioning, these are also used for firewall rules.",
+      "type": "object",
+      "properties": {
+        "max_ingress_port_tcp": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0,
+          "nullable": true
+        },
+        "max_ingress_port_udp": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0,
+          "nullable": true
+        },
+        "min_ingress_port_tcp": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0,
+          "nullable": true
+        },
+        "min_ingress_port_udp": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0,
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "Hardware": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Hcaptcha": {
+      "type": "object",
+      "properties": {
+        "secret_fallback": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/Secret<String>"
+            }
+          ],
+          "nullable": true
+        },
+        "site_key_fallback": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/Secret<String>"
+            }
+          ],
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "Health": {
+      "description": "Configuration for the health check service.",
+      "type": "object",
+      "properties": {
+        "host": {
+          "type": "string",
+          "format": "ip",
+          "nullable": true
+        },
+        "port": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0,
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "IpInfo": {
+      "type": "object",
+      "required": [
+        "token"
+      ],
+      "properties": {
+        "token": {
+          "$ref": "#/definitions/Secret<String>"
+        }
+      },
+      "additionalProperties": false
+    },
+    "JobRun": {
+      "description": "Deprecated: Configuration for job running.",
+      "type": "object",
+      "required": [
+        "job_runner_binary_url"
+      ],
+      "properties": {
+        "job_runner_binary_url": {
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "additionalProperties": false
+    },
+    "JwtKey": {
+      "type": "object",
+      "required": [
+        "private",
+        "public"
+      ],
+      "properties": {
+        "private": {
+          "description": "The private EdDSA key in a PEM format.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Secret<String>"
+            }
+          ]
+        },
+        "public": {
+          "description": "The public EdDSA key in a PEM format.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Linode": {
+      "type": "object",
+      "required": [
+        "api_token"
+      ],
+      "properties": {
+        "api_token": {
+          "$ref": "#/definitions/Secret<String>"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Loops": {
+      "type": "object",
+      "required": [
+        "token"
+      ],
+      "properties": {
+        "token": {
+          "$ref": "#/definitions/Secret<String>"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Metrics": {
+      "description": "Configuration for the metrics service.",
+      "type": "object",
+      "properties": {
+        "host": {
+          "type": "string",
+          "format": "ip",
+          "nullable": true
+        },
+        "port": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0,
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "Nats": {
+      "type": "object",
+      "required": [
+        "urls"
+      ],
+      "properties": {
+        "password": {
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/Secret<String>"
+            }
+          ],
+          "nullable": true
+        },
+        "urls": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "username": {
+          "default": null,
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "Neon": {
+      "type": "object",
+      "required": [
+        "api_key"
+      ],
+      "properties": {
+        "api_key": {
+          "$ref": "#/definitions/Secret<String>"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Nomad": {
+      "type": "object",
+      "required": [
+        "server_count",
+        "url"
+      ],
+      "properties": {
+        "server_count": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Pegboard": {
+      "description": "The service that manages Rivet Actors.",
+      "type": "object",
+      "properties": {
+        "host": {
+          "description": "The host on which the Pegboard service listens.",
+          "type": "string",
+          "format": "ip",
+          "nullable": true
+        },
+        "port": {
+          "description": "The port on which the Pegboard service listens.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0,
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "Pool": {
+      "type": "object",
+      "required": [
+        "desired_count",
+        "drain_timeout",
+        "hardware",
+        "max_count",
+        "min_count"
+      ],
+      "properties": {
+        "desired_count": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "drain_timeout": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "hardware": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Hardware"
+          }
+        },
+        "max_count": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "min_count": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "Prometheus": {
+      "type": "object",
+      "required": [
+        "url"
+      ],
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Provider": {
+      "type": "string",
+      "enum": [
+        "linode"
+      ]
+    },
+    "Redis": {
+      "type": "object",
+      "required": [
+        "url"
+      ],
+      "properties": {
+        "password": {
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/Secret<String>"
+            }
+          ],
+          "nullable": true
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "username": {
+          "default": null,
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "RedisTypes": {
+      "type": "object",
+      "required": [
+        "ephemeral",
+        "persistent"
+      ],
+      "properties": {
+        "ephemeral": {
+          "$ref": "#/definitions/Redis"
+        },
+        "persistent": {
+          "$ref": "#/definitions/Redis"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Rivet": {
+      "type": "object",
+      "properties": {
+        "api_edge": {
+          "default": {
+            "host": null,
+            "port": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/ApiEdge"
+            }
+          ]
+        },
+        "api_public": {
+          "default": {
+            "host": null,
+            "port": null,
+            "public_origin": null,
+            "respect_forwarded_for": null,
+            "verbose_errors": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/ApiPublic"
+            }
+          ]
+        },
+        "auth": {
+          "default": {
+            "access_kind": "private"
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/Auth"
+            }
+          ]
+        },
+        "backend": {
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/Backend"
+            }
+          ],
+          "nullable": true
+        },
+        "billing": {
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/Billing"
+            }
+          ],
+          "nullable": true
+        },
+        "cdn": {
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/Cdn"
+            }
+          ],
+          "nullable": true
+        },
+        "clusters": {
+          "default": null,
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/Cluster"
+          },
+          "nullable": true
+        },
+        "default_cluster_id": {
+          "description": "If specified, will use this as the default cluster ID.\n\nThis will have no effect if applied after the cluster has first ran.",
+          "default": null,
+          "type": "string",
+          "format": "uuid",
+          "nullable": true
+        },
+        "dns": {
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/Dns"
+            }
+          ],
+          "nullable": true
+        },
+        "guard": {
+          "default": {
+            "max_ingress_port_tcp": null,
+            "max_ingress_port_udp": null,
+            "min_ingress_port_tcp": null,
+            "min_ingress_port_udp": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/Guard"
+            }
+          ]
+        },
+        "health": {
+          "default": {
+            "host": null,
+            "port": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/Health"
+            }
+          ]
+        },
+        "job_run": {
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/JobRun"
+            }
+          ],
+          "nullable": true
+        },
+        "metrics": {
+          "default": {
+            "host": null,
+            "port": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/Metrics"
+            }
+          ]
+        },
+        "namespace": {
+          "description": "IMPORTANT: Do not change this value after the first time starting a cluster with this namespace.",
+          "default": "rivet",
+          "type": "string"
+        },
+        "orchestrator": {
+          "default": {
+            "host": null,
+            "port": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/Pegboard"
+            }
+          ]
+        },
+        "provision": {
+          "description": "Configures how servers are provisioned.\n\nEnterprise only.",
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/ClusterProvision"
+            }
+          ],
+          "nullable": true
+        },
+        "telemetry": {
+          "default": {
+            "enable": true
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/Telemetry"
+            }
+          ]
+        },
+        "test_builds": {
+          "description": "Configuration for test builds.",
+          "default": {},
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/TestBuild"
+          }
+        },
+        "token": {
+          "default": {
+            "status": null,
+            "traefik_provider": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/Tokens"
+            }
+          ]
+        },
+        "tunnel": {
+          "default": {
+            "public_host": "127.0.0.1:8003"
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/Tunnel"
+            }
+          ]
+        },
+        "ui": {
+          "default": {
+            "enable": null,
+            "public_origin": null,
+            "public_origin_regex": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/Ui"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "S3": {
+      "type": "object",
+      "required": [
+        "access_key_id",
+        "endpoint_external",
+        "endpoint_internal",
+        "region",
+        "secret_access_key"
+      ],
+      "properties": {
+        "access_key_id": {
+          "$ref": "#/definitions/Secret<String>"
+        },
+        "endpoint_edge_internal": {
+          "description": "If not defined, will default to endpoint_external.",
+          "type": "string",
+          "format": "uri",
+          "nullable": true
+        },
+        "endpoint_external": {
+          "type": "string",
+          "format": "uri"
+        },
+        "endpoint_internal": {
+          "type": "string",
+          "format": "uri"
+        },
+        "region": {
+          "type": "string"
+        },
+        "secret_access_key": {
+          "$ref": "#/definitions/Secret<String>"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SSHEntry": {
+      "type": "object",
+      "required": [
+        "private_key_openssh"
+      ],
+      "properties": {
+        "private_key_openssh": {
+          "$ref": "#/definitions/Secret<String>"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Secret<String>": {
+      "type": "string"
+    },
+    "Sendgrid": {
+      "type": "object",
+      "required": [
+        "key"
+      ],
+      "properties": {
+        "key": {
+          "$ref": "#/definitions/Secret<String>"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Ssh": {
+      "type": "object",
+      "required": [
+        "server"
+      ],
+      "properties": {
+        "server": {
+          "$ref": "#/definitions/SSHEntry"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Stripe": {
+      "type": "object",
+      "required": [
+        "secret_key",
+        "webhook_secret"
+      ],
+      "properties": {
+        "secret_key": {
+          "$ref": "#/definitions/Secret<String>"
+        },
+        "webhook_secret": {
+          "description": "The current Stripe webhook secret.\n\nSecrets can be added at: https://dashboard.stripe.com/webhooks\n\nAdd the following events to the WebHook: - invoice.payment_succeeded - checkout.session.completed - payment_intent.succeeded",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Secret<String>"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Telemetry": {
+      "description": "Configuration for telemetry collection.",
+      "type": "object",
+      "required": [
+        "enable"
+      ],
+      "properties": {
+        "enable": {
+          "description": "Flag to enable or disable telemetry collection.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "TestBuild": {
+      "description": "Configuration for a default test build.",
+      "type": "object",
+      "required": [
+        "key",
+        "tag"
+      ],
+      "properties": {
+        "key": {
+          "description": "S3 key.",
+          "type": "string"
+        },
+        "tag": {
+          "description": "Image tag.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Tls": {
+      "type": "object",
+      "required": [
+        "acme",
+        "cert_locally_signed_job_cert_pem",
+        "cert_locally_signed_job_key_pem",
+        "root_ca_cert_pem"
+      ],
+      "properties": {
+        "acme": {
+          "$ref": "#/definitions/TlsAcme"
+        },
+        "cert_locally_signed_job_cert_pem": {
+          "$ref": "#/definitions/Secret<String>"
+        },
+        "cert_locally_signed_job_key_pem": {
+          "$ref": "#/definitions/Secret<String>"
+        },
+        "root_ca_cert_pem": {
+          "$ref": "#/definitions/Secret<String>"
+        }
+      },
+      "additionalProperties": false
+    },
+    "TlsAcme": {
+      "type": "object",
+      "required": [
+        "account_private_key_pem"
+      ],
+      "properties": {
+        "account_private_key_pem": {
+          "$ref": "#/definitions/Secret<String>"
+        },
+        "directory": {
+          "default": "lets_encrypt",
+          "allOf": [
+            {
+              "$ref": "#/definitions/TlsAcmeDirectory"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "TlsAcmeDirectory": {
+      "type": "string",
+      "enum": [
+        "lets_encrypt",
+        "lets_encrypt_staging"
+      ]
+    },
+    "Tokens": {
+      "description": "Configuration for various tokens used in the system.",
+      "type": "object",
+      "properties": {
+        "status": {
+          "description": "Token for API status checks.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Secret<String>"
+            }
+          ],
+          "nullable": true
+        },
+        "traefik_provider": {
+          "description": "Token for the API Traefik provider.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Secret<String>"
+            }
+          ],
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "Tunnel": {
+      "description": "Configuration for the tunnel service.",
+      "type": "object",
+      "required": [
+        "public_host"
+      ],
+      "properties": {
+        "public_host": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Turnstile": {
+      "type": "object",
+      "properties": {
+        "cdn_secret_key": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/Secret<String>"
+            }
+          ],
+          "nullable": true
+        },
+        "cdn_site_key": {
+          "type": "string",
+          "nullable": true
+        },
+        "main_secret_key": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/Secret<String>"
+            }
+          ],
+          "nullable": true
+        },
+        "main_site_key": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "Ui": {
+      "description": "Configuration for the UI service.",
+      "type": "object",
+      "properties": {
+        "enable": {
+          "description": "Enables serving the UI automatically.\n\nIf disabled, the UI can be hosted separately.",
+          "type": "boolean",
+          "nullable": true
+        },
+        "public_origin": {
+          "description": "The origin URL for the UI.",
+          "type": "string",
+          "format": "uri",
+          "nullable": true
+        },
+        "public_origin_regex": {
+          "description": "Regular expression to match valid UI origins.",
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

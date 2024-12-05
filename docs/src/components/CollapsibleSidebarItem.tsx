@@ -18,7 +18,7 @@ export function CollapsibleSidebarItem({ item, children }: CollapsibleSidebarIte
   return (
     <div>
       <button
-        className='text-muted-foreground data-[active]:text-foreground flex w-full appearance-none items-center gap-4 px-2 py-1 text-sm transition-colors'
+        className='flex w-full appearance-none items-center gap-4 px-2 py-1 text-sm text-muted-foreground transition-colors data-[active]:text-foreground'
         data-active={isCurrent ? true : undefined}
         onClick={() => setIsOpen(open => !open)}>
         {item.title}

@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use schemars::JsonSchema;
 
 /// Wraps a given value in a container that does not implement `Debug` or `Display` in order to
 /// prevent accidentally logging the inner secret.
@@ -54,5 +55,18 @@ where
 		D: serde::Deserializer<'de>,
 	{
 		T::deserialize(deserializer).map(Secret)
+	}
+}
+
+impl<T> JsonSchema for Secret<T>
+where
+	T: Clone + JsonSchema,
+{
+	fn schema_name() -> String {
+		format!("Secret<{}>", T::schema_name())
+	}
+
+	fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+		T::json_schema(gen)
 	}
 }

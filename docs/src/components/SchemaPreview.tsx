@@ -116,12 +116,12 @@ function PropertyLabel({ parent, name, ...rest }: PropertyLabelProps) {
       <div className='flex items-center gap-1 px-4'>
         <code className='text-foreground/90'>
           {parent ? <>{parent}.</> : null}
-          <span className='text-foreground font-bold'>{name}</span>
+          <span className='font-bold text-foreground'>{name}</span>
         </code>
         <PropertyTypeLabel {...rest} />
       </div>
 
-      <div className='text-muted-foreground px-4 text-sm'>
+      <div className='px-4 text-sm text-muted-foreground'>
         <Markdown>{rest.description || ''}</Markdown>
       </div>
     </>

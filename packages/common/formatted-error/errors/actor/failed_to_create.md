@@ -1,6 +1,6 @@
 ---
 name = "ACTOR_FAILED_TO_CREATE"
-description = "Invalid actor configuration: {error}."
+description = "Actor failed to create: {error}"
 description_basic = "Actor failed to create."
 http_status = 400
 ---

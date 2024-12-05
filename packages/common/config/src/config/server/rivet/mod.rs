@@ -3,6 +3,7 @@ use maplit::hashmap;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, net::IpAddr, path::PathBuf};
 use url::Url;
+use schemars::JsonSchema;
 use uuid::Uuid;
 
 use crate::secret::Secret;
@@ -46,7 +47,7 @@ pub mod default_ports {
 	pub const METRICS: u16 = 8091;
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Rivet {
 	/// IMPORTANT: Do not change this value after the first time starting a cluster with this
@@ -227,7 +228,7 @@ impl Rivet {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum AccessKind {
 	/// Anyone can sign up for an account.
@@ -248,7 +249,7 @@ pub enum AccessKind {
 }
 
 /// Configuration for billing features (Enterprise Edition).
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Billing {
 	/// Price ID for the indie tier.
@@ -258,7 +259,7 @@ pub struct Billing {
 }
 
 /// Configuration for backend features (Enterprise Edition).
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Backend {
 	/// Base domain serving the backend endpoints.
@@ -266,7 +267,7 @@ pub struct Backend {
 }
 
 /// Configuration for a default test build.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct TestBuild {
 	/// Image tag.
@@ -276,7 +277,7 @@ pub struct TestBuild {
 }
 
 /// Configuration for the public API service.
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ApiPublic {
 	/// The public origin URL for the API.
@@ -319,7 +320,7 @@ impl ApiPublic {
 }
 
 /// Configuration for the edge API service.
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ApiEdge {
 	pub host: Option<IpAddr>,
@@ -337,13 +338,13 @@ impl ApiEdge {
 }
 
 /// Deprecated: Configuration for CDN.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 #[derive(Default)]
 pub struct Cdn {}
 
 /// Configuration for DNS management.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Dns {
 	/// The DNS provider used for managing domains.
@@ -356,14 +357,14 @@ pub struct Dns {
 	pub domain_cdn: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum DnsProvider {
 	Cloudflare,
 }
 
 /// Manages the automatic provisioning of servers that Rivet runs on.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Cluster {
 	/// This ID must not change.
@@ -392,7 +393,7 @@ impl Cluster {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Datacenter {
 	/// This ID must not change.
@@ -433,7 +434,7 @@ impl Datacenter {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct DatacenterHardware {
 	pub cpu_cores: u32,
@@ -447,7 +448,7 @@ pub struct DatacenterHardware {
 	pub bandwidth: u32,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum BuildDeliveryMethod {
 	TrafficServer,
@@ -455,7 +456,7 @@ pub enum BuildDeliveryMethod {
 }
 
 /// The service that manages Rivet Actors.
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Pegboard {
 	/// The host on which the Pegboard service listens.
@@ -476,7 +477,7 @@ impl Pegboard {
 
 /// The port ranges define what ports Guard will allocate ports on. If using cluster
 /// provisioning, these are also used for firewall rules.
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Guard {
 	pub min_ingress_port_tcp: Option<u16>,
@@ -504,14 +505,14 @@ impl Guard {
 }
 
 /// Deprecated: Configuration for job running.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct JobRun {
 	pub job_runner_binary_url: Url,
 }
 
 /// Configuration for authentication and access control.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Auth {
 	pub access_kind: AccessKind,
@@ -526,7 +527,7 @@ impl Default for Auth {
 }
 
 /// Configuration for the tunnel service.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Tunnel {
 	pub public_host: String,
@@ -541,7 +542,7 @@ impl Default for Tunnel {
 }
 
 /// Configuration for the UI service.
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Ui {
 	/// Enables serving the UI automatically.
@@ -580,7 +581,7 @@ impl Ui {
 }
 
 /// Configuration for various tokens used in the system.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 #[derive(Default)]
 pub struct Tokens {
@@ -591,7 +592,7 @@ pub struct Tokens {
 }
 
 /// Configuration for the health check service.
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Health {
 	pub host: Option<IpAddr>,
@@ -609,7 +610,7 @@ impl Health {
 }
 
 /// Configuration for the metrics service.
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Metrics {
 	pub host: Option<IpAddr>,
@@ -627,7 +628,7 @@ impl Metrics {
 }
 
 /// Configuration for telemetry collection.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Telemetry {
 	/// Flag to enable or disable telemetry collection.

@@ -69,7 +69,7 @@ export function NavLink({
       strict
       href={href}
       className={cn(
-        'text-muted-foreground aria-current-page:text-foreground group flex w-full items-center rounded-md border border-transparent px-2 py-1 text-sm hover:underline',
+        'group flex w-full items-center rounded-md border border-transparent px-2 py-1 text-sm text-muted-foreground hover:underline aria-current-page:text-foreground',
         className
       )}>
       {children}

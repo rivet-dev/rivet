@@ -1,0 +1,17 @@
+import { JsonSchemaPreview } from '@/components/JsonSchemaPreview';
+import SERVER_SPEC from './server-spec.json';
+import Link from 'next/link';
+
+# Server Config
+
+Default location: <Link href='https://github.com/rivet-gg/rivet/blob/main/docker/dev-full/rivet-server/config.yaml'>`docker/monolith/rivet-server/config.yaml`</Link>
+
+## Schema
+
+<JsonSchemaPreview className='not-prose' schema={SERVER_SPEC} />
+
+## Overriding
+
+Config properties can be overridden with environment variables:
+
+- `RIVET__SERVER__JWT__PRIVATE=value` overrides `jwt.private`.

@@ -1,0 +1,306 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Client",
+  "type": "object",
+  "required": [
+    "cluster",
+    "foundationdb",
+    "network",
+    "runner"
+  ],
+  "properties": {
+    "cluster": {
+      "$ref": "#/definitions/Cluster"
+    },
+    "cni": {
+      "$ref": "#/definitions/Cni"
+    },
+    "data_dir": {
+      "type": "string",
+      "nullable": true
+    },
+    "foundationdb": {
+      "$ref": "#/definitions/FoundationDb"
+    },
+    "logs": {
+      "$ref": "#/definitions/Logs"
+    },
+    "metrics": {
+      "$ref": "#/definitions/Metrics"
+    },
+    "network": {
+      "$ref": "#/definitions/Network"
+    },
+    "reserved_resources": {
+      "$ref": "#/definitions/ReservedResources"
+    },
+    "runner": {
+      "$ref": "#/definitions/Runner"
+    },
+    "vector": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Vector"
+        }
+      ],
+      "nullable": true
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "ClientFlavor": {
+      "type": "string",
+      "enum": [
+        "container",
+        "isolate"
+      ]
+    },
+    "Cluster": {
+      "type": "object",
+      "required": [
+        "api_endpoint",
+        "client_id",
+        "datacenter_id",
+        "pegboard_endpoint"
+      ],
+      "properties": {
+        "api_endpoint": {
+          "type": "string",
+          "format": "uri"
+        },
+        "client_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "datacenter_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "pegboard_endpoint": {
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Cni": {
+      "type": "object",
+      "required": [
+        "network_interface"
+      ],
+      "properties": {
+        "bin_path": {
+          "type": "string",
+          "nullable": true
+        },
+        "config_path": {
+          "type": "string",
+          "nullable": true
+        },
+        "network_interface": {
+          "type": "string"
+        },
+        "network_name": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "FoundationDb": {
+      "type": "object",
+      "required": [
+        "address",
+        "cluster_description",
+        "cluster_id"
+      ],
+      "properties": {
+        "address": {
+          "$ref": "#/definitions/FoundationDbAddress"
+        },
+        "cluster_description": {
+          "type": "string"
+        },
+        "cluster_id": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "FoundationDbAddress": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "dynamic"
+          ],
+          "properties": {
+            "dynamic": {
+              "type": "object",
+              "required": [
+                "fetch_endpoint"
+              ],
+              "properties": {
+                "fetch_endpoint": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "static"
+          ],
+          "properties": {
+            "static": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Logs": {
+      "type": "object",
+      "properties": {
+        "redirect_logs": {
+          "type": "boolean",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "Metrics": {
+      "type": "object",
+      "properties": {
+        "port": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0,
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "Network": {
+      "type": "object",
+      "required": [
+        "bind_ip",
+        "lan_ip",
+        "wan_ip"
+      ],
+      "properties": {
+        "bind_ip": {
+          "description": "Address to serve actor traffic on.\n\nThis will usually be the same as `actor_lan_ip` unless the node is accessed within the LAN by a different IP.",
+          "type": "string",
+          "format": "ipv4"
+        },
+        "lan_ip": {
+          "description": "Address to access this node in a LAN.\n\nThis IP is used to route traffic from Game Guard.",
+          "type": "string",
+          "format": "ip"
+        },
+        "lan_port_range_max": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0,
+          "nullable": true
+        },
+        "lan_port_range_min": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0,
+          "nullable": true
+        },
+        "wan_ip": {
+          "description": "Address to access this node publicly.\n\nThis IP is used when providing the actor's IP & port for host networking.",
+          "type": "string",
+          "format": "ip"
+        },
+        "wan_port_range_max": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0,
+          "nullable": true
+        },
+        "wan_port_range_min": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0,
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "ReservedResources": {
+      "type": "object",
+      "properties": {
+        "cpu": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0,
+          "nullable": true
+        },
+        "memory": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0,
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "Runner": {
+      "type": "object",
+      "required": [
+        "flavor"
+      ],
+      "properties": {
+        "container_runner_binary_path": {
+          "type": "string",
+          "nullable": true
+        },
+        "flavor": {
+          "$ref": "#/definitions/ClientFlavor"
+        },
+        "isolate_runner_binary_path": {
+          "type": "string",
+          "nullable": true
+        },
+        "port": {
+          "description": "WebSocket Port for runners on this machine to connect to.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0,
+          "nullable": true
+        },
+        "use_mounts": {
+          "description": "Whether or not to use a mount for actor file systems.",
+          "type": "boolean",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "Vector": {
+      "type": "object",
+      "required": [
+        "address"
+      ],
+      "properties": {
+        "address": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

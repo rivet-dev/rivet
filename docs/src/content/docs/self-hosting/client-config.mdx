@@ -1,0 +1,11 @@
+import { JsonSchemaPreview } from '@/components/JsonSchemaPreview';
+import CLIENT_SPEC from './client-spec.json';
+import Link from 'next/link';
+
+# Client Config
+
+Default location: <Link href='https://github.com/rivet-gg/rivet/blob/main/docker/dev-full/rivet-client/config.yaml'>`docker/monolith/rivet-client/config.yaml`</Link>
+
+## Schema
+
+<JsonSchemaPreview className='not-prose' schema={CLIENT_SPEC} />

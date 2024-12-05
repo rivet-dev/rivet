@@ -1,5 +1,5 @@
-import { IconProp } from "@fortawesome/fontawesome-svg-core";
-import { Route } from "next";
+import { IconProp } from '@fortawesome/fontawesome-svg-core';
+import { Route } from 'next';
 
 type Href = string | Route | URL;
 type Page = { title?: string; href: Href; icon?: IconProp };

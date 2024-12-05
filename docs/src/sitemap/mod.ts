@@ -77,8 +77,8 @@ export const sitemap = [
 				pages: [
 					// { title: 'Cheatsheet', href: '/docs/cheatsheet', icon: 'file-code' },
 					// { title: 'Integrating Exiting Projects', href: '/docs/integrate', icon: 'plug' },
-					{ title: 'Self-Hosting', href: '/docs/self-hosting', icon: 'server' },
 					{ title: 'Configuration', href: '/docs/config', icon: 'square-sliders' },
+					{ title: 'Available Regions', href: '/docs/regions', icon: 'globe' },
 					// { title: 'CLI', href: '/docs/cli', icon: 'square-terminal' },
 					// { title: 'Hub', href: '/docs/hub', icon: 'browser' },
 					// { title: 'Local Development', href: '/docs/local-development', icon: 'display' },
@@ -94,10 +94,14 @@ export const sitemap = [
 					// 	]
 					// },
 					{
-						title: 'More',
+						title: 'Self-Hosting',
 						collapsible: true,
 						pages: [
-							{ title: 'Available Regions', href: '/docs/regions', icon: 'globe' },
+							{ title: 'Introduction', href: '/docs/self-hosting' },
+							{ title: 'Docker Compose', href: '/docs/self-hosting/docker-compose' },
+							{ title: 'Manual Deployment', href: '/docs/self-hosting/manual-deployment' },
+							{ title: 'Server Config', href: '/docs/self-hosting/server-config' },
+							{ title: 'Client Config', href: '/docs/self-hosting/client-config' }
 						]
 					},
 					{
@@ -112,7 +116,15 @@ export const sitemap = [
 							{ title: 'Erlang/OTP & Elixir', href: '/docs/erlang' },
 							// { title: 'Supabase Realtime', href: '/docs' },
 						]
-					}
+					},
+					{
+						title: 'Advanced',
+						collapsible: true,
+						pages: [
+							{ title: 'Rescheduling', href: '/docs/actor-internals/rescheduling' },
+							{ title: 'Networking', href: '/docs/actor-internals/networking' }
+						]
+					},
 				]
 			},
 		]

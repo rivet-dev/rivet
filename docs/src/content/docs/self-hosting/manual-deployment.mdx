@@ -1,0 +1,162 @@
+import Link from 'next/link';
+
+# Manual Deployment
+
+Manual deployment of Rivet is meant for advanced use cases. For a simpler solution, try <Link href='/docs/self-hosting/docker-compose'>our Docker Compose</Link>.
+
+## Prerequisites
+
+- <Link href='https://git-scm.com/downloads'>Git</Link>
+- <Link href='https://docs.docker.com/get-started/get-docker/'>Docker</Link>
+
+## Architecture overview
+
+Core cluster:
+
+- Contains hardware running the Rivet server as well as databases.
+
+Edge server:
+
+- Contains hardware running the Rivet client.
+
+## Core Cluster Setup
+
+0. <Link href='https://github.com/rivet-gg/rivet'>Clone repo</Link>
+
+1. Setup prerequisites
+
+   This guide assumes you have the following already running in your core cluster:
+
+   - <Link href='https://www.cockroachlabs.com/docs/stable/start-a-local-cluster.html'>CockroachDB</Link>
+   - <Link href='https://clickhouse.com/docs/en/getting-started/'>ClickHouse</Link>
+   - <Link href='https://redis.io/docs/getting-started/'>Redis</Link>
+   - S3 (any compatible provider)
+   - <Link href='https://docs.nats.io/nats-concepts/what-is-nats'>NATS</Link>
+   - <Link href='https://vector.dev/docs/setup/installation/'>Vector</Link>
+
+2. Setup the <Link href='/docs/self-hosting/server-config'>Rivet server config</Link> with your existing components:
+
+   ```yaml {{ "file": "rivet.yaml" }}
+   server:
+     cockroachdb:
+       url: <crdb instance url>
+       username: root
+     redis:
+       ephemeral:
+         url: <redis instance url>
+         password: <redis password>
+       persistent:
+         url: <redis instance url>
+         password: <redis password>
+     clickhouse:
+       http_url: <clickhouse instance http url>
+       native_url: <clickhouse instance native url>
+       username: default
+     s3:
+       region: <s3 region>
+       endpoint_internal: <s3 internal url>
+       endpoint_edge_internal: <s3 edge url> # see "Core Cluster <-> Edge Server" below
+       endpoint_external: <s3 public url>
+       access_key_id: <s3 access key id>
+       secret_access_key: <s3 secret access key>
+     nats:
+       urls:
+         - <nats url>
+
+     # ...
+   ```
+
+3. Build and run the Rivet server docker container:
+
+   ```bash
+   # Run in the root of the Rivet repo
+   docker build -t rivet-server -f docker/dev-full/server.Dockerfile .
+   ```
+
+   ```bash
+   docker run \
+     -v "$(pwd)/rivet-server.yaml:/etc/rivet-server/config.yaml:ro" \ # Mount local config
+     -v "$(pwd)/rivet-server-data:/data" \ # Persist data to `$(pwd)/rivet-server-data`
+     -p 8080:8080 \
+     -p 8081:8080 \
+     -p 8082:8082 \
+     rivet-server \
+     /usr/bin/rivet-server start
+   ```
+
+Once running, you can visit the dashboard at <Link href='http://localhost:8080'>http://localhost:8080</Link>.
+
+## Edge Server Setup
+
+0. <Link href='https://github.com/rivet-gg/rivet'>Clone repo</Link>
+
+1. Setup Prerequisites
+
+   This guide assumes you already have <Link href='https://apple.github.io/foundationdb/getting-started-linux.html'>FoundationDB</Link> running on
+   the edge.
+
+2. Setup the <Link href='/docs/self-hosting/client-config'>Rivet client config</Link>:
+
+   ```yaml {{ "file": "rivet.yaml" }}
+   client:
+     runner:
+       flavor: isolate
+     cluster:
+       client_id: <unique uuid for each server>
+       datacenter_id: 00000000-0000-0000-0000-000000000000
+       api_endpoint: <core cluster url>:8080 # see "Core Cluster <-> Edge Server" below
+       pegboard_endpoint: <core cluster url>:8082 # see "Core Cluster <-> Edge Server" below
+     network:
+       bind_ip: 127.0.0.1
+       lan_ip: 127.0.0.1
+       wan_ip: <public ip of this server>
+
+     # ...
+   ```
+
+   Currently, only the "isolate" flavor is supported for self hosting.
+
+3. Build and run the Rivet client docker container:
+
+   ```bash
+   # Run in the root of the Rivet repo
+   docker build -t rivet-client -f docker/dev-full/client.Dockerfile .
+   ```
+
+   ```bash
+   docker run \
+     -v "$(pwd)/rivet-client.yaml:/etc/rivet-client/config.yaml:ro" \ # Mount local config
+     -v "$(pwd)/rivet-client-data:/var/lib/rivet-client" \ # Persist data to `$(pwd)/rivet-client-data`
+     -p 20000-20100:20000-20100 \
+     rivet-client \
+     -c /etc/rivet-client/config.yaml
+   ```
+
+## Test deployment
+
+To test creating an actor end-to-end, run:
+
+```bash
+./scripts/manual_tests/actors_e2e_js.ts
+```
+
+You should see an actor in the actor list in the dashboard.
+
+## Core Cluster \<-> Edge Server
+
+Communication between the core and edge should be handled via secure mTLS encrypted tunnels. Some common solutions:
+
+- Cloudflare Tunnels
+- common VLAN
+- Tailscale
+- Wireguard
+
+## Rivet Guard
+
+The Rivet Guard system is currently unavailable with a manual deployment. Coming soon!
+
+## Caveats
+
+Manual deployment currently only supports host networking and host ports.
+
+Read more about host networking and ports <Link href='/docs/actor-internals/networking'>here</Link>.

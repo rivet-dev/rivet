@@ -1,7 +1,9 @@
+use std::collections::HashMap;
+
 use global_error::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use url::Url;
+use schemars::JsonSchema;
 
 use crate::secret::Secret;
 
@@ -9,7 +11,7 @@ pub mod rivet;
 
 pub use rivet::*;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 #[derive(Default)]
 pub struct Server {
@@ -115,7 +117,7 @@ impl Server {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct JwtKey {
 	/// The public EdDSA key in a PEM format.
@@ -133,32 +135,32 @@ impl Default for JwtKey {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Nomad {
 	pub url: Url,
 	pub server_count: usize,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Ssh {
 	pub server: SSHEntry,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct SSHEntry {
 	pub private_key_openssh: Secret<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Linode {
 	pub api_token: Secret<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct S3 {
 	pub region: String,
@@ -183,7 +185,7 @@ impl Default for S3 {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct RedisTypes {
 	pub ephemeral: Redis,
@@ -208,7 +210,7 @@ impl Default for RedisTypes {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Redis {
 	pub url: Url,
@@ -218,7 +220,7 @@ pub struct Redis {
 	pub password: Option<Secret<String>>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Cloudflare {
 	pub account_id: String,
@@ -228,7 +230,7 @@ pub struct Cloudflare {
 	pub auth_token: Secret<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct CloudflareZone {
 	pub main: Option<String>,
@@ -236,7 +238,7 @@ pub struct CloudflareZone {
 	pub job: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Tls {
 	pub root_ca_cert_pem: Secret<String>,
@@ -245,7 +247,7 @@ pub struct Tls {
 	pub acme: TlsAcme,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct TlsAcme {
 	#[serde(default)]
@@ -253,7 +255,7 @@ pub struct TlsAcme {
 	pub account_private_key_pem: Secret<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum TlsAcmeDirectory {
 	LetsEncrypt,
@@ -266,20 +268,20 @@ impl Default for TlsAcmeDirectory {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Prometheus {
 	pub url: Url,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Hcaptcha {
 	pub site_key_fallback: Option<Secret<String>>,
 	pub secret_fallback: Option<Secret<String>>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Turnstile {
 	pub main_site_key: Option<String>,
@@ -288,19 +290,19 @@ pub struct Turnstile {
 	pub cdn_secret_key: Option<Secret<String>>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Sendgrid {
 	pub key: Secret<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Loops {
 	pub token: Secret<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Stripe {
 	pub secret_key: Secret<String>,
@@ -315,19 +317,19 @@ pub struct Stripe {
 	pub webhook_secret: Secret<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Neon {
 	pub api_key: Secret<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct IpInfo {
 	pub token: Secret<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct CockroachDb {
 	pub url: Url,
@@ -365,7 +367,7 @@ impl CockroachDb {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct CockroachDbUser {
 	pub username: String,
@@ -373,14 +375,14 @@ pub struct CockroachDbUser {
 	pub role: CockroachDbUserRole,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum CockroachDbUserRole {
 	Read,
 	ReadWrite,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Nats {
 	pub urls: Vec<Url>,
@@ -400,7 +402,7 @@ impl Default for Nats {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ClickHouse {
 	/// URL to the HTTP access port for ClickHouse.
@@ -414,7 +416,7 @@ pub struct ClickHouse {
 	pub provision_users: HashMap<String, ClickHouseUser>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ClickHouseUser {
 	pub username: String,
@@ -422,7 +424,7 @@ pub struct ClickHouseUser {
 	pub role: ClickHouseUserRole,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum ClickHouseUserRole {
 	Admin,

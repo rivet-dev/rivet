@@ -1,0 +1,46 @@
+import Link from 'next/link';
+
+# Rescheduling
+
+Through rescheduling, durable actors can be shut down and brought up again while
+automatically persisting state.
+
+No work is needed from the developer to handle rescheduling; actor rescheduling
+is often completely transparent through [state persistence](/docs/state) & [automatic client offline queues + reconnections](/docs/connections).
+
+## Rescheduling Behavior
+
+### Automatic Rescheduling
+
+Automatic rescheduling occurs from the following triggers:
+
+- The actor stopped with a non-zero exit code
+- The node crashes or becomes unresponsive for any reason
+- The node that the actor is allocated to is upgrading and has finished draining
+
+Actors that stop with a 0 exit code are considered "completed" and will not be rescheduled.
+
+Only actors that are marked as "durable" are automatically rescheduled.
+
+### Manual Rescheduling
+
+Manual rescheduling occurs when the user upgrades an actor with a new build, causing the actor to restart.
+
+## Networking reschedule behavior
+
+### Rivet Guard port routing
+
+Actors will be accessible via the same address upon reschedule when using Rivet
+Guard port routing. Clients do not need to handle rescheduling in any special
+way.
+
+### Host port routing
+
+Rescheduling does not guarantee that the actor will be re-allocated to the same
+node, only the same datacenter. This means the IP address & port of the actor
+is likely to change after a reschedule.
+
+All port mappings will be reset every time the actor is rescheduled. When using host ports, make sure to
+always read the appropriate env vars to determine which ports are open to the actor.
+
+Read more about host networking <Link href='/docs/actor-internals/networking'>here</Link>.

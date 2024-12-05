@@ -270,7 +270,7 @@ pub async fn create_build(
 			unwrap_with!(
 				body.image_tag,
 				API_BAD_BODY,
-				error = "missing field `image_tag`"
+				error = "field `image_tag` is required for the given build kind"
 			),
 		),
 		Some(models::ActorBuildKind::OciBundle) => (

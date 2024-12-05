@@ -6,6 +6,7 @@ use std::{
 use pegboard::protocol;
 use serde::Deserialize;
 use url::Url;
+use schemars::JsonSchema;
 use uuid::Uuid;
 
 #[derive(Clone, Deserialize)]
@@ -39,7 +40,7 @@ impl Config {
 	}
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Client {
 	pub data_dir: Option<PathBuf>,
@@ -67,7 +68,7 @@ impl Client {
 	}
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Cluster {
 	pub client_id: Uuid,
@@ -76,7 +77,7 @@ pub struct Cluster {
 	pub pegboard_endpoint: Url,
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Runner {
 	pub flavor: protocol::ClientFlavor,
@@ -112,7 +113,7 @@ impl Runner {
 	}
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Network {
 	/// Address to serve actor traffic on.
@@ -155,7 +156,7 @@ impl Network {
 	}
 }
 
-#[derive(Clone, Deserialize, Default)]
+#[derive(Clone, Deserialize, Default, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Cni {
 	pub network_interface: String,
@@ -184,7 +185,7 @@ impl Cni {
 	}
 }
 
-#[derive(Clone, Deserialize, Default)]
+#[derive(Clone, Deserialize, Default, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ReservedResources {
 	// Millicores
@@ -203,7 +204,7 @@ impl ReservedResources {
 	}
 }
 
-#[derive(Clone, Deserialize, Default)]
+#[derive(Clone, Deserialize, Default, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Logs {
 	pub redirect_logs: Option<bool>,
@@ -215,7 +216,7 @@ impl Logs {
 	}
 }
 
-#[derive(Clone, Deserialize, Default)]
+#[derive(Clone, Deserialize, Default, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Metrics {
 	pub port: Option<u16>,
@@ -227,7 +228,7 @@ impl Metrics {
 	}
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct FoundationDb {
 	pub cluster_description: String,
@@ -235,14 +236,14 @@ pub struct FoundationDb {
 	pub address: FoundationDbAddress,
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum FoundationDbAddress {
 	Dynamic { fetch_endpoint: Url },
 	Static(Vec<String>),
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Vector {
 	pub address: String,

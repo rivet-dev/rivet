@@ -2629,7 +2629,7 @@ checksum = "18af5425854858c507eec70f7deb4d5d8cec4216fcb086283a78872387281ea5"
 dependencies = [
  "proc-macro2",
  "quote",
- "serde_derive_internals",
+ "serde_derive_internals 0.26.0",
  "syn 1.0.109",
 ]
 
@@ -7530,12 +7530,24 @@ dependencies = [
  "nix 0.27.1",
  "rivet-config",
  "rivet-util",
+ "schemars",
  "serde",
  "serde_json",
  "server-spec",
  "sqlx",
  "strum 0.24.1",
  "thiserror 1.0.69",
+ "uuid",
+]
+
+[[package]]
+name = "pegboard-config"
+version = "0.0.1"
+dependencies = [
+ "pegboard",
+ "schemars",
+ "serde",
+ "url",
  "uuid",
 ]
 
@@ -8670,6 +8682,7 @@ dependencies = [
  "global-error",
  "ipnet",
  "maplit",
+ "schemars",
  "serde",
  "serde_json",
  "url",
@@ -9052,6 +9065,17 @@ dependencies = [
  "tracing",
  "tracing-logfmt",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "rivet-schema-generator"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "pegboard-config",
+ "rivet-config",
+ "schemars",
+ "serde_json",
 ]
 
 [[package]]
@@ -9549,6 +9573,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "schemars"
+version = "0.8.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09c024468a378b7e36765cd36702b7a90cc3cba11654f6685c8f233408e89e92"
+dependencies = [
+ "dyn-clone",
+ "schemars_derive",
+ "serde",
+ "serde_json",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "schemars_derive"
+version = "0.8.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1eee588578aff73f856ab961cd2f79e36bc45d7ded33a7562adba4667aecc0e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "serde_derive_internals 0.29.1",
+ "syn 2.0.90",
+]
+
+[[package]]
 name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9804,6 +9854,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "serde_derive_internals"
+version = "0.29.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "18d26a20a969b9e3fdf2fc2d9f21eda6c40e2de84c9408bb5d3b05d499aae711"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.90",
 ]
 
 [[package]]

@@ -1,5 +1,7 @@
-use serde::{Deserialize, Serialize};
 use std::net::Ipv4Addr;
+
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use strum::FromRepr;
 use uuid::Uuid;
 
@@ -247,7 +249,7 @@ pub struct ProxiedPort {
 	pub protocol: TransportProtocol,
 }
 
-#[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr)]
+#[derive(Serialize, Deserialize, Hash, Debug, Clone, Copy, PartialEq, Eq, FromRepr, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ClientFlavor {
 	Container = 0,

@@ -9,7 +9,7 @@
     "format": "prettier --write .",
     "create-article": "vite-node scripts/generateArticle.ts",
     "generate-favicon": "npx cli-real-favicon generate scripts/faviconConfig.json faviconData.json public/icons",
-	"update-framer": "unframer"
+    "update-framer": "unframer"
   },
   "browserslist": "defaults, not ie <= 11",
   "workspaces": [
@@ -35,6 +35,7 @@
     "@sindresorhus/slugify": "^2.1.1",
     "@tailwindcss/forms": "^0.5.3",
     "@tailwindcss/typography": "^0.5.8",
+    "@types/json-schema": "^7.0.15",
     "acorn": "^8.8.1",
     "autoprefixer": "^10.4.7",
     "chart.js": "^4.4.2",

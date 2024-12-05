@@ -1,14 +1,17 @@
+use std::net::Ipv4Addr;
+
 use ipnet::{Ipv4AddrRange, Ipv4Net};
 use serde::{Deserialize, Serialize};
-use std::net::Ipv4Addr;
+use schemars::JsonSchema;
 use url::Url;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ClusterProvision {
 	/// Configuration for server pools that use a margin for scaling.
 	pub pools: ClusterPools,
 
+	#[schemars(with = "Option<String>")]
 	pub vlan_ip_net: Option<Ipv4Net>,
 
 	/// The URL for the manager binary.
@@ -28,7 +31,7 @@ impl ClusterProvision {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ClusterPools {
 	pub job: ClusterPoolJob,
@@ -38,7 +41,7 @@ pub struct ClusterPools {
 	pub fdb: ClusterPoolFdb,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ClusterPoolJob {
 	pub provision_margin: u32,
@@ -47,7 +50,7 @@ pub struct ClusterPoolJob {
 
 /// These port range values will be pass to the Rivet Clients to choose ports & are used to
 /// provision firewalls.
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ClusterPoolPegboard {
 	pub provision_margin: u32,
@@ -119,9 +122,10 @@ impl ClusterPoolPegboard {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ClusterPoolGg {
+	#[schemars(with = "Option<String>")]
 	pub vlan_ip_net: Option<Ipv4Net>,
 	pub firewall_rules: Option<Vec<FirewallRule>>,
 }
@@ -198,9 +202,10 @@ impl ClusterPoolGg {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ClusterPoolAts {
+	#[schemars(with = "Option<String>")]
 	pub vlan_ip_net: Option<Ipv4Net>,
 	pub firewall_rules: Option<Vec<FirewallRule>>,
 }
@@ -219,9 +224,10 @@ impl ClusterPoolAts {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ClusterPoolFdb {
+	#[schemars(with = "Option<String>")]
 	pub vlan_ip_net: Option<Ipv4Net>,
 	pub firewall_rules: Option<Vec<FirewallRule>>,
 }
@@ -240,7 +246,7 @@ impl ClusterPoolFdb {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 pub struct FirewallRule {
 	pub label: String,
 	pub ports: String,
