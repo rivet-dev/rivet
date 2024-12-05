@@ -103,26 +103,17 @@ pub async fn create(
 ) -> GlobalResult<models::ActorCreateActorResponse> {
 	let CheckOutput { game_id, env_id } = ctx.auth().check(ctx.op_ctx(), &query, true).await?;
 
-	let (clusters_res, game_configs_res, build_res) = tokio::try_join!(
+	let (clusters_res, game_configs_res, build) = tokio::try_join!(
 		ctx.op(cluster::ops::get_for_game::Input {
 			game_ids: vec![game_id],
 		}),
 		ctx.op(ds::ops::game_config::get::Input {
 			game_ids: vec![game_id],
 		}),
-		async {
-			let build_id =
-				resolve_build_id(&ctx, env_id, body.build, body.build_tags.flatten()).await?;
-
-			ctx.op(build::ops::get::Input {
-				build_ids: vec![build_id],
-			})
-			.await
-		},
+		resolve_build(&ctx, game_id, env_id, body.build, body.build_tags.flatten()),
 	)?;
 	let cluster_id = unwrap!(clusters_res.games.first()).cluster_id;
 	let game_config = unwrap!(game_configs_res.game_configs.first());
-	let build = unwrap!(build_res.builds.first());
 
 	let datacenter_id = resolve_dc_id(&ctx, cluster_id, body.region.clone()).await?;
 
@@ -460,16 +451,18 @@ pub async fn upgrade(
 
 	assert::server_for_env(&ctx, actor_id, game_id, env_id).await?;
 
-	let build_id = resolve_build_id(&ctx, env_id, body.build, body.build_tags.flatten()).await?;
+	let build = resolve_build(&ctx, game_id, env_id, body.build, body.build_tags.flatten()).await?;
 
 	let mut sub = ctx
 		.subscribe::<ds::workflows::server::UpgradeStarted>(("server_id", actor_id))
 		.await?;
 
-	ctx.signal(ds::workflows::server::Upgrade { image_id: build_id })
-		.tag("server_id", actor_id)
-		.send()
-		.await?;
+	ctx.signal(ds::workflows::server::Upgrade {
+		image_id: build.build_id,
+	})
+	.tag("server_id", actor_id)
+	.send()
+	.await?;
 
 	sub.next().await?;
 
@@ -482,7 +475,7 @@ pub async fn upgrade_all(
 	body: models::ActorUpgradeAllActorsRequest,
 	query: GlobalQuery,
 ) -> GlobalResult<models::ActorUpgradeAllActorsResponse> {
-	let CheckOutput { env_id, .. } = ctx.auth().check(ctx.op_ctx(), &query, false).await?;
+	let CheckOutput { game_id, env_id } = ctx.auth().check(ctx.op_ctx(), &query, false).await?;
 
 	let tags = unwrap_with!(body.tags, API_BAD_BODY, error = "missing property `tags`");
 
@@ -515,7 +508,7 @@ pub async fn upgrade_all(
 		);
 	}
 
-	let build_id = resolve_build_id(&ctx, env_id, body.build, body.build_tags.flatten()).await?;
+	let build = resolve_build(&ctx, game_id, env_id, body.build, body.build_tags.flatten()).await?;
 
 	// Work in batches
 	let mut count = 0;
@@ -544,9 +537,11 @@ pub async fn upgrade_all(
 
 		futures_util::stream::iter(list_res.server_ids)
 			.map(|server_id| {
-				ctx.signal(ds::workflows::server::Upgrade { image_id: build_id })
-					.tag("server_id", server_id)
-					.send()
+				ctx.signal(ds::workflows::server::Upgrade {
+					image_id: build.build_id,
+				})
+				.tag("server_id", server_id)
+				.send()
 			})
 			.buffer_unordered(32)
 			.try_collect::<Vec<_>>()
@@ -785,14 +780,31 @@ fn legacy_convert_actor_to_server(
 	})
 }
 
-async fn resolve_build_id(
+async fn resolve_build(
 	ctx: &Ctx<Auth>,
+	game_id: Uuid,
 	env_id: Uuid,
 	build_id: Option<Uuid>,
 	build_tags: Option<serde_json::Value>,
-) -> GlobalResult<Uuid> {
+) -> GlobalResult<build::types::Build> {
 	match (build_id, build_tags) {
-		(Some(build_id), None) => Ok(build_id),
+		(Some(build_id), None) => {
+			let builds_res = ctx
+				.op(build::ops::get::Input {
+					build_ids: vec![build_id],
+				})
+				.await?;
+			let build = unwrap!(builds_res.builds.into_iter().next());
+
+			// Ensure build belongs to this game/env
+			if let Some(build_game_id) = build.game_id {
+				ensure_with!(build_game_id == game_id, BUILD_NOT_FOUND);
+			} else if let Some(build_env_id) = build.env_id {
+				ensure_with!(build_env_id == env_id, BUILD_NOT_FOUND);
+			}
+
+			Ok(build)
+		}
 		// Resolve build from tags
 		(None, Some(build_tags)) => {
 			let build_tags = unwrap_with!(
@@ -831,9 +843,19 @@ async fn resolve_build_id(
 				})
 				.await?;
 
-			let build = unwrap_with!(builds_res.builds.first(), BUILD_NOT_FOUND_WITH_TAGS);
+			let build = unwrap_with!(
+				builds_res.builds.into_iter().next(),
+				BUILD_NOT_FOUND_WITH_TAGS
+			);
 
-			Ok(build.build_id)
+			// Ensure build belongs to this game/env
+			if let Some(build_game_id) = build.game_id {
+				ensure_with!(build_game_id == game_id, BUILD_NOT_FOUND);
+			} else if let Some(build_env_id) = build.env_id {
+				ensure_with!(build_env_id == env_id, BUILD_NOT_FOUND);
+			}
+
+			Ok(build)
 		}
 		_ => {
 			bail_with!(
