@@ -2,6 +2,8 @@
 
 This guide will walk you through creating, deploying, and connecting to a simple Rivet Actor.
 
+Read [_Introduction to Rivet_](/docs/introduction) for an overview of the tool, or read [_What are Actors?_](/docs/actors) for more information on building actors.
+
 ## Install CLI
 
 ```sh
@@ -10,7 +12,7 @@ TODO
 
 ## Initialize Project
 
- Create a new project:
+Create a new project:
 
 ```sh
 rivet init
@@ -20,8 +22,12 @@ Follow the instructions to setup your project.
 
 This will create a few files:
 
-- `rivet.json[c]` This configures how your app is deployed to Rivet.
-- `hello_world.ts` This is an example actor. This will be deployed in the next step.
+| File              | Description                                                                                       |
+| ----------------- | ------------------------------------------------------------------------------------------------- |
+| `rivet.json[c]`   | This configures how your app is deployed to Rivet.                                                |
+| `deno.json[c]`    | This defines the packages that your project depends on.                                           |
+| `counter.ts`      | This is a simple example actor that counts over [RPC](/docs/rpc). This will be deployed in the next step. |
+| `counter_test.ts` | This will be used to test the actor was deployed successfully in the next step. This file can be safely deleted if you would like. |
 
 ## Deploy project
 
@@ -31,32 +37,29 @@ Deploy your project to Rivet with:
 rivet deploy
 ```
 
-<Note>
-    If self-hosting, this will prompt you to input a custom API address.
-</Note>
+<Note>If [self-hosting](/docs/self-hosting), this will prompt you to input a custom API address.</Note>
 
-This will print an endpoint that you can connect to.
+### Test actor
 
-You can test this by using the Rivet CLI:
-
-TODO: This is not implemented yet, find a cleaner way of testing this, maybe just give client code
+To test the actor can be created & connected to, run:
 
 ```sh
-rivet actor connect --tags name=hello_world
+deno run -A counter_test.ts
 ```
+
+You can visit the [Rivet Hub](https://hub.rivet.gg) to see the actor you created.
 
 ## Setup your editor/IDE (optional)
 
-Rivet actors run on the [Deno](https://deno.com/) runtime.  Read their guide on how to configure your IDE [here](https://docs.deno.com/runtime/getting_started/setup_your_environment/#using-an-editoride).
+Rivet actors run on the [Deno](https://deno.com/) runtime. Read their guide on how to configure your IDE [here](https://docs.deno.com/runtime/getting_started/setup_your_environment/#using-an-editoride).
 
-## Setup client
+## Next steps: setup client to connect to actor
 
-To setup a client, follow the guide for [JavaScript/TypeScript](/docs/javascript).
+Now that you have an actor deployed, you can integrate the Rivet client in to your application.
 
-## Next Steps
+Follow the appropriate guide for your language:
 
 <CardGroup>
-    <Card title="What are Actors?" href="/docs/actors" />
-    <Card title="Use Cases" href="/use-cases" />
-    <Card title="Examples" href="/examples" />
+  <Card title='JavaScript' href='/docs/client/javascript' />
+  <Card title='TypeScript' href='/docs/client/javascript' />
 </CardGroup>

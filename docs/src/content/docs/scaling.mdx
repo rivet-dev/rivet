@@ -1,33 +1,31 @@
 # Scaling & Concurrency
 
-Actors are very easy to scale because they are independent and self-contained. Each actor manages its own state, enabling seamless horizontal scaling across machines.
+This document covers how Rivet Actors are able to scale better than traditional applications & provides tips on architecting your actors.
 
 ## How actors scale
 
-Actors scale naturally through these key properties:
+Actors scale by design through these key properties:
 
-- **Independent State**: Each actor maintains its own isolated state, eliminating the need for complex locking mechanisms.
-- **Function-Based Communication**: Actors communicate through asynchronous functions, making it easy to distribute them across different processes or machines.
-- **Location Transparency**: Actors don't need to know where other actors are located. They can run on the same machine or across a network.
-- **Horizontal Scaling**: Add more instances of your application to handle more actors. The actor system automatically distributes the load.
-- **Natural Partitioning**: Since actors map to real-world entities, they provide natural boundaries for distributing your system across multiple machines.
+| Property                             | Description                                                                                                                                                                                                                                                                                     |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Independent State**                | Each actor manages its own private data separately from other actors, so they never conflict with each other when running at the same time (i.e. using locking mechanisms).                                                                                                                     |
+| **RPC- & Event-Based Communication** | Actors communicate through asynchronous [RPCs](/docs/rpc) or [events](/docs/events), making it easy to distribute them across different machines.                                                                                                                                               |
+| **Location Transparency**            | Unlike traditional servers, actors don't need to know which machine other actors are running on in order to communicate with each other. They can run on the same machine, across a network, and across the world. Rivet handles the network routing for you under the hood.                    |
+| **Horizontal Scaling**               | Actors distribute workload by splitting responsibilities into small, focused units. Since each actor handles a limited scope (like a single user, document, or chat room), the system automatically spreads load across many independent actors rather than concentrating it in a single place. |
 
-## Architecting actors
+## Tips for architecting actors for scale
 
-Actors should be designed around clear responsibility boundaries. Here are key principles for architecting your actor system:
+Here are key principles for architecting your actor system:
 
 **Single Responsibility**
 
-Each actor should represent one specific entity or concept from your application (e.g., `User`, `Document`, `ChatRoom`). This makes your system:
-
-- Easier to understand (clear 1:1 mapping with application concepts)
-- Simpler to maintain (isolated responsibilities)
-- Natural to scale (clear boundaries for distribution)
+- Each actor should represent one specific entity or concept from your application (e.g., `User`, `Document`, `ChatRoom`).
+- This makes your system scale better, since actors have small scopes and do not conflict with each other.
 
 **State Management**
 
 - Each actor owns and manages only its own state
-- Use remote function calls passing to request data from other actors
+- Use [RPCs](/docs/rpc) to request data from other actors
 - Keep state minimal and relevant to the actor's core responsibility
 
 **Granularity Guidelines**

@@ -1,12 +1,16 @@
-# Functions
+# Remote Procedure Calls
 
-Remote function calls are how clients communicate with actors. Functions are as simple as writing a method on the actor class, then calling it from the client.
+Remote procedure calls (RPC) are how clients communicate with actors. RPCs are as simple as writing a method on the actor class and then calling it from the client.
 
-## Writing functions
+<Tip>
+    RPCs are very lightweight and can be called hundreds of times per second to send realtime data to the actor.
+</Tip>
 
-Functions can be written as native JavaScript methods on the actor class.
+## Writing RPCs
 
-For example, the `increment` method is this simple:
+RPCs can be written as native JavaScript methods on the actor class.
+
+For example, the `increment` method is written as:
 
 ```typescript
 interface State {
@@ -14,19 +18,25 @@ interface State {
 }
 
 export class Counter extends Actor<State> {
+    // This is a built-in method
     initializeState() {
         return { totalCount: 0 };
     }
 
+    // This is an RPC
     increment(count: number) {
         this.state.totalCount += count;
     }
 }
 ```
 
-## Calling functions
+### Streaming return data
 
-Calling functions are as simple as calling any other JavaScript function.
+RPCs have a single return value. In order to stream realtime data in response to an RPC, use [events](/docs/events).
+
+## Calling RPCs
+
+Calling RPCs are as simple as calling any other JavaScript function.
 
 ```typescript
 import type { Counter } from "./counter.ts";
@@ -36,7 +46,7 @@ await actor.increment(42);
 ```
 
 <Warning>
-    Calling functions from the client are async and require an `await`, even if the server function is not async.
+    Calling RPCs from the client are async and require an `await`, even if the actor's method is not async.
 </Warning>
 
 ### Type safety
@@ -102,4 +112,4 @@ export class Counter extends Actor<State> {
 
 ## Authentication
 
-By default, clients can call all functions on an actor without restriction. Make sure to implement authentication if needed. Documentation on authentication is available [here](/docs/authentication).
+By default, clients can call all RPCs on an actor without restriction. Make sure to implement authentication if needed. Documentation on authentication is available [here](/docs/authentication).

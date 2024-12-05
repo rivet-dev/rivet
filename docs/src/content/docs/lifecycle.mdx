@@ -14,11 +14,11 @@ Use this to set up any resources or start any background tasks.
 
 ### `onConnect(connection: Connection<ConnectionData>, parameters: ConnectionParams): ConnectionData | Promise<ConnectionData>`
 
-Called whenever a new client connects to the actor. Clients can pass parameters when connecting for this function.
+Called whenever a new client connects to the actor. Clients can pass parameters when connecting for this method.
 
-Connections will not be able to interact with the actor until this function succeeds. Throwing an error will abort the connection. This can be used for authentication, see [here](/docs/authentication).
+Connections will not be able to interact with the actor until this method succeeds. Throwing an error will abort the connection. This can be used for authentication, see [here](/docs/authentication).
 
-The returned value will be associated with the connection and can be accessed later under `conn.data`.
+The returned value will be associated with the connection and can be accessed later under `connection.data`.
 
 ### `onDisconnect(connection: Connection<ConnectionData>): void | Promise<void>`
 

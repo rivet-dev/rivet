@@ -1,8 +1,10 @@
 # Events
 
-Events are used to receive realtime data from actors.
+Events are used for clients to receive realtime data from actors.
 
-Only actors can publish events. Clients must call functions to communicate with the actor.
+<Info>
+    Only actors can publish events to clients. Clients must call RPCs to communicate with the actor.
+</Info>
 
 ## Publishing from actors
 
@@ -13,8 +15,8 @@ Actors can publish events to clients using `this.broadcast` and `connection.send
 Actors can publish events to all connected clients with `this.broadcast(name, data)`. For example:
 
 <CodeGroup>
-```typescript {{ "title": "chat_channel.ts" }}
-class ChatChannel extends Actor {
+```typescript {{ "title": "chat_room.ts" }}
+class ChatRoom extends Actor {
     sendMessage(message: string) {
         this.broadcast("newMessage", { message });
     }
@@ -22,7 +24,7 @@ class ChatChannel extends Actor {
 ```
 
 ```typescript {{ "title": "client.ts" }}
-const actor = client.withTags<ChatChannel>({ name: "chat_channel" });
+const actor = client.withTags<ChatRoom>({ name: "chat_room" });
 await actor.sendMessage("Hello, world!");
 ```
 </CodeGroup>
@@ -32,8 +34,8 @@ await actor.sendMessage("Hello, world!");
 Actors can send messages to specific client connections. All connections are available on the `this.connections` array. For example:
 
 <CodeGroup>
-```typescript {{ "title": "chat_hub.ts" }}
-class ChatHub extends Actor {
+```typescript {{ "title": "chat_room.ts" }}
+class ChatRoom extends Actor {
     sendPrivateMessage(connectionId: number, message: string) {
         const conn = this.connections.find(c => c.id == connectionId);
         conn.send("newMessage", { message });
@@ -42,7 +44,7 @@ class ChatHub extends Actor {
 ```
 
 ```typescript {{ "title": "client.ts" }}
-const actor = client.withTags<ChatHub>({ name: "chat_hub" });
+const actor = client.withTags<ChatRoom>({ name: "chat_room" });
 await actor.sendPrivateMessage(123, "Hello, world!");
 ```
 </CodeGroup>
@@ -53,18 +55,20 @@ Clients can subscribe to events from actors using `on` and `once`.
 
 ### `on`
 
-Clients can subscribe to events using `actor.on(name, callback)`. For example:
+Clients can subscribe to events that will happen repeatedly using `actor.on(name, callback)`.
+
+For example:
 
 <CodeGroup>
 ```typescript {{ "title": "client.ts" }}
-const actor = client.withTags<ChatChannel>({ name: "chat_channel" });
+const actor = client.withTags<ChatRoom>({ name: "chat_room" });
 actor.on("newMessage", ({ message }) => {
     console.log("Message", message);
 });
 ```
 
-```typescript {{ "title": "chat_channel.ts" }}
-class ChatChannel extends Actor {
+```typescript {{ "title": "chat_room.ts" }}
+class ChatRoom extends Actor {
     sendMessage(message: string) {
         this.broadcast("newMessage", { message });
     }
@@ -74,25 +78,35 @@ class ChatChannel extends Actor {
 
 ### `once`
 
-Clients can subscribe to a single event with `actor.once(name, callback)`. For example:
+Clients can listen for an event only one time with `actor.once(name, callback)`.
+
+For example:
 
 <CodeGroup>
 ```typescript {{ "title": "client.ts" }}
-const actor = client.withTags<Example>({ name: "example" });
-actor.once("ping", () => {  // This will only be called once
-    console.log("Received ping");
+const actor = client.withTags<ChatRoom>({ name: "chat_room" });
+actor.once("joinRequestApproved", () => {  // This will only be called once
+    console.log("Join request accepted");
 });
+await actor.requestJoin();
 ```
 
-```typescript {{ "title": "example.ts" }}
-class LongTask extends Actor {
-    broadcastPing() {
-        this.broadcast("ping");
+```typescript {{ "title": "chat_root.ts" }}
+class ChatRoom extends Actor {
+    requestJoin() {
+        // ...ask the admin to approve the request...
+    }
+
+    approveJoinRequest(connectionId: number) {
+        const conn = this.connections.find(c => c.id == connectionId);
+        conn.send("joinRequestApproved");
     }
 }
 ```
 </CodeGroup>
 
 ## Connections
+
+Connections are used to communicate with clients from the actor.
 
 Read more about connections [here](/docs/connections).

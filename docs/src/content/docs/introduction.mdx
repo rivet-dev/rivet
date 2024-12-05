@@ -1,46 +1,81 @@
 # Intro to Rivet
 
-Rivet is a powerful platform for building real-time applications, offering a simplified approach to distributed computing similar to Durable Objects. With built-in support for RPC functions, event handling, persistence, and edge networking, Rivet makes it easier than ever to build scalable real-time applications.
+Rivet is a powerful platform for building real-time applications, offering a simplified approach to distributed computing. With built-in support for remote procedure calls, events, state, and edge networking, Rivet makes it easy to build scalable real-time applications.
 
-## What you can do with Rivet
+Common use cases include multiplayer tools, local-first apps, AI agents, running untrusted user code, dedicated game servers, and more.
 
-Rivet is designed to empower developers with robust real-time capabilities and seamless scaling across distributed systems. Here's a breakdown of key features and common use cases:
+## Platform Features
 
-### Platform Features
+| Feature                 | Description                                                                                     |
+| ----------------------- | ----------------------------------------------------------------------------------------------- |
+| High-Performance        | Built for speed with in-memory state, minimal network hops, and edge deployment capabilities    |
+| Simplified Architecture | Replace complex infrastructure (caches, queues, pubsub) with a simple actor-based model         |
+| Resource Efficiency     | Zero cost when idle - actors automatically sleep and wake instantly on demand                   |
+| Fault Tolerance         | Built-in durability preserves state across crashes & upgrades with automatic failure isolation  |
+| Edge Computing          | Deploy globally with automatic region selection to minimize latency for users                   |
+| Reduced DevOps          | Minimal DevOps overhead with environment management, built-in monitoring, and automatic scaling |
 
-Feature | Description
---------|-------------
-Easy Scaling | Automatic horizontal scaling based on demand
-Edge Distribution | Global deployment with minimal latency
-State Management | Built-in persistence and state synchronization
-Type Safety | Full TypeScript support for end-to-end type safety
-Developer Experience | Simple API design with minimal boilerplate
+## Core Capabilities
 
-### Core Capabilities
-
-| Capability | Enables you to... |
-|------------|------------------|
-| Functions (RPC) | Build distributed function calls across your application with minimal boilerplate |
-| Event System | Handle real-time updates and state changes with a built-in pub/sub system |
-| Persistence | Store and retrieve data with automatic persistence and state management |
-| Edge Networking | Deploy your applications globally with automatic edge distribution |
-| Fault Tolerance | Build resilient applications with automatic failover and recovery |
-
-### Common Use Cases
-
-TODO
+| Capability                                | Benefit                                                                                |
+| ----------------------------------------- | -------------------------------------------------------------------------------------- |
+| [RPC (Remote Procedure Calls)](/docs/rpc) | Build distributed function calls across your application with minimal boilerplate      |
+| [State & Persistence](/docs/state)        | Store and retrieve data with automatic persistence and state management                |
+| [Event System](/docs/events)              | Handle real-time updates and state changes with a built-in pub/sub system              |
+| [Edge Networking](/docs/edge)             | Deploy your applications globally with automatic edge distribution                     |
+| [Scaling & Concurrency](/docs/scaling)    | Automatically scale actors across compute resources with built-in concurrency controls |
+| [Fault Tolerance](/docs/fault-tolerance)  | Build resilient applications with automatic failover and recovery                      |
 
 ## Code Examples
 
-```typescript
-TODO
+<CodeGroup>
+```typescript {{ "title": "counter.ts" }}
+// This state is associated with each actor. State is stored in-memory, but is
+// automatically persisted & survives crashes/upgrades.
+interface State {
+  totalCount: 0;
+}
+
+class Counter extends Actor<State> {
+  // Create the initial state when creating a new actor
+  initializeState() {
+    return { totalCount: 0 };
+  }
+
+  // Define a remote procedure call (RPC)
+  increment(count: number) {
+    // Update state. This is automatically persisted.
+    this.state.totalCount += count;
+
+    // Broadcast new count to all connections using the event system.
+    this.broadcast("newCount", this.state.totalCount);
+
+    return this.state.totalCount;
+  }
+}
 ```
+
+```typescript {{ "title": "client.ts" }}
+// Connect to counter actor
+const client = new Client(/* Rivet endpoint */);
+const counter = await client.withTags({ name: "counter" });
+
+// Listen for events
+counter.on("newCount", count => console.log("Broadcasted new count"));
+
+// Call the actor's RPC
+const newCount = await counter.increment(42);
+console.log("RPC response", newCount);
+```
+</CodeGroup>
+
+For more examples, see [here](/examples). To see guides for common use cases, see [here](/use-cases).
 
 ## Start building with Rivet
 
 <CardGroup>
-    <Card title="Initial Setup" href="/docs/setup" />
-    <Card title="What are Actors?" href="/docs/actors" />
-    <Card title="Use Cases" href="/use-cases" />
-    <Card title="Examples" href="/examples" />
+  <Card title='Initial Setup' href='/docs/setup' />
+  <Card title='What are Actors?' href='/docs/actors' />
+  <Card title='Use Cases' href='/use-cases' />
+  <Card title='Examples' href='/examples' />
 </CardGroup>

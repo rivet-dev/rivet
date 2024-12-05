@@ -30,11 +30,6 @@ class ExampleActor extends Actor<State, ConnectionData, ConnectionParams> {
     connection: Connection<ConnectionData>,
     params: ConnectionParams
   ): Promise<ConnectionData> {
-    // Validate the auth token
-    if (!params.authToken) {
-      throw new Error("No auth token provided");
-    }
-
     // Verify the token with your auth system
     const userData = await validateAuthToken(params.authToken);
     if (!userData) {
@@ -52,20 +47,12 @@ class ExampleActor extends Actor<State, ConnectionData, ConnectionParams> {
 
 ## Accessing Connection Data
 
-TODO: Update to new ctx format
-
 After authentication, you can access the connection data in any actor method using `connection.data`:
 
 ```typescript
 class AuthenticatedActor extends Actor<State, ConnectionData, ConnectionParams> {
-  async someProtectedMethod(connection: Connection<ConnectionData>) {
-    // Check if user has required role
-    if (connection.data.role !== 'admin') {
-      throw new Error("Unauthorized");
-    }
-    
-    // Proceed with protected operation
-    // ...
+  async doSomething(conn: Connection<ConnectionData>) {
+    console.log(`User ${conn.data.userId} did something.`);)
   }
 }
 ```
@@ -79,13 +66,12 @@ interface State {
     // ...
 }
 
-interface ConnectionParams {
-  apiKey: string;
+interface ConnectionData {
+  userId: string;
 }
 
-interface ConnectionData {
-  accountId: string;
-  tier: 'free' | 'pro' | 'enterprise';
+interface ConnectionParams {
+  apiKey: string;
 }
 
 class APIAuthenticatedActor extends Actor<State, ConnectionData, ConnectionParams> {
@@ -105,11 +91,10 @@ class APIAuthenticatedActor extends Actor<State, ConnectionData, ConnectionParam
       throw new Error("Invalid API key");
     }
 
-    const account = await response.json();
+    const user = await response.json();
     
     return {
-      accountId: account.id,
-      tier: account.tier,
+      userId: user.id,
     };
   }
 }
@@ -124,13 +109,13 @@ interface State {
     // ...
 }
 
-interface ConnectionParams {
-  jwt: string;
-}
-
 interface ConnectionData {
   userId: string;
   permissions: string[];
+}
+
+interface ConnectionParams {
+  jwt: string;
 }
 
 class JWTAuthenticatedActor extends Actor<State, ConnectionData, ConnectionParams> {
@@ -140,7 +125,7 @@ class JWTAuthenticatedActor extends Actor<State, ConnectionData, ConnectionParam
   ): Promise<ConnectionData> {
     try {
       // Verify JWT token
-      const decoded = jwt.verify(params.jwt, process.env.JWT_SECRET);
+      const decoded = jwt.verify(params.jwt, JWT_SECRET);
       
       return {
         userId: decoded.sub,

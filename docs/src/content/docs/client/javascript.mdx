@@ -16,7 +16,6 @@ npx jsr add @rivet-gg/actors-client
 ```
 
 ```sh {{ "title": "Yarn" }}
-# This doesn't use `yarn add` since the packages is hosted on jsr.io.
 yarn dlx jsr add @rivet-gg/actors-client
 ```
 
@@ -34,20 +33,16 @@ bunx jsr add @rivet-gg/esbuild-deno-loader
 </CodeGroup>
 
 <Info>
-    These commands don't use the usual `npm install`/`yarn add`/etc since `@rivet-gg/actors-client` package is hosted on jsr.io, a portable alternative to NPM.
+    These commands don't use the usual `npm install`/`yarn add`/etc since `@rivet-gg/actors-client` package is hosted on [jsr.io](https://jsr.io/docs/why), a portable alternative to NPM.
 </Info>
 
-### Get connection address
+## Connect to actor
 
-Fetch the connection address using the Rivet CLI. Copy this value for the next step.
-
-TODO: This is wrong
+Fetch the connection address using the Rivet CLI. Copy this value.
 
 ```sh
 rivet get-address
 ```
-
-### Connect to actor
 
 Use this code to create & connect to the actor. Replace `/* CONNECTION ADDRESS */` with the value from the previous step.
 
@@ -55,18 +50,16 @@ Use this code to create & connect to the actor. Replace `/* CONNECTION ADDRESS *
 import Client from "@rivet-gg/actors-client";
 const client = new Client(/* CONNECTION ADDRESS */);
 
-const counter = await client.withTags({ name: "hello_world" });  // Get or create a `hello_world` actor
-const newCount = await counter.increment(5);  // Call the method `increment` on the `hello_world` actor
+const counter = await client.withTags({ name: "counter" });  // Get or create a `counter` actor
+const newCount = await counter.increment(5);  // Call the method `increment` on the `counter` actor
 console.log("New count", newCount);
 ```
 
-You can view the actor state with:
+You can monitor the actor with:
 
 <Tabs>
 <Tab title="Hub">
 Visit the [Rivet Hub](https://hub.rivet.gg). Click on the actor with the green dot.
-
-TODO: Add screenshot of dashboard
 </Tab>
 <Tab title="CLI">
 ```sh
@@ -78,8 +71,8 @@ rivet actor list
 ## Next steps
 
 <CardGroup>
-    <Card title="Examples" href="/examples" />
     <Card title="What are Actors?" href="/docs/actors" />
-    <Card title="Functions" href="/docs/functions" />
-    <Card title="Events" href="/docs/events" />
+    <Card title="RPC" href="/docs/rpc" />
+    <Card title="State" href="/docs/events" />
+    <Card title="Examples" href="/examples" />
 </CardGroup>

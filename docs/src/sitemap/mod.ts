@@ -54,7 +54,7 @@ export const sitemap = [
 				title: 'Build with Rivet',
 				pages: [
 					{ title: 'What Are Actors?', href: '/docs/actors', icon: 'block-question' },
-					{ title: 'Functions', href: '/docs/functions', icon: 'code' },
+					{ title: 'Remote Procedure Calls', href: '/docs/rpc', icon: 'code' },
 					{ title: 'State', href: '/docs/state', icon: 'floppy-disk' },
 					{ title: 'Events', href: '/docs/events', icon: 'tower-broadcast' },
 					{ title: 'Scaling & Concurrency', href: '/docs/scaling', icon: 'maximize' },
@@ -121,6 +121,7 @@ export const sitemap = [
 						title: 'Advanced',
 						collapsible: true,
 						pages: [
+							{ title: 'Limitations', href: '/docs/limitations' },
 							{ title: 'Rescheduling', href: '/docs/actor-internals/rescheduling' },
 							{ title: 'Networking', href: '/docs/actor-internals/networking' }
 						]

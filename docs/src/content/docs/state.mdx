@@ -1,17 +1,17 @@
 # State
 
-Actor data is isolated to this actor and cannot be accessed from other actors.
+Actor data is isolated to itself and cannot be accessed from other actors or clients. All reads & writes to state are done via [RPC](/docs/rpc).
 
 Actor state provides the best of both worlds: it's stored in-memory and persisted automatically. This lets you work with the data without added latency while still being able to survive crashes & upgrades.
 
 There are two ways of storing actor data:
 
-- **Native state** data is the most common persistence mechanism. State is a native JavaScript object stored in-memory.
-- **Key-Value (KV)** data is used when dealing with lager datasets specific to this actor.
+- **Native state** data is the most common persistence mechanism. State is a native JavaScript object stored in memory.
+- **Key-Value (KV)** data allows you deal with larger datasets than cannot fit in memory.
 
 ## Native state
 
-State is a native JavaScript object stored in-memory on `this.state`. This makes building realtime & stateful applications as simple as dealing with JavaScript objects.
+State is a native JavaScript object stored in-memory on `this.state`. This makes building realtime & stateful applications as simple as updating native JavaScript objects.
 
 ### State type
 
@@ -19,7 +19,7 @@ Actor states can be typed in TypeScript using the first generic argument on `Act
 
 ```typescript
 interface State {
-    count: 0;
+    count: number;
 }
 
 class Counter extends Actor<State> {
@@ -35,7 +35,7 @@ For example:
 
 ```typescript
 interface State {
-    count: 0;
+    count: number;
 }
 
 class Counter extends Actor<State> {
@@ -47,19 +47,36 @@ class Counter extends Actor<State> {
 
 ### State saves
 
-Rivet automatically handles persisting state transparently to recover from a crash or upgrade. This happens at the end of every function call if the state has changed.
+Rivet automatically handles persisting state transparently to recover from a crash or upgrade. This happens at the end of every remote procedure call if the state has changed.
 
-In the rare occasion you need to force a state change mid-function call, you can use `forceSaveState`. This should only be used if your function makes an important state change that needs to be persisted before the function exits in case of a crash.
+In the rare occasion you need to force a state change mid-RPC, you can use `forceSaveState`. This should only be used if your remote procedure call makes an important state change that needs to be persisted before the RPC exits in case of a crash.
 
 ### Valid data types
 
-Only JSON-serializable types can be stored in state. State is persisted under the hood in a compact, binary format.
+Only JSON-serializable types can be stored in state. State is persisted under the hood in a compact, binary format. This is because JavaScript classes cannot be serialized & deserialized.
 
 ### Limitations
 
-State is constrained to the available memory. For larger datasets, use KV.
+State is constrained to the available memory (see [limitations](/docs/limitations)). For larger datasets, use KV.
 
 ## Key-Value (KV)
+
+The KV state is used for storing large datasets that cannot fit in to memory.
+
+<Info>
+    KV is specific to each actor and is not global. To fetch data from other actors, use [RPC](/docs/rpc).
+
+    If you need a shared state, you have two options:
+
+    1. Create an actor that holds the shared state that actors can make RPCs to
+    2. Use an external database, such as [PostgreSQL](https://www.postgresql.org/)
+</Info>
+
+### Performance
+
+KV stores native JavaScript values in a compact binary format, so you don't need to worry about writing extra serialization & deserialization code.
+
+TODO: Discuss in-memory cache & latencies
 
 ### Operations
 

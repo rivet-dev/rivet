@@ -1,30 +1,44 @@
 # What are Actors?
 
-Actors are a simple - yet powerful - architecture. Think of actors as independent workers that:
+Actors are a simple & powerful architecture. Think of actors as independent workers that:
 
 - Run in their own isolated, lightweight process
 - Maintain their own isolated, durable state in memory (survives crashes & upgrades)
-- Communicate only through remote function calls - no shared state
+- Communicate only through remote procedure calls - no shared state
 - Scale infinitely, start instantly, and sleep when not in use
 - Deploy globally at the edge (close to users)
 
 These characteristics provide the following benefits:
 
-- Replace the need for complex infrastructure (caches, queues, pubsub) with actors - a simpler architecture
-- Improve performance by combining compute (i.e. "functions") with data (i.e. "state")
+- Complex infrastructure (e.g. caches, queues, pubsub) can be replaced with actors, which is a simpler architecture
+- Improve performance by combining compute (i.e. "RPC") with data (i.e. "state")
 - Provide natural fault tolerance - state is durable & failures don't cascade
 - Lower latency for users by running at the edge & combining compute/data
-- Make large applications more maintainable with clear system boundaries
 
 ## Core concepts
 
-- **Functions** (i.e. remote procedure calls) are how clients communicate with actors & how actors communicate with each other.
+- **Remote Procedure Call** (RPC) are how clients communicate with actors & how actors communicate with each other.
 - **State** is the data belonging to each actor. State cannot be shared between actors. State is stored in memory (unless it's too large) for fast reads & writes. State is durable and will always survive a crash or upgrade. You can update state without having to do anything special.
 - **Events** are used for realtime communication between clients & actors. Clients can subscribe to events with `actor.on("myEvent")` and actors can publish events with `this.broadcast("myEvent")` or `connection.send("myEvent")`.
 - **Connections** represent a client that's currently connected to the actor. Connections have have their own state, e.g. `userId`. You can use `onConnect` to authenticate connections before they can communicate with the actor.
 - **Tags** are used to identify actors. Read more below.
 
 To read more about architecting actors for scale, see [here](/docs/scaling).
+
+## Actor architecture vs. server & container architecture
+
+Servers & containers and actors handle state and compute very differently:
+
+| Feature                 | Servers/Containers                                                         | Actors                                                           |
+| ----------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| **Compute and State**   | Separate compute (application layer) from state (databases)                | Keep state and compute together                                  |
+| **Scaling**             | Need external services (load balancers, databases) to scale                | Cheaper & automatically distribute load                          |
+| **High Availability**   | Need manual configuration for high availability and fault tolerance        | Provide built-in durability and fault isolation                  |
+| **Cascading Failure**   | Failures can cascade across systems without proper isolation               | Built-in fault isolation prevents cascading failures             |
+| **Resource Efficiency** | Run continuously regardless of load, wasting resources when idle           | Automatically sleep when inactive and wake instantly when needed |
+| **Performance**         | Performance can be limited by network latency & complex locking mechanisms | Optimized performance by co-locating compute and state           |
+| **Latency**             | Typically higher latency due to centralized data centers & database        | Lower latency by deploying at the edge, closer to users          |
+| **DevOps Overhead**     | Requires significant DevOps effort for setup and maintenance               | Minimal DevOps overhead due to simpler, on-demand architecture   |
 
 ## Builds
 
@@ -46,21 +60,6 @@ While you can choose anything you'd like for your actor's tags, here's a few gui
 - For larger projects, actors & builds sometimes have have an `app` tag to group the product an actor belongs to together. For example, `app=social` and `app=store`.
 
 Tags are not intended for storing large amounts of data (e.g. descriptions or long lists of items). They're intended purely for organizing & filtering actors/builds.
-
-## Actors vs. servers/containers
-
-Servers/containers and actors handle state and compute very differently:
-
-| Feature                 | Servers/Containers                                                  | Actors                                                           |
-| ----------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| **Compute and State**   | Separate compute (application layer) from state (databases)         | Keep state and compute together                                  |
-| **Scaling**             | Need external services (load balancers, databases) to scale         | Scale by creating more instances                                 |
-| **High Availability**   | Need manual configuration for high availability and fault tolerance | Provide built-in durability and fault isolation                  |
-| **Cascading Failure**   | Failures can cascade across systems without proper isolation        | Built-in fault isolation prevents cascading failures             |
-| **Resource Efficiency** | Run continuously regardless of load, wasting resources when idle    | Automatically sleep when inactive and wake instantly when needed |
-| **Performance**         | Performance can be limited by network and database latency          | Optimized performance by co-locating compute and state           |
-| **Latency**             | Typically higher latency due to centralized data centers & database | Lower latency by deploying at the edge, closer to users          |
-| **DevOps Overhead**     | Requires significant DevOps effort for setup and maintenance        | Minimal DevOps overhead due to simpler, on-demand architecture   |
 
 ## Example architectures
 
@@ -119,7 +118,7 @@ interface State {
 
 class Channel extends Actor<State> {
   initializeState() {
-    return { username: "Guest" };
+    return { username: 'Guest' };
   }
 
   sendMessage(username: string, message: string) {
@@ -179,6 +178,7 @@ await doc.insertText(username, 0, "Hello!");
 await doc.moveCursor(username, 5);
 await doc.insertText(username, 5, ", world");
 assert(await doc.getContent() == "Hello, world!");
+
 ````
 
 ```typescript {{ "title": "user.ts" }}
@@ -227,7 +227,7 @@ interface DocumentState {
 
 class Document extends Actor<DocumentState> {
   initializeState() {
-    return { cursors: {}, content: "" };
+    return { cursors: {}, content: '' };
   }
 
   insertText(username: string, location: number, text: string) {
@@ -287,7 +287,7 @@ const orderId = await cart.checkout();
 // Track order
 const order = await client.withTags<Order>({ name: "order", orderId });
 order.on("status", ({ status, timestamp }) => {
-    console.log(`Order ${orderId} is now ${status} at ${timestamp}`);
+console.log(`Order ${orderId} is now ${status} at ${timestamp}`);
 });
 
 ````
@@ -388,7 +388,7 @@ interface OrderState {
 
 class Order extends Actor<OrderState> {
   initializeState() {
-    return { items: [], status: "pending", timestamps: {} };
+    return { items: [], status: 'pending', timestamps: {} };
   }
 
   async create(items: { productId: string; quantity: number }[]) {
@@ -442,33 +442,34 @@ async function insertContact(id: string, contact: Contact) {
 }
 
 // Connect to sync actor
-const client = new Client(/* ... */);
+const client = new Client(/_ ... _/);
 const contactSync = await client.withTags<ContactSync>({ name: "contact_sync", userId: "123" });
 
 contactSync.on("contactUpdated", ({ id, contact }) => {
-  const localContact = localContacts[id];
-  if (localContact.updatedAt < contact.updatedAt) {
-    localContact[id] = contact;
-    localStorage.setItem("contacts", JSON.stringify(localContact));
-    localStorage.setItem("lastUpdate", contact.updatedAt);
-  }
+const localContact = localContacts[id];
+if (localContact.updatedAt < contact.updatedAt) {
+localContact[id] = contact;
+localStorage.setItem("contacts", JSON.stringify(localContact));
+localStorage.setItem("lastUpdate", contact.updatedAt);
+}
 });
 
 // Pull new changes
 let lastUpdate = parseInt(localStorage.getItem("lastUpdate") || "0");
 const newContacts = await contactSync.pullUpdatesAfter(lastUpdate);
 for (const id in newContacts) {
-  localContact[id] = newContacts[id];
+localContact[id] = newContacts[id];
 }
 localStorage.setItem("contacts", JSON.stringify(localContact));
 
 // Write a new contact
 await insertContact("1234", {
-  updatedAt: Date.now(),
-  name: "Greg the Egg",
-  email: "gregory@waystarroyco.com"
+updatedAt: Date.now(),
+name: "Greg the Egg",
+email: "gregory@waystarroyco.com"
 });
-```
+
+````
 
 ```typescript {{ "title": "contact_sync.ts" }}
 interface Contact {
@@ -504,5 +505,6 @@ class ContactSync extends Actor<State> {
     return updatedContacts;
   }
 }
-```
+````
+
 </CodeGroup>

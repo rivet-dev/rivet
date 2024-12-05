@@ -330,7 +330,7 @@ export const SchemaPreview = ({ schema }) => {
   );
 };
 
-export const Warning = ({ title = 'Heads up!', children }) => {
+export const Warning = ({ title = 'Notice', children }) => {
   return (
     <Alert variant='warning' className='my-4'>
       <AlertTitle className='flex items-center'>
@@ -342,7 +342,7 @@ export const Warning = ({ title = 'Heads up!', children }) => {
   );
 };
 
-export const Tip = ({ title = 'Might be useful!', children }) => {
+export const Tip = ({ title = 'Tip', children }) => {
   return (
     <Alert className='my-4'>
       <AlertTitle className='flex items-center'>
@@ -354,7 +354,7 @@ export const Tip = ({ title = 'Might be useful!', children }) => {
   );
 };
 
-export const Info = ({ title = 'Heads up!', children }) => {
+export const Info = ({ title = 'Info', children }) => {
   return (
     <Alert className='my-4'>
       <AlertTitle className='flex items-center'>
