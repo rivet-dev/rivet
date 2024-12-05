@@ -198,11 +198,20 @@ pub async fn patch_tags(
 
 	for (k, v) in &tags {
 		ensure_with!(
+			!k.is_empty(),
+			API_BAD_BODY,
+			error = "tags[]: Tag label cannot be empty."
+		);
+		ensure_with!(
 			k.len() <= 256,
 			ACTOR_BUILD_INVALID_PATCH_CONFIG,
 			error = format!("tags[{:?}]: Tag label too large (max 256).", &k[..256])
 		);
 		if let Some(v) = v {
+			ensure_with!(
+				!v.is_empty(), API_BAD_BODY,
+				error = "tags[{k:?}]: Tag value cannot be an empty string. Try setting it to null instead."
+			);
 			ensure_with!(
 				v.len() <= 1024,
 				ACTOR_BUILD_INVALID_PATCH_CONFIG,

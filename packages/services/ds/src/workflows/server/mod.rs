@@ -242,11 +242,17 @@ async fn validate(ctx: &ActivityCtx, input: &ValidateInput) -> GlobalResult<Opti
 	}
 
 	for (k, v) in &input.tags {
+		if k.is_empty() {
+			return Ok(Some("tags[]: Tag label cannot be empty.".into()));
+		}
 		if k.len() > 256 {
 			return Ok(Some(format!(
 				"tags[{:?}]: Tag label too large (max 256 bytes).",
 				&k[..256]
 			)));
+		}
+		if v.is_empty() {
+			return Ok(Some(format!("tags[{k:?}]: Tag value cannot be empty.",)));
 		}
 		if v.len() > 1024 {
 			return Ok(Some(format!(

@@ -493,6 +493,11 @@ pub async fn upgrade_all(
 
 	for (k, v) in &tags {
 		ensure_with!(
+			!k.is_empty(),
+			API_BAD_BODY,
+			error = "tags[]: Tag label cannot be empty."
+		);
+		ensure_with!(
 			k.len() <= 256,
 			API_BAD_BODY,
 			error = format!(
@@ -500,7 +505,11 @@ pub async fn upgrade_all(
 				&k[..256]
 			),
 		);
-
+		ensure_with!(
+			!v.is_empty(),
+			API_BAD_BODY,
+			error = format!("tags[{k:?}]: Tag value cannot be empty.")
+		);
 		ensure_with!(
 			v.len() <= 1024,
 			API_BAD_BODY,
@@ -821,12 +830,22 @@ async fn resolve_build(
 
 			for (k, v) in &build_tags {
 				ensure_with!(
+					!k.is_empty(),
+					API_BAD_BODY,
+					error = "build_tags[]: Build tag label cannot be empty."
+				);
+				ensure_with!(
 					k.len() < 128,
 					API_BAD_BODY,
 					error = format!(
 						"build_tags[{:?}]: Build tag label too large (max 128 bytes).",
 						&k[..128]
 					)
+				);
+				ensure_with!(
+					!v.is_empty(),
+					API_BAD_BODY,
+					error = format!("build_tags[{k:?}]: Build tag value cannot be empty.")
 				);
 				ensure_with!(
 					v.len() < 256,
