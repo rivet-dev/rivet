@@ -195,15 +195,23 @@ impl ActorOwner {
 pub struct ActorMetadata {
 	pub tags: HashableMap<String, String>,
 	pub create_ts: i64,
-	pub env: ActorMetadataEnv,
+	pub project: ActorMetadataProject,
+	pub environment: ActorMetadataEnvironment,
 	pub datacenter: ActorMetadataDatacenter,
 	pub cluster: ActorMetadataCluster,
 	pub build: ActorMetadataBuild,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash)]
-pub struct ActorMetadataEnv {
+pub struct ActorMetadataProject {
+	pub project_id: Uuid,
+	pub slug: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Hash)]
+pub struct ActorMetadataEnvironment {
 	pub env_id: Uuid,
+	pub slug: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash)]

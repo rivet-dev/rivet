@@ -10,22 +10,36 @@ Remote procedure calls (RPC) are how clients communicate with actors. RPCs are a
 
 RPCs can be written as native JavaScript methods on the actor class.
 
-For example, the `increment` method is written as:
+For example, the `multiplyByTwo` method is written as:
 
 ```typescript
-interface State {
-    totalCount: number;
+export class Example extends Actor {
+    // This is an RPC
+    multiplyByTwo(x: number) {
+        return x * 2;
+    }
 }
+```
 
-export class Counter extends Actor<State> {
-    // This is a built-in method
-    initializeState() {
-        return { totalCount: 0 };
+### Private methods
+
+Methods starting with `_` or `#` (e.g. `_myMethod` and `#myMethod`) are private and cannot be called by clients.
+
+All Rivet-provided methods start with `_` (e.g. `_broadcast`) so clients cannot call them.
+
+For example:
+
+```typescript
+export default class Example extends Actor {
+    // This is private and cannot be called by clients
+    _calcFibonacci(n: number): number {
+        if (n <= 1) return n;
+        return this._calcFibonacci(n - 1) + this._calcFibonacci(n - 2);
     }
 
-    // This is an RPC
-    increment(count: number) {
-        this.state.totalCount += count;
+    // This is public and can be called by clients
+    fetchFibonacci(n: number): number {
+        return this._calcFibonacci(n);
     }
 }
 ```
@@ -66,7 +80,7 @@ actor.nonexistentMethod(123);  // compile error
 ```typescript {{ "title": "actor.ts" }}
 // ...setup...
 
-export class Counter extends Actor<State> {
+export class Counter extends Actor {
     increment(count: number) {
         // ...body...
     }
@@ -80,14 +94,10 @@ export class Counter extends Actor<State> {
 
 Data schemas are not validated by default. For production applications, use a library like [zod](https://zod.dev/) to validate input types.
 
-In the previous example, providing a non-number value to `count` could cause `this.state.totalCount` to become an invalid value. For example, to validate the `increment` request schema:
+In the previous example, providing a non-number value to `count` could corrupt the actor's state (e.g. by passing a string instead of a number). For example, to validate the `increment` request schema:
 
 ```typescript
 import { z } from "zod";
-
-interface State {
-    totalCount: 0,
-}
 
 // Define schemas for user requests
 const IncrementOptionsSchema = z.object({
@@ -96,16 +106,12 @@ const IncrementOptionsSchema = z.object({
 
 type IncrementOptions = z.infer<typeof IncrementOptionsSchema>;
 
-export class Counter extends Actor<State> {
-    initializeState() {
-        return { totalCount: 0 };
-    }
-
+export class Counter extends Actor {
     increment(opts: IncrementOptions) {
         // Will throw error if input type is invalid
         const validatedOpts = IncrementOptionsSchema.parse(opts);
 
-        this.state.totalCount += validatedOpts.count;
+        // ...etc...
     }
 }
 ```

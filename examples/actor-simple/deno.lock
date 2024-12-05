@@ -3,11 +3,10 @@
   "specifiers": {
     "jsr:@core/asyncutil@^1.2.0": "1.2.0",
     "jsr:@hono/hono@^4.6.12": "4.6.12",
-    "jsr:@rivet-gg/actors-core@0.0.1-rc.5": "0.0.1-rc.5",
     "jsr:@std/assert@^1.0.8": "1.0.8",
     "jsr:@std/async@^1.0.9": "1.0.9",
     "jsr:@std/internal@^1.0.5": "1.0.5",
-    "npm:@rivet-gg/api@0.0.1-rc.1": "0.0.1-rc.1",
+    "npm:@rivet-gg/api@0.0.1-rc.2": "0.0.1-rc.2",
     "npm:on-change@^5.0.1": "5.0.1"
   },
   "jsr": {
@@ -16,9 +15,6 @@
     },
     "@hono/hono@4.6.12": {
       "integrity": "fa0b97fa7c3292f0d9957109ac07a475fe485868795b71b8e3114c284152cdb5"
-    },
-    "@rivet-gg/actors-core@0.0.1-rc.5": {
-      "integrity": "466ca05f6acd1822e3b29794065e7b6e4e404333289a7c220967aa92b8b1821c"
     },
     "@std/assert@1.0.8": {
       "integrity": "ebe0bd7eb488ee39686f77003992f389a06c3da1bbd8022184804852b2fa641b",
@@ -34,8 +30,8 @@
     }
   },
   "npm": {
-    "@rivet-gg/api@0.0.1-rc.1": {
-      "integrity": "sha512-kmeS4RCy4ZkUBJWjlJ06DfX4Gvw9oNC3fiB1Ov357a5Ppd4jY8GKksYprfrh3uaemylStjPRCMjaevxfVYunJw==",
+    "@rivet-gg/api@0.0.1-rc.2": {
+      "integrity": "sha512-sGzOVRNUvFXnRx16gRxwQi1Q6WPwq5DBkMhd3xB88yU8uo4cXjeUCtsEw+vt/1uPuUKOyYpabXLD+6VnEAQR/A==",
       "dependencies": [
         "@types/readable-stream",
         "form-data",
@@ -141,8 +137,8 @@
         "hasown"
       ]
     },
-    "gopd@1.0.1": {
-      "integrity": "sha512-d65bNlIadxvpb/A2abVdlqKqV563juRnZ1Wtk6s1sIR8uNsXR70xqIzVqxVf1eTqDunwT2MkczEeaezCKTZhwA==",
+    "gopd@1.1.0": {
+      "integrity": "sha512-FQoVQnqcdk4hVM4JN1eromaun4iuS34oStkdlLENLdpULsuQcTyXj8w7ayhuUfPwEYZ1ZOooOTT6fdA9Vmx/RA==",
       "dependencies": [
         "get-intrinsic"
       ]
@@ -153,8 +149,11 @@
         "es-define-property"
       ]
     },
-    "has-proto@1.0.3": {
-      "integrity": "sha512-SJ1amZAJUiZS+PhsVLf5tGydlaVB8EdFpaSO4gmiUKUOxk8qzn5AIy4ZeJUmh22znIdk/uMAUT2pl3FxzVUH+Q=="
+    "has-proto@1.1.0": {
+      "integrity": "sha512-QLdzI9IIO1Jg7f9GT1gXpPpXArAn6cS31R1eEZqz08Gc+uQ8/XiqHWt17Fiw+2p6oTTIq5GXEpQkAlA88YRl/Q==",
+      "dependencies": [
+        "call-bind"
+      ]
     },
     "has-symbols@1.0.3": {
       "integrity": "sha512-l3LCuF6MgDNwTDKkdYGEihYjt5pRPbEg46rtlmnSPlUbgmB8LOIrKJbYYFBSbnPaJexMKtiPO8hmeRjRz2Td+A=="
@@ -267,10 +266,9 @@
     "dependencies": [
       "jsr:@core/asyncutil@^1.2.0",
       "jsr:@hono/hono@^4.6.12",
-      "jsr:@rivet-gg/actors-core@0.0.1-rc.5",
       "jsr:@std/assert@^1.0.8",
       "jsr:@std/async@^1.0.9",
-      "npm:@rivet-gg/api@0.0.1-rc.1",
+      "npm:@rivet-gg/api@0.0.1-rc.2",
       "npm:on-change@^5.0.1"
     ]
   }

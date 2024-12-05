@@ -1,22 +1,30 @@
 #!/usr/bin/env -S deno run -A
 
 import $ from "dax";
-import { copy, exists, walk } from "@std/fs";
+import { copy, walk } from "@std/fs";
 import { resolve } from "@std/path";
 
-const ACTORS_SDK_PATH = resolve(import.meta.dirname, "../../sdks/actors");
+const ACTORS_SDK_PATH = resolve(import.meta.dirname!, "../../sdks/actors");
 
 const ACTOR_BRIDGE_PATH = resolve(ACTORS_SDK_PATH, "bridge");
 const ACTOR_BRIDGE_TYPES_PATH = resolve(ACTOR_BRIDGE_PATH, "types");
 
-const ACTOR_CORE_TYPES_PATH = resolve(ACTORS_SDK_PATH, "core", "src", "types");
+const ISOLATE_RUNNER_JS_PATH =
+	resolve(import.meta.dirname!, "../../packages/infra/client/isolate-v8-runner/js/");
+
+const ACTOR_CORE_BRIDGE_TYPES_PATH = resolve(ACTORS_SDK_PATH, "core", "src", "bridge_types");
+
+// Clean folders
+await Deno.remove(ACTOR_BRIDGE_TYPES_PATH, { recursive: true }).catch(() => {});
+await Deno.remove(ACTOR_CORE_BRIDGE_TYPES_PATH, { recursive: true }).catch(() => {});
+await Deno.remove(ISOLATE_RUNNER_JS_PATH, { recursive: true }).catch(() => {});
 
 // Compile JS bridge
 await $`npx -p typescript@5.7.2 tsc -p tsconfig.bridge.json`.cwd(ACTOR_BRIDGE_PATH);
 
 // Add header to JS bridge
 for await (const entry of walk(
-	resolve(import.meta.dirname, "../../packages/infra/client/isolate-v8-runner/js/"),
+	ISOLATE_RUNNER_JS_PATH,
 	{
 		exts: [".js"],
 		includeDirs: false,
@@ -29,10 +37,6 @@ for await (const entry of walk(
 	);
 }
 
-// Clean types
-if (await exists(ACTOR_BRIDGE_TYPES_PATH, { directory: true })) {
-	await Deno.remove(ACTOR_BRIDGE_TYPES_PATH, { recursive: true });
-}
 
 // Compile TypeScript types
 await $`npx -p typescript@5.7.2 tsc -p tsconfig.types.json`.cwd(ACTOR_BRIDGE_PATH);
@@ -51,5 +55,8 @@ for await (const entry of walk(ACTOR_BRIDGE_TYPES_PATH, {
 	);
 }
 
+// Copy internal types file, since TypeScript doesn't copy type declarations
+await copy(resolve(ACTOR_BRIDGE_PATH, "src", "bridge", "types"), resolve(ACTOR_BRIDGE_TYPES_PATH, "types"));
+
 // Copy types to core repo
-copy(ACTOR_BRIDGE_TYPES_PATH, ACTOR_CORE_TYPES_PATH, { recursive: true });
+await copy(ACTOR_BRIDGE_TYPES_PATH, ACTOR_CORE_BRIDGE_TYPES_PATH);

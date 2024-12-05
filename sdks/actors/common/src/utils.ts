@@ -1,7 +1,5 @@
 export type ActorTags = Record<string, string>;
 
-export const PORT_NAME = "http";
-
 export interface RivetEnvironment {
 	project?: string;
 	environment?: string;

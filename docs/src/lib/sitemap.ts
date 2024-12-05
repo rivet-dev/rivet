@@ -6,7 +6,7 @@ type Page = { title?: string; href: Href; icon?: IconProp };
 type PageWithTitle = { title: string; href: Href; icon?: IconProp };
 type PageWithPages = {
   title: string;
-  pages: Page[];
+  pages: AnyPage[];
   collapsible?: true;
   initiallyOpen?: boolean;
   icon?: IconProp;

@@ -2,8 +2,8 @@
 //
 // Generated from sdks/actors-bridge/
 
-import type { Metadata } from "internal_types";
-export type { Metadata } from "internal_types";
+import type { Metadata } from "./types/metadata.d.ts";
+export type { Metadata } from "./types/metadata.d.ts";
 export declare function deepFreeze(object: Record<any, any>): Readonly<Record<any, any>>;
 export declare const ACTOR_CONTEXT: {
     metadata: Metadata;

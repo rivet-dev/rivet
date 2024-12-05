@@ -1,5 +1,6 @@
 import { assertEquals, assertExists } from "@std/assert";
-import { assertUnreachable, MAX_PARAMS_LEN } from "../../common/src/utils.ts";
+import { assertUnreachable } from "../../common/src/utils.ts";
+import { MAX_CONN_PARAMS_SIZE } from "../../common/src/network.ts";
 import * as wsToServer from "../../protocol/src/ws/to_server.ts";
 import * as wsToClient from "../../protocol/src/ws/to_client.ts";
 
@@ -95,19 +96,19 @@ export class ActorHandleRaw {
 	connect() {
 		this.#disconnected = false;
 
-		let url = `${this.endpoint}/connect`;
+		let url = `${this.endpoint}/connect?version=1`;
 
 		if (this.parameters !== undefined) {
 			const paramsStr = JSON.stringify(this.parameters);
 
 			// TODO: This is an imprecise count since it doesn't count the full URL length & URI encoding expansion in the URL size
-			if (paramsStr.length > MAX_PARAMS_LEN) {
+			if (paramsStr.length > MAX_CONN_PARAMS_SIZE) {
 				throw new Error(
-					`Connection parameters must be less than ${MAX_PARAMS_LEN} bytes`,
+					`Connection parameters must be less than ${MAX_CONN_PARAMS_SIZE} bytes`,
 				);
 			}
 
-			url += `?params=${encodeURIComponent(paramsStr)}`;
+			url += `&params=${encodeURIComponent(paramsStr)}`;
 		}
 
 		const ws = new WebSocket(url);
@@ -129,11 +130,11 @@ export class ActorHandleRaw {
 				this.#webSocketSendRaw(msg);
 			}
 		};
-		ws.onclose = () => {
+		ws.onclose = (ev) => {
 			// TODO: Handle queue
 			// TODO: Reconnect with backoff
 
-			console.log("Socket closed");
+			console.log("Socket closed", ev.code, ev.reason);
 			this.#websocket = undefined;
 
 			// Automatically reconnect

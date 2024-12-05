@@ -17,7 +17,7 @@ pub struct BuildImageOutput {
 
 /// Builds an image and archives it to a path.
 pub async fn build_image(
-	ctx: &ToolchainCtx,
+	_ctx: &ToolchainCtx,
 	task: task::TaskCtx,
 	build_path: &Path,
 	dockerfile: &Path,
@@ -65,7 +65,6 @@ pub async fn build_image(
 			build_arg_flags.insert(k.into(), v.into());
 		}
 	}
-	build_arg_flags.insert("RIVET_API_ENDPOINT".into(), ctx.api_endpoint.clone());
 
 	// Build image
 	let image_tag = super::generate_unique_image_tag();

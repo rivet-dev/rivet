@@ -2,8 +2,8 @@ import { primordials } from "ext:core/mod.js";
 import { KV_NAMESPACE } from "ext:rivet_kv/40_rivet_kv.js";
 const { ReflectOwnKeys, ObjectFreeze } = primordials;
 
-import type { Metadata } from "internal_types";
-export type { Metadata } from "internal_types";
+import type { Metadata } from "./types/metadata.d.ts";
+export type { Metadata } from "./types/metadata.d.ts";
 
 export function deepFreeze(object: Record<any, any>): Readonly<Record<any, any>> {
 	// Retrieve the property names defined on object

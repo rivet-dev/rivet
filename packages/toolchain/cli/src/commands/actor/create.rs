@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use toolchain::{
 	build,
 	rivet_api::{apis, models},
+	errors,
 };
 use uuid::Uuid;
 
@@ -58,11 +59,11 @@ pub struct Opts {
 	#[clap(long = "port", short = 'p')]
 	ports: Option<Vec<String>>,
 
-	#[clap(long, default_value = "1000")]
-	cpu: i32,
+	#[clap(long)]
+	cpu: Option<i32>,
 
-	#[clap(long, default_value = "1024")]
-	memory: i32,
+	#[clap(long)]
+	memory: Option<i32>,
 
 	#[clap(long)]
 	kill_timeout: Option<i64>,
@@ -225,6 +226,14 @@ impl Opts {
 			auto_region
 		};
 
+		let resources = match (self.cpu, self.memory) {
+			(Some(cpu), Some(memory)) => Some(Box::new(models::ActorResources { cpu, memory })),
+			(Some(_), None) | (None, Some(_)) => {
+				return Err(errors::UserError::new("Must define both --cpu and --memory").into())
+			}
+			(None, None) => None,
+		};
+
 		let request = models::ActorCreateActorRequest {
 			region: Some(region),
 			tags: Some(serde_json::json!(actor_tags)),
@@ -240,10 +249,7 @@ impl Opts {
 				}),
 				ports,
 			})),
-			resources: Some(Box::new(models::ActorResources {
-				cpu: self.cpu,
-				memory: self.memory,
-			})),
+			resources,
 			lifecycle: Some(Box::new(models::ActorLifecycle {
 				durable: Some(self.durable),
 				kill_timeout: self.kill_timeout,

@@ -1,5 +1,5 @@
 {
   "imports": {
-    "@rivet-gg/api": "npm:@rivet-gg/api@0.0.1-rc.1"
+    "@rivet-gg/api": "npm:@rivet-gg/api@0.0.1-rc.2"
   }
 }

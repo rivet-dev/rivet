@@ -2,7 +2,7 @@
 	"name": "@rivet-gg/actors-core",
 	"version": "0.0.1-rc.5",
 	"license": "Apache-2.0",
-	"exports": "./src/index.ts",
+	"exports": "./src/mod.ts",
 	"exclude": [
 		"!src/types/"
 	]

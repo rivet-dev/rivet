@@ -536,13 +536,17 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<()>
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-struct GetBuildAndDcInput {
+struct GetServerMetaInput {
+	env_id: Uuid,
 	datacenter_id: Uuid,
 	image_id: Uuid,
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-struct GetBuildAndDcOutput {
+struct GetServerMetaOutput {
+	project_id: Uuid,
+	project_slug: String,
+	env_slug: String,
 	build_upload_id: Uuid,
 	build_file_name: String,
 	build_kind: BuildKind,
@@ -552,13 +556,16 @@ struct GetBuildAndDcOutput {
 	dc_build_delivery_method: BuildDeliveryMethod,
 }
 
-#[activity(GetBuildAndDc)]
-async fn get_build_and_dc(
+#[activity(GetServerMeta)]
+async fn get_server_meta(
 	ctx: &ActivityCtx,
-	input: &GetBuildAndDcInput,
-) -> GlobalResult<GetBuildAndDcOutput> {
+	input: &GetServerMetaInput,
+) -> GlobalResult<GetServerMetaOutput> {
 	// Validate build exists and belongs to this game
-	let (build_res, dc_res) = tokio::try_join!(
+	let (env_res, build_res, dc_res) = tokio::try_join!(
+		op!([ctx] game_namespace_get {
+			namespace_ids: vec![input.env_id.into()],
+		}),
 		ctx.op(build::ops::get::Input {
 			build_ids: vec![input.image_id],
 		}),
@@ -566,11 +573,22 @@ async fn get_build_and_dc(
 			datacenter_ids: vec![input.datacenter_id],
 		})
 	)?;
+	let env = unwrap_with!(env_res.namespaces.first(), ENVIRONMENT_NOT_FOUND);
 	let build = unwrap_with!(build_res.builds.first(), BUILD_NOT_FOUND);
 
 	let dc = unwrap!(dc_res.datacenters.first());
 
-	Ok(GetBuildAndDcOutput {
+	// Lookup project
+	let project_id = unwrap!(env.game_id).as_uuid();
+	let projects_res = op!([ctx] game_get {
+		game_ids: vec![project_id.into()],
+	}).await?;
+	let project = unwrap!(projects_res.games.first());
+
+	Ok(GetServerMetaOutput {
+		project_id,
+		project_slug: project.name_id.clone(),
+		env_slug: env.name_id.clone(),
 		build_upload_id: build.upload_id,
 		build_file_name: build::utils::file_name(build.kind, build.compression),
 		build_kind: build.kind,

@@ -10,7 +10,7 @@ use util::serde::AsHashableExt;
 
 use super::{
 	resolve_image_artifact_url, CreateComplete, Destroy, Drain, DrainState, Failed,
-	GetBuildAndDcInput, InsertDbInput, Port, Ready, SetConnectableInput, UpdateImageInput, Upgrade,
+	GetServerMetaInput, InsertDbInput, Port, Ready, SetConnectableInput, UpdateImageInput, Upgrade,
 	UpgradeComplete, UpgradeStarted, DRAIN_PADDING_MS, TRAEFIK_GRACE_PERIOD,
 };
 use crate::types::{
@@ -308,8 +308,9 @@ async fn setup(
 
 	let image_id = new_image_id.unwrap_or(input.image_id);
 
-	let build_dc = ctx
-		.activity(GetBuildAndDcInput {
+	let server_meta = ctx
+		.activity(GetServerMetaInput {
+			env_id: input.env_id,
 			image_id,
 			datacenter_id: input.datacenter_id,
 		})
@@ -328,9 +329,9 @@ async fn setup(
 				datacenter_id: input.datacenter_id,
 				image_id,
 				server_id: input.server_id,
-				build_upload_id: build_dc.build_upload_id,
-				build_file_name: build_dc.build_file_name,
-				dc_build_delivery_method: build_dc.dc_build_delivery_method,
+				build_upload_id: server_meta.build_upload_id,
+				build_file_name: server_meta.build_file_name,
+				dc_build_delivery_method: server_meta.dc_build_delivery_method,
 			}),
 		))
 		.await?;
@@ -340,12 +341,12 @@ async fn setup(
 		config: Box::new(pp::ActorConfig {
 			image: pp::Image {
 				artifact_url: image_artifact_url,
-				kind: match build_dc.build_kind {
+				kind: match server_meta.build_kind {
 					BuildKind::DockerImage => pp::ImageKind::DockerImage,
 					BuildKind::OciBundle => pp::ImageKind::OciBundle,
 					BuildKind::JavaScript => pp::ImageKind::JavaScript,
 				},
-				compression: match build_dc.build_compression {
+				compression: match server_meta.build_compression {
 					BuildCompression::None => pp::ImageCompression::None,
 					BuildCompression::Lz4 => pp::ImageCompression::Lz4,
 				},
@@ -395,12 +396,17 @@ async fn setup(
 				tags: input.tags.as_hashable(),
 				// Represents when the pegboard actor was created, not the ds workflow.
 				create_ts: ctx.ts(),
-				env: pp::ActorMetadataEnv {
+				project: pp::ActorMetadataProject {
+					project_id: server_meta.project_id,
+					slug: server_meta.project_slug,
+				},
+				environment: pp::ActorMetadataEnvironment {
 					env_id: input.env_id,
+					slug: server_meta.env_slug,
 				},
 				datacenter: pp::ActorMetadataDatacenter {
-					name_id: build_dc.dc_name_id,
-					display_name: build_dc.dc_display_name,
+					name_id: server_meta.dc_name_id,
+					display_name: server_meta.dc_display_name,
 				},
 				cluster: pp::ActorMetadataCluster {
 					cluster_id: input.cluster_id,

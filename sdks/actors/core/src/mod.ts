@@ -7,6 +7,6 @@
  * developers are used to.
  */
 
-import { ACTOR_CONTEXT } from "./types/90_rivet_ns.d.ts";
+import { ACTOR_CONTEXT } from "./bridge_types/90_rivet_ns.d.ts";
 
 export type ActorContext = typeof ACTOR_CONTEXT;

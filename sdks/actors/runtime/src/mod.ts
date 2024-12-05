@@ -1,2 +1,2 @@
-import { Actor } from "./actor.ts";
-export default Actor;
+export { Actor } from "./actor.ts";
+export { Context } from "./context.ts";

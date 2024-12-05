@@ -7,10 +7,10 @@ import { Lock } from "@core/asyncutil/lock";
 import { ActorConfig, mergeActorConfig } from "./config.ts";
 import onChange from "on-change";
 import { Connection } from "./connection.ts";
-import { RpcContext } from "./rpc_context.ts";
-import * as httpRpc from "../../protocol/src/http/rpc.ts";
+import { Context } from "./context.ts";
 import * as wsToClient from "../../protocol/src/ws/to_client.ts";
 import * as wsToServer from "../../protocol/src/ws/to_server.ts";
+import { MAX_CONN_PARAMS_SIZE } from "../../common/src/network.ts";
 import { assertUnreachable } from "../../common/src/utils.ts";
 import { assertExists } from "@std/assert";
 
@@ -53,7 +53,16 @@ function isJsonSerializable(value: unknown): boolean {
 	return false;
 }
 
-export abstract class Actor<State = undefined, ConnectionData = undefined> {
+export interface PrepareConnectionOpts<ConnParams> {
+	request: Request;
+	parameters: ConnParams;
+}
+
+export abstract class Actor<
+	State = undefined,
+	ConnParams = undefined,
+	ConnState = undefined,
+> {
 	#stateChanged: boolean = false;
 
 	/**
@@ -70,73 +79,87 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 
 	#backgroundPromises: Promise<void>[] = [];
 	#config: ActorConfig;
-	#ctx: ActorContext;
+	#ctx!: ActorContext;
 	#ready: boolean = false;
 
-	#connections = new Set<Connection<ConnectionData>>();
-	#eventSubscriptions = new Map<string, Set<Connection<ConnectionData>>>();
+	#connectionIdCounter: number = 0;
+	#connections = new Set<Connection<this>>();
+	#eventSubscriptions = new Map<string, Set<Connection<this>>>();
 
-	get connections(): Set<Connection<ConnectionData>> {
-		return this.#connections;
-	}
-
-	public constructor(config?: Partial<ActorConfig>) {
+	protected constructor(config?: Partial<ActorConfig>) {
 		this.#config = mergeActorConfig(config);
 	}
 
-	protected initializeState?(): State | Promise<State>;
-
-	protected onStart?(): void | Promise<void>;
-
-	protected onConnect?(
-		connection: Connection<ConnectionData>,
-		...args: unknown[]
-	): ConnectionData | Promise<ConnectionData>;
-
-	protected onDisconnect?(connection: Connection<ConnectionData>): void | Promise<void>;
-
-	protected onStateChange?(newState: State): void | Promise<void>;
-
-	// TODO: Types
-	public static start(ctx: ActorContext) {
-		let instance = new (this as any)() as Actor;
-		instance.#ctx = ctx;
-
-		return instance.run();
+	protected get connections(): Set<Connection<this>> {
+		return this.#connections;
 	}
 
-	public async run() {
+	protected _createState?(): State | Promise<State>;
+
+	protected _onStart?(): void | Promise<void>;
+
+	protected _prepareConnection?(
+		opts: PrepareConnectionOpts<ConnParams>,
+	): ConnState | Promise<ConnState>;
+
+	protected _onConnect?(
+		connection: Connection<this>,
+	): void | Promise<void>;
+
+	protected _onDisconnect?(
+		connection: Connection<this>,
+	): void | Promise<void>;
+
+	protected _onStateChange?(newState: State): void | Promise<void>;
+
+	// This is called by Rivet when the actor is exported as the default
+	// property
+	public static start(ctx: ActorContext) {
+		// deno-lint-ignore no-explicit-any
+		const instance = new (this as any)() as Actor;
+		return instance.#run(ctx);
+	}
+
+	async #run(ctx: ActorContext) {
+		this.#ctx = ctx;
+
 		await this.#initializeState();
 
 		this.#runServer();
 
 		// TODO: Exit process if this errors
 		console.log("calling start");
-		await this.onStart?.();
+		await this._onStart?.();
 
 		console.log("ready");
 		this.#ready = true;
 	}
 
-	public get state(): State {
+	protected get state(): State {
 		this.#validateStateEnabled();
 		return this.#stateProxy;
 	}
 
-	public set state(value: State) {
+	protected set state(value: State) {
 		this.#validateStateEnabled();
 		this.#setStateWithoutChange(value);
 		this.#stateChanged = true;
 	}
 
 	get #stateEnabled() {
-		return typeof this.initializeState == "function";
+		return typeof this._createState == "function";
 	}
 
 	#validateStateEnabled() {
 		if (!this.#stateEnabled) {
-			throw new Error("State not enabled. Must implement initializeState to use state.");
+			throw new Error(
+				"State not enabled. Must implement createState to use state.",
+			);
 		}
+	}
+
+	get #connectionStateEnabled() {
+		return typeof this._prepareConnection == "function";
 	}
 
 	/** Updates the state and creates a new proxy. */
@@ -168,14 +191,16 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 			// deno-lint-ignore no-explicit-any
 			(path: any, value: any, _previousValue: any, _applyData: any) => {
 				if (!isJsonSerializable(value)) {
-					throw new Error(`State value at path "${path}" must be JSON serializable`);
+					throw new Error(
+						`State value at path "${path}" must be JSON serializable`,
+					);
 				}
 				this.#stateChanged = true;
 
 				// Call onStateChange if it exists
-				if (this.onStateChange && this.#ready) {
+				if (this._onStateChange && this.#ready) {
 					try {
-						this.onStateChange(this.#stateRaw);
+						this._onStateChange(this.#stateRaw);
 					} catch (err) {
 						console.error("Error from onStateChange:", err);
 					}
@@ -183,7 +208,7 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 			},
 			{
 				ignoreDetached: true,
-			}
+			},
 		);
 	}
 
@@ -192,17 +217,20 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 			console.log("State not enabled");
 			return;
 		}
-		assertExists(this.initializeState);
+		assertExists(this._createState);
 
 		// Read initial state
-		const getStateBatch = await this.#ctx.kv.getBatch([KEYS.STATE.INITIALIZED, KEYS.STATE.DATA]);
+		const getStateBatch = await this.#ctx.kv.getBatch([
+			KEYS.STATE.INITIALIZED,
+			KEYS.STATE.DATA,
+		]);
 		const initialized = getStateBatch.get(KEYS.STATE.INITIALIZED);
 		const stateData = getStateBatch.get(KEYS.STATE.DATA);
 
 		if (!initialized) {
 			// Initialize
 			console.log("initializing");
-			let stateOrPromise = await this.initializeState();
+			const stateOrPromise = await this._createState();
 
 			let stateData: State;
 			if (stateOrPromise instanceof Promise) {
@@ -213,11 +241,11 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 
 			// Update state
 			console.log("writing initial state");
-			await Rivet.kv.putBatch(
+			await this.#ctx.kv.putBatch(
 				new Map<unknown, unknown>([
 					[KEYS.STATE.INITIALIZED, true],
 					[KEYS.STATE.DATA, stateData],
-				])
+				]),
 			);
 			this.#setStateWithoutChange(stateData);
 		} else {
@@ -235,7 +263,7 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 			return c.text("This is a Rivet Actor\n\nLearn more at https://rivet.gg");
 		});
 
-		app.post("/rpc/:name", this.#handleRpc.bind(this));
+		//app.post("/rpc/:name", this.#pandleRpc.bind(this));
 
 		app.get("/connect", upgradeWebSocket(this.#handleWebSocket.bind(this)));
 
@@ -249,7 +277,7 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 	}
 
 	#getServerPort(): number {
-		const portStr = Deno.env.get("PORT_http");
+		const portStr = Deno.env.get("PORT_HTTP");
 		if (!portStr) {
 			throw "Missing port";
 		}
@@ -262,21 +290,21 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 	}
 
 	// MARK: RPC
-	async #handleRpc(c: HonoContext): Promise<Response> {
-		try {
-			const rpcName = c.req.param("name");
-			const requestBody = await c.req.json<httpRpc.Request<unknown[]>>();
-			const ctx = new RpcContext<ConnectionData>();
-
-			const output = await this.#executeRpc(ctx, rpcName, requestBody.args);
-			return c.json({ output });
-		} catch (error) {
-			console.error("RPC Error:", error);
-			return c.json({ error: String(error) }, 500);
-		} finally {
-			await this.forceSaveState();
-		}
-	}
+	//async #handleRpc(c: HonoContext): Promise<Response> {
+	//	try {
+	//		const rpcName = c.req.param("name");
+	//		const requestBody = await c.req.json<httpRpc.Request<unknown[]>>();
+	//		const ctx = new RpcContext<ConnState>();
+	//
+	//		const output = await this.#executeRpc(ctx, rpcName, requestBody.args);
+	//		return c.json({ output });
+	//	} catch (error) {
+	//		console.error("RPC Error:", error);
+	//		return c.json({ error: String(error) }, 500);
+	//	} finally {
+	//		await this.forceSaveState();
+	//	}
+	//}
 
 	#isValidRpc(rpcName: string): boolean {
 		// Prevent calling private methods
@@ -295,27 +323,7 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 	}
 
 	// MARK: Events
-	broadcast<Args extends Array<unknown>>(name: string, ...args: Args) {
-		this.#assertReady();
-
-		// Send to all connected clients
-		const subscriptions = this.#eventSubscriptions.get(name);
-		if (!subscriptions) return;
-
-		const body = JSON.stringify({
-			body: {
-				event: {
-					name,
-					args,
-				},
-			},
-		} satisfies wsToClient.ToClient);
-		for (const connection of subscriptions) {
-			connection.sendWebSocketMessage(body);
-		}
-	}
-
-	#addSubscription(eventName: string, connection: Connection<ConnectionData>) {
+	#addSubscription(eventName: string, connection: Connection<this>) {
 		connection.subscriptions.add(eventName);
 
 		let subscribers = this.#eventSubscriptions.get(eventName);
@@ -326,7 +334,7 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 		subscribers.add(connection);
 	}
 
-	#removeSubscription(eventName: string, connection: Connection<ConnectionData>) {
+	#removeSubscription(eventName: string, connection: Connection<this>) {
 		connection.subscriptions.delete(eventName);
 
 		const subscribers = this.#eventSubscriptions.get(eventName);
@@ -340,51 +348,79 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 
 	// MARK: WebSocket
 	async #handleWebSocket(c: HonoContext): Promise<WSEvents<WebSocket>> {
-		const conn = new Connection<ConnectionData>();
-
-		// Add connection to set
-		this.#connections.add(conn);
-
 		// TODO: Handle timeouts opening socket
 
-		// Validate args size (limiting to 4KB which is reasonable for query params)
-		const MAX_ARGS_SIZE = 4096;
-		const argsStr = c.req.query("args");
-		if (argsStr && argsStr.length > MAX_ARGS_SIZE) {
-			throw new Error(`WebSocket args too large (max ${MAX_ARGS_SIZE} bytes)`);
+		// Validate protocol
+		const protocolVersion = c.req.query("version");
+		if (protocolVersion != "1") {
+			throw new Error(`Invalid protocol version: ${protocolVersion}`);
 		}
 
-		// Parse and validate args
-		let args: unknown[];
+		// Validate params size (limiting to 4KB which is reasonable for query params)
+		const paramsStr = c.req.query("params");
+		if (paramsStr && paramsStr.length > MAX_CONN_PARAMS_SIZE) {
+			throw new Error(
+				`WebSocket params too large (max ${MAX_CONN_PARAMS_SIZE} bytes)`,
+			);
+		}
+
+		// Parse and validate params
+		let params: ConnParams;
 		try {
-			args = typeof argsStr === "string" ? JSON.parse(argsStr) : [];
-			if (!Array.isArray(args)) {
-				throw new Error("WebSocket args must be an array");
-			}
+			params = typeof paramsStr === "string"
+				? JSON.parse(paramsStr)
+				: undefined;
 		} catch (err) {
-			throw new Error(`Invalid WebSocket args: ${err}`);
+			throw new Error(`Invalid WebSocket params: ${err}`);
 		}
 
-		// Handle connection with timeout
-		const CONNECT_TIMEOUT = 5000; // 5 seconds
-		if (this.onConnect) {
-			const dataOrPromise = this.onConnect(conn, ...args);
-			let data: ConnectionData;
+		// Authenticate connection
+		let state: ConnState | undefined = undefined;
+		const PREAPRE_CONNECT_TIMEOUT = 5000; // 5 seconds
+		if (this._prepareConnection) {
+			const dataOrPromise = this._prepareConnection({
+				request: c.req.raw,
+				parameters: params,
+			});
 			if (dataOrPromise instanceof Promise) {
-				data = await deadline(dataOrPromise, CONNECT_TIMEOUT);
+				state = await deadline(dataOrPromise, PREAPRE_CONNECT_TIMEOUT);
 			} else {
-				data = dataOrPromise;
+				state = dataOrPromise;
 			}
-			conn.data = data;
 		}
 
+		let conn: Connection<this> | undefined;
 		return {
 			onOpen: (_evt, ws) => {
-				// Actors don't need to know about this. Events are
-				// automatically queued.
-				conn.websocket = ws;
+				// Create connection
+				//
+				// If `prepareConnection` is not defined and `state` is
+				// undefined, there will be a runtime error when attempting to
+				// read it
+				this.#connectionIdCounter += 1;
+				// TODO: As any
+				conn = new Connection<Actor<State, ConnParams, ConnState>>(this.#connectionIdCounter, ws, state!, this.#connectionStateEnabled);
+				this.#connections.add(conn);
+
+				// Handle connection
+				const CONNECT_TIMEOUT = 5000; // 5 seconds
+				if (this._onConnect) {
+					const voidOrPromise = this._onConnect(conn);
+					if (voidOrPromise instanceof Promise) {
+						deadline(voidOrPromise, CONNECT_TIMEOUT)
+							.catch((err) => {
+								console.error("Error in `onConnect`, closing socket:", err);
+								conn?.disconnect("`onConnect` failed");
+							});
+					}
+				}
 			},
 			onMessage: async (evt, ws) => {
+				if (!conn) {
+					console.warn("`conn` does not exist");
+					return;
+				}
+
 				let rpcRequestId: string | undefined;
 				try {
 					const value = evt.data.valueOf();
@@ -398,24 +434,32 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 						const { id, name, args = [] } = message.body.rpcRequest;
 						rpcRequestId = id;
 
-						const ctx = new RpcContext<ConnectionData>();
+						const ctx = new Context<this>(conn);
 						const output = await this.#executeRpc(ctx, name, args);
 
 						ws.send(
-							JSON.stringify({
-								body: {
-									rpcResponseOk: {
-										id,
-										output,
+							JSON.stringify(
+								{
+									body: {
+										rpcResponseOk: {
+											id,
+											output,
+										},
 									},
-								},
-							} satisfies wsToClient.ToClient)
+								} satisfies wsToClient.ToClient,
+							),
 						);
 					} else if ("subscriptionRequest" in message.body) {
 						if (message.body.subscriptionRequest.subscribe) {
-							this.#addSubscription(message.body.subscriptionRequest.eventName, conn);
+							this.#addSubscription(
+								message.body.subscriptionRequest.eventName,
+								conn,
+							);
 						} else {
-							this.#removeSubscription(message.body.subscriptionRequest.eventName, conn);
+							this.#removeSubscription(
+								message.body.subscriptionRequest.eventName,
+								conn,
+							);
 						}
 					} else {
 						assertUnreachable(message.body);
@@ -423,29 +467,38 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 				} catch (err) {
 					if (rpcRequestId) {
 						ws.send(
-							JSON.stringify({
-								body: {
-									rpcResponseError: {
-										id: rpcRequestId,
-										message: String(err),
+							JSON.stringify(
+								{
+									body: {
+										rpcResponseError: {
+											id: rpcRequestId,
+											message: String(err),
+										},
 									},
-								},
-							} satisfies wsToClient.ToClient)
+								} satisfies wsToClient.ToClient,
+							),
 						);
 					} else {
 						ws.send(
-							JSON.stringify({
-								body: {
-									error: {
-										message: String(err),
+							JSON.stringify(
+								{
+									body: {
+										error: {
+											message: String(err),
+										},
 									},
-								},
-							} satisfies wsToClient.ToClient)
+								} satisfies wsToClient.ToClient,
+							),
 						);
 					}
 				}
 			},
 			onClose: () => {
+				if (!conn) {
+					console.warn!("`conn` does not exist");
+					return;
+				}
+
 				this.#connections.delete(conn);
 
 				// Remove subscriptions
@@ -453,7 +506,7 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 					this.#removeSubscription(eventName, conn);
 				}
 
-				this.onDisconnect?.(conn);
+				this._onDisconnect?.(conn);
 			},
 			onError: (evt) => {
 				// Actors don't need to know about this, since it's abstracted
@@ -463,61 +516,16 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 		};
 	}
 
-	/**
-	 * Runs a promise in the background.
-	 *
-	 * This allows the actor runtime to ensure that a promise completes while
-	 * returning from an RPC request early.
-	 */
-	protected runInBackground(promise: Promise<void>) {
-		this.#assertReady();
-
-		// TODO: Should we force save the state?
-		// Add logging to promise and make it non-failable
-		const nonfailablePromise = promise
-			.then(() => console.log("background promise complete"))
-			.catch((err) => {
-				console.error("background promise failed", err);
-				// ctx.log.error(
-				// 	"background promise failed",
-				// 	...errorToLogEntries("error", err),
-				// )
-			});
-		this.#backgroundPromises.push(nonfailablePromise);
-	}
-
-	/**
-	 * Forces the state to get saved.
-	 *
-	 * This is helpful if running a long task that may fail later or a background
-	 * job that updates the state.
-	 */
-	public async forceSaveState() {
-		this.#assertReady();
-
-		// Use a lock in order to avoid race conditions with writing to KV
-		await this.#saveStateLock.lock(async () => {
-			if (this.#stateChanged) {
-				console.log("saving state");
-
-				// There might be more changes while we're writing, so we set
-				// this before writing to KV in order to avoid a race
-				// condition.
-				this.#stateChanged = false;
-
-				// Write to KV
-				await this.#ctx.kv.put(KEYS.STATE.DATA, this.#stateRaw);
-			} else {
-				console.log("skipping save, state not modified");
-			}
-		});
-	}
 
 	#assertReady() {
 		if (!this.#ready) throw new Error("Actor not ready");
 	}
 
-	async #executeRpc(ctx: RpcContext<ConnectionData>, rpcName: string, args: unknown[]): Promise<unknown> {
+	async #executeRpc(
+		ctx: Context<this>,
+		rpcName: string,
+		args: unknown[],
+	): Promise<unknown> {
 		// Prevent calling private or reserved methods
 		if (!this.#isValidRpc(rpcName)) {
 			throw new Error(`RPC ${rpcName} is not accessible`);
@@ -547,5 +555,81 @@ export abstract class Actor<State = undefined, ConnectionData = undefined> {
 				throw new Error(`RPC ${rpcName} failed: ${String(error)}`);
 			}
 		}
+	}
+
+	// MARK: Exposed methods
+	/**
+	 * Broadcasts an event to all connected clients.
+	 */
+	protected _broadcast<Args extends Array<unknown>>(name: string, ...args: Args) {
+		this.#assertReady();
+
+		// Send to all connected clients
+		const subscriptions = this.#eventSubscriptions.get(name);
+		if (!subscriptions) return;
+
+		const body = JSON.stringify(
+			{
+				body: {
+					event: {
+						name,
+						args,
+					},
+				},
+			} satisfies wsToClient.ToClient,
+		);
+		for (const connection of subscriptions) {
+			connection._sendWebSocketMessage(body);
+		}
+	}
+
+	/**
+	 * Runs a promise in the background.
+	 *
+	 * This allows the actor runtime to ensure that a promise completes while
+	 * returning from an RPC request early.
+	 */
+	protected _runInBackground(promise: Promise<void>) {
+		this.#assertReady();
+
+		// TODO: Should we force save the state?
+		// Add logging to promise and make it non-failable
+		const nonfailablePromise = promise
+			.then(() => console.log("background promise complete"))
+			.catch((err) => {
+				console.error("background promise failed", err);
+				// ctx.log.error(
+				// 	"background promise failed",
+				// 	...errorToLogEntries("error", err),
+				// )
+			});
+		this.#backgroundPromises.push(nonfailablePromise);
+	}
+
+	/**
+	 * Forces the state to get saved.
+	 *
+	 * This is helpful if running a long task that may fail later or a background
+	 * job that updates the state.
+	 */
+	protected async _forceSaveState() {
+		this.#assertReady();
+
+		// Use a lock in order to avoid race conditions with writing to KV
+		await this.#saveStateLock.lock(async () => {
+			if (this.#stateChanged) {
+				console.log("saving state");
+
+				// There might be more changes while we're writing, so we set
+				// this before writing to KV in order to avoid a race
+				// condition.
+				this.#stateChanged = false;
+
+				// Write to KV
+				await this.#ctx.kv.put(KEYS.STATE.DATA, this.#stateRaw);
+			} else {
+				console.log("skipping save, state not modified");
+			}
+		});
 	}
 }

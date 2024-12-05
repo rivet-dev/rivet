@@ -12,7 +12,7 @@ use util::serde::AsHashableExt;
 
 use super::{
 	resolve_image_artifact_url, CreateComplete, Destroy, Drain, DrainState, Failed,
-	GetBuildAndDcInput, InsertDbInput, Port, Upgrade, DRAIN_PADDING_MS,
+	GetServerMetaInput, InsertDbInput, Port, Upgrade, DRAIN_PADDING_MS,
 };
 use crate::{
 	types::{NetworkMode, Routing, ServerLifecycle, ServerResources},
@@ -214,7 +214,8 @@ async fn setup(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
 				environment: input.environment.as_hashable(),
 				network_ports: input.network_ports.as_hashable(),
 			}),
-			activity(GetBuildAndDcInput {
+			activity(GetServerMetaInput {
+				env_id: input.env_id,
 				image_id: input.image_id,
 				datacenter_id: input.datacenter_id,
 			}),

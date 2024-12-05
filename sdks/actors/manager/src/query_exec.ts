@@ -1,5 +1,6 @@
 import { RivetClient, RivetClientClient } from "@rivet-gg/api";
-import { assertUnreachable, PORT_NAME, RivetEnvironment, ActorTags } from "../../common/src/utils.ts";
+import { assertUnreachable, RivetEnvironment, ActorTags } from "../../common/src/utils.ts";
+import { PORT_NAME } from "../../common/src/network.ts";
 import { ActorQuery, CreateRequest } from "../../manager-protocol/src/query.ts";
 
 export async function queryActor(
@@ -94,11 +95,7 @@ async function createActor(
 
 	const req = {
 		...environment,
-		body: {
-			// Add fallback resources if one is not provided
-			resources: { cpu: 100, memory: 100 },
-			...createRequest,
-		},
+		body: createRequest,
 	};
 	console.log("Create actor", req);
 	const { actor } = await client.actor.create(req);

@@ -70,12 +70,17 @@ impl task::Task for Task {
 
 		// Build
 		let mut build_ids = Vec::new();
+		let mut example_build = None; // Build to use for the example code
 		for build in &input.config.builds {
 			// Filter out builds that match the tags
 			if let Some(filter) = &input.build_tags {
 				if !filter.iter().all(|(k, v)| build.tags.get(k) == Some(v)) {
 					continue;
 				}
+			}
+
+			if example_build.is_none() {
+				example_build = Some(build);
 			}
 
 			// Build
@@ -96,16 +101,37 @@ impl task::Task for Task {
 		task.log("[Deploy Finished]");
 
 		if let Some(manager_res) = &manager_res {
+			// Build to use as an example
+			let example_build = example_build.context("no example build")?;
+
 			task.log("");
-			task.log(format!("Manager endpoint: {}", manager_res.endpoint));
+			task.log("Deployed:");
 			task.log("");
-			task.log("Exapmle code:");
+			task.log("  Actors:          https://hub.rivet.gg/todo");
+			task.log("  Builds:          https://hub.rivet.gg/todo");
+			task.log(format!("  Endpoint:        {}", manager_res.endpoint));
+			task.log("");
+			task.log("Next steps:");
 			task.log("");
 			task.log(r#"  import ActorClient from "@rivet-gg/actors-client";"#);
 			task.log(format!(
 				r#"  const actorClient = new ActorClient("{}");"#,
 				manager_res.endpoint
 			));
+			task.log("");
+			task.log(format!(
+				r#"  const actor = await actorClient.withTags({})"#,
+				serde_json::to_string(&example_build.tags)?
+			));
+			task.log(r#"  actor.rpc("myMethod", "Hello, world!")"#);
+			task.log("");
+		} else {
+			task.log("");
+			task.log("Deployed:");
+			task.log("");
+			task.log("  Actors:          https://hub.rivet.gg/todo");
+			task.log("  Builds:          https://hub.rivet.gg/todo");
+			task.log("");
 		}
 
 		Ok(Output { build_ids })

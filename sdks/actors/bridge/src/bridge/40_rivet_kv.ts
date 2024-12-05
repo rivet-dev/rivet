@@ -8,7 +8,7 @@ import {
 	op_rivet_kv_put,
 	op_rivet_kv_put_batch,
 } from "ext:core/ops";
-import type { InKey, OutKey, ListQuery } from "internal_types";
+import type { InKey, OutKey, ListQuery } from "./types/metadata.d.ts";
 import { core } from "ext:core/mod.js";
 
 export type Key = any;

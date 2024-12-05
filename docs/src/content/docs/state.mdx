@@ -45,6 +45,31 @@ class Counter extends Actor<State> {
 }
 ```
 
+### Updating state
+
+State can be updated using `this.state`. State will automatically be persisted.
+
+For example:
+
+```typescript
+interface State {
+    count: number;
+}
+
+class Counter extends Actor<State> {
+    increment() {
+        this.state.count += 1;
+    }
+
+    // ...
+}
+```
+
+<Warning>
+    Only state stored on the `this.state` property will be persisted. Properties
+    of the `Counter` class are kept in-memory and not persisted.
+</Warning>
+
 ### State saves
 
 Rivet automatically handles persisting state transparently to recover from a crash or upgrade. This happens at the end of every remote procedure call if the state has changed.
@@ -86,7 +111,9 @@ TODO
 
 TODO
 
-### Cookbook
+{/* TODO: Create examples for these storage types and link to them */}
+
+{/* ### Cookbook
 
 TODO
 
@@ -100,4 +127,4 @@ TODO
 
 #### Queues
 
-TODO
+TODO */}

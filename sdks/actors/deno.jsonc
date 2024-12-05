@@ -1,6 +1,6 @@
 {
 	"tasks": {
-		"check": "deno check --all runtime/**/*.ts client/**/*.ts manager/**/*.ts"
+		"check": "deno check --all client/**/*.ts runtime/**/*.ts client/**/*.ts manager/**/*.ts"
 	},
 	"workspace": [
 		"./bridge",

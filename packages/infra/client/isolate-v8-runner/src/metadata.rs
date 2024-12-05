@@ -8,7 +8,8 @@ use uuid::Uuid;
 #[serde(rename_all = "camelCase")]
 pub struct JsMetadata {
 	pub actor: JsMetadataActor,
-	pub env: JsMetadataEnv,
+	pub project: JsMetadataProject,
+	pub environment: JsMetadataEnvironment,
 	pub region: JsMetadataRegion,
 	pub cluster: JsMetadataCluster,
 	pub build: JsMetadataBuild,
@@ -29,8 +30,13 @@ impl JsMetadata {
 				tags: metadata.tags,
 				created_at: v8::Global::new(scope, date).into(),
 			},
-			env: JsMetadataEnv {
-				id: metadata.env.env_id,
+			project: JsMetadataProject {
+				id: metadata.project.project_id,
+				slug: metadata.project.slug,
+			},
+			environment: JsMetadataEnvironment {
+				id: metadata.environment.env_id,
+				slug: metadata.environment.slug,
 			},
 			region: JsMetadataRegion {
 				id: metadata.datacenter.name_id,
@@ -56,8 +62,16 @@ pub struct JsMetadataActor {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct JsMetadataEnv {
+pub struct JsMetadataProject {
 	pub id: Uuid,
+	pub slug: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsMetadataEnvironment {
+	pub id: Uuid,
+	pub slug: String,
 }
 
 #[derive(Serialize)]

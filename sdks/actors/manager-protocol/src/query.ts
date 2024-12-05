@@ -10,6 +10,4 @@ export type ActorQuery =
 export interface GetOrCreateRequest { tags: ActorTags, create?: CreateRequest }
 
 // TODO(RVT-4250):
-export type CreateRequest = Omit<RivetClient.actor.CreateActorRequest, "resources"> & {
-	resources?: RivetClient.actor.Resources,
-};
+export type CreateRequest = RivetClient.actor.CreateActorRequest;

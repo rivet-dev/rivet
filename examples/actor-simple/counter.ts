@@ -1,39 +1,39 @@
-import { Connection } from "../../sdks/actors/runtime/src/connection.ts";
-import Actor from "../../sdks/actors/runtime/src/mod.ts";
+import { PrepareConnectionOpts } from "../../sdks/actors/runtime/src/actor.ts";
+import { Actor, Context } from "../../sdks/actors/runtime/src/mod.ts";
 
 interface State {
     count: number;
 }
 
-interface ConnectionData {
+interface ConnState {
 	mod: number;
 }
 
-interface ConnectionParameters {
+interface ConnParams {
 	mod: number;
 }
 
-export class Counter extends Actor<State, ConnectionData, ConnectionParameters>  {
-	protected override onConnect(_conn: Connection<ConnectionData, ConnectionParameters>, parameters?: ConnectionParameters): ConnectionData {
-		return { mod: parameters?.mod ?? 1 };
+export default class Counter extends Actor<State, ConnParams, ConnState>  {
+	protected override _prepareConnection(opts: PrepareConnectionOpts<ConnParams>): ConnState {
+		return { mod: opts.parameters.mod ?? 1 };
 	}
 
-	protected override onStateChange(newState: State): void | Promise<void> {
-		this.broadcast("broadcastCount", newState.count);
+	protected override _onStateChange(newState: State): void | Promise<void> {
+		this._broadcast("broadcastCount", newState.count);
 
 		for (const conn of this.connections.values()) {
-			console.log('checking mod', conn.id, conn.data);
-			if (newState.count % conn.data!.mod == 0) {
+			console.log('checking mod', conn.id, conn.state);
+			if (newState.count % conn.state!.mod == 0) {
 				conn.send("directCount", newState.count);
 			}
 		}
 	}
 
-    override initializeState(): State {
+    override _createState(): State {
         return { count: 0 };
     }
 
-    increment(count: number): number {
+    increment(c: Context<Counter>, count: number): number {
         this.state.count += count;
         return this.state.count;
     }
@@ -43,7 +43,4 @@ export class Counter extends Actor<State, ConnectionData, ConnectionParameters> 
 		setTimeout(() => Deno.exit(0), 500);
 	}
 }
-
-// TODO: Clean up this syntax
-new Counter().run();
 
