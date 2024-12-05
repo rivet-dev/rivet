@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
+use schemars::JsonSchema;
 
 pub mod docker;
 pub mod javascript;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", tag = "runtime")]
 pub enum Runtime {
 	Docker(docker::Build),
@@ -11,7 +12,7 @@ pub enum Runtime {
 	JavaScript(javascript::Build),
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, strum::AsRefStr)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, strum::AsRefStr, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Compression {
 	/// No compression.

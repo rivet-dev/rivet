@@ -1,0 +1,310 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Root",
+  "type": "object",
+  "required": [
+    "builds"
+  ],
+  "properties": {
+    "builds": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Build"
+      }
+    },
+    "unstable": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Unstable3"
+        }
+      ],
+      "nullable": true
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "Build": {
+      "type": "object",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "runtime"
+          ],
+          "properties": {
+            "build_args": {
+              "description": "Build arguments to pass to the build.",
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "nullable": true
+            },
+            "build_path": {
+              "description": "Directory to build the Docker image from.",
+              "type": "string",
+              "nullable": true
+            },
+            "build_target": {
+              "description": "Build target to upload.",
+              "type": "string",
+              "nullable": true
+            },
+            "dockerfile": {
+              "description": "Dockerfile to build.",
+              "type": "string",
+              "nullable": true
+            },
+            "image": {
+              "description": "Existing image tag to upload.",
+              "type": "string",
+              "nullable": true
+            },
+            "runtime": {
+              "type": "string",
+              "enum": [
+                "docker"
+              ]
+            },
+            "unstable": {
+              "description": "Unstable features.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/Unstable"
+                }
+              ],
+              "nullable": true
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "runtime",
+            "script"
+          ],
+          "properties": {
+            "bundler": {
+              "allOf": [
+                {
+                  "$ref": "#/definitions/Bundler"
+                }
+              ],
+              "nullable": true
+            },
+            "deno": {
+              "default": {
+                "config_path": null,
+                "import_map_url": null,
+                "lock_path": null
+              },
+              "allOf": [
+                {
+                  "$ref": "#/definitions/Deno"
+                }
+              ]
+            },
+            "runtime": {
+              "type": "string",
+              "enum": [
+                "javascript"
+              ]
+            },
+            "script": {
+              "type": "string"
+            },
+            "unstable": {
+              "default": {
+                "analyze_result": null,
+                "compression": null,
+                "esbuild_log_level": null,
+                "minify": null
+              },
+              "allOf": [
+                {
+                  "$ref": "#/definitions/Unstable2"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "required": [
+        "tags"
+      ],
+      "properties": {
+        "tags": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "BuildMethod": {
+      "oneOf": [
+        {
+          "description": "Use the native Docker build command. Only used if Buildx is not available.",
+          "type": "string",
+          "enum": [
+            "buildx"
+          ]
+        },
+        {
+          "description": "Create & use a Buildx builder on this machine. Required for cross-platform compilation.",
+          "type": "string",
+          "enum": [
+            "native"
+          ]
+        }
+      ]
+    },
+    "BundleKind": {
+      "oneOf": [
+        {
+          "description": "Legacy option. Docker image archive output from `docker save`. Slower lobby start times.",
+          "type": "string",
+          "enum": [
+            "docker_image"
+          ]
+        },
+        {
+          "description": "OCI bundle archive derived from a generated Docker image. Optimized for fast lobby start times.",
+          "type": "string",
+          "enum": [
+            "oci_bundle"
+          ]
+        }
+      ]
+    },
+    "Bundler": {
+      "type": "string",
+      "enum": [
+        "deno",
+        "none"
+      ]
+    },
+    "Compression": {
+      "oneOf": [
+        {
+          "description": "No compression.",
+          "type": "string",
+          "enum": [
+            "none"
+          ]
+        },
+        {
+          "description": "LZ4 compression. Fast compression optimized for fast lobby start times.",
+          "type": "string",
+          "enum": [
+            "lz4"
+          ]
+        }
+      ]
+    },
+    "Deno": {
+      "type": "object",
+      "properties": {
+        "config_path": {
+          "type": "string",
+          "nullable": true
+        },
+        "import_map_url": {
+          "type": "string",
+          "nullable": true
+        },
+        "lock_path": {
+          "type": "string",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "ManagerUnstable": {
+      "type": "object",
+      "properties": {
+        "enable": {
+          "type": "boolean",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "Unstable": {
+      "type": "object",
+      "properties": {
+        "allow_root": {
+          "type": "boolean",
+          "nullable": true
+        },
+        "build_method": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/BuildMethod"
+            }
+          ],
+          "nullable": true
+        },
+        "bundle": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/BundleKind"
+            }
+          ],
+          "nullable": true
+        },
+        "compression": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/Compression"
+            }
+          ],
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "Unstable2": {
+      "type": "object",
+      "properties": {
+        "analyze_result": {
+          "type": "boolean",
+          "nullable": true
+        },
+        "compression": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/Compression"
+            }
+          ],
+          "nullable": true
+        },
+        "esbuild_log_level": {
+          "type": "string",
+          "nullable": true
+        },
+        "minify": {
+          "type": "boolean",
+          "nullable": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "Unstable3": {
+      "type": "object",
+      "properties": {
+        "manager": {
+          "default": {
+            "enable": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/ManagerUnstable"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

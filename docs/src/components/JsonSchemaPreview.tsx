@@ -3,27 +3,30 @@
 import { Foldable } from '@/components/FoldableSchema';
 import { Markdown } from '@/components/Markdown';
 import { cn } from '@rivet-gg/components';
-import { ReactNode } from 'react';
+import { ReactNode, ReactElement } from 'react';
 import type { JSONSchema7, JSONSchema7Definition, JSONSchema7Type } from 'json-schema';
 
 interface JsonSchemaPreviewProps {
   className?: string;
+  title?: string;
   schema: JSONSchema7;
   defs?: Record<string, JSONSchema7>;
   parent?: string;
   empty?: ReactNode;
 }
 
-export function JsonSchemaPreview({ className, schema, defs, parent, empty }: JsonSchemaPreviewProps) {
+export function JsonSchemaPreview({ className, title, schema, defs, parent, empty }: JsonSchemaPreviewProps) {
   if (schema.type === 'object') {
     if (!schema.properties || Object.keys(schema.properties).length === 0) {
       return empty;
     }
 
-    if (schema.title) {
+    if (title ?? schema.title) {
       return (
         <div className='not-prose mb-6 rounded-md border px-4 pb-3'>
-          <h3 className='relative -top-4 mb-0 inline-block bg-card text-xl font-bold'>{schema.title}</h3>
+          <h3 className='relative -top-4 mb-0 inline-block bg-card text-xl font-bold'>
+            {title ?? schema.title}
+          </h3>
           <ObjectSchema
             className={className}
             schema={schema}
@@ -65,8 +68,8 @@ function ObjectSchema({ schema: baseSchema, defs, parent, className }: ObjectSch
         let newParent = parent ? `${parent}.${key}` : key;
 
         return (
-          <ObjectSchemaItem key={key}>
-            <PropertyLabel parent={parent} name={key} schema={resolved} nullable={nullable} />
+          <ObjectSchemaItem className={'px-4'} key={key}>
+            <PropertyLabel parent={parent} name={key} schema={resolved} defs={defs} nullable={nullable} />
             <Schema parent={newParent} schema={resolved} defs={defs} />
           </ObjectSchemaItem>
         );
@@ -79,42 +82,73 @@ interface SchemaProps {
   schema: JSONSchema7;
   defs: Record<string, JSONSchema7>;
   parent?: string;
-  className?: string;
   foldable?: boolean;
 }
 
-function Schema({ schema: baseSchema, defs, parent, className, foldable }: SchemaProps) {
+function Schema({ schema: baseSchema, defs, parent, foldable }: SchemaProps) {
   let isFoldable = foldable ?? true;
   let schema = resolveSchema(baseSchema as JSONSchema7, defs);
 
   // Enum
   if (schema.oneOf) {
+    const common = {
+      type: 'object',
+      properties: schema.properties
+    } as JSONSchema7;
+
     let inner = (
-      <ul className='space-y-4 rounded-md'>
+      <ul>
         {schema.oneOf.map((item: JSONSchema7, index) => {
           return (
-            <li key={index} className='my-4'>
+            <li key={index} className='mt-4 pl-4'>
               {item.enum ? (
                 <TypeLabel type={item.enum[0]} description={item.description} />
               ) : (
-                <Schema parent={parent} schema={item} defs={defs} foldable={false} />
+                <>
+                  <TypeLabel type={`Variant #${index + 1}`} />
+                  <Schema parent={parent} schema={item} defs={defs} foldable={false} />
+                </>
               )}
+            </li>
+          );
+        })}
+        {common.properties ? (
+          <li className='mt-4 pl-4'>
+            <TypeLabel type={'Common (on all variants)'} />
+            <Schema parent={parent} schema={common} defs={defs} foldable={false} />
+          </li>
+        ) : null}
+      </ul>
+    );
+
+    return isFoldable ? (
+      <Foldable title='Show possible variants' closeTitle='Hide possible variants'>
+        {inner}
+      </Foldable>
+    ) : (
+      inner
+    );
+  }
+
+  // String enum
+  if (schema.enum) {
+    let inner = (
+      <ul className='space-y-4 rounded-md'>
+        {schema.enum.map((item, index) => {
+          return (
+            <li key={index} className='mt-4 px-4'>
+              <TypeLabel type={item} />
             </li>
           );
         })}
       </ul>
     );
-
-    return (
-      <div className='mt-1 px-4'>
-        {isFoldable ? (
-          <Foldable title='Show possible variants' closeTitle='Hide possible variants'>
-            {inner}
-          </Foldable>
-        ) : (
-          inner
-        )}
-      </div>
+    return isFoldable ? (
+      <Foldable title='Show possible variants' closeTitle='Hide possible variants'>
+        {inner}
+      </Foldable>
+    ) : (
+      inner
     );
   }
 
@@ -127,95 +161,72 @@ function Schema({ schema: baseSchema, defs, parent, className, foldable }: Schem
     const isEmpty = item.type === 'object' && (!item.properties || Object.keys(item.properties).length === 0);
 
     if (isObject && !isEmpty) {
-      return (
-        <div className='mt-1 px-4'>
-          {isFoldable ? (
-            <Foldable>
-              <JsonSchemaPreview schema={item} defs={defs} parent={newParent} />
-            </Foldable>
-          ) : (
-            <JsonSchemaPreview schema={item} defs={defs} parent={newParent} />
-          )}
-        </div>
+      return isFoldable ? (
+        <Foldable>
+          <JsonSchemaPreview schema={item} defs={defs} parent={newParent} />
+        </Foldable>
+      ) : (
+        <JsonSchemaPreview schema={item} defs={defs} parent={newParent} />
       );
     }
     return null;
   }
 
+  // Object
   if (schema.type === 'object') {
     const isEmpty = !schema.properties || Object.keys(schema.properties).length === 0;
 
     if (!isEmpty) {
-      return (
-        <div className='mt-1 px-4'>
-          {isFoldable ? (
-            <Foldable>
-              <JsonSchemaPreview schema={schema} defs={defs} parent={parent} />
-            </Foldable>
-          ) : (
-            <JsonSchemaPreview schema={schema} defs={defs} parent={parent} />
-          )}
-        </div>
+      return isFoldable ? (
+        <Foldable>
+          <ObjectSchema schema={schema} defs={defs} parent={parent} />
+        </Foldable>
+      ) : (
+        <ObjectSchema schema={schema} defs={defs} parent={parent} />
       );
     }
     return null;
   }
 
+  // Array
   if (schema.type === 'array' && schema.items) {
     const newParent = `${parent}[]`;
 
-    const items = schema.items as JSONSchema7;
+    const items = resolveSchema(schema.items as JSONSchema7, defs);
     const isObject = items.type === 'object';
     const isEmpty =
       items.type === 'object' && (!items.properties || Object.keys(items.properties).length === 0);
+    const isEnum = items.oneOf != undefined;
 
     if (isObject && !isEmpty) {
-      return (
-        <div className='mt-1 px-4'>
-          {isFoldable ? (
-            <Foldable>
-              <JsonSchemaPreview schema={items} defs={defs} parent={newParent} />
-            </Foldable>
-          ) : (
-            <JsonSchemaPreview schema={items} defs={defs} parent={newParent} />
-          )}
-        </div>
+      return isFoldable ? (
+        <Foldable
+          title={isEnum ? 'Show possible variants' : undefined}
+          closeTitle={isEnum ? 'Hide possible variants' : undefined}>
+          <Schema schema={items} defs={defs} parent={newParent} foldable={false} />
+        </Foldable>
+      ) : (
+        <Schema schema={items} defs={defs} parent={newParent} />
       );
     }
     return null;
   }
 
-  if (schema.enum) {
-    let inner = (
-      <ul className='space-y-4 rounded-md'>
-        {schema.enum.map((item, index) => {
-          return (
-            <li key={index} className='my-4'>
-              <TypeLabel type={item} />
-            </li>
-          );
-        })}
-      </ul>
-    );
-    return (
-      <div className='mt-1 px-4'>
-        {isFoldable ? (
-          <Foldable title='Show possible variants' closeTitle='Hide possible variants'>
-            {inner}
-          </Foldable>
-        ) : (
-          inner
-        )}
-      </div>
-    );
-  }
-
-  return <JsonSchemaPreview schema={schema} defs={defs} parent={parent} />;
+  return null;
 }
 
-function ObjectSchemaItem({ children }) {
+interface ObjectSchemaItemProps {
+  className?: string;
+  children: ReactElement[];
+}
+
+function ObjectSchemaItem({ children, className }: ObjectSchemaItemProps) {
   return (
-    <li className='min-w-0 overflow-auto whitespace-pre border-b pb-4 last:border-none last:pb-0'>
+    <li
+      className={cn(
+        'min-w-0 overflow-auto whitespace-pre border-b pb-4 last:border-none last:pb-0',
+        className
+      )}>
       {children}
     </li>
   );
@@ -225,21 +236,21 @@ interface PropertyLabelProps {
   parent?: string;
   name: string;
   schema: JSONSchema7;
+  defs: Record<string, JSONSchema7>;
   nullable: boolean;
 }
 
-function PropertyLabel({ parent, name, schema, nullable }: PropertyLabelProps) {
+function PropertyLabel({ parent, name, schema, defs, nullable }: PropertyLabelProps) {
   return (
     <>
-      <div className='scrollbar-hide flex items-center gap-1 overflow-auto px-4'>
+      <div className='scrollbar-hide flex items-center gap-1 overflow-auto'>
         <code className='text-foreground/90'>
           {parent ? <>{parent}.</> : null}
           <span className='font-bold text-foreground'>{name}</span>
         </code>
-        <div className='text-xs opacity-20'>{getPropertyTypeLabel(schema, nullable)}</div>
+        <div className='text-xs opacity-20'>{getPropertyTypeLabel(schema, defs, nullable)}</div>
       </div>
-
-      <div className='text-wrap px-4 text-sm text-muted-foreground'>
+      <div className='prose text-wrap text-sm text-muted-foreground'>
         <Markdown>{schema.description || ''}</Markdown>
       </div>
     </>
@@ -254,17 +265,21 @@ interface TypeLabelProps {
 function TypeLabel({ type, description }: TypeLabelProps) {
   return (
     <>
-      <div className='scrollbar-hide flex items-center gap-1 overflow-auto px-4'>
+      <div className='scrollbar-hide flex items-center gap-1 overflow-auto'>
         <code className='font-bold text-foreground'>{getTypeLabel(type)}</code>
       </div>
 
-      <div className='prose text-wrap px-4 text-sm text-muted-foreground'>
+      <div className='prose text-wrap text-sm text-muted-foreground'>
         <Markdown>{description || ''}</Markdown>
       </div>
     </>
   );
 }
-function getPropertyTypeLabel(schema: JSONSchema7, nullable: boolean = false) {
+function getPropertyTypeLabel(
+  schema: JSONSchema7,
+  defs: Record<string, JSONSchema7>,
+  nullable: boolean = false
+) {
   let s: string[] = [];
 
   if (nullable) {
@@ -272,7 +287,7 @@ function getPropertyTypeLabel(schema: JSONSchema7, nullable: boolean = false) {
   }
 
   if (schema.oneOf) {
-    let type = Array.from(new Set(schema.oneOf.map((s: JSONSchema7) => getPropertyTypeLabel(s))));
+    let type = Array.from(new Set(schema.oneOf.map((s: JSONSchema7) => getPropertyTypeLabel(s, defs))));
     s.push(type.join(', '));
   } else if (schema.type === 'string') {
     s.push('string');
@@ -283,7 +298,7 @@ function getPropertyTypeLabel(schema: JSONSchema7, nullable: boolean = false) {
   } else if (schema.type === 'boolean') {
     s.push('boolean');
   } else if (schema.type === 'array') {
-    s.push(`array of ${getPropertyTypeLabel(schema.items as JSONSchema7)}s`);
+    s.push(`array of ${getPropertyTypeLabel(resolveSchema(schema.items as JSONSchema7, defs), defs)}s`);
   } else if (schema.type === 'object') {
     if (schema.additionalProperties) {
       s.push('map');

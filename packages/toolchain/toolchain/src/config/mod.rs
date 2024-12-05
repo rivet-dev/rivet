@@ -1,11 +1,13 @@
-use anyhow::*;
-use serde::{Deserialize, Serialize};
 use std::{
 	collections::HashMap,
 	ops::Deref,
 	path::{Path, PathBuf},
 	sync::Arc,
 };
+
+use anyhow::*;
+use serde::{Deserialize, Serialize};
+use schemars::JsonSchema;
 
 pub mod build;
 
@@ -52,7 +54,7 @@ impl Deref for Config {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Root {
 	pub builds: Vec<Build>,
@@ -66,7 +68,7 @@ impl Root {
 }
 
 // TODO: Add back `deny_unknown_fields` after https://github.com/serde-rs/serde/issues/1600
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct Build {
 	pub tags: HashMap<String, String>,
@@ -74,14 +76,14 @@ pub struct Build {
 	pub runtime: build::Runtime,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Unstable {
 	#[serde(default)]
 	pub manager: ManagerUnstable,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ManagerUnstable {
 	pub enable: Option<bool>

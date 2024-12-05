@@ -1,9 +1,11 @@
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+use serde::{Deserialize, Serialize};
+use schemars::JsonSchema;
 
 use super::Compression;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Build {
 	/// Existing image tag to upload.
@@ -32,7 +34,7 @@ impl Build {
 	}
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Unstable {
 	pub allow_root: Option<bool>,
@@ -55,7 +57,7 @@ impl Unstable {
 	}
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum BuildMethod {
 	/// Use the native Docker build command. Only used if Buildx is not available.
@@ -65,7 +67,7 @@ pub enum BuildMethod {
 	Native,
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, strum::AsRefStr)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, strum::AsRefStr, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum BundleKind {
 	/// Legacy option. Docker image archive output from `docker save`. Slower lobby start

@@ -24,8 +24,7 @@ actor servers to provide bridged port access to any ports chosen by the user. It
 maps a randomly chosen port number on the host machine to the chosen port number
 by you.
 
-
-For isolates, Rivet restricts what ports an isolate can listen on.
+Bridge networking is currently not implemented for isolates.
 
 ### Host
 
@@ -36,8 +35,10 @@ choose a specific port number. Port numbers will be randomly chosen for you for 
 port number in your application, there are environment variables provided with the port name and number
 (ex. `PORT_MY_PORT=24020`).
 
-Actors in host networking have no protection on what ports they can listen on
+Containers with host networking have no restriction on what ports they can listen on
 and connect to. This is less secure than using bridge networking.
+
+For isolates, Rivet restricts what ports an isolate can listen on.
 
 Host networking is sometimes required for edge cases where actors need an
 unrestricted amount of ports. It's up to the developer to ensure that multiple
@@ -70,8 +71,6 @@ It recommended to use Rivet Guard whenever possible for production applications
 to better protect from DDoS attacks & improve monitoring of your application.
 
 If using host ports, read about differences in behavior with [actor rescheduling](/docs/actor-internals/rescheduling).
-
-Host routing must use the host network mode.
 
 ## Routing Diagram
 
