@@ -7,7 +7,7 @@ import { Lock } from "@core/asyncutil/lock";
 import { ActorConfig, mergeActorConfig } from "./config.ts";
 import onChange from "on-change";
 import { Connection } from "./connection.ts";
-import { Context } from "./context.ts";
+import { Rpc } from "./rpc.ts";
 import * as wsToClient from "../../protocol/src/ws/to_client.ts";
 import * as wsToServer from "../../protocol/src/ws/to_server.ts";
 import { MAX_CONN_PARAMS_SIZE } from "../../common/src/network.ts";
@@ -53,7 +53,7 @@ function isJsonSerializable(value: unknown): boolean {
 	return false;
 }
 
-export interface PrepareConnectionOpts<ConnParams> {
+export interface OnBeforeConnectOpts<ConnParams> {
 	request: Request;
 	parameters: ConnParams;
 }
@@ -94,12 +94,14 @@ export abstract class Actor<
 		return this.#connections;
 	}
 
-	protected _createState?(): State | Promise<State>;
+	protected _onInitialize?(): State | Promise<State>;
 
 	protected _onStart?(): void | Promise<void>;
 
-	protected _prepareConnection?(
-		opts: PrepareConnectionOpts<ConnParams>,
+	protected _onStateChange?(newState: State): void | Promise<void>;
+
+	protected _onBeforeConnect?(
+		opts: OnBeforeConnectOpts<ConnParams>,
 	): ConnState | Promise<ConnState>;
 
 	protected _onConnect?(
@@ -109,8 +111,6 @@ export abstract class Actor<
 	protected _onDisconnect?(
 		connection: Connection<this>,
 	): void | Promise<void>;
-
-	protected _onStateChange?(newState: State): void | Promise<void>;
 
 	// This is called by Rivet when the actor is exported as the default
 	// property
@@ -147,7 +147,7 @@ export abstract class Actor<
 	}
 
 	get #stateEnabled() {
-		return typeof this._createState == "function";
+		return typeof this._onInitialize == "function";
 	}
 
 	#validateStateEnabled() {
@@ -159,7 +159,7 @@ export abstract class Actor<
 	}
 
 	get #connectionStateEnabled() {
-		return typeof this._prepareConnection == "function";
+		return typeof this._onBeforeConnect == "function";
 	}
 
 	/** Updates the state and creates a new proxy. */
@@ -217,7 +217,7 @@ export abstract class Actor<
 			console.log("State not enabled");
 			return;
 		}
-		assertExists(this._createState);
+		assertExists(this._onInitialize);
 
 		// Read initial state
 		const getStateBatch = await this.#ctx.kv.getBatch([
@@ -230,7 +230,7 @@ export abstract class Actor<
 		if (!initialized) {
 			// Initialize
 			console.log("initializing");
-			const stateOrPromise = await this._createState();
+			const stateOrPromise = await this._onInitialize();
 
 			let stateData: State;
 			if (stateOrPromise instanceof Promise) {
@@ -377,8 +377,8 @@ export abstract class Actor<
 		// Authenticate connection
 		let state: ConnState | undefined = undefined;
 		const PREAPRE_CONNECT_TIMEOUT = 5000; // 5 seconds
-		if (this._prepareConnection) {
-			const dataOrPromise = this._prepareConnection({
+		if (this._onBeforeConnect) {
+			const dataOrPromise = this._onBeforeConnect({
 				request: c.req.raw,
 				parameters: params,
 			});
@@ -394,7 +394,7 @@ export abstract class Actor<
 			onOpen: (_evt, ws) => {
 				// Create connection
 				//
-				// If `prepareConnection` is not defined and `state` is
+				// If `_onBeforeConnect` is not defined and `state` is
 				// undefined, there will be a runtime error when attempting to
 				// read it
 				this.#connectionIdCounter += 1;
@@ -434,7 +434,7 @@ export abstract class Actor<
 						const { id, name, args = [] } = message.body.rpcRequest;
 						rpcRequestId = id;
 
-						const ctx = new Context<this>(conn);
+						const ctx = new Rpc<this>(conn);
 						const output = await this.#executeRpc(ctx, name, args);
 
 						ws.send(
@@ -522,7 +522,7 @@ export abstract class Actor<
 	}
 
 	async #executeRpc(
-		ctx: Context<this>,
+		ctx: Rpc<this>,
 		rpcName: string,
 		args: unknown[],
 	): Promise<unknown> {

@@ -8,24 +8,36 @@ export interface WithTagsOpts {
 	create?: CreateRequest;
 }
 
-/** RPC function returned by the actor proxy. This will call `ActorHandle.rpc`
- * when triggered. */
-export type ActorRPCFunction<
-	Args extends Array<unknown> = unknown[],
-	Response = unknown,
-> = (...args: Args) => Promise<Response>;
-
-/** Proxied wrapper of `RawActorHandle` that allows calling RPC functions
- * implicitly. */
+/**
+ * Proxied wrapper of `RawActorHandle` that allows calling RPC functions
+ * implicitly.
+ *
+ * Private methods (e.g. those starting with `_`) are automatically excluded.
+ */
 export type ActorHandle<A = unknown> =
 	& ActorHandleRaw
 	& {
-		[K in keyof A]: A[K] extends (...args: infer Args) => infer Return
-			? (...args: Args) => Promise<Return>
+		[
+			K in keyof A as K extends string ? K extends `_${string}` ? never : K
+				: K
+		]: A[K] extends (...args: infer Args) => infer Return
+			? ActorRPCFunction<Args, Return>
 			: never;
 	};
 
-export class ActorClient {
+/**
+ * RPC function returned by the actor proxy. This will call `ActorHandle.rpc`
+ * when triggered.
+ */
+export type ActorRPCFunction<
+	Args extends Array<unknown> = unknown[],
+	Response = unknown,
+> = (
+	// Remove the first parameter, since that's `Context<...>`
+	...args: Args extends [unknown, ...infer Rest] ? Rest : Args
+) => Promise<Response>;
+
+export class Client {
 	constructor(private readonly managerEndpoint: string) {}
 
 	async withTags<A = unknown>(

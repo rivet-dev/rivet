@@ -145,10 +145,7 @@ pub async fn deploy(
 					),
 				])),
 			})),
-			resources: Some(Box::new(models::ActorResources {
-				cpu: 100,
-				memory: 100,
-			})),
+			resources: None,
 			lifecycle: Some(Box::new(models::ActorLifecycle {
 				durable: Some(true),
 				kill_timeout: None,

@@ -119,10 +119,9 @@ interface ConnectionParams {
 }
 
 class JWTAuthenticatedActor extends Actor<State, ConnectionData, ConnectionParams> {
-  async onConnect(
-    connection: Connection<ConnectionData>,
-    params: ConnectionParams
-  ): Promise<ConnectionData> {
+  async _onBeforeConnect(
+    opts: ConnectOpts<this>
+  ): Promise<ConnectionState> {
     try {
       // Verify JWT token
       const decoded = jwt.verify(params.jwt, JWT_SECRET);
@@ -135,5 +134,7 @@ class JWTAuthenticatedActor extends Actor<State, ConnectionData, ConnectionParam
       throw new Error("Invalid JWT token");
     }
   }
+
+  async _onConnect(conn: Connection<this>)
 }
 ```

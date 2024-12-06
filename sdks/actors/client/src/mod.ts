@@ -1,3 +1,3 @@
-export { ActorClient } from "./client.ts";
+export { Client } from "./client.ts";
 export type { ActorHandle } from "./client.ts";
 

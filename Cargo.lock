@@ -9075,6 +9075,7 @@ dependencies = [
  "anyhow",
  "pegboard-config",
  "rivet-config",
+ "rivet-toolchain",
  "schemars",
  "serde_json",
 ]
@@ -9236,6 +9237,7 @@ dependencies = [
  "rivet-actors-sdk-embed",
  "rivet-api",
  "rivet-js-utils-embed",
+ "schemars",
  "serde",
  "serde_json",
  "sha1",

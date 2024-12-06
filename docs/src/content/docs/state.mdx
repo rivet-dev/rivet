@@ -39,7 +39,7 @@ interface State {
 }
 
 class Counter extends Actor<State> {
-    initializeState() {
+    _onInitialize() {
         return { count: 0 };
     }
 }

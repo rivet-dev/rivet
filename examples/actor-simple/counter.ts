@@ -1,5 +1,4 @@
-import { PrepareConnectionOpts } from "../../sdks/actors/runtime/src/actor.ts";
-import { Actor, Context } from "../../sdks/actors/runtime/src/mod.ts";
+import { Actor, Rpc, Connection, OnBeforeConnectOpts } from "../../sdks/actors/runtime/src/mod.ts";
 
 interface State {
     count: number;
@@ -13,27 +12,40 @@ interface ConnParams {
 	mod: number;
 }
 
-export default class Counter extends Actor<State, ConnParams, ConnState>  {
-	protected override _prepareConnection(opts: PrepareConnectionOpts<ConnParams>): ConnState {
-		return { mod: opts.parameters.mod ?? 1 };
+export default class Counter extends Actor<State, ConnParams | undefined, ConnState>  {
+	//override _onConnect(opts: PrepareConnectionOpts<ConnParams>): ConnState {
+	//	console.log('parameters', opts.parameters);
+	//	return { mod: opts.parameters?.mod ?? 1 };
+	//}
+
+    override _onInitialize(): State {
+        return { count: 0 };
+    }
+
+	override _onConnect(opts: OnBeforeConnectOpts<ConnParams>): ConnState {
+		//if (!await authenticate(opts.params.token)) throw new Error("unauthenticated");
+		console.log('parameters', opts.parameters);
+		return { mod: opts.parameters?.mod ?? 1 };
 	}
 
-	protected override _onStateChange(newState: State): void | Promise<void> {
+	override _onConnectionReady(_conn: Connection<this>) {
+		// ...
+	}
+
+	override _onStateChange(newState: State): void | Promise<void> {
 		this._broadcast("broadcastCount", newState.count);
 
 		for (const conn of this.connections.values()) {
 			console.log('checking mod', conn.id, conn.state);
-			if (newState.count % conn.state!.mod == 0) {
+			console.log('state', conn.state);
+			if (newState.count % conn.state.mod == 0) {
 				conn.send("directCount", newState.count);
 			}
 		}
 	}
 
-    override _createState(): State {
-        return { count: 0 };
-    }
 
-    increment(c: Context<Counter>, count: number): number {
+    increment(_rpc: Rpc<Counter>, count: number): number {
         this.state.count += count;
         return this.state.count;
     }

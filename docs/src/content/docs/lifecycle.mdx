@@ -52,21 +52,27 @@ interface ConnectionParams {
 }
 
 class CounterActor extends Actor<State, ConnectionData, ConnectionParams> {
-  async initializeState(): Promise<State> {
+  async _onInitialize(): Promise<State> {
     // Initialize with a count of 0
     return {
       count: 0,
     };
   }
 
-  async onStart(): Promise<void> {
+  async _onStart(): Promise<void> {
     // Upgrade state if needed
     console.log("Started");
   }
 
-  async onConnect(
-    connection: Connection<ConnectionData>,
-    params: ConnectionParams
+  async _onStateChange(newState: State): Promise<void> {
+    // Broadcast the new count to all connected clients
+    this.broadcast("countUpdated", {
+      count: newState.count,
+    });
+  }
+
+  async _onBeforeConnect(
+    opts: ConnectionParams
   ): Promise<ConnectionData> {
     // Validate auth token and determine user permissions
     if (!await validateAuthToken(params.authToken)) {
@@ -79,15 +85,8 @@ class CounterActor extends Actor<State, ConnectionData, ConnectionParams> {
     };
   }
 
-  async onDisconnect(connection: Connection<ConnectionData>): Promise<void> {
+  async _onDisconnect(connection: Connection<ConnectionData>): Promise<void> {
     console.log(`User ${connection.data.userId} disconnected`);
-  }
-
-  async onStateChange(newState: State): Promise<void> {
-    // Broadcast the new count to all connected clients
-    this.broadcast("countUpdated", {
-      count: newState.count,
-    });
   }
 
   // Actor methods
