@@ -562,7 +562,7 @@ pub async fn upgrade_all(
 			.try_collect::<Vec<_>>()
 			.await?;
 
-		if count % 10_000 != 0 {
+		if count < 10_000 {
 			break;
 		}
 	}
@@ -616,6 +616,8 @@ async fn list_actors_inner(
 			tags,
 			include_destroyed,
 			cursor: query.cursor,
+			// HACK: Until we have webhooks, there needs to be a good way to get all of the most
+			// recent crashed actors. 10k is a high limit intentionally.
 			limit: if include_destroyed { 64 } else { 10_000 },
 		})
 		.await?;

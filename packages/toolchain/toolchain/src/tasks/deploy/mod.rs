@@ -278,6 +278,20 @@ async fn build_and_upload(
 		complete_res.context("complete_res")?;
 	}
 
+	// Upgrade actors
+	task.log(format!("[Upgrading Actors]"));
+	apis::actor_api::actor_upgrade_all(
+		&ctx.openapi_config_cloud,
+		models::ActorUpgradeAllActorsRequest {
+			tags: Some(serde_json::to_value(build.tags.clone())?),
+			build: Some(build_id),
+			build_tags: None,
+		},
+		Some(&ctx.project.name_id),
+		Some(&env.slug),
+	)
+	.await?;
+
 	task.log(format!("[Build Finished] {build_id}"));
 	task.log("");
 
