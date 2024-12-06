@@ -6,8 +6,6 @@ use crate::{
 	config, paths, project::environment::TEMPEnvironment, toolchain_ctx::ToolchainCtx, util::task,
 };
 
-const HTTP_PORT: &str = "http";
-
 pub struct DeployOpts {
 	pub env: TEMPEnvironment,
 	pub version_name: String,
@@ -133,7 +131,7 @@ pub async fn deploy(
 				ports: Some(HashMap::from([
 					// TODO(RVT-4263):
 					(
-						HTTP_PORT.to_string(),
+						crate::util::actor_manager::HTTP_PORT.to_string(),
 						models::ActorCreateActorPortRequest {
 							protocol: models::ActorPortProtocol::Tcp,
 							internal_port: None,
@@ -166,7 +164,7 @@ pub async fn deploy(
 	let http_port = actor
 		.network
 		.ports
-		.get(HTTP_PORT)
+		.get(crate::util::actor_manager::HTTP_PORT)
 		.context("missing http port")?;
 	let protocol = match http_port.protocol {
 		models::ActorPortProtocol::Http | models::ActorPortProtocol::Tcp => "http",

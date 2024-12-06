@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod manager;
 pub mod deploy;
 pub mod env;
 pub mod get_bootstrap_data;

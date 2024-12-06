@@ -1,4 +1,5 @@
 pub mod api;
+pub mod actor_manager;
 pub mod build;
 pub mod cmd;
 pub mod docker;

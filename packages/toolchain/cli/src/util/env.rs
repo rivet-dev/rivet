@@ -8,6 +8,8 @@ use uuid::Uuid;
 use crate::util::task::{run_task, TaskOutputStyle};
 
 /// Select an environment or use the provided env.
+///
+/// Returns the env's slug.
 pub async fn get_or_select(
 	ctx: &toolchain::ToolchainCtx,
 	slug: Option<impl ToString>,
