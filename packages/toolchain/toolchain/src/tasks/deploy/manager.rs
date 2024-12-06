@@ -108,11 +108,13 @@ pub async fn deploy(
 		};
 
 		// Issue service token
-		let service_token = apis::games_environments_tokens_api::games_environments_tokens_create_service_token(
-			&ctx.openapi_config_cloud,
-			&ctx.project.game_id.to_string(),
-			&opts.env.id.to_string()
-		).await?;
+		let service_token =
+			apis::games_environments_tokens_api::games_environments_tokens_create_service_token(
+				&ctx.openapi_config_cloud,
+				&ctx.project.game_id.to_string(),
+				&opts.env.id.to_string(),
+			)
+			.await?;
 
 		// TODO(RVT-4263): Auto-determine TCP or HTTP networking
 		// Get or create actor
@@ -122,9 +124,10 @@ pub async fn deploy(
 			build: Some(build_id),
 			build_tags: None,
 			runtime: Some(Box::new(models::ActorCreateActorRuntimeRequest {
-				environment: Some(HashMap::from([
-					("RIVET_SERVICE_TOKEN".to_string(), service_token.token),
-				]))
+				environment: Some(HashMap::from([(
+					"RIVET_SERVICE_TOKEN".to_string(),
+					service_token.token,
+				)])),
 			})),
 			network: Some(Box::new(models::ActorCreateActorNetworkRequest {
 				mode: Some(models::ActorNetworkMode::Host),
@@ -160,28 +163,7 @@ pub async fn deploy(
 		*response.actor
 	};
 
-	// Get endpoitn
-	let http_port = actor
-		.network
-		.ports
-		.get(crate::util::actor_manager::HTTP_PORT)
-		.context("missing http port")?;
-	let protocol = match http_port.protocol {
-		models::ActorPortProtocol::Http | models::ActorPortProtocol::Tcp => "http",
-		models::ActorPortProtocol::Https => "https",
-		models::ActorPortProtocol::TcpTls | models::ActorPortProtocol::Udp => {
-			bail!("unsupported protocol")
-		}
-	};
-	let public_hostname = http_port
-		.public_hostname
-		.as_ref()
-		.context("missing public_hostname")?;
-	let public_port = http_port
-		.public_port
-		.as_ref()
-		.context("missing public_port")?;
-	let endpoint = format!("{protocol}://{public_hostname}:{public_port}");
+	let endpoint = crate::util::actor_manager::extract_endpoint(&actor)?;
 
 	Ok(DeployOutput { endpoint })
 }

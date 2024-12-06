@@ -1,9 +1,8 @@
 use anyhow::*;
+use rivet_api::apis;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use rivet_api::{apis, models};
 
-use crate::{meta, paths, util::task};
+use crate::util::task;
 
 #[derive(Deserialize)]
 pub struct Input {
@@ -47,28 +46,7 @@ impl task::Task for Task {
 			bail!("manager actor does not exist")
 		};
 
-		// Get endpoint
-		let http_port = actor
-			.network
-			.ports
-			.get(crate::util::actor_manager::HTTP_PORT)
-			.context("missing http port")?;
-		let protocol = match http_port.protocol {
-			models::ActorPortProtocol::Http | models::ActorPortProtocol::Tcp => "http",
-			models::ActorPortProtocol::Https => "https",
-			models::ActorPortProtocol::TcpTls | models::ActorPortProtocol::Udp => {
-				bail!("unsupported protocol")
-			}
-		};
-		let public_hostname = http_port
-			.public_hostname
-			.as_ref()
-			.context("missing public_hostname")?;
-		let public_port = http_port
-			.public_port
-			.as_ref()
-			.context("missing public_port")?;
-		let endpoint = format!("{protocol}://{public_hostname}:{public_port}");
+		let endpoint = crate::util::actor_manager::extract_endpoint(&actor)?;
 
 		Ok(Output { endpoint })
 	}

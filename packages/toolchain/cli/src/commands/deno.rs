@@ -1,9 +1,6 @@
 use anyhow::*;
 use clap::Parser;
-use inquire::validator::Validation;
 use serde::Serialize;
-use std::{fmt, result::Result as StdResult};
-use tokio::fs;
 use toolchain::errors;
 
 #[derive(Parser, Serialize)]
@@ -18,16 +15,18 @@ pub struct Opts {
 impl Opts {
 	pub async fn execute(&self) -> Result<()> {
 		let deno = deno_embed::get_executable(&toolchain::paths::data_dir()?).await?;
-		let mut cmd = tokio::process::Command::new(&deno.executable_path)
-			.args(&self.args)
+
+		let mut cmd = tokio::process::Command::new(&deno.executable_path);
+		cmd.args(&self.args)
 			.stdin(std::process::Stdio::inherit())
 			.stdout(std::process::Stdio::inherit())
-			.stderr(std::process::Stdio::inherit())
-			.spawn()
-			.context("Failed to spawn deno process")?;
-
+			.stderr(std::process::Stdio::inherit());
+		if let Result::Ok(path) = std::env::current_exe() {
+			let final_path = std::fs::canonicalize(&path).unwrap_or(path);
+			cmd.env("RIVET_CLI_PATH", final_path);
+		}
 		let status = cmd
-			.wait()
+			.status()
 			.await
 			.context("Failed to wait for deno process")?;
 

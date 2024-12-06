@@ -1,9 +1,9 @@
 import { Client, ActorHandle } from "../../sdks/actors/client/src/mod.ts"
+import { readEndpointFromCli } from "../../sdks/actors/client/src/dev.ts"
 import type Counter from "./counter.ts";
 
 async function main() {
-	const endpoint = Deno.env.get("MANAGER_ENDPOINT");
-	if (!endpoint) throw new Error("Missing MANAGER_ENDPOINT");
+	const endpoint = await readEndpointFromCli();
 	const actorClient = new Client(endpoint);
 
 
