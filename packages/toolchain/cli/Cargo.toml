@@ -30,6 +30,7 @@ sentry = { version = "0.34.0", features = ["anyhow"] }
 sysinfo = "0.32.0"
 ctrlc = "3.4.5"
 async-posthog.workspace = true
+deno-embed.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.27", default-features = false, features = ["user", "signal"] }

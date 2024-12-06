@@ -1,3 +1,5 @@
+use std::process::ExitCode;
+
 /// This error type will exit without printing anything.
 ///
 /// This should be used for errors where the error was already printed and the program should exit
@@ -67,3 +69,36 @@ impl std::fmt::Display for UserError {
 }
 
 impl std::error::Error for UserError {}
+
+/// This error type will exit with the given exit code without printing anything.
+///
+/// This should only be used for passthrough commands.
+pub struct PassthroughExitCode {
+	exit_code: ExitCode,
+}
+
+impl PassthroughExitCode {
+	pub fn new(exit_code: ExitCode) -> Self {
+		Self { exit_code }
+	}
+
+	pub fn exit_code(&self) -> ExitCode {
+		self.exit_code
+	}
+}
+
+impl std::fmt::Debug for PassthroughExitCode {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("GracefulExit")
+			.field("exit_code", &self.exit_code)
+			.finish()
+	}
+}
+
+impl std::fmt::Display for PassthroughExitCode {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "GracefulExit occurred")
+	}
+}
+
+impl std::error::Error for PassthroughExitCode {}

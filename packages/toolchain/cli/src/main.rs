@@ -62,6 +62,8 @@ async fn main_async() -> ExitCode {
 			// TODO(TOOL-438): Catch 400 API errors as user errors
 			if err.is::<errors::GracefulExit>() || err.is::<errors::CtrlC>() {
 				// Don't print anything, already handled
+			} else if let Some(err) = err.downcast_ref::<errors::PassthroughExitCode>() {
+				return err.exit_code();
 			} else if let Some(err) = err.downcast_ref::<errors::UserError>() {
 				// Don't report error since this is a user error
 				eprintln!("\n{err}");

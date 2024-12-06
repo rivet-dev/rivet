@@ -1,5 +1,6 @@
 pub mod actor;
 pub mod build;
+pub mod deno;
 pub mod manager;
 pub mod deploy;
 pub mod environment;
@@ -49,6 +50,7 @@ pub enum SubCommand {
 		#[clap(subcommand)]
 		subcommand: metadata::SubCommand,
 	},
+	Deno(deno::Opts),
 }
 
 impl SubCommand {
@@ -64,6 +66,7 @@ impl SubCommand {
 			SubCommand::Region { subcommand } => subcommand.execute().await,
 			SubCommand::Manager { subcommand } => subcommand.execute().await,
 			SubCommand::Metadata { subcommand } => subcommand.execute().await,
+			SubCommand::Deno(opts) => opts.execute().await,
 		}
 	}
 }
