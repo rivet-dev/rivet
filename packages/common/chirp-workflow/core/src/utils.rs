@@ -50,12 +50,11 @@ pub mod time {
 	impl TsToMillis for Instant {
 		fn to_millis(self) -> GlobalResult<i64> {
 			let now_instant = Instant::now();
-			let now_system_time = SystemTime::now();
 
 			let system_time = if self >= now_instant {
-				now_system_time.checked_add(self.duration_since(now_instant))
+				SystemTime::now().checked_add(self.duration_since(now_instant))
 			} else {
-				now_system_time.checked_sub(now_instant.duration_since(self))
+				SystemTime::now().checked_sub(now_instant.duration_since(self))
 			};
 
 			let ms = unwrap!(system_time, "invalid timestamp")
@@ -64,6 +63,12 @@ pub mod time {
 				.try_into()?;
 
 			Ok(ms)
+		}
+	}
+
+	impl TsToMillis for tokio::time::Instant {
+		fn to_millis(self) -> GlobalResult<i64> {
+			self.into_std().to_millis()
 		}
 	}
 

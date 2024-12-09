@@ -542,7 +542,7 @@ struct GetServerMetaInput {
 	image_id: Uuid,
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Clone, Debug, Serialize, Deserialize, Hash)]
 struct GetServerMetaOutput {
 	project_id: Uuid,
 	project_slug: String,
@@ -582,7 +582,8 @@ async fn get_server_meta(
 	let project_id = unwrap!(env.game_id).as_uuid();
 	let projects_res = op!([ctx] game_get {
 		game_ids: vec![project_id.into()],
-	}).await?;
+	})
+	.await?;
 	let project = unwrap!(projects_res.games.first());
 
 	Ok(GetServerMetaOutput {
@@ -644,6 +645,37 @@ async fn update_image(ctx: &ActivityCtx, input: &UpdateImageInput) -> GlobalResu
 	.await?;
 
 	Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct UpdateRescheduleRetryInput {
+	server_id: Uuid,
+	reset: bool,
+}
+
+#[activity(UpdateRescheduleRetry)]
+async fn update_reschedule_retry(
+	ctx: &ActivityCtx,
+	input: &UpdateRescheduleRetryInput,
+) -> GlobalResult<i64> {
+	let (retry_count,) = sql_fetch_one!(
+		[ctx, (i64,)]
+		"
+		UPDATE db_ds.servers
+		SET
+			reschedule_retry_count = COALESCE($2, reschedule_retry_count + 1),
+			last_reschedule_retry_ts = COALESCE($3, last_reschedule_retry_ts)
+		WHERE server_id = $1
+		-- Return value before update
+		RETURNING reschedule_retry_count - 1
+		",
+		input.server_id,
+		input.reset.then_some(0),
+		(!input.reset).then(util::timestamp::now),
+	)
+	.await?;
+
+	Ok(retry_count)
 }
 
 #[message("ds_server_create_complete")]
