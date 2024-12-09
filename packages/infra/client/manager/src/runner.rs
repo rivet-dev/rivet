@@ -59,6 +59,8 @@ impl Handle {
 		match &self.comms {
 			Comms::Basic => bail!("attempt to attach socket to basic runner"),
 			Comms::Socket(tx) => {
+				tracing::info!(pid=?self.pid, "attaching socket");
+
 				let mut guard = tx.lock().await;
 
 				if guard.is_some() {
@@ -103,6 +105,8 @@ impl Handle {
 						}
 					}
 				});
+
+				tracing::info!(pid=?self.pid, "socket attached");
 			}
 		}
 

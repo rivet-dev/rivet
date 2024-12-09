@@ -196,6 +196,8 @@ impl Ctx {
 					Ok((stream, _)) => {
 						let mut socket = tokio_tungstenite::accept_async(stream).await?;
 
+						tracing::info!("received new socket");
+
 						if let Some(runner) = &*self2.isolate_runner.read().await {
 							runner.attach_socket(socket).await?;
 						} else {
@@ -609,7 +611,7 @@ impl Ctx {
 		if let Some(isolate_runner_pid) = isolate_runner_pid {
 			let mut guard = self.isolate_runner.write().await;
 
-			tracing::info!(?isolate_runner_pid, "found old isolate runner");
+			tracing::info!(?isolate_runner_pid, "found existing isolate runner");
 
 			let runner = runner::Handle::from_pid(
 				runner::Comms::socket(),
