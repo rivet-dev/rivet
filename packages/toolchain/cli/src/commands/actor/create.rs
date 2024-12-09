@@ -3,9 +3,8 @@ use clap::{Parser, ValueEnum};
 use serde::Deserialize;
 use std::collections::HashMap;
 use toolchain::{
-	build,
+	build, errors,
 	rivet_api::{apis, models},
-	errors,
 };
 use uuid::Uuid;
 

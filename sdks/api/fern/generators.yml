@@ -17,7 +17,7 @@ groups:
           path: ../runtime/typescript/src
         config:
           outputSourceFiles: true
-          namespaceExport: RivetClient
+          namespaceExport: Rivet
           defaultTimeoutInSeconds: 180
           skipResponseValidation: true
           allowCustomFetcher: true
@@ -41,7 +41,7 @@ groups:
           path: ../full/typescript/src
         config:
           outputSourceFiles: true
-          namespaceExport: RivetClient
+          namespaceExport: Rivet
           defaultTimeoutInSeconds: 180
           skipResponseValidation: true
           allowCustomFetcher: true

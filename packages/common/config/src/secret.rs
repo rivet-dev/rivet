@@ -1,6 +1,6 @@
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use schemars::JsonSchema;
 
 /// Wraps a given value in a container that does not implement `Debug` or `Display` in order to
 /// prevent accidentally logging the inner secret.

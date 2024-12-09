@@ -1,6 +1,6 @@
 use global_error::prelude::*;
-use serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
 pub mod server;
 

@@ -3,12 +3,12 @@
  */
 
 import * as serializers from "../../../../index";
-import * as RivetClient from "../../../../../api/index";
+import * as Rivet from "../../../../../api/index";
 import * as core from "../../../../../core";
 
 export const PrepareAvatarUploadRequest: core.serialization.Schema<
     serializers.identity.PrepareAvatarUploadRequest.Raw,
-    RivetClient.identity.PrepareAvatarUploadRequest
+    Rivet.identity.PrepareAvatarUploadRequest
 > = core.serialization.object({
     path: core.serialization.string(),
     mime: core.serialization.string(),

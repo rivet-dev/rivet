@@ -9,7 +9,7 @@ import { Servers } from "../resources/servers/client/Client";
 
 export declare namespace Provision {
     interface Options {
-        environment?: core.Supplier<environments.RivetClientEnvironment | string>;
+        environment?: core.Supplier<environments.RivetEnvironment | string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         fetcher?: core.FetchFunction;
     }

@@ -3,7 +3,7 @@
  */
 
 import * as serializers from "../../../../index";
-import * as RivetClient from "../../../../../api/index";
+import * as Rivet from "../../../../../api/index";
 import * as core from "../../../../../core";
 import { DisplayName } from "../../../common/types/DisplayName";
 import { AccountNumber } from "../../../common/types/AccountNumber";
@@ -11,7 +11,7 @@ import { Bio } from "../../../common/types/Bio";
 
 export const ValidateProfileRequest: core.serialization.Schema<
     serializers.identity.ValidateProfileRequest.Raw,
-    RivetClient.identity.ValidateProfileRequest
+    Rivet.identity.ValidateProfileRequest
 > = core.serialization.object({
     displayName: core.serialization.property("display_name", DisplayName.optional()),
     accountNumber: core.serialization.property("account_number", AccountNumber.optional()),

@@ -1,7 +1,7 @@
 use anyhow::*;
 use futures_util::{StreamExt, TryStreamExt};
 use rivet_api::{apis, models};
-use std::{path::PathBuf, sync::Arc, collections::HashMap};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use tokio::fs;
 use uuid::Uuid;
 

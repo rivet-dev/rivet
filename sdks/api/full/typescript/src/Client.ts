@@ -16,9 +16,9 @@ import { Job } from "./api/resources/job/client/Client";
 import { Matchmaker } from "./api/resources/matchmaker/client/Client";
 import { Portal } from "./api/resources/portal/client/Client";
 
-export declare namespace RivetClientClient {
+export declare namespace RivetClient {
     interface Options {
-        environment?: core.Supplier<environments.RivetClientEnvironment | string>;
+        environment?: core.Supplier<environments.RivetEnvironment | string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         fetcher?: core.FetchFunction;
     }
@@ -33,8 +33,8 @@ export declare namespace RivetClientClient {
     }
 }
 
-export class RivetClientClient {
-    constructor(protected readonly _options: RivetClientClient.Options = {}) {}
+export class RivetClient {
+    constructor(protected readonly _options: RivetClient.Options = {}) {}
 
     protected _actor: Actor | undefined;
 

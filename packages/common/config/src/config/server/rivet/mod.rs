@@ -1,9 +1,9 @@
 use global_error::prelude::*;
 use maplit::hashmap;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, net::IpAddr, path::PathBuf};
 use url::Url;
-use schemars::JsonSchema;
 use uuid::Uuid;
 
 use crate::secret::Secret;

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]

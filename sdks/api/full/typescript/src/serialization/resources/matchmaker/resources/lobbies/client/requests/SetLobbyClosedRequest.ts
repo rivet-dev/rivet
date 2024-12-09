@@ -3,12 +3,12 @@
  */
 
 import * as serializers from "../../../../../../index";
-import * as RivetClient from "../../../../../../../api/index";
+import * as Rivet from "../../../../../../../api/index";
 import * as core from "../../../../../../../core";
 
 export const SetLobbyClosedRequest: core.serialization.Schema<
     serializers.matchmaker.SetLobbyClosedRequest.Raw,
-    RivetClient.matchmaker.SetLobbyClosedRequest
+    Rivet.matchmaker.SetLobbyClosedRequest
 > = core.serialization.object({
     isClosed: core.serialization.property("is_closed", core.serialization.boolean()),
 });

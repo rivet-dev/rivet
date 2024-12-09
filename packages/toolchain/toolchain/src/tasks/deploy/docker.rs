@@ -1,7 +1,7 @@
 use anyhow::*;
+use std::collections::HashMap;
 use std::path::Path;
 use uuid::Uuid;
-use std::collections::HashMap;
 
 use crate::{
 	config, paths,

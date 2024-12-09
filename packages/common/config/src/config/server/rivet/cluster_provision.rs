@@ -1,8 +1,8 @@
 use std::net::Ipv4Addr;
 
 use ipnet::{Ipv4AddrRange, Ipv4Net};
-use serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use url::Url;
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]

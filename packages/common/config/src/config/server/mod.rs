@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use global_error::prelude::*;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use url::Url;
-use schemars::JsonSchema;
 
 use crate::secret::Secret;
 

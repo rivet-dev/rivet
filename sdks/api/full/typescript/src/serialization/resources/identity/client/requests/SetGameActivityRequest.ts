@@ -3,13 +3,13 @@
  */
 
 import * as serializers from "../../../../index";
-import * as RivetClient from "../../../../../api/index";
+import * as Rivet from "../../../../../api/index";
 import * as core from "../../../../../core";
 import { UpdateGameActivity } from "../../resources/common/types/UpdateGameActivity";
 
 export const SetGameActivityRequest: core.serialization.Schema<
     serializers.identity.SetGameActivityRequest.Raw,
-    RivetClient.identity.SetGameActivityRequest
+    Rivet.identity.SetGameActivityRequest
 > = core.serialization.object({
     gameActivity: core.serialization.property("game_activity", UpdateGameActivity),
 });

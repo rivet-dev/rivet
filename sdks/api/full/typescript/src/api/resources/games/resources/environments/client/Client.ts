@@ -8,7 +8,7 @@ import { Tokens } from "../resources/tokens/client/Client";
 
 export declare namespace Environments {
     interface Options {
-        environment?: core.Supplier<environments.RivetClientEnvironment | string>;
+        environment?: core.Supplier<environments.RivetEnvironment | string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         fetcher?: core.FetchFunction;
     }

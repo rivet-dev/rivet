@@ -3,10 +3,10 @@
  */
 
 import * as errors from "../../../../errors/index";
-import * as RivetClient from "../../../index";
+import * as Rivet from "../../../index";
 
-export class BadRequestError extends errors.RivetClientError {
-    constructor(body: RivetClient.ErrorBody) {
+export class BadRequestError extends errors.RivetError {
+    constructor(body: Rivet.ErrorBody) {
         super({
             message: "BadRequestError",
             statusCode: 400,

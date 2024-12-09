@@ -3,10 +3,10 @@
  */
 
 import * as errors from "../../../../errors/index";
-import * as RivetClient from "../../../index";
+import * as Rivet from "../../../index";
 
-export class ForbiddenError extends errors.RivetClientError {
-    constructor(body: RivetClient.ErrorBody) {
+export class ForbiddenError extends errors.RivetError {
+    constructor(body: Rivet.ErrorBody) {
         super({
             message: "ForbiddenError",
             statusCode: 403,

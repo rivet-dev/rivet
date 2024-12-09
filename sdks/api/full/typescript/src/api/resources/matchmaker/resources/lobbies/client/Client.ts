@@ -4,14 +4,14 @@
 
 import * as environments from "../../../../../../environments";
 import * as core from "../../../../../../core";
-import * as RivetClient from "../../../../../index";
+import * as Rivet from "../../../../../index";
 import urlJoin from "url-join";
 import * as errors from "../../../../../../errors/index";
 import * as serializers from "../../../../../../serialization/index";
 
 export declare namespace Lobbies {
     interface Options {
-        environment?: core.Supplier<environments.RivetClientEnvironment | string>;
+        environment?: core.Supplier<environments.RivetEnvironment | string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         fetcher?: core.FetchFunction;
     }
@@ -35,12 +35,12 @@ export class Lobbies {
      *
      * @param {Lobbies.RequestOptions} requestOptions - Request-specific configuration.
      *
-     * @throws {@link RivetClient.InternalError}
-     * @throws {@link RivetClient.RateLimitError}
-     * @throws {@link RivetClient.ForbiddenError}
-     * @throws {@link RivetClient.UnauthorizedError}
-     * @throws {@link RivetClient.NotFoundError}
-     * @throws {@link RivetClient.BadRequestError}
+     * @throws {@link Rivet.InternalError}
+     * @throws {@link Rivet.RateLimitError}
+     * @throws {@link Rivet.ForbiddenError}
+     * @throws {@link Rivet.UnauthorizedError}
+     * @throws {@link Rivet.NotFoundError}
+     * @throws {@link Rivet.BadRequestError}
      *
      * @example
      *     await client.matchmaker.lobbies.ready()
@@ -48,7 +48,7 @@ export class Lobbies {
     public async ready(requestOptions?: Lobbies.RequestOptions): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetClientEnvironment.Production,
+                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
                 "/matchmaker/lobbies/ready"
             ),
             method: "POST",
@@ -71,7 +71,7 @@ export class Lobbies {
         if (_response.error.reason === "status-code") {
             switch (_response.error.statusCode) {
                 case 500:
-                    throw new RivetClient.InternalError(
+                    throw new Rivet.InternalError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -81,7 +81,7 @@ export class Lobbies {
                         })
                     );
                 case 429:
-                    throw new RivetClient.RateLimitError(
+                    throw new Rivet.RateLimitError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -91,7 +91,7 @@ export class Lobbies {
                         })
                     );
                 case 403:
-                    throw new RivetClient.ForbiddenError(
+                    throw new Rivet.ForbiddenError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -101,7 +101,7 @@ export class Lobbies {
                         })
                     );
                 case 408:
-                    throw new RivetClient.UnauthorizedError(
+                    throw new Rivet.UnauthorizedError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -111,7 +111,7 @@ export class Lobbies {
                         })
                     );
                 case 404:
-                    throw new RivetClient.NotFoundError(
+                    throw new Rivet.NotFoundError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -121,7 +121,7 @@ export class Lobbies {
                         })
                     );
                 case 400:
-                    throw new RivetClient.BadRequestError(
+                    throw new Rivet.BadRequestError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -131,7 +131,7 @@ export class Lobbies {
                         })
                     );
                 default:
-                    throw new errors.RivetClientError({
+                    throw new errors.RivetError({
                         statusCode: _response.error.statusCode,
                         body: _response.error.body,
                     });
@@ -140,14 +140,14 @@ export class Lobbies {
 
         switch (_response.error.reason) {
             case "non-json":
-                throw new errors.RivetClientError({
+                throw new errors.RivetError({
                     statusCode: _response.error.statusCode,
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetClientTimeoutError();
+                throw new errors.RivetTimeoutError();
             case "unknown":
-                throw new errors.RivetClientError({
+                throw new errors.RivetError({
                     message: _response.error.errorMessage,
                 });
         }
@@ -164,15 +164,15 @@ export class Lobbies {
      * for mock responses. When running on Rivet servers, you can access the given lobby token from the
      * [`RIVET_TOKEN`](/docs/matchmaker/concepts/lobby-env) environment variable.
      *
-     * @param {RivetClient.matchmaker.SetLobbyClosedRequest} request
+     * @param {Rivet.matchmaker.SetLobbyClosedRequest} request
      * @param {Lobbies.RequestOptions} requestOptions - Request-specific configuration.
      *
-     * @throws {@link RivetClient.InternalError}
-     * @throws {@link RivetClient.RateLimitError}
-     * @throws {@link RivetClient.ForbiddenError}
-     * @throws {@link RivetClient.UnauthorizedError}
-     * @throws {@link RivetClient.NotFoundError}
-     * @throws {@link RivetClient.BadRequestError}
+     * @throws {@link Rivet.InternalError}
+     * @throws {@link Rivet.RateLimitError}
+     * @throws {@link Rivet.ForbiddenError}
+     * @throws {@link Rivet.UnauthorizedError}
+     * @throws {@link Rivet.NotFoundError}
+     * @throws {@link Rivet.BadRequestError}
      *
      * @example
      *     await client.matchmaker.lobbies.setClosed({
@@ -180,12 +180,12 @@ export class Lobbies {
      *     })
      */
     public async setClosed(
-        request: RivetClient.matchmaker.SetLobbyClosedRequest,
+        request: Rivet.matchmaker.SetLobbyClosedRequest,
         requestOptions?: Lobbies.RequestOptions
     ): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetClientEnvironment.Production,
+                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
                 "/matchmaker/lobbies/closed"
             ),
             method: "PUT",
@@ -211,7 +211,7 @@ export class Lobbies {
         if (_response.error.reason === "status-code") {
             switch (_response.error.statusCode) {
                 case 500:
-                    throw new RivetClient.InternalError(
+                    throw new Rivet.InternalError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -221,7 +221,7 @@ export class Lobbies {
                         })
                     );
                 case 429:
-                    throw new RivetClient.RateLimitError(
+                    throw new Rivet.RateLimitError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -231,7 +231,7 @@ export class Lobbies {
                         })
                     );
                 case 403:
-                    throw new RivetClient.ForbiddenError(
+                    throw new Rivet.ForbiddenError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -241,7 +241,7 @@ export class Lobbies {
                         })
                     );
                 case 408:
-                    throw new RivetClient.UnauthorizedError(
+                    throw new Rivet.UnauthorizedError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -251,7 +251,7 @@ export class Lobbies {
                         })
                     );
                 case 404:
-                    throw new RivetClient.NotFoundError(
+                    throw new Rivet.NotFoundError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -261,7 +261,7 @@ export class Lobbies {
                         })
                     );
                 case 400:
-                    throw new RivetClient.BadRequestError(
+                    throw new Rivet.BadRequestError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -271,7 +271,7 @@ export class Lobbies {
                         })
                     );
                 default:
-                    throw new errors.RivetClientError({
+                    throw new errors.RivetError({
                         statusCode: _response.error.statusCode,
                         body: _response.error.body,
                     });
@@ -280,14 +280,14 @@ export class Lobbies {
 
         switch (_response.error.reason) {
             case "non-json":
-                throw new errors.RivetClientError({
+                throw new errors.RivetError({
                     statusCode: _response.error.statusCode,
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetClientTimeoutError();
+                throw new errors.RivetTimeoutError();
             case "unknown":
-                throw new errors.RivetClientError({
+                throw new errors.RivetError({
                     message: _response.error.errorMessage,
                 });
         }
@@ -304,12 +304,12 @@ export class Lobbies {
      * @param {unknown} request
      * @param {Lobbies.RequestOptions} requestOptions - Request-specific configuration.
      *
-     * @throws {@link RivetClient.InternalError}
-     * @throws {@link RivetClient.RateLimitError}
-     * @throws {@link RivetClient.ForbiddenError}
-     * @throws {@link RivetClient.UnauthorizedError}
-     * @throws {@link RivetClient.NotFoundError}
-     * @throws {@link RivetClient.BadRequestError}
+     * @throws {@link Rivet.InternalError}
+     * @throws {@link Rivet.RateLimitError}
+     * @throws {@link Rivet.ForbiddenError}
+     * @throws {@link Rivet.UnauthorizedError}
+     * @throws {@link Rivet.NotFoundError}
+     * @throws {@link Rivet.BadRequestError}
      *
      * @example
      *     await client.matchmaker.lobbies.setState({
@@ -319,7 +319,7 @@ export class Lobbies {
     public async setState(request?: unknown, requestOptions?: Lobbies.RequestOptions): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetClientEnvironment.Production,
+                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
                 "/matchmaker/lobbies/state"
             ),
             method: "PUT",
@@ -348,7 +348,7 @@ export class Lobbies {
         if (_response.error.reason === "status-code") {
             switch (_response.error.statusCode) {
                 case 500:
-                    throw new RivetClient.InternalError(
+                    throw new Rivet.InternalError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -358,7 +358,7 @@ export class Lobbies {
                         })
                     );
                 case 429:
-                    throw new RivetClient.RateLimitError(
+                    throw new Rivet.RateLimitError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -368,7 +368,7 @@ export class Lobbies {
                         })
                     );
                 case 403:
-                    throw new RivetClient.ForbiddenError(
+                    throw new Rivet.ForbiddenError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -378,7 +378,7 @@ export class Lobbies {
                         })
                     );
                 case 408:
-                    throw new RivetClient.UnauthorizedError(
+                    throw new Rivet.UnauthorizedError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -388,7 +388,7 @@ export class Lobbies {
                         })
                     );
                 case 404:
-                    throw new RivetClient.NotFoundError(
+                    throw new Rivet.NotFoundError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -398,7 +398,7 @@ export class Lobbies {
                         })
                     );
                 case 400:
-                    throw new RivetClient.BadRequestError(
+                    throw new Rivet.BadRequestError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -408,7 +408,7 @@ export class Lobbies {
                         })
                     );
                 default:
-                    throw new errors.RivetClientError({
+                    throw new errors.RivetError({
                         statusCode: _response.error.statusCode,
                         body: _response.error.body,
                     });
@@ -417,14 +417,14 @@ export class Lobbies {
 
         switch (_response.error.reason) {
             case "non-json":
-                throw new errors.RivetClientError({
+                throw new errors.RivetError({
                     statusCode: _response.error.statusCode,
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetClientTimeoutError();
+                throw new errors.RivetTimeoutError();
             case "unknown":
-                throw new errors.RivetClientError({
+                throw new errors.RivetError({
                     message: _response.error.errorMessage,
                 });
         }
@@ -441,12 +441,12 @@ export class Lobbies {
      * @param {string} lobbyId
      * @param {Lobbies.RequestOptions} requestOptions - Request-specific configuration.
      *
-     * @throws {@link RivetClient.InternalError}
-     * @throws {@link RivetClient.RateLimitError}
-     * @throws {@link RivetClient.ForbiddenError}
-     * @throws {@link RivetClient.UnauthorizedError}
-     * @throws {@link RivetClient.NotFoundError}
-     * @throws {@link RivetClient.BadRequestError}
+     * @throws {@link Rivet.InternalError}
+     * @throws {@link Rivet.RateLimitError}
+     * @throws {@link Rivet.ForbiddenError}
+     * @throws {@link Rivet.UnauthorizedError}
+     * @throws {@link Rivet.NotFoundError}
+     * @throws {@link Rivet.BadRequestError}
      *
      * @example
      *     await client.matchmaker.lobbies.getState("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
@@ -454,7 +454,7 @@ export class Lobbies {
     public async getState(lobbyId: string, requestOptions?: Lobbies.RequestOptions): Promise<unknown | undefined> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetClientEnvironment.Production,
+                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
                 `/matchmaker/lobbies/${encodeURIComponent(lobbyId)}/state`
             ),
             method: "GET",
@@ -483,7 +483,7 @@ export class Lobbies {
         if (_response.error.reason === "status-code") {
             switch (_response.error.statusCode) {
                 case 500:
-                    throw new RivetClient.InternalError(
+                    throw new Rivet.InternalError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -493,7 +493,7 @@ export class Lobbies {
                         })
                     );
                 case 429:
-                    throw new RivetClient.RateLimitError(
+                    throw new Rivet.RateLimitError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -503,7 +503,7 @@ export class Lobbies {
                         })
                     );
                 case 403:
-                    throw new RivetClient.ForbiddenError(
+                    throw new Rivet.ForbiddenError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -513,7 +513,7 @@ export class Lobbies {
                         })
                     );
                 case 408:
-                    throw new RivetClient.UnauthorizedError(
+                    throw new Rivet.UnauthorizedError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -523,7 +523,7 @@ export class Lobbies {
                         })
                     );
                 case 404:
-                    throw new RivetClient.NotFoundError(
+                    throw new Rivet.NotFoundError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -533,7 +533,7 @@ export class Lobbies {
                         })
                     );
                 case 400:
-                    throw new RivetClient.BadRequestError(
+                    throw new Rivet.BadRequestError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -543,7 +543,7 @@ export class Lobbies {
                         })
                     );
                 default:
-                    throw new errors.RivetClientError({
+                    throw new errors.RivetError({
                         statusCode: _response.error.statusCode,
                         body: _response.error.body,
                     });
@@ -552,14 +552,14 @@ export class Lobbies {
 
         switch (_response.error.reason) {
             case "non-json":
-                throw new errors.RivetClientError({
+                throw new errors.RivetError({
                     statusCode: _response.error.statusCode,
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetClientTimeoutError();
+                throw new errors.RivetTimeoutError();
             case "unknown":
-                throw new errors.RivetClientError({
+                throw new errors.RivetError({
                     message: _response.error.errorMessage,
                 });
         }
@@ -576,15 +576,15 @@ export class Lobbies {
      * for mock responses and a [public namespace token](/docs/general/concepts/token-types#namespace-public)
      * can be used for general authentication.
      *
-     * @param {RivetClient.matchmaker.FindLobbyRequest} request
+     * @param {Rivet.matchmaker.FindLobbyRequest} request
      * @param {Lobbies.RequestOptions} requestOptions - Request-specific configuration.
      *
-     * @throws {@link RivetClient.InternalError}
-     * @throws {@link RivetClient.RateLimitError}
-     * @throws {@link RivetClient.ForbiddenError}
-     * @throws {@link RivetClient.UnauthorizedError}
-     * @throws {@link RivetClient.NotFoundError}
-     * @throws {@link RivetClient.BadRequestError}
+     * @throws {@link Rivet.InternalError}
+     * @throws {@link Rivet.RateLimitError}
+     * @throws {@link Rivet.ForbiddenError}
+     * @throws {@link Rivet.UnauthorizedError}
+     * @throws {@link Rivet.NotFoundError}
+     * @throws {@link Rivet.BadRequestError}
      *
      * @example
      *     await client.matchmaker.lobbies.find({
@@ -610,13 +610,13 @@ export class Lobbies {
      *     })
      */
     public async find(
-        request: RivetClient.matchmaker.FindLobbyRequest,
+        request: Rivet.matchmaker.FindLobbyRequest,
         requestOptions?: Lobbies.RequestOptions
-    ): Promise<RivetClient.matchmaker.FindLobbyResponse> {
+    ): Promise<Rivet.matchmaker.FindLobbyResponse> {
         const { origin, ..._body } = request;
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetClientEnvironment.Production,
+                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
                 "/matchmaker/lobbies/find"
             ),
             method: "POST",
@@ -647,7 +647,7 @@ export class Lobbies {
         if (_response.error.reason === "status-code") {
             switch (_response.error.statusCode) {
                 case 500:
-                    throw new RivetClient.InternalError(
+                    throw new Rivet.InternalError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -657,7 +657,7 @@ export class Lobbies {
                         })
                     );
                 case 429:
-                    throw new RivetClient.RateLimitError(
+                    throw new Rivet.RateLimitError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -667,7 +667,7 @@ export class Lobbies {
                         })
                     );
                 case 403:
-                    throw new RivetClient.ForbiddenError(
+                    throw new Rivet.ForbiddenError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -677,7 +677,7 @@ export class Lobbies {
                         })
                     );
                 case 408:
-                    throw new RivetClient.UnauthorizedError(
+                    throw new Rivet.UnauthorizedError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -687,7 +687,7 @@ export class Lobbies {
                         })
                     );
                 case 404:
-                    throw new RivetClient.NotFoundError(
+                    throw new Rivet.NotFoundError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -697,7 +697,7 @@ export class Lobbies {
                         })
                     );
                 case 400:
-                    throw new RivetClient.BadRequestError(
+                    throw new Rivet.BadRequestError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -707,7 +707,7 @@ export class Lobbies {
                         })
                     );
                 default:
-                    throw new errors.RivetClientError({
+                    throw new errors.RivetError({
                         statusCode: _response.error.statusCode,
                         body: _response.error.body,
                     });
@@ -716,14 +716,14 @@ export class Lobbies {
 
         switch (_response.error.reason) {
             case "non-json":
-                throw new errors.RivetClientError({
+                throw new errors.RivetError({
                     statusCode: _response.error.statusCode,
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetClientTimeoutError();
+                throw new errors.RivetTimeoutError();
             case "unknown":
-                throw new errors.RivetClientError({
+                throw new errors.RivetError({
                     message: _response.error.errorMessage,
                 });
         }
@@ -740,15 +740,15 @@ export class Lobbies {
      * for mock responses and a [public namespace token](/docs/general/concepts/token-types#namespace-public)
      * can be used for general authentication.
      *
-     * @param {RivetClient.matchmaker.JoinLobbyRequest} request
+     * @param {Rivet.matchmaker.JoinLobbyRequest} request
      * @param {Lobbies.RequestOptions} requestOptions - Request-specific configuration.
      *
-     * @throws {@link RivetClient.InternalError}
-     * @throws {@link RivetClient.RateLimitError}
-     * @throws {@link RivetClient.ForbiddenError}
-     * @throws {@link RivetClient.UnauthorizedError}
-     * @throws {@link RivetClient.NotFoundError}
-     * @throws {@link RivetClient.BadRequestError}
+     * @throws {@link Rivet.InternalError}
+     * @throws {@link Rivet.RateLimitError}
+     * @throws {@link Rivet.ForbiddenError}
+     * @throws {@link Rivet.UnauthorizedError}
+     * @throws {@link Rivet.NotFoundError}
+     * @throws {@link Rivet.BadRequestError}
      *
      * @example
      *     await client.matchmaker.lobbies.join({
@@ -767,12 +767,12 @@ export class Lobbies {
      *     })
      */
     public async join(
-        request: RivetClient.matchmaker.JoinLobbyRequest,
+        request: Rivet.matchmaker.JoinLobbyRequest,
         requestOptions?: Lobbies.RequestOptions
-    ): Promise<RivetClient.matchmaker.JoinLobbyResponse> {
+    ): Promise<Rivet.matchmaker.JoinLobbyResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetClientEnvironment.Production,
+                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
                 "/matchmaker/lobbies/join"
             ),
             method: "POST",
@@ -802,7 +802,7 @@ export class Lobbies {
         if (_response.error.reason === "status-code") {
             switch (_response.error.statusCode) {
                 case 500:
-                    throw new RivetClient.InternalError(
+                    throw new Rivet.InternalError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -812,7 +812,7 @@ export class Lobbies {
                         })
                     );
                 case 429:
-                    throw new RivetClient.RateLimitError(
+                    throw new Rivet.RateLimitError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -822,7 +822,7 @@ export class Lobbies {
                         })
                     );
                 case 403:
-                    throw new RivetClient.ForbiddenError(
+                    throw new Rivet.ForbiddenError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -832,7 +832,7 @@ export class Lobbies {
                         })
                     );
                 case 408:
-                    throw new RivetClient.UnauthorizedError(
+                    throw new Rivet.UnauthorizedError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -842,7 +842,7 @@ export class Lobbies {
                         })
                     );
                 case 404:
-                    throw new RivetClient.NotFoundError(
+                    throw new Rivet.NotFoundError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -852,7 +852,7 @@ export class Lobbies {
                         })
                     );
                 case 400:
-                    throw new RivetClient.BadRequestError(
+                    throw new Rivet.BadRequestError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -862,7 +862,7 @@ export class Lobbies {
                         })
                     );
                 default:
-                    throw new errors.RivetClientError({
+                    throw new errors.RivetError({
                         statusCode: _response.error.statusCode,
                         body: _response.error.body,
                     });
@@ -871,14 +871,14 @@ export class Lobbies {
 
         switch (_response.error.reason) {
             case "non-json":
-                throw new errors.RivetClientError({
+                throw new errors.RivetError({
                     statusCode: _response.error.statusCode,
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetClientTimeoutError();
+                throw new errors.RivetTimeoutError();
             case "unknown":
-                throw new errors.RivetClientError({
+                throw new errors.RivetError({
                     message: _response.error.errorMessage,
                 });
         }
@@ -893,15 +893,15 @@ export class Lobbies {
      * for mock responses and a [public namespace token](/docs/general/concepts/token-types#namespace-public)
      * can be used for general authentication.
      *
-     * @param {RivetClient.matchmaker.CreateLobbyRequest} request
+     * @param {Rivet.matchmaker.CreateLobbyRequest} request
      * @param {Lobbies.RequestOptions} requestOptions - Request-specific configuration.
      *
-     * @throws {@link RivetClient.InternalError}
-     * @throws {@link RivetClient.RateLimitError}
-     * @throws {@link RivetClient.ForbiddenError}
-     * @throws {@link RivetClient.UnauthorizedError}
-     * @throws {@link RivetClient.NotFoundError}
-     * @throws {@link RivetClient.BadRequestError}
+     * @throws {@link Rivet.InternalError}
+     * @throws {@link Rivet.RateLimitError}
+     * @throws {@link Rivet.ForbiddenError}
+     * @throws {@link Rivet.UnauthorizedError}
+     * @throws {@link Rivet.NotFoundError}
+     * @throws {@link Rivet.BadRequestError}
      *
      * @example
      *     await client.matchmaker.lobbies.create({
@@ -929,12 +929,12 @@ export class Lobbies {
      *     })
      */
     public async create(
-        request: RivetClient.matchmaker.CreateLobbyRequest,
+        request: Rivet.matchmaker.CreateLobbyRequest,
         requestOptions?: Lobbies.RequestOptions
-    ): Promise<RivetClient.matchmaker.CreateLobbyResponse> {
+    ): Promise<Rivet.matchmaker.CreateLobbyResponse> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetClientEnvironment.Production,
+                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
                 "/matchmaker/lobbies/create"
             ),
             method: "POST",
@@ -964,7 +964,7 @@ export class Lobbies {
         if (_response.error.reason === "status-code") {
             switch (_response.error.statusCode) {
                 case 500:
-                    throw new RivetClient.InternalError(
+                    throw new Rivet.InternalError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -974,7 +974,7 @@ export class Lobbies {
                         })
                     );
                 case 429:
-                    throw new RivetClient.RateLimitError(
+                    throw new Rivet.RateLimitError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -984,7 +984,7 @@ export class Lobbies {
                         })
                     );
                 case 403:
-                    throw new RivetClient.ForbiddenError(
+                    throw new Rivet.ForbiddenError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -994,7 +994,7 @@ export class Lobbies {
                         })
                     );
                 case 408:
-                    throw new RivetClient.UnauthorizedError(
+                    throw new Rivet.UnauthorizedError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -1004,7 +1004,7 @@ export class Lobbies {
                         })
                     );
                 case 404:
-                    throw new RivetClient.NotFoundError(
+                    throw new Rivet.NotFoundError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -1014,7 +1014,7 @@ export class Lobbies {
                         })
                     );
                 case 400:
-                    throw new RivetClient.BadRequestError(
+                    throw new Rivet.BadRequestError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -1024,7 +1024,7 @@ export class Lobbies {
                         })
                     );
                 default:
-                    throw new errors.RivetClientError({
+                    throw new errors.RivetError({
                         statusCode: _response.error.statusCode,
                         body: _response.error.body,
                     });
@@ -1033,14 +1033,14 @@ export class Lobbies {
 
         switch (_response.error.reason) {
             case "non-json":
-                throw new errors.RivetClientError({
+                throw new errors.RivetError({
                     statusCode: _response.error.statusCode,
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetClientTimeoutError();
+                throw new errors.RivetTimeoutError();
             case "unknown":
-                throw new errors.RivetClientError({
+                throw new errors.RivetError({
                     message: _response.error.errorMessage,
                 });
         }
@@ -1055,15 +1055,15 @@ export class Lobbies {
      * for mock responses and a [public namespace token](/docs/general/concepts/token-types#namespace-public)
      * can be used for general authentication.
      *
-     * @param {RivetClient.matchmaker.ListLobbiesRequest} request
+     * @param {Rivet.matchmaker.ListLobbiesRequest} request
      * @param {Lobbies.RequestOptions} requestOptions - Request-specific configuration.
      *
-     * @throws {@link RivetClient.InternalError}
-     * @throws {@link RivetClient.RateLimitError}
-     * @throws {@link RivetClient.ForbiddenError}
-     * @throws {@link RivetClient.UnauthorizedError}
-     * @throws {@link RivetClient.NotFoundError}
-     * @throws {@link RivetClient.BadRequestError}
+     * @throws {@link Rivet.InternalError}
+     * @throws {@link Rivet.RateLimitError}
+     * @throws {@link Rivet.ForbiddenError}
+     * @throws {@link Rivet.UnauthorizedError}
+     * @throws {@link Rivet.NotFoundError}
+     * @throws {@link Rivet.BadRequestError}
      *
      * @example
      *     await client.matchmaker.lobbies.list({
@@ -1071,9 +1071,9 @@ export class Lobbies {
      *     })
      */
     public async list(
-        request: RivetClient.matchmaker.ListLobbiesRequest = {},
+        request: Rivet.matchmaker.ListLobbiesRequest = {},
         requestOptions?: Lobbies.RequestOptions
-    ): Promise<RivetClient.matchmaker.ListLobbiesResponse> {
+    ): Promise<Rivet.matchmaker.ListLobbiesResponse> {
         const { includeState } = request;
         const _queryParams: Record<string, string | string[] | object | object[]> = {};
         if (includeState != null) {
@@ -1082,7 +1082,7 @@ export class Lobbies {
 
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
-                (await core.Supplier.get(this._options.environment)) ?? environments.RivetClientEnvironment.Production,
+                (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
                 "/matchmaker/lobbies/list"
             ),
             method: "GET",
@@ -1112,7 +1112,7 @@ export class Lobbies {
         if (_response.error.reason === "status-code") {
             switch (_response.error.statusCode) {
                 case 500:
-                    throw new RivetClient.InternalError(
+                    throw new Rivet.InternalError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -1122,7 +1122,7 @@ export class Lobbies {
                         })
                     );
                 case 429:
-                    throw new RivetClient.RateLimitError(
+                    throw new Rivet.RateLimitError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -1132,7 +1132,7 @@ export class Lobbies {
                         })
                     );
                 case 403:
-                    throw new RivetClient.ForbiddenError(
+                    throw new Rivet.ForbiddenError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -1142,7 +1142,7 @@ export class Lobbies {
                         })
                     );
                 case 408:
-                    throw new RivetClient.UnauthorizedError(
+                    throw new Rivet.UnauthorizedError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -1152,7 +1152,7 @@ export class Lobbies {
                         })
                     );
                 case 404:
-                    throw new RivetClient.NotFoundError(
+                    throw new Rivet.NotFoundError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -1162,7 +1162,7 @@ export class Lobbies {
                         })
                     );
                 case 400:
-                    throw new RivetClient.BadRequestError(
+                    throw new Rivet.BadRequestError(
                         serializers.ErrorBody.parseOrThrow(_response.error.body, {
                             unrecognizedObjectKeys: "passthrough",
                             allowUnrecognizedUnionMembers: true,
@@ -1172,7 +1172,7 @@ export class Lobbies {
                         })
                     );
                 default:
-                    throw new errors.RivetClientError({
+                    throw new errors.RivetError({
                         statusCode: _response.error.statusCode,
                         body: _response.error.body,
                     });
@@ -1181,14 +1181,14 @@ export class Lobbies {
 
         switch (_response.error.reason) {
             case "non-json":
-                throw new errors.RivetClientError({
+                throw new errors.RivetError({
                     statusCode: _response.error.statusCode,
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetClientTimeoutError();
+                throw new errors.RivetTimeoutError();
             case "unknown":
-                throw new errors.RivetClientError({
+                throw new errors.RivetError({
                     message: _response.error.errorMessage,
                 });
         }

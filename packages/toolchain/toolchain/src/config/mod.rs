@@ -6,8 +6,8 @@ use std::{
 };
 
 use anyhow::*;
-use serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
 pub mod build;
 
@@ -86,12 +86,11 @@ pub struct Unstable {
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ManagerUnstable {
-	pub enable: Option<bool>
+	pub enable: Option<bool>,
 }
 
 impl ManagerUnstable {
 	pub fn enable(&self) -> bool {
 		self.enable.unwrap_or(true)
 	}
-
 }

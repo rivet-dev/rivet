@@ -4,9 +4,9 @@ use std::{
 };
 
 use pegboard::protocol;
+use schemars::JsonSchema;
 use serde::Deserialize;
 use url::Url;
-use schemars::JsonSchema;
 use uuid::Uuid;
 
 #[derive(Clone, Deserialize)]
