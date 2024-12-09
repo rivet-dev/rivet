@@ -265,8 +265,8 @@ impl ApiFrom<Port> for models::ActorPort {
 		models::ActorPort {
 			protocol,
 			internal_port: value.internal_port,
-			public_hostname: value.public_hostname,
-			public_port: value.public_port,
+			hostname: value.public_hostname,
+			port: value.public_port,
 			routing: Box::new(routing),
 		}
 	}

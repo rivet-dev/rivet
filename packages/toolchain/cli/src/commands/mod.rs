@@ -1,12 +1,12 @@
 pub mod actor;
 pub mod build;
 pub mod deno;
-pub mod manager;
 pub mod deploy;
 pub mod environment;
 pub mod init;
 pub mod login;
 pub mod logout;
+pub mod manager;
 pub mod metadata;
 pub mod region;
 

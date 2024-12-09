@@ -758,8 +758,8 @@ fn legacy_convert_actor_to_server(
 								}
 								models::ActorPortProtocol::Udp => models::ServersPortProtocol::Udp,
 							},
-							public_hostname: p.public_hostname,
-							public_port: p.public_port,
+							public_hostname: p.hostname,
+							public_port: p.port,
 							routing: Box::new(models::ServersPortRouting {
 								game_guard: p.routing.guard.map(|_| json!({})),
 								host: p.routing.host.map(|_| json!({})),

@@ -63,8 +63,8 @@ types:
     properties:
       protocol: PortProtocol
       internal_port: optional<integer>
-      public_hostname: optional<string>
-      public_port: optional<integer>
+      hostname: optional<string>
+      port: optional<integer>
       routing: PortRouting
 
   PortProtocol:

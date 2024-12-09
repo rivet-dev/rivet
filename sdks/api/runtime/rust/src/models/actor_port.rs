@@ -17,10 +17,10 @@ pub struct ActorPort {
     pub protocol: crate::models::ActorPortProtocol,
     #[serde(rename = "internal_port", skip_serializing_if = "Option::is_none")]
     pub internal_port: Option<i32>,
-    #[serde(rename = "public_hostname", skip_serializing_if = "Option::is_none")]
-    pub public_hostname: Option<String>,
-    #[serde(rename = "public_port", skip_serializing_if = "Option::is_none")]
-    pub public_port: Option<i32>,
+    #[serde(rename = "hostname", skip_serializing_if = "Option::is_none")]
+    pub hostname: Option<String>,
+    #[serde(rename = "port", skip_serializing_if = "Option::is_none")]
+    pub port: Option<i32>,
     #[serde(rename = "routing")]
     pub routing: Box<crate::models::ActorPortRouting>,
 }
@@ -30,8 +30,8 @@ impl ActorPort {
         ActorPort {
             protocol,
             internal_port: None,
-            public_hostname: None,
-            public_port: None,
+            hostname: None,
+            port: None,
             routing: Box::new(routing),
         }
     }

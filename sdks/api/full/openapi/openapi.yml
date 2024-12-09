@@ -10004,9 +10004,9 @@ components:
           $ref: '#/components/schemas/ActorPortProtocol'
         internal_port:
           type: integer
-        public_hostname:
+        hostname:
           type: string
-        public_port:
+        port:
           type: integer
         routing:
           $ref: '#/components/schemas/ActorPortRouting'

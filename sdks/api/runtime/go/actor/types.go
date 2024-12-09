@@ -315,11 +315,11 @@ func (n NetworkMode) Ptr() *NetworkMode {
 }
 
 type Port struct {
-	Protocol       PortProtocol `json:"protocol,omitempty"`
-	InternalPort   *int         `json:"internal_port,omitempty"`
-	PublicHostname *string      `json:"public_hostname,omitempty"`
-	PublicPort     *int         `json:"public_port,omitempty"`
-	Routing        *PortRouting `json:"routing,omitempty"`
+	Protocol     PortProtocol `json:"protocol,omitempty"`
+	InternalPort *int         `json:"internal_port,omitempty"`
+	Hostname     *string      `json:"hostname,omitempty"`
+	Port         *int         `json:"port,omitempty"`
+	Routing      *PortRouting `json:"routing,omitempty"`
 
 	_rawJSON json.RawMessage
 }
