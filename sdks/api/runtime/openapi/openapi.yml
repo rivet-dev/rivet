@@ -910,6 +910,68 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
       security: *ref_0
+  /regions/resolve:
+    get:
+      operationId: actor_regions_resolve
+      tags:
+        - ActorRegions
+      parameters:
+        - name: long
+          in: query
+          required: false
+          schema:
+            type: number
+            format: double
+        - name: lat
+          in: query
+          required: false
+          schema:
+            type: number
+            format: double
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActorResolveRegionResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
 components:
   schemas:
     ActorGetActorResponse:
@@ -1307,6 +1369,13 @@ components:
             $ref: '#/components/schemas/ActorRegion'
       required:
         - regions
+    ActorResolveRegionResponse:
+      type: object
+      properties:
+        region:
+          $ref: '#/components/schemas/ActorRegion'
+      required:
+        - region
     WatchResponse:
       type: object
       description: Provided by watchable endpoints used in blocking loops.

@@ -36,6 +36,7 @@ docs/ActorPrepareBuildRequest.md
 docs/ActorPrepareBuildResponse.md
 docs/ActorRegion.md
 docs/ActorRegionsApi.md
+docs/ActorResolveRegionResponse.md
 docs/ActorResources.md
 docs/ActorRuntime.md
 docs/ActorUpgradeActorRequest.md
@@ -82,6 +83,7 @@ src/models/actor_port_routing.rs
 src/models/actor_prepare_build_request.rs
 src/models/actor_prepare_build_response.rs
 src/models/actor_region.rs
+src/models/actor_resolve_region_response.rs
 src/models/actor_resources.rs
 src/models/actor_runtime.rs
 src/models/actor_upgrade_actor_request.rs

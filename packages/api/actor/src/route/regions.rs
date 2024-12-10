@@ -1,6 +1,8 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
+use proto::backend;
 use rivet_api::models;
 use rivet_operation::prelude::*;
+use serde::Deserialize;
 
 use crate::{
 	auth::{Auth, CheckOutput},
@@ -9,7 +11,7 @@ use crate::{
 
 use super::GlobalQuery;
 
-// MARK: GET /datacenters
+// MARK: GET /regions
 pub async fn list(
 	ctx: Ctx<Auth>,
 	_watch_index: WatchIndexQuery,
@@ -95,4 +97,81 @@ pub async fn list_deprecated(
 		.collect::<Vec<_>>();
 
 	Ok(models::ServersListDatacentersResponse { datacenters })
+}
+
+// MARK: GET /regions/resolve
+#[derive(Debug, Clone, Deserialize)]
+pub struct ResolveQuery {
+	#[serde(flatten)]
+	global: GlobalQuery,
+	lat: Option<f64>,
+	long: Option<f64>,
+}
+
+pub async fn resolve(
+	ctx: Ctx<Auth>,
+	_watch_index: WatchIndexQuery,
+	query: ResolveQuery,
+) -> GlobalResult<models::ActorResolveRegionResponse> {
+	let CheckOutput { game_id, .. } = ctx.auth().check(ctx.op_ctx(), &query.global, true).await?;
+
+	// Resolve coords
+	let coords = match (query.lat, query.long) {
+		(Some(lat), Some(long)) => Some((lat, long)),
+		(None, None) => ctx.coords(),
+		_ => bail_with!(API_BAD_QUERY, error = "must have both `lat` and `long`"),
+	};
+
+	let cluster_res = ctx
+		.op(cluster::ops::get_for_game::Input {
+			game_ids: vec![game_id],
+		})
+		.await?;
+	let cluster_id = unwrap!(cluster_res.games.first()).cluster_id;
+
+	let cluster_dcs_res = ctx
+		.op(cluster::ops::datacenter::list::Input {
+			cluster_ids: vec![cluster_id],
+		})
+		.await?;
+	let cluster_dcs = &unwrap!(cluster_dcs_res.clusters.first()).datacenter_ids;
+
+	// Get recommended dc
+	let datacenter_id = if let Some((lat, long)) = coords {
+		let recommend_res = op!([ctx] region_recommend {
+			region_ids: cluster_dcs
+				.iter()
+				.cloned()
+				.map(Into::into)
+				.collect(),
+			coords: Some(backend::net::Coordinates {
+				latitude: lat,
+				longitude: long,
+			}),
+			..Default::default()
+		})
+		.await?;
+		let region = unwrap!(recommend_res.regions.first());
+
+		unwrap_ref!(region.region_id).as_uuid()
+	} else {
+		tracing::warn!("coords not provided to select region");
+
+		*unwrap!(cluster_dcs.first())
+	};
+
+	// Fetch dc
+	let dcs_res = ctx
+		.op(cluster::ops::datacenter::get::Input {
+			datacenter_ids: vec![datacenter_id],
+		})
+		.await?;
+	let dc = unwrap!(dcs_res.datacenters.into_iter().next());
+
+	Ok(models::ActorResolveRegionResponse {
+		region: Box::new(models::ActorRegion {
+			id: dc.name_id,
+			name: dc.display_name,
+		}),
+	})
 }

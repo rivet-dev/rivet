@@ -56,6 +56,8 @@ pub mod actor_prepare_build_response;
 pub use self::actor_prepare_build_response::ActorPrepareBuildResponse;
 pub mod actor_region;
 pub use self::actor_region::ActorRegion;
+pub mod actor_resolve_region_response;
+pub use self::actor_resolve_region_response::ActorResolveRegionResponse;
 pub mod actor_resources;
 pub use self::actor_resources::ActorResources;
 pub mod actor_runtime;

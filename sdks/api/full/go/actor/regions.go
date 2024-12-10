@@ -13,6 +13,11 @@ type ListRegionsRequestQuery struct {
 	Environment *string `json:"-"`
 }
 
+type ResolveRegionsRequestQuery struct {
+	Long *float64 `json:"-"`
+	Lat  *float64 `json:"-"`
+}
+
 type ListRegionsResponse struct {
 	Regions []*Region `json:"regions,omitempty"`
 
@@ -40,4 +45,33 @@ func (l *ListRegionsResponse) String() string {
 		return value
 	}
 	return fmt.Sprintf("%#v", l)
+}
+
+type ResolveRegionResponse struct {
+	Region *Region `json:"region,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *ResolveRegionResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler ResolveRegionResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = ResolveRegionResponse(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *ResolveRegionResponse) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
 }

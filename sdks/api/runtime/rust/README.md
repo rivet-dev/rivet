@@ -38,6 +38,7 @@ Class | Method | HTTP request | Description
 *ActorBuildsApi* | [**actor_builds_prepare**](docs/ActorBuildsApi.md#actor_builds_prepare) | **POST** /builds/prepare | 
 *ActorLogsApi* | [**actor_logs_get**](docs/ActorLogsApi.md#actor_logs_get) | **GET** /actors/{actor}/logs | 
 *ActorRegionsApi* | [**actor_regions_list**](docs/ActorRegionsApi.md#actor_regions_list) | **GET** /regions | 
+*ActorRegionsApi* | [**actor_regions_resolve**](docs/ActorRegionsApi.md#actor_regions_resolve) | **GET** /regions/resolve | 
 
 
 ## Documentation For Models
@@ -71,6 +72,7 @@ Class | Method | HTTP request | Description
  - [ActorPrepareBuildRequest](docs/ActorPrepareBuildRequest.md)
  - [ActorPrepareBuildResponse](docs/ActorPrepareBuildResponse.md)
  - [ActorRegion](docs/ActorRegion.md)
+ - [ActorResolveRegionResponse](docs/ActorResolveRegionResponse.md)
  - [ActorResources](docs/ActorResources.md)
  - [ActorRuntime](docs/ActorRuntime.md)
  - [ActorUpgradeActorRequest](docs/ActorUpgradeActorRequest.md)

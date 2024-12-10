@@ -184,6 +184,12 @@ define_router! {
 				},
 			),
 		},
+		"regions" / "resolve": {
+			GET: regions::resolve(
+				query: regions::ResolveQuery,
+				opt_auth: true,
+			),
+		},
 
 		// MARK: Deprecated
 		"games" / Uuid / "environments" / Uuid / "servers": {

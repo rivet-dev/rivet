@@ -2,6 +2,7 @@ import { ActorHandleRaw } from "./handle.ts";
 import { ActorTags } from "../../common/src/utils.ts";
 import { ActorsRequest } from "../../manager-protocol/src/mod.ts";
 import { CreateRequest } from "../../manager-protocol/src/query.ts";
+import { RivetClient, RivetClientClient } from "@rivet-gg/api";
 
 export interface WithTagsOpts {
 	parameters?: unknown;
@@ -14,36 +15,31 @@ export interface WithTagsOpts {
  *
  * Private methods (e.g. those starting with `_`) are automatically excluded.
  */
-export type ActorHandle<A = unknown> =
-	& ActorHandleRaw
-	& {
-		[
-			K in keyof A as K extends string ? K extends `_${string}` ? never : K
-				: K
-		]: A[K] extends (...args: infer Args) => infer Return
-			? ActorRPCFunction<Args, Return>
-			: never;
-	};
+export type ActorHandle<A = unknown> = ActorHandleRaw & {
+	[K in keyof A as K extends string ? (K extends `_${string}` ? never : K) : K]: A[K] extends (
+		...args: infer Args
+	) => infer Return
+		? ActorRPCFunction<Args, Return>
+		: never;
+};
 
 /**
  * RPC function returned by the actor proxy. This will call `ActorHandle.rpc`
  * when triggered.
  */
-export type ActorRPCFunction<
-	Args extends Array<unknown> = unknown[],
-	Response = unknown,
-> = (
+export type ActorRPCFunction<Args extends Array<unknown> = unknown[], Response = unknown> = (
 	// Remove the first parameter, since that's `Context<...>`
 	...args: Args extends [unknown, ...infer Rest] ? Rest : Args
 ) => Promise<Response>;
 
 export class Client {
+	private readonly client = new RivetClientClient({ token: TODO });
+
+	private region: Promise<RivetClient.actor.Region> | null = this.#fetchRegion();
+
 	constructor(private readonly managerEndpoint: string) {}
 
-	async withTags<A = unknown>(
-		tags: ActorTags,
-		opts?: WithTagsOpts,
-	): Promise<ActorHandle<A>> {
+	async withTags<A = unknown>(tags: ActorTags, opts?: WithTagsOpts): Promise<ActorHandle<A>> {
 		const handle = await this.#createHandle(tags, opts);
 		return this.#createProxy(handle) as ActorHandle<A>;
 	}
@@ -126,16 +122,14 @@ export class Client {
 		}) as ActorHandle;
 	}
 
-	async #createHandle(
-		tags: ActorTags,
-		opts?: WithTagsOpts,
-	): Promise<ActorHandleRaw> {
+	async #createHandle(tags: ActorTags, opts?: WithTagsOpts): Promise<ActorHandleRaw> {
 		const create = opts?.create ?? {
 			tags,
 			buildTags: {
 				name: tags.name,
 				current: "true",
 			},
+			region: (await this.region).id,
 		};
 
 		//client.get("chat_room", { room: "lkjsdf" }, { noCreate: true, parameters: { token: 123 } });
@@ -152,27 +146,29 @@ export class Client {
 
 		const res = await fetch(`${this.managerEndpoint}/actors`, {
 			method: "POST",
-			body: JSON.stringify(
-				{
-					query: {
-						getOrCreate: {
-							tags,
-							create,
-						},
+			body: JSON.stringify({
+				query: {
+					getOrCreate: {
+						tags,
+						create,
 					},
-				} satisfies ActorsRequest,
-			),
+				},
+			} satisfies ActorsRequest),
 		});
 
 		if (!res.ok) {
-			throw new Error(
-				`Manager error (${res.statusText}):\n${await res.text()}`,
-			);
+			throw new Error(`Manager error (${res.statusText}):\n${await res.text()}`);
 		}
 
 		const resJson: { endpoint: string } = await res.json();
 		const handle = new ActorHandleRaw(resJson.endpoint, opts?.parameters);
 		handle.connect();
 		return handle;
+	}
+
+	async #fetchRegion() {
+		let { region } = await this.client.actor.regions.resolve({});
+
+		return region;
 	}
 }
