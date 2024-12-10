@@ -19,11 +19,11 @@ Actor states can be typed in TypeScript using the first generic argument on `Act
 
 ```typescript
 interface State {
-    count: number;
+  count: number;
 }
 
 class Counter extends Actor<State> {
-    // ...
+  // ...
 }
 ```
 
@@ -35,13 +35,13 @@ For example:
 
 ```typescript
 interface State {
-    count: number;
+  count: number;
 }
 
 class Counter extends Actor<State> {
-    _onInitialize() {
-        return { count: 0 };
-    }
+  _onInitialize() {
+    return { count: 0 };
+  }
 }
 ```
 
@@ -53,21 +53,21 @@ For example:
 
 ```typescript
 interface State {
-    count: number;
+  count: number;
 }
 
 class Counter extends Actor<State> {
-    increment() {
-        this.state.count += 1;
-    }
+  increment() {
+    this.state.count += 1;
+  }
 
-    // ...
+  // ...
 }
 ```
 
 <Warning>
-    Only state stored on the `this.state` property will be persisted. Properties
-    of the `Counter` class are kept in-memory and not persisted.
+  Only state stored on the `this.state` property will be persisted. Properties of the `Counter` class are kept
+  in-memory and not persisted.
 </Warning>
 
 ### State saves
@@ -95,21 +95,205 @@ The KV state is used for storing large datasets that cannot fit in to memory.
 
     1. Create an actor that holds the shared state that actors can make RPCs to
     2. Use an external database, such as [PostgreSQL](https://www.postgresql.org/)
+
 </Info>
 
 ### Performance
 
 KV stores native JavaScript values in a compact binary format, so you don't need to worry about writing extra serialization & deserialization code.
 
-TODO: Discuss in-memory cache & latencies
-
 ### Operations
 
-TODO
+Raw KV operations can be called via `this.#ctx.kv.<op>`.
 
-### Sorted keys
+- **`get(key: any, options?: GetOptions): Promise<any | null>`**
 
-TODO
+  Retrieves a value from the key-value store.
+
+  Options:
+
+  ```js
+  {
+      format?: "value" | "arrayBuffer";
+  }
+  ```
+
+- **`getBatch(keys: any[], options?: GetBatchOptions): Promise<Map<any, any>>`**
+
+  Retrieves a batch of key-value pairs.
+
+  Options:
+
+  ```js
+  {
+      format?: "value" | "arrayBuffer";
+  }
+  ```
+
+- **`list(options?: ListOptions): Promise<Map<any, any>>`**
+
+  Retrieves all key-value pairs in the KV store. When using any of the options, the keys lexicographic order
+  is used for filtering.
+
+  Options:
+
+  ```js
+  {
+      format?: "value" | "arrayBuffer";
+      // The key to start listing results from (inclusive). Cannot be used with startAfter or prefix.
+      start?: any;
+      // The key to start listing results after (exclusive). Cannot be used with start or prefix.
+      startAfter?: any;
+      // The key to end listing results at (exclusive).
+      end?: any;
+      // Restricts results to keys that start with the given prefix. Cannot be used with start or startAfter.
+      prefix?: any;
+      // If true, results are returned in descending order.
+      reverse?: boolean;
+      // The maximum number of key-value pairs to return.
+      limit?: number;
+  }
+  ```
+
+- **`put(key: any, value: any | ArrayBuffer, options?: PutOptions): Promise<void>`**
+
+  Stores a key-value pair in the key-value store.
+
+  Options:
+
+  ```js
+  {
+      format?: "value" | "arrayBuffer";
+  }
+  ```
+
+- **`putBatch(obj: Map<any, any | ArrayBuffer>, options?: PutBatchOptions): Promise<void>`**
+
+  Stores a batch of key-value pairs.
+
+  Options:
+
+  ```js
+  {
+      format?: "value" | "arrayBuffer";
+  }
+  ```
+
+- **`delete(key: any): Promise<void>`**
+
+  Deletes a key-value pair from the key-value store.
+
+- **`deleteBatch(keys: any[]): Promise<void>`**
+
+  Deletes a batch of key-value pairs from the key-value store.
+
+- **`deleteAll(): Promise<void>`**
+
+  Deletes all data from the key-value store. **This CANNOT be undone.**
+
+### Keys
+
+Keys used for KV storage can be any JavaScript type that can be cloned via the
+[structured clone algorithm](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Structured_clone_algorithm):
+
+```js
+let myKey = { foo: ['bar', 2] };
+
+await this.#ctx.kv.put(myKey, [1, 2, 3]);
+
+await this.#ctx.kv.get(myKey); // [1, 2, 3]
+```
+
+**Structured keys**
+
+Structured keys provide security and ease of use for applications with layered storage criteria such as lists
+within lists or deeply nested hashmaps.
+
+In general, it is more efficient to your data structure with small chunks in individual keys instead of
+all in one key. This is where structured keys come in:
+
+```js
+// Entire document in a single key (not recommended)
+await this.#ctx.kv.put(["user", "kacper"], {
+  inventory: /* ... */,
+  stats: /* ... */,
+  paymentMethod: /* ... */,
+});
+
+// Sharded document using structured keys (arrays)
+await this.#ctx.kv.put(["user", "kacper", "inventory"], /* ... */);
+await this.#ctx.kv.put(["user", "kacper", "stats"], /* ... */);
+await this.#ctx.kv.put(["user", "kacper", "paymentMethod"], /* ... */);
+```
+
+It is strongly advised to always use structured keys instead of manually implementing them yourself to reduce
+possible attack vectors from end-users:
+
+```js
+let userName = /* ... */;
+
+// Manually building keys (**DON'T DO THIS**)
+let user = await this.#ctx.kv.get(`user:${userName}`);
+
+// Structured keys
+let user = await this.#ctx.kv.get(["user", userName]);
+```
+
+The difference here is that with a manual approach it is possible to retrieve data that was otherwise not
+public via injection:
+
+```js
+// Setting our username to this value lets us access the inventory
+// of any user, which should otherwise be private.
+let userName = 'nicholas:inventory';
+
+// Manually building keys (**DON'T DO THIS**)
+let user = await this.#ctx.kv.get(`user:${userName}`);
+
+// Structured keys automatically provide protection against special
+// token boundary attacks
+let user = await this.#ctx.kv.get(['user', userName]);
+```
+
+Note that single-value keys are automatically converted into single item lists for consistency:
+
+```js
+// The same
+await this.#ctx.kv.get('my-key');
+await this.#ctx.kv.get(['my-key']);
+```
+
+**Sorting**
+
+Keys are automatically sorted in [lexicographic order](https://en.wikipedia.org/wiki/Lexicographic_order).
+This means when using the `list` command, you can fetch all values between two keys in order:
+
+```js
+// Fetch all users with usernames that start with "k" through "s"
+// (note that the end is exclusive, so "t" is not included)
+await this.#ctx.kv.list({
+  start: ['users', 'k'],
+  end: ['users', 't']
+});
+```
+
+You can also use this to list all values under a common prefix key:
+
+```js
+// Fetch all items in a user's inventory
+await this.#ctx.kv.list({
+  prefix: ['users', 'nathan', 'inventory']
+});
+```
+
+### Values
+
+Values stored in the KV can be any JavaScript type which can be cloned via the
+[structured clone algorithm](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Structured_clone_algorithm).
+
+To store raw binary data, it is recommended to set the `format` option in your KV operation to `arrayBuffer`
+and pass in an `ArrayBuffer` object. Alternatively, you can `put` an `ArrayBuffer` or `Blob` directly without
+changing the format but this has additional space overhead from the JS type system.
 
 {/* TODO: Create examples for these storage types and link to them */}
 
@@ -127,4 +311,4 @@ TODO
 
 #### Queues
 
-TODO */}
+TODO \*/}

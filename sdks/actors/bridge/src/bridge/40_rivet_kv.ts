@@ -67,16 +67,23 @@ async function getBatch(keys: Key[], options?: GetBatchOptions): Promise<Map<Key
  */
 export interface ListOptions {
 	format?: "value" | "arrayBuffer";
+	// The key to start listing results from (inclusive). Cannot be used with startAfter or prefix.
 	start?: Key;
+	// The key to start listing results after (exclusive). Cannot be used with start or prefix.
 	startAfter?: Key;
+	// The key to end listing results at (exclusive).
 	end?: Key;
+	// Restricts results to keys that start with the given prefix. Cannot be used with start or startAfter.
 	prefix?: Key;
+	// If true, results are returned in descending order.
 	reverse?: boolean;
+	// The maximum number of key-value pairs to return.
 	limit?: number;
 }
 
 /**
- * Retrieves all key-value pairs in the KV store.
+ * Retrieves all key-value pairs in the KV store. When using any of the options, the keys lexicographic order
+ * is used for filtering.
  *
  * @param {ListOptions} [options] - Options.
  * @returns {Promise<Map<Key, Entry>>} The retrieved values.
@@ -159,7 +166,7 @@ export interface PutBatchOptions {
 }
 
 /**
- * Asynchronously stores a batch of key-value pairs.
+ * Stores a batch of key-value pairs.
  *
  * @param {Map<Key, Entry | ArrayBuffer>} obj - An object containing key-value pairs to be stored.
  * @param {PutBatchOptions} [options] - Options.
@@ -199,6 +206,12 @@ async function delete_(key: Key): Promise<void> {
 	return await op_rivet_kv_delete(serializeKey(key));
 }
 
+/**
+ * Deletes a batch of key-value pairs from the key-value store.
+ *
+ * @param {Key[]} keys - A list of keys to delete.
+ * @returns {Promise<void>} A promise that resolves when the operation is complete.
+ */
 async function deleteBatch(keys: Key[]): Promise<void> {
 	return await op_rivet_kv_delete_batch(keys.map((x) => serializeKey(x)));
 }
