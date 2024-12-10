@@ -2,7 +2,14 @@
     "$schema": "https://unframer-schema.vercel.app/schema.json",
     "outDir": "./src/framer",
     "components": {
-        "main": "https://framer.com/m/Main-Site-38YR.js@5a3LIbvcpcJM2bsSMFTJ"
+        "index": "https://framer.com/m/Main-Page-hPg2.js@hPuYHpaHdqrwjz44qR1N",
+        "pricing": "https://framer.com/m/Pricing-Page-VfNq.js@q1ZVKhr4UZwXUATr4xTE",
+        "sales": "https://framer.com/m/Enterprise-Support-Page-vy8N.js@4NSLp8g2XeiRa7UrhEvQ"
+    },
+    "breakpoints": {
+        "xl": 1200,
+        "md": 768,
+        "sm": 320
     }
 }
 

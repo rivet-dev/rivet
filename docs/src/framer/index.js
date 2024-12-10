@@ -1,7 +1,9 @@
 // @ts-nocheck
 /* eslint-disable */
 'use client';
-import { css, html, javascript, } from './chunk-WY5XFK64.js';
+import { defaultEvents, getIconSelection, NullState, useIconSelection, } from './chunk-K6MKSK76.js';
+import { className, className2, css, css2, fonts, fonts2, } from './chunk-76DSJYNX.js';
+import { css as css3, html, javascript, } from './chunk-WY5XFK64.js';
 import { closeBrackets, closeBracketsKeymap, } from './chunk-RD5SFWJ7.js';
 import {
   Annotation,
@@ -43,13 +45,13 @@ import {
 } from './chunk-QHDV5QG3.js';
 import './chunk-RUAN5HWR.js';
 
-// https :https://framerusercontent.com/modules/iDDKRieYEAiI3cZj3HIf/5a3LIbvcpcJM2bsSMFTJ/zLfXOCD5_.js
-import { jsx as _jsx19, jsxs as _jsxs10, } from 'react/jsx-runtime';
+// https :https://framerusercontent.com/modules/iDDKRieYEAiI3cZj3HIf/hPuYHpaHdqrwjz44qR1N/zLfXOCD5_.js
+import { jsx as _jsx18, jsxs as _jsxs10, } from 'react/jsx-runtime';
 import {
   addFonts as addFonts12,
   addPropertyControls as addPropertyControls18,
   ComponentViewportProvider as ComponentViewportProvider7,
-  ControlType as ControlType22,
+  ControlType as ControlType21,
   cx as cx12,
   getFonts as getFonts7,
   getFontsFromSharedStyle as getFontsFromSharedStyle2,
@@ -65,78 +67,18 @@ import {
   withOptimizedAppearEffect as withOptimizedAppearEffect3,
 } from 'unframer';
 import { LayoutGroup as LayoutGroup13, motion as motion17, MotionConfigContext as MotionConfigContext12, } from 'unframer';
-import * as React17 from 'react';
+import * as React16 from 'react';
 
 // https :https://framerusercontent.com/modules/6Ldpz1V0DkD45gXvi67I/PCgBX5d6MdQT7E7nhdXn/Material.js
-import { jsx as _jsx2, } from 'react/jsx-runtime';
-import * as React2 from 'react';
-import { useEffect, useMemo as useMemo2, useRef, useState, } from 'react';
-import { addPropertyControls, ControlType as ControlType2, motion, RenderTarget, } from 'unframer';
-
-// https :https://framer.com/m/framer/icon-nullstate.js@0.7.0
 import { jsx as _jsx, } from 'react/jsx-runtime';
 import * as React from 'react';
-var containerStyles = {
-  width: '100%',
-  height: '100%',
-  display: 'flex',
-  justifyContent: 'center',
-  alignItems: 'center',
-};
-var emptyStateStyle = {
-  ...containerStyles,
-  borderRadius: 6,
-  background: 'rgba(149, 149, 149, 0.1)',
-  border: '1px dashed rgba(149, 149, 149, 0.15)',
-  color: '#a5a5a5',
-  flexDirection: 'column',
-};
-var NullState = /* @__PURE__ */ React.forwardRef((_, ref,) => {
-  return /* @__PURE__ */ _jsx('div', {
-    style: emptyStateStyle,
-    ref,
-  },);
-},);
+import { useEffect, useMemo, useRef, useState, } from 'react';
+import { addPropertyControls, ControlType, motion, RenderTarget, } from 'unframer';
 
 // https :https://framer.com/m/material-icons/Home.js@0.0.32
 var o = (e2,) => e2;
 var t;
 var h = (e2,) => (t || (t = o(e2.createElement('path', { d: 'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z', },), 'Home',)), t);
-
-// https :https://framerusercontent.com/modules/Ma20hU0GGRxLxZphbywl/OSpwWF91FHPVFyQJjMHt/utils.js
-import { useMemo, } from 'react';
-import { ControlType, } from 'unframer';
-var defaultEvents = {
-  onClick: { type: ControlType.EventHandler, },
-  onMouseDown: { type: ControlType.EventHandler, },
-  onMouseUp: { type: ControlType.EventHandler, },
-  onMouseEnter: { type: ControlType.EventHandler, },
-  onMouseLeave: { type: ControlType.EventHandler, },
-};
-var findByArray = (arr, search,) => arr.find((a3,) => a3.toLowerCase().includes(search,));
-function getIconSelection(iconKeys2, selectByList, iconSearch = '', iconSelection, lowercaseIconKeyPairs2,) {
-  if (selectByList) return iconSelection;
-  if (iconSearch == null || (iconSearch === null || iconSearch === void 0 ? void 0 : iconSearch.length) === 0) return null;
-  const iconSearchTerm = iconSearch.toLowerCase().replace(/-|\s/g, '',);
-  var _iconSearchTerm;
-  const searchResult = (_iconSearchTerm = lowercaseIconKeyPairs2[iconSearchTerm]) !== null && _iconSearchTerm !== void 0
-    ? _iconSearchTerm
-    : findByArray(iconKeys2, iconSearchTerm,);
-  return searchResult;
-}
-function useIconSelection(iconKeys2, selectByList, iconSearch = '', iconSelection, lowercaseIconKeyPairs2,) {
-  const iconSearchResult = useMemo(() => {
-    if (iconSearch == null || (iconSearch === null || iconSearch === void 0 ? void 0 : iconSearch.length) === 0) return null;
-    const iconSearchTerm = iconSearch.toLowerCase().replace(/-|\s/g, '',);
-    var _iconSearchTerm;
-    const searchResult = (_iconSearchTerm = lowercaseIconKeyPairs2[iconSearchTerm]) !== null && _iconSearchTerm !== void 0
-      ? _iconSearchTerm
-      : findByArray(iconKeys2, iconSearchTerm,);
-    return searchResult;
-  }, [iconSelection, iconSearch,],);
-  const name = selectByList ? iconSelection : iconSearchResult;
-  return name;
-}
 
 // https :https://framerusercontent.com/modules/6Ldpz1V0DkD45gXvi67I/PCgBX5d6MdQT7E7nhdXn/Material.js
 var moduleBaseUrl = 'https://framer.com/m/material-icons/';
@@ -1886,14 +1828,14 @@ function Icon(props,) {
   const isMounted = useRef(false,);
   const iconKey = useIconSelection(iconKeys, selectByList, iconSearch, iconSelection, lowercaseIconKeyPairs,);
   const styleOptionProps = styleOptionPropKeys.map((prop,) => props[prop]);
-  const iconStyle = useMemo2(() => {
+  const iconStyle = useMemo(() => {
     const iconStyleKey = icons[iconKey];
     if (!iconStyleKey) return;
     const activeStyle = props[`iconStyle${iconStyleKey}`];
     if (activeStyle === 'Filled') return;
     return activeStyle;
   }, [...styleOptionProps,],);
-  const [SelectedIcon, setSelectedIcon,] = useState(iconKey === 'Home' ? h(React2,) : null,);
+  const [SelectedIcon, setSelectedIcon,] = useState(iconKey === 'Home' ? h(React,) : null,);
   async function importModule() {
     if (typeof icons[iconKey] !== 'number') {
       setSelectedIcon(null,);
@@ -1907,7 +1849,7 @@ function Icon(props,) {
         /* @vite-ignore */
         iconModuleUrl
       );
-      if (isMounted.current) setSelectedIcon(module.default(React2,),);
+      if (isMounted.current) setSelectedIcon(module.default(React,),);
     } catch {
       if (isMounted.current) setSelectedIcon(null,);
     }
@@ -1920,8 +1862,8 @@ function Icon(props,) {
     };
   }, [iconKey, ...styleOptionProps,],);
   const isOnCanvas = RenderTarget.current() === RenderTarget.canvas;
-  const emptyState = isOnCanvas ? /* @__PURE__ */ _jsx2(NullState, {},) : null;
-  return /* @__PURE__ */ _jsx2(motion.div, {
+  const emptyState = isOnCanvas ? /* @__PURE__ */ _jsx(NullState, {},) : null;
+  return /* @__PURE__ */ _jsx(motion.div, {
     style: { display: 'contents', },
     onClick,
     onMouseEnter,
@@ -1929,7 +1871,7 @@ function Icon(props,) {
     onMouseDown,
     onMouseUp,
     children: SelectedIcon
-      ? /* @__PURE__ */ _jsx2('svg', {
+      ? /* @__PURE__ */ _jsx('svg', {
         xmlns: 'http://www.w3.org/2000/svg',
         style: {
           userSelect: 'none',
@@ -1971,14 +1913,14 @@ function hideStyleOptions(props, styleOptions,) {
 }
 addPropertyControls(Icon, {
   selectByList: {
-    type: ControlType2.Boolean,
+    type: ControlType.Boolean,
     title: 'Select',
     enabledTitle: 'List',
     disabledTitle: 'Search',
     defaultValue: Icon.defaultProps.selectByList,
   },
   iconSelection: {
-    type: ControlType2.Enum,
+    type: ControlType.Enum,
     options: iconKeys,
     defaultValue: Icon.defaultProps.iconSelection,
     title: 'Name',
@@ -1986,16 +1928,16 @@ addPropertyControls(Icon, {
     description: 'Find every icon name on the [Material site](https://fonts.google.com/icons)',
   },
   iconSearch: {
-    type: ControlType2.String,
+    type: ControlType.String,
     title: 'Name',
     placeholder: 'Menu, Wifi, Box\u2026',
     hidden: ({ selectByList, },) => selectByList,
   },
-  mirrored: { type: ControlType2.Boolean, enabledTitle: 'Yes', disabledTitle: 'No', defaultValue: Icon.defaultProps.mirrored, },
-  color: { type: ControlType2.Color, title: 'Color', defaultValue: Icon.defaultProps.color, },
+  mirrored: { type: ControlType.Boolean, enabledTitle: 'Yes', disabledTitle: 'No', defaultValue: Icon.defaultProps.mirrored, },
+  color: { type: ControlType.Color, title: 'Color', defaultValue: Icon.defaultProps.color, },
   ...Object.keys(styleKeyOptions,).reduce((result, optionKey,) => {
     result[`iconStyle${optionKey}`] = {
-      type: ControlType2.Enum,
+      type: ControlType.Enum,
       title: 'Style',
       defaultValue: 'Filled',
       options: styleKeyOptions[optionKey],
@@ -2007,18 +1949,18 @@ addPropertyControls(Icon, {
 },);
 
 // https :https://framerusercontent.com/modules/B2xAlJLcN0gOnt11mSPw/XVUmpmPn1EPL0dzocT35/Ticker.js
-import { jsx as _jsx3, jsxs as _jsxs, } from 'react/jsx-runtime';
+import { jsx as _jsx2, jsxs as _jsxs, } from 'react/jsx-runtime';
 import {
   Children,
   cloneElement,
   createRef,
   useCallback,
   useEffect as useEffect2,
-  useMemo as useMemo3,
+  useMemo as useMemo2,
   useRef as useRef2,
   useState as useState2,
 } from 'react';
-import { addPropertyControls as addPropertyControls2, ControlType as ControlType3, RenderTarget as RenderTarget2, } from 'unframer';
+import { addPropertyControls as addPropertyControls2, ControlType as ControlType2, RenderTarget as RenderTarget2, } from 'unframer';
 import {
   frame,
   LayoutGroup,
@@ -2080,108 +2022,6 @@ function R(o3, r2,) {
   return r2 ? o3 * (1e3 / r2) : 0;
 }
 
-// https :https://esm.sh/v135/@motionone/generators@10.18.0/esnext/generators.mjs
-var S2 = 5;
-function x2(t4, o3, r2,) {
-  let s4 = Math.max(o3 - S2, 0,);
-  return R(r2 - t4(s4,), o3 - s4,);
-}
-var h3 = { stiffness: 100, damping: 10, mass: 1, };
-var w = (t4 = h3.stiffness, o3 = h3.damping, r2 = h3.mass,) => o3 / (2 * Math.sqrt(t4 * r2,));
-function k(t4, o3, r2,) {
-  return t4 < o3 && r2 >= o3 || t4 > o3 && r2 <= o3;
-}
-var V = (
-  {
-    stiffness: t4 = h3.stiffness,
-    damping: o3 = h3.damping,
-    mass: r2 = h3.mass,
-    from: s4 = 0,
-    to: n2 = 1,
-    velocity: u3 = 0,
-    restSpeed: l4,
-    restDistance: d4,
-  } = {},
-) => {
-  u3 = u3 ? N.s(u3,) : 0;
-  let c3 = { done: false, hasReachedTarget: false, current: s4, target: n2, },
-    p2 = n2 - s4,
-    m4 = Math.sqrt(t4 / r2,) / 1e3,
-    a3 = w(t4, o3, r2,),
-    T3 = Math.abs(p2,) < 5;
-  l4 || (l4 = T3 ? 0.01 : 2), d4 || (d4 = T3 ? 5e-3 : 0.5);
-  let M4;
-  if (a3 < 1) {
-    let i3 = m4 * Math.sqrt(1 - a3 * a3,);
-    M4 = (f4,) => n2 - Math.exp(-a3 * m4 * f4,) * ((-u3 + a3 * m4 * p2) / i3 * Math.sin(i3 * f4,) + p2 * Math.cos(i3 * f4,));
-  } else M4 = (i3,) => n2 - Math.exp(-m4 * i3,) * (p2 + (-u3 + m4 * p2) * i3);
-  return (i3,) => {
-    c3.current = M4(i3,);
-    let f4 = i3 === 0 ? u3 : x2(M4, i3, c3.current,), g3 = Math.abs(f4,) <= l4, y2 = Math.abs(n2 - c3.current,) <= d4;
-    return c3.done = g3 && y2, c3.hasReachedTarget = k(s4, n2, c3.current,), c3;
-  };
-};
-var L = (
-  {
-    from: t4 = 0,
-    velocity: o3 = 0,
-    power: r2 = 0.8,
-    decay: s4 = 0.325,
-    bounceDamping: n2,
-    bounceStiffness: u3,
-    changeTarget: l4,
-    min: d4,
-    max: c3,
-    restDistance: p2 = 0.5,
-    restSpeed: m4,
-  },
-) => {
-  s4 = N.ms(s4,);
-  let a3 = { hasReachedTarget: false, done: false, current: t4, target: t4, },
-    T3 = (e2,) => d4 !== void 0 && e2 < d4 || c3 !== void 0 && e2 > c3,
-    M4 = (e2,) => d4 === void 0 ? c3 : c3 === void 0 || Math.abs(d4 - e2,) < Math.abs(c3 - e2,) ? d4 : c3,
-    i3 = r2 * o3,
-    f4 = t4 + i3,
-    g3 = l4 === void 0 ? f4 : l4(f4,);
-  a3.target = g3, g3 !== f4 && (i3 = g3 - t4);
-  let y2 = (e2,) => -i3 * Math.exp(-e2 / s4,),
-    D2 = (e2,) => g3 + y2(e2,),
-    G2 = (e2,) => {
-      let b4 = y2(e2,), K2 = D2(e2,);
-      a3.done = Math.abs(b4,) <= p2, a3.current = a3.done ? g3 : K2;
-    },
-    R4,
-    B3,
-    F3 = (e2,) => {
-      T3(a3.current,) &&
-        (R4 = e2,
-          B3 = V({
-            from: a3.current,
-            to: M4(a3.current,),
-            velocity: x2(D2, e2, a3.current,),
-            damping: n2,
-            stiffness: u3,
-            restDistance: p2,
-            restSpeed: m4,
-          },));
-    };
-  return F3(0,), (e2,) => {
-    let b4 = false;
-    return !B3 && R4 === void 0 && (b4 = true, G2(e2,), F3(e2,)),
-      R4 !== void 0 && e2 > R4 ? (a3.hasReachedTarget = true, B3(e2 - R4,)) : (a3.hasReachedTarget = false, !b4 && G2(e2,), a3);
-  };
-};
-var q = 10;
-var $ = 1e4;
-function j(t4, o3 = u,) {
-  let r2, s4 = q, n2 = t4(0,), u3 = [o3(n2.current,),];
-  for (; !n2.done && s4 < $;) {
-    n2 = t4(s4,), u3.push(o3(n2.done ? n2.target : n2.current,),), r2 === void 0 && n2.hasReachedTarget && (r2 = s4), s4 += q;
-  }
-  let l4 = s4 - q;
-  return u3.length === 1 && u3.push(n2.current,), { keyframes: u3, duration: l4 / 1e3, overshootDuration: (r2 ?? l4) / 1e3, };
-}
-
 // https :https://esm.sh/v135/@motionone/easing@10.18.0/esnext/easing.mjs
 var s2 = (n2, e2, t4,) => (((1 - 3 * t4 + 3 * e2) * n2 + (3 * t4 - 6 * e2)) * n2 + 3 * e2) * n2;
 var f2 = 1e-7;
@@ -2196,14 +2036,14 @@ function l2(n2, e2, t4, r2,) {
   let o3 = (i3,) => b2(i3, 0, 1, n2, t4,);
   return (i3,) => i3 === 0 || i3 === 1 ? i3 : s2(o3(i3,), e2, r2,);
 }
-var h4 = (n2, e2 = 'end',) => (t4,) => {
+var h3 = (n2, e2 = 'end',) => (t4,) => {
   t4 = e2 === 'end' ? Math.min(t4, 0.999,) : Math.max(t4, 1e-3,);
   let r2 = t4 * n2, o3 = e2 === 'end' ? Math.floor(r2,) : Math.ceil(r2,);
   return x(0, 1, o3 / n2,);
 };
 
 // https :https://esm.sh/v135/@motionone/animation@10.18.0/esnext/animation.mjs
-var w2 = {
+var w = {
   ease: l2(0.25, 0.1, 0.25, 1,),
   'ease-in': l2(0.42, 0, 1, 1,),
   'ease-in-out': l2(0.42, 0, 0.58, 1,),
@@ -2213,13 +2053,13 @@ var M = /\((.*?)\)/;
 function m2(s4,) {
   if (I(s4,)) return s4;
   if (A(s4,)) return l2(...s4,);
-  let t4 = w2[s4];
+  let t4 = w[s4];
   if (t4) return t4;
   if (s4.startsWith('steps',)) {
     let a3 = M.exec(s4,);
     if (a3) {
       let e2 = a3[1].split(',',);
-      return h4(parseFloat(e2[0],), e2[1].trim(),);
+      return h3(parseFloat(e2[0],), e2[1].trim(),);
     }
   }
   return u;
@@ -2325,6 +2165,112 @@ var T = class {
   }
 };
 
+// https :https://esm.sh/v135/@motionone/generators@10.18.0/esnext/generators.mjs
+var S2 = 5;
+function x2(t4, o3, r2,) {
+  let s4 = Math.max(o3 - S2, 0,);
+  return R(r2 - t4(s4,), o3 - s4,);
+}
+var h4 = { stiffness: 100, damping: 10, mass: 1, };
+var w2 = (t4 = h4.stiffness, o3 = h4.damping, r2 = h4.mass,) => o3 / (2 * Math.sqrt(t4 * r2,));
+function k(t4, o3, r2,) {
+  return t4 < o3 && r2 >= o3 || t4 > o3 && r2 <= o3;
+}
+var V = (
+  {
+    stiffness: t4 = h4.stiffness,
+    damping: o3 = h4.damping,
+    mass: r2 = h4.mass,
+    from: s4 = 0,
+    to: n2 = 1,
+    velocity: u3 = 0,
+    restSpeed: l4,
+    restDistance: d4,
+  } = {},
+) => {
+  u3 = u3 ? N.s(u3,) : 0;
+  let c3 = { done: false, hasReachedTarget: false, current: s4, target: n2, },
+    p2 = n2 - s4,
+    m4 = Math.sqrt(t4 / r2,) / 1e3,
+    a3 = w2(t4, o3, r2,),
+    T3 = Math.abs(p2,) < 5;
+  l4 || (l4 = T3 ? 0.01 : 2), d4 || (d4 = T3 ? 5e-3 : 0.5);
+  let M4;
+  if (a3 < 1) {
+    let i3 = m4 * Math.sqrt(1 - a3 * a3,);
+    M4 = (f4,) => n2 - Math.exp(-a3 * m4 * f4,) * ((-u3 + a3 * m4 * p2) / i3 * Math.sin(i3 * f4,) + p2 * Math.cos(i3 * f4,));
+  } else M4 = (i3,) => n2 - Math.exp(-m4 * i3,) * (p2 + (-u3 + m4 * p2) * i3);
+  return (i3,) => {
+    c3.current = M4(i3,);
+    let f4 = i3 === 0 ? u3 : x2(M4, i3, c3.current,), g3 = Math.abs(f4,) <= l4, y2 = Math.abs(n2 - c3.current,) <= d4;
+    return c3.done = g3 && y2, c3.hasReachedTarget = k(s4, n2, c3.current,), c3;
+  };
+};
+var L = (
+  {
+    from: t4 = 0,
+    velocity: o3 = 0,
+    power: r2 = 0.8,
+    decay: s4 = 0.325,
+    bounceDamping: n2,
+    bounceStiffness: u3,
+    changeTarget: l4,
+    min: d4,
+    max: c3,
+    restDistance: p2 = 0.5,
+    restSpeed: m4,
+  },
+) => {
+  s4 = N.ms(s4,);
+  let a3 = { hasReachedTarget: false, done: false, current: t4, target: t4, },
+    T3 = (e2,) => d4 !== void 0 && e2 < d4 || c3 !== void 0 && e2 > c3,
+    M4 = (e2,) => d4 === void 0 ? c3 : c3 === void 0 || Math.abs(d4 - e2,) < Math.abs(c3 - e2,) ? d4 : c3,
+    i3 = r2 * o3,
+    f4 = t4 + i3,
+    g3 = l4 === void 0 ? f4 : l4(f4,);
+  a3.target = g3, g3 !== f4 && (i3 = g3 - t4);
+  let y2 = (e2,) => -i3 * Math.exp(-e2 / s4,),
+    D2 = (e2,) => g3 + y2(e2,),
+    G2 = (e2,) => {
+      let b4 = y2(e2,), K2 = D2(e2,);
+      a3.done = Math.abs(b4,) <= p2, a3.current = a3.done ? g3 : K2;
+    },
+    R4,
+    B3,
+    F3 = (e2,) => {
+      T3(a3.current,) &&
+        (R4 = e2,
+          B3 = V({
+            from: a3.current,
+            to: M4(a3.current,),
+            velocity: x2(D2, e2, a3.current,),
+            damping: n2,
+            stiffness: u3,
+            restDistance: p2,
+            restSpeed: m4,
+          },));
+    };
+  return F3(0,), (e2,) => {
+    let b4 = false;
+    return !B3 && R4 === void 0 && (b4 = true, G2(e2,), F3(e2,)),
+      R4 !== void 0 && e2 > R4 ? (a3.hasReachedTarget = true, B3(e2 - R4,)) : (a3.hasReachedTarget = false, !b4 && G2(e2,), a3);
+  };
+};
+var q = 10;
+var $ = 1e4;
+function j(t4, o3 = u,) {
+  let r2, s4 = q, n2 = t4(0,), u3 = [o3(n2.current,),];
+  for (; !n2.done && s4 < $;) {
+    n2 = t4(s4,), u3.push(o3(n2.done ? n2.target : n2.current,),), r2 === void 0 && n2.hasReachedTarget && (r2 = s4), s4 += q;
+  }
+  let l4 = s4 - q;
+  return u3.length === 1 && u3.push(n2.current,), { keyframes: u3, duration: l4 / 1e3, overshootDuration: (r2 ?? l4) / 1e3, };
+}
+
+// https :https://esm.sh/v135/hey-listen@1.0.8/esnext/hey-listen.mjs
+var e = function () {
+};
+
 // https :https://esm.sh/v135/@motionone/types@10.17.1/esnext/types.mjs
 var t2 = class {
   setAnimation(i3,) {
@@ -2348,10 +2294,6 @@ function S3(e2, t4,) {
   }
   return n2;
 }
-
-// https :https://esm.sh/v135/hey-listen@1.0.8/esnext/hey-listen.mjs
-var e = function () {
-};
 
 // https :https://esm.sh/v135/@motionone/dom@10.18.0/esnext/dom.mjs
 var ft = /* @__PURE__ */ new WeakMap();
@@ -2989,7 +2931,7 @@ function Ticker(props,) {
   const transformer = directionTransformers[direction];
   const transform = useTransform(offset, transformer,);
   const parentRef = useRef2(null,);
-  const childrenRef = useMemo3(() => {
+  const childrenRef = useMemo2(() => {
     return [/* @__PURE__ */ createRef(), /* @__PURE__ */ createRef(),];
   }, [],);
   const [size, setSize,] = useState2({ parent: null, children: null, },);
@@ -3046,9 +2988,9 @@ function Ticker(props,) {
         width: widthType ? (_child_props = child.props) === null || _child_props === void 0 ? void 0 : _child_props.width : '100%',
         height: heightType ? (_child_props1 = child.props) === null || _child_props1 === void 0 ? void 0 : _child_props1.height : '100%',
       };
-      return /* @__PURE__ */ _jsx3(LayoutGroup, {
+      return /* @__PURE__ */ _jsx2(LayoutGroup, {
         inherit: 'id',
-        children: /* @__PURE__ */ _jsx3('li', {
+        children: /* @__PURE__ */ _jsx2('li', {
           ref,
           style: size2,
           children: /* @__PURE__ */ cloneElement(child, {
@@ -3077,9 +3019,9 @@ function Ticker(props,) {
               : '100%',
             willChange: 'transform',
           };
-          return /* @__PURE__ */ _jsx3(LayoutGroup, {
+          return /* @__PURE__ */ _jsx2(LayoutGroup, {
             inherit: 'id',
-            children: /* @__PURE__ */ _jsx3('li', {
+            children: /* @__PURE__ */ _jsx2('li', {
               style: size2,
               'aria-hidden': true,
               children: /* @__PURE__ */ cloneElement(child, {
@@ -3166,13 +3108,13 @@ function Ticker(props,) {
     return /* @__PURE__ */ _jsxs('section', {
       style: placeholderStyles,
       children: [
-        /* @__PURE__ */ _jsx3('div', { style: emojiStyles, children: '\u2728', },),
-        /* @__PURE__ */ _jsx3('p', { style: titleStyles, children: 'Connect to Content', },),
-        /* @__PURE__ */ _jsx3('p', { style: subtitleStyles, children: 'Add layers or components to infinitely loop on your page.', },),
+        /* @__PURE__ */ _jsx2('div', { style: emojiStyles, children: '\u2728', },),
+        /* @__PURE__ */ _jsx2('p', { style: titleStyles, children: 'Connect to Content', },),
+        /* @__PURE__ */ _jsx2('p', { style: subtitleStyles, children: 'Add layers or components to infinitely loop on your page.', },),
       ],
     },);
   }
-  return /* @__PURE__ */ _jsx3('section', {
+  return /* @__PURE__ */ _jsx2('section', {
     style: {
       ...containerStyle,
       opacity,
@@ -3221,10 +3163,10 @@ Ticker.defaultProps = {
   direction: true,
 };
 addPropertyControls2(Ticker, {
-  slots: { type: ControlType3.Array, title: 'Children', control: { type: ControlType3.ComponentInstance, }, },
-  speed: { type: ControlType3.Number, title: 'Speed', min: 0, max: 1e3, defaultValue: 100, unit: '%', displayStepper: true, step: 5, },
+  slots: { type: ControlType2.Array, title: 'Children', control: { type: ControlType2.ComponentInstance, }, },
+  speed: { type: ControlType2.Number, title: 'Speed', min: 0, max: 1e3, defaultValue: 100, unit: '%', displayStepper: true, step: 5, },
   direction: {
-    type: ControlType3.Enum,
+    type: ControlType2.Enum,
     title: 'Direction',
     options: ['left', 'right', 'top', 'bottom',],
     optionIcons: ['direction-left', 'direction-right', 'direction-up', 'direction-down',],
@@ -3233,7 +3175,7 @@ addPropertyControls2(Ticker, {
     displaySegmentedControl: true,
   },
   alignment: {
-    type: ControlType3.Enum,
+    type: ControlType2.Enum,
     title: 'Align',
     options: ['flex-start', 'center', 'flex-end',],
     optionIcons: {
@@ -3247,10 +3189,10 @@ addPropertyControls2(Ticker, {
     defaultValue: 'center',
     displaySegmentedControl: true,
   },
-  gap: { type: ControlType3.Number, title: 'Gap', },
+  gap: { type: ControlType2.Number, title: 'Gap', },
   padding: {
     title: 'Padding',
-    type: ControlType3.FusedNumber,
+    type: ControlType2.FusedNumber,
     toggleKey: 'paddingPerSide',
     toggleTitles: ['Padding', 'Padding per side',],
     valueKeys: ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',],
@@ -3258,20 +3200,20 @@ addPropertyControls2(Ticker, {
     min: 0,
   },
   sizingOptions: {
-    type: ControlType3.Object,
+    type: ControlType2.Object,
     title: 'Sizing',
     controls: {
-      widthType: { type: ControlType3.Boolean, title: 'Width', enabledTitle: 'Auto', disabledTitle: 'Stretch', defaultValue: true, },
-      heightType: { type: ControlType3.Boolean, title: 'Height', enabledTitle: 'Auto', disabledTitle: 'Stretch', defaultValue: true, },
+      widthType: { type: ControlType2.Boolean, title: 'Width', enabledTitle: 'Auto', disabledTitle: 'Stretch', defaultValue: true, },
+      heightType: { type: ControlType2.Boolean, title: 'Height', enabledTitle: 'Auto', disabledTitle: 'Stretch', defaultValue: true, },
     },
   },
   fadeOptions: {
-    type: ControlType3.Object,
+    type: ControlType2.Object,
     title: 'Clipping',
     controls: {
-      fadeContent: { type: ControlType3.Boolean, title: 'Fade', defaultValue: true, },
+      fadeContent: { type: ControlType2.Boolean, title: 'Fade', defaultValue: true, },
       overflow: {
-        type: ControlType3.Boolean,
+        type: ControlType2.Boolean,
         title: 'Overflow',
         enabledTitle: 'Show',
         disabledTitle: 'Hide',
@@ -3281,7 +3223,7 @@ addPropertyControls2(Ticker, {
         },
       },
       fadeWidth: {
-        type: ControlType3.Number,
+        type: ControlType2.Number,
         title: 'Width',
         defaultValue: 25,
         min: 0,
@@ -3292,7 +3234,7 @@ addPropertyControls2(Ticker, {
         },
       },
       fadeInset: {
-        type: ControlType3.Number,
+        type: ControlType2.Number,
         title: 'Inset',
         defaultValue: 0,
         min: 0,
@@ -3303,7 +3245,7 @@ addPropertyControls2(Ticker, {
         },
       },
       fadeAlpha: {
-        type: ControlType3.Number,
+        type: ControlType2.Number,
         title: 'Opacity',
         defaultValue: 0,
         min: 0,
@@ -3316,7 +3258,7 @@ addPropertyControls2(Ticker, {
     },
   },
   hoverFactor: {
-    type: ControlType3.Number,
+    type: ControlType2.Number,
     title: 'Hover',
     min: 0,
     max: 1,
@@ -3359,19 +3301,19 @@ var clamp = (num, min, max,) => Math.min(Math.max(num, min,), max,);
 var isValidNumber = (value,) => typeof value === 'number' && !isNaN(value,);
 
 // https :https://framerusercontent.com/modules/lRDHiNWNVWmE0lqtoVHP/zEmAposrjympIK2ybAcQ/Video.js
-import { jsx as _jsx4, } from 'react/jsx-runtime';
+import { jsx as _jsx3, } from 'react/jsx-runtime';
 import {
   addPropertyControls as addPropertyControls3,
-  ControlType as ControlType7,
+  ControlType as ControlType6,
   useIsInCurrentNavigationTarget as useIsInCurrentNavigationTarget2,
 } from 'unframer';
 import { isMotionValue as isMotionValue2, useInView as useInView2, } from 'unframer';
 
 // https :https://framerusercontent.com/modules/VTUDdizacRHpwbkOamr7/AykinQJbgwl92LvMGZwu/constants.js
-import { ControlType as ControlType4, } from 'unframer';
+import { ControlType as ControlType3, } from 'unframer';
 var fontStack =
   `"Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"`;
-var containerStyles2 = {
+var containerStyles = {
   position: 'relative',
   width: '100%',
   height: '100%',
@@ -3379,8 +3321,8 @@ var containerStyles2 = {
   justifyContent: 'center',
   alignItems: 'center',
 };
-var emptyStateStyle2 = {
-  ...containerStyles2,
+var emptyStateStyle = {
+  ...containerStyles,
   borderRadius: 6,
   background: 'rgba(136, 85, 255, 0.3)',
   color: '#85F',
@@ -3389,17 +3331,17 @@ var emptyStateStyle2 = {
 };
 var defaultEvents2 = {
   onClick: {
-    type: ControlType4.EventHandler,
+    type: ControlType3.EventHandler,
   },
   onMouseEnter: {
-    type: ControlType4.EventHandler,
+    type: ControlType3.EventHandler,
   },
   onMouseLeave: {
-    type: ControlType4.EventHandler,
+    type: ControlType3.EventHandler,
   },
 };
 var fontSizeOptions = {
-  type: ControlType4.Number,
+  type: ControlType3.Number,
   title: 'Font Size',
   min: 2,
   max: 200,
@@ -3408,20 +3350,20 @@ var fontSizeOptions = {
 };
 var fontControls = {
   font: {
-    type: ControlType4.Boolean,
+    type: ControlType3.Boolean,
     title: 'Font',
     defaultValue: false,
     disabledTitle: 'Default',
     enabledTitle: 'Custom',
   },
   fontFamily: {
-    type: ControlType4.String,
+    type: ControlType3.String,
     title: 'Family',
     placeholder: 'Inter',
     hidden: ({ font, },) => !font,
   },
   fontWeight: {
-    type: ControlType4.Enum,
+    type: ControlType3.Enum,
     title: 'Weight',
     options: [
       100,
@@ -3477,13 +3419,13 @@ import { Color, } from 'unframer';
 import { MotionValue, } from 'unframer';
 
 // https :https://framerusercontent.com/modules/xDiQsqBGXzmMsv7AlEVy/uhunpMiNsbXxzjlXsg1y/useUniqueClassName.js
-import * as React3 from 'react';
+import * as React2 from 'react';
 
 // https :https://framerusercontent.com/modules/ETACN5BJyFTSo0VVDJfu/NHRqowOiXkF9UwOzczF7/variantUtils.js
-import { ControlType as ControlType5, } from 'unframer';
+import { ControlType as ControlType4, } from 'unframer';
 
 // https :https://framerusercontent.com/modules/eMBrwoqQK7h6mEeGQUH8/GuplvPJVjmxpk9zqOTcb/isBrowser.js
-import { useMemo as useMemo4, } from 'react';
+import { useMemo as useMemo3, } from 'react';
 var isBrowserSafari = () => {
   if (typeof navigator !== `undefined`) {
     const userAgent = navigator.userAgent.toLowerCase();
@@ -3493,7 +3435,7 @@ var isBrowserSafari = () => {
   } else return false;
 };
 var useIsBrowserSafari = () =>
-  useMemo4(
+  useMemo3(
     () => isBrowserSafari(),
     [],
   );
@@ -3538,10 +3480,10 @@ function useFontControls(props,) {
 }
 
 // https :https://framerusercontent.com/modules/afBE9Yx1W6bY5q32qPxe/m3q7puE2tbo1S2C0s0CT/useRenderTarget.js
-import { useMemo as useMemo5, } from 'react';
+import { useMemo as useMemo4, } from 'react';
 import { RenderTarget as RenderTarget4, } from 'unframer';
 function useIsOnCanvas() {
-  const onCanvas = useMemo5(
+  const onCanvas = useMemo4(
     () => RenderTarget4.current() === RenderTarget4.canvas,
     [],
   );
@@ -3549,14 +3491,14 @@ function useIsOnCanvas() {
 }
 
 // https :https://framerusercontent.com/modules/zGkoP8tPDCkoBzMdt5uq/0zFSjxIYliHxrQQnryFX/useControlledState.js
-import * as React4 from 'react';
+import * as React3 from 'react';
 
 // https :https://framerusercontent.com/modules/5SM58HxZHxjjv7aLMOgQ/WXz9i6mVki0bBCrKdqB3/propUtils.js
-import { useMemo as useMemo6, } from 'react';
-import { ControlType as ControlType6, } from 'unframer';
+import { useMemo as useMemo5, } from 'react';
+import { ControlType as ControlType5, } from 'unframer';
 function useRadius(props,) {
   const { borderRadius, isMixedBorderRadius, topLeftRadius, topRightRadius, bottomRightRadius, bottomLeftRadius, } = props;
-  const radiusValue = useMemo6(
+  const radiusValue = useMemo5(
     () => isMixedBorderRadius ? `${topLeftRadius}px ${topRightRadius}px ${bottomRightRadius}px ${bottomLeftRadius}px` : `${borderRadius}px`,
     [
       borderRadius,
@@ -3572,7 +3514,7 @@ function useRadius(props,) {
 var borderRadiusControl = {
   borderRadius: {
     title: 'Radius',
-    type: ControlType6.FusedNumber,
+    type: ControlType5.FusedNumber,
     toggleKey: 'isMixedBorderRadius',
     toggleTitles: [
       'Radius',
@@ -3595,7 +3537,7 @@ var borderRadiusControl = {
 };
 function usePadding(props,) {
   const { padding, paddingPerSide, paddingTop, paddingRight, paddingBottom, paddingLeft, } = props;
-  const paddingValue = useMemo6(
+  const paddingValue = useMemo5(
     () => paddingPerSide ? `${paddingTop}px ${paddingRight}px ${paddingBottom}px ${paddingLeft}px` : padding,
     [
       padding,
@@ -3610,7 +3552,7 @@ function usePadding(props,) {
 }
 var paddingControl = {
   padding: {
-    type: ControlType6.FusedNumber,
+    type: ControlType5.FusedNumber,
     toggleKey: 'paddingPerSide',
     toggleTitles: [
       'Padding',
@@ -3638,7 +3580,7 @@ import {
   memo,
   useCallback as useCallback3,
   useEffect as useEffect9,
-  useMemo as useMemo7,
+  useMemo as useMemo6,
   useRef as useRef5,
   useState as useState5,
 } from 'react';
@@ -3661,7 +3603,7 @@ function getProps(props,) {
 }
 function Video(props,) {
   const newProps = getProps(props,);
-  return /* @__PURE__ */ _jsx4(VideoMemo, { ...newProps, },);
+  return /* @__PURE__ */ _jsx3(VideoMemo, { ...newProps, },);
 }
 function usePlaybackControls(videoRef,) {
   const isInCurrentNavigationTarget = useIsInCurrentNavigationTarget2();
@@ -3809,7 +3751,7 @@ var VideoMemo = /* @__PURE__ */ memo(function VideoInner(props,) {
       pause();
     }
   },);
-  const src = useMemo7(() => {
+  const src = useMemo6(() => {
     let fragment = '';
     if (srcType === 'URL') return srcUrl + fragment;
     if (srcType === 'Upload') return srcFile + fragment;
@@ -3828,7 +3770,7 @@ var VideoMemo = /* @__PURE__ */ memo(function VideoInner(props,) {
     if (video.currentTime < 0.3 && startTime > 0) setProgress((startTime !== null && startTime !== void 0 ? startTime : 0) * 0.01,);
     if (autoplayBehavior === 'on-mount') play();
   };
-  return /* @__PURE__ */ _jsx4('video', {
+  return /* @__PURE__ */ _jsx3('video', {
     onClick,
     onMouseEnter,
     onMouseLeave,
@@ -3890,9 +3832,9 @@ function titleCase(value,) {
 }
 var objectFitOptions = ['cover', 'fill', 'contain', 'scale-down', 'none',];
 addPropertyControls3(Video, {
-  srcType: { type: ControlType7.Enum, displaySegmentedControl: true, title: 'Source', options: ['URL', 'Upload',], },
+  srcType: { type: ControlType6.Enum, displaySegmentedControl: true, title: 'Source', options: ['URL', 'Upload',], },
   srcUrl: {
-    type: ControlType7.String,
+    type: ControlType6.String,
     title: 'URL',
     placeholder: '../example.mp4',
     hidden(props,) {
@@ -3900,45 +3842,45 @@ addPropertyControls3(Video, {
     },
   },
   srcFile: {
-    type: ControlType7.File,
+    type: ControlType6.File,
     title: 'File',
     allowedFileTypes: ['mp4', 'webm',],
     hidden(props,) {
       return props.srcType === 'URL';
     },
   },
-  playing: { type: ControlType7.Boolean, title: 'Playing', enabledTitle: 'Yes', disabledTitle: 'No', },
+  playing: { type: ControlType6.Boolean, title: 'Playing', enabledTitle: 'Yes', disabledTitle: 'No', },
   posterEnabled: {
-    type: ControlType7.Boolean,
+    type: ControlType6.Boolean,
     title: 'Poster',
     enabledTitle: 'Yes',
     disabledTitle: 'No',
     description: 'We recommend adding a poster. [Learn more](http://framer.com/help/articles/how-are-videos-optimized-in-framer/).',
   },
-  poster: { type: ControlType7.Image, title: ' ', hidden: ({ posterEnabled, },) => !posterEnabled, },
-  backgroundColor: { type: ControlType7.Color, title: 'Background', },
+  poster: { type: ControlType6.Image, title: ' ', hidden: ({ posterEnabled, },) => !posterEnabled, },
+  backgroundColor: { type: ControlType6.Color, title: 'Background', },
   ...borderRadiusControl,
-  startTime: { title: 'Start Time', type: ControlType7.Number, min: 0, max: 100, step: 0.1, unit: '%', },
-  loop: { type: ControlType7.Boolean, title: 'Loop', enabledTitle: 'Yes', disabledTitle: 'No', },
-  objectFit: { type: ControlType7.Enum, title: 'Fit', options: objectFitOptions, optionTitles: objectFitOptions.map(titleCase,), },
+  startTime: { title: 'Start Time', type: ControlType6.Number, min: 0, max: 100, step: 0.1, unit: '%', },
+  loop: { type: ControlType6.Boolean, title: 'Loop', enabledTitle: 'Yes', disabledTitle: 'No', },
+  objectFit: { type: ControlType6.Enum, title: 'Fit', options: objectFitOptions, optionTitles: objectFitOptions.map(titleCase,), },
   // restartOnEnter: {
   //     type: ControlType.Boolean,
   //     title: "On ReEnter",
   //     enabledTitle: "Restart",
   //     disabledTitle: "Resume",
   // },
-  controls: { type: ControlType7.Boolean, title: 'Controls', enabledTitle: 'Show', disabledTitle: 'Hide', },
-  muted: { type: ControlType7.Boolean, title: 'Muted', enabledTitle: 'Yes', disabledTitle: 'No', },
-  volume: { type: ControlType7.Number, max: 100, min: 0, unit: '%', hidden: ({ muted, },) => muted, },
-  onEnd: { type: ControlType7.EventHandler, },
-  onSeeked: { type: ControlType7.EventHandler, },
-  onPause: { type: ControlType7.EventHandler, },
-  onPlay: { type: ControlType7.EventHandler, },
+  controls: { type: ControlType6.Boolean, title: 'Controls', enabledTitle: 'Show', disabledTitle: 'Hide', },
+  muted: { type: ControlType6.Boolean, title: 'Muted', enabledTitle: 'Yes', disabledTitle: 'No', },
+  volume: { type: ControlType6.Number, max: 100, min: 0, unit: '%', hidden: ({ muted, },) => muted, },
+  onEnd: { type: ControlType6.EventHandler, },
+  onSeeked: { type: ControlType6.EventHandler, },
+  onPause: { type: ControlType6.EventHandler, },
+  onPlay: { type: ControlType6.EventHandler, },
   ...defaultEvents2,
 },);
 
 // https :https://framerusercontent.com/modules/UIrMjSS6ZX89L0CsT8k6/ZtFjxnixyznUo5AKQme5/Carousel.js
-import { jsx as _jsx5, jsxs as _jsxs2, } from 'react/jsx-runtime';
+import { jsx as _jsx4, jsxs as _jsxs2, } from 'react/jsx-runtime';
 import {
   Children as Children2,
   cloneElement as cloneElement2,
@@ -3948,7 +3890,7 @@ import {
   useRef as useRef6,
   useState as useState6,
 } from 'react';
-import { addPropertyControls as addPropertyControls4, ControlType as ControlType8, RenderTarget as RenderTarget5, } from 'unframer';
+import { addPropertyControls as addPropertyControls4, ControlType as ControlType7, RenderTarget as RenderTarget5, } from 'unframer';
 import {
   animate as animate2,
   motion as motion3,
@@ -4238,14 +4180,14 @@ function Carousel(
     gotoPage(currentPage + delta,);
   };
   if (numItems === 0) {
-    return /* @__PURE__ */ _jsx5(Placeholder, {},);
+    return /* @__PURE__ */ _jsx4(Placeholder, {},);
   }
   const dots = [];
   const dotsBlurStyle = {};
   if (numPages > 1 && showProgressDots && !showScrollbar) {
     for (let i3 = 0; i3 < numPages; i3++) {
       const isSelected = isCanvas && !i3 || false;
-      dots.push(/* @__PURE__ */ _jsx5(Dot, {
+      dots.push(/* @__PURE__ */ _jsx4(Dot, {
         dotStyle: { ...dotStyle, width: dotSize, height: dotSize, backgroundColor: dotsFill, },
         buttonStyle: baseButtonStyles,
         isSelected,
@@ -4269,7 +4211,7 @@ function Carousel(
     style: containerStyle2,
     ...carouselA11y,
     children: [
-      /* @__PURE__ */ _jsx5(motion3.ul, {
+      /* @__PURE__ */ _jsx4(motion3.ul, {
         ref: carouselRef,
         style: carouselStyle,
         className: 'framer--carousel',
@@ -4279,7 +4221,7 @@ function Carousel(
         onWheel: () => targetScroll.current = void 0,
         children: Children2.map(filteredSlots, (child, index,) => {
           var _child_props;
-          return /* @__PURE__ */ _jsx5('li', {
+          return /* @__PURE__ */ _jsx4('li', {
             style: itemStyle,
             ...itemA11y,
             'aria-label': `${index + 1} of ${numItems}`,
@@ -4296,7 +4238,7 @@ function Carousel(
         className: 'framer--carousel-controls',
         'data-show-mouse-controls': showMouseControls,
         children: [
-          /* @__PURE__ */ _jsx5(motion3.button, {
+          /* @__PURE__ */ _jsx4(motion3.button, {
             ref: start.buttonRef,
             type: 'button',
             style: {
@@ -4312,14 +4254,14 @@ function Carousel(
             'aria-label': 'Previous',
             whileTap: { scale: 0.9, },
             transition: { duration: 0.05, },
-            children: /* @__PURE__ */ _jsx5('img', {
+            children: /* @__PURE__ */ _jsx4('img', {
               alt: '',
               width: arrowSize,
               height: arrowSize,
               src: leftArrow || 'https://framerusercontent.com/images/6tTbkXggWgQCAJ4DO2QEdXXmgM.svg',
             },),
           },),
-          /* @__PURE__ */ _jsx5(motion3.button, {
+          /* @__PURE__ */ _jsx4(motion3.button, {
             ref: end.buttonRef,
             type: 'button',
             style: {
@@ -4335,7 +4277,7 @@ function Carousel(
             'aria-label': 'Next',
             whileTap: { scale: 0.9, },
             transition: { duration: 0.05, },
-            children: /* @__PURE__ */ _jsx5('img', {
+            children: /* @__PURE__ */ _jsx4('img', {
               alt: '',
               width: arrowSize,
               height: arrowSize,
@@ -4343,7 +4285,7 @@ function Carousel(
             },),
           },),
           dots.length > 1
-            ? /* @__PURE__ */ _jsx5('div', {
+            ? /* @__PURE__ */ _jsx4('div', {
               style: {
                 ...dotsContainerStyle,
                 left: axis ? '50%' : dotsInset,
@@ -4360,7 +4302,7 @@ function Carousel(
             : null,
         ],
       },),
-      /* @__PURE__ */ _jsx5(MouseStyles, {},),
+      /* @__PURE__ */ _jsx4(MouseStyles, {},),
     ],
   },);
 }
@@ -4372,16 +4314,16 @@ Carousel.defaultProps = {
   borderRadius: 0,
 };
 addPropertyControls4(Carousel, {
-  slots: { type: ControlType8.Array, title: 'Children', control: { type: ControlType8.ComponentInstance, }, },
+  slots: { type: ControlType7.Array, title: 'Children', control: { type: ControlType7.ComponentInstance, }, },
   axis: {
-    type: ControlType8.Enum,
+    type: ControlType7.Enum,
     title: 'Direction',
     options: [true, false,],
     optionIcons: ['direction-horizontal', 'direction-vertical',],
     displaySegmentedControl: true,
   },
   align: {
-    type: ControlType8.Enum,
+    type: ControlType7.Enum,
     title: 'Align',
     options: ['flex-start', 'center', 'flex-end',],
     optionIcons: {
@@ -4390,21 +4332,21 @@ addPropertyControls4(Carousel, {
     defaultValue: 'center',
     displaySegmentedControl: true,
   },
-  gap: { type: ControlType8.Number, title: 'Gap', },
+  gap: { type: ControlType7.Number, title: 'Gap', },
   ...paddingControl,
   sizingObject: {
-    type: ControlType8.Object,
+    type: ControlType7.Object,
     title: 'Sizing',
     controls: {
       widthType: {
-        type: ControlType8.Enum,
+        type: ControlType7.Enum,
         title: 'Width',
         options: ['auto', 'stretch', 'columns',],
         optionTitles: ['Auto', 'Stretch', 'Columns',],
         defaultValue: 'auto',
       },
       widthInset: {
-        type: ControlType8.Number,
+        type: ControlType7.Number,
         title: 'Inset',
         min: 0,
         max: 500,
@@ -4412,7 +4354,7 @@ addPropertyControls4(Carousel, {
         hidden: (props,) => props.widthType !== 'stretch',
       },
       widthColumns: {
-        type: ControlType8.Number,
+        type: ControlType7.Number,
         title: 'Columns',
         min: 1,
         max: 10,
@@ -4421,14 +4363,14 @@ addPropertyControls4(Carousel, {
         hidden: (props,) => props.widthType !== 'columns',
       },
       heightType: {
-        type: ControlType8.Enum,
+        type: ControlType7.Enum,
         title: 'Height',
         options: ['auto', 'stretch', 'rows',],
         optionTitles: ['Auto', 'Stretch', 'Rows',],
         defaultValue: 'auto',
       },
       heightInset: {
-        type: ControlType8.Number,
+        type: ControlType7.Number,
         title: 'Inset',
         min: 0,
         max: 500,
@@ -4436,7 +4378,7 @@ addPropertyControls4(Carousel, {
         hidden: (props,) => props.heightType !== 'stretch',
       },
       heightRows: {
-        type: ControlType8.Number,
+        type: ControlType7.Number,
         title: 'Rows',
         min: 1,
         max: 10,
@@ -4447,28 +4389,28 @@ addPropertyControls4(Carousel, {
     },
   },
   snapObject: {
-    type: ControlType8.Object,
+    type: ControlType7.Object,
     title: 'Snapping',
     controls: {
-      snap: { type: ControlType8.Boolean, title: 'Enable', },
+      snap: { type: ControlType7.Boolean, title: 'Enable', },
       snapEdge: {
-        type: ControlType8.Enum,
+        type: ControlType7.Enum,
         title: 'Edge',
         options: ['start', 'center', 'end',],
         optionTitles: ['Left', 'Center', 'Right',],
         defaultValue: 'center',
         hidden: (props,) => !props.snap,
       },
-      fluid: { type: ControlType8.Boolean, title: 'Fluid', defaultValue: false, hidden: (props,) => !props.snap, },
+      fluid: { type: ControlType7.Boolean, title: 'Fluid', defaultValue: false, hidden: (props,) => !props.snap, },
     },
   },
   fadeObject: {
-    type: ControlType8.Object,
+    type: ControlType7.Object,
     title: 'Fading',
     controls: {
-      fadeContent: { type: ControlType8.Boolean, title: 'Enable', defaultValue: false, },
+      fadeContent: { type: ControlType7.Boolean, title: 'Enable', defaultValue: false, },
       fadeWidth: {
-        type: ControlType8.Number,
+        type: ControlType7.Number,
         title: 'Width',
         defaultValue: 25,
         min: 0,
@@ -4477,7 +4419,7 @@ addPropertyControls4(Carousel, {
         hidden: (props,) => !props.fadeContent,
       },
       fadeInset: {
-        type: ControlType8.Number,
+        type: ControlType7.Number,
         title: 'Inset',
         defaultValue: 0,
         min: 0,
@@ -4486,7 +4428,7 @@ addPropertyControls4(Carousel, {
         hidden: (props,) => !props.fadeContent,
       },
       fadeAlpha: {
-        type: ControlType8.Number,
+        type: ControlType7.Number,
         title: 'Opacity',
         hidden: (props,) => !props.fadeContent,
         min: 0,
@@ -4494,17 +4436,17 @@ addPropertyControls4(Carousel, {
         step: 0.05,
         defaultValue: 0,
       },
-      fadeTransition: { type: ControlType8.Transition, title: 'Transition', hidden: (props,) => !props.fadeContent, },
+      fadeTransition: { type: ControlType7.Transition, title: 'Transition', hidden: (props,) => !props.fadeContent, },
     },
   },
   progressObject: {
-    type: ControlType8.Object,
+    type: ControlType7.Object,
     title: 'Progress',
     controls: {
-      showScrollbar: { type: ControlType8.Boolean, title: 'Scroll Bar', defaultValue: false, },
-      showProgressDots: { type: ControlType8.Boolean, title: 'Dots', defaultValue: false, hidden: (props,) => props.showScrollbar, },
+      showScrollbar: { type: ControlType7.Boolean, title: 'Scroll Bar', defaultValue: false, },
+      showProgressDots: { type: ControlType7.Boolean, title: 'Dots', defaultValue: false, hidden: (props,) => props.showScrollbar, },
       dotSize: {
-        type: ControlType8.Number,
+        type: ControlType7.Number,
         title: 'Size',
         min: 1,
         max: 100,
@@ -4513,7 +4455,7 @@ addPropertyControls4(Carousel, {
         hidden: (props,) => !props.showProgressDots || props.showScrollbar,
       },
       dotsInset: {
-        type: ControlType8.Number,
+        type: ControlType7.Number,
         title: 'Inset',
         min: 0,
         max: 100,
@@ -4522,7 +4464,7 @@ addPropertyControls4(Carousel, {
         hidden: (props,) => !props.showProgressDots || props.showScrollbar,
       },
       dotsGap: {
-        type: ControlType8.Number,
+        type: ControlType7.Number,
         title: 'Gap',
         min: 0,
         max: 100,
@@ -4531,7 +4473,7 @@ addPropertyControls4(Carousel, {
         hidden: (props,) => !props.showProgressDots || props.showScrollbar,
       },
       dotsPadding: {
-        type: ControlType8.Number,
+        type: ControlType7.Number,
         title: 'Padding',
         min: 0,
         max: 100,
@@ -4540,19 +4482,19 @@ addPropertyControls4(Carousel, {
         hidden: (props,) => !props.showProgressDots || props.showScrollbar,
       },
       dotsFill: {
-        type: ControlType8.Color,
+        type: ControlType7.Color,
         title: 'Fill',
         defaultValue: '#fff',
         hidden: (props,) => !props.showProgressDots || props.showScrollbar,
       },
       dotsBackground: {
-        type: ControlType8.Color,
+        type: ControlType7.Color,
         title: 'Backdrop',
         defaultValue: 'rgba(0,0,0,0.2)',
         hidden: (props,) => !props.showProgressDots || props.showScrollbar,
       },
       dotsRadius: {
-        type: ControlType8.Number,
+        type: ControlType7.Number,
         title: 'Radius',
         min: 0,
         max: 200,
@@ -4560,7 +4502,7 @@ addPropertyControls4(Carousel, {
         hidden: (props,) => !props.showProgressDots || props.showScrollbar,
       },
       dotsOpacity: {
-        type: ControlType8.Number,
+        type: ControlType7.Number,
         title: 'Opacity',
         min: 0,
         max: 1,
@@ -4570,7 +4512,7 @@ addPropertyControls4(Carousel, {
         hidden: (props,) => !props.showProgressDots || props.showScrollbar,
       },
       dotsActiveOpacity: {
-        type: ControlType8.Number,
+        type: ControlType7.Number,
         title: 'Current',
         min: 0,
         max: 1,
@@ -4580,7 +4522,7 @@ addPropertyControls4(Carousel, {
         hidden: (props,) => !props.showProgressDots || props.showScrollbar,
       },
       dotsBlur: {
-        type: ControlType8.Number,
+        type: ControlType7.Number,
         title: 'Blur',
         min: 0,
         max: 50,
@@ -4591,20 +4533,20 @@ addPropertyControls4(Carousel, {
     },
   },
   arrowObject: {
-    type: ControlType8.Object,
+    type: ControlType7.Object,
     title: 'Arrows',
     controls: {
-      showMouseControls: { type: ControlType8.Boolean, title: 'Show', defaultValue: true, },
+      showMouseControls: { type: ControlType7.Boolean, title: 'Show', defaultValue: true, },
       arrowFill: {
-        type: ControlType8.Color,
+        type: ControlType7.Color,
         title: 'Fill',
         defaultValue: 'rgba(0,0,0,0.2)',
         hidden: (props,) => !props.showMouseControls,
       },
-      leftArrow: { type: ControlType8.Image, title: 'Previous', hidden: (props,) => !props.showMouseControls, },
-      rightArrow: { type: ControlType8.Image, title: 'Next', hidden: (props,) => !props.showMouseControls, },
+      leftArrow: { type: ControlType7.Image, title: 'Previous', hidden: (props,) => !props.showMouseControls, },
+      rightArrow: { type: ControlType7.Image, title: 'Next', hidden: (props,) => !props.showMouseControls, },
       arrowSize: {
-        type: ControlType8.Number,
+        type: ControlType7.Number,
         title: 'Size',
         min: 0,
         max: 200,
@@ -4613,7 +4555,7 @@ addPropertyControls4(Carousel, {
         hidden: (props,) => !props.showMouseControls,
       },
       arrowRadius: {
-        type: ControlType8.Number,
+        type: ControlType7.Number,
         title: 'Radius',
         min: 0,
         max: 500,
@@ -4621,7 +4563,7 @@ addPropertyControls4(Carousel, {
         hidden: (props,) => !props.showMouseControls,
       },
       arrowPadding: {
-        type: ControlType8.Number,
+        type: ControlType7.Number,
         title: 'Inset',
         min: 0,
         max: 100,
@@ -4631,8 +4573,8 @@ addPropertyControls4(Carousel, {
       },
     },
   },
-  ariaLabel: { type: ControlType8.String, title: 'Aria Label', placeholder: 'Movies...', },
-  borderRadius: { type: ControlType8.Number, title: 'Radius', min: 0, max: 500, displayStepper: true, defaultValue: 0, },
+  ariaLabel: { type: ControlType7.String, title: 'Aria Label', placeholder: 'Movies...', },
+  borderRadius: { type: ControlType7.Number, title: 'Radius', min: 0, max: 500, displayStepper: true, defaultValue: 0, },
 },);
 function Dot(
   {
@@ -4671,26 +4613,26 @@ function Dot(
   let bottom = !axis && index !== total - 1 ? inlinePadding : padding;
   let right = axis && index !== total - 1 ? inlinePadding : padding;
   let left = axis && index > 0 ? inlinePadding : padding;
-  return /* @__PURE__ */ _jsx5('button', {
+  return /* @__PURE__ */ _jsx4('button', {
     'aria-label': `Scroll to page ${index + 1}`,
     type: 'button',
     ...props,
     style: { ...buttonStyle, padding: `${top}px ${right}px ${bottom}px ${left}px`, },
-    children: /* @__PURE__ */ _jsx5(motion3.div, { style: { ...dotStyle2, opacity, }, },),
+    children: /* @__PURE__ */ _jsx4(motion3.div, { style: { ...dotStyle2, opacity, }, },),
   },);
 }
 function Placeholder() {
   return /* @__PURE__ */ _jsxs2('section', {
     style: placeholderStyles2,
     children: [
-      /* @__PURE__ */ _jsx5('div', { style: emojiStyles2, children: '\u2728', },),
-      /* @__PURE__ */ _jsx5('p', { style: titleStyles2, children: 'Connect to Content', },),
-      /* @__PURE__ */ _jsx5('p', { style: subtitleStyles2, children: 'Add layers or components to swipe between.', },),
+      /* @__PURE__ */ _jsx4('div', { style: emojiStyles2, children: '\u2728', },),
+      /* @__PURE__ */ _jsx4('p', { style: titleStyles2, children: 'Connect to Content', },),
+      /* @__PURE__ */ _jsx4('p', { style: subtitleStyles2, children: 'Add layers or components to swipe between.', },),
     ],
   },);
 }
 function MouseStyles() {
-  return /* @__PURE__ */ _jsx5('div', {
+  return /* @__PURE__ */ _jsx4('div', {
     dangerouslySetInnerHTML: {
       __html: `<style>@media (pointer: fine) {
                 .framer--carousel[data-show-scrollbar="false"]::-webkit-scrollbar {
@@ -4782,436 +4724,12 @@ var dotStyle = {
   padding: 0,
 };
 
-// https :https://framerusercontent.com/modules/CeBJmIrsThfDJW9clnka/unRlmqMa5mtgMoq0ExKt/kHb0JRZSH.js
-import { fontStore as fontStore2, } from 'unframer';
-fontStore2.loadFonts(['Inter-Medium', 'Inter-Bold', 'Inter-BoldItalic', 'Inter-MediumItalic',],);
-var fonts = [{
-  explicitInter: true,
-  fonts: [{
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange: 'U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F',
-    url: 'https://framerusercontent.com/assets/5A3Ce6C9YYmCjpQx9M4inSaKU.woff2',
-    weight: '500',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange: 'U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116',
-    url: 'https://framerusercontent.com/assets/Qx95Xyt0Ka3SGhinnbXIGpEIyP4.woff2',
-    weight: '500',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange: 'U+1F00-1FFF',
-    url: 'https://framerusercontent.com/assets/6mJuEAguuIuMog10gGvH5d3cl8.woff2',
-    weight: '500',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange: 'U+0370-03FF',
-    url: 'https://framerusercontent.com/assets/xYYWaj7wCU5zSQH0eXvSaS19wo.woff2',
-    weight: '500',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange: 'U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF',
-    url: 'https://framerusercontent.com/assets/otTaNuNpVK4RbdlT7zDDdKvQBA.woff2',
-    weight: '500',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange:
-      'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
-    url: 'https://framerusercontent.com/assets/d3tHnaQIAeqiE5hGcRw4mmgWYU.woff2',
-    weight: '500',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange: 'U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+1EA0-1EF9, U+20AB',
-    url: 'https://framerusercontent.com/assets/DolVirEGb34pEXEp8t8FQBSK4.woff2',
-    weight: '500',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange: 'U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F',
-    url: 'https://framerusercontent.com/assets/DpPBYI0sL4fYLgAkX8KXOPVt7c.woff2',
-    weight: '700',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange: 'U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116',
-    url: 'https://framerusercontent.com/assets/4RAEQdEOrcnDkhHiiCbJOw92Lk.woff2',
-    weight: '700',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange: 'U+1F00-1FFF',
-    url: 'https://framerusercontent.com/assets/1K3W8DizY3v4emK8Mb08YHxTbs.woff2',
-    weight: '700',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange: 'U+0370-03FF',
-    url: 'https://framerusercontent.com/assets/tUSCtfYVM1I1IchuyCwz9gDdQ.woff2',
-    weight: '700',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange: 'U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF',
-    url: 'https://framerusercontent.com/assets/VgYFWiwsAC5OYxAycRXXvhze58.woff2',
-    weight: '700',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange:
-      'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
-    url: 'https://framerusercontent.com/assets/DXD0Q7LSl7HEvDzucnyLnGBHM.woff2',
-    weight: '700',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange: 'U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+1EA0-1EF9, U+20AB',
-    url: 'https://framerusercontent.com/assets/GIryZETIX4IFypco5pYZONKhJIo.woff2',
-    weight: '700',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange: 'U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F',
-    url: 'https://framerusercontent.com/assets/H89BbHkbHDzlxZzxi8uPzTsp90.woff2',
-    weight: '700',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange: 'U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116',
-    url: 'https://framerusercontent.com/assets/u6gJwDuwB143kpNK1T1MDKDWkMc.woff2',
-    weight: '700',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange: 'U+1F00-1FFF',
-    url: 'https://framerusercontent.com/assets/43sJ6MfOPh1LCJt46OvyDuSbA6o.woff2',
-    weight: '700',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange: 'U+0370-03FF',
-    url: 'https://framerusercontent.com/assets/wccHG0r4gBDAIRhfHiOlq6oEkqw.woff2',
-    weight: '700',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange: 'U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF',
-    url: 'https://framerusercontent.com/assets/WZ367JPwf9bRW6LdTHN8rXgSjw.woff2',
-    weight: '700',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange:
-      'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
-    url: 'https://framerusercontent.com/assets/QxmhnWTzLtyjIiZcfaLIJ8EFBXU.woff2',
-    weight: '700',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange: 'U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+1EA0-1EF9, U+20AB',
-    url: 'https://framerusercontent.com/assets/2A4Xx7CngadFGlVV4xrO06OBHY.woff2',
-    weight: '700',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange: 'U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F',
-    url: 'https://framerusercontent.com/assets/khkJkwSL66WFg8SX6Wa726c.woff2',
-    weight: '500',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange: 'U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116',
-    url: 'https://framerusercontent.com/assets/0E7IMbDzcGABpBwwqNEt60wU0w.woff2',
-    weight: '500',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange: 'U+1F00-1FFF',
-    url: 'https://framerusercontent.com/assets/NTJ0nQgIF0gcDelS14zQ9NR9Q.woff2',
-    weight: '500',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange: 'U+0370-03FF',
-    url: 'https://framerusercontent.com/assets/QrcNhgEPfRl0LS8qz5Ln8olanl8.woff2',
-    weight: '500',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange: 'U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF',
-    url: 'https://framerusercontent.com/assets/JEXmejW8mXOYMtt0hyRg811kHac.woff2',
-    weight: '500',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange:
-      'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
-    url: 'https://framerusercontent.com/assets/ksvR4VsLksjpSwnC2fPgHRNMw.woff2',
-    weight: '500',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange: 'U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+1EA0-1EF9, U+20AB',
-    url: 'https://framerusercontent.com/assets/uy9s0iWuxiNnVt8EpTI3gzohpwo.woff2',
-    weight: '500',
-  },],
-},];
-var css2 = [
-  '.framer-S6zkH .framer-styles-preset-az499w:not(.rich-text-wrapper), .framer-S6zkH .framer-styles-preset-az499w.rich-text-wrapper h2 { --framer-font-family: "Inter", "Inter Placeholder", sans-serif; --framer-font-family-bold: "Inter", "Inter Placeholder", sans-serif; --framer-font-family-bold-italic: "Inter", "Inter Placeholder", sans-serif; --framer-font-family-italic: "Inter", "Inter Placeholder", sans-serif; --framer-font-open-type-features: normal; --framer-font-size: 20px; --framer-font-style: normal; --framer-font-style-bold: normal; --framer-font-style-bold-italic: italic; --framer-font-style-italic: italic; --framer-font-weight: 500; --framer-font-weight-bold: 700; --framer-font-weight-bold-italic: 700; --framer-font-weight-italic: 500; --framer-letter-spacing: -1px; --framer-line-height: 1.2em; --framer-paragraph-spacing: 40px; --framer-text-alignment: left; --framer-text-color: #8a8a8a; --framer-text-decoration: none; --framer-text-stroke-color: initial; --framer-text-stroke-width: initial; --framer-text-transform: none; }',
-];
-var className = 'framer-S6zkH';
-
-// https :https://framerusercontent.com/modules/s4C54EbknlUbqhBfYMqd/YN6cEyD1mHPgUfMRbdy2/zu841OiIg.js
-import { fontStore as fontStore3, } from 'unframer';
-fontStore3.loadFonts(['Inter-Bold', 'Inter-Black', 'Inter-BlackItalic', 'Inter-BoldItalic',],);
-var fonts2 = [{
-  explicitInter: true,
-  fonts: [{
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange: 'U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F',
-    url: 'https://framerusercontent.com/assets/DpPBYI0sL4fYLgAkX8KXOPVt7c.woff2',
-    weight: '700',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange: 'U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116',
-    url: 'https://framerusercontent.com/assets/4RAEQdEOrcnDkhHiiCbJOw92Lk.woff2',
-    weight: '700',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange: 'U+1F00-1FFF',
-    url: 'https://framerusercontent.com/assets/1K3W8DizY3v4emK8Mb08YHxTbs.woff2',
-    weight: '700',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange: 'U+0370-03FF',
-    url: 'https://framerusercontent.com/assets/tUSCtfYVM1I1IchuyCwz9gDdQ.woff2',
-    weight: '700',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange: 'U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF',
-    url: 'https://framerusercontent.com/assets/VgYFWiwsAC5OYxAycRXXvhze58.woff2',
-    weight: '700',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange:
-      'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
-    url: 'https://framerusercontent.com/assets/DXD0Q7LSl7HEvDzucnyLnGBHM.woff2',
-    weight: '700',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange: 'U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+1EA0-1EF9, U+20AB',
-    url: 'https://framerusercontent.com/assets/GIryZETIX4IFypco5pYZONKhJIo.woff2',
-    weight: '700',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange: 'U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F',
-    url: 'https://framerusercontent.com/assets/mkY5Sgyq51ik0AMrSBwhm9DJg.woff2',
-    weight: '900',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange: 'U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116',
-    url: 'https://framerusercontent.com/assets/X5hj6qzcHUYv7h1390c8Rhm6550.woff2',
-    weight: '900',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange: 'U+1F00-1FFF',
-    url: 'https://framerusercontent.com/assets/gQhNpS3tN86g8RcVKYUUaKt2oMQ.woff2',
-    weight: '900',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange: 'U+0370-03FF',
-    url: 'https://framerusercontent.com/assets/cugnVhSraaRyANCaUtI5FV17wk.woff2',
-    weight: '900',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange: 'U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF',
-    url: 'https://framerusercontent.com/assets/5HcVoGak8k5agFJSaKa4floXVu0.woff2',
-    weight: '900',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange:
-      'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
-    url: 'https://framerusercontent.com/assets/jn4BtSPLlS0NDp1KiFAtFKiiY0o.woff2',
-    weight: '900',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'normal',
-    unicodeRange: 'U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+1EA0-1EF9, U+20AB',
-    url: 'https://framerusercontent.com/assets/P2Bw01CtL0b9wqygO0sSVogWbo.woff2',
-    weight: '900',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange: 'U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F',
-    url: 'https://framerusercontent.com/assets/05KsVHGDmqXSBXM4yRZ65P8i0s.woff2',
-    weight: '900',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange: 'U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116',
-    url: 'https://framerusercontent.com/assets/ky8ovPukK4dJ1Pxq74qGhOqCYI.woff2',
-    weight: '900',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange: 'U+1F00-1FFF',
-    url: 'https://framerusercontent.com/assets/vvNSqIj42qeQ2bvCRBIWKHscrc.woff2',
-    weight: '900',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange: 'U+0370-03FF',
-    url: 'https://framerusercontent.com/assets/3ZmXbBKToJifDV9gwcifVd1tEY.woff2',
-    weight: '900',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange: 'U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF',
-    url: 'https://framerusercontent.com/assets/FNfhX3dt4ChuLJq2PwdlxHO7PU.woff2',
-    weight: '900',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange:
-      'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
-    url: 'https://framerusercontent.com/assets/g0c8vEViiXNlKAgI4Ymmk3Ig.woff2',
-    weight: '900',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange: 'U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+1EA0-1EF9, U+20AB',
-    url: 'https://framerusercontent.com/assets/efTfQcBJ53kM2pB1hezSZ3RDUFs.woff2',
-    weight: '900',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange: 'U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F',
-    url: 'https://framerusercontent.com/assets/H89BbHkbHDzlxZzxi8uPzTsp90.woff2',
-    weight: '700',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange: 'U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116',
-    url: 'https://framerusercontent.com/assets/u6gJwDuwB143kpNK1T1MDKDWkMc.woff2',
-    weight: '700',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange: 'U+1F00-1FFF',
-    url: 'https://framerusercontent.com/assets/43sJ6MfOPh1LCJt46OvyDuSbA6o.woff2',
-    weight: '700',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange: 'U+0370-03FF',
-    url: 'https://framerusercontent.com/assets/wccHG0r4gBDAIRhfHiOlq6oEkqw.woff2',
-    weight: '700',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange: 'U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF',
-    url: 'https://framerusercontent.com/assets/WZ367JPwf9bRW6LdTHN8rXgSjw.woff2',
-    weight: '700',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange:
-      'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
-    url: 'https://framerusercontent.com/assets/QxmhnWTzLtyjIiZcfaLIJ8EFBXU.woff2',
-    weight: '700',
-  }, {
-    family: 'Inter',
-    source: 'framer',
-    style: 'italic',
-    unicodeRange: 'U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+1EA0-1EF9, U+20AB',
-    url: 'https://framerusercontent.com/assets/2A4Xx7CngadFGlVV4xrO06OBHY.woff2',
-    weight: '700',
-  },],
-},];
-var css3 = [
-  '.framer-C3cpK .framer-styles-preset-jttjmp:not(.rich-text-wrapper), .framer-C3cpK .framer-styles-preset-jttjmp.rich-text-wrapper h3 { --framer-font-family: "Inter", "Inter Placeholder", sans-serif; --framer-font-family-bold: "Inter", sans-serif; --framer-font-family-bold-italic: "Inter", sans-serif; --framer-font-family-italic: "Inter", "Inter Placeholder", sans-serif; --framer-font-open-type-features: normal; --framer-font-size: 30px; --framer-font-style: normal; --framer-font-style-bold: normal; --framer-font-style-bold-italic: italic; --framer-font-style-italic: italic; --framer-font-weight: 700; --framer-font-weight-bold: 900; --framer-font-weight-bold-italic: 900; --framer-font-weight-italic: 700; --framer-letter-spacing: -1.9px; --framer-line-height: 1.2em; --framer-paragraph-spacing: 40px; --framer-text-alignment: left; --framer-text-color: #ffffff; --framer-text-decoration: none; --framer-text-stroke-color: initial; --framer-text-stroke-width: initial; --framer-text-transform: none; }',
-];
-var className2 = 'framer-C3cpK';
-
-// https :https://framerusercontent.com/modules/Z6gdUhkHpshOHd867fuv/erX8h85NcFdhZLj4lGvk/d9Sk_EB5Q.js
-import { jsx as _jsx6, jsxs as _jsxs3, } from 'react/jsx-runtime';
+// https :https://framerusercontent.com/modules/Z6gdUhkHpshOHd867fuv/fxFbaYuaDvGVFksJn8ih/d9Sk_EB5Q.js
+import { jsx as _jsx5, jsxs as _jsxs3, } from 'react/jsx-runtime';
 import {
   addFonts,
   addPropertyControls as addPropertyControls5,
-  ControlType as ControlType9,
+  ControlType as ControlType8,
   cx,
   getFontsFromSharedStyle,
   RichText,
@@ -5223,10 +4741,10 @@ import {
   withOptimizedAppearEffect,
 } from 'unframer';
 import { LayoutGroup as LayoutGroup2, motion as motion4, MotionConfigContext, } from 'unframer';
-import * as React5 from 'react';
+import * as React4 from 'react';
 var RichTextWithFXWithOptimizedAppearEffect = withOptimizedAppearEffect(withFX(RichText,),);
 var cycleOrder = ['qZtGGvQMb', 'ISBvwwlCY', 'LJzQDXnbV', 'vjaStZmYU',];
-var serializationHash = 'framer-x92wK';
+var serializationHash = 'framer-iT6sr';
 var variantClassNames = {
   ISBvwwlCY: 'framer-v-16pg4jh',
   LJzQDXnbV: 'framer-v-w0ft4i',
@@ -5243,17 +4761,17 @@ function addPropertyOverrides(overrides, ...variants) {
 var transition1 = { bounce: 0.2, delay: 0, duration: 0.4, type: 'spring', };
 var animation = { filter: 'blur(10px)', opacity: 1e-3, rotate: 0, scale: 1, skewX: 0, skewY: 0, x: 0, y: 10, };
 var transition2 = { delay: 0.4, duration: 1, ease: [0.44, 0, 0.56, 1,], type: 'tween', };
-var textEffect = { effect: animation, startDelay: 0.2, tokenization: 'line', transition: transition2, trigger: 'onMount', type: 'appear', };
+var textEffect = { effect: animation, startDelay: 0, tokenization: 'line', transition: transition2, trigger: 'onMount', type: 'appear', };
 var transition3 = { delay: 0.7, duration: 0.7, ease: [0.44, 0, 0.56, 1,], type: 'tween', };
 var animation1 = { opacity: 1, rotate: 0, rotateX: 0, rotateY: 0, scale: 1, skewX: 0, skewY: 0, transition: transition3, x: 0, y: 0, };
 var animation2 = { opacity: 1e-3, rotate: 0, rotateX: 0, rotateY: 0, scale: 1, skewX: 0, skewY: 0, x: 0, y: 150, };
 var Transition = ({ value, children, },) => {
-  const config = React5.useContext(MotionConfigContext,);
+  const config = React4.useContext(MotionConfigContext,);
   const transition = value !== null && value !== void 0 ? value : config.transition;
-  const contextValue = React5.useMemo(() => ({ ...config, transition, }), [JSON.stringify(transition,),],);
-  return /* @__PURE__ */ _jsx6(MotionConfigContext.Provider, { value: contextValue, children, },);
+  const contextValue = React4.useMemo(() => ({ ...config, transition, }), [JSON.stringify(transition,),],);
+  return /* @__PURE__ */ _jsx5(MotionConfigContext.Provider, { value: contextValue, children, },);
 };
-var Variants = motion4.create(React5.Fragment,);
+var Variants = motion4.create(React4.Fragment,);
 var humanReadableVariantMap = { 'Variant 1': 'qZtGGvQMb', 'Variant 2': 'ISBvwwlCY', 'Variant 3': 'LJzQDXnbV', 'Variant 4': 'vjaStZmYU', };
 var getProps2 = ({ height, id, width, ...props },) => {
   var _humanReadableVariantMap_props_variant, _ref;
@@ -5273,7 +4791,7 @@ var createLayoutDependency = (props, variants,) => {
   if (props.layoutDependency) return variants.join('-',) + props.layoutDependency;
   return variants.join('-',);
 };
-var Component = /* @__PURE__ */ React5.forwardRef(function (props, ref,) {
+var Component = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
   const { activeLocale, setLocale, } = useLocaleInfo();
   const { style, className: className3, layoutId, variant, ...restProps } = getProps2(props,);
   const {
@@ -5288,16 +4806,16 @@ var Component = /* @__PURE__ */ React5.forwardRef(function (props, ref,) {
     variants,
   } = useVariantState({ cycleOrder, defaultVariant: 'qZtGGvQMb', variant, variantClassNames, },);
   const layoutDependency = createLayoutDependency(props, variants,);
-  const ref1 = React5.useRef(null,);
-  const defaultLayoutId = React5.useId();
+  const ref1 = React4.useRef(null,);
+  const defaultLayoutId = React4.useId();
   const sharedStyleClassNames = [className,];
   const componentViewport = useComponentViewport();
-  return /* @__PURE__ */ _jsx6(LayoutGroup2, {
+  return /* @__PURE__ */ _jsx5(LayoutGroup2, {
     id: layoutId !== null && layoutId !== void 0 ? layoutId : defaultLayoutId,
-    children: /* @__PURE__ */ _jsx6(Variants, {
+    children: /* @__PURE__ */ _jsx5(Variants, {
       animate: variants,
       initial: false,
-      children: /* @__PURE__ */ _jsx6(Transition, {
+      children: /* @__PURE__ */ _jsx5(Transition, {
         value: transition1,
         children: /* @__PURE__ */ _jsxs3(motion4.div, {
           ...restProps,
@@ -5318,10 +4836,10 @@ var Component = /* @__PURE__ */ React5.forwardRef(function (props, ref,) {
             gestureVariant,
           ),
           children: [
-            /* @__PURE__ */ _jsx6(RichText, {
+            /* @__PURE__ */ _jsx5(RichText, {
               __fromCanvasComponent: true,
-              children: /* @__PURE__ */ _jsx6(React5.Fragment, {
-                children: /* @__PURE__ */ _jsx6(motion4.h1, {
+              children: /* @__PURE__ */ _jsx5(React4.Fragment, {
+                children: /* @__PURE__ */ _jsx5(motion4.h1, {
                   style: {
                     '--font-selector': 'SW50ZXItQm9sZA==',
                     '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -5350,8 +4868,8 @@ var Component = /* @__PURE__ */ React5.forwardRef(function (props, ref,) {
               ...addPropertyOverrides(
                 {
                   ISBvwwlCY: {
-                    children: /* @__PURE__ */ _jsx6(React5.Fragment, {
-                      children: /* @__PURE__ */ _jsx6(motion4.h1, {
+                    children: /* @__PURE__ */ _jsx5(React4.Fragment, {
+                      children: /* @__PURE__ */ _jsx5(motion4.h1, {
                         style: {
                           '--font-selector': 'SW50ZXItQm9sZA==',
                           '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -5366,7 +4884,7 @@ var Component = /* @__PURE__ */ React5.forwardRef(function (props, ref,) {
                     },),
                   },
                   LJzQDXnbV: {
-                    children: /* @__PURE__ */ _jsx6(React5.Fragment, {
+                    children: /* @__PURE__ */ _jsx5(React4.Fragment, {
                       children: /* @__PURE__ */ _jsxs3(motion4.h1, {
                         style: {
                           '--font-selector': 'SW50ZXItQm9sZA==',
@@ -5377,27 +4895,27 @@ var Component = /* @__PURE__ */ React5.forwardRef(function (props, ref,) {
                           '--framer-text-alignment': 'left',
                           '--framer-text-color': 'var(--extracted-gdpscs, rgb(255, 255, 255))',
                         },
-                        children: ['Run and scale realtime ', /* @__PURE__ */ _jsx6(motion4.br, {},), 'applications',],
+                        children: ['Run and scale realtime ', /* @__PURE__ */ _jsx5(motion4.br, {},), 'applications',],
                       },),
                     },),
                   },
                   vjaStZmYU: {
-                    children: /* @__PURE__ */ _jsx6(React5.Fragment, {
+                    children: /* @__PURE__ */ _jsx5(React4.Fragment, {
                       children: /* @__PURE__ */ _jsxs3(motion4.h1, {
                         style: {
                           '--font-selector': 'SW50ZXItQm9sZA==',
                           '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
-                          '--framer-font-size': '50px',
+                          '--framer-font-size': '45px',
                           '--framer-font-weight': '700',
                           '--framer-letter-spacing': '-3.8px',
-                          '--framer-text-alignment': 'left',
+                          '--framer-text-alignment': 'center',
                           '--framer-text-color': 'var(--extracted-gdpscs, rgb(255, 255, 255))',
                         },
                         children: [
                           'Run and scale ',
-                          /* @__PURE__ */ _jsx6(motion4.br, {},),
+                          /* @__PURE__ */ _jsx5(motion4.br, {},),
                           'realtime ',
-                          /* @__PURE__ */ _jsx6(motion4.br, {},),
+                          /* @__PURE__ */ _jsx5(motion4.br, {},),
                           'applications',
                         ],
                       },),
@@ -5408,14 +4926,14 @@ var Component = /* @__PURE__ */ React5.forwardRef(function (props, ref,) {
                 gestureVariant,
               ),
             },),
-            /* @__PURE__ */ _jsx6(RichTextWithFXWithOptimizedAppearEffect, {
+            /* @__PURE__ */ _jsx5(RichTextWithFXWithOptimizedAppearEffect, {
               __fromCanvasComponent: true,
               __perspectiveFX: false,
               __smartComponentFX: true,
               __targetOpacity: 1,
               animate: animation1,
-              children: /* @__PURE__ */ _jsx6(React5.Fragment, {
-                children: /* @__PURE__ */ _jsx6(motion4.h2, {
+              children: /* @__PURE__ */ _jsx5(React4.Fragment, {
+                children: /* @__PURE__ */ _jsx5(motion4.h2, {
                   className: 'framer-styles-preset-az499w',
                   'data-styles-preset': 'kHb0JRZSH',
                   style: { '--framer-text-alignment': 'left', },
@@ -5430,23 +4948,39 @@ var Component = /* @__PURE__ */ React5.forwardRef(function (props, ref,) {
               layoutId: 'YmzO8NHmd',
               optimized: true,
               style: { '--framer-paragraph-spacing': '0px', },
+              variants: { vjaStZmYU: { '--extracted-1of0zx5': 'rgb(138, 138, 138)', }, },
               verticalAlignment: 'top',
               withExternalLayout: true,
               ...addPropertyOverrides(
                 {
                   vjaStZmYU: {
-                    children: /* @__PURE__ */ _jsx6(React5.Fragment, {
+                    children: /* @__PURE__ */ _jsx5(React4.Fragment, {
                       children: /* @__PURE__ */ _jsxs3(motion4.h2, {
-                        className: 'framer-styles-preset-az499w',
-                        'data-styles-preset': 'kHb0JRZSH',
-                        style: { '--framer-text-alignment': 'left', },
+                        style: {
+                          '--font-selector': 'SW50ZXItTWVkaXVt',
+                          '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
+                          '--framer-font-weight': '500',
+                          '--framer-letter-spacing': '-1px',
+                          '--framer-text-alignment': 'center',
+                          '--framer-text-color': 'var(--extracted-1of0zx5, rgb(138, 138, 138))',
+                        },
                         children: [
-                          'Your system to build robust, fast, ',
-                          /* @__PURE__ */ _jsx6(motion4.br, {},),
-                          'and scalable applications on the edge. ',
+                          /* @__PURE__ */ _jsx5(motion4.span, {
+                            style: { '--framer-font-size': '17px', },
+                            children: 'Your system to build robust, fast, ',
+                          },),
+                          /* @__PURE__ */ _jsx5(motion4.span, {
+                            style: { '--framer-font-size': '17px', },
+                            children: /* @__PURE__ */ _jsx5(motion4.br, {},),
+                          },),
+                          /* @__PURE__ */ _jsx5(motion4.span, {
+                            style: { '--framer-font-size': '17px', },
+                            children: 'and scalable applications on the edge. ',
+                          },),
                         ],
                       },),
                     },),
+                    fonts: ['Inter-Medium',],
                   },
                 },
                 baseVariant,
@@ -5461,13 +4995,15 @@ var Component = /* @__PURE__ */ React5.forwardRef(function (props, ref,) {
 },);
 var css4 = [
   '@supports (aspect-ratio: 1) { body { --framer-aspect-ratio-supported: auto; } }',
-  '.framer-x92wK.framer-1vu5d7d, .framer-x92wK .framer-1vu5d7d { display: block; }',
-  '.framer-x92wK.framer-rxzgau { align-content: flex-start; align-items: flex-start; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: flex-start; overflow: hidden; padding: 0px; position: relative; width: min-content; }',
-  '.framer-x92wK .framer-o7ici8, .framer-x92wK .framer-1fegu5r { flex: none; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 771px; word-break: break-word; word-wrap: break-word; }',
-  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-x92wK.framer-rxzgau { gap: 0px; } .framer-x92wK.framer-rxzgau > * { margin: 0px; margin-bottom: calc(10px / 2); margin-top: calc(10px / 2); } .framer-x92wK.framer-rxzgau > :first-child { margin-top: 0px; } .framer-x92wK.framer-rxzgau > :last-child { margin-bottom: 0px; } }',
-  ...css2,
+  '.framer-iT6sr.framer-1vu5d7d, .framer-iT6sr .framer-1vu5d7d { display: block; }',
+  '.framer-iT6sr.framer-rxzgau { align-content: flex-start; align-items: flex-start; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: flex-start; overflow: hidden; padding: 0px; position: relative; width: min-content; }',
+  '.framer-iT6sr .framer-o7ici8, .framer-iT6sr .framer-1fegu5r { flex: none; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 771px; word-break: break-word; word-wrap: break-word; }',
+  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-iT6sr.framer-rxzgau { gap: 0px; } .framer-iT6sr.framer-rxzgau > * { margin: 0px; margin-bottom: calc(10px / 2); margin-top: calc(10px / 2); } .framer-iT6sr.framer-rxzgau > :first-child { margin-top: 0px; } .framer-iT6sr.framer-rxzgau > :last-child { margin-bottom: 0px; } }',
+  '.framer-iT6sr.framer-v-15zuc8n.framer-rxzgau { align-content: center; align-items: center; }',
+  '.framer-iT6sr.framer-v-15zuc8n .framer-1fegu5r { align-self: stretch; width: auto; }',
+  ...css,
 ];
-var Framerd9Sk_EB5Q = withCSS(Component, css4, 'framer-x92wK',);
+var Framerd9Sk_EB5Q = withCSS(Component, css4, 'framer-iT6sr',);
 var stdin_default = Framerd9Sk_EB5Q;
 Framerd9Sk_EB5Q.displayName = 'Header';
 Framerd9Sk_EB5Q.defaultProps = { height: 226, width: 771, };
@@ -5476,7 +5012,7 @@ addPropertyControls5(Framerd9Sk_EB5Q, {
     options: ['qZtGGvQMb', 'ISBvwwlCY', 'LJzQDXnbV', 'vjaStZmYU',],
     optionTitles: ['Variant 1', 'Variant 2', 'Variant 3', 'Variant 4',],
     title: 'Variant',
-    type: ControlType9.Enum,
+    type: ControlType8.Enum,
   },
 },);
 addFonts(Framerd9Sk_EB5Q, [{
@@ -5581,15 +5117,65 @@ addFonts(Framerd9Sk_EB5Q, [{
     unicodeRange: 'U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+1EA0-1EF9, U+20AB',
     url: 'https://framerusercontent.com/assets/b6Y37FthZeALduNqHicBT6FutY.woff2',
     weight: '400',
+  }, {
+    family: 'Inter',
+    source: 'framer',
+    style: 'normal',
+    unicodeRange: 'U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F',
+    url: 'https://framerusercontent.com/assets/5A3Ce6C9YYmCjpQx9M4inSaKU.woff2',
+    weight: '500',
+  }, {
+    family: 'Inter',
+    source: 'framer',
+    style: 'normal',
+    unicodeRange: 'U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116',
+    url: 'https://framerusercontent.com/assets/Qx95Xyt0Ka3SGhinnbXIGpEIyP4.woff2',
+    weight: '500',
+  }, {
+    family: 'Inter',
+    source: 'framer',
+    style: 'normal',
+    unicodeRange: 'U+1F00-1FFF',
+    url: 'https://framerusercontent.com/assets/6mJuEAguuIuMog10gGvH5d3cl8.woff2',
+    weight: '500',
+  }, {
+    family: 'Inter',
+    source: 'framer',
+    style: 'normal',
+    unicodeRange: 'U+0370-03FF',
+    url: 'https://framerusercontent.com/assets/xYYWaj7wCU5zSQH0eXvSaS19wo.woff2',
+    weight: '500',
+  }, {
+    family: 'Inter',
+    source: 'framer',
+    style: 'normal',
+    unicodeRange: 'U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF',
+    url: 'https://framerusercontent.com/assets/otTaNuNpVK4RbdlT7zDDdKvQBA.woff2',
+    weight: '500',
+  }, {
+    family: 'Inter',
+    source: 'framer',
+    style: 'normal',
+    unicodeRange:
+      'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
+    url: 'https://framerusercontent.com/assets/d3tHnaQIAeqiE5hGcRw4mmgWYU.woff2',
+    weight: '500',
+  }, {
+    family: 'Inter',
+    source: 'framer',
+    style: 'normal',
+    unicodeRange: 'U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+1EA0-1EF9, U+20AB',
+    url: 'https://framerusercontent.com/assets/DolVirEGb34pEXEp8t8FQBSK4.woff2',
+    weight: '500',
   },],
 }, ...getFontsFromSharedStyle(fonts,),], { supportsExplicitInterCodegen: true, },);
 
 // https :https://framerusercontent.com/modules/xQku7nZxQQIoLWBCdHYm/CDTPe4EowIDaiNlq5km5/fQgkomDej.js
-import { jsx as _jsx7, } from 'react/jsx-runtime';
+import { jsx as _jsx6, } from 'react/jsx-runtime';
 import {
   addFonts as addFonts2,
   addPropertyControls as addPropertyControls6,
-  ControlType as ControlType10,
+  ControlType as ControlType9,
   cx as cx2,
   CycleVariantState,
   RichText as RichText2,
@@ -5602,7 +5188,7 @@ import {
   withOptimizedAppearEffect as withOptimizedAppearEffect2,
 } from 'unframer';
 import { LayoutGroup as LayoutGroup3, motion as motion5, MotionConfigContext as MotionConfigContext2, } from 'unframer';
-import * as React6 from 'react';
+import * as React5 from 'react';
 var MotionDivWithFXWithOptimizedAppearEffect = withOptimizedAppearEffect2(withFX2(motion5.div,),);
 var cycleOrder2 = ['rqtHH74qY', 'Uj6fhqUAc',];
 var serializationHash2 = 'framer-oInxj';
@@ -5619,12 +5205,12 @@ var animation3 = { opacity: 1, rotate: 0, rotateX: 0, rotateY: 0, scale: 1, skew
 var animation12 = { opacity: 1, rotate: 0, rotateX: 0, rotateY: 0, scale: 1, skewX: 0, skewY: 0, x: 0, y: 0, };
 var transition22 = { duration: 0, type: 'tween', };
 var Transition2 = ({ value, children, },) => {
-  const config = React6.useContext(MotionConfigContext2,);
+  const config = React5.useContext(MotionConfigContext2,);
   const transition = value !== null && value !== void 0 ? value : config.transition;
-  const contextValue = React6.useMemo(() => ({ ...config, transition, }), [JSON.stringify(transition,),],);
-  return /* @__PURE__ */ _jsx7(MotionConfigContext2.Provider, { value: contextValue, children, },);
+  const contextValue = React5.useMemo(() => ({ ...config, transition, }), [JSON.stringify(transition,),],);
+  return /* @__PURE__ */ _jsx6(MotionConfigContext2.Provider, { value: contextValue, children, },);
 };
-var Variants2 = motion5.create(React6.Fragment,);
+var Variants2 = motion5.create(React5.Fragment,);
 var humanReadableVariantMap2 = { 'Variant 1': 'rqtHH74qY', Hover: 'Uj6fhqUAc', };
 var getProps3 = ({ height, id, width, ...props },) => {
   var _humanReadableVariantMap_props_variant, _ref;
@@ -5644,7 +5230,7 @@ var createLayoutDependency2 = (props, variants,) => {
   if (props.layoutDependency) return variants.join('-',) + props.layoutDependency;
   return variants.join('-',);
 };
-var Component2 = /* @__PURE__ */ React6.forwardRef(function (props, ref,) {
+var Component2 = /* @__PURE__ */ React5.forwardRef(function (props, ref,) {
   const { activeLocale, setLocale, } = useLocaleInfo2();
   const { style, className: className3, layoutId, variant, ...restProps } = getProps3(props,);
   const {
@@ -5670,19 +5256,19 @@ var Component2 = /* @__PURE__ */ React6.forwardRef(function (props, ref,) {
   const onMouseEntergnqhaj = activeVariantCallback(async (...args) => {
     setVariant(CycleVariantState,);
   },);
-  const ref1 = React6.useRef(null,);
-  const defaultLayoutId = React6.useId();
+  const ref1 = React5.useRef(null,);
+  const defaultLayoutId = React5.useId();
   const sharedStyleClassNames = [];
   const componentViewport = useComponentViewport2();
-  return /* @__PURE__ */ _jsx7(LayoutGroup3, {
+  return /* @__PURE__ */ _jsx6(LayoutGroup3, {
     id: layoutId !== null && layoutId !== void 0 ? layoutId : defaultLayoutId,
-    children: /* @__PURE__ */ _jsx7(Variants2, {
+    children: /* @__PURE__ */ _jsx6(Variants2, {
       animate: variants,
       initial: false,
-      children: /* @__PURE__ */ _jsx7(Transition2, {
+      children: /* @__PURE__ */ _jsx6(Transition2, {
         value: transition12,
         ...addPropertyOverrides2({ Uj6fhqUAc: { value: transition22, }, }, baseVariant, gestureVariant,),
-        children: /* @__PURE__ */ _jsx7(MotionDivWithFXWithOptimizedAppearEffect, {
+        children: /* @__PURE__ */ _jsx6(MotionDivWithFXWithOptimizedAppearEffect, {
           ...restProps,
           ...gestureHandlers,
           className: cx2(serializationHash2, ...sharedStyleClassNames, 'framer-qio6me', className3, classNames,),
@@ -5721,10 +5307,10 @@ var Component2 = /* @__PURE__ */ React6.forwardRef(function (props, ref,) {
             baseVariant,
             gestureVariant,
           ),
-          children: /* @__PURE__ */ _jsx7(RichText2, {
+          children: /* @__PURE__ */ _jsx6(RichText2, {
             __fromCanvasComponent: true,
-            children: /* @__PURE__ */ _jsx7(React6.Fragment, {
-              children: /* @__PURE__ */ _jsx7(motion5.p, {
+            children: /* @__PURE__ */ _jsx6(React5.Fragment, {
+              children: /* @__PURE__ */ _jsx6(motion5.p, {
                 style: {
                   '--font-selector': 'R0Y7SW50ZXItNjAw',
                   '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -5769,7 +5355,7 @@ var stdin_default2 = FramerfQgkomDej;
 FramerfQgkomDej.displayName = 'Orange Button';
 FramerfQgkomDej.defaultProps = { height: 36, width: 92, };
 addPropertyControls6(FramerfQgkomDej, {
-  variant: { options: ['rqtHH74qY', 'Uj6fhqUAc',], optionTitles: ['Variant 1', 'Hover',], title: 'Variant', type: ControlType10.Enum, },
+  variant: { options: ['rqtHH74qY', 'Uj6fhqUAc',], optionTitles: ['Variant 1', 'Hover',], title: 'Variant', type: ControlType9.Enum, },
 },);
 addFonts2(FramerfQgkomDej, [{
   explicitInter: true,
@@ -5782,13 +5368,13 @@ addFonts2(FramerfQgkomDej, [{
   },],
 },], { supportsExplicitInterCodegen: true, },);
 
-// https :https://framerusercontent.com/modules/THYGF83xDIfNgevll2BO/15mZH7410chGtIx3Afzj/h7szLpqNn.js
-import { jsx as _jsx11, jsxs as _jsxs5, } from 'react/jsx-runtime';
+// https :https://framerusercontent.com/modules/THYGF83xDIfNgevll2BO/8j3PAk7STgbTufSjmyeO/h7szLpqNn.js
+import { jsx as _jsx10, jsxs as _jsxs5, } from 'react/jsx-runtime';
 import {
   addFonts as addFonts4,
   addPropertyControls as addPropertyControls10,
   ComponentViewportProvider as ComponentViewportProvider2,
-  ControlType as ControlType14,
+  ControlType as ControlType13,
   cx as cx4,
   getFonts as getFonts2,
   RichText as RichText3,
@@ -5800,10 +5386,10 @@ import {
   withCSS as withCSS5,
 } from 'unframer';
 import { LayoutGroup as LayoutGroup5, motion as motion9, MotionConfigContext as MotionConfigContext4, } from 'unframer';
-import * as React9 from 'react';
+import * as React8 from 'react';
 
 // https :https://framerusercontent.com/modules/pVk4QsoHxASnVtUBp6jr/TbhpORLndv1iOkZzyo83/CodeBlock.js
-import { Fragment as _Fragment, jsx as _jsx8, jsxs as _jsxs4, } from 'react/jsx-runtime';
+import { Fragment as _Fragment, jsx as _jsx7, jsxs as _jsxs4, } from 'react/jsx-runtime';
 import { motion as motion6, } from 'unframer';
 
 // https :https://framerusercontent.com/modules/SWAtenub3goqbKHfvwGg/SGdoMClxnsCb2h0GRQ48/codesandbox_sandpack_react.js
@@ -12326,7 +11912,7 @@ var defaultKeymap = /* @__PURE__ */ [
 
 // https :https://framerusercontent.com/modules/SWAtenub3goqbKHfvwGg/SGdoMClxnsCb2h0GRQ48/codesandbox_sandpack_react.js
 import * as React22 from 'react';
-import React7 from 'react';
+import React6 from 'react';
 var __create3 = Object.create;
 var __defProp3 = Object.defineProperty;
 var __getOwnPropDesc3 = Object.getOwnPropertyDescriptor;
@@ -14705,7 +14291,7 @@ function dequal2(foo, bar,) {
   window.IntersectionObserver = IntersectionObserver2;
   window.IntersectionObserverEntry = IntersectionObserverEntry;
 })();
-var usePassiveLayoutEffect = React7[typeof document !== 'undefined' && document.createElement !== void 0 ? 'useLayoutEffect' : 'useEffect'];
+var usePassiveLayoutEffect = React6[typeof document !== 'undefined' && document.createElement !== void 0 ? 'useLayoutEffect' : 'useEffect'];
 var module_default = usePassiveLayoutEffect;
 function useIntersectionObserver(target, options = {},) {
   const {
@@ -17116,7 +16702,7 @@ var getCodeMirrorLanguage = function (extension, additionalLanguages,) {
     javascript: javascript({ jsx: true, typescript: false, },),
     typescript: javascript({ jsx: true, typescript: true, },),
     html: html(),
-    css: css(),
+    css: css3(),
   };
   for (var _i = 0, additionalLanguages_2 = additionalLanguages; _i < additionalLanguages_2.length; _i++) {
     var additionalLanguage = additionalLanguages_2[_i];
@@ -18021,7 +17607,7 @@ var rtlLayoutClassName = css6({
 },);
 
 // https :https://framerusercontent.com/modules/pVk4QsoHxASnVtUBp6jr/TbhpORLndv1iOkZzyo83/CodeBlock.js
-import { addPropertyControls as addPropertyControls7, ControlType as ControlType11, withCSS as withCSS3, } from 'unframer';
+import { addPropertyControls as addPropertyControls7, ControlType as ControlType10, withCSS as withCSS3, } from 'unframer';
 
 // https :https://framerusercontent.com/modules/wOI0XDWuPNeaYuatKp4b/ezOdeUpHBrE7fwL9evTL/browser.js
 var Browser;
@@ -18102,7 +17688,7 @@ var SuspenseValue = class {
 
 // https :https://framerusercontent.com/modules/IdMJ4CymCWCh4cOBkZlb/RXSqswLIbuViBOVW1keE/utils.js
 import { RenderTarget as RenderTarget6, } from 'unframer';
-import { useMemo as useMemo11, useState as useState9, } from 'react';
+import { useMemo as useMemo10, useState as useState9, } from 'react';
 function getFileExtensions(language,) {
   switch (language) {
     case 'JavaScript':
@@ -18225,7 +17811,7 @@ function titleCase2(value,) {
 }
 function useRadius2(props,) {
   const { borderRadius, isMixedBorderRadius, topLeftRadius, topRightRadius, bottomRightRadius, bottomLeftRadius, } = props;
-  const radiusValue = useMemo11(
+  const radiusValue = useMemo10(
     () => isMixedBorderRadius ? `${topLeftRadius}px ${topRightRadius}px ${bottomRightRadius}px ${bottomLeftRadius}px` : `${borderRadius}px`,
     [borderRadius, isMixedBorderRadius, topLeftRadius, topRightRadius, bottomRightRadius, bottomLeftRadius,],
   );
@@ -18233,7 +17819,7 @@ function useRadius2(props,) {
 }
 function usePadding2(props,) {
   const { padding, paddingBottom, paddingLeft, paddingPerSide, paddingRight, paddingTop, } = props;
-  const paddingValue = useMemo11(
+  const paddingValue = useMemo10(
     () => paddingPerSide ? `${paddingTop}px ${paddingRight}px ${paddingBottom}px ${paddingLeft}px` : `${padding}px`,
     [padding, paddingBottom, paddingLeft, paddingPerSide, paddingRight, paddingTop,],
   );
@@ -19297,13 +18883,13 @@ var CodeBlock = withCSS3(function CodeBlock2(props,) {
     whileHover: 'visible',
     style: { ...lightThemeVariables2, ...darkThemeVariables2, position: 'relative', width: '100%', height: '100%', },
     children: [
-      /* @__PURE__ */ _jsx8(SandpackProvider, {
+      /* @__PURE__ */ _jsx7(SandpackProvider, {
         options: { classes: { 'sp-code-editor': 'cb-code-editor', }, },
         theme: variableTheme,
         files: { [fileName]: code, },
         customSetup: { entry: fileName, },
         style: { height: '100%', },
-        children: /* @__PURE__ */ _jsx8(SandpackLayout, {
+        children: /* @__PURE__ */ _jsx7(SandpackLayout, {
           style: {
             height: '100%',
             // make sure the codeblock doesnt grow beyond
@@ -19321,7 +18907,7 @@ var CodeBlock = withCSS3(function CodeBlock2(props,) {
             ),
             overflow: 'hidden',
           },
-          children: /* @__PURE__ */ _jsx8(SandpackCodeEditor, {
+          children: /* @__PURE__ */ _jsx7(SandpackCodeEditor, {
             style: { letterSpacing: font.letterSpacing, },
             readOnly: true,
             showReadOnly: false,
@@ -19329,29 +18915,29 @@ var CodeBlock = withCSS3(function CodeBlock2(props,) {
           },),
         },),
       },),
-      /* @__PURE__ */ _jsx8(SandpackStyles, {},),
+      /* @__PURE__ */ _jsx7(SandpackStyles, {},),
     ],
   },);
 }, css7,);
 var stdin_default3 = CodeBlock;
 function SandpackStyles() {
-  return /* @__PURE__ */ _jsx8(_Fragment, {
+  return /* @__PURE__ */ _jsx7(_Fragment, {
     children: !Browser.isBrowser() && /* @__PURE__ */
-      _jsx8('style', { 'data-framer-css-ssr': true, dangerouslySetInnerHTML: { __html: getCssText(), }, },),
+      _jsx7('style', { 'data-framer-css-ssr': true, dangerouslySetInnerHTML: { __html: getCssText(), }, },),
   },);
 }
 var themeNames = themeKeys.map(titleCase2,);
 addPropertyControls7(CodeBlock, {
-  code: { type: ControlType11.String, title: 'Code', displayTextArea: true, defaultValue: DEFAULT_CODE, },
+  code: { type: ControlType10.String, title: 'Code', displayTextArea: true, defaultValue: DEFAULT_CODE, },
   themeMode: {
-    type: ControlType11.Enum,
+    type: ControlType10.Enum,
     title: 'Theme',
     displaySegmentedControl: true,
     options: ['Static', 'Dynamic',],
     defaultValue: 'Static',
   },
   theme: {
-    type: ControlType11.Enum,
+    type: ControlType10.Enum,
     title: ' ',
     options: [...themeKeys,],
     optionTitles: themeNames,
@@ -19359,7 +18945,7 @@ addPropertyControls7(CodeBlock, {
     hidden: ({ themeMode, },) => themeMode !== 'Static',
   },
   lightTheme: {
-    type: ControlType11.Enum,
+    type: ControlType10.Enum,
     title: 'Light',
     options: [...themeKeys,],
     optionTitles: themeNames,
@@ -19367,33 +18953,33 @@ addPropertyControls7(CodeBlock, {
     hidden: ({ themeMode, },) => themeMode !== 'Dynamic',
   },
   darkTheme: {
-    type: ControlType11.Enum,
+    type: ControlType10.Enum,
     title: 'Dark',
     options: [...themeKeys,],
     optionTitles: themeNames,
     defaultValue: 'framerDark',
     hidden: ({ themeMode, },) => themeMode !== 'Dynamic',
   },
-  language: { type: ControlType11.Enum, title: 'Language', options: [...supportedLanguages,], defaultValue: 'JSX', },
+  language: { type: ControlType10.Enum, title: 'Language', options: [...supportedLanguages,], defaultValue: 'JSX', },
   font: {
     // @ts-ignore: Internal API
-    type: ControlType11.Font,
+    type: ControlType10.Font,
     controls: 'extended',
     displayFontSize: true,
     displayTextAlignment: false,
     defaultFontType: 'monospace',
     defaultValue: { fontSize: 14, lineHeight: '1.5em', },
   },
-  background: { title: 'Fill', type: ControlType11.Color, optional: true, },
+  background: { title: 'Fill', type: ControlType10.Color, optional: true, },
   border: {
     buttonTitle: 'Options',
-    type: ControlType11.Object,
+    type: ControlType10.Object,
     optional: true,
     controls: {
-      borderColor: { type: ControlType11.Color, title: 'Border', defaultValue: '#eee', },
+      borderColor: { type: ControlType10.Color, title: 'Border', defaultValue: '#eee', },
       borderWidth: {
         title: 'Width',
-        type: ControlType11.FusedNumber,
+        type: ControlType10.FusedNumber,
         toggleKey: 'isMixedBorderWidth',
         toggleTitles: ['Border', 'Border per side',],
         valueKeys: ['borderWidthTop', 'borderWidthRight', 'borderWidthBottom', 'borderWidthLeft',],
@@ -19403,7 +18989,7 @@ addPropertyControls7(CodeBlock, {
       },
       borderStyle: {
         title: 'Style',
-        type: ControlType11.Enum,
+        type: ControlType10.Enum,
         options: ['solid', 'dashed', 'dotted', 'double',],
         optionTitles: ['Solid', 'Dashed', 'Dotted', 'double',],
         defaultValue: 'solid',
@@ -19412,7 +18998,7 @@ addPropertyControls7(CodeBlock, {
   },
   borderRadius: {
     title: 'Radius',
-    type: ControlType11.FusedNumber,
+    type: ControlType10.FusedNumber,
     toggleKey: 'isMixedBorderRadius',
     toggleTitles: ['Radius', 'Radius per corner',],
     valueKeys: ['topLeftRadius', 'topRightRadius', 'bottomRightRadius', 'bottomLeftRadius',],
@@ -19422,7 +19008,7 @@ addPropertyControls7(CodeBlock, {
   },
   padding: {
     title: 'Padding',
-    type: ControlType11.FusedNumber,
+    type: ControlType10.FusedNumber,
     toggleKey: 'paddingPerSide',
     toggleTitles: ['Padding', 'Padding per side',],
     valueKeys: ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',],
@@ -19434,12 +19020,12 @@ addPropertyControls7(CodeBlock, {
 CodeBlock.displayName = 'Code Block';
 
 // https :https://framerusercontent.com/modules/A8evTVkfVwjWozYKNHjD/MYCqkSo6asXejmnsMVpV/B61ioAr7n.js
-import { jsx as _jsx10, } from 'react/jsx-runtime';
+import { jsx as _jsx9, } from 'react/jsx-runtime';
 import {
   addFonts as addFonts3,
   addPropertyControls as addPropertyControls9,
   ComponentViewportProvider,
-  ControlType as ControlType13,
+  ControlType as ControlType12,
   cx as cx3,
   getFonts,
   useActiveVariantCallback as useActiveVariantCallback2,
@@ -19449,12 +19035,12 @@ import {
   withCSS as withCSS4,
 } from 'unframer';
 import { LayoutGroup as LayoutGroup4, motion as motion8, MotionConfigContext as MotionConfigContext3, } from 'unframer';
-import * as React8 from 'react';
+import * as React7 from 'react';
 
 // https :https://framerusercontent.com/modules/Hj20QU19p80mpYsvesiZ/RfHh9MIwqlgi04HKZ3Qo/Clipboard.js
-import { jsx as _jsx9, } from 'react/jsx-runtime';
+import { jsx as _jsx8, } from 'react/jsx-runtime';
 import { useCallback as useCallback6, } from 'react';
-import { addPropertyControls as addPropertyControls8, ControlType as ControlType12, } from 'unframer';
+import { addPropertyControls as addPropertyControls8, ControlType as ControlType11, } from 'unframer';
 import { motion as motion7, } from 'unframer';
 function Clipboard(props,) {
   const { label, content, fill, color: color2, style, onClick, font, hoverOptions, ...rest } = props;
@@ -19466,7 +19052,7 @@ function Clipboard(props,) {
     (ref = navigator.clipboard) === null || ref === void 0 ? void 0 : ref.writeText(content,);
     onClick === null || onClick === void 0 ? void 0 : onClick();
   }, [onClick, content,],);
-  return /* @__PURE__ */ _jsx9(motion7.button, {
+  return /* @__PURE__ */ _jsx8(motion7.button, {
     style: {
       border: 'none',
       outline: 'none',
@@ -19497,34 +19083,34 @@ function Clipboard(props,) {
 }
 addPropertyControls8(Clipboard, {
   content: {
-    type: ControlType12.String,
+    type: ControlType11.String,
     title: 'Content',
     displayTextArea: true,
     description: 'When clicked, this content will be copied to the clipboard.',
   },
-  label: { type: ControlType12.String, title: 'Label', defaultValue: 'Copy to Clipboard', },
-  fill: { type: ControlType12.Color, title: 'Fill', defaultValue: '#06F', },
-  color: { type: ControlType12.Color, title: 'Text', defaultValue: '#fff', },
+  label: { type: ControlType11.String, title: 'Label', defaultValue: 'Copy to Clipboard', },
+  fill: { type: ControlType11.Color, title: 'Fill', defaultValue: '#06F', },
+  color: { type: ControlType11.Color, title: 'Text', defaultValue: '#fff', },
   font: {
     // @ts-ignore - Internal
-    type: ControlType12.Font,
+    type: ControlType11.Font,
     controls: 'extended',
     defaultValue: { fontSize: 16, },
   },
   hoverOptions: {
-    type: ControlType12.Object,
+    type: ControlType11.Object,
     title: 'Hover',
     buttonTitle: 'Effect',
     optional: true,
     controls: {
-      scale: { type: ControlType12.Number, title: 'Scale', min: 0, max: 10, displayStepper: true, step: 0.01, defaultValue: 1.1, },
-      backgroundColor: { type: ControlType12.Color, title: 'Fill', defaultValue: '#0088FF', optional: true, },
-      color: { type: ControlType12.Color, title: 'Color', defaultValue: '#FFF', optional: true, },
-      transition: { type: ControlType12.Transition, title: 'Transition', defaultValue: { type: 'spring', stiffness: 400, damping: 30, }, },
+      scale: { type: ControlType11.Number, title: 'Scale', min: 0, max: 10, displayStepper: true, step: 0.01, defaultValue: 1.1, },
+      backgroundColor: { type: ControlType11.Color, title: 'Fill', defaultValue: '#0088FF', optional: true, },
+      color: { type: ControlType11.Color, title: 'Color', defaultValue: '#FFF', optional: true, },
+      transition: { type: ControlType11.Transition, title: 'Transition', defaultValue: { type: 'spring', stiffness: 400, damping: 30, }, },
     },
   },
   padding: {
-    type: ControlType12.FusedNumber,
+    type: ControlType11.FusedNumber,
     toggleKey: 'paddingPerSide',
     toggleTitles: ['Padding', 'Padding per side',],
     valueKeys: ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',],
@@ -19535,7 +19121,7 @@ addPropertyControls8(Clipboard, {
   },
   borderRadius: {
     title: 'Radius',
-    type: ControlType12.FusedNumber,
+    type: ControlType11.FusedNumber,
     toggleKey: 'isMixedBorderRadius',
     toggleTitles: ['Radius', 'Radius per corner',],
     valueKeys: ['topLeftRadius', 'topRightRadius', 'bottomRightRadius', 'bottomLeftRadius',],
@@ -19560,12 +19146,12 @@ function addPropertyOverrides3(overrides, ...variants) {
 }
 var transition13 = { duration: 0, type: 'tween', };
 var Transition3 = ({ value, children, },) => {
-  const config = React8.useContext(MotionConfigContext3,);
+  const config = React7.useContext(MotionConfigContext3,);
   const transition = value !== null && value !== void 0 ? value : config.transition;
-  const contextValue = React8.useMemo(() => ({ ...config, transition, }), [JSON.stringify(transition,),],);
-  return /* @__PURE__ */ _jsx10(MotionConfigContext3.Provider, { value: contextValue, children, },);
+  const contextValue = React7.useMemo(() => ({ ...config, transition, }), [JSON.stringify(transition,),],);
+  return /* @__PURE__ */ _jsx9(MotionConfigContext3.Provider, { value: contextValue, children, },);
 };
-var Variants3 = motion8.create(React8.Fragment,);
+var Variants3 = motion8.create(React7.Fragment,);
 var humanReadableVariantMap3 = { 'Variant 1': 'eNdZrIKTk', 'Variant 2': 'q4NQGzS2b', 'Variant 3': 'E6EJAwsuf', };
 var getProps4 = ({ click, height, id, width, ...props },) => {
   var _humanReadableVariantMap_props_variant, _ref;
@@ -19586,7 +19172,7 @@ var createLayoutDependency3 = (props, variants,) => {
   if (props.layoutDependency) return variants.join('-',) + props.layoutDependency;
   return variants.join('-',);
 };
-var Component3 = /* @__PURE__ */ React8.forwardRef(function (props, ref,) {
+var Component3 = /* @__PURE__ */ React7.forwardRef(function (props, ref,) {
   const { activeLocale, setLocale, } = useLocaleInfo3();
   const { style, className: className3, layoutId, variant, dXpeIOP9n, ...restProps } = getProps4(props,);
   const {
@@ -19633,18 +19219,18 @@ var Component3 = /* @__PURE__ */ React8.forwardRef(function (props, ref,) {
     setGestureState({ isHovered: false, },);
     setVariant('eNdZrIKTk',);
   },);
-  const ref1 = React8.useRef(null,);
-  const defaultLayoutId = React8.useId();
+  const ref1 = React7.useRef(null,);
+  const defaultLayoutId = React7.useId();
   const sharedStyleClassNames = [];
   const componentViewport = useComponentViewport3();
-  return /* @__PURE__ */ _jsx10(LayoutGroup4, {
+  return /* @__PURE__ */ _jsx9(LayoutGroup4, {
     id: layoutId !== null && layoutId !== void 0 ? layoutId : defaultLayoutId,
-    children: /* @__PURE__ */ _jsx10(Variants3, {
+    children: /* @__PURE__ */ _jsx9(Variants3, {
       animate: variants,
       initial: false,
-      children: /* @__PURE__ */ _jsx10(Transition3, {
+      children: /* @__PURE__ */ _jsx9(Transition3, {
         value: transition13,
-        children: /* @__PURE__ */ _jsx10(motion8.div, {
+        children: /* @__PURE__ */ _jsx9(motion8.div, {
           ...restProps,
           ...gestureHandlers,
           className: cx3(serializationHash3, ...sharedStyleClassNames, 'framer-r9wivl', className3, classNames,),
@@ -19664,12 +19250,12 @@ var Component3 = /* @__PURE__ */ React8.forwardRef(function (props, ref,) {
             baseVariant,
             gestureVariant,
           ),
-          children: /* @__PURE__ */ _jsx10(ComponentViewportProvider, {
-            children: /* @__PURE__ */ _jsx10(motion8.div, {
+          children: /* @__PURE__ */ _jsx9(ComponentViewportProvider, {
+            children: /* @__PURE__ */ _jsx9(motion8.div, {
               className: 'framer-1q80ngk-container',
               layoutDependency,
               layoutId: 'gHzDIQxvi-container',
-              children: /* @__PURE__ */ _jsx10(Clipboard, {
+              children: /* @__PURE__ */ _jsx9(Clipboard, {
                 borderRadius: 6,
                 bottomLeftRadius: 6,
                 bottomRightRadius: 6,
@@ -19730,9 +19316,9 @@ addPropertyControls9(FramerB61ioAr7n, {
     options: ['eNdZrIKTk', 'q4NQGzS2b', 'E6EJAwsuf',],
     optionTitles: ['Variant 1', 'Variant 2', 'Variant 3',],
     title: 'Variant',
-    type: ControlType13.Enum,
+    type: ControlType12.Enum,
   },
-  dXpeIOP9n: { title: 'Click', type: ControlType13.EventHandler, },
+  dXpeIOP9n: { title: 'Click', type: ControlType12.EventHandler, },
 },);
 addFonts3(FramerB61ioAr7n, [{
   explicitInter: true,
@@ -19789,11 +19375,11 @@ addFonts3(FramerB61ioAr7n, [{
   },],
 }, ...ClipboardFonts,], { supportsExplicitInterCodegen: true, },);
 
-// https :https://framerusercontent.com/modules/THYGF83xDIfNgevll2BO/15mZH7410chGtIx3Afzj/h7szLpqNn.js
+// https :https://framerusercontent.com/modules/THYGF83xDIfNgevll2BO/8j3PAk7STgbTufSjmyeO/h7szLpqNn.js
 var CodeBlockFonts = getFonts2(stdin_default3,);
 var ClipboardFonts2 = getFonts2(stdin_default4,);
 var cycleOrder4 = ['sXIQhpQYS', 'qHMrDOFpV', 'BOAWw0bsz', 'YN6I5JYYy',];
-var serializationHash4 = 'framer-if8Tb';
+var serializationHash4 = 'framer-qcO77';
 var variantClassNames4 = {
   BOAWw0bsz: 'framer-v-kcbogs',
   qHMrDOFpV: 'framer-v-uap4wv',
@@ -19821,12 +19407,12 @@ var animation4 = {
   transition: transition23,
 };
 var Transition4 = ({ value, children, },) => {
-  const config = React9.useContext(MotionConfigContext4,);
+  const config = React8.useContext(MotionConfigContext4,);
   const transition = value !== null && value !== void 0 ? value : config.transition;
-  const contextValue = React9.useMemo(() => ({ ...config, transition, }), [JSON.stringify(transition,),],);
-  return /* @__PURE__ */ _jsx11(MotionConfigContext4.Provider, { value: contextValue, children, },);
+  const contextValue = React8.useMemo(() => ({ ...config, transition, }), [JSON.stringify(transition,),],);
+  return /* @__PURE__ */ _jsx10(MotionConfigContext4.Provider, { value: contextValue, children, },);
 };
-var Variants4 = motion9.create(React9.Fragment,);
+var Variants4 = motion9.create(React8.Fragment,);
 var humanReadableVariantMap4 = { 'Variant 1': 'sXIQhpQYS', 'Variant 2': 'qHMrDOFpV', 'Variant 4': 'BOAWw0bsz', 'Variant 5': 'YN6I5JYYy', };
 var getProps5 = ({ height, id, width, ...props },) => {
   var _humanReadableVariantMap_props_variant, _ref;
@@ -19846,7 +19432,7 @@ var createLayoutDependency4 = (props, variants,) => {
   if (props.layoutDependency) return variants.join('-',) + props.layoutDependency;
   return variants.join('-',);
 };
-var Component4 = /* @__PURE__ */ React9.forwardRef(function (props, ref,) {
+var Component4 = /* @__PURE__ */ React8.forwardRef(function (props, ref,) {
   const { activeLocale, setLocale, } = useLocaleInfo4();
   const { style, className: className3, layoutId, variant, ...restProps } = getProps5(props,);
   const {
@@ -19877,16 +19463,16 @@ var Component4 = /* @__PURE__ */ React9.forwardRef(function (props, ref,) {
   const onMouseEnteru5isup = activeVariantCallback(async (...args) => {
     setVariant('BOAWw0bsz',);
   },);
-  const ref1 = React9.useRef(null,);
-  const defaultLayoutId = React9.useId();
+  const ref1 = React8.useRef(null,);
+  const defaultLayoutId = React8.useId();
   const sharedStyleClassNames = [];
   const componentViewport = useComponentViewport4();
-  return /* @__PURE__ */ _jsx11(LayoutGroup5, {
+  return /* @__PURE__ */ _jsx10(LayoutGroup5, {
     id: layoutId !== null && layoutId !== void 0 ? layoutId : defaultLayoutId,
-    children: /* @__PURE__ */ _jsx11(Variants4, {
+    children: /* @__PURE__ */ _jsx10(Variants4, {
       animate: variants,
       initial: false,
-      children: /* @__PURE__ */ _jsx11(Transition4, {
+      children: /* @__PURE__ */ _jsx10(Transition4, {
         value: transition14,
         children: /* @__PURE__ */ _jsxs5(motion9.div, {
           ...restProps,
@@ -19912,7 +19498,7 @@ var Component4 = /* @__PURE__ */ React9.forwardRef(function (props, ref,) {
               layoutDependency,
               layoutId: 'QuuCjCalh',
               children: [
-                /* @__PURE__ */ _jsx11(motion9.div, {
+                /* @__PURE__ */ _jsx10(motion9.div, {
                   className: 'framer-5c9g9x',
                   'data-border': true,
                   'data-framer-name': 'Item',
@@ -19957,7 +19543,7 @@ var Component4 = /* @__PURE__ */ React9.forwardRef(function (props, ref,) {
                     layoutDependency,
                     layoutId: 'KaufkIsga',
                     children: [
-                      /* @__PURE__ */ _jsx11(SVG2, {
+                      /* @__PURE__ */ _jsx10(SVG2, {
                         className: 'framer-arcg91',
                         'data-framer-name': 'Javascript',
                         fill: 'rgb(3, 2, 2)',
@@ -19969,10 +19555,10 @@ var Component4 = /* @__PURE__ */ React9.forwardRef(function (props, ref,) {
                           '<svg fill="#fff" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M0 0h24v24H0V0zm22.034 18.276c-.175-1.095-.888-2.015-3.003-2.873-.736-.345-1.554-.585-1.797-1.14-.091-.33-.105-.51-.046-.705.15-.646.915-.84 1.515-.66.39.12.75.42.976.9 1.034-.676 1.034-.676 1.755-1.125-.27-.42-.404-.601-.586-.78-.63-.705-1.469-1.065-2.834-1.034l-.705.089c-.676.165-1.32.525-1.71 1.005-1.14 1.291-.811 3.541.569 4.471 1.365 1.02 3.361 1.244 3.616 2.205.24 1.17-.87 1.545-1.966 1.41-.811-.18-1.26-.586-1.755-1.336l-1.83 1.051c.21.48.45.689.81 1.109 1.74 1.756 6.09 1.666 6.871-1.004.029-.09.24-.705.074-1.65l.046.067zm-8.983-7.245h-2.248c0 1.938-.009 3.864-.009 5.805 0 1.232.063 2.363-.138 2.711-.33.689-1.18.601-1.566.48-.396-.196-.597-.466-.83-.855-.063-.105-.11-.196-.127-.196l-1.825 1.125c.305.63.75 1.172 1.324 1.517.855.51 2.004.675 3.207.405.783-.226 1.458-.691 1.811-1.411.51-.93.402-2.07.397-3.346.012-2.054 0-4.109 0-6.179l.004-.056z"/></svg>',
                         withExternalLayout: true,
                       },),
-                      /* @__PURE__ */ _jsx11(RichText3, {
+                      /* @__PURE__ */ _jsx10(RichText3, {
                         __fromCanvasComponent: true,
-                        children: /* @__PURE__ */ _jsx11(React9.Fragment, {
-                          children: /* @__PURE__ */ _jsx11(motion9.p, {
+                        children: /* @__PURE__ */ _jsx10(React8.Fragment, {
+                          children: /* @__PURE__ */ _jsx10(motion9.p, {
                             style: {
                               '--font-selector': 'SW50ZXItTWVkaXVt',
                               '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -19997,7 +19583,7 @@ var Component4 = /* @__PURE__ */ React9.forwardRef(function (props, ref,) {
                     ],
                   },),
                 },),
-                /* @__PURE__ */ _jsx11(motion9.div, {
+                /* @__PURE__ */ _jsx10(motion9.div, {
                   className: 'framer-1wjvx4m',
                   'data-framer-name': 'Item',
                   'data-highlight': true,
@@ -20041,7 +19627,7 @@ var Component4 = /* @__PURE__ */ React9.forwardRef(function (props, ref,) {
                     layoutId: 'EkV5PeFm8',
                     onMouseEnter: onMouseEnterpwzohi,
                     children: [
-                      /* @__PURE__ */ _jsx11(SVG2, {
+                      /* @__PURE__ */ _jsx10(SVG2, {
                         className: 'framer-10yc9v3',
                         'data-framer-name': 'Python',
                         fill: 'black',
@@ -20053,10 +19639,10 @@ var Component4 = /* @__PURE__ */ React9.forwardRef(function (props, ref,) {
                           '<svg fill="#fff" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="m14.25.18.9.2.73.26.59.3.45.32.34.34.25.34.16.33.1.3.04.26.02.2-.01.13V8.5l-.05.63-.13.55-.21.46-.26.38-.3.31-.33.25-.35.19-.35.14-.33.1-.3.07-.26.04-.21.02H8.77l-.69.05-.59.14-.5.22-.41.27-.33.32-.27.35-.2.36-.15.37-.1.35-.07.32-.04.27-.02.21v3.06H3.17l-.21-.03-.28-.07-.32-.12-.35-.18-.36-.26-.36-.36-.35-.46-.32-.59-.28-.73-.21-.88-.14-1.05-.05-1.23.06-1.22.16-1.04.24-.87.32-.71.36-.57.4-.44.42-.33.42-.24.4-.16.36-.1.32-.05.24-.01h.16l.06.01h8.16v-.83H6.18l-.01-2.75-.02-.37.05-.34.11-.31.17-.28.25-.26.31-.23.38-.2.44-.18.51-.15.58-.12.64-.1.71-.06.77-.04.84-.02 1.27.05zm-6.3 1.98-.23.33-.08.41.08.41.23.34.33.22.41.09.41-.09.33-.22.23-.34.08-.41-.08-.41-.23-.33-.33-.22-.41-.09-.41.09zm13.09 3.95.28.06.32.12.35.18.36.27.36.35.35.47.32.59.28.73.21.88.14 1.04.05 1.23-.06 1.23-.16 1.04-.24.86-.32.71-.36.57-.4.45-.42.33-.42.24-.4.16-.36.09-.32.05-.24.02-.16-.01h-8.22v.82h5.84l.01 2.76.02.36-.05.34-.11.31-.17.29-.25.25-.31.24-.38.2-.44.17-.51.15-.58.13-.64.09-.71.07-.77.04-.84.01-1.27-.04-1.07-.14-.9-.2-.73-.25-.59-.3-.45-.33-.34-.34-.25-.34-.16-.33-.1-.3-.04-.25-.02-.2.01-.13v-5.34l.05-.64.13-.54.21-.46.26-.38.3-.32.33-.24.35-.2.35-.14.33-.1.3-.06.26-.04.21-.02.13-.01h5.84l.69-.05.59-.14.5-.21.41-.28.33-.32.27-.35.2-.36.15-.36.1-.35.07-.32.04-.28.02-.21V6.07h2.09l.14.01zm-6.47 14.25-.23.33-.08.41.08.41.23.33.33.23.41.08.41-.08.33-.23.23-.33.08-.41-.08-.41-.23-.33-.33-.23-.41-.08-.41.08z"/></svg>',
                         withExternalLayout: true,
                       },),
-                      /* @__PURE__ */ _jsx11(RichText3, {
+                      /* @__PURE__ */ _jsx10(RichText3, {
                         __fromCanvasComponent: true,
-                        children: /* @__PURE__ */ _jsx11(React9.Fragment, {
-                          children: /* @__PURE__ */ _jsx11(motion9.p, {
+                        children: /* @__PURE__ */ _jsx10(React8.Fragment, {
+                          children: /* @__PURE__ */ _jsx10(motion9.p, {
                             style: {
                               '--font-selector': 'SW50ZXItTWVkaXVt',
                               '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -20081,7 +19667,7 @@ var Component4 = /* @__PURE__ */ React9.forwardRef(function (props, ref,) {
                     ],
                   },),
                 },),
-                /* @__PURE__ */ _jsx11(motion9.div, {
+                /* @__PURE__ */ _jsx10(motion9.div, {
                   className: 'framer-4hwj87',
                   'data-framer-name': 'Item',
                   'data-highlight': true,
@@ -20125,7 +19711,7 @@ var Component4 = /* @__PURE__ */ React9.forwardRef(function (props, ref,) {
                     layoutDependency,
                     layoutId: 'WIBkbreIO',
                     children: [
-                      /* @__PURE__ */ _jsx11(SVG2, {
+                      /* @__PURE__ */ _jsx10(SVG2, {
                         className: 'framer-13edo1p',
                         'data-framer-name': 'Dotnet',
                         fill: 'black',
@@ -20137,10 +19723,10 @@ var Component4 = /* @__PURE__ */ React9.forwardRef(function (props, ref,) {
                           '<svg fill="#fff" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M24 8.77h-2.468v7.565h-1.425V8.77h-2.462V7.53H24zm-6.852 7.565h-4.821V7.53h4.63v1.24h-3.205v2.494h2.953v1.234h-2.953v2.604h3.396zm-6.708 0H8.882L4.78 9.863a2.896 2.896 0 0 1-.258-.51h-.036c.032.189.048.592.048 1.21v5.772H3.157V7.53h1.659l3.965 6.32c.167.261.275.442.323.54h.024c-.04-.233-.06-.629-.06-1.185V7.529h1.372zm-8.703-.693a.868.829 0 0 1-.869.829.868.829 0 0 1-.868-.83.868.829 0 0 1 .868-.828.868.829 0 0 1 .869.829Z"/></svg>',
                         withExternalLayout: true,
                       },),
-                      /* @__PURE__ */ _jsx11(RichText3, {
+                      /* @__PURE__ */ _jsx10(RichText3, {
                         __fromCanvasComponent: true,
-                        children: /* @__PURE__ */ _jsx11(React9.Fragment, {
-                          children: /* @__PURE__ */ _jsx11(motion9.p, {
+                        children: /* @__PURE__ */ _jsx10(React8.Fragment, {
+                          children: /* @__PURE__ */ _jsx10(motion9.p, {
                             style: {
                               '--font-selector': 'SW50ZXItTWVkaXVt',
                               '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -20165,7 +19751,7 @@ var Component4 = /* @__PURE__ */ React9.forwardRef(function (props, ref,) {
                     ],
                   },),
                 },),
-                /* @__PURE__ */ _jsx11(motion9.div, {
+                /* @__PURE__ */ _jsx10(motion9.div, {
                   className: 'framer-1gbrxoc',
                   'data-framer-name': 'Item',
                   'data-highlight': true,
@@ -20207,7 +19793,7 @@ var Component4 = /* @__PURE__ */ React9.forwardRef(function (props, ref,) {
                     layoutDependency,
                     layoutId: 'npyvVJVu4',
                     children: [
-                      /* @__PURE__ */ _jsx11(SVG2, {
+                      /* @__PURE__ */ _jsx10(SVG2, {
                         className: 'framer-1efectc',
                         'data-framer-name': '4chan',
                         fill: 'black',
@@ -20219,10 +19805,10 @@ var Component4 = /* @__PURE__ */ React9.forwardRef(function (props, ref,) {
                           '<svg fill="#fff" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M11.07 8.82S9.803 1.079 5.145 1.097C2.006 1.109.78 4.124 3.055 4.802c0 0-2.698.973-2.698 2.697 0 1.725 4.274 3.54 10.713 1.32zm1.931 5.924s.904 7.791 5.558 7.991c3.136.135 4.503-2.82 2.262-3.604 0 0 2.74-.845 2.82-2.567.08-1.723-4.105-3.737-10.64-1.82zm-3.672-1.55s-7.532 2.19-6.952 6.813c.39 3.114 3.53 3.969 3.93 1.63 0 0 1.29 2.559 3.002 2.351 1.712-.208 3-4.67.02-10.794zm5.623-2.467s7.727-1.35 7.66-6.008c-.046-3.138-3.074-4.333-3.728-2.051 0 0-1-2.686-2.726-2.668-1.724.018-3.494 4.312-1.206 10.727z"/></svg>',
                         withExternalLayout: true,
                       },),
-                      /* @__PURE__ */ _jsx11(RichText3, {
+                      /* @__PURE__ */ _jsx10(RichText3, {
                         __fromCanvasComponent: true,
-                        children: /* @__PURE__ */ _jsx11(React9.Fragment, {
-                          children: /* @__PURE__ */ _jsx11(motion9.p, {
+                        children: /* @__PURE__ */ _jsx10(React8.Fragment, {
+                          children: /* @__PURE__ */ _jsx10(motion9.p, {
                             style: {
                               '--font-selector': 'SW50ZXItTWVkaXVt',
                               '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -20249,12 +19835,12 @@ var Component4 = /* @__PURE__ */ React9.forwardRef(function (props, ref,) {
                 },),
               ],
             },),
-            /* @__PURE__ */ _jsx11(ComponentViewportProvider2, {
-              children: /* @__PURE__ */ _jsx11(motion9.div, {
+            /* @__PURE__ */ _jsx10(ComponentViewportProvider2, {
+              children: /* @__PURE__ */ _jsx10(motion9.div, {
                 className: 'framer-1gdsnr5-container',
                 layoutDependency,
                 layoutId: 'jmkQiIH7d-container',
-                children: /* @__PURE__ */ _jsx11(stdin_default3, {
+                children: /* @__PURE__ */ _jsx10(stdin_default3, {
                   background: 'rgb(13, 13, 13)',
                   border: {
                     borderColor: 'rgba(237, 237, 237, 0.19)',
@@ -20306,22 +19892,22 @@ var Component4 = /* @__PURE__ */ React9.forwardRef(function (props, ref,) {
                 },),
               },),
             },),
-            /* @__PURE__ */ _jsx11(motion9.div, {
+            /* @__PURE__ */ _jsx10(motion9.div, {
               className: 'framer-qar4i2',
               layoutDependency,
               layoutId: 'AFYoWL5ko',
-              children: /* @__PURE__ */ _jsx11(ComponentViewportProvider2, {
+              children: /* @__PURE__ */ _jsx10(ComponentViewportProvider2, {
                 height: 24,
                 width: '60px',
                 y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 14 +
-                  ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 394) - 28 - 303) /
-                      2 + 243 + 20) +
+                  ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 412) - 28 - 321) /
+                      2 + 243 + 38) +
                   8,
-                children: /* @__PURE__ */ _jsx11(motion9.div, {
+                children: /* @__PURE__ */ _jsx10(motion9.div, {
                   className: 'framer-py208u-container',
                   layoutDependency,
                   layoutId: 'HukQZ_Cy6-container',
-                  children: /* @__PURE__ */ _jsx11(stdin_default4, {
+                  children: /* @__PURE__ */ _jsx10(stdin_default4, {
                     height: '100%',
                     id: 'HukQZ_Cy6',
                     layoutId: 'HukQZ_Cy6',
@@ -20340,32 +19926,32 @@ var Component4 = /* @__PURE__ */ React9.forwardRef(function (props, ref,) {
 },);
 var css9 = [
   '@supports (aspect-ratio: 1) { body { --framer-aspect-ratio-supported: auto; } }',
-  '.framer-if8Tb.framer-1he655, .framer-if8Tb .framer-1he655 { display: block; }',
-  '.framer-if8Tb.framer-1r0obd7 { align-content: center; align-items: center; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; max-width: 750px; min-width: 250px; overflow: auto; padding: 14px 16px 14px 16px; position: relative; width: 656px; }',
-  '.framer-if8Tb .framer-1gbxf93 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: wrap; gap: 0px; height: 43px; justify-content: center; overflow: visible; padding: 20px; position: relative; width: 100%; }',
-  '.framer-if8Tb .framer-5c9g9x, .framer-if8Tb .framer-4hwj87, .framer-if8Tb .framer-1gbrxoc { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 0px; height: min-content; justify-content: flex-start; overflow: hidden; padding: 6px 0px 6px 0px; position: relative; width: 146px; will-change: var(--framer-will-change-override, transform); }',
-  '.framer-if8Tb .framer-1boohdc, .framer-if8Tb .framer-ttcs2, .framer-if8Tb .framer-18z2c1m, .framer-if8Tb .framer-1jnkozo { align-content: center; align-items: center; display: flex; flex: 1 0 0px; flex-direction: row; flex-wrap: nowrap; gap: 0px; height: 24px; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 1px; }',
-  '.framer-if8Tb .framer-arcg91, .framer-if8Tb .framer-1efectc { aspect-ratio: 1 / 1; flex: none; height: var(--framer-aspect-ratio-supported, 17px); position: relative; width: 17px; }',
-  '.framer-if8Tb .framer-vapjna, .framer-if8Tb .framer-qu04q5, .framer-if8Tb .framer-nk1a8a, .framer-if8Tb .framer-1e99a93 { -webkit-user-select: none; flex: none; height: auto; position: relative; user-select: none; white-space: pre-wrap; width: 80px; word-break: break-word; word-wrap: break-word; }',
-  '.framer-if8Tb .framer-1wjvx4m { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 0px; height: min-content; justify-content: center; overflow: hidden; padding: 6px 0px 6px 0px; position: relative; width: 146px; will-change: var(--framer-will-change-override, transform); }',
-  '.framer-if8Tb .framer-10yc9v3, .framer-if8Tb .framer-13edo1p { flex: none; height: 17px; position: relative; width: 17px; }',
-  '.framer-if8Tb .framer-1gdsnr5-container { flex: none; height: auto; position: relative; width: 100%; }',
-  '.framer-if8Tb .framer-qar4i2 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: 40px; justify-content: flex-end; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-if8Tb .framer-py208u-container { flex: none; height: 24px; position: relative; width: 60px; }',
-  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-if8Tb.framer-1r0obd7, .framer-if8Tb .framer-1gbxf93, .framer-if8Tb .framer-5c9g9x, .framer-if8Tb .framer-1boohdc, .framer-if8Tb .framer-1wjvx4m, .framer-if8Tb .framer-ttcs2, .framer-if8Tb .framer-4hwj87, .framer-if8Tb .framer-18z2c1m, .framer-if8Tb .framer-1gbrxoc, .framer-if8Tb .framer-1jnkozo, .framer-if8Tb .framer-qar4i2 { gap: 0px; } .framer-if8Tb.framer-1r0obd7 > * { margin: 0px; margin-bottom: calc(10px / 2); margin-top: calc(10px / 2); } .framer-if8Tb.framer-1r0obd7 > :first-child { margin-top: 0px; } .framer-if8Tb.framer-1r0obd7 > :last-child { margin-bottom: 0px; } .framer-if8Tb .framer-1gbxf93 > *, .framer-if8Tb .framer-5c9g9x > *, .framer-if8Tb .framer-1boohdc > *, .framer-if8Tb .framer-1wjvx4m > *, .framer-if8Tb .framer-ttcs2 > *, .framer-if8Tb .framer-4hwj87 > *, .framer-if8Tb .framer-18z2c1m > *, .framer-if8Tb .framer-1gbrxoc > *, .framer-if8Tb .framer-1jnkozo > * { margin: 0px; margin-left: calc(0px / 2); margin-right: calc(0px / 2); } .framer-if8Tb .framer-1gbxf93 > :first-child, .framer-if8Tb .framer-5c9g9x > :first-child, .framer-if8Tb .framer-1boohdc > :first-child, .framer-if8Tb .framer-1wjvx4m > :first-child, .framer-if8Tb .framer-ttcs2 > :first-child, .framer-if8Tb .framer-4hwj87 > :first-child, .framer-if8Tb .framer-18z2c1m > :first-child, .framer-if8Tb .framer-1gbrxoc > :first-child, .framer-if8Tb .framer-1jnkozo > :first-child, .framer-if8Tb .framer-qar4i2 > :first-child { margin-left: 0px; } .framer-if8Tb .framer-1gbxf93 > :last-child, .framer-if8Tb .framer-5c9g9x > :last-child, .framer-if8Tb .framer-1boohdc > :last-child, .framer-if8Tb .framer-1wjvx4m > :last-child, .framer-if8Tb .framer-ttcs2 > :last-child, .framer-if8Tb .framer-4hwj87 > :last-child, .framer-if8Tb .framer-18z2c1m > :last-child, .framer-if8Tb .framer-1gbrxoc > :last-child, .framer-if8Tb .framer-1jnkozo > :last-child, .framer-if8Tb .framer-qar4i2 > :last-child { margin-right: 0px; } .framer-if8Tb .framer-qar4i2 > * { margin: 0px; margin-left: calc(10px / 2); margin-right: calc(10px / 2); } }',
-  '.framer-if8Tb.framer-v-kcbogs.framer-1r0obd7, .framer-if8Tb.framer-v-dpo5yv.framer-1r0obd7 { cursor: pointer; }',
-  '.framer-if8Tb[data-border="true"]::after, .framer-if8Tb [data-border="true"]::after { content: ""; border-width: var(--border-top-width, 0) var(--border-right-width, 0) var(--border-bottom-width, 0) var(--border-left-width, 0); border-color: var(--border-color, none); border-style: var(--border-style, none); width: 100%; height: 100%; position: absolute; box-sizing: border-box; left: 0; top: 0; border-radius: inherit; pointer-events: none; }',
+  '.framer-qcO77.framer-1he655, .framer-qcO77 .framer-1he655 { display: block; }',
+  '.framer-qcO77.framer-1r0obd7 { align-content: center; align-items: center; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 19px; height: min-content; justify-content: center; max-width: 750px; min-width: 250px; overflow: auto; padding: 14px 16px 14px 16px; position: relative; width: 656px; }',
+  '.framer-qcO77 .framer-1gbxf93 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: wrap; gap: 0px; height: 43px; justify-content: center; overflow: visible; padding: 20px; position: relative; width: 100%; }',
+  '.framer-qcO77 .framer-5c9g9x, .framer-qcO77 .framer-4hwj87, .framer-qcO77 .framer-1gbrxoc { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 0px; height: min-content; justify-content: flex-start; overflow: hidden; padding: 6px 0px 6px 0px; position: relative; width: 146px; will-change: var(--framer-will-change-override, transform); }',
+  '.framer-qcO77 .framer-1boohdc, .framer-qcO77 .framer-ttcs2, .framer-qcO77 .framer-18z2c1m, .framer-qcO77 .framer-1jnkozo { align-content: center; align-items: center; display: flex; flex: 1 0 0px; flex-direction: row; flex-wrap: nowrap; gap: 0px; height: 24px; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 1px; }',
+  '.framer-qcO77 .framer-arcg91, .framer-qcO77 .framer-1efectc { aspect-ratio: 1 / 1; flex: none; height: var(--framer-aspect-ratio-supported, 17px); position: relative; width: 17px; }',
+  '.framer-qcO77 .framer-vapjna, .framer-qcO77 .framer-qu04q5, .framer-qcO77 .framer-nk1a8a, .framer-qcO77 .framer-1e99a93 { -webkit-user-select: none; flex: none; height: auto; position: relative; user-select: none; white-space: pre-wrap; width: 80px; word-break: break-word; word-wrap: break-word; }',
+  '.framer-qcO77 .framer-1wjvx4m { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 0px; height: min-content; justify-content: center; overflow: hidden; padding: 6px 0px 6px 0px; position: relative; width: 146px; will-change: var(--framer-will-change-override, transform); }',
+  '.framer-qcO77 .framer-10yc9v3, .framer-qcO77 .framer-13edo1p { flex: none; height: 17px; position: relative; width: 17px; }',
+  '.framer-qcO77 .framer-1gdsnr5-container { flex: none; height: auto; position: relative; width: 100%; }',
+  '.framer-qcO77 .framer-qar4i2 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: 40px; justify-content: flex-end; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-qcO77 .framer-py208u-container { flex: none; height: 24px; position: relative; width: 60px; }',
+  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-qcO77.framer-1r0obd7, .framer-qcO77 .framer-1gbxf93, .framer-qcO77 .framer-5c9g9x, .framer-qcO77 .framer-1boohdc, .framer-qcO77 .framer-1wjvx4m, .framer-qcO77 .framer-ttcs2, .framer-qcO77 .framer-4hwj87, .framer-qcO77 .framer-18z2c1m, .framer-qcO77 .framer-1gbrxoc, .framer-qcO77 .framer-1jnkozo, .framer-qcO77 .framer-qar4i2 { gap: 0px; } .framer-qcO77.framer-1r0obd7 > * { margin: 0px; margin-bottom: calc(19px / 2); margin-top: calc(19px / 2); } .framer-qcO77.framer-1r0obd7 > :first-child { margin-top: 0px; } .framer-qcO77.framer-1r0obd7 > :last-child { margin-bottom: 0px; } .framer-qcO77 .framer-1gbxf93 > *, .framer-qcO77 .framer-5c9g9x > *, .framer-qcO77 .framer-1boohdc > *, .framer-qcO77 .framer-1wjvx4m > *, .framer-qcO77 .framer-ttcs2 > *, .framer-qcO77 .framer-4hwj87 > *, .framer-qcO77 .framer-18z2c1m > *, .framer-qcO77 .framer-1gbrxoc > *, .framer-qcO77 .framer-1jnkozo > * { margin: 0px; margin-left: calc(0px / 2); margin-right: calc(0px / 2); } .framer-qcO77 .framer-1gbxf93 > :first-child, .framer-qcO77 .framer-5c9g9x > :first-child, .framer-qcO77 .framer-1boohdc > :first-child, .framer-qcO77 .framer-1wjvx4m > :first-child, .framer-qcO77 .framer-ttcs2 > :first-child, .framer-qcO77 .framer-4hwj87 > :first-child, .framer-qcO77 .framer-18z2c1m > :first-child, .framer-qcO77 .framer-1gbrxoc > :first-child, .framer-qcO77 .framer-1jnkozo > :first-child, .framer-qcO77 .framer-qar4i2 > :first-child { margin-left: 0px; } .framer-qcO77 .framer-1gbxf93 > :last-child, .framer-qcO77 .framer-5c9g9x > :last-child, .framer-qcO77 .framer-1boohdc > :last-child, .framer-qcO77 .framer-1wjvx4m > :last-child, .framer-qcO77 .framer-ttcs2 > :last-child, .framer-qcO77 .framer-4hwj87 > :last-child, .framer-qcO77 .framer-18z2c1m > :last-child, .framer-qcO77 .framer-1gbrxoc > :last-child, .framer-qcO77 .framer-1jnkozo > :last-child, .framer-qcO77 .framer-qar4i2 > :last-child { margin-right: 0px; } .framer-qcO77 .framer-qar4i2 > * { margin: 0px; margin-left: calc(10px / 2); margin-right: calc(10px / 2); } }',
+  '.framer-qcO77.framer-v-kcbogs.framer-1r0obd7, .framer-qcO77.framer-v-dpo5yv.framer-1r0obd7 { cursor: pointer; }',
+  '.framer-qcO77[data-border="true"]::after, .framer-qcO77 [data-border="true"]::after { content: ""; border-width: var(--border-top-width, 0) var(--border-right-width, 0) var(--border-bottom-width, 0) var(--border-left-width, 0); border-color: var(--border-color, none); border-style: var(--border-style, none); width: 100%; height: 100%; position: absolute; box-sizing: border-box; left: 0; top: 0; border-radius: inherit; pointer-events: none; }',
 ];
-var Framerh7szLpqNn = withCSS5(Component4, css9, 'framer-if8Tb',);
+var Framerh7szLpqNn = withCSS5(Component4, css9, 'framer-qcO77',);
 var stdin_default5 = Framerh7szLpqNn;
 Framerh7szLpqNn.displayName = 'code menu';
-Framerh7szLpqNn.defaultProps = { height: 394, width: 656, };
+Framerh7szLpqNn.defaultProps = { height: 412, width: 656, };
 addPropertyControls10(Framerh7szLpqNn, {
   variant: {
     options: ['sXIQhpQYS', 'qHMrDOFpV', 'BOAWw0bsz', 'YN6I5JYYy',],
     optionTitles: ['Variant 1', 'Variant 2', 'Variant 4', 'Variant 5',],
     title: 'Variant',
-    type: ControlType14.Enum,
+    type: ControlType13.Enum,
   },
 },);
 addFonts4(Framerh7szLpqNn, [
@@ -20434,12 +20020,12 @@ addFonts4(Framerh7szLpqNn, [
 ], { supportsExplicitInterCodegen: true, },);
 
 // https :https://framerusercontent.com/modules/0crjgCBhqirewQPRqGUT/5TfINqsfpXQezIEinvSY/hZVCT4xNf.js
-import { jsx as _jsx12, jsxs as _jsxs6, } from 'react/jsx-runtime';
+import { jsx as _jsx11, jsxs as _jsxs6, } from 'react/jsx-runtime';
 import {
   addFonts as addFonts5,
   addPropertyControls as addPropertyControls11,
   ComponentViewportProvider as ComponentViewportProvider3,
-  ControlType as ControlType15,
+  ControlType as ControlType14,
   cx as cx5,
   getFonts as getFonts3,
   Image,
@@ -20450,7 +20036,7 @@ import {
   withCSS as withCSS6,
 } from 'unframer';
 import { LayoutGroup as LayoutGroup6, motion as motion10, MotionConfigContext as MotionConfigContext5, } from 'unframer';
-import * as React10 from 'react';
+import * as React9 from 'react';
 var VideoFonts = getFonts3(Video,);
 var MaterialFonts = getFonts3(Icon,);
 var enabledGestures = {
@@ -20476,12 +20062,12 @@ function addPropertyOverrides5(overrides, ...variants) {
 }
 var transition15 = { bounce: 0.2, delay: 0, duration: 0.4, type: 'spring', };
 var Transition5 = ({ value, children, },) => {
-  const config = React10.useContext(MotionConfigContext5,);
+  const config = React9.useContext(MotionConfigContext5,);
   const transition = value !== null && value !== void 0 ? value : config.transition;
-  const contextValue = React10.useMemo(() => ({ ...config, transition, }), [JSON.stringify(transition,),],);
-  return /* @__PURE__ */ _jsx12(MotionConfigContext5.Provider, { value: contextValue, children, },);
+  const contextValue = React9.useMemo(() => ({ ...config, transition, }), [JSON.stringify(transition,),],);
+  return /* @__PURE__ */ _jsx11(MotionConfigContext5.Provider, { value: contextValue, children, },);
 };
-var Variants5 = motion10.create(React10.Fragment,);
+var Variants5 = motion10.create(React9.Fragment,);
 var humanReadableVariantMap5 = { 'Variant 3': 'Qf4R4vZgE', 'Variant 4': 'uQEdWo7XB', 'Variant 5': 'mLxgki_Ui', Gaming: 'gcHn84aAi', };
 var getProps6 = ({ height, id, width, ...props },) => {
   var _humanReadableVariantMap_props_variant, _ref;
@@ -20501,7 +20087,7 @@ var createLayoutDependency5 = (props, variants,) => {
   if (props.layoutDependency) return variants.join('-',) + props.layoutDependency;
   return variants.join('-',);
 };
-var Component5 = /* @__PURE__ */ React10.forwardRef(function (props, ref,) {
+var Component5 = /* @__PURE__ */ React9.forwardRef(function (props, ref,) {
   const { activeLocale, setLocale, } = useLocaleInfo5();
   const { style, className: className3, layoutId, variant, ...restProps } = getProps6(props,);
   const {
@@ -20522,16 +20108,16 @@ var Component5 = /* @__PURE__ */ React10.forwardRef(function (props, ref,) {
     variantClassNames: variantClassNames5,
   },);
   const layoutDependency = createLayoutDependency5(props, variants,);
-  const ref1 = React10.useRef(null,);
-  const defaultLayoutId = React10.useId();
+  const ref1 = React9.useRef(null,);
+  const defaultLayoutId = React9.useId();
   const sharedStyleClassNames = [];
   const componentViewport = useComponentViewport5();
-  return /* @__PURE__ */ _jsx12(LayoutGroup6, {
+  return /* @__PURE__ */ _jsx11(LayoutGroup6, {
     id: layoutId !== null && layoutId !== void 0 ? layoutId : defaultLayoutId,
-    children: /* @__PURE__ */ _jsx12(Variants5, {
+    children: /* @__PURE__ */ _jsx11(Variants5, {
       animate: variants,
       initial: false,
-      children: /* @__PURE__ */ _jsx12(Transition5, {
+      children: /* @__PURE__ */ _jsx11(Transition5, {
         value: transition15,
         children: /* @__PURE__ */ _jsxs6(Image, {
           ...restProps,
@@ -20557,12 +20143,12 @@ var Component5 = /* @__PURE__ */ React10.forwardRef(function (props, ref,) {
             gestureVariant,
           ),
           children: [
-            /* @__PURE__ */ _jsx12(ComponentViewportProvider3, {
-              children: /* @__PURE__ */ _jsx12(motion10.div, {
+            /* @__PURE__ */ _jsx11(ComponentViewportProvider3, {
+              children: /* @__PURE__ */ _jsx11(motion10.div, {
                 className: 'framer-etvbyw-container',
                 layoutDependency,
                 layoutId: 'TRJY3WelD-container',
-                children: /* @__PURE__ */ _jsx12(Video, {
+                children: /* @__PURE__ */ _jsx11(Video, {
                   backgroundColor: 'rgba(0, 0, 0, 0)',
                   borderRadius: 6,
                   bottomLeftRadius: 6,
@@ -20590,7 +20176,7 @@ var Component5 = /* @__PURE__ */ React10.forwardRef(function (props, ref,) {
                 },),
               },),
             },),
-            /* @__PURE__ */ _jsx12(motion10.div, {
+            /* @__PURE__ */ _jsx11(motion10.div, {
               className: 'framer-181wkeo',
               layoutDependency,
               layoutId: 'pyDM3ceeP',
@@ -20599,10 +20185,10 @@ var Component5 = /* @__PURE__ */ React10.forwardRef(function (props, ref,) {
                 layoutDependency,
                 layoutId: 'eBGQ2A0c4',
                 children: [
-                  /* @__PURE__ */ _jsx12(RichText4, {
+                  /* @__PURE__ */ _jsx11(RichText4, {
                     __fromCanvasComponent: true,
-                    children: /* @__PURE__ */ _jsx12(React10.Fragment, {
-                      children: /* @__PURE__ */ _jsx12(motion10.h3, {
+                    children: /* @__PURE__ */ _jsx11(React9.Fragment, {
+                      children: /* @__PURE__ */ _jsx11(motion10.h3, {
                         style: {
                           '--font-selector': 'R0Y7SW50ZXItNjAw',
                           '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -20630,8 +20216,8 @@ var Component5 = /* @__PURE__ */ React10.forwardRef(function (props, ref,) {
                     ...addPropertyOverrides5(
                       {
                         mLxgki_Ui: {
-                          children: /* @__PURE__ */ _jsx12(React10.Fragment, {
-                            children: /* @__PURE__ */ _jsx12(motion10.h3, {
+                          children: /* @__PURE__ */ _jsx11(React9.Fragment, {
+                            children: /* @__PURE__ */ _jsx11(motion10.h3, {
                               style: {
                                 '--font-selector': 'R0Y7SW50ZXItNjAw',
                                 '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -20646,8 +20232,8 @@ var Component5 = /* @__PURE__ */ React10.forwardRef(function (props, ref,) {
                           },),
                         },
                         uQEdWo7XB: {
-                          children: /* @__PURE__ */ _jsx12(React10.Fragment, {
-                            children: /* @__PURE__ */ _jsx12(motion10.h3, {
+                          children: /* @__PURE__ */ _jsx11(React9.Fragment, {
+                            children: /* @__PURE__ */ _jsx11(motion10.h3, {
                               style: {
                                 '--font-selector': 'R0Y7SW50ZXItNjAw',
                                 '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -20666,7 +20252,7 @@ var Component5 = /* @__PURE__ */ React10.forwardRef(function (props, ref,) {
                       gestureVariant,
                     ),
                   },),
-                  /* @__PURE__ */ _jsx12(motion10.button, {
+                  /* @__PURE__ */ _jsx11(motion10.button, {
                     className: 'framer-id1l8x',
                     'data-border': true,
                     'data-framer-name': 'Arrow Button',
@@ -20693,12 +20279,12 @@ var Component5 = /* @__PURE__ */ React10.forwardRef(function (props, ref,) {
                       'Qf4R4vZgE-hover': { '--border-color': 'rgb(250, 88, 0)', opacity: 1, },
                       'uQEdWo7XB-hover': { '--border-color': 'rgb(255, 89, 0)', opacity: 1, },
                     },
-                    children: /* @__PURE__ */ _jsx12(ComponentViewportProvider3, {
-                      children: /* @__PURE__ */ _jsx12(motion10.div, {
+                    children: /* @__PURE__ */ _jsx11(ComponentViewportProvider3, {
+                      children: /* @__PURE__ */ _jsx11(motion10.div, {
                         className: 'framer-13eitts-container',
                         layoutDependency,
                         layoutId: 'V8wYXU5N1-container',
-                        children: /* @__PURE__ */ _jsx12(Icon, {
+                        children: /* @__PURE__ */ _jsx11(Icon, {
                           color: 'rgb(199, 199, 199)',
                           height: '100%',
                           iconSearch: 'Home',
@@ -20759,7 +20345,7 @@ addPropertyControls11(FramerhZVCT4xNf, {
     options: ['gcHn84aAi', 'Qf4R4vZgE', 'uQEdWo7XB', 'mLxgki_Ui',],
     optionTitles: ['Gaming', 'Variant 3', 'Variant 4', 'Variant 5',],
     title: 'Variant',
-    type: ControlType15.Enum,
+    type: ControlType14.Enum,
   },
 },);
 addFonts5(FramerhZVCT4xNf, [
@@ -20778,12 +20364,12 @@ addFonts5(FramerhZVCT4xNf, [
 ], { supportsExplicitInterCodegen: true, },);
 
 // https :https://framerusercontent.com/modules/eh49IqkRJFy9Y5DVoDGK/TsNFO3CUi90p6iUUtRmH/iHkbGukFD.js
-import { jsx as _jsx14, jsxs as _jsxs7, } from 'react/jsx-runtime';
+import { jsx as _jsx13, jsxs as _jsxs7, } from 'react/jsx-runtime';
 import {
   addFonts as addFonts7,
   addPropertyControls as addPropertyControls13,
   ComponentViewportProvider as ComponentViewportProvider4,
-  ControlType as ControlType17,
+  ControlType as ControlType16,
   cx as cx7,
   getFonts as getFonts4,
   RichText as RichText5,
@@ -20793,14 +20379,14 @@ import {
   withCSS as withCSS8,
 } from 'unframer';
 import { LayoutGroup as LayoutGroup8, motion as motion12, MotionConfigContext as MotionConfigContext7, } from 'unframer';
-import * as React12 from 'react';
+import * as React11 from 'react';
 
 // https :https://framerusercontent.com/modules/wLbYE90umuHy49zMv67y/CghOPvlD0eqjsgCeqfxg/Gz9Lweymb.js
-import { jsx as _jsx13, } from 'react/jsx-runtime';
+import { jsx as _jsx12, } from 'react/jsx-runtime';
 import {
   addFonts as addFonts6,
   addPropertyControls as addPropertyControls12,
-  ControlType as ControlType16,
+  ControlType as ControlType15,
   cx as cx6,
   getLoadingLazyAtYPosition,
   Image as Image2,
@@ -20810,7 +20396,7 @@ import {
   withCSS as withCSS7,
 } from 'unframer';
 import { LayoutGroup as LayoutGroup7, motion as motion11, MotionConfigContext as MotionConfigContext6, } from 'unframer';
-import * as React11 from 'react';
+import * as React10 from 'react';
 var enabledGestures2 = { IzboM3IdJ: { hover: true, }, wOGMp6lUN: { hover: true, }, };
 var cycleOrder6 = ['IzboM3IdJ', 'wOGMp6lUN', 'ojjlZYM8M',];
 var serializationHash6 = 'framer-DmPAI';
@@ -20824,12 +20410,12 @@ function addPropertyOverrides6(overrides, ...variants) {
 }
 var transition16 = { bounce: 0.2, delay: 0, duration: 0.4, type: 'spring', };
 var Transition6 = ({ value, children, },) => {
-  const config = React11.useContext(MotionConfigContext6,);
+  const config = React10.useContext(MotionConfigContext6,);
   const transition = value !== null && value !== void 0 ? value : config.transition;
-  const contextValue = React11.useMemo(() => ({ ...config, transition, }), [JSON.stringify(transition,),],);
-  return /* @__PURE__ */ _jsx13(MotionConfigContext6.Provider, { value: contextValue, children, },);
+  const contextValue = React10.useMemo(() => ({ ...config, transition, }), [JSON.stringify(transition,),],);
+  return /* @__PURE__ */ _jsx12(MotionConfigContext6.Provider, { value: contextValue, children, },);
 };
-var Variants6 = motion11.create(React11.Fragment,);
+var Variants6 = motion11.create(React10.Fragment,);
 var humanReadableVariantMap6 = { 'Variant 1': 'IzboM3IdJ', 'Variant 2': 'wOGMp6lUN', 'Variant 3': 'ojjlZYM8M', };
 var getProps7 = ({ height, id, width, ...props },) => {
   var _humanReadableVariantMap_props_variant, _ref;
@@ -20849,7 +20435,7 @@ var createLayoutDependency6 = (props, variants,) => {
   if (props.layoutDependency) return variants.join('-',) + props.layoutDependency;
   return variants.join('-',);
 };
-var Component6 = /* @__PURE__ */ React11.forwardRef(function (props, ref,) {
+var Component6 = /* @__PURE__ */ React10.forwardRef(function (props, ref,) {
   const { activeLocale, setLocale, } = useLocaleInfo6();
   const { style, className: className3, layoutId, variant, ...restProps } = getProps7(props,);
   const {
@@ -20870,18 +20456,18 @@ var Component6 = /* @__PURE__ */ React11.forwardRef(function (props, ref,) {
     variantClassNames: variantClassNames6,
   },);
   const layoutDependency = createLayoutDependency6(props, variants,);
-  const ref1 = React11.useRef(null,);
-  const defaultLayoutId = React11.useId();
+  const ref1 = React10.useRef(null,);
+  const defaultLayoutId = React10.useId();
   const sharedStyleClassNames = [];
   const componentViewport = useComponentViewport6();
-  return /* @__PURE__ */ _jsx13(LayoutGroup7, {
+  return /* @__PURE__ */ _jsx12(LayoutGroup7, {
     id: layoutId !== null && layoutId !== void 0 ? layoutId : defaultLayoutId,
-    children: /* @__PURE__ */ _jsx13(Variants6, {
+    children: /* @__PURE__ */ _jsx12(Variants6, {
       animate: variants,
       initial: false,
-      children: /* @__PURE__ */ _jsx13(Transition6, {
+      children: /* @__PURE__ */ _jsx12(Transition6, {
         value: transition16,
-        children: /* @__PURE__ */ _jsx13(Image2, {
+        children: /* @__PURE__ */ _jsx12(Image2, {
           ...restProps,
           ...gestureHandlers,
           background: {
@@ -20970,7 +20556,7 @@ addPropertyControls12(FramerGz9Lweymb, {
     options: ['IzboM3IdJ', 'wOGMp6lUN', 'ojjlZYM8M',],
     optionTitles: ['Variant 1', 'Variant 2', 'Variant 3',],
     title: 'Variant',
-    type: ControlType16.Enum,
+    type: ControlType15.Enum,
   },
 },);
 addFonts6(FramerGz9Lweymb, [{ explicitInter: true, fonts: [], },], { supportsExplicitInterCodegen: true, },);
@@ -20995,12 +20581,12 @@ function addPropertyOverrides7(overrides, ...variants) {
 }
 var transition17 = { bounce: 0.2, delay: 0, duration: 0.4, type: 'spring', };
 var Transition7 = ({ value, children, },) => {
-  const config = React12.useContext(MotionConfigContext7,);
+  const config = React11.useContext(MotionConfigContext7,);
   const transition = value !== null && value !== void 0 ? value : config.transition;
-  const contextValue = React12.useMemo(() => ({ ...config, transition, }), [JSON.stringify(transition,),],);
-  return /* @__PURE__ */ _jsx14(MotionConfigContext7.Provider, { value: contextValue, children, },);
+  const contextValue = React11.useMemo(() => ({ ...config, transition, }), [JSON.stringify(transition,),],);
+  return /* @__PURE__ */ _jsx13(MotionConfigContext7.Provider, { value: contextValue, children, },);
 };
-var Variants7 = motion12.create(React12.Fragment,);
+var Variants7 = motion12.create(React11.Fragment,);
 var humanReadableVariantMap7 = { 'Variant 1': 'XNDnp9AgU', 'Variant 2': 'JupJsu9eV', 'Variant 3': 'N9sSzUNiP', 'Variant 4': 'jovIT9GOj', };
 var getProps8 = ({ height, id, width, ...props },) => {
   var _humanReadableVariantMap_props_variant, _ref;
@@ -21020,7 +20606,7 @@ var createLayoutDependency7 = (props, variants,) => {
   if (props.layoutDependency) return variants.join('-',) + props.layoutDependency;
   return variants.join('-',);
 };
-var Component7 = /* @__PURE__ */ React12.forwardRef(function (props, ref,) {
+var Component7 = /* @__PURE__ */ React11.forwardRef(function (props, ref,) {
   const { activeLocale, setLocale, } = useLocaleInfo7();
   const { style, className: className3, layoutId, variant, ...restProps } = getProps8(props,);
   const {
@@ -21041,7 +20627,7 @@ var Component7 = /* @__PURE__ */ React12.forwardRef(function (props, ref,) {
     variantClassNames: variantClassNames7,
   },);
   const layoutDependency = createLayoutDependency7(props, variants,);
-  const ref1 = React12.useRef(null,);
+  const ref1 = React11.useRef(null,);
   const isDisplayed = () => {
     if (['JupJsu9eV-hover', 'N9sSzUNiP-hover', 'jovIT9GOj-hover',].includes(gestureVariant,)) return false;
     if (['JupJsu9eV', 'N9sSzUNiP', 'jovIT9GOj',].includes(baseVariant,)) return false;
@@ -21072,15 +20658,15 @@ var Component7 = /* @__PURE__ */ React12.forwardRef(function (props, ref,) {
     if (baseVariant === 'jovIT9GOj') return true;
     return false;
   };
-  const defaultLayoutId = React12.useId();
+  const defaultLayoutId = React11.useId();
   const sharedStyleClassNames = [];
   const componentViewport = useComponentViewport7();
-  return /* @__PURE__ */ _jsx14(LayoutGroup8, {
+  return /* @__PURE__ */ _jsx13(LayoutGroup8, {
     id: layoutId !== null && layoutId !== void 0 ? layoutId : defaultLayoutId,
-    children: /* @__PURE__ */ _jsx14(Variants7, {
+    children: /* @__PURE__ */ _jsx13(Variants7, {
       animate: variants,
       initial: false,
-      children: /* @__PURE__ */ _jsx14(Transition7, {
+      children: /* @__PURE__ */ _jsx13(Transition7, {
         value: transition17,
         children: /* @__PURE__ */ _jsxs7(motion12.div, {
           ...restProps,
@@ -21124,7 +20710,7 @@ var Component7 = /* @__PURE__ */ React12.forwardRef(function (props, ref,) {
               layoutDependency,
               layoutId: 'fN8je7t96',
               children: [
-                isDisplayed() && /* @__PURE__ */ _jsx14(ComponentViewportProvider4, {
+                isDisplayed() && /* @__PURE__ */ _jsx13(ComponentViewportProvider4, {
                   height: 300,
                   width: `calc(${
                     (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
@@ -21133,11 +20719,11 @@ var Component7 = /* @__PURE__ */ React12.forwardRef(function (props, ref,) {
                     ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 432) - 40 -
                           363.6) / 2 + 0 + 0) +
                     0 + 0,
-                  children: /* @__PURE__ */ _jsx14(motion12.div, {
+                  children: /* @__PURE__ */ _jsx13(motion12.div, {
                     className: 'framer-vxx0yj-container',
                     layoutDependency,
                     layoutId: 'QaxcQYy6y-container',
-                    children: /* @__PURE__ */ _jsx14(stdin_default7, {
+                    children: /* @__PURE__ */ _jsx13(stdin_default7, {
                       height: '100%',
                       id: 'QaxcQYy6y',
                       layoutId: 'QaxcQYy6y',
@@ -21147,7 +20733,7 @@ var Component7 = /* @__PURE__ */ React12.forwardRef(function (props, ref,) {
                     },),
                   },),
                 },),
-                isDisplayed1() && /* @__PURE__ */ _jsx14(ComponentViewportProvider4, {
+                isDisplayed1() && /* @__PURE__ */ _jsx13(ComponentViewportProvider4, {
                   ...addPropertyOverrides7(
                     {
                       JupJsu9eV: {
@@ -21161,11 +20747,11 @@ var Component7 = /* @__PURE__ */ React12.forwardRef(function (props, ref,) {
                     baseVariant,
                     gestureVariant,
                   ),
-                  children: /* @__PURE__ */ _jsx14(motion12.div, {
+                  children: /* @__PURE__ */ _jsx13(motion12.div, {
                     className: 'framer-ykojbq-container',
                     layoutDependency,
                     layoutId: 'HnlnLtmeY-container',
-                    children: /* @__PURE__ */ _jsx14(stdin_default7, {
+                    children: /* @__PURE__ */ _jsx13(stdin_default7, {
                       height: '100%',
                       id: 'HnlnLtmeY',
                       layoutId: 'HnlnLtmeY',
@@ -21175,7 +20761,7 @@ var Component7 = /* @__PURE__ */ React12.forwardRef(function (props, ref,) {
                     },),
                   },),
                 },),
-                isDisplayed2() && /* @__PURE__ */ _jsx14(ComponentViewportProvider4, {
+                isDisplayed2() && /* @__PURE__ */ _jsx13(ComponentViewportProvider4, {
                   ...addPropertyOverrides7(
                     {
                       jovIT9GOj: {
@@ -21196,11 +20782,11 @@ var Component7 = /* @__PURE__ */ React12.forwardRef(function (props, ref,) {
                     baseVariant,
                     gestureVariant,
                   ),
-                  children: /* @__PURE__ */ _jsx14(motion12.div, {
+                  children: /* @__PURE__ */ _jsx13(motion12.div, {
                     className: 'framer-rim9vr-container',
                     layoutDependency,
                     layoutId: 'ndtVAYk4F-container',
-                    children: /* @__PURE__ */ _jsx14(stdin_default7, {
+                    children: /* @__PURE__ */ _jsx13(stdin_default7, {
                       height: '100%',
                       id: 'ndtVAYk4F',
                       layoutId: 'ndtVAYk4F',
@@ -21217,10 +20803,10 @@ var Component7 = /* @__PURE__ */ React12.forwardRef(function (props, ref,) {
                   layoutDependency,
                   layoutId: 'bDUIBU4iw',
                   children: [
-                    /* @__PURE__ */ _jsx14(RichText5, {
+                    /* @__PURE__ */ _jsx13(RichText5, {
                       __fromCanvasComponent: true,
-                      children: /* @__PURE__ */ _jsx14(React12.Fragment, {
-                        children: /* @__PURE__ */ _jsx14(motion12.h2, {
+                      children: /* @__PURE__ */ _jsx13(React11.Fragment, {
+                        children: /* @__PURE__ */ _jsx13(motion12.h2, {
                           style: {
                             '--font-selector': 'R0Y7SW50ZXItNzAw',
                             '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -21248,8 +20834,8 @@ var Component7 = /* @__PURE__ */ React12.forwardRef(function (props, ref,) {
                       ...addPropertyOverrides7(
                         {
                           jovIT9GOj: {
-                            children: /* @__PURE__ */ _jsx14(React12.Fragment, {
-                              children: /* @__PURE__ */ _jsx14(motion12.h2, {
+                            children: /* @__PURE__ */ _jsx13(React11.Fragment, {
+                              children: /* @__PURE__ */ _jsx13(motion12.h2, {
                                 style: {
                                   '--font-selector': 'R0Y7SW50ZXItNzAw',
                                   '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -21264,8 +20850,8 @@ var Component7 = /* @__PURE__ */ React12.forwardRef(function (props, ref,) {
                             },),
                           },
                           N9sSzUNiP: {
-                            children: /* @__PURE__ */ _jsx14(React12.Fragment, {
-                              children: /* @__PURE__ */ _jsx14(motion12.h2, {
+                            children: /* @__PURE__ */ _jsx13(React11.Fragment, {
+                              children: /* @__PURE__ */ _jsx13(motion12.h2, {
                                 style: {
                                   '--font-selector': 'R0Y7SW50ZXItNzAw',
                                   '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -21284,9 +20870,9 @@ var Component7 = /* @__PURE__ */ React12.forwardRef(function (props, ref,) {
                         gestureVariant,
                       ),
                     },),
-                    /* @__PURE__ */ _jsx14(RichText5, {
+                    /* @__PURE__ */ _jsx13(RichText5, {
                       __fromCanvasComponent: true,
-                      children: /* @__PURE__ */ _jsx14(React12.Fragment, {
+                      children: /* @__PURE__ */ _jsx13(React11.Fragment, {
                         children: /* @__PURE__ */ _jsxs7(motion12.h3, {
                           style: {
                             '--font-selector': 'R0Y7SW50ZXItNTAw',
@@ -21301,8 +20887,8 @@ var Component7 = /* @__PURE__ */ React12.forwardRef(function (props, ref,) {
                           },
                           children: [
                             'Add effects with a few clicks and capture your audience\u2019s attention when they land on your website.',
-                            /* @__PURE__ */ _jsx14(motion12.br, {},),
-                            /* @__PURE__ */ _jsx14(motion12.br, { className: 'trailing-break', },),
+                            /* @__PURE__ */ _jsx13(motion12.br, {},),
+                            /* @__PURE__ */ _jsx13(motion12.br, { className: 'trailing-break', },),
                           ],
                         },),
                       },),
@@ -21319,8 +20905,8 @@ var Component7 = /* @__PURE__ */ React12.forwardRef(function (props, ref,) {
                       ...addPropertyOverrides7(
                         {
                           jovIT9GOj: {
-                            children: /* @__PURE__ */ _jsx14(React12.Fragment, {
-                              children: /* @__PURE__ */ _jsx14(motion12.h3, {
+                            children: /* @__PURE__ */ _jsx13(React11.Fragment, {
+                              children: /* @__PURE__ */ _jsx13(motion12.h3, {
                                 style: {
                                   '--font-selector': 'R0Y7SW50ZXItNTAw',
                                   '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -21338,8 +20924,8 @@ var Component7 = /* @__PURE__ */ React12.forwardRef(function (props, ref,) {
                             },),
                           },
                           N9sSzUNiP: {
-                            children: /* @__PURE__ */ _jsx14(React12.Fragment, {
-                              children: /* @__PURE__ */ _jsx14(motion12.h3, {
+                            children: /* @__PURE__ */ _jsx13(React11.Fragment, {
+                              children: /* @__PURE__ */ _jsx13(motion12.h3, {
                                 style: {
                                   '--font-selector': 'R0Y7SW50ZXItNTAw',
                                   '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -21369,10 +20955,10 @@ var Component7 = /* @__PURE__ */ React12.forwardRef(function (props, ref,) {
                   layoutDependency,
                   layoutId: 'siciuXRA0',
                   children: [
-                    /* @__PURE__ */ _jsx14(RichText5, {
+                    /* @__PURE__ */ _jsx13(RichText5, {
                       __fromCanvasComponent: true,
-                      children: /* @__PURE__ */ _jsx14(React12.Fragment, {
-                        children: /* @__PURE__ */ _jsx14(motion12.h2, {
+                      children: /* @__PURE__ */ _jsx13(React11.Fragment, {
+                        children: /* @__PURE__ */ _jsx13(motion12.h2, {
                           style: {
                             '--font-selector': 'R0Y7SW50ZXItNzAw',
                             '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -21398,10 +20984,10 @@ var Component7 = /* @__PURE__ */ React12.forwardRef(function (props, ref,) {
                       verticalAlignment: 'top',
                       withExternalLayout: true,
                     },),
-                    /* @__PURE__ */ _jsx14(RichText5, {
+                    /* @__PURE__ */ _jsx13(RichText5, {
                       __fromCanvasComponent: true,
-                      children: /* @__PURE__ */ _jsx14(React12.Fragment, {
-                        children: /* @__PURE__ */ _jsx14(motion12.h3, {
+                      children: /* @__PURE__ */ _jsx13(React11.Fragment, {
+                        children: /* @__PURE__ */ _jsx13(motion12.h3, {
                           style: {
                             '--font-selector': 'R0Y7SW50ZXItNTAw',
                             '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -21430,7 +21016,7 @@ var Component7 = /* @__PURE__ */ React12.forwardRef(function (props, ref,) {
                     },),
                   ],
                 },),
-                isDisplayed1() && /* @__PURE__ */ _jsx14(motion12.div, {
+                isDisplayed1() && /* @__PURE__ */ _jsx13(motion12.div, {
                   className: 'framer-1egbzet',
                   layoutDependency,
                   layoutId: 'L5ubW8Ta4',
@@ -21443,7 +21029,7 @@ var Component7 = /* @__PURE__ */ React12.forwardRef(function (props, ref,) {
                 },),
               ],
             },),
-            isDisplayed4() && /* @__PURE__ */ _jsx14(motion12.div, {
+            isDisplayed4() && /* @__PURE__ */ _jsx13(motion12.div, {
               className: 'framer-1bp9t5s',
               layoutDependency,
               layoutId: 'Yoy9iWoep',
@@ -21454,7 +21040,7 @@ var Component7 = /* @__PURE__ */ React12.forwardRef(function (props, ref,) {
                 },
               },
             },),
-            isDisplayed5() && /* @__PURE__ */ _jsx14(motion12.div, {
+            isDisplayed5() && /* @__PURE__ */ _jsx13(motion12.div, {
               className: 'framer-gc4fjh',
               layoutDependency,
               layoutId: 'Xua73_jAI',
@@ -21503,7 +21089,7 @@ addPropertyControls13(FrameriHkbGukFD, {
     options: ['XNDnp9AgU', 'JupJsu9eV', 'N9sSzUNiP', 'jovIT9GOj',],
     optionTitles: ['Variant 1', 'Variant 2', 'Variant 3', 'Variant 4',],
     title: 'Variant',
-    type: ControlType17.Enum,
+    type: ControlType16.Enum,
   },
 },);
 addFonts7(FrameriHkbGukFD, [{
@@ -21523,13 +21109,13 @@ addFonts7(FrameriHkbGukFD, [{
   },],
 }, ...LargeImageFonts,], { supportsExplicitInterCodegen: true, },);
 
-// https :https://framerusercontent.com/modules/mn4LNnpGOYMF5GvG6Y5k/5jeiz8HBp3MsYeMq20iS/p6_cJaMqj.js
-import { jsx as _jsx15, jsxs as _jsxs8, } from 'react/jsx-runtime';
+// https :https://framerusercontent.com/modules/mn4LNnpGOYMF5GvG6Y5k/gDOxzR5IfRly5lTAi776/p6_cJaMqj.js
+import { jsx as _jsx14, jsxs as _jsxs8, } from 'react/jsx-runtime';
 import {
   addFonts as addFonts8,
   addPropertyControls as addPropertyControls14,
   ComponentViewportProvider as ComponentViewportProvider5,
-  ControlType as ControlType18,
+  ControlType as ControlType17,
   cx as cx8,
   getFonts as getFonts5,
   RichText as RichText6,
@@ -21540,11 +21126,11 @@ import {
   withCSS as withCSS9,
 } from 'unframer';
 import { LayoutGroup as LayoutGroup9, motion as motion13, MotionConfigContext as MotionConfigContext8, } from 'unframer';
-import * as React13 from 'react';
+import * as React12 from 'react';
 var MaterialFonts2 = getFonts5(Icon,);
 var enabledGestures4 = { h8JN1WIsh: { pressed: true, }, };
 var cycleOrder8 = ['rLSvZw8dT', 'h8JN1WIsh',];
-var serializationHash8 = 'framer-fP5BH';
+var serializationHash8 = 'framer-UeXCO';
 var variantClassNames8 = { h8JN1WIsh: 'framer-v-13umg3m', rLSvZw8dT: 'framer-v-u34dxp', };
 function addPropertyOverrides8(overrides, ...variants) {
   const nextOverrides = {};
@@ -21569,12 +21155,12 @@ var animation5 = {
 };
 var animation13 = { opacity: 1, rotate: 0, rotateX: 0, rotateY: 0, scale: 1, skewX: 0, skewY: 0, transition: transition24, x: 6, };
 var Transition8 = ({ value, children, },) => {
-  const config = React13.useContext(MotionConfigContext8,);
+  const config = React12.useContext(MotionConfigContext8,);
   const transition = value !== null && value !== void 0 ? value : config.transition;
-  const contextValue = React13.useMemo(() => ({ ...config, transition, }), [JSON.stringify(transition,),],);
-  return /* @__PURE__ */ _jsx15(MotionConfigContext8.Provider, { value: contextValue, children, },);
+  const contextValue = React12.useMemo(() => ({ ...config, transition, }), [JSON.stringify(transition,),],);
+  return /* @__PURE__ */ _jsx14(MotionConfigContext8.Provider, { value: contextValue, children, },);
 };
-var Variants8 = motion13.create(React13.Fragment,);
+var Variants8 = motion13.create(React12.Fragment,);
 var humanReadableVariantMap8 = { 'Variant 1': 'rLSvZw8dT', 'Variant 2': 'h8JN1WIsh', };
 var getProps9 = ({ height, id, width, ...props },) => {
   var _humanReadableVariantMap_props_variant, _ref;
@@ -21594,7 +21180,7 @@ var createLayoutDependency8 = (props, variants,) => {
   if (props.layoutDependency) return variants.join('-',) + props.layoutDependency;
   return variants.join('-',);
 };
-var Component8 = /* @__PURE__ */ React13.forwardRef(function (props, ref,) {
+var Component8 = /* @__PURE__ */ React12.forwardRef(function (props, ref,) {
   const { activeLocale, setLocale, } = useLocaleInfo8();
   const { style, className: className3, layoutId, variant, ...restProps } = getProps9(props,);
   const {
@@ -21630,16 +21216,16 @@ var Component8 = /* @__PURE__ */ React13.forwardRef(function (props, ref,) {
   const onMouseEnterd1nhoc = activeVariantCallback(async (...args) => {
     setVariant('h8JN1WIsh',);
   },);
-  const ref1 = React13.useRef(null,);
-  const defaultLayoutId = React13.useId();
+  const ref1 = React12.useRef(null,);
+  const defaultLayoutId = React12.useId();
   const sharedStyleClassNames = [];
   const componentViewport = useComponentViewport8();
-  return /* @__PURE__ */ _jsx15(LayoutGroup9, {
+  return /* @__PURE__ */ _jsx14(LayoutGroup9, {
     id: layoutId !== null && layoutId !== void 0 ? layoutId : defaultLayoutId,
-    children: /* @__PURE__ */ _jsx15(Variants8, {
+    children: /* @__PURE__ */ _jsx14(Variants8, {
       animate: variants,
       initial: false,
-      children: /* @__PURE__ */ _jsx15(Transition8, {
+      children: /* @__PURE__ */ _jsx14(Transition8, {
         value: transition18,
         children: /* @__PURE__ */ _jsxs8(motion13.div, {
           ...restProps,
@@ -21662,10 +21248,10 @@ var Component8 = /* @__PURE__ */ React13.forwardRef(function (props, ref,) {
             gestureVariant,
           ),
           children: [
-            /* @__PURE__ */ _jsx15(RichText6, {
+            /* @__PURE__ */ _jsx14(RichText6, {
               __fromCanvasComponent: true,
-              children: /* @__PURE__ */ _jsx15(React13.Fragment, {
-                children: /* @__PURE__ */ _jsx15(motion13.p, {
+              children: /* @__PURE__ */ _jsx14(React12.Fragment, {
+                children: /* @__PURE__ */ _jsx14(motion13.p, {
                   style: { '--framer-line-height': '0.8em', '--framer-text-color': 'var(--extracted-r6o4lv, rgb(255, 255, 255))', },
                   children: 'and more ',
                 },),
@@ -21683,7 +21269,7 @@ var Component8 = /* @__PURE__ */ React13.forwardRef(function (props, ref,) {
               verticalAlignment: 'top',
               withExternalLayout: true,
             },),
-            /* @__PURE__ */ _jsx15(motion13.button, {
+            /* @__PURE__ */ _jsx14(motion13.button, {
               className: 'framer-3tzi55',
               'data-border': true,
               'data-framer-name': 'Button',
@@ -21711,8 +21297,8 @@ var Component8 = /* @__PURE__ */ React13.forwardRef(function (props, ref,) {
                 baseVariant,
                 gestureVariant,
               ),
-              children: /* @__PURE__ */ _jsx15(ComponentViewportProvider5, {
-                children: /* @__PURE__ */ _jsx15(motion13.div, {
+              children: /* @__PURE__ */ _jsx14(ComponentViewportProvider5, {
+                children: /* @__PURE__ */ _jsx14(motion13.div, {
                   className: 'framer-6s0hxe-container',
                   layoutDependency,
                   layoutId: 'yoJsDWZtQ-container',
@@ -21722,7 +21308,7 @@ var Component8 = /* @__PURE__ */ React13.forwardRef(function (props, ref,) {
                     baseVariant,
                     gestureVariant,
                   ),
-                  children: /* @__PURE__ */ _jsx15(Icon, {
+                  children: /* @__PURE__ */ _jsx14(Icon, {
                     color: 'rgb(255, 255, 255)',
                     height: '100%',
                     iconSearch: 'Home',
@@ -21749,24 +21335,24 @@ var Component8 = /* @__PURE__ */ React13.forwardRef(function (props, ref,) {
 },);
 var css13 = [
   '@supports (aspect-ratio: 1) { body { --framer-aspect-ratio-supported: auto; } }',
-  '.framer-fP5BH.framer-l3uomp, .framer-fP5BH .framer-l3uomp { display: block; }',
-  '.framer-fP5BH.framer-u34dxp { height: 16px; overflow: hidden; position: relative; width: 102px; }',
-  '.framer-fP5BH .framer-jdme44 { flex: none; height: auto; left: 1px; position: absolute; top: 50%; white-space: pre; width: auto; }',
-  '.framer-fP5BH .framer-3tzi55 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 0px; height: 15px; justify-content: center; left: 78px; overflow: visible; padding: 4px 5px 4px 5px; position: absolute; top: 50%; width: min-content; z-index: 1; }',
-  '.framer-fP5BH .framer-6s0hxe-container { flex: none; height: 12px; position: relative; width: 14px; }',
-  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-fP5BH .framer-3tzi55 { gap: 0px; } .framer-fP5BH .framer-3tzi55 > * { margin: 0px; margin-left: calc(0px / 2); margin-right: calc(0px / 2); } .framer-fP5BH .framer-3tzi55 > :first-child { margin-left: 0px; } .framer-fP5BH .framer-3tzi55 > :last-child { margin-right: 0px; } }',
-  '.framer-fP5BH.framer-v-13umg3m.framer-u34dxp { cursor: pointer; }',
-  '.framer-fP5BH.framer-v-13umg3m .framer-3tzi55 { min-width: 24px; }',
-  '.framer-fP5BH.framer-v-13umg3m .framer-6s0hxe-container { bottom: 1px; height: unset; left: 7px; position: absolute; right: 0px; top: 1px; width: unset; z-index: 1; }',
-  '.framer-fP5BH.framer-v-13umg3m.pressed .framer-6s0hxe-container { height: unset; width: unset; }',
-  '.framer-fP5BH[data-border="true"]::after, .framer-fP5BH [data-border="true"]::after { content: ""; border-width: var(--border-top-width, 0) var(--border-right-width, 0) var(--border-bottom-width, 0) var(--border-left-width, 0); border-color: var(--border-color, none); border-style: var(--border-style, none); width: 100%; height: 100%; position: absolute; box-sizing: border-box; left: 0; top: 0; border-radius: inherit; pointer-events: none; }',
+  '.framer-UeXCO.framer-l3uomp, .framer-UeXCO .framer-l3uomp { display: block; }',
+  '.framer-UeXCO.framer-u34dxp { height: 16px; overflow: hidden; position: relative; width: 102px; }',
+  '.framer-UeXCO .framer-jdme44 { flex: none; height: auto; left: 1px; position: absolute; top: 50%; white-space: pre; width: auto; }',
+  '.framer-UeXCO .framer-3tzi55 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 0px; height: 15px; justify-content: center; left: 78px; overflow: visible; padding: 4px 5px 4px 5px; position: absolute; top: 50%; width: min-content; z-index: 1; }',
+  '.framer-UeXCO .framer-6s0hxe-container { flex: none; height: 12px; position: relative; width: 14px; }',
+  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-UeXCO .framer-3tzi55 { gap: 0px; } .framer-UeXCO .framer-3tzi55 > * { margin: 0px; margin-left: calc(0px / 2); margin-right: calc(0px / 2); } .framer-UeXCO .framer-3tzi55 > :first-child { margin-left: 0px; } .framer-UeXCO .framer-3tzi55 > :last-child { margin-right: 0px; } }',
+  '.framer-UeXCO.framer-v-13umg3m.framer-u34dxp { cursor: pointer; }',
+  '.framer-UeXCO.framer-v-13umg3m .framer-3tzi55 { min-width: 24px; }',
+  '.framer-UeXCO.framer-v-13umg3m .framer-6s0hxe-container { bottom: 1px; height: unset; left: 7px; position: absolute; right: 0px; top: 1px; width: unset; z-index: 1; }',
+  '.framer-UeXCO.framer-v-13umg3m.pressed .framer-6s0hxe-container { height: unset; width: unset; }',
+  '.framer-UeXCO[data-border="true"]::after, .framer-UeXCO [data-border="true"]::after { content: ""; border-width: var(--border-top-width, 0) var(--border-right-width, 0) var(--border-bottom-width, 0) var(--border-left-width, 0); border-color: var(--border-color, none); border-style: var(--border-style, none); width: 100%; height: 100%; position: absolute; box-sizing: border-box; left: 0; top: 0; border-radius: inherit; pointer-events: none; }',
 ];
-var Framerp6_cJaMqj = withCSS9(Component8, css13, 'framer-fP5BH',);
+var Framerp6_cJaMqj = withCSS9(Component8, css13, 'framer-UeXCO',);
 var stdin_default9 = Framerp6_cJaMqj;
 Framerp6_cJaMqj.displayName = 'and more';
 Framerp6_cJaMqj.defaultProps = { height: 16, width: 102, };
 addPropertyControls14(Framerp6_cJaMqj, {
-  variant: { options: ['rLSvZw8dT', 'h8JN1WIsh',], optionTitles: ['Variant 1', 'Variant 2',], title: 'Variant', type: ControlType18.Enum, },
+  variant: { options: ['rLSvZw8dT', 'h8JN1WIsh',], optionTitles: ['Variant 1', 'Variant 2',], title: 'Variant', type: ControlType17.Enum, },
 },);
 addFonts8(Framerp6_cJaMqj, [{
   explicitInter: true,
@@ -21824,11 +21410,11 @@ addFonts8(Framerp6_cJaMqj, [{
 }, ...MaterialFonts2,], { supportsExplicitInterCodegen: true, },);
 
 // https :https://framerusercontent.com/modules/owGn2ReghAZ17q4h5Lir/ThuynW2gnmJ1G836jhr1/y0yY_PnFZ.js
-import { jsx as _jsx16, } from 'react/jsx-runtime';
+import { jsx as _jsx15, } from 'react/jsx-runtime';
 import {
   addFonts as addFonts9,
   addPropertyControls as addPropertyControls15,
-  ControlType as ControlType19,
+  ControlType as ControlType18,
   cx as cx9,
   RichText as RichText7,
   useActiveVariantCallback as useActiveVariantCallback5,
@@ -21838,7 +21424,7 @@ import {
   withCSS as withCSS10,
 } from 'unframer';
 import { LayoutGroup as LayoutGroup10, motion as motion14, MotionConfigContext as MotionConfigContext9, } from 'unframer';
-import * as React14 from 'react';
+import * as React13 from 'react';
 var cycleOrder9 = ['dDtkKZuBL', 'nZuXT749o',];
 var serializationHash9 = 'framer-lhdsb';
 var variantClassNames9 = { dDtkKZuBL: 'framer-v-9niw15', nZuXT749o: 'framer-v-qnjd15', };
@@ -21851,12 +21437,12 @@ function addPropertyOverrides9(overrides, ...variants) {
 }
 var transition19 = { bounce: 0.2, delay: 0, duration: 0.4, type: 'spring', };
 var Transition9 = ({ value, children, },) => {
-  const config = React14.useContext(MotionConfigContext9,);
+  const config = React13.useContext(MotionConfigContext9,);
   const transition = value !== null && value !== void 0 ? value : config.transition;
-  const contextValue = React14.useMemo(() => ({ ...config, transition, }), [JSON.stringify(transition,),],);
-  return /* @__PURE__ */ _jsx16(MotionConfigContext9.Provider, { value: contextValue, children, },);
+  const contextValue = React13.useMemo(() => ({ ...config, transition, }), [JSON.stringify(transition,),],);
+  return /* @__PURE__ */ _jsx15(MotionConfigContext9.Provider, { value: contextValue, children, },);
 };
-var Variants9 = motion14.create(React14.Fragment,);
+var Variants9 = motion14.create(React13.Fragment,);
 var humanReadableVariantMap9 = { 'Variant 1': 'dDtkKZuBL', Hover: 'nZuXT749o', };
 var getProps10 = ({ height, id, width, ...props },) => {
   var _humanReadableVariantMap_props_variant, _ref;
@@ -21876,7 +21462,7 @@ var createLayoutDependency9 = (props, variants,) => {
   if (props.layoutDependency) return variants.join('-',) + props.layoutDependency;
   return variants.join('-',);
 };
-var Component9 = /* @__PURE__ */ React14.forwardRef(function (props, ref,) {
+var Component9 = /* @__PURE__ */ React13.forwardRef(function (props, ref,) {
   const { activeLocale, setLocale, } = useLocaleInfo9();
   const { style, className: className3, layoutId, variant, ...restProps } = getProps10(props,);
   const {
@@ -21900,18 +21486,18 @@ var Component9 = /* @__PURE__ */ React14.forwardRef(function (props, ref,) {
     setGestureState({ isHovered: false, },);
     setVariant('dDtkKZuBL',);
   },);
-  const ref1 = React14.useRef(null,);
-  const defaultLayoutId = React14.useId();
+  const ref1 = React13.useRef(null,);
+  const defaultLayoutId = React13.useId();
   const sharedStyleClassNames = [];
   const componentViewport = useComponentViewport9();
-  return /* @__PURE__ */ _jsx16(LayoutGroup10, {
+  return /* @__PURE__ */ _jsx15(LayoutGroup10, {
     id: layoutId !== null && layoutId !== void 0 ? layoutId : defaultLayoutId,
-    children: /* @__PURE__ */ _jsx16(Variants9, {
+    children: /* @__PURE__ */ _jsx15(Variants9, {
       animate: variants,
       initial: false,
-      children: /* @__PURE__ */ _jsx16(Transition9, {
+      children: /* @__PURE__ */ _jsx15(Transition9, {
         value: transition19,
-        children: /* @__PURE__ */ _jsx16(motion14.div, {
+        children: /* @__PURE__ */ _jsx15(motion14.div, {
           ...restProps,
           ...gestureHandlers,
           className: cx9(serializationHash9, ...sharedStyleClassNames, 'framer-9niw15', className3, classNames,),
@@ -21937,10 +21523,10 @@ var Component9 = /* @__PURE__ */ React14.forwardRef(function (props, ref,) {
             baseVariant,
             gestureVariant,
           ),
-          children: /* @__PURE__ */ _jsx16(RichText7, {
+          children: /* @__PURE__ */ _jsx15(RichText7, {
             __fromCanvasComponent: true,
-            children: /* @__PURE__ */ _jsx16(React14.Fragment, {
-              children: /* @__PURE__ */ _jsx16(motion14.p, {
+            children: /* @__PURE__ */ _jsx15(React13.Fragment, {
+              children: /* @__PURE__ */ _jsx15(motion14.p, {
                 style: {
                   '--font-selector': 'R0Y7SW50ZXItNjAw',
                   '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -21983,7 +21569,7 @@ var stdin_default10 = Framery0yY_PnFZ;
 Framery0yY_PnFZ.displayName = 'grey button';
 Framery0yY_PnFZ.defaultProps = { height: 36, width: 121, };
 addPropertyControls15(Framery0yY_PnFZ, {
-  variant: { options: ['dDtkKZuBL', 'nZuXT749o',], optionTitles: ['Variant 1', 'Hover',], title: 'Variant', type: ControlType19.Enum, },
+  variant: { options: ['dDtkKZuBL', 'nZuXT749o',], optionTitles: ['Variant 1', 'Hover',], title: 'Variant', type: ControlType18.Enum, },
 },);
 addFonts9(Framery0yY_PnFZ, [{
   explicitInter: true,
@@ -21996,13 +21582,13 @@ addFonts9(Framery0yY_PnFZ, [{
   },],
 },], { supportsExplicitInterCodegen: true, },);
 
-// https :https://framerusercontent.com/modules/oEjNUXkNrP2LNbwKaoaU/p8IPzqLIDRUKWvMQ5xMk/ZMEpPgcsT.js
-import { jsx as _jsx18, jsxs as _jsxs9, } from 'react/jsx-runtime';
+// https :https://framerusercontent.com/modules/oEjNUXkNrP2LNbwKaoaU/CHD81eugUXFFYPnbIAdj/ZMEpPgcsT.js
+import { jsx as _jsx17, jsxs as _jsxs9, } from 'react/jsx-runtime';
 import {
   addFonts as addFonts11,
   addPropertyControls as addPropertyControls17,
   ComponentViewportProvider as ComponentViewportProvider6,
-  ControlType as ControlType21,
+  ControlType as ControlType20,
   cx as cx11,
   getFonts as getFonts6,
   getLoadingLazyAtYPosition as getLoadingLazyAtYPosition3,
@@ -22014,14 +21600,14 @@ import {
   withCSS as withCSS12,
 } from 'unframer';
 import { LayoutGroup as LayoutGroup12, motion as motion16, MotionConfigContext as MotionConfigContext11, } from 'unframer';
-import * as React16 from 'react';
+import * as React15 from 'react';
 
 // https :https://framerusercontent.com/modules/GnlKQ0Lpe15Cvq41MLQU/16WpCp1eLtWySx0F8GQ0/gkZaRp3we.js
-import { jsx as _jsx17, } from 'react/jsx-runtime';
+import { jsx as _jsx16, } from 'react/jsx-runtime';
 import {
   addFonts as addFonts10,
   addPropertyControls as addPropertyControls16,
-  ControlType as ControlType20,
+  ControlType as ControlType19,
   cx as cx10,
   getLoadingLazyAtYPosition as getLoadingLazyAtYPosition2,
   Image as Image3,
@@ -22031,7 +21617,7 @@ import {
   withCSS as withCSS11,
 } from 'unframer';
 import { LayoutGroup as LayoutGroup11, motion as motion15, MotionConfigContext as MotionConfigContext10, } from 'unframer';
-import * as React15 from 'react';
+import * as React14 from 'react';
 var enabledGestures5 = { hSx6pJB1w: { hover: true, }, x4_54rhAW: { hover: true, }, x4sB5KcHz: { hover: true, }, };
 var cycleOrder10 = ['x4sB5KcHz', 'hSx6pJB1w', 'x4_54rhAW',];
 var serializationHash10 = 'framer-BohOC';
@@ -22045,12 +21631,12 @@ function addPropertyOverrides10(overrides, ...variants) {
 }
 var transition110 = { delay: 0, duration: 0.4, ease: [0.44, 0, 0.56, 1,], type: 'tween', };
 var Transition10 = ({ value, children, },) => {
-  const config = React15.useContext(MotionConfigContext10,);
+  const config = React14.useContext(MotionConfigContext10,);
   const transition = value !== null && value !== void 0 ? value : config.transition;
-  const contextValue = React15.useMemo(() => ({ ...config, transition, }), [JSON.stringify(transition,),],);
-  return /* @__PURE__ */ _jsx17(MotionConfigContext10.Provider, { value: contextValue, children, },);
+  const contextValue = React14.useMemo(() => ({ ...config, transition, }), [JSON.stringify(transition,),],);
+  return /* @__PURE__ */ _jsx16(MotionConfigContext10.Provider, { value: contextValue, children, },);
 };
-var Variants10 = motion15.create(React15.Fragment,);
+var Variants10 = motion15.create(React14.Fragment,);
 var humanReadableVariantMap10 = { 'Variant 1': 'x4sB5KcHz', 'Variant 2': 'hSx6pJB1w', 'Variant 3': 'x4_54rhAW', };
 var getProps11 = ({ height, id, width, ...props },) => {
   var _humanReadableVariantMap_props_variant, _ref;
@@ -22070,7 +21656,7 @@ var createLayoutDependency10 = (props, variants,) => {
   if (props.layoutDependency) return variants.join('-',) + props.layoutDependency;
   return variants.join('-',);
 };
-var Component10 = /* @__PURE__ */ React15.forwardRef(function (props, ref,) {
+var Component10 = /* @__PURE__ */ React14.forwardRef(function (props, ref,) {
   const { activeLocale, setLocale, } = useLocaleInfo10();
   const { style, className: className3, layoutId, variant, ...restProps } = getProps11(props,);
   const {
@@ -22091,22 +21677,22 @@ var Component10 = /* @__PURE__ */ React15.forwardRef(function (props, ref,) {
     variantClassNames: variantClassNames10,
   },);
   const layoutDependency = createLayoutDependency10(props, variants,);
-  const ref1 = React15.useRef(null,);
+  const ref1 = React14.useRef(null,);
   const isDisplayed = () => {
     if (['x4sB5KcHz-hover', 'hSx6pJB1w-hover', 'x4_54rhAW-hover',].includes(gestureVariant,)) return false;
     return true;
   };
-  const defaultLayoutId = React15.useId();
+  const defaultLayoutId = React14.useId();
   const sharedStyleClassNames = [];
   const componentViewport = useComponentViewport10();
-  return /* @__PURE__ */ _jsx17(LayoutGroup11, {
+  return /* @__PURE__ */ _jsx16(LayoutGroup11, {
     id: layoutId !== null && layoutId !== void 0 ? layoutId : defaultLayoutId,
-    children: /* @__PURE__ */ _jsx17(Variants10, {
+    children: /* @__PURE__ */ _jsx16(Variants10, {
       animate: variants,
       initial: false,
-      children: /* @__PURE__ */ _jsx17(Transition10, {
+      children: /* @__PURE__ */ _jsx16(Transition10, {
         value: transition110,
-        children: /* @__PURE__ */ _jsx17(Image3, {
+        children: /* @__PURE__ */ _jsx16(Image3, {
           ...restProps,
           ...gestureHandlers,
           background: {
@@ -22182,7 +21768,7 @@ var Component10 = /* @__PURE__ */ React15.forwardRef(function (props, ref,) {
             gestureVariant,
           ),
           children: isDisplayed() && /* @__PURE__ */
-            _jsx17(motion15.div, {
+            _jsx16(motion15.div, {
               className: 'framer-rqs0n7',
               layoutDependency,
               layoutId: 'J9W9q_Kv0',
@@ -22215,16 +21801,16 @@ addPropertyControls16(FramergkZaRp3we, {
     options: ['x4sB5KcHz', 'hSx6pJB1w', 'x4_54rhAW',],
     optionTitles: ['Variant 1', 'Variant 2', 'Variant 3',],
     title: 'Variant',
-    type: ControlType20.Enum,
+    type: ControlType19.Enum,
   },
 },);
 addFonts10(FramergkZaRp3we, [{ explicitInter: true, fonts: [], },], { supportsExplicitInterCodegen: true, },);
 
-// https :https://framerusercontent.com/modules/oEjNUXkNrP2LNbwKaoaU/p8IPzqLIDRUKWvMQ5xMk/ZMEpPgcsT.js
+// https :https://framerusercontent.com/modules/oEjNUXkNrP2LNbwKaoaU/CHD81eugUXFFYPnbIAdj/ZMEpPgcsT.js
 var ContainerImageFonts = getFonts6(stdin_default11,);
 var enabledGestures6 = { bw63v3uQU: { hover: true, }, j_TcHhg2e: { hover: true, }, sDTGhalD0: { hover: true, }, };
 var cycleOrder11 = ['j_TcHhg2e', 'sDTGhalD0', 'bw63v3uQU',];
-var serializationHash11 = 'framer-HMJph';
+var serializationHash11 = 'framer-wpMds';
 var variantClassNames11 = { bw63v3uQU: 'framer-v-c4uek9', j_TcHhg2e: 'framer-v-156cgdm', sDTGhalD0: 'framer-v-xuw7c1', };
 function addPropertyOverrides11(overrides, ...variants) {
   const nextOverrides = {};
@@ -22235,12 +21821,12 @@ function addPropertyOverrides11(overrides, ...variants) {
 }
 var transition111 = { bounce: 0.2, delay: 0, duration: 0.4, type: 'spring', };
 var Transition11 = ({ value, children, },) => {
-  const config = React16.useContext(MotionConfigContext11,);
+  const config = React15.useContext(MotionConfigContext11,);
   const transition = value !== null && value !== void 0 ? value : config.transition;
-  const contextValue = React16.useMemo(() => ({ ...config, transition, }), [JSON.stringify(transition,),],);
-  return /* @__PURE__ */ _jsx18(MotionConfigContext11.Provider, { value: contextValue, children, },);
+  const contextValue = React15.useMemo(() => ({ ...config, transition, }), [JSON.stringify(transition,),],);
+  return /* @__PURE__ */ _jsx17(MotionConfigContext11.Provider, { value: contextValue, children, },);
 };
-var Variants11 = motion16.create(React16.Fragment,);
+var Variants11 = motion16.create(React15.Fragment,);
 var humanReadableVariantMap11 = { 'Variant 1': 'j_TcHhg2e', 'Variant 2': 'sDTGhalD0', 'Variant 3': 'bw63v3uQU', };
 var getProps12 = ({ height, id, width, ...props },) => {
   var _humanReadableVariantMap_props_variant, _ref;
@@ -22260,7 +21846,7 @@ var createLayoutDependency11 = (props, variants,) => {
   if (props.layoutDependency) return variants.join('-',) + props.layoutDependency;
   return variants.join('-',);
 };
-var Component11 = /* @__PURE__ */ React16.forwardRef(function (props, ref,) {
+var Component11 = /* @__PURE__ */ React15.forwardRef(function (props, ref,) {
   const { activeLocale, setLocale, } = useLocaleInfo11();
   const { style, className: className3, layoutId, variant, ...restProps } = getProps12(props,);
   const {
@@ -22281,7 +21867,7 @@ var Component11 = /* @__PURE__ */ React16.forwardRef(function (props, ref,) {
     variantClassNames: variantClassNames11,
   },);
   const layoutDependency = createLayoutDependency11(props, variants,);
-  const ref1 = React16.useRef(null,);
+  const ref1 = React15.useRef(null,);
   const isDisplayed = () => {
     if (['sDTGhalD0-hover', 'bw63v3uQU-hover',].includes(gestureVariant,)) return false;
     if (['sDTGhalD0', 'bw63v3uQU',].includes(baseVariant,)) return false;
@@ -22297,15 +21883,15 @@ var Component11 = /* @__PURE__ */ React16.forwardRef(function (props, ref,) {
     if (baseVariant === 'bw63v3uQU') return true;
     return false;
   };
-  const defaultLayoutId = React16.useId();
+  const defaultLayoutId = React15.useId();
   const sharedStyleClassNames = [];
   const componentViewport = useComponentViewport11();
-  return /* @__PURE__ */ _jsx18(LayoutGroup12, {
+  return /* @__PURE__ */ _jsx17(LayoutGroup12, {
     id: layoutId !== null && layoutId !== void 0 ? layoutId : defaultLayoutId,
-    children: /* @__PURE__ */ _jsx18(Variants11, {
+    children: /* @__PURE__ */ _jsx17(Variants11, {
       animate: variants,
       initial: false,
-      children: /* @__PURE__ */ _jsx18(Transition11, {
+      children: /* @__PURE__ */ _jsx17(Transition11, {
         value: transition111,
         children: /* @__PURE__ */ _jsxs9(motion16.div, {
           ...restProps,
@@ -22353,10 +21939,10 @@ var Component11 = /* @__PURE__ */ React16.forwardRef(function (props, ref,) {
               layoutDependency,
               layoutId: 'm4bC1ksok',
               children: [
-                /* @__PURE__ */ _jsx18(RichText8, {
+                /* @__PURE__ */ _jsx17(RichText8, {
                   __fromCanvasComponent: true,
-                  children: /* @__PURE__ */ _jsx18(React16.Fragment, {
-                    children: /* @__PURE__ */ _jsx18(motion16.h2, {
+                  children: /* @__PURE__ */ _jsx17(React15.Fragment, {
+                    children: /* @__PURE__ */ _jsx17(motion16.h2, {
                       style: {
                         '--font-selector': 'R0Y7SW50ZXItNzAw',
                         '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -22384,8 +21970,8 @@ var Component11 = /* @__PURE__ */ React16.forwardRef(function (props, ref,) {
                   ...addPropertyOverrides11(
                     {
                       bw63v3uQU: {
-                        children: /* @__PURE__ */ _jsx18(React16.Fragment, {
-                          children: /* @__PURE__ */ _jsx18(motion16.h2, {
+                        children: /* @__PURE__ */ _jsx17(React15.Fragment, {
+                          children: /* @__PURE__ */ _jsx17(motion16.h2, {
                             style: {
                               '--font-selector': 'R0Y7SW50ZXItNzAw',
                               '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -22400,8 +21986,8 @@ var Component11 = /* @__PURE__ */ React16.forwardRef(function (props, ref,) {
                         },),
                       },
                       sDTGhalD0: {
-                        children: /* @__PURE__ */ _jsx18(React16.Fragment, {
-                          children: /* @__PURE__ */ _jsx18(motion16.h2, {
+                        children: /* @__PURE__ */ _jsx17(React15.Fragment, {
+                          children: /* @__PURE__ */ _jsx17(motion16.h2, {
                             style: {
                               '--font-selector': 'R0Y7SW50ZXItNzAw',
                               '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -22420,10 +22006,10 @@ var Component11 = /* @__PURE__ */ React16.forwardRef(function (props, ref,) {
                     gestureVariant,
                   ),
                 },),
-                /* @__PURE__ */ _jsx18(RichText8, {
+                /* @__PURE__ */ _jsx17(RichText8, {
                   __fromCanvasComponent: true,
-                  children: /* @__PURE__ */ _jsx18(React16.Fragment, {
-                    children: /* @__PURE__ */ _jsx18(motion16.h3, {
+                  children: /* @__PURE__ */ _jsx17(React15.Fragment, {
+                    children: /* @__PURE__ */ _jsx17(motion16.h3, {
                       style: {
                         '--font-selector': 'R0Y7SW50ZXItNTAw',
                         '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -22452,8 +22038,8 @@ var Component11 = /* @__PURE__ */ React16.forwardRef(function (props, ref,) {
                   ...addPropertyOverrides11(
                     {
                       bw63v3uQU: {
-                        children: /* @__PURE__ */ _jsx18(React16.Fragment, {
-                          children: /* @__PURE__ */ _jsx18(motion16.h3, {
+                        children: /* @__PURE__ */ _jsx17(React15.Fragment, {
+                          children: /* @__PURE__ */ _jsx17(motion16.h3, {
                             style: {
                               '--font-selector': 'R0Y7SW50ZXItNTAw',
                               '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -22470,8 +22056,8 @@ var Component11 = /* @__PURE__ */ React16.forwardRef(function (props, ref,) {
                         },),
                       },
                       sDTGhalD0: {
-                        children: /* @__PURE__ */ _jsx18(React16.Fragment, {
-                          children: /* @__PURE__ */ _jsx18(motion16.h3, {
+                        children: /* @__PURE__ */ _jsx17(React15.Fragment, {
+                          children: /* @__PURE__ */ _jsx17(motion16.h3, {
                             style: {
                               '--font-selector': 'R0Y7SW50ZXItNTAw',
                               '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -22494,7 +22080,7 @@ var Component11 = /* @__PURE__ */ React16.forwardRef(function (props, ref,) {
                 },),
               ],
             },),
-            isDisplayed() && /* @__PURE__ */ _jsx18(Image4, {
+            isDisplayed() && /* @__PURE__ */ _jsx17(Image4, {
               background: {
                 alt: '',
                 fit: 'fill',
@@ -22517,7 +22103,7 @@ var Component11 = /* @__PURE__ */ React16.forwardRef(function (props, ref,) {
               layoutDependency,
               layoutId: 'XZV4KVloY',
             },),
-            /* @__PURE__ */ _jsx18(motion16.div, {
+            /* @__PURE__ */ _jsx17(motion16.div, {
               className: 'framer-1gb5k7z',
               layoutDependency,
               layoutId: 'KMG3DQZgi',
@@ -22540,7 +22126,7 @@ var Component11 = /* @__PURE__ */ React16.forwardRef(function (props, ref,) {
                 },
               },
             },),
-            isDisplayed1() && /* @__PURE__ */ _jsx18(ComponentViewportProvider6, {
+            isDisplayed1() && /* @__PURE__ */ _jsx17(ComponentViewportProvider6, {
               ...addPropertyOverrides11(
                 {
                   sDTGhalD0: {
@@ -22554,11 +22140,11 @@ var Component11 = /* @__PURE__ */ React16.forwardRef(function (props, ref,) {
                 baseVariant,
                 gestureVariant,
               ),
-              children: /* @__PURE__ */ _jsx18(motion16.div, {
+              children: /* @__PURE__ */ _jsx17(motion16.div, {
                 className: 'framer-debbrv-container',
                 layoutDependency,
                 layoutId: 'oXx02Q_RK-container',
-                children: /* @__PURE__ */ _jsx18(stdin_default11, {
+                children: /* @__PURE__ */ _jsx17(stdin_default11, {
                   height: '100%',
                   id: 'oXx02Q_RK',
                   layoutId: 'oXx02Q_RK',
@@ -22568,7 +22154,7 @@ var Component11 = /* @__PURE__ */ React16.forwardRef(function (props, ref,) {
                 },),
               },),
             },),
-            isDisplayed2() && /* @__PURE__ */ _jsx18(ComponentViewportProvider6, {
+            isDisplayed2() && /* @__PURE__ */ _jsx17(ComponentViewportProvider6, {
               ...addPropertyOverrides11(
                 {
                   bw63v3uQU: {
@@ -22582,11 +22168,11 @@ var Component11 = /* @__PURE__ */ React16.forwardRef(function (props, ref,) {
                 baseVariant,
                 gestureVariant,
               ),
-              children: /* @__PURE__ */ _jsx18(motion16.div, {
+              children: /* @__PURE__ */ _jsx17(motion16.div, {
                 className: 'framer-9gs1ug-container',
                 layoutDependency,
                 layoutId: 'qGkJRD2lK-container',
-                children: /* @__PURE__ */ _jsx18(stdin_default11, {
+                children: /* @__PURE__ */ _jsx17(stdin_default11, {
                   height: '100%',
                   id: 'qGkJRD2lK',
                   layoutId: 'qGkJRD2lK',
@@ -22604,18 +22190,19 @@ var Component11 = /* @__PURE__ */ React16.forwardRef(function (props, ref,) {
 },);
 var css16 = [
   '@supports (aspect-ratio: 1) { body { --framer-aspect-ratio-supported: auto; } }',
-  '.framer-HMJph.framer-18ctzpx, .framer-HMJph .framer-18ctzpx { display: block; }',
-  '.framer-HMJph.framer-156cgdm { align-content: flex-start; align-items: flex-start; cursor: pointer; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 0px; height: 432px; justify-content: flex-start; overflow: visible; padding: 20px; position: relative; width: 296px; }',
-  '.framer-HMJph .framer-dcy2uv { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 12px; height: 135px; justify-content: flex-start; padding: 0px; position: relative; width: min-content; }',
-  '.framer-HMJph .framer-12smw5x, .framer-HMJph .framer-q6ox07 { flex: none; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 256px; word-break: break-word; word-wrap: break-word; }',
-  '.framer-HMJph .framer-dpwd5j { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 100px; height: 253px; justify-content: flex-start; overflow: hidden; padding: 0px; position: relative; width: 256px; z-index: 1; }',
-  '.framer-HMJph .framer-1gb5k7z { bottom: 0px; flex: none; left: 0px; overflow: hidden; position: absolute; right: 0px; top: 0px; will-change: var(--framer-will-change-override, transform); z-index: 1; }',
-  '.framer-HMJph .framer-debbrv-container { flex: none; height: 229px; position: relative; width: 100%; }',
-  '.framer-HMJph .framer-9gs1ug-container { flex: none; height: 238px; position: relative; width: 100%; }',
-  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-HMJph.framer-156cgdm, .framer-HMJph .framer-dcy2uv, .framer-HMJph .framer-dpwd5j { gap: 0px; } .framer-HMJph.framer-156cgdm > * { margin: 0px; margin-bottom: calc(0px / 2); margin-top: calc(0px / 2); } .framer-HMJph.framer-156cgdm > :first-child, .framer-HMJph .framer-dcy2uv > :first-child, .framer-HMJph .framer-dpwd5j > :first-child { margin-top: 0px; } .framer-HMJph.framer-156cgdm > :last-child, .framer-HMJph .framer-dcy2uv > :last-child, .framer-HMJph .framer-dpwd5j > :last-child { margin-bottom: 0px; } .framer-HMJph .framer-dcy2uv > * { margin: 0px; margin-bottom: calc(12px / 2); margin-top: calc(12px / 2); } .framer-HMJph .framer-dpwd5j > * { margin: 0px; margin-bottom: calc(100px / 2); margin-top: calc(100px / 2); } }',
-  '.framer-HMJph[data-border="true"]::after, .framer-HMJph [data-border="true"]::after { content: ""; border-width: var(--border-top-width, 0) var(--border-right-width, 0) var(--border-bottom-width, 0) var(--border-left-width, 0); border-color: var(--border-color, none); border-style: var(--border-style, none); width: 100%; height: 100%; position: absolute; box-sizing: border-box; left: 0; top: 0; border-radius: inherit; pointer-events: none; }',
+  '.framer-wpMds.framer-18ctzpx, .framer-wpMds .framer-18ctzpx { display: block; }',
+  '.framer-wpMds.framer-156cgdm { align-content: flex-start; align-items: flex-start; cursor: pointer; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 0px; height: 432px; justify-content: flex-start; overflow: visible; padding: 20px; position: relative; width: 296px; }',
+  '.framer-wpMds .framer-dcy2uv { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 12px; height: 135px; justify-content: flex-start; padding: 0px; position: relative; width: min-content; }',
+  '.framer-wpMds .framer-12smw5x { flex: none; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 256px; word-break: break-word; word-wrap: break-word; }',
+  '.framer-wpMds .framer-q6ox07 { align-self: stretch; flex: none; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: auto; word-break: break-word; word-wrap: break-word; }',
+  '.framer-wpMds .framer-dpwd5j { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 100px; height: 253px; justify-content: flex-start; overflow: hidden; padding: 0px; position: relative; width: 256px; z-index: 1; }',
+  '.framer-wpMds .framer-1gb5k7z { bottom: 0px; flex: none; left: 0px; overflow: hidden; position: absolute; right: 0px; top: 0px; will-change: var(--framer-will-change-override, transform); z-index: 1; }',
+  '.framer-wpMds .framer-debbrv-container { flex: none; height: 229px; position: relative; width: 100%; }',
+  '.framer-wpMds .framer-9gs1ug-container { flex: none; height: 238px; position: relative; width: 100%; }',
+  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-wpMds.framer-156cgdm, .framer-wpMds .framer-dcy2uv, .framer-wpMds .framer-dpwd5j { gap: 0px; } .framer-wpMds.framer-156cgdm > * { margin: 0px; margin-bottom: calc(0px / 2); margin-top: calc(0px / 2); } .framer-wpMds.framer-156cgdm > :first-child, .framer-wpMds .framer-dcy2uv > :first-child, .framer-wpMds .framer-dpwd5j > :first-child { margin-top: 0px; } .framer-wpMds.framer-156cgdm > :last-child, .framer-wpMds .framer-dcy2uv > :last-child, .framer-wpMds .framer-dpwd5j > :last-child { margin-bottom: 0px; } .framer-wpMds .framer-dcy2uv > * { margin: 0px; margin-bottom: calc(12px / 2); margin-top: calc(12px / 2); } .framer-wpMds .framer-dpwd5j > * { margin: 0px; margin-bottom: calc(100px / 2); margin-top: calc(100px / 2); } }',
+  '.framer-wpMds[data-border="true"]::after, .framer-wpMds [data-border="true"]::after { content: ""; border-width: var(--border-top-width, 0) var(--border-right-width, 0) var(--border-bottom-width, 0) var(--border-left-width, 0); border-color: var(--border-color, none); border-style: var(--border-style, none); width: 100%; height: 100%; position: absolute; box-sizing: border-box; left: 0; top: 0; border-radius: inherit; pointer-events: none; }',
 ];
-var FramerZMEpPgcsT = withCSS12(Component11, css16, 'framer-HMJph',);
+var FramerZMEpPgcsT = withCSS12(Component11, css16, 'framer-wpMds',);
 var stdin_default12 = FramerZMEpPgcsT;
 FramerZMEpPgcsT.displayName = 'isolate';
 FramerZMEpPgcsT.defaultProps = { height: 432, width: 296, };
@@ -22624,7 +22211,7 @@ addPropertyControls17(FramerZMEpPgcsT, {
     options: ['j_TcHhg2e', 'sDTGhalD0', 'bw63v3uQU',],
     optionTitles: ['Variant 1', 'Variant 2', 'Variant 3',],
     title: 'Variant',
-    type: ControlType21.Enum,
+    type: ControlType20.Enum,
   },
 },);
 addFonts11(FramerZMEpPgcsT, [{
@@ -22644,7 +22231,7 @@ addFonts11(FramerZMEpPgcsT, [{
   },],
 }, ...ContainerImageFonts,], { supportsExplicitInterCodegen: true, },);
 
-// https :https://framerusercontent.com/modules/iDDKRieYEAiI3cZj3HIf/5a3LIbvcpcJM2bsSMFTJ/zLfXOCD5_.js
+// https :https://framerusercontent.com/modules/iDDKRieYEAiI3cZj3HIf/hPuYHpaHdqrwjz44qR1N/zLfXOCD5_.js
 var VideoFonts2 = getFonts7(Video,);
 var HeaderFonts = getFonts7(stdin_default,);
 var OrangeButtonFonts = getFonts7(stdin_default2,);
@@ -22661,7 +22248,7 @@ var AndMoreFonts = getFonts7(stdin_default9,);
 var CodeMenuFonts = getFonts7(stdin_default5,);
 var TickerFonts = getFonts7(Ticker,);
 var cycleOrder12 = ['G87o8jzVW', 'fu9Ny71bW', 'RuG5jmR5S',];
-var serializationHash12 = 'framer-2sMTS';
+var serializationHash12 = 'framer-NWdLO';
 var variantClassNames12 = { fu9Ny71bW: 'framer-v-1hv2o6j', G87o8jzVW: 'framer-v-fb2xo2', RuG5jmR5S: 'framer-v-1vd12yp', };
 function addPropertyOverrides12(overrides, ...variants) {
   const nextOverrides = {};
@@ -22708,6 +22295,7 @@ var transition5 = { bounce: 0.25, delay: 0, duration: 0.45, type: 'spring', };
 var animation7 = { opacity: 1, rotate: 0, rotateX: 0, rotateY: 0, scale: 1, skewX: 0, skewY: 0, transition: transition5, y: -5, };
 var animation8 = { opacity: 1, rotate: 0, rotateX: 0, rotateY: 0, scale: 1, skewX: 0, skewY: 0, transition: transition5, };
 var transformTemplate12 = (_, t4,) => `translateY(-50%) ${t4}`;
+var transformTemplate2 = (_, t4,) => `translate(-50%, -50%) ${t4}`;
 var transition6 = { damping: 30, delay: 0.2, mass: 1, stiffness: 100, type: 'spring', };
 var animation9 = {
   opacity: 1,
@@ -22735,12 +22323,12 @@ var animation10 = {
   y: 100,
 };
 var Transition12 = ({ value, children, },) => {
-  const config = React17.useContext(MotionConfigContext12,);
+  const config = React16.useContext(MotionConfigContext12,);
   const transition = value !== null && value !== void 0 ? value : config.transition;
-  const contextValue = React17.useMemo(() => ({ ...config, transition, }), [JSON.stringify(transition,),],);
-  return /* @__PURE__ */ _jsx19(MotionConfigContext12.Provider, { value: contextValue, children, },);
+  const contextValue = React16.useMemo(() => ({ ...config, transition, }), [JSON.stringify(transition,),],);
+  return /* @__PURE__ */ _jsx18(MotionConfigContext12.Provider, { value: contextValue, children, },);
 };
-var Variants12 = motion17.create(React17.Fragment,);
+var Variants12 = motion17.create(React16.Fragment,);
 var humanReadableVariantMap12 = { Desktop: 'G87o8jzVW', Phone: 'RuG5jmR5S', Tablet: 'fu9Ny71bW', };
 var getProps13 = ({ height, id, width, ...props },) => {
   var _humanReadableVariantMap_props_variant, _ref;
@@ -22760,7 +22348,7 @@ var createLayoutDependency12 = (props, variants,) => {
   if (props.layoutDependency) return variants.join('-',) + props.layoutDependency;
   return variants.join('-',);
 };
-var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
+var Component12 = /* @__PURE__ */ React16.forwardRef(function (props, ref,) {
   const { activeLocale, setLocale, } = useLocaleInfo12();
   const { style, className: className3, layoutId, variant, ...restProps } = getProps13(props,);
   const {
@@ -22775,16 +22363,24 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
     variants,
   } = useVariantState12({ cycleOrder: cycleOrder12, defaultVariant: 'G87o8jzVW', variant, variantClassNames: variantClassNames12, },);
   const layoutDependency = createLayoutDependency12(props, variants,);
-  const ref1 = React17.useRef(null,);
-  const defaultLayoutId = React17.useId();
+  const ref1 = React16.useRef(null,);
+  const isDisplayed = () => {
+    if (baseVariant === 'RuG5jmR5S') return false;
+    return true;
+  };
+  const isDisplayed1 = () => {
+    if (baseVariant === 'RuG5jmR5S') return true;
+    return false;
+  };
+  const defaultLayoutId = React16.useId();
   const sharedStyleClassNames = [className2, className,];
   const componentViewport = useComponentViewport12();
-  return /* @__PURE__ */ _jsx19(LayoutGroup13, {
+  return /* @__PURE__ */ _jsx18(LayoutGroup13, {
     id: layoutId !== null && layoutId !== void 0 ? layoutId : defaultLayoutId,
-    children: /* @__PURE__ */ _jsx19(Variants12, {
+    children: /* @__PURE__ */ _jsx18(Variants12, {
       animate: variants,
       initial: false,
-      children: /* @__PURE__ */ _jsx19(Transition12, {
+      children: /* @__PURE__ */ _jsx18(Transition12, {
         value: transition112,
         children: /* @__PURE__ */ _jsxs10(motion17.div, {
           ...restProps,
@@ -22794,19 +22390,19 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
           layoutDependency,
           layoutId: 'G87o8jzVW',
           ref: ref !== null && ref !== void 0 ? ref : ref1,
-          style: { ...style, },
+          style: { backgroundColor: 'rgb(0, 0, 0)', ...style, },
           ...addPropertyOverrides12(
             { fu9Ny71bW: { 'data-framer-name': 'Tablet', }, RuG5jmR5S: { 'data-framer-name': 'Phone', }, },
             baseVariant,
             gestureVariant,
           ),
           children: [
-            /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
-              children: /* @__PURE__ */ _jsx19(motion17.div, {
+            /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
+              children: /* @__PURE__ */ _jsx18(motion17.div, {
                 className: 'framer-qdh2wp-container',
                 layoutDependency,
                 layoutId: 'derKNwyS6-container',
-                children: /* @__PURE__ */ _jsx19(Video, {
+                children: /* @__PURE__ */ _jsx18(Video, {
                   backgroundColor: 'rgba(0, 0, 0, 0)',
                   borderRadius: 0,
                   bottomLeftRadius: 0,
@@ -22820,6 +22416,7 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                   muted: true,
                   objectFit: 'cover',
                   playing: true,
+                  poster: 'https://framerusercontent.com/images/lGucB5iQTMlfTnRdEEB67P1aGNs.png',
                   posterEnabled: false,
                   srcFile: 'https://framerusercontent.com/assets/dtNAfHbbbjidUOD3Ssa9rReZZo.mp4',
                   srcType: 'Upload',
@@ -22834,11 +22431,11 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                 },),
               },),
             },),
-            /* @__PURE__ */ _jsx19(motion17.div, {
+            isDisplayed() && /* @__PURE__ */ _jsx18(motion17.div, {
               className: 'framer-1csjyj5',
               layoutDependency,
               layoutId: 'hUaQYLdoj',
-              children: /* @__PURE__ */ _jsx19(motion17.div, {
+              children: /* @__PURE__ */ _jsx18(motion17.div, {
                 className: 'framer-7dpnet',
                 layoutDependency,
                 layoutId: 'c1wYmZANP',
@@ -22847,47 +22444,26 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                   layoutDependency,
                   layoutId: 'dDHinT110',
                   children: [
-                    /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
+                    /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
                       height: 226,
                       width: '771px',
                       y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                        ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 6129) - 0 -
-                              6069.2) / 2 + 0 + 0) +
+                        ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 6164) - 0 -
+                              6104.2) / 2 + 0 + 0) +
                         71 + 117 + 0 + 0,
-                      ...addPropertyOverrides12(
-                        {
-                          fu9Ny71bW: { width: void 0, y: void 0, },
-                          RuG5jmR5S: {
-                            width: `min(max(max(min(${
-                              (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
-                            } * 1200, 1200px), ${
-                              (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
-                            } * 0) - 40px, 1px), 1200px)`,
-                            y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                              ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 200) -
-                                    0 - 7051.8) / 2 + 0 + 0) +
-                              20 + 0 + 0 + 0,
-                          },
-                        },
-                        baseVariant,
-                        gestureVariant,
-                      ),
-                      children: /* @__PURE__ */ _jsx19(motion17.div, {
+                      ...addPropertyOverrides12({ fu9Ny71bW: { width: void 0, y: void 0, }, }, baseVariant, gestureVariant,),
+                      children: /* @__PURE__ */ _jsx18(motion17.div, {
                         className: 'framer-h1blye-container',
                         layoutDependency,
                         layoutId: 'TC4RFzPxF-container',
-                        children: /* @__PURE__ */ _jsx19(stdin_default, {
+                        children: /* @__PURE__ */ _jsx18(stdin_default, {
                           height: '100%',
                           id: 'TC4RFzPxF',
                           layoutId: 'TC4RFzPxF',
                           style: { width: '100%', },
                           variant: 'qZtGGvQMb',
                           width: '100%',
-                          ...addPropertyOverrides12(
-                            { fu9Ny71bW: { variant: 'LJzQDXnbV', }, RuG5jmR5S: { variant: 'vjaStZmYU', }, },
-                            baseVariant,
-                            gestureVariant,
-                          ),
+                          ...addPropertyOverrides12({ fu9Ny71bW: { variant: 'LJzQDXnbV', }, }, baseVariant, gestureVariant,),
                         },),
                       },),
                     },),
@@ -22904,30 +22480,18 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                       optimized: true,
                       style: { transformPerspective: 1200, },
                       children: [
-                        /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
+                        /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
                           height: 36,
                           y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                            ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 6129) -
-                                  0 - 6069.2) / 2 + 0 + 0) +
+                            ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 6164) -
+                                  0 - 6104.2) / 2 + 0 + 0) +
                             71 + 117 + 0 + 246 + 0,
-                          ...addPropertyOverrides12(
-                            {
-                              fu9Ny71bW: { y: void 0, },
-                              RuG5jmR5S: {
-                                y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                                  ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) ||
-                                        200) - 0 - 7051.8) / 2 + 0 + 0) +
-                                  20 + 0 + 0 + 246 + 0,
-                              },
-                            },
-                            baseVariant,
-                            gestureVariant,
-                          ),
-                          children: /* @__PURE__ */ _jsx19(motion17.div, {
+                          ...addPropertyOverrides12({ fu9Ny71bW: { y: void 0, }, }, baseVariant, gestureVariant,),
+                          children: /* @__PURE__ */ _jsx18(motion17.div, {
                             className: 'framer-1xlgoke-container',
                             layoutDependency,
                             layoutId: 'yHinsIPUJ-container',
-                            children: /* @__PURE__ */ _jsx19(stdin_default2, {
+                            children: /* @__PURE__ */ _jsx18(stdin_default2, {
                               height: '100%',
                               id: 'yHinsIPUJ',
                               layoutId: 'yHinsIPUJ',
@@ -22937,30 +22501,18 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                             },),
                           },),
                         },),
-                        /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
+                        /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
                           height: 36,
                           y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                            ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 6129) -
-                                  0 - 6069.2) / 2 + 0 + 0) +
+                            ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 6164) -
+                                  0 - 6104.2) / 2 + 0 + 0) +
                             71 + 117 + 0 + 246 + 0,
-                          ...addPropertyOverrides12(
-                            {
-                              fu9Ny71bW: { y: void 0, },
-                              RuG5jmR5S: {
-                                y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                                  ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) ||
-                                        200) - 0 - 7051.8) / 2 + 0 + 0) +
-                                  20 + 0 + 0 + 246 + 0,
-                              },
-                            },
-                            baseVariant,
-                            gestureVariant,
-                          ),
-                          children: /* @__PURE__ */ _jsx19(motion17.div, {
+                          ...addPropertyOverrides12({ fu9Ny71bW: { y: void 0, }, }, baseVariant, gestureVariant,),
+                          children: /* @__PURE__ */ _jsx18(motion17.div, {
                             className: 'framer-ly6lyb-container',
                             layoutDependency,
                             layoutId: 'xAKZli_Rd-container',
-                            children: /* @__PURE__ */ _jsx19(stdin_default10, {
+                            children: /* @__PURE__ */ _jsx18(stdin_default10, {
                               height: '100%',
                               id: 'xAKZli_Rd',
                               layoutId: 'xAKZli_Rd',
@@ -22976,7 +22528,100 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                 },),
               },),
             },),
-            /* @__PURE__ */ _jsx19(MotionDivWithFXWithOptimizedAppearEffect2, {
+            isDisplayed1() && /* @__PURE__ */ _jsx18(motion17.div, {
+              className: 'framer-x2wyxl',
+              layoutDependency,
+              layoutId: 'Ib5qKH7Aa',
+              children: /* @__PURE__ */ _jsx18(motion17.div, {
+                className: 'framer-21vdse',
+                layoutDependency,
+                layoutId: 's8p4Vi4BP',
+                children: /* @__PURE__ */ _jsxs10(motion17.div, {
+                  className: 'framer-ec3ga6',
+                  layoutDependency,
+                  layoutId: 'KwOO5p2qu',
+                  children: [
+                    /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
+                      height: 226,
+                      ...addPropertyOverrides12(
+                        {
+                          RuG5jmR5S: {
+                            width: `calc(min(max(max(min(${
+                              (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
+                            }, 1200px), ${
+                              (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
+                            } * 0) - 40px, 1px), 1200px) * 1.0029)`,
+                          },
+                        },
+                        baseVariant,
+                        gestureVariant,
+                      ),
+                      children: /* @__PURE__ */ _jsx18(motion17.div, {
+                        className: 'framer-wd4t81-container',
+                        layoutDependency,
+                        layoutId: 'M5EQDoiTB-container',
+                        children: /* @__PURE__ */ _jsx18(stdin_default, {
+                          height: '100%',
+                          id: 'M5EQDoiTB',
+                          layoutId: 'M5EQDoiTB',
+                          style: { width: '100%', },
+                          variant: 'vjaStZmYU',
+                          width: '100%',
+                        },),
+                      },),
+                    },),
+                    /* @__PURE__ */ _jsxs10(MotionDivWithFXWithOptimizedAppearEffect2, {
+                      __perspectiveFX: false,
+                      __smartComponentFX: true,
+                      __targetOpacity: 1,
+                      animate: animation6,
+                      className: 'framer-1a7cok7',
+                      'data-framer-appear-id': '1a7cok7',
+                      initial: animation14,
+                      layoutDependency,
+                      layoutId: 'RCCG6orJF',
+                      optimized: true,
+                      style: { transformPerspective: 1200, },
+                      children: [
+                        /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
+                          height: 36,
+                          children: /* @__PURE__ */ _jsx18(motion17.div, {
+                            className: 'framer-arci8a-container',
+                            layoutDependency,
+                            layoutId: 'GS4HykLpQ-container',
+                            children: /* @__PURE__ */ _jsx18(stdin_default2, {
+                              height: '100%',
+                              id: 'GS4HykLpQ',
+                              layoutId: 'GS4HykLpQ',
+                              style: { height: '100%', },
+                              variant: 'rqtHH74qY',
+                              width: '100%',
+                            },),
+                          },),
+                        },),
+                        /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
+                          height: 36,
+                          children: /* @__PURE__ */ _jsx18(motion17.div, {
+                            className: 'framer-1jq77gp-container',
+                            layoutDependency,
+                            layoutId: 'qzol2ktGG-container',
+                            children: /* @__PURE__ */ _jsx18(stdin_default10, {
+                              height: '100%',
+                              id: 'qzol2ktGG',
+                              layoutId: 'qzol2ktGG',
+                              style: { height: '100%', },
+                              variant: 'dDtkKZuBL',
+                              width: '100%',
+                            },),
+                          },),
+                        },),
+                      ],
+                    },),
+                  ],
+                },),
+              },),
+            },),
+            /* @__PURE__ */ _jsx18(MotionDivWithFXWithOptimizedAppearEffect2, {
               __perspectiveFX: false,
               __smartComponentFX: true,
               __targetOpacity: 1,
@@ -22988,7 +22633,7 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
               layoutDependency,
               layoutId: 'G9odP4Tlo',
               optimized: true,
-              children: /* @__PURE__ */ _jsx19(motion17.div, {
+              children: /* @__PURE__ */ _jsx18(motion17.div, {
                 className: 'framer-rb3yzr',
                 'data-framer-name': 'Grid 2',
                 layoutDependency,
@@ -22998,36 +22643,35 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                   layoutDependency,
                   layoutId: 'HavWKHxSP',
                   children: [
-                    /* @__PURE__ */ _jsx19(motion17.div, {
+                    /* @__PURE__ */ _jsx18(motion17.div, {
                       className: 'framer-1c5cyd1',
                       layoutDependency,
                       layoutId: 'Pq3PxKaRF',
-                      children: /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
+                      children: /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
                         height: 432,
                         width: '322px',
                         y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                          ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 6129) - 0 -
-                                6069.2) / 2 + 646 + 0) +
+                          ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 6164) - 0 -
+                                6104.2) / 2 + 646 + 0) +
                           85 + 0 + 0 + 0 + 0 + 0 + 0 + 0,
                         ...addPropertyOverrides12(
                           {
-                            fu9Ny71bW: { width: '491.5px', y: void 0, },
+                            fu9Ny71bW: { width: '366.5px', y: void 0, },
                             RuG5jmR5S: {
-                              width: '1000px',
-                              y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                                ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) ||
-                                      200) - 0 - 7051.8) / 2 + 397 + 0) +
-                                0 + 0 + 0 + 0 + 0 + 0 + 0 + 0,
+                              width: `max(min(min(${
+                                (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
+                              }, 1200px) - 80px, 1000px), 200px)`,
+                              y: void 0,
                             },
                           },
                           baseVariant,
                           gestureVariant,
                         ),
-                        children: /* @__PURE__ */ _jsx19(motion17.div, {
+                        children: /* @__PURE__ */ _jsx18(motion17.div, {
                           className: 'framer-11shrbi-container',
                           layoutDependency,
                           layoutId: 'lnFw2EGwa-container',
-                          children: /* @__PURE__ */ _jsx19(stdin_default12, {
+                          children: /* @__PURE__ */ _jsx18(stdin_default12, {
                             height: '100%',
                             id: 'lnFw2EGwa',
                             layoutId: 'lnFw2EGwa',
@@ -23038,36 +22682,35 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                         },),
                       },),
                     },),
-                    /* @__PURE__ */ _jsx19(motion17.div, {
+                    /* @__PURE__ */ _jsx18(motion17.div, {
                       className: 'framer-1670yay',
                       layoutDependency,
                       layoutId: 'Hw3KQrYgH',
-                      children: /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
+                      children: /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
                         height: 432,
                         width: '661px',
                         y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                          ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 6129) - 0 -
-                                6069.2) / 2 + 646 + 0) +
+                          ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 6164) - 0 -
+                                6104.2) / 2 + 646 + 0) +
                           85 + 0 + 0 + 0 + 0 + 0 + 0 + 0,
                         ...addPropertyOverrides12(
                           {
-                            fu9Ny71bW: { width: '491.5px', y: void 0, },
+                            fu9Ny71bW: { width: '366.5px', y: void 0, },
                             RuG5jmR5S: {
-                              width: '1000px',
-                              y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                                ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) ||
-                                      200) - 0 - 7051.8) / 2 + 397 + 0) +
-                                0 + 0 + 0 + 0 + 0 + 449 + 0 + 0,
+                              width: `max(min(min(${
+                                (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
+                              }, 1200px) - 80px, 1000px), 200px)`,
+                              y: void 0,
                             },
                           },
                           baseVariant,
                           gestureVariant,
                         ),
-                        children: /* @__PURE__ */ _jsx19(motion17.div, {
+                        children: /* @__PURE__ */ _jsx18(motion17.div, {
                           className: 'framer-ps0uox-container',
                           layoutDependency,
                           layoutId: 'aFdpFtFPl-container',
-                          children: /* @__PURE__ */ _jsx19(stdin_default8, {
+                          children: /* @__PURE__ */ _jsx18(stdin_default8, {
                             height: '100%',
                             id: 'aFdpFtFPl',
                             layoutId: 'aFdpFtFPl',
@@ -23078,36 +22721,35 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                         },),
                       },),
                     },),
-                    /* @__PURE__ */ _jsx19(motion17.div, {
+                    /* @__PURE__ */ _jsx18(motion17.div, {
                       className: 'framer-1e6hs5w',
                       layoutDependency,
                       layoutId: 'C3Wo_eLUE',
-                      children: /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
+                      children: /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
                         height: 432,
                         width: '661px',
                         y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                          ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 6129) - 0 -
-                                6069.2) / 2 + 646 + 0) +
+                          ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 6164) - 0 -
+                                6104.2) / 2 + 646 + 0) +
                           85 + 0 + 0 + 0 + 0 + 449 + 0 + 0,
                         ...addPropertyOverrides12(
                           {
-                            fu9Ny71bW: { width: '491.5px', y: void 0, },
+                            fu9Ny71bW: { width: '366.5px', y: void 0, },
                             RuG5jmR5S: {
-                              width: '1000px',
-                              y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                                ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) ||
-                                      200) - 0 - 7051.8) / 2 + 397 + 0) +
-                                0 + 0 + 0 + 0 + 0 + 898 + 0 + 0,
+                              width: `max(min(min(${
+                                (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
+                              }, 1200px) - 80px, 1000px), 200px)`,
+                              y: void 0,
                             },
                           },
                           baseVariant,
                           gestureVariant,
                         ),
-                        children: /* @__PURE__ */ _jsx19(motion17.div, {
+                        children: /* @__PURE__ */ _jsx18(motion17.div, {
                           className: 'framer-1bgn3mo-container',
                           layoutDependency,
                           layoutId: 'r6JIrs0Wi-container',
-                          children: /* @__PURE__ */ _jsx19(stdin_default8, {
+                          children: /* @__PURE__ */ _jsx18(stdin_default8, {
                             height: '100%',
                             id: 'r6JIrs0Wi',
                             layoutId: 'r6JIrs0Wi',
@@ -23118,36 +22760,35 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                         },),
                       },),
                     },),
-                    /* @__PURE__ */ _jsx19(motion17.div, {
+                    /* @__PURE__ */ _jsx18(motion17.div, {
                       className: 'framer-kezepa',
                       layoutDependency,
                       layoutId: 'giBsTbG0m',
-                      children: /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
+                      children: /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
                         height: 432,
                         width: '322px',
                         y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                          ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 6129) - 0 -
-                                6069.2) / 2 + 646 + 0) +
+                          ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 6164) - 0 -
+                                6104.2) / 2 + 646 + 0) +
                           85 + 0 + 0 + 0 + 0 + 449 + 0 + 0,
                         ...addPropertyOverrides12(
                           {
-                            fu9Ny71bW: { width: '491.5px', y: void 0, },
+                            fu9Ny71bW: { width: '366.5px', y: void 0, },
                             RuG5jmR5S: {
-                              width: '1000px',
-                              y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                                ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) ||
-                                      200) - 0 - 7051.8) / 2 + 397 + 0) +
-                                0 + 0 + 0 + 0 + 0 + 1347 + 0 + 0,
+                              width: `max(min(min(${
+                                (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
+                              }, 1200px) - 80px, 1000px), 200px)`,
+                              y: void 0,
                             },
                           },
                           baseVariant,
                           gestureVariant,
                         ),
-                        children: /* @__PURE__ */ _jsx19(motion17.div, {
+                        children: /* @__PURE__ */ _jsx18(motion17.div, {
                           className: 'framer-nlgb42-container',
                           layoutDependency,
                           layoutId: 'dOj09Qf9z-container',
-                          children: /* @__PURE__ */ _jsx19(stdin_default12, {
+                          children: /* @__PURE__ */ _jsx18(stdin_default12, {
                             height: '100%',
                             id: 'dOj09Qf9z',
                             layoutId: 'dOj09Qf9z',
@@ -23158,36 +22799,35 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                         },),
                       },),
                     },),
-                    /* @__PURE__ */ _jsx19(motion17.div, {
+                    /* @__PURE__ */ _jsx18(motion17.div, {
                       className: 'framer-1pde9jt',
                       layoutDependency,
                       layoutId: 'vxfzyouXH',
-                      children: /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
+                      children: /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
                         height: 432,
                         width: '322px',
                         y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                          ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 6129) - 0 -
-                                6069.2) / 2 + 646 + 0) +
+                          ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 6164) - 0 -
+                                6104.2) / 2 + 646 + 0) +
                           85 + 0 + 0 + 0 + 0 + 898 + 0 + 0,
                         ...addPropertyOverrides12(
                           {
-                            fu9Ny71bW: { width: '491.5px', y: void 0, },
+                            fu9Ny71bW: { width: '366.5px', y: void 0, },
                             RuG5jmR5S: {
-                              width: '1000px',
-                              y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                                ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) ||
-                                      200) - 0 - 7051.8) / 2 + 397 + 0) +
-                                0 + 0 + 0 + 0 + 0 + 1796 + 0 + 0,
+                              width: `max(min(min(${
+                                (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
+                              }, 1200px) - 80px, 1000px), 200px)`,
+                              y: void 0,
                             },
                           },
                           baseVariant,
                           gestureVariant,
                         ),
-                        children: /* @__PURE__ */ _jsx19(motion17.div, {
+                        children: /* @__PURE__ */ _jsx18(motion17.div, {
                           className: 'framer-1rrzb1b-container',
                           layoutDependency,
                           layoutId: 'T0F1wyuyW-container',
-                          children: /* @__PURE__ */ _jsx19(stdin_default12, {
+                          children: /* @__PURE__ */ _jsx18(stdin_default12, {
                             height: '100%',
                             id: 'T0F1wyuyW',
                             layoutId: 'T0F1wyuyW',
@@ -23198,36 +22838,35 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                         },),
                       },),
                     },),
-                    /* @__PURE__ */ _jsx19(motion17.div, {
+                    /* @__PURE__ */ _jsx18(motion17.div, {
                       className: 'framer-17i9u46',
                       layoutDependency,
                       layoutId: 'Ls9cdv3i1',
-                      children: /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
+                      children: /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
                         height: 432,
                         width: '661px',
                         y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                          ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 6129) - 0 -
-                                6069.2) / 2 + 646 + 0) +
+                          ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 6164) - 0 -
+                                6104.2) / 2 + 646 + 0) +
                           85 + 0 + 0 + 0 + 0 + 898 + 0 + 0,
                         ...addPropertyOverrides12(
                           {
-                            fu9Ny71bW: { width: '491.5px', y: void 0, },
+                            fu9Ny71bW: { width: '366.5px', y: void 0, },
                             RuG5jmR5S: {
-                              width: '1000px',
-                              y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                                ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) ||
-                                      200) - 0 - 7051.8) / 2 + 397 + 0) +
-                                0 + 0 + 0 + 0 + 0 + 2245 + 0 + 0,
+                              width: `max(min(min(${
+                                (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
+                              }, 1200px) - 80px, 1000px), 200px)`,
+                              y: void 0,
                             },
                           },
                           baseVariant,
                           gestureVariant,
                         ),
-                        children: /* @__PURE__ */ _jsx19(motion17.div, {
+                        children: /* @__PURE__ */ _jsx18(motion17.div, {
                           className: 'framer-1vha8lw-container',
                           layoutDependency,
                           layoutId: 'gWQN7NCeC-container',
-                          children: /* @__PURE__ */ _jsx19(stdin_default8, {
+                          children: /* @__PURE__ */ _jsx18(stdin_default8, {
                             height: '100%',
                             id: 'gWQN7NCeC',
                             layoutId: 'gWQN7NCeC',
@@ -23242,12 +22881,12 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                 },),
               },),
             },),
-            /* @__PURE__ */ _jsx19(motion17.div, {
+            /* @__PURE__ */ _jsx18(motion17.div, {
               className: 'framer-8vqfe5',
               layoutDependency,
               layoutId: 'gz_Hfcwt6',
               style: { background: 'radial-gradient(67% 33% at 30.7% 2.3%, rgb(18, 18, 18) 0%, rgb(0, 0, 0) 100%)', },
-              children: /* @__PURE__ */ _jsx19(motion17.div, {
+              children: /* @__PURE__ */ _jsx18(motion17.div, {
                 className: 'framer-14cen47',
                 'data-framer-name': 'Use-case',
                 layoutDependency,
@@ -23257,7 +22896,7 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                   layoutDependency,
                   layoutId: 'kPJGO4Gh6',
                   children: [
-                    /* @__PURE__ */ _jsx19(motion17.div, {
+                    /* @__PURE__ */ _jsx18(motion17.div, {
                       className: 'framer-1pnmmgc',
                       layoutDependency,
                       layoutId: 'Qghdl0DJn',
@@ -23271,12 +22910,12 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                             layoutDependency,
                             layoutId: 'ICXvHPTlJ',
                             children: [
-                              /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
-                                children: /* @__PURE__ */ _jsx19(motion17.div, {
+                              /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
+                                children: /* @__PURE__ */ _jsx18(motion17.div, {
                                   className: 'framer-9xm5li-container',
                                   layoutDependency,
                                   layoutId: 'OMMajwXmX-container',
-                                  children: /* @__PURE__ */ _jsx19(Icon, {
+                                  children: /* @__PURE__ */ _jsx18(Icon, {
                                     color: 'var(--token-f94bc001-f1ab-463c-abc3-37fb7e541046, rgb(255, 79, 1))',
                                     height: '100%',
                                     iconSearch: 'Home',
@@ -23293,14 +22932,14 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                                   },),
                                 },),
                               },),
-                              /* @__PURE__ */ _jsx19(RichTextWithFXWithOptimizedAppearEffect2, {
+                              /* @__PURE__ */ _jsx18(RichTextWithFXWithOptimizedAppearEffect2, {
                                 __fromCanvasComponent: true,
                                 __perspectiveFX: false,
                                 __smartComponentFX: true,
                                 __targetOpacity: 1,
                                 animate: animation42,
-                                children: /* @__PURE__ */ _jsx19(React17.Fragment, {
-                                  children: /* @__PURE__ */ _jsx19(motion17.h3, {
+                                children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                                  children: /* @__PURE__ */ _jsx18(motion17.h3, {
                                     style: {
                                       '--font-selector': 'SW50ZXItTWVkaXVt',
                                       '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -23331,10 +22970,10 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                               },),
                             ],
                           },),
-                          /* @__PURE__ */ _jsx19(RichText9, {
+                          /* @__PURE__ */ _jsx18(RichText9, {
                             __fromCanvasComponent: true,
-                            children: /* @__PURE__ */ _jsx19(React17.Fragment, {
-                              children: /* @__PURE__ */ _jsx19(motion17.h3, {
+                            children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                              children: /* @__PURE__ */ _jsx18(motion17.h3, {
                                 className: 'framer-styles-preset-jttjmp',
                                 'data-styles-preset': 'zu841OiIg',
                                 children: 'Run and Scale with Rivet',
@@ -23351,12 +22990,28 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                             },
                             verticalAlignment: 'top',
                             withExternalLayout: true,
+                            ...addPropertyOverrides12(
+                              {
+                                RuG5jmR5S: {
+                                  children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                                    children: /* @__PURE__ */ _jsx18(motion17.h3, {
+                                      className: 'framer-styles-preset-jttjmp',
+                                      'data-styles-preset': 'zu841OiIg',
+                                      style: { '--framer-text-alignment': 'center', },
+                                      children: 'Run and Scale with Rivet',
+                                    },),
+                                  },),
+                                },
+                              },
+                              baseVariant,
+                              gestureVariant,
+                            ),
                           },),
                         ],
                       },),
                     },),
-                    /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
-                      children: /* @__PURE__ */ _jsx19(MotionDivWithFX, {
+                    /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
+                      children: /* @__PURE__ */ _jsx18(MotionDivWithFX, {
                         __framer__animate: { transition: transition4, },
                         __framer__animateOnce: true,
                         __framer__enter: animation62,
@@ -23368,7 +23023,7 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                         className: 'framer-t5evmk-container',
                         layoutDependency,
                         layoutId: 'rOqvJg1Lr-container',
-                        children: /* @__PURE__ */ _jsx19(Carousel, {
+                        children: /* @__PURE__ */ _jsx18(Carousel, {
                           align: 'center',
                           ariaLabel: '',
                           arrowObject: {
@@ -23420,17 +23075,17 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                             widthType: 'auto',
                           },
                           slots: [
-                            /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
+                            /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
                               height: 266,
                               width: '200px',
-                              children: /* @__PURE__ */ _jsx19(motion17.div, {
+                              children: /* @__PURE__ */ _jsx18(motion17.div, {
                                 className: 'framer-6k9qjn-container',
                                 'data-framer-name': 'Gaming',
                                 layoutDependency,
                                 layoutId: 'c7qSMclCx-container',
                                 name: 'Gaming',
                                 whileHover: animation7,
-                                children: /* @__PURE__ */ _jsx19(stdin_default6, {
+                                children: /* @__PURE__ */ _jsx18(stdin_default6, {
                                   height: '100%',
                                   id: 'c7qSMclCx',
                                   layoutId: 'c7qSMclCx',
@@ -23441,17 +23096,17 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                                 },),
                               },),
                             },),
-                            /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
+                            /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
                               height: 266,
                               width: '200px',
-                              children: /* @__PURE__ */ _jsx19(motion17.div, {
+                              children: /* @__PURE__ */ _jsx18(motion17.div, {
                                 className: 'framer-lr4jr0-container',
                                 'data-framer-name': 'Gaming',
                                 layoutDependency,
                                 layoutId: 'YhgjGEkVi-container',
                                 name: 'Gaming',
                                 whileHover: animation7,
-                                children: /* @__PURE__ */ _jsx19(stdin_default6, {
+                                children: /* @__PURE__ */ _jsx18(stdin_default6, {
                                   height: '100%',
                                   id: 'YhgjGEkVi',
                                   layoutId: 'YhgjGEkVi',
@@ -23462,17 +23117,17 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                                 },),
                               },),
                             },),
-                            /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
+                            /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
                               height: 266,
                               width: '200px',
-                              children: /* @__PURE__ */ _jsx19(motion17.div, {
+                              children: /* @__PURE__ */ _jsx18(motion17.div, {
                                 className: 'framer-2jdlln-container',
                                 'data-framer-name': 'Gaming',
                                 layoutDependency,
                                 layoutId: 'G9QPGcvTa-container',
                                 name: 'Gaming',
                                 whileHover: animation7,
-                                children: /* @__PURE__ */ _jsx19(stdin_default6, {
+                                children: /* @__PURE__ */ _jsx18(stdin_default6, {
                                   height: '100%',
                                   id: 'G9QPGcvTa',
                                   layoutId: 'G9QPGcvTa',
@@ -23483,17 +23138,17 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                                 },),
                               },),
                             },),
-                            /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
+                            /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
                               height: 266,
                               width: '200px',
-                              children: /* @__PURE__ */ _jsx19(motion17.div, {
+                              children: /* @__PURE__ */ _jsx18(motion17.div, {
                                 className: 'framer-iy3ngw-container',
                                 'data-framer-name': 'Gaming',
                                 layoutDependency,
                                 layoutId: 'uWtgW2zV3-container',
                                 name: 'Gaming',
                                 whileHover: animation7,
-                                children: /* @__PURE__ */ _jsx19(stdin_default6, {
+                                children: /* @__PURE__ */ _jsx18(stdin_default6, {
                                   height: '100%',
                                   id: 'uWtgW2zV3',
                                   layoutId: 'uWtgW2zV3',
@@ -23504,17 +23159,17 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                                 },),
                               },),
                             },),
-                            /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
+                            /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
                               height: 266,
                               width: '200px',
-                              children: /* @__PURE__ */ _jsx19(motion17.div, {
+                              children: /* @__PURE__ */ _jsx18(motion17.div, {
                                 className: 'framer-2jdlln-container',
                                 'data-framer-name': 'Gaming',
                                 layoutDependency,
                                 layoutId: 'G9QPGcvTa-container',
                                 name: 'Gaming',
                                 whileHover: animation7,
-                                children: /* @__PURE__ */ _jsx19(stdin_default6, {
+                                children: /* @__PURE__ */ _jsx18(stdin_default6, {
                                   height: '100%',
                                   id: 'G9QPGcvTa',
                                   layoutId: 'G9QPGcvTa',
@@ -23525,17 +23180,17 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                                 },),
                               },),
                             },),
-                            /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
+                            /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
                               height: 266,
                               width: '200px',
-                              children: /* @__PURE__ */ _jsx19(motion17.div, {
+                              children: /* @__PURE__ */ _jsx18(motion17.div, {
                                 className: 'framer-lr4jr0-container',
                                 'data-framer-name': 'Gaming',
                                 layoutDependency,
                                 layoutId: 'YhgjGEkVi-container',
                                 name: 'Gaming',
                                 whileHover: animation7,
-                                children: /* @__PURE__ */ _jsx19(stdin_default6, {
+                                children: /* @__PURE__ */ _jsx18(stdin_default6, {
                                   height: '100%',
                                   id: 'YhgjGEkVi',
                                   layoutId: 'YhgjGEkVi',
@@ -23550,45 +23205,61 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                           snapObject: { fluid: true, snap: false, snapEdge: 'center', },
                           style: { height: '100%', maxWidth: '100%', width: '100%', },
                           width: '100%',
+                          ...addPropertyOverrides12(
+                            {
+                              fu9Ny71bW: { paddingLeft: 40, },
+                              RuG5jmR5S: {
+                                progressObject: {
+                                  dotsActiveOpacity: 1,
+                                  dotsBackground: 'rgba(0, 0, 0, 0.2)',
+                                  dotsBlur: 50,
+                                  dotsFill: 'rgb(255, 255, 255)',
+                                  dotsGap: 10,
+                                  dotsInset: 0,
+                                  dotSize: 10,
+                                  dotsOpacity: 0.1,
+                                  dotsPadding: 10,
+                                  dotsRadius: 200,
+                                  showProgressDots: true,
+                                  showScrollbar: true,
+                                },
+                              },
+                            },
+                            baseVariant,
+                            gestureVariant,
+                          ),
                         },),
                       },),
                     },),
-                    /* @__PURE__ */ _jsx19(motion17.div, {
+                    /* @__PURE__ */ _jsx18(motion17.div, {
                       className: 'framer-1ibuyg3',
                       layoutDependency,
                       layoutId: 'mOz7WgS82',
-                      children: /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
+                      children: /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
                         height: 16,
                         width: '102px',
                         y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                          ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 6129) - 0 -
-                                6069.2) / 2 + 2146 + 0) +
+                          ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 6164) - 0 -
+                                6104.2) / 2 + 2146 + 0) +
                           0 + 85 + 0 + 415 + 0,
                         ...addPropertyOverrides12(
-                          {
-                            fu9Ny71bW: { y: void 0, },
-                            RuG5jmR5S: {
-                              y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                                ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) ||
-                                      200) - 0 - 7051.8) / 2 + 3159 + 0) +
-                                0 + 85 + 0 + 506 + 0,
-                            },
-                          },
+                          { fu9Ny71bW: { width: void 0, y: void 0, }, RuG5jmR5S: { y: void 0, }, },
                           baseVariant,
                           gestureVariant,
                         ),
-                        children: /* @__PURE__ */ _jsx19(motion17.div, {
+                        children: /* @__PURE__ */ _jsx18(motion17.div, {
                           className: 'framer-1jmskuy-container',
                           layoutDependency,
                           layoutId: 'FYDqTqHDY-container',
                           whileHover: animation8,
-                          children: /* @__PURE__ */ _jsx19(stdin_default9, {
+                          children: /* @__PURE__ */ _jsx18(stdin_default9, {
                             height: '100%',
                             id: 'FYDqTqHDY',
                             layoutId: 'FYDqTqHDY',
                             style: { height: '100%', width: '100%', },
                             variant: 'rLSvZw8dT',
                             width: '100%',
+                            ...addPropertyOverrides12({ fu9Ny71bW: { style: { height: '100%', }, }, }, baseVariant, gestureVariant,),
                           },),
                         },),
                       },),
@@ -23597,7 +23268,7 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                 },),
               },),
             },),
-            /* @__PURE__ */ _jsx19(motion17.div, {
+            /* @__PURE__ */ _jsx18(motion17.div, {
               className: 'framer-1d4g1q4',
               layoutDependency,
               layoutId: 'J8QpWxT7O',
@@ -23618,12 +23289,12 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                         layoutDependency,
                         layoutId: 'UlaY6g_YA',
                         children: [
-                          /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
-                            children: /* @__PURE__ */ _jsx19(motion17.div, {
+                          /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
+                            children: /* @__PURE__ */ _jsx18(motion17.div, {
                               className: 'framer-1411rd3-container',
                               layoutDependency,
                               layoutId: 'ehAgqWcnC-container',
-                              children: /* @__PURE__ */ _jsx19(Icon, {
+                              children: /* @__PURE__ */ _jsx18(Icon, {
                                 color: 'rgb(255, 79, 1)',
                                 height: '100%',
                                 iconSearch: 'Home',
@@ -23640,14 +23311,14 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                               },),
                             },),
                           },),
-                          /* @__PURE__ */ _jsx19(RichTextWithFXWithOptimizedAppearEffect2, {
+                          /* @__PURE__ */ _jsx18(RichTextWithFXWithOptimizedAppearEffect2, {
                             __fromCanvasComponent: true,
                             __perspectiveFX: false,
                             __smartComponentFX: true,
                             __targetOpacity: 1,
                             animate: animation42,
-                            children: /* @__PURE__ */ _jsx19(React17.Fragment, {
-                              children: /* @__PURE__ */ _jsx19(motion17.h3, {
+                            children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                              children: /* @__PURE__ */ _jsx18(motion17.h3, {
                                 style: {
                                   '--font-selector': 'SW50ZXItTWVkaXVt',
                                   '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -23678,14 +23349,14 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                           },),
                         ],
                       },),
-                      /* @__PURE__ */ _jsx19(RichTextWithFXWithOptimizedAppearEffect2, {
+                      /* @__PURE__ */ _jsx18(RichTextWithFXWithOptimizedAppearEffect2, {
                         __fromCanvasComponent: true,
                         __perspectiveFX: false,
                         __smartComponentFX: true,
                         __targetOpacity: 1,
                         animate: animation42,
-                        children: /* @__PURE__ */ _jsx19(React17.Fragment, {
-                          children: /* @__PURE__ */ _jsx19(motion17.h3, {
+                        children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                          children: /* @__PURE__ */ _jsx18(motion17.h3, {
                             className: 'framer-styles-preset-jttjmp',
                             'data-styles-preset': 'zu841OiIg',
                             style: { '--framer-text-alignment': 'center', },
@@ -23707,10 +23378,10 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                         verticalAlignment: 'top',
                         withExternalLayout: true,
                       },),
-                      /* @__PURE__ */ _jsx19(RichText9, {
+                      /* @__PURE__ */ _jsx18(RichText9, {
                         __fromCanvasComponent: true,
-                        children: /* @__PURE__ */ _jsx19(React17.Fragment, {
-                          children: /* @__PURE__ */ _jsx19(motion17.h2, {
+                        children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                          children: /* @__PURE__ */ _jsx18(motion17.h2, {
                             className: 'framer-styles-preset-az499w',
                             'data-styles-preset': 'kHb0JRZSH',
                             style: { '--framer-text-alignment': 'center', },
@@ -23722,43 +23393,66 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                         layoutDependency,
                         layoutId: 'GGsUekSBu',
                         style: { '--framer-paragraph-spacing': '0px', },
+                        variants: { RuG5jmR5S: { '--extracted-1of0zx5': 'rgb(138, 138, 138)', }, },
                         verticalAlignment: 'top',
                         withExternalLayout: true,
+                        ...addPropertyOverrides12(
+                          {
+                            RuG5jmR5S: {
+                              children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                                children: /* @__PURE__ */ _jsx18(motion17.h2, {
+                                  style: {
+                                    '--font-selector': 'SW50ZXItTWVkaXVt',
+                                    '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
+                                    '--framer-font-size': '17px',
+                                    '--framer-font-weight': '500',
+                                    '--framer-letter-spacing': '-1px',
+                                    '--framer-text-alignment': 'center',
+                                    '--framer-text-color': 'var(--extracted-1of0zx5, rgb(138, 138, 138))',
+                                  },
+                                  children: 'Get started with your favorite tools, frameworks, and languages.',
+                                },),
+                              },),
+                              fonts: ['Inter-Medium',],
+                            },
+                          },
+                          baseVariant,
+                          gestureVariant,
+                        ),
                       },),
                     ],
                   },),
-                  /* @__PURE__ */ _jsx19(motion17.div, {
+                  /* @__PURE__ */ _jsx18(motion17.div, {
                     className: 'framer-w8od71',
                     layoutDependency,
                     layoutId: 'nxAILEQ7i',
                     style: { backgroundColor: 'rgb(0, 0, 0)', borderTopLeftRadius: 3, borderTopRightRadius: 3, },
-                    children: /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
+                    children: /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
                       height: 396,
                       width: '750px',
                       y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                        ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 6129) - 0 -
-                              6069.2) / 2 + 2827 + 0) +
+                        ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 6164) - 0 -
+                              6104.2) / 2 + 2827 + 0) +
                         0 + 70 + 169 + 0 + 0,
                       ...addPropertyOverrides12(
                         {
                           fu9Ny71bW: { y: void 0, },
                           RuG5jmR5S: {
-                            height: 394,
-                            width: '1190px',
-                            y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                              ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 200) -
-                                    0 - 7051.8) / 2 + 3891 + 0) +
-                              0 + 70 + 169 + 0 + 42.5,
+                            height: 412,
+                            width: `max(${
+                              (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
+                            } - 10px, 1px)`,
+                            y: void 0,
                           },
                         },
                         baseVariant,
                         gestureVariant,
                       ),
-                      children: /* @__PURE__ */ _jsx19(motion17.div, {
+                      children: /* @__PURE__ */ _jsx18(motion17.div, {
                         className: 'framer-ze04js-container',
                         layoutDependency,
                         layoutId: 'BjVmZdXkP-container',
-                        children: /* @__PURE__ */ _jsx19(stdin_default5, {
+                        children: /* @__PURE__ */ _jsx18(stdin_default5, {
                           height: '100%',
                           id: 'BjVmZdXkP',
                           layoutId: 'BjVmZdXkP',
@@ -23780,14 +23474,14 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                         layoutDependency,
                         layoutId: 'Ipzben1nY',
                         children: [
-                          /* @__PURE__ */ _jsx19(RichTextWithFXWithOptimizedAppearEffect2, {
+                          /* @__PURE__ */ _jsx18(RichTextWithFXWithOptimizedAppearEffect2, {
                             __fromCanvasComponent: true,
                             __perspectiveFX: false,
                             __smartComponentFX: true,
                             __targetOpacity: 1,
                             animate: animation42,
-                            children: /* @__PURE__ */ _jsx19(React17.Fragment, {
-                              children: /* @__PURE__ */ _jsx19(motion17.h3, {
+                            children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                              children: /* @__PURE__ */ _jsx18(motion17.h3, {
                                 className: 'framer-styles-preset-jttjmp',
                                 'data-styles-preset': 'zu841OiIg',
                                 style: { '--framer-text-alignment': 'center', },
@@ -23809,10 +23503,10 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                             verticalAlignment: 'top',
                             withExternalLayout: true,
                           },),
-                          /* @__PURE__ */ _jsx19(RichText9, {
+                          /* @__PURE__ */ _jsx18(RichText9, {
                             __fromCanvasComponent: true,
-                            children: /* @__PURE__ */ _jsx19(React17.Fragment, {
-                              children: /* @__PURE__ */ _jsx19(motion17.h2, {
+                            children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                              children: /* @__PURE__ */ _jsx18(motion17.h2, {
                                 className: 'framer-styles-preset-az499w',
                                 'data-styles-preset': 'kHb0JRZSH',
                                 style: { '--framer-text-alignment': 'center', },
@@ -23825,18 +23519,43 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                             layoutDependency,
                             layoutId: 'L_E4GqwGh',
                             style: { '--framer-paragraph-spacing': '0px', },
+                            variants: { RuG5jmR5S: { '--extracted-1of0zx5': 'rgb(138, 138, 138)', }, },
                             verticalAlignment: 'top',
                             withExternalLayout: true,
+                            ...addPropertyOverrides12(
+                              {
+                                RuG5jmR5S: {
+                                  children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                                    children: /* @__PURE__ */ _jsx18(motion17.h2, {
+                                      style: {
+                                        '--font-selector': 'SW50ZXItTWVkaXVt',
+                                        '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
+                                        '--framer-font-size': '17px',
+                                        '--framer-font-weight': '500',
+                                        '--framer-letter-spacing': '-1px',
+                                        '--framer-text-alignment': 'center',
+                                        '--framer-text-color': 'var(--extracted-1of0zx5, rgb(138, 138, 138))',
+                                      },
+                                      children:
+                                        'Rivet integrates with your existing stack or as a standalone tool to build your infrastructure or backend.',
+                                    },),
+                                  },),
+                                  fonts: ['Inter-Medium',],
+                                },
+                              },
+                              baseVariant,
+                              gestureVariant,
+                            ),
                           },),
                         ],
                       },),
-                      /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
-                        children: /* @__PURE__ */ _jsx19(motion17.div, {
+                      /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
+                        children: /* @__PURE__ */ _jsx18(motion17.div, {
                           className: 'framer-sp5cxg-container',
                           layoutDependency,
                           layoutId: 'MYBA6thWX-container',
                           style: { opacity: 0.29, },
-                          children: /* @__PURE__ */ _jsx19(Ticker, {
+                          children: /* @__PURE__ */ _jsx18(Ticker, {
                             alignment: 'center',
                             direction: 'left',
                             fadeOptions: { fadeAlpha: 0, fadeContent: true, fadeInset: 0, fadeWidth: 25, overflow: false, },
@@ -23853,12 +23572,12 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                             paddingTop: 10,
                             sizingOptions: { heightType: true, widthType: true, },
                             slots: [
-                              /* @__PURE__ */ _jsx19(motion17.div, {
+                              /* @__PURE__ */ _jsx18(motion17.div, {
                                 className: 'framer-xw2c5s',
                                 'data-framer-name': 'Object1',
                                 layoutDependency,
                                 layoutId: 'kISdLUckS',
-                                children: /* @__PURE__ */ _jsx19(SVG3, {
+                                children: /* @__PURE__ */ _jsx18(SVG3, {
                                   className: 'framer-1dn6rse',
                                   'data-framer-name': 'Backblaze',
                                   fill: 'black',
@@ -23871,12 +23590,12 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                                   withExternalLayout: true,
                                 },),
                               },),
-                              /* @__PURE__ */ _jsx19(motion17.div, {
+                              /* @__PURE__ */ _jsx18(motion17.div, {
                                 className: 'framer-inidr2',
                                 'data-framer-name': 'Object2',
                                 layoutDependency,
                                 layoutId: 'A20CcjWzQ',
-                                children: /* @__PURE__ */ _jsx19(SVG3, {
+                                children: /* @__PURE__ */ _jsx18(SVG3, {
                                   className: 'framer-sts5wz',
                                   'data-framer-name': 'Babylondotjs',
                                   fill: 'black',
@@ -23889,12 +23608,12 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                                   withExternalLayout: true,
                                 },),
                               },),
-                              /* @__PURE__ */ _jsx19(motion17.div, {
+                              /* @__PURE__ */ _jsx18(motion17.div, {
                                 className: 'framer-1esmdhl',
                                 'data-framer-name': 'Object3',
                                 layoutDependency,
                                 layoutId: 'zcLIjrswa',
-                                children: /* @__PURE__ */ _jsx19(SVG3, {
+                                children: /* @__PURE__ */ _jsx18(SVG3, {
                                   className: 'framer-nlhah3',
                                   'data-framer-name': 'Airtable',
                                   layout: 'position',
@@ -23936,12 +23655,12 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                       layoutDependency,
                       layoutId: 'Pfoxle6B5',
                       children: [
-                        /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
-                          children: /* @__PURE__ */ _jsx19(motion17.div, {
+                        /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
+                          children: /* @__PURE__ */ _jsx18(motion17.div, {
                             className: 'framer-1o7zqv7-container',
                             layoutDependency,
                             layoutId: 'loDRsf9gt-container',
-                            children: /* @__PURE__ */ _jsx19(Icon, {
+                            children: /* @__PURE__ */ _jsx18(Icon, {
                               color: 'var(--token-f94bc001-f1ab-463c-abc3-37fb7e541046, rgb(255, 79, 1))',
                               height: '100%',
                               iconSearch: 'Home',
@@ -23958,14 +23677,14 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                             },),
                           },),
                         },),
-                        /* @__PURE__ */ _jsx19(RichTextWithFXWithOptimizedAppearEffect2, {
+                        /* @__PURE__ */ _jsx18(RichTextWithFXWithOptimizedAppearEffect2, {
                           __fromCanvasComponent: true,
                           __perspectiveFX: false,
                           __smartComponentFX: true,
                           __targetOpacity: 1,
                           animate: animation42,
-                          children: /* @__PURE__ */ _jsx19(React17.Fragment, {
-                            children: /* @__PURE__ */ _jsx19(motion17.h3, {
+                          children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                            children: /* @__PURE__ */ _jsx18(motion17.h3, {
                               style: {
                                 '--font-selector': 'SW50ZXItTWVkaXVt',
                                 '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -23996,13 +23715,13 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                         },),
                       ],
                     },),
-                    /* @__PURE__ */ _jsx19(RichText9, {
+                    /* @__PURE__ */ _jsx18(RichText9, {
                       __fromCanvasComponent: true,
-                      children: /* @__PURE__ */ _jsx19(React17.Fragment, {
+                      children: /* @__PURE__ */ _jsx18(React16.Fragment, {
                         children: /* @__PURE__ */ _jsxs10(motion17.h3, {
                           className: 'framer-styles-preset-jttjmp',
                           'data-styles-preset': 'zu841OiIg',
-                          children: ['Deploy your Application ', /* @__PURE__ */ _jsx19(motion17.br, {},), 'with Rivet Cloud',],
+                          children: ['Deploy your Application ', /* @__PURE__ */ _jsx18(motion17.br, {},), 'with Rivet Cloud',],
                         },),
                       },),
                       className: 'framer-mgwi15',
@@ -24016,17 +23735,33 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                       },
                       verticalAlignment: 'top',
                       withExternalLayout: true,
+                      ...addPropertyOverrides12(
+                        {
+                          RuG5jmR5S: {
+                            children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                              children: /* @__PURE__ */ _jsxs10(motion17.h3, {
+                                className: 'framer-styles-preset-jttjmp',
+                                'data-styles-preset': 'zu841OiIg',
+                                style: { '--framer-text-alignment': 'center', },
+                                children: ['Deploy your Application ', /* @__PURE__ */ _jsx18(motion17.br, {},), 'with Rivet Cloud',],
+                              },),
+                            },),
+                          },
+                        },
+                        baseVariant,
+                        gestureVariant,
+                      ),
                     },),
-                    /* @__PURE__ */ _jsx19(RichText9, {
+                    /* @__PURE__ */ _jsx18(RichText9, {
                       __fromCanvasComponent: true,
-                      children: /* @__PURE__ */ _jsx19(React17.Fragment, {
+                      children: /* @__PURE__ */ _jsx18(React16.Fragment, {
                         children: /* @__PURE__ */ _jsxs10(motion17.h2, {
                           className: 'framer-styles-preset-az499w',
                           'data-styles-preset': 'kHb0JRZSH',
                           style: { '--framer-text-alignment': 'left', },
                           children: [
                             'Rivet provides a feature rich platform',
-                            /* @__PURE__ */ _jsx19(motion17.br, {},),
+                            /* @__PURE__ */ _jsx18(motion17.br, {},),
                             'so you can get back to building. ',
                           ],
                         },),
@@ -24036,422 +23771,201 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                       layoutDependency,
                       layoutId: 'pdkht9kmu',
                       style: { '--framer-paragraph-spacing': '0px', },
+                      variants: { RuG5jmR5S: { '--extracted-1of0zx5': 'rgb(138, 138, 138)', }, },
                       verticalAlignment: 'top',
                       withExternalLayout: true,
+                      ...addPropertyOverrides12(
+                        {
+                          RuG5jmR5S: {
+                            children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                              children: /* @__PURE__ */ _jsxs10(motion17.h2, {
+                                style: {
+                                  '--font-selector': 'SW50ZXItTWVkaXVt',
+                                  '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
+                                  '--framer-font-size': '17px',
+                                  '--framer-font-weight': '500',
+                                  '--framer-letter-spacing': '-1px',
+                                  '--framer-text-alignment': 'center',
+                                  '--framer-text-color': 'var(--extracted-1of0zx5, rgb(138, 138, 138))',
+                                },
+                                children: [
+                                  'Rivet provides a feature rich platform',
+                                  /* @__PURE__ */ _jsx18(motion17.br, {},),
+                                  'so you can get back to building. ',
+                                ],
+                              },),
+                            },),
+                            fonts: ['Inter-Medium',],
+                          },
+                        },
+                        baseVariant,
+                        gestureVariant,
+                      ),
                     },),
                   ],
                 },),
-                /* @__PURE__ */ _jsxs10(motion17.div, {
+                /* @__PURE__ */ _jsx18(motion17.div, {
+                  className: 'framer-mszazt',
+                  layoutDependency,
+                  layoutId: 'KHi64nyfP',
+                  children: /* @__PURE__ */ _jsxs10(Image5, {
+                    background: {
+                      alt: '',
+                      fit: 'fill',
+                      intrinsicHeight: 570,
+                      intrinsicWidth: 892,
+                      loading: getLoadingLazyAtYPosition4(
+                        ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
+                          ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 6164) - 0 -
+                                6104.2) / 2 + 3892 + 0) +
+                          114 + 154.4 + -97.5,
+                      ),
+                      pixelHeight: 1140,
+                      pixelWidth: 1784,
+                      sizes: '1230px',
+                      src: 'https://framerusercontent.com/images/jcPzRSNtLXFreYDLuCJpp8PdfJ8.png?scale-down-to=1024',
+                      srcSet:
+                        'https://framerusercontent.com/images/jcPzRSNtLXFreYDLuCJpp8PdfJ8.png?scale-down-to=512 512w,https://framerusercontent.com/images/jcPzRSNtLXFreYDLuCJpp8PdfJ8.png?scale-down-to=1024 1024w,https://framerusercontent.com/images/jcPzRSNtLXFreYDLuCJpp8PdfJ8.png 1784w',
+                    },
+                    className: 'framer-1yqat0r',
+                    'data-framer-name': 'Image',
+                    layoutDependency,
+                    layoutId: 'hEixpceOq',
+                    style: { opacity: 0.87, },
+                    ...addPropertyOverrides12(
+                      {
+                        fu9Ny71bW: {
+                          background: {
+                            alt: '',
+                            fit: 'fill',
+                            intrinsicHeight: 570,
+                            intrinsicWidth: 892,
+                            pixelHeight: 1140,
+                            pixelWidth: 1784,
+                            sizes: '1030px',
+                            src: 'https://framerusercontent.com/images/jcPzRSNtLXFreYDLuCJpp8PdfJ8.png?scale-down-to=1024',
+                            srcSet:
+                              'https://framerusercontent.com/images/jcPzRSNtLXFreYDLuCJpp8PdfJ8.png?scale-down-to=512 512w,https://framerusercontent.com/images/jcPzRSNtLXFreYDLuCJpp8PdfJ8.png?scale-down-to=1024 1024w,https://framerusercontent.com/images/jcPzRSNtLXFreYDLuCJpp8PdfJ8.png 1784w',
+                          },
+                        },
+                        RuG5jmR5S: {
+                          background: {
+                            alt: '',
+                            fit: 'fill',
+                            intrinsicHeight: 570,
+                            intrinsicWidth: 892,
+                            pixelHeight: 1140,
+                            pixelWidth: 1784,
+                            sizes: '397px',
+                            src: 'https://framerusercontent.com/images/jcPzRSNtLXFreYDLuCJpp8PdfJ8.png?scale-down-to=1024',
+                            srcSet:
+                              'https://framerusercontent.com/images/jcPzRSNtLXFreYDLuCJpp8PdfJ8.png?scale-down-to=512 512w,https://framerusercontent.com/images/jcPzRSNtLXFreYDLuCJpp8PdfJ8.png?scale-down-to=1024 1024w,https://framerusercontent.com/images/jcPzRSNtLXFreYDLuCJpp8PdfJ8.png 1784w',
+                          },
+                        },
+                      },
+                      baseVariant,
+                      gestureVariant,
+                    ),
+                    children: [
+                      /* @__PURE__ */ _jsx18(motion17.div, {
+                        className: 'framer-xrjguc',
+                        'data-framer-name': 'Image',
+                        layoutDependency,
+                        layoutId: 'ukzKBe5AE',
+                        style: {
+                          background:
+                            'radial-gradient(86% 112.00000000000001% at 3.9% 13.600000000000001%, rgb(0, 0, 0) 3%, rgba(255, 255, 255, 0) 63%, rgb(0, 0, 0) 99.09909909909909%)',
+                        },
+                      },),
+                      /* @__PURE__ */ _jsx18(motion17.div, {
+                        className: 'framer-11v4wm2',
+                        'data-framer-name': 'Image',
+                        layoutDependency,
+                        layoutId: 'Lidn3etRq',
+                        style: {
+                          background:
+                            'radial-gradient(86% 112.00000000000001% at 3.9% 13.600000000000001%, rgb(0, 0, 0) 3%, rgba(255, 255, 255, 0) 63%, rgb(0, 0, 0) 99.09909909909909%)',
+                        },
+                        transformTemplate: transformTemplate12,
+                        ...addPropertyOverrides12({ RuG5jmR5S: { transformTemplate: transformTemplate2, }, }, baseVariant, gestureVariant,),
+                      },),
+                    ],
+                  },),
+                },),
+                /* @__PURE__ */ _jsx18(motion17.div, {
                   className: 'framer-5lagxh',
                   layoutDependency,
                   layoutId: 'F3zMriBWW',
-                  children: [
-                    /* @__PURE__ */ _jsx19(motion17.div, {
-                      className: 'framer-mszazt',
-                      layoutDependency,
-                      layoutId: 'KHi64nyfP',
-                      children: /* @__PURE__ */ _jsxs10(Image5, {
-                        background: {
-                          alt: '',
-                          fit: 'fill',
-                          intrinsicHeight: 570,
-                          intrinsicWidth: 892,
-                          loading: getLoadingLazyAtYPosition4(
-                            ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                              ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) || 6129) -
-                                    0 - 6069.2) / 2 + 3892 + 0) +
-                              114 + 154.39999999999995 + 0 + 0 + -97.5,
-                          ),
-                          pixelHeight: 1140,
-                          pixelWidth: 1784,
-                          sizes: '1230px',
-                          src: 'https://framerusercontent.com/images/jcPzRSNtLXFreYDLuCJpp8PdfJ8.png?scale-down-to=1024',
-                          srcSet:
-                            'https://framerusercontent.com/images/jcPzRSNtLXFreYDLuCJpp8PdfJ8.png?scale-down-to=512 512w,https://framerusercontent.com/images/jcPzRSNtLXFreYDLuCJpp8PdfJ8.png?scale-down-to=1024 1024w,https://framerusercontent.com/images/jcPzRSNtLXFreYDLuCJpp8PdfJ8.png 1784w',
-                        },
-                        className: 'framer-1yqat0r',
-                        'data-framer-name': 'Image',
+                  children: /* @__PURE__ */ _jsxs10(motion17.div, {
+                    className: 'framer-17prusv',
+                    layoutDependency,
+                    layoutId: 'ANC4yjo2O',
+                    children: [
+                      /* @__PURE__ */ _jsx18(motion17.div, {
+                        className: 'framer-1gmjw3u',
                         layoutDependency,
-                        layoutId: 'hEixpceOq',
-                        style: { opacity: 0.87, },
-                        ...addPropertyOverrides12(
-                          {
-                            fu9Ny71bW: {
-                              background: {
-                                alt: '',
-                                fit: 'fill',
-                                intrinsicHeight: 570,
-                                intrinsicWidth: 892,
-                                pixelHeight: 1140,
-                                pixelWidth: 1784,
-                                sizes: '1230px',
-                                src: 'https://framerusercontent.com/images/jcPzRSNtLXFreYDLuCJpp8PdfJ8.png?scale-down-to=1024',
-                                srcSet:
-                                  'https://framerusercontent.com/images/jcPzRSNtLXFreYDLuCJpp8PdfJ8.png?scale-down-to=512 512w,https://framerusercontent.com/images/jcPzRSNtLXFreYDLuCJpp8PdfJ8.png?scale-down-to=1024 1024w,https://framerusercontent.com/images/jcPzRSNtLXFreYDLuCJpp8PdfJ8.png 1784w',
-                              },
-                            },
-                            RuG5jmR5S: {
-                              background: {
-                                alt: '',
-                                fit: 'fill',
-                                intrinsicHeight: 570,
-                                intrinsicWidth: 892,
-                                loading: getLoadingLazyAtYPosition4(
-                                  ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                                    ((((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.height) ||
-                                          200) - 0 - 7051.8) / 2 + 5033 + 0) +
-                                    33 + 94.4 + 0 + 0 + 243 - 195,
-                                ),
-                                pixelHeight: 1140,
-                                pixelWidth: 1784,
-                                sizes: '289px',
-                                src: 'https://framerusercontent.com/images/jcPzRSNtLXFreYDLuCJpp8PdfJ8.png?scale-down-to=1024',
-                                srcSet:
-                                  'https://framerusercontent.com/images/jcPzRSNtLXFreYDLuCJpp8PdfJ8.png?scale-down-to=512 512w,https://framerusercontent.com/images/jcPzRSNtLXFreYDLuCJpp8PdfJ8.png?scale-down-to=1024 1024w,https://framerusercontent.com/images/jcPzRSNtLXFreYDLuCJpp8PdfJ8.png 1784w',
-                              },
-                            },
-                          },
-                          baseVariant,
-                          gestureVariant,
-                        ),
-                        children: [
-                          /* @__PURE__ */ _jsx19(motion17.div, {
-                            className: 'framer-xrjguc',
-                            'data-framer-name': 'Image',
-                            layoutDependency,
-                            layoutId: 'ukzKBe5AE',
-                            style: {
-                              background:
-                                'radial-gradient(86% 112.00000000000001% at 3.9% 13.600000000000001%, rgb(0, 0, 0) 3%, rgba(255, 255, 255, 0) 63%, rgb(0, 0, 0) 99.09909909909909%)',
-                            },
-                          },),
-                          /* @__PURE__ */ _jsx19(motion17.div, {
-                            className: 'framer-11v4wm2',
-                            'data-framer-name': 'Image',
-                            layoutDependency,
-                            layoutId: 'Lidn3etRq',
-                            style: {
-                              background:
-                                'radial-gradient(86% 112.00000000000001% at 3.9% 13.600000000000001%, rgb(0, 0, 0) 3%, rgba(255, 255, 255, 0) 63%, rgb(0, 0, 0) 99.09909909909909%)',
-                            },
-                            transformTemplate: transformTemplate12,
-                          },),
-                        ],
-                      },),
-                    },),
-                    /* @__PURE__ */ _jsxs10(motion17.div, {
-                      className: 'framer-17prusv',
-                      layoutDependency,
-                      layoutId: 'ANC4yjo2O',
-                      children: [
-                        /* @__PURE__ */ _jsx19(motion17.div, {
-                          className: 'framer-1gmjw3u',
+                        layoutId: 'JRepiF6Ev',
+                        children: /* @__PURE__ */ _jsx18(motion17.div, {
+                          className: 'framer-snnm7r',
                           layoutDependency,
-                          layoutId: 'JRepiF6Ev',
-                          children: /* @__PURE__ */ _jsx19(motion17.div, {
-                            className: 'framer-snnm7r',
-                            layoutDependency,
-                            layoutId: 'Zg_MadQ3P',
-                            children: /* @__PURE__ */ _jsxs10(motion17.div, {
-                              className: 'framer-3a391p',
-                              'data-framer-name': 'Content',
-                              layoutDependency,
-                              layoutId: 'B5Igux5FW',
-                              children: [
-                                /* @__PURE__ */ _jsxs10(motion17.div, {
-                                  className: 'framer-j08hmh',
-                                  layoutDependency,
-                                  layoutId: 'IS2OE9rxV',
-                                  children: [
-                                    /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
-                                      children: /* @__PURE__ */ _jsx19(motion17.div, {
-                                        className: 'framer-1ui5nk4-container',
-                                        layoutDependency,
-                                        layoutId: 'KEH2WNjsZ-container',
-                                        children: /* @__PURE__ */ _jsx19(Icon, {
-                                          color: 'rgb(255, 255, 255)',
-                                          height: '100%',
-                                          iconSearch: 'Home',
-                                          iconSelection: 'Lock',
-                                          iconStyle15: 'Filled',
-                                          iconStyle2: 'Filled',
-                                          iconStyle7: 'Filled',
-                                          id: 'KEH2WNjsZ',
-                                          layoutId: 'KEH2WNjsZ',
-                                          mirrored: false,
-                                          selectByList: true,
-                                          style: { height: '100%', width: '100%', },
-                                          width: '100%',
-                                        },),
-                                      },),
-                                    },),
-                                    /* @__PURE__ */ _jsx19(RichText9, {
-                                      __fromCanvasComponent: true,
-                                      children: /* @__PURE__ */ _jsx19(React17.Fragment, {
-                                        children: /* @__PURE__ */ _jsx19(motion17.h2, {
-                                          style: {
-                                            '--font-selector': 'R0Y7SW50ZXItNzAw',
-                                            '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
-                                            '--framer-font-weight': '700',
-                                            '--framer-letter-spacing': '-0.8px',
-                                            '--framer-line-height': '1.5em',
-                                            '--framer-text-alignment': 'left',
-                                            '--framer-text-color': 'var(--extracted-1of0zx5, rgb(255, 255, 255))',
-                                          },
-                                          children: 'Reliability & Security',
-                                        },),
-                                      },),
-                                      className: 'framer-1gri49i',
-                                      fonts: ['GF;Inter-700',],
-                                      layoutDependency,
-                                      layoutId: 'h3U8WG7E1',
-                                      style: {
-                                        '--extracted-1of0zx5': 'rgb(255, 255, 255)',
-                                        '--framer-link-text-color': 'rgb(0, 153, 255)',
-                                        '--framer-link-text-decoration': 'underline',
-                                        '--framer-paragraph-spacing': '0px',
-                                      },
-                                      verticalAlignment: 'top',
-                                      withExternalLayout: true,
-                                    },),
-                                  ],
-                                },),
-                                /* @__PURE__ */ _jsx19(RichText9, {
-                                  __fromCanvasComponent: true,
-                                  children: /* @__PURE__ */ _jsx19(React17.Fragment, {
-                                    children: /* @__PURE__ */ _jsx19(motion17.h3, {
-                                      style: {
-                                        '--font-selector': 'R0Y7SW50ZXItNTAw',
-                                        '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
-                                        '--framer-font-weight': '500',
-                                        '--framer-letter-spacing': '-0.5px',
-                                        '--framer-line-height': '1.4em',
-                                        '--framer-text-alignment': 'left',
-                                        '--framer-text-color':
-                                          'var(--extracted-a0htzi, var(--token-1021654d-251a-4750-952b-de3f7005260e, rgb(136, 136, 136)))',
-                                      },
-                                      children: 'DDoS Mitigation',
-                                    },),
-                                  },),
-                                  className: 'framer-8j5uos',
-                                  fonts: ['GF;Inter-500',],
-                                  layoutDependency,
-                                  layoutId: 'amGpC68_1',
-                                  style: {
-                                    '--extracted-a0htzi': 'var(--token-1021654d-251a-4750-952b-de3f7005260e, rgb(136, 136, 136))',
-                                    '--framer-paragraph-spacing': '0px',
-                                  },
-                                  verticalAlignment: 'top',
-                                  withExternalLayout: true,
-                                },),
-                              ],
-                            },),
-                          },),
-                        },),
-                        /* @__PURE__ */ _jsx19(motion17.div, {
-                          className: 'framer-phtzfv',
-                          layoutDependency,
-                          layoutId: 'IdV6UkkfJ',
-                          children: /* @__PURE__ */ _jsx19(motion17.div, {
-                            className: 'framer-13xtp2b',
-                            layoutDependency,
-                            layoutId: 'PtEkJXu5c',
-                            children: /* @__PURE__ */ _jsxs10(motion17.div, {
-                              className: 'framer-ez5ras',
-                              'data-framer-name': 'Content',
-                              layoutDependency,
-                              layoutId: 'S78y9VDIj',
-                              children: [
-                                /* @__PURE__ */ _jsxs10(motion17.div, {
-                                  className: 'framer-fb8c4p',
-                                  layoutDependency,
-                                  layoutId: 'Nu5EuYxjS',
-                                  children: [
-                                    /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
-                                      children: /* @__PURE__ */ _jsx19(motion17.div, {
-                                        className: 'framer-1t4zmih-container',
-                                        layoutDependency,
-                                        layoutId: 'ci_oZjLpZ-container',
-                                        children: /* @__PURE__ */ _jsx19(Icon, {
-                                          color: 'rgb(255, 255, 255)',
-                                          height: '100%',
-                                          iconSearch: 'Home',
-                                          iconSelection: 'Topic',
-                                          iconStyle15: 'Filled',
-                                          iconStyle2: 'Filled',
-                                          iconStyle7: 'Filled',
-                                          id: 'ci_oZjLpZ',
-                                          layoutId: 'ci_oZjLpZ',
-                                          mirrored: false,
-                                          selectByList: true,
-                                          style: { height: '100%', width: '100%', },
-                                          width: '100%',
-                                        },),
-                                      },),
-                                    },),
-                                    /* @__PURE__ */ _jsx19(RichText9, {
-                                      __fromCanvasComponent: true,
-                                      children: /* @__PURE__ */ _jsx19(React17.Fragment, {
-                                        children: /* @__PURE__ */ _jsx19(motion17.h2, {
-                                          style: {
-                                            '--font-selector': 'R0Y7SW50ZXItNzAw',
-                                            '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
-                                            '--framer-font-weight': '700',
-                                            '--framer-letter-spacing': '-0.8px',
-                                            '--framer-line-height': '1.5em',
-                                            '--framer-text-alignment': 'left',
-                                            '--framer-text-color': 'var(--extracted-1of0zx5, rgb(255, 255, 255))',
-                                          },
-                                          children: 'Development Management',
-                                        },),
-                                      },),
-                                      className: 'framer-1smddtw',
-                                      fonts: ['GF;Inter-700',],
-                                      layoutDependency,
-                                      layoutId: 'YI4nAkvPz',
-                                      style: {
-                                        '--extracted-1of0zx5': 'rgb(255, 255, 255)',
-                                        '--framer-link-text-color': 'rgb(0, 153, 255)',
-                                        '--framer-link-text-decoration': 'underline',
-                                        '--framer-paragraph-spacing': '0px',
-                                      },
-                                      verticalAlignment: 'top',
-                                      withExternalLayout: true,
-                                    },),
-                                  ],
-                                },),
-                                /* @__PURE__ */ _jsx19(RichText9, {
-                                  __fromCanvasComponent: true,
-                                  children: /* @__PURE__ */ _jsx19(React17.Fragment, {
-                                    children: /* @__PURE__ */ _jsx19(motion17.h3, {
-                                      style: {
-                                        '--font-selector': 'R0Y7SW50ZXItNTAw',
-                                        '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
-                                        '--framer-font-weight': '500',
-                                        '--framer-letter-spacing': '-0.5px',
-                                        '--framer-line-height': '1.4em',
-                                        '--framer-text-alignment': 'left',
-                                        '--framer-text-color':
-                                          'var(--extracted-a0htzi, var(--token-1021654d-251a-4750-952b-de3f7005260e, rgb(136, 136, 136)))',
-                                      },
-                                      children: 'Build and Version Control built in.',
-                                    },),
-                                  },),
-                                  className: 'framer-15u9wjh',
-                                  fonts: ['GF;Inter-500',],
-                                  layoutDependency,
-                                  layoutId: 'OGhVHc6u9',
-                                  style: {
-                                    '--extracted-a0htzi': 'var(--token-1021654d-251a-4750-952b-de3f7005260e, rgb(136, 136, 136))',
-                                    '--framer-paragraph-spacing': '0px',
-                                  },
-                                  verticalAlignment: 'top',
-                                  withExternalLayout: true,
-                                },),
-                              ],
-                            },),
-                          },),
-                        },),
-                        /* @__PURE__ */ _jsx19(motion17.div, {
-                          className: 'framer-1bsyb1z',
-                          layoutDependency,
-                          layoutId: 'aFJ3i4Hn9',
-                          children: /* @__PURE__ */ _jsx19(motion17.div, {
-                            className: 'framer-2wv9l0',
+                          layoutId: 'Zg_MadQ3P',
+                          children: /* @__PURE__ */ _jsxs10(motion17.div, {
+                            className: 'framer-3a391p',
                             'data-framer-name': 'Content',
                             layoutDependency,
-                            layoutId: 'LHzMS7YKC',
-                            children: /* @__PURE__ */ _jsx19(motion17.div, {
-                              className: 'framer-1gxn14o',
-                              layoutDependency,
-                              layoutId: 'JS9h73vYx',
-                              children: /* @__PURE__ */ _jsxs10(motion17.div, {
-                                className: 'framer-ggrpo5',
-                                'data-framer-name': 'Content',
+                            layoutId: 'B5Igux5FW',
+                            children: [
+                              /* @__PURE__ */ _jsxs10(motion17.div, {
+                                className: 'framer-j08hmh',
                                 layoutDependency,
-                                layoutId: 'sm_NW_Mjm',
+                                layoutId: 'IS2OE9rxV',
                                 children: [
-                                  /* @__PURE__ */ _jsxs10(motion17.div, {
-                                    className: 'framer-18z8nzm',
-                                    layoutDependency,
-                                    layoutId: 'kkyHX918z',
-                                    children: [
-                                      /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
-                                        children: /* @__PURE__ */ _jsx19(motion17.div, {
-                                          className: 'framer-17af5vf-container',
-                                          layoutDependency,
-                                          layoutId: 'fl5EGp0hD-container',
-                                          children: /* @__PURE__ */ _jsx19(Icon, {
-                                            color: 'rgb(255, 255, 255)',
-                                            height: '100%',
-                                            iconSearch: 'Home',
-                                            iconSelection: 'Backup',
-                                            iconStyle15: 'Filled',
-                                            iconStyle2: 'Filled',
-                                            iconStyle7: 'Filled',
-                                            id: 'fl5EGp0hD',
-                                            layoutId: 'fl5EGp0hD',
-                                            mirrored: false,
-                                            selectByList: true,
-                                            style: { height: '100%', width: '100%', },
-                                            width: '100%',
-                                          },),
-                                        },),
-                                      },),
-                                      /* @__PURE__ */ _jsx19(RichText9, {
-                                        __fromCanvasComponent: true,
-                                        children: /* @__PURE__ */ _jsx19(React17.Fragment, {
-                                          children: /* @__PURE__ */ _jsx19(motion17.h2, {
-                                            style: {
-                                              '--font-selector': 'R0Y7SW50ZXItNzAw',
-                                              '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
-                                              '--framer-font-weight': '700',
-                                              '--framer-letter-spacing': '-0.8px',
-                                              '--framer-line-height': '1.5em',
-                                              '--framer-text-alignment': 'left',
-                                              '--framer-text-color': 'var(--extracted-1of0zx5, rgb(255, 255, 255))',
-                                            },
-                                            children: 'Instant Rollbacks',
-                                          },),
-                                        },),
-                                        className: 'framer-1ykr04m',
-                                        fonts: ['GF;Inter-700',],
-                                        layoutDependency,
-                                        layoutId: 'P2_k26WGG',
-                                        style: {
-                                          '--extracted-1of0zx5': 'rgb(255, 255, 255)',
-                                          '--framer-link-text-color': 'rgb(0, 153, 255)',
-                                          '--framer-link-text-decoration': 'underline',
-                                          '--framer-paragraph-spacing': '0px',
-                                        },
-                                        verticalAlignment: 'top',
-                                        withExternalLayout: true,
-                                      },),
-                                    ],
-                                  },),
-                                  /* @__PURE__ */ _jsx19(RichText9, {
-                                    __fromCanvasComponent: true,
-                                    children: /* @__PURE__ */ _jsx19(React17.Fragment, {
-                                      children: /* @__PURE__ */ _jsx19(motion17.h3, {
-                                        style: {
-                                          '--font-selector': 'R0Y7SW50ZXItNTAw',
-                                          '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
-                                          '--framer-font-weight': '500',
-                                          '--framer-letter-spacing': '-0.5px',
-                                          '--framer-line-height': '1.4em',
-                                          '--framer-text-alignment': 'left',
-                                          '--framer-text-color':
-                                            'var(--extracted-a0htzi, var(--token-1021654d-251a-4750-952b-de3f7005260e, rgb(136, 136, 136)))',
-                                        },
-                                        children: 'DDoS Mitigation and rollbacks.',
+                                  /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
+                                    children: /* @__PURE__ */ _jsx18(motion17.div, {
+                                      className: 'framer-1ui5nk4-container',
+                                      layoutDependency,
+                                      layoutId: 'KEH2WNjsZ-container',
+                                      children: /* @__PURE__ */ _jsx18(Icon, {
+                                        color: 'rgb(255, 255, 255)',
+                                        height: '100%',
+                                        iconSearch: 'Home',
+                                        iconSelection: 'Lock',
+                                        iconStyle15: 'Filled',
+                                        iconStyle2: 'Filled',
+                                        iconStyle7: 'Filled',
+                                        id: 'KEH2WNjsZ',
+                                        layoutId: 'KEH2WNjsZ',
+                                        mirrored: false,
+                                        selectByList: true,
+                                        style: { height: '100%', width: '100%', },
+                                        width: '100%',
                                       },),
                                     },),
-                                    className: 'framer-yn5jo8',
-                                    fonts: ['GF;Inter-500',],
+                                  },),
+                                  /* @__PURE__ */ _jsx18(RichText9, {
+                                    __fromCanvasComponent: true,
+                                    children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                                      children: /* @__PURE__ */ _jsx18(motion17.h2, {
+                                        style: {
+                                          '--font-selector': 'R0Y7SW50ZXItNzAw',
+                                          '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
+                                          '--framer-font-weight': '700',
+                                          '--framer-letter-spacing': '-0.8px',
+                                          '--framer-line-height': '1.5em',
+                                          '--framer-text-alignment': 'left',
+                                          '--framer-text-color': 'var(--extracted-1of0zx5, rgb(255, 255, 255))',
+                                        },
+                                        children: 'Reliability & Security',
+                                      },),
+                                    },),
+                                    className: 'framer-1gri49i',
+                                    fonts: ['GF;Inter-700',],
                                     layoutDependency,
-                                    layoutId: 'rGfsssIry',
+                                    layoutId: 'h3U8WG7E1',
                                     style: {
-                                      '--extracted-a0htzi': 'var(--token-1021654d-251a-4750-952b-de3f7005260e, rgb(136, 136, 136))',
+                                      '--extracted-1of0zx5': 'rgb(255, 255, 255)',
+                                      '--framer-link-text-color': 'rgb(0, 153, 255)',
+                                      '--framer-link-text-decoration': 'underline',
                                       '--framer-paragraph-spacing': '0px',
                                     },
                                     verticalAlignment: 'top',
@@ -24459,43 +23973,181 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                                   },),
                                 ],
                               },),
-                            },),
+                              /* @__PURE__ */ _jsx18(RichText9, {
+                                __fromCanvasComponent: true,
+                                children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                                  children: /* @__PURE__ */ _jsx18(motion17.h3, {
+                                    style: {
+                                      '--font-selector': 'R0Y7SW50ZXItNTAw',
+                                      '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
+                                      '--framer-font-weight': '500',
+                                      '--framer-letter-spacing': '-0.5px',
+                                      '--framer-line-height': '1.4em',
+                                      '--framer-text-alignment': 'left',
+                                      '--framer-text-color':
+                                        'var(--extracted-a0htzi, var(--token-1021654d-251a-4750-952b-de3f7005260e, rgb(136, 136, 136)))',
+                                    },
+                                    children: 'DDoS Mitigation',
+                                  },),
+                                },),
+                                className: 'framer-8j5uos',
+                                fonts: ['GF;Inter-500',],
+                                layoutDependency,
+                                layoutId: 'amGpC68_1',
+                                style: {
+                                  '--extracted-a0htzi': 'var(--token-1021654d-251a-4750-952b-de3f7005260e, rgb(136, 136, 136))',
+                                  '--framer-paragraph-spacing': '0px',
+                                },
+                                verticalAlignment: 'top',
+                                withExternalLayout: true,
+                              },),
+                            ],
                           },),
                         },),
-                        /* @__PURE__ */ _jsx19(motion17.div, {
-                          className: 'framer-wb7ge7',
+                      },),
+                      /* @__PURE__ */ _jsx18(motion17.div, {
+                        className: 'framer-phtzfv',
+                        layoutDependency,
+                        layoutId: 'IdV6UkkfJ',
+                        children: /* @__PURE__ */ _jsx18(motion17.div, {
+                          className: 'framer-13xtp2b',
                           layoutDependency,
-                          layoutId: 'oS8ota1PQ',
-                          children: /* @__PURE__ */ _jsx19(motion17.div, {
-                            className: 'framer-1f074bp',
+                          layoutId: 'PtEkJXu5c',
+                          children: /* @__PURE__ */ _jsxs10(motion17.div, {
+                            className: 'framer-ez5ras',
+                            'data-framer-name': 'Content',
                             layoutDependency,
-                            layoutId: 'aUC3FWRpf',
+                            layoutId: 'S78y9VDIj',
+                            children: [
+                              /* @__PURE__ */ _jsxs10(motion17.div, {
+                                className: 'framer-fb8c4p',
+                                layoutDependency,
+                                layoutId: 'Nu5EuYxjS',
+                                children: [
+                                  /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
+                                    children: /* @__PURE__ */ _jsx18(motion17.div, {
+                                      className: 'framer-1t4zmih-container',
+                                      layoutDependency,
+                                      layoutId: 'ci_oZjLpZ-container',
+                                      children: /* @__PURE__ */ _jsx18(Icon, {
+                                        color: 'rgb(255, 255, 255)',
+                                        height: '100%',
+                                        iconSearch: 'Home',
+                                        iconSelection: 'Topic',
+                                        iconStyle15: 'Filled',
+                                        iconStyle2: 'Filled',
+                                        iconStyle7: 'Filled',
+                                        id: 'ci_oZjLpZ',
+                                        layoutId: 'ci_oZjLpZ',
+                                        mirrored: false,
+                                        selectByList: true,
+                                        style: { height: '100%', width: '100%', },
+                                        width: '100%',
+                                      },),
+                                    },),
+                                  },),
+                                  /* @__PURE__ */ _jsx18(RichText9, {
+                                    __fromCanvasComponent: true,
+                                    children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                                      children: /* @__PURE__ */ _jsx18(motion17.h2, {
+                                        style: {
+                                          '--font-selector': 'R0Y7SW50ZXItNzAw',
+                                          '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
+                                          '--framer-font-weight': '700',
+                                          '--framer-letter-spacing': '-0.8px',
+                                          '--framer-line-height': '1.5em',
+                                          '--framer-text-alignment': 'left',
+                                          '--framer-text-color': 'var(--extracted-1of0zx5, rgb(255, 255, 255))',
+                                        },
+                                        children: 'Development Management',
+                                      },),
+                                    },),
+                                    className: 'framer-1smddtw',
+                                    fonts: ['GF;Inter-700',],
+                                    layoutDependency,
+                                    layoutId: 'YI4nAkvPz',
+                                    style: {
+                                      '--extracted-1of0zx5': 'rgb(255, 255, 255)',
+                                      '--framer-link-text-color': 'rgb(0, 153, 255)',
+                                      '--framer-link-text-decoration': 'underline',
+                                      '--framer-paragraph-spacing': '0px',
+                                    },
+                                    verticalAlignment: 'top',
+                                    withExternalLayout: true,
+                                  },),
+                                ],
+                              },),
+                              /* @__PURE__ */ _jsx18(RichText9, {
+                                __fromCanvasComponent: true,
+                                children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                                  children: /* @__PURE__ */ _jsx18(motion17.h3, {
+                                    style: {
+                                      '--font-selector': 'R0Y7SW50ZXItNTAw',
+                                      '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
+                                      '--framer-font-weight': '500',
+                                      '--framer-letter-spacing': '-0.5px',
+                                      '--framer-line-height': '1.4em',
+                                      '--framer-text-alignment': 'left',
+                                      '--framer-text-color':
+                                        'var(--extracted-a0htzi, var(--token-1021654d-251a-4750-952b-de3f7005260e, rgb(136, 136, 136)))',
+                                    },
+                                    children: 'Build and Version Control built in.',
+                                  },),
+                                },),
+                                className: 'framer-15u9wjh',
+                                fonts: ['GF;Inter-500',],
+                                layoutDependency,
+                                layoutId: 'OGhVHc6u9',
+                                style: {
+                                  '--extracted-a0htzi': 'var(--token-1021654d-251a-4750-952b-de3f7005260e, rgb(136, 136, 136))',
+                                  '--framer-paragraph-spacing': '0px',
+                                },
+                                verticalAlignment: 'top',
+                                withExternalLayout: true,
+                              },),
+                            ],
+                          },),
+                        },),
+                      },),
+                      /* @__PURE__ */ _jsx18(motion17.div, {
+                        className: 'framer-1bsyb1z',
+                        layoutDependency,
+                        layoutId: 'aFJ3i4Hn9',
+                        children: /* @__PURE__ */ _jsx18(motion17.div, {
+                          className: 'framer-2wv9l0',
+                          'data-framer-name': 'Content',
+                          layoutDependency,
+                          layoutId: 'LHzMS7YKC',
+                          children: /* @__PURE__ */ _jsx18(motion17.div, {
+                            className: 'framer-1gxn14o',
+                            layoutDependency,
+                            layoutId: 'JS9h73vYx',
                             children: /* @__PURE__ */ _jsxs10(motion17.div, {
-                              className: 'framer-13ew2pv',
+                              className: 'framer-ggrpo5',
                               'data-framer-name': 'Content',
                               layoutDependency,
-                              layoutId: 'xkTkgbaQN',
+                              layoutId: 'sm_NW_Mjm',
                               children: [
                                 /* @__PURE__ */ _jsxs10(motion17.div, {
-                                  className: 'framer-1opuvb7',
+                                  className: 'framer-18z8nzm',
                                   layoutDependency,
-                                  layoutId: 'GhEAQdJ_A',
+                                  layoutId: 'kkyHX918z',
                                   children: [
-                                    /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
-                                      children: /* @__PURE__ */ _jsx19(motion17.div, {
-                                        className: 'framer-jcsk01-container',
+                                    /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
+                                      children: /* @__PURE__ */ _jsx18(motion17.div, {
+                                        className: 'framer-17af5vf-container',
                                         layoutDependency,
-                                        layoutId: 'fmPr85zVq-container',
-                                        children: /* @__PURE__ */ _jsx19(Icon, {
+                                        layoutId: 'fl5EGp0hD-container',
+                                        children: /* @__PURE__ */ _jsx18(Icon, {
                                           color: 'rgb(255, 255, 255)',
                                           height: '100%',
                                           iconSearch: 'Home',
-                                          iconSelection: 'Lock',
+                                          iconSelection: 'Backup',
                                           iconStyle15: 'Filled',
                                           iconStyle2: 'Filled',
                                           iconStyle7: 'Filled',
-                                          id: 'fmPr85zVq',
-                                          layoutId: 'fmPr85zVq',
+                                          id: 'fl5EGp0hD',
+                                          layoutId: 'fl5EGp0hD',
                                           mirrored: false,
                                           selectByList: true,
                                           style: { height: '100%', width: '100%', },
@@ -24503,10 +24155,10 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                                         },),
                                       },),
                                     },),
-                                    /* @__PURE__ */ _jsx19(RichText9, {
+                                    /* @__PURE__ */ _jsx18(RichText9, {
                                       __fromCanvasComponent: true,
-                                      children: /* @__PURE__ */ _jsx19(React17.Fragment, {
-                                        children: /* @__PURE__ */ _jsx19(motion17.h2, {
+                                      children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                                        children: /* @__PURE__ */ _jsx18(motion17.h2, {
                                           style: {
                                             '--font-selector': 'R0Y7SW50ZXItNzAw',
                                             '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -24516,13 +24168,13 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                                             '--framer-text-alignment': 'left',
                                             '--framer-text-color': 'var(--extracted-1of0zx5, rgb(255, 255, 255))',
                                           },
-                                          children: 'No Server Management ',
+                                          children: 'Instant Rollbacks',
                                         },),
                                       },),
-                                      className: 'framer-sm7fv2',
+                                      className: 'framer-1ykr04m',
                                       fonts: ['GF;Inter-700',],
                                       layoutDependency,
-                                      layoutId: 'Y47s2bwTK',
+                                      layoutId: 'P2_k26WGG',
                                       style: {
                                         '--extracted-1of0zx5': 'rgb(255, 255, 255)',
                                         '--framer-link-text-color': 'rgb(0, 153, 255)',
@@ -24534,10 +24186,10 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                                     },),
                                   ],
                                 },),
-                                /* @__PURE__ */ _jsx19(RichText9, {
+                                /* @__PURE__ */ _jsx18(RichText9, {
                                   __fromCanvasComponent: true,
-                                  children: /* @__PURE__ */ _jsx19(React17.Fragment, {
-                                    children: /* @__PURE__ */ _jsx19(motion17.h3, {
+                                  children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                                    children: /* @__PURE__ */ _jsx18(motion17.h3, {
                                       style: {
                                         '--font-selector': 'R0Y7SW50ZXItNTAw',
                                         '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -24548,13 +24200,13 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                                         '--framer-text-color':
                                           'var(--extracted-a0htzi, var(--token-1021654d-251a-4750-952b-de3f7005260e, rgb(136, 136, 136)))',
                                       },
-                                      children: 'Autoscale your application instantly.',
+                                      children: 'DDoS Mitigation and rollbacks.',
                                     },),
                                   },),
-                                  className: 'framer-qc3fmc',
+                                  className: 'framer-yn5jo8',
                                   fonts: ['GF;Inter-500',],
                                   layoutDependency,
-                                  layoutId: 'U4Y8uhrXr',
+                                  layoutId: 'rGfsssIry',
                                   style: {
                                     '--extracted-a0htzi': 'var(--token-1021654d-251a-4750-952b-de3f7005260e, rgb(136, 136, 136))',
                                     '--framer-paragraph-spacing': '0px',
@@ -24566,217 +24218,321 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                             },),
                           },),
                         },),
-                        /* @__PURE__ */ _jsx19(motion17.div, {
-                          className: 'framer-1652jzq',
+                      },),
+                      /* @__PURE__ */ _jsx18(motion17.div, {
+                        className: 'framer-wb7ge7',
+                        layoutDependency,
+                        layoutId: 'oS8ota1PQ',
+                        children: /* @__PURE__ */ _jsx18(motion17.div, {
+                          className: 'framer-1f074bp',
                           layoutDependency,
-                          layoutId: 'QW6gAKIkY',
-                          children: /* @__PURE__ */ _jsx19(motion17.div, {
-                            className: 'framer-1uqyzgc',
+                          layoutId: 'aUC3FWRpf',
+                          children: /* @__PURE__ */ _jsxs10(motion17.div, {
+                            className: 'framer-13ew2pv',
+                            'data-framer-name': 'Content',
                             layoutDependency,
-                            layoutId: 'HEP9YACdA',
-                            children: /* @__PURE__ */ _jsxs10(motion17.div, {
-                              className: 'framer-3r9ihq',
-                              'data-framer-name': 'Content',
-                              layoutDependency,
-                              layoutId: 'jUgVPhwIj',
-                              children: [
-                                /* @__PURE__ */ _jsxs10(motion17.div, {
-                                  className: 'framer-1x4f373',
-                                  layoutDependency,
-                                  layoutId: 'jYdojZpAl',
-                                  children: [
-                                    /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
-                                      children: /* @__PURE__ */ _jsx19(motion17.div, {
-                                        className: 'framer-1pq5c66-container',
-                                        layoutDependency,
-                                        layoutId: 'yhrGFI3Mp-container',
-                                        children: /* @__PURE__ */ _jsx19(Icon, {
-                                          color: 'rgb(255, 255, 255)',
-                                          height: '100%',
-                                          iconSearch: 'Home',
-                                          iconSelection: 'Lock',
-                                          iconStyle15: 'Filled',
-                                          iconStyle2: 'Filled',
-                                          iconStyle7: 'Filled',
-                                          id: 'yhrGFI3Mp',
-                                          layoutId: 'yhrGFI3Mp',
-                                          mirrored: false,
-                                          selectByList: true,
-                                          style: { height: '100%', width: '100%', },
-                                          width: '100%',
-                                        },),
-                                      },),
-                                    },),
-                                    /* @__PURE__ */ _jsx19(RichText9, {
-                                      __fromCanvasComponent: true,
-                                      children: /* @__PURE__ */ _jsx19(React17.Fragment, {
-                                        children: /* @__PURE__ */ _jsx19(motion17.h2, {
-                                          style: {
-                                            '--font-selector': 'R0Y7SW50ZXItNzAw',
-                                            '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
-                                            '--framer-font-weight': '700',
-                                            '--framer-letter-spacing': '-0.8px',
-                                            '--framer-line-height': '1.5em',
-                                            '--framer-text-alignment': 'left',
-                                            '--framer-text-color': 'var(--extracted-1of0zx5, rgb(255, 255, 255))',
-                                          },
-                                          children: 'Usage Pricing',
-                                        },),
-                                      },),
-                                      className: 'framer-59tp0e',
-                                      fonts: ['GF;Inter-700',],
+                            layoutId: 'xkTkgbaQN',
+                            children: [
+                              /* @__PURE__ */ _jsxs10(motion17.div, {
+                                className: 'framer-1opuvb7',
+                                layoutDependency,
+                                layoutId: 'GhEAQdJ_A',
+                                children: [
+                                  /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
+                                    children: /* @__PURE__ */ _jsx18(motion17.div, {
+                                      className: 'framer-jcsk01-container',
                                       layoutDependency,
-                                      layoutId: 'qRAeJxZdY',
-                                      style: {
-                                        '--extracted-1of0zx5': 'rgb(255, 255, 255)',
-                                        '--framer-link-text-color': 'rgb(0, 153, 255)',
-                                        '--framer-link-text-decoration': 'underline',
-                                        '--framer-paragraph-spacing': '0px',
-                                      },
-                                      verticalAlignment: 'top',
-                                      withExternalLayout: true,
-                                    },),
-                                  ],
-                                },),
-                                /* @__PURE__ */ _jsx19(RichText9, {
-                                  __fromCanvasComponent: true,
-                                  children: /* @__PURE__ */ _jsx19(React17.Fragment, {
-                                    children: /* @__PURE__ */ _jsx19(motion17.h3, {
-                                      style: {
-                                        '--font-selector': 'R0Y7SW50ZXItNTAw',
-                                        '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
-                                        '--framer-font-weight': '500',
-                                        '--framer-letter-spacing': '-0.5px',
-                                        '--framer-line-height': '1.4em',
-                                        '--framer-text-alignment': 'left',
-                                        '--framer-text-color':
-                                          'var(--extracted-a0htzi, var(--token-1021654d-251a-4750-952b-de3f7005260e, rgb(136, 136, 136)))',
-                                      },
-                                      children: 'Only pay for what you use',
+                                      layoutId: 'fmPr85zVq-container',
+                                      children: /* @__PURE__ */ _jsx18(Icon, {
+                                        color: 'rgb(255, 255, 255)',
+                                        height: '100%',
+                                        iconSearch: 'Home',
+                                        iconSelection: 'Lock',
+                                        iconStyle15: 'Filled',
+                                        iconStyle2: 'Filled',
+                                        iconStyle7: 'Filled',
+                                        id: 'fmPr85zVq',
+                                        layoutId: 'fmPr85zVq',
+                                        mirrored: false,
+                                        selectByList: true,
+                                        style: { height: '100%', width: '100%', },
+                                        width: '100%',
+                                      },),
                                     },),
                                   },),
-                                  className: 'framer-1bkvn76',
-                                  fonts: ['GF;Inter-500',],
-                                  layoutDependency,
-                                  layoutId: 'CDDO7D7Aa',
-                                  style: {
-                                    '--extracted-a0htzi': 'var(--token-1021654d-251a-4750-952b-de3f7005260e, rgb(136, 136, 136))',
-                                    '--framer-paragraph-spacing': '0px',
-                                  },
-                                  verticalAlignment: 'top',
-                                  withExternalLayout: true,
+                                  /* @__PURE__ */ _jsx18(RichText9, {
+                                    __fromCanvasComponent: true,
+                                    children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                                      children: /* @__PURE__ */ _jsx18(motion17.h2, {
+                                        style: {
+                                          '--font-selector': 'R0Y7SW50ZXItNzAw',
+                                          '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
+                                          '--framer-font-weight': '700',
+                                          '--framer-letter-spacing': '-0.8px',
+                                          '--framer-line-height': '1.5em',
+                                          '--framer-text-alignment': 'left',
+                                          '--framer-text-color': 'var(--extracted-1of0zx5, rgb(255, 255, 255))',
+                                        },
+                                        children: 'No Server Management ',
+                                      },),
+                                    },),
+                                    className: 'framer-sm7fv2',
+                                    fonts: ['GF;Inter-700',],
+                                    layoutDependency,
+                                    layoutId: 'Y47s2bwTK',
+                                    style: {
+                                      '--extracted-1of0zx5': 'rgb(255, 255, 255)',
+                                      '--framer-link-text-color': 'rgb(0, 153, 255)',
+                                      '--framer-link-text-decoration': 'underline',
+                                      '--framer-paragraph-spacing': '0px',
+                                    },
+                                    verticalAlignment: 'top',
+                                    withExternalLayout: true,
+                                  },),
+                                ],
+                              },),
+                              /* @__PURE__ */ _jsx18(RichText9, {
+                                __fromCanvasComponent: true,
+                                children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                                  children: /* @__PURE__ */ _jsx18(motion17.h3, {
+                                    style: {
+                                      '--font-selector': 'R0Y7SW50ZXItNTAw',
+                                      '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
+                                      '--framer-font-weight': '500',
+                                      '--framer-letter-spacing': '-0.5px',
+                                      '--framer-line-height': '1.4em',
+                                      '--framer-text-alignment': 'left',
+                                      '--framer-text-color':
+                                        'var(--extracted-a0htzi, var(--token-1021654d-251a-4750-952b-de3f7005260e, rgb(136, 136, 136)))',
+                                    },
+                                    children: 'Autoscale your application instantly.',
+                                  },),
                                 },),
-                              ],
-                            },),
+                                className: 'framer-qc3fmc',
+                                fonts: ['GF;Inter-500',],
+                                layoutDependency,
+                                layoutId: 'U4Y8uhrXr',
+                                style: {
+                                  '--extracted-a0htzi': 'var(--token-1021654d-251a-4750-952b-de3f7005260e, rgb(136, 136, 136))',
+                                  '--framer-paragraph-spacing': '0px',
+                                },
+                                verticalAlignment: 'top',
+                                withExternalLayout: true,
+                              },),
+                            ],
                           },),
                         },),
-                        /* @__PURE__ */ _jsx19(motion17.div, {
-                          className: 'framer-a2rebs',
+                      },),
+                      /* @__PURE__ */ _jsx18(motion17.div, {
+                        className: 'framer-1652jzq',
+                        layoutDependency,
+                        layoutId: 'QW6gAKIkY',
+                        children: /* @__PURE__ */ _jsx18(motion17.div, {
+                          className: 'framer-1uqyzgc',
                           layoutDependency,
-                          layoutId: 'L9NkK7XRp',
-                          children: /* @__PURE__ */ _jsx19(motion17.div, {
-                            className: 'framer-g9qfix',
+                          layoutId: 'HEP9YACdA',
+                          children: /* @__PURE__ */ _jsxs10(motion17.div, {
+                            className: 'framer-3r9ihq',
+                            'data-framer-name': 'Content',
                             layoutDependency,
-                            layoutId: 'x8xNCGocg',
-                            children: /* @__PURE__ */ _jsxs10(motion17.div, {
-                              className: 'framer-7e0rqs',
-                              'data-framer-name': 'Content',
-                              layoutDependency,
-                              layoutId: 'cYWnhSD_U',
-                              children: [
-                                /* @__PURE__ */ _jsxs10(motion17.div, {
-                                  className: 'framer-1m8mc2d',
-                                  layoutDependency,
-                                  layoutId: 'GrD0v3xtV',
-                                  children: [
-                                    /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
-                                      children: /* @__PURE__ */ _jsx19(motion17.div, {
-                                        className: 'framer-122po8s-container',
-                                        layoutDependency,
-                                        layoutId: 'KE7TeiQrf-container',
-                                        children: /* @__PURE__ */ _jsx19(Icon, {
-                                          color: 'rgb(255, 255, 255)',
-                                          height: '100%',
-                                          iconSearch: 'Home',
-                                          iconSelection: 'Lock',
-                                          iconStyle15: 'Filled',
-                                          iconStyle2: 'Filled',
-                                          iconStyle7: 'Filled',
-                                          id: 'KE7TeiQrf',
-                                          layoutId: 'KE7TeiQrf',
-                                          mirrored: false,
-                                          selectByList: true,
-                                          style: { height: '100%', width: '100%', },
-                                          width: '100%',
-                                        },),
-                                      },),
-                                    },),
-                                    /* @__PURE__ */ _jsx19(RichText9, {
-                                      __fromCanvasComponent: true,
-                                      children: /* @__PURE__ */ _jsx19(React17.Fragment, {
-                                        children: /* @__PURE__ */ _jsx19(motion17.h2, {
-                                          style: {
-                                            '--font-selector': 'R0Y7SW50ZXItNzAw',
-                                            '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
-                                            '--framer-font-weight': '700',
-                                            '--framer-letter-spacing': '-0.8px',
-                                            '--framer-line-height': '1.5em',
-                                            '--framer-text-alignment': 'left',
-                                            '--framer-text-color': 'var(--extracted-1of0zx5, rgb(255, 255, 255))',
-                                          },
-                                          children: 'DDoS Mitigation',
-                                        },),
-                                      },),
-                                      className: 'framer-9ovo4l',
-                                      fonts: ['GF;Inter-700',],
+                            layoutId: 'jUgVPhwIj',
+                            children: [
+                              /* @__PURE__ */ _jsxs10(motion17.div, {
+                                className: 'framer-1x4f373',
+                                layoutDependency,
+                                layoutId: 'jYdojZpAl',
+                                children: [
+                                  /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
+                                    children: /* @__PURE__ */ _jsx18(motion17.div, {
+                                      className: 'framer-1pq5c66-container',
                                       layoutDependency,
-                                      layoutId: 'kqBrCVuuc',
-                                      style: {
-                                        '--extracted-1of0zx5': 'rgb(255, 255, 255)',
-                                        '--framer-link-text-color': 'rgb(0, 153, 255)',
-                                        '--framer-link-text-decoration': 'underline',
-                                        '--framer-paragraph-spacing': '0px',
-                                      },
-                                      verticalAlignment: 'top',
-                                      withExternalLayout: true,
-                                    },),
-                                  ],
-                                },),
-                                /* @__PURE__ */ _jsx19(RichText9, {
-                                  __fromCanvasComponent: true,
-                                  children: /* @__PURE__ */ _jsx19(React17.Fragment, {
-                                    children: /* @__PURE__ */ _jsx19(motion17.h3, {
-                                      style: {
-                                        '--font-selector': 'R0Y7SW50ZXItNTAw',
-                                        '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
-                                        '--framer-font-weight': '500',
-                                        '--framer-letter-spacing': '-0.5px',
-                                        '--framer-line-height': '1.4em',
-                                        '--framer-text-alignment': 'left',
-                                        '--framer-text-color':
-                                          'var(--extracted-a0htzi, var(--token-1021654d-251a-4750-952b-de3f7005260e, rgb(136, 136, 136)))',
-                                      },
-                                      children: 'DDoS Mitigation built in.',
+                                      layoutId: 'yhrGFI3Mp-container',
+                                      children: /* @__PURE__ */ _jsx18(Icon, {
+                                        color: 'rgb(255, 255, 255)',
+                                        height: '100%',
+                                        iconSearch: 'Home',
+                                        iconSelection: 'Lock',
+                                        iconStyle15: 'Filled',
+                                        iconStyle2: 'Filled',
+                                        iconStyle7: 'Filled',
+                                        id: 'yhrGFI3Mp',
+                                        layoutId: 'yhrGFI3Mp',
+                                        mirrored: false,
+                                        selectByList: true,
+                                        style: { height: '100%', width: '100%', },
+                                        width: '100%',
+                                      },),
                                     },),
                                   },),
-                                  className: 'framer-1b6qzsm',
-                                  fonts: ['GF;Inter-500',],
-                                  layoutDependency,
-                                  layoutId: 'U2_4Xwq6I',
-                                  style: {
-                                    '--extracted-a0htzi': 'var(--token-1021654d-251a-4750-952b-de3f7005260e, rgb(136, 136, 136))',
-                                    '--framer-paragraph-spacing': '0px',
-                                  },
-                                  verticalAlignment: 'top',
-                                  withExternalLayout: true,
+                                  /* @__PURE__ */ _jsx18(RichText9, {
+                                    __fromCanvasComponent: true,
+                                    children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                                      children: /* @__PURE__ */ _jsx18(motion17.h2, {
+                                        style: {
+                                          '--font-selector': 'R0Y7SW50ZXItNzAw',
+                                          '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
+                                          '--framer-font-weight': '700',
+                                          '--framer-letter-spacing': '-0.8px',
+                                          '--framer-line-height': '1.5em',
+                                          '--framer-text-alignment': 'left',
+                                          '--framer-text-color': 'var(--extracted-1of0zx5, rgb(255, 255, 255))',
+                                        },
+                                        children: 'Usage Pricing',
+                                      },),
+                                    },),
+                                    className: 'framer-59tp0e',
+                                    fonts: ['GF;Inter-700',],
+                                    layoutDependency,
+                                    layoutId: 'qRAeJxZdY',
+                                    style: {
+                                      '--extracted-1of0zx5': 'rgb(255, 255, 255)',
+                                      '--framer-link-text-color': 'rgb(0, 153, 255)',
+                                      '--framer-link-text-decoration': 'underline',
+                                      '--framer-paragraph-spacing': '0px',
+                                    },
+                                    verticalAlignment: 'top',
+                                    withExternalLayout: true,
+                                  },),
+                                ],
+                              },),
+                              /* @__PURE__ */ _jsx18(RichText9, {
+                                __fromCanvasComponent: true,
+                                children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                                  children: /* @__PURE__ */ _jsx18(motion17.h3, {
+                                    style: {
+                                      '--font-selector': 'R0Y7SW50ZXItNTAw',
+                                      '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
+                                      '--framer-font-weight': '500',
+                                      '--framer-letter-spacing': '-0.5px',
+                                      '--framer-line-height': '1.4em',
+                                      '--framer-text-alignment': 'left',
+                                      '--framer-text-color':
+                                        'var(--extracted-a0htzi, var(--token-1021654d-251a-4750-952b-de3f7005260e, rgb(136, 136, 136)))',
+                                    },
+                                    children: 'Only pay for what you use',
+                                  },),
                                 },),
-                              ],
-                            },),
+                                className: 'framer-1bkvn76',
+                                fonts: ['GF;Inter-500',],
+                                layoutDependency,
+                                layoutId: 'CDDO7D7Aa',
+                                style: {
+                                  '--extracted-a0htzi': 'var(--token-1021654d-251a-4750-952b-de3f7005260e, rgb(136, 136, 136))',
+                                  '--framer-paragraph-spacing': '0px',
+                                },
+                                verticalAlignment: 'top',
+                                withExternalLayout: true,
+                              },),
+                            ],
                           },),
                         },),
-                      ],
-                    },),
-                  ],
+                      },),
+                      /* @__PURE__ */ _jsx18(motion17.div, {
+                        className: 'framer-a2rebs',
+                        layoutDependency,
+                        layoutId: 'L9NkK7XRp',
+                        children: /* @__PURE__ */ _jsx18(motion17.div, {
+                          className: 'framer-g9qfix',
+                          layoutDependency,
+                          layoutId: 'x8xNCGocg',
+                          children: /* @__PURE__ */ _jsxs10(motion17.div, {
+                            className: 'framer-7e0rqs',
+                            'data-framer-name': 'Content',
+                            layoutDependency,
+                            layoutId: 'cYWnhSD_U',
+                            children: [
+                              /* @__PURE__ */ _jsxs10(motion17.div, {
+                                className: 'framer-1m8mc2d',
+                                layoutDependency,
+                                layoutId: 'GrD0v3xtV',
+                                children: [
+                                  /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
+                                    children: /* @__PURE__ */ _jsx18(motion17.div, {
+                                      className: 'framer-122po8s-container',
+                                      layoutDependency,
+                                      layoutId: 'KE7TeiQrf-container',
+                                      children: /* @__PURE__ */ _jsx18(Icon, {
+                                        color: 'rgb(255, 255, 255)',
+                                        height: '100%',
+                                        iconSearch: 'Home',
+                                        iconSelection: 'Lock',
+                                        iconStyle15: 'Filled',
+                                        iconStyle2: 'Filled',
+                                        iconStyle7: 'Filled',
+                                        id: 'KE7TeiQrf',
+                                        layoutId: 'KE7TeiQrf',
+                                        mirrored: false,
+                                        selectByList: true,
+                                        style: { height: '100%', width: '100%', },
+                                        width: '100%',
+                                      },),
+                                    },),
+                                  },),
+                                  /* @__PURE__ */ _jsx18(RichText9, {
+                                    __fromCanvasComponent: true,
+                                    children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                                      children: /* @__PURE__ */ _jsx18(motion17.h2, {
+                                        style: {
+                                          '--font-selector': 'R0Y7SW50ZXItNzAw',
+                                          '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
+                                          '--framer-font-weight': '700',
+                                          '--framer-letter-spacing': '-0.8px',
+                                          '--framer-line-height': '1.5em',
+                                          '--framer-text-alignment': 'left',
+                                          '--framer-text-color': 'var(--extracted-1of0zx5, rgb(255, 255, 255))',
+                                        },
+                                        children: 'DDoS Mitigation',
+                                      },),
+                                    },),
+                                    className: 'framer-9ovo4l',
+                                    fonts: ['GF;Inter-700',],
+                                    layoutDependency,
+                                    layoutId: 'kqBrCVuuc',
+                                    style: {
+                                      '--extracted-1of0zx5': 'rgb(255, 255, 255)',
+                                      '--framer-link-text-color': 'rgb(0, 153, 255)',
+                                      '--framer-link-text-decoration': 'underline',
+                                      '--framer-paragraph-spacing': '0px',
+                                    },
+                                    verticalAlignment: 'top',
+                                    withExternalLayout: true,
+                                  },),
+                                ],
+                              },),
+                              /* @__PURE__ */ _jsx18(RichText9, {
+                                __fromCanvasComponent: true,
+                                children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                                  children: /* @__PURE__ */ _jsx18(motion17.h3, {
+                                    style: {
+                                      '--font-selector': 'R0Y7SW50ZXItNTAw',
+                                      '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
+                                      '--framer-font-weight': '500',
+                                      '--framer-letter-spacing': '-0.5px',
+                                      '--framer-line-height': '1.4em',
+                                      '--framer-text-alignment': 'left',
+                                      '--framer-text-color':
+                                        'var(--extracted-a0htzi, var(--token-1021654d-251a-4750-952b-de3f7005260e, rgb(136, 136, 136)))',
+                                    },
+                                    children: 'DDoS Mitigation built in.',
+                                  },),
+                                },),
+                                className: 'framer-1b6qzsm',
+                                fonts: ['GF;Inter-500',],
+                                layoutDependency,
+                                layoutId: 'U2_4Xwq6I',
+                                style: {
+                                  '--extracted-a0htzi': 'var(--token-1021654d-251a-4750-952b-de3f7005260e, rgb(136, 136, 136))',
+                                  '--framer-paragraph-spacing': '0px',
+                                },
+                                verticalAlignment: 'top',
+                                withExternalLayout: true,
+                              },),
+                            ],
+                          },),
+                        },),
+                      },),
+                    ],
+                  },),
                 },),
               ],
             },),
@@ -24786,10 +24542,10 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
               layoutDependency,
               layoutId: 'y8ibTiCau',
               children: [
-                /* @__PURE__ */ _jsx19(RichText9, {
+                /* @__PURE__ */ _jsx18(RichText9, {
                   __fromCanvasComponent: true,
-                  children: /* @__PURE__ */ _jsx19(React17.Fragment, {
-                    children: /* @__PURE__ */ _jsx19(motion17.h3, {
+                  children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                    children: /* @__PURE__ */ _jsx18(motion17.h3, {
                       className: 'framer-styles-preset-jttjmp',
                       'data-styles-preset': 'zu841OiIg',
                       children: 'Run Rivet  anywhere or in your own cloud',
@@ -24809,8 +24565,8 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                   ...addPropertyOverrides12(
                     {
                       RuG5jmR5S: {
-                        children: /* @__PURE__ */ _jsx19(React17.Fragment, {
-                          children: /* @__PURE__ */ _jsx19(motion17.h3, {
+                        children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                          children: /* @__PURE__ */ _jsx18(motion17.h3, {
                             className: 'framer-styles-preset-jttjmp',
                             'data-styles-preset': 'zu841OiIg',
                             style: { '--framer-text-alignment': 'center', },
@@ -24828,7 +24584,7 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                   layoutDependency,
                   layoutId: 'BnMfdb2Qq',
                   children: [
-                    /* @__PURE__ */ _jsx19(Image5, {
+                    /* @__PURE__ */ _jsx18(Image5, {
                       background: {
                         alt: '',
                         fit: 'fit',
@@ -24845,7 +24601,7 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                       layoutDependency,
                       layoutId: 'oGm36hff_',
                     },),
-                    /* @__PURE__ */ _jsx19(Image5, {
+                    /* @__PURE__ */ _jsx18(Image5, {
                       background: {
                         alt: '',
                         fit: 'fit',
@@ -24862,7 +24618,7 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                       layoutDependency,
                       layoutId: 'QZmiCO_39',
                     },),
-                    /* @__PURE__ */ _jsx19(Image5, {
+                    /* @__PURE__ */ _jsx18(Image5, {
                       background: {
                         alt: '',
                         fit: 'fit',
@@ -24879,7 +24635,7 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                       layoutDependency,
                       layoutId: 'rB7ERX97q',
                     },),
-                    /* @__PURE__ */ _jsx19(Image5, {
+                    /* @__PURE__ */ _jsx18(Image5, {
                       background: {
                         alt: '',
                         fit: 'fit',
@@ -24898,8 +24654,30 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                       'data-framer-name': 'Logo',
                       layoutDependency,
                       layoutId: 'fKOSvknLJ',
+                      ...addPropertyOverrides12(
+                        {
+                          RuG5jmR5S: {
+                            background: {
+                              alt: '',
+                              fit: 'fit',
+                              intrinsicHeight: 92,
+                              intrinsicWidth: 272,
+                              pixelHeight: 92,
+                              pixelWidth: 272,
+                              positionX: 'center',
+                              positionY: 'center',
+                              sizes: '88.6957px',
+                              src: 'https://framerusercontent.com/images/NSNW0CTD6m1RXNPvLQgKWbK3z7o.png?scale-down-to=512',
+                              srcSet:
+                                'https://framerusercontent.com/images/NSNW0CTD6m1RXNPvLQgKWbK3z7o.png?scale-down-to=512 512w,https://framerusercontent.com/images/NSNW0CTD6m1RXNPvLQgKWbK3z7o.png?scale-down-to=1024 1024w,https://framerusercontent.com/images/NSNW0CTD6m1RXNPvLQgKWbK3z7o.png 1128w',
+                            },
+                          },
+                        },
+                        baseVariant,
+                        gestureVariant,
+                      ),
                     },),
-                    /* @__PURE__ */ _jsx19(Image5, {
+                    /* @__PURE__ */ _jsx18(Image5, {
                       background: {
                         alt: '',
                         fit: 'fit',
@@ -24918,19 +24696,19 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                     },),
                   ],
                 },),
-                /* @__PURE__ */ _jsx19(motion17.div, {
+                /* @__PURE__ */ _jsx18(motion17.div, {
                   className: 'framer-1gov77p',
                   layoutDependency,
                   layoutId: 'TgPwxwJhp',
-                  children: /* @__PURE__ */ _jsx19(ComponentViewportProvider7, {
+                  children: /* @__PURE__ */ _jsx18(ComponentViewportProvider7, {
                     height: 16,
                     width: '102px',
-                    children: /* @__PURE__ */ _jsx19(motion17.div, {
+                    children: /* @__PURE__ */ _jsx18(motion17.div, {
                       className: 'framer-1r6jtev-container',
                       layoutDependency,
                       layoutId: 'ube13MVnY-container',
                       whileHover: animation8,
-                      children: /* @__PURE__ */ _jsx19(stdin_default9, {
+                      children: /* @__PURE__ */ _jsx18(stdin_default9, {
                         height: '100%',
                         id: 'ube13MVnY',
                         layoutId: 'ube13MVnY',
@@ -24943,7 +24721,7 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                 },),
               ],
             },),
-            /* @__PURE__ */ _jsx19(motion17.div, {
+            /* @__PURE__ */ _jsx18(motion17.div, {
               className: 'framer-28b5pq',
               'data-framer-name': 'start riveting',
               layoutDependency,
@@ -24955,10 +24733,10 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                 layoutDependency,
                 layoutId: 'lDn_OXVXq',
                 children: [
-                  /* @__PURE__ */ _jsx19(RichText9, {
+                  /* @__PURE__ */ _jsx18(RichText9, {
                     __fromCanvasComponent: true,
-                    children: /* @__PURE__ */ _jsx19(React17.Fragment, {
-                      children: /* @__PURE__ */ _jsx19(motion17.h1, {
+                    children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                      children: /* @__PURE__ */ _jsx18(motion17.h1, {
                         style: {
                           '--font-selector': 'SW50ZXItQm9sZA==',
                           '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -24968,7 +24746,7 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                           '--framer-text-alignment': 'center',
                           '--framer-text-color': 'var(--extracted-gdpscs, rgb(255, 255, 255))',
                         },
-                        children: /* @__PURE__ */ _jsx19(motion17.span, {
+                        children: /* @__PURE__ */ _jsx18(motion17.span, {
                           'data-text-fill': 'true',
                           style: {
                             backgroundImage:
@@ -24993,18 +24771,18 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                     ...addPropertyOverrides12(
                       {
                         RuG5jmR5S: {
-                          children: /* @__PURE__ */ _jsx19(React17.Fragment, {
-                            children: /* @__PURE__ */ _jsx19(motion17.h1, {
+                          children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                            children: /* @__PURE__ */ _jsx18(motion17.h1, {
                               style: {
                                 '--font-selector': 'SW50ZXItQm9sZA==',
                                 '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
-                                '--framer-font-size': '50px',
+                                '--framer-font-size': '43px',
                                 '--framer-font-weight': '700',
                                 '--framer-letter-spacing': '-3.8px',
                                 '--framer-text-alignment': 'center',
                                 '--framer-text-color': 'var(--extracted-gdpscs, rgb(255, 255, 255))',
                               },
-                              children: /* @__PURE__ */ _jsx19(motion17.span, {
+                              children: /* @__PURE__ */ _jsx18(motion17.span, {
                                 'data-text-fill': 'true',
                                 style: {
                                   backgroundImage:
@@ -25020,7 +24798,7 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                       gestureVariant,
                     ),
                   },),
-                  /* @__PURE__ */ _jsx19(motion17.div, {
+                  /* @__PURE__ */ _jsx18(motion17.div, {
                     className: 'framer-orzwps',
                     'data-framer-name': 'Buttons',
                     layoutDependency,
@@ -25038,7 +24816,7 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                       optimized: true,
                       style: { transformPerspective: 1200, },
                       children: [
-                        /* @__PURE__ */ _jsx19(motion17.div, {
+                        /* @__PURE__ */ _jsx18(motion17.div, {
                           className: 'framer-ozb7f2',
                           'data-framer-name': 'Button',
                           layoutDependency,
@@ -25052,10 +24830,10 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                             boxShadow:
                               '0px 0.7065919983928324px 0.7065919983928324px -0.625px rgba(0, 0, 0, 0.14764), 0px 1.8065619053231785px 1.8065619053231785px -1.25px rgba(0, 0, 0, 0.14398), 0px 3.6217592146567767px 3.6217592146567767px -1.875px rgba(0, 0, 0, 0.13793), 0px 6.8655999097303715px 6.8655999097303715px -2.5px rgba(0, 0, 0, 0.12711), 0px 13.646761411524492px 13.646761411524492px -3.125px rgba(0, 0, 0, 0.10451), 0px 30px 30px -3.75px rgba(0, 0, 0, 0.05)',
                           },
-                          children: /* @__PURE__ */ _jsx19(RichText9, {
+                          children: /* @__PURE__ */ _jsx18(RichText9, {
                             __fromCanvasComponent: true,
-                            children: /* @__PURE__ */ _jsx19(React17.Fragment, {
-                              children: /* @__PURE__ */ _jsx19(motion17.p, {
+                            children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                              children: /* @__PURE__ */ _jsx18(motion17.p, {
                                 style: {
                                   '--font-selector': 'R0Y7SW50ZXItNjAw',
                                   '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -25082,7 +24860,7 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                             withExternalLayout: true,
                           },),
                         },),
-                        /* @__PURE__ */ _jsx19(motion17.div, {
+                        /* @__PURE__ */ _jsx18(motion17.div, {
                           className: 'framer-sjfbw4',
                           'data-framer-name': 'Button',
                           layoutDependency,
@@ -25096,10 +24874,10 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
                             boxShadow:
                               '0px 0.7065919983928324px 0.7065919983928324px -0.625px rgba(0, 0, 0, 0.14764), 0px 1.8065619053231785px 1.8065619053231785px -1.25px rgba(0, 0, 0, 0.14398), 0px 3.6217592146567767px 3.6217592146567767px -1.875px rgba(0, 0, 0, 0.13793), 0px 6.8655999097303715px 6.8655999097303715px -2.5px rgba(0, 0, 0, 0.12711), 0px 13.646761411524492px 13.646761411524492px -3.125px rgba(0, 0, 0, 0.10451), 0px 30px 30px -3.75px rgba(0, 0, 0, 0.05)',
                           },
-                          children: /* @__PURE__ */ _jsx19(RichText9, {
+                          children: /* @__PURE__ */ _jsx18(RichText9, {
                             __fromCanvasComponent: true,
-                            children: /* @__PURE__ */ _jsx19(React17.Fragment, {
-                              children: /* @__PURE__ */ _jsx19(motion17.p, {
+                            children: /* @__PURE__ */ _jsx18(React16.Fragment, {
+                              children: /* @__PURE__ */ _jsx18(motion17.p, {
                                 style: {
                                   '--font-selector': 'R0Y7SW50ZXItNjAw',
                                   '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
@@ -25140,130 +24918,158 @@ var Component12 = /* @__PURE__ */ React17.forwardRef(function (props, ref,) {
 },);
 var css17 = [
   '@supports (aspect-ratio: 1) { body { --framer-aspect-ratio-supported: auto; } }',
-  '.framer-2sMTS.framer-cygs1, .framer-2sMTS .framer-cygs1 { display: block; }',
-  '.framer-2sMTS.framer-fb2xo2 { align-content: center; align-items: center; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 0px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 1200px; }',
-  '.framer-2sMTS .framer-qdh2wp-container { flex: none; height: 1086px; left: 0px; min-height: 0px; position: absolute; right: 0px; top: 0px; z-index: 0; }',
-  '.framer-2sMTS .framer-1csjyj5 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; max-width: 1200px; min-width: 0%; overflow: hidden; padding: 71px 100px 20px 100px; position: relative; width: 1200px; }',
-  '.framer-2sMTS .framer-7dpnet { align-content: flex-start; align-items: flex-start; display: flex; flex: 1 0 0px; flex-direction: row; flex-wrap: nowrap; gap: 12px; height: min-content; justify-content: flex-start; max-width: 1200px; overflow: hidden; padding: 117px 0px 117px 0px; position: relative; width: 1px; }',
-  '.framer-2sMTS .framer-1mo0wlk { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 20px; height: 321px; justify-content: flex-start; overflow: hidden; padding: 0px; position: relative; width: 771px; }',
-  '.framer-2sMTS .framer-h1blye-container, .framer-2sMTS .framer-ps0uox-container, .framer-2sMTS .framer-1bgn3mo-container, .framer-2sMTS .framer-1vha8lw-container { flex: none; height: auto; position: relative; width: 100%; }',
-  '.framer-2sMTS .framer-ya3okc { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 20px; height: min-content; justify-content: flex-start; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-2sMTS .framer-1xlgoke-container, .framer-2sMTS .framer-ly6lyb-container { flex: none; height: 36px; position: relative; width: auto; }',
-  '.framer-2sMTS .framer-kbzal { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 0px; height: min-content; justify-content: center; max-width: 1200px; overflow: visible; padding: 85px 100px 85px 100px; position: relative; width: 1200px; }',
-  '.framer-2sMTS .framer-rb3yzr { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 0px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-2sMTS .framer-bst864 { display: grid; flex: none; gap: 17px; grid-auto-rows: min-content; grid-template-columns: repeat(3, minmax(200px, 1fr)); grid-template-rows: repeat(2, min-content); height: min-content; justify-content: center; max-width: 1000px; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-2sMTS .framer-1c5cyd1, .framer-2sMTS .framer-kezepa, .framer-2sMTS .framer-1pde9jt, .framer-2sMTS .framer-1gmjw3u, .framer-2sMTS .framer-phtzfv, .framer-2sMTS .framer-1bsyb1z, .framer-2sMTS .framer-wb7ge7, .framer-2sMTS .framer-1652jzq, .framer-2sMTS .framer-a2rebs { align-content: center; align-items: center; align-self: start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 30px; height: auto; justify-content: center; justify-self: start; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-2sMTS .framer-11shrbi-container, .framer-2sMTS .framer-nlgb42-container, .framer-2sMTS .framer-1rrzb1b-container { flex: none; height: 432px; position: relative; width: 100%; }',
-  '.framer-2sMTS .framer-1670yay, .framer-2sMTS .framer-1e6hs5w, .framer-2sMTS .framer-17i9u46 { align-content: center; align-items: center; align-self: start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 30px; grid-column: auto / span 2; height: auto; justify-content: center; justify-self: start; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-2sMTS .framer-8vqfe5 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: hidden; padding: 0px 40px 80px 40px; position: relative; width: 1200px; }',
-  '.framer-2sMTS .framer-14cen47 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 60px; height: min-content; justify-content: center; max-width: 1200px; overflow: hidden; padding: 85px 40px 85px 100px; position: relative; width: 100%; }',
-  '.framer-2sMTS .framer-1hwhirj { align-content: center; align-items: center; display: flex; flex: 1 0 0px; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; max-width: 1600px; overflow: hidden; padding: 0px; position: relative; width: 1px; }',
-  '.framer-2sMTS .framer-1pnmmgc { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 20px; height: min-content; justify-content: flex-start; overflow: hidden; padding: 0px; position: relative; width: 100%; z-index: 1; }',
-  '.framer-2sMTS .framer-1dsjsc { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: 73px; justify-content: flex-start; overflow: hidden; padding: 0px; position: relative; width: 502px; }',
-  '.framer-2sMTS .framer-pvnv6g, .framer-2sMTS .framer-1opp49l, .framer-2sMTS .framer-pntxy9 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 6px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
-  '.framer-2sMTS .framer-9xm5li-container, .framer-2sMTS .framer-1411rd3-container, .framer-2sMTS .framer-1o7zqv7-container, .framer-2sMTS .framer-1ui5nk4-container, .framer-2sMTS .framer-1t4zmih-container, .framer-2sMTS .framer-17af5vf-container, .framer-2sMTS .framer-jcsk01-container, .framer-2sMTS .framer-1pq5c66-container, .framer-2sMTS .framer-122po8s-container { flex: none; height: 12px; position: relative; width: 12px; }',
-  '.framer-2sMTS .framer-4oybr, .framer-2sMTS .framer-1ehzy0u, .framer-2sMTS .framer-1gri49i, .framer-2sMTS .framer-1smddtw, .framer-2sMTS .framer-1ykr04m, .framer-2sMTS .framer-sm7fv2, .framer-2sMTS .framer-59tp0e, .framer-2sMTS .framer-9ovo4l { flex: 1 0 0px; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 1px; word-break: break-word; word-wrap: break-word; }',
-  '.framer-2sMTS .framer-17e6tfv, .framer-2sMTS .framer-1gs284b, .framer-2sMTS .framer-1vx1cm1, .framer-2sMTS .framer-8j5uos, .framer-2sMTS .framer-15u9wjh, .framer-2sMTS .framer-yn5jo8, .framer-2sMTS .framer-qc3fmc, .framer-2sMTS .framer-1bkvn76, .framer-2sMTS .framer-1b6qzsm { flex: none; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 100%; word-break: break-word; word-wrap: break-word; }',
-  '.framer-2sMTS .framer-t5evmk-container { flex: none; height: 322px; max-width: 100%; position: relative; width: 100%; }',
-  '.framer-2sMTS .framer-6k9qjn-container, .framer-2sMTS .framer-lr4jr0-container, .framer-2sMTS .framer-2jdlln-container, .framer-2sMTS .framer-iy3ngw-container { height: 266px; position: relative; width: 200px; z-index: 1; }',
-  '.framer-2sMTS .framer-1ibuyg3 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 0px; height: min-content; justify-content: flex-start; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
-  '.framer-2sMTS .framer-1jmskuy-container, .framer-2sMTS .framer-1r6jtev-container { flex: none; height: 16px; position: relative; width: 102px; }',
-  '.framer-2sMTS .framer-1d4g1q4 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: hidden; padding: 0px 40px 0px 40px; position: relative; width: 1200px; }',
-  '.framer-2sMTS .framer-q9o3h6 { align-content: center; align-items: center; display: flex; flex: 1 0 0px; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: hidden; padding: 70px 40px 70px 40px; position: relative; width: 1px; }',
-  '.framer-2sMTS .framer-36ejs4 { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: 159px; justify-content: flex-start; overflow: hidden; padding: 0px; position: relative; width: 354px; }',
-  '.framer-2sMTS .framer-mpnwbq, .framer-2sMTS .framer-1d18i2k, .framer-2sMTS .framer-jl04gz { flex: none; height: auto; overflow: visible; position: relative; white-space: pre; width: auto; }',
-  '.framer-2sMTS .framer-yqoaue { flex: none; height: 96px; overflow: visible; position: relative; white-space: pre-wrap; width: 100%; word-break: break-word; word-wrap: break-word; }',
-  '.framer-2sMTS .framer-w8od71 { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 50px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: min-content; will-change: var(--framer-will-change-override, transform); }',
-  '.framer-2sMTS .framer-ze04js-container { flex: none; height: 396px; position: relative; width: 750px; z-index: 1; }',
-  '.framer-2sMTS .framer-adge1t { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 34px; height: min-content; justify-content: center; overflow: hidden; padding: 98px 0px 98px 0px; position: relative; width: 100%; }',
-  '.framer-2sMTS .framer-20ebjx { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
-  '.framer-2sMTS .framer-4g5qy0 { flex: none; height: 37px; overflow: visible; position: relative; white-space: pre-wrap; width: 100%; word-break: break-word; word-wrap: break-word; }',
-  '.framer-2sMTS .framer-sp5cxg-container { flex: none; height: 37px; position: relative; width: 542px; }',
-  '.framer-2sMTS .framer-xw2c5s, .framer-2sMTS .framer-inidr2, .framer-2sMTS .framer-1esmdhl { align-content: center; align-items: center; display: flex; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: min-content; }',
-  '.framer-2sMTS .framer-1dn6rse, .framer-2sMTS .framer-sts5wz { aspect-ratio: 1 / 1; flex: none; height: var(--framer-aspect-ratio-supported, 32px); position: relative; width: 32px; }',
-  '.framer-2sMTS .framer-nlhah3 { flex: none; height: 32px; position: relative; width: 32px; }',
-  '.framer-2sMTS .framer-uk1s4s { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 60px; height: min-content; justify-content: center; overflow: hidden; padding: 114px 40px 114px 40px; position: relative; width: 1200px; }',
-  '.framer-2sMTS .framer-t6r8lk { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 26%; }',
-  '.framer-2sMTS .framer-mgwi15 { flex: none; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 1000px; word-break: break-word; word-wrap: break-word; }',
-  '.framer-2sMTS .framer-5lagxh { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 25px; height: min-content; justify-content: center; overflow: hidden; padding: 0px 100px 0px 100px; position: relative; width: 100%; }',
-  '.framer-2sMTS .framer-mszazt { flex: none; height: 668px; overflow: hidden; position: relative; width: 1000px; }',
-  '.framer-2sMTS .framer-1yqat0r { align-content: center; align-items: center; aspect-ratio: 1.5649122807017544 / 1; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: var(--framer-aspect-ratio-supported, 786px); justify-content: center; left: 0px; overflow: visible; padding: 0px; position: absolute; right: -230px; top: -97px; z-index: 0; }',
-  '.framer-2sMTS .framer-xrjguc { align-content: center; align-items: center; aspect-ratio: 1.5649122807017544 / 1; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: 100%; justify-content: center; overflow: visible; padding: 0px; position: relative; width: var(--framer-aspect-ratio-supported, 1230px); }',
-  '.framer-2sMTS .framer-11v4wm2 { align-content: center; align-items: center; aspect-ratio: 1.5649122807017544 / 1; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 0px; height: var(--framer-aspect-ratio-supported, 847px); justify-content: center; left: -12px; overflow: visible; padding: 0px; position: absolute; right: -83px; top: 53%; z-index: 1; }',
-  '.framer-2sMTS .framer-17prusv { display: grid; flex: none; gap: 60px; grid-auto-rows: min-content; grid-template-columns: repeat(3, minmax(200px, 1fr)); grid-template-rows: repeat(2, min-content); height: min-content; justify-content: center; max-width: 1000px; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-2sMTS .framer-snnm7r, .framer-2sMTS .framer-13xtp2b, .framer-2sMTS .framer-1gxn14o, .framer-2sMTS .framer-1f074bp, .framer-2sMTS .framer-1uqyzgc, .framer-2sMTS .framer-g9qfix { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 11px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
-  '.framer-2sMTS .framer-3a391p, .framer-2sMTS .framer-ez5ras, .framer-2sMTS .framer-ggrpo5, .framer-2sMTS .framer-13ew2pv, .framer-2sMTS .framer-3r9ihq, .framer-2sMTS .framer-7e0rqs { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 2px; height: min-content; justify-content: center; padding: 0px; position: relative; width: 100%; }',
-  '.framer-2sMTS .framer-j08hmh, .framer-2sMTS .framer-fb8c4p, .framer-2sMTS .framer-18z8nzm, .framer-2sMTS .framer-1opuvb7, .framer-2sMTS .framer-1x4f373, .framer-2sMTS .framer-1m8mc2d { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
-  '.framer-2sMTS .framer-2wv9l0 { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; padding: 0px; position: relative; width: 100%; }',
-  '.framer-2sMTS .framer-8bi12y { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 30px; height: 377px; justify-content: center; overflow: hidden; padding: 100px 40px 100px 40px; position: relative; width: 1200px; }',
-  '.framer-2sMTS .framer-1q9k2e5 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: wrap; gap: 60px; height: min-content; justify-content: center; max-width: 100%; overflow: visible; padding: 0px; position: relative; width: 1000px; }',
-  '.framer-2sMTS .framer-lt549, .framer-2sMTS .framer-6gtmix, .framer-2sMTS .framer-r3i8my, .framer-2sMTS .framer-1hsqj1f, .framer-2sMTS .framer-1f0fhb3 { aspect-ratio: 2.9565217391304346 / 1; flex: none; height: var(--framer-aspect-ratio-supported, 46px); overflow: hidden; position: relative; width: 136px; }',
-  '.framer-2sMTS .framer-1gov77p { align-content: center; align-items: center; display: flex; flex: 1 0 0px; flex-direction: row; flex-wrap: nowrap; gap: 1px; height: 1px; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
-  '.framer-2sMTS .framer-28b5pq { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 0px; height: min-content; justify-content: center; overflow: visible; padding: 200px 40px 200px 40px; position: relative; width: 1200px; }',
-  '.framer-2sMTS .framer-162uwhi { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 30px; height: min-content; justify-content: center; max-width: 100%; overflow: visible; padding: 0px; position: relative; width: 1000px; }',
-  '.framer-2sMTS .framer-1a0aq52 { flex: none; height: auto; position: relative; white-space: pre-wrap; width: 100%; word-break: break-word; word-wrap: break-word; }',
-  '.framer-2sMTS .framer-orzwps { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 20px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: min-content; }',
-  '.framer-2sMTS .framer-1oxx4hb { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 20px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 380px; }',
-  '.framer-2sMTS .framer-ozb7f2, .framer-2sMTS .framer-sjfbw4 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: 36px; justify-content: center; overflow: visible; padding: 15px; position: relative; width: min-content; }',
-  '.framer-2sMTS .framer-cukhih, .framer-2sMTS .framer-1qk5l56 { flex: none; height: auto; position: relative; white-space: pre; width: auto; }',
-  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-2sMTS.framer-fb2xo2, .framer-2sMTS .framer-1csjyj5, .framer-2sMTS .framer-7dpnet, .framer-2sMTS .framer-1mo0wlk, .framer-2sMTS .framer-ya3okc, .framer-2sMTS .framer-kbzal, .framer-2sMTS .framer-rb3yzr, .framer-2sMTS .framer-1c5cyd1, .framer-2sMTS .framer-1670yay, .framer-2sMTS .framer-1e6hs5w, .framer-2sMTS .framer-kezepa, .framer-2sMTS .framer-1pde9jt, .framer-2sMTS .framer-17i9u46, .framer-2sMTS .framer-8vqfe5, .framer-2sMTS .framer-14cen47, .framer-2sMTS .framer-1hwhirj, .framer-2sMTS .framer-1pnmmgc, .framer-2sMTS .framer-1dsjsc, .framer-2sMTS .framer-pvnv6g, .framer-2sMTS .framer-1ibuyg3, .framer-2sMTS .framer-1d4g1q4, .framer-2sMTS .framer-q9o3h6, .framer-2sMTS .framer-36ejs4, .framer-2sMTS .framer-1opp49l, .framer-2sMTS .framer-w8od71, .framer-2sMTS .framer-adge1t, .framer-2sMTS .framer-20ebjx, .framer-2sMTS .framer-xw2c5s, .framer-2sMTS .framer-inidr2, .framer-2sMTS .framer-1esmdhl, .framer-2sMTS .framer-uk1s4s, .framer-2sMTS .framer-t6r8lk, .framer-2sMTS .framer-pntxy9, .framer-2sMTS .framer-5lagxh, .framer-2sMTS .framer-1yqat0r, .framer-2sMTS .framer-xrjguc, .framer-2sMTS .framer-11v4wm2, .framer-2sMTS .framer-1gmjw3u, .framer-2sMTS .framer-snnm7r, .framer-2sMTS .framer-3a391p, .framer-2sMTS .framer-j08hmh, .framer-2sMTS .framer-phtzfv, .framer-2sMTS .framer-13xtp2b, .framer-2sMTS .framer-ez5ras, .framer-2sMTS .framer-fb8c4p, .framer-2sMTS .framer-1bsyb1z, .framer-2sMTS .framer-2wv9l0, .framer-2sMTS .framer-1gxn14o, .framer-2sMTS .framer-ggrpo5, .framer-2sMTS .framer-18z8nzm, .framer-2sMTS .framer-wb7ge7, .framer-2sMTS .framer-1f074bp, .framer-2sMTS .framer-13ew2pv, .framer-2sMTS .framer-1opuvb7, .framer-2sMTS .framer-1652jzq, .framer-2sMTS .framer-1uqyzgc, .framer-2sMTS .framer-3r9ihq, .framer-2sMTS .framer-1x4f373, .framer-2sMTS .framer-a2rebs, .framer-2sMTS .framer-g9qfix, .framer-2sMTS .framer-7e0rqs, .framer-2sMTS .framer-1m8mc2d, .framer-2sMTS .framer-8bi12y, .framer-2sMTS .framer-1q9k2e5, .framer-2sMTS .framer-1gov77p, .framer-2sMTS .framer-28b5pq, .framer-2sMTS .framer-162uwhi, .framer-2sMTS .framer-orzwps, .framer-2sMTS .framer-1oxx4hb, .framer-2sMTS .framer-ozb7f2, .framer-2sMTS .framer-sjfbw4 { gap: 0px; } .framer-2sMTS.framer-fb2xo2 > *, .framer-2sMTS .framer-kbzal > *, .framer-2sMTS .framer-rb3yzr > *, .framer-2sMTS .framer-28b5pq > * { margin: 0px; margin-bottom: calc(0px / 2); margin-top: calc(0px / 2); } .framer-2sMTS.framer-fb2xo2 > :first-child, .framer-2sMTS .framer-1mo0wlk > :first-child, .framer-2sMTS .framer-kbzal > :first-child, .framer-2sMTS .framer-rb3yzr > :first-child, .framer-2sMTS .framer-1c5cyd1 > :first-child, .framer-2sMTS .framer-1670yay > :first-child, .framer-2sMTS .framer-1e6hs5w > :first-child, .framer-2sMTS .framer-kezepa > :first-child, .framer-2sMTS .framer-1pde9jt > :first-child, .framer-2sMTS .framer-17i9u46 > :first-child, .framer-2sMTS .framer-1hwhirj > :first-child, .framer-2sMTS .framer-1dsjsc > :first-child, .framer-2sMTS .framer-q9o3h6 > :first-child, .framer-2sMTS .framer-36ejs4 > :first-child, .framer-2sMTS .framer-w8od71 > :first-child, .framer-2sMTS .framer-adge1t > :first-child, .framer-2sMTS .framer-20ebjx > :first-child, .framer-2sMTS .framer-uk1s4s > :first-child, .framer-2sMTS .framer-t6r8lk > :first-child, .framer-2sMTS .framer-5lagxh > :first-child, .framer-2sMTS .framer-1gmjw3u > :first-child, .framer-2sMTS .framer-snnm7r > :first-child, .framer-2sMTS .framer-3a391p > :first-child, .framer-2sMTS .framer-phtzfv > :first-child, .framer-2sMTS .framer-13xtp2b > :first-child, .framer-2sMTS .framer-ez5ras > :first-child, .framer-2sMTS .framer-1bsyb1z > :first-child, .framer-2sMTS .framer-2wv9l0 > :first-child, .framer-2sMTS .framer-1gxn14o > :first-child, .framer-2sMTS .framer-ggrpo5 > :first-child, .framer-2sMTS .framer-wb7ge7 > :first-child, .framer-2sMTS .framer-1f074bp > :first-child, .framer-2sMTS .framer-13ew2pv > :first-child, .framer-2sMTS .framer-1652jzq > :first-child, .framer-2sMTS .framer-1uqyzgc > :first-child, .framer-2sMTS .framer-3r9ihq > :first-child, .framer-2sMTS .framer-a2rebs > :first-child, .framer-2sMTS .framer-g9qfix > :first-child, .framer-2sMTS .framer-7e0rqs > :first-child, .framer-2sMTS .framer-8bi12y > :first-child, .framer-2sMTS .framer-28b5pq > :first-child, .framer-2sMTS .framer-162uwhi > :first-child { margin-top: 0px; } .framer-2sMTS.framer-fb2xo2 > :last-child, .framer-2sMTS .framer-1mo0wlk > :last-child, .framer-2sMTS .framer-kbzal > :last-child, .framer-2sMTS .framer-rb3yzr > :last-child, .framer-2sMTS .framer-1c5cyd1 > :last-child, .framer-2sMTS .framer-1670yay > :last-child, .framer-2sMTS .framer-1e6hs5w > :last-child, .framer-2sMTS .framer-kezepa > :last-child, .framer-2sMTS .framer-1pde9jt > :last-child, .framer-2sMTS .framer-17i9u46 > :last-child, .framer-2sMTS .framer-1hwhirj > :last-child, .framer-2sMTS .framer-1dsjsc > :last-child, .framer-2sMTS .framer-q9o3h6 > :last-child, .framer-2sMTS .framer-36ejs4 > :last-child, .framer-2sMTS .framer-w8od71 > :last-child, .framer-2sMTS .framer-adge1t > :last-child, .framer-2sMTS .framer-20ebjx > :last-child, .framer-2sMTS .framer-uk1s4s > :last-child, .framer-2sMTS .framer-t6r8lk > :last-child, .framer-2sMTS .framer-5lagxh > :last-child, .framer-2sMTS .framer-1gmjw3u > :last-child, .framer-2sMTS .framer-snnm7r > :last-child, .framer-2sMTS .framer-3a391p > :last-child, .framer-2sMTS .framer-phtzfv > :last-child, .framer-2sMTS .framer-13xtp2b > :last-child, .framer-2sMTS .framer-ez5ras > :last-child, .framer-2sMTS .framer-1bsyb1z > :last-child, .framer-2sMTS .framer-2wv9l0 > :last-child, .framer-2sMTS .framer-1gxn14o > :last-child, .framer-2sMTS .framer-ggrpo5 > :last-child, .framer-2sMTS .framer-wb7ge7 > :last-child, .framer-2sMTS .framer-1f074bp > :last-child, .framer-2sMTS .framer-13ew2pv > :last-child, .framer-2sMTS .framer-1652jzq > :last-child, .framer-2sMTS .framer-1uqyzgc > :last-child, .framer-2sMTS .framer-3r9ihq > :last-child, .framer-2sMTS .framer-a2rebs > :last-child, .framer-2sMTS .framer-g9qfix > :last-child, .framer-2sMTS .framer-7e0rqs > :last-child, .framer-2sMTS .framer-8bi12y > :last-child, .framer-2sMTS .framer-28b5pq > :last-child, .framer-2sMTS .framer-162uwhi > :last-child { margin-bottom: 0px; } .framer-2sMTS .framer-1csjyj5 > *, .framer-2sMTS .framer-8vqfe5 > *, .framer-2sMTS .framer-1d4g1q4 > *, .framer-2sMTS .framer-xw2c5s > *, .framer-2sMTS .framer-inidr2 > *, .framer-2sMTS .framer-1esmdhl > *, .framer-2sMTS .framer-1yqat0r > *, .framer-2sMTS .framer-xrjguc > *, .framer-2sMTS .framer-j08hmh > *, .framer-2sMTS .framer-fb8c4p > *, .framer-2sMTS .framer-18z8nzm > *, .framer-2sMTS .framer-1opuvb7 > *, .framer-2sMTS .framer-1x4f373 > *, .framer-2sMTS .framer-1m8mc2d > *, .framer-2sMTS .framer-ozb7f2 > *, .framer-2sMTS .framer-sjfbw4 > * { margin: 0px; margin-left: calc(10px / 2); margin-right: calc(10px / 2); } .framer-2sMTS .framer-1csjyj5 > :first-child, .framer-2sMTS .framer-7dpnet > :first-child, .framer-2sMTS .framer-ya3okc > :first-child, .framer-2sMTS .framer-8vqfe5 > :first-child, .framer-2sMTS .framer-14cen47 > :first-child, .framer-2sMTS .framer-1pnmmgc > :first-child, .framer-2sMTS .framer-pvnv6g > :first-child, .framer-2sMTS .framer-1ibuyg3 > :first-child, .framer-2sMTS .framer-1d4g1q4 > :first-child, .framer-2sMTS .framer-1opp49l > :first-child, .framer-2sMTS .framer-xw2c5s > :first-child, .framer-2sMTS .framer-inidr2 > :first-child, .framer-2sMTS .framer-1esmdhl > :first-child, .framer-2sMTS .framer-pntxy9 > :first-child, .framer-2sMTS .framer-1yqat0r > :first-child, .framer-2sMTS .framer-xrjguc > :first-child, .framer-2sMTS .framer-11v4wm2 > :first-child, .framer-2sMTS .framer-j08hmh > :first-child, .framer-2sMTS .framer-fb8c4p > :first-child, .framer-2sMTS .framer-18z8nzm > :first-child, .framer-2sMTS .framer-1opuvb7 > :first-child, .framer-2sMTS .framer-1x4f373 > :first-child, .framer-2sMTS .framer-1m8mc2d > :first-child, .framer-2sMTS .framer-1q9k2e5 > :first-child, .framer-2sMTS .framer-1gov77p > :first-child, .framer-2sMTS .framer-orzwps > :first-child, .framer-2sMTS .framer-1oxx4hb > :first-child, .framer-2sMTS .framer-ozb7f2 > :first-child, .framer-2sMTS .framer-sjfbw4 > :first-child { margin-left: 0px; } .framer-2sMTS .framer-1csjyj5 > :last-child, .framer-2sMTS .framer-7dpnet > :last-child, .framer-2sMTS .framer-ya3okc > :last-child, .framer-2sMTS .framer-8vqfe5 > :last-child, .framer-2sMTS .framer-14cen47 > :last-child, .framer-2sMTS .framer-1pnmmgc > :last-child, .framer-2sMTS .framer-pvnv6g > :last-child, .framer-2sMTS .framer-1ibuyg3 > :last-child, .framer-2sMTS .framer-1d4g1q4 > :last-child, .framer-2sMTS .framer-1opp49l > :last-child, .framer-2sMTS .framer-xw2c5s > :last-child, .framer-2sMTS .framer-inidr2 > :last-child, .framer-2sMTS .framer-1esmdhl > :last-child, .framer-2sMTS .framer-pntxy9 > :last-child, .framer-2sMTS .framer-1yqat0r > :last-child, .framer-2sMTS .framer-xrjguc > :last-child, .framer-2sMTS .framer-11v4wm2 > :last-child, .framer-2sMTS .framer-j08hmh > :last-child, .framer-2sMTS .framer-fb8c4p > :last-child, .framer-2sMTS .framer-18z8nzm > :last-child, .framer-2sMTS .framer-1opuvb7 > :last-child, .framer-2sMTS .framer-1x4f373 > :last-child, .framer-2sMTS .framer-1m8mc2d > :last-child, .framer-2sMTS .framer-1q9k2e5 > :last-child, .framer-2sMTS .framer-1gov77p > :last-child, .framer-2sMTS .framer-orzwps > :last-child, .framer-2sMTS .framer-1oxx4hb > :last-child, .framer-2sMTS .framer-ozb7f2 > :last-child, .framer-2sMTS .framer-sjfbw4 > :last-child { margin-right: 0px; } .framer-2sMTS .framer-7dpnet > * { margin: 0px; margin-left: calc(12px / 2); margin-right: calc(12px / 2); } .framer-2sMTS .framer-1mo0wlk > * { margin: 0px; margin-bottom: calc(20px / 2); margin-top: calc(20px / 2); } .framer-2sMTS .framer-ya3okc > *, .framer-2sMTS .framer-1pnmmgc > *, .framer-2sMTS .framer-orzwps > *, .framer-2sMTS .framer-1oxx4hb > * { margin: 0px; margin-left: calc(20px / 2); margin-right: calc(20px / 2); } .framer-2sMTS .framer-1c5cyd1 > *, .framer-2sMTS .framer-1670yay > *, .framer-2sMTS .framer-1e6hs5w > *, .framer-2sMTS .framer-kezepa > *, .framer-2sMTS .framer-1pde9jt > *, .framer-2sMTS .framer-17i9u46 > *, .framer-2sMTS .framer-1gmjw3u > *, .framer-2sMTS .framer-phtzfv > *, .framer-2sMTS .framer-1bsyb1z > *, .framer-2sMTS .framer-wb7ge7 > *, .framer-2sMTS .framer-1652jzq > *, .framer-2sMTS .framer-a2rebs > *, .framer-2sMTS .framer-8bi12y > *, .framer-2sMTS .framer-162uwhi > * { margin: 0px; margin-bottom: calc(30px / 2); margin-top: calc(30px / 2); } .framer-2sMTS .framer-14cen47 > *, .framer-2sMTS .framer-1q9k2e5 > * { margin: 0px; margin-left: calc(60px / 2); margin-right: calc(60px / 2); } .framer-2sMTS .framer-1hwhirj > *, .framer-2sMTS .framer-1dsjsc > *, .framer-2sMTS .framer-q9o3h6 > *, .framer-2sMTS .framer-36ejs4 > *, .framer-2sMTS .framer-20ebjx > *, .framer-2sMTS .framer-t6r8lk > *, .framer-2sMTS .framer-2wv9l0 > * { margin: 0px; margin-bottom: calc(10px / 2); margin-top: calc(10px / 2); } .framer-2sMTS .framer-pvnv6g > *, .framer-2sMTS .framer-1opp49l > *, .framer-2sMTS .framer-pntxy9 > * { margin: 0px; margin-left: calc(6px / 2); margin-right: calc(6px / 2); } .framer-2sMTS .framer-1ibuyg3 > *, .framer-2sMTS .framer-11v4wm2 > * { margin: 0px; margin-left: calc(0px / 2); margin-right: calc(0px / 2); } .framer-2sMTS .framer-w8od71 > * { margin: 0px; margin-bottom: calc(50px / 2); margin-top: calc(50px / 2); } .framer-2sMTS .framer-adge1t > * { margin: 0px; margin-bottom: calc(34px / 2); margin-top: calc(34px / 2); } .framer-2sMTS .framer-uk1s4s > * { margin: 0px; margin-bottom: calc(60px / 2); margin-top: calc(60px / 2); } .framer-2sMTS .framer-5lagxh > * { margin: 0px; margin-bottom: calc(25px / 2); margin-top: calc(25px / 2); } .framer-2sMTS .framer-snnm7r > *, .framer-2sMTS .framer-13xtp2b > *, .framer-2sMTS .framer-1gxn14o > *, .framer-2sMTS .framer-1f074bp > *, .framer-2sMTS .framer-1uqyzgc > *, .framer-2sMTS .framer-g9qfix > * { margin: 0px; margin-bottom: calc(11px / 2); margin-top: calc(11px / 2); } .framer-2sMTS .framer-3a391p > *, .framer-2sMTS .framer-ez5ras > *, .framer-2sMTS .framer-ggrpo5 > *, .framer-2sMTS .framer-13ew2pv > *, .framer-2sMTS .framer-3r9ihq > *, .framer-2sMTS .framer-7e0rqs > * { margin: 0px; margin-bottom: calc(2px / 2); margin-top: calc(2px / 2); } .framer-2sMTS .framer-1gov77p > * { margin: 0px; margin-left: calc(1px / 2); margin-right: calc(1px / 2); } }',
-  '.framer-2sMTS.framer-v-1hv2o6j.framer-fb2xo2 { width: 810px; }',
-  '.framer-2sMTS.framer-v-1hv2o6j .framer-1mo0wlk { height: 395px; width: min-content; }',
-  '.framer-2sMTS.framer-v-1hv2o6j .framer-h1blye-container { width: auto; }',
-  '.framer-2sMTS.framer-v-1hv2o6j .framer-ya3okc { width: 612px; }',
-  '.framer-2sMTS.framer-v-1hv2o6j .framer-bst864 { grid-template-columns: repeat(2, minmax(200px, 1fr)); }',
-  '.framer-2sMTS.framer-v-1hv2o6j .framer-1670yay, .framer-2sMTS.framer-v-1hv2o6j .framer-1e6hs5w, .framer-2sMTS.framer-v-1hv2o6j .framer-17i9u46 { grid-column: unset; }',
-  '.framer-2sMTS.framer-v-1hv2o6j .framer-14cen47 { padding: 85px 100px 85px 100px; }',
-  '.framer-2sMTS.framer-v-1hv2o6j .framer-4g5qy0 { height: 74px; }',
-  '.framer-2sMTS.framer-v-1hv2o6j .framer-t6r8lk { width: 84%; }',
-  '.framer-2sMTS.framer-v-1hv2o6j .framer-1yqat0r { height: var(--framer-aspect-ratio-supported, 785px); }',
-  '.framer-2sMTS.framer-v-1hv2o6j .framer-xrjguc, .framer-2sMTS.framer-v-1vd12yp .framer-xrjguc { width: var(--framer-aspect-ratio-supported, 313px); }',
-  '.framer-2sMTS.framer-v-1hv2o6j .framer-11v4wm2, .framer-2sMTS.framer-v-1vd12yp .framer-11v4wm2 { height: var(--framer-aspect-ratio-supported, 786px); }',
-  '.framer-2sMTS.framer-v-1hv2o6j .framer-8bi12y { height: min-content; padding: 80px 40px 80px 40px; }',
-  '.framer-2sMTS.framer-v-1hv2o6j .framer-1oxx4hb { width: 342px; }',
-  '.framer-2sMTS.framer-v-1vd12yp.framer-fb2xo2 { width: 390px; }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-qdh2wp-container { height: 645px; }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-1csjyj5 { padding: 20px 20px 0px 20px; width: 120000%; }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-7dpnet { padding: 0px; }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-1mo0wlk { flex-wrap: wrap; height: 377px; width: 100%; }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-kbzal { padding: 0px 40px 85px 40px; }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-bst864 { grid-template-columns: repeat(1, minmax(200px, 1fr)); }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-1670yay, .framer-2sMTS.framer-v-1vd12yp .framer-1e6hs5w, .framer-2sMTS.framer-v-1vd12yp .framer-17i9u46 { grid-column: auto / span 1; }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-8vqfe5 { padding: 0px 40px 40px 40px; }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-14cen47 { padding: 85px 0px 85px 0px; }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-1dsjsc { height: 164px; width: 100%; }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-1d4g1q4 { padding: 0px 5px 0px 5px; }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-q9o3h6 { padding: 70px 0px 70px 0px; }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-w8od71 { height: 479px; width: 100%; }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-ze04js-container { height: auto; width: 100%; }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-adge1t { gap: 0px; padding: 54px 0px 54px 0px; }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-20ebjx, .framer-2sMTS.framer-v-1vd12yp .framer-ozb7f2 { order: 0; }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-4g5qy0 { height: 153px; }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-sp5cxg-container { order: 1; width: 227px; }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-uk1s4s { gap: 0px; padding: 33px 40px 33px 40px; }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-t6r8lk { width: 101%; }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-1d18i2k { white-space: pre-wrap; width: 314px; word-break: break-word; word-wrap: break-word; }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-mszazt { height: 243px; order: 0; width: 287px; }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-1yqat0r { bottom: 10px; height: var(--framer-aspect-ratio-supported, 185px); right: -2px; top: unset; }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-17prusv { grid-template-columns: repeat(1, minmax(200px, 1fr)); order: 1; }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-8bi12y { height: 474px; padding: 60px 20px 60px 20px; }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-jl04gz { white-space: pre-wrap; width: 100%; word-break: break-word; word-wrap: break-word; }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-1oxx4hb { width: 298px; }',
-  '.framer-2sMTS.framer-v-1vd12yp .framer-sjfbw4 { order: 1; }',
-  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-2sMTS.framer-v-1vd12yp .framer-adge1t, .framer-2sMTS.framer-v-1vd12yp .framer-uk1s4s { gap: 0px; } .framer-2sMTS.framer-v-1vd12yp .framer-adge1t > *, .framer-2sMTS.framer-v-1vd12yp .framer-uk1s4s > * { margin: 0px; margin-bottom: calc(0px / 2); margin-top: calc(0px / 2); } .framer-2sMTS.framer-v-1vd12yp .framer-adge1t > :first-child, .framer-2sMTS.framer-v-1vd12yp .framer-uk1s4s > :first-child { margin-top: 0px; } .framer-2sMTS.framer-v-1vd12yp .framer-adge1t > :last-child, .framer-2sMTS.framer-v-1vd12yp .framer-uk1s4s > :last-child { margin-bottom: 0px; } }',
-  ...css3,
+  '.framer-NWdLO.framer-cygs1, .framer-NWdLO .framer-cygs1 { display: block; }',
+  '.framer-NWdLO.framer-fb2xo2 { align-content: center; align-items: center; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 0px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 1200px; }',
+  '.framer-NWdLO .framer-qdh2wp-container { flex: none; height: 1086px; left: 0px; min-height: 0px; position: absolute; right: 0px; top: 0px; z-index: 0; }',
+  '.framer-NWdLO .framer-1csjyj5 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; max-width: 1200px; min-width: 0%; overflow: hidden; padding: 71px 100px 20px 100px; position: relative; width: 1200px; }',
+  '.framer-NWdLO .framer-7dpnet { align-content: flex-start; align-items: flex-start; display: flex; flex: 1 0 0px; flex-direction: row; flex-wrap: nowrap; gap: 12px; height: min-content; justify-content: flex-start; max-width: 1200px; overflow: hidden; padding: 117px 0px 117px 0px; position: relative; width: 1px; }',
+  '.framer-NWdLO .framer-1mo0wlk { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 20px; height: 321px; justify-content: flex-start; overflow: hidden; padding: 0px; position: relative; width: 771px; }',
+  '.framer-NWdLO .framer-h1blye-container, .framer-NWdLO .framer-wd4t81-container, .framer-NWdLO .framer-ps0uox-container, .framer-NWdLO .framer-1bgn3mo-container, .framer-NWdLO .framer-1vha8lw-container { flex: none; height: auto; position: relative; width: 100%; }',
+  '.framer-NWdLO .framer-ya3okc { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 20px; height: min-content; justify-content: flex-start; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-NWdLO .framer-1xlgoke-container, .framer-NWdLO .framer-ly6lyb-container, .framer-NWdLO .framer-arci8a-container, .framer-NWdLO .framer-1jq77gp-container { flex: none; height: 36px; position: relative; width: auto; }',
+  '.framer-NWdLO .framer-x2wyxl { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; max-width: 1200px; min-width: 0%; overflow: hidden; padding: 72px 20px 0px 20px; position: relative; width: 100%; }',
+  '.framer-NWdLO .framer-21vdse { align-content: flex-start; align-items: flex-start; display: flex; flex: 1 0 0px; flex-direction: row; flex-wrap: nowrap; gap: 12px; height: min-content; justify-content: flex-start; max-width: 1200px; overflow: hidden; padding: 0px; position: relative; width: 1px; }',
+  '.framer-NWdLO .framer-ec3ga6 { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: wrap; gap: 20px; height: 377px; justify-content: flex-start; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
+  '.framer-NWdLO .framer-1a7cok7 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 20px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-NWdLO .framer-kbzal { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 0px; height: min-content; justify-content: center; max-width: 1200px; overflow: visible; padding: 85px 100px 85px 100px; position: relative; width: 1200px; }',
+  '.framer-NWdLO .framer-rb3yzr { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 0px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-NWdLO .framer-bst864 { display: grid; flex: none; gap: 17px; grid-auto-rows: min-content; grid-template-columns: repeat(3, minmax(200px, 1fr)); grid-template-rows: repeat(2, min-content); height: min-content; justify-content: center; max-width: 1000px; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-NWdLO .framer-1c5cyd1, .framer-NWdLO .framer-kezepa, .framer-NWdLO .framer-1pde9jt, .framer-NWdLO .framer-1gmjw3u, .framer-NWdLO .framer-phtzfv, .framer-NWdLO .framer-1bsyb1z, .framer-NWdLO .framer-wb7ge7, .framer-NWdLO .framer-1652jzq, .framer-NWdLO .framer-a2rebs { align-content: center; align-items: center; align-self: start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 30px; height: auto; justify-content: center; justify-self: start; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-NWdLO .framer-11shrbi-container, .framer-NWdLO .framer-nlgb42-container, .framer-NWdLO .framer-1rrzb1b-container { flex: none; height: 432px; position: relative; width: 100%; }',
+  '.framer-NWdLO .framer-1670yay, .framer-NWdLO .framer-1e6hs5w, .framer-NWdLO .framer-17i9u46 { align-content: center; align-items: center; align-self: start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 30px; grid-column: auto / span 2; height: auto; justify-content: center; justify-self: start; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-NWdLO .framer-8vqfe5 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: hidden; padding: 0px 40px 80px 40px; position: relative; width: 1200px; }',
+  '.framer-NWdLO .framer-14cen47 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 60px; height: min-content; justify-content: center; max-width: 1200px; overflow: hidden; padding: 85px 40px 85px 100px; position: relative; width: 100%; }',
+  '.framer-NWdLO .framer-1hwhirj { align-content: center; align-items: center; display: flex; flex: 1 0 0px; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; max-width: 1600px; overflow: hidden; padding: 0px; position: relative; width: 1px; }',
+  '.framer-NWdLO .framer-1pnmmgc { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 20px; height: min-content; justify-content: flex-start; overflow: hidden; padding: 0px; position: relative; width: 100%; z-index: 1; }',
+  '.framer-NWdLO .framer-1dsjsc { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: 73px; justify-content: flex-start; overflow: hidden; padding: 0px; position: relative; width: 502px; }',
+  '.framer-NWdLO .framer-pvnv6g, .framer-NWdLO .framer-1opp49l, .framer-NWdLO .framer-pntxy9 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 6px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
+  '.framer-NWdLO .framer-9xm5li-container, .framer-NWdLO .framer-1411rd3-container, .framer-NWdLO .framer-1o7zqv7-container, .framer-NWdLO .framer-1ui5nk4-container, .framer-NWdLO .framer-1t4zmih-container, .framer-NWdLO .framer-17af5vf-container, .framer-NWdLO .framer-jcsk01-container, .framer-NWdLO .framer-1pq5c66-container, .framer-NWdLO .framer-122po8s-container { flex: none; height: 12px; position: relative; width: 12px; }',
+  '.framer-NWdLO .framer-4oybr, .framer-NWdLO .framer-1ehzy0u, .framer-NWdLO .framer-1gri49i, .framer-NWdLO .framer-1smddtw, .framer-NWdLO .framer-1ykr04m, .framer-NWdLO .framer-sm7fv2, .framer-NWdLO .framer-59tp0e, .framer-NWdLO .framer-9ovo4l { flex: 1 0 0px; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 1px; word-break: break-word; word-wrap: break-word; }',
+  '.framer-NWdLO .framer-17e6tfv, .framer-NWdLO .framer-1gs284b, .framer-NWdLO .framer-1vx1cm1, .framer-NWdLO .framer-8j5uos, .framer-NWdLO .framer-15u9wjh, .framer-NWdLO .framer-yn5jo8, .framer-NWdLO .framer-qc3fmc, .framer-NWdLO .framer-1bkvn76, .framer-NWdLO .framer-1b6qzsm { flex: none; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 100%; word-break: break-word; word-wrap: break-word; }',
+  '.framer-NWdLO .framer-t5evmk-container { flex: none; height: 322px; max-width: 100%; position: relative; width: 100%; }',
+  '.framer-NWdLO .framer-6k9qjn-container, .framer-NWdLO .framer-lr4jr0-container, .framer-NWdLO .framer-2jdlln-container, .framer-NWdLO .framer-iy3ngw-container { height: 266px; position: relative; width: 200px; z-index: 1; }',
+  '.framer-NWdLO .framer-1ibuyg3 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 0px; height: min-content; justify-content: flex-start; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
+  '.framer-NWdLO .framer-1jmskuy-container, .framer-NWdLO .framer-1r6jtev-container { flex: none; height: 16px; position: relative; width: 102px; }',
+  '.framer-NWdLO .framer-1d4g1q4 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: hidden; padding: 0px 40px 0px 40px; position: relative; width: 1200px; }',
+  '.framer-NWdLO .framer-q9o3h6 { align-content: center; align-items: center; display: flex; flex: 1 0 0px; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: hidden; padding: 70px 40px 70px 40px; position: relative; width: 1px; }',
+  '.framer-NWdLO .framer-36ejs4 { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: 159px; justify-content: flex-start; overflow: hidden; padding: 0px; position: relative; width: 354px; }',
+  '.framer-NWdLO .framer-mpnwbq, .framer-NWdLO .framer-1d18i2k, .framer-NWdLO .framer-jl04gz { flex: none; height: auto; overflow: visible; position: relative; white-space: pre; width: auto; }',
+  '.framer-NWdLO .framer-yqoaue { flex: none; height: 96px; overflow: visible; position: relative; white-space: pre-wrap; width: 100%; word-break: break-word; word-wrap: break-word; }',
+  '.framer-NWdLO .framer-w8od71 { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 50px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: min-content; will-change: var(--framer-will-change-override, transform); }',
+  '.framer-NWdLO .framer-ze04js-container { flex: none; height: 396px; position: relative; width: 750px; z-index: 1; }',
+  '.framer-NWdLO .framer-adge1t { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 34px; height: min-content; justify-content: center; overflow: hidden; padding: 98px 0px 98px 0px; position: relative; width: 100%; }',
+  '.framer-NWdLO .framer-20ebjx { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
+  '.framer-NWdLO .framer-4g5qy0 { flex: none; height: 37px; overflow: visible; position: relative; white-space: pre-wrap; width: 100%; word-break: break-word; word-wrap: break-word; }',
+  '.framer-NWdLO .framer-sp5cxg-container { flex: none; height: 37px; position: relative; width: 542px; }',
+  '.framer-NWdLO .framer-xw2c5s, .framer-NWdLO .framer-inidr2, .framer-NWdLO .framer-1esmdhl { align-content: center; align-items: center; display: flex; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: min-content; }',
+  '.framer-NWdLO .framer-1dn6rse, .framer-NWdLO .framer-sts5wz { aspect-ratio: 1 / 1; flex: none; height: var(--framer-aspect-ratio-supported, 32px); position: relative; width: 32px; }',
+  '.framer-NWdLO .framer-nlhah3 { flex: none; height: 32px; position: relative; width: 32px; }',
+  '.framer-NWdLO .framer-uk1s4s { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 60px; height: min-content; justify-content: center; overflow: hidden; padding: 114px 40px 114px 40px; position: relative; width: 1200px; }',
+  '.framer-NWdLO .framer-t6r8lk { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 76%; }',
+  '.framer-NWdLO .framer-mgwi15 { flex: none; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 1000px; word-break: break-word; word-wrap: break-word; }',
+  '.framer-NWdLO .framer-mszazt { flex: none; height: 668px; overflow: hidden; position: relative; width: 1000px; }',
+  '.framer-NWdLO .framer-1yqat0r { align-content: center; align-items: center; aspect-ratio: 1.5649122807017544 / 1; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: var(--framer-aspect-ratio-supported, 786px); justify-content: center; left: 0px; overflow: visible; padding: 0px; position: absolute; right: -230px; top: -97px; z-index: 0; }',
+  '.framer-NWdLO .framer-xrjguc { align-content: center; align-items: center; aspect-ratio: 1.5649122807017544 / 1; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: 100%; justify-content: center; overflow: visible; padding: 0px; position: relative; width: var(--framer-aspect-ratio-supported, 1230px); }',
+  '.framer-NWdLO .framer-11v4wm2 { align-content: center; align-items: center; aspect-ratio: 1.5649122807017544 / 1; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 0px; height: var(--framer-aspect-ratio-supported, 847px); justify-content: center; left: -12px; overflow: visible; padding: 0px; position: absolute; right: -83px; top: 53%; z-index: 1; }',
+  '.framer-NWdLO .framer-5lagxh { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 25px; height: min-content; justify-content: center; overflow: hidden; padding: 0px 100px 0px 100px; position: relative; width: 100%; }',
+  '.framer-NWdLO .framer-17prusv { display: grid; flex: none; gap: 60px; grid-auto-rows: min-content; grid-template-columns: repeat(3, minmax(200px, 1fr)); grid-template-rows: repeat(2, min-content); height: min-content; justify-content: center; max-width: 1000px; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-NWdLO .framer-snnm7r, .framer-NWdLO .framer-13xtp2b, .framer-NWdLO .framer-1gxn14o, .framer-NWdLO .framer-1f074bp, .framer-NWdLO .framer-1uqyzgc, .framer-NWdLO .framer-g9qfix { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 11px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
+  '.framer-NWdLO .framer-3a391p, .framer-NWdLO .framer-ez5ras, .framer-NWdLO .framer-ggrpo5, .framer-NWdLO .framer-13ew2pv, .framer-NWdLO .framer-3r9ihq, .framer-NWdLO .framer-7e0rqs { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 2px; height: min-content; justify-content: center; padding: 0px; position: relative; width: 100%; }',
+  '.framer-NWdLO .framer-j08hmh, .framer-NWdLO .framer-fb8c4p, .framer-NWdLO .framer-18z8nzm, .framer-NWdLO .framer-1opuvb7, .framer-NWdLO .framer-1x4f373, .framer-NWdLO .framer-1m8mc2d { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
+  '.framer-NWdLO .framer-2wv9l0 { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; padding: 0px; position: relative; width: 100%; }',
+  '.framer-NWdLO .framer-8bi12y { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 30px; height: 377px; justify-content: center; overflow: hidden; padding: 100px 40px 100px 40px; position: relative; width: 1200px; }',
+  '.framer-NWdLO .framer-1q9k2e5 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: wrap; gap: 60px; height: min-content; justify-content: center; max-width: 100%; overflow: visible; padding: 0px; position: relative; width: 1000px; }',
+  '.framer-NWdLO .framer-lt549, .framer-NWdLO .framer-6gtmix, .framer-NWdLO .framer-r3i8my, .framer-NWdLO .framer-1hsqj1f, .framer-NWdLO .framer-1f0fhb3 { aspect-ratio: 2.9565217391304346 / 1; flex: none; height: var(--framer-aspect-ratio-supported, 46px); overflow: hidden; position: relative; width: 136px; }',
+  '.framer-NWdLO .framer-1gov77p { align-content: center; align-items: center; display: flex; flex: 1 0 0px; flex-direction: row; flex-wrap: nowrap; gap: 1px; height: 1px; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
+  '.framer-NWdLO .framer-28b5pq { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 0px; height: min-content; justify-content: center; overflow: visible; padding: 200px 40px 200px 40px; position: relative; width: 1200px; }',
+  '.framer-NWdLO .framer-162uwhi { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 30px; height: min-content; justify-content: center; max-width: 100%; overflow: visible; padding: 0px; position: relative; width: 1000px; }',
+  '.framer-NWdLO .framer-1a0aq52 { flex: none; height: auto; position: relative; white-space: pre-wrap; width: 100%; word-break: break-word; word-wrap: break-word; }',
+  '.framer-NWdLO .framer-orzwps { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 20px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: min-content; }',
+  '.framer-NWdLO .framer-1oxx4hb { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 20px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 380px; }',
+  '.framer-NWdLO .framer-ozb7f2, .framer-NWdLO .framer-sjfbw4 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: 36px; justify-content: center; overflow: visible; padding: 15px; position: relative; width: min-content; }',
+  '.framer-NWdLO .framer-cukhih, .framer-NWdLO .framer-1qk5l56 { flex: none; height: auto; position: relative; white-space: pre; width: auto; }',
+  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-NWdLO.framer-fb2xo2, .framer-NWdLO .framer-1csjyj5, .framer-NWdLO .framer-7dpnet, .framer-NWdLO .framer-1mo0wlk, .framer-NWdLO .framer-ya3okc, .framer-NWdLO .framer-x2wyxl, .framer-NWdLO .framer-21vdse, .framer-NWdLO .framer-ec3ga6, .framer-NWdLO .framer-1a7cok7, .framer-NWdLO .framer-kbzal, .framer-NWdLO .framer-rb3yzr, .framer-NWdLO .framer-1c5cyd1, .framer-NWdLO .framer-1670yay, .framer-NWdLO .framer-1e6hs5w, .framer-NWdLO .framer-kezepa, .framer-NWdLO .framer-1pde9jt, .framer-NWdLO .framer-17i9u46, .framer-NWdLO .framer-8vqfe5, .framer-NWdLO .framer-14cen47, .framer-NWdLO .framer-1hwhirj, .framer-NWdLO .framer-1pnmmgc, .framer-NWdLO .framer-1dsjsc, .framer-NWdLO .framer-pvnv6g, .framer-NWdLO .framer-1ibuyg3, .framer-NWdLO .framer-1d4g1q4, .framer-NWdLO .framer-q9o3h6, .framer-NWdLO .framer-36ejs4, .framer-NWdLO .framer-1opp49l, .framer-NWdLO .framer-w8od71, .framer-NWdLO .framer-adge1t, .framer-NWdLO .framer-20ebjx, .framer-NWdLO .framer-xw2c5s, .framer-NWdLO .framer-inidr2, .framer-NWdLO .framer-1esmdhl, .framer-NWdLO .framer-uk1s4s, .framer-NWdLO .framer-t6r8lk, .framer-NWdLO .framer-pntxy9, .framer-NWdLO .framer-1yqat0r, .framer-NWdLO .framer-xrjguc, .framer-NWdLO .framer-11v4wm2, .framer-NWdLO .framer-5lagxh, .framer-NWdLO .framer-1gmjw3u, .framer-NWdLO .framer-snnm7r, .framer-NWdLO .framer-3a391p, .framer-NWdLO .framer-j08hmh, .framer-NWdLO .framer-phtzfv, .framer-NWdLO .framer-13xtp2b, .framer-NWdLO .framer-ez5ras, .framer-NWdLO .framer-fb8c4p, .framer-NWdLO .framer-1bsyb1z, .framer-NWdLO .framer-2wv9l0, .framer-NWdLO .framer-1gxn14o, .framer-NWdLO .framer-ggrpo5, .framer-NWdLO .framer-18z8nzm, .framer-NWdLO .framer-wb7ge7, .framer-NWdLO .framer-1f074bp, .framer-NWdLO .framer-13ew2pv, .framer-NWdLO .framer-1opuvb7, .framer-NWdLO .framer-1652jzq, .framer-NWdLO .framer-1uqyzgc, .framer-NWdLO .framer-3r9ihq, .framer-NWdLO .framer-1x4f373, .framer-NWdLO .framer-a2rebs, .framer-NWdLO .framer-g9qfix, .framer-NWdLO .framer-7e0rqs, .framer-NWdLO .framer-1m8mc2d, .framer-NWdLO .framer-8bi12y, .framer-NWdLO .framer-1q9k2e5, .framer-NWdLO .framer-1gov77p, .framer-NWdLO .framer-28b5pq, .framer-NWdLO .framer-162uwhi, .framer-NWdLO .framer-orzwps, .framer-NWdLO .framer-1oxx4hb, .framer-NWdLO .framer-ozb7f2, .framer-NWdLO .framer-sjfbw4 { gap: 0px; } .framer-NWdLO.framer-fb2xo2 > *, .framer-NWdLO .framer-kbzal > *, .framer-NWdLO .framer-rb3yzr > *, .framer-NWdLO .framer-28b5pq > * { margin: 0px; margin-bottom: calc(0px / 2); margin-top: calc(0px / 2); } .framer-NWdLO.framer-fb2xo2 > :first-child, .framer-NWdLO .framer-1mo0wlk > :first-child, .framer-NWdLO .framer-ec3ga6 > :first-child, .framer-NWdLO .framer-kbzal > :first-child, .framer-NWdLO .framer-rb3yzr > :first-child, .framer-NWdLO .framer-1c5cyd1 > :first-child, .framer-NWdLO .framer-1670yay > :first-child, .framer-NWdLO .framer-1e6hs5w > :first-child, .framer-NWdLO .framer-kezepa > :first-child, .framer-NWdLO .framer-1pde9jt > :first-child, .framer-NWdLO .framer-17i9u46 > :first-child, .framer-NWdLO .framer-1hwhirj > :first-child, .framer-NWdLO .framer-1dsjsc > :first-child, .framer-NWdLO .framer-q9o3h6 > :first-child, .framer-NWdLO .framer-36ejs4 > :first-child, .framer-NWdLO .framer-w8od71 > :first-child, .framer-NWdLO .framer-adge1t > :first-child, .framer-NWdLO .framer-20ebjx > :first-child, .framer-NWdLO .framer-uk1s4s > :first-child, .framer-NWdLO .framer-t6r8lk > :first-child, .framer-NWdLO .framer-5lagxh > :first-child, .framer-NWdLO .framer-1gmjw3u > :first-child, .framer-NWdLO .framer-snnm7r > :first-child, .framer-NWdLO .framer-3a391p > :first-child, .framer-NWdLO .framer-phtzfv > :first-child, .framer-NWdLO .framer-13xtp2b > :first-child, .framer-NWdLO .framer-ez5ras > :first-child, .framer-NWdLO .framer-1bsyb1z > :first-child, .framer-NWdLO .framer-2wv9l0 > :first-child, .framer-NWdLO .framer-1gxn14o > :first-child, .framer-NWdLO .framer-ggrpo5 > :first-child, .framer-NWdLO .framer-wb7ge7 > :first-child, .framer-NWdLO .framer-1f074bp > :first-child, .framer-NWdLO .framer-13ew2pv > :first-child, .framer-NWdLO .framer-1652jzq > :first-child, .framer-NWdLO .framer-1uqyzgc > :first-child, .framer-NWdLO .framer-3r9ihq > :first-child, .framer-NWdLO .framer-a2rebs > :first-child, .framer-NWdLO .framer-g9qfix > :first-child, .framer-NWdLO .framer-7e0rqs > :first-child, .framer-NWdLO .framer-8bi12y > :first-child, .framer-NWdLO .framer-28b5pq > :first-child, .framer-NWdLO .framer-162uwhi > :first-child { margin-top: 0px; } .framer-NWdLO.framer-fb2xo2 > :last-child, .framer-NWdLO .framer-1mo0wlk > :last-child, .framer-NWdLO .framer-ec3ga6 > :last-child, .framer-NWdLO .framer-kbzal > :last-child, .framer-NWdLO .framer-rb3yzr > :last-child, .framer-NWdLO .framer-1c5cyd1 > :last-child, .framer-NWdLO .framer-1670yay > :last-child, .framer-NWdLO .framer-1e6hs5w > :last-child, .framer-NWdLO .framer-kezepa > :last-child, .framer-NWdLO .framer-1pde9jt > :last-child, .framer-NWdLO .framer-17i9u46 > :last-child, .framer-NWdLO .framer-1hwhirj > :last-child, .framer-NWdLO .framer-1dsjsc > :last-child, .framer-NWdLO .framer-q9o3h6 > :last-child, .framer-NWdLO .framer-36ejs4 > :last-child, .framer-NWdLO .framer-w8od71 > :last-child, .framer-NWdLO .framer-adge1t > :last-child, .framer-NWdLO .framer-20ebjx > :last-child, .framer-NWdLO .framer-uk1s4s > :last-child, .framer-NWdLO .framer-t6r8lk > :last-child, .framer-NWdLO .framer-5lagxh > :last-child, .framer-NWdLO .framer-1gmjw3u > :last-child, .framer-NWdLO .framer-snnm7r > :last-child, .framer-NWdLO .framer-3a391p > :last-child, .framer-NWdLO .framer-phtzfv > :last-child, .framer-NWdLO .framer-13xtp2b > :last-child, .framer-NWdLO .framer-ez5ras > :last-child, .framer-NWdLO .framer-1bsyb1z > :last-child, .framer-NWdLO .framer-2wv9l0 > :last-child, .framer-NWdLO .framer-1gxn14o > :last-child, .framer-NWdLO .framer-ggrpo5 > :last-child, .framer-NWdLO .framer-wb7ge7 > :last-child, .framer-NWdLO .framer-1f074bp > :last-child, .framer-NWdLO .framer-13ew2pv > :last-child, .framer-NWdLO .framer-1652jzq > :last-child, .framer-NWdLO .framer-1uqyzgc > :last-child, .framer-NWdLO .framer-3r9ihq > :last-child, .framer-NWdLO .framer-a2rebs > :last-child, .framer-NWdLO .framer-g9qfix > :last-child, .framer-NWdLO .framer-7e0rqs > :last-child, .framer-NWdLO .framer-8bi12y > :last-child, .framer-NWdLO .framer-28b5pq > :last-child, .framer-NWdLO .framer-162uwhi > :last-child { margin-bottom: 0px; } .framer-NWdLO .framer-1csjyj5 > *, .framer-NWdLO .framer-x2wyxl > *, .framer-NWdLO .framer-8vqfe5 > *, .framer-NWdLO .framer-1d4g1q4 > *, .framer-NWdLO .framer-xw2c5s > *, .framer-NWdLO .framer-inidr2 > *, .framer-NWdLO .framer-1esmdhl > *, .framer-NWdLO .framer-1yqat0r > *, .framer-NWdLO .framer-xrjguc > *, .framer-NWdLO .framer-j08hmh > *, .framer-NWdLO .framer-fb8c4p > *, .framer-NWdLO .framer-18z8nzm > *, .framer-NWdLO .framer-1opuvb7 > *, .framer-NWdLO .framer-1x4f373 > *, .framer-NWdLO .framer-1m8mc2d > *, .framer-NWdLO .framer-ozb7f2 > *, .framer-NWdLO .framer-sjfbw4 > * { margin: 0px; margin-left: calc(10px / 2); margin-right: calc(10px / 2); } .framer-NWdLO .framer-1csjyj5 > :first-child, .framer-NWdLO .framer-7dpnet > :first-child, .framer-NWdLO .framer-ya3okc > :first-child, .framer-NWdLO .framer-x2wyxl > :first-child, .framer-NWdLO .framer-21vdse > :first-child, .framer-NWdLO .framer-1a7cok7 > :first-child, .framer-NWdLO .framer-8vqfe5 > :first-child, .framer-NWdLO .framer-14cen47 > :first-child, .framer-NWdLO .framer-1pnmmgc > :first-child, .framer-NWdLO .framer-pvnv6g > :first-child, .framer-NWdLO .framer-1ibuyg3 > :first-child, .framer-NWdLO .framer-1d4g1q4 > :first-child, .framer-NWdLO .framer-1opp49l > :first-child, .framer-NWdLO .framer-xw2c5s > :first-child, .framer-NWdLO .framer-inidr2 > :first-child, .framer-NWdLO .framer-1esmdhl > :first-child, .framer-NWdLO .framer-pntxy9 > :first-child, .framer-NWdLO .framer-1yqat0r > :first-child, .framer-NWdLO .framer-xrjguc > :first-child, .framer-NWdLO .framer-11v4wm2 > :first-child, .framer-NWdLO .framer-j08hmh > :first-child, .framer-NWdLO .framer-fb8c4p > :first-child, .framer-NWdLO .framer-18z8nzm > :first-child, .framer-NWdLO .framer-1opuvb7 > :first-child, .framer-NWdLO .framer-1x4f373 > :first-child, .framer-NWdLO .framer-1m8mc2d > :first-child, .framer-NWdLO .framer-1q9k2e5 > :first-child, .framer-NWdLO .framer-1gov77p > :first-child, .framer-NWdLO .framer-orzwps > :first-child, .framer-NWdLO .framer-1oxx4hb > :first-child, .framer-NWdLO .framer-ozb7f2 > :first-child, .framer-NWdLO .framer-sjfbw4 > :first-child { margin-left: 0px; } .framer-NWdLO .framer-1csjyj5 > :last-child, .framer-NWdLO .framer-7dpnet > :last-child, .framer-NWdLO .framer-ya3okc > :last-child, .framer-NWdLO .framer-x2wyxl > :last-child, .framer-NWdLO .framer-21vdse > :last-child, .framer-NWdLO .framer-1a7cok7 > :last-child, .framer-NWdLO .framer-8vqfe5 > :last-child, .framer-NWdLO .framer-14cen47 > :last-child, .framer-NWdLO .framer-1pnmmgc > :last-child, .framer-NWdLO .framer-pvnv6g > :last-child, .framer-NWdLO .framer-1ibuyg3 > :last-child, .framer-NWdLO .framer-1d4g1q4 > :last-child, .framer-NWdLO .framer-1opp49l > :last-child, .framer-NWdLO .framer-xw2c5s > :last-child, .framer-NWdLO .framer-inidr2 > :last-child, .framer-NWdLO .framer-1esmdhl > :last-child, .framer-NWdLO .framer-pntxy9 > :last-child, .framer-NWdLO .framer-1yqat0r > :last-child, .framer-NWdLO .framer-xrjguc > :last-child, .framer-NWdLO .framer-11v4wm2 > :last-child, .framer-NWdLO .framer-j08hmh > :last-child, .framer-NWdLO .framer-fb8c4p > :last-child, .framer-NWdLO .framer-18z8nzm > :last-child, .framer-NWdLO .framer-1opuvb7 > :last-child, .framer-NWdLO .framer-1x4f373 > :last-child, .framer-NWdLO .framer-1m8mc2d > :last-child, .framer-NWdLO .framer-1q9k2e5 > :last-child, .framer-NWdLO .framer-1gov77p > :last-child, .framer-NWdLO .framer-orzwps > :last-child, .framer-NWdLO .framer-1oxx4hb > :last-child, .framer-NWdLO .framer-ozb7f2 > :last-child, .framer-NWdLO .framer-sjfbw4 > :last-child { margin-right: 0px; } .framer-NWdLO .framer-7dpnet > *, .framer-NWdLO .framer-21vdse > * { margin: 0px; margin-left: calc(12px / 2); margin-right: calc(12px / 2); } .framer-NWdLO .framer-1mo0wlk > *, .framer-NWdLO .framer-ec3ga6 > * { margin: 0px; margin-bottom: calc(20px / 2); margin-top: calc(20px / 2); } .framer-NWdLO .framer-ya3okc > *, .framer-NWdLO .framer-1a7cok7 > *, .framer-NWdLO .framer-1pnmmgc > *, .framer-NWdLO .framer-orzwps > *, .framer-NWdLO .framer-1oxx4hb > * { margin: 0px; margin-left: calc(20px / 2); margin-right: calc(20px / 2); } .framer-NWdLO .framer-1c5cyd1 > *, .framer-NWdLO .framer-1670yay > *, .framer-NWdLO .framer-1e6hs5w > *, .framer-NWdLO .framer-kezepa > *, .framer-NWdLO .framer-1pde9jt > *, .framer-NWdLO .framer-17i9u46 > *, .framer-NWdLO .framer-1gmjw3u > *, .framer-NWdLO .framer-phtzfv > *, .framer-NWdLO .framer-1bsyb1z > *, .framer-NWdLO .framer-wb7ge7 > *, .framer-NWdLO .framer-1652jzq > *, .framer-NWdLO .framer-a2rebs > *, .framer-NWdLO .framer-8bi12y > *, .framer-NWdLO .framer-162uwhi > * { margin: 0px; margin-bottom: calc(30px / 2); margin-top: calc(30px / 2); } .framer-NWdLO .framer-14cen47 > *, .framer-NWdLO .framer-1q9k2e5 > * { margin: 0px; margin-left: calc(60px / 2); margin-right: calc(60px / 2); } .framer-NWdLO .framer-1hwhirj > *, .framer-NWdLO .framer-1dsjsc > *, .framer-NWdLO .framer-q9o3h6 > *, .framer-NWdLO .framer-36ejs4 > *, .framer-NWdLO .framer-20ebjx > *, .framer-NWdLO .framer-t6r8lk > *, .framer-NWdLO .framer-2wv9l0 > * { margin: 0px; margin-bottom: calc(10px / 2); margin-top: calc(10px / 2); } .framer-NWdLO .framer-pvnv6g > *, .framer-NWdLO .framer-1opp49l > *, .framer-NWdLO .framer-pntxy9 > * { margin: 0px; margin-left: calc(6px / 2); margin-right: calc(6px / 2); } .framer-NWdLO .framer-1ibuyg3 > *, .framer-NWdLO .framer-11v4wm2 > * { margin: 0px; margin-left: calc(0px / 2); margin-right: calc(0px / 2); } .framer-NWdLO .framer-w8od71 > * { margin: 0px; margin-bottom: calc(50px / 2); margin-top: calc(50px / 2); } .framer-NWdLO .framer-adge1t > * { margin: 0px; margin-bottom: calc(34px / 2); margin-top: calc(34px / 2); } .framer-NWdLO .framer-uk1s4s > * { margin: 0px; margin-bottom: calc(60px / 2); margin-top: calc(60px / 2); } .framer-NWdLO .framer-5lagxh > * { margin: 0px; margin-bottom: calc(25px / 2); margin-top: calc(25px / 2); } .framer-NWdLO .framer-snnm7r > *, .framer-NWdLO .framer-13xtp2b > *, .framer-NWdLO .framer-1gxn14o > *, .framer-NWdLO .framer-1f074bp > *, .framer-NWdLO .framer-1uqyzgc > *, .framer-NWdLO .framer-g9qfix > * { margin: 0px; margin-bottom: calc(11px / 2); margin-top: calc(11px / 2); } .framer-NWdLO .framer-3a391p > *, .framer-NWdLO .framer-ez5ras > *, .framer-NWdLO .framer-ggrpo5 > *, .framer-NWdLO .framer-13ew2pv > *, .framer-NWdLO .framer-3r9ihq > *, .framer-NWdLO .framer-7e0rqs > * { margin: 0px; margin-bottom: calc(2px / 2); margin-top: calc(2px / 2); } .framer-NWdLO .framer-1gov77p > * { margin: 0px; margin-left: calc(1px / 2); margin-right: calc(1px / 2); } }',
+  '.framer-NWdLO.framer-v-1hv2o6j.framer-fb2xo2 { width: 768px; }',
+  '.framer-NWdLO.framer-v-1hv2o6j .framer-1csjyj5, .framer-NWdLO.framer-v-1hv2o6j .framer-kbzal, .framer-NWdLO.framer-v-1vd12yp .framer-36ejs4, .framer-NWdLO.framer-v-1vd12yp .framer-162uwhi { width: 100%; }',
+  '.framer-NWdLO.framer-v-1hv2o6j .framer-1mo0wlk { height: 395px; order: 0; width: min-content; }',
+  '.framer-NWdLO.framer-v-1hv2o6j .framer-h1blye-container { order: 0; width: auto; }',
+  '.framer-NWdLO.framer-v-1hv2o6j .framer-ya3okc { order: 1; width: 612px; }',
+  '.framer-NWdLO.framer-v-1hv2o6j .framer-rb3yzr { width: 1000px; }',
+  '.framer-NWdLO.framer-v-1hv2o6j .framer-bst864 { grid-template-columns: repeat(2, minmax(200px, 1fr)); max-width: 750px; }',
+  '.framer-NWdLO.framer-v-1hv2o6j .framer-1670yay, .framer-NWdLO.framer-v-1hv2o6j .framer-1e6hs5w, .framer-NWdLO.framer-v-1hv2o6j .framer-17i9u46 { grid-column: unset; }',
+  '.framer-NWdLO.framer-v-1hv2o6j .framer-8vqfe5 { padding: 0px 0px 80px 0px; }',
+  '.framer-NWdLO.framer-v-1hv2o6j .framer-14cen47 { padding: 85px 0px 85px 0px; }',
+  '.framer-NWdLO.framer-v-1hv2o6j .framer-1pnmmgc { padding: 0px 0px 0px 40px; width: 67%; }',
+  '.framer-NWdLO.framer-v-1hv2o6j .framer-1dsjsc { width: 498px; }',
+  '.framer-NWdLO.framer-v-1hv2o6j .framer-t5evmk-container { height: 287px; width: 67%; }',
+  '.framer-NWdLO.framer-v-1hv2o6j .framer-1ibuyg3 { padding: 20px 0px 0px 0px; width: min-content; }',
+  '.framer-NWdLO.framer-v-1hv2o6j .framer-1jmskuy-container { width: auto; }',
+  '.framer-NWdLO.framer-v-1hv2o6j .framer-4g5qy0 { height: 74px; }',
+  '.framer-NWdLO.framer-v-1hv2o6j .framer-uk1s4s, .framer-NWdLO.framer-v-1hv2o6j .framer-mszazt { width: 800px; }',
+  '.framer-NWdLO.framer-v-1hv2o6j .framer-t6r8lk { padding: 0px 0px 0px 40px; width: 100%; }',
+  '.framer-NWdLO.framer-v-1hv2o6j .framer-1yqat0r { height: var(--framer-aspect-ratio-supported, 658px); }',
+  '.framer-NWdLO.framer-v-1hv2o6j .framer-xrjguc { width: var(--framer-aspect-ratio-supported, 1030px); }',
+  '.framer-NWdLO.framer-v-1hv2o6j .framer-11v4wm2 { height: var(--framer-aspect-ratio-supported, 720px); }',
+  '.framer-NWdLO.framer-v-1hv2o6j .framer-17prusv { width: min-content; }',
+  '.framer-NWdLO.framer-v-1hv2o6j .framer-8bi12y { height: min-content; padding: 80px 40px 80px 40px; width: 100%; }',
+  '.framer-NWdLO.framer-v-1hv2o6j .framer-1gov77p { width: 730px; }',
+  '.framer-NWdLO.framer-v-1hv2o6j .framer-1oxx4hb { width: 342px; }',
+  '.framer-NWdLO.framer-v-1vd12yp.framer-fb2xo2 { width: 320px; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-qdh2wp-container { height: 800px; order: 1; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-x2wyxl { order: 2; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-kbzal { order: 3; padding: 0px 40px 40px 40px; width: 100%; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-bst864 { grid-template-columns: repeat(1, minmax(200px, 1fr)); }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-1670yay, .framer-NWdLO.framer-v-1vd12yp .framer-1e6hs5w, .framer-NWdLO.framer-v-1vd12yp .framer-17i9u46 { grid-column: auto / span 1; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-8vqfe5 { order: 4; padding: 0px 40px 40px 40px; width: 100%; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-14cen47 { flex: 1 0 0px; padding: 40px 0px 40px 0px; width: 1px; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-1hwhirj { flex: none; order: 0; width: 320px; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-1pnmmgc { gap: 0px; justify-content: center; width: min-content; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-1dsjsc { align-content: center; align-items: center; height: 95px; justify-content: center; width: 222px; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-4oybr, .framer-NWdLO.framer-v-1vd12yp .framer-1ehzy0u { flex: none; white-space: pre; width: auto; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-t5evmk-container { width: 1090px; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-1ibuyg3 { justify-content: center; width: 1090px; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-1d4g1q4 { order: 5; padding: 0px 5px 0px 5px; width: 100%; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-q9o3h6 { padding: 20px 0px 20px 0px; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-w8od71 { align-content: center; align-items: center; height: 446px; width: 100%; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-ze04js-container { height: auto; width: 100%; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-adge1t { gap: 0px; padding: 54px 0px 54px 0px; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-20ebjx, .framer-NWdLO.framer-v-1vd12yp .framer-ozb7f2 { order: 0; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-4g5qy0 { height: 102px; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-sp5cxg-container { order: 1; width: 227px; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-uk1s4s { gap: 0px; order: 6; padding: 33px 40px 33px 40px; width: 100%; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-t6r8lk { align-content: center; align-items: center; order: 0; width: min-content; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-pntxy9 { width: 240px; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-mgwi15 { width: 302px; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-1d18i2k { white-space: pre-wrap; width: 326px; word-break: break-word; word-wrap: break-word; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-mszazt { height: 289px; order: 1; width: 395px; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-1yqat0r { bottom: 10px; height: var(--framer-aspect-ratio-supported, 254px); right: -2px; top: unset; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-xrjguc { width: var(--framer-aspect-ratio-supported, 397px); }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-11v4wm2 { height: 83%; left: 49%; right: unset; top: 47%; width: var(--framer-aspect-ratio-supported, 329px); }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-5lagxh { gap: 0px; order: 2; padding: 0px 20px 0px 20px; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-17prusv { gap: 20px; grid-template-columns: repeat(1, minmax(200px, 1fr)); order: 0; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-snnm7r, .framer-NWdLO.framer-v-1vd12yp .framer-3a391p { align-content: center; align-items: center; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-8bi12y { gap: 27px; height: min-content; order: 7; padding: 60px 0px 60px 0px; width: min-content; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-jl04gz { white-space: pre-wrap; width: 317px; word-break: break-word; word-wrap: break-word; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-1q9k2e5 { gap: 20px; width: 333px; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-lt549, .framer-NWdLO.framer-v-1vd12yp .framer-6gtmix, .framer-NWdLO.framer-v-1vd12yp .framer-r3i8my, .framer-NWdLO.framer-v-1vd12yp .framer-1hsqj1f, .framer-NWdLO.framer-v-1vd12yp .framer-1f0fhb3 { height: var(--framer-aspect-ratio-supported, 30px); width: 89px; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-1gov77p { align-self: stretch; flex: none; gap: 0px; height: min-content; width: auto; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-28b5pq { order: 8; padding: 50px 0px 50px 0px; width: 100%; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-1oxx4hb { width: 298px; }',
+  '.framer-NWdLO.framer-v-1vd12yp .framer-sjfbw4 { order: 1; }',
+  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-NWdLO.framer-v-1vd12yp .framer-1pnmmgc, .framer-NWdLO.framer-v-1vd12yp .framer-adge1t, .framer-NWdLO.framer-v-1vd12yp .framer-uk1s4s, .framer-NWdLO.framer-v-1vd12yp .framer-5lagxh, .framer-NWdLO.framer-v-1vd12yp .framer-17prusv, .framer-NWdLO.framer-v-1vd12yp .framer-8bi12y, .framer-NWdLO.framer-v-1vd12yp .framer-1q9k2e5, .framer-NWdLO.framer-v-1vd12yp .framer-1gov77p { gap: 0px; } .framer-NWdLO.framer-v-1vd12yp .framer-1pnmmgc > *, .framer-NWdLO.framer-v-1vd12yp .framer-1gov77p > * { margin: 0px; margin-left: calc(0px / 2); margin-right: calc(0px / 2); } .framer-NWdLO.framer-v-1vd12yp .framer-1pnmmgc > :first-child, .framer-NWdLO.framer-v-1vd12yp .framer-1q9k2e5 > :first-child, .framer-NWdLO.framer-v-1vd12yp .framer-1gov77p > :first-child { margin-left: 0px; } .framer-NWdLO.framer-v-1vd12yp .framer-1pnmmgc > :last-child, .framer-NWdLO.framer-v-1vd12yp .framer-1q9k2e5 > :last-child, .framer-NWdLO.framer-v-1vd12yp .framer-1gov77p > :last-child { margin-right: 0px; } .framer-NWdLO.framer-v-1vd12yp .framer-adge1t > *, .framer-NWdLO.framer-v-1vd12yp .framer-uk1s4s > *, .framer-NWdLO.framer-v-1vd12yp .framer-5lagxh > * { margin: 0px; margin-bottom: calc(0px / 2); margin-top: calc(0px / 2); } .framer-NWdLO.framer-v-1vd12yp .framer-adge1t > :first-child, .framer-NWdLO.framer-v-1vd12yp .framer-uk1s4s > :first-child, .framer-NWdLO.framer-v-1vd12yp .framer-5lagxh > :first-child, .framer-NWdLO.framer-v-1vd12yp .framer-8bi12y > :first-child { margin-top: 0px; } .framer-NWdLO.framer-v-1vd12yp .framer-adge1t > :last-child, .framer-NWdLO.framer-v-1vd12yp .framer-uk1s4s > :last-child, .framer-NWdLO.framer-v-1vd12yp .framer-5lagxh > :last-child, .framer-NWdLO.framer-v-1vd12yp .framer-8bi12y > :last-child { margin-bottom: 0px; } .framer-NWdLO.framer-v-1vd12yp .framer-17prusv > *, .framer-NWdLO.framer-v-1vd12yp .framer-17prusv > :first-child, .framer-NWdLO.framer-v-1vd12yp .framer-17prusv > :last-child { margin: 0px; } .framer-NWdLO.framer-v-1vd12yp .framer-8bi12y > * { margin: 0px; margin-bottom: calc(27px / 2); margin-top: calc(27px / 2); } .framer-NWdLO.framer-v-1vd12yp .framer-1q9k2e5 > * { margin: 0px; margin-left: calc(20px / 2); margin-right: calc(20px / 2); } }',
   ...css2,
+  ...css,
 ];
-var FramerzLfXOCD5_ = withCSS13(Component12, css17, 'framer-2sMTS',);
+var FramerzLfXOCD5_ = withCSS13(Component12, css17, 'framer-NWdLO',);
 var stdin_default13 = FramerzLfXOCD5_;
-FramerzLfXOCD5_.displayName = 'Main Site';
-FramerzLfXOCD5_.defaultProps = { height: 6129, width: 1200, };
+FramerzLfXOCD5_.displayName = 'Main (Page)';
+FramerzLfXOCD5_.defaultProps = { height: 6164, width: 1200, };
 addPropertyControls18(FramerzLfXOCD5_, {
   variant: {
     options: ['G87o8jzVW', 'fu9Ny71bW', 'RuG5jmR5S',],
     optionTitles: ['Desktop', 'Tablet', 'Phone',],
     title: 'Variant',
-    type: ControlType22.Enum,
+    type: ControlType21.Enum,
   },
 },);
 addFonts12(FramerzLfXOCD5_, [
@@ -25455,14 +25261,14 @@ addFonts12(FramerzLfXOCD5_, [
   ...getFontsFromSharedStyle2(fonts,),
 ], { supportsExplicitInterCodegen: true, },);
 
-// virtual:main
+// virtual:index
 import { WithFramerBreakpoints, } from 'unframer';
 import { jsx as jsx2, } from 'react/jsx-runtime';
 stdin_default13.Responsive = (props,) => {
   return /* @__PURE__ */ jsx2(WithFramerBreakpoints, { Component: stdin_default13, ...props, },);
 };
-var main_default = stdin_default13;
-export { main_default as default, };
+var index_default = stdin_default13;
+export { index_default as default, };
 /*! Bundled license information:
 
 static-browser-server/out/lib/main.js:

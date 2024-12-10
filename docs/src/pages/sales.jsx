@@ -1,9 +1,9 @@
-import IndexFramer from '@/framer/index';
+import SalesFramer from '@/framer/sales';
 
 export default function Index() {
 	return (
 		<div>
-			<IndexFramer.Responsive
+			<SalesFramer.Responsive
 				style={{ width: '100%', background: '#000000' }}
 				variants={{
 					xl: 'Desktop',
@@ -15,7 +15,6 @@ export default function Index() {
 	);
 }
 
-Index.description = 'Open-Source Multiplayer Tooling. A Single Tool to Manage Your Game Servers & Backend.';
 Index.prose = false;
 Index.fullWidth = true;
 

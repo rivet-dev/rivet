@@ -13,11 +13,11 @@ export interface Props {
     "variant"?: 'Desktop' | 'Tablet' | 'Phone'
 }
 
-const MainFramerComponent = (props: Props) => any
+const IndexFramerComponent = (props: Props) => any
 
 type VariantsMap = Partial<Record<UnframerBreakpoint, Props['variant']>> & { base: Props['variant'] }
 
-MainFramerComponent.Responsive = (props: Omit<Props, 'variant'> & {variants: VariantsMap}) => any
+IndexFramerComponent.Responsive = (props: Omit<Props, 'variant'> & {variants: VariantsMap}) => any
 
-export default MainFramerComponent
+export default IndexFramerComponent
 
