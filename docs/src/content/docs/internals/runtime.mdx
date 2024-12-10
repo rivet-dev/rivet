@@ -1,0 +1,58 @@
+# Actor Runtime
+
+The actor runtime requires that user scripts contain a default export with a function called `start`:
+
+```ts {{"file": "index.js"}}
+export default {
+  start: function(ctx: ActorContext) {
+    // ...
+  }
+};
+```
+
+This can also be a class with a static method:
+
+```ts {{"file": "index.js"}}
+export default class MyClass {
+  static start(ctx: ActorContext) {
+    // ...
+  }
+}
+```
+
+The runtime provides a single argument with type `ActorContext`:
+
+```ts
+interface ActorContext {
+  metadata: {
+    actor: {
+      id: string;
+      tags: Record<string, string>;
+      createdAt: Date;
+    };
+    project: {
+      id: string;
+      slug: string;
+    };
+    environment: {
+      id: string;
+      slug: string;
+    };
+    cluster: {
+      id: string;
+    };
+    region: {
+      id: string;
+      name: string;
+    };
+    build: {
+      id: string;
+    };
+  };
+  kv: {
+    // ...See docs for state... †
+  };
+}
+```
+
+_[† state](/docs/state#operations)_

@@ -11,7 +11,6 @@ fn main() -> Result<()> {
 	let docs_output_path = cwd.join("../../../docs/src/content/docs/");
 
 	let settings = SchemaSettings::draft07().with(|s| {
-		s.option_nullable = true;
 		s.option_add_null_type = false;
 	});
 	let generator = settings.into_generator();
