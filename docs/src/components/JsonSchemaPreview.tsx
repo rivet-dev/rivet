@@ -15,35 +15,33 @@ interface JsonSchemaPreviewProps {
   empty?: ReactNode;
 }
 
-export function JsonSchemaPreview({ className, title, schema, defs, parent, empty }: JsonSchemaPreviewProps) {
-  if (schema.type === 'object') {
-    if (!schema.properties || Object.keys(schema.properties).length === 0) {
+export function JsonSchemaPreview({
+  className,
+  title,
+  schema: baseSchema,
+  defs: baseDefs,
+  parent,
+  empty
+}: JsonSchemaPreviewProps) {
+  let defs = baseDefs ?? (baseSchema.definitions as Record<string, JSONSchema7>) ?? {};
+  let schema = resolveSchema(baseSchema, defs);
+
+  if (schema.type === 'object' || schema.$ref) {
+    if (schema.type === 'object' && (!schema.properties || Object.keys(schema.properties).length === 0)) {
       return empty;
     }
 
     if (title ?? schema.title) {
       return (
-        <div className='not-prose mb-6 rounded-md border px-4 pb-3'>
+        <div className={cn('not-prose mb-6 rounded-md border px-4 pb-4', className)}>
           <h3 className='relative -top-4 mb-0 inline-block bg-card text-xl font-bold'>
             {title ?? schema.title}
           </h3>
-          <ObjectSchema
-            className={className}
-            schema={schema}
-            defs={defs ?? (schema.definitions as Record<string, JSONSchema7>) ?? {}}
-            parent={parent}
-          />
+          <ObjectSchema schema={schema} defs={defs} parent={parent} />
         </div>
       );
     } else {
-      return (
-        <ObjectSchema
-          className={className}
-          schema={schema}
-          defs={defs ?? (schema.definitions as Record<string, JSONSchema7>) ?? {}}
-          parent={parent}
-        />
-      );
+      return <ObjectSchema className={className} schema={schema} defs={defs} parent={parent} />;
     }
   }
 
@@ -233,6 +231,7 @@ function ObjectSchemaItem({ children, className }: ObjectSchemaItemProps) {
 }
 
 interface PropertyLabelProps {
+  className?: string;
   parent?: string;
   name: string;
   schema: JSONSchema7;
@@ -240,10 +239,10 @@ interface PropertyLabelProps {
   nullable: boolean;
 }
 
-function PropertyLabel({ parent, name, schema, defs, nullable }: PropertyLabelProps) {
+export function PropertyLabel({ className, parent, name, schema, defs, nullable }: PropertyLabelProps) {
   return (
     <>
-      <div className='scrollbar-hide flex items-center gap-1 overflow-auto'>
+      <div className={cn('scrollbar-hide flex items-center gap-1 overflow-auto', className)}>
         <code className='text-foreground/90'>
           {parent ? <>{parent}.</> : null}
           <span className='font-bold text-foreground'>{name}</span>
@@ -309,6 +308,13 @@ function getPropertyTypeLabel(
     }
   } else if (schema.type === 'null') {
     s.push('null');
+  } else {
+    s.push('unknown');
+  }
+
+  // Location from OpenAPI spec
+  if ((schema as any).in) {
+    s.push(`${(schema as any).in} parameter`);
   }
 
   return s.join(' ');
@@ -341,7 +347,8 @@ function resolveSchema(schema: JSONSchema7, defs: Record<string, JSONSchema7Defi
   }
 
   if (schema.$ref) {
-    return defs[schema.$ref.slice('#/definitions/'.length)] as JSONSchema7;
+    let cleanRef = schema.$ref.replace(/#\/(definitions|components\/schemas)\//, '');
+    return defs[cleanRef] as JSONSchema7;
   }
 
   return schema;

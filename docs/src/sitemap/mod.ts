@@ -1,5 +1,5 @@
-import { Sitemap, SiteTab } from '@/lib/sitemap';
-// import { advanced, common, developingModules, platforms, usingModules } from '@/sitemap/common';
+import { Sitemap } from '@/lib/sitemap';
+import apiPages from '@/generated/apiPages.json' assert { type: 'json' };
 
 // Goals:
 // - Siebar links should advertise the product, collapse any advanced pages away
@@ -274,6 +274,6 @@ export const sitemap = [
   {
     title: 'Platform API',
     href: '/docs/examples',
-    sidebar: []
+    sidebar: apiPages.pages
   }
 ] satisfies Sitemap;
