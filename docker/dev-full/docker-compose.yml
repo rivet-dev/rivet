@@ -175,6 +175,7 @@ services:
     volumes:
       - ./foundationdb/entrypoint.sh:/usr/local/bin/entrypoint.sh
       - foundationdb-data:/var/fdb:rw
+      - foundationdb-storage-data:/var/fdb/data:rw
     healthcheck:
       test: ["CMD", "fdbcli", "--exec", "status"]
       interval: 2s
@@ -216,3 +217,4 @@ volumes:
   seaweedfs-data:
   vector-server-data:
   foundationdb-data:
+  foundationdb-storage-data:

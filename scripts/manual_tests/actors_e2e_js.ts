@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-net --allow-env --allow-read
+#!/usr/bin/env -S deno run --allow-net --allow-env --allow-read --allow-run
 
 // Import necessary modules
 import { resolve } from "https://deno.land/std@0.114.0/path/mod.ts";

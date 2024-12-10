@@ -1,10 +1,10 @@
 # Actor Runtime
 
-The actor runtime requires that user scripts contain a default export with a function called `start`:
+The actor runtime requires that user scripts contain a default export with an async function called `start`:
 
 ```ts {{"file": "index.js"}}
 export default {
-  start: function(ctx: ActorContext) {
+  async start(ctx: ActorContext) {
     // ...
   }
 };
@@ -14,7 +14,7 @@ This can also be a class with a static method:
 
 ```ts {{"file": "index.js"}}
 export default class MyClass {
-  static start(ctx: ActorContext) {
+  static async start(ctx: ActorContext) {
     // ...
   }
 }

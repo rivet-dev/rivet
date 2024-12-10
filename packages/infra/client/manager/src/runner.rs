@@ -115,9 +115,9 @@ impl Handle {
 
 	pub async fn send(&self, packet: &runner_protocol::ToRunner) -> Result<()> {
 		match &self.comms {
-			Comms::Basic => bail!("attempt to send socket message to basic runner"),
+			Comms::Basic => bail!("cannot send socket message to basic runner"),
 			Comms::Socket(socket) => {
-				// Wait for socket to connect
+				// Wait for socket to connect in a retry loop
 				let mut attempts = 0;
 				let mut guard = loop {
 					{
@@ -127,9 +127,13 @@ impl Handle {
 						}
 					}
 
+					if attempts == 0 {
+						tracing::warn!(pid=?self.pid, "socket not yet attached, can't send message. retrying");
+					}
+
 					attempts += 1;
 					if attempts > 15 {
-						bail!("timed out waiting for runner socket to connect");
+						bail!("timed out waiting for runner socket (pid {}) to attach", self.pid);
 					}
 
 					tokio::time::sleep(std::time::Duration::from_millis(125)).await;
