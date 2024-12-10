@@ -17,7 +17,7 @@ pub async fn run_from_env(
 		.merge(job_run::registry()?)?
 		.merge(pegboard::registry()?)?;
 
-	let db = db::DatabasePgNats::from_pools(pools.crdb()?, pools.nats()?);
+	let db = db::DatabaseCrdbNats::from_pools(pools.crdb()?, pools.nats()?);
 	let worker = Worker::new(reg.handle(), db);
 
 	// Start worker

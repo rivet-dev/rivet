@@ -10,7 +10,7 @@ use crate::{
 		message::{SubscriptionHandle, TailAnchor, TailAnchorResponse},
 		MessageCtx,
 	},
-	db::{DatabaseHandle, DatabasePgNats},
+	db::{DatabaseCrdbNats, DatabaseHandle},
 	message::{AsTags, Message, NatsMessage},
 	operation::{Operation, OperationInput},
 	signal::Signal,
@@ -68,8 +68,10 @@ impl TestCtx {
 			(),
 		);
 
-		let db =
-			DatabasePgNats::from_pools(pools.crdb().unwrap(), pools.nats_option().clone().unwrap());
+		let db = DatabaseCrdbNats::from_pools(
+			pools.crdb().unwrap(),
+			pools.nats_option().clone().unwrap(),
+		);
 		let msg_ctx = MessageCtx::new(&conn, ray_id).await.unwrap();
 
 		TestCtx {

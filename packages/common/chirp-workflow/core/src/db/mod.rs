@@ -11,8 +11,8 @@ use crate::{
 	workflow::Workflow,
 };
 
-mod pg_nats;
-pub use pg_nats::DatabasePgNats;
+mod crdb_nats;
+pub use crdb_nats::DatabaseCrdbNats;
 
 pub type DatabaseHandle = Arc<dyn Database + Sync>;
 
@@ -222,6 +222,7 @@ pub trait Database: Send {
 		&self,
 		from_workflow_id: Uuid,
 		location: &Location,
+		version: usize,
 		loop_location: Option<&Location>,
 	) -> WorkflowResult<()>;
 }

@@ -32,15 +32,15 @@ const TXN_RETRY: Duration = Duration::from_millis(100);
 /// Maximum times a query ran by this database adapter is retried.
 const MAX_QUERY_RETRIES: usize = 16;
 
-pub struct DatabasePgNats {
+pub struct DatabaseCrdbNats {
 	pool: PgPool,
 	nats: NatsPool,
 	sub: Mutex<Option<rivet_pools::prelude::nats::Subscriber>>,
 }
 
-impl DatabasePgNats {
-	pub fn from_pools(pool: PgPool, nats: NatsPool) -> Arc<DatabasePgNats> {
-		Arc::new(DatabasePgNats {
+impl DatabaseCrdbNats {
+	pub fn from_pools(pool: PgPool, nats: NatsPool) -> Arc<DatabaseCrdbNats> {
+		Arc::new(DatabaseCrdbNats {
 			pool,
 			// Lazy load the nats sub
 			sub: Mutex::new(None),
@@ -125,7 +125,7 @@ impl DatabasePgNats {
 }
 
 #[async_trait::async_trait]
-impl Database for DatabasePgNats {
+impl Database for DatabaseCrdbNats {
 	async fn wake(&self) -> WorkflowResult<()> {
 		let mut sub = self.sub.try_lock().map_err(WorkflowError::WakeLock)?;
 
@@ -454,7 +454,7 @@ impl Database for DatabasePgNats {
 				sw.location,
 				sw.location2,
 				version,
-				4 AS event_type, -- pg_nats::types::EventType
+				4 AS event_type, -- crdb_nats::types::EventType
 				w.workflow_name AS name,
 				sw.sub_workflow_id AS auxiliary_id,
 				NULL AS hash,
@@ -476,7 +476,7 @@ impl Database for DatabasePgNats {
 				location,
 				location2,
 				version,
-				5 AS event_type, -- pg_nats::types::EventType
+				5 AS event_type, -- crdb_nats::types::EventType
 				NULL AS name,
 				NULL AS auxiliary_id,
 				NULL AS hash,
@@ -496,7 +496,7 @@ impl Database for DatabasePgNats {
 				location,
 				location2,
 				version,
-				6 AS event_type, -- pg_nats::types::EventType
+				6 AS event_type, -- crdb_nats::types::EventType
 				NULL AS name,
 				NULL AS auxiliary_id,
 				NULL AS hash,
@@ -516,7 +516,7 @@ impl Database for DatabasePgNats {
 				ARRAY[] AS location,
 				location AS location2,
 				version,
-				7 AS event_type, -- pg_nats::types::EventType
+				7 AS event_type, -- crdb_nats::types::EventType
 				NULL AS name,
 				NULL AS auxiliary_id,
 				NULL AS hash,
@@ -536,7 +536,7 @@ impl Database for DatabasePgNats {
 				ARRAY[] AS location,
 				location AS location2,
 				1 AS version, -- Default
-				8 AS event_type, -- pg_nats::types::EventType
+				8 AS event_type, -- crdb_nats::types::EventType
 				event_name AS name,
 				NULL AS auxiliary_id,
 				NULL AS hash,
@@ -556,7 +556,7 @@ impl Database for DatabasePgNats {
 				ARRAY[] AS location,
 				location AS location2,
 				1 AS version, -- Default
-				9 AS event_type, -- pg_nats::types::EventType
+				9 AS event_type, -- crdb_nats::types::EventType
 				NULL AS name,
 				NULL AS auxiliary_id,
 				NULL AS hash,
@@ -1420,20 +1420,22 @@ impl Database for DatabasePgNats {
 		&self,
 		from_workflow_id: Uuid,
 		location: &Location,
+		version: usize,
 		loop_location: Option<&Location>,
 	) -> WorkflowResult<()> {
 		self.query(|| async {
 			sqlx::query(indoc!(
 				"
 				INSERT INTO db_workflow.workflow_version_check_events(
-					workflow_id, location, loop_location
+					workflow_id, location, version, loop_location
 				)
-				VALUES($1, $2, $3)
+				VALUES($1, $2, $3, $4)
 				RETURNING 1
 				",
 			))
 			.bind(from_workflow_id)
 			.bind(location)
+			.bind(version as i64)
 			.bind(loop_location)
 			.execute(&mut *self.conn().await?)
 			.await

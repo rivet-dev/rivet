@@ -12,7 +12,7 @@ use crate::{
 		common,
 		message::{MessageCtx, SubscriptionHandle},
 	},
-	db::{DatabaseHandle, DatabasePgNats},
+	db::{DatabaseCrdbNats, DatabaseHandle},
 	message::{AsTags, Message},
 	operation::{Operation, OperationInput},
 	signal::Signal,
@@ -112,7 +112,7 @@ async fn db_from_ctx<B: Debug + Clone>(
 	let crdb = ctx.crdb().await?;
 	let nats = ctx.conn().nats().await?;
 
-	Ok(DatabasePgNats::from_pools(crdb, nats))
+	Ok(DatabaseCrdbNats::from_pools(crdb, nats))
 }
 
 // Get crdb pool as a trait object
@@ -120,5 +120,5 @@ pub async fn db_from_pools(pools: &rivet_pools::Pools) -> GlobalResult<DatabaseH
 	let crdb = pools.crdb()?;
 	let nats = pools.nats()?;
 
-	Ok(DatabasePgNats::from_pools(crdb, nats))
+	Ok(DatabaseCrdbNats::from_pools(crdb, nats))
 }

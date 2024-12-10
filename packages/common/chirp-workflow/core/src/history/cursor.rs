@@ -175,7 +175,7 @@ impl Cursor {
 		Ok(())
 	}
 
-	/// Returns `Some` if the current event is a replay.
+	/// Returns `Some` if the current event is being replayed.
 	pub fn compare_activity(
 		&self,
 		version: usize,
@@ -224,7 +224,7 @@ impl Cursor {
 		}
 	}
 
-	/// Returns `Some` if the current event is a replay.
+	/// Returns `Some` if the current event is being replayed.
 	pub fn compare_msg(
 		&self,
 		version: usize,
@@ -271,7 +271,7 @@ impl Cursor {
 		}
 	}
 
-	/// Returns `Some` if the current event is a replay.
+	/// Returns `Some` if the current event is being replayed.
 	pub fn compare_signal_send(
 		&self,
 		version: usize,
@@ -318,7 +318,7 @@ impl Cursor {
 		}
 	}
 
-	/// Returns `Some` if the current event is a replay.
+	/// Returns `Some` if the current event is being replayed.
 	pub fn compare_sub_workflow(
 		&self,
 		version: usize,
@@ -365,7 +365,7 @@ impl Cursor {
 		}
 	}
 
-	/// Returns `Some` if the current event is a replay.
+	/// Returns `Some` if the current event is being replayed.
 	pub fn compare_signal(&self, version: usize) -> WorkflowResult<HistoryResult<&SignalEvent>> {
 		if let Some(event) = self.current_event() {
 			if version > event.version {
@@ -397,7 +397,7 @@ impl Cursor {
 		}
 	}
 
-	/// Returns `Some` if the current event is a replay.
+	/// Returns `Some` if the current event is being replayed.
 	pub fn compare_loop(&self, version: usize) -> WorkflowResult<HistoryResult<&LoopEvent>> {
 		if let Some(event) = self.current_event() {
 			if version > event.version {
@@ -429,7 +429,7 @@ impl Cursor {
 		}
 	}
 
-	/// Returns `Some` if the current event is a replay.
+	/// Returns `Some` if the current event is being replayed.
 	pub fn compare_sleep(&self, version: usize) -> WorkflowResult<HistoryResult<&SleepEvent>> {
 		if let Some(event) = self.current_event() {
 			if version > event.version {
@@ -461,7 +461,7 @@ impl Cursor {
 		}
 	}
 
-	/// Returns `true` if the current event is a replay.
+	/// Returns `true` if the current event is being replayed.
 	pub fn compare_branch(&self, version: usize) -> WorkflowResult<HistoryResult<()>> {
 		if let Some(event) = self.current_event() {
 			if version > event.version {
@@ -493,7 +493,7 @@ impl Cursor {
 		}
 	}
 
-	/// Returns `true` if the current event is a replay.
+	/// Returns `true` if the current event is being replayed.
 	/// Because loops have a sparse history with potentially 0 events (after forgetting), they create branches
 	/// at specific locations instead of using `current_location_for`. This means the cursor cannot use
 	/// `current_event` to compare the history and instead we just find the correct event via coordinate.
@@ -518,7 +518,7 @@ impl Cursor {
 		}
 	}
 
-	/// Returns `true` if the current event is a replay.
+	/// Returns `true` if the current event is being replayed.
 	pub fn compare_removed<T: Removed>(&self) -> WorkflowResult<bool> {
 		if let Some(event) = self.current_event() {
 			// Validate history is consistent
@@ -588,10 +588,10 @@ impl Cursor {
 		}
 	}
 
-	/// Returns `Some` if the current event is a replay.
-	pub fn compare_version_check(&self) -> WorkflowResult<Option<bool>> {
+	/// Returns `Some` if the current event is being replayed.
+	pub fn compare_version_check(&self) -> WorkflowResult<Option<usize>> {
 		if let Some(event) = self.current_event() {
-			Ok(Some(matches!(event.data, EventData::VersionCheck)))
+			Ok(Some(event.version))
 		} else {
 			Ok(None)
 		}

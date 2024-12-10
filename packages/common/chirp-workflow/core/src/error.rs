@@ -170,6 +170,9 @@ pub enum WorkflowError {
 
 	#[error("serialize location: {0}")]
 	SerializeLocation(serde_json::Error),
+
+	#[error("invalid version: {0}")]
+	InvalidVersion(String),
 }
 
 impl WorkflowError {

@@ -1188,16 +1188,21 @@ impl WorkflowCtx {
 		Ok(())
 	}
 
-	/// Returns true if the workflow has never reached this point before and is consistent for all future
-	/// executions of this workflow.
-	pub async fn is_new(&mut self) -> GlobalResult<bool> {
-		// Existing event
-		let is_new = if let Some(is_new) = self
+	/// Returns the version of the current event in history. If no event exists, returns `current_version` and
+	/// inserts a version check event.
+	pub async fn check_version(&mut self, current_version: usize) -> GlobalResult<usize> {
+		if current_version == 0 {
+			return Err(GlobalError::raw(WorkflowError::InvalidVersion(
+				"version for `check_version` must be greater than 0".into(),
+			)));
+		}
+
+		if let Some(step_version) = self
 			.cursor
 			.compare_version_check()
 			.map_err(GlobalError::raw)?
 		{
-			is_new
+			Ok(step_version + 1 - self.version)
 		} else {
 			tracing::debug!(name=%self.name, id=%self.workflow_id, "inserting version check");
 
@@ -1205,19 +1210,13 @@ impl WorkflowCtx {
 				.commit_workflow_version_check_event(
 					self.workflow_id,
 					&self.cursor.current_location(),
+					current_version + self.version - 1,
 					self.loop_location(),
 				)
 				.await?;
 
-			true
-		};
-
-		if is_new {
-			// Move to next event
-			self.cursor.inc();
+			Ok(current_version + 1 - self.version)
 		}
-
-		Ok(is_new)
 	}
 }
 
@@ -1258,7 +1257,8 @@ impl WorkflowCtx {
 		self.ray_id
 	}
 
-	pub fn version(&self) -> usize {
+	// Not public because this only denotes the version of the context, use `check_version` instead.
+	pub(crate) fn version(&self) -> usize {
 		self.version
 	}
 
