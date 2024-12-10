@@ -99,7 +99,6 @@ types:
 
   PrepareBuildRequest:
     properties:
-      name: string
       image_tag:
         docs: A tag given to the project build.
         type: optional<string>

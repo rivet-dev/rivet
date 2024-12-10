@@ -19,7 +19,6 @@ pub struct BuildAndUploadOpts {
 	pub env: TEMPEnvironment,
 	pub tags: HashMap<String, String>,
 	pub build_config: config::build::javascript::Build,
-	pub version_name: String,
 }
 
 /// Builds image if not specified and returns the build ID.
@@ -128,7 +127,6 @@ pub async fn build_and_upload(
 		task.clone(),
 		&UploadBundleOpts {
 			env: opts.env,
-			version_name: opts.version_name,
 			build_path: build_dir.path().into(),
 			compression: opts.build_config.unstable.compression(),
 		},
@@ -140,7 +138,6 @@ pub async fn build_and_upload(
 
 struct UploadBundleOpts {
 	env: TEMPEnvironment,
-	version_name: String,
 
 	/// Path to the root of the built files.
 	build_path: PathBuf,
@@ -201,7 +198,6 @@ async fn upload_bundle(
 	let prepare_res = apis::actor_builds_api::actor_builds_prepare(
 		&ctx.openapi_config_cloud,
 		models::ActorPrepareBuildRequest {
-			name: push_opts.version_name.clone(),
 			image_tag: None,
 			image_file: Box::new(image_file.prepared),
 			kind: Some(build_kind),

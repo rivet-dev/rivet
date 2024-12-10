@@ -23,9 +23,6 @@ pub struct PushOpts {
 	/// Docker inside the image.
 	pub docker_tag: String,
 
-	/// Name of the image
-	pub name: Option<String>,
-
 	pub bundle: config::build::docker::BundleKind,
 
 	pub compression: config::build::Compression,
@@ -49,16 +46,10 @@ pub async fn push_tar(
 		.with_context(|| anyhow!("failed to open image file: {}", push_opts.path.display()))?;
 	ensure!(image_file_meta.len() > 0, "docker image archive is empty");
 
-	// Create image
-	let display_name = push_opts
-		.name
-		.clone()
-		.unwrap_or_else(|| push_opts.docker_tag.clone());
 	let content_type = "binary/octet-stream";
 
 	task.log(format!(
-		"[Uploading] {name} ({size})",
-		name = display_name,
+		"[Uploading] ({size})",
 		size = upload::format_file_size(image_file_meta.len())?
 	));
 
@@ -75,7 +66,6 @@ pub async fn push_tar(
 	let build_res = apis::actor_builds_api::actor_builds_prepare(
 		&ctx.openapi_config_cloud,
 		models::ActorPrepareBuildRequest {
-			name: display_name.clone(),
 			image_tag: Some(push_opts.docker_tag.clone()),
 			image_file: Box::new(models::UploadPrepareFile {
 				path: crate::util::build::file_name(build_kind, build_compression),

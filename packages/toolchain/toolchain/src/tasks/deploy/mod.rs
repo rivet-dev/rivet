@@ -54,15 +54,8 @@ impl task::Task for Task {
 		// Manager
 		let manager_res = if input.config.unstable().manager.enable() {
 			Some(
-				manager::deploy(
-					&ctx,
-					task.clone(),
-					manager::DeployOpts {
-						env: env.clone(),
-						version_name: version_name.clone(),
-					},
-				)
-				.await?,
+				manager::deploy(&ctx, task.clone(), manager::DeployOpts { env: env.clone() })
+					.await?,
 			)
 		} else {
 			None
@@ -182,7 +175,6 @@ async fn build_and_upload(
 					config: config.clone(),
 					tags: build.tags.clone(),
 					build_config: docker.clone(),
-					version_name: version_name.to_string(),
 				},
 			)
 			.await?
@@ -195,7 +187,6 @@ async fn build_and_upload(
 					env: env.clone(),
 					tags: build.tags.clone(),
 					build_config: js.clone(),
-					version_name: version_name.to_string(),
 				},
 			)
 			.await?

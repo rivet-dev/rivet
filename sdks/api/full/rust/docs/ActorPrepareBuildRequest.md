@@ -4,7 +4,6 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**name** | **String** |  | 
 **image_tag** | Option<**String**> | A tag given to the project build. | [optional]
 **image_file** | [**crate::models::UploadPrepareFile**](UploadPrepareFile.md) |  | 
 **kind** | Option<[**crate::models::ActorBuildKind**](ActorBuildKind.md)> |  | [optional]

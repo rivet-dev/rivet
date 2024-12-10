@@ -19,7 +19,6 @@ pub struct BuildAndUploadOpts {
 	pub config: config::Config,
 	pub tags: HashMap<String, String>,
 	pub build_config: config::build::docker::Build,
-	pub version_name: String,
 }
 
 /// Builds image if not specified and returns the build ID.
@@ -47,7 +46,6 @@ pub async fn build_and_upload(
 			&DockerPushOpts {
 				config: opts.config.clone(),
 				env: opts.env,
-				name: Some(opts.version_name.to_string()),
 				docker_tag: image.clone(),
 				bundle,
 				compression,
@@ -80,7 +78,6 @@ pub async fn build_and_upload(
 				config: opts.config.clone(),
 				env: opts.env.clone(),
 				dockerfile: dockerfile.clone(),
-				name: Some(opts.version_name.clone()),
 				build_args: Some(
 					opts.build_config
 						.build_args
@@ -109,7 +106,6 @@ pub async fn build_and_upload(
 pub struct DockerBuildPushOpts {
 	pub config: config::Config,
 	pub env: TEMPEnvironment,
-	pub name: Option<String>,
 
 	/// Path to Dockerfile
 	pub dockerfile: String,
@@ -157,7 +153,6 @@ pub async fn docker_build_and_push(
 			env: push_opts.env.clone(),
 			path: build_output.path.to_owned(),
 			docker_tag: build_output.tag,
-			name: push_opts.name.clone(),
 			bundle: push_opts.bundle,
 			compression: push_opts.compression,
 		},
@@ -168,7 +163,6 @@ pub async fn docker_build_and_push(
 pub struct DockerPushOpts {
 	pub config: config::Config,
 	pub env: TEMPEnvironment,
-	pub name: Option<String>,
 
 	pub docker_tag: String,
 
@@ -211,7 +205,6 @@ pub async fn docker_push(
 			env: push_opts.env.clone(),
 			path: archive_path.to_owned(),
 			docker_tag: unique_image_tag,
-			name: push_opts.name.clone(),
 			bundle: push_opts.bundle,
 			compression: push_opts.compression,
 		},

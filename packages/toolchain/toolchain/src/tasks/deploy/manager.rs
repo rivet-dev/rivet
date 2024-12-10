@@ -8,7 +8,6 @@ use crate::{
 
 pub struct DeployOpts {
 	pub env: TEMPEnvironment,
-	pub version_name: String,
 }
 
 pub struct DeployOutput {
@@ -34,7 +33,6 @@ pub async fn deploy(
 		task.clone(),
 		super::js::BuildAndUploadOpts {
 			env: opts.env.clone(),
-			version_name: opts.version_name,
 			tags: tags.clone(),
 			build_config: config::build::javascript::Build {
 				script: manager_src_path

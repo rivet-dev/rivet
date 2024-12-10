@@ -13,8 +13,6 @@
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct ActorPrepareBuildRequest {
-    #[serde(rename = "name")]
-    pub name: String,
     /// A tag given to the project build.
     #[serde(rename = "image_tag", skip_serializing_if = "Option::is_none")]
     pub image_tag: Option<String>,
@@ -27,9 +25,8 @@ pub struct ActorPrepareBuildRequest {
 }
 
 impl ActorPrepareBuildRequest {
-    pub fn new(name: String, image_file: crate::models::UploadPrepareFile) -> ActorPrepareBuildRequest {
+    pub fn new(image_file: crate::models::UploadPrepareFile) -> ActorPrepareBuildRequest {
         ActorPrepareBuildRequest {
-            name,
             image_tag: None,
             image_file: Box::new(image_file),
             kind: None,

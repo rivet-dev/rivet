@@ -1049,8 +1049,6 @@ components:
     ActorPrepareBuildRequest:
       type: object
       properties:
-        name:
-          type: string
         image_tag:
           type: string
           description: A tag given to the project build.
@@ -1061,7 +1059,6 @@ components:
         compression:
           $ref: '#/components/schemas/ActorBuildCompression'
       required:
-        - name
         - image_file
     ActorPrepareBuildResponse:
       type: object

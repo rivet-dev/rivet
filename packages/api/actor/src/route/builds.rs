@@ -267,12 +267,6 @@ pub async fn create_build(
 ) -> GlobalResult<models::ActorPrepareBuildResponse> {
 	let CheckOutput { env_id, .. } = ctx.auth().check(ctx.op_ctx(), &query, false).await?;
 
-	ensure_with!(
-		body.name.len() <= 128,
-		ACTOR_BUILD_INVALID_CONFIG,
-		error = "Build name too large (max 128 bytes)."
-	);
-
 	let (kind, image_tag) = match body.kind {
 		Option::None | Some(models::ActorBuildKind::DockerImage) => (
 			build::types::BuildKind::DockerImage,
@@ -299,7 +293,7 @@ pub async fn create_build(
 	let create_res = ctx
 		.op(build::ops::create::Input {
 			owner: build::ops::create::Owner::Env(env_id),
-			display_name: body.name,
+			display_name: util::faker::display_name(),
 			content: build::ops::create::Content::New {
 				image_file: (*body.image_file).api_try_into()?,
 				image_tag,
@@ -342,7 +336,6 @@ pub async fn create_build_deprecated(
 				models::ServersBuildKind::DockerImage => models::ActorBuildKind::DockerImage,
 				models::ServersBuildKind::OciBundle => models::ActorBuildKind::OciBundle,
 			}),
-			name: body.name,
 		},
 		global,
 	)
