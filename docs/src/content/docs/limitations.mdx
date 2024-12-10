@@ -1,11 +1,40 @@
 # Limitations
 
+<Note>[Contact us](/support) if you need an increase.</Note>
+
+## Actors
+
+| Feature                   | Limit        |
+| ------------------------- | ------------ |
+| **Memory**                | 128 MB       |
+| **Environment Variables** | 64 variables |
+| **Environment Key**       | 256 bytes    |
+| **Environment Value**     | 1024 bytes   |
+| **Network Ports**         | 8 ports      |
+
 ## KV
 
-| Feature                                    | Limit                                                     |
-| ------------------------------------------ | --------------------------------------------------------- |
-| **Key size**                               | 2 KiB                                                     |
-| **Value size**                             | 128 KiB                                                   |
-| **Keys per batch operation**               | 128                                                       |
-| **Total payload size for `put` operation** | 976 KiB (includes keys and values together)               |
-| **Total storage**                          | 1 GiB (per actor, [contact us](/support) for an increase) |
+| Feature                                    | Limit                                                 |
+| ------------------------------------------ | ----------------------------------------------------- |
+| **Key size**                               | 2 KiB                                                 |
+| **Value size**                             | 128 KiB                                               |
+| **Keys per batch operation**               | 128                                                   |
+| **Total payload size for `put` operation** | 976 KiB (includes keys and values together)           |
+| **Total storage**                          | 1 GiB per actor ([contact us](/support) for increase) |
+
+## Builds
+
+| Feature                   | Limit |
+| ------------------------- | ----- |
+| **JavaScript Build Size** | 10 MB |
+| **Container Build Size**  | 8 GB  |
+
+## Actor & Build Tags
+
+| Feature       | Limit      |
+| ------------- | ---------- |
+| **Tags**      | 8 tags     |
+| **Tag Key**   | 16 bytes   |
+| **Tag Value** | 1024 bytes |
+
+{/* TODO: Rivet Guard: max in flight & request rate limit once this is finalized */}
