@@ -69,7 +69,6 @@
 // 					display_name: "Local".to_string(),
 // 				},
 // 				cluster: protocol::ActorMetadataCluster { id: Uuid::nil() },
-// 				build: protocol::ActorMetadataBuild { id: Uuid::nil() },
 // 			})
 // 			.unwrap(),
 // 			owner: protocol::ActorOwner::DynamicServer {

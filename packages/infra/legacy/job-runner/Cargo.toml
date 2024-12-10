@@ -1,5 +1,5 @@
 [package]
-name = "job-runner"
+name = "rivet-job-runner"
 version.workspace = true
 authors.workspace = true
 license.workspace = true

@@ -5936,19 +5936,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "job-runner"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "portpicker",
- "serde",
- "serde_json",
- "signal-hook",
- "tempfile",
- "uuid",
-]
-
-[[package]]
 name = "jobserver"
 version = "0.1.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8836,6 +8823,19 @@ dependencies = [
  "bytes",
  "http 0.2.12",
  "tower",
+]
+
+[[package]]
+name = "rivet-job-runner"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "portpicker",
+ "serde",
+ "serde_json",
+ "signal-hook",
+ "tempfile",
+ "uuid",
 ]
 
 [[package]]

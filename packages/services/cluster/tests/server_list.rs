@@ -14,6 +14,8 @@ async fn server_list(ctx: TestCtx) {
 			public_ips: None,
 		},
 		include_destroyed: false,
+		exclude_draining: false,
+		exclude_no_vlan: false,
 	})
 	.await
 	.unwrap();

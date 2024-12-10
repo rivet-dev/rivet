@@ -9,10 +9,9 @@ use serde_json::json;
 use util::serde::AsHashableExt;
 
 use super::{
-	resolve_image_artifact_url, CreateComplete, Destroy, Drain, DrainState, Failed,
-	GetServerMetaInput, GetServerMetaOutput, InsertDbInput, Port, Ready, SetConnectableInput,
-	UpdateImageInput, UpdateRescheduleRetryInput, Upgrade, UpgradeComplete, UpgradeStarted,
-	DRAIN_PADDING_MS, TRAEFIK_GRACE_PERIOD,
+	CreateComplete, Destroy, Drain, DrainState, Failed, GetServerMetaInput, GetServerMetaOutput,
+	InsertDbInput, Port, Ready, SetConnectableInput, UpdateImageInput, UpdateRescheduleRetryInput,
+	Upgrade, UpgradeComplete, UpgradeStarted, DRAIN_PADDING_MS, TRAEFIK_GRACE_PERIOD,
 };
 use crate::types::{
 	GameGuardProtocol, HostProtocol, NetworkMode, Routing, ServerLifecycle, ServerResources,
@@ -322,7 +321,8 @@ struct ActorSetupCtx {
 	actor_id: Uuid,
 	server_meta: GetServerMetaOutput,
 	resources: pp::Resources,
-	image_artifact_url: String,
+	artifact_url_stub: String,
+	fallback_artifact_url: Option<String>,
 }
 
 async fn setup(
@@ -373,7 +373,7 @@ async fn setup(
 		})
 		.await?;
 
-	let (actor_id, resources, image_artifact_url) = ctx
+	let (actor_id, resources, artifacts_res) = ctx
 		.join((
 			activity(SelectActorIdInput {
 				server_id: input.server_id,
@@ -383,9 +383,6 @@ async fn setup(
 				resources: input.resources.clone(),
 			}),
 			activity(ResolveArtifactsInput {
-				datacenter_id: input.datacenter_id,
-				image_id,
-				server_id: input.server_id,
 				build_upload_id: server_meta.build_upload_id,
 				build_file_name: server_meta.build_file_name.clone(),
 				dc_build_delivery_method: server_meta.dc_build_delivery_method,
@@ -397,7 +394,8 @@ async fn setup(
 		actor_id,
 		server_meta,
 		resources,
-		image_artifact_url,
+		artifact_url_stub: artifacts_res.artifact_url_stub,
+		fallback_artifact_url: artifacts_res.fallback_artifact_url,
 	};
 
 	// Rescheduling handles spawning the actor manually
@@ -489,7 +487,9 @@ async fn spawn_actor(
 		actor_id: actor_setup.actor_id,
 		config: Box::new(pp::ActorConfig {
 			image: pp::Image {
-				artifact_url: actor_setup.image_artifact_url.clone(),
+				id: input.image_id,
+				artifact_url_stub: actor_setup.artifact_url_stub.clone(),
+				fallback_artifact_url: actor_setup.fallback_artifact_url.clone(),
 				kind: match actor_setup.server_meta.build_kind {
 					BuildKind::DockerImage => pp::ImageKind::DockerImage,
 					BuildKind::OciBundle => pp::ImageKind::OciBundle,
@@ -542,9 +542,12 @@ async fn spawn_actor(
 				server_id: input.server_id,
 			},
 			metadata: util::serde::Raw::new(&pp::ActorMetadata {
-				tags: input.tags.as_hashable(),
-				// Represents when the pegboard actor was created, not the ds workflow.
-				create_ts: ctx.ts(),
+				actor: pp::ActorMetadataActor {
+					id: actor_setup.actor_id,
+					tags: input.tags.as_hashable(),
+					// Represents when the pegboard actor was created, not the ds workflow.
+					create_ts: ctx.ts(),
+				},
 				project: pp::ActorMetadataProject {
 					project_id: actor_setup.server_meta.project_id,
 					slug: actor_setup.server_meta.project_slug.clone(),
@@ -575,36 +578,68 @@ async fn spawn_actor(
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
 struct ResolveArtifactsInput {
-	datacenter_id: Uuid,
-	image_id: Uuid,
-	server_id: Uuid,
 	build_upload_id: Uuid,
 	build_file_name: String,
 	dc_build_delivery_method: BuildDeliveryMethod,
 }
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct ResolveArtifactsOutput {
+	artifact_url_stub: String,
+	fallback_artifact_url: Option<String>,
+}
+
 #[activity(ResolveArtifacts)]
 async fn resolve_artifacts(
 	ctx: &ActivityCtx,
 	input: &ResolveArtifactsInput,
-) -> GlobalResult<String> {
-	let upload_res = op!([ctx] upload_get {
-		upload_ids: vec![input.build_upload_id.into()],
+) -> GlobalResult<ResolveArtifactsOutput> {
+	let artifact_url_stub = format!(
+		"/s3-cache/{namespace}-bucket-build/{upload_id}/{file_name}",
+		namespace = ctx.config().server()?.rivet.namespace,
+		upload_id = input.build_upload_id,
+		file_name = input.build_file_name,
+	);
+
+	let fallback_artifact_url =
+		if let BuildDeliveryMethod::S3Direct = input.dc_build_delivery_method {
+			tracing::debug!("using s3 direct delivery");
+
+			// Build client
+			let s3_client = s3_util::Client::with_bucket_and_endpoint(
+				ctx.config(),
+				"bucket-build",
+				s3_util::EndpointKind::EdgeInternal,
+			)
+			.await?;
+
+			let presigned_req = s3_client
+				.get_object()
+				.bucket(s3_client.bucket())
+				.key(format!(
+					"{upload_id}/{file_name}",
+					upload_id = input.build_upload_id,
+					file_name = input.build_file_name,
+				))
+				.presigned(
+					s3_util::aws_sdk_s3::presigning::PresigningConfig::builder()
+						.expires_in(std::time::Duration::from_secs(15 * 60))
+						.build()?,
+				)
+				.await?;
+
+			let addr_str = presigned_req.uri().to_string();
+			tracing::debug!(addr = %addr_str, "resolved artifact s3 presigned request");
+
+			Some(addr_str)
+		} else {
+			None
+		};
+
+	Ok(ResolveArtifactsOutput {
+		artifact_url_stub,
+		fallback_artifact_url,
 	})
-	.await?;
-	let upload = unwrap!(upload_res.uploads.first());
-	let upload_id = unwrap_ref!(upload.upload_id).as_uuid();
-
-	let image_artifact_url = resolve_image_artifact_url(
-		ctx,
-		input.datacenter_id,
-		input.build_file_name.clone(),
-		input.dc_build_delivery_method,
-		input.image_id,
-		upload_id,
-	)
-	.await?;
-
-	Ok(image_artifact_url)
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]

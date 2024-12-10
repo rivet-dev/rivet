@@ -49,11 +49,14 @@ pub async fn servers(
 	let servers_res = ctx
 		.op(cluster::ops::server::list::Input {
 			filter: cluster::types::Filter {
+				datacenter_ids: Some(vec![datacenter_id]),
 				pool_types: (!query.pools.is_empty())
 					.then(|| query.pools.into_iter().map(ApiInto::api_into).collect()),
 				..Default::default()
 			},
 			include_destroyed: false,
+			exclude_draining: true,
+			exclude_no_vlan: true,
 		})
 		.await?;
 

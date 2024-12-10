@@ -13,12 +13,7 @@
       }
     },
     "unstable": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/Unstable3"
-        }
-      ],
-      "nullable": true
+      "$ref": "#/definitions/Unstable3"
     }
   },
   "additionalProperties": false,
@@ -37,28 +32,23 @@
               "type": "object",
               "additionalProperties": {
                 "type": "string"
-              },
-              "nullable": true
+              }
             },
             "build_path": {
               "description": "Directory to build the Docker image from.",
-              "type": "string",
-              "nullable": true
+              "type": "string"
             },
             "build_target": {
               "description": "Build target to upload.",
-              "type": "string",
-              "nullable": true
+              "type": "string"
             },
             "dockerfile": {
               "description": "Dockerfile to build.",
-              "type": "string",
-              "nullable": true
+              "type": "string"
             },
             "image": {
               "description": "Existing image tag to upload.",
-              "type": "string",
-              "nullable": true
+              "type": "string"
             },
             "runtime": {
               "type": "string",
@@ -72,8 +62,7 @@
                 {
                   "$ref": "#/definitions/Unstable"
                 }
-              ],
-              "nullable": true
+              ]
             }
           }
         },
@@ -85,12 +74,7 @@
           ],
           "properties": {
             "bundler": {
-              "allOf": [
-                {
-                  "$ref": "#/definitions/Bundler"
-                }
-              ],
-              "nullable": true
+              "$ref": "#/definitions/Bundler"
             },
             "deno": {
               "default": {
@@ -206,16 +190,13 @@
       "type": "object",
       "properties": {
         "config_path": {
-          "type": "string",
-          "nullable": true
+          "type": "string"
         },
         "import_map_url": {
-          "type": "string",
-          "nullable": true
+          "type": "string"
         },
         "lock_path": {
-          "type": "string",
-          "nullable": true
+          "type": "string"
         }
       },
       "additionalProperties": false
@@ -224,8 +205,7 @@
       "type": "object",
       "properties": {
         "enable": {
-          "type": "boolean",
-          "nullable": true
+          "type": "boolean"
         }
       },
       "additionalProperties": false
@@ -234,32 +214,16 @@
       "type": "object",
       "properties": {
         "allow_root": {
-          "type": "boolean",
-          "nullable": true
+          "type": "boolean"
         },
         "build_method": {
-          "allOf": [
-            {
-              "$ref": "#/definitions/BuildMethod"
-            }
-          ],
-          "nullable": true
+          "$ref": "#/definitions/BuildMethod"
         },
         "bundle": {
-          "allOf": [
-            {
-              "$ref": "#/definitions/BundleKind"
-            }
-          ],
-          "nullable": true
+          "$ref": "#/definitions/BundleKind"
         },
         "compression": {
-          "allOf": [
-            {
-              "$ref": "#/definitions/Compression"
-            }
-          ],
-          "nullable": true
+          "$ref": "#/definitions/Compression"
         }
       },
       "additionalProperties": false
@@ -268,24 +232,16 @@
       "type": "object",
       "properties": {
         "analyze_result": {
-          "type": "boolean",
-          "nullable": true
+          "type": "boolean"
         },
         "compression": {
-          "allOf": [
-            {
-              "$ref": "#/definitions/Compression"
-            }
-          ],
-          "nullable": true
+          "$ref": "#/definitions/Compression"
         },
         "esbuild_log_level": {
-          "type": "string",
-          "nullable": true
+          "type": "string"
         },
         "minify": {
-          "type": "boolean",
-          "nullable": true
+          "type": "boolean"
         }
       },
       "additionalProperties": false

@@ -13,6 +13,13 @@ cat << 'EOF' > /etc/rivet-client/config.json
 		"runner": {
 			"flavor": "__FLAVOR__"
 		},
+		"images": {
+			"pull_addresses": {
+				"dynamic": {
+					"fetch_endpoint": "__TUNNEL_API_EDGE_API__/provision/datacenters/___DATACENTER_ID___/servers?pools=ats"
+				}
+			}
+		},
 		"network": {
 			"bind_ip": "___VLAN_IP___",
 			"lan_ip": "___VLAN_IP___",

@@ -22,7 +22,7 @@ use tokio::{
 	sync::mpsc::{channel, Receiver},
 };
 
-use pegboard_config::{Config, FoundationDbAddress};
+use pegboard_config::{Addresses, Config};
 
 pub mod sql;
 
@@ -230,31 +230,29 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 	Ok(())
 }
 
+#[derive(Deserialize)]
+struct ApiResponse {
+	servers: Vec<ApiServer>,
+}
+
+#[derive(Deserialize)]
+struct ApiServer {
+	vlan_ip: Option<Ipv4Addr>,
+}
+
 pub async fn init_fdb_config(config: &Config) -> Result<()> {
-	let ips = match &config.client.foundationdb.address {
-		FoundationDbAddress::Dynamic { fetch_endpoint } => {
-			#[derive(Deserialize)]
-			struct Response {
-				servers: Vec<Server>,
-			}
-
-			#[derive(Deserialize)]
-			struct Server {
-				vlan_ip: Option<Ipv4Addr>,
-			}
-
-			reqwest::get(fetch_endpoint.clone())
-				.await?
-				.error_for_status()?
-				.json::<Response>()
-				.await?
-				.servers
-				.into_iter()
-				.filter_map(|server| server.vlan_ip)
-				.map(|vlan_ip| format!("{vlan_ip}:4500"))
-				.collect::<Vec<_>>()
-		}
-		FoundationDbAddress::Static(addresses) => addresses.clone(),
+	let ips = match &config.client.foundationdb.addresses {
+		Addresses::Dynamic { fetch_endpoint } => reqwest::get(fetch_endpoint.clone())
+			.await?
+			.error_for_status()?
+			.json::<ApiResponse>()
+			.await?
+			.servers
+			.into_iter()
+			.filter_map(|server| server.vlan_ip)
+			.map(|vlan_ip| format!("{vlan_ip}:4500"))
+			.collect::<Vec<_>>(),
+		Addresses::Static(addresses) => addresses.clone(),
 	};
 
 	ensure!(!ips.is_empty(), "no fdb clusters found");
@@ -276,6 +274,27 @@ pub async fn init_fdb_config(config: &Config) -> Result<()> {
 	.await?;
 
 	Ok(())
+}
+
+pub async fn fetch_pull_addresses(config: &Config) -> Result<Vec<String>> {
+	let mut addresses = match &config.client.images.pull_addresses {
+		Addresses::Dynamic { fetch_endpoint } => reqwest::get(fetch_endpoint.clone())
+			.await?
+			.error_for_status()?
+			.json::<ApiResponse>()
+			.await?
+			.servers
+			.into_iter()
+			.filter_map(|server| server.vlan_ip)
+			.map(|vlan_ip| format!("{vlan_ip}:8080"))
+			.collect::<Vec<_>>(),
+		Addresses::Static(addresses) => addresses.clone(),
+	};
+
+	// Always sort the addresses so the list is deterministic
+	addresses.sort();
+
+	Ok(addresses)
 }
 
 /// Executes queries and explicitly handles retry errors.

@@ -46,6 +46,7 @@ pub struct Client {
 	pub data_dir: Option<PathBuf>,
 	pub cluster: Cluster,
 	pub runner: Runner,
+	pub images: Images,
 	pub network: Network,
 	#[serde(default)]
 	pub cni: Cni,
@@ -111,6 +112,12 @@ impl Runner {
 			.clone()
 			.unwrap_or_else(|| Path::new("/usr/local/bin/rivet-isolate-v8-runner").into())
 	}
+}
+
+#[derive(Clone, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct Images {
+	pub pull_addresses: Addresses,
 }
 
 #[derive(Clone, Deserialize, JsonSchema)]
@@ -233,12 +240,12 @@ impl Metrics {
 pub struct FoundationDb {
 	pub cluster_description: String,
 	pub cluster_id: String,
-	pub address: FoundationDbAddress,
+	pub addresses: Addresses,
 }
 
 #[derive(Clone, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub enum FoundationDbAddress {
+pub enum Addresses {
 	Dynamic { fetch_endpoint: Url },
 	Static(Vec<String>),
 }

@@ -15,15 +15,15 @@ pub struct Config {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct Port {
-	pub target: u16,
-	pub protocol: protocol::TransportProtocol,
-}
-
-#[derive(Serialize, Deserialize)]
 pub struct Resources {
 	/// Bytes.
 	pub memory: u64,
 	/// Bytes.
 	pub memory_max: u64,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Port {
+	pub target: u16,
+	pub protocol: protocol::TransportProtocol,
 }

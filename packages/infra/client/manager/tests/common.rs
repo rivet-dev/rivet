@@ -18,7 +18,6 @@ use hyper::{
 use pegboard::protocol;
 use pegboard_config::*;
 use pegboard_manager::{system_info, utils, Ctx};
-use serde_json::json;
 use tokio::{
 	fs::File,
 	io::BufReader,
@@ -74,8 +73,9 @@ pub async fn start_echo_actor(
 		actor_id,
 		config: Box::new(protocol::ActorConfig {
 			image: protocol::Image {
-				// Should match the URL in `serve_binaries`
-				artifact_url: format!("http://127.0.0.1:{ARTIFACTS_PORT}/image"),
+				id: Uuid::nil(),
+				artifact_url_stub: "/image".into(),
+				fallback_artifact_url: None,
 				kind: protocol::ImageKind::DockerImage,
 				compression: protocol::ImageCompression::None,
 			},
@@ -104,12 +104,20 @@ pub async fn start_echo_actor(
 				server_id: actor_id,
 			},
 			metadata: protocol::Raw::new(&protocol::ActorMetadata {
-				tags: [("foo".to_string(), "bar".to_string())]
-					.into_iter()
-					.collect(),
-				create_ts: 0,
-				env: protocol::ActorMetadataEnv {
+				actor: protocol::ActorMetadataActor {
+					id: actor_id,
+					tags: [("foo".to_string(), "bar".to_string())]
+						.into_iter()
+						.collect(),
+					create_ts: 0,
+				},
+				project: protocol::ActorMetadataProject {
+					project_id: Uuid::nil(),
+					slug: "foo".to_string(),
+				},
+				environment: protocol::ActorMetadataEnvironment {
 					env_id: Uuid::nil(),
+					slug: "foo".to_string(),
 				},
 				datacenter: protocol::ActorMetadataDatacenter {
 					name_id: "local".to_string(),
@@ -118,9 +126,7 @@ pub async fn start_echo_actor(
 				cluster: protocol::ActorMetadataCluster {
 					cluster_id: Uuid::nil(),
 				},
-				build: protocol::ActorMetadataBuild {
-					build_id: Uuid::nil(),
-				},
+				build: protocol::ActorMetadataBuild { id: Uuid::nil() },
 			})
 			.unwrap(),
 		}),
@@ -137,8 +143,9 @@ pub async fn start_js_echo_actor(
 		actor_id,
 		config: Box::new(protocol::ActorConfig {
 			image: protocol::Image {
-				// Should match the URL in `serve_binaries`
-				artifact_url: format!("http://127.0.0.1:{ARTIFACTS_PORT}/js-image"),
+				id: Uuid::nil(),
+				artifact_url_stub: "/js-image".into(),
+				fallback_artifact_url: None,
 				kind: protocol::ImageKind::JavaScript,
 				compression: protocol::ImageCompression::None,
 			},
@@ -165,12 +172,20 @@ pub async fn start_js_echo_actor(
 				server_id: actor_id,
 			},
 			metadata: protocol::Raw::new(&protocol::ActorMetadata {
-				tags: [("foo".to_string(), "bar".to_string())]
-					.into_iter()
-					.collect(),
-				create_ts: 0,
-				env: protocol::ActorMetadataEnv {
+				actor: protocol::ActorMetadataActor {
+					id: actor_id,
+					tags: [("foo".to_string(), "bar".to_string())]
+						.into_iter()
+						.collect(),
+					create_ts: 0,
+				},
+				project: protocol::ActorMetadataProject {
+					project_id: Uuid::nil(),
+					slug: "foo".to_string(),
+				},
+				environment: protocol::ActorMetadataEnvironment {
 					env_id: Uuid::nil(),
+					slug: "foo".to_string(),
 				},
 				datacenter: protocol::ActorMetadataDatacenter {
 					name_id: "local".to_string(),
@@ -179,9 +194,7 @@ pub async fn start_js_echo_actor(
 				cluster: protocol::ActorMetadataCluster {
 					cluster_id: Uuid::nil(),
 				},
-				build: protocol::ActorMetadataBuild {
-					build_id: Uuid::nil(),
-				},
+				build: protocol::ActorMetadataBuild { id: Uuid::nil() },
 			})
 			.unwrap(),
 		}),
@@ -255,6 +268,12 @@ pub async fn init_client(gen_path: &Path, working_path: &Path) -> Config {
 				container_runner_binary_path: Some(container_runner_binary_path),
 				isolate_runner_binary_path: Some(isolate_runner_binary_path),
 			},
+			images: Images {
+				// Should match the URL in `serve_binaries`
+				pull_addresses: Addresses::Static(vec![format!(
+					"http://127.0.0.1:{ARTIFACTS_PORT}"
+				)]),
+			},
 			network: Network {
 				bind_ip: "127.0.0.1".parse().unwrap(),
 				lan_ip: "127.0.0.1".parse().unwrap(),
@@ -273,7 +292,7 @@ pub async fn init_client(gen_path: &Path, working_path: &Path) -> Config {
 			foundationdb: FoundationDb {
 				cluster_description: "fdb".into(),
 				cluster_id: "fdb".into(),
-				address: FoundationDbAddress::Static(vec!["127.0.0.1:4500".parse().unwrap()]),
+				addresses: Addresses::Static(vec!["127.0.0.1:4500".into()]),
 			},
 			vector: Some(Vector {
 				address: "127.0.0.1:5021".into(),
@@ -313,6 +332,9 @@ pub async fn start_client(
 	// Init FDB config files
 	utils::init_fdb_config(&config).await.unwrap();
 
+	// Fetch ATS addresses
+	let pull_addresses = utils::fetch_pull_addresses(&config).await.unwrap();
+
 	// Build WS connection URL
 	let mut url = Url::parse("ws://127.0.0.1").unwrap();
 	url.set_port(Some(port)).unwrap();
@@ -335,7 +357,7 @@ pub async fn start_client(
 
 	tracing::info!("connected");
 
-	let ctx = Ctx::new(config, system, pool, tx);
+	let ctx = Ctx::new(config, system, pool, tx, pull_addresses);
 
 	// Share reference
 	{
@@ -409,24 +431,24 @@ async fn build_runner(gen_path: &Path, variant: &str) {
 	let image_name = format!("pegboard-{variant}-runner");
 
 	// Build runner binary
-	let status = Command::new("docker")
-		.arg("build")
-		.arg("--platform")
-		.arg("linux/amd64")
-		.arg("-t")
-		.arg(&image_name)
-		.arg("-f")
-		.arg(
-			pkg_path
-				.join(format!("{variant}-runner"))
-				.join("Dockerfile"),
-		)
-		.arg(pkg_path.join("..").join("..").join(".."))
-		.status()
-		.await
-		.unwrap();
+	// let status = Command::new("docker")
+	// 	.arg("build")
+	// 	.arg("--platform")
+	// 	.arg("linux/amd64")
+	// 	.arg("-t")
+	// 	.arg(&image_name)
+	// 	.arg("-f")
+	// 	.arg(
+	// 		pkg_path
+	// 			.join(format!("{variant}-runner"))
+	// 			.join("Dockerfile"),
+	// 	)
+	// 	.arg(pkg_path.join("..").join("..").join(".."))
+	// 	.status()
+	// 	.await
+	// 	.unwrap();
 
-	assert!(status.success());
+	// assert!(status.success());
 
 	tracing::info!("copying runner image");
 

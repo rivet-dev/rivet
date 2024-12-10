@@ -17,18 +17,21 @@ pub struct JsMetadata {
 
 impl JsMetadata {
 	pub fn from_actor(
-		actor_id: Uuid,
 		metadata: protocol::ActorMetadata,
 		scope: &mut v8::HandleScope<'_>,
 	) -> Result<Self> {
-		let date =
-			v8::Local::from(v8::Date::new(scope, metadata.create_ts as f64).context("bad date")?);
-
 		Ok(JsMetadata {
 			actor: JsMetadataActor {
-				id: actor_id,
-				tags: metadata.tags,
-				created_at: v8::Global::new(scope, date).into(),
+				id: metadata.actor.id,
+				tags: metadata.actor.tags,
+				created_at: {
+					let date = v8::Local::from(
+						v8::Date::new(scope, metadata.actor.create_ts as f64)
+							.context("bad date")?,
+					);
+
+					v8::Global::new(scope, date).into()
+				},
 			},
 			project: JsMetadataProject {
 				id: metadata.project.project_id,

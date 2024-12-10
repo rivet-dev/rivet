@@ -5,6 +5,7 @@
   "required": [
     "cluster",
     "foundationdb",
+    "images",
     "network",
     "runner"
   ],
@@ -16,11 +17,13 @@
       "$ref": "#/definitions/Cni"
     },
     "data_dir": {
-      "type": "string",
-      "nullable": true
+      "type": "string"
     },
     "foundationdb": {
       "$ref": "#/definitions/FoundationDb"
+    },
+    "images": {
+      "$ref": "#/definitions/Images"
     },
     "logs": {
       "$ref": "#/definitions/Logs"
@@ -38,16 +41,52 @@
       "$ref": "#/definitions/Runner"
     },
     "vector": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/Vector"
-        }
-      ],
-      "nullable": true
+      "$ref": "#/definitions/Vector"
     }
   },
   "additionalProperties": false,
   "definitions": {
+    "Addresses": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "dynamic"
+          ],
+          "properties": {
+            "dynamic": {
+              "type": "object",
+              "required": [
+                "fetch_endpoint"
+              ],
+              "properties": {
+                "fetch_endpoint": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "static"
+          ],
+          "properties": {
+            "static": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
     "ClientFlavor": {
       "type": "string",
       "enum": [
@@ -90,19 +129,16 @@
       ],
       "properties": {
         "bin_path": {
-          "type": "string",
-          "nullable": true
+          "type": "string"
         },
         "config_path": {
-          "type": "string",
-          "nullable": true
+          "type": "string"
         },
         "network_interface": {
           "type": "string"
         },
         "network_name": {
-          "type": "string",
-          "nullable": true
+          "type": "string"
         }
       },
       "additionalProperties": false
@@ -110,13 +146,13 @@
     "FoundationDb": {
       "type": "object",
       "required": [
-        "address",
+        "addresses",
         "cluster_description",
         "cluster_id"
       ],
       "properties": {
-        "address": {
-          "$ref": "#/definitions/FoundationDbAddress"
+        "addresses": {
+          "$ref": "#/definitions/Addresses"
         },
         "cluster_description": {
           "type": "string"
@@ -127,53 +163,23 @@
       },
       "additionalProperties": false
     },
-    "FoundationDbAddress": {
-      "oneOf": [
-        {
-          "type": "object",
-          "required": [
-            "dynamic"
-          ],
-          "properties": {
-            "dynamic": {
-              "type": "object",
-              "required": [
-                "fetch_endpoint"
-              ],
-              "properties": {
-                "fetch_endpoint": {
-                  "type": "string",
-                  "format": "uri"
-                }
-              },
-              "additionalProperties": false
-            }
-          },
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "required": [
-            "static"
-          ],
-          "properties": {
-            "static": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          },
-          "additionalProperties": false
+    "Images": {
+      "type": "object",
+      "required": [
+        "pull_addresses"
+      ],
+      "properties": {
+        "pull_addresses": {
+          "$ref": "#/definitions/Addresses"
         }
-      ]
+      },
+      "additionalProperties": false
     },
     "Logs": {
       "type": "object",
       "properties": {
         "redirect_logs": {
-          "type": "boolean",
-          "nullable": true
+          "type": "boolean"
         }
       },
       "additionalProperties": false
@@ -184,8 +190,7 @@
         "port": {
           "type": "integer",
           "format": "uint16",
-          "minimum": 0.0,
-          "nullable": true
+          "minimum": 0.0
         }
       },
       "additionalProperties": false
@@ -211,14 +216,12 @@
         "lan_port_range_max": {
           "type": "integer",
           "format": "uint16",
-          "minimum": 0.0,
-          "nullable": true
+          "minimum": 0.0
         },
         "lan_port_range_min": {
           "type": "integer",
           "format": "uint16",
-          "minimum": 0.0,
-          "nullable": true
+          "minimum": 0.0
         },
         "wan_ip": {
           "description": "Address to access this node publicly.\n\nThis IP is used when providing the actor's IP & port for host networking.",
@@ -228,14 +231,12 @@
         "wan_port_range_max": {
           "type": "integer",
           "format": "uint16",
-          "minimum": 0.0,
-          "nullable": true
+          "minimum": 0.0
         },
         "wan_port_range_min": {
           "type": "integer",
           "format": "uint16",
-          "minimum": 0.0,
-          "nullable": true
+          "minimum": 0.0
         }
       },
       "additionalProperties": false
@@ -246,14 +247,12 @@
         "cpu": {
           "type": "integer",
           "format": "uint64",
-          "minimum": 0.0,
-          "nullable": true
+          "minimum": 0.0
         },
         "memory": {
           "type": "integer",
           "format": "uint64",
-          "minimum": 0.0,
-          "nullable": true
+          "minimum": 0.0
         }
       },
       "additionalProperties": false
@@ -265,27 +264,23 @@
       ],
       "properties": {
         "container_runner_binary_path": {
-          "type": "string",
-          "nullable": true
+          "type": "string"
         },
         "flavor": {
           "$ref": "#/definitions/ClientFlavor"
         },
         "isolate_runner_binary_path": {
-          "type": "string",
-          "nullable": true
+          "type": "string"
         },
         "port": {
           "description": "WebSocket Port for runners on this machine to connect to.",
           "type": "integer",
           "format": "uint16",
-          "minimum": 0.0,
-          "nullable": true
+          "minimum": 0.0
         },
         "use_mounts": {
           "description": "Whether or not to use a mount for actor file systems.",
-          "type": "boolean",
-          "nullable": true
+          "type": "boolean"
         }
       },
       "additionalProperties": false

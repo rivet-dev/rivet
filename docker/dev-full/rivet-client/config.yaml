@@ -3,6 +3,8 @@ client:
     flavor: isolate
     # Enables running in non-privileged Docker containers
     use_mounts: false
+  images: !static
+    pull_addresses: ["TODO:4500"]
   cluster:
     # This is safe to hardcode
     client_id: fc67e54e-5d6a-4726-ab23-77b0e54f068f
@@ -29,8 +31,7 @@ client:
   foundationdb:
     cluster_description: docker
     cluster_id: docker
-    address:
-      !static
+    addresses: !static
       - "foundationdb:4500"
   vector:
     address: vector-server:6100

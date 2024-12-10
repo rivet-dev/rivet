@@ -1,9 +1,4 @@
-use std::{
-	collections::HashMap,
-	hash::{DefaultHasher, Hasher},
-	net::IpAddr,
-	time::Duration,
-};
+use std::{collections::HashMap, time::Duration};
 
 use build::types::{BuildCompression, BuildKind};
 use chirp_workflow::prelude::*;
@@ -724,98 +719,6 @@ join_signal!(DrainState {
 	Undrain,
 	Destroy,
 });
-
-/// Generates a presigned URL for the build image.
-async fn resolve_image_artifact_url(
-	ctx: &ActivityCtx,
-	datacenter_id: Uuid,
-	build_file_name: String,
-	build_delivery_method: BuildDeliveryMethod,
-	build_id: Uuid,
-	upload_id: Uuid,
-) -> GlobalResult<String> {
-	// Build URL
-	match build_delivery_method {
-		BuildDeliveryMethod::S3Direct => {
-			tracing::debug!("using s3 direct delivery");
-
-			// Build client
-			let s3_client = s3_util::Client::with_bucket_and_endpoint(
-				ctx.config(),
-				"bucket-build",
-				s3_util::EndpointKind::EdgeInternal,
-			)
-			.await?;
-
-			let presigned_req = s3_client
-				.get_object()
-				.bucket(s3_client.bucket())
-				.key(format!("{upload_id}/{build_file_name}"))
-				.presigned(
-					s3_util::aws_sdk_s3::presigning::PresigningConfig::builder()
-						.expires_in(std::time::Duration::from_secs(15 * 60))
-						.build()?,
-				)
-				.await?;
-
-			let addr_str = presigned_req.uri().to_string();
-			tracing::debug!(addr = %addr_str, "resolved artifact s3 presigned request");
-
-			Ok(addr_str)
-		}
-		BuildDeliveryMethod::TrafficServer => {
-			tracing::debug!("using traffic server delivery");
-
-			// Hash build so that the ATS server that we download the build from is always the same one. This
-			// improves cache hit rates and reduces download times.
-			let mut hasher = DefaultHasher::new();
-			hasher.write(build_id.as_bytes());
-			let hash = hasher.finish() as i64;
-
-			// NOTE: The algorithm for choosing the vlan_ip from the hash should match the one in
-			// prewarm_ats.rs @ prewarm_ats_cache
-			// Get vlan ip from build id hash for consistent routing
-			let (ats_vlan_ip,) = sql_fetch_one!(
-				[ctx, (IpAddr,)]
-				"
-				WITH sel AS (
-					-- Select candidate vlan ips
-					SELECT
-						vlan_ip
-					FROM db_cluster.servers
-					WHERE
-						datacenter_id = $1 AND
-						pool_type = $2 AND
-						vlan_ip IS NOT NULL AND
-						install_complete_ts IS NOT NULL AND
-						drain_ts IS NULL AND
-						cloud_destroy_ts IS NULL
-				)
-				SELECT vlan_ip
-				FROM sel
-				-- Use mod to make sure the hash stays within bounds
-				OFFSET abs($3 % GREATEST((SELECT COUNT(*) FROM sel), 1))
-				LIMIT 1
-				",
-				&datacenter_id,
-				cluster::types::PoolType::Ats as i32,
-				hash,
-			)
-			.await?;
-
-			let addr = format!(
-				"http://{vlan_ip}:8080/s3-cache/{namespace}-bucket-build/{upload_id}/{build_file_name}",
-				vlan_ip = ats_vlan_ip,
-				namespace = ctx.config().server()?.rivet.namespace,
-				upload_id = upload_id,
-			);
-
-			tracing::debug!(%addr, "resolved artifact s3 url");
-
-			Ok(addr)
-		}
-	}
-}
 
 /// Choose which port to assign for a job's ingress port.
 /// This is required because TCP and UDP do not have a `Host` header and thus cannot be re-routed by hostname.

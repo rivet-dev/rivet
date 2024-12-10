@@ -4704,6 +4704,7 @@ name = "pegboard-manager"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "bytes",
  "futures-util",
  "hyper 0.14.31",
  "indoc 2.0.5",
@@ -4715,6 +4716,7 @@ dependencies = [
  "portpicker",
  "prometheus",
  "rand",
+ "rand_chacha",
  "reqwest",
  "rivet-util",
  "serde",

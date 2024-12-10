@@ -49,6 +49,8 @@ pub async fn build_ip_allowlist(
 				..Default::default()
 			},
 			include_destroyed: false,
+			exclude_draining: false,
+			exclude_no_vlan: false,
 		})
 		.await?;
 

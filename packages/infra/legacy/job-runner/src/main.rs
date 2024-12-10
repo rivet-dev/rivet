@@ -8,7 +8,7 @@ use std::{
 };
 
 use anyhow::*;
-use job_runner::{log_shipper, throttle};
+use rivet_job_runner::{log_shipper, throttle, Manager};
 use signal_hook::{consts::signal::SIGTERM, iterator::Signals};
 
 /// Maximum length of a single log line
@@ -29,10 +29,10 @@ fn main() -> anyhow::Result<()> {
 		== "1";
 
 	let manager = match std::env::var("NOMAD_META_manager").ok() {
-		Some(x) if x == "dynamic_servers" => job_runner::Manager::DynamicServers {
+		Some(x) if x == "dynamic_servers" => Manager::DynamicServers {
 			server_id: std::env::var("NOMAD_META_server_id").context("NOMAD_META_server_id")?,
 		},
-		_ => job_runner::Manager::JobRun {
+		_ => Manager::JobRun {
 			run_id: std::env::var("NOMAD_META_job_run_id").context("NOMAD_META_job_run_id")?,
 		},
 	};

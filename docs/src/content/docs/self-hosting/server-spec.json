@@ -12,8 +12,7 @@
         {
           "$ref": "#/definitions/ClickHouse"
         }
-      ],
-      "nullable": true
+      ]
     },
     "cloudflare": {
       "default": null,
@@ -21,8 +20,7 @@
         {
           "$ref": "#/definitions/Cloudflare"
         }
-      ],
-      "nullable": true
+      ]
     },
     "cockroachdb": {
       "default": {
@@ -45,8 +43,7 @@
         {
           "$ref": "#/definitions/Hcaptcha"
         }
-      ],
-      "nullable": true
+      ]
     },
     "ip_info": {
       "default": null,
@@ -54,8 +51,7 @@
         {
           "$ref": "#/definitions/IpInfo"
         }
-      ],
-      "nullable": true
+      ]
     },
     "jwt": {
       "$ref": "#/definitions/JwtKey"
@@ -66,8 +62,7 @@
         {
           "$ref": "#/definitions/Linode"
         }
-      ],
-      "nullable": true
+      ]
     },
     "loops": {
       "default": null,
@@ -75,8 +70,7 @@
         {
           "$ref": "#/definitions/Loops"
         }
-      ],
-      "nullable": true
+      ]
     },
     "nats": {
       "default": {
@@ -98,8 +92,7 @@
         {
           "$ref": "#/definitions/Neon"
         }
-      ],
-      "nullable": true
+      ]
     },
     "nomad": {
       "description": "Deprecated",
@@ -108,8 +101,7 @@
         {
           "$ref": "#/definitions/Nomad"
         }
-      ],
-      "nullable": true
+      ]
     },
     "prometheus": {
       "default": null,
@@ -117,8 +109,7 @@
         {
           "$ref": "#/definitions/Prometheus"
         }
-      ],
-      "nullable": true
+      ]
     },
     "redis": {
       "default": {
@@ -226,8 +217,7 @@
         {
           "$ref": "#/definitions/Sendgrid"
         }
-      ],
-      "nullable": true
+      ]
     },
     "ssh": {
       "default": null,
@@ -235,8 +225,7 @@
         {
           "$ref": "#/definitions/Ssh"
         }
-      ],
-      "nullable": true
+      ]
     },
     "stripe": {
       "default": null,
@@ -244,8 +233,7 @@
         {
           "$ref": "#/definitions/Stripe"
         }
-      ],
-      "nullable": true
+      ]
     },
     "tls": {
       "default": null,
@@ -253,8 +241,7 @@
         {
           "$ref": "#/definitions/Tls"
         }
-      ],
-      "nullable": true
+      ]
     },
     "turnstile": {
       "default": null,
@@ -262,8 +249,7 @@
         {
           "$ref": "#/definitions/Turnstile"
         }
-      ],
-      "nullable": true
+      ]
     }
   },
   "additionalProperties": false,
@@ -299,14 +285,12 @@
       "properties": {
         "host": {
           "type": "string",
-          "format": "ip",
-          "nullable": true
+          "format": "ip"
         },
         "port": {
           "type": "integer",
           "format": "uint16",
-          "minimum": 0.0,
-          "nullable": true
+          "minimum": 0.0
         }
       },
       "additionalProperties": false
@@ -318,31 +302,26 @@
         "host": {
           "description": "The host on which the API service listens.",
           "type": "string",
-          "format": "ip",
-          "nullable": true
+          "format": "ip"
         },
         "port": {
           "description": "The port on which the API service listens.",
           "type": "integer",
           "format": "uint16",
-          "minimum": 0.0,
-          "nullable": true
+          "minimum": 0.0
         },
         "public_origin": {
           "description": "The public origin URL for the API.",
           "type": "string",
-          "format": "uri",
-          "nullable": true
+          "format": "uri"
         },
         "respect_forwarded_for": {
           "description": "Flag to respect the X-Forwarded-For header for client IP addresses.\n\nWill be ignored in favor of CF-Connecting-IP if DNS provider is configured as Cloudflare.",
-          "type": "boolean",
-          "nullable": true
+          "type": "boolean"
         },
         "verbose_errors": {
           "description": "Flag to enable verbose error reporting.",
-          "type": "boolean",
-          "nullable": true
+          "type": "boolean"
         }
       },
       "additionalProperties": false
@@ -429,8 +408,7 @@
             {
               "$ref": "#/definitions/Secret<String>"
             }
-          ],
-          "nullable": true
+          ]
         },
         "provision_users": {
           "default": {},
@@ -501,16 +479,13 @@
       "type": "object",
       "properties": {
         "game": {
-          "type": "string",
-          "nullable": true
+          "type": "string"
         },
         "job": {
-          "type": "string",
-          "nullable": true
+          "type": "string"
         },
         "main": {
-          "type": "string",
-          "nullable": true
+          "type": "string"
         }
       },
       "additionalProperties": false
@@ -544,12 +519,10 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/FirewallRule"
-          },
-          "nullable": true
+          }
         },
         "vlan_ip_net": {
-          "type": "string",
-          "nullable": true
+          "type": "string"
         }
       },
       "additionalProperties": false
@@ -561,12 +534,10 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/FirewallRule"
-          },
-          "nullable": true
+          }
         },
         "vlan_ip_net": {
-          "type": "string",
-          "nullable": true
+          "type": "string"
         }
       },
       "additionalProperties": false
@@ -578,12 +549,10 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/FirewallRule"
-          },
-          "nullable": true
+          }
         },
         "vlan_ip_net": {
-          "type": "string",
-          "nullable": true
+          "type": "string"
         }
       },
       "additionalProperties": false
@@ -613,32 +582,27 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/FirewallRule"
-          },
-          "nullable": true
+          }
         },
         "max_lan_port": {
           "type": "integer",
           "format": "uint16",
-          "minimum": 0.0,
-          "nullable": true
+          "minimum": 0.0
         },
         "max_wan_port": {
           "type": "integer",
           "format": "uint16",
-          "minimum": 0.0,
-          "nullable": true
+          "minimum": 0.0
         },
         "min_lan_port": {
           "type": "integer",
           "format": "uint16",
-          "minimum": 0.0,
-          "nullable": true
+          "minimum": 0.0
         },
         "min_wan_port": {
           "type": "integer",
           "format": "uint16",
-          "minimum": 0.0,
-          "nullable": true
+          "minimum": 0.0
         },
         "provision_margin": {
           "type": "integer",
@@ -647,13 +611,11 @@
         },
         "vlan_addr_range_max": {
           "type": "string",
-          "format": "ipv4",
-          "nullable": true
+          "format": "ipv4"
         },
         "vlan_addr_range_min": {
           "type": "string",
-          "format": "ipv4",
-          "nullable": true
+          "format": "ipv4"
         }
       },
       "additionalProperties": false
@@ -719,8 +681,7 @@
           ]
         },
         "vlan_ip_net": {
-          "type": "string",
-          "nullable": true
+          "type": "string"
         }
       },
       "additionalProperties": false
@@ -745,12 +706,7 @@
           "minimum": 0.0
         },
         "password": {
-          "allOf": [
-            {
-              "$ref": "#/definitions/Secret<String>"
-            }
-          ],
-          "nullable": true
+          "$ref": "#/definitions/Secret<String>"
         },
         "provision_users": {
           "description": "Automatically provisions new users when migrating the database.",
@@ -815,8 +771,7 @@
             {
               "$ref": "#/definitions/DatacenterHardware"
             }
-          ],
-          "nullable": true
+          ]
         },
         "id": {
           "description": "This ID must not change.",
@@ -833,8 +788,7 @@
             {
               "$ref": "#/definitions/DatacenterProvision"
             }
-          ],
-          "nullable": true
+          ]
         }
       },
       "additionalProperties": false
@@ -917,18 +871,15 @@
       "properties": {
         "domain_cdn": {
           "description": "The domain used for CDN-related services.",
-          "type": "string",
-          "nullable": true
+          "type": "string"
         },
         "domain_job": {
           "description": "The domain used for job-related services.",
-          "type": "string",
-          "nullable": true
+          "type": "string"
         },
         "domain_main": {
           "description": "The domain used for backend services.",
-          "type": "string",
-          "nullable": true
+          "type": "string"
         },
         "provider": {
           "description": "The DNS provider used for managing domains.",
@@ -987,26 +938,22 @@
         "max_ingress_port_tcp": {
           "type": "integer",
           "format": "uint16",
-          "minimum": 0.0,
-          "nullable": true
+          "minimum": 0.0
         },
         "max_ingress_port_udp": {
           "type": "integer",
           "format": "uint16",
-          "minimum": 0.0,
-          "nullable": true
+          "minimum": 0.0
         },
         "min_ingress_port_tcp": {
           "type": "integer",
           "format": "uint16",
-          "minimum": 0.0,
-          "nullable": true
+          "minimum": 0.0
         },
         "min_ingress_port_udp": {
           "type": "integer",
           "format": "uint16",
-          "minimum": 0.0,
-          "nullable": true
+          "minimum": 0.0
         }
       },
       "additionalProperties": false
@@ -1027,20 +974,10 @@
       "type": "object",
       "properties": {
         "secret_fallback": {
-          "allOf": [
-            {
-              "$ref": "#/definitions/Secret<String>"
-            }
-          ],
-          "nullable": true
+          "$ref": "#/definitions/Secret<String>"
         },
         "site_key_fallback": {
-          "allOf": [
-            {
-              "$ref": "#/definitions/Secret<String>"
-            }
-          ],
-          "nullable": true
+          "$ref": "#/definitions/Secret<String>"
         }
       },
       "additionalProperties": false
@@ -1051,14 +988,12 @@
       "properties": {
         "host": {
           "type": "string",
-          "format": "ip",
-          "nullable": true
+          "format": "ip"
         },
         "port": {
           "type": "integer",
           "format": "uint16",
-          "minimum": 0.0,
-          "nullable": true
+          "minimum": 0.0
         }
       },
       "additionalProperties": false
@@ -1141,14 +1076,12 @@
       "properties": {
         "host": {
           "type": "string",
-          "format": "ip",
-          "nullable": true
+          "format": "ip"
         },
         "port": {
           "type": "integer",
           "format": "uint16",
-          "minimum": 0.0,
-          "nullable": true
+          "minimum": 0.0
         }
       },
       "additionalProperties": false
@@ -1165,8 +1098,7 @@
             {
               "$ref": "#/definitions/Secret<String>"
             }
-          ],
-          "nullable": true
+          ]
         },
         "urls": {
           "type": "array",
@@ -1177,8 +1109,7 @@
         },
         "username": {
           "default": null,
-          "type": "string",
-          "nullable": true
+          "type": "string"
         }
       },
       "additionalProperties": false
@@ -1221,15 +1152,13 @@
         "host": {
           "description": "The host on which the Pegboard service listens.",
           "type": "string",
-          "format": "ip",
-          "nullable": true
+          "format": "ip"
         },
         "port": {
           "description": "The port on which the Pegboard service listens.",
           "type": "integer",
           "format": "uint16",
-          "minimum": 0.0,
-          "nullable": true
+          "minimum": 0.0
         }
       },
       "additionalProperties": false
@@ -1304,8 +1233,7 @@
             {
               "$ref": "#/definitions/Secret<String>"
             }
-          ],
-          "nullable": true
+          ]
         },
         "url": {
           "type": "string",
@@ -1313,8 +1241,7 @@
         },
         "username": {
           "default": null,
-          "type": "string",
-          "nullable": true
+          "type": "string"
         }
       },
       "additionalProperties": false
@@ -1379,8 +1306,7 @@
             {
               "$ref": "#/definitions/Backend"
             }
-          ],
-          "nullable": true
+          ]
         },
         "billing": {
           "default": null,
@@ -1388,8 +1314,7 @@
             {
               "$ref": "#/definitions/Billing"
             }
-          ],
-          "nullable": true
+          ]
         },
         "cdn": {
           "default": null,
@@ -1397,23 +1322,20 @@
             {
               "$ref": "#/definitions/Cdn"
             }
-          ],
-          "nullable": true
+          ]
         },
         "clusters": {
           "default": null,
           "type": "object",
           "additionalProperties": {
             "$ref": "#/definitions/Cluster"
-          },
-          "nullable": true
+          }
         },
         "default_cluster_id": {
           "description": "If specified, will use this as the default cluster ID.\n\nThis will have no effect if applied after the cluster has first ran.",
           "default": null,
           "type": "string",
-          "format": "uuid",
-          "nullable": true
+          "format": "uuid"
         },
         "dns": {
           "default": null,
@@ -1421,8 +1343,7 @@
             {
               "$ref": "#/definitions/Dns"
             }
-          ],
-          "nullable": true
+          ]
         },
         "guard": {
           "default": {
@@ -1454,8 +1375,7 @@
             {
               "$ref": "#/definitions/JobRun"
             }
-          ],
-          "nullable": true
+          ]
         },
         "metrics": {
           "default": {
@@ -1491,8 +1411,7 @@
             {
               "$ref": "#/definitions/ClusterProvision"
             }
-          ],
-          "nullable": true
+          ]
         },
         "telemetry": {
           "default": {
@@ -1564,8 +1483,7 @@
         "endpoint_edge_internal": {
           "description": "If not defined, will default to endpoint_external.",
           "type": "string",
-          "format": "uri",
-          "nullable": true
+          "format": "uri"
         },
         "endpoint_external": {
           "type": "string",
@@ -1738,8 +1656,7 @@
             {
               "$ref": "#/definitions/Secret<String>"
             }
-          ],
-          "nullable": true
+          ]
         },
         "traefik_provider": {
           "description": "Token for the API Traefik provider.",
@@ -1747,8 +1664,7 @@
             {
               "$ref": "#/definitions/Secret<String>"
             }
-          ],
-          "nullable": true
+          ]
         }
       },
       "additionalProperties": false
@@ -1770,28 +1686,16 @@
       "type": "object",
       "properties": {
         "cdn_secret_key": {
-          "allOf": [
-            {
-              "$ref": "#/definitions/Secret<String>"
-            }
-          ],
-          "nullable": true
+          "$ref": "#/definitions/Secret<String>"
         },
         "cdn_site_key": {
-          "type": "string",
-          "nullable": true
+          "type": "string"
         },
         "main_secret_key": {
-          "allOf": [
-            {
-              "$ref": "#/definitions/Secret<String>"
-            }
-          ],
-          "nullable": true
+          "$ref": "#/definitions/Secret<String>"
         },
         "main_site_key": {
-          "type": "string",
-          "nullable": true
+          "type": "string"
         }
       },
       "additionalProperties": false
@@ -1802,19 +1706,16 @@
       "properties": {
         "enable": {
           "description": "Enables serving the UI automatically.\n\nIf disabled, the UI can be hosted separately.",
-          "type": "boolean",
-          "nullable": true
+          "type": "boolean"
         },
         "public_origin": {
           "description": "The origin URL for the UI.",
           "type": "string",
-          "format": "uri",
-          "nullable": true
+          "format": "uri"
         },
         "public_origin_regex": {
           "description": "Regular expression to match valid UI origins.",
-          "type": "string",
-          "nullable": true
+          "type": "string"
         }
       },
       "additionalProperties": false

@@ -304,7 +304,6 @@ pub async fn run_inner(
 				} else {
 					// Call `start`
 					match handle_entrypoint(
-						actor_id,
 						actor_config.metadata.deserialize()?,
 						&mut worker,
 						module_id,
@@ -388,7 +387,6 @@ pub async fn run_inner(
 
 // Reads the `start` function from the default export of index.js and calls it.
 fn handle_entrypoint(
-	actor_id: Uuid,
 	actor_metadata: protocol::ActorMetadata,
 	worker: &mut MainWorker,
 	index_module_id: ModuleId,
@@ -446,7 +444,7 @@ fn handle_entrypoint(
 		.context("ns is object")?;
 
 	// Serialize metadata
-	let metadata = JsMetadata::from_actor(actor_id, actor_metadata, scope)?;
+	let metadata = JsMetadata::from_actor(actor_metadata, scope)?;
 	let metadata = deno_core::serde_v8::to_v8(scope, metadata)?;
 
 	// Add metadata

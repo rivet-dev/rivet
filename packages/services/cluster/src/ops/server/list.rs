@@ -9,6 +9,8 @@ use crate::types::{Filter, Server};
 pub struct Input {
 	pub filter: Filter,
 	pub include_destroyed: bool,
+	pub exclude_draining: bool,
+	pub exclude_no_vlan: bool,
 }
 
 #[derive(Debug)]
@@ -34,13 +36,17 @@ pub async fn cluster_server_list(ctx: &OperationCtx, input: &Input) -> GlobalRes
 		ON s.datacenter_id = d.datacenter_id
 		WHERE
 			($1 OR s.cloud_destroy_ts IS NULL) AND
-			($2 IS NULL OR s.server_id = ANY($2)) AND
-			($3 IS NULL OR s.datacenter_id = ANY($3)) AND
-			($4 IS NULL OR d.cluster_id = ANY($4)) AND
-			($5 IS NULL OR s.pool_type = ANY($5)) AND
-			($6 IS NULL OR s.public_ip = ANY($6))
+			(NOT $2 OR s.drain_ts IS NULL) AND
+			(NOT $3 OR s.vlan_ip IS NOT NULL) AND
+			($4 IS NULL OR s.server_id = ANY($4)) AND
+			($5 IS NULL OR s.datacenter_id = ANY($5)) AND
+			($6 IS NULL OR d.cluster_id = ANY($6)) AND
+			($7 IS NULL OR s.pool_type = ANY($7)) AND
+			($8 IS NULL OR s.public_ip = ANY($8))
 		",
 		input.include_destroyed,
+		input.exclude_draining,
+		input.exclude_no_vlan,
 		&input.filter.server_ids,
 		&input.filter.datacenter_ids,
 		&input.filter.cluster_ids,
