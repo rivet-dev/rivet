@@ -109,9 +109,6 @@ faster
 
 ## 📐 Architecture
 
-We maintain a detailed architecture diagram
-[here](https://www.figma.com/file/GvCj77EG79NUoW1dRG4qkg/Architecture?type=whiteboard&node-id=0%3A1&t=WqMQ2r6avjM0jPK0-1).
-
 ![Architecture](./.github/media/architecture.png)
 
 ## 📖 Documentation
