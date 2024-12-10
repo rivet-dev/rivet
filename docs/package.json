@@ -13,7 +13,6 @@
   },
   "browserslist": "defaults, not ie <= 11",
   "dependencies": {
-    "@algolia/autocomplete-core": "^1.7.3",
     "@fortawesome/fontawesome-svg-core": "^6.5.2",
     "@fortawesome/free-brands-svg-icons": "^6.5.2",
     "@fortawesome/free-solid-svg-icons": "^6.5.2",
@@ -26,7 +25,7 @@
     "@next/mdx": "^14.0.1",
     "@next/third-parties": "latest",
     "@rivet-gg/api": "^0.0.1-rc19",
-    "@rivet-gg/components": "https://github.com/rivet-gg/hub#workspace=@rivet-gg/components&head=09-27-fix_changes_to_components_for_site",
+    "@rivet-gg/components": "*",
     "@rivet-gg/icons": "*",
     "@shikijs/transformers": "^1.17.6",
     "@sindresorhus/slugify": "^2.1.1",
@@ -48,17 +47,16 @@
     "feed": "^4.2.2",
     "flexsearch": "^0.7.31",
     "focus-visible": "^5.2.0",
-    "framer-motion": "11.5.4",
+    "framer-motion": "*",
     "mdast-util-to-string": "^3.2.0",
     "mdx-annotations": "^0.1.1",
-    "next": "^14.2.5",
+    "next": "^15.0",
     "next-router-mock": "^0.9.7",
     "postcss": "^8.4.24",
     "postcss-focus-visible": "^6.0.4",
-    "posthog-js": "^1.142.1",
-    "react": "18.3.1",
+    "posthog-js": "^1.161.6",
+    "react": "*",
     "react-chartjs-2": "^5.2.0",
-    "react-dom": "18.3.1",
     "react-github-btn": "^1.4.0",
     "react-highlight-words": "^0.20.0",
     "react-markdown": "^9.0.1",
@@ -96,6 +94,10 @@
   },
   "packageManager": "yarn@4.2.2",
   "resolutions": {
-    "@rivet-gg/icons": "https://github.com/rivet-gg/hub#workspace=@rivet-gg/icons&head=09-18-icons_pack"
+    "@rivet-gg/icons": "https://github.com/rivet-gg/hub#workspace=@rivet-gg/icons&head=09-18-icons_pack",
+    "@rivet-gg/components": "https://github.com/rivet-gg/hub#workspace=@rivet-gg/components&head=12-04-refactor_components_adjustments_for_landing_page",
+    "framer-motion": "npm:unframer@^2.6.5",
+    "react": "^19.0.0-rc-69d4b800-20241021",
+    "react-dom": "^19.0.0-rc-69d4b800-20241021"
   }
 }

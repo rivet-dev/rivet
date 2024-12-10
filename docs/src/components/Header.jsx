@@ -9,7 +9,6 @@ import { Popover, Transition } from '@headlessui/react';
 
 import { Button } from '@/components/Button';
 import { MobileNavigation, useIsInsideMobileNavigation } from '@/components/MobileNavigation';
-import { MobileSearch, Search } from '@/components/Search';
 import {
   Icon,
   faSquare,
@@ -183,8 +182,6 @@ export const Header = forwardRef(function Header({ className, tabsTitle, tabs },
             ))}
             {/* </div> */}
 
-            {pathname != '/' && <Search />}
-            <MobileSearch />
             {/* <ModeToggle /> */}
             <div className='hidden min-[416px]:contents'>
               <Button href='https://hub.rivet.gg' variant='secondary'>

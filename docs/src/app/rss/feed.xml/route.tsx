@@ -4,6 +4,8 @@ import { getSiteUrl } from '@/lib/siteUrl';
 import { Feed } from 'feed';
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-static';
+
 export async function GET() {
   let siteUrl = getSiteUrl();
 

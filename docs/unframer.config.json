@@ -1,15 +1,14 @@
 {
-    "$schema": "https://unframer-schema.vercel.app/schema.json",
-    "outDir": "./src/framer",
-    "components": {
-        "index": "https://framer.com/m/Main-Page-hPg2.js@hPuYHpaHdqrwjz44qR1N",
-        "pricing": "https://framer.com/m/Pricing-Page-VfNq.js@q1ZVKhr4UZwXUATr4xTE",
-        "sales": "https://framer.com/m/Enterprise-Support-Page-vy8N.js@4NSLp8g2XeiRa7UrhEvQ"
-    },
-    "breakpoints": {
-        "xl": 1200,
-        "md": 768,
-        "sm": 320
-    }
+  "$schema": "https://unframer-schema.vercel.app/schema.json",
+  "outDir": "./src/generated/framer",
+  "components": {
+    "index": "https://framer.com/m/Main-Page-hPg2.js@jvdc7f49GeGHL91H9tN8",
+    "pricing": "https://framer.com/m/Pricing-Page-VfNq.js@9HBP886Lg8laNJJDIopP",
+    "sales": "https://framer.com/m/Sales-Page-8CF8.js@2rKfjq3WifCNzY4bVYMM"
+  },
+  "breakpoints": {
+    "xl": 1200,
+    "md": 768,
+    "sm": 320
+  }
 }
-

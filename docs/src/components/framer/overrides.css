@@ -1,0 +1,6 @@
+svg[style*="display: inline-block"] {
+    /**
+    Overrides the inline-block style of the svg element, which is added by unframer/material plugin in Framer and causes invalid display of icons.
+    */
+    display: block !important;
+}

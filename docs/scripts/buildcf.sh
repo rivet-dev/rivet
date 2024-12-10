@@ -7,4 +7,5 @@ set -euf
 	git clone https://github.com/rivet-gg/modules.git --depth=1 --branch main
 )
 yarn
+yarn update-framer
 npx next build && cp _redirects out/_redirects

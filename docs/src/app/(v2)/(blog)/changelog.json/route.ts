@@ -1,6 +1,8 @@
 import { loadArticles } from "@/lib/article";
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-static";
+
 export async function GET() {
     const articles = await loadArticles();
 
