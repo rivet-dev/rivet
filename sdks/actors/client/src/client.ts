@@ -133,10 +133,22 @@ export class Client {
 		const create = opts?.create ?? {
 			tags,
 			buildTags: {
-				...tags,
+				name: tags.name,
 				current: "true",
 			},
 		};
+
+		//client.get("chat_room", { room: "lkjsdf" }, { noCreate: true, parameters: { token: 123 } });
+		//client.get({ name: "chat_room", room: "lkjsdf" }, { noCreate: true, parameters: { token: 123 } });
+		//client.get("chat_room", {
+		//	tags: { channel: "foo", },
+		//	parameters: { token: 123 }
+		//});
+
+		//client.withTags({ name: "chat_room", room: "lkjsdf" };
+		//client.withTags("chat_room", { room: "lkjsdf" });
+
+		// { game_mode: "tdm" } -> { game_mode: "tdm", map: "sandstorm" }
 
 		const res = await fetch(`${this.managerEndpoint}/actors`, {
 			method: "POST",

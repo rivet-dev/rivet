@@ -11,6 +11,15 @@ import {
 	ActorsResponse,
 } from "../../manager-protocol/src/mod.ts";
 
+interface AccessConfig {
+	builds: Build[]
+}
+
+// all actors with public access:
+interface Build {
+	tags: any,
+}
+
 export default class Manager {
 	private readonly rivetClient: RivetClientClient;
 	private readonly environment: RivetEnvironment;

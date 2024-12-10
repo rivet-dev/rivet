@@ -20,7 +20,7 @@ class Example extends Actor<State, ConnectionData, ConnectionParams> {
 ```
 
 ```typescript {{ "title": "client.ts" }}
-const actor = client.withTags({ name: "example" }, {
+const actor = client.get("example", {}, {
   parameters: { authToken: "supersekure" }
 });
 ```

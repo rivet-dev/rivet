@@ -1,12 +1,19 @@
 {
-	"builds": [
-		{
-			"tags": { "name": "counter" },
-			"runtime": "javascript",
+	//"builds": [
+	//	{
+	//		"tags": { "name": "counter" },
+	//		"runtime": "javascript",
+	//		"script": "counter.ts",
+	//		"accesss": "public",
+	//		"unstable": {
+	//			"minify": false
+	//		}
+	//	}
+	//]
+	"builds": {
+		"counter": {
 			"script": "counter.ts",
-			"unstable": {
-				"minify": false
-			}
+			"access": "public"
 		}
-	]
+	}
 }

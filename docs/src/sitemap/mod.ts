@@ -172,7 +172,11 @@ export const sitemap = [
             collapsible: true,
             pages: [
               {
+<<<<<<< HEAD
                 title: 'Introduction',
+=======
+                title: 'Overview',
+>>>>>>> 4623a0eb5 (chore: add access controls to actor manager)
                 href: '/docs/self-hosting'
               },
               {

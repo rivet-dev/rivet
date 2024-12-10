@@ -4,13 +4,13 @@ Rivet actors are designed to be fault-tolerant and resilient to various types of
 
 ## Actor crashes
 
-- When an actor crashes, Rivet automatically starts the actor again (with an [exponential backoff](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/retry-backoff.html)).
+- When an actor crashes, Rivet [automatically starts the actor again](/docs/rescheduling) (with an [exponential backoff](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/retry-backoff.html)).
 - The actor's state will still be there when it restarts.
 - `onStart` will be called when the actor starts again.
 
 ## Hardware and System Faults
 
-While uncommon, hardware and system faults can cause an actor to crash. Rivet is designed to handle these scenarios by automatically restarting the actor (with an [exponential backoff](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/retry-backoff.html)).
+While uncommon, hardware and system faults can cause an actor to crash. Rivet is designed to handle these scenarios by [automatically restarting the actor](/docs/rescheduling). (with an [exponential backoff](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/retry-backoff.html)).
 
 ## Actor state
 

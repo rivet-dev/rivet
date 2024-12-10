@@ -7,7 +7,10 @@ export type ActorQuery =
 	| { getOrCreate: GetOrCreateRequest }
 	| { create: CreateRequest };
 
-export interface GetOrCreateRequest { tags: ActorTags, create?: CreateRequest }
+export interface GetOrCreateRequest {
+	tags: ActorTags;
+	create?: CreateRequest;
+}
 
 // TODO(RVT-4250):
 export type CreateRequest = RivetClient.actor.CreateActorRequest;

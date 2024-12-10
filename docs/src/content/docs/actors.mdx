@@ -80,7 +80,7 @@ This example has two actors:
 ```typescript {{ "title": "client.ts" }}
 const client = new Client(/* ... */);
 
-const user = await client.withTags<User>({ name: "user", userId: "1234" });
+const user = await client.get<User>({ name: "user", userId: "1234" });
 const username = await user.getUsername();
 
 const chat = await client.withTags<Channel>({ name: "channel", channelId: "hello-world" });
