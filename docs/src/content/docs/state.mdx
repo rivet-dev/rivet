@@ -1,13 +1,20 @@
 # State
 
-Actor data is isolated to itself and cannot be accessed from other actors or clients. All reads & writes to state are done via [RPC](/docs/rpc).
-
 Actor state provides the best of both worlds: it's stored in-memory and persisted automatically. This lets you work with the data without added latency while still being able to survive crashes & upgrades.
 
-There are two ways of storing actor data:
+Actor state is isolated to itself and cannot be accessed from other actors or clients. All reads & writes to state are done via [RPC](/docs/rpc).
 
-- **Native state** data is the most common persistence mechanism. State is a native JavaScript object stored in memory.
-- **Key-Value (KV)** data allows you deal with larger datasets than cannot fit in memory.
+There are two ways of storing actor state:
+
+- **Native state** is the most common persistence mechanism. State is a native JavaScript object stored in memory.
+- **Key-Value (KV) state** allows you deal with larger datasets than cannot fit in memory.
+
+<Note>
+  While Rivet Actors can serve as a complete database solution, they can also
+  complement your existing databases effectively. For example, you might use
+  Rivet Actors to handle frequently-changing data that needs real-time access,
+  while keeping less frequently accessed data in your traditional database.
+</Note>
 
 ## Native state
 
@@ -88,6 +95,8 @@ State is constrained to the available memory (see [limitations](/docs/limitation
 
 The KV state is used for storing large datasets that cannot fit in to memory.
 
+Native & KV state can be used together side-by-side without issue..
+
 <Info>
     KV is specific to each actor and is not global. To fetch data from other actors, use [RPC](/docs/rpc).
 
@@ -100,13 +109,15 @@ The KV state is used for storing large datasets that cannot fit in to memory.
 
 ### Performance
 
-KV stores native JavaScript values in a compact binary format, so you don't need to worry about writing extra serialization & deserialization code.
+KV has the same performance as using native state, but with a more flexible API & unlimited storage.
+
+KV stores native JavaScript values in a compact binary format so you don't need to write extra serialization & deserialization code.
 
 ### Operations
 
 Raw KV operations can be called via `this.#ctx.kv.<op>`.
 
-- **`get(key: any, options?: GetOptions): Promise<any | null>`**
+#### `get(key: any, options?: GetOptions): Promise<any | null>`
 
   Retrieves a value from the key-value store.
 
@@ -118,7 +129,7 @@ Raw KV operations can be called via `this.#ctx.kv.<op>`.
   }
   ```
 
-- **`getBatch(keys: any[], options?: GetBatchOptions): Promise<Map<any, any>>`**
+#### `getBatch(keys: any[], options?: GetBatchOptions): Promise<Map<any, any>>`
 
   Retrieves a batch of key-value pairs.
 
@@ -130,7 +141,7 @@ Raw KV operations can be called via `this.#ctx.kv.<op>`.
   }
   ```
 
-- **`list(options?: ListOptions): Promise<Map<any, any>>`**
+#### `list(options?: ListOptions): Promise<Map<any, any>>`
 
   Retrieves all key-value pairs in the KV store. When using any of the options, the keys lexicographic order
   is used for filtering.
@@ -155,7 +166,7 @@ Raw KV operations can be called via `this.#ctx.kv.<op>`.
   }
   ```
 
-- **`put(key: any, value: any | ArrayBuffer, options?: PutOptions): Promise<void>`**
+#### `put(key: any, value: any | ArrayBuffer, options?: PutOptions): Promise<void>`
 
   Stores a key-value pair in the key-value store.
 
@@ -167,7 +178,7 @@ Raw KV operations can be called via `this.#ctx.kv.<op>`.
   }
   ```
 
-- **`putBatch(obj: Map<any, any | ArrayBuffer>, options?: PutBatchOptions): Promise<void>`**
+#### `putBatch(obj: Map<any, any | ArrayBuffer>, options?: PutBatchOptions): Promise<void>`
 
   Stores a batch of key-value pairs.
 
@@ -179,15 +190,15 @@ Raw KV operations can be called via `this.#ctx.kv.<op>`.
   }
   ```
 
-- **`delete(key: any): Promise<void>`**
+#### `delete(key: any): Promise<void>`
 
   Deletes a key-value pair from the key-value store.
 
-- **`deleteBatch(keys: any[]): Promise<void>`**
+#### `deleteBatch(keys: any[]): Promise<void>`
 
   Deletes a batch of key-value pairs from the key-value store.
 
-- **`deleteAll(): Promise<void>`**
+#### `deleteAll(): Promise<void>`
 
   Deletes all data from the key-value store. **This CANNOT be undone.**
 
@@ -204,7 +215,7 @@ await this.#ctx.kv.put(myKey, [1, 2, 3]);
 await this.#ctx.kv.get(myKey); // [1, 2, 3]
 ```
 
-**Structured keys**
+#### Structured Keys
 
 Structured keys provide security and ease of use for applications with layered storage criteria such as lists
 within lists or deeply nested hashmaps.
@@ -263,7 +274,7 @@ await this.#ctx.kv.get('my-key');
 await this.#ctx.kv.get(['my-key']);
 ```
 
-**Sorting**
+#### Sorting Keys
 
 Keys are automatically sorted in [lexicographic order](https://en.wikipedia.org/wiki/Lexicographic_order).
 This means when using the `list` command, you can fetch all values between two keys in order:
@@ -286,6 +297,22 @@ await this.#ctx.kv.list({
 });
 ```
 
+Sorted keys also enable you to create ordered lists, like this:
+
+```js
+// bar posted a score of 88
+await this.#ctx.kv.put(["leaderboard", 88], { username: "bar", date: Date.now() });
+
+// foo posted a score of 42
+await this.#ctx.kv.put(["leaderboard", 42], { username: "foo", date: Date.now() });
+
+// Returns 88, 42
+await this.#ctx.kv.list({
+  prefix: ['leaderboard'],
+  reverse: true,  // Descending order
+});
+```
+
 ### Values
 
 Values stored in the KV can be any JavaScript type which can be cloned via the
@@ -294,6 +321,10 @@ Values stored in the KV can be any JavaScript type which can be cloned via the
 To store raw binary data, it is recommended to set the `format` option in your KV operation to `arrayBuffer`
 and pass in an `ArrayBuffer` object. Alternatively, you can `put` an `ArrayBuffer` or `Blob` directly without
 changing the format but this has additional space overhead from the JS type system.
+
+### Limitations
+
+See [limitations](/docs/limitations).
 
 {/* TODO: Create examples for these storage types and link to them */}
 
