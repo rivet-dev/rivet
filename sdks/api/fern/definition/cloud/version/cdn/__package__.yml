@@ -4,7 +4,7 @@ imports:
   commons: ../../common.yml
 
 types:
-  Config:
+  CdnConfig:
     docs: CDN configuration for a given version.
     properties:
       build_command:

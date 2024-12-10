@@ -25,6 +25,8 @@ export declare namespace Namespaces {
         maxRetries?: number;
         /** A hook to abort the request. */
         abortSignal?: AbortSignal;
+        /** Additional headers to include in the request. */
+        headers?: Record<string, string>;
     }
 }
 
@@ -68,6 +70,7 @@ export class Namespaces {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -165,7 +168,9 @@ export class Namespaces {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling POST /cloud/games/{game_id}/namespaces."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -209,6 +214,7 @@ export class Namespaces {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -306,7 +312,9 @@ export class Namespaces {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling POST /cloud/games/{game_id}/namespaces/validate."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -347,6 +355,7 @@ export class Namespaces {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -441,7 +450,9 @@ export class Namespaces {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling GET /cloud/games/{game_id}/namespaces/{namespace_id}."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -487,6 +498,7 @@ export class Namespaces {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -578,7 +590,9 @@ export class Namespaces {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling POST /cloud/games/{game_id}/namespaces/{namespace_id}/auth-user."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -623,6 +637,7 @@ export class Namespaces {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -711,7 +726,9 @@ export class Namespaces {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling DELETE /cloud/games/{game_id}/namespaces/{namespace_id}/auth-user/{user}."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -756,6 +773,7 @@ export class Namespaces {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -847,7 +865,9 @@ export class Namespaces {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling PUT /cloud/games/{game_id}/namespaces/{namespace_id}/cdn-auth."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -894,6 +914,7 @@ export class Namespaces {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -985,7 +1006,9 @@ export class Namespaces {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling PUT /cloud/games/{game_id}/namespaces/{namespace_id}/domain-public-auth."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -1030,6 +1053,7 @@ export class Namespaces {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -1121,7 +1145,9 @@ export class Namespaces {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling POST /cloud/games/{game_id}/namespaces/{namespace_id}/domains."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -1166,6 +1192,7 @@ export class Namespaces {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -1254,7 +1281,9 @@ export class Namespaces {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling DELETE /cloud/games/{game_id}/namespaces/{namespace_id}/domains/{domain}."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -1300,6 +1329,7 @@ export class Namespaces {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -1391,7 +1421,9 @@ export class Namespaces {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling POST /cloud/games/{game_id}/namespaces/{namespace_id}/mm-config."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -1449,6 +1481,7 @@ export class Namespaces {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             queryParameters: _queryParams,
@@ -1547,7 +1580,9 @@ export class Namespaces {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling GET /cloud/games/{game_id}/namespaces/{namespace_id}/version-history."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -1595,6 +1630,7 @@ export class Namespaces {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -1695,7 +1731,9 @@ export class Namespaces {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling POST /cloud/games/{game_id}/namespaces/{namespace_id}/mm-config/validate."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -1755,6 +1793,7 @@ export class Namespaces {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -1855,7 +1894,9 @@ export class Namespaces {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling POST /cloud/games/{game_id}/namespaces/{namespace_id}/tokens/development."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -1908,6 +1949,7 @@ export class Namespaces {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -2008,7 +2050,9 @@ export class Namespaces {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling POST /cloud/games/{game_id}/namespaces/{namespace_id}/tokens/development/validate."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -2049,6 +2093,7 @@ export class Namespaces {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -2146,7 +2191,9 @@ export class Namespaces {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling POST /cloud/games/{game_id}/namespaces/{namespace_id}/tokens/public."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -2191,6 +2238,7 @@ export class Namespaces {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -2282,7 +2330,9 @@ export class Namespaces {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling PUT /cloud/games/{game_id}/namespaces/{namespace_id}/version."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,

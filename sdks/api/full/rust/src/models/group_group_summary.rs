@@ -9,7 +9,7 @@
  */
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
-pub struct GroupSummary {
+pub struct GroupGroupSummary {
 	#[serde(rename = "group_id")]
 	pub group_id: uuid::Uuid,
 	/// Represent a resource's readable display name.
@@ -37,7 +37,7 @@ pub struct GroupSummary {
 	pub owner_identity_id: uuid::Uuid,
 }
 
-impl GroupSummary {
+impl GroupGroupSummary {
 	pub fn new(
 		group_id: uuid::Uuid,
 		display_name: String,
@@ -48,8 +48,8 @@ impl GroupSummary {
 		publicity: crate::models::GroupPublicity,
 		member_count: i32,
 		owner_identity_id: uuid::Uuid,
-	) -> GroupSummary {
-		GroupSummary {
+	) -> GroupGroupSummary {
+		GroupGroupSummary {
 			group_id,
 			display_name,
 			avatar_url: None,

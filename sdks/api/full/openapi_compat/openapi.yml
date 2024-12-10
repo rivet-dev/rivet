@@ -8879,12 +8879,12 @@ components:
         games:
           type: array
           items:
-            $ref: '#/components/schemas/GameSummary'
+            $ref: '#/components/schemas/GameGameSummary'
           description: A list of game summaries.
         groups:
           type: array
           items:
-            $ref: '#/components/schemas/GroupSummary'
+            $ref: '#/components/schemas/GroupGroupSummary'
           description: A list of group summaries.
         watch:
           $ref: '#/components/schemas/WatchResponse'
@@ -9234,15 +9234,15 @@ components:
           additionalProperties:
             type: string
         engine:
-          $ref: '#/components/schemas/CloudVersionEngineConfig'
+          $ref: '#/components/schemas/CloudVersionEngineEngineConfig'
         cdn:
-          $ref: '#/components/schemas/CloudVersionCdnConfig'
+          $ref: '#/components/schemas/CloudVersionCdnCdnConfig'
         matchmaker:
-          $ref: '#/components/schemas/CloudVersionMatchmakerConfig'
+          $ref: '#/components/schemas/CloudVersionMatchmakerMatchmakerConfig'
         kv:
-          $ref: '#/components/schemas/CloudVersionKvConfig'
+          $ref: '#/components/schemas/CloudVersionKvKvConfig'
         identity:
-          $ref: '#/components/schemas/CloudVersionIdentityConfig'
+          $ref: '#/components/schemas/CloudVersionIdentityIdentityConfig'
     CloudVersionFull:
       type: object
       description: A full version.
@@ -9276,7 +9276,7 @@ components:
         - version_id
         - create_ts
         - display_name
-    CloudVersionCdnConfig:
+    CloudVersionCdnCdnConfig:
       type: object
       description: CDN configuration for a given version.
       properties:
@@ -9347,7 +9347,7 @@ components:
       required:
         - name
         - value
-    CloudVersionEngineConfig:
+    CloudVersionEngineEngineConfig:
       type: object
       properties:
         unity:
@@ -9360,7 +9360,7 @@ components:
           $ref: '#/components/schemas/CloudVersionEngineHtml5Config'
         custom:
           $ref: '#/components/schemas/CloudVersionEngineCustomConfig'
-    CloudVersionIdentityConfig:
+    CloudVersionIdentityIdentityConfig:
       type: object
       description: |-
         **Deprecated**
@@ -9402,11 +9402,11 @@ components:
           format: uuid
       required:
         - upload_id
-    CloudVersionKvConfig:
+    CloudVersionKvKvConfig:
       type: object
       description: KV configuration for a given version.
       properties: {}
-    CloudVersionMatchmakerConfig:
+    CloudVersionMatchmakerMatchmakerConfig:
       type: object
       description: Matchmaker configuration for a given version.
       properties:
@@ -9449,7 +9449,7 @@ components:
         groups:
           type: array
           items:
-            $ref: '#/components/schemas/GroupSummary'
+            $ref: '#/components/schemas/GroupGroupSummary'
           description: A list of group summaries.
         watch:
           $ref: '#/components/schemas/WatchResponse'
@@ -9589,7 +9589,7 @@ components:
       type: object
       properties:
         group:
-          $ref: '#/components/schemas/GroupSummary'
+          $ref: '#/components/schemas/GroupGroupSummary'
       required:
         - group
     GroupTransferOwnershipRequest:
@@ -12070,7 +12070,7 @@ components:
         - game_id
         - name_id
         - display_name
-    GameSummary:
+    GameGameSummary:
       type: object
       properties:
         game_id:
@@ -12126,7 +12126,7 @@ components:
           type: string
           description: The URL to this game's website.
         developer:
-          $ref: '#/components/schemas/GroupSummary'
+          $ref: '#/components/schemas/GroupGroupSummary'
         tags:
           type: array
           items:
@@ -12143,7 +12143,7 @@ components:
         recommended_groups:
           type: array
           items:
-            $ref: '#/components/schemas/GroupSummary'
+            $ref: '#/components/schemas/GroupGroupSummary'
           description: A list of group summaries.
         identity_leaderboard_categories:
           type: array
@@ -12320,7 +12320,7 @@ components:
       required:
         - kilometers
         - miles
-    GroupSummary:
+    GroupGroupSummary:
       type: object
       properties:
         group_id:
@@ -12530,11 +12530,11 @@ components:
         games:
           type: array
           items:
-            $ref: '#/components/schemas/GameSummary'
+            $ref: '#/components/schemas/GameGameSummary'
         suggested_groups:
           type: array
           items:
-            $ref: '#/components/schemas/GroupSummary'
+            $ref: '#/components/schemas/GroupGroupSummary'
         suggested_players:
           type: array
           items:
@@ -13158,7 +13158,7 @@ components:
         games:
           type: array
           items:
-            $ref: '#/components/schemas/GameSummary'
+            $ref: '#/components/schemas/GameGameSummary'
           description: A list of game summaries.
         watch:
           $ref: '#/components/schemas/WatchResponse'

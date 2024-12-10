@@ -5,7 +5,7 @@ imports:
   identityCommons: ../identity/common.yml
 
 types:
-  Summary:
+  GroupSummary:
     properties:
       group_id: uuid
       display_name: commons.DisplayName

@@ -9,7 +9,7 @@
  */
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
-pub struct CloudVersionEngineConfig {
+pub struct CloudVersionEngineEngineConfig {
 	#[serde(rename = "unity", skip_serializing_if = "Option::is_none")]
 	pub unity: Option<serde_json::Value>,
 	#[serde(rename = "unreal", skip_serializing_if = "Option::is_none")]
@@ -22,9 +22,9 @@ pub struct CloudVersionEngineConfig {
 	pub custom: Option<serde_json::Value>,
 }
 
-impl CloudVersionEngineConfig {
-	pub fn new() -> CloudVersionEngineConfig {
-		CloudVersionEngineConfig {
+impl CloudVersionEngineEngineConfig {
+	pub fn new() -> CloudVersionEngineEngineConfig {
+		CloudVersionEngineEngineConfig {
 			unity: None,
 			unreal: None,
 			godot: None,

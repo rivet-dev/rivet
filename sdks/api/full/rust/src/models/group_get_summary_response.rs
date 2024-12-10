@@ -11,11 +11,11 @@
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct GroupGetSummaryResponse {
 	#[serde(rename = "group")]
-	pub group: Box<crate::models::GroupSummary>,
+	pub group: Box<crate::models::GroupGroupSummary>,
 }
 
 impl GroupGetSummaryResponse {
-	pub fn new(group: crate::models::GroupSummary) -> GroupGetSummaryResponse {
+	pub fn new(group: crate::models::GroupGroupSummary) -> GroupGetSummaryResponse {
 		GroupGetSummaryResponse {
 			group: Box::new(group),
 		}

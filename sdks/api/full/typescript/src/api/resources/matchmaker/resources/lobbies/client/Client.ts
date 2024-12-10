@@ -23,6 +23,8 @@ export declare namespace Lobbies {
         maxRetries?: number;
         /** A hook to abort the request. */
         abortSignal?: AbortSignal;
+        /** Additional headers to include in the request. */
+        headers?: Record<string, string>;
     }
 }
 
@@ -57,6 +59,7 @@ export class Lobbies {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -145,7 +148,7 @@ export class Lobbies {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError("Timeout exceeded when calling POST /matchmaker/lobbies/ready.");
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -194,6 +197,7 @@ export class Lobbies {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -285,7 +289,7 @@ export class Lobbies {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError("Timeout exceeded when calling PUT /matchmaker/lobbies/closed.");
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -328,6 +332,7 @@ export class Lobbies {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -422,7 +427,7 @@ export class Lobbies {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError("Timeout exceeded when calling PUT /matchmaker/lobbies/state.");
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -463,6 +468,7 @@ export class Lobbies {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -557,7 +563,9 @@ export class Lobbies {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling GET /matchmaker/lobbies/{lobby_id}/state."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -626,6 +634,7 @@ export class Lobbies {
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
                 origin: origin != null ? origin : undefined,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -721,7 +730,7 @@ export class Lobbies {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError("Timeout exceeded when calling POST /matchmaker/lobbies/find.");
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -781,6 +790,7 @@ export class Lobbies {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -876,7 +886,7 @@ export class Lobbies {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError("Timeout exceeded when calling POST /matchmaker/lobbies/join.");
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -943,6 +953,7 @@ export class Lobbies {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -1038,7 +1049,7 @@ export class Lobbies {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError("Timeout exceeded when calling POST /matchmaker/lobbies/create.");
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -1091,6 +1102,7 @@ export class Lobbies {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             queryParameters: _queryParams,
@@ -1186,7 +1198,7 @@ export class Lobbies {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError("Timeout exceeded when calling GET /matchmaker/lobbies/list.");
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,

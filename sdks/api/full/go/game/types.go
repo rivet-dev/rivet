@@ -84,8 +84,8 @@ type Profile struct {
 	// The URL of this game's banner image.
 	BannerUrl *string `json:"banner_url,omitempty"`
 	// The URL to this game's website.
-	Url       string         `json:"url"`
-	Developer *group.Summary `json:"developer,omitempty"`
+	Url       string              `json:"url"`
+	Developer *group.GroupSummary `json:"developer,omitempty"`
 	// A list of game tags.
 	Tags []string `json:"tags,omitempty"`
 	// A description of the given game.
@@ -93,7 +93,7 @@ type Profile struct {
 	// A list of platform links.
 	Platforms []*PlatformLink `json:"platforms,omitempty"`
 	// A list of group summaries.
-	RecommendedGroups []*group.Summary `json:"recommended_groups,omitempty"`
+	RecommendedGroups []*group.GroupSummary `json:"recommended_groups,omitempty"`
 	// A list of game leaderboard categories.
 	IdentityLeaderboardCategories []*LeaderboardCategory `json:"identity_leaderboard_categories,omitempty"`
 	// A list of game leaderboard categories.

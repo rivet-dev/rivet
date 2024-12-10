@@ -28,7 +28,7 @@ pub fn summary(
 	team: &backend::team::Team,
 	team_member_counts: &[team::member_count::response::Team],
 	is_current_identity_member: bool,
-) -> GlobalResult<models::GroupSummary> {
+) -> GlobalResult<models::GroupGroupSummary> {
 	let team_id_proto = unwrap_ref!(team.team_id);
 
 	let member_count = unwrap!(team_member_counts
@@ -39,7 +39,7 @@ pub fn summary(
 	let team_id = team_id_proto.as_uuid();
 	let owner_user_id = unwrap_ref!(team.owner_user_id).as_uuid();
 
-	Ok(models::GroupSummary {
+	Ok(models::GroupGroupSummary {
 		group_id: team_id,
 		display_name: team.display_name.clone(),
 		bio: team.bio.clone(),

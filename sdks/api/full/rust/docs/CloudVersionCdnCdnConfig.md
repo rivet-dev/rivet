@@ -1,4 +1,4 @@
-# CloudVersionCdnConfig
+# CloudVersionCdnCdnConfig
 
 ## Properties
 

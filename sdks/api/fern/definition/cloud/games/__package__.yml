@@ -105,10 +105,10 @@ types:
     properties:
       games:
         docs: A list of game summaries.
-        type: list<gameCommons.Summary>
+        type: list<gameCommons.GameSummary>
       groups:
         docs: A list of group summaries.
-        type: list<groupCommons.Summary>
+        type: list<groupCommons.GroupSummary>
       watch: commons.WatchResponse
 
   CreateGameRequest:

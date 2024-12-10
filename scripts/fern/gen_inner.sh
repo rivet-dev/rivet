@@ -7,14 +7,12 @@ set -euf -o pipefail
 # Add missing deps
 (cd sdks/api/$FERN_GROUP/typescript && nix-shell -p jq --run 'jq ".devDependencies[\"@types/node-fetch\"] = \"2.6.11\"" package.json > package.json.tmp && mv package.json.tmp package.json')
 
-# TODO(RVT-4266): Fix compilation errors
-# # Build libraries
-# #
-# # See https://github.com/fern-api/fern-typescript/blob/3b1c33781bbd726cee26a21c1ff3464eeae70cad/README.md?plain=1#L379
-# (cd sdks/api/$FERN_GROUP/typescript && yarn install && yarn pack -f archive.tgz) &
+# Build libraries
+#
+# See https://github.com/fern-api/fern-typescript/blob/3b1c33781bbd726cee26a21c1ff3464eeae70cad/README.md?plain=1#L379
+(cd sdks/api/$FERN_GROUP/typescript && yarn install && yarn pack -f archive.tgz) &
 
 # Generate OpenAPI clients
 ./scripts/openapi/gen_rust.ts &
 
 wait
-

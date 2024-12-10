@@ -200,7 +200,7 @@ func (g *GetProfileResponse) String() string {
 }
 
 type GetSummaryResponse struct {
-	Group *group.Summary `json:"group,omitempty"`
+	Group *group.GroupSummary `json:"group,omitempty"`
 
 	_rawJSON json.RawMessage
 }
@@ -230,8 +230,8 @@ func (g *GetSummaryResponse) String() string {
 
 type ListSuggestedResponse struct {
 	// A list of group summaries.
-	Groups []*group.Summary   `json:"groups,omitempty"`
-	Watch  *sdk.WatchResponse `json:"watch,omitempty"`
+	Groups []*group.GroupSummary `json:"groups,omitempty"`
+	Watch  *sdk.WatchResponse    `json:"watch,omitempty"`
 
 	_rawJSON json.RawMessage
 }

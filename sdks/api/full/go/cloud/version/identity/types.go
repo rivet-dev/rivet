@@ -10,44 +10,6 @@ import (
 	core "sdk/core"
 )
 
-// **Deprecated**
-// Identity configuration for a given version.
-type Config struct {
-	// **Deprecated**
-	DisplayNames []string `json:"display_names,omitempty"`
-	// **Deprecated**
-	Avatars []uuid.UUID `json:"avatars,omitempty"`
-	// **Deprecated**
-	CustomDisplayNames []*CustomDisplayName `json:"custom_display_names,omitempty"`
-	// **Deprecated**
-	CustomAvatars []*CustomAvatar `json:"custom_avatars,omitempty"`
-
-	_rawJSON json.RawMessage
-}
-
-func (c *Config) UnmarshalJSON(data []byte) error {
-	type unmarshaler Config
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*c = Config(value)
-	c._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (c *Config) String() string {
-	if len(c._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(c._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(c); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", c)
-}
-
 type CustomAvatar struct {
 	UploadId uuid.UUID `json:"upload_id"`
 
@@ -104,4 +66,42 @@ func (c *CustomDisplayName) String() string {
 		return value
 	}
 	return fmt.Sprintf("%#v", c)
+}
+
+// **Deprecated**
+// Identity configuration for a given version.
+type IdentityConfig struct {
+	// **Deprecated**
+	DisplayNames []string `json:"display_names,omitempty"`
+	// **Deprecated**
+	Avatars []uuid.UUID `json:"avatars,omitempty"`
+	// **Deprecated**
+	CustomDisplayNames []*CustomDisplayName `json:"custom_display_names,omitempty"`
+	// **Deprecated**
+	CustomAvatars []*CustomAvatar `json:"custom_avatars,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (i *IdentityConfig) UnmarshalJSON(data []byte) error {
+	type unmarshaler IdentityConfig
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*i = IdentityConfig(value)
+	i._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (i *IdentityConfig) String() string {
+	if len(i._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(i._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(i); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", i)
 }

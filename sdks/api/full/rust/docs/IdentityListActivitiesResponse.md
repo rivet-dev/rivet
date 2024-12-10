@@ -5,8 +5,8 @@
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **identities** | [**Vec<crate::models::IdentityHandle>**](IdentityHandle.md) |  | 
-**games** | [**Vec<crate::models::GameSummary>**](GameSummary.md) |  | 
-**suggested_groups** | [**Vec<crate::models::GroupSummary>**](GroupSummary.md) |  | 
+**games** | [**Vec<crate::models::GameGameSummary>**](GameGameSummary.md) |  | 
+**suggested_groups** | [**Vec<crate::models::GroupGroupSummary>**](GroupGroupSummary.md) |  | 
 **suggested_players** | [**Vec<crate::models::IdentityHandle>**](IdentityHandle.md) |  | 
 **watch** | [**crate::models::WatchResponse**](WatchResponse.md) |  | 
 

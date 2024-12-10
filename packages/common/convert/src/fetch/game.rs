@@ -12,7 +12,7 @@ use crate::convert;
 pub async fn summaries(
 	ctx: &OperationContext<()>,
 	game_ids: Vec<Uuid>,
-) -> GlobalResult<Vec<models::GameSummary>> {
+) -> GlobalResult<Vec<models::GameGameSummary>> {
 	if game_ids.is_empty() {
 		return Ok(Vec::new());
 	}

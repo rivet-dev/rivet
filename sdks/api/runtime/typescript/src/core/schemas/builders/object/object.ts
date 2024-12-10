@@ -267,6 +267,47 @@ export function getObjectUtils<Raw, Parsed>(schema: BaseObjectSchema<Raw, Parsed
                 ...getObjectUtils(baseSchema),
             };
         },
+        passthrough: () => {
+            const baseSchema: BaseObjectSchema<Raw & { [key: string]: unknown }, Parsed & { [key: string]: unknown }> =
+                {
+                    _getParsedProperties: () => schema._getParsedProperties(),
+                    _getRawProperties: () => schema._getRawProperties(),
+                    parse: (raw, opts) => {
+                        const transformed = schema.parse(raw, { ...opts, unrecognizedObjectKeys: "passthrough" });
+                        if (!transformed.ok) {
+                            return transformed;
+                        }
+                        return {
+                            ok: true,
+                            value: {
+                                ...(raw as any),
+                                ...transformed.value,
+                            },
+                        };
+                    },
+                    json: (parsed, opts) => {
+                        const transformed = schema.json(parsed, { ...opts, unrecognizedObjectKeys: "passthrough" });
+                        if (!transformed.ok) {
+                            return transformed;
+                        }
+                        return {
+                            ok: true,
+                            value: {
+                                ...(parsed as any),
+                                ...transformed.value,
+                            },
+                        };
+                    },
+                    getType: () => SchemaType.OBJECT,
+                };
+
+            return {
+                ...baseSchema,
+                ...getSchemaUtils(baseSchema),
+                ...getObjectLikeUtils(baseSchema),
+                ...getObjectUtils(baseSchema),
+            };
+        },
     };
 }
 

@@ -25,6 +25,8 @@ export declare namespace Identity {
         maxRetries?: number;
         /** A hook to abort the request. */
         abortSignal?: AbortSignal;
+        /** Additional headers to include in the request. */
+        headers?: Record<string, string>;
     }
 }
 
@@ -70,6 +72,7 @@ export class Identity {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -165,7 +168,7 @@ export class Identity {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError("Timeout exceeded when calling POST /identity/identities.");
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -214,6 +217,7 @@ export class Identity {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             queryParameters: _queryParams,
@@ -309,7 +313,9 @@ export class Identity {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling GET /identity/identities/{identity_id}/profile."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -356,6 +362,7 @@ export class Identity {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             queryParameters: _queryParams,
@@ -451,7 +458,9 @@ export class Identity {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling GET /identity/identities/self/profile."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -500,6 +509,7 @@ export class Identity {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             queryParameters: _queryParams,
@@ -595,7 +605,9 @@ export class Identity {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling GET /identity/identities/batch/handle."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -644,6 +656,7 @@ export class Identity {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             queryParameters: _queryParams,
@@ -739,7 +752,9 @@ export class Identity {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling GET /identity/identities/batch/summary."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -782,6 +797,7 @@ export class Identity {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -871,7 +887,9 @@ export class Identity {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling POST /identity/identities/self/profile."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -914,6 +932,7 @@ export class Identity {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -1003,7 +1022,9 @@ export class Identity {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling POST /identity/identities/self/profile/validate."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -1052,6 +1073,7 @@ export class Identity {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -1141,7 +1163,9 @@ export class Identity {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling POST /identity/identities/self/activity."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -1176,6 +1200,7 @@ export class Identity {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -1264,7 +1289,9 @@ export class Identity {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling DELETE /identity/identities/self/activity."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -1305,6 +1332,7 @@ export class Identity {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -1394,7 +1422,9 @@ export class Identity {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling POST /identity/identities/identities/self/status."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -1437,6 +1467,7 @@ export class Identity {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -1534,7 +1565,9 @@ export class Identity {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling POST /identity/identities/avatar-upload/prepare."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -1570,6 +1603,7 @@ export class Identity {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -1658,7 +1692,9 @@ export class Identity {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling POST /identity/identities/avatar-upload/{upload_id}/complete."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -1703,6 +1739,7 @@ export class Identity {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -1792,7 +1829,9 @@ export class Identity {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling POST /identity/identities/self/beta-signup."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -1825,6 +1864,7 @@ export class Identity {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -1913,7 +1953,9 @@ export class Identity {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling POST /identity/identities/self/delete-request."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -1946,6 +1988,7 @@ export class Identity {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -2034,7 +2077,9 @@ export class Identity {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling DELETE /identity/identities/self/delete-request."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,

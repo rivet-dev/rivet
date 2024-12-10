@@ -8,7 +8,7 @@ imports:
   custom: custom.yml
 
 types:
-  Config:
+  EngineConfig:
     properties:
       unity: optional<unity.UnityConfig>
       unreal: optional<unreal.UnrealConfig>

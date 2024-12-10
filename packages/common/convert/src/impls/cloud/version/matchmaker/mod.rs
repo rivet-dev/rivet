@@ -12,7 +12,7 @@ pub mod lobby_group;
 pub async fn config_to_proto(
 	ctx: &OperationContext<()>,
 	game_id: Uuid,
-	value: models::CloudVersionMatchmakerConfig,
+	value: models::CloudVersionMatchmakerMatchmakerConfig,
 ) -> GlobalResult<backend::matchmaker::VersionConfig> {
 	// Fetch region data required to convert models
 	let mut all_region_name_ids = HashSet::new();
@@ -57,7 +57,7 @@ pub async fn config_to_proto(
 pub async fn config_to_openapi(
 	ctx: &OperationContext<()>,
 	value: backend::matchmaker::VersionConfig,
-) -> GlobalResult<models::CloudVersionMatchmakerConfig> {
+) -> GlobalResult<models::CloudVersionMatchmakerMatchmakerConfig> {
 	// Fetch region data required to convert models
 	let all_region_ids = value
 		.lobby_groups
@@ -73,7 +73,7 @@ pub async fn config_to_openapi(
 	})
 	.await?;
 
-	Ok(models::CloudVersionMatchmakerConfig {
+	Ok(models::CloudVersionMatchmakerMatchmakerConfig {
 		game_modes: Some(
 			value
 				.lobby_groups

@@ -9,7 +9,7 @@ use crate::{ApiFrom, ApiInto, ApiTryFrom, ApiTryInto};
 pub fn game_mode_to_proto(
 	name_id: String,
 	game_mode: &models::CloudVersionMatchmakerGameMode,
-	matchmaker: &models::CloudVersionMatchmakerConfig,
+	matchmaker: &models::CloudVersionMatchmakerMatchmakerConfig,
 	all_regions: &[backend::region::Region],
 ) -> GlobalResult<backend::matchmaker::LobbyGroup> {
 	// Derive regions
@@ -278,7 +278,7 @@ fn region_to_proto(
 	name_id: String,
 	region: &models::CloudVersionMatchmakerGameModeRegion,
 	game_mode: &models::CloudVersionMatchmakerGameMode,
-	matchmaker: &models::CloudVersionMatchmakerConfig,
+	matchmaker: &models::CloudVersionMatchmakerMatchmakerConfig,
 	regions_data: &[backend::region::Region],
 ) -> GlobalResult<backend::matchmaker::lobby_group::Region> {
 	let region_id = regions_data

@@ -10,7 +10,7 @@ import (
 )
 
 // CDN configuration for a given version.
-type Config struct {
+type CdnConfig struct {
 	// _Configures Rivet CLI behavior. Has no effect on server behavior._
 	BuildCommand *string `json:"build_command,omitempty"`
 	// _Configures Rivet CLI behavior. Has no effect on server behavior._
@@ -24,18 +24,18 @@ type Config struct {
 	_rawJSON json.RawMessage
 }
 
-func (c *Config) UnmarshalJSON(data []byte) error {
-	type unmarshaler Config
+func (c *CdnConfig) UnmarshalJSON(data []byte) error {
+	type unmarshaler CdnConfig
 	var value unmarshaler
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
-	*c = Config(value)
+	*c = CdnConfig(value)
 	c._rawJSON = json.RawMessage(data)
 	return nil
 }
 
-func (c *Config) String() string {
+func (c *CdnConfig) String() string {
 	if len(c._rawJSON) > 0 {
 		if value, err := core.StringifyJSON(c._rawJSON); err == nil {
 			return value

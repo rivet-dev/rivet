@@ -21,8 +21,8 @@ pub fn summary(
 	config: &rivet_config::Config,
 	game: &backend::game::Game,
 	dev_team: &backend::team::Team,
-) -> GlobalResult<models::GameSummary> {
-	Ok(models::GameSummary {
+) -> GlobalResult<models::GameGameSummary> {
+	Ok(models::GameGameSummary {
 		game_id: unwrap_ref!(game.game_id).as_uuid(),
 		name_id: game.name_id.to_owned(),
 		display_name: game.display_name.to_owned(),

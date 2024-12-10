@@ -17,12 +17,12 @@ import (
 
 // Cloud configuration for a given version.
 type Config struct {
-	Scripts    map[string]string  `json:"scripts,omitempty"`
-	Engine     *engine.Config     `json:"engine,omitempty"`
-	Cdn        *cdn.Config        `json:"cdn,omitempty"`
-	Matchmaker *matchmaker.Config `json:"matchmaker,omitempty"`
-	Kv         *kv.Config         `json:"kv,omitempty"`
-	Identity   *identity.Config   `json:"identity,omitempty"`
+	Scripts    map[string]string            `json:"scripts,omitempty"`
+	Engine     *engine.EngineConfig         `json:"engine,omitempty"`
+	Cdn        *cdn.CdnConfig               `json:"cdn,omitempty"`
+	Matchmaker *matchmaker.MatchmakerConfig `json:"matchmaker,omitempty"`
+	Kv         *kv.KvConfig                 `json:"kv,omitempty"`
+	Identity   *identity.IdentityConfig     `json:"identity,omitempty"`
 
 	_rawJSON json.RawMessage
 }

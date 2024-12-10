@@ -901,7 +901,7 @@ func (l *LobbyGroupRuntimeDockerPort) String() string {
 }
 
 // Matchmaker configuration for a given version.
-type Config struct {
+type MatchmakerConfig struct {
 	// A list of game modes.
 	GameModes map[string]*GameMode `json:"game_modes,omitempty"`
 	Captcha   *Captcha             `json:"captcha,omitempty"`
@@ -921,25 +921,25 @@ type Config struct {
 	_rawJSON json.RawMessage
 }
 
-func (c *Config) UnmarshalJSON(data []byte) error {
-	type unmarshaler Config
+func (m *MatchmakerConfig) UnmarshalJSON(data []byte) error {
+	type unmarshaler MatchmakerConfig
 	var value unmarshaler
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
-	*c = Config(value)
-	c._rawJSON = json.RawMessage(data)
+	*m = MatchmakerConfig(value)
+	m._rawJSON = json.RawMessage(data)
 	return nil
 }
 
-func (c *Config) String() string {
-	if len(c._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(c._rawJSON); err == nil {
+func (m *MatchmakerConfig) String() string {
+	if len(m._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(m._rawJSON); err == nil {
 			return value
 		}
 	}
-	if value, err := core.StringifyJSON(c); err == nil {
+	if value, err := core.StringifyJSON(m); err == nil {
 		return value
 	}
-	return fmt.Sprintf("%#v", c)
+	return fmt.Sprintf("%#v", m)
 }

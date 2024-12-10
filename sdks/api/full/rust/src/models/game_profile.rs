@@ -30,7 +30,7 @@ pub struct GameProfile {
 	#[serde(rename = "url")]
 	pub url: String,
 	#[serde(rename = "developer")]
-	pub developer: Box<crate::models::GroupSummary>,
+	pub developer: Box<crate::models::GroupGroupSummary>,
 	/// A list of game tags.
 	#[serde(rename = "tags")]
 	pub tags: Vec<String>,
@@ -42,7 +42,7 @@ pub struct GameProfile {
 	pub platforms: Vec<crate::models::GamePlatformLink>,
 	/// A list of group summaries.
 	#[serde(rename = "recommended_groups")]
-	pub recommended_groups: Vec<crate::models::GroupSummary>,
+	pub recommended_groups: Vec<crate::models::GroupGroupSummary>,
 	/// A list of game leaderboard categories.
 	#[serde(rename = "identity_leaderboard_categories")]
 	pub identity_leaderboard_categories: Vec<crate::models::GameLeaderboardCategory>,
@@ -58,11 +58,11 @@ impl GameProfile {
 		name_id: String,
 		display_name: String,
 		url: String,
-		developer: crate::models::GroupSummary,
+		developer: crate::models::GroupGroupSummary,
 		tags: Vec<String>,
 		description: String,
 		platforms: Vec<crate::models::GamePlatformLink>,
-		recommended_groups: Vec<crate::models::GroupSummary>,
+		recommended_groups: Vec<crate::models::GroupGroupSummary>,
 		identity_leaderboard_categories: Vec<crate::models::GameLeaderboardCategory>,
 		group_leaderboard_categories: Vec<crate::models::GameLeaderboardCategory>,
 	) -> GameProfile {

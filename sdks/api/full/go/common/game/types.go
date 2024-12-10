@@ -11,6 +11,45 @@ import (
 	core "sdk/core"
 )
 
+type GameSummary struct {
+	GameId      uuid.UUID       `json:"game_id"`
+	NameId      sdk.Identifier  `json:"name_id"`
+	DisplayName sdk.DisplayName `json:"display_name"`
+	// The URL of this game's logo image.
+	LogoUrl *string `json:"logo_url,omitempty"`
+	// The URL of this game's banner image.
+	BannerUrl *string       `json:"banner_url,omitempty"`
+	Url       string        `json:"url"`
+	Developer *group.Handle `json:"developer,omitempty"`
+	// Unsigned 32 bit integer.
+	TotalPlayerCount int `json:"total_player_count"`
+
+	_rawJSON json.RawMessage
+}
+
+func (g *GameSummary) UnmarshalJSON(data []byte) error {
+	type unmarshaler GameSummary
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*g = GameSummary(value)
+	g._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (g *GameSummary) String() string {
+	if len(g._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(g._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(g); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", g)
+}
+
 type Handle struct {
 	GameId      uuid.UUID       `json:"game_id"`
 	NameId      sdk.Identifier  `json:"name_id"`
@@ -245,45 +284,6 @@ func (s *StatSummary) UnmarshalJSON(data []byte) error {
 }
 
 func (s *StatSummary) String() string {
-	if len(s._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(s._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(s); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", s)
-}
-
-type Summary struct {
-	GameId      uuid.UUID       `json:"game_id"`
-	NameId      sdk.Identifier  `json:"name_id"`
-	DisplayName sdk.DisplayName `json:"display_name"`
-	// The URL of this game's logo image.
-	LogoUrl *string `json:"logo_url,omitempty"`
-	// The URL of this game's banner image.
-	BannerUrl *string       `json:"banner_url,omitempty"`
-	Url       string        `json:"url"`
-	Developer *group.Handle `json:"developer,omitempty"`
-	// Unsigned 32 bit integer.
-	TotalPlayerCount int `json:"total_player_count"`
-
-	_rawJSON json.RawMessage
-}
-
-func (s *Summary) UnmarshalJSON(data []byte) error {
-	type unmarshaler Summary
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*s = Summary(value)
-	s._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (s *Summary) String() string {
 	if len(s._rawJSON) > 0 {
 		if value, err := core.StringifyJSON(s._rawJSON); err == nil {
 			return value

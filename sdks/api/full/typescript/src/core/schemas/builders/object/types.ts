@@ -18,6 +18,7 @@ export interface ObjectUtils<Raw, Parsed> {
     extend: <RawExtension, ParsedExtension>(
         schemas: ObjectSchema<RawExtension, ParsedExtension>
     ) => ObjectSchema<Raw & RawExtension, Parsed & ParsedExtension>;
+    passthrough: () => ObjectSchema<Raw & { [key: string]: unknown }, Parsed & { [key: string]: unknown }>;
 }
 
 export type inferRawObject<O extends ObjectSchema<any, any>> = O extends ObjectSchema<infer Raw, any> ? Raw : never;

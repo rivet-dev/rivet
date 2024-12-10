@@ -235,10 +235,10 @@ func (g *GetGameByIdResponse) String() string {
 
 type GetGamesResponse struct {
 	// A list of game summaries.
-	Games []*game.Summary `json:"games,omitempty"`
+	Games []*game.GameSummary `json:"games,omitempty"`
 	// A list of group summaries.
-	Groups []*group.Summary   `json:"groups,omitempty"`
-	Watch  *sdk.WatchResponse `json:"watch,omitempty"`
+	Groups []*group.GroupSummary `json:"groups,omitempty"`
+	Watch  *sdk.WatchResponse    `json:"watch,omitempty"`
 
 	_rawJSON json.RawMessage
 }

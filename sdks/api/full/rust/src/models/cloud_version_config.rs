@@ -15,16 +15,16 @@ pub struct CloudVersionConfig {
 	#[serde(rename = "scripts", skip_serializing_if = "Option::is_none")]
 	pub scripts: Option<::std::collections::HashMap<String, String>>,
 	#[serde(rename = "engine", skip_serializing_if = "Option::is_none")]
-	pub engine: Option<Box<crate::models::CloudVersionEngineConfig>>,
+	pub engine: Option<Box<crate::models::CloudVersionEngineEngineConfig>>,
 	#[serde(rename = "cdn", skip_serializing_if = "Option::is_none")]
-	pub cdn: Option<Box<crate::models::CloudVersionCdnConfig>>,
+	pub cdn: Option<Box<crate::models::CloudVersionCdnCdnConfig>>,
 	#[serde(rename = "matchmaker", skip_serializing_if = "Option::is_none")]
-	pub matchmaker: Option<Box<crate::models::CloudVersionMatchmakerConfig>>,
+	pub matchmaker: Option<Box<crate::models::CloudVersionMatchmakerMatchmakerConfig>>,
 	/// KV configuration for a given version.
 	#[serde(rename = "kv", skip_serializing_if = "Option::is_none")]
 	pub kv: Option<serde_json::Value>,
 	#[serde(rename = "identity", skip_serializing_if = "Option::is_none")]
-	pub identity: Option<Box<crate::models::CloudVersionIdentityConfig>>,
+	pub identity: Option<Box<crate::models::CloudVersionIdentityIdentityConfig>>,
 }
 
 impl CloudVersionConfig {

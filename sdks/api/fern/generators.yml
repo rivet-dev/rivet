@@ -9,8 +9,8 @@ groups:
         output:
           location: local-file-system
           path: ../runtime/openapi
-      - name: fernapi/fern-typescript-browser-sdk
-        version: 0.41.1
+      - name: fernapi/fern-typescript-node-sdk
+        version: 0.42.7
         ir-version: v53
         output:
           location: local-file-system
@@ -33,8 +33,8 @@ groups:
         output:
           location: local-file-system
           path: ../full/openapi
-      - name: fernapi/fern-typescript-browser-sdk
-        version: 0.41.1
+      - name: fernapi/fern-typescript-node-sdk
+        version: 0.42.7
         ir-version: v53
         output:
           location: local-file-system

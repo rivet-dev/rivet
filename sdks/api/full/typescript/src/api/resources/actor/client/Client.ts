@@ -26,6 +26,8 @@ export declare namespace Actor {
         maxRetries?: number;
         /** A hook to abort the request. */
         abortSignal?: AbortSignal;
+        /** Additional headers to include in the request. */
+        headers?: Record<string, string>;
     }
 }
 
@@ -78,6 +80,7 @@ export class Actor {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             queryParameters: _queryParams,
@@ -173,7 +176,7 @@ export class Actor {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError("Timeout exceeded when calling GET /actors/{actor}.");
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -240,6 +243,7 @@ export class Actor {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             queryParameters: _queryParams,
@@ -335,7 +339,7 @@ export class Actor {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError("Timeout exceeded when calling GET /actors.");
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -412,6 +416,7 @@ export class Actor {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             queryParameters: _queryParams,
@@ -508,7 +513,7 @@ export class Actor {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError("Timeout exceeded when calling POST /actors.");
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -567,6 +572,7 @@ export class Actor {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             queryParameters: _queryParams,
@@ -662,7 +668,7 @@ export class Actor {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError("Timeout exceeded when calling DELETE /actors/{actor}.");
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -722,6 +728,7 @@ export class Actor {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             queryParameters: _queryParams,
@@ -818,7 +825,7 @@ export class Actor {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError("Timeout exceeded when calling POST /actors/{actor}/upgrade.");
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -879,6 +886,7 @@ export class Actor {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             queryParameters: _queryParams,
@@ -975,7 +983,7 @@ export class Actor {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError("Timeout exceeded when calling POST /actors/upgrade.");
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,

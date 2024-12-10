@@ -23,6 +23,8 @@ export declare namespace Versions {
         maxRetries?: number;
         /** A hook to abort the request. */
         abortSignal?: AbortSignal;
+        /** Additional headers to include in the request. */
+        headers?: Record<string, string>;
     }
 }
 
@@ -122,6 +124,7 @@ export class Versions {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -219,7 +222,9 @@ export class Versions {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling POST /cloud/games/{game_id}/versions."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -258,6 +263,7 @@ export class Versions {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -352,7 +358,9 @@ export class Versions {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling POST /cloud/games/{game_id}/versions/reserve-name."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -453,6 +461,7 @@ export class Versions {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -550,7 +559,9 @@ export class Versions {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling POST /cloud/games/{game_id}/versions/validate."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -591,6 +602,7 @@ export class Versions {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -685,7 +697,9 @@ export class Versions {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling GET /cloud/games/{game_id}/versions/{version_id}."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,

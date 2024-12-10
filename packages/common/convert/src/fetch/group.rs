@@ -7,7 +7,7 @@ pub async fn summaries(
 	ctx: &OperationContext<()>,
 	current_user_id: Option<Uuid>,
 	group_ids: Vec<Uuid>,
-) -> GlobalResult<Vec<models::GroupSummary>> {
+) -> GlobalResult<Vec<models::GroupGroupSummary>> {
 	if group_ids.is_empty() {
 		return Ok(Vec::new());
 	}

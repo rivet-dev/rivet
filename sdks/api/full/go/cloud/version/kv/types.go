@@ -9,29 +9,29 @@ import (
 )
 
 // KV configuration for a given version.
-type Config struct {
+type KvConfig struct {
 	_rawJSON json.RawMessage
 }
 
-func (c *Config) UnmarshalJSON(data []byte) error {
-	type unmarshaler Config
+func (k *KvConfig) UnmarshalJSON(data []byte) error {
+	type unmarshaler KvConfig
 	var value unmarshaler
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
-	*c = Config(value)
-	c._rawJSON = json.RawMessage(data)
+	*k = KvConfig(value)
+	k._rawJSON = json.RawMessage(data)
 	return nil
 }
 
-func (c *Config) String() string {
-	if len(c._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(c._rawJSON); err == nil {
+func (k *KvConfig) String() string {
+	if len(k._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(k._rawJSON); err == nil {
 			return value
 		}
 	}
-	if value, err := core.StringifyJSON(c); err == nil {
+	if value, err := core.StringifyJSON(k); err == nil {
 		return value
 	}
-	return fmt.Sprintf("%#v", c)
+	return fmt.Sprintf("%#v", k)
 }

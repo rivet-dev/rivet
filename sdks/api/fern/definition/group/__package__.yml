@@ -224,7 +224,7 @@ types:
     properties:
       groups:
         docs: A list of group summaries.
-        type: list<groupCommons.Summary>
+        type: list<groupCommons.GroupSummary>
       watch: commons.WatchResponse
 
   CreateRequest:
@@ -311,7 +311,7 @@ types:
 
   GetSummaryResponse:
     properties:
-      group: groupCommons.Summary
+      group: groupCommons.GroupSummary
 
   TransferOwnershipRequest:
     properties:

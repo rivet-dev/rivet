@@ -4,6 +4,6 @@ imports:
   commons: ../../common.yml
 
 types:
-  Config:
+  KvConfig:
     docs: KV configuration for a given version.
     properties: {}

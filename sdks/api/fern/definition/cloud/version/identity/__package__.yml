@@ -5,7 +5,7 @@ imports:
   cloudCommons: ../../common.yml
 
 types:
-  Config:
+  IdentityConfig:
     docs: >-
       **Deprecated**
 

@@ -14,11 +14,11 @@ types:
     docs: Cloud configuration for a given version.
     properties:
       scripts: optional<map<string, string>>
-      engine: optional<engine.Config>
-      cdn: optional<cdn.Config>
-      matchmaker: optional<matchmaker.Config>
-      kv: optional<kv.Config>
-      identity: optional<identity.Config>
+      engine: optional<engine.EngineConfig>
+      cdn: optional<cdn.CdnConfig>
+      matchmaker: optional<matchmaker.MatchmakerConfig>
+      kv: optional<kv.KvConfig>
+      identity: optional<identity.IdentityConfig>
 
   Full:
     docs: A full version.

@@ -4,10 +4,10 @@ use rivet_operation::prelude::*;
 
 use crate::{ApiTryFrom, ApiTryInto};
 
-impl ApiTryFrom<models::CloudVersionIdentityConfig> for backend::identity::VersionConfig {
+impl ApiTryFrom<models::CloudVersionIdentityIdentityConfig> for backend::identity::VersionConfig {
 	type Error = GlobalError;
 
-	fn api_try_from(value: models::CloudVersionIdentityConfig) -> GlobalResult<Self> {
+	fn api_try_from(value: models::CloudVersionIdentityIdentityConfig) -> GlobalResult<Self> {
 		Ok(backend::identity::VersionConfig {
 			custom_display_names: value
 				.custom_display_names
@@ -57,11 +57,11 @@ impl ApiTryFrom<models::CloudVersionIdentityCustomAvatar> for backend::identity:
 	}
 }
 
-impl ApiTryFrom<backend::identity::VersionConfig> for models::CloudVersionIdentityConfig {
+impl ApiTryFrom<backend::identity::VersionConfig> for models::CloudVersionIdentityIdentityConfig {
 	type Error = GlobalError;
 
 	fn api_try_from(value: backend::identity::VersionConfig) -> GlobalResult<Self> {
-		Ok(models::CloudVersionIdentityConfig {
+		Ok(models::CloudVersionIdentityIdentityConfig {
 			display_names: Some(
 				value
 					.custom_display_names

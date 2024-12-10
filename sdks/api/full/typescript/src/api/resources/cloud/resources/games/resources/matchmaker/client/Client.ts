@@ -23,6 +23,8 @@ export declare namespace Matchmaker {
         maxRetries?: number;
         /** A hook to abort the request. */
         abortSignal?: AbortSignal;
+        /** Additional headers to include in the request. */
+        headers?: Record<string, string>;
     }
 }
 
@@ -65,6 +67,7 @@ export class Matchmaker {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -162,7 +165,9 @@ export class Matchmaker {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling POST /cloud/games/{game_id}/matchmaker/lobbies/export-history."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -203,6 +208,7 @@ export class Matchmaker {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -297,7 +303,9 @@ export class Matchmaker {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling DELETE /cloud/games/{game_id}/matchmaker/lobbies/{lobby_id}."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -350,6 +358,7 @@ export class Matchmaker {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             queryParameters: _queryParams,
@@ -445,7 +454,9 @@ export class Matchmaker {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling GET /cloud/games/{game_id}/matchmaker/lobbies/{lobby_id}/logs."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,
@@ -492,6 +503,7 @@ export class Matchmaker {
                 "X-Fern-Language": "JavaScript",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
+                ...requestOptions?.headers,
             },
             contentType: "application/json",
             requestType: "json",
@@ -589,7 +601,9 @@ export class Matchmaker {
                     body: _response.error.rawBody,
                 });
             case "timeout":
-                throw new errors.RivetTimeoutError();
+                throw new errors.RivetTimeoutError(
+                    "Timeout exceeded when calling POST /cloud/games/{game_id}/matchmaker/lobbies/{lobby_id}/logs/export."
+                );
             case "unknown":
                 throw new errors.RivetError({
                     message: _response.error.errorMessage,

@@ -9,7 +9,7 @@
  */
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize)]
-pub struct GameSummary {
+pub struct GameGameSummary {
 	#[serde(rename = "game_id")]
 	pub game_id: uuid::Uuid,
 	/// A human readable short identifier used to references resources. Different than a `uuid` because this is intended to be human readable. Different than `DisplayName` because this should not include special characters and be short.
@@ -33,7 +33,7 @@ pub struct GameSummary {
 	pub total_player_count: i32,
 }
 
-impl GameSummary {
+impl GameGameSummary {
 	pub fn new(
 		game_id: uuid::Uuid,
 		name_id: String,
@@ -41,8 +41,8 @@ impl GameSummary {
 		url: String,
 		developer: crate::models::GroupHandle,
 		total_player_count: i32,
-	) -> GameSummary {
-		GameSummary {
+	) -> GameGameSummary {
+		GameGameSummary {
 			game_id,
 			name_id,
 			display_name,

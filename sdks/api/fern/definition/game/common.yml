@@ -17,7 +17,7 @@ types:
         docs: The URL of this game's banner image.
         type: optional<string>
 
-  Summary:
+  GameSummary:
     properties:
       game_id: uuid
       name_id: commons.Identifier
@@ -58,7 +58,7 @@ types:
       url:
         docs: The URL to this game's website.
         type: string
-      developer: groupCommons.Summary
+      developer: groupCommons.GroupSummary
       tags:
         docs: A list of game tags.
         type: list<string>
@@ -70,7 +70,7 @@ types:
         type: list<PlatformLink>
       recommended_groups:
         docs: A list of group summaries.
-        type: list<groupCommons.Summary>
+        type: list<groupCommons.GroupSummary>
       identity_leaderboard_categories:
         docs: A list of game leaderboard categories.
         type: list<LeaderboardCategory>

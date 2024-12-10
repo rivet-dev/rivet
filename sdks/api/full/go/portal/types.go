@@ -89,8 +89,8 @@ func (n NotificationUnregisterService) Ptr() *NotificationUnregisterService {
 
 type GetSuggestedGamesResponse struct {
 	// A list of game summaries.
-	Games []*game.Summary    `json:"games,omitempty"`
-	Watch *sdk.WatchResponse `json:"watch,omitempty"`
+	Games []*game.GameSummary `json:"games,omitempty"`
+	Watch *sdk.WatchResponse  `json:"watch,omitempty"`
 
 	_rawJSON json.RawMessage
 }

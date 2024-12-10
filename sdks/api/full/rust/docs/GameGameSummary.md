@@ -1,4 +1,4 @@
-# GameSummary
+# GameGameSummary
 
 ## Properties
 

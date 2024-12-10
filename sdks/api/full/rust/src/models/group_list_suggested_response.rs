@@ -12,14 +12,14 @@
 pub struct GroupListSuggestedResponse {
 	/// A list of group summaries.
 	#[serde(rename = "groups")]
-	pub groups: Vec<crate::models::GroupSummary>,
+	pub groups: Vec<crate::models::GroupGroupSummary>,
 	#[serde(rename = "watch")]
 	pub watch: Box<crate::models::WatchResponse>,
 }
 
 impl GroupListSuggestedResponse {
 	pub fn new(
-		groups: Vec<crate::models::GroupSummary>,
+		groups: Vec<crate::models::GroupGroupSummary>,
 		watch: crate::models::WatchResponse,
 	) -> GroupListSuggestedResponse {
 		GroupListSuggestedResponse {

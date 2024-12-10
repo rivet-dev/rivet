@@ -17,11 +17,11 @@ type ListActivitiesRequest struct {
 }
 
 type ListActivitiesResponse struct {
-	Identities       []*identity.Handle `json:"identities,omitempty"`
-	Games            []*game.Summary    `json:"games,omitempty"`
-	SuggestedGroups  []*group.Summary   `json:"suggested_groups,omitempty"`
-	SuggestedPlayers []*identity.Handle `json:"suggested_players,omitempty"`
-	Watch            *sdk.WatchResponse `json:"watch,omitempty"`
+	Identities       []*identity.Handle    `json:"identities,omitempty"`
+	Games            []*game.GameSummary   `json:"games,omitempty"`
+	SuggestedGroups  []*group.GroupSummary `json:"suggested_groups,omitempty"`
+	SuggestedPlayers []*identity.Handle    `json:"suggested_players,omitempty"`
+	Watch            *sdk.WatchResponse    `json:"watch,omitempty"`
 
 	_rawJSON json.RawMessage
 }

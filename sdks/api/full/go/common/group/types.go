@@ -41,6 +41,48 @@ func (e *ExternalLinks) String() string {
 	return fmt.Sprintf("%#v", e)
 }
 
+type GroupSummary struct {
+	GroupId     uuid.UUID       `json:"group_id"`
+	DisplayName sdk.DisplayName `json:"display_name"`
+	// The URL of this group's avatar image.
+	AvatarUrl *string        `json:"avatar_url,omitempty"`
+	External  *ExternalLinks `json:"external,omitempty"`
+	// **Deprecated**
+	// Whether or not this group is a developer.
+	IsDeveloper bool    `json:"is_developer"`
+	Bio         sdk.Bio `json:"bio"`
+	// Whether or not the current identity is a member of this group.
+	IsCurrentIdentityMember bool      `json:"is_current_identity_member"`
+	Publicity               Publicity `json:"publicity,omitempty"`
+	MemberCount             int       `json:"member_count"`
+	OwnerIdentityId         uuid.UUID `json:"owner_identity_id"`
+
+	_rawJSON json.RawMessage
+}
+
+func (g *GroupSummary) UnmarshalJSON(data []byte) error {
+	type unmarshaler GroupSummary
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*g = GroupSummary(value)
+	g._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (g *GroupSummary) String() string {
+	if len(g._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(g._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(g); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", g)
+}
+
 // A group handle.
 type Handle struct {
 	GroupId     uuid.UUID       `json:"group_id"`
@@ -98,46 +140,4 @@ func NewPublicityFromString(s string) (Publicity, error) {
 
 func (p Publicity) Ptr() *Publicity {
 	return &p
-}
-
-type Summary struct {
-	GroupId     uuid.UUID       `json:"group_id"`
-	DisplayName sdk.DisplayName `json:"display_name"`
-	// The URL of this group's avatar image.
-	AvatarUrl *string        `json:"avatar_url,omitempty"`
-	External  *ExternalLinks `json:"external,omitempty"`
-	// **Deprecated**
-	// Whether or not this group is a developer.
-	IsDeveloper bool    `json:"is_developer"`
-	Bio         sdk.Bio `json:"bio"`
-	// Whether or not the current identity is a member of this group.
-	IsCurrentIdentityMember bool      `json:"is_current_identity_member"`
-	Publicity               Publicity `json:"publicity,omitempty"`
-	MemberCount             int       `json:"member_count"`
-	OwnerIdentityId         uuid.UUID `json:"owner_identity_id"`
-
-	_rawJSON json.RawMessage
-}
-
-func (s *Summary) UnmarshalJSON(data []byte) error {
-	type unmarshaler Summary
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*s = Summary(value)
-	s._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (s *Summary) String() string {
-	if len(s._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(s._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(s); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", s)
 }

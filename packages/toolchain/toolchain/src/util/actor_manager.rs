@@ -22,14 +22,8 @@ pub fn extract_endpoint(actor: &models::ActorActor) -> Result<String> {
 			bail!("unsupported protocol")
 		}
 	};
-	let hostname = http_port
-		.hostname
-		.as_ref()
-		.context("missing hostname")?;
-	let port = http_port
-		.port
-		.as_ref()
-		.context("missing port")?;
+	let hostname = http_port.hostname.as_ref().context("missing hostname")?;
+	let port = http_port.port.as_ref().context("missing port")?;
 	let endpoint = format!("{protocol}://{hostname}:{port}");
 
 	Ok(endpoint)

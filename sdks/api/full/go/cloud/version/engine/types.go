@@ -148,7 +148,7 @@ func (u *UnrealConfig) String() string {
 	return fmt.Sprintf("%#v", u)
 }
 
-type Config struct {
+type EngineConfig struct {
 	Unity  *UnityConfig  `json:"unity,omitempty"`
 	Unreal *UnrealConfig `json:"unreal,omitempty"`
 	Godot  *GodotConfig  `json:"godot,omitempty"`
@@ -158,25 +158,25 @@ type Config struct {
 	_rawJSON json.RawMessage
 }
 
-func (c *Config) UnmarshalJSON(data []byte) error {
-	type unmarshaler Config
+func (e *EngineConfig) UnmarshalJSON(data []byte) error {
+	type unmarshaler EngineConfig
 	var value unmarshaler
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
-	*c = Config(value)
-	c._rawJSON = json.RawMessage(data)
+	*e = EngineConfig(value)
+	e._rawJSON = json.RawMessage(data)
 	return nil
 }
 
-func (c *Config) String() string {
-	if len(c._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(c._rawJSON); err == nil {
+func (e *EngineConfig) String() string {
+	if len(e._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(e._rawJSON); err == nil {
 			return value
 		}
 	}
-	if value, err := core.StringifyJSON(c); err == nil {
+	if value, err := core.StringifyJSON(e); err == nil {
 		return value
 	}
-	return fmt.Sprintf("%#v", c)
+	return fmt.Sprintf("%#v", e)
 }

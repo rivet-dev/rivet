@@ -7,7 +7,7 @@ imports:
   gameMode: game_mode.yml
 
 types:
-  Config:
+  MatchmakerConfig:
     docs: Matchmaker configuration for a given version.
     properties:
       game_modes:

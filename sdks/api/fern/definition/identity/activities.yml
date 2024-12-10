@@ -24,7 +24,7 @@ types:
   ListActivitiesResponse:
     properties:
       identities: list<identityCommons.Handle>
-      games: list<gameCommons.Summary>
-      suggested_groups: list<groupCommons.Summary>
+      games: list<gameCommons.GameSummary>
+      suggested_groups: list<groupCommons.GroupSummary>
       suggested_players: list<identityCommons.Handle>
       watch: commons.WatchResponse

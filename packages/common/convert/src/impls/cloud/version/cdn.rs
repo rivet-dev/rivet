@@ -4,10 +4,10 @@ use rivet_operation::prelude::*;
 
 use crate::{ApiTryFrom, ApiTryInto};
 
-impl ApiTryFrom<models::CloudVersionCdnConfig> for backend::cdn::VersionConfig {
+impl ApiTryFrom<models::CloudVersionCdnCdnConfig> for backend::cdn::VersionConfig {
 	type Error = GlobalError;
 
-	fn api_try_from(value: models::CloudVersionCdnConfig) -> GlobalResult<Self> {
+	fn api_try_from(value: models::CloudVersionCdnCdnConfig) -> GlobalResult<Self> {
 		Ok(backend::cdn::VersionConfig {
 			site_id: value.site_id.map(Into::into),
 			routes: value
@@ -92,13 +92,13 @@ impl ApiTryFrom<models::CloudVersionCdnHeader> for backend::cdn::custom_headers_
 	}
 }
 
-impl ApiTryFrom<backend::cdn::VersionConfig> for models::CloudVersionCdnConfig {
+impl ApiTryFrom<backend::cdn::VersionConfig> for models::CloudVersionCdnCdnConfig {
 	type Error = GlobalError;
 
 	fn api_try_from(value: backend::cdn::VersionConfig) -> GlobalResult<Self> {
 		let site_id = unwrap_ref!(value.site_id).as_uuid();
 
-		Ok(models::CloudVersionCdnConfig {
+		Ok(models::CloudVersionCdnCdnConfig {
 			build_command: None,
 			build_output: None,
 			build_env: None,
