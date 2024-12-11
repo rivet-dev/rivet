@@ -480,9 +480,9 @@ pub async fn upgrade_all(
 	let tags = unwrap_with!(body.tags, API_BAD_BODY, error = "missing property `tags`");
 
 	ensure_with!(
-		tags.as_object().map(|x| x.len()).unwrap_or_default() <= 64,
+		tags.as_object().map(|x| x.len()).unwrap_or_default() <= 8,
 		API_BAD_BODY,
-		error = "Too many tags (max 64)."
+		error = "Too many tags (max 8)."
 	);
 
 	let tags = unwrap_with!(
@@ -498,11 +498,11 @@ pub async fn upgrade_all(
 			error = "tags[]: Tag label cannot be empty."
 		);
 		ensure_with!(
-			k.len() <= 256,
+			k.len() <= 16,
 			API_BAD_BODY,
 			error = format!(
 				"tags[{:?}]: Tag label too large (max 256 bytes).",
-				&k[..256]
+				util::safe_slice(k, 0, 16),
 			),
 		);
 		ensure_with!(
@@ -825,9 +825,9 @@ async fn resolve_build(
 			);
 
 			ensure_with!(
-				build_tags.len() < 64,
+				build_tags.len() < 8,
 				API_BAD_BODY,
-				error = "Too many build tags (max 64)."
+				error = "Too many build tags (max 8)."
 			);
 
 			for (k, v) in &build_tags {
@@ -837,11 +837,11 @@ async fn resolve_build(
 					error = "build_tags[]: Build tag label cannot be empty."
 				);
 				ensure_with!(
-					k.len() < 128,
+					k.len() < 16,
 					API_BAD_BODY,
 					error = format!(
-						"build_tags[{:?}]: Build tag label too large (max 128 bytes).",
-						&k[..128]
+						"build_tags[{:?}]: Build tag label too large (max 16 bytes).",
+						util::safe_slice(k, 0, 16),
 					)
 				);
 				ensure_with!(

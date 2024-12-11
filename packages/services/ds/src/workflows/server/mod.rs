@@ -232,18 +232,18 @@ async fn validate(ctx: &ActivityCtx, input: &ValidateInput) -> GlobalResult<Opti
 		));
 	}
 
-	if input.tags.len() > 64 {
-		return Ok(Some("Too many tags (max 64).".into()));
+	if input.tags.len() > 8 {
+		return Ok(Some("Too many tags (max 8).".into()));
 	}
 
 	for (k, v) in &input.tags {
 		if k.is_empty() {
 			return Ok(Some("tags[]: Tag label cannot be empty.".into()));
 		}
-		if k.len() > 256 {
+		if k.len() > 16 {
 			return Ok(Some(format!(
-				"tags[{:?}]: Tag label too large (max 256 bytes).",
-				&k[..256]
+				"tags[{:?}]: Tag label too large (max 16 bytes).",
+				util::safe_slice(k, 0, 16),
 			)));
 		}
 		if v.is_empty() {
@@ -276,7 +276,7 @@ async fn validate(ctx: &ActivityCtx, input: &ValidateInput) -> GlobalResult<Opti
 		if k.len() > 256 {
 			return Ok(Some(format!(
 				"runtime.environment[{:?}]: Key too large (max 256 bytes).",
-				&k[..256]
+				util::safe_slice(k, 0, 256),
 			)));
 		}
 		if v.len() > 1024 {
@@ -286,15 +286,15 @@ async fn validate(ctx: &ActivityCtx, input: &ValidateInput) -> GlobalResult<Opti
 		}
 	}
 
-	if input.network_ports.len() > 64 {
-		return Ok(Some("Too many ports (max 64).".into()));
+	if input.network_ports.len() > 8 {
+		return Ok(Some("Too many ports (max 8).".into()));
 	}
 
 	for (name, port) in &input.network_ports {
-		if name.len() > 256 {
+		if name.len() > 16 {
 			return Ok(Some(format!(
-				"runtime.ports[{:?}]: Port name too large (max 256 bytes).",
-				&name[..256]
+				"runtime.ports[{:?}]: Port name too large (max 16 bytes).",
+				util::safe_slice(name, 0, 16),
 			)));
 		}
 

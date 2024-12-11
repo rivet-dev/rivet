@@ -187,3 +187,23 @@ mod tests {
 		}
 	}
 }
+
+/// Slices a string without panicking on char boundaries. Defaults to the left side of the char if a slice
+// is invalid. Will still panic if start > end.
+pub fn safe_slice(s: &str, start: usize, end: usize) -> &str {
+	// Adjust start to the nearest valid boundary to the left
+	let adjusted_start = s.char_indices()
+		.take_while(|&(i, _)| i <= start)
+		.last()
+		.map(|(i, _)| i)
+		.unwrap_or(0);
+
+	// Adjust end to the nearest valid boundary to the left
+	let adjusted_end = s.char_indices()
+		.take_while(|&(i, _)| i <= end)
+		.last()
+		.map(|(i, _)| i)
+		.unwrap_or(s.len());
+
+	&s[adjusted_start..adjusted_end]
+}

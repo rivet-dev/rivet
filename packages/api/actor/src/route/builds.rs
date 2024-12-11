@@ -188,9 +188,9 @@ pub async fn patch_tags(
 	let tags = unwrap_with!(body.tags, API_BAD_BODY, error = "missing field `tags`");
 
 	ensure_with!(
-		tags.as_object().map(|x| x.len()).unwrap_or_default() <= 64,
+		tags.as_object().map(|x| x.len()).unwrap_or_default() <= 8,
 		ACTOR_BUILD_INVALID_PATCH_CONFIG,
-		error = "Too many tags (max 64)."
+		error = "Too many tags (max 8)."
 	);
 
 	let tags = serde_json::from_value::<HashMap<String, Option<String>>>(tags)
@@ -203,9 +203,12 @@ pub async fn patch_tags(
 			error = "tags[]: Tag label cannot be empty."
 		);
 		ensure_with!(
-			k.len() <= 256,
+			k.len() <= 16,
 			ACTOR_BUILD_INVALID_PATCH_CONFIG,
-			error = format!("tags[{:?}]: Tag label too large (max 256).", &k[..256])
+			error = format!(
+				"tags[{:?}]: Tag label too large (max 16).",
+				util::safe_slice(k, 0, 16),
+			)
 		);
 		if let Some(v) = v {
 			ensure_with!(
