@@ -90,8 +90,8 @@ pub async fn actor_regions_list(
 
 pub async fn actor_regions_resolve(
 	configuration: &configuration::Configuration,
-	long: Option<f64>,
 	lat: Option<f64>,
+	long: Option<f64>,
 ) -> Result<crate::models::ActorResolveRegionResponse, Error<ActorRegionsResolveError>> {
 	let local_var_configuration = configuration;
 
@@ -101,12 +101,12 @@ pub async fn actor_regions_resolve(
 	let mut local_var_req_builder =
 		local_var_client.request(reqwest::Method::GET, local_var_uri_str.as_str());
 
+	if let Some(ref local_var_str) = lat {
+		local_var_req_builder = local_var_req_builder.query(&[("lat", &local_var_str.to_string())]);
+	}
 	if let Some(ref local_var_str) = long {
 		local_var_req_builder =
 			local_var_req_builder.query(&[("long", &local_var_str.to_string())]);
-	}
-	if let Some(ref local_var_str) = lat {
-		local_var_req_builder = local_var_req_builder.query(&[("lat", &local_var_str.to_string())]);
 	}
 	if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
 		local_var_req_builder =

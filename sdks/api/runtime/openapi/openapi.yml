@@ -916,13 +916,13 @@ paths:
       tags:
         - ActorRegions
       parameters:
-        - name: long
+        - name: lat
           in: query
           required: false
           schema:
             type: number
             format: double
-        - name: lat
+        - name: long
           in: query
           required: false
           schema:
@@ -1278,26 +1278,7 @@ components:
           $ref: '#/components/schemas/ActorHostRouting'
     ActorGuardRouting:
       type: object
-      properties:
-        authorization:
-          $ref: '#/components/schemas/ActorPortAuthorization'
-    ActorPortAuthorization:
-      type: object
-      properties:
-        bearer:
-          type: string
-        query:
-          $ref: '#/components/schemas/ActorPortQueryAuthorization'
-    ActorPortQueryAuthorization:
-      type: object
-      properties:
-        key:
-          type: string
-        value:
-          type: string
-      required:
-        - key
-        - value
+      properties: {}
     ActorHostRouting:
       type: object
       properties: {}

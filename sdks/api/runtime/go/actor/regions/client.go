@@ -130,11 +130,11 @@ func (c *Client) Resolve(ctx context.Context, request *actor.ResolveRegionsReque
 	endpointURL := baseURL + "/" + "regions/resolve"
 
 	queryParams := make(url.Values)
-	if request.Long != nil {
-		queryParams.Add("long", fmt.Sprintf("%v", *request.Long))
-	}
 	if request.Lat != nil {
 		queryParams.Add("lat", fmt.Sprintf("%v", *request.Lat))
+	}
+	if request.Long != nil {
+		queryParams.Add("long", fmt.Sprintf("%v", *request.Long))
 	}
 	if len(queryParams) > 0 {
 		endpointURL += "?" + queryParams.Encode()

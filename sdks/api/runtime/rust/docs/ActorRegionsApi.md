@@ -40,7 +40,7 @@ Name | Type | Description  | Required | Notes
 
 ## actor_regions_resolve
 
-> crate::models::ActorResolveRegionResponse actor_regions_resolve(long, lat)
+> crate::models::ActorResolveRegionResponse actor_regions_resolve(lat, long)
 
 
 ### Parameters
@@ -48,8 +48,8 @@ Name | Type | Description  | Required | Notes
 
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
-**long** | Option<**f64**> |  |  |
 **lat** | Option<**f64**> |  |  |
+**long** | Option<**f64**> |  |  |
 
 ### Return type
 

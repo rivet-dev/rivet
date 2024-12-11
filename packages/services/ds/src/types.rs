@@ -230,26 +230,28 @@ impl ApiFrom<Port> for models::ActorPort {
 			} => (
 				(*protocol).api_into(),
 				models::ActorPortRouting {
-					guard: Some(Box::new(models::ActorGuardRouting {
-						authorization: match authorization {
-							PortAuthorization::None => None,
-							PortAuthorization::Bearer(token) => {
-								Some(Box::new(models::ActorPortAuthorization {
-									bearer: Some(token.clone()),
-									..Default::default()
-								}))
-							}
-							PortAuthorization::Query(key, value) => {
-								Some(Box::new(models::ActorPortAuthorization {
-									query: Some(Box::new(models::ActorPortQueryAuthorization {
-										key: key.clone(),
-										value: value.clone(),
-									})),
-									..Default::default()
-								}))
-							}
-						},
-					})),
+					guard: Some(json!({})),
+					// Temporarily disabled
+					// guard: Some(Box::new(models::ActorGuardRouting {
+					// 	authorization: match authorization {
+					// 		PortAuthorization::None => None,
+					// 		PortAuthorization::Bearer(token) => {
+					// 			Some(Box::new(models::ActorPortAuthorization {
+					// 				bearer: Some(token.clone()),
+					// 				..Default::default()
+					// 			}))
+					// 		}
+					// 		PortAuthorization::Query(key, value) => {
+					// 			Some(Box::new(models::ActorPortAuthorization {
+					// 				query: Some(Box::new(models::ActorPortQueryAuthorization {
+					// 					key: key.clone(),
+					// 					value: value.clone(),
+					// 				})),
+					// 				..Default::default()
+					// 			}))
+					// 		}
+					// 	},
+					// })),
 					..Default::default()
 				},
 			),

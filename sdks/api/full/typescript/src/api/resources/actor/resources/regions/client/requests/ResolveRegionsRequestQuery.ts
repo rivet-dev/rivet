@@ -5,11 +5,11 @@
 /**
  * @example
  *     {
- *         long: 1.1,
- *         lat: 1.1
+ *         lat: 1.1,
+ *         long: 1.1
  *     }
  */
 export interface ResolveRegionsRequestQuery {
-    long?: number;
     lat?: number;
+    long?: number;
 }

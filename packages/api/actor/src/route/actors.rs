@@ -195,20 +195,22 @@ pub async fn create(
 								host: None,
 							} => ds::types::Routing::GameGuard {
 								protocol: p.protocol.api_into(),
-								authorization: match gg.authorization.as_deref() {
-									Some(models::ActorPortAuthorization {
-										bearer: Some(token),
-										..
-									}) => ds::types::PortAuthorization::Bearer(token.clone()),
-									Some(models::ActorPortAuthorization {
-										query: Some(query),
-										..
-									}) => ds::types::PortAuthorization::Query(
-										query.key.clone(),
-										query.value.clone(),
-									),
-									_ => ds::types::PortAuthorization::None,
-								},
+								// Temporarily disabled
+								// authorization: match gg.authorization.as_deref() {
+								// 	Some(models::ActorPortAuthorization {
+								// 		bearer: Some(token),
+								// 		..
+								// 	}) => ds::types::PortAuthorization::Bearer(token.clone()),
+								// 	Some(models::ActorPortAuthorization {
+								// 		query: Some(query),
+								// 		..
+								// 	}) => ds::types::PortAuthorization::Query(
+								// 		query.key.clone(),
+								// 		query.value.clone(),
+								// 	),
+								// 	_ => ds::types::PortAuthorization::None,
+								// },
+								authorization: ds::types::PortAuthorization::None,
 							},
 							models::ActorPortRouting {
 								guard: None,
@@ -336,9 +338,11 @@ pub async fn create_deprecated(
 									},
 									routing: p.routing.map(|r| {
 										Box::new(models::ActorPortRouting {
-											guard: r.game_guard.map(|_| {
-												Box::new(models::ActorGuardRouting::default())
-											}),
+											// Temporarily disabled
+											// guard: r.game_guard.map(|_| {
+											// 	Box::new(models::ActorGuardRouting::default())
+											// }),
+											guard: r.game_guard.map(|_| json!({})),
 											host: r.host.map(|_| json!({})),
 										})
 									}),

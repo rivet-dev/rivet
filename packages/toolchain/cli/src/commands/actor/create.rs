@@ -21,7 +21,10 @@ struct Port {
 	name: String,
 	protocol: models::ActorPortProtocol,
 	internal_port: Option<i32>,
-	guard: Option<models::ActorGuardRouting>,
+	// Temporarily disabled
+	// guard: Option<models::ActorGuardRouting>,
+	#[serde(default)]
+	guard: bool,
 	#[serde(default)]
 	host: bool,
 }
@@ -132,12 +135,10 @@ impl Opts {
 								internal_port: port.internal_port,
 								protocol: port.protocol,
 								routing: Some(Box::new(models::ActorPortRouting {
-									guard: port.guard.map(Box::new),
-									host: if port.host {
-										Some(serde_json::json!({}))
-									} else {
-										None
-									},
+									// Temporarily disabled
+									// guard: port.guard.map(Box::new),
+									guard: port.guard.then_some(serde_json::json!({})),
+									host: port.host.then_some(serde_json::json!({})),
 								})),
 							},
 						))

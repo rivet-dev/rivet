@@ -14,8 +14,8 @@ type ListRegionsRequestQuery struct {
 }
 
 type ResolveRegionsRequestQuery struct {
-	Long *float64 `json:"-"`
 	Lat  *float64 `json:"-"`
+	Long *float64 `json:"-"`
 }
 
 type ListRegionsResponse struct {

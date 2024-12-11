@@ -17,7 +17,6 @@ docs/ActorCreateActorRuntimeRequest.md
 docs/ActorGetActorLogsResponse.md
 docs/ActorGetActorResponse.md
 docs/ActorGetBuildResponse.md
-docs/ActorGuardRouting.md
 docs/ActorLifecycle.md
 docs/ActorListActorsResponse.md
 docs/ActorListBuildsResponse.md
@@ -28,9 +27,7 @@ docs/ActorNetwork.md
 docs/ActorNetworkMode.md
 docs/ActorPatchBuildTagsRequest.md
 docs/ActorPort.md
-docs/ActorPortAuthorization.md
 docs/ActorPortProtocol.md
-docs/ActorPortQueryAuthorization.md
 docs/ActorPortRouting.md
 docs/ActorPrepareBuildRequest.md
 docs/ActorPrepareBuildResponse.md
@@ -432,7 +429,6 @@ src/models/actor_create_actor_runtime_request.rs
 src/models/actor_get_actor_logs_response.rs
 src/models/actor_get_actor_response.rs
 src/models/actor_get_build_response.rs
-src/models/actor_guard_routing.rs
 src/models/actor_lifecycle.rs
 src/models/actor_list_actors_response.rs
 src/models/actor_list_builds_response.rs
@@ -442,9 +438,7 @@ src/models/actor_network.rs
 src/models/actor_network_mode.rs
 src/models/actor_patch_build_tags_request.rs
 src/models/actor_port.rs
-src/models/actor_port_authorization.rs
 src/models/actor_port_protocol.rs
-src/models/actor_port_query_authorization.rs
 src/models/actor_port_routing.rs
 src/models/actor_prepare_build_request.rs
 src/models/actor_prepare_build_response.rs

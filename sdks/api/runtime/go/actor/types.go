@@ -175,8 +175,6 @@ func (b *Build) String() string {
 }
 
 type GuardRouting struct {
-	Authorization *PortAuthorization `json:"authorization,omitempty"`
-
 	_rawJSON json.RawMessage
 }
 
@@ -347,36 +345,6 @@ func (p *Port) String() string {
 	return fmt.Sprintf("%#v", p)
 }
 
-type PortAuthorization struct {
-	Bearer *string                 `json:"bearer,omitempty"`
-	Query  *PortQueryAuthorization `json:"query,omitempty"`
-
-	_rawJSON json.RawMessage
-}
-
-func (p *PortAuthorization) UnmarshalJSON(data []byte) error {
-	type unmarshaler PortAuthorization
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*p = PortAuthorization(value)
-	p._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (p *PortAuthorization) String() string {
-	if len(p._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(p._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(p); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", p)
-}
-
 type PortProtocol string
 
 const (
@@ -406,36 +374,6 @@ func NewPortProtocolFromString(s string) (PortProtocol, error) {
 
 func (p PortProtocol) Ptr() *PortProtocol {
 	return &p
-}
-
-type PortQueryAuthorization struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
-
-	_rawJSON json.RawMessage
-}
-
-func (p *PortQueryAuthorization) UnmarshalJSON(data []byte) error {
-	type unmarshaler PortQueryAuthorization
-	var value unmarshaler
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	*p = PortQueryAuthorization(value)
-	p._rawJSON = json.RawMessage(data)
-	return nil
-}
-
-func (p *PortQueryAuthorization) String() string {
-	if len(p._rawJSON) > 0 {
-		if value, err := core.StringifyJSON(p._rawJSON); err == nil {
-			return value
-		}
-	}
-	if value, err := core.StringifyJSON(p); err == nil {
-		return value
-	}
-	return fmt.Sprintf("%#v", p)
 }
 
 type PortRouting struct {
