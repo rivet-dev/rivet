@@ -43,6 +43,7 @@ pub struct Unstable {
 	pub analyze_result: Option<bool>,
 	pub esbuild_log_level: Option<String>,
 	pub compression: Option<Compression>,
+	pub dump_build: Option<bool>,
 }
 
 impl Unstable {
@@ -63,5 +64,9 @@ impl Unstable {
 	pub fn compression(&self) -> Compression {
 		// TODO: Change back to Lz4 default
 		self.compression.unwrap_or(Compression::None)
+	}
+
+	pub fn dump_build(&self) -> bool {
+		self.dump_build.unwrap_or(false)
 	}
 }

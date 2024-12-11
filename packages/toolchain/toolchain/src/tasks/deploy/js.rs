@@ -1,7 +1,11 @@
 use anyhow::*;
 use futures_util::{StreamExt, TryStreamExt};
 use rivet_api::{apis, models};
-use std::{collections::HashMap, path::{PathBuf, Path}, sync::Arc};
+use std::{
+	collections::HashMap,
+	path::{Path, PathBuf},
+	sync::Arc,
+};
 use tokio::{fs, process::Command};
 use uuid::Uuid;
 
@@ -33,6 +37,10 @@ pub async fn build_and_upload(
 
 	// Create dir to write build artifacts to
 	let build_dir = tempfile::TempDir::new()?;
+
+	if opts.build_config.unstable.dump_build() {
+		task.log(format!("[Build Path] {}", build_dir.path().display()));
+	}
 
 	// Bundle JS
 	match opts.build_config.bundler() {
@@ -75,7 +83,7 @@ pub async fn build_and_upload(
 
 			// Check the project before deploying
 			deno_check_script(CheckOpts {
-                script_path: &script_path,
+				script_path: &script_path,
 				config_path: config_path.as_deref(),
 				import_map_url: import_map_url.as_deref(),
 				lock_path: lock_path.as_deref(),
@@ -147,11 +155,16 @@ pub async fn build_and_upload(
 	)
 	.await?;
 
+	// Retain build folder
+	if opts.build_config.unstable.dump_build() {
+		let _ = build_dir.into_path();
+	}
+
 	Ok(build_id)
 }
 
 struct CheckOpts<'a> {
-    script_path: &'a Path,
+	script_path: &'a Path,
 	config_path: Option<&'a str>,
 	import_map_url: Option<&'a str>,
 	lock_path: Option<&'a str>,
@@ -183,7 +196,7 @@ async fn deno_check_script(opts: CheckOpts<'_>) -> Result<()> {
 	let stderr = String::from_utf8_lossy(&output.stderr);
 
 	if output.status.success() {
-        Ok(())
+		Ok(())
 	} else {
 		let mut error_message = format!("Failed to check script: {}", output.status);
 		if !stdout.is_empty() {

@@ -192,14 +192,16 @@ mod tests {
 // is invalid. Will still panic if start > end.
 pub fn safe_slice(s: &str, start: usize, end: usize) -> &str {
 	// Adjust start to the nearest valid boundary to the left
-	let adjusted_start = s.char_indices()
+	let adjusted_start = s
+		.char_indices()
 		.take_while(|&(i, _)| i <= start)
 		.last()
 		.map(|(i, _)| i)
 		.unwrap_or(0);
 
 	// Adjust end to the nearest valid boundary to the left
-	let adjusted_end = s.char_indices()
+	let adjusted_end = s
+		.char_indices()
 		.take_while(|&(i, _)| i <= end)
 		.last()
 		.map(|(i, _)| i)

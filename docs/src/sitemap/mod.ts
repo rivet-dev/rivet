@@ -153,6 +153,11 @@ export const sitemap = [
             href: '/docs/config',
             icon: 'square-sliders'
           },
+          {
+            title: 'Troubleshooting',
+            href: '/docs/troubleshooting',
+            icon: 'clipboard-list-check'
+          },
           // { title: 'CLI', href: '/docs/cli', icon: 'square-terminal' },
           // { title: 'Hub', href: '/docs/hub', icon: 'browser' },
           // { title: 'Local Development', href: '/docs/local-development', icon: 'display' },
@@ -172,11 +177,7 @@ export const sitemap = [
             collapsible: true,
             pages: [
               {
-<<<<<<< HEAD
-                title: 'Introduction',
-=======
                 title: 'Overview',
->>>>>>> 4623a0eb5 (chore: add access controls to actor manager)
                 href: '/docs/self-hosting'
               },
               {

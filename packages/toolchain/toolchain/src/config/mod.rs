@@ -87,6 +87,8 @@ pub struct Unstable {
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ManagerUnstable {
 	pub enable: Option<bool>,
+	#[serde(flatten)]
+	pub js_unstable: build::javascript::Unstable,
 }
 
 impl ManagerUnstable {

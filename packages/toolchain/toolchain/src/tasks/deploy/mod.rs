@@ -54,8 +54,15 @@ impl task::Task for Task {
 		// Manager
 		let manager_res = if input.config.unstable().manager.enable() {
 			Some(
-				manager::deploy(&ctx, task.clone(), manager::DeployOpts { env: env.clone() })
-					.await?,
+				manager::deploy(
+					&ctx,
+					task.clone(),
+					manager::DeployOpts {
+						env: env.clone(),
+						manager_config: input.config.unstable().manager,
+					},
+				)
+				.await?,
 			)
 		} else {
 			None
@@ -116,7 +123,7 @@ impl task::Task for Task {
 				r#"  const actor = await actorClient.withTags({})"#,
 				serde_json::to_string(&example_build.tags)?
 			));
-			task.log(r#"  actor.rpc("myMethod", "Hello, world!")"#);
+			task.log(r#"  actor.myRpc("Hello, world!");"#);
 			task.log("");
 		} else {
 			task.log("");

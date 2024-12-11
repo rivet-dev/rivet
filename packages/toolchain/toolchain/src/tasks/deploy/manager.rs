@@ -8,6 +8,7 @@ use crate::{
 
 pub struct DeployOpts {
 	pub env: TEMPEnvironment,
+	pub manager_config: config::ManagerUnstable,
 }
 
 pub struct DeployOutput {
@@ -47,7 +48,7 @@ pub async fn deploy(
 					import_map_url: None,
 					lock_path: Some(manager_src_path.join("deno.lock").display().to_string()),
 				},
-				unstable: Default::default(),
+				unstable: opts.manager_config.js_unstable.clone(),
 			},
 		},
 	)

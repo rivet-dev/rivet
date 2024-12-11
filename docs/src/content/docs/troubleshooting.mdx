@@ -1,0 +1,57 @@
+# Troubleshooting
+
+## Accessing source maps
+
+Update your configuration to include `unstable.minify = false` and `unstable.dump_build = true`.
+
+```json {{ "title": "rivet.json" }}
+{
+	"builds": [
+		{
+			"tags": { "name": "counter" },
+			"access": "public",
+			"runtime": "javascript",
+			"script": "counter.ts",
+			"accesss": "public",
+			"unstable": {
+				"minify": false,
+				"dump_build": true
+			}
+		}
+	]
+}
+```
+
+<Tip>
+    `unstable.minify = false` is not required, but it maintains symbol names & whitespace to make your backtraces easier to read.
+</Tip>
+
+After you deploy again, you'll see a new line in your output:
+
+```sh
+$ rivet deploy
+...etc...
+[Build Path] /var/folders/hh/qn66rcl906gg79xjk27qhg900000gn/T/.tmpX5Jcer
+...etc...
+```
+
+Inside the build folder printed above (e.g. `/var/folders/hh/qn66rcl906gg79xjk27qhg900000gn/T/.tmpX5Jcer`), you'll find both:
+
+- `index.js` The file that's running on the server. You can manually look up your backtraces in this file.
+- `index.js.map` The source map for your code. You can look up the backtrace in this
+
+### Resolving a location in the source map
+
+To look up the location `file:///index.js:3754:17`, you can:
+
+1. `cd` to the build path (see above)
+2. Run:
+
+    ```sh
+    $ npx source-map-cli resolve index.js.map 3754 17
+    Maps to ../../../../../../Users/nathan/rivet/ee/oss/examples/counter/counter.ts:39:14
+
+        console.log(new Error("foo"));
+                ^
+    ```
+

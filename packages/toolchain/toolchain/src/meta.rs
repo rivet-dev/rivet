@@ -111,8 +111,10 @@ pub async fn try_read_project<F: FnOnce(&Meta) -> Result<T>, T>(
 	let mut global_meta = META.lock().await;
 	if !global_meta.contains_key(&meta_path) {
 		let mut meta = match fs::read_to_string(&meta_path).await {
-			Result::Ok(config) => serde_json::from_str::<Meta>(&config)
-				.context(format!("failed to deserialize meta ({})", meta_path.display()))?,
+			Result::Ok(config) => serde_json::from_str::<Meta>(&config).context(format!(
+				"failed to deserialize meta ({})",
+				meta_path.display()
+			))?,
 			Err(err) if err.kind() == std::io::ErrorKind::NotFound => Meta::new(),
 			Err(err) => return Err(err.into()),
 		};
@@ -146,8 +148,10 @@ pub async fn try_mutate_project<F: FnOnce(&mut Meta) -> Result<T>, T>(
 	let mut global_meta = META.lock().await;
 	if !global_meta.contains_key(&meta_path) {
 		let mut meta = match fs::read_to_string(&meta_path).await {
-			Result::Ok(config) => serde_json::from_str::<Meta>(&config)
-				.context(format!("failed to deserialize meta ({})", meta_path.display()))?,
+			Result::Ok(config) => serde_json::from_str::<Meta>(&config).context(format!(
+				"failed to deserialize meta ({})",
+				meta_path.display()
+			))?,
 			Err(err) if err.kind() == std::io::ErrorKind::NotFound => Meta::new(),
 			Err(err) => return Err(err.into()),
 		};
