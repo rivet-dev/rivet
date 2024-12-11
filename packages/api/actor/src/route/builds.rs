@@ -22,7 +22,7 @@ pub async fn get(
 	_watch_index: WatchIndexQuery,
 	query: GlobalQuery,
 ) -> GlobalResult<models::ActorGetBuildResponse> {
-	let CheckOutput { env_id, .. } = ctx.auth().check(ctx.op_ctx(), &query, false).await?;
+	let CheckOutput { env_id, .. } = ctx.auth().check(ctx.op_ctx(), &query, true).await?;
 
 	let builds_res = op!([ctx] build_get {
 		build_ids: vec![build_id.into()],
@@ -87,7 +87,7 @@ pub async fn list(
 	_watch_index: WatchIndexQuery,
 	query: ListQuery,
 ) -> GlobalResult<models::ActorListBuildsResponse> {
-	let CheckOutput { env_id, .. } = ctx.auth().check(ctx.op_ctx(), &query.global, false).await?;
+	let CheckOutput { env_id, .. } = ctx.auth().check(ctx.op_ctx(), &query.global, true).await?;
 
 	let list_res = op!([ctx] build_list_for_env {
 		env_id: Some(env_id.into()),
@@ -183,7 +183,7 @@ pub async fn patch_tags(
 	body: models::ActorPatchBuildTagsRequest,
 	query: GlobalQuery,
 ) -> GlobalResult<serde_json::Value> {
-	let CheckOutput { env_id, .. } = ctx.auth().check(ctx.op_ctx(), &query, false).await?;
+	let CheckOutput { env_id, .. } = ctx.auth().check(ctx.op_ctx(), &query, true).await?;
 
 	let tags = unwrap_with!(body.tags, API_BAD_BODY, error = "missing field `tags`");
 
@@ -268,7 +268,7 @@ pub async fn create_build(
 	body: models::ActorPrepareBuildRequest,
 	query: GlobalQuery,
 ) -> GlobalResult<models::ActorPrepareBuildResponse> {
-	let CheckOutput { env_id, .. } = ctx.auth().check(ctx.op_ctx(), &query, false).await?;
+	let CheckOutput { env_id, .. } = ctx.auth().check(ctx.op_ctx(), &query, true).await?;
 
 	let (kind, image_tag) = match body.kind {
 		Option::None | Some(models::ActorBuildKind::DockerImage) => (
@@ -372,7 +372,7 @@ pub async fn complete_build(
 	_body: serde_json::Value,
 	query: GlobalQuery,
 ) -> GlobalResult<serde_json::Value> {
-	let CheckOutput { env_id, .. } = ctx.auth().check(ctx.op_ctx(), &query, false).await?;
+	let CheckOutput { env_id, .. } = ctx.auth().check(ctx.op_ctx(), &query, true).await?;
 
 	let build_res = op!([ctx] build_get {
 		build_ids: vec![build_id.into()],
