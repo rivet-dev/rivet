@@ -1,9 +1,15 @@
-import { ActorQuery } from "./query.ts";
+import type { ActorQuery } from "./query.ts";
 
 export interface ActorsRequest {
-	query: ActorQuery,
+	query: ActorQuery;
 }
 
 export interface ActorsResponse {
-	endpoint: string,
+	endpoint: string;
+}
+
+export interface RivetConfigResponse {
+	endpoint: string;
+	project?: string;
+	environment?: string;
 }

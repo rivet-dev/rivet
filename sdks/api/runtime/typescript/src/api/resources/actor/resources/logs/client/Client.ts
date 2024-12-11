@@ -12,7 +12,7 @@ import * as errors from "../../../../../../errors/index";
 export declare namespace Logs {
     interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
-        token: core.Supplier<core.BearerToken>;
+        token?: core.Supplier<core.BearerToken | undefined>;
         fetcher?: core.FetchFunction;
     }
 
@@ -29,7 +29,7 @@ export declare namespace Logs {
 }
 
 export class Logs {
-    constructor(protected readonly _options: Logs.Options) {}
+    constructor(protected readonly _options: Logs.Options = {}) {}
 
     /**
      * Returns the logs for a given actor.
@@ -188,7 +188,12 @@ export class Logs {
         }
     }
 
-    protected async _getAuthorizationHeader(): Promise<string> {
-        return `Bearer ${await core.Supplier.get(this._options.token)}`;
+    protected async _getAuthorizationHeader(): Promise<string | undefined> {
+        const bearer = await core.Supplier.get(this._options.token);
+        if (bearer != null) {
+            return `Bearer ${bearer}`;
+        }
+
+        return undefined;
     }
 }

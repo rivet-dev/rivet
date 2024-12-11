@@ -6,7 +6,7 @@
     "jsr:@std/assert@^1.0.8": "1.0.8",
     "jsr:@std/async@^1.0.9": "1.0.9",
     "jsr:@std/internal@^1.0.5": "1.0.5",
-    "npm:@rivet-gg/api@0.0.1-rc.5": "0.0.1-rc.5",
+    "npm:@rivet-gg/api@0.0.1-rc.4": "0.0.1-rc.4",
     "npm:on-change@^5.0.1": "5.0.1"
   },
   "jsr": {
@@ -30,8 +30,8 @@
     }
   },
   "npm": {
-    "@rivet-gg/api@0.0.1-rc.5": {
-      "integrity": "sha512-InaqqAWBW8e3tOEe0OpeEMlP2MctmVrLrzHjkNtYbmrxMW+2ZKHxbqk/pd9DyOuaRCCLr5N1X0HLExOR7EZaTA==",
+    "@rivet-gg/api@0.0.1-rc.4": {
+      "integrity": "sha512-0CjnLk2s5uaZa+6PjddHSP827GzajgwbFfl5p0LtcR5qKfyVRiSqFRbONoJ90tyZ5BSeSRZ1+jrZoFSEtNQOYQ==",
       "dependencies": [
         "@types/readable-stream",
         "form-data",
@@ -268,34 +268,13 @@
     }
   },
   "workspace": {
-    "members": {
-      "client": {
-        "dependencies": [
-          "jsr:@std/assert@^1.0.8",
-          "npm:@rivet-gg/api@0.0.1-rc.5"
-        ]
-      },
-      "manager": {
-        "dependencies": [
-          "jsr:@hono/hono@^4.6.12",
-          "jsr:@std/assert@^1.0.8",
-          "npm:@rivet-gg/api@0.0.1-rc.5"
-        ]
-      },
-      "manager-protocol": {
-        "dependencies": [
-          "npm:@rivet-gg/api@0.0.1-rc.5"
-        ]
-      },
-      "runtime": {
-        "dependencies": [
-          "jsr:@core/asyncutil@^1.2.0",
-          "jsr:@hono/hono@^4.6.12",
-          "jsr:@std/assert@^1.0.8",
-          "jsr:@std/async@^1.0.9",
-          "npm:on-change@^5.0.1"
-        ]
-      }
-    }
+    "dependencies": [
+      "jsr:@core/asyncutil@^1.2.0",
+      "jsr:@hono/hono@^4.6.12",
+      "jsr:@std/assert@^1.0.8",
+      "jsr:@std/async@^1.0.9",
+      "npm:@rivet-gg/api@0.0.1-rc.4",
+      "npm:on-change@^5.0.1"
+    ]
   }
 }

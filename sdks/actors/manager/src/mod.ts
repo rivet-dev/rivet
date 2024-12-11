@@ -1,7 +1,7 @@
 import { Context as HonoContext, Hono } from "hono";
 import { cors } from "hono/cors";
 import { ActorContext } from "@rivet-gg/actors-core";
-import { RivetClientClient } from "@rivet-gg/api";
+import { RivetClient } from "@rivet-gg/api";
 import { queryActor } from "./query_exec.ts";
 import { assertExists } from "@std/assert/exists";
 import { assertUnreachable, RivetEnvironment } from "../../common/src/utils.ts";
@@ -9,19 +9,21 @@ import { PORT_NAME } from "../../common/src/network.ts";
 import {
 	ActorsRequest,
 	ActorsResponse,
+	RivetConfigResponse,
 } from "../../manager-protocol/src/mod.ts";
 
 interface AccessConfig {
-	builds: Build[]
+	builds: Build[];
 }
 
 // all actors with public access:
 interface Build {
-	tags: any,
+	tags: any;
 }
 
 export default class Manager {
-	private readonly rivetClient: RivetClientClient;
+	private readonly endpoint: string;
+	private readonly rivetClient: RivetClient;
 	private readonly environment: RivetEnvironment;
 
 	constructor(private readonly ctx: ActorContext) {
@@ -30,7 +32,9 @@ export default class Manager {
 		const token = Deno.env.get("RIVET_SERVICE_TOKEN");
 		assertExists(token, "missing RIVET_SERVICE_TOKEN");
 
-		this.rivetClient = new RivetClientClient({
+		this.endpoint = endpoint;
+
+		this.rivetClient = new RivetClient({
 			environment: endpoint,
 			token,
 		});
@@ -56,6 +60,17 @@ export default class Manager {
 
 		app.use("/*", cors());
 
+		app.get("/rivet/config", (c: HonoContext) => {
+			return c.json(
+				{
+					// HACK(RVT-4376): Replace DNS address used for local dev envs with public address
+					endpoint: this.endpoint.replace("rivet-server", "127.0.0.1"),
+					project: this.environment.project,
+					environment: this.environment.environment,
+				} satisfies RivetConfigResponse,
+			);
+		});
+
 		app.post("/actors", async (c: HonoContext) => {
 			// Get actor
 			const body: ActorsRequest = await c.req.json();
@@ -68,12 +83,12 @@ export default class Manager {
 			// Fetch port
 			const httpPort = actor.network.ports[PORT_NAME];
 			assertExists(httpPort, "missing port");
-			const hostname = httpPort.publicHostname;
+			const hostname = httpPort.hostname;
 			assertExists(hostname);
-			const port = httpPort.publicPort;
+			const port = httpPort.port;
 			assertExists(port);
 
-			let isTls: boolean = false;
+			let isTls = false;
 			switch (httpPort.protocol) {
 				case "https":
 					isTls = true;
@@ -89,10 +104,11 @@ export default class Manager {
 					assertUnreachable(httpPort.protocol);
 			}
 
-			console.log('port', httpPort);
-			const path = httpPort.publicPath ?? "";
+			const path = httpPort.path ?? "";
 
-			const endpoint = `${isTls ? "https" : "http"}://${hostname}:${port}${path}`;
+			const endpoint = `${
+				isTls ? "https" : "http"
+			}://${hostname}:${port}${path}`;
 
 			return c.json({ endpoint } satisfies ActorsResponse);
 		});

@@ -1,16 +1,16 @@
 import { assertEquals, assertExists } from "@std/assert";
 import { assertUnreachable } from "../../common/src/utils.ts";
 import { MAX_CONN_PARAMS_SIZE } from "../../common/src/network.ts";
-import * as wsToServer from "../../protocol/src/ws/to_server.ts";
-import * as wsToClient from "../../protocol/src/ws/to_client.ts";
+import type * as wsToServer from "../../protocol/src/ws/to_server.ts";
+import type * as wsToClient from "../../protocol/src/ws/to_client.ts";
 
 interface RpcInFlight {
 	resolve: (response: wsToClient.RpcResponseOk) => void;
 	reject: (error: Error) => void;
 }
 
-interface EventSubscriptions {
-	callback: (...args: unknown[]) => void;
+interface EventSubscriptions<Args extends Array<unknown>> {
+	callback: (...args: Args) => void;
 	once: boolean;
 }
 
@@ -27,7 +27,8 @@ export class ActorHandleRaw {
 	#websocketQueue: string[] = [];
 	#websocketRpcInFlight = new Map<string, RpcInFlight>();
 
-	#eventSubscriptions = new Map<string, Set<EventSubscriptions>>();
+	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+	#eventSubscriptions = new Map<string, Set<EventSubscriptions<any[]>>>();
 
 	// TODO: ws message queue
 
@@ -194,14 +195,14 @@ export class ActorHandleRaw {
 		if (!listeners) return;
 
 		// Create a new array to avoid issues with listeners being removed during iteration
-		[...listeners].forEach((listener) => {
+		for (const listener of [...listeners]) {
 			listener.callback(...event.args);
 
 			// Remove if this was a one-time listener
 			if (listener.once) {
 				listeners.delete(listener);
 			}
-		});
+		}
 
 		// Clean up empty listener sets
 		if (listeners.size === 0) {
@@ -209,22 +210,23 @@ export class ActorHandleRaw {
 		}
 	}
 
-	#addEventSubscription(
+	#addEventSubscription<Args extends Array<unknown>>(
 		eventName: string,
-		callback: (...args: unknown[]) => void,
+		callback: (...args: Args) => void,
 		once: boolean,
 	): EventUnsubscribe {
-		const listener: EventSubscriptions = {
+		const listener: EventSubscriptions<Args> = {
 			callback,
 			once,
 		};
 
-		const isFirstListener = !this.#eventSubscriptions.has(eventName);
-		if (isFirstListener) {
-			this.#eventSubscriptions.set(eventName, new Set());
+		let subscriptionSet = this.#eventSubscriptions.get(eventName);
+		if (subscriptionSet === undefined) {
+			subscriptionSet = new Set();
+			this.#eventSubscriptions.set(eventName, subscriptionSet);
 			this.#sendSubscription(eventName, true);
 		}
-		this.#eventSubscriptions.get(eventName)!.add(listener);
+		subscriptionSet.add(listener);
 
 		// Return unsubscribe function
 		return () => {
@@ -239,18 +241,18 @@ export class ActorHandleRaw {
 		};
 	}
 
-	on(
+	on<Args extends Array<unknown> = unknown[]>(
 		eventName: string,
-		callback: (...args: unknown[]) => void,
+		callback: (...args: Args) => void,
 	): EventUnsubscribe {
-		return this.#addEventSubscription(eventName, callback, false);
+		return this.#addEventSubscription<Args>(eventName, callback, false);
 	}
 
-	once(
+	once<Args extends Array<unknown> = unknown[]>(
 		eventName: string,
-		callback: (...args: unknown[]) => void,
+		callback: (...args: Args) => void,
 	): EventUnsubscribe {
-		return this.#addEventSubscription(eventName, callback, true);
+		return this.#addEventSubscription<Args>(eventName, callback, true);
 	}
 
 	#webSocketSend(message: wsToServer.ToServer, opts?: SendOpts) {
@@ -258,7 +260,7 @@ export class ActorHandleRaw {
 	}
 
 	#webSocketSendRaw(message: string, opts?: SendOpts) {
-		if (this.#websocket?.readyState == WebSocket.OPEN) {
+		if (this.#websocket?.readyState === WebSocket.OPEN) {
 			try {
 				this.#websocket.send(message);
 				console.log("sent", message);

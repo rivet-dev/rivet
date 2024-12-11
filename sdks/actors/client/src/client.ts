@@ -1,8 +1,11 @@
 import { ActorHandleRaw } from "./handle.ts";
-import { ActorTags } from "../../common/src/utils.ts";
-import { ActorsRequest } from "../../manager-protocol/src/mod.ts";
-import { CreateRequest } from "../../manager-protocol/src/query.ts";
-import { RivetClient, RivetClientClient } from "@rivet-gg/api";
+import type { ActorTags } from "../../common/src/utils.ts";
+import type {
+	ActorsRequest,
+	ActorsResponse,
+	RivetConfigResponse,
+} from "../../manager-protocol/src/mod.ts";
+import type { CreateRequest } from "../../manager-protocol/src/query.ts";
 
 export interface WithTagsOpts {
 	parameters?: unknown;
@@ -15,31 +18,44 @@ export interface WithTagsOpts {
  *
  * Private methods (e.g. those starting with `_`) are automatically excluded.
  */
-export type ActorHandle<A = unknown> = ActorHandleRaw & {
-	[K in keyof A as K extends string ? (K extends `_${string}` ? never : K) : K]: A[K] extends (
-		...args: infer Args
-	) => infer Return
-		? ActorRPCFunction<Args, Return>
-		: never;
-};
+export type ActorHandle<A = unknown> =
+	& ActorHandleRaw
+	& {
+		[
+			K in keyof A as K extends string ? K extends `_${string}` ? never : K
+				: K
+		]: A[K] extends (...args: infer Args) => infer Return
+			? ActorRPCFunction<Args, Return>
+			: never;
+	};
 
 /**
  * RPC function returned by the actor proxy. This will call `ActorHandle.rpc`
  * when triggered.
  */
-export type ActorRPCFunction<Args extends Array<unknown> = unknown[], Response = unknown> = (
+export type ActorRPCFunction<
+	Args extends Array<unknown> = unknown[],
+	Response = unknown,
+> = (
 	// Remove the first parameter, since that's `Context<...>`
 	...args: Args extends [unknown, ...infer Rest] ? Rest : Args
 ) => Promise<Response>;
 
-export class Client {
-	private readonly client = new RivetClientClient({ token: TODO });
+/** Region to connect to. */
+interface Region {
+	id: string;
+	name: string;
+}
 
-	private region: Promise<RivetClient.actor.Region> | null = this.#fetchRegion();
+export class Client {
+	#regionPromise = this.#fetchRegion();
 
 	constructor(private readonly managerEndpoint: string) {}
 
-	async withTags<A = unknown>(tags: ActorTags, opts?: WithTagsOpts): Promise<ActorHandle<A>> {
+	async withTags<A = unknown>(
+		tags: ActorTags,
+		opts?: WithTagsOpts,
+	): Promise<ActorHandle<A>> {
 		const handle = await this.#createHandle(tags, opts);
 		return this.#createProxy(handle) as ActorHandle<A>;
 	}
@@ -47,9 +63,8 @@ export class Client {
 	#createProxy(handle: ActorHandleRaw): ActorHandle {
 		// Stores returned RPC functions for faster calls
 		const methodCache = new Map<string, ActorRPCFunction>();
-
 		return new Proxy(handle, {
-			get(target: ActorHandleRaw, prop: string | symbol, receiver: any) {
+			get(target: ActorHandleRaw, prop: string | symbol, receiver: unknown) {
 				// Handle built-in Symbol properties
 				if (typeof prop === "symbol") {
 					return Reflect.get(target, prop, receiver);
@@ -122,53 +137,100 @@ export class Client {
 		}) as ActorHandle;
 	}
 
-	async #createHandle(tags: ActorTags, opts?: WithTagsOpts): Promise<ActorHandleRaw> {
+	async #createHandle(
+		tags: ActorTags,
+		opts?: WithTagsOpts,
+	): Promise<ActorHandleRaw> {
 		const create = opts?.create ?? {
 			tags,
 			buildTags: {
 				name: tags.name,
 				current: "true",
 			},
-			region: (await this.region).id,
+			region: (await this.#regionPromise)?.id,
 		};
 
-		//client.get("chat_room", { room: "lkjsdf" }, { noCreate: true, parameters: { token: 123 } });
-		//client.get({ name: "chat_room", room: "lkjsdf" }, { noCreate: true, parameters: { token: 123 } });
-		//client.get("chat_room", {
-		//	tags: { channel: "foo", },
-		//	parameters: { token: 123 }
-		//});
-
-		//client.withTags({ name: "chat_room", room: "lkjsdf" };
-		//client.withTags("chat_room", { room: "lkjsdf" });
-
-		// { game_mode: "tdm" } -> { game_mode: "tdm", map: "sandstorm" }
-
-		const res = await fetch(`${this.managerEndpoint}/actors`, {
-			method: "POST",
-			body: JSON.stringify({
+		const resJson = await this.#sendManagerRequest<
+			ActorsRequest,
+			ActorsResponse
+		>(
+			"POST",
+			"/actors",
+			{
 				query: {
 					getOrCreate: {
 						tags,
 						create,
 					},
 				},
-			} satisfies ActorsRequest),
-		});
+			},
+		);
 
-		if (!res.ok) {
-			throw new Error(`Manager error (${res.statusText}):\n${await res.text()}`);
-		}
-
-		const resJson: { endpoint: string } = await res.json();
 		const handle = new ActorHandleRaw(resJson.endpoint, opts?.parameters);
 		handle.connect();
 		return handle;
 	}
 
-	async #fetchRegion() {
-		let { region } = await this.client.actor.regions.resolve({});
+	/** Sends an HTTP request to the manager actor. */
+	async #sendManagerRequest<Request, Response>(
+		method: string,
+		path: string,
+		body?: Request,
+	): Promise<Response> {
+		const res = await fetch(`${this.managerEndpoint}${path}`, {
+			method,
+			headers: {
+				"Content-Type": "application/json",
+			},
+			body: body ? JSON.stringify(body) : undefined,
+		});
 
-		return region;
+		if (!res.ok) {
+			throw new Error(
+				`Manager error (${res.statusText}):\n${await res.text()}`,
+			);
+		}
+
+		return res.json();
+	}
+
+	async #fetchRegion(): Promise<Region | undefined> {
+		try {
+			// Fetch the connection info from the manager
+			const { endpoint, project, environment } = await this.#sendManagerRequest<
+				undefined,
+				RivetConfigResponse
+			>(
+				"GET",
+				"/rivet/config",
+			);
+
+			// Fetch the region
+			//
+			// This is fetched from the client instead of the manager so Rivet
+			// can automatically determine the recommended region using an
+			// anycast request made from the client
+			const url = new URL("/regions/resolve", endpoint);
+			if (project) url.searchParams.set("project", project);
+			if (environment) url.searchParams.set("environment", environment);
+			const res = await fetch(url.toString());
+
+			if (!res.ok) {
+				throw new Error(
+					`Failed to fetch region (${res.statusText}):\n${await res.text()}`,
+				);
+			}
+
+			const { region }: { region: Region } = await res.json();
+
+			return region;
+		} catch (err) {
+			// Add safe fallback in case we can't fetch the region
+			console.error(
+				"Failed to fetch region, defaulting to manager region",
+				err,
+			);
+			return undefined;
+		}
 	}
 }

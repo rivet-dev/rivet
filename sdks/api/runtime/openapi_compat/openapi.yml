@@ -924,7 +924,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
   /regions/resolve:
     get:
       operationId: actor_regions_resolve
@@ -986,7 +985,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
 components:
   schemas:
     ActorGetActorResponse:

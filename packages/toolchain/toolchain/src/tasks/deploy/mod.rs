@@ -239,6 +239,24 @@ async fn build_and_upload(
 			&ctx.openapi_config_cloud,
 			&build_id.to_string(),
 			models::ActorPatchBuildTagsRequest {
+				tags: Some(serde_json::json!({
+					"access": build.access,
+				})),
+				exclusive_tags: None,
+			},
+			Some(&ctx.project.name_id),
+			Some(&env.slug),
+		)
+		.await;
+		if let Err(err) = complete_res.as_ref() {
+			task.log(format!("{err:?}"));
+		}
+		complete_res.context("complete_res")?;
+
+		let complete_res = apis::actor_builds_api::actor_builds_patch_tags(
+			&ctx.openapi_config_cloud,
+			&build_id.to_string(),
+			models::ActorPatchBuildTagsRequest {
 				tags: Some(serde_json::to_value(&HashMap::from([(
 					build::tags::CURRENT.to_string(),
 					"true".to_string(),

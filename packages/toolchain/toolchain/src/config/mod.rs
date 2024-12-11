@@ -74,6 +74,14 @@ pub struct Build {
 	pub tags: HashMap<String, String>,
 	#[serde(flatten)]
 	pub runtime: build::Runtime,
+	pub access: BuildAccess,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum BuildAccess {
+	Public,
+	Private,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema)]

@@ -15,7 +15,7 @@ import { Regions } from "../resources/regions/client/Client";
 export declare namespace Actor {
     interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
-        token: core.Supplier<core.BearerToken>;
+        token?: core.Supplier<core.BearerToken | undefined>;
         fetcher?: core.FetchFunction;
     }
 
@@ -32,7 +32,7 @@ export declare namespace Actor {
 }
 
 export class Actor {
-    constructor(protected readonly _options: Actor.Options) {}
+    constructor(protected readonly _options: Actor.Options = {}) {}
 
     /**
      * Gets a dynamic actor.
@@ -1024,7 +1024,12 @@ export class Actor {
         return (this._regions ??= new Regions(this._options));
     }
 
-    protected async _getAuthorizationHeader(): Promise<string> {
-        return `Bearer ${await core.Supplier.get(this._options.token)}`;
+    protected async _getAuthorizationHeader(): Promise<string | undefined> {
+        const bearer = await core.Supplier.get(this._options.token);
+        if (bearer != null) {
+            return `Bearer ${bearer}`;
+        }
+
+        return undefined;
     }
 }

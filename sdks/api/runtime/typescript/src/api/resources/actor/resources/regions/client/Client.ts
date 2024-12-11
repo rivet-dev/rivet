@@ -12,7 +12,7 @@ import * as errors from "../../../../../../errors/index";
 export declare namespace Regions {
     interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
-        token: core.Supplier<core.BearerToken>;
+        token?: core.Supplier<core.BearerToken | undefined>;
         fetcher?: core.FetchFunction;
     }
 
@@ -29,7 +29,7 @@ export declare namespace Regions {
 }
 
 export class Regions {
-    constructor(protected readonly _options: Regions.Options) {}
+    constructor(protected readonly _options: Regions.Options = {}) {}
 
     /**
      * @param {Rivet.actor.ListRegionsRequestQuery} request
@@ -323,7 +323,12 @@ export class Regions {
         }
     }
 
-    protected async _getAuthorizationHeader(): Promise<string> {
-        return `Bearer ${await core.Supplier.get(this._options.token)}`;
+    protected async _getAuthorizationHeader(): Promise<string | undefined> {
+        const bearer = await core.Supplier.get(this._options.token);
+        if (bearer != null) {
+            return `Bearer ${bearer}`;
+        }
+
+        return undefined;
     }
 }

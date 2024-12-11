@@ -4886,7 +4886,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
   /regions/resolve:
     get:
       operationId: actor_regions_resolve
@@ -4948,7 +4947,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
   /auth/identity/email/start-verification:
     post:
       description: Starts the verification process for linking an email to your identity.

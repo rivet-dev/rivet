@@ -12,7 +12,7 @@ import * as errors from "../../../../../../errors/index";
 export declare namespace Builds {
     interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
-        token: core.Supplier<core.BearerToken>;
+        token?: core.Supplier<core.BearerToken | undefined>;
         fetcher?: core.FetchFunction;
     }
 
@@ -29,7 +29,7 @@ export declare namespace Builds {
 }
 
 export class Builds {
-    constructor(protected readonly _options: Builds.Options) {}
+    constructor(protected readonly _options: Builds.Options = {}) {}
 
     /**
      * Get a build.
@@ -792,7 +792,12 @@ export class Builds {
         }
     }
 
-    protected async _getAuthorizationHeader(): Promise<string> {
-        return `Bearer ${await core.Supplier.get(this._options.token)}`;
+    protected async _getAuthorizationHeader(): Promise<string | undefined> {
+        const bearer = await core.Supplier.get(this._options.token);
+        if (bearer != null) {
+            return `Bearer ${bearer}`;
+        }
+
+        return undefined;
     }
 }

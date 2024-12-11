@@ -1,0 +1,8 @@
+{
+	"builds": {
+		"app": {
+			"script": "app.ts",
+			"access": "public"
+		}
+	}
+}

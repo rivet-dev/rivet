@@ -6,7 +6,7 @@ imports:
   uploadCommons: ../upload/common.yml
 
 service:
-  auth: true
+  auth: false
   base-path: /regions
   audiences:
     - runtime

@@ -1,4 +1,4 @@
-import { RivetClient } from "@rivet-gg/api";
+import { Rivet } from "@rivet-gg/api";
 import { ActorTags } from "../../common/src/utils.ts";
 
 export type ActorQuery =
@@ -13,4 +13,4 @@ export interface GetOrCreateRequest {
 }
 
 // TODO(RVT-4250):
-export type CreateRequest = RivetClient.actor.CreateActorRequest;
+export type CreateRequest = Rivet.actor.CreateActorRequest;

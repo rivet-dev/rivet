@@ -6,7 +6,7 @@
     "jsr:@std/assert@^1.0.8": "1.0.8",
     "jsr:@std/async@^1.0.9": "1.0.9",
     "jsr:@std/internal@^1.0.5": "1.0.5",
-    "npm:@rivet-gg/api@0.0.1-rc.4": "0.0.1-rc.4",
+    "npm:@rivet-gg/api@0.0.1-rc.5": "0.0.1-rc.5",
     "npm:on-change@^5.0.1": "5.0.1"
   },
   "jsr": {
@@ -30,8 +30,8 @@
     }
   },
   "npm": {
-    "@rivet-gg/api@0.0.1-rc.4": {
-      "integrity": "sha512-0CjnLk2s5uaZa+6PjddHSP827GzajgwbFfl5p0LtcR5qKfyVRiSqFRbONoJ90tyZ5BSeSRZ1+jrZoFSEtNQOYQ==",
+    "@rivet-gg/api@0.0.1-rc.5": {
+      "integrity": "sha512-InaqqAWBW8e3tOEe0OpeEMlP2MctmVrLrzHjkNtYbmrxMW+2ZKHxbqk/pd9DyOuaRCCLr5N1X0HLExOR7EZaTA==",
       "dependencies": [
         "@types/readable-stream",
         "form-data",
@@ -74,8 +74,8 @@
         "ieee754"
       ]
     },
-    "call-bind-apply-helpers@1.0.0": {
-      "integrity": "sha512-CCKAP2tkPau7D3GE8+V8R6sQubA9R5foIzGp+85EXCVSCivuxBNAWqcpn72PKYiIcqoViv/kcUDpaEIMBVi1lQ==",
+    "call-bind-apply-helpers@1.0.1": {
+      "integrity": "sha512-BhYE+WDaywFg2TBWYNXAE+8B1ATnThNBqXHP5nQu0jWJdVvY2hvkpyB3qOmtmDePiS5/BDQ8wASEWGMWRG148g==",
       "dependencies": [
         "es-errors",
         "function-bind"
@@ -273,7 +273,7 @@
       "jsr:@hono/hono@^4.6.12",
       "jsr:@std/assert@^1.0.8",
       "jsr:@std/async@^1.0.9",
-      "npm:@rivet-gg/api@0.0.1-rc.4",
+      "npm:@rivet-gg/api@0.0.1-rc.5",
       "npm:on-change@^5.0.1"
     ]
   }

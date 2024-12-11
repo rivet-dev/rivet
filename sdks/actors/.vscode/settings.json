@@ -1,3 +1,6 @@
 {
-    "deno.enable": true
+    "deno.enable": true,
+    // Use biome instead
+    "deno.lint": false,
+    "editor.defaultFormatter": "biomejs.biome"
 }
