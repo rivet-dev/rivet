@@ -1,1 +1,0 @@
-ALTER TABLE "module_foo"."table6" RENAME TO "table7";
