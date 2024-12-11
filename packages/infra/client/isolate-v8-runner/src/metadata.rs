@@ -22,7 +22,7 @@ impl JsMetadata {
 	) -> Result<Self> {
 		Ok(JsMetadata {
 			actor: JsMetadataActor {
-				id: metadata.actor.id,
+				id: metadata.actor.actor_id,
 				tags: metadata.actor.tags,
 				created_at: {
 					let date = v8::Local::from(

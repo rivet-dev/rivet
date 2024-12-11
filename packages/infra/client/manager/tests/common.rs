@@ -105,7 +105,7 @@ pub async fn start_echo_actor(
 			},
 			metadata: protocol::Raw::new(&protocol::ActorMetadata {
 				actor: protocol::ActorMetadataActor {
-					id: actor_id,
+					actor_id,
 					tags: [("foo".to_string(), "bar".to_string())]
 						.into_iter()
 						.collect(),
@@ -173,7 +173,7 @@ pub async fn start_js_echo_actor(
 			},
 			metadata: protocol::Raw::new(&protocol::ActorMetadata {
 				actor: protocol::ActorMetadataActor {
-					id: actor_id,
+					actor_id,
 					tags: [("foo".to_string(), "bar".to_string())]
 						.into_iter()
 						.collect(),

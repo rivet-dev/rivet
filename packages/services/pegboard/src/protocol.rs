@@ -207,7 +207,7 @@ pub struct ActorMetadata {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash)]
 pub struct ActorMetadataActor {
-	pub id: Uuid,
+	pub actor_id: Uuid,
 	pub tags: HashableMap<String, String>,
 	pub create_ts: i64,
 }

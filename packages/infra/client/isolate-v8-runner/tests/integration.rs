@@ -59,16 +59,27 @@
 // 			ports: Default::default(),
 // 			env: Default::default(),
 // 			metadata: protocol::Raw::new(&protocol::ActorMetadata {
-// 				tags: [("foo".to_string(), "bar".to_string())]
-// 					.into_iter()
-// 					.collect(),
-// 				create_ts: 0,
-// 				env: protocol::ActorMetadataEnv { id: Uuid::nil() },
+// 				actor: protocol::ActorMetadataActor {
+// 					actor_id: Uuid::nil(),
+// 					tags: [("foo".to_string(), "bar".to_string())]
+// 						.into_iter()
+// 						.collect(),
+// 					create_ts: 0,
+// 				},
+// 				project: protocol::ActorMetadataProject {
+// 					project_id: Uuid::nil(),
+// 					slug: "foo".into(),
+// 				},
+// 				environment: protocol::ActorMetadataEnvironment {
+// 					env_id: Uuid::nil(),
+// 					slug: "foo".into(),
+// 				},
 // 				datacenter: protocol::ActorMetadataDatacenter {
 // 					name_id: "local".to_string(),
 // 					display_name: "Local".to_string(),
 // 				},
-// 				cluster: protocol::ActorMetadataCluster { id: Uuid::nil() },
+// 				cluster: protocol::ActorMetadataCluster { cluster_id: Uuid::nil() },
+// 				build: protocol::ActorMetadataBuild { build_id: Uuid::nil() },
 // 			})
 // 			.unwrap(),
 // 			owner: protocol::ActorOwner::DynamicServer {

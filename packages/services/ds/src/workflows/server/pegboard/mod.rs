@@ -543,7 +543,7 @@ async fn spawn_actor(
 			},
 			metadata: util::serde::Raw::new(&pp::ActorMetadata {
 				actor: pp::ActorMetadataActor {
-					id: actor_setup.actor_id,
+					actor_id: actor_setup.actor_id,
 					tags: input.tags.as_hashable(),
 					// Represents when the pegboard actor was created, not the ds workflow.
 					create_ts: ctx.ts(),

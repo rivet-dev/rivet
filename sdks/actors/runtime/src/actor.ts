@@ -22,6 +22,7 @@ const KEYS = {
 			return [...this.EVENT_PREFIX, id];
 		},
 	},
+	// Shutting down is not part of the state because you can't meaningfully handle the state change
 	STATE: {
 		INITIALIZED: ["actor", "state", "initialized"],
 		DATA: ["actor", "state", "data"],
@@ -58,11 +59,7 @@ export interface OnBeforeConnectOpts<ConnParams> {
 	parameters: ConnParams;
 }
 
-export abstract class Actor<
-	State = undefined,
-	ConnParams = undefined,
-	ConnState = undefined,
-> {
+export abstract class Actor<State = undefined, ConnParams = undefined, ConnState = undefined> {
 	#stateChanged: boolean = false;
 
 	/**
@@ -77,6 +74,7 @@ export abstract class Actor<
 
 	#saveStateLock = new Lock<void>(void 0);
 
+	#server?: Deno.HttpServer<Deno.NetAddr>;
 	#backgroundPromises: Promise<void>[] = [];
 	#config: ActorConfig;
 	#ctx!: ActorContext;
@@ -100,17 +98,11 @@ export abstract class Actor<
 
 	protected _onStateChange?(newState: State): void | Promise<void>;
 
-	protected _onBeforeConnect?(
-		opts: OnBeforeConnectOpts<ConnParams>,
-	): ConnState | Promise<ConnState>;
+	protected _onBeforeConnect?(opts: OnBeforeConnectOpts<ConnParams>): ConnState | Promise<ConnState>;
 
-	protected _onConnect?(
-		connection: Connection<this>,
-	): void | Promise<void>;
+	protected _onConnect?(connection: Connection<this>): void | Promise<void>;
 
-	protected _onDisconnect?(
-		connection: Connection<this>,
-	): void | Promise<void>;
+	protected _onDisconnect?(connection: Connection<this>): void | Promise<void>;
 
 	// This is called by Rivet when the actor is exported as the default
 	// property
@@ -152,9 +144,7 @@ export abstract class Actor<
 
 	#validateStateEnabled() {
 		if (!this.#stateEnabled) {
-			throw new Error(
-				"State not enabled. Must implement createState to use state.",
-			);
+			throw new Error("State not enabled. Must implement createState to use state.");
 		}
 	}
 
@@ -191,9 +181,7 @@ export abstract class Actor<
 			// deno-lint-ignore no-explicit-any
 			(path: any, value: any, _previousValue: any, _applyData: any) => {
 				if (!isJsonSerializable(value)) {
-					throw new Error(
-						`State value at path "${path}" must be JSON serializable`,
-					);
+					throw new Error(`State value at path "${path}" must be JSON serializable`);
 				}
 				this.#stateChanged = true;
 
@@ -208,7 +196,7 @@ export abstract class Actor<
 			},
 			{
 				ignoreDetached: true,
-			},
+			}
 		);
 	}
 
@@ -220,10 +208,7 @@ export abstract class Actor<
 		assertExists(this._onInitialize);
 
 		// Read initial state
-		const getStateBatch = await this.#ctx.kv.getBatch([
-			KEYS.STATE.INITIALIZED,
-			KEYS.STATE.DATA,
-		]);
+		const getStateBatch = await this.#ctx.kv.getBatch([KEYS.STATE.INITIALIZED, KEYS.STATE.DATA]);
 		const initialized = getStateBatch.get(KEYS.STATE.INITIALIZED);
 		const stateData = getStateBatch.get(KEYS.STATE.DATA);
 
@@ -245,7 +230,7 @@ export abstract class Actor<
 				new Map<unknown, unknown>([
 					[KEYS.STATE.INITIALIZED, true],
 					[KEYS.STATE.DATA, stateData],
-				]),
+				])
 			);
 			this.#setStateWithoutChange(stateData);
 		} else {
@@ -273,7 +258,7 @@ export abstract class Actor<
 
 		const port = this.#getServerPort();
 		console.log(`server running on ${port}`);
-		Deno.serve({ port, hostname: "0.0.0.0" }, app.fetch);
+		this.#server = Deno.serve({ port, hostname: "0.0.0.0" }, app.fetch);
 	}
 
 	#getServerPort(): number {
@@ -359,17 +344,13 @@ export abstract class Actor<
 		// Validate params size (limiting to 4KB which is reasonable for query params)
 		const paramsStr = c.req.query("params");
 		if (paramsStr && paramsStr.length > MAX_CONN_PARAMS_SIZE) {
-			throw new Error(
-				`WebSocket params too large (max ${MAX_CONN_PARAMS_SIZE} bytes)`,
-			);
+			throw new Error(`WebSocket params too large (max ${MAX_CONN_PARAMS_SIZE} bytes)`);
 		}
 
 		// Parse and validate params
 		let params: ConnParams;
 		try {
-			params = typeof paramsStr === "string"
-				? JSON.parse(paramsStr)
-				: undefined;
+			params = typeof paramsStr === "string" ? JSON.parse(paramsStr) : undefined;
 		} catch (err) {
 			throw new Error(`Invalid WebSocket params: ${err}`);
 		}
@@ -399,7 +380,12 @@ export abstract class Actor<
 				// read it
 				this.#connectionIdCounter += 1;
 				// TODO: As any
-				conn = new Connection<Actor<State, ConnParams, ConnState>>(this.#connectionIdCounter, ws, state!, this.#connectionStateEnabled);
+				conn = new Connection<Actor<State, ConnParams, ConnState>>(
+					this.#connectionIdCounter,
+					ws,
+					state!,
+					this.#connectionStateEnabled
+				);
 				this.#connections.add(conn);
 
 				// Handle connection
@@ -407,11 +393,10 @@ export abstract class Actor<
 				if (this._onConnect) {
 					const voidOrPromise = this._onConnect(conn);
 					if (voidOrPromise instanceof Promise) {
-						deadline(voidOrPromise, CONNECT_TIMEOUT)
-							.catch((err) => {
-								console.error("Error in `onConnect`, closing socket:", err);
-								conn?.disconnect("`onConnect` failed");
-							});
+						deadline(voidOrPromise, CONNECT_TIMEOUT).catch((err) => {
+							console.error("Error in `onConnect`, closing socket:", err);
+							conn?.disconnect("`onConnect` failed");
+						});
 					}
 				}
 			},
@@ -438,28 +423,20 @@ export abstract class Actor<
 						const output = await this.#executeRpc(ctx, name, args);
 
 						ws.send(
-							JSON.stringify(
-								{
-									body: {
-										rpcResponseOk: {
-											id,
-											output,
-										},
+							JSON.stringify({
+								body: {
+									rpcResponseOk: {
+										id,
+										output,
 									},
-								} satisfies wsToClient.ToClient,
-							),
+								},
+							} satisfies wsToClient.ToClient)
 						);
 					} else if ("subscriptionRequest" in message.body) {
 						if (message.body.subscriptionRequest.subscribe) {
-							this.#addSubscription(
-								message.body.subscriptionRequest.eventName,
-								conn,
-							);
+							this.#addSubscription(message.body.subscriptionRequest.eventName, conn);
 						} else {
-							this.#removeSubscription(
-								message.body.subscriptionRequest.eventName,
-								conn,
-							);
+							this.#removeSubscription(message.body.subscriptionRequest.eventName, conn);
 						}
 					} else {
 						assertUnreachable(message.body);
@@ -467,28 +444,24 @@ export abstract class Actor<
 				} catch (err) {
 					if (rpcRequestId) {
 						ws.send(
-							JSON.stringify(
-								{
-									body: {
-										rpcResponseError: {
-											id: rpcRequestId,
-											message: String(err),
-										},
+							JSON.stringify({
+								body: {
+									rpcResponseError: {
+										id: rpcRequestId,
+										message: String(err),
 									},
-								} satisfies wsToClient.ToClient,
-							),
+								},
+							} satisfies wsToClient.ToClient)
 						);
 					} else {
 						ws.send(
-							JSON.stringify(
-								{
-									body: {
-										error: {
-											message: String(err),
-										},
+							JSON.stringify({
+								body: {
+									error: {
+										message: String(err),
 									},
-								} satisfies wsToClient.ToClient,
-							),
+								},
+							} satisfies wsToClient.ToClient)
 						);
 					}
 				}
@@ -516,16 +489,11 @@ export abstract class Actor<
 		};
 	}
 
-
 	#assertReady() {
 		if (!this.#ready) throw new Error("Actor not ready");
 	}
 
-	async #executeRpc(
-		ctx: Rpc<this>,
-		rpcName: string,
-		args: unknown[],
-	): Promise<unknown> {
+	async #executeRpc(ctx: Rpc<this>, rpcName: string, args: unknown[]): Promise<unknown> {
 		// Prevent calling private or reserved methods
 		if (!this.#isValidRpc(rpcName)) {
 			throw new Error(`RPC ${rpcName} is not accessible`);
@@ -568,16 +536,14 @@ export abstract class Actor<
 		const subscriptions = this.#eventSubscriptions.get(name);
 		if (!subscriptions) return;
 
-		const body = JSON.stringify(
-			{
-				body: {
-					event: {
-						name,
-						args,
-					},
+		const body = JSON.stringify({
+			body: {
+				event: {
+					name,
+					args,
 				},
-			} satisfies wsToClient.ToClient,
-		);
+			},
+		} satisfies wsToClient.ToClient);
 		for (const connection of subscriptions) {
 			connection._sendWebSocketMessage(body);
 		}
@@ -631,5 +597,41 @@ export abstract class Actor<
 				console.log("skipping save, state not modified");
 			}
 		});
+	}
+
+	protected async _shutdown() {
+		// Stop accepting new connections
+		if (this.#server) await this.#server.shutdown();
+
+		// Disconnect existing connections
+		let promises: Promise<unknown>[] = [];
+		for (let connection of this.#connections) {
+			let raw = connection._websocket.raw;
+			if (!raw) continue;
+
+			// Create deferred promise
+			let resolve: (value: unknown) => void;
+			let promise = new Promise((res) => (resolve = res));
+
+			// Resolve promise when websocket closes
+			raw.addEventListener("close", resolve!);
+
+			// Close connection
+			connection.disconnect();
+
+			promises.push(promise);
+		}
+
+		// Await all `close` event listeners with 1.5 second timeout
+		let res = Promise.race([
+			Promise.all(promises).then(() => false),
+			new Promise<boolean>((res) => setTimeout(() => res(true), 1500)),
+		]);
+
+		if (await res) {
+			console.warn("timed out waiting for connections to close, shutting down anyway");
+		}
+
+		Deno.exit(0);
 	}
 }
