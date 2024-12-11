@@ -44,7 +44,15 @@ pub async fn deploy(
 					.to_string(),
 				bundler: Some(config::build::javascript::Bundler::Deno),
 				deno: config::build::javascript::Deno {
-					config_path: Some(manager_src_path.join("deno.jsonc").display().to_string()),
+					// TODO(RVT-4382): Does not support workspaces, so we have to point to the
+					// manager's Deno config
+					config_path: Some(
+						manager_src_path
+							.join("manager")
+							.join("deno.jsonc")
+							.display()
+							.to_string(),
+					),
 					import_map_url: None,
 					lock_path: Some(manager_src_path.join("deno.lock").display().to_string()),
 				},

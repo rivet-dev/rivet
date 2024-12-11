@@ -1,5 +1,6 @@
+use std::collections::{HashMap, HashSet};
+
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
-use ds::types::EndpointType;
 use futures_util::{StreamExt, TryStreamExt};
 use proto::backend;
 use rivet_api::models;
@@ -7,7 +8,6 @@ use rivet_convert::{ApiInto, ApiTryInto};
 use rivet_operation::prelude::*;
 use serde::Deserialize;
 use serde_json::json;
-use std::collections::{HashMap, HashSet};
 
 use crate::{
 	assert,
@@ -210,7 +210,7 @@ pub async fn create(
 					routing: if let Some(routing) = p.routing {
 						match *routing {
 							models::ActorPortRouting {
-								guard: Some(gg),
+								guard: Some(_gg),
 								host: None,
 							} => ds::types::Routing::GameGuard {
 								protocol: p.protocol.api_into(),

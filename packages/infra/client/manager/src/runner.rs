@@ -133,7 +133,10 @@ impl Handle {
 
 					attempts += 1;
 					if attempts > 15 {
-						bail!("timed out waiting for runner socket (pid {}) to attach", self.pid);
+						bail!(
+							"timed out waiting for runner socket (pid {}) to attach",
+							self.pid
+						);
 					}
 
 					tokio::time::sleep(std::time::Duration::from_millis(125)).await;

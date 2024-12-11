@@ -54,32 +54,34 @@ pub async fn build_and_upload(
 			);
 
 			// Search for deno.json or deno.jsonc
-			let deno_config_path = ["deno.json", "deno.jsonc"].iter().find_map(|file_name| {
-				let path = project_root.join(file_name);
-				if path.exists() {
-					Some(path.display().to_string())
+			let config_path = if let Some(config_path) = opts.build_config.deno.config_path.clone()
+			{
+				Some(config_path)
+			} else {
+				["deno.json", "deno.jsonc"].iter().find_map(|file_name| {
+					let path = project_root.join(file_name);
+					if path.exists() {
+						Some(path.display().to_string())
+					} else {
+						None
+					}
+				})
+			};
+
+			// Search for a Deno lockfile
+			let lock_path = if let Some(lock_path) = opts.build_config.deno.lock_path.clone() {
+				Some(lock_path)
+			} else {
+				let project_deno_lockfile_path = project_root.join("deno.lock");
+				if project_deno_lockfile_path.exists() {
+					Some(project_deno_lockfile_path.display().to_string())
 				} else {
 					None
 				}
-			});
-
-			// Search for a Deno lockfile
-			let project_deno_lockfile_path = project_root.join("deno.lock");
-			let deno_lockfile_path = if project_deno_lockfile_path.exists() {
-				Some(project_deno_lockfile_path.display().to_string())
-			} else {
-				opts.build_config.deno.lock_path.clone()
 			};
 
 			// Define paths
-			let config_path = deno_config_path.or_else(|| {
-				opts.build_config
-					.deno
-					.config_path
-					.map(|x| project_root.join(x).display().to_string())
-			});
 			let import_map_url = opts.build_config.deno.import_map_url.clone();
-			let lock_path = deno_lockfile_path;
 
 			// Check the project before deploying
 			deno_check_script(CheckOpts {
