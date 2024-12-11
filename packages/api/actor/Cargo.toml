@@ -41,8 +41,8 @@ ds-log-read.workspace = true
 ds.workspace = true
 game-get.workspace = true
 game-namespace-get.workspace = true
-game-namespace-resolve-name-id = { version = "0.0.1", workspace = true }
-game-resolve-name-id = { version = "0.0.1", workspace = true }
+game-namespace-resolve-name-id.workspace = true
+game-resolve-name-id.workspace = true
 game-version-get.workspace = true
 region-recommend.workspace = true
 rivet-config.workspace = true

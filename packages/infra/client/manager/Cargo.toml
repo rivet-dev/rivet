@@ -50,7 +50,6 @@ serde_yaml = "0.9.34"
 
 [dependencies.sqlx]
 workspace = true
-default-features = false
 features = [
 	"runtime-tokio",
 	"migrate",

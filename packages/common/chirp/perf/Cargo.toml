@@ -23,7 +23,6 @@ features = ["v4", "serde"]
 [dependencies.redis]
 # TODO: https://github.com/rivet-gg/rivet/issues/508
 workspace = true
-default-features = false
 features = [
 	"keep-alive",
 	"aio",

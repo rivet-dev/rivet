@@ -39,7 +39,6 @@ uuid = { version = "1.8.0", features = ["v4", "serde"] }
 
 [dependencies.sqlx]
 workspace = true
-default-features = false
 features = [
 	"runtime-tokio",
 	"postgres",

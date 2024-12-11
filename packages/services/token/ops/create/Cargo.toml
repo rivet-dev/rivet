@@ -17,7 +17,6 @@ lazy_static = "1.4"
 
 [dependencies.sqlx]
 workspace = true
-default-features = false
 
 [dev-dependencies]
 chirp-worker.workspace = true

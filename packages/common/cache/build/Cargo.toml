@@ -26,7 +26,6 @@ uuid = { version = "1", features = ["v4"] }
 
 [dependencies.redis]
 workspace = true
-default-features = false
 features = [
 	"keep-alive",
 	"aio",

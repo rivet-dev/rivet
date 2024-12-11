@@ -18,7 +18,6 @@ mm-config-version-get.workspace = true
 
 [dependencies.sqlx]
 workspace = true
-default-features = false
 
 [dev-dependencies]
 chirp-worker.workspace = true

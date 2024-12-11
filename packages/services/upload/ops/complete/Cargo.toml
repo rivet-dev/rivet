@@ -15,7 +15,6 @@ url = "2.2"
 
 [dependencies.sqlx]
 workspace = true
-default-features = false
 
 [dev-dependencies]
 chirp-worker.workspace = true

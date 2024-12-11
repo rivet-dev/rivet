@@ -28,5 +28,4 @@ server-spec = { workspace = true, optional = true }
 [dependencies.sqlx]
 optional = true
 workspace = true
-default-features = false
 features = [ "json", "ipnetwork" ]

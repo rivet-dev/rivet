@@ -14,7 +14,6 @@ itertools = "0.10.5"
 
 [dependencies.sqlx]
 workspace = true
-default-features = false
 
 [dev-dependencies]
 chirp-worker.workspace = true

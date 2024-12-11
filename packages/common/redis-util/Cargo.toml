@@ -12,5 +12,3 @@ regex = "1.5"
 [dependencies.redis]
 # TODO: https://github.com/rivet-gg/rivet/issues/508
 workspace = true
-default-features = false
-

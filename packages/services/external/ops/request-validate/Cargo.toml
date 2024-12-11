@@ -17,7 +17,6 @@ serde_json = "1.0"
 
 [dependencies.sqlx]
 workspace = true
-default-features = false
 
 [dev-dependencies]
 chirp-worker.workspace = true

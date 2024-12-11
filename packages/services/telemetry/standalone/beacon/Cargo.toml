@@ -25,24 +25,23 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 ] }
 tracing-logfmt = "0.3"
 
+chirp-workflow.workspace = true
 cloud-version-get.workspace = true
+dynamic-config.workspace = true
 game-get.workspace = true
 game-namespace-get.workspace = true
 game-version-get.workspace = true
 mm-player-count-for-namespace.workspace = true
+pegboard.workspace = true
+rivet-config.workspace = true
+rivet-env.workspace = true
+serde = { version = "1.0.214", features = ["derive"] }
+sysinfo = "0.32.0"
 team-get.workspace = true
 team-member-count.workspace = true
-rivet-config.workspace = true
-dynamic-config.workspace = true
-chirp-workflow.workspace = true
-sysinfo = "0.32.0"
-rivet-env.workspace = true
-pegboard = { version = "0.0.1", workspace = true }
-serde = { version = "1.0.214", features = ["derive"] }
 
 [dependencies.sqlx]
 workspace = true
-default-features = false
 
 [dev-dependencies]
 chirp-worker.workspace = true

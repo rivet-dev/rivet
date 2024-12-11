@@ -12,6 +12,7 @@ license = "Apache-2.0"
 [workspace.dependencies.sqlx]
 git = "https://github.com/rivet-gg/sqlx"
 rev = "e7120f59"
+default-features = false
 
 [workspace.dependencies.nomad_client]
 git = "https://github.com/rivet-gg/nomad-client"
@@ -37,6 +38,7 @@ rev = "d539a07"
 [workspace.dependencies.redis]
 git = "https://github.com/rivet-gg/redis-rs"
 rev = "ac3e27f"
+default-features = false
 
 [workspace.dependencies.serde_array_query]
 git = "https://github.com/rivet-gg/serde_array_query"
