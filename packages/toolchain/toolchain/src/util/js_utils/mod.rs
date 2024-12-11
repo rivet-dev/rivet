@@ -46,6 +46,8 @@ pub async fn build_backend_command_raw(opts: CommandOpts) -> Result<CommandRaw> 
 	let input_json = serde_json::to_string(&opts.input)?;
 
 	// Run backend
+	let mut envs = opts.env;
+	envs.insert("DENO_NO_UPDATE_CHECK".into(), "1".into());
 	Ok(CommandRaw {
 		command: deno.executable_path,
 		args: vec![
@@ -66,7 +68,7 @@ pub async fn build_backend_command_raw(opts: CommandOpts) -> Result<CommandRaw> 
 			"--input".into(),
 			input_json,
 		],
-		envs: opts.env,
+		envs,
 		current_dir: paths::project_root()?,
 	})
 }

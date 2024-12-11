@@ -175,6 +175,7 @@ async fn deno_check_script(opts: CheckOpts<'_>) -> Result<()> {
 
 	let mut check_cmd = Command::new(&deno_exec.executable_path);
 	check_cmd.current_dir(&paths::project_root()?);
+	check_cmd.env("DENO_NO_UPDATE_CHECK", "1");
 	check_cmd.arg("check");
 	if let Some(config_path) = &opts.config_path {
 		check_cmd.arg(format!("--config={config_path}"));

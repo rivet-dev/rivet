@@ -18,6 +18,7 @@ impl Opts {
 
 		let mut cmd = tokio::process::Command::new(&deno.executable_path);
 		cmd.args(&self.args)
+			.env("DENO_NO_UPDATE_CHECK", "1")
 			.stdin(std::process::Stdio::inherit())
 			.stdout(std::process::Stdio::inherit())
 			.stderr(std::process::Stdio::inherit());

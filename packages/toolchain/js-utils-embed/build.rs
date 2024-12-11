@@ -55,6 +55,7 @@ async fn main() -> Result<()> {
 
 	// Prepare the directory for `include_dir!`
 	let status = Command::new(&deno_exec.executable_path)
+		.env("DENO_NO_UPDATE_CHECK", "1")
 		.arg("task")
 		.arg("prepare")
 		// Deno runs out of memory on Windows
