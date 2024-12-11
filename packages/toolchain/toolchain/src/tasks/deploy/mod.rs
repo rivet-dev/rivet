@@ -108,11 +108,14 @@ impl task::Task for Task {
 			// Build to use as an example
 			let (example_build_name, _example_build) = example_build.context("no example build")?;
 
+			let hub_origin = &ctx.bootstrap.origins.hub;
+			let project_id = ctx.project.game_id;
+			let env_id = env.id;
 			task.log("");
 			task.log("Deployed:");
 			task.log("");
-			task.log("  Actors:          https://hub.rivet.gg/todo");
-			task.log("  Builds:          https://hub.rivet.gg/todo");
+			task.log(format!("  Actors:          {hub_origin}/projects/{project_id}/environments/{env_id}/actors"));
+			task.log(format!("  Builds:          {hub_origin}/projects/{project_id}/environments/{env_id}/builds"));
 			task.log(format!("  Endpoint:        {}", manager_res.endpoint));
 			task.log("");
 			task.log("Next steps:");
