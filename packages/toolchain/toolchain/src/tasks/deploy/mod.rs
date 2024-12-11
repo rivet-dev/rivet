@@ -127,8 +127,7 @@ impl task::Task for Task {
 			));
 			task.log("");
 			task.log(format!(
-				r#"  const actor = await actorClient.withTags({{ name: "{}" }})"#,
-				serde_json::to_string(&example_build_name)?
+				r#"  const actor = await actorClient.get({{ name: "{example_build_name}" }})"#,
 			));
 			task.log(r#"  actor.myRpc("Hello, world!");"#);
 			task.log("");

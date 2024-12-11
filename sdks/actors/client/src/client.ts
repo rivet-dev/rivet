@@ -7,7 +7,7 @@ import type {
 } from "../../manager-protocol/src/mod.ts";
 import type { CreateRequest } from "../../manager-protocol/src/query.ts";
 
-export interface WithTagsOpts {
+export interface GetOpts {
 	parameters?: unknown;
 	create?: CreateRequest;
 }
@@ -48,13 +48,24 @@ interface Region {
 }
 
 export class Client {
-	#regionPromise = this.#fetchRegion();
+	#managerEndpointPromise: Promise<string>;
+	#regionPromise: Promise<Region | undefined>;
 
-	constructor(private readonly managerEndpoint: string) {}
+	constructor(managerEndpointPromise: string | Promise<string>) {
+		if (managerEndpointPromise instanceof Promise) {
+			// Save promise
+			this.#managerEndpointPromise = managerEndpointPromise;
+		} else {
+			// Convert to promise
+			this.#managerEndpointPromise = new Promise(resolve => resolve(managerEndpointPromise));
+		}
 
-	async withTags<A = unknown>(
+		this.#regionPromise = this.#fetchRegion();
+	}
+
+	async get<A = unknown>(
 		tags: ActorTags,
-		opts?: WithTagsOpts,
+		opts?: GetOpts,
 	): Promise<ActorHandle<A>> {
 		const handle = await this.#createHandle(tags, opts);
 		return this.#createProxy(handle) as ActorHandle<A>;
@@ -139,7 +150,7 @@ export class Client {
 
 	async #createHandle(
 		tags: ActorTags,
-		opts?: WithTagsOpts,
+		opts?: GetOpts,
 	): Promise<ActorHandleRaw> {
 		const create = opts?.create ?? {
 			tags,
@@ -177,7 +188,8 @@ export class Client {
 		path: string,
 		body?: Request,
 	): Promise<Response> {
-		const res = await fetch(`${this.managerEndpoint}${path}`, {
+		const managerEndpoint = await this.#managerEndpointPromise;
+		const res = await fetch(`${managerEndpoint}${path}`, {
 			method,
 			headers: {
 				"Content-Type": "application/json",

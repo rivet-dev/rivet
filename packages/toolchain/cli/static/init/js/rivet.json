@@ -1,9 +1,0 @@
-{
-  "builds": [
-    {
-      "tags": { "name": "__NAME__" },
-      "runtime": "javascript",
-      "script": "__SCRIPT__"
-    }
-  ]
-}
