@@ -9,6 +9,7 @@ import * as Rivet from "../../../../index";
  *     {
  *         project: "string",
  *         environment: "string",
+ *         endpointType: "hostname",
  *         body: {
  *             region: "string",
  *             tags: {
@@ -39,5 +40,6 @@ import * as Rivet from "../../../../index";
 export interface CreateActorRequestQuery {
     project?: string;
     environment?: string;
+    endpointType?: Rivet.actor.EndpointType;
     body: Rivet.actor.CreateActorRequest;
 }

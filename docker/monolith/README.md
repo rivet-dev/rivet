@@ -16,7 +16,7 @@ docker build -f docker/monolith/Dockerfile -t rivet .
 ### Run via `docker run`
 
 ```bash
-docker run -v "$(pwd)/rivet-data:/data" -p 8080:8080 -p 9000:9000 -p 20000-20100:20000-20100 rivet
+docker run -v "$(pwd)/rivet-data:/data" -p 8080:8080 -p 9000:9000 -p 7080:7080 -p 7443:7443 -p 7500-7599:7500-7599 -p 7600-7699:7600-7699 rivet
 ```
 
 ### Run via Docker Compose
@@ -30,7 +30,10 @@ services:
     ports:
       - "8080:8080"
       - "9000:9000"
-      - "20000-20100:20000-20100"
+      - "7080:7080"
+      - "7443:7443"
+      - "7500-7599:7500-7599"
+      - "7600-7699:7600-7699"
 
 volumes:
   rivet-data:
@@ -60,11 +63,20 @@ Monitor `vector-client`:
 vector top --url http://0.0.0.0:9510/graphql
 ```
 
-## Testing
+## Development
+
+Build & run the monolith container with extra logs enabled with:
 
 ```bash
-docker build -f docker/monolith/Dockerfile -t rivet . && docker run --platform linux/amd64 --name rivet --rm -v "/tmp/rivet-data:/data" -p 8080:8080 -p 9000:9000 -p 20000-20100:20000-20100 rivet
+./scripts/docker/monolith_dev.ts
 ```
+
+Flags:
+
+- `--no-build` Skip build step
+- `--no-clean` Skips removing data dir
+
+Data will be stored in `/tmp/rivet-data`.
 
 ## Port collisions
 

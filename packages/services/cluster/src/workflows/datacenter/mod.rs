@@ -1,10 +1,13 @@
 use chirp_workflow::prelude::*;
 use futures_util::FutureExt;
+use std::ops::Deref;
 
 pub mod scale;
 pub mod tls_issue;
 
-use crate::types::{BuildDeliveryMethod, Pool, PoolType, PoolUpdate, Provider, TlsState};
+use crate::types::{
+	BuildDeliveryMethod, GuardPublicHostname, Pool, PoolType, PoolUpdate, Provider, TlsState,
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct Input {
@@ -21,26 +24,41 @@ pub(crate) struct Input {
 
 	pub build_delivery_method: BuildDeliveryMethod,
 	pub prebakes_enabled: bool,
+	pub guard_public_hostname: Option<GuardPublicHostname>,
 }
 
 #[workflow]
 pub(crate) async fn cluster_datacenter(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
-	ctx.activity(InsertDbInput {
-		cluster_id: input.cluster_id,
-		datacenter_id: input.datacenter_id,
-		name_id: input.name_id.clone(),
-		display_name: input.display_name.clone(),
+	{
+		let v1 = InsertDbInputV1 {
+			cluster_id: input.cluster_id,
+			datacenter_id: input.datacenter_id,
+			name_id: input.name_id.clone(),
+			display_name: input.display_name.clone(),
 
-		provider: input.provider,
-		provider_datacenter_id: input.provider_datacenter_id.clone(),
-		provider_api_token: input.provider_api_token.clone(),
+			provider: input.provider,
+			provider_datacenter_id: input.provider_datacenter_id.clone(),
+			provider_api_token: input.provider_api_token.clone(),
 
-		pools: input.pools.clone(),
+			pools: input.pools.clone(),
 
-		build_delivery_method: input.build_delivery_method,
-		prebakes_enabled: input.prebakes_enabled,
-	})
-	.await?;
+			build_delivery_method: input.build_delivery_method,
+			prebakes_enabled: input.prebakes_enabled,
+		};
+
+		// TODO(RVT-4340): Clean up this syntax
+		match ctx.check_version(2).await? {
+			1 => ctx.activity(v1).await?,
+			2 => {
+				ctx.activity(InsertDbInputV2 {
+					v1,
+					guard_public_hostname: input.guard_public_hostname.clone(),
+				})
+				.await?
+			}
+			_ => bail!("unreachable"),
+		}
+	}
 
 	// Issue TLS
 	if ctx.config().server()?.is_tls_enabled() {
@@ -74,6 +92,7 @@ pub(crate) async fn cluster_datacenter(ctx: &mut WorkflowCtx, input: &Input) -> 
 						datacenter_id,
 						pools: sig.pools,
 						prebakes_enabled: sig.prebakes_enabled,
+						guard_public_hostname: sig.guard_public_hostname,
 					})
 					.await?;
 
@@ -117,7 +136,7 @@ pub(crate) async fn cluster_datacenter(ctx: &mut WorkflowCtx, input: &Input) -> 
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
-struct InsertDbInput {
+struct InsertDbInputV1 {
 	cluster_id: Uuid,
 	datacenter_id: Uuid,
 	name_id: String,
@@ -133,8 +152,38 @@ struct InsertDbInput {
 	prebakes_enabled: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+struct InsertDbInputV2 {
+	v1: InsertDbInputV1,
+	guard_public_hostname: Option<GuardPublicHostname>,
+}
+
+impl Deref for InsertDbInputV2 {
+	type Target = InsertDbInputV1;
+
+	fn deref(&self) -> &Self::Target {
+		&self.v1
+	}
+}
+
 #[activity(InsertDb)]
-async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<()> {
+async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInputV1) -> GlobalResult<()> {
+	insert_db_inner(
+		ctx,
+		&InsertDbInputV2 {
+			v1: input.clone(),
+			guard_public_hostname: None,
+		},
+	)
+	.await
+}
+
+#[activity(InsertDbV2)]
+async fn insert_db_v2(ctx: &ActivityCtx, input: &InsertDbInputV2) -> GlobalResult<()> {
+	insert_db_inner(ctx, input).await
+}
+
+async fn insert_db_inner(ctx: &ActivityCtx, input: &InsertDbInputV2) -> GlobalResult<()> {
 	let mut pools = input.pools.clone();
 
 	// Constrain the desired count
@@ -148,6 +197,10 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<()>
 		let ctx = ctx.clone();
 		let input = input.clone();
 		let pools_buf = pools_buf.clone();
+		let (gph_dns_parent, gph_static) = input
+			.guard_public_hostname
+			.clone()
+			.map_or((None, None), GuardPublicHostname::into_columns);
 
 		async move {
 			sql_execute!(
@@ -165,10 +218,12 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<()>
 					pools2,
 					build_delivery_method,
 					prebakes_enabled,
-					create_ts
+					create_ts,
+					guard_public_hostname_dns_parent,
+					guard_public_hostname_static
 				)
 				VALUES (
-					$1, $2, $3, $4, $5, $6, $7, '', $8, $9, $10, $11
+					$1, $2, $3, $4, $5, $6, $7, '', $8, $9, $10, $11, $12, $13
 				)
 				",
 				input.datacenter_id,
@@ -182,6 +237,8 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<()>
 				input.build_delivery_method as i64,
 				input.prebakes_enabled,
 				util::timestamp::now(),
+				gph_dns_parent,
+				gph_static
 			)
 			.await?;
 
@@ -214,6 +271,7 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<()>
 pub struct Update {
 	pub pools: Vec<PoolUpdate>,
 	pub prebakes_enabled: Option<bool>,
+	pub guard_public_hostname: Option<GuardPublicHostname>,
 }
 
 #[signal("cluster_datacenter_scale")]
@@ -244,6 +302,7 @@ struct UpdateDbInput {
 	datacenter_id: Uuid,
 	pools: Vec<PoolUpdate>,
 	prebakes_enabled: Option<bool>,
+	guard_public_hostname: Option<GuardPublicHostname>,
 }
 
 #[activity(UpdateDb)]
@@ -308,18 +367,27 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<()>
 		};
 	}
 
+	let (gph_dns_parent, gph_static) = input
+		.guard_public_hostname
+		.clone()
+		.map_or((None, None), GuardPublicHostname::into_columns);
+
 	sql_execute!(
 		[ctx]
 		"
 		UPDATE db_cluster.datacenters
 		SET
 			pools2 = $2,
-			prebakes_enabled = coalesce($3, prebakes_enabled)
+			prebakes_enabled = coalesce($3, prebakes_enabled),
+			guard_public_hostname_dns_parent = $4,
+			guard_public_hostname_static = $5
 		WHERE datacenter_id = $1
 		",
 		input.datacenter_id,
 		serde_json::to_string(&pools)?,
 		input.prebakes_enabled,
+		gph_dns_parent,
+		gph_static
 	)
 	.await?;
 

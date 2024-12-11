@@ -259,6 +259,7 @@ async fn get_server_addr(ctx: &TestCtx, server_id: Uuid, port: &str) -> (String,
 	let server = ctx
 		.op(ds::ops::server::get::Input {
 			server_ids: vec![server_id],
+			endpoint_type: ds::types::EndpointType::Hostname,
 		})
 		.await
 		.unwrap()

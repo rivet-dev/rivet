@@ -1,10 +1,13 @@
-use std::{collections::HashMap, convert::TryInto};
+use std::{
+	collections::{HashMap, HashSet},
+	convert::TryInto,
+};
 
 use chirp_workflow::prelude::*;
 
 use crate::types::{
-	GameGuardProtocol, HostProtocol, NetworkMode, Port, PortAuthorization, PortAuthorizationType,
-	Routing, Server, ServerLifecycle, ServerResources,
+	EndpointType, GameGuardProtocol, HostProtocol, NetworkMode, Port, PortAuthorization,
+	PortAuthorizationType, Routing, Server, ServerLifecycle, ServerResources,
 };
 
 #[derive(sqlx::FromRow)]
@@ -59,7 +62,7 @@ struct ServerNomad {
 struct ServerPegboard {
 	server_id: Uuid,
 	running_ts: Option<i64>,
-	public_ip: Option<String>,
+	wan_hostname: Option<String>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -72,6 +75,12 @@ struct ProxiedPort {
 #[derive(Debug)]
 pub struct Input {
 	pub server_ids: Vec<Uuid>,
+
+	/// If null, will fall back to the default endpoint type for the datacenter.
+	///
+	/// If the datacenter has a parent hostname, will use hostname endpoint. Otherwise, will use
+	/// path endpoint.
+	pub endpoint_type: Option<crate::types::EndpointType>,
 }
 
 #[derive(Debug)]
@@ -178,7 +187,7 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 			SELECT
 				ds.server_id AS server_id,
 				a.running_ts AS running_ts,
-				(c.config->'network'->>'wan_ip') AS public_ip
+				(c.config->'network'->>'wan_hostname') AS wan_hostname
 			FROM db_ds.servers_pegboard AS ds
 			JOIN db_pegboard.actors AS a
 			ON ds.pegboard_actor_id = a.actor_id
@@ -190,13 +199,37 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 		),
 	)?;
 
+	// Fetch datacenters
+	let datacenter_ids = server_rows
+		.iter()
+		.map(|s| s.datacenter_id)
+		.collect::<HashSet<Uuid>>()
+		.into_iter()
+		.collect::<Vec<_>>();
+	let dc_res = ctx
+		.op(cluster::ops::datacenter::get::Input { datacenter_ids })
+		.await?;
+
 	let servers = input
 		.server_ids
 		.iter()
 		.filter_map(|server_id| server_rows.iter().find(|x| x.server_id == *server_id))
 		.map(|server| {
+			// Get the associated datacenter
+			let dc = dc_res
+				.datacenters
+				.iter()
+				.find(|dc| dc.datacenter_id == server.datacenter_id);
+			let dc = unwrap!(dc, "unable to find dc {} for server", server.datacenter_id);
+			let endpoint_type =
+				input
+					.endpoint_type
+					.unwrap_or(EndpointType::default_for_guard_public_hostname(
+						&dc.guard_public_hostname,
+					));
+
 			// TODO: Handle timeout to let Traefik pull config
-			let (is_nomad, is_connectable, public_ip) = if let Some(server_nomad) =
+			let (is_nomad, is_connectable, wan_hostname) = if let Some(server_nomad) =
 				server_nomad_rows
 					.iter()
 					.find(|x| x.server_id == server.server_id)
@@ -213,7 +246,7 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 				(
 					false,
 					server_pb.running_ts.is_some(),
-					server_pb.public_ip.clone(),
+					server_pb.wan_hostname.clone(),
 				)
 			} else {
 				// Neither nomad nor pegboard server attached
@@ -231,6 +264,9 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 							is_connectable,
 							gg_port,
 							server.datacenter_id,
+							unwrap!(GameGuardProtocol::from_repr(gg_port.protocol.try_into()?)),
+							endpoint_type,
+							&dc.guard_public_hostname,
 						)?,
 					))
 				})
@@ -260,7 +296,7 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 								host_port.port_name.clone(),
 								create_port_host(
 									is_connectable,
-									public_ip.as_deref(),
+									wan_hostname.as_deref(),
 									host_port,
 									proxied_port,
 								)?,
@@ -304,26 +340,32 @@ fn create_port_gg(
 	is_connectable: bool,
 	gg_port: &ServerPortGg,
 	datacenter_id: Uuid,
+	protocol: GameGuardProtocol,
+	endpoint_type: EndpointType,
+	guard_public_hostname: &cluster::types::GuardPublicHostname,
 ) -> GlobalResult<Port> {
+	let (public_hostname, public_port, public_path) = if is_connectable {
+		let (hostname, path) = crate::util::build_ds_hostname_and_path(
+			gg_port.server_id,
+			&gg_port.port_name,
+			datacenter_id,
+			protocol,
+			endpoint_type,
+			guard_public_hostname,
+		)?;
+		let port = gg_port.gg_port.try_into()?;
+		(Some(hostname), Some(port), path)
+	} else {
+		(None, None, None)
+	};
+
 	Ok(Port {
 		internal_port: gg_port.port_number.map(TryInto::try_into).transpose()?,
-		public_hostname: if is_connectable {
-			Some(crate::util::build_ds_hostname(
-				config,
-				gg_port.server_id,
-				&gg_port.port_name,
-				datacenter_id,
-			)?)
-		} else {
-			None
-		},
-		public_port: if is_connectable {
-			Some(gg_port.gg_port.try_into()?)
-		} else {
-			None
-		},
+		public_hostname,
+		public_port,
+		public_path,
 		routing: Routing::GameGuard {
-			protocol: unwrap!(GameGuardProtocol::from_repr(gg_port.protocol.try_into()?)),
+			protocol,
 			authorization: {
 				let authorization_type = if let Some(auth_type) = gg_port.auth_type {
 					unwrap!(PortAuthorizationType::from_repr(auth_type.try_into()?))
@@ -348,14 +390,14 @@ fn create_port_gg(
 
 fn create_port_host(
 	is_connectable: bool,
-	public_ip: Option<&str>,
+	wan_hostname: Option<&str>,
 	host_port: &ServerPortHost,
 	proxied_port: Option<&ProxiedPort>,
 ) -> GlobalResult<Port> {
 	Ok(Port {
 		internal_port: None,
 		public_hostname: if is_connectable {
-			proxied_port.and(public_ip).map(|x| x.to_string())
+			proxied_port.and(wan_hostname).map(|x| x.to_string())
 		} else {
 			None
 		},
@@ -364,6 +406,7 @@ fn create_port_host(
 		} else {
 			None
 		},
+		public_path: None,
 		routing: Routing::Host {
 			protocol: unwrap!(HostProtocol::from_repr(host_port.protocol.try_into()?)),
 		},

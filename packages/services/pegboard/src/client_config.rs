@@ -12,8 +12,8 @@ pub struct ClientConfig {
 #[derive(Debug, Serialize, Deserialize, Hash)]
 pub struct Network {
 	pub bind_ip: IpAddr,
-	pub lan_ip: IpAddr,
-	pub wan_ip: IpAddr,
+	pub lan_hostname: String,
+	pub wan_hostname: String,
 	pub lan_port_range_min: u16,
 	pub lan_port_range_max: u16,
 	pub wan_port_range_min: u16,

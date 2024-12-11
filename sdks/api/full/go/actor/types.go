@@ -11,9 +11,10 @@ import (
 )
 
 type CreateActorRequestQuery struct {
-	Project     *string             `json:"-"`
-	Environment *string             `json:"-"`
-	Body        *CreateActorRequest `json:"-"`
+	Project      *string             `json:"-"`
+	Environment  *string             `json:"-"`
+	EndpointType *EndpointType       `json:"-"`
+	Body         *CreateActorRequest `json:"-"`
 }
 
 func (c *CreateActorRequestQuery) UnmarshalJSON(data []byte) error {
@@ -37,16 +38,18 @@ type DestroyActorRequestQuery struct {
 }
 
 type ListActorsRequestQuery struct {
-	Project     *string `json:"-"`
-	Environment *string `json:"-"`
+	Project      *string       `json:"-"`
+	Environment  *string       `json:"-"`
+	EndpointType *EndpointType `json:"-"`
 }
 
 type GetActorsRequestQuery struct {
-	Project          *string    `json:"-"`
-	Environment      *string    `json:"-"`
-	TagsJson         *string    `json:"-"`
-	IncludeDestroyed *bool      `json:"-"`
-	Cursor           *uuid.UUID `json:"-"`
+	Project          *string       `json:"-"`
+	Environment      *string       `json:"-"`
+	EndpointType     *EndpointType `json:"-"`
+	TagsJson         *string       `json:"-"`
+	IncludeDestroyed *bool         `json:"-"`
+	Cursor           *uuid.UUID    `json:"-"`
 }
 
 type BuildCompression string
@@ -172,6 +175,28 @@ func (b *Build) String() string {
 		return value
 	}
 	return fmt.Sprintf("%#v", b)
+}
+
+type EndpointType string
+
+const (
+	EndpointTypeHostname EndpointType = "hostname"
+	EndpointTypePath     EndpointType = "path"
+)
+
+func NewEndpointTypeFromString(s string) (EndpointType, error) {
+	switch s {
+	case "hostname":
+		return EndpointTypeHostname, nil
+	case "path":
+		return EndpointTypePath, nil
+	}
+	var t EndpointType
+	return "", fmt.Errorf("%s is not a valid %T", s, t)
+}
+
+func (e EndpointType) Ptr() *EndpointType {
+	return &e
 }
 
 type GuardRouting struct {
@@ -317,6 +342,7 @@ type Port struct {
 	InternalPort *int         `json:"internal_port,omitempty"`
 	Hostname     *string      `json:"hostname,omitempty"`
 	Port         *int         `json:"port,omitempty"`
+	Path         *string      `json:"path,omitempty"`
 	Routing      *PortRouting `json:"routing,omitempty"`
 
 	_rawJSON json.RawMessage

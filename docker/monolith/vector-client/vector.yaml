@@ -12,7 +12,7 @@ sources:
   prometheus_pegboard:
     type: prometheus_scrape
     endpoints:
-      - http://rivet-client:7090
+      - http://rivet-client:6090
     scrape_interval_secs: 15
   
   pegboard_manager:

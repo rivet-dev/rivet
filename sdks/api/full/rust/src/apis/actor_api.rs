@@ -97,6 +97,7 @@ pub async fn actor_create(
 	actor_create_actor_request: crate::models::ActorCreateActorRequest,
 	project: Option<&str>,
 	environment: Option<&str>,
+	endpoint_type: Option<crate::models::ActorEndpointType>,
 ) -> Result<crate::models::ActorCreateActorResponse, Error<ActorCreateError>> {
 	let local_var_configuration = configuration;
 
@@ -113,6 +114,10 @@ pub async fn actor_create(
 	if let Some(ref local_var_str) = environment {
 		local_var_req_builder =
 			local_var_req_builder.query(&[("environment", &local_var_str.to_string())]);
+	}
+	if let Some(ref local_var_str) = endpoint_type {
+		local_var_req_builder =
+			local_var_req_builder.query(&[("endpoint_type", &local_var_str.to_string())]);
 	}
 	if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
 		local_var_req_builder =
@@ -209,6 +214,7 @@ pub async fn actor_get(
 	actor: &str,
 	project: Option<&str>,
 	environment: Option<&str>,
+	endpoint_type: Option<crate::models::ActorEndpointType>,
 ) -> Result<crate::models::ActorGetActorResponse, Error<ActorGetError>> {
 	let local_var_configuration = configuration;
 
@@ -229,6 +235,10 @@ pub async fn actor_get(
 	if let Some(ref local_var_str) = environment {
 		local_var_req_builder =
 			local_var_req_builder.query(&[("environment", &local_var_str.to_string())]);
+	}
+	if let Some(ref local_var_str) = endpoint_type {
+		local_var_req_builder =
+			local_var_req_builder.query(&[("endpoint_type", &local_var_str.to_string())]);
 	}
 	if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
 		local_var_req_builder =
@@ -262,6 +272,7 @@ pub async fn actor_list(
 	configuration: &configuration::Configuration,
 	project: Option<&str>,
 	environment: Option<&str>,
+	endpoint_type: Option<crate::models::ActorEndpointType>,
 	tags_json: Option<&str>,
 	include_destroyed: Option<bool>,
 	cursor: Option<&str>,
@@ -281,6 +292,10 @@ pub async fn actor_list(
 	if let Some(ref local_var_str) = environment {
 		local_var_req_builder =
 			local_var_req_builder.query(&[("environment", &local_var_str.to_string())]);
+	}
+	if let Some(ref local_var_str) = endpoint_type {
+		local_var_req_builder =
+			local_var_req_builder.query(&[("endpoint_type", &local_var_str.to_string())]);
 	}
 	if let Some(ref local_var_str) = tags_json {
 		local_var_req_builder =

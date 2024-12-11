@@ -15,12 +15,13 @@ client:
     pegboard_endpoint: ws://rivet-server:8082
   network:
     bind_ip: 127.0.0.1
-    lan_ip: 127.0.0.1
-    # Point to lcoalhost since this is a dev instance
-    wan_ip: 127.0.0.1
-    # Corresponds to the recommended port range for the `docker run` command
-    wan_port_range_min: 20000
-    wan_port_range_max: 20100
+    # Point to DNS name inside Docker container
+    lan_hostname: 127.0.0.1
+    # Point to localhost since this is a dev instance
+    wan_hostname: 127.0.0.1
+    # Corresponds to the port range configured in the `docker-compose.yml`
+    wan_port_range_min: 7600
+    wan_port_range_max: 7699
   cni:
     network_interface: eth0
   # Don't reserve any resources on dev instances
@@ -30,6 +31,10 @@ client:
   logs:
     redirect_logs: false
   foundationdb:
-    addresses: ["foundationdb:4500"]
+    cluster_description: fdb
+    cluster_id: fdb
+    addresses:
+      !static
+      - "127.0.0.1:4500"
   vector:
     address: vector-server:6100

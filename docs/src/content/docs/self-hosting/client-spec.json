@@ -199,8 +199,8 @@
       "type": "object",
       "required": [
         "bind_ip",
-        "lan_ip",
-        "wan_ip"
+        "lan_hostname",
+        "wan_hostname"
       ],
       "properties": {
         "bind_ip": {
@@ -208,10 +208,9 @@
           "type": "string",
           "format": "ipv4"
         },
-        "lan_ip": {
+        "lan_hostname": {
           "description": "Address to access this node in a LAN.\n\nThis IP is used to route traffic from Game Guard.",
-          "type": "string",
-          "format": "ip"
+          "type": "string"
         },
         "lan_port_range_max": {
           "type": "integer",
@@ -223,10 +222,9 @@
           "format": "uint16",
           "minimum": 0.0
         },
-        "wan_ip": {
+        "wan_hostname": {
           "description": "Address to access this node publicly.\n\nThis IP is used when providing the actor's IP & port for host networking.",
-          "type": "string",
-          "format": "ip"
+          "type": "string"
         },
         "wan_port_range_max": {
           "type": "integer",

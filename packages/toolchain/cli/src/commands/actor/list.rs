@@ -36,6 +36,7 @@ impl Opts {
 			&ctx.openapi_config_cloud,
 			Some(&ctx.project.name_id),
 			Some(&env),
+			None,
 			tags_json.as_deref(),
 			Some(self.include_destroyed),
 			self.cursor.as_deref(),

@@ -63,24 +63,38 @@ async function generateRustSdk() {
 }
 
 async function fixOpenApiBugs() {
-	if (FERN_GROUP !== "full") return;
-
-	const files = {
+	const files: Record<string, [RegExp, string][]> = {
 		"cloud_games_matchmaker_api.rs": [
-			"CloudGamesLogStream",
-			"crate::models::CloudGamesLogStream",
+			[/CloudGamesLogStream/g, "crate::models::CloudGamesLogStream"],
 		],
-		"actor_logs_api.rs": ["ActorLogStream", "crate::models::ActorLogStream"],
+		"actor_api.rs": [
+			[/ActorEndpointType/g, "crate::models::ActorEndpointType"],
+		],
+		"actor_logs_api.rs": [
+			[/ActorLogStream/g, "crate::models::ActorLogStream"],
+		],
 		"servers_logs_api.rs": [
-			"ServersLogStream",
-			"crate::models::ServersLogStream",
+			[/ServersLogStream/g, "crate::models::ServersLogStream"],
 		],
 	};
 
-	for (const [file, [from, to]] of Object.entries(files)) {
+	for (const [file, replacements] of Object.entries(files)) {
 		const filePath = `${GEN_PATH_RUST}/src/apis/${file}`;
-		let content = await Deno.readTextFile(filePath);
-		content = content.replace(from, to);
+		let content;
+		try {
+			content = await Deno.readTextFile(filePath);
+		} catch (error) {
+			if (error instanceof Deno.errors.NotFound) {
+				console.warn(`File not found: ${filePath}`);
+				continue;
+			} else {
+				throw error;
+			}
+		}
+
+		for (const [from, to] of replacements) {
+			content = content.replace(from, to);
+		}
 		await Deno.writeTextFile(filePath, content);
 	}
 }
@@ -124,9 +138,9 @@ async function main() {
 	await generateRustSdk();
 	await fixOpenApiBugs();
 	await modifyDependencies();
-	await formatSdk();  // Format so patch is consistent
+	await formatSdk(); // Format so patch is consistent
 	await applyErrorPatch();
-	await formatSdk();  // Format again after patched
+	await formatSdk(); // Format again after patched
 
 	console.log("Done");
 }

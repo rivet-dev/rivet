@@ -384,6 +384,10 @@ impl Cluster {
 					name: "Local".into(),
 					// ATS is not running in local dev
 					build_delivery_method: BuildDeliveryMethod::S3Direct,
+					guard: DatacenterGuard {
+						public_hostname: Some(GuardPublicHostname::Static("127.0.0.1".into())),
+
+					},
 					// Placeholder values for the dev node
 					hardware: Some(DatacenterHardware { cpu_cores: 4, cpu: 3_000 * 4, memory: 8_192, disk: 32_768, bandwidth: 1_000_000 }),
 					provision: None,
@@ -391,6 +395,29 @@ impl Cluster {
 			},
 		}
 	}
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum GuardPublicHostname {
+	/// Rivet Guard has the appropriate wildcard DNS addresses set up for host-based routing. This
+	/// is the preferred option.
+	///
+	/// This is the parent address that all subdomains will be build from.
+	///
+	/// If SSL certs are provided, this should also be the name of the TLS parent host.
+	///
+	/// This will default to hostname endpoint types (see `ds::type::EndpointType`).
+	DnsParent(String),
+	/// Rivet Guard is only accessible by IP or DNS address without a wildcard.
+	///
+	/// This is usually used for routing to a static IP address on simple architectures.
+	///
+	/// If the developer cannot set up wildcard DNS addresses for whatever reason, this method can
+	/// be used.
+	///
+	/// This will default to path endpoint types (see `ds::type::EndpointType`).
+	Static(String),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
@@ -402,6 +429,9 @@ pub struct Datacenter {
 	pub name: String,
 
 	pub build_delivery_method: BuildDeliveryMethod,
+
+	#[serde(default)]
+	pub guard: DatacenterGuard,
 
 	/// Hardware specs used to orchestrate jobs.
 	///
@@ -432,6 +462,14 @@ impl Datacenter {
 			.as_ref()
 			.map_or(false, |x| x.prebakes_enabled)
 	}
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default, JsonSchema)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct DatacenterGuard {
+	/// If not specified, will attempt to fallback to auto-generated wildcard hosts based on
+	/// domain_job or error if domain_job is not provided.
+	pub public_hostname: Option<GuardPublicHostname>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
@@ -475,11 +513,21 @@ impl Pegboard {
 	}
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum EndpointType {
+	Hostname,
+	Path,
+}
+
 /// The port ranges define what ports Guard will allocate ports on. If using cluster
 /// provisioning, these are also used for firewall rules.
 #[derive(Debug, Serialize, Deserialize, Clone, Default, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Guard {
+	pub tls_enabled: Option<bool>,
+	pub http_port: Option<u16>,
+	pub https_port: Option<u16>,
 	pub min_ingress_port_tcp: Option<u16>,
 	pub max_ingress_port_tcp: Option<u16>,
 	pub min_ingress_port_udp: Option<u16>,
@@ -487,6 +535,18 @@ pub struct Guard {
 }
 
 impl Guard {
+	pub fn tls_enabled(&self) -> bool {
+		self.tls_enabled.unwrap_or(true)
+	}
+
+	pub fn http_port(&self) -> u16 {
+		self.http_port.unwrap_or(80)
+	}
+
+	pub fn https_port(&self) -> u16 {
+		self.http_port.unwrap_or(443)
+	}
+
 	pub fn min_ingress_port_tcp(&self) -> u16 {
 		self.min_ingress_port_tcp.unwrap_or(20000)
 	}

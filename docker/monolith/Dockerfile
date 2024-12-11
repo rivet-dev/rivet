@@ -54,9 +54,12 @@ RUN \
 # instead of 12 (which uses OpenSSL 3).
 FROM --platform=linux/amd64 debian:12-slim AS runner
 
+ARG TRAEFIK_VERSION=3.2.1
 ARG COCKROACHDB_VERSION=24.2.3
 ARG NATS_VERSION=2.9.2
 ARG SEAWEEDFS_VERSION=3.79
+# See docs-internal/infrastructure/fdb/AVX.md
+ARG FDB_VERSION=7.1.60
 ARG VECTOR_VERSION=0.42.0
 ARG S6_OVERLAY_VERSION=3.2.0.2
 
@@ -73,10 +76,15 @@ COPY ./docker/monolith/clickhouse/users.xml /etc/clickhouse-server/users.d/users
 
 COPY ./docker/monolith/seaweedfs /etc/seaweedfs
 
+COPY ./docker/monolith/foundationdb/etc /etc/foundationdb
+COPY --chmod=0755 ./docker/monolith/foundationdb/entrypoint.sh /usr/local/bin/foundationdb-entrypoint.sh
+
 COPY ./docker/monolith/vector-client /etc/vector-client
 COPY ./docker/monolith/vector-server /etc/vector-server
 
 COPY ./docker/monolith/rivet-server /etc/rivet-server
+
+COPY ./docker/monolith/rivet-guard /etc/rivet-guard
 
 COPY ./docker/monolith/rivet-client /etc/rivet-client
 
@@ -86,7 +94,7 @@ COPY --from=client-builder /app/dist/rivet-client /app/dist/rivet-isolate-v8-run
 
 VOLUME ["/data"]
 
-EXPOSE 8080 8081 8082 8080 20000-20100
+EXPOSE 8080 8081 8082 7080 7443 7500-7599 7600-7699
 
 ENV S6_LOGGING=1
 ENV S6_VERBOSITY=1

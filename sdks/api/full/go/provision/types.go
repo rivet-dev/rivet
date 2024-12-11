@@ -47,8 +47,8 @@ type Server struct {
 	ServerId     uuid.UUID `json:"server_id"`
 	DatacenterId uuid.UUID `json:"datacenter_id"`
 	PoolType     PoolType  `json:"pool_type,omitempty"`
-	VlanIp       *string   `json:"vlan_ip,omitempty"`
-	PublicIp     *string   `json:"public_ip,omitempty"`
+	LanIp        *string   `json:"lan_ip,omitempty"`
+	WanIp        *string   `json:"wan_ip,omitempty"`
 
 	_rawJSON json.RawMessage
 }

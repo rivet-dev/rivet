@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt};
 
 use chirp_workflow::prelude::*;
 use rivet_api::models;
@@ -60,6 +60,7 @@ pub struct Port {
 	pub internal_port: Option<i32>,
 	pub public_hostname: Option<String>,
 	pub public_port: Option<i32>,
+	pub public_path: Option<String>,
 	pub routing: Routing,
 }
 
@@ -125,6 +126,36 @@ impl GameConfig {
 			host_networking_enabled: false,
 			root_user_enabled: false,
 			runtime: ServerRuntime::default(),
+		}
+	}
+}
+
+/// Determines how port endpoints are returned.
+#[derive(Debug, Copy, Clone, Hash, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum EndpointType {
+	#[serde(rename = "hostname")]
+	Hostname = 0,
+	#[serde(rename = "path")]
+	Path = 1,
+}
+
+impl EndpointType {
+	pub fn default_for_guard_public_hostname(
+		hostname: &cluster::types::GuardPublicHostname,
+	) -> Self {
+		match hostname {
+			cluster::types::GuardPublicHostname::DnsParent(_) => Self::Hostname,
+			cluster::types::GuardPublicHostname::Static(_) => Self::Path,
+		}
+	}
+}
+
+impl fmt::Display for EndpointType {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			EndpointType::Hostname => write!(f, "hostname"),
+			EndpointType::Path => write!(f, "path"),
 		}
 	}
 }
@@ -269,6 +300,7 @@ impl ApiFrom<Port> for models::ActorPort {
 			internal_port: value.internal_port,
 			hostname: value.public_hostname,
 			port: value.public_port,
+			path: value.public_path,
 			routing: Box::new(routing),
 		}
 	}
@@ -319,6 +351,24 @@ impl ApiFrom<HostProtocol> for models::ActorPortProtocol {
 		match value {
 			HostProtocol::Udp => models::ActorPortProtocol::Udp,
 			HostProtocol::Tcp => models::ActorPortProtocol::Tcp,
+		}
+	}
+}
+
+impl ApiFrom<models::ActorEndpointType> for EndpointType {
+	fn api_from(value: models::ActorEndpointType) -> EndpointType {
+		match value {
+			models::ActorEndpointType::Hostname => EndpointType::Hostname,
+			models::ActorEndpointType::Path => EndpointType::Path,
+		}
+	}
+}
+
+impl ApiFrom<EndpointType> for models::ActorEndpointType {
+	fn api_from(value: EndpointType) -> models::ActorEndpointType {
+		match value {
+			EndpointType::Hostname => models::ActorEndpointType::Hostname,
+			EndpointType::Path => models::ActorEndpointType::Path,
 		}
 	}
 }

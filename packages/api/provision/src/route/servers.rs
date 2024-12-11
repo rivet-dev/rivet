@@ -48,12 +48,20 @@ pub async fn info(
 		server.server_id,
 	)?;
 
+	let lan_ip = unwrap_ref!(server.lan_ip, "server should have lan hostname by now").to_string();
+	let wan_ip =
+		unwrap_ref!(server.wan_ip, "server should have public hostname by now").to_string();
+
 	Ok(models::ProvisionServersGetInfoResponse {
 		name,
 		server_id: server.server_id,
 		datacenter_id: server.datacenter_id,
 		cluster_id: datacenter.cluster_id,
-		vlan_ip: unwrap_ref!(server.vlan_ip, "server should have vlan ip by now").to_string(),
-		public_ip: unwrap_ref!(server.public_ip, "server should have public ip by now").to_string(),
+		lan_ip: lan_ip.clone(),
+		wan_ip: wan_ip.clone(),
+
+		// Deprecated
+		vlan_ip: lan_ip,
+		public_ip: wan_ip,
 	})
 }

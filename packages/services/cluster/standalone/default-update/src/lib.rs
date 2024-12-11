@@ -163,6 +163,16 @@ async fn upsert_datacenter(
 		existing_datacenter,
 	}: UpsertDatacenterArgs<'_>,
 ) -> GlobalResult<()> {
+	let guard_public_hostname = match &dc_config.guard.public_hostname {
+		Some(rivet_config::config::server::rivet::GuardPublicHostname::DnsParent(x)) => {
+			Some(cluster::types::GuardPublicHostname::DnsParent(x.clone()))
+		}
+		Some(rivet_config::config::server::rivet::GuardPublicHostname::Static(x)) => {
+			Some(cluster::types::GuardPublicHostname::Static(x.clone()))
+		}
+		None => None,
+	};
+
 	if let Some(existing_datacenter) = existing_datacenter {
 		// Validate IDs match
 		ensure_eq!(
@@ -200,6 +210,7 @@ async fn upsert_datacenter(
 		ctx.signal(cluster::workflows::datacenter::Update {
 			pools,
 			prebakes_enabled: Some(dc_config.prebakes_enabled()),
+			guard_public_hostname,
 		})
 		.tag("datacenter_id", existing_datacenter.datacenter_id)
 		.send()
@@ -250,6 +261,7 @@ async fn upsert_datacenter(
 
 			build_delivery_method: dc_config.build_delivery_method.into(),
 			prebakes_enabled: dc_config.prebakes_enabled(),
+			guard_public_hostname,
 		})
 		.tag("cluster_id", cluster_id)
 		.send()

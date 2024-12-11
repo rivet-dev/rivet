@@ -34,7 +34,7 @@ pub async fn get_logs(
 		ctx.auth().check(ctx.op_ctx(), &query.global, false).await?;
 
 	// Validate server belongs to game
-	assert::server_for_env(&ctx, server_id, game_id, env_id).await?;
+	assert::server_for_env(&ctx, server_id, game_id, env_id, None).await?;
 
 	// Determine stream type
 	let stream_type = match query.stream {

@@ -62,6 +62,9 @@ func (c *Client) Get(ctx context.Context, actor uuid.UUID, request *sdkactor.Lis
 	if request.Environment != nil {
 		queryParams.Add("environment", fmt.Sprintf("%v", *request.Environment))
 	}
+	if request.EndpointType != nil {
+		queryParams.Add("endpoint_type", fmt.Sprintf("%v", *request.EndpointType))
+	}
 	if len(queryParams) > 0 {
 		endpointURL += "?" + queryParams.Encode()
 	}
@@ -150,6 +153,9 @@ func (c *Client) List(ctx context.Context, request *sdkactor.GetActorsRequestQue
 	}
 	if request.Environment != nil {
 		queryParams.Add("environment", fmt.Sprintf("%v", *request.Environment))
+	}
+	if request.EndpointType != nil {
+		queryParams.Add("endpoint_type", fmt.Sprintf("%v", *request.EndpointType))
 	}
 	if request.TagsJson != nil {
 		queryParams.Add("tags_json", fmt.Sprintf("%v", *request.TagsJson))
@@ -248,6 +254,9 @@ func (c *Client) Create(ctx context.Context, request *sdkactor.CreateActorReques
 	}
 	if request.Environment != nil {
 		queryParams.Add("environment", fmt.Sprintf("%v", *request.Environment))
+	}
+	if request.EndpointType != nil {
+		queryParams.Add("endpoint_type", fmt.Sprintf("%v", *request.EndpointType))
 	}
 	if len(queryParams) > 0 {
 		endpointURL += "?" + queryParams.Encode()

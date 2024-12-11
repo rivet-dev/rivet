@@ -14,12 +14,13 @@ client:
     pegboard_endpoint: ws://rivet-server:8082
   network:
     bind_ip: 127.0.0.1
-    lan_ip: 127.0.0.1
+    # Point to DNS name inside Docker container
+    lan_hostname: rivet-client
     # Point to localhost since this is a dev instance
-    wan_ip: 127.0.0.1
+    wan_hostname: 127.0.0.1
     # Corresponds to the port range configured in the `docker-compose.yml`
-    wan_port_range_min: 20000
-    wan_port_range_max: 20100
+    wan_port_range_min: 7600
+    wan_port_range_max: 7699
   cni:
     network_interface: eth0
   # Don't reserve any resources on dev instances

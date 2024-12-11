@@ -15,5 +15,5 @@ types:
       server_id: uuid
       datacenter_id: uuid
       pool_type: PoolType
-      vlan_ip: optional<string>
-      public_ip: optional<string>
+      lan_ip: optional<string>
+      wan_ip: optional<string>

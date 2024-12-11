@@ -1,3 +1,6 @@
+#!/usr/bin/env bash
+set -euf -o pipefail
+
 TARGET_ARCH=$(uname -m | sed 's/aarch64/arm64/' | sed 's/x86_64/amd64/')
 
 # Install required packages
@@ -14,12 +17,17 @@ apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
 	unzip \
     apt-transport-https \
     dirmngr \
-	netcat-openbsd && \
+	netcat-openbsd \
+	procps && \
     (curl -L https://github.com/golang-migrate/migrate/releases/download/v4.18.1/migrate.linux-${TARGET_ARCH}.tar.gz | tar xvz) && \
     mv migrate /usr/local/bin/migrate && \
     curl -fsSL https://deno.land/x/install/install.sh | sh && \
     ln -s /root/.deno/bin/deno /usr/local/bin/deno && \
 	curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.1.60/libfdb_c.x86_64.so"
+
+# === Traefik ===
+curl -sSLf https://github.com/traefik/traefik/releases/download/v${TRAEFIK_VERSION}/traefik_v${TRAEFIK_VERSION}_linux_${TARGET_ARCH}.tar.gz | \
+    tar xz -C /usr/local/bin/ traefik
 
 # === CockroachDB ===
 useradd -m -s /bin/bash cockroachdb && \
@@ -48,6 +56,24 @@ useradd -m -s /bin/bash nats && \
 useradd -m -s /bin/bash seaweedfs && \
     curl -sSLf https://github.com/seaweedfs/seaweedfs/releases/download/${SEAWEEDFS_VERSION}/linux_${TARGET_ARCH}.tar.gz | tar xz -C /usr/local/bin/
 
+# === FoundationDB ===
+# Client (for health checks)
+curl -sSLf -o "/tmp/foundationdb-clients.deb" "https://github.com/apple/foundationdb/releases/download/${FDB_VERSION}/foundationdb-clients_${FDB_VERSION}-1_amd64.deb"
+dpkg -i "/tmp/foundationdb-clients.deb"
+
+fdbcli --version
+
+# Server
+curl -Lf -o "/tmp/foundationdb-server.deb" "https://github.com/apple/foundationdb/releases/download/${FDB_VERSION}/foundationdb-server_${FDB_VERSION}-1_amd64.deb"
+dpkg -i "/tmp/foundationdb-server.deb"
+rm -rf /etc/foundationdb
+
+fdbserver --version
+
+# Create log dir for internal FDB logs, since /var/log/foundationdb is used by S6
+mkdir /var/log/foundationdb-monitor
+chown foundationdb:foundationdb /var/log/foundationdb-monitor
+
 # === Vector ===
 useradd -m -s /bin/bash vector-client && \
 	useradd -m -s /bin/bash vector-server && \
@@ -64,6 +90,6 @@ curl -sSLf https://github.com/just-containers/s6-overlay/releases/download/v${S6
 # Setup S6
 deno run --allow-read --allow-write /tmp/build-scripts/setup_s6.ts
 
-# === Rivet Server ===
+# === Rivet ===
 useradd -m -s /bin/bash rivet-server
-
+useradd -m -s /bin/bash rivet-guard

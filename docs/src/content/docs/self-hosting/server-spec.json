@@ -153,10 +153,13 @@
         "default_cluster_id": null,
         "dns": null,
         "guard": {
+          "http_port": null,
+          "https_port": null,
           "max_ingress_port_tcp": null,
           "max_ingress_port_udp": null,
           "min_ingress_port_tcp": null,
-          "min_ingress_port_udp": null
+          "min_ingress_port_udp": null,
+          "tls_enabled": null
         },
         "health": {
           "host": null,
@@ -764,6 +767,16 @@
         "build_delivery_method": {
           "$ref": "#/definitions/BuildDeliveryMethod"
         },
+        "guard": {
+          "default": {
+            "public_hostname": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/DatacenterGuard"
+            }
+          ]
+        },
         "hardware": {
           "description": "Hardware specs used to orchestrate jobs.\n\nThis is only used if `provision` is not provided.\n\nThis will be automatically determined in development mode.",
           "default": null,
@@ -787,6 +800,20 @@
           "allOf": [
             {
               "$ref": "#/definitions/DatacenterProvision"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "DatacenterGuard": {
+      "type": "object",
+      "properties": {
+        "public_hostname": {
+          "description": "If not specified, will attempt to fallback to auto-generated wildcard hosts based on domain_job or error if domain_job is not provided.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/GuardPublicHostname"
             }
           ]
         }
@@ -935,6 +962,16 @@
       "description": "The port ranges define what ports Guard will allocate ports on. If using cluster provisioning, these are also used for firewall rules.",
       "type": "object",
       "properties": {
+        "http_port": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0
+        },
+        "https_port": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0
+        },
         "max_ingress_port_tcp": {
           "type": "integer",
           "format": "uint16",
@@ -954,9 +991,42 @@
           "type": "integer",
           "format": "uint16",
           "minimum": 0.0
+        },
+        "tls_enabled": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false
+    },
+    "GuardPublicHostname": {
+      "oneOf": [
+        {
+          "description": "Rivet Guard has the appropriate wildcard DNS addresses set up for host-based routing. This is the preferred option.\n\nThis is the parent address that all subdomains will be build from.\n\nIf SSL certs are provided, this should also be the name of the TLS parent host.\n\nThis will default to hostname endpoint types (see `ds::type::EndpointType`).",
+          "type": "object",
+          "required": [
+            "dns_parent"
+          ],
+          "properties": {
+            "dns_parent": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "Rivet Guard is only accessible by IP or DNS address without a wildcard.\n\nThis is usually used for routing to a static IP address on simple architectures.\n\nIf the developer cannot set up wildcard DNS addresses for whatever reason, this method can be used.\n\nThis will default to path endpoint types (see `ds::type::EndpointType`).",
+          "type": "object",
+          "required": [
+            "static"
+          ],
+          "properties": {
+            "static": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
     },
     "Hardware": {
       "type": "object",
@@ -1347,10 +1417,13 @@
         },
         "guard": {
           "default": {
+            "http_port": null,
+            "https_port": null,
             "max_ingress_port_tcp": null,
             "max_ingress_port_udp": null,
             "min_ingress_port_tcp": null,
-            "min_ingress_port_udp": null
+            "min_ingress_port_udp": null,
+            "tls_enabled": null
           },
           "allOf": [
             {

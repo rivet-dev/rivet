@@ -77,22 +77,16 @@ async function createActor(
 	environment: RivetEnvironment,
 	createRequest: CreateRequest = {} satisfies CreateRequest
 ): Promise<RivetClient.actor.Actor> {
-	// TODO(RVT-4250):
 	if (!createRequest.network) {
 		createRequest.network = {};
-	}
-	if (!createRequest.network.mode) {
-		// TODO: Don't force host
-		createRequest.network.mode = "host";
 	}
 	if (!createRequest.network.ports) {
 		createRequest.network.ports = {};
 	}
 	if (!(PORT_NAME in createRequest.network.ports)) {
-		// TODO: Don't force TCP protocol
 		createRequest.network.ports[PORT_NAME] = {
-			protocol: "tcp",
-			routing: { host: {} },
+			protocol: "https",
+			routing: { guard: {} },
 		};
 	}
 

@@ -6,15 +6,21 @@ This Docker Compose is intended for running a full development environment for R
 
 ## Prerequisites
 
+- Docker
 - Docker Compose
 
 ## Required ports
 
 The following ports need to be open before running Rivet:
 
-- 8080-8082 (Rivet server)
-- 9000 (S3)
-- 20000-20100 (Rivet client host networking)
+| Service      | Description     | Optional | Port      |
+| ------------ | --------------- | -------- | --------- |
+| Rivet Server | API             |          | 8080      |
+|              | Object Storage  |          | 9000      |
+| Rivet Guard  | HTTP            |          | 7080      |
+|              | HTTPS           |          | 7443      |
+|              | TCP & UDP       | X        | 7500-7599 |
+| Rivet Client | Host Networking | X        | 7600-7699 |
 
 ## Operation
 

@@ -12,3 +12,11 @@ Validate that the client config (e.g. `/var/lib/rivet-client/fdb.cluster` on a R
 
 If you're using DNS to resolve the cluster, make sure that the DNS address resolves to the correct location.
 
+### `Illegal instruction`
+
+This usually means you're trying to use the AVX version of FoundationDB on an
+unsupported system. This also happens when attempting to run AVX FoundationDB
+on an Apple Silicon chip, since Docker's x86 emulation does not support AVX.
+
+See [here](./AVX.md) for more information.
+

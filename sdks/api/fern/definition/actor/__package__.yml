@@ -22,6 +22,7 @@ service:
         query-parameters:
           project: optional<string>
           environment: optional<string>
+          endpoint_type: optional<commons.EndpointType>
       response: GetActorResponse
 
     list:
@@ -35,6 +36,7 @@ service:
         query-parameters:
           project: optional<string>
           environment: optional<string>
+          endpoint_type: optional<commons.EndpointType>
           tags_json: optional<string>
           include_destroyed: optional<boolean>
           cursor: optional<uuid>
@@ -50,6 +52,7 @@ service:
         query-parameters:
           project: optional<string>
           environment: optional<string>
+          endpoint_type: optional<commons.EndpointType>
       response: CreateActorResponse
 
     destroy:

@@ -27,6 +27,11 @@ paths:
           required: false
           schema:
             type: string
+        - name: endpoint_type
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/ActorEndpointType'
       responses:
         '200':
           description: ''
@@ -168,6 +173,11 @@ paths:
           required: false
           schema:
             type: string
+        - name: endpoint_type
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/ActorEndpointType'
         - name: tags_json
           in: query
           required: false
@@ -244,6 +254,11 @@ paths:
           required: false
           schema:
             type: string
+        - name: endpoint_type
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/ActorEndpointType'
       responses:
         '200':
           description: ''
@@ -9790,15 +9805,23 @@ components:
         cluster_id:
           type: string
           format: uuid
+        lan_ip:
+          type: string
+        wan_ip:
+          type: string
         vlan_ip:
           type: string
+          description: '**Deprecated**: Use lan_ip'
         public_ip:
           type: string
+          description: '**Deprecated**: Use wan_ip'
       required:
         - name
         - server_id
         - datacenter_id
         - cluster_id
+        - lan_ip
+        - wan_ip
         - vlan_ip
         - public_ip
     ServersGetServerResponse:
@@ -10067,6 +10090,8 @@ components:
           type: string
         port:
           type: integer
+        path:
+          type: string
         routing:
           $ref: '#/components/schemas/ActorPortRouting'
       required:
@@ -10093,6 +10118,11 @@ components:
     ActorHostRouting:
       type: object
       properties: {}
+    ActorEndpointType:
+      type: string
+      enum:
+        - hostname
+        - path
     ActorBuild:
       type: object
       properties:
@@ -13242,9 +13272,9 @@ components:
           format: uuid
         pool_type:
           $ref: '#/components/schemas/ProvisionPoolType'
-        vlan_ip:
+        lan_ip:
           type: string
-        public_ip:
+        wan_ip:
           type: string
       required:
         - server_id

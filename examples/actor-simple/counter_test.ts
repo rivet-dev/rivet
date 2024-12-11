@@ -3,9 +3,7 @@ import { readEndpointFromCli } from "../../sdks/actors/client/src/dev.ts"
 import type Counter from "./counter.ts";
 
 async function main() {
-	const endpoint = await readEndpointFromCli();
-	const actorClient = new Client(endpoint);
-
+	const actorClient = new Client(await readEndpointFromCli());
 
 	// Broadcast event
 	let broadcastActor: ActorHandle<Counter>;

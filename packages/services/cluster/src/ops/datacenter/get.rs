@@ -1,4 +1,4 @@
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryInto;
 
 use chirp_workflow::prelude::*;
 
@@ -27,26 +27,32 @@ struct DatacenterRow {
 	build_delivery_method: i64,
 	prebakes_enabled: bool,
 	create_ts: i64,
+	guard_public_hostname_dns_parent: Option<String>,
+	guard_public_hostname_static: Option<String>,
 }
 
-impl TryFrom<DatacenterRow> for Datacenter {
-	type Error = GlobalError;
-
-	fn try_from(value: DatacenterRow) -> GlobalResult<Self> {
+impl DatacenterRow {
+	fn into_datacenter(self, config: &rivet_config::Config) -> GlobalResult<Datacenter> {
 		Ok(Datacenter {
-			datacenter_id: value.datacenter_id,
-			cluster_id: value.cluster_id,
-			name_id: value.name_id,
-			display_name: value.display_name,
-			create_ts: value.create_ts,
-			provider: unwrap!(Provider::from_repr(value.provider.try_into()?)),
-			provider_datacenter_id: value.provider_datacenter_id,
-			provider_api_token: value.provider_api_token,
-			pools: value.pools2.0,
+			datacenter_id: self.datacenter_id,
+			cluster_id: self.cluster_id,
+			name_id: self.name_id,
+			display_name: self.display_name,
+			create_ts: self.create_ts,
+			provider: unwrap!(Provider::from_repr(self.provider.try_into()?)),
+			provider_datacenter_id: self.provider_datacenter_id,
+			provider_api_token: self.provider_api_token,
+			pools: self.pools2.0,
 			build_delivery_method: unwrap!(BuildDeliveryMethod::from_repr(
-				value.build_delivery_method.try_into()?
+				self.build_delivery_method.try_into()?
 			)),
-			prebakes_enabled: value.prebakes_enabled,
+			prebakes_enabled: self.prebakes_enabled,
+			guard_public_hostname: crate::types::GuardPublicHostname::from_columns(
+				config,
+				self.datacenter_id,
+				self.guard_public_hostname_dns_parent,
+				self.guard_public_hostname_static,
+			)?,
 		})
 	}
 }
@@ -90,7 +96,9 @@ async fn get_dcs(ctx: OperationCtx, datacenter_ids: Vec<Uuid>) -> GlobalResult<V
 			pools2,
 			build_delivery_method,
 			prebakes_enabled,
-			create_ts
+			create_ts,
+			guard_public_hostname_dns_parent,
+			guard_public_hostname_static
 		FROM db_cluster.datacenters
 		WHERE datacenter_id = ANY($1)
 		",
@@ -100,6 +108,6 @@ async fn get_dcs(ctx: OperationCtx, datacenter_ids: Vec<Uuid>) -> GlobalResult<V
 
 	dc_rows
 		.into_iter()
-		.map(TryInto::try_into)
+		.map(|row| row.into_datacenter(ctx.config()))
 		.collect::<GlobalResult<Vec<_>>>()
 }

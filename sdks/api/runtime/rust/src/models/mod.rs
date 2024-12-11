@@ -16,6 +16,8 @@ pub mod actor_create_actor_response;
 pub use self::actor_create_actor_response::ActorCreateActorResponse;
 pub mod actor_create_actor_runtime_request;
 pub use self::actor_create_actor_runtime_request::ActorCreateActorRuntimeRequest;
+pub mod actor_endpoint_type;
+pub use self::actor_endpoint_type::ActorEndpointType;
 pub mod actor_get_actor_logs_response;
 pub use self::actor_get_actor_logs_response::ActorGetActorLogsResponse;
 pub mod actor_get_actor_response;

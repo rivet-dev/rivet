@@ -15,10 +15,12 @@ services:
       # API
       - "8080:8080"
       # API internal
-      - "8081:8080"
+      - "8081:8081"
       # Pegboard
       - "8082:8082"
     depends_on:
+      rivet-guard:
+        condition: service_started
       cockroachdb:
         condition: service_healthy
       redis:
@@ -55,6 +57,46 @@ services:
     networks:
       - rivet-network
 
+  rivet-guard:
+    restart: unless-stopped
+    image: traefik:v3.2.1
+    command: --configFile=/etc/rivet-guard/traefik.yaml
+    volumes:
+      - ./rivet-guard:/etc/rivet-guard:ro
+    ports:
+      # HTTP
+      - "7080:7080"
+      # HTTPS
+      - "7443:7443"
+      # Dashboard
+      - "9980:9980"
+      # Enable TCP & UDP port ranges.
+      #
+      # Corresponds to `server.rivet.guard.min_ingress_port_tcp` and
+      # `actor.network.wan_port_range_max` in `rivet-server/config.yaml`.
+      #
+      # We only reserve 100 ports instead of the default 22,000 since each
+      # individual port converts to an iptable rule when using Docker, which
+      # can cause unexpected side effects. This limits the number of actors
+      # using host networking to 100.
+      - "7500-7599:7500-7599"
+    networks:
+      - rivet-network
+
+  cockroachdb:
+    restart: unless-stopped
+    image: cockroachdb/cockroach:v24.2.3
+    command: start-single-node --insecure
+    volumes:
+      - cockroach-data:/cockroach/cockroach-data
+    networks:
+      - rivet-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/health?ready=1"]
+      interval: 2s
+      timeout: 10s
+      retries: 10
+
   rivet-client:
     build:
       context: ../..
@@ -78,27 +120,11 @@ services:
       # Corresponds to `actor.network.wan_port_range_min` and
       # `actor.network.wan_port_range_max` in `rivet-client/config.yaml`.
       #
-      # We only reserve 100 ports instead of the default 22,000 since each
-      # individual port converts to an iptable rule when using Docker, which
-      # can cause unexpected side effects. This limits the number of actors
-      # using host networking to 100.
-      - "20000-20100:20000-20100"
+      # We only reserve 100 ports instead of the default 22,000. See
+      # rivet-guard for explanation.
+      - "7600-7699:7600-7699"
     networks:
       - rivet-network
-
-  cockroachdb:
-    restart: unless-stopped
-    image: cockroachdb/cockroach:v24.2.3
-    command: start-single-node --insecure
-    volumes:
-      - cockroach-data:/cockroach/cockroach-data
-    networks:
-      - rivet-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/health?ready=1"]
-      interval: 2s
-      timeout: 10s
-      retries: 10
 
   redis:
     restart: unless-stopped

@@ -1,5 +1,3 @@
-use std::net::Ipv4Addr;
-
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use strum::FromRepr;
@@ -293,8 +291,8 @@ pub struct ProxiedPort {
 	pub source: u16,
 	/// Port in the container.
 	pub target: u16,
-	/// Vlan IP of the node running the container.
-	pub ip: Ipv4Addr,
+	/// LAN hostname of the node running the container.
+	pub lan_hostname: String,
 	pub protocol: TransportProtocol,
 }
 

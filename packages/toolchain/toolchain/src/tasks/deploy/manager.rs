@@ -58,6 +58,7 @@ pub async fn deploy(
 		&ctx.openapi_config_cloud,
 		Some(&ctx.project.name_id),
 		Some(&opts.env.slug),
+		None,
 		Some(&serde_json::to_string(&serde_json::json!({
 			"name": "manager",
 		}))?),
@@ -129,20 +130,17 @@ pub async fn deploy(
 			})),
 			network: Some(Box::new(models::ActorCreateActorNetworkRequest {
 				mode: Some(models::ActorNetworkMode::Host),
-				ports: Some(HashMap::from([
-					// TODO(RVT-4263):
-					(
-						crate::util::actor_manager::HTTP_PORT.to_string(),
-						models::ActorCreateActorPortRequest {
-							protocol: models::ActorPortProtocol::Tcp,
-							internal_port: None,
-							routing: Some(Box::new(models::ActorPortRouting {
-								host: Some(serde_json::json!({})),
-								guard: None,
-							})),
-						},
-					),
-				])),
+				ports: Some(HashMap::from([(
+					crate::util::actor_manager::HTTP_PORT.to_string(),
+					models::ActorCreateActorPortRequest {
+						protocol: models::ActorPortProtocol::Http,
+						internal_port: None,
+						routing: Some(Box::new(models::ActorPortRouting {
+							host: None,
+							guard: Some(serde_json::json!({})),
+						})),
+					},
+				)])),
 			})),
 			resources: None,
 			lifecycle: Some(Box::new(models::ActorLifecycle {
@@ -155,6 +153,7 @@ pub async fn deploy(
 			request,
 			Some(&ctx.project.name_id),
 			Some(&opts.env.slug),
+			None,
 		)
 		.await?;
 

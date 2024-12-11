@@ -83,16 +83,27 @@ const services: Service[] = [
 	},
 
 	{
+		name: "rivet-guard",
+		command: "traefik --configFile=/etc/rivet-guard/traefik.yaml",
+		ports: {
+			http: 7080,
+			metrics: 7443,
+			dashboard: 9980,
+		},
+	},
+
+	{
 		name: "rivet-client",
 		command: "rivet-client -c /etc/rivet-client/config.yaml",
 		dependencies: [
 			"rivet-server",
+			"foundationdb",
 		],
 		dataDir: true,
 		rootUser: true,
 		ports: {
-			runner: 7080,
-			metrics: 7090,
+			runner: 6080,
+			metrics: 6090,
 		},
 	},
 
@@ -167,6 +178,18 @@ const services: Service[] = [
 
 			// 9000 is the standard port for S3 in development (based on Minio)
 			s3: 9000,
+		},
+	},
+
+	{
+		name: "foundationdb",
+		command: "/usr/local/bin/foundationdb-entrypoint.sh",
+		dataDir: true,
+		// TODO:
+		rootUser: true,
+		healthCheckCommand: "fdbcli -C /data/foundationdb/fdb.cluster --exec status",
+		ports: {
+			fdb: 4500,
 		},
 	},
 
@@ -415,7 +438,7 @@ async function createServiceFiles(service: Service) {
 			start_time=\$(date +%s%3N)
             while ! (echo 'Running health check'; ${scriptsPath}/${service.name}-healthcheck.sh); do
 				echo 'Health check failed'
-                sleep 0.25
+                sleep 0.5
             done
 
 			end_time=\$(date +%s%3N)

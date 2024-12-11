@@ -346,7 +346,6 @@ fn http_router_middlewares(
 			strip_prefix_id.clone(),
 			types::TraefikMiddlewareHttp::StripPrefix {
 				prefixes: paths.map(|url| url.path().to_string()).collect(),
-				force_slash: None,
 			},
 		);
 

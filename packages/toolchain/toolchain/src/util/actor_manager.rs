@@ -24,7 +24,8 @@ pub fn extract_endpoint(actor: &models::ActorActor) -> Result<String> {
 	};
 	let hostname = http_port.hostname.as_ref().context("missing hostname")?;
 	let port = http_port.port.as_ref().context("missing port")?;
-	let endpoint = format!("{protocol}://{hostname}:{port}");
+	let path = http_port.path.clone().unwrap_or_default();
+	let endpoint = format!("{protocol}://{hostname}:{port}{path}");
 
 	Ok(endpoint)
 }

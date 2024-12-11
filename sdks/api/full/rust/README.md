@@ -174,6 +174,7 @@ Class | Method | HTTP request | Description
  - [ActorCreateActorRequest](docs/ActorCreateActorRequest.md)
  - [ActorCreateActorResponse](docs/ActorCreateActorResponse.md)
  - [ActorCreateActorRuntimeRequest](docs/ActorCreateActorRuntimeRequest.md)
+ - [ActorEndpointType](docs/ActorEndpointType.md)
  - [ActorGetActorLogsResponse](docs/ActorGetActorLogsResponse.md)
  - [ActorGetActorResponse](docs/ActorGetActorResponse.md)
  - [ActorGetBuildResponse](docs/ActorGetBuildResponse.md)

@@ -89,7 +89,10 @@ export default class Manager {
 					assertUnreachable(httpPort.protocol);
 			}
 
-			const endpoint = `${isTls ? "https" : "http"}://${hostname}:${port}`;
+			console.log('port', httpPort);
+			const path = httpPort.publicPath ?? "";
+
+			const endpoint = `${isTls ? "https" : "http"}://${hostname}:${port}${path}`;
 
 			return c.json({ endpoint } satisfies ActorsResponse);
 		});

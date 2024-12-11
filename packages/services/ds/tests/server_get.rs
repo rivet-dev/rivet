@@ -97,6 +97,7 @@ async fn server_get(ctx: TestCtx) {
 
 	ctx.op(ds::ops::server::get::Input {
 		server_ids: vec![server_id],
+		endpoint_type: ds::types::EndpointType::Hostname,
 	})
 	.await
 	.unwrap()

@@ -169,10 +169,7 @@ pub enum TraefikMiddlewareHttp {
 	#[serde(rename = "replacePathRegex", rename_all = "camelCase")]
 	ReplacePathRegex { regex: String, replacement: String },
 	#[serde(rename = "stripPrefix", rename_all = "camelCase")]
-	StripPrefix {
-		prefixes: Vec<String>,
-		force_slash: Option<bool>,
-	},
+	StripPrefix { prefixes: Vec<String> },
 	#[serde(rename = "addPrefix", rename_all = "camelCase")]
 	AddPrefix { prefix: String },
 	#[serde(rename = "rateLimit", rename_all = "camelCase")]

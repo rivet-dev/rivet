@@ -105,6 +105,7 @@ async fn server_create(ctx: TestCtx) {
 		let server = ctx
 			.op(ds::ops::server::get::Input {
 				server_ids: vec![server_id],
+				endpoint_type: ds::types::EndpointType::Hostname,
 			})
 			.await
 			.unwrap()

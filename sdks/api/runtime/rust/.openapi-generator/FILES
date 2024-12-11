@@ -14,6 +14,7 @@ docs/ActorCreateActorPortRequest.md
 docs/ActorCreateActorRequest.md
 docs/ActorCreateActorResponse.md
 docs/ActorCreateActorRuntimeRequest.md
+docs/ActorEndpointType.md
 docs/ActorGetActorLogsResponse.md
 docs/ActorGetActorResponse.md
 docs/ActorGetBuildResponse.md
@@ -60,6 +61,7 @@ src/models/actor_create_actor_port_request.rs
 src/models/actor_create_actor_request.rs
 src/models/actor_create_actor_response.rs
 src/models/actor_create_actor_runtime_request.rs
+src/models/actor_endpoint_type.rs
 src/models/actor_get_actor_logs_response.rs
 src/models/actor_get_actor_response.rs
 src/models/actor_get_build_response.rs

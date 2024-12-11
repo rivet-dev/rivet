@@ -56,6 +56,7 @@ pub async fn cluster(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
 
 						build_delivery_method: sig.build_delivery_method,
 						prebakes_enabled: sig.prebakes_enabled,
+						guard_public_hostname: sig.guard_public_hostname,
 					})
 					.tag("datacenter_id", sig.datacenter_id)
 					.dispatch()
@@ -122,7 +123,9 @@ pub struct DatacenterCreate {
 
 	pub build_delivery_method: BuildDeliveryMethod,
 	pub prebakes_enabled: bool,
+	pub guard_public_hostname: Option<crate::types::GuardPublicHostname>,
 }
+
 join_signal!(Main {
 	GameLink,
 	DatacenterCreate,

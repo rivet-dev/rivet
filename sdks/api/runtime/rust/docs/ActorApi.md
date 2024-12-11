@@ -15,7 +15,7 @@ Method | HTTP request | Description
 
 ## actor_create
 
-> crate::models::ActorCreateActorResponse actor_create(actor_create_actor_request, project, environment)
+> crate::models::ActorCreateActorResponse actor_create(actor_create_actor_request, project, environment, endpoint_type)
 
 
 Create a new dynamic actor.
@@ -28,6 +28,7 @@ Name | Type | Description  | Required | Notes
 **actor_create_actor_request** | [**ActorCreateActorRequest**](ActorCreateActorRequest.md) |  | [required] |
 **project** | Option<**String**> |  |  |
 **environment** | Option<**String**> |  |  |
+**endpoint_type** | Option<[**ActorEndpointType**](.md)> |  |  |
 
 ### Return type
 
@@ -80,7 +81,7 @@ Name | Type | Description  | Required | Notes
 
 ## actor_get
 
-> crate::models::ActorGetActorResponse actor_get(actor, project, environment)
+> crate::models::ActorGetActorResponse actor_get(actor, project, environment, endpoint_type)
 
 
 Gets a dynamic actor.
@@ -93,6 +94,7 @@ Name | Type | Description  | Required | Notes
 **actor** | **uuid::Uuid** | The id of the actor to destroy | [required] |
 **project** | Option<**String**> |  |  |
 **environment** | Option<**String**> |  |  |
+**endpoint_type** | Option<[**ActorEndpointType**](.md)> |  |  |
 
 ### Return type
 
@@ -112,7 +114,7 @@ Name | Type | Description  | Required | Notes
 
 ## actor_list
 
-> crate::models::ActorListActorsResponse actor_list(project, environment, tags_json, include_destroyed, cursor)
+> crate::models::ActorListActorsResponse actor_list(project, environment, endpoint_type, tags_json, include_destroyed, cursor)
 
 
 Lists all actors associated with the token used. Can be filtered by tags in the query string.
@@ -124,6 +126,7 @@ Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **project** | Option<**String**> |  |  |
 **environment** | Option<**String**> |  |  |
+**endpoint_type** | Option<[**ActorEndpointType**](.md)> |  |  |
 **tags_json** | Option<**String**> |  |  |
 **include_destroyed** | Option<**bool**> |  |  |
 **cursor** | Option<**uuid::Uuid**> |  |  |

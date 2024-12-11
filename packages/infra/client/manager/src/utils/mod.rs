@@ -237,7 +237,7 @@ struct ApiResponse {
 
 #[derive(Deserialize)]
 struct ApiServer {
-	vlan_ip: Option<Ipv4Addr>,
+	lan_ip: Option<Ipv4Addr>,
 }
 
 pub async fn init_fdb_config(config: &Config) -> Result<()> {
@@ -249,8 +249,8 @@ pub async fn init_fdb_config(config: &Config) -> Result<()> {
 			.await?
 			.servers
 			.into_iter()
-			.filter_map(|server| server.vlan_ip)
-			.map(|vlan_ip| format!("{vlan_ip}:4500"))
+			.filter_map(|server| server.lan_ip)
+			.map(|lan_ip| format!("{lan_ip}:4500"))
 			.collect::<Vec<_>>(),
 		Addresses::Static(addresses) => addresses.clone(),
 	};
@@ -285,7 +285,7 @@ pub async fn fetch_pull_addresses(config: &Config) -> Result<Vec<String>> {
 			.await?
 			.servers
 			.into_iter()
-			.filter_map(|server| server.vlan_ip)
+			.filter_map(|server| server.lan_ip)
 			.map(|vlan_ip| format!("{vlan_ip}:8080"))
 			.collect::<Vec<_>>(),
 		Addresses::Static(addresses) => addresses.clone(),

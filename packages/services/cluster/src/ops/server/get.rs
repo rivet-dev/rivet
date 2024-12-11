@@ -37,8 +37,8 @@ impl TryFrom<ServerRow> for Server {
 			datacenter_id: value.datacenter_id,
 			pool_type: unwrap!(PoolType::from_repr(value.pool_type.try_into()?)),
 			provider_server_id: value.provider_server_id,
-			vlan_ip: value.vlan_ip,
-			public_ip: value.public_ip,
+			lan_ip: value.vlan_ip,
+			wan_ip: value.public_ip,
 			cloud_destroy_ts: value.cloud_destroy_ts,
 		})
 	}

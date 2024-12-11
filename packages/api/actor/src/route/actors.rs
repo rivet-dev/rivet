@@ -1,4 +1,5 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
+use ds::types::EndpointType;
 use futures_util::{StreamExt, TryStreamExt};
 use proto::backend;
 use rivet_api::models;
@@ -16,12 +17,19 @@ use crate::{
 
 use super::GlobalQuery;
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct GlobalEndpointTypeQuery {
+	#[serde(flatten)]
+	global: GlobalQuery,
+	endpoint_type: Option<models::ActorEndpointType>,
+}
+
 // MARK: GET /actors/{}
 pub async fn get(
 	ctx: Ctx<Auth>,
 	actor_id: Uuid,
 	watch_index: WatchIndexQuery,
-	query: GlobalQuery,
+	query: GlobalEndpointTypeQuery,
 ) -> GlobalResult<models::ActorGetActorResponse> {
 	get_inner(&ctx, actor_id, watch_index, query).await
 }
@@ -30,14 +38,15 @@ async fn get_inner(
 	ctx: &Ctx<Auth>,
 	actor_id: Uuid,
 	_watch_index: WatchIndexQuery,
-	query: GlobalQuery,
+	query: GlobalEndpointTypeQuery,
 ) -> GlobalResult<models::ActorGetActorResponse> {
-	let CheckOutput { env_id, .. } = ctx.auth().check(ctx.op_ctx(), &query, true).await?;
+	let CheckOutput { env_id, .. } = ctx.auth().check(ctx.op_ctx(), &query.global, true).await?;
 
 	// Get the server
 	let servers_res = ctx
 		.op(ds::ops::server::get::Input {
 			server_ids: vec![actor_id],
+			endpoint_type: query.endpoint_type.map(ApiInto::api_into),
 		})
 		.await?;
 	let server = unwrap_with!(servers_res.servers.first(), ACTOR_NOT_FOUND);
@@ -66,7 +75,16 @@ pub async fn get_deprecated(
 	watch_index: WatchIndexQuery,
 ) -> GlobalResult<models::ServersGetServerResponse> {
 	let global = build_global_query_compat(&ctx, game_id, env_id).await?;
-	let get_res = get_inner(&ctx, actor_id, watch_index, global).await?;
+	let get_res = get_inner(
+		&ctx,
+		actor_id,
+		watch_index,
+		GlobalEndpointTypeQuery {
+			global,
+			endpoint_type: None,
+		},
+	)
+	.await?;
 
 	let game_res = ctx
 		.op(cluster::ops::get_for_game::Input {
@@ -99,9 +117,10 @@ pub async fn get_deprecated(
 pub async fn create(
 	ctx: Ctx<Auth>,
 	body: models::ActorCreateActorRequest,
-	query: GlobalQuery,
+	query: GlobalEndpointTypeQuery,
 ) -> GlobalResult<models::ActorCreateActorResponse> {
-	let CheckOutput { game_id, env_id } = ctx.auth().check(ctx.op_ctx(), &query, true).await?;
+	let CheckOutput { game_id, env_id } =
+		ctx.auth().check(ctx.op_ctx(), &query.global, true).await?;
 
 	let (clusters_res, game_configs_res, build) = tokio::try_join!(
 		ctx.op(cluster::ops::get_for_game::Input {
@@ -264,6 +283,7 @@ pub async fn create(
 	let servers_res = ctx
 		.op(ds::ops::server::get::Input {
 			server_ids: vec![server_id],
+			endpoint_type: query.endpoint_type.map(ApiInto::api_into),
 		})
 		.await?;
 	let server = unwrap_with!(servers_res.servers.first(), ACTOR_NOT_FOUND);
@@ -363,7 +383,10 @@ pub async fn create_deprecated(
 			build_tags: None,
 			tags: body.tags,
 		},
-		global,
+		GlobalEndpointTypeQuery {
+			global,
+			endpoint_type: None,
+		},
 	)
 	.await?;
 
@@ -406,7 +429,7 @@ pub async fn destroy(
 		.await?;
 
 	// Get server after sub is created
-	let server = assert::server_for_env(&ctx, actor_id, game_id, env_id).await?;
+	let server = assert::server_for_env(&ctx, actor_id, game_id, env_id, None).await?;
 
 	// Already destroyed
 	if server.destroy_ts.is_some() {
@@ -453,7 +476,7 @@ pub async fn upgrade(
 ) -> GlobalResult<serde_json::Value> {
 	let CheckOutput { game_id, env_id } = ctx.auth().check(ctx.op_ctx(), &query, false).await?;
 
-	assert::server_for_env(&ctx, actor_id, game_id, env_id).await?;
+	assert::server_for_env(&ctx, actor_id, game_id, env_id, None).await?;
 
 	let build = resolve_build(&ctx, game_id, env_id, body.build, body.build_tags.flatten()).await?;
 
@@ -580,7 +603,7 @@ pub async fn upgrade_all(
 #[derive(Debug, Clone, Deserialize)]
 pub struct ListQuery {
 	#[serde(flatten)]
-	global: GlobalQuery,
+	global_endpoint_type: GlobalEndpointTypeQuery,
 	tags_json: Option<String>,
 	include_destroyed: Option<bool>,
 	cursor: Option<Uuid>,
@@ -599,7 +622,10 @@ async fn list_actors_inner(
 	_watch_index: WatchIndexQuery,
 	query: ListQuery,
 ) -> GlobalResult<models::ActorListActorsResponse> {
-	let CheckOutput { env_id, .. } = ctx.auth().check(ctx.op_ctx(), &query.global, true).await?;
+	let CheckOutput { env_id, .. } = ctx
+		.auth()
+		.check(ctx.op_ctx(), &query.global_endpoint_type.global, true)
+		.await?;
 
 	let include_destroyed = query.include_destroyed.unwrap_or(false);
 
@@ -629,6 +655,10 @@ async fn list_actors_inner(
 	let servers_res = ctx
 		.op(ds::ops::server::get::Input {
 			server_ids: list_res.server_ids.clone(),
+			endpoint_type: query
+				.global_endpoint_type
+				.endpoint_type
+				.map(ApiInto::api_into),
 		})
 		.await?;
 
@@ -666,7 +696,18 @@ pub async fn list_servers_deprecated(
 	query: ListQuery,
 ) -> GlobalResult<models::ServersListServersResponse> {
 	let global = build_global_query_compat(&ctx, game_id, env_id).await?;
-	let actors_res = list_actors_inner(&ctx, watch_index, ListQuery { global, ..query }).await?;
+	let actors_res = list_actors_inner(
+		&ctx,
+		watch_index,
+		ListQuery {
+			global_endpoint_type: GlobalEndpointTypeQuery {
+				global,
+				..query.global_endpoint_type
+			},
+			..query
+		},
+	)
+	.await?;
 
 	let clusters_res = ctx
 		.op(cluster::ops::get_for_game::Input {

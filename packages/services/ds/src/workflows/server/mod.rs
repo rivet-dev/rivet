@@ -76,6 +76,12 @@ pub async fn ds_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()>
 		return Ok(());
 	}
 
+	let network_ports = ctx
+		.activity(DisableTlsPortsInput {
+			network_ports: input.network_ports.as_hashable(),
+		})
+		.await?;
+
 	match input.runtime {
 		ServerRuntime::Nomad => {
 			ctx.workflow(nomad::Input {
@@ -91,7 +97,7 @@ pub async fn ds_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()>
 				args: input.args.clone(),
 				network_mode: input.network_mode,
 				environment: input.environment.clone(),
-				network_ports: input.network_ports.clone(),
+				network_ports: network_ports.into_iter().collect(),
 			})
 			.output()
 			.await
@@ -110,11 +116,62 @@ pub async fn ds_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()>
 				args: input.args.clone(),
 				network_mode: input.network_mode,
 				environment: input.environment.clone(),
-				network_ports: input.network_ports.clone(),
+				network_ports: network_ports.into_iter().collect(),
 			})
 			.output()
 			.await
 		}
+	}
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+struct DisableTlsPortsInput {
+	network_ports: util::serde::HashableMap<String, Port>,
+}
+
+/// If TLS is not enabled in the cluster, we downgrade all protocols to the non-TLS equivalents.
+/// This allows developers to develop locally with the same code they would use in production.
+#[activity(DisableTlsPorts)]
+async fn disable_tls_ports(
+	ctx: &ActivityCtx,
+	input: &DisableTlsPortsInput,
+) -> GlobalResult<util::serde::HashableMap<String, Port>> {
+	if ctx.config().server()?.rivet.guard.tls_enabled() {
+		// Do nothing
+		Ok(input.network_ports.clone())
+	} else {
+		// Downgrade all TLS protocols to non-TLS protocols
+		let network_ports = input
+			.network_ports
+			.clone()
+			.into_iter()
+			.map(|(k, p)| {
+				(
+					k,
+					Port {
+						internal_port: p.internal_port,
+						routing: match p.routing {
+							Routing::GameGuard {
+								protocol,
+								authorization,
+							} => Routing::GameGuard {
+								protocol: match protocol {
+									GameGuardProtocol::Https => GameGuardProtocol::Http,
+									GameGuardProtocol::TcpTls => GameGuardProtocol::Tcp,
+									x @ (GameGuardProtocol::Http
+									| GameGuardProtocol::Tcp
+									| GameGuardProtocol::Udp) => x,
+								},
+								authorization,
+							},
+							x @ Routing::Host { .. } => x,
+						},
+					},
+				)
+			})
+			.collect();
+
+		Ok(network_ports)
 	}
 }
 
@@ -732,8 +789,8 @@ async fn choose_ingress_port(ctx: &ActivityCtx, protocol: GameGuardProtocol) -> 
 	let gg_config = &ctx.config().server()?.rivet.guard;
 
 	match protocol {
-		GameGuardProtocol::Http => Ok(80),
-		GameGuardProtocol::Https => Ok(443),
+		GameGuardProtocol::Http => Ok(gg_config.http_port()),
+		GameGuardProtocol::Https => Ok(gg_config.https_port()),
 		GameGuardProtocol::Tcp | GameGuardProtocol::TcpTls => {
 			bind_with_retries(
 				ctx,

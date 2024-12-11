@@ -72,6 +72,38 @@ to better protect from DDoS attacks & improve monitoring of your application.
 
 If using host ports, read about differences in behavior with [actor rescheduling](/docs/rescheduling).
 
+## Endpoint Type
+
+### Host
+
+<Note>"Host endpoint type" has no association with "host networking" or "host routing" above.</Note>
+
+The host endpoint type uses the `Host` header to route the request to the correct actor. This is the default & recommended method to use for production Rivet clusters.
+
+For example, the URL `c03fc1cf-66dc-4946-9663-eae42a399060-http.actor.45a33878-e0e5-4f6b-8e72-7e9f6c0a306c.rivet.run` would route to the:
+
+- Actor with ID `c03fc1cf-66dc-4946-9663-eae42a399060`
+- Port labelled `http`
+- Region with ID `45a33878-e0e5-4f6b-8e72-7e9f6c0a306c`
+
+If self-hosting, host endpoints requires [wildcard DNS records](https://en.wikipedia.org/wiki/Wildcard_DNS_record#:~:text=A%20wildcard%20DNS%20record%20is,example.com%20.) & [wildcard SSL certificates](https://letsencrypt.org/docs/faq/#does-let-s-encrypt-issue-wildcard-certificates).
+
+### Path
+
+The path endpoint type uses the beginning of the request path to route to the correct actor. This should only be used if:
+
+- Self hosting or developing Rivet without a wildcard DNS record (e.g. Rivet Guard running on `127.0.0.1:7080`)
+- Rare cases where explicit hostnames need to be whitelisted (e.g. Discord Activities [URL mappings](https://discord.com/developers/docs/activities/development-guides#url-mapping))
+
+<Warning>
+  Directing your users to an HTML page with path endpoint type may be a security
+  risk. The origin for path endpoint types (`route.actor.{region}.rivet.run`) is
+  shared with other actors. This means that all cookies, local/session storage,
+  web workers, etc are shared with any other actor running in the same region.
+
+  Use the host endpoint type instead if serving HTML content.
+</Warning>
+
 ## Routing Diagram
 
 This diagram shows how requests are routed from the end-user to the application running on Rivet based on the

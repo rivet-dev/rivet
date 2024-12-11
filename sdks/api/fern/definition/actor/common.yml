@@ -65,6 +65,7 @@ types:
       internal_port: optional<integer>
       hostname: optional<string>
       port: optional<integer>
+      path: optional<string>
       routing: PortRouting
 
   PortProtocol:
@@ -98,6 +99,11 @@ types:
 
   HostRouting:
     properties: {}
+
+  EndpointType:
+    enum:
+      - hostname
+      - path
 
   Build:
     properties:

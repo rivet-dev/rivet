@@ -35,8 +35,8 @@ impl ApiFrom<cluster::types::Server> for models::ProvisionServer {
 			server_id: value.server_id,
 			datacenter_id: value.datacenter_id,
 			pool_type: value.pool_type.api_into(),
-			vlan_ip: value.vlan_ip.map(|ip| ip.to_string()),
-			public_ip: value.public_ip.map(|ip| ip.to_string()),
+			lan_ip: value.lan_ip.map(|ip| ip.to_string()),
+			wan_ip: value.wan_ip.map(|ip| ip.to_string()),
 		}
 	}
 }

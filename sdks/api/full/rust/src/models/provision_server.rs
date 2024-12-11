@@ -16,10 +16,10 @@ pub struct ProvisionServer {
 	pub datacenter_id: uuid::Uuid,
 	#[serde(rename = "pool_type")]
 	pub pool_type: crate::models::ProvisionPoolType,
-	#[serde(rename = "vlan_ip", skip_serializing_if = "Option::is_none")]
-	pub vlan_ip: Option<String>,
-	#[serde(rename = "public_ip", skip_serializing_if = "Option::is_none")]
-	pub public_ip: Option<String>,
+	#[serde(rename = "lan_ip", skip_serializing_if = "Option::is_none")]
+	pub lan_ip: Option<String>,
+	#[serde(rename = "wan_ip", skip_serializing_if = "Option::is_none")]
+	pub wan_ip: Option<String>,
 }
 
 impl ProvisionServer {
@@ -32,8 +32,8 @@ impl ProvisionServer {
 			server_id,
 			datacenter_id,
 			pool_type,
-			vlan_ip: None,
-			public_ip: None,
+			lan_ip: None,
+			wan_ip: None,
 		}
 	}
 }

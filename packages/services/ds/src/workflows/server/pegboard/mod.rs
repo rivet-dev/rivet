@@ -682,7 +682,7 @@ async fn update_ports(ctx: &ActivityCtx, input: &UpdatePortsInput) -> GlobalResu
 	for (label, port) in &input.ports {
 		flat_port_labels.push(label.as_str());
 		flat_port_sources.push(port.source as i64);
-		flat_port_ips.push(port.ip.to_string());
+		flat_port_ips.push(port.lan_hostname.clone());
 	}
 
 	sql_execute!(

@@ -161,6 +161,7 @@ async fn poll_actor_state(
 			&opts.actor_id.to_string(),
 			Some(&ctx.project.name_id),
 			Some(opts.environment),
+			None,
 		)
 		.await
 		.map_err(|err| anyhow!("Failed to poll actor: {err}"))?;
