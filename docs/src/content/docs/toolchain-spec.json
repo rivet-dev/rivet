@@ -7,8 +7,8 @@
   ],
   "properties": {
     "builds": {
-      "type": "array",
-      "items": {
+      "type": "object",
+      "additionalProperties": {
         "$ref": "#/definitions/Build"
       }
     },
@@ -20,103 +20,21 @@
   "definitions": {
     "Build": {
       "type": "object",
-      "oneOf": [
+      "anyOf": [
         {
-          "type": "object",
-          "required": [
-            "runtime"
-          ],
-          "properties": {
-            "build_args": {
-              "description": "Build arguments to pass to the build.",
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              }
-            },
-            "build_path": {
-              "description": "Directory to build the Docker image from.",
-              "type": "string"
-            },
-            "build_target": {
-              "description": "Build target to upload.",
-              "type": "string"
-            },
-            "dockerfile": {
-              "description": "Dockerfile to build.",
-              "type": "string"
-            },
-            "image": {
-              "description": "Existing image tag to upload.",
-              "type": "string"
-            },
-            "runtime": {
-              "type": "string",
-              "enum": [
-                "docker"
-              ]
-            },
-            "unstable": {
-              "description": "Unstable features.",
-              "allOf": [
-                {
-                  "$ref": "#/definitions/Unstable"
-                }
-              ]
-            }
-          }
+          "$ref": "#/definitions/Build2"
         },
         {
-          "type": "object",
-          "required": [
-            "runtime",
-            "script"
-          ],
-          "properties": {
-            "bundler": {
-              "$ref": "#/definitions/Bundler"
-            },
-            "deno": {
-              "default": {
-                "config_path": null,
-                "import_map_url": null,
-                "lock_path": null
-              },
-              "allOf": [
-                {
-                  "$ref": "#/definitions/Deno"
-                }
-              ]
-            },
-            "runtime": {
-              "type": "string",
-              "enum": [
-                "javascript"
-              ]
-            },
-            "script": {
-              "type": "string"
-            },
-            "unstable": {
-              "default": {
-                "analyze_result": null,
-                "compression": null,
-                "esbuild_log_level": null,
-                "minify": null
-              },
-              "allOf": [
-                {
-                  "$ref": "#/definitions/Unstable2"
-                }
-              ]
-            }
-          }
+          "$ref": "#/definitions/Build3"
         }
       ],
       "required": [
-        "tags"
+        "access"
       ],
       "properties": {
+        "access": {
+          "$ref": "#/definitions/BuildAccess"
+        },
         "tags": {
           "type": "object",
           "additionalProperties": {
@@ -124,6 +42,90 @@
           }
         }
       }
+    },
+    "Build2": {
+      "type": "object",
+      "properties": {
+        "build_args": {
+          "description": "Build arguments to pass to the build.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "build_path": {
+          "description": "Directory to build the Docker image from.",
+          "type": "string"
+        },
+        "build_target": {
+          "description": "Build target to upload.",
+          "type": "string"
+        },
+        "dockerfile": {
+          "description": "Dockerfile to build.",
+          "type": "string"
+        },
+        "image": {
+          "description": "Existing image tag to upload.",
+          "type": "string"
+        },
+        "unstable": {
+          "description": "Unstable features.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Unstable"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Build3": {
+      "type": "object",
+      "required": [
+        "script"
+      ],
+      "properties": {
+        "bundler": {
+          "$ref": "#/definitions/Bundler"
+        },
+        "deno": {
+          "default": {
+            "config_path": null,
+            "import_map_url": null,
+            "lock_path": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/Deno"
+            }
+          ]
+        },
+        "script": {
+          "type": "string"
+        },
+        "unstable": {
+          "default": {
+            "analyze_result": null,
+            "compression": null,
+            "dump_build": null,
+            "esbuild_log_level": null,
+            "minify": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/Unstable2"
+            }
+          ]
+        }
+      }
+    },
+    "BuildAccess": {
+      "type": "string",
+      "enum": [
+        "public",
+        "private"
+      ]
     },
     "BuildMethod": {
       "oneOf": [
@@ -204,7 +206,22 @@
     "ManagerUnstable": {
       "type": "object",
       "properties": {
+        "analyze_result": {
+          "type": "boolean"
+        },
+        "compression": {
+          "$ref": "#/definitions/Compression"
+        },
+        "dump_build": {
+          "type": "boolean"
+        },
         "enable": {
+          "type": "boolean"
+        },
+        "esbuild_log_level": {
+          "type": "string"
+        },
+        "minify": {
           "type": "boolean"
         }
       },
@@ -237,6 +254,9 @@
         "compression": {
           "$ref": "#/definitions/Compression"
         },
+        "dump_build": {
+          "type": "boolean"
+        },
         "esbuild_log_level": {
           "type": "string"
         },
@@ -251,7 +271,12 @@
       "properties": {
         "manager": {
           "default": {
-            "enable": null
+            "analyze_result": null,
+            "compression": null,
+            "dump_build": null,
+            "enable": null,
+            "esbuild_log_level": null,
+            "minify": null
           },
           "allOf": [
             {

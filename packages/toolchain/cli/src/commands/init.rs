@@ -144,7 +144,7 @@ impl Opts {
 		// Login to Rivet
 		if prompt.login {
 			println!();
-			println!("Loggin in to Rivet...");
+			println!("Login in to Rivet...");
 			crate::util::login::login(prompt.api_endpoint.clone()).await?;
 		}
 
@@ -159,7 +159,7 @@ impl Opts {
 		println!();
 		println!("Resources:");
 		println!();
-		println!("  Quickstart:      https://rivet.gg/docs/quickstart");
+		println!("  Introduction:    https://rivet.gg/docs/introduction");
 		println!("  Examples:        https://rivet.gg/docs/examples");
 		println!("  Discord:         https://rivet.gg/discord");
 		println!("  Enterprise:      https://rivet.gg/sales");

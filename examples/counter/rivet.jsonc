@@ -1,30 +1,8 @@
 {
-	"builds": [
-		{
-			"tags": { "name": "counter" },
-			"access": "public",
-			"runtime": "javascript",
-			"script": "counter.ts",
-			"accesss": "public",
-			"unstable": {
-				"minify": false
-			},
-			"unstable": {
-				"minify": false,
-				"dump_build": true
-			}
-		}
-	],
-	"unstable": {
-		"manager": {
-			"minify": false,
-			"dump_build": true
-		}
-	}
-	/*"builds": {
+	"builds": {
 		"counter": {
 			"script": "counter.ts",
 			"access": "public"
 		}
-	}*/
+	}
 }

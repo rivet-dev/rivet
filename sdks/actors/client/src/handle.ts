@@ -44,7 +44,7 @@ export class ActorHandleRaw {
 	): Promise<Response> {
 		assertExists(this.#websocket);
 
-		console.log("rpc", name, args);
+		console.trace("rpc", name, args);
 
 		// TODO: Add to queue if socket is not open
 
@@ -115,7 +115,7 @@ export class ActorHandleRaw {
 		const ws = new WebSocket(url);
 		this.#websocket = ws;
 		ws.onopen = () => {
-			console.log("Socket open");
+			console.trace("Socket open");
 
 			// Resubscribe to all active events
 			for (const eventName of this.#eventSubscriptions.keys()) {
@@ -135,7 +135,7 @@ export class ActorHandleRaw {
 			// TODO: Handle queue
 			// TODO: Reconnect with backoff
 
-			console.log("Socket closed", ev.code, ev.reason);
+			console.trace("Socket closed", ev.code, ev.reason);
 			this.#websocket = undefined;
 
 			// Automatically reconnect
@@ -263,7 +263,7 @@ export class ActorHandleRaw {
 		if (this.#websocket?.readyState === WebSocket.OPEN) {
 			try {
 				this.#websocket.send(message);
-				console.log("sent", message);
+				console.trace("sent", message);
 			} catch (err) {
 				console.warn("failed to send message, added to queue", err);
 
@@ -275,7 +275,7 @@ export class ActorHandleRaw {
 		} else {
 			if (!opts?.ephemeral) {
 				this.#websocketQueue.push(message);
-				console.log("queued", message);
+				console.trace("queued", message);
 			}
 		}
 	}
@@ -285,7 +285,7 @@ export class ActorHandleRaw {
 		if (!this.#websocket) return;
 		this.#disconnected = true;
 
-		console.log("Disconnecting");
+		console.trace("Disconnecting");
 
 		// TODO: What do we do with the queue?
 
@@ -294,7 +294,7 @@ export class ActorHandleRaw {
 	}
 
 	dispose() {
-		console.log("Disposing");
+		console.trace("Disposing");
 
 		// TODO: this will error if not usable
 		this.disconnect();

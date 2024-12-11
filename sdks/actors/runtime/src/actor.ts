@@ -133,10 +133,10 @@ export abstract class Actor<
 		this.#initializedPromise = undefined;
 
 		// TODO: Exit process if this errors
-		console.log("calling start");
+		console.log("Starting");
 		await this._onStart?.();
 
-		console.log("ready");
+		console.log("Ready");
 		this.#ready = true;
 	}
 
@@ -227,7 +227,7 @@ export abstract class Actor<
 
 		if (!initialized) {
 			// Initialize
-			console.log("initializing");
+			console.log("Initializing");
 			const stateOrPromise = await this._onInitialize();
 
 			let stateData: State;
@@ -238,7 +238,7 @@ export abstract class Actor<
 			}
 
 			// Update state
-			console.log("writing initial state");
+			console.log("Writing state");
 			await this.#ctx.kv.putBatch(
 				new Map<unknown, unknown>([
 					[KEYS.STATE.INITIALIZED, true],
@@ -248,7 +248,7 @@ export abstract class Actor<
 			this.#setStateWithoutChange(stateData);
 		} else {
 			// Save state
-			console.log("found existing state");
+			console.log("Already initialized");
 			this.#setStateWithoutChange(stateData);
 		}
 	}
@@ -270,7 +270,7 @@ export abstract class Actor<
 		});
 
 		const port = this.#getServerPort();
-		console.log(`server running on ${port}`);
+		console.log(`Server running on ${port}`);
 		this.#server = Deno.serve({ port, hostname: "0.0.0.0" }, app.fetch);
 	}
 
@@ -578,7 +578,7 @@ export abstract class Actor<
 		// TODO: Should we force save the state?
 		// Add logging to promise and make it non-failable
 		const nonfailablePromise = promise
-			.then(() => console.log("background promise complete"))
+			.then(() => console.trace("background promise complete"))
 			.catch((err) => {
 				console.error("background promise failed", err);
 				// ctx.log.error(
@@ -601,7 +601,7 @@ export abstract class Actor<
 		// Use a lock in order to avoid race conditions with writing to KV
 		await this.#saveStateLock.lock(async () => {
 			if (this.#stateChanged) {
-				console.log("saving state");
+				console.trace("saving state");
 
 				// There might be more changes while we're writing, so we set
 				// this before writing to KV in order to avoid a race
@@ -611,7 +611,7 @@ export abstract class Actor<
 				// Write to KV
 				await this.#ctx.kv.put(KEYS.STATE.DATA, this.#stateRaw);
 			} else {
-				console.log("skipping save, state not modified");
+				console.trace("skipping save, state not modified");
 			}
 		});
 	}
