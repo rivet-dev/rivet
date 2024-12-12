@@ -178,6 +178,13 @@ export class ActorHandleRaw {
 					md: metadata,
 				} = response.body.re;
 
+				logger().info("received error from actor", {
+					rpc: rpcId,
+					code,
+					message,
+					metadata,
+				});
+
 				const inFlight = this.#takeRpcInFlight(rpcId);
 				inFlight.reject(new errors.RpcError(code, message, metadata));
 			} else if ("ev" in response.body) {
@@ -185,7 +192,7 @@ export class ActorHandleRaw {
 			} else if ("er" in response.body) {
 				const { c: code, m: message, md: metadata } = response.body.er;
 
-				logger().warn("unhandled error from actor", {
+				logger().info("received error from actor", {
 					code,
 					message,
 					metadata,

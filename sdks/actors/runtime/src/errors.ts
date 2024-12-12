@@ -86,6 +86,14 @@ export class InvalidProtocolFormat extends ActorError {
 	}
 }
 
+export class ConnectionParametersTooLong extends ActorError {
+	constructor() {
+		super("connection_parameters_too_long", "Connection parameters too long.", {
+			public: true,
+		});
+	}
+}
+
 export class MalformedConnectionParameters extends ActorError {
 	constructor(cause: unknown) {
 		super(
@@ -93,6 +101,12 @@ export class MalformedConnectionParameters extends ActorError {
 			`Malformed connection parameters: ${cause}`,
 			{ public: true, cause },
 		);
+	}
+}
+
+export class MessageTooLong extends ActorError {
+	constructor() {
+		super("message_too_long", "Message too long.", { public: true });
 	}
 }
 

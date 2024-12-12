@@ -1,6 +1,6 @@
 import { Lock } from "@core/asyncutil/lock";
 import type { ActorContext } from "@rivet-gg/actors-core";
-import { assertExists } from "@std/assert";
+import { assertExists, assertInstanceOf } from "@std/assert";
 import { deadline } from "@std/async/deadline";
 import { throttle } from "@std/async/unstable-throttle";
 import type { Logger } from "@std/log/get-logger";
@@ -17,7 +17,11 @@ import {
 import type * as wsToClient from "../../protocol/src/ws/to_client.ts";
 import * as wsToServer from "../../protocol/src/ws/to_server.ts";
 import { type ActorConfig, mergeActorConfig } from "./config.ts";
-import { Connection, type SendWebSocketMessage } from "./connection.ts";
+import {
+	Connection,
+	type IncomingWebSocketMessage,
+	type OutgoingWebSocketMessage,
+} from "./connection.ts";
 import * as errors from "./errors.ts";
 import { instanceLogger, logger } from "./log.ts";
 import { Rpc } from "./rpc.ts";
@@ -405,6 +409,13 @@ export abstract class Actor<
 
 		// Validate params size (limiting to 4KB which is reasonable for query params)
 		const paramsStr = c.req.query("params");
+		if (
+			paramsStr &&
+			paramsStr.length > this.#config.protocol.maxConnectionParametersSize
+		) {
+			logger().warn("connection parameters too long");
+			throw new errors.ConnectionParametersTooLong();
+		}
 
 		// Parse and validate params
 		let params: ConnParams;
@@ -472,7 +483,27 @@ export abstract class Actor<
 
 				let rpcRequestId: number | undefined;
 				try {
-					const value = evt.data.valueOf() as string | Uint8Array;
+					const value = evt.data.valueOf() as IncomingWebSocketMessage;
+
+					// Validate value length
+					let length: number;
+					if (typeof value === "string") {
+						length = value.length;
+					} else if (value instanceof Blob) {
+						length = value.size;
+					} else if (
+						value instanceof ArrayBuffer ||
+						value instanceof SharedArrayBuffer
+					) {
+						length = value.byteLength;
+					} else {
+						assertUnreachable(value);
+					}
+					if (length > this.#config.protocol.maxIncomingMessageSize) {
+						throw new errors.MessageTooLong();
+					}
+
+					// Parse & validate message
 					const {
 						data: message,
 						success,
@@ -515,16 +546,26 @@ export abstract class Actor<
 					} else {
 						assertUnreachable(message.body);
 					}
-				} catch (err) {
+				} catch (error) {
 					// Build response error information. Only return errors if flagged as public in order to prevent leaking internal behavior.
 					let code: string;
 					let message: string;
 					let metadata: unknown = undefined;
-					if (err instanceof errors.ActorError && err.public) {
-						code = err.code;
-						message = String(err);
-						metadata = err.metadata;
+					if (error instanceof errors.ActorError && error.public) {
+						logger().info("connection public error", {
+							rpc: rpcRequestId,
+							error,
+						});
+
+						code = error.code;
+						message = String(error);
+						metadata = error.metadata;
 					} else {
+						logger().warn("connection internal error", {
+							rpc: rpcRequestId,
+							error,
+						});
+
 						code = errors.INTERNAL_ERROR_CODE;
 						message = errors.INTERNAL_ERROR_DESCRIPTION;
 					}
@@ -616,14 +657,8 @@ export abstract class Actor<
 			}
 		} catch (error) {
 			if (error instanceof DOMException && error.name === "TimeoutError") {
-				logger().error("rpc timed out", { rpcName });
 				throw new errors.RpcTimedOut();
 			} else {
-				if (error instanceof errors.UserError) {
-					logger().info("rpc raised user error", { rpcName, error });
-				} else {
-					logger().error("rpc raised error", { rpcName, error });
-				}
 				throw error;
 			}
 		} finally {
@@ -689,7 +724,7 @@ export abstract class Actor<
 		};
 
 		// Send message to clients
-		const serialized: Record<string, SendWebSocketMessage> = {};
+		const serialized: Record<string, OutgoingWebSocketMessage> = {};
 		for (const connection of subscriptions) {
 			// Lazily serialize the appropriate format
 			if (!(connection._protocolFormat in serialized)) {

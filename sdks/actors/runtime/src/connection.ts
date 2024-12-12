@@ -13,8 +13,8 @@ type GetConnStateType<A> = A extends Actor<any, any, infer ConnState>
 	? ConnState
 	: never;
 
-export type ReceiveWebSocketMessage = string | Blob | ArrayBufferLike;
-export type SendWebSocketMessage = string | ArrayBuffer | Uint8Array;
+export type IncomingWebSocketMessage = string | Blob | ArrayBufferLike;
+export type OutgoingWebSocketMessage = string | ArrayBuffer | Uint8Array;
 
 export class Connection<A extends AnyActor> {
 	subscriptions = new Set<string>();
@@ -50,7 +50,7 @@ export class Connection<A extends AnyActor> {
 		}
 	}
 
-	public async _parse(data: ReceiveWebSocketMessage): Promise<unknown> {
+	public async _parse(data: IncomingWebSocketMessage): Promise<unknown> {
 		if (this._protocolFormat === "json") {
 			if (typeof data !== "string") {
 				logger().warn("received non-string for json parse");
@@ -71,7 +71,7 @@ export class Connection<A extends AnyActor> {
 		}
 	}
 
-	public _serialize(value: unknown): SendWebSocketMessage {
+	public _serialize(value: unknown): OutgoingWebSocketMessage {
 		if (this._protocolFormat === "json") {
 			return JSON.stringify(value);
 		} else if (this._protocolFormat === "cbor") {
@@ -81,7 +81,7 @@ export class Connection<A extends AnyActor> {
 		}
 	}
 
-	public _sendWebSocketMessage(message: SendWebSocketMessage) {
+	public _sendWebSocketMessage(message: OutgoingWebSocketMessage) {
 		// TODO: Queue message
 		if (!this._websocket) return;
 

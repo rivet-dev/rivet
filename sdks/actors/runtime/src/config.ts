@@ -1,4 +1,8 @@
 export interface ActorConfig {
+	protocol: {
+		maxConnectionParametersSize: number;
+		maxIncomingMessageSize: number;
+	};
 	state: StateConfig;
 	rpc: RpcConfig;
 }
@@ -12,6 +16,11 @@ export interface RpcConfig {
 }
 
 export const DEFAULT_ACTOR_CONFIG: ActorConfig = {
+	protocol: {
+		// This goes in the URL so the default needs to be short
+		maxConnectionParametersSize: 8_192,
+		maxIncomingMessageSize: 65_536,
+	},
 	state: {
 		saveInterval: 1000,
 	},
@@ -24,6 +33,14 @@ export function mergeActorConfig(
 	partialConfig?: Partial<ActorConfig>,
 ): ActorConfig {
 	return {
+		protocol: {
+			maxConnectionParametersSize:
+				partialConfig?.protocol?.maxConnectionParametersSize ??
+				DEFAULT_ACTOR_CONFIG.protocol.maxConnectionParametersSize,
+			maxIncomingMessageSize:
+				partialConfig?.protocol?.maxIncomingMessageSize ??
+				DEFAULT_ACTOR_CONFIG.protocol.maxIncomingMessageSize,
+		},
 		state: {
 			saveInterval:
 				partialConfig?.state?.saveInterval ??
