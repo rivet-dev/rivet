@@ -124,9 +124,10 @@ export function castToLogValue(v: unknown): LogValue {
 	) {
 		return v;
 	}
-	//if (v instanceof Error) {
-	//	args.push(...errorToLogEntries(k, v));
-	//}
+	if (v instanceof Error) {
+		//args.push(...errorToLogEntries(k, v));
+		return String(v);
+	}
 	try {
 		return JSON.stringify(v);
 	} catch {

@@ -1,4 +1,5 @@
 import { setupLogging } from "../../common/src/log.ts";
+import type { ClientOptions } from "./client.ts";
 import { InternalError } from "./errors.ts";
 import { Client } from "./mod.ts";
 
@@ -26,10 +27,10 @@ export async function readEndpointFromCli(): Promise<string> {
 }
 
 export class TestClient extends Client {
-	public constructor() {
+	public constructor(opts?: ClientOptions) {
 		// Setup logging automatically
 		setupLogging();
 
-		super(readEndpointFromCli());
+		super(readEndpointFromCli(), opts);
 	}
 }

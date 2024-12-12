@@ -1,13 +1,20 @@
 import { assertExists } from "@std/assert/exists";
+import * as cbor from "@std/cbor";
 import type { WSContext } from "hono/ws";
+import type { ProtocolFormat } from "../../protocol/src/ws/mod.ts";
 import type * as wsToClient from "../../protocol/src/ws/to_client.ts";
 import type { Actor, AnyActor } from "./actor.ts";
 import * as errors from "./errors.ts";
+import { logger } from "./log.ts";
+import { assertUnreachable } from "./utils.ts";
 
 // biome-ignore lint/suspicious/noExplicitAny: Must be used for `extends`
 type GetConnStateType<A> = A extends Actor<any, any, infer ConnState>
 	? ConnState
 	: never;
+
+export type ReceiveWebSocketMessage = string | Blob | ArrayBufferLike;
+export type SendWebSocketMessage = string | ArrayBuffer | Uint8Array;
 
 export class Connection<A extends AnyActor> {
 	subscriptions = new Set<string>();
@@ -29,6 +36,7 @@ export class Connection<A extends AnyActor> {
 	constructor(
 		public readonly id: number,
 		public _websocket: WSContext<WebSocket>,
+		public _protocolFormat: ProtocolFormat,
 		state: GetConnStateType<A> | undefined,
 		stateEnabled: boolean,
 	) {
@@ -42,7 +50,38 @@ export class Connection<A extends AnyActor> {
 		}
 	}
 
-	_sendWebSocketMessage(message: string) {
+	public async _parse(data: ReceiveWebSocketMessage): Promise<unknown> {
+		if (this._protocolFormat === "json") {
+			if (typeof data !== "string") {
+				logger().warn("received non-string for json parse");
+				throw new errors.MalformedMessage();
+			}
+			return JSON.parse(data);
+		} else if (this._protocolFormat === "cbor") {
+			if (data instanceof Blob) {
+				return cbor.decodeCbor(await data.bytes());
+			} else if (data instanceof ArrayBuffer) {
+				return cbor.decodeCbor(new Uint8Array(data));
+			} else {
+				logger().warn("received non-binary type for cbor parse");
+				throw new errors.MalformedMessage();
+			}
+		} else {
+			assertUnreachable(this._protocolFormat);
+		}
+	}
+
+	public _serialize(value: unknown): SendWebSocketMessage {
+		if (this._protocolFormat === "json") {
+			return JSON.stringify(value);
+		} else if (this._protocolFormat === "cbor") {
+			return cbor.encodeCbor(value as cbor.CborType);
+		} else {
+			assertUnreachable(this._protocolFormat);
+		}
+	}
+
+	public _sendWebSocketMessage(message: SendWebSocketMessage) {
 		// TODO: Queue message
 		if (!this._websocket) return;
 
@@ -52,7 +91,7 @@ export class Connection<A extends AnyActor> {
 
 	send(eventName: string, ...args: unknown[]) {
 		this._sendWebSocketMessage(
-			JSON.stringify({
+			this._serialize({
 				body: {
 					ev: {
 						n: eventName,

@@ -1,6 +1,8 @@
 import { assertEquals } from "@std/assert";
+import * as cbor from "@std/cbor";
 import { MAX_CONN_PARAMS_SIZE } from "../../common/src/network.ts";
 import { assertUnreachable } from "../../common/src/utils.ts";
+import type { ProtocolFormat } from "../../protocol/src/ws/mod.ts";
 import type * as wsToClient from "../../protocol/src/ws/to_client.ts";
 import type * as wsToServer from "../../protocol/src/ws/to_server.ts";
 import * as errors from "./errors.ts";
@@ -22,21 +24,26 @@ interface SendOpts {
 	ephemeral: boolean;
 }
 
+type WebSocketMessage = string | Blob | ArrayBuffer;
+
 export class ActorHandleRaw {
 	#disconnected = false;
 
 	#websocket?: WebSocket;
-	#websocketQueue: string[] = [];
-	#websocketRpcInFlight = new Map<string, RpcInFlight>();
+	#websocketQueue: WebSocketMessage[] = [];
+	#websocketRpcInFlight = new Map<number, RpcInFlight>();
 
 	// biome-ignore lint/suspicious/noExplicitAny: Unknown subscription type
 	#eventSubscriptions = new Map<string, Set<EventSubscriptions<any[]>>>();
+
+	#requestIdCounter = 0;
 
 	// TODO: ws message queue
 
 	constructor(
 		private readonly endpoint: string,
 		private readonly parameters: unknown,
+		private readonly protocolFormat: ProtocolFormat,
 	) {}
 
 	async rpc<Args extends Array<unknown> = unknown[], Response = unknown>(
@@ -47,7 +54,8 @@ export class ActorHandleRaw {
 
 		// TODO: Add to queue if socket is not open
 
-		const requestId = crypto.randomUUID();
+		const requestId = this.#requestIdCounter;
+		this.#requestIdCounter += 1;
 
 		const {
 			promise: resolvePromise,
@@ -95,7 +103,7 @@ export class ActorHandleRaw {
 	connect() {
 		this.#disconnected = false;
 
-		let url = `${this.endpoint}/connect?version=1`;
+		let url = `${this.endpoint}/connect?version=1&format=${this.protocolFormat}`;
 
 		if (this.parameters !== undefined) {
 			const paramsStr = JSON.stringify(this.parameters);
@@ -150,14 +158,8 @@ export class ActorHandleRaw {
 			if (this.#disconnected) return;
 			logger().debug("socket error", { event });
 		};
-		ws.onmessage = (ev) => {
-			const rawData = ev.data;
-			if (typeof rawData !== "string") {
-				logger().warn("response message was not string");
-				throw new errors.MalformedResponseMessage();
-			}
-
-			const response: wsToClient.ToClient = JSON.parse(rawData);
+		ws.onmessage = async (ev) => {
+			const response = (await this.#parse(ev.data)) as wsToClient.ToClient;
 
 			if ("ro" in response.body) {
 				// RPC response OK
@@ -194,7 +196,7 @@ export class ActorHandleRaw {
 		};
 	}
 
-	#takeRpcInFlight(id: string): RpcInFlight {
+	#takeRpcInFlight(id: number): RpcInFlight {
 		const inFlight = this.#websocketRpcInFlight.get(id);
 		if (!inFlight)
 			throw new errors.InternalError(`No in flight response for ${id}`);
@@ -270,10 +272,39 @@ export class ActorHandleRaw {
 	}
 
 	#webSocketSend(message: wsToServer.ToServer, opts?: SendOpts) {
-		this.#webSocketSendRaw(JSON.stringify(message), opts);
+		this.#webSocketSendRaw(this.#serialize(message), opts);
 	}
 
-	#webSocketSendRaw(message: string, opts?: SendOpts) {
+	async #parse(data: WebSocketMessage): Promise<unknown> {
+		if (this.protocolFormat === "json") {
+			if (typeof data !== "string") {
+				throw new Error("received non-string for json parse");
+			}
+			return JSON.parse(data);
+		} else if (this.protocolFormat === "cbor") {
+			if (data instanceof Blob) {
+				return cbor.decodeCbor(await data.bytes());
+			} else if (data instanceof ArrayBuffer) {
+				return cbor.decodeCbor(new Uint8Array(data));
+			} else {
+				throw new Error("received non-binary type for cbor parse");
+			}
+		} else {
+			assertUnreachable(this.protocolFormat);
+		}
+	}
+
+	#serialize(value: unknown): WebSocketMessage {
+		if (this.protocolFormat === "json") {
+			return JSON.stringify(value);
+		} else if (this.protocolFormat === "cbor") {
+			return cbor.encodeCbor(value as cbor.CborType);
+		} else {
+			assertUnreachable(this.protocolFormat);
+		}
+	}
+
+	#webSocketSendRaw(message: WebSocketMessage, opts?: SendOpts) {
 		if (this.#websocket?.readyState === WebSocket.OPEN) {
 			try {
 				this.#websocket.send(message);

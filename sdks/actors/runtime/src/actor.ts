@@ -10,10 +10,14 @@ import type { WSEvents } from "hono/ws";
 import onChange from "on-change";
 import { setupLogging } from "../../common/src/log.ts";
 import { assertUnreachable } from "../../common/src/utils.ts";
+import {
+	type ProtocolFormat,
+	ProtocolFormatSchema,
+} from "../../protocol/src/ws/mod.ts";
 import type * as wsToClient from "../../protocol/src/ws/to_client.ts";
 import * as wsToServer from "../../protocol/src/ws/to_server.ts";
 import { type ActorConfig, mergeActorConfig } from "./config.ts";
-import { Connection } from "./connection.ts";
+import { Connection, type SendWebSocketMessage } from "./connection.ts";
 import * as errors from "./errors.ts";
 import { instanceLogger, logger } from "./log.ts";
 import { Rpc } from "./rpc.ts";
@@ -389,6 +393,16 @@ export abstract class Actor<
 			throw new errors.InvalidProtocolVersion(protocolVersion);
 		}
 
+		const protocolFormatRaw = c.req.query("format");
+		const { data: protocolFormat, success } =
+			ProtocolFormatSchema.safeParse(protocolFormatRaw);
+		if (!success) {
+			logger().warn("invalid protocol format", {
+				protocolFormat: protocolFormatRaw,
+			});
+			throw new errors.InvalidProtocolFormat(protocolFormatRaw);
+		}
+
 		// Validate params size (limiting to 4KB which is reasonable for query params)
 		const paramsStr = c.req.query("params");
 
@@ -430,6 +444,7 @@ export abstract class Actor<
 				conn = new Connection<Actor<State, ConnParams, ConnState>>(
 					this.#connectionIdCounter,
 					ws,
+					protocolFormat,
 					state,
 					this.#connectionStateEnabled,
 				);
@@ -449,25 +464,20 @@ export abstract class Actor<
 					}
 				}
 			},
-			onMessage: async (evt, ws) => {
+			onMessage: async (evt) => {
 				if (!conn) {
 					logger().warn("`conn` does not exist");
 					return;
 				}
 
-				let rpcRequestId: string | undefined;
+				let rpcRequestId: number | undefined;
 				try {
-					const value = evt.data.valueOf();
-					if (typeof value !== "string") {
-						logger().warn("received non-string message");
-						throw new errors.MalformedMessage();
-					}
-
+					const value = evt.data.valueOf() as string | Uint8Array;
 					const {
 						data: message,
 						success,
 						error,
-					} = wsToServer.ToServerSchema.safeParse(JSON.parse(value));
+					} = wsToServer.ToServerSchema.safeParse(await conn._parse(value));
 					if (!success) {
 						throw new errors.MalformedMessage(error);
 					}
@@ -482,8 +492,8 @@ export abstract class Actor<
 						const ctx = new Rpc<this>(conn);
 						const output = await this.#executeRpc(ctx, name, args);
 
-						ws.send(
-							JSON.stringify({
+						conn._sendWebSocketMessage(
+							conn._serialize({
 								body: {
 									ro: {
 										i: id,
@@ -520,9 +530,9 @@ export abstract class Actor<
 					}
 
 					// Build response
-					if (rpcRequestId) {
-						ws.send(
-							JSON.stringify({
+					if (rpcRequestId !== undefined) {
+						conn._sendWebSocketMessage(
+							conn._serialize({
 								body: {
 									re: {
 										i: rpcRequestId,
@@ -534,8 +544,8 @@ export abstract class Actor<
 							} satisfies wsToClient.ToClient),
 						);
 					} else {
-						ws.send(
-							JSON.stringify({
+						conn._sendWebSocketMessage(
+							conn._serialize({
 								body: {
 									er: {
 										c: code,
@@ -566,7 +576,7 @@ export abstract class Actor<
 			onError: (error) => {
 				// Actors don't need to know about this, since it's abstracted
 				// away
-				logger().warn("WebSocket error", { error });
+				logger().warn("websocket error", { error });
 			},
 		};
 	}
@@ -669,16 +679,25 @@ export abstract class Actor<
 		const subscriptions = this.#eventSubscriptions.get(name);
 		if (!subscriptions) return;
 
-		const body = JSON.stringify({
+		const toClient: wsToClient.ToClient = {
 			body: {
 				ev: {
 					n: name,
 					a: args,
 				},
 			},
-		} satisfies wsToClient.ToClient);
+		};
+
+		// Send message to clients
+		const serialized: Record<string, SendWebSocketMessage> = {};
 		for (const connection of subscriptions) {
-			connection._sendWebSocketMessage(body);
+			// Lazily serialize the appropriate format
+			if (!(connection._protocolFormat in serialized)) {
+				serialized[connection._protocolFormat] =
+					connection._serialize(toClient);
+			}
+
+			connection._sendWebSocketMessage(serialized[connection._protocolFormat]);
 		}
 	}
 

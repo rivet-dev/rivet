@@ -78,6 +78,14 @@ export class InvalidProtocolVersion extends ActorError {
 	}
 }
 
+export class InvalidProtocolFormat extends ActorError {
+	constructor(format?: string) {
+		super("invalid_protocol_format", `Invalid protocol format \`${format}\`.`, {
+			public: true,
+		});
+	}
+}
+
 export class MalformedConnectionParameters extends ActorError {
 	constructor(cause: unknown) {
 		super(

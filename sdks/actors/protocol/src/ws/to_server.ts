@@ -2,7 +2,7 @@ import { z } from "zod";
 
 const RpcRequestSchema = z.object({
 	// ID
-	i: z.string(),
+	i: z.number().int(),
 	// Name
 	n: z.string(),
 	// Args

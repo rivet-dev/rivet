@@ -5,10 +5,15 @@ import type {
 	RivetConfigResponse,
 } from "../../manager-protocol/src/mod.ts";
 import type { CreateRequest } from "../../manager-protocol/src/query.ts";
+import type { ProtocolFormat } from "../../protocol/src/ws/mod.ts";
 import type { AnyActor } from "../../runtime/src/actor.ts";
 import * as errors from "./errors.ts";
 import { ActorHandleRaw } from "./handle.ts";
 import { logger } from "./log.ts";
+
+export interface ClientOptions {
+	protocolFormat?: ProtocolFormat;
+}
 
 export interface QueryOptions {
 	/** Parameters to pass to the connection. */
@@ -66,8 +71,12 @@ interface Region {
 export class Client {
 	#managerEndpointPromise: Promise<string>;
 	#regionPromise: Promise<Region | undefined>;
+	#protocolFormat: ProtocolFormat;
 
-	constructor(managerEndpointPromise: string | Promise<string>) {
+	public constructor(
+		managerEndpointPromise: string | Promise<string>,
+		opts?: ClientOptions,
+	) {
 		if (managerEndpointPromise instanceof Promise) {
 			// Save promise
 			this.#managerEndpointPromise = managerEndpointPromise;
@@ -79,6 +88,8 @@ export class Client {
 		}
 
 		this.#regionPromise = this.#fetchRegion();
+
+		this.#protocolFormat = opts?.protocolFormat ?? "cbor";
 	}
 
 	async getWithId<A extends AnyActor = AnyActor>(
@@ -166,7 +177,11 @@ export class Client {
 	}
 
 	#createHandle(endpoint: string, parameters: unknown): ActorHandleRaw {
-		const handle = new ActorHandleRaw(endpoint, parameters);
+		const handle = new ActorHandleRaw(
+			endpoint,
+			parameters,
+			this.#protocolFormat,
+		);
 		handle.connect();
 		return handle;
 	}

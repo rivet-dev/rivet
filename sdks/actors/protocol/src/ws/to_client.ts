@@ -2,14 +2,14 @@ import { z } from "zod";
 
 export const RpcResponseOkSchema = z.object({
 	// ID
-	i: z.string(),
+	i: z.number().int(),
 	// Output
 	o: z.unknown(),
 });
 
 export const RpcResponseErrorSchema = z.object({
 	// ID
-	i: z.string(),
+	i: z.number().int(),
 	// Code
 	c: z.string(),
 	// Message
