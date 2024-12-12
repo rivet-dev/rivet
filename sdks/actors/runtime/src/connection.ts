@@ -16,6 +16,8 @@ type GetConnStateType<A> = A extends Actor<any, any, infer ConnState>
 export type IncomingWebSocketMessage = string | Blob | ArrayBufferLike;
 export type OutgoingWebSocketMessage = string | ArrayBuffer | Uint8Array;
 
+export type ConnectionId = number;
+
 export class Connection<A extends AnyActor> {
 	subscriptions = new Set<string>();
 
@@ -34,7 +36,7 @@ export class Connection<A extends AnyActor> {
 	}
 
 	constructor(
-		public readonly id: number,
+		public readonly id: ConnectionId,
 		public _websocket: WSContext<WebSocket>,
 		public _protocolFormat: ProtocolFormat,
 		state: GetConnStateType<A> | undefined,

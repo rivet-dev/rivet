@@ -10,15 +10,13 @@ import type { WSEvents } from "hono/ws";
 import onChange from "on-change";
 import { setupLogging } from "../../common/src/log.ts";
 import { assertUnreachable } from "../../common/src/utils.ts";
-import {
-	type ProtocolFormat,
-	ProtocolFormatSchema,
-} from "../../protocol/src/ws/mod.ts";
+import { ProtocolFormatSchema } from "../../protocol/src/ws/mod.ts";
 import type * as wsToClient from "../../protocol/src/ws/to_client.ts";
 import * as wsToServer from "../../protocol/src/ws/to_server.ts";
 import { type ActorConfig, mergeActorConfig } from "./config.ts";
 import {
 	Connection,
+	type ConnectionId,
 	type IncomingWebSocketMessage,
 	type OutgoingWebSocketMessage,
 } from "./connection.ts";
@@ -108,7 +106,7 @@ export abstract class Actor<
 	#ready = false;
 
 	#connectionIdCounter = 0;
-	#connections = new Set<Connection<this>>();
+	#connections = new Map<ConnectionId, Connection<this>>();
 	#eventSubscriptions = new Map<string, Set<Connection<this>>>();
 
 	protected constructor(config?: Partial<ActorConfig>) {
@@ -450,16 +448,17 @@ export abstract class Actor<
 				// If `_onBeforeConnect` is not defined and `state` is
 				// undefined, there will be a runtime error when attempting to
 				// read it
+				const connectionId = this.#connectionIdCounter;
 				this.#connectionIdCounter += 1;
 				// TODO: As any
 				conn = new Connection<Actor<State, ConnParams, ConnState>>(
-					this.#connectionIdCounter,
+					connectionId,
 					ws,
 					protocolFormat,
 					state,
 					this.#connectionStateEnabled,
 				);
-				this.#connections.add(conn);
+				this.#connections.set(conn.id, conn);
 
 				// Handle connection
 				const CONNECT_TIMEOUT = 5000; // 5 seconds
@@ -605,7 +604,7 @@ export abstract class Actor<
 					return;
 				}
 
-				this.#connections.delete(conn);
+				this.#connections.delete(conn.id);
 
 				// Remove subscriptions
 				for (const eventName of [...conn.subscriptions.values()]) {
@@ -686,7 +685,7 @@ export abstract class Actor<
 		return instanceLogger();
 	}
 
-	protected get _connections(): Set<Connection<this>> {
+	protected get _connections(): Map<ConnectionId, Connection<this>> {
 		return this.#connections;
 	}
 
@@ -791,7 +790,7 @@ export abstract class Actor<
 
 		// Disconnect existing connections
 		const promises: Promise<unknown>[] = [];
-		for (const connection of this.#connections) {
+		for (const connection of this.#connections.values()) {
 			const raw = connection._websocket.raw;
 			if (!raw) continue;
 
