@@ -11,7 +11,7 @@ import onChange from "on-change";
 import { setupLogging } from "../../common/src/log.ts";
 import { assertUnreachable } from "../../common/src/utils.ts";
 import type * as wsToClient from "../../protocol/src/ws/to_client.ts";
-import type * as wsToServer from "../../protocol/src/ws/to_server.ts";
+import * as wsToServer from "../../protocol/src/ws/to_server.ts";
 import { type ActorConfig, mergeActorConfig } from "./config.ts";
 import { Connection } from "./connection.ts";
 import * as errors from "./errors.ts";
@@ -463,10 +463,20 @@ export abstract class Actor<
 						throw new errors.MalformedMessage();
 					}
 
-					const message: wsToServer.ToServer = JSON.parse(value);
+					const {
+						data: message,
+						success,
+						error,
+					} = wsToServer.ToServerSchema.safeParse(JSON.parse(value));
+					if (!success) {
+						throw new errors.MalformedMessage(error);
+					}
 
-					if ("rpcRequest" in message.body) {
-						const { id, name, args = [] } = message.body.rpcRequest;
+					if ("rr" in message.body) {
+						// RPC request
+
+						const { i: id, n: name, a: args = [] } = message.body.rr;
+
 						rpcRequestId = id;
 
 						const ctx = new Rpc<this>(conn);
@@ -475,24 +485,22 @@ export abstract class Actor<
 						ws.send(
 							JSON.stringify({
 								body: {
-									rpcResponseOk: {
-										id,
-										output,
+									ro: {
+										i: id,
+										o: output,
 									},
 								},
 							} satisfies wsToClient.ToClient),
 						);
-					} else if ("subscriptionRequest" in message.body) {
-						if (message.body.subscriptionRequest.subscribe) {
-							this.#addSubscription(
-								message.body.subscriptionRequest.eventName,
-								conn,
-							);
+					} else if ("sr" in message.body) {
+						// Subscription request
+
+						const { e: eventName, s: subscribe } = message.body.sr;
+
+						if (subscribe) {
+							this.#addSubscription(eventName, conn);
 						} else {
-							this.#removeSubscription(
-								message.body.subscriptionRequest.eventName,
-								conn,
-							);
+							this.#removeSubscription(eventName, conn);
 						}
 					} else {
 						assertUnreachable(message.body);
@@ -516,11 +524,11 @@ export abstract class Actor<
 						ws.send(
 							JSON.stringify({
 								body: {
-									rpcResponseError: {
-										id: rpcRequestId,
-										code,
-										message,
-										metadata,
+									re: {
+										i: rpcRequestId,
+										c: code,
+										m: message,
+										md: metadata,
 									},
 								},
 							} satisfies wsToClient.ToClient),
@@ -529,10 +537,10 @@ export abstract class Actor<
 						ws.send(
 							JSON.stringify({
 								body: {
-									error: {
-										code,
-										message,
-										metadata,
+									er: {
+										c: code,
+										m: message,
+										md: metadata,
 									},
 								},
 							} satisfies wsToClient.ToClient),
@@ -663,9 +671,9 @@ export abstract class Actor<
 
 		const body = JSON.stringify({
 			body: {
-				event: {
-					name,
-					args,
+				ev: {
+					n: name,
+					a: args,
 				},
 			},
 		} satisfies wsToClient.ToClient);

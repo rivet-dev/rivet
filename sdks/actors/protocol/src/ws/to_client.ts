@@ -1,34 +1,45 @@
 import { z } from "zod";
 
 export const RpcResponseOkSchema = z.object({
-	id: z.string(),
-	output: z.unknown(),
+	// ID
+	i: z.string(),
+	// Output
+	o: z.unknown(),
 });
 
 export const RpcResponseErrorSchema = z.object({
-	id: z.string(),
-	code: z.string(),
-	message: z.string(),
-	metadata: z.unknown().optional(),
+	// ID
+	i: z.string(),
+	// Code
+	c: z.string(),
+	// Message
+	m: z.string(),
+	// Metadata
+	md: z.unknown().optional(),
 });
 
 export const ToClientEventSchema = z.object({
-	name: z.string(),
-	args: z.array(z.unknown()),
+	// Name
+	n: z.string(),
+	// Args
+	a: z.array(z.unknown()),
 });
 
 export const ToClientErrorSchema = z.object({
-	code: z.string(),
-	message: z.string(),
-	metadata: z.unknown().optional(),
+	// Code
+	c: z.string(),
+	// Message
+	m: z.string(),
+	// Metadata
+	md: z.unknown().optional(),
 });
 
 export const ToClientSchema = z.object({
 	body: z.union([
-		z.object({ rpcResponseOk: RpcResponseOkSchema }),
-		z.object({ rpcResponseError: RpcResponseErrorSchema }),
-		z.object({ event: ToClientEventSchema }),
-		z.object({ error: ToClientErrorSchema }),
+		z.object({ ro: RpcResponseOkSchema }),
+		z.object({ re: RpcResponseErrorSchema }),
+		z.object({ ev: ToClientEventSchema }),
+		z.object({ er: ToClientErrorSchema }),
 	]),
 });
 

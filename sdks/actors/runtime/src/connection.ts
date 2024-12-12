@@ -54,9 +54,9 @@ export class Connection<A extends AnyActor> {
 		this._sendWebSocketMessage(
 			JSON.stringify({
 				body: {
-					event: {
-						name: eventName,
-						args,
+					ev: {
+						n: eventName,
+						a: args,
 					},
 				},
 			} satisfies wsToClient.ToClient),

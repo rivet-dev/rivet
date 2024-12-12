@@ -58,20 +58,20 @@ export class ActorHandleRaw {
 
 		this.#webSocketSend({
 			body: {
-				rpcRequest: {
-					id: requestId,
-					name,
-					args,
+				rr: {
+					i: requestId,
+					n: name,
+					a: args,
 				},
 			},
 		} satisfies wsToServer.ToServer);
 
 		// TODO: Throw error if disconnect is called
 
-		const res = await resolvePromise;
-		assertEquals(res.id, requestId);
+		const { i: responseId, o: output } = await resolvePromise;
+		assertEquals(responseId, requestId);
 
-		return res.output as Response;
+		return output as Response;
 	}
 
 	//async #rpcHttp<Args extends Array<unknown> = unknown[], Response = unknown>(name: string, ...args: Args): Promise<Response> {
@@ -159,27 +159,34 @@ export class ActorHandleRaw {
 
 			const response: wsToClient.ToClient = JSON.parse(rawData);
 
-			if ("rpcResponseOk" in response.body) {
-				const inFlight = this.#takeRpcInFlight(response.body.rpcResponseOk.id);
-				inFlight.resolve(response.body.rpcResponseOk);
-			} else if ("rpcResponseError" in response.body) {
-				const inFlight = this.#takeRpcInFlight(
-					response.body.rpcResponseError.id,
-				);
-				inFlight.reject(
-					new errors.RpcError(
-						response.body.rpcResponseError.code,
-						response.body.rpcResponseError.message,
-						response.body.rpcResponseError.metadata,
-					),
-				);
-			} else if ("event" in response.body) {
-				this.#dispatchEvent(response.body.event);
-			} else if ("error" in response.body) {
+			if ("ro" in response.body) {
+				// RPC response OK
+
+				const { i: rpcId } = response.body.ro;
+
+				const inFlight = this.#takeRpcInFlight(rpcId);
+				inFlight.resolve(response.body.ro);
+			} else if ("re" in response.body) {
+				// RPC response error
+
+				const {
+					i: rpcId,
+					c: code,
+					m: message,
+					md: metadata,
+				} = response.body.re;
+
+				const inFlight = this.#takeRpcInFlight(rpcId);
+				inFlight.reject(new errors.RpcError(code, message, metadata));
+			} else if ("ev" in response.body) {
+				this.#dispatchEvent(response.body.ev);
+			} else if ("er" in response.body) {
+				const { c: code, m: message, md: metadata } = response.body.er;
+
 				logger().warn("unhandled error from actor", {
-					code: response.body.error.code,
-					message: response.body.error.message,
-					metadata: response.body.error.metadata,
+					code,
+					message,
+					metadata,
 				});
 			} else {
 				assertUnreachable(response.body);
@@ -196,12 +203,14 @@ export class ActorHandleRaw {
 	}
 
 	#dispatchEvent(event: wsToClient.ToClientEvent) {
-		const listeners = this.#eventSubscriptions.get(event.name);
+		const { n: name, a: args } = event;
+
+		const listeners = this.#eventSubscriptions.get(name);
 		if (!listeners) return;
 
 		// Create a new array to avoid issues with listeners being removed during iteration
 		for (const listener of [...listeners]) {
-			listener.callback(...event.args);
+			listener.callback(...args);
 
 			// Remove if this was a one-time listener
 			if (listener.once) {
@@ -211,7 +220,7 @@ export class ActorHandleRaw {
 
 		// Clean up empty listener sets
 		if (listeners.size === 0) {
-			this.#eventSubscriptions.delete(event.name);
+			this.#eventSubscriptions.delete(name);
 		}
 	}
 
@@ -309,9 +318,9 @@ export class ActorHandleRaw {
 		this.#webSocketSend(
 			{
 				body: {
-					subscriptionRequest: {
-						eventName,
-						subscribe,
+					sr: {
+						e: eventName,
+						s: subscribe,
 					},
 				},
 			},

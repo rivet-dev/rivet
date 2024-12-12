@@ -1,24 +1,28 @@
 import { z } from "zod";
 
 const RpcRequestSchema = z.object({
-	id: z.string(),
-	name: z.string(),
-	args: z.array(z.unknown()),
+	// ID
+	i: z.string(),
+	// Name
+	n: z.string(),
+	// Args
+	a: z.array(z.unknown()),
 });
 
 const SubscriptionRequestSchema = z.object({
-	eventName: z.string(),
-	subscribe: z.boolean(),
+	// Event name
+	e: z.string(),
+	// Subscribe
+	s: z.boolean(),
 });
 
 export const ToServerSchema = z.object({
 	body: z.union([
-		z.object({ rpcRequest: RpcRequestSchema }),
-		z.object({ subscriptionRequest: SubscriptionRequestSchema }),
+		z.object({ rr: RpcRequestSchema }),
+		z.object({ sr: SubscriptionRequestSchema }),
 	]),
 });
 
-// Type inference
 export type ToServer = z.infer<typeof ToServerSchema>;
 export type RpcRequest = z.infer<typeof RpcRequestSchema>;
 export type SubscriptionRequest = z.infer<typeof SubscriptionRequestSchema>;
