@@ -5,7 +5,11 @@
     "jsr:@hono/hono@^4.6.12": "4.6.12",
     "jsr:@std/assert@^1.0.8": "1.0.8",
     "jsr:@std/async@^1.0.9": "1.0.9",
+    "jsr:@std/fmt@^1.0.3": "1.0.3",
+    "jsr:@std/fs@^1.0.6": "1.0.6",
     "jsr:@std/internal@^1.0.5": "1.0.5",
+    "jsr:@std/io@0.225": "0.225.0",
+    "jsr:@std/log@~0.224.11": "0.224.11",
     "npm:@rivet-gg/api@0.0.1-rc.5": "0.0.1-rc.5",
     "npm:on-change@^5.0.1": "5.0.1"
   },
@@ -25,8 +29,25 @@
     "@std/async@1.0.9": {
       "integrity": "c6472fd0623b3f3daae023cdf7ca5535e1b721dfbf376562c0c12b3fb4867f91"
     },
+    "@std/fmt@1.0.3": {
+      "integrity": "97765c16aa32245ff4e2204ecf7d8562496a3cb8592340a80e7e554e0bb9149f"
+    },
+    "@std/fs@1.0.6": {
+      "integrity": "42b56e1e41b75583a21d5a37f6a6a27de9f510bcd36c0c85791d685ca0b85fa2"
+    },
     "@std/internal@1.0.5": {
       "integrity": "54a546004f769c1ac9e025abd15a76b6671ddc9687e2313b67376125650dc7ba"
+    },
+    "@std/io@0.225.0": {
+      "integrity": "c1db7c5e5a231629b32d64b9a53139445b2ca640d828c26bf23e1c55f8c079b3"
+    },
+    "@std/log@0.224.11": {
+      "integrity": "df5e5a6d6ab8bcea016a17982cd2435f65234d6618bf631925587c0b2eae2a4e",
+      "dependencies": [
+        "jsr:@std/fmt",
+        "jsr:@std/fs",
+        "jsr:@std/io"
+      ]
     }
   },
   "npm": {
@@ -273,6 +294,7 @@
       "jsr:@hono/hono@^4.6.12",
       "jsr:@std/assert@^1.0.8",
       "jsr:@std/async@^1.0.9",
+      "jsr:@std/log@~0.224.11",
       "npm:@rivet-gg/api@0.0.1-rc.5",
       "npm:on-change@^5.0.1"
     ]

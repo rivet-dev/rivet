@@ -23,16 +23,16 @@ export default class Counter extends Actor<
 	}
 
 	override _onBeforeConnect(opts: OnBeforeConnectOpts<ConnParams>): ConnState {
-		this.log.info("parameters", { params: opts.parameters });
+		this._log.info("parameters", { params: opts.parameters });
 		return { mod: opts.parameters?.mod ?? 1 };
 	}
 
 	override _onStateChange(newState: State): void | Promise<void> {
 		this._broadcast("broadcastCount", newState.count);
 
-		for (const conn of this.connections.values()) {
-			this.log.info("checking mod", { id: conn.id, state: conn.state });
-			this.log.info("state", { state: conn.state });
+		for (const conn of this._connections.values()) {
+			this._log.info("checking mod", { id: conn.id, state: conn.state });
+			this._log.info("state", { state: conn.state });
 			if (newState.count % conn.state.mod === 0) {
 				conn.send("directCount", newState.count);
 			}
@@ -40,9 +40,9 @@ export default class Counter extends Actor<
 	}
 
 	increment(_rpc: Rpc<Counter>, count: number): number {
-		this.log.info("increment", { count });
-		this.state.count += count;
-		return this.state.count;
+		this._log.info("increment", { count });
+		this._state.count += count;
+		return this._state.count;
 	}
 
 	destroyMe() {

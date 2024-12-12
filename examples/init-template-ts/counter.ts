@@ -20,7 +20,7 @@ export default class Counter extends Actor<State> {
 
 	// Expose a remote procedure call for clients to update the count (https://rivet.gg/docs/rpc)
 	increment(_rpc: Rpc<Counter>, count: number): number {
-		this.state.count += count;
-		return this.state.count;
+		this._state.count += count;
+		return this._state.count;
 	}
 }

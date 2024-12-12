@@ -102,28 +102,6 @@ export abstract class Actor<
 		this.#config = mergeActorConfig(config);
 	}
 
-	protected get log(): Logger {
-		return instanceLogger();
-	}
-
-	protected get connections(): Set<Connection<this>> {
-		return this.#connections;
-	}
-
-	protected _onInitialize?(): State | Promise<State>;
-
-	protected _onStart?(): void | Promise<void>;
-
-	protected _onStateChange?(newState: State): void | Promise<void>;
-
-	protected _onBeforeConnect?(
-		opts: OnBeforeConnectOpts<ConnParams>,
-	): ConnState | Promise<ConnState>;
-
-	protected _onConnect?(connection: Connection<this>): void | Promise<void>;
-
-	protected _onDisconnect?(connection: Connection<this>): void | Promise<void>;
-
 	// This is called by Rivet when the actor is exported as the default
 	// property
 	public static start(ctx: ActorContext) {
@@ -153,17 +131,6 @@ export abstract class Actor<
 
 		logger().info("ready");
 		this.#ready = true;
-	}
-
-	protected get state(): State {
-		this.#validateStateEnabled();
-		return this.#stateProxy;
-	}
-
-	protected set state(value: State) {
-		this.#validateStateEnabled();
-		this.#setStateWithoutChange(value);
-		this.#stateChanged = true;
 	}
 
 	get #stateEnabled() {
@@ -584,7 +551,42 @@ export abstract class Actor<
 		}
 	}
 
+	// MARK: Lifecycle hooks
+	protected _onInitialize?(): State | Promise<State>;
+
+	protected _onStart?(): void | Promise<void>;
+
+	protected _onStateChange?(newState: State): void | Promise<void>;
+
+	protected _onBeforeConnect?(
+		opts: OnBeforeConnectOpts<ConnParams>,
+	): ConnState | Promise<ConnState>;
+
+	protected _onConnect?(connection: Connection<this>): void | Promise<void>;
+
+	protected _onDisconnect?(connection: Connection<this>): void | Promise<void>;
+
 	// MARK: Exposed methods
+	protected get _log(): Logger {
+		return instanceLogger();
+	}
+
+	protected get _connections(): Set<Connection<this>> {
+		return this.#connections;
+	}
+
+	protected get _state(): State {
+		this.#validateStateEnabled();
+		return this.#stateProxy;
+	}
+
+	protected set _state(value: State) {
+		this.#validateStateEnabled();
+		this.#setStateWithoutChange(value);
+		this.#stateChanged = true;
+	}
+
+
 	/**
 	 * Broadcasts an event to all connected clients.
 	 */
