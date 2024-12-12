@@ -1,7 +1,7 @@
 import { assertEquals } from "@std/assert";
 import { MAX_CONN_PARAMS_SIZE } from "../../common/src/network.ts";
 import { assertUnreachable } from "../../common/src/utils.ts";
-import type * as wsToClient from "../../protocol/src/ws/to_client.ts";
+import * as wsToClient from "../../protocol/src/ws/to_client.ts";
 import type * as wsToServer from "../../protocol/src/ws/to_server.ts";
 import { logger } from "./log.ts";
 
@@ -48,11 +48,10 @@ export class ActorHandleRaw {
 
 		const requestId = crypto.randomUUID();
 
-		const resolvePromise = new Promise<wsToClient.RpcResponseOk>(
-			(resolve, reject) => {
-				this.#websocketRpcInFlight.set(requestId, { resolve, reject });
-			},
-		);
+		const { promise: resolvePromise, resolve, reject } = Promise.withResolvers<
+			wsToClient.RpcResponseOk
+		>();
+		this.#websocketRpcInFlight.set(requestId, { resolve, reject });
 
 		this.#webSocketSend(
 			{

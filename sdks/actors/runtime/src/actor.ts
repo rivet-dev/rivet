@@ -1,3 +1,4 @@
+import { throttle } from "@std/async/unstable-throttle";
 import { Lock } from "@core/asyncutil/lock";
 import type { ActorContext } from "@rivet-gg/actors-core";
 import { assertExists } from "@std/assert";
@@ -62,6 +63,13 @@ export interface OnBeforeConnectOpts<ConnParams> {
 	parameters: ConnParams;
 }
 
+export interface SaveStateOpts {
+	/**
+	 * Forces the state to be saved immediately. This function will return when the state has save successfully.
+	 */
+	immediate?: boolean;
+}
+
 /** Actor type alias with all `any` types. Used for `extends` in classes referencing this actor. */
 // biome-ignore lint/suspicious/noExplicitAny: Needs to be used in `extends`
 export type AnyActor = Actor<any, any, any>;
@@ -86,8 +94,6 @@ export abstract class Actor<
 	/** Raw state without the proxy wrapper */
 	#stateRaw!: State;
 
-	#saveStateLock = new Lock<void>(void 0);
-
 	#server?: Deno.HttpServer<Deno.NetAddr>;
 	#backgroundPromises: Promise<void>[] = [];
 	#config: ActorConfig;
@@ -100,6 +106,12 @@ export abstract class Actor<
 
 	protected constructor(config?: Partial<ActorConfig>) {
 		this.#config = mergeActorConfig(config);
+
+		this.#saveStateThrottled = throttle(() => {
+			this.#saveStateInner().catch((error) => {
+				logger().error("failed to save state", { error });
+			});
+		}, this.#config.state.saveInterval);
 	}
 
 	// This is called by Rivet when the actor is exported as the default
@@ -147,6 +159,40 @@ export abstract class Actor<
 
 	get #connectionStateEnabled() {
 		return typeof this._onBeforeConnect === "function";
+	}
+
+	#saveStateLock = new Lock<void>(void 0);
+
+	/** Throttled save state method. Used to write to KV at a reasonable cadence. */
+	#saveStateThrottled: () => void;
+
+	/** Promise used to wait for a save to complete. This is required since you cannot await `#saveStateThrottled`. */
+	#onStateSavedPromise?: PromiseWithResolvers<void>;
+
+	/** Saves the state to the database. You probably want to use #saveStateThrottled instead except for a few edge cases. */
+	async #saveStateInner() {
+		try {
+			if (this.#stateChanged) {
+				// Use a lock in order to avoid race conditions with multiple
+				// parallel promises writing to KV. This should almost never happen
+				// unless there are abnormally high latency in KV writes.
+				await this.#saveStateLock.lock(async () => {
+					logger().debug("saving state");
+
+					// There might be more changes while we're writing, so we set this
+					// before writing to KV in order to avoid a race condition.
+					this.#stateChanged = false;
+
+					// Write to KV
+					await this.#ctx.kv.put(KEYS.STATE.DATA, this.#stateRaw);
+				});
+			}
+
+			this.#onStateSavedPromise?.resolve();
+		} catch (error) {
+			this.#onStateSavedPromise?.reject(error);
+			throw error;
+		}
 	}
 
 	/** Updates the state and creates a new proxy. */
@@ -404,7 +450,9 @@ export abstract class Actor<
 					const voidOrPromise = this._onConnect(conn);
 					if (voidOrPromise instanceof Promise) {
 						deadline(voidOrPromise, CONNECT_TIMEOUT).catch((error) => {
-							logger().error("error in `_onConnect`, closing socket", { error });
+							logger().error("error in `_onConnect`, closing socket", {
+								error,
+							});
 							conn?.disconnect("`onConnect` failed");
 						});
 					}
@@ -548,6 +596,8 @@ export abstract class Actor<
 			} else {
 				throw new Error(`RPC ${rpcName} failed: ${String(error)}`);
 			}
+		} finally {
+			this.#saveStateThrottled();
 		}
 	}
 
@@ -585,7 +635,6 @@ export abstract class Actor<
 		this.#setStateWithoutChange(value);
 		this.#stateChanged = true;
 	}
-
 
 	/**
 	 * Broadcasts an event to all connected clients.
@@ -639,28 +688,29 @@ export abstract class Actor<
 	/**
 	 * Forces the state to get saved.
 	 *
-	 * This is helpful if running a long task that may fail later or a background
-	 * job that updates the state.
+	 * This is helpful if running a long task that may fail later or when
+	 * running a background job that updates the state.
 	 */
-	protected async _forceSaveState() {
+	protected async _saveState(opts: SaveStateOpts) {
 		this.#assertReady();
 
-		// Use a lock in order to avoid race conditions with writing to KV
-		await this.#saveStateLock.lock(async () => {
-			if (this.#stateChanged) {
-				logger().debug("saving state");
-
-				// There might be more changes while we're writing, so we set
-				// this before writing to KV in order to avoid a race
-				// condition.
-				this.#stateChanged = false;
-
-				// Write to KV
-				await this.#ctx.kv.put(KEYS.STATE.DATA, this.#stateRaw);
+		if (this.#stateChanged) {
+			if (opts.immediate) {
+				// Save immediately
+				await this.#saveStateInner();
 			} else {
-				logger().debug("skipping save, state not modified");
+				// Create callback
+				if (!this.#onStateSavedPromise) {
+					this.#onStateSavedPromise = Promise.withResolvers();
+				}
+
+				// Save state throttled
+				this.#saveStateThrottled();
+
+				// Wait for save
+				await this.#onStateSavedPromise.promise;
 			}
-		});
+		}
 	}
 
 	protected async _shutdown() {
@@ -674,10 +724,7 @@ export abstract class Actor<
 			if (!raw) continue;
 
 			// Create deferred promise
-			let resolve: ((value: unknown) => void) | undefined;
-			const promise = new Promise((res) => {
-				resolve = res;
-			});
+			const { promise, resolve } = Promise.withResolvers();
 			assertExists(resolve, "resolve should be defined by now");
 
 			// Resolve promise when websocket closes

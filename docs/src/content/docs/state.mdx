@@ -81,7 +81,7 @@ class Counter extends Actor<State> {
 
 Rivet automatically handles persisting state transparently to recover from a crash or upgrade. This happens at the end of every remote procedure call if the state has changed.
 
-In the rare occasion you need to force a state change mid-RPC, you can use `forceSaveState`. This should only be used if your remote procedure call makes an important state change that needs to be persisted before the RPC exits in case of a crash.
+In the rare occasion you need to force a state change mid-RPC, you can use `_saveState`. This should only be used if your remote procedure call makes an important state change that needs to be persisted before the RPC exits in case of a crash.
 
 ### Valid data types
 
