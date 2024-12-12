@@ -1,8 +1,9 @@
-import { assertEquals, assertExists } from "@std/assert";
+import { assertEquals } from "@std/assert";
 import { MAX_CONN_PARAMS_SIZE } from "../../common/src/network.ts";
 import { assertUnreachable } from "../../common/src/utils.ts";
 import type * as wsToClient from "../../protocol/src/ws/to_client.ts";
 import type * as wsToServer from "../../protocol/src/ws/to_server.ts";
+import { logger } from "./log.ts";
 
 interface RpcInFlight {
 	resolve: (response: wsToClient.RpcResponseOk) => void;
@@ -27,7 +28,7 @@ export class ActorHandleRaw {
 	#websocketQueue: string[] = [];
 	#websocketRpcInFlight = new Map<string, RpcInFlight>();
 
-	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+	// biome-ignore lint/suspicious/noExplicitAny: Unknown subscription type
 	#eventSubscriptions = new Map<string, Set<EventSubscriptions<any[]>>>();
 
 	// TODO: ws message queue
@@ -41,9 +42,7 @@ export class ActorHandleRaw {
 		name: string,
 		...args: Args
 	): Promise<Response> {
-		assertExists(this.#websocket);
-
-		console.trace("rpc", name, args);
+		logger().debug("rpc", { name, args });
 
 		// TODO: Add to queue if socket is not open
 
@@ -55,15 +54,17 @@ export class ActorHandleRaw {
 			},
 		);
 
-		this.#webSocketSend({
-			body: {
-				rpcRequest: {
-					id: requestId,
-					name,
-					args,
+		this.#webSocketSend(
+			{
+				body: {
+					rpcRequest: {
+						id: requestId,
+						name,
+						args,
+					},
 				},
-			},
-		} satisfies wsToServer.ToServer);
+			} satisfies wsToServer.ToServer,
+		);
 
 		// TODO: Throw error if disconnect is called
 
@@ -112,7 +113,7 @@ export class ActorHandleRaw {
 		const ws = new WebSocket(url);
 		this.#websocket = ws;
 		ws.onopen = () => {
-			console.trace("Socket open");
+			logger().debug("socket open");
 
 			// Resubscribe to all active events
 			for (const eventName of this.#eventSubscriptions.keys()) {
@@ -132,7 +133,11 @@ export class ActorHandleRaw {
 			// TODO: Handle queue
 			// TODO: Reconnect with backoff
 
-			console.trace("Socket closed", ev.code, ev.reason);
+			logger().debug("socket closed", {
+				code: ev.code,
+				reason: ev.reason,
+				wasClean: ev.wasClean,
+			});
 			this.#websocket = undefined;
 
 			// Automatically reconnect
@@ -143,9 +148,9 @@ export class ActorHandleRaw {
 				// this.connect(...args);
 			}
 		};
-		ws.onerror = (ev) => {
+		ws.onerror = (event) => {
 			if (this.#disconnected) return;
-			console.warn("Socket error", ev);
+			logger().debug("socket error", { event });
 		};
 		ws.onmessage = (ev) => {
 			const rawData = ev.data;
@@ -168,8 +173,9 @@ export class ActorHandleRaw {
 			} else if ("event" in response.body) {
 				this.#dispatchEvent(response.body.event);
 			} else if ("error" in response.body) {
-				console.warn(
-					`Unhandled error from actor: ${response.body.error.message}`,
+				logger().warn(
+					"unhandled error from actor",
+					{ message: response.body.error.message },
 				);
 			} else {
 				assertUnreachable(response.body);
@@ -257,9 +263,9 @@ export class ActorHandleRaw {
 		if (this.#websocket?.readyState === WebSocket.OPEN) {
 			try {
 				this.#websocket.send(message);
-				console.trace("sent", message);
-			} catch (err) {
-				console.warn("failed to send message, added to queue", err);
+				logger().debug("sent websocket message", { message });
+			} catch (error) {
+				logger().warn("failed to send message, added to queue", { error });
 
 				// Assuming the socket is disconnected and will be reconnected soon
 				//
@@ -269,7 +275,7 @@ export class ActorHandleRaw {
 		} else {
 			if (!opts?.ephemeral) {
 				this.#websocketQueue.push(message);
-				console.trace("queued", message);
+				logger().debug("queued websocket message", { message });
 			}
 		}
 	}
@@ -279,7 +285,7 @@ export class ActorHandleRaw {
 		if (!this.#websocket) return;
 		this.#disconnected = true;
 
-		console.trace("Disconnecting");
+		logger().debug("disconnecting");
 
 		// TODO: What do we do with the queue?
 
@@ -288,7 +294,7 @@ export class ActorHandleRaw {
 	}
 
 	dispose() {
-		console.trace("Disposing");
+		logger().debug("disposing");
 
 		// TODO: this will error if not usable
 		this.disconnect();

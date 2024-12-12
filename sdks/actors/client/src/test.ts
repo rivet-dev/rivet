@@ -1,4 +1,5 @@
 import { Client } from "./mod.ts";
+import { setupLogging } from "../../common/src/log.ts";
 
 /**
  * Uses the Rivet CLI to read the manager endpoint to connect to. This allows
@@ -25,6 +26,9 @@ export async function readEndpointFromCli(): Promise<string> {
 
 export class TestClient extends Client {
 	public constructor() {
+		// Setup logging automatically
+		setupLogging();
+
 		super(readEndpointFromCli());
 	}
 }

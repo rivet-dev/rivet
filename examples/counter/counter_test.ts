@@ -1,59 +1,56 @@
-import { Client, ActorHandle } from "../../sdks/actors/client/src/mod.ts"
-import { readEndpointFromCli } from "../../sdks/actors/client/src/dev.ts"
+import type { ActorHandle } from "../../sdks/actors/client/src/mod.ts"
+import { TestClient } from "../../sdks/actors/client/src/test.ts"
 import type Counter from "./counter.ts";
 
-async function main() {
-	const actorClient = new Client(await readEndpointFromCli());
+const actorClient = new TestClient();
 
-	// Broadcast event
-	let broadcastActor: ActorHandle<Counter>;
-	{
-		broadcastActor = await actorClient.withTags({ name: "counter" });
-		broadcastActor.on("broadcastCount", (count: unknown) => {
-			console.log("Broadcast:", count);
-		});
-	}
-
-	// Direct event
-	let directActor: ActorHandle<Counter>;
-	{
-		const mod = 3;
-		directActor = await actorClient.withTags(
-			{ name: "counter" },
-			{
-				parameters: { mod },
-			}
-		);
-		directActor.on("directCount", (count: unknown) => {
-			console.log(`Direct (n % ${mod}):`, count);
-		});
-	}
-
-	// Simple RPC
-	{
-		const actor = await actorClient.withTags<Counter>({ name: "counter" });
-		const newCount = await actor.increment(1);
-		console.log('Simple RPC:', newCount);
-		actor.disconnect();
-	}
-
-	// Multiple RPC calls
-	{
-		const actor = await actorClient.withTags<Counter>({ name: "counter" });
-
-		for (let i = 0; i < 10; i++) {
-			const output = await actor.increment(1);
-			console.log('Multiple RPC:', output);
-		}
-
-		actor.disconnect();
-	}
-
-	await directActor.destroyMe();
-
-	// Disconnect all actors before 
-	broadcastActor.disconnect();
-	directActor.disconnect();
+// Broadcast event
+let broadcastActor: ActorHandle<Counter>;
+{
+	broadcastActor = await actorClient.get({ name: "counter" });
+	broadcastActor.on("broadcastCount", (count: unknown) => {
+		console.log("Broadcast:", count);
+	});
 }
 
-await main();
+// Direct event
+let directActor: ActorHandle<Counter>;
+{
+	const mod = 3;
+	directActor = await actorClient.get(
+		{ name: "counter" },
+		{
+			parameters: { mod },
+		}
+	);
+	directActor.on("directCount", (count: unknown) => {
+		console.log(`Direct (n % ${mod}):`, count);
+	});
+}
+
+// Simple RPC
+{
+	const actor = await actorClient.get<Counter>({ name: "counter" });
+	const newCount = await actor.increment(1);
+	console.log('Simple RPC:', newCount);
+	actor.disconnect();
+}
+
+// Multiple RPC calls
+{
+	const actor = await actorClient.get<Counter>({ name: "counter" });
+
+	for (let i = 0; i < 10; i++) {
+		const output = await actor.increment(1);
+		console.log('Multiple RPC:', output);
+	}
+
+	actor.disconnect();
+}
+
+await directActor.destroyMe();
+
+// Disconnect all actors before 
+broadcastActor.disconnect();
+directActor.disconnect();
+

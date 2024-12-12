@@ -6,6 +6,7 @@ import type {
 } from "../../manager-protocol/src/mod.ts";
 import type { CreateRequest } from "../../manager-protocol/src/query.ts";
 import { ActorHandleRaw } from "./handle.ts";
+import { logger } from "./log.ts";
 
 export interface GetOpts {
 	parameters?: unknown;
@@ -18,15 +19,17 @@ export interface GetOpts {
  *
  * Private methods (e.g. those starting with `_`) are automatically excluded.
  */
-export type ActorHandle<A = unknown> = ActorHandleRaw & {
-	[K in keyof A as K extends string
-		? K extends `_${string}`
-			? never
-			: K
-		: K]: A[K] extends (...args: infer Args) => infer Return
-		? ActorRPCFunction<Args, Return>
-		: never;
-};
+export type ActorHandle<A = unknown> =
+	& ActorHandleRaw
+	& {
+		[
+			K in keyof A as K extends string ? K extends `_${string}` ? never
+				: K
+				: K
+		]: A[K] extends (...args: infer Args) => infer Return
+			? ActorRPCFunction<Args, Return>
+			: never;
+	};
 
 /**
  * RPC function returned by the actor proxy. This will call `ActorHandle.rpc`
@@ -57,7 +60,7 @@ export class Client {
 		} else {
 			// Convert to promise
 			this.#managerEndpointPromise = new Promise((resolve) =>
-				resolve(managerEndpointPromise),
+				resolve(managerEndpointPromise)
 			);
 		}
 
@@ -68,6 +71,7 @@ export class Client {
 		tags: ActorTags,
 		opts?: GetOpts,
 	): Promise<ActorHandle<A>> {
+		logger().debug("get actor", { tags, opts });
 		const handle = await this.#createHandle(tags, opts);
 		return this.#createProxy(handle) as ActorHandle<A>;
 	}
@@ -230,12 +234,11 @@ export class Client {
 			const { region }: { region: Region } = await res.json();
 
 			return region;
-		} catch (err) {
+		} catch (error) {
 			// Add safe fallback in case we can't fetch the region
-			console.error(
-				"Failed to fetch region, defaulting to manager region",
-				err,
-			);
+			logger().error("failed to fetch region, defaulting to manager region", {
+				error,
+			});
 			return undefined;
 		}
 	}

@@ -10,13 +10,14 @@ import type {
 	ActorQuery,
 	CreateRequest,
 } from "../../manager-protocol/src/query.ts";
+import { logger } from "./log.ts";
 
 export async function queryActor(
 	client: RivetClient,
 	environment: RivetEnvironment,
 	query: ActorQuery,
 ): Promise<Rivet.actor.Actor> {
-	console.log("Query", query);
+	logger().debug("query", { query });
 	if ("actorId" in query) {
 		const res = await client.actor.get(query.actorId.actorId, environment);
 		if ((res.actor.tags as ActorTags).access !== "public") {
@@ -57,7 +58,6 @@ async function getWithTags(
 		tagsJson: JSON.stringify(tags),
 		...environment,
 	};
-	console.log("List request", req);
 	let { actors } = await client.actor.list(req);
 
 	// TODO(RVT-4248): Don't return actors that aren't networkable yet
@@ -120,7 +120,7 @@ async function createActor(
 		...environment,
 		body: createRequest,
 	};
-	console.log("Create actor", req);
+	logger().info("creating actor", { req });
 	const { actor } = await client.actor.create(req);
 	return actor;
 }
@@ -134,7 +134,6 @@ async function getBuildWithTags(
 		tagsJson: JSON.stringify(buildTags),
 		...environment,
 	};
-	console.log("List builds request", req);
 	let { builds } = await client.actor.builds.list(req);
 
 	builds = builds.filter((b) => {

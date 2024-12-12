@@ -36,7 +36,6 @@ export default class Counter extends Actor<State, ConnParams | undefined, ConnSt
 	}
 
 	increment(_rpc: Rpc<Counter>, count: number): number {
-		console.log(new Error("foo"));
 		this.state.count += count;
 		return this.state.count;
 	}

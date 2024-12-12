@@ -1,5 +1,6 @@
 {
 	"imports": {
+		"@std/log": "jsr:@std/log@^0.224.11",
 		"hono": "jsr:@hono/hono@^4.6.12",
 		"@rivet-gg/api": "npm:@rivet-gg/api@0.0.1-rc.5",
 		"@rivet-gg/actors-core": "../core/src/mod.ts",

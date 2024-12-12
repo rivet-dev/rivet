@@ -3,7 +3,7 @@ import type { WSContext } from "hono/ws";
 import type * as wsToClient from "../../protocol/src/ws/to_client.ts";
 import type { Actor, AnyActor } from "./actor.ts";
 
-// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+// biome-ignore lint/suspicious/noExplicitAny: Must be used for `extends`
 type GetConnStateType<A> = A extends Actor<any, any, infer ConnState>
 	? ConnState
 	: never;

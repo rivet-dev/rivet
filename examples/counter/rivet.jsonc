@@ -4,5 +4,11 @@
 			"script": "counter.ts",
 			"access": "public"
 		}
+	},
+	"unstable": {
+		"manager": {
+			"minify": false,
+			"dump_build": true
+		}
 	}
 }

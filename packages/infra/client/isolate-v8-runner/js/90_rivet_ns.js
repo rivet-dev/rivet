@@ -10,7 +10,7 @@ export function deepFreeze(object) {
     const propNames = ReflectOwnKeys(object);
     // Freeze properties before freezing self
     for (const name of propNames) {
-        // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+        // biome-ignore lint/suspicious/noExplicitAny: Unknown object type
         const value = object[name];
         // Check if value is an array or object and not null
         if (value &&

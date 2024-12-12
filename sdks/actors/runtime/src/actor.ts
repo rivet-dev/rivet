@@ -2,7 +2,7 @@ import { Lock } from "@core/asyncutil/lock";
 import type { ActorContext } from "@rivet-gg/actors-core";
 import { assertExists } from "@std/assert";
 import { deadline } from "@std/async/deadline";
-import { Hono, type Context as HonoContext } from "hono";
+import { type Context as HonoContext, Hono } from "hono";
 import { upgradeWebSocket } from "hono/deno";
 import type { WSEvents } from "hono/ws";
 import onChange from "on-change";
@@ -13,6 +13,8 @@ import type * as wsToServer from "../../protocol/src/ws/to_server.ts";
 import { type ActorConfig, mergeActorConfig } from "./config.ts";
 import { Connection } from "./connection.ts";
 import { Rpc } from "./rpc.ts";
+import { logger } from "./log.ts";
+import { setupLogging } from "../../common/src/log.ts";
 
 const KEYS = {
 	SCHEDULE: {
@@ -120,6 +122,8 @@ export abstract class Actor<
 	// This is called by Rivet when the actor is exported as the default
 	// property
 	public static start(ctx: ActorContext) {
+		setupLogging();
+
 		// biome-ignore lint/complexity/noThisInStatic lint/suspicious/noExplicitAny: Needs to construct self
 		const instance = new (this as any)() as Actor;
 		return instance.#run(ctx);
@@ -139,10 +143,10 @@ export abstract class Actor<
 		this.#initializedPromise = undefined;
 
 		// TODO: Exit process if this errors
-		console.log("Starting");
+		logger().info("starting");
 		await this._onStart?.();
 
-		console.log("Ready");
+		logger().info("ready");
 		this.#ready = true;
 	}
 
@@ -212,8 +216,8 @@ export abstract class Actor<
 				if (this._onStateChange && this.#ready) {
 					try {
 						this._onStateChange(this.#stateRaw);
-					} catch (err) {
-						console.error("Error from onStateChange:", err);
+					} catch (error) {
+						logger().error("error in `_onStateChange`", { error });
 					}
 				}
 			},
@@ -225,7 +229,7 @@ export abstract class Actor<
 
 	async #initializeState() {
 		if (!this.#stateEnabled) {
-			console.log("State not enabled");
+			logger().debug("state not enabled");
 			return;
 		}
 		assertExists(this._onInitialize);
@@ -240,7 +244,7 @@ export abstract class Actor<
 
 		if (!initialized) {
 			// Initialize
-			console.log("Initializing");
+			logger().info("initializing");
 			const stateOrPromise = await this._onInitialize();
 
 			let stateData: State;
@@ -251,7 +255,7 @@ export abstract class Actor<
 			}
 
 			// Update state
-			console.log("Writing state");
+			logger().debug("writing state");
 			await this.#ctx.kv.putBatch(
 				new Map<unknown, unknown>([
 					[KEYS.STATE.INITIALIZED, true],
@@ -261,7 +265,7 @@ export abstract class Actor<
 			this.#setStateWithoutChange(stateData);
 		} else {
 			// Save state
-			console.log("Already initialized");
+			logger().debug("already initialized");
 			this.#setStateWithoutChange(stateData);
 		}
 	}
@@ -283,7 +287,7 @@ export abstract class Actor<
 		});
 
 		const port = this.#getServerPort();
-		console.log(`Server running on ${port}`);
+		logger().info("server running", { port });
 		this.#server = Deno.serve({ port, hostname: "0.0.0.0" }, app.fetch);
 	}
 
@@ -311,7 +315,7 @@ export abstract class Actor<
 	//		const output = await this.#executeRpc(ctx, rpcName, requestBody.args);
 	//		return c.json({ output });
 	//	} catch (error) {
-	//		console.error("RPC Error:", error);
+	//		logger().error("RPC Error:", error);
 	//		return c.json({ error: String(error) }, 500);
 	//	} finally {
 	//		await this.forceSaveState();
@@ -382,8 +386,9 @@ export abstract class Actor<
 		// Parse and validate params
 		let params: ConnParams;
 		try {
-			params =
-				typeof paramsStr === "string" ? JSON.parse(paramsStr) : undefined;
+			params = typeof paramsStr === "string"
+				? JSON.parse(paramsStr)
+				: undefined;
 		} catch (err) {
 			throw new Error(`Invalid WebSocket params: ${err}`);
 		}
@@ -426,8 +431,8 @@ export abstract class Actor<
 				if (this._onConnect) {
 					const voidOrPromise = this._onConnect(conn);
 					if (voidOrPromise instanceof Promise) {
-						deadline(voidOrPromise, CONNECT_TIMEOUT).catch((err) => {
-							console.error("Error in `onConnect`, closing socket:", err);
+						deadline(voidOrPromise, CONNECT_TIMEOUT).catch((error) => {
+							logger().error("error in `_onConnect`, closing socket", { error });
 							conn?.disconnect("`onConnect` failed");
 						});
 					}
@@ -435,7 +440,7 @@ export abstract class Actor<
 			},
 			onMessage: async (evt, ws) => {
 				if (!conn) {
-					console.warn("`conn` does not exist");
+					logger().warn("`conn` does not exist");
 					return;
 				}
 
@@ -456,14 +461,16 @@ export abstract class Actor<
 						const output = await this.#executeRpc(ctx, name, args);
 
 						ws.send(
-							JSON.stringify({
-								body: {
-									rpcResponseOk: {
-										id,
-										output,
+							JSON.stringify(
+								{
+									body: {
+										rpcResponseOk: {
+											id,
+											output,
+										},
 									},
-								},
-							} satisfies wsToClient.ToClient),
+								} satisfies wsToClient.ToClient,
+							),
 						);
 					} else if ("subscriptionRequest" in message.body) {
 						if (message.body.subscriptionRequest.subscribe) {
@@ -483,31 +490,35 @@ export abstract class Actor<
 				} catch (err) {
 					if (rpcRequestId) {
 						ws.send(
-							JSON.stringify({
-								body: {
-									rpcResponseError: {
-										id: rpcRequestId,
-										message: String(err),
+							JSON.stringify(
+								{
+									body: {
+										rpcResponseError: {
+											id: rpcRequestId,
+											message: String(err),
+										},
 									},
-								},
-							} satisfies wsToClient.ToClient),
+								} satisfies wsToClient.ToClient,
+							),
 						);
 					} else {
 						ws.send(
-							JSON.stringify({
-								body: {
-									error: {
-										message: String(err),
+							JSON.stringify(
+								{
+									body: {
+										error: {
+											message: String(err),
+										},
 									},
-								},
-							} satisfies wsToClient.ToClient),
+								} satisfies wsToClient.ToClient,
+							),
 						);
 					}
 				}
 			},
 			onClose: () => {
 				if (!conn) {
-					console.warn("`conn` does not exist");
+					logger().warn("`conn` does not exist");
 					return;
 				}
 
@@ -520,10 +531,10 @@ export abstract class Actor<
 
 				this._onDisconnect?.(conn);
 			},
-			onError: (evt) => {
+			onError: (error) => {
 				// Actors don't need to know about this, since it's abstracted
 				// away
-				console.warn("WebSocket error:", evt);
+				logger().warn("WebSocket error", { error });
 			},
 		};
 	}
@@ -582,14 +593,16 @@ export abstract class Actor<
 		const subscriptions = this.#eventSubscriptions.get(name);
 		if (!subscriptions) return;
 
-		const body = JSON.stringify({
-			body: {
-				event: {
-					name,
-					args,
+		const body = JSON.stringify(
+			{
+				body: {
+					event: {
+						name,
+						args,
+					},
 				},
-			},
-		} satisfies wsToClient.ToClient);
+			} satisfies wsToClient.ToClient,
+		);
 		for (const connection of subscriptions) {
 			connection._sendWebSocketMessage(body);
 		}
@@ -607,13 +620,11 @@ export abstract class Actor<
 		// TODO: Should we force save the state?
 		// Add logging to promise and make it non-failable
 		const nonfailablePromise = promise
-			.then(() => console.trace("background promise complete"))
-			.catch((err) => {
-				console.error("background promise failed", err);
-				// ctx.log.error(
-				// 	"background promise failed",
-				// 	...errorToLogEntries("error", err),
-				// )
+			.then(() => {
+				logger().debug("background promise complete");
+			})
+			.catch((error) => {
+				logger().error("background promise failed", { error });
 			});
 		this.#backgroundPromises.push(nonfailablePromise);
 	}
@@ -630,7 +641,7 @@ export abstract class Actor<
 		// Use a lock in order to avoid race conditions with writing to KV
 		await this.#saveStateLock.lock(async () => {
 			if (this.#stateChanged) {
-				console.trace("saving state");
+				logger().debug("saving state");
 
 				// There might be more changes while we're writing, so we set
 				// this before writing to KV in order to avoid a race
@@ -640,7 +651,7 @@ export abstract class Actor<
 				// Write to KV
 				await this.#ctx.kv.put(KEYS.STATE.DATA, this.#stateRaw);
 			} else {
-				console.trace("skipping save, state not modified");
+				logger().debug("skipping save, state not modified");
 			}
 		});
 	}
@@ -678,7 +689,7 @@ export abstract class Actor<
 		]);
 
 		if (await res) {
-			console.warn(
+			logger().warn(
 				"timed out waiting for connections to close, shutting down anyway",
 			);
 		}

@@ -1,9 +1,11 @@
 {
 	"imports": {
 		"@core/asyncutil": "jsr:@core/asyncutil@^1.2.0",
+		"@cross/env": "jsr:@cross/env@^1.0.2",
 		"@rivet-gg/api": "npm:@rivet-gg/api@0.0.1-rc.5",
 		"@std/assert": "jsr:@std/assert@^1.0.8",
 		"@std/async": "jsr:@std/async@^1.0.9",
+		"@std/log": "jsr:@std/log@^0.224.11",
 		"hono": "jsr:@hono/hono@^4.6.12",
 		"@rivet-gg/actors-core": "../../sdks/actors/core/src/mod.ts",
 		"@rivet-gg/actors": "../../sdks/actors/runtime/src/mod.ts",

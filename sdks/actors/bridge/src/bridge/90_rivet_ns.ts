@@ -11,7 +11,7 @@ export function deepFreeze<T extends object>(object: T): Readonly<T> {
 
 	// Freeze properties before freezing self
 	for (const name of propNames) {
-		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+		// biome-ignore lint/suspicious/noExplicitAny: Unknown object type
 		const value = (object as any)[name as string];
 
 		// Check if value is an array or object and not null

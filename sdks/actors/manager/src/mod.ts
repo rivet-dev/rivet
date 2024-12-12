@@ -1,12 +1,12 @@
 import type { ActorContext } from "@rivet-gg/actors-core";
 import { RivetClient } from "@rivet-gg/api";
 import { assertExists } from "@std/assert/exists";
-import { Hono, type Context as HonoContext } from "hono";
+import { type Context as HonoContext, Hono } from "hono";
 import { cors } from "hono/cors";
 import { PORT_NAME } from "../../common/src/network.ts";
 import {
-	type RivetEnvironment,
 	assertUnreachable,
+	type RivetEnvironment,
 } from "../../common/src/utils.ts";
 import type {
 	ActorsRequest,
@@ -14,6 +14,8 @@ import type {
 	RivetConfigResponse,
 } from "../../manager-protocol/src/mod.ts";
 import { queryActor } from "./query_exec.ts";
+import { setupLogging } from "../../common/src/log.ts";
+import { logger } from "./log.ts";
 
 export default class Manager {
 	private readonly endpoint: string;
@@ -40,7 +42,9 @@ export default class Manager {
 	}
 
 	static async start(ctx: ActorContext) {
-		// biome-ignore lint/complexity/noThisInStatic: <explanation>
+		setupLogging();
+
+		// biome-ignore lint/complexity/noThisInStatic: Must be used for default actor entrypoint
 		const manager = new this(ctx);
 		await manager.#run();
 	}
@@ -56,12 +60,14 @@ export default class Manager {
 		app.use("/*", cors());
 
 		app.get("/rivet/config", (c: HonoContext) => {
-			return c.json({
-				// HACK(RVT-4376): Replace DNS address used for local dev envs with public address
-				endpoint: this.endpoint.replace("rivet-server", "127.0.0.1"),
-				project: this.environment.project,
-				environment: this.environment.environment,
-			} satisfies RivetConfigResponse);
+			return c.json(
+				{
+					// HACK(RVT-4376): Replace DNS address used for local dev envs with public address
+					endpoint: this.endpoint.replace("rivet-server", "127.0.0.1"),
+					project: this.environment.project,
+					environment: this.environment.environment,
+				} satisfies RivetConfigResponse,
+			);
 		});
 
 		app.post("/actors", async (c: HonoContext) => {
@@ -106,6 +112,11 @@ export default class Manager {
 			return c.json({ endpoint } satisfies ActorsResponse);
 		});
 
+		app.all("*", (c) => {
+			return c.text("Not Found", 404);
+		});
+
+		logger().info("server running", { port });
 		const server = Deno.serve(
 			{
 				port,
@@ -113,6 +124,13 @@ export default class Manager {
 			},
 			app.fetch,
 		);
+
+		logger().debug("rivet endpoint", {
+			endpoint: this.endpoint,
+			project: this.ctx.metadata.project.slug,
+			environment: this.ctx.metadata.environment.slug,
+		});
+
 		await server.finished;
 	}
 }
