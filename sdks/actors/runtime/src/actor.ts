@@ -13,8 +13,9 @@ import type * as wsToServer from "../../protocol/src/ws/to_server.ts";
 import { type ActorConfig, mergeActorConfig } from "./config.ts";
 import { Connection } from "./connection.ts";
 import { Rpc } from "./rpc.ts";
-import { logger } from "./log.ts";
+import { instanceLogger, logger } from "./log.ts";
 import { setupLogging } from "../../common/src/log.ts";
+import type { Logger } from "@std/log/get-logger";
 
 const KEYS = {
 	SCHEDULE: {
@@ -99,6 +100,10 @@ export abstract class Actor<
 
 	protected constructor(config?: Partial<ActorConfig>) {
 		this.#config = mergeActorConfig(config);
+	}
+
+	protected get log(): Logger {
+		return instanceLogger();
 	}
 
 	protected get connections(): Set<Connection<this>> {

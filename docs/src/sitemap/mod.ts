@@ -137,6 +137,11 @@ export const sitemap = [
                 title: 'Fault Tolerance',
                 href: '/docs/fault-tolerance',
                 icon: 'heart-pulse'
+              },
+              {
+                title: 'Logging',
+                href: '/docs/logging',
+                icon: 'list-ul'
               }
               // { title: 'DDoS & Botting Mitigation', href: '/docs', icon: 'shield-halved' },
             ]

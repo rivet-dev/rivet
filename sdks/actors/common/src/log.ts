@@ -2,7 +2,7 @@ import * as log from "@std/log";
 //import { getEnv as crossGetEnv } from "@cross/env";
 import { LOGGER_NAME as CLIENT } from "../../client/src/log.ts";
 import { LOGGER_NAME as MANAGER } from "../../manager/src/log.ts";
-import { LOGGER_NAME as RUNTIME } from "../../runtime/src/log.ts";
+import { LOGGER_NAME as RUNTIME, INSTANCE_LOGGER_NAME as INSTANCE } from "../../runtime/src/log.ts";
 import { type LogEntry, stringify, castToLogValue } from "./logfmt.ts";
 
 export function getLogger(name: string): log.Logger {
@@ -28,6 +28,7 @@ export function setupLogging() {
 			[CLIENT]: loggerConfig,
 			[MANAGER]: loggerConfig,
 			[RUNTIME]: loggerConfig,
+			[INSTANCE]: loggerConfig,
 		},
 	});
 }

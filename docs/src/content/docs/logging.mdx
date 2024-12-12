@@ -1,0 +1,86 @@
+# Logging
+
+Actors provide a built-in way to log complex data to the console.
+
+When dealing with lots of data, `console.log` often doesn't cut it. Using `this.log` allows you to log complex data using structured logging.
+
+<Note>Using the actor logging API is completely optional.</Note>
+
+## Log levels
+
+There are 5 log levels:
+
+| Level    | Call                                   | Description                                                      |
+| -------- | -------------------------------------- | ---------------------------------------------------------------- |
+| Critical | `this.log.critical(message, ...args);` | Severe errors that prevent core functionality                    |
+| Error    | `this.log.error(message, ...args);`    | Errors that affect functionality but allow continued operation   |
+| Warning  | `this.log.warn(message, ...args);`     | Potentially harmful situations that should be addressed          |
+| Info     | `this.log.info(message, ...args);`     | General information about significant events & state changes     |
+| Debug    | `this.log.debug(message, ...args);`    | Detailed debugging information, usually used only in development |
+
+## Structured logging
+
+The built-in logging API (using `this.log`) provides structured logging to let you log key-value
+pairs instead of raw strings. Structures logs are readable by both machines &
+humans to make them easier to parse & search.
+
+Passing an object to a log will print as structured data. For example:
+
+```typescript
+this.log.info('increment', { connection: rpc.connection.id, count });
+// Prints: level=INFO msg=increment connection=123 count=456
+```
+
+The first parameter in each log method is the message. The rest of the arguments are used for structured logging.
+
+## `this.log` vs `console.log` logging
+
+`this.log` makes it easier to manage complex logs, while `console.log` can
+become unmaintainable at scale.
+
+Consider this example:
+
+<CodeGroup>
+
+```typescript {{ "title": "structured_logging.ts" }}
+export default class Counter extends Actor<State> {
+  increment(rpc: Rpc<Counter>, count: number): number {
+    // Prints: level=INFO msg=increment connection=123 count=456
+    this.log.info('increment', { connection: rpc.connection.id, count });
+
+    this.state.count += count;
+    return this.state.count;
+  }
+
+  // ...etc...
+}
+```
+
+```typescript {{ "title": "unstructured_logging.ts" }}
+export default class Counter extends Actor<State> {
+  increment(rpc: Rpc<Counter>, count: number): number {
+    // Prints: Increment for connection 123 with count 456
+    console.log(`Increment for connection ${rpc.connection.id} with count ${count}`);
+
+    this.state.count += count;
+    return this.state.count;
+  }
+
+  // ...etc...
+}
+```
+
+</CodeGroup>
+
+If you need to search through a lot of logs, it's easier to read the structured logs. To find increments for a single connection, you can search `connection=123`.
+
+Additionally, structured logs can be parsed and queried at scale using tools like Elasticsearch, Loki, or Datadog. For example, you can parse the log `level=INFO msg=increment connection=123 count=456` in to the JSON object `{"level":"INFO","msg":"increment","connection":123,"count":456}` and then query it as you would any other structured data.
+
+## Configuring logging
+
+The Rivet logging API is powered by the [@std/log](https://jsr.io/@std/log) package.
+
+By default, logs are printed in [logfmt](https://brandur.org/logfmt) format for
+a balance between machine & human readability. To configure the logging format
+yourself, you can call the [`setup`](https://jsr.io/@std/log/doc/~/setup)
+function in `_onStart`.
