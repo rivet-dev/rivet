@@ -1,5 +1,6 @@
 import { Client } from "./mod.ts";
 import { setupLogging } from "../../common/src/log.ts";
+import { InternalError } from "./errors.ts";
 
 /**
  * Uses the Rivet CLI to read the manager endpoint to connect to. This allows
@@ -12,7 +13,7 @@ export async function readEndpointFromCli(): Promise<string> {
 		args: ["manager", "endpoint"],
 	}).output();
 	if (!output.success) {
-		throw new Error(
+		throw new InternalError(
 			`Read endpoint failed with ${output.code}:\n${new TextDecoder().decode(
 				output.stderr,
 			)}`,

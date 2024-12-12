@@ -7,7 +7,6 @@ import { type Context as HonoContext, Hono } from "hono";
 import { upgradeWebSocket } from "hono/deno";
 import type { WSEvents } from "hono/ws";
 import onChange from "on-change";
-import { MAX_CONN_PARAMS_SIZE } from "../../common/src/network.ts";
 import { assertUnreachable } from "../../common/src/utils.ts";
 import type * as wsToClient from "../../protocol/src/ws/to_client.ts";
 import type * as wsToServer from "../../protocol/src/ws/to_server.ts";
@@ -17,6 +16,7 @@ import { Rpc } from "./rpc.ts";
 import { instanceLogger, logger } from "./log.ts";
 import { setupLogging } from "../../common/src/log.ts";
 import type { Logger } from "@std/log/get-logger";
+import * as errors from "./errors.ts";
 
 const KEYS = {
 	SCHEDULE: {
@@ -26,7 +26,6 @@ const KEYS = {
 			return [...this.EVENT_PREFIX, id];
 		},
 	},
-	// Shutting down is not part of the state because you can't meaningfully handle the state change
 	STATE: {
 		INITIALIZED: ["actor", "state", "initialized"],
 		DATA: ["actor", "state", "data"],
@@ -58,12 +57,12 @@ function isJsonSerializable(value: unknown): boolean {
 	return false;
 }
 
-export interface OnBeforeConnectOpts<ConnParams> {
+export interface OnBeforeConnectOptions<ConnParams> {
 	request: Request;
 	parameters: ConnParams;
 }
 
-export interface SaveStateOpts {
+export interface SaveStateOptions {
 	/**
 	 * Forces the state to be saved immediately. This function will return when the state has save successfully.
 	 */
@@ -151,9 +150,7 @@ export abstract class Actor<
 
 	#validateStateEnabled() {
 		if (!this.#stateEnabled) {
-			throw new Error(
-				"State not enabled. Must implement createState to use state.",
-			);
+			throw new errors.StateNotEnabled();
 		}
 	}
 
@@ -198,7 +195,7 @@ export abstract class Actor<
 	/** Updates the state and creates a new proxy. */
 	#setStateWithoutChange(value: State) {
 		if (!isJsonSerializable(value)) {
-			throw new Error("State must be JSON serializable");
+			throw new errors.InvalidStateType();
 		}
 		this.#stateProxy = this.#createStateProxy(value);
 		this.#stateRaw = value;
@@ -208,7 +205,7 @@ export abstract class Actor<
 		// If this can't be proxied, return raw value
 		if (target === null || typeof target !== "object") {
 			if (!isJsonSerializable(target)) {
-				throw new Error("State value must be JSON serializable");
+				throw new errors.InvalidStateType();
 			}
 			return target;
 		}
@@ -224,9 +221,7 @@ export abstract class Actor<
 			// biome-ignore lint/suspicious/noExplicitAny: Don't know types in proxy
 			(path: any, value: any, _previousValue: any, _applyData: any) => {
 				if (!isJsonSerializable(value)) {
-					throw new Error(
-						`State value at path "${path}" must be JSON serializable`,
-					);
+					throw new errors.InvalidStateType({ path });
 				}
 				this.#stateChanged = true;
 
@@ -390,16 +385,12 @@ export abstract class Actor<
 		// Validate protocol
 		const protocolVersion = c.req.query("version");
 		if (protocolVersion !== "1") {
-			throw new Error(`Invalid protocol version: ${protocolVersion}`);
+			logger().warn("invalid protocol version", { protocolVersion });
+			throw new errors.InvalidProtocolVersion(protocolVersion);
 		}
 
 		// Validate params size (limiting to 4KB which is reasonable for query params)
 		const paramsStr = c.req.query("params");
-		if (paramsStr && paramsStr.length > MAX_CONN_PARAMS_SIZE) {
-			throw new Error(
-				`WebSocket params too large (max ${MAX_CONN_PARAMS_SIZE} bytes)`,
-			);
-		}
 
 		// Parse and validate params
 		let params: ConnParams;
@@ -407,8 +398,9 @@ export abstract class Actor<
 			params = typeof paramsStr === "string"
 				? JSON.parse(paramsStr)
 				: undefined;
-		} catch (err) {
-			throw new Error(`Invalid WebSocket params: ${err}`);
+		} catch (error) {
+			logger().warn("malformed connection parameters", { error });
+			throw new errors.MalformedConnectionParameters(error);
 		}
 
 		// Authenticate connection
@@ -468,9 +460,10 @@ export abstract class Actor<
 				try {
 					const value = evt.data.valueOf();
 					if (typeof value !== "string") {
-						throw new Error("message must be string");
+						logger().warn("received non-string message");
+						throw new errors.MalformedMessage();
 					}
-					// TODO: Validate message
+
 					const message: wsToServer.ToServer = JSON.parse(value);
 
 					if ("rpcRequest" in message.body) {
@@ -508,6 +501,20 @@ export abstract class Actor<
 						assertUnreachable(message.body);
 					}
 				} catch (err) {
+					// Build response error information. Only return errors if flagged as public in order to prevent leaking internal behavior.
+					let code: string;
+					let message: string;
+					let metadata: unknown = undefined;
+					if (err instanceof errors.ActorError && err.public) {
+						code = err.code;
+						message = String(err);
+						metadata = err.metadata;
+					} else {
+						code = errors.INTERNAL_ERROR_CODE;
+						message = errors.INTERNAL_ERROR_DESCRIPTION;
+					}
+
+					// Build response
 					if (rpcRequestId) {
 						ws.send(
 							JSON.stringify(
@@ -515,7 +522,9 @@ export abstract class Actor<
 									body: {
 										rpcResponseError: {
 											id: rpcRequestId,
-											message: String(err),
+											code,
+											message,
+											metadata,
 										},
 									},
 								} satisfies wsToClient.ToClient,
@@ -527,7 +536,9 @@ export abstract class Actor<
 								{
 									body: {
 										error: {
-											message: String(err),
+											code,
+											message,
+											metadata,
 										},
 									},
 								} satisfies wsToClient.ToClient,
@@ -560,7 +571,7 @@ export abstract class Actor<
 	}
 
 	#assertReady() {
-		if (!this.#ready) throw new Error("Actor not ready");
+		if (!this.#ready) throw new errors.InternalError("Actor not ready");
 	}
 
 	async #executeRpc(
@@ -570,14 +581,16 @@ export abstract class Actor<
 	): Promise<unknown> {
 		// Prevent calling private or reserved methods
 		if (!this.#isValidRpc(rpcName)) {
-			throw new Error(`RPC ${rpcName} is not accessible`);
+			logger().warn("attempted to call invalid rpc", { rpcName });
+			throw new errors.RpcNotFound();
 		}
 
 		// Check if the method exists on this object
 		// biome-ignore lint/suspicious/noExplicitAny: RPC name is dynamic from client
 		const rpcFunction = (this as any)[rpcName];
 		if (typeof rpcFunction !== "function") {
-			throw new Error(`RPC ${rpcName} not found`);
+			logger().warn("rpc not found", { rpcName });
+			throw new errors.RpcNotFound();
 		}
 
 		// TODO: pass abortable to the rpc to decide when to abort
@@ -592,9 +605,15 @@ export abstract class Actor<
 			}
 		} catch (error) {
 			if (error instanceof DOMException && error.name === "TimeoutError") {
-				throw new Error(`RPC ${rpcName} timed out`);
+				logger().error("rpc timed out", { rpcName });
+				throw new errors.RpcTimedOut();
 			} else {
-				throw new Error(`RPC ${rpcName} failed: ${String(error)}`);
+				if (error instanceof errors.UserError) {
+					logger().info("rpc raised user error", { rpcName, error });
+				} else {
+					logger().error("rpc raised error", { rpcName, error });
+				}
+				throw error;
 			}
 		} finally {
 			this.#saveStateThrottled();
@@ -609,7 +628,7 @@ export abstract class Actor<
 	protected _onStateChange?(newState: State): void | Promise<void>;
 
 	protected _onBeforeConnect?(
-		opts: OnBeforeConnectOpts<ConnParams>,
+		opts: OnBeforeConnectOptions<ConnParams>,
 	): ConnState | Promise<ConnState>;
 
 	protected _onConnect?(connection: Connection<this>): void | Promise<void>;
@@ -691,7 +710,7 @@ export abstract class Actor<
 	 * This is helpful if running a long task that may fail later or when
 	 * running a background job that updates the state.
 	 */
-	protected async _saveState(opts: SaveStateOpts) {
+	protected async _saveState(opts: SaveStateOptions) {
 		this.#assertReady();
 
 		if (this.#stateChanged) {

@@ -4,6 +4,7 @@ import { assertUnreachable } from "../../common/src/utils.ts";
 import * as wsToClient from "../../protocol/src/ws/to_client.ts";
 import type * as wsToServer from "../../protocol/src/ws/to_server.ts";
 import { logger } from "./log.ts";
+import * as errors from "./errors.ts";
 
 interface RpcInFlight {
 	resolve: (response: wsToClient.RpcResponseOk) => void;
@@ -101,9 +102,7 @@ export class ActorHandleRaw {
 
 			// TODO: This is an imprecise count since it doesn't count the full URL length & URI encoding expansion in the URL size
 			if (paramsStr.length > MAX_CONN_PARAMS_SIZE) {
-				throw new Error(
-					`Connection parameters must be less than ${MAX_CONN_PARAMS_SIZE} bytes`,
-				);
+				throw new errors.ConnectionParametersTooLong();
 			}
 
 			url += `&params=${encodeURIComponent(paramsStr)}`;
@@ -154,7 +153,8 @@ export class ActorHandleRaw {
 		ws.onmessage = (ev) => {
 			const rawData = ev.data;
 			if (typeof rawData !== "string") {
-				throw new Error("Response data was not string");
+				logger().warn("response message was not string");
+				throw new errors.MalformedResponseMessage();
 			}
 
 			const response: wsToClient.ToClient = JSON.parse(rawData);
@@ -167,14 +167,14 @@ export class ActorHandleRaw {
 					response.body.rpcResponseError.id,
 				);
 				inFlight.reject(
-					new Error(`RPC error: ${response.body.rpcResponseError.message}`),
+					new errors.RpcError(response.body.rpcResponseError.code, response.body.rpcResponseError.message, response.body.rpcResponseError.metadata)
 				);
 			} else if ("event" in response.body) {
 				this.#dispatchEvent(response.body.event);
 			} else if ("error" in response.body) {
 				logger().warn(
 					"unhandled error from actor",
-					{ message: response.body.error.message },
+					{ code: response.body.error.code, message: response.body.error.message, metadata: response.body.error.metadata }
 				);
 			} else {
 				assertUnreachable(response.body);
@@ -184,7 +184,7 @@ export class ActorHandleRaw {
 
 	#takeRpcInFlight(id: string): RpcInFlight {
 		const inFlight = this.#websocketRpcInFlight.get(id);
-		if (!inFlight) throw new Error(`No in flight response for ${id}`);
+		if (!inFlight) throw new errors.InternalError(`No in flight response for ${id}`);
 		this.#websocketRpcInFlight.delete(id);
 		return inFlight;
 	}

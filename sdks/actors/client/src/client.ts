@@ -7,6 +7,7 @@ import type {
 import type { CreateRequest } from "../../manager-protocol/src/query.ts";
 import { ActorHandleRaw } from "./handle.ts";
 import { logger } from "./log.ts";
+import * as errors from "./errors.ts";
 
 export interface GetOpts {
 	parameters?: unknown;
@@ -189,22 +190,25 @@ export class Client {
 		path: string,
 		body?: Request,
 	): Promise<Response> {
-		const managerEndpoint = await this.#managerEndpointPromise;
-		const res = await fetch(`${managerEndpoint}${path}`, {
-			method,
-			headers: {
-				"Content-Type": "application/json",
-			},
-			body: body ? JSON.stringify(body) : undefined,
-		});
+		try {
+			const managerEndpoint = await this.#managerEndpointPromise;
+			const res = await fetch(`${managerEndpoint}${path}`, {
+				method,
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: body ? JSON.stringify(body) : undefined,
+			});
 
-		if (!res.ok) {
-			throw new Error(
-				`Manager error (${res.statusText}):\n${await res.text()}`,
-			);
+			if (!res.ok) {
+				throw new errors.ManagerError(`${res.statusText}: ${await res.text()}`);
+			}
+
+			return res.json();
+		} catch (error) {
+			throw new errors.ManagerError(String(error), { cause: error });
+
 		}
-
-		return res.json();
 	}
 
 	async #fetchRegion(): Promise<Region | undefined> {
@@ -226,9 +230,12 @@ export class Client {
 			const res = await fetch(url.toString());
 
 			if (!res.ok) {
-				throw new Error(
-					`Failed to fetch region (${res.statusText}):\n${await res.text()}`,
-				);
+				// Add safe fallback in case we can't fetch the region
+				logger().error("failed to fetch region, defaulting to manager region", {
+					status: res.statusText,
+					body: await res.text(),
+				});
+				return undefined;
 			}
 
 			const { region }: { region: Region } = await res.json();

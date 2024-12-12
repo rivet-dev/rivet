@@ -13,7 +13,9 @@ export interface RpcResponseOk {
 
 export interface RpcResponseError {
 	id: string;
+	code: string;
 	message: string;
+	metadata?: unknown;
 }
 
 export interface ToClientEvent {
@@ -22,5 +24,7 @@ export interface ToClientEvent {
 }
 
 export interface ToClientError {
+	code: string;
 	message: string;
+	metadata?: unknown;
 }

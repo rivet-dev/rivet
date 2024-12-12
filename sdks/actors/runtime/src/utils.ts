@@ -1,3 +1,5 @@
+import * as errors from "./errors.ts";
+
 export function assertUnreachable(x: never): never {
-	throw new Error(`Unreachable case: ${x}`);
+	throw new errors.Unreachable(x);
 }
