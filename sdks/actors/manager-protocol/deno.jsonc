@@ -1,5 +1,6 @@
 {
 	"imports": {
-		"@rivet-gg/api": "npm:@rivet-gg/api@0.0.1-rc.5"
+		"@rivet-gg/api": "npm:@rivet-gg/api@0.0.1-rc.5",
+		"zod": "npm:zod@^3.24.1"
 	}
 }

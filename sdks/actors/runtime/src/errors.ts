@@ -1,5 +1,6 @@
 export const INTERNAL_ERROR_CODE = "internal_error";
-export const INTERNAL_ERROR_DESCRIPTION = "Internal error. Read the actor logs for more details.";
+export const INTERNAL_ERROR_DESCRIPTION =
+	"Internal error. Read the actor logs for more details.";
 
 export const USER_ERROR_CODE = "user_error";
 
@@ -14,7 +15,11 @@ export class ActorError extends Error {
 	public public: boolean;
 	public metadata?: unknown;
 
-	constructor(public readonly code: string, message: string, opts?: ActorErrorOptions) {
+	constructor(
+		public readonly code: string,
+		message: string,
+		opts?: ActorErrorOptions,
+	) {
 		super(message, { cause: opts?.cause });
 		this.public = opts?.public ?? false;
 		this.metadata = opts?.metadata;
@@ -35,7 +40,10 @@ export class Unreachable extends InternalError {
 
 export class StateNotEnabled extends ActorError {
 	constructor() {
-		super("state_not_enabled", "State not enabled. Must implement `_onInitialize` to use state.");
+		super(
+			"state_not_enabled",
+			"State not enabled. Must implement `_onInitialize` to use state.",
+		);
 	}
 }
 
@@ -62,19 +70,30 @@ export class RpcNotFound extends ActorError {
 
 export class InvalidProtocolVersion extends ActorError {
 	constructor(version?: string) {
-		super("invalid_protocol_version", `Invalid protocol version \`${version}\`.`, { public: true });
+		super(
+			"invalid_protocol_version",
+			`Invalid protocol version \`${version}\`.`,
+			{ public: true },
+		);
 	}
 }
 
 export class MalformedConnectionParameters extends ActorError {
 	constructor(cause: unknown) {
-		super("malformed_connnection_parameters", `Malformed connection parameters: ${cause}`, { public: true, cause });
+		super(
+			"malformed_connnection_parameters",
+			`Malformed connection parameters: ${cause}`,
+			{ public: true, cause },
+		);
 	}
 }
 
 export class MalformedMessage extends ActorError {
 	constructor(cause?: unknown) {
-		super("malformed_message", `Malformed message: ${cause}`, { public: true, cause });
+		super("malformed_message", `Malformed message: ${cause}`, {
+			public: true,
+			cause,
+		});
 	}
 }
 
@@ -84,11 +103,13 @@ export interface InvalidStateTypeOptions {
 
 export class InvalidStateType extends ActorError {
 	constructor(opts?: InvalidStateTypeOptions) {
-		const msg =
-			(opts?.path
-				? `Attempted to set invalid state at path \`${opts.path}\`.`
-				: "Attempted to set invalid state.") +
-			" State must be JSON serializable.";
+		let msg = "";
+		if (opts?.path) {
+			msg += `Attempted to set invalid state at path \`${opts.path}\`.`;
+		} else {
+			msg += "Attempted to set invalid state.";
+		}
+		msg += " State must be JSON serializable.";
 		super("invalid_state_type", msg);
 	}
 }
@@ -104,4 +125,3 @@ export class UserError extends ActorError {
 		super(opts?.code ?? USER_ERROR_CODE, message);
 	}
 }
-

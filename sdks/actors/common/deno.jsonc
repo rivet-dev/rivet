@@ -1,5 +1,6 @@
 {
-  "imports": {
-    "@std/log": "jsr:@std/log@^0.224.11"
-  }
+	"imports": {
+		"@std/log": "jsr:@std/log@^0.224.11",
+		"zod": "npm:zod@^3.24.1"
+	}
 }

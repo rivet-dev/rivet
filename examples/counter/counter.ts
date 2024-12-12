@@ -1,5 +1,5 @@
 import { Actor } from "@rivet-gg/actors";
-import type { Rpc, OnBeforeConnectOpts } from "@rivet-gg/actors";
+import type { Rpc, OnBeforeConnectOptions } from "@rivet-gg/actors";
 
 interface State {
 	count: number;
@@ -22,7 +22,7 @@ export default class Counter extends Actor<
 		return { count: 0 };
 	}
 
-	override _onBeforeConnect(opts: OnBeforeConnectOpts<ConnParams>): ConnState {
+	override _onBeforeConnect(opts: OnBeforeConnectOptions<ConnParams>): ConnState {
 		this._log.info("parameters", { params: opts.parameters });
 		return { mod: opts.parameters?.mod ?? 1 };
 	}

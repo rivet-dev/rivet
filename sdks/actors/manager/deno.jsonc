@@ -4,6 +4,7 @@
 		"hono": "jsr:@hono/hono@^4.6.12",
 		"@rivet-gg/api": "npm:@rivet-gg/api@0.0.1-rc.5",
 		"@rivet-gg/actors-core": "../core/src/mod.ts",
-		"@std/assert": "jsr:@std/assert@^1.0.8"
+		"@std/assert": "jsr:@std/assert@^1.0.8",
+		"zod": "npm:zod@^3.24.1"
 	}
 }

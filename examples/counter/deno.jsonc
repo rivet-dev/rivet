@@ -9,7 +9,8 @@
 		"hono": "jsr:@hono/hono@^4.6.12",
 		"@rivet-gg/actors-core": "../../sdks/actors/core/src/mod.ts",
 		"@rivet-gg/actors": "../../sdks/actors/runtime/src/mod.ts",
-		"on-change": "npm:on-change@^5.0.1"
+		"on-change": "npm:on-change@^5.0.1",
+		"zod": "npm:zod@^3.24.1"
 	},
 	"fmt": {
 		"useTabs": true

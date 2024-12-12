@@ -1,4 +1,5 @@
 import type { Rivet, RivetClient } from "@rivet-gg/api";
+import { assertEquals } from "@std/assert";
 import { PORT_NAME } from "../../common/src/network.ts";
 import { assertUnreachable } from "../../common/src/utils.ts";
 import type {
@@ -18,29 +19,43 @@ export async function queryActor(
 	query: ActorQuery,
 ): Promise<Rivet.actor.Actor> {
 	logger().debug("query", { query });
-	if ("actorId" in query) {
-		const res = await client.actor.get(query.actorId.actorId, environment);
+	if ("getForId" in query) {
+		// Get actor
+		const res = await client.actor.get(query.getForId.actorId, environment);
+
+		// Validate actor
 		if ((res.actor.tags as ActorTags).access !== "public") {
-			throw new Error(`Actor with ID ${query.actorId.actorId} is private`);
+			// TODO: Throw 404 that matches the 404 from Fern if the actor is not found
+			throw new Error(`Actor with ID ${query.getForId.actorId} is private`);
 		}
 		if (res.actor.destroyedAt) {
 			throw new Error(
-				`Actor with ID ${query.actorId.actorId} already destroyed`,
+				`Actor with ID ${query.getForId.actorId} already destroyed`,
 			);
 		}
+
 		return res.actor;
-	} else if ("get" in query) {
-		const getActor = await getWithTags(client, environment, query.get.tags);
-		if (!getActor) throw new Error("Actor not found with tags or is private");
-		return getActor;
-	} else if ("getOrCreate" in query) {
-		const tags = query.getOrCreate.tags;
-		if (!tags) throw new Error("Must define tags in getOrCreate");
-		const getActor = await getWithTags(client, environment, tags as ActorTags);
-		if (getActor) {
-			return getActor;
+	} else if ("getOrCreateForTags" in query) {
+		const tags = query.getOrCreateForTags.tags;
+		if (!tags) throw new Error("Must define tags in getOrCreateForTags");
+		const existingActor = await getWithTags(
+			client,
+			environment,
+			tags as ActorTags,
+		);
+		if (existingActor) {
+			// Actor exists
+			return existingActor;
+		} else if (query.getOrCreateForTags.create) {
+			// Create if needed
+			return await createActor(
+				client,
+				environment,
+				query.getOrCreateForTags.create,
+			);
 		} else {
-			return await createActor(client, environment, query.getOrCreate.create);
+			// Creation disabled
+			throw new Error("Actor not found with tags or is private.");
 		}
 	} else if ("create" in query) {
 		return await createActor(client, environment, query.create);
@@ -55,15 +70,22 @@ async function getWithTags(
 	tags: ActorTags,
 ): Promise<Rivet.actor.Actor | undefined> {
 	const req = {
-		tagsJson: JSON.stringify(tags),
+		tagsJson: JSON.stringify({
+			...tags,
+			access: "public",
+		}),
 		...environment,
 	};
 	let { actors } = await client.actor.list(req);
 
 	// TODO(RVT-4248): Don't return actors that aren't networkable yet
 	actors = actors.filter((a) => {
-		// Filter out private actors
-		if ((a.tags as ActorTags).access !== "public") return false;
+		// This should never be triggered. This assertion will leak if private actors exist if it's ever triggered.
+		assertEquals(
+			(a.tags as ActorTags).access,
+			"public",
+			"unreachable: actor tags not public",
+		);
 
 		for (const portName in a.network.ports) {
 			const port = a.network.ports[portName];
@@ -75,6 +97,8 @@ async function getWithTags(
 	if (actors.length === 0) {
 		return undefined;
 	}
+
+	// Make the chosen actor consistent
 	if (actors.length > 1) {
 		actors.sort((a, b) => a.id.localeCompare(b.id));
 	}
@@ -85,42 +109,37 @@ async function getWithTags(
 async function createActor(
 	client: RivetClient,
 	environment: RivetEnvironment,
-	createRequest: CreateRequest = {} satisfies CreateRequest,
+	createRequest: CreateRequest,
 ): Promise<Rivet.actor.Actor> {
-	if (!createRequest.network) {
-		createRequest.network = {};
-	}
-	if (!createRequest.network.ports) {
-		createRequest.network.ports = {};
-	}
-	if (!(PORT_NAME in createRequest.network.ports)) {
-		createRequest.network.ports[PORT_NAME] = {
-			protocol: "https",
-			routing: { guard: {} },
-		};
-	}
-
 	// Verify build access
-	if (createRequest.build) {
-		const { build } = await client.actor.builds.get(createRequest.build);
+	const build = await getBuildWithTags(client, environment, {
+		name: createRequest.tags.name,
+		current: "true",
+		access: "public",
+	});
+	if (!build) throw new Error("Build not found with tags or is private");
 
-		if (build.tags.access !== "public") {
-			throw new Error("Cannot create actor with private build");
-		}
-	} else if (createRequest.buildTags) {
-		const build = await getBuildWithTags(
-			client,
-			environment,
-			createRequest.buildTags as BuildTags,
-		);
-		if (!build) throw new Error("Build not found with tags or is private");
-	}
-
-	const req = {
+	// Create actor
+	const req: Rivet.actor.CreateActorRequestQuery = {
 		...environment,
-		body: createRequest,
+		body: {
+			tags: {
+				...createRequest.tags,
+				access: "public",
+			},
+			build: build.id,
+			region: createRequest.region,
+			network: {
+				ports: {
+					[PORT_NAME]: {
+						protocol: "https",
+						routing: { guard: {} },
+					},
+				},
+			},
+		},
 	};
-	logger().info("creating actor", { req });
+	logger().info("creating actor", { ...req });
 	const { actor } = await client.actor.create(req);
 	return actor;
 }

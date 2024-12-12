@@ -1,16 +1,30 @@
-import type { Rivet } from "@rivet-gg/api";
+import { z } from "zod";
 import type { ActorTags } from "../../common/src/utils.ts";
 
-export type ActorQuery =
-	| { actorId: { actorId: string } }
-	| { get: { tags: ActorTags } }
-	| { getOrCreate: GetOrCreateRequest }
-	| { create: CreateRequest };
+export const CreateRequestSchema = z.object({
+	region: z.string().optional(),
+	tags: z.custom<ActorTags>(),
+});
 
-export interface GetOrCreateRequest {
-	tags: ActorTags;
-	create?: CreateRequest;
-}
+export const GetOrCreateRequestSchema = z.object({
+	tags: z.custom<ActorTags>(),
+	create: CreateRequestSchema.optional(),
+});
 
-// TODO(RVT-4250):
-export type CreateRequest = Rivet.actor.CreateActorRequest;
+export const ActorQuerySchema = z.union([
+	z.object({
+		getForId: z.object({
+			actorId: z.string(),
+		}),
+	}),
+	z.object({
+		getOrCreateForTags: GetOrCreateRequestSchema,
+	}),
+	z.object({
+		create: CreateRequestSchema,
+	}),
+]);
+
+export type ActorQuery = z.infer<typeof ActorQuerySchema>;
+export type GetOrCreateRequest = z.infer<typeof GetOrCreateRequestSchema>;
+export type CreateRequest = z.infer<typeof CreateRequestSchema>;

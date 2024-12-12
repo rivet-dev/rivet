@@ -1,10 +1,10 @@
 import { assertEquals } from "@std/assert";
 import { MAX_CONN_PARAMS_SIZE } from "../../common/src/network.ts";
 import { assertUnreachable } from "../../common/src/utils.ts";
-import * as wsToClient from "../../protocol/src/ws/to_client.ts";
+import type * as wsToClient from "../../protocol/src/ws/to_client.ts";
 import type * as wsToServer from "../../protocol/src/ws/to_server.ts";
-import { logger } from "./log.ts";
 import * as errors from "./errors.ts";
+import { logger } from "./log.ts";
 
 interface RpcInFlight {
 	resolve: (response: wsToClient.RpcResponseOk) => void;
@@ -49,22 +49,22 @@ export class ActorHandleRaw {
 
 		const requestId = crypto.randomUUID();
 
-		const { promise: resolvePromise, resolve, reject } = Promise.withResolvers<
-			wsToClient.RpcResponseOk
-		>();
+		const {
+			promise: resolvePromise,
+			resolve,
+			reject,
+		} = Promise.withResolvers<wsToClient.RpcResponseOk>();
 		this.#websocketRpcInFlight.set(requestId, { resolve, reject });
 
-		this.#webSocketSend(
-			{
-				body: {
-					rpcRequest: {
-						id: requestId,
-						name,
-						args,
-					},
+		this.#webSocketSend({
+			body: {
+				rpcRequest: {
+					id: requestId,
+					name,
+					args,
 				},
-			} satisfies wsToServer.ToServer,
-		);
+			},
+		} satisfies wsToServer.ToServer);
 
 		// TODO: Throw error if disconnect is called
 
@@ -167,15 +167,20 @@ export class ActorHandleRaw {
 					response.body.rpcResponseError.id,
 				);
 				inFlight.reject(
-					new errors.RpcError(response.body.rpcResponseError.code, response.body.rpcResponseError.message, response.body.rpcResponseError.metadata)
+					new errors.RpcError(
+						response.body.rpcResponseError.code,
+						response.body.rpcResponseError.message,
+						response.body.rpcResponseError.metadata,
+					),
 				);
 			} else if ("event" in response.body) {
 				this.#dispatchEvent(response.body.event);
 			} else if ("error" in response.body) {
-				logger().warn(
-					"unhandled error from actor",
-					{ code: response.body.error.code, message: response.body.error.message, metadata: response.body.error.metadata }
-				);
+				logger().warn("unhandled error from actor", {
+					code: response.body.error.code,
+					message: response.body.error.message,
+					metadata: response.body.error.metadata,
+				});
 			} else {
 				assertUnreachable(response.body);
 			}
@@ -184,7 +189,8 @@ export class ActorHandleRaw {
 
 	#takeRpcInFlight(id: string): RpcInFlight {
 		const inFlight = this.#websocketRpcInFlight.get(id);
-		if (!inFlight) throw new errors.InternalError(`No in flight response for ${id}`);
+		if (!inFlight)
+			throw new errors.InternalError(`No in flight response for ${id}`);
 		this.#websocketRpcInFlight.delete(id);
 		return inFlight;
 	}

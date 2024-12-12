@@ -1,21 +1,21 @@
 import type { ActorContext } from "@rivet-gg/actors-core";
 import { RivetClient } from "@rivet-gg/api";
 import { assertExists } from "@std/assert/exists";
-import { type Context as HonoContext, Hono } from "hono";
+import { Hono, type Context as HonoContext } from "hono";
 import { cors } from "hono/cors";
+import { setupLogging } from "../../common/src/log.ts";
 import { PORT_NAME } from "../../common/src/network.ts";
 import {
-	assertUnreachable,
 	type RivetEnvironment,
+	assertUnreachable,
 } from "../../common/src/utils.ts";
-import type {
-	ActorsRequest,
-	ActorsResponse,
-	RivetConfigResponse,
+import {
+	ActorsRequestSchema,
+	type ActorsResponse,
+	type RivetConfigResponse,
 } from "../../manager-protocol/src/mod.ts";
-import { queryActor } from "./query_exec.ts";
-import { setupLogging } from "../../common/src/log.ts";
 import { logger } from "./log.ts";
+import { queryActor } from "./query_exec.ts";
 
 export default class Manager {
 	private readonly endpoint: string;
@@ -60,19 +60,17 @@ export default class Manager {
 		app.use("/*", cors());
 
 		app.get("/rivet/config", (c: HonoContext) => {
-			return c.json(
-				{
-					// HACK(RVT-4376): Replace DNS address used for local dev envs with public address
-					endpoint: this.endpoint.replace("rivet-server", "127.0.0.1"),
-					project: this.environment.project,
-					environment: this.environment.environment,
-				} satisfies RivetConfigResponse,
-			);
+			return c.json({
+				// HACK(RVT-4376): Replace DNS address used for local dev envs with public address
+				endpoint: this.endpoint.replace("rivet-server", "127.0.0.1"),
+				project: this.environment.project,
+				environment: this.environment.environment,
+			} satisfies RivetConfigResponse);
 		});
 
 		app.post("/actors", async (c: HonoContext) => {
 			// Get actor
-			const body: ActorsRequest = await c.req.json();
+			const body = ActorsRequestSchema.parse(await c.req.json());
 			const actor = await queryActor(
 				this.rivetClient,
 				this.environment,

@@ -1,5 +1,5 @@
 export interface ActorConfig {
-	state: StateConfig,
+	state: StateConfig;
 	rpc: RpcConfig;
 }
 
@@ -25,7 +25,9 @@ export function mergeActorConfig(
 ): ActorConfig {
 	return {
 		state: {
-			saveInterval: partialConfig?.state?.saveInterval ?? DEFAULT_ACTOR_CONFIG.state.saveInterval,
+			saveInterval:
+				partialConfig?.state?.saveInterval ??
+				DEFAULT_ACTOR_CONFIG.state.saveInterval,
 		},
 		rpc: {
 			timeout: partialConfig?.rpc?.timeout ?? DEFAULT_ACTOR_CONFIG.rpc.timeout,

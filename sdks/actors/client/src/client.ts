@@ -5,13 +5,28 @@ import type {
 	RivetConfigResponse,
 } from "../../manager-protocol/src/mod.ts";
 import type { CreateRequest } from "../../manager-protocol/src/query.ts";
+import type { AnyActor } from "../../runtime/src/actor.ts";
+import * as errors from "./errors.ts";
 import { ActorHandleRaw } from "./handle.ts";
 import { logger } from "./log.ts";
-import * as errors from "./errors.ts";
 
-export interface GetOpts {
+export interface QueryOptions {
+	/** Parameters to pass to the connection. */
 	parameters?: unknown;
-	create?: CreateRequest;
+}
+
+export interface GetWithIdOptions extends QueryOptions {}
+
+export interface GetOptions extends QueryOptions {
+	/** Prevents creating a new actor if one does not exist. */
+	noCreate?: boolean;
+	/** Config used to create the actor. */
+	create?: Partial<CreateRequest>;
+}
+
+export interface CreateOptions extends QueryOptions {
+	/** Config used to create the actor. */
+	create: CreateRequest;
 }
 
 /**
@@ -20,17 +35,15 @@ export interface GetOpts {
  *
  * Private methods (e.g. those starting with `_`) are automatically excluded.
  */
-export type ActorHandle<A = unknown> =
-	& ActorHandleRaw
-	& {
-		[
-			K in keyof A as K extends string ? K extends `_${string}` ? never
-				: K
-				: K
-		]: A[K] extends (...args: infer Args) => infer Return
-			? ActorRPCFunction<Args, Return>
-			: never;
-	};
+export type ActorHandle<A = unknown> = ActorHandleRaw & {
+	[K in keyof A as K extends string
+		? K extends `_${string}`
+			? never
+			: K
+		: K]: A[K] extends (...args: infer Args) => infer Return
+		? ActorRPCFunction<Args, Return>
+		: never;
+};
 
 /**
  * RPC function returned by the actor proxy. This will call `ActorHandle.rpc`
@@ -61,20 +74,101 @@ export class Client {
 		} else {
 			// Convert to promise
 			this.#managerEndpointPromise = new Promise((resolve) =>
-				resolve(managerEndpointPromise)
+				resolve(managerEndpointPromise),
 			);
 		}
 
 		this.#regionPromise = this.#fetchRegion();
 	}
 
-	async get<A = unknown>(
-		tags: ActorTags,
-		opts?: GetOpts,
-	): Promise<ActorHandle<A>> {
-		logger().debug("get actor", { tags, opts });
-		const handle = await this.#createHandle(tags, opts);
+	async getWithId<A extends AnyActor = AnyActor>(
+		actorId: string,
+		opts?: GetWithIdOptions,
+	) {
+		logger().debug("get actor with id ", {
+			actorId,
+			parameters: opts?.parameters,
+		});
+
+		const resJson = await this.#sendManagerRequest<
+			ActorsRequest,
+			ActorsResponse
+		>("POST", "/actors", {
+			query: {
+				getForId: {
+					actorId,
+				},
+			},
+		});
+
+		const handle = this.#createHandle(resJson.endpoint, opts?.parameters);
 		return this.#createProxy(handle) as ActorHandle<A>;
+	}
+
+	async get<A extends AnyActor = AnyActor>(
+		tags: ActorTags,
+		opts?: GetOptions,
+	): Promise<ActorHandle<A>> {
+		if (!("name" in tags)) throw new Error("Tags must contain name");
+
+		// Build create config
+		let create: CreateRequest | undefined = undefined;
+		if (!opts?.noCreate) {
+			create = create ?? {
+				// Default to the same tags as the request
+				tags: tags,
+			};
+
+			// Default to the chosen region
+			if (!create.region) create.region = (await this.#regionPromise)?.id;
+		}
+
+		logger().debug("get actor", { tags, parameters: opts?.parameters, create });
+
+		const resJson = await this.#sendManagerRequest<
+			ActorsRequest,
+			ActorsResponse
+		>("POST", "/actors", {
+			query: {
+				getOrCreateForTags: {
+					tags,
+					create,
+				},
+			},
+		});
+
+		const handle = this.#createHandle(resJson.endpoint, opts?.parameters);
+		return this.#createProxy(handle) as ActorHandle<A>;
+	}
+
+	async create<A extends AnyActor = AnyActor>(
+		opts: CreateOptions,
+	): Promise<ActorHandle<A>> {
+		// Build create config
+		const create = opts.create;
+
+		// Default to the chosen region
+		if (!create.region) create.region = (await this.#regionPromise)?.id;
+
+		logger().debug("create actor", { parameters: opts?.parameters, create });
+
+		const resJson = await this.#sendManagerRequest<
+			ActorsRequest,
+			ActorsResponse
+		>("POST", "/actors", {
+			query: {
+				create,
+			},
+		});
+
+		const handle = this.#createHandle(resJson.endpoint, opts?.parameters);
+		return this.#createProxy(handle) as ActorHandle<A>;
+	}
+
+	#createHandle(endpoint: string, parameters: unknown): ActorHandleRaw {
+		const handle = new ActorHandleRaw(endpoint, parameters);
+		handle.connect();
+		return handle;
 	}
 
 	#createProxy(handle: ActorHandleRaw): ActorHandle {
@@ -154,36 +248,6 @@ export class Client {
 		}) as ActorHandle;
 	}
 
-	async #createHandle(
-		tags: ActorTags,
-		opts?: GetOpts,
-	): Promise<ActorHandleRaw> {
-		const create = opts?.create ?? {
-			tags,
-			buildTags: {
-				name: tags.name,
-				current: "true",
-			},
-			region: (await this.#regionPromise)?.id,
-		};
-
-		const resJson = await this.#sendManagerRequest<
-			ActorsRequest,
-			ActorsResponse
-		>("POST", "/actors", {
-			query: {
-				getOrCreate: {
-					tags,
-					create,
-				},
-			},
-		});
-
-		const handle = new ActorHandleRaw(resJson.endpoint, opts?.parameters);
-		handle.connect();
-		return handle;
-	}
-
 	/** Sends an HTTP request to the manager actor. */
 	async #sendManagerRequest<Request, Response>(
 		method: string,
@@ -207,7 +271,6 @@ export class Client {
 			return res.json();
 		} catch (error) {
 			throw new errors.ManagerError(String(error), { cause: error });
-
 		}
 	}
 

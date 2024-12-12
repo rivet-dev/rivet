@@ -1,22 +1,22 @@
-import { throttle } from "@std/async/unstable-throttle";
 import { Lock } from "@core/asyncutil/lock";
 import type { ActorContext } from "@rivet-gg/actors-core";
 import { assertExists } from "@std/assert";
 import { deadline } from "@std/async/deadline";
-import { type Context as HonoContext, Hono } from "hono";
+import { throttle } from "@std/async/unstable-throttle";
+import type { Logger } from "@std/log/get-logger";
+import { Hono, type Context as HonoContext } from "hono";
 import { upgradeWebSocket } from "hono/deno";
 import type { WSEvents } from "hono/ws";
 import onChange from "on-change";
+import { setupLogging } from "../../common/src/log.ts";
 import { assertUnreachable } from "../../common/src/utils.ts";
 import type * as wsToClient from "../../protocol/src/ws/to_client.ts";
 import type * as wsToServer from "../../protocol/src/ws/to_server.ts";
 import { type ActorConfig, mergeActorConfig } from "./config.ts";
 import { Connection } from "./connection.ts";
-import { Rpc } from "./rpc.ts";
-import { instanceLogger, logger } from "./log.ts";
-import { setupLogging } from "../../common/src/log.ts";
-import type { Logger } from "@std/log/get-logger";
 import * as errors from "./errors.ts";
+import { instanceLogger, logger } from "./log.ts";
+import { Rpc } from "./rpc.ts";
 
 const KEYS = {
 	SCHEDULE: {
@@ -395,9 +395,8 @@ export abstract class Actor<
 		// Parse and validate params
 		let params: ConnParams;
 		try {
-			params = typeof paramsStr === "string"
-				? JSON.parse(paramsStr)
-				: undefined;
+			params =
+				typeof paramsStr === "string" ? JSON.parse(paramsStr) : undefined;
 		} catch (error) {
 			logger().warn("malformed connection parameters", { error });
 			throw new errors.MalformedConnectionParameters(error);
@@ -474,16 +473,14 @@ export abstract class Actor<
 						const output = await this.#executeRpc(ctx, name, args);
 
 						ws.send(
-							JSON.stringify(
-								{
-									body: {
-										rpcResponseOk: {
-											id,
-											output,
-										},
+							JSON.stringify({
+								body: {
+									rpcResponseOk: {
+										id,
+										output,
 									},
-								} satisfies wsToClient.ToClient,
-							),
+								},
+							} satisfies wsToClient.ToClient),
 						);
 					} else if ("subscriptionRequest" in message.body) {
 						if (message.body.subscriptionRequest.subscribe) {
@@ -517,32 +514,28 @@ export abstract class Actor<
 					// Build response
 					if (rpcRequestId) {
 						ws.send(
-							JSON.stringify(
-								{
-									body: {
-										rpcResponseError: {
-											id: rpcRequestId,
-											code,
-											message,
-											metadata,
-										},
+							JSON.stringify({
+								body: {
+									rpcResponseError: {
+										id: rpcRequestId,
+										code,
+										message,
+										metadata,
 									},
-								} satisfies wsToClient.ToClient,
-							),
+								},
+							} satisfies wsToClient.ToClient),
 						);
 					} else {
 						ws.send(
-							JSON.stringify(
-								{
-									body: {
-										error: {
-											code,
-											message,
-											metadata,
-										},
+							JSON.stringify({
+								body: {
+									error: {
+										code,
+										message,
+										metadata,
 									},
-								} satisfies wsToClient.ToClient,
-							),
+								},
+							} satisfies wsToClient.ToClient),
 						);
 					}
 				}
@@ -668,16 +661,14 @@ export abstract class Actor<
 		const subscriptions = this.#eventSubscriptions.get(name);
 		if (!subscriptions) return;
 
-		const body = JSON.stringify(
-			{
-				body: {
-					event: {
-						name,
-						args,
-					},
+		const body = JSON.stringify({
+			body: {
+				event: {
+					name,
+					args,
 				},
-			} satisfies wsToClient.ToClient,
-		);
+			},
+		} satisfies wsToClient.ToClient);
 		for (const connection of subscriptions) {
 			connection._sendWebSocketMessage(body);
 		}

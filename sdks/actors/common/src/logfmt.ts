@@ -60,10 +60,10 @@ export function stringify(...data: LogEntry[]) {
 			valueString = valueRaw.toString();
 		}
 
-		const needsQuoting = valueString.indexOf(" ") > -1 ||
-			valueString.indexOf("=") > -1;
-		const needsEscaping = valueString.indexOf('"') > -1 ||
-			valueString.indexOf("\\") > -1;
+		const needsQuoting =
+			valueString.indexOf(" ") > -1 || valueString.indexOf("=") > -1;
+		const needsEscaping =
+			valueString.indexOf('"') > -1 || valueString.indexOf("\\") > -1;
 
 		valueString = valueString.replace(/\n/g, "\\n");
 		if (needsEscaping) valueString = valueString.replace(/["\\]/g, "\\$&");
@@ -88,8 +88,7 @@ export function stringify(...data: LogEntry[]) {
 			}
 
 			// Format line
-			line +=
-				`\x1b[0m\x1b[1m${key}\x1b[0m\x1b[2m=\x1b[0m${color}${valueString}${RESET_COLOR}`;
+			line += `\x1b[0m\x1b[1m${key}\x1b[0m\x1b[2m=\x1b[0m${color}${valueString}${RESET_COLOR}`;
 		} else {
 			// No color
 			line += `${key}=${valueString}`;
@@ -116,18 +115,24 @@ export function formatTimestamp(date: Date): string {
 }
 
 export function castToLogValue(v: unknown): LogValue {
- 	if (typeof v === "string" || typeof v === "number" || typeof v === "boolean" || v === null || v === undefined) {
- 		return v;
- 	}
+	if (
+		typeof v === "string" ||
+		typeof v === "number" ||
+		typeof v === "boolean" ||
+		v === null ||
+		v === undefined
+	) {
+		return v;
+	}
 	//if (v instanceof Error) {
 	//	args.push(...errorToLogEntries(k, v));
 	//}
- 	try {
- 		return JSON.stringify(v);
- 	} catch {
- 		return "[cannot stringify]";
- 	}
- }
+	try {
+		return JSON.stringify(v);
+	} catch {
+		return "[cannot stringify]";
+	}
+}
 
 // MARK: Config
 interface GlobalLoggerConfig {

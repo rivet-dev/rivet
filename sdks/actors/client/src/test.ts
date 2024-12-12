@@ -1,6 +1,6 @@
-import { Client } from "./mod.ts";
 import { setupLogging } from "../../common/src/log.ts";
 import { InternalError } from "./errors.ts";
+import { Client } from "./mod.ts";
 
 /**
  * Uses the Rivet CLI to read the manager endpoint to connect to. This allows

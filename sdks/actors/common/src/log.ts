@@ -2,8 +2,11 @@ import * as log from "@std/log";
 //import { getEnv as crossGetEnv } from "@cross/env";
 import { LOGGER_NAME as CLIENT } from "../../client/src/log.ts";
 import { LOGGER_NAME as MANAGER } from "../../manager/src/log.ts";
-import { LOGGER_NAME as RUNTIME, INSTANCE_LOGGER_NAME as INSTANCE } from "../../runtime/src/log.ts";
-import { type LogEntry, stringify, castToLogValue } from "./logfmt.ts";
+import {
+	INSTANCE_LOGGER_NAME as INSTANCE,
+	LOGGER_NAME as RUNTIME,
+} from "../../runtime/src/log.ts";
+import { type LogEntry, castToLogValue, stringify } from "./logfmt.ts";
 
 export function getLogger(name: string): log.Logger {
 	return log.getLogger(name);
@@ -40,6 +43,7 @@ function formatter(log: log.LogRecord): string {
 		if (logArg && typeof logArg === "object") {
 			// Spread object
 			for (const k in logArg) {
+				// biome-ignore lint/suspicious/noExplicitAny: Unknown type
 				const v = (logArg as any)[k];
 
 				pushArg(k, v, args);
