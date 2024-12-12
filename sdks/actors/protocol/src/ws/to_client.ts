@@ -1,30 +1,39 @@
-export interface ToClient {
-	body:
-		| { rpcResponseOk: RpcResponseOk }
-		| { rpcResponseError: RpcResponseError }
-		| { event: ToClientEvent }
-		| { error: ToClientError };
-}
+import { z } from "zod";
 
-export interface RpcResponseOk {
-	id: string;
-	output: unknown;
-}
+export const RpcResponseOkSchema = z.object({
+	id: z.string(),
+	output: z.unknown(),
+});
 
-export interface RpcResponseError {
-	id: string;
-	code: string;
-	message: string;
-	metadata?: unknown;
-}
+export const RpcResponseErrorSchema = z.object({
+	id: z.string(),
+	code: z.string(),
+	message: z.string(),
+	metadata: z.unknown().optional(),
+});
 
-export interface ToClientEvent {
-	name: string;
-	args: unknown[];
-}
+export const ToClientEventSchema = z.object({
+	name: z.string(),
+	args: z.array(z.unknown()),
+});
 
-export interface ToClientError {
-	code: string;
-	message: string;
-	metadata?: unknown;
-}
+export const ToClientErrorSchema = z.object({
+	code: z.string(),
+	message: z.string(),
+	metadata: z.unknown().optional(),
+});
+
+export const ToClientSchema = z.object({
+	body: z.union([
+		z.object({ rpcResponseOk: RpcResponseOkSchema }),
+		z.object({ rpcResponseError: RpcResponseErrorSchema }),
+		z.object({ event: ToClientEventSchema }),
+		z.object({ error: ToClientErrorSchema }),
+	]),
+});
+
+export type ToClient = z.infer<typeof ToClientSchema>;
+export type RpcResponseOk = z.infer<typeof RpcResponseOkSchema>;
+export type RpcResponseError = z.infer<typeof RpcResponseErrorSchema>;
+export type ToClientEvent = z.infer<typeof ToClientEventSchema>;
+export type ToClientError = z.infer<typeof ToClientErrorSchema>;

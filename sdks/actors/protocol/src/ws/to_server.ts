@@ -1,16 +1,24 @@
-export interface ToServer {
-	body:
-		| { rpcRequest: RpcRequest }
-		| { subscriptionRequest: SubscriptionRequest };
-}
+import { z } from "zod";
 
-export interface RpcRequest {
-	id: string;
-	name: string;
-	args: unknown[];
-}
+const RpcRequestSchema = z.object({
+	id: z.string(),
+	name: z.string(),
+	args: z.array(z.unknown()),
+});
 
-export interface SubscriptionRequest {
-	eventName: string;
-	subscribe: boolean;
-}
+const SubscriptionRequestSchema = z.object({
+	eventName: z.string(),
+	subscribe: z.boolean(),
+});
+
+export const ToServerSchema = z.object({
+	body: z.union([
+		z.object({ rpcRequest: RpcRequestSchema }),
+		z.object({ subscriptionRequest: SubscriptionRequestSchema }),
+	]),
+});
+
+// Type inference
+export type ToServer = z.infer<typeof ToServerSchema>;
+export type RpcRequest = z.infer<typeof RpcRequestSchema>;
+export type SubscriptionRequest = z.infer<typeof SubscriptionRequestSchema>;

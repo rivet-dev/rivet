@@ -322,6 +322,11 @@
           "npm:zod@^3.24.1"
         ]
       },
+      "protocol": {
+        "dependencies": [
+          "npm:zod@^3.24.1"
+        ]
+      },
       "runtime": {
         "dependencies": [
           "jsr:@core/asyncutil@^1.2.0",
