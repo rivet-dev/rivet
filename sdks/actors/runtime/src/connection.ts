@@ -1,17 +1,22 @@
-import { WSContext } from "hono/ws";
-import type { Actor } from "./actor.ts";
-import * as wsToClient from "../../protocol/src/ws/to_client.ts";
+import { assertExists } from "@std/assert/exists";
+import type { WSContext } from "hono/ws";
+import type * as wsToClient from "../../protocol/src/ws/to_client.ts";
+import type { Actor, AnyActor } from "./actor.ts";
 
-type GetConnStateType<A> = A extends Actor<any, any, infer ConnState> ? ConnState : never;
+// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+type GetConnStateType<A> = A extends Actor<any, any, infer ConnState>
+	? ConnState
+	: never;
 
-export class Connection<A extends Actor<any, any, any>> {
+export class Connection<A extends AnyActor> {
 	subscriptions = new Set<string>();
 
-	#state: GetConnStateType<A>;
+	#state: GetConnStateType<A> | undefined;
 	#stateEnabled: boolean;
 
 	public get state(): GetConnStateType<A> {
 		this.#validateStateEnabled();
+		assertExists(this.#state, "state should exist");
 		return this.#state;
 	}
 
@@ -23,7 +28,7 @@ export class Connection<A extends Actor<any, any, any>> {
 	constructor(
 		public readonly id: number,
 		public _websocket: WSContext<WebSocket>,
-		state: GetConnStateType<A>,
+		state: GetConnStateType<A> | undefined,
 		stateEnabled: boolean,
 	) {
 		this.#state = state;
@@ -47,16 +52,16 @@ export class Connection<A extends Actor<any, any, any>> {
 	}
 
 	send(eventName: string, ...args: unknown[]) {
-		this._sendWebSocketMessage(JSON.stringify(
-			{
+		this._sendWebSocketMessage(
+			JSON.stringify({
 				body: {
 					event: {
 						name: eventName,
 						args,
 					},
 				},
-			} satisfies wsToClient.ToClient,
-		));
+			} satisfies wsToClient.ToClient),
+		);
 	}
 
 	disconnect(reason?: string) {

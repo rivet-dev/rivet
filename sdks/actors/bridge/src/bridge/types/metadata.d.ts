@@ -1,7 +1,3 @@
-// DO NOT MODIFY
-//
-// Generated from sdks/actors-bridge/
-
 export interface Metadata {
 	actor: {
 		id: string;

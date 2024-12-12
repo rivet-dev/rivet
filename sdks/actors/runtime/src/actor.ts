@@ -1,18 +1,18 @@
-import { ActorContext } from "@rivet-gg/actors-core";
-import { deadline } from "@std/async/deadline";
-import { Context as HonoContext, Hono } from "hono";
-import { WSEvents } from "hono/ws";
-import { upgradeWebSocket } from "hono/deno";
 import { Lock } from "@core/asyncutil/lock";
-import { ActorConfig, mergeActorConfig } from "./config.ts";
+import type { ActorContext } from "@rivet-gg/actors-core";
+import { assertExists } from "@std/assert";
+import { deadline } from "@std/async/deadline";
+import { Hono, type Context as HonoContext } from "hono";
+import { upgradeWebSocket } from "hono/deno";
+import type { WSEvents } from "hono/ws";
 import onChange from "on-change";
-import { Connection } from "./connection.ts";
-import { Rpc } from "./rpc.ts";
-import * as wsToClient from "../../protocol/src/ws/to_client.ts";
-import * as wsToServer from "../../protocol/src/ws/to_server.ts";
 import { MAX_CONN_PARAMS_SIZE } from "../../common/src/network.ts";
 import { assertUnreachable } from "../../common/src/utils.ts";
-import { assertExists } from "@std/assert";
+import type * as wsToClient from "../../protocol/src/ws/to_client.ts";
+import type * as wsToServer from "../../protocol/src/ws/to_server.ts";
+import { type ActorConfig, mergeActorConfig } from "./config.ts";
+import { Connection } from "./connection.ts";
+import { Rpc } from "./rpc.ts";
 
 const KEYS = {
 	SCHEDULE: {
@@ -59,6 +59,10 @@ export interface OnBeforeConnectOpts<ConnParams> {
 	parameters: ConnParams;
 }
 
+/** Actor type alias with all `any` types. Used for `extends` in classes referencing this actor. */
+// biome-ignore lint/suspicious/noExplicitAny: Needs to be used in `extends`
+export type AnyActor = Actor<any, any, any>;
+
 export abstract class Actor<
 	State = undefined,
 	ConnParams = undefined,
@@ -67,7 +71,7 @@ export abstract class Actor<
 	// Store the init promise so network requests can await initialization
 	#initializedPromise?: Promise<void>;
 
-	#stateChanged: boolean = false;
+	#stateChanged = false;
 
 	/**
 	 * The proxied state that notifies of changes automatically.
@@ -85,9 +89,9 @@ export abstract class Actor<
 	#backgroundPromises: Promise<void>[] = [];
 	#config: ActorConfig;
 	#ctx!: ActorContext;
-	#ready: boolean = false;
+	#ready = false;
 
-	#connectionIdCounter: number = 0;
+	#connectionIdCounter = 0;
 	#connections = new Set<Connection<this>>();
 	#eventSubscriptions = new Map<string, Set<Connection<this>>>();
 
@@ -105,7 +109,9 @@ export abstract class Actor<
 
 	protected _onStateChange?(newState: State): void | Promise<void>;
 
-	protected _onBeforeConnect?(opts: OnBeforeConnectOpts<ConnParams>): ConnState | Promise<ConnState>;
+	protected _onBeforeConnect?(
+		opts: OnBeforeConnectOpts<ConnParams>,
+	): ConnState | Promise<ConnState>;
 
 	protected _onConnect?(connection: Connection<this>): void | Promise<void>;
 
@@ -114,7 +120,7 @@ export abstract class Actor<
 	// This is called by Rivet when the actor is exported as the default
 	// property
 	public static start(ctx: ActorContext) {
-		// deno-lint-ignore no-explicit-any
+		// biome-ignore lint/complexity/noThisInStatic lint/suspicious/noExplicitAny: Needs to construct self
 		const instance = new (this as any)() as Actor;
 		return instance.#run(ctx);
 	}
@@ -152,17 +158,19 @@ export abstract class Actor<
 	}
 
 	get #stateEnabled() {
-		return typeof this._onInitialize == "function";
+		return typeof this._onInitialize === "function";
 	}
 
 	#validateStateEnabled() {
 		if (!this.#stateEnabled) {
-			throw new Error("State not enabled. Must implement createState to use state.");
+			throw new Error(
+				"State not enabled. Must implement createState to use state.",
+			);
 		}
 	}
 
 	get #connectionStateEnabled() {
-		return typeof this._onBeforeConnect == "function";
+		return typeof this._onBeforeConnect === "function";
 	}
 
 	/** Updates the state and creates a new proxy. */
@@ -191,10 +199,12 @@ export abstract class Actor<
 		// Listen for changes to the object in order to automatically write state
 		return onChange(
 			target,
-			// deno-lint-ignore no-explicit-any
+			// biome-ignore lint/suspicious/noExplicitAny: Don't know types in proxy
 			(path: any, value: any, _previousValue: any, _applyData: any) => {
 				if (!isJsonSerializable(value)) {
-					throw new Error(`State value at path "${path}" must be JSON serializable`);
+					throw new Error(
+						`State value at path "${path}" must be JSON serializable`,
+					);
 				}
 				this.#stateChanged = true;
 
@@ -209,7 +219,7 @@ export abstract class Actor<
 			},
 			{
 				ignoreDetached: true,
-			}
+			},
 		);
 	}
 
@@ -221,9 +231,12 @@ export abstract class Actor<
 		assertExists(this._onInitialize);
 
 		// Read initial state
-		const getStateBatch = await this.#ctx.kv.getBatch([KEYS.STATE.INITIALIZED, KEYS.STATE.DATA]);
-		const initialized = getStateBatch.get(KEYS.STATE.INITIALIZED);
-		const stateData = getStateBatch.get(KEYS.STATE.DATA);
+		const getStateBatch = await this.#ctx.kv.getBatch([
+			KEYS.STATE.INITIALIZED,
+			KEYS.STATE.DATA,
+		]);
+		const initialized = getStateBatch.get(KEYS.STATE.INITIALIZED) as boolean;
+		const stateData = getStateBatch.get(KEYS.STATE.DATA) as State;
 
 		if (!initialized) {
 			// Initialize
@@ -243,7 +256,7 @@ export abstract class Actor<
 				new Map<unknown, unknown>([
 					[KEYS.STATE.INITIALIZED, true],
 					[KEYS.STATE.DATA, stateData],
-				])
+				]),
 			);
 			this.#setStateWithoutChange(stateData);
 		} else {
@@ -279,8 +292,8 @@ export abstract class Actor<
 		if (!portStr) {
 			throw "Missing port";
 		}
-		const port = parseInt(portStr);
-		if (!isFinite(port)) {
+		const port = Number.parseInt(portStr);
+		if (!Number.isFinite(port)) {
 			throw "Invalid port";
 		}
 
@@ -354,20 +367,23 @@ export abstract class Actor<
 
 		// Validate protocol
 		const protocolVersion = c.req.query("version");
-		if (protocolVersion != "1") {
+		if (protocolVersion !== "1") {
 			throw new Error(`Invalid protocol version: ${protocolVersion}`);
 		}
 
 		// Validate params size (limiting to 4KB which is reasonable for query params)
 		const paramsStr = c.req.query("params");
 		if (paramsStr && paramsStr.length > MAX_CONN_PARAMS_SIZE) {
-			throw new Error(`WebSocket params too large (max ${MAX_CONN_PARAMS_SIZE} bytes)`);
+			throw new Error(
+				`WebSocket params too large (max ${MAX_CONN_PARAMS_SIZE} bytes)`,
+			);
 		}
 
 		// Parse and validate params
 		let params: ConnParams;
 		try {
-			params = typeof paramsStr === "string" ? JSON.parse(paramsStr) : undefined;
+			params =
+				typeof paramsStr === "string" ? JSON.parse(paramsStr) : undefined;
 		} catch (err) {
 			throw new Error(`Invalid WebSocket params: ${err}`);
 		}
@@ -400,8 +416,8 @@ export abstract class Actor<
 				conn = new Connection<Actor<State, ConnParams, ConnState>>(
 					this.#connectionIdCounter,
 					ws,
-					state!,
-					this.#connectionStateEnabled
+					state,
+					this.#connectionStateEnabled,
 				);
 				this.#connections.add(conn);
 
@@ -426,7 +442,7 @@ export abstract class Actor<
 				let rpcRequestId: string | undefined;
 				try {
 					const value = evt.data.valueOf();
-					if (typeof value != "string") {
+					if (typeof value !== "string") {
 						throw new Error("message must be string");
 					}
 					// TODO: Validate message
@@ -447,13 +463,19 @@ export abstract class Actor<
 										output,
 									},
 								},
-							} satisfies wsToClient.ToClient)
+							} satisfies wsToClient.ToClient),
 						);
 					} else if ("subscriptionRequest" in message.body) {
 						if (message.body.subscriptionRequest.subscribe) {
-							this.#addSubscription(message.body.subscriptionRequest.eventName, conn);
+							this.#addSubscription(
+								message.body.subscriptionRequest.eventName,
+								conn,
+							);
 						} else {
-							this.#removeSubscription(message.body.subscriptionRequest.eventName, conn);
+							this.#removeSubscription(
+								message.body.subscriptionRequest.eventName,
+								conn,
+							);
 						}
 					} else {
 						assertUnreachable(message.body);
@@ -468,7 +490,7 @@ export abstract class Actor<
 										message: String(err),
 									},
 								},
-							} satisfies wsToClient.ToClient)
+							} satisfies wsToClient.ToClient),
 						);
 					} else {
 						ws.send(
@@ -478,14 +500,14 @@ export abstract class Actor<
 										message: String(err),
 									},
 								},
-							} satisfies wsToClient.ToClient)
+							} satisfies wsToClient.ToClient),
 						);
 					}
 				}
 			},
 			onClose: () => {
 				if (!conn) {
-					console.warn!("`conn` does not exist");
+					console.warn("`conn` does not exist");
 					return;
 				}
 
@@ -510,14 +532,18 @@ export abstract class Actor<
 		if (!this.#ready) throw new Error("Actor not ready");
 	}
 
-	async #executeRpc(ctx: Rpc<this>, rpcName: string, args: unknown[]): Promise<unknown> {
+	async #executeRpc(
+		ctx: Rpc<this>,
+		rpcName: string,
+		args: unknown[],
+	): Promise<unknown> {
 		// Prevent calling private or reserved methods
 		if (!this.#isValidRpc(rpcName)) {
 			throw new Error(`RPC ${rpcName} is not accessible`);
 		}
 
 		// Check if the method exists on this object
-		// deno-lint-ignore no-explicit-any
+		// biome-ignore lint/suspicious/noExplicitAny: RPC name is dynamic from client
 		const rpcFunction = (this as any)[rpcName];
 		if (typeof rpcFunction !== "function") {
 			throw new Error(`RPC ${rpcName} not found`);
@@ -534,7 +560,7 @@ export abstract class Actor<
 				return outputOrPromise;
 			}
 		} catch (error) {
-			if (error instanceof DOMException && error.name == "TimeoutError") {
+			if (error instanceof DOMException && error.name === "TimeoutError") {
 				throw new Error(`RPC ${rpcName} timed out`);
 			} else {
 				throw new Error(`RPC ${rpcName} failed: ${String(error)}`);
@@ -546,7 +572,10 @@ export abstract class Actor<
 	/**
 	 * Broadcasts an event to all connected clients.
 	 */
-	protected _broadcast<Args extends Array<unknown>>(name: string, ...args: Args) {
+	protected _broadcast<Args extends Array<unknown>>(
+		name: string,
+		...args: Args
+	) {
 		this.#assertReady();
 
 		// Send to all connected clients
@@ -621,17 +650,20 @@ export abstract class Actor<
 		if (this.#server) await this.#server.shutdown();
 
 		// Disconnect existing connections
-		let promises: Promise<unknown>[] = [];
-		for (let connection of this.#connections) {
-			let raw = connection._websocket.raw;
+		const promises: Promise<unknown>[] = [];
+		for (const connection of this.#connections) {
+			const raw = connection._websocket.raw;
 			if (!raw) continue;
 
 			// Create deferred promise
-			let resolve: (value: unknown) => void;
-			let promise = new Promise((res) => (resolve = res));
+			let resolve: ((value: unknown) => void) | undefined;
+			const promise = new Promise((res) => {
+				resolve = res;
+			});
+			assertExists(resolve, "resolve should be defined by now");
 
 			// Resolve promise when websocket closes
-			raw.addEventListener("close", resolve!);
+			raw.addEventListener("close", resolve);
 
 			// Close connection
 			connection.disconnect();
@@ -640,13 +672,15 @@ export abstract class Actor<
 		}
 
 		// Await all `close` event listeners with 1.5 second timeout
-		let res = Promise.race([
+		const res = Promise.race([
 			Promise.all(promises).then(() => false),
 			new Promise<boolean>((res) => setTimeout(() => res(true), 1500)),
 		]);
 
 		if (await res) {
-			console.warn("timed out waiting for connections to close, shutting down anyway");
+			console.warn(
+				"timed out waiting for connections to close, shutting down anyway",
+			);
 		}
 
 		Deno.exit(0);

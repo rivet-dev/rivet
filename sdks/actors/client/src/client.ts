@@ -1,4 +1,3 @@
-import { ActorHandleRaw } from "./handle.ts";
 import type { ActorTags } from "../../common/src/utils.ts";
 import type {
 	ActorsRequest,
@@ -6,6 +5,7 @@ import type {
 	RivetConfigResponse,
 } from "../../manager-protocol/src/mod.ts";
 import type { CreateRequest } from "../../manager-protocol/src/query.ts";
+import { ActorHandleRaw } from "./handle.ts";
 
 export interface GetOpts {
 	parameters?: unknown;
@@ -18,16 +18,15 @@ export interface GetOpts {
  *
  * Private methods (e.g. those starting with `_`) are automatically excluded.
  */
-export type ActorHandle<A = unknown> =
-	& ActorHandleRaw
-	& {
-		[
-			K in keyof A as K extends string ? K extends `_${string}` ? never : K
-				: K
-		]: A[K] extends (...args: infer Args) => infer Return
-			? ActorRPCFunction<Args, Return>
-			: never;
-	};
+export type ActorHandle<A = unknown> = ActorHandleRaw & {
+	[K in keyof A as K extends string
+		? K extends `_${string}`
+			? never
+			: K
+		: K]: A[K] extends (...args: infer Args) => infer Return
+		? ActorRPCFunction<Args, Return>
+		: never;
+};
 
 /**
  * RPC function returned by the actor proxy. This will call `ActorHandle.rpc`
@@ -57,7 +56,9 @@ export class Client {
 			this.#managerEndpointPromise = managerEndpointPromise;
 		} else {
 			// Convert to promise
-			this.#managerEndpointPromise = new Promise(resolve => resolve(managerEndpointPromise));
+			this.#managerEndpointPromise = new Promise((resolve) =>
+				resolve(managerEndpointPromise),
+			);
 		}
 
 		this.#regionPromise = this.#fetchRegion();
@@ -164,18 +165,14 @@ export class Client {
 		const resJson = await this.#sendManagerRequest<
 			ActorsRequest,
 			ActorsResponse
-		>(
-			"POST",
-			"/actors",
-			{
-				query: {
-					getOrCreate: {
-						tags,
-						create,
-					},
+		>("POST", "/actors", {
+			query: {
+				getOrCreate: {
+					tags,
+					create,
 				},
 			},
-		);
+		});
 
 		const handle = new ActorHandleRaw(resJson.endpoint, opts?.parameters);
 		handle.connect();
@@ -212,10 +209,7 @@ export class Client {
 			const { endpoint, project, environment } = await this.#sendManagerRequest<
 				undefined,
 				RivetConfigResponse
-			>(
-				"GET",
-				"/rivet/config",
-			);
+			>("GET", "/rivet/config");
 
 			// Fetch the region
 			//

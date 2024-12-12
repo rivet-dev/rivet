@@ -12,7 +12,9 @@ export const DEFAULT_ACTOR_CONFIG: ActorConfig = {
 	},
 };
 
-export function mergeActorConfig(partialConfig?: Partial<ActorConfig>): ActorConfig {
+export function mergeActorConfig(
+	partialConfig?: Partial<ActorConfig>,
+): ActorConfig {
 	return {
 		rpc: {
 			timeout: partialConfig?.rpc?.timeout ?? DEFAULT_ACTOR_CONFIG.rpc.timeout,

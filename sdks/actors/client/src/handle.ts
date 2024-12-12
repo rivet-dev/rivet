@@ -1,8 +1,8 @@
 import { assertEquals, assertExists } from "@std/assert";
-import { assertUnreachable } from "../../common/src/utils.ts";
 import { MAX_CONN_PARAMS_SIZE } from "../../common/src/network.ts";
-import type * as wsToServer from "../../protocol/src/ws/to_server.ts";
+import { assertUnreachable } from "../../common/src/utils.ts";
 import type * as wsToClient from "../../protocol/src/ws/to_client.ts";
+import type * as wsToServer from "../../protocol/src/ws/to_server.ts";
 
 interface RpcInFlight {
 	resolve: (response: wsToClient.RpcResponseOk) => void;
@@ -35,8 +35,7 @@ export class ActorHandleRaw {
 	constructor(
 		private readonly endpoint: string,
 		private readonly parameters: unknown,
-	) {
-	}
+	) {}
 
 	async rpc<Args extends Array<unknown> = unknown[], Response = unknown>(
 		name: string,
@@ -56,17 +55,15 @@ export class ActorHandleRaw {
 			},
 		);
 
-		this.#webSocketSend(
-			{
-				body: {
-					rpcRequest: {
-						id: requestId,
-						name,
-						args,
-					},
+		this.#webSocketSend({
+			body: {
+				rpcRequest: {
+					id: requestId,
+					name,
+					args,
 				},
-			} satisfies wsToServer.ToServer,
-		);
+			},
+		} satisfies wsToServer.ToServer);
 
 		// TODO: Throw error if disconnect is called
 
@@ -141,11 +138,8 @@ export class ActorHandleRaw {
 			// Automatically reconnect
 			if (!this.#disconnected) {
 				// TODO: Fetch actor to check if it's destroyed
-
 				// TODO: Add backoff for reconnect
-
 				// TODO: Add a way of preserving connection ID for connection state
-
 				// this.connect(...args);
 			}
 		};
@@ -301,13 +295,16 @@ export class ActorHandleRaw {
 	}
 
 	#sendSubscription(eventName: string, subscribe: boolean) {
-		this.#webSocketSend({
-			body: {
-				subscriptionRequest: {
-					eventName,
-					subscribe,
+		this.#webSocketSend(
+			{
+				body: {
+					subscriptionRequest: {
+						eventName,
+						subscribe,
+					},
 				},
 			},
-		}, { ephemeral: true });
+			{ ephemeral: true },
+		);
 	}
 }

@@ -10,8 +10,13 @@ export function deepFreeze(object) {
     const propNames = ReflectOwnKeys(object);
     // Freeze properties before freezing self
     for (const name of propNames) {
+        // biome-ignore lint/suspicious/noExplicitAny: <explanation>
         const value = object[name];
-        if ((value && typeof value === "object") || typeof value === "function") {
+        // Check if value is an array or object and not null
+        if (value &&
+            (Array.isArray(value) ||
+                typeof value === "object" ||
+                typeof value === "function")) {
             deepFreeze(value);
         }
     }
@@ -19,6 +24,6 @@ export function deepFreeze(object) {
 }
 export const ACTOR_CONTEXT = {
     // Populated at runtime
-    metadata: null,
+    metadata: undefined,
     kv: KV_NAMESPACE,
 };

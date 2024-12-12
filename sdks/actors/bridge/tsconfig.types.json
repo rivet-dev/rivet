@@ -1,9 +1,9 @@
 {
-    "extends": "./tsconfig.json",
-    "compilerOptions": {
-        "declaration": true,
-        "emitDeclarationOnly": true,
-        "rootDir": "./src/bridge",
-        "outDir": "types/"
-    }
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"declaration": true,
+		"emitDeclarationOnly": true,
+		"rootDir": "./src/bridge",
+		"outDir": "types/"
+	}
 }

@@ -1,25 +1,19 @@
-import { Context as HonoContext, Hono } from "hono";
-import { cors } from "hono/cors";
-import { ActorContext } from "@rivet-gg/actors-core";
+import type { ActorContext } from "@rivet-gg/actors-core";
 import { RivetClient } from "@rivet-gg/api";
-import { queryActor } from "./query_exec.ts";
 import { assertExists } from "@std/assert/exists";
-import { assertUnreachable, RivetEnvironment } from "../../common/src/utils.ts";
+import { Hono, type Context as HonoContext } from "hono";
+import { cors } from "hono/cors";
 import { PORT_NAME } from "../../common/src/network.ts";
 import {
+	type RivetEnvironment,
+	assertUnreachable,
+} from "../../common/src/utils.ts";
+import type {
 	ActorsRequest,
 	ActorsResponse,
 	RivetConfigResponse,
 } from "../../manager-protocol/src/mod.ts";
-
-interface AccessConfig {
-	builds: Build[];
-}
-
-// all actors with public access:
-interface Build {
-	tags: any;
-}
+import { queryActor } from "./query_exec.ts";
 
 export default class Manager {
 	private readonly endpoint: string;
@@ -46,6 +40,7 @@ export default class Manager {
 	}
 
 	static async start(ctx: ActorContext) {
+		// biome-ignore lint/complexity/noThisInStatic: <explanation>
 		const manager = new this(ctx);
 		await manager.#run();
 	}
@@ -53,22 +48,20 @@ export default class Manager {
 	async #run() {
 		const portStr = Deno.env.get("PORT_HTTP");
 		if (!portStr) throw "Missing port";
-		const port = parseInt(portStr);
-		if (!isFinite(port)) throw "Invalid port";
+		const port = Number.parseInt(portStr);
+		if (!Number.isFinite(port)) throw "Invalid port";
 
 		const app = new Hono();
 
 		app.use("/*", cors());
 
 		app.get("/rivet/config", (c: HonoContext) => {
-			return c.json(
-				{
-					// HACK(RVT-4376): Replace DNS address used for local dev envs with public address
-					endpoint: this.endpoint.replace("rivet-server", "127.0.0.1"),
-					project: this.environment.project,
-					environment: this.environment.environment,
-				} satisfies RivetConfigResponse,
-			);
+			return c.json({
+				// HACK(RVT-4376): Replace DNS address used for local dev envs with public address
+				endpoint: this.endpoint.replace("rivet-server", "127.0.0.1"),
+				project: this.environment.project,
+				environment: this.environment.environment,
+			} satisfies RivetConfigResponse);
 		});
 
 		app.post("/actors", async (c: HonoContext) => {
@@ -113,10 +106,13 @@ export default class Manager {
 			return c.json({ endpoint } satisfies ActorsResponse);
 		});
 
-		const server = Deno.serve({
-			port,
-			hostname: "0.0.0.0",
-		}, app.fetch);
+		const server = Deno.serve(
+			{
+				port,
+				hostname: "0.0.0.0",
+			},
+			app.fetch,
+		);
 		await server.finished;
 	}
 }

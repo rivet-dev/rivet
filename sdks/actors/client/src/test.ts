@@ -12,9 +12,9 @@ export async function readEndpointFromCli(): Promise<string> {
 	}).output();
 	if (!output.success) {
 		throw new Error(
-			`Read endpoint failed with ${output.code}:\n${
-				new TextDecoder().decode(output.stderr)
-			}`,
+			`Read endpoint failed with ${output.code}:\n${new TextDecoder().decode(
+				output.stderr,
+			)}`,
 		);
 	}
 

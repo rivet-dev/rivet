@@ -41,6 +41,12 @@ for await (const entry of walk(
 // Compile TypeScript types
 await $`npx -p typescript@5.7.2 tsc -p tsconfig.types.json`.cwd(ACTOR_BRIDGE_PATH);
 
+// Copy internal types file, since TypeScript doesn't copy type declarations
+await copy(resolve(ACTOR_BRIDGE_PATH, "src", "bridge", "types"), resolve(ACTOR_BRIDGE_TYPES_PATH, "types"));
+
+// Format types. Needs to run in ACTORS_SDK_PATH so it has access to the biome config.
+await $`npx -p @biomejs/biome@1.9.4 biome check --write bridge/types/`.cwd(ACTORS_SDK_PATH);
+
 // Replace imports from `ext:*` to `./*.d.ts`. This is required for this
 // package to be usable on JSR.
 for await (const entry of walk(ACTOR_BRIDGE_TYPES_PATH, {
@@ -54,9 +60,6 @@ for await (const entry of walk(ACTOR_BRIDGE_TYPES_PATH, {
 		"// DO NOT MODIFY\n//\n// Generated from sdks/actors-bridge/\n\n" + newContent
 	);
 }
-
-// Copy internal types file, since TypeScript doesn't copy type declarations
-await copy(resolve(ACTOR_BRIDGE_PATH, "src", "bridge", "types"), resolve(ACTOR_BRIDGE_TYPES_PATH, "types"));
 
 // Copy types to core repo
 await copy(ACTOR_BRIDGE_TYPES_PATH, ACTOR_CORE_BRIDGE_TYPES_PATH);

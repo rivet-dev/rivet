@@ -4,8 +4,8 @@
 
 declare module "ext:core/mod.js" {
 	export const core: {
-		serialize(value: any, options?: { forStorage?: boolean }): Uint8Array;
-		deserialize(value: Uint8Array, options?: { forStorage?: boolean }): any;
+		serialize(value: unknown, options?: { forStorage?: boolean }): Uint8Array;
+		deserialize(value: Uint8Array, options?: { forStorage?: boolean }): unknown;
 	};
 	export const primordials: {
 		ReflectOwnKeys: typeof Reflect.ownKeys;
@@ -15,6 +15,6 @@ declare module "ext:core/mod.js" {
 
 declare module "ext:runtime/30_os.js" {
 	export const env: {
-		get(key: string): string?;
+		get(key: string): string | undefined;
 	};
 }

@@ -1,15 +1,19 @@
 export interface ToClient {
-	body: { rpcResponseOk: RpcResponseOk } | { rpcResponseError: RpcResponseError } | { event: ToClientEvent } | { error: ToClientError };
+	body:
+		| { rpcResponseOk: RpcResponseOk }
+		| { rpcResponseError: RpcResponseError }
+		| { event: ToClientEvent }
+		| { error: ToClientError };
 }
 
 export interface RpcResponseOk {
-	id: string,
-	output: unknown
+	id: string;
+	output: unknown;
 }
 
 export interface RpcResponseError {
-	id: string,
-	message: string,
+	id: string;
+	message: string;
 }
 
 export interface ToClientEvent {
@@ -18,6 +22,5 @@ export interface ToClientEvent {
 }
 
 export interface ToClientError {
-	message: string,
+	message: string;
 }
-

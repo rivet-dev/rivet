@@ -1,6 +1,7 @@
 {
-    "deno.enable": true,
-    // Use biome instead
-    "deno.lint": false,
-    "editor.defaultFormatter": "biomejs.biome"
+	"deno.enable": true,
+	// Use biome instead
+	"deno.lint": false,
+	"editor.defaultFormatter": "biomejs.biome",
+	"cSpell.words": ["networkable"]
 }

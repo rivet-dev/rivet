@@ -1,3 +1,4 @@
+import { core } from "ext:core/mod.js";
 import {
 	op_rivet_kv_delete,
 	op_rivet_kv_delete_all,
@@ -8,11 +9,7 @@ import {
 	op_rivet_kv_put,
 	op_rivet_kv_put_batch,
 } from "ext:core/ops";
-import type { InKey, OutKey, ListQuery } from "./types/metadata.d.ts";
-import { core } from "ext:core/mod.js";
-
-export type Key = any;
-export type Entry = any;
+import type { InKey, ListQuery, OutKey } from "./types/metadata.d.ts";
 
 /**
  * Options for the `get` function.
@@ -23,16 +20,12 @@ export interface GetOptions {
 
 /**
  * Retrieves a value from the key-value store.
- *
- * @param {Key} key - The key to retrieve the value for.
- * @param {GetOptions} [options] - Options.
- * @returns {Promise<Entry | null>} The retrieved value, or undefined if the key does not exist.
  */
-async function get(key: Key, options?: GetOptions): Promise<Entry | null> {
-	let entry = await op_rivet_kv_get(serializeKey(key));
+async function get<K, V>(key: K, options?: GetOptions): Promise<V | null> {
+	const entry = await op_rivet_kv_get(serializeKey(key));
 	if (entry == null) return null;
 
-	return deserializeValue(key, entry.value, options?.format);
+	return deserializeValue(key, entry.value, options?.format) as V;
 }
 
 /**
@@ -44,19 +37,21 @@ export interface GetBatchOptions {
 
 /**
  * Retrieves a batch of key-value pairs.
- *
- * @param {Key[]} keys - A list of keys to retrieve.
- * @param {GetBatchOptions} [options] - Options.
- * @returns {Promise<Map<Key, Entry>>} The retrieved values.
  */
-async function getBatch(keys: Key[], options?: GetBatchOptions): Promise<Map<Key, Entry>> {
-	let entries = await op_rivet_kv_get_batch(keys.map((x) => serializeKey(x)));
+async function getBatch<K extends Array<unknown>, V>(
+	keys: K,
+	options?: GetBatchOptions,
+): Promise<Map<K[number], V>> {
+	const entries = await op_rivet_kv_get_batch(keys.map((x) => serializeKey(x)));
 
-	let deserializedValues = new Map<Key, Entry>();
+	const deserializedValues = new Map<K[number], V>();
 
-	for (let [key, entry] of entries) {
-		let jsKey = deserializeKey(key);
-		deserializedValues.set(jsKey, deserializeValue(jsKey, entry.value, options?.format));
+	for (const [key, entry] of entries) {
+		const jsKey = deserializeKey(key) as K[number];
+		deserializedValues.set(
+			jsKey,
+			deserializeValue(jsKey, entry.value, options?.format) as V,
+		);
 	}
 
 	return deserializedValues;
@@ -65,16 +60,16 @@ async function getBatch(keys: Key[], options?: GetBatchOptions): Promise<Map<Key
 /**
  * Options for the `list` function.
  */
-export interface ListOptions {
+export interface ListOptions<K> {
 	format?: "value" | "arrayBuffer";
 	// The key to start listing results from (inclusive). Cannot be used with startAfter or prefix.
-	start?: Key;
+	start?: K;
 	// The key to start listing results after (exclusive). Cannot be used with start or prefix.
-	startAfter?: Key;
+	startAfter?: K;
 	// The key to end listing results at (exclusive).
-	end?: Key;
+	end?: K;
 	// Restricts results to keys that start with the given prefix. Cannot be used with start or startAfter.
-	prefix?: Key;
+	prefix?: K;
 	// If true, results are returned in descending order.
 	reverse?: boolean;
 	// The maximum number of key-value pairs to return.
@@ -88,7 +83,7 @@ export interface ListOptions {
  * @param {ListOptions} [options] - Options.
  * @returns {Promise<Map<Key, Entry>>} The retrieved values.
  */
-async function list(options?: ListOptions): Promise<Map<Key, Entry>> {
+async function list<K, V>(options?: ListOptions<K>): Promise<Map<K, V>> {
 	// Build query
 	let query: ListQuery;
 	if (options?.prefix) {
@@ -101,7 +96,10 @@ async function list(options?: ListOptions): Promise<Map<Key, Entry>> {
 		}
 
 		query = {
-			rangeInclusive: [serializeListKey(options.start), serializeKey(options.end)],
+			rangeInclusive: [
+				serializeListKey(options.start),
+				serializeKey(options.end),
+			],
 		};
 	} else if (options?.startAfter) {
 		if (!options.end) {
@@ -109,20 +107,32 @@ async function list(options?: ListOptions): Promise<Map<Key, Entry>> {
 		}
 
 		query = {
-			rangeExclusive: [serializeListKey(options.startAfter), serializeKey(options.end)],
+			rangeExclusive: [
+				serializeListKey(options.startAfter),
+				serializeKey(options.end),
+			],
 		};
 	} else if (options?.end) {
-		throw new Error("must set options.start or options.startAfter with options.end");
+		throw new Error(
+			"must set options.start or options.startAfter with options.end",
+		);
 	} else {
 		query = { all: {} };
 	}
 
-	let entries = await op_rivet_kv_list(query, options?.reverse ?? false, options?.limit);
-	let deserializedValues = new Map<Key, Entry>();
+	const entries = await op_rivet_kv_list(
+		query,
+		options?.reverse ?? false,
+		options?.limit,
+	);
+	const deserializedValues = new Map<K, V>();
 
-	for (let [key, entry] of entries) {
-		let jsKey = deserializeKey(key);
-		deserializedValues.set(jsKey, deserializeValue(jsKey, entry.value, options?.format));
+	for (const [key, entry] of entries) {
+		const jsKey = deserializeKey(key) as K;
+		deserializedValues.set(
+			jsKey,
+			deserializeValue(jsKey, entry.value, options?.format) as V,
+		);
 	}
 
 	return deserializedValues;
@@ -143,19 +153,30 @@ export interface PutOptions {
  * @param {PutOptions} [options] - Options.
  * @returns {Promise<void>} A promise that resolves when the operation is complete.
  */
-async function put(key: Key, value: Entry | ArrayBuffer, options?: PutOptions): Promise<void> {
+async function put<K, V>(
+	key: K,
+	value: V | ArrayBuffer,
+	options?: PutOptions,
+): Promise<void> {
 	validateType(value, null, options?.format);
-	let format = options?.format ?? "value";
+	const format = options?.format ?? "value";
 
-	let serializedValue;
-	if (format == "value") {
+	let serializedValue: Uint8Array;
+	if (format === "value") {
 		serializedValue = core.serialize(value, { forStorage: true });
-	} else if (format == "arrayBuffer") {
+	} else if (format === "arrayBuffer") {
 		if (value instanceof ArrayBuffer) serializedValue = new Uint8Array(value);
-		else throw new Error(`value must be of type \`ArrayBuffer\` if format is "arrayBuffer"`);
+		else {
+			throw new Error(
+				`value must be of type \`ArrayBuffer\` if format is "arrayBuffer"`,
+			);
+		}
+	} else {
+		// Handled by validateType
+		throw new Error(`unreachable format: \`${format}\``);
 	}
 
-	await op_rivet_kv_put(serializeKey(key), serializedValue!);
+	await op_rivet_kv_put(serializeKey(key), serializedValue);
 }
 
 /**
@@ -172,25 +193,32 @@ export interface PutBatchOptions {
  * @param {PutBatchOptions} [options] - Options.
  * @returns {Promise<void>} A promise that resolves when the batch operation is complete.
  */
-async function putBatch(obj: Map<Key, Entry | ArrayBuffer>, options?: PutBatchOptions): Promise<void> {
-	let serializedObj = new Map<InKey, Uint8Array>();
-	let format = options?.format ?? "value";
+async function putBatch<K, V>(
+	obj: Map<K, V | ArrayBuffer>,
+	options?: PutBatchOptions,
+): Promise<void> {
+	const serializedObj = new Map<InKey, Uint8Array>();
+	const format = options?.format ?? "value";
 
-	for (let [key, value] of obj) {
+	for (const [key, value] of obj) {
 		validateType(value, key, format);
 
-		let serializedValue;
-		if (format == "value") {
+		let serializedValue: Uint8Array;
+		if (format === "value") {
 			serializedValue = core.serialize(value, { forStorage: true });
-		} else if (format == "arrayBuffer") {
+		} else if (format === "arrayBuffer") {
 			if (value instanceof ArrayBuffer) serializedValue = new Uint8Array(value);
-			else
+			else {
 				throw new Error(
-					`value in key "${key}" must be of type \`ArrayBuffer\` if format is "arrayBuffer"`
+					`value in key "${key}" must be of type \`ArrayBuffer\` if format is "arrayBuffer"`,
 				);
+			}
+		} else {
+			// Handled by validateType
+			throw new Error(`unreachable format: \`${format}\``);
 		}
 
-		serializedObj.set(serializeKey(key), serializedValue!);
+		serializedObj.set(serializeKey(key), serializedValue);
 	}
 
 	await op_rivet_kv_put_batch(serializedObj);
@@ -202,7 +230,7 @@ async function putBatch(obj: Map<Key, Entry | ArrayBuffer>, options?: PutBatchOp
  * @param {Key} key - The key of the key-value pair to delete.
  * @returns {Promise<void>} A promise that resolves when the operation is complete.
  */
-async function delete_(key: Key): Promise<void> {
+async function delete_<K>(key: K): Promise<void> {
 	return await op_rivet_kv_delete(serializeKey(key));
 }
 
@@ -212,7 +240,7 @@ async function delete_(key: Key): Promise<void> {
  * @param {Key[]} keys - A list of keys to delete.
  * @returns {Promise<void>} A promise that resolves when the operation is complete.
  */
-async function deleteBatch(keys: Key[]): Promise<void> {
+async function deleteBatch<K extends Array<unknown>>(keys: K): Promise<void> {
 	return await op_rivet_kv_delete_batch(keys.map((x) => serializeKey(x)));
 }
 
@@ -226,16 +254,16 @@ async function deleteAll(): Promise<void> {
 }
 
 function validateType(
-	value: Entry | ArrayBuffer,
-	key: Key | null,
-	format: "value" | "arrayBuffer" = "value"
+	value: unknown | ArrayBuffer,
+	key: unknown | null,
+	format: "value" | "arrayBuffer" = "value",
 ): void {
-	let keyText = key ? ` in key "{key}"` : "";
+	const keyText = key ? ` in key "{key}"` : "";
 
-	if (format == "value") {
+	if (format === "value") {
 		if (value instanceof Blob) {
 			throw new Error(
-				`the type ${value.constructor.name}${keyText} is not serializable in Deno, but you can use a TypedArray instead. See https://github.com/denoland/deno/issues/12067#issuecomment-1975001079.`
+				`the type ${value.constructor.name}${keyText} is not serializable in Deno, but you can use a TypedArray instead. See https://github.com/denoland/deno/issues/12067#issuecomment-1975001079.`,
 			);
 		}
 		if (
@@ -248,63 +276,71 @@ function validateType(
 			value instanceof ImageData
 		) {
 			throw new Error(
-				`the type ${value.constructor.name}${keyText} is not serializable in Deno. See https://github.com/denoland/deno/issues/12067#issuecomment-1975001079.`
+				`the type ${value.constructor.name}${keyText} is not serializable in Deno. See https://github.com/denoland/deno/issues/12067#issuecomment-1975001079.`,
 			);
 		}
-	} else if (format == "arrayBuffer") {
+	} else if (format === "arrayBuffer") {
 		if (!(value instanceof ArrayBuffer)) {
-			throw new Error(`value must be an ArrayBuffer if options.format = "arrayBuffer".`);
+			throw new Error(
+				`value must be an ArrayBuffer if options.format = "arrayBuffer".`,
+			);
 		}
 	} else {
 		throw new Error("unexpected key type from KV driver");
 	}
 }
 
-function serializeKey(key: Key): InKey {
-	if (key instanceof Array) {
+function serializeKey<K>(key: K): InKey {
+	if (Array.isArray(key)) {
 		return { jsInKey: key.map((x) => core.serialize(x)) };
 	} else {
 		return { jsInKey: [core.serialize(key)] };
 	}
 }
 
-function serializeListKey(key: Key): Uint8Array[] {
-	if (key instanceof Array) {
+function serializeListKey<K>(key: K): Uint8Array[] {
+	if (Array.isArray(key)) {
 		return key.map((x) => core.serialize(x));
 	} else {
 		return [core.serialize(key)];
 	}
 }
 
-function deserializeKey(key: OutKey): Key {
+function deserializeKey<K>(key: OutKey): K {
 	if ("inKey" in key || "outKey" in key) {
-		let jsKey = key.inKey ?? key.outKey;
+		const jsKey = key.inKey ?? key.outKey;
 
-		let tuple = jsKey.map((x) => core.deserialize(x));
+		const tuple = jsKey.map((x) => core.deserialize(x));
 
-		if (tuple.length == 1) return tuple[0];
-		else return tuple;
+		if (tuple.length === 1) return tuple[0] as K;
+		else return tuple as K;
 	} else {
 		throw new Error("unexpected key type from KV driver");
 	}
 }
 
-function deserializeValue(key: Key, value: Uint8Array, format: "value" | "arrayBuffer" = "value"): Entry {
-	if (value == undefined) return value;
+function deserializeValue<V>(
+	key: unknown,
+	value: Uint8Array,
+	format: "value" | "arrayBuffer" = "value",
+): V | ArrayBufferLike {
+	if (value === undefined) return value;
 
-	if (format == "value") {
+	if (format === "value") {
 		try {
-			return core.deserialize(value, { forStorage: true });
+			return core.deserialize(value, { forStorage: true }) as V;
 		} catch (e) {
 			throw new Error(
 				`could not deserialize value in key "${key}". you must use options.format = "arrayBuffer".`,
-				{ cause: e }
+				{ cause: e },
 			);
 		}
-	} else if (format == "arrayBuffer") {
+	} else if (format === "arrayBuffer") {
 		return value.buffer;
 	} else {
-		throw Error(`invalid format: "${format}". expected "value" or "arrayBuffer".`);
+		throw Error(
+			`invalid format: "${format}". expected "value" or "arrayBuffer".`,
+		);
 	}
 }
 

@@ -1,5 +1,5 @@
-import { Rivet } from "@rivet-gg/api";
-import { ActorTags } from "../../common/src/utils.ts";
+import type { Rivet } from "@rivet-gg/api";
+import type { ActorTags } from "../../common/src/utils.ts";
 
 export type ActorQuery =
 	| { actorId: { actorId: string } }

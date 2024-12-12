@@ -1,5 +1,7 @@
 export interface ToServer {
-	body: { rpcRequest: RpcRequest } | { subscriptionRequest: SubscriptionRequest },
+	body:
+		| { rpcRequest: RpcRequest }
+		| { subscriptionRequest: SubscriptionRequest };
 }
 
 export interface RpcRequest {
@@ -12,4 +14,3 @@ export interface SubscriptionRequest {
 	eventName: string;
 	subscribe: boolean;
 }
-

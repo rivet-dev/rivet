@@ -1,6 +1,6 @@
-import { Connection } from "./connection.ts";
-import type { Actor } from "./actor.ts";
+import type { Actor, AnyActor } from "./actor.ts";
+import type { Connection } from "./connection.ts";
 
-export class Rpc<A extends Actor<any, any, any>> {
+export class Rpc<A extends AnyActor> {
 	constructor(public readonly connection: Connection<A>) {}
 }

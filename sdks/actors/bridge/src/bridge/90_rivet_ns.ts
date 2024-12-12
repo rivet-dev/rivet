@@ -5,15 +5,22 @@ const { ReflectOwnKeys, ObjectFreeze } = primordials;
 import type { Metadata } from "./types/metadata.d.ts";
 export type { Metadata } from "./types/metadata.d.ts";
 
-export function deepFreeze(object: Record<any, any>): Readonly<Record<any, any>> {
+export function deepFreeze<T extends object>(object: T): Readonly<T> {
 	// Retrieve the property names defined on object
 	const propNames = ReflectOwnKeys(object);
 
 	// Freeze properties before freezing self
 	for (const name of propNames) {
-		const value = object[name as string];
+		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+		const value = (object as any)[name as string];
 
-		if ((value && typeof value === "object") || typeof value === "function") {
+		// Check if value is an array or object and not null
+		if (
+			value &&
+			(Array.isArray(value) ||
+				typeof value === "object" ||
+				typeof value === "function")
+		) {
 			deepFreeze(value);
 		}
 	}
@@ -23,6 +30,6 @@ export function deepFreeze(object: Record<any, any>): Readonly<Record<any, any>>
 
 export const ACTOR_CONTEXT = {
 	// Populated at runtime
-	metadata: null as any as Metadata,
+	metadata: undefined as unknown as Metadata,
 	kv: KV_NAMESPACE,
 };

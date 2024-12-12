@@ -1,10 +1,10 @@
 {
 	"$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
-    "linter": {
-        "rules": {
-            "style": {
-                "noUselessElse": "off"
-            }
-        }
-    }
+	"linter": {
+		"rules": {
+			"style": {
+				"noUselessElse": "off"
+			}
+		}
+	}
 }
