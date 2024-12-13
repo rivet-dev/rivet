@@ -12,6 +12,12 @@ pub struct Auth {
 	claims: Option<Claims>,
 }
 
+pub struct CheckOpts<'a> {
+	pub query: &'a GlobalQuery,
+	pub allow_service_token: bool,
+	pub opt_auth: bool,
+}
+
 pub struct CheckOutput {
 	pub game_id: Uuid,
 	pub env_id: Uuid,
@@ -65,13 +71,12 @@ impl Auth {
 	pub async fn check(
 		&self,
 		ctx: &OperationContext<()>,
-		query: &GlobalQuery,
-		allow_service: bool,
+		opts: CheckOpts<'_>,
 	) -> GlobalResult<CheckOutput> {
 		let is_development = ctx.config().server()?.rivet.auth.access_kind
 			== rivet_config::config::rivet::AccessKind::Development;
 
-		let (project_query, environment_query) = query.project_and_env()?;
+		let (project_query, environment_query) = opts.query.project_and_env()?;
 
 		// Lookup project name ID
 		let project = if is_development {
@@ -121,6 +126,11 @@ impl Auth {
 			return Ok(output);
 		}
 
+		// Skip auth if not needed
+		if self.claims.is_none() && opts.opt_auth {
+			return Ok(output);
+		}
+
 		// Validate claims
 		let claims = self.claims()?;
 
@@ -134,7 +144,7 @@ impl Auth {
 			Ok(output)
 		} else if let Ok(service_ent) = claims.as_env_service() {
 			ensure_with!(
-				allow_service,
+				opts.allow_service_token,
 				API_FORBIDDEN,
 				reason = "Cannot use service token for this endpoint."
 			);

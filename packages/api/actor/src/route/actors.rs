@@ -11,7 +11,7 @@ use serde_json::json;
 
 use crate::{
 	assert,
-	auth::{Auth, CheckOutput},
+	auth::{Auth, CheckOpts, CheckOutput},
 	utils::build_global_query_compat,
 };
 
@@ -40,7 +40,17 @@ async fn get_inner(
 	_watch_index: WatchIndexQuery,
 	query: GlobalEndpointTypeQuery,
 ) -> GlobalResult<models::ActorGetActorResponse> {
-	let CheckOutput { env_id, .. } = ctx.auth().check(ctx.op_ctx(), &query.global, true).await?;
+	let CheckOutput { env_id, .. } = ctx
+		.auth()
+		.check(
+			ctx.op_ctx(),
+			CheckOpts {
+				query: &query.global,
+				allow_service_token: true,
+				opt_auth: false,
+			},
+		)
+		.await?;
 
 	// Get the server
 	let servers_res = ctx
@@ -119,8 +129,17 @@ pub async fn create(
 	body: models::ActorCreateActorRequest,
 	query: GlobalEndpointTypeQuery,
 ) -> GlobalResult<models::ActorCreateActorResponse> {
-	let CheckOutput { game_id, env_id } =
-		ctx.auth().check(ctx.op_ctx(), &query.global, true).await?;
+	let CheckOutput { game_id, env_id } = ctx
+		.auth()
+		.check(
+			ctx.op_ctx(),
+			CheckOpts {
+				query: &query.global,
+				allow_service_token: true,
+				opt_auth: false,
+			},
+		)
+		.await?;
 
 	let (clusters_res, game_configs_res, build) = tokio::try_join!(
 		ctx.op(cluster::ops::get_for_game::Input {
@@ -408,8 +427,17 @@ pub async fn destroy(
 	actor_id: Uuid,
 	query: DeleteQuery,
 ) -> GlobalResult<serde_json::Value> {
-	let CheckOutput { game_id, env_id } =
-		ctx.auth().check(ctx.op_ctx(), &query.global, true).await?;
+	let CheckOutput { game_id, env_id } = ctx
+		.auth()
+		.check(
+			ctx.op_ctx(),
+			CheckOpts {
+				query: &query.global,
+				allow_service_token: true,
+				opt_auth: false,
+			},
+		)
+		.await?;
 
 	ensure_with!(
 		query.override_kill_timeout.unwrap_or(0) >= 0,
@@ -474,7 +502,17 @@ pub async fn upgrade(
 	body: models::ActorUpgradeActorRequest,
 	query: GlobalQuery,
 ) -> GlobalResult<serde_json::Value> {
-	let CheckOutput { game_id, env_id } = ctx.auth().check(ctx.op_ctx(), &query, false).await?;
+	let CheckOutput { game_id, env_id } = ctx
+		.auth()
+		.check(
+			ctx.op_ctx(),
+			CheckOpts {
+				query: &query,
+				allow_service_token: true,
+				opt_auth: false,
+			},
+		)
+		.await?;
 
 	assert::server_for_env(&ctx, actor_id, game_id, env_id, None).await?;
 
@@ -502,7 +540,17 @@ pub async fn upgrade_all(
 	body: models::ActorUpgradeAllActorsRequest,
 	query: GlobalQuery,
 ) -> GlobalResult<models::ActorUpgradeAllActorsResponse> {
-	let CheckOutput { game_id, env_id } = ctx.auth().check(ctx.op_ctx(), &query, false).await?;
+	let CheckOutput { game_id, env_id } = ctx
+		.auth()
+		.check(
+			ctx.op_ctx(),
+			CheckOpts {
+				query: &query,
+				allow_service_token: true,
+				opt_auth: false,
+			},
+		)
+		.await?;
 
 	let tags = unwrap_with!(body.tags, API_BAD_BODY, error = "missing property `tags`");
 
@@ -622,9 +670,16 @@ async fn list_actors_inner(
 	_watch_index: WatchIndexQuery,
 	query: ListQuery,
 ) -> GlobalResult<models::ActorListActorsResponse> {
-	let CheckOutput { env_id, .. } = ctx
+	let CheckOutput { game_id, env_id } = ctx
 		.auth()
-		.check(ctx.op_ctx(), &query.global_endpoint_type.global, true)
+		.check(
+			ctx.op_ctx(),
+			CheckOpts {
+				query: &query.global_endpoint_type.global,
+				allow_service_token: true,
+				opt_auth: false,
+			},
+		)
 		.await?;
 
 	let include_destroyed = query.include_destroyed.unwrap_or(false);

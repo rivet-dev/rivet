@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use crate::{
 	assert,
-	auth::{Auth, CheckOutput},
+	auth::{Auth, CheckOpts, CheckOutput},
 	utils::build_global_query_compat,
 };
 
@@ -30,8 +30,17 @@ pub async fn get_logs(
 	watch_index: WatchIndexQuery,
 	query: GetActorLogsQuery,
 ) -> GlobalResult<models::ActorGetActorLogsResponse> {
-	let CheckOutput { game_id, env_id } =
-		ctx.auth().check(ctx.op_ctx(), &query.global, false).await?;
+	let CheckOutput { game_id, env_id } = ctx
+		.auth()
+		.check(
+			ctx.op_ctx(),
+			CheckOpts {
+				query: &query.global,
+				allow_service_token: false,
+				opt_auth: false,
+			},
+		)
+		.await?;
 
 	// Validate server belongs to game
 	assert::server_for_env(&ctx, server_id, game_id, env_id, None).await?;
