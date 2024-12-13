@@ -19,6 +19,12 @@ lazy_static::lazy_static! {
 		&["worker_instance_id"],
 		*REGISTRY,
 	).unwrap();
+	pub static ref PULL_WORKFLOWS_FULL_DURATION: GaugeVec = register_gauge_vec_with_registry!(
+		"chirp_pull_workflows_full_duration",
+		"Duration of pulling workflow rows and history.",
+		&["worker_instance_id"],
+		*REGISTRY,
+	).unwrap();
 
 	pub static ref WORKFLOW_TOTAL: IntGaugeVec = register_int_gauge_vec_with_registry!(
 		"chirp_workflow_total",

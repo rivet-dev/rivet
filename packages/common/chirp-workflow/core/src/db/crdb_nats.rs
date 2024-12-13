@@ -348,7 +348,7 @@ impl Database for DatabaseCrdbNats {
 			.map(|row| row.workflow_id)
 			.collect::<Vec<_>>();
 
-		let start_instant = Instant::now();
+		let start_instant2 = Instant::now();
 
 		// Fetch all events for all fetched workflows
 		let events = sqlx::query_as::<_, AmalgamEventRow>(indoc!(
@@ -579,14 +579,14 @@ impl Database for DatabaseCrdbNats {
 		.await
 		.map_err(WorkflowError::Sqlx)?;
 
-		// tracing::info!(?workflow_ids, l=%events.len(), dt=%start_instant.elapsed().as_secs_f64(), "----------------------------------");
-
 		let workflows = build_histories(workflow_rows, events)?;
 
-		// tracing::info!(dt=%start_instant.elapsed().as_secs_f64(), "----------------------------------");
-
-		let dt = start_instant.elapsed().as_secs_f64();
+		let dt = start_instant2.elapsed().as_secs_f64();
 		metrics::PULL_WORKFLOWS_HISTORY_DURATION
+			.with_label_values(&[&worker_instance_id.to_string()])
+			.set(dt);
+		let dt = start_instant.elapsed().as_secs_f64();
+		metrics::PULL_WORKFLOWS_FULL_DURATION
 			.with_label_values(&[&worker_instance_id.to_string()])
 			.set(dt);
 

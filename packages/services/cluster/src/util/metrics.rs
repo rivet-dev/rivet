@@ -27,13 +27,13 @@ lazy_static::lazy_static! {
 	).unwrap();
 	pub static ref PEGBOARD_SERVERS: IntGaugeVec = register_int_gauge_vec_with_registry!(
 		"provision_pegboard_servers",
-		"Job servers with pegboard connected.",
+		"Servers with pegboard connected running containers.",
 		&["cluster_id", "datacenter_id", "provider_datacenter_id", "datacenter_name_id"],
 		*REGISTRY,
 	).unwrap();
 	pub static ref PEGBOARD_ISOLATE_SERVERS: IntGaugeVec = register_int_gauge_vec_with_registry!(
 		"provision_pegboard_isolate_servers",
-		"Job servers with pegboard connected in isolate mode.",
+		"Servers with pegboard connected running isolates.",
 		&["cluster_id", "datacenter_id", "provider_datacenter_id", "datacenter_name_id"],
 		*REGISTRY,
 	).unwrap();
