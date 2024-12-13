@@ -138,11 +138,11 @@ pub async fn deploy(
 				)])),
 			})),
 			network: Some(Box::new(models::ActorCreateActorNetworkRequest {
-				mode: Some(models::ActorNetworkMode::Host),
+				mode: Some(models::ActorNetworkMode::Bridge),
 				ports: Some(HashMap::from([(
 					crate::util::actor_manager::HTTP_PORT.to_string(),
 					models::ActorCreateActorPortRequest {
-						protocol: models::ActorPortProtocol::Http,
+						protocol: models::ActorPortProtocol::Https,
 						internal_port: None,
 						routing: Some(Box::new(models::ActorPortRouting {
 							host: None,
