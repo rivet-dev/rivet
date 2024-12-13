@@ -40,8 +40,9 @@ datacenter-id = ___DATACENTER_ID___
 # TODO: TLS
 
 # Individual servers
+# 
+# Each process requires 4 GB of RAM.
 [fdbserver.4500]
-[fdbserver.4501]
  
 [backup_agent]
 command = /usr/lib/foundationdb/backup_agent/backup_agent
