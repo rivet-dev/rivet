@@ -277,7 +277,7 @@ pub async fn init_fdb_config(config: &Config) -> Result<()> {
 }
 
 pub async fn fetch_pull_addresses(config: &Config) -> Result<Vec<String>> {
-	let mut addresses = match &config.client.images.pull_addresses {
+	let mut addresses = match &*config.client.images.pull_addresses() {
 		Addresses::Dynamic { fetch_endpoint } => reqwest::get(fetch_endpoint.clone())
 			.await?
 			.error_for_status()?

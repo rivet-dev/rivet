@@ -1,4 +1,5 @@
 use std::{
+	borrow::Cow,
 	net::{IpAddr, Ipv4Addr},
 	path::{Path, PathBuf},
 };
@@ -46,6 +47,7 @@ pub struct Client {
 	pub data_dir: Option<PathBuf>,
 	pub cluster: Cluster,
 	pub runner: Runner,
+	#[serde(default)]
 	pub images: Images,
 	pub network: Network,
 	#[serde(default)]
@@ -114,10 +116,19 @@ impl Runner {
 	}
 }
 
-#[derive(Clone, Deserialize, JsonSchema)]
+#[derive(Clone, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Images {
-	pub pull_addresses: Addresses,
+	pub pull_addresses: Option<Addresses>,
+}
+
+impl Images {
+	pub fn pull_addresses(&self) -> Cow<Addresses> {
+		self.pull_addresses
+			.as_ref()
+			.map(Cow::Borrowed)
+			.unwrap_or_else(|| Cow::Owned(Addresses::Static(Vec::new())))
+	}
 }
 
 #[derive(Clone, Deserialize, JsonSchema)]

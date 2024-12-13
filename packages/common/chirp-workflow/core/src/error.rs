@@ -78,22 +78,22 @@ pub enum WorkflowError {
 	#[error("deserialize message: {0}")]
 	DeserializeMessage(serde_json::Error),
 
-	#[error("cjson serialize tags: {0:?}")]
+	#[error("failed to serialize cjson tags: {0:?}")]
 	CjsonSerializeTags(cjson::Error),
 
-	#[error("serialize tags: {0:?}")]
+	#[error("failed to serialize tags: {0:?}")]
 	SerializeTags(serde_json::Error),
 
-	#[error("deserialize tags: {0}")]
+	#[error("failed to deserialize tags: {0}")]
 	DeserializeTags(serde_json::Error),
 
 	#[error("tags must be a json object")]
 	InvalidTags,
 
-	#[error("serialize loop output: {0}")]
+	#[error("failed to serialize loop output: {0}")]
 	SerializeLoopOutput(serde_json::Error),
 
-	#[error("deserialize loop input: {0}")]
+	#[error("failed to deserialize loop output: {0}")]
 	DeserializeLoopOutput(serde_json::Error),
 
 	#[error("invalid sleep state: {0}")]
@@ -102,10 +102,10 @@ pub enum WorkflowError {
 	#[error("invalid event type: {0}")]
 	InvalidEventType(i64),
 
-	#[error("create subscription: {0}")]
+	#[error("failed to create subscription: {0}")]
 	CreateSubscription(rivet_pools::prelude::nats::Error),
 
-	#[error("flush nats: {0}")]
+	#[error("failed to flush nats: {0}")]
 	FlushNats(rivet_pools::prelude::nats::Error),
 
 	#[error("subscription unsubscribed")]
@@ -114,7 +114,7 @@ pub enum WorkflowError {
 	#[error("missing message data")]
 	MissingMessageData,
 
-	#[error("redis: {source}")]
+	#[error("redis error: {source}")]
 	Redis {
 		#[from]
 		source: rivet_pools::prelude::redis::RedisError,
@@ -132,16 +132,16 @@ pub enum WorkflowError {
 	#[error("missing event data")]
 	MissingEventData,
 
-	#[error("build sql pool: {0}")]
+	#[error("failed to build sql pool: {0}")]
 	BuildSqlx(sqlx::Error),
 
-	#[error("sql: {0}")]
+	#[error("sql error: {0}")]
 	Sqlx(sqlx::Error),
 
-	#[error("max sql retries (last error: {0})")]
+	#[error("max sql retries, last error: {0}")]
 	MaxSqlRetries(sqlx::Error),
 
-	#[error("pools: {0}")]
+	#[error("pools error: {0}")]
 	Pools(#[from] rivet_pools::Error),
 
 	#[error("activity timed out")]
@@ -168,7 +168,7 @@ pub enum WorkflowError {
 	#[error("int conversion error: {0}")]
 	TryFromIntError(#[from] std::num::TryFromIntError),
 
-	#[error("serialize location: {0}")]
+	#[error("failed to serialize location: {0}")]
 	SerializeLocation(serde_json::Error),
 
 	#[error("invalid version: {0}")]
