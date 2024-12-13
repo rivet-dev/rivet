@@ -1,6 +1,5 @@
 use chirp_workflow::prelude::*;
 use cluster::types::GuardPublicHostname;
-use std::fmt;
 
 use crate::types::{EndpointType, GameGuardProtocol};
 

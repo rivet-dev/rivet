@@ -18,6 +18,8 @@ pub mod pegboard;
 // In ms, a small amount of time to separate the completion of the drain to the deletion of the
 // cluster server. We want the drain to complete first.
 const DRAIN_PADDING_MS: i64 = 10000;
+/// Time to delay an actor from rescheduling after a rescheduling failure.
+const BASE_RETRY_TIMEOUT_MS: usize = 2000;
 
 // TODO: Restructure traefik to get rid of this
 const TRAEFIK_GRACE_PERIOD: Duration = Duration::from_secs(2);
@@ -702,7 +704,6 @@ async fn update_image(ctx: &ActivityCtx, input: &UpdateImageInput) -> GlobalResu
 #[derive(Debug, Serialize, Deserialize, Hash)]
 struct UpdateRescheduleRetryInput {
 	server_id: Uuid,
-	reset: bool,
 }
 
 #[activity(UpdateRescheduleRetry)]
@@ -715,15 +716,21 @@ async fn update_reschedule_retry(
 		"
 		UPDATE db_ds.servers
 		SET
-			reschedule_retry_count = COALESCE($2, reschedule_retry_count + 1),
-			last_reschedule_retry_ts = COALESCE($3, last_reschedule_retry_ts)
+			-- If the last retry ts is more than 2 * backoff ago, reset retry count to 0
+			reschedule_retry_count = CASE
+				-- Should match algorithm in backoff
+				WHEN last_reschedule_retry_ts < $2 - (2 * $3 * (2 ^ LEAST(reschedule_retry_count, $4)))
+				THEN 0
+				ELSE last_reschedule_retry_ts + 1
+			END,
+			last_reschedule_retry_ts = $2
 		WHERE server_id = $1
-		-- Return value before update
-		RETURNING reschedule_retry_count - 1
+		RETURNING reschedule_retry_count
 		",
 		input.server_id,
-		input.reset.then_some(0),
-		(!input.reset).then(util::timestamp::now),
+		util::timestamp::now(),
+		BASE_RETRY_TIMEOUT_MS as i64,
+		8, // max_exponent
 	)
 	.await?;
 

@@ -11,16 +11,14 @@ use util::serde::AsHashableExt;
 use super::{
 	CreateComplete, Destroy, Drain, DrainState, Failed, GetServerMetaInput, GetServerMetaOutput,
 	InsertDbInput, Port, Ready, SetConnectableInput, UpdateImageInput, UpdateRescheduleRetryInput,
-	Upgrade, UpgradeComplete, UpgradeStarted, DRAIN_PADDING_MS, TRAEFIK_GRACE_PERIOD,
+	Upgrade, UpgradeComplete, UpgradeStarted, BASE_RETRY_TIMEOUT_MS, DRAIN_PADDING_MS,
+	TRAEFIK_GRACE_PERIOD,
 };
 use crate::types::{
 	GameGuardProtocol, HostProtocol, NetworkMode, Routing, ServerLifecycle, ServerResources,
 };
 
 pub mod destroy;
-
-/// Time to delay an actor from rescheduling after a rescheduling failure (no available dc's).
-const BASE_RETRY_TIMEOUT_MS: usize = 2000;
 
 #[derive(Serialize, Deserialize)]
 struct StateRes {
@@ -130,18 +128,11 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 							.await?;
 						}
 						pp::ActorState::Running { ports, .. } => {
-							ctx.join((
-								activity(UpdatePortsInput {
-									server_id: input.server_id,
-									datacenter_id: input.datacenter_id,
-									ports,
-								}),
-								// Reset retry count only after the actor becomes running
-								activity(UpdateRescheduleRetryInput {
-									server_id: input.server_id,
-									reset: true,
-								}),
-							))
+							ctx.activity(UpdatePortsInput {
+								server_id: input.server_id,
+								datacenter_id: input.datacenter_id,
+								ports,
+							})
 							.await?;
 
 							// Wait for Traefik to poll ports and update GG
@@ -739,7 +730,6 @@ async fn reschedule_actor(
 			let retry_count = ctx
 				.activity(UpdateRescheduleRetryInput {
 					server_id: input.server_id,
-					reset: false,
 				})
 				.await?;
 

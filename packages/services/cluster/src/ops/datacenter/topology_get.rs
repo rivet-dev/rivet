@@ -124,17 +124,25 @@ pub async fn cluster_datacenter_topology_get(
 	.map(TryInto::<ServerRowStructured>::try_into)
 	.collect::<GlobalResult<Vec<_>>>()?;
 
-	// Fetch batch data from nomad
-	let (
-		datacenters_res,
-		pb_client_usage_res,
-		(hardware_specs, prometheus_metrics),
-		allocation_info,
-		node_info,
-	) = tokio::try_join!(
-		ctx.op(crate::ops::datacenter::get::Input {
+	let datacenters_res = ctx
+		.op(crate::ops::datacenter::get::Input {
 			datacenter_ids: input.datacenter_ids.clone(),
-		}),
+		})
+		.await?;
+
+	// Get the first hardware id from each datacenters' pools
+	let default_hardware_ids = datacenters_res
+		.datacenters
+		.iter()
+		.flat_map(|dc| &dc.pools)
+		.map(|pool| {
+			Ok(unwrap!(pool.hardware.first(), "no hardware")
+				.provider_hardware
+				.clone())
+		});
+
+	// Fetch batch data from nomad
+	let (pb_client_usage_res, (hardware_specs, prometheus_metrics), allocation_info, node_info) = tokio::try_join!(
 		ctx.op(pegboard::ops::client::usage_get::Input {
 			client_ids: servers
 				.iter()
@@ -148,19 +156,17 @@ pub async fn cluster_datacenter_topology_get(
 				.collect(),
 		}),
 		async {
-			tracing::info!(?servers, hardware_ids=?servers
+			let server_hardware_ids = servers
 				.iter()
 				.filter_map(|s| s.provider_hardware.clone())
-				.collect::<HashSet<_>>()
-				.into_iter()
-				.collect::<Vec<_>>(), "------------------------");
+				.map(Ok);
+
 			// Fetch hardware for each server
 			let instance_types = if ctx.config().server()?.linode.is_some() {
 				ctx.op(linode::ops::instance_type_get::Input {
-					hardware_ids: servers
-						.iter()
-						.filter_map(|s| s.provider_hardware.clone())
-						.collect::<HashSet<_>>()
+					hardware_ids: default_hardware_ids
+						.chain(server_hardware_ids)
+						.collect::<GlobalResult<HashSet<_>>>()?
 						.into_iter()
 						.collect::<Vec<_>>(),
 				})
@@ -169,8 +175,6 @@ pub async fn cluster_datacenter_topology_get(
 			} else {
 				Vec::new()
 			};
-
-			tracing::info!(?instance_types, "--------------------");
 
 			// Make the hardware data agnostic and put it into a hashmap for better reads
 			let hardware_specs = instance_types
