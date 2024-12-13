@@ -267,7 +267,7 @@
           ]
         },
         {
-          "description": "Only admin users can crate teams & projects.",
+          "description": "Only admin users can create teams & projects.",
           "type": "string",
           "enum": [
             "private"

@@ -14,7 +14,7 @@ pub(crate) mod install;
 pub(crate) mod undrain;
 
 use crate::{
-	types::{Datacenter, PoolType, Provider},
+	types::{Pool, PoolType, Provider},
 	util::metrics,
 };
 
@@ -332,8 +332,20 @@ pub(crate) struct GetDcInput {
 	pub datacenter_id: Uuid,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct GetDcOutput {
+	pub datacenter_id: Uuid,
+	pub cluster_id: Uuid,
+	pub name_id: String,
+	pub provider: Provider,
+	pub provider_datacenter_id: String,
+	pub provider_api_token: Option<String>,
+	pub pools: Vec<Pool>,
+	pub prebakes_enabled: bool,
+}
+
 #[activity(GetDc)]
-pub(crate) async fn get_dc(ctx: &ActivityCtx, input: &GetDcInput) -> GlobalResult<Datacenter> {
+pub(crate) async fn get_dc(ctx: &ActivityCtx, input: &GetDcInput) -> GlobalResult<GetDcOutput> {
 	let dcs_res = ctx
 		.op(crate::ops::datacenter::get::Input {
 			datacenter_ids: vec![input.datacenter_id],
@@ -341,7 +353,16 @@ pub(crate) async fn get_dc(ctx: &ActivityCtx, input: &GetDcInput) -> GlobalResul
 		.await?;
 	let dc = unwrap!(dcs_res.datacenters.into_iter().next());
 
-	Ok(dc)
+	Ok(GetDcOutput {
+		pools: dc.pools,
+		prebakes_enabled: dc.prebakes_enabled,
+		provider: dc.provider,
+		provider_datacenter_id: dc.provider_datacenter_id,
+		provider_api_token: dc.provider_api_token,
+		cluster_id: dc.cluster_id,
+		datacenter_id: dc.datacenter_id,
+		name_id: dc.name_id,
+	})
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]

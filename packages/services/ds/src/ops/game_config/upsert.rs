@@ -16,7 +16,7 @@ pub async fn ds_game_config_upsert(ctx: &OperationCtx, input: &Input) -> GlobalR
 		[ctx]
 		"
 		INSERT INTO db_ds.game_config (game_id, host_networking_enabled, root_user_enabled, runtime)
-		VALUES ($1, $2, $3, $4)
+		SELECT $1, COALESCE($2, false), COALESCE($3, false), $4
 		ON CONFLICT (game_id) DO UPDATE
 		SET
 			host_networking_enabled = COALESCE($2, EXCLUDED.host_networking_enabled),

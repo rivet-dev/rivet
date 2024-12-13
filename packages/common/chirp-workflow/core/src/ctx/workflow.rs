@@ -495,10 +495,10 @@ impl WorkflowCtx {
 
 		// Activity was ran before
 		let output = if let HistoryResult::Event(activity) = history_res {
+			tracing::debug!(name=%self.name, id=%self.workflow_id, activity_name=%I::Activity::NAME, "replaying activity");
+
 			// Activity succeeded
 			if let Some(output) = activity.parse_output().map_err(GlobalError::raw)? {
-				tracing::debug!(name=%self.name, id=%self.workflow_id, activity_name=%I::Activity::NAME, "replaying activity");
-
 				output
 			}
 			// Activity failed, retry

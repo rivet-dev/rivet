@@ -286,7 +286,7 @@ pub async fn fetch_pull_addresses(config: &Config) -> Result<Vec<String>> {
 			.servers
 			.into_iter()
 			.filter_map(|server| server.lan_ip)
-			.map(|vlan_ip| format!("{vlan_ip}:8080"))
+			.map(|vlan_ip| format!("http://{vlan_ip}:8080"))
 			.collect::<Vec<_>>(),
 		Addresses::Static(addresses) => addresses.clone(),
 	};

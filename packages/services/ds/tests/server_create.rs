@@ -13,6 +13,14 @@ async fn server_create(ctx: TestCtx) {
 	.unwrap();
 	let env_id = game_res.prod_env_id.unwrap();
 
+	ctx.op(ds::ops::game_config::upsert::Input {
+		game_id: game_res.game_id.unwrap().as_uuid(),
+		host_networking_enabled: Some(true),
+		..Default::default()
+	})
+	.await
+	.unwrap();
+
 	// Pick an existing cluster
 	let cluster_id = ctx
 		.op(cluster::ops::list::Input {})
@@ -25,7 +33,7 @@ async fn server_create(ctx: TestCtx) {
 
 	let build_res = op!([ctx] faker_build {
 		env_id: Some(env_id),
-		image: backend::faker::Image::DsEcho as i32,
+		image: backend::faker::Image::JsEcho as i32,
 	})
 	.await
 	.unwrap();
@@ -87,7 +95,7 @@ async fn server_create(ctx: TestCtx) {
 		args: Vec::new(),
 		environment: env,
 		image_id: build_res.build_id.unwrap().as_uuid(),
-		network_mode: types::NetworkMode::Bridge,
+		network_mode: types::NetworkMode::Host,
 		network_ports: ports,
 	})
 	.tag("server_id", server_id)
@@ -105,7 +113,7 @@ async fn server_create(ctx: TestCtx) {
 		let server = ctx
 			.op(ds::ops::server::get::Input {
 				server_ids: vec![server_id],
-				endpoint_type: ds::types::EndpointType::Hostname,
+				endpoint_type: Some(ds::types::EndpointType::Hostname),
 			})
 			.await
 			.unwrap()
@@ -131,7 +139,7 @@ async fn server_create(ctx: TestCtx) {
 		let client = reqwest::Client::new();
 		let res = tokio::time::timeout(std::time::Duration::from_secs(3), async {
 			client
-				.post(format!("http://{hostname}:{port}"))
+				.post(format!("http://{hostname}:{port}/error"))
 				.body(random_body.clone())
 				.send()
 				.await

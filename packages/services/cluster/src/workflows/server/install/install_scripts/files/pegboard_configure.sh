@@ -22,9 +22,9 @@ cat << 'EOF' > /etc/rivet-client/config.json
 		},
 		"network": {
 			"bind_ip": "___VLAN_IP___",
-			"lan_ip": "___VLAN_IP___",
-			"wan_ip": "___PUBLIC_IP___"
-		}
+			"lan_hostname": "___VLAN_IP___",
+			"wan_hostname": "___PUBLIC_IP___"
+		},
 		"cni": {
 			"network_interface": "eth0"
 		},
@@ -33,6 +33,8 @@ cat << 'EOF' > /etc/rivet-client/config.json
 			"memory": __RESERVED_MEMORY__
 		},
 		"foundationdb": {
+			"cluster_description": "fdb",
+			"cluster_id": "fdb",
 			"addresses": {
 				"dynamic": {
 					"fetch_endpoint": "__TUNNEL_API_EDGE_API__/provision/datacenters/___DATACENTER_ID___/servers?pools=fdb"

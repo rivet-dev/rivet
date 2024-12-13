@@ -19,6 +19,7 @@ struct ServerRow {
 	pegboard_client_id: Option<Uuid>,
 }
 
+#[derive(Debug)]
 struct ServerRowStructured {
 	server_id: Uuid,
 	datacenter_id: Uuid,
@@ -147,6 +148,12 @@ pub async fn cluster_datacenter_topology_get(
 				.collect(),
 		}),
 		async {
+			tracing::info!(?servers, hardware_ids=?servers
+				.iter()
+				.filter_map(|s| s.provider_hardware.clone())
+				.collect::<HashSet<_>>()
+				.into_iter()
+				.collect::<Vec<_>>(), "------------------------");
 			// Fetch hardware for each server
 			let instance_types = if ctx.config().server()?.linode.is_some() {
 				ctx.op(linode::ops::instance_type_get::Input {
@@ -162,6 +169,8 @@ pub async fn cluster_datacenter_topology_get(
 			} else {
 				Vec::new()
 			};
+
+			tracing::info!(?instance_types, "--------------------");
 
 			// Make the hardware data agnostic and put it into a hashmap for better reads
 			let hardware_specs = instance_types

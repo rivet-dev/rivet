@@ -17,7 +17,7 @@ pub struct Cluster {
 	pub create_ts: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Datacenter {
 	pub datacenter_id: Uuid,
 	pub cluster_id: Uuid,
