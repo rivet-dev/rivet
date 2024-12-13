@@ -10,7 +10,9 @@ pub struct Input {
 
 #[workflow]
 pub async fn cluster_server_dns_delete(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
+	ctx.removed::<Activity<GetDnsRecords>>().await?;
 	let records_res = ctx
+		.v(2)
 		.activity(GetDnsRecordsInput {
 			server_id: input.server_id,
 		})
@@ -41,6 +43,17 @@ pub async fn cluster_server_dns_delete(ctx: &mut WorkflowCtx, input: &Input) -> 
 		tracing::warn!("server has no secondary dns record");
 	}
 
+	if let Some(dns_record_id) = records_res.actor_wildcard_dns_record_id {
+		ctx.v(2)
+			.activity(DeleteDnsRecordInput {
+				dns_record_id,
+				zone_id: zone_id.to_string(),
+			})
+			.await?;
+	} else {
+		tracing::warn!("server has no actor wildcard dns record");
+	}
+
 	ctx.activity(UpdateDbInput {
 		server_id: input.server_id,
 	})
@@ -58,6 +71,7 @@ struct GetDnsRecordsInput {
 struct GetDnsRecordsOutput {
 	dns_record_id: Option<String>,
 	secondary_dns_record_id: Option<String>,
+	actor_wildcard_dns_record_id: Option<String>,
 }
 
 #[activity(GetDnsRecords)]
@@ -68,7 +82,7 @@ async fn get_dns_records(
 	let row = sql_fetch_optional!(
 		[ctx, GetDnsRecordsOutput]
 		"
-		SELECT dns_record_id, secondary_dns_record_id
+		SELECT dns_record_id, secondary_dns_record_id, actor_wildcard_dns_record_id
 		FROM db_cluster.servers_cloudflare
 		WHERE
 			server_id = $1 AND

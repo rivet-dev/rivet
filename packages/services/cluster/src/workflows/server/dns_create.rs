@@ -1,4 +1,7 @@
-use std::net::{IpAddr, Ipv4Addr};
+use std::{
+	net::{IpAddr, Ipv4Addr},
+	ops::Deref,
+};
 
 use chirp_workflow::prelude::*;
 use cloudflare::endpoints as cf;
@@ -18,18 +21,19 @@ pub async fn cluster_server_dns_create(ctx: &mut WorkflowCtx, input: &Input) -> 
 		})
 		.await?;
 
-	let zone_id = unwrap_ref!(
-		ctx.config().server()?.cloudflare()?.zone.job,
+	let zone_id = unwrap!(
+		ctx.config().server()?.cloudflare()?.zone.job.clone(),
 		"dns not configured"
 	);
-	let domain_job = unwrap_ref!(ctx.config().server()?.rivet.dns()?.domain_job);
+	let domain_job = unwrap!(ctx.config().server()?.rivet.dns()?.domain_job.clone());
 
-	let (primary_dns_record_id, secondary_dns_record_id) = ctx
+	let (primary_dns_record_id, secondary_dns_record_id, actor_wildcard_dns_record_id) = ctx
 		.join((
+			// Lobbies
 			activity(CreateDnsRecordInput {
 				record_name: format!("*.lobby.{}.{domain_job}", server_res.datacenter_id),
 				public_ip: server_res.public_ip,
-				zone_id: zone_id.to_string(),
+				zone_id: zone_id.clone(),
 			}),
 			// This is solely for compatibility with Discord activities. Their docs say they support parameter
 			// mapping but it does not work
@@ -37,17 +41,51 @@ pub async fn cluster_server_dns_create(ctx: &mut WorkflowCtx, input: &Input) -> 
 			activity(CreateDnsRecordInput {
 				record_name: format!("lobby.{}.{domain_job}", server_res.datacenter_id),
 				public_ip: server_res.public_ip,
-				zone_id: zone_id.to_string(),
+				zone_id: zone_id.clone(),
+			}),
+			closure(|ctx| {
+				let datacenter_id = server_res.datacenter_id;
+				let domain_job = domain_job.clone();
+				let public_ip = server_res.public_ip.clone();
+				let zone_id = zone_id.clone();
+
+				Box::pin(async move {
+					let record_id = match ctx.check_version(2).await? {
+						1 => None,
+						_latest => Some(
+							ctx.activity(CreateDnsRecordInput {
+								record_name: format!("*.actor.{datacenter_id}.{domain_job}"),
+								public_ip,
+								zone_id,
+							})
+							.await?,
+						),
+					};
+
+					Ok(record_id)
+				})
 			}),
 		))
 		.await?;
 
-	ctx.activity(InsertDbInput {
-		server_id: input.server_id,
-		primary_dns_record_id,
-		secondary_dns_record_id,
-	})
-	.await?;
+	{
+		let v1 = InsertDbInputV1 {
+			server_id: input.server_id,
+			primary_dns_record_id,
+			secondary_dns_record_id,
+		};
+
+		match ctx.check_version(2).await? {
+			1 => ctx.activity(v1).await?,
+			_latest => {
+				ctx.activity(InsertDbInputV2 {
+					v1,
+					actor_wildcard_dns_record_id,
+				})
+				.await?
+			}
+		}
+	}
 
 	Ok(())
 }
@@ -121,26 +159,60 @@ async fn create_dns_record(
 	Ok(record_id)
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
-struct InsertDbInput {
+#[derive(Clone, Debug, Serialize, Deserialize, Hash)]
+struct InsertDbInputV1 {
 	server_id: Uuid,
 	primary_dns_record_id: String,
 	secondary_dns_record_id: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct InsertDbInputV2 {
+	v1: InsertDbInputV1,
+	actor_wildcard_dns_record_id: Option<String>,
+}
+
+impl Deref for InsertDbInputV2 {
+	type Target = InsertDbInputV1;
+
+	fn deref(&self) -> &Self::Target {
+		&self.v1
+	}
+}
+
 #[activity(InsertDb)]
-async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<()> {
+async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInputV1) -> GlobalResult<()> {
+	insert_db_inner(
+		ctx,
+		&InsertDbInputV2 {
+			v1: input.clone(),
+			actor_wildcard_dns_record_id: None,
+		},
+	)
+	.await
+}
+
+#[activity(InsertDbV2)]
+async fn insert_db_v2(ctx: &ActivityCtx, input: &InsertDbInputV2) -> GlobalResult<()> {
+	insert_db_inner(ctx, input).await
+}
+
+async fn insert_db_inner(ctx: &ActivityCtx, input: &InsertDbInputV2) -> GlobalResult<()> {
+	// Upsert since this needs to be idempotent for wf upgrades
+	//
+	// Can't use `USERT` since we use a non-standard PK
 	sql_execute!(
 		[ctx]
 		"
 		INSERT INTO db_cluster.servers_cloudflare (
-			server_id, dns_record_id, secondary_dns_record_id
+			server_id, dns_record_id, secondary_dns_record_id, actor_wildcard_dns_record_id
 		)
-		VALUES ($1, $2, $3)
+		VALUES ($1, $2, $3, $4)
 		",
 		input.server_id,
 		&input.primary_dns_record_id,
 		&input.secondary_dns_record_id,
+		&input.actor_wildcard_dns_record_id,
 	)
 	.await?;
 
