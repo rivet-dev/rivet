@@ -7,6 +7,8 @@ fi
 
 # Install vector
 mkdir -p "/opt/vector-${version}"
+
+echo 'Downloading vector'
 curl -L "https://github.com/vectordotdev/vector/releases/download/v${version}/vector-${version}-x86_64-unknown-linux-gnu.tar.gz" -o "/tmp/vector_${version}.tar.gz"
 tar zxvf "/tmp/vector_${version}.tar.gz" -C "/opt/vector-${version}"
 install -o vector -g vector "/opt/vector-${version}/vector-x86_64-unknown-linux-gnu/bin/vector" /usr/bin/

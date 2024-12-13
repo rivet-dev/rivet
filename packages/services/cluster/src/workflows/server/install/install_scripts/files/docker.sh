@@ -1,4 +1,5 @@
 # Add Docker GPG key
+echo 'Downloading docker gpg'
 curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -
 
 # Add Docker repository

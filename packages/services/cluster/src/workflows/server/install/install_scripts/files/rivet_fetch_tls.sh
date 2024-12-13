@@ -14,7 +14,8 @@ CERT_ID="job"
 STUB="/etc/__NAME__/tls/$CERT_ID"
 
 
-# Retry script every 5 seconds
+# Retry script every 5 seconds until success
+echo 'Fetching rivet tls'
 while true; do
   response=$(
     curl -f \

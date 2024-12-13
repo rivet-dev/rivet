@@ -57,6 +57,7 @@ pub mod umoci {
 	pub fn install() -> String {
 		indoc!(
 			r#"
+			echo 'Downloading umoci'
 			curl -Lf -o /usr/bin/umoci "https://github.com/opencontainers/umoci/releases/download/v0.4.7/umoci.amd64"
 			chmod +x /usr/bin/umoci
 			"#
@@ -70,6 +71,7 @@ pub mod cni {
 	pub fn tool() -> String {
 		indoc!(
 			r#"
+			echo 'Downloading cnitool'
 			curl -Lf -o /usr/bin/cnitool "https://github.com/rivet-gg/cni/releases/download/v1.1.2-build3/cnitool"
 			chmod +x /usr/bin/cnitool
 			"#

@@ -162,7 +162,7 @@ ALTER TABLE workflow_activity_errors
 	-- New
 	ADD COLUMN location2 JSONB,
 	-- Required to create indexes (JSONB indexes are not supported)
-	ADD COLUMN location2_hash BYTES NOT NULL GENERATED ALWAYS AS (digest(location2::TEXT, 'md5')) STORED;
+	ADD COLUMN location2_hash BYTES GENERATED ALWAYS AS (digest(location2::TEXT, 'md5')) STORED;
 
 -- Update idx
 CREATE INDEX ON workflow_activity_errors (workflow_id, location2_hash);

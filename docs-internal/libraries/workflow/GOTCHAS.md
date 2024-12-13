@@ -208,3 +208,19 @@ fn other_workflow2() {
 ```
 
 > Closures and sub workflows function in the same way. They create a new branch in history.
+
+## Hashes for single-variant enum values
+
+Rust does not hash the enum discriminant for single-variant enums. This means when you add another variant in
+the future, the hash of the existing variant will change.
+
+This can be fixed with a custom `Hash` impl when you only have 1 variant:
+
+```rust
+impl Hash for ENUM {
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		std::mem::discriminant(self).hash(state);
+		// ... Hash enum fields, if any
+	}
+}
+```

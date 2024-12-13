@@ -10,6 +10,11 @@ fn main() -> Result<()> {
 	let cwd = std::env::current_dir()?;
 	let docs_output_path = cwd.join("../../../docs/src/content/docs/");
 
+	if !std::fs::metadata(&docs_output_path).is_ok() {
+		eprintln!("output path does not exist: {:?}", docs_output_path.display());
+		return Ok(());
+	}
+
 	let settings = SchemaSettings::draft07().with(|s| {
 		s.option_add_null_type = false;
 	});

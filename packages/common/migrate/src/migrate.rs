@@ -419,7 +419,7 @@ async fn migrate_db_url(config: rivet_config::Config, service: &SqlService) -> R
 				.context("clickhouse missing port")?;
 
 			let mut query = format!(
-				"database={db}&username={username}&x-multi-statement=true&x-migrations-table-engine=ReplicatedMergeTree&secure=false&skip_verify=true",
+				"database={db}&username={username}&x-multi-statement=true&x-migrations-table-engine=ReplicatedMergeTree&secure=true&skip_verify=true",
 				db = encode(service.db_name),
 				username = encode(&clickhouse_config.username),
 			);

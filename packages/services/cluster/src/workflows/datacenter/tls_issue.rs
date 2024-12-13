@@ -54,17 +54,32 @@ pub(crate) async fn cluster_datacenter_tls_issue(
 		"job domain not enabled"
 	);
 
-	let (gg_cert, _, job_cert) = ctx
-		.join((
-			activity(OrderInput {
+	let gg_cert = ctx
+		.activity(OrderInput {
+			renew: input.renew,
+			zone_id: main_zone_id.to_string(),
+			common_name: domain_main.to_string(),
+			subject_alternative_names: vec![format!("*.{datacenter_id}.{domain_main}")],
+		})
+		.await?;
+
+	let job_cert = match ctx.check_version(2).await? {
+		// Old Job certs
+		1 => {
+			ctx.activity(OrderInput {
 				renew: input.renew,
-				zone_id: main_zone_id.to_string(),
-				common_name: domain_main.to_string(),
-				subject_alternative_names: vec![format!("*.{datacenter_id}.{domain_main}")],
-			}),
-			removed::<Activity<Order>>(), // Old Job certs
-			// New job certs
-			v(2).activity(OrderInput {
+				zone_id: job_zone_id.to_string(),
+				common_name: domain_job.to_string(),
+				subject_alternative_names: vec![
+					format!("*.lobby.{datacenter_id}.{domain_job}"),
+					format!("*.{datacenter_id}.{domain_job}"),
+				],
+			},)
+			.await?
+		}
+		// New job certs
+		_latest => {
+			ctx.activity(OrderInput {
 				renew: input.renew,
 				zone_id: job_zone_id.to_string(),
 				common_name: domain_job.to_string(),
@@ -73,9 +88,10 @@ pub(crate) async fn cluster_datacenter_tls_issue(
 					format!("*.actor.{datacenter_id}.{domain_job}"),
 					format!("*.{datacenter_id}.{domain_job}"),
 				],
-			}),
-		))
-		.await?;
+			})
+			.await?
+		}
+	};
 
 	ctx.activity(InsertDbInput {
 		datacenter_id: input.datacenter_id,

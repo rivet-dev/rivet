@@ -233,7 +233,7 @@ impl Rivet {
 pub enum AccessKind {
 	/// Anyone can sign up for an account.
 	Public,
-	/// Only admin users can crate teams & projects.
+	/// Only admin users can create teams & projects.
 	Private,
 	/// Anyone can access the cluster without authorization.
 	///

@@ -8,6 +8,8 @@ fi
 
 # Install traefik
 mkdir -p "/opt/traefik-${version}"
+
+echo 'Downloading traefik'
 curl -L "https://github.com/traefik/traefik/releases/download/v${version}/traefik_v${version}_linux_amd64.tar.gz" -o "/tmp/traefik_v${version}.tar.gz"
 tar zxvf "/tmp/traefik_v${version}.tar.gz" -C "/opt/traefik-${version}"
 install -o traefik -g traefik "/opt/traefik-${version}/traefik" /usr/bin/

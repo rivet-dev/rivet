@@ -10,12 +10,14 @@ cat << 'EOF' > /etc/foundationdb/fdb.cluster
 fdb:fdb@127.0.0.1:4500
 EOF
 
+echo 'Downloading fdb client'
 curl -Lf -o "/tmp/foundationdb-clients_${FDB_VERSION}-1_amd64.deb" "https://github.com/apple/foundationdb/releases/download/${FDB_VERSION}/foundationdb-clients_${FDB_VERSION}-1_amd64.deb"
 dpkg -i "/tmp/foundationdb-clients_${FDB_VERSION}-1_amd64.deb"
 
 # Verify installation
 fdbcli --version
 
+echo 'Downloading fdb server'
 curl -Lf -o "/tmp/foundationdb-server_${FDB_VERSION}-1_amd64.deb" "https://github.com/apple/foundationdb/releases/download/${FDB_VERSION}/foundationdb-server_${FDB_VERSION}-1_amd64.deb"
 dpkg -i "/tmp/foundationdb-server_${FDB_VERSION}-1_amd64.deb"
 
