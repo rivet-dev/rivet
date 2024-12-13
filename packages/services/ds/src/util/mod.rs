@@ -37,7 +37,7 @@ pub fn build_ds_hostname_and_path(
 		// server in the subdomain is a convenience
 		(true, EndpointType::Hostname, GuardPublicHostname::DnsParent(dns_parent))
 		| (false, _, GuardPublicHostname::DnsParent(dns_parent)) => {
-			Ok((format!("{server_id}-{port_name}.{dns_parent}"), None))
+			Ok((format!("{server_id}-{port_name}.actor.{dns_parent}"), None))
 		}
 
 		(true, EndpointType::Hostname, GuardPublicHostname::Static(_)) => {
@@ -45,7 +45,14 @@ pub fn build_ds_hostname_and_path(
 		}
 
 		(true, EndpointType::Path, GuardPublicHostname::DnsParent(dns_parent)) => Ok((
-			format!("route.{dns_parent}"),
+			// This will not collide with host-based routing since server IDs are always UUIDs.
+			//
+			// This is stored on a subdomain of `actor` instead of `actor.{dns_parent}` since
+			// hosting actors on a parent domain of the `{actor_id}.actor.{dns_parent}` could lead
+			// to a security vulnerability if cookies on the parent domain have a misconfigured
+			// domain scope that grants access to the children. This is a very niche security
+			// vulnerability, but worth avoiding regardless.
+			format!("route.actor.{dns_parent}"),
 			Some(format!("/{server_id}-{port_name}")),
 		)),
 

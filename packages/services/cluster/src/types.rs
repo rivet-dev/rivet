@@ -215,7 +215,7 @@ impl GuardPublicHostname {
 			(None, None) => {
 				if let Ok(domain_job) = config.server()?.rivet.domain_job() {
 					// Fall back to auto-generated hostname
-					let hostname = format!("actor.{}.{domain_job}", datacenter_id);
+					let hostname = format!("{}.{domain_job}", datacenter_id);
 					crate::types::GuardPublicHostname::DnsParent(hostname)
 				} else {
 					bail!("no guard public hostname specified in dc {datacenter_id}")
