@@ -414,6 +414,8 @@ pub struct ClickHouse {
 	pub password: Option<Secret<String>>,
 	#[serde(default)]
 	pub provision_users: HashMap<String, ClickHouseUser>,
+	#[serde(default)]
+	pub secure: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]

@@ -905,7 +905,7 @@ async fn resolve_build(
 					build_ids: vec![build_id],
 				})
 				.await?;
-			let build = unwrap!(builds_res.builds.into_iter().next());
+			let build = unwrap_with!(builds_res.builds.into_iter().next(), BUILD_NOT_FOUND);
 
 			// Ensure build belongs to this game/env
 			if let Some(build_game_id) = build.game_id {

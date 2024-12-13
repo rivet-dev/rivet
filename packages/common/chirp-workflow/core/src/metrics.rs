@@ -7,15 +7,15 @@ lazy_static::lazy_static! {
 		&[],
 		*REGISTRY,
 	).unwrap();
-	pub static ref PULL_WORKFLOWS_PARTIAL_DURATION: GaugeVec = register_gauge_vec_with_registry!(
-		"chirp_pull_workflows_partial_duration",
-		"Duration of just pulling workflows.",
+	pub static ref PULL_WORKFLOWS_DURATION: GaugeVec = register_gauge_vec_with_registry!(
+		"chirp_pull_workflows_duration",
+		"Duration of just pulling workflow rows.",
 		&["worker_instance_id"],
 		*REGISTRY,
 	).unwrap();
-	pub static ref PULL_WORKFLOWS_FULL_DURATION: GaugeVec = register_gauge_vec_with_registry!(
-		"chirp_pull_workflows_full_duration",
-		"Duration of pulling workflows and their histories.",
+	pub static ref PULL_WORKFLOWS_HISTORY_DURATION: GaugeVec = register_gauge_vec_with_registry!(
+		"chirp_pull_workflows_history_duration",
+		"Duration of pulling workflow histories.",
 		&["worker_instance_id"],
 		*REGISTRY,
 	).unwrap();

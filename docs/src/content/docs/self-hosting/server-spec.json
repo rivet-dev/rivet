@@ -420,6 +420,10 @@
             "$ref": "#/definitions/ClickHouseUser"
           }
         },
+        "secure": {
+          "default": false,
+          "type": "boolean"
+        },
         "username": {
           "type": "string"
         }
