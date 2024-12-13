@@ -1444,6 +1444,7 @@ func (b BootstrapCluster) Ptr() *BootstrapCluster {
 type BootstrapDomains struct {
 	Cdn    *string `json:"cdn,omitempty"`
 	Job    *string `json:"job,omitempty"`
+	Main   *string `json:"main,omitempty"`
 	Opengb *string `json:"opengb,omitempty"`
 
 	_rawJSON json.RawMessage
@@ -1473,7 +1474,8 @@ func (b *BootstrapDomains) String() string {
 }
 
 type BootstrapLoginMethods struct {
-	Email bool `json:"email"`
+	Email       bool  `json:"email"`
+	AccessToken *bool `json:"access_token,omitempty"`
 
 	_rawJSON json.RawMessage
 }

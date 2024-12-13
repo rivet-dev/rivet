@@ -36,6 +36,12 @@ pub async fn build_bootstrap_data(
 				.dns
 				.as_ref()
 				.and_then(|x| x.domain_job.clone()),
+			// Deprecated:
+			main: server_config
+				.rivet
+				.dns
+				.as_ref()
+				.and_then(|x| x.domain_main.clone()),
 			opengb: None,
 		}),
 		origins: Box::new(models::CloudBootstrapOrigins {
@@ -50,6 +56,7 @@ pub async fn build_bootstrap_data(
 		}),
 		login_methods: Box::new(models::CloudBootstrapLoginMethods {
 			email: server_config.sendgrid.is_some(),
+			access_token: Some(false),
 		}),
 		deploy_hash: rivet_env::source_hash().to_string(),
 	})

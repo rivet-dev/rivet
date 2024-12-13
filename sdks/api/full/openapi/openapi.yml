@@ -8919,6 +8919,8 @@ components:
           type: string
         job:
           type: string
+        main:
+          type: string
         opengb:
           type: string
     CloudBootstrapOrigins:
@@ -8945,6 +8947,8 @@ components:
       type: object
       properties:
         email:
+          type: boolean
+        access_token:
           type: boolean
       required:
         - email

@@ -12,10 +12,15 @@
 pub struct CloudBootstrapLoginMethods {
 	#[serde(rename = "email")]
 	pub email: bool,
+	#[serde(rename = "access_token", skip_serializing_if = "Option::is_none")]
+	pub access_token: Option<bool>,
 }
 
 impl CloudBootstrapLoginMethods {
 	pub fn new(email: bool) -> CloudBootstrapLoginMethods {
-		CloudBootstrapLoginMethods { email }
+		CloudBootstrapLoginMethods {
+			email,
+			access_token: None,
+		}
 	}
 }

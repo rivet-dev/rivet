@@ -38,8 +38,8 @@ types:
     properties:
       cdn: optional<string>
       job: optional<string>
-      # TODO: This is the legacy name, but changing this MIGHT break CLI 1.0
-      # clients. Need to check this.
+      # Deprecated
+      main: optional<string>
       opengb: optional<string>
 
   BootstrapOrigins:
@@ -58,3 +58,5 @@ types:
   BootstrapLoginMethods:
     properties:
       email: boolean
+      # Deprecated
+      access_token: optional<boolean>
