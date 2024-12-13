@@ -125,13 +125,12 @@ export class Client {
 		// Build create config
 		let create: CreateRequest | undefined = undefined;
 		if (!opts?.noCreate) {
-			create = create ?? {
+			create = {
 				// Default to the same tags as the request
-				tags: tags,
+				tags: opts?.create?.tags ?? tags,
+				// Default to the chosen region
+				region: opts?.create?.region ?? (await this.#regionPromise)?.id,
 			};
-
-			// Default to the chosen region
-			if (!create.region) create.region = (await this.#regionPromise)?.id;
 		}
 
 		logger().debug("get actor", { tags, parameters: opts?.parameters, create });

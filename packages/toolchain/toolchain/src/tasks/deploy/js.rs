@@ -330,6 +330,6 @@ async fn upload_bundle(
 		task.log(format!("{err:?}"));
 	}
 	complete_res.context("complete_res")?;
-
+    
 	Ok(prepare_res.build)
 }
