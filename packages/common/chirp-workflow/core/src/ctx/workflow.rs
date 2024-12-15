@@ -1197,12 +1197,14 @@ impl WorkflowCtx {
 			)));
 		}
 
-		if let Some(step_version) = self
+		let (is_version_check, version) = if let Some((is_version_check, step_version)) = self
 			.cursor
 			.compare_version_check()
 			.map_err(GlobalError::raw)?
 		{
-			Ok(step_version + 1 - self.version)
+			tracing::debug!(name=%self.name, id=%self.workflow_id, "checking existing version");
+
+			(is_version_check, step_version)
 		} else {
 			tracing::debug!(name=%self.name, id=%self.workflow_id, "inserting version check");
 
@@ -1215,11 +1217,15 @@ impl WorkflowCtx {
 				)
 				.await?;
 
+			(true, current_version)
+		};
+
+		if is_version_check {
 			// Move to next event
 			self.cursor.inc();
-
-			Ok(current_version + 1 - self.version)
 		}
+
+		Ok(version + 1 - self.version)
 	}
 }
 

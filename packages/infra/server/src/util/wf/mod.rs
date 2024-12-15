@@ -359,34 +359,40 @@ pub async fn print_history(
 				WITH workflow_events AS (
 					SELECT $1 AS workflow_id
 				)
-				SELECT location, 0 AS t, activity_name AS name, input, output, forgotten
+				-- Activity events
+				SELECT location, location2, 0 AS t, activity_name AS name, input, output, forgotten
 				FROM db_workflow.workflow_activity_events, workflow_events
 				WHERE
 					workflow_activity_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
 				UNION ALL
-				SELECT location, 1 AS t, signal_name AS name, body as input, null as output, forgotten
+				-- Signal listen events
+				SELECT location, location2, 1 AS t, signal_name AS name, body as input, null as output, forgotten
 				FROM db_workflow.workflow_signal_events, workflow_events
 				WHERE
 					workflow_signal_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
 				UNION ALL
-				SELECT location, 2 AS t, w.workflow_name AS name, w.input, w.output, forgotten
+				-- Signal send events
+				SELECT location, location2, 3 AS t, signal_name AS name, body as input, null as output, forgotten
+				FROM db_workflow.workflow_signal_send_events, workflow_events
+				WHERE
+					workflow_signal_send_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
+				UNION ALL
+				-- Message send events
+				SELECT location, location2, 4 AS t, message_name AS name, body as input, null as output, forgotten
+				FROM db_workflow.workflow_message_send_events, workflow_events
+				WHERE
+					workflow_message_send_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
+				UNION ALL
+				-- Sub workflow events
+				SELECT location, location2, 2 AS t, w.workflow_name AS name, w.input, w.output, forgotten
 				FROM workflow_events, db_workflow.workflow_sub_workflow_events AS sw
 				JOIN db_workflow.workflows AS w
 				ON sw.sub_workflow_id = w.workflow_id
 				WHERE
 					sw.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
 				UNION ALL
-				SELECT location, 3 AS t, signal_name AS name, body as input, null as output, forgotten
-				FROM db_workflow.workflow_signal_send_events, workflow_events
-				WHERE
-					workflow_signal_send_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
-				UNION ALL
-				SELECT location, 4 AS t, message_name AS name, body as input, null as output, forgotten
-				FROM db_workflow.workflow_message_send_events, workflow_events
-				WHERE
-					workflow_message_send_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
-				UNION ALL
-				SELECT location, 5 AS t, NULL AS name, null as input, null as output, forgotten
+				-- Loop events
+				SELECT location, location2, 5 AS t, NULL AS name, null as input, null as output, forgotten
 				FROM db_workflow.workflow_loop_events, workflow_events
 				WHERE
 					workflow_loop_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)

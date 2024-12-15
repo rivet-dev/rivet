@@ -5,7 +5,6 @@ use crate::{
 	activity::{Activity, ActivityInput},
 	builder::workflow as builder,
 	ctx::{workflow::Loop, WorkflowCtx},
-	error::WorkflowError,
 	executable::{AsyncResult, Executable},
 	listen::{CustomListener, Listen},
 	message::Message,
@@ -145,39 +144,6 @@ impl<'a> VersionedWorkflowCtx<'a> {
 
 	pub async fn sleep_until(&mut self, time: impl TsToMillis) -> GlobalResult<()> {
 		wrap!(self, "sleep", { self.inner.sleep_until(time).await })
-	}
-
-	/// Returns the version of the current event in history. If no event exists, returns current version and
-	/// inserts a version check event.
-	pub async fn check_version(&mut self) -> GlobalResult<usize> {
-		if self.version == 0 {
-			return Err(GlobalError::raw(WorkflowError::InvalidVersion(
-				"version for `check_version` must be greater than 0".into(),
-			)));
-		}
-
-		if let Some(step_version) = self
-			.inner
-			.cursor()
-			.compare_version_check()
-			.map_err(GlobalError::raw)?
-		{
-			Ok(step_version + 1 - self.inner.version())
-		} else {
-			tracing::debug!(name=%self.inner.name(), id=%self.inner.workflow_id(), "inserting version check");
-
-			self.inner
-				.db()
-				.commit_workflow_version_check_event(
-					self.inner.workflow_id(),
-					&self.inner.cursor().current_location(),
-					self.version + self.inner.version() - 1,
-					self.inner.loop_location(),
-				)
-				.await?;
-
-			Ok(self.version + 1 - self.inner.version())
-		}
 	}
 
 	pub async fn listen_with_timeout<T: Listen>(

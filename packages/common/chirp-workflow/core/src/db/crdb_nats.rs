@@ -557,7 +557,7 @@ impl Database for DatabaseCrdbNats {
 				workflow_id,
 				ARRAY[] AS location,
 				location AS location2,
-				1 AS version, -- Default
+				version,
 				9 AS event_type, -- crdb_nats::types::EventType
 				NULL AS name,
 				NULL AS auxiliary_id,

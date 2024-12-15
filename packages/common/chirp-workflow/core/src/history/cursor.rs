@@ -166,9 +166,15 @@ impl Cursor {
 		if self.iter_idx < branch.len() {
 			let latent = branch.len() - self.iter_idx;
 			return Err(WorkflowError::LatentHistoryFound(format!(
-				"expected {latent} more event{} in root at {}",
+				"expected {latent} more event{} in root {}: {}",
 				if latent == 1 { "" } else { "s" },
 				self.root_location,
+				branch
+					.iter()
+					.skip(self.iter_idx)
+					.map(|event| event.to_string())
+					.collect::<Vec<_>>()
+					.join(", "),
 			)));
 		};
 
@@ -589,9 +595,12 @@ impl Cursor {
 	}
 
 	/// Returns `Some` if the current event is being replayed.
-	pub fn compare_version_check(&self) -> WorkflowResult<Option<usize>> {
+	pub fn compare_version_check(&self) -> WorkflowResult<Option<(bool, usize)>> {
 		if let Some(event) = self.current_event() {
-			Ok(Some(event.version))
+			Ok(Some((
+				matches!(event.data, EventData::VersionCheck),
+				event.version,
+			)))
 		} else {
 			Ok(None)
 		}
