@@ -67,36 +67,81 @@ pub async fn run_from_env(
 		sql_fetch_all!(
 			[ctx, ActorRow]
 			"
-			SELECT
-				actor_id,
-				client_id,
-				running_ts IS NULL AS failed_start,
-				stopping_ts IS NOT NULL AS failed_stop,
-				stop_ts IS NOT NULL AS failed_exit
-			FROM db_pegboard.actors
+			UPDATE db_pegboard.actors
+			SET
+				-- Failed to stop (prevents GC from picking this up again)
+				stop_ts = CASE
+					WHEN
+						exit_ts IS NULL
+						AND lost_ts IS NULL
+						AND stopping_ts < $1 - $3
+						AND stop_ts IS NULL
+					THEN $1
+					ELSE stop_ts
+				END,
+				-- Failed to exit (prevents GC from picking this up again)
+				lost_ts = CASE
+					WHEN
+						exit_ts IS NULL AND
+						lost_ts IS NULL AND
+						stop_ts < $1 - $4
+					THEN $1
+					ELSE lost_ts
+				END
 			WHERE
+				-- Select actors that have not exited yet
 				exit_ts IS NULL AND
 				lost_ts IS NULL AND
+				-- Match any event condition
 				(
-					-- create_ts exceeded threshold and running_ts is null (failed start)
+					-- Failed to start (never reached running state)
 					(
-						create_ts < $1 AND
+						create_ts < $1 - $2 AND
 						running_ts IS NULL AND
 						stopping_ts IS NULL AND
 						stop_ts IS NULL
-					) OR
-					-- stopping_ts exceeded threshold and stop_ts is null (failed stop)
+					)
+					OR
+					-- Failed to stop (never reached stopped state after stopping)
 					(
-						stopping_ts < $2 AND
+						stopping_ts < $1 - $3 AND
 						stop_ts IS NULL
-					) OR
-					-- stop_ts exceeded threshold and exit_ts is null (failed exit)
-					stop_ts < $3
+					)
+					OR
+					-- Failed to exit (send stop event and never exited)
+					stop_ts < $1 - $4
 				)
+			RETURNING
+				actor_id,
+				client_id,
+				-- Failed to start
+				CASE
+					WHEN
+						create_ts < $1 - $2 AND
+						running_ts IS NULL AND
+						stopping_ts IS NULL AND stop_ts IS NULL
+					THEN true
+					ELSE false
+				END AS failed_start,
+				-- Failed to stop
+				CASE
+					WHEN
+						stopping_ts < $1 - $3 AND
+						stop_ts IS NULL
+					THEN true
+					ELSE false
+				END AS failed_stop,
+				-- Failed to exit
+				CASE
+					WHEN stop_ts < $1 - $4
+					THEN true
+					ELSE false
+				END AS failed_exit
 			",
-			ts - ACTOR_START_THRESHOLD_MS,
-			ts - ACTOR_STOP_THRESHOLD_MS,
-			ts - ACTOR_EXIT_THRESHOLD_MS
+			ts,
+			ACTOR_START_THRESHOLD_MS,
+			ACTOR_STOP_THRESHOLD_MS,
+			ACTOR_EXIT_THRESHOLD_MS
 		),
 	)?;
 
@@ -140,26 +185,6 @@ pub async fn run_from_env(
 			.send()
 			.await?;
 		}
-	}
-
-	// Manually set stop ts for failed stop actors
-	let failed_stop_actor_ids = failed_actor_rows
-		.iter()
-		.filter(|row| row.failed_stop)
-		.map(|row| row.actor_id)
-		.collect::<Vec<_>>();
-	if !failed_stop_actor_ids.is_empty() {
-		sql_fetch_all!(
-			[ctx, ActorRow]
-			"
-			UPDATE db_pegboard.actors
-			SET stop_ts = $2
-			WHERE actor_id = ANY($1)
-			",
-			failed_stop_actor_ids,
-			ts,
-		)
-		.await?;
 	}
 
 	Ok(())
