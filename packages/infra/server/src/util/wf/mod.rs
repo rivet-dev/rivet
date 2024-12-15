@@ -390,7 +390,7 @@ pub async fn print_history(
 				FROM db_workflow.workflow_loop_events, workflow_events
 				WHERE
 					workflow_loop_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
-				ORDER BY location ASC;
+				ORDER BY location ASC
 				"
 			))
 			.bind(workflow_id)

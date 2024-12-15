@@ -1215,6 +1215,9 @@ impl WorkflowCtx {
 				)
 				.await?;
 
+			// Move to next event
+			self.cursor.inc();
+
 			Ok(current_version + 1 - self.version)
 		}
 	}

@@ -74,7 +74,7 @@ impl ActorKv {
 
 		self.subspace = Some(kv_dir.subspace(&()).map_err(|err| anyhow!("{err:?}"))?);
 
-		tracing::info!("successfully initialized kv");
+		tracing::info!("successfully initialized KV");
 
 		Ok(())
 	}

@@ -721,7 +721,7 @@ async fn update_reschedule_retry(
 				-- Should match algorithm in backoff
 				WHEN last_reschedule_retry_ts < $2 - (2 * $3 * (2 ^ LEAST(reschedule_retry_count, $4)))
 				THEN 0
-				ELSE last_reschedule_retry_ts + 1
+				ELSE reschedule_retry_count + 1
 			END,
 			last_reschedule_retry_ts = $2
 		WHERE server_id = $1
