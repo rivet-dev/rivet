@@ -65,7 +65,7 @@ pub async fn config(
 }
 
 /// Builds configuration for CDN routes.
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip_all)]
 pub async fn build_cdn(
 	ctx: &Ctx<Auth>,
 	config: &mut types::TraefikConfigResponse,
@@ -74,10 +74,12 @@ pub async fn build_cdn(
 
 	let redis_cdn = ctx.op_ctx().redis_cdn().await?;
 	let cdn_fetch = fetch_cdn(redis_cdn).await?;
+	let dns_config = ctx.config().server()?.rivet.dns.as_ref();
 
 	// Process namespaces
+	tracing::info!(len = cdn_fetch.len(), "cdn count");
 	for ns in &cdn_fetch {
-		let register_res = register_namespace(ctx.config(), ns, config, &s3_client);
+		let register_res = register_namespace(dns_config, ns, config, &s3_client);
 		match register_res {
 			Ok(_) => {}
 			Err(err) => tracing::error!(?err, ?ns, "failed to register namespace route"),
@@ -94,15 +96,7 @@ pub async fn build_cdn(
 			// This number needs to be high to allow for parallel requests
 			amount: 128,
 			source_criterion: types::InFlightReqSourceCriterion::RequestHeaderName(
-				if ctx
-					.config()
-					.server()?
-					.rivet
-					.dns
-					.as_ref()
-					.map(|x| &x.provider)
-					== Some(&DnsProvider::Cloudflare)
-				{
+				if dns_config.map(|x| &x.provider) == Some(&DnsProvider::Cloudflare) {
 					"cf-connecting-ip".to_string()
 				} else {
 					"x-forwarded-for".to_string()
@@ -194,20 +188,14 @@ async fn fetch_cdn(
 	Ok(ns)
 }
 
-#[tracing::instrument(skip(config, s3_client))]
+#[tracing::instrument(skip_all)]
 fn register_namespace(
-	config: &rivet_config::Config,
+	dns_config: Option<&rivet_config::config::rivet::Dns>,
 	ns: &cdn::redis_cdn::NamespaceCdnConfig,
 	traefik_config: &mut types::TraefikConfigResponse,
 	s3_client: &s3_util::Client,
 ) -> GlobalResult<()> {
-	let Some(domain_cdn) = &config
-		.server()?
-		.rivet
-		.dns
-		.as_ref()
-		.and_then(|x| x.domain_cdn.as_ref())
-	else {
+	let Some(domain_cdn) = &dns_config.and_then(|x| x.domain_cdn.as_ref()) else {
 		return Ok(());
 	};
 
@@ -238,7 +226,7 @@ fn register_namespace(
 		}
 
 		// Match all custom domains
-		for domain in &ns.domains {
+		for domain in ns.domains.iter().take(10) {
 			write!(
 				&mut router_rule,
 				" || Host(`{domain}`)",
@@ -357,6 +345,7 @@ fn register_namespace(
 				users: ns
 					.auth_user_list
 					.iter()
+					.take(10)
 					.map(|user| format!("{}:{}", user.user, user.password))
 					.collect::<Vec<_>>(),
 				realm: Some("RivetCdn".to_string()),
@@ -369,9 +358,9 @@ fn register_namespace(
 		.middlewares
 		.insert(auth_middleware_key, auth_middleware);
 
-	for route in &ns.routes {
+	for route in ns.routes.iter().take(10) {
 		register_custom_cdn_route(
-			config,
+			dns_config,
 			ns,
 			traefik_config,
 			service,
@@ -384,9 +373,9 @@ fn register_namespace(
 	Ok(())
 }
 
-#[tracing::instrument(skip(config))]
+#[tracing::instrument(skip_all)]
 fn register_custom_cdn_route(
-	config: &rivet_config::Config,
+	dns_config: Option<&rivet_config::config::rivet::Dns>,
 	ns: &cdn::redis_cdn::NamespaceCdnConfig,
 	traefik_config: &mut types::TraefikConfigResponse,
 	service: &str,
@@ -394,13 +383,7 @@ fn register_custom_cdn_route(
 	router_middlewares_html: Vec<String>,
 	route: &backend::cdn::Route,
 ) -> GlobalResult<()> {
-	let Some(domain_cdn) = &config
-		.server()?
-		.rivet
-		.dns
-		.as_ref()
-		.and_then(|x| x.domain_cdn.as_ref())
-	else {
+	let Some(domain_cdn) = &dns_config.and_then(|x| x.domain_cdn.as_ref()) else {
 		return Ok(());
 	};
 
@@ -436,7 +419,7 @@ fn register_custom_cdn_route(
 					}
 
 					// Match all custom domains
-					for domain in &ns.domains {
+					for domain in ns.domains.iter().take(10) {
 						write!(&mut router_rule, ", `{domain}`", domain = domain.domain,)?;
 					}
 
@@ -459,7 +442,7 @@ fn register_custom_cdn_route(
 				// Add middleware
 				let mut custom_headers_router_middlewares_cdn = router_middlewares_cdn;
 				let mut custom_headers_router_middlewares_html = router_middlewares_html;
-				for middleware in &route.middlewares {
+				for middleware in route.middlewares.iter().take(10) {
 					match &middleware.kind {
 						Some(backend::cdn::middleware::Kind::CustomHeaders(custom_headers)) => {
 							let custom_header_key =
@@ -473,6 +456,7 @@ fn register_custom_cdn_route(
 											.headers
 											.clone()
 											.into_iter()
+											.take(10)
 											.map(|header| (header.name, header.value))
 											.collect::<HashMap<_, _>>(),
 									),
