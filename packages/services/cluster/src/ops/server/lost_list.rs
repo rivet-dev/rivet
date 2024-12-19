@@ -32,6 +32,7 @@ pub struct Output {
 /// Fetches deleted servers directly from the cloud providers own APIs and returns existing servers older
 /// than 12 hours.
 #[operation]
+#[timeout = 300]
 pub async fn cluster_server_lost_list(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
 	let linode_token = ctx.config().server()?.linode()?.api_token.read().clone();
 
