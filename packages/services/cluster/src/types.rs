@@ -40,14 +40,6 @@ pub enum Provider {
 	Linode = 0,
 }
 
-impl From<rivet_config::config::rivet::dc_provision::Provider> for Provider {
-	fn from(value: rivet_config::config::rivet::dc_provision::Provider) -> Provider {
-		match value {
-			rivet_config::config::rivet::dc_provision::Provider::Linode => Provider::Linode,
-		}
-	}
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct Pool {
 	pub pool_type: PoolType,
@@ -106,32 +98,9 @@ impl std::fmt::Display for PoolType {
 	}
 }
 
-impl From<rivet_config::config::rivet::dc_provision::PoolType> for PoolType {
-	fn from(value: rivet_config::config::rivet::dc_provision::PoolType) -> PoolType {
-		match value {
-			rivet_config::config::rivet::dc_provision::PoolType::Job => PoolType::Job,
-			rivet_config::config::rivet::dc_provision::PoolType::Gg => PoolType::Gg,
-			rivet_config::config::rivet::dc_provision::PoolType::Ats => PoolType::Ats,
-			rivet_config::config::rivet::dc_provision::PoolType::Pegboard => PoolType::Pegboard,
-			rivet_config::config::rivet::dc_provision::PoolType::PegboardIsolate => {
-				PoolType::PegboardIsolate
-			}
-			rivet_config::config::rivet::dc_provision::PoolType::Fdb => PoolType::Fdb,
-		}
-	}
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct Hardware {
 	pub provider_hardware: String,
-}
-
-impl From<rivet_config::config::rivet::dc_provision::Hardware> for Hardware {
-	fn from(value: rivet_config::config::rivet::dc_provision::Hardware) -> Hardware {
-		Hardware {
-			provider_hardware: value.name,
-		}
-	}
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]

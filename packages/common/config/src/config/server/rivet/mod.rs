@@ -9,10 +9,8 @@ use uuid::Uuid;
 use crate::secret::Secret;
 
 pub mod cluster_provision;
-pub mod dc_provision;
 
 pub use cluster_provision::*;
-pub use dc_provision::*;
 
 pub mod default_dev_cluster {
 	use uuid::{uuid, Uuid};
@@ -369,14 +367,18 @@ pub enum DnsProvider {
 pub struct Cluster {
 	/// This ID must not change.
 	pub id: Uuid,
-	pub datacenters: HashMap<String, Datacenter>,
+	/// Datacenters to automatically be created on cluster boot.
+	///
+	/// This should only be used for manual cluster creation. Do not use for enterprise
+	/// distributions.
+	pub bootstrap_datacenters: HashMap<String, Datacenter>,
 }
 
 impl Cluster {
 	fn build_dev_cluster() -> Self {
 		Cluster {
 			id: default_dev_cluster::CLUSTER_ID,
-			datacenters: hashmap! {
+			bootstrap_datacenters: hashmap! {
 				"local".into() => Datacenter {
 					// Intentionally hardcoded in order to simplify default dev configuration
 					id: default_dev_cluster::DATACENTER_ID,
@@ -390,7 +392,6 @@ impl Cluster {
 					},
 					// Placeholder values for the dev node
 					hardware: Some(DatacenterHardware { cpu_cores: 4, cpu: 3_000 * 4, memory: 8_192, disk: 32_768, bandwidth: 1_000_000 }),
-					provision: None,
 				},
 			},
 		}
@@ -440,28 +441,6 @@ pub struct Datacenter {
 	/// This will be automatically determined in development mode.
 	#[serde(default)]
 	pub hardware: Option<DatacenterHardware>,
-
-	// #[serde(default)]
-	// pub reserve_resources: Option<ReserveResources>,
-	/// Configures how servers are provisioned.
-	///
-	/// Enterprise only.
-	#[serde(default)]
-	pub provision: Option<dc_provision::DatacenterProvision>,
-}
-
-impl Datacenter {
-	pub fn pools(&self) -> HashMap<dc_provision::PoolType, dc_provision::Pool> {
-		self.provision
-			.as_ref()
-			.map_or_else(HashMap::new, |x| x.pools.clone())
-	}
-
-	pub fn prebakes_enabled(&self) -> bool {
-		self.provision
-			.as_ref()
-			.map_or(false, |x| x.prebakes_enabled)
-	}
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default, JsonSchema)]

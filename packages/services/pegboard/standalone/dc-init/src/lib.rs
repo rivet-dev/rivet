@@ -19,7 +19,7 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> G
 	for cluster_config in cluster_configs.values() {
 		// Find datacenter ids with pegboard pools
 		let datacenter_ids = cluster_config
-			.datacenters
+			.bootstrap_datacenters
 			.values()
 			.map(|x| x.id)
 			.collect::<Vec<_>>();

@@ -501,11 +501,12 @@
       "description": "Manages the automatic provisioning of servers that Rivet runs on.",
       "type": "object",
       "required": [
-        "datacenters",
+        "bootstrap_datacenters",
         "id"
       ],
       "properties": {
-        "datacenters": {
+        "bootstrap_datacenters": {
+          "description": "Datacenters to automatically be created on cluster boot.\n\nThis should only be used for manual cluster creation. Do not use for enterprise distributions.",
           "type": "object",
           "additionalProperties": {
             "$ref": "#/definitions/Datacenter"
@@ -797,15 +798,6 @@
         },
         "name": {
           "type": "string"
-        },
-        "provision": {
-          "description": "Configures how servers are provisioned.\n\nEnterprise only.",
-          "default": null,
-          "allOf": [
-            {
-              "$ref": "#/definitions/DatacenterProvision"
-            }
-          ]
         }
       },
       "additionalProperties": false
@@ -862,33 +854,6 @@
           "type": "integer",
           "format": "uint32",
           "minimum": 0.0
-        }
-      },
-      "additionalProperties": false
-    },
-    "DatacenterProvision": {
-      "type": "object",
-      "required": [
-        "pools",
-        "prebakes_enabled",
-        "provider",
-        "provider_datacenter_id"
-      ],
-      "properties": {
-        "pools": {
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/definitions/Pool"
-          }
-        },
-        "prebakes_enabled": {
-          "type": "boolean"
-        },
-        "provider": {
-          "$ref": "#/definitions/Provider"
-        },
-        "provider_datacenter_id": {
-          "type": "string"
         }
       },
       "additionalProperties": false
@@ -1031,18 +996,6 @@
           "additionalProperties": false
         }
       ]
-    },
-    "Hardware": {
-      "type": "object",
-      "required": [
-        "name"
-      ],
-      "properties": {
-        "name": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
     },
     "Hcaptcha": {
       "type": "object",
@@ -1237,45 +1190,6 @@
       },
       "additionalProperties": false
     },
-    "Pool": {
-      "type": "object",
-      "required": [
-        "desired_count",
-        "drain_timeout",
-        "hardware",
-        "max_count",
-        "min_count"
-      ],
-      "properties": {
-        "desired_count": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0.0
-        },
-        "drain_timeout": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0.0
-        },
-        "hardware": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/Hardware"
-          }
-        },
-        "max_count": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0.0
-        },
-        "min_count": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0.0
-        }
-      },
-      "additionalProperties": false
-    },
     "Prometheus": {
       "type": "object",
       "required": [
@@ -1288,12 +1202,6 @@
         }
       },
       "additionalProperties": false
-    },
-    "Provider": {
-      "type": "string",
-      "enum": [
-        "linode"
-      ]
     },
     "Redis": {
       "type": "object",

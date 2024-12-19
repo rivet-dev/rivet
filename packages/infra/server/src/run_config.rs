@@ -97,7 +97,7 @@ pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 		Service::new(
 			"cluster_default_update",
 			ServiceKind::Oneshot,
-			|config, pools| Box::pin(cluster_default_update::start(config, pools, false)),
+			|config, pools| Box::pin(cluster_default_update::start(config, pools)),
 		),
 	];
 

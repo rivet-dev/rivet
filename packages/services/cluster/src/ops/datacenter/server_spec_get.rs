@@ -111,7 +111,7 @@ pub async fn datacenter_server_spec_list(
 				);
 				let (_, dc_config) = unwrap!(
 					cluster_config
-						.datacenters
+						.bootstrap_datacenters
 						.iter()
 						.find(|(_, dc_config)| dc_config.id == datacenter.datacenter_id),
 					"could not find matching datacenter config"

@@ -4,21 +4,19 @@ use rivet_config::config;
 pub async fn start(
 	config: rivet_config::Config,
 	pools: rivet_pools::Pools,
-	use_autoscaler: bool,
 ) -> GlobalResult<()> {
 	// TODO: When running bolt up, this service gets created first before `cluster-worker` so the messages
 	// sent from here are received but effectively forgotten because `cluster-worker` gets restarted
 	// immediately afterwards. This server will be replaced with a bolt infra step
 	tokio::time::sleep(std::time::Duration::from_secs(3)).await;
 
-	start_inner(config, pools, use_autoscaler).await
+	start_inner(config, pools, ).await
 }
 
 #[tracing::instrument(skip_all)]
 pub async fn start_inner(
 	config: rivet_config::Config,
 	pools: rivet_pools::Pools,
-	use_autoscaler: bool,
 ) -> GlobalResult<()> {
 	let client =
 		chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("cluster-default-update");
@@ -36,7 +34,7 @@ pub async fn start_inner(
 	let cluster_configs = rivet_config.clusters();
 
 	for (cluster_slug, cluster) in cluster_configs.iter() {
-		upsert_cluster(&ctx, use_autoscaler, cluster_slug, cluster).await?;
+		upsert_cluster(&ctx,  cluster_slug, cluster).await?;
 	}
 
 	Ok(())
@@ -45,7 +43,6 @@ pub async fn start_inner(
 /// Creates or updates an existing cluster.
 async fn upsert_cluster(
 	ctx: &StandaloneCtx,
-	use_autoscaler: bool,
 	cluster_slug: &str,
 	cluster_config: &config::rivet::Cluster,
 ) -> GlobalResult<()> {
@@ -110,7 +107,7 @@ async fn upsert_cluster(
 	// Log dcs that are trying to be deleted
 	for existing_datacenter in &datacenters_res.datacenters {
 		if !cluster_config
-			.datacenters
+			.bootstrap_datacenters
 			.contains_key(&existing_datacenter.name_id)
 		{
 			// Warn about removing datacenter
@@ -123,7 +120,7 @@ async fn upsert_cluster(
 	}
 
 	// Upsert datacenters
-	for (dc_slug, dc_config) in &cluster_config.datacenters {
+	for (dc_slug, dc_config) in &cluster_config.bootstrap_datacenters {
 		let existing_datacenter = datacenters_res
 			.datacenters
 			.iter()
@@ -131,7 +128,6 @@ async fn upsert_cluster(
 		upsert_datacenter(
 			ctx,
 			UpsertDatacenterArgs {
-				use_autoscaler,
 				cluster_id: cluster.cluster_id,
 				dc_slug,
 				dc_config,
@@ -145,7 +141,6 @@ async fn upsert_cluster(
 }
 
 struct UpsertDatacenterArgs<'a> {
-	use_autoscaler: bool,
 	cluster_id: Uuid,
 	dc_slug: &'a str,
 	dc_config: &'a config::rivet::Datacenter,
@@ -156,7 +151,6 @@ struct UpsertDatacenterArgs<'a> {
 async fn upsert_datacenter(
 	ctx: &StandaloneCtx,
 	UpsertDatacenterArgs {
-		use_autoscaler,
 		cluster_id,
 		dc_slug,
 		dc_config,
@@ -181,35 +175,9 @@ async fn upsert_datacenter(
 			"datacenter id does not match config"
 		);
 
-		// Update existing datacenter
-		let pools = dc_config
-			.pools()
-			.into_iter()
-			.map(|(pool_type, pool)| {
-				let desired_count = if use_autoscaler {
-					None
-				} else {
-					Some(pool.desired_count)
-				};
-
-				cluster::types::PoolUpdate {
-					pool_type: pool_type.into(),
-					hardware: pool
-						.hardware
-						.into_iter()
-						.map(Into::into)
-						.collect::<Vec<_>>(),
-					desired_count,
-					min_count: Some(pool.min_count),
-					max_count: Some(pool.max_count),
-					drain_timeout: Some(pool.drain_timeout),
-				}
-			})
-			.collect::<Vec<_>>();
-
 		ctx.signal(cluster::workflows::datacenter::Update {
-			pools,
-			prebakes_enabled: Some(dc_config.prebakes_enabled()),
+			pools: Vec::new(),
+			prebakes_enabled: None,
 			guard_public_hostname,
 		})
 		.tag("datacenter_id", existing_datacenter.datacenter_id)
@@ -220,33 +188,8 @@ async fn upsert_datacenter(
 
 		let datacenter_id = dc_config.id;
 
-		let (provider, provider_datacenter_id) = if let Some(provision) = &dc_config.provision {
-			// Automatically provisioned
-			(
-				cluster::types::Provider::from(provision.provider),
-				provision.provider_datacenter_id.clone(),
-			)
-		} else {
-			// Manual node config
-			(cluster::types::Provider::Manual, "dev".to_string())
-		};
-
-		let pools = dc_config
-			.pools()
-			.into_iter()
-			.map(|(pool_type, pool)| cluster::types::Pool {
-				pool_type: pool_type.into(),
-				hardware: pool
-					.hardware
-					.into_iter()
-					.map(Into::into)
-					.collect::<Vec<_>>(),
-				desired_count: pool.desired_count,
-				min_count: pool.min_count,
-				max_count: pool.max_count,
-				drain_timeout: pool.drain_timeout,
-			})
-			.collect::<Vec<_>>();
+		let provider = cluster::types::Provider::Manual;
+		let provider_datacenter_id = "dev".to_string();
 
 		ctx.signal(cluster::workflows::cluster::DatacenterCreate {
 			datacenter_id,
@@ -257,10 +200,10 @@ async fn upsert_datacenter(
 			provider_datacenter_id,
 			provider_api_token: None,
 
-			pools,
+			pools: Vec::new(),
 
 			build_delivery_method: dc_config.build_delivery_method.into(),
-			prebakes_enabled: dc_config.prebakes_enabled(),
+			prebakes_enabled: false,
 			guard_public_hostname,
 		})
 		.tag("cluster_id", cluster_id)
