@@ -108,7 +108,7 @@ async fn cdn() {
 		let res = reqwest::Client::new()
 			.get(&format!(
 				"{API_TRAEFIK_PROVIDER_URL}/config/core?token={token}",
-				token = ctx.config().server()?.rivet.tokens.traefik_provider.read()
+				token = ctx.config().server()?.rivet.api_edge.traefik_provider_token.read()
 			))
 			.send()
 			.await

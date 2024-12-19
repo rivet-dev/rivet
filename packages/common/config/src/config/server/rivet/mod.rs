@@ -78,9 +78,6 @@ pub struct Rivet {
 	pub auth: Auth,
 
 	#[serde(default)]
-	pub token: Tokens,
-
-	#[serde(default)]
 	pub api_public: ApiPublic,
 
 	#[serde(default)]
@@ -91,6 +88,9 @@ pub struct Rivet {
 
 	#[serde(default)]
 	pub health: Health,
+
+	#[serde(default)]
+	pub status: Option<Status>,
 
 	#[serde(default)]
 	pub tunnel: Tunnel,
@@ -134,11 +134,11 @@ impl Default for Rivet {
 			guard: Guard::default(),
 			job_run: None,
 			auth: Auth::default(),
-			token: Tokens::default(),
 			api_public: ApiPublic::default(),
 			api_edge: ApiEdge::default(),
 			metrics: Metrics::default(),
 			health: Health::default(),
+			status: None,
 			telemetry: Telemetry::default(),
 			cdn: None,
 			dns: None,
@@ -223,6 +223,10 @@ impl Rivet {
 		let public_origin = self.api_public.public_origin();
 		let host_str = unwrap!(public_origin.host_str(), "api origin missing host");
 		Ok(host_str.to_string())
+	}
+
+	pub fn status(&self) -> GlobalResult<&Status> {
+		Ok(unwrap_ref!(self.status, "status api disabled"))
 	}
 }
 
@@ -323,6 +327,9 @@ impl ApiPublic {
 pub struct ApiEdge {
 	pub host: Option<IpAddr>,
 	pub port: Option<u16>,
+
+	/// Token for the API Traefik provider.
+	pub traefik_provider_token: Option<Secret<String>>,
 }
 
 impl ApiEdge {
@@ -619,17 +626,6 @@ impl Ui {
 	}
 }
 
-/// Configuration for various tokens used in the system.
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
-#[derive(Default)]
-pub struct Tokens {
-	/// Token for the API Traefik provider.
-	pub traefik_provider: Option<Secret<String>>,
-	/// Token for API status checks.
-	pub status: Option<Secret<String>>,
-}
-
 /// Configuration for the health check service.
 #[derive(Debug, Serialize, Deserialize, Clone, Default, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
@@ -646,6 +642,18 @@ impl Health {
 	pub fn port(&self) -> u16 {
 		self.port.unwrap_or(default_ports::HEALTH)
 	}
+}
+
+/// Configure the status check API.
+///
+/// These are different than the health check API since they check the internals of the Rivet
+/// system.
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct Status {
+	pub token: Secret<String>,
+	pub system_test_isolate_project: Option<String>,
+	pub system_test_isolate_environment: Option<String>,
 }
 
 /// Configuration for the metrics service.

@@ -134,7 +134,8 @@
       "default": {
         "api_edge": {
           "host": null,
-          "port": null
+          "port": null,
+          "traefik_provider_token": null
         },
         "api_public": {
           "host": null,
@@ -176,14 +177,11 @@
           "port": null
         },
         "provision": null,
+        "status": null,
         "telemetry": {
           "enable": true
         },
         "test_builds": {},
-        "token": {
-          "status": null,
-          "traefik_provider": null
-        },
         "tunnel": {
           "public_host": "127.0.0.1:8003"
         },
@@ -294,6 +292,14 @@
           "type": "integer",
           "format": "uint16",
           "minimum": 0.0
+        },
+        "traefik_provider_token": {
+          "description": "Token for the API Traefik provider.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Secret<String>"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -1250,7 +1256,8 @@
         "api_edge": {
           "default": {
             "host": null,
-            "port": null
+            "port": null,
+            "traefik_provider_token": null
           },
           "allOf": [
             {
@@ -1398,6 +1405,14 @@
             }
           ]
         },
+        "status": {
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/Status"
+            }
+          ]
+        },
         "telemetry": {
           "default": {
             "enable": true
@@ -1415,17 +1430,6 @@
           "additionalProperties": {
             "$ref": "#/definitions/TestBuild"
           }
-        },
-        "token": {
-          "default": {
-            "status": null,
-            "traefik_provider": null
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/Tokens"
-            }
-          ]
         },
         "tunnel": {
           "default": {
@@ -1522,6 +1526,22 @@
       "properties": {
         "server": {
           "$ref": "#/definitions/SSHEntry"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Status": {
+      "description": "Configure the status check API.\n\nThese are different than the health check API since they check the internals of the Rivet system.",
+      "type": "object",
+      "required": [
+        "token"
+      ],
+      "properties": {
+        "system_test_isolate_project": {
+          "type": "string"
+        },
+        "token": {
+          "$ref": "#/definitions/Secret<String>"
         }
       },
       "additionalProperties": false
@@ -1630,29 +1650,6 @@
         "lets_encrypt",
         "lets_encrypt_staging"
       ]
-    },
-    "Tokens": {
-      "description": "Configuration for various tokens used in the system.",
-      "type": "object",
-      "properties": {
-        "status": {
-          "description": "Token for API status checks.",
-          "allOf": [
-            {
-              "$ref": "#/definitions/Secret<String>"
-            }
-          ]
-        },
-        "traefik_provider": {
-          "description": "Token for the API Traefik provider.",
-          "allOf": [
-            {
-              "$ref": "#/definitions/Secret<String>"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false
     },
     "Tunnel": {
       "description": "Configuration for the tunnel service.",

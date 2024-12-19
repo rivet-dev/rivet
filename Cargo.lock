@@ -913,6 +913,7 @@ dependencies = [
  "async_once",
  "chirp-client",
  "chrono",
+ "cluster",
  "faker-region",
  "futures-util",
  "game-namespace-resolve-name-id",

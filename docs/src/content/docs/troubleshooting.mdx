@@ -55,3 +55,28 @@ To look up the location `file:///index.js:3754:17`, you can:
                 ^
     ```
 
+## `Bad Gateway` when making request to actor
+
+This indicates that your actor's HTTP server is:
+
+- Not responding to requests
+- Is respondign with invalid data
+- Your actor is crashing when receing the request or on startup
+
+Validate that:
+
+- Your server is listening on the correct port (e.g. for port `http`, read the port from `PORT_HTTP`)
+- Your server starts immediately when the actor starts (i.e. don't run async code before starting the HTTP server)
+- You're not using HTTPS for your server (Rivet Guard handles this for you)
+
+If using the actor SDK, this likely an issue with the underlying Rivet library and should be reported on GitHub [here](https://github.com/rivet-gg/rivet/issues/new/choose).
+
+## `404 page not found` when making request to actor
+
+This indicates that there is no actor running for the given address. This often indicates that your actor has crashed and no longer exists.
+
+Validate that:
+
+- Your actor is not crashing by checking the logs
+- The address is exactly what's returned from the Rivet API
+

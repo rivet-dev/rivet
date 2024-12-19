@@ -1,4 +1,4 @@
-# Counter
+# Sandbox (Isolate)
 
 A bare bones example of RPC & events using a counter as an example.
 
