@@ -230,13 +230,13 @@ pub async fn gg_static_config(config: &rivet_config::Config) -> GlobalResult<Str
 		&config.server()?.rivet.api_edge.traefik_provider_token
 	{
 		format!(
-			"http://127.0.0.1:{port}/traefik-provider/config/game-guard?token={token}&datacenter=___DATACENTER_ID___",
+			"http://127.0.0.1:{port}/traefik-provider/config/game-guard?token={token}&datacenter=___DATACENTER_ID___&server=___SERVER_ID___",
 			port = TUNNEL_API_EDGE_PORT,
 			token = api_traefik_provider_token.read(),
 		)
 	} else {
 		format!(
-			"http://127.0.0.1:{port}/traefik-provider/config/game-guard?datacenter=___DATACENTER_ID___",
+			"http://127.0.0.1:{port}/traefik-provider/config/game-guard?datacenter=___DATACENTER_ID___&server=___SERVER_ID___",
 			port = TUNNEL_API_EDGE_PORT,
 		)
 	};
@@ -259,6 +259,8 @@ pub async fn gg_static_config(config: &rivet_config::Config) -> GlobalResult<Str
 			insecure = true
 
 		[providers]
+			providersThrottleDuration = "0.025s"
+
 			[providers.file]
 				directory = "/etc/game_guard/dynamic"
 

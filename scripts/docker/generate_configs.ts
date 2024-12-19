@@ -40,6 +40,7 @@ async function generateRivetGuard() {
 		},
 		accessLog: {},
 		providers: {
+			providersThrottleDuration: "0.025s",
 			http: {
 				endpoint:
 					"http://rivet-server:8081/traefik-provider/config/game-guard?datacenter=f288913c-735d-4188-bf9b-2fcf6eac7b9c",

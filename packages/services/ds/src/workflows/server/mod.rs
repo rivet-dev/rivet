@@ -21,7 +21,7 @@ const DRAIN_PADDING_MS: i64 = 10000;
 /// Time to delay an actor from rescheduling after a rescheduling failure.
 const BASE_RETRY_TIMEOUT_MS: usize = 2000;
 
-// TODO: Restructure traefik to get rid of this
+// Only used by Nomad
 const TRAEFIK_GRACE_PERIOD: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -583,7 +583,7 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<()>
 	// workflow step
 	// Invalidate cache when new server is created
 	ctx.cache()
-		.purge("ds_proxied_ports", [input.datacenter_id])
+		.purge("ds_proxied_ports2", [input.datacenter_id])
 		.await?;
 
 	Ok(())

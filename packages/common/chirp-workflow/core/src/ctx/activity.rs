@@ -3,8 +3,13 @@ use rivet_pools::prelude::*;
 use uuid::Uuid;
 
 use crate::{
-	ctx::common,
+	ctx::{
+		common,
+		message::{MessageCtx, SubscriptionHandle, TailAnchor, TailAnchorResponse},
+	},
 	db::DatabaseHandle,
+	error::WorkflowResult,
+	message::{AsTags, Message, NatsMessage},
 	operation::{Operation, OperationInput},
 };
 
@@ -19,13 +24,14 @@ pub struct ActivityCtx {
 
 	config: rivet_config::Config,
 	conn: rivet_connection::Connection,
+	msg_ctx: MessageCtx,
 
 	// Backwards compatibility
 	op_ctx: rivet_operation::OperationContext<()>,
 }
 
 impl ActivityCtx {
-	pub fn new(
+	pub async fn new(
 		workflow_id: Uuid,
 		db: DatabaseHandle,
 		config: &rivet_config::Config,
@@ -33,7 +39,7 @@ impl ActivityCtx {
 		activity_create_ts: i64,
 		ray_id: Uuid,
 		name: &'static str,
-	) -> Self {
+	) -> WorkflowResult<Self> {
 		let ts = rivet_util::timestamp::now();
 		let req_id = Uuid::new_v4();
 		let conn = conn.wrap(req_id, ray_id, name);
@@ -50,7 +56,9 @@ impl ActivityCtx {
 		);
 		op_ctx.from_workflow = true;
 
-		ActivityCtx {
+		let msg_ctx = MessageCtx::new(&conn, ray_id).await?;
+
+		Ok(ActivityCtx {
 			workflow_id,
 			ray_id,
 			name,
@@ -58,8 +66,9 @@ impl ActivityCtx {
 			db,
 			config: config.clone(),
 			conn,
+			msg_ctx,
 			op_ctx,
-		}
+		})
 	}
 }
 
@@ -88,6 +97,46 @@ impl ActivityCtx {
 	pub async fn update_workflow_tags(&self, tags: &serde_json::Value) -> GlobalResult<()> {
 		self.db
 			.update_workflow_tags(self.workflow_id, tags)
+			.await
+			.map_err(GlobalError::raw)
+	}
+
+	/// IMPORTANT: This is intended for ephemeral realtime events and should be used carefully. Use
+	/// signals if you need this to be durable.
+	pub async fn subscribe<M>(&self, tags: impl AsTags) -> GlobalResult<SubscriptionHandle<M>>
+	where
+		M: Message,
+	{
+		self.msg_ctx
+			.subscribe::<M>(tags)
+			.await
+			.map_err(GlobalError::raw)
+	}
+
+	/// IMPORTANT: This is intended for ephemeral realtime events and should be used carefully. Use
+	/// signals if you need this to be durable.
+	pub async fn tail_read<M>(&self, tags: impl AsTags) -> GlobalResult<Option<NatsMessage<M>>>
+	where
+		M: Message,
+	{
+		self.msg_ctx
+			.tail_read::<M>(tags)
+			.await
+			.map_err(GlobalError::raw)
+	}
+
+	/// IMPORTANT: This is intended for ephemeral realtime events and should be used carefully. Use
+	/// signals if you need this to be durable.
+	pub async fn tail_anchor<M>(
+		&self,
+		tags: impl AsTags,
+		anchor: &TailAnchor,
+	) -> GlobalResult<TailAnchorResponse<M>>
+	where
+		M: Message,
+	{
+		self.msg_ctx
+			.tail_anchor::<M>(tags, anchor)
 			.await
 			.map_err(GlobalError::raw)
 	}

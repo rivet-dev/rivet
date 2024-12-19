@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+	collections::{HashMap, HashSet},
+	time::Duration,
+};
 
 use build::types::{BuildCompression, BuildKind};
 use chirp_workflow::prelude::*;
@@ -12,7 +15,6 @@ use super::{
 	CreateComplete, Destroy, Drain, DrainState, Failed, GetServerMetaInput, GetServerMetaOutput,
 	InsertDbInput, Port, Ready, SetConnectableInput, UpdateImageInput, UpdateRescheduleRetryInput,
 	Upgrade, UpgradeComplete, UpgradeStarted, BASE_RETRY_TIMEOUT_MS, DRAIN_PADDING_MS,
-	TRAEFIK_GRACE_PERIOD,
 };
 use crate::types::{
 	GameGuardProtocol, HostProtocol, NetworkMode, Routing, ServerLifecycle, ServerResources,
@@ -136,7 +138,18 @@ pub(crate) async fn ds_server_pegboard(ctx: &mut WorkflowCtx, input: &Input) -> 
 							.await?;
 
 							// Wait for Traefik to poll ports and update GG
-							ctx.sleep(TRAEFIK_GRACE_PERIOD).await?;
+							let create_ts = ctx.ts();
+							match ctx.check_version(2).await? {
+								1 => ctx.removed::<Sleep>().await?,
+								_latest => {
+									ctx.activity(WaitForTraefikPollInput {
+										create_ts,
+										cluster_id: input.cluster_id,
+										datacenter_id: input.datacenter_id,
+									})
+									.await?;
+								}
+							}
 
 							let updated = ctx
 								.activity(SetConnectableInput {
@@ -698,7 +711,7 @@ async fn update_ports(ctx: &ActivityCtx, input: &UpdatePortsInput) -> GlobalResu
 	// Invalidate cache when ports are updated
 	if !input.ports.is_empty() {
 		ctx.cache()
-			.purge("ds_proxied_ports", [input.datacenter_id])
+			.purge("ds_proxied_ports2", [input.datacenter_id])
 			.await?;
 	}
 
@@ -832,6 +845,115 @@ async fn get_actor_id(ctx: &ActivityCtx, input: &GetActorIdInput) -> GlobalResul
 	.await?;
 
 	Ok(actor_id)
+}
+
+/// Amount of time to wait after all servers have successfully polled to wait to return in order to
+/// avoid a race condition.
+///
+/// This can likely be decreased to < 100 ms safely.
+const TRAEFIK_POLL_COMPLETE_GRACE: Duration = Duration::from_millis(750);
+
+/// Max time to wait for servers to poll their configs.
+const TRAEFIK_POLL_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// How logn to wait if no GG servers were returned from the list. This is either from:
+/// - Cluster without provisioning configured
+/// - Edge case where all GG servers were destroyed and waiting for new servers to come up
+const TRAFEIK_NO_SERVERS_GRACE: Duration = Duration::from_millis(500);
+
+#[message("ds_traefik_poll")]
+pub struct TraefikPoll {
+	/// Server ID will be `None` if:
+	/// - Not using provisioning (i.e. self-hosted cluster) or
+	/// - Older GG node that's being upgraded
+	pub server_id: Option<Uuid>,
+	pub latest_ds_create_ts: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct WaitForTraefikPollInput {
+	create_ts: i64,
+	cluster_id: Uuid,
+	datacenter_id: Uuid,
+}
+
+/// Waits for all of the GG nodes to poll the Traefik config.
+///
+/// This is done by waiting for an event to be published for each of the GG server IDs with a
+/// timestamp for the latest DS it's seen that's > than this DS's create ts.
+#[activity(WaitForTraefikPoll)]
+async fn wait_for_traefik_poll(
+	ctx: &ActivityCtx,
+	input: &WaitForTraefikPollInput,
+) -> GlobalResult<()> {
+	// TODO: This will only work with 1 node on self-hosted. RG 2 will be out by then which fixes
+	// this issue.
+
+	// Start sub first since the messages may arrive while fetching the server list
+	let mut sub = ctx
+		.subscribe::<TraefikPoll>(&json!({ "datacenter_id": input.datacenter_id }))
+		.await?;
+
+	// Fetch servers
+	let servers_res = ctx
+		.op(cluster::ops::server::list::Input {
+			filter: cluster::types::Filter {
+				pool_types: Some(vec![cluster::types::PoolType::Gg]),
+				cluster_ids: Some(vec![input.cluster_id]),
+				..Default::default()
+			},
+			include_destroyed: false,
+			exclude_draining: true,
+			exclude_no_vlan: false,
+		})
+		.await?;
+
+	let mut remaining_servers: HashSet<Uuid> = if servers_res.servers.is_empty() {
+		// HACK: Will wait for a single server poll if we don't have the server list. Wait for a
+		// static amount of time.
+		tokio::time::sleep(TRAFEIK_NO_SERVERS_GRACE).await;
+		return Ok(());
+	} else {
+		servers_res
+			.servers
+			.iter()
+			.map(|s| s.server_id)
+			.collect()
+	};
+
+	tracing::debug!(servers = ?remaining_servers, after_create_ts = ?input.create_ts, "waiting for traefik servers");
+	let res = tokio::time::timeout(TRAEFIK_POLL_TIMEOUT, async {
+		// Wait for servers to fetch their configs
+		loop {
+			let msg = sub.next().await?;
+
+			if let Some(server_id) = msg.server_id {
+				if msg.latest_ds_create_ts >= input.create_ts {
+					let did_remove = remaining_servers.remove(&server_id);
+
+					tracing::debug!(server_id = ?msg.server_id, latest_ds_create_ts = ?msg.latest_ds_create_ts, servers = ?remaining_servers, "received poll from traefik server");
+
+					// Break loop once all servers have polled
+					if remaining_servers.is_empty() {
+						return GlobalResult::Ok(());
+					}
+				}
+			}
+		}
+	})
+	.await;
+
+	match res {
+		Ok(_) => {
+			tracing::debug!("received poll from all traefik servers, waiting for grace period");
+			tokio::time::sleep(TRAEFIK_POLL_COMPLETE_GRACE).await;
+		}
+		Err(_) => {
+			tracing::warn!(missing_server_ids = ?remaining_servers, "did not receive poll from all gg servers before deadline");
+		}
+	}
+
+	Ok(())
 }
 
 join_signal!(Init {

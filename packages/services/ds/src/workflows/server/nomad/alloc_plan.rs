@@ -233,7 +233,7 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<Upd
 	// Invalidate cache when ports are updated
 	else if !input.ports.is_empty() {
 		ctx.cache()
-			.purge("ds_proxied_ports", [row.datacenter_id])
+			.purge("ds_proxied_ports2", [row.datacenter_id])
 			.await?;
 	}
 

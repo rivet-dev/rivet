@@ -124,7 +124,7 @@ async fn update_db(
 		// workflow step
 		// Invalidate cache when server is destroyed
 		ctx.cache()
-			.purge("ds_proxied_ports", [db_output.datacenter_id])
+			.purge("ds_proxied_ports2", [db_output.datacenter_id])
 			.await?;
 	}
 

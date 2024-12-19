@@ -115,7 +115,7 @@ impl ApiCtx {
 	}
 
 	/// Creates a message builder.
-	pub fn msg<M>(&mut self, body: M) -> builder::message::MessageBuilder<M>
+	pub fn msg<M>(&self, body: M) -> builder::message::MessageBuilder<M>
 	where
 		M: Message,
 	{

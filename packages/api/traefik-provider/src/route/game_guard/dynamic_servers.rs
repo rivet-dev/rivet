@@ -18,6 +18,7 @@ use crate::{auth::Auth, types};
 struct DynamicServerProxiedPort {
 	server_id: Uuid,
 	datacenter_id: Uuid,
+	create_ts: i64,
 	guard_public_hostname_dns_parent: Option<String>,
 	guard_public_hostname_static: Option<String>,
 
@@ -37,18 +38,20 @@ struct DynamicServerProxiedPort {
 pub async fn build_ds(
 	ctx: &Ctx<Auth>,
 	dc_id: Uuid,
+	server_id: Option<Uuid>,
 	config: &mut types::TraefikConfigResponse,
-) -> GlobalResult<()> {
+) -> GlobalResult<Option<i64>> {
 	let proxied_ports = ctx
 		.cache()
 		.ttl(60_000)
-		.fetch_one_json("ds_proxied_ports", dc_id, |mut cache, dc_id| async move {
+		.fetch_one_json("ds_proxied_ports2", dc_id, |mut cache, dc_id| async move {
 			let rows = sql_fetch_all!(
 				[ctx, DynamicServerProxiedPort]
 				"
 				SELECT
 					s.server_id,
 					s.datacenter_id,
+					s.create_ts,
 					dc.guard_public_hostname_dns_parent,
 					dc.guard_public_hostname_static,
 					pp.label,
@@ -86,6 +89,8 @@ pub async fn build_ds(
 		})
 		.await?
 		.unwrap_or_default();
+
+	let latest_ds_create_ts = proxied_ports.iter().map(|pp| pp.create_ts).max();
 
 	config.http.middlewares.insert(
 		"ds-rate-limit".to_owned(),
@@ -140,7 +145,7 @@ pub async fn build_ds(
 		"dynamic servers traefik config"
 	);
 
-	Ok(())
+	Ok(latest_ds_create_ts)
 }
 
 #[tracing::instrument(skip(config))]
