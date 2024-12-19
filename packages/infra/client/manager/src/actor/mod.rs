@@ -452,8 +452,16 @@ impl Actor {
 		}
 
 		// Set exit code if it hasn't already been set
-		self.set_exit_code(ctx, None).await?;
+		let set_exit_code_res = self.set_exit_code(ctx, None).await;
 
-		self.cleanup_setup(ctx).await
+		// Cleanup setup
+		let cleanup_setup_res = self.cleanup_setup(ctx).await;
+
+		// Delete dir
+		let remove_actor_dir_res = self.remove_actor_dir(ctx).await;
+
+		// Chain results. Do this after running since we should attempt to run all steps if
+		// possible.
+		set_exit_code_res.and(cleanup_setup_res).and(remove_actor_dir_res)
 	}
 }

@@ -724,6 +724,14 @@ impl Actor {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
+	pub async fn remove_actor_dir(&self, ctx: &Ctx) -> Result<()> {
+		let actor_path = ctx.actor_path(self.actor_id);
+		tokio::fs::remove_dir(&actor_path).await?;
+
+		Ok(())
+	}
+
 	// Path to the created namespace
 	fn netns_path(&self) -> PathBuf {
 		if let protocol::NetworkMode::Host = self.config.network_mode {
