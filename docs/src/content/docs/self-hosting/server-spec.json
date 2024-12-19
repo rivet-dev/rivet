@@ -1537,6 +1537,9 @@
         "token"
       ],
       "properties": {
+        "system_test_isolate_environment": {
+          "type": "string"
+        },
         "system_test_isolate_project": {
           "type": "string"
         },

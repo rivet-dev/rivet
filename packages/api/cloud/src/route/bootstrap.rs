@@ -45,7 +45,7 @@ pub async fn build_bootstrap_data(
 			opengb: None,
 		}),
 		origins: Box::new(models::CloudBootstrapOrigins {
-			hub: config.server()?.rivet.ui.public_origin().to_string(),
+			hub: util::url::to_string_without_slash(&config.server()?.rivet.ui.public_origin()),
 		}),
 		captcha: Box::new(models::CloudBootstrapCaptcha {
 			turnstile: server_config

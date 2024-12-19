@@ -33,12 +33,8 @@ pub fn configure(
 ) -> GlobalResult<String> {
 	let provision_config = config.server()?.rivet.provision()?;
 
-	let origin_api = config
-		.server()?
-		.rivet
-		.api_public
-		.public_origin()
-		.to_string();
+	let origin_api =
+		util::url::to_string_without_slash(&config.server()?.rivet.api_public.public_origin());
 
 	let pb_reserved_memory = match flavor {
 		pegboard::protocol::ClientFlavor::Container => {

@@ -2,6 +2,7 @@ use rand::Rng;
 pub use rivet_util_macros as macros;
 use tokio::time::{Duration, Instant};
 
+pub mod url;
 pub mod billing;
 pub mod check;
 pub mod dev_defaults;

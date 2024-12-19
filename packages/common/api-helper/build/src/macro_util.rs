@@ -39,13 +39,12 @@ impl __RouterConfig {
 		// NOTE: We do not use `Url::join` because it normalizes paths
 		// This url doesn't actually represent the url of the request, it's just put here so that the
 		// URI can be parsed by url::Url::parse
-		let origin = config
+		let origin = rivet_util::url::to_string_without_slash(&config
 			.server()?
 			.rivet
 			.api_public
-			.public_origin()
-			.to_string();
-		let url = format!("{}{}", origin.trim_end_matches('/'), uri);
+			.public_origin());
+		let url = format!("{}{}", origin, uri);
 		let route = url::Url::parse(url.as_str())?;
 
 		Ok(__RouterConfig {

@@ -36,6 +36,7 @@ tokio = { version = "1.36", default-features = false, features = [
     "time",
 ] }
 types-proto.workspace = true
+url = "2.5.4"
 uuid = { version = "1", features = ["v4", "serde"] }
 
 [dependencies.sqlx]
