@@ -13,7 +13,7 @@ pub async fn gen_remap(config: &rivet_config::Config) -> GlobalResult<GenRemapS3
 	let s3_config = &config.server()?.s3;
 
 	let mut remap = String::new();
-	let endpoint_external = s3_config.endpoint_external.to_string();
+	let endpoint_external = util::url::to_string_without_slash(&s3_config.endpoint_external);
 
 	// Build plugin chain
 	let plugins = "@plugin=tslua.so @pparam=/etc/trafficserver/strip_headers.lua @plugin=s3_auth.so @pparam=--config @pparam=s3_auth_v4.config".to_string();
