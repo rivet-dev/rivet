@@ -226,6 +226,7 @@ async fn insert_events(ctx: &ActivityCtx, input: &InsertEventsInput) -> GlobalRe
 		return Ok(());
 	};
 
+	// TODO(RVT-4450): `last_event_idx < $2` and `ON CONFLICT DO NOTHING` is a workaround
 	sql_execute!(
 		[ctx]
 		"
@@ -233,13 +234,16 @@ async fn insert_events(ctx: &ActivityCtx, input: &InsertEventsInput) -> GlobalRe
 			update_last_event_idx AS (
 				UPDATE db_pegboard.clients
 				SET last_event_idx = $2
-				WHERE client_id = $1
+				WHERE
+					client_id = $1 AND
+					last_event_idx < $2
 				RETURNING 1
 			),
 			insert_events AS (
 				INSERT INTO db_pegboard.client_events (client_id, index, payload, ack_ts)
 				SELECT $1, index, payload, $5
 				FROM UNNEST($3, $4) AS e(index, payload)
+				ON CONFLICT DO NOTHING
 				RETURNING 1
 			)
 		SELECT 1
