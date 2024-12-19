@@ -1,5 +1,5 @@
 # Use Traefik v3 beta for TLS servers transport support
-version="3.0.0-beta5"
+version="3.2.1"
 
 # Create traefik user
 if ! id -u "traefik" &>/dev/null; then
