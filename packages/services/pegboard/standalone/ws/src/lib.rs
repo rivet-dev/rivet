@@ -57,17 +57,6 @@ pub async fn run_from_env(
 
 	let conns: Arc<RwLock<Connections>> = Arc::new(RwLock::new(HashMap::new()));
 
-	tokio::try_join!(
-		socket_thread(&ctx, conns.clone()),
-		msg_thread(&ctx, conns.clone()),
-		update_ping_thread(&ctx, conns.clone()),
-		check_workflows_thread(&ctx, conns.clone()),
-	)?;
-
-	Ok(())
-}
-
-async fn socket_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>) -> GlobalResult<()> {
 	let host = ctx.config().server()?.rivet.pegboard.host();
 	let port = ctx.config().server()?.rivet.pegboard.port();
 	let addr = SocketAddr::from((host, port));
@@ -75,6 +64,23 @@ async fn socket_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>) -> 
 	let listener = TcpListener::bind(addr).await?;
 	tracing::info!(?port, ?port, "pegboard ws server listening");
 
+	// None of these should ever exit
+	//
+	// If these do exit, then the `handle_connection` task will run indefinitely and never
+	// send/receive anything to clients. Client workflows will then expire because of their ping,
+	// their workflow will complete, and clients will be unusable unless they reconnect.
+	tokio::join!(
+		socket_thread(&ctx, conns.clone(), listener),
+		msg_thread(&ctx, conns.clone()),
+		update_ping_thread(&ctx, conns.clone()),
+		check_workflows_thread(&ctx, conns.clone()),
+	);
+
+	Ok(())
+}
+
+#[tracing::instrument(skip_all)]
+async fn socket_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>, listener: TcpListener) {
 	loop {
 		match listener.accept().await {
 			Ok((stream, addr)) => handle_connection(ctx, conns.clone(), stream, addr).await,
@@ -83,6 +89,7 @@ async fn socket_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>) -> 
 	}
 }
 
+#[tracing::instrument(skip_all)]
 async fn handle_connection(
 	ctx: &StandaloneCtx,
 	conns: Arc<RwLock<Connections>>,
@@ -126,6 +133,7 @@ async fn handle_connection(
 	});
 }
 
+#[tracing::instrument(skip_all)]
 async fn setup_connection(
 	raw_stream: TcpStream,
 	addr: SocketAddr,
@@ -151,6 +159,7 @@ async fn setup_connection(
 	Ok((ws_stream, url_data))
 }
 
+#[tracing::instrument(skip_all)]
 async fn handle_connection_inner(
 	ctx: &StandaloneCtx,
 	conns: Arc<RwLock<Connections>>,
@@ -247,6 +256,7 @@ async fn handle_connection_inner(
 	GlobalResult::Ok(())
 }
 
+#[tracing::instrument(skip_all)]
 async fn upsert_client(
 	ctx: &StandaloneCtx,
 	client_id: Uuid,
@@ -300,8 +310,25 @@ async fn upsert_client(
 	Ok(())
 }
 
+#[tracing::instrument(skip_all)]
+async fn update_ping_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>) {
+	loop {
+		match update_ping_thread_inner(ctx, conns.clone()).await {
+			Ok(_) => { 
+				tracing::warn!("update ping thread thread exited early");
+			}
+			Err(err) => { 
+				tracing::error!(?err, "update ping thread error");
+			}
+		}
+
+		tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+	}
+}
+
 /// Updates the ping of all clients requesting a ping update at once.
-async fn update_ping_thread(
+#[tracing::instrument(skip_all)]
+async fn update_ping_thread_inner(
 	ctx: &StandaloneCtx,
 	conns: Arc<RwLock<Connections>>,
 ) -> GlobalResult<()> {
@@ -340,9 +367,26 @@ async fn update_ping_thread(
 	}
 }
 
+#[tracing::instrument(skip_all)]
+async fn check_workflows_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>) {
+	loop {
+		match check_workflows_thread_inner(ctx, conns.clone()).await {
+			Ok(_) => { 
+				tracing::warn!("check workflows thread thread exited early");
+			}
+			Err(err) => { 
+				tracing::error!(?err, "check workflows thread error");
+			}
+		}
+
+		tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+	}
+}
+
 // HACK(RVT-4458):
 /// Validates that workflows exist for the curation of the client running.
-async fn check_workflows_thread(
+#[tracing::instrument(skip_all)]
+async fn check_workflows_thread_inner(
 	ctx: &StandaloneCtx,
 	conns: Arc<RwLock<Connections>>,
 ) -> GlobalResult<()> {
@@ -408,7 +452,24 @@ async fn check_workflows_thread(
 	}
 }
 
-async fn msg_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>) -> GlobalResult<()> {
+#[tracing::instrument(skip_all)]
+async fn msg_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>) {
+	loop {
+		match msg_thread_inner(ctx, conns.clone()).await {
+			Ok(_) => { 
+				tracing::warn!("msg thread exited early");
+			}
+			Err(err) => { 
+				tracing::error!(?err, "msg thread error");
+			}
+		}
+
+		tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+	}
+}
+
+#[tracing::instrument(skip_all)]
+async fn msg_thread_inner(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>)  ->GlobalResult<()>{
 	// Listen for commands from client workflows
 	let mut sub = ctx
 		.subscribe::<pegboard::workflows::client::ToWs>(&json!({}))
