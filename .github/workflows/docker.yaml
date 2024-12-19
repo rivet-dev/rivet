@@ -80,8 +80,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - platform: linux/arm64
-            runner: [self-hosted, Linux, ARM64]
+          # TODO(RVT-4168): Compile libfdb from scratch for ARM
+          # - platform: linux/arm64
+          #   runner: [self-hosted, Linux, ARM64]
           - platform: linux/x86_64
             runner: [self-hosted, Linux, X64]
     runs-on: ${{ matrix.runner }}
@@ -168,8 +169,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - platform: linux/arm64
-            runner: [self-hosted, Linux, ARM64]
+          # TODO(RVT-4168): Compile libfdb from scratch for ARM
+          # - platform: linux/arm64
+          #   runner: [self-hosted, Linux, ARM64]
           - platform: linux/x86_64
             runner: [self-hosted, Linux, X64]
     runs-on: ${{ matrix.runner }}
