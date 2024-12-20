@@ -11,7 +11,8 @@ async function npmVersionExists(
 	if (npmCheck.code === 0) {
 		return true;
 	} else {
-		assertStringIncludes(npmCheck.stdout, `No match found for version ${version}`, "unexpected output");
+		console.log('out', npmCheck.stdout);
+		assertStringIncludes(npmCheck.stderr, `No match found for version ${version}`, "unexpected output");
 		return false;
 	}
 }
@@ -58,7 +59,7 @@ export async function publishSdk(opts: ReleaseOpts) {
 		// Publish
 		if (pkg.npm) {
 			$.logStep("Publishing to NPM", `${pkg.name}@${opts.version}`);
-			await $`npm version ${opts.version} --no-git-tag-version`.cwd(pkg.path);
+			await $`npm version ${opts.version} --no-git-tag-version --allow-same-version`.cwd(pkg.path);
 			await $`npm publish`.cwd(pkg.path)
 		}
 

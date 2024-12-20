@@ -64,7 +64,7 @@ _Install the CLI on your machine in order to create & deploy Rivet Actors._
 <summary><b>macOS & Linux & WSL</b></summary>
 
 ```sh
-curl -fsSL https://releases.rivet.gg/rivet/24.6.0-rc.1/install.sh | sh
+curl -fsSL https://releases.rivet.gg/rivet/latest/install.sh | sh
 ```
 
 Next, follow the [setup guide](https://rivet.gg/docs/setup).
@@ -77,7 +77,7 @@ Next, follow the [setup guide](https://rivet.gg/docs/setup).
 **Install latest version**
 
 ```ps1
-powershell -Command "iwr https://releases.rivet.gg/rivet/24.6.0-rc.1/install.ps1 -useb | iex"
+powershell -Command "iwr https://releases.rivet.gg/rivet/latest/install.ps1 -useb | iex"
 ```
 
 Next, follow the [setup guide](https://rivet.gg/docs/setup).
@@ -88,7 +88,7 @@ Next, follow the [setup guide](https://rivet.gg/docs/setup).
 <summary><b>Windows (PowerShell)</b></summary>
 
 ```
-iwr https://releases.rivet.gg/rivet/24.6.0-rc.1/install.ps1 -useb | iex
+iwr https://releases.rivet.gg/rivet/latest/install.ps1 -useb | iex
 ```
 
 Next, follow the [setup guide](https://rivet.gg/docs/setup).

@@ -11,7 +11,7 @@ Read [_Introduction to Rivet_](/docs/introduction) for an overview of the tool, 
 <Tab title="macOS & Linux & WSL">
 
 ```sh
-curl -fsSL https://releases.rivet.gg/rivet/24.6.0-rc.1/install.sh | sh
+curl -fsSL https://releases.rivet.gg/rivet/latest/install.sh | sh
 ```
 
 Next, follow the [setup guide](https://rivet.gg/docs/setup).
@@ -23,7 +23,7 @@ Next, follow the [setup guide](https://rivet.gg/docs/setup).
 **Install latest version**
 
 ```ps1
-powershell -Command "iwr https://releases.rivet.gg/rivet/24.6.0-rc.1/install.ps1 -useb | iex"
+powershell -Command "iwr https://releases.rivet.gg/rivet/latest/install.ps1 -useb | iex"
 ```
 
 Next, follow the [setup guide](https://rivet.gg/docs/setup).
@@ -33,7 +33,7 @@ Next, follow the [setup guide](https://rivet.gg/docs/setup).
 <Tab title="Windows (PowerShell)">
 
 ```ps1
-iwr https://releases.rivet.gg/rivet/24.6.0-rc.1/install.ps1 -useb | iex
+iwr https://releases.rivet.gg/rivet/latest/install.ps1 -useb | iex
 ```
 
 Next, follow the [setup guide](https://rivet.gg/docs/setup).
@@ -89,7 +89,7 @@ rivet deploy
 To test the actor can be created & connected to, run:
 
 ```sh
-deno run -A counter_test.ts
+rivet deno run -A counter_test.ts
 ```
 
 You can visit the [Rivet Hub](https://hub.rivet.gg) to see the actor you created.
