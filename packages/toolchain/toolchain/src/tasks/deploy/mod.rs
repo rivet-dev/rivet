@@ -118,14 +118,13 @@ impl task::Task for Task {
 			task.log(format!("  Builds:          {hub_origin}/projects/{project_id}/environments/{env_id}/builds"));
 			task.log(format!("  Endpoint:        {}", manager_res.endpoint));
 			task.log("");
-			task.log("Next steps:");
+			task.log("Connect to your actor:");
 			task.log("");
 			task.log(r#"  import ActorClient from "@rivet-gg/actor-client";"#);
 			task.log(format!(
 				r#"  const actorClient = new ActorClient("{}");"#,
 				manager_res.endpoint
 			));
-			task.log("");
 			task.log(format!(
 				r#"  const actor = await actorClient.get({{ name: "{example_build_name}" }})"#,
 			));

@@ -9,11 +9,11 @@ use crate::util::{
 };
 
 pub fn inquire_self_hosting() -> Result<Option<String>> {
-	let self_hosting = inquire::Confirm::new("Are you self-hosting Rivet?")
-		.with_default(false)
+	let using_cloud = inquire::Confirm::new("Are you using Rivet Cloud?")
+		.with_default(true)
 		.prompt()?;
 
-	let api_endpoint = if self_hosting {
+	let api_endpoint = if !using_cloud {
 		let e = inquire::Text::new("What is the API endpoint?")
 			.with_default("http://localhost:8080")
 			.with_validator(|input: &str| match url::Url::parse(input) {

@@ -9,7 +9,7 @@ export default class Counter extends Actor {
 	// Listen for state changes (https://rivet.gg/docs/lifecycle)
 	_onStateChange(newState) {
 		// Broadcast a state update event to all clients (https://rivet.gg/docs/events)
-		this._broadcast("count", newState.count);
+		this._broadcast("countUpdate", newState.count);
 	}
 
 	// Expose a remote procedure call for clients to update the count (https://rivet.gg/docs/rpc)

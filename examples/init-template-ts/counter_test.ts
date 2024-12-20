@@ -7,7 +7,7 @@ const client = new TestClient();
 const counter = await client.get<Counter>({ name: "counter" });
 
 // Listen for update count events (https://rivet.gg/docs/events)
-counter.on("count", (count: number) => console.log("New count:", count));
+counter.on("countUpdate", (count: number) => console.log("New count:", count));
 
 // Increment the count over remote procedure call (https://rivet.gg/docs/rpc)
 await counter.increment(1);

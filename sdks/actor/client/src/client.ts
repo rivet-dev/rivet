@@ -150,9 +150,7 @@ export class Client {
 		return this.#createProxy(handle) as ActorHandle<A>;
 	}
 
-	async create<A = unknown>(
-		opts: CreateOptions,
-	): Promise<ActorHandle<A>> {
+	async create<A = unknown>(opts: CreateOptions): Promise<ActorHandle<A>> {
 		// Build create config
 		const create = opts.create;
 

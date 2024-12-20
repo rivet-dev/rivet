@@ -74,8 +74,6 @@ Next, follow the [setup guide](https://rivet.gg/docs/setup).
 <details>
 <summary><b>Windows (cmd)</b></summary>
 
-**Install latest version**
-
 ```ps1
 powershell -Command "iwr https://releases.rivet.gg/rivet/latest/install.ps1 -useb | iex"
 ```

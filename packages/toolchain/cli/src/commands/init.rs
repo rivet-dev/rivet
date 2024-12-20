@@ -173,17 +173,20 @@ impl Opts {
 		println!();
 		println!("    ==========   Welcome to Rivet!   ==========");
 		println!();
+		println!("Resources:");
+		println!();
+		println!("  Documentation:      https://rivet.gg/docs");
+		//println!("  Examples:         https://rivet.gg/docs/examples");
+		println!("  Discord:            https://rivet.gg/discord");
+		println!("  Issues:             https://github.com/rivet-gg/rivet/issues");
+		println!("  Questions & Ideas:  https://github.com/orgs/rivet-gg/discussions");
+		println!("  Configure IDE:      https://docs.deno.com/runtime/getting_started/setup_your_environment");
+		//println!("  Enterprise:       https://rivet.gg/sales");
+		println!();
 		println!("Next steps:");
 		println!();
 		println!("  $ cd {}", prompt.project_name);
 		println!("  $ rivet deploy");
-		println!();
-		println!("Resources:");
-		println!();
-		println!("  Introduction:    https://rivet.gg/docs/introduction");
-		println!("  Examples:        https://rivet.gg/docs/examples");
-		println!("  Discord:         https://rivet.gg/discord");
-		println!("  Enterprise:      https://rivet.gg/sales");
 		println!();
 
 		crate::util::telemetry::capture_event(

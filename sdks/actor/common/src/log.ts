@@ -27,7 +27,7 @@ export function setupLogging() {
 			// manager/src/log.ts
 			"actor-manager": loggerConfig,
 			// runtime/src/log.ts
-			"actor": loggerConfig,
+			actor: loggerConfig,
 			"actor-runtime": loggerConfig,
 		},
 	});
