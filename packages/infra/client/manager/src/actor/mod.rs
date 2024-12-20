@@ -462,6 +462,8 @@ impl Actor {
 
 		// Chain results. Do this after running since we should attempt to run all steps if
 		// possible.
-		set_exit_code_res.and(cleanup_setup_res).and(remove_actor_dir_res)
+		set_exit_code_res
+			.and(cleanup_setup_res)
+			.and(remove_actor_dir_res)
 	}
 }

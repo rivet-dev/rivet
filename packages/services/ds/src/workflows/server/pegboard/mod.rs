@@ -914,11 +914,7 @@ async fn wait_for_traefik_poll(
 		tokio::time::sleep(TRAFEIK_NO_SERVERS_GRACE).await;
 		return Ok(());
 	} else {
-		servers_res
-			.servers
-			.iter()
-			.map(|s| s.server_id)
-			.collect()
+		servers_res.servers.iter().map(|s| s.server_id).collect()
 	};
 
 	tracing::debug!(servers = ?remaining_servers, after_create_ts = ?input.create_ts, "waiting for traefik servers");

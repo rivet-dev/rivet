@@ -61,7 +61,9 @@ pub async fn status(
 
 	// Resolve the region
 	let datacenters_res = ctx
-		.op(cluster::ops::datacenter::get::Input { datacenter_ids: vec![query.region] })
+		.op(cluster::ops::datacenter::get::Input {
+			datacenter_ids: vec![query.region],
+		})
 		.await?;
 	let dc = unwrap!(datacenters_res.datacenters.first());
 
@@ -310,7 +312,9 @@ async fn test_http(
 
 /// Tests WebSocket connectivity to a hostname.
 async fn test_ws(actor_origin: &str) -> GlobalResult<()> {
-	let actor_origin = actor_origin.replace("http://", "ws://").replace("https://", "wss://");
+	let actor_origin = actor_origin
+		.replace("http://", "ws://")
+		.replace("https://", "wss://");
 
 	let (mut socket, _) = connect_async(format!("{actor_origin}/ws")).await?;
 

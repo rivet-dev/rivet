@@ -256,7 +256,8 @@ impl WorkflowCtx {
 			self.create_ts,
 			self.ray_id,
 			A::NAME,
-		).await?;
+		)
+		.await?;
 
 		let start_instant = Instant::now();
 

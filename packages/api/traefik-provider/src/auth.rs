@@ -33,7 +33,9 @@ impl ApiAuth for Auth {
 
 impl Auth {
 	pub async fn token(&self, token: &Option<String>) -> GlobalResult<()> {
-		if let Some(traefik_provider_token) = &self.config.server()?.rivet.api_edge.traefik_provider_token {
+		if let Some(traefik_provider_token) =
+			&self.config.server()?.rivet.api_edge.traefik_provider_token
+		{
 			let token = unwrap_with_ref!(token, API_FORBIDDEN, reason = "Token not provided");
 			ensure_eq_with!(
 				token,

@@ -18,7 +18,12 @@ impl ApiAuth for Auth {
 		// TODO: Use JWT
 		if let Some(api_token) = api_token {
 			let status_token = config.server()?.rivet.status()?.token.read();
-			ensure_eq_with!(api_token, *status_token, API_FORBIDDEN, reason = "Invalid auth");
+			ensure_eq_with!(
+				api_token,
+				*status_token,
+				API_FORBIDDEN,
+				reason = "Invalid auth"
+			);
 			Ok(Auth { _claims: None })
 		} else {
 			bail!("unreachable");

@@ -6,9 +6,54 @@ Read [_Introduction to Rivet_](/docs/introduction) for an overview of the tool, 
 
 ## Install CLI
 
+<Tabs>
+
+<Tab title="macOS & Linux & WSL">
+
 ```sh
-TODO
+curl -fsSL https://releases.rivet.gg/rivet/24.6.0-rc.1/install.sh | sh
 ```
+
+Next, follow the [setup guide](https://rivet.gg/docs/setup).
+
+</Tab>
+
+<Tab title="Windows (cmd)">
+
+**Install latest version**
+
+```ps1
+powershell -Command "iwr https://releases.rivet.gg/rivet/24.6.0-rc.1/install.ps1 -useb | iex"
+```
+
+Next, follow the [setup guide](https://rivet.gg/docs/setup).
+
+</Tab>
+
+<Tab title="Windows (PowerShell)">
+
+```ps1
+iwr https://releases.rivet.gg/rivet/24.6.0-rc.1/install.ps1 -useb | iex
+```
+
+Next, follow the [setup guide](https://rivet.gg/docs/setup).
+
+</Tab>
+
+<Tab title="Build from source">
+
+```sh
+git clone https://github.com/rivet-gg/rivet
+cargo build --bin rivet
+```
+
+The executable will be available at _target/debug/rivet_.
+
+Next, follow the [setup guide](https://rivet.gg/docs/setup).
+
+</Tab>
+
+</Tabs>
 
 ## Initialize Project
 

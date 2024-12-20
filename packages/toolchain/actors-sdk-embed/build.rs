@@ -11,10 +11,10 @@ async fn main() -> Result<()> {
 	let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")?;
 	let out_dir = std::env::var("OUT_DIR")?;
 
-	let sdk_path = PathBuf::from(manifest_dir.clone()).join("../../../sdks/actors");
+	let sdk_path = PathBuf::from(manifest_dir.clone()).join("../../../sdks/actor");
 
 	// Copy SDK directory to out_dir
-	let out_sdk_path = Path::new(&out_dir).join("actors-sdk");
+	let out_sdk_path = Path::new(&out_dir).join("actor-sdk");
 
 	// Remove old dir
 	if out_sdk_path.is_dir() {
@@ -34,9 +34,9 @@ async fn main() -> Result<()> {
 	})?;
 
 	println!("cargo:rerun-if-changed={}", sdk_path.display());
-	println!("cargo:rustc-env=ACTORS_SDK_PATH={}", out_sdk_path.display());
+	println!("cargo:rustc-env=ACTOR_SDK_PATH={}", out_sdk_path.display());
 	println!(
-		"cargo:rustc-env=ACTORS_SDK_HASH={}",
+		"cargo:rustc-env=ACTOR_SDK_HASH={}",
 		hash_directory(&out_sdk_path)?
 	);
 

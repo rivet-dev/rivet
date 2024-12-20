@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - main
-    tags:
-      - '*'
   # For testing:
   # pull_request:
 
@@ -37,7 +35,7 @@ jobs:
             suffix: x86-mac
           - platform: aarch64-apple-darwin
             runner: [self-hosted, Linux, ARM64]
-            suffix: aarch64-max
+            suffix: aarch64-mac
     runs-on: ${{ matrix.runner }}
     container:
       image: rust:1.82.0
@@ -126,7 +124,7 @@ jobs:
           apt-get update
           apt-get install -y awscli
 
-          COMMIT_SHA_SHORT=$(git rev-parse --short HEAD)
+          COMMIT_SHA_SHORT="${GITHUB_SHA::7}"
           BINARY_PATH="target/${{ matrix.platform }}/release/rivet"
           BINARY_NAME="rivet-${{ matrix.suffix }}"
           if [[ "${{ matrix.platform }}" == "x86_64-pc-windows-gnu" ]]; then

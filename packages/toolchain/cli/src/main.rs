@@ -19,8 +19,6 @@ const STYLES: styling::Styles = styling::Styles::styled()
 	long_version = concat!(
 		"\n\n",
 		"git sha: ", env!("VERGEN_GIT_SHA"), "\n",
-		"git branch: ", env!("VERGEN_GIT_BRANCH"), "\n",
-		"build semver: ", env!("CARGO_PKG_VERSION"), "\n",
 		"build timestamp: ", env!("VERGEN_BUILD_TIMESTAMP"), "\n",
 		"build target: ", env!("VERGEN_CARGO_TARGET_TRIPLE"), "\n",
 		"build debug: ", env!("VERGEN_CARGO_DEBUG"), "\n",

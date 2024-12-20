@@ -398,11 +398,9 @@ async fn submit_job(ctx: &ActivityCtx, input: &SubmitJobInput) -> GlobalResult<S
 		.into_iter()
 		.chain([(
 			"RIVET_API_ENDPOINT".to_string(),
-			util::url::to_string_without_slash(&ctx.config()
-				.server()?
-				.rivet
-				.api_public
-				.public_origin())
+			util::url::to_string_without_slash(
+				&ctx.config().server()?.rivet.api_public.public_origin(),
+			),
 		)])
 		.chain(env_ports)
 		.map(|(k, v)| format!("{k}={v}"))

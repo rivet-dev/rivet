@@ -80,7 +80,11 @@ pub async fn run_from_env(
 }
 
 #[tracing::instrument(skip_all)]
-async fn socket_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>, listener: TcpListener) {
+async fn socket_thread(
+	ctx: &StandaloneCtx,
+	conns: Arc<RwLock<Connections>>,
+	listener: TcpListener,
+) {
 	loop {
 		match listener.accept().await {
 			Ok((stream, addr)) => handle_connection(ctx, conns.clone(), stream, addr).await,
@@ -281,7 +285,6 @@ async fn upsert_client(
 			flavor as i32,
 			util::timestamp::now(),
 		),
-
 		// HACK(RVT-4458): Check if workflow already exists and spawn a new one if not
 		sql_fetch_one!(
 			[ctx, (bool,)]
@@ -300,7 +303,12 @@ async fn upsert_client(
 	)?;
 
 	if !workflow_exists {
-		tracing::info!(?client_id, ?datacenter_id, ?flavor, "creating client workflow");
+		tracing::info!(
+			?client_id,
+			?datacenter_id,
+			?flavor,
+			"creating client workflow"
+		);
 		ctx.workflow(pegboard::workflows::client::Input { client_id })
 			.tag("client_id", client_id)
 			.dispatch()
@@ -314,10 +322,10 @@ async fn upsert_client(
 async fn update_ping_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>) {
 	loop {
 		match update_ping_thread_inner(ctx, conns.clone()).await {
-			Ok(_) => { 
+			Ok(_) => {
 				tracing::warn!("update ping thread thread exited early");
 			}
-			Err(err) => { 
+			Err(err) => {
 				tracing::error!(?err, "update ping thread error");
 			}
 		}
@@ -371,10 +379,10 @@ async fn update_ping_thread_inner(
 async fn check_workflows_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>) {
 	loop {
 		match check_workflows_thread_inner(ctx, conns.clone()).await {
-			Ok(_) => { 
+			Ok(_) => {
 				tracing::warn!("check workflows thread thread exited early");
 			}
-			Err(err) => { 
+			Err(err) => {
 				tracing::error!(?err, "check workflows thread error");
 			}
 		}
@@ -456,10 +464,10 @@ async fn check_workflows_thread_inner(
 async fn msg_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>) {
 	loop {
 		match msg_thread_inner(ctx, conns.clone()).await {
-			Ok(_) => { 
+			Ok(_) => {
 				tracing::warn!("msg thread exited early");
 			}
-			Err(err) => { 
+			Err(err) => {
 				tracing::error!(?err, "msg thread error");
 			}
 		}
@@ -469,7 +477,10 @@ async fn msg_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>) {
 }
 
 #[tracing::instrument(skip_all)]
-async fn msg_thread_inner(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>)  ->GlobalResult<()>{
+async fn msg_thread_inner(
+	ctx: &StandaloneCtx,
+	conns: Arc<RwLock<Connections>>,
+) -> GlobalResult<()> {
 	// Listen for commands from client workflows
 	let mut sub = ctx
 		.subscribe::<pegboard::workflows::client::ToWs>(&json!({}))

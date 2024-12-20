@@ -8,6 +8,8 @@ ignore = [
 	# rustls 0.19.1 is only used by aws-smithy-client in our deprecated
 	# generated clients. This is used only for type ser/de and old tests.
 	"RUSTSEC-2024-0336",
+	# Inputs are only read from trusted sources
+	"RUSTSEC-2024-0421",
 	# Unmaintained, low-impact crates
 	"RUSTSEC-2020-0163",
 	"RUSTSEC-2024-0370",

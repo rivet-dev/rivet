@@ -1,16 +1,13 @@
 use chirp_workflow::prelude::*;
 use rivet_config::config;
 
-pub async fn start(
-	config: rivet_config::Config,
-	pools: rivet_pools::Pools,
-) -> GlobalResult<()> {
+pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> GlobalResult<()> {
 	// TODO: When running bolt up, this service gets created first before `cluster-worker` so the messages
 	// sent from here are received but effectively forgotten because `cluster-worker` gets restarted
 	// immediately afterwards. This server will be replaced with a bolt infra step
 	tokio::time::sleep(std::time::Duration::from_secs(3)).await;
 
-	start_inner(config, pools, ).await
+	start_inner(config, pools).await
 }
 
 #[tracing::instrument(skip_all)]
@@ -34,7 +31,7 @@ pub async fn start_inner(
 	let cluster_configs = rivet_config.clusters();
 
 	for (cluster_slug, cluster) in cluster_configs.iter() {
-		upsert_cluster(&ctx,  cluster_slug, cluster).await?;
+		upsert_cluster(&ctx, cluster_slug, cluster).await?;
 	}
 
 	Ok(())

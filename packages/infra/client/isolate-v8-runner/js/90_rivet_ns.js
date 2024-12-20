@@ -1,6 +1,6 @@
 // DO NOT MODIFY
 //
-// Generated with scripts/sdk_actors/compile_bridge.ts
+// Generated with scripts/sdk_actor/compile_bridge.ts
 
 import { primordials } from "ext:core/mod.js";
 import { KV_NAMESPACE } from "ext:rivet_kv/40_rivet_kv.js";

@@ -17,11 +17,8 @@ impl Router {
 			replacement_count
 		);
 
-		let public_origin = util::url::to_string_without_slash(&config
-			.server()?
-			.rivet
-			.api_public
-			.public_origin());
+		let public_origin =
+			util::url::to_string_without_slash(&config.server()?.rivet.api_public.public_origin());
 		let replaced_content = content_str.replace("%VITE_APP_API_URL%", &public_origin);
 
 		Ok(replaced_content.into_bytes())
