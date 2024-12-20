@@ -14,7 +14,7 @@ is often completely transparent through [state persistence](/docs/state) & [auto
 
 Automatic rescheduling occurs from the following triggers:
 
-- The actor stopped with a non-zero exit code
+- The actor stopped with a non-zero exit code (e.g. `Deno.exit(1)`)
 - The node crashes or becomes unresponsive for any reason
 - The node that the actor is allocated to is upgrading and has finished draining
 

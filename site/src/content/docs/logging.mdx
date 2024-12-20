@@ -44,7 +44,7 @@ Consider this example:
 
 ```typescript {{ "title": "structured_logging.ts" }}
 export default class Counter extends Actor<State> {
-  increment(rpc: Rpc<Counter>, count: number): number {
+  increment(rpc: Rpc<this>, count: number): number {
     // Prints: level=INFO msg=increment connection=123 count=456
     this.log.info('increment', { connection: rpc.connection.id, count });
 
@@ -58,7 +58,7 @@ export default class Counter extends Actor<State> {
 
 ```typescript {{ "title": "unstructured_logging.ts" }}
 export default class Counter extends Actor<State> {
-  increment(rpc: Rpc<Counter>, count: number): number {
+  increment(rpc: Rpc<this>, count: number): number {
     // Prints: Increment for connection 123 with count 456
     console.log(`Increment for connection ${rpc.connection.id} with count ${count}`);
 

@@ -6,19 +6,16 @@ Update your configuration to include `unstable.minify = false` and `unstable.dum
 
 ```json {{ "title": "rivet.json" }}
 {
-	"builds": [
-		{
-			"tags": { "name": "counter" },
-			"access": "public",
-			"runtime": "javascript",
+	"builds" {
+		"counter" {
 			"script": "counter.ts",
-			"accesss": "public",
+			"access": "public",
 			"unstable": {
 				"minify": false,
 				"dump_build": true
 			}
 		}
-	]
+	}
 }
 ```
 

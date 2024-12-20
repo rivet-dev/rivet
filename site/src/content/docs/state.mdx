@@ -64,7 +64,7 @@ interface State {
 }
 
 class Counter extends Actor<State> {
-  increment() {
+  increment(rpc: Rpc<this>) {
     this.state.count += 1;
   }
 
@@ -117,7 +117,9 @@ KV stores native JavaScript values in a compact binary format so you don't need 
 
 Raw KV operations can be called via `this.#ctx.kv.<op>`.
 
-#### `get(key: any, options?: GetOptions): Promise<any | null>`
+#### `get`
+
+  `get(key: any, options?: GetOptions): Promise<any | null>`
 
   Retrieves a value from the key-value store.
 
@@ -129,7 +131,9 @@ Raw KV operations can be called via `this.#ctx.kv.<op>`.
   }
   ```
 
-#### `getBatch(keys: any[], options?: GetBatchOptions): Promise<Map<any, any>>`
+#### `getBatch`
+
+  `getBatch(keys: any[], options?: GetBatchOptions): Promise<Map<any, any>>`
 
   Retrieves a batch of key-value pairs.
 
@@ -141,7 +145,9 @@ Raw KV operations can be called via `this.#ctx.kv.<op>`.
   }
   ```
 
-#### `list(options?: ListOptions): Promise<Map<any, any>>`
+#### `list`
+
+  `list(options?: ListOptions): Promise<Map<any, any>>`
 
   Retrieves all key-value pairs in the KV store. When using any of the options, the keys lexicographic order
   is used for filtering.
@@ -166,7 +172,9 @@ Raw KV operations can be called via `this.#ctx.kv.<op>`.
   }
   ```
 
-#### `put(key: any, value: any | ArrayBuffer, options?: PutOptions): Promise<void>`
+#### `put`
+
+  `put(key: any, value: any | ArrayBuffer, options?: PutOptions): Promise<void>`
 
   Stores a key-value pair in the key-value store.
 
@@ -178,7 +186,9 @@ Raw KV operations can be called via `this.#ctx.kv.<op>`.
   }
   ```
 
-#### `putBatch(obj: Map<any, any | ArrayBuffer>, options?: PutBatchOptions): Promise<void>`
+#### `putBatch`
+
+  `putBatch(obj: Map<any, any | ArrayBuffer>, options?: PutBatchOptions): Promise<void>`
 
   Stores a batch of key-value pairs.
 
@@ -190,15 +200,21 @@ Raw KV operations can be called via `this.#ctx.kv.<op>`.
   }
   ```
 
-#### `delete(key: any): Promise<void>`
+#### `delete`
+
+  `delete(key: any): Promise<void>`
 
   Deletes a key-value pair from the key-value store.
 
-#### `deleteBatch(keys: any[]): Promise<void>`
+#### `deleteBatch`
+
+  `deleteBatch(keys: any[]): Promise<void>`
 
   Deletes a batch of key-value pairs from the key-value store.
 
-#### `deleteAll(): Promise<void>`
+#### `deleteAll`
+
+  `deleteAll(): Promise<void>`
 
   Deletes all data from the key-value store. **This CANNOT be undone.**
 

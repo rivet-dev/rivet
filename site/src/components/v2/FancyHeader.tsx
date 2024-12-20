@@ -79,7 +79,7 @@ export function FancyHeader({ active, subnav }: FancyHeaderProps) {
                   </Link>
                 </RivetHeader.NavItem>
                 <RivetHeader.NavItem asChild className='p-2'>
-                  <Link href='/support' className='text-white/90'>
+                  <Link href='https://github.com/rivet-gg/rivet' target='_blank' className='text-white/90'>
                     <Icon icon={faGithub} className='drop-shadow-md' />
                   </Link>
                 </RivetHeader.NavItem>
@@ -99,12 +99,12 @@ export function FancyHeader({ active, subnav }: FancyHeaderProps) {
                     Product
                   </div>
                 </RivetHeader.NavItem>
-                <RivetHeader.NavItem
+                {/* <RivetHeader.NavItem
                   asChild
                   className='flex cursor-pointer items-center gap-1 px-2.5 py-2'
                   onMouseEnter={() => setIsSubnavOpen('solutions')}>
                   <div className='text-white/90'>Solutions</div>
-                </RivetHeader.NavItem>
+                </RivetHeader.NavItem> */}
                 <RivetHeader.NavItem asChild className='flex items-center gap-1 px-2.5 py-2'>
                   <Link
                     href='/docs'
@@ -156,7 +156,7 @@ export function FancyHeader({ active, subnav }: FancyHeaderProps) {
                       </motion.div>
                     </motion.div>
                   ) : null}
-                  {isSubnavOpen === 'solutions' ? (
+                  {/* {isSubnavOpen === 'solutions' ? (
                     <motion.div
                       key='solutions'
                       onMouseLeave={() => setIsSubnavOpen(false)}
@@ -171,7 +171,7 @@ export function FancyHeader({ active, subnav }: FancyHeaderProps) {
                         </div>
                       </motion.div>
                     </motion.div>
-                  ) : null}
+                  ) : null} */}
                 </AnimatePresence>
               </motion.div>
             ) : null}

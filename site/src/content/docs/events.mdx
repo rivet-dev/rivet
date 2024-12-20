@@ -2,9 +2,7 @@
 
 Events are used for clients to receive realtime data from actors.
 
-<Info>
-    Only actors can publish events to clients. Clients must call RPCs to communicate with the actor.
-</Info>
+<Info>Events are used for actors to publish updates to clients. Clients call RPCs to communicate with the actor.</Info>
 
 ## Publishing from actors
 
@@ -15,18 +13,20 @@ Actors can publish events to clients using `this.broadcast` and `connection.send
 Actors can publish events to all connected clients with `this.broadcast(name, data)`. For example:
 
 <CodeGroup>
+
 ```typescript {{ "title": "chat_room.ts" }}
 class ChatRoom extends Actor {
-    sendMessage(message: string) {
-        this.broadcast("newMessage", { message });
-    }
+  sendMessage(rpc: Rpc<this>, message: string) {
+    this.broadcast('newMessage', { message });
+  }
 }
 ```
 
 ```typescript {{ "title": "client.ts" }}
-const actor = client.withTags<ChatRoom>({ name: "chat_room" });
-await actor.sendMessage("Hello, world!");
+const actor = client.get<ChatRoom>({ name: 'chat_room' });
+await actor.sendMessage('Hello, world!');
 ```
+
 </CodeGroup>
 
 ### Sending events to specific connections
@@ -34,19 +34,21 @@ await actor.sendMessage("Hello, world!");
 Actors can send messages to specific client connections. All connections are available on the `this.connections` array. For example:
 
 <CodeGroup>
+
 ```typescript {{ "title": "chat_room.ts" }}
 class ChatRoom extends Actor {
-    sendPrivateMessage(connectionId: number, message: string) {
-        const conn = this.connections.find(c => c.id == connectionId);
-        conn.send("newMessage", { message });
-    }
+  sendPrivateMessage(rpc: Rpc<this>, connectionId: number, message: string) {
+    const conn = this.connections.find(c => c.id == connectionId);
+    conn.send('newMessage', { message });
+  }
 }
 ```
 
 ```typescript {{ "title": "client.ts" }}
-const actor = client.withTags<ChatRoom>({ name: "chat_room" });
-await actor.sendPrivateMessage(123, "Hello, world!");
+const actor = client.get<ChatRoom>({ name: 'chat_room' });
+await actor.sendPrivateMessage(123, 'Hello, world!');
 ```
+
 </CodeGroup>
 
 ## Subscribing from clients
@@ -60,20 +62,22 @@ Clients can subscribe to events that will happen repeatedly using `actor.on(name
 For example:
 
 <CodeGroup>
+
 ```typescript {{ "title": "client.ts" }}
-const actor = client.withTags<ChatRoom>({ name: "chat_room" });
-actor.on("newMessage", ({ message }) => {
-    console.log("Message", message);
+const actor = client.get<ChatRoom>({ name: 'chat_room' });
+actor.on('newMessage', ({ message }) => {
+  console.log('Message', message);
 });
 ```
 
 ```typescript {{ "title": "chat_room.ts" }}
 class ChatRoom extends Actor {
-    sendMessage(message: string) {
-        this.broadcast("newMessage", { message });
-    }
+  sendMessage(rpc: Rpc<this>, message: string) {
+    this.broadcast('newMessage', { message });
+  }
 }
 ```
+
 </CodeGroup>
 
 ### `once`
@@ -83,26 +87,29 @@ Clients can listen for an event only one time with `actor.once(name, callback)`.
 For example:
 
 <CodeGroup>
+
 ```typescript {{ "title": "client.ts" }}
-const actor = client.withTags<ChatRoom>({ name: "chat_room" });
-actor.once("joinRequestApproved", () => {  // This will only be called once
-    console.log("Join request accepted");
+const actor = client.get<ChatRoom>({ name: 'chat_room' });
+actor.once('joinRequestApproved', () => {
+  // This will only be called once
+  console.log('Join request accepted');
 });
 await actor.requestJoin();
 ```
 
 ```typescript {{ "title": "chat_root.ts" }}
 class ChatRoom extends Actor {
-    requestJoin() {
-        // ...ask the admin to approve the request...
-    }
+  requestJoin(rpc: Rpc<this>) {
+    // ...ask the admin to approve the request...
+  }
 
-    approveJoinRequest(connectionId: number) {
-        const conn = this.connections.find(c => c.id == connectionId);
-        conn.send("joinRequestApproved");
-    }
+  approveJoinRequest(rpc: Rpc<this>, connectionId: number) {
+    const conn = this.connections.find(c => c.id == connectionId);
+    conn.send('joinRequestApproved');
+  }
 }
 ```
+
 </CodeGroup>
 
 ## Connections

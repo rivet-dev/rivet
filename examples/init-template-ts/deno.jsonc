@@ -6,10 +6,10 @@
 		"@std/async": "jsr:@std/async@^1.0.9",
 		"@std/log": "jsr:@std/log@^0.224.11",
 		"hono": "jsr:@hono/hono@^4.6.12",
-		"@rivet-gg/actors-core": "../../sdks/actors/core/src/mod.ts",
-		"@rivet-gg/actors": "../../sdks/actors/runtime/src/mod.ts",
-		"@rivet-gg/actors-client": "../../sdks/actors/client/src/mod.ts",
-		"@rivet-gg/actors-client/test": "../../sdks/actors/client/src/test.ts",
+		"@rivet-gg/actor-core": "../../sdks/actors/core/src/mod.ts",
+		"@rivet-gg/actor": "../../sdks/actors/runtime/src/mod.ts",
+		"@rivet-gg/actor-client": "../../sdks/actors/client/src/mod.ts",
+		"@rivet-gg/actor-client/test": "../../sdks/actors/client/src/test.ts",
 		"on-change": "npm:on-change@^5.0.1"
 	},
 	"fmt": {

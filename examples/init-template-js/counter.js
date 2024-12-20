@@ -1,4 +1,4 @@
-import { Actor } from "@rivet-gg/actors";
+import { Actor } from "@rivet-gg/actor";
 
 export default class Counter extends Actor {
 	// Create the initial state when the actor is first created (https://rivet.gg/docs/state)

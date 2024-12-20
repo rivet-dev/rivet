@@ -1,4 +1,4 @@
-import { TestClient } from "@rivet-gg/actors-client/test";
+import { TestClient } from "@rivet-gg/actor-client/test";
 import type Counter from "./counter.ts";
 
 const client = new TestClient();
@@ -14,4 +14,3 @@ await counter.increment(1);
 
 // Disconnect from the actor when finished (https://rivet.gg/docs/connections)
 counter.disconnect();
-

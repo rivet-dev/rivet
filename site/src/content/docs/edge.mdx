@@ -10,16 +10,18 @@ See available regions [here](/docs/regions).
 
 This region list can be fetched with `GET https://api.rivet.gg/regions`.
 
+See API documentation [here](/docs/api/actor/regions/list).
+
 ## Automatic region selection
 
 By default, actors will choose the most optimal region based on the client's latency. This can be overridden if needed.
 
 ## Region selection
 
-TODO: Validate this
+The region an actor is created in can be overridden by defining `create.region`:
 
-```typescript
-const actor = client.withTags({ name: "example" }, {
+```typescript {{ "title": "client.ts" }}
+const actor = client.get({ name: "example" }, {
     create: {
         region: "atl"
     }

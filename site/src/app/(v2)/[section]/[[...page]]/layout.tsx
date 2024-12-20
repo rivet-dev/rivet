@@ -10,7 +10,7 @@ function Subnav({ path }: { path: string[] }) {
   return (
     <div className='-mx-8 -mb-[9px] hidden min-h-10 items-center px-8 empty:hidden md:flex'>
       {sitemap.map((tab, i) => (
-        <ModulePageLink key={i} href={tab.href} isActive={findPageForHref(fullPath, tab)}>
+        <ModulePageLink key={i} href={tab.href} target={tab.target} isActive={findPageForHref(fullPath, tab)}>
           {tab.title}
         </ModulePageLink>
       ))}

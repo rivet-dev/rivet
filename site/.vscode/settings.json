@@ -1,9 +1,21 @@
 {
     "typescript.preferences.importModuleSpecifier": "non-relative",
-    "grammarly.selectors": [
-        {
-            "language": "mdx",
-            "scheme": "file"
-        }
-    ]
+    "cSpell.words": [
+        "architecting"
+    ],
+    "[javascript]": {
+        "editor.defaultFormatter": "biomejs.biome"
+    },
+    "[typescript]": {
+        "editor.defaultFormatter": "biomejs.biome"
+    },
+    "[javascriptreact]": {
+        "editor.defaultFormatter": "biomejs.biome"
+    },
+    "[typescriptreact]": {
+        "editor.defaultFormatter": "biomejs.biome"
+    },
+    "[mdx]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    }
 }

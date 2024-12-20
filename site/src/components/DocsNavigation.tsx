@@ -1,6 +1,6 @@
 import routes from '@/generated/routes.json';
 import { SidebarItem } from '@/lib/sitemap';
-import { Icon, iconPack } from '@rivet-gg/icons';
+import { faArrowUpRight, faArrowUpRightFromSquare, Icon, iconPack } from '@rivet-gg/icons';
 import { PropsWithChildren, ReactNode } from 'react';
 import { cn } from '@rivet-gg/components';
 import { CollapsibleSidebarItem } from '@/components/CollapsibleSidebarItem';
@@ -35,9 +35,10 @@ function TreeItem({ item }: TreeItemProps) {
   }
 
   return (
-    <NavLink href={item.href}>
+    <NavLink href={item.href} external={item.external}>
       {item.icon ? <Icon icon={item.icon} className='mr-2 size-3.5' /> : null}
       <span className='truncate'>{item.title ?? routes.pages[getAliasedHref(item.href)]?.title}</span>
+      {item.external ? <Icon icon={faArrowUpRight} className='ml-2 size-3' /> : null}
     </NavLink>
   );
 }
@@ -61,13 +62,15 @@ export function Tree({ pages, className }: TreeProps) {
 
 export function NavLink({
   href,
+  external,
   children,
   className
-}: PropsWithChildren<{ href: string; children: ReactNode; className?: string }>) {
+}: PropsWithChildren<{ href: string; external?: boolean; children: ReactNode; className?: string }>) {
   return (
     <ActiveLink
       strict
       href={href}
+      target={external && '_blank'}
       className={cn(
         'group flex w-full items-center rounded-md border border-transparent px-2 py-1 text-sm text-muted-foreground hover:underline aria-current-page:text-foreground',
         className

@@ -1,6 +1,6 @@
 {
   "imports": {
-    "@rivet-gg/actors": "jsr:@rivet-gg/actors",
-    "@rivet-gg/actors-client": "jsr:@rivet-gg/actors-client"
+    "@rivet-gg/actor": "jsr:@rivet-gg/actor",
+    "@rivet-gg/actor-client": "jsr:@rivet-gg/actor-client"
   }
 }

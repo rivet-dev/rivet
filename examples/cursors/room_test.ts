@@ -1,5 +1,5 @@
-import { Client } from "@rivet-gg/actors-client";
-import type { ActorHandle } from "@rivet-gg/actors-client";
+import { Client } from "@rivet-gg/actor-client";
+import type { ActorHandle } from "@rivet-gg/actor-client";
 import { readEndpointFromCli } from "../../sdks/actors/client/src/dev.ts";
 import { assertEquals, assertExists } from "@std/assert";
 import type Room from "./room.ts";

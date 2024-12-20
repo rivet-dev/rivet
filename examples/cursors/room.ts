@@ -1,4 +1,4 @@
-import type { Actor, Rpc } from "@rivet-gg/actors";
+import type { Actor, Rpc } from "@rivet-gg/actor";
 import { throttle } from "@std/async/unstable-throttle";
 
 const ENTITY_COUNT = 10;

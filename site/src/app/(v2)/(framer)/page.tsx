@@ -3,7 +3,7 @@ import { FancyHeader } from '@/components/v2/FancyHeader';
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  description: 'Open-Source Multiplayer Tooling. A Single Tool to Manage Your Game Servers & Backend.'
+  description: 'Run and scale realtime applications'
 };
 
 export default function IndexPage() {

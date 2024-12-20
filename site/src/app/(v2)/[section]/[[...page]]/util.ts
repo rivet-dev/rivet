@@ -1,4 +1,5 @@
-export const VALID_SECTIONS = ['docs', 'use-cases', 'examples', 'compare'];
+// export const VALID_SECTIONS = ['docs', 'use-cases', 'examples', 'compare'];
+export const VALID_SECTIONS = ['docs', 'compare'];
 
 export function buildPathComponents(section: string, page?: string[]): string[] {
     // Add default page

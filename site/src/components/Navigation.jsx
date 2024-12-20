@@ -90,9 +90,6 @@ export function Navigation({ navigation, ...props }) {
         <TopLevelNavItem href='/docs/general' icon={faBooks}>
           Docs
         </TopLevelNavItem>
-        <TopLevelNavItem href='/modules' target='_blank' icon={faPuzzle}>
-          Modules
-        </TopLevelNavItem>
         <TopLevelNavItem href='/changelog' icon={faNewspaper}>
           Changelog
         </TopLevelNavItem>

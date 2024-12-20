@@ -21,17 +21,17 @@ export function DocsMobileNavigation() {
   const currentSidebar = sitemap.find(page => pathname.startsWith(page.href));
   return (
     <>
-      {links.map(({ href, label }) =>
+      {links.map(({ href, external, label }) =>
         pathname.startsWith(href) && currentSidebar ? (
           <div className='flex flex-col gap-1' key={href}>
             <RivetHeader.NavItem asChild className='flex items-center gap-1.5'>
-              <ActiveLink href={href}>{label}</ActiveLink>
+              <ActiveLink href={href} target={external && '_blank'}>{label}</ActiveLink>
             </RivetHeader.NavItem>
             <Tree pages={currentSidebar.sidebar} />
           </div>
         ) : (
           <RivetHeader.NavItem key={href} asChild className='flex items-center gap-1.5'>
-            <ActiveLink href={href}>{label}</ActiveLink>
+            <ActiveLink href={href} target={external && '_blank'}>{label}</ActiveLink>
           </RivetHeader.NavItem>
         )
       )}

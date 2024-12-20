@@ -61,7 +61,7 @@ This is significantly more difficult to understand than the equivalent in Rivet:
 <CodeGroup>
 ```typescript {{ "title": "actor.ts" }}
 class Example extends Actor {
-    publishPost(data: Post) {
+    publishPost(rpc: Rpc<this>, data: Post) {
         this.broadcast("post", data)
     }
 }
@@ -129,12 +129,12 @@ class UserActor extends Actor {
 class UserActor extends Actor {
     private balance = 0;
 
-    async deposit(amount: number) {
+    async deposit(rpc: Rpc<this>, amount: number) {
         this.balance += amount;
         return this.balance;
     }
 
-    async withdraw(amount: number) {
+    async withdraw(rpc: Rpc<this>, amount: number) {
         if (amount > this.balance) {
             throw new Error("Insufficient funds");
         }
@@ -142,7 +142,7 @@ class UserActor extends Actor {
         return this.balance;
     }
 
-    async getBalance() {
+    async getBalance(rpc: Rpc<this>) {
         return this.balance;
     }
 }
@@ -194,11 +194,11 @@ class SerialActor extends Actor {
     constructor() {
         super();
         // Start processing messages in the background
-        this.processMessages();
+        this.#processMessages();
     }
 
     // Process messages one at a time
-    private async processMessages() {
+    private async #processMessages() {
         while (true) {
             const message = await this.messageQueue.dequeue();
             await message();
@@ -206,7 +206,7 @@ class SerialActor extends Actor {
     }
 
     // Wrap RPC handlers to be processed serially
-    async deposit(amount: number) {
+    async deposit(rpc: Rpc<this>, amount: number) {
         return new Promise((resolve, reject) => {
             this.messageQueue.enqueue(async () => {
                 this.balance += amount;
@@ -215,7 +215,7 @@ class SerialActor extends Actor {
         });
     }
 
-    async getBalance() {
+    async getBalance(rpc: Rpc<this>) {
         return new Promise((resolve) => {
             this.messageQueue.enqueue(async () => {
                 resolve(this.balance);
@@ -249,4 +249,4 @@ Using tags instead of an actor ID & supervisors is _insanely_ easy to understand
 
 **Supervisors still exist & non-durable actors**
 
-Rivet can run non-durable actors and use the traditional actor model, if needed. This is a core part of how Open Game Backend works. The matchmaker actor handles the lifecycle of game server actors itself.
+Rivet can run non-durable actors and use the traditional actor model, if needed. This is a core part of how the dedicated game server example works. The matchmaker actor handles the lifecycle of game server actors itself.

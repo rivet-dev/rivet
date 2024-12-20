@@ -1,0 +1,91 @@
+{/* # Local-First Apps
+
+TODO:
+
+- Low-latency edge networking
+- Secure & isolated
+- Cost-effective sync
+- Faster read-write persistence */}
+
+In this sync example, actors provide a very simple way of incrementally syncing data in real time between multiple clients. When a client goes offline and comes back online, all new changes will be pulled.
+
+This example has a single actor: `ContactSync` maintains all of the contacts and sends the updates on change.
+
+<CodeGroup>
+```typescript {{ "title": "client.ts" }}
+// Load contacts from storage
+let localContacts: Record<string, Contact> = JSON.parse(localStorage.getItem("contacts") || "{}");
+async function insertContact(id: string, contact: Contact) {
+  localContact[id] = contact;
+  localStorage.setItem("contacts", JSON.stringify(localContact));
+  localStorage.setItem("lastUpdate", contact.updatedAt);
+  await contactSync.insertContact(contact);
+}
+
+// Connect to sync actor
+const client = new Client(/_ ... _/);
+const contactSync = await client.get<ContactSync>({ name: "contact_sync", userId: "123" });
+
+contactSync.on("contactUpdated", ({ id, contact }) => {
+const localContact = localContacts[id];
+if (localContact.updatedAt < contact.updatedAt) {
+localContact[id] = contact;
+localStorage.setItem("contacts", JSON.stringify(localContact));
+localStorage.setItem("lastUpdate", contact.updatedAt);
+}
+});
+
+// Pull new changes
+let lastUpdate = parseInt(localStorage.getItem("lastUpdate") || "0");
+const newContacts = await contactSync.pullUpdatesAfter(lastUpdate);
+for (const id in newContacts) {
+localContact[id] = newContacts[id];
+}
+localStorage.setItem("contacts", JSON.stringify(localContact));
+
+// Write a new contact
+await insertContact("1234", {
+updatedAt: Date.now(),
+name: "Greg the Egg",
+email: "gregory@waystarroyco.com"
+});
+
+````
+
+```typescript {{ "title": "contact_sync.ts" }}
+interface Contact {
+  updatedAt: number;
+  name: string;
+  email: string;
+}
+
+interface State {
+  contacts: Record<string, Contact>;
+}
+
+class ContactSync extends Actor<State> {
+  initializeState() {
+    return { contacts: {} };
+  }
+
+  async insertContact(id: string, contact: Contact) {
+    // Update contact if (a) it's a new contact or (b) update timestamp is newer
+    if (id in this.state.contacts || this.state.contacts[id].updatedAt < contact.updatedAt) {
+      this.state.contacts[id] = contact;
+      this.broadcast("contactUpdated", { id, contact });
+    }
+  }
+
+  async pullUpdatesAfter(timestamp: number): Promise<Record<string, Contact>> {
+    const updatedContacts: Record<string, Contact> = {};
+    for (const id in this.state.contacts) {
+      if (this.state.contacts[id].updatedAt > timestamp) {
+        updatedContacts[id] = this.state.contacts[id];
+      }
+    }
+    return updatedContacts;
+  }
+}
+````
+
+</CodeGroup>

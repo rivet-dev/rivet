@@ -1,4 +1,4 @@
-import { TestClient } from "@rivet-gg/actors-client/test";
+import { TestClient } from "@rivet-gg/actor-client/test";
 
 const client = new TestClient();
 

@@ -1,96 +1,119 @@
 # Lifecycle
 
-## `Actor` methods
+## Lifecycle Hooks
 
-### `initializeState(): State | Promise<State>`
+### `_onInitialize`
+
+`_onInitialize(): State | Promise<State>`
 
 Called when the actor is first created. This method should return the initial state of the actor.
 
-### `onStart(): void | Promise<void>`
+### `_onStart`
+
+`_onStart(): void | Promise<void>`
 
 Called after the actor has been initialized but before any connections are accepted. If the actor crashes or is upgraded, this method will be called before startup. If you need to upgrade your state, use this method.
 
 Use this to set up any resources or start any background tasks.
 
-### `onConnect(connection: Connection<ConnectionData>, parameters: ConnectionParams): ConnectionData | Promise<ConnectionData>`
+### `_onStateChange`
 
-Called whenever a new client connects to the actor. Clients can pass parameters when connecting for this method.
-
-Connections will not be able to interact with the actor until this method succeeds. Throwing an error will abort the connection. This can be used for authentication, see [here](/docs/authentication).
-
-The returned value will be associated with the connection and can be accessed later under `connection.data`.
-
-### `onDisconnect(connection: Connection<ConnectionData>): void | Promise<void>`
-
-Called when a client disconnects from the actor. Use this to clean up any connection-specific resources.
-
-### `onStateChange(newState: State): void | Promise<void>`
+`_onStateChange(newState: State): void | Promise<void>`
 
 Called whenever the actor's state changes. This is often used to broadcast state updates.
 
-### Destroy
+### `_onBeforeConnect`
 
-Actors with a 0 exit code with shut down gracefully. This can be done with `Deno.exit(0)`.
+`_onBeforeConnect?(opts: OnBeforeConnectOptions<this>): ConnState | Promise<ConnState>`
 
-A non-0 exit code will be considered a failure, see [fault tolerance](/docs/fault-tolerance).
+Called whenever a new client connects to the actor. Clients can pass parameters when connecting, accessible via `opts.parameters`.
 
-TODO: What about draining?
+The returned value becomes the connection's initial state and can be accessed later via `connection.state`.
 
-## Example
+Connections cannot interact with the actor until this method completes successfully. Throwing an error will abort the connection. This can be used for authentication - see [Authentication](/docs/authentication) for details.
+
+### `_onConnect`
+
+`_onConnect?(connection: Connection<this>): void | Promise<void>`
+
+Executed after the client has successfully connected.
+
+Messages will not be processed for this actor until this method succeeds.
+
+Errors thrown from this method will cause the client to disconnect.
+
+### `_onDisconnect`
+
+`_onDisconnect?(connection: Connection<this>): void | Promise<void>`
+
+Called when a client disconnects from the actor. Use this to clean up any connection-specific resources.
+
+## Destroying actors
+
+Actors can be shut down gracefully with `this._shutdown()`. Clients will be gracefully disconnected.
+
+This action is permanent and cannot be reverted.
+
+Actors can also be destroyed externally via the platform API with [actors.destroy](/docs/api/actor/destroy).
+
+## Full Example
 
 ```typescript
 interface State {
   count: number;
 }
 
-interface ConnectionData {
-  userId: string;
-}
-
-interface ConnectionParams {
+interface ConnParams {
   authToken: string;
 }
 
-class CounterActor extends Actor<State, ConnectionData, ConnectionParams> {
+interface ConnState {
+  userId: string;
+}
+
+class CounterActor extends Actor<State, ConnParams, ConnState> {
   async _onInitialize(): Promise<State> {
     // Initialize with a count of 0
     return {
-      count: 0,
+      count: 0
     };
   }
 
   async _onStart(): Promise<void> {
     // Upgrade state if needed
-    console.log("Started");
+    console.log('Started');
   }
 
   async _onStateChange(newState: State): Promise<void> {
     // Broadcast the new count to all connected clients
-    this.broadcast("countUpdated", {
-      count: newState.count,
+    this.broadcast('countUpdated', {
+      count: newState.count
     });
   }
 
-  async _onBeforeConnect(
-    opts: ConnectionParams
-  ): Promise<ConnectionData> {
-    // Validate auth token and determine user permissions
-    if (!await validateAuthToken(params.authToken)) {
-      throw new Error("Invalid auth token");
+  async _onBeforeConnect(opts: OnBeforeConnectOptions<CounterActor>): Promise<ConnState> {
+    // Validate auth token with your API and determine the user
+    const auth = await myValidateAuthToken(opts.parameters.authToken);
+    if (!auth) {
+      throw new Error('Invalid auth token');
     }
 
-    // Return connection data that will be available as conn.data
+    // Return connection state that will be available as connection.state
     return {
-      userId: auth.userId,
+      userId: auth.userId
     };
   }
 
-  async _onDisconnect(connection: Connection<ConnectionData>): Promise<void> {
-    console.log(`User ${connection.data.userId} disconnected`);
+  async _onConnect(connection: Connection<this>): Promise<void> {
+    console.log(`User ${connection.state.userId} connected`);
   }
 
-  // Actor methods
-  async increment() {
+  async _onDisconnect(connection: Connection<this>): Promise<void> {
+    console.log(`User ${connection.state.userId} disconnected`);
+  }
+
+  // Example RPC method
+  async increment(rpc: Rpc<this>) {
     this.state.count++;
   }
 }

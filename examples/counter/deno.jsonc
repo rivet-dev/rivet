@@ -8,8 +8,8 @@
 		"@std/cbor": "jsr:@std/cbor@^0.1.3",
 		"@std/log": "jsr:@std/log@^0.224.11",
 		"hono": "jsr:@hono/hono@^4.6.12",
-		"@rivet-gg/actors-core": "../../sdks/actors/core/src/mod.ts",
-		"@rivet-gg/actors": "../../sdks/actors/runtime/src/mod.ts",
+		"@rivet-gg/actor-core": "../../sdks/actors/core/src/mod.ts",
+		"@rivet-gg/actor": "../../sdks/actors/runtime/src/mod.ts",
 		"on-change": "npm:on-change@^5.0.1",
 		"zod": "npm:zod@^3.24.1"
 	},

@@ -7,18 +7,18 @@ import clsx from 'clsx';
 import routes from '@/generated/routes.json';
 
 import imgLogo from '@/images/rivet-logos/icon-white.svg';
-import { Icon, faDiscord, faGithub, faLinkedin, faTwitter, faYoutube } from '@rivet-gg/icons';
+import { Icon, faDiscord, faGithub, faLinkedin, faTwitter, faBluesky, faYoutube } from '@rivet-gg/icons';
 
 const footer = {
   docs: [
     { name: 'Documentation', href: '/docs' },
-    { name: 'Modules', href: '/modules', target: '_blank' }
   ],
   company: [
     // { name: 'We\'re hiring!', href: 'https://rivet-gg.notion.site/Job-Board-eed66f2eab2b4d7ea3e21ccd63b22efe?pvs=4', newTab: true, highlight: true, badge: '1' },
     { name: 'Support', href: '/support' },
     { name: 'Pricing', href: '/pricing' },
-    { name: 'Status Page', href: 'https://rivet-gg.betteruptime.com/' },
+    { name: 'Sales', href: '/sales' },
+    { name: 'Status Page', href: 'https://rivet.betteruptime.com/' },
     { name: 'OSS Friends', href: '/oss-friends' }
   ],
   legal: [
@@ -36,6 +36,11 @@ const footer = {
       name: 'Twitter',
       href: 'https://twitter.com/rivet_gg',
       icon: faTwitter
+    },
+    {
+      name: 'Bluesky',
+      href: 'https://bsky.app/profile/rivet-gg.bsky.social',
+      icon: faBluesky
     },
     {
       name: 'GitHub',
@@ -111,7 +116,7 @@ function SmallPrint() {
           {/* Logo */}
           <Image className='size-12' src={imgLogo} alt='Rivet' />
           <p className='text-sm leading-6 text-gray-300'>
-            Open-source multiplayer infrastructure. Easy, flexible, and affordable.
+            Run and scale realtime applications
           </p>
 
           {/* Social */}
@@ -176,31 +181,6 @@ function SmallPrint() {
             </ul>
           </div>
         </div>
-      </div>
-
-      {/* Trademarks */}
-      <div className='mt-6 space-y-3 text-xs text-gray-600 md:mt-12'>
-        {/* Copied from https://unity.com/legal/branding-trademarks#:~:text=Use%20current%2C%20official%2C%20unmodified%20Unity%20Logos.&text=The%20Unity%20Logos%20may%20not,and%20consistent%20use%20is%20required. */}
-        {`This website is not sponsored by or affiliated with Unity Technologies or its affiliates. Unity Trademark(s) are trademark(s) or registered trademark(s) of Unity Technologies or its affiliates in the U.S. and elsewhere.`}
-        &nbsp;|&nbsp;
-        {/* Generated with GPT-4 */}
-        {`This website is not sponsored by, affiliated with, or endorsed by Epic Games, Inc. or its affiliates. 'Unreal Engine' is a trademark or registered trademark of Epic Games, Inc. in the U.S.  and elsewhere.`}
-        &nbsp;|&nbsp;
-        {/* Generated with GPT-4 */}
-        {/* Another shorter option is also available at https://www.w3.org/html/logo/faq.html */}
-        {`The HTML5 Logo by the World Wide Web Consortium (W3C), used under a Creative Commons Attribution 3.0 License. `}
-        <Link href='https://www.w3.org/html/logo/index.html' className='underline'>
-          Source
-        </Link>
-        &nbsp;|&nbsp;
-        {/* Generated with GPT-4 */}
-        {`The Godot Engine Logo by the Andrea Calabró, used under a Creative Commons Attribution 4.0 International License. `}
-        <Link href='https://godotengine.org/press/' className='underline'>
-          Source
-        </Link>
-        &nbsp;|&nbsp;
-        {/* Copied from https://www.docker.com/legal/trademark-guidelines/ */}
-        {`Docker and the Docker logo are trademarks or registered trademarks of Docker, Inc. in the United States and/or other countries. Docker, Inc. and other parties may also have trademark rights in other terms used herein.`}
       </div>
 
       {/* Footer */}

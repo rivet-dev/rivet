@@ -1,0 +1,112 @@
+In this collaborative document example, actors make managing stateful, realtime documents simple. Actors provide the added benefit of providing a realtime "drive" for a list of all of the user's documents.
+
+This example has three actors:
+
+- `User` maintains the information of each user
+- `Drive` maintains a list of all documents belonging to a user
+- `Document` maintains the contents of a document & location of users' cursors
+
+<CodeGroup>
+```typescript {{ "title": "client.ts" }}
+const client = new Client(/* ... */);
+
+// Get user
+const user = await client.get<User>({ name: "user", userId: "1234" });
+const username = user.getUsername();
+
+// Create document
+const drive = await client.get<Drive>({ name: "drive", userId: "1234" });
+const docId = drive.createDocument("A very important message");
+
+// Update document
+const doc = await client.get<Document>({ name: "document", docId: "sample-doc" });
+
+doc.on("change", ({ username, content }) => {
+console.log(`${username} updated document:`, content);
+});
+
+doc.on("cursor", ({ username, location }) => {
+console.log(`${username} moved to:`, location);
+});
+
+await doc.insertText(username, 0, "Hello!");
+await doc.moveCursor(username, 5);
+await doc.insertText(username, 5, ", world");
+assert(await doc.getContent() == "Hello, world!");
+
+````
+
+```typescript {{ "title": "user.ts" }}
+interface State {
+    username: string;
+}
+
+class User extends Actor<State> {
+    initializeState() {
+      return { username: "Guest" };
+    }
+
+    getUsername(): string {
+        return this.state.username;
+    }
+}
+````
+
+```typescript {{ "title": "drive.ts" }}
+interface State {
+  documents: { id: string; title: string }[];
+}
+
+class Drive extends Actor<State> {
+  initializeState() {
+    return { documents: [] };
+  }
+
+  listDocuments() {
+    return this.state.documents;
+  }
+
+  createDocument(title: string): string {
+    const id = Math.random().toString(36).slice(2);
+    this.state.documents.push({ id, title });
+    return id;
+  }
+}
+```
+
+```typescript {{ "title": "document.ts" }}
+interface DocumentState {
+  cursors: Record<string, number>;
+  content: string;
+}
+
+class Document extends Actor<DocumentState> {
+  initializeState() {
+    return { cursors: {}, content: '' };
+  }
+
+  insertText(username: string, location: number, text: string) {
+    this.state.content = this.state.content.slice(0, location) + text + this.state.content.slice(location);
+    this.state.cursors[username] = location + text.length;
+    this.broadcast('change', { username, content: newContent });
+  }
+
+  moveCursor(username: string, location: number) {
+    this.cursors[username] = location;
+    this.broadcast('cursor', { username, location });
+  }
+
+  getContent(): string {
+    return this.state.content;
+  }
+}
+```
+
+</CodeGroup>
+
+Future improvements for this code would include:
+
+- Add CRDTs for client-first document editing
+- Authentication for users
+- Use `onConnect` and `onDisconnect` for user presence in documents
+- Local-first CRDTs for text editing

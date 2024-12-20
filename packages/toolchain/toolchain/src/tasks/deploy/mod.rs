@@ -120,7 +120,7 @@ impl task::Task for Task {
 			task.log("");
 			task.log("Next steps:");
 			task.log("");
-			task.log(r#"  import ActorClient from "@rivet-gg/actors-client";"#);
+			task.log(r#"  import ActorClient from "@rivet-gg/actor-client";"#);
 			task.log(format!(
 				r#"  const actorClient = new ActorClient("{}");"#,
 				manager_res.endpoint

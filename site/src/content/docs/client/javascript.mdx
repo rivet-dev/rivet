@@ -12,11 +12,11 @@ Install the Rivet actor package with:
 
 <CodeGroup>
 ```sh {{ "title": "npm" }}
-npx jsr add @rivet-gg/actors-client
+npx jsr add @rivet-gg/actor-client
 ```
 
 ```sh {{ "title": "Yarn" }}
-yarn dlx jsr add @rivet-gg/actors-client
+yarn dlx jsr add @rivet-gg/actor-client
 ```
 
 ```sh {{ "title": "pnpm" }}
@@ -24,7 +24,7 @@ pnpm dlx jsr add @rivet-gg/esbuild-deno-loader
 ```
 
 ```sh {{ "title": "Deno" }}
-deno add jsr:@rivet-gg/actors-client
+deno add jsr:@rivet-gg/actor-client
 ```
 
 ```sh {{ "title": "Bun" }}
@@ -33,7 +33,7 @@ bunx jsr add @rivet-gg/esbuild-deno-loader
 </CodeGroup>
 
 <Info>
-    These commands don't use the usual `npm install`/`yarn add`/etc since `@rivet-gg/actors-client` package is hosted on [jsr.io](https://jsr.io/docs/why), a portable alternative to NPM.
+    These commands don't use the usual `npm install`/`yarn add`/etc since `@rivet-gg/actor-client` package is hosted on [jsr.io](https://jsr.io/docs/why), a portable alternative to NPM.
 </Info>
 
 ## Connect to actor
@@ -47,10 +47,10 @@ rivet get-address
 Use this code to create & connect to the actor. Replace `/* CONNECTION ADDRESS */` with the value from the previous step.
 
 ```typescript
-import Client from "@rivet-gg/actors-client";
+import Client from "@rivet-gg/actor-client";
 const client = new Client(/* CONNECTION ADDRESS */);
 
-const counter = await client.withTags({ name: "counter" });  // Get or create a `counter` actor
+const counter = await client.get({ name: "counter" });  // Get or create a `counter` actor
 const newCount = await counter.increment(5);  // Call the method `increment` on the `counter` actor
 console.log("New count", newCount);
 ```

@@ -47,7 +47,7 @@ export default function App({ Component, pageProps }) {
           <meta name='twitter:card' content='summary_large_image' />
           <meta name='twitter:site' content='@rivet_gg' />
           <meta name='twitter:image' content={`${siteUrl}/promo/og.png`} />
-          <meta name='twitter:image:alt' content='Rivet - Open-Source Multiplayer Tooling' />
+          <meta name='twitter:image:alt' content='Rivet - Run and scale realtime applications' />
           {/* Add dynamic metadata. Blog `ArticleLayout` provides its own title. */}
           {!pathname.startsWith('/blog/') && (
             <>
@@ -57,7 +57,7 @@ export default function App({ Component, pageProps }) {
               <meta property='og:title' content={title} />
               {description && <meta property='og:description' content={description} />}
               <meta property='og:image' content={`${siteUrl}/promo/og.png`} />
-              <meta property='og:image:alt' content='Rivet - Open-Source Multiplayer Tooling' />
+              <meta property='og:image:alt' content='Rivet - Run and scale realtime applications' />
 
               <meta name='twitter:title' content={title} />
               {description && <meta property='twitter:description' content={description} />}

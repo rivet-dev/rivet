@@ -1,5 +1,5 @@
-import { Actor } from "@rivet-gg/actors";
-import type { Rpc } from "@rivet-gg/actors";
+import { Actor } from "@rivet-gg/actor";
+import type { Rpc } from "@rivet-gg/actor";
 
 // Durable state for the counter (https://rivet.gg/docs/state)
 interface State {

@@ -1,10 +1,10 @@
 import { Lock } from "@core/asyncutil/lock";
-import type { ActorContext } from "@rivet-gg/actors-core";
+import type { ActorContext } from "@rivet-gg/actor-core";
 import { assertExists, assertInstanceOf } from "@std/assert";
 import { deadline } from "@std/async/deadline";
 import { throttle } from "@std/async/unstable-throttle";
 import type { Logger } from "@std/log/get-logger";
-import { Hono, type Context as HonoContext } from "hono";
+import { type Context as HonoContext, Hono } from "hono";
 import { upgradeWebSocket } from "hono/deno";
 import type { WSEvents } from "hono/ws";
 import onChange from "on-change";
@@ -396,8 +396,9 @@ export abstract class Actor<
 		}
 
 		const protocolFormatRaw = c.req.query("format");
-		const { data: protocolFormat, success } =
-			ProtocolFormatSchema.safeParse(protocolFormatRaw);
+		const { data: protocolFormat, success } = ProtocolFormatSchema.safeParse(
+			protocolFormatRaw,
+		);
 		if (!success) {
 			logger().warn("invalid protocol format", {
 				protocolFormat: protocolFormatRaw,
@@ -418,8 +419,9 @@ export abstract class Actor<
 		// Parse and validate params
 		let params: ConnParams;
 		try {
-			params =
-				typeof paramsStr === "string" ? JSON.parse(paramsStr) : undefined;
+			params = typeof paramsStr === "string"
+				? JSON.parse(paramsStr)
+				: undefined;
 		} catch (error) {
 			logger().warn("malformed connection parameters", { error });
 			throw new errors.MalformedConnectionParameters(error);
@@ -523,14 +525,16 @@ export abstract class Actor<
 						const output = await this.#executeRpc(ctx, name, args);
 
 						conn._sendWebSocketMessage(
-							conn._serialize({
-								body: {
-									ro: {
-										i: id,
-										o: output,
+							conn._serialize(
+								{
+									body: {
+										ro: {
+											i: id,
+											o: output,
+										},
 									},
-								},
-							} satisfies wsToClient.ToClient),
+								} satisfies wsToClient.ToClient,
+							),
 						);
 					} else if ("sr" in message.body) {
 						// Subscription request
@@ -572,28 +576,32 @@ export abstract class Actor<
 					// Build response
 					if (rpcRequestId !== undefined) {
 						conn._sendWebSocketMessage(
-							conn._serialize({
-								body: {
-									re: {
-										i: rpcRequestId,
-										c: code,
-										m: message,
-										md: metadata,
+							conn._serialize(
+								{
+									body: {
+										re: {
+											i: rpcRequestId,
+											c: code,
+											m: message,
+											md: metadata,
+										},
 									},
-								},
-							} satisfies wsToClient.ToClient),
+								} satisfies wsToClient.ToClient,
+							),
 						);
 					} else {
 						conn._sendWebSocketMessage(
-							conn._serialize({
-								body: {
-									er: {
-										c: code,
-										m: message,
-										md: metadata,
+							conn._serialize(
+								{
+									body: {
+										er: {
+											c: code,
+											m: message,
+											md: metadata,
+										},
 									},
-								},
-							} satisfies wsToClient.ToClient),
+								} satisfies wsToClient.ToClient,
+							),
 						);
 					}
 				}
@@ -727,8 +735,9 @@ export abstract class Actor<
 		for (const connection of subscriptions) {
 			// Lazily serialize the appropriate format
 			if (!(connection._protocolFormat in serialized)) {
-				serialized[connection._protocolFormat] =
-					connection._serialize(toClient);
+				serialized[connection._protocolFormat] = connection._serialize(
+					toClient,
+				);
 			}
 
 			connection._sendWebSocketMessage(serialized[connection._protocolFormat]);

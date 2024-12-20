@@ -10,7 +10,7 @@ import Link from 'next/link';
 export const HeaderPopupProductMenu = () => {
   return (
     <div className='grid h-full grid-cols-3 grid-rows-3 gap-4 overflow-hidden pb-2'>
-      <Link href='/docs/actors' target='_blank' className='col-span-2 row-span-3 '>
+      <Link href='/docs/actors' className='col-span-2 row-span-3 '>
         <Item
           onMouseEnter={e => e.currentTarget.querySelector('video')?.play()}
           onMouseLeave={e => e.currentTarget.querySelector('video')?.pause()}>
@@ -20,11 +20,8 @@ export const HeaderPopupProductMenu = () => {
               Actors
             </p>
             <p className='opacity-80 transition-opacity group-hover:opacity-100'>
-              Lightweight, isolated containers for code execution.
+              The easiest way to build & scale realtime applications.
             </p>
-            <Button variant='secondary' size='sm' asChild className='absolute bottom-0 right-0 '>
-              <div>Read more</div>
-            </Button>
           </div>
           <video className='absolute inset-0 h-full w-full object-cover opacity-60' muted loop>
             <source
@@ -57,7 +54,7 @@ export const HeaderPopupProductMenu = () => {
         className='col-start-3 h-full justify-start'
         target='_blank'
         startIcon={<Icon icon={faBriefcase} />}>
-        <Link href='/sales' target='_blank'>
+        <Link href='/sales'>
           Rivet Enterprise
         </Link>
       </Button>

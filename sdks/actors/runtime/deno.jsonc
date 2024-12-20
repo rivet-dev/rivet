@@ -6,7 +6,7 @@
 		"@std/cbor": "jsr:@std/cbor@^0.1.3",
 		"@std/log": "jsr:@std/log@^0.224.11",
 		"hono": "jsr:@hono/hono@^4.6.12",
-		"@rivet-gg/actors-core": "../core/src/mod.ts",
+		"@rivet-gg/actor-core": "../core/src/mod.ts",
 		"on-change": "npm:on-change@^5.0.1"
 	},
 	"exports": "./src/mod.ts",

@@ -22,18 +22,23 @@ export const sitemap = [
         title: 'Getting Started',
         pages: [
           {
-            title: 'Intro to Rivet',
-            href: '/docs/introduction',
-            icon: 'book'
-          },
-          {
             title: 'Initial Setup',
             href: '/docs/setup',
             icon: 'play'
           },
           {
-            // title: 'Languages & Game Engines',
-            title: 'Languages',
+            title: 'What Are Actors?',
+            href: '/docs/actors',
+            icon: 'block-question'
+          },
+          {
+            title: 'Actor SDK',
+            href: 'https://jsr.io/@rivet-gg/actor/doc',
+            icon: 'toolbox',
+            external: true
+          },
+          {
+            title: 'Client SDKs',
             collapsible: true,
             pages: [
               {
@@ -48,47 +53,47 @@ export const sitemap = [
           }
         ]
       },
-      {
-        title: 'Use Cases',
-        pages: [
-          {
-            title: 'Multiplayer Tools',
-            href: '/use-cases/multiplayer',
-            icon: 'rotate'
-          },
-          {
-            title: 'Local-First Apps',
-            href: '/use-cases/local-first',
-            icon: 'mobile'
-          },
-          {
-            title: 'AI Agents',
-            href: '/use-cases/ai-agents',
-            icon: 'robot'
-          },
-          {
-            title: 'Run User Code',
-            href: '/use-cases/user-code',
-            icon: 'alien-8bit'
-          },
-          {
-            title: 'Dedicated Game Servers',
-            href: '/use-cases/game-servers',
-            icon: 'gamepad'
-          },
-          // { title: 'Batch Jobs', href: '/docs', icon: 'forklift' },
-          // { title: 'Live Events', href: '/docs', icon: 'calendar' },
-          { title: 'More', href: '/use-cases', icon: 'ellipsis' }
-        ]
-      },
+      //{
+      //  title: 'Use Cases',
+      //  pages: [
+      //    {
+      //      title: 'Collaborative Application',
+      //      href: '/use-cases/multiplayer',
+      //      icon: 'rotate'
+      //    },
+      //    {
+      //      title: 'Local-First Sync',
+      //      href: '/use-cases/local-first',
+      //      icon: 'mobile'
+      //    },
+      //    {
+      //      title: 'AI Agents',
+      //      href: '/use-cases/ai-agents',
+      //      icon: 'robot'
+      //    },
+      //    {
+      //      title: 'Discord Activities',
+      //      href: '/use-cases/user-code',
+      //      icon: 'alien-8bit'
+      //    },
+      //    {
+      //      title: 'Dedicated Game Servers',
+      //      href: '/use-cases/game-servers',
+      //      icon: 'gamepad'
+      //    },
+      //    {
+      //      title: 'Run User Code',
+      //      href: '/use-cases/user-code',
+      //      icon: 'alien-8bit'
+      //    },
+      //    // { title: 'Batch Jobs', href: '/docs', icon: 'forklift' },
+      //    // { title: 'Live Events', href: '/docs', icon: 'calendar' },
+      //    { title: 'More', href: '/use-cases', icon: 'ellipsis' }
+      //  ]
+      //},
       {
         title: 'Build with Rivet',
         pages: [
-          {
-            title: 'What Are Actors?',
-            href: '/docs/actors',
-            icon: 'block-question'
-          },
           {
             title: 'Remote Procedure Calls',
             href: '/docs/rpc',
@@ -115,7 +120,7 @@ export const sitemap = [
             icon: 'globe'
           },
           {
-            title: 'Concepts',
+            title: 'More',
             collapsible: true,
             pages: [
               {
@@ -203,28 +208,28 @@ export const sitemap = [
               }
             ]
           },
-          {
-            title: 'Comparison',
-            collapsible: true,
-            pages: [
-              {
-                title: 'Kubernetes Jobs',
-                href: '/compare/kubernetes'
-              },
-              {
-                title: 'Cloudflare Durable Objects',
-                href: '/compare/cloudflare'
-              },
-              { title: 'Firebase', href: '/compare/firebase' },
-              { title: 'Socket.io', href: '/compare/socket-io' },
-              { title: 'Redis', href: '/compare/redis' },
-              {
-                title: 'Erlang/OTP & Elixir',
-                href: '/docs/erlang'
-              }
-              // { title: 'Supabase Realtime', href: '/docs' },
-            ]
-          },
+          // {
+          //   title: 'Comparison',
+          //   collapsible: true,
+          //   pages: [
+          //     {
+          //       title: 'Kubernetes Jobs',
+          //       href: '/compare/kubernetes'
+          //     },
+          //     {
+          //       title: 'Cloudflare Durable Objects',
+          //       href: '/compare/cloudflare'
+          //     },
+          //     { title: 'Firebase', href: '/compare/firebase' },
+          //     { title: 'Socket.io', href: '/compare/socket-io' },
+          //     { title: 'Redis', href: '/compare/redis' },
+          //     {
+          //       title: 'Erlang/OTP & Elixir',
+          //       href: '/docs/erlang'
+          //     }
+          //     // { title: 'Supabase Realtime', href: '/docs' },
+          //   ]
+          // },
           {
             title: 'More',
             collapsible: true,
@@ -269,21 +274,16 @@ export const sitemap = [
       }
     ]
   },
-  {
-    title: 'Examples',
-    href: '/examples',
-    sidebar: [
-      // TODO: Group by type in sidebar
-    ]
-  },
-  {
-    title: 'Actors SDK',
-    href: '/docs/examples',
-    sidebar: []
-  },
+  // {
+  //   title: 'Examples',
+  //   href: '/examples',
+  //   sidebar: [
+  //     // TODO: Group by type in sidebar
+  //   ]
+  // },
   {
     title: 'Platform API',
-    href: '/docs/examples',
+    href: '/docs/api',
     sidebar: apiPages.pages
   }
 ] satisfies Sitemap;

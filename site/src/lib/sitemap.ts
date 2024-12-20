@@ -2,8 +2,8 @@ import { IconProp } from "@fortawesome/fontawesome-svg-core";
 import { Route } from "next";
 
 type Href = string | Route | URL;
-type Page = { title?: string; href: Href; icon?: IconProp };
-type PageWithTitle = { title: string; href: Href; icon?: IconProp };
+type Page = { title?: string; href: Href; external?: boolean; icon?: IconProp };
+type PageWithTitle = { title: string; href: Href; external?: boolean; icon?: IconProp };
 type PageWithPages = {
   title: string;
   pages: AnyPage[];
@@ -25,6 +25,7 @@ export type SidebarItem = SidebarTopLevelPage | SidebarSection;
 type SiteTab = {
   title: string;
   href: Href;
+  external?: boolean;
   sidebar: SidebarItem[];
 };
 

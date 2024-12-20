@@ -1,0 +1,165 @@
+In this e-commerce example, actors are ideal for providing real-time updates and managing shopping carts and stock levels. This approach ensures users receive instant feedback on product availability and order status, thereby enhancing the shopping experience and maintaining accurate inventory records.
+
+This example has three actors:
+
+- `ShoppingCart` maintains items in a user's cart and handles checkout
+- `Inventory` tracks product stock levels and reserves items
+- `Order` manages the lifecycle of a placed order
+
+<CodeGroup>
+```typescript {{ "title": "client.ts" }}
+const client = new Client(/* ... */);
+
+// Get cart for user
+const cart = await client.get<ShoppingCart>({ name: "cart", userId: "1234" });
+
+// Add items to cart
+await cart.addItem("product-123", 2);
+await cart.addItem("product-456", 1);
+
+// Get cart contents
+const items = await cart.getItems();
+console.log("Cart:", items);
+
+// Checkout
+const orderId = await cart.checkout();
+
+// Track order
+const order = await client.get<Order>({ name: "order", orderId });
+order.on("status", ({ status, timestamp }) => {
+console.log(`Order ${orderId} is now ${status} at ${timestamp}`);
+});
+
+````
+
+```typescript {{ "title": "shopping_cart.ts" }}
+interface State {
+    items: { productId: string; quantity: number; }[];
+}
+
+class ShoppingCart extends Actor<State> {
+    initializeState() {
+        return { items: [] };
+    }
+
+    async addItem(productId: string, quantity: number) {
+        // Check inventory first
+        const inventory = await this.client.get<Inventory>({ name: "inventory" });
+        const available = await inventory.checkStock(productId);
+
+        if (available < quantity) {
+            throw new Error("Not enough stock");
+        }
+
+        // Update cart
+        const existingItem = this.state.items.find(i => i.productId === productId);
+        if (existingItem) {
+            existingItem.quantity += quantity;
+        } else {
+            this.state.items.push({ productId, quantity });
+        }
+    }
+
+    async checkout(): Promise<string> {
+        // Reserve inventory
+        const inventory = await this.client.get<Inventory>({ name: "inventory" });
+        for (const item of this.state.items) {
+            await inventory.reserveStock(item.productId, item.quantity);
+        }
+
+        // Create order
+        const orderId = Math.random().toString(36).slice(2);
+        const order = await this.client.get<Order>({
+            name: "order",
+            orderId
+        });
+        await order.create(this.state.items);
+
+        // Clear cart
+        this.state.items = [];
+
+        return orderId;
+    }
+
+    getItems() {
+        return this.state.items;
+    }
+}
+````
+
+```typescript {{ "title": "inventory.ts" }}
+interface State {
+  stock: Record<string, number>;
+  reserved: Record<string, number>;
+}
+
+class Inventory extends Actor<State> {
+  initializeState() {
+    return { stock: {}, reserved: {} };
+  }
+
+  checkStock(productId: string): number {
+    const available = this.state.stock[productId] || 0;
+    const reserved = this.state.reserved[productId] || 0;
+    return available - reserved;
+  }
+
+  async reserveStock(productId: string, quantity: number) {
+    if (this.checkStock(productId) < quantity) {
+      throw new Error('Not enough stock');
+    }
+
+    this.state.reserved[productId] = (this.state.reserved[productId] || 0) + quantity;
+  }
+
+  async fulfillReservation(productId: string, quantity: number) {
+    this.state.stock[productId] -= quantity;
+    this.state.reserved[productId] -= quantity;
+  }
+}
+```
+
+```typescript {{ "title": "order.ts" }}
+interface OrderState {
+  items: { productId: string; quantity: number }[];
+  status: 'pending' | 'processing' | 'shipped' | 'delivered';
+  timestamps: Record<string, Date>;
+}
+
+class Order extends Actor<OrderState> {
+  initializeState() {
+    return { items: [], status: 'pending', timestamps: {} };
+  }
+
+  async create(items: { productId: string; quantity: number }[]) {
+    this.state.items = items;
+    this.state.status = 'pending';
+    this.state.timestamps = {
+      created: new Date()
+    };
+    this.broadcast('status', {
+      status: this.state.status,
+      timestamp: this.state.timestamps.created
+    });
+  }
+
+  async updateStatus(status: OrderState['status']) {
+    this.state.status = status;
+    this.state.timestamps[status] = new Date();
+    this.broadcast('status', {
+      status,
+      timestamp: this.state.timestamps[status]
+    });
+
+    // When shipped, update inventory
+    if (status === 'shipped') {
+      const inventory = await this.client.get<Inventory>({ name: 'inventory' });
+      for (const item of this.state.items) {
+        await inventory.fulfillReservation(item.productId, item.quantity);
+      }
+    }
+  }
+}
+```
+
+</CodeGroup>
