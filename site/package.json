@@ -94,7 +94,7 @@
   },
   "packageManager": "yarn@4.2.2",
   "resolutions": {
-    "@rivet-gg/icons": "https://github.com/rivet-gg/hub#workspace=@rivet-gg/icons&head=09-18-icons_pack",
+    "@rivet-gg/icons": "https://github.com/rivet-gg/hub#workspace=@rivet-gg/icons&head=12-04-refactor_components_adjustments_for_landing_page",
     "@rivet-gg/components": "https://github.com/rivet-gg/hub#workspace=@rivet-gg/components&head=12-04-refactor_components_adjustments_for_landing_page",
     "framer-motion": "npm:unframer@^2.6.5",
     "react": "^19.0.0-rc-69d4b800-20241021",

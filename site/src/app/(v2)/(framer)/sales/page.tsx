@@ -1,10 +1,10 @@
 import { FramerSalesPage } from '@/components/framer/SalesPage';
-import { Header } from '@/components/v2/Header';
+import { FancyHeader } from '@/components/v2/FancyHeader';
 
 export default function SalesPage() {
   return (
     <>
-      <Header />
+      <FancyHeader />
       <FramerSalesPage />
     </>
   );

@@ -13,15 +13,7 @@ export * from '@/components/callouts';
 export { ArticleHeader } from '@/components/ArticleHeader';
 export { ArticleSocials } from '@/components/ArticleSocials';
 import { CodeBlock } from '@/components/CodeBlock';
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-  CtaCard,
-  Badge,
-  WithTooltip,
-  Slot
-} from '@rivet-gg/components';
+import { Alert, AlertDescription, AlertTitle, CtaCard, Badge, WithTooltip, Slot } from '@rivet-gg/components';
 
 export * from '@/components/Tabs';
 export { Steps, Step } from '@/components/Steps';
@@ -319,7 +311,7 @@ export const Card = ({ href, ...props }) => {
 };
 
 export const CardGroup = ({ children }) => {
-  return <div className='not-prose grid grid-cols-2 gap-4'>{children}</div>;
+  return <div className='not-prose grid gap-4 md:grid-cols-2'>{children}</div>;
 };
 
 export const SchemaPreview = ({ schema }) => {
@@ -334,7 +326,7 @@ export const Warning = ({ title = 'Notice', children }) => {
   return (
     <Alert variant='warning' className='my-4'>
       <AlertTitle className='flex items-center'>
-        <Icon icon={faExclamationTriangle} className='text-warning mr-2' />
+        <Icon icon={faExclamationTriangle} className='mr-2 text-warning' />
         {title}
       </AlertTitle>
       <AlertDescription className='prose-invert prose'>{children}</AlertDescription>
@@ -346,7 +338,7 @@ export const Tip = ({ title = 'Tip', children }) => {
   return (
     <Alert className='my-4'>
       <AlertTitle className='flex items-center'>
-        <Icon icon={faLightbulbOn} className='text-primary mr-2' />
+        <Icon icon={faLightbulbOn} className='mr-2 text-primary' />
         {title}
       </AlertTitle>
       <AlertDescription className='prose-invert prose'>{children}</AlertDescription>
@@ -387,4 +379,3 @@ export const Tags = ({ tags }) => {
     </div>
   );
 };
-

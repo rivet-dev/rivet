@@ -1,10 +1,10 @@
 import { FramerPricingPage } from '@/components/framer/PricingPage';
-import { Header } from '@/components/v2/Header';
+import { FancyHeader } from '@/components/v2/FancyHeader';
 
 export default function PricingPage() {
   return (
     <>
-      <Header active='pricing' />
+      <FancyHeader active='pricing' />
       <FramerPricingPage />
     </>
   );

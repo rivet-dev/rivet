@@ -92,7 +92,7 @@ function NavLink({ id, isActive, children }) {
         href={`#${id}`}
         aria-current={isActive ? 'page' : undefined}
         className={cn(
-          'text-muted-foreground aria-current-page:text-foreground group flex w-full items-center rounded-md border border-transparent px-2 py-1 text-sm hover:underline'
+          'group flex w-full items-center rounded-md border border-transparent px-2 py-1 text-sm text-muted-foreground hover:underline aria-current-page:text-foreground'
         )}>
         <span className='truncate'>{children}</span>
       </Link>
@@ -177,7 +177,7 @@ export function DocsTableOfContents({ tableOfContents: providedToc, className }:
       ref={ref}
       className={cn(
         className,
-        'lg:top-header pt-4 lg:pt-6',
+        'lg:top-header pt-10 md:pt-36 lg:pt-6',
         'w-full lg:pointer-events-auto lg:sticky lg:block lg:max-w-aside lg:self-start lg:overflow-y-auto'
       )}>
       <div className='relative'>

@@ -1,5 +1,5 @@
 import { FramerIndexPage } from '@/components/framer/IndexPage';
-import { Header } from '@/components/v2/Header';
+import { FancyHeader } from '@/components/v2/FancyHeader';
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 export default function IndexPage() {
   return (
     <>
-      <Header />
+      <FancyHeader />
       <FramerIndexPage />
     </>
   );

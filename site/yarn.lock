@@ -2267,7 +2267,7 @@ __metadata:
 
 "@rivet-gg/components@https://github.com/rivet-gg/hub#workspace=@rivet-gg/components&head=12-04-refactor_components_adjustments_for_landing_page":
   version: 1.0.0
-  resolution: "@rivet-gg/components@https://github.com/rivet-gg/hub.git#workspace=%40rivet-gg%2Fcomponents&commit=406050924aca9e44c4cfc92011d72df1f81c2ec7"
+  resolution: "@rivet-gg/components@https://github.com/rivet-gg/hub.git#workspace=%40rivet-gg%2Fcomponents&commit=5f95d76ea71c63ab6aa521909e4c42ebe45db0cd"
   dependencies:
     "@codemirror/lang-javascript": "npm:^6.2.2"
     "@codemirror/lang-json": "npm:^6.0.1"
@@ -2320,13 +2320,13 @@ __metadata:
     tailwindcss-animate: "npm:^1.0.7"
     usehooks-ts: "npm:^3.1.0"
     zod: "npm:^3.23.8"
-  checksum: 10/6e3d953d3859634846001b2d148c02250623d0c27c059f0ae34a6461153796b515a887652aa3eb001348f48a2a87bc0a1989f38dbb589b21af259ec5edeb9115
+  checksum: 10/853bf3bb0ca92a1532c791d8c5792ea82749a67a3a8741923b21ea8f1b7eed4b356dbf7cc5b2b46b67b23b376c5483f995c9c895f34fc99175e504b5abfeddcc
   languageName: node
   linkType: hard
 
-"@rivet-gg/icons@https://github.com/rivet-gg/hub#workspace=@rivet-gg/icons&head=09-18-icons_pack":
+"@rivet-gg/icons@https://github.com/rivet-gg/hub#workspace=@rivet-gg/icons&head=12-04-refactor_components_adjustments_for_landing_page":
   version: 1.0.0
-  resolution: "@rivet-gg/icons@https://github.com/rivet-gg/hub.git#workspace=%40rivet-gg%2Ficons&commit=7894f3e3dc562d5241364bbfe0112ccdde6d25b0"
+  resolution: "@rivet-gg/icons@https://github.com/rivet-gg/hub.git#workspace=%40rivet-gg%2Ficons&commit=5f95d76ea71c63ab6aa521909e4c42ebe45db0cd"
   dependencies:
     dedent: "npm:^1.5.3"
     local-pkg: "npm:^0.5.0"
@@ -2338,7 +2338,7 @@ __metadata:
     "@fortawesome/react-fontawesome": ^0.2.2
     react: ^18
     react-dom: ^18
-  checksum: 10/bf2c85bc9c613d4cc8b8306cfb63413a873870967210893d52933da62c88cfd8fddb71d005c81aecde821e3fb4a6099af39df753a6dead18d3c88c27e804d103
+  checksum: 10/af92698037b65b47d2806ff8e276fc54ddbc8213733a13d743d61790eb1aea6f978747a0b023670b0ffa13724254106f297cfa8ebcce9e30ad75f6fd168b8a1a
   languageName: node
   linkType: hard
 

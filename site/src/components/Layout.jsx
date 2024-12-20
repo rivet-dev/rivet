@@ -20,7 +20,6 @@ export function Layout({
   sections = [],
   pathname
 }) {
-  console.log(pathname);
   return (
     <div>
       <Header active={pathname === '/pricing' ? 'pricing' : ''} />
@@ -48,7 +47,7 @@ export function Layout({
             className={clsx(
               {
                 'lg:px-8': navigation.sidebar,
-                'lg:max-w-3xl mt-9': !fullWidth
+                'mt-9 lg:max-w-3xl': !fullWidth
               },
               'mx-auto w-full flex-1'
             )}>

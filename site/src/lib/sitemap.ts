@@ -1,5 +1,5 @@
-import { IconProp } from '@fortawesome/fontawesome-svg-core';
-import { Route } from 'next';
+import { IconProp } from "@fortawesome/fontawesome-svg-core";
+import { Route } from "next";
 
 type Href = string | Route | URL;
 type Page = { title?: string; href: Href; icon?: IconProp };
@@ -31,8 +31,8 @@ type SiteTab = {
 export type Sitemap = SiteTab[];
 
 interface FoundTab {
-  tab: SiteTab,
-  page: FoundPage,
+  tab: SiteTab;
+  page: FoundPage;
 }
 
 /** Recursively check if a tab contains a given href. */

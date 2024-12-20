@@ -179,7 +179,7 @@ function SmallPrint() {
       </div>
 
       {/* Trademarks */}
-      <div className='mt-6 space-y-3 text-xs italic text-white/60 md:mt-12'>
+      <div className='mt-6 space-y-3 text-xs text-gray-600 md:mt-12'>
         {/* Copied from https://unity.com/legal/branding-trademarks#:~:text=Use%20current%2C%20official%2C%20unmodified%20Unity%20Logos.&text=The%20Unity%20Logos%20may%20not,and%20consistent%20use%20is%20required. */}
         {`This website is not sponsored by or affiliated with Unity Technologies or its affiliates. Unity Trademark(s) are trademark(s) or registered trademark(s) of Unity Technologies or its affiliates in the U.S. and elsewhere.`}
         &nbsp;|&nbsp;

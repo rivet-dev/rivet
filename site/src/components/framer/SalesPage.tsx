@@ -22,8 +22,6 @@ export const FramerSalesPage = () => {
             .map((value, index) => [`$survey_response${index > 0 ? `_${index}` : ''}`, value.toString()])
         );
 
-        console.log(data);
-
         posthog.capture('survey sent', {
           $survey_id: '0193928a-4799-0000-8fc4-455382e21359',
           ...data
