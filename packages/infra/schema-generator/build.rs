@@ -8,7 +8,7 @@ use schemars::{
 
 fn main() -> Result<()> {
 	let cwd = std::env::current_dir()?;
-	let docs_output_path = cwd.join("../../../docs/src/content/docs/");
+	let docs_output_path = cwd.join("../../../site/src/content/docs/");
 
 	if !std::fs::metadata(&docs_output_path).is_ok() {
 		eprintln!(
