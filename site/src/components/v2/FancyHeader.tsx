@@ -8,7 +8,7 @@ import { ReactNode, useEffect, useRef, useState } from 'react';
 import { DocsMobileNavigation } from '@/components/DocsMobileNavigation';
 import { faDiscord, faGithub, Icon } from '@rivet-gg/icons';
 import { AnimatePresence, motion } from 'unframer';
-import { HeaderPopupMenu, HeaderPopupProductMenu } from '../HeaderPopupProductMenu';
+import { HeaderPopupProductMenu } from '../HeaderPopupProductMenu';
 import { HeaderPopupSolutionsMenu } from '../HeaderPopupSolutionsMenu';
 
 type Subnav = false | 'product' | 'solutions';
@@ -83,7 +83,10 @@ export function FancyHeader({ active, subnav }: FancyHeaderProps) {
                     <Icon icon={faGithub} className='drop-shadow-md' />
                   </Link>
                 </RivetHeader.NavItem>
-                <Button variant='secondary' asChild className='font-v2 subpixel-antialiased'>
+                <Button
+                  variant='secondary'
+                  asChild
+                  className='font-v2 subpixel-antialiased hover:border-white/20'>
                   <Link href='https://hub.rivet.gg'>Sign In</Link>
                 </Button>
               </>
@@ -135,9 +138,9 @@ export function FancyHeader({ active, subnav }: FancyHeaderProps) {
           <AnimatePresence>
             {isSubnavOpen ? (
               <motion.div
-                className='relative overflow-x-hidden'
+                className='relative overflow-hidden'
                 initial={{ height: 0, opacity: 1 }}
-                animate={{ height: 200, opacity: 1 }}
+                animate={{ height: 200, opacity: 1, transition: { ease: ['easeIn', 'easeOut'] } }}
                 exit={{ height: 0, opacity: 0 }}>
                 <AnimatePresence>
                   {isSubnavOpen === 'product' ? (
@@ -146,9 +149,9 @@ export function FancyHeader({ active, subnav }: FancyHeaderProps) {
                       onMouseLeave={() => setIsSubnavOpen(false)}
                       className=' absolute inset-0'>
                       <motion.div
-                        initial={{ opacity: 0, x: prev.current === 'solutions' ? '25%' : 0 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: 0 }}
+                        initial={{ opacity: 0, y: prev.current === 'solutions' ? -10 : 0 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 0 }}
                         className='overflow-hidden'>
                         <div className='h-[200px] w-full overflow-hidden pb-4 pl-4 pr-4 pt-2'>
                           <HeaderPopupProductMenu />
@@ -162,9 +165,9 @@ export function FancyHeader({ active, subnav }: FancyHeaderProps) {
                       onMouseLeave={() => setIsSubnavOpen(false)}
                       className='absolute inset-0'>
                       <motion.div
-                        initial={{ opacity: 0, x: prev.current === 'product' ? '-25%' : 0 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: 0 }}
+                        initial={{ opacity: 0, y: prev.current === 'product' ? -10 : 0 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 0 }}
                         className='overflow-hidden'>
                         <div className='h-[200px] w-full overflow-hidden pb-4 pl-4 pr-4 pt-2'>
                           <HeaderPopupSolutionsMenu />

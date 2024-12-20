@@ -5,7 +5,9 @@ export default function SalesPage() {
   return (
     <>
       <FancyHeader />
-      <FramerSalesPage />
+      <div className='bg-black pb-20 pt-32'>
+        <FramerSalesPage />
+      </div>
     </>
   );
 }
