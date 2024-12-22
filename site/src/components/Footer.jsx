@@ -39,7 +39,7 @@ const footer = {
     },
     {
       name: 'Bluesky',
-      href: 'https://bsky.app/profile/rivet-gg.bsky.social',
+      href: 'https://bsky.app/profile/rivet.gg',
       icon: faBluesky
     },
     {
