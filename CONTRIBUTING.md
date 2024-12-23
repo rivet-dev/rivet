@@ -1,5 +1,10 @@
 # Contributing
 
+## Conventions
+
+- [Naming conventions](./docs-internal/development/NAMING_CONVENTIONS.md).
+- [Internal <-> External Aliases](./docs-internal/development/INTERNAL_EXTERNAL_ALIASES.md).
+
 ## For Open Source Contributors
 
 1. **Fork and Clone**: Fork the repository and clone it locally.

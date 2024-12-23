@@ -1,4 +1,4 @@
-# Internal -> External Naming Aliases
+# Internal <-> External Naming Aliases
 
 Most internal types have different names than what's exposed in the public API.
 
