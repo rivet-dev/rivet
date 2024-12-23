@@ -9,7 +9,7 @@
     "format": "prettier --write .",
     "create-article": "vite-node scripts/generateArticle.ts",
     "generate-favicon": "npx cli-real-favicon generate scripts/faviconConfig.json faviconData.json public/icons",
-    "update-framer": "unframer"
+    "update-framer": "unframer --outDir ./src/generated/framer"
   },
   "browserslist": "defaults, not ie <= 11",
   "dependencies": {
@@ -74,7 +74,7 @@
     "socket.io": "^4.7.1",
     "socket.io-client": "^4.7.1",
     "tailwindcss": "^3.3.0",
-    "unframer": "=2.6.6",
+    "unframer": "=2.8.0",
     "unified": "^10.1.2",
     "unist-util-filter": "^4.0.1",
     "unist-util-visit": "^4.1.1",
@@ -96,7 +96,6 @@
   "resolutions": {
     "@rivet-gg/icons": "https://github.com/rivet-gg/hub#workspace=@rivet-gg/icons&head=12-04-refactor_components_adjustments_for_landing_page",
     "@rivet-gg/components": "https://github.com/rivet-gg/hub#workspace=@rivet-gg/components&head=12-04-refactor_components_adjustments_for_landing_page",
-    "framer-motion": "npm:unframer@^2.6.5",
     "react": "^19.0.0-rc-69d4b800-20241021",
     "react-dom": "^19.0.0-rc-69d4b800-20241021"
   }
