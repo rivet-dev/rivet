@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.2
 
 # MARK: Rivet Server Builder
-# TODO(RVT-4168): Copmile libfdb from scratch for ARM
+# TODO(RVT-4168): Compile libfdb from scratch for ARM
 FROM --platform=linux/amd64 rust:1.82.0-slim AS server-builder
 
 RUN apt-get update && \

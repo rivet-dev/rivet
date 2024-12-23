@@ -1,5 +1,5 @@
 # MARK: Builder
-# TODO(RVT-4168): Copmile libfdb from scratch for ARM
+# TODO(RVT-4168): Compile libfdb from scratch for ARM
 FROM --platform=linux/amd64 rust:1.82.0-bullseye AS builder
 
 RUN apt-get update && apt-get install --yes libclang-dev protobuf-compiler pkg-config libssl-dev g++ git wget curl && \
