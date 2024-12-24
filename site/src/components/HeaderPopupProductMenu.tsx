@@ -23,7 +23,13 @@ export const HeaderPopupProductMenu = () => {
               The easiest way to build & scale realtime applications.
             </p>
           </div>
-          <video className='absolute inset-0 h-full w-full object-cover opacity-60' muted loop>
+          <video
+            className='absolute inset-0 h-full w-full object-cover opacity-60'
+            muted
+            loop
+            playsInline
+            disablePictureInPicture
+            disableRemotePlayback>
             <source
               src='https://assets2.rivet.gg/effects/bg-effect-product-actors.webm?v=2'
               type='video/webm'
@@ -54,9 +60,7 @@ export const HeaderPopupProductMenu = () => {
         className='col-start-3 h-full justify-start'
         target='_blank'
         startIcon={<Icon icon={faBriefcase} />}>
-        <Link href='/sales'>
-          Rivet Enterprise
-        </Link>
+        <Link href='/sales'>Rivet Enterprise</Link>
       </Button>
     </div>
   );
