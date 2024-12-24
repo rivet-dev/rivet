@@ -1,4 +1,5 @@
 import { Sitemap } from '@/lib/sitemap';
+import { faActorsBorderless, faTs } from '@rivet-gg/icons';
 import apiPages from '@/generated/apiPages.json' assert { type: 'json' };
 
 // Goals:
@@ -26,31 +27,58 @@ export const sitemap = [
             href: '/docs/setup',
             icon: 'play'
           },
-          {
-            title: 'What Are Actors?',
-            href: '/docs/actors',
-            icon: 'block-question'
-          },
+          // {
+          //   title: 'Client SDKs',
+          //   href: '/docs/client/javascript',
+          //   icon: 'toolbox'
+          // },
+          // {
+          //   title: 'JavaScript SDK',
+          //   href: '/docs/client/javascript',
+          //   icon: 'js'
+          // },
+          // {
+          //   title: 'Client SDKs',
+          //   collapsible: true,
+          //   pages: [
+          //     {
+          //       title: 'JavaScript & TypeScript',
+          //       href: '/docs/client/javascript'
+          //     }
+          //     // TODO:
+          //     // { title: 'Godot', href: '/docs/godot' },
+          //     // { title: 'Unity', href: '/docs/unity' },
+          //     // { title: 'Unreal', href: '/docs/unreal' },
+          //   ]
+          // },
           {
             title: 'Actor SDK',
             href: 'https://jsr.io/@rivet-gg/actor/doc',
-            icon: 'toolbox',
+            icon: faActorsBorderless,
             external: true
           },
+          // {
+          //   title: 'JavaScript SDK',
+          //   href: 'https://jsr.io/@rivet-gg/actor-client',
+          //   icon: 'js'
+          // },
+        ]
+      },
+      {
+        title: 'Client SDKs',
+        pages: [
           {
-            title: 'Client SDKs',
-            collapsible: true,
-            pages: [
-              {
-                title: 'JavaScript & TypeScript',
-                href: '/docs/client/javascript'
-              }
-              // TODO:
-              // { title: 'Godot', href: '/docs/godot' },
-              // { title: 'Unity', href: '/docs/unity' },
-              // { title: 'Unreal', href: '/docs/unreal' },
-            ]
-          }
+            title: 'JavaScript',
+            href: 'https://jsr.io/@rivet-gg/actor-client',
+            icon: 'js',
+            external: true,
+          },
+          {
+            title: 'TypeScript',
+            href: 'https://jsr.io/@rivet-gg/actor-client',
+            icon: faTs,
+            external: true,
+          },
         ]
       },
       //{
@@ -95,6 +123,11 @@ export const sitemap = [
         title: 'Build with Rivet',
         pages: [
           {
+            title: 'Create & Manage Actors',
+            href: '/docs/manage',
+            icon: 'square-plus',
+          },
+          {
             title: 'Remote Procedure Calls',
             href: '/docs/rpc',
             icon: 'code'
@@ -110,11 +143,6 @@ export const sitemap = [
             icon: 'tower-broadcast'
           },
           {
-            title: 'Scaling & Concurrency',
-            href: '/docs/scaling',
-            icon: 'maximize'
-          },
-          {
             title: 'Edge Networking',
             href: '/docs/edge',
             icon: 'globe'
@@ -123,6 +151,11 @@ export const sitemap = [
             title: 'More',
             collapsible: true,
             pages: [
+              {
+                title: 'Scaling & Concurrency',
+                href: '/docs/scaling',
+                icon: 'maximize'
+              },
               {
                 title: 'Lifecycle',
                 href: '/docs/lifecycle',
@@ -147,7 +180,12 @@ export const sitemap = [
                 title: 'Logging',
                 href: '/docs/logging',
                 icon: 'list-ul'
-              }
+              },
+              {
+                title: 'Builds',
+                href: '/docs/builds',
+                icon: 'hammer'
+              },
               // { title: 'DDoS & Botting Mitigation', href: '/docs', icon: 'shield-halved' },
             ]
           }
@@ -167,6 +205,11 @@ export const sitemap = [
             title: 'Troubleshooting',
             href: '/docs/troubleshooting',
             icon: 'clipboard-list-check'
+          },
+          {
+            title: 'FAQ',
+            href: '/docs/faq',
+            icon: 'block-question'
           },
           // { title: 'CLI', href: '/docs/cli', icon: 'square-terminal' },
           // { title: 'Hub', href: '/docs/hub', icon: 'browser' },

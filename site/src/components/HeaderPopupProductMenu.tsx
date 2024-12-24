@@ -10,7 +10,7 @@ import Link from 'next/link';
 export const HeaderPopupProductMenu = () => {
   return (
     <div className='grid h-full grid-cols-3 grid-rows-3 gap-4 overflow-hidden pb-2'>
-      <Link href='/docs/actors' className='col-span-2 row-span-3 '>
+      <Link href='/docs' className='col-span-2 row-span-3 '>
         <Item
           onMouseEnter={e => e.currentTarget.querySelector('video')?.play()}
           onMouseLeave={e => e.currentTarget.querySelector('video')?.pause()}>

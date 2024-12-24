@@ -1,0 +1,269 @@
+# Create & Manage Actors
+
+This guide will walk through creating & managing Rivet Actors.
+
+## Actor tags
+
+Tags are simple key-value pairs (like labels) attached to every actor. Tags serve two purposes:
+
+1. **Actor Discovery**: Find specific actors using [`client.get(tags, opts)`](https://jsr.io/@rivet-gg/actor-client/doc/~/Client.prototype.get) (see below)
+2. **Organization**: Group actors for monitoring & administration
+
+When structuring tags, keep values short, use consistent naming patterns, and avoid storing sensitive information.
+
+The `name` tag is special. This identifies what type of actor to spawn.
+
+### Common tag patterns
+
+The following examples show different ways tags can be used to organize actors:
+
+<CodeGroup>
+
+```typescript {{ "title": "Party Code" }}
+// Connect to a game server using a party code
+const gameServer = await client.get<GameServer>({
+  name: 'game_server',
+  partyCode: 'ABCDEF'
+});
+```
+
+```typescript {{ "title": "Chat Room Channel" }}
+// Connect to a specific chat room channel
+const chatRoom = await client.get<ChatRoom>({
+  name: 'chat_room',
+  channel: 'random'
+});
+```
+
+```typescript {{ "title": "User ID" }}
+// Connect to a user's profile actor using their database ID
+const userProfile = await client.get<UserProfile>({
+  name: 'user_profile',
+  userId: '1234'
+});
+```
+
+```typescript {{ "title": "Document Workspace" }}
+// Connect to a shared document within a specific workspace
+const document = await client.get<SharedDocument>({
+  name: 'shared_document',
+  workspaceId: 'team-alpha',
+  documentId: 'budget-2024'
+});
+```
+
+```typescript {{ "title": "Game Instance" }}
+// Connect to a game instance with specific mode and difficulty
+const gameInstance = await client.get<GameInstance>({
+  name: 'game_instance',
+  game_mode: 'battle_royale',
+  difficulty: 'hard'
+});
+```
+
+```typescript {{ "title": "Matchmaking Queue" }}
+// Connect to a regional matchmaking queue for specific skill level
+const matchmaker = await client.get<Matchmaker>({
+  name: 'matchmaker',
+  region: 'eu_west',
+  skill_level: 'platinum'
+});
+```
+
+```typescript {{ "title": "App Feature" }}
+// Connect to a feature flag actor for a specific app feature
+const featureFlag = await client.get<FeatureFlag>({
+  name: 'feature_flag',
+  app: 'chat',
+  feature_id: 'reactions'
+});
+```
+
+```typescript {{ "title": "Service Owner" }}
+// Connect to an analytics actor owned by a specific service
+const analytics = await client.get<Analytics>({
+  name: 'analytics',
+  owner: 'metrics_service',
+  metric_id: 'daily_active_users'
+});
+```
+
+</CodeGroup>
+
+## Client
+
+Clients are used to connect & manage actors.
+
+To create a new client, write:
+
+```typescript {{ "title": "client.ts" }}
+import Client from '@rivet-gg/actor-client';
+const client = new Client(/* CONNECTION ADDRESS */);
+```
+
+<Tip>See [setup guide](/docs/setup) for how to access `/* CONNECTION ADDRESS */`.</Tip>
+
+### `client.get(tags, opts)`
+
+To get or create an actor, use [`client.get(tags)`](https://jsr.io/@rivet-gg/actor-client/doc/~/Client.prototype.get). This will attempt to find an actor matching a subset of the provided tags or create an actor if not found.
+
+```typescript {{ "title": "client.ts" }}
+const room = await client.get<ChatRoom>({
+  name: 'chat_room',
+  // Get or create the actor for the channel `random`
+  channel: 'random'
+});
+
+// This actor will have the tags: { name: 'chat_room', channel: 'random' }
+await room.sendMessage('Hello, world!');
+```
+
+#### `noCreate`
+
+To prevent creating a new actor if it does not exist, pass the `noCreate` option. For example:
+
+```typescript {{ "title": "client.ts" }}
+// Get or create actor
+const doc = await client.get<MyDocument>({ name: 'my_document', docId: '123' }, { noCreate: true });
+
+await doc.doSomething();
+```
+
+### `client.create(opts)`
+
+To explicitly create a new actor, use [`client.create(tags)`](https://jsr.io/@rivet-gg/actor-client/doc/~/Client.prototype.create). This will create a new actor with the provided tags.
+
+```typescript
+// Create a new document actor
+const doc = await client.create<MyDocument>({
+  create: {
+    tags: {
+      name: 'my_document',
+      docId: '123'
+    }
+  }
+});
+
+await doc.doSomething();
+```
+
+### `client.getWithId(id, opts)`
+
+Each actor has a unique identifier that can be used instead of tags. To get an actor by its ID, use [`client.getWithId(id)`](https://jsr.io/@rivet-gg/actor-client/doc/~/Client.prototype.getWithId).
+
+It's recommended to use tags instead of using actor IDs directly (e.g. see `docId` above).
+
+For example:
+
+```typescript {{ "title": "client.ts" }}
+// Get the actor with the given ID
+const myActorId = '55425f42-82f8-451f-82c1-6227c83c9372';
+const doc = await client.getWithId<MyDocument>(myActorId);
+
+await doc.doSomething();
+```
+
+### `opts.parameters`
+
+All client methods accept a `parameters` property. This can be used to pass information about the current connection, such as authentication tokens or usernames.
+
+For example:
+
+<CodeGroup>
+
+```typescript {{ "title": "client.ts" }}
+const actor = client.get<Example>(
+  { name: 'example' },
+  {
+    parameters: { authToken: 'supersekure' }
+  }
+);
+```
+
+```typescript {{ "title": "actor.ts" }}
+interface ConnectionParams {
+  authToken: string;
+}
+
+class Example extends Actor<State, ConnectionParams> {
+  _onBeforeConnect(opts: OnBeforeConnectOptions<this>) {
+    const authToken = opts.parameters.authToken;
+    // ...
+  }
+}
+```
+
+</CodeGroup>
+
+This is available on `client.get`, `client.create`, and `client.getWithId`.
+
+Read more about parameters & connections [here](/docs/connections).
+
+### `opts.create.tags`
+
+When creating an actor, you can specify additional tags beyond those provided in the first argument. If `opts.create.tags` is not provided, the tags from the query will be used. For example:
+
+```typescript {{ "title": "client.ts" }}
+const actor = client.get<MyDocument>(
+  // Tags used in the query
+  {
+    name: 'my_document',
+    document_id: 'budget_2024'
+  },
+  {
+    create: {
+      // Tags assigned to the created actor
+      tags: {
+        name: 'my_document',
+        workspace_id: 'team_alpha',
+        document_id: 'budget_2024'
+      }
+    }
+  }
+);
+```
+
+This is available on `client.get` and `client.create`.
+
+### `opts.create.region`
+
+By default, actors will choose the optimal region based on the client's latency. The can be overridden by defining `create.region`:
+
+```typescript {{ "title": "client.ts" }}
+const actor = client.get(
+  { name: 'example' },
+  {
+    create: {
+      region: 'atl'
+    }
+  }
+);
+```
+
+This is available on `client.get` and `client.create`.
+
+## Shutdown actor
+
+For security reasons, actors must be shut down from within the actor itself using [`this._shutdown()`](https://jsr.io/@rivet-gg/actor/doc/~/Actor.prototype._shutdown). For example:
+
+<CodeGroup>
+
+```typescript {{ "title": "actor.ts" }}
+class Example {
+  // client will call this rpc to shut down actor
+  myShutdownRpc(rpc: Rpc<this>) {
+    this._shutdown();
+  }
+}
+```
+
+```typescript {{ "title": "client.ts" }}
+const actor = client.get<Example>({ name: 'example' });
+
+// send rpc to shut down actor
+await actor.myShutdownRpc();
+```
+
+</CodeGroup>
+
+Read more about the [actor lifecycle](/docs/lifecycle).

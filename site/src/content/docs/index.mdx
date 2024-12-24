@@ -2,31 +2,56 @@ import { Card as MyCard } from '@/components/Card';
 
 # Welcome to Rivet
 
-Rivet is a powerful platform for building real-time applications, offering a simplified approach to distributed computing. At the core of Rivet are Actors, with built-in support for remote procedure calls, state, events, and edge networking.
+Rivet is a powerful platform for building real-time applications. At the core of Rivet are Actors, with built-in support for remote procedure calls, state, events, and edge networking.
+
+## Why use Rivet Actors?
+
+Rivet Actors offer several compelling advantages for building real-time applications:
+
+- **Enhanced Performance**: By integrating compute (i.e., "RPC") with data (i.e., "state"), performance is significantly improved.
+- **Simplified Architecture**: Replace complex infrastructure (e.g., caches, queues, pub/sub) with actors for a more straightforward architecture.
+- **Built-in Fault Tolerance**: Actors provide natural fault tolerance as state is durable and failures do not cascade.
+- **Reduced Latency**: Achieve lower latency for users by running at the edge and combining compute with data.
+
+## Core primitives
+
+- [**Remote Procedure Call**](/docs/rpc) (RPC) is how clients communicate with actors and how actors communicate with each other.
+- [**State**](/docs/state) is the data belonging to each actor. State cannot be shared between actors. State is stored in memory (unless it's too large) for fast reads and writes. State is durable and will always survive a crash or upgrade. You can update state without having to do anything special.
+- [**Events**](/docs/events) are used for real-time communication between clients and actors. Clients can subscribe to events with `actor.on("myEvent")`, and actors can publish events with `this.broadcast("myEvent")` or `connection.send("myEvent")`.
+- [**Connections**](/docs/connections) represent a client that's currently connected to the actor. Connections have their own state, e.g., `userId`. You can use `onConnect` to authenticate connections before they can communicate with the actor.
+
+To read more about architecting actors for scale, see [here](/docs/scaling).
 
 ## Get Started
 
 <CardGroup>
-    <Card title="Initial Setup" href='/docs/setup' />
-    <Card title="What Are Actors?" href='/docs/actors' />
-    <Card title="Actor SDK" href='https://jsr.io/@rivet-gg/actor/doc' target='_blank' />
-    <Card title="JavaScript & TypeScript Client" href='/docs/client/javascript' />
+  <Card title='Initial Setup' href='/docs/setup' />
+  <Card title='Actor SDK' href='https://jsr.io/@rivet-gg/actor/doc' target='_blank' />
+</CardGroup>
+
+## Client SDKs
+
+<CardGroup>
+  <Card title='JavaScript' href='https://jsr.io/@rivet-gg/actor-client' target='_blank' />
+  <Card title='TypeScript' href='https://jsr.io/@rivet-gg/actor-client' target='_blank' />
 </CardGroup>
 
 ## Build with Rivet
 
 <CardGroup>
-    <Card title="Remote Procedure Calls" href='/docs/rpc' />
-    <Card title="State" href='/docs/state' />
-    <Card title="Events" href='/docs/events' />
-    <Card title="Scaling & Concurrency" href='/docs/scaling' />
-    <Card title="Edge Networking" href='/docs/edge' />
+  <Card title='Create & Manage Actors' href='/docs/manage' />
+  <Card title='Remote Procedure Calls' href='/docs/rpc' />
+  <Card title='State' href='/docs/state' />
+  <Card title='Events' href='/docs/events' />
+  <Card title='Scaling & Concurrency' href='/docs/scaling' />
+  <Card title='Edge Networking' href='/docs/edge' />
 </CardGroup>
 
 ## Resources
 
 <CardGroup>
-    <Card title="Configuration" href='/docs/config' />
-    <Card title="Troubleshooting" href='/docs/troubleshooting' />
-    <Card title="Self-Hosting" href='/docs/self-hosting' />
+  <Card title='Configuration' href='/docs/config' />
+  <Card title='Troubleshooting' href='/docs/troubleshooting' />
+  <Card title='FAQ' href='/docs/faq' />
+  <Card title='Self-Hosting' href='/docs/self-hosting' />
 </CardGroup>

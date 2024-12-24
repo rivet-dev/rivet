@@ -1,0 +1,21 @@
+# FAQ
+
+## How are actors different from containers and servers?
+
+Servers and containers and actors handle state and compute very differently:
+
+| Feature                 | Servers and Containers                                                     | Actors                                                                                    |
+| ----------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| **Compute and State**   | Separate compute (application layer) from state (databases)                | Keep state and compute together                                                           |
+| **Scaling**             | Need external services (load balancers, databases) to scale                | Cheaper & automatically distribute load                                                   |
+| **Performance**         | Performance can be limited by network latency & complex locking mechanisms | Optimized performance by co-locating compute and state                                    |
+| **Latency**             | Typically higher latency due to centralized data centers & database        | Lower latency by deploying at the edge, closer to users                                   |
+| **High Availability**   | Need manual configuration for high availability and fault tolerance        | Provide built-in durability for crashes and fault isolation to prevent cascading failures |
+| **Resource Efficiency** | Run continuously regardless of load, wasting resources when idle           | Automatically sleep when inactive and wake instantly when needed                          |
+| **DevOps Overhead**     | Requires significant DevOps effort for setup and maintenance               | Minimal DevOps overhead due to simpler, on-demand architecture                            |
+
+## Can I use Rivet Actors with my existing database?
+
+Yes.
+
+Rivet Actors behaves similar to serverless platform (e.g. Lambda, Vercel Functions, etc.) and connect directly to your database. This is common for developers who need to work with relational data in conjunction with realtime functionality.

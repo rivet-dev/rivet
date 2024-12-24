@@ -24,7 +24,7 @@ class Example extends Actor<State, ConnectionParams> {
 ```
 
 ```typescript {{ "title": "client.ts" }}
-const actor = client.get(
+const actor = client.get<Example>(
   { name: 'example' },
   {
     parameters: { authToken: 'supersekure' }
