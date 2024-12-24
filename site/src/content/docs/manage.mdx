@@ -4,14 +4,18 @@ This guide will walk through creating & managing Rivet Actors.
 
 ## Actor tags
 
-Tags are simple key-value pairs (like labels) attached to every actor. Tags serve two purposes:
+Tags are simple key-value pairs attached to every actor. Tags serve two purposes:
 
-1. **Actor Discovery**: Find specific actors using [`client.get(tags, opts)`](https://jsr.io/@rivet-gg/actor-client/doc/~/Client.prototype.get) (see below)
-2. **Organization**: Group actors for monitoring & administration
+1. **Actor Discovery**: Find specific actors using [`client.get(tags, opts)`](https://jsr.io/@rivet-gg/actor-client/doc/~/Client.prototype.get)
+2. **Organization**: Group actors for monitoring & administration purposes
 
-When structuring tags, keep values short, use consistent naming patterns, and avoid storing sensitive information.
+When choosing tags, follow these best practices:
 
-The `name` tag is special. This identifies what type of actor to spawn.
+- Keep values short and concise
+- Use consistent naming patterns
+- Avoid storing sensitive information
+
+The `name` tag is required and specifies which type of actor to spawn.
 
 ### Common tag patterns
 
@@ -105,7 +109,7 @@ const client = new Client(/* CONNECTION ADDRESS */);
 
 ### `client.get(tags, opts)`
 
-To get or create an actor, use [`client.get(tags)`](https://jsr.io/@rivet-gg/actor-client/doc/~/Client.prototype.get). This will attempt to find an actor matching a subset of the provided tags or create an actor if not found.
+[`client.get(tags)`](https://jsr.io/@rivet-gg/actor-client/doc/~/Client.prototype.get) attempts to find an existing actor matching the provided tags. If no matching actor is found, it creates a new one with those tags.
 
 ```typescript {{ "title": "client.ts" }}
 const room = await client.get<ChatRoom>({
@@ -116,17 +120,6 @@ const room = await client.get<ChatRoom>({
 
 // This actor will have the tags: { name: 'chat_room', channel: 'random' }
 await room.sendMessage('Hello, world!');
-```
-
-#### `noCreate`
-
-To prevent creating a new actor if it does not exist, pass the `noCreate` option. For example:
-
-```typescript {{ "title": "client.ts" }}
-// Get or create actor
-const doc = await client.get<MyDocument>({ name: 'my_document', docId: '123' }, { noCreate: true });
-
-await doc.doSomething();
 ```
 
 ### `client.create(opts)`
@@ -163,7 +156,9 @@ const doc = await client.getWithId<MyDocument>(myActorId);
 await doc.doSomething();
 ```
 
-### `opts.parameters`
+### Options
+
+#### `opts.parameters`
 
 All client methods accept a `parameters` property. This can be used to pass information about the current connection, such as authentication tokens or usernames.
 
@@ -172,7 +167,7 @@ For example:
 <CodeGroup>
 
 ```typescript {{ "title": "client.ts" }}
-const actor = client.get<Example>(
+const actor = await client.get<Example>(
   { name: 'example' },
   {
     parameters: { authToken: 'supersekure' }
@@ -199,20 +194,20 @@ This is available on `client.get`, `client.create`, and `client.getWithId`.
 
 Read more about parameters & connections [here](/docs/connections).
 
-### `opts.create.tags`
+#### `opts.create.tags`
 
-When creating an actor, you can specify additional tags beyond those provided in the first argument. If `opts.create.tags` is not provided, the tags from the query will be used. For example:
+When creating an actor, you can specify additional tags beyond those used for querying. If `opts.create.tags` is not provided, the query tags will be used. For example:
 
 ```typescript {{ "title": "client.ts" }}
 const actor = client.get<MyDocument>(
-  // Tags used in the query
+  // Tags used to find the actor
   {
     name: 'my_document',
     document_id: 'budget_2024'
   },
   {
     create: {
-      // Tags assigned to the created actor
+      // Tags assigned if a new actor is created
       tags: {
         name: 'my_document',
         workspace_id: 'team_alpha',
@@ -225,9 +220,9 @@ const actor = client.get<MyDocument>(
 
 This is available on `client.get` and `client.create`.
 
-### `opts.create.region`
+#### `opts.create.region`
 
-By default, actors will choose the optimal region based on the client's latency. The can be overridden by defining `create.region`:
+By default, actors are created in the region with the lowest latency for the client. You can override this by specifying `create.region`:
 
 ```typescript {{ "title": "client.ts" }}
 const actor = client.get(
@@ -242,6 +237,19 @@ const actor = client.get(
 
 This is available on `client.get` and `client.create`.
 
+#### `opts.noCreate`
+
+To prevent creating a new actor if it does not exist, pass the `noCreate` option. For example:
+
+```typescript {{ "title": "client.ts" }}
+// Get the actor, do not create
+const doc = await client.get<MyDocument>({ name: 'my_document', docId: '123' }, { noCreate: true });
+
+await doc.doSomething();
+```
+
+This is available only on `client.get`.
+
 ## Shutdown actor
 
 For security reasons, actors must be shut down from within the actor itself using [`this._shutdown()`](https://jsr.io/@rivet-gg/actor/doc/~/Actor.prototype._shutdown). For example:
@@ -249,7 +257,7 @@ For security reasons, actors must be shut down from within the actor itself usin
 <CodeGroup>
 
 ```typescript {{ "title": "actor.ts" }}
-class Example {
+class Example extends Actor {
   // client will call this rpc to shut down actor
   myShutdownRpc(rpc: Rpc<this>) {
     this._shutdown();
