@@ -1,4 +1,5 @@
 import { resolve } from "@std/path";
+import { exists } from "@std/fs";
 import { denoPlugins } from "@rivet-gg/esbuild-deno-loader";
 import * as esbuild from "esbuild";
 import { Input, Output } from "./mod.ts";
@@ -23,23 +24,23 @@ export async function build(input: Input): Promise<Output> {
 			// Windows paths, so we manually resolve any paths that
 			// start with a Windows path separator (\) and resolve
 			// them to the full path.
-			// {
-			// 	name: "fix-windows-paths",
-			// 	setup(build: esbuild.PluginBuild) {
-			// 		build.onResolve({ filter: /^\\.*/ }, (args) => {
-			// 			const resolvedPath = resolve(args.resolveDir, args.path);
-			// 			if (!exists(resolvedPath, { isFile: true })) {
-			// 				return {
-			// 					errors: [{ text: `File could not be resolved: ${resolvedPath}` }],
-			// 				};
-			// 			}
+			{
+				name: "fix-windows-paths",
+				setup(build: esbuild.PluginBuild) {
+					build.onResolve({ filter: /^\\.*/ }, (args) => {
+						const resolvedPath = resolve(args.resolveDir, args.path);
+						if (!exists(resolvedPath, { isFile: true })) {
+							return {
+								errors: [{ text: `File could not be resolved: ${resolvedPath}` }],
+							};
+						}
 
-			// 			return {
-			// 				path: resolve(args.resolveDir, args.path),
-			// 			};
-			// 		});
-			// 	},
-			// } satisfies esbuild.Plugin,
+						return {
+							path: resolve(args.resolveDir, args.path),
+						};
+					});
+				},
+			} satisfies esbuild.Plugin,
 		],
 		define: {
 			// HACK: Disable `process.domain` in order to correctly handle this edge case:

@@ -1,4 +1,5 @@
 use anyhow::*;
+use fs_extra::dir::{copy, CopyOptions};
 use merkle_hash::MerkleTree;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -6,51 +7,35 @@ use std::process::Command;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-	let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")?;
-	let out_dir = std::env::var("OUT_DIR")?;
+	let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
+	let out_dir = PathBuf::from(std::env::var("OUT_DIR")?);
 
 	let mut js_utils_path = PathBuf::from(manifest_dir.clone());
 	js_utils_path.push("js");
 
 	// Copy js-utils directory to out_dir
-	let out_js_utils_path = Path::new(&out_dir).join("js-utils");
+	let out_js_utils_path = out_dir.join("js-utils");
 
 	// Remove old dir
 	if out_js_utils_path.is_dir() {
 		fs::remove_dir_all(&out_js_utils_path).context("fs::remove_dir_all")?;
 	}
 
-	// Copy js-utils directory to out_dir
-	// TODO: This breaks    deno check``
-	// let mut copy_options = CopyOptions::new();
-	// copy_options.overwrite = true;
-	// copy_options.copy_inside = true;
-	// copy(&js_utils_path, &out_js_utils_path, &copy_options).with_context(|| {
-	// 	format!(
-	// 		"failed to copy directory from {} to {}",
-	// 		js_utils_path.display(),
-	// 		out_js_utils_path.display()
-	// 	)
-	// })?;
+	// Create the target directory first
+	let copy_options = CopyOptions::new()
+		.overwrite(true)
+		.copy_inside(true);
 
-	let status = std::process::Command::new("cp")
-		.arg("-R")
-		.arg(&js_utils_path)
-		.arg(&out_js_utils_path)
-		.status()
-		.with_context(|| {
-			format!(
-				"failed to copy directory from {} to {}",
-				js_utils_path.display(),
-				out_js_utils_path.display()
-			)
-		})?;
-	if !status.success() {
-		return Err(anyhow!("cp command failed"));
-	}
+	copy(&js_utils_path, &out_js_utils_path, &copy_options).with_context(|| {
+		format!(
+			"failed to copy directory from {} to {}",
+			js_utils_path.display(),
+			out_js_utils_path.display()
+		)
+	})?;
 
 	// Install deno
-	let deno_dir = Path::new(&out_dir).join("deno");
+	let deno_dir = out_dir.join("deno");
 	let deno_exec = deno_embed::get_executable(&deno_dir).await?;
 
 	// Prepare the directory for `include_dir!`
