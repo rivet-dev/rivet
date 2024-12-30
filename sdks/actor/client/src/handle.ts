@@ -7,6 +7,7 @@ import type * as wsToClient from "../protocol/ws/to_client.ts";
 import type * as wsToServer from "../protocol/ws/to_server.ts";
 import * as errors from "./errors.ts";
 import { logger } from "./log.ts";
+import { messageLength, WebSocketMessage } from "./utils.ts";
 
 interface RpcInFlight {
 	resolve: (response: wsToClient.RpcResponseOk) => void;
@@ -23,8 +24,6 @@ type EventUnsubscribe = () => void;
 interface SendOpts {
 	ephemeral: boolean;
 }
-
-type WebSocketMessage = string | Blob | ArrayBuffer;
 
 export class ActorHandleRaw {
 	#disconnected = false;
@@ -315,7 +314,7 @@ export class ActorHandleRaw {
 		if (this.#websocket?.readyState === WebSocket.OPEN) {
 			try {
 				this.#websocket.send(message);
-				logger().debug("sent websocket message", { message });
+				logger().debug("sent websocket message", { len: messageLength(message) });
 			} catch (error) {
 				logger().warn("failed to send message, added to queue", { error });
 
@@ -327,7 +326,7 @@ export class ActorHandleRaw {
 		} else {
 			if (!opts?.ephemeral) {
 				this.#websocketQueue.push(message);
-				logger().debug("queued websocket message", { message });
+				logger().debug("queued websocket message", { len: messageLength(message) });
 			}
 		}
 	}
