@@ -19,7 +19,8 @@ const footer = {
     { name: 'Pricing', href: '/pricing' },
     { name: 'Sales', href: '/sales' },
     { name: 'Status Page', href: 'https://rivet.betteruptime.com/' },
-    { name: 'OSS Friends', href: '/oss-friends' }
+    { name: 'OSS Friends', href: '/oss-friends' },
+    { name: 'Press Kit', href: 'https://releases.rivet.gg/press-kit.zip' }
   ],
   legal: [
     { name: 'Terms', href: '/terms' },
