@@ -56,6 +56,9 @@ jobs:
           CC_aarch64_apple_darwin: aarch64-apple-darwin20.4-clang
           CXX_aarch64_apple_darwin: aarch64-apple-darwin20.4-clang++
           MACOSX_DEPLOYMENT_TARGET: "10.7"
+
+          # Expose token for pulling GH artifacts
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Install required components for each platform
           apt-get update

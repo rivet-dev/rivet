@@ -44,6 +44,9 @@ jobs:
           apt-get update
           apt-get install -y protobuf-compiler libpq-dev
       - run: RUSTFLAGS="--cfg tokio_unstable" cargo check --release
+        env:
+          # Expose token for pulling GH artifacts
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   cargo-check-infra:
     # The FDB version should match `cluster::workflows::server::install::install_scripts::components::fdb::FDB_VERSION`
@@ -59,6 +62,9 @@ jobs:
           apt-get install -y protobuf-compiler libpq-dev curl libclang-dev
           curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.1.60/libfdb_c.x86_64.so"
       - run: cd packages/infra/client && RUSTFLAGS="--cfg tokio_unstable" cargo check --release
+        env:
+          # Expose token for pulling GH artifacts
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   cargo-deny:
     runs-on: ubuntu-20.04
