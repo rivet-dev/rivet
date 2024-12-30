@@ -88,14 +88,20 @@ class ChatRoom extends Actor {
 Connections can be disconnected with:
 
 ```typescript {{ "title": "actor.ts" }}
-connection.disconnect();
+await connection.disconnect();
 ```
 
 A reason can optionally be provided like:
 
 ```typescript {{ "title": "actor.ts" }}
-connection.disconnect('Too many requests');
+await connection.disconnect('Too many requests');
 ```
+
+<Tip>
+	Waiting the `disconnect` promise is not required, but recommended in order
+	to ensure the underlying network connections close cleanly before exiting
+	the program.
+</Tip>
 
 ## Offline & reconnection behavior
 

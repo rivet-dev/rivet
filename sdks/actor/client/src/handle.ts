@@ -333,23 +333,28 @@ export class ActorHandleRaw {
 	}
 
 	// TODO:Add destructor
-	disconnect() {
-		if (!this.#websocket) return;
-		this.#disconnected = true;
+	disconnect(): Promise<void> {
+		return new Promise(resolve => {
+			if (!this.#websocket) return;
+			this.#disconnected = true;
 
-		logger().debug("disconnecting");
+			logger().debug("disconnecting");
 
-		// TODO: What do we do with the queue?
+			// TODO: What do we do with the queue?
 
-		this.#websocket?.close();
-		this.#websocket = undefined;
+			if (this.#websocket) {
+				this.#websocket.addEventListener("close", () => resolve());
+				this.#websocket.close();
+				this.#websocket = undefined;
+			}
+		});
 	}
 
-	dispose() {
+	async dispose() {
 		logger().debug("disposing");
 
 		// TODO: this will error if not usable
-		this.disconnect();
+		await this.disconnect();
 	}
 
 	#sendSubscription(eventName: string, subscribe: boolean) {
