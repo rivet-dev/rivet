@@ -24,7 +24,7 @@ Called whenever the actor's state changes. This is often used to broadcast state
 
 ### `_onBeforeConnect`
 
-`_onBeforeConnect?(opts: OnBeforeConnectOptions<this>): ConnState | Promise<ConnState>`
+`_onBeforeConnect?(opts: OnBeforeConnectOptions<MyActor>): ConnState | Promise<ConnState>`
 
 Called whenever a new client connects to the actor. Clients can pass parameters when connecting, accessible via `opts.parameters`.
 
@@ -34,7 +34,7 @@ Connections cannot interact with the actor until this method completes successfu
 
 ### `_onConnect`
 
-`_onConnect?(connection: Connection<this>): void | Promise<void>`
+`_onConnect?(connection: Connection<MyActor>): void | Promise<void>`
 
 Executed after the client has successfully connected.
 
@@ -44,7 +44,7 @@ Errors thrown from this method will cause the client to disconnect.
 
 ### `_onDisconnect`
 
-`_onDisconnect?(connection: Connection<this>): void | Promise<void>`
+`_onDisconnect?(connection: Connection<MyActor>): void | Promise<void>`
 
 Called when a client disconnects from the actor. Use this to clean up any connection-specific resources.
 
@@ -71,7 +71,7 @@ interface ConnState {
   userId: string;
 }
 
-class CounterActor extends Actor<State, ConnParams, ConnState> {
+export default class Counter extends Actor<State, ConnParams, ConnState> {
   async _onInitialize(): Promise<State> {
     // Initialize with a count of 0
     return {
@@ -86,12 +86,12 @@ class CounterActor extends Actor<State, ConnParams, ConnState> {
 
   async _onStateChange(newState: State): Promise<void> {
     // Broadcast the new count to all connected clients
-    this.broadcast('countUpdated', {
+    this._broadcast('countUpdated', {
       count: newState.count
     });
   }
 
-  async _onBeforeConnect(opts: OnBeforeConnectOptions<CounterActor>): Promise<ConnState> {
+  async _onBeforeConnect(opts: OnBeforeConnectOptions<Counter>): Promise<ConnState> {
     // Validate auth token with your API and determine the user
     const auth = await myValidateAuthToken(opts.parameters.authToken);
     if (!auth) {
@@ -104,17 +104,17 @@ class CounterActor extends Actor<State, ConnParams, ConnState> {
     };
   }
 
-  async _onConnect(connection: Connection<this>): Promise<void> {
+  async _onConnect(connection: Connection<Counter>): Promise<void> {
     console.log(`User ${connection.state.userId} connected`);
   }
 
-  async _onDisconnect(connection: Connection<this>): Promise<void> {
+  async _onDisconnect(connection: Connection<Counter>): Promise<void> {
     console.log(`User ${connection.state.userId} disconnected`);
   }
 
   // Example RPC method
-  async increment(rpc: Rpc<this>) {
-    this.state.count++;
+  async increment(rpc: Rpc<Counter>) {
+    this._state.count++;
   }
 }
 ```

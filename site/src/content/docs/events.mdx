@@ -6,18 +6,18 @@ Events are used for clients to receive realtime data from actors.
 
 ## Publishing from actors
 
-Actors can publish events to clients using `this.broadcast` and `connection.send`.
+Actors can publish events to clients using `this._broadcast` and `connection.send`.
 
 ### Broadcasting events
 
-Actors can publish events to all connected clients with `this.broadcast(name, data)`. For example:
+Actors can publish events to all connected clients with `this._broadcast(name, data)`. For example:
 
 <CodeGroup>
 
 ```typescript {{ "title": "chat_room.ts" }}
-class ChatRoom extends Actor {
-  sendMessage(rpc: Rpc<this>, message: string) {
-    this.broadcast('newMessage', { message });
+export default class ChatRoom extends Actor {
+  sendMessage(rpc: Rpc<ChatRoom>, message: string) {
+    this._broadcast('newMessage', { message });
   }
 }
 ```
@@ -31,14 +31,14 @@ await actor.sendMessage('Hello, world!');
 
 ### Sending events to specific connections
 
-Actors can send messages to specific client connections. All connections are available on the `this.connections` array. For example:
+Actors can send messages to specific client connections. All connections are available on the `this._connections` array. For example:
 
 <CodeGroup>
 
 ```typescript {{ "title": "chat_room.ts" }}
-class ChatRoom extends Actor {
-  sendPrivateMessage(rpc: Rpc<this>, connectionId: number, message: string) {
-    const conn = this.connections.find(c => c.id == connectionId);
+export default class ChatRoom extends Actor {
+  sendPrivateMessage(rpc: Rpc<ChatRoom>, connectionId: number, message: string) {
+    const conn = this._connections.find(c => c.id == connectionId);
     conn.send('newMessage', { message });
   }
 }
@@ -71,9 +71,9 @@ actor.on('newMessage', ({ message }) => {
 ```
 
 ```typescript {{ "title": "chat_room.ts" }}
-class ChatRoom extends Actor {
-  sendMessage(rpc: Rpc<this>, message: string) {
-    this.broadcast('newMessage', { message });
+export default class ChatRoom extends Actor {
+  sendMessage(rpc: Rpc<ChatRoom>, message: string) {
+    this._broadcast('newMessage', { message });
   }
 }
 ```
@@ -98,13 +98,13 @@ await actor.requestJoin();
 ```
 
 ```typescript {{ "title": "chat_root.ts" }}
-class ChatRoom extends Actor {
-  requestJoin(rpc: Rpc<this>) {
+export default class ChatRoom extends Actor {
+  requestJoin(rpc: Rpc<ChatRoom>) {
     // ...ask the admin to approve the request...
   }
 
-  approveJoinRequest(rpc: Rpc<this>, connectionId: number) {
-    const conn = this.connections.find(c => c.id == connectionId);
+  approveJoinRequest(rpc: Rpc<ChatRoom>, connectionId: number) {
+    const conn = this._connections.get(c.id);
     conn.send('joinRequestApproved');
   }
 }

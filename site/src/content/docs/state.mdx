@@ -18,7 +18,7 @@ There are two ways of storing actor state:
 
 ## Native state
 
-State is a native JavaScript object stored in-memory on `this.state`. This makes building realtime & stateful applications as simple as updating native JavaScript objects.
+State is a native JavaScript object stored in-memory on `this._state`. This makes building realtime & stateful applications as simple as updating native JavaScript objects.
 
 ### State type
 
@@ -29,7 +29,7 @@ interface State {
   count: number;
 }
 
-class Counter extends Actor<State> {
+export default class Counter extends Actor<State> {
   // ...
 }
 ```
@@ -45,7 +45,7 @@ interface State {
   count: number;
 }
 
-class Counter extends Actor<State> {
+export default class Counter extends Actor<State> {
   _onInitialize() {
     return { count: 0 };
   }
@@ -54,7 +54,7 @@ class Counter extends Actor<State> {
 
 ### Updating state
 
-State can be updated using `this.state`. State will automatically be persisted.
+State can be updated using `this._state`. State will automatically be persisted.
 
 For example:
 
@@ -63,9 +63,9 @@ interface State {
   count: number;
 }
 
-class Counter extends Actor<State> {
-  increment(rpc: Rpc<this>) {
-    this.state.count += 1;
+export default class Counter extends Actor<State> {
+  increment(rpc: Rpc<Counter>) {
+    this._state.count += 1;
   }
 
   // ...
@@ -73,7 +73,7 @@ class Counter extends Actor<State> {
 ```
 
 <Warning>
-  Only state stored on the `this.state` property will be persisted. Properties of the `Counter` class are kept
+  Only state stored on the `this._state` property will be persisted. Properties of the `Counter` class are kept
   in-memory and not persisted.
 </Warning>
 

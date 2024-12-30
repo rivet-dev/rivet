@@ -24,8 +24,8 @@ interface ConnectionState {
   role: string;
 }
 
-class ExampleActor extends Actor<State, ConnectionParams, ConnectionState> {
-  async _onBeforeConnect(opts: OnBeforeConnectOptions<this>): Promise<ConnectionState> {
+export default class ExampleActor extends Actor<State, ConnectionParams, ConnectionState> {
+  async _onBeforeConnect(opts: OnBeforeConnectOptions<ExampleActor>): Promise<ConnectionState> {
     // Verify the token with your authentication system
     const userData = await myValidateAuthToken(opts.parameters.authToken);
     if (!userData) {
@@ -46,8 +46,8 @@ class ExampleActor extends Actor<State, ConnectionParams, ConnectionState> {
 After authentication, you can access the connection state in any actor method using `rpc.connection.state`:
 
 ```typescript
-class AuthenticatedActor extends Actor<State, ConnectionParams, ConnectionState> {
-  exampleAdminCommand(rpc: Rpc<this>) {
+export default class AuthenticatedActor extends Actor<State, ConnectionParams, ConnectionState> {
+  exampleAdminCommand(rpc: Rpc<AuthenticatedActor>) {
     // Example of validating admin access
     if (rpc.connection.state.role !== 'admin') throw new Error('User must be an admin');
 
@@ -73,8 +73,8 @@ interface ConnectionState {
   userId: string;
 }
 
-class APIAuthenticatedActor extends Actor<State, ConnectionParams, ConnectionState> {
-  async _onBeforeConnect(opts: OnBeforeConnectOptions<this>): Promise<ConnectionState> {
+export default class APIAuthenticatedActor extends Actor<State, ConnectionParams, ConnectionState> {
+  async _onBeforeConnect(opts: OnBeforeConnectOptions<APIAuthenticatedActor>): Promise<ConnectionState> {
     // Validate API key with your server
     const response = await fetch('https://api.yourserver.com/validate', {
       method: 'POST',
@@ -114,8 +114,8 @@ interface ConnectionState {
   permissions: string[];
 }
 
-class JwtAuthenticatedActor extends Actor<State, ConnectionParams, ConnectionState> {
-  async _onBeforeConnect(opts: OnBeforeConnectOptions<this>): Promise<ConnectionState> {
+export default class JwtAuthenticatedActor extends Actor<State, ConnectionParams, ConnectionState> {
+  async _onBeforeConnect(opts: OnBeforeConnectOptions<JwtAuthenticatedActor>): Promise<ConnectionState> {
     // Verify JWT token (throws error for invalid tokens)
     const decoded = jwt.verify(opts.parameters.jwt, JWT_SECRET);
 

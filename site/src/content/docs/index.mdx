@@ -17,7 +17,7 @@ Rivet Actors offer several compelling advantages for building real-time applicat
 
 - [**Remote Procedure Call**](/docs/rpc) (RPC) is how clients communicate with actors and how actors communicate with each other.
 - [**State**](/docs/state) is the data belonging to each actor. State cannot be shared between actors. State is stored in memory (unless it's too large) for fast reads and writes. State is durable and will always survive a crash or upgrade. You can update state without having to do anything special.
-- [**Events**](/docs/events) are used for real-time communication between clients and actors. Clients can subscribe to events with `actor.on("myEvent")`, and actors can publish events with `this.broadcast("myEvent")` or `connection.send("myEvent")`.
+- [**Events**](/docs/events) are used for real-time communication between clients and actors. Clients can subscribe to events with `actor.on("myEvent")`, and actors can publish events with `this._broadcast("myEvent")` or `connection.send("myEvent")`.
 - [**Connections**](/docs/connections) represent a client that's currently connected to the actor. Connections have their own state, e.g., `userId`. You can use `onConnect` to authenticate connections before they can communicate with the actor.
 
 To read more about architecting actors for scale, see [here](/docs/scaling).

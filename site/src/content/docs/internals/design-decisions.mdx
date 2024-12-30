@@ -29,7 +29,7 @@ For example:
 
 <CodeGroup>
 ```typescript {{ "title": "actor.ts" }}
-class Example extends Actor {
+export default class Example extends Actor {
     // Fake event system
     eventSystem: EventSystem;
 
@@ -60,9 +60,9 @@ This is significantly more difficult to understand than the equivalent in Rivet:
 
 <CodeGroup>
 ```typescript {{ "title": "actor.ts" }}
-class Example extends Actor {
-    publishPost(rpc: Rpc<this>, data: Post) {
-        this.broadcast("post", data)
+export default class Example extends Actor {
+    publishPost(rpc: Rpc<Example>, data: Post) {
+        this._broadcast("post", data)
     }
 }
 ```
@@ -94,7 +94,7 @@ type Message =
     | { type: "withdraw"; amount: number; replyTo: MessagePort }
     | { type: "getBalance"; replyTo: MessagePort };
 
-class UserActor extends Actor {
+export default class UserActor extends Actor {
     private balance = 0;
 
     async run() {
@@ -126,15 +126,15 @@ class UserActor extends Actor {
 ```
 
 ```typescript {{ "title": "rpc_actor.ts" }}
-class UserActor extends Actor {
+export default class UserActor extends Actor {
     private balance = 0;
 
-    async deposit(rpc: Rpc<this>, amount: number) {
+    async deposit(rpc: Rpc<UserActor>, amount: number) {
         this.balance += amount;
         return this.balance;
     }
 
-    async withdraw(rpc: Rpc<this>, amount: number) {
+    async withdraw(rpc: Rpc<UserActor>, amount: number) {
         if (amount > this.balance) {
             throw new Error("Insufficient funds");
         }
@@ -142,7 +142,7 @@ class UserActor extends Actor {
         return this.balance;
     }
 
-    async getBalance(rpc: Rpc<this>) {
+    async getBalance(rpc: Rpc<UserActor>) {
         return this.balance;
     }
 }
@@ -156,7 +156,7 @@ The RPC version is much more straightforward to understand and maintain. It look
 If developers use an `await` in an event loop, they'll unintentionally slow down their actor when they don't need to by taking a long time to receive the next message. For example, this code is deceivingly slow:
 
 ```typescript
-class SlowActor extends Actor {
+export default class SlowActor extends Actor {
     private balance = 0;
 
     async run() {
@@ -187,7 +187,7 @@ class SlowActor extends Actor {
 It's still easy to opt-in to serial message handling if it makes sense. For example:
 
 ```typescript
-class SerialActor extends Actor {
+export default class SerialActor extends Actor {
     private messageQueue = new AsyncQueue();
     private balance = 0;
 
@@ -206,7 +206,7 @@ class SerialActor extends Actor {
     }
 
     // Wrap RPC handlers to be processed serially
-    async deposit(rpc: Rpc<this>, amount: number) {
+    async deposit(rpc: Rpc<SerialActor>, amount: number) {
         return new Promise((resolve, reject) => {
             this.messageQueue.enqueue(async () => {
                 this.balance += amount;
@@ -215,7 +215,7 @@ class SerialActor extends Actor {
         });
     }
 
-    async getBalance(rpc: Rpc<this>) {
+    async getBalance(rpc: Rpc<SerialActor>) {
         return new Promise((resolve) => {
             this.messageQueue.enqueue(async () => {
                 resolve(this.balance);

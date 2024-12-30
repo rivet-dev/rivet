@@ -15,7 +15,7 @@ For example, the `multiplyByTwo` method is written as:
 ```typescript
 export class Example extends Actor {
   // This is an RPC
-  multiplyByTwo(rpc: Rpc<this>, x: number) {
+  multiplyByTwo(rpc: Rpc<Example>, x: number) {
     return x * 2;
   }
 }
@@ -38,7 +38,7 @@ export default class Example extends Actor {
   }
 
   // This is public and can be called by clients
-  fetchFibonacci(rpc: Rpc<this>, n: number): number {
+  fetchFibonacci(rpc: Rpc<Example>, n: number): number {
     return this.#calcFibonacci(n);
   }
 }
@@ -82,7 +82,7 @@ await actor.nonexistentMethod(123); // compile error
 // ...setup...
 
 export class Counter extends Actor {
-  increment(rpc: Rpc<this>, count: number) {
+  increment(rpc: Rpc<Counter>, count: number) {
     // ...body...
   }
 
@@ -109,7 +109,7 @@ const IncrementOptionsSchema = z.object({
 type IncrementOptions = z.infer<typeof IncrementOptionsSchema>;
 
 export class Counter extends Actor {
-  increment(rpc: Rpc<this>, opts: IncrementOptions) {
+  increment(rpc: Rpc<Counter>, opts: IncrementOptions) {
     // Will throw error if input is invalid
     const validatedOpts = IncrementOptionsSchema.parse(opts);
 

@@ -15,8 +15,8 @@ interface ConnectionParams {
   authToken: string;
 }
 
-class Example extends Actor<State, ConnectionParams> {
-  _onBeforeConnect(opts: OnBeforeConnectOptions<this>) {
+export default class Example extends Actor<State, ConnectionParams> {
+  _onBeforeConnect(opts: OnBeforeConnectOptions<Example>) {
     const authToken = opts.parameters.authToken;
     // ...
   }
@@ -46,9 +46,9 @@ interface ConnectionState {
   role: string;
 }
 
-class Example extends Actor<State, ConnectionState> {
+export default class Example extends Actor<State, ConnectionState> {
   // The data returned from `_onBeforeConnect` will be assigned to the connection's state
-  _onBeforeConnect(opts: OnBeforeConnectOptions<this>): ConnectionState {
+  _onBeforeConnect(opts: OnBeforeConnectOptions<Example>): ConnectionState {
     return { userId: 123, role: 'admin' };
   }
 
@@ -66,17 +66,17 @@ See the documentation on the following lifecycle hooks:
 
 ## Connection List
 
-All active connections can be accessed with `this.connections`. This is stored as `Map<number, Connection>` where the key is the connection ID.
+All active connections can be accessed with `this._connections`. This is stored as `Map<number, Connection>` where the key is the connection ID.
 
 This is frequently used with `conn.send(name, event)` to send messages directly to clients.
 
 For example:
 
 ```typescript {{ "title": "actor.ts" }}
-class ChatRoom extends Actor {
-  sendDirectMessage(rpc: Rpc<this>, recipient: number, message: string) {
-    this.connections.get(recipient, message).send('directMessage', {
-      from: rpc.id,
+export default class ChatRoom extends Actor {
+  sendDirectMessage(rpc: Rpc<ChatRoom>, recipient: number, message: string) {
+    this._connections.get(recipient).send('directMessage', {
+      from: rpc.connection.id,
       message: message
     });
   }

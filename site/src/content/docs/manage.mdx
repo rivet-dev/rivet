@@ -180,8 +180,8 @@ interface ConnectionParams {
   authToken: string;
 }
 
-class Example extends Actor<State, ConnectionParams> {
-  _onBeforeConnect(opts: OnBeforeConnectOptions<this>) {
+export default class Example extends Actor<State, ConnectionParams> {
+  _onBeforeConnect(opts: OnBeforeConnectOptions<Example>) {
     const authToken = opts.parameters.authToken;
     // ...
   }
@@ -257,9 +257,9 @@ For security reasons, actors must be shut down from within the actor itself usin
 <CodeGroup>
 
 ```typescript {{ "title": "actor.ts" }}
-class Example extends Actor {
+export default class Example extends Actor {
   // client will call this rpc to shut down actor
-  myShutdownRpc(rpc: Rpc<this>) {
+  myShutdownRpc(rpc: Rpc<Example>) {
     this._shutdown();
   }
 }

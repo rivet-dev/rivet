@@ -2,7 +2,7 @@
 
 Actors provide a built-in way to log complex data to the console.
 
-When dealing with lots of data, `console.log` often doesn't cut it. Using `this.log` allows you to log complex data using structured logging.
+When dealing with lots of data, `console.log` often doesn't cut it. Using `this._log` allows you to log complex data using structured logging.
 
 <Note>Using the actor logging API is completely optional.</Note>
 
@@ -12,30 +12,30 @@ There are 5 log levels:
 
 | Level    | Call                                   | Description                                                      |
 | -------- | -------------------------------------- | ---------------------------------------------------------------- |
-| Critical | `this.log.critical(message, ...args);` | Severe errors that prevent core functionality                    |
-| Error    | `this.log.error(message, ...args);`    | Errors that affect functionality but allow continued operation   |
-| Warning  | `this.log.warn(message, ...args);`     | Potentially harmful situations that should be addressed          |
-| Info     | `this.log.info(message, ...args);`     | General information about significant events & state changes     |
-| Debug    | `this.log.debug(message, ...args);`    | Detailed debugging information, usually used only in development |
+| Critical | `this._log.critical(message, ...args);` | Severe errors that prevent core functionality                    |
+| Error    | `this._log.error(message, ...args);`    | Errors that affect functionality but allow continued operation   |
+| Warning  | `this._log.warn(message, ...args);`     | Potentially harmful situations that should be addressed          |
+| Info     | `this._log.info(message, ...args);`     | General information about significant events & state changes     |
+| Debug    | `this._log.debug(message, ...args);`    | Detailed debugging information, usually used only in development |
 
 ## Structured logging
 
-The built-in logging API (using `this.log`) provides structured logging to let you log key-value
+The built-in logging API (using `this._log`) provides structured logging to let you log key-value
 pairs instead of raw strings. Structures logs are readable by both machines &
 humans to make them easier to parse & search.
 
 Passing an object to a log will print as structured data. For example:
 
 ```typescript
-this.log.info('increment', { connection: rpc.connection.id, count });
+this._log.info('increment', { connection: rpc.connection.id, count });
 // Prints: level=INFO msg=increment connection=123 count=456
 ```
 
 The first parameter in each log method is the message. The rest of the arguments are used for structured logging.
 
-## `this.log` vs `console.log` logging
+## `this._log` vs `console.log` logging
 
-`this.log` makes it easier to manage complex logs, while `console.log` can
+`this._log` makes it easier to manage complex logs, while `console.log` can
 become unmaintainable at scale.
 
 Consider this example:
@@ -44,12 +44,12 @@ Consider this example:
 
 ```typescript {{ "title": "structured_logging.ts" }}
 export default class Counter extends Actor<State> {
-  increment(rpc: Rpc<this>, count: number): number {
+  increment(rpc: Rpc<Counter>, count: number): number {
     // Prints: level=INFO msg=increment connection=123 count=456
-    this.log.info('increment', { connection: rpc.connection.id, count });
+    this._log.info('increment', { connection: rpc.connection.id, count });
 
-    this.state.count += count;
-    return this.state.count;
+    this._state.count += count;
+    return this._state.count;
   }
 
   // ...etc...
@@ -58,12 +58,12 @@ export default class Counter extends Actor<State> {
 
 ```typescript {{ "title": "unstructured_logging.ts" }}
 export default class Counter extends Actor<State> {
-  increment(rpc: Rpc<this>, count: number): number {
+  increment(rpc: Rpc<Counter>, count: number): number {
     // Prints: Increment for connection 123 with count 456
     console.log(`Increment for connection ${rpc.connection.id} with count ${count}`);
 
-    this.state.count += count;
-    return this.state.count;
+    this._state.count += count;
+    return this._state.count;
   }
 
   // ...etc...
