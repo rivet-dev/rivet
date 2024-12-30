@@ -3,7 +3,7 @@ import { assertExists } from "@std/assert/exists";
 import { deadline } from "@std/async/deadline";
 import { throttle } from "@std/async/unstable-throttle";
 import type { Logger } from "@std/log/get-logger";
-import { Hono, type Context as HonoContext } from "hono";
+import { type Context as HonoContext, Hono } from "hono";
 import { upgradeWebSocket } from "hono/deno";
 import type { WSEvents } from "hono/ws";
 import onChange from "on-change";
@@ -109,14 +109,11 @@ export abstract class Actor<
 	#connections = new Map<ConnectionId, Connection<this>>();
 	#eventSubscriptions = new Map<string, Set<Connection<this>>>();
 
+	#lastSaveTime = 0;
+	#pendingSaveTimeout?: number;
+
 	protected constructor(config?: Partial<ActorConfig>) {
 		this.#config = mergeActorConfig(config);
-
-		this.#saveStateThrottled = throttle(() => {
-			this.#saveStateInner().catch((error) => {
-				logger().error("failed to save state", { error });
-			});
-		}, this.#config.state.saveInterval);
 	}
 
 	// This is called by Rivet when the actor is exported as the default
@@ -166,15 +163,34 @@ export abstract class Actor<
 
 	#saveStateLock = new Lock<void>(void 0);
 
-	/** Throttled save state method. Used to write to KV at a reasonable cadence. */
-	#saveStateThrottled: () => void;
-
 	/** Promise used to wait for a save to complete. This is required since you cannot await `#saveStateThrottled`. */
 	#onStateSavedPromise?: PromiseWithResolvers<void>;
 
-	/** Saves the state to the database. You probably want to use #saveStateThrottled instead except for a few edge cases. */
+	/** Throttled save state method. Used to write to KV at a reasonable cadence. */
+	#saveStateThrottled() {
+		const now = Date.now();
+		const timeSinceLastSave = now - this.#lastSaveTime;
+		const saveInterval = this.#config.state.saveInterval;
+
+		// If we're within the throttle window and not already scheduled, schedule the next save.
+		if (timeSinceLastSave < saveInterval) {
+			if (this.#pendingSaveTimeout === undefined) {
+				this.#pendingSaveTimeout = setTimeout(() => {
+					this.#pendingSaveTimeout = undefined;
+					this.#saveStateInner();
+				}, saveInterval - timeSinceLastSave);
+			}
+		} else {
+			// If we're outside the throttle window, save immediately
+			this.#saveStateInner();
+		}
+	}
+
+	/** Saves the state to KV. You probably want to use #saveStateThrottled instead except for a few edge cases. */
 	async #saveStateInner() {
 		try {
+			this.#lastSaveTime = Date.now();
+
 			if (this.#stateChanged) {
 				// Use a lock in order to avoid race conditions with multiple
 				// parallel promises writing to KV. This should almost never happen
@@ -241,6 +257,8 @@ export abstract class Actor<
 						logger().error("error in `_onStateChange`", { error });
 					}
 				}
+
+				// State will be flushed at the end of the RPC
 			},
 			{
 				ignoreDetached: true,
@@ -261,11 +279,14 @@ export abstract class Actor<
 		//	KEYS.STATE.INITIALIZED,
 		//	KEYS.STATE.DATA,
 		//]);
-		const getStateBatch = Object.fromEntries(await this.#ctx.kv.getBatch([
-			KEYS.STATE.INITIALIZED,
-			KEYS.STATE.DATA,
-		]));
-		const initialized = getStateBatch[String(KEYS.STATE.INITIALIZED)] as boolean;
+		const getStateBatch = Object.fromEntries(
+			await this.#ctx.kv.getBatch([
+				KEYS.STATE.INITIALIZED,
+				KEYS.STATE.DATA,
+			]),
+		);
+		const initialized =
+			getStateBatch[String(KEYS.STATE.INITIALIZED)] as boolean;
 		const stateData = getStateBatch[String(KEYS.STATE.DATA)] as State;
 
 		if (!initialized) {
@@ -403,8 +424,9 @@ export abstract class Actor<
 		}
 
 		const protocolFormatRaw = c.req.query("format");
-		const { data: protocolFormat, success } =
-			ProtocolFormatSchema.safeParse(protocolFormatRaw);
+		const { data: protocolFormat, success } = ProtocolFormatSchema.safeParse(
+			protocolFormatRaw,
+		);
 		if (!success) {
 			logger().warn("invalid protocol format", {
 				protocolFormat: protocolFormatRaw,
@@ -425,8 +447,9 @@ export abstract class Actor<
 		// Parse and validate params
 		let params: ConnParams;
 		try {
-			params =
-				typeof paramsStr === "string" ? JSON.parse(paramsStr) : undefined;
+			params = typeof paramsStr === "string"
+				? JSON.parse(paramsStr)
+				: undefined;
 		} catch (error) {
 			logger().warn("malformed connection parameters", { error });
 			throw new errors.MalformedConnectionParameters(error);
@@ -530,14 +553,16 @@ export abstract class Actor<
 						const output = await this.#executeRpc(ctx, name, args);
 
 						conn._sendWebSocketMessage(
-							conn._serialize({
-								body: {
-									ro: {
-										i: id,
-										o: output,
+							conn._serialize(
+								{
+									body: {
+										ro: {
+											i: id,
+											o: output,
+										},
 									},
-								},
-							} satisfies wsToClient.ToClient),
+								} satisfies wsToClient.ToClient,
+							),
 						);
 					} else if ("sr" in message.body) {
 						// Subscription request
@@ -579,28 +604,32 @@ export abstract class Actor<
 					// Build response
 					if (rpcRequestId !== undefined) {
 						conn._sendWebSocketMessage(
-							conn._serialize({
-								body: {
-									re: {
-										i: rpcRequestId,
-										c: code,
-										m: message,
-										md: metadata,
+							conn._serialize(
+								{
+									body: {
+										re: {
+											i: rpcRequestId,
+											c: code,
+											m: message,
+											md: metadata,
+										},
 									},
-								},
-							} satisfies wsToClient.ToClient),
+								} satisfies wsToClient.ToClient,
+							),
 						);
 					} else {
 						conn._sendWebSocketMessage(
-							conn._serialize({
-								body: {
-									er: {
-										c: code,
-										m: message,
-										md: metadata,
+							conn._serialize(
+								{
+									body: {
+										er: {
+											c: code,
+											m: message,
+											md: metadata,
+										},
 									},
-								},
-							} satisfies wsToClient.ToClient),
+								} satisfies wsToClient.ToClient,
+							),
 						);
 					}
 				}
@@ -734,8 +763,9 @@ export abstract class Actor<
 		for (const connection of subscriptions) {
 			// Lazily serialize the appropriate format
 			if (!(connection._protocolFormat in serialized)) {
-				serialized[connection._protocolFormat] =
-					connection._serialize(toClient);
+				serialized[connection._protocolFormat] = connection._serialize(
+					toClient,
+				);
 			}
 
 			connection._sendWebSocketMessage(serialized[connection._protocolFormat]);
