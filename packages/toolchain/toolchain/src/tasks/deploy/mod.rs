@@ -157,17 +157,6 @@ async fn build_and_upload(
 ) -> Result<Uuid> {
 	task.log("");
 
-	// let mut tags = HashMap::from([
-	// 	(build::tags::VERSION.to_string(), version_name.to_string()),
-	// 	(build::tags::CURRENT.to_string(), "true".to_string()),
-	// ]);
-	// tags.extend(build.tags.clone());
-
-	// let exclusive_tags = vec![
-	// 	build::tags::VERSION.to_string(),
-	// 	build::tags::CURRENT.to_string(),
-	// ];
-
 	// Build & upload
 	let build_tags = build
 		.full_tags(build_name)
@@ -202,99 +191,35 @@ async fn build_and_upload(
 		}
 	};
 
-	// // Tag build
-	// let complete_res = apis::actor_builds_api::actor_builds_patch_tags(
-	// 	&ctx.openapi_config_cloud,
-	// 	&build_id.to_string(),
-	// 	models::ActorPatchBuildTagsRequest {
-	// 		tags: Some(serde_json::to_value(&tags)?),
-	// 		exclusive_tags: Some(exclusive_tags.clone()),
-	// 	},
-	// 	Some(&ctx.project.name_id),
-	// 	Some(&env.slug),
-	// )
-	// .await;
-	// if let Err(err) = complete_res.as_ref() {
-	// 	task.log(format!("{err:?}"));
-	// }
-	// complete_res.context("complete_res")?;
-
-	// HACK: Multiple exclusive tags doesn't work atm
-	{
-		let complete_res = apis::actor_builds_api::actor_builds_patch_tags(
-			&ctx.openapi_config_cloud,
-			&build_id.to_string(),
-			models::ActorPatchBuildTagsRequest {
-				tags: Some(serde_json::to_value(&build_tags)?),
-				exclusive_tags: None,
-			},
-			Some(&ctx.project.name_id),
-			Some(&env.slug),
-		)
-		.await;
-		if let Err(err) = complete_res.as_ref() {
-			task.log(format!("{err:?}"));
-		}
-		complete_res.context("complete_res")?;
-
-		let complete_res = apis::actor_builds_api::actor_builds_patch_tags(
-			&ctx.openapi_config_cloud,
-			&build_id.to_string(),
-			models::ActorPatchBuildTagsRequest {
-				tags: Some(serde_json::json!({
-					build::tags::ACCESS: build.access,
-				})),
-				exclusive_tags: None,
-			},
-			Some(&ctx.project.name_id),
-			Some(&env.slug),
-		)
-		.await;
-		if let Err(err) = complete_res.as_ref() {
-			task.log(format!("{err:?}"));
-		}
-		complete_res.context("complete_res")?;
-
-		let complete_res = apis::actor_builds_api::actor_builds_patch_tags(
-			&ctx.openapi_config_cloud,
-			&build_id.to_string(),
-			models::ActorPatchBuildTagsRequest {
-				tags: Some(serde_json::to_value(&HashMap::from([(
-					build::tags::CURRENT.to_string(),
-					"true".to_string(),
-				)]))?),
-				exclusive_tags: Some(vec![build::tags::CURRENT.to_string()]),
-			},
-			Some(&ctx.project.name_id),
-			Some(&env.slug),
-		)
-		.await;
-		if let Err(err) = complete_res.as_ref() {
-			task.log(format!("{err:?}"));
-		}
-		complete_res.context("complete_res")?;
-
-		let complete_res = apis::actor_builds_api::actor_builds_patch_tags(
-			&ctx.openapi_config_cloud,
-			&build_id.to_string(),
-			models::ActorPatchBuildTagsRequest {
-				tags: Some(serde_json::to_value(&HashMap::from([(
-					build::tags::VERSION.to_string(),
-					version_name.to_string(),
-				)]))?),
-				// TODO: This does not behave correctly atm
-				exclusive_tags: None,
-				// exclusive_tags: Some(vec![build::tags::VERSION.to_string()]),
-			},
-			Some(&ctx.project.name_id),
-			Some(&env.slug),
-		)
-		.await;
-		if let Err(err) = complete_res.as_ref() {
-			task.log(format!("{err:?}"));
-		}
-		complete_res.context("complete_res")?;
+	let mut tags = HashMap::from([
+		(build::tags::VERSION.to_string(), version_name.to_string()),
+		(build::tags::CURRENT.to_string(), "true".to_string()),
+	]);
+	if let Some(build_tags) = build.tags.clone() {
+		tags.extend(build_tags.clone());
 	}
+
+	let exclusive_tags = vec![
+		build::tags::VERSION.to_string(),
+		build::tags::CURRENT.to_string(),
+	];
+
+	// Tag build
+	let complete_res = apis::actor_builds_api::actor_builds_patch_tags(
+		&ctx.openapi_config_cloud,
+		&build_id.to_string(),
+		models::ActorPatchBuildTagsRequest {
+			tags: Some(serde_json::to_value(&tags)?),
+			exclusive_tags: Some(exclusive_tags.clone()),
+		},
+		Some(&ctx.project.name_id),
+		Some(&env.slug),
+	)
+	.await;
+	if let Err(err) = complete_res.as_ref() {
+		task.log(format!("{err:?}"));
+	}
+	complete_res.context("complete_res")?;
 
 	// Upgrade actors
 	task.log(format!("[Upgrading Actors]"));

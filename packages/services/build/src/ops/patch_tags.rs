@@ -56,6 +56,10 @@ pub async fn patch_tags(ctx: &OperationCtx, input: &Input) -> GlobalResult<Outpu
 							FROM db_build.builds
 							WHERE build_id = $1
 						),
+						split_exclusive_tags AS (
+							SELECT key, value
+							FROM jsonb_each($2)
+						),
 						filter_tags AS (
 							-- Combine the now filtered kv pairs back into an object
 							SELECT build_id, jsonb_object_agg(key, value) AS tags
@@ -80,8 +84,15 @@ pub async fn patch_tags(ctx: &OperationCtx, input: &Input) -> GlobalResult<Outpu
 									) OR
 									b.env_id = (SELECT env_id FROM build_data)
 								) AND
-								-- Check that build has the exclusive tags to begin with (pre-filtering)
-								b.tags @> $2
+								-- Check that build has any of the exclusive tags to begin with (pre-filtering)
+								(
+									SELECT EXISTS (
+										SELECT 1
+										FROM split_exclusive_tags
+										WHERE b.tags @> jsonb_build_object(key, value)
+										LIMIT 1
+									)
+								)
 							GROUP BY build_id
 						)
 					UPDATE db_build.builds AS b
@@ -109,7 +120,15 @@ pub async fn patch_tags(ctx: &OperationCtx, input: &Input) -> GlobalResult<Outpu
 								) OR 
 								b.env_id = (SELECT env_id FROM build_data)
 							) AND
-							b.tags @> $2
+							-- Check that build has any of the exclusive tags
+							(
+								SELECT EXISTS (
+									SELECT 1
+									FROM split_exclusive_tags
+									WHERE b.tags @> jsonb_build_object(key, value)
+									LIMIT 1
+								)
+							)
 					) AS f2
 					WHERE b.build_id = f2.build_id
 					",

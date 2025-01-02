@@ -295,7 +295,7 @@ async fn multiple_exclusive_tags(ctx: TestCtx) {
 			("version".to_string(), Some("123".to_string())),
 			("current".to_string(), Some("true".to_string())),
 		]),
-		exclusive_tags: Some(vec!["version".to_string(), "current".to_string()]),
+		exclusive_tags: Some(vec!["current".to_string(), "version".to_string()]),
 	})
 	.await
 	.unwrap();
@@ -314,8 +314,9 @@ async fn multiple_exclusive_tags(ctx: TestCtx) {
 			("name".to_string(), Some("foo".to_string())),
 			("version".to_string(), Some("123".to_string())),
 			("current".to_string(), Some("true".to_string())),
+			("other".to_string(), Some("tag".to_string())),
 		]),
-		exclusive_tags: Some(vec!["version".to_string(), "current".to_string()]),
+		exclusive_tags: Some(vec!["version".to_string(), "current".to_string(), "other".to_string()]),
 	})
 	.await
 	.unwrap();
@@ -341,7 +342,8 @@ async fn multiple_exclusive_tags(ctx: TestCtx) {
 		HashMap::from([
 			("name".to_string(), Some("foo".to_string())),
 			("version".to_string(), Some("123".to_string())),
-			("current".to_string(), Some("true".to_string()))
+			("current".to_string(), Some("true".to_string())),
+			("other".to_string(), Some("tag".to_string()))
 		])
 	);
 }
