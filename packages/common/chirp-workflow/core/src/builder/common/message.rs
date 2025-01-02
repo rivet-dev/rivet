@@ -54,7 +54,7 @@ impl<'a, M: Message> MessageBuilder<'a, M> {
 		self
 	}
 
-	pub async fn wait(mut self) -> Self {
+	pub fn wait(mut self) -> Self {
 		if self.error.is_some() {
 			return self;
 		}

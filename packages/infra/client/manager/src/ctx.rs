@@ -54,8 +54,8 @@ pub enum RuntimeError {
 	SocketFailed(tokio_tungstenite::tungstenite::Error),
 	#[error("runner socket failed: {0}")]
 	RunnerSocketListenFailed(std::io::Error),
-	#[error("socket closed")]
-	SocketClosed,
+	#[error("socket closed: {0}, {1}")]
+	SocketClosed(CloseCode, String),
 	#[error("stream closed")]
 	StreamClosed,
 }
@@ -281,7 +281,20 @@ impl Ctx {
 					self.process_packet(packet).await?;
 				}
 				Message::Pong(_) => tracing::debug!("received pong"),
-				Message::Close(_) => return Err(RuntimeError::SocketClosed.into()),
+				Message::Close(Some(close_frame)) => {
+					return Err(RuntimeError::SocketClosed(
+						close_frame.code,
+						close_frame.reason.to_string(),
+					)
+					.into())
+				}
+				Message::Close(None) => {
+					return Err(RuntimeError::SocketClosed(
+						CloseCode::Abnormal,
+						"no close frame".to_string(),
+					)
+					.into())
+				}
 				msg => {
 					tracing::warn!(?msg, "unexpected message");
 				}

@@ -3,7 +3,6 @@ use std::convert::TryInto;
 use chirp_workflow::prelude::*;
 use futures_util::FutureExt;
 use nix::sys::signal::Signal;
-use serde_json::json;
 
 use crate::{metrics, protocol};
 
@@ -48,7 +47,6 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 									last_event_idx: init_data.last_event_idx,
 								},
 							})
-							.tags(json!({}))
 							.send()
 							.await?;
 
@@ -58,7 +56,6 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 									client_id,
 									inner: protocol::ToClient::Commands(init_data.missed_commands),
 								})
-								.tags(json!({}))
 								.send()
 								.await?;
 							}
@@ -146,7 +143,6 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 	ctx.msg(CloseWs {
 		client_id: input.client_id,
 	})
-	.tags(json!({}))
 	.send()
 	.await?;
 
@@ -428,7 +424,6 @@ pub async fn handle_commands(
 			client_id,
 			inner: protocol::ToClient::Commands(vec![wrapped_command]),
 		})
-		.tags(json!({}))
 		.send()
 		.await?;
 	}
