@@ -1,9 +1,7 @@
-name: build
+name: release-bin
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
   # For testing:
   # pull_request:
 
