@@ -1,0 +1,15 @@
+[package]
+name = "pegboard-logs"
+version = "0.0.1"
+edition = "2021"
+authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
+license = "Apache-2.0"
+
+[dependencies]
+anyhow.workspace = true
+chrono = { version = "0.4", features = ["now"] }
+nix.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-logfmt.workspace = true
+tracing-subscriber.workspace = true

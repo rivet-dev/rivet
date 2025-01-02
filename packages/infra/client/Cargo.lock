@@ -4337,15 +4337,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nu-ansi-term"
-version = "0.50.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4a28e057d01f97e61255210fcff094d74ed0466038633e95017f5beb68e4399"
-dependencies = [
- "windows-sys 0.52.0",
-]
-
-[[package]]
 name = "num-bigint"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4775,6 +4766,7 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "nix",
+ "pegboard-logs",
  "portpicker",
  "serde",
  "serde_json",
@@ -4805,6 +4797,7 @@ dependencies = [
  "pegboard",
  "pegboard-actor-kv",
  "pegboard-config",
+ "pegboard-logs",
  "portpicker",
  "serde",
  "serde_json",
@@ -4817,6 +4810,19 @@ dependencies = [
  "tracing-subscriber",
  "twox-hash",
  "uuid",
+]
+
+[[package]]
+name = "pegboard-logs"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "nix",
+ "tokio",
+ "tracing",
+ "tracing-logfmt",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -4833,6 +4839,7 @@ dependencies = [
  "notify",
  "pegboard",
  "pegboard-config",
+ "pegboard-logs",
  "portpicker",
  "prometheus",
  "rand",
@@ -7631,7 +7638,6 @@ version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6b1f47d22deb79c3f59fcf2a1f00f60cbdc05462bf17d1cd356c1fefa3f444bd"
 dependencies = [
- "nu-ansi-term 0.50.1",
  "time",
  "tracing",
  "tracing-core",
@@ -7654,7 +7660,7 @@ version = "0.3.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ad0f048c97dbd9faa9b7df56362b8ebcaa52adb06b498c050d2f4e32f90a7a8b"
 dependencies = [
- "nu-ansi-term 0.46.0",
+ "nu-ansi-term",
  "serde",
  "serde_json",
  "sharded-slab",

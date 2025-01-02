@@ -10,25 +10,21 @@ name = "rivet-isolate-v8-runner"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = "1.0.79"
+anyhow.workspace = true
 deno_ast = "0.42.1"
 deno_core.workspace = true
 foundationdb = {version = "0.9.1", features = [ "fdb-7_1", "embedded-fdb-include" ] }
 futures-util = { version = "0.3" }
 netif = "0.1.6"
-nix = { version = "0.27", default-features = false, features = ["user", "signal"] }
+nix.workspace = true
 serde = { version = "1.0.195", features = ["derive"] }
 serde_json = "1.0.111"
 signal-hook = "0.3.17"
-tokio = { version = "1.40.0", features = [ "full" ] }
+tokio.workspace = true
 tokio-tungstenite = "0.23.1"
-tracing = "0.1"
-tracing-logfmt = { version = "0.3" , features = ["ansi_logs"] }
-tracing-subscriber = { version = "0.3", default-features = false, features = [
-    "ansi",
-    "fmt",
-    "json",
-] }
+tracing.workspace = true
+tracing-logfmt.workspace = true
+tracing-subscriber.workspace = true
 twox-hash = "1.6.3"
 uuid = { version = "1.6.1", features = ["v4"] }
 
@@ -36,6 +32,7 @@ actor-kv.workspace = true
 deno_runtime.workspace = true
 pegboard = { path = "../../../services/pegboard", default-features = false }
 pegboard-config.workspace = true
+pegboard-logs.workspace = true
 
 [dev-dependencies]
 portpicker = "0.1.1"

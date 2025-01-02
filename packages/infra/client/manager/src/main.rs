@@ -1,6 +1,5 @@
 use std::{
-	os::fd::AsRawFd,
-	path::{Path, PathBuf},
+	path::Path,
 	result::Result::{Err, Ok},
 	time::Duration,
 };
@@ -116,7 +115,12 @@ async fn init() -> Result<Init> {
 	};
 
 	if config.client.logs.redirect_logs() {
-		redirect_logs(config.client.data_dir().join("log")).await?;
+		pegboard_logs::Logs::new(
+			config.client.data_dir().join("logs"),
+			config.client.logs.retention(),
+		)
+		.start()
+		.await?;
 	}
 
 	// SAFETY: No other task has spawned yet.
@@ -207,20 +211,4 @@ fn init_tracing() {
 				.with_filter(tracing_subscriber::filter::LevelFilter::INFO),
 		)
 		.init();
-}
-
-async fn redirect_logs(log_file_path: PathBuf) -> Result<()> {
-	tracing::info!("Redirecting all logs to {}", log_file_path.display());
-	let log_file = fs::OpenOptions::new()
-		.write(true)
-		.create(true)
-		.append(true)
-		.open(log_file_path)
-		.await?;
-	let log_fd = log_file.as_raw_fd();
-
-	nix::unistd::dup2(log_fd, nix::libc::STDOUT_FILENO)?;
-	nix::unistd::dup2(log_fd, nix::libc::STDERR_FILENO)?;
-
-	Ok(())
 }

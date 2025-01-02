@@ -1,7 +1,6 @@
 use std::{
 	collections::HashMap,
-	os::fd::AsRawFd,
-	path::{Path, PathBuf},
+	path::Path,
 	result::Result::{Err, Ok},
 	sync::Arc,
 	thread::JoinHandle,
@@ -41,6 +40,8 @@ enum Packet {
 /// Manager port to connect to.
 const THREAD_STATUS_POLL_INTERVAL: Duration = Duration::from_millis(500);
 const PING_INTERVAL: Duration = Duration::from_secs(1);
+// 7 day logs retention
+const LOGS_RETENTION: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -52,7 +53,9 @@ async fn main() -> Result<()> {
 		.context("`working_path` arg required")?;
 	let working_path = Path::new(&working_path);
 
-	redirect_logs(working_path.join("log")).await?;
+	pegboard_logs::Logs::new(working_path.join("logs"), LOGS_RETENTION)
+		.start()
+		.await?;
 
 	let config_data = fs::read_to_string(working_path.join("config.json")).await?;
 	let config = serde_json::from_str::<Config>(&config_data)?;
@@ -329,22 +332,6 @@ fn cleanup_thread(actor_id: Uuid, handle: JoinHandle<Result<()>>, fatal_tx: &wat
 		Err(_) => fatal_tx.send(()).expect("receiver cannot be dropped"),
 		_ => {}
 	}
-}
-
-async fn redirect_logs(log_file_path: PathBuf) -> Result<()> {
-	tracing::info!("Redirecting all logs to {}", log_file_path.display());
-	let log_file = fs::OpenOptions::new()
-		.write(true)
-		.create(true)
-		.append(true)
-		.open(log_file_path)
-		.await?;
-	let log_fd = log_file.as_raw_fd();
-
-	nix::unistd::dup2(log_fd, nix::libc::STDOUT_FILENO)?;
-	nix::unistd::dup2(log_fd, nix::libc::STDERR_FILENO)?;
-
-	Ok(())
 }
 
 fn init_tracing() {

@@ -2,6 +2,7 @@ use std::{
 	borrow::Cow,
 	net::{IpAddr, Ipv4Addr},
 	path::{Path, PathBuf},
+	time::Duration,
 };
 
 use pegboard::protocol;
@@ -226,11 +227,17 @@ impl ReservedResources {
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Logs {
 	pub redirect_logs: Option<bool>,
+	/// Log retention in seconds. Defaults to 10 days. Only applies with log redirection enabled.
+	pub retention: Option<u64>,
 }
 
 impl Logs {
 	pub fn redirect_logs(&self) -> bool {
 		self.redirect_logs.unwrap_or(true)
+	}
+
+	pub fn retention(&self) -> Duration {
+		Duration::from_secs(self.retention.unwrap_or(10 * 24 * 60 * 60))
 	}
 }
 

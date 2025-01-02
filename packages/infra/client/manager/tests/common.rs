@@ -291,6 +291,7 @@ pub async fn init_client(gen_path: &Path, working_path: &Path) -> Config {
 			reserved_resources: Default::default(),
 			logs: Logs {
 				redirect_logs: Some(false),
+				retention: None,
 			},
 			metrics: Default::default(),
 			foundationdb: FoundationDb {

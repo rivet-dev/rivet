@@ -14,13 +14,13 @@ path = "src/main.rs"
 test = []
 
 [dependencies]
-anyhow = "1.0.79"
+anyhow.workspace = true
 bytes = "1.0"
 futures-util = { version = "0.3" }
 hyper = { version = "0.14", features = ["server", "http1", "tcp", "stream"] }
 indoc = "2.0"
 lazy_static = "1.4"
-nix = { version = "0.27", default-features = false, features = ["fs", "user", "signal"] }
+nix.workspace = true
 notify = { version = "6.1.1", default-features = false, features = ["serde", "fsevent-sys"] }
 prometheus = "0.13"
 rand = "0.8"
@@ -31,21 +31,18 @@ serde_json = "1.0.111"
 sysinfo = "0.31.4" 
 tempfile = "3.2"
 thiserror = "1.0"
-tokio = { version = "1.27", default-features = false, features = ["fs", "process", "macros", "rt", "rt-multi-thread"] }
+tokio = { workspace = true, default-features = false, features = ["fs", "process", "macros", "rt", "rt-multi-thread"] }
 tokio-tungstenite = "0.23.1"
 tokio-util = { version = "0.7", default-features = false, features = ["io-util"] }
-tracing = "0.1"
-tracing-logfmt = "0.3"
-tracing-subscriber = { version = "0.3", default-features = false, features = [
-    "ansi",
-    "fmt",
-    "json",
-] }
+tracing.workspace = true
+tracing-logfmt.workspace = true
+tracing-subscriber.workspace = true
 url = "2.4"
 uuid = { version = "1.6.1", features = ["v4"] }
 
 pegboard = { path = "../../../services/pegboard", default-features = false }
-pegboard-config = { path = "../config" }
+pegboard-config.workspace = true
+pegboard-logs.workspace = true
 serde_yaml = "0.9.34"
 
 [dependencies.sqlx]

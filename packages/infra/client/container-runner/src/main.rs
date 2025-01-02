@@ -1,9 +1,4 @@
-use std::{
-	fs,
-	os::fd::AsRawFd,
-	path::{Path, PathBuf},
-	sync::mpsc,
-};
+use std::{fs, path::Path, sync::mpsc, time::Duration};
 
 use anyhow::*;
 use utils::{var, ActorOwner};
@@ -15,9 +10,10 @@ mod utils;
 
 /// Maximum length of a single log line
 const MAX_LINE_BYTES: usize = 1024;
-
 /// Maximum number of bytes to buffer before dropping logs
 const MAX_BUFFER_BYTES: usize = 1024 * 1024;
+// 7 day logs retention
+const LOGS_RETENTION: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
 fn main() -> Result<()> {
 	let actor_path = std::env::args()
@@ -26,7 +22,7 @@ fn main() -> Result<()> {
 		.context("`actor_path` arg required")?;
 	let actor_path = Path::new(&actor_path);
 
-	redirect_logs(actor_path.join("log"))?;
+	pegboard_logs::Logs::new(actor_path.join("logs"), LOGS_RETENTION).start_sync()?;
 
 	// Write PID to file
 	fs::write(
@@ -109,19 +105,4 @@ fn main() -> Result<()> {
 	)?;
 
 	std::process::exit(exit_code)
-}
-
-fn redirect_logs(log_file_path: PathBuf) -> Result<()> {
-	println!("Redirecting all logs to {}", log_file_path.display());
-	let log_file = fs::OpenOptions::new()
-		.write(true)
-		.create(true)
-		.append(true)
-		.open(log_file_path)?;
-	let log_fd = log_file.as_raw_fd();
-
-	nix::unistd::dup2(log_fd, nix::libc::STDOUT_FILENO)?;
-	nix::unistd::dup2(log_fd, nix::libc::STDERR_FILENO)?;
-
-	Ok(())
 }

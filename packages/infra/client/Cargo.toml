@@ -1,11 +1,12 @@
 [workspace]
 members = [
+	"actor-kv",
+	"config",
 	"container-runner",
 	"echo",
 	"isolate-v8-runner",
-	"actor-kv",
+	"logs",
 	"manager",
-	"config",
 ]
 
 [workspace.package]
@@ -15,12 +16,24 @@ authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 license = "Apache-2.0"
 
 [workspace.dependencies]
+actor-kv = { path = "actor-kv", package = "pegboard-actor-kv" }
 container-runner = { path = "container-runner" }
 echo = { path = "echo" }
 isolate-v8-runner = { path = "isolate-v8-runner" }
-pegboard-config = { path = "config" }
-actor-kv = { path = "actor-kv", package = "pegboard-actor-kv" }
 manager = { path = "manager", package = "pegboard-manager" }
+pegboard-config = { path = "config" }
+pegboard-logs = { path = "logs" }
+
+anyhow = "1.0.79"
+tokio = { version = "1.40.0", default-features = false, features = [ "full" ] }
+nix = { version = "0.27", default-features = false, features = ["fs", "user", "signal"] }
+tracing = "0.1"
+tracing-logfmt = "0.3"
+tracing-subscriber = { version = "0.3", default-features = false, features = [
+    "ansi",
+    "fmt",
+    "json",
+] }
 
 [workspace.dependencies.sqlx]
 git = "https://github.com/rivet-gg/sqlx"

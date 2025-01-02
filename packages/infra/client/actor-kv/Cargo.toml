@@ -6,22 +6,18 @@ authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]
 license = "Apache-2.0"
 
 [dependencies]
-anyhow = "1.0.79"
+anyhow.workspace = true
 deno_core.workspace = true
 foundationdb = {version = "0.9.1", features = [ "fdb-7_1", "embedded-fdb-include" ] }
 futures-util = { version = "0.3" }
 prost = "0.13.3"
 serde = { version = "1.0.195", features = ["derive"] }
 serde_json = "1.0.111"
-tokio = { version = "1.40.0", features = [ "full" ] }
+tokio.workspace = true
 tokio-tungstenite = "0.23.1"
-tracing = "0.1"
-tracing-logfmt = { version = "0.3" , features = ["ansi_logs"] }
-tracing-subscriber = { version = "0.3", default-features = false, features = [
-    "ansi",
-    "fmt",
-    "json",
-] }
+tracing.workspace = true
+tracing-logfmt.workspace = true
+tracing-subscriber.workspace = true
 uuid = { version = "1.6.1", features = ["v4"] }
 
 pegboard = { path = "../../../services/pegboard", default-features = false }
