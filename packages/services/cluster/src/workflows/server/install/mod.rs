@@ -10,7 +10,7 @@ use ssh2::Session;
 
 use crate::{
 	types::{Datacenter, PoolType},
-	util::metrics,
+	metrics,
 };
 
 mod install_scripts;

@@ -3,7 +3,7 @@ use std::convert::{TryFrom, TryInto};
 use chirp_workflow::prelude::*;
 use cluster::{
 	types::{Datacenter, PoolType},
-	util::metrics,
+	metrics,
 };
 
 pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> GlobalResult<()> {

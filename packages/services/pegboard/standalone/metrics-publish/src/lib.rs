@@ -52,13 +52,13 @@ pub async fn run_from_env(
 	)?;
 
 	for (client_id, last_ping_ts) in client_ping {
-		pegboard::metrics::PEGBOARD_CLIENT_LAST_PING
+		pegboard::metrics::CLIENT_LAST_PING
 			.with_label_values(&[&client_id.to_string()])
 			.set(last_ping_ts);
 	}
 
 	for (client_id, count) in client_actors {
-		pegboard::metrics::PEGBOARD_CLIENT_ACTORS_ALLOCATED
+		pegboard::metrics::CLIENT_ACTORS_ALLOCATED
 			.with_label_values(&[&client_id.to_string()])
 			.set(count.try_into()?);
 	}

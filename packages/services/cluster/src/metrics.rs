@@ -84,4 +84,11 @@ lazy_static::lazy_static! {
 		PROVISION_BUCKETS.to_vec(),
 		*REGISTRY,
 	).unwrap();
+
+	pub static ref NONREPORTING_SERVER: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		"provision_nonreporting_server",
+		"Servers without reporting Prometheus metrics.",
+		&["cluster_id", "datacenter_id", "server_id", "provider_datacenter_id", "pool_type"],
+		*REGISTRY,
+	).unwrap();
 }
