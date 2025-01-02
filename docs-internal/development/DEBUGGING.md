@@ -130,6 +130,6 @@ dashboards:
 
 ## Alerting
 
-Rivet uses Alert Manager extensively for catching errors before they happen & quickly narrowing down the
-source of errors. Alerts can be pushed to Slack if the `alertmanager/slack/url` and
-`alertmanager/slack/channel` secrets are provided. See _infra/tf/k8s_infra/prometheus.tf_.
+Rivet uses Grafana Alerts for catching errors before they happen & quickly narrowing down the
+source of errors. Alerts can be pushed to Slack if the `grafana_alerts/slack/webhook_url` secret is provided.
+See _infra/tf/k8s_infra/prometheus.tf_.
