@@ -275,7 +275,7 @@ async fn insert_events(ctx: &ActivityCtx, input: &InsertEventsInput) -> GlobalRe
 			continue;
 		}
 
-		metrics::PEGBOARD_DUPLICATE_CLIENT_EVENT
+		metrics::PEGBOARD_CLIENT_DUPLICATE_EVENT
 			.with_label_values(&[&input.client_id.to_string(), &event.index.to_string()])
 			.inc();
 	}
