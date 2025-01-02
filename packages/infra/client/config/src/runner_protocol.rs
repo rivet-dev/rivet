@@ -9,7 +9,7 @@ pub enum ToRunner {
 	Signal {
 		actor_id: Uuid,
 		signal: i32,
-		persist_state: bool,
+		persist_storage: bool,
 	},
 	// Kills the runner process
 	Terminate,

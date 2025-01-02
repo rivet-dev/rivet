@@ -740,7 +740,7 @@ impl Actor {
 		}
 
 		// Delete entire actor dir. Note that for actors using KV storage, it is persisted elsewhere and will
-		// not be deleted by this (see `persist_state` in the runner protocol).
+		// not be deleted by this (see `persist_storage` in the runner protocol).
 		if let Err(err) = tokio::fs::remove_dir_all(&actor_path).await {
 			tracing::error!(actor_id=?self.actor_id, ?err, "failed to delete actor dir");
 		}

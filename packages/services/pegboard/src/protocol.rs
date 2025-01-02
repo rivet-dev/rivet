@@ -79,7 +79,9 @@ pub enum Command {
 		// See nix::sys::signal::Signal
 		signal: i32,
 		/// Whether or not to delete related data (KV store).
-		persist_state: bool,
+		persist_storage: bool,
+		/// Whether or not to publish any state update signals after this command.
+		ignore_future_state: bool,
 	},
 }
 

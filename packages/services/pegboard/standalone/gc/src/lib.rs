@@ -179,7 +179,8 @@ pub async fn run_from_env(
 			ctx.signal(protocol::Command::SignalActor {
 				actor_id: row.actor_id,
 				signal: Signal::SIGKILL as i32,
-				persist_state: false,
+				persist_storage: false,
+				ignore_future_state: true,
 			})
 			.tag("client_id", row.client_id)
 			.send()

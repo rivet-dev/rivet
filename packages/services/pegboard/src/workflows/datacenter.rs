@@ -54,7 +54,8 @@ pub async fn pegboard_datacenter(ctx: &mut WorkflowCtx, input: &Input) -> Global
 				protocol::Command::SignalActor {
 					actor_id,
 					signal,
-					persist_state,
+					persist_storage,
+					ignore_future_state,
 				} => {
 					let client_id = ctx.activity(GetClientForActorInput { actor_id }).await?;
 
@@ -63,7 +64,8 @@ pub async fn pegboard_datacenter(ctx: &mut WorkflowCtx, input: &Input) -> Global
 						ctx.signal(protocol::Command::SignalActor {
 							actor_id,
 							signal,
-							persist_state,
+							persist_storage,
+							ignore_future_state,
 						})
 						.tag("client_id", client_id)
 						.send()

@@ -116,14 +116,15 @@ pub(crate) async fn destroy_actor(
 	ctx: &mut WorkflowCtx,
 	datacenter_id: Uuid,
 	kill_timeout_ms: i64,
-	persist_state: bool,
+	persist_storage: bool,
 	actor_id: Uuid,
 ) -> GlobalResult<()> {
 	if kill_timeout_ms != 0 {
 		ctx.signal(pp::Command::SignalActor {
 			actor_id,
 			signal: Signal::SIGTERM as i32,
-			persist_state,
+			persist_storage,
+			ignore_future_state: true,
 		})
 		.tag("datacenter_id", datacenter_id)
 		.send()
@@ -136,7 +137,8 @@ pub(crate) async fn destroy_actor(
 	ctx.signal(pp::Command::SignalActor {
 		actor_id,
 		signal: Signal::SIGKILL as i32,
-		persist_state,
+		persist_storage,
+		ignore_future_state: true,
 	})
 	.tag("datacenter_id", datacenter_id)
 	.send()

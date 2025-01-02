@@ -1,6 +1,5 @@
 use chirp_workflow::prelude::*;
 use ds::types;
-// use rivet_api::{apis::*, models};
 use rivet_operation::prelude::proto::backend;
 use serde_json::json;
 
@@ -46,15 +45,14 @@ async fn server_create(ctx: TestCtx) {
 			"some_other_envkey_test".to_string(),
 			"4325234356".to_string(),
 		),
-		("HTTP_PORT".to_string(), 28234.to_string()),
 	]
 	.into_iter()
 	.collect();
 
 	let ports = vec![(
-		"testing2".to_string(),
+		"ds_testing2".to_string(),
 		ds::workflows::server::Port {
-			internal_port: Some(28234),
+			internal_port: None,
 			routing: types::Routing::GameGuard {
 				protocol: types::GameGuardProtocol::Http,
 				authorization: types::PortAuthorization::None,
@@ -122,7 +120,7 @@ async fn server_create(ctx: TestCtx) {
 			.next()
 			.unwrap();
 
-		let port = server.network_ports.get("testing2").unwrap();
+		let port = server.network_ports.get("ds_testing2").unwrap();
 
 		if let Some(hostname) = port.public_hostname.as_ref() {
 			break (hostname.clone(), port.public_port.unwrap());
@@ -139,7 +137,7 @@ async fn server_create(ctx: TestCtx) {
 		let client = reqwest::Client::new();
 		let res = tokio::time::timeout(std::time::Duration::from_secs(3), async {
 			client
-				.post(format!("http://{hostname}:{port}/error"))
+				.post(format!("http://{hostname}:{port}"))
 				.body(random_body.clone())
 				.send()
 				.await

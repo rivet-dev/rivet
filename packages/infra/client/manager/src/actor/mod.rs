@@ -287,14 +287,14 @@ impl Actor {
 		self: &Arc<Self>,
 		ctx: &Arc<Ctx>,
 		signal: Signal,
-		persist_state: bool,
+		persist_storage: bool,
 	) -> Result<()> {
 		tracing::info!(actor_id=?self.actor_id, ?signal, "sending signal");
 
 		let self2 = self.clone();
 		let ctx2 = ctx.clone();
 		tokio::spawn(async move {
-			if let Err(err) = self2.signal_inner(&ctx2, signal, persist_state).await {
+			if let Err(err) = self2.signal_inner(&ctx2, signal, persist_storage).await {
 				tracing::error!(?err, "actor signal failed");
 			}
 		});
@@ -306,7 +306,7 @@ impl Actor {
 		self: &Arc<Self>,
 		ctx: &Arc<Ctx>,
 		signal: Signal,
-		persist_state: bool,
+		persist_storage: bool,
 	) -> Result<()> {
 		let mut i = 0;
 
@@ -344,7 +344,7 @@ impl Actor {
 					.send(&runner_protocol::ToRunner::Signal {
 						actor_id: self.actor_id,
 						signal: signal as i32,
-						persist_state,
+						persist_storage,
 					})
 					.await?;
 			}

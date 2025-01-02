@@ -63,23 +63,39 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 						// We assume events are in order by index
 						protocol::ToServer::Events(events) => {
 							// Write to db
-							ctx.activity(InsertEventsInput {
-								client_id,
-								events: events.clone(),
-							})
-							.await?;
-
-							ctx.activity(UpdateActorStateInput {
-								events: events.iter().map(|x| x.inner.clone()).collect(),
-							})
-							.await?;
+							let (_, update_actor_state_res) = ctx
+								.join((
+									activity(InsertEventsInput {
+										client_id,
+										events: events.clone(),
+									}),
+									activity(UpdateActorStateInput {
+										updates: events
+											.iter()
+											.map(|x| Update {
+												event: x.inner.clone(),
+												ignore_future_state: None,
+											})
+											.collect(),
+									}),
+								))
+								.await?;
 
 							// NOTE: This should not be parallelized because signals should be sent in order
 							for event in events {
 								#[allow(irrefutable_let_patterns)]
 								if let protocol::Event::ActorStateUpdate { actor_id, state } =
-									serde_json::from_str(event.inner.get())?
+									event.inner.deserialize()?
 								{
+									// Skip ignored actor ids
+									if update_actor_state_res
+										.ignore_actor_ids
+										.iter()
+										.any(|id| &actor_id == id)
+									{
+										continue;
+									}
+
 									ctx.signal(ActorStateUpdate { state })
 										.tag("actor_id", actor_id)
 										.send()
@@ -133,7 +149,8 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 			.map(|actor_id| protocol::Command::SignalActor {
 				actor_id,
 				signal: Signal::SIGKILL as i32,
-				persist_state: false,
+				persist_storage: false,
+				ignore_future_state: true,
 			})
 			.collect(),
 	)
@@ -268,12 +285,22 @@ async fn insert_events(ctx: &ActivityCtx, input: &InsertEventsInput) -> GlobalRe
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
 struct UpdateActorStateInput {
-	events: Vec<protocol::Raw<protocol::Event>>,
+	updates: Vec<Update>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct Update {
+	event: protocol::Raw<protocol::Event>,
+	ignore_future_state: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
 struct UpdateActorStateOutput {
-	stopping_actor_ids: Vec<Uuid>,
+	// Deprecated
+	stopping_actor_ids: Option<Vec<Uuid>>,
+	/// A list of actor ids which we should not publish actor state update signals for.
+	#[serde(default)]
+	ignore_actor_ids: Vec<Uuid>,
 }
 
 #[activity(UpdateActorState)]
@@ -283,111 +310,122 @@ async fn update_actor_state(
 ) -> GlobalResult<UpdateActorStateOutput> {
 	use protocol::ActorState::*;
 
-	let mut stopping_actor_ids = Vec::new();
+	let mut ignore_actor_ids = Vec::new();
 
 	// TODO: Parallelize
-	for event in &input.events {
+	for update in &input.updates {
 		// Update actors table with actor state updates
-		match event.deserialize()? {
-			protocol::Event::ActorStateUpdate { actor_id, state } => match state {
-				Starting => {
-					sql_execute!(
-						[ctx]
-						"
-						UPDATE db_pegboard.actors
-						SET start_ts = $2
-						WHERE actor_id = $1
-						",
-						actor_id,
-						util::timestamp::now(),
-					)
-					.await?;
-				}
-				Running { pid, .. } => {
-					sql_execute!(
-						[ctx]
+		match update.event.deserialize()? {
+			protocol::Event::ActorStateUpdate { actor_id, state } => {
+				let (ignore_future_state,) = match state {
+					Starting => {
+						sql_fetch_one!(
+							[ctx, (bool,)]
+							"
+							UPDATE db_pegboard.actors
+							SET start_ts = $2
+							WHERE actor_id = $1
+							RETURNING ignore_future_state
+							",
+							actor_id,
+							util::timestamp::now(),
+						)
+						.await?
+					}
+					Running { pid, .. } => {
+						sql_fetch_one!(
+							[ctx, (bool,)]
+							"
+							UPDATE db_pegboard.actors
+							SET
+								running_ts = $2,
+								pid = $3
+							WHERE actor_id = $1
+							RETURNING ignore_future_state
+							",
+							actor_id,
+							util::timestamp::now(),
+							pid as i64,
+						)
+						.await?
+					}
+					Stopping => sql_fetch_optional!(
+						[ctx, (bool,)]
 						"
 						UPDATE db_pegboard.actors
 						SET
-							running_ts = $2,
-							pid = $3
-						WHERE actor_id = $1
-						",
-						actor_id,
-						util::timestamp::now(),
-						pid as i64,
-					)
-					.await?;
-				}
-				Stopping => {
-					let set_stopping_ts = sql_fetch_optional!(
-						[ctx, (i64,)]
-						"
-						UPDATE db_pegboard.actors
-						SET stopping_ts = $2
+							stopping_ts = $2,
+							ignore_future_state = COALESCE($3, ignore_future_state)
 						WHERE actor_id = $1 AND stopping_ts IS NULL
-						RETURNING 1
+						RETURNING ignore_future_state
 						",
 						actor_id,
 						util::timestamp::now(),
+						update.ignore_future_state,
 					)
 					.await?
-					.is_some();
-
-					if set_stopping_ts {
-						stopping_actor_ids.push(actor_id);
+					.unwrap_or((true,)),
+					Stopped => {
+						sql_fetch_one!(
+							[ctx, (bool,)]
+							"
+							UPDATE db_pegboard.actors
+							SET stop_ts = $2
+							WHERE actor_id = $1
+							RETURNING ignore_future_state
+							",
+							actor_id,
+							util::timestamp::now(),
+						)
+						.await?
 					}
+					Lost => {
+						sql_fetch_one!(
+							[ctx, (bool,)]
+							"
+							UPDATE db_pegboard.actors
+							SET
+								lost_ts = $2
+							WHERE actor_id = $1
+							RETURNING ignore_future_state
+							",
+							actor_id,
+							util::timestamp::now(),
+						)
+						.await?
+					}
+					Exited { exit_code } => {
+						sql_fetch_one!(
+							[ctx, (bool,)]
+							"
+							UPDATE db_pegboard.actors
+							SET
+								exit_ts = $2,
+								exit_code = $3
+							WHERE actor_id = $1
+							RETURNING ignore_future_state
+							",
+							actor_id,
+							util::timestamp::now(),
+							exit_code,
+						)
+						.await?
+					}
+					// These updates should never reach this workflow
+					Allocated { .. } | FailedToAllocate => bail!("invalid state for updating db"),
+				};
+
+				if ignore_future_state {
+					ignore_actor_ids.push(actor_id);
 				}
-				Stopped => {
-					sql_execute!(
-						[ctx]
-						"
-						UPDATE db_pegboard.actors
-						SET stop_ts = $2
-						WHERE actor_id = $1
-						",
-						actor_id,
-						util::timestamp::now(),
-					)
-					.await?;
-				}
-				Lost => {
-					sql_execute!(
-						[ctx]
-						"
-						UPDATE db_pegboard.actors
-						SET
-							lost_ts = $2
-						WHERE actor_id = $1
-						",
-						actor_id,
-						util::timestamp::now(),
-					)
-					.await?;
-				}
-				Exited { exit_code } => {
-					sql_execute!(
-						[ctx]
-						"
-						UPDATE db_pegboard.actors
-						SET
-							exit_ts = $2,
-							exit_code = $3
-						WHERE actor_id = $1
-						",
-						actor_id,
-						util::timestamp::now(),
-						exit_code,
-					)
-					.await?;
-				}
-				// These updates should never reach this workflow
-				Allocated { .. } | FailedToAllocate => bail!("invalid state for updating db"),
-			},
+			}
 		}
 	}
 
-	Ok(UpdateActorStateOutput { stopping_actor_ids })
+	Ok(UpdateActorStateOutput {
+		stopping_actor_ids: None,
+		ignore_actor_ids,
+	})
 }
 
 pub async fn handle_commands(
@@ -428,24 +466,28 @@ pub async fn handle_commands(
 		.await?;
 	}
 
+	// TODO: Parallelize
 	// Update actor state based on commands
 	for command in commands {
 		if let protocol::Command::SignalActor {
-			actor_id, signal, ..
+			actor_id, signal, ignore_future_state, ..
 		} = command
 		{
 			if matches!(signal.try_into()?, Signal::SIGTERM | Signal::SIGKILL) {
 				let res = ctx
 					.activity(UpdateActorStateInput {
-						events: vec![protocol::Raw::new(&protocol::Event::ActorStateUpdate {
-							actor_id,
-							state: protocol::ActorState::Stopping,
-						})?],
+						updates: vec![Update {
+							event: protocol::Raw::new(&protocol::Event::ActorStateUpdate {
+								actor_id,
+								state: protocol::ActorState::Stopping,
+							})?,
+							ignore_future_state: ignore_future_state.then_some(true),
+						}],
 					})
 					.await?;
 
 				// Publish signal if stopping_ts was not set before
-				if !res.stopping_actor_ids.is_empty() {
+				if res.ignore_actor_ids.is_empty() {
 					ctx.signal(crate::workflows::client::ActorStateUpdate {
 						state: protocol::ActorState::Stopping,
 					})

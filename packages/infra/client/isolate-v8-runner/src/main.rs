@@ -188,12 +188,12 @@ async fn handle_connection(
 			runner_protocol::ToRunner::Signal {
 				actor_id,
 				signal,
-				persist_state,
+				persist_storage,
 			} => {
 				if let Some(signal_tx) = actors.read().await.get(&actor_id) {
 					// Tell actor thread to stop. Removing the actor is handled in the tokio task above.
 					signal_tx
-						.try_send((signal, persist_state))
+						.try_send((signal, persist_storage))
 						.context("failed to send stop signal to actor thread watcher")?;
 				} else {
 					tracing::warn!("Actor {actor_id} not found for stopping");
@@ -261,11 +261,11 @@ async fn watch_thread(
 	drop(terminate_rx);
 
 	// Wait for either the thread to stop or a signal to be received
-	let persist_state = tokio::select! {
+	let persist_storage = tokio::select! {
 		biased;
 		_ = poll_thread(&handle) => true,
 		res = signal_rx.recv() => {
-			let Some((_signal, persist_state)) = res else {
+			let Some((_signal, persist_storage)) = res else {
 				tracing::error!(?actor_id, "failed to receive signal");
 				fatal_tx.send(()).expect("receiver cannot be dropped");
 				return;
@@ -276,7 +276,7 @@ async fn watch_thread(
 				terminate_handle.terminate();
 			}
 
-			persist_state
+			persist_storage
 		}
 	};
 
@@ -286,7 +286,7 @@ async fn watch_thread(
 	}
 
 	// Remove state
-	if !persist_state {
+	if !persist_storage {
 		let db = match utils::fdb_handle(&config) {
 			Ok(db) => db,
 			Err(err) => {

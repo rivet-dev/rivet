@@ -342,11 +342,12 @@ impl Ctx {
 			protocol::Command::SignalActor {
 				actor_id,
 				signal,
-				persist_state,
+				persist_storage,
+				ignore_future_state: _,
 			} => {
 				if let Some(actor) = self.actors.read().await.get(&actor_id) {
 					actor
-						.signal(&self, signal.try_into()?, persist_state)
+						.signal(&self, signal.try_into()?, persist_storage)
 						.await?;
 				} else {
 					tracing::warn!(

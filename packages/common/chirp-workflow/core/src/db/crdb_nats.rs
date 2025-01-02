@@ -189,6 +189,7 @@ impl Database for DatabaseCrdbNats {
 					workflow_id, workflow_name, create_ts, ray_id, tags, input, wake_immediate
 				)
 				VALUES ($1, $2, $3, $4, $5, $6, true)
+				RETURNING workflow_id
 				"
 			)
 		};
@@ -791,7 +792,7 @@ impl Database for DatabaseCrdbNats {
 									create_ts,
 									loop_location2
 								)
-								VALUES ($1, $2, $3, $4, $5, $7, $8, $9)
+								VALUES ($1, $2, $3, $4, $5, $6, $8, $9)
 								ON CONFLICT (workflow_id, location2_hash) DO NOTHING
 								RETURNING 1
 							),
@@ -1161,7 +1162,7 @@ impl Database for DatabaseCrdbNats {
 							workflow_id, workflow_name, create_ts, ray_id, tags, input, wake_immediate
 						)
 						VALUES ($9, $2, $3, $4, $5, $6, true)
-						RETURNING 1
+						RETURNING workflow_id
 					),
 					insert_sub_workflow_event AS (
 						INSERT INTO db_workflow.workflow_sub_workflow_events(
@@ -1170,7 +1171,7 @@ impl Database for DatabaseCrdbNats {
 						VALUES($1, $7, $8, $9, $3, $10)
 						RETURNING 1
 					)
-				SELECT 1
+				SELECT workflow_id FROM insert_workflow
 				",
 			)
 		};
