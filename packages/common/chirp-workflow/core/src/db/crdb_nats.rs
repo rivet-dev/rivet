@@ -152,31 +152,67 @@ impl Database for DatabaseCrdbNats {
 		workflow_name: &str,
 		tags: Option<&serde_json::Value>,
 		input: &serde_json::value::RawValue,
-	) -> WorkflowResult<()> {
-		self.query(|| async {
-			sqlx::query(indoc!(
+		unique: bool,
+	) -> WorkflowResult<Uuid> {
+		let query = if unique {
+			// Check if an incomplete workflow with the given name and tags already exists
+			indoc!(
+				"
+				WITH
+					select_existing AS (
+						SELECT workflow_id, input, output
+						FROM db_workflow.workflows
+						WHERE
+							workflow_name = $2 AND
+							tags <@ $5 AND
+							output IS NULL
+						LIMIT 1
+					),
+					insert_workflow AS (
+						INSERT INTO db_workflow.workflows (
+							workflow_id, workflow_name, create_ts, ray_id, tags, input, wake_immediate
+						)
+						SELECT $1, $2, $3, $4, $5, $6, true
+						WHERE NOT EXISTS(SELECT 1 FROM select_existing)
+						RETURNING workflow_id
+					)
+				SELECT COALESCE(s.workflow_id, i.workflow_id)
+				FROM select_existing AS s
+				FULL OUTER JOIN insert_workflow AS i
+				ON TRUE
+				",
+			)
+		} else {
+			indoc!(
 				"
 				INSERT INTO db_workflow.workflows (
 					workflow_id, workflow_name, create_ts, ray_id, tags, input, wake_immediate
 				)
 				VALUES ($1, $2, $3, $4, $5, $6, true)
-				",
-			))
-			.bind(workflow_id)
-			.bind(workflow_name)
-			.bind(rivet_util::timestamp::now())
-			.bind(ray_id)
-			.bind(tags)
-			.bind(sqlx::types::Json(input))
-			.execute(&mut *self.conn().await?)
-			.await
-			.map_err(WorkflowError::Sqlx)
-		})
-		.await?;
+				"
+			)
+		};
 
-		self.wake_worker();
+		let (actual_workflow_id,) = self
+			.query(|| async {
+				sqlx::query_as::<_, (Uuid,)>(query)
+					.bind(workflow_id)
+					.bind(workflow_name)
+					.bind(rivet_util::timestamp::now())
+					.bind(ray_id)
+					.bind(tags)
+					.bind(sqlx::types::Json(input))
+					.fetch_one(&mut *self.conn().await?)
+					.await
+					.map_err(WorkflowError::Sqlx)
+			})
+			.await?;
 
-		Ok(())
+		if workflow_id == actual_workflow_id {
+			self.wake_worker();
+		}
+
+		Ok(actual_workflow_id)
 	}
 
 	async fn get_workflow(&self, workflow_id: Uuid) -> WorkflowResult<Option<WorkflowData>> {
@@ -1078,19 +1114,56 @@ impl Database for DatabaseCrdbNats {
 		tags: Option<&serde_json::Value>,
 		input: &serde_json::value::RawValue,
 		loop_location: Option<&Location>,
-	) -> WorkflowResult<()> {
-		self.query(|| async {
-			sqlx::query(indoc!(
+		unique: bool,
+	) -> WorkflowResult<Uuid> {
+		let query = if unique {
+			// Check if an incomplete workflow with the given name and tags already exists
+			indoc!(
 				"
 				WITH
-					workflow AS (
+					select_existing AS (
+						SELECT workflow_id, input, output
+						FROM db_workflow.workflows
+						WHERE
+							workflow_name = $2 AND
+							tags <@ $5 AND
+							output IS NULL
+						LIMIT 1
+					),
+					insert_workflow AS (
+						INSERT INTO db_workflow.workflows (
+							workflow_id, workflow_name, create_ts, ray_id, tags, input, wake_immediate
+						)
+						SELECT $9, $2, $3, $4, $5, $6, true
+						WHERE NOT EXISTS(SELECT 1 FROM select_existing)
+						RETURNING workflow_id
+					),
+					insert_sub_workflow_event AS (
+						INSERT INTO db_workflow.workflow_sub_workflow_events(
+							workflow_id, location2, version, sub_workflow_id, create_ts, loop_location2
+						)
+						SELECT $1, $7, $8, $9, $3, $10
+						WHERE NOT EXISTS(SELECT 1 FROM select_existing)
+						RETURNING 1
+					)
+				SELECT COALESCE(s.workflow_id, i.workflow_id)
+				FROM select_existing AS s
+				FULL OUTER JOIN insert_workflow AS i
+				ON TRUE
+				",
+			)
+		} else {
+			indoc!(
+				"
+				WITH
+					insert_workflow AS (
 						INSERT INTO db_workflow.workflows (
 							workflow_id, workflow_name, create_ts, ray_id, tags, input, wake_immediate
 						)
 						VALUES ($9, $2, $3, $4, $5, $6, true)
 						RETURNING 1
 					),
-					sub_workflow AS (
+					insert_sub_workflow_event AS (
 						INSERT INTO db_workflow.workflow_sub_workflow_events(
 							workflow_id, location2, version, sub_workflow_id, create_ts, loop_location2
 						)
@@ -1099,26 +1172,33 @@ impl Database for DatabaseCrdbNats {
 					)
 				SELECT 1
 				",
-			))
-			.bind(workflow_id)
-			.bind(sub_workflow_name)
-			.bind(rivet_util::timestamp::now())
-			.bind(ray_id)
-			.bind(tags)
-			.bind(sqlx::types::Json(input))
-			.bind(location)
-			.bind(version as i64)
-			.bind(sub_workflow_id)
-			.bind(loop_location)
-			.execute(&mut *self.conn().await?)
-			.await
-			.map_err(WorkflowError::Sqlx)
-		})
-		.await?;
+			)
+		};
 
-		self.wake_worker();
+		let (actual_sub_workflow_id,) = self
+			.query(|| async {
+				sqlx::query_as::<_, (Uuid,)>(query)
+					.bind(workflow_id)
+					.bind(sub_workflow_name)
+					.bind(rivet_util::timestamp::now())
+					.bind(ray_id)
+					.bind(tags)
+					.bind(sqlx::types::Json(input))
+					.bind(location)
+					.bind(version as i64)
+					.bind(sub_workflow_id)
+					.bind(loop_location)
+					.fetch_one(&mut *self.conn().await?)
+					.await
+					.map_err(WorkflowError::Sqlx)
+			})
+			.await?;
 
-		Ok(())
+		if sub_workflow_id == actual_sub_workflow_id {
+			self.wake_worker();
+		}
+
+		Ok(actual_sub_workflow_id)
 	}
 
 	async fn commit_workflow_message_send_event(

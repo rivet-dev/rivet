@@ -19,6 +19,7 @@ pub struct SubWorkflowBuilder<'a, I: WorkflowInput> {
 
 	input: I,
 	tags: serde_json::Map<String, serde_json::Value>,
+	unique: bool,
 	error: Option<BuilderError>,
 }
 
@@ -33,6 +34,7 @@ where
 
 			input,
 			tags: serde_json::Map::new(),
+			unique: false,
 			error: None,
 		}
 	}
@@ -67,6 +69,18 @@ where
 		self
 	}
 
+	/// Does not dispatch a workflow if one already exists with the given name and tags. Has no effect if no
+	/// tags are provided (will always spawn a new workflow).
+	pub fn unique(mut self) -> Self {
+		if self.error.is_some() {
+			return self;
+		}
+
+		self.unique = true;
+
+		self
+	}
+
 	pub async fn dispatch(self) -> GlobalResult<Uuid> {
 		if let Some(err) = self.error {
 			return Err(err.into());
@@ -84,9 +98,121 @@ where
 			.compare_version("sub workflow", self.version)
 			.map_err(GlobalError::raw)?;
 
-		Self::dispatch_workflow_inner(self.ctx, self.version, self.input, tags)
+		Self::dispatch_workflow_inner(self.ctx, self.version, self.input, tags, self.unique)
 			.await
 			.map_err(GlobalError::raw)
+	}
+
+	// This doesn't have a self parameter because self.tags was already moved (see above)
+	async fn dispatch_workflow_inner(
+		ctx: &mut WorkflowCtx,
+		version: usize,
+		input: I,
+		tags: Option<serde_json::Value>,
+		unique: bool,
+	) -> WorkflowResult<Uuid>
+	where
+		I: WorkflowInput,
+		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
+	{
+		let history_res = ctx
+			.cursor()
+			.compare_sub_workflow(version, I::Workflow::NAME)?;
+		let location = ctx.cursor().current_location_for(&history_res);
+
+		// Signal received before
+		let id = if let HistoryResult::Event(sub_workflow) = history_res {
+			tracing::debug!(
+				name=%ctx.name(),
+				id=%ctx.workflow_id(),
+				sub_workflow_name=%sub_workflow.name,
+				sub_workflow_id=%sub_workflow.sub_workflow_id,
+				"replaying workflow dispatch"
+			);
+
+			sub_workflow.sub_workflow_id
+		}
+		// Dispatch new workflow
+		else {
+			let sub_workflow_name = I::Workflow::NAME;
+			let sub_workflow_id = Uuid::new_v4();
+
+			if unique {
+				tracing::debug!(
+					name=%ctx.name(),
+					id=%ctx.workflow_id(),
+					%sub_workflow_name,
+					?tags,
+					?input,
+					"dispatching unique sub workflow"
+				);
+			} else {
+				tracing::debug!(
+					name=%ctx.name(),
+					id=%ctx.workflow_id(),
+					%sub_workflow_name,
+					%sub_workflow_id,
+					?tags,
+					?input,
+					"dispatching sub workflow"
+				);
+			}
+
+			// Serialize input
+			let input_val = serde_json::value::to_raw_value(&input)
+				.map_err(WorkflowError::SerializeWorkflowOutput)?;
+
+			let actual_sub_workflow_id = ctx
+				.db()
+				.dispatch_sub_workflow(
+					ctx.ray_id(),
+					ctx.workflow_id(),
+					&location,
+					version,
+					sub_workflow_id,
+					sub_workflow_name,
+					tags.as_ref(),
+					&input_val,
+					ctx.loop_location(),
+					unique,
+				)
+				.await?;
+
+			if unique {
+				if sub_workflow_id == actual_sub_workflow_id {
+					tracing::debug!(
+						name=%ctx.name(),
+						id=%ctx.workflow_id(),
+						%sub_workflow_name,
+						%sub_workflow_id,
+						?tags,
+						"dispatched unique sub workflow"
+					);
+				} else {
+					tracing::debug!(
+						name=%ctx.name(),
+						id=%ctx.workflow_id(),
+						%sub_workflow_name,
+						sub_workflow_id=%actual_sub_workflow_id,
+						?tags,
+						"unique sub workflow already exists"
+					);
+				}
+			}
+
+			if sub_workflow_id == actual_sub_workflow_id {
+				metrics::WORKFLOW_DISPATCHED
+					.with_label_values(&[sub_workflow_name])
+					.inc();
+			}
+
+			sub_workflow_id
+		};
+
+		// Move to next event
+		ctx.cursor_mut().update(&location);
+
+		Ok(id)
 	}
 
 	pub async fn output(
@@ -128,86 +254,5 @@ where
 		self.ctx.cursor_mut().update(branch.cursor().root());
 
 		Ok(output)
-	}
-
-	async fn dispatch_workflow_inner(
-		ctx: &mut WorkflowCtx,
-		version: usize,
-		input: I,
-		tags: Option<serde_json::Value>,
-	) -> WorkflowResult<Uuid>
-	where
-		I: WorkflowInput,
-		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
-	{
-		let history_res = ctx
-			.cursor()
-			.compare_sub_workflow(version, I::Workflow::NAME)?;
-		let location = ctx.cursor().current_location_for(&history_res);
-
-		// Signal received before
-		let id = if let HistoryResult::Event(sub_workflow) = history_res {
-			tracing::debug!(
-				name=%ctx.name(),
-				id=%ctx.workflow_id(),
-				sub_workflow_name=%sub_workflow.name,
-				sub_workflow_id=%sub_workflow.sub_workflow_id,
-				"replaying workflow dispatch"
-			);
-
-			sub_workflow.sub_workflow_id
-		}
-		// Dispatch new workflow
-		else {
-			let sub_workflow_name = I::Workflow::NAME;
-			let sub_workflow_id = Uuid::new_v4();
-
-			tracing::debug!(
-				name=%ctx.name(),
-				id=%ctx.workflow_id(),
-				%sub_workflow_name,
-				%sub_workflow_id,
-				?tags,
-				?input,
-				"dispatching sub workflow"
-			);
-
-			// Serialize input
-			let input_val = serde_json::value::to_raw_value(&input)
-				.map_err(WorkflowError::SerializeWorkflowOutput)?;
-
-			ctx.db()
-				.dispatch_sub_workflow(
-					ctx.ray_id(),
-					ctx.workflow_id(),
-					&location,
-					version,
-					sub_workflow_id,
-					sub_workflow_name,
-					tags.as_ref(),
-					&input_val,
-					ctx.loop_location(),
-				)
-				.await?;
-
-			tracing::debug!(
-				name=%ctx.name(),
-				id=%ctx.workflow_id(),
-				%sub_workflow_name,
-				?sub_workflow_id,
-				"sub workflow dispatched"
-			);
-
-			metrics::WORKFLOW_DISPATCHED
-				.with_label_values(&[sub_workflow_name])
-				.inc();
-
-			sub_workflow_id
-		};
-
-		// Move to next event
-		ctx.cursor_mut().update(&location);
-
-		Ok(id)
 	}
 }

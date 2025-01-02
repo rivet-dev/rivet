@@ -18,6 +18,7 @@ pub struct WorkflowBuilder<I: WorkflowInput> {
 	ray_id: Uuid,
 	input: I,
 	tags: serde_json::Map<String, serde_json::Value>,
+	unique: bool,
 	error: Option<BuilderError>,
 }
 
@@ -31,6 +32,7 @@ where
 			ray_id,
 			input,
 			tags: serde_json::Map::new(),
+			unique: false,
 			error: None,
 		}
 	}
@@ -65,6 +67,18 @@ where
 		self
 	}
 
+	/// Does not dispatch a workflow if one already exists with the given name and tags. Has no effect if no
+	/// tags are provided (will always spawn a new workflow).
+	pub fn unique(mut self) -> Self {
+		if self.error.is_some() {
+			return self;
+		}
+
+		self.unique = true;
+
+		self
+	}
+
 	pub async fn dispatch(self) -> GlobalResult<Uuid> {
 		if let Some(err) = self.error {
 			return Err(err.into());
@@ -77,29 +91,66 @@ where
 		let tags = serde_json::Value::Object(self.tags);
 		let tags = if no_tags { None } else { Some(&tags) };
 
-		tracing::debug!(
-			%workflow_name,
-			%workflow_id,
-			?tags,
-			input=?self.input,
-			"dispatching workflow"
-		);
+		if self.unique {
+			tracing::debug!(
+				%workflow_name,
+				?tags,
+				input=?self.input,
+				"dispatching unique workflow"
+			);
+		} else {
+			tracing::debug!(
+				%workflow_name,
+				%workflow_id,
+				?tags,
+				input=?self.input,
+				"dispatching workflow"
+			);
+		}
 
 		// Serialize input
 		let input_val = serde_json::value::to_raw_value(&self.input)
 			.map_err(WorkflowError::SerializeWorkflowOutput)
 			.map_err(GlobalError::raw)?;
 
-		self.db
-			.dispatch_workflow(self.ray_id, workflow_id, workflow_name, tags, &input_val)
+		let actual_workflow_id = self
+			.db
+			.dispatch_workflow(
+				self.ray_id,
+				workflow_id,
+				workflow_name,
+				tags,
+				&input_val,
+				self.unique,
+			)
 			.await
 			.map_err(GlobalError::raw)?;
 
-		metrics::WORKFLOW_DISPATCHED
-			.with_label_values(&[workflow_name])
-			.inc();
+		if self.unique {
+			if workflow_id == actual_workflow_id {
+				tracing::debug!(
+					%workflow_name,
+					%workflow_id,
+					?tags,
+					"dispatched unique workflow"
+				);
+			} else {
+				tracing::debug!(
+					%workflow_name,
+					workflow_id=%actual_workflow_id,
+					?tags,
+					"unique workflow already exists"
+				);
+			}
+		}
 
-		Ok(workflow_id)
+		if workflow_id == actual_workflow_id {
+			metrics::WORKFLOW_DISPATCHED
+				.with_label_values(&[workflow_name])
+				.inc();
+		}
+
+		Ok(actual_workflow_id)
 	}
 
 	pub async fn output(

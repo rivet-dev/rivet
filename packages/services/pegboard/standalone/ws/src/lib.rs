@@ -26,7 +26,6 @@ use tokio_tungstenite::{
 use pegboard::protocol;
 
 const UPDATE_PING_INTERVAL: Duration = Duration::from_secs(3);
-const CHECK_WORKFLOW_INTERVAL: Duration = Duration::from_secs(15);
 
 struct Connection {
 	protocol_version: u16,
@@ -73,7 +72,6 @@ pub async fn run_from_env(
 		socket_thread(&ctx, conns.clone(), listener),
 		msg_thread(&ctx, conns.clone()),
 		update_ping_thread(&ctx, conns.clone()),
-		check_workflows_thread(&ctx, conns.clone()),
 	);
 
 	Ok(())
@@ -267,53 +265,31 @@ async fn upsert_client(
 	datacenter_id: Uuid,
 	flavor: protocol::ClientFlavor,
 ) -> GlobalResult<()> {
-	// Inserting before creating the workflow prevents a race condition with using select + insert instead
-	let (_, (workflow_exists,)) = tokio::try_join!(
-		sql_execute!(
-			[ctx]
-			"
-			INSERT INTO db_pegboard.clients (
-				client_id, datacenter_id, flavor, create_ts, last_ping_ts
-			)
-			VALUES ($1, $2, $3, $4, $4)
-			ON CONFLICT (client_id)
-				DO UPDATE
-				SET delete_ts = NULL
-			",
-			client_id,
-			datacenter_id,
-			flavor as i32,
-			util::timestamp::now(),
-		),
-		// HACK(RVT-4458): Check if workflow already exists and spawn a new one if not
-		sql_fetch_one!(
-			[ctx, (bool,)]
-			"
-			SELECT EXISTS (
-				SELECT 1
-				FROM db_workflow.workflows
-				WHERE
-					tags->>'client_id' = $1::text AND
-					workflow_name = 'pegboard_client' AND
-					output IS NULL
-			)
-			",
-			client_id,
-		),
-	)?;
+	sql_execute!(
+		[ctx]
+		"
+		INSERT INTO db_pegboard.clients (
+			client_id, datacenter_id, flavor, create_ts, last_ping_ts
+		)
+		VALUES ($1, $2, $3, $4, $4)
+		ON CONFLICT (client_id)
+			DO UPDATE
+			SET delete_ts = NULL
+		RETURNING 1
+		",
+		client_id,
+		datacenter_id,
+		flavor as i32,
+		util::timestamp::now(),
+	)
+	.await?;
 
-	if !workflow_exists {
-		tracing::info!(
-			?client_id,
-			?datacenter_id,
-			?flavor,
-			"creating client workflow"
-		);
-		ctx.workflow(pegboard::workflows::client::Input { client_id })
-			.tag("client_id", client_id)
-			.dispatch()
-			.await?;
-	}
+	// Spawn a new client workflow if one doesn't already exist
+	ctx.workflow(pegboard::workflows::client::Input { client_id })
+		.tag("client_id", client_id)
+		.unique()
+		.dispatch()
+		.await?;
 
 	Ok(())
 }
@@ -372,90 +348,6 @@ async fn update_ping_thread_inner(
 			util::timestamp::now(),
 		)
 		.await?;
-	}
-}
-
-#[tracing::instrument(skip_all)]
-async fn check_workflows_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>) {
-	loop {
-		match check_workflows_thread_inner(ctx, conns.clone()).await {
-			Ok(_) => {
-				tracing::warn!("check workflows thread thread exited early");
-			}
-			Err(err) => {
-				tracing::error!(?err, "check workflows thread error");
-			}
-		}
-
-		tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-	}
-}
-
-// HACK(RVT-4458):
-/// Validates that workflows exist for the curation of the client running.
-#[tracing::instrument(skip_all)]
-async fn check_workflows_thread_inner(
-	ctx: &StandaloneCtx,
-	conns: Arc<RwLock<Connections>>,
-) -> GlobalResult<()> {
-	loop {
-		tokio::time::sleep(CHECK_WORKFLOW_INTERVAL).await;
-
-		let client_ids = {
-			let conns = conns.read().await;
-
-			conns
-				.iter()
-				.map(|(client_id, _)| *client_id)
-				.collect::<Vec<Uuid>>()
-		};
-
-		if client_ids.is_empty() {
-			continue;
-		}
-
-		// Find clients that do not have a running workflow
-		let clients_without_workflows = sql_fetch_all!(
-			[ctx, (Uuid,)]
-			"
-			WITH client_ids AS (
-			   SELECT unnest($1::uuid[]) as client_id
-			)
-			SELECT c.client_id
-			FROM client_ids c
-			LEFT JOIN db_workflow.workflows w ON
-				w.tags->>'client_id' = c.client_id::text AND
-				w.workflow_name = 'pegboard_client' AND
-				w.output IS NULL
-			WHERE w.workflow_id IS NULL
-			",
-			client_ids,
-		)
-		.await?;
-
-		// Disconnect clients without running workflow
-		if !clients_without_workflows.is_empty() {
-			let conns = conns.read().await;
-
-			for (client_id,) in clients_without_workflows {
-				if let Some(conn) = conns.get(&client_id) {
-					tracing::warn!(
-						?client_id,
-						"client does not have running workflow, closing socket"
-					);
-
-					let close_frame = CloseFrame {
-						code: CloseCode::Normal,
-						reason: "client does not have running workflow".into(),
-					};
-					conn.tx
-						.lock()
-						.await
-						.send(Message::Close(Some(close_frame)))
-						.await?;
-				}
-			}
-		}
 	}
 }
 

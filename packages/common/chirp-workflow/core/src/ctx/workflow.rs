@@ -38,7 +38,7 @@ use crate::{
 /// Poll interval when polling for signals in-process
 const SIGNAL_RETRY: Duration = Duration::from_millis(100);
 /// Most in-process signal poll tries
-const MAX_SIGNAL_RETRIES: usize = 16;
+const MAX_SIGNAL_RETRIES: usize = 4;
 /// Most in-process sub workflow poll tries
 const MAX_SUB_WORKFLOW_RETRIES: usize = 4;
 /// Retry interval for failed db actions
