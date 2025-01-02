@@ -109,7 +109,9 @@ impl Actor {
 			}
 
 			// Cleanup afterwards
-			self2.cleanup(&ctx2).await
+			if let Err(err) = self2.cleanup(&ctx2).await {
+				tracing::error!(actor_id=?self2.actor_id, ?err, "cleanup failed");
+			}
 		});
 
 		Ok(())
@@ -452,18 +454,11 @@ impl Actor {
 		}
 
 		// Set exit code if it hasn't already been set
-		let set_exit_code_res = self.set_exit_code(ctx, None).await;
+		self.set_exit_code(ctx, None).await?;
 
-		// Cleanup setup
-		let cleanup_setup_res = self.cleanup_setup(ctx).await;
+		// Cleanup setup. Should only be called after the exit code is set successfully for consistent state
+		self.cleanup_setup(ctx).await;
 
-		// Delete dir
-		let remove_actor_dir_res = self.remove_actor_dir(ctx).await;
-
-		// Chain results. Do this after running since we should attempt to run all steps if
-		// possible.
-		set_exit_code_res
-			.and(cleanup_setup_res)
-			.and(remove_actor_dir_res)
+		Ok(())
 	}
 }

@@ -404,7 +404,6 @@ async fn check_workflows_thread_inner(
 		let client_ids = {
 			let conns = conns.read().await;
 
-			// Select all clients that required a ping update
 			conns
 				.iter()
 				.map(|(client_id, _)| *client_id)

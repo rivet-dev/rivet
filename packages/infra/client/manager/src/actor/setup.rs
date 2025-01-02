@@ -621,11 +621,15 @@ impl Actor {
 		Ok(proxied_ports)
 	}
 
+	// This function is meant to run gracefully-handled fallible steps to clean up every part of the setup
+	// process. It returns a result for errors that should not be gracefully handled and should shut down the
+	// program if thrown.
 	#[tracing::instrument(skip_all)]
-	pub async fn cleanup_setup(&self, ctx: &Ctx) -> Result<()> {
+	pub async fn cleanup_setup(&self, ctx: &Ctx) {
 		let actor_path = ctx.actor_path(self.actor_id);
 		let netns_path = self.netns_path();
 
+		// Clean up fs mount
 		if ctx.config().runner.use_mounts() {
 			match Command::new("umount")
 				.arg("-dl")
@@ -636,18 +640,22 @@ impl Actor {
 				Result::Ok(cmd_out) => {
 					if !cmd_out.status.success() {
 						tracing::error!(
-							stdout=%std::str::from_utf8(&cmd_out.stdout)?,
-							stderr=%std::str::from_utf8(&cmd_out.stderr)?,
+							actor_id=?self.actor_id,
+							stdout=%std::str::from_utf8(&cmd_out.stdout).unwrap_or("<failed to parse stdout>"),
+							stderr=%std::str::from_utf8(&cmd_out.stderr).unwrap_or("<failed to parse stderr>"),
 							"failed `umount` command",
 						);
 					}
 				}
-				Err(err) => tracing::error!(?err, "failed to run `umount` command"),
+				Err(err) => {
+					tracing::error!(actor_id=?self.actor_id, ?err, "failed to run `umount` command")
+				}
 			}
 		}
 
 		match self.config.image.kind {
 			protocol::ImageKind::DockerImage | protocol::ImageKind::OciBundle => {
+				// Clean up runc
 				match Command::new("runc")
 					.arg("delete")
 					.arg("--force")
@@ -658,13 +666,16 @@ impl Actor {
 					Result::Ok(cmd_out) => {
 						if !cmd_out.status.success() {
 							tracing::error!(
-								stdout=%std::str::from_utf8(&cmd_out.stdout)?,
-								stderr=%std::str::from_utf8(&cmd_out.stderr)?,
+								actor_id=?self.actor_id,
+								stdout=%std::str::from_utf8(&cmd_out.stdout).unwrap_or("<failed to parse stdout>"),
+								stderr=%std::str::from_utf8(&cmd_out.stderr).unwrap_or("<failed to parse stderr>"),
 								"failed `runc` delete command",
 							);
 						}
 					}
-					Err(err) => tracing::error!(?err, "failed to run `runc` command"),
+					Err(err) => {
+						tracing::error!(actor_id=?self.actor_id, ?err, "failed to run `runc` command")
+					}
 				}
 
 				if let protocol::NetworkMode::Bridge = self.config.network_mode {
@@ -684,20 +695,24 @@ impl Actor {
 								Result::Ok(cmd_out) => {
 									if !cmd_out.status.success() {
 										tracing::error!(
-											stdout=%std::str::from_utf8(&cmd_out.stdout)?,
-											stderr=%std::str::from_utf8(&cmd_out.stderr)?,
+											actor_id=?self.actor_id,
+											stdout=%std::str::from_utf8(&cmd_out.stdout).unwrap_or("<failed to parse stdout>"),
+											stderr=%std::str::from_utf8(&cmd_out.stderr).unwrap_or("<failed to parse stderr>"),
 											"failed `cnitool del` command",
 										);
 									}
 								}
 								Err(err) => {
-									tracing::error!(?err, "failed to run `cnitool` command")
+									tracing::error!(actor_id=?self.actor_id, ?err, "failed to run `cnitool` command")
 								}
 							}
 						}
-						Err(err) => tracing::error!(?err, "failed to read `cni-cap-args.json`"),
+						Err(err) => {
+							tracing::error!(actor_id=?self.actor_id, ?err, "failed to read `cni-cap-args.json`")
+						}
 					}
 
+					// Clean up network
 					match Command::new("ip")
 						.arg("netns")
 						.arg("del")
@@ -708,28 +723,27 @@ impl Actor {
 						Result::Ok(cmd_out) => {
 							if !cmd_out.status.success() {
 								tracing::error!(
-									stdout=%std::str::from_utf8(&cmd_out.stdout)?,
-									stderr=%std::str::from_utf8(&cmd_out.stderr)?,
+									actor_id=?self.actor_id,
+									stdout=%std::str::from_utf8(&cmd_out.stdout).unwrap_or("<failed to parse stdout>"),
+									stderr=%std::str::from_utf8(&cmd_out.stderr).unwrap_or("<failed to parse stderr>"),
 									"failed `ip netns` command",
 								);
 							}
 						}
-						Err(err) => tracing::error!(?err, "failed to run `ip` command"),
+						Err(err) => {
+							tracing::error!(actor_id=?self.actor_id, ?err, "failed to run `ip` command")
+						}
 					}
 				}
 			}
 			protocol::ImageKind::JavaScript => {}
 		}
 
-		Ok(())
-	}
-
-	#[tracing::instrument(skip_all)]
-	pub async fn remove_actor_dir(&self, ctx: &Ctx) -> Result<()> {
-		let actor_path = ctx.actor_path(self.actor_id);
-		tokio::fs::remove_dir(&actor_path).await?;
-
-		Ok(())
+		// Delete entire actor dir. Note that for actors using KV storage, it is persisted elsewhere and will
+		// not be deleted by this (see `persist_state` in the runner protocol).
+		if let Err(err) = tokio::fs::remove_dir_all(&actor_path).await {
+			tracing::error!(actor_id=?self.actor_id, ?err, "failed to delete actor dir");
+		}
 	}
 
 	// Path to the created namespace

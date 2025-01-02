@@ -493,7 +493,9 @@ impl Ctx {
 				}
 
 				// Cleanup afterwards
-				actor.cleanup(&self2).await
+				if let Err(err) = actor.cleanup(&self2).await {
+					tracing::error!(actor_id=?row.actor_id, ?err, "cleanup failed");
+				}
 			});
 		}
 
