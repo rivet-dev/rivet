@@ -9,6 +9,7 @@ use crate::{
 	ctx::WorkflowCtx,
 	error::{WorkflowError, WorkflowResult},
 	history::cursor::HistoryResult,
+	metrics,
 	workflow::{Workflow, WorkflowInput},
 };
 
@@ -196,6 +197,10 @@ where
 				?sub_workflow_id,
 				"sub workflow dispatched"
 			);
+
+			metrics::WORKFLOW_DISPATCHED
+				.with_label_values(&[sub_workflow_name])
+				.inc();
 
 			sub_workflow_id
 		};

@@ -405,6 +405,7 @@ pub async fn handle_commands(
 		})
 		.await?;
 
+	// TODO: Send as a single message
 	for (i, raw_command) in raw_commands.into_iter().enumerate() {
 		let wrapped_command = protocol::CommandWrapper {
 			index: index + i as i64,

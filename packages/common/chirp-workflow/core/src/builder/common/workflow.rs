@@ -9,6 +9,7 @@ use crate::{
 	ctx::common,
 	db::DatabaseHandle,
 	error::WorkflowError,
+	metrics,
 	workflow::{Workflow, WorkflowInput},
 };
 
@@ -93,6 +94,10 @@ where
 			.dispatch_workflow(self.ray_id, workflow_id, workflow_name, tags, &input_val)
 			.await
 			.map_err(GlobalError::raw)?;
+
+		metrics::WORKFLOW_DISPATCHED
+			.with_label_values(&[workflow_name])
+			.inc();
 
 		Ok(workflow_id)
 	}

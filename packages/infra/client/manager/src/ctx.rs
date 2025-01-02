@@ -169,20 +169,6 @@ impl Ctx {
 		self: &Arc<Self>,
 		rx: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
 	) -> Result<()> {
-		// Start ping thread
-		let self2 = self.clone();
-		let ping_thread: tokio::task::JoinHandle<Result<()>> = tokio::spawn(async move {
-			loop {
-				tokio::time::sleep(PING_INTERVAL).await;
-				self2
-					.tx
-					.lock()
-					.await
-					.send(Message::Ping(Vec::new()))
-					.await?;
-			}
-		});
-
 		// Rebuild isolate runner from db
 		self.rebuild_isolate_runner().await?;
 
@@ -214,6 +200,20 @@ impl Ctx {
 			}
 		});
 
+		// Start ping thread
+		let self2 = self.clone();
+		let ping_thread: tokio::task::JoinHandle<Result<()>> = tokio::spawn(async move {
+			loop {
+				tokio::time::sleep(PING_INTERVAL).await;
+				self2
+					.tx
+					.lock()
+					.await
+					.send(Message::Ping(Vec::new()))
+					.await?;
+			}
+		});
+
 		// Send init packet
 		{
 			let (last_command_idx,) = utils::query(|| async {
@@ -236,8 +236,8 @@ impl Ctx {
 		}
 
 		tokio::try_join!(
-			async { ping_thread.await? },
 			async { runner_socket.await? },
+			async { ping_thread.await? },
 			self.receive_messages(rx),
 		)?;
 

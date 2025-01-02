@@ -3,7 +3,7 @@ use std::fmt::Display;
 use global_error::GlobalResult;
 use serde::Serialize;
 
-use crate::{builder::BuilderError, ctx::MessageCtx, message::Message};
+use crate::{builder::BuilderError, ctx::MessageCtx, message::Message, metrics};
 
 pub struct MessageBuilder<'a, M: Message> {
 	msg_ctx: &'a MessageCtx,
@@ -78,6 +78,10 @@ impl<'a, M: Message> MessageBuilder<'a, M> {
 		} else {
 			self.msg_ctx.message(tags, self.body).await?;
 		}
+
+		metrics::MESSAGE_PUBLISHED
+			.with_label_values(&[M::NAME])
+			.inc();
 
 		Ok(())
 	}

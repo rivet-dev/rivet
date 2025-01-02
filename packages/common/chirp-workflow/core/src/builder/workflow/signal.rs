@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::{
 	builder::BuilderError, ctx::WorkflowCtx, error::WorkflowError, history::cursor::HistoryResult,
-	signal::Signal,
+	metrics, signal::Signal,
 };
 
 pub struct SignalBuilder<'a, T: Signal + Serialize> {
@@ -167,6 +167,10 @@ impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
 				(Some(_), false) => return Err(BuilderError::WorkflowIdAndTags.into()),
 				(None, true) => return Err(BuilderError::NoWorkflowIdOrTags.into()),
 			}
+
+			metrics::SIGNAL_PUBLISHED
+				.with_label_values(&[T::NAME])
+				.inc();
 
 			signal_id
 		};

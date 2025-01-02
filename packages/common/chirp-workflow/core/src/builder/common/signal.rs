@@ -4,7 +4,9 @@ use global_error::{GlobalError, GlobalResult};
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::{builder::BuilderError, db::DatabaseHandle, error::WorkflowError, signal::Signal};
+use crate::{
+	builder::BuilderError, db::DatabaseHandle, error::WorkflowError, metrics, signal::Signal,
+};
 
 pub struct SignalBuilder<T: Signal + Serialize> {
 	db: DatabaseHandle,
@@ -105,6 +107,10 @@ impl<T: Signal + Serialize> SignalBuilder<T> {
 			(Some(_), false) => return Err(BuilderError::WorkflowIdAndTags.into()),
 			(None, true) => return Err(BuilderError::NoWorkflowIdOrTags.into()),
 		}
+
+		metrics::SIGNAL_PUBLISHED
+			.with_label_values(&[T::NAME])
+			.inc();
 
 		Ok(signal_id)
 	}
