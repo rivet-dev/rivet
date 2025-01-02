@@ -573,11 +573,11 @@ pub async fn upgrade_all(
 			error = "tags[]: Tag label cannot be empty."
 		);
 		ensure_with!(
-			k.len() <= 16,
+			k.len() <= 32,
 			API_BAD_BODY,
 			error = format!(
-				"tags[{:?}]: Tag label too large (max 256 bytes).",
-				util::safe_slice(k, 0, 16),
+				"tags[{:?}]: Tag label too large (max 32 bytes).",
+				util::safe_slice(k, 0, 32),
 			),
 		);
 		ensure_with!(
@@ -937,11 +937,11 @@ async fn resolve_build(
 					error = "build_tags[]: Build tag label cannot be empty."
 				);
 				ensure_with!(
-					k.len() < 16,
+					k.len() < 32,
 					API_BAD_BODY,
 					error = format!(
-						"build_tags[{:?}]: Build tag label too large (max 16 bytes).",
-						util::safe_slice(k, 0, 16),
+						"build_tags[{:?}]: Build tag label too large (max 32 bytes).",
+						util::safe_slice(k, 0, 32),
 					)
 				);
 				ensure_with!(

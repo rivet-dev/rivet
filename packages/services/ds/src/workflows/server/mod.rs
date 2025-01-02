@@ -299,10 +299,10 @@ async fn validate(ctx: &ActivityCtx, input: &ValidateInput) -> GlobalResult<Opti
 		if k.is_empty() {
 			return Ok(Some("tags[]: Tag label cannot be empty.".into()));
 		}
-		if k.len() > 16 {
+		if k.len() > 32 {
 			return Ok(Some(format!(
-				"tags[{:?}]: Tag label too large (max 16 bytes).",
-				util::safe_slice(k, 0, 16),
+				"tags[{:?}]: Tag label too large (max 32 bytes).",
+				util::safe_slice(k, 0, 32),
 			)));
 		}
 		if v.is_empty() {

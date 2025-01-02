@@ -233,11 +233,11 @@ pub async fn patch_tags(
 			error = "tags[]: Tag label cannot be empty."
 		);
 		ensure_with!(
-			k.len() <= 16,
+			k.len() <= 32,
 			ACTOR_BUILD_INVALID_PATCH_CONFIG,
 			error = format!(
-				"tags[{:?}]: Tag label too large (max 16).",
-				util::safe_slice(k, 0, 16),
+				"tags[{:?}]: Tag label too large (max 32).",
+				util::safe_slice(k, 0, 32),
 			)
 		);
 		if let Some(v) = v {
