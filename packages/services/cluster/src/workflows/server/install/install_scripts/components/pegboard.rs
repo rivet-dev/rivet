@@ -1,6 +1,6 @@
 use chirp_workflow::prelude::*;
 
-use super::{fdb::FDB_VERSION, TUNNEL_API_EDGE_PORT};
+use super::{fdb::FDB_VERSION, rivet::TUNNEL_API_EDGE_PORT};
 
 pub const TUNNEL_PEGBOARD_WS_PORT: u16 = 5030;
 

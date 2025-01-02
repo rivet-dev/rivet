@@ -5,7 +5,7 @@ use futures_util::FutureExt;
 use nix::sys::signal::Signal;
 use serde_json::json;
 
-use crate::protocol;
+use crate::{metrics, protocol};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Input {
@@ -227,8 +227,8 @@ async fn insert_events(ctx: &ActivityCtx, input: &InsertEventsInput) -> GlobalRe
 	};
 
 	// TODO(RVT-4450): `last_event_idx < $2` and `ON CONFLICT DO NOTHING` is a workaround
-	sql_execute!(
-		[ctx]
+	let inserted_rows = sql_fetch_all!(
+		[ctx, (i64,)]
 		"
 		WITH
 			update_last_event_idx AS (
@@ -244,9 +244,9 @@ async fn insert_events(ctx: &ActivityCtx, input: &InsertEventsInput) -> GlobalRe
 				SELECT $1, index, payload, $5
 				FROM UNNEST($3, $4) AS e(index, payload)
 				ON CONFLICT DO NOTHING
-				RETURNING 1
+				RETURNING index
 			)
-		SELECT 1
+		SELECT index FROM insert_events
 		",
 		input.client_id,
 		last_event_idx,
@@ -255,6 +255,17 @@ async fn insert_events(ctx: &ActivityCtx, input: &InsertEventsInput) -> GlobalRe
 		util::timestamp::now(),
 	)
 	.await?;
+
+	// TODO(RVT-4450): Check for duplicate events
+	for event in &input.events {
+		if inserted_rows.iter().all(|(idx,)| &event.index != idx) {
+			continue;
+		}
+
+		metrics::PEGBOARD_DUPLICATE_CLIENT_EVENT
+			.with_label_values(&[&input.client_id.to_string(), &event.index.to_string()])
+			.inc();
+	}
 
 	Ok(())
 }

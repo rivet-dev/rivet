@@ -7,7 +7,7 @@ use super::{
 	ok_server::OK_SERVER_PORT,
 	pegboard::TUNNEL_PEGBOARD_WS_PORT,
 	vector::{TUNNEL_VECTOR_PORT, TUNNEL_VECTOR_TCP_JSON_PORT},
-	TUNNEL_API_EDGE_PORT,
+	rivet::TUNNEL_API_EDGE_PORT,
 };
 
 pub const TUNNEL_SERVICES: &[TunnelService] = &[

@@ -1,6 +1,6 @@
 use chirp_workflow::prelude::*;
 
-use super::TUNNEL_API_EDGE_PORT;
+pub const TUNNEL_API_EDGE_PORT: u16 = 5010;
 
 pub fn create_hook(tunnel_name: &str, initialize_immediately: bool) -> GlobalResult<String> {
 	let mut script =

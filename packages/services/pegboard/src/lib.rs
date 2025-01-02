@@ -2,6 +2,7 @@
 use chirp_workflow::prelude::*;
 
 pub mod client_config;
+mod metrics;
 #[cfg(feature = "ops")]
 pub mod ops;
 pub mod protocol;

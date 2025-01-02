@@ -10,8 +10,6 @@ pub mod traefik;
 pub mod traffic_server;
 pub mod vector;
 
-pub const TUNNEL_API_EDGE_PORT: u16 = 5010;
-
 pub fn common() -> String {
 	indoc!(
 		"

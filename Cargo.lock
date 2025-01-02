@@ -7516,8 +7516,10 @@ name = "pegboard"
 version = "0.0.1"
 dependencies = [
  "chirp-workflow",
+ "lazy_static",
  "nix 0.27.1",
  "rivet-config",
+ "rivet-metrics",
  "rivet-util",
  "schemars",
  "serde",
