@@ -119,6 +119,8 @@ export default class Manager {
 			{
 				port,
 				hostname: "0.0.0.0",
+				// Remove "Listening on ..." message
+				onListen() {},
 			},
 			app.fetch,
 		);

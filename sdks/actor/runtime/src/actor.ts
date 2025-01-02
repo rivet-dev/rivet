@@ -335,7 +335,12 @@ export abstract class Actor<
 
 		const port = this.#getServerPort();
 		logger().info("server running", { port });
-		this.#server = Deno.serve({ port, hostname: "0.0.0.0" }, app.fetch);
+		this.#server = Deno.serve({
+			port,
+			hostname: "0.0.0.0",
+			// Remove "Listening on ..." message
+			onListen() {},
+		}, app.fetch);
 	}
 
 	#getServerPort(): number {
