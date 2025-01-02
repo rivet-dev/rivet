@@ -38,10 +38,10 @@ ExecStart=/usr/bin/docker run --rm --name trafficserver \
 	"__IMAGE__"
 ExecStop=/usr/bin/docker stop trafficserver
 
-# Medium CPU priority
-CPUSchedulingPriority=60
 # Real time service
 CPUSchedulingPolicy=fifo
+# Medium CPU priority
+CPUSchedulingPriority=60
 
 [Install]
 WantedBy=multi-user.target

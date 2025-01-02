@@ -76,10 +76,10 @@ OnCalendar=*:0
 RandomizedDelaySec=60
 Unit=rivet_fetch_tls.service
 
-# High CPU priority
-CPUSchedulingPriority=90
 # Real time service
 CPUSchedulingPolicy=fifo
+# High CPU priority
+CPUSchedulingPriority=90
 # Prevent killing from system OOM
 OOMScoreAdjust=-800
 

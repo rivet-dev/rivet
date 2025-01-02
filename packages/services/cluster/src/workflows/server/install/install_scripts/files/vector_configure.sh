@@ -34,10 +34,10 @@ AmbientCapabilities=CAP_NET_BIND_SERVICE
 StartLimitInterval=10
 StartLimitBurst=5
 
-# Medium CPU priority
-CPUSchedulingPriority=60
 # Real time service
 CPUSchedulingPolicy=fifo
+# Medium CPU priority
+CPUSchedulingPriority=60
 # Prevent killing from system OOM
 OOMScoreAdjust=-500
 

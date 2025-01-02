@@ -25,10 +25,10 @@ Type=oneshot
 ExecStart=/usr/bin/ok_server.sh
 Type=simple
 
-# High CPU priority
-CPUSchedulingPriority=90
 # Real time service
 CPUSchedulingPolicy=fifo
+# High CPU priority
+CPUSchedulingPriority=90
 # Prevent killing from system OOM
 OOMScoreAdjust=-800
 

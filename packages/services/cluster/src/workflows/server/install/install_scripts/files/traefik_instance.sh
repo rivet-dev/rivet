@@ -40,10 +40,10 @@ AmbientCapabilities=CAP_NET_BIND_SERVICE
 Restart=always
 RestartSec=2
 
-# High CPU priority
-CPUSchedulingPriority=85
 # Real time service
 CPUSchedulingPolicy=fifo
+# High CPU priority
+CPUSchedulingPriority=85
 # Prevent killing from system OOM
 OOMScoreAdjust=-900
 
