@@ -44,7 +44,7 @@ pub struct ClusterPools {
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ClusterPoolJob {
-	pub provision_margin: u32,
+	pub autoscale_margin: u32,
 	// All other properties are read from Pegboard since they're identical
 }
 
@@ -53,7 +53,7 @@ pub struct ClusterPoolJob {
 #[derive(Debug, Serialize, Deserialize, Clone, Default, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ClusterPoolPegboard {
-	pub provision_margin: u32,
+	pub autoscale_margin: u32,
 
 	pub vlan_addr_range_min: Option<Ipv4Addr>,
 	pub vlan_addr_range_max: Option<Ipv4Addr>,
@@ -125,6 +125,8 @@ impl ClusterPoolPegboard {
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ClusterPoolGg {
+	pub autoscale_margin: u32,
+
 	#[schemars(with = "Option<String>")]
 	pub vlan_ip_net: Option<Ipv4Net>,
 	pub firewall_rules: Option<Vec<FirewallRule>>,
@@ -205,6 +207,8 @@ impl ClusterPoolGg {
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ClusterPoolAts {
+	pub autoscale_margin: u32,
+
 	#[schemars(with = "Option<String>")]
 	pub vlan_ip_net: Option<Ipv4Net>,
 	pub firewall_rules: Option<Vec<FirewallRule>>,

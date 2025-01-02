@@ -76,6 +76,12 @@ struct PoolCtx {
 	desired_count: usize,
 }
 
+#[derive(Clone)]
+struct ServerSortTopology {
+	cpu: u32,
+	memory: u32,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Input {
 	pub datacenter_id: Uuid,
@@ -189,20 +195,29 @@ async fn calculate_diff(
 
 	let dc = unwrap!(datacenter_res.datacenters.first());
 
+	// Build hashmap from topos for sorting
 	let topology = unwrap!(topology_res.datacenters.first());
-	let memory_by_server = topology
+	let topo_by_server = topology
 		.servers
 		.iter()
-		.map(|server| Ok((server.server_id, server.usage.memory)))
+		.map(|server| {
+			Ok((
+				server.server_id,
+				ServerSortTopology {
+					cpu: server.usage.cpu,
+					memory: server.usage.memory,
+				},
+			))
+		})
 		.collect::<GlobalResult<HashMap<_, _>>>()?;
 
 	// Run everything in a locking transaction
 	let actions = rivet_pools::utils::crdb::tx(&ctx.crdb().await?, |tx| {
 		let ctx = ctx.clone();
 		let dc = dc.clone();
-		let memory_by_server = memory_by_server.clone();
+		let topo_by_server = topo_by_server.clone();
 
-		inner(ctx, tx, dc, memory_by_server).boxed()
+		inner(ctx, tx, dc, topo_by_server).boxed()
 	})
 	.await?;
 
@@ -213,7 +228,7 @@ async fn inner(
 	ctx: ActivityCtx,
 	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
 	dc: Datacenter,
-	memory_by_server: HashMap<Uuid, u32>,
+	topo_by_server: HashMap<Uuid, ServerSortTopology>,
 ) -> GlobalResult<Vec<Action>> {
 	let servers = sql_fetch_all!(
 		[ctx, ServerRow, @tx tx]
@@ -244,8 +259,16 @@ async fn inner(
 		.map(TryInto::try_into)
 		.collect::<GlobalResult<Vec<Server>>>()?;
 
-	// Sort servers by memory usage
-	servers.sort_by_key(|server| memory_by_server.get(&server.server_id));
+	// Sort servers
+	servers.sort_by_key(|server| {
+		let topo = topo_by_server.get(&server.server_id);
+		match server.pool_type {
+			// Sort job and pb servers by memory
+			PoolType::Job | PoolType::Pegboard => (topo.map(|t| t.memory), None),
+			// Sort the rest by cpu
+			_ => (None, topo.map(|t| t.cpu)),
+		}
+	});
 
 	let mut actions = Vec::new();
 
