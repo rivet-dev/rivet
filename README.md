@@ -177,7 +177,7 @@ _Compile Rivet from scratch and start a full cluster._
 Build & start the cluster with:
 
 ```yaml
-docker compose -f docker/dev-full/docker-compose.yml up -d
+docker compose -f docker/dev-full/docker-compose.yml up -d --build
 ```
 
 Then visit http://localhost:8080 in your browser.
