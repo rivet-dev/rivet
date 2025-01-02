@@ -7,6 +7,6 @@
  * developers are used to.
  */
 
-import type { ACTOR_CONTEXT } from "./bridge_types/90_rivet_ns.d.ts";
-
-export type ActorContext = typeof ACTOR_CONTEXT;
+export type { ActorContext } from "./bridge_types/90_rivet_ns.d.ts";
+export type { Metadata } from "./bridge_types/types/metadata.d.ts";
+export type { Kv } from "./bridge_types/40_rivet_kv.d.ts";

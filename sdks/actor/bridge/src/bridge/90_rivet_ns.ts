@@ -1,9 +1,7 @@
 import { primordials } from "ext:core/mod.js";
-import { KV_NAMESPACE } from "ext:rivet_kv/40_rivet_kv.js";
+import { KV_NAMESPACE, type Kv } from "ext:rivet_kv/40_rivet_kv.js";
 const { ReflectOwnKeys, ObjectFreeze } = primordials;
-
 import type { Metadata } from "./types/metadata.d.ts";
-export type { Metadata } from "./types/metadata.d.ts";
 
 export function deepFreeze<T extends object>(object: T): Readonly<T> {
 	// Retrieve the property names defined on object
@@ -28,7 +26,12 @@ export function deepFreeze<T extends object>(object: T): Readonly<T> {
 	return ObjectFreeze(object);
 }
 
-export const ACTOR_CONTEXT = {
+export interface ActorContext {
+	metadata: Metadata;
+	kv: Kv;
+}
+
+export const ACTOR_CONTEXT: ActorContext = {
 	// Populated at runtime
 	metadata: undefined as unknown as Metadata,
 	kv: KV_NAMESPACE,

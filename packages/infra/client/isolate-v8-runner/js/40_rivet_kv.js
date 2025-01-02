@@ -8,7 +8,7 @@ import { deepEqual } from "./lib/fast-equals/index.js";
 /**
  * Retrieves a value from the key-value store.
  */
-async function get(key, options) {
+export async function get(key, options) {
     const entry = await op_rivet_kv_get(serializeKey(key));
     if (entry == null)
         return null;
@@ -17,11 +17,14 @@ async function get(key, options) {
 /**
  * Retrieves a batch of key-value pairs.
  */
-async function getBatch(keys, options) {
+export async function getBatch(keys, options) {
     const entries = await op_rivet_kv_get_batch(keys.map((x) => serializeKey(x)));
     return new HashMap(entries.map(([key, entry]) => {
-        let jsKey = deserializeKey(key);
-        return [jsKey, deserializeValue(jsKey, entry.value, options?.format)];
+        const jsKey = deserializeKey(key);
+        return [
+            jsKey,
+            deserializeValue(jsKey, entry.value, options?.format),
+        ];
     }));
 }
 /**
@@ -31,7 +34,7 @@ async function getBatch(keys, options) {
  * @param {ListOptions} [options] - Options.
  * @returns {Promise<HashMap<Key, Entry>>} The retrieved values.
  */
-async function list(options) {
+export async function list(options) {
     // Build query
     let query;
     if (options?.prefix) {
@@ -69,8 +72,11 @@ async function list(options) {
     }
     const entries = await op_rivet_kv_list(query, options?.reverse ?? false, options?.limit);
     return new HashMap(entries.map(([key, entry]) => {
-        let jsKey = deserializeKey(key);
-        return [jsKey, deserializeValue(jsKey, entry.value, options?.format)];
+        const jsKey = deserializeKey(key);
+        return [
+            jsKey,
+            deserializeValue(jsKey, entry.value, options?.format),
+        ];
     }));
 }
 /**
@@ -81,7 +87,7 @@ async function list(options) {
  * @param {PutOptions} [options] - Options.
  * @returns {Promise<void>} A promise that resolves when the operation is complete.
  */
-async function put(key, value, options) {
+export async function put(key, value, options) {
     validateType(value, null, options?.format);
     const format = options?.format ?? "value";
     let serializedValue;
@@ -108,7 +114,7 @@ async function put(key, value, options) {
  * @param {PutBatchOptions} [options] - Options.
  * @returns {Promise<void>} A promise that resolves when the batch operation is complete.
  */
-async function putBatch(obj, options) {
+export async function putBatch(obj, options) {
     const serializedObj = new Map();
     const format = options?.format ?? "value";
     for (const [key, value] of obj) {
@@ -138,7 +144,7 @@ async function putBatch(obj, options) {
  * @param {Key} key - The key of the key-value pair to delete.
  * @returns {Promise<void>} A promise that resolves when the operation is complete.
  */
-async function delete_(key) {
+export async function delete_(key) {
     return await op_rivet_kv_delete(serializeKey(key));
 }
 /**
@@ -147,7 +153,7 @@ async function delete_(key) {
  * @param {Key[]} keys - A list of keys to delete.
  * @returns {Promise<void>} A promise that resolves when the operation is complete.
  */
-async function deleteBatch(keys) {
+export async function deleteBatch(keys) {
     return await op_rivet_kv_delete_batch(keys.map((x) => serializeKey(x)));
 }
 /**
@@ -155,7 +161,7 @@ async function deleteBatch(keys) {
  *
  * @returns {Promise<void>} A promise that resolves when the operation is complete.
  */
-async function deleteAll() {
+export async function deleteAll() {
     return await op_rivet_kv_delete_all();
 }
 function validateType(value, key, format = "value") {
@@ -236,7 +242,7 @@ class HashMap {
         this.#internal = internal;
     }
     get(key) {
-        for (let [k, v] of this.#internal) {
+        for (const [k, v] of this.#internal) {
             if (deepEqual(key, k))
                 return v;
         }

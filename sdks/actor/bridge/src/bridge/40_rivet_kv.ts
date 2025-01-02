@@ -23,7 +23,10 @@ export interface GetOptions {
 /**
  * Retrieves a value from the key-value store.
  */
-async function get<K, V>(key: K, options?: GetOptions): Promise<V | null> {
+export async function get<K, V>(
+	key: K,
+	options?: GetOptions,
+): Promise<V | null> {
 	const entry = await op_rivet_kv_get(serializeKey(key));
 	if (entry == null) return null;
 
@@ -40,16 +43,23 @@ export interface GetBatchOptions {
 /**
  * Retrieves a batch of key-value pairs.
  */
-async function getBatch<K extends Array<unknown>, V>(
+export async function getBatch<K extends Array<unknown>, V>(
 	keys: K,
 	options?: GetBatchOptions,
 ): Promise<HashMap<K[number], V>> {
-	const entries: [OutKey, OutEntry][] = await op_rivet_kv_get_batch(keys.map((x) => serializeKey(x)));
+	const entries: [OutKey, OutEntry][] = await op_rivet_kv_get_batch(
+		keys.map((x) => serializeKey(x)),
+	);
 
-	return new HashMap(entries.map(([key, entry]) => {
-		let jsKey = deserializeKey(key) as K[number];
-		return [jsKey, deserializeValue(jsKey, entry.value, options?.format) as V];
-	}));
+	return new HashMap(
+		entries.map(([key, entry]) => {
+			const jsKey = deserializeKey(key) as K[number];
+			return [
+				jsKey,
+				deserializeValue(jsKey, entry.value, options?.format) as V,
+			];
+		}),
+	);
 }
 
 /**
@@ -78,7 +88,9 @@ export interface ListOptions<K> {
  * @param {ListOptions} [options] - Options.
  * @returns {Promise<HashMap<Key, Entry>>} The retrieved values.
  */
-async function list<K, V>(options?: ListOptions<K>): Promise<HashMap<K, V>> {
+export async function list<K, V>(
+	options?: ListOptions<K>,
+): Promise<HashMap<K, V>> {
 	// Build query
 	let query: ListQuery;
 	if (options?.prefix) {
@@ -121,10 +133,15 @@ async function list<K, V>(options?: ListOptions<K>): Promise<HashMap<K, V>> {
 		options?.limit,
 	);
 
-	return new HashMap(entries.map(([key, entry]) => {
-		let jsKey = deserializeKey(key) as K;
-		return [jsKey, deserializeValue(jsKey, entry.value, options?.format) as V];
-	}));
+	return new HashMap(
+		entries.map(([key, entry]) => {
+			const jsKey = deserializeKey(key) as K;
+			return [
+				jsKey,
+				deserializeValue(jsKey, entry.value, options?.format) as V,
+			];
+		}),
+	);
 }
 
 /**
@@ -142,7 +159,7 @@ export interface PutOptions {
  * @param {PutOptions} [options] - Options.
  * @returns {Promise<void>} A promise that resolves when the operation is complete.
  */
-async function put<K, V>(
+export async function put<K, V>(
 	key: K,
 	value: V | ArrayBuffer,
 	options?: PutOptions,
@@ -182,7 +199,7 @@ export interface PutBatchOptions {
  * @param {PutBatchOptions} [options] - Options.
  * @returns {Promise<void>} A promise that resolves when the batch operation is complete.
  */
-async function putBatch<K, V>(
+export async function putBatch<K, V>(
 	obj: Map<K, V | ArrayBuffer>,
 	options?: PutBatchOptions,
 ): Promise<void> {
@@ -219,7 +236,7 @@ async function putBatch<K, V>(
  * @param {Key} key - The key of the key-value pair to delete.
  * @returns {Promise<void>} A promise that resolves when the operation is complete.
  */
-async function delete_<K>(key: K): Promise<void> {
+export async function delete_<K>(key: K): Promise<void> {
 	return await op_rivet_kv_delete(serializeKey(key));
 }
 
@@ -229,7 +246,9 @@ async function delete_<K>(key: K): Promise<void> {
  * @param {Key[]} keys - A list of keys to delete.
  * @returns {Promise<void>} A promise that resolves when the operation is complete.
  */
-async function deleteBatch<K extends Array<unknown>>(keys: K): Promise<void> {
+export async function deleteBatch<K extends Array<unknown>>(
+	keys: K,
+): Promise<void> {
 	return await op_rivet_kv_delete_batch(keys.map((x) => serializeKey(x)));
 }
 
@@ -238,7 +257,7 @@ async function deleteBatch<K extends Array<unknown>>(keys: K): Promise<void> {
  *
  * @returns {Promise<void>} A promise that resolves when the operation is complete.
  */
-async function deleteAll(): Promise<void> {
+export async function deleteAll(): Promise<void> {
 	return await op_rivet_kv_delete_all();
 }
 
@@ -341,7 +360,7 @@ class HashMap<K, V> {
 	}
 
 	get(key: K): V | undefined {
-		for (let [k, v] of this.#internal) {
+		for (const [k, v] of this.#internal) {
 			if (deepEqual(key, k)) return v;
 		}
 
@@ -379,3 +398,5 @@ export const KV_NAMESPACE = {
 	deleteBatch,
 	deleteAll,
 };
+
+export type Kv = typeof KV_NAMESPACE;

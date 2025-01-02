@@ -13,30 +13,81 @@ export type OutgoingWebSocketMessage = string | ArrayBuffer | Uint8Array;
 
 export type ConnectionId = number;
 
+/**
+ * Represents a client connection to an actor.
+ *
+ * Manages connection-specific data and controls the connection lifecycle.
+ *
+ * @see {@link https://rivet.gg/docs/connections|Connection Documentation}
+ */
 export class Connection<A extends AnyActor> {
 	subscriptions: Set<string> = new Set<string>();
 
 	#state: ExtractActorConnState<A> | undefined;
 	#stateEnabled: boolean;
 
+	/**
+	 * Unique identifier for the connection.
+	 */
+	public readonly id: ConnectionId;
+
+	/**
+	 * WebSocket context for managing the connection.
+	 *
+	 * @protected
+	 */
+	public _websocket: WSContext<WebSocket>;
+
+	/**
+	 * Protocol format used for message serialization and deserialization.
+	 *
+	 * @protected
+	 */
+	public _protocolFormat: ProtocolFormat;
+
+	/**
+	 * Gets the current state of the connection.
+	 *
+	 * Throws an error if the state is not enabled.
+	 */
 	public get state(): ExtractActorConnState<A> {
 		this.#validateStateEnabled();
 		assertExists(this.#state, "state should exist");
 		return this.#state;
 	}
 
+	/**
+	 * Sets the state of the connection.
+	 *
+	 * Throws an error if the state is not enabled.
+	 */
 	public set state(value: ExtractActorConnState<A>) {
 		this.#validateStateEnabled();
 		this.#state = value;
 	}
 
-	constructor(
-		public readonly id: ConnectionId,
-		public _websocket: WSContext<WebSocket>,
-		public _protocolFormat: ProtocolFormat,
+	/**
+	 * Initializes a new instance of the Connection class.
+	 *
+	 * This should only be constructed by {@link Actor}.
+	 *
+	 * @param id - Unique identifier for the connection.
+	 * @param websocket - WebSocket context for managing the connection.
+	 * @param protocolFormat - Protocol format for message serialization and deserialization.
+	 * @param state - Initial state of the connection.
+	 * @param stateEnabled - Indicates if the state is enabled.
+	 * @protected
+	 */
+	public constructor(
+		id: ConnectionId,
+		websocket: WSContext<WebSocket>,
+		protocolFormat: ProtocolFormat,
 		state: ExtractActorConnState<A> | undefined,
 		stateEnabled: boolean,
 	) {
+		this.id = id;
+		this._websocket = websocket;
+		this._protocolFormat = protocolFormat;
 		this.#state = state;
 		this.#stateEnabled = stateEnabled;
 	}
@@ -47,6 +98,15 @@ export class Connection<A extends AnyActor> {
 		}
 	}
 
+	/**
+	 * Parses incoming WebSocket messages based on the protocol format.
+	 *
+	 * @param data - The incoming WebSocket message.
+	 * @returns The parsed message.
+	 * @throws MalformedMessage if the message format is incorrect.
+	 *
+	 * @protected
+	 */
 	public async _parse(data: IncomingWebSocketMessage): Promise<unknown> {
 		if (this._protocolFormat === "json") {
 			if (typeof data !== "string") {
@@ -68,6 +128,14 @@ export class Connection<A extends AnyActor> {
 		}
 	}
 
+	/**
+	 * Serializes a value into a WebSocket message based on the protocol format.
+	 *
+	 * @param value - The value to serialize.
+	 * @returns The serialized message.
+	 *
+	 * @protected
+	 */
 	public _serialize(value: unknown): OutgoingWebSocketMessage {
 		if (this._protocolFormat === "json") {
 			return JSON.stringify(value);
@@ -78,6 +146,13 @@ export class Connection<A extends AnyActor> {
 		}
 	}
 
+	/**
+	 * Sends a WebSocket message to the client.
+	 *
+	 * @param message - The message to send.
+	 *
+	 * @protected
+	 */
 	public _sendWebSocketMessage(message: OutgoingWebSocketMessage) {
 		// TODO: Queue message
 		if (!this._websocket) return;
@@ -86,6 +161,13 @@ export class Connection<A extends AnyActor> {
 		this._websocket.send(message);
 	}
 
+	/**
+	 * Sends an event with arguments to the client.
+	 *
+	 * @param eventName - The name of the event.
+	 * @param args - The arguments for the event.
+	 * @see {@link https://rivet.gg/docs/events|Events Documentation}
+	 */
 	send(eventName: string, ...args: unknown[]) {
 		this._sendWebSocketMessage(
 			this._serialize({
@@ -99,6 +181,11 @@ export class Connection<A extends AnyActor> {
 		);
 	}
 
+	/**
+	 * Disconnects the client with an optional reason.
+	 *
+	 * @param reason - The reason for disconnection.
+	 */
 	disconnect(reason?: string) {
 		this._websocket.close(1000, reason);
 	}

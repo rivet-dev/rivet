@@ -2,10 +2,10 @@
 //
 // Generated from sdks/actor/bridge/
 
-import type { CustomEqualCreatorOptions } from "./internalTypes.js";
-import { sameValueZeroEqual } from "./utils.js";
+import type { CustomEqualCreatorOptions } from "./internalTypes.d.ts";
+import { sameValueZeroEqual } from "./utils.d.ts";
 export { sameValueZeroEqual };
-export * from "./internalTypes.js";
+export * from "./internalTypes.d.ts";
 /**
  * Whether the items passed are deeply-equal in value.
  */
@@ -48,4 +48,6 @@ export declare const strictCircularShallowEqual: <A, B>(a: A, b: B) => boolean;
  * support for legacy environments that do not support expected features like
  * `RegExp.prototype.flags` out of the box.
  */
-export declare function createCustomEqual<Meta = undefined>(options?: CustomEqualCreatorOptions<Meta>): <A, B>(a: A, b: B) => boolean;
+export declare function createCustomEqual<Meta = undefined>(
+	options?: CustomEqualCreatorOptions<Meta>,
+): <A, B>(a: A, b: B) => boolean;

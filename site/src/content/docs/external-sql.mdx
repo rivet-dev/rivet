@@ -1,0 +1,79 @@
+# External SQL Database
+
+While Rivet Actors can serve as a complete database solution, they can also complement your existing databases. For example, you might use Rivet Actors to handle frequently-changing data that needs real-time access, while keeping less frequently accessed data in your traditional database.
+
+Rivet can be used with common SQL databases, such as PostgreSQL and MySQL.
+
+## Libraries
+
+To facilitate interaction with SQL databases, you can use either ORM libraries or raw SQL drivers. Each has its own use cases and benefits:
+
+-   **ORM Libraries**: Type-safe and easy way to interact with your database
+
+    -   [Drizzle](https://orm.drizzle.team/)
+    -   [Prisma](https://www.prisma.io/)
+
+-   **Raw SQL Drivers**: Direct access to the database for more flexibility
+
+    -   [PostgreSQL](https://node-postgres.com/)
+    -   [MySQL](https://github.com/mysqljs/mysql)
+
+## Hosting Providers
+
+There are several options for places to host your SQL database:
+
+-   [Supabase](https://supabase.com/)
+-   [Neon](https://neon.tech/)
+-   [PlanetScale](https://planetscale.com/)
+-   [AWS RDS](https://aws.amazon.com/rds/)
+-   [Google Cloud SQL](https://cloud.google.com/sql)
+
+## Example
+
+Here's a basic example of how you might set up a connection to a PostgreSQL database using Drizzle:
+
+```typescript {{ "title": "actor.ts" }}
+import { Actor } from "@rivet-gg/actor";
+import { Pool } from "pg";
+
+export default class DatabaseActor extends Actor {
+	#pool: Pool;
+
+	constructor() {
+		super();
+
+		this.#pool = new Pool({
+			user: "your_db_user",
+			host: "localhost",
+			database: "your_db_name",
+			password: "your_db_password",
+			port: 5432,
+		});
+	}
+
+	// Example RPC to fetch data from database
+	async fetchData(rpc: Rpc<DatabaseActor>) {
+		try {
+			const result = await this.#pool.query("SELECT * FROM your_table");
+			return result.rows;
+		} catch (error) {
+			console.error("Error fetching data:", error);
+			throw new Error("Failed to fetch data");
+		}
+	}
+
+	// Example RPC to insert data into database
+	async insertData(rpc: Rpc<DatabaseActor>, data: any) {
+		try {
+			await this.#pool.query("INSERT INTO your_table (column1, column2) VALUES ($1, $2)", [
+				data.value1,
+				data.value2,
+			]);
+			return { success: true };
+		} catch (error) {
+			console.error("Error inserting data:", error);
+			throw new Error("Failed to insert data");
+		}
+	}
+}
+```

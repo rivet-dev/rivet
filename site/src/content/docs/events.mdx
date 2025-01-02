@@ -55,11 +55,11 @@ await actor.sendPrivateMessage(123, 'Hello, world!');
 
 Clients can subscribe to events from actors using `on` and `once`.
 
-### `on`
+### `on(eventName, callback)`
 
-Clients can subscribe to events that will happen repeatedly using `actor.on(name, callback)`.
+[Documentation](https://jsr.io/@rivet-gg/actor-client/doc/~/ActorHandleRaw.prototype.on.html)
 
-For example:
+Clients can subscribe to events that will happen repeatedly using `actor.on(name, callback)`. For example:
 
 <CodeGroup>
 
@@ -80,11 +80,11 @@ export default class ChatRoom extends Actor {
 
 </CodeGroup>
 
-### `once`
+### `once(eventName, callback)`
 
-Clients can listen for an event only one time with `actor.once(name, callback)`.
+[Documentation](https://jsr.io/@rivet-gg/actor-client/doc/~/ActorHandleRaw.prototype.once.html)
 
-For example:
+Clients can listen for an event only one time with `actor.once(name, callback)`. For example:
 
 <CodeGroup>
 

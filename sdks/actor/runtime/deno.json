@@ -12,7 +12,10 @@
 		"on-change": "npm:on-change@^5.0.1",
 		"zod": "npm:zod@^3.24.1"
 	},
-	"exports": "./src/mod.ts",
+	"exports": {
+		".": "./src/mod.ts",
+		"./kv": "./src/kv.ts"
+	},
 	"fmt": {
 		"useTabs": true
 	},

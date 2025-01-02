@@ -8,8 +8,6 @@
 		}
 	},
 	"files": {
-		"ignore": [
-			"bridge/types/lib/fast-equals"
-		]
+		"ignore": ["*/lib/fast-equals"]
 	}
 }

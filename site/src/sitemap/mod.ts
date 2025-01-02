@@ -1,6 +1,6 @@
-import { Sitemap } from '@/lib/sitemap';
-import { faActorsBorderless, faTs } from '@rivet-gg/icons';
-import apiPages from '@/generated/apiPages.json' assert { type: 'json' };
+import { Sitemap } from "@/lib/sitemap";
+import { faActorsBorderless, faTs } from "@rivet-gg/icons";
+import apiPages from "@/generated/apiPages.json" assert { type: "json" };
 
 // Goals:
 // - Siebar links should advertise the product, collapse any advanced pages away
@@ -15,17 +15,17 @@ import apiPages from '@/generated/apiPages.json' assert { type: 'json' };
 
 export const sitemap = [
   {
-    title: 'Documentation',
-    href: '/docs',
+    title: "Documentation",
+    href: "/docs",
     sidebar: [
-      { title: 'Overview', href: '/docs', icon: 'square-info' },
+      { title: "Overview", href: "/docs", icon: "square-info" },
       {
-        title: 'Getting Started',
+        title: "Getting Started",
         pages: [
           {
-            title: 'Initial Setup',
-            href: '/docs/setup',
-            icon: 'play'
+            title: "Initial Setup",
+            href: "/docs/setup",
+            icon: "play",
           },
           // {
           //   title: 'Client SDKs',
@@ -52,34 +52,34 @@ export const sitemap = [
           //   ]
           // },
           {
-            title: 'Actor SDK',
-            href: 'https://jsr.io/@rivet-gg/actor/doc',
+            title: "Actor SDK",
+            href: "https://jsr.io/@rivet-gg/actor",
             icon: faActorsBorderless,
-            external: true
+            external: true,
           },
           // {
           //   title: 'JavaScript SDK',
           //   href: 'https://jsr.io/@rivet-gg/actor-client',
           //   icon: 'js'
           // },
-        ]
+        ],
       },
       {
-        title: 'Client SDKs',
+        title: "Client SDKs",
         pages: [
           {
-            title: 'JavaScript',
-            href: 'https://jsr.io/@rivet-gg/actor-client',
-            icon: 'js',
+            title: "JavaScript",
+            href: "https://jsr.io/@rivet-gg/actor-client",
+            icon: "js",
             external: true,
           },
           {
-            title: 'TypeScript',
-            href: 'https://jsr.io/@rivet-gg/actor-client',
+            title: "TypeScript",
+            href: "https://jsr.io/@rivet-gg/actor-client",
             icon: faTs,
             external: true,
           },
-        ]
+        ],
       },
       //{
       //  title: 'Use Cases',
@@ -120,96 +120,106 @@ export const sitemap = [
       //  ]
       //},
       {
-        title: 'Build with Rivet',
+        title: "Build with Actors",
         pages: [
           {
-            title: 'Create & Manage Actors',
-            href: '/docs/manage',
-            icon: 'square-plus',
+            title: "Create & Manage Actors",
+            href: "/docs/manage",
+            icon: "square-plus",
           },
           {
-            title: 'Remote Procedure Calls',
-            href: '/docs/rpc',
-            icon: 'code'
+            title: "Remote Procedure Calls",
+            href: "/docs/rpc",
+            icon: "code",
           },
           {
-            title: 'State',
-            href: '/docs/state',
-            icon: 'floppy-disk'
+            title: "State",
+            href: "/docs/state",
+            icon: "floppy-disk",
           },
           {
-            title: 'Events',
-            href: '/docs/events',
-            icon: 'tower-broadcast'
+            title: "Events",
+            href: "/docs/events",
+            icon: "tower-broadcast",
           },
           {
-            title: 'Edge Networking',
-            href: '/docs/edge',
-            icon: 'globe'
+            title: "Lifecycle",
+            href: "/docs/lifecycle",
+            icon: "sync",
           },
           {
-            title: 'More',
+            title: "Edge Networking",
+            href: "/docs/edge",
+            icon: "globe",
+          },
+          {
+            title: "More",
             collapsible: true,
             pages: [
               {
-                title: 'Scaling & Concurrency',
-                href: '/docs/scaling',
-                icon: 'maximize'
+                title: "Connections",
+                href: "/docs/connections",
+                icon: "network-wired",
               },
               {
-                title: 'Lifecycle',
-                href: '/docs/lifecycle',
-                icon: 'sync'
+                title: "Authentication",
+                href: "/docs/authentication",
+                icon: "fingerprint",
               },
               {
-                title: 'Connections',
-                href: '/docs/connections',
-                icon: 'network-wired'
+                title: "Metadata",
+                href: "/docs/metadata",
+                icon: "tag",
               },
               {
-                title: 'Authentication',
-                href: '/docs/authentication',
-                icon: 'fingerprint'
+                title: "External SQL Databases",
+                href: "/docs/external-sql",
+                icon: "database",
               },
               {
-                title: 'Fault Tolerance',
-                href: '/docs/fault-tolerance',
-                icon: 'heart-pulse'
+                title: "Logging",
+                href: "/docs/logging",
+                icon: "list-ul",
               },
               {
-                title: 'Logging',
-                href: '/docs/logging',
-                icon: 'list-ul'
+                title: "Builds",
+                href: "/docs/builds",
+                icon: "hammer",
               },
               {
-                title: 'Builds',
-                href: '/docs/builds',
-                icon: 'hammer'
+                title: "Scaling & Concurrency",
+                href: "/docs/scaling",
+                icon: "maximize",
+              },
+              {
+                title: "Fault Tolerance",
+                href: "/docs/fault-tolerance",
+                icon: "heart-pulse",
               },
               // { title: 'DDoS & Botting Mitigation', href: '/docs', icon: 'shield-halved' },
-            ]
-          }
-        ]
+            ],
+          },
+        ],
       },
       {
-        title: 'Resources',
+        title: "Resources",
         pages: [
           // { title: 'Cheatsheet', href: '/docs/cheatsheet', icon: 'file-code' },
           // { title: 'Integrating Exiting Projects', href: '/docs/integrate', icon: 'plug' },
           {
-            title: 'Configuration',
-            href: '/docs/config',
-            icon: 'square-sliders'
+            title: "Configuration",
+            href: "/docs/config",
+            icon: "square-sliders",
           },
           {
-            title: 'Troubleshooting',
-            href: '/docs/troubleshooting',
-            icon: 'clipboard-list-check'
+            title: "Troubleshooting",
+            href: "/docs/troubleshooting",
+            icon: "clipboard-list-check",
           },
           {
-            title: 'FAQ',
-            href: '/docs/faq',
-            icon: 'block-question'
+            title: "FAQ",
+            href: "/docs/faq",
+            icon: "block-question",
           },
           // { title: 'CLI', href: '/docs/cli', icon: 'square-terminal' },
           // { title: 'Hub', href: '/docs/hub', icon: 'browser' },
@@ -226,30 +236,30 @@ export const sitemap = [
           // 	]
           // },
           {
-            title: 'Self-Hosting',
+            title: "Self-Hosting",
             collapsible: true,
             pages: [
               {
-                title: 'Overview',
-                href: '/docs/self-hosting'
+                title: "Overview",
+                href: "/docs/self-hosting",
               },
               {
-                title: 'Docker Compose',
-                href: '/docs/self-hosting/docker-compose'
+                title: "Docker Compose",
+                href: "/docs/self-hosting/docker-compose",
               },
               {
-                title: 'Manual Deployment',
-                href: '/docs/self-hosting/manual-deployment'
+                title: "Manual Deployment",
+                href: "/docs/self-hosting/manual-deployment",
               },
               {
-                title: 'Server Config',
-                href: '/docs/self-hosting/server-config'
+                title: "Server Config",
+                href: "/docs/self-hosting/server-config",
               },
               {
-                title: 'Client Config',
-                href: '/docs/self-hosting/client-config'
-              }
-            ]
+                title: "Client Config",
+                href: "/docs/self-hosting/client-config",
+              },
+            ],
           },
           // {
           //   title: 'Comparison',
@@ -274,48 +284,52 @@ export const sitemap = [
           //   ]
           // },
           {
-            title: 'More',
+            title: "More",
             collapsible: true,
             pages: [
               {
-                title: 'Available Regions',
-                href: '/docs/regions',
-                icon: 'globe'
+                title: "Available Regions",
+                href: "/docs/regions",
+                icon: "globe",
               },
-              { title: 'Limitations', href: '/docs/limitations', icon: 'exclamation-triangle' },
               {
-                title: 'Advanced',
+                title: "Limitations",
+                href: "/docs/limitations",
+                icon: "exclamation-triangle",
+              },
+              {
+                title: "Advanced",
                 collapsible: true,
                 pages: [
                   {
-                    title: 'Rescheduling',
-                    href: '/docs/rescheduling'
+                    title: "Rescheduling",
+                    href: "/docs/rescheduling",
                   },
                   {
-                    title: 'Networking',
-                    href: '/docs/networking'
+                    title: "Networking",
+                    href: "/docs/networking",
                   },
                   {
-                    title: 'Internals',
+                    title: "Internals",
                     collapsible: true,
                     pages: [
                       {
-                        title: 'Design Decisions',
-                        href: '/docs/internals/design-decisions'
+                        title: "Design Decisions",
+                        href: "/docs/internals/design-decisions",
                       },
                       {
-                        title: 'Actor Runtime',
-                        href: '/docs/internals/runtime'
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      }
-    ]
+                        title: "Actor Runtime",
+                        href: "/docs/internals/runtime",
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
   },
   // {
   //   title: 'Examples',
@@ -325,8 +339,8 @@ export const sitemap = [
   //   ]
   // },
   {
-    title: 'Platform API',
-    href: '/docs/api',
-    sidebar: apiPages.pages
-  }
+    title: "Platform API",
+    href: "/docs/api",
+    sidebar: apiPages.pages,
+  },
 ] satisfies Sitemap;

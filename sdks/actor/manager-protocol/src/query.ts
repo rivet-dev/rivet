@@ -27,4 +27,19 @@ export const ActorQuerySchema = z.union([
 
 export type ActorQuery = z.infer<typeof ActorQuerySchema>;
 export type GetOrCreateRequest = z.infer<typeof GetOrCreateRequestSchema>;
-export type CreateRequest = z.infer<typeof CreateRequestSchema>;
+
+// export type CreateRequest = z.infer<typeof CreateRequestSchema>; // Complex type
+/**
+ * Interface representing a request to create an actor.
+ */
+export interface CreateRequest {
+	/**
+	 * The region where the actor should be created.
+	 */
+	region?: string;
+
+	/**
+	 * The tags associated with the actor.
+	 */
+	tags: { name: string } & { [k: string]: string };
+}

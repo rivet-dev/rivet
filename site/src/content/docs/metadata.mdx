@@ -1,0 +1,59 @@
+# Metadata
+
+Metadata provides information about the currently running actor. Metadata can be accessed from `this._metadata`.
+
+For example:
+
+<CodeGroup>
+
+```typescript {{ "title": "chat_room.ts" }}
+export default class ChatRoom extends Actor {
+  // Internal method used to get the channel ID. Returns `random` for this example.
+  #getChannelId(rpc: Rpc<ChatRoom>): string {
+    return this._metadata.actor.tags['channel'];
+  }
+}
+```
+
+```typescript {{ "title": "client.ts" }}
+// Create an actor with `channel` set to `random`
+const actor = client.get<ChatRoom>({
+  name: 'chat_room',
+  channel: 'random'
+});
+```
+
+</CodeGroup>
+
+## Properties
+
+### `actor`
+
+- **id**: The unique identifier for the actor.
+- **tags**: A collection of key-value pairs associated with the actor. See [Create & Manage Actors](/docs/manage) for more information.
+- **createdAt**: The date when the actor was created.
+
+### `region`
+
+- **id**: The slug for the region. See [all available regions](/docs/regions).
+- **name**: The name of the region.
+
+### `build`
+
+- **id**: The unique identifier for the currently running build.
+
+### `project`
+
+- **id**: The unique identifier for the project.
+- **slug**: A human-readable identifier for the project.
+
+### `environment`
+
+- **id**: The unique identifier for the environment.
+- **slug**: A human-readable identifier for the environment.
+
+### `cluster`
+
+This is only relevant if running multiple dedicated clusters.
+
+- **id**: The unique identifier for the cluster.

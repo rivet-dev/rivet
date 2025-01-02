@@ -1,7 +1,6 @@
 import { Lock } from "@core/asyncutil/lock";
 import { assertExists } from "@std/assert/exists";
 import { deadline } from "@std/async/deadline";
-import { throttle } from "@std/async/unstable-throttle";
 import type { Logger } from "@std/log/get-logger";
 import { Hono, type Context as HonoContext } from "hono";
 import { upgradeWebSocket } from "hono/deno";
@@ -9,7 +8,7 @@ import type { WSEvents } from "hono/ws";
 import onChange from "on-change";
 import { setupLogging } from "../common/log.ts";
 import { assertUnreachable } from "../common/utils.ts";
-import type { ActorContext } from "../core/mod.ts";
+import type { ActorContext, Metadata } from "../core/mod.ts";
 import { ProtocolFormatSchema } from "../protocol/ws/mod.ts";
 import type * as wsToClient from "../protocol/ws/to_client.ts";
 import * as wsToServer from "../protocol/ws/to_server.ts";
@@ -21,6 +20,7 @@ import {
 	type OutgoingWebSocketMessage,
 } from "./connection.ts";
 import * as errors from "./errors.ts";
+import type { Kv } from "./kv.ts";
 import { instanceLogger, logger } from "./log.ts";
 import { Rpc } from "./rpc.ts";
 
@@ -63,14 +63,33 @@ function isJsonSerializable(value: unknown): boolean {
 	return false;
 }
 
+/**
+ * Options for the `_onBeforeConnect` method.
+ *
+ * @see {@link https://rivet.gg/docs/connections|Connections Documentation}
+ */
 export interface OnBeforeConnectOptions<A extends AnyActor> {
+	/**
+	 * The request object associated with the connection.
+	 *
+	 * @experimental
+	 */
 	request: Request;
+
+	/**
+	 * The parameters passed when a client connects to the actor.
+	 */
 	parameters: ExtractActorConnParams<A>;
 }
 
+/**
+ * Options for the `_saveState` method.
+ *
+ * @see {@link https://rivet.gg/docs/state|State Documentation}
+ */
 export interface SaveStateOptions {
 	/**
-	 * Forces the state to be saved immediately. This function will return when the state has save successfully.
+	 * Forces the state to be saved immediately. This function will return when the state has saved successfully.
 	 */
 	immediate?: boolean;
 }
@@ -79,24 +98,43 @@ export interface SaveStateOptions {
 // biome-ignore lint/suspicious/noExplicitAny: Needs to be used in `extends`
 export type AnyActor = Actor<any, any, any>;
 
-// biome-ignore lint/suspicious/noExplicitAny: Must be used for `extends`
 export type ExtractActorConnParams<A> = A extends Actor<
+	// biome-ignore lint/suspicious/noExplicitAny: Must be used for `extends`
 	any,
 	infer ConnParams,
+	// biome-ignore lint/suspicious/noExplicitAny: Must be used for `extends`
 	any
 >
 	? ConnParams
 	: never;
 
-// biome-ignore lint/suspicious/noExplicitAny: Must be used for `extends`
 export type ExtractActorConnState<A> = A extends Actor<
+	// biome-ignore lint/suspicious/noExplicitAny: Must be used for `extends`
 	any,
+	// biome-ignore lint/suspicious/noExplicitAny: Must be used for `extends`
 	any,
 	infer ConnState
 >
 	? ConnState
 	: never;
 
+/**
+ * Abstract class representing a Rivet Actor. Extend this class to implement logic for your actor.
+ *
+ * @template State Represents the actor's state, which is stored in-memory and persisted automatically. This allows you to work with data without added latency while still being able to survive crashes & upgrades. Must define `_onInitialize` to create the initial state. For more details, see the {@link https://rivet.gg/docs/state|State Documentation}.
+ * @template ConnParams Represents the parameters passed when a client connects to the actor. These parameters can be used for authentication or other connection-specific logic. For more details, see the {@link https://rivet.gg/docs/connections|Connections Documentation}.
+ * @template ConnState Represents the state of a connection, which is initialized from the data returned by `_onBeforeConnect`. This state can be accessed in any actor method using `connection.state`. For more details, see the {@link https://rivet.gg/docs/connections|Connections Documentation}.
+ * @see {@link https://rivet.gg/docs|Documentation}
+ * @see {@link https://rivet.gg/docs/setup|Initial Setup}
+ * @see {@link https://rivet.gg/docs/manage|Create & Manage Actors}
+ * @see {@link https://rivet.gg/docs/rpc|Remote Procedure Calls}
+ * @see {@link https://rivet.gg/docs/state|State}
+ * @see {@link https://rivet.gg/docs/events|Events}
+ * @see {@link https://rivet.gg/docs/lifecycle|Lifecycle}
+ * @see {@link https://rivet.gg/docs/connections|Connections}
+ * @see {@link https://rivet.gg/docs/authentication|Authentication}
+ * @see {@link https://rivet.gg/docs/logging|Logging}
+ */
 export abstract class Actor<
 	State = undefined,
 	ConnParams = undefined,
@@ -130,12 +168,24 @@ export abstract class Actor<
 	#lastSaveTime = 0;
 	#pendingSaveTimeout?: number;
 
-	protected constructor(config?: Partial<ActorConfig>) {
+	/**
+	 * This constructor should never be used directly.
+	 *
+	 * Constructed in {@link Actor.start}.
+	 *
+	 * @private
+	 */
+	private constructor(config?: Partial<ActorConfig>) {
 		this.#config = mergeActorConfig(config);
 	}
 
-	// This is called by Rivet when the actor is exported as the default
-	// property
+	/**
+	 * Called by Rivet runtime to start a new actor. This class must use `export default` in order to be called automatically.
+	 *
+	 * This should never be used directly.
+	 *
+	 * @param ctx - The actor context.
+	 */
 	public static start(ctx: ActorContext): Promise<void> {
 		setupLogging();
 
@@ -351,12 +401,15 @@ export abstract class Actor<
 
 		const port = this.#getServerPort();
 		logger().info("server running", { port });
-		this.#server = Deno.serve({
-			port,
-			hostname: "0.0.0.0",
-			// Remove "Listening on ..." message
-			onListen() {},
-		}, app.fetch);
+		this.#server = Deno.serve(
+			{
+				port,
+				hostname: "0.0.0.0",
+				// Remove "Listening on ..." message
+				onListen() {},
+			},
+			app.fetch,
+		);
 	}
 
 	#getServerPort(): number {
@@ -715,34 +768,123 @@ export abstract class Actor<
 	}
 
 	// MARK: Lifecycle hooks
+	/**
+	 * Hook called when the actor is first created. This method should return the initial state of the actor. The state can be access with `this._state`.
+	 *
+	 * @see _state
+	 * @see {@link https://rivet.gg/docs/lifecycle|Lifecycle Documentation}
+	 */
 	protected _onInitialize?(): State | Promise<State>;
 
+	/**
+	 * Hook called after the actor has been initialized but before any connections are accepted. If the actor crashes or is upgraded, this method will be called before startup. If you need to upgrade your state, use this method.
+	 *
+	 * Use this to set up any resources or start any background tasks.
+	 *
+	 * @see {@link https://rivet.gg/docs/lifecycle|Lifecycle Documentation}
+	 */
 	protected _onStart?(): void | Promise<void>;
 
+	/**
+	 * Hook called whenever the actor's state changes. This is often used to broadcast state updates.
+	 *
+	 * @param newState - The new state.
+	 * @see {@link https://rivet.gg/docs/lifecycle|Lifecycle Documentation}
+	 */
 	protected _onStateChange?(newState: State): void | Promise<void>;
 
+	/**
+	 * Called whenever a new client connects to the actor. Clients can pass parameters when connecting, accessible via `opts.parameters`.
+	 *
+	 * The returned value becomes the connection's initial state and can be accessed later via `connection.state`.
+	 *
+	 * Connections cannot interact with the actor until this method completes successfully. Throwing an error will abort the connection.
+	 *
+	 * @param opts - Options for the connection.
+	 * @see {@link https://rivet.gg/docs/lifecycle|Lifecycle Documentation}
+	 * @see {@link https://rivet.gg/docs/authentication|Authentication Documentation}
+	 */
 	protected _onBeforeConnect?(
 		opts: OnBeforeConnectOptions<this>,
 	): ConnState | Promise<ConnState>;
 
+	/**
+	 * Executed after the client has successfully connected.
+	 *
+	 * Messages will not be processed for this actor until this method succeeds.
+	 *
+	 * Errors thrown from this method will cause the client to disconnect.
+	 *
+	 * @param connection - The connection object.
+	 * @see {@link https://rivet.gg/docs/lifecycle|Lifecycle Documentation}
+	 */
 	protected _onConnect?(connection: Connection<this>): void | Promise<void>;
 
+	/**
+	 * Called when a client disconnects from the actor. Use this to clean up any connection-specific resources.
+	 *
+	 * @param connection - The connection object.
+	 * @see {@link https://rivet.gg/docs/lifecycle|Lifecycle Documentation}
+	 */
 	protected _onDisconnect?(connection: Connection<this>): void | Promise<void>;
 
 	// MARK: Exposed methods
+	/**
+	 * Gets metadata associated with this actor.
+	 *
+	 * @see {@link https://rivet.gg/docs/metadata|Metadata Documentation}
+	 */
+	protected get _metadata(): Metadata {
+		return this.#ctx.metadata;
+	}
+
+	/**
+	 * Gets the KV state API. This KV storage is local to this actor.
+	 *
+	 * @see {@link https://rivet.gg/docs/state|State Documentation}
+	 */
+	protected get _kv(): Kv {
+		return this.#ctx.kv;
+	}
+
+	/**
+	 * Gets the logger instance.
+	 *
+	 * @see {@link https://rivet.gg/docs/logging|Logging Documentation}
+	 */
 	protected get _log(): Logger {
 		return instanceLogger();
 	}
 
+	/**
+	 * Gets the map of connections.
+	 *
+	 * @see {@link https://rivet.gg/docs/connections|Connections Documentation}
+	 */
 	protected get _connections(): Map<ConnectionId, Connection<this>> {
 		return this.#connections;
 	}
 
+	/**
+	 * Gets the current state.
+	 *
+	 * Changing properties of this value will automatically be persisted.
+	 *
+	 * @see _onInitialize
+	 * @see {@link https://rivet.gg/docs/state|State Documentation}
+	 */
 	protected get _state(): State {
 		this.#validateStateEnabled();
 		return this.#stateProxy;
 	}
 
+	/**
+	 * Sets the current state.
+	 *
+	 * This property will automatically be persisted.
+	 *
+	 * @see {@link https://rivet.gg/docs/state|State Documentation}
+	 */
 	protected set _state(value: State) {
 		this.#validateStateEnabled();
 		this.#setStateWithoutChange(value);
@@ -751,6 +893,9 @@ export abstract class Actor<
 
 	/**
 	 * Broadcasts an event to all connected clients.
+	 * @param name - The name of the event.
+	 * @param args - The arguments to send with the event.
+	 * @see {@link https://rivet.gg/docs/events|Events}
 	 */
 	protected _broadcast<Args extends Array<unknown>>(
 		name: string,
@@ -789,6 +934,8 @@ export abstract class Actor<
 	 *
 	 * This allows the actor runtime to ensure that a promise completes while
 	 * returning from an RPC request early.
+	 *
+	 * @param promise - The promise to run in the background.
 	 */
 	protected _runInBackground(promise: Promise<void>) {
 		this.#assertReady();
@@ -810,6 +957,9 @@ export abstract class Actor<
 	 *
 	 * This is helpful if running a long task that may fail later or when
 	 * running a background job that updates the state.
+	 *
+	 * @param opts - Options for saving the state.
+	 * @see {@link https://rivet.gg/docs/state|State Documentation}
 	 */
 	protected async _saveState(opts: SaveStateOptions) {
 		this.#assertReady();
@@ -833,6 +983,11 @@ export abstract class Actor<
 		}
 	}
 
+	/**
+	 * Shuts down the actor, closing all connections and stopping the server.
+	 *
+	 * @see {@link https://rivet.gg/docs/lifecycle|Lifecycle Documentation}
+	 */
 	protected async _shutdown() {
 		// Stop accepting new connections
 		if (this.#server) await this.#server.shutdown();

@@ -7,7 +7,7 @@ export const USER_ERROR_CODE = "user_error";
 interface ActorErrorOptions extends ErrorOptions {
 	/** Error data can safely be serialized in a response to the client. */
 	public?: boolean;
-	/** Metadata assocaited with this error. This will be sent to clients. */
+	/** Metadata associated with this error. This will be sent to clients. */
 	metadata?: unknown;
 }
 
@@ -136,14 +136,30 @@ export class InvalidStateType extends ActorError {
 	}
 }
 
+/**
+ * Options for the UserError class.
+ */
 export interface UserErrorOptions extends ErrorOptions {
+	/**
+	 * Machine readable code for this error. Useful for catching different types of errors in try-catch.
+	 */
 	code?: string;
-	meta: unknown;
+
+	/**
+	 * Additional metadata related to the error. Useful for understanding context about the error.
+	 */
+	metadata: unknown;
 }
 
 /** Error that can be safely returned to the user. Usually used to indicate a user error. */
 export class UserError extends ActorError {
+	/**
+	 * Constructs a new UserError instance.
+	 *
+	 * @param message - The error message to be displayed.
+	 * @param opts - Optional parameters for the error, including a machine-readable code and additional metadata.
+	 */
 	constructor(message: string, opts?: UserErrorOptions) {
-		super(opts?.code ?? USER_ERROR_CODE, message);
+		super(opts?.code ?? USER_ERROR_CODE, message, { metadata: opts?.metadata });
 	}
 }

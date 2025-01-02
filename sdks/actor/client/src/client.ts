@@ -10,17 +10,37 @@ import * as errors from "./errors.ts";
 import { ActorHandleRaw } from "./handle.ts";
 import { logger } from "./log.ts";
 
+/**
+ * Options for configuring the client.
+ * @typedef {Object} ClientOptions
+ * @property {ProtocolFormat} [protocolFormat] - The format used for protocol communication.
+ */
 export interface ClientOptions {
 	protocolFormat?: ProtocolFormat;
 }
 
+/**
+ * Options for querying actors.
+ * @typedef {Object} QueryOptions
+ * @property {unknown} [parameters] - Parameters to pass to the connection.
+ */
 export interface QueryOptions {
 	/** Parameters to pass to the connection. */
 	parameters?: unknown;
 }
 
+/**
+ * Options for getting an actor by ID.
+ * @typedef {QueryOptions} GetWithIdOptions
+ */
 export interface GetWithIdOptions extends QueryOptions {}
 
+/**
+ * Options for getting an actor.
+ * @typedef {QueryOptions} GetOptions
+ * @property {boolean} [noCreate] - Prevents creating a new actor if one does not exist.
+ * @property {Partial<CreateRequest>} [create] - Config used to create the actor.
+ */
 export interface GetOptions extends QueryOptions {
 	/** Prevents creating a new actor if one does not exist. */
 	noCreate?: boolean;
@@ -28,16 +48,30 @@ export interface GetOptions extends QueryOptions {
 	create?: Partial<CreateRequest>;
 }
 
+/**
+ * Options for creating an actor.
+ * @typedef {QueryOptions} CreateOptions
+ * @property {CreateRequest} create - Config used to create the actor.
+ */
 export interface CreateOptions extends QueryOptions {
 	/** Config used to create the actor. */
 	create: CreateRequest;
 }
 
 /**
- * Proxied wrapper of `RawActorHandle` that allows calling RPC functions
- * implicitly.
+ * Connection to an actor. Allows calling actor's remote procedure calls with inferred types. See {@link ActorHandleRaw} for underlying methods.
+ *
+ * @example
+ * ```
+ * const room = await client.get<ChatRoom>(...etc...);
+ * // This calls the rpc named `sendMessage` on the `ChatRoom` actor.
+ * await room.sendMessage('Hello, world!');
+ * ```
  *
  * Private methods (e.g. those starting with `_`) are automatically excluded.
+ *
+ * @template A The actor class that this handle is connected to.
+ * @see {@link ActorHandleRaw}
  */
 export type ActorHandle<A = unknown> = ActorHandleRaw & {
 	[K in keyof A as K extends string
@@ -50,28 +84,57 @@ export type ActorHandle<A = unknown> = ActorHandleRaw & {
 };
 
 /**
- * RPC function returned by the actor proxy. This will call `ActorHandle.rpc`
- * when triggered.
+ * RPC function returned by `ActorHandle`. This will call `ActorHandle.rpc` when triggered.
+ *
+ * @typedef {Function} ActorRPCFunction
+ * @template Args
+ * @template Response
+ * @param {...Args} args - Arguments for the RPC function.
+ * @returns {Promise<Response>}
  */
 export type ActorRPCFunction<
 	Args extends Array<unknown> = unknown[],
 	Response = unknown,
 > = (
-	// Remove the first parameter, since that's `Context<...>`
 	...args: Args extends [unknown, ...infer Rest] ? Rest : Args
 ) => Promise<Response>;
 
-/** Region to connect to. */
-interface Region {
+/**
+ * Represents a region to connect to.
+ * @typedef {Object} Region
+ * @property {string} id - The region ID.
+ * @property {string} name - The region name.
+ * @see {@link https://rivet.gg/docs/edge|Edge Networking}
+ * @see {@link https://rivet.gg/docs/regions|Available Regions}
+ */
+export interface Region {
+	/**
+	 * The region slug.
+	 */
 	id: string;
+
+	/**
+	 * The human-friendly region name.
+	 */
 	name: string;
 }
 
+/**
+ * Client for managing & connecting to actors.
+ * @see {@link https://rivet.gg/docs/manage|Create & Manage Actors}
+ */
 export class Client {
 	#managerEndpointPromise: Promise<string>;
 	#regionPromise: Promise<Region | undefined>;
 	#protocolFormat: ProtocolFormat;
 
+	/**
+	 * Creates an instance of Client.
+	 *
+	 * @param {string | Promise<string>} managerEndpointPromise - The manager endpoint or a promise resolving to it. See {@link https://rivet.gg/docs/setup|Initial Setup} for instructions on getting the manager endpoint.
+	 * @param {ClientOptions} [opts] - Options for configuring the client.
+	 * @see {@link https://rivet.gg/docs/setup|Initial Setup}
+	 */
 	public constructor(
 		managerEndpointPromise: string | Promise<string>,
 		opts?: ClientOptions,
@@ -91,6 +154,13 @@ export class Client {
 		this.#protocolFormat = opts?.protocolFormat ?? "cbor";
 	}
 
+	/**
+	 * Gets an actor by its ID.
+	 * @template A The actor class that this handle is connected to.
+	 * @param {string} actorId - The ID of the actor.
+	 * @param {GetWithIdOptions} [opts] - Options for getting the actor.
+	 * @returns {Promise<ActorHandle<A>>} - A promise resolving to the actor handle.
+	 */
 	async getWithId<A = unknown>(
 		actorId: string,
 		opts?: GetWithIdOptions,
@@ -115,6 +185,27 @@ export class Client {
 		return this.#createProxy(handle) as ActorHandle<A>;
 	}
 
+	/**
+	 * Gets an actor by its tags, creating it if necessary.
+	 *
+	 * @example
+	 * ```
+	 * const room = await client.get<ChatRoom>({
+	 *   name: 'chat_room',
+	 *   // Get or create the actor for the channel `random`
+	 *   channel: 'random'
+	 * });
+	 *
+	 * // This actor will have the tags: { name: 'chat_room', channel: 'random' }
+	 * await room.sendMessage('Hello, world!');
+	 * ```
+	 *
+	 * @template A The actor class that this handle is connected to.
+	 * @param {ActorTags} tags - The tags to identify the actor.
+	 * @param {GetOptions} [opts] - Options for getting the actor.
+	 * @returns {Promise<ActorHandle<A>>} - A promise resolving to the actor handle.
+	 * @see {@link https://rivet.gg/docs/manage#client.get}
+	 */
 	async get<A = unknown>(
 		tags: ActorTags,
 		opts?: GetOptions,
@@ -150,6 +241,29 @@ export class Client {
 		return this.#createProxy(handle) as ActorHandle<A>;
 	}
 
+	/**
+	 * Creates a new actor with the provided tags.
+	 *
+	 * @example
+	 * ```
+	 * // Create a new document actor
+	 * const doc = await client.create<MyDocument>({
+	 *   create: {
+	 *     tags: {
+	 *       name: 'my_document',
+	 *       docId: '123'
+	 *     }
+	 *   }
+	 * });
+	 *
+	 * await doc.doSomething();
+	 * ```
+	 *
+	 * @template A The actor class that this handle is connected to.
+	 * @param {CreateOptions} opts - Options for creating the actor.
+	 * @returns {Promise<ActorHandle<A>>} - A promise resolving to the actor handle.
+	 * @see {@link https://rivet.gg/docs/manage#client.create}
+	 */
 	async create<A = unknown>(opts: CreateOptions): Promise<ActorHandle<A>> {
 		// Build create config
 		const create = opts.create;
@@ -259,7 +373,17 @@ export class Client {
 		}) as ActorHandle;
 	}
 
-	/** Sends an HTTP request to the manager actor. */
+	/**
+	 * Sends an HTTP request to the manager actor.
+	 * @private
+	 * @template Request
+	 * @template Response
+	 * @param {string} method - The HTTP method.
+	 * @param {string} path - The path for the request.
+	 * @param {Request} [body] - The request body.
+	 * @returns {Promise<Response>} - A promise resolving to the response.
+	 * @see {@link https://rivet.gg/docs/manage#client}
+	 */
 	async #sendManagerRequest<Request, Response>(
 		method: string,
 		path: string,
@@ -285,6 +409,12 @@ export class Client {
 		}
 	}
 
+	/**
+	 * Fetches the region information.
+	 * @private
+	 * @returns {Promise<Region | undefined>} - A promise resolving to the region or undefined.
+	 * @see {@link https://rivet.gg/docs/edge#Fetching-regions-via-API}
+	 */
 	async #fetchRegion(): Promise<Region | undefined> {
 		try {
 			// Fetch the connection info from the manager

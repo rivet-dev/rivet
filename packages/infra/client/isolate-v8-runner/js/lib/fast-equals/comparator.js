@@ -181,9 +181,7 @@ export function createEqualityComparatorConfig({ circular, createCustomConfig, s
  * use inside the built comparator.
  */
 export function createInternalEqualityComparator(compare) {
-    return function (a, b, _indexOrKeyA, _indexOrKeyB, _parentA, _parentB, state) {
-        return compare(a, b, state);
-    };
+    return (a, b, _indexOrKeyA, _indexOrKeyB, _parentA, _parentB, state) => compare(a, b, state);
 }
 /**
  * Create the `isEqual` function used by the consuming application.

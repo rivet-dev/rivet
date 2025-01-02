@@ -107,9 +107,11 @@ const client = new Client(/* CONNECTION ADDRESS */);
 
 <Tip>See [setup guide](/docs/setup) for how to access `/* CONNECTION ADDRESS */`.</Tip>
 
-### `client.get(tags, opts)`
+### `get(tags, opts)`
 
-[`client.get(tags)`](https://jsr.io/@rivet-gg/actor-client/doc/~/Client.prototype.get) attempts to find an existing actor matching the provided tags. If no matching actor is found, it creates a new one with those tags.
+[Documentation](https://jsr.io/@rivet-gg/actor-client/doc/~/Client.prototype.get)
+
+Attempts to find an existing actor matching the provided tags. If no matching actor is found, it creates a new one with those tags.
 
 ```typescript {{ "title": "client.ts" }}
 const room = await client.get<ChatRoom>({
@@ -122,9 +124,11 @@ const room = await client.get<ChatRoom>({
 await room.sendMessage('Hello, world!');
 ```
 
-### `client.create(opts)`
+### `create(opts)`
 
-To explicitly create a new actor, use [`client.create(tags)`](https://jsr.io/@rivet-gg/actor-client/doc/~/Client.prototype.create). This will create a new actor with the provided tags.
+[Documentation](https://jsr.io/@rivet-gg/actor-client/doc/~/Client.prototype.create)
+
+Explicitly create a new actor with the provided tags.
 
 ```typescript
 // Create a new document actor
@@ -140,9 +144,11 @@ const doc = await client.create<MyDocument>({
 await doc.doSomething();
 ```
 
-### `client.getWithId(id, opts)`
+### `getWithId(id, opts)`
 
-Each actor has a unique identifier that can be used instead of tags. To get an actor by its ID, use [`client.getWithId(id)`](https://jsr.io/@rivet-gg/actor-client/doc/~/Client.prototype.getWithId).
+[Documentation](https://jsr.io/@rivet-gg/actor-client/doc/~/Client.prototype.getWithId)
+
+Connects to an actor based on its ID.
 
 It's recommended to use tags instead of using actor IDs directly (e.g. see `docId` above).
 

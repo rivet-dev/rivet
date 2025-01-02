@@ -19,12 +19,22 @@ interface EventSubscriptions<Args extends Array<unknown>> {
 	once: boolean;
 }
 
-type EventUnsubscribe = () => void;
+/**
+ * A function that unsubscribes from an event.
+ *
+ * @typedef {Function} EventUnsubscribe
+ */
+export type EventUnsubscribe = () => void;
 
 interface SendOpts {
 	ephemeral: boolean;
 }
 
+/**
+ * Provides underlying functions for {@link ActorHandle}. See {@link ActorHandle} for using type-safe remote procedure calls.
+ *
+ * @see {@link ActorHandle}
+ */
 export class ActorHandleRaw {
 	#disconnected = false;
 
@@ -39,12 +49,33 @@ export class ActorHandleRaw {
 
 	// TODO: ws message queue
 
-	constructor(
+	/**
+	 * Do not call this directly.
+	 *
+	 * Creates an instance of ActorHandleRaw.
+	 *
+	 * @param {string} endpoint - The endpoint to connect to.
+	 * @param {unknown} parameters - The parameters to pass to the connection.
+	 * @param {ProtocolFormat} protocolFormat - The format used for protocol communication.
+	 *
+	 * @protected
+	 */
+	public constructor(
 		private readonly endpoint: string,
 		private readonly parameters: unknown,
 		private readonly protocolFormat: ProtocolFormat,
 	) {}
 
+	/**
+	 * Call a raw RPC handle. See {@link ActorHandle} for type-safe RPC calls.
+	 *
+	 * @see {@link ActorHandle}
+	 * @template Args - The type of arguments to pass to the RPC function.
+	 * @template Response - The type of the response returned by the RPC function.
+	 * @param {string} name - The name of the RPC function to call.
+	 * @param {...Args} args - The arguments to pass to the RPC function.
+	 * @returns {Promise<Response>} - A promise that resolves to the response of the RPC function.
+	 */
 	async rpc<Args extends Array<unknown> = unknown[], Response = unknown>(
 		name: string,
 		...args: Args
@@ -99,7 +130,14 @@ export class ActorHandleRaw {
 	//	return resJson.output;
 	//}
 
-	connect() {
+	/**
+	 * Do not call this directly.
+	 *
+	 * Establishes a WebSocket connection to the server using the specified endpoint and protocol format.
+	 *
+	 * @protected
+	 */
+	public connect() {
 		this.#disconnected = false;
 
 		let url = `${this.endpoint}/connect?version=1&format=${this.protocolFormat}`;
@@ -204,8 +242,9 @@ export class ActorHandleRaw {
 
 	#takeRpcInFlight(id: number): RpcInFlight {
 		const inFlight = this.#websocketRpcInFlight.get(id);
-		if (!inFlight)
+		if (!inFlight) {
 			throw new errors.InternalError(`No in flight response for ${id}`);
+		}
 		this.#websocketRpcInFlight.delete(id);
 		return inFlight;
 	}
@@ -263,6 +302,15 @@ export class ActorHandleRaw {
 		};
 	}
 
+	/**
+	 * Subscribes to an event that will happen repeatedly.
+	 *
+	 * @template Args - The type of arguments the event callback will receive.
+	 * @param {string} eventName - The name of the event to subscribe to.
+	 * @param {(...args: Args) => void} callback - The callback function to execute when the event is triggered.
+	 * @returns {EventUnsubscribe} - A function to unsubscribe from the event.
+	 * @see {@link https://rivet.gg/docs/events|Events Documentation}
+	 */
 	on<Args extends Array<unknown> = unknown[]>(
 		eventName: string,
 		callback: (...args: Args) => void,
@@ -270,6 +318,15 @@ export class ActorHandleRaw {
 		return this.#addEventSubscription<Args>(eventName, callback, false);
 	}
 
+	/**
+	 * Subscribes to an event that will be triggered only once.
+	 *
+	 * @template Args - The type of arguments the event callback will receive.
+	 * @param {string} eventName - The name of the event to subscribe to.
+	 * @param {(...args: Args) => void} callback - The callback function to execute when the event is triggered.
+	 * @returns {EventUnsubscribe} - A function to unsubscribe from the event.
+	 * @see {@link https://rivet.gg/docs/events|Events Documentation}
+	 */
 	once<Args extends Array<unknown> = unknown[]>(
 		eventName: string,
 		callback: (...args: Args) => void,
@@ -335,7 +392,13 @@ export class ActorHandleRaw {
 		}
 	}
 
-	// TODO:Add destructor
+	// TODO: Add destructor
+
+	/**
+	 * Disconnects the WebSocket connection.
+	 *
+	 * @returns {Promise<void>} A promise that resolves when the WebSocket connection is closed.
+	 */
 	disconnect(): Promise<void> {
 		return new Promise((resolve) => {
 			if (!this.#websocket) return;
@@ -353,7 +416,12 @@ export class ActorHandleRaw {
 		});
 	}
 
-	async dispose() {
+	/**
+	 * Disposes of the ActorHandleRaw instance by disconnecting the WebSocket connection.
+	 *
+	 * @returns {Promise<void>} A promise that resolves when the WebSocket connection is closed.
+	 */
+	async dispose(): Promise<void> {
 		logger().debug("disposing");
 
 		// TODO: this will error if not usable

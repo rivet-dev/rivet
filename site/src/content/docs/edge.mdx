@@ -1,29 +1,43 @@
 # Edge Networking
 
-Actors can run in 8 regions around the world.
+Actors run near your users on Rivet's global network by default.
+
+## Region selection
+
+### Automatic region selection
+
+By default, actors will choose the optimal region based on the client's location.
+
+<Note>
+	Under the hood, Rivet uses [Anycast routing](https://en.wikipedia.org/wiki/Anycast) to automatically find
+	the best location for the client to connect to without relying on slow & expensive manual pinging process.
+</Note>
+
+### Manual region selection
+
+The region an actor is created in can be overridden by defining `create.region`:
+
+```typescript {{ "title": "client.ts" }}
+const actor = client.get(
+	{ name: "example" },
+	{
+		create: {
+			region: "atl",
+		},
+	}
+);
+```
+
+See [Create & Manage Actors](/docs/manage) for more information.
 
 ## Available regions
 
 See available regions [here](/docs/regions).
 
-## Fetching regions via API
+### Fetching region list
 
-This region list can be fetched with `GET https://api.rivet.gg/regions`.
+It's common to need to display a list of available regions in your application.
 
-See API documentation [here](/docs/api/actor/regions/list).
+To fetch a full list of regions, you can use the `GET https://api.rivet.gg/regions` HTTP endpoint. See API documentation [here](/docs/api/actor/regions/list).
 
-## Automatic region selection
-
-By default, actors will choose the optimal region based on the client's latency. This can be overridden if needed.
-
-## Region selection
-
-The region an actor is created in can be overridden by defining `create.region`:
-
-```typescript {{ "title": "client.ts" }}
-const actor = client.get({ name: "example" }, {
-    create: {
-        region: "atl"
-    }
-});
-```
+We don't recommend hard-coding the region list. This allows you to develop your application with a local development cluster.

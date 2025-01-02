@@ -2,7 +2,7 @@
 //
 // Generated with scripts/sdk_actor/compile_bridge.ts
 
-import { createEqualityComparatorConfig, createEqualityComparator, createInternalEqualityComparator, createIsEqual, } from "./comparator.js";
+import { createEqualityComparator, createEqualityComparatorConfig, createInternalEqualityComparator, createIsEqual, } from "./comparator.js";
 import { sameValueZeroEqual } from "./utils.js";
 export { sameValueZeroEqual };
 export * from "./internalTypes.js";
