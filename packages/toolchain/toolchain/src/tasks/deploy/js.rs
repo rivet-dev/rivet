@@ -49,7 +49,7 @@ pub async fn build_and_upload(
 			let script_path = project_root.join(&opts.build_config.script);
 			let ext = script_path.extension().and_then(|s| s.to_str());
 			ensure!(
-				ext == Some("ts") || ext == Some("js"),
+				ext == Some("ts") || ext == Some("tsx") || ext == Some("js") || ext == Some("jsx"),
 				"script file must have a .ts or .js extension for Deno bundler"
 			);
 
