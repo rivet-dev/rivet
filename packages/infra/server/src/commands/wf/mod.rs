@@ -33,9 +33,9 @@ pub enum SubCommand {
 	History {
 		#[clap(index = 1)]
 		workflow_id: Uuid,
-		/// Includes activity errors in graph.
-		#[clap(short = 'e', long)]
-		include_errors: bool,
+		/// Excludes all JSON in history graph.
+		#[clap(short = 'j', long)]
+		exclude_json: bool,
 		/// Includes forgotten events in graph, shown in red.
 		#[clap(short = 'f', long)]
 		include_forgotten: bool,
@@ -53,7 +53,7 @@ impl SubCommand {
 	pub async fn execute(self, config: rivet_config::Config) -> Result<()> {
 		match self {
 			Self::Get { workflow_ids } => {
-				let pool = util::wf::build_pool(&config).await?;
+				let pool = rivet_pools::db::crdb::setup(config.clone()).await?;
 				let workflows = util::wf::get_workflows(pool, workflow_ids).await?;
 				util::wf::print_workflows(workflows, true).await
 			}
@@ -63,29 +63,29 @@ impl SubCommand {
 				state,
 				pretty,
 			} => {
-				let pool = util::wf::build_pool(&config).await?;
+				let pool = rivet_pools::db::crdb::setup(config.clone()).await?;
 				let workflows = util::wf::find_workflows(pool, tags, name, state).await?;
 				util::wf::print_workflows(workflows, pretty).await
 			}
 			Self::Ack { workflow_ids } => {
-				let pool = util::wf::build_pool(&config).await?;
+				let pool = rivet_pools::db::crdb::setup(config.clone()).await?;
 				util::wf::silence_workflows(pool, workflow_ids).await
 			}
 			Self::Wake { workflow_ids } => {
-				let pool = util::wf::build_pool(&config).await?;
+				let pool = rivet_pools::db::crdb::setup(config.clone()).await?;
 				util::wf::wake_workflows(pool, workflow_ids).await
 			}
 			Self::History {
 				workflow_id,
-				include_errors,
+				exclude_json,
 				include_forgotten,
 				print_location,
 			} => {
-				let pool = util::wf::build_pool(&config).await?;
+				let pool = rivet_pools::db::crdb::setup(config.clone()).await?;
 				util::wf::print_history(
 					pool,
 					workflow_id,
-					include_errors,
+					exclude_json,
 					include_forgotten,
 					print_location,
 				)

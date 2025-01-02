@@ -85,7 +85,7 @@ impl Cursor {
 			HistoryResult::Insertion => {
 				let prev = &self.prev_coord;
 
-				match prev.cardinality().cmp(&curr.cardinality()) {
+				match prev.len().cmp(&curr.len()) {
 					// 1.1 vs 1.1.1
 					Ordering::Less => {
 						// prev + .0.1 (2.3 -> 2.3.0.1)

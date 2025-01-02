@@ -5,7 +5,7 @@ pub mod ctx;
 pub mod db;
 mod error;
 mod executable;
-mod history;
+pub mod history;
 pub mod listen;
 pub mod message;
 pub mod metrics;

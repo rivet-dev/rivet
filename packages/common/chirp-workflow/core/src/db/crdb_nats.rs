@@ -1773,7 +1773,7 @@ mod types {
 			Ok(RemovedEvent {
 				name: value.name,
 				event_type: EventType::from_repr(event_type.try_into()?)
-					.ok_or_else(|| WorkflowError::InvalidSleepState(event_type))?,
+					.ok_or_else(|| WorkflowError::InvalidEventType(event_type))?,
 			})
 		}
 	}

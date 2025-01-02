@@ -33,7 +33,7 @@ impl SubCommand {
 	pub async fn execute(self, config: rivet_config::Config) -> Result<()> {
 		match self {
 			Self::Get { signal_ids } => {
-				let pool = util::wf::build_pool(&config).await?;
+				let pool = rivet_pools::db::crdb::setup(config.clone()).await?;
 				let signals = util::wf::signal::get_signals(pool, signal_ids).await?;
 				util::wf::signal::print_signals(signals, true).await
 			}
@@ -44,13 +44,13 @@ impl SubCommand {
 				state,
 				pretty,
 			} => {
-				let pool = util::wf::build_pool(&config).await?;
+				let pool = rivet_pools::db::crdb::setup(config.clone()).await?;
 				let signals =
 					util::wf::signal::find_signals(pool, tags, workflow_id, name, state).await?;
 				util::wf::signal::print_signals(signals, pretty).await
 			}
 			Self::Ack { signal_ids } => {
-				let pool = util::wf::build_pool(&config).await?;
+				let pool = rivet_pools::db::crdb::setup(config.clone()).await?;
 				util::wf::signal::silence_signals(pool, signal_ids).await
 			}
 		}

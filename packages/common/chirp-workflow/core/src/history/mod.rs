@@ -1,8 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
-pub mod cursor;
+pub(crate) mod cursor;
 pub mod event;
 pub mod location;
-pub mod removed;
+pub(crate) mod removed;
 
-pub type History = Arc<HashMap<location::Location, Vec<event::Event>>>;
+pub(crate) type History = Arc<HashMap<location::Location, Vec<event::Event>>>;

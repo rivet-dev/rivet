@@ -183,11 +183,11 @@ pub async fn print_signals(signals: Vec<SignalRow>, pretty: bool) -> Result<()> 
 			println!(
 				"  {} {}",
 				style("body").bold(),
-				&indent_string(&colored_json(&signal.body)?, "    ")[4..]
+				&indent_string(&colored_json(&signal.body)?, "    ", true)
 			);
 		}
 	} else {
-		render::signals(signals)?;
+		table::signals(signals)?;
 	}
 
 	Ok(())
@@ -222,7 +222,7 @@ pub async fn silence_signals(pool: CrdbPool, signal_ids: Vec<Uuid>) -> Result<()
 	Ok(())
 }
 
-mod render {
+mod table {
 	use anyhow::*;
 	use rivet_term::console::style;
 	use tabled::Tabled;

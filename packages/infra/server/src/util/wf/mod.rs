@@ -1,19 +1,19 @@
-use std::cmp::Ordering;
-
 use anyhow::*;
+use chirp_workflow::history::{event::SleepState, location::Location};
 use chrono::{TimeZone, Utc};
 use clap::ValueEnum;
 use indoc::indoc;
 use rivet_pools::CrdbPool;
 use rivet_term::console::style;
-use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::util::{
 	self,
-	format::{colored_json, indent_string},
+	format::{chunk_string, colored_json, indent_string},
 };
 
+mod history;
+use history::EventData;
 pub mod signal;
 
 #[derive(Debug, Clone)]
@@ -52,29 +52,6 @@ pub enum WorkflowState {
 	Dead,
 }
 
-#[derive(strum::FromRepr)]
-enum EventType {
-	Activity = 0,
-	Signal = 1,
-	SubWorkflow = 2,
-	SignalSend = 3,
-	MessageSend = 4,
-	Loop = 5,
-}
-
-impl EventType {
-	fn name(&self) -> &str {
-		match self {
-			EventType::Activity => "activity",
-			EventType::Signal => "signal receive",
-			EventType::SubWorkflow => "sub workflow",
-			EventType::SignalSend => "signal send",
-			EventType::MessageSend => "message send",
-			EventType::Loop => "loop",
-		}
-	}
-}
-
 #[derive(Debug, sqlx::FromRow)]
 pub struct WorkflowRow {
 	workflow_id: Uuid,
@@ -89,20 +66,19 @@ pub struct WorkflowRow {
 	has_wake_condition: bool,
 }
 
-#[derive(sqlx::FromRow)]
-struct HistoryEventRow {
-	location: Vec<i64>,
-	/// Event type.
-	t: i64,
-	name: Option<String>,
-	input: Option<serde_json::Value>,
+#[derive(Debug, sqlx::FromRow)]
+pub struct HistoryWorkflowRow {
+	workflow_name: String,
+	input: serde_json::Value,
 	output: Option<serde_json::Value>,
-	forgotten: bool,
+	error: Option<String>,
+	is_active: bool,
+	has_wake_condition: bool,
 }
 
 #[derive(sqlx::FromRow)]
 struct ActivityErrorRow {
-	location: Vec<i64>,
+	location: Location,
 	error: String,
 	count: i64,
 	latest_ts: i64,
@@ -268,26 +244,30 @@ pub async fn print_workflows(workflows: Vec<WorkflowRow>, pretty: bool) -> Resul
 				println!(
 					"  {} {}",
 					style("error").bold(),
-					style(&indent_string(&chunk_string(&error, 200).join("\n"), "    ")[4..])
-						.green()
+					style(indent_string(
+						&chunk_string(&error, 200).join("\n"),
+						"    ",
+						true
+					))
+					.green()
 				);
 			}
 
 			println!(
 				"  {} {}",
 				style("input").bold(),
-				&indent_string(&colored_json(&workflow.input)?, "    ")[4..]
+				indent_string(&colored_json(&workflow.input)?, "    ", true)
 			);
 
 			print!("  {} ", style("output").bold());
 			if let Some(output) = workflow.output {
-				println!("{}", &indent_string(&colored_json(&output)?, "    ")[4..]);
+				println!("{}", indent_string(&colored_json(&output)?, "    ", true));
 			} else {
 				println!("{}", style("<none>").dim());
 			}
 		}
 	} else {
-		render::workflows(workflows)?;
+		table::workflows(workflows)?;
 	}
 
 	Ok(())
@@ -331,7 +311,7 @@ pub async fn wake_workflows(pool: CrdbPool, workflow_ids: Vec<Uuid>) -> Result<(
 pub async fn print_history(
 	pool: CrdbPool,
 	workflow_id: Uuid,
-	include_errors: bool,
+	exclude_json: bool,
 	include_forgotten: bool,
 	print_location: bool,
 ) -> Result<()> {
@@ -341,9 +321,20 @@ pub async fn print_history(
 
 	let (wf_row, events, error_rows) = tokio::try_join!(
 		async move {
-			sqlx::query_as::<_, (String, serde_json::Value, Option<serde_json::Value>)>(indoc!(
+			sqlx::query_as::<_, HistoryWorkflowRow>(indoc!(
 				"
-				SELECT workflow_name, input, output
+				SELECT
+					workflow_name,
+					input,
+					output,
+					error,
+					worker_instance_id IS NOT NULL AS is_active,
+					(
+						wake_immediate OR
+						wake_deadline_ts IS NOT NULL OR
+						cardinality(wake_signals) > 0 OR
+						wake_sub_workflow_id IS NOT NULL
+					) AS has_wake_condition
 				FROM db_workflow.workflows
 				WHERE workflow_id = $1
 				"
@@ -354,49 +345,208 @@ pub async fn print_history(
 			.map_err(Into::into)
 		},
 		async move {
-			sqlx::query_as::<_, HistoryEventRow>(indoc!(
+			sqlx::query_as::<_, history::AmalgamEventRow>(indoc!(
 				"
-				WITH workflow_events AS (
-					SELECT $1 AS workflow_id
-				)
 				-- Activity events
-				SELECT location, location2, 0 AS t, activity_name AS name, input, output, forgotten
-				FROM db_workflow.workflow_activity_events, workflow_events
+				SELECT
+					location,
+					location2,
+					NULL AS tags,
+					0 AS event_type,
+					version,
+					activity_name AS name,
+					NULL AS auxiliary_id,
+					input,
+					output,
+					NULL AS iteration,
+					NULL AS deadline_ts,
+					NULL AS state,
+					NULL AS inner_event_type,
+					forgotten
+				FROM db_workflow.workflow_activity_events
 				WHERE
-					workflow_activity_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
+					workflow_activity_events.workflow_id = $1 AND ($2 OR NOT forgotten)
 				UNION ALL
 				-- Signal listen events
-				SELECT location, location2, 1 AS t, signal_name AS name, body as input, null as output, forgotten
-				FROM db_workflow.workflow_signal_events, workflow_events
+				SELECT
+					location,
+					location2,
+					NULL AS tags,
+					1 AS event_type,
+					version,
+					signal_name AS name,
+					signal_id::UUID AS auxiliary_id,
+					NULL AS input,
+					body AS output,
+					NULL AS iteration,
+					NULL AS deadline_ts,
+					NULL AS state,
+					NULL AS inner_event_type,
+					forgotten
+				FROM db_workflow.workflow_signal_events
 				WHERE
-					workflow_signal_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
+					workflow_signal_events.workflow_id = $1 AND ($2 OR NOT forgotten)
 				UNION ALL
 				-- Signal send events
-				SELECT location, location2, 3 AS t, signal_name AS name, body as input, null as output, forgotten
-				FROM db_workflow.workflow_signal_send_events, workflow_events
+				SELECT
+					location,
+					location2,
+					s.tags,
+					2 AS event_type,
+					version,
+					se.signal_name AS name,
+					se.signal_id AS auxiliary_id,
+					se.body AS input,
+					NULL AS output,
+					NULL AS iteration,
+					NULL AS deadline_ts,
+					NULL AS state,
+					NULL AS inner_event_type,
+					forgotten
+				FROM db_workflow.workflow_signal_send_events AS se
+				LEFT JOIN db_workflow.tagged_signals AS s
+				ON se.signal_id = s.signal_id
 				WHERE
-					workflow_signal_send_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
+					se.workflow_id = $1 AND ($2 OR NOT forgotten)
 				UNION ALL
 				-- Message send events
-				SELECT location, location2, 4 AS t, message_name AS name, body as input, null as output, forgotten
-				FROM db_workflow.workflow_message_send_events, workflow_events
+				SELECT
+					location,
+					location2,
+					tags,
+					3 AS event_type,
+					version,
+					message_name AS name,
+					NULL AS auxiliary_id,
+					body AS input,
+					NULL AS output,
+					NULL AS iteration,
+					NULL AS deadline_ts,
+					NULL AS state,
+					NULL AS inner_event_type,
+					forgotten				
+				FROM db_workflow.workflow_message_send_events
 				WHERE
-					workflow_message_send_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
+					workflow_message_send_events.workflow_id = $1 AND ($2 OR NOT forgotten)
 				UNION ALL
 				-- Sub workflow events
-				SELECT location, location2, 2 AS t, w.workflow_name AS name, w.input, w.output, forgotten
-				FROM workflow_events, db_workflow.workflow_sub_workflow_events AS sw
+				SELECT
+					location,
+					location2,
+					w.tags,
+					4 AS event_type,
+					version,
+					w.workflow_name AS name,
+					sw.sub_workflow_id AS auxiliary_id,
+					w.input,
+					w.output,
+					NULL AS iteration,
+					NULL AS deadline_ts,
+					NULL AS state,
+					NULL AS inner_event_type,
+					forgotten
+				FROM db_workflow.workflow_sub_workflow_events AS sw
 				JOIN db_workflow.workflows AS w
 				ON sw.sub_workflow_id = w.workflow_id
 				WHERE
-					sw.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
+					sw.workflow_id = $1 AND ($2 OR NOT forgotten)
 				UNION ALL
 				-- Loop events
-				SELECT location, location2, 5 AS t, NULL AS name, null as input, null as output, forgotten
-				FROM db_workflow.workflow_loop_events, workflow_events
+				SELECT
+					location,
+					location2,
+					NULL AS tags,
+					5 AS event_type,
+					version,
+					NULL AS name,
+					NULL AS auxiliary_id,
+					NULL AS input,
+					NULL AS output,
+					iteration,
+					NULL AS deadline_ts,
+					NULL AS state,
+					NULL AS inner_event_type,
+					forgotten
+				FROM db_workflow.workflow_loop_events
 				WHERE
-					workflow_loop_events.workflow_id = workflow_events.workflow_id AND ($2 OR NOT forgotten)
-				ORDER BY location ASC
+					workflow_loop_events.workflow_id = $1 AND ($2 OR NOT forgotten)
+				UNION ALL
+				SELECT
+					location,
+					location2,
+					NULL AS tags,
+					6 AS event_type,
+					version,
+					NULL AS name,
+					NULL AS auxiliary_id,
+					NULL AS input,
+					NULL AS output,
+					NULL AS iteration,
+					deadline_ts,
+					state,
+					NULL AS inner_event_type,
+					forgotten
+				FROM db_workflow.workflow_sleep_events
+				WHERE
+					workflow_sleep_events.workflow_id = $1 AND ($2 OR NOT forgotten)
+				UNION ALL
+				SELECT
+					ARRAY[] AS location,
+					location AS location2,
+					NULL AS tags,
+					7 AS event_type,
+					version,
+					NULL AS name,
+					NULL AS auxiliary_id,
+					NULL AS input,
+					NULL AS output,
+					NULL AS iteration,
+					NULL AS deadline_ts,
+					NULL AS state,
+					NULL AS inner_event_type,
+					forgotten
+				FROM db_workflow.workflow_branch_events
+				WHERE
+					workflow_branch_events.workflow_id = $1 AND ($2 OR NOT forgotten)
+				UNION ALL
+				SELECT
+					ARRAY[] AS location,
+					location AS location2,
+					NULL AS tags,
+					8 AS event_type,
+					1 AS version,
+					NULL AS name,
+					NULL AS auxiliary_id,
+					NULL AS input,
+					NULL AS output,
+					NULL AS iteration,
+					NULL AS deadline_ts,
+					NULL AS state,
+					event_type AS inner_event_type,
+					forgotten
+				FROM db_workflow.workflow_removed_events
+				WHERE
+					workflow_removed_events.workflow_id = $1 AND ($2 OR NOT forgotten)
+				UNION ALL
+				SELECT
+					ARRAY[] AS location,
+					location AS location2,
+					NULL AS tags,
+					9 AS event_type,
+					version,
+					NULL AS name,
+					NULL AS auxiliary_id,
+					NULL AS input,
+					NULL AS output,
+					NULL AS iteration,
+					NULL AS deadline_ts,
+					NULL AS state,
+					NULL AS inner_event_type,
+					forgotten
+				FROM db_workflow.workflow_version_check_events
+				WHERE
+					workflow_version_check_events.workflow_id = $1 AND ($2 OR NOT forgotten)
+				ORDER BY location ASC, location2 ASC
 				"
 			))
 			.bind(workflow_id)
@@ -406,31 +556,29 @@ pub async fn print_history(
 			.map_err(Into::into)
 		},
 		async move {
-			if include_errors {
-				sqlx::query_as::<_, ActivityErrorRow>(indoc!(
-					"
-					SELECT location, error, COUNT(error), MAX(ts) AS latest_ts
-					FROM db_workflow.workflow_activity_errors
-					WHERE workflow_id = $1
-					GROUP BY location, error
-					ORDER BY latest_ts
-					"
-				))
-				.bind(workflow_id)
-				.fetch_all(&mut *conn3)
-				.await
-				.map_err(Into::into)
-			} else {
-				Ok(Vec::new())
-			}
+			sqlx::query_as::<_, ActivityErrorRow>(indoc!(
+				"
+				SELECT location2 AS location, error, COUNT(error), MAX(ts) AS latest_ts
+				FROM db_workflow.workflow_activity_errors
+				WHERE workflow_id = $1
+				GROUP BY location2, error
+				ORDER BY latest_ts
+				"
+			))
+			.bind(workflow_id)
+			.fetch_all(&mut *conn3)
+			.await
+			.map_err(Into::into)
 		},
 	)?;
 
-	let Some((workflow_name, input, output)) = wf_row else {
+	let Some(workflow) = wf_row else {
 		rivet_term::status::success("No workflow found", "");
 
 		return Ok(());
 	};
+
+	let history = history::build(events)?;
 
 	// Print header
 	{
@@ -438,230 +586,343 @@ pub async fn print_history(
 
 		println!(
 			"{} {}",
-			style(workflow_name).blue().bold(),
-			style(workflow_id).blue()
+			style(workflow.workflow_name).bold(),
+			style(workflow_id)
 		);
 
-		print!("  {} {}", style("╰").blue().dim(), style("input").blue());
-
-		let input = serde_json::to_string(&input)?;
-		let input_trim = input.chars().take(50).collect::<String>();
-		print!(" {}", style(input_trim).blue().dim());
-		if input.len() > 50 {
-			print!(" {}", style("...").blue().dim());
+		if !exclude_json {
+			println!(
+				"{} input {}",
+				style("|").dim(),
+				indent_string(
+					&colored_json(&workflow.input)?,
+					style("  | ").dim().to_string(),
+					true
+				)
+			);
 		}
 
-		println!("\n");
+		println!();
 	}
 
-	for i in 0..events.len() {
-		let event = events.get(i).unwrap();
-		let errors = error_rows
-			.iter()
-			.filter(|row| row.location == event.location)
-			.collect::<Vec<_>>();
-
-		let t = EventType::from_repr(event.t.try_into()?).context("invalid event type")?;
+	for i in 0..history.len() {
+		let event = history.get(i).unwrap();
+		let indent = event.location.len();
 
 		// Indentation
-		print!("{}", "  ".repeat(event.location.len().saturating_sub(1)));
+		print!(
+			"{}{} ",
+			"  ".repeat(indent.saturating_sub(1)),
+			event.style().apply_to("-"),
+		);
+
+		// Structure char
+		let c = if event.forgotten {
+			style("|").red().dim()
+		} else {
+			event.style().apply_to("|").dim()
+		};
+
+		event.print_name();
 
 		if print_location {
-			print!("{} ", style(event.location.last().unwrap()).dim());
-		}
-
-		if event.forgotten {
-			print!("{}", style(t.name()).red().dim().bold());
-		} else {
-			print!("{}", style(t.name()).bold());
-		}
-
-		if let Some(name) = &event.name {
-			print!(" {}", style(name));
+			print!(
+				" {}",
+				event
+					.style()
+					.apply_to(format!("v{} @ {}", event.version, event.location))
+					.dim()
+			);
 		}
 
 		println!();
 
-		if let Some(input) = &event.input {
-			print!("{}", "  ".repeat(event.location.len()));
+		// TODO: Color code each (make header white instead of yellow)
+		match &event.data {
+			EventData::Activity(data) => {
+				let errors = error_rows
+					.iter()
+					.filter(|row| row.location == event.location)
+					.collect::<Vec<_>>();
 
-			let c = if event.output.is_none() && errors.is_empty() {
-				"╰"
-			} else {
-				"├"
-			};
-			let c = if event.forgotten {
-				style(c).red().dim()
-			} else {
-				style(c).dim()
-			};
-			print!("{} ", c);
+				if !exclude_json {
+					// Indent
+					print!("{}{c} ", "  ".repeat(indent));
 
-			print!("input");
+					println!(
+						"input {}",
+						indent_string(
+							&colored_json(&data.input)?,
+							format!("{}{c} ", "  ".repeat(indent)),
+							true
+						)
+					);
 
-			let input = serde_json::to_string(&input)?;
-			let input_trim = input.chars().take(50).collect::<String>();
-			print!(" {}", style(input_trim).dim());
-			if input.len() > 50 {
-				print!(" {}", style("...").dim());
+					if let Some(output) = &data.output {
+						// Indent
+						print!("{}{c} ", "  ".repeat(indent));
+
+						println!(
+							"output {}",
+							indent_string(
+								&colored_json(&output)?,
+								format!("{}{c} ", "  ".repeat(indent)),
+								true
+							)
+						);
+					}
+				}
+
+				if !errors.is_empty() {
+					// Indent
+					print!("{}{c} ", "  ".repeat(indent));
+
+					println!("errors");
+
+					for error in errors {
+						print!("{}{c}   - ", "  ".repeat(indent));
+
+						let datetime = Utc
+							.timestamp_millis_opt(error.latest_ts)
+							.single()
+							.context("invalid ts")?;
+						let date = datetime.format("%Y-%m-%d %H:%M:%S");
+
+						println!(
+							"{} {} {}",
+							style(format!("x{}", error.count)).yellow().bold(),
+							style(format!("(last {})", date)).magenta(),
+							style(error.error.replace('\n', " ")).green(),
+						);
+					}
+				}
 			}
+			EventData::Signal(data) => {
+				// Indent
+				print!("{}{c} ", "  ".repeat(indent));
 
-			println!();
-		}
+				println!("id {}", style(data.signal_id).green());
 
-		if let Some(output) = &event.output {
-			print!("{}", "  ".repeat(event.location.len()));
+				if !exclude_json {
+					// Indent
+					print!("{}{c} ", "  ".repeat(indent));
 
-			let c = if errors.is_empty() { "╰" } else { "├" };
-			let c = if event.forgotten {
-				style(c).red().dim()
-			} else {
-				style(c).dim()
-			};
-			print!("{} ", c);
-
-			print!("output");
-
-			let output = serde_json::to_string(&output)?;
-			let output_trim = output.chars().take(50).collect::<String>();
-			print!(" {}", style(output_trim).dim());
-			if output.len() > 50 {
-				print!(" {}", style("...").dim());
+					println!(
+						"body {}",
+						indent_string(
+							&colored_json(&data.body)?,
+							format!("{}{c} ", "  ".repeat(indent)),
+							true
+						)
+					);
+				}
 			}
+			EventData::SignalSend(data) => {
+				// Indent
+				print!("{}{c} ", "  ".repeat(indent));
 
-			println!();
-		}
+				println!("id {}", style(data.signal_id).green());
 
-		if !errors.is_empty() {
-			print!("{}", "  ".repeat(event.location.len()));
+				if !exclude_json {
+					if let Some(tags) = &data.tags {
+						if tags.as_object().map(|x| !x.is_empty()).unwrap_or_default() {
+							// Indent
+							print!("{}{c} ", "  ".repeat(indent));
 
-			if event.forgotten {
-				print!("{} ", style("╰").red().dim());
-			} else {
-				print!("{} ", style("╰").dim());
+							println!(
+								"tags {}",
+								indent_string(
+									&colored_json(&tags)?,
+									format!("{}{c} ", "  ".repeat(indent)),
+									true
+								)
+							);
+						}
+					}
+
+					// Indent
+					print!("{}{c} ", "  ".repeat(indent));
+
+					println!(
+						"body {}",
+						indent_string(
+							&colored_json(&data.body)?,
+							format!("{}{c} ", "  ".repeat(indent)),
+							true
+						)
+					);
+				}
 			}
+			EventData::MessageSend(data) => {
+				if !exclude_json {
+					if data
+						.tags
+						.as_object()
+						.map(|x| !x.is_empty())
+						.unwrap_or_default()
+					{
+						// Indent
+						print!("{}{c} ", "  ".repeat(indent));
 
-			println!("{}", style("errors"));
+						println!(
+							"tags {}",
+							indent_string(
+								&colored_json(&data.tags)?,
+								format!("{}{c} ", "  ".repeat(indent)),
+								true
+							)
+						);
+					}
 
-			for (i, error) in errors.iter().enumerate() {
-				print!("{}", "  ".repeat(event.location.len() + 1));
+					// Indent
+					print!("{}{c} ", "  ".repeat(indent));
 
-				let c = if i == errors.len() - 1 { "╰" } else { "├" };
-				let c = if event.forgotten {
-					style(c).red().dim()
-				} else {
-					style(c).dim()
-				};
-				print!("{} ", c);
+					println!(
+						"{} {}",
+						"body",
+						indent_string(
+							&colored_json(&data.body)?,
+							format!("{}{c} ", "  ".repeat(indent)),
+							true
+						)
+					);
+				}
+			}
+			EventData::SubWorkflow(data) => {
+				// Indent
+				print!("{}{c} ", "  ".repeat(indent));
+
+				println!("id {}", style(data.sub_workflow_id).green());
+
+				if !exclude_json {
+					if data
+						.tags
+						.as_object()
+						.map(|x| !x.is_empty())
+						.unwrap_or_default()
+					{
+						// Indent
+						print!("{}{c} ", "  ".repeat(indent));
+
+						println!(
+							"tags {}",
+							indent_string(
+								&colored_json(&data.tags)?,
+								format!("{}{c} ", "  ".repeat(indent)),
+								true
+							)
+						);
+					}
+
+					// Indent
+					print!("{}{c} ", "  ".repeat(indent));
+
+					println!(
+						"{} {}",
+						"input",
+						indent_string(
+							&colored_json(&data.input)?,
+							format!("{}{c} ", "  ".repeat(indent)),
+							true
+						)
+					);
+				}
+			}
+			EventData::Loop(data) => {
+				// Indent
+				print!("{}{c} ", "  ".repeat(indent));
+
+				println!("iteration {}", style(data.iteration).yellow());
+
+				if let Some(output) = &data.output {
+					// Indent
+					print!("{}{c} ", "  ".repeat(indent));
+
+					println!(
+						"output {}",
+						indent_string(
+							&colored_json(&output)?,
+							format!("{}{c} ", "  ".repeat(indent)),
+							true
+						)
+					);
+				}
+			}
+			EventData::Sleep(data) => {
+				// Indent
+				print!("{}{c} ", "  ".repeat(indent));
 
 				let datetime = Utc
-					.timestamp_millis_opt(error.latest_ts)
+					.timestamp_millis_opt(data.deadline_ts)
 					.single()
 					.context("invalid ts")?;
 				let date = datetime.format("%Y-%m-%d %H:%M:%S");
 
-				println!(
-					"{} {} {}",
-					style(format!("(last {})", date)).magenta(),
-					style(format!("x{}", error.count)).yellow().bold(),
-					style(error.error.replace('\n', " ")).dim(),
-				);
-			}
-		}
+				println!("deadline {}", style(date).magenta());
 
-		if !matches!(t, EventType::Loop) {
-			println!();
-		}
+				match data.state {
+					SleepState::Normal => {}
+					_ => {
+						// Indent
+						print!("{}{c} ", "  ".repeat(indent));
 
-		let next_event = events.get(i + 1);
-		if let Some(ne) = next_event {
-			match event.location.len().cmp(&ne.location.len()) {
-				Ordering::Equal => {}
-				Ordering::Less => {
-					let start = if matches!(t, EventType::Loop) { 1 } else { 0 };
-
-					for i in start..ne.location.len() - event.location.len() {
-						print!(
-							"{}",
-							"  ".repeat(event.location.len().saturating_sub(1) + i)
-						);
-
-						if print_location {
-							print!(
-								"{} ",
-								style(ne.location.get(ne.location.len() - 2).unwrap()).dim()
-							);
-						}
-
-						if ne.forgotten {
-							print!("{}", style("branch").red().dim().bold());
-						} else {
-							print!("{}", style("branch").bold());
-						}
-
-						println!();
-					}
-				}
-				Ordering::Greater => {
-					for (j, (a, b)) in event.location.iter().zip(ne.location.iter()).enumerate() {
-						if a != b {
-							if j + 1 != ne.location.len() {
-								// Indentation
-								print!("{}", "  ".repeat(j));
-
-								if print_location {
-									print!("{} ", style(b).dim());
-								}
-
-								if ne.forgotten {
-									print!("{}", style("branch").red().dim().bold());
-								} else {
-									print!("{}", style("branch").bold());
-								}
-
-								println!();
-							}
-
-							break;
-						}
+						println!("state {}", style(data.state).blue());
 					}
 				}
 			}
+			_ => {}
 		}
 	}
 
 	// Print footer
-	if let Some(output) = output {
-		println!("{}", style("Workflow complete").green().bold());
-
-		print!("  {} {}", style("╰").green().dim(), style("output").green());
-
-		let output = serde_json::to_string(&output)?;
-		let output_trim = output.chars().take(50).collect::<String>();
-		print!(" {}", style(output_trim).green().dim());
-		if output.len() > 50 {
-			print!(" {}", style("...").green().dim());
-		}
-
+	if let Some(output) = workflow.output {
 		println!();
+
+		println!("{}", style("Workflow complete").bright().blue().bold());
+
+		if !exclude_json {
+			println!(
+				"  {} output {}",
+				style("|").blue(),
+				indent_string(
+					&colored_json(&output)?,
+					style("  | ").blue().to_string(),
+					true
+				)
+			);
+		}
+	} else if workflow.is_active {
+		println!();
+
+		println!("{}", style("Workflow running").green().bold());
+	} else {
+		println!();
+
+		if workflow.has_wake_condition {
+			println!("{}", style("Workflow sleeping").yellow().bold());
+
+			if let Some(error) = workflow.error {
+				println!(
+					"{} reason {}",
+					style("|").yellow().dim(),
+					style(error).green(),
+				);
+			}
+		} else {
+			println!("{}", style("Workflow dead").red().bold());
+
+			if let Some(error) = workflow.error {
+				println!("{} error {}", style("|").red().dim(), style(error).green(),);
+			}
+		}
 	}
+
+	println!();
 
 	Ok(())
 }
 
-pub async fn build_pool(config: &rivet_config::Config) -> Result<PgPool> {
-	let pool = rivet_pools::db::crdb::setup(config.clone()).await?;
-	Ok(pool)
-}
-
-fn chunk_string(s: &str, size: usize) -> Vec<String> {
-	s.as_bytes()
-		.chunks(size)
-		.map(|chunk| String::from_utf8_lossy(chunk).to_string())
-		.collect()
-}
-
-mod render {
+mod table {
 	use anyhow::*;
 	use rivet_term::console::style;
 	use tabled::Tabled;

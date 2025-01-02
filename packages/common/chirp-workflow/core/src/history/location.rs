@@ -58,6 +58,15 @@ impl Deref for Location {
 	}
 }
 
+impl IntoIterator for Location {
+	type Item = Coordinate;
+	type IntoIter = std::vec::IntoIter<Coordinate>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.into_vec().into_iter()
+	}
+}
+
 impl FromIterator<Vec<usize>> for Location {
 	fn from_iter<I: IntoIterator<Item = Vec<usize>>>(iter: I) -> Self {
 		Location(
@@ -109,10 +118,6 @@ impl Coordinate {
 	pub fn tail(&self) -> usize {
 		*self.0.last().expect("empty coordinate")
 	}
-
-	pub fn cardinality(&self) -> usize {
-		self.0.len()
-	}
 }
 
 impl std::fmt::Display for Coordinate {
@@ -126,6 +131,15 @@ impl std::fmt::Display for Coordinate {
 		}
 
 		Ok(())
+	}
+}
+
+impl IntoIterator for Coordinate {
+	type Item = usize;
+	type IntoIter = std::vec::IntoIter<usize>;
+
+	fn into_iter(self) -> Self::IntoIter {
+		self.0.into_vec().into_iter()
 	}
 }
 

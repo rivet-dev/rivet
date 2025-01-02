@@ -191,6 +191,16 @@ pub enum SleepState {
 	Interrupted,
 }
 
+impl std::fmt::Display for SleepState {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			SleepState::Normal => write!(f, "normal"),
+			SleepState::Uninterrupted => write!(f, "uninterrupted"),
+			SleepState::Interrupted => write!(f, "interrupted"),
+		}
+	}
+}
+
 #[derive(Debug)]
 pub struct RemovedEvent {
 	pub event_type: EventType,
