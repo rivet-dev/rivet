@@ -106,11 +106,11 @@
         },
         "unstable": {
           "default": {
+            "minify": null,
             "analyze_result": null,
-            "compression": null,
-            "dump_build": null,
             "esbuild_log_level": null,
-            "minify": null
+            "compression": null,
+            "dump_build": null
           },
           "allOf": [
             {
@@ -271,12 +271,12 @@
       "properties": {
         "manager": {
           "default": {
-            "analyze_result": null,
-            "compression": null,
-            "dump_build": null,
             "enable": null,
+            "minify": null,
+            "analyze_result": null,
             "esbuild_log_level": null,
-            "minify": null
+            "compression": null,
+            "dump_build": null
           },
           "allOf": [
             {

@@ -10,23 +10,24 @@ async function updateCargoToml() {
 	const workspaceTomlPath = join(rootDir, "Cargo.toml");
 	const workspaceTomlContent = await Deno.readTextFile(workspaceTomlPath);
 	const workspaceToml = parse(workspaceTomlContent);
+	let oss = await exists(join(rootDir, "oss"));
 
-	const entries = async function*() {
+	const entries = async function* () {
 		for await (const entry of walk(join(rootDir, "packages"), {
 			includeDirs: false,
 			exts: ["toml"],
 			skip: [/node_modules/],
 		})) {
-			yield entry;
+			if (entry.path.endsWith("Cargo.toml")) yield entry;
 		}
 
 		// Yield from OSS
-		if (await exists(join(rootDir, "oss"))) {
+		if (oss) {
 			for await (const entry of walk(join(rootDir, "oss", "packages"), {
 				includeDirs: false,
 				exts: ["toml"],
 			})) {
-				yield entry;
+				if (entry.path.endsWith("Cargo.toml")) yield entry;
 			}
 		}
 	}();
@@ -37,12 +38,7 @@ async function updateCargoToml() {
 		const entry of entries
 	) {
 		// Exclude infra packages
-		if (
-			entry.path.includes("packages/infra/client") ||
-			entry.path.includes("packages/infra/job-runner")
-		) {
-			continue;
-		}
+		if (entry.path.includes("packages/infra/job-runner")) continue;
 
 		const packagePath = relative(
 			rootDir,
@@ -53,6 +49,7 @@ async function updateCargoToml() {
 
 	// Hardcode extra workspace members
 	members.push("sdks/api/full/rust");
+	if (oss) members.push("oss/sdks/api/full/rust");
 
 	// Sort deps
 	members.sort();

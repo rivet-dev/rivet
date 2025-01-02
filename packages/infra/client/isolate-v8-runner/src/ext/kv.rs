@@ -2,6 +2,7 @@ use std::{collections::HashMap, future::Future, sync::Arc};
 
 use deno_core::{error::AnyError, op2, JsBuffer, OpState, ToJsBuffer};
 use serde::Serialize;
+use pegboard_actor_kv as actor_kv;
 
 type FakeMap<T, U> = Box<[(T, U)]>;
 

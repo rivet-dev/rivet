@@ -176,6 +176,12 @@
       "properties": {
         "redirect_logs": {
           "type": "boolean"
+        },
+        "retention": {
+          "description": "Log retention in seconds. Defaults to 10 days. Only applies with log redirection enabled.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
         }
       },
       "additionalProperties": false

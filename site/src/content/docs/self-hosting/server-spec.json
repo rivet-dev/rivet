@@ -24,12 +24,12 @@
     },
     "cockroachdb": {
       "default": {
-        "max_connections": 4096,
-        "min_connections": 4,
+        "url": "postgresql://localhost:26257/defaultdb?sslmode=disable",
+        "username": "root",
         "password": null,
         "provision_users": {},
-        "url": "postgresql://localhost:26257/defaultdb?sslmode=disable",
-        "username": "root"
+        "min_connections": 4,
+        "max_connections": 4096
       },
       "allOf": [
         {
@@ -74,11 +74,11 @@
     },
     "nats": {
       "default": {
-        "password": null,
         "urls": [
           "nats://localhost:4222"
         ],
-        "username": null
+        "username": null,
+        "password": null
       },
       "allOf": [
         {
@@ -114,14 +114,14 @@
     "redis": {
       "default": {
         "ephemeral": {
-          "password": null,
           "url": "redis://127.0.0.1:6379",
-          "username": null
+          "username": null,
+          "password": null
         },
         "persistent": {
-          "password": null,
           "url": "redis://127.0.0.1:6379",
-          "username": null
+          "username": null,
+          "password": null
         }
       },
       "allOf": [
@@ -132,56 +132,47 @@
     },
     "rivet": {
       "default": {
+        "namespace": "rivet",
+        "default_cluster_id": null,
+        "clusters": null,
+        "provision": null,
+        "orchestrator": {
+          "host": null,
+          "port": null
+        },
+        "guard": {
+          "tls_enabled": null,
+          "http_port": null,
+          "https_port": null,
+          "min_ingress_port_tcp": null,
+          "max_ingress_port_tcp": null,
+          "min_ingress_port_udp": null,
+          "max_ingress_port_udp": null
+        },
+        "auth": {
+          "access_kind": "private"
+        },
+        "api_public": {
+          "public_origin": null,
+          "host": null,
+          "port": null,
+          "verbose_errors": null,
+          "respect_forwarded_for": null
+        },
         "api_edge": {
           "host": null,
           "port": null,
           "traefik_provider_token": null
         },
-        "api_public": {
+        "metrics": {
           "host": null,
-          "port": null,
-          "public_origin": null,
-          "respect_forwarded_for": null,
-          "verbose_errors": null
-        },
-        "auth": {
-          "access_kind": "private"
-        },
-        "backend": null,
-        "billing": null,
-        "cdn": null,
-        "clusters": null,
-        "default_cluster_id": null,
-        "dns": null,
-        "guard": {
-          "http_port": null,
-          "https_port": null,
-          "max_ingress_port_tcp": null,
-          "max_ingress_port_udp": null,
-          "min_ingress_port_tcp": null,
-          "min_ingress_port_udp": null,
-          "tls_enabled": null
+          "port": null
         },
         "health": {
           "host": null,
           "port": null
         },
-        "job_run": null,
-        "metrics": {
-          "host": null,
-          "port": null
-        },
-        "namespace": "rivet",
-        "orchestrator": {
-          "host": null,
-          "port": null
-        },
-        "provision": null,
         "status": null,
-        "telemetry": {
-          "enable": true
-        },
-        "test_builds": {},
         "tunnel": {
           "public_host": "127.0.0.1:8003"
         },
@@ -189,7 +180,16 @@
           "enable": null,
           "public_origin": null,
           "public_origin_regex": null
-        }
+        },
+        "dns": null,
+        "telemetry": {
+          "enable": true
+        },
+        "billing": null,
+        "backend": null,
+        "test_builds": {},
+        "job_run": null,
+        "cdn": null
       },
       "allOf": [
         {
@@ -199,11 +199,11 @@
     },
     "s3": {
       "default": {
-        "access_key_id": "root",
+        "region": "us-east-1",
+        "endpoint_internal": "http://127.0.0.1:9000/",
         "endpoint_edge_internal": null,
         "endpoint_external": "http://127.0.0.1:9000/",
-        "endpoint_internal": "http://127.0.0.1:9000/",
-        "region": "us-east-1",
+        "access_key_id": "root",
         "secret_access_key": "root"
       },
       "allOf": [
@@ -528,7 +528,15 @@
     },
     "ClusterPoolAts": {
       "type": "object",
+      "required": [
+        "autoscale_margin"
+      ],
       "properties": {
+        "autoscale_margin": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
         "firewall_rules": {
           "type": "array",
           "items": {
@@ -558,7 +566,15 @@
     },
     "ClusterPoolGg": {
       "type": "object",
+      "required": [
+        "autoscale_margin"
+      ],
       "properties": {
+        "autoscale_margin": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
         "firewall_rules": {
           "type": "array",
           "items": {
@@ -574,10 +590,10 @@
     "ClusterPoolJob": {
       "type": "object",
       "required": [
-        "provision_margin"
+        "autoscale_margin"
       ],
       "properties": {
-        "provision_margin": {
+        "autoscale_margin": {
           "type": "integer",
           "format": "uint32",
           "minimum": 0.0
@@ -589,9 +605,14 @@
       "description": "These port range values will be pass to the Rivet Clients to choose ports & are used to provision firewalls.",
       "type": "object",
       "required": [
-        "provision_margin"
+        "autoscale_margin"
       ],
       "properties": {
+        "autoscale_margin": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
         "firewall_rules": {
           "type": "array",
           "items": {
@@ -616,11 +637,6 @@
         "min_wan_port": {
           "type": "integer",
           "format": "uint16",
-          "minimum": 0.0
-        },
-        "provision_margin": {
-          "type": "integer",
-          "format": "uint32",
           "minimum": 0.0
         },
         "vlan_addr_range_max": {
@@ -1267,11 +1283,11 @@
         },
         "api_public": {
           "default": {
+            "public_origin": null,
             "host": null,
             "port": null,
-            "public_origin": null,
-            "respect_forwarded_for": null,
-            "verbose_errors": null
+            "verbose_errors": null,
+            "respect_forwarded_for": null
           },
           "allOf": [
             {
@@ -1336,13 +1352,13 @@
         },
         "guard": {
           "default": {
+            "tls_enabled": null,
             "http_port": null,
             "https_port": null,
-            "max_ingress_port_tcp": null,
-            "max_ingress_port_udp": null,
             "min_ingress_port_tcp": null,
+            "max_ingress_port_tcp": null,
             "min_ingress_port_udp": null,
-            "tls_enabled": null
+            "max_ingress_port_udp": null
           },
           "allOf": [
             {

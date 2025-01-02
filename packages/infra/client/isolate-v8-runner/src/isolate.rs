@@ -10,7 +10,7 @@ use std::{
 	thread::JoinHandle,
 };
 
-use actor_kv::ActorKv;
+use pegboard_actor_kv::ActorKv;
 use anyhow::*;
 use deno_core::{
 	error::JsError, v8, v8::CreateParams, ModuleId, ModuleSpecifier, StaticModuleLoader,

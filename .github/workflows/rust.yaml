@@ -31,37 +31,21 @@ jobs:
       - uses: actions/checkout@v4
       - run: rustup component add rustfmt
       - run: cargo fmt --check
-      - run: cd packages/infra/client && cargo fmt --check
 
   cargo-check-main:
-    runs-on: [self-hosted, Linux]
-    container:
-      image: rust:1.82.0
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install dependencies
-        run: |
-          apt-get update
-          apt-get install -y protobuf-compiler libpq-dev
-      - run: RUSTFLAGS="--cfg tokio_unstable" cargo check --release
-        env:
-          # Expose token for pulling GH artifacts
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  cargo-check-infra:
-    # The FDB version should match `cluster::workflows::server::install::install_scripts::components::fdb::FDB_VERSION`
-    # TODO(RVT-4168): Copmile libfdb from scratch for ARM
     runs-on: [self-hosted, Linux, X64]
     container:
       image: rust:1.82.0
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
+        # TODO(RVT-4168): Compile libfdb from scratch for ARM
+        # The FDB version should match `cluster::workflows::server::install::install_scripts::components::fdb::FDB_VERSION`
         run: |
           apt-get update
           apt-get install -y protobuf-compiler libpq-dev curl libclang-dev
           curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.1.60/libfdb_c.x86_64.so"
-      - run: cd packages/infra/client && RUSTFLAGS="--cfg tokio_unstable" cargo check --release
+      - run: RUSTFLAGS="--cfg tokio_unstable" cargo check --release
         env:
           # Expose token for pulling GH artifacts
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -74,8 +58,4 @@ jobs:
       - uses: actions/checkout@v4
       - name: cargo deny
         uses: EmbarkStudios/cargo-deny-action@v1
-      - name: cargo deny (packages/infra/client)
-        uses: EmbarkStudios/cargo-deny-action@v1
-        with:
-          manifest-path: packages/infra/client/Cargo.toml
 

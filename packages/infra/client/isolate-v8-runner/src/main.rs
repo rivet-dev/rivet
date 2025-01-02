@@ -7,7 +7,7 @@ use std::{
 	time::Duration,
 };
 
-use actor_kv::ActorKv;
+use pegboard_actor_kv::ActorKv;
 use anyhow::*;
 use deno_core::{v8_set_flags, JsRuntime};
 use deno_runtime::worker::MainWorkerTerminateHandle;

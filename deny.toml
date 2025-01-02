@@ -10,6 +10,8 @@ ignore = [
 	"RUSTSEC-2024-0336",
 	# Inputs are only read from trusted sources
 	"RUSTSEC-2024-0421",
+	# TODO(RVT-4096):
+	"RUSTSEC-2023-0071",
 	# Unmaintained, low-impact crates
 	"RUSTSEC-2020-0163",
 	"RUSTSEC-2024-0370",
