@@ -9,6 +9,7 @@ use cluster::types::BuildDeliveryMethod;
 use futures_util::FutureExt;
 use pegboard::protocol as pp;
 use serde_json::json;
+use tokio::time::Instant;
 use util::serde::AsHashableExt;
 
 use super::{
@@ -757,9 +758,13 @@ async fn reschedule_actor(
 					(retry_count - 1).try_into()?,
 				);
 				let next = backoff.step().expect("should not have max retry");
+				
+				// Sleep for backoff or destroy early
+				if let Some(sig) = ctx.listen_with_timeout::<Destroy>(next - Instant::now()).await? {
+					tracing::debug!("destroying before actor start");
 
-				// Sleep for backoff
-				ctx.sleep_until(next).await?;
+					return Ok(Loop::Break(Some(sig)));
+				}
 			}
 
 			spawn_actor(ctx, &input, &actor_setup).await?;
