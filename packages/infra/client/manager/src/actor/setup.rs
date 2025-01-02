@@ -808,7 +808,7 @@ async fn bind_ports_inner(
 	let udp_offset = rand::thread_rng().gen_range(0..truncated_max);
 
 	// Selects available TCP and UDP ports
-	let rows = utils::query(|| async {
+	let rows = utils::sql::query(|| async {
 		sqlx::query_as::<_, (i64, i64)>(indoc!(
 			"
 			INSERT INTO actor_ports (actor_id, port, protocol)

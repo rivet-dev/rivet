@@ -15,14 +15,22 @@ use futures_util::{
 use indoc::indoc;
 use nix::unistd::Pid;
 use pegboard::{protocol, system_info::SystemInfo};
-use pegboard_config::{isolate_runner::Config as IsolateRunnerConfig, Client, Config};
+use pegboard_config::{
+	isolate_runner::Config as IsolateRunnerConfig, runner_protocol, Client, Config,
+};
 use sqlx::{pool::PoolConnection, Sqlite, SqlitePool};
 use tokio::{
 	fs,
 	net::{TcpListener, TcpStream},
 	sync::{Mutex, RwLock},
 };
-use tokio_tungstenite::{tungstenite::protocol::Message, MaybeTlsStream, WebSocketStream};
+use tokio_tungstenite::{
+	tungstenite::protocol::{
+		frame::{coding::CloseCode, CloseFrame},
+		Message,
+	},
+	MaybeTlsStream, WebSocketStream,
+};
 use url::Url;
 use uuid::Uuid;
 
@@ -120,7 +128,7 @@ impl Ctx {
 		let event_json = serde_json::to_vec(event)?;
 
 		// Fetch next idx
-		let index = utils::query(|| async {
+		let index = utils::sql::query(|| async {
 			let mut conn = self.sql().await?;
 			let mut txn = conn.begin_immediate().await?;
 
@@ -184,15 +192,30 @@ impl Ctx {
 			loop {
 				match listener.accept().await {
 					Ok((stream, _)) => {
-						let mut socket = tokio_tungstenite::accept_async(stream).await?;
+						let mut ws_stream = tokio_tungstenite::accept_async(stream).await?;
 
 						tracing::info!("received new socket");
 
 						if let Some(runner) = &*self2.isolate_runner.read().await {
-							runner.attach_socket(socket).await?;
+							runner.attach_socket(ws_stream).await?;
 						} else {
-							socket.close(None).await?;
-							bail!("no isolate runner to attach socket to");
+							// HACK(RVT-4456): Until we find out where unknown runners (runners that the
+							// manager does not know about) come from, we just kill them
+							tracing::error!("killing unknown runner");
+
+							metrics::UNKNOWN_ISOLATE_RUNNER.with_label_values(&[]).inc();
+
+							ws_stream
+								.send(Message::Binary(serde_json::to_vec(
+									&runner_protocol::ToRunner::Terminate,
+								)?))
+								.await?;
+
+							let close_frame = CloseFrame {
+								code: CloseCode::Error,
+								reason: "unknown runner".into(),
+							};
+							ws_stream.send(Message::Close(Some(close_frame))).await?;
 						}
 					}
 					Err(err) => tracing::error!(?err, "failed to connect websocket"),
@@ -216,7 +239,7 @@ impl Ctx {
 
 		// Send init packet
 		{
-			let (last_command_idx,) = utils::query(|| async {
+			let (last_command_idx,) = utils::sql::query(|| async {
 				sqlx::query_as::<_, (i64,)>(indoc!(
 					"
 					SELECT last_command_idx FROM state
@@ -323,7 +346,7 @@ impl Ctx {
 
 		// Ack command
 		tokio::try_join!(
-			utils::query(|| async {
+			utils::sql::query(|| async {
 				sqlx::query(indoc!(
 					"
 					UPDATE state
@@ -334,7 +357,7 @@ impl Ctx {
 				.execute(&mut *self.sql().await?)
 				.await
 			}),
-			utils::query(|| async {
+			utils::sql::query(|| async {
 				sqlx::query(indoc!(
 					"
 					INSERT INTO commands (
@@ -360,7 +383,7 @@ impl Ctx {
 	/// Sends all events after the given idx.
 	async fn rebroadcast(&self, last_event_idx: i64) -> Result<()> {
 		// Fetch all missed events
-		let events = utils::query(|| async {
+		let events = utils::sql::query(|| async {
 			sqlx::query_as::<_, (i64, Vec<u8>)>(indoc!(
 				"
 				SELECT idx, payload
@@ -394,7 +417,7 @@ impl Ctx {
 		let ((last_event_idx,), actor_rows) = tokio::try_join!(
 			// There should not be any database operations going on at this point so it is safe to read this
 			// value
-			utils::query(|| async {
+			utils::sql::query(|| async {
 				sqlx::query_as::<_, (i64,)>(indoc!(
 					"
 					SELECT last_event_idx FROM state
@@ -403,7 +426,7 @@ impl Ctx {
 				.fetch_one(&mut *self.sql().await?)
 				.await
 			}),
-			utils::query(|| async {
+			utils::sql::query(|| async {
 				sqlx::query_as::<_, ActorRow>(indoc!(
 					"
 					SELECT actor_id, config, pid, stop_ts
@@ -426,7 +449,7 @@ impl Ctx {
 			if row.pid.is_none() && row.stop_ts.is_none() {
 				tracing::error!(actor_id=?row.actor_id, "actor has no pid, stopping");
 
-				utils::query(|| async {
+				utils::sql::query(|| async {
 					sqlx::query(indoc!(
 						"
 						UPDATE actors
@@ -538,7 +561,7 @@ impl Ctx {
 			self.observe_isolate_runner(&runner);
 
 			// Save runner pid
-			utils::query(|| async {
+			utils::sql::query(|| async {
 				sqlx::query(indoc!(
 					"
 					UPDATE state
@@ -580,7 +603,7 @@ impl Ctx {
 			*guard = None;
 
 			// Update db state
-			let res = utils::query(|| async {
+			let res = utils::sql::query(|| async {
 				sqlx::query(indoc!(
 					"
 					UPDATE state
@@ -601,7 +624,7 @@ impl Ctx {
 
 	/// Fetches isolate runner state from the db. Should be called before the manager's runner websocket opens.
 	async fn rebuild_isolate_runner(self: &Arc<Self>) -> Result<()> {
-		let (isolate_runner_pid,) = utils::query(|| async {
+		let (isolate_runner_pid,) = utils::sql::query(|| async {
 			sqlx::query_as::<_, (Option<i32>,)>(indoc!(
 				"
 				SELECT isolate_runner_pid

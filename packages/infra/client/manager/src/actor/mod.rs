@@ -63,7 +63,7 @@ impl Actor {
 		// Write actor to DB
 		let config_json = serde_json::to_vec(&self.config)?;
 
-		utils::query(|| async {
+		utils::sql::query(|| async {
 			// NOTE: On conflict here in case this query runs but the command is not acknowledged
 			sqlx::query(indoc!(
 				"
@@ -201,7 +201,7 @@ impl Actor {
 		}
 
 		// Update DB
-		utils::query(|| async {
+		utils::sql::query(|| async {
 			sqlx::query(indoc!(
 				"
 				UPDATE actors
@@ -356,7 +356,7 @@ impl Actor {
 
 		// Update stop_ts
 		if matches!(signal, Signal::SIGTERM | Signal::SIGKILL) || !has_runner {
-			let stop_ts_set = utils::query(|| async {
+			let stop_ts_set = utils::sql::query(|| async {
 				sqlx::query_as::<_, (bool,)>(indoc!(
 					"
 					UPDATE actors
@@ -398,7 +398,7 @@ impl Actor {
 		}
 
 		// Update DB
-		utils::query(|| async {
+		utils::sql::query(|| async {
 			sqlx::query(indoc!(
 				"
 				UPDATE actors
@@ -417,7 +417,7 @@ impl Actor {
 		.await?;
 
 		// Unbind ports
-		utils::query(|| async {
+		utils::sql::query(|| async {
 			sqlx::query(indoc!(
 				"
 				UPDATE actor_ports

@@ -94,7 +94,9 @@ async fn main() -> Result<()> {
 	};
 
 	// Write exit code
-	if res.is_err() {
+	if let Err(err) = &res {
+		tracing::error!(?err);
+
 		fs::write(working_path.join("exit-code"), 1.to_string().as_bytes()).await?;
 	}
 
@@ -197,6 +199,7 @@ async fn handle_connection(
 					tracing::warn!("Actor {actor_id} not found for stopping");
 				}
 			}
+			runner_protocol::ToRunner::Terminate => bail!("Received terminate"),
 		}
 	}
 }

@@ -11,4 +11,6 @@ pub enum ToRunner {
 		signal: i32,
 		persist_state: bool,
 	},
+	// Kills the runner process
+	Terminate,
 }

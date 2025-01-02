@@ -126,7 +126,9 @@ pub async fn start_echo_actor(
 				cluster: protocol::ActorMetadataCluster {
 					cluster_id: Uuid::nil(),
 				},
-				build: protocol::ActorMetadataBuild { id: Uuid::nil() },
+				build: protocol::ActorMetadataBuild {
+					build_id: Uuid::nil(),
+				},
 			})
 			.unwrap(),
 		}),
@@ -194,7 +196,9 @@ pub async fn start_js_echo_actor(
 				cluster: protocol::ActorMetadataCluster {
 					cluster_id: Uuid::nil(),
 				},
-				build: protocol::ActorMetadataBuild { id: Uuid::nil() },
+				build: protocol::ActorMetadataBuild {
+					build_id: Uuid::nil(),
+				},
 			})
 			.unwrap(),
 		}),
@@ -270,14 +274,14 @@ pub async fn init_client(gen_path: &Path, working_path: &Path) -> Config {
 			},
 			images: Images {
 				// Should match the URL in `serve_binaries`
-				pull_addresses: Addresses::Static(vec![format!(
+				pull_addresses: Some(Addresses::Static(vec![format!(
 					"http://127.0.0.1:{ARTIFACTS_PORT}"
-				)]),
+				)])),
 			},
 			network: Network {
 				bind_ip: "127.0.0.1".parse().unwrap(),
-				lan_ip: "127.0.0.1".parse().unwrap(),
-				wan_ip: "127.0.0.1".parse().unwrap(),
+				lan_hostname: "127.0.0.1".into(),
+				wan_hostname: "127.0.0.1".into(),
 				lan_port_range_min: None,
 				lan_port_range_max: None,
 				wan_port_range_min: None,
@@ -431,24 +435,24 @@ async fn build_runner(gen_path: &Path, variant: &str) {
 	let image_name = format!("pegboard-{variant}-runner");
 
 	// Build runner binary
-	// let status = Command::new("docker")
-	// 	.arg("build")
-	// 	.arg("--platform")
-	// 	.arg("linux/amd64")
-	// 	.arg("-t")
-	// 	.arg(&image_name)
-	// 	.arg("-f")
-	// 	.arg(
-	// 		pkg_path
-	// 			.join(format!("{variant}-runner"))
-	// 			.join("Dockerfile"),
-	// 	)
-	// 	.arg(pkg_path.join("..").join("..").join(".."))
-	// 	.status()
-	// 	.await
-	// 	.unwrap();
+	let status = Command::new("docker")
+		.arg("build")
+		.arg("--platform")
+		.arg("linux/amd64")
+		.arg("-t")
+		.arg(&image_name)
+		.arg("-f")
+		.arg(
+			pkg_path
+				.join(format!("{variant}-runner"))
+				.join("Dockerfile"),
+		)
+		.arg(pkg_path.join("..").join("..").join(".."))
+		.status()
+		.await
+		.unwrap();
 
-	// assert!(status.success());
+	assert!(status.success());
 
 	tracing::info!("copying runner image");
 

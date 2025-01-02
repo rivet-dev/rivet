@@ -26,10 +26,6 @@ use pegboard_config::{Addresses, Config};
 
 pub mod sql;
 
-const MAX_QUERY_RETRIES: usize = 16;
-const QUERY_RETRY: Duration = Duration::from_millis(500);
-const TXN_RETRY: Duration = Duration::from_millis(250);
-
 pub async fn init_dir(config: &Config) -> Result<()> {
 	let data_dir = config.client.data_dir();
 
@@ -295,50 +291,6 @@ pub async fn fetch_pull_addresses(config: &Config) -> Result<Vec<String>> {
 	addresses.sort();
 
 	Ok(addresses)
-}
-
-/// Executes queries and explicitly handles retry errors.
-pub async fn query<'a, F, Fut, T>(mut cb: F) -> Result<T>
-where
-	F: FnMut() -> Fut,
-	Fut: std::future::Future<Output = std::result::Result<T, sqlx::Error>> + 'a,
-	T: 'a,
-{
-	let mut i = 0;
-
-	loop {
-		match cb().await {
-			std::result::Result::Ok(x) => return Ok(x),
-			std::result::Result::Err(err) => {
-				use sqlx::Error::*;
-
-				if i > MAX_QUERY_RETRIES {
-					bail!("max sql retries: {err:?}");
-				}
-				i += 1;
-
-				match &err {
-					// Retry transaction errors immediately
-					Database(db_err)
-						if db_err
-							.message()
-							.contains("TransactionRetryWithProtoRefreshError") =>
-					{
-						tracing::info!(message=%db_err.message(), "transaction retry");
-						tokio::time::sleep(TXN_RETRY).await;
-					}
-					// Retry internal errors with a backoff
-					Database(_) | Io(_) | Tls(_) | Protocol(_) | PoolTimedOut | PoolClosed
-					| WorkerCrashed => {
-						tracing::info!(?err, "query retry");
-						tokio::time::sleep(QUERY_RETRY).await;
-					}
-					// Throw error
-					_ => return Err(err.into()),
-				}
-			}
-		}
-	}
 }
 
 pub fn now() -> i64 {

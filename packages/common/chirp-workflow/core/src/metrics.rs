@@ -93,21 +93,21 @@ lazy_static::lazy_static! {
 		*REGISTRY,
 	).unwrap();
 
-	pub static ref SIGNAL_PUBLISHED: IntGaugeVec = register_int_gauge_vec_with_registry!(
+	pub static ref SIGNAL_PUBLISHED: IntCounterVec = register_int_counter_vec_with_registry!(
 		"chirp_workflow_signal_published",
 		"Total published signals.",
 		&["signal_name"],
 		*REGISTRY,
 	).unwrap();
 
-	pub static ref MESSAGE_PUBLISHED: IntGaugeVec = register_int_gauge_vec_with_registry!(
+	pub static ref MESSAGE_PUBLISHED: IntCounterVec = register_int_counter_vec_with_registry!(
 		"chirp_workflow_message_published",
 		"Total published messages.",
 		&["message_name"],
 		*REGISTRY,
 	).unwrap();
 
-	pub static ref WORKFLOW_DISPATCHED: IntGaugeVec = register_int_gauge_vec_with_registry!(
+	pub static ref WORKFLOW_DISPATCHED: IntCounterVec = register_int_counter_vec_with_registry!(
 		"chirp_workflow_workflow_dispatched",
 		"Total dispatched workflows.",
 		&["workflow_name"],
