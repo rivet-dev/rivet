@@ -3,15 +3,10 @@ import * as cbor from "@std/cbor";
 import type { WSContext } from "hono/ws";
 import type { ProtocolFormat } from "../protocol/ws/mod.ts";
 import type * as wsToClient from "../protocol/ws/to_client.ts";
-import type { Actor, AnyActor } from "./actor.ts";
+import type { Actor, AnyActor, ExtractActorConnState } from "./actor.ts";
 import * as errors from "./errors.ts";
 import { logger } from "./log.ts";
 import { assertUnreachable } from "./utils.ts";
-
-// biome-ignore lint/suspicious/noExplicitAny: Must be used for `extends`
-type GetConnStateType<A> = A extends Actor<any, any, infer ConnState>
-	? ConnState
-	: never;
 
 export type IncomingWebSocketMessage = string | Blob | ArrayBufferLike;
 export type OutgoingWebSocketMessage = string | ArrayBuffer | Uint8Array;
@@ -21,16 +16,16 @@ export type ConnectionId = number;
 export class Connection<A extends AnyActor> {
 	subscriptions: Set<string> = new Set<string>();
 
-	#state: GetConnStateType<A> | undefined;
+	#state: ExtractActorConnState<A> | undefined;
 	#stateEnabled: boolean;
 
-	public get state(): GetConnStateType<A> {
+	public get state(): ExtractActorConnState<A> {
 		this.#validateStateEnabled();
 		assertExists(this.#state, "state should exist");
 		return this.#state;
 	}
 
-	public set state(value: GetConnStateType<A>) {
+	public set state(value: ExtractActorConnState<A>) {
 		this.#validateStateEnabled();
 		this.#state = value;
 	}
@@ -39,7 +34,7 @@ export class Connection<A extends AnyActor> {
 		public readonly id: ConnectionId,
 		public _websocket: WSContext<WebSocket>,
 		public _protocolFormat: ProtocolFormat,
-		state: GetConnStateType<A> | undefined,
+		state: ExtractActorConnState<A> | undefined,
 		stateEnabled: boolean,
 	) {
 		this.#state = state;

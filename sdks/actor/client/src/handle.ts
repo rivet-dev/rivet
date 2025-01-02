@@ -7,7 +7,7 @@ import type * as wsToClient from "../protocol/ws/to_client.ts";
 import type * as wsToServer from "../protocol/ws/to_server.ts";
 import * as errors from "./errors.ts";
 import { logger } from "./log.ts";
-import { messageLength, WebSocketMessage } from "./utils.ts";
+import { type WebSocketMessage, messageLength } from "./utils.ts";
 
 interface RpcInFlight {
 	resolve: (response: wsToClient.RpcResponseOk) => void;
@@ -314,7 +314,9 @@ export class ActorHandleRaw {
 		if (this.#websocket?.readyState === WebSocket.OPEN) {
 			try {
 				this.#websocket.send(message);
-				logger().debug("sent websocket message", { len: messageLength(message) });
+				logger().debug("sent websocket message", {
+					len: messageLength(message),
+				});
 			} catch (error) {
 				logger().warn("failed to send message, added to queue", { error });
 
@@ -326,14 +328,16 @@ export class ActorHandleRaw {
 		} else {
 			if (!opts?.ephemeral) {
 				this.#websocketQueue.push(message);
-				logger().debug("queued websocket message", { len: messageLength(message) });
+				logger().debug("queued websocket message", {
+					len: messageLength(message),
+				});
 			}
 		}
 	}
 
 	// TODO:Add destructor
 	disconnect(): Promise<void> {
-		return new Promise(resolve => {
+		return new Promise((resolve) => {
 			if (!this.#websocket) return;
 			this.#disconnected = true;
 

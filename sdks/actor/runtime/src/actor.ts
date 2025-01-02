@@ -3,7 +3,7 @@ import { assertExists } from "@std/assert/exists";
 import { deadline } from "@std/async/deadline";
 import { throttle } from "@std/async/unstable-throttle";
 import type { Logger } from "@std/log/get-logger";
-import { type Context as HonoContext, Hono } from "hono";
+import { Hono, type Context as HonoContext } from "hono";
 import { upgradeWebSocket } from "hono/deno";
 import type { WSEvents } from "hono/ws";
 import onChange from "on-change";
@@ -63,9 +63,9 @@ function isJsonSerializable(value: unknown): boolean {
 	return false;
 }
 
-export interface OnBeforeConnectOptions<ConnParams> {
+export interface OnBeforeConnectOptions<A extends AnyActor> {
 	request: Request;
-	parameters: ConnParams;
+	parameters: ExtractActorConnParams<A>;
 }
 
 export interface SaveStateOptions {
@@ -78,6 +78,24 @@ export interface SaveStateOptions {
 /** Actor type alias with all `any` types. Used for `extends` in classes referencing this actor. */
 // biome-ignore lint/suspicious/noExplicitAny: Needs to be used in `extends`
 export type AnyActor = Actor<any, any, any>;
+
+// biome-ignore lint/suspicious/noExplicitAny: Must be used for `extends`
+export type ExtractActorConnParams<A> = A extends Actor<
+	any,
+	infer ConnParams,
+	any
+>
+	? ConnParams
+	: never;
+
+// biome-ignore lint/suspicious/noExplicitAny: Must be used for `extends`
+export type ExtractActorConnState<A> = A extends Actor<
+	any,
+	any,
+	infer ConnState
+>
+	? ConnState
+	: never;
 
 export abstract class Actor<
 	State = undefined,
@@ -280,13 +298,11 @@ export abstract class Actor<
 		//	KEYS.STATE.DATA,
 		//]);
 		const getStateBatch = Object.fromEntries(
-			await this.#ctx.kv.getBatch([
-				KEYS.STATE.INITIALIZED,
-				KEYS.STATE.DATA,
-			]),
+			await this.#ctx.kv.getBatch([KEYS.STATE.INITIALIZED, KEYS.STATE.DATA]),
 		);
-		const initialized =
-			getStateBatch[String(KEYS.STATE.INITIALIZED)] as boolean;
+		const initialized = getStateBatch[
+			String(KEYS.STATE.INITIALIZED)
+		] as boolean;
 		const stateData = getStateBatch[String(KEYS.STATE.DATA)] as State;
 
 		if (!initialized) {
@@ -429,9 +445,8 @@ export abstract class Actor<
 		}
 
 		const protocolFormatRaw = c.req.query("format");
-		const { data: protocolFormat, success } = ProtocolFormatSchema.safeParse(
-			protocolFormatRaw,
-		);
+		const { data: protocolFormat, success } =
+			ProtocolFormatSchema.safeParse(protocolFormatRaw);
 		if (!success) {
 			logger().warn("invalid protocol format", {
 				protocolFormat: protocolFormatRaw,
@@ -450,11 +465,10 @@ export abstract class Actor<
 		}
 
 		// Parse and validate params
-		let params: ConnParams;
+		let params: ExtractActorConnParams<this>;
 		try {
-			params = typeof paramsStr === "string"
-				? JSON.parse(paramsStr)
-				: undefined;
+			params =
+				typeof paramsStr === "string" ? JSON.parse(paramsStr) : undefined;
 		} catch (error) {
 			logger().warn("malformed connection parameters", { error });
 			throw new errors.MalformedConnectionParameters(error);
@@ -462,14 +476,14 @@ export abstract class Actor<
 
 		// Authenticate connection
 		let state: ConnState | undefined = undefined;
-		const PREAPRE_CONNECT_TIMEOUT = 5000; // 5 seconds
+		const PREPARE_CONNECT_TIMEOUT = 5000; // 5 seconds
 		if (this._onBeforeConnect) {
 			const dataOrPromise = this._onBeforeConnect({
 				request: c.req.raw,
 				parameters: params,
 			});
 			if (dataOrPromise instanceof Promise) {
-				state = await deadline(dataOrPromise, PREAPRE_CONNECT_TIMEOUT);
+				state = await deadline(dataOrPromise, PREPARE_CONNECT_TIMEOUT);
 			} else {
 				state = dataOrPromise;
 			}
@@ -558,16 +572,14 @@ export abstract class Actor<
 						const output = await this.#executeRpc(ctx, name, args);
 
 						conn._sendWebSocketMessage(
-							conn._serialize(
-								{
-									body: {
-										ro: {
-											i: id,
-											o: output,
-										},
+							conn._serialize({
+								body: {
+									ro: {
+										i: id,
+										o: output,
 									},
-								} satisfies wsToClient.ToClient,
-							),
+								},
+							} satisfies wsToClient.ToClient),
 						);
 					} else if ("sr" in message.body) {
 						// Subscription request
@@ -609,32 +621,28 @@ export abstract class Actor<
 					// Build response
 					if (rpcRequestId !== undefined) {
 						conn._sendWebSocketMessage(
-							conn._serialize(
-								{
-									body: {
-										re: {
-											i: rpcRequestId,
-											c: code,
-											m: message,
-											md: metadata,
-										},
+							conn._serialize({
+								body: {
+									re: {
+										i: rpcRequestId,
+										c: code,
+										m: message,
+										md: metadata,
 									},
-								} satisfies wsToClient.ToClient,
-							),
+								},
+							} satisfies wsToClient.ToClient),
 						);
 					} else {
 						conn._sendWebSocketMessage(
-							conn._serialize(
-								{
-									body: {
-										er: {
-											c: code,
-											m: message,
-											md: metadata,
-										},
+							conn._serialize({
+								body: {
+									er: {
+										c: code,
+										m: message,
+										md: metadata,
 									},
-								} satisfies wsToClient.ToClient,
-							),
+								},
+							} satisfies wsToClient.ToClient),
 						);
 					}
 				}
@@ -714,7 +722,7 @@ export abstract class Actor<
 	protected _onStateChange?(newState: State): void | Promise<void>;
 
 	protected _onBeforeConnect?(
-		opts: OnBeforeConnectOptions<ConnParams>,
+		opts: OnBeforeConnectOptions<this>,
 	): ConnState | Promise<ConnState>;
 
 	protected _onConnect?(connection: Connection<this>): void | Promise<void>;
@@ -768,9 +776,8 @@ export abstract class Actor<
 		for (const connection of subscriptions) {
 			// Lazily serialize the appropriate format
 			if (!(connection._protocolFormat in serialized)) {
-				serialized[connection._protocolFormat] = connection._serialize(
-					toClient,
-				);
+				serialized[connection._protocolFormat] =
+					connection._serialize(toClient);
 			}
 
 			connection._sendWebSocketMessage(serialized[connection._protocolFormat]);
