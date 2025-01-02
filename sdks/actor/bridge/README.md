@@ -6,3 +6,7 @@ Internal JavaScript used to bridge native Rust code with the high-level JavaScri
 
 - `tsconfig.bridge.json` is used for compiling the bridge types (see `./scripts/pegboard/compile_bridge.ts`)
 - `tsconfig.types.json` is used for compiling the types for import in `actor-types`
+
+## License
+
+Apache 2.0

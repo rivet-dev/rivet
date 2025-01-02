@@ -126,7 +126,7 @@ rivet manager endpoint
 Use this code to create & connect to the actor. Replace `/* CONNECTION ADDRESS */` with the value from the previous step.
 
 ```typescript
-import Client from '@rivet-gg/actor-client';
+import { Client } from '@rivet-gg/actor-client';
 const client = new Client(/* CONNECTION ADDRESS */);
 
 const counter = await client.get({ name: 'counter' }); // Get or create a `counter` actor

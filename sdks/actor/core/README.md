@@ -1,16 +1,16 @@
 # Rivet Actor Core
 
-Related:
+Core low-level types for working with the Rivet Actor runtime.
 
-- [**Documentation**](https://rivet.gg/docs)
-- [**API documentation**](https://rivet.gg/docs/api)
-- [**@rivet-gg/actor**](https://jsr.io/@rivet-gg/actor)
+**This package is for advanced low-level usage of Rivet. If getting started, please use the
+[Actor SDK](https://jsr.io/@rivet-gg/actor).**
 
-## Usage
+## Getting Started
 
-See the [setup guide](https://rivet.gg/docs/setup) for more information.
-
-See the [API documentation](https://rivet.gg/docs/api) on how to create this actor.
+- [Setup Guide](https://rivet.gg/docs/setup)
+- [Documentation](https://rivet.gg/docs)
+- [Examples](https://github.com/rivet-gg/rivet/tree/main/examples)
+- [API documentation](https://rivet.gg/docs/api)
 
 ## Example
 
@@ -43,6 +43,20 @@ export default {
 		await server.finished;
 	},
 };
-
 ```
 
+## Related Packages
+
+- [Actor SDK (@rivet-gg/actor)](https://jsr.io/@rivet-gg/actor)
+
+## Community & Support
+
+- Join our [Discord](https://rivet.gg/discord)
+- Follow us on [X](https://x.com/rivet_gg)
+- Follow us on [Bluesky](https://bsky.app/profile/rivet-gg.bsky.social)
+- File bug reports in [GitHub Issues](https://github.com/rivet-gg/rivet/issues)
+- Post questions & ideas in [GitHub Discussions](https://github.com/orgs/rivet-gg/discussions)
+
+## License
+
+Apache 2.0
