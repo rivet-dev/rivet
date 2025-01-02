@@ -4746,6 +4746,7 @@ dependencies = [
  "deno_core",
  "foundationdb",
  "futures-util",
+ "indexmap 2.6.0",
  "pegboard",
  "prost 0.13.3",
  "serde",

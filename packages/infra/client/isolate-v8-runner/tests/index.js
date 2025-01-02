@@ -4,10 +4,12 @@ export default {
 	async start(ctx) {
 		console.log(ctx);
 
-		await ctx.kv.put(['foob', 'b'], 1);
+		await ctx.kv.putBatch(new Map([[['foob', 'b'], 12], [['foob', 'a'], null], [['foob', 'c'], true]]));
 
-		let res = await ctx.kv.getBatch(['foob', 'b']);
-		console.log(res, res.get(['foob', 'b']));
+		let res = await ctx.kv.list({ prefix: ['foob'] });
+
+		console.log(res.array(), res.raw(), res.entries());
+		console.log(res.get(['foob', 'b']));
 
 		Deno.exit(2);
 

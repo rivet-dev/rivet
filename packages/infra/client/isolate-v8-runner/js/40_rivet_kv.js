@@ -4,6 +4,7 @@
 
 import { core } from "ext:core/mod.js";
 import { op_rivet_kv_delete, op_rivet_kv_delete_all, op_rivet_kv_delete_batch, op_rivet_kv_get, op_rivet_kv_get_batch, op_rivet_kv_list, op_rivet_kv_put, op_rivet_kv_put_batch, } from "ext:core/ops";
+import { deepEqual } from "./lib/fast-equals/index.js";
 /**
  * Retrieves a value from the key-value store.
  */
@@ -18,19 +19,17 @@ async function get(key, options) {
  */
 async function getBatch(keys, options) {
     const entries = await op_rivet_kv_get_batch(keys.map((x) => serializeKey(x)));
-    const deserializedValues = new Map();
-    for (const [key, entry] of entries) {
-        const jsKey = deserializeKey(key);
-        deserializedValues.set(jsKey, deserializeValue(jsKey, entry.value, options?.format));
-    }
-    return deserializedValues;
+    return new HashMap(entries.map(([key, entry]) => {
+        let jsKey = deserializeKey(key);
+        return [jsKey, deserializeValue(jsKey, entry.value, options?.format)];
+    }));
 }
 /**
  * Retrieves all key-value pairs in the KV store. When using any of the options, the keys lexicographic order
  * is used for filtering.
  *
  * @param {ListOptions} [options] - Options.
- * @returns {Promise<Map<Key, Entry>>} The retrieved values.
+ * @returns {Promise<HashMap<Key, Entry>>} The retrieved values.
  */
 async function list(options) {
     // Build query
@@ -69,12 +68,10 @@ async function list(options) {
         query = { all: {} };
     }
     const entries = await op_rivet_kv_list(query, options?.reverse ?? false, options?.limit);
-    const deserializedValues = new Map();
-    for (const [key, entry] of entries) {
-        const jsKey = deserializeKey(key);
-        deserializedValues.set(jsKey, deserializeValue(jsKey, entry.value, options?.format));
-    }
-    return deserializedValues;
+    return new HashMap(entries.map(([key, entry]) => {
+        let jsKey = deserializeKey(key);
+        return [jsKey, deserializeValue(jsKey, entry.value, options?.format)];
+    }));
 }
 /**
  * Stores a key-value pair in the key-value store.
@@ -231,6 +228,35 @@ function deserializeValue(key, value, format = "value") {
     }
     else {
         throw Error(`invalid format: "${format}". expected "value" or "arrayBuffer".`);
+    }
+}
+class HashMap {
+    #internal;
+    constructor(internal) {
+        this.#internal = internal;
+    }
+    get(key) {
+        for (let [k, v] of this.#internal) {
+            if (deepEqual(key, k))
+                return v;
+        }
+        return undefined;
+    }
+    /**
+     * Returns a map of keys to values. **WARNING** Using `.get` on the returned map does not work as expected
+     * with complex types (arrays, objects, etc). Use `.get` on this class instead.
+     */
+    raw() {
+        return new Map(this.#internal);
+    }
+    array() {
+        return this.#internal;
+    }
+    entries() {
+        return this[Symbol.iterator]();
+    }
+    [Symbol.iterator]() {
+        return this.#internal[Symbol.iterator]();
     }
 }
 export const KV_NAMESPACE = {

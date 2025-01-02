@@ -9,7 +9,9 @@ import {
 	op_rivet_kv_put,
 	op_rivet_kv_put_batch,
 } from "ext:core/ops";
-import type { InKey, ListQuery, OutKey } from "./types/metadata.d.ts";
+import type { InKey, ListQuery, OutEntry, OutKey } from "./types/metadata.d.ts";
+
+import { deepEqual } from "./lib/fast-equals/index.js";
 
 /**
  * Options for the `get` function.
@@ -41,20 +43,13 @@ export interface GetBatchOptions {
 async function getBatch<K extends Array<unknown>, V>(
 	keys: K,
 	options?: GetBatchOptions,
-): Promise<Map<K[number], V>> {
-	const entries = await op_rivet_kv_get_batch(keys.map((x) => serializeKey(x)));
+): Promise<HashMap<K[number], V>> {
+	const entries: [OutKey, OutEntry][] = await op_rivet_kv_get_batch(keys.map((x) => serializeKey(x)));
 
-	const deserializedValues = new Map<K[number], V>();
-
-	for (const [key, entry] of entries) {
-		const jsKey = deserializeKey(key) as K[number];
-		deserializedValues.set(
-			jsKey,
-			deserializeValue(jsKey, entry.value, options?.format) as V,
-		);
-	}
-
-	return deserializedValues;
+	return new HashMap(entries.map(([key, entry]) => {
+		let jsKey = deserializeKey(key) as K[number];
+		return [jsKey, deserializeValue(jsKey, entry.value, options?.format) as V];
+	}));
 }
 
 /**
@@ -81,9 +76,9 @@ export interface ListOptions<K> {
  * is used for filtering.
  *
  * @param {ListOptions} [options] - Options.
- * @returns {Promise<Map<Key, Entry>>} The retrieved values.
+ * @returns {Promise<HashMap<Key, Entry>>} The retrieved values.
  */
-async function list<K, V>(options?: ListOptions<K>): Promise<Map<K, V>> {
+async function list<K, V>(options?: ListOptions<K>): Promise<HashMap<K, V>> {
 	// Build query
 	let query: ListQuery;
 	if (options?.prefix) {
@@ -120,22 +115,16 @@ async function list<K, V>(options?: ListOptions<K>): Promise<Map<K, V>> {
 		query = { all: {} };
 	}
 
-	const entries = await op_rivet_kv_list(
+	const entries: [OutKey, OutEntry][] = await op_rivet_kv_list(
 		query,
 		options?.reverse ?? false,
 		options?.limit,
 	);
-	const deserializedValues = new Map<K, V>();
 
-	for (const [key, entry] of entries) {
-		const jsKey = deserializeKey(key) as K;
-		deserializedValues.set(
-			jsKey,
-			deserializeValue(jsKey, entry.value, options?.format) as V,
-		);
-	}
-
-	return deserializedValues;
+	return new HashMap(entries.map(([key, entry]) => {
+		let jsKey = deserializeKey(key) as K;
+		return [jsKey, deserializeValue(jsKey, entry.value, options?.format) as V];
+	}));
 }
 
 /**
@@ -341,6 +330,42 @@ function deserializeValue<V>(
 		throw Error(
 			`invalid format: "${format}". expected "value" or "arrayBuffer".`,
 		);
+	}
+}
+
+class HashMap<K, V> {
+	#internal: [K, V][];
+
+	constructor(internal: [K, V][]) {
+		this.#internal = internal;
+	}
+
+	get(key: K): V | undefined {
+		for (let [k, v] of this.#internal) {
+			if (deepEqual(key, k)) return v;
+		}
+
+		return undefined;
+	}
+
+	/**
+	 * Returns a map of keys to values. **WARNING** Using `.get` on the returned map does not work as expected
+	 * with complex types (arrays, objects, etc). Use `.get` on this class instead.
+	 */
+	raw() {
+		return new Map(this.#internal);
+	}
+
+	array() {
+		return this.#internal;
+	}
+
+	entries() {
+		return this[Symbol.iterator]();
+	}
+
+	[Symbol.iterator]() {
+		return this.#internal[Symbol.iterator]();
 	}
 }
 

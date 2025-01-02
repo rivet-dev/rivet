@@ -24,7 +24,7 @@ export interface GetBatchOptions {
 declare function getBatch<K extends Array<unknown>, V>(
 	keys: K,
 	options?: GetBatchOptions,
-): Promise<Map<K[number], V>>;
+): Promise<HashMap<K[number], V>>;
 /**
  * Options for the `list` function.
  */
@@ -42,9 +42,9 @@ export interface ListOptions<K> {
  * is used for filtering.
  *
  * @param {ListOptions} [options] - Options.
- * @returns {Promise<Map<Key, Entry>>} The retrieved values.
+ * @returns {Promise<HashMap<Key, Entry>>} The retrieved values.
  */
-declare function list<K, V>(options?: ListOptions<K>): Promise<Map<K, V>>;
+declare function list<K, V>(options?: ListOptions<K>): Promise<HashMap<K, V>>;
 /**
  * Options for the `put` function.
  */
@@ -101,6 +101,19 @@ declare function deleteBatch<K extends Array<unknown>>(keys: K): Promise<void>;
  * @returns {Promise<void>} A promise that resolves when the operation is complete.
  */
 declare function deleteAll(): Promise<void>;
+declare class HashMap<K, V> {
+	#private;
+	constructor(internal: [K, V][]);
+	get(key: K): V | undefined;
+	/**
+	 * Returns a map of keys to values. **WARNING** Using `.get` on the returned map does not work as expected
+	 * with complex types (arrays, objects, etc). Use `.get` on this class instead.
+	 */
+	raw(): Map<K, V>;
+	array(): [K, V][];
+	entries(): ArrayIterator<[K, V]>;
+	[Symbol.iterator](): ArrayIterator<[K, V]>;
+}
 export declare const KV_NAMESPACE: {
 	get: typeof get;
 	getBatch: typeof getBatch;

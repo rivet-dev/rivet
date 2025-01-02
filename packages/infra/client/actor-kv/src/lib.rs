@@ -1,5 +1,5 @@
 use std::{
-	collections::{hash_map, HashMap},
+	collections::HashMap,
 	result::Result::{Err, Ok},
 };
 
@@ -15,6 +15,7 @@ pub use list_query::ListQuery;
 pub use metadata::Metadata;
 use pegboard::protocol;
 use prost::Message;
+use indexmap::IndexMap;
 use utils::{owner_segment, validate_entries, validate_keys, TransactionExt};
 
 mod entry;
@@ -174,7 +175,7 @@ impl ActorKv {
 		query: ListQuery,
 		reverse: bool,
 		limit: Option<usize>,
-	) -> Result<HashMap<Key, Entry>> {
+	) -> Result<IndexMap<Key, Entry>> {
 		let subspace = self
 			.subspace
 			.as_ref()
@@ -231,13 +232,13 @@ impl ActorKv {
 					// With a limit, we short circuit out of the `try_fold` once the limit is reached
 					if let Some(limit) = limit {
 						stream
-							.try_fold(HashMap::new(), |mut acc, (key, sub_key)| async {
+							.try_fold(IndexMap::new(), |mut acc, (key, sub_key)| async {
 								let size = acc.len();
 								let entry = acc.entry(key);
 
 								// Short circuit when limit is reached. This relies on data from the stream
 								// being in order.
-								if size == limit && matches!(entry, hash_map::Entry::Vacant(_)) {
+								if size == limit && matches!(entry, indexmap::map::Entry::Vacant(_)) {
 									return Err(ListLimitReached(acc).into());
 								}
 
@@ -255,7 +256,7 @@ impl ActorKv {
 							})
 					} else {
 						stream
-							.try_fold(HashMap::new(), |mut acc, (key, sub_key)| async {
+							.try_fold(IndexMap::new(), |mut acc, (key, sub_key)| async {
 								acc.entry(key)
 									.or_insert_with(EntryBuilder::default)
 									.add_sub_key(sub_key)?;

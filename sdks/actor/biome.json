@@ -6,5 +6,10 @@
 				"noUselessElse": "off"
 			}
 		}
+	},
+	"files": {
+		"ignore": [
+			"bridge/types/lib/fast-equals"
+		]
 	}
 }

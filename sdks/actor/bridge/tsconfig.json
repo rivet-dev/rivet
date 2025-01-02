@@ -8,8 +8,6 @@
 		"allowSyntheticDefaultImports": false,
 		"paths": {
 			"ext:rivet_kv/40_rivet_kv.js": ["./src/bridge/40_rivet_kv.ts"],
-			"ext:rivet_runtime/90_rivet_ns.js": ["./src/bridge/90_rivet_ns.ts"],
-			"ext:rivet_runtime/99_rivet_main.js": ["./src/bridge/90_rivet_main.ts"]
 		}
 	},
 	"include": ["src/**/*"]

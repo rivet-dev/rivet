@@ -19,6 +19,13 @@ deno_core::extension!(
   ],
   esm = [
 	dir "js",
+	// Order matters
+	"lib/fast-equals/utils.js",
+	"lib/fast-equals/equals.js",
+	"lib/fast-equals/comparator.js",
+	"lib/fast-equals/internalTypes.js",
+	"lib/fast-equals/index.js",
+
 	"40_rivet_kv.js",
   ],
   options = {

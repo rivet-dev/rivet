@@ -15,14 +15,13 @@ const ISOLATE_RUNNER_JS_PATH =
 const ACTOR_CORE_BRIDGE_TYPES_PATH = resolve(ACTOR_SDK_PATH, "core", "src", "bridge_types");
 
 // Clean folders
-await Deno.remove(ACTOR_BRIDGE_TYPES_PATH, { recursive: true }).catch(() => {});
-await Deno.remove(ACTOR_CORE_BRIDGE_TYPES_PATH, { recursive: true }).catch(() => {});
-await Deno.remove(ISOLATE_RUNNER_JS_PATH, { recursive: true }).catch(() => {});
+await Deno.remove(ACTOR_BRIDGE_TYPES_PATH, { recursive: true }).catch(() => { });
+await Deno.remove(ACTOR_CORE_BRIDGE_TYPES_PATH, { recursive: true }).catch(() => { });
+await Deno.remove(ISOLATE_RUNNER_JS_PATH, { recursive: true }).catch(() => { });
 
 // Compile JS bridge
 await $`npx -p typescript@5.7.2 tsc -p tsconfig.bridge.json`.cwd(ACTOR_BRIDGE_PATH);
 
-// Add header to JS bridge
 for await (const entry of walk(
 	ISOLATE_RUNNER_JS_PATH,
 	{
@@ -30,7 +29,9 @@ for await (const entry of walk(
 		includeDirs: false,
 	}
 )) {
-	const content = await Deno.readTextFile(entry.path);
+	let content = await Deno.readTextFile(entry.path);
+
+	// Add header to JS bridge
 	await Deno.writeTextFile(
 		entry.path,
 		"// DO NOT MODIFY\n//\n// Generated with scripts/sdk_actor/compile_bridge.ts\n\n" + content

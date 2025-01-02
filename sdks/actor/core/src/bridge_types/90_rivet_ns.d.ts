@@ -15,10 +15,24 @@ export declare const ACTOR_CONTEXT: {
 		getBatch: <K extends Array<unknown>, V>(
 			keys: K,
 			options?: import("./40_rivet_kv.d.ts").GetBatchOptions,
-		) => Promise<Map<K[number], V>>;
+		) => Promise<{
+			"__#1@#internal": [K[number], V][];
+			get(key: K[number]): V | undefined;
+			raw(): Map<K[number], V>;
+			array(): [K[number], V][];
+			entries(): ArrayIterator<[K[number], V]>;
+			[Symbol.iterator](): ArrayIterator<[K[number], V]>;
+		}>;
 		list: <K, V>(
 			options?: import("./40_rivet_kv.d.ts").ListOptions<K>,
-		) => Promise<Map<K, V>>;
+		) => Promise<{
+			"__#1@#internal": [K, V][];
+			get(key: K): V | undefined;
+			raw(): Map<K, V>;
+			array(): [K, V][];
+			entries(): ArrayIterator<[K, V]>;
+			[Symbol.iterator](): ArrayIterator<[K, V]>;
+		}>;
 		put: <K, V>(
 			key: K,
 			value: V | ArrayBuffer,

@@ -171,7 +171,7 @@ pub fn ship_logs(
 		let mut throttle_error = throttle::Throttle::new(1, Duration::from_secs(60));
 
 		// How many lines have been logged as a preview, see `MAX_PREVIEW_LINES`
-		let mut preview_iine_count = 0;
+		let mut preview_line_count = 0;
 
 		for line in stream.lines() {
 			// Throttle
@@ -216,8 +216,8 @@ pub fn ship_logs(
 			}
 
 			// Log preview of lines from the program for easy debugging from Pegboard
-			if preview_iine_count < MAX_PREVIEW_LINES {
-				preview_iine_count += 1;
+			if preview_line_count < MAX_PREVIEW_LINES {
+				preview_line_count += 1;
 				tracing::info!(
 					?actor_id,
 					"{stream_type:?}: {message}",
@@ -225,7 +225,7 @@ pub fn ship_logs(
 					message = message,
 				);
 
-				if preview_iine_count == MAX_PREVIEW_LINES {
+				if preview_line_count == MAX_PREVIEW_LINES {
 					tracing::warn!(
 						?actor_id,
 						"{stream_type:?}: ...not logging any more lines...",

@@ -1,8 +1,7 @@
-use std::collections::HashMap;
-
 use anyhow::*;
 use foundationdb::tuple::Subspace;
 use serde::Deserialize;
+use indexmap::IndexMap;
 
 use crate::{
 	entry::EntryBuilder,
@@ -71,7 +70,7 @@ impl ListQuery {
 }
 
 // Used to short circuit after the
-pub struct ListLimitReached(pub HashMap<Key, EntryBuilder>);
+pub struct ListLimitReached(pub IndexMap<Key, EntryBuilder>);
 
 impl std::fmt::Debug for ListLimitReached {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
