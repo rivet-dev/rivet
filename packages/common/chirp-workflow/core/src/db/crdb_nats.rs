@@ -748,13 +748,14 @@ impl Database for DatabaseCrdbNats {
 								INSERT INTO db_workflow.workflow_activity_events (
 									workflow_id,
 									location2,
+									version,
 									activity_name,
 									input_hash,
 									input,
 									create_ts,
 									loop_location2
 								)
-								VALUES ($1, $2, $3, $4, $5, $7, $8)
+								VALUES ($1, $2, $3, $4, $5, $7, $8, $9)
 								ON CONFLICT (workflow_id, location2_hash) DO NOTHING
 								RETURNING 1
 							),
@@ -762,7 +763,7 @@ impl Database for DatabaseCrdbNats {
 								INSERT INTO db_workflow.workflow_activity_errors (
 									workflow_id, location2, activity_name, error, ts
 								)
-								VALUES ($1, $2, $3, $6, $9)
+								VALUES ($1, $2, $4, $7, $10)
 								RETURNING 1
 							)
 						SELECT 1
@@ -770,6 +771,7 @@ impl Database for DatabaseCrdbNats {
 					))
 					.bind(workflow_id)
 					.bind(location)
+					.bind(version as i64)
 					.bind(&event_id.name)
 					.bind(event_id.input_hash.to_le_bytes())
 					.bind(sqlx::types::Json(input))
