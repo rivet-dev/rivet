@@ -193,6 +193,11 @@ async fn build_and_upload(
 	};
 
 	let mut tags = HashMap::from([
+		(build::tags::NAME.to_string(), build_name.to_string()),
+		(
+			build::tags::ACCESS.to_string(),
+			build.access.as_ref().to_string(),
+		),
 		(build::tags::VERSION.to_string(), version_name.to_string()),
 		(build::tags::CURRENT.to_string(), "true".to_string()),
 	]);
