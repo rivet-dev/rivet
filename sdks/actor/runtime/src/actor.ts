@@ -341,19 +341,13 @@ export abstract class Actor<
 		}
 		assertExists(this._onInitialize);
 
-		// HACK(RVT-4150): `get` does not work for arrays
 		// Read initial state
-		//const [initialized, stateData] = await this.#ctx.kv.getBatch<[boolean, state]>([
-		//	KEYS.STATE.INITIALIZED,
-		//	KEYS.STATE.DATA,
-		//]);
-		const getStateBatch = Object.fromEntries(
-			await this.#ctx.kv.getBatch([KEYS.STATE.INITIALIZED, KEYS.STATE.DATA]),
-		);
-		const initialized = getStateBatch[
-			String(KEYS.STATE.INITIALIZED)
-		] as boolean;
-		const stateData = getStateBatch[String(KEYS.STATE.DATA)] as State;
+		const getStateBatch = await this.#ctx.kv.getBatch([
+			KEYS.STATE.INITIALIZED,
+			KEYS.STATE.DATA,
+		]);
+		const initialized = getStateBatch.get(KEYS.STATE.INITIALIZED) as boolean;
+		const stateData = getStateBatch.get(KEYS.STATE.DATA) as State;
 
 		if (!initialized) {
 			// Initialize

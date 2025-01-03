@@ -48,6 +48,4 @@ export declare const strictCircularShallowEqual: <A, B>(a: A, b: B) => boolean;
  * support for legacy environments that do not support expected features like
  * `RegExp.prototype.flags` out of the box.
  */
-export declare function createCustomEqual<Meta = undefined>(
-	options?: CustomEqualCreatorOptions<Meta>,
-): <A, B>(a: A, b: B) => boolean;
+export declare function createCustomEqual<Meta = undefined>(options?: CustomEqualCreatorOptions<Meta>): <A, B>(a: A, b: B) => boolean;
