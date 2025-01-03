@@ -2,7 +2,7 @@
 # The FDB version should match `cluster::workflows::server::install::install_scripts::components::fdb::FDB_VERSION`
 
 # TODO(RVT-4168): Compile libfdb from scratch for ARM
-FROM --platform=linux/amd64 rust:1.82.0-bullseye AS builder
+FROM --platform=linux/amd64 rust:1.82.0-bookworm AS builder
 
 RUN apt-get update && apt-get install --yes libclang-dev protobuf-compiler pkg-config libssl-dev g++ git libpq-dev wget curl && \
 	curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.1.60/libfdb_c.x86_64.so"

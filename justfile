@@ -14,7 +14,7 @@ dev-up-all:
 
 [group('dev')]
 dev-up-all-nobuild:
-	{{docker_compose}} --parallel=1 up -d
+	{{docker_compose}} up -d
 
 [group('dev')]
 dev-up CONTAINER:
@@ -27,6 +27,18 @@ dev-up-nobuild CONTAINER:
 [group('dev')]
 dev-logs CONTAINER:
 	{{docker_compose}} logs -f {{CONTAINER}}
+
+[group('dev')]
+dev-logs-client:
+	{{docker_compose}} exec rivet-client sh -c 'tail -f -n 100 /var/lib/rivet-client/logs/*'
+
+[group('dev')]
+dev-logs-runner:
+	{{docker_compose}} exec rivet-client sh -c 'tail -f -n 100 /var/lib/rivet-client/runner/logs/*'
+
+[group('dev')]
+dev-logs-server:
+	{{docker_compose}} logs -f rivet-server
 
 [group('dev')]
 dev-exec CONTAINER:

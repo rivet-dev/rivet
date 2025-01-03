@@ -31,7 +31,7 @@ RUN \
 
 # MARK: Rivet Client Builder
 # TODO(RVT-4168): Switch back to ARM
-FROM --platform=linux/amd64 rust:1.82.0-bullseye AS client-builder
+FROM --platform=linux/amd64 rust:1.82.0-bookworm AS client-builder
 
 RUN apt-get update && apt-get install --yes protobuf-compiler pkg-config libssl-dev g++ git libpq-dev curl libclang-dev && \
 	curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.1.60/libfdb_c.x86_64.so"
@@ -49,9 +49,6 @@ RUN \
     mv target/release/rivet-client target/release/rivet-isolate-v8-runner target/release/rivet-container-runner /app/dist/
 
 # MARK: Runner
-#
-# Requires OpenSSL 1.1, so we pin this to Debian 11 (which uses OpenSSL 1.1)
-# instead of 12 (which uses OpenSSL 3).
 FROM --platform=linux/amd64 debian:12-slim AS runner
 
 ARG TRAEFIK_VERSION=3.2.1
