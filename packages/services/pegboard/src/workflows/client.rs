@@ -269,9 +269,9 @@ async fn insert_events(ctx: &ActivityCtx, input: &InsertEventsInput) -> GlobalRe
 	)
 	.await?;
 
-	// TODO(RVT-4450): Check for duplicate events
 	for event in &input.events {
-		if inserted_rows.iter().all(|(idx,)| &event.index != idx) {
+		// Filter out events that were actually inserted
+		if inserted_rows.iter().any(|(idx,)| &event.index == idx) {
 			continue;
 		}
 

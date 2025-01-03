@@ -64,6 +64,8 @@ async fn main() -> Result<()> {
 	let _network = unsafe { fdb::boot() };
 	tokio::spawn(utils::fdb_health_check(config.clone()));
 
+	tracing::info!(pid=%std::process::id(), "starting");
+
 	// Write PID to file
 	fs::write(
 		working_path.join("pid"),

@@ -99,6 +99,11 @@ pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			ServiceKind::Oneshot,
 			|config, pools| Box::pin(cluster_default_update::start(config, pools)),
 		),
+		Service::new(
+			"pegboard_metrics_publish",
+			ServiceKind::Singleton,
+			|config, pools| Box::pin(pegboard_metrics_publish::start(config, pools)),
+		),
 	];
 
 	if server_config.is_tls_enabled() {

@@ -10310,6 +10310,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "pegboard-metrics-publish"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-workflow",
+ "pegboard",
+ "rivet-config",
+ "rivet-connection",
+ "rivet-health-checks",
+ "rivet-metrics",
+ "rivet-runtime",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "pegboard-ws"
 version = "0.0.1"
 dependencies = [
@@ -12126,6 +12144,7 @@ dependencies = [
  "nomad-monitor",
  "pegboard-dc-init",
  "pegboard-gc",
+ "pegboard-metrics-publish",
  "pegboard-ws",
  "reqwest 0.12.9",
  "rivet-api",

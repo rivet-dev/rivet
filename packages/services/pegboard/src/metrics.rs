@@ -15,7 +15,7 @@ lazy_static::lazy_static! {
 		*REGISTRY
 	).unwrap();
 
-	pub static ref CLIENT_ACTORS_ALLOCATED: IntCounterVec = register_int_counter_vec_with_registry!(
+	pub static ref CLIENT_ACTORS_ALLOCATED: IntGaugeVec = register_int_gauge_vec_with_registry!(
 		"pegboard_client_actors_allocated",
 		"Total actors allocated on a client.",
 		&["client_id"],

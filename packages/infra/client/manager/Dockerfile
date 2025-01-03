@@ -8,11 +8,10 @@ COPY . .
 RUN \
 	--mount=type=cache,target=/root/.cargo/git \
 	--mount=type=cache,target=/root/.cargo/registry \
-	--mount=type=cache,target=/app/packages/infra/client/target \
-	cd packages/infra/client && \
+	--mount=type=cache,target=/app/target \
 	RUSTFLAGS="--cfg tokio_unstable" cargo build --release --bin rivet-client && \
 	mkdir -p /app/dist && \
-	mv /app/packages/infra/client/target/x86_64-unknown-linux-musl/release/rivet-client /app/dist/rivet-client
+	mv /app/target/x86_64-unknown-linux-musl/release/rivet-client /app/dist/rivet-client
 
 # Create an empty image and copy binaries into it to minimize the size of the image
 FROM scratch

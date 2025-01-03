@@ -557,6 +557,13 @@ impl Ctx {
 				runner_addr: SocketAddr::from(([127, 0, 0, 1], self.config().runner.port())),
 			};
 
+			// Delete existing exit code
+			if let Err(err) = fs::remove_file(working_path.join("exit-code")).await {
+				if err.kind() != std::io::ErrorKind::NotFound {
+					return Err(err.into());
+				}
+			}
+
 			// Write isolate runner config
 			fs::write(
 				working_path.join("config.json"),
@@ -595,7 +602,7 @@ impl Ctx {
 	}
 
 	fn observe_isolate_runner(self: &Arc<Self>, runner: &runner::Handle) {
-		tracing::info!("observing isolate runner");
+		tracing::info!(pid=?runner.pid(), "observing isolate runner");
 
 		// Observe runner
 		let self2 = self.clone();
@@ -610,7 +617,7 @@ impl Ctx {
 				}
 			};
 
-			tracing::error!(?exit_code, "isolate runner exited");
+			tracing::error!(pid=?runner2.pid(), ?exit_code, "isolate runner exited");
 
 			// Update in-memory state
 			let mut guard = self2.isolate_runner.write().await;
