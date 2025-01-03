@@ -113,8 +113,8 @@ impl Handle {
 				} else {
 					tracing::warn!(pid=?self.pid, "runner received another socket, terminating new one");
 
-					metrics::DUPLICATE_ISOLATE_RUNNER
-						.with_label_values(&[])
+					metrics::DUPLICATE_RUNNER
+						.with_label_values(&[&self.pid.to_string()])
 						.inc();
 
 					ws_stream

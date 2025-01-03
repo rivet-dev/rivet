@@ -6,7 +6,7 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> G
 	loop {
 		interval.tick().await;
 
-		run_from_env(config.clone(), pools.clone(), util::timestamp::now()).await?;
+		run_from_env(config.clone(), pools.clone()).await?;
 	}
 }
 
@@ -14,7 +14,6 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> G
 pub async fn run_from_env(
 	config: rivet_config::Config,
 	pools: rivet_pools::Pools,
-	ts: i64,
 ) -> GlobalResult<()> {
 	let client =
 		chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("pegboard-metrics-publish");
@@ -31,11 +30,10 @@ pub async fn run_from_env(
 		sql_fetch_all!(
 			[ctx, (Uuid, i64)]
 			"
-			SELECT last_ping_ts
+			SELECT client_id, last_ping_ts
 			FROM db_pegboard.clients AS OF SYSTEM TIME '-1s'
 			WHERE delete_ts IS NULL
 			",
-			ts - util::duration::seconds(30),
 		),
 		sql_fetch_all!(
 			[ctx, (Uuid, i64)]

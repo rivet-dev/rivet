@@ -30,10 +30,10 @@ lazy_static::lazy_static! {
 		*REGISTRY,
 	).unwrap();
 
-	pub static ref DUPLICATE_ISOLATE_RUNNER: IntCounterVec = register_int_counter_vec_with_registry!(
-		"duplicate_isolate_runner",
-		"Total number of duplicate isolate runners that were found and killed.",
-		&[],
+	pub static ref DUPLICATE_RUNNER: IntCounterVec = register_int_counter_vec_with_registry!(
+		"duplicate_runner",
+		"Total number of duplicate runners that were found and killed.",
+		&["pid"],
 		*REGISTRY,
 	).unwrap();
 

@@ -199,8 +199,6 @@ impl Ctx {
 						if let Some(runner) = &*self2.isolate_runner.read().await {
 							runner.attach_socket(ws_stream).await?;
 						} else {
-							// HACK(RVT-4456): Until we find out where unknown runners (runners that the
-							// manager does not know about) come from, we just kill them
 							tracing::error!("killing unknown runner");
 
 							metrics::UNKNOWN_ISOLATE_RUNNER.with_label_values(&[]).inc();
