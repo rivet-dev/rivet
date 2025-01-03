@@ -1,0 +1,11 @@
+/* This css file contains your color variables, sometimes these get desynced when updated in Framer so it's good that you copy and paste this snippet into your app css */
+/* Bug: https://www.framer.community/c/bugs/color-style-unlinks-when-copying-component-between-projects-resulting-in-potential-value-discrepancy */
+:root {
+    /* Used by index.js, pricing.js */
+    --token-f94bc001-f1ab-463c-abc3-37fb7e541046: rgb(255, 79, 1); 
+    /* Used by index.js */
+    --token-1021654d-251a-4750-952b-de3f7005260e: rgb(136, 136, 136); 
+    /* Used by pricing.js */
+    --token-be2928fe-8496-42f6-9733-c37829997236: rgb(33, 33, 33); 
+    --token-386e994b-f4ee-4375-90a6-b73d3b96e90b: rgb(212, 212, 212); 
+}
