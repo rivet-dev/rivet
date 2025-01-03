@@ -3,11 +3,12 @@
 let
 
 	# Pull new Rust packages
-	moz_overlay = import (builtins.fetchTarball https://github.com/mozilla/nixpkgs-mozilla/archive/9b11a87c0cc54e308fa83aac5b4ee1816d5418a2.tar.gz);
+	moz_overlay = import (builtins.fetchTarball https://github.com/mozilla/nixpkgs-mozilla/archive/ad7af231a95acf65ccc4afa0c766f5c0674ad3f1.tar.gz);
 
 	# Overlay package
 	pkgs = import (fetchTarball {
-		url = "https://github.com/NixOS/nixpkgs/archive/refs/tags/23.05.tar.gz";
+		# Required for https://github.com/NixOS/nixpkgs/issues/208951#issuecomment-2143431252
+		url = "https://github.com/NixOS/nixpkgs/archive/refs/tags/24.11-beta.tar.gz";
 	}) { overlays = [ moz_overlay ]; };
 
 	# TODO(RVT-4163): FoundationDB Nix is only supported on Linux
