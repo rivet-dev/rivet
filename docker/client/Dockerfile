@@ -13,8 +13,7 @@ RUN \
 	--mount=type=secret,id=netrc,target=/root/.netrc,mode=0600 \
 	--mount=type=cache,target=/usr/local/cargo/git,id=client-cargo-git \
 	--mount=type=cache,target=/usr/local/cargo/registry,id=client-cargo-registry \
-	--mount=type=cache,target=/app/packages/infra/client/target,id=client-target \
-	cd packages/infra/client && \
+	--mount=type=cache,target=/app/target,id=client-target \
 	RUSTFLAGS="--cfg tokio_unstable" cargo build -vv --release --bin rivet-client --bin rivet-isolate-v8-runner --bin rivet-container-runner && \
 	mkdir -p /app/dist && \
 	mv target/release/rivet-client target/release/rivet-isolate-v8-runner target/release/rivet-container-runner /app/dist/
