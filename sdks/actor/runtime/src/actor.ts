@@ -175,7 +175,7 @@ export abstract class Actor<
 	 *
 	 * @private
 	 */
-	private constructor(config?: Partial<ActorConfig>) {
+	public constructor(config?: Partial<ActorConfig>) {
 		this.#config = mergeActorConfig(config);
 	}
 
