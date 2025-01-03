@@ -51,6 +51,8 @@ in
 
 			# Fixes "cannot change locale" warning
 			glibcLocales
+
+			just
 		] ++ (
 			# Use the global variable to check if FoundationDB is supported
 			pkgs.lib.optionals isFdbSupported [
@@ -75,6 +77,7 @@ in
 			
 			# Install autocomplete
 			source ${pkgs.bash-completion}/share/bash-completion/bash_completion
+			source ${pkgs.just}/share/bash-completion/completions/just.bash
 
 			export LD_LIBRARY_PATH="${pkgs.clang}/resource-root/lib"
 			export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.strings.makeLibraryPath [ pkgs.openssl ]}"
