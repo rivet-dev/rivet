@@ -93,7 +93,7 @@ impl Build {
 #[derive(Debug, Serialize, Deserialize, JsonSchema, strum::AsRefStr)]
 #[serde(rename_all = "snake_case")]
 pub enum BuildAccess {
-	#[strum(serialize = "pubilc")]
+	#[strum(serialize = "public")]
 	Public,
 	#[strum(serialize = "private")]
 	Private,

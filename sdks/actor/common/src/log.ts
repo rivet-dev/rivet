@@ -8,7 +8,7 @@ export function getLogger(name: string): log.Logger {
 
 export function setupLogging() {
 	const loggerConfig: log.LoggerConfig = {
-		level: (getEnv("LOG_LEVEL") as log.LevelName) ?? "DEBUG",
+		level: (getEnv("LOG_LEVEL") as log.LevelName) ?? "INFO",
 		handlers: ["default"],
 	};
 

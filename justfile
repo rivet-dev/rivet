@@ -4,6 +4,11 @@ docker_compose := "docker compose -f docker/dev-full/docker-compose.yml"
 watch:
 	bacon
 
+[group('run')]
+[no-cd]
+cli *ARGS:
+	cargo run -p rivet-cli -- {{ARGS}}
+
 [group('dev')]
 dev-compose *ARGS:
 	{{docker_compose}} --parallel=1 up -d --build {{ARGS}}
