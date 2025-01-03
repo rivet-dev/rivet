@@ -1,6 +1,6 @@
 {
 	"name": "@rivet-gg/actor-core",
-	"version": "24.6.0",
+	"version": "24.6.1",
 	"license": "Apache-2.0",
 	"exports": "./src/mod.ts",
 	"exclude": ["!src/types/"]
