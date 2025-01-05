@@ -4,7 +4,7 @@ import { parse } from '@std/yaml';
 import { resolve, join, dirname } from '@std/path';
 import dedent from 'dedent';
 
-const SPEC_PATH = resolve(import.meta.dirname, '../../../sdks/api/full/openapi/openapi.yml');
+const SPEC_PATH = resolve(import.meta.dirname, '../../sdks/api/full/openapi/openapi.yml');
 const OUTPUT_PATH = resolve(import.meta.dirname, '../src/content/docs/api');
 
 export async function main() {

@@ -77,7 +77,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-COPY --from=build /app/dist/rivet-server /usr/bin/rivet-server
+COPY --from=builder /app/dist/rivet-server /usr/bin/rivet-server
 
 CMD ["/usr/bin/rivet-server"]
 

@@ -11,6 +11,11 @@
       "sortingKey": "/actors post"
     },
     {
+      "title": "actor.upgradeAll",
+      "href": "/docs/api/actor/upgrade-all",
+      "sortingKey": "/actors/upgrade post"
+    },
+    {
       "title": "actor.destroy",
       "href": "/docs/api/actor/destroy",
       "sortingKey": "/actors/{actor} delete"
@@ -59,6 +64,11 @@
       "title": "actor.regions.list",
       "href": "/docs/api/actor/regions/list",
       "sortingKey": "/regions get"
+    },
+    {
+      "title": "actor.regions.resolve",
+      "href": "/docs/api/actor/regions/resolve",
+      "sortingKey": "/regions/resolve get"
     }
   ]
 }

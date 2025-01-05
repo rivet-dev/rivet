@@ -3,10 +3,10 @@ import $ from "dax";
 const REPOS = [
 	{ name: "rivetgg/rivet-server", prefix: "slim", main: true },
 	{ name: "rivetgg/rivet-server", prefix: "full" },
-	{ name: "rivetgg/rivet-client", prefix: "full-runner", main: true },
+	{ name: "rivetgg/rivet-client", prefix: "full", main: true },
 	{ name: "rivetgg/rivet-client", prefix: "isolate-v8-runner" },
 	{ name: "rivetgg/rivet-client", prefix: "container-runner" },
-	{ name: "rivetgg/rivet", prefix: "monolith", main: true },
+	//{ name: "rivetgg/rivet", prefix: "monolith", main: true },
 ]
 
 export async function tagDocker(opts: { version: string; commit: string; latest: boolean }) {

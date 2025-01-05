@@ -7,12 +7,16 @@ async function npmVersionExists(
 	version: string,
 ): Promise<boolean> {
 	$.logStep("Checking if NPM version exists", `${packageName}@${version}`);
-	const npmCheck = await $`npm view ${packageName}@${version} version`.quiet().noThrow();
+	const npmCheck = await $`npm view ${packageName}@${version} version`.quiet()
+		.noThrow();
 	if (npmCheck.code === 0) {
 		return true;
 	} else {
-		console.log('out', npmCheck.stdout);
-		assertStringIncludes(npmCheck.stderr, `No match found for version ${version}`, "unexpected output");
+		assertStringIncludes(
+			npmCheck.stderr,
+			`No match found for version ${version}`,
+			"unexpected output",
+		);
 		return false;
 	}
 }
@@ -22,22 +26,47 @@ async function jsrVersionExists(
 	version: string,
 ): Promise<boolean> {
 	$.logStep("Checking if JSR version exists", `${packageName}@${version}`);
-	const denoCheck = await $`deno info jsr:${packageName}@${version}`.quiet().noThrow();
+	const denoCheck = await $`deno info jsr:${packageName}@${version}`.quiet()
+		.noThrow();
 	if (denoCheck.code === 0) {
 		return true;
 	} else {
-		assertStringIncludes(denoCheck.stderr, `Could not find version of '${packageName}' that matches specified version constraint '${version}'`, "unexpected output");
+		assertStringIncludes(
+			denoCheck.stderr,
+			`Could not find version of '${packageName}' that matches specified version constraint '${version}'`,
+			"unexpected output",
+		);
 		return false;
 	}
 }
 
 export async function publishSdk(opts: ReleaseOpts) {
 	const packages = [
-		{ path: `${opts.root}/sdks/api/runtime/typescript`, name: "@rivet-gg/api", npm: true },
-		{ path: `${opts.root}/sdks/api/full/typescript`, name: "@rivet-gg/api-full", npm: true },
-		{ path: `${opts.root}/sdks/actor/runtime`, name: "@rivet-gg/actor", jsr: true },
-		{ path: `${opts.root}/sdks/actor/client`, name: "@rivet-gg/actor-client", jsr: true },
-		{ path: `${opts.root}/sdks/actor/core`, name: "@rivet-gg/actor-core", jsr: true },
+		{
+			path: `${opts.root}/sdks/api/runtime/typescript`,
+			name: "@rivet-gg/api",
+			npm: true,
+		},
+		{
+			path: `${opts.root}/sdks/api/full/typescript`,
+			name: "@rivet-gg/api-full",
+			npm: true,
+		},
+		{
+			path: `${opts.root}/sdks/actor/runtime`,
+			name: "@rivet-gg/actor",
+			jsr: true,
+		},
+		{
+			path: `${opts.root}/sdks/actor/client`,
+			name: "@rivet-gg/actor-client",
+			jsr: true,
+		},
+		{
+			path: `${opts.root}/sdks/actor/core`,
+			name: "@rivet-gg/actor-core",
+			jsr: true,
+		},
 	];
 
 	for (const pkg of packages) {
@@ -59,8 +88,8 @@ export async function publishSdk(opts: ReleaseOpts) {
 		// Publish
 		if (pkg.npm) {
 			$.logStep("Publishing to NPM", `${pkg.name}@${opts.version}`);
-			await $`npm version ${opts.version} --no-git-tag-version --allow-same-version`.cwd(pkg.path);
-			await $`npm publish`.cwd(pkg.path)
+			await $`yarn install`.cwd(pkg.path);
+			await $`yarn publish --new-version ${opts.version} --no-git-tag-version`.cwd(pkg.path);
 		}
 
 		if (pkg.jsr) {
@@ -78,7 +107,8 @@ export async function publishSdk(opts: ReleaseOpts) {
 			// --allow-slow-types = we use zod which doesn't support this
 			// --allow-dirty = we change the version on the fly
 			// --set-version = validate the correct version is used
-			await $`deno publish --allow-slow-types --allow-dirty --set-version ${opts.version}`.cwd(pkg.path);
+			await $`deno publish --allow-slow-types --allow-dirty --set-version ${opts.version}`
+				.cwd(pkg.path);
 		}
 	}
 }

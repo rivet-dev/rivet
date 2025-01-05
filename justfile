@@ -91,3 +91,11 @@ graphite-modify:
 	gt modify -a
 	gt submit
 
+[group('github')]
+release-latest VERSION:
+	gh workflow run .github/workflows/release.yaml -f version={{ VERSION }} -f latest=true
+
+[group('github')]
+release-nolatest VERSION:
+	gh workflow run .github/workflows/release.yaml -f version={{ VERSION }} -f latest=false
+

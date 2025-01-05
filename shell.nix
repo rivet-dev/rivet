@@ -22,11 +22,10 @@ in
 			cloc
 			curl
 			docker-client  # Standardize client CLI since older clients have breaking changes
+			just
 			git-lfs
 			jq
 			openssh  # ssh-keygen
-
-			python310Packages.detect-secrets
 
 			# Compilers
 			clang
@@ -52,7 +51,10 @@ in
 			# Fixes "cannot change locale" warning
 			glibcLocales
 
-			just
+			# Python utils
+			pkgs.python3
+			python310Packages.detect-secrets
+			pkgs.awscli2
 		] ++ (
 			# Use the global variable to check if FoundationDB is supported
 			pkgs.lib.optionals isFdbSupported [

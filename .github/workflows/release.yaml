@@ -1,4 +1,4 @@
-name: release-docker
+name: release
 
 on:
   workflow_dispatch:
@@ -13,9 +13,6 @@ on:
         type: boolean
         default: true
 
-  # For testing:
-  # pull_request:
-
 defaults:
   run:
     # Enable fail-fast behavior
@@ -28,19 +25,43 @@ env:
 
 jobs:
   setup:
-    runs-on: [self-hosted, Linux]
-    container:
-      image: denoland/deno:2.1.4
+    name: "Setup"
+    runs-on: ubuntu-24.04
+    permissions:
+      # Allow pushing to GitHub
+      contents: write
+      # Allows JSR to authenticate with GitHub
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Setup
+        env:
+          # Required to authenticate with Git
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ "${{ inputs.enable-feature }}" = "true" ]; then
-              ./scripts/release/main.ts --version ${{ github.event.inputs.version }} --setup --noValidateGit
+          # Configure Git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Install Deno
+          curl -fsSL https://deno.land/x/install/install.sh | sh
+          export PATH=$HOME/.deno/bin:$PATH
+
+          # Authenticate NPM
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+          echo "@rivet-gg:registry=https://registry.npmjs.org/" >> ~/.npmrc
+
+          if [ "${{ inputs.latest }}" = "true" ]; then
+              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --setup
           else
-              ./scripts/release/main.ts --version ${{ github.event.inputs.version }} --no-latest --setup --noValidateGit
+              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --setup
           fi
+
 
   binaries:
     name: "Build & Push Binaries"
@@ -108,11 +129,11 @@ jobs:
               mv MacOSX11.3.sdk.tar.xz tarballs/
               UNATTENDED=yes OSX_VERSION_MIN=10.7 ./build.sh
             )
-            
+
             # Add osxcross to PATH permanently
             echo 'export PATH="/root/osxcross/target/bin:$PATH"' >> ~/.bashrc
             export PATH="/root/osxcross/target/bin:$PATH"
-            
+
             # Verify compiler installation
             echo 'clang path:'
             which x86_64-apple-darwin20.4-clang
@@ -187,17 +208,17 @@ jobs:
         uses: douglascamata/setup-docker-macos-action@v1-alpha
 
       - uses: actions/checkout@v4
-  
+
       - name: Set outputs
         id: vars
         run: echo "sha_short=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
-  
+
       - uses: ./.github/actions/docker-setup
         with:
           docker_username: ${{ secrets.DOCKER_CI_USERNAME }}
           docker_password: ${{ secrets.DOCKER_CI_ACCESS_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN}}
-  
+
       - name: Build & Push (rivetgg/server:full)
         uses: docker/build-push-action@v4
         with:
@@ -209,18 +230,6 @@ jobs:
           platforms: ${{ matrix.platform }}
           secret-files: |
             netrc=${{ runner.temp }}/netrc
-  
-      - name: Build & Push (rivetgg/server:slim)
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: true
-          tags: rivetgg/rivet-server:slim-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
-          file: docker/universal/Dockerfile
-          target: server-slim
-          platforms: ${{ matrix.platform }}
-          secret-files: |
-            netrc=${{ runner.temp }}/netrc
 
       - name: Build & Push (rivetgg/server:slim)
         uses: docker/build-push-action@v4
@@ -234,18 +243,30 @@ jobs:
           secret-files: |
             netrc=${{ runner.temp }}/netrc
 
-      - name: Build & Push (rivetgg/client:full-runner)
+      - name: Build & Push (rivetgg/server:slim)
         uses: docker/build-push-action@v4
         with:
           context: .
           push: true
-          tags: rivetgg/rivet-client:full-runner-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
+          tags: rivetgg/rivet-server:slim-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
           file: docker/universal/Dockerfile
-          target: full-runner
+          target: server-slim
           platforms: ${{ matrix.platform }}
           secret-files: |
             netrc=${{ runner.temp }}/netrc
-  
+
+      - name: Build & Push (rivetgg/client:full)
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: rivetgg/rivet-client:full-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
+          file: docker/universal/Dockerfile
+          target: client-full
+          platforms: ${{ matrix.platform }}
+          secret-files: |
+            netrc=${{ runner.temp }}/netrc
+
       - name: Build & Push (rivetgg/client:isolate-v8-runner)
         uses: docker/build-push-action@v4
         with:
@@ -257,7 +278,7 @@ jobs:
           platforms: ${{ matrix.platform }}
           secret-files: |
             netrc=${{ runner.temp }}/netrc
-  
+
       - name: Build & Push (rivetgg/client:container-runner)
         uses: docker/build-push-action@v4
         with:
@@ -270,19 +291,43 @@ jobs:
           secret-files: |
             netrc=${{ runner.temp }}/netrc
 
+      - name: Build & Push (rivetgg/rivet:monolith)
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: rivetgg/rivet:monolith-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
+          file: docker/universal/Dockerfile
+          target: monolith
+          platforms: ${{ matrix.platform }}
+          secret-files: |
+            netrc=${{ runner.temp }}/netrc
+
   complete:
+    name: "Complete"
     needs: [binaries, docker]
-    runs-on: [self-hosted, Linux]
-    container:
-      image: denoland/deno:2.1.4
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
+      - uses: ./.github/actions/docker-setup
+        with:
+          docker_username: ${{ secrets.DOCKER_CI_USERNAME }}
+          docker_password: ${{ secrets.DOCKER_CI_ACCESS_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN}}
+
       - name: Complete
+        env:
+          R2_RELEASES_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
+          R2_RELEASES_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
         run: |
-          if [ "${{ inputs.enable-feature }}" = "true" ]; then
-              ./scripts/release/main.ts --version ${{ github.event.inputs.version }} --complete
+          # Install Deno
+          curl -fsSL https://deno.land/x/install/install.sh | sh
+          export PATH=$HOME/.deno/bin:$PATH
+
+          if [ "${{ inputs.latest }}" = "true" ]; then
+              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --complete
           else
-              ./scripts/release/main.ts --version ${{ github.event.inputs.version }} --no-latest --complete
+              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --complete
           fi
 

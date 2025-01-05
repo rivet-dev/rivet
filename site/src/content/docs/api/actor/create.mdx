@@ -36,6 +36,6 @@ await RIVET.actor.create({
 </CodeGroup>
 
 ## Schema
-<JsonSchemaPreview className='not-prose mt-4' title='Request Parameters' schema={{"type":"object","properties":{"project":{"in":"query","type":"string"},"environment":{"in":"query","type":"string"}},"required":[]}} defs={API_SCHEMA.definitions}/>
+<JsonSchemaPreview className='not-prose mt-4' title='Request Parameters' schema={{"type":"object","properties":{"project":{"in":"query","type":"string"},"environment":{"in":"query","type":"string"},"endpoint_type":{"in":"query","$ref":"#/components/schemas/ActorEndpointType"}},"required":[]}} defs={API_SCHEMA.definitions}/>
 <JsonSchemaPreview className='not-prose mt-4' title='Request' schema={{"$ref":"#/components/schemas/ActorCreateActorRequest"}} defs={API_SCHEMA.definitions}/>
 <JsonSchemaPreview className='not-prose mt-4' title='Response' schema={{"$ref":"#/components/schemas/ActorCreateActorResponse"}} defs={API_SCHEMA.definitions}/>

@@ -33,5 +33,5 @@ await RIVET.actor.list({
 </CodeGroup>
 
 ## Schema
-<JsonSchemaPreview className='not-prose mt-4' title='Request Parameters' schema={{"type":"object","properties":{"project":{"in":"query","type":"string"},"environment":{"in":"query","type":"string"},"tags_json":{"in":"query","type":"string"},"include_destroyed":{"in":"query","type":"boolean"},"cursor":{"in":"query","type":"string","format":"uuid"}},"required":[]}} defs={API_SCHEMA.definitions}/>
+<JsonSchemaPreview className='not-prose mt-4' title='Request Parameters' schema={{"type":"object","properties":{"project":{"in":"query","type":"string"},"environment":{"in":"query","type":"string"},"endpoint_type":{"in":"query","$ref":"#/components/schemas/ActorEndpointType"},"tags_json":{"in":"query","type":"string"},"include_destroyed":{"in":"query","type":"boolean"},"cursor":{"in":"query","type":"string","format":"uuid"}},"required":[]}} defs={API_SCHEMA.definitions}/>
 <JsonSchemaPreview className='not-prose mt-4' title='Response' schema={{"$ref":"#/components/schemas/ActorListActorsResponse"}} defs={API_SCHEMA.definitions}/>

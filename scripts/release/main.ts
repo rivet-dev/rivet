@@ -33,7 +33,6 @@ async function main() {
 			"noValidateGit",
 
 			// Granular steps
-			"format",
 			"updateVersion",
 			"generateFern",
 			"gitCommit",
@@ -42,6 +41,7 @@ async function main() {
 			"publishSdk",
 			"tagDocker",
 			"updateArtifacts",
+			"mergeRelease",
 
 			// Batch steps
 			"setup",
@@ -69,7 +69,7 @@ async function main() {
 		commit = args.commit;
 	} else {
 		// Read commit
-		commit = await getCommit();
+		commit = await $`git rev-parse HEAD`.text();
 	}
 
 	const opts: ReleaseOpts = {
@@ -87,13 +87,6 @@ async function main() {
 
 	if (!args.noValidateGit) {
 		await validateGit(opts);
-	}
-
-	if (args.format || args.setup) {
-		$.logStep("Formatting", "");
-		await $.logGroup(async () => {
-			await $`cargo fmt`;
-		});
 	}
 
 	if (args.updateVersion || args.setup) {
@@ -155,8 +148,14 @@ async function main() {
 		});
 	}
 
+	if (args.mergeRelease || args.complete) {
+		$.logStep("Merging Release", "");
+		await $.logGroup(async () => {
+			await $`gh pr merge release-please--branches--main --auto`;
+		});
+	}
+
 	$.logStep("Complete");
-	$.logWarn("Important", "Make sure to release the Release Please PR");
 }
 
 if (import.meta.main) {
