@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/).
 
+## [24.6.2-rc.1'](https://github.com/rivet-gg/rivet/compare/v24.6.1...v24.6.2-rc.1') (2025-01-05)
+
+
+### Bug Fixes
+
+* **fern:** fix generation script with latest nix-shell version on macos ([#1794](https://github.com/rivet-gg/rivet/issues/1794)) ([2acda68](https://github.com/rivet-gg/rivet/commit/2acda689598f8cbc18b0d14aeaa3e79d39474b8a))
+* **release:** correct quotes on release please commit message ([c38d89b](https://github.com/rivet-gg/rivet/commit/c38d89ba8eb6682485a1231029c6dd9d8399b0f7))
+* **release:** update release script ([#1799](https://github.com/rivet-gg/rivet/issues/1799)) ([ae7f5d4](https://github.com/rivet-gg/rivet/commit/ae7f5d40e25bb7da5b0ccc588331a28a72d27c7c))
+
+
+### Chores
+
+* **docker:** add universal dockerfile ([#1792](https://github.com/rivet-gg/rivet/issues/1792)) ([89e31b2](https://github.com/rivet-gg/rivet/commit/89e31b2848a9cb6f28e625d2a7df1d7ee4962bf6))
+* **fern:** remove building typescript archives ([#1793](https://github.com/rivet-gg/rivet/issues/1793)) ([bc02f63](https://github.com/rivet-gg/rivet/commit/bc02f633ce39a51f2e5385923e023a9fc36448b1))
+* **release:** update version to 24.6.2-rc.1 ([55f9c0b](https://github.com/rivet-gg/rivet/commit/55f9c0b34e202677d94783692c615c8d871d0a62))
+* update release script to be fully automated dispatch ([#1795](https://github.com/rivet-gg/rivet/issues/1795)) ([7d105ba](https://github.com/rivet-gg/rivet/commit/7d105baeeb1631dec50d42715888b927aa6b438c))
+
 ## [24.6.1](https://github.com/rivet-gg/rivet/compare/v24.6.0...v24.6.1) (2025-01-03)
 
 
