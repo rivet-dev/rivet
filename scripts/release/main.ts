@@ -1,11 +1,10 @@
 #!/usr/bin/env -S deno run -A
 
-import { copy } from "jsr:@std/fs";
 import { resolve } from "jsr:@std/path";
 import { assert, assertEquals, assertExists } from "jsr:@std/assert";
-import { S3Bucket } from "https://deno.land/x/s3@0.5.0/mod.ts";
 import { publishSdk } from "./sdk.ts";
- import { configureReleasePlease } from "./release_please.ts";
+import { updateVersion } from "./update_version.ts";
+import { configureReleasePlease } from "./release_please.ts";
 import { getCommit, validateGit } from "./git.ts";
 import { parseArgs } from "jsr:@std/cli";
 import $ from "dax";
@@ -23,9 +22,31 @@ export interface ReleaseOpts {
 }
 
 async function main() {
-	// Parse args
+	// Parse args:
+	// - latest = tag version as the latest version
+	// - noValidateGit = used for testing without using the main branch
+	// - setup & complete = run all pre-build or post-build steps, used in CI for batch jbos
 	const args = parseArgs(Deno.args, {
-		boolean: ["latest", "publishSdk", "tagDocker", "updateArtifacts", "configureReleasePlease"],
+		boolean: [
+			// Config
+			"latest",
+			"noValidateGit",
+
+			// Granular steps
+			"format",
+			"updateVersion",
+			"generateFern",
+			"gitCommit",
+			"configureReleasePlease",
+			"gitPush",
+			"publishSdk",
+			"tagDocker",
+			"updateArtifacts",
+
+			// Batch steps
+			"setup",
+			"complete",
+		],
 		negatable: ["latest"],
 		string: ["version", "commit"],
 		default: {
@@ -40,7 +61,6 @@ async function main() {
 		),
 		"version must be a valid semantic version",
 	);
-
 
 	// Setup opts
 	let commit: string;
@@ -65,36 +85,73 @@ async function main() {
 
 	assertEquals(opts.commit.length, 7, "must use 8 char short commit");
 
-	await validateGit(opts);
+	if (!args.noValidateGit) {
+		await validateGit(opts);
+	}
 
-	// Determine which steps to run
-	const runAllSteps = !args.publishSdk && !args.tagDocker && !args.updateArtifacts && !args.configureReleasePlease;
+	if (args.format || args.setup) {
+		$.logStep("Formatting", "");
+		await $.logGroup(async () => {
+			await $`cargo fmt`;
+		});
+	}
 
-	if (args.publishSdk || runAllSteps) {
+	if (args.updateVersion || args.setup) {
+		$.logStep("Updating Version", "");
+		await $.logGroup(async () => {
+			await updateVersion(opts);
+		});
+	}
+
+	if (args.generateFern || args.setup) {
+		$.logStep("Generating Fern", "");
+		await $.logGroup(async () => {
+			await $`./scripts/fern/gen.sh`;
+		});
+	}
+
+	if (args.publishSdk || args.setup) {
 		$.logStep("Publishing SDKs", "");
 		await $.logGroup(async () => {
 			await publishSdk(opts);
 		});
 	}
 
-	if (args.tagDocker || runAllSteps) {
+	if (args.gitCommit || args.setup) {
+		assert(!args.noValidateGit, "cannot commit without git validation");
+		$.logStep("Committing Changes", "");
+		await $.logGroup(async () => {
+			await $`git commit --allow-empty -m ${`chore(release): update version to ${opts.version}`}`;
+		});
+	}
+
+	if (args.configureReleasePlease || args.setup) {
+		assert(!args.noValidateGit, "cannot configure release please without git validation");
+		$.logStep("Configuring Release Please", "");
+		await $.logGroup(async () => {
+			await configureReleasePlease(opts);
+		});
+	}
+
+	if (args.gitPush || args.setup) {
+		assert(!args.noValidateGit, "cannot push without git validation");
+		$.logStep("Pushing Commits", "");
+		await $.logGroup(async () => {
+			await $`git push`;
+		});
+	}
+
+	if (args.tagDocker || args.complete) {
 		$.logStep("Tagging Docker", "");
 		await $.logGroup(async () => {
 			await tagDocker(opts);
 		});
 	}
 
-	if (args.updateArtifacts || runAllSteps) {
+	if (args.updateArtifacts || args.complete) {
 		$.logStep("Updating Artifacts", "");
 		await $.logGroup(async () => {
 			await updateArtifacts(opts);
-		});
-	}
-
-	if (args.configureReleasePlease || runAllSteps) {
-		$.logStep("Configuring Release Please", "");
-		await $.logGroup(async () => {
-			await configureReleasePlease(opts);
 		});
 	}
 
@@ -106,14 +163,3 @@ if (import.meta.main) {
 	main();
 }
 
-// More steps:
-// - Update version
-//	- Default version in initiated project
-//	- Version for docs
-//	- Install instructions in readme
-//	- Cargo.toml
-// - Docker images & docker monolith (tag with version & latest)
-// - Copy release binaries to latest tag
-// - Create rename commit for release please (release please will tag repo)
-// - Commit changes for version update in JSR/NPM
-// - Merge release please

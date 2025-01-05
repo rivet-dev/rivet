@@ -316,7 +316,11 @@ async fn multiple_exclusive_tags(ctx: TestCtx) {
 			("current".to_string(), Some("true".to_string())),
 			("other".to_string(), Some("tag".to_string())),
 		]),
-		exclusive_tags: Some(vec!["version".to_string(), "current".to_string(), "other".to_string()]),
+		exclusive_tags: Some(vec![
+			"version".to_string(),
+			"current".to_string(),
+			"other".to_string(),
+		]),
 	})
 	.await
 	.unwrap();

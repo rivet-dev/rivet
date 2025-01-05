@@ -470,7 +470,10 @@ pub async fn handle_commands(
 	// Update actor state based on commands
 	for command in commands {
 		if let protocol::Command::SignalActor {
-			actor_id, signal, ignore_future_state, ..
+			actor_id,
+			signal,
+			ignore_future_state,
+			..
 		} = command
 		{
 			if matches!(signal.try_into()?, Signal::SIGTERM | Signal::SIGKILL) {

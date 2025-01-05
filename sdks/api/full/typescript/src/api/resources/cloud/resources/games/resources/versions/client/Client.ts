@@ -13,6 +13,8 @@ export declare namespace Versions {
     interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
         token?: core.Supplier<core.BearerToken | undefined>;
+        /** Override the X-API-Version header */
+        xApiVersion?: "24.6.2-rc.1";
         fetcher?: core.FetchFunction;
     }
 
@@ -25,6 +27,8 @@ export declare namespace Versions {
         abortSignal?: AbortSignal;
         /** Additional headers to include in the request. */
         headers?: Record<string, string>;
+        /** Override the X-API-Version header */
+        xApiVersion?: "24.6.2-rc.1";
     }
 }
 
@@ -122,6 +126,7 @@ export class Versions {
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
+                "X-API-Version": requestOptions?.xApiVersion ?? this._options?.xApiVersion ?? "24.6.2-rc.1",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
                 ...requestOptions?.headers,
@@ -261,6 +266,7 @@ export class Versions {
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
+                "X-API-Version": requestOptions?.xApiVersion ?? this._options?.xApiVersion ?? "24.6.2-rc.1",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
                 ...requestOptions?.headers,
@@ -459,6 +465,7 @@ export class Versions {
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
+                "X-API-Version": requestOptions?.xApiVersion ?? this._options?.xApiVersion ?? "24.6.2-rc.1",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
                 ...requestOptions?.headers,
@@ -600,6 +607,7 @@ export class Versions {
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
+                "X-API-Version": requestOptions?.xApiVersion ?? this._options?.xApiVersion ?? "24.6.2-rc.1",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
                 ...requestOptions?.headers,

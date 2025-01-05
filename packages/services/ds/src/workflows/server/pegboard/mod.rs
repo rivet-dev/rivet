@@ -758,9 +758,12 @@ async fn reschedule_actor(
 					(retry_count - 1).try_into()?,
 				);
 				let next = backoff.step().expect("should not have max retry");
-				
+
 				// Sleep for backoff or destroy early
-				if let Some(sig) = ctx.listen_with_timeout::<Destroy>(next - Instant::now()).await? {
+				if let Some(sig) = ctx
+					.listen_with_timeout::<Destroy>(next - Instant::now())
+					.await?
+				{
 					tracing::debug!("destroying before actor start");
 
 					return Ok(Loop::Break(Some(sig)));

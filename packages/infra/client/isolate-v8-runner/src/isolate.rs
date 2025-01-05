@@ -10,7 +10,6 @@ use std::{
 	thread::JoinHandle,
 };
 
-use pegboard_actor_kv::ActorKv;
 use anyhow::*;
 use deno_core::{
 	error::JsError, v8, v8::CreateParams, ModuleId, ModuleSpecifier, StaticModuleLoader,
@@ -26,6 +25,7 @@ use deno_runtime::{
 };
 use nix::{libc, unistd::pipe};
 use pegboard::protocol;
+use pegboard_actor_kv::ActorKv;
 use pegboard_config::isolate_runner as config;
 use tokio::{fs, sync::mpsc};
 use uuid::Uuid;

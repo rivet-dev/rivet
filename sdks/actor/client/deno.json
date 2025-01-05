@@ -1,6 +1,6 @@
 {
 	"name": "@rivet-gg/actor-client",
-	"version": "24.6.2",
+	"version": "24.6.2-rc.1",
 	"license": "Apache-2.0",
 	"imports": {
 		"@std/assert": "jsr:@std/assert@^1.0.8",

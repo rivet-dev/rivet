@@ -14,8 +14,8 @@ pub(crate) mod install;
 pub(crate) mod undrain;
 
 use crate::{
-	types::{Pool, PoolType, Provider},
 	metrics,
+	types::{Pool, PoolType, Provider},
 };
 
 #[derive(Debug, Serialize, Deserialize)]

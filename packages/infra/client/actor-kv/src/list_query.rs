@@ -1,7 +1,7 @@
 use anyhow::*;
 use foundationdb::tuple::Subspace;
-use serde::Deserialize;
 use indexmap::IndexMap;
+use serde::Deserialize;
 
 use crate::{
 	entry::EntryBuilder,

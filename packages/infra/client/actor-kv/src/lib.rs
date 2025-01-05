@@ -9,13 +9,13 @@ pub use entry::Entry;
 use entry::{EntryBuilder, SubKey};
 use foundationdb::{self as fdb, directory::Directory, tuple::Subspace};
 use futures_util::{StreamExt, TryStreamExt};
+use indexmap::IndexMap;
 use key::Key;
 use list_query::ListLimitReached;
 pub use list_query::ListQuery;
 pub use metadata::Metadata;
 use pegboard::protocol;
 use prost::Message;
-use indexmap::IndexMap;
 use utils::{owner_segment, validate_entries, validate_keys, TransactionExt};
 
 mod entry;
@@ -238,7 +238,8 @@ impl ActorKv {
 
 								// Short circuit when limit is reached. This relies on data from the stream
 								// being in order.
-								if size == limit && matches!(entry, indexmap::map::Entry::Vacant(_)) {
+								if size == limit && matches!(entry, indexmap::map::Entry::Vacant(_))
+								{
 									return Err(ListLimitReached(acc).into());
 								}
 

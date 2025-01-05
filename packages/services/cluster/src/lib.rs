@@ -1,10 +1,10 @@
 use chirp_workflow::prelude::*;
 
+pub mod metrics;
 pub mod ops;
 pub mod types;
 pub mod util;
 pub mod workflows;
-pub mod metrics;
 
 pub fn registry() -> WorkflowResult<Registry> {
 	use workflows::*;

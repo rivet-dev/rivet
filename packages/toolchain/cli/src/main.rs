@@ -18,6 +18,7 @@ const STYLES: styling::Styles = styling::Styles::styled()
 	version = concat!(env!("CARGO_PKG_VERSION"), " (", env!("VERGEN_GIT_SHA"), ")"),
 	long_version = concat!(
 		"\n\n",
+		"version: ", env!("CARGO_PKG_VERSION"), "\n",
 		"git sha: ", env!("VERGEN_GIT_SHA"), "\n",
 		"build timestamp: ", env!("VERGEN_BUILD_TIMESTAMP"), "\n",
 		"build target: ", env!("VERGEN_CARGO_TARGET_TRIPLE"), "\n",

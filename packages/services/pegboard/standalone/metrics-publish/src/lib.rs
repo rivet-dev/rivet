@@ -1,8 +1,7 @@
 use chirp_workflow::prelude::*;
 
 pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> GlobalResult<()> {
-	let mut interval =
-		tokio::time::interval(std::time::Duration::from_secs(15));
+	let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
 	loop {
 		interval.tick().await;
 

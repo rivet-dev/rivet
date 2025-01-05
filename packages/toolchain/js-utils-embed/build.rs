@@ -22,9 +22,7 @@ async fn main() -> Result<()> {
 	}
 
 	// Create the target directory first
-	let copy_options = CopyOptions::new()
-		.overwrite(true)
-		.copy_inside(true);
+	let copy_options = CopyOptions::new().overwrite(true).copy_inside(true);
 
 	copy(&js_utils_path, &out_js_utils_path, &copy_options).with_context(|| {
 		format!(

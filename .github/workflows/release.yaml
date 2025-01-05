@@ -1,0 +1,288 @@
+name: release-docker
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version'
+        required: true
+        type: string
+      latest:
+        description: 'Latest'
+        required: true
+        type: boolean
+        default: true
+
+  # For testing:
+  # pull_request:
+
+defaults:
+  run:
+    # Enable fail-fast behavior
+    shell: bash -e {0}
+
+env:
+  # Disable incremental compilation for faster from-scratch builds
+  CARGO_INCREMENTAL: 0
+  RUSTFLAGS: "--cfg tokio_unstable"
+
+jobs:
+  setup:
+    runs-on: [self-hosted, Linux]
+    container:
+      image: denoland/deno:2.1.4
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup
+        run: |
+          if [ "${{ inputs.enable-feature }}" = "true" ]; then
+              ./scripts/release/main.ts --version ${{ github.event.inputs.version }} --setup --noValidateGit
+          else
+              ./scripts/release/main.ts --version ${{ github.event.inputs.version }} --no-latest --setup --noValidateGit
+          fi
+
+  binaries:
+    name: "Build & Push Binaries"
+    needs: [setup]
+    strategy:
+      matrix:
+        include:
+          - platform: x86_64-unknown-linux-gnu
+            runner: [self-hosted, Linux, X64]
+            suffix: x86-linux
+          - platform: x86_64-pc-windows-gnu
+            runner: [self-hosted, Linux, X64]
+            suffix: x86-windows
+          - platform: x86_64-apple-darwin
+            runner: [self-hosted, Linux, X64]
+            suffix: x86-mac
+          - platform: aarch64-apple-darwin
+            runner: [self-hosted, Linux, ARM64]
+            suffix: aarch64-mac
+    runs-on: ${{ matrix.runner }}
+    container:
+      image: rust:1.82.0
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        env:
+          # Expose correct target since we're building cross-platform
+          OVERRIDE_TARGET: ${{ matrix.platform }}
+
+          # Expose env
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: x86_64-linux-gnu-gcc
+          CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER: x86_64-apple-darwin20.4-clang
+          CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER: aarch64-apple-darwin20.4-clang
+          CC_x86_64_apple_darwin: x86_64-apple-darwin20.4-clang
+          CXX_x86_64_apple_darwin: x86_64-apple-darwin20.4-clang++
+          CC_aarch64_apple_darwin: aarch64-apple-darwin20.4-clang
+          CXX_aarch64_apple_darwin: aarch64-apple-darwin20.4-clang++
+          MACOSX_DEPLOYMENT_TARGET: "10.7"
+
+          # Expose token for pulling GH artifacts
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Install required components for each platform
+          apt-get update
+          if [[ "${{ matrix.platform }}" == "x86_64-pc-windows-gnu" ]]; then
+            echo "Installing Windows components"
+
+            apt-get install -y gcc-mingw-w64-x86-64
+          elif [[ "${{ matrix.platform }}" == "x86_64-unknown-linux-gnu" ]]; then
+            echo "Installing Linux components"
+
+            apt-get install -y gcc-x86-64-linux-gnu libc6-dev-amd64-cross
+          elif [[ "${{ matrix.platform }}" == "x86_64-apple-darwin" || "${{ matrix.platform }}" == "aarch64-apple-darwin" ]]; then
+            echo "Installing macOS components"
+
+            apt-get install -y clang cmake patch libxml2-dev wget xz-utils curl
+
+            # Install osxcross
+            git config --global --add safe.directory '*'
+            git clone https://github.com/tpoechtrager/osxcross /root/osxcross
+            (
+              cd /root/osxcross
+              wget -nc https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz
+              mv MacOSX11.3.sdk.tar.xz tarballs/
+              UNATTENDED=yes OSX_VERSION_MIN=10.7 ./build.sh
+            )
+            
+            # Add osxcross to PATH permanently
+            echo 'export PATH="/root/osxcross/target/bin:$PATH"' >> ~/.bashrc
+            export PATH="/root/osxcross/target/bin:$PATH"
+            
+            # Verify compiler installation
+            echo 'clang path:'
+            which x86_64-apple-darwin20.4-clang
+            echo 'clang version:'
+            x86_64-apple-darwin20.4-clang --version
+          fi
+
+          # Install targets
+          rustup target add ${{ matrix.platform }}
+
+          mkdir -p /root/.cargo && \
+          echo '\
+          [target.x86_64-unknown-linux-gnu]\n\
+          linker = "x86_64-linux-gnu-gcc"\n\
+          \n\
+          [target.x86_64-pc-windows-gnu]\n\
+          linker = "x86_64-w64-mingw32-gcc"\n\
+          \n\
+          [target.x86_64-apple-darwin]\n\
+          linker = "x86_64-apple-darwin20.4-clang"\n\
+          ar = "x86_64-apple-darwin20.4-ar"\n\
+          \n\
+          [target.aarch64-apple-darwin]\n\
+          linker = "aarch64-apple-darwin20.4-clang"\n\
+          ar = "aarch64-apple-darwin20.4-ar"\n\
+          ' > /root/.cargo/config.toml
+
+          # Build
+          cargo build --bin rivet --release --target ${{ matrix.platform }}
+
+      - name: Upload artifacts
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
+        run: |
+          apt-get update
+          apt-get install -y awscli
+
+          COMMIT_SHA_SHORT="${GITHUB_SHA::7}"
+          BINARY_PATH="target/${{ matrix.platform }}/release/rivet"
+          BINARY_NAME="rivet-${{ matrix.suffix }}"
+          if [[ "${{ matrix.platform }}" == "x86_64-pc-windows-gnu" ]]; then
+            BINARY_PATH="${BINARY_PATH}.exe"
+            BINARY_NAME="${BINARY_NAME}.exe"
+          fi
+
+          aws s3 cp \
+            "${BINARY_PATH}" \
+            "s3://rivet/${COMMIT_SHA_SHORT}/${BINARY_NAME}" \
+            --region auto \
+            --endpoint-url https://2a94c6a0ced8d35ea63cddc86c2681e7.r2.cloudflarestorage.com/rivet-releases
+
+  docker:
+    name: "Build & Push Docker Images"
+    needs: [setup]
+    strategy:
+      matrix:
+        include:
+          # TODO(RVT-4479): Add back ARM builder once manifest generation fixed
+          # - platform: linux/arm64
+          #   runner: [self-hosted, Linux, ARM64]
+          #   arch_suffix: -arm64
+          - platform: linux/x86_64
+            runner: [self-hosted, Linux, X64]
+            # TODO: Replace with appropriate arch_suffix when needed
+            # arch_suffix: -amd64
+            arch_suffix: ''
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Setup Docker on macOS
+        if: runner.os == 'macOS'
+        uses: douglascamata/setup-docker-macos-action@v1-alpha
+
+      - uses: actions/checkout@v4
+  
+      - name: Set outputs
+        id: vars
+        run: echo "sha_short=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+  
+      - uses: ./.github/actions/docker-setup
+        with:
+          docker_username: ${{ secrets.DOCKER_CI_USERNAME }}
+          docker_password: ${{ secrets.DOCKER_CI_ACCESS_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN}}
+  
+      - name: Build & Push (rivetgg/server:full)
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: rivetgg/rivet-server:full-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
+          file: docker/universal/Dockerfile
+          target: server-full
+          platforms: ${{ matrix.platform }}
+          secret-files: |
+            netrc=${{ runner.temp }}/netrc
+  
+      - name: Build & Push (rivetgg/server:slim)
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: rivetgg/rivet-server:slim-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
+          file: docker/universal/Dockerfile
+          target: server-slim
+          platforms: ${{ matrix.platform }}
+          secret-files: |
+            netrc=${{ runner.temp }}/netrc
+
+      - name: Build & Push (rivetgg/server:slim)
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: rivetgg/rivet-server:slim-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
+          file: docker/universal/Dockerfile
+          target: server-slim
+          platforms: ${{ matrix.platform }}
+          secret-files: |
+            netrc=${{ runner.temp }}/netrc
+
+      - name: Build & Push (rivetgg/client:full-runner)
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: rivetgg/rivet-client:full-runner-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
+          file: docker/universal/Dockerfile
+          target: full-runner
+          platforms: ${{ matrix.platform }}
+          secret-files: |
+            netrc=${{ runner.temp }}/netrc
+  
+      - name: Build & Push (rivetgg/client:isolate-v8-runner)
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: rivetgg/rivet-client:isolate-v8-runner-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
+          file: docker/universal/Dockerfile
+          target: isolate-v8-runner
+          platforms: ${{ matrix.platform }}
+          secret-files: |
+            netrc=${{ runner.temp }}/netrc
+  
+      - name: Build & Push (rivetgg/client:container-runner)
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: rivetgg/rivet-client:container-runner-${{ steps.vars.outputs.sha_short }}${{ matrix.arch_suffix }}
+          file: docker/universal/Dockerfile
+          target: container-runner
+          platforms: ${{ matrix.platform }}
+          secret-files: |
+            netrc=${{ runner.temp }}/netrc
+
+  complete:
+    needs: [binaries, docker]
+    runs-on: [self-hosted, Linux]
+    container:
+      image: denoland/deno:2.1.4
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Complete
+        run: |
+          if [ "${{ inputs.enable-feature }}" = "true" ]; then
+              ./scripts/release/main.ts --version ${{ github.event.inputs.version }} --complete
+          else
+              ./scripts/release/main.ts --version ${{ github.event.inputs.version }} --no-latest --complete
+          fi
+

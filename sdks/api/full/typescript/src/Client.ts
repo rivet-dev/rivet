@@ -20,6 +20,8 @@ export declare namespace RivetClient {
     interface Options {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
         token?: core.Supplier<core.BearerToken | undefined>;
+        /** Override the X-API-Version header */
+        xApiVersion?: "24.6.2-rc.1";
         fetcher?: core.FetchFunction;
     }
 
@@ -32,6 +34,8 @@ export declare namespace RivetClient {
         abortSignal?: AbortSignal;
         /** Additional headers to include in the request. */
         headers?: Record<string, string>;
+        /** Override the X-API-Version header */
+        xApiVersion?: "24.6.2-rc.1";
     }
 }
 

@@ -9,8 +9,8 @@ use rivet_operation::prelude::proto::{self, backend::pkg::token};
 use ssh2::Session;
 
 use crate::{
-	types::{Datacenter, PoolType},
 	metrics,
+	types::{Datacenter, PoolType},
 };
 
 mod install_scripts;
