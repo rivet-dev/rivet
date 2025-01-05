@@ -70,7 +70,7 @@ Edge server:
 
    ```bash
    # Run in the root of the Rivet repo
-   docker build -t rivet-server -f docker/dev-full/server.Dockerfile .
+   docker build -t rivet-server -f docker/universal/Dockerfile --target server-full .
    ```
 
    ```bash
@@ -120,7 +120,7 @@ Once running, you can visit the dashboard at <Link href='http://localhost:8080'>
 
    ```bash
    # Run in the root of the Rivet repo
-   docker build -t rivet-client -f docker/dev-full/client.Dockerfile .
+   docker build -t rivet-client -f docker/universal/Dockerfile --target client-full .
    ```
 
    ```bash

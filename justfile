@@ -11,11 +11,11 @@ cli *ARGS:
 
 [group('dev')]
 dev-compose *ARGS:
-	{{docker_compose}} --parallel=1 up -d --build {{ARGS}}
+	{{docker_compose}} up -d --build {{ARGS}}
 
 [group('dev')]
 dev-up-all:
-	{{docker_compose}} --parallel=1 up -d --build
+	{{docker_compose}} up -d --build
 
 [group('dev')]
 dev-up-all-nobuild:

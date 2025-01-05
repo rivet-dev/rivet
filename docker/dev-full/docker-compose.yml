@@ -2,7 +2,8 @@ services:
   rivet-server:
     build:
       context: ../..
-      dockerfile: docker/dev-full/server.Dockerfile
+      dockerfile: docker/universal/Dockerfile
+      target: server-full
     restart: unless-stopped
     command: /usr/bin/rivet-server start
     environment:
@@ -46,7 +47,7 @@ services:
   rivet-shell:
     build:
       context: ../..
-      dockerfile: docker/dev-full/server.Dockerfile
+      dockerfile: docker/universal/Dockerfile
     restart: unless-stopped
     command: sleep infinity
     environment:
@@ -100,7 +101,8 @@ services:
   rivet-client:
     build:
       context: ../..
-      dockerfile: docker/dev-full/client.Dockerfile
+      dockerfile: docker/universal/Dockerfile
+      target: client-full
     # TODO(RVT-4168): Compile libfdb from scratch for ARM
     platform: linux/amd64
     restart: unless-stopped

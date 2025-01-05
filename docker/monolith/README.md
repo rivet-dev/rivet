@@ -10,7 +10,7 @@ in to an existing Docker Compose environment.
 Before running the image, it needs to be built:
 
 ```bash
-docker build -f docker/monolith/Dockerfile -t rivet .
+docker build -f docker/universal/Dockerfile --target monolith -t rivet .
 ```
 
 ### Run via `docker run`

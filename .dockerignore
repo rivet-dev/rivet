@@ -2,7 +2,11 @@
 
 !Cargo.lock
 !Cargo.toml
-!packages
-!resources/legacy/proto
 !sdks/api/full/rust/Cargo.toml
 !sdks/api/full/rust/src
+!packages
+!resources/legacy/proto
+
+!docker/monolith
+docker/monolith/*.md
+

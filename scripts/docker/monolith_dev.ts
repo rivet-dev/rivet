@@ -14,7 +14,7 @@ if (!args["no-clean"]) {
 
 if (!args["no-build"]) {
 	console.log("Building Rivet");
-	await $`docker build -f docker/monolith/Dockerfile -t rivet .`;
+	await $`docker build -f docker/universal/Dockerfile --target monolith -t rivet .`;
 }
 
 console.log("Starting Rivet");
