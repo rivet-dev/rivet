@@ -9,6 +9,7 @@ import {
 	cn,
 } from "@rivet-gg/components";
 import { Icon, faBars } from "@rivet-gg/icons";
+import { ErrorBoundary } from "@sentry/react";
 import { Link } from "@tanstack/react-router";
 import { Breadcrumbs } from "../breadcrumbs/breadcrumbs";
 import { MobileBreadcrumbs } from "../breadcrumbs/mobile-breadcrumbs";
@@ -153,7 +154,24 @@ export function Header({ variant = "opaque" }: HeaderProps) {
 								Feedback
 							</Link>
 						</NavItem>
-						<Changelog />
+						<ErrorBoundary
+							fallback={
+								<NavItem
+									asChild
+									className="hidden md:inline-block"
+								>
+									<a
+										href="https://rivet.gg/changelog"
+										target="_blank"
+										rel="noreferrer"
+									>
+										Changelog
+									</a>
+								</NavItem>
+							}
+						>
+							<Changelog />
+						</ErrorBoundary>
 						<NavItem asChild className="hidden md:inline-block">
 							<a
 								href="https://rivet.gg/support"
