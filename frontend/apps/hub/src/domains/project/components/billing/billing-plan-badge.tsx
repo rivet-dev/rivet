@@ -6,9 +6,9 @@ import { useIntersectionObserver } from "usehooks-ts";
 import { projectBillingQueryOptions } from "../../queries";
 
 const BILLING_PLAN_LABELS = {
-	[Rivet.ee.billing.Plan.Indie]: "Indie Plan",
-	[Rivet.ee.billing.Plan.Studio]: "Studio Plan",
-	[Rivet.ee.billing.Plan.Trial]: "Trial Plan",
+	[Rivet.ee.billing.Plan.Indie]: "Pro",
+	[Rivet.ee.billing.Plan.Studio]: "Team",
+	[Rivet.ee.billing.Plan.Trial]: "Free",
 };
 
 const BILLING_PLAN_COLORS = {
@@ -59,8 +59,6 @@ export function BillingPlanBadge({ projectId }: BillingPlanBadgeProps) {
 	return <Content projectId={projectId} />;
 }
 
-export function ProjectBillingPlanLabel({
-	plan,
-}: { plan: Rivet.ee.billing.Plan }) {
+export function ProjectBillingPlanLabel({ plan }: { plan: Rivet.ee.billing.Plan }) {
 	return BILLING_PLAN_LABELS[plan];
 }
