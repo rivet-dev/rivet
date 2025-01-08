@@ -72,6 +72,21 @@ function ObjectSchema({ schema: baseSchema, defs, parent, className }: ObjectSch
           </ObjectSchemaItem>
         );
       })}
+      {schema.anyOf ? (
+        <li className='px-4'>
+          <p className='mb-2'>Any of the following variants:</p>
+          <ul className='space-y-4 rounded-md border py-4'>
+            {schema.anyOf?.map((ref: JSONSchema7, index) => {
+              return (
+                <ObjectSchemaItem className='px-4' key={ref.$ref}>
+                  <p>Variant #{index + 1}</p>
+                  <Schema parent={parent} schema={ref as JSONSchema7} defs={defs} />
+                </ObjectSchemaItem>
+              );
+            })}
+          </ul>
+        </li>
+      ) : null}
     </ul>
   );
 }
