@@ -1,6 +1,9 @@
 name: fern
 
-on: push
+on: 
+  push:
+    paths-ignore:
+      - 'frontend/**'
 
 defaults:
   run:

@@ -1,0 +1,1 @@
+rivet deno run -A counter_test.ts

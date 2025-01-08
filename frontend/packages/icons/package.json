@@ -1,0 +1,52 @@
+{
+	"name": "@rivet-gg/icons",
+	"version": "1.0.0",
+	"sideEffects": false,
+	"files": ["scripts", "manifest.json", "src", "dist"],
+	"scripts": {
+		"postinstall": "node scripts/postinstall.js"
+	},
+	"engines": {
+		"node": ">=18"
+	},
+	"dependencies": {
+		"dedent": "^1.5.3",
+		"local-pkg": "^0.5.0",
+		"vite": "^5.2.0"
+	},
+	"peerDependencies": {
+		"@fortawesome/fontawesome-svg-core": "^6.5.2",
+		"@fortawesome/free-brands-svg-icons": "^6.5.2",
+		"@fortawesome/free-solid-svg-icons": "^6.5.2",
+		"@fortawesome/react-fontawesome": "^0.2.2",
+		"react": "^18",
+		"react-dom": "^18"
+	},
+	"devDependencies": {
+		"@yarnpkg/types": "^4.0.0"
+	},
+	"main": "./dist/index.umd.js",
+	"module": "./dist/index.mjs",
+	"jsnext:main": "./dist/index.mjs",
+	"types": "./src/index.gen.ts",
+	"exports": {
+		".": {
+			"types": "./src/index.gen.ts",
+			"import": "./dist/index.mjs",
+			"require": "./dist/index.umd.js",
+			"default": "./dist/index.umd.js"
+		},
+		"./index": {
+			"types": "./src/index.gen.ts",
+			"import": "./dist/index.mjs",
+			"require": "./dist/index.umd.js",
+			"default": "./dist/index.umd.js"
+		},
+		"./index.js": {
+			"types": "./src/index.gen.ts",
+			"import": "./dist/index.mjs",
+			"require": "./dist/index.umd.js",
+			"default": "./dist/index.umd.js"
+		}
+	}
+}

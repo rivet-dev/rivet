@@ -1,0 +1,44 @@
+@import "@rivet-gg/components/theme.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+	* {
+		@apply border-border;
+	}
+	body {
+		@apply bg-background text-foreground min-h-screen;
+	}
+	#root {
+		@apply min-h-screen;
+	}
+}
+
+@layer utilities {
+	.overflow-r-gradient {
+		mask-image: linear-gradient(-90deg, rgba(0, 0, 0, 0) 0%, #000 45px);
+	}
+}
+
+:root {
+	/* biome-ignore lint/correctness/noUnknownFunction: tailwind functions */
+	--shiki-color-text: theme("colors.white");
+	/* biome-ignore lint/correctness/noUnknownFunction: tailwind functions */
+	--shiki-token-constant: theme("colors.violet.300");
+	/* biome-ignore lint/correctness/noUnknownFunction: tailwind functions */
+	--shiki-token-string: theme("colors.violet.300");
+	/* biome-ignore lint/correctness/noUnknownFunction: tailwind functions */
+	--shiki-token-comment: theme("colors.zinc.500");
+	/* biome-ignore lint/correctness/noUnknownFunction: tailwind functions */
+	--shiki-token-keyword: theme("colors.sky.300");
+	/* biome-ignore lint/correctness/noUnknownFunction: tailwind functions */
+	--shiki-token-parameter: theme("colors.pink.300");
+	/* biome-ignore lint/correctness/noUnknownFunction: tailwind functions */
+	--shiki-token-function: theme("colors.violet.300");
+	/* biome-ignore lint/correctness/noUnknownFunction: tailwind functions */
+	--shiki-token-string-expression: theme("colors.violet.300");
+	/* biome-ignore lint/correctness/noUnknownFunction: tailwind functions */
+	--shiki-token-punctuation: theme("colors.zinc.200");
+}

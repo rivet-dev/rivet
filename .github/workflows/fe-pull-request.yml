@@ -1,0 +1,25 @@
+name: frontend code quality
+
+on:
+  push:
+    paths:
+      - frontend/**
+  pull_request:
+    paths:
+      - frontend/**
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            frontend
+      - name: Setup Biome
+        uses: biomejs/setup-biome@v2
+        with:
+          version: latest
+      - name: Run Biome
+        run: cd frontend && biome ci . --reporter=github

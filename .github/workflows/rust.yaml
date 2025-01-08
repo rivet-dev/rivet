@@ -2,6 +2,8 @@ name: rust
 
 on:
   pull_request:
+    paths-ignore:
+      - 'frontend/**'
   push:
     branches:
       - main

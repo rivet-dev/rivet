@@ -1,0 +1,3 @@
+*.gen.*
+src/*
+!src/package.json

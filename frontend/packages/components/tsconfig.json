@@ -1,0 +1,14 @@
+{
+	"composite": true,
+	"compilerOptions": {
+		"target": "ESNext",
+		"strict": true,
+		"esModuleInterop": true,
+		"noEmit": true,
+		"moduleResolution": "bundler",
+		"jsx": "react-jsx",
+		"baseUrl": ".",
+		"module": "Preserve"
+	},
+	"include": ["src"]
+}
