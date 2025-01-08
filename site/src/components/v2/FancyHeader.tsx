@@ -108,7 +108,10 @@ export function FancyHeader({ active, subnav }: FancyHeaderProps) {
                   onMouseEnter={() => setIsSubnavOpen('solutions')}>
                   <div className='text-white/90'>Solutions</div>
                 </RivetHeader.NavItem> */}
-                <RivetHeader.NavItem asChild className='flex items-center gap-1 px-2.5 py-2'>
+                <RivetHeader.NavItem
+                  onMouseEnter={() => setIsSubnavOpen(false)}
+                  asChild
+                  className='flex items-center gap-1 px-2.5 py-2'>
                   <Link
                     href='/docs'
                     className='text-white/90'
@@ -116,7 +119,10 @@ export function FancyHeader({ active, subnav }: FancyHeaderProps) {
                     Docs
                   </Link>
                 </RivetHeader.NavItem>
-                <RivetHeader.NavItem asChild className='flex items-center gap-1 px-2.5'>
+                <RivetHeader.NavItem
+                  asChild
+                  onMouseEnter={() => setIsSubnavOpen(false)}
+                  className='flex items-center gap-1 px-2.5'>
                   <Link
                     href='/changelog'
                     className='text-white/90'
@@ -124,7 +130,10 @@ export function FancyHeader({ active, subnav }: FancyHeaderProps) {
                     Changelog
                   </Link>
                 </RivetHeader.NavItem>
-                <RivetHeader.NavItem asChild className='flex items-center gap-1 px-2.5'>
+                <RivetHeader.NavItem
+                  asChild
+                  onMouseEnter={() => setIsSubnavOpen(false)}
+                  className='flex items-center gap-1 px-2.5'>
                   <Link
                     href='/pricing'
                     className='text-white/90'
