@@ -59,7 +59,8 @@ const queryCache = new QueryCache({
 		if (isRivetError(error)) {
 			if (
 				error.body.code === "TOKEN_REVOKED" ||
-				error.body.code === "TOKEN_INVALID"
+				error.body.code === "TOKEN_INVALID" ||
+				error.body.code === "CLAIMS_ENTITLEMENT_EXPIRED"
 			) {
 				logout();
 			}
