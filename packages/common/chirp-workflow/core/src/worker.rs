@@ -115,7 +115,6 @@ impl Worker {
 				workflow.workflow_id,
 				&workflow.workflow_name,
 			);
-			let wake_deadline_ts = workflow.wake_deadline_ts;
 			let ctx = WorkflowCtx::new(
 				self.registry.clone(),
 				self.db.clone(),
@@ -127,11 +126,6 @@ impl Worker {
 
 			tokio::task::spawn(
 				async move {
-					// Sleep until deadline
-					if let Some(wake_deadline_ts) = wake_deadline_ts {
-						utils::time::sleep_until_ts(wake_deadline_ts as u64).await;
-					}
-
 					if let Err(err) = ctx.run().await {
 						tracing::error!(?err, "unhandled error");
 					}

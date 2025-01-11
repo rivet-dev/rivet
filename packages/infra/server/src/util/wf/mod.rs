@@ -56,7 +56,7 @@ pub enum WorkflowState {
 pub struct WorkflowRow {
 	workflow_id: Uuid,
 	workflow_name: String,
-	tags: Option<serde_json::Value>,
+	tags: serde_json::Value,
 	create_ts: i64,
 	input: serde_json::Value,
 	output: Option<serde_json::Value>,
@@ -69,6 +69,7 @@ pub struct WorkflowRow {
 #[derive(Debug, sqlx::FromRow)]
 pub struct HistoryWorkflowRow {
 	workflow_name: String,
+	tags: serde_json::Value,
 	input: serde_json::Value,
 	output: Option<serde_json::Value>,
 	error: Option<String>,
@@ -325,6 +326,7 @@ pub async fn print_history(
 				"
 				SELECT
 					workflow_name,
+					tags,
 					input,
 					output,
 					error,
@@ -592,11 +594,20 @@ pub async fn print_history(
 
 		if !exclude_json {
 			println!(
+				"{} tags {}",
+				style("|").dim(),
+				indent_string(
+					&colored_json(&workflow.tags)?,
+					style("| ").dim().to_string(),
+					true
+				)
+			);
+			println!(
 				"{} input {}",
 				style("|").dim(),
 				indent_string(
 					&colored_json(&workflow.input)?,
-					style("  | ").dim().to_string(),
+					style("| ").dim().to_string(),
 					true
 				)
 			);
@@ -882,11 +893,11 @@ pub async fn print_history(
 
 		if !exclude_json {
 			println!(
-				"  {} output {}",
+				"{} output {}",
 				style("|").blue(),
 				indent_string(
 					&colored_json(&output)?,
-					style("  | ").blue().to_string(),
+					style("| ").blue().to_string(),
 					true
 				)
 			);
@@ -937,8 +948,7 @@ mod table {
 		pub workflow_name: String,
 		#[tabled(display_with = "display_state")]
 		pub state: WorkflowState,
-		#[tabled(display_with = "display_option")]
-		pub tags: Option<String>,
+		pub tags: String,
 	}
 
 	pub fn workflows(workflows: Vec<WorkflowRow>) -> Result<()> {
@@ -957,7 +967,7 @@ mod table {
 					} else {
 						WorkflowState::Dead
 					},
-					tags: w.tags.as_ref().map(colored_json_ugly).transpose()?,
+					tags: colored_json_ugly(&w.tags)?,
 				})
 			})
 			.collect::<Result<Vec<_>>>()?;
@@ -975,13 +985,6 @@ mod table {
 			WorkflowState::Running => style("running").green().to_string(),
 			WorkflowState::Sleeping => style("sleeping").yellow().to_string(),
 			WorkflowState::Dead => style("dead").red().to_string(),
-		}
-	}
-
-	pub(crate) fn display_option<T: std::fmt::Display>(item: &Option<T>) -> String {
-		match item {
-			Some(s) => s.to_string(),
-			None => String::new(),
 		}
 	}
 }

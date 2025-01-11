@@ -7,7 +7,7 @@ use std::{
 
 use futures_util::StreamExt;
 use indoc::indoc;
-use rivet_pools::prelude::NatsPool;
+use rivet_pools::prelude::*;
 use sqlx::{pool::PoolConnection, Acquire, PgPool, Postgres};
 use tokio::sync::Mutex;
 use tracing::Instrument;
@@ -22,6 +22,9 @@ use crate::{
 	},
 	message, metrics, worker,
 };
+
+// HACK: We alias global error here because its hardcoded into the sql macros
+type GlobalError = WorkflowError;
 
 /// Max amount of workflows pulled from the database with each call to `pull_workflows`.
 const MAX_PULLED_WORKFLOWS: i64 = 50;
@@ -56,6 +59,16 @@ impl DatabaseCrdbNats {
 			// Create a new connection
 			self.pool.acquire().await.map_err(WorkflowError::Sqlx)
 		}
+	}
+
+	// Alias function for sql macro compatibility
+	async fn crdb(&self) -> WorkflowResult<PgPool> {
+		Ok(self.pool.clone())
+	}
+
+	// For sql macro
+	pub fn name(&self) -> &str {
+		"chirp_workflow_crdb_nats_engine"
 	}
 
 	/// Spawns a new thread and publishes a worker wake message to nats.
@@ -105,7 +118,7 @@ impl DatabaseCrdbNats {
 								.message()
 								.contains("TransactionRetryWithProtoRefreshError") =>
 						{
-							tracing::info!(message=%db_err.message(), "transaction retry");
+							tracing::warn!(message=%db_err.message(), "transaction retry");
 							tokio::time::sleep(TXN_RETRY).await;
 						}
 						// Retry other errors with a backoff
@@ -196,16 +209,17 @@ impl Database for DatabaseCrdbNats {
 
 		let (actual_workflow_id,) = self
 			.query(|| async {
-				sqlx::query_as::<_, (Uuid,)>(query)
-					.bind(workflow_id)
-					.bind(workflow_name)
-					.bind(rivet_util::timestamp::now())
-					.bind(ray_id)
-					.bind(tags)
-					.bind(sqlx::types::Json(input))
-					.fetch_one(&mut *self.conn().await?)
-					.await
-					.map_err(WorkflowError::Sqlx)
+				sql_fetch_one!(
+					[self, (Uuid,)]
+					query,
+					workflow_id,
+					workflow_name,
+					rivet_util::timestamp::now(),
+					ray_id,
+					tags,
+					sqlx::types::Json(input),
+				)
+				.await
 			})
 			.await?;
 
@@ -217,18 +231,17 @@ impl Database for DatabaseCrdbNats {
 	}
 
 	async fn get_workflow(&self, workflow_id: Uuid) -> WorkflowResult<Option<WorkflowData>> {
-		sqlx::query_as::<_, WorkflowRow>(indoc!(
+		sql_fetch_optional!(
+			[self, WorkflowRow]
 			"
 			SELECT workflow_id, input, output
 			FROM db_workflow.workflows
 			WHERE workflow_id = $1
 			",
-		))
-		.bind(workflow_id)
-		.fetch_optional(&mut *self.conn().await?)
+			workflow_id,
+		)
 		.await
 		.map(|row| row.map(Into::into))
-		.map_err(WorkflowError::Sqlx)
 	}
 
 	async fn pull_workflows(
@@ -241,7 +254,8 @@ impl Database for DatabaseCrdbNats {
 		// Select all workflows that have a wake condition
 		let workflow_rows = self
 			.query(|| async {
-				sqlx::query_as::<_, PulledWorkflowRow>(indoc!(
+				sql_fetch_all!(
+					[self, PulledWorkflowRow]
 					"
 					WITH
 						pull_workflows AS (
@@ -357,17 +371,15 @@ impl Database for DatabaseCrdbNats {
 						)
 					SELECT * FROM pull_workflows
 					",
-				))
-				.bind(worker_instance_id)
-				.bind(filter)
-				.bind(rivet_util::timestamp::now())
-				// Add padding to the tick interval so that the workflow deadline is never passed before its pulled.
-				// The worker sleeps internally to handle this
-				.bind(worker::TICK_INTERVAL.as_millis() as i64 + 1)
-				.bind(MAX_PULLED_WORKFLOWS)
-				.fetch_all(&mut *self.conn().await?)
+					worker_instance_id,
+					filter,
+					rivet_util::timestamp::now(),
+					// Add padding to the tick interval so that the workflow deadline is never passed before its pulled.
+					// The worker sleeps internally to handle this
+					worker::TICK_INTERVAL.as_millis() as i64 + 1,
+					MAX_PULLED_WORKFLOWS,
+				)
 				.await
-				.map_err(WorkflowError::Sqlx)
 			})
 			.await?;
 
@@ -388,7 +400,8 @@ impl Database for DatabaseCrdbNats {
 		let start_instant2 = Instant::now();
 
 		// Fetch all events for all fetched workflows
-		let events = sqlx::query_as::<_, AmalgamEventRow>(indoc!(
+		let events = sql_fetch_all!(
+			[self, AmalgamEventRow]
 			"
 			-- Activity events
 			SELECT
@@ -610,11 +623,9 @@ impl Database for DatabaseCrdbNats {
 			WHERE workflow_id = ANY($1) AND forgotten = FALSE
 			ORDER BY workflow_id ASC, location2 ASC
 			",
-		))
-		.bind(&workflow_ids)
-		.fetch_all(&mut *self.conn().await?)
-		.await
-		.map_err(WorkflowError::Sqlx)?;
+			&workflow_ids,
+		)
+		.await?;
 
 		let workflows = build_histories(workflow_rows, events)?;
 
@@ -837,7 +848,8 @@ impl Database for DatabaseCrdbNats {
 	) -> WorkflowResult<Option<SignalData>> {
 		let signal = self
 			.query(|| async {
-				sqlx::query_as::<_, SignalRow>(indoc!(
+				sql_fetch_optional!(
+					[self, SignalRow]
 					"
 					WITH
 						-- Finds the oldest signal matching the signal name filter in either the normal signals table
@@ -911,17 +923,15 @@ impl Database for DatabaseCrdbNats {
 						)
 					SELECT * FROM next_signal
 					",
-				))
-				.bind(workflow_id)
-				.bind(filter)
-				.bind(location)
-				.bind(version as i64)
-				.bind(rivet_util::timestamp::now())
-				.bind(loop_location)
-				.fetch_optional(&mut *self.conn().await?)
+					workflow_id,
+					filter,
+					location,
+					version as i64,
+					rivet_util::timestamp::now(),
+					loop_location,
+				)
 				.await
 				.map(|row| row.map(Into::into))
-				.map_err(WorkflowError::Sqlx)
 			})
 			.await?;
 
@@ -937,23 +947,22 @@ impl Database for DatabaseCrdbNats {
 		body: &serde_json::value::RawValue,
 	) -> WorkflowResult<()> {
 		self.query(|| async {
-			sqlx::query(indoc!(
+			sql_execute!(
+				[self]
 				"
 				INSERT INTO db_workflow.signals (
 					signal_id, workflow_id, signal_name, body, ray_id, create_ts
 				)			
 				VALUES ($1, $2, $3, $4, $5, $6)
 				",
-			))
-			.bind(signal_id)
-			.bind(workflow_id)
-			.bind(signal_name)
-			.bind(sqlx::types::Json(body))
-			.bind(ray_id)
-			.bind(rivet_util::timestamp::now())
-			.execute(&mut *self.conn().await?)
+				signal_id,
+				workflow_id,
+				signal_name,
+				sqlx::types::Json(body),
+				ray_id,
+				rivet_util::timestamp::now(),
+			)
 			.await
-			.map_err(WorkflowError::Sqlx)
 		})
 		.await?;
 
@@ -971,23 +980,22 @@ impl Database for DatabaseCrdbNats {
 		body: &serde_json::value::RawValue,
 	) -> WorkflowResult<()> {
 		self.query(|| async {
-			sqlx::query(indoc!(
+			sql_execute!(
+				[self]
 				"
 				INSERT INTO db_workflow.tagged_signals (
 					signal_id, tags, signal_name, body, ray_id, create_ts
 				)			
 				VALUES ($1, $2, $3, $4, $5, $6)
 				",
-			))
-			.bind(signal_id)
-			.bind(tags)
-			.bind(signal_name)
-			.bind(sqlx::types::Json(body))
-			.bind(ray_id)
-			.bind(rivet_util::timestamp::now())
-			.execute(&mut *self.conn().await?)
+				signal_id,
+				tags,
+				signal_name,
+				sqlx::types::Json(body),
+				ray_id,
+				rivet_util::timestamp::now(),
+			)
 			.await
-			.map_err(WorkflowError::Sqlx)
 		})
 		.await?;
 
@@ -1009,7 +1017,8 @@ impl Database for DatabaseCrdbNats {
 		loop_location: Option<&Location>,
 	) -> WorkflowResult<()> {
 		self.query(|| async {
-			sqlx::query(indoc!(
+			sql_execute!(
+				[self]
 				"
 				WITH
 					signal AS (
@@ -1028,20 +1037,18 @@ impl Database for DatabaseCrdbNats {
 					)
 				SELECT 1
 				",
-			))
-			.bind(signal_id)
-			.bind(to_workflow_id)
-			.bind(signal_name)
-			.bind(sqlx::types::Json(body))
-			.bind(ray_id)
-			.bind(rivet_util::timestamp::now())
-			.bind(from_workflow_id)
-			.bind(location)
-			.bind(version as i64)
-			.bind(loop_location)
-			.execute(&mut *self.conn().await?)
+				signal_id,
+				to_workflow_id,
+				signal_name,
+				sqlx::types::Json(body),
+				ray_id,
+				rivet_util::timestamp::now(),
+				from_workflow_id,
+				location,
+				version as i64,
+				loop_location,
+			)
 			.await
-			.map_err(WorkflowError::Sqlx)
 		})
 		.await?;
 
@@ -1063,7 +1070,8 @@ impl Database for DatabaseCrdbNats {
 		loop_location: Option<&Location>,
 	) -> WorkflowResult<()> {
 		self.query(|| async {
-			sqlx::query(indoc!(
+			sql_execute!(
+				[self]
 				"
 				WITH
 					signal AS (
@@ -1082,20 +1090,18 @@ impl Database for DatabaseCrdbNats {
 					)
 				SELECT 1
 				",
-			))
-			.bind(signal_id)
-			.bind(tags)
-			.bind(signal_name)
-			.bind(sqlx::types::Json(body))
-			.bind(ray_id)
-			.bind(rivet_util::timestamp::now())
-			.bind(from_workflow_id)
-			.bind(location)
-			.bind(version as i64)
-			.bind(loop_location)
-			.execute(&mut *self.conn().await?)
+				signal_id,
+				tags,
+				signal_name,
+				sqlx::types::Json(body),
+				ray_id,
+				rivet_util::timestamp::now(),
+				from_workflow_id,
+				location,
+				version as i64,
+				loop_location,
+			)
 			.await
-			.map_err(WorkflowError::Sqlx)
 		})
 		.await?;
 
@@ -1251,7 +1257,8 @@ impl Database for DatabaseCrdbNats {
 			let mut conn = self.conn().await?;
 			let mut tx = conn.begin().await.map_err(WorkflowError::Sqlx)?;
 
-			sqlx::query(indoc!(
+			sql_execute!(
+				[self, @tx &mut tx]
 				"
 				INSERT INTO db_workflow.workflow_loop_events (
 					workflow_id,
@@ -1268,20 +1275,19 @@ impl Database for DatabaseCrdbNats {
 					output = $5
 				RETURNING 1
 				",
-			))
-			.bind(workflow_id)
-			.bind(location)
-			.bind(version as i64)
-			.bind(iteration as i64)
-			.bind(output.map(sqlx::types::Json))
-			.bind(loop_location)
-			.execute(&mut *tx)
-			.await
-			.map_err(WorkflowError::Sqlx)?;
+				workflow_id,
+				location,
+				version as i64,
+				iteration as i64,
+				output.map(sqlx::types::Json),
+				loop_location,
+			)
+			.await?;
 
 			// 0-th iteration is the initial insertion
 			if iteration != 0 {
-				sqlx::query(indoc!(
+				sql_execute!(
+					[self, @tx &mut tx]
 					"
 					WITH
 						forget_activity_events AS (
@@ -1328,9 +1334,18 @@ impl Database for DatabaseCrdbNats {
 								loop_location2_hash = $2 AND
 								forgotten = FALSE
 							RETURNING 1
-						),	
+						),
 						forget_loop_events AS (
 							UPDATE db_workflow.workflow_loop_events@workflow_loop_events_workflow_id_loop_location2_hash_idx
+							SET forgotten = TRUE
+							WHERE
+								workflow_id = $1 AND
+								loop_location2_hash = $2 AND
+								forgotten = FALSE
+							RETURNING 1
+						),
+						forget_sleep_events AS (
+							UPDATE db_workflow.workflow_sleep_events@workflow_sleep_events_workflow_id_loop_location2_hash_idx
 							SET forgotten = TRUE
 							WHERE
 								workflow_id = $1 AND
@@ -1367,12 +1382,10 @@ impl Database for DatabaseCrdbNats {
 						)
 					SELECT 1
 					",
-				))
-				.bind(workflow_id)
-				.bind(hash_location(location)?)
-				.execute(&mut *tx)
-				.await
-				.map_err(WorkflowError::Sqlx)?;
+					workflow_id,
+					hash_location(location),
+				)
+				.await?;
 			}
 
 			tx.commit().await.map_err(WorkflowError::Sqlx)?;
@@ -1837,12 +1850,62 @@ mod types {
 
 	// IMPORTANT: Must match the hashing algorithm used in the `db-workflow` `loop_location2_hash` generated
 	/// column expression.
-	pub fn hash_location(location: &Location) -> WorkflowResult<Vec<u8>> {
-		Ok(md5::compute(
-			serde_json::to_vec(&serialize_location(location))
-				.map_err(WorkflowError::SerializeLocation)?,
-		)
-		.to_vec())
+	pub fn hash_location(location: &Location) -> Vec<u8> {
+		let mut s = "[".to_string();
+
+		let mut loc_iter = location.iter();
+
+		// First coord
+		if let Some(coord) = loc_iter.next() {
+			let mut coord_iter = coord.iter();
+
+			s.push_str("[");
+
+			// First part
+			if let Some(part) = coord_iter.next() {
+				s.push_str(&part.to_string());
+			}
+
+			// Rest
+			for part in coord_iter {
+				// NOTE: The space here is important as it mimics the default behavior of casting JSONB to
+				// TEXT in CRDB.
+				s.push_str(", ");
+				s.push_str(&part.to_string());
+			}
+
+			s.push_str("]");
+		}
+
+		// Rest
+		for coord in loc_iter {
+			// NOTE: The space here is important as it mimics the default behavior of casting JSONB to
+			// TEXT in CRDB.
+			s.push_str(", ");
+
+			let mut coord_iter = coord.iter();
+
+			s.push_str("[");
+
+			// First part
+			if let Some(part) = coord_iter.next() {
+				s.push_str(&part.to_string());
+			}
+
+			// Rest
+			for part in coord_iter {
+				// NOTE: The space here is important as it mimics the default behavior of casting JSONB to
+				// TEXT in CRDB.
+				s.push_str(", ");
+				s.push_str(&part.to_string());
+			}
+
+			s.push_str("]");
+		}
+
+		s.push_str("]");
+
+		md5::compute(s).to_vec()
 	}
 
 	/// Takes all workflow events (each with their own location) and combines them via enum into a hashmap of the

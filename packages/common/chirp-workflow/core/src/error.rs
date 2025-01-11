@@ -136,7 +136,7 @@ pub enum WorkflowError {
 	BuildSqlx(sqlx::Error),
 
 	#[error("sql error: {0}")]
-	Sqlx(sqlx::Error),
+	Sqlx(#[from] sqlx::Error),
 
 	#[error("max sql retries, last error: {0}")]
 	MaxSqlRetries(sqlx::Error),
