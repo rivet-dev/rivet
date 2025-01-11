@@ -228,7 +228,7 @@ async fn validate(ctx: &ActivityCtx, input: &ValidateInput) -> GlobalResult<Opti
 				})
 				.await?;
 
-			let Some(build) = builds_res.builds.first() else {
+			let Some(build) = builds_res.builds.into_iter().next() else {
 				return Ok(None);
 			};
 
@@ -237,9 +237,10 @@ async fn validate(ctx: &ActivityCtx, input: &ValidateInput) -> GlobalResult<Opti
 			})
 			.await?;
 
-			Ok(Some(
+			Ok(Some((
+				build,
 				unwrap!(uploads_res.uploads.first()).complete_ts.is_some(),
-			))
+			)))
 		},
 		async {
 			let games_res = op!([ctx] game_resolve_namespace_id {
@@ -269,7 +270,7 @@ async fn validate(ctx: &ActivityCtx, input: &ValidateInput) -> GlobalResult<Opti
 		return Ok(Some("Too many resources allocated.".into()));
 	}
 
-	let Some(upload_complete) = upload_res else {
+	let Some((build, upload_complete)) = upload_res else {
 		return Ok(Some("Build not found.".into()));
 	};
 
@@ -357,25 +358,45 @@ async fn validate(ctx: &ActivityCtx, input: &ValidateInput) -> GlobalResult<Opti
 			)));
 		}
 
+		match input.network_mode {
+			NetworkMode::Bridge => {
+				// NOTE: Temporary validation until we implement bridge networking for isolates
+				if let BuildKind::JavaScript = build.kind {
+					if port.internal_port.is_some() {
+						return Ok(Some(format!(
+							"runtime.ports[{name:?}].internal_port: Must be null when `network.mode` = \"bridge\" and using a JS build.",
+						)));
+					}
+				}
+			}
+			NetworkMode::Host => {
+				if port.internal_port.is_some() {
+					return Ok(Some(format!(
+						"runtime.ports[{name:?}].internal_port: Must be null when `network.mode` = \"host\".",
+					)));
+				}
+			}
+		}
+
 		match &port.routing {
 			Routing::GameGuard { authorization, .. } => match authorization {
 				PortAuthorization::Bearer(token) => {
 					if token.len() > 1024 {
 						return Ok(Some(format!(
-								"runtime.ports[{name:?}].routing.guard.authorization.bearer: Bearer authorization too large (max 1024 bytes).",
-							)));
+							"runtime.ports[{name:?}].routing.guard.authorization.bearer: Bearer authorization too large (max 1024 bytes).",
+						)));
 					}
 				}
 				PortAuthorization::Query(parameter, value) => {
 					if parameter.len() > 128 {
 						return Ok(Some(format!(
-								"runtime.ports[{name:?}].routing.guard.authorization.query: Query parameter too large (max 128 bytes).",
-							)));
+							"runtime.ports[{name:?}].routing.guard.authorization.query: Query parameter too large (max 128 bytes).",
+						)));
 					}
 					if value.len() > 1024 {
 						return Ok(Some(format!(
-								"runtime.ports[{name:?}].routing.guard.authorization.query: Query value too large (max 1024 bytes).",
-							)));
+							"runtime.ports[{name:?}].routing.guard.authorization.query: Query value too large (max 1024 bytes).",
+						)));
 					}
 				}
 				PortAuthorization::None => {}

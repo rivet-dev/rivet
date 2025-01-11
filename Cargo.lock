@@ -3408,6 +3408,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "cluster-tunnel-tls-renew"
+version = "0.0.1"
+dependencies = [
+ "chirp-client",
+ "chirp-workflow",
+ "cluster",
+ "openssl",
+ "rivet-config",
+ "rivet-connection",
+ "rivet-health-checks",
+ "rivet-metrics",
+ "rivet-runtime",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "tracing-logfmt",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "codespan-reporting"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12127,6 +12147,7 @@ dependencies = [
  "cluster-default-update",
  "cluster-gc",
  "cluster-metrics-publish",
+ "cluster-tunnel-tls-renew",
  "colored_json",
  "global-error",
  "include_dir",

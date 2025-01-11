@@ -7,34 +7,34 @@ use serde::Serialize;
 type FakeMap<T, U> = Box<[(T, U)]>;
 
 deno_core::extension!(
-  rivet_kv,
-  ops = [
-	op_rivet_kv_get,
-	op_rivet_kv_get_batch,
-	op_rivet_kv_list,
-	op_rivet_kv_put,
-	op_rivet_kv_put_batch,
-	op_rivet_kv_delete,
-	op_rivet_kv_delete_batch,
-	op_rivet_kv_delete_all,
-  ],
-  esm = [
-	dir "js",
-	// Order matters
-	"lib/fast-equals/utils.js",
-	"lib/fast-equals/equals.js",
-	"lib/fast-equals/comparator.js",
-	"lib/fast-equals/internalTypes.js",
-	"lib/fast-equals/index.js",
+	rivet_kv,
+	ops = [
+		op_rivet_kv_get,
+		op_rivet_kv_get_batch,
+		op_rivet_kv_list,
+		op_rivet_kv_put,
+		op_rivet_kv_put_batch,
+		op_rivet_kv_delete,
+		op_rivet_kv_delete_batch,
+		op_rivet_kv_delete_all,
+	],
+	esm = [
+		dir "js",
+		// Order matters
+		"lib/fast-equals/utils.js",
+		"lib/fast-equals/equals.js",
+		"lib/fast-equals/comparator.js",
+		"lib/fast-equals/internalTypes.js",
+		"lib/fast-equals/index.js",
 
-	"40_rivet_kv.js",
-  ],
-  options = {
-	kv: actor_kv::ActorKv,
-  },
-  state = |state, options| {
-	state.put::<Arc<actor_kv::ActorKv>>(Arc::new(options.kv));
-  },
+		"40_rivet_kv.js",
+	],
+	options = {
+		kv: actor_kv::ActorKv,
+	},
+	state = |state, options| {
+		state.put::<Arc<actor_kv::ActorKv>>(Arc::new(options.kv));
+	},
 );
 
 #[derive(Serialize)]
