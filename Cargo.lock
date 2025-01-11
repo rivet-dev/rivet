@@ -3409,7 +3409,7 @@ dependencies = [
 
 [[package]]
 name = "cluster-tunnel-tls-renew"
-version = "0.0.1"
+version = "24.6.2-rc.1"
 dependencies = [
  "chirp-client",
  "chirp-workflow",

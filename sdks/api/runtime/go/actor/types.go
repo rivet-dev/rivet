@@ -343,7 +343,9 @@ type Port struct {
 	Hostname     *string      `json:"hostname,omitempty"`
 	Port         *int         `json:"port,omitempty"`
 	Path         *string      `json:"path,omitempty"`
-	Routing      *PortRouting `json:"routing,omitempty"`
+	// Fully formed connection URL including protocol, hostname, port, and path, if applicable.
+	Url     *string      `json:"url,omitempty"`
+	Routing *PortRouting `json:"routing,omitempty"`
 
 	_rawJSON json.RawMessage
 }

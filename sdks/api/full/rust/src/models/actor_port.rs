@@ -20,6 +20,9 @@ pub struct ActorPort {
 	pub port: Option<i32>,
 	#[serde(rename = "path", skip_serializing_if = "Option::is_none")]
 	pub path: Option<String>,
+	/// Fully formed connection URL including protocol, hostname, port, and path, if applicable.
+	#[serde(rename = "url", skip_serializing_if = "Option::is_none")]
+	pub url: Option<String>,
 	#[serde(rename = "routing")]
 	pub routing: Box<crate::models::ActorPortRouting>,
 }
@@ -35,6 +38,7 @@ impl ActorPort {
 			hostname: None,
 			port: None,
 			path: None,
+			url: None,
 			routing: Box::new(routing),
 		}
 	}

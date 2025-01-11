@@ -66,6 +66,10 @@ types:
       hostname: optional<string>
       port: optional<integer>
       path: optional<string>
+      url:
+        docs: |
+          Fully formed connection URL including protocol, hostname, port, and path, if applicable.
+        type: optional<string>
       routing: PortRouting
 
   PortProtocol:

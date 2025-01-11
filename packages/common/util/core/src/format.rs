@@ -1,4 +1,7 @@
-use std::iter::Iterator;
+use std::{
+	fmt::{self, Display, Formatter},
+	iter::Iterator,
+};
 
 use lazy_static::lazy_static;
 use rand::seq::IteratorRandom;
@@ -8,6 +11,19 @@ use crate::check;
 
 lazy_static! {
 	static ref SPACE_REPLACE: Regex = Regex::new(r#" +"#).unwrap();
+}
+
+/// Renders `Some<T>` as `T` and does not render `None`.
+pub struct OptDisplay<T: Display>(pub Option<T>);
+
+impl<T: Display> Display for OptDisplay<T> {
+	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+		if let Some(value) = &self.0 {
+			write!(f, "{}", value)
+		} else {
+			Ok(())
+		}
+	}
 }
 
 /// Formats a user's biography properly. Assumes util::check::biography succeeded before this function

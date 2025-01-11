@@ -260,10 +260,8 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 					Ok((
 						gg_port.port_name.clone(),
 						create_port_gg(
-							ctx.config(),
 							is_connectable,
 							gg_port,
-							server.datacenter_id,
 							unwrap!(GameGuardProtocol::from_repr(gg_port.protocol.try_into()?)),
 							endpoint_type,
 							&dc.guard_public_hostname,
@@ -336,10 +334,8 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 }
 
 fn create_port_gg(
-	config: &rivet_config::Config,
 	is_connectable: bool,
 	gg_port: &ServerPortGg,
-	datacenter_id: Uuid,
 	protocol: GameGuardProtocol,
 	endpoint_type: EndpointType,
 	guard_public_hostname: &cluster::types::GuardPublicHostname,
@@ -348,7 +344,6 @@ fn create_port_gg(
 		let (hostname, path) = crate::util::build_ds_hostname_and_path(
 			gg_port.server_id,
 			&gg_port.port_name,
-			datacenter_id,
 			protocol,
 			endpoint_type,
 			guard_public_hostname,

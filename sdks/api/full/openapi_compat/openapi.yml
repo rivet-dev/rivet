@@ -10094,6 +10094,11 @@ components:
           type: integer
         path:
           type: string
+        url:
+          type: string
+          description: >-
+            Fully formed connection URL including protocol, hostname, port, and
+            path, if applicable.
         routing:
           $ref: '#/components/schemas/ActorPortRouting'
       required:

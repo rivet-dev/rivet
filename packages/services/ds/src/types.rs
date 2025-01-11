@@ -84,6 +84,18 @@ pub enum GameGuardProtocol {
 	Udp = 4,
 }
 
+impl fmt::Display for GameGuardProtocol {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			GameGuardProtocol::Http => write!(f, "http"),
+			GameGuardProtocol::Https => write!(f, "https"),
+			GameGuardProtocol::Tcp => write!(f, "tcp"),
+			GameGuardProtocol::TcpTls => write!(f, "tcps"),
+			GameGuardProtocol::Udp => write!(f, "udp"),
+		}
+	}
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub enum PortAuthorization {
 	None,
@@ -254,44 +266,75 @@ impl ApiFrom<NetworkMode> for models::ActorNetworkMode {
 
 impl ApiFrom<Port> for models::ActorPort {
 	fn api_from(value: Port) -> models::ActorPort {
-		let (protocol, routing) = match &value.routing {
+		let (protocol, routing, url) = match &value.routing {
 			Routing::GameGuard {
 				protocol,
 				authorization,
-			} => (
-				(*protocol).api_into(),
-				models::ActorPortRouting {
-					guard: Some(json!({})),
-					// Temporarily disabled
-					// guard: Some(Box::new(models::ActorGuardRouting {
-					// 	authorization: match authorization {
-					// 		PortAuthorization::None => None,
-					// 		PortAuthorization::Bearer(token) => {
-					// 			Some(Box::new(models::ActorPortAuthorization {
-					// 				bearer: Some(token.clone()),
-					// 				..Default::default()
-					// 			}))
-					// 		}
-					// 		PortAuthorization::Query(key, value) => {
-					// 			Some(Box::new(models::ActorPortAuthorization {
-					// 				query: Some(Box::new(models::ActorPortQueryAuthorization {
-					// 					key: key.clone(),
-					// 					value: value.clone(),
-					// 				})),
-					// 				..Default::default()
-					// 			}))
-					// 		}
-					// 	},
-					// })),
-					..Default::default()
-				},
-			),
+			} => {
+				let url = match (
+					protocol,
+					value.public_hostname.as_ref(),
+					value.public_port,
+					value.public_path.as_ref(),
+				) {
+					(
+						GameGuardProtocol::Http | GameGuardProtocol::Https,
+						Some(hostname),
+						Some(port),
+						path,
+					) => Some(format!(
+						"{protocol}://{hostname}:{port}{}",
+						util::format::OptDisplay(path)
+					)),
+					(
+						GameGuardProtocol::Http | GameGuardProtocol::Https,
+						Some(hostname),
+						None,
+						path,
+					) => Some(format!(
+						"{protocol}://{hostname}{}",
+						util::format::OptDisplay(path)
+					)),
+					_ => None,
+				};
+
+				(
+					(*protocol).api_into(),
+					models::ActorPortRouting {
+						guard: Some(json!({})),
+						// Temporarily disabled
+						// guard: Some(Box::new(models::ActorGuardRouting {
+						// 	authorization: match authorization {
+						// 		PortAuthorization::None => None,
+						// 		PortAuthorization::Bearer(token) => {
+						// 			Some(Box::new(models::ActorPortAuthorization {
+						// 				bearer: Some(token.clone()),
+						// 				..Default::default()
+						// 			}))
+						// 		}
+						// 		PortAuthorization::Query(key, value) => {
+						// 			Some(Box::new(models::ActorPortAuthorization {
+						// 				query: Some(Box::new(models::ActorPortQueryAuthorization {
+						// 					key: key.clone(),
+						// 					value: value.clone(),
+						// 				})),
+						// 				..Default::default()
+						// 			}))
+						// 		}
+						// 	},
+						// })),
+						..Default::default()
+					},
+					url,
+				)
+			}
 			Routing::Host { protocol } => (
 				(*protocol).api_into(),
 				models::ActorPortRouting {
 					host: Some(json!({})),
 					..Default::default()
 				},
+				None,
 			),
 		};
 
@@ -301,6 +344,7 @@ impl ApiFrom<Port> for models::ActorPort {
 			hostname: value.public_hostname,
 			port: value.public_port,
 			path: value.public_path,
+			url,
 			routing: Box::new(routing),
 		}
 	}

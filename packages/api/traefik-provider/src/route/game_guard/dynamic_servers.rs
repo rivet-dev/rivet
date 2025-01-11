@@ -304,7 +304,6 @@ fn add_http_port(
 		let (hostname, path) = ds::util::build_ds_hostname_and_path(
 			proxied_port.server_id,
 			&proxied_port.port_name,
-			proxied_port.datacenter_id,
 			if is_https {
 				GameGuardProtocol::Https
 			} else {

@@ -26,7 +26,6 @@ pub fn is_nomad_ds(job_id: &str) -> bool {
 pub fn build_ds_hostname_and_path(
 	server_id: Uuid,
 	port_name: &str,
-	datacenter_id: Uuid,
 	protocol: GameGuardProtocol,
 	endpoint_type: EndpointType,
 	guard_public_hostname: &GuardPublicHostname,

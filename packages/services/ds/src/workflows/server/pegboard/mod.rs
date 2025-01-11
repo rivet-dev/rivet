@@ -925,7 +925,11 @@ async fn wait_for_traefik_poll(
 		servers_res.servers.iter().map(|s| s.server_id).collect()
 	};
 
-	tracing::debug!(servers = ?remaining_servers, after_create_ts = ?input.create_ts, "waiting for traefik servers");
+	tracing::debug!(
+		servers=?remaining_servers,
+		after_create_ts=?input.create_ts,
+		"waiting for traefik servers",
+	);
 	let res = tokio::time::timeout(TRAEFIK_POLL_TIMEOUT, async {
 		// Wait for servers to fetch their configs
 		loop {
@@ -933,9 +937,13 @@ async fn wait_for_traefik_poll(
 
 			if let Some(server_id) = msg.server_id {
 				if msg.latest_ds_create_ts >= input.create_ts {
-					let did_remove = remaining_servers.remove(&server_id);
+					let _did_remove = remaining_servers.remove(&server_id);
 
-					tracing::debug!(server_id = ?msg.server_id, latest_ds_create_ts = ?msg.latest_ds_create_ts, servers = ?remaining_servers, "received poll from traefik server");
+					tracing::debug!(
+						server_id=?msg.server_id,
+						latest_ds_create_ts=?msg.latest_ds_create_ts,
+						servers=?remaining_servers, "received poll from traefik server",
+					);
 
 					// Break loop once all servers have polled
 					if remaining_servers.is_empty() {
