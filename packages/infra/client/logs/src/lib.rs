@@ -1,7 +1,7 @@
 use std::{os::fd::AsRawFd, path::PathBuf};
 
 use anyhow::*;
-use chrono::{Datelike, Duration, TimeZone, Utc};
+use chrono::{Datelike, Duration, TimeDelta, TimeZone, Utc};
 use tokio::fs;
 
 pub struct Logs {
@@ -40,6 +40,7 @@ impl Logs {
 			if self.next_rotation - now > Duration::seconds(5) {
 				tokio::time::sleep(
 					(self.next_rotation - now - Duration::seconds(5))
+						.max(TimeDelta::default())
 						.to_std()
 						.expect("bad duration"),
 				)

@@ -40,12 +40,13 @@ fn main() -> Result<()> {
 	init_tracing();
 
 	let init = { Runtime::new()?.block_on(init())? };
+	let mut first = true;
 
 	// Retry loop
 	loop {
 		let runtime = Builder::new_multi_thread().enable_all().build()?;
 
-		match runtime.block_on(run(init.clone())) {
+		match runtime.block_on(run(init.clone(), first)) {
 			Ok(_) => return Ok(()),
 			Err(err) => {
 				// Only restart if its a `RuntimeError`
@@ -57,6 +58,8 @@ fn main() -> Result<()> {
 				runtime.shutdown_background();
 			}
 		}
+
+		first = false;
 
 		std::thread::sleep(Duration::from_secs(2));
 	}
@@ -173,7 +176,18 @@ async fn init() -> Result<Init> {
 	})
 }
 
-async fn run(init: Init) -> Result<()> {
+async fn run(init: Init, first: bool) -> Result<()> {
+	// We have to redirect logs here as well because the entire tokio runtime gets destroyed after a runtime
+	// error
+	if !first && init.config.client.logs.redirect_logs() {
+		pegboard_logs::Logs::new(
+			init.config.client.data_dir().join("logs"),
+			init.config.client.logs.retention(),
+		)
+		.start()
+		.await?;
+	}
+
 	// Start metrics server
 	let metrics_thread = tokio::spawn(metrics::run_standalone(init.config.client.metrics.port()));
 
