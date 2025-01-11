@@ -8,17 +8,10 @@ lazy_static::lazy_static! {
 		*REGISTRY
 	).unwrap();
 
-	pub static ref CLIENT_LAST_PING: IntGaugeVec = register_int_gauge_vec_with_registry!(
-		"pegboard_client_last_ping",
-		"Last client ping timestamp, in ms.",
-		&["client_id"],
-		*REGISTRY
-	).unwrap();
-
 	pub static ref CLIENT_ACTORS_ALLOCATED: IntGaugeVec = register_int_gauge_vec_with_registry!(
 		"pegboard_client_actors_allocated",
 		"Total actors allocated on a client.",
-		&["client_id"],
+		&["datacenter_id", "client_id", "flavor", "inactive"],
 		*REGISTRY
 	).unwrap();
 }
