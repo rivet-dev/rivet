@@ -1623,17 +1623,21 @@
       "type": "object",
       "required": [
         "acme",
-        "root_ca_cert_pem",
-        "root_ca_key_pem"
+        "cert_locally_signed_job_cert_pem",
+        "cert_locally_signed_job_key_pem",
+        "root_ca_cert_pem"
       ],
       "properties": {
         "acme": {
           "$ref": "#/definitions/TlsAcme"
         },
-        "root_ca_cert_pem": {
+        "cert_locally_signed_job_cert_pem": {
           "$ref": "#/definitions/Secret<String>"
         },
-        "root_ca_key_pem": {
+        "cert_locally_signed_job_key_pem": {
+          "$ref": "#/definitions/Secret<String>"
+        },
+        "root_ca_cert_pem": {
           "$ref": "#/definitions/Secret<String>"
         }
       },

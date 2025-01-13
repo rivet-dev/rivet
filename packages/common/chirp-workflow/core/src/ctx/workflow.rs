@@ -974,6 +974,7 @@ impl WorkflowCtx {
 			.cursor
 			.compare_sleep(self.version)
 			.map_err(GlobalError::raw)?;
+		let history_res2 = history_res.equivalent();
 		let sleep_location = self.cursor.current_location_for(&history_res);
 
 		// Slept before
@@ -1034,11 +1035,7 @@ impl WorkflowCtx {
 		}
 
 		// Location of the signal event (comes after the sleep event)
-		let history_res = self
-			.cursor
-			.compare_signal(self.version)
-			.map_err(GlobalError::raw)?;
-		let signal_location = self.cursor.current_location_for(&history_res);
+		let signal_location = self.cursor.current_location_for(&history_res2);
 		let duration = deadline_ts.saturating_sub(rivet_util::timestamp::now());
 
 		// Duration is now 0, timeout is over

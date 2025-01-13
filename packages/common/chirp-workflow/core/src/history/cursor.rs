@@ -70,6 +70,8 @@ impl Cursor {
 		&self.root_location
 	}
 
+	/// Returns the current location of the cursor in relation to history. Does not take into account any
+	/// inserted events throughout the course of a workflow run.
 	pub fn current_location(&self) -> Location {
 		self.root_location.join(self.current_coord())
 	}
@@ -615,6 +617,18 @@ pub enum HistoryResult<T> {
 	Insertion,
 	/// No event for this location in history exists.
 	New,
+}
+
+impl<T> HistoryResult<T> {
+	/// Returns a history event thats equivalent to the current one. Used to bypass ownership if its not
+	/// needed.
+	pub(crate) fn equivalent(&self) -> HistoryResult<()> {
+		match self {
+			HistoryResult::Event(_) => HistoryResult::Event(()),
+			HistoryResult::Insertion => HistoryResult::Insertion,
+			HistoryResult::New => HistoryResult::New,
+		}
+	}
 }
 
 #[cfg(test)]
