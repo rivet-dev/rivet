@@ -1,1 +1,1 @@
-export type * from "../../core/src/bridge_types/40_rivet_kv.d.ts";
+export type * from "../core/bridge_types/40_rivet_kv.d.ts";
