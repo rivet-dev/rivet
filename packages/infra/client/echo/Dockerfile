@@ -9,7 +9,7 @@ RUN \
 	cd packages/infra/client && \
 	RUSTFLAGS="--cfg tokio_unstable" cargo build --release --bin pegboard-echo-server && \
 	mkdir -p /app/dist && \
-	mv /app/packages/infra/client/target/x86_64-unknown-linux-musl/release/pegboard-echo-server /app/dist/pegboard-echo-server
+	mv /app/target/x86_64-unknown-linux-musl/release/pegboard-echo-server /app/dist/pegboard-echo-server
 
 # Create non-root user and group
 RUN useradd -m -d /home/nonroot -s /bin/sh nonroot

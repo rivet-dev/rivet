@@ -337,9 +337,6 @@ pub async fn start_client(
 	// Init FDB config files
 	utils::init_fdb_config(&config).await.unwrap();
 
-	// Fetch ATS addresses
-	let pull_addresses = utils::fetch_pull_addresses(&config).await.unwrap();
-
 	// Build WS connection URL
 	let mut url = Url::parse("ws://127.0.0.1").unwrap();
 	url.set_port(Some(port)).unwrap();
@@ -362,7 +359,7 @@ pub async fn start_client(
 
 	tracing::info!("connected");
 
-	let ctx = Ctx::new(config, system, pool, tx, pull_addresses);
+	let ctx = Ctx::new(config, system, pool, tx);
 
 	// Share reference
 	{

@@ -9,10 +9,10 @@ const CLIENT_LOST_THRESHOLD_MS: i64 = util::duration::minutes(2);
 /// How long to wait after creating and not receiving a starting state before forcibly stopping actor.
 const ACTOR_START_THRESHOLD_MS: i64 = util::duration::seconds(30);
 /// How long to wait after stopping and not receiving a stop state before manually setting actor as
-/// stopped.
+/// lost.
 const ACTOR_STOP_THRESHOLD_MS: i64 = util::duration::seconds(30);
 /// How long to wait after stopped and not receiving an exit state before manually setting actor as
-/// exited.
+/// lost.
 const ACTOR_EXIT_THRESHOLD_MS: i64 = util::duration::seconds(5);
 
 #[derive(sqlx::FromRow)]

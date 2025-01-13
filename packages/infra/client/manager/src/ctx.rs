@@ -37,7 +37,9 @@ use uuid::Uuid;
 use crate::{
 	actor::Actor,
 	event_sender::EventSender,
-	metrics, runner,
+	metrics,
+	pull_addr_handler::PullAddrHandler,
+	runner,
 	utils::{self, sql::SqliteConnectionExt},
 };
 
@@ -75,8 +77,7 @@ pub struct Ctx {
 	pool: SqlitePool,
 	tx: Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>,
 	event_sender: EventSender,
-	// Cached addresses (should be sorted beforehand)
-	pub(crate) pull_addresses: Vec<String>,
+	pub(crate) pull_addr_handler: PullAddrHandler,
 
 	pub(crate) actors: RwLock<HashMap<Uuid, Arc<Actor>>>,
 	isolate_runner: RwLock<Option<runner::Handle>>,
@@ -88,7 +89,6 @@ impl Ctx {
 		system: SystemInfo,
 		pool: SqlitePool,
 		tx: SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
-		pull_addresses: Vec<String>,
 	) -> Arc<Self> {
 		Arc::new(Ctx {
 			config,
@@ -97,7 +97,7 @@ impl Ctx {
 			pool,
 			tx: Mutex::new(tx),
 			event_sender: EventSender::new(),
-			pull_addresses,
+			pull_addr_handler: PullAddrHandler::new(),
 
 			actors: RwLock::new(HashMap::new()),
 			isolate_runner: RwLock::new(None),

@@ -227,13 +227,13 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 }
 
 #[derive(Deserialize)]
-struct ApiResponse {
-	servers: Vec<ApiServer>,
+pub(crate) struct ApiResponse {
+	pub(crate) servers: Vec<ApiServer>,
 }
 
 #[derive(Deserialize)]
-struct ApiServer {
-	lan_ip: Option<Ipv4Addr>,
+pub(crate) struct ApiServer {
+	pub(crate) lan_ip: Option<Ipv4Addr>,
 }
 
 pub async fn init_fdb_config(config: &Config) -> Result<()> {
@@ -270,27 +270,6 @@ pub async fn init_fdb_config(config: &Config) -> Result<()> {
 	.await?;
 
 	Ok(())
-}
-
-pub async fn fetch_pull_addresses(config: &Config) -> Result<Vec<String>> {
-	let mut addresses = match &*config.client.images.pull_addresses() {
-		Addresses::Dynamic { fetch_endpoint } => reqwest::get(fetch_endpoint.clone())
-			.await?
-			.error_for_status()?
-			.json::<ApiResponse>()
-			.await?
-			.servers
-			.into_iter()
-			.filter_map(|server| server.lan_ip)
-			.map(|vlan_ip| format!("http://{vlan_ip}:8080"))
-			.collect::<Vec<_>>(),
-		Addresses::Static(addresses) => addresses.clone(),
-	};
-
-	// Always sort the addresses so the list is deterministic
-	addresses.sort();
-
-	Ok(addresses)
 }
 
 pub fn now() -> i64 {

@@ -86,7 +86,9 @@ impl Actor {
 
 		// Shuffle based on hash
 		let mut addresses = ctx
-			.pull_addresses
+			.pull_addr_handler
+			.addresses(ctx.config())
+			.await?
 			.iter()
 			.map(|addr| {
 				Ok(
