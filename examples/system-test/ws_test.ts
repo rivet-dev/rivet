@@ -7,6 +7,11 @@ const RIVET_SERVICE_TOKEN = Deno.env.get("RIVET_SERVICE_TOKEN");
 const RIVET_PROJECT = Deno.env.get("RIVET_PROJECT");
 const RIVET_ENVIRONMENT = Deno.env.get("RIVET_ENVIRONMENT");
 
+let region = Deno.env.get("REGION");
+if (!region || region.length == 0) {
+region = undefined;
+}
+
 const client = new RivetClient({
 	environment: RIVET_ENDPOINT,
 	token: RIVET_SERVICE_TOKEN,
@@ -15,11 +20,13 @@ const client = new RivetClient({
 async function run() {
 	let actorId: string | undefined;
 	try {
-		console.log("Creating actor");
+
+		console.log("Creating actor", { region });
 		const { actor } = await client.actor.create({
 			project: RIVET_PROJECT,
 			environment: RIVET_ENVIRONMENT,
 			body: {
+				region,
 				tags: {
 					name: "ws",
 				},
