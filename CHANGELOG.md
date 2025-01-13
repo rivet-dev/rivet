@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/).
 
+## [24.6.2](https://github.com/rivet-gg/rivet/compare/v24.6.2-rc.1...v24.6.2) (2025-01-13)
+
+
+### Features
+
+* add url to actor ports ([#1811](https://github.com/rivet-gg/rivet/issues/1811)) ([8a80712](https://github.com/rivet-gg/rivet/commit/8a807123849bc8638613ca68a5aa957214b2c3ea))
+* **site:** add support for intersection schemas ([#1725](https://github.com/rivet-gg/rivet/issues/1725)) ([9b9e51c](https://github.com/rivet-gg/rivet/commit/9b9e51c074aa8e4b04d4db11b094e36b691fb65e))
+
+
+### Bug Fixes
+
+* add validation around internal_port ([#1809](https://github.com/rivet-gg/rivet/issues/1809)) ([37ae0f5](https://github.com/rivet-gg/rivet/commit/37ae0f5d49ab65cab98e84f930b8dc35bbbc3c69))
+* **docker/dev-full:** force linux/amd64 for server container ([#1818](https://github.com/rivet-gg/rivet/issues/1818)) ([948a1c0](https://github.com/rivet-gg/rivet/commit/948a1c0f79a5f40b2ab4296c93a0179ebd722c0d))
+* fix manager log rotation ([#1806](https://github.com/rivet-gg/rivet/issues/1806)) ([4e96fd7](https://github.com/rivet-gg/rivet/commit/4e96fd73bc3e2e92d16ca449c285cc03fff0f06f))
+* fix various wf bugs, ds undrain, nonreporting metric ([#1791](https://github.com/rivet-gg/rivet/issues/1791)) ([4b86429](https://github.com/rivet-gg/rivet/commit/4b86429f99b8d0e5f38fa70a3a3749ea9f12ac95))
+* fix workflow listen_with_timeout history bug ([#1822](https://github.com/rivet-gg/rivet/issues/1822)) ([c315617](https://github.com/rivet-gg/rivet/commit/c31561791fe3167f3edb090a54bf1fd243b880c0))
+* **hub:** blank screen when `CLAIMS_ENTITLEMENT_EXPIRED` ([#1730](https://github.com/rivet-gg/rivet/issues/1730)) ([2a2bba4](https://github.com/rivet-gg/rivet/commit/2a2bba483a6c89c82cb31d48deae78651240bd12))
+* **hub:** failed request to rivet.gg/changelog.json causes error that blocks usage of hub ([#1731](https://github.com/rivet-gg/rivet/issues/1731)) ([86924c9](https://github.com/rivet-gg/rivet/commit/86924c9335705460a6450f6b7086ec2f15b8f318))
+* **pegboard:** build with bullseye for correct glibc version ([#1823](https://github.com/rivet-gg/rivet/issues/1823)) ([936bbdb](https://github.com/rivet-gg/rivet/commit/936bbdb6510d2c1a2b060fbdcb015eba7dc4c5e6))
+* remove unused workflow idxs ([#1810](https://github.com/rivet-gg/rivet/issues/1810)) ([8df19e8](https://github.com/rivet-gg/rivet/commit/8df19e89764c6197d09de6005aea361d544e51dc))
+* **sdks/actor/runtime:** bad import path for 40_rivet_kv.d.ts ([#1819](https://github.com/rivet-gg/rivet/issues/1819)) ([5c599c6](https://github.com/rivet-gg/rivet/commit/5c599c645080dd1258ea4a0292f8dcf052373265))
+* **site:** add missing redirects to opengamebackend.org ([#1726](https://github.com/rivet-gg/rivet/issues/1726)) ([d84fa85](https://github.com/rivet-gg/rivet/commit/d84fa85f6550f0f1087a83f8dfe54e059b3daec4))
+* **site:** hide dropdown when hovering over tab without dropdown ([#1727](https://github.com/rivet-gg/rivet/issues/1727)) ([d9d16f7](https://github.com/rivet-gg/rivet/commit/d9d16f757bbc7663180d07c2aed2c5cfa8d65873))
+* **site:** pricing page anchors to bottom of page ([#1728](https://github.com/rivet-gg/rivet/issues/1728)) ([6903892](https://github.com/rivet-gg/rivet/commit/69038922002d397f3fe2e4492ad0e9e2ef9292e0))
+
+
+### Code Refactoring
+
+* **hub:** change plan names in billing badge ([#1732](https://github.com/rivet-gg/rivet/issues/1732)) ([9727f21](https://github.com/rivet-gg/rivet/commit/9727f216d3884f94ee438f6419caafdcb5bc7e0b))
+
+
+### Chores
+
+* **fe/deps:** update yarn.lock ([#1827](https://github.com/rivet-gg/rivet/issues/1827)) ([c95e36b](https://github.com/rivet-gg/rivet/commit/c95e36bab57d1617bbfef592dd65cb4db20af838))
+* **hub:** move hub source code to rivet ([#1729](https://github.com/rivet-gg/rivet/issues/1729)) ([ac89fe1](https://github.com/rivet-gg/rivet/commit/ac89fe1142a303529d6ae17a5661a847aeb4bde5))
+* **hub:** update hub ([#1835](https://github.com/rivet-gg/rivet/issues/1835)) ([0db5070](https://github.com/rivet-gg/rivet/commit/0db50707a9e41f27d62d05a77489d23b233e4aa6))
+* improve actors allocated metric ([#1812](https://github.com/rivet-gg/rivet/issues/1812)) ([46ea373](https://github.com/rivet-gg/rivet/commit/46ea3738a1156b57e1030df679d3ed36b235ca35))
+* **justfile:** add system test shortcut command ([#1825](https://github.com/rivet-gg/rivet/issues/1825)) ([1ce6f44](https://github.com/rivet-gg/rivet/commit/1ce6f440a68330ddde26aa150f203a138546feed))
+* **mm:** handle orphaned runs without matching lobbies ([#1826](https://github.com/rivet-gg/rivet/issues/1826)) ([34e333c](https://github.com/rivet-gg/rivet/commit/34e333c819c3d6d3c77aabc19e514141398bf962))
+* release 24.6.2 ([cc607c3](https://github.com/rivet-gg/rivet/commit/cc607c321636eb4072c4707bb6862d3e7afedcfb))
+* release 24.6.2 ([221567e](https://github.com/rivet-gg/rivet/commit/221567edf18bee18caeefccb58164ef47ef5173c))
+* **release:** update version to 24.6.2 ([a18a756](https://github.com/rivet-gg/rivet/commit/a18a75650ca20c15cf6f478a712c66b6ef4045ce))
+* sync fe repo ([#1829](https://github.com/rivet-gg/rivet/issues/1829)) ([df42570](https://github.com/rivet-gg/rivet/commit/df4257038a5b2cc511f0c7d3b05cfca020bc01f1))
+
 ## [24.6.2-rc.1](https://github.com/rivet-gg/rivet/compare/v24.6.1...v24.6.2-rc.1) (2025-01-05)
 
 
