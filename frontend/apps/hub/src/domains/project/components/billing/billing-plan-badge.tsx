@@ -59,6 +59,8 @@ export function BillingPlanBadge({ projectId }: BillingPlanBadgeProps) {
 	return <Content projectId={projectId} />;
 }
 
-export function ProjectBillingPlanLabel({ plan }: { plan: Rivet.ee.billing.Plan }) {
+export function ProjectBillingPlanLabel({
+	plan,
+}: { plan: Rivet.ee.billing.Plan }) {
 	return BILLING_PLAN_LABELS[plan];
 }

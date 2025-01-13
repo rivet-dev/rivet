@@ -1,0 +1,1 @@
+curl -fsSL https://releases.rivet.gg/rivet/latest/install.sh | sh

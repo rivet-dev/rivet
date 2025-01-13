@@ -27,15 +27,13 @@ import {
 } from "@rivet-gg/icons";
 import { motion, useMotionValueEvent, useScroll } from "framer-motion";
 import { type ComponentProps, useState } from "react";
-import installCli, {
-	source as installCliSource,
-} from "./onboarding/initial-setup-install-rivet-cli.sh?shiki&lang=bash";
 import setupCli, {
 	source as setupCliSource,
 } from "./onboarding/initial-setup-setup-rivet-cli.sh?shiki&lang=bash";
 import testCli, {
 	source as testCliSource,
 } from "./onboarding/initial-setup-test-rivet-cli.sh?shiki&lang=bash";
+import { InstallCli } from "./onboarding/install-cli";
 
 const containerVariants = {
 	hidden: {
@@ -88,9 +86,7 @@ export function GetStarted() {
 				<CardContent>
 					<div>
 						<h3 className="font-semibold">1. Install</h3>
-						<CodeFrame code={installCliSource} language="bash">
-							<CodeSource>{installCli}</CodeSource>
-						</CodeFrame>
+						<InstallCli />
 					</div>
 					<div>
 						<h3 className="font-semibold">2. Setup</h3>
