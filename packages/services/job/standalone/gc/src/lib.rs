@@ -87,13 +87,14 @@ pub async fn run_from_env(
 	// We use stale reads without locks since job-run-stop is idempotent.
 	let crdb = ctx.crdb().await?;
 	let runs = sql_fetch_all!(
-		[ctx, (Uuid, Option<String>), &crdb]
+		[ctx, (Uuid, Option<String>, bool), &crdb]
 		"
-		SELECT runs.run_id, run_meta_nomad.dispatched_job_id
+		SELECT runs.run_id, run_meta_nomad.dispatched_job_id, lobbies.lobby_id IS NULL AS lobby_exists
 		FROM db_job_state.runs
 		INNER JOIN db_job_state.run_meta_nomad ON run_meta_nomad.run_id = runs.run_id
+		LEFT JOIN db_mm_state.lobbies ON lobbies.run_id = runs.run_id
 		AS OF SYSTEM TIME '-5s'
-		WHERE stop_ts IS NULL AND create_ts < $1
+		WHERE runs.stop_ts IS NULL AND runs.create_ts < $1
 		",
 		check_orphaned_ts,
 	)
@@ -106,10 +107,11 @@ pub async fn run_from_env(
 	let mut orphaned_nomad_job = 0;
 	let mut orphaned_mm_lobby = 0;
 	let mut oprhaned_mm_lobby_not_found = 0;
+	let mut no_lobby = 0;
 	let mut no_dispatched_job_id = 0;
 
 	// Check for orphaned Nomad jobs
-	for (run_id, dispatched_job_id) in runs {
+	for (run_id, dispatched_job_id, lobby_exists) in runs {
 		let dispatched_job_id = if let Some(x) = dispatched_job_id {
 			x
 		} else {
@@ -117,6 +119,20 @@ pub async fn run_from_env(
 			no_dispatched_job_id += 1;
 			continue;
 		};
+
+		if !lobby_exists {
+			no_lobby += 1;
+			running_run_ids.remove(&run_id);
+
+			tracing::warn!(%run_id, "lobby does not exist, skipping run");
+			msg!([ctx] @wait job_run::msg::stop(run_id) {
+				run_id: Some(run_id.into()),
+				..Default::default()
+			})
+			.await?;
+
+			continue;
+		}
 
 		if !job_ids_from_nomad.contains(&dispatched_job_id) {
 			orphaned_nomad_job += 1;
@@ -178,6 +194,7 @@ pub async fn run_from_env(
 		?orphaned_nomad_job,
 		?orphaned_mm_lobby,
 		?oprhaned_mm_lobby_not_found,
+		?no_lobby,
 		?no_dispatched_job_id,
 		still_running = ?running_run_ids.len(),
 		"finished"
