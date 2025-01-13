@@ -47,7 +47,7 @@ pub struct Build {
 	pub create_ts: i64,
 	pub kind: BuildKind,
 	pub compression: BuildCompression,
-	pub tags: HashMap<String, Option<String>>,
+	pub tags: HashMap<String, String>,
 }
 
 // TODO: Move to upload pkg when its converted to new ops

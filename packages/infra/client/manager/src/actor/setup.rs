@@ -1,26 +1,22 @@
 use std::{
 	collections::HashMap,
-	hash::{DefaultHasher, Hasher},
 	path::{Path, PathBuf},
 	process::Stdio,
 	result::Result::{Err, Ok},
 };
 
 use anyhow::*;
-use futures_util::Stream;
 use futures_util::StreamExt;
 use indoc::indoc;
 use pegboard::protocol;
 use pegboard_config::isolate_runner::actor as actor_config;
 use rand::Rng;
-use rand::{prelude::SliceRandom, SeedableRng};
 use serde_json::json;
 use tokio::{
 	fs::{self, File},
 	io::{AsyncReadExt, AsyncWriteExt},
 	process::Command,
 };
-use url::Url;
 use uuid::Uuid;
 
 use super::{oci_config, Actor};
@@ -71,63 +67,19 @@ impl Actor {
 		Ok(())
 	}
 
-	/// Deterministically shuffles a list of available ATS URL's to download the image from based on the image
-	// ID and attempts to download from each URL until success.
-	async fn fetch_image_stream(
-		&self,
-		ctx: &Ctx,
-	) -> Result<impl Stream<Item = reqwest::Result<bytes::Bytes>>> {
-		// Get hash from image id
-		let mut hasher = DefaultHasher::new();
-		hasher.write(self.config.image.id.as_bytes());
-		let hash = hasher.finish();
-
-		let mut rng = rand_chacha::ChaCha12Rng::seed_from_u64(hash);
-
-		// Shuffle based on hash
-		let mut addresses = ctx
-			.pull_addr_handler
-			.addresses(ctx.config())
-			.await?
-			.iter()
-			.map(|addr| {
-				Ok(
-					Url::parse(&format!("{addr}{}", self.config.image.artifact_url_stub))
-						.context("failed to build artifact url")?
-						.to_string(),
-				)
-			})
-			.collect::<Result<Vec<_>>>()?;
-		addresses.shuffle(&mut rng);
-
-		// Add fallback url to the end if one is set
-		if let Some(fallback_artifact_url) = &self.config.image.fallback_artifact_url {
-			addresses.push(fallback_artifact_url.clone());
-		}
-
-		let mut iter = addresses.into_iter();
-		while let Some(artifact_url) = iter.next() {
-			match reqwest::get(&artifact_url)
-				.await
-				.and_then(|res| res.error_for_status())
-			{
-				Ok(res) => return Ok(res.bytes_stream()),
-				Err(err) => {
-					tracing::warn!(actor_id=?self.actor_id, "failed to start download from {artifact_url}: {err}");
-				}
-			}
-		}
-
-		bail!("artifact url could not be resolved");
-	}
-
 	pub async fn download_image(&self, ctx: &Ctx) -> Result<()> {
 		tracing::info!(actor_id=?self.actor_id, "downloading artifact");
 
 		let actor_path = ctx.actor_path(self.actor_id);
 		let fs_path = actor_path.join("fs");
 
-		let mut stream = self.fetch_image_stream(ctx).await?;
+		let mut stream = utils::fetch_image_stream(
+			ctx,
+			self.config.image.id,
+			&self.config.image.artifact_url_stub,
+			self.config.image.fallback_artifact_url.as_deref(),
+		)
+		.await?;
 
 		match self.config.image.kind {
 			protocol::ImageKind::DockerImage => {

@@ -44,6 +44,7 @@ game-namespace-get.workspace = true
 game-namespace-resolve-name-id.workspace = true
 game-resolve-name-id.workspace = true
 game-version-get.workspace = true
+pegboard.workspace = true
 region-recommend.workspace = true
 rivet-config.workspace = true
 rivet-env.workspace = true

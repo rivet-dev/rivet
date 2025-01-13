@@ -4,7 +4,7 @@ use chirp_workflow::prelude::*;
 use futures_util::FutureExt;
 use nix::sys::signal::Signal;
 
-use crate::{metrics, protocol};
+use crate::{metrics, protocol, workflows::PrewarmImage};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Input {
@@ -103,11 +103,21 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 								}
 							}
 						}
-						protocol::ToServer::FetchStateResponse {} => todo!(),
 					}
 				}
 				Main::Command(command) => {
 					handle_commands(ctx, client_id, vec![command]).await?;
+				}
+				Main::PrewarmImage(sig) => {
+					ctx.msg(ToWs {
+						client_id,
+						inner: protocol::ToClient::PrewarmImage {
+							image_id: sig.image_id,
+							image_artifact_url_stub: sig.image_artifact_url_stub,
+						},
+					})
+					.send()
+					.await?;
 				}
 				Main::Drain(_) => {
 					ctx.activity(SetDrainInput {
@@ -633,6 +643,7 @@ join_signal!(Main {
 	Command(protocol::Command),
 	// Forwarded from the ws to this workflow
 	Forward(protocol::ToServer),
+	PrewarmImage,
 	Drain,
 	Undrain,
 	Destroy,

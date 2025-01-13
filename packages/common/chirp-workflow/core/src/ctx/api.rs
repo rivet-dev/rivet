@@ -17,6 +17,8 @@ use crate::{
 	workflow::{Workflow, WorkflowInput},
 };
 
+// NOTE: Clonable because of inner arcs
+#[derive(Clone)]
 pub struct ApiCtx {
 	ray_id: Uuid,
 	name: String,

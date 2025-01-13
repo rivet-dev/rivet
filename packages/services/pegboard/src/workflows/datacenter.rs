@@ -1,7 +1,7 @@
 use chirp_workflow::prelude::*;
 use futures_util::FutureExt;
 
-use crate::protocol;
+use crate::{protocol, workflows::PrewarmImage};
 
 /// How long after last ping before not considering a client for allocation.
 const CLIENT_ELIGIBLE_THRESHOLD_MS: i64 = util::duration::seconds(10);
@@ -17,8 +17,8 @@ pub async fn pegboard_datacenter(ctx: &mut WorkflowCtx, input: &Input) -> Global
 		let datacenter_id = input.datacenter_id;
 
 		async move {
-			match ctx.listen::<protocol::Command>().await? {
-				protocol::Command::StartActor { actor_id, config } => {
+			match ctx.listen::<Main>().await? {
+				Main::Command(protocol::Command::StartActor { actor_id, config }) => {
 					let client_id = ctx
 						.activity(AllocateActorInput {
 							datacenter_id,
@@ -51,12 +51,12 @@ pub async fn pegboard_datacenter(ctx: &mut WorkflowCtx, input: &Input) -> Global
 						.await?;
 					}
 				}
-				protocol::Command::SignalActor {
+				Main::Command(protocol::Command::SignalActor {
 					actor_id,
 					signal,
 					persist_storage,
 					ignore_future_state,
-				} => {
+				}) => {
 					let client_id = ctx.activity(GetClientForActorInput { actor_id }).await?;
 
 					if let Some(client_id) = client_id {
@@ -75,6 +75,16 @@ pub async fn pegboard_datacenter(ctx: &mut WorkflowCtx, input: &Input) -> Global
 							?actor_id,
 							"tried sending signal to actor that doesn't exist"
 						);
+					}
+				}
+				Main::PrewarmImage(sig) => {
+					let client_id = ctx.activity(GetClientFromDcInput { datacenter_id }).await?;
+
+					if let Some(client_id) = client_id {
+						// Forward signal to client
+						ctx.signal(sig).tag("client_id", client_id).send().await?;
+					} else {
+						tracing::error!(?datacenter_id, image_id=?sig.image_id, "failed to prewarm image");
 					}
 				}
 			}
@@ -235,3 +245,32 @@ async fn get_client_for_actor(
 
 	Ok(row.map(|(client_id,)| client_id))
 }
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct GetClientFromDcInput {
+	datacenter_id: Uuid,
+}
+
+#[activity(GetClientFromDc)]
+async fn get_client_from_dc(
+	ctx: &ActivityCtx,
+	input: &GetClientFromDcInput,
+) -> GlobalResult<Option<Uuid>> {
+	let row = sql_fetch_optional!(
+		[ctx, (Uuid,)]
+		"
+		SELECT client_id
+		FROM db_pegboard.actors
+		WHERE datacenter_id = $1
+		",
+		input.datacenter_id,
+	)
+	.await?;
+
+	Ok(row.map(|(client_id,)| client_id))
+}
+
+join_signal!(Main {
+	Command(protocol::Command),
+	PrewarmImage,
+});

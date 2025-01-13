@@ -670,7 +670,7 @@ async fn list_actors_inner(
 	_watch_index: WatchIndexQuery,
 	query: ListQuery,
 ) -> GlobalResult<models::ActorListActorsResponse> {
-	let CheckOutput { game_id, env_id } = ctx
+	let CheckOutput { env_id, .. } = ctx
 		.auth()
 		.check(
 			ctx.op_ctx(),

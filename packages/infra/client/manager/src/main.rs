@@ -27,7 +27,7 @@ mod utils;
 
 use ctx::Ctx;
 
-const PROTOCOL_VERSION: u16 = 1;
+const PROTOCOL_VERSION: u16 = 2;
 
 #[derive(Clone)]
 struct Init {

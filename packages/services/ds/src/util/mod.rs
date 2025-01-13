@@ -64,6 +64,17 @@ pub fn build_ds_hostname_and_path(
 	}
 }
 
+pub fn image_artifact_url_stub(
+	config: &rivet_config::Config,
+	upload_id: Uuid,
+	file_name: &str,
+) -> GlobalResult<String> {
+	Ok(format!(
+		"/s3-cache/{namespace}-bucket-build/{upload_id}/{file_name}",
+		namespace = config.server()?.rivet.namespace,
+	))
+}
+
 /// Formats the port label to be used in Nomad and Pegboard.
 ///
 /// Prefixing this port ensure that the user defined port names don't interfere

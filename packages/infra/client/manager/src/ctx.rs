@@ -319,7 +319,16 @@ impl Ctx {
 					self.process_command(command).await?;
 				}
 			}
-			protocol::ToClient::FetchStateRequest {} => todo!(),
+			protocol::ToClient::PrewarmImage {
+				image_id,
+				image_artifact_url_stub,
+			} => {
+				let self2 = self.clone();
+
+				tokio::spawn(async move {
+					utils::prewarm_image(&self2, image_id, &image_artifact_url_stub).await
+				});
+			}
 		}
 
 		Ok(())
@@ -521,8 +530,6 @@ impl Ctx {
 			let actor = actor.clone();
 			let self2 = self.clone();
 			tokio::spawn(async move {
-				use std::result::Result::Err;
-
 				if let Err(err) = actor.observe(&self2).await {
 					tracing::error!(actor_id=?row.actor_id, ?err, "observe failed");
 				}

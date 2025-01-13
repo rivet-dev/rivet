@@ -20,9 +20,14 @@ pub enum PegboardProtocolError {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ToClient {
-	Init { last_event_idx: i64 },
+	Init {
+		last_event_idx: i64,
+	},
 	Commands(Vec<CommandWrapper>),
-	FetchStateRequest {},
+	PrewarmImage {
+		image_id: Uuid,
+		image_artifact_url_stub: String,
+	},
 }
 
 impl ToClient {
@@ -46,7 +51,6 @@ pub enum ToServer {
 		system: crate::system_info::SystemInfo,
 	},
 	Events(Vec<EventWrapper>),
-	FetchStateResponse {},
 }
 
 impl ToServer {

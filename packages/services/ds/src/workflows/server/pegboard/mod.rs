@@ -642,7 +642,11 @@ async fn resolve_artifacts(
 		};
 
 	Ok(ResolveArtifactsOutput {
-		artifact_url_stub,
+		artifact_url_stub: crate::util::image_artifact_url_stub(
+			ctx.config(),
+			input.build_upload_id,
+			&input.build_file_name,
+		)?,
 		fallback_artifact_url,
 	})
 }

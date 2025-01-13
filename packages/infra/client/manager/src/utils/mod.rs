@@ -1,16 +1,21 @@
 use std::{
+	hash::{DefaultHasher, Hasher},
 	net::Ipv4Addr,
 	path::Path,
+	result::Result::{Err, Ok},
 	time::{self, Duration},
 };
 
 use anyhow::*;
+use futures_util::Stream;
 use indoc::indoc;
 use notify::{
 	event::{AccessKind, AccessMode},
 	Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
 };
 use pegboard::protocol;
+use pegboard_config::{Addresses, Config};
+use rand::{prelude::SliceRandom, SeedableRng};
 use serde::Deserialize;
 use sqlx::{
 	migrate::MigrateDatabase,
@@ -21,8 +26,10 @@ use tokio::{
 	fs,
 	sync::mpsc::{channel, Receiver},
 };
+use url::Url;
+use uuid::Uuid;
 
-use pegboard_config::{Addresses, Config};
+use crate::ctx::Ctx;
 
 pub mod sql;
 
@@ -227,13 +234,13 @@ pub async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 }
 
 #[derive(Deserialize)]
-pub(crate) struct ApiResponse {
-	pub(crate) servers: Vec<ApiServer>,
+pub struct ApiResponse {
+	pub servers: Vec<ApiServer>,
 }
 
 #[derive(Deserialize)]
-pub(crate) struct ApiServer {
-	pub(crate) lan_ip: Option<Ipv4Addr>,
+pub struct ApiServer {
+	pub lan_ip: Option<Ipv4Addr>,
 }
 
 pub async fn init_fdb_config(config: &Config) -> Result<()> {
@@ -327,4 +334,69 @@ pub async fn wait_for_write<P: AsRef<Path>>(path: P) -> Result<()> {
 	}
 
 	Ok(())
+}
+
+/// Deterministically shuffles a list of available ATS URL's to download the image from based on the image
+// ID and attempts to download from each URL until success.
+pub async fn fetch_image_stream(
+	ctx: &Ctx,
+	image_id: Uuid,
+	image_artifact_url_stub: &str,
+	image_fallback_artifact_url: Option<&str>,
+) -> Result<impl Stream<Item = reqwest::Result<bytes::Bytes>>> {
+	// Get hash from image id
+	let mut hasher = DefaultHasher::new();
+	hasher.write(image_id.as_bytes());
+	let hash = hasher.finish();
+
+	let mut rng = rand_chacha::ChaCha12Rng::seed_from_u64(hash);
+
+	// Shuffle based on hash
+	let mut addresses = ctx
+		.pull_addr_handler
+		.addresses(ctx.config())
+		.await?
+		.iter()
+		.map(|addr| {
+			Ok(Url::parse(&format!("{addr}{}", image_artifact_url_stub))
+				.context("failed to build artifact url")?
+				.to_string())
+		})
+		.collect::<Result<Vec<_>>>()?;
+	addresses.shuffle(&mut rng);
+
+	// Add fallback url to the end if one is set
+	if let Some(fallback_artifact_url) = image_fallback_artifact_url {
+		addresses.push(fallback_artifact_url.to_string());
+	}
+
+	let mut iter = addresses.into_iter();
+	while let Some(artifact_url) = iter.next() {
+		match reqwest::get(&artifact_url)
+			.await
+			.and_then(|res| res.error_for_status())
+		{
+			Ok(res) => return Ok(res.bytes_stream()),
+			Err(err) => {
+				tracing::warn!(
+					?image_id,
+					"failed to start download from {artifact_url}: {err}"
+				);
+			}
+		}
+	}
+
+	bail!("artifact url could not be resolved");
+}
+
+pub async fn prewarm_image(ctx: &Ctx, image_id: Uuid, image_artifact_url_stub: &str) {
+	tracing::debug!(?image_id, "prewarming");
+
+	match fetch_image_stream(ctx, image_id, image_artifact_url_stub, None).await {
+		Ok(_) => tracing::debug!(?image_id, "prewarm complete"),
+		Err(_) => tracing::warn!(
+			?image_id,
+			"prewarm failed, artifact url could not be resolved"
+		),
+	}
 }

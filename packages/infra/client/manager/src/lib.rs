@@ -9,9 +9,9 @@ mod ctx;
 #[cfg(feature = "test")]
 pub mod event_sender;
 #[cfg(feature = "test")]
-pub mod pull_addr_handler;
-#[cfg(feature = "test")]
 mod metrics;
+#[cfg(feature = "test")]
+pub mod pull_addr_handler;
 #[cfg(feature = "test")]
 mod runner;
 #[cfg(feature = "test")]

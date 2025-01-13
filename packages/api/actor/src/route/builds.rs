@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
+use futures_util::{StreamExt, TryStreamExt};
 use rivet_api::models;
 use rivet_convert::{ApiInto, ApiTryInto};
 use rivet_operation::prelude::*;
@@ -34,25 +35,25 @@ pub async fn get(
 		)
 		.await?;
 
-	let builds_res = op!([ctx] build_get {
-		build_ids: vec![build_id.into()],
-	})
-	.await?;
+	let builds_res = ctx
+		.op(build::ops::get::Input {
+			build_ids: vec![build_id],
+		})
+		.await?;
 	let build = unwrap_with!(builds_res.builds.first(), BUILD_NOT_FOUND);
-	ensure_with!(unwrap!(build.env_id).as_uuid() == env_id, BUILD_NOT_FOUND);
+	ensure_with!(
+		unwrap_with!(build.env_id, BUILD_NOT_FOUND) == env_id,
+		BUILD_NOT_FOUND
+	);
 
 	let uploads_res = op!([ctx] upload_get {
-		upload_ids: builds_res
-			.builds
-			.iter()
-			.filter_map(|build| build.upload_id)
-			.collect::<Vec<_>>(),
+		upload_ids: vec![build.upload_id.into()],
 	})
 	.await?;
 	let upload = unwrap!(uploads_res.uploads.first());
 
 	let build = models::ActorBuild {
-		id: unwrap!(build.build_id).as_uuid(),
+		id: build.build_id,
 		name: build.display_name.clone(),
 		created_at: timestamp::to_string(build.create_ts)?,
 		content_length: upload.content_length.api_try_into()?,
@@ -253,14 +254,17 @@ pub async fn patch_tags(
 		}
 	}
 
-	let build_res = ctx
+	let builds_res = ctx
 		.op(build::ops::get::Input {
 			build_ids: vec![build_id],
 		})
 		.await?;
-	let build = unwrap_with!(build_res.builds.first(), BUILD_NOT_FOUND);
+	let build = unwrap_with!(builds_res.builds.first(), BUILD_NOT_FOUND);
 
-	ensure_with!(unwrap!(build.env_id) == env_id, BUILD_NOT_FOUND);
+	ensure_with!(
+		unwrap_with!(build.env_id, BUILD_NOT_FOUND) == env_id,
+		BUILD_NOT_FOUND
+	);
 
 	ctx.op(build::ops::patch_tags::Input {
 		build_id,
@@ -366,7 +370,7 @@ pub async fn create_build_deprecated(
 	body: models::ServersCreateBuildRequest,
 ) -> GlobalResult<models::ServersCreateBuildResponse> {
 	let global = build_global_query_compat(&ctx, game_id, env_id).await?;
-	let build_res = create_build(
+	let builds_res = create_build(
 		ctx,
 		models::ActorPrepareBuildRequest {
 			compression: body.compression.map(|c| match c {
@@ -388,18 +392,18 @@ pub async fn create_build_deprecated(
 
 	let (image_presigned_request, image_presigned_requests) = if !multipart_upload {
 		(
-			Some(Box::new(unwrap!(build_res
+			Some(Box::new(unwrap!(builds_res
 				.presigned_requests
 				.into_iter()
 				.next()))),
 			None,
 		)
 	} else {
-		(None, Some(build_res.presigned_requests))
+		(None, Some(builds_res.presigned_requests))
 	};
 
 	Ok(models::ServersCreateBuildResponse {
-		build: build_res.build,
+		build: builds_res.build,
 		image_presigned_request,
 		image_presigned_requests,
 	})
@@ -424,19 +428,56 @@ pub async fn complete_build(
 		)
 		.await?;
 
-	let build_res = op!([ctx] build_get {
-		build_ids: vec![build_id.into()],
-	})
-	.await?;
-	let build = unwrap_with!(build_res.builds.first(), BUILD_NOT_FOUND);
+	let builds_res = ctx
+		.op(build::ops::get::Input {
+			build_ids: vec![build_id],
+		})
+		.await?;
+	let build = unwrap_with!(builds_res.builds.first(), BUILD_NOT_FOUND);
 
-	ensure_with!(unwrap!(build.env_id).as_uuid() == env_id, BUILD_NOT_FOUND);
+	ensure_with!(
+		unwrap_with!(build.env_id, BUILD_NOT_FOUND) == env_id,
+		BUILD_NOT_FOUND
+	);
 
 	op!([ctx] @dont_log_body upload_complete {
-		upload_id: build.upload_id,
+		upload_id: Some(build.upload_id.into()),
 		bucket: None,
 	})
 	.await?;
+
+	// Prewarm all datacenters for pegboard
+	{
+		let default_cluster_id = ctx.config().server()?.rivet.default_cluster_id()?;
+
+		let datacenters_res = ctx
+			.op(cluster::ops::datacenter::list::Input {
+				cluster_ids: vec![default_cluster_id],
+			})
+			.await?;
+		let cluster = unwrap!(datacenters_res.clusters.first());
+
+		futures_util::stream::iter(cluster.datacenter_ids.iter().cloned())
+			.map(|datacenter_id| {
+				let ctx = ctx.clone();
+				async move {
+					ctx.signal(pegboard::workflows::PrewarmImage {
+						image_id: build_id,
+						image_artifact_url_stub: ds::util::image_artifact_url_stub(
+							ctx.config(),
+							build.upload_id,
+							&build::utils::file_name(build.kind, build.compression),
+						)?,
+					})
+					.tag("datacenter_id", datacenter_id)
+					.send()
+					.await
+				}
+			})
+			.buffer_unordered(16)
+			.try_collect::<Vec<_>>()
+			.await?;
+	}
 
 	Ok(json!({}))
 }
