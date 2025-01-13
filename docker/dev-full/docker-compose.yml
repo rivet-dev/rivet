@@ -4,6 +4,7 @@ services:
       context: ../..
       dockerfile: docker/universal/Dockerfile
       target: server-full
+    platform: linux/amd64
     restart: unless-stopped
     command: /usr/bin/rivet-server start
     environment:
