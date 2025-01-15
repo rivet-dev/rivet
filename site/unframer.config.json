@@ -3,8 +3,8 @@
   "outDir": "./src/generated/framer",
   "components": {
     "index": "https://framer.com/m/Main-Page-hPg2.js@s5Y7TgBI7iMaEuZnNlR8",
-    "pricing": "https://framer.com/m/Sales-Page-serf.js@bZPytf0REs7q4bOEwvxc",
-    "sales": "https://framer.com/m/Pricing-Page-VfNq.js@iNJek3q0rL1MFbNQOpd3"
+    "pricing": "https://framer.com/m/Pricing-Page-VfNq.js@iNJek3q0rL1MFbNQOpd3",
+    "sales": "https://framer.com/m/Sales-Page-serf.js@bZPytf0REs7q4bOEwvxc"
   },
   "breakpoints": {
     "xl": 1200,
