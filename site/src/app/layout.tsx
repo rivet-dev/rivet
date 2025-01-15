@@ -10,7 +10,7 @@ else if (process.env.CF_PAGES_URL) metadataBase = new URL(process.env.CF_PAGES_U
 
 export const metadata: Metadata = {
   metadataBase,
-  title: 'Rivet - Run and scale realtime applications',
+  title: 'Rivet - Serverless for stateful backends',
   description: 'Rivet Actors have built-in RPC, state, and events — the easiest way to build modern applications.',
   twitter: {
     site: '@rivetgg',
