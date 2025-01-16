@@ -10,6 +10,7 @@ import { faDiscord, faGithub, Icon } from '@rivet-gg/icons';
 import { AnimatePresence, motion } from 'unframer';
 import { HeaderPopupProductMenu } from '../HeaderPopupProductMenu';
 import { HeaderPopupSolutionsMenu } from '../HeaderPopupSolutionsMenu';
+import { GitHubStars } from '@/components/GitHubStars';
 
 type Subnav = false | 'product' | 'solutions';
 
@@ -19,7 +20,7 @@ interface FancyHeaderProps {
   mobileBreadcrumbs?: ReactNode;
 }
 
-export function FancyHeader({ active, subnav }: FancyHeaderProps) {
+export function FancyHeader({ active, subnav, mobileBreadcrumbs }: FancyHeaderProps) {
   const [isSubnavOpen, setIsSubnavOpen] = useState<Subnav>(false);
   const prev = useRef<Subnav>(false);
 
@@ -72,16 +73,14 @@ export function FancyHeader({ active, subnav }: FancyHeaderProps) {
               </div>
             }
             links={
-              <>
-                <RivetHeader.NavItem asChild className='-m-2 p-2'>
+              <div className="flex flex-row items-center">
+                <RivetHeader.NavItem asChild className='p-2 mr-4'>
                   <Link href='/discord' className='text-white/90'>
                     <Icon icon={faDiscord} className='drop-shadow-md' />
                   </Link>
                 </RivetHeader.NavItem>
-                <RivetHeader.NavItem asChild className='p-2'>
-                  <Link href='https://github.com/rivet-gg/rivet' target='_blank' className='text-white/90'>
-                    <Icon icon={faGithub} className='drop-shadow-md' />
-                  </Link>
+                <RivetHeader.NavItem asChild className='flex mr-2'>
+                  <GitHubStars className='text-white/90 hover:text-white transition-colors w-full' />
                 </RivetHeader.NavItem>
                 <Button
                   variant='secondary'
@@ -89,7 +88,7 @@ export function FancyHeader({ active, subnav }: FancyHeaderProps) {
                   className='font-v2 subpixel-antialiased hover:border-white/20'>
                   <Link href='https://hub.rivet.gg'>Sign In</Link>
                 </Button>
-              </>
+              </div>
             }
             mobileBreadcrumbs={<DocsMobileNavigation />}
             breadcrumbs={
