@@ -6,6 +6,7 @@ import * as environments from "../../../../environments";
 import * as core from "../../../../core";
 import { Datacenters } from "../resources/datacenters/client/Client";
 import { Servers } from "../resources/servers/client/Client";
+import { Tunnel } from "../resources/tunnel/client/Client";
 
 export declare namespace Provision {
     interface Options {
@@ -43,5 +44,11 @@ export class Provision {
 
     public get servers(): Servers {
         return (this._servers ??= new Servers(this._options));
+    }
+
+    protected _tunnel: Tunnel | undefined;
+
+    public get tunnel(): Tunnel {
+        return (this._tunnel ??= new Tunnel(this._options));
     }
 }

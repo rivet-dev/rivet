@@ -242,8 +242,7 @@ pub struct CloudflareZone {
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Tls {
 	pub root_ca_cert_pem: Secret<String>,
-	pub cert_locally_signed_job_cert_pem: Secret<String>,
-	pub cert_locally_signed_job_key_pem: Secret<String>,
+	pub root_ca_key_pem: Secret<String>,
 	pub acme: TlsAcme,
 }
 

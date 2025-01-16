@@ -56,6 +56,7 @@ pub fn install() -> String {
 	include_str!("../files/traefik.sh").to_string()
 }
 
+#[derive(Clone)]
 pub struct TlsCert {
 	pub cert_pem: String,
 	pub key_pem: String,
@@ -71,17 +72,18 @@ pub struct Instance {
 pub struct ServerTransport {
 	pub server_name: String,
 	pub root_cas: Vec<String>,
+	/// IMPORTANT: Make sure the first cert is always the tunnel cert.
 	pub certs: Vec<TlsCert>,
 }
 
 /// Creates a Traefik instance.
 ///
 /// Requires `install()`.
-pub fn instance(config: Instance) -> String {
+pub fn instance(config: Instance) -> GlobalResult<String> {
 	let config_name = &config.name;
 
 	let mut script = include_str!("../files/traefik_instance.sh")
-		.replace("__NAME__", &config.name)
+		.replace("__TRAEFIK_INSTANCE_NAME__", &config.name)
 		.replace("__STATIC_CONFIG__", &config.static_config)
 		.replace("__DYNAMIC_CONFIG__", &config.dynamic_config);
 
@@ -150,33 +152,34 @@ pub fn instance(config: Instance) -> String {
 		));
 	}
 
-	script
+	Ok(script)
 }
 
-pub fn tunnel(config: &rivet_config::Config, name: &str) -> GlobalResult<String> {
+pub fn tunnel(
+	config: &rivet_config::Config,
+	name: &str,
+	root_ca: &str,
+	cert: &TlsCert,
+) -> GlobalResult<String> {
 	// Build transports for each service
-	let tls_config = &config.server()?.tls()?;
 	let mut tcp_server_transports = HashMap::new();
 	for TunnelService { name, .. } in TUNNEL_SERVICES {
 		tcp_server_transports.insert(
 			name.to_string(),
 			ServerTransport {
 				server_name: format!("{name}.tunnel.rivet.gg"),
-				root_cas: vec![tls_config.root_ca_cert_pem.read().clone()],
-				certs: vec![TlsCert {
-					cert_pem: tls_config.cert_locally_signed_job_cert_pem.read().clone(),
-					key_pem: tls_config.cert_locally_signed_job_key_pem.read().clone(),
-				}],
+				root_cas: vec![root_ca.to_string()],
+				certs: vec![cert.clone()],
 			},
 		);
 	}
 
-	Ok(instance(Instance {
+	instance(Instance {
 		name: name.to_string(),
 		static_config: tunnel_static_config(),
 		dynamic_config: tunnel_dynamic_config(&config.server()?.rivet.tunnel.public_host),
 		tcp_server_transports,
-	}))
+	})
 }
 
 fn tunnel_static_config() -> String {

@@ -56,6 +56,22 @@ impl ServiceKind {
 			Cron(config) => ServiceBehavior::Cron(config.clone()),
 		}
 	}
+
+	pub fn eq(&self, other: &Self) -> bool {
+		use ServiceKind::*;
+
+		match (self, other) {
+			(ApiPublic, ApiPublic)
+			| (ApiEdge, ApiEdge)
+			| (ApiPrivate, ApiPrivate)
+			| (Standalone, Standalone)
+			| (Singleton, Singleton)
+			| (Oneshot, Oneshot)
+			| (Core, Core) => true,
+			(Cron(_), Cron(_)) => true,
+			_ => false,
+		}
+	}
 }
 
 /// Defines how a service should be ran.

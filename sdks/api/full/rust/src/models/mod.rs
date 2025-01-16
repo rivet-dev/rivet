@@ -592,6 +592,8 @@ pub mod provision_server;
 pub use self::provision_server::ProvisionServer;
 pub mod provision_servers_get_info_response;
 pub use self::provision_servers_get_info_response::ProvisionServersGetInfoResponse;
+pub mod provision_tunnel_get_tls_response;
+pub use self::provision_tunnel_get_tls_response::ProvisionTunnelGetTlsResponse;
 pub mod servers_build;
 pub use self::servers_build::ServersBuild;
 pub mod servers_build_compression;

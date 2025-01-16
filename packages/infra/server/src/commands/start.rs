@@ -65,7 +65,7 @@ impl Opts {
 			run_config
 				.services
 				.iter()
-				.filter(|x| service_kinds.iter().any(|y| *y == x.kind))
+				.filter(|x| service_kinds.iter().any(|y| y.eq(&x.kind)))
 				.cloned()
 				.collect::<Vec<_>>()
 		};

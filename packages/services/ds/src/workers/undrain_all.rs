@@ -40,7 +40,7 @@ async fn worker(ctx: &OperationContext<ds::msg::undrain_all::Message>) -> Global
 	};
 
 	for (server_id,) in server_rows {
-		chirp_workflow::compat::signal(ctx, crate::workflows::server::Undrain { })
+		chirp_workflow::compat::signal(ctx, crate::workflows::server::Undrain {})
 			.await?
 			.tag("server_id", server_id)
 			.send()

@@ -22,14 +22,40 @@ pub fn fetch_info(server_token: &str) -> GlobalResult<String> {
 		))
 }
 
-pub fn fetch_tls(
+pub fn fetch_tunnel_tls(
+	initialize_immediately: bool,
+	server_token: &str,
+	traefik_instance_name: &str,
+) -> GlobalResult<String> {
+	let mut script = include_str!("../files/rivet_fetch_tunnel_tls.sh")
+		.replace("__TRAEFIK_INSTANCE_NAME__", traefik_instance_name)
+		.replace("__SERVER_TOKEN__", server_token)
+		.replace(
+			"__TUNNEL_API_EDGE_API__",
+			&format!("http://127.0.0.1:{TUNNEL_API_EDGE_PORT}"),
+		);
+
+	if initialize_immediately {
+		// Start timer & run script immediately
+		script.push_str(indoc!(
+			"
+			systemctl start rivet_fetch_tunnel_tls.timer
+			systemctl start --no-block rivet_fetch_tunnel_tls.service
+			"
+		));
+	}
+
+	Ok(script)
+}
+
+pub fn fetch_gg_tls(
 	initialize_immediately: bool,
 	server_token: &str,
 	traefik_instance_name: &str,
 	datacenter_id: Uuid,
 ) -> GlobalResult<String> {
-	let mut script = include_str!("../files/rivet_fetch_tls.sh")
-		.replace("__NAME__", traefik_instance_name)
+	let mut script = include_str!("../files/rivet_fetch_gg_tls.sh")
+		.replace("__TRAEFIK_INSTANCE_NAME__", traefik_instance_name)
 		.replace("__SERVER_TOKEN__", server_token)
 		.replace(
 			"__TUNNEL_API_EDGE_API__",
@@ -41,8 +67,8 @@ pub fn fetch_tls(
 		// Start timer & run script immediately
 		script.push_str(indoc!(
 			"
-			systemctl start rivet_fetch_tls.timer
-			systemctl start --no-block rivet_fetch_tls.service
+			systemctl start rivet_fetch_gg_tls.timer
+			systemctl start --no-block rivet_fetch_gg_tls.service
 			"
 		));
 	}

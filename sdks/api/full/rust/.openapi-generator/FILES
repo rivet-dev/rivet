@@ -337,6 +337,8 @@ docs/ProvisionPoolType.md
 docs/ProvisionServer.md
 docs/ProvisionServersApi.md
 docs/ProvisionServersGetInfoResponse.md
+docs/ProvisionTunnelApi.md
+docs/ProvisionTunnelGetTlsResponse.md
 docs/ServersApi.md
 docs/ServersBuild.md
 docs/ServersBuildCompression.md
@@ -413,6 +415,7 @@ src/apis/mod.rs
 src/apis/portal_games_api.rs
 src/apis/provision_datacenters_api.rs
 src/apis/provision_servers_api.rs
+src/apis/provision_tunnel_api.rs
 src/apis/servers_api.rs
 src/apis/servers_builds_api.rs
 src/apis/servers_datacenters_api.rs
@@ -716,6 +719,7 @@ src/models/provision_datacenters_get_tls_response.rs
 src/models/provision_pool_type.rs
 src/models/provision_server.rs
 src/models/provision_servers_get_info_response.rs
+src/models/provision_tunnel_get_tls_response.rs
 src/models/servers_build.rs
 src/models/servers_build_compression.rs
 src/models/servers_build_kind.rs

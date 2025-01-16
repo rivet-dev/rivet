@@ -4114,6 +4114,56 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
       security: *ref_0
+  /tunnel/tls:
+    get:
+      operationId: provision_tunnel_getTls
+      tags:
+        - ProvisionTunnel
+      parameters: []
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProvisionTunnelGetTlsResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
   '/games/{game_id}/environments/{environment_id}/servers/{server_id}':
     get:
       description: Gets a dynamic server.
@@ -9826,6 +9876,19 @@ components:
         - wan_ip
         - vlan_ip
         - public_ip
+    ProvisionTunnelGetTlsResponse:
+      type: object
+      properties:
+        cert_pem:
+          type: string
+        root_ca_cert_pem:
+          type: string
+        private_key_pem:
+          type: string
+      required:
+        - cert_pem
+        - root_ca_cert_pem
+        - private_key_pem
     ServersGetServerResponse:
       type: object
       properties:

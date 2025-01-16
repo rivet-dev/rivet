@@ -150,6 +150,7 @@ Class | Method | HTTP request | Description
 *ProvisionDatacentersApi* | [**provision_datacenters_get_servers**](docs/ProvisionDatacentersApi.md#provision_datacenters_get_servers) | **GET** /datacenters/{datacenter_id}/servers | 
 *ProvisionDatacentersApi* | [**provision_datacenters_get_tls**](docs/ProvisionDatacentersApi.md#provision_datacenters_get_tls) | **GET** /datacenters/{datacenter_id}/tls | 
 *ProvisionServersApi* | [**provision_servers_get_info**](docs/ProvisionServersApi.md#provision_servers_get_info) | **GET** /servers/{ip} | 
+*ProvisionTunnelApi* | [**provision_tunnel_get_tls**](docs/ProvisionTunnelApi.md#provision_tunnel_get_tls) | **GET** /tunnel/tls | 
 *ServersApi* | [**servers_create**](docs/ServersApi.md#servers_create) | **POST** /games/{game_id}/environments/{environment_id}/servers | 
 *ServersApi* | [**servers_destroy**](docs/ServersApi.md#servers_destroy) | **DELETE** /games/{game_id}/environments/{environment_id}/servers/{server_id} | 
 *ServersApi* | [**servers_get**](docs/ServersApi.md#servers_get) | **GET** /games/{game_id}/environments/{environment_id}/servers/{server_id} | 
@@ -462,6 +463,7 @@ Class | Method | HTTP request | Description
  - [ProvisionPoolType](docs/ProvisionPoolType.md)
  - [ProvisionServer](docs/ProvisionServer.md)
  - [ProvisionServersGetInfoResponse](docs/ProvisionServersGetInfoResponse.md)
+ - [ProvisionTunnelGetTlsResponse](docs/ProvisionTunnelGetTlsResponse.md)
  - [ServersBuild](docs/ServersBuild.md)
  - [ServersBuildCompression](docs/ServersBuildCompression.md)
  - [ServersBuildKind](docs/ServersBuildKind.md)

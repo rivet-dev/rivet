@@ -1,5 +1,5 @@
 use anyhow::*;
-use chirp_workflow::history::{event::SleepState, location::Location};
+use chirp_workflow::history::{event::SleepState, location::{Location, Coordinate}};
 use chrono::{TimeZone, Utc};
 use clap::ValueEnum;
 use indoc::indoc;
@@ -79,6 +79,14 @@ pub struct HistoryWorkflowRow {
 
 #[derive(sqlx::FromRow)]
 struct ActivityErrorRow {
+	location: Vec<i64>,
+	location2: Option<Location>,
+	error: String,
+	count: i64,
+	latest_ts: i64,
+}
+
+struct ActivityError {
 	location: Location,
 	error: String,
 	count: i64,
@@ -560,10 +568,10 @@ pub async fn print_history(
 		async move {
 			sqlx::query_as::<_, ActivityErrorRow>(indoc!(
 				"
-				SELECT location2 AS location, error, COUNT(error), MAX(ts) AS latest_ts
+				SELECT location, location2, error, COUNT(error), MAX(ts) AS latest_ts
 				FROM db_workflow.workflow_activity_errors
 				WHERE workflow_id = $1
-				GROUP BY location2, error
+				GROUP BY location, location2, error
 				ORDER BY latest_ts
 				"
 			))
@@ -571,6 +579,21 @@ pub async fn print_history(
 			.fetch_all(&mut *conn3)
 			.await
 			.map_err(Into::into)
+			.map(|rows| rows.into_iter().map(|value| {
+				ActivityError {
+						// Backwards compatibility
+						// NOTE: Add 1 because we switched from 0-based to 1-based
+						location:
+							value.location2.clone().unwrap_or_else(|| {value
+								.location
+								.iter()
+								.map(|x| Coordinate::simple(*x as usize + 1))
+								.collect()}),
+						error: value.error,
+						count: value.count,
+						latest_ts: value.latest_ts,	
+					}
+			}).collect::<Vec<_>>())
 		},
 	)?;
 

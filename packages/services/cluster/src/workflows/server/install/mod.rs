@@ -31,14 +31,33 @@ pub(crate) async fn cluster_server_install(
 ) -> GlobalResult<()> {
 	let server_token = ctx.activity(CreateTokenInput {}).await?;
 
-	ctx.activity(InstallOverSshInput {
-		datacenter_id: input.datacenter_id,
-		public_ip: input.public_ip,
-		pool_type: input.pool_type,
-		initialize_immediately: input.initialize_immediately,
-		server_token,
-	})
-	.await?;
+	match ctx.check_version(2).await? {
+		1 => {
+			ctx.activity(InstallOverSshInputV1 {
+				datacenter_id: input.datacenter_id,
+				public_ip: input.public_ip,
+				pool_type: input.pool_type,
+				initialize_immediately: input.initialize_immediately,
+				server_token,
+			})
+			.await?;
+		}
+		_ => {
+			let tunnel_cert_res = ctx.activity(ReadTunnelCertInput {}).await?;
+
+			ctx.activity(InstallOverSshInputV2 {
+				datacenter_id: input.datacenter_id,
+				public_ip: input.public_ip,
+				pool_type: input.pool_type,
+				initialize_immediately: input.initialize_immediately,
+				server_token,
+				tunnel_cert_cert_pem: tunnel_cert_res.cert_pem,
+				tunnel_cert_private_key_pem: tunnel_cert_res.private_key_pem,
+				root_ca_cert_pem: tunnel_cert_res.root_ca_cert_pem,
+			})
+			.await?;
+		}
+	}
 
 	// If the server id is set this is not a prebake server
 	if let Some(server_id) = input.server_id {
@@ -87,7 +106,31 @@ async fn create_token(ctx: &ActivityCtx, input: &CreateTokenInput) -> GlobalResu
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-struct InstallOverSshInput {
+struct ReadTunnelCertInput {}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ReadTunnelCertOutput {
+	cert_pem: String,
+	private_key_pem: String,
+	root_ca_cert_pem: String,
+}
+
+#[activity(ReadTunnelCert)]
+async fn read_tunnel_cert(
+	ctx: &ActivityCtx,
+	_input: &ReadTunnelCertInput,
+) -> GlobalResult<ReadTunnelCertOutput> {
+	let tunnel_tls_res = ctx.op(crate::ops::tunnel::tls_get::Input {}).await?;
+
+	Ok(ReadTunnelCertOutput {
+		cert_pem: tunnel_tls_res.cert_pem,
+		private_key_pem: tunnel_tls_res.private_key_pem,
+		root_ca_cert_pem: tunnel_tls_res.root_ca_cert_pem,
+	})
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct InstallOverSshInputV1 {
 	datacenter_id: Uuid,
 	public_ip: Ipv4Addr,
 	pool_type: PoolType,
@@ -97,7 +140,25 @@ struct InstallOverSshInput {
 
 #[activity(InstallOverSsh)]
 #[timeout = 300]
-async fn install_over_ssh(ctx: &ActivityCtx, input: &InstallOverSshInput) -> GlobalResult<()> {
+async fn install_over_ssh(ctx: &ActivityCtx, _input: &InstallOverSshInputV1) -> GlobalResult<()> {
+	bail!("old version, should not rerun");
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct InstallOverSshInputV2 {
+	datacenter_id: Uuid,
+	public_ip: Ipv4Addr,
+	pool_type: PoolType,
+	initialize_immediately: bool,
+	server_token: String,
+	tunnel_cert_cert_pem: String,
+	tunnel_cert_private_key_pem: String,
+	root_ca_cert_pem: String,
+}
+
+#[activity(InstallOverSshV2)]
+#[timeout = 300]
+async fn install_over_ssh_v2(ctx: &ActivityCtx, input: &InstallOverSshInputV2) -> GlobalResult<()> {
 	let public_ip = input.public_ip;
 	let private_key_openssh = ctx
 		.config()
@@ -114,6 +175,11 @@ async fn install_over_ssh(ctx: &ActivityCtx, input: &InstallOverSshInput) -> Glo
 		input.initialize_immediately,
 		&input.server_token,
 		input.datacenter_id,
+		&input.root_ca_cert_pem,
+		&install_scripts::components::traefik::TlsCert {
+			cert_pem: input.tunnel_cert_cert_pem.clone(),
+			key_pem: input.tunnel_cert_private_key_pem.clone(),
+		},
 	)
 	.await?;
 	let hook_script = install_scripts::gen_hook(&input.server_token).await?;

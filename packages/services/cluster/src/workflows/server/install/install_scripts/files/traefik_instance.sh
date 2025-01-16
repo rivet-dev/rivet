@@ -1,34 +1,34 @@
-if ! id -u "__NAME__" &>/dev/null; then
-	useradd -r -s /bin/false __NAME__
+if ! id -u "__TRAEFIK_INSTANCE_NAME__" &>/dev/null; then
+	useradd -r -s /bin/false __TRAEFIK_INSTANCE_NAME__
 fi
 
-mkdir -p /etc/__NAME__ /etc/__NAME__/dynamic /etc/__NAME__/dynamic/tls /etc/__NAME__/tls /opt/__NAME__
+mkdir -p /etc/__TRAEFIK_INSTANCE_NAME__ /etc/__TRAEFIK_INSTANCE_NAME__/dynamic /etc/__TRAEFIK_INSTANCE_NAME__/dynamic/tls /etc/__TRAEFIK_INSTANCE_NAME__/tls /opt/__TRAEFIK_INSTANCE_NAME__
 
 # Static config
-cat << 'EOF' > /etc/__NAME__/traefik.toml
+cat << 'EOF' > /etc/__TRAEFIK_INSTANCE_NAME__/traefik.toml
 __STATIC_CONFIG__
 EOF
 
 # Dynamic config
-cat << 'EOF' > /etc/__NAME__/dynamic/common.toml
+cat << 'EOF' > /etc/__TRAEFIK_INSTANCE_NAME__/dynamic/common.toml
 __DYNAMIC_CONFIG__
 EOF
 
-chown -R __NAME__:__NAME__ /etc/__NAME__ /etc/__NAME__/dynamic /etc/__NAME__/dynamic/tls /etc/__NAME__/tls /opt/__NAME__
+chown -R __TRAEFIK_INSTANCE_NAME__:__TRAEFIK_INSTANCE_NAME__ /etc/__TRAEFIK_INSTANCE_NAME__ /etc/__TRAEFIK_INSTANCE_NAME__/dynamic /etc/__TRAEFIK_INSTANCE_NAME__/dynamic/tls /etc/__TRAEFIK_INSTANCE_NAME__/tls /opt/__TRAEFIK_INSTANCE_NAME__
 
 # Systemd service
 #
 # See https://doc.traefik.io/traefik-enterprise/installing/on-premise/#systemd-linux-only
-cat << 'EOF' > /etc/systemd/system/__NAME__.service
+cat << 'EOF' > /etc/systemd/system/__TRAEFIK_INSTANCE_NAME__.service
 [Unit]
-Description=__NAME__
+Description=__TRAEFIK_INSTANCE_NAME__
 After=network-online.target
 Wants=network-online.target systemd-networkd-wait-online.service
 
 [Service]
-User=__NAME__
-Group=__NAME__
-ExecStart=/usr/bin/traefik --configFile=/etc/__NAME__/traefik.toml
+User=__TRAEFIK_INSTANCE_NAME__
+Group=__TRAEFIK_INSTANCE_NAME__
+ExecStart=/usr/bin/traefik --configFile=/etc/__TRAEFIK_INSTANCE_NAME__/traefik.toml
 PrivateTmp=true
 PrivateDevices=false
 ProtectHome=true
@@ -54,6 +54,6 @@ EOF
 
 # Start and enable the service
 systemctl daemon-reload
-systemctl enable __NAME__
-systemctl start __NAME__
+systemctl enable __TRAEFIK_INSTANCE_NAME__
+systemctl start __TRAEFIK_INSTANCE_NAME__
 

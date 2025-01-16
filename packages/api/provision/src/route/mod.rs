@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 pub mod datacenters;
 pub mod servers;
+pub mod tunnel;
 
 define_router! {
 	routes: {
@@ -28,5 +29,11 @@ define_router! {
 				internal_endpoint: true,
 			),
 		},
+
+		"tunnel" / "tls": {
+			GET: tunnel::tls(
+				internal_endpoint: true,
+			),
+		}
 	},
 }

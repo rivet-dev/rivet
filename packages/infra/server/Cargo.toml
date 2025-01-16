@@ -17,6 +17,7 @@ colored_json = "5.0.0"
 global-error.workspace = true
 include_dir = "0.7.4"
 indoc = "2.0.5"
+reqwest = "0.12.9"
 rivet-api.workspace = true
 rivet-migrate.workspace = true
 rivet-pools.workspace = true
@@ -67,16 +68,14 @@ api-monolith-public.workspace = true
 
 # Oneshot
 build-default-create.workspace = true
+chirp-client.workspace = true
+chirp-workflow.workspace = true
+cloud-default-create.workspace = true
 cluster-default-update.workspace = true
 pegboard-dc-init.workspace = true
-rivet-config.workspace = true
-reqwest = "0.12.9"
-chirp-client.workspace = true
 rivet-cache.workspace = true
-chirp-workflow.workspace = true
+rivet-config.workspace = true
 rivet-connection.workspace = true
-cloud-default-create.workspace = true
-
 
 [dependencies.sqlx]
 workspace = true

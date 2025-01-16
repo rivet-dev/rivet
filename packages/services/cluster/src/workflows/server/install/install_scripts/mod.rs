@@ -17,6 +17,8 @@ pub async fn gen_install(
 	initialize_immediately: bool,
 	server_token: &str,
 	datacenter_id: Uuid,
+	tunnel_root_ca: &str,
+	tunnel_cert: &components::traefik::TlsCert,
 ) -> GlobalResult<String> {
 	// MARK: Common (pre)
 	let mut script = vec![
@@ -24,7 +26,9 @@ pub async fn gen_install(
 		components::node_exporter::install(),
 		components::sysctl::install(),
 		components::traefik::install(),
-		components::traefik::tunnel(config, TUNNEL_NAME)?,
+		// NOTE: TLS certs expire in a year, prebakes expire in 6 months
+		components::traefik::tunnel(config, TUNNEL_NAME, tunnel_root_ca, tunnel_cert)?,
+		components::rivet::fetch_tunnel_tls(initialize_immediately, server_token, TUNNEL_NAME)?,
 		components::vector::install(),
 	];
 
@@ -40,7 +44,7 @@ pub async fn gen_install(
 			script.push(components::nomad::install());
 		}
 		PoolType::Gg => {
-			script.push(components::rivet::fetch_tls(
+			script.push(components::rivet::fetch_gg_tls(
 				initialize_immediately,
 				server_token,
 				GG_TRAEFIK_INSTANCE_NAME,
@@ -132,7 +136,7 @@ pub async fn gen_initialize(
 					dynamic_config: components::traefik::gg_dynamic_config(config, datacenter_id)?,
 					tcp_server_transports: Default::default(),
 				},
-			));
+			)?);
 		}
 		PoolType::Ats => {
 			script.push(components::traffic_server::configure(config).await?);

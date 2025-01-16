@@ -7,6 +7,7 @@ import (
 	core "sdk/core"
 	datacentersclient "sdk/provision/datacenters/client"
 	serversclient "sdk/provision/servers/client"
+	tunnelclient "sdk/provision/tunnel/client"
 )
 
 type Client struct {
@@ -16,6 +17,7 @@ type Client struct {
 
 	Datacenters *datacentersclient.Client
 	Servers     *serversclient.Client
+	Tunnel      *tunnelclient.Client
 }
 
 func NewClient(opts ...core.ClientOption) *Client {
@@ -29,5 +31,6 @@ func NewClient(opts ...core.ClientOption) *Client {
 		header:      options.ToHeader(),
 		Datacenters: datacentersclient.NewClient(opts...),
 		Servers:     serversclient.NewClient(opts...),
+		Tunnel:      tunnelclient.NewClient(opts...),
 	}
 }
