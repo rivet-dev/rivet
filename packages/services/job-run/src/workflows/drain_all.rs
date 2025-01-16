@@ -8,6 +8,7 @@ use crate::util::{signal_allocation, NOMAD_REGION};
 // cluster server. We want the drain to complete first.
 const DRAIN_PADDING_MS: u64 = 10000;
 
+#[deprecated]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Input {
 	pub nomad_node_id: String,

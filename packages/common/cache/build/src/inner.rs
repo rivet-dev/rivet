@@ -9,7 +9,6 @@ pub type Cache = Arc<CacheInner>;
 /// Utility type used to hold information relating to caching.
 pub struct CacheInner {
 	service_name: String,
-	service_source_hash: String,
 	pub(crate) redis_conn: RedisPool,
 }
 
@@ -17,7 +16,6 @@ impl Debug for CacheInner {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("CacheInner")
 			.field("service_name", &self.service_name)
-			.field("service_source_hash", &self.service_source_hash)
 			.finish()
 	}
 }
@@ -26,21 +24,18 @@ impl CacheInner {
 	#[tracing::instrument(skip(pools))]
 	pub fn from_env(pools: rivet_pools::Pools) -> Result<Cache, Error> {
 		let service_name = rivet_env::service_name();
-		let service_source_hash = rivet_env::source_hash().to_string();
 		let redis_cache = pools.redis_cache().map_err(Error::Pools)?;
 
 		Ok(Self::new(
 			service_name.to_string(),
-			service_source_hash,
 			redis_cache,
 		))
 	}
 
 	#[tracing::instrument(skip(redis_conn))]
-	pub fn new(service_name: String, service_source_hash: String, redis_conn: RedisPool) -> Cache {
+	pub fn new(service_name: String, redis_conn: RedisPool) -> Cache {
 		Arc::new(CacheInner {
 			service_name,
-			service_source_hash,
 			redis_conn,
 		})
 	}
@@ -55,19 +50,6 @@ impl CacheInner {
 	{
 		format!("{{key:{}}}:{}", base_key, key.simple_cache_key())
 	}
-
-	// pub(crate) fn build_redis_svc_key<K>(&self, base_key: &str, key: &K) -> String
-	// where
-	// 	K: CacheKey,
-	// {
-	// 	format!(
-	// 		"svc:{}:{}:{}:{}",
-	// 		self.service_name,
-	// 		self.service_source_hash,
-	// 		base_key,
-	// 		key.simple_cache_key()
-	// 	)
-	// }
 
 	// pub(crate) fn build_redis_topic_key(&self, base_key: &str, key: &impl CacheKey) -> String {
 	// 	format!("{{topic:{}}}:{}:keys", base_key, key.simple_cache_key())

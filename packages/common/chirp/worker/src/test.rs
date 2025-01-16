@@ -22,7 +22,6 @@ impl TestCtx {
 		let pools = rivet_pools::Pools::new(config.clone()).await?;
 		let cache = rivet_cache::CacheInner::new(
 			service_name.clone(),
-			rivet_env::source_hash().to_string(),
 			pools.redis_cache()?,
 		);
 		let client = chirp_client::SharedClient::from_env(pools.clone())
