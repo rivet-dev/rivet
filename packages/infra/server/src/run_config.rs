@@ -56,9 +56,9 @@ pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			ServiceKind::Standalone,
 			|config, pools| Box::pin(monolith_workflow_worker::start(config, pools)),
 		),
-		Service::new("pegboard_gc", ServiceKind::Singleton, |config, pools| {
-			Box::pin(pegboard_gc::start(config, pools))
-		}),
+		// Service::new("pegboard_gc", ServiceKind::Singleton, |config, pools| {
+		// 	Box::pin(pegboard_gc::start(config, pools))
+		// }),
 		Service::new("pegboard_dc_init", ServiceKind::Oneshot, |config, pools| {
 			Box::pin(pegboard_dc_init::start(config, pools))
 		}),

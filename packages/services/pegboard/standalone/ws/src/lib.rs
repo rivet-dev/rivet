@@ -54,6 +54,7 @@ pub async fn run_from_env(
 	)
 	.await?;
 
+	let sql_lock = Arc::new(Mutex::new(()));
 	let conns: Arc<RwLock<Connections>> = Arc::new(RwLock::new(HashMap::new()));
 
 	let host = ctx.config().server()?.rivet.pegboard.host();
@@ -69,9 +70,9 @@ pub async fn run_from_env(
 	// send/receive anything to clients. Client workflows will then expire because of their ping,
 	// their workflow will complete, and clients will be unusable unless they reconnect.
 	tokio::join!(
-		socket_thread(&ctx, conns.clone(), listener),
+		socket_thread(&ctx, sql_lock.clone(), conns.clone(), listener),
 		msg_thread(&ctx, conns.clone()),
-		update_ping_thread(&ctx, conns.clone()),
+		update_ping_thread(&ctx, sql_lock, conns.clone()),
 	);
 
 	Ok(())
@@ -80,12 +81,15 @@ pub async fn run_from_env(
 #[tracing::instrument(skip_all)]
 async fn socket_thread(
 	ctx: &StandaloneCtx,
+	sql_lock: Arc<Mutex<()>>,
 	conns: Arc<RwLock<Connections>>,
 	listener: TcpListener,
 ) {
 	loop {
 		match listener.accept().await {
-			Ok((stream, addr)) => handle_connection(ctx, conns.clone(), stream, addr).await,
+			Ok((stream, addr)) => {
+				handle_connection(ctx, sql_lock.clone(), conns.clone(), stream, addr).await
+			}
 			Err(err) => tracing::error!(?err, "failed to connect websocket"),
 		}
 	}
@@ -94,6 +98,7 @@ async fn socket_thread(
 #[tracing::instrument(skip_all)]
 async fn handle_connection(
 	ctx: &StandaloneCtx,
+	sql_lock: Arc<Mutex<()>>,
 	conns: Arc<RwLock<Connections>>,
 	raw_stream: TcpStream,
 	addr: SocketAddr,
@@ -106,13 +111,15 @@ async fn handle_connection(
 		let (ws_stream, url_data) = match setup_connection(raw_stream, addr).await {
 			Ok(x) => x,
 			Err(err) => {
-				tracing::error!(?addr, "{err}");
+				tracing::error!(?addr, ?err, "setup connection failed");
 				return;
 			}
 		};
 
-		if let Err(err) = handle_connection_inner(&ctx, conns.clone(), ws_stream, url_data).await {
-			tracing::error!(?addr, "{err}");
+		if let Err(err) =
+			handle_connection_inner(&ctx, sql_lock, conns.clone(), ws_stream, url_data).await
+		{
+			tracing::error!(?addr, ?err, "handle connection inner failed");
 		}
 
 		// Clean up
@@ -129,7 +136,7 @@ async fn handle_connection(
 				.send(Message::Close(Some(close_frame)))
 				.await
 			{
-				tracing::error!(?addr, "failed closing socket: {err}");
+				tracing::error!(?addr, ?err, "failed closing socket");
 			}
 		}
 	});
@@ -164,6 +171,7 @@ async fn setup_connection(
 #[tracing::instrument(skip_all)]
 async fn handle_connection_inner(
 	ctx: &StandaloneCtx,
+	sql_lock: Arc<Mutex<()>>,
 	conns: Arc<RwLock<Connections>>,
 	ws_stream: WebSocketStream<TcpStream>,
 	UrlData {
@@ -211,7 +219,7 @@ async fn handle_connection_inner(
 
 				if let protocol::ToServer::Init { .. } = &packet {
 					// Insert into db and spawn workflow (if not exists)
-					upsert_client(ctx, client_id, datacenter_id, flavor).await?;
+					upsert_client(ctx, sql_lock, client_id, datacenter_id, flavor).await?;
 				} else {
 					bail!("unexpected initial packet: {packet:?}");
 				}
@@ -261,21 +269,42 @@ async fn handle_connection_inner(
 #[tracing::instrument(skip_all)]
 async fn upsert_client(
 	ctx: &StandaloneCtx,
+	sql_lock: Arc<Mutex<()>>,
 	client_id: Uuid,
 	datacenter_id: Uuid,
 	flavor: protocol::ClientFlavor,
 ) -> GlobalResult<()> {
-	sql_execute!(
-		[ctx]
+	let _ = sql_lock.lock().await;
+
+	let (exists, deleted) = sql_fetch_one!(
+		[ctx, (bool, bool)]
 		"
-		INSERT INTO db_pegboard.clients (
-			client_id, datacenter_id, flavor, create_ts, last_ping_ts
-		)
-		VALUES ($1, $2, $3, $4, $4)
-		ON CONFLICT (client_id)
-			DO UPDATE
-			SET delete_ts = NULL
-		RETURNING 1
+		WITH
+			select_exists AS (
+				SELECT 1
+				FROM db_pegboard.clients
+				WHERE client_id = $1
+			),
+			select_deleted AS (
+				SELECT 1
+				FROM db_pegboard.clients
+				WHERE
+					client_id = $1 AND
+					delete_ts IS NOT NULL
+			),
+			insert_client AS (
+				INSERT INTO db_pegboard.clients (
+					client_id, datacenter_id, flavor, create_ts, last_ping_ts
+				)
+				VALUES ($1, $2, $3, $4, $4)
+				ON CONFLICT (client_id)
+					DO UPDATE
+					SET delete_ts = NULL
+				RETURNING 1
+			)
+		SELECT
+			EXISTS(SELECT 1 FROM select_exists) AS exists,
+			EXISTS(SELECT 1 FROM select_deleted) AS deleted
 		",
 		client_id,
 		datacenter_id,
@@ -284,20 +313,37 @@ async fn upsert_client(
 	)
 	.await?;
 
-	// Spawn a new client workflow if one doesn't already exist
-	ctx.workflow(pegboard::workflows::client::Input { client_id })
-		.tag("client_id", client_id)
-		.unique()
-		.dispatch()
-		.await?;
+	if deleted {
+		tracing::warn!(?client_id, "client was previously deleted");
+	}
+
+	if exists == deleted {
+		tracing::info!(?client_id, ?datacenter_id, ?flavor, "new client");
+
+		// Spawn a new client workflow
+		tracing::info!(
+			?client_id,
+			?datacenter_id,
+			?flavor,
+			"creating client workflow"
+		);
+		ctx.workflow(pegboard::workflows::client::Input { client_id })
+			.tag("client_id", client_id)
+			.dispatch()
+			.await?;
+	}
 
 	Ok(())
 }
 
 #[tracing::instrument(skip_all)]
-async fn update_ping_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>) {
+async fn update_ping_thread(
+	ctx: &StandaloneCtx,
+	sql_lock: Arc<Mutex<()>>,
+	conns: Arc<RwLock<Connections>>,
+) {
 	loop {
-		match update_ping_thread_inner(ctx, conns.clone()).await {
+		match update_ping_thread_inner(ctx, sql_lock.clone(), conns.clone()).await {
 			Ok(_) => {
 				tracing::warn!("update ping thread thread exited early");
 			}
@@ -314,6 +360,7 @@ async fn update_ping_thread(ctx: &StandaloneCtx, conns: Arc<RwLock<Connections>>
 #[tracing::instrument(skip_all)]
 async fn update_ping_thread_inner(
 	ctx: &StandaloneCtx,
+	sql_lock: Arc<Mutex<()>>,
 	conns: Arc<RwLock<Connections>>,
 ) -> GlobalResult<()> {
 	loop {
@@ -336,6 +383,8 @@ async fn update_ping_thread_inner(
 		if client_ids.is_empty() {
 			continue;
 		}
+
+		let _ = sql_lock.lock().await;
 
 		sql_execute!(
 			[ctx]

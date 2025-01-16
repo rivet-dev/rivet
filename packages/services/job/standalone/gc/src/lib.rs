@@ -124,12 +124,12 @@ pub async fn run_from_env(
 			no_lobby += 1;
 			running_run_ids.remove(&run_id);
 
-			tracing::warn!(%run_id, "lobby does not exist, skipping run");
+			/*tracing::warn!(%run_id, "lobby does not exist, skipping run");
 			msg!([ctx] @wait job_run::msg::stop(run_id) {
 				run_id: Some(run_id.into()),
 				..Default::default()
 			})
-			.await?;
+			.await?;*/
 
 			continue;
 		}
