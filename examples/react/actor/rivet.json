@@ -1,0 +1,8 @@
+{
+	"builds": {
+		"simple-chat": {
+			"script": "simple-chat.ts",
+			"access": "public"
+		}
+	}
+}

@@ -154,6 +154,7 @@ export class ActorHandleRaw {
 		}
 
 		const ws = new WebSocket(url);
+		ws.binaryType = this.protocolFormat === "cbor" ?  "arraybuffer" : "blob"
 		this.#websocket = ws;
 		ws.onopen = () => {
 			logger().debug("socket open");
@@ -346,7 +347,7 @@ export class ActorHandleRaw {
 			return JSON.parse(data);
 		} else if (this.protocolFormat === "cbor") {
 			if (data instanceof Blob) {
-				return cbor.decodeCbor(await data.bytes());
+				return cbor.decodeCbor(new Uint8Array(await data.arrayBuffer()));
 			} else if (data instanceof ArrayBuffer) {
 				return cbor.decodeCbor(new Uint8Array(data));
 			} else {
