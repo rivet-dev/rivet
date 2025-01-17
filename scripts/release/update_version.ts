@@ -12,7 +12,7 @@ export async function updateVersion(opts: ReleaseOpts) {
 			replace: `[workspace.package]\nversion = "${opts.version}"`,
 		},
 		{
-			path: "sdks/actor/*/deno.json",
+			path: "sdks/actor/*/package.json",
 			find: /"version": ".*"/,
 			replace: `"version": "${opts.version}"`,
 		},

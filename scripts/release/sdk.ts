@@ -95,13 +95,6 @@ export async function publishSdk(opts: ReleaseOpts) {
 			continue;
 		}
 
-		// Update version in config
-		const pkgJsonPath = `${pkg.path}/package.json`;
-		const pkgJsonContent = await Deno.readTextFile(pkgJsonPath);
-		const pkgJson = JSON.parse(pkgJsonContent);
-		pkgJson.version = opts.version;
-		await Deno.writeTextFile(pkgJsonPath, JSON.stringify(pkgJson, null, 2));
-
 		// Publish
 		if (pkg.npm) {
 			$.logStep("Publishing to NPM", `${pkg.name}@${opts.version}`);
