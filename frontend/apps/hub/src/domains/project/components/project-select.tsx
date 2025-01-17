@@ -71,6 +71,7 @@ export function ProjectSelect({
 							</SelectLabel>
 							{group.projects.map((project) => (
 								<SelectItem
+									className="pl-8"
 									key={project.gameId}
 									value={project.gameId}
 								>
