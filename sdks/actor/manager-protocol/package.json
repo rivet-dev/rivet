@@ -1,0 +1,44 @@
+{
+	"name": "@rivet-gg/manager-protocol",
+	"private": true,
+	"version": "24.6.2-rc.1",
+	"files": ["dist", "src", "deno.json", "package.json"],
+	"type": "module",
+	"exports": {
+		".": {
+			"deno": "./src/mod.ts",
+			"import": {
+				"types": "./dist/mod.d.ts",
+				"default": "./dist/mod.js"
+			},
+			"require": {
+				"types": "./dist/mod.d.cts",
+				"default": "./dist/mod.cjs"
+			}
+		},
+		"./query": {
+			"deno": "./src/query.ts",
+			"import": {
+				"types": "./dist/query.d.ts",
+				"default": "./dist/query.js"
+			},
+			"require": {
+				"types": "./dist/query.d.cts",
+				"default": "./dist/query.cjs"
+			}
+		}
+	},
+	"sideEffects": false,
+	"scripts": {
+		"build": "tsup src/mod.ts src/query.ts",
+		"check-types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@rivet-gg/actor-common": "workspace:*",
+		"zod": "^3.24.1"
+	},
+	"devDependencies": {
+		"tsup": "^8.3.5",
+		"typescript": "^5.7.3"
+	}
+}

@@ -4,8 +4,14 @@
 
 declare module "ext:core/mod.js" {
 	export const core: {
-		serialize(value: unknown, options?: { forStorage?: boolean }): Uint8Array;
-		deserialize(value: Uint8Array, options?: { forStorage?: boolean }): unknown;
+		serialize(
+			value: unknown,
+			options?: { forStorage?: boolean },
+		): Uint8Array;
+		deserialize(
+			value: Uint8Array,
+			options?: { forStorage?: boolean },
+		): unknown;
 	};
 	export const primordials: {
 		ReflectOwnKeys: typeof Reflect.ownKeys;

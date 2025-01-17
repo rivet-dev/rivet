@@ -39,7 +39,10 @@ export function ProjectMatchmakerListLobbyButton({
 		>
 			<Link
 				to="."
-				search={(old) => ({ ...old, lobbyId: lobbyId })}
+				search={(old: Record<string, unknown>) => ({
+					...old,
+					lobbyId: lobbyId,
+				})}
 				className="truncate min-w-0"
 			>
 				<Flex gap="2" items="center" w="full">

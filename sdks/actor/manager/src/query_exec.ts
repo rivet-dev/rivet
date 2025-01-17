@@ -26,7 +26,9 @@ export async function queryActor(
 		// Validate actor
 		if ((res.actor.tags as ActorTags).access !== "public") {
 			// TODO: Throw 404 that matches the 404 from Fern if the actor is not found
-			throw new Error(`Actor with ID ${query.getForId.actorId} is private`);
+			throw new Error(
+				`Actor with ID ${query.getForId.actorId} is private`,
+			);
 		}
 		if (res.actor.destroyedAt) {
 			throw new Error(
@@ -35,7 +37,8 @@ export async function queryActor(
 		}
 
 		return res.actor;
-	} else if ("getOrCreateForTags" in query) {
+	}
+	if ("getOrCreateForTags" in query) {
 		const tags = query.getOrCreateForTags.tags;
 		if (!tags) throw new Error("Must define tags in getOrCreateForTags");
 		const existingActor = await getWithTags(
@@ -46,22 +49,23 @@ export async function queryActor(
 		if (existingActor) {
 			// Actor exists
 			return existingActor;
-		} else if (query.getOrCreateForTags.create) {
+		}
+
+		if (query.getOrCreateForTags.create) {
 			// Create if needed
 			return await createActor(
 				client,
 				environment,
 				query.getOrCreateForTags.create,
 			);
-		} else {
-			// Creation disabled
-			throw new Error("Actor not found with tags or is private.");
 		}
-	} else if ("create" in query) {
-		return await createActor(client, environment, query.create);
-	} else {
-		assertUnreachable(query);
+		// Creation disabled
+		throw new Error("Actor not found with tags or is private.");
 	}
+	if ("create" in query) {
+		return await createActor(client, environment, query.create);
+	}
+	assertUnreachable(query);
 }
 
 async function getWithTags(

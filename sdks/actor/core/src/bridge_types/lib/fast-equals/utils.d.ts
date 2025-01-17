@@ -2,22 +2,34 @@
 //
 // Generated from sdks/actor/bridge/
 
-import type { AnyEqualityComparator, Dictionary, State, TypeEqualityComparator } from "./internalTypes.d.ts";
+import type {
+	AnyEqualityComparator,
+	Dictionary,
+	State,
+	TypeEqualityComparator,
+} from "./internalTypes.d.ts";
 /**
  * Combine two comparators into a single comparators.
  */
-export declare function combineComparators<Meta>(comparatorA: AnyEqualityComparator<Meta>, comparatorB: AnyEqualityComparator<Meta>): <A, B>(a: A, b: B, state: State<Meta>) => boolean;
+export declare function combineComparators<Meta>(
+	comparatorA: AnyEqualityComparator<Meta>,
+	comparatorB: AnyEqualityComparator<Meta>,
+): <A, B>(a: A, b: B, state: State<Meta>) => boolean;
 /**
  * Wrap the provided `areItemsEqual` method to manage the circular state, allowing
  * for circular references to be safely included in the comparison without creating
  * stack overflows.
  */
-export declare function createIsCircular<AreItemsEqual extends TypeEqualityComparator<any, any>>(areItemsEqual: AreItemsEqual): AreItemsEqual;
+export declare function createIsCircular<
+	AreItemsEqual extends TypeEqualityComparator<any, any>,
+>(areItemsEqual: AreItemsEqual): AreItemsEqual;
 /**
  * Get the properties to strictly examine, which include both own properties that are
  * not enumerable and symbol properties.
  */
-export declare function getStrictProperties(object: Dictionary): Array<string | symbol>;
+export declare function getStrictProperties(
+	object: Dictionary,
+): Array<string | symbol>;
 /**
  * Whether the object contains the property passed as an own property.
  */

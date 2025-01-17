@@ -1,0 +1,35 @@
+{
+	"name": "@rivet-gg/actor-core",
+	"private": true,
+	"version": "24.6.2-rc.1",
+	"files": ["dist", "src", "package.json"],
+	"type": "module",
+	"types": "dist/mod.d.ts",
+	"main": "dist/mod.cjs",
+	"module": "dist/mod.js",
+	"exports": {
+		".": {
+			"deno": "./src/mod.ts",
+			"import": {
+				"types": "./dist/mod.d.ts",
+				"default": "./dist/mod.js"
+			},
+			"require": {
+				"types": "./dist/mod.d.cts",
+				"default": "./dist/mod.cjs"
+			}
+		}
+	},
+	"sideEffects": false,
+	"scripts": {
+		"build": "tsup src/mod.ts",
+		"check-types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"zod": "^3.24.1"
+	},
+	"devDependencies": {
+		"tsup": "^8.3.5",
+		"typescript": "^5.7.3"
+	}
+}

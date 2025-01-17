@@ -1,14 +1,14 @@
 import dedent from "dedent";
 
 export const backendModule = ({ module, script }) =>
-    dedent`
+	dedent`
     const data = await ctx.modules.${module}.${script}({
       // Request body
     });
 `;
 
 export const frontendModule = ({ module, script }) =>
-    dedent`
+	dedent`
         import { Backend } from "rivet-sdk";
         
         const backend = new Backend({ 
@@ -20,7 +20,7 @@ export const frontendModule = ({ module, script }) =>
 `;
 
 export const godotModule = ({ module, script }) =>
-    dedent`
+	dedent`
         extends Node
 
         func _ready():
@@ -30,7 +30,7 @@ export const godotModule = ({ module, script }) =>
     `;
 
 export const unityModule = ({ module, script }) =>
-    dedent`
+	dedent`
         using Rivet;
 
         public class MyScript : MonoBehaviour
@@ -47,7 +47,7 @@ export const unityModule = ({ module, script }) =>
     `;
 
 export const unrealModule = ({ module, script }) =>
-    dedent`
+	dedent`
         // IMPORTANT: Auto-generated SDK coming soon
         #include "HttpModule.h"
         #include "Interfaces/IHttpRequest.h"
@@ -81,5 +81,5 @@ export const unrealModule = ({ module, script }) =>
     `;
 
 export const bashModule = ({ module, script }) =>
-    dedent`
+	dedent`
         curl -X POST -H "Content-Type: application/json" -d '{"key":"value"}' https://localhost:6420/modules/${module}/scripts/${script}/call`;

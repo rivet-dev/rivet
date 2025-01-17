@@ -1,8 +1,16 @@
 {
+	"$schema": "https://turbo.build/schema.json",
 	"extends": ["//"],
 	"tasks": {
 		"build": {
-			"outputs": ["dist/**"]
+			"env": ["VITE_APP_*"],
+			"outputs": ["dist/**"],
+			"dependsOn": ["@rivet-gg/actor-client#build"]
+		},
+		"dev": {
+			"env": ["VITE_APP_*"],
+			"persistent": true,
+			"dependsOn": ["@rivet-gg/actor-client#build"]
 		}
 	}
 }

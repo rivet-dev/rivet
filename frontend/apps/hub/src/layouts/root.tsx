@@ -34,7 +34,7 @@ const VisibleInFull = ({ children }: PropsWithChildren) => {
 	return (
 		<div
 			className={cn("relative", {
-				"min-h-screen grid grid-rows-[auto,1fr]":
+				"h-screen grid grid-rows-[auto,1fr]":
 					layout === "full" || layout === "onboarding",
 				contents: layout === "compact",
 			})}

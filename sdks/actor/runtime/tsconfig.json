@@ -1,0 +1,16 @@
+{
+	"compilerOptions": {
+		"target": "esnext",
+		"module": "esnext",
+		"strict": true,
+		"skipLibCheck": true,
+		"esModuleInterop": false,
+		"allowSyntheticDefaultImports": false,
+		"stripInternal": true,
+		"allowImportingTsExtensions": true,
+		"moduleResolution": "bundler",
+		"types": ["deno"],
+		"lib": ["ESNext", "DOM"]
+	},
+	"include": ["src/**/*"]
+}

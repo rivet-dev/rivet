@@ -212,7 +212,10 @@ export function createEqualityComparatorConfig<Meta>({
 			: areArraysEqualDefault,
 		areDatesEqual: areDatesEqualDefault,
 		areMapsEqual: strict
-			? combineComparators(areMapsEqualDefault, areObjectsEqualStrictDefault)
+			? combineComparators(
+					areMapsEqualDefault,
+					areObjectsEqualStrictDefault,
+				)
 			: areMapsEqualDefault,
 		areObjectsEqual: strict
 			? areObjectsEqualStrictDefault
@@ -220,7 +223,10 @@ export function createEqualityComparatorConfig<Meta>({
 		arePrimitiveWrappersEqual: arePrimitiveWrappersEqualDefault,
 		areRegExpsEqual: areRegExpsEqualDefault,
 		areSetsEqual: strict
-			? combineComparators(areSetsEqualDefault, areObjectsEqualStrictDefault)
+			? combineComparators(
+					areSetsEqualDefault,
+					areObjectsEqualStrictDefault,
+				)
 			: areSetsEqualDefault,
 		areTypedArraysEqual: strict
 			? areObjectsEqualStrictDefault

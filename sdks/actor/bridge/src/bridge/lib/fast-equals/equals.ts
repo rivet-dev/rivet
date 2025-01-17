@@ -131,7 +131,15 @@ export function areObjectsEqual(
 
 		if (
 			!hasOwn(b, property) ||
-			!state.equals(a[property], b[property], property, property, a, b, state)
+			!state.equals(
+				a[property],
+				b[property],
+				property,
+				property,
+				a,
+				b,
+				state,
+			)
 		) {
 			return false;
 		}
@@ -180,7 +188,15 @@ export function areObjectsEqualStrict(
 		}
 
 		if (
-			!state.equals(a[property], b[property], property, property, a, b, state)
+			!state.equals(
+				a[property],
+				b[property],
+				property,
+				property,
+				a,
+				b,
+				state,
+			)
 		) {
 			return false;
 		}

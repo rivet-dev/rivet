@@ -78,7 +78,7 @@ export function Header({ variant = "opaque" }: HeaderProps) {
 								<div className="flex-1">
 									<Flex direction="col" gap="6">
 										<Link
-											href="/"
+											to="/"
 											className="flex items-center gap-2 text-lg font-semibold"
 										>
 											<img

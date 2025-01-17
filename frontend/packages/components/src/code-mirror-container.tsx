@@ -1,4 +1,5 @@
 import { type ComponentProps, forwardRef } from "react";
+import { cn } from "./lib/utils";
 
 export const CodeMirrorContainer = forwardRef<
 	HTMLDivElement,
@@ -8,7 +9,7 @@ export const CodeMirrorContainer = forwardRef<
 		<div
 			ref={ref}
 			{...props}
-			className="border rounded-md overflow-hidden"
+			className={cn("border rounded-md overflow-hidden", props.className)}
 		/>
 	);
 });

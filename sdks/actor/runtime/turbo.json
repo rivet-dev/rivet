@@ -1,0 +1,14 @@
+{
+	"$schema": "https://turbo.build/schema.json",
+	"extends": ["//"],
+	"tasks": {
+		"build": {
+			"inputs": ["src/**", "./tsup.config.ts"],
+			"dependsOn": [
+				"@rivet-gg/actor-common#build",
+				"@rivet-gg/actor-core#build",
+				"@rivet-gg/actor-protocol#build"
+			]
+		}
+	}
+}

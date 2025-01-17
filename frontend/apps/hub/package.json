@@ -5,8 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite",
-		"build": "tsc && vite build --mode=development",
-		"build:prod": "tsc && vite build --mode=production",
+		"build": "tsc && vite build --mode=production",
 		"preview": "vite preview"
 	},
 	"dependencies": {
@@ -16,6 +15,7 @@
 		"@fortawesome/free-solid-svg-icons": "^6.5.2",
 		"@fortawesome/react-fontawesome": "^0.2.2",
 		"@hookform/resolvers": "^3.3.4",
+		"@rivet-gg/actor-protocol": "workspace:*",
 		"@rivet-gg/api": "file:vendor/rivet-gg-api.tgz",
 		"@rivet-gg/api-ee": "file:vendor/rivet-gg-api-ee.tgz",
 		"@rivet-gg/components": "workspace:*",
@@ -35,8 +35,8 @@
 		"framer-motion": "^11.2.11",
 		"lodash": "^4.17.21",
 		"posthog-js": "^1.144.2",
-		"react": "^18.2.0",
-		"react-dom": "^18.2.0",
+		"react": "*",
+		"react-dom": "*",
 		"react-hook-form": "^7.51.1",
 		"react-konami-code": "^2.3.0",
 		"react-turnstile": "^1.1.3",
@@ -45,13 +45,15 @@
 		"tailwind-merge": "^2.2.2",
 		"tailwindcss-animate": "^1.0.7",
 		"usehooks-ts": "^3.1.0",
-		"zod": "^3.22.4"
+		"zod": "^3.24"
 	},
 	"devDependencies": {
 		"@sentry/vite-plugin": "^2.22.2",
 		"@shikijs/transformers": "^1.24.2",
 		"@tanstack/router-vite-plugin": "^1.58.12",
 		"@types/file-saver": "^2",
+		"@types/filesize": "^5.0.2",
+		"@types/lodash": "^4.17.14",
 		"@types/mime": "^4.0.0",
 		"@types/node": "^20.11.30",
 		"@types/react": "^18.2.66",

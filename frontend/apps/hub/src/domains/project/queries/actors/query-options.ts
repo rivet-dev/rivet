@@ -1,6 +1,7 @@
 import { mergeWatchStreams } from "@/lib/watch-utilities";
 import { rivetClient } from "@/queries/global";
 import { getMetaWatchIndex } from "@/queries/utils";
+import { InspectResponseSchema } from "@rivet-gg/actor-protocol/http/inspect";
 import { Rivet } from "@rivet-gg/api";
 import {
 	type InfiniteData,
@@ -386,5 +387,99 @@ export const actorRegionQueryOptions = ({
 			actorRegionsQueryOptions({ projectNameId, environmentNameId })
 				.select?.(data)
 				.find((region) => region.id === regionId),
+	});
+};
+
+export const actorInspectQueryOptions = ({
+	projectNameId,
+	environmentNameId,
+	actorId,
+	network,
+}: {
+	projectNameId: string;
+	environmentNameId: string;
+	actorId: string;
+	network: Rivet.actor.Network;
+}) => {
+	const http = Object.values(network.ports).find(
+		(port) => port.protocol === "http",
+	);
+	return queryOptions({
+		queryKey: [
+			"project",
+			projectNameId,
+			"environment",
+			environmentNameId,
+			"actor",
+			actorId,
+			"inspect",
+		],
+		queryFn: async ({ signal }) => {
+			const url = new URL(
+				`${http?.protocol}://${http?.hostname}:${http?.port}`,
+			);
+			url.pathname = `${http?.path}/inspect`;
+			const response = await fetch(url.href, { signal });
+			if (!response.ok) {
+				throw response;
+			}
+
+			const parsed = InspectResponseSchema.parse(await response.json());
+
+			// format the JSON for better readability
+			parsed.state.native = JSON.stringify(
+				JSON.parse(parsed.state.native),
+				null,
+				2,
+			);
+
+			return parsed;
+		},
+		enabled: http !== undefined,
+	});
+};
+
+export const actorStateQueryOptions = ({
+	projectNameId,
+	environmentNameId,
+	actorId,
+	network,
+}: {
+	projectNameId: string;
+	environmentNameId: string;
+	actorId: string;
+	network: Rivet.actor.Network;
+}) => {
+	return queryOptions({
+		...actorInspectQueryOptions({
+			projectNameId,
+			environmentNameId,
+			actorId,
+			network,
+		}),
+		refetchInterval: 1000,
+		select: (data) => data.state,
+	});
+};
+
+export const actorsRpcsQueryOptions = ({
+	projectNameId,
+	environmentNameId,
+	actorId,
+	network,
+}: {
+	projectNameId: string;
+	environmentNameId: string;
+	actorId: string;
+	network: Rivet.actor.Network;
+}) => {
+	return queryOptions({
+		...actorInspectQueryOptions({
+			projectNameId,
+			environmentNameId,
+			actorId,
+			network,
+		}),
+		select: (data) => data.rpcs,
 	});
 };

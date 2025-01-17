@@ -1,139 +1,139 @@
 @config "../../tailwind.config.js";
 
 @layer base {
-  ::selection {
-    background-color: #FF4F00 !important;
-    color: black !important;
-  }
-  ::-moz-selection {
-    background-color: #FF4F00 !important;
-    color: black !important;
-  }
+	::selection {
+		background-color: #ff4f00 !important;
+		color: black !important;
+	}
+	::-moz-selection {
+		background-color: #ff4f00 !important;
+		color: black !important;
+	}
 
-  :root {
-    --shiki-color-text: theme('colors.white');
-    --shiki-token-constant: theme('colors.violet.300');
-    --shiki-token-string: theme('colors.violet.300');
-    --shiki-token-comment: theme('colors.zinc.500');
-    --shiki-token-keyword: theme('colors.sky.300');
-    --shiki-token-parameter: theme('colors.pink.300');
-    --shiki-token-function: theme('colors.violet.300');
-    --shiki-token-string-expression: theme('colors.violet.300');
-    --shiki-token-punctuation: theme('colors.zinc.200');
+	:root {
+		--shiki-color-text: theme("colors.white");
+		--shiki-token-constant: theme("colors.violet.300");
+		--shiki-token-string: theme("colors.violet.300");
+		--shiki-token-comment: theme("colors.zinc.500");
+		--shiki-token-keyword: theme("colors.sky.300");
+		--shiki-token-parameter: theme("colors.pink.300");
+		--shiki-token-function: theme("colors.violet.300");
+		--shiki-token-string-expression: theme("colors.violet.300");
+		--shiki-token-punctuation: theme("colors.zinc.200");
 
-    --bg-dark-grain: url('../images/effects/grain-dark.png');
-    --bg-light-grain: url('../images/effects/grain-light.png');
-    --spacing-top-navigation: theme('spacing.docs-navigation');
+		--bg-dark-grain: url("../images/effects/grain-dark.png");
+		--bg-light-grain: url("../images/effects/grain-light.png");
+		--spacing-top-navigation: theme("spacing.docs-navigation");
 
-    --background: 20 14.3% 4.1%;
-    --foreground: 60 9.1% 97.8%;
-    --card: 0 9.09% 6.47%;
-    --card-foreground: 60 9.1% 97.8%;
-    --popover: 0 9.09% 6.47%;
-    --popover-foreground: 60 9.1% 97.8%;
-    --primary: 18.5 100% 50%;
-    --primary-foreground: 60 9.1% 97.8%;
-    --secondary: 12 6.5% 15.1%;
-    --secondary-foreground: 60 9.1% 97.8%;
-    --muted: 34 10% 10%;
-    --muted-foreground: 24 5.4% 63.9%;
-    --accent: 12 6.5% 15.1%;
-    --accent-foreground: 60 9.1% 97.8%;
-    --destructive: 0 72.2% 50.6%;
-    --destructive-foreground: 60 9.1% 97.8%;
-    --warning: 47.9 95.8% 53.1%;
-    --border: 12 6.5% 15.1%;
-    --input: 12 6.5% 15.1%;
-    --ring: 18.59deg 100% 50%;
-    --background-main: 0 7.14% 5.49%;
+		--background: 20 14.3% 4.1%;
+		--foreground: 60 9.1% 97.8%;
+		--card: 0 9.09% 6.47%;
+		--card-foreground: 60 9.1% 97.8%;
+		--popover: 0 9.09% 6.47%;
+		--popover-foreground: 60 9.1% 97.8%;
+		--primary: 18.5 100% 50%;
+		--primary-foreground: 60 9.1% 97.8%;
+		--secondary: 12 6.5% 15.1%;
+		--secondary-foreground: 60 9.1% 97.8%;
+		--muted: 34 10% 10%;
+		--muted-foreground: 24 5.4% 63.9%;
+		--accent: 12 6.5% 15.1%;
+		--accent-foreground: 60 9.1% 97.8%;
+		--destructive: 0 72.2% 50.6%;
+		--destructive-foreground: 60 9.1% 97.8%;
+		--warning: 47.9 95.8% 53.1%;
+		--border: 12 6.5% 15.1%;
+		--input: 12 6.5% 15.1%;
+		--ring: 18.59deg 100% 50%;
+		--background-main: 0 7.14% 5.49%;
 
-    @apply bg-charcole-950 antialiased;
-  }
+		@apply bg-charcole-950 antialiased;
+	}
 
-  [inert] ::-webkit-scrollbar {
-    display: none;
-  }
+	[inert] ::-webkit-scrollbar {
+		display: none;
+	}
 
-  .hide-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
+	.hide-scrollbar {
+		-ms-overflow-style: none;
+		scrollbar-width: none;
+	}
 
-  .hide-scrollbar::-webkit-scrollbar {
-    display: none;
-  }
+	.hide-scrollbar::-webkit-scrollbar {
+		display: none;
+	}
 }
 
 .red-glow {
-  box-shadow: 0 0 30px 5px rgba(248, 113, 113, 0.35); /* Increased glow for red */
+	box-shadow: 0 0 30px 5px rgba(248, 113, 113, 0.35); /* Increased glow for red */
 }
 
 .orange-glow {
-  box-shadow: 0 0 30px 5px rgba(251, 146, 60, 0.35); /* Increased glow for orange */
+	box-shadow: 0 0 30px 5px rgba(251, 146, 60, 0.35); /* Increased glow for orange */
 }
 
 .yellow-glow {
-  box-shadow: 0 0 30px 5px rgba(250, 204, 21, 0.35); /* Increased glow for yellow */
+	box-shadow: 0 0 30px 5px rgba(250, 204, 21, 0.35); /* Increased glow for yellow */
 }
 
 .green-glow {
-  box-shadow: 0 0 30px 5px rgba(74, 222, 128, 0.35); /* Increased glow for green */
+	box-shadow: 0 0 30px 5px rgba(74, 222, 128, 0.35); /* Increased glow for green */
 }
 
 .blue-glow {
-  box-shadow: 0 0 30px 5px rgba(96, 165, 250, 0.35); /* Increased glow for blue */
+	box-shadow: 0 0 30px 5px rgba(96, 165, 250, 0.35); /* Increased glow for blue */
 }
 
 .purple-glow {
-  box-shadow: 0 0 30px 5px rgba(192, 132, 252, 0.35); /* Increased glow for purple */
+	box-shadow: 0 0 30px 5px rgba(192, 132, 252, 0.35); /* Increased glow for purple */
 }
 
 .hover-white-shadow:hover {
-  box-shadow: 5px 5px 0 0 #ffffff; /* Adjust the x and y offset to create a 35-degree angle */
+	box-shadow: 5px 5px 0 0 #ffffff; /* Adjust the x and y offset to create a 35-degree angle */
 }
 
 /* CSS for the hover effect */
 .hover-effect {
-  position: relative;
-  display: inline-block; /* Ensures the link behaves as an inline element */
+	position: relative;
+	display: inline-block; /* Ensures the link behaves as an inline element */
 }
 
 .hover-effect::after {
-  content: '';
-  display: block;
-  width: 0;
-  height: 2px;
-  background: linear-gradient(
-    to right,
-    #3d000e,
-    #900012,
-    #ffcf00,
-    #009d3a,
-    #c4b2da,
-    #009dda,
-    #0c4ca3,
-    #28246d
-  );
-  background-size: 100% 100%;
-  position: absolute;
-  bottom: 0;
-  right: 0;
-  left: auto;
-  transition: width 0.5s ease-in-out;
-  z-index: 10;
+	content: "";
+	display: block;
+	width: 0;
+	height: 2px;
+	background: linear-gradient(
+		to right,
+		#3d000e,
+		#900012,
+		#ffcf00,
+		#009d3a,
+		#c4b2da,
+		#009dda,
+		#0c4ca3,
+		#28246d
+	);
+	background-size: 100% 100%;
+	position: absolute;
+	bottom: 0;
+	right: 0;
+	left: auto;
+	transition: width 0.5s ease-in-out;
+	z-index: 10;
 }
 
 .hover-effect:hover::after {
-  width: 100%; /* On hover, set width to 100% */
+	width: 100%; /* On hover, set width to 100% */
 }
 
 @keyframes moveVerticalLines {
-  0% {
-    background-position: 50% 0%;
-  }
-  100% {
-    background-position: 50% 100%;
-  }
+	0% {
+		background-position: 50% 0%;
+	}
+	100% {
+		background-position: 50% 100%;
+	}
 }
 
 @tailwind base;
@@ -141,23 +141,25 @@
 @tailwind utilities;
 
 @layer utilities {
-  .mask-section {
-    mask-image: linear-gradient(to bottom, transparent 0%, black 20%);
-  }
+	.mask-section {
+		mask-image: linear-gradient(to bottom, transparent 0%, black 20%);
+	}
 
-  .main-content-container {
-    @apply mx-auto max-w-screen-2xl;
-  }
+	.main-content-container {
+		@apply mx-auto max-w-screen-2xl;
+	}
 }
 
 /* Ensure it works in all contexts */
-*, *::before, *::after {
-  ::selection {
-    background-color: #FF4F00 !important;
-    color: black !important;
-  }
-  ::-moz-selection {
-    background-color: #FF4F00 !important;
-    color: black !important;
-  }
+*,
+*::before,
+*::after {
+	::selection {
+		background-color: #ff4f00 !important;
+		color: black !important;
+	}
+	::-moz-selection {
+		background-color: #ff4f00 !important;
+		color: black !important;
+	}
 }

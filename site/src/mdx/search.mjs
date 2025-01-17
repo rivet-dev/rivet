@@ -1,83 +1,90 @@
-import { createLoader } from 'simple-functional-loader';
-import glob from 'fast-glob';
-import { remark } from 'remark';
-import remarkMdx from 'remark-mdx';
-import * as url from 'url';
-import * as path from 'path';
-import * as fs from 'fs';
-import { visit, SKIP } from 'unist-util-visit';
-import { slugifyWithCounter } from '@sindresorhus/slugify';
-import { toString } from 'mdast-util-to-string';
-import { filter } from 'unist-util-filter';
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as url from "node:url";
+import { slugifyWithCounter } from "@sindresorhus/slugify";
+import glob from "fast-glob";
+import { toString as mdastToString } from "mdast-util-to-string";
+import { remark } from "remark";
+import remarkMdx from "remark-mdx";
+import { createLoader } from "simple-functional-loader";
+import { filter } from "unist-util-filter";
+import { SKIP, visit } from "unist-util-visit";
 
 const __filename = url.fileURLToPath(import.meta.url);
 const processor = remark().use(remarkMdx).use(extractSections);
 const slugify = slugifyWithCounter();
 
 function isObjectExpression(node) {
-  return (
-    node.type === 'mdxTextExpression' && node.data?.estree?.body?.[0]?.expression?.type === 'ObjectExpression'
-  );
+	return (
+		node.type === "mdxTextExpression" &&
+		node.data?.estree?.body?.[0]?.expression?.type === "ObjectExpression"
+	);
 }
 
 function excludeObjectExpressions(tree) {
-  return filter(tree, node => !isObjectExpression(node));
+	return filter(tree, (node) => !isObjectExpression(node));
 }
 
 function extractSections() {
-  return (tree, { sections }) => {
-    slugify.reset();
+	return (tree, { sections }) => {
+		slugify.reset();
 
-    visit(tree, node => {
-      if (node.type === 'heading' || node.type === 'paragraph') {
-        let content = toString(excludeObjectExpressions(node));
-        if (node.type === 'heading' && node.depth <= 2) {
-          let hash = node.depth === 1 ? null : slugify(content);
-          sections.push([content, hash, []]);
-        } else {
-          sections.at(-1)?.[2].push(content);
-        }
-        return SKIP;
-      }
-    });
-  };
+		visit(tree, (node) => {
+			if (node.type === "heading" || node.type === "paragraph") {
+				const content = mdastToString(excludeObjectExpressions(node));
+				if (node.type === "heading" && node.depth <= 2) {
+					const hash = node.depth === 1 ? null : slugify(content);
+					sections.push([content, hash, []]);
+				} else {
+					sections.at(-1)?.[2].push(content);
+				}
+				return SKIP;
+			}
+		});
+	};
 }
 
 export default function (nextConfig = {}) {
-  let cache = new Map();
+	const cache = new Map();
 
-  return Object.assign({}, nextConfig, {
-    webpack(config, options) {
-      config.module.rules.push({
-        test: __filename,
-        use: [
-          createLoader(function () {
-            let pagesDir = path.resolve('./src/pages');
-            this.addContextDependency(pagesDir);
+	return Object.assign({}, nextConfig, {
+		webpack(config, options) {
+			config.module.rules.push({
+				test: __filename,
+				use: [
+					createLoader(function () {
+						const pagesDir = path.resolve("./src/pages");
+						this.addContextDependency(pagesDir);
 
-            let files = glob.sync('**/*.mdx', { cwd: pagesDir });
-            let data = files.map(file => {
-              let url = `/${file.replace(/\/index\.mdx$/, '').replace(/\.mdx$/, '')}`;
-              let mdx = fs.readFileSync(path.join(pagesDir, file), 'utf8');
+						const files = glob.sync("**/*.mdx", { cwd: pagesDir });
+						const data = files.map((file) => {
+							const url = `/${file.replace(/\/index\.mdx$/, "").replace(/\.mdx$/, "")}`;
+							const mdx = fs.readFileSync(
+								path.join(pagesDir, file),
+								"utf8",
+							);
 
-              // console.log('Processing', url);
+							// console.log('Processing', url);
 
-              let sections = [];
+							let sections = [];
 
-              if (cache.get(file)?.[0] === mdx) {
-                sections = cache.get(file)[1];
-              } else {
-                let vfile = { value: mdx, sections };
-                processor.runSync(processor.parse(vfile), vfile);
-                cache.set(file, [mdx, sections]);
-              }
+							if (cache.get(file)?.[0] === mdx) {
+								sections = cache.get(file)[1];
+							} else {
+								const vfile = { value: mdx, sections };
+								processor.runSync(
+									processor.parse(vfile),
+									vfile,
+								);
+								cache.set(file, [mdx, sections]);
+							}
 
-              return { url, sections };
-            });
+							return { url, sections };
+						});
 
-            // When this file is imported within the application
-            // the following module is loaded:
-            return `
+						// When this file is imported within the application
+						// the following module is loaded:
+						return `
               import FlexSearch from 'flexsearch'
 
               let sectionIndex = new FlexSearch.Document({
@@ -122,15 +129,15 @@ export default function (nextConfig = {}) {
                 }))
               }
             `;
-          })
-        ]
-      });
+					}),
+				],
+			});
 
-      if (typeof nextConfig.webpack === 'function') {
-        return nextConfig.webpack(config, options);
-      }
+			if (typeof nextConfig.webpack === "function") {
+				return nextConfig.webpack(config, options);
+			}
 
-      return config;
-    }
-  });
+			return config;
+		},
+	});
 }

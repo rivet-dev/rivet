@@ -1,0 +1,13 @@
+{
+	"compilerOptions": {
+		"target": "esnext",
+		"module": "esnext",
+		"strict": true,
+		"skipLibCheck": true,
+		"esModuleInterop": false,
+		"allowSyntheticDefaultImports": false,
+		"stripInternal": true,
+		"moduleResolution": "bundler"
+	},
+	"include": ["src/**/*"]
+}

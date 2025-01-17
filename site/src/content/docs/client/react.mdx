@@ -1,0 +1,375 @@
+# React
+
+<Warning title="Caution!">
+This integration is unstable and not recommended for production use. If you're looking for a stable integration, please let us know by upvoting the issue on our [GitHub repository]().
+</Warning>
+
+
+## Getting Started
+
+First, add Rivet's Actor Client SDK to your project.
+
+<CodeGroup>
+
+```bash {{ "title": "npm" }}
+npm i @rivet-gg/actor-client --save
+```
+
+```bash {{ "title": "yarn" }}
+yarn add @rivet-gg/actor-client
+```
+
+```bash {{ "title": "pnpm" }}
+pnpm add @rivet-gg/actor-client
+```
+
+```bash {{ "title": "jsr" }}
+npx jsr add @rivet-gg/actor-client
+```
+</CodeGroup>
+
+[Generate a Actor Manager endpoint by using the `rivet` CLI and guide here](https://rivet.gg/docs/setup). Then add the generated URL to your env file.
+
+### Create React App / Vite
+
+If you're using Create React App or Vite, you can put `ActorClientProvider` in `App.tsx`.
+
+```tsx {{ "title": "App.tsx" }}
+import { Client } from "@rivet-gg/actor-client";
+import { ActorClientProvider } from "@rivet-gg/actor-client/unstable-react";
+
+export const App = () => {
+  const [actorClient] = useState(() => new ActorClient({
+      endpoint: process.env.VITE_APP_ACTOR_ENDPOINT,
+  }));
+
+  return (
+    <ActorClientProvider client={actorClient}>
+      /* your other context providers / your app  */
+    </ActorClientProvider>
+  );
+};
+```
+
+### Next.js Pages Router
+
+If you're using Next.js Pages Router you can put `ActorClientProvider` in `_app.tsx`, or in the page where you're going to use actors.
+
+```tsx {{"title": "pages/_app.tsx"}}
+import { Client } from "@rivet-gg/actor-client";
+import { ActorClientProvider } from "@rivet-gg/actor-client/unstable-react";
+
+export const App = ({ Component, pageProps }) => {
+  const [actorClient] = useState(() => new ActorClient({
+      endpoint: process.env.NEXT_PUBLIC_APP_ACTOR_ENDPOINT,
+  }));
+
+  return (
+    <ActorClientProvider client={actorClient}>
+      <Component {...pageProps} />
+    </ActorClientProvider>
+  );
+};
+```
+
+### Next.js App Router
+
+If you're using Next.js app router you can put `ActorClientProvider` in `layout.tsx`, or in the layout where you're going to use actors. 
+We recommend creating a new component for your providers as shown below, because this SDK needs to be initialized on the client side with `use client` directive.
+
+<CodeGroup>
+```tsx {{"title":"src/app/providers.tsx"}}
+'use client';
+import { Client } from "@rivet-gg/actor-client";
+import { ActorClientProvider } from '@rivet-gg/actor-client/unstable-react';
+
+export function Providers({
+  children,
+}) {
+  const [actorClient] = useState(() => new ActorClient({
+      endpoint: process.env.NEXT_PUBLIC_APP_ACTOR_ENDPOINT,
+  }));
+
+  return (
+    <ActorClientProvider client={actorClient}>
+      {children}
+    </ActorClientProvider>
+  )
+}
+```
+
+```tsx {{"title": "src/app/layout.tsx"}}
+import { Providers } from './providers';
+
+export default function Layout({
+  children,
+}) {
+  return (
+    <html lang="en">
+      <body>
+        <Providers>{children}</Providers>
+      </body>
+    </html>
+  )
+}
+```
+</CodeGroup>
+
+## Usage
+
+### Creating an Actor
+
+`useActor` is a hook that allows you to interact with actors in your React components. Pass to it a name of your actor, [and optionally any other create parameters](https://rivet.gg/docs/manage#options). It will connect to the actor, once the component is mounted, and disconnect when the component is unmounted. 
+
+The hook also provides the actor's state, error, and loading status. Actor created by `useActor` is available to that particular component tree only. If you call `useActor` somewhere else (even with the same arguments), it will create a new actor instance. To share the actor between components, you can use React's context or a state management library. It's safe to pass `actor` instance to child components as a prop, as it does not change between renders.
+
+Optionally, if you're using TypeScript, you can pass your Actor class type to the hook to get the correct types for [RPC methods](https://rivet.gg/docs/rpc). 
+
+<CodeGroup>
+```tsx {{"title": "JavaScript"}}
+import { useActor } from "@rivet-gg/actor-client/unstable-react";
+
+export const MyComponent = () => {
+  const [{ isLoading, error, actor }] = useActor({ name: "counter" }); // [!code focus]
+  /* ... */
+};
+```
+```tsx {{"title": "TypeScript"}}
+import { useActor } from "@rivet-gg/actor-client/unstable-react";
+import type CounterActor from "../your-path-to-actors-directory/your-actor-file-name"; // replace with your actor file path // [!code focus] 
+
+export const MyComponent = () => {
+  const [{ isLoading, error, actor }] = useActor<CounterActor>({ name: "counter" }); // [!code focus]
+  /* ... */
+};
+```
+</CodeGroup>
+
+### Remote Procedure Call (RPC)
+
+To call any defined Remote Procedure Call (RPC) method on the actor, you can use the `actor.methodName` syntax. Make sure to replace `methodName` with the name of the method you want to call. Be aware that those methods are asynchronous and return a promise.
+
+<CodeGroup>
+```tsx {{"title": "JavaScript"}}
+import { useActor } from "@rivet-gg/actor-client/unstable-react";
+
+export const MyComponent = () => {
+  const [{ isLoading, error, actor }] = useActor({ name: "counter" });
+
+  return (
+    <div>
+      <button onClick={() => actor.increment()}>Increment</button> // [!code focus]
+    </div>
+  );
+};
+```
+```tsx {{"title": "TypeScript"}}
+import { useActor } from "@rivet-gg/actor-client/unstable-react";
+import type CounterActor from "../your-path-to-actors-directory/your-actor-file-name"; // replace with your actor file path
+
+export const MyComponent = () => {
+  const [{ isLoading, error, actor }] = useActor<CounterActor>({ name: "counter" });
+
+
+  return (
+    <div>
+      <button onClick={() => actor.increment())}>Increment</button> // [!code focus]
+    </div>
+  );
+};
+```
+</CodeGroup>
+
+### Events
+
+To subscribe to actor events changes, you can use the `actor.on` method. 
+
+```tsx {{"title": "TypeScript"}}
+import { useActor } from "@rivet-gg/actor-client/unstable-react";
+
+export const MyComponent = () => {
+  const [{ isLoading, error, actor }] = useActor({ name: "counter" });
+
+  useEffect(() => {
+    const unsubscribe = actor.on("your event name", (event) => { // [!code focus]
+      console.log(event); // [!code focus]
+    }); // [!code focus]
+
+    return () => { // [!code focus]
+      unsubscribe(); // [!code focus]
+    }; // [!code focus]
+  }, []);
+};
+
+```
+
+### Troubleshooting
+
+#### JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists
+
+If you're getting this error, you need to add types for React. Normally React does not come with types, so you need to tell Deno to use the types from the different package.
+
+```tsx {{ "title": "your-actor.tsx" }}
+// @deno-types=npm:@types/react
+import React from "react";
+```
+
+
+### Advanced Usage
+
+#### Server Driven UI
+
+You can use the Actor RPC methods to return React components. [This is done by using React Server Components paradigm](https://react.dev/reference/rsc/server-components).
+
+In order to render components from your Actor, you need to ensure that your Actor extends the `RscActor` class from the `@rivet-gg/actor` package. Your RPC methods can receive props like any other React component.
+
+```tsx {{"title": "your-actor.tsx"}}
+import { Rpc } from "@rivet-gg/actor";
+import { RscActor } from "@rivet-gg/actor/unstable-react";  // [!code focus]
+
+export default class ActorName extends RscActor { // [!code focus]
+
+  /* ... */
+
+  _getMessages() {
+    /* 
+      your code for getting messages,
+      either from state or external source
+    */
+  }
+
+  messages(_rpc: Rpc<this>, props: {limit: number}) {  // [!code focus]
+    const messages = this._getMessages();  // [!code focus]
+    // [!code focus]
+    return <ul>  // [!code focus]
+      {messages.slice(0, props.limit).map((message) => (  // [!code focus]
+        <li key={message.id}>{message.text}</li>  // [!code focus]
+      ))}  // [!code focus]
+    </ul> // [!code focus]
+  } // [!code focus]
+}
+```
+
+Then, you can use the second return value of the `useActor` hook to use your RscActor's elements. Make sure to wrap those elements in `Suspense`.
+
+```tsx {{"title": "your-component.tsx"}}
+import { useActor } from "@rivet-gg/actor-client/unstable-react";
+import type ActorName from "../your-path-to-actor.tsx"; // replace with your actor file path
+
+export const MyComponent = () => {
+  const [// [!code focus]
+    state,// [!code focus]
+    { messages: Messages }// [!code focus]
+  ] = useActor<ActorName>({ name: "actor-name" }); // [!code focus]
+
+  return (
+    <Suspense> // [!code focus]
+      <Messages limit={5} /> // [!code focus]
+    </Suspense> // [!code focus]
+  );
+};
+```
+
+
+## Experimental Features
+
+<Warning title="Caution!">
+    Methods described below are unstable and may change in the future, do not use them in production.
+</Warning>
+
+### Manual RSC update
+
+If you need to re-render the component when the something happens in your actor, use `this._updateRsc()` method. This will trigger a re-render of the RSC elements in your actor. Behind the scenes, this method broadcasts an internal event `__rsc` that all RSC elements are listening to.
+
+```tsx {{ "title": "your-actor.tsx" }}
+import { Rpc } from "@rivet-gg/actor";
+import { RscActor } from "@rivet-gg/actor/unstable-react";
+
+export default class ActorName extends RscActor {
+
+  /* ... */
+
+  someFn(_rpc: Rpc<this>) {
+    this._updateRsc(); // [!code focus]
+  }
+
+  /* ... */
+
+  messages(_rpc: Rpc<this>, props: {limit: number}) { 
+    /* ... */
+  }
+}
+```
+
+### `unstable_createActorHooks`
+
+`unstable_createActorHooks` is a function that allows you to create type-safe hooks for your actors. It takes an actor name and returns a hook that can be used to interact with that actor. This is useful when you want to create a custom hook that encapsulates the logic for a specific actor and its types.
+
+```tsx {{"title": "your-actor-hooks.tsx"}}
+
+import { 
+  unstable_createActorHooks
+} from "@rivet-gg/actor-client/unstable-react";
+
+export const { 
+  useActor, 
+  useActorEventCallback, 
+  useActorRsc 
+} = unstable_createActorHooks("counter");
+```
+
+#### `useActor`
+
+`useActor` is a hook that allows you to interact with actors in your React components. Pass to it a name of your actor, [and optionally any other create parameters](https://rivet.gg/docs/manage#options). It will connect to the actor, once the component is mounted, and disconnect when the component is unmounted.
+
+```tsx {{"title": "your-component.tsx"}}
+import { useActor } from "./your-actor-hooks";
+
+export const MyComponent = () => {
+  const [{ isLoading, error, actor }] = useActor(); // [!code focus]
+
+  return (
+    <div>
+      <button onClick={() => actor.increment()}>Increment</button> // [!code focus]
+    </div>
+  );
+};
+```
+
+#### `useActorEventCallback`
+
+`useActorEventCallback` is a hook that allows you to subscribe to actor events changes. It takes an event name and a callback function that will be called when the event is triggered. You do not need to wrap the callback in `useCallback` as the hook will handle that for you.
+
+```tsx {{"title": "your-component.tsx"}}
+import { useActorEventCallback } from "./your-actor-hooks";
+
+export const MyComponent = ({ actor }) => {
+  useActorEventCallback({ actor, event: "your event name"}, (event) => { // [!code focus]
+    console.log(event); // [!code focus]
+  }); // [!code focus]
+
+  return null;
+};
+```
+
+#### `useActorRsc`
+
+`useActorRsc` is a hook that allows you to use React Server Components from your actor. It takes an actor instance and returns a function that can be used to render the RSC elements. Make sure to wrap those elements in Suspense. The second return value of the hook is the function to refetch the RSC elements. 
+
+<Note>
+    This hook won't re-render the component when the actor state changes. If you need to re-render the component when the actor state changes. Use the second return value of the hook to refetch the response.
+</Note>
+
+```tsx {{"title": "your-component.tsx"}}
+import { useActorRsc } from "./your-actor-hooks";
+
+export const MyComponent = ({ actor }) => {
+  const [Messages, update] = useActorRsc({ actor, fn: 'messages' }); // [!code focus]
+
+  return (
+    <Suspense> // [!code focus]
+      <Messages limit={5} /> // [!code focus]
+    </Suspense> // [!code focus]
+  );
+};
+```

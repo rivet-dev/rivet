@@ -1,10 +1,10 @@
+import { MAX_CONN_PARAMS_SIZE } from "@rivet-gg/actor-common/network";
+import { assertUnreachable } from "@rivet-gg/actor-common/utils";
+import type { ProtocolFormat } from "@rivet-gg/actor-protocol/ws";
+import type * as wsToClient from "@rivet-gg/actor-protocol/ws/to_client";
+import type * as wsToServer from "@rivet-gg/actor-protocol/ws/to_server";
 import { assertEquals } from "@std/assert";
 import * as cbor from "@std/cbor";
-import { MAX_CONN_PARAMS_SIZE } from "../common/network.ts";
-import { assertUnreachable } from "../common/utils.ts";
-import type { ProtocolFormat } from "../protocol/ws/mod.ts";
-import type * as wsToClient from "../protocol/ws/to_client.ts";
-import type * as wsToServer from "../protocol/ws/to_server.ts";
 import * as errors from "./errors.ts";
 import { logger } from "./log.ts";
 import { type WebSocketMessage, messageLength } from "./utils.ts";
@@ -154,7 +154,7 @@ export class ActorHandleRaw {
 		}
 
 		const ws = new WebSocket(url);
-		ws.binaryType = this.protocolFormat === "cbor" ?  "arraybuffer" : "blob"
+		ws.binaryType = this.protocolFormat === "cbor" ? "arraybuffer" : "blob";
 		this.#websocket = ws;
 		ws.onopen = () => {
 			logger().debug("socket open");
@@ -197,7 +197,9 @@ export class ActorHandleRaw {
 			logger().debug("socket error", { event });
 		};
 		ws.onmessage = async (ev) => {
-			const response = (await this.#parse(ev.data)) as wsToClient.ToClient;
+			const response = (await this.#parse(
+				ev.data,
+			)) as wsToClient.ToClient;
 
 			if ("ro" in response.body) {
 				// RPC response OK
@@ -345,27 +347,29 @@ export class ActorHandleRaw {
 				throw new Error("received non-string for json parse");
 			}
 			return JSON.parse(data);
-		} else if (this.protocolFormat === "cbor") {
-			if (data instanceof Blob) {
-				return cbor.decodeCbor(new Uint8Array(await data.arrayBuffer()));
-			} else if (data instanceof ArrayBuffer) {
-				return cbor.decodeCbor(new Uint8Array(data));
-			} else {
-				throw new Error("received non-binary type for cbor parse");
-			}
-		} else {
-			assertUnreachable(this.protocolFormat);
 		}
+		if (this.protocolFormat === "cbor") {
+			if (data instanceof Blob) {
+				return cbor.decodeCbor(
+					new Uint8Array(await data.arrayBuffer()),
+				);
+			}
+			if (data instanceof ArrayBuffer) {
+				return cbor.decodeCbor(new Uint8Array(data));
+			}
+			throw new Error("received non-binary type for cbor parse");
+		}
+		assertUnreachable(this.protocolFormat);
 	}
 
 	#serialize(value: unknown): WebSocketMessage {
 		if (this.protocolFormat === "json") {
 			return JSON.stringify(value);
-		} else if (this.protocolFormat === "cbor") {
-			return cbor.encodeCbor(value as cbor.CborType);
-		} else {
-			assertUnreachable(this.protocolFormat);
 		}
+		if (this.protocolFormat === "cbor") {
+			return cbor.encodeCbor(value as cbor.CborType);
+		}
+		assertUnreachable(this.protocolFormat);
 	}
 
 	#webSocketSendRaw(message: WebSocketMessage, opts?: SendOpts) {
@@ -376,7 +380,9 @@ export class ActorHandleRaw {
 					len: messageLength(message),
 				});
 			} catch (error) {
-				logger().warn("failed to send message, added to queue", { error });
+				logger().warn("failed to send message, added to queue", {
+					error,
+				});
 
 				// Assuming the socket is disconnected and will be reconnected soon
 				//

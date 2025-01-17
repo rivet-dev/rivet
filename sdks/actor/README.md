@@ -1,10 +1,10 @@
 # Actor SDK
 
-## Symlinking local dependencies
+## Building for npm
 
-Deno does not allow importing JS files from outside of the package's directory. Therefore, we have to symlink the local package.
-
-For example, we symlink `./core/src` to `./runtime/src/core` so the runtime package can access code from core.
+```sh
+    npm run build
+```
 
 ## `allow-slow-types`
 

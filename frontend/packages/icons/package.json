@@ -2,7 +2,12 @@
 	"name": "@rivet-gg/icons",
 	"version": "1.0.0",
 	"sideEffects": false,
-	"files": ["scripts", "manifest.json", "src", "dist"],
+	"files": [
+		"scripts",
+		"manifest.json",
+		"src",
+		"dist"
+	],
 	"scripts": {
 		"postinstall": "node scripts/postinstall.js"
 	},
@@ -19,11 +24,8 @@
 		"@fortawesome/free-brands-svg-icons": "^6.5.2",
 		"@fortawesome/free-solid-svg-icons": "^6.5.2",
 		"@fortawesome/react-fontawesome": "^0.2.2",
-		"react": "^18",
-		"react-dom": "^18"
-	},
-	"devDependencies": {
-		"@yarnpkg/types": "^4.0.0"
+		"react": "^19",
+		"react-dom": "^19"
 	},
 	"main": "./dist/index.umd.js",
 	"module": "./dist/index.mjs",

@@ -1,4 +1,4 @@
 export function Snippet() {
-  // TODO: Fill this in
-  return <></>;
+	// TODO: Fill this in
+	return <></>;
 }

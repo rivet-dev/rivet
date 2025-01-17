@@ -169,14 +169,17 @@ export function spreadObjectToLogEntries(
 			// logData.push([`${base}.${key}`, JSON.stringify((data as any)[key])]);
 
 			logData.push(
-				// biome-ignore lint/suspicious/noExplicitAny: unknown type
-				...spreadObjectToLogEntries(`${base}.${key}`, (data as any)[key]),
+				...spreadObjectToLogEntries(
+					`${base}.${key}`,
+					// biome-ignore lint/suspicious/noExplicitAny: FIXME
+					(data as any)[key],
+				),
 			);
 		}
 		return logData;
-	} else {
-		return [[base, JSON.stringify(data)]];
 	}
+
+	return [[base, JSON.stringify(data)]];
 }
 
 export function errorToLogEntries(base: string, error: unknown): LogEntry[] {
@@ -187,11 +190,12 @@ export function errorToLogEntries(base: string, error: unknown): LogEntry[] {
 			...(LOGGER_CONFIG.enableErrorStack && error.stack
 				? [[`${base}.stack`, formatStackTrace(error.stack)] as LogEntry]
 				: []),
-			...(error.cause ? errorToLogEntries(`${base}.cause`, error.cause) : []),
+			...(error.cause
+				? errorToLogEntries(`${base}.cause`, error.cause)
+				: []),
 		];
-	} else {
-		return [[base, `${error}`]];
 	}
+	return [[base, `${error}`]];
 }
 
 // export function errorToLogEntries(base: string, error: unknown): LogEntry[] {

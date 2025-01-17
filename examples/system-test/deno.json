@@ -1,6 +1,6 @@
 {
-  "imports": {
-    "@core/asyncutil": "jsr:@core/asyncutil@^1.2.0",
+	"imports": {
+		"@core/asyncutil": "jsr:@core/asyncutil@^1.2.0",
 		"@cross/env": "jsr:@cross/env@^1.0.2",
 		"@rivet-gg/api": "npm:@rivet-gg/api@0.0.1-rc.5",
 		"@std/assert": "jsr:@std/assert@^1.0.8",
@@ -12,6 +12,5 @@
 		"@rivet-gg/actor": "../../sdks/actor/runtime/src/mod.ts",
 		"on-change": "npm:on-change@^5.0.1",
 		"zod": "npm:zod@^3.24.1"
-
-  }
+	}
 }

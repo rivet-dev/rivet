@@ -102,17 +102,14 @@ export const HardwareMultiplier = () => {
 
 			setValue(
 				"capacity",
-				value.capacity?.map(
-					(item) =>
-						({
-							cores: Math.ceil(
-								((item?.cores ?? 1) *
-									lastHardwareTierValue.multiplier) /
-									currentHardwareTierValue.multiplier,
-							),
-							regionId: item?.regionId ?? "",
-						}) ?? [],
-				),
+				value.capacity?.map((item) => ({
+					cores: Math.ceil(
+						((item?.cores ?? 1) *
+							lastHardwareTierValue.multiplier) /
+							currentHardwareTierValue.multiplier,
+					),
+					regionId: item?.regionId ?? "",
+				})) ?? [],
 			);
 
 			lastHardwareTier = value.hardwareTier;

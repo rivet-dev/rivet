@@ -282,11 +282,7 @@ const DescriptionTerm = ({
 	const Comp = asChild ? Slot : "dt";
 	return (
 		<Comp
-			className={cn(
-				className,
-				"font-semibold",
-				getCommonHelperClass(props),
-			)}
+			className={cn(className, getCommonHelperClass(props))}
 			{...omitCommonHelperProps(props)}
 		/>
 	);

@@ -43,5 +43,5 @@
 	"rust-analyzer.server.extraEnv": {
 		"CARGO_TARGET_DIR": "${workspaceFolder}/target/analyzer"
 	},
-	"rust-analyzer.cargo.targetDir": "${workspaceFolder}/target/analyzer"
+	"rust-analyzer.cargo.targetDir": "${workspaceFolder}/target/analyzer",
 }

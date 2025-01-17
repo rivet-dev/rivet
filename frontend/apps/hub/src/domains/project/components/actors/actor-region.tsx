@@ -1,9 +1,9 @@
-import { AssetImage, Flex, WithTooltip } from "@rivet-gg/components";
+import { Flex, WithTooltip } from "@rivet-gg/components";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { actorRegionQueryOptions } from "../../queries";
 import {
 	REGION_LABEL,
-	getRegionEmoji,
+	RegionIcon,
 	getRegionKey,
 } from "../matchmaker/lobby-region";
 
@@ -29,13 +29,12 @@ export function ActorRegion({
 	if (showLabel) {
 		return (
 			<Flex gap="2" items="center" justify="center">
-				<AssetImage
-					className="w-4 min-w-4"
-					src={getRegionEmoji(regionKey)}
-				/>
-				{showLabel === "abbreviated"
-					? regionKey.toUpperCase()
-					: (REGION_LABEL[regionKey] ?? REGION_LABEL.unknown)}
+				<RegionIcon region={regionKey} className="w-4 min-w-4" />
+				<span>
+					{showLabel === "abbreviated"
+						? regionKey.toUpperCase()
+						: (REGION_LABEL[regionKey] ?? REGION_LABEL.unknown)}
+				</span>
 			</Flex>
 		);
 	}
@@ -45,10 +44,7 @@ export function ActorRegion({
 			content={REGION_LABEL[regionKey] ?? REGION_LABEL.unknown}
 			trigger={
 				<Flex gap="2" items="center" justify="center">
-					<AssetImage
-						className="w-4 min-w-4"
-						src={getRegionEmoji(regionKey)}
-					/>
+					<RegionIcon region={regionKey} className="w-4 min-w-4" />
 				</Flex>
 			}
 		/>

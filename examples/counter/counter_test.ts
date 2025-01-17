@@ -14,4 +14,3 @@ await counter.increment(1);
 
 // Disconnect from the actor when finished (https://rivet.gg/docs/connections)
 counter.disconnect();
-

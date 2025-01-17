@@ -171,7 +171,8 @@ export async function put<K, V>(
 	if (format === "value") {
 		serializedValue = core.serialize(value, { forStorage: true });
 	} else if (format === "arrayBuffer") {
-		if (value instanceof ArrayBuffer) serializedValue = new Uint8Array(value);
+		if (value instanceof ArrayBuffer)
+			serializedValue = new Uint8Array(value);
 		else {
 			throw new Error(
 				`value must be of type \`ArrayBuffer\` if format is "arrayBuffer"`,
@@ -213,7 +214,8 @@ export async function putBatch<K, V>(
 		if (format === "value") {
 			serializedValue = core.serialize(value, { forStorage: true });
 		} else if (format === "arrayBuffer") {
-			if (value instanceof ArrayBuffer) serializedValue = new Uint8Array(value);
+			if (value instanceof ArrayBuffer)
+				serializedValue = new Uint8Array(value);
 			else {
 				throw new Error(
 					`value in key "${key}" must be of type \`ArrayBuffer\` if format is "arrayBuffer"`,
@@ -301,17 +303,15 @@ function validateType(
 function serializeKey<K>(key: K): InKey {
 	if (Array.isArray(key)) {
 		return { jsInKey: key.map((x) => core.serialize(x)) };
-	} else {
-		return { jsInKey: [core.serialize(key)] };
 	}
+	return { jsInKey: [core.serialize(key)] };
 }
 
 function serializeListKey<K>(key: K): Uint8Array[] {
 	if (Array.isArray(key)) {
 		return key.map((x) => core.serialize(x));
-	} else {
-		return [core.serialize(key)];
 	}
+	return [core.serialize(key)];
 }
 
 function deserializeKey<K>(key: OutKey): K {
@@ -321,10 +321,9 @@ function deserializeKey<K>(key: OutKey): K {
 		const tuple = jsKey.map((x) => core.deserialize(x));
 
 		if (tuple.length === 1) return tuple[0] as K;
-		else return tuple as K;
-	} else {
-		throw new Error("unexpected key type from KV driver");
+		return tuple as K;
 	}
+	throw new Error("unexpected key type from KV driver");
 }
 
 function deserializeValue<V>(

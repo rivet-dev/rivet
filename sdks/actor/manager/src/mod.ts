@@ -57,7 +57,14 @@ export default class Manager {
 
 		const app = new Hono();
 
-		app.use("/*", cors());
+		app.use(
+			"/*",
+			cors({
+				origin: (origin) => {
+					return origin.includes("localhost");
+				},
+			}),
+		);
 
 		app.get("/rivet/config", (c: HonoContext) => {
 			return c.json({

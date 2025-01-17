@@ -1,4 +1,4 @@
-import type { Actor, Rpc } from "@rivet-gg/actor";
+import type { Rpc } from "@rivet-gg/actor";
 import { throttle } from "@std/async/unstable-throttle";
 
 const ENTITY_COUNT = 10;
@@ -31,12 +31,15 @@ export default class Room extends Actor<State, undefined, ConnState> {
 	#broadcastState = throttle(() => {
 		const state: BroadcastState = {
 			entities: this.state.entities,
-			cursors: this.connections.values().map((c) => ({
-				id: c.id,
-				x: c.state.x,
-				y: c.state.y,
-				color: c.state.color,
-			})).toArray(),
+			cursors: this.connections
+				.values()
+				.map((c) => ({
+					id: c.id,
+					x: c.state.x,
+					y: c.state.y,
+					color: c.state.color,
+				}))
+				.toArray(),
 		};
 		this._broadcast("state", state);
 	}, 50);
@@ -53,7 +56,9 @@ export default class Room extends Actor<State, undefined, ConnState> {
 		return { entities };
 	}
 
-	override _onBeforeConnect(_opts: OnBeforeConnectOpts<undefined>): ConnState {
+	override _onBeforeConnect(
+		_opts: OnBeforeConnectOpts<undefined>,
+	): ConnState {
 		return {
 			x: Math.random(),
 			y: Math.random(),

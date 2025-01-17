@@ -1,64 +1,64 @@
 @config "../../tailwind.v2.config.js";
-@import '@rivet-gg/components/theme.css';
+@import "@rivet-gg/components/theme.css";
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply min-h-screen bg-background text-foreground;
-  }
-  #root {
-    @apply min-h-screen;
-  }
+	* {
+		@apply border-border;
+	}
+	body {
+		@apply min-h-screen bg-background text-foreground;
+	}
+	#root {
+		@apply min-h-screen;
+	}
 }
 
 :root {
-  --shiki-color-text: theme('colors.white');
-  --shiki-token-constant: theme('colors.violet.300');
-  --shiki-token-string: theme('colors.violet.300');
-  --shiki-token-comment: theme('colors.zinc.500');
-  --shiki-token-keyword: theme('colors.sky.300');
-  --shiki-token-parameter: theme('colors.pink.300');
-  --shiki-token-function: theme('colors.violet.300');
-  --shiki-token-string-expression: theme('colors.violet.300');
-  --shiki-token-punctuation: theme('colors.zinc.200');
+	--shiki-color-text: theme("colors.white");
+	--shiki-token-constant: theme("colors.violet.300");
+	--shiki-token-string: theme("colors.violet.300");
+	--shiki-token-comment: theme("colors.zinc.500");
+	--shiki-token-keyword: theme("colors.sky.300");
+	--shiki-token-parameter: theme("colors.pink.300");
+	--shiki-token-function: theme("colors.violet.300");
+	--shiki-token-string-expression: theme("colors.violet.300");
+	--shiki-token-punctuation: theme("colors.zinc.200");
 }
 
 .shiki .line {
-  @apply break-all;
+	@apply break-all;
 }
 
 .shiki.has-focused .line:not(.focused) {
-  @apply opacity-40 transition-opacity;
+	@apply opacity-40 transition-opacity;
 }
 
 .shiki.has-focused:hover .line {
-  @apply opacity-100;
+	@apply opacity-100;
 }
 
 @layer utilities {
-  .step {
-    counter-increment: step;
-  }
+	.step {
+		counter-increment: step;
+	}
 
-  .step:before {
-    @apply absolute inline-flex h-9 w-9 items-center justify-center rounded-full border-4 border-background bg-primary text-center -indent-px font-mono text-base font-medium;
-    @apply ml-[-50px] mt-[-4px];
-    content: counter(step);
-  }
+	.step:before {
+		@apply absolute inline-flex h-9 w-9 items-center justify-center rounded-full border-4 border-background bg-primary text-center -indent-px font-mono text-base font-medium;
+		@apply ml-[-50px] mt-[-4px];
+		content: counter(step);
+	}
 
-  /* Hide scrollbar for Chrome, Safari and Opera */
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
-  /* Hide scrollbar for IE, Edge and Firefox */
-  .scrollbar-hide {
-    -ms-overflow-style: none; /* IE and Edge */
-    scrollbar-width: none; /* Firefox */
-  }
+	/* Hide scrollbar for Chrome, Safari and Opera */
+	.scrollbar-hide::-webkit-scrollbar {
+		display: none;
+	}
+	/* Hide scrollbar for IE, Edge and Firefox */
+	.scrollbar-hide {
+		-ms-overflow-style: none; /* IE and Edge */
+		scrollbar-width: none; /* Firefox */
+	}
 }

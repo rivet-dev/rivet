@@ -3,7 +3,11 @@
 	"private": true,
 	"version": "1.0.0",
 	"type": "module",
-	"files": ["dist", "src", "public"],
+	"files": [
+		"dist",
+		"src",
+		"public"
+	],
 	"main": "./dist/index.cjs",
 	"module": "./dist/index.js",
 	"sideEffects": false,
@@ -18,9 +22,6 @@
 		"./layout": "./src/layout/index.ts"
 	},
 	"types": "./dist/index.d.ts",
-	"scripts": {
-		"dev": "vite build --watch"
-	},
 	"dependencies": {
 		"@codemirror/lang-javascript": "^6.2.2",
 		"@codemirror/lang-json": "^6.0.1",
@@ -62,9 +63,9 @@
 		"framer-motion": "^11.2.11",
 		"input-otp": "^1.2.3",
 		"lucide-react": "^0.439.0",
-		"react": "^18.2.0",
+		"react": "^19",
 		"react-day-picker": "^9.0.9",
-		"react-dom": "^18.2.0",
+		"react-dom": "^19",
 		"react-hook-form": "^7.51.1",
 		"react-resizable-panels": "^2.0.19",
 		"recharts": "^2.12.7",
@@ -72,7 +73,7 @@
 		"tailwind-merge": "^2.2.2",
 		"tailwindcss-animate": "^1.0.7",
 		"usehooks-ts": "^3.1.0",
-		"zod": "^3.23.8"
+		"zod": "^3.24"
 	},
 	"devDependencies": {
 		"@types/mime": "^4.0.0",

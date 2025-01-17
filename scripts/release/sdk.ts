@@ -1,6 +1,7 @@
 import type { ReleaseOpts } from "./main.ts";
 import { assertStringIncludes } from "@std/assert";
 import $ from "dax";
+import { transformPackageJsonToDenoJson } from "../sdk_actor/transform_pkg_to_deno.ts";
 
 async function npmVersionExists(
 	packageName: string,
@@ -56,20 +57,29 @@ export async function publishSdk(opts: ReleaseOpts) {
 			path: `${opts.root}/sdks/actor/runtime`,
 			name: "@rivet-gg/actor",
 			jsr: true,
+			turbo: true,
 		},
 		{
 			path: `${opts.root}/sdks/actor/client`,
 			name: "@rivet-gg/actor-client",
 			jsr: true,
+			npm: true,
+			turbo: true,
 		},
 		{
 			path: `${opts.root}/sdks/actor/core`,
 			name: "@rivet-gg/actor-core",
 			jsr: true,
+			npm: true,
+			turbo: true
 		},
 	];
 
 	for (const pkg of packages) {
+		if(pkg.turbo) {
+			await $`yarn build --filter ${pkg.name}`;
+		}
+
 		// Check if version already exists
 		let versionExists = false;
 		if (pkg.npm) {
@@ -85,29 +95,39 @@ export async function publishSdk(opts: ReleaseOpts) {
 			continue;
 		}
 
+		// Update version in config
+		const pkgJsonPath = `${pkg.path}/package.json`;
+		const pkgJsonContent = await Deno.readTextFile(pkgJsonPath);
+		const pkgJson = JSON.parse(pkgJsonContent);
+		pkgJson.version = opts.version;
+		await Deno.writeTextFile(pkgJsonPath, JSON.stringify(pkgJson, null, 2));
+
 		// Publish
 		if (pkg.npm) {
 			$.logStep("Publishing to NPM", `${pkg.name}@${opts.version}`);
-			await $`yarn install`.cwd(pkg.path);
-			await $`yarn publish --new-version ${opts.version} --no-git-tag-version`.cwd(pkg.path);
+			try {
+				await $`yarn publish --new-version ${opts.version} --no-git-tag-version`.cwd(pkg.path);
+			} catch {
+				await $`yarn npm publish --access public`.cwd(pkg.path);
+			}
 		}
 
 		if (pkg.jsr) {
 			$.logStep("Publishing to JSR", `${pkg.name}@${opts.version}`);
 
 			// TODO(https://github.com/denoland/deno/issues/27428): `--set-version` not working, so we have to manually update `jsr.jsonc`
-			// Update version in config
-			const jsrJsonPath = `${pkg.path}/deno.json`;
-			const jsrJsonContent = await Deno.readTextFile(jsrJsonPath);
-			const jsrJson = JSON.parse(jsrJsonContent);
-			jsrJson.version = opts.version;
-			await Deno.writeTextFile(jsrJsonPath, JSON.stringify(jsrJson, null, 2));
+
+			await transformPackageJsonToDenoJson({
+				cwd: pkg.path, 
+				skipPathInInternalPackages: "src",
+				internalPackagesLinkPath: "internal",
+			});
 
 			// TODO: Auto-populate token here
 			// --allow-slow-types = we use zod which doesn't support this
 			// --allow-dirty = we change the version on the fly
 			// --set-version = validate the correct version is used
-			await $`deno publish --allow-slow-types --allow-dirty --set-version ${opts.version}`
+			await $`DENO_NO_PACKAGE_JSON=1 deno publish --allow-slow-types --allow-dirty`
 				.cwd(pkg.path);
 		}
 	}

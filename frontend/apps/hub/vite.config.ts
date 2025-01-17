@@ -104,7 +104,9 @@ async function shikiTransformer(): Promise<Plugin> {
 					theme: "css-variables",
 					transformers: [transformerNotationFocus()],
 				});
-				return `export default ${JSON.stringify(output)};export const source = ${JSON.stringify(code)}`;
+				return `export default ${JSON.stringify(
+					output,
+				)};export const source = ${JSON.stringify(code)}`;
 			}
 		},
 	};

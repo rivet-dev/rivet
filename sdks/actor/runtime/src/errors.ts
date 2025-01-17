@@ -80,17 +80,25 @@ export class InvalidProtocolVersion extends ActorError {
 
 export class InvalidProtocolFormat extends ActorError {
 	constructor(format?: string) {
-		super("invalid_protocol_format", `Invalid protocol format \`${format}\`.`, {
-			public: true,
-		});
+		super(
+			"invalid_protocol_format",
+			`Invalid protocol format \`${format}\`.`,
+			{
+				public: true,
+			},
+		);
 	}
 }
 
 export class ConnectionParametersTooLong extends ActorError {
 	constructor() {
-		super("connection_parameters_too_long", "Connection parameters too long.", {
-			public: true,
-		});
+		super(
+			"connection_parameters_too_long",
+			"Connection parameters too long.",
+			{
+				public: true,
+			},
+		);
 	}
 }
 
@@ -160,6 +168,8 @@ export class UserError extends ActorError {
 	 * @param opts - Optional parameters for the error, including a machine-readable code and additional metadata.
 	 */
 	constructor(message: string, opts?: UserErrorOptions) {
-		super(opts?.code ?? USER_ERROR_CODE, message, { metadata: opts?.metadata });
+		super(opts?.code ?? USER_ERROR_CODE, message, {
+			metadata: opts?.metadata,
+		});
 	}
 }

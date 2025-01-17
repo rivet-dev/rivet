@@ -1,0 +1,77 @@
+{
+	"name": "@rivet-gg/actor-common",
+	"private": true,
+	"version": "24.6.2-rc.1",
+	"files": ["dist", "package.json"],
+	"type": "module",
+	"exports": {
+		"./log": {
+			"deno": "./src/log.ts",
+			"import": {
+				"types": "./dist/log.d.ts",
+				"default": "./dist/log.js"
+			},
+			"require": {
+				"types": "./dist/log.d.cts",
+				"default": "./dist/log.cjs"
+			}
+		},
+		"./logfmt": {
+			"deno": "./src/logfmt.ts",
+			"import": {
+				"types": "./dist/logfmt.d.ts",
+				"default": "./dist/logfmt.js"
+			},
+			"require": {
+				"types": "./dist/logfmt.d.cts",
+				"default": "./dist/logfmt.cjs"
+			}
+		},
+		"./network": {
+			"deno": "./src/network.ts",
+			"import": {
+				"types": "./dist/network.d.ts",
+				"default": "./dist/network.js"
+			},
+			"require": {
+				"types": "./dist/network.d.cts",
+				"default": "./dist/network.cjs"
+			}
+		},
+		"./utils": {
+			"deno": "./src/utils.ts",
+			"import": {
+				"types": "./dist/utils.d.ts",
+				"default": "./dist/utils.js"
+			},
+			"require": {
+				"types": "./dist/utils.d.cts",
+				"default": "./dist/utils.cjs"
+			}
+		},
+		"./reflect": {
+			"deno": "./src/reflect.ts",
+			"import": {
+				"types": "./dist/reflect.d.ts",
+				"default": "./dist/reflect.js"
+			},
+			"require": {
+				"types": "./dist/reflect.d.cts",
+				"default": "./dist/reflect.cjs"
+			}
+		}
+	},
+	"sideEffects": false,
+	"scripts": {
+		"build": "tsup src/log.ts src/logfmt.ts src/network.ts src/utils.ts src/reflect.ts",
+		"check-types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@std/log": "npm:@jsr/std__log@^0.224.12",
+		"zod": "^3.24.1"
+	},
+	"devDependencies": {
+		"tsup": "^8.3.5",
+		"typescript": "^5.7.3"
+	}
+}

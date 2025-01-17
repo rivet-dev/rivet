@@ -5,7 +5,7 @@ import { assert, assertEquals, assertExists } from "jsr:@std/assert";
 import { publishSdk } from "./sdk.ts";
 import { updateVersion } from "./update_version.ts";
 import { configureReleasePlease } from "./release_please.ts";
-import { getCommit, validateGit } from "./git.ts";
+import { validateGit } from "./git.ts";
 import { parseArgs } from "jsr:@std/cli";
 import $ from "dax";
 import { tagDocker } from "./docker.ts";

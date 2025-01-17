@@ -53,6 +53,7 @@ lib/**/Cargo.lock
 **/.cache/
 **/dist/
 **/node_modules/
+.turbo
 
 tests/basic-game/.env
 
@@ -60,3 +61,7 @@ tests/basic-game/.env
 # Added by cargo
 
 /target
+.env*
+.yarn/cache
+.yarn/install-state.gz
+.turbo

@@ -76,7 +76,10 @@ function MatchmakerLobbiesView() {
 					onValueChange={(value) => {
 						navigate({
 							to: ".",
-							search: (prev) => ({ ...prev, sort: value }),
+							search: (prev: Record<string, unknown>) => ({
+								...prev,
+								sort: value,
+							}),
 						});
 					}}
 				/>

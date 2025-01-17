@@ -1,9 +1,9 @@
+import type { ProtocolFormat } from "@rivet-gg/actor-protocol/ws";
+import type * as wsToClient from "@rivet-gg/actor-protocol/ws/to_client";
 import { assertExists } from "@std/assert/exists";
 import * as cbor from "@std/cbor";
 import type { WSContext } from "hono/ws";
-import type { ProtocolFormat } from "../protocol/ws/mod.ts";
-import type * as wsToClient from "../protocol/ws/to_client.ts";
-import type { Actor, AnyActor, ExtractActorConnState } from "./actor.ts";
+import type { AnyActor, ExtractActorConnState } from "./actor.ts";
 import * as errors from "./errors.ts";
 import { logger } from "./log.ts";
 import { assertUnreachable } from "./utils.ts";
@@ -114,18 +114,18 @@ export class Connection<A extends AnyActor> {
 				throw new errors.MalformedMessage();
 			}
 			return JSON.parse(data);
-		} else if (this._protocolFormat === "cbor") {
+		}
+		if (this._protocolFormat === "cbor") {
 			if (data instanceof Blob) {
 				return cbor.decodeCbor(await data.bytes());
-			} else if (data instanceof ArrayBuffer) {
-				return cbor.decodeCbor(new Uint8Array(data));
-			} else {
-				logger().warn("received non-binary type for cbor parse");
-				throw new errors.MalformedMessage();
 			}
-		} else {
-			assertUnreachable(this._protocolFormat);
+			if (data instanceof ArrayBuffer) {
+				return cbor.decodeCbor(new Uint8Array(data));
+			}
+			logger().warn("received non-binary type for cbor parse");
+			throw new errors.MalformedMessage();
 		}
+		assertUnreachable(this._protocolFormat);
 	}
 
 	/**
@@ -139,11 +139,11 @@ export class Connection<A extends AnyActor> {
 	public _serialize(value: unknown): OutgoingWebSocketMessage {
 		if (this._protocolFormat === "json") {
 			return JSON.stringify(value);
-		} else if (this._protocolFormat === "cbor") {
-			return cbor.encodeCbor(value as cbor.CborType);
-		} else {
-			assertUnreachable(this._protocolFormat);
 		}
+		if (this._protocolFormat === "cbor") {
+			return cbor.encodeCbor(value as cbor.CborType);
+		}
+		assertUnreachable(this._protocolFormat);
 	}
 
 	/**

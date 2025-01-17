@@ -4,10 +4,7 @@
 	"postCreateCommand": "yarn install",
 	"customizations": {
 		"vscode": {
-			"extensions": [
-				"unifiedjs.vscode-mdx",
-				"esbenp.prettier-vscode"
-			]
+			"extensions": ["unifiedjs.vscode-mdx", "esbenp.prettier-vscode"]
 		}
 	}
 }

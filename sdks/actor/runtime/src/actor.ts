@@ -1,17 +1,20 @@
 import { Lock } from "@core/asyncutil/lock";
+import { setupLogging } from "@rivet-gg/actor-common/log";
+import { listObjectMethods } from "@rivet-gg/actor-common/reflect";
+import { assertUnreachable, safeStringify } from "@rivet-gg/actor-common/utils";
+import type { ActorContext, Metadata } from "@rivet-gg/actor-core";
+import type { InspectResponse } from "@rivet-gg/actor-protocol/http/inspect";
+import { ProtocolFormatSchema } from "@rivet-gg/actor-protocol/ws";
+import type * as wsToClient from "@rivet-gg/actor-protocol/ws/to_client";
+import * as wsToServer from "@rivet-gg/actor-protocol/ws/to_server";
 import { assertExists } from "@std/assert/exists";
 import { deadline } from "@std/async/deadline";
 import type { Logger } from "@std/log/get-logger";
 import { Hono, type Context as HonoContext } from "hono";
+import { cors } from "hono/cors";
 import { upgradeWebSocket } from "hono/deno";
 import type { WSEvents } from "hono/ws";
 import onChange from "on-change";
-import { setupLogging } from "../common/log.ts";
-import { assertUnreachable } from "../common/utils.ts";
-import type { ActorContext, Metadata } from "../core/mod.ts";
-import { ProtocolFormatSchema } from "../protocol/ws/mod.ts";
-import type * as wsToClient from "../protocol/ws/to_client.ts";
-import * as wsToServer from "../protocol/ws/to_server.ts";
 import { type ActorConfig, mergeActorConfig } from "./config.ts";
 import {
 	Connection,
@@ -346,7 +349,9 @@ export abstract class Actor<
 			KEYS.STATE.INITIALIZED,
 			KEYS.STATE.DATA,
 		]);
-		const initialized = getStateBatch.get(KEYS.STATE.INITIALIZED) as boolean;
+		const initialized = getStateBatch.get(
+			KEYS.STATE.INITIALIZED,
+		) as boolean;
 		const stateData = getStateBatch.get(KEYS.STATE.DATA) as State;
 
 		if (!initialized) {
@@ -382,7 +387,34 @@ export abstract class Actor<
 
 		app.get("/", (c) => {
 			// TODO: Give the metadata about this actor (ie tags)
-			return c.text("This is a Rivet Actor\n\nLearn more at https://rivet.gg");
+			return c.text(
+				"This is a Rivet Actor\n\nLearn more at https://rivet.gg",
+			);
+		});
+
+		app.use(
+			"/inspect",
+			cors({
+				origin: (origin) => {
+					// Allow localhost:5080 for development, production domain (hub.rivet.gg), and dynamic preview domains (*.rivet-hub-7jb.pages.dev)
+					// TODO: make this configurable, (ask manager for configured origins?)
+					return origin.includes("localhost:5080") ||
+						origin.includes("hub.rivet.gg") ||
+						origin.includes(".rivet-hub-7jb.pages.dev")
+						? origin
+						: undefined;
+				},
+			}),
+		).get((c) => {
+			const response = {
+				rpcs: this.#rpcNames,
+				state: {
+					enabled: this.#stateEnabled,
+					native: this._inspectState(),
+				},
+				connections: this.#connections.size,
+			} satisfies InspectResponse;
+			return c.json(response);
 		});
 
 		//app.post("/rpc/:name", this.#pandleRpc.bind(this));
@@ -515,7 +547,9 @@ export abstract class Actor<
 		let params: ExtractActorConnParams<this>;
 		try {
 			params =
-				typeof paramsStr === "string" ? JSON.parse(paramsStr) : undefined;
+				typeof paramsStr === "string"
+					? JSON.parse(paramsStr)
+					: undefined;
 		} catch (error) {
 			logger().warn("malformed connection parameters", { error });
 			throw new errors.MalformedConnectionParameters(error);
@@ -561,12 +595,17 @@ export abstract class Actor<
 				if (this._onConnect) {
 					const voidOrPromise = this._onConnect(conn);
 					if (voidOrPromise instanceof Promise) {
-						deadline(voidOrPromise, CONNECT_TIMEOUT).catch((error) => {
-							logger().error("error in `_onConnect`, closing socket", {
-								error,
-							});
-							conn?.disconnect("`onConnect` failed");
-						});
+						deadline(voidOrPromise, CONNECT_TIMEOUT).catch(
+							(error) => {
+								logger().error(
+									"error in `_onConnect`, closing socket",
+									{
+										error,
+									},
+								);
+								conn?.disconnect("`onConnect` failed");
+							},
+						);
 					}
 				}
 			},
@@ -578,7 +617,8 @@ export abstract class Actor<
 
 				let rpcRequestId: number | undefined;
 				try {
-					const value = evt.data.valueOf() as IncomingWebSocketMessage;
+					const value =
+						evt.data.valueOf() as IncomingWebSocketMessage;
 
 					// Validate value length
 					let length: number;
@@ -603,7 +643,9 @@ export abstract class Actor<
 						data: message,
 						success,
 						error,
-					} = wsToServer.ToServerSchema.safeParse(await conn._parse(value));
+					} = wsToServer.ToServerSchema.safeParse(
+						await conn._parse(value),
+					);
 					if (!success) {
 						throw new errors.MalformedMessage(error);
 					}
@@ -611,7 +653,11 @@ export abstract class Actor<
 					if ("rr" in message.body) {
 						// RPC request
 
-						const { i: id, n: name, a: args = [] } = message.body.rr;
+						const {
+							i: id,
+							n: name,
+							a: args = [],
+						} = message.body.rr;
 
 						rpcRequestId = id;
 
@@ -746,19 +792,35 @@ export abstract class Actor<
 		try {
 			const outputOrPromise = rpcFunction.call(this, ctx, ...args);
 			if (outputOrPromise instanceof Promise) {
-				return await deadline(outputOrPromise, this.#config.rpc.timeout);
-			} else {
-				return outputOrPromise;
+				return await this._onBeforeRpcResponse(
+					rpcName,
+					args,
+					await deadline(outputOrPromise, this.#config.rpc.timeout),
+				);
 			}
+			return await this._onBeforeRpcResponse(
+				rpcName,
+				args,
+				outputOrPromise,
+			);
 		} catch (error) {
-			if (error instanceof DOMException && error.name === "TimeoutError") {
+			if (
+				error instanceof DOMException &&
+				error.name === "TimeoutError"
+			) {
 				throw new errors.RpcTimedOut();
-			} else {
-				throw error;
 			}
+			throw error;
 		} finally {
 			this.#saveStateThrottled();
 		}
+	}
+
+	get #rpcNames(): string[] {
+		return listObjectMethods(this).filter(
+			(name): name is string =>
+				typeof name === "string" && this.#isValidRpc(name),
+		);
 	}
 
 	// MARK: Lifecycle hooks
@@ -786,6 +848,27 @@ export abstract class Actor<
 	 * @see {@link https://rivet.gg/docs/lifecycle|Lifecycle Documentation}
 	 */
 	protected _onStateChange?(newState: State): void | Promise<void>;
+
+	/**
+	 * Hook called after the RPC method is executed, but before the response is sent.
+	 *
+	 * This is useful for logging or auditing RPC calls.
+	 *
+	 * @internal
+	 * @private
+	 * @param _name - The name of the called RPC method.
+	 * @param _args - The arguments passed to the RPC method.
+	 * @param output - The output of the RPC method.
+	 *
+	 * @returns The output of the RPC method.
+	 */
+	protected _onBeforeRpcResponse<Out>(
+		_name: string,
+		_args: unknown[],
+		output: Out,
+	): Out {
+		return output;
+	}
 
 	/**
 	 * Called whenever a new client connects to the actor. Clients can pass parameters when connecting, accessible via `opts.parameters`.
@@ -820,7 +903,20 @@ export abstract class Actor<
 	 * @param connection - The connection object.
 	 * @see {@link https://rivet.gg/docs/lifecycle|Lifecycle Documentation}
 	 */
-	protected _onDisconnect?(connection: Connection<this>): void | Promise<void>;
+	protected _onDisconnect?(
+		connection: Connection<this>,
+	): void | Promise<void>;
+
+	/**
+	 * Safely transforms the actor state into a string for debugging purposes.
+	 */
+	protected _inspectState(): string {
+		try {
+			return safeStringify(this.#stateRaw, 128_000_000 /* 128 MB */);
+		} catch (error) {
+			return `Error inspecting state: ${error}`;
+		}
+	}
 
 	// MARK: Exposed methods
 	/**
@@ -919,7 +1015,9 @@ export abstract class Actor<
 					connection._serialize(toClient);
 			}
 
-			connection._sendWebSocketMessage(serialized[connection._protocolFormat]);
+			connection._sendWebSocketMessage(
+				serialized[connection._protocolFormat],
+			);
 		}
 	}
 
@@ -1008,7 +1106,9 @@ export abstract class Actor<
 		// Await all `close` event listeners with 1.5 second timeout
 		const res = Promise.race([
 			Promise.all(promises).then(() => false),
-			new Promise<boolean>((res) => setTimeout(() => res(true), 1500)),
+			new Promise<boolean>((res) =>
+				globalThis.setTimeout(() => res(true), 1500),
+			),
 		]);
 
 		if (await res) {

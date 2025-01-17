@@ -1,10 +1,11 @@
 import { converEmojiToUriFriendlyString } from "@/lib/emoji";
 import { AssetImage, Flex, WithTooltip } from "@rivet-gg/components";
+import { Icon, type IconProp, faComputer } from "@rivet-gg/icons";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { projectRegionQueryOptions } from "../../queries";
 
-export const REGION_EMOJI: Record<string, string> = {
-	local: "🏠",
+export const REGION_ICON: Record<string, string | IconProp> = {
+	local: faComputer,
 	unknown: "❓",
 	atlanta: "🇺🇸", // Atlanta
 	san_francisco: "🇺🇸", // San Francisco
@@ -111,9 +112,22 @@ export function getRegionKey(regionNameId: string | undefined) {
 	return regionIdSplit[regionIdSplit.length - 1];
 }
 
-export function getRegionEmoji(regionKey: string | undefined = "") {
-	const regionEmoji = REGION_EMOJI[regionKey] ?? REGION_EMOJI.unknown;
-	return `/icons/emoji/${converEmojiToUriFriendlyString(regionEmoji)}.svg`;
+export function RegionIcon({
+	region = "",
+	...props
+}: { region: string | undefined; className?: string }) {
+	const regionIcon = REGION_ICON[region] ?? REGION_ICON.unknown;
+
+	if (typeof regionIcon === "string") {
+		return (
+			<AssetImage
+				{...props}
+				src={`/icons/emoji/${converEmojiToUriFriendlyString(regionIcon)}.svg`}
+			/>
+		);
+	}
+
+	return <Icon {...props} icon={regionIcon} />;
 }
 
 export function LobbyRegion({
@@ -130,13 +144,12 @@ export function LobbyRegion({
 	if (showLabel) {
 		return (
 			<Flex gap="2" items="center" justify="center">
-				<AssetImage
-					className="w-5 min-w-5"
-					src={getRegionEmoji(regionKey)}
-				/>
-				{showLabel === "abbreviated"
-					? regionKey
-					: (REGION_LABEL[regionKey] ?? REGION_LABEL.unknown)}
+				<RegionIcon region={regionKey} className="w-5 min-w-5" />
+				<span>
+					{showLabel === "abbreviated"
+						? regionKey
+						: (REGION_LABEL[regionKey] ?? REGION_LABEL.unknown)}
+				</span>
 			</Flex>
 		);
 	}
@@ -146,10 +159,7 @@ export function LobbyRegion({
 			content={REGION_LABEL[regionKey] ?? REGION_LABEL.unknown}
 			trigger={
 				<Flex gap="2" items="center" justify="center">
-					<AssetImage
-						className="w-5 min-w-5"
-						src={getRegionEmoji(regionKey)}
-					/>
+					<RegionIcon region={regionKey} className="w-5 min-w-5" />
 				</Flex>
 			}
 		/>
@@ -160,8 +170,7 @@ export function LobbyRegionIcon({
 	regionNameId,
 	className,
 }: { regionNameId: string; className?: string }) {
-	const regionKey = getRegionKey(regionNameId);
-	return <AssetImage className={className} src={getRegionEmoji(regionKey)} />;
+	return <RegionIcon region={regionNameId} className={className} />;
 }
 
 export function LobbyRegionName({ regionNameId }: { regionNameId: string }) {

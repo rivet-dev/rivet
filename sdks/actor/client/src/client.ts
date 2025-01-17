@@ -1,11 +1,11 @@
-import type { ActorTags } from "../common/utils.ts";
+import type { ActorTags } from "@rivet-gg/actor-common/utils";
+import type { ProtocolFormat } from "@rivet-gg/actor-protocol/ws";
 import type {
 	ActorsRequest,
 	ActorsResponse,
 	RivetConfigResponse,
-} from "../manager-protocol/mod.ts";
-import type { CreateRequest } from "../manager-protocol/query.ts";
-import type { ProtocolFormat } from "../protocol/ws/mod.ts";
+} from "@rivet-gg/manager-protocol";
+import type { CreateRequest } from "@rivet-gg/manager-protocol/query";
 import * as errors from "./errors.ts";
 import { ActorHandleRaw } from "./handle.ts";
 import { logger } from "./log.ts";
@@ -223,7 +223,11 @@ export class Client {
 			};
 		}
 
-		logger().debug("get actor", { tags, parameters: opts?.parameters, create });
+		logger().debug("get actor", {
+			tags,
+			parameters: opts?.parameters,
+			create,
+		});
 
 		const resJson = await this.#sendManagerRequest<
 			ActorsRequest,
@@ -271,7 +275,10 @@ export class Client {
 		// Default to the chosen region
 		if (!create.region) create.region = (await this.#regionPromise)?.id;
 
-		logger().debug("create actor", { parameters: opts?.parameters, create });
+		logger().debug("create actor", {
+			parameters: opts?.parameters,
+			create,
+		});
 
 		const resJson = await this.#sendManagerRequest<
 			ActorsRequest,
@@ -300,7 +307,11 @@ export class Client {
 		// Stores returned RPC functions for faster calls
 		const methodCache = new Map<string, ActorRPCFunction>();
 		return new Proxy(handle, {
-			get(target: ActorHandleRaw, prop: string | symbol, receiver: unknown) {
+			get(
+				target: ActorHandleRaw,
+				prop: string | symbol,
+				receiver: unknown,
+			) {
 				// Handle built-in Symbol properties
 				if (typeof prop === "symbol") {
 					return Reflect.get(target, prop, receiver);
@@ -326,7 +337,8 @@ export class Client {
 				if (typeof prop === "string") {
 					let method = methodCache.get(prop);
 					if (!method) {
-						method = (...args: unknown[]) => target.rpc(prop, ...args);
+						method = (...args: unknown[]) =>
+							target.rpc(prop, ...args);
 						methodCache.set(prop, method);
 					}
 					return method;
@@ -354,8 +366,14 @@ export class Client {
 			},
 
 			// Support proper property descriptors
-			getOwnPropertyDescriptor(target: ActorHandleRaw, prop: string | symbol) {
-				const targetDescriptor = Reflect.getOwnPropertyDescriptor(target, prop);
+			getOwnPropertyDescriptor(
+				target: ActorHandleRaw,
+				prop: string | symbol,
+			) {
+				const targetDescriptor = Reflect.getOwnPropertyDescriptor(
+					target,
+					prop,
+				);
 				if (targetDescriptor) {
 					return targetDescriptor;
 				}
@@ -365,7 +383,8 @@ export class Client {
 						configurable: true,
 						enumerable: false,
 						writable: false,
-						value: (...args: unknown[]) => target.rpc(prop, ...args),
+						value: (...args: unknown[]) =>
+							target.rpc(prop, ...args),
 					};
 				}
 				return undefined;
@@ -400,7 +419,9 @@ export class Client {
 			});
 
 			if (!res.ok) {
-				throw new errors.ManagerError(`${res.statusText}: ${await res.text()}`);
+				throw new errors.ManagerError(
+					`${res.statusText}: ${await res.text()}`,
+				);
 			}
 
 			return res.json();
@@ -418,10 +439,11 @@ export class Client {
 	async #fetchRegion(): Promise<Region | undefined> {
 		try {
 			// Fetch the connection info from the manager
-			const { endpoint, project, environment } = await this.#sendManagerRequest<
-				undefined,
-				RivetConfigResponse
-			>("GET", "/rivet/config");
+			const { endpoint, project, environment } =
+				await this.#sendManagerRequest<undefined, RivetConfigResponse>(
+					"GET",
+					"/rivet/config",
+				);
 
 			// Fetch the region
 			//
@@ -435,10 +457,13 @@ export class Client {
 
 			if (!res.ok) {
 				// Add safe fallback in case we can't fetch the region
-				logger().error("failed to fetch region, defaulting to manager region", {
-					status: res.statusText,
-					body: await res.text(),
-				});
+				logger().error(
+					"failed to fetch region, defaulting to manager region",
+					{
+						status: res.statusText,
+						body: await res.text(),
+					},
+				);
 				return undefined;
 			}
 
@@ -447,9 +472,12 @@ export class Client {
 			return region;
 		} catch (error) {
 			// Add safe fallback in case we can't fetch the region
-			logger().error("failed to fetch region, defaulting to manager region", {
-				error,
-			});
+			logger().error(
+				"failed to fetch region, defaulting to manager region",
+				{
+					error,
+				},
+			);
 			return undefined;
 		}
 	}

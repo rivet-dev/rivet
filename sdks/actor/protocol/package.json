@@ -1,0 +1,76 @@
+{
+	"name": "@rivet-gg/actor-protocol",
+	"private": true,
+	"version": "24.6.2-rc.1",
+	"files": ["dist", "package.json"],
+	"type": "module",
+	"exports": {
+		"./http/rpc": {
+			"deno": "./src/http/rpc.ts",
+			"import": {
+				"types": "./dist/http/rpc.d.ts",
+				"default": "./dist/http/rpc.js"
+			},
+			"require": {
+				"types": "./dist/http/rpc.d.cts",
+				"default": "./dist/http/rpc.cjs"
+			}
+		},
+		"./http/inspect": {
+			"deno": "./src/http/inspect.ts",
+			"import": {
+				"types": "./dist/http/inspect.d.ts",
+				"default": "./dist/http/inspect.js"
+			},
+			"require": {
+				"types": "./dist/http/inspect.d.cts",
+				"default": "./dist/http/inspect.cjs"
+			}
+		},
+		"./ws": {
+			"deno": "./src/ws/mod.ts",
+			"import": {
+				"types": "./dist/ws/mod.d.ts",
+				"default": "./dist/ws/mod.js"
+			},
+			"require": {
+				"types": "./dist/ws/mod.d.cts",
+				"default": "./dist/ws/mod.cjs"
+			}
+		},
+		"./ws/to_client": {
+			"deno": "./src/ws/to_client.ts",
+			"import": {
+				"types": "./dist/ws/to_client.d.ts",
+				"default": "./dist/ws/to_client.js"
+			},
+			"require": {
+				"types": "./dist/ws/to_client.d.cts",
+				"default": "./dist/ws/to_client.cjs"
+			}
+		},
+		"./ws/to_server": {
+			"deno": "./src/ws/to_server.ts",
+			"import": {
+				"types": "./dist/ws/to_server.d.ts",
+				"default": "./dist/ws/to_server.js"
+			},
+			"require": {
+				"types": "./dist/ws/to_server.d.cts",
+				"default": "./dist/ws/to_server.cjs"
+			}
+		}
+	},
+	"sideEffects": false,
+	"scripts": {
+		"build": "tsup src/http/rpc.ts src/http/inspect.ts src/ws/mod.ts src/ws/to_client.ts src/ws/to_server.ts",
+		"check-types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"zod": "^3.24.1"
+	},
+	"devDependencies": {
+		"tsup": "^8.3.5",
+		"typescript": "^5.7.3"
+	}
+}

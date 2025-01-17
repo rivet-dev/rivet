@@ -1,5 +1,5 @@
+import type { ActorTags } from "@rivet-gg/actor-common/utils";
 import { z } from "zod";
-import type { ActorTags } from "../common/utils.ts";
 
 export const CreateRequestSchema = z.object({
 	region: z.string().optional(),

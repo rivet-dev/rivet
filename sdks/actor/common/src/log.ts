@@ -66,9 +66,8 @@ function pushArg(k: string, v: unknown, args: LogEntry[]) {
 function getEnv(name: string): string | undefined {
 	if (typeof window !== "undefined" && window.localStorage) {
 		return window.localStorage.getItem(name) || undefined;
-	} else {
-		return undefined;
-		// TODO(ACTR-9): Add back env config once node compat layer works
-		//return crossGetEnv(name);
 	}
+	return undefined;
+	// TODO(ACTR-9): Add back env config once node compat layer works
+	//return crossGetEnv(name);
 }

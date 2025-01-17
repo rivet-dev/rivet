@@ -1,8 +1,0 @@
-pre-commit:
-  commands:
-    check:
-      glob: "*.{js,ts,cjs,mjs,d.cts,d.mts,jsx,tsx,json,jsonc}"
-      run: npx biome check --write --no-errors-on-unmatched --files-ignore-unknown=true {staged_files} && git update-index --again
-    types:
-      glob: "*.{json,js,jsx,ts,tsx}"
-      run: yarn workspaces foreach -A run tsc --noEmit

@@ -1,44 +1,53 @@
-import * as shiki from 'shiki';
+import * as shiki from "shiki";
 
 const LANGS: shiki.BundledLanguage[] = [
-  'bash',
-  'batch',
-  'cpp',
-  'csharp',
-  'docker',
-  'gdscript',
-  'html',
-  'ini',
-  'js',
-  'json',
-  'json',
-  'powershell',
-  'ts',
-  'typescript',
-  'yaml',
-  'http',
-  'prisma'
+	"bash",
+	"batch",
+	"cpp",
+	"csharp",
+	"docker",
+	"gdscript",
+	"html",
+	"ini",
+	"js",
+	"json",
+	"json",
+	"powershell",
+	"ts",
+	"typescript",
+	"yaml",
+	"http",
+	"prisma",
 ];
 
 const theme = shiki.createCssVariablesTheme({
-  name: 'css-variables',
-  variablePrefix: '--shiki-',
-  variableDefaults: {},
-  fontStyle: true
+	name: "css-variables",
+	variablePrefix: "--shiki-",
+	variableDefaults: {},
+	fontStyle: true,
 });
 
 let highlighter: shiki.Highlighter;
 
-export async function CodeBlock({ lang, code }: { lang: shiki.BundledLanguage; code: string }) {
-  highlighter ??= await shiki.getSingletonHighlighter({
-    langs: LANGS,
-    themes: [theme]
-  });
+export async function CodeBlock({
+	lang,
+	code,
+}: { lang: shiki.BundledLanguage; code: string }) {
+	highlighter ??= await shiki.getSingletonHighlighter({
+		langs: LANGS,
+		themes: [theme],
+	});
 
-  const out = highlighter.codeToHtml(code, {
-    lang,
-    theme
-  });
+	const out = highlighter.codeToHtml(code, {
+		lang,
+		theme,
+	});
 
-  return <div className='code' dangerouslySetInnerHTML={{ __html: out }} />;
+	return (
+		<div
+			className="code"
+			// biome-ignore lint/security/noDangerouslySetInnerHtml: we trust shinki
+			dangerouslySetInnerHTML={{ __html: out }}
+		/>
+	);
 }

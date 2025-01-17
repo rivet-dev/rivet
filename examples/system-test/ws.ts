@@ -1,7 +1,7 @@
+import type { ActorContext } from "@rivet-gg/actor-core";
+import { assertEquals, assertExists } from "@std/assert";
 import { Hono } from "hono";
 import { upgradeWebSocket } from "hono/deno";
-import { assertEquals, assertExists } from "@std/assert";
-import type { ActorContext } from "@rivet-gg/actor-core";
 
 // Setup Hono app
 const app = new Hono();
@@ -26,7 +26,9 @@ app.get(
 			},
 			onMessage(event, ws) {
 				if (typeof event.data === "string") {
-					const [eventType, data] = JSON.parse(event.data.slice(0, 2 ** 13));
+					const [eventType, data] = JSON.parse(
+						event.data.slice(0, 2 ** 13),
+					);
 					switch (eventType) {
 						case "ping":
 							ws.send(JSON.stringify(["pong", data]));

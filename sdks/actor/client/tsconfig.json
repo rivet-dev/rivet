@@ -1,0 +1,15 @@
+{
+	"compilerOptions": {
+		"target": "esnext",
+		"module": "esnext",
+		"strict": true,
+		"skipLibCheck": true,
+		"esModuleInterop": false,
+		"allowSyntheticDefaultImports": true,
+		"stripInternal": true,
+		"allowImportingTsExtensions": true,
+		"moduleResolution": "bundler",
+		"jsx": "react-jsx"
+	},
+	"include": ["src/**/*"]
+}

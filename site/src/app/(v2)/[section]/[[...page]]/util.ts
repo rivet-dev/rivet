@@ -1,18 +1,21 @@
 // export const VALID_SECTIONS = ['docs', 'use-cases', 'examples', 'compare'];
-export const VALID_SECTIONS = ['docs', 'compare'];
+export const VALID_SECTIONS = ["docs", "compare"];
 
-export function buildPathComponents(section: string, page?: string[]): string[] {
-    // Add default page
-    page = page ?? [];
+export function buildPathComponents(
+	section: string,
+	page?: string[],
+): string[] {
+	// Add default page
+	let defaultedPage = page ?? [];
 
-    // Remove index suffix
-    if (page[page.length - 1] == 'index') {
-        page = page.slice(0, -1);
-    }
+	// Remove index suffix
+	if (defaultedPage[defaultedPage.length - 1] === "index") {
+		defaultedPage = defaultedPage.slice(0, -1);
+	}
 
-    return [section, ...page];
+	return [section, ...defaultedPage];
 }
 
 export function buildFullPath(pathComponents: string[]): string {
-    return `/${pathComponents.join('/')}`;
+	return `/${pathComponents.join("/")}`;
 }

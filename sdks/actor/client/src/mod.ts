@@ -11,5 +11,5 @@ export type {
 } from "./client.ts";
 export { ActorHandleRaw } from "./handle.ts";
 export type { EventUnsubscribe } from "./handle.ts";
-export type { ProtocolFormat } from "../protocol/ws/mod.ts";
-export type { CreateRequest } from "../manager-protocol/query.ts";
+export type { ProtocolFormat } from "@rivet-gg/actor-protocol/ws";
+export type { CreateRequest } from "@rivet-gg/manager-protocol/query";

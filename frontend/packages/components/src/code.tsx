@@ -20,9 +20,9 @@ import { WithTooltip } from "./ui/tooltip";
 interface JsonCodeProps extends ReactCodeMirrorProps {}
 
 export const JsonCode = forwardRef<HTMLDivElement, JsonCodeProps>(
-	({ value, extensions = [], ...props }, ref) => {
+	({ value, extensions = [], className, ...props }, ref) => {
 		return (
-			<CodeMirrorContainer ref={ref} tabIndex={0}>
+			<CodeMirrorContainer ref={ref} tabIndex={0} className={className}>
 				<ReactCodeMirror
 					{...props}
 					extensions={[

@@ -84,6 +84,25 @@ State is constrained to the available memory (see [limitations](/docs/limitation
 
 Only JSON-serializable types can be stored in state. State is persisted under the hood in a compact, binary format. This is because JavaScript classes cannot be serialized & deserialized.
 
+### Debugging
+
+To debug state, you can use visit the Rivet dashboard and view the state of each actor. This can be useful for understanding the current state of an actor and diagnosing issues. You can also override the method that's used to preview the state in the dashboard. Make sure to not exceed the maximum size of 125MB for the state preview.
+
+```typescript {{ "title": "actor.ts" }}
+
+export default class Counter extends Actor<State> {
+	// Override the method used to inspect the state
+	override _inspectState() {
+		return { 
+			count: this._state.count, 
+			custom: "value", 
+			nested: { key: "value" } 
+			timestamp: Date.now(),
+		};
+	}
+}
+```
+
 ## Local Key-Value State
 
 KV state is used for storing complex or large datasets that cannot fit into memory. You can access local KV using `this._kv`. The KV data is isolated to this actor and cannot be accessed from outside of it.

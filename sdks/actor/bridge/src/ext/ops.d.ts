@@ -14,7 +14,10 @@ declare module "ext:core/ops" {
 		reverse: boolean,
 		limit?: number,
 	): Promise<Array<OutKey, OutEntry>>;
-	export function op_rivet_kv_put(key: InKey, value: Uint8Array): Promise<void>;
+	export function op_rivet_kv_put(
+		key: InKey,
+		value: Uint8Array,
+	): Promise<void>;
 	export function op_rivet_kv_put_batch(
 		entries: Map<InKey, Uint8Array>,
 	): Promise<void>;
