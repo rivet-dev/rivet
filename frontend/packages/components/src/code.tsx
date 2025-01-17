@@ -2,7 +2,7 @@ import { javascript } from "@codemirror/lang-javascript";
 import { json, jsonParseLinter } from "@codemirror/lang-json";
 import { linter } from "@codemirror/lint";
 import { EditorView } from "@codemirror/view";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@radix-ui/react-tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Icon, faCopy, faFile } from "@rivet-gg/icons";
 import { githubDark } from "@uiw/codemirror-theme-github";
 import ReactCodeMirror, {

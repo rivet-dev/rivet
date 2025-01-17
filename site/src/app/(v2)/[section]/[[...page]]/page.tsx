@@ -86,7 +86,7 @@ export default async function CatchAllCorePage({ params: { section, page } }) {
 					<DocsNavigation sidebar={foundTab.tab.sidebar} />
 				) : null}
 			</aside>
-			<main className="mx-auto mt-8 w-full max-w-prose px-8 pb-8">
+			<main className="md:mx-auto mt-8 w-full max-w-prose px-8 pb-8">
 				<Prose as="article">
 					{parentPage && (
 						<div className="eyebrow h-5 text-primary text-sm font-semibold">

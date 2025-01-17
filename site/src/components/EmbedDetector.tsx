@@ -8,7 +8,6 @@ export function EmbedDetector() {
 	useEffect(() => {
 		if (queryParams?.get("embed") === "true") {
 			document.querySelector("body > header")?.classList.add("hidden");
-			document.querySelector("body > div")?.classList.add("hidden");
 		}
 	}, [queryParams]);
 

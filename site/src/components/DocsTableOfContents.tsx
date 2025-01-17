@@ -199,7 +199,7 @@ export function DocsTableOfContents({
 			ref={ref}
 			className={cn(
 				className,
-				"lg:top-header pt-10 md:pt-36 lg:pt-6",
+				"lg:top-header pt-10 lg:pt-6",
 				"w-full lg:pointer-events-auto lg:sticky lg:block lg:max-w-aside lg:self-start lg:overflow-y-auto",
 			)}
 		>

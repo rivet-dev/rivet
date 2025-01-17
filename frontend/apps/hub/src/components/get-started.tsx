@@ -13,17 +13,12 @@ import {
 import {
 	Icon,
 	faActors,
-	faArrowPointer,
 	faArrowProgress,
 	faChevronDoubleDown,
 	faChevronRight,
 	faCircleNodes,
-	faCode,
 	faDiagramNext,
-	faGamepadAlt,
-	faSparkles,
 	faUpRightAndDownLeftFromCenter,
-	faWifiSlash,
 } from "@rivet-gg/icons";
 import { motion, useMotionValueEvent, useScroll } from "framer-motion";
 import { type ComponentProps, useState } from "react";
@@ -102,7 +97,7 @@ export function GetStarted() {
 					</div>
 				</CardContent>
 			</Card>
-			<Card
+			{/* <Card
 				id="examples"
 				asChild
 				className="max-w-xl w-full mx-auto my-6"
@@ -156,7 +151,7 @@ export function GetStarted() {
 						</motion.div>
 					</CardContent>
 				</motion.div>
-			</Card>
+			</Card> */}
 			<Card asChild className="max-w-xl w-full mx-auto my-6">
 				<motion.div>
 					<CardHeader>
@@ -175,31 +170,31 @@ export function GetStarted() {
 							className="grid md:grid-cols-2 gap-4"
 						>
 							<ExampleLink
-								href="examples"
+								href="docs"
 								title="What are Actors?"
 								size="md"
 								icon={faActors}
 							/>
 							<ExampleLink
-								href="examples"
+								href="docs/rpc"
 								title="RPC"
 								size="md"
 								icon={faArrowProgress}
 							/>
 							<ExampleLink
-								href="examples"
+								href="docs/state"
 								size="md"
 								title="State"
 								icon={faDiagramNext}
 							/>
 							<ExampleLink
-								href="https://rivet.gg/examples"
+								href="docs/scaling"
 								title="Scaling & Concurrency"
 								size="md"
 								icon={faUpRightAndDownLeftFromCenter}
 							/>
 							<ExampleLink
-								href="https://rivet.gg/examples"
+								href="docs/edge"
 								size="md"
 								title="Edge Networking"
 								icon={faCircleNodes}
@@ -215,7 +210,7 @@ export function GetStarted() {
 							>
 								<motion.a
 									variants={linkVariants}
-									href="https://rivet.gg/examples"
+									href="https://rivet.gg/docs?utm_source=hub"
 									target="_blank"
 									rel="noreferrer"
 								>

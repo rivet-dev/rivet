@@ -27,7 +27,7 @@ export function Header({ active, subnav }: HeaderProps) {
 	const [ref, setRef] = useState<Element | null>(null);
 	return (
 		<RivetHeader
-			className="px-8 md:[&>div:first-child]:max-w-[calc(20rem+65ch+20rem)] md:[&>div:first-child]:px-0"
+			className="lg:px-8 md:[&>div:first-child]:max-w-[calc(20rem+65ch+20rem)] md:[&>div:first-child]:px-0"
 			logo={
 				<Link href="/">
 					<Image {...logoUrl} className="w-20" alt="Rivet logo" />

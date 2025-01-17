@@ -25,7 +25,7 @@ export function DocsSheet({ path, title, children }: DocsSheetProps) {
 					<SheetTitle>{title}</SheetTitle>
 					<Text className="text-xs">
 						<Link
-							href={`https://rivet.gg/${path}?utm_source=hub`}
+							href={`https://rivet.gg/${path}?utm_source=hub&embed=true`}
 							target="_blank"
 							rel="noopener noreferrer"
 						>
