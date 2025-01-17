@@ -1,6 +1,15 @@
 @config "../../tailwind.config.js";
 
 @layer base {
+  ::selection {
+    background-color: #FF4F00 !important;
+    color: black !important;
+  }
+  ::-moz-selection {
+    background-color: #FF4F00 !important;
+    color: black !important;
+  }
+
   :root {
     --shiki-color-text: theme('colors.white');
     --shiki-token-constant: theme('colors.violet.300');
@@ -138,5 +147,17 @@
 
   .main-content-container {
     @apply mx-auto max-w-screen-2xl;
+  }
+}
+
+/* Ensure it works in all contexts */
+*, *::before, *::after {
+  ::selection {
+    background-color: #FF4F00 !important;
+    color: black !important;
+  }
+  ::-moz-selection {
+    background-color: #FF4F00 !important;
+    color: black !important;
   }
 }

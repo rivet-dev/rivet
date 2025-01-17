@@ -1,3 +1,4 @@
+'use client';
 import { useState, useEffect } from 'react';
 import { Icon, faGithub } from '@rivet-gg/icons';
 import { cn } from '@rivet-gg/components';
@@ -13,27 +14,54 @@ function formatNumber(num: number): string {
   return num.toString();
 }
 
-export async function GitHubStars({ repo = 'rivet-gg/rivet', className, ...props }: GitHubStarsProps) {
-  try {
-    const response = await fetch(`https://api.github.com/repos/${repo}`);
-    const data = await response.json();
-    const { stargazers_count: stars } = data;
+export function GitHubStars({ repo = 'rivet-gg/rivet', className, ...props }: GitHubStarsProps) {
+  const [stars, setStars] = useState<number | null>(null);
+  
+  useEffect(() => {
+    const cacheKey = `github-stars-${repo}`;
+    const cachedData = sessionStorage.getItem(cacheKey);
     
-    return (
-      <a
-        href={`https://github.com/${repo}`}
-        target='_blank'
-        rel='noreferrer'
-        className={cn(
-          "md:bg-white/10 rounded-md px-4 h-10 flex items-center gap-2 md:hover:bg-white/20 transition-colors",
-          className
-        )}
-        {...props}>
-        <Icon icon={faGithub} /> <span className="hidden md:inline">{stars ? `${formatNumber(stars)} Stars` : 'GitHub'}</span>
-      </a>
-    );
-  } catch (err) {
-    console.error('Failed to fetch stars', err);
-    return null;
-  }
+    if (cachedData) {
+      const { stars: cachedStars, timestamp } = JSON.parse(cachedData);
+      // Check if cache is less than 5 minutes old
+      if (Date.now() - timestamp < 5 * 60 * 1000) {
+        setStars(cachedStars);
+        return;
+      }
+    }
+
+    fetch(`https://api.github.com/repos/${repo}`)
+      .then(response => {
+        if (!response.ok) throw new Error('Failed to fetch');
+        return response.json();
+      })
+      .then(data => {
+        const newStars = data.stargazers_count;
+        setStars(newStars);
+        sessionStorage.setItem(cacheKey, JSON.stringify({
+          stars: newStars,
+          timestamp: Date.now()
+        }));
+      })
+      .catch(err => {
+        console.error('Failed to fetch stars', err);
+      });
+  }, [repo]);
+
+  return (
+    <a
+      href={`https://github.com/${repo}`}
+      target='_blank'
+      rel='noreferrer'
+      className={cn(
+        "md:bg-white/10 rounded-md px-4 h-10 flex items-center gap-2 md:hover:bg-white/20 transition-colors",
+        className
+      )}
+      {...props}>
+      <Icon icon={faGithub} /> 
+      <span className="hidden md:inline">
+        {stars ? `${formatNumber(stars)} Stars` : 'GitHub'}
+      </span>
+    </a>
+  );
 } 

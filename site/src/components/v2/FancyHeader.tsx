@@ -55,7 +55,14 @@ export function FancyHeader({ active, subnav, mobileBreadcrumbs }: FancyHeaderPr
             className={headerStyles}
             logo={
               <Link href='/'>
-                <Image {...logoUrl} className='ml-1 w-20' alt='Rivet logo' />
+                <Image 
+                  src={logoUrl.src || logoUrl}
+                  width={80}
+                  height={24}
+                  className='ml-1 w-20' 
+                  alt='Rivet logo'
+                  unoptimized
+                />
               </Link>
             }
             subnav={subnav}
