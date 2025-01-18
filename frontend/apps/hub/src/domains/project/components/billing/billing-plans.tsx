@@ -27,7 +27,7 @@ import { BillingPlanStatus } from "./billing-plan-status";
 interface BillingPlansProps {
 	projectId: string;
 	showHeader?: boolean;
-	onChoosePlan?: () => void;
+	onChoosePlan?: () => Promise<void> | void;
 	config?: Partial<
 		Record<RivetEe.ee.billing.Plan, Partial<BillingPlanCardProps>>
 	>;

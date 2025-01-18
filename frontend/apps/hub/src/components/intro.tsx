@@ -7,6 +7,7 @@ import {
 	projectsByGroupQueryOptions,
 	useProjectCreateMutation,
 } from "@/domains/project/queries";
+import type { Rivet } from "@rivet-gg/api";
 import { Rivet as RivetEe } from "@rivet-gg/api-ee";
 import {
 	Card,
@@ -18,7 +19,7 @@ import {
 } from "@rivet-gg/components";
 import * as Sentry from "@sentry/react";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { Navigate, useNavigate } from "@tanstack/react-router";
+import { Navigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { Suspense, useState } from "react";
 
@@ -31,9 +32,14 @@ enum Step {
 interface IntroProps {
 	initialStep?: Step;
 	initialProjectName?: string;
+	onFinish?: (project: Rivet.game.GameSummary) => Promise<void> | void;
 }
 
-export function Intro({ initialStep, initialProjectName }: IntroProps) {
+export function Intro({
+	initialStep,
+	initialProjectName,
+	onFinish,
+}: IntroProps) {
 	const { mutateAsync, data: createdGroupResponse } =
 		useGroupCreateMutation();
 	const { mutateAsync: createProject, data: projectCreationData } =
@@ -53,8 +59,6 @@ export function Intro({ initialStep, initialProjectName }: IntroProps) {
 	);
 
 	const groupId = createdGroupResponse?.groupId || project?.developer.groupId;
-
-	const navigate = useNavigate();
 
 	if (step === Step.CreateProject) {
 		return (
@@ -176,27 +180,13 @@ export function Intro({ initialStep, initialProjectName }: IntroProps) {
 								<BillingPlans
 									projectId={project.gameId}
 									onChoosePlan={() => {
-										navigate({
-											to: "/projects/$projectNameId/environments/$environmentNameId",
-											params: {
-												projectNameId: project.nameId,
-												environmentNameId: "prod",
-											},
-										});
+										return onFinish?.(project);
 									}}
 									config={{
 										[RivetEe.ee.billing.Plan.Trial]: {
 											cancelLabel: "Get Started",
 											onCancel: () => {
-												navigate({
-													to: "/projects/$projectNameId/environments/$environmentNameId",
-													params: {
-														projectNameId:
-															project.nameId,
-														environmentNameId:
-															"prod",
-													},
-												});
+												return onFinish?.(project);
 											},
 										},
 									}}

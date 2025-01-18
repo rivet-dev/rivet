@@ -1,9 +1,10 @@
+import { Onboarding } from "@/components/onboarding/onboarding";
 import * as DeviceLinkForm from "@/domains/auth/forms/device-link-form";
 import {
 	deviceLinkTokenQueryOptions,
 	useCompleteDeviceLinkMutation,
 } from "@/domains/auth/queries";
-import * as Layout from "@/layouts/page-centered";
+import { projectsByGroupQueryOptions } from "@/domains/project/queries";
 import { queryClient } from "@/queries/global";
 import {
 	Button,
@@ -14,20 +15,42 @@ import {
 	CardHeader,
 	CardTitle,
 	Flex,
+	Page,
 	Text,
 } from "@rivet-gg/components";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { zodSearchValidator } from "@tanstack/router-zod-adapter";
 import { z } from "zod";
 
 function DeviceLinkTokenRoute() {
-	const { token } = Route.useSearch();
+	const navigate = Route.useNavigate();
+	const { token, newbie } = Route.useSearch();
 
 	const { mutateAsync, isSuccess } = useCompleteDeviceLinkMutation();
+	const { data: groups, refetch } = useSuspenseQuery(
+		projectsByGroupQueryOptions(),
+	);
+
+	if (groups.length === 0 || newbie) {
+		return (
+			<Onboarding
+				onFinish={async () => {
+					await refetch();
+					if (newbie) {
+						navigate({
+							to: ".",
+							search: (prev) => ({ ...prev, newbie: undefined }),
+						});
+					}
+				}}
+			/>
+		);
+	}
 
 	if (isSuccess) {
 		return (
-			<Layout.Root>
+			<Page className="relative h-full flex flex-col items-center justify-center">
 				<Card>
 					<CardHeader>
 						<CardTitle>Project Linked Successfully</CardTitle>
@@ -44,7 +67,7 @@ function DeviceLinkTokenRoute() {
 						</Button>
 					</CardFooter>
 				</Card>
-			</Layout.Root>
+			</Page>
 		);
 	}
 
@@ -56,9 +79,15 @@ function DeviceLinkTokenRoute() {
 					gameId: values.projectId,
 				});
 			}}
-			defaultValues={{ token, projectId: "" }}
+			defaultValues={{
+				token,
+				projectId:
+					groups.length === 1 && groups[0].projects.length === 1
+						? groups[0].projects[0].gameId
+						: "",
+			}}
 		>
-			<Layout.Root>
+			<Page className="relative h-full flex flex-col items-center justify-center">
 				<Card>
 					<CardHeader>
 						<CardTitle>Link project</CardTitle>
@@ -81,18 +110,22 @@ function DeviceLinkTokenRoute() {
 						</Flex>
 					</CardFooter>
 				</Card>
-			</Layout.Root>
+			</Page>
 		</DeviceLinkForm.Form>
 	);
 }
 
 export const searchSchema = z.object({
 	token: z.string(),
+	newbie: z.boolean().optional(),
 });
 
 export const Route = createFileRoute("/_authenticated/devices/link")({
 	validateSearch: zodSearchValidator(searchSchema),
 	component: DeviceLinkTokenRoute,
+	staticData: {
+		layout: "onboarding",
+	},
 	beforeLoad: async ({ search: { token } }) => {
 		try {
 			const response = await queryClient.fetchQuery(
