@@ -46,7 +46,11 @@ function ProjectActorsRoute() {
 	}
 
 	return (
-		<Card w="full" h="full" className="flex flex-col">
+		<Card
+			w="full"
+			// 100vh - header - page padding
+			className="flex flex-col h-[calc(100vh-6.5rem-2rem)]"
+		>
 			<CardHeader className="border-b ">
 				<CardTitle className="flex flex-row justify-between items-center">
 					Actors

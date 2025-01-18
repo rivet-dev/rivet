@@ -1,3 +1,5 @@
+import type { AuthContext } from "@/domains/auth/contexts/auth";
+
 type LSKey = `rivet-lastteam-${string}` | "rivet-token";
 
 export const ls = {
@@ -13,5 +15,19 @@ export const ls = {
 	},
 	clear: () => {
 		localStorage.clear();
+	},
+
+	recentTeam: {
+		set: (auth: AuthContext, groupId: string) => {
+			localStorage.setItem(
+				`rivet-lastteam-${auth.profile?.identity.identityId}`,
+				groupId,
+			);
+		},
+		remove: (auth: AuthContext) => {
+			localStorage.removeItem(
+				`rivet-lastteam-${auth.profile?.identity.identityId}`,
+			);
+		},
 	},
 };

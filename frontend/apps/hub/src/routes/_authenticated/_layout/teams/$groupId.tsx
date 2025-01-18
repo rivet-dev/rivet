@@ -1,8 +1,10 @@
 import { ErrorComponent } from "@/components/error-component";
+import { useAuth } from "@/domains/auth/contexts/auth";
 import * as Layout from "@/domains/project/layouts/group-layout";
 import { groupProjectsQueryOptions } from "@/domains/project/queries";
 import { useDialog } from "@/hooks/use-dialog";
 import { ls } from "@/lib/ls";
+import { queryClient } from "@/queries/global";
 import {
 	type ErrorComponentProps,
 	Outlet,
@@ -20,6 +22,7 @@ export function GroupIdErrorComponent(props: ErrorComponentProps) {
 }
 
 function Modals() {
+	const auth = useAuth();
 	const navigate = Route.useNavigate();
 	const { groupId } = Route.useParams();
 	const { modal } = Route.useSearch();
@@ -52,7 +55,11 @@ function Modals() {
 			/>
 			<ConfirmLeaveGroupDialog
 				groupId={groupId}
-				onSuccess={() => navigate({ to: "/" })}
+				onSuccess={async () => {
+					ls.recentTeam.remove(auth);
+					await queryClient.invalidateQueries({ refetchType: "all" });
+					navigate({ to: "/" });
+				}}
 				dialogProps={{
 					open: modal === "leave",
 					onOpenChange: handleonOpenChange,
@@ -88,6 +95,6 @@ export const Route = createFileRoute("/_authenticated/_layout/teams/$groupId")({
 		context: { auth, queryClient },
 	}) => {
 		await queryClient.ensureQueryData(groupProjectsQueryOptions(groupId));
-		ls.set(`rivet-lastteam-${auth.profile?.identity.identityId}`, groupId);
+		ls.recentTeam.set(auth, groupId);
 	},
 });
