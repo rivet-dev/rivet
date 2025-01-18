@@ -1,0 +1,37 @@
+name: Publish Approved Pull Requests
+on:
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  check:
+    # First, trigger a permissions check on the user approving the pull request.
+    if: github.event.review.state == 'approved'
+    runs-on: ubuntu-latest
+    outputs:
+      has-permissions: ${{ steps.checkPermissions.outputs.require-result }}
+    steps:
+      - name: Check permissions
+        id: checkPermissions
+        uses: actions-cool/check-user-permission@v2
+        with:
+          require: "write"
+
+  publish:
+    needs: check
+    # Publish the preview package only if the permissions check passed.
+    if: needs.check.outputs.has-permissions == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "yarn"
+
+      - name: Install dependencies
+        run: yarn install
+        
+      - run: yarn build --filter='sdks/**/*'
+      - run: yarn dlx pkg-pr-new publish 'sdks/*'
