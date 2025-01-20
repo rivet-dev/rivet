@@ -10,6 +10,7 @@ import {
 	Code,
 	Text,
 } from "@rivet-gg/components";
+import { PageLayout } from "@rivet-gg/components/layout";
 import { Icon, faBomb, faLock } from "@rivet-gg/icons";
 import * as Sentry from "@sentry/react";
 import {
@@ -18,6 +19,7 @@ import {
 } from "@tanstack/react-query";
 import { type ErrorComponentProps, useRouter } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { NetworkIssueError } from "./network-issue-error";
 import { NotFoundComponent } from "./not-found-component";
 
 export const ErrorComponent = ({
@@ -72,6 +74,8 @@ export const ErrorComponent = ({
 		}
 	} else if (!error) {
 		return <NotFoundComponent />;
+	} else if ("statusCode" in error && "body" in error) {
+		return <NetworkIssueError />;
 	}
 
 	return (
@@ -106,3 +110,11 @@ export const ErrorComponent = ({
 		</Card>
 	);
 };
+
+export function LayoutedErrorComponent(props: ErrorComponentProps) {
+	return (
+		<PageLayout.Root>
+			<ErrorComponent {...props} />
+		</PageLayout.Root>
+	);
+}

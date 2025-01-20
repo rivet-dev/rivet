@@ -9,8 +9,13 @@ import { PageLayout } from "@rivet-gg/components/layout";
 import * as Sentry from "@sentry/react";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
-import { RouterProvider, createRouter } from "@tanstack/react-router";
+import {
+	CatchBoundary,
+	RouterProvider,
+	createRouter,
+} from "@tanstack/react-router";
 import { Suspense } from "react";
+import { LayoutedErrorComponent } from "./components/error-component";
 import { ThirdPartyProviders } from "./components/third-party-providers";
 import { AuthProvider, useAuth } from "./domains/auth/contexts/auth";
 import { routeMasks } from "./lib/route-masks";
@@ -63,9 +68,14 @@ export function App({ cacheKey }: { cacheKey?: string }) {
 				<ThirdPartyProviders>
 					<Suspense fallback={<FullscreenLoading />}>
 						<TooltipProvider>
-							<AuthProvider>
-								<InnerApp />
-							</AuthProvider>
+							<CatchBoundary
+								getResetKey={() => ""}
+								errorComponent={LayoutedErrorComponent}
+							>
+								<AuthProvider>
+									<InnerApp />
+								</AuthProvider>
+							</CatchBoundary>
 						</TooltipProvider>
 					</Suspense>
 
