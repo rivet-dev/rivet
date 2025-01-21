@@ -9,180 +9,59 @@
 
 
 <p align="center">
-  <p align="center"><b>Run and scale realtime applications</b><br/>Rivet Actors have built-in RPC, state, and events — the easiest way to build modern applications.</p>
-</p>
-
+  <p align="center"><b>Scalable. Stateful. Serverless.</b><br/>Rivet is the platform to build realtime, edge, or agent applications.No limitations of Redis or timeouts of Lambda.</p></p>
+<h4 align="center">
+  <a href="https://hub.rivet.gg">Rivet Cloud</a> |
+  <a href="https://rivet.gg/docs/self-hosting">Self-Hosting</a> |
+  <a href="https://rivet.gg/docs">Docs</a> |
+  <a href="https://www.rivet.gg">Website</a>
+</h4>
 <p align="center">
-  <a href="/docs/philosophy/LICENSING.md"><img alt="License Apache-2.0" src="https://img.shields.io/github/license/rivet-gg/rivet?style=flat-square"></a>
+  <a href="/LICENSE"><img alt="License Apache-2.0" src="https://img.shields.io/github/license/rivet-gg/rivet?style=flat-square"></a>
   <a href="https://github.com/rivet-gg/rivet/graphs/commit-activity"><img alt="GitHub commit activity" src="https://img.shields.io/github/commit-activity/m/rivet-gg/rivet?style=flat-square"/></a>
   <img alt="GitHub Discussions" src="https://img.shields.io/github/discussions/rivet-gg/rivet?style=flat-square">
   <a href="https://rivet.gg/discord"><img alt="Discord" src="https://img.shields.io/discord/822914074136018994?style=flat-square&label=discord"/></a>
+   <a href="https://twitter.com/rivet_gg">
+    <img src="https://img.shields.io/twitter/follow/rivet_gg?label=Follow" alt="Rivet Twitter" />
+  </a>
 </p>
 
 ![Code snippets](./.github/media/code.png)
 
+Rivet comes with simple primitives to build your backend. Leverage Rivet Actors to build complex functionality with ease.
+
 ## Features
 
-### Rivet Actors
-
-- [**Remote Procedure Calls**](https://rivet.gg/docs/rpc): Create cross-application function calls with minimal code overhead.
-- [**State**](https://rivet.gg/docs/state): Automatically manage and persist your data with built-in state handling.
-- [**Events**](https://rivet.gg/docs/events): Manage real-time state changes using integrated pub/sub messaging.
-- [**Scaling & Concurrency**](https://rivet.gg/docs/scaling): Actors scale automatically to cover regions and process needs.
-- [**Edge Networking**](https://rivet.gg/docs/edge): Automatically distribute your applications to global edge locations.
-
-Learn more about actors [here](https://rivet.gg/docs/actors).
+- [**State & Persistence**](https://rivet.gg/docs/state): State that feels like memory but works like storage. Ideal for dynamic, fast-moving apps.
+- [**Remote Procedure Calls**](https://rivet.gg/docs/rpc): Lightweight messaging built for speed. Complete client/server type safety included.
+- [**Runs Forever, Sleeps When Idle**](https://rivet.gg/docs/lifecycle): Always available, sleeps on network inactivity or timeouts, and wakes instantly on demand.
+- [**Edge Networking**](https://rivet.gg/docs/edge): Automatically distribute your applications near your users for ultra-low latency.
+- [**Fault Tolerance**](https://rivet.gg/docs/fault-tolerance): Ensure application & state resilience through crashes with zero downtime.
 
 ### Infrastructure
 
-- **Runs globally near your users**: Minimize latency with actors created in regions closest to your users.
-- **Scales to zero**: Handle millions of connections with low latency and high-throughput writes while saving costs through instant actor sleep/wake cycles.
-- **Built-in monitoring**: Includes monitoring out of the box.
-- **Supports data localization**: Store data in designated locations to meet data localization compliance requirements.
-- **Powered by V8 isolates & Deno runtime**: Faster, cheaper, and more lightweight than lambda functions & containers.
-- **Supports both isolates & containers**: Run your code on V8 isolates or run things like Godot/Unity game servers or video encoding in containers.
-- **Built with technologies you can trust**: Rust, FoundationDB, the [Rivet workflow engine](docs-internal/libraries/workflow/OVERVIEW.md), and [Rivet orchestrator](packages/services/pegboard/) make Rivet  delightfully boring to use.
+- **Works with Your Runtime**: Supports v8 isolates, WebAssembly, and containers to work with your existing tools.
+- **Scales to Zero**: Handle millions of connections with low latency and high-throughput writes while saving costs through instant actor sleep/wake cycles.
+- **Built-in Monitoring**: Includes monitoring out of the box.
+- **No Servers & No Configuration**: Deploy with one command. Scale on demand without any configuration.
+- **Powered by V8 Isolates & Deno Runtime**: Faster, cheaper, and more lightweight than lambda functions & containers.
+- **Supports Both Isolates & Containers**: Run your code on V8 isolates or run things like Godot/Unity game servers or video encoding in containers.
+- **Simpler Than Lambda, No Timeouts Ever**: No execution time limits, no complexity — just better serverless.
+- **Built with Technologies You Can Trust**: Rust, FoundationDB, the [Rivet workflow engine](docs-internal/libraries/workflow/OVERVIEW.md), and [Rivet orchestrator](packages/services/pegboard/) make Rivet delightfully boring to use.
 
 ### Use cases
 
+- AI agents
+- Game Servers
 - Collaborative applications
 - Local-first apps
-- AI agents
 - Discord Activities
-- Game Servers
 - Chat Apps
 - Yjs Sync & Storage
 - Run Untrusted User Code
 
 ## Quickstart
-
-### Install CLI
-
-_Install the CLI on your machine in order to create & deploy Rivet Actors._
-
-<details>
-<summary><b>macOS & Linux & WSL</b></summary>
-
-```sh
-curl -fsSL https://releases.rivet.gg/rivet/latest/install.sh | sh
-```
-
-Next, follow the [setup guide](https://rivet.gg/docs/setup).
-
-</details>
-
-<details>
-<summary><b>Windows (cmd)</b></summary>
-
-```ps1
-powershell -Command "iwr https://releases.rivet.gg/rivet/latest/install.ps1 -useb | iex"
-```
-
-Next, follow the [setup guide](https://rivet.gg/docs/setup).
-
-</details>
-
-<details>
-<summary><b>Windows (PowerShell)</b></summary>
-
-```
-iwr https://releases.rivet.gg/rivet/latest/install.ps1 -useb | iex
-```
-
-Next, follow the [setup guide](https://rivet.gg/docs/setup).
-
-</details>
-
-<details>
-<summary><b>Build from source (<code>cargo build</code>)</b></summary>
-
-```sh
-git clone https://github.com/rivet-gg/rivet
-cargo build --bin rivet
-```
-
-The executable will be available at _target/debug/rivet_.
-
-Next, follow the [setup guide](https://rivet.gg/docs/setup).
-
-</details>
-
-### Single-node cluster
-
-_Run a single-node Rivet instance for developing your applications locally._
-
-<details>
-<summary><b><code>docker run</code></b></summary>
-
-Start a Rivet cluster:
-
-```sh
-docker run --name rivet -v "$(pwd)/rivet-data:/data" -p 8080:8080 -p 9000:9000 -p 7080:7080 -p 7443:7443 --platform linux/amd64 rivetgg/rivet
-```
-
-Next, follow the [setup guide](https://rivet.gg/docs/setup).
-
-</details>
-
-<details>
-<summary><b><code>docker run</code> with TCP & UDP</b></summary>
-
-Start a Rivet cluster with TCP & UDP enabled:
-
-```sh
-docker run --name rivet -v "$(pwd)/rivet-data:/data" -p 8080:8080 -p 9000:9000 -p 7080:7080 -p 7443:7443 -p 7500-7599:7500-7599 -p 7600-7699:7600-7699 --platform linux/amd64 rivetgg/rivet
-```
-
-Next, follow the [setup guide](https://rivet.gg/docs/setup).
-
-</details>
-
-<details>
-<summary><b>Integrate in to your Docker Compose</b></summary>
-
-Integrate in to an your existing project's Docker Compose with:
-
-```yaml
-services:
-  rivet:
-    image: rivetgg/rivet
-    platform: linux/amd64
-    volumes:
-      - rivet-data:/data
-    ports:
-      - "8080:8080"
-      - "9000:9000"
-      - "7080:7080"
-      - "7443:7443"
-      # Optional: Rivet Guard TCP & UDP
-      - "7500-7599:7500-7599"
-      # Optional: Host networking TCP & UDP
-      - "7600-7699:7600-7699"
-
-volumes:
-  rivet-data:
-```
-
-Next, follow the [setup guide](https://rivet.gg/docs/setup).
-
-</details>
-
-### Developing Rivet
-
-_Compile Rivet from scratch and start a full cluster._
-
-<details>
-<summary><b>Docker Compose</b></summary>
-
-Build & start the cluster with:
-
-```yaml
-docker compose -f docker/dev-full/docker-compose.yml up -d --build
-```
-
-Then visit http://localhost:8080 in your browser.
-
-</details>
+Follow the [setup guide](https://rivet.gg/docs/setup).
 
 ### Self-hosting & manual deployment
 
@@ -203,10 +82,9 @@ Get a demo, tailored pricing to fit your needs, or have your questions answered 
 
 - **Getting Started**
   - [Initial Setup](https://rivet.gg/docs/setup)
-  - [What Are Actors?](https://rivet.gg/docs/actors)
   - [Actor SDK](https://jsr.io/@rivet-gg/actor/doc) (external)
   - **Client SDKs**
-    - [JavaScript & TypeScript](https://rivet.gg/docs/client/javascript)
+    - [JavaScript & TypeScript](https://jsr.io/@rivet-gg/actor-client)
 
 - **Build with Rivet**
   - [Remote Procedure Calls](https://rivet.gg/docs/rpc)
