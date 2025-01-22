@@ -1,5 +1,4 @@
 import type { ActorContext } from "@rivet-gg/actor-core";
-import { assertEquals, assertExists } from "@std/assert";
 import { Hono } from "hono";
 import { upgradeWebSocket } from "hono/deno";
 
@@ -56,13 +55,17 @@ export default {
 
 		// Find port
 		const portEnv = Deno.env.get("PORT_HTTP");
-		assertExists(portEnv, "missing PORT_HTTP");
+		if (!portEnv) {
+			throw new Error("missing PORT_HTTP");
+		}
 		const port = Number.parseInt(portEnv);
 
 		// Test KV
 		console.time("kv-test");
 		await ctx.kv.put(["foo", "bar"], 1);
-		assertEquals(await ctx.kv.get(["foo", "bar"]), 1, "kv get");
+		if ((await ctx.kv.get(["foo", "bar"])) !== 1) {
+			throw new Error("kv get");
+		}
 		await ctx.kv.delete(["foo", "bar"]);
 
 		await ctx.kv.putBatch(
@@ -75,26 +78,33 @@ export default {
 			["batch", "a"],
 			["batch", "b"],
 		]);
-		assertEquals(getBatch.get(["batch", "a"]), 2, "kv get batch");
-		assertEquals(getBatch.get(["batch", "b"]), 3, "kv get batch");
+		if (getBatch.get(["batch", "a"]) !== 2) {
+			throw new Error("kv get batch");
+		}
+		if (getBatch.get(["batch", "b"]) !== 3) {
+			throw new Error("kv get batch");
+		}
 
 		const list = await ctx.kv.list({
 			prefix: ["batch"],
 		});
-		assertEquals(
-			list.array(),
-			[
+		if (
+			JSON.stringify(list.array()) !==
+			JSON.stringify([
 				[["batch", "a"], 2],
 				[["batch", "b"], 3],
-			],
-			"kv list",
-		);
+			])
+		) {
+			throw new Error("kv list");
+		}
 
 		await ctx.kv.deleteBatch([
 			["batch", "a"],
 			["batch", "b"],
 		]);
-		assertEquals(await ctx.kv.get(["batch", "a"]), null, "kv get deleted");
+		if ((await ctx.kv.get(["batch", "a"])) !== null) {
+			throw new Error("kv get deleted");
+		}
 		console.timeEnd("kv-test");
 
 		// Start server
