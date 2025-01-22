@@ -48,6 +48,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          # Setup Corepack
+          corepack enable
+
           # Install Deno
           curl -fsSL https://deno.land/x/install/install.sh | sh
           export PATH=$HOME/.deno/bin:$PATH
