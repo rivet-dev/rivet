@@ -1,0 +1,72 @@
+# Local Development & Single Container
+
+A full Rivet cluster can be ran in a single container for use cases like:
+
+- Develop your app with a local Rivet cluster
+- Including in an existing Docker Compose project
+- Quick, single-node deployments
+
+## Prerequisites
+
+- Docker
+
+## Operation
+
+### Run with Docker CLI
+
+Start a Rivet cluster:
+
+<Tabs>
+<Tab title="Recommended">
+
+Run Rivet with:
+
+```sh
+docker run --name rivet -v "$(pwd)/rivet-data:/data" -p 8080:8080 -p 9000:9000 -p 7080:7080 -p 7443:7443 -p 7500-7599:7500-7599 -p 7600-7699:7600-7699 --platform linux/amd64 rivetgg/rivet
+```
+
+This runs Rivet with HTTP, TCP, and UDP networking support.
+
+</Tab>
+<Tab title="Limited Networking">
+
+If you don't need TCP & UDP support (which is common), you can run Rivet with just HTTP support:
+
+```sh
+docker run --name rivet -v "$(pwd)/rivet-data:/data" -p 8080:8080 -p 9000:9000 -p 7080:7080 -p 7443:7443 --platform linux/amd64 rivetgg/rivet
+```
+
+This is sometimes needed if the port ranges required above have port conflicts with other software on your computer.
+
+</Tab>
+</Tabs>
+
+Data will be stored in a folder named `rivet-data` in your current directory.
+
+Next, follow the [setup guide](/docs/setup).
+
+### Integrate in to existing Docker Compose
+
+Integrate in to an existing project's Docker Compose with:
+
+```yaml
+services:
+  rivet:
+    image: rivetgg/rivet
+    platform: linux/amd64
+    volumes:
+      - rivet-data:/data
+    ports:
+      - "8080:8080"
+      - "9000:9000"
+      - "7080:7080"
+      - "7443:7443"
+      # Optional: Rivet Guard TCP & UDP
+      - "7500-7599:7500-7599"
+      # Optional: Host networking TCP & UDP
+      - "7600-7699:7600-7699"
+
+volumes:
+  rivet-data:
+```
+

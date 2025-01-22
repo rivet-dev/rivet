@@ -249,6 +249,10 @@ export const sitemap = [
 								href: "/docs/self-hosting",
 							},
 							{
+								title: "Local Dev & Single Container",
+								href: "/docs/self-hosting/single-container",
+							},
+							{
 								title: "Docker Compose",
 								href: "/docs/self-hosting/docker-compose",
 							},
