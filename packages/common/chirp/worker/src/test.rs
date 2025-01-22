@@ -20,10 +20,7 @@ impl TestCtx {
 			.await
 			.map_err(ManagerError::Global)?;
 		let pools = rivet_pools::Pools::new(config.clone()).await?;
-		let cache = rivet_cache::CacheInner::new(
-			service_name.clone(),
-			pools.redis_cache()?,
-		);
+		let cache = rivet_cache::CacheInner::new(service_name.clone(), pools.redis_cache()?);
 		let client = chirp_client::SharedClient::from_env(pools.clone())
 			.unwrap()
 			.wrap_new(&service_name);

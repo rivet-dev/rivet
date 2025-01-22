@@ -56,7 +56,7 @@ pub async fn build_backend_command_raw(opts: CommandOpts) -> Result<CommandRaw> 
 			"--no-check".into(),
 			"--allow-all".into(),
 			"--unstable-sloppy-imports".into(),
-			"--vendor".into(),  // Required for unenv files to be readable
+			"--vendor".into(), // Required for unenv files to be readable
 			opts.task_path.to_string(),
 			"--input".into(),
 			input_json,

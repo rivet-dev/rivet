@@ -2,15 +2,14 @@ use anyhow::*;
 use rivet_api::{apis, models};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use uuid::Uuid;
 use std::path::Path;
+use uuid::Uuid;
 
 use crate::{
-	build,
+	build, paths,
 	project::environment::TEMPEnvironment,
 	ToolchainCtx,
 	{config, util::task},
-	paths,
 };
 
 mod docker;

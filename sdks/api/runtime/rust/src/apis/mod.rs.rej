@@ -1,6 +1,4 @@
---- mod.rs
-+++ mod.rs
-@@ -16,13 +16,33 @@ pub enum Error<T> {
+@@ -16,13 +16,33 @@
  	ResponseError(ResponseContent<T>),
  }
  

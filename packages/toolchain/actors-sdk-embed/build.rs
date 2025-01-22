@@ -89,7 +89,7 @@ pub async fn build_backend_command_raw(opts: CommandOpts) -> Result<()> {
 			"run",
 			"--allow-all",
 			"--unstable-sloppy-imports",
-			"--vendor",  // Required for unenv files to be readable
+			"--vendor", // Required for unenv files to be readable
 		])
 		.arg(&opts.task_path)
 		.arg("--input")

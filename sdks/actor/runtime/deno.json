@@ -1,0 +1,39 @@
+{
+	"compilerOptions": {
+		"lib": ["dom"],
+		"jsx": "react-jsx",
+		"jsxImportSource": "react",
+		"jsxImportSourceTypes": "@types/react@^19"
+	},
+	"name": "@rivet-gg/actor",
+	"version": "25.1.0-rc.1",
+	"license": "Apache-2.0",
+	"imports": {
+		"@jogit/tmp-react-server-dom-nodeless": "npm:@jogit/tmp-react-server-dom-nodeless@^19.0.1",
+		"cbor-x": "npm:cbor-x@^1.6.0",
+		"get-stream": "npm:get-stream@^9.0.1",
+		"hono": "npm:hono@^4.6.16",
+		"on-change": "npm:on-change@^5.0.1",
+		"react": "npm:react@^19.0.0",
+		"zod": "npm:zod@^3.24.1",
+		"@rivet-gg/actor-common/log": "./internal/common/log.ts",
+		"@rivet-gg/actor-common/logfmt": "./internal/common/logfmt.ts",
+		"@rivet-gg/actor-common/network": "./internal/common/network.ts",
+		"@rivet-gg/actor-common/utils": "./internal/common/utils.ts",
+		"@rivet-gg/actor-common/reflect": "./internal/common/reflect.ts",
+		"@rivet-gg/actor-core": "./internal/core/mod.ts",
+		"@rivet-gg/actor-protocol/http/rpc": "./internal/protocol/http/rpc.ts",
+		"@rivet-gg/actor-protocol/http/inspect": "./internal/protocol/http/inspect.ts",
+		"@rivet-gg/actor-protocol/ws": "./internal/protocol/ws/mod.ts",
+		"@rivet-gg/actor-protocol/ws/to_client": "./internal/protocol/ws/to_client.ts",
+		"@rivet-gg/actor-protocol/ws/to_server": "./internal/protocol/ws/to_server.ts"
+	},
+	"exports": {
+		".": "./src/mod.ts",
+		"./kv": "./src/mod.ts",
+		"./unstable-react": "./src/unstable-react.ts"
+	},
+	"publish": {
+		"exclude": ["!internal/common", "!internal/core", "!internal/protocol"]
+	}
+}

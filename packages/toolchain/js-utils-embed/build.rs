@@ -1,7 +1,11 @@
 use anyhow::*;
 use fs_extra::dir::{copy, CopyOptions};
 use merkle_hash::MerkleTree;
-use std::{path::{Path, PathBuf}, fs, process::Stdio};
+use std::{
+	fs,
+	path::{Path, PathBuf},
+	process::Stdio,
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -59,10 +63,7 @@ async fn main() -> Result<()> {
 	//ensure!(status.success(), "deno install command failed");
 
 	println!("cargo:rerun-if-changed={}", src_path.display());
-	println!(
-		"cargo:rustc-env=JS_UTILS_PATH={}",
-		dst_path.display()
-	);
+	println!("cargo:rustc-env=JS_UTILS_PATH={}", dst_path.display());
 	println!(
 		"cargo:rustc-env=JS_UTILS_HASH={}",
 		hash_directory(&dst_path)?

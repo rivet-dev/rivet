@@ -1,5 +1,8 @@
 use anyhow::*;
-use chirp_workflow::history::{event::SleepState, location::{Location, Coordinate}};
+use chirp_workflow::history::{
+	event::SleepState,
+	location::{Coordinate, Location},
+};
 use chrono::{TimeZone, Utc};
 use clap::ValueEnum;
 use indoc::indoc;
@@ -579,21 +582,26 @@ pub async fn print_history(
 			.fetch_all(&mut *conn3)
 			.await
 			.map_err(Into::into)
-			.map(|rows| rows.into_iter().map(|value| {
-				ActivityError {
-						// Backwards compatibility
-						// NOTE: Add 1 because we switched from 0-based to 1-based
-						location:
-							value.location2.clone().unwrap_or_else(|| {value
-								.location
-								.iter()
-								.map(|x| Coordinate::simple(*x as usize + 1))
-								.collect()}),
-						error: value.error,
-						count: value.count,
-						latest_ts: value.latest_ts,	
-					}
-			}).collect::<Vec<_>>())
+			.map(|rows| {
+				rows.into_iter()
+					.map(|value| {
+						ActivityError {
+							// Backwards compatibility
+							// NOTE: Add 1 because we switched from 0-based to 1-based
+							location: value.location2.clone().unwrap_or_else(|| {
+								value
+									.location
+									.iter()
+									.map(|x| Coordinate::simple(*x as usize + 1))
+									.collect()
+							}),
+							error: value.error,
+							count: value.count,
+							latest_ts: value.latest_ts,
+						}
+					})
+					.collect::<Vec<_>>()
+			})
 		},
 	)?;
 

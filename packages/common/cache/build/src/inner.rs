@@ -26,10 +26,7 @@ impl CacheInner {
 		let service_name = rivet_env::service_name();
 		let redis_cache = pools.redis_cache().map_err(Error::Pools)?;
 
-		Ok(Self::new(
-			service_name.to_string(),
-			redis_cache,
-		))
+		Ok(Self::new(service_name.to_string(), redis_cache))
 	}
 
 	#[tracing::instrument(skip(redis_conn))]

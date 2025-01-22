@@ -43,33 +43,34 @@ async function jsrVersionExists(
 
 export async function publishSdk(opts: ReleaseOpts) {
 	const packages = [
-		{
-			path: `${opts.root}/sdks/api/runtime/typescript`,
-			name: "@rivet-gg/api",
-			npm: true,
-		},
-		{
-			path: `${opts.root}/sdks/api/full/typescript`,
-			name: "@rivet-gg/api-full",
-			npm: true,
-		},
+		//{
+		//	path: `${opts.root}/sdks/api/runtime/typescript`,
+		//	name: "@rivet-gg/api",
+		//	npm: true,
+		//},
+		//{
+		//	path: `${opts.root}/sdks/api/full/typescript`,
+		//	name: "@rivet-gg/api-full",
+		//	npm: true,
+		//},
 		{
 			path: `${opts.root}/sdks/actor/runtime`,
 			name: "@rivet-gg/actor",
-			jsr: true,
+			//jsr: true,
+			npm: true,
 			turbo: true,
 		},
 		{
 			path: `${opts.root}/sdks/actor/client`,
 			name: "@rivet-gg/actor-client",
-			jsr: true,
+			//jsr: true,
 			npm: true,
 			turbo: true,
 		},
 		{
 			path: `${opts.root}/sdks/actor/core`,
 			name: "@rivet-gg/actor-core",
-			jsr: true,
+			//jsr: true,
 			npm: true,
 			turbo: true
 		},
@@ -99,7 +100,7 @@ export async function publishSdk(opts: ReleaseOpts) {
 		if (pkg.npm) {
 			$.logStep("Publishing to NPM", `${pkg.name}@${opts.version}`);
 			try {
-				await $`yarn publish --new-version ${opts.version} --no-git-tag-version`.cwd(pkg.path);
+				await $`yarn npm publish --new-version ${opts.version} --no-git-tag-version`.cwd(pkg.path);
 			} catch {
 				await $`yarn npm publish --access public`.cwd(pkg.path);
 			}

@@ -20,4 +20,3 @@ pub async fn src_path(data_dir: &PathBuf) -> Result<PathBuf> {
 
 	Ok(src_dir)
 }
-
