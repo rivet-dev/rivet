@@ -1,5 +1,4 @@
 pub mod actor;
-pub mod project;
 pub mod build;
 pub mod deno;
 pub mod deploy;
@@ -9,6 +8,7 @@ pub mod login;
 pub mod logout;
 pub mod manager;
 pub mod metadata;
+pub mod project;
 pub mod region;
 
 use anyhow::*;
@@ -57,6 +57,12 @@ pub enum SubCommand {
 		subcommand: metadata::SubCommand,
 	},
 	Deno(deno::Opts),
+	#[clap(alias = "v")]
+	// Alias of `environment view`
+	View {
+		#[clap(long, alias = "env", short = 'e')]
+		environment: Option<String>,
+	},
 }
 
 impl SubCommand {
@@ -74,6 +80,13 @@ impl SubCommand {
 			SubCommand::Manager { subcommand } => subcommand.execute().await,
 			SubCommand::Metadata { subcommand } => subcommand.execute().await,
 			SubCommand::Deno(opts) => opts.execute().await,
+			SubCommand::View { environment } => {
+				environment::SubCommand::View {
+					environment: environment.clone(),
+				}
+				.execute()
+				.await
+			}
 		}
 	}
 }
