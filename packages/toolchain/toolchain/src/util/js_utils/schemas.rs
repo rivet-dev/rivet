@@ -7,19 +7,7 @@ pub mod build {
 	pub struct Input {
 		pub entry_point: PathBuf,
 		pub out_dir: PathBuf,
-		pub deno: Deno,
 		pub bundle: Bundle,
-	}
-
-	#[derive(Serialize)]
-	#[serde(rename_all = "camelCase")]
-	pub struct Deno {
-		#[serde(skip_serializing_if = "Option::is_none")]
-		pub config_path: Option<String>,
-		#[serde(skip_serializing_if = "Option::is_none")]
-		pub import_map_url: Option<String>,
-		#[serde(skip_serializing_if = "Option::is_none")]
-		pub lock_path: Option<String>,
 	}
 
 	#[derive(Serialize)]

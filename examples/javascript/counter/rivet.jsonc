@@ -2,7 +2,11 @@
 	"builds": {
 		"counter": {
 			"script": "counter.ts",
-			"access": "public"
+			"access": "public",
+			"unstable": {
+				"minify": false,
+				"dump_build": true
+			}
 		}
 	},
 	"unstable": {

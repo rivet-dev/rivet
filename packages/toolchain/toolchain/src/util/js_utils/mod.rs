@@ -19,7 +19,7 @@ async fn base_url() -> Result<String> {
 	let base_url = if let Some(url) = std::env::var("_RIVET_JS_UTILS_SRC_DIR").ok() {
 		url
 	} else {
-		rivet_js_utils_embed::src_path(&paths::data_dir()?)
+		rivet_js_utils_embed::dist_path(&paths::data_dir()?)
 			.await?
 			.display()
 			.to_string()
@@ -54,16 +54,14 @@ pub async fn build_backend_command_raw(opts: CommandOpts) -> Result<CommandRaw> 
 			"run".into(),
 			"--quiet".into(),
 			"--no-check".into(),
-			"--allow-net".into(),
-			"--allow-read".into(),
-			"--allow-env".into(),
-			"--allow-run".into(),
-			"--allow-write".into(),
-			"--allow-sys".into(),
-			"--config".into(),
-			format!("{base_url}/deno.jsonc"),
-			"--lock".into(),
-			format!("{base_url}/deno.lock"),
+			//"--allow-net".into(),
+			//"--allow-read".into(),
+			//"--allow-env".into(),
+			//"--allow-run".into(),
+			//"--allow-write".into(),
+			//"--allow-sys".into(),
+			"--allow-all".into(),
+			"--unstable-bare-node-builtins".into(),
 			format!("{base_url}/{}", opts.task_path),
 			"--input".into(),
 			input_json,

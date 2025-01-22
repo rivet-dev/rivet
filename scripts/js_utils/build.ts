@@ -26,32 +26,19 @@ const JS_UTILS_DIR = resolve(ROOT_DIR, "packages/toolchain/js-utils-embed/js");
 
 const input = {
 	entryPoint: resolve(Deno.cwd(), entry),
-	outDir: resolve(Deno.cwd(), "out"),
-	deno: {
-		//configPath: resolve(Deno.cwd(), "deno.jsonc"),
-		//importMapUrl: z.string().optional(),
-		lockPath: resolve(Deno.cwd(), "deno.lock"),
-	},
+	outDir: resolve(Deno.cwd(), "dist"),
 	bundle: {
 		minify: false,
-		analyzeResult: true,
+		analyzeResult: false,
 		logLevel: "debug",
 	},
 };
-
-const output1 = await new Deno.Command("deno", {
-	args: [
-		"clean"
-	],
-	cwd: JS_UTILS_DIR,
-	stdout: "inherit",
-	stderr: "inherit",
-}).output();
 
 const output = await new Deno.Command("deno", {
 	args: [
 		"run",
 		"-A",
+		"--unstable-sloppy-imports",
 		"src/tasks/build/mod.ts",
 		"--input",
 		JSON.stringify(input),

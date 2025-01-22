@@ -43,106 +43,68 @@ pub async fn build_and_upload(
 	}
 
 	// Bundle JS
-	match opts.build_config.bundler() {
-		config::build::javascript::Bundler::Deno => {
-			// Validate that the script path has a .ts or .js extension
-			let script_path = project_root.join(&opts.build_config.script);
-			let ext = script_path.extension().and_then(|s| s.to_str());
-			ensure!(
-				ext == Some("ts") || ext == Some("tsx") || ext == Some("js") || ext == Some("jsx"),
-				"script file must have a .ts or .js extension for Deno bundler"
-			);
+	if !opts.build_config.unstable.no_bundler() {
+		// Validate that the script path has a .ts or .js extension
+		let script_path = project_root.join(&opts.build_config.script);
+		let ext = script_path.extension().and_then(|s| s.to_str());
+		ensure!(
+			ext == Some("ts") || ext == Some("tsx") || ext == Some("js") || ext == Some("jsx"),
+			"script file must have a .ts or .js extension for Deno bundler"
+		);
 
-			// Search for deno.json or deno.jsonc
-			let config_path = if let Some(config_path) = opts.build_config.deno.config_path.clone()
-			{
-				Some(config_path)
-			} else {
-				["deno.json", "deno.jsonc"].iter().find_map(|file_name| {
-					let path = project_root.join(file_name);
-					if path.exists() {
-						Some(path.display().to_string())
-					} else {
-						None
-					}
-				})
-			};
+		// Check the project before deploying
+		//deno_check_script(CheckOpts {
+		//	script_path: &script_path,
+		//	config_path: config_path.as_deref(),
+		//	import_map_url: import_map_url.as_deref(),
+		//	lock_path: lock_path.as_deref(),
+		//})
+		//.await?;
 
-			// Search for a Deno lockfile
-			let lock_path = if let Some(lock_path) = opts.build_config.deno.lock_path.clone() {
-				Some(lock_path)
-			} else {
-				let project_deno_lockfile_path = project_root.join("deno.lock");
-				if project_deno_lockfile_path.exists() {
-					Some(project_deno_lockfile_path.display().to_string())
-				} else {
-					None
-				}
-			};
-
-			// Define paths
-			let import_map_url = opts.build_config.deno.import_map_url.clone();
-
-			// Check the project before deploying
-			deno_check_script(CheckOpts {
-				script_path: &script_path,
-				config_path: config_path.as_deref(),
-				import_map_url: import_map_url.as_deref(),
-				lock_path: lock_path.as_deref(),
-			})
-			.await?;
-
-			// Build the bundle to the output dir. This will bundle all Deno dependencies into a
-			// single JS file.
-			//
-			// The Deno command is run in the project root, so `config_path`, `lock_path`, etc can
-			// all safely be passed as relative paths without joining with `project_root`.
-			let output = js_utils::run_command_and_parse_output::<
-				js_utils::schemas::build::Input,
-				js_utils::schemas::build::Output,
-			>(
-				"src/tasks/build/mod.ts",
-				&js_utils::schemas::build::Input {
-					entry_point: script_path,
-					out_dir: build_dir.path().to_path_buf(),
-					deno: js_utils::schemas::build::Deno {
-						config_path,
-						import_map_url,
-						lock_path,
-					},
-					bundle: js_utils::schemas::build::Bundle {
-						minify: opts.build_config.unstable.minify(),
-						analyze_result: opts.build_config.unstable.analyze_result(),
-						log_level: opts.build_config.unstable.esbuild_log_level(),
-					},
+		// Build the bundle to the output dir. This will bundle all Deno dependencies into a
+		// single JS file.
+		//
+		// The Deno command is run in the project root, so `config_path`, `lock_path`, etc can
+		// all safely be passed as relative paths without joining with `project_root`.
+		let output = js_utils::run_command_and_parse_output::<
+			js_utils::schemas::build::Input,
+			js_utils::schemas::build::Output,
+		>(
+			"src/tasks/build/mod.js",
+			&js_utils::schemas::build::Input {
+				entry_point: script_path,
+				out_dir: build_dir.path().to_path_buf(),
+				bundle: js_utils::schemas::build::Bundle {
+					minify: opts.build_config.unstable.minify(),
+					analyze_result: opts.build_config.unstable.analyze_result(),
+					log_level: opts.build_config.unstable.esbuild_log_level(),
 				},
-			)
-			.await?;
-			if let Some(analyze_result) = output.analyzed_metafile {
-				task.log("[Bundle Analysis]");
-				task.log(analyze_result);
-			}
+			},
+		)
+		.await?;
+		if let Some(analyze_result) = output.analyzed_metafile {
+			task.log("[Bundle Analysis]");
+			task.log(analyze_result);
 		}
-		config::build::javascript::Bundler::None => {
-			// Ensure the script path has a .js extension
-			let script_path = project_root.join(opts.build_config.script);
-			ensure!(
-				script_path.extension().and_then(|s| s.to_str()) == Some("js"),
-				"script file must have a .js extension when not using a bundler"
-			);
+	} else {
+		// Ensure the script path has a .js extension
+		let script_path = project_root.join(opts.build_config.script);
+		ensure!(
+			script_path.extension().and_then(|s| s.to_str()) == Some("js"),
+			"script file must have a .js extension when not using a bundler"
+		);
 
-			// Validate script exists
-			match fs::metadata(&script_path).await {
-				Result::Ok(_) => {}
-				Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-					bail!("script not found: {}", script_path.display())
-				}
-				Err(err) => bail!("failed to read script at {}: {err}", script_path.display()),
+		// Validate script exists
+		match fs::metadata(&script_path).await {
+			Result::Ok(_) => {}
+			Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+				bail!("script not found: {}", script_path.display())
 			}
-
-			// Copy index file to build dir
-			fs::copy(&script_path, build_dir.path().join(BUILD_INDEX_NAME)).await?;
+			Err(err) => bail!("failed to read script at {}: {err}", script_path.display()),
 		}
+
+		// Copy index file to build dir
+		fs::copy(&script_path, build_dir.path().join(BUILD_INDEX_NAME)).await?;
 	};
 
 	// Deploy JS build

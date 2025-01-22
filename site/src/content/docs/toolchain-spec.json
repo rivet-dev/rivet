@@ -86,21 +86,6 @@
         "script"
       ],
       "properties": {
-        "bundler": {
-          "$ref": "#/definitions/Bundler"
-        },
-        "deno": {
-          "default": {
-            "config_path": null,
-            "import_map_url": null,
-            "lock_path": null
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/Deno"
-            }
-          ]
-        },
         "script": {
           "type": "string"
         },
@@ -110,7 +95,8 @@
             "analyze_result": null,
             "esbuild_log_level": null,
             "compression": null,
-            "dump_build": null
+            "dump_build": null,
+            "no_bundler": null
           },
           "allOf": [
             {
@@ -163,13 +149,6 @@
         }
       ]
     },
-    "Bundler": {
-      "type": "string",
-      "enum": [
-        "deno",
-        "none"
-      ]
-    },
     "Compression": {
       "oneOf": [
         {
@@ -187,21 +166,6 @@
           ]
         }
       ]
-    },
-    "Deno": {
-      "type": "object",
-      "properties": {
-        "config_path": {
-          "type": "string"
-        },
-        "import_map_url": {
-          "type": "string"
-        },
-        "lock_path": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
     },
     "ManagerUnstable": {
       "type": "object",
@@ -222,6 +186,9 @@
           "type": "string"
         },
         "minify": {
+          "type": "boolean"
+        },
+        "no_bundler": {
           "type": "boolean"
         }
       },
@@ -262,6 +229,9 @@
         },
         "minify": {
           "type": "boolean"
+        },
+        "no_bundler": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false
@@ -276,7 +246,8 @@
             "analyze_result": null,
             "esbuild_log_level": null,
             "compression": null,
-            "dump_build": null
+            "dump_build": null,
+            "no_bundler": null
           },
           "allOf": [
             {

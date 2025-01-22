@@ -11532,6 +11532,8 @@ dependencies = [
  "fs_extra",
  "include_dir",
  "merkle_hash",
+ "rivet-js-utils-embed",
+ "serde_json",
  "sha2 0.10.8",
  "tempfile",
  "tokio",
@@ -13080,9 +13082,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.133"
+version = "1.0.137"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7fceb2473b9166b2294ef05efcb65a3db80803f0b03ef86a5fc88a2b85ee377"
+checksum = "930cfb6e6abf99298aaad7d29abbef7a9999a9a8806a40088f55f0dcec03146b"
 dependencies = [
  "indexmap 2.7.0",
  "itoa 1.0.14",

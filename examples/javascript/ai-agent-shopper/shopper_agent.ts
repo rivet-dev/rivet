@@ -6,40 +6,42 @@ import {
 	UserError,
 } from "@rivet-gg/actor";
 import { assert } from "@std/assert";
-import { CATALOG, type CatalogItem } from "./catalog.ts";
-
-// HACK: `ai` package is not currently packaged correctly. Using esm.sh as a fallback.
-//
-// Zod must be the exact same package or else we'll get a "took too long to evaluate" error.
+import { type CoreMessage, streamText, tool } from "ai";
+import { z } from "zod";
 import {
-	type CoreMessage,
-	streamText,
-	tool,
-} from "https://esm.sh/ai@^4.1.0&deps=zod@3.24.1";
-import { z } from "https://esm.sh/zod@3.24.1";
+	type CatalogItem,
+	getCatalogItemBySlug,
+	searchCatalogByKeywords,
+} from "./catalog";
 
-const SYSTEM_PROMPT = `
-You are ShopperAgent, an intelligent shopping assistant designed to interact with users and manage their shopping experience. Your primary responsibilities include updating the shopping cart, retrieving the current shopping cart status, and providing information about the available catalog of items. You are powered by the GPT-4-turbo model and utilize various tools to perform your tasks effectively.
+const SYSTEM_PROMPT = `You are a helpful hardware store shopping assistant. Your role is to help customers find and purchase items from our catalog.
 
-Capabilities:
-1. **Update Shopping Cart**: You can update the quantity of items in the user's shopping cart. You require the item's slug and the desired count to perform this action.
-2. **Retrieve Shopping Cart**: You can provide the current status of the user's shopping cart, detailing the items and their quantities.
-3. **Access Catalog**: You can access and provide information about the catalog of available items.
+Key responsibilities:
+- Use the searchCatalog tool with relevant tags to find items that match the customer's needs
+- When searching, include common synonyms and related terms for more complete results (e.g. "saw" should include "cutting", "blade"; "hammer" should include "mallet", "striking")
+- Help customers add items to their cart using updateItemsInCart
+- Check the current cart contents using getShoppingCart when needed
+- Only recommend items that are confirmed to exist in the catalog search results
+- Ask for clarification if the customer's request is ambiguous
 
-Constraints:
-- You must ensure that any updates to the shopping cart are accurately reflected and communicated to the user.
-- You should maintain a history of interactions to improve user experience and provide context for ongoing conversations.
-- You should handle all operations asynchronously and ensure that responses are prompt and informative.
+Important restrictions:
+- Never make assumptions about item availability - always search the catalog first
+- You are not able to list the entire catalog, but you can search by keywords
+- Only suggest items that are explicitly returned by the searchCatalog tool
+- If a requested item cannot be found, explain this to the customer and offer to search for alternatives
+- Do not make up prices, specifications, or details about items
+- If unsure about a specific item, ask the customer for more details to refine the search
 
-Interaction Guidelines:
-- Always confirm actions taken, such as updates to the shopping cart, with a clear and concise message.
-- Provide detailed information when retrieving the shopping cart or catalog, ensuring the user has all necessary details.
-- Maintain a friendly and helpful tone, ensuring the user feels supported throughout their shopping experience.
+When searching:
+1. Break down the customer's request into relevant search tags
+2. Use searchCatalog to find matching items
+3. Review the search results and recommend appropriate items
+4. Help add selected items to cart with specific quantities
 
-Remember, your goal is to enhance the user's shopping experience by providing efficient and accurate assistance. Always prioritize user satisfaction and clarity in your interactions.
+Always maintain a helpful and professional tone while staying strictly within the bounds of available catalog items.
 `;
 
-interface ShoppingCartItem {
+export interface ShoppingCartItem {
 	slug: string;
 	count: number;
 }
@@ -52,6 +54,8 @@ interface State {
 	messages: CoreMessage[];
 }
 
+const MAX_MESSAGE_HISTORY = 20;
+
 interface ConnParams {
 	openaiKey?: string;
 }
@@ -62,6 +66,14 @@ interface ConnState {
 
 export default class ShopperAgent extends Actor<State, ConnParams, ConnState> {
 	#isStreaming = false;
+
+	constructor() {
+		super({
+			rpc: {
+				timeout: 60_000,
+			},
+		});
+	}
 
 	override _onInitialize(): State {
 		return { shoppingCart: [], messages: [] };
@@ -87,7 +99,7 @@ export default class ShopperAgent extends Actor<State, ConnParams, ConnState> {
 
 	updateItemInCart(_rpc: Rpc<ShopperAgent>, slug: string, count: number) {
 		// Assert that the item is in the catalog
-		const isInCatalog = CATALOG.some((item) => item.slug === slug);
+		const isInCatalog = getCatalogItemBySlug(slug);
 		assert(isInCatalog, `Item with slug ${slug} is not in the catalog`);
 
 		const itemIndex = this._state.shoppingCart.findIndex(
@@ -111,11 +123,22 @@ export default class ShopperAgent extends Actor<State, ConnParams, ConnState> {
 		return this._state.shoppingCart;
 	}
 
-	getCatalog(_rpc: Rpc<ShopperAgent>): CatalogItem[] {
-		return CATALOG;
+	async searchCatalog(
+		_rpc: Rpc<ShopperAgent>,
+		keywords: string[],
+	): Promise<CatalogItem[]> {
+		return searchCatalogByKeywords(keywords);
 	}
 
-	async processPrompt(rpc: Rpc<ShopperAgent>, prompt: string) {
+	resetState() {
+		this._state.messages = [];
+		this._state.shoppingCart = [];
+	}
+
+	async processPrompt(
+		rpc: Rpc<ShopperAgent>,
+		prompt: string,
+	): Promise<string> {
 		try {
 			// Add check for openai provider
 			if (!rpc.connection.state.openai) {
@@ -129,12 +152,26 @@ export default class ShopperAgent extends Actor<State, ConnParams, ConnState> {
 			assert(!this.#isStreaming, "already streaming response");
 			this.#isStreaming = true;
 
+			// Trim history if it exceeds the maximum
+			if (this._state.messages.length >= MAX_MESSAGE_HISTORY) {
+				this._state.messages = this._state.messages.slice(
+					-MAX_MESSAGE_HISTORY,
+				);
+			}
+
+			this._state.messages.push({
+				role: "user",
+				content: prompt,
+			});
+
+			this._log.info("prompt start", { prompt });
+			const startTime = performance.now();
 			const { textStream } = streamText({
 				model: rpc.connection.state.openai("gpt-4o"),
 				system: SYSTEM_PROMPT,
 				messages: this._state.messages,
-				prompt,
 				maxSteps: 5,
+				maxTokens: 16_000,
 				tools: {
 					updateItemsInCart: tool({
 						description:
@@ -145,6 +182,15 @@ export default class ShopperAgent extends Actor<State, ConnParams, ConnState> {
 									z.object({
 										slug: z
 											.string()
+											.refine(
+												(slug) =>
+													getCatalogItemBySlug(
+														slug,
+													) !== undefined,
+												(slug) => ({
+													message: `Invalid catalog item: ${slug}`,
+												}),
+											)
 											.describe(
 												"The slug of the item to update in the cart",
 											),
@@ -179,31 +225,80 @@ export default class ShopperAgent extends Actor<State, ConnParams, ConnState> {
 							return `Current shopping cart: ${JSON.stringify(cart)}`;
 						},
 					}),
-					getCatalog: tool({
-						description: "Get the catalog of items",
-						parameters: z.object({}),
-						execute: async () => {
-							return `Catalog: ${JSON.stringify(this.getCatalog(rpc))}`;
+					searchCatalog: tool({
+						description: "Search the catalog of items using tags",
+						parameters: z.object({
+							tags: z
+								.array(z.string())
+								.describe(
+									"Array of tags to search for in the catalog",
+								),
+						}),
+						execute: async ({ tags }) => {
+							const results = await this.searchCatalog(rpc, tags);
+							return `Search results for tags [${tags.join(", ")}]: ${JSON.stringify(results)}`;
 						},
 					}),
+					getCatalogItems: tool({
+						description:
+							"Look up specific catalog items by their slugs",
+						parameters: z.object({
+							slugs: z
+								.array(z.string())
+								.describe("Array of item slugs to look up"),
+						}),
+						execute: async ({ slugs }) => {
+							const items = slugs
+								.map((slug) => getCatalogItemBySlug(slug))
+								.filter(
+									(item): item is CatalogItem =>
+										item !== undefined,
+								);
+							return `Items found: ${JSON.stringify(items)}`;
+						},
+					}),
+				},
+				onStepFinish: ({
+					text,
+					stepType,
+					finishReason,
+					toolCalls,
+					toolResults,
+				}) => {
+					this._log.info("prompt step finish", {
+						text,
+						stepType,
+						finishReason,
+						toolCalls: toolCalls.map(({ toolName, args }) => ({
+							name: toolName,
+							args,
+						})),
+						toolResults,
+					});
 				},
 				onFinish: ({ text }) => {
 					// Save response
 					this._state.messages.push({
-						role: "user",
-						content: prompt,
-					});
-					this._state.messages.push({
 						role: "system",
 						content: text,
+					});
+
+					const elapsed = performance.now() - startTime;
+					this._log.info("prompt finish", {
+						text,
+						elapsed: (elapsed / 1000).toFixed(3),
 					});
 				},
 			});
 
 			// Stream response
+			let fullText = "";
 			for await (const textPart of textStream) {
+				fullText += textPart;
 				this._broadcast("textPart", textPart);
 			}
+
+			return fullText;
 		} catch (error) {
 			this._log.error("error generating response", { error });
 			throw new UserError("Error while generating response.", {

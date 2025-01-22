@@ -1,0 +1,362 @@
+{
+  "version": "4",
+  "specifiers": {
+    "jsr:@std/assert@^1.0.8": "1.0.10",
+    "jsr:@std/internal@^1.0.5": "1.0.5"
+  },
+  "jsr": {
+    "@std/assert@1.0.10": {
+      "integrity": "59b5cbac5bd55459a19045d95cc7c2ff787b4f8527c0dd195078ff6f9481fbb3",
+      "dependencies": [
+        "jsr:@std/internal"
+      ]
+    },
+    "@std/internal@1.0.5": {
+      "integrity": "54a546004f769c1ac9e025abd15a76b6671ddc9687e2313b67376125650dc7ba"
+    }
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:@biomejs/biome@^1.9.4",
+        "npm:lefthook@^1.6.12",
+        "npm:turbo@^2.0.1"
+      ]
+    },
+    "members": {
+      "examples/javascript/ai-agent-shopper": {
+        "dependencies": [
+          "jsr:@core/asyncutil@^1.2.0",
+          "jsr:@cross/env@^1.0.2",
+          "jsr:@hono/hono@^4.6.12",
+          "jsr:@std/assert@^1.0.8",
+          "jsr:@std/async@^1.0.9",
+          "jsr:@std/cbor@~0.1.3",
+          "jsr:@std/log@~0.224.11",
+          "npm:@ai-sdk/openai@^1.0.16",
+          "npm:@rivet-gg/api@0.0.1-rc.5",
+          "npm:ai@^4.1.0",
+          "npm:on-change@^5.0.1",
+          "npm:zod@3.24.1"
+        ],
+        "packageJson": {
+          "dependencies": [
+            "npm:@ai-sdk/openai@^1.1.0",
+            "npm:@clack/prompts@~0.9.1",
+            "npm:@jsr/std__assert@^1.0.10",
+            "npm:ai@^4.1.0",
+            "npm:zod@^3.24.1"
+          ]
+        }
+      },
+      "frontend/apps/hub": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@date-fns/utc@^1.2.0",
+            "npm:@fortawesome/fontawesome-svg-core@^6.5.2",
+            "npm:@fortawesome/free-brands-svg-icons@^6.5.2",
+            "npm:@fortawesome/free-solid-svg-icons@^6.5.2",
+            "npm:@fortawesome/react-fontawesome@~0.2.2",
+            "npm:@hookform/resolvers@^3.3.4",
+            "npm:@sentry/react@^8.26.0",
+            "npm:@sentry/vite-plugin@^2.22.2",
+            "npm:@shikijs/transformers@^1.24.2",
+            "npm:@tanstack/query-broadcast-client-experimental@^5.56.2",
+            "npm:@tanstack/query-sync-storage-persister@^5.56.2",
+            "npm:@tanstack/react-query-devtools@^5.58.0",
+            "npm:@tanstack/react-query-persist-client@^5.56.2",
+            "npm:@tanstack/react-query@^5.56.2",
+            "npm:@tanstack/react-router@^1.81.5",
+            "npm:@tanstack/router-devtools@^1.81.5",
+            "npm:@tanstack/router-vite-plugin@^1.58.12",
+            "npm:@tanstack/router-zod-adapter@^1.81.5",
+            "npm:@types/bcryptjs@^2.4.6",
+            "npm:@types/file-saver@2",
+            "npm:@types/filesize@^5.0.2",
+            "npm:@types/lodash@^4.17.14",
+            "npm:@types/mime@4",
+            "npm:@types/node@^20.11.30",
+            "npm:@types/react-dom@^18.2.22",
+            "npm:@types/react@^18.2.66",
+            "npm:@vitejs/plugin-react@^4.2.1",
+            "npm:autoprefixer@^10.4.19",
+            "npm:bcryptjs@^2.4.3",
+            "npm:file-saver@^2.0.5",
+            "npm:framer-motion@^11.2.11",
+            "npm:lodash@^4.17.21",
+            "npm:postcss@^8.4.38",
+            "npm:posthog-js@^1.144.2",
+            "npm:react-dom@*",
+            "npm:react-hook-form@^7.51.1",
+            "npm:react-konami-code@^2.3.0",
+            "npm:react-turnstile@^1.1.3",
+            "npm:react@*",
+            "npm:recharts@^2.12.7",
+            "npm:shiki@^1.24.2",
+            "npm:superjson@^2.2.1",
+            "npm:tailwind-merge@^2.2.2",
+            "npm:tailwindcss-animate@^1.0.7",
+            "npm:tailwindcss@^3.4.1",
+            "npm:turnstile-types@^1.2.1",
+            "npm:typescript@^5.5.4",
+            "npm:usehooks-ts@^3.1.0",
+            "npm:vite-plugin-favicons-inject@^2.2.0",
+            "npm:vite@^5.2.0",
+            "npm:zod@^3.24.0"
+          ]
+        }
+      },
+      "frontend/packages/components": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@codemirror/lang-javascript@^6.2.2",
+            "npm:@codemirror/lang-json@^6.0.1",
+            "npm:@codemirror/view@^6.28.4",
+            "npm:@fortawesome/fontawesome-svg-core@^6.5.2",
+            "npm:@fortawesome/free-brands-svg-icons@^6.5.2",
+            "npm:@fortawesome/free-solid-svg-icons@^6.5.2",
+            "npm:@fortawesome/react-fontawesome@~0.2.2",
+            "npm:@hookform/resolvers@^3.9.0",
+            "npm:@radix-ui/react-accordion@^1.1.2",
+            "npm:@radix-ui/react-avatar@^1.0.4",
+            "npm:@radix-ui/react-checkbox@^1.1.1",
+            "npm:@radix-ui/react-dialog@^1.1.1",
+            "npm:@radix-ui/react-dropdown-menu@^2.0.6",
+            "npm:@radix-ui/react-label@^2.0.2",
+            "npm:@radix-ui/react-popover@^1.0.7",
+            "npm:@radix-ui/react-progress@^1.0.3",
+            "npm:@radix-ui/react-radio-group@^1.0.3",
+            "npm:@radix-ui/react-scroll-area@^1.0.5",
+            "npm:@radix-ui/react-select@2",
+            "npm:@radix-ui/react-separator@^1.0.3",
+            "npm:@radix-ui/react-slider@^1.1.2",
+            "npm:@radix-ui/react-slot@^1.0.2",
+            "npm:@radix-ui/react-switch@^1.0.3",
+            "npm:@radix-ui/react-tabs@^1.0.4",
+            "npm:@radix-ui/react-toggle@^1.0.3",
+            "npm:@radix-ui/react-tooltip@^1.1.1",
+            "npm:@radix-ui/react-visually-hidden@^1.0.3",
+            "npm:@tailwindcss/container-queries@~0.1.1",
+            "npm:@tanstack/react-virtual@^3.10.8",
+            "npm:@types/mime@4",
+            "npm:@types/node@^20.11.30",
+            "npm:@types/react-dom@^18.2.22",
+            "npm:@types/react@^18.2.66",
+            "npm:@uiw/codemirror-extensions-basic-setup@^4.23.0",
+            "npm:@uiw/codemirror-theme-github@^4.23.0",
+            "npm:@uiw/react-codemirror@^4.23.0",
+            "npm:@vitejs/plugin-react@^4.2.1",
+            "npm:autoprefixer@^10.4.19",
+            "npm:class-variance-authority@0.7",
+            "npm:clsx@^2.1.0",
+            "npm:cmdk@1",
+            "npm:date-fns@^3.6.0",
+            "npm:framer-motion@^11.2.11",
+            "npm:input-otp@^1.2.3",
+            "npm:lucide-react@0.439",
+            "npm:postcss@^8.4.38",
+            "npm:react-day-picker@^9.0.9",
+            "npm:react-dom@19",
+            "npm:react-hook-form@^7.51.1",
+            "npm:react-resizable-panels@^2.0.19",
+            "npm:react@19",
+            "npm:recharts@^2.12.7",
+            "npm:sonner@^1.4.41",
+            "npm:tailwind-merge@^2.2.2",
+            "npm:tailwindcss-animate@^1.0.7",
+            "npm:tailwindcss@^3.4.1",
+            "npm:typescript@^5.5.4",
+            "npm:usehooks-ts@^3.1.0",
+            "npm:vite-plugin-dts@^3.8.1",
+            "npm:vite@^5.2.0",
+            "npm:zod@^3.24.0"
+          ]
+        }
+      },
+      "frontend/packages/icons": {
+        "packageJson": {
+          "dependencies": [
+            "npm:dedent@^1.5.3",
+            "npm:local-pkg@0.5",
+            "npm:vite@^5.2.0"
+          ]
+        }
+      },
+      "packages/toolchain/js-utils-embed/js": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@jsr/std__cli@^1.0.5",
+            "npm:@jsr/std__fmt@^1.0.1",
+            "npm:@jsr/std__fs@0.213",
+            "npm:@jsr/std__path@0.213",
+            "npm:dedent@^1.5.3",
+            "npm:glob@11",
+            "npm:ts-node@^10.9.2",
+            "npm:typescript@^5.7.3",
+            "npm:unenv@^1.10.0",
+            "npm:zod-validation-error@^3.3.1",
+            "npm:zod@^3.24.1"
+          ]
+        }
+      },
+      "sdks/actor/client": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@jsr/std__assert@^1.0.10",
+            "npm:@jsr/std__cbor@~0.1.4",
+            "npm:@kentcdodds/tmp-react-server-dom-esm@^19.0.1",
+            "npm:@types/react@^19.0.4",
+            "npm:tsup@^8.3.5",
+            "npm:typescript@^5.7.3",
+            "npm:zod@^3.24.1"
+          ]
+        }
+      },
+      "sdks/actor/common": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@jsr/std__log@~0.224.12",
+            "npm:tsup@^8.3.5",
+            "npm:typescript@^5.7.3",
+            "npm:zod@^3.24.1"
+          ]
+        }
+      },
+      "sdks/actor/core": {
+        "packageJson": {
+          "dependencies": [
+            "npm:tsup@^8.3.5",
+            "npm:typescript@^5.7.3",
+            "npm:zod@^3.24.1"
+          ]
+        }
+      },
+      "sdks/actor/manager": {
+        "packageJson": {
+          "dependencies": [
+            "npm:hono@^4.6.17",
+            "npm:ts-dedent@^2.2.0"
+          ]
+        }
+      },
+      "sdks/actor/manager-protocol": {
+        "packageJson": {
+          "dependencies": [
+            "npm:tsup@^8.3.5",
+            "npm:typescript@^5.7.3",
+            "npm:zod@^3.24.1"
+          ]
+        }
+      },
+      "sdks/actor/protocol": {
+        "packageJson": {
+          "dependencies": [
+            "npm:tsup@^8.3.5",
+            "npm:typescript@^5.7.3",
+            "npm:zod@^3.24.1"
+          ]
+        }
+      },
+      "sdks/actor/runtime": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@jogit/tmp-react-server-dom-nodeless@^19.0.1",
+            "npm:@jsr/core__asyncutil@^1.2.0",
+            "npm:@jsr/std__assert@^1.0.10",
+            "npm:@jsr/std__async@^1.0.9",
+            "npm:@jsr/std__cbor@~0.1.4",
+            "npm:@jsr/std__log@~0.224.12",
+            "npm:@types/deno@2",
+            "npm:get-stream@^9.0.1",
+            "npm:hono@^4.6.16",
+            "npm:on-change@^5.0.1",
+            "npm:react@19",
+            "npm:tsup@^8.3.5",
+            "npm:typescript@^5.7.3",
+            "npm:zod@^3.24.1"
+          ]
+        }
+      },
+      "site": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@fortawesome/fontawesome-svg-core@^6.5.2",
+            "npm:@fortawesome/free-brands-svg-icons@^6.5.2",
+            "npm:@fortawesome/free-solid-svg-icons@^6.5.2",
+            "npm:@fortawesome/react-fontawesome@~0.2.2",
+            "npm:@headlessui/react@^1.7.13",
+            "npm:@heroicons/react@^2.0.18",
+            "npm:@inquirer/prompts@^6.0.1",
+            "npm:@mdx-js/loader@^2.1.5",
+            "npm:@mdx-js/react@^2.1.5",
+            "npm:@next/mdx@^14.0.1",
+            "npm:@next/third-parties@latest",
+            "npm:@rivet-gg/api@^0.0.1-rc19",
+            "npm:@shikijs/transformers@^1.17.6",
+            "npm:@sindresorhus/slugify@^2.1.1",
+            "npm:@tailwindcss/forms@~0.5.3",
+            "npm:@tailwindcss/typography@~0.5.8",
+            "npm:@types/escape-html@1",
+            "npm:@types/json-schema@^7.0.15",
+            "npm:acorn@^8.8.1",
+            "npm:autoprefixer@^10.4.7",
+            "npm:axios@^1.5.0",
+            "npm:chart.js@^4.4.2",
+            "npm:chartjs-adapter-date-fns@3",
+            "npm:clsx@^2.1.0",
+            "npm:csv-parser@3",
+            "npm:date-fns@^3.6.0",
+            "npm:dedent@^1.5.3",
+            "npm:esast-util-from-js@^2.0.1",
+            "npm:escape-html@^1.0.3",
+            "npm:eslint-config-next@13.0.2",
+            "npm:eslint@8.26.0",
+            "npm:estree-util-to-js@2",
+            "npm:fast-glob@^3.2.12",
+            "npm:feed@^4.2.2",
+            "npm:file-loader@^6.2.0",
+            "npm:flexsearch@~0.7.31",
+            "npm:focus-visible@^5.2.0",
+            "npm:framer-motion@*",
+            "npm:mdast-util-to-string@^3.2.0",
+            "npm:mdx-annotations@~0.1.1",
+            "npm:next-router-mock@~0.9.7",
+            "npm:next@15",
+            "npm:postcss-focus-visible@^6.0.4",
+            "npm:postcss@^8.4.24",
+            "npm:posthog-js@^1.206.0",
+            "npm:prettier-plugin-tailwindcss@0.3",
+            "npm:prettier@^2.8.8",
+            "npm:react-chartjs-2@^5.2.0",
+            "npm:react-github-btn@^1.4.0",
+            "npm:react-highlight-words@0.20",
+            "npm:react-markdown@^9.0.1",
+            "npm:react@*",
+            "npm:recma-nextjs-static-props@1",
+            "npm:rehype-mdx-title@2",
+            "npm:rehype-parse@^8.0.4",
+            "npm:rehype-remark@^9.1.2",
+            "npm:remark-gfm@^3.0.1",
+            "npm:remark-mdx@^2.3.0",
+            "npm:remark-stringify@^10.0.3",
+            "npm:remark@^14.0.2",
+            "npm:sharp@~0.32.1",
+            "npm:shiki@1",
+            "npm:simple-functional-loader@^1.2.1",
+            "npm:socket.io-client@^4.7.1",
+            "npm:socket.io@^4.7.1",
+            "npm:tailwindcss@^3.3.0",
+            "npm:typescript@^5.1.6",
+            "npm:unframer@2.8.0",
+            "npm:unified@^10.1.2",
+            "npm:unist-util-filter@^4.0.1",
+            "npm:unist-util-visit@^4.1.1",
+            "npm:vite-node@^2.1.1",
+            "npm:yaml@^2.3.1",
+            "npm:zustand@^4.3.2"
+          ]
+        }
+      }
+    }
+  }
+}

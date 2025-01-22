@@ -20,15 +20,16 @@ pub async fn deploy(
 	task: task::TaskCtx,
 	opts: DeployOpts,
 ) -> Result<DeployOutput> {
-	// Get source
-	let manager_src_path = rivet_actors_sdk_embed::src_path(&paths::data_dir()?).await?;
-
 	let tags = HashMap::from([
 		("name".to_string(), "manager".to_string()),
 		("owner".to_string(), "rivet".to_string()),
 	]);
 
 	// Deploy manager
+	let manager_script_path = rivet_actors_sdk_embed::dist_path(&paths::data_dir()?)
+		.await?
+		.join("manager")
+		.join("index.js");
 	let build_id = super::js::build_and_upload(
 		ctx,
 		task.clone(),
@@ -36,19 +37,11 @@ pub async fn deploy(
 			env: opts.env.clone(),
 			tags: tags.clone(),
 			build_config: config::build::javascript::Build {
-				script: manager_src_path
-					.join("manager")
-					.join("src")
-					.join("mod.ts")
-					.display()
-					.to_string(),
-				bundler: Some(config::build::javascript::Bundler::Deno),
-				deno: config::build::javascript::Deno {
-					config_path: None,
-					import_map_url: None,
-					lock_path: Some(manager_src_path.join("deno.lock").display().to_string()),
+				script: manager_script_path.display().to_string(),
+				unstable: config::build::javascript::Unstable {
+					no_bundler: Some(true),
+					..opts.manager_config.js_unstable.clone()
 				},
-				unstable: opts.manager_config.js_unstable.clone(),
 			},
 		},
 	)

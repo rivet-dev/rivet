@@ -6,7 +6,9 @@
 		"frontend/apps/*",
 		"frontend/packages/*",
 		"site",
-		"sdks/actor/*"
+		"sdks/actor/*",
+		"packages/toolchain/js-utils-embed/js",
+		"examples/javascript/*"
 	],
 	"scripts": {
 		"start": "npx turbo dev",

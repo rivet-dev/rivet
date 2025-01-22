@@ -1,0 +1,11 @@
+{
+	"name": "counter",
+	"version": "1.0.0",
+	"private": true,
+	"dependencies": {
+		"@rivet-gg/actor": "workspace:*"
+	},
+	"devDependencies": {
+		"@rivet-gg/actor-client": "workspace:*"
+	}
+}

@@ -8,32 +8,8 @@ use super::Compression;
 #[serde(rename_all = "snake_case")]
 pub struct Build {
 	pub script: String,
-	pub bundler: Option<Bundler>,
-	#[serde(default)]
-	pub deno: Deno,
 	#[serde(default)]
 	pub unstable: Unstable,
-}
-
-impl Build {
-	pub fn bundler(&self) -> Bundler {
-		self.bundler.unwrap_or(Bundler::Deno)
-	}
-}
-
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum Bundler {
-	Deno,
-	None,
-}
-
-#[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct Deno {
-	pub config_path: Option<String>,
-	pub import_map_url: Option<String>,
-	pub lock_path: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -44,6 +20,7 @@ pub struct Unstable {
 	pub esbuild_log_level: Option<String>,
 	pub compression: Option<Compression>,
 	pub dump_build: Option<bool>,
+	pub no_bundler: Option<bool>,
 }
 
 impl Unstable {
@@ -68,5 +45,9 @@ impl Unstable {
 
 	pub fn dump_build(&self) -> bool {
 		self.dump_build.unwrap_or(false)
+	}
+
+	pub fn no_bundler(&self) -> bool {
+		self.no_bundler.unwrap_or(false)
 	}
 }

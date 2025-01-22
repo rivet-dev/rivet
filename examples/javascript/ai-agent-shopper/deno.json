@@ -19,13 +19,11 @@
 		"@rivet-gg/actor-common/utils": "../../../sdks/actor/common/src/utils.ts",
 		"@rivet-gg/actor-common/reflect": "../../../sdks/actor/common/src/reflect.ts",
 		"@rivet-gg/actor-common/log": "../../../sdks/actor/common/src/log.ts",
-		"@rivet-gg/actor-common/network": "../../../sdks/actor/common/src/network.ts",
 		"@rivet-gg/actor-client": "../../../sdks/actor/client/src/mod.ts",
 		"@rivet-gg/actor-client/test": "../../../sdks/actor/client/src/test.ts",
 		"on-change": "npm:on-change@^5.0.1",
 		"zod": "npm:zod@3.24.1",
-		"@rivet-gg/manager-protocol": "../../../sdks/actor/manager-protocol/src/mod.ts",
-		"@rivet-gg/manager-protocol/query": "../../../sdks/actor/manager-protocol/src/query.ts"
+		"@rivet-gg/manager-protocol/query": "../../../sdks/manager/protocol/src/query.ts"
 	},
 	"fmt": {
 		"useTabs": true

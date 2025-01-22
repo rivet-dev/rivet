@@ -1,0 +1,27 @@
+{
+    "name": "@rivet-gg/js-utils-embed",
+    "version": "0.0.0",
+    "private": true,
+    "dependencies": {
+        "@std/cli": "npm:@jsr/std__cli@^1.0.5",
+        "@std/fmt": "npm:@jsr/std__fmt@^1.0.1",
+        "@std/fs": "npm:@jsr/std__fs@0.213",
+        "@std/path": "npm:@jsr/std__path@0.213",
+        "dedent": "^1.5.3",
+        "glob": "^11.0.0",
+        "unenv": "^1.10.0",
+        "zod": "^3.24.1",
+        "zod-validation-error": "^3.3.1"
+    },
+    "type": "module",
+    "engines": {
+        "node": ">=18"
+    },
+    "scripts": {
+        "build": "deno run -A build.ts"
+    },
+    "devDependencies": {
+        "ts-node": "^10.9.2",
+        "typescript": "^5.7.3"
+    }
+}

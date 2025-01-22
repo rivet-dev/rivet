@@ -1,0 +1,14 @@
+{
+	"compilerOptions": {
+		"target": "esnext",
+		"module": "ESNext",
+		"strict": true,
+		"skipLibCheck": true,
+		"esModuleInterop": true,
+		"stripInternal": true,
+		"moduleResolution": "bundler",
+		"types": ["node"],
+		"lib": ["ESNext", "DOM"]
+	},
+	"include": ["**/*.ts"]
+}

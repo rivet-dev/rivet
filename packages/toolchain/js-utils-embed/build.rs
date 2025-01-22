@@ -15,6 +15,7 @@ async fn main() -> Result<()> {
 
 	// Copy js-utils directory to out_dir
 	let out_js_utils_path = out_dir.join("js-utils");
+	let out_js_utils_path_dist = out_js_utils_path.join("dist");
 
 	// Remove old dir
 	if out_js_utils_path.is_dir() {
@@ -39,8 +40,9 @@ async fn main() -> Result<()> {
 	// Prepare the directory for `include_dir!`
 	let status = Command::new(&deno_exec.executable_path)
 		.env("DENO_NO_UPDATE_CHECK", "1")
-		.arg("task")
-		.arg("prepare")
+		.arg("run")
+		.arg("-A")
+		.arg("build.ts")
 		// Deno runs out of memory on Windows
 		.env(
 			"DENO_V8_FLAGS",
@@ -49,7 +51,7 @@ async fn main() -> Result<()> {
 		.current_dir(&out_js_utils_path)
 		.status()?;
 	if !status.success() {
-		panic!("cache dependencies failed");
+		panic!("build js utils");
 	}
 
 	// TODO: This doesn't work
@@ -59,12 +61,12 @@ async fn main() -> Result<()> {
 
 	println!("cargo:rerun-if-changed={}", js_utils_path.display());
 	println!(
-		"cargo:rustc-env=JS_UTILS_PATH={}",
-		out_js_utils_path.display()
+		"cargo:rustc-env=JS_UTILS_DIST_PATH={}",
+		out_js_utils_path_dist.display()
 	);
 	println!(
-		"cargo:rustc-env=JS_UTILS_HASH={}",
-		hash_directory(&out_js_utils_path)?
+		"cargo:rustc-env=JS_UTILS_DIST_HASH={}",
+		hash_directory(&out_js_utils_path_dist)?
 	);
 
 	Ok(())
@@ -82,56 +84,3 @@ fn hash_directory<P: AsRef<Path>>(path: P) -> Result<String> {
 		.join("");
 	Ok(hash)
 }
-
-// fn strip_cross_platform(path: &Path) -> Result<()> {
-// 	// Remove directories starting with "@esbuild+"
-// 	let esbuild_path = path.join("node_modules").join(".deno");
-// 	let output = Command::new("find")
-// 		.arg(&esbuild_path)
-// 		.arg("-type")
-// 		.arg("d")
-// 		.arg("-name")
-// 		.arg("@esbuild+*")
-// 		.arg("-exec")
-// 		.arg("rm")
-// 		.arg("-rf")
-// 		.arg("{}")
-// 		.arg("+")
-// 		.output()
-// 		.context("Failed to execute 'find' command to remove @esbuild+ directories")?;
-//
-// 	if !output.status.success() {
-// 		return Err(anyhow!(
-// 			"Failed to remove @esbuild+ directories. Path: {}, Status: {}, Stdout: {}, Stderr: {}",
-// 			esbuild_path.display(),
-// 			output.status,
-// 			String::from_utf8_lossy(&output.stdout),
-// 			String::from_utf8_lossy(&output.stderr)
-// 		));
-// 	}
-//
-// 	// Remove broken symlinks
-// 	let output = Command::new("find")
-// 		.arg(path)
-// 		.arg("-type")
-// 		.arg("l")
-// 		.arg("-exec")
-// 		.arg("sh")
-// 		.arg("-c")
-// 		.arg("for x; do [ -e \"$x\" ] || rm \"$x\"; done")
-// 		.arg("{}")
-// 		.arg("+")
-// 		.output()
-// 		.context("Failed to execute 'find' command to remove broken symlinks")?;
-//
-// 	if !output.status.success() {
-// 		return Err(anyhow!(
-// 			"Failed to remove broken symlinks. Status: {}, Stdout: {}, Stderr: {}",
-// 			output.status,
-// 			String::from_utf8_lossy(&output.stdout),
-// 			String::from_utf8_lossy(&output.stderr)
-// 		));
-// 	}
-//
-// 	Ok(())
-// }

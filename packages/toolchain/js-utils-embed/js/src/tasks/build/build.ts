@@ -1,56 +1,27 @@
 import { resolve } from "@std/path";
-import { exists } from "@std/fs";
-import { denoPlugins } from "@luca/esbuild-deno-loader";
 import * as esbuild from "esbuild";
 import { Input, Output } from "./mod.ts";
+import { nodePolyfill } from "./node_polyfill.ts";
+import { runPackageManagerCommand } from "./package_manager.ts";
 
 export async function build(input: Input): Promise<Output> {
+	console.log("Installing dependencies...");
+	await runPackageManagerCommand("install");
+
 	let outfile = resolve(input.outDir, "index.js");
+	console.log(`Building to output file: ${outfile}`);
+
 	const result = await esbuild.build({
 		entryPoints: [input.entryPoint],
 		outfile,
 		format: "esm",
 		sourcemap: true,
-		plugins: [
-			// Bundle Deno dependencies
-			...denoPlugins({
-				loader: "native",
-				configPath: input.deno.configPath,
-				importMapURL: input.deno.importMapUrl,
-				lockPath: input.deno.lockPath,
-			}),
-
-			// HACK: esbuild-deno-loader does not play nice with
-			// Windows paths, so we manually resolve any paths that
-			// start with a Windows path separator (\) and resolve
-			// them to the full path.
-			{
-				name: "fix-windows-paths",
-				setup(build: esbuild.PluginBuild) {
-					build.onResolve({ filter: /^\\.*/ }, (args) => {
-						const resolvedPath = resolve(args.resolveDir, args.path);
-						if (!exists(resolvedPath, { isFile: true })) {
-							return {
-								errors: [{ text: `File could not be resolved: ${resolvedPath}` }],
-							};
-						}
-
-						return {
-							path: resolve(args.resolveDir, args.path),
-						};
-					});
-				},
-			} satisfies esbuild.Plugin,
-		],
-		define: {
-			// HACK: Disable `process.domain` in order to correctly handle this edge case:
-			// https://github.com/brianc/node-postgres/blob/50c06f9bc6ff2ca1e8d7b7268b9af54ce49d72c1/packages/pg/lib/native/query.js#L126
-			"process.domain": "undefined",
-		},
+		platform: "browser",
+		// Helpful for traces & for RPCs when minified.
+		keepNames: true,
+		//plugins: [nodelessPlugin],
+		plugins: [nodePolyfill()],
 		external: [
-			// Provided by Deno
-			"node:*",
-
 			// Wasm must be loaded as a separate file manually, cannot be bundled
 			"*.wasm",
 			"*.wasm?module",
@@ -58,16 +29,28 @@ export async function build(input: Input): Promise<Output> {
 		bundle: true,
 		minify: input.bundle.minify,
 
+		// Added new configurations
+		target: ["es2020"],
+		treeShaking: true,
+		resolveExtensions: [".js", ".jsx", ".ts", ".tsx", ".json"],
+		define: {
+			"process.env.NODE_ENV": '"production"',
+		},
+
 		// TODO: Remove any
 		logLevel: input.bundle.logLevel as any,
 		metafile: input.bundle.analyzeResult,
 	});
+	console.log("Build completed successfully");
 
-	let analyzedMetafile = undefined;
+	let analyzedMetafile: string | undefined = undefined;
 	if (result.metafile) {
+		console.log("Analyzing metafile...");
 		analyzedMetafile = await esbuild.analyzeMetafile(result.metafile);
+		console.log("Metafile analysis complete");
 	}
 
+	console.log("Build process finished");
 	return {
 		files: ["index.js"],
 		analyzedMetafile,

@@ -5,6 +5,7 @@
 	"dependencies": {
 		"@rivet-gg/actor-common": "workspace:*",
 		"@rivet-gg/manager-protocol": "workspace:*",
-		"hono": "^4.6.17"
+		"hono": "^4.6.17",
+		"ts-dedent": "^2.2.0"
 	}
 }

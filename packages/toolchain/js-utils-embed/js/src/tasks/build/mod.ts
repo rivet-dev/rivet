@@ -5,11 +5,6 @@ import { build } from "./build.ts";
 export const inputSchema = z.object({
 	entryPoint: z.string(),
 	outDir: z.string(),
-	deno: z.object({
-		configPath: z.string().optional(),
-		importMapUrl: z.string().optional(),
-		lockPath: z.string().optional(),
-	}),
 	bundle: z.object({
 		minify: z.boolean(),
 		analyzeResult: z.boolean(),
