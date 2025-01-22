@@ -1,12 +1,78 @@
-# Cloudflare
+# Cloudflare Durable Objects
 
-TODO:
+## Durable Objects
 
-- Open-source
-- Monitoring
-- Container support
-- Flexibility
-    - Networking
-    - Runtime
-- Run user code
-- Ease of use
+### Common Pain Points
+
+| Topic                                  | Cloudflare Durable Objects                                                                             | Rivet                                                                                                                                                                      |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Architecture                           | Independent, black box services (DO, Queues, R2)                                                       | Provide all features as Actors (e.g. Queue Actor, Pub/Sub Actor, etc.)                                                                                                     |
+| Metadata                               | Have to build a weird hack to inform DO about its metadata                                             | See [Metadata docs](https://rivet.gg/docs/metadata)                                                                                                                        |
+| Local dev & prod differences           | Wrangler frequently doesn't match prod                                                                 | When running local dev, you get a full Rivet cluster which is 1:1 the same behavior                                                                                        |
+| Number of DO per namespace             | Difficult to build a platform, will hit limits of Cloudflare for Platforms quickly                     | Provides flexible tagging system for builds with unlimited number of builds                                                                                                |
+| Random shutdowns                       | DO has no "draining" mechanism for DO, they kill your DO immediately                                   | Provides a 6h draining window for your actor to gracefully decide when to move                                                                                             |
+| TCP & UDP                              | Only supports WS                                                                                       | Supports TCP & UDP & WS                                                                                                                                                    |
+| Stubs                                  | Need a string to get a stub                                                                            | Similar pattern, but provides flexible tagging to "query" your actors                                                                                                      |
+| Limitations of isolates & WASM         | Can only run isolates & WASM with constrained memory                                                   | Allows you to run containers alongside isolates for intensive jobs & for non-JS workloads (e.g. Python)                                                                    |
+| Upgrading DO                           | Rolling out a session affinity system, TBD on effectiveness                                            | Full control over when to upgrade actors, see [actor.upgrade](https://rivet.gg/docs/api/actor/upgrade) and [actor.upgradeAll](https://rivet.gg/docs/api/actor/upgrade-all) |
+| Running multiple workers with Wrangler | Requires tmux or something similar                                                                     | Monitoring is built in for dev & prod, making it easy to juggle complex setups                                                                                             |
+| Getting logs off of a DO               | Requires writing a custom protocol to return logs from requests or write directly to a logging service | Built-in                                                                                                                                                                   |
+| Cloudflare Workflows                   | Workflows get stuck in queue, no way to retry failed jobs                                              | N/A                                                                                                                                                                        |
+| Wrangler hard crash                    | Frequently crashes during development                                                                  | N/A                                                                                                                                                                        |
+| Room state                             | Have to build your own monitoring stack                                                                | Includes monitoring stack for logs, state, & connections                                                                                                                   |
+| Documentation                          | Pretty rough                                                                                           | Nothing gets shipped without the engineer writing docs on it                                                                                                               |
+| Logging                                | Complex to get logs shipping, depending on your configuration                                          | Logging included out of the box, currently no log shipping built in                                                                                                        |
+| Memory Limit                           | 128 MB memory limit for Workers                                                                        | TBD (currently 128 MB)                                                                                                                                                     |
+| SQLite Performance                     | Limits listed, but no performance implications discussed                                               | TBD (need benchmarks)                                                                                                                                                      |
+| Web Containers (NPM Support)           | Not mentioned                                                                                          | TBD (can likely support, but will evaluate recommending containers as an alternative)                                                                                      |
+| RPS                                    | _Unknown bottleneck_                                                                                   | TBD (need to benchmark)                                                                                                                                                    |
+| Billing API                            | No                                                                                                     | TBD (on roadmap)                                                                                                                                                           |
+| Python and Rust Support                | Via WASM                                                                                               | Via WASM or containers                                                                                                                                                     |
+
+## Limits
+
+### Durable Objects
+
+| Feature                           | Limit for class with key-value storage backend                                                    | Limit for class with SQLite storage backend                                                       |
+| --------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Number of Objects                 | Unlimited (within an account or of a given class)                                                 | Unlimited (within an account or of a given class)                                                 |
+| Maximum Durable Object namespaces | 500 (identical to the [script limit](https://developers.cloudflare.com/workers/platform/limits/)) | 500 (identical to the [script limit](https://developers.cloudflare.com/workers/platform/limits/)) |
+| Storage per account               | 50 GB (can be raised by contacting Cloudflare)                                                    | 50 GB (can be raised by contacting Cloudflare)                                                    |
+| Storage per class                 | Unlimited                                                                                         | Unlimited                                                                                         |
+| Storage per Durable Object        | Unlimited                                                                                         | 1 GB                                                                                              |
+| Key size                          | 2 KiB (2048 bytes)                                                                                | Key and value combined cannot exceed 2 MB                                                         |
+| Value size                        | 128 KiB (131072 bytes)                                                                            | Key and value combined cannot exceed 2 MB                                                         |
+| WebSocket message size            | 1 MiB (only for received messages)                                                                | 1 MiB (only for received messages)                                                                |
+| CPU per request                   | 30s (including WebSocket messages)                                                                | 30s (including WebSocket messages)                                                                |
+
+### SQLite with Durable Objects
+
+| SQL                                                  | Limit                                           |
+| ---------------------------------------------------- | ----------------------------------------------- |
+| Maximum number of columns per table                  | 100                                             |
+| Maximum number of rows per table                     | Unlimited (excluding per-object storage limits) |
+| Maximum string, BLOB or table row size               | 2 MB                                            |
+| Maximum SQL statement length                         | 100 KB                                          |
+| Maximum bound parameters per query                   | 100                                             |
+| Maximum arguments per SQL function                   | 32                                              |
+| Maximum characters (bytes) in a LIKE or GLOB pattern | 50 bytes                                        |
+
+### Workers
+
+| Limitation Type                   | Free Plan Limit                         | Paid Plan Limit                                                                            |
+| --------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Subrequests                       | 50/request                              | 1000/request                                                                               |
+| Simultaneous outgoing connections | 6                                       | 6                                                                                          |
+| Environment variables             | 64/Worker                               | 128/Worker                                                                                 |
+| Environment variable size         | 5 KB                                    | 5 KB                                                                                       |
+| Worker size                       | 3 MB                                    | 10 MB                                                                                      |
+| Worker startup time               | 400 ms                                  | 400 ms                                                                                     |
+| Number of Workers                 | 100                                     | 500                                                                                        |
+| Request                           | 100,000 requests/day, 1000 requests/min | No limit                                                                                   |
+| Worker memory                     | 128 MB                                  | 128 MB                                                                                     |
+| CPU time                          | 10 ms                                   | 30 s HTTP request, 15 min Cron Trigger                                                     |
+| Duration                          | No limit                                | No limit for Workers, 15 min for Cron Triggers, Durable Object Alarms, and Queue Consumers |
+| Cache API calls/request           | 50                                      | 1,000                                                                                      |
+| Maximum object size (Cache API)   | 512 MB                                  | 512 MB                                                                                     |
+| Simultaneous open connections     | 6                                       | 6                                                                                          |
+| Log size                          | 128 KB                                  | 128 KB                                                                                     |
