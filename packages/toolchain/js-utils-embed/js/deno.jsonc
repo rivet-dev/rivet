@@ -38,7 +38,7 @@
 		"@bartlomieju/postgres": "jsr:@bartlomieju/postgres@^0.17.2",
 		"@cross/dir": "jsr:@cross/dir@^1.1.0",
 		"@hono/hono": "jsr:@hono/hono@^4.6.3",
-		"@luca/esbuild-deno-loader": "jsr:@luca/esbuild-deno-loader@^0.11.1",
+		"@luca/esbuild-deno-loader": "jsr:@rivet-gg/esbuild-deno-loader@^0.10.3-fork.3",
 		"@std/assert": "jsr:@std/assert@0.213",
 		"@std/async": "jsr:@std/async@^1.0.4",
 		"@std/cli": "jsr:@std/cli@^1.0.5",

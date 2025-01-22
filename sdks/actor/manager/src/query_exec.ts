@@ -1,16 +1,20 @@
-import type { Rivet, RivetClient } from "@rivet-gg/api";
-import { assertEquals } from "@std/assert";
-import { PORT_NAME } from "../../common/src/network.ts";
-import { assertUnreachable } from "../../common/src/utils.ts";
+// @ts-types="../../common/dist/network.d.ts"
+import { PORT_NAME } from "@rivet-gg/actor-common/network";
+// @ts-types="../../common/dist/utils.d.ts"
+import { assertUnreachable } from "@rivet-gg/actor-common/utils";
+// @ts-types="../../common/dist/utils.d.ts"
 import type {
 	ActorTags,
 	BuildTags,
 	RivetEnvironment,
-} from "../../common/src/utils.ts";
+} from "@rivet-gg/actor-common/utils";
+import type { Rivet, RivetClient } from "@rivet-gg/api";
+// @ts-types="../../manager-protocol/dist/query.d.ts"
 import type {
 	ActorQuery,
 	CreateRequest,
-} from "../../manager-protocol/src/query.ts";
+} from "@rivet-gg/manager-protocol/query";
+import { assertEquals } from "@std/assert";
 import { logger } from "./log.ts";
 
 export async function queryActor(
