@@ -38,6 +38,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: "yarn"
+
+      - name: Install dependencies
+        run: yarn install
 
       - name: Setup
         env:
@@ -56,8 +60,8 @@ jobs:
           export PATH=$HOME/.deno/bin:$PATH
 
           # Authenticate NPM
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
-          echo "@rivet-gg:registry=https://registry.npmjs.org/" >> ~/.npmrc
+          yarn config set 'npmRegistries["//registry.npmjs.org"].npmAuthToken' ${{ secrets.NPM_TOKEN }}
+          yarn config set 'npmScopes["@rivet-gg"].npmPublishRegistry' https://registry.npmjs.org/
 
           if [ "${{ inputs.latest }}" = "true" ]; then
               ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --setup
