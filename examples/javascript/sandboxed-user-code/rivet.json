@@ -1,0 +1,8 @@
+{
+	"builds": {
+		"counter": {
+			"script": "counter.ts",
+			"access": "public"
+		}
+	}
+}

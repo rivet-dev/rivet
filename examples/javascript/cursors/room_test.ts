@@ -71,7 +71,7 @@ async function main() {
 	}
 
 	// Cleanup
-	roomActor.disconnect();
+	await roomActor.disconnect();
 }
 
 await main();

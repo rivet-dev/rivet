@@ -1,5 +1,6 @@
 import type { Rpc } from "@rivet-gg/actor";
 import { throttle } from "@std/async/unstable-throttle";
+import { chooseRandomColor } from "./utils.ts";
 
 const ENTITY_COUNT = 10;
 
@@ -80,6 +81,3 @@ export default class Room extends Actor<State, undefined, ConnState> {
 	}
 }
 
-function chooseRandomColor(): string {
-	return `hsl(${Math.floor(Math.random() * 360)}, 60%, 60%)`;
-}

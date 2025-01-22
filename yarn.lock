@@ -2978,6 +2978,10 @@ __metadata:
 "@rivet-gg/actor-manager@workspace:sdks/actor/manager":
   version: 0.0.0-use.local
   resolution: "@rivet-gg/actor-manager@workspace:sdks/actor/manager"
+  dependencies:
+    "@rivet-gg/actor-common": "workspace:*"
+    "@rivet-gg/manager-protocol": "workspace:*"
+    hono: "npm:^4.6.17"
   languageName: unknown
   linkType: soft
 
@@ -8152,6 +8156,13 @@ __metadata:
   version: 4.6.16
   resolution: "hono@npm:4.6.16"
   checksum: 10c0/3d7bf6e19dd2bf1fff38c92fb714da8ef501c90a54e0efd1e8e47fd9d386a88523b39002add8a71c2b8fd2c2f7107837a08ca31580778cba312575d6c72d6da2
+  languageName: node
+  linkType: hard
+
+"hono@npm:^4.6.17":
+  version: 4.6.17
+  resolution: "hono@npm:4.6.17"
+  checksum: 10c0/a951eb705841282c16a98ff0b45fb58d2325f945e839ec43c820c29dd380092382781a1fd4590d809a9a0ec9f4df6db738a06bf58c6ce2c279879374d070e2ab
   languageName: node
   linkType: hard
 

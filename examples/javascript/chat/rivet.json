@@ -1,0 +1,8 @@
+{
+	"builds": {
+		"chat_room": {
+			"script": "chat_room.ts",
+			"access": "public"
+		}
+	}
+}
