@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ActorQuerySchema } from "./query.ts";
+import { ActorQuerySchema } from "./query";
 
 export const ActorsRequestSchema = z.object({
 	query: ActorQuerySchema,

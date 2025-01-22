@@ -6,9 +6,9 @@ import type {
 	RivetConfigResponse,
 } from "@rivet-gg/manager-protocol";
 import type { CreateRequest } from "@rivet-gg/manager-protocol/query";
-import * as errors from "./errors.ts";
-import { ActorHandleRaw } from "./handle.ts";
-import { logger } from "./log.ts";
+import * as errors from "./errors";
+import { ActorHandleRaw } from "./handle";
+import { logger } from "./log";
 
 /**
  * Options for configuring the client.

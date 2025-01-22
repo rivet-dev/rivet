@@ -1,4 +1,4 @@
-export { Client } from "./client.ts";
+export { Client } from "./client";
 export type {
 	ActorHandle,
 	ActorRPCFunction,
@@ -8,8 +8,8 @@ export type {
 	GetWithIdOptions,
 	QueryOptions,
 	Region,
-} from "./client.ts";
-export { ActorHandleRaw } from "./handle.ts";
-export type { EventUnsubscribe } from "./handle.ts";
+} from "./client";
+export { ActorHandleRaw } from "./handle";
+export type { EventUnsubscribe } from "./handle";
 export type { ProtocolFormat } from "@rivet-gg/actor-protocol/ws";
 export type { CreateRequest } from "@rivet-gg/manager-protocol/query";

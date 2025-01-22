@@ -15,11 +15,10 @@ import {
 	type ActorsResponse,
 	type RivetConfigResponse,
 } from "@rivet-gg/manager-protocol";
-import { assertExists } from "@std/assert/exists";
 import { Hono, type Context as HonoContext } from "hono";
 import { cors } from "hono/cors";
-import { logger } from "./log.ts";
-import { queryActor } from "./query_exec.ts";
+import { logger } from "./log";
+import { queryActor } from "./query_exec";
 
 export default class Manager {
 	private readonly endpoint: string;
@@ -28,9 +27,9 @@ export default class Manager {
 
 	constructor(private readonly ctx: ActorContext) {
 		const endpoint = Deno.env.get("RIVET_API_ENDPOINT");
-		assertExists(endpoint, "missing RIVET_API_ENDPOINT");
+		if (!endpoint) throw new Error("missing RIVET_API_ENDPOINT");
 		const token = Deno.env.get("RIVET_SERVICE_TOKEN");
-		assertExists(token, "missing RIVET_SERVICE_TOKEN");
+		if (!token) throw new Error("missing RIVET_SERVICE_TOKEN");
 
 		this.endpoint = endpoint;
 
@@ -83,11 +82,11 @@ export default class Manager {
 
 			// Fetch port
 			const httpPort = actor.network.ports[PORT_NAME];
-			assertExists(httpPort, "missing port");
+			if (!httpPort) throw new Error("missing http port");
 			const hostname = httpPort.hostname;
-			assertExists(hostname);
+			if (!hostname) throw new Error("missing hostname");
 			const port = httpPort.port;
-			assertExists(port);
+			if (!port) throw new Error("missing port");
 
 			let isTls = false;
 			switch (httpPort.protocol) {

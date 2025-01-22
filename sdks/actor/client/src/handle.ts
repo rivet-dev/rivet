@@ -3,11 +3,10 @@ import { assertUnreachable } from "@rivet-gg/actor-common/utils";
 import type { ProtocolFormat } from "@rivet-gg/actor-protocol/ws";
 import type * as wsToClient from "@rivet-gg/actor-protocol/ws/to_client";
 import type * as wsToServer from "@rivet-gg/actor-protocol/ws/to_server";
-import { assertEquals } from "@std/assert";
-import * as cbor from "@std/cbor";
-import * as errors from "./errors.ts";
-import { logger } from "./log.ts";
-import { type WebSocketMessage, messageLength } from "./utils.ts";
+import * as cbor from "cbor-x";
+import * as errors from "./errors";
+import { logger } from "./log";
+import { type WebSocketMessage, messageLength } from "./utils";
 
 interface RpcInFlight {
 	resolve: (response: wsToClient.RpcResponseOk) => void;
@@ -107,7 +106,10 @@ export class ActorHandleRaw {
 		// TODO: Throw error if disconnect is called
 
 		const { i: responseId, o: output } = await resolvePromise;
-		assertEquals(responseId, requestId);
+		if (responseId !== requestId)
+			throw new Error(
+				`Request ID ${requestId} does not match response ID ${responseId}`,
+			);
 
 		return output as Response;
 	}
@@ -350,12 +352,10 @@ export class ActorHandleRaw {
 		}
 		if (this.protocolFormat === "cbor") {
 			if (data instanceof Blob) {
-				return cbor.decodeCbor(
-					new Uint8Array(await data.arrayBuffer()),
-				);
+				return cbor.decode(new Uint8Array(await data.arrayBuffer()));
 			}
 			if (data instanceof ArrayBuffer) {
-				return cbor.decodeCbor(new Uint8Array(data));
+				return cbor.decode(new Uint8Array(data));
 			}
 			throw new Error("received non-binary type for cbor parse");
 		}
@@ -367,7 +367,7 @@ export class ActorHandleRaw {
 			return JSON.stringify(value);
 		}
 		if (this.protocolFormat === "cbor") {
-			return cbor.encodeCbor(value as cbor.CborType);
+			return cbor.encode(value);
 		}
 		assertUnreachable(this.protocolFormat);
 	}

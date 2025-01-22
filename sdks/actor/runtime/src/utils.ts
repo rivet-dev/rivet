@@ -1,4 +1,4 @@
-import * as errors from "./errors.ts";
+import * as errors from "./errors";
 
 export function assertUnreachable(x: never): never {
 	throw new errors.Unreachable(x);
@@ -32,3 +32,44 @@ export const throttle = <
 		} else lastArgs = args;
 	};
 };
+
+export function deadline<T>(promise: Promise<T>, timeout: number): Promise<T> {
+	const controller = new AbortController();
+	const signal = controller.signal;
+
+	// Set a timeout to abort the operation
+	const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+	return Promise.race<T>([
+		promise,
+		new Promise<T>((_, reject) => {
+			signal.addEventListener("abort", () =>
+				reject(new Error("Operation timed out")),
+			);
+		}),
+	]).finally(() => {
+		clearTimeout(timeoutId);
+	});
+}
+
+export class Lock<T> {
+	private _locked = false;
+	private _waiting: Array<() => void> = [];
+
+	constructor(private _value: T) {}
+
+	async lock(fn: (value: T) => Promise<void>): Promise<void> {
+		if (this._locked) {
+			await new Promise<void>((resolve) => this._waiting.push(resolve));
+		}
+		this._locked = true;
+
+		try {
+			await fn(this._value);
+		} finally {
+			this._locked = false;
+			const next = this._waiting.shift();
+			if (next) next();
+		}
+	}
+}

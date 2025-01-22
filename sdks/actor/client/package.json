@@ -1,11 +1,7 @@
 {
 	"name": "@rivet-gg/actor-client",
-	"version": "24.6.2-rc.1",
-	"files": [
-		"src",
-		"dist",
-		"package.json"
-	],
+	"version": "0.0.3",
+	"files": ["src", "dist", "package.json"],
 	"type": "module",
 	"exports": {
 		".": {
@@ -49,8 +45,7 @@
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@std/assert": "npm:@jsr/std__assert@^1.0.10",
-		"@std/cbor": "npm:@jsr/std__cbor@^0.1.4",
+		"cbor-x": "^1.6.0",
 		"zod": "^3.24.1"
 	},
 	"optionalDependencies": {

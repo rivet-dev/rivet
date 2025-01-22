@@ -1,12 +1,11 @@
 import type { ProtocolFormat } from "@rivet-gg/actor-protocol/ws";
 import type * as wsToClient from "@rivet-gg/actor-protocol/ws/to_client";
-import { assertExists } from "@std/assert/exists";
-import * as cbor from "@std/cbor";
+import * as cbor from "cbor-x";
 import type { WSContext } from "hono/ws";
-import type { AnyActor, ExtractActorConnState } from "./actor.ts";
-import * as errors from "./errors.ts";
-import { logger } from "./log.ts";
-import { assertUnreachable } from "./utils.ts";
+import type { AnyActor, ExtractActorConnState } from "./actor";
+import * as errors from "./errors";
+import { logger } from "./log";
+import { assertUnreachable } from "./utils";
 
 export type IncomingWebSocketMessage = string | Blob | ArrayBufferLike;
 export type OutgoingWebSocketMessage = string | ArrayBuffer | Uint8Array;
@@ -52,7 +51,7 @@ export class Connection<A extends AnyActor> {
 	 */
 	public get state(): ExtractActorConnState<A> {
 		this.#validateStateEnabled();
-		assertExists(this.#state, "state should exist");
+		if (!this.#state) throw new Error("state should exists");
 		return this.#state;
 	}
 
@@ -117,10 +116,11 @@ export class Connection<A extends AnyActor> {
 		}
 		if (this._protocolFormat === "cbor") {
 			if (data instanceof Blob) {
-				return cbor.decodeCbor(await data.bytes());
+				const arrayBuffer = await data.arrayBuffer();
+				return cbor.decode(new Uint8Array(arrayBuffer));
 			}
 			if (data instanceof ArrayBuffer) {
-				return cbor.decodeCbor(new Uint8Array(data));
+				return cbor.decode(new Uint8Array(data));
 			}
 			logger().warn("received non-binary type for cbor parse");
 			throw new errors.MalformedMessage();
@@ -141,7 +141,7 @@ export class Connection<A extends AnyActor> {
 			return JSON.stringify(value);
 		}
 		if (this._protocolFormat === "cbor") {
-			return cbor.encodeCbor(value as cbor.CborType);
+			return cbor.encode(value);
 		}
 		assertUnreachable(this._protocolFormat);
 	}

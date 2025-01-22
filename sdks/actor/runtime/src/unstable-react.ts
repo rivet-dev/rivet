@@ -2,7 +2,7 @@
 import { renderToPipeableStream } from "@jogit/tmp-react-server-dom-nodeless";
 import getStream from "get-stream";
 import { isValidElement } from "react";
-import { Actor } from "./actor.ts";
+import { Actor } from "./actor";
 
 /**
  * A React Server Components (RSC) actor.

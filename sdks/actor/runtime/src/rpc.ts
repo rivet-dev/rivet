@@ -1,5 +1,5 @@
-import type { AnyActor } from "./actor.ts";
-import type { Connection } from "./connection.ts";
+import type { AnyActor } from "./actor";
+import type { Connection } from "./connection";
 
 /**
  * Context for an remote procedure call.

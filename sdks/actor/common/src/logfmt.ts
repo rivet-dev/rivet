@@ -1,15 +1,14 @@
-import { type LevelName, type LogLevel, LogLevels } from "@std/log";
+import { type LogLevel, LogLevels } from "./log";
 
 export type LogEntry = [string, LogValue];
 export type LogValue = string | number | boolean | null | undefined;
 
-const LOG_LEVEL_COLORS: Record<LogLevel, string> = {
+const LOG_LEVEL_COLORS: Record<number, string> = {
 	[LogLevels.CRITICAL]: "\x1b[31m", // Red
 	[LogLevels.ERROR]: "\x1b[31m", // Red
 	[LogLevels.WARN]: "\x1b[33m", // Yellow
 	[LogLevels.INFO]: "\x1b[32m", // Green
 	[LogLevels.DEBUG]: "\x1b[36m", // Cyan
-	[LogLevels.NOTSET]: "\x1b[35m", // Magenta
 };
 
 const RESET_COLOR = "\x1b[0m";
@@ -76,7 +75,7 @@ export function stringify(...data: LogEntry[]) {
 			// Special message colors
 			let color = "\x1b[2m";
 			if (key === "level") {
-				const level = LogLevels[valueString as LevelName];
+				const level = LogLevels[valueString as LogLevel];
 				const levelColor = LOG_LEVEL_COLORS[level];
 				if (levelColor) {
 					color = levelColor;

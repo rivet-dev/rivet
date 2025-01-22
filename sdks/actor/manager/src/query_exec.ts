@@ -14,8 +14,7 @@ import type {
 	ActorQuery,
 	CreateRequest,
 } from "@rivet-gg/manager-protocol/query";
-import { assertEquals } from "@std/assert";
-import { logger } from "./log.ts";
+import { logger } from "./log";
 
 export async function queryActor(
 	client: RivetClient,
@@ -89,11 +88,9 @@ async function getWithTags(
 	// TODO(RVT-4248): Don't return actors that aren't networkable yet
 	actors = actors.filter((a) => {
 		// This should never be triggered. This assertion will leak if private actors exist if it's ever triggered.
-		assertEquals(
-			(a.tags as ActorTags).access,
-			"public",
-			"unreachable: actor tags not public",
-		);
+		if ((a.tags as ActorTags).access !== "public") {
+			throw new Error("unreachable: actor tags not public");
+		}
 
 		for (const portName in a.network.ports) {
 			const port = a.network.ports[portName];

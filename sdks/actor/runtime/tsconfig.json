@@ -5,11 +5,10 @@
 		"strict": true,
 		"skipLibCheck": true,
 		"esModuleInterop": false,
-		"allowSyntheticDefaultImports": false,
+		"allowSyntheticDefaultImports": true,
 		"stripInternal": true,
-		"allowImportingTsExtensions": true,
 		"moduleResolution": "bundler",
-		"types": ["deno"],
+		"types": ["node", "deno"],
 		"lib": ["ESNext", "DOM"]
 	},
 	"include": ["src/**/*"]

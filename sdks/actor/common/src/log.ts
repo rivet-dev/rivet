@@ -1,39 +1,97 @@
-import * as log from "@std/log";
-//import { getEnv as crossGetEnv } from "@cross/env";
-import { type LogEntry, castToLogValue, stringify } from "./logfmt.ts";
+import { type LogEntry, castToLogValue, stringify } from "./logfmt";
 
-export function getLogger(name: string): log.Logger {
-	return log.getLogger(name);
+export type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR" | "CRITICAL";
+
+export const LogLevels: Record<LogLevel, LevelIndex> = {
+	DEBUG: 0,
+	INFO: 1,
+	WARN: 2,
+	ERROR: 3,
+	CRITICAL: 4,
+} as const;
+
+const LevelNameMap: Record<number, LogLevel> = {
+	0: "DEBUG",
+	1: "INFO",
+	2: "WARN",
+	3: "ERROR",
+	4: "CRITICAL",
+};
+
+export type LevelIndex = number;
+
+interface LogRecord {
+	args: unknown[];
+	datetime: Date;
+	level: number;
+	levelName: string;
+	loggerName: string;
+	msg: string;
 }
 
-export function setupLogging() {
-	const loggerConfig: log.LoggerConfig = {
-		level: (getEnv("LOG_LEVEL") as log.LevelName) ?? "INFO",
-		handlers: ["default"],
-	};
+export class Logger {
+	name: string;
+	level: LogLevel;
 
-	log.setup({
-		handlers: {
-			default: new log.ConsoleHandler("INFO", {
-				formatter,
-				useColors: false,
-			}),
-		},
-		// Enable logging for all actor SDKs
-		loggers: {
-			default: loggerConfig,
-			// client/src/log.ts
-			"actor-client": loggerConfig,
-			// manager/src/log.ts
-			"actor-manager": loggerConfig,
-			// runtime/src/log.ts
-			actor: loggerConfig,
-			"actor-runtime": loggerConfig,
-		},
-	});
+	constructor(name: string, level: LogLevel) {
+		this.name = name;
+		this.level = level;
+	}
+
+	log(level: LevelIndex, message: string, ...args: unknown[]): void {
+		const record: LogRecord = {
+			msg: message,
+			args,
+			level,
+			loggerName: this.name,
+			datetime: new Date(),
+			levelName: LevelNameMap[level],
+		};
+
+		if (this.#shouldLog(level)) {
+			this.#logRecord(record);
+		}
+	}
+
+	#shouldLog(level: LevelIndex): boolean {
+		return level >= LogLevels[this.level];
+	}
+
+	#logRecord(record: LogRecord): void {
+		console.log(formatter(record));
+	}
+
+	debug(message: string, ...args: unknown[]): void {
+		this.log(LogLevels.DEBUG, message, ...args);
+	}
+
+	info(message: string, ...args: unknown[]): void {
+		this.log(LogLevels.INFO, message, ...args);
+	}
+
+	warn(message: string, ...args: unknown[]): void {
+		this.log(LogLevels.WARN, message, ...args);
+	}
+
+	error(message: string, ...args: unknown[]): void {
+		this.log(LogLevels.ERROR, message, ...args);
+	}
+
+	critical(message: string, ...args: unknown[]): void {
+		this.log(LogLevels.CRITICAL, message, ...args);
+	}
 }
 
-function formatter(log: log.LogRecord): string {
+const loggers: Record<string, Logger> = {};
+
+export function getLogger(name = "default"): Logger {
+	if (!loggers[name]) {
+		loggers[name] = new Logger(name, "INFO");
+	}
+	return loggers[name];
+}
+
+function formatter(log: LogRecord): string {
 	const args: LogEntry[] = [];
 	for (let i = 0; i < log.args.length; i++) {
 		const logArg = log.args[i];
@@ -52,7 +110,7 @@ function formatter(log: log.LogRecord): string {
 
 	return stringify(
 		//["ts", formatTimestamp(log.datetime)],
-		["level", log.levelName],
+		["level", LevelNameMap[log.level]],
 		//["target", log.loggerName],
 		["msg", log.msg],
 		...args,
@@ -63,11 +121,15 @@ function pushArg(k: string, v: unknown, args: LogEntry[]) {
 	args.push([k, castToLogValue(v)]);
 }
 
-function getEnv(name: string): string | undefined {
-	if (typeof window !== "undefined" && window.localStorage) {
-		return window.localStorage.getItem(name) || undefined;
-	}
-	return undefined;
-	// TODO(ACTR-9): Add back env config once node compat layer works
-	//return crossGetEnv(name);
+// function getEnv(name: string): string | undefined {
+// 	if (typeof window !== "undefined" && window.localStorage) {
+// 		return window.localStorage.getItem(name) || undefined;
+// 	}
+// 	return undefined;
+// 	// TODO(ACTR-9): Add back env config once node compat layer works
+// 	//return crossGetEnv(name);
+// }
+
+export function setupLogging() {
+	// Do nothing for now
 }

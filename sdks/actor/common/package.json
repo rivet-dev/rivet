@@ -2,10 +2,7 @@
 	"name": "@rivet-gg/actor-common",
 	"private": true,
 	"version": "24.6.2-rc.1",
-	"files": [
-		"dist",
-		"package.json"
-	],
+	"files": ["dist", "package.json"],
 	"type": "module",
 	"exports": {
 		"./log": {
@@ -70,7 +67,6 @@
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@std/log": "npm:@jsr/std__log@^0.224.12",
 		"zod": "^3.24.1"
 	},
 	"devDependencies": {

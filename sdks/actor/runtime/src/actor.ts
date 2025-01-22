@@ -1,5 +1,4 @@
-import { Lock } from "@core/asyncutil/lock";
-import { setupLogging } from "@rivet-gg/actor-common/log";
+import { type Logger, setupLogging } from "@rivet-gg/actor-common/log";
 import { listObjectMethods } from "@rivet-gg/actor-common/reflect";
 import { assertUnreachable, safeStringify } from "@rivet-gg/actor-common/utils";
 import { isJsonSerializable } from "@rivet-gg/actor-common/utils";
@@ -7,25 +6,22 @@ import type { ActorContext, Metadata } from "@rivet-gg/actor-core";
 import { ProtocolFormatSchema } from "@rivet-gg/actor-protocol/ws";
 import type * as wsToClient from "@rivet-gg/actor-protocol/ws/to_client";
 import * as wsToServer from "@rivet-gg/actor-protocol/ws/to_server";
-import { assertExists } from "@std/assert/exists";
-import { deadline } from "@std/async/deadline";
-import type { Logger } from "@std/log/get-logger";
 import { Hono, type Context as HonoContext } from "hono";
 import { upgradeWebSocket } from "hono/deno";
 import type { WSEvents } from "hono/ws";
 import onChange from "on-change";
-import { type ActorConfig, mergeActorConfig } from "./config.ts";
+import { type ActorConfig, mergeActorConfig } from "./config";
 import {
 	Connection,
 	type ConnectionId,
 	type IncomingWebSocketMessage,
 	type OutgoingWebSocketMessage,
-} from "./connection.ts";
-import * as errors from "./errors.ts";
-import type { Kv } from "./kv.ts";
-import { instanceLogger, logger } from "./log.ts";
-import { Rpc } from "./rpc.ts";
-import { throttle } from "./utils.ts";
+} from "./connection";
+import * as errors from "./errors";
+import type { Kv } from "./kv";
+import { instanceLogger, logger } from "./log";
+import { Rpc } from "./rpc";
+import { Lock, deadline, throttle } from "./utils";
 
 const KEYS = {
 	SCHEDULE: {
@@ -144,7 +140,7 @@ export abstract class Actor<
 	#eventSubscriptions = new Map<string, Set<Connection<this>>>();
 
 	#lastSaveTime = 0;
-	#pendingSaveTimeout?: number;
+	#pendingSaveTimeout?: number | NodeJS.Timeout;
 
 	#notifyStateInspectThrottle = throttle(async () => {
 		const inspectionResult = this.internal_inspect();
@@ -334,7 +330,7 @@ export abstract class Actor<
 			logger().debug("state not enabled");
 			return;
 		}
-		assertExists(this._onInitialize);
+		if (!this._onInitialize) throw new Error("missing _onInitialize");
 
 		// Read initial state
 		const getStateBatch = await this.#ctx.kv.getBatch([
@@ -1096,7 +1092,7 @@ export abstract class Actor<
 
 			// Create deferred promise
 			const { promise, resolve } = Promise.withResolvers();
-			assertExists(resolve, "resolve should be defined by now");
+			if (!resolve) throw new Error("resolve should be defined by now");
 
 			// Resolve promise when websocket closes
 			raw.addEventListener("close", resolve);
