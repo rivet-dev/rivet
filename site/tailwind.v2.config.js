@@ -1,10 +1,11 @@
 // Used by the new design
 
+console.log(require("@rivet-gg/components/tailwind-base"));
 /** @type {import('tailwindcss').Config} */
 module.exports = {
 	content: [
 		"./src/**/*.{ts,tsx,jsx,js,mdx,md}",
-		"./node_modules/@rivet-gg/components/**/*.{ts,tsx}",
+		"../node_modules/@rivet-gg/components/**/*.{ts,tsx}",
 	],
 	theme: {
 		extend: {
@@ -44,6 +45,6 @@ module.exports = {
 			},
 		},
 	},
-	presets: [require("@rivet-gg/components/tailwind-base")],
+	presets: [require("@rivet-gg/components/tailwind-base").default],
 	plugins: [require("@tailwindcss/typography")],
 };

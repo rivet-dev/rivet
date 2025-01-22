@@ -13,6 +13,8 @@ import { DocsTableOfContents } from "@/components/DocsTableOfContents";
 import { Prose } from "@/components/Prose";
 import { type Sitemap, findActiveTab } from "@/lib/sitemap";
 import { sitemap } from "@/sitemap/mod";
+import { Button } from "@rivet-gg/components";
+import { Icon, faPencil } from "@rivet-gg/icons";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { VALID_SECTIONS, buildFullPath, buildPathComponents } from "./util";
@@ -36,12 +38,20 @@ function createParamsForFile(section, file): Param {
 }
 
 async function loadContent(path: string[]) {
+	const module = path.join("/");
 	try {
-		return await import(`@/content/${path.join("/")}.mdx`);
+		return {
+			path: `${module}.mdx`,
+			component: await import(`@/content/${module}.mdx`),
+		};
 	} catch (error) {
 		if (error.code === "MODULE_NOT_FOUND") {
 			try {
-				return await import(`@/content/${path.join("/")}/index.mdx`);
+				const indexModule = `${module}/index`;
+				return {
+					path: `${indexModule}.mdx`,
+					component: await import(`@/content/${indexModule}.mdx`),
+				};
 			} catch (indexError) {
 				if (indexError.code === "MODULE_NOT_FOUND") {
 					throw new Error(
@@ -59,7 +69,9 @@ export async function generateMetadata({
 	params: { section, page },
 }): Promise<Metadata> {
 	const path = buildPathComponents(section, page);
-	const { title, description } = await loadContent(path);
+	const {
+		component: { title, description },
+	} = await loadContent(path);
 
 	return {
 		title: `${title} - Rivet`,
@@ -73,7 +85,10 @@ export default async function CatchAllCorePage({ params: { section, page } }) {
 	}
 
 	const path = buildPathComponents(section, page);
-	const { default: Content, tableOfContents } = await loadContent(path);
+	const {
+		path: componentSourcePath,
+		component: { default: Content, tableOfContents },
+	} = await loadContent(path);
 
 	const fullPath = buildFullPath(path);
 	const foundTab = findActiveTab(fullPath, sitemap as Sitemap);
@@ -95,6 +110,20 @@ export default async function CatchAllCorePage({ params: { section, page } }) {
 					)}
 					<Content />
 				</Prose>
+				<div className="border-t mt-8 mb-2" />
+				<Button
+					variant="ghost"
+					asChild
+					startIcon={<Icon icon={faPencil} />}
+				>
+					<a
+						href={`https://github.com/rivet-gg/rivet/edit/main/site/src/content/${componentSourcePath}`}
+						target="_blank"
+						rel="noreferrer"
+					>
+						Suggest changes to this page
+					</a>
+				</Button>
 			</main>
 			<aside className="-order-1 mx-auto w-full min-w-0 max-w-3xl flex-shrink-0 pb-4 pl-4 md:order-none xl:mx-0">
 				<DocsTableOfContents
