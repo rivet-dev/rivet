@@ -1,4 +1,5 @@
 pub mod actor;
+pub mod project;
 pub mod build;
 pub mod deno;
 pub mod deploy;
@@ -26,6 +27,11 @@ pub enum SubCommand {
 	Environment {
 		#[clap(subcommand)]
 		subcommand: environment::SubCommand,
+	},
+	#[clap(alias = "proj")]
+	Project {
+		#[clap(subcommand)]
+		subcommand: project::SubCommand,
 	},
 	#[clap(alias = "a")]
 	Actor {
@@ -61,6 +67,7 @@ impl SubCommand {
 			SubCommand::Logout(opts) => opts.execute().await,
 			SubCommand::Deploy(opts) => opts.execute().await,
 			SubCommand::Environment { subcommand } => subcommand.execute().await,
+			SubCommand::Project { subcommand } => subcommand.execute().await,
 			SubCommand::Actor { subcommand } => subcommand.execute().await,
 			SubCommand::Build { subcommand } => subcommand.execute().await,
 			SubCommand::Region { subcommand } => subcommand.execute().await,
