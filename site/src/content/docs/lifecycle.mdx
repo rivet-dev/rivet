@@ -8,15 +8,19 @@ Lifecycle hooks can be implemented by overriding the following methods of actors
 
 [Documentation](https://jsr.io/@rivet-gg/actor/doc/~/Actor.prototype._onInitialize)
 
-Called when the actor is first created. This method should return the initial state of the actor.
+Called only once when the actor is first created. This method returns the initial state of the actor (see [state documentation](/docs/state)).
+
+If you need to call code when the actor is started (e.g. after restarting for upgrading code), see `_onStart`.
 
 ### `_onStart()`
 
 [Documentation](https://jsr.io/@rivet-gg/actor/doc/~/Actor.prototype._onStart)
 
-Called after the actor has been initialized but before any connections are accepted. If the actor crashes or is upgraded, this method will be called before startup. If you need to upgrade your state, use this method.
+This method is called any time the actor is started (e.g. after restarting, upgrading code, or crashing).
 
-Use this to set up any resources or start any background tasks.
+This is called after the actor has been initialized but before any connections are accepted.
+
+Use this method to set up any resources or start any background tasks, such as `setInterval`.
 
 ### `_onStateChange(newState)`
 
