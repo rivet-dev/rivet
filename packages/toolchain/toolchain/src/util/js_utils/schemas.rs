@@ -5,6 +5,7 @@ pub mod build {
 	#[derive(Serialize)]
 	#[serde(rename_all = "camelCase")]
 	pub struct Input {
+		pub project_root: PathBuf,
 		pub entry_point: PathBuf,
 		pub out_dir: PathBuf,
 		pub bundle: Bundle,

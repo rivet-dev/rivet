@@ -7,13 +7,16 @@
 ## File structure
 
 - `rivet.json` Configuration file for deploying the actor
-- `shopper_agent.ts` Agent source code, deployed to Rivet
-- `cli.ts` CLI to interact with the agent
+- `src/shopper_agent.ts` Agent source code, deployed to Rivet
+- `src/catalog_items.ts` Full list of items available
+- `src/cli.ts` CLI to interact with the agent
 
 ## Running
 
 ```sh
-rivet login
+# Deploy
 rivet deploy
-rivet deno run -A cli.ts  # Also supports NodeJS
+
+# Run interactive chat interface (also supports NodeJS)
+rivet deno run -A --unstable-sloppy-imports src/cli.ts
 ```

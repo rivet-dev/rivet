@@ -1,0 +1,11 @@
+{
+    "imports": {
+        "chalk": "npm:chalk@5.4.1",
+        "dedent": "npm:dedent@1.5.3",
+        "esbuild": "npm:esbuild@0.24.2",
+        "glob": "npm:glob@11.0.0",
+        "unenv": "npm:unenv@1.10.0",
+        "zod": "npm:zod@3.24.1",
+        "zod-validation-error": "npm:zod-validation-error@3.3.1"
+    }
+}

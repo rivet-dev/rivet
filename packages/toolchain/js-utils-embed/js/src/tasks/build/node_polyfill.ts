@@ -3,13 +3,14 @@ import dedent from "dedent";
 import { env, nodeless } from "unenv";
 import type { Plugin, PluginBuild } from "esbuild";
 import { decodeGlobalName, encodeGlobalName } from "./utils.ts";
+import { Input } from "./mod.ts";
 
 const NODE_BUILTIN_MODULES_NAMESPACE = "node-built-in-modules";
 const UNENV_ALIAS_NAMESPACE = "required-unenv-alias";
 
 // Based on https://github.com/unjs/unenv/issues/32#issuecomment-1125928455
 
-export function nodePolyfill(): Plugin {
+export function nodePolyfill(_input: Input): Plugin {
 	const { alias, inject, external } = env(nodeless);
 	const nodeBuiltinModules = Object.keys(alias);
 
@@ -69,7 +70,6 @@ function handleUnenvModuleAliases(
 
 	build.onResolve({ filter: ALIAS_MODULE_PATTERN }, (args) => {
 		const aliasPath = moduleAliases[args.path];
-		console.log('alias', aliasPath, args);
 		// Convert `require()` calls for NPM packages to a virtual ES Module that can be imported avoiding the require calls.
 		// Note: Does not apply to Node.js packages that are handled in `handleRequireCallsToNodeJSBuiltins`
 		if (
@@ -109,7 +109,6 @@ function handleUnenvModuleAliases(
 	build.onLoad(
 		{ filter: /.*/, namespace: UNENV_ALIAS_NAMESPACE },
 		({ path }) => {
-			console.log('importing', path);
 			return {
 				contents: dedent`
 					import * as esm from '${path}';
@@ -123,8 +122,9 @@ function handleUnenvModuleAliases(
 
 function handleGlobalPolyfills(
 	build: PluginBuild,
-	globalPolyfills: Record<string, string | string[]>
+	inject: Record<string, string | string[]>
 ) {
+
 	const VIRTUAL_POLYFILL_PATTERN = /__unenv_polyfill-([^.]+)\.js$/;
 	const virtualModulePrefix = resolve(
 		process.cwd(),
@@ -133,8 +133,10 @@ function handleGlobalPolyfills(
 
 	build.initialOptions.inject = [
 		...(build.initialOptions.inject ?? []),
-		...Object.keys(globalPolyfills).map(
-			(globalName) => `${virtualModulePrefix}${encodeGlobalName(globalName)}.js`
+		...Object.keys(inject).map(
+			(globalName) =>  {
+				return `${virtualModulePrefix}${encodeGlobalName(globalName)}.js`
+			}
 		)
 	];
 
@@ -142,7 +144,7 @@ function handleGlobalPolyfills(
 
 	build.onLoad({ filter: VIRTUAL_POLYFILL_PATTERN }, ({ path }) => {
 		const globalName = decodeGlobalName(path.match(VIRTUAL_POLYFILL_PATTERN)![1]);
-		const { importStatement, exportName } = createGlobalPolyfillImport(globalPolyfills[globalName]);
+		const { importStatement, exportName } = createGlobalPolyfillImport(inject[globalName]);
 
 		return {
 			contents: dedent`
@@ -154,6 +156,15 @@ function handleGlobalPolyfills(
 }
 
 function createGlobalPolyfillImport(polyfillConfig: string | string[]) {
+	// Overwrite bugged configs
+	// See https://github.com/unjs/unenv/commit/d9d4d035c7ef13fb03189b49ec95ee4b14d1a603 for v2
+	if (Array.isArray(polyfillConfig) && polyfillConfig[0] === "buffer") {
+		polyfillConfig = ["unenv/runtime/node/buffer/index", "Buffer"];
+	} else if (typeof polyfillConfig === "string" && polyfillConfig == "unenv/runtime/node/process") {
+		polyfillConfig = "unenv/runtime/node/process/index";
+	}
+
+	// Build import statement
 	if (typeof polyfillConfig === "string") {
 		return {
 			importStatement: `import nodePolyfill from "${polyfillConfig}";`,

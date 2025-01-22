@@ -66,8 +66,9 @@ pub async fn build_and_upload(
 			js_utils::schemas::build::Input,
 			js_utils::schemas::build::Output,
 		>(
-			"src/tasks/build/mod.js",
+			"src/tasks/build/mod.ts",
 			&js_utils::schemas::build::Input {
+				project_root: project_root,
 				entry_point: script_path,
 				out_dir: build_dir.path().to_path_buf(),
 				bundle: js_utils::schemas::build::Bundle {

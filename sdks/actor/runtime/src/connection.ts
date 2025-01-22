@@ -141,7 +141,9 @@ export class Connection<A extends AnyActor> {
 			return JSON.stringify(value);
 		}
 		if (this._protocolFormat === "cbor") {
-			return cbor.encode(value);
+			// TODO: Remove this hack, but cbor-x can't handle anything extra in data structures
+			const cleanValue = JSON.parse(JSON.stringify(value));
+			return cbor.encode(cleanValue);
 		}
 		assertUnreachable(this._protocolFormat);
 	}

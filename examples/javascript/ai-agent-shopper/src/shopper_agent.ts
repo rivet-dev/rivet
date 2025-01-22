@@ -5,7 +5,6 @@ import {
 	type Rpc,
 	UserError,
 } from "@rivet-gg/actor";
-import { assert } from "@std/assert";
 import { type CoreMessage, streamText, tool } from "ai";
 import { z } from "zod";
 import {
@@ -100,7 +99,8 @@ export default class ShopperAgent extends Actor<State, ConnParams, ConnState> {
 	updateItemInCart(_rpc: Rpc<ShopperAgent>, slug: string, count: number) {
 		// Assert that the item is in the catalog
 		const isInCatalog = getCatalogItemBySlug(slug);
-		assert(isInCatalog, `Item with slug ${slug} is not in the catalog`);
+		if (!isInCatalog)
+			throw new Error(`Item with slug ${slug} is not in the catalog`);
 
 		const itemIndex = this._state.shoppingCart.findIndex(
 			(item) => item.slug === slug,
@@ -149,7 +149,8 @@ export default class ShopperAgent extends Actor<State, ConnParams, ConnState> {
 			}
 
 			// Prevent duplicate streaming
-			assert(!this.#isStreaming, "already streaming response");
+			if (this.#isStreaming)
+				throw new Error("already streaming response");
 			this.#isStreaming = true;
 
 			// Trim history if it exceeds the maximum

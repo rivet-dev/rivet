@@ -6,7 +6,7 @@ import { runPackageManagerCommand } from "./package_manager.ts";
 
 export async function build(input: Input): Promise<Output> {
 	console.log("Installing dependencies...");
-	await runPackageManagerCommand("install");
+	await runPackageManagerCommand(input.projectRoot, "install");
 
 	let outfile = resolve(input.outDir, "index.js");
 	console.log(`Building to output file: ${outfile}`);
@@ -20,7 +20,7 @@ export async function build(input: Input): Promise<Output> {
 		// Helpful for traces & for RPCs when minified.
 		keepNames: true,
 		//plugins: [nodelessPlugin],
-		plugins: [nodePolyfill()],
+		plugins: [nodePolyfill(input)],
 		external: [
 			// Wasm must be loaded as a separate file manually, cannot be bundled
 			"*.wasm",
@@ -35,6 +35,8 @@ export async function build(input: Input): Promise<Output> {
 		resolveExtensions: [".js", ".jsx", ".ts", ".tsx", ".json"],
 		define: {
 			"process.env.NODE_ENV": '"production"',
+			// TODO: This is fixed in 2.0https://github.com/unjs/unenv/blob/8f5967b499f9b7f175f0d06938547f55430f316c/src/presets/nodeless.ts#L91
+			"global": "globalThis",
 		},
 
 		// TODO: Remove any

@@ -3,6 +3,7 @@ import { runTask } from "../../util/task/task.ts";
 import { build } from "./build.ts";
 
 export const inputSchema = z.object({
+	projectRoot: z.string(),
 	entryPoint: z.string(),
 	outDir: z.string(),
 	bundle: z.object({

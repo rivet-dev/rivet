@@ -7,7 +7,6 @@
 		"@ai-sdk/openai": "^1.1.0",
 		"@clack/prompts": "^0.9.1",
 		"@rivet-gg/actor": "workspace:*",
-		"@std/assert": "npm:@jsr/std__assert@^1.0.10",
 		"ai": "^4.1.0",
 		"zod": "^3.24.1"
 	},

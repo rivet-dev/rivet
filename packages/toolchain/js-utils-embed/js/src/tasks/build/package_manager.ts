@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process';
  * Checks for yarn.lock, package-lock.json, pnpm-lock.yaml, and .npmrc
  * @returns The detected package manager ('yarn', 'npm', 'pnpm') or undefined if none found
  */
-export function getPreferredPackageManager(): 'yarn' | 'npm' | 'pnpm' | undefined {
+export function getPreferredPackageManager(projectRoot: string): 'yarn' | 'npm' | 'pnpm' | undefined {
     // Check environment variable override first
     const envPackageManager = process.env._RIVET_PACKAGE_MANAGER?.toLowerCase();
     if (envPackageManager && ['yarn', 'npm', 'pnpm'].includes(envPackageManager)) {
@@ -18,12 +18,12 @@ export function getPreferredPackageManager(): 'yarn' | 'npm' | 'pnpm' | undefine
     console.log('Detecting preferred package manager...');
 
     // Check for lockfiles in the current directory
-    const hasYarnLock = fs.existsSync(path.join(process.cwd(), 'yarn.lock'));
-    const hasNpmLock = fs.existsSync(path.join(process.cwd(), 'package-lock.json'));
-    const hasPnpmLock = fs.existsSync(path.join(process.cwd(), 'pnpm-lock.yaml'));
+    const hasYarnLock = fs.existsSync(path.join(projectRoot, 'yarn.lock'));
+    const hasNpmLock = fs.existsSync(path.join(projectRoot, 'package-lock.json'));
+    const hasPnpmLock = fs.existsSync(path.join(projectRoot, 'pnpm-lock.yaml'));
 
     // Check .npmrc for pnpm configuration
-    const npmrcPath = path.join(process.cwd(), '.npmrc');
+    const npmrcPath = path.join(projectRoot, '.npmrc');
     let hasPnpmConfig = false;
     if (fs.existsSync(npmrcPath)) {
         try {
@@ -82,8 +82,8 @@ async function isPackageManagerInstalled(packageManager: string): Promise<boolea
  * @param args Additional arguments for the command
  * @returns A promise that resolves when the command completes
  */
-export async function runPackageManagerCommand(command: string, ...args: string[]): Promise<void> {
-    const packageManager = getPreferredPackageManager() || 'yarn';
+export async function runPackageManagerCommand(projectRoot: string, command: string, ...args: string[]): Promise<void> {
+    const packageManager = getPreferredPackageManager(projectRoot) || 'yarn';
     console.log(`Selected package manager: ${packageManager}`);
     
     // Check environment variable override for Deno usage
@@ -100,7 +100,8 @@ export async function runPackageManagerCommand(command: string, ...args: string[
     return new Promise((resolve, reject) => {
         const process = spawn(commandArray[0], commandArray.slice(1), {
             stdio: 'inherit',
-            shell: true
+            shell: true,
+            cwd: projectRoot,
         });
 
         process.on('close', (code: number) => {

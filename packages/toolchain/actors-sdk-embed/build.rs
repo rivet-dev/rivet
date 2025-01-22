@@ -24,8 +24,9 @@ async fn main() -> Result<()> {
 
 	// Build manager
 	build_backend_command_raw(CommandOpts {
-		task_path: "src/tasks/build/mod.js",
+		task_path: "src/tasks/build/mod.ts",
 		input: json!({
+			"projectRoot": sdk_path.join("manager"),
 			"entryPoint": sdk_path.join("manager/src/mod.ts"),
 			"outDir": dist_path.join("manager"),
 			"bundle": {
@@ -34,7 +35,6 @@ async fn main() -> Result<()> {
 				"logLevel": "debug"
 			}
 		}),
-		current_dir: sdk_path.clone(),
 	})
 	.await?;
 
@@ -67,18 +67,18 @@ fn hash_directory<P: AsRef<Path>>(path: P) -> Result<String> {
 pub struct CommandOpts {
 	pub task_path: &'static str,
 	pub input: serde_json::Value,
-	pub current_dir: PathBuf,
 }
 
 // TODO: Split toolchain's js_utils in to a separate crate so we can share this code
 pub async fn build_backend_command_raw(opts: CommandOpts) -> Result<()> {
+	// We can't use tempdir because it breaks something with deno
 	let data_dir = tempfile::tempdir()?;
 
 	// Get Deno executable
 	let deno = deno_embed::get_executable(&data_dir.path().to_owned()).await?;
 
 	// Get JS utils
-	let base = rivet_js_utils_embed::dist_path(&data_dir.path().to_owned()).await?;
+	let base = rivet_js_utils_embed::src_path(&data_dir.path().to_owned()).await?;
 
 	// Serialize command
 	let input_json = serde_json::to_string(&opts.input)?;
@@ -87,16 +87,15 @@ pub async fn build_backend_command_raw(opts: CommandOpts) -> Result<()> {
 	let status = tokio::process::Command::new(deno.executable_path)
 		.args([
 			"run",
-			"--quiet",
-			"--no-check",
 			"--allow-all",
-			"--unstable-bare-node-builtins",
+			"--unstable-sloppy-imports",
+			"--vendor",  // Required for unenv files to be readable
 		])
-		.arg(base.join(opts.task_path))
+		.arg(&opts.task_path)
 		.arg("--input")
 		.arg(input_json)
 		.env("DENO_NO_UPDATE_CHECK", "1")
-		.current_dir(opts.current_dir)
+		.current_dir(&base)
 		.stdout(Stdio::inherit())
 		.stderr(Stdio::inherit())
 		.status()

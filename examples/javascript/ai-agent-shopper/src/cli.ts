@@ -1,6 +1,5 @@
 import { intro, isCancel, outro, password, text } from "@clack/prompts";
 import { TestClient } from "@rivet-gg/actor-client/test";
-import { assertExists } from "@std/assert";
 import type { CoreMessage } from "ai";
 import colors from "picocolors";
 import type ShopperAgent from "./shopper_agent";
@@ -49,7 +48,7 @@ async function main() {
 			process.exit(0);
 		}
 	}
-	assertExists(openaiKey, "OpenAI API key is required");
+	if (!openaiKey) throw new Error("OpenAI API key is required");
 
 	// Connect to the shopper agent
 	const shopperAgent = await client.get<ShopperAgent>(

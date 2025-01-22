@@ -23,8 +23,10 @@ console.log("Building", entry);
 
 const ROOT_DIR = resolve(import.meta.dirname!, "..", "..");
 const JS_UTILS_DIR = resolve(ROOT_DIR, "packages/toolchain/js-utils-embed/js");
+//const JS_UTILS_DIR = "/Users/nathan/Downloads/js-utils"
 
 const input = {
+	projectRoot: Deno.cwd(),
 	entryPoint: resolve(Deno.cwd(), entry),
 	outDir: resolve(Deno.cwd(), "dist"),
 	bundle: {
@@ -34,15 +36,34 @@ const input = {
 	},
 };
 
+//const output0 = await new Deno.Command("deno", {
+//	args: [
+//		"install",
+//	],
+//	env: {
+//		JS_UTILS_ROOT: JS_UTILS_DIR,
+//	},
+//	cwd: JS_UTILS_DIR,
+//	stdout: "inherit",
+//	stderr: "inherit",
+//}).output();
+//if (!output0.success) {
+//	throw new Error("Failed");
+//}
+
 const output = await new Deno.Command("deno", {
 	args: [
 		"run",
-		"-A",
+		"--allow-all",
 		"--unstable-sloppy-imports",
+		"--vendor",  // Required for unenv files to be readable
 		"src/tasks/build/mod.ts",
 		"--input",
 		JSON.stringify(input),
 	],
+	env: {
+		JS_UTILS_ROOT: JS_UTILS_DIR,
+	},
 	cwd: JS_UTILS_DIR,
 	stdout: "inherit",
 	stderr: "inherit",

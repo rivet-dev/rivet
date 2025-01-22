@@ -1,4 +1,4 @@
-import { type LogLevel, LogLevels } from "./log";
+import { type LogLevel, LogLevels } from "./log_levels";
 
 export type LogEntry = [string, LogValue];
 export type LogValue = string | number | boolean | null | undefined;
