@@ -1,6 +1,6 @@
 import { resolve } from "@std/path";
 import { exists } from "@std/fs";
-import { denoPlugins } from "@rivet-gg/esbuild-deno-loader";
+import { denoPlugins } from "@luca/esbuild-deno-loader";
 import * as esbuild from "esbuild";
 import { Input, Output } from "./mod.ts";
 
