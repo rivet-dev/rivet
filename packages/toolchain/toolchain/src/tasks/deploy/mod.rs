@@ -3,12 +3,14 @@ use rivet_api::{apis, models};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
+use std::path::Path;
 
 use crate::{
 	build,
 	project::environment::TEMPEnvironment,
 	ToolchainCtx,
 	{config, util::task},
+	paths,
 };
 
 mod docker;
@@ -39,6 +41,12 @@ impl task::Task for Task {
 
 	async fn run(task: task::TaskCtx, input: Self::Input) -> Result<Self::Output> {
 		let ctx = crate::toolchain_ctx::load().await?;
+
+		// Check for deno.json or deno.jsonc
+		let project_root = paths::project_root()?;
+		if project_root.join("deno.json").exists() || project_root.join("deno.jsonc").exists() {
+			task.log("[WARNING] deno.json and deno.jsonc are not supported at the moment. Please use package.json with NPM instead.");
+		}
 
 		let env = crate::project::environment::get_env(&ctx, input.environment_id).await?;
 
