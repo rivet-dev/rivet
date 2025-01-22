@@ -260,10 +260,18 @@ async fn get_client_from_dc(
 		[ctx, (Uuid,)]
 		"
 		SELECT client_id
-		FROM db_pegboard.actors
-		WHERE datacenter_id = $1
+		FROM db_pegboard.clients
+		WHERE
+			datacenter_id = $1 AND
+			-- Within ping threshold
+			last_ping_ts > $2 AND
+			-- Not draining
+			drain_ts IS NULL AND
+			-- Not deleted
+			delete_ts IS NULL
 		",
 		input.datacenter_id,
+		util::timestamp::now() - CLIENT_ELIGIBLE_THRESHOLD_MS,
 	)
 	.await?;
 
