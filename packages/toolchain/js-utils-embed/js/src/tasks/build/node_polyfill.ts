@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 import dedent from "dedent";
 import { env, nodeless } from "unenv";
 import type { Plugin, PluginBuild } from "esbuild";
-import { decodeGlobalName, encodeGlobalName } from "./utils";
+import { decodeGlobalName, encodeGlobalName } from "./utils.ts";
 
 const NODE_BUILTIN_MODULES_NAMESPACE = "node-built-in-modules";
 const UNENV_ALIAS_NAMESPACE = "required-unenv-alias";
@@ -69,6 +69,7 @@ function handleUnenvModuleAliases(
 
 	build.onResolve({ filter: ALIAS_MODULE_PATTERN }, (args) => {
 		const aliasPath = moduleAliases[args.path];
+		console.log('alias', aliasPath, args);
 		// Convert `require()` calls for NPM packages to a virtual ES Module that can be imported avoiding the require calls.
 		// Note: Does not apply to Node.js packages that are handled in `handleRequireCallsToNodeJSBuiltins`
 		if (
@@ -108,6 +109,7 @@ function handleUnenvModuleAliases(
 	build.onLoad(
 		{ filter: /.*/, namespace: UNENV_ALIAS_NAMESPACE },
 		({ path }) => {
+			console.log('importing', path);
 			return {
 				contents: dedent`
 					import * as esm from '${path}';

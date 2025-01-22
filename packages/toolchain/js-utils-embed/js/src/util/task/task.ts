@@ -1,4 +1,3 @@
-import { parseArgs } from "@std/cli/parse-args";
 import { printError, UserError } from "./error.ts";
 import { z } from "zod";
 
@@ -15,12 +14,13 @@ export async function runTask<T extends z.ZodType>(task: Task<T>) {
 
 	let exitCode = 0;
 	try {
-		// Parse flags
-		const args = parseArgs(Deno.args);
-		const inputJson = args["input"];
-		if (!inputJson) {
+		// Parse flags using vanilla Node.js
+		const args = process.argv.slice(2);
+		const inputArgIndex = args.indexOf('--input');
+		if (inputArgIndex === -1 || inputArgIndex + 1 >= args.length) {
 			throw new UserError("Missing --input argument");
 		}
+		const inputJson = args[inputArgIndex + 1];
 
 		// Parse input
 		let input;

@@ -1,5 +1,5 @@
-import { relative } from "@std/path";
-import * as colors from "@std/fmt/colors";
+import { relative } from "node:path";
+import chalk from "chalk";
 import { fromError as fromValidationError } from "zod-validation-error";
 
 /**
@@ -141,8 +141,8 @@ export function printError(error: unknown) {
 		console.error();
 		console.error(
 			`${
-				colors.bold(
-					colors.red(
+				chalk.bold(
+					chalk.red(
 						`Failed. Found ${error.errors.length} ${error.errors.length == 1 ? "error" : "errors"}.`,
 					),
 				)
@@ -152,24 +152,24 @@ export function printError(error: unknown) {
 		let str = "";
 
 		// Message
-		str += `${colors.bold(colors.red("error"))}: ${colors.bold(error.message)}\n`;
+		str += `${chalk.bold(chalk.red("error"))}: ${chalk.bold(error.message)}\n`;
 		str += "\n";
 
 		if (error instanceof BuildError && error.details) {
 			// Details
 			for (const line of error.details.split("\n")) {
-				str += `  ${colors.dim(line)}\n`;
+				str += `  ${chalk.dim(line)}\n`;
 			}
 		}
 
 		if (error instanceof ValidationError) {
-			str += `  ${colors.dim(fromValidationError(error.validationError).toString())}\n`;
+			str += `  ${chalk.dim(fromValidationError(error.validationError).toString())}\n`;
 		}
 
 		if (error instanceof UserError && error.suggest) {
 			// Suggest
 			for (const line of error.suggest.split("\n")) {
-				str += `  ${colors.brightBlue(line)}\n`;
+				str += `  ${chalk.blueBright(line)}\n`;
 			}
 		}
 
@@ -180,11 +180,11 @@ export function printError(error: unknown) {
 				for (const path of error.paths) {
 					const pathRelative = relative(Deno.cwd(), path);
 					if (i == 0) {
-						str += `  ${colors.dim("see " + pathRelative)}\n`;
+						str += `  ${chalk.dim("see " + pathRelative)}\n`;
 					} else if (i < 4) {
-						str += `  ${colors.dim("see " + pathRelative)}\n`;
+						str += `  ${chalk.dim("see " + pathRelative)}\n`;
 					} else {
-						str += `  ${colors.dim(`...${error.paths.length - i} more`)}\n`;
+						str += `  ${chalk.dim(`...${error.paths.length - i} more`)}\n`;
 						break;
 					}
 					i++;
@@ -193,7 +193,7 @@ export function printError(error: unknown) {
 		}
 
 		if (error instanceof UnreachableError) {
-			str += `  ${colors.dim("value")}: ${JSON.stringify(error.value)}\n`;
+			str += `  ${chalk.dim("value")}: ${JSON.stringify(error.value)}\n`;
 		}
 
 		if (error instanceof InternalError) {
@@ -205,9 +205,9 @@ export function printError(error: unknown) {
 			// Command output
 			try {
 				const stdout = new TextDecoder().decode(error.commandOutput.stdout).trimEnd();
-				str += `  ${colors.dim("stdout")}: ${stdout}\n`;
+				str += `  ${chalk.dim("stdout")}: ${stdout}\n`;
 				for (const line of stdout.split("\n")) {
-					str += `  ${colors.dim(line)}\n`;
+					str += `  ${chalk.dim(line)}\n`;
 				}
 			} catch (err) {
 				// HACK: If the command did not pipe stdout, Deno throws a TypeError. There's no
@@ -218,9 +218,9 @@ export function printError(error: unknown) {
 			try {
 				if (error.commandOutput.stderr.length > 0) {
 					const stderr = new TextDecoder().decode(error.commandOutput.stderr).trimEnd();
-					str += `  ${colors.dim("stderr")}: ${stderr}\n`;
+					str += `  ${chalk.dim("stderr")}: ${stderr}\n`;
 					for (const line of stderr.split("\n")) {
-						str += `  ${colors.dim(line)}\n`;
+						str += `  ${chalk.dim(line)}\n`;
 					}
 				}
 			} catch (err) {
@@ -231,7 +231,7 @@ export function printError(error: unknown) {
 
 		console.error(str);
 	} else if (error instanceof Error) {
-		let str = `${colors.bold(colors.red("[UNCAUGHT] " + error.name))}: ${error.message}\n`;
+		let str = `${chalk.bold(chalk.red("[UNCAUGHT] " + error.name))}: ${error.message}\n`;
 
 		// Stack
 		str += prettyPrintStack(error);
@@ -240,7 +240,7 @@ export function printError(error: unknown) {
 	} else {
 		// Unknown error type
 
-		const str = `${colors.bold(colors.red("[UNCAUGHT] " + error))}\n`;
+		const str = `${chalk.bold(chalk.red("[UNCAUGHT] " + error))}\n`;
 		console.error(str);
 	}
 }
@@ -251,7 +251,7 @@ function prettyPrintStack(error: Error): string {
 	let str = "";
 	for (let line of error.stack.split("\n")) {
 		line = line.trim();
-		if (line.startsWith("at ")) str += `  ${colors.dim(line)}\n`;
+		if (line.startsWith("at ")) str += `  ${chalk.dim(line)}\n`;
 	}
 	return str;
 }

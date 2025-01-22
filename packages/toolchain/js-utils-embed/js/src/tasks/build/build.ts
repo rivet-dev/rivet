@@ -1,4 +1,4 @@
-import { resolve } from "@std/path";
+import { resolve } from "node:path";
 import * as esbuild from "esbuild";
 import { Input, Output } from "./mod.ts";
 import { nodePolyfill } from "./node_polyfill.ts";
