@@ -45,7 +45,7 @@ import {
   ViewPlugin,
 } from './chunk-TE4WM7VV.js';
 
-// https :https://framerusercontent.com/modules/iDDKRieYEAiI3cZj3HIf/tSjsvzfgPZ9LoU4Jmd1X/zLfXOCD5_.js
+// https :https://framerusercontent.com/modules/iDDKRieYEAiI3cZj3HIf/4ID57bZyMQiDoFwoLKW4/zLfXOCD5_.js
 import { jsx as _jsx23, jsxs as _jsxs11, } from 'react/jsx-runtime';
 import {
   addFonts as addFonts18,
@@ -5912,7 +5912,7 @@ addFonts7(FramerfQgkomDej, [{
   },],
 },], { supportsExplicitInterCodegen: true, },);
 
-// https :https://framerusercontent.com/modules/0crjgCBhqirewQPRqGUT/qLD42uJuxrpmFEK7iV1E/hZVCT4xNf.js
+// https :https://framerusercontent.com/modules/0crjgCBhqirewQPRqGUT/vmxyO5WX62z0PMZNizyC/hZVCT4xNf.js
 import { jsx as _jsx12, jsxs as _jsxs4, } from 'react/jsx-runtime';
 import {
   addFonts as addFonts8,
@@ -5956,7 +5956,7 @@ var cycleOrder7 = [
   'b11Vb9iLv',
   'QXaFpn3jB',
 ];
-var serializationHash8 = 'framer-vR1mi';
+var serializationHash8 = 'framer-NrcAE';
 var variantClassNames8 = {
   b11Vb9iLv: 'framer-v-x8bv2s',
   e5NDZcXVz: 'framer-v-iyfz9f',
@@ -6101,7 +6101,7 @@ var Component8 = /* @__PURE__ */ React11.forwardRef(function (props, ref,) {
                   muted: true,
                   objectFit: 'cover',
                   playing: true,
-                  posterEnabled: false,
+                  posterEnabled: true,
                   srcFile: 'https://framerusercontent.com/assets/FPQDVPwzfqFQp4NYRozFRNEQdMI.mp4',
                   srcType: 'Upload',
                   srcUrl:
@@ -6327,18 +6327,18 @@ var Component8 = /* @__PURE__ */ React11.forwardRef(function (props, ref,) {
 },);
 var css11 = [
   '@supports (aspect-ratio: 1) { body { --framer-aspect-ratio-supported: auto; } }',
-  '.framer-vR1mi.framer-5h1lrf, .framer-vR1mi .framer-5h1lrf { display: block; }',
-  '.framer-vR1mi.framer-acmb2c { align-content: flex-end; align-items: flex-end; cursor: default; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 0px; height: 250px; justify-content: flex-end; padding: 0px; position: relative; width: 200px; }',
-  '.framer-vR1mi .framer-etvbyw-container { bottom: 0px; cursor: default; flex: none; height: 250px; left: 0px; position: absolute; right: 0px; z-index: 0; }',
-  '.framer-vR1mi .framer-181wkeo { align-content: center; align-items: center; cursor: default; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: visible; padding: 0px 0px 20px 0px; position: relative; width: 100%; }',
-  '.framer-vR1mi .framer-129pq3b { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 16px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-vR1mi .framer-1nfsbjr { flex: none; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 104px; word-break: break-word; word-wrap: break-word; }',
-  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-vR1mi.framer-acmb2c, .framer-vR1mi .framer-181wkeo, .framer-vR1mi .framer-129pq3b { gap: 0px; } .framer-vR1mi.framer-acmb2c > * { margin: 0px; margin-bottom: calc(0px / 2); margin-top: calc(0px / 2); } .framer-vR1mi.framer-acmb2c > :first-child, .framer-vR1mi .framer-181wkeo > :first-child { margin-top: 0px; } .framer-vR1mi.framer-acmb2c > :last-child, .framer-vR1mi .framer-181wkeo > :last-child { margin-bottom: 0px; } .framer-vR1mi .framer-181wkeo > * { margin: 0px; margin-bottom: calc(10px / 2); margin-top: calc(10px / 2); } .framer-vR1mi .framer-129pq3b > * { margin: 0px; margin-left: calc(16px / 2); margin-right: calc(16px / 2); } .framer-vR1mi .framer-129pq3b > :first-child { margin-left: 0px; } .framer-vR1mi .framer-129pq3b > :last-child { margin-right: 0px; } }',
-  '.framer-vR1mi.framer-v-1hbalqt .framer-129pq3b, .framer-vR1mi.framer-v-m3w3pj .framer-129pq3b, .framer-vR1mi.framer-v-1ag2bcs .framer-129pq3b, .framer-vR1mi.framer-v-olm2k7 .framer-129pq3b, .framer-vR1mi.framer-v-iyfz9f .framer-129pq3b, .framer-vR1mi.framer-v-145mxp2 .framer-129pq3b, .framer-vR1mi.framer-v-x8bv2s .framer-129pq3b, .framer-vR1mi.framer-v-cv328g .framer-129pq3b { align-content: flex-end; align-items: flex-end; }',
-  '.framer-vR1mi.framer-v-m3w3pj .framer-etvbyw-container { order: 0; }',
-  '.framer-vR1mi.framer-v-m3w3pj .framer-181wkeo { order: 1; }',
+  '.framer-NrcAE.framer-5h1lrf, .framer-NrcAE .framer-5h1lrf { display: block; }',
+  '.framer-NrcAE.framer-acmb2c { align-content: flex-end; align-items: flex-end; cursor: default; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 0px; height: 250px; justify-content: flex-end; padding: 0px; position: relative; width: 200px; }',
+  '.framer-NrcAE .framer-etvbyw-container { bottom: 0px; cursor: default; flex: none; height: 250px; left: 0px; position: absolute; right: 0px; z-index: 0; }',
+  '.framer-NrcAE .framer-181wkeo { align-content: center; align-items: center; cursor: default; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: visible; padding: 0px 0px 20px 0px; position: relative; width: 100%; }',
+  '.framer-NrcAE .framer-129pq3b { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 16px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-NrcAE .framer-1nfsbjr { flex: none; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 104px; word-break: break-word; word-wrap: break-word; }',
+  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-NrcAE.framer-acmb2c, .framer-NrcAE .framer-181wkeo, .framer-NrcAE .framer-129pq3b { gap: 0px; } .framer-NrcAE.framer-acmb2c > * { margin: 0px; margin-bottom: calc(0px / 2); margin-top: calc(0px / 2); } .framer-NrcAE.framer-acmb2c > :first-child, .framer-NrcAE .framer-181wkeo > :first-child { margin-top: 0px; } .framer-NrcAE.framer-acmb2c > :last-child, .framer-NrcAE .framer-181wkeo > :last-child { margin-bottom: 0px; } .framer-NrcAE .framer-181wkeo > * { margin: 0px; margin-bottom: calc(10px / 2); margin-top: calc(10px / 2); } .framer-NrcAE .framer-129pq3b > * { margin: 0px; margin-left: calc(16px / 2); margin-right: calc(16px / 2); } .framer-NrcAE .framer-129pq3b > :first-child { margin-left: 0px; } .framer-NrcAE .framer-129pq3b > :last-child { margin-right: 0px; } }',
+  '.framer-NrcAE.framer-v-1hbalqt .framer-129pq3b, .framer-NrcAE.framer-v-m3w3pj .framer-129pq3b, .framer-NrcAE.framer-v-1ag2bcs .framer-129pq3b, .framer-NrcAE.framer-v-olm2k7 .framer-129pq3b, .framer-NrcAE.framer-v-iyfz9f .framer-129pq3b, .framer-NrcAE.framer-v-145mxp2 .framer-129pq3b, .framer-NrcAE.framer-v-x8bv2s .framer-129pq3b, .framer-NrcAE.framer-v-cv328g .framer-129pq3b { align-content: flex-end; align-items: flex-end; }',
+  '.framer-NrcAE.framer-v-m3w3pj .framer-etvbyw-container { order: 0; }',
+  '.framer-NrcAE.framer-v-m3w3pj .framer-181wkeo { order: 1; }',
 ];
-var FramerhZVCT4xNf = withCSS8(Component8, css11, 'framer-vR1mi',);
+var FramerhZVCT4xNf = withCSS8(Component8, css11, 'framer-NrcAE',);
 var stdin_default8 = FramerhZVCT4xNf;
 FramerhZVCT4xNf.displayName = 'use-case';
 FramerhZVCT4xNf.defaultProps = { height: 250, width: 200, };
@@ -23428,7 +23428,7 @@ addFonts17(FramerZMEpPgcsT, [{
   },],
 }, ...ContainerImageFonts,], { supportsExplicitInterCodegen: true, },);
 
-// https :https://framerusercontent.com/modules/iDDKRieYEAiI3cZj3HIf/tSjsvzfgPZ9LoU4Jmd1X/zLfXOCD5_.js
+// https :https://framerusercontent.com/modules/iDDKRieYEAiI3cZj3HIf/4ID57bZyMQiDoFwoLKW4/zLfXOCD5_.js
 var VideoFonts2 = getFonts8(Video,);
 var VideoWithInlineVideo2 = withInlineVideo(Video,);
 var HeaderFonts = getFonts8(stdin_default4,);
@@ -23451,7 +23451,7 @@ var DistributedFonts = getFonts8(stdin_default10,);
 var LearnMoreFonts = getFonts8(stdin_default6,);
 var MotionDivWithFXWithOptimizedAppearEffect = withOptimizedAppearEffect2(withFX2(motion21.div,),);
 var cycleOrder17 = ['G87o8jzVW', 'fu9Ny71bW', 'RuG5jmR5S',];
-var serializationHash18 = 'framer-1OiEq';
+var serializationHash18 = 'framer-vPjst';
 var variantClassNames18 = { fu9Ny71bW: 'framer-v-1hv2o6j', G87o8jzVW: 'framer-v-fb2xo2', RuG5jmR5S: 'framer-v-1vd12yp', };
 function addPropertyOverrides18(overrides, ...variants) {
   const nextOverrides = {};
@@ -23627,11 +23627,9 @@ var Component18 = /* @__PURE__ */ React23.forwardRef(function (props, ref,) {
                       children: [
                         /* @__PURE__ */ _jsx23(ComponentViewportProvider8, {
                           height: 186,
-                          width: `min(max(max(1200px, ${
-                            (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
-                          } * 0) - 80px, 1px), 1200px)`,
+                          width: '1120px',
                           y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 + 0 +
-                            -32.10000000000002 + 150 + 0 + 0 + 0 + 50 + 0,
+                            71 + 150 + 0 + 0 + 0 + 0 + 0,
                           ...addPropertyOverrides18(
                             {
                               fu9Ny71bW: { width: void 0, y: void 0, },
@@ -23674,7 +23672,7 @@ var Component18 = /* @__PURE__ */ React23.forwardRef(function (props, ref,) {
                             /* @__PURE__ */ _jsx23(ComponentViewportProvider8, {
                               height: 36,
                               y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                                0 + -32.10000000000002 + 150 + 0 + 0 + 0 + 50 + 219 + 0,
+                                0 + 71 + 150 + 0 + 0 + 0 + 0 + 219 + 0,
                               ...addPropertyOverrides18(
                                 { fu9Ny71bW: { y: void 0, }, RuG5jmR5S: { y: void 0, }, },
                                 baseVariant,
@@ -23697,7 +23695,7 @@ var Component18 = /* @__PURE__ */ React23.forwardRef(function (props, ref,) {
                             /* @__PURE__ */ _jsx23(ComponentViewportProvider8, {
                               height: 36,
                               y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                                0 + -32.10000000000002 + 150 + 0 + 0 + 0 + 50 + 219 + 0,
+                                0 + 71 + 150 + 0 + 0 + 0 + 0 + 219 + 0,
                               ...addPropertyOverrides18(
                                 { fu9Ny71bW: { y: void 0, }, RuG5jmR5S: { y: void 0, }, },
                                 baseVariant,
@@ -23721,6 +23719,69 @@ var Component18 = /* @__PURE__ */ React23.forwardRef(function (props, ref,) {
                         },),
                       ],
                     },),
+                  },),
+                  /* @__PURE__ */ _jsx23(Image10, {
+                    background: {
+                      alt: '',
+                      fit: 'fill',
+                      intrinsicHeight: 1020,
+                      intrinsicWidth: 1927.5,
+                      loading: getLoadingLazyAtYPosition9(
+                        ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 + 0 + 71 +
+                          150 + 320,
+                      ),
+                      pixelHeight: 2040,
+                      pixelWidth: 3855,
+                      sizes: '1120px',
+                      src: 'https://framerusercontent.com/images/l0fIDavrybjyHqacMbBzoaKgXg.png?scale-down-to=2048',
+                      srcSet:
+                        'https://framerusercontent.com/images/l0fIDavrybjyHqacMbBzoaKgXg.png?scale-down-to=512 512w,https://framerusercontent.com/images/l0fIDavrybjyHqacMbBzoaKgXg.png?scale-down-to=1024 1024w,https://framerusercontent.com/images/l0fIDavrybjyHqacMbBzoaKgXg.png?scale-down-to=2048 2048w,https://framerusercontent.com/images/l0fIDavrybjyHqacMbBzoaKgXg.png 3855w',
+                    },
+                    className: 'framer-16h9b6n',
+                    'data-framer-name': 'Image',
+                    layoutDependency,
+                    layoutId: 'mqETac7SW',
+                    style: { borderBottomLeftRadius: 19, borderBottomRightRadius: 19, borderTopLeftRadius: 19, borderTopRightRadius: 19, },
+                    ...addPropertyOverrides18(
+                      {
+                        fu9Ny71bW: {
+                          background: {
+                            alt: '',
+                            fit: 'fill',
+                            intrinsicHeight: 1020,
+                            intrinsicWidth: 1927.5,
+                            pixelHeight: 2040,
+                            pixelWidth: 3855,
+                            sizes: `min(max(min(${
+                              (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
+                            }, 1200px), 1px), 1200px)`,
+                            src: 'https://framerusercontent.com/images/l0fIDavrybjyHqacMbBzoaKgXg.png?scale-down-to=2048',
+                            srcSet:
+                              'https://framerusercontent.com/images/l0fIDavrybjyHqacMbBzoaKgXg.png?scale-down-to=512 512w,https://framerusercontent.com/images/l0fIDavrybjyHqacMbBzoaKgXg.png?scale-down-to=1024 1024w,https://framerusercontent.com/images/l0fIDavrybjyHqacMbBzoaKgXg.png?scale-down-to=2048 2048w,https://framerusercontent.com/images/l0fIDavrybjyHqacMbBzoaKgXg.png 3855w',
+                          },
+                        },
+                        RuG5jmR5S: {
+                          background: {
+                            alt: '',
+                            fit: 'fill',
+                            intrinsicHeight: 1020,
+                            intrinsicWidth: 1927.5,
+                            pixelHeight: 2040,
+                            pixelWidth: 3855,
+                            sizes: `min(max(max(min(${
+                              (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
+                            }, 1200px), ${
+                              (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
+                            } / 2) - 40px, 1px), 1200px)`,
+                            src: 'https://framerusercontent.com/images/l0fIDavrybjyHqacMbBzoaKgXg.png?scale-down-to=2048',
+                            srcSet:
+                              'https://framerusercontent.com/images/l0fIDavrybjyHqacMbBzoaKgXg.png?scale-down-to=512 512w,https://framerusercontent.com/images/l0fIDavrybjyHqacMbBzoaKgXg.png?scale-down-to=1024 1024w,https://framerusercontent.com/images/l0fIDavrybjyHqacMbBzoaKgXg.png?scale-down-to=2048 2048w,https://framerusercontent.com/images/l0fIDavrybjyHqacMbBzoaKgXg.png 3855w',
+                          },
+                        },
+                      },
+                      baseVariant,
+                      gestureVariant,
+                    ),
                   },),
                   /* @__PURE__ */ _jsx23(motion21.div, {
                     className: 'framer-apg1g5',
@@ -24225,7 +24286,7 @@ var Component18 = /* @__PURE__ */ React23.forwardRef(function (props, ref,) {
                                 (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
                               } - 80px, 1200px)`,
                               y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                                972 + 100 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 159.4,
+                                1578.7 + 100 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 159.4,
                               ...addPropertyOverrides18({ fu9Ny71bW: { width: '753px', y: void 0, }, }, baseVariant, gestureVariant,),
                               children: /* @__PURE__ */ _jsx23(motion21.div, {
                                 className: 'framer-1dsuw28-container',
@@ -24338,7 +24399,7 @@ var Component18 = /* @__PURE__ */ React23.forwardRef(function (props, ref,) {
                                 height: 26,
                                 width: '26px',
                                 y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                                  1844.4 + 85 + 32 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0,
+                                  2451.1 + 85 + 32 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0,
                                 ...addPropertyOverrides18(
                                   { fu9Ny71bW: { y: void 0, }, RuG5jmR5S: { y: void 0, }, },
                                   baseVariant,
@@ -24431,7 +24492,7 @@ var Component18 = /* @__PURE__ */ React23.forwardRef(function (props, ref,) {
                                   (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
                                 } - 200px, 1px), 1200px) - 120px) / 3, 200px), 1px)`,
                                 y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                                  1844.4 + 85 + 32 + 0 + 0 + 0 + 0 + 0 + 0 + 64.4 + 0,
+                                  2451.1 + 85 + 32 + 0 + 0 + 0 + 0 + 0 + 0 + 64.4 + 0,
                                 ...addPropertyOverrides18(
                                   {
                                     fu9Ny71bW: {
@@ -24496,7 +24557,7 @@ var Component18 = /* @__PURE__ */ React23.forwardRef(function (props, ref,) {
                                 height: 26,
                                 width: '26px',
                                 y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                                  1844.4 + 85 + 32 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0,
+                                  2451.1 + 85 + 32 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0,
                                 ...addPropertyOverrides18(
                                   { fu9Ny71bW: { y: void 0, }, RuG5jmR5S: { y: void 0, }, },
                                   baseVariant,
@@ -24589,7 +24650,7 @@ var Component18 = /* @__PURE__ */ React23.forwardRef(function (props, ref,) {
                                   (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
                                 } - 200px, 1px), 1200px) - 120px) / 3, 200px), 1px)`,
                                 y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                                  1844.4 + 85 + 32 + 0 + 0 + 0 + 0 + 0 + 0 + 64.4 + 0,
+                                  2451.1 + 85 + 32 + 0 + 0 + 0 + 0 + 0 + 0 + 64.4 + 0,
                                 ...addPropertyOverrides18(
                                   {
                                     fu9Ny71bW: {
@@ -24654,7 +24715,7 @@ var Component18 = /* @__PURE__ */ React23.forwardRef(function (props, ref,) {
                                 height: 26,
                                 width: '26px',
                                 y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                                  1844.4 + 85 + 32 + 141.4 + 0 + 0 + 0 + 0 + 0 + 0 + 0,
+                                  2451.1 + 85 + 32 + 141.4 + 0 + 0 + 0 + 0 + 0 + 0 + 0,
                                 ...addPropertyOverrides18(
                                   { fu9Ny71bW: { y: void 0, }, RuG5jmR5S: { y: void 0, }, },
                                   baseVariant,
@@ -24747,7 +24808,7 @@ var Component18 = /* @__PURE__ */ React23.forwardRef(function (props, ref,) {
                                   (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
                                 } - 200px, 1px), 1200px) - 120px) / 3, 200px), 1px)`,
                                 y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                                  1844.4 + 85 + 32 + 141.4 + 0 + 0 + 0 + 0 + 0 + 64.4 + 0,
+                                  2451.1 + 85 + 32 + 141.4 + 0 + 0 + 0 + 0 + 0 + 64.4 + 0,
                                 ...addPropertyOverrides18(
                                   {
                                     fu9Ny71bW: {
@@ -24812,7 +24873,7 @@ var Component18 = /* @__PURE__ */ React23.forwardRef(function (props, ref,) {
                                 height: 26,
                                 width: '26px',
                                 y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                                  1844.4 + 85 + 32 + 141.4 + 0 + 0 + 0 + 0 + 0 + 0 + 0,
+                                  2451.1 + 85 + 32 + 141.4 + 0 + 0 + 0 + 0 + 0 + 0 + 0,
                                 ...addPropertyOverrides18(
                                   { fu9Ny71bW: { y: void 0, }, RuG5jmR5S: { y: void 0, }, },
                                   baseVariant,
@@ -24905,7 +24966,7 @@ var Component18 = /* @__PURE__ */ React23.forwardRef(function (props, ref,) {
                                   (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
                                 } - 200px, 1px), 1200px) - 120px) / 3, 200px), 1px)`,
                                 y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                                  1844.4 + 85 + 32 + 141.4 + 0 + 0 + 0 + 0 + 0 + 64.4 + 0,
+                                  2451.1 + 85 + 32 + 141.4 + 0 + 0 + 0 + 0 + 0 + 64.4 + 0,
                                 ...addPropertyOverrides18(
                                   {
                                     fu9Ny71bW: {
@@ -24975,7 +25036,7 @@ var Component18 = /* @__PURE__ */ React23.forwardRef(function (props, ref,) {
                                   height: 26,
                                   width: '26px',
                                   y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) +
-                                    0 + 1844.4 + 85 + 32 + 141.4 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0,
+                                    0 + 2451.1 + 85 + 32 + 141.4 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0,
                                   ...addPropertyOverrides18(
                                     { fu9Ny71bW: { y: void 0, }, RuG5jmR5S: { y: void 0, }, },
                                     baseVariant,
@@ -25069,7 +25130,7 @@ var Component18 = /* @__PURE__ */ React23.forwardRef(function (props, ref,) {
                                     '100vw'
                                   } - 200px, 1px), 1200px) - 120px) / 3, 200px), 1px)`,
                                   y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) +
-                                    0 + 1844.4 + 85 + 32 + 141.4 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 64.4 + 0,
+                                    0 + 2451.1 + 85 + 32 + 141.4 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 64.4 + 0,
                                   ...addPropertyOverrides18(
                                     {
                                       fu9Ny71bW: {
@@ -25263,7 +25324,7 @@ var Component18 = /* @__PURE__ */ React23.forwardRef(function (props, ref,) {
                           height: 432,
                           width: '322px',
                           y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                            2301.2000000000003 + 85 + 173 + 0 + 0 + 0 + 0 + 0 + 0,
+                            2907.9 + 85 + 173 + 0 + 0 + 0 + 0 + 0 + 0,
                           ...addPropertyOverrides18(
                             {
                               fu9Ny71bW: { width: '366.5px', y: void 0, },
@@ -25305,7 +25366,7 @@ var Component18 = /* @__PURE__ */ React23.forwardRef(function (props, ref,) {
                           height: 432,
                           width: '661px',
                           y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                            2301.2000000000003 + 85 + 173 + 0 + 0 + 0 + 0 + 0 + 0,
+                            2907.9 + 85 + 173 + 0 + 0 + 0 + 0 + 0 + 0,
                           ...addPropertyOverrides18(
                             {
                               fu9Ny71bW: { width: '366.5px', y: void 0, },
@@ -25342,7 +25403,7 @@ var Component18 = /* @__PURE__ */ React23.forwardRef(function (props, ref,) {
                           height: 432,
                           width: '661px',
                           y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                            2301.2000000000003 + 85 + 173 + 0 + 0 + 0 + 449 + 0 + 0,
+                            2907.9 + 85 + 173 + 0 + 0 + 0 + 449 + 0 + 0,
                           ...addPropertyOverrides18(
                             {
                               fu9Ny71bW: { width: '366.5px', y: void 0, },
@@ -25379,7 +25440,7 @@ var Component18 = /* @__PURE__ */ React23.forwardRef(function (props, ref,) {
                           height: 432,
                           width: '322px',
                           y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                            2301.2000000000003 + 85 + 173 + 0 + 0 + 0 + 449 + 0 + 0,
+                            2907.9 + 85 + 173 + 0 + 0 + 0 + 449 + 0 + 0,
                           ...addPropertyOverrides18(
                             {
                               fu9Ny71bW: { width: '366.5px', y: void 0, },
@@ -25421,7 +25482,7 @@ var Component18 = /* @__PURE__ */ React23.forwardRef(function (props, ref,) {
                           height: 432,
                           width: '322px',
                           y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                            2301.2000000000003 + 85 + 173 + 0 + 0 + 0 + 898 + 0 + 0,
+                            2907.9 + 85 + 173 + 0 + 0 + 0 + 898 + 0 + 0,
                           ...addPropertyOverrides18(
                             {
                               fu9Ny71bW: { width: '366.5px', y: void 0, },
@@ -25463,7 +25524,7 @@ var Component18 = /* @__PURE__ */ React23.forwardRef(function (props, ref,) {
                           height: 432,
                           width: '661px',
                           y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                            2301.2000000000003 + 85 + 173 + 0 + 0 + 0 + 898 + 0 + 0,
+                            2907.9 + 85 + 173 + 0 + 0 + 0 + 898 + 0 + 0,
                           ...addPropertyOverrides18(
                             {
                               fu9Ny71bW: { width: '366.5px', y: void 0, },
@@ -25685,16 +25746,16 @@ var Component18 = /* @__PURE__ */ React23.forwardRef(function (props, ref,) {
                             intrinsicWidth: 892,
                             loading: getLoadingLazyAtYPosition9(
                               ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 0 +
-                                3974.2000000000003 + 85 + 0 + 0 + 0 + 0 + 134.4 + -97.5,
+                                4580.9 + 85 + 0 + 0 + 0 + 0 + 134.4 + -97.5,
                             ),
-                            pixelHeight: 703,
-                            pixelWidth: 1489,
+                            pixelHeight: 1058,
+                            pixelWidth: 2e3,
                             positionX: 'center',
                             positionY: 'center',
                             sizes: '1230px',
-                            src: 'https://framerusercontent.com/images/a4tBCRNT64ulKaSQr4Dm62l8.png?scale-down-to=1024',
+                            src: 'https://framerusercontent.com/images/HHCeOHvCq7C9kZ4hHCz2T8rbjak.png?scale-down-to=1024',
                             srcSet:
-                              'https://framerusercontent.com/images/a4tBCRNT64ulKaSQr4Dm62l8.png?scale-down-to=512 512w,https://framerusercontent.com/images/a4tBCRNT64ulKaSQr4Dm62l8.png?scale-down-to=1024 1024w,https://framerusercontent.com/images/a4tBCRNT64ulKaSQr4Dm62l8.png 1489w',
+                              'https://framerusercontent.com/images/HHCeOHvCq7C9kZ4hHCz2T8rbjak.png?scale-down-to=512 512w,https://framerusercontent.com/images/HHCeOHvCq7C9kZ4hHCz2T8rbjak.png?scale-down-to=1024 1024w,https://framerusercontent.com/images/HHCeOHvCq7C9kZ4hHCz2T8rbjak.png 2000w',
                           },
                           className: 'framer-1yqat0r',
                           'data-framer-name': 'Image',
@@ -25709,14 +25770,14 @@ var Component18 = /* @__PURE__ */ React23.forwardRef(function (props, ref,) {
                                   fit: 'fit',
                                   intrinsicHeight: 570,
                                   intrinsicWidth: 892,
-                                  pixelHeight: 703,
-                                  pixelWidth: 1489,
+                                  pixelHeight: 1058,
+                                  pixelWidth: 2e3,
                                   positionX: 'center',
                                   positionY: 'center',
                                   sizes: '931px',
-                                  src: 'https://framerusercontent.com/images/a4tBCRNT64ulKaSQr4Dm62l8.png?scale-down-to=1024',
+                                  src: 'https://framerusercontent.com/images/HHCeOHvCq7C9kZ4hHCz2T8rbjak.png?scale-down-to=1024',
                                   srcSet:
-                                    'https://framerusercontent.com/images/a4tBCRNT64ulKaSQr4Dm62l8.png?scale-down-to=512 512w,https://framerusercontent.com/images/a4tBCRNT64ulKaSQr4Dm62l8.png?scale-down-to=1024 1024w,https://framerusercontent.com/images/a4tBCRNT64ulKaSQr4Dm62l8.png 1489w',
+                                    'https://framerusercontent.com/images/HHCeOHvCq7C9kZ4hHCz2T8rbjak.png?scale-down-to=512 512w,https://framerusercontent.com/images/HHCeOHvCq7C9kZ4hHCz2T8rbjak.png?scale-down-to=1024 1024w,https://framerusercontent.com/images/HHCeOHvCq7C9kZ4hHCz2T8rbjak.png 2000w',
                                 },
                               },
                               RuG5jmR5S: {
@@ -25725,17 +25786,17 @@ var Component18 = /* @__PURE__ */ React23.forwardRef(function (props, ref,) {
                                   fit: 'fit',
                                   intrinsicHeight: 570,
                                   intrinsicWidth: 892,
-                                  pixelHeight: 703,
-                                  pixelWidth: 1489,
+                                  pixelHeight: 1058,
+                                  pixelWidth: 2e3,
                                   positionX: 'center',
                                   positionY: 'center',
                                   sizes: `max(min(${
                                     (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) ||
                                     '100vw'
                                   } - 16px, 1000px), 1px)`,
-                                  src: 'https://framerusercontent.com/images/a4tBCRNT64ulKaSQr4Dm62l8.png?scale-down-to=1024',
+                                  src: 'https://framerusercontent.com/images/HHCeOHvCq7C9kZ4hHCz2T8rbjak.png?scale-down-to=1024',
                                   srcSet:
-                                    'https://framerusercontent.com/images/a4tBCRNT64ulKaSQr4Dm62l8.png?scale-down-to=512 512w,https://framerusercontent.com/images/a4tBCRNT64ulKaSQr4Dm62l8.png?scale-down-to=1024 1024w,https://framerusercontent.com/images/a4tBCRNT64ulKaSQr4Dm62l8.png 1489w',
+                                    'https://framerusercontent.com/images/HHCeOHvCq7C9kZ4hHCz2T8rbjak.png?scale-down-to=512 512w,https://framerusercontent.com/images/HHCeOHvCq7C9kZ4hHCz2T8rbjak.png?scale-down-to=1024 1024w,https://framerusercontent.com/images/HHCeOHvCq7C9kZ4hHCz2T8rbjak.png 2000w',
                                 },
                               },
                             },
@@ -26815,157 +26876,160 @@ var Component18 = /* @__PURE__ */ React23.forwardRef(function (props, ref,) {
 },);
 var css23 = [
   '@supports (aspect-ratio: 1) { body { --framer-aspect-ratio-supported: auto; } }',
-  '.framer-1OiEq.framer-cygs1, .framer-1OiEq .framer-cygs1 { display: block; }',
-  '.framer-1OiEq.framer-fb2xo2 { align-content: center; align-items: center; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 0px; height: min-content; justify-content: flex-start; overflow: hidden; padding: 0px; position: relative; width: 1200px; }',
-  '.framer-1OiEq .framer-qdh2wp-container { flex: none; height: 1513px; left: 0px; min-height: 0px; position: absolute; right: 0px; top: 0px; z-index: 0; }',
-  '.framer-1OiEq .framer-1csjyj5 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: calc(var(--framer-viewport-height, 100vh) * 0.97); justify-content: center; max-width: 1200px; min-width: 0%; overflow: hidden; padding: 71px 40px 20px 40px; position: relative; width: 1200px; }',
-  '.framer-1OiEq .framer-7dpnet { align-content: center; align-items: center; display: flex; flex: 1 0 0px; flex-direction: column; flex-wrap: nowrap; gap: 65px; height: min-content; justify-content: flex-start; max-width: 1200px; overflow: hidden; padding: 150px 0px 236px 0px; position: relative; width: 1px; }',
-  '.framer-1OiEq .framer-1mo0wlk { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 40px; height: min-content; justify-content: flex-start; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-g8azv0 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 33px; height: min-content; justify-content: center; overflow: visible; padding: 50px 0px 0px 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-h1blye-container, .framer-1OiEq .framer-1dsuw28-container, .framer-1OiEq .framer-195it53-container { flex: none; height: auto; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-ya3okc { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 20px; height: min-content; justify-content: flex-start; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-1xlgoke-container, .framer-1OiEq .framer-ly6lyb-container { cursor: pointer; flex: none; height: 36px; position: relative; width: auto; }',
-  '.framer-1OiEq .framer-apg1g5 { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-xr5k4k { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: flex-start; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-7io10p { flex: none; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 1060px; word-break: break-word; word-wrap: break-word; }',
-  '.framer-1OiEq .framer-e6fybv-container { flex: none; height: 300px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-6k9qjn-container, .framer-1OiEq .framer-iy3ngw-container, .framer-1OiEq .framer-ec5tlq-container { cursor: default; height: 250px; position: relative; width: 200px; z-index: 1; }',
-  '.framer-1OiEq .framer-14gjy58-container, .framer-1OiEq .framer-zu8v3z-container, .framer-1OiEq .framer-8cp9w7-container, .framer-1OiEq .framer-eyxl4u-container, .framer-1OiEq .framer-krmuio-container { height: 250px; position: relative; width: 200px; z-index: 1; }',
-  '.framer-1OiEq .framer-gez7bu { flex: none; height: 2px; overflow: visible; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-1d4g1q4 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; max-width: 100%; overflow: hidden; padding: 100px 40px 100px 40px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-xwyhah { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; max-width: 1200px; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-q9o3h6 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 27px; height: min-content; justify-content: center; overflow: visible; padding: 0px 0px 20px 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-w8od71 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 50px; height: min-content; justify-content: center; max-width: 1200px; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-hsfvww { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 119px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-pyhlqn { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 65px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-1ttqtak, .framer-1OiEq .framer-1g0rutw, .framer-1OiEq .framer-1tfm02a, .framer-1OiEq .framer-117dn62 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-18r2oh3, .framer-1OiEq .framer-so06u9 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 6px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: min-content; }',
-  '.framer-1OiEq .framer-gklbsh-container, .framer-1OiEq .framer-ezns2g-container, .framer-1OiEq .framer-1o7zqv7-container, .framer-1OiEq .framer-1ui5nk4-container, .framer-1OiEq .framer-1t4zmih-container, .framer-1OiEq .framer-17af5vf-container, .framer-1OiEq .framer-jcsk01-container, .framer-1OiEq .framer-1pq5c66-container, .framer-1OiEq .framer-122po8s-container { flex: none; height: 12px; position: relative; width: 12px; }',
-  '.framer-1OiEq .framer-19n8zr6, .framer-1OiEq .framer-kpgxy6, .framer-1OiEq .framer-1d18i2k, .framer-1OiEq .framer-jl04gz { flex: none; height: auto; overflow: visible; position: relative; white-space: pre; width: auto; }',
-  '.framer-1OiEq .framer-vkbq9p { flex: none; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 540px; word-break: break-word; word-wrap: break-word; }',
-  '.framer-1OiEq .framer-zbwnt2, .framer-1OiEq .framer-562txm { flex: none; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 398px; word-break: break-word; word-wrap: break-word; }',
-  '.framer-1OiEq .framer-8vqfe5 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: hidden; padding: 85px 100px 85px 100px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-sqpofl { display: grid; flex: 1 0 0px; gap: 60px; grid-auto-rows: min-content; grid-template-columns: repeat(3, minmax(200px, 1fr)); grid-template-rows: repeat(2, min-content); height: min-content; justify-content: center; max-width: 1200px; overflow: visible; padding: 32px 0px 32px 0px; position: relative; width: 1px; }',
-  '.framer-1OiEq .framer-fbzk4b { align-self: start; flex: none; height: auto; justify-self: start; overflow: visible; position: relative; white-space: pre-wrap; width: 100%; word-break: break-word; word-wrap: break-word; }',
-  '.framer-1OiEq .framer-1dzcznt, .framer-1OiEq .framer-1vx2bfd, .framer-1OiEq .framer-ccv3ei, .framer-1OiEq .framer-1xkhgnl, .framer-1OiEq .framer-1c5cyd1, .framer-1OiEq .framer-1pde9jt, .framer-1OiEq .framer-kezepa, .framer-1OiEq .framer-1gmjw3u, .framer-1OiEq .framer-phtzfv, .framer-1OiEq .framer-1bsyb1z, .framer-1OiEq .framer-wb7ge7, .framer-1OiEq .framer-1652jzq, .framer-1OiEq .framer-a2rebs { align-content: center; align-items: center; align-self: start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 30px; height: auto; justify-content: center; justify-self: start; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-1h99aqk, .framer-1OiEq .framer-1rpxrsq, .framer-1OiEq .framer-z8sb5i, .framer-1OiEq .framer-wrenfs, .framer-1OiEq .framer-1sok0h3, .framer-1OiEq .framer-snnm7r, .framer-1OiEq .framer-13xtp2b, .framer-1OiEq .framer-1gxn14o, .framer-1OiEq .framer-1f074bp, .framer-1OiEq .framer-1uqyzgc, .framer-1OiEq .framer-g9qfix { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 11px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-1g2k08v, .framer-1OiEq .framer-1futfa1, .framer-1OiEq .framer-1vb2t2p, .framer-1OiEq .framer-1cm7zm4, .framer-1OiEq .framer-d0cyc { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 8px; height: min-content; justify-content: center; padding: 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-jx156w, .framer-1OiEq .framer-17g3cii, .framer-1OiEq .framer-4xn4ce, .framer-1OiEq .framer-1lt7mqj, .framer-1OiEq .framer-j08hmh, .framer-1OiEq .framer-fb8c4p, .framer-1OiEq .framer-18z8nzm, .framer-1OiEq .framer-1opuvb7, .framer-1OiEq .framer-1x4f373, .framer-1OiEq .framer-1m8mc2d { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-1ribz3k-container, .framer-1OiEq .framer-1dscink-container, .framer-1OiEq .framer-1j6u4ti-container, .framer-1OiEq .framer-2ymwsj-container, .framer-1OiEq .framer-1ypj5e0-container { flex: none; height: 26px; position: relative; width: 26px; }',
-  '.framer-1OiEq .framer-g0jm1m, .framer-1OiEq .framer-1t7m11c, .framer-1OiEq .framer-1x28xq, .framer-1OiEq .framer-1jrx1s8, .framer-1OiEq .framer-1m4g8d1, .framer-1OiEq .framer-1ehzy0u, .framer-1OiEq .framer-1gri49i, .framer-1OiEq .framer-1smddtw, .framer-1OiEq .framer-1ykr04m, .framer-1OiEq .framer-sm7fv2, .framer-1OiEq .framer-59tp0e, .framer-1OiEq .framer-9ovo4l { flex: 1 0 0px; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 1px; word-break: break-word; word-wrap: break-word; }',
-  '.framer-1OiEq .framer-h8qa0u, .framer-1OiEq .framer-bpv7lr, .framer-1OiEq .framer-edvuem, .framer-1OiEq .framer-1eivzpc, .framer-1OiEq .framer-9o8n26, .framer-1OiEq .framer-8j5uos, .framer-1OiEq .framer-15u9wjh, .framer-1OiEq .framer-yn5jo8, .framer-1OiEq .framer-qc3fmc, .framer-1OiEq .framer-1bkvn76, .framer-1OiEq .framer-1b6qzsm { flex: none; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 100%; word-break: break-word; word-wrap: break-word; }',
-  '.framer-1OiEq .framer-17a6d6u, .framer-1OiEq .framer-1saumyi, .framer-1OiEq .framer-1t23hb, .framer-1OiEq .framer-5igu7c, .framer-1OiEq .framer-1ainuab { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; text-decoration: none; width: 100%; }',
-  '.framer-1OiEq .framer-dn4a9k-container, .framer-1OiEq .framer-134lequ-container, .framer-1OiEq .framer-u5ppin-container, .framer-1OiEq .framer-reqcow-container, .framer-1OiEq .framer-11itvfj-container { flex: 1 0 0px; height: auto; position: relative; width: 1px; }',
-  '.framer-1OiEq .framer-hkq7qp { align-content: flex-end; align-items: flex-end; align-self: start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 30px; height: auto; justify-content: center; justify-self: start; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-1x8p88j { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-1yf7qpm, .framer-1OiEq .framer-2wv9l0 { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; padding: 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-kbzal { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 40px; height: min-content; justify-content: center; max-width: 1200px; overflow: visible; padding: 85px 100px 85px 100px; position: relative; width: 1200px; }',
-  '.framer-1OiEq .framer-1427yxh { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: 133px; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 502px; }',
-  '.framer-1OiEq .framer-8r30wj { flex: none; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 352px; word-break: break-word; word-wrap: break-word; }',
-  '.framer-1OiEq .framer-rb3yzr { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 0px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-bst864 { display: grid; flex: none; gap: 17px; grid-auto-rows: min-content; grid-template-columns: repeat(3, minmax(200px, 1fr)); grid-template-rows: repeat(2, min-content); height: min-content; justify-content: center; max-width: 1000px; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-11shrbi-container, .framer-1OiEq .framer-1rrzb1b-container, .framer-1OiEq .framer-nlgb42-container { cursor: default; flex: none; height: 432px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-1670yay, .framer-1OiEq .framer-1e6hs5w, .framer-1OiEq .framer-17i9u46 { align-content: center; align-items: center; align-self: start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 30px; grid-column: auto / span 2; height: auto; justify-content: center; justify-self: start; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-ps0uox-container, .framer-1OiEq .framer-1bgn3mo-container, .framer-1OiEq .framer-1vha8lw-container { cursor: default; flex: none; height: auto; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-uk1s4s { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 60px; height: min-content; justify-content: center; overflow: hidden; padding: 85px 40px 85px 40px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-4e3lqx { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 40px; height: min-content; justify-content: center; max-width: 1000px; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-1jen8oj { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 40px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-t6r8lk { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-pntxy9 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 6px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-mgwi15 { flex: none; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 1000px; word-break: break-word; word-wrap: break-word; }',
-  '.framer-1OiEq .framer-mszazt { flex: none; height: 598px; overflow: hidden; position: relative; width: 1000px; will-change: var(--framer-will-change-override, transform); }',
-  '.framer-1OiEq .framer-1yqat0r { align-content: center; align-items: center; aspect-ratio: 1.5649122807017544 / 1; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: var(--framer-aspect-ratio-supported, 242px); justify-content: center; left: 0px; overflow: visible; padding: 0px; position: absolute; right: -230px; top: -97px; z-index: 0; }',
-  '.framer-1OiEq .framer-xrjguc { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: 786px; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 1230px; }',
-  '.framer-1OiEq .framer-5lagxh { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 25px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-17prusv { display: grid; flex: none; gap: 60px; grid-auto-rows: min-content; grid-template-columns: repeat(3, minmax(200px, 1fr)); grid-template-rows: repeat(2, min-content); height: min-content; justify-content: center; max-width: 1000px; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-3a391p, .framer-1OiEq .framer-ez5ras, .framer-1OiEq .framer-ggrpo5, .framer-1OiEq .framer-13ew2pv, .framer-1OiEq .framer-3r9ihq, .framer-1OiEq .framer-7e0rqs { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 2px; height: min-content; justify-content: center; padding: 0px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-8bi12y { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 40px; height: 377px; justify-content: center; overflow: hidden; padding: 85px 40px 85px 40px; position: relative; width: 1200px; }',
-  '.framer-1OiEq .framer-1q9k2e5 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: wrap; gap: 60px; height: min-content; justify-content: center; max-width: 100%; overflow: visible; padding: 0px; position: relative; width: 1000px; }',
-  '.framer-1OiEq .framer-6gtmix, .framer-1OiEq .framer-r3i8my, .framer-1OiEq .framer-1hsqj1f, .framer-1OiEq .framer-1f0fhb3 { aspect-ratio: 2.9565217391304346 / 1; flex: none; height: var(--framer-aspect-ratio-supported, 46px); overflow: hidden; position: relative; width: 136px; }',
-  '.framer-1OiEq .framer-1gov77p { align-content: center; align-items: center; display: flex; flex: 1 0 0px; flex-direction: row; flex-wrap: nowrap; gap: 1px; height: 1px; justify-content: center; overflow: hidden; padding: 0px; position: relative; text-decoration: none; width: 100%; }',
-  '.framer-1OiEq .framer-10ao5sd-container { flex: none; height: 16px; position: relative; width: auto; }',
-  '.framer-1OiEq .framer-28b5pq { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 0px; height: min-content; justify-content: center; overflow: visible; padding: 200px 40px 200px 40px; position: relative; width: 100%; }',
-  '.framer-1OiEq .framer-162uwhi { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 30px; height: min-content; justify-content: center; max-width: 100%; overflow: visible; padding: 0px; position: relative; width: 1000px; }',
-  '.framer-1OiEq .framer-1a0aq52 { flex: none; height: auto; position: relative; white-space: pre-wrap; width: 100%; word-break: break-word; word-wrap: break-word; }',
-  '.framer-1OiEq .framer-orzwps { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 20px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: min-content; }',
-  '.framer-1OiEq .framer-1oxx4hb { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 20px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 380px; }',
-  '.framer-1OiEq .framer-ozb7f2, .framer-1OiEq .framer-sjfbw4 { align-content: center; align-items: center; cursor: pointer; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: 36px; justify-content: center; overflow: visible; padding: 15px; position: relative; text-decoration: none; width: min-content; }',
-  '.framer-1OiEq .framer-cukhih, .framer-1OiEq .framer-1qk5l56 { flex: none; height: auto; position: relative; white-space: pre; width: auto; }',
-  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-1OiEq.framer-fb2xo2, .framer-1OiEq .framer-1csjyj5, .framer-1OiEq .framer-7dpnet, .framer-1OiEq .framer-1mo0wlk, .framer-1OiEq .framer-g8azv0, .framer-1OiEq .framer-ya3okc, .framer-1OiEq .framer-apg1g5, .framer-1OiEq .framer-xr5k4k, .framer-1OiEq .framer-1d4g1q4, .framer-1OiEq .framer-xwyhah, .framer-1OiEq .framer-q9o3h6, .framer-1OiEq .framer-w8od71, .framer-1OiEq .framer-hsfvww, .framer-1OiEq .framer-pyhlqn, .framer-1OiEq .framer-1ttqtak, .framer-1OiEq .framer-1g0rutw, .framer-1OiEq .framer-18r2oh3, .framer-1OiEq .framer-8vqfe5, .framer-1OiEq .framer-1dzcznt, .framer-1OiEq .framer-1h99aqk, .framer-1OiEq .framer-1g2k08v, .framer-1OiEq .framer-jx156w, .framer-1OiEq .framer-17a6d6u, .framer-1OiEq .framer-1vx2bfd, .framer-1OiEq .framer-1rpxrsq, .framer-1OiEq .framer-1futfa1, .framer-1OiEq .framer-17g3cii, .framer-1OiEq .framer-1saumyi, .framer-1OiEq .framer-hkq7qp, .framer-1OiEq .framer-z8sb5i, .framer-1OiEq .framer-1vb2t2p, .framer-1OiEq .framer-1x8p88j, .framer-1OiEq .framer-1t23hb, .framer-1OiEq .framer-ccv3ei, .framer-1OiEq .framer-wrenfs, .framer-1OiEq .framer-1cm7zm4, .framer-1OiEq .framer-4xn4ce, .framer-1OiEq .framer-5igu7c, .framer-1OiEq .framer-1xkhgnl, .framer-1OiEq .framer-1yf7qpm, .framer-1OiEq .framer-1sok0h3, .framer-1OiEq .framer-d0cyc, .framer-1OiEq .framer-1lt7mqj, .framer-1OiEq .framer-1ainuab, .framer-1OiEq .framer-kbzal, .framer-1OiEq .framer-1427yxh, .framer-1OiEq .framer-1tfm02a, .framer-1OiEq .framer-so06u9, .framer-1OiEq .framer-117dn62, .framer-1OiEq .framer-rb3yzr, .framer-1OiEq .framer-1c5cyd1, .framer-1OiEq .framer-1670yay, .framer-1OiEq .framer-1e6hs5w, .framer-1OiEq .framer-1pde9jt, .framer-1OiEq .framer-kezepa, .framer-1OiEq .framer-17i9u46, .framer-1OiEq .framer-uk1s4s, .framer-1OiEq .framer-4e3lqx, .framer-1OiEq .framer-1jen8oj, .framer-1OiEq .framer-t6r8lk, .framer-1OiEq .framer-pntxy9, .framer-1OiEq .framer-1yqat0r, .framer-1OiEq .framer-xrjguc, .framer-1OiEq .framer-5lagxh, .framer-1OiEq .framer-1gmjw3u, .framer-1OiEq .framer-snnm7r, .framer-1OiEq .framer-3a391p, .framer-1OiEq .framer-j08hmh, .framer-1OiEq .framer-phtzfv, .framer-1OiEq .framer-13xtp2b, .framer-1OiEq .framer-ez5ras, .framer-1OiEq .framer-fb8c4p, .framer-1OiEq .framer-1bsyb1z, .framer-1OiEq .framer-2wv9l0, .framer-1OiEq .framer-1gxn14o, .framer-1OiEq .framer-ggrpo5, .framer-1OiEq .framer-18z8nzm, .framer-1OiEq .framer-wb7ge7, .framer-1OiEq .framer-1f074bp, .framer-1OiEq .framer-13ew2pv, .framer-1OiEq .framer-1opuvb7, .framer-1OiEq .framer-1652jzq, .framer-1OiEq .framer-1uqyzgc, .framer-1OiEq .framer-3r9ihq, .framer-1OiEq .framer-1x4f373, .framer-1OiEq .framer-a2rebs, .framer-1OiEq .framer-g9qfix, .framer-1OiEq .framer-7e0rqs, .framer-1OiEq .framer-1m8mc2d, .framer-1OiEq .framer-8bi12y, .framer-1OiEq .framer-1q9k2e5, .framer-1OiEq .framer-1gov77p, .framer-1OiEq .framer-28b5pq, .framer-1OiEq .framer-162uwhi, .framer-1OiEq .framer-orzwps, .framer-1OiEq .framer-1oxx4hb, .framer-1OiEq .framer-ozb7f2, .framer-1OiEq .framer-sjfbw4 { gap: 0px; } .framer-1OiEq.framer-fb2xo2 > *, .framer-1OiEq .framer-rb3yzr > *, .framer-1OiEq .framer-28b5pq > * { margin: 0px; margin-bottom: calc(0px / 2); margin-top: calc(0px / 2); } .framer-1OiEq.framer-fb2xo2 > :first-child, .framer-1OiEq .framer-7dpnet > :first-child, .framer-1OiEq .framer-1mo0wlk > :first-child, .framer-1OiEq .framer-g8azv0 > :first-child, .framer-1OiEq .framer-apg1g5 > :first-child, .framer-1OiEq .framer-xr5k4k > :first-child, .framer-1OiEq .framer-1d4g1q4 > :first-child, .framer-1OiEq .framer-xwyhah > :first-child, .framer-1OiEq .framer-q9o3h6 > :first-child, .framer-1OiEq .framer-w8od71 > :first-child, .framer-1OiEq .framer-hsfvww > :first-child, .framer-1OiEq .framer-pyhlqn > :first-child, .framer-1OiEq .framer-1ttqtak > :first-child, .framer-1OiEq .framer-1g0rutw > :first-child, .framer-1OiEq .framer-1dzcznt > :first-child, .framer-1OiEq .framer-1h99aqk > :first-child, .framer-1OiEq .framer-1g2k08v > :first-child, .framer-1OiEq .framer-1vx2bfd > :first-child, .framer-1OiEq .framer-1rpxrsq > :first-child, .framer-1OiEq .framer-1futfa1 > :first-child, .framer-1OiEq .framer-hkq7qp > :first-child, .framer-1OiEq .framer-z8sb5i > :first-child, .framer-1OiEq .framer-1vb2t2p > :first-child, .framer-1OiEq .framer-ccv3ei > :first-child, .framer-1OiEq .framer-wrenfs > :first-child, .framer-1OiEq .framer-1cm7zm4 > :first-child, .framer-1OiEq .framer-1xkhgnl > :first-child, .framer-1OiEq .framer-1yf7qpm > :first-child, .framer-1OiEq .framer-1sok0h3 > :first-child, .framer-1OiEq .framer-d0cyc > :first-child, .framer-1OiEq .framer-kbzal > :first-child, .framer-1OiEq .framer-1427yxh > :first-child, .framer-1OiEq .framer-1tfm02a > :first-child, .framer-1OiEq .framer-117dn62 > :first-child, .framer-1OiEq .framer-rb3yzr > :first-child, .framer-1OiEq .framer-1c5cyd1 > :first-child, .framer-1OiEq .framer-1670yay > :first-child, .framer-1OiEq .framer-1e6hs5w > :first-child, .framer-1OiEq .framer-1pde9jt > :first-child, .framer-1OiEq .framer-kezepa > :first-child, .framer-1OiEq .framer-17i9u46 > :first-child, .framer-1OiEq .framer-uk1s4s > :first-child, .framer-1OiEq .framer-4e3lqx > :first-child, .framer-1OiEq .framer-1jen8oj > :first-child, .framer-1OiEq .framer-t6r8lk > :first-child, .framer-1OiEq .framer-5lagxh > :first-child, .framer-1OiEq .framer-1gmjw3u > :first-child, .framer-1OiEq .framer-snnm7r > :first-child, .framer-1OiEq .framer-3a391p > :first-child, .framer-1OiEq .framer-phtzfv > :first-child, .framer-1OiEq .framer-13xtp2b > :first-child, .framer-1OiEq .framer-ez5ras > :first-child, .framer-1OiEq .framer-1bsyb1z > :first-child, .framer-1OiEq .framer-2wv9l0 > :first-child, .framer-1OiEq .framer-1gxn14o > :first-child, .framer-1OiEq .framer-ggrpo5 > :first-child, .framer-1OiEq .framer-wb7ge7 > :first-child, .framer-1OiEq .framer-1f074bp > :first-child, .framer-1OiEq .framer-13ew2pv > :first-child, .framer-1OiEq .framer-1652jzq > :first-child, .framer-1OiEq .framer-1uqyzgc > :first-child, .framer-1OiEq .framer-3r9ihq > :first-child, .framer-1OiEq .framer-a2rebs > :first-child, .framer-1OiEq .framer-g9qfix > :first-child, .framer-1OiEq .framer-7e0rqs > :first-child, .framer-1OiEq .framer-8bi12y > :first-child, .framer-1OiEq .framer-28b5pq > :first-child, .framer-1OiEq .framer-162uwhi > :first-child { margin-top: 0px; } .framer-1OiEq.framer-fb2xo2 > :last-child, .framer-1OiEq .framer-7dpnet > :last-child, .framer-1OiEq .framer-1mo0wlk > :last-child, .framer-1OiEq .framer-g8azv0 > :last-child, .framer-1OiEq .framer-apg1g5 > :last-child, .framer-1OiEq .framer-xr5k4k > :last-child, .framer-1OiEq .framer-1d4g1q4 > :last-child, .framer-1OiEq .framer-xwyhah > :last-child, .framer-1OiEq .framer-q9o3h6 > :last-child, .framer-1OiEq .framer-w8od71 > :last-child, .framer-1OiEq .framer-hsfvww > :last-child, .framer-1OiEq .framer-pyhlqn > :last-child, .framer-1OiEq .framer-1ttqtak > :last-child, .framer-1OiEq .framer-1g0rutw > :last-child, .framer-1OiEq .framer-1dzcznt > :last-child, .framer-1OiEq .framer-1h99aqk > :last-child, .framer-1OiEq .framer-1g2k08v > :last-child, .framer-1OiEq .framer-1vx2bfd > :last-child, .framer-1OiEq .framer-1rpxrsq > :last-child, .framer-1OiEq .framer-1futfa1 > :last-child, .framer-1OiEq .framer-hkq7qp > :last-child, .framer-1OiEq .framer-z8sb5i > :last-child, .framer-1OiEq .framer-1vb2t2p > :last-child, .framer-1OiEq .framer-ccv3ei > :last-child, .framer-1OiEq .framer-wrenfs > :last-child, .framer-1OiEq .framer-1cm7zm4 > :last-child, .framer-1OiEq .framer-1xkhgnl > :last-child, .framer-1OiEq .framer-1yf7qpm > :last-child, .framer-1OiEq .framer-1sok0h3 > :last-child, .framer-1OiEq .framer-d0cyc > :last-child, .framer-1OiEq .framer-kbzal > :last-child, .framer-1OiEq .framer-1427yxh > :last-child, .framer-1OiEq .framer-1tfm02a > :last-child, .framer-1OiEq .framer-117dn62 > :last-child, .framer-1OiEq .framer-rb3yzr > :last-child, .framer-1OiEq .framer-1c5cyd1 > :last-child, .framer-1OiEq .framer-1670yay > :last-child, .framer-1OiEq .framer-1e6hs5w > :last-child, .framer-1OiEq .framer-1pde9jt > :last-child, .framer-1OiEq .framer-kezepa > :last-child, .framer-1OiEq .framer-17i9u46 > :last-child, .framer-1OiEq .framer-uk1s4s > :last-child, .framer-1OiEq .framer-4e3lqx > :last-child, .framer-1OiEq .framer-1jen8oj > :last-child, .framer-1OiEq .framer-t6r8lk > :last-child, .framer-1OiEq .framer-5lagxh > :last-child, .framer-1OiEq .framer-1gmjw3u > :last-child, .framer-1OiEq .framer-snnm7r > :last-child, .framer-1OiEq .framer-3a391p > :last-child, .framer-1OiEq .framer-phtzfv > :last-child, .framer-1OiEq .framer-13xtp2b > :last-child, .framer-1OiEq .framer-ez5ras > :last-child, .framer-1OiEq .framer-1bsyb1z > :last-child, .framer-1OiEq .framer-2wv9l0 > :last-child, .framer-1OiEq .framer-1gxn14o > :last-child, .framer-1OiEq .framer-ggrpo5 > :last-child, .framer-1OiEq .framer-wb7ge7 > :last-child, .framer-1OiEq .framer-1f074bp > :last-child, .framer-1OiEq .framer-13ew2pv > :last-child, .framer-1OiEq .framer-1652jzq > :last-child, .framer-1OiEq .framer-1uqyzgc > :last-child, .framer-1OiEq .framer-3r9ihq > :last-child, .framer-1OiEq .framer-a2rebs > :last-child, .framer-1OiEq .framer-g9qfix > :last-child, .framer-1OiEq .framer-7e0rqs > :last-child, .framer-1OiEq .framer-8bi12y > :last-child, .framer-1OiEq .framer-28b5pq > :last-child, .framer-1OiEq .framer-162uwhi > :last-child { margin-bottom: 0px; } .framer-1OiEq .framer-1csjyj5 > *, .framer-1OiEq .framer-8vqfe5 > *, .framer-1OiEq .framer-jx156w > *, .framer-1OiEq .framer-17a6d6u > *, .framer-1OiEq .framer-17g3cii > *, .framer-1OiEq .framer-1saumyi > *, .framer-1OiEq .framer-1x8p88j > *, .framer-1OiEq .framer-1t23hb > *, .framer-1OiEq .framer-4xn4ce > *, .framer-1OiEq .framer-5igu7c > *, .framer-1OiEq .framer-1lt7mqj > *, .framer-1OiEq .framer-1ainuab > *, .framer-1OiEq .framer-1yqat0r > *, .framer-1OiEq .framer-xrjguc > *, .framer-1OiEq .framer-j08hmh > *, .framer-1OiEq .framer-fb8c4p > *, .framer-1OiEq .framer-18z8nzm > *, .framer-1OiEq .framer-1opuvb7 > *, .framer-1OiEq .framer-1x4f373 > *, .framer-1OiEq .framer-1m8mc2d > *, .framer-1OiEq .framer-ozb7f2 > *, .framer-1OiEq .framer-sjfbw4 > * { margin: 0px; margin-left: calc(10px / 2); margin-right: calc(10px / 2); } .framer-1OiEq .framer-1csjyj5 > :first-child, .framer-1OiEq .framer-ya3okc > :first-child, .framer-1OiEq .framer-18r2oh3 > :first-child, .framer-1OiEq .framer-8vqfe5 > :first-child, .framer-1OiEq .framer-jx156w > :first-child, .framer-1OiEq .framer-17a6d6u > :first-child, .framer-1OiEq .framer-17g3cii > :first-child, .framer-1OiEq .framer-1saumyi > :first-child, .framer-1OiEq .framer-1x8p88j > :first-child, .framer-1OiEq .framer-1t23hb > :first-child, .framer-1OiEq .framer-4xn4ce > :first-child, .framer-1OiEq .framer-5igu7c > :first-child, .framer-1OiEq .framer-1lt7mqj > :first-child, .framer-1OiEq .framer-1ainuab > :first-child, .framer-1OiEq .framer-so06u9 > :first-child, .framer-1OiEq .framer-pntxy9 > :first-child, .framer-1OiEq .framer-1yqat0r > :first-child, .framer-1OiEq .framer-xrjguc > :first-child, .framer-1OiEq .framer-j08hmh > :first-child, .framer-1OiEq .framer-fb8c4p > :first-child, .framer-1OiEq .framer-18z8nzm > :first-child, .framer-1OiEq .framer-1opuvb7 > :first-child, .framer-1OiEq .framer-1x4f373 > :first-child, .framer-1OiEq .framer-1m8mc2d > :first-child, .framer-1OiEq .framer-1q9k2e5 > :first-child, .framer-1OiEq .framer-1gov77p > :first-child, .framer-1OiEq .framer-orzwps > :first-child, .framer-1OiEq .framer-1oxx4hb > :first-child, .framer-1OiEq .framer-ozb7f2 > :first-child, .framer-1OiEq .framer-sjfbw4 > :first-child { margin-left: 0px; } .framer-1OiEq .framer-1csjyj5 > :last-child, .framer-1OiEq .framer-ya3okc > :last-child, .framer-1OiEq .framer-18r2oh3 > :last-child, .framer-1OiEq .framer-8vqfe5 > :last-child, .framer-1OiEq .framer-jx156w > :last-child, .framer-1OiEq .framer-17a6d6u > :last-child, .framer-1OiEq .framer-17g3cii > :last-child, .framer-1OiEq .framer-1saumyi > :last-child, .framer-1OiEq .framer-1x8p88j > :last-child, .framer-1OiEq .framer-1t23hb > :last-child, .framer-1OiEq .framer-4xn4ce > :last-child, .framer-1OiEq .framer-5igu7c > :last-child, .framer-1OiEq .framer-1lt7mqj > :last-child, .framer-1OiEq .framer-1ainuab > :last-child, .framer-1OiEq .framer-so06u9 > :last-child, .framer-1OiEq .framer-pntxy9 > :last-child, .framer-1OiEq .framer-1yqat0r > :last-child, .framer-1OiEq .framer-xrjguc > :last-child, .framer-1OiEq .framer-j08hmh > :last-child, .framer-1OiEq .framer-fb8c4p > :last-child, .framer-1OiEq .framer-18z8nzm > :last-child, .framer-1OiEq .framer-1opuvb7 > :last-child, .framer-1OiEq .framer-1x4f373 > :last-child, .framer-1OiEq .framer-1m8mc2d > :last-child, .framer-1OiEq .framer-1q9k2e5 > :last-child, .framer-1OiEq .framer-1gov77p > :last-child, .framer-1OiEq .framer-orzwps > :last-child, .framer-1OiEq .framer-1oxx4hb > :last-child, .framer-1OiEq .framer-ozb7f2 > :last-child, .framer-1OiEq .framer-sjfbw4 > :last-child { margin-right: 0px; } .framer-1OiEq .framer-7dpnet > *, .framer-1OiEq .framer-pyhlqn > * { margin: 0px; margin-bottom: calc(65px / 2); margin-top: calc(65px / 2); } .framer-1OiEq .framer-1mo0wlk > *, .framer-1OiEq .framer-kbzal > *, .framer-1OiEq .framer-4e3lqx > *, .framer-1OiEq .framer-1jen8oj > *, .framer-1OiEq .framer-8bi12y > * { margin: 0px; margin-bottom: calc(40px / 2); margin-top: calc(40px / 2); } .framer-1OiEq .framer-g8azv0 > * { margin: 0px; margin-bottom: calc(33px / 2); margin-top: calc(33px / 2); } .framer-1OiEq .framer-ya3okc > *, .framer-1OiEq .framer-orzwps > *, .framer-1OiEq .framer-1oxx4hb > * { margin: 0px; margin-left: calc(20px / 2); margin-right: calc(20px / 2); } .framer-1OiEq .framer-apg1g5 > *, .framer-1OiEq .framer-xr5k4k > *, .framer-1OiEq .framer-1d4g1q4 > *, .framer-1OiEq .framer-xwyhah > *, .framer-1OiEq .framer-1ttqtak > *, .framer-1OiEq .framer-1g0rutw > *, .framer-1OiEq .framer-1yf7qpm > *, .framer-1OiEq .framer-1427yxh > *, .framer-1OiEq .framer-1tfm02a > *, .framer-1OiEq .framer-117dn62 > *, .framer-1OiEq .framer-t6r8lk > *, .framer-1OiEq .framer-2wv9l0 > * { margin: 0px; margin-bottom: calc(10px / 2); margin-top: calc(10px / 2); } .framer-1OiEq .framer-q9o3h6 > * { margin: 0px; margin-bottom: calc(27px / 2); margin-top: calc(27px / 2); } .framer-1OiEq .framer-w8od71 > * { margin: 0px; margin-bottom: calc(50px / 2); margin-top: calc(50px / 2); } .framer-1OiEq .framer-hsfvww > * { margin: 0px; margin-bottom: calc(119px / 2); margin-top: calc(119px / 2); } .framer-1OiEq .framer-18r2oh3 > *, .framer-1OiEq .framer-so06u9 > *, .framer-1OiEq .framer-pntxy9 > * { margin: 0px; margin-left: calc(6px / 2); margin-right: calc(6px / 2); } .framer-1OiEq .framer-1dzcznt > *, .framer-1OiEq .framer-1vx2bfd > *, .framer-1OiEq .framer-hkq7qp > *, .framer-1OiEq .framer-ccv3ei > *, .framer-1OiEq .framer-1xkhgnl > *, .framer-1OiEq .framer-1c5cyd1 > *, .framer-1OiEq .framer-1670yay > *, .framer-1OiEq .framer-1e6hs5w > *, .framer-1OiEq .framer-1pde9jt > *, .framer-1OiEq .framer-kezepa > *, .framer-1OiEq .framer-17i9u46 > *, .framer-1OiEq .framer-1gmjw3u > *, .framer-1OiEq .framer-phtzfv > *, .framer-1OiEq .framer-1bsyb1z > *, .framer-1OiEq .framer-wb7ge7 > *, .framer-1OiEq .framer-1652jzq > *, .framer-1OiEq .framer-a2rebs > *, .framer-1OiEq .framer-162uwhi > * { margin: 0px; margin-bottom: calc(30px / 2); margin-top: calc(30px / 2); } .framer-1OiEq .framer-1h99aqk > *, .framer-1OiEq .framer-1rpxrsq > *, .framer-1OiEq .framer-z8sb5i > *, .framer-1OiEq .framer-wrenfs > *, .framer-1OiEq .framer-1sok0h3 > *, .framer-1OiEq .framer-snnm7r > *, .framer-1OiEq .framer-13xtp2b > *, .framer-1OiEq .framer-1gxn14o > *, .framer-1OiEq .framer-1f074bp > *, .framer-1OiEq .framer-1uqyzgc > *, .framer-1OiEq .framer-g9qfix > * { margin: 0px; margin-bottom: calc(11px / 2); margin-top: calc(11px / 2); } .framer-1OiEq .framer-1g2k08v > *, .framer-1OiEq .framer-1futfa1 > *, .framer-1OiEq .framer-1vb2t2p > *, .framer-1OiEq .framer-1cm7zm4 > *, .framer-1OiEq .framer-d0cyc > * { margin: 0px; margin-bottom: calc(8px / 2); margin-top: calc(8px / 2); } .framer-1OiEq .framer-uk1s4s > * { margin: 0px; margin-bottom: calc(60px / 2); margin-top: calc(60px / 2); } .framer-1OiEq .framer-5lagxh > * { margin: 0px; margin-bottom: calc(25px / 2); margin-top: calc(25px / 2); } .framer-1OiEq .framer-3a391p > *, .framer-1OiEq .framer-ez5ras > *, .framer-1OiEq .framer-ggrpo5 > *, .framer-1OiEq .framer-13ew2pv > *, .framer-1OiEq .framer-3r9ihq > *, .framer-1OiEq .framer-7e0rqs > * { margin: 0px; margin-bottom: calc(2px / 2); margin-top: calc(2px / 2); } .framer-1OiEq .framer-1q9k2e5 > * { margin: 0px; margin-left: calc(60px / 2); margin-right: calc(60px / 2); } .framer-1OiEq .framer-1gov77p > * { margin: 0px; margin-left: calc(1px / 2); margin-right: calc(1px / 2); } }',
-  '.framer-1OiEq.framer-v-1hv2o6j.framer-fb2xo2 { width: 768px; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-1csjyj5 { padding: 136px 0px 20px 0px; width: 100%; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-7dpnet, .framer-1OiEq.framer-v-1hv2o6j .framer-ya3okc, .framer-1OiEq.framer-v-1vd12yp .framer-ya3okc { justify-content: center; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-1mo0wlk, .framer-1OiEq.framer-v-1hv2o6j .framer-17prusv { order: 0; width: min-content; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-g8azv0 { align-self: stretch; order: 0; width: auto; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-h1blye-container { width: auto; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-apg1g5, .framer-1OiEq.framer-v-1hv2o6j .framer-h8qa0u, .framer-1OiEq.framer-v-1hv2o6j .framer-5lagxh, .framer-1OiEq.framer-v-1vd12yp .framer-sjfbw4 { order: 1; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-7io10p, .framer-1OiEq.framer-v-1hv2o6j .framer-kbzal, .framer-1OiEq.framer-v-1vd12yp .framer-h1blye-container, .framer-1OiEq.framer-v-1vd12yp .framer-7io10p, .framer-1OiEq.framer-v-1vd12yp .framer-vkbq9p, .framer-1OiEq.framer-v-1vd12yp .framer-zbwnt2, .framer-1OiEq.framer-v-1vd12yp .framer-mgwi15, .framer-1OiEq.framer-v-1vd12yp .framer-162uwhi { width: 100%; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-1d4g1q4 { padding: 100px 20px 100px 20px; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-q9o3h6 { padding: 0px 20px 20px 20px; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-w8od71 { width: 763px; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-pyhlqn { padding: 0px 5px 0px 5px; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-8vqfe5 { padding: 85px 0px 85px 0px; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-sqpofl { padding: 32px 40px 32px 40px; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-jx156w, .framer-1OiEq.framer-v-1hv2o6j .framer-1jen8oj, .framer-1OiEq.framer-v-1vd12yp .framer-ozb7f2 { order: 0; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-17a6d6u, .framer-1OiEq.framer-v-1vd12yp .framer-gez7bu { order: 2; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-rb3yzr { width: 1000px; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-bst864 { grid-template-columns: repeat(2, minmax(200px, 1fr)); max-width: 750px; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-11shrbi-container, .framer-1OiEq.framer-v-1hv2o6j .framer-1rrzb1b-container, .framer-1OiEq.framer-v-1hv2o6j .framer-nlgb42-container, .framer-1OiEq.framer-v-1vd12yp .framer-11shrbi-container, .framer-1OiEq.framer-v-1vd12yp .framer-1rrzb1b-container, .framer-1OiEq.framer-v-1vd12yp .framer-nlgb42-container { height: auto; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-1670yay, .framer-1OiEq.framer-v-1hv2o6j .framer-1e6hs5w, .framer-1OiEq.framer-v-1hv2o6j .framer-17i9u46 { grid-column: unset; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-uk1s4s { width: 800px; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-4e3lqx { gap: 42px; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-t6r8lk { padding: 0px 0px 0px 40px; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-mszazt { height: 487px; width: 701px; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-1yqat0r { height: var(--framer-aspect-ratio-supported, 786px); top: -150px; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-8bi12y { height: min-content; padding: 80px 40px 80px 40px; width: 100%; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-1gov77p { width: 730px; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-28b5pq { padding: 100px 40px 100px 40px; }',
-  '.framer-1OiEq.framer-v-1hv2o6j .framer-1oxx4hb { width: 342px; }',
-  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-1OiEq.framer-v-1hv2o6j .framer-4e3lqx { gap: 0px; } .framer-1OiEq.framer-v-1hv2o6j .framer-4e3lqx > * { margin: 0px; margin-bottom: calc(42px / 2); margin-top: calc(42px / 2); } .framer-1OiEq.framer-v-1hv2o6j .framer-4e3lqx > :first-child { margin-top: 0px; } .framer-1OiEq.framer-v-1hv2o6j .framer-4e3lqx > :last-child { margin-bottom: 0px; } }',
-  '.framer-1OiEq.framer-v-1vd12yp.framer-fb2xo2 { width: 320px; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-qdh2wp-container { height: 971px; order: 1; z-index: -1; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-1csjyj5 { height: min-content; min-width: 50%; order: 0; padding: 150px 20px 50px 20px; width: 100%; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-7dpnet { gap: 37px; padding: 0px; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-1mo0wlk { flex-wrap: wrap; gap: 20px; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-apg1g5, .framer-1OiEq.framer-v-1vd12yp .framer-snnm7r, .framer-1OiEq.framer-v-1vd12yp .framer-3a391p { align-content: center; align-items: center; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-1d4g1q4 { order: 3; padding: 0px 5px 20px 5px; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-xwyhah { gap: 0px; width: 310px; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-q9o3h6 { order: 0; padding: 38px 5px 38px 5px; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-hsfvww { gap: 0px; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-8vqfe5 { order: 4; padding: 0px 20px 0px 20px; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-sqpofl { grid-template-columns: repeat(1, minmax(200px, 1fr)); padding: 60px 20px 30px 20px; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-kbzal { gap: 100px; order: 6; padding: 80px 20px 30px 20px; width: 100%; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-1427yxh { height: 161px; width: 100%; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-562txm, .framer-1OiEq.framer-v-1vd12yp .framer-pntxy9 { width: 240px; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-bst864 { grid-template-columns: repeat(1, minmax(200px, 1fr)); padding: 5px; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-1670yay, .framer-1OiEq.framer-v-1vd12yp .framer-1e6hs5w, .framer-1OiEq.framer-v-1vd12yp .framer-17i9u46 { grid-column: auto / span 1; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-1pde9jt, .framer-1OiEq.framer-v-1vd12yp .framer-kezepa { height: min-content; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-uk1s4s { gap: 100px; order: 7; padding: 80px 8px 7px 8px; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-4e3lqx { gap: 55px; order: 0; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-1jen8oj { gap: 5px; height: 331px; order: 0; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-t6r8lk { align-content: center; align-items: center; padding: 0px 0px 50px 0px; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-1ehzy0u { flex: none; white-space: pre; width: auto; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-1d18i2k { white-space: pre-wrap; width: 100%; word-break: break-word; word-wrap: break-word; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-mszazt { align-content: center; align-items: center; display: flex; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; padding: 0px; width: 100%; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-1yqat0r { aspect-ratio: unset; flex: 1 0 0px; height: min-content; left: unset; order: 0; position: relative; right: unset; top: unset; width: 1px; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-xrjguc { height: 215px; width: 490px; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-5lagxh { gap: 0px; order: 1; padding: 0px 20px 0px 20px; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-17prusv { gap: 20px; grid-template-columns: repeat(1, minmax(200px, 1fr)); order: 0; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-8bi12y { gap: 27px; height: min-content; order: 8; padding: 120px 0px 120px 0px; width: 100%; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-jl04gz { white-space: pre-wrap; width: 259px; word-break: break-word; word-wrap: break-word; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-1q9k2e5 { gap: 20px; width: 265px; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-6gtmix, .framer-1OiEq.framer-v-1vd12yp .framer-r3i8my, .framer-1OiEq.framer-v-1vd12yp .framer-1hsqj1f, .framer-1OiEq.framer-v-1vd12yp .framer-1f0fhb3 { height: var(--framer-aspect-ratio-supported, 30px); width: 89px; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-1gov77p { flex: none; gap: 0px; height: min-content; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-28b5pq { order: 9; padding: 95px 0px 95px 0px; }',
-  '.framer-1OiEq.framer-v-1vd12yp .framer-1oxx4hb { width: 298px; }',
-  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-1OiEq.framer-v-1vd12yp .framer-7dpnet, .framer-1OiEq.framer-v-1vd12yp .framer-1mo0wlk, .framer-1OiEq.framer-v-1vd12yp .framer-xwyhah, .framer-1OiEq.framer-v-1vd12yp .framer-hsfvww, .framer-1OiEq.framer-v-1vd12yp .framer-kbzal, .framer-1OiEq.framer-v-1vd12yp .framer-uk1s4s, .framer-1OiEq.framer-v-1vd12yp .framer-4e3lqx, .framer-1OiEq.framer-v-1vd12yp .framer-1jen8oj, .framer-1OiEq.framer-v-1vd12yp .framer-mszazt, .framer-1OiEq.framer-v-1vd12yp .framer-5lagxh, .framer-1OiEq.framer-v-1vd12yp .framer-17prusv, .framer-1OiEq.framer-v-1vd12yp .framer-8bi12y, .framer-1OiEq.framer-v-1vd12yp .framer-1q9k2e5, .framer-1OiEq.framer-v-1vd12yp .framer-1gov77p { gap: 0px; } .framer-1OiEq.framer-v-1vd12yp .framer-7dpnet > * { margin: 0px; margin-bottom: calc(37px / 2); margin-top: calc(37px / 2); } .framer-1OiEq.framer-v-1vd12yp .framer-7dpnet > :first-child, .framer-1OiEq.framer-v-1vd12yp .framer-1mo0wlk > :first-child, .framer-1OiEq.framer-v-1vd12yp .framer-xwyhah > :first-child, .framer-1OiEq.framer-v-1vd12yp .framer-hsfvww > :first-child, .framer-1OiEq.framer-v-1vd12yp .framer-kbzal > :first-child, .framer-1OiEq.framer-v-1vd12yp .framer-uk1s4s > :first-child, .framer-1OiEq.framer-v-1vd12yp .framer-4e3lqx > :first-child, .framer-1OiEq.framer-v-1vd12yp .framer-1jen8oj > :first-child, .framer-1OiEq.framer-v-1vd12yp .framer-5lagxh > :first-child, .framer-1OiEq.framer-v-1vd12yp .framer-8bi12y > :first-child { margin-top: 0px; } .framer-1OiEq.framer-v-1vd12yp .framer-7dpnet > :last-child, .framer-1OiEq.framer-v-1vd12yp .framer-1mo0wlk > :last-child, .framer-1OiEq.framer-v-1vd12yp .framer-xwyhah > :last-child, .framer-1OiEq.framer-v-1vd12yp .framer-hsfvww > :last-child, .framer-1OiEq.framer-v-1vd12yp .framer-kbzal > :last-child, .framer-1OiEq.framer-v-1vd12yp .framer-uk1s4s > :last-child, .framer-1OiEq.framer-v-1vd12yp .framer-4e3lqx > :last-child, .framer-1OiEq.framer-v-1vd12yp .framer-1jen8oj > :last-child, .framer-1OiEq.framer-v-1vd12yp .framer-5lagxh > :last-child, .framer-1OiEq.framer-v-1vd12yp .framer-8bi12y > :last-child { margin-bottom: 0px; } .framer-1OiEq.framer-v-1vd12yp .framer-1mo0wlk > * { margin: 0px; margin-bottom: calc(20px / 2); margin-top: calc(20px / 2); } .framer-1OiEq.framer-v-1vd12yp .framer-xwyhah > *, .framer-1OiEq.framer-v-1vd12yp .framer-hsfvww > *, .framer-1OiEq.framer-v-1vd12yp .framer-5lagxh > * { margin: 0px; margin-bottom: calc(0px / 2); margin-top: calc(0px / 2); } .framer-1OiEq.framer-v-1vd12yp .framer-kbzal > *, .framer-1OiEq.framer-v-1vd12yp .framer-uk1s4s > * { margin: 0px; margin-bottom: calc(100px / 2); margin-top: calc(100px / 2); } .framer-1OiEq.framer-v-1vd12yp .framer-4e3lqx > * { margin: 0px; margin-bottom: calc(55px / 2); margin-top: calc(55px / 2); } .framer-1OiEq.framer-v-1vd12yp .framer-1jen8oj > * { margin: 0px; margin-bottom: calc(5px / 2); margin-top: calc(5px / 2); } .framer-1OiEq.framer-v-1vd12yp .framer-mszazt > * { margin: 0px; margin-left: calc(10px / 2); margin-right: calc(10px / 2); } .framer-1OiEq.framer-v-1vd12yp .framer-mszazt > :first-child, .framer-1OiEq.framer-v-1vd12yp .framer-1q9k2e5 > :first-child, .framer-1OiEq.framer-v-1vd12yp .framer-1gov77p > :first-child { margin-left: 0px; } .framer-1OiEq.framer-v-1vd12yp .framer-mszazt > :last-child, .framer-1OiEq.framer-v-1vd12yp .framer-1q9k2e5 > :last-child, .framer-1OiEq.framer-v-1vd12yp .framer-1gov77p > :last-child { margin-right: 0px; } .framer-1OiEq.framer-v-1vd12yp .framer-17prusv > *, .framer-1OiEq.framer-v-1vd12yp .framer-17prusv > :first-child, .framer-1OiEq.framer-v-1vd12yp .framer-17prusv > :last-child { margin: 0px; } .framer-1OiEq.framer-v-1vd12yp .framer-8bi12y > * { margin: 0px; margin-bottom: calc(27px / 2); margin-top: calc(27px / 2); } .framer-1OiEq.framer-v-1vd12yp .framer-1q9k2e5 > * { margin: 0px; margin-left: calc(20px / 2); margin-right: calc(20px / 2); } .framer-1OiEq.framer-v-1vd12yp .framer-1gov77p > * { margin: 0px; margin-left: calc(0px / 2); margin-right: calc(0px / 2); } }',
+  '.framer-vPjst.framer-cygs1, .framer-vPjst .framer-cygs1 { display: block; }',
+  '.framer-vPjst.framer-fb2xo2 { align-content: center; align-items: center; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 0px; height: min-content; justify-content: flex-start; overflow: hidden; padding: 0px; position: relative; width: 1200px; }',
+  '.framer-vPjst .framer-qdh2wp-container { flex: none; height: 1513px; left: 0px; min-height: 0px; position: absolute; right: 0px; top: 0px; z-index: 0; }',
+  '.framer-vPjst .framer-1csjyj5 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; max-width: 1200px; overflow: hidden; padding: 71px 40px 20px 40px; position: relative; width: 1200px; }',
+  '.framer-vPjst .framer-7dpnet { align-content: center; align-items: center; display: flex; flex: 1 0 0px; flex-direction: column; flex-wrap: nowrap; gap: 65px; height: min-content; justify-content: flex-start; max-width: 1200px; overflow: hidden; padding: 150px 0px 29px 0px; position: relative; width: 1px; }',
+  '.framer-vPjst .framer-1mo0wlk { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 40px; height: min-content; justify-content: flex-start; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-g8azv0 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 33px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-h1blye-container, .framer-vPjst .framer-1dsuw28-container, .framer-vPjst .framer-195it53-container { flex: none; height: auto; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-ya3okc { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 20px; height: min-content; justify-content: flex-start; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-1xlgoke-container, .framer-vPjst .framer-ly6lyb-container { cursor: pointer; flex: none; height: 36px; position: relative; width: auto; }',
+  '.framer-vPjst .framer-16h9b6n { aspect-ratio: 1.8897058823529411 / 1; flex: none; height: var(--framer-aspect-ratio-supported, 593px); overflow: visible; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-apg1g5 { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-xr5k4k { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: flex-start; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-7io10p { flex: none; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 1060px; word-break: break-word; word-wrap: break-word; }',
+  '.framer-vPjst .framer-e6fybv-container { flex: none; height: 300px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-6k9qjn-container, .framer-vPjst .framer-iy3ngw-container, .framer-vPjst .framer-ec5tlq-container { cursor: default; height: 250px; position: relative; width: 200px; z-index: 1; }',
+  '.framer-vPjst .framer-14gjy58-container, .framer-vPjst .framer-zu8v3z-container, .framer-vPjst .framer-8cp9w7-container, .framer-vPjst .framer-eyxl4u-container, .framer-vPjst .framer-krmuio-container { height: 250px; position: relative; width: 200px; z-index: 1; }',
+  '.framer-vPjst .framer-gez7bu { flex: none; height: 2px; overflow: visible; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-1d4g1q4 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; max-width: 100%; overflow: hidden; padding: 100px 40px 100px 40px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-xwyhah { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; max-width: 1200px; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-q9o3h6 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 27px; height: min-content; justify-content: center; overflow: visible; padding: 0px 0px 20px 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-w8od71 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 50px; height: min-content; justify-content: center; max-width: 1200px; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-hsfvww { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 119px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-pyhlqn { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 65px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-1ttqtak, .framer-vPjst .framer-1g0rutw, .framer-vPjst .framer-1tfm02a, .framer-vPjst .framer-117dn62 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-18r2oh3, .framer-vPjst .framer-so06u9 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 6px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: min-content; }',
+  '.framer-vPjst .framer-gklbsh-container, .framer-vPjst .framer-ezns2g-container, .framer-vPjst .framer-1o7zqv7-container, .framer-vPjst .framer-1ui5nk4-container, .framer-vPjst .framer-1t4zmih-container, .framer-vPjst .framer-17af5vf-container, .framer-vPjst .framer-jcsk01-container, .framer-vPjst .framer-1pq5c66-container, .framer-vPjst .framer-122po8s-container { flex: none; height: 12px; position: relative; width: 12px; }',
+  '.framer-vPjst .framer-19n8zr6, .framer-vPjst .framer-kpgxy6, .framer-vPjst .framer-1d18i2k, .framer-vPjst .framer-jl04gz { flex: none; height: auto; overflow: visible; position: relative; white-space: pre; width: auto; }',
+  '.framer-vPjst .framer-vkbq9p { flex: none; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 540px; word-break: break-word; word-wrap: break-word; }',
+  '.framer-vPjst .framer-zbwnt2, .framer-vPjst .framer-562txm { flex: none; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 398px; word-break: break-word; word-wrap: break-word; }',
+  '.framer-vPjst .framer-8vqfe5 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: hidden; padding: 85px 100px 85px 100px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-sqpofl { display: grid; flex: 1 0 0px; gap: 60px; grid-auto-rows: min-content; grid-template-columns: repeat(3, minmax(200px, 1fr)); grid-template-rows: repeat(2, min-content); height: min-content; justify-content: center; max-width: 1200px; overflow: visible; padding: 32px 0px 32px 0px; position: relative; width: 1px; }',
+  '.framer-vPjst .framer-fbzk4b { align-self: start; flex: none; height: auto; justify-self: start; overflow: visible; position: relative; white-space: pre-wrap; width: 100%; word-break: break-word; word-wrap: break-word; }',
+  '.framer-vPjst .framer-1dzcznt, .framer-vPjst .framer-1vx2bfd, .framer-vPjst .framer-ccv3ei, .framer-vPjst .framer-1xkhgnl, .framer-vPjst .framer-1c5cyd1, .framer-vPjst .framer-1pde9jt, .framer-vPjst .framer-kezepa, .framer-vPjst .framer-1gmjw3u, .framer-vPjst .framer-phtzfv, .framer-vPjst .framer-1bsyb1z, .framer-vPjst .framer-wb7ge7, .framer-vPjst .framer-1652jzq, .framer-vPjst .framer-a2rebs { align-content: center; align-items: center; align-self: start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 30px; height: auto; justify-content: center; justify-self: start; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-1h99aqk, .framer-vPjst .framer-1rpxrsq, .framer-vPjst .framer-z8sb5i, .framer-vPjst .framer-wrenfs, .framer-vPjst .framer-1sok0h3, .framer-vPjst .framer-snnm7r, .framer-vPjst .framer-13xtp2b, .framer-vPjst .framer-1gxn14o, .framer-vPjst .framer-1f074bp, .framer-vPjst .framer-1uqyzgc, .framer-vPjst .framer-g9qfix { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 11px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-1g2k08v, .framer-vPjst .framer-1futfa1, .framer-vPjst .framer-1vb2t2p, .framer-vPjst .framer-1cm7zm4, .framer-vPjst .framer-d0cyc { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 8px; height: min-content; justify-content: center; padding: 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-jx156w, .framer-vPjst .framer-17g3cii, .framer-vPjst .framer-4xn4ce, .framer-vPjst .framer-1lt7mqj, .framer-vPjst .framer-j08hmh, .framer-vPjst .framer-fb8c4p, .framer-vPjst .framer-18z8nzm, .framer-vPjst .framer-1opuvb7, .framer-vPjst .framer-1x4f373, .framer-vPjst .framer-1m8mc2d { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-1ribz3k-container, .framer-vPjst .framer-1dscink-container, .framer-vPjst .framer-1j6u4ti-container, .framer-vPjst .framer-2ymwsj-container, .framer-vPjst .framer-1ypj5e0-container { flex: none; height: 26px; position: relative; width: 26px; }',
+  '.framer-vPjst .framer-g0jm1m, .framer-vPjst .framer-1t7m11c, .framer-vPjst .framer-1x28xq, .framer-vPjst .framer-1jrx1s8, .framer-vPjst .framer-1m4g8d1, .framer-vPjst .framer-1ehzy0u, .framer-vPjst .framer-1gri49i, .framer-vPjst .framer-1smddtw, .framer-vPjst .framer-1ykr04m, .framer-vPjst .framer-sm7fv2, .framer-vPjst .framer-59tp0e, .framer-vPjst .framer-9ovo4l { flex: 1 0 0px; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 1px; word-break: break-word; word-wrap: break-word; }',
+  '.framer-vPjst .framer-h8qa0u, .framer-vPjst .framer-bpv7lr, .framer-vPjst .framer-edvuem, .framer-vPjst .framer-1eivzpc, .framer-vPjst .framer-9o8n26, .framer-vPjst .framer-8j5uos, .framer-vPjst .framer-15u9wjh, .framer-vPjst .framer-yn5jo8, .framer-vPjst .framer-qc3fmc, .framer-vPjst .framer-1bkvn76, .framer-vPjst .framer-1b6qzsm { flex: none; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 100%; word-break: break-word; word-wrap: break-word; }',
+  '.framer-vPjst .framer-17a6d6u, .framer-vPjst .framer-1saumyi, .framer-vPjst .framer-1t23hb, .framer-vPjst .framer-5igu7c, .framer-vPjst .framer-1ainuab { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; text-decoration: none; width: 100%; }',
+  '.framer-vPjst .framer-dn4a9k-container, .framer-vPjst .framer-134lequ-container, .framer-vPjst .framer-u5ppin-container, .framer-vPjst .framer-reqcow-container, .framer-vPjst .framer-11itvfj-container { flex: 1 0 0px; height: auto; position: relative; width: 1px; }',
+  '.framer-vPjst .framer-hkq7qp { align-content: flex-end; align-items: flex-end; align-self: start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 30px; height: auto; justify-content: center; justify-self: start; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-1x8p88j { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-1yf7qpm, .framer-vPjst .framer-2wv9l0 { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; padding: 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-kbzal { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 40px; height: min-content; justify-content: center; max-width: 1200px; overflow: visible; padding: 85px 100px 85px 100px; position: relative; width: 1200px; }',
+  '.framer-vPjst .framer-1427yxh { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: 133px; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 502px; }',
+  '.framer-vPjst .framer-8r30wj { flex: none; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 352px; word-break: break-word; word-wrap: break-word; }',
+  '.framer-vPjst .framer-rb3yzr { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 0px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-bst864 { display: grid; flex: none; gap: 17px; grid-auto-rows: min-content; grid-template-columns: repeat(3, minmax(200px, 1fr)); grid-template-rows: repeat(2, min-content); height: min-content; justify-content: center; max-width: 1000px; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-11shrbi-container, .framer-vPjst .framer-1rrzb1b-container, .framer-vPjst .framer-nlgb42-container { cursor: default; flex: none; height: 432px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-1670yay, .framer-vPjst .framer-1e6hs5w, .framer-vPjst .framer-17i9u46 { align-content: center; align-items: center; align-self: start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 30px; grid-column: auto / span 2; height: auto; justify-content: center; justify-self: start; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-ps0uox-container, .framer-vPjst .framer-1bgn3mo-container, .framer-vPjst .framer-1vha8lw-container { cursor: default; flex: none; height: auto; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-uk1s4s { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 60px; height: min-content; justify-content: center; overflow: hidden; padding: 85px 40px 85px 40px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-4e3lqx { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 40px; height: min-content; justify-content: center; max-width: 1000px; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-1jen8oj { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 40px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-t6r8lk { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-pntxy9 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 6px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-mgwi15 { flex: none; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 1000px; word-break: break-word; word-wrap: break-word; }',
+  '.framer-vPjst .framer-mszazt { flex: none; height: 598px; overflow: hidden; position: relative; width: 1000px; will-change: var(--framer-will-change-override, transform); }',
+  '.framer-vPjst .framer-1yqat0r { align-content: center; align-items: center; aspect-ratio: 1.5649122807017544 / 1; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: var(--framer-aspect-ratio-supported, 786px); justify-content: center; left: 0px; overflow: visible; padding: 0px; position: absolute; right: -230px; top: -97px; z-index: 0; }',
+  '.framer-vPjst .framer-xrjguc { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: 786px; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 1230px; }',
+  '.framer-vPjst .framer-5lagxh { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 25px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-17prusv { display: grid; flex: none; gap: 60px; grid-auto-rows: min-content; grid-template-columns: repeat(3, minmax(200px, 1fr)); grid-template-rows: repeat(2, min-content); height: min-content; justify-content: center; max-width: 1000px; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-3a391p, .framer-vPjst .framer-ez5ras, .framer-vPjst .framer-ggrpo5, .framer-vPjst .framer-13ew2pv, .framer-vPjst .framer-3r9ihq, .framer-vPjst .framer-7e0rqs { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 2px; height: min-content; justify-content: center; padding: 0px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-8bi12y { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 40px; height: 377px; justify-content: center; overflow: hidden; padding: 85px 40px 85px 40px; position: relative; width: 1200px; }',
+  '.framer-vPjst .framer-1q9k2e5 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: wrap; gap: 60px; height: min-content; justify-content: center; max-width: 100%; overflow: visible; padding: 0px; position: relative; width: 1000px; }',
+  '.framer-vPjst .framer-6gtmix, .framer-vPjst .framer-r3i8my, .framer-vPjst .framer-1hsqj1f, .framer-vPjst .framer-1f0fhb3 { aspect-ratio: 2.9565217391304346 / 1; flex: none; height: var(--framer-aspect-ratio-supported, 46px); overflow: hidden; position: relative; width: 136px; }',
+  '.framer-vPjst .framer-1gov77p { align-content: center; align-items: center; display: flex; flex: 1 0 0px; flex-direction: row; flex-wrap: nowrap; gap: 1px; height: 1px; justify-content: center; overflow: hidden; padding: 0px; position: relative; text-decoration: none; width: 100%; }',
+  '.framer-vPjst .framer-10ao5sd-container { flex: none; height: 16px; position: relative; width: auto; }',
+  '.framer-vPjst .framer-28b5pq { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 0px; height: min-content; justify-content: center; overflow: visible; padding: 200px 40px 200px 40px; position: relative; width: 100%; }',
+  '.framer-vPjst .framer-162uwhi { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 30px; height: min-content; justify-content: center; max-width: 100%; overflow: visible; padding: 0px; position: relative; width: 1000px; }',
+  '.framer-vPjst .framer-1a0aq52 { flex: none; height: auto; position: relative; white-space: pre-wrap; width: 100%; word-break: break-word; word-wrap: break-word; }',
+  '.framer-vPjst .framer-orzwps { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 20px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: min-content; }',
+  '.framer-vPjst .framer-1oxx4hb { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 20px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 380px; }',
+  '.framer-vPjst .framer-ozb7f2, .framer-vPjst .framer-sjfbw4 { align-content: center; align-items: center; cursor: pointer; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: 36px; justify-content: center; overflow: visible; padding: 15px; position: relative; text-decoration: none; width: min-content; }',
+  '.framer-vPjst .framer-cukhih, .framer-vPjst .framer-1qk5l56 { flex: none; height: auto; position: relative; white-space: pre; width: auto; }',
+  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-vPjst.framer-fb2xo2, .framer-vPjst .framer-1csjyj5, .framer-vPjst .framer-7dpnet, .framer-vPjst .framer-1mo0wlk, .framer-vPjst .framer-g8azv0, .framer-vPjst .framer-ya3okc, .framer-vPjst .framer-apg1g5, .framer-vPjst .framer-xr5k4k, .framer-vPjst .framer-1d4g1q4, .framer-vPjst .framer-xwyhah, .framer-vPjst .framer-q9o3h6, .framer-vPjst .framer-w8od71, .framer-vPjst .framer-hsfvww, .framer-vPjst .framer-pyhlqn, .framer-vPjst .framer-1ttqtak, .framer-vPjst .framer-1g0rutw, .framer-vPjst .framer-18r2oh3, .framer-vPjst .framer-8vqfe5, .framer-vPjst .framer-1dzcznt, .framer-vPjst .framer-1h99aqk, .framer-vPjst .framer-1g2k08v, .framer-vPjst .framer-jx156w, .framer-vPjst .framer-17a6d6u, .framer-vPjst .framer-1vx2bfd, .framer-vPjst .framer-1rpxrsq, .framer-vPjst .framer-1futfa1, .framer-vPjst .framer-17g3cii, .framer-vPjst .framer-1saumyi, .framer-vPjst .framer-hkq7qp, .framer-vPjst .framer-z8sb5i, .framer-vPjst .framer-1vb2t2p, .framer-vPjst .framer-1x8p88j, .framer-vPjst .framer-1t23hb, .framer-vPjst .framer-ccv3ei, .framer-vPjst .framer-wrenfs, .framer-vPjst .framer-1cm7zm4, .framer-vPjst .framer-4xn4ce, .framer-vPjst .framer-5igu7c, .framer-vPjst .framer-1xkhgnl, .framer-vPjst .framer-1yf7qpm, .framer-vPjst .framer-1sok0h3, .framer-vPjst .framer-d0cyc, .framer-vPjst .framer-1lt7mqj, .framer-vPjst .framer-1ainuab, .framer-vPjst .framer-kbzal, .framer-vPjst .framer-1427yxh, .framer-vPjst .framer-1tfm02a, .framer-vPjst .framer-so06u9, .framer-vPjst .framer-117dn62, .framer-vPjst .framer-rb3yzr, .framer-vPjst .framer-1c5cyd1, .framer-vPjst .framer-1670yay, .framer-vPjst .framer-1e6hs5w, .framer-vPjst .framer-1pde9jt, .framer-vPjst .framer-kezepa, .framer-vPjst .framer-17i9u46, .framer-vPjst .framer-uk1s4s, .framer-vPjst .framer-4e3lqx, .framer-vPjst .framer-1jen8oj, .framer-vPjst .framer-t6r8lk, .framer-vPjst .framer-pntxy9, .framer-vPjst .framer-1yqat0r, .framer-vPjst .framer-xrjguc, .framer-vPjst .framer-5lagxh, .framer-vPjst .framer-1gmjw3u, .framer-vPjst .framer-snnm7r, .framer-vPjst .framer-3a391p, .framer-vPjst .framer-j08hmh, .framer-vPjst .framer-phtzfv, .framer-vPjst .framer-13xtp2b, .framer-vPjst .framer-ez5ras, .framer-vPjst .framer-fb8c4p, .framer-vPjst .framer-1bsyb1z, .framer-vPjst .framer-2wv9l0, .framer-vPjst .framer-1gxn14o, .framer-vPjst .framer-ggrpo5, .framer-vPjst .framer-18z8nzm, .framer-vPjst .framer-wb7ge7, .framer-vPjst .framer-1f074bp, .framer-vPjst .framer-13ew2pv, .framer-vPjst .framer-1opuvb7, .framer-vPjst .framer-1652jzq, .framer-vPjst .framer-1uqyzgc, .framer-vPjst .framer-3r9ihq, .framer-vPjst .framer-1x4f373, .framer-vPjst .framer-a2rebs, .framer-vPjst .framer-g9qfix, .framer-vPjst .framer-7e0rqs, .framer-vPjst .framer-1m8mc2d, .framer-vPjst .framer-8bi12y, .framer-vPjst .framer-1q9k2e5, .framer-vPjst .framer-1gov77p, .framer-vPjst .framer-28b5pq, .framer-vPjst .framer-162uwhi, .framer-vPjst .framer-orzwps, .framer-vPjst .framer-1oxx4hb, .framer-vPjst .framer-ozb7f2, .framer-vPjst .framer-sjfbw4 { gap: 0px; } .framer-vPjst.framer-fb2xo2 > *, .framer-vPjst .framer-rb3yzr > *, .framer-vPjst .framer-28b5pq > * { margin: 0px; margin-bottom: calc(0px / 2); margin-top: calc(0px / 2); } .framer-vPjst.framer-fb2xo2 > :first-child, .framer-vPjst .framer-7dpnet > :first-child, .framer-vPjst .framer-1mo0wlk > :first-child, .framer-vPjst .framer-g8azv0 > :first-child, .framer-vPjst .framer-apg1g5 > :first-child, .framer-vPjst .framer-xr5k4k > :first-child, .framer-vPjst .framer-1d4g1q4 > :first-child, .framer-vPjst .framer-xwyhah > :first-child, .framer-vPjst .framer-q9o3h6 > :first-child, .framer-vPjst .framer-w8od71 > :first-child, .framer-vPjst .framer-hsfvww > :first-child, .framer-vPjst .framer-pyhlqn > :first-child, .framer-vPjst .framer-1ttqtak > :first-child, .framer-vPjst .framer-1g0rutw > :first-child, .framer-vPjst .framer-1dzcznt > :first-child, .framer-vPjst .framer-1h99aqk > :first-child, .framer-vPjst .framer-1g2k08v > :first-child, .framer-vPjst .framer-1vx2bfd > :first-child, .framer-vPjst .framer-1rpxrsq > :first-child, .framer-vPjst .framer-1futfa1 > :first-child, .framer-vPjst .framer-hkq7qp > :first-child, .framer-vPjst .framer-z8sb5i > :first-child, .framer-vPjst .framer-1vb2t2p > :first-child, .framer-vPjst .framer-ccv3ei > :first-child, .framer-vPjst .framer-wrenfs > :first-child, .framer-vPjst .framer-1cm7zm4 > :first-child, .framer-vPjst .framer-1xkhgnl > :first-child, .framer-vPjst .framer-1yf7qpm > :first-child, .framer-vPjst .framer-1sok0h3 > :first-child, .framer-vPjst .framer-d0cyc > :first-child, .framer-vPjst .framer-kbzal > :first-child, .framer-vPjst .framer-1427yxh > :first-child, .framer-vPjst .framer-1tfm02a > :first-child, .framer-vPjst .framer-117dn62 > :first-child, .framer-vPjst .framer-rb3yzr > :first-child, .framer-vPjst .framer-1c5cyd1 > :first-child, .framer-vPjst .framer-1670yay > :first-child, .framer-vPjst .framer-1e6hs5w > :first-child, .framer-vPjst .framer-1pde9jt > :first-child, .framer-vPjst .framer-kezepa > :first-child, .framer-vPjst .framer-17i9u46 > :first-child, .framer-vPjst .framer-uk1s4s > :first-child, .framer-vPjst .framer-4e3lqx > :first-child, .framer-vPjst .framer-1jen8oj > :first-child, .framer-vPjst .framer-t6r8lk > :first-child, .framer-vPjst .framer-5lagxh > :first-child, .framer-vPjst .framer-1gmjw3u > :first-child, .framer-vPjst .framer-snnm7r > :first-child, .framer-vPjst .framer-3a391p > :first-child, .framer-vPjst .framer-phtzfv > :first-child, .framer-vPjst .framer-13xtp2b > :first-child, .framer-vPjst .framer-ez5ras > :first-child, .framer-vPjst .framer-1bsyb1z > :first-child, .framer-vPjst .framer-2wv9l0 > :first-child, .framer-vPjst .framer-1gxn14o > :first-child, .framer-vPjst .framer-ggrpo5 > :first-child, .framer-vPjst .framer-wb7ge7 > :first-child, .framer-vPjst .framer-1f074bp > :first-child, .framer-vPjst .framer-13ew2pv > :first-child, .framer-vPjst .framer-1652jzq > :first-child, .framer-vPjst .framer-1uqyzgc > :first-child, .framer-vPjst .framer-3r9ihq > :first-child, .framer-vPjst .framer-a2rebs > :first-child, .framer-vPjst .framer-g9qfix > :first-child, .framer-vPjst .framer-7e0rqs > :first-child, .framer-vPjst .framer-8bi12y > :first-child, .framer-vPjst .framer-28b5pq > :first-child, .framer-vPjst .framer-162uwhi > :first-child { margin-top: 0px; } .framer-vPjst.framer-fb2xo2 > :last-child, .framer-vPjst .framer-7dpnet > :last-child, .framer-vPjst .framer-1mo0wlk > :last-child, .framer-vPjst .framer-g8azv0 > :last-child, .framer-vPjst .framer-apg1g5 > :last-child, .framer-vPjst .framer-xr5k4k > :last-child, .framer-vPjst .framer-1d4g1q4 > :last-child, .framer-vPjst .framer-xwyhah > :last-child, .framer-vPjst .framer-q9o3h6 > :last-child, .framer-vPjst .framer-w8od71 > :last-child, .framer-vPjst .framer-hsfvww > :last-child, .framer-vPjst .framer-pyhlqn > :last-child, .framer-vPjst .framer-1ttqtak > :last-child, .framer-vPjst .framer-1g0rutw > :last-child, .framer-vPjst .framer-1dzcznt > :last-child, .framer-vPjst .framer-1h99aqk > :last-child, .framer-vPjst .framer-1g2k08v > :last-child, .framer-vPjst .framer-1vx2bfd > :last-child, .framer-vPjst .framer-1rpxrsq > :last-child, .framer-vPjst .framer-1futfa1 > :last-child, .framer-vPjst .framer-hkq7qp > :last-child, .framer-vPjst .framer-z8sb5i > :last-child, .framer-vPjst .framer-1vb2t2p > :last-child, .framer-vPjst .framer-ccv3ei > :last-child, .framer-vPjst .framer-wrenfs > :last-child, .framer-vPjst .framer-1cm7zm4 > :last-child, .framer-vPjst .framer-1xkhgnl > :last-child, .framer-vPjst .framer-1yf7qpm > :last-child, .framer-vPjst .framer-1sok0h3 > :last-child, .framer-vPjst .framer-d0cyc > :last-child, .framer-vPjst .framer-kbzal > :last-child, .framer-vPjst .framer-1427yxh > :last-child, .framer-vPjst .framer-1tfm02a > :last-child, .framer-vPjst .framer-117dn62 > :last-child, .framer-vPjst .framer-rb3yzr > :last-child, .framer-vPjst .framer-1c5cyd1 > :last-child, .framer-vPjst .framer-1670yay > :last-child, .framer-vPjst .framer-1e6hs5w > :last-child, .framer-vPjst .framer-1pde9jt > :last-child, .framer-vPjst .framer-kezepa > :last-child, .framer-vPjst .framer-17i9u46 > :last-child, .framer-vPjst .framer-uk1s4s > :last-child, .framer-vPjst .framer-4e3lqx > :last-child, .framer-vPjst .framer-1jen8oj > :last-child, .framer-vPjst .framer-t6r8lk > :last-child, .framer-vPjst .framer-5lagxh > :last-child, .framer-vPjst .framer-1gmjw3u > :last-child, .framer-vPjst .framer-snnm7r > :last-child, .framer-vPjst .framer-3a391p > :last-child, .framer-vPjst .framer-phtzfv > :last-child, .framer-vPjst .framer-13xtp2b > :last-child, .framer-vPjst .framer-ez5ras > :last-child, .framer-vPjst .framer-1bsyb1z > :last-child, .framer-vPjst .framer-2wv9l0 > :last-child, .framer-vPjst .framer-1gxn14o > :last-child, .framer-vPjst .framer-ggrpo5 > :last-child, .framer-vPjst .framer-wb7ge7 > :last-child, .framer-vPjst .framer-1f074bp > :last-child, .framer-vPjst .framer-13ew2pv > :last-child, .framer-vPjst .framer-1652jzq > :last-child, .framer-vPjst .framer-1uqyzgc > :last-child, .framer-vPjst .framer-3r9ihq > :last-child, .framer-vPjst .framer-a2rebs > :last-child, .framer-vPjst .framer-g9qfix > :last-child, .framer-vPjst .framer-7e0rqs > :last-child, .framer-vPjst .framer-8bi12y > :last-child, .framer-vPjst .framer-28b5pq > :last-child, .framer-vPjst .framer-162uwhi > :last-child { margin-bottom: 0px; } .framer-vPjst .framer-1csjyj5 > *, .framer-vPjst .framer-8vqfe5 > *, .framer-vPjst .framer-jx156w > *, .framer-vPjst .framer-17a6d6u > *, .framer-vPjst .framer-17g3cii > *, .framer-vPjst .framer-1saumyi > *, .framer-vPjst .framer-1x8p88j > *, .framer-vPjst .framer-1t23hb > *, .framer-vPjst .framer-4xn4ce > *, .framer-vPjst .framer-5igu7c > *, .framer-vPjst .framer-1lt7mqj > *, .framer-vPjst .framer-1ainuab > *, .framer-vPjst .framer-1yqat0r > *, .framer-vPjst .framer-xrjguc > *, .framer-vPjst .framer-j08hmh > *, .framer-vPjst .framer-fb8c4p > *, .framer-vPjst .framer-18z8nzm > *, .framer-vPjst .framer-1opuvb7 > *, .framer-vPjst .framer-1x4f373 > *, .framer-vPjst .framer-1m8mc2d > *, .framer-vPjst .framer-ozb7f2 > *, .framer-vPjst .framer-sjfbw4 > * { margin: 0px; margin-left: calc(10px / 2); margin-right: calc(10px / 2); } .framer-vPjst .framer-1csjyj5 > :first-child, .framer-vPjst .framer-ya3okc > :first-child, .framer-vPjst .framer-18r2oh3 > :first-child, .framer-vPjst .framer-8vqfe5 > :first-child, .framer-vPjst .framer-jx156w > :first-child, .framer-vPjst .framer-17a6d6u > :first-child, .framer-vPjst .framer-17g3cii > :first-child, .framer-vPjst .framer-1saumyi > :first-child, .framer-vPjst .framer-1x8p88j > :first-child, .framer-vPjst .framer-1t23hb > :first-child, .framer-vPjst .framer-4xn4ce > :first-child, .framer-vPjst .framer-5igu7c > :first-child, .framer-vPjst .framer-1lt7mqj > :first-child, .framer-vPjst .framer-1ainuab > :first-child, .framer-vPjst .framer-so06u9 > :first-child, .framer-vPjst .framer-pntxy9 > :first-child, .framer-vPjst .framer-1yqat0r > :first-child, .framer-vPjst .framer-xrjguc > :first-child, .framer-vPjst .framer-j08hmh > :first-child, .framer-vPjst .framer-fb8c4p > :first-child, .framer-vPjst .framer-18z8nzm > :first-child, .framer-vPjst .framer-1opuvb7 > :first-child, .framer-vPjst .framer-1x4f373 > :first-child, .framer-vPjst .framer-1m8mc2d > :first-child, .framer-vPjst .framer-1q9k2e5 > :first-child, .framer-vPjst .framer-1gov77p > :first-child, .framer-vPjst .framer-orzwps > :first-child, .framer-vPjst .framer-1oxx4hb > :first-child, .framer-vPjst .framer-ozb7f2 > :first-child, .framer-vPjst .framer-sjfbw4 > :first-child { margin-left: 0px; } .framer-vPjst .framer-1csjyj5 > :last-child, .framer-vPjst .framer-ya3okc > :last-child, .framer-vPjst .framer-18r2oh3 > :last-child, .framer-vPjst .framer-8vqfe5 > :last-child, .framer-vPjst .framer-jx156w > :last-child, .framer-vPjst .framer-17a6d6u > :last-child, .framer-vPjst .framer-17g3cii > :last-child, .framer-vPjst .framer-1saumyi > :last-child, .framer-vPjst .framer-1x8p88j > :last-child, .framer-vPjst .framer-1t23hb > :last-child, .framer-vPjst .framer-4xn4ce > :last-child, .framer-vPjst .framer-5igu7c > :last-child, .framer-vPjst .framer-1lt7mqj > :last-child, .framer-vPjst .framer-1ainuab > :last-child, .framer-vPjst .framer-so06u9 > :last-child, .framer-vPjst .framer-pntxy9 > :last-child, .framer-vPjst .framer-1yqat0r > :last-child, .framer-vPjst .framer-xrjguc > :last-child, .framer-vPjst .framer-j08hmh > :last-child, .framer-vPjst .framer-fb8c4p > :last-child, .framer-vPjst .framer-18z8nzm > :last-child, .framer-vPjst .framer-1opuvb7 > :last-child, .framer-vPjst .framer-1x4f373 > :last-child, .framer-vPjst .framer-1m8mc2d > :last-child, .framer-vPjst .framer-1q9k2e5 > :last-child, .framer-vPjst .framer-1gov77p > :last-child, .framer-vPjst .framer-orzwps > :last-child, .framer-vPjst .framer-1oxx4hb > :last-child, .framer-vPjst .framer-ozb7f2 > :last-child, .framer-vPjst .framer-sjfbw4 > :last-child { margin-right: 0px; } .framer-vPjst .framer-7dpnet > *, .framer-vPjst .framer-pyhlqn > * { margin: 0px; margin-bottom: calc(65px / 2); margin-top: calc(65px / 2); } .framer-vPjst .framer-1mo0wlk > *, .framer-vPjst .framer-kbzal > *, .framer-vPjst .framer-4e3lqx > *, .framer-vPjst .framer-1jen8oj > *, .framer-vPjst .framer-8bi12y > * { margin: 0px; margin-bottom: calc(40px / 2); margin-top: calc(40px / 2); } .framer-vPjst .framer-g8azv0 > * { margin: 0px; margin-bottom: calc(33px / 2); margin-top: calc(33px / 2); } .framer-vPjst .framer-ya3okc > *, .framer-vPjst .framer-orzwps > *, .framer-vPjst .framer-1oxx4hb > * { margin: 0px; margin-left: calc(20px / 2); margin-right: calc(20px / 2); } .framer-vPjst .framer-apg1g5 > *, .framer-vPjst .framer-xr5k4k > *, .framer-vPjst .framer-1d4g1q4 > *, .framer-vPjst .framer-xwyhah > *, .framer-vPjst .framer-1ttqtak > *, .framer-vPjst .framer-1g0rutw > *, .framer-vPjst .framer-1yf7qpm > *, .framer-vPjst .framer-1427yxh > *, .framer-vPjst .framer-1tfm02a > *, .framer-vPjst .framer-117dn62 > *, .framer-vPjst .framer-t6r8lk > *, .framer-vPjst .framer-2wv9l0 > * { margin: 0px; margin-bottom: calc(10px / 2); margin-top: calc(10px / 2); } .framer-vPjst .framer-q9o3h6 > * { margin: 0px; margin-bottom: calc(27px / 2); margin-top: calc(27px / 2); } .framer-vPjst .framer-w8od71 > * { margin: 0px; margin-bottom: calc(50px / 2); margin-top: calc(50px / 2); } .framer-vPjst .framer-hsfvww > * { margin: 0px; margin-bottom: calc(119px / 2); margin-top: calc(119px / 2); } .framer-vPjst .framer-18r2oh3 > *, .framer-vPjst .framer-so06u9 > *, .framer-vPjst .framer-pntxy9 > * { margin: 0px; margin-left: calc(6px / 2); margin-right: calc(6px / 2); } .framer-vPjst .framer-1dzcznt > *, .framer-vPjst .framer-1vx2bfd > *, .framer-vPjst .framer-hkq7qp > *, .framer-vPjst .framer-ccv3ei > *, .framer-vPjst .framer-1xkhgnl > *, .framer-vPjst .framer-1c5cyd1 > *, .framer-vPjst .framer-1670yay > *, .framer-vPjst .framer-1e6hs5w > *, .framer-vPjst .framer-1pde9jt > *, .framer-vPjst .framer-kezepa > *, .framer-vPjst .framer-17i9u46 > *, .framer-vPjst .framer-1gmjw3u > *, .framer-vPjst .framer-phtzfv > *, .framer-vPjst .framer-1bsyb1z > *, .framer-vPjst .framer-wb7ge7 > *, .framer-vPjst .framer-1652jzq > *, .framer-vPjst .framer-a2rebs > *, .framer-vPjst .framer-162uwhi > * { margin: 0px; margin-bottom: calc(30px / 2); margin-top: calc(30px / 2); } .framer-vPjst .framer-1h99aqk > *, .framer-vPjst .framer-1rpxrsq > *, .framer-vPjst .framer-z8sb5i > *, .framer-vPjst .framer-wrenfs > *, .framer-vPjst .framer-1sok0h3 > *, .framer-vPjst .framer-snnm7r > *, .framer-vPjst .framer-13xtp2b > *, .framer-vPjst .framer-1gxn14o > *, .framer-vPjst .framer-1f074bp > *, .framer-vPjst .framer-1uqyzgc > *, .framer-vPjst .framer-g9qfix > * { margin: 0px; margin-bottom: calc(11px / 2); margin-top: calc(11px / 2); } .framer-vPjst .framer-1g2k08v > *, .framer-vPjst .framer-1futfa1 > *, .framer-vPjst .framer-1vb2t2p > *, .framer-vPjst .framer-1cm7zm4 > *, .framer-vPjst .framer-d0cyc > * { margin: 0px; margin-bottom: calc(8px / 2); margin-top: calc(8px / 2); } .framer-vPjst .framer-uk1s4s > * { margin: 0px; margin-bottom: calc(60px / 2); margin-top: calc(60px / 2); } .framer-vPjst .framer-5lagxh > * { margin: 0px; margin-bottom: calc(25px / 2); margin-top: calc(25px / 2); } .framer-vPjst .framer-3a391p > *, .framer-vPjst .framer-ez5ras > *, .framer-vPjst .framer-ggrpo5 > *, .framer-vPjst .framer-13ew2pv > *, .framer-vPjst .framer-3r9ihq > *, .framer-vPjst .framer-7e0rqs > * { margin: 0px; margin-bottom: calc(2px / 2); margin-top: calc(2px / 2); } .framer-vPjst .framer-1q9k2e5 > * { margin: 0px; margin-left: calc(60px / 2); margin-right: calc(60px / 2); } .framer-vPjst .framer-1gov77p > * { margin: 0px; margin-left: calc(1px / 2); margin-right: calc(1px / 2); } }',
+  '.framer-vPjst.framer-v-1hv2o6j.framer-fb2xo2 { width: 768px; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-1csjyj5 { padding: 136px 0px 20px 0px; width: 100%; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-7dpnet, .framer-vPjst.framer-v-1hv2o6j .framer-ya3okc, .framer-vPjst.framer-v-1vd12yp .framer-ya3okc { justify-content: center; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-1mo0wlk, .framer-vPjst.framer-v-1hv2o6j .framer-17prusv { order: 0; width: min-content; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-g8azv0 { align-self: stretch; order: 0; width: auto; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-h1blye-container { width: auto; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-16h9b6n { height: var(--framer-aspect-ratio-supported, 407px); order: 1; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-apg1g5, .framer-vPjst.framer-v-1hv2o6j .framer-17a6d6u, .framer-vPjst.framer-v-1vd12yp .framer-gez7bu { order: 2; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-7io10p, .framer-vPjst.framer-v-1hv2o6j .framer-kbzal, .framer-vPjst.framer-v-1vd12yp .framer-h1blye-container, .framer-vPjst.framer-v-1vd12yp .framer-7io10p, .framer-vPjst.framer-v-1vd12yp .framer-vkbq9p, .framer-vPjst.framer-v-1vd12yp .framer-zbwnt2, .framer-vPjst.framer-v-1vd12yp .framer-mgwi15, .framer-vPjst.framer-v-1vd12yp .framer-162uwhi { width: 100%; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-1d4g1q4 { padding: 100px 20px 100px 20px; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-q9o3h6 { padding: 0px 20px 20px 20px; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-w8od71 { width: 763px; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-pyhlqn { padding: 0px 5px 0px 5px; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-8vqfe5 { padding: 85px 0px 85px 0px; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-sqpofl { padding: 32px 40px 32px 40px; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-jx156w, .framer-vPjst.framer-v-1hv2o6j .framer-1jen8oj, .framer-vPjst.framer-v-1vd12yp .framer-ozb7f2 { order: 0; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-h8qa0u, .framer-vPjst.framer-v-1hv2o6j .framer-5lagxh, .framer-vPjst.framer-v-1vd12yp .framer-sjfbw4 { order: 1; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-rb3yzr { width: 1000px; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-bst864 { grid-template-columns: repeat(2, minmax(200px, 1fr)); max-width: 750px; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-11shrbi-container, .framer-vPjst.framer-v-1hv2o6j .framer-1rrzb1b-container, .framer-vPjst.framer-v-1hv2o6j .framer-nlgb42-container, .framer-vPjst.framer-v-1vd12yp .framer-11shrbi-container, .framer-vPjst.framer-v-1vd12yp .framer-1rrzb1b-container, .framer-vPjst.framer-v-1vd12yp .framer-nlgb42-container { height: auto; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-1670yay, .framer-vPjst.framer-v-1hv2o6j .framer-1e6hs5w, .framer-vPjst.framer-v-1hv2o6j .framer-17i9u46 { grid-column: unset; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-uk1s4s { width: 800px; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-4e3lqx { gap: 42px; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-t6r8lk { padding: 0px 0px 0px 40px; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-mszazt { height: 487px; width: 701px; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-1yqat0r { top: -150px; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-8bi12y { height: min-content; padding: 80px 40px 80px 40px; width: 100%; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-1gov77p { width: 730px; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-28b5pq { padding: 100px 40px 100px 40px; }',
+  '.framer-vPjst.framer-v-1hv2o6j .framer-1oxx4hb { width: 342px; }',
+  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-vPjst.framer-v-1hv2o6j .framer-4e3lqx { gap: 0px; } .framer-vPjst.framer-v-1hv2o6j .framer-4e3lqx > * { margin: 0px; margin-bottom: calc(42px / 2); margin-top: calc(42px / 2); } .framer-vPjst.framer-v-1hv2o6j .framer-4e3lqx > :first-child { margin-top: 0px; } .framer-vPjst.framer-v-1hv2o6j .framer-4e3lqx > :last-child { margin-bottom: 0px; } }',
+  '.framer-vPjst.framer-v-1vd12yp.framer-fb2xo2 { width: 320px; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-qdh2wp-container { height: 1161px; order: 1; z-index: -1; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-1csjyj5 { min-width: 50%; order: 0; padding: 150px 20px 50px 20px; width: 100%; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-7dpnet { gap: 37px; padding: 0px; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-1mo0wlk { flex-wrap: wrap; gap: 20px; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-16h9b6n { height: var(--framer-aspect-ratio-supported, 148px); }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-apg1g5, .framer-vPjst.framer-v-1vd12yp .framer-snnm7r, .framer-vPjst.framer-v-1vd12yp .framer-3a391p { align-content: center; align-items: center; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-1d4g1q4 { order: 3; padding: 0px 5px 20px 5px; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-xwyhah { gap: 0px; width: 310px; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-q9o3h6 { order: 0; padding: 38px 5px 38px 5px; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-hsfvww { gap: 0px; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-8vqfe5 { order: 4; padding: 0px 20px 0px 20px; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-sqpofl { grid-template-columns: repeat(1, minmax(200px, 1fr)); padding: 60px 20px 30px 20px; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-kbzal { gap: 100px; order: 6; padding: 80px 20px 30px 20px; width: 100%; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-1427yxh { height: 161px; width: 100%; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-562txm, .framer-vPjst.framer-v-1vd12yp .framer-pntxy9 { width: 240px; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-bst864 { grid-template-columns: repeat(1, minmax(200px, 1fr)); padding: 5px; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-1670yay, .framer-vPjst.framer-v-1vd12yp .framer-1e6hs5w, .framer-vPjst.framer-v-1vd12yp .framer-17i9u46 { grid-column: auto / span 1; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-1pde9jt, .framer-vPjst.framer-v-1vd12yp .framer-kezepa { height: min-content; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-uk1s4s { gap: 100px; order: 7; padding: 80px 8px 7px 8px; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-4e3lqx { gap: 55px; order: 0; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-1jen8oj { gap: 5px; height: 331px; order: 0; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-t6r8lk { align-content: center; align-items: center; padding: 0px 0px 50px 0px; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-1ehzy0u { flex: none; white-space: pre; width: auto; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-1d18i2k { white-space: pre-wrap; width: 100%; word-break: break-word; word-wrap: break-word; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-mszazt { align-content: center; align-items: center; display: flex; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; padding: 0px; width: 100%; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-1yqat0r { aspect-ratio: unset; flex: 1 0 0px; height: min-content; left: unset; order: 0; position: relative; right: unset; top: unset; width: 1px; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-xrjguc { height: 215px; width: 490px; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-5lagxh { gap: 0px; order: 1; padding: 0px 20px 0px 20px; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-17prusv { gap: 20px; grid-template-columns: repeat(1, minmax(200px, 1fr)); order: 0; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-8bi12y { gap: 27px; height: min-content; order: 8; padding: 120px 0px 120px 0px; width: 100%; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-jl04gz { white-space: pre-wrap; width: 259px; word-break: break-word; word-wrap: break-word; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-1q9k2e5 { gap: 20px; width: 265px; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-6gtmix, .framer-vPjst.framer-v-1vd12yp .framer-r3i8my, .framer-vPjst.framer-v-1vd12yp .framer-1hsqj1f, .framer-vPjst.framer-v-1vd12yp .framer-1f0fhb3 { height: var(--framer-aspect-ratio-supported, 30px); width: 89px; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-1gov77p { flex: none; gap: 0px; height: min-content; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-28b5pq { order: 9; padding: 95px 0px 95px 0px; }',
+  '.framer-vPjst.framer-v-1vd12yp .framer-1oxx4hb { width: 298px; }',
+  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-vPjst.framer-v-1vd12yp .framer-7dpnet, .framer-vPjst.framer-v-1vd12yp .framer-1mo0wlk, .framer-vPjst.framer-v-1vd12yp .framer-xwyhah, .framer-vPjst.framer-v-1vd12yp .framer-hsfvww, .framer-vPjst.framer-v-1vd12yp .framer-kbzal, .framer-vPjst.framer-v-1vd12yp .framer-uk1s4s, .framer-vPjst.framer-v-1vd12yp .framer-4e3lqx, .framer-vPjst.framer-v-1vd12yp .framer-1jen8oj, .framer-vPjst.framer-v-1vd12yp .framer-mszazt, .framer-vPjst.framer-v-1vd12yp .framer-5lagxh, .framer-vPjst.framer-v-1vd12yp .framer-17prusv, .framer-vPjst.framer-v-1vd12yp .framer-8bi12y, .framer-vPjst.framer-v-1vd12yp .framer-1q9k2e5, .framer-vPjst.framer-v-1vd12yp .framer-1gov77p { gap: 0px; } .framer-vPjst.framer-v-1vd12yp .framer-7dpnet > * { margin: 0px; margin-bottom: calc(37px / 2); margin-top: calc(37px / 2); } .framer-vPjst.framer-v-1vd12yp .framer-7dpnet > :first-child, .framer-vPjst.framer-v-1vd12yp .framer-1mo0wlk > :first-child, .framer-vPjst.framer-v-1vd12yp .framer-xwyhah > :first-child, .framer-vPjst.framer-v-1vd12yp .framer-hsfvww > :first-child, .framer-vPjst.framer-v-1vd12yp .framer-kbzal > :first-child, .framer-vPjst.framer-v-1vd12yp .framer-uk1s4s > :first-child, .framer-vPjst.framer-v-1vd12yp .framer-4e3lqx > :first-child, .framer-vPjst.framer-v-1vd12yp .framer-1jen8oj > :first-child, .framer-vPjst.framer-v-1vd12yp .framer-5lagxh > :first-child, .framer-vPjst.framer-v-1vd12yp .framer-8bi12y > :first-child { margin-top: 0px; } .framer-vPjst.framer-v-1vd12yp .framer-7dpnet > :last-child, .framer-vPjst.framer-v-1vd12yp .framer-1mo0wlk > :last-child, .framer-vPjst.framer-v-1vd12yp .framer-xwyhah > :last-child, .framer-vPjst.framer-v-1vd12yp .framer-hsfvww > :last-child, .framer-vPjst.framer-v-1vd12yp .framer-kbzal > :last-child, .framer-vPjst.framer-v-1vd12yp .framer-uk1s4s > :last-child, .framer-vPjst.framer-v-1vd12yp .framer-4e3lqx > :last-child, .framer-vPjst.framer-v-1vd12yp .framer-1jen8oj > :last-child, .framer-vPjst.framer-v-1vd12yp .framer-5lagxh > :last-child, .framer-vPjst.framer-v-1vd12yp .framer-8bi12y > :last-child { margin-bottom: 0px; } .framer-vPjst.framer-v-1vd12yp .framer-1mo0wlk > * { margin: 0px; margin-bottom: calc(20px / 2); margin-top: calc(20px / 2); } .framer-vPjst.framer-v-1vd12yp .framer-xwyhah > *, .framer-vPjst.framer-v-1vd12yp .framer-hsfvww > *, .framer-vPjst.framer-v-1vd12yp .framer-5lagxh > * { margin: 0px; margin-bottom: calc(0px / 2); margin-top: calc(0px / 2); } .framer-vPjst.framer-v-1vd12yp .framer-kbzal > *, .framer-vPjst.framer-v-1vd12yp .framer-uk1s4s > * { margin: 0px; margin-bottom: calc(100px / 2); margin-top: calc(100px / 2); } .framer-vPjst.framer-v-1vd12yp .framer-4e3lqx > * { margin: 0px; margin-bottom: calc(55px / 2); margin-top: calc(55px / 2); } .framer-vPjst.framer-v-1vd12yp .framer-1jen8oj > * { margin: 0px; margin-bottom: calc(5px / 2); margin-top: calc(5px / 2); } .framer-vPjst.framer-v-1vd12yp .framer-mszazt > * { margin: 0px; margin-left: calc(10px / 2); margin-right: calc(10px / 2); } .framer-vPjst.framer-v-1vd12yp .framer-mszazt > :first-child, .framer-vPjst.framer-v-1vd12yp .framer-1q9k2e5 > :first-child, .framer-vPjst.framer-v-1vd12yp .framer-1gov77p > :first-child { margin-left: 0px; } .framer-vPjst.framer-v-1vd12yp .framer-mszazt > :last-child, .framer-vPjst.framer-v-1vd12yp .framer-1q9k2e5 > :last-child, .framer-vPjst.framer-v-1vd12yp .framer-1gov77p > :last-child { margin-right: 0px; } .framer-vPjst.framer-v-1vd12yp .framer-17prusv > *, .framer-vPjst.framer-v-1vd12yp .framer-17prusv > :first-child, .framer-vPjst.framer-v-1vd12yp .framer-17prusv > :last-child { margin: 0px; } .framer-vPjst.framer-v-1vd12yp .framer-8bi12y > * { margin: 0px; margin-bottom: calc(27px / 2); margin-top: calc(27px / 2); } .framer-vPjst.framer-v-1vd12yp .framer-1q9k2e5 > * { margin: 0px; margin-left: calc(20px / 2); margin-right: calc(20px / 2); } .framer-vPjst.framer-v-1vd12yp .framer-1gov77p > * { margin: 0px; margin-left: calc(0px / 2); margin-right: calc(0px / 2); } }',
   ...css2,
   ...css,
 ];
-var FramerzLfXOCD5_ = withCSS19(Component18, css23, 'framer-1OiEq',);
+var FramerzLfXOCD5_ = withCSS19(Component18, css23, 'framer-vPjst',);
 var stdin_default19 = FramerzLfXOCD5_;
 FramerzLfXOCD5_.displayName = 'Main (Page)';
-FramerzLfXOCD5_.defaultProps = { height: 6006.5, width: 1200, };
+FramerzLfXOCD5_.defaultProps = { height: 6807.5, width: 1200, };
 addPropertyControls22(FramerzLfXOCD5_, {
   variant: {
     options: ['G87o8jzVW', 'fu9Ny71bW', 'RuG5jmR5S',],
