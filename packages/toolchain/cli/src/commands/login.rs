@@ -10,13 +10,7 @@ pub struct Opts {
 
 impl Opts {
 	pub async fn execute(&self) -> Result<()> {
-		let api_endpoint = if let Some(e) = &self.api_endpoint {
-			Some(e.clone())
-		} else {
-			tokio::task::spawn_blocking(|| crate::util::login::inquire_self_hosting()).await??
-		};
-
-		crate::util::login::login(api_endpoint).await?;
+		crate::util::login::login(self.api_endpoint.clone()).await?;
 
 		Ok(())
 	}

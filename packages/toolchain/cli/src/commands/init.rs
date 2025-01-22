@@ -57,25 +57,10 @@ impl Opts {
 			.with_starting_cursor(0)
 			.prompt()?;
 
-			let login = inquire::Confirm::new("Would you like to log in to Rivet now?")
-				.with_default(true)
-				.with_help_message(
-					"This is required to deploy. You can run this later with `rivet login`.",
-				)
-				.prompt()?;
-
-			let api_endpoint = if login {
-				crate::util::login::inquire_self_hosting()?
-			} else {
-				None
-			};
-
 			Ok(PromptOutput {
 				project_name,
 				lang,
 				config_format,
-				login,
-				api_endpoint,
 			})
 		})
 		.await??;
@@ -162,13 +147,6 @@ impl Opts {
 
 		println!("Project created successfully.");
 
-		// Login to Rivet
-		if prompt.login {
-			println!();
-			println!("Login in to Rivet...");
-			crate::util::login::login(prompt.api_endpoint.clone()).await?;
-		}
-
 		println!();
 		println!();
 		println!("    ==========   Welcome to Rivet!   ==========");
@@ -180,7 +158,6 @@ impl Opts {
 		println!("  Discord:            https://rivet.gg/discord");
 		println!("  Issues:             https://github.com/rivet-gg/rivet/issues");
 		println!("  Questions & Ideas:  https://github.com/orgs/rivet-gg/discussions");
-		println!("  Configure IDE:      https://docs.deno.com/runtime/getting_started/setup_your_environment");
 		//println!("  Enterprise:       https://rivet.gg/sales");
 		println!();
 		println!("Next steps:");
@@ -212,8 +189,6 @@ struct PromptOutput {
 	project_name: String,
 	lang: Language,
 	config_format: ConfigFormat,
-	login: bool,
-	api_endpoint: Option<String>,
 }
 
 #[derive(Serialize)]

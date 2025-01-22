@@ -1,7 +1,7 @@
 use anyhow::Result;
 use inquire::validator::Validation;
 use std::result::Result as StdResult;
-use toolchain::tasks;
+use toolchain::{meta, paths, tasks, ToolchainCtx};
 
 use crate::util::{
 	os,
@@ -30,8 +30,39 @@ pub fn inquire_self_hosting() -> Result<Option<String>> {
 	Ok(api_endpoint)
 }
 
+/// Loads the toolchain ctx if already signed in. Prompts to login if not signed in.
+pub async fn load_or_login_with_endpoint(api_endpoint: Option<String>) -> Result<ToolchainCtx> {
+	// Login if needed
+	let is_logged_in = meta::read_project(&paths::data_dir()?, |x| x.cloud.is_some()).await?;
+	if !is_logged_in {
+		login(api_endpoint).await?;
+	}
+
+	// Load ctx
+	let ctx = toolchain::toolchain_ctx::load().await?;
+
+	Ok(ctx)
+}
+
+pub async fn load_or_login() -> Result<ToolchainCtx> {
+	load_or_login_with_endpoint(None).await
+}
+
 pub async fn login(api_endpoint: Option<String>) -> Result<()> {
-	let api_endpoint = api_endpoint.unwrap_or_else(|| "https://api.rivet.gg".to_string());
+	println!("Logging in to Rivet...");
+
+	// Inquire address
+	let api_endpoint = if let Some(e) = &api_endpoint {
+		e.clone()
+	} else {
+		// Attempt to read endpoint
+		let input_endpoint =
+			tokio::task::spawn_blocking(|| crate::util::login::inquire_self_hosting()).await??;
+
+
+		// Fallback to main
+		input_endpoint.unwrap_or_else(|| "https://api.rivet.gg".to_string())
+	};
 
 	// Check if linked
 	let output = run_task::<tasks::auth::check_state::Task>(

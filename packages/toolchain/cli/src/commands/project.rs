@@ -11,7 +11,7 @@ impl SubCommand {
 	pub async fn execute(&self) -> Result<()> {
 		match &self {
 			SubCommand::View => {
-				let ctx = toolchain::toolchain_ctx::load().await?;
+				let ctx = crate::util::login::load_or_login().await?;
 
 				let url = format!(
 					"{hub}/projects/{proj}",

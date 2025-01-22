@@ -19,7 +19,7 @@ impl SubCommand {
 		match &self {
 			SubCommand::Select(opts) => opts.execute().await,
 			SubCommand::View { environment } => {
-				let ctx = toolchain::toolchain_ctx::load().await?;
+				let ctx = crate::util::login::load_or_login().await?;
 				let env = crate::util::env::get_or_select(&ctx, environment.as_ref()).await?;
 
 				let url = format!(

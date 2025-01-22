@@ -34,7 +34,7 @@ impl Opts {
 				get_bootstrap_data::Input {},
 			)
 			.await?;
-			let ctx = toolchain::toolchain_ctx::load().await?;
+			let ctx = crate::util::login::load_or_login().await?;
 
 			// Find environment
 			let env_slug = crate::util::env::get_or_select(&ctx, Option::<String>::None).await?;
