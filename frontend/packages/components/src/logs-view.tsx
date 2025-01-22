@@ -110,6 +110,7 @@ export function LogsView({
 	const [follow, setFollow] = useState(true);
 	const isEmpty = lines.length === 0 || timestamps.length === 0;
 
+	const viewport = useRef<HTMLDivElement>(null);
 	const ref = useRef<Virtualizer<HTMLDivElement, Element>>(null);
 
 	useEffect(() => {
@@ -162,6 +163,7 @@ export function LogsView({
 					) : (
 						<VirtualScrollArea
 							virtualizerRef={ref}
+							viewportRef={viewport}
 							onChange={handleChange}
 							getRowData={(index) => ({
 								timestamp: showTurncatedLogsInfo
@@ -181,7 +183,7 @@ export function LogsView({
 							paddingEnd={8}
 							estimateSize={() => 28}
 							className="w-full"
-							row={<LogRow />}
+							row={LogRow}
 						/>
 					)}
 				</LogsArea>

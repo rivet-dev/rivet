@@ -7,7 +7,7 @@ import {
 	createFileRoute,
 	useLocation,
 } from "@tanstack/react-router";
-import { zodSearchValidator } from "@tanstack/router-zod-adapter";
+import { zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
 
 function Authenticated() {
@@ -35,7 +35,7 @@ const searchSchema = z.object({
 });
 
 export const Route = createFileRoute("/_authenticated")({
-	validateSearch: zodSearchValidator(searchSchema),
+	validateSearch: zodValidator(searchSchema),
 	component: Authenticated,
 });
 

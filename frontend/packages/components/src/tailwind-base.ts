@@ -42,6 +42,14 @@ const config = {
 			},
 		},
 		extend: {
+			fontFamily: {
+				"mono-console": [
+					"Consolas",
+					"Lucida Console",
+					"Courier New",
+					"monospace",
+				],
+			},
 			data: {
 				active: 'status~="active"',
 				open: 'state*="open"',

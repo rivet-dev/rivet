@@ -16,6 +16,10 @@ export default defineConfig({
 		lib: {
 			entry: {
 				index: path.resolve(__dirname, "src/index.ts"),
+				"code-mirror": path.resolve(
+					__dirname,
+					"src/code-mirror/index.tsx",
+				),
 				"tailwind-base": path.resolve(
 					__dirname,
 					"src/tailwind-base.ts",

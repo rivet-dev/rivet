@@ -59,6 +59,9 @@ export default defineConfig({
 			include: [/@rivet-gg\/components/, /node_modules/],
 		},
 	},
+	worker: {
+		format: "es",
+	},
 });
 
 async function shikiTransformer(): Promise<Plugin> {

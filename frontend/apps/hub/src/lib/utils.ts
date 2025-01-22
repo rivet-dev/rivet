@@ -97,3 +97,9 @@ export function RestOnRouteChange(props: ErrorComponentProps) {
 		});
 	}, [router]);
 }
+
+export function assertNonNullable<V>(v: V): asserts v is Exclude<V, null> {
+	if (!v) {
+		throw new Error(`${v} is null`);
+	}
+}

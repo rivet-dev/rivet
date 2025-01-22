@@ -189,4 +189,19 @@ export class Connection<A extends AnyActor> {
 	disconnect(reason?: string) {
 		this._websocket.close(1000, reason);
 	}
+
+	/**
+	 * Inspects the connection for debugging purposes.
+	 * @internal
+	 */
+	public _inspect() {
+		return {
+			id: this.id.toString(),
+			subscriptions: [...this.subscriptions.values()],
+			state: {
+				enabled: this.#stateEnabled,
+				native: this.#state,
+			},
+		};
+	}
 }

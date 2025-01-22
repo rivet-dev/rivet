@@ -1,13 +1,13 @@
 import { mergeWatchStreams } from "@/lib/watch-utilities";
 import { rivetClient } from "@/queries/global";
 import { getMetaWatchIndex } from "@/queries/utils";
-import { InspectResponseSchema } from "@rivet-gg/actor-protocol/http/inspect";
 import { Rivet } from "@rivet-gg/api";
 import {
 	type InfiniteData,
 	infiniteQueryOptions,
 	queryOptions,
 } from "@tanstack/react-query";
+import { uniqueId } from "lodash";
 
 export const projectActorsQueryOptions = ({
 	projectNameId,
@@ -81,6 +81,30 @@ export const projectActorsQueryOptions = ({
 	});
 };
 
+export const actorsCountQueryOptions = ({
+	projectNameId,
+	environmentNameId,
+	includeDestroyed,
+	tags,
+}: {
+	projectNameId: string;
+	environmentNameId: string;
+	includeDestroyed?: boolean;
+	tags?: Record<string, string>;
+}) => {
+	return infiniteQueryOptions({
+		...projectActorsQueryOptions({
+			projectNameId,
+			environmentNameId,
+			tags,
+			includeDestroyed,
+		}),
+		select: (data) =>
+			data.pages.flatMap((page) => page.actors || []).length,
+		notifyOnChangeProps: ["data"],
+	});
+};
+
 export const actorQueryOptions = ({
 	projectNameId,
 	environmentNameId,
@@ -131,6 +155,23 @@ export const actorQueryOptions = ({
 	});
 };
 
+export const actorDestroyedAtQueryOptions = ({
+	projectNameId,
+	environmentNameId,
+	actorId,
+}: {
+	projectNameId: string;
+	environmentNameId: string;
+	actorId: string;
+}) =>
+	queryOptions({
+		...actorQueryOptions({ projectNameId, environmentNameId, actorId }),
+		select: (data) =>
+			data.actor.destroyedAt
+				? new Date(data.actor.destroyedAt)
+				: undefined,
+	});
+
 export const actorLogsQueryOptions = (
 	{
 		projectNameId,
@@ -157,12 +198,12 @@ export const actorLogsQueryOptions = (
 			"logs",
 			stream,
 		],
-		queryFn: ({
+		queryFn: async ({
 			signal: abortSignal,
 			meta,
-			queryKey: [_, project, __, environment, ___, actorId, ____, stream],
-		}) =>
-			rivetClient.actor.logs.get(
+			queryKey: [, project, , environment, , actorId, , stream],
+		}) => {
+			const response = await rivetClient.actor.logs.get(
 				actorId,
 				{
 					project,
@@ -171,12 +212,14 @@ export const actorLogsQueryOptions = (
 					watchIndex: getMetaWatchIndex(meta),
 				},
 				{ abortSignal },
-			),
-		select: (data) => ({
-			...data,
-			timestamps: data.timestamps.map((ts) => ts.toISOString()),
-			lines: data.lines.map((line) => window.atob(line)),
-		}),
+			);
+			return {
+				...response,
+				timestamps: response.timestamps.map((ts) => ts.toISOString()),
+				lines: response.lines.map((line) => window.atob(line)),
+				ids: response.timestamps.map(() => uniqueId(stream)),
+			};
+		},
 		meta: {
 			watch: mergeWatchStreams,
 		},
@@ -235,7 +278,7 @@ export const actorBuildsQueryOptions = ({
 			signal: abortSignal,
 		}) =>
 			rivetClient.actor.builds.list(
-				{ project, environment },
+				{ project, environment, tagsJson: JSON.stringify(tagsJson) },
 				{
 					abortSignal,
 				},
@@ -399,96 +442,56 @@ export const actorRegionQueryOptions = ({
 	});
 };
 
-export const actorInspectQueryOptions = ({
-	projectNameId,
-	environmentNameId,
-	actorId,
-	network,
-}: {
-	projectNameId: string;
-	environmentNameId: string;
-	actorId: string;
-	network: Rivet.actor.Network;
-}) => {
+const createActorEndpoint = (network: Rivet.actor.Network) => {
 	const http = Object.values(network.ports).find(
 		(port) => port.protocol === "http",
 	);
+	if (!http) {
+		return undefined;
+	}
+	const url = new URL(`${http.protocol}://${http.hostname}:${http.port}`);
+	url.pathname = http.path || "/";
+	return url.href;
+};
+
+export const actorManagerUrlQueryOptions = ({
+	projectNameId,
+	environmentNameId,
+}: {
+	projectNameId: string;
+	environmentNameId: string;
+}) => {
 	return queryOptions({
 		queryKey: [
 			"project",
 			projectNameId,
 			"environment",
 			environmentNameId,
-			"actor",
-			actorId,
-			"inspect",
+			"actor-manager",
 		],
-		queryFn: async ({ signal }) => {
-			const url = new URL(
-				`${http?.protocol}://${http?.hostname}:${http?.port}`,
+		queryFn: async ({
+			signal: abortSignal,
+			queryKey: [_, project, __, environment],
+		}) => {
+			const response = await rivetClient.actor.list(
+				{
+					project,
+					environment,
+					tagsJson: JSON.stringify({ name: "manager" }),
+				},
+				{ abortSignal },
 			);
-			url.pathname = `${http?.path}/inspect`;
-			const response = await fetch(url.href, { signal });
-			if (!response.ok) {
-				throw response;
+
+			if (response.actors.length === 0) {
+				throw new Error("No actor manager found");
+			}
+			const href = createActorEndpoint(response.actors[0].network);
+
+			if (!href) {
+				throw new Error("No actor manager found");
 			}
 
-			const parsed = InspectResponseSchema.parse(await response.json());
-
-			// format the JSON for better readability
-			parsed.state.native = JSON.stringify(
-				JSON.parse(parsed.state.native),
-				null,
-				2,
-			);
-
-			return parsed;
+			return href;
 		},
-		enabled: http !== undefined,
-	});
-};
-
-export const actorStateQueryOptions = ({
-	projectNameId,
-	environmentNameId,
-	actorId,
-	network,
-}: {
-	projectNameId: string;
-	environmentNameId: string;
-	actorId: string;
-	network: Rivet.actor.Network;
-}) => {
-	return queryOptions({
-		...actorInspectQueryOptions({
-			projectNameId,
-			environmentNameId,
-			actorId,
-			network,
-		}),
-		refetchInterval: 1000,
-		select: (data) => data.state,
-	});
-};
-
-export const actorsRpcsQueryOptions = ({
-	projectNameId,
-	environmentNameId,
-	actorId,
-	network,
-}: {
-	projectNameId: string;
-	environmentNameId: string;
-	actorId: string;
-	network: Rivet.actor.Network;
-}) => {
-	return queryOptions({
-		...actorInspectQueryOptions({
-			projectNameId,
-			environmentNameId,
-			actorId,
-			network,
-		}),
-		select: (data) => data.rpcs,
 	});
 };

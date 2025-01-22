@@ -135,23 +135,22 @@ const Ol = ({ className, asChild, ...props }: TypographyElementProps<"ol">) => {
 	);
 };
 
-const Code = ({
-	className,
-	asChild,
-	...props
-}: TypographyElementProps<"code">) => {
-	const Comp = asChild ? Slot : "code";
-	return (
-		<Comp
-			className={cn(
-				"relative rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono text-sm font-semibold",
-				className,
-				getCommonHelperClass(props),
-			)}
-			{...omitCommonHelperProps(props)}
-		/>
-	);
-};
+const Code = forwardRef<HTMLElement, TypographyElementProps<"code">>(
+	({ className, asChild, ...props }, ref) => {
+		const Comp = asChild ? Slot : "code";
+		return (
+			<Comp
+				ref={ref}
+				className={cn(
+					"relative rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono text-sm font-semibold",
+					className,
+					getCommonHelperClass(props),
+				)}
+				{...omitCommonHelperProps(props)}
+			/>
+		);
+	},
+);
 
 const Lead = ({
 	className,
@@ -282,7 +281,7 @@ const DescriptionTerm = ({
 	const Comp = asChild ? Slot : "dt";
 	return (
 		<Comp
-			className={cn(className, getCommonHelperClass(props))}
+			className={cn(className, "min-w-0", getCommonHelperClass(props))}
 			{...omitCommonHelperProps(props)}
 		/>
 	);
@@ -298,7 +297,7 @@ const DescriptionDetails = ({
 		<Comp
 			className={cn(
 				className,
-				"mb-4 md:mb-0",
+				"mb-4 md:mb-0 min-w-0",
 				getCommonHelperClass(props),
 			)}
 			{...omitCommonHelperProps(props)}

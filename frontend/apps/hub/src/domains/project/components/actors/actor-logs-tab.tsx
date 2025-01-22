@@ -1,73 +1,101 @@
-import type { Rivet } from "@rivet-gg/api";
-import { Button, LogsView, WithTooltip } from "@rivet-gg/components";
-import { Icon, faSave } from "@rivet-gg/icons";
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { differenceInHours } from "date-fns";
-import { saveAs } from "file-saver";
-import { actorLogsQueryOptions } from "../../queries";
+import {
+	Button,
+	DocsSheet,
+	LogsView,
+	ToggleGroup,
+	ToggleGroupItem,
+} from "@rivet-gg/components";
+import { Icon, faBooks, faTrash } from "@rivet-gg/icons";
+import { startTransition, useState } from "react";
+import { ActorDetailsSettingsButton } from "./actor-details-settings-button";
+import { ActorDownloadLogsButton } from "./actor-download-logs-button";
+import { ActorLogs, type LogsTypeFilter } from "./actor-logs";
 
 interface ActorLogsTabProps {
 	projectNameId: string;
 	environmentNameId: string;
 	actorId: string;
-	logType: Rivet.actor.LogStream;
-	createdAt: Rivet.Timestamp;
 }
 
-export function ActorLogsTab({
-	projectNameId,
-	environmentNameId,
-	actorId,
-	logType,
-	createdAt,
-}: ActorLogsTabProps) {
-	const {
-		data: { timestamps, lines },
-	} = useSuspenseQuery(
-		actorLogsQueryOptions({
-			projectNameId,
-			environmentNameId,
-			actorId,
-			stream: logType,
-		}),
-	);
-
-	const areLogsRetained = differenceInHours(Date.now(), createdAt) < 24 * 3;
-
+export function ActorLogsTab(props: ActorLogsTabProps) {
+	const [search, setSearch] = useState("");
+	const [logsFilter, setLogsFilter] = useState<LogsTypeFilter>("all");
 	return (
-		<LogsView
-			timestamps={timestamps}
-			lines={lines}
-			empty={
-				areLogsRetained
-					? "No logs available."
-					: "Logs are retained for 3 days."
-			}
-			sidebar={
-				lines.length > 0 ? (
-					<WithTooltip
-						content="Download logs"
-						trigger={
-							<Button
-								variant="outline"
-								aria-label="Download logs"
-								size="icon"
-								onClick={() =>
-									saveAs(
-										new Blob([lines.join("\n")], {
-											type: "text/plain;charset=utf-8",
-										}),
-										"logs.txt",
-									)
-								}
-							>
-								<Icon icon={faSave} />
-							</Button>
-						}
+		<div className="flex flex-col h-full">
+			<div className="border-b">
+				<div className="flex items-stretch px-2">
+					<div className="border-r flex flex-1">
+						<Button
+							size="icon-sm"
+							variant="outline"
+							className="place-self-center"
+							onClick={() => startTransition(() => setSearch(""))}
+						>
+							<Icon icon={faTrash} />
+						</Button>
+						<input
+							type="text"
+							className="bg-transparent outline-none px-2 text-xs placeholder:text-muted-foreground font-sans flex-1"
+							placeholder="Filter output"
+							spellCheck={false}
+							onChange={(e) =>
+								startTransition(() => setSearch(e.target.value))
+							}
+						/>
+					</div>
+					<ToggleGroup
+						type="single"
+						value={logsFilter}
+						size="xs"
+						onValueChange={(value) => {
+							if (!value) {
+								setLogsFilter("all");
+							} else {
+								setLogsFilter(value as LogsTypeFilter);
+							}
+						}}
+						className="gap-0 text-xs p-2 border-r"
+					>
+						<ToggleGroupItem
+							value="all"
+							className="text-xs border border-r-0 rounded-se-none rounded-ee-none"
+						>
+							all
+						</ToggleGroupItem>
+						<ToggleGroupItem
+							value="output"
+							className="text-xs border rounded-none"
+						>
+							output
+						</ToggleGroupItem>
+						<ToggleGroupItem
+							value="errors"
+							className=" text-xs border rounded-es-none rounded-ss-none border-l-0"
+						>
+							errors
+						</ToggleGroupItem>
+					</ToggleGroup>
+					<DocsSheet title="Logging" path="docs/logging" showTooltip>
+						<Button
+							size="icon-sm"
+							variant="outline"
+							className="place-self-center ml-2 "
+						>
+							<Icon icon={faBooks} />
+						</Button>
+					</DocsSheet>
+					<ActorDownloadLogsButton
+						{...props}
+						typeFilter={logsFilter}
+						filter={search}
 					/>
-				) : null
-			}
-		/>
+					<ActorDetailsSettingsButton />
+				</div>
+			</div>
+			<div className="flex-1 min-h-0 overflow-hidden flex">
+				<ActorLogs {...props} typeFilter={logsFilter} filter={search} />
+			</div>
+		</div>
 	);
 }
 

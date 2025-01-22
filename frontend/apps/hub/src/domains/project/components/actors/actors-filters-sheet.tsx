@@ -32,7 +32,7 @@ export function ActorsFiltersSheet({
 	return (
 		<Sheet>
 			<SheetTrigger asChild>{children}</SheetTrigger>
-			<SheetContent>
+			<SheetContent side="left">
 				<SheetHeader>
 					<SheetTitle>{title}</SheetTitle>
 					<SheetDescription>
@@ -53,7 +53,7 @@ export function ActorsFiltersSheet({
 								onSubmit={onFiltersSubmitted}
 								defaultValues={{
 									tags: {},
-									showDestroyed: false,
+									showDestroyed: true,
 								}}
 								values={{ tags, showDestroyed }}
 							>
@@ -73,7 +73,7 @@ export function ActorsFiltersSheet({
 										onClick={() => {
 											onFiltersSubmitted({
 												tags: {},
-												showDestroyed: false,
+												showDestroyed: true,
 											});
 										}}
 									>

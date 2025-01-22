@@ -44,7 +44,6 @@ export const createSchemaForm = <Schema extends z.ZodSchema>(
 				defaultValues,
 				values,
 			});
-
 			return (
 				<Form {...form}>
 					<form
@@ -82,11 +81,11 @@ export const createSchemaForm = <Schema extends z.ZodSchema>(
 			return (
 				<Button
 					type="button"
+					{...props}
 					onClick={(e) => {
 						reset(defaultValues);
 						props.onClick?.(e);
 					}}
-					{...props}
 				/>
 			);
 		},

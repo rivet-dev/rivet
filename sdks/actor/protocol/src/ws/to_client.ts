@@ -48,3 +48,22 @@ export type RpcResponseOk = z.infer<typeof RpcResponseOkSchema>;
 export type RpcResponseError = z.infer<typeof RpcResponseErrorSchema>;
 export type ToClientEvent = z.infer<typeof ToClientEventSchema>;
 export type ToClientError = z.infer<typeof ToClientErrorSchema>;
+
+// MARK: Internal RPCs
+
+export const InspectRpcResponseSchema = z.object({
+	rpcs: z.array(z.string()),
+	state: z.object({
+		enabled: z.boolean(),
+		native: z.string(),
+	}),
+	connections: z.array(
+		z.object({
+			id: z.string(),
+			state: z.any(),
+			subscriptions: z.array(z.string()),
+		}),
+	),
+});
+
+export type InspectRpcResponse = z.infer<typeof InspectRpcResponseSchema>;

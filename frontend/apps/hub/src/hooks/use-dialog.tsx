@@ -274,3 +274,7 @@ useDialog.ConfirmLeaveGroup = createDialogHook(
 useDialog.EditBuildTags = createDialogHook(
 	import("@/domains/project/components/dialogs/edit-build-tags-dialog"),
 );
+
+useDialog.CreateActor = createDialogHook(
+	import("@/domains/project/components/dialogs/create-actor-dialog"),
+);

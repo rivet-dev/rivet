@@ -13,7 +13,7 @@ import {
 	createRootRouteWithContext,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/router-devtools";
-import { zodSearchValidator } from "@tanstack/router-zod-adapter";
+import { zodValidator } from "@tanstack/zod-adapter";
 import { usePostHog } from "posthog-js/react";
 import { useKonami } from "react-konami-code";
 import { z } from "zod";
@@ -122,7 +122,7 @@ const searchSchema = z.object({
 });
 
 export const Route = createRootRouteWithContext<RouterContext>()({
-	validateSearch: zodSearchValidator(searchSchema),
+	validateSearch: zodValidator(searchSchema),
 	component: RootRoute,
 	errorComponent: RootErrorComponent,
 	notFoundComponent: RootNotFoundComponent,

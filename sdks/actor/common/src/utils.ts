@@ -52,3 +52,28 @@ export function safeStringify(obj: unknown, maxSize: number) {
 
 	return JSON.stringify(obj, replacer);
 }
+
+// TODO: Instead of doing this, use a temp var for state and attempt to write
+// it. Roll back state if fails to serialize.
+export function isJsonSerializable(value: unknown): boolean {
+	// Handle primitive types directly
+	if (value === null || value === undefined) return true;
+	if (typeof value === "number") return Number.isFinite(value);
+	if (typeof value === "boolean" || typeof value === "string") return true;
+
+	// Handle arrays
+	if (Array.isArray(value)) {
+		return value.every(isJsonSerializable);
+	}
+
+	// Handle plain objects
+	if (typeof value === "object") {
+		// Reject if it's not a plain object
+		if (Object.getPrototypeOf(value) !== Object.prototype) return false;
+
+		// Check all values recursively
+		return Object.values(value).every(isJsonSerializable);
+	}
+
+	return false;
+}

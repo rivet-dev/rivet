@@ -2726,7 +2726,32 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@radix-ui/react-toggle@npm:^1.0.3":
+"@radix-ui/react-toggle-group@npm:^1.1.1":
+  version: 1.1.1
+  resolution: "@radix-ui/react-toggle-group@npm:1.1.1"
+  dependencies:
+    "@radix-ui/primitive": "npm:1.1.1"
+    "@radix-ui/react-context": "npm:1.1.1"
+    "@radix-ui/react-direction": "npm:1.1.0"
+    "@radix-ui/react-primitive": "npm:2.0.1"
+    "@radix-ui/react-roving-focus": "npm:1.1.1"
+    "@radix-ui/react-toggle": "npm:1.1.1"
+    "@radix-ui/react-use-controllable-state": "npm:1.1.0"
+  peerDependencies:
+    "@types/react": "*"
+    "@types/react-dom": "*"
+    react: ^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc
+    react-dom: ^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc
+  peerDependenciesMeta:
+    "@types/react":
+      optional: true
+    "@types/react-dom":
+      optional: true
+  checksum: 10c0/730403b34ab2578fb660d6704ae56a11ea34a708ff5289bf828dc128286c6b7755f35186b7e4865bf41a11563f49dbc6cacb1ff2261ca8606394893f52ac86a7
+  languageName: node
+  linkType: hard
+
+"@radix-ui/react-toggle@npm:1.1.1, @radix-ui/react-toggle@npm:^1.0.3":
   version: 1.1.1
   resolution: "@radix-ui/react-toggle@npm:1.1.1"
   dependencies:
@@ -2908,7 +2933,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@rivet-gg/actor-client@workspace:sdks/actor/client":
+"@rivet-gg/actor-client@workspace:*, @rivet-gg/actor-client@workspace:sdks/actor/client":
   version: 0.0.0-use.local
   resolution: "@rivet-gg/actor-client@workspace:sdks/actor/client"
   dependencies:
@@ -2929,7 +2954,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@rivet-gg/actor-common@workspace:*, @rivet-gg/actor-common@workspace:sdks/actor/common":
+"@rivet-gg/actor-common@workspace:*, @rivet-gg/actor-common@workspace:^, @rivet-gg/actor-common@workspace:sdks/actor/common":
   version: 0.0.0-use.local
   resolution: "@rivet-gg/actor-common@workspace:sdks/actor/common"
   dependencies:
@@ -3061,6 +3086,7 @@ __metadata:
     "@radix-ui/react-switch": "npm:^1.0.3"
     "@radix-ui/react-tabs": "npm:^1.0.4"
     "@radix-ui/react-toggle": "npm:^1.0.3"
+    "@radix-ui/react-toggle-group": "npm:^1.1.1"
     "@radix-ui/react-tooltip": "npm:^1.1.1"
     "@radix-ui/react-visually-hidden": "npm:^1.0.3"
     "@rivet-gg/icons": "workspace:^"
@@ -3111,6 +3137,8 @@ __metadata:
     "@fortawesome/free-solid-svg-icons": "npm:^6.5.2"
     "@fortawesome/react-fontawesome": "npm:^0.2.2"
     "@hookform/resolvers": "npm:^3.3.4"
+    "@rivet-gg/actor-client": "workspace:*"
+    "@rivet-gg/actor-common": "workspace:^"
     "@rivet-gg/actor-protocol": "workspace:*"
     "@rivet-gg/api": "file:vendor/rivet-gg-api.tgz"
     "@rivet-gg/api-ee": "file:vendor/rivet-gg-api-ee.tgz"
@@ -3124,10 +3152,11 @@ __metadata:
     "@tanstack/react-query": "npm:^5.56.2"
     "@tanstack/react-query-devtools": "npm:^5.58.0"
     "@tanstack/react-query-persist-client": "npm:^5.56.2"
-    "@tanstack/react-router": "npm:^1.81.5"
-    "@tanstack/router-devtools": "npm:^1.81.5"
+    "@tanstack/react-router": "npm:^1.97.3"
+    "@tanstack/react-table": "npm:^8.20.6"
+    "@tanstack/router-devtools": "npm:^1.97.3"
     "@tanstack/router-vite-plugin": "npm:^1.58.12"
-    "@tanstack/router-zod-adapter": "npm:^1.81.5"
+    "@tanstack/zod-adapter": "npm:^1.97.3"
     "@types/bcryptjs": "npm:^2.4.6"
     "@types/file-saver": "npm:^2"
     "@types/filesize": "npm:^5.0.2"
@@ -3139,14 +3168,16 @@ __metadata:
     "@vitejs/plugin-react": "npm:^4.2.1"
     autoprefixer: "npm:^10.4.19"
     bcryptjs: "npm:^2.4.3"
+    esast-util-from-js: "npm:^2.0.1"
     file-saver: "npm:^2.0.5"
     framer-motion: "npm:^11.2.11"
     lodash: "npm:^4.17.21"
     postcss: "npm:^8.4.38"
     posthog-js: "npm:^1.144.2"
-    react: "npm:*"
-    react-dom: "npm:*"
+    react: "npm:^19.0.0"
+    react-dom: "npm:^19.0.0"
     react-hook-form: "npm:^7.51.1"
+    react-inspector: "npm:^6.0.2"
     react-konami-code: "npm:^2.3.0"
     react-turnstile: "npm:^1.1.3"
     recharts: "npm:^2.12.7"
@@ -3892,9 +3923,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@tanstack/react-router@npm:^1.81.5":
-  version: 1.97.1
-  resolution: "@tanstack/react-router@npm:1.97.1"
+"@tanstack/react-router@npm:^1.97.3":
+  version: 1.97.3
+  resolution: "@tanstack/react-router@npm:1.97.3"
   dependencies:
     "@tanstack/history": "npm:1.97.0"
     "@tanstack/react-store": "npm:^0.7.0"
@@ -3904,7 +3935,7 @@ __metadata:
   peerDependencies:
     react: ">=18"
     react-dom: ">=18"
-  checksum: 10c0/a9bc90528c3cf2fb874ebee72b002588c81134e1afdf82d131a6f6e55662d38f4b6b7a56c4dc6a3113ca826f81e49b2b62ed1414fc6c54f201cc2513d0fc4bde
+  checksum: 10c0/fad3eaead7dc12083ec406dec9cfe444cb5ad494b547650332762331db8afb3081008d45985a77cf53e6289bd3dd1bc67da96b23ed74275a4b96d185f9dd7123
   languageName: node
   linkType: hard
 
@@ -3921,6 +3952,18 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@tanstack/react-table@npm:^8.20.6":
+  version: 8.20.6
+  resolution: "@tanstack/react-table@npm:8.20.6"
+  dependencies:
+    "@tanstack/table-core": "npm:8.20.5"
+  peerDependencies:
+    react: ">=16.8"
+    react-dom: ">=16.8"
+  checksum: 10c0/3213dc146f647fbd571f4e347007b969320819e588439b2ee95dd3a65efcbe30d097c24426dd82617041ed1e186182a5b303382bcebed5d61a1c6045a55c58d3
+  languageName: node
+  linkType: hard
+
 "@tanstack/react-virtual@npm:^3.0.0-beta.60, @tanstack/react-virtual@npm:^3.10.8":
   version: 3.11.2
   resolution: "@tanstack/react-virtual@npm:3.11.2"
@@ -3933,17 +3976,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@tanstack/router-devtools@npm:^1.81.5":
-  version: 1.97.1
-  resolution: "@tanstack/router-devtools@npm:1.97.1"
+"@tanstack/router-devtools@npm:^1.97.3":
+  version: 1.97.3
+  resolution: "@tanstack/router-devtools@npm:1.97.3"
   dependencies:
     clsx: "npm:^2.1.1"
     goober: "npm:^2.1.16"
   peerDependencies:
-    "@tanstack/react-router": ^1.97.1
+    "@tanstack/react-router": ^1.97.3
     react: ">=18"
     react-dom: ">=18"
-  checksum: 10c0/b36fc4ccf59595596e626c72b39112b5beb88a4c372b50de9e21414cd3c6c64ea43f0bb930605d0a1af0d81b74a7aae8b8ea7543f8652d93a0ba2ed87b32d41f
+  checksum: 10c0/8e33a7d2c5027b1aadb03876e6aad73404cc0c997a17d4bdfd30eb15f91a81d1fc382a6b80bb8b1851d53aab59ae6f28a250bc41ba413ee4aabb9f2626449da2
   languageName: node
   linkType: hard
 
@@ -4013,20 +4056,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@tanstack/router-zod-adapter@npm:^1.81.5":
-  version: 1.81.5
-  resolution: "@tanstack/router-zod-adapter@npm:1.81.5"
-  peerDependencies:
-    "@tanstack/react-router": ">=1.43.2"
-    zod: ">=3"
-  checksum: 10c0/25f565895ea12307ca76934d7153e291e28776f0f2b51e3dd7542fc16dbd1a22de122734cbf8c3e928aad1e7c84fd526335cc0080b76dc0e15942f90602e90a5
-  languageName: node
-  linkType: hard
-
 "@tanstack/store@npm:0.7.0":
   version: 0.7.0
   resolution: "@tanstack/store@npm:0.7.0"
   checksum: 10c0/17003f1eba25bb6e9e2557ffb5d9c63cac09aa46f57d670a917727665ccc0b72d8d421ea1c07451257554aa5d14dbfff46875e7ed6a81f133b0738065f3162df
+  languageName: node
+  linkType: hard
+
+"@tanstack/table-core@npm:8.20.5":
+  version: 8.20.5
+  resolution: "@tanstack/table-core@npm:8.20.5"
+  checksum: 10c0/3c27b5debd61b6bd9bfbb40bfc7c5d5af90873ae1a566b20e3bf2d2f4f2e9a78061c081aacc5259a00e256f8df506ec250eb5472f5c01ff04baf9918b554982b
   languageName: node
   linkType: hard
 
@@ -4041,6 +4081,16 @@ __metadata:
   version: 1.97.0
   resolution: "@tanstack/virtual-file-routes@npm:1.97.0"
   checksum: 10c0/484fbb29ea9e20235f8a9aaf5d0d50cdabca849fc8521bccd5c2275b33a18be1667f51d0dc2ce25936a9fb0a8d61fdbaad80c8601814a9ca7a8df32c64af201e
+  languageName: node
+  linkType: hard
+
+"@tanstack/zod-adapter@npm:^1.97.3":
+  version: 1.97.3
+  resolution: "@tanstack/zod-adapter@npm:1.97.3"
+  peerDependencies:
+    "@tanstack/react-router": ">=1.43.2"
+    zod: ^3.23.8
+  checksum: 10c0/3910489e73bf6f9daf390aa4c7c6ca0505ffe16a993edab16f99730da45e9c7cd7cc4d415bfa0ad4af6e304c9b17341b1191f72c250419544783f7781c102f77
   languageName: node
   linkType: hard
 
@@ -11562,6 +11612,15 @@ __metadata:
   peerDependencies:
     react: ^16.8.0 || ^17 || ^18 || ^19
   checksum: 10c0/6eebead2900e3d369a989e7a20429f390dc75b3897142aa3107f1f6dabb9ae64fed201ea98cdcd8676e40466c97748aeb0c0d83264f5bd3a84dbc0b8e4863415
+  languageName: node
+  linkType: hard
+
+"react-inspector@npm:^6.0.2":
+  version: 6.0.2
+  resolution: "react-inspector@npm:6.0.2"
+  peerDependencies:
+    react: ^16.8.4 || ^17.0.0 || ^18.0.0
+  checksum: 10c0/8f9b23c21b4d95722e28c9455c2bf00fd9437347714382594461f98e5b9954d60864d0f4e74e881639b065e752a97ba52a65e39930c234072e5bff291bb02b5e
   languageName: node
   linkType: hard
 

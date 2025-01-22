@@ -32,10 +32,11 @@ const buttonVariants = cva(
 			size: {
 				default: "h-10 px-4 py-2",
 				xs: "h-5 rounded-md px-2 text-xs",
-				sm: "h-9 rounded-md px-3 text-xs",
+				sm: "h-7 rounded-md px-2 text-xs [&_svg]:size-3",
 				lg: "h-11 rounded-md px-8",
 				icon: "h-10 w-10",
 				"icon-sm": "h-7 w-7 text-xs [&_svg]:size-3",
+				"icon-xs": "h-5 w-5 text-xs [&_svg]:size-2",
 			},
 		},
 		defaultVariants: {
@@ -89,13 +90,21 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 						icon={faSpinnerThird}
 						className={cn(
 							"h-4 w-4 animate-spin",
-							size !== "icon" && "mr-2",
+							!size?.includes("icon") && "mr-2",
 						)}
 					/>
 				) : startIcon ? (
-					React.cloneElement(startIcon, { className: "mr-2" })
+					React.cloneElement(startIcon, {
+						className: cn(
+							"mr-2",
+							{
+								"mr-1.5": size === "sm",
+							},
+							startIcon.props.className,
+						),
+					})
 				) : null}
-				{size === "icon" && isLoading ? null : (
+				{!size?.includes("icon") && isLoading ? null : (
 					<Slottable>{children}</Slottable>
 				)}
 				{endIcon

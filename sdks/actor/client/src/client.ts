@@ -164,7 +164,7 @@ export class Client {
 	async getWithId<A = unknown>(
 		actorId: string,
 		opts?: GetWithIdOptions,
-	): Promise<ActorHandle> {
+	): Promise<ActorHandle<A>> {
 		logger().debug("get actor with id ", {
 			actorId,
 			parameters: opts?.parameters,

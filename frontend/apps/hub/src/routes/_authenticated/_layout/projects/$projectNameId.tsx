@@ -14,7 +14,7 @@ import {
 	createFileRoute,
 	notFound,
 } from "@tanstack/react-router";
-import { zodSearchValidator } from "@tanstack/router-zod-adapter";
+import { zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
 
 function ProjectIdErrorComponent(props: ErrorComponentProps) {
@@ -87,7 +87,7 @@ const searchSchema = z.object({
 export const Route = createFileRoute(
 	"/_authenticated/_layout/projects/$projectNameId",
 )({
-	validateSearch: zodSearchValidator(searchSchema),
+	validateSearch: zodValidator(searchSchema),
 	component: ProjectIdRoute,
 	errorComponent: ProjectIdErrorComponent,
 	pendingComponent: Layout.Root.Skeleton,

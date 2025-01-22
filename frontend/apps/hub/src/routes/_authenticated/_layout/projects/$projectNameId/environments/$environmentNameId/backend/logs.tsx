@@ -14,7 +14,7 @@ import {
 	type ErrorComponentProps,
 	createFileRoute,
 } from "@tanstack/react-router";
-import { zodSearchValidator } from "@tanstack/router-zod-adapter";
+import { zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
 
 function ProjectBackendEnvironmentIdLogsRoute() {
@@ -58,7 +58,7 @@ const searchSchema = z.object({
 export const Route = createFileRoute(
 	"/_authenticated/_layout/projects/$projectNameId/environments/$environmentNameId/backend/logs",
 )({
-	validateSearch: zodSearchValidator(searchSchema),
+	validateSearch: zodValidator(searchSchema),
 	staticData: {
 		layout: "full",
 	},

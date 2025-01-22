@@ -1,5 +1,7 @@
-import { Flex, Text } from "@rivet-gg/components";
+import { CatchBoundary, useNavigate, useSearch } from "@tanstack/react-router";
 import { ActorsActorDetails } from "./actors-actor-details";
+import { ActorsActorMissing } from "./actors-actor-missing";
+import { ActorsActorError } from "./actors-actor-not-found";
 
 interface ActorsActorDetailsPanelProps {
 	projectNameId: string;
@@ -12,22 +14,36 @@ export function ActorsActorDetailsPanel({
 	environmentNameId,
 	actorId,
 }: ActorsActorDetailsPanelProps) {
+	const currentTab = useSearch({
+		from: "/_authenticated/_layout/projects/$projectNameId/environments/$environmentNameId/actors",
+		select: (state) => state.tab,
+	});
+
+	const navigate = useNavigate();
+
 	if (!actorId) {
-		return (
-			<Flex items="center" justify="center" className="h-full">
-				<Text textAlign="center">
-					Please select an actor from the list.
-				</Text>
-			</Flex>
-		);
+		return <ActorsActorMissing />;
 	}
 
 	return (
-		<ActorsActorDetails
-			projectNameId={projectNameId}
-			environmentNameId={environmentNameId}
-			actorId={actorId}
-		/>
+		<CatchBoundary
+			getResetKey={() => actorId}
+			errorComponent={ActorsActorError}
+		>
+			<ActorsActorDetails
+				tab={currentTab}
+				projectNameId={projectNameId}
+				environmentNameId={environmentNameId}
+				actorId={actorId}
+				onTabChange={(tab) => {
+					navigate({
+						from: "/projects/$projectNameId/environments/$environmentNameId/actors",
+						to: ".",
+						search: (old) => ({ ...old, tab }),
+					});
+				}}
+			/>
+		</CatchBoundary>
 	);
 }
 ActorsActorDetailsPanel.Skeleton = ActorsActorDetails.Skeleton;

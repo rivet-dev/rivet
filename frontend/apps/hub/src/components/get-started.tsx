@@ -60,7 +60,7 @@ export function GetStarted() {
 				<Button
 					onClick={() => {
 						document
-							.getElementById("examples")
+							.getElementById("build-with-rivet")
 							?.scrollIntoView({ behavior: "smooth" });
 					}}
 					endIcon={<Icon icon={faChevronDoubleDown} />}
@@ -152,7 +152,11 @@ export function GetStarted() {
 					</CardContent>
 				</motion.div>
 			</Card> */}
-			<Card asChild className="max-w-xl w-full mx-auto my-6">
+			<Card
+				asChild
+				className="max-w-xl w-full mx-auto my-6"
+				id="build-with-rivet"
+			>
 				<motion.div>
 					<CardHeader>
 						<CardTitle>Build with Rivet</CardTitle>

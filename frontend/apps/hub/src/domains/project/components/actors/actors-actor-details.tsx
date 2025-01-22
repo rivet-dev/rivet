@@ -1,262 +1,122 @@
 import {
-	Button,
-	ClickToCopy,
 	Flex,
 	LogsView,
-	Ping,
 	Skeleton,
-	SmallText,
 	Tabs,
 	TabsContent,
 	TabsList,
 	TabsTrigger,
-	Text,
+	cn,
 } from "@rivet-gg/components";
-import { ErrorBoundary } from "@sentry/react";
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
-import { useNavigate, useSearch } from "@tanstack/react-router";
-import { formatISO } from "date-fns";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import { Suspense } from "react";
-import {
-	actorErrorsQueryOptions,
-	actorQueryOptions,
-	useDestroyActorMutation,
-} from "../../queries";
+import { actorQueryOptions } from "../../queries";
 import { ActorConfigTab } from "./actor-config-tab";
+import { ActorConnectionsTab } from "./actor-connections-tab";
+import { ActorDetailsSettingsProvider } from "./actor-details-settings";
 import { ActorLogsTab } from "./actor-logs-tab";
-import { ActorRegion } from "./actor-region";
+import { ActorStateTab } from "./actor-state-tab";
 import { ActorStatus } from "./actor-status";
-import { ActorTags } from "./actor-tags";
+import { ActorStopButton } from "./actor-stop-button";
+import { ActorsSidebarToggleButton } from "./actors-sidebar-toggle-button";
+import { ActorConsole } from "./console/actor-console";
+import { ActorWorkerContextProvider } from "./worker/actor-worker-context";
 
 interface ActorsActorDetailsProps {
 	projectNameId: string;
 	environmentNameId: string;
 	actorId: string;
+	className?: string;
+	tab?: string;
+	onTabChange?: (tab: string) => void;
 }
 
 export function ActorsActorDetails({
-	projectNameId,
-	environmentNameId,
-	actorId,
+	tab,
+	onTabChange,
+	className,
+	...props
 }: ActorsActorDetailsProps) {
-	const { data } = useSuspenseQuery(
-		actorQueryOptions({ projectNameId, environmentNameId, actorId }),
-	);
-
-	const { data: hasError } = useQuery(
-		actorErrorsQueryOptions({ projectNameId, environmentNameId, actorId }),
-	);
-
-	const currentTab = useSearch({
-		from: "/_authenticated/_layout/projects/$projectNameId/environments/$environmentNameId/actors",
-		select: (state) => state.tab,
-	});
-	const navigate = useNavigate();
-
-	const { mutate, isPending: isDestroying } = useDestroyActorMutation();
-
-	if (!data) {
-		return (
-			<Flex items="center" justify="center" className="h-full">
-				<Text my="10" textAlign="center">
-					Actor not found.
-				</Text>
-			</Flex>
-		);
-	}
-
+	const { data } = useSuspenseQuery(actorQueryOptions(props));
 	return (
-		<ErrorBoundary
-			fallback={
-				<Flex items="center" justify="center" className="h-full">
-					<Text textAlign="center">
-						An error occurred while fetching actor data.
-					</Text>
-				</Flex>
-			}
-		>
-			<Flex direction="col" className="h-full w-full" pt="4">
-				<Flex items="start" gap="4" px="6" className="flex-col">
-					<Flex gap="2" justify="between" w="full">
-						<ActorStatus className="text-sm" {...data} />
-						{!data.destroyTs ? (
-							<Button
-								isLoading={isDestroying}
-								variant="destructive"
-								size="sm"
-								onClick={() =>
-									mutate({
-										projectNameId,
-										environmentNameId,
-										actorId,
-									})
-								}
-							>
-								Stop
-							</Button>
-						) : null}
-					</Flex>
-
-					<div className="w-full">
-						<Flex
-							direction="col"
-							gap="2"
-							className="flex-1 min-w-0"
-							w="full"
-						>
-							<ActorTags className="justify-start" {...data} />
-						</Flex>
-					</div>
-					<div className="flex  w-full flex-wrap text-sm gap-4 border px-3 py-2 rounded-md -mx-3 box-content">
-						<div className="shrink-0 flex gap-2 items-center justify-center">
-							<p className="">Region </p>
-							<SmallText className="text-xs text-muted-foreground">
-								<ActorRegion
-									showLabel="abbreviated"
-									projectNameId={projectNameId}
-									environmentNameId={environmentNameId}
-									regionId={data.region}
-								/>
-							</SmallText>
-						</div>
-						<ClickToCopy value={data.id}>
-							<button
-								type="button"
-								className="shrink-0 flex gap-2 items-center justify-center"
-							>
-								<p>ID </p>
-								<SmallText className="font-mono  text-muted-foreground text-xs">
-									{data.id.split("-")[0]}
-								</SmallText>
-							</button>
-						</ClickToCopy>
-						<ClickToCopy value={formatISO(data.createdAt)}>
-							<button
-								type="button"
-								className="shrink-0 flex gap-2 items-center justify-center"
-							>
-								<p>Created </p>
-								<SmallText className=" text-xs  text-muted-foreground">
-									{formatISO(data.createdAt)}
-								</SmallText>
-							</button>
-						</ClickToCopy>
-
-						<ClickToCopy
-							value={
-								data.destroyTs ? formatISO(data.destroyTs) : "-"
-							}
-						>
-							<button
-								type="button"
-								className="shrink-0 flex gap-2 items-center"
-							>
-								<p>Destroyed </p>
-								<SmallText className="text-xs  text-muted-foreground ">
-									{data.destroyTs
-										? formatISO(data.destroyTs)
-										: "-"}
-								</SmallText>
-							</button>
-						</ClickToCopy>
-					</div>
-				</Flex>
-
-				<Tabs
-					value={currentTab}
-					onValueChange={(tab) => {
-						navigate({
-							from: "/projects/$projectNameId/environments/$environmentNameId/actors",
-							to: ".",
-							search: (old: Record<string, unknown>) => ({
-								...old,
-								tab,
-							}),
-						});
-					}}
-					defaultValue="output"
-					className="flex-1 min-h-0 flex flex-col mt-4"
-				>
-					<TabsList className="overflow-auto">
-						<TabsTrigger value="output">Output</TabsTrigger>
-						<TabsTrigger value="error">
-							<span className="relative">
-								Error
-								{hasError ? (
-									<Ping variant="destructive" />
-								) : null}
-							</span>
-						</TabsTrigger>
-						<TabsTrigger value="config">Config</TabsTrigger>
-					</TabsList>
-					<TabsContent
-						value="output"
-						className="min-h-0 flex-1 mt-0 p-4"
+		<ActorDetailsSettingsProvider>
+			<ActorWorkerContextProvider enabled={!data.destroyedAt} {...props}>
+				<div className="flex flex-col h-full flex-1 pt-2">
+					<Tabs
+						value={tab || "logs"}
+						onValueChange={onTabChange}
+						defaultValue="logs"
+						className={cn(
+							className,
+							"flex-1 min-h-0 flex flex-col",
+						)}
 					>
-						<ErrorBoundary
-							fallback={
+						<motion.div className="flex justify-between items-center border-b">
+							<ActorsSidebarToggleButton />
+							<motion.div layout className="flex flex-1">
+								<TabsList className="overflow-auto border-none">
+									<TabsTrigger value="logs">Logs</TabsTrigger>
+									<TabsTrigger value="state">
+										State
+									</TabsTrigger>
+									<TabsTrigger value="connections">
+										Connections
+									</TabsTrigger>
+									<TabsTrigger value="config">
+										Config
+									</TabsTrigger>
+								</TabsList>
 								<Flex
+									gap="2"
+									justify="between"
 									items="center"
-									justify="center"
-									className="h-full"
+									className="h-[36px] pb-3 pt-2 pr-4"
 								>
-									<Text textAlign="center">
-										An error occurred while fetching
-										actors's logs.
-									</Text>
+									<ActorStatus
+										className="text-sm h-auto"
+										{...data}
+									/>
+									<ActorStopButton {...data} {...props} />
 								</Flex>
-							}
+							</motion.div>
+						</motion.div>
+						<TabsContent
+							value="logs"
+							className="min-h-0 flex-1 mt-0 h-full"
 						>
 							<Suspense fallback={<ActorLogsTab.Skeleton />}>
-								<ActorLogsTab
-									createdAt={data.createdAt}
-									projectNameId={projectNameId}
-									environmentNameId={environmentNameId}
-									actorId={actorId}
-									logType="std_out"
-								/>
+								<ActorLogsTab {...props} />
 							</Suspense>
-						</ErrorBoundary>
-					</TabsContent>
-					<TabsContent
-						value="error"
-						className="min-h-0 flex-1 mt-0 p-4"
-					>
-						<ErrorBoundary
-							fallback={
-								<Flex
-									items="center"
-									justify="center"
-									className="h-full"
-								>
-									<Text textAlign="center">
-										An error occurred while fetching actor's
-										logs.
-									</Text>
-								</Flex>
-							}
+						</TabsContent>
+						<TabsContent
+							value="config"
+							className="min-h-0 flex-1 mt-0 h-full"
 						>
-							<Suspense fallback={<ActorLogsTab.Skeleton />}>
-								<ActorLogsTab
-									createdAt={data.createdAt}
-									projectNameId={projectNameId}
-									environmentNameId={environmentNameId}
-									actorId={actorId}
-									logType="std_err"
-								/>
-							</Suspense>
-						</ErrorBoundary>
-					</TabsContent>
-					<TabsContent value="config" className="min-h-0 flex-1 mt-0">
-						<ActorConfigTab
-							projectNameId={projectNameId}
-							environmentNameId={environmentNameId}
-							{...data}
-						/>
-					</TabsContent>
-				</Tabs>
-			</Flex>
-		</ErrorBoundary>
+							<ActorConfigTab {...props} {...data} />
+						</TabsContent>
+						<TabsContent
+							value="connections"
+							className="min-h-0 flex-1 mt-0"
+						>
+							<ActorConnectionsTab
+								disabled={!!data.destroyTs || !data.startedAt}
+							/>
+						</TabsContent>
+						<TabsContent
+							value="state"
+							className="min-h-0 flex-1 mt-0"
+						>
+							<ActorStateTab
+								disabled={!!data.destroyTs || !data.startedAt}
+							/>
+						</TabsContent>
+					</Tabs>
+
+					{!data.destroyTs ? <ActorConsole /> : null}
+				</div>
+			</ActorWorkerContextProvider>
+		</ActorDetailsSettingsProvider>
 	);
 }
 

@@ -1,7 +1,7 @@
 import { Onboarding } from "@/components/onboarding/onboarding";
 import { guardOssNewbie } from "@/lib/guards";
 import { createFileRoute } from "@tanstack/react-router";
-import { zodSearchValidator } from "@tanstack/router-zod-adapter";
+import { zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
 
 function IndexRoute() {
@@ -31,7 +31,7 @@ const searchSchema = z.object({
 });
 
 export const Route = createFileRoute("/_authenticated/_layout/")({
-	validateSearch: zodSearchValidator(searchSchema),
+	validateSearch: zodValidator(searchSchema),
 	component: IndexRoute,
 	staticData: {
 		layout: "onboarding",

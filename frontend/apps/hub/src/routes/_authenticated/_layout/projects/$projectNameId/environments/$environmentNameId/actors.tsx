@@ -1,42 +1,32 @@
 import { GetStarted } from "@/components/get-started";
-import { ActorsFiltersSheet } from "@/domains/project/components/actors/actors-filters-sheet";
 import { ActorsListPreview } from "@/domains/project/components/actors/actors-list-preview";
 import * as Layout from "@/domains/project/layouts/servers-layout";
-import { projectActorsQueryOptions } from "@/domains/project/queries";
-import {
-	Button,
-	Card,
-	CardContent,
-	CardHeader,
-	CardTitle,
-	Flex,
-	Ping,
-	WithTooltip,
-} from "@rivet-gg/components";
-import { Icon, faActors, faFilter, faRefresh } from "@rivet-gg/icons";
+import { actorsCountQueryOptions } from "@/domains/project/queries";
+import { Icon, faActors } from "@rivet-gg/icons";
 import { useSuspenseInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { zodSearchValidator } from "@tanstack/router-zod-adapter";
+import { zodValidator } from "@tanstack/zod-adapter";
+import { useMemo } from "react";
 import { z } from "zod";
 
 function ProjectActorsRoute() {
 	const {
-		environment: { nameId: environmentNameId, namespaceId: environmentId },
-		project: { nameId: projectNameId, gameId: projectId },
+		environment: { nameId: environmentNameId },
+		project: { nameId: projectNameId },
 	} = Route.useRouteContext();
 	const { actorId, tags, showDestroyed } = Route.useSearch();
-	const tagsRecord = Object.fromEntries(tags || []);
-	const { data, refetch, isRefetching } = useSuspenseInfiniteQuery(
-		projectActorsQueryOptions({
+	const tagsRecord = useMemo(() => Object.fromEntries(tags || []), [tags]);
+
+	const { data } = useSuspenseInfiniteQuery(
+		actorsCountQueryOptions({
 			projectNameId,
 			environmentNameId,
 			tags: tagsRecord,
 			includeDestroyed: showDestroyed,
 		}),
 	);
-	const navigate = Route.useNavigate();
 
-	if (data.length === 0 && !tags && showDestroyed === undefined) {
+	if (data === 0 && !tags && showDestroyed === undefined) {
 		return (
 			<div className="w-full h-full flex flex-col justify-center">
 				<div className="flex flex-col justify-center my-8">
@@ -55,87 +45,15 @@ function ProjectActorsRoute() {
 	}
 
 	return (
-		<Card
-			w="full"
-			// 100vh - header - page padding
-			className="flex flex-col h-[calc(100vh-6.5rem-2rem)]"
-		>
-			<CardHeader className="border-b ">
-				<CardTitle className="flex flex-row justify-between items-center">
-					Actors
-					<Flex gap="2">
-						<WithTooltip
-							content="Filters"
-							trigger={
-								<ActorsFiltersSheet
-									title="Filters"
-									projectId={projectId}
-									environmentId={environmentId}
-									tags={tagsRecord}
-									showDestroyed={showDestroyed || false}
-									onFiltersSubmitted={(values) => {
-										return navigate({
-											search: {
-												showDestroyed:
-													values.showDestroyed,
-												tags: Object.entries(
-													values.tags,
-												).map(
-													([key, value]) =>
-														[key, value] as [
-															string,
-															string,
-														],
-												),
-											},
-										});
-									}}
-								>
-									<Button
-										size="icon"
-										isLoading={isRefetching}
-										variant="outline"
-									>
-										<div className="relative">
-											{(tags?.length || 0) > 0 &&
-											showDestroyed !== undefined ? (
-												<Ping
-													variant="primary"
-													className="bottom-0 -right-2 top-auto"
-												/>
-											) : null}
-											<Icon icon={faFilter} />
-										</div>
-									</Button>
-								</ActorsFiltersSheet>
-							}
-						/>
-						<WithTooltip
-							content="Refresh"
-							trigger={
-								<Button
-									size="icon"
-									isLoading={isRefetching}
-									variant="outline"
-									onClick={() => refetch()}
-								>
-									<Icon icon={faRefresh} />
-								</Button>
-							}
-						/>
-					</Flex>
-				</CardTitle>
-			</CardHeader>
-			<CardContent className="flex-1 min-h-0 w-full p-0">
-				<ActorsListPreview
-					projectNameId={projectNameId}
-					environmentNameId={environmentNameId}
-					actorId={actorId}
-					tags={tagsRecord}
-					showDestroyed={showDestroyed || false}
-				/>
-			</CardContent>
-		</Card>
+		<div className="flex flex-col h-[calc(100vh-6.5rem)] bg-card -mx-4 -my-4">
+			<ActorsListPreview
+				projectNameId={projectNameId}
+				environmentNameId={environmentNameId}
+				actorId={actorId}
+				tags={tagsRecord}
+				showDestroyed={showDestroyed ?? true}
+			/>
+		</div>
 	);
 }
 
@@ -150,9 +68,9 @@ const searchSchema = z.object({
 export const Route = createFileRoute(
 	"/_authenticated/_layout/projects/$projectNameId/environments/$environmentNameId/actors",
 )({
-	validateSearch: zodSearchValidator(searchSchema),
+	validateSearch: zodValidator(searchSchema),
 	staticData: {
-		layout: "full",
+		layout: "actors",
 	},
 	component: ProjectActorsRoute,
 	pendingComponent: Layout.Content.Skeleton,

@@ -8,7 +8,7 @@ export interface PageProps {
 	className?: string;
 	title?: ReactNode;
 	header?: ReactNode;
-	layout?: "compact" | "full" | "onboarding";
+	layout?: "compact" | "full" | "onboarding" | "actors";
 	children: ReactNode;
 }
 
@@ -24,7 +24,10 @@ export const Page = ({
 			direction="col"
 			gap="4"
 			className={cn(className, {
-				"h-full": layout === "full" || layout === "onboarding",
+				"h-full":
+					layout === "full" ||
+					layout === "onboarding" ||
+					layout === "actors",
 			})}
 		>
 			{title ? (

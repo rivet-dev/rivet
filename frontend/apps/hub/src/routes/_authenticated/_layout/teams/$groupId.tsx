@@ -10,7 +10,7 @@ import {
 	Outlet,
 	createFileRoute,
 } from "@tanstack/react-router";
-import { zodSearchValidator } from "@tanstack/router-zod-adapter";
+import { zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
 
 export function GroupIdErrorComponent(props: ErrorComponentProps) {
@@ -86,7 +86,7 @@ const searchSchema = z.object({
 });
 
 export const Route = createFileRoute("/_authenticated/_layout/teams/$groupId")({
-	validateSearch: zodSearchValidator(searchSchema),
+	validateSearch: zodValidator(searchSchema),
 	component: GroupIdView,
 	errorComponent: GroupIdErrorComponent,
 	pendingComponent: Layout.Root.Skeleton,

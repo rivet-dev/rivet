@@ -35,7 +35,9 @@ const VisibleInFull = ({ children }: PropsWithChildren) => {
 		<div
 			className={cn("relative", {
 				"min-h-screen grid grid-rows-[auto,1fr]":
-					layout === "full" || layout === "onboarding",
+					layout === "full" ||
+					layout === "onboarding" ||
+					layout === "actors",
 				contents: layout === "compact",
 			})}
 		>
@@ -52,8 +54,13 @@ const Header = () => {
 };
 
 const Footer = () => {
+	const layout = usePageLayout();
+
+	if (layout === "actors") {
+		return null;
+	}
 	return (
-		<footer className="text-muted-foreground bg-background p-4 text-center text-sm border-t mt-8 relative">
+		<footer className="text-muted-foreground bg-background p-4 text-center text-sm border-t relative">
 			<div className="container">
 				<div className="flex items-center justify-between">
 					<div className="flex gap-4 items-center justify-between w-full lg:w-auto lg:justify-normal">

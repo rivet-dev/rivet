@@ -9,7 +9,12 @@ interface ActorStatusProps extends Rivet.actor.Actor {
 
 export const ActorStatus = ({ className, ...props }: ActorStatusProps) => {
 	return (
-		<div className={cn("flex items-center gap-x-2", className)}>
+		<div
+			className={cn(
+				"flex items-center gap-x-2 border rounded-full  px-2.5 py-0.5",
+				className,
+			)}
+		>
 			<ActorStatusIndicator {...props} />
 			<ActorStatusLabel {...props} />
 		</div>

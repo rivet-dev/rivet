@@ -8,24 +8,40 @@ import {
 	SheetTitle,
 	SheetTrigger,
 } from "./ui/sheet";
+import { WithTooltip } from "./ui/tooltip";
 import { Link, Text } from "./ui/typography";
 
 interface DocsSheetProps {
 	path: string;
 	title: string;
+	hash?: string;
 	children?: ReactNode;
+	showTooltip?: boolean;
 }
 
-export function DocsSheet({ path, title, children }: DocsSheetProps) {
+export function DocsSheet({
+	path,
+	showTooltip,
+	title,
+	children,
+	hash,
+}: DocsSheetProps) {
 	return (
 		<Sheet>
-			<SheetTrigger asChild>{children}</SheetTrigger>
+			{showTooltip ? (
+				<WithTooltip
+					content="Documentation"
+					trigger={<SheetTrigger asChild>{children}</SheetTrigger>}
+				/>
+			) : (
+				<SheetTrigger asChild>{children}</SheetTrigger>
+			)}
 			<SheetContent className="sm:max-w-[500px]">
 				<SheetHeader>
 					<SheetTitle>{title}</SheetTitle>
 					<Text className="text-xs">
 						<Link
-							href={`https://rivet.gg/${path}?utm_source=hub&embed=true`}
+							href={`https://rivet.gg/${path}?utm_source=hub&embed=true#${hash}`}
 							target="_blank"
 							rel="noopener noreferrer"
 						>
@@ -36,7 +52,7 @@ export function DocsSheet({ path, title, children }: DocsSheetProps) {
 						<div>
 							<iframe
 								className="w-full h-screen border-t"
-								src={`https://rivet.gg/${path}?embed=true`}
+								src={`https://rivet.gg/${path}?embed=true#${hash}`}
 								title={title}
 							/>
 						</div>

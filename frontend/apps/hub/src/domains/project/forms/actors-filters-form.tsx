@@ -11,11 +11,9 @@ import { type UseFormReturn, useFormContext } from "react-hook-form";
 import z from "zod";
 import { TagsSelect } from "../components/tags-select";
 
-const allowedTypes = ["image/png", "image/jpeg"];
-
 export const formSchema = z.object({
 	tags: z.record(z.string()),
-	showDestroyed: z.boolean().default(false),
+	showDestroyed: z.boolean().default(true),
 });
 
 export type FormValues = z.infer<typeof formSchema>;
@@ -31,7 +29,7 @@ export const Tags = ({
 	projectId,
 	environmentId,
 }: { projectId: string; environmentId: string }) => {
-	const { control } = useFormContext<FormValues>();
+	const { control, setValue } = useFormContext<FormValues>();
 	return (
 		<FormField
 			control={control}

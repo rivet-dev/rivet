@@ -1,14 +1,5 @@
-import { javascript } from "@codemirror/lang-javascript";
-import { json, jsonParseLinter } from "@codemirror/lang-json";
-import { linter } from "@codemirror/lint";
-import { EditorView } from "@codemirror/view";
 import { Icon, faCopy, faFile } from "@rivet-gg/icons";
-import { githubDark } from "@uiw/codemirror-theme-github";
-import ReactCodeMirror, {
-	type ReactCodeMirrorProps,
-} from "@uiw/react-codemirror";
-import { Children, type ReactElement, cloneElement, forwardRef } from "react";
-import { CodeMirrorContainer } from "./code-mirror-container";
+import { Children, type ReactElement, cloneElement } from "react";
 import { CopyButton } from "./copy-area";
 import { cn } from "./lib/utils";
 import { Badge } from "./ui/badge";
@@ -16,47 +7,6 @@ import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { WithTooltip } from "./ui/tooltip";
-
-interface JsonCodeProps extends ReactCodeMirrorProps {}
-
-export const JsonCode = forwardRef<HTMLDivElement, JsonCodeProps>(
-	({ value, extensions = [], className, ...props }, ref) => {
-		return (
-			<CodeMirrorContainer ref={ref} tabIndex={0} className={className}>
-				<ReactCodeMirror
-					{...props}
-					extensions={[
-						json(),
-						linter(jsonParseLinter()),
-						...extensions,
-					]}
-					theme={githubDark}
-					value={value}
-				/>
-			</CodeMirrorContainer>
-		);
-	},
-);
-
-export const JavaScriptCode = forwardRef<HTMLDivElement, JsonCodeProps>(
-	({ value, extensions = [], ...props }, ref) => {
-		return (
-			<CodeMirrorContainer ref={ref}>
-				<ReactCodeMirror
-					{...props}
-					basicSetup={{}}
-					extensions={[
-						javascript(),
-						EditorView.lineWrapping,
-						...extensions,
-					]}
-					theme={githubDark}
-					value={value}
-				/>
-			</CodeMirrorContainer>
-		);
-	},
-);
 
 const languageNames = {
 	csharp: "C#",

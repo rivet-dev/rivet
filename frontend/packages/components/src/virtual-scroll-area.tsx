@@ -5,12 +5,12 @@ import {
 	useVirtualizer,
 } from "@tanstack/react-virtual";
 import {
-	type ReactElement,
+	type ComponentPropsWithoutRef,
+	type FunctionComponent,
 	type RefObject,
-	cloneElement,
 	useImperativeHandle,
-	useRef,
 } from "react";
+import { cn } from "./lib/utils";
 import { ScrollArea, type ScrollAreaProps } from "./ui/scroll-area";
 
 // biome-ignore lint/suspicious/noExplicitAny: we don't care about the type of the row
@@ -30,8 +30,10 @@ interface VirtualScrollAreaProps<TItem extends Record<string, any>>
 		Pick<ScrollAreaProps, "viewportProps"> {
 	getRowData: (index: number) => TItem;
 	className?: string;
-	row: ReactElement<TItem>;
+	row: FunctionComponent<TItem>;
 	virtualizerRef?: RefObject<Virtualizer<HTMLDivElement, Element>>;
+	viewportRef?: RefObject<HTMLDivElement>;
+	scrollerProps?: ComponentPropsWithoutRef<"div">;
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: we don't care about the type of the row
@@ -41,43 +43,41 @@ export function VirtualScrollArea<TItem extends Record<string, any>>({
 	getRowData,
 	viewportProps,
 	virtualizerRef,
+	viewportRef,
+	scrollerProps,
 	...rowVirtualizerOptions
 }: VirtualScrollAreaProps<TItem>) {
-	const ref = useRef<HTMLDivElement>(null);
-
 	const rowVirtualizer = useVirtualizer({
 		...rowVirtualizerOptions,
-		getScrollElement: () => ref.current,
+		getScrollElement: () => viewportRef?.current || null,
 	});
 
 	useImperativeHandle(virtualizerRef, () => rowVirtualizer, [rowVirtualizer]);
 
 	return (
 		<ScrollArea
-			viewportRef={ref}
+			viewportRef={viewportRef}
 			className={className}
 			viewportProps={viewportProps}
 		>
 			<div
-				className="relative w-full"
+				{...scrollerProps}
+				className={cn("relative w-full", scrollerProps?.className)}
 				style={{
 					height: `${rowVirtualizer.getTotalSize()}px`,
 				}}
 			>
 				{rowVirtualizer.getVirtualItems().map((virtualItem) => (
-					<div
+					<Row
 						key={virtualItem.key}
 						data-index={virtualItem.index}
-						className="absolute w-full inset-x-0 px-4"
+						className="absolute w-full inset-x-0"
 						ref={rowVirtualizer.measureElement}
 						style={{
 							transform: `translateY(${virtualItem.start}px)`,
 						}}
-					>
-						{cloneElement(Row, {
-							...getRowData(virtualItem.index),
-						})}
-					</div>
+						{...getRowData(virtualItem.index)}
+					/>
 				))}
 			</div>
 		</ScrollArea>

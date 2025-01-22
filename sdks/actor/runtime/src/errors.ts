@@ -144,6 +144,12 @@ export class InvalidStateType extends ActorError {
 	}
 }
 
+export class StateTooLarge extends ActorError {
+	constructor() {
+		super("state_too_large", "State too large.", { public: true });
+	}
+}
+
 /**
  * Options for the UserError class.
  */

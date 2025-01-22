@@ -12,6 +12,7 @@ interface ActorRegionProps {
 	projectNameId: string;
 	environmentNameId: string;
 	showLabel?: boolean | "abbreviated";
+	className?: string;
 }
 
 export function ActorRegion({
@@ -19,6 +20,7 @@ export function ActorRegion({
 	regionId,
 	environmentNameId,
 	showLabel,
+	className,
 }: ActorRegionProps) {
 	const { data: region } = useSuspenseQuery(
 		actorRegionQueryOptions({ projectNameId, environmentNameId, regionId }),
@@ -28,7 +30,7 @@ export function ActorRegion({
 
 	if (showLabel) {
 		return (
-			<Flex gap="2" items="center" justify="center">
+			<Flex gap="2" items="center" justify="center" className={className}>
 				<RegionIcon region={regionKey} className="w-4 min-w-4" />
 				<span>
 					{showLabel === "abbreviated"
@@ -43,7 +45,12 @@ export function ActorRegion({
 		<WithTooltip
 			content={REGION_LABEL[regionKey] ?? REGION_LABEL.unknown}
 			trigger={
-				<Flex gap="2" items="center" justify="center">
+				<Flex
+					gap="2"
+					items="center"
+					justify="center"
+					className={className}
+				>
 					<RegionIcon region={regionKey} className="w-4 min-w-4" />
 				</Flex>
 			}

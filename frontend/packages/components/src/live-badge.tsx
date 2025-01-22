@@ -11,8 +11,8 @@ export function LiveBadge({ className }: LiveBadgeProps) {
 			className={cn(className, "flex justify-center items-center")}
 			variant="outline"
 		>
+			<div className="mr-2 bg-destructive rounded-full animate-pulse size-2" />
 			Live
-			<div className="ml-2 bg-destructive rounded-full animate-pulse size-2" />
 		</Badge>
 	);
 }

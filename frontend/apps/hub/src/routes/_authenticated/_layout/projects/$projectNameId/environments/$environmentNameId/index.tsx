@@ -14,14 +14,8 @@ import {
 	Link as RivetLink,
 	ValueCard,
 } from "@rivet-gg/components";
-import { Icon, faArrowRight } from "@rivet-gg/icons";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link, createFileRoute, redirect } from "@tanstack/react-router";
-import { lazy } from "react";
-
-const FeaturedModules = lazy(
-	() => import("@/components/featured-modules-grid"),
-);
 
 function environmentIdRoute() {
 	const params = Route.useParams();
@@ -46,21 +40,6 @@ function environmentIdRoute() {
 				) : null}
 				{legacyLobbiesEnabled ? <CurrentVersionCard /> : null}
 			</Grid>
-			<GuardEnterprise>
-				<FeaturedModules
-					footer={
-						<RivetLink asChild>
-							<Link
-								to="/projects/$projectNameId/environments/$environmentNameId/modules"
-								params={params}
-							>
-								View All Modules
-								<Icon className="ml-2" icon={faArrowRight} />
-							</Link>
-						</RivetLink>
-					}
-				/>
-			</GuardEnterprise>
 		</>
 	);
 }

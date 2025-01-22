@@ -34,10 +34,10 @@
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@rivet-gg/actor-common": "workspace:*",
 		"zod": "^3.24.1"
 	},
 	"devDependencies": {
+		"@rivet-gg/actor-common": "workspace:*",
 		"tsup": "^8.3.5",
 		"typescript": "^5.7.3"
 	}

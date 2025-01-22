@@ -1,6 +1,10 @@
 import type { AuthContext } from "@/domains/auth/contexts/auth";
 
-type LSKey = `rivet-lastteam-${string}` | "rivet-token";
+type LSKey =
+	| `rivet-lastteam-${string}`
+	| "rivet-token"
+	| "actors-list-preview-width"
+	| "actors-list-preview-folded";
 
 export const ls = {
 	set: (key: LSKey, value: unknown) => {
@@ -29,5 +33,13 @@ export const ls = {
 				`rivet-lastteam-${auth.profile?.identity.identityId}`,
 			);
 		},
+	},
+	actorsList: {
+		set: (width: number, folded: boolean) => {
+			ls.set("actors-list-preview-width", width);
+			ls.set("actors-list-preview-folded", folded);
+		},
+		getWidth: () => ls.get("actors-list-preview-width"),
+		getFolded: () => ls.get("actors-list-preview-folded"),
 	},
 };

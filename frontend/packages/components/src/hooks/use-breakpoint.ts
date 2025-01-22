@@ -6,8 +6,6 @@ const resolvedConfig = resolveConfig(config);
 
 const breakpoints = resolvedConfig.theme.screens;
 
-console.log(breakpoints);
-
 type BreakpointKey = keyof typeof breakpoints;
 
 export function useBreakpoint<Point extends BreakpointKey>(point: Point) {

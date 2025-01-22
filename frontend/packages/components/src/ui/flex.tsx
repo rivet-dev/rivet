@@ -62,12 +62,12 @@ const Flex = forwardRef<HTMLDivElement, StackProps>(
 				ref={ref}
 				className={cn(
 					"flex",
-					className,
 					getCommonHelperClass(props),
 					getGapClass(props),
 					getFlexDirectionClass(props),
 					getJustifyContentClass(props),
 					getAlignItemsClass(props),
+					className,
 				)}
 				{...htmlProps}
 			>

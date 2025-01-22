@@ -2,7 +2,7 @@ import * as Layout from "@/domains/project/layouts/project-layout";
 import { useDialog } from "@/hooks/use-dialog";
 import { Button, CopyArea, DocsCard, Grid, Text } from "@rivet-gg/components";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { zodSearchValidator } from "@tanstack/router-zod-adapter";
+import { zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
 
 function EnvironmentTokensRoute() {
@@ -130,7 +130,7 @@ const searchSchema = z.object({
 export const Route = createFileRoute(
 	"/_authenticated/_layout/projects/$projectNameId/environments/$environmentNameId/tokens",
 )({
-	validateSearch: zodSearchValidator(searchSchema),
+	validateSearch: zodValidator(searchSchema),
 	component: EnvironmentTokensRoute,
 	pendingComponent: Layout.Root.Skeleton,
 });

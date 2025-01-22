@@ -1,18 +1,15 @@
 import type { Rivet } from "@rivet-gg/api";
 import {
-	Code,
-	CopyArea,
 	Dd,
 	Dl,
 	Dt,
 	Flex,
-	Grid,
 	Skeleton,
 	formatDuration,
 } from "@rivet-gg/components";
 import { Suspense } from "react";
-import { Fragment } from "react/jsx-runtime";
 import { ActorBuild } from "./actor-build";
+import { ActorObjectInspector } from "./console/actor-inspector";
 
 export interface ActorRuntimeProps
 	extends Omit<Rivet.actor.Actor, "createTs" | "startTs" | "destroyTs"> {
@@ -31,10 +28,10 @@ export function ActorRuntime({
 	resources,
 }: ActorRuntimeProps) {
 	return (
-		<div className="border mt-4 px-4 py-4 rounded-md relative">
-			<p className="inline-block bg-card w-auto absolute -top-0 left-3 font-semibold px-0.5 -translate-y-1/2">
-				Runtime
-			</p>
+		<div className="px-4 mt-4 mb-4 ">
+			<div className="flex gap-1 items-center mb-2">
+				<h3 className=" font-semibold">Runtime</h3>
+			</div>
 			<Flex gap="2" direction="col" className="text-xs">
 				<Dl>
 					<Dt>Kill timeout</Dt>
@@ -46,46 +43,26 @@ export function ActorRuntime({
 					</Dd>
 					<Dt>Arguments</Dt>
 					<Dd>
-						{runtime.arguments?.length === 0 ? (
-							<p>No arguments provided.</p>
-						) : (
-							<Code>{runtime.arguments?.join(" ")}</Code>
-						)}
+						<ActorObjectInspector data={runtime.arguments} />
 					</Dd>
 					<Dt>Environment</Dt>
 					<Dd>
-						{Object.keys(runtime.environment || {}).length === 0 ? (
-							<p>No environment variables set.</p>
-						) : (
-							<Grid columns="2" gap="2">
-								{Object.entries(runtime.environment || {}).map(
-									([name, value]) => (
-										<Fragment key={name}>
-											<CopyArea
-												variant="discrete"
-												value={name}
-											/>
-											<CopyArea
-												variant="discrete"
-												value={value}
-											/>
-										</Fragment>
-									),
-								)}
-							</Grid>
-						)}
+						<ActorObjectInspector data={runtime.environment} />
 					</Dd>
-					<Suspense
-						fallback={
-							<Skeleton className="w-full h-32 col-span-2" />
-						}
-					>
-						<ActorBuild
-							projectNameId={projectNameId}
-							environmentNameId={environmentNameId}
-							buildId={runtime.build}
-						/>
-					</Suspense>
+					<Dt>Build</Dt>
+					<Dd>
+						<Suspense
+							fallback={
+								<Skeleton className="w-full h-32 col-span-2" />
+							}
+						>
+							<ActorBuild
+								projectNameId={projectNameId}
+								environmentNameId={environmentNameId}
+								buildId={runtime.build}
+							/>
+						</Suspense>
+					</Dd>
 				</Dl>
 			</Flex>
 		</div>

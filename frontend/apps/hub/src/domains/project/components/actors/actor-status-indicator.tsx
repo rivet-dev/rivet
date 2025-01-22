@@ -1,5 +1,5 @@
 import type { Rivet } from "@rivet-gg/api";
-import { cn } from "@rivet-gg/components";
+import { Ping, cn } from "@rivet-gg/components";
 
 export function getActorStatus(
 	actor: Pick<Rivet.actor.Actor, "createdAt" | "startedAt" | "destroyedAt">,
@@ -25,7 +25,11 @@ export function getActorStatus(
 	return "unknown";
 }
 
-interface ActorStatusIndicatorProps extends Rivet.actor.Actor {}
+interface ActorStatusIndicatorProps
+	extends Pick<
+		Rivet.actor.Actor,
+		"createdAt" | "startedAt" | "destroyedAt"
+	> {}
 
 export const ActorStatusIndicator = ({
 	createdAt,
@@ -34,10 +38,13 @@ export const ActorStatusIndicator = ({
 }: ActorStatusIndicatorProps) => {
 	const status = getActorStatus({ createdAt, startedAt, destroyedAt });
 
+	if (status === "running") {
+		return <Ping variant="success" className="relative right-auto" />;
+	}
+
 	return (
 		<div
-			className={cn("size-3 rounded-full", {
-				"bg-green-600": status === "running",
+			className={cn("size-2 rounded-full", {
 				"bg-blue-600 animate-pulse": status === "starting",
 				"bg-destructive": status === "crashed",
 				"bg-foreground/10": status === "stopped",

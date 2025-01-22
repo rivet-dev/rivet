@@ -1,9 +1,12 @@
 import { queryClient, rivetClient } from "@/queries/global";
+import { Client } from "@rivet-gg/actor-client";
 import type { Rivet } from "@rivet-gg/api";
 import { toast } from "@rivet-gg/components";
 import { useMutation } from "@tanstack/react-query";
 import {
+	actorBuildQueryOptions,
 	actorBuildsQueryOptions,
+	actorManagerUrlQueryOptions,
 	actorQueryOptions,
 	projectActorsQueryOptions,
 } from "./query-options";
@@ -119,6 +122,55 @@ export function useUpgradeAllActorsMutation({
 					? `Build successfully tagged. Upgraded ${response.count} actors to the latest build.`
 					: "Build successfully tagged. No actors to upgrade.",
 			);
+			onSuccess?.();
+		},
+	});
+}
+
+export function useCreateActorFromSdkMutation({
+	onSuccess,
+}: { onSuccess?: () => void }) {
+	return useMutation({
+		mutationFn: async ({
+			projectNameId,
+			environmentNameId,
+			buildId,
+		}: {
+			projectNameId: string;
+			environmentNameId: string;
+			buildId: string;
+		}) => {
+			const managerUrl = await queryClient.fetchQuery(
+				actorManagerUrlQueryOptions({
+					projectNameId,
+					environmentNameId,
+				}),
+			);
+
+			const { build } = await queryClient.fetchQuery(
+				actorBuildQueryOptions({
+					projectNameId,
+					environmentNameId,
+					buildId,
+				}),
+			);
+
+			const cl = new Client(managerUrl);
+
+			await cl.create({
+				create: { tags: { name: build.tags.name || build.id } },
+			});
+		},
+		onSuccess: async () => {
+			await queryClient.invalidateQueries({
+				predicate(query) {
+					return (
+						query.queryKey[0] === "project" &&
+						query.queryKey[2] === "environment" &&
+						query.queryKey[4] === "actors"
+					);
+				},
+			});
 			onSuccess?.();
 		},
 	});

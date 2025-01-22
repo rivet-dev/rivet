@@ -9,7 +9,7 @@ import {
 	createFileRoute,
 	notFound,
 } from "@tanstack/react-router";
-import { zodSearchValidator } from "@tanstack/router-zod-adapter";
+import { zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
 
 function Modals() {
@@ -24,10 +24,11 @@ function Modals() {
 		useDialog.ConfirmOuterbaseConnection.Dialog;
 
 	const EditBuildTagsDialog = useDialog.EditBuildTags.Dialog;
+	const CreateActorDialog = useDialog.CreateActor.Dialog;
 
 	const handleOpenChange = (value: boolean) => {
 		if (!value) {
-			navigate({ search: { modal: undefined } });
+			navigate({ search: (old) => ({ ...old, modal: undefined }) });
 		}
 	};
 
@@ -51,6 +52,14 @@ function Modals() {
 					onOpenChange: handleOpenChange,
 				}}
 			/>
+			<CreateActorDialog
+				environmentNameId={environmentNameId}
+				projectNameId={projectNameId}
+				dialogProps={{
+					open: modal === "create-actor",
+					onOpenChange: handleOpenChange,
+				}}
+			/>
 		</>
 	);
 }
@@ -69,7 +78,7 @@ function environmentIdRoute() {
 }
 const searchSchema = z.object({
 	modal: z
-		.enum(["database", "edit-tags"])
+		.enum(["database", "edit-tags", "create-actor"])
 		.or(z.string())
 		.optional()
 		.catch(undefined),
@@ -78,7 +87,7 @@ const searchSchema = z.object({
 export const Route = createFileRoute(
 	"/_authenticated/_layout/projects/$projectNameId/environments/$environmentNameId",
 )({
-	validateSearch: zodSearchValidator(searchSchema),
+	validateSearch: zodValidator(searchSchema),
 	beforeLoad: async ({
 		matches,
 		location,

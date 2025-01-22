@@ -20,7 +20,7 @@ import {
 } from "@rivet-gg/components";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
-import { zodSearchValidator } from "@tanstack/router-zod-adapter";
+import { zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
 
 function DeviceLinkTokenRoute() {
@@ -121,7 +121,7 @@ export const searchSchema = z.object({
 });
 
 export const Route = createFileRoute("/_authenticated/devices/link")({
-	validateSearch: zodSearchValidator(searchSchema),
+	validateSearch: zodValidator(searchSchema),
 	component: DeviceLinkTokenRoute,
 	staticData: {
 		layout: "onboarding",
