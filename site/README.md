@@ -11,6 +11,7 @@ public/           Static assets
   promo/          Assets used for promotional marketing
 scripts/
 src/
+  content/        This is where all MDX content lives.
   authors/
   components/     Reusable components
   generated/      Content generated from the rivet-gg/rivet repo with scripts/generate*.js

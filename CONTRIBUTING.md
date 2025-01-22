@@ -1,11 +1,35 @@
 # Contributing
 
+The Rivet repository is a monorepo. Each component has its own README.md
+including information on how to develop it.
+
+## Development Quickstart
+
+- [Rivet Cluster](docker/dev-full/README.md)
+- [CLI](packages/toolchain/cli/README.md)
+- [Actor SDK](sdks/actor/README.md)
+- [Site & Docs](site/README.md)
+- [Hub](frontend/apps/hub)
+- [Examples](examples/README.md)
+
+## Justfile
+
+It's recommended to use [just](https://github.com/casey/just) to run development commands, though not required.
+
+## Nix Environment
+
+It's recommended to install the [Nix package manager](https://nixos.org/download/) in order to build a consistent environment.
+
+Once installed, run `nix-shell` to build your development environment.
+
 ## Conventions
 
 - [Naming conventions](./docs-internal/development/NAMING_CONVENTIONS.md).
 - [Internal <-> External Aliases](./docs-internal/development/INTERNAL_EXTERNAL_ALIASES.md).
 
-## For Open Source Contributors
+## Making Changes
+
+### For Open Source Contributors
 
 1. **Fork and Clone**: Fork the repository and clone it locally.
 2. **Branch**: Create a feature or bugfix branch.
@@ -16,7 +40,7 @@
    - Link the related GitHub issue (if applicable).
    - Validate that required checks pass. We ensure that Rivet's required checks run within < 5 minutes.
 
-## For Rivet Employees
+### For Rivet Employees
 
 1. **Branching and Commits**:
    - Use [Graphite](https://graphite.dev/) for creating and managing branches.
