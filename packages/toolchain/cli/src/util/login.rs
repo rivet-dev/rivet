@@ -59,7 +59,6 @@ pub async fn login(api_endpoint: Option<String>) -> Result<()> {
 		let input_endpoint =
 			tokio::task::spawn_blocking(|| crate::util::login::inquire_self_hosting()).await??;
 
-
 		// Fallback to main
 		input_endpoint.unwrap_or_else(|| "https://api.rivet.gg".to_string())
 	};

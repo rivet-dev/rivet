@@ -1,12 +1,8 @@
 use anyhow::*;
 use futures_util::{StreamExt, TryStreamExt};
 use rivet_api::{apis, models};
-use std::{
-	collections::HashMap,
-	path::{Path, PathBuf},
-	sync::Arc,
-};
-use tokio::{fs, process::Command};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use tokio::fs;
 use uuid::Uuid;
 
 use crate::{
@@ -127,52 +123,52 @@ pub async fn build_and_upload(
 	Ok(build_id)
 }
 
-struct CheckOpts<'a> {
-	script_path: &'a Path,
-	config_path: Option<&'a str>,
-	import_map_url: Option<&'a str>,
-	lock_path: Option<&'a str>,
-}
-
-async fn deno_check_script(opts: CheckOpts<'_>) -> Result<()> {
-	let deno_exec = deno_embed::get_executable(&paths::data_dir()?).await?;
-
-	let mut check_cmd = Command::new(&deno_exec.executable_path);
-	check_cmd.current_dir(&paths::project_root()?);
-	check_cmd.env("DENO_NO_UPDATE_CHECK", "1");
-	check_cmd.arg("check");
-	if let Some(config_path) = &opts.config_path {
-		check_cmd.arg(format!("--config={config_path}"));
-	}
-	if let Some(url) = &opts.import_map_url {
-		check_cmd.arg(format!("--import-map={url}"));
-	}
-	if let Some(lock_path) = &opts.lock_path {
-		check_cmd.arg(format!("--lock={lock_path}"));
-	}
-	check_cmd.arg(opts.script_path);
-
-	let output = check_cmd
-		.output()
-		.await
-		.map_err(|err| anyhow!("Failed to run command: {err}"))?;
-
-	let stdout = String::from_utf8_lossy(&output.stdout);
-	let stderr = String::from_utf8_lossy(&output.stderr);
-
-	if output.status.success() {
-		Ok(())
-	} else {
-		let mut error_message = format!("Failed to check script: {}", output.status);
-		if !stdout.is_empty() {
-			error_message.push_str(&format!("\nstdout:\n{stdout}"));
-		}
-		if !stderr.is_empty() {
-			error_message.push_str(&format!("\nstderr:\n{stderr}"));
-		}
-		Err(anyhow!(error_message))
-	}
-}
+// struct CheckOpts<'a> {
+// 	script_path: &'a Path,
+// 	config_path: Option<&'a str>,
+// 	import_map_url: Option<&'a str>,
+// 	lock_path: Option<&'a str>,
+// }
+//
+// async fn deno_check_script(opts: CheckOpts<'_>) -> Result<()> {
+// 	let deno_exec = deno_embed::get_executable(&paths::data_dir()?).await?;
+//
+// 	let mut check_cmd = Command::new(&deno_exec.executable_path);
+// 	check_cmd.current_dir(&paths::project_root()?);
+// 	check_cmd.env("DENO_NO_UPDATE_CHECK", "1");
+// 	check_cmd.arg("check");
+// 	if let Some(config_path) = &opts.config_path {
+// 		check_cmd.arg(format!("--config={config_path}"));
+// 	}
+// 	if let Some(url) = &opts.import_map_url {
+// 		check_cmd.arg(format!("--import-map={url}"));
+// 	}
+// 	if let Some(lock_path) = &opts.lock_path {
+// 		check_cmd.arg(format!("--lock={lock_path}"));
+// 	}
+// 	check_cmd.arg(opts.script_path);
+//
+// 	let output = check_cmd
+// 		.output()
+// 		.await
+// 		.map_err(|err| anyhow!("Failed to run command: {err}"))?;
+//
+// 	let stdout = String::from_utf8_lossy(&output.stdout);
+// 	let stderr = String::from_utf8_lossy(&output.stderr);
+//
+// 	if output.status.success() {
+// 		Ok(())
+// 	} else {
+// 		let mut error_message = format!("Failed to check script: {}", output.status);
+// 		if !stdout.is_empty() {
+// 			error_message.push_str(&format!("\nstdout:\n{stdout}"));
+// 		}
+// 		if !stderr.is_empty() {
+// 			error_message.push_str(&format!("\nstderr:\n{stderr}"));
+// 		}
+// 		Err(anyhow!(error_message))
+// 	}
+// }
 
 struct UploadBundleOpts {
 	env: TEMPEnvironment,

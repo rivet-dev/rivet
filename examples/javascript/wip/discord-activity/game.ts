@@ -3,9 +3,7 @@ import type { Rpc } from "@rivet-gg/actor";
 
 type Move = "rock" | "paper" | "scissors";
 
-interface State {
-	
-}
+type State = Record<never, never>;
 
 interface ConnState {
 	userId: string;

@@ -80,32 +80,42 @@ impl Opts {
 		// Generate config
 		let config = match prompt.lang {
 			Language::TypeScript | Language::JavaScript => {
-				// Write Deno config
-				let deno_config = include_str!("../../static/init/js/deno.json");
-				let deno_config_name = match prompt.config_format {
-					ConfigFormat::Json => "deno.json",
-					ConfigFormat::Jsonc => "deno.jsonc",
-				};
-				fs::write(project_path.join(deno_config_name), deno_config).await?;
+				// Write package config
+				let package_config = include_str!("../../static/init/js/package.json")
+					.replace("__NAME__", &prompt.project_name);
+				fs::write(project_path.join("package.json"), package_config).await?;
 
 				// Write script
 				let (config_body, readme_body, script_name, script_body, test_name, test_body) =
 					match prompt.lang {
-						Language::TypeScript => (
-							include_str!("../../../../../examples/javascript/bare-template-ts/rivet.json"),
-							include_str!("../../../../../examples/javascript/bare-template-ts/README.md"),
-							"counter.ts",
-							include_str!("../../../../../examples/javascript/bare-template-ts/counter.ts"),
-							"counter_test.ts",
-							include_str!(
-								"../../../../../examples/javascript/bare-template-ts/counter_test.ts"
-							),
-						),
+						Language::TypeScript => {
+							let tsconfig = include_str!(
+								"../../../../../examples/javascript/bare-template-ts/tsconfig.json"
+							);
+							fs::write(project_path.join("tsconfig.json"), tsconfig).await?;
+
+							(
+                                include_str!("../../../../../examples/javascript/bare-template-ts/rivet.json"),
+                                include_str!("../../../../../examples/javascript/bare-template-ts/README.md"),
+                                "counter.ts",
+                                include_str!("../../../../../examples/javascript/bare-template-ts/counter.ts"),
+                                "counter_test.ts",
+                                include_str!(
+                                    "../../../../../examples/javascript/bare-template-ts/counter_test.ts"
+                                ),
+                            )
+						}
 						Language::JavaScript => (
-							include_str!("../../../../../examples/javascript/bare-template-js/rivet.json"),
-							include_str!("../../../../../examples/javascript/bare-template-js/README.md"),
+							include_str!(
+								"../../../../../examples/javascript/bare-template-js/rivet.json"
+							),
+							include_str!(
+								"../../../../../examples/javascript/bare-template-js/README.md"
+							),
 							"counter.js",
-							include_str!("../../../../../examples/javascript/bare-template-js/counter.js"),
+							include_str!(
+								"../../../../../examples/javascript/bare-template-js/counter.js"
+							),
 							"counter_test.js",
 							include_str!(
 								"../../../../../examples/javascript/bare-template-js/counter_test.js"

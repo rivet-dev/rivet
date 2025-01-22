@@ -1,9 +1,9 @@
 import {
 	Actor,
+	type Connection,
 	type OnBeforeConnectOptions,
-	UserError,
 	type Rpc,
-	Connection,
+	UserError,
 } from "@rivet-gg/actor";
 import { validateUsername } from "./utils.ts";
 
@@ -25,7 +25,9 @@ interface ChatMessage {
 }
 
 export default class ChatRoom extends Actor<undefined, ConnParams, ConnState> {
-	override _onBeforeConnect(opts: OnBeforeConnectOptions<ChatRoom>): ConnState {
+	override _onBeforeConnect(
+		opts: OnBeforeConnectOptions<ChatRoom>,
+	): ConnState {
 		const username = opts.parameters.username;
 		validateUsername(username);
 		return {
@@ -49,9 +51,10 @@ export default class ChatRoom extends Actor<undefined, ConnParams, ConnState> {
 	}
 
 	#broadcastPresence() {
-		const connectedUsers = this._connections
-			.values()
-			.map((c) => ({ username: c.state.username, typing: c.state.typing }));
+		const connectedUsers = this._connections.values().map((c) => ({
+			username: c.state.username,
+			typing: c.state.typing,
+		}));
 		this._broadcast("presenceUpdate", connectedUsers);
 	}
 

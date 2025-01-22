@@ -1,4 +1,4 @@
-import { UserError} from "@rivet-gg/actor";
+import { UserError } from "@rivet-gg/actor";
 
 export function validateUsername(username: string) {
 	if (username.length > 16) {

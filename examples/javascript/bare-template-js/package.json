@@ -1,0 +1,12 @@
+{
+	"name": "bare-template-js",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"dependencies": {
+		"@rivet-gg/actor": "workspace:*"
+	},
+	"devDependencies": {
+		"@rivet-gg/actor-client": "workspace:*"
+	}
+}

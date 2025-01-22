@@ -9,7 +9,6 @@ A new project powered by [Rivet](https://rivet.gg).
 ## File structure
 
 - `rivet.json` Configuration file for deploying the actor
-- `deno.json` Configuration file for dependencies for the actor
 - `counter.js` Simple counter actor
 - `counter_test.js` Script to test the counter
 
@@ -18,11 +17,5 @@ A new project powered by [Rivet](https://rivet.gg).
 ```sh
 rivet login
 rivet deploy
-```
-
-## Testing
-
-```sh
-rivet deno run -A counter_test.js
 ```
 

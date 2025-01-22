@@ -5478,6 +5478,24 @@ __metadata:
   languageName: node
   linkType: hard
 
+"bare-template-js@workspace:examples/javascript/bare-template-js":
+  version: 0.0.0-use.local
+  resolution: "bare-template-js@workspace:examples/javascript/bare-template-js"
+  dependencies:
+    "@rivet-gg/actor": "workspace:*"
+    "@rivet-gg/actor-client": "workspace:*"
+  languageName: unknown
+  linkType: soft
+
+"bare-template-ts@workspace:examples/javascript/bare-template-ts":
+  version: 0.0.0-use.local
+  resolution: "bare-template-ts@workspace:examples/javascript/bare-template-ts"
+  dependencies:
+    "@rivet-gg/actor": "workspace:*"
+    "@rivet-gg/actor-client": "workspace:*"
+  languageName: unknown
+  linkType: soft
+
 "base64-js@npm:^1.3.1":
   version: 1.5.1
   resolution: "base64-js@npm:1.5.1"

@@ -1,7 +1,7 @@
 {
 	"builds": {
 		"shopper_agent": {
-			"script": "shopper_agent.ts",
+			"script": "src/shopper_agent.ts",
 			"access": "public",
 			"unstable": {
 				"minify": false,

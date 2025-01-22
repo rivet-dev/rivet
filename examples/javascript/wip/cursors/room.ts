@@ -80,4 +80,3 @@ export default class Room extends Actor<State, undefined, ConnState> {
 		this.#broadcastState();
 	}
 }
-

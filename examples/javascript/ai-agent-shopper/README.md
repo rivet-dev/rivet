@@ -1,6 +1,4 @@
-# ai-agent
-
-A new project powered by [Rivet](https://rivet.gg).
+# ai-agent-shopper
 
 ## Prerequisites
 
@@ -9,20 +7,13 @@ A new project powered by [Rivet](https://rivet.gg).
 ## File structure
 
 - `rivet.json` Configuration file for deploying the actor
-- `deno.json` Configuration file for dependencies for the actor
-- `counter.ts` Simple counter actor
-- `counter_test.ts` Script to test the counter
+- `shopper_agent.ts` Agent source code, deployed to Rivet
+- `cli.ts` CLI to interact with the agent
 
-## Deploying
+## Running
 
 ```sh
 rivet login
 rivet deploy
+rivet deno run -A cli.ts  # Also supports NodeJS
 ```
-
-## Testing
-
-```sh
-rivet deno run -A counter_test.ts
-```
-
