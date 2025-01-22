@@ -82,9 +82,9 @@ COPY --from=builder /app/dist/rivet-server /usr/bin/rivet-server
 CMD ["/usr/bin/rivet-server"]
 
 # MARK: Runner base
-FROM --platform=linux/amd64 debian:12-slim AS base-runner
+FROM --platform=linux/amd64 debian:12.1-slim AS base-runner
 RUN DEBIAN_FRONTEND=noninteractive apt-get update -y && \
-	apt-get install -y --no-install-recommends ca-certificates curl && \
+	apt-get install -y --no-install-recommends ca-certificates openssl curl && \
 	curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.1.60/libfdb_c.x86_64.so"
 
 # MARK: Runner (Full)
@@ -103,7 +103,7 @@ COPY --from=builder /app/dist/rivet-container-runner /usr/local/bin/
 ENTRYPOINT ["rivet-client"]
 
 # MARK: Monlith
-FROM --platform=linux/amd64 debian:12-slim AS monolith
+FROM --platform=linux/amd64 debian:12.1-slim AS monolith
 
 ARG TRAEFIK_VERSION=3.2.1
 ARG COCKROACHDB_VERSION=24.2.3
