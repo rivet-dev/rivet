@@ -1,3 +1,4 @@
+import { exec as execCallback } from "node:child_process";
 import { setupLogging } from "@rivet-gg/actor-common/log";
 import type { ClientOptions } from "./client.ts";
 import { InternalError } from "./errors.ts";
@@ -9,21 +10,31 @@ import { Client } from "./mod.ts";
  */
 export async function readEndpointFromCli(): Promise<string> {
 	// Read endpoint
-	const cliPath = Deno.env.get("RIVET_CLI_PATH") ?? "rivet";
-	const output = await new Deno.Command(cliPath, {
-		args: ["manager", "endpoint"],
-	}).output();
-	if (!output.success) {
-		throw new InternalError(
-			`Read endpoint failed with ${output.code}:\n${new TextDecoder().decode(
-				output.stderr,
-			)}`,
-		);
-	}
+	const cliPath = process.env.RIVET_CLI_PATH ?? "rivet";
 
-	// Decode output
-	const endpoint = new TextDecoder().decode(output.stdout).trim();
-	return endpoint;
+	try {
+		const { stdout, stderr } = await new Promise<{
+			stdout: string;
+			stderr: string;
+		}>((resolve, reject) => {
+			execCallback(
+				`${cliPath} manager endpoint`,
+				(error, stdout, stderr) => {
+					if (error) reject(error);
+					else resolve({ stdout, stderr });
+				},
+			);
+		});
+
+		if (stderr) {
+			throw new Error(stderr);
+		}
+
+		// Decode output
+		return stdout.trim();
+	} catch (error) {
+		throw new InternalError(`Read endpoint failed: ${error}`);
+	}
 }
 
 export class TestClient extends Client {

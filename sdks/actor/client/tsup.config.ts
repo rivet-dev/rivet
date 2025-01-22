@@ -10,5 +10,5 @@ export default defineConfig({
 	// Bundle only the local dependencies
 	noExternal: [/@rivet-gg\/.*?/],
 	minify: true,
-	platform: "neutral",
+	platform: "node",
 });
