@@ -404,7 +404,7 @@ fn handle_entrypoint(
 		.context("default export")?
 		.to_object(scope)
 		.context(
-			"Missing default export at index.js. Try: export default {{ start(ctx) {{ ... }} }}.",
+			"Missing default export at index.js. Try: export default { start(ctx) { ... } }",
 		)?;
 
 	// Get `start` export
