@@ -518,9 +518,11 @@ pub async fn upgrade(
 
 	let build = resolve_build(&ctx, game_id, env_id, body.build, body.build_tags.flatten()).await?;
 
-	let mut sub = ctx
-		.subscribe::<ds::workflows::server::UpgradeStarted>(("server_id", actor_id))
-		.await?;
+	// TODO: Add back once we figure out how to cleanly handle if a wf is already complete when
+	// upgrading
+	// let mut sub = ctx
+	// 	.subscribe::<ds::workflows::server::UpgradeStarted>(("server_id", actor_id))
+	// 	.await?;
 
 	ctx.signal(ds::workflows::server::Upgrade {
 		image_id: build.build_id,
@@ -529,7 +531,7 @@ pub async fn upgrade(
 	.send()
 	.await?;
 
-	sub.next().await?;
+	// sub.next().await?;
 
 	Ok(json!({}))
 }
@@ -611,13 +613,15 @@ pub async fn upgrade_all(
 		count += list_res.server_ids.len();
 		cursor = list_res.server_ids.last().cloned();
 
-		let subs = futures_util::stream::iter(list_res.server_ids.clone())
-			.map(|server_id| {
-				ctx.subscribe::<ds::workflows::server::UpgradeStarted>(("server_id", server_id))
-			})
-			.buffer_unordered(32)
-			.try_collect::<Vec<_>>()
-			.await?;
+        // TODO: Add back once we figure out how to cleanly handle if a wf is already complete when
+        // upgrading
+		// let subs = futures_util::stream::iter(list_res.server_ids.clone())
+		// 	.map(|server_id| {
+		// 		ctx.subscribe::<ds::workflows::server::UpgradeStarted>(("server_id", server_id))
+		// 	})
+		// 	.buffer_unordered(32)
+		// 	.try_collect::<Vec<_>>()
+		// 	.await?;
 
 		futures_util::stream::iter(list_res.server_ids)
 			.map(|server_id| {
@@ -631,11 +635,11 @@ pub async fn upgrade_all(
 			.try_collect::<Vec<_>>()
 			.await?;
 
-		futures_util::stream::iter(subs)
-			.map(|mut sub| async move { sub.next().await })
-			.buffer_unordered(32)
-			.try_collect::<Vec<_>>()
-			.await?;
+		// futures_util::stream::iter(subs)
+		// 	.map(|mut sub| async move { sub.next().await })
+		// 	.buffer_unordered(32)
+		// 	.try_collect::<Vec<_>>()
+		// 	.await?;
 
 		if count < 10_000 {
 			break;

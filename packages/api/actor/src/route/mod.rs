@@ -44,7 +44,7 @@ impl GlobalQuery {
 }
 
 define_router! {
-	cors: |config| CorsConfigBuilder::hub(config).build(),
+	cors: |config| CorsConfigBuilder::public().build(),
 	routes: {
 		"actors": {
 			GET: actors::list_actors(
