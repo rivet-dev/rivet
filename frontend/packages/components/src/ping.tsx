@@ -14,11 +14,12 @@ const pingVariants = {
 
 interface PingProps {
 	variant?: Variant;
+	className?: string;
 }
 
-export const Ping = ({ variant = "primary" }: PingProps) => {
+export const Ping = ({ variant = "primary", className }: PingProps) => {
 	return (
-		<span className="flex size-2 absolute top-0 -right-3">
+		<span className={cn("flex size-2 absolute top-0 -right-3", className)}>
 			<span
 				className={cn(
 					"animate-ping absolute inline-flex h-full w-full rounded-full opacity-75",

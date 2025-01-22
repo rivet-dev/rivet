@@ -4,11 +4,12 @@ import { faCheck, faChevronDown } from "@rivet-gg/icons";
 import { Icon } from "@rivet-gg/icons";
 import { Fragment } from "react";
 import { cn } from "../lib/utils";
+import { Badge } from "./badge";
 import { Button } from "./button";
 import { Command, CommandInput, CommandItem, CommandList } from "./command";
 import { Popover, PopoverContent, PopoverTrigger } from "./popover";
 
-export interface Option {
+export interface ComboboxOption {
 	label: React.ReactNode;
 	value: string;
 }
@@ -35,36 +36,33 @@ interface ComboboxMultipleProps {
 	onValueChange: (value: string[]) => void;
 }
 
-export type ComboboxProps = {
+export type ComboboxProps<Option extends ComboboxOption> = {
 	options: Option[];
 	placeholder?: string;
 	notFoundMessage?: string;
 	className?: string;
+	showSelectedOptions?: number;
+	filter?: (option: Option, search: string) => boolean;
 } & (ComboboxNewOptionsProps | ComboboxDefaultProps) &
 	(ComboboxSingleProps | ComboboxMultipleProps);
 
-export const Combobox = React.forwardRef<HTMLButtonElement, ComboboxProps>(
-	(
-		{
-			options,
-			placeholder,
-			notFoundMessage,
-			className,
-			value,
-			multiple,
-			onValueChange,
-			...props
-		},
-		ref,
-	) => {
-		const [search, setSearch] = React.useState("");
-		const [open, onOpenChange] = React.useState(false);
+export const Combobox = <Option extends ComboboxOption>({
+	options,
+	placeholder,
+	notFoundMessage,
+	className,
+	value,
+	multiple,
+	onValueChange,
+	filter,
+	showSelectedOptions = 3,
+	...props
+}: ComboboxProps<Option>) => {
+	const [search, setSearch] = React.useState("");
+	const [open, onOpenChange] = React.useState(false);
 
-		const filteredOptions = options.filter((option) =>
-			option.value.toLowerCase().includes(search.toLowerCase()),
-		);
-
-		const handleSelect = (newValue: string) => {
+	const handleSelect = (newValue: string) => {
+		React.startTransition(() => {
 			if (multiple) {
 				const newValues = Array.isArray(value) ? value : [];
 				if (newValues.includes(newValue)) {
@@ -76,104 +74,152 @@ export const Combobox = React.forwardRef<HTMLButtonElement, ComboboxProps>(
 				onValueChange(newValue);
 			}
 			onOpenChange(false);
-		};
+		});
+	};
 
-		const handleNewSelect = (value: string) => {
-			if (props.allowCreate) {
-				React.startTransition(() => {
-					handleSelect(value);
-					props.onCreateOption(value);
-				});
-			}
-		};
+	const handleNewSelect = (value: string) => {
+		if (props.allowCreate) {
+			React.startTransition(() => {
+				handleSelect(value);
+				props.onCreateOption(value);
+			});
+		}
+	};
 
-		const currentOptions = options.filter((option) =>
-			Array.isArray(value)
-				? value.includes(option.value)
-				: option.value === value,
-		);
+	const currentOptions = options.filter((option) =>
+		Array.isArray(value)
+			? value.includes(option.value)
+			: option.value === value,
+	);
 
-		return (
-			<Popover open={open} onOpenChange={onOpenChange}>
-				<PopoverTrigger asChild>
-					<Button
-						ref={ref}
-						variant="outline"
-						// biome-ignore lint/a11y/useSemanticElements: combobox is a custom component
-						role="combobox"
-						aria-expanded={open}
-						className={cn(
-							"justify-between",
-							currentOptions.length === 0 &&
-								"text-muted-foreground/50",
-							className,
+	const currentValues = currentOptions.map((opt) => opt.value);
+
+	const filteredOptions = filter
+		? options.filter((option) => filter(option, search))
+		: options.filter((option) =>
+				option.value.toLowerCase().includes(search.toLowerCase()),
+			);
+
+	const sorted = filteredOptions.toSorted((a, b) => {
+		if (
+			currentValues.includes(a.value) &&
+			currentValues.includes(b.value)
+		) {
+			return 0;
+		}
+		if (currentValues.includes(a.value)) {
+			return -1;
+		}
+		if (currentValues.includes(b.value)) {
+			return 1;
+		}
+		return 0;
+	});
+
+	return (
+		<Popover open={open} onOpenChange={onOpenChange}>
+			<PopoverTrigger asChild>
+				<Button
+					variant="outline"
+					// biome-ignore lint/a11y/useSemanticElements: combobox is a custom component
+					role="combobox"
+					aria-expanded={open}
+					className={cn(
+						"justify-between",
+						currentOptions.length === 0 &&
+							"text-muted-foreground/50",
+						className,
+					)}
+				>
+					<div className="flex gap-4">
+						{currentOptions.length > 0 ? (
+							<>
+								{currentOptions
+									.map((option) => (
+										<Fragment key={option.value}>
+											{option.label}
+										</Fragment>
+									))
+									.slice(0, showSelectedOptions)}
+
+								{currentOptions.length > showSelectedOptions ? (
+									<Badge variant="outline">
+										+
+										{currentOptions.length -
+											showSelectedOptions}
+									</Badge>
+								) : null}
+							</>
+						) : (
+							placeholder
 						)}
-					>
-						{currentOptions.length > 0
-							? currentOptions.map((option) => (
-									<Fragment key={option.value}>
-										{option.label}
-									</Fragment>
-								))
-							: placeholder}
+					</div>
 
-						<Icon
-							className="ml-2 h-4 w-4 shrink-0 text-foreground opacity-50"
-							icon={faChevronDown}
-						/>
-					</Button>
-				</PopoverTrigger>
-				<PopoverContent className="p-0 w-[--radix-popover-trigger-width]">
-					<Command shouldFilter={false} loop>
-						<CommandInput
-							value={search}
-							onValueChange={setSearch}
-							placeholder={placeholder}
-						/>
-						<CommandList>
-							{filteredOptions.map((option) => {
-								return (
-									<ComboboxOption
-										key={option.value}
-										isCurrent={
-											Array.isArray(value)
-												? value.includes(option.value)
-												: value === option.value
-										}
-										label={option.label}
-										value={option.value}
-										onSelect={handleSelect}
-									/>
-								);
-							})}
-							{filteredOptions.length === 0 ? (
-								<ComboboxOption
-									label={search}
-									value={search}
-									onSelect={handleNewSelect}
+					<Icon
+						className="ml-2 h-4 w-4 shrink-0 text-foreground opacity-50"
+						icon={faChevronDown}
+					/>
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent
+				className="p-0 w-[--radix-popover-trigger-width]"
+				// https://github.com/radix-ui/primitives/issues/1159
+				onWheel={(e) => {
+					e.stopPropagation();
+				}}
+				onTouchMove={(e) => {
+					e.stopPropagation();
+				}}
+			>
+				<Command shouldFilter={false} loop>
+					<CommandInput
+						value={search}
+						onValueChange={setSearch}
+						placeholder={placeholder}
+					/>
+					<CommandList>
+						{sorted.map((option) => {
+							return (
+								<ComboboxOption<Option>
+									key={option.value}
+									isCurrent={
+										Array.isArray(value)
+											? value.includes(option.value)
+											: value === option.value
+									}
+									label={option.label}
+									value={option.value}
+									onSelect={handleSelect}
 								/>
-							) : null}
-						</CommandList>
-					</Command>
-				</PopoverContent>
-			</Popover>
-		);
-	},
-);
+							);
+						})}
+						{filteredOptions.length === 0 ? (
+							<ComboboxOption
+								label={search}
+								value={search}
+								onSelect={handleNewSelect}
+							/>
+						) : null}
+					</CommandList>
+				</Command>
+			</PopoverContent>
+		</Popover>
+	);
+};
 
-interface ComboboxOptionProps {
+interface ComboboxOptionProps<Option extends ComboboxOption> {
 	isCurrent?: boolean;
 	label: Option["label"];
 	value: Option["value"];
 	onSelect: (value: string) => void;
 }
 
-function ComboboxOption({
+function ComboboxOption<Option extends ComboboxOption>({
 	isCurrent,
 	label,
 	value,
 	onSelect,
-}: ComboboxOptionProps) {
+}: ComboboxOptionProps<Option>) {
 	return (
 		<CommandItem
 			key={value}

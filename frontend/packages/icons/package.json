@@ -2,12 +2,7 @@
 	"name": "@rivet-gg/icons",
 	"version": "1.0.0",
 	"sideEffects": false,
-	"files": [
-		"scripts",
-		"manifest.json",
-		"src",
-		"dist"
-	],
+	"files": ["scripts", "manifest.json", "src", "dist"],
 	"scripts": {
 		"postinstall": "node scripts/postinstall.js"
 	},

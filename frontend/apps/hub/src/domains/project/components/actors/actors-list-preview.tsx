@@ -12,12 +12,16 @@ interface ActorsListPreview {
 	projectNameId: string;
 	environmentNameId: string;
 	actorId?: string;
+	tags: Record<string, string>;
+	showDestroyed: boolean;
 }
 
 export function ActorsListPreview({
 	projectNameId,
 	environmentNameId,
 	actorId,
+	tags,
+	showDestroyed,
 }: ActorsListPreview) {
 	const isMd = useBreakpoint("md");
 
@@ -33,6 +37,8 @@ export function ActorsListPreview({
 						projectNameId={projectNameId}
 						environmentNameId={environmentNameId}
 						actorId={actorId}
+						tags={tags}
+						showDestroyed={showDestroyed}
 					/>
 				</div>
 			</ResizablePanel>

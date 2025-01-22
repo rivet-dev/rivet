@@ -1,5 +1,6 @@
 import { ActorTags } from "@/domains/project/components/actors/actor-tags";
 import { ProjectBuildsTableActions } from "@/domains/project/components/project-builds-table-actions";
+import { TagsSelect } from "@/domains/project/components/tags-select";
 import * as Layout from "@/domains/project/layouts/servers-layout";
 import {
 	projectBuildsQueryOptions,
@@ -16,6 +17,7 @@ import {
 	CardTitle,
 	CopyButton,
 	Flex,
+	Skeleton,
 	Table,
 	TableBody,
 	TableCell,
@@ -26,7 +28,7 @@ import {
 	WithTooltip,
 } from "@rivet-gg/components";
 import { Icon, faCheckCircle, faInfoCircle, faRefresh } from "@rivet-gg/icons";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { zodSearchValidator } from "@tanstack/router-zod-adapter";
 import { z } from "zod";
@@ -42,10 +44,9 @@ function ProjectBuildsRoute() {
 	const {
 		data: builds,
 		isRefetching,
+		isLoading,
 		refetch,
-	} = useSuspenseQuery(
-		projectBuildsQueryOptions({ projectId, environmentId, tags }),
-	);
+	} = useQuery(projectBuildsQueryOptions({ projectId, environmentId, tags }));
 
 	const navigate = Route.useNavigate();
 
@@ -55,20 +56,24 @@ function ProjectBuildsRoute() {
 				<Flex items="center" gap="4" justify="between">
 					<CardTitle>Builds</CardTitle>
 					<div className="flex gap-2">
-						{/* <TagsSelect
-              value={tags}
-              projectId={projectId}
-              environmentId={environmentId}
-              onValueChange={(newTags) => {
-                navigate({
-                  search: {
-                    tags: Object.entries(newTags).map(
-                      ([key, value]) => [key, value] as [string, string],
-                    ),
-                  },
-                });
-              }}
-            /> */}
+						<TagsSelect
+							value={tags}
+							projectId={projectId}
+							environmentId={environmentId}
+							onValueChange={(newTags) => {
+								navigate({
+									search: {
+										tags: Object.entries(newTags).map(
+											([key, value]) =>
+												[key, value] as [
+													string,
+													string,
+												],
+										),
+									},
+								});
+							}}
+						/>
 						<Button
 							size="icon"
 							isLoading={isRefetching}
@@ -101,16 +106,28 @@ function ProjectBuildsRoute() {
 						</TableRow>
 					</TableHeader>
 					<TableBody>
-						{builds.length === 0 ? (
+						{!isLoading && builds?.length === 0 ? (
 							<TableRow>
 								<TableCell colSpan={6}>
 									<Text className="text-center">
-										There's no builds yet.
+										There's no builds matching criteria.
 									</Text>
 								</TableCell>
 							</TableRow>
 						) : null}
-						{builds.map((build) => (
+						{isLoading ? (
+							<>
+								<RowSkeleton />
+								<RowSkeleton />
+								<RowSkeleton />
+								<RowSkeleton />
+								<RowSkeleton />
+								<RowSkeleton />
+								<RowSkeleton />
+								<RowSkeleton />
+							</>
+						) : null}
+						{builds?.map((build) => (
 							<TableRow key={build.id}>
 								<TableCell>
 									<WithTooltip
@@ -150,6 +167,25 @@ function ProjectBuildsRoute() {
 				</Table>
 			</CardContent>
 		</Card>
+	);
+}
+
+function RowSkeleton() {
+	return (
+		<TableRow>
+			<TableCell>
+				<Skeleton className="w-full h-4" />
+			</TableCell>
+			<TableCell>
+				<Skeleton className="w-full h-4" />
+			</TableCell>
+			<TableCell>
+				<Skeleton className="w-full h-4" />
+			</TableCell>
+			<TableCell>
+				<Skeleton className="w-full h-4" />
+			</TableCell>
+		</TableRow>
 	);
 }
 
@@ -206,14 +242,14 @@ function ProjectBuildLatestButton({
 	return <Icon icon={faCheckCircle} className="fill-primary text-primary" />;
 }
 
-const f = z.object({
+const searchSchema = z.object({
 	tags: z.array(z.tuple([z.string(), z.string()])).optional(),
 });
 
 export const Route = createFileRoute(
 	"/_authenticated/_layout/projects/$projectNameId/environments/$environmentNameId/builds",
 )({
-	validateSearch: zodSearchValidator(f),
+	validateSearch: zodSearchValidator(searchSchema),
 	component: ProjectBuildsRoute,
 	pendingComponent: Layout.Content.Skeleton,
 });

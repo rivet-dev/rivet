@@ -23,9 +23,13 @@
 			"sdks/api/**",
 			"*.lock",
 			"resources/**",
-			"packages/**",
 			"site/framer/**",
-			"**/out/**"
+			"**/out/**",
+			"packages/infra/**",
+			"packages/common/**",
+			"packages/api/**",
+			"packages/services/**",
+			"packages/toolchain/**"
 		],
 		"ignoreUnknown": true
 	},

@@ -8,6 +8,7 @@ interface TagsSelectProps {
 	environmentId: string;
 	value: Record<string, string>;
 	onValueChange: (value: Record<string, string>) => void;
+	showSelectedOptions?: number;
 }
 
 export function TagsSelect({
@@ -15,6 +16,7 @@ export function TagsSelect({
 	environmentId,
 	value,
 	onValueChange,
+	showSelectedOptions,
 }: TagsSelectProps) {
 	const { data } = useSuspenseQuery(
 		actorBuildTagsQueryOptions({ projectId, environmentId }),
@@ -60,7 +62,12 @@ export function TagsSelect({
 			options={tags}
 			value={val}
 			onValueChange={handleValueChange}
-			className="w-full"
+			showSelectedOptions={showSelectedOptions}
+			filter={(option, search) =>
+				option.tag.key.includes(search) ||
+				option.tag.value.includes(search)
+			}
+			className="w-full min-w-[20rem]"
 		/>
 	);
 }

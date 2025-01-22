@@ -2,7 +2,6 @@ import { javascript } from "@codemirror/lang-javascript";
 import { json, jsonParseLinter } from "@codemirror/lang-json";
 import { linter } from "@codemirror/lint";
 import { EditorView } from "@codemirror/view";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Icon, faCopy, faFile } from "@rivet-gg/icons";
 import { githubDark } from "@uiw/codemirror-theme-github";
 import ReactCodeMirror, {
@@ -15,6 +14,7 @@ import { cn } from "./lib/utils";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { WithTooltip } from "./ui/tooltip";
 
 interface JsonCodeProps extends ReactCodeMirrorProps {}

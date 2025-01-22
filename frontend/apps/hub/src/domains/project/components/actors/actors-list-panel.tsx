@@ -17,16 +17,25 @@ interface ActorsListPanelProps {
 	projectNameId: string;
 	environmentNameId: string;
 	actorId: string | undefined;
+	tags: Record<string, string>;
+	showDestroyed: boolean;
 }
 
 export function ActorsListPanel({
 	actorId,
 	projectNameId,
 	environmentNameId,
+	tags,
+	showDestroyed,
 }: ActorsListPanelProps) {
 	const { data, hasNextPage, isFetchingNextPage, fetchNextPage } =
 		useSuspenseInfiniteQuery(
-			projectActorsQueryOptions({ projectNameId, environmentNameId }),
+			projectActorsQueryOptions({
+				projectNameId,
+				environmentNameId,
+				includeDestroyed: showDestroyed,
+				tags,
+			}),
 		);
 	return (
 		<ScrollArea className="overflow-auto h-full truncate min-w-0">

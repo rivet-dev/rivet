@@ -12,7 +12,14 @@ import {
 export const projectActorsQueryOptions = ({
 	projectNameId,
 	environmentNameId,
-}: { projectNameId: string; environmentNameId: string }) => {
+	includeDestroyed,
+	tags,
+}: {
+	projectNameId: string;
+	environmentNameId: string;
+	includeDestroyed?: boolean;
+	tags?: Record<string, string>;
+}) => {
 	return infiniteQueryOptions({
 		queryKey: [
 			"project",
@@ -20,20 +27,22 @@ export const projectActorsQueryOptions = ({
 			"environment",
 			environmentNameId,
 			"actors",
-		],
+			{ includeDestroyed, tags },
+		] as const,
 		refetchInterval: 5000,
 		initialPageParam: "",
 		queryFn: ({
 			signal: abortSignal,
 			pageParam,
-			queryKey: [_, project, __, environment],
+			queryKey: [, project, , environment, , { includeDestroyed, tags }],
 		}) =>
 			rivetClient.actor.list(
 				{
 					project,
 					environment,
-					includeDestroyed: true,
+					includeDestroyed,
 					cursor: pageParam ? pageParam : undefined,
+					tagsJson: JSON.stringify(tags),
 				},
 				{ abortSignal },
 			),

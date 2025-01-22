@@ -18,6 +18,7 @@ interface FormProps<FormValues extends FieldValues>
 	extends Omit<ComponentProps<"form">, "onSubmit"> {
 	onSubmit: SubmitHandler<FormValues>;
 	defaultValues: DefaultValues<FormValues>;
+	values?: FormValues;
 	children: ReactNode;
 }
 
@@ -32,6 +33,7 @@ export const createSchemaForm = <Schema extends z.ZodSchema>(
 	return {
 		Form: ({
 			defaultValues,
+			values,
 			children,
 			onSubmit,
 			...props
@@ -40,6 +42,7 @@ export const createSchemaForm = <Schema extends z.ZodSchema>(
 				reValidateMode: "onSubmit",
 				resolver: zodResolver(schema),
 				defaultValues,
+				values,
 			});
 
 			return (
@@ -74,13 +77,15 @@ export const createSchemaForm = <Schema extends z.ZodSchema>(
 			);
 		},
 		Reset: (props: ButtonProps) => {
-			const { defaultValues, isDirty } = useFormState<z.TypeOf<Schema>>();
+			const { defaultValues } = useFormState<z.TypeOf<Schema>>();
 			const { reset } = useFormContext<z.TypeOf<Schema>>();
 			return (
 				<Button
 					type="button"
-					disabled={!isDirty}
-					onClick={() => reset(defaultValues)}
+					onClick={(e) => {
+						reset(defaultValues);
+						props.onClick?.(e);
+					}}
 					{...props}
 				/>
 			);
