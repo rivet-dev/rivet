@@ -90,6 +90,12 @@ pub enum WorkflowError {
 	#[error("tags must be a json object")]
 	InvalidTags,
 
+	#[error("failed to serialize loop state: {0}")]
+	SerializeLoopState(serde_json::Error),
+
+	#[error("failed to deserialize loop state: {0}")]
+	DeserializeLoopState(serde_json::Error),
+
 	#[error("failed to serialize loop output: {0}")]
 	SerializeLoopOutput(serde_json::Error),
 

@@ -473,7 +473,7 @@ pub async fn print_history(
 					version,
 					NULL AS name,
 					NULL AS auxiliary_id,
-					NULL AS input,
+					state AS input,
 					NULL AS output,
 					iteration,
 					NULL AS deadline_ts,
@@ -876,18 +876,32 @@ pub async fn print_history(
 
 				println!("iteration {}", style(data.iteration).yellow());
 
-				if let Some(output) = &data.output {
+				if !exclude_json {
 					// Indent
 					print!("{}{c} ", "  ".repeat(indent));
 
 					println!(
-						"output {}",
+						"state {}",
 						indent_string(
-							&colored_json(&output)?,
+							&colored_json(&data.state)?,
 							format!("{}{c} ", "  ".repeat(indent)),
 							true
 						)
 					);
+
+					if let Some(output) = &data.output {
+						// Indent
+						print!("{}{c} ", "  ".repeat(indent));
+
+						println!(
+							"output {}",
+							indent_string(
+								&colored_json(&output)?,
+								format!("{}{c} ", "  ".repeat(indent)),
+								true
+							)
+						);
+					}
 				}
 			}
 			EventData::Sleep(data) => {

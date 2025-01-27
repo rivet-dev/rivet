@@ -413,6 +413,7 @@ impl Database for DatabaseCrdbNats {
 				activity_name AS name,
 				NULL AS auxiliary_id,
 				input_hash AS hash,
+				NULL AS input,
 				output AS output,
 				create_ts AS create_ts,
 				(
@@ -450,6 +451,7 @@ impl Database for DatabaseCrdbNats {
 				signal_name AS name,
 				NULL AS auxiliary_id,
 				NULL AS hash,
+				NULL AS input,
 				body AS output,
 				NULL AS create_ts,
 				NULL AS error_count,
@@ -470,6 +472,7 @@ impl Database for DatabaseCrdbNats {
 				signal_name AS name,
 				signal_id AS auxiliary_id,
 				NULL AS hash,
+				NULL AS input,
 				NULL AS output,
 				NULL AS create_ts,
 				NULL AS error_count,
@@ -490,6 +493,7 @@ impl Database for DatabaseCrdbNats {
 				message_name AS name,
 				NULL AS auxiliary_id,
 				NULL AS hash,
+				NULL AS input,
 				NULL AS output,
 				NULL AS create_ts,
 				NULL AS error_count,
@@ -510,6 +514,7 @@ impl Database for DatabaseCrdbNats {
 				w.workflow_name AS name,
 				sw.sub_workflow_id AS auxiliary_id,
 				NULL AS hash,
+				NULL AS input,
 				NULL AS output,
 				NULL AS create_ts,
 				NULL AS error_count,
@@ -532,6 +537,7 @@ impl Database for DatabaseCrdbNats {
 				NULL AS name,
 				NULL AS auxiliary_id,
 				NULL AS hash,
+				state AS input,
 				output,
 				NULL AS create_ts,
 				NULL AS error_count,
@@ -552,6 +558,7 @@ impl Database for DatabaseCrdbNats {
 				NULL AS name,
 				NULL AS auxiliary_id,
 				NULL AS hash,
+				NULL AS input,
 				NULL AS output,
 				NULL AS create_ts,
 				NULL AS error_count,
@@ -572,6 +579,7 @@ impl Database for DatabaseCrdbNats {
 				NULL AS name,
 				NULL AS auxiliary_id,
 				NULL AS hash,
+				NULL AS input,
 				NULL AS output,
 				NULL AS create_ts,
 				NULL AS error_count,
@@ -592,6 +600,7 @@ impl Database for DatabaseCrdbNats {
 				event_name AS name,
 				NULL AS auxiliary_id,
 				NULL AS hash,
+				NULL AS input,
 				NULL AS output,
 				NULL AS create_ts,
 				NULL AS error_count,
@@ -612,6 +621,7 @@ impl Database for DatabaseCrdbNats {
 				NULL AS name,
 				NULL AS auxiliary_id,
 				NULL AS hash,
+				NULL AS input,
 				NULL AS output,
 				NULL AS create_ts,
 				NULL AS error_count,
@@ -1250,6 +1260,7 @@ impl Database for DatabaseCrdbNats {
 		location: &Location,
 		version: usize,
 		iteration: usize,
+		state: &serde_json::value::RawValue,
 		output: Option<&serde_json::value::RawValue>,
 		loop_location: Option<&Location>,
 	) -> WorkflowResult<()> {
@@ -1265,20 +1276,23 @@ impl Database for DatabaseCrdbNats {
 					location2,
 					version,
 					iteration,
+					state,
 					output,
 					loop_location2
 				)
-				VALUES ($1, $2, $3, $4, $5, $6)
+				VALUES ($1, $2, $3, $4, $5, $6, $7)
 				ON CONFLICT (workflow_id, location2_hash) DO UPDATE
 				SET
 					iteration = $4,
-					output = $5
+					state = $5,
+					output = $6
 				RETURNING 1
 				",
 				workflow_id,
 				location,
 				version as i64,
 				iteration as i64,
+				sqlx::types::Json(state),
 				output.map(sqlx::types::Json),
 				loop_location,
 			)
@@ -1626,6 +1640,7 @@ mod types {
 		name: Option<String>,
 		auxiliary_id: Option<Uuid>,
 		hash: Option<Vec<u8>>,
+		input: Option<RawJson>,
 		output: Option<RawJson>,
 		create_ts: Option<i64>,
 		error_count: Option<i64>,
@@ -1751,6 +1766,7 @@ mod types {
 
 		fn try_from(value: AmalgamEventRow) -> WorkflowResult<Self> {
 			Ok(LoopEvent {
+				state: value.input.ok_or(WorkflowError::MissingEventData)?.0,
 				output: value.output.map(|x| x.0),
 				iteration: value
 					.iteration

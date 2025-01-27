@@ -180,6 +180,7 @@ pub trait Database: Send {
 		location: &Location,
 		version: usize,
 		iteration: usize,
+		state: &serde_json::value::RawValue,
 		output: Option<&serde_json::value::RawValue>,
 		loop_location: Option<&Location>,
 	) -> WorkflowResult<()>;

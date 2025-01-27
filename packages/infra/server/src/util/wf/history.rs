@@ -172,13 +172,14 @@ pub struct SubWorkflowEvent {
 	pub name: String,
 	pub tags: serde_json::Value,
 	pub input: serde_json::Value,
-	pub output: Option<serde_json::Value>,
+	// pub output: Option<serde_json::Value>,
 }
 
 #[derive(Debug)]
 pub struct LoopEvent {
+	pub state: serde_json::Value,
 	/// If the loop completes, this will be some.
-	pub(crate) output: Option<serde_json::Value>,
+	pub output: Option<serde_json::Value>,
 	pub iteration: usize,
 }
 
@@ -296,7 +297,7 @@ impl TryFrom<AmalgamEventRow> for SubWorkflowEvent {
 			name: value.name.context("missing event data")?,
 			tags: value.tags.context("missing event data")?,
 			input: value.input.context("missing event data")?,
-			output: value.output,
+			// output: value.output,
 		})
 	}
 }
@@ -306,6 +307,7 @@ impl TryFrom<AmalgamEventRow> for LoopEvent {
 
 	fn try_from(value: AmalgamEventRow) -> Result<Self> {
 		Ok(LoopEvent {
+			state: value.input.context("missing event data")?,
 			output: value.output,
 			iteration: value
 				.iteration

@@ -163,12 +163,17 @@ pub struct SubWorkflowEvent {
 
 #[derive(Debug)]
 pub struct LoopEvent {
+	pub(crate) state: Box<serde_json::value::RawValue>,
 	/// If the loop completes, this will be some.
 	pub(crate) output: Option<Box<serde_json::value::RawValue>>,
 	pub iteration: usize,
 }
 
 impl LoopEvent {
+	pub fn parse_state<S: DeserializeOwned>(&self) -> WorkflowResult<S> {
+		serde_json::from_str(self.state.get()).map_err(WorkflowError::DeserializeLoopState)
+	}
+
 	pub fn parse_output<O: DeserializeOwned>(&self) -> WorkflowResult<Option<O>> {
 		self.output
 			.as_ref()

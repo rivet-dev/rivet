@@ -715,45 +715,6 @@ impl WorkflowCtx {
 		Ok(signal)
 	}
 
-	// TODO: Currently implemented wrong, if no signal is received it should still write a signal row to the
-	// database so that upon replay it again receives no signal
-	// /// Checks if the given signal exists in the database.
-	// pub async fn query_signal<T: Listen>(&mut self) -> GlobalResult<Option<T>> {
-	// 	let event = self.current_history_event();
-
-	// 	// Signal received before
-	// 	let signal = if let Some(event) = event {
-	// 		tracing::debug!(name=%self.name, id=%self.workflow_id, "replaying signal");
-
-	// 		// Validate history is consistent
-	// 		let Event::Signal(signal) = event else {
-	// 			return Err(WorkflowError::HistoryDiverged(format!(
-	// 				"expected {event} at {}, found signal",
-	// 				self.loc(),
-	// 			)))
-	// 			.map_err(GlobalError::raw);
-	// 		};
-
-	// 		Some(T::parse(&signal.name, signal.body.clone()).map_err(GlobalError::raw)?)
-	// 	}
-	// 	// Listen for new message
-	// 	else {
-	// 		let mut ctx = ListenCtx::new(self);
-	// 		ctx.reset();
-
-	// 		match T::listen(&mut ctx).await {
-	// 			Ok(res) => Some(res),
-	// 			Err(err) if matches!(err, WorkflowError::NoSignalFound(_)) => None,
-	// 			Err(err) => return Err(err).map_err(GlobalError::raw),
-	// 		}
-	// 	};
-
-	// 	// Move to next event
-	// 	self.cursor.update();
-
-	// 	Ok(signal)
-	// }
-
 	/// Creates a message builder.
 	pub fn msg<M>(&mut self, body: M) -> builder::message::MessageBuilder<M>
 	where
@@ -762,11 +723,29 @@ impl WorkflowCtx {
 		builder::message::MessageBuilder::new(self, self.version, body)
 	}
 
-	/// Runs workflow steps in a loop. **Ensure that there are no side effects caused by the code in this
-	/// callback**. If you need side causes or side effects, use a native rust loop.
+	/// Runs workflow steps in a loop. If you need side causes, use `WorkflowCtx::loope`.
 	pub async fn repeat<F, T>(&mut self, mut cb: F) -> GlobalResult<T>
 	where
 		F: for<'a> FnMut(&'a mut WorkflowCtx) -> AsyncResult<'a, Loop<T>>,
+		T: Serialize + DeserializeOwned,
+	{
+		self.loop_inner((), |ctx, _| cb(ctx)).await
+	}
+
+	/// Runs workflow steps in a loop with state.
+	pub async fn loope<S, F, T>(&mut self, state: S, cb: F) -> GlobalResult<T>
+	where
+		S: Serialize + DeserializeOwned,
+		F: for<'a> FnMut(&'a mut WorkflowCtx, &'a mut S) -> AsyncResult<'a, Loop<T>>,
+		T: Serialize + DeserializeOwned,
+	{
+		self.loop_inner(state, cb).await
+	}
+
+	async fn loop_inner<S, F, T>(&mut self, state: S, mut cb: F) -> GlobalResult<T>
+	where
+		S: Serialize + DeserializeOwned,
+		F: for<'a> FnMut(&'a mut WorkflowCtx, &'a mut S) -> AsyncResult<'a, Loop<T>>,
 		T: Serialize + DeserializeOwned,
 	{
 		let history_res = self
@@ -776,25 +755,32 @@ impl WorkflowCtx {
 		let loop_location = self.cursor.current_location_for(&history_res);
 
 		// Loop existed before
-		let (mut iteration, output) = if let HistoryResult::Event(loop_event) = history_res {
-			let output = loop_event.parse_output().map_err(GlobalError::raw)?;
+		let (mut iteration, mut state, output) =
+			if let HistoryResult::Event(loop_event) = history_res {
+				let state = loop_event.parse_state().map_err(GlobalError::raw)?;
+				let output = loop_event.parse_output().map_err(GlobalError::raw)?;
 
-			(loop_event.iteration, output)
-		} else {
-			// Insert event before loop is run so the history is consistent
-			self.db
-				.upsert_workflow_loop_event(
-					self.workflow_id,
-					&loop_location,
-					self.version,
-					0,
-					None,
-					self.loop_location(),
-				)
-				.await?;
+				(loop_event.iteration, state, output)
+			} else {
+				let state_val = serde_json::value::to_raw_value(&state)
+					.map_err(WorkflowError::SerializeLoopOutput)
+					.map_err(GlobalError::raw)?;
 
-			(0, None)
-		};
+				// Insert event before loop is run so the history is consistent
+				self.db
+					.upsert_workflow_loop_event(
+						self.workflow_id,
+						&loop_location,
+						self.version,
+						0,
+						&state_val,
+						None,
+						self.loop_location(),
+					)
+					.await?;
+
+				(0, state, None)
+			};
 
 		// Create a branch but no branch event (loop event takes its place)
 		let mut loop_branch =
@@ -841,9 +827,13 @@ impl WorkflowCtx {
 				}
 
 				// Run loop
-				match cb(&mut iteration_branch).await? {
+				match cb(&mut iteration_branch, &mut state).await? {
 					Loop::Continue => {
 						iteration += 1;
+
+						let state_val = serde_json::value::to_raw_value(&state)
+							.map_err(WorkflowError::SerializeLoopOutput)
+							.map_err(GlobalError::raw)?;
 
 						self.db
 							.upsert_workflow_loop_event(
@@ -851,6 +841,7 @@ impl WorkflowCtx {
 								&loop_location,
 								self.version,
 								iteration,
+								&state_val,
 								None,
 								self.loop_location(),
 							)
@@ -865,6 +856,9 @@ impl WorkflowCtx {
 					Loop::Break(res) => {
 						iteration += 1;
 
+						let state_val = serde_json::value::to_raw_value(&state)
+							.map_err(WorkflowError::SerializeLoopOutput)
+							.map_err(GlobalError::raw)?;
 						let output_val = serde_json::value::to_raw_value(&res)
 							.map_err(WorkflowError::SerializeLoopOutput)
 							.map_err(GlobalError::raw)?;
@@ -875,6 +869,7 @@ impl WorkflowCtx {
 								&loop_location,
 								self.version,
 								iteration,
+								&state_val,
 								Some(&output_val),
 								self.loop_location(),
 							)
