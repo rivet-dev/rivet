@@ -15,6 +15,7 @@ pub fn registry() -> WorkflowResult<Registry> {
 	registry.register_workflow::<datacenter::scale::Workflow>()?;
 	registry.register_workflow::<datacenter::tls_issue::Workflow>()?;
 	registry.register_workflow::<server::Workflow>()?;
+	registry.register_workflow::<server::Workflow2>()?;
 	registry.register_workflow::<server::install::Workflow>()?;
 	registry.register_workflow::<server::dns_create::Workflow>()?;
 	registry.register_workflow::<server::dns_delete::Workflow>()?;

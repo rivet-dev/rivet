@@ -144,17 +144,30 @@ impl Action {
 			Action::Provision {
 				server_id,
 				pool_type,
-			} => {
-				ctx.workflow(crate::workflows::server::Input {
-					datacenter_id,
-					server_id,
-					pool_type,
-					tags: Vec::new(),
-				})
-				.tag("server_id", server_id)
-				.dispatch()
-				.await?;
-			}
+			} => match ctx.check_version(2).await? {
+				1 => {
+					ctx.workflow(crate::workflows::server::Input {
+						datacenter_id,
+						server_id,
+						pool_type,
+						tags: Vec::new(),
+					})
+					.tag("server_id", server_id)
+					.dispatch()
+					.await?;
+				}
+				_ => {
+					ctx.v(2).workflow(crate::workflows::server::Input2 {
+						datacenter_id,
+						server_id,
+						pool_type,
+						tags: Vec::new(),
+					})
+					.tag("server_id", server_id)
+					.dispatch()
+					.await?;
+				}
+			},
 			Action::Drain { server_id } => {
 				ctx.signal(crate::workflows::server::Drain {})
 					.tag("server_id", server_id)

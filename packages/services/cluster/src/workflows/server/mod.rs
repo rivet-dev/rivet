@@ -1,4 +1,5 @@
 use chirp_workflow::prelude::*;
+use futures_util::FutureExt;
 use ipnet::Ipv4Net;
 use rand::Rng;
 use serde_json::json;
@@ -18,7 +19,41 @@ use crate::{
 	types::{Pool, PoolType, Provider},
 };
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct Input2 {
+	pub datacenter_id: Uuid,
+	pub server_id: Uuid,
+	pub pool_type: PoolType,
+	pub tags: Vec<String>,
+}
+
+#[workflow(Workflow2)]
+pub(crate) async fn cluster_server2(ctx: &mut WorkflowCtx, input: &Input2) -> GlobalResult<()> {
+	let (dc, provider_server_workflow_id) = provision_server(ctx, input).await?;
+
+	let has_dns = ctx
+		.loope(State::default(), |ctx, state| {
+			let input = input.clone();
+			let dc = dc.clone();
+
+			async move { lifecycle(ctx, &input, &dc, state).await }.boxed()
+		})
+		.await?;
+
+	cleanup(
+		ctx,
+		input,
+		&dc.provider,
+		provider_server_workflow_id,
+		has_dns,
+	)
+	.await?;
+
+	Ok(())
+}
+
+/// Old cluster_server workflow before loop state was implemented.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Input {
 	pub datacenter_id: Uuid,
 	pub server_id: Uuid,
@@ -26,8 +61,47 @@ pub(crate) struct Input {
 	pub tags: Vec<String>,
 }
 
+impl From<Input> for Input2 {
+	fn from(input: Input) -> Self {
+		Input2 {
+			datacenter_id: input.datacenter_id,
+			server_id: input.server_id,
+			pool_type: input.pool_type,
+			tags: input.tags,
+		}
+	}
+}
+
 #[workflow]
 pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
+	let input = input.clone().into();
+	let (dc, provider_server_workflow_id) = provision_server(ctx, &input).await?;
+
+	// NOTE: This loop has side effects (for state) so we do not use `ctx.repeat`
+	let mut state = State::default();
+	loop {
+		match lifecycle(ctx, &input, &dc, &mut state).await? {
+			Loop::Continue => {}
+			Loop::Break(_) => break,
+		}
+	}
+
+	cleanup(
+		ctx,
+		&input,
+		&dc.provider,
+		provider_server_workflow_id,
+		state.has_dns,
+	)
+	.await?;
+
+	Ok(())
+}
+
+async fn provision_server(
+	ctx: &mut WorkflowCtx,
+	input: &Input2,
+) -> GlobalResult<(GetDcOutput, Uuid)> {
 	let dc = ctx
 		.activity(GetDcInput {
 			datacenter_id: input.datacenter_id,
@@ -234,97 +308,93 @@ pub(crate) async fn cluster_server(ctx: &mut WorkflowCtx, input: &Input) -> Glob
 		bail!("failed all attempts to provision server");
 	};
 
-	// NOTE: This loop has side effects (for state) so we do not use `ctx.repeat`
-	let mut state = State::default();
-	loop {
-		match state.run(ctx).await? {
-			Main::DnsCreate(_) => {
-				ctx.workflow(dns_create::Input {
-					server_id: input.server_id,
-				})
-				.output()
-				.await?;
-			}
-			Main::DnsDelete(_) => {
-				ctx.workflow(dns_delete::Input {
-					server_id: input.server_id,
-				})
-				.output()
-				.await?;
-			}
-			Main::NomadRegistered(sig) => {
-				ctx.activity(SetNomadNodeIdInput {
-					server_id: input.server_id,
-					cluster_id: dc.cluster_id,
-					datacenter_id: dc.datacenter_id,
-					provider_datacenter_id: dc.provider_datacenter_id.clone(),
-					datacenter_name_id: dc.name_id.clone(),
-					node_id: sig.node_id,
-				})
-				.await?;
+	Ok((dc, provider_server_workflow_id))
+}
 
-				// Scale to get rid of tainted servers
-				ctx.signal(crate::workflows::datacenter::Scale {})
-					.tag("datacenter_id", input.datacenter_id)
-					.send()
-					.await?;
-			}
-			Main::PegboardRegistered(_) => {
-				ctx.activity(SetPegboardClientIdInput {
-					server_id: input.server_id,
-					cluster_id: dc.cluster_id,
-					datacenter_id: dc.datacenter_id,
-					provider_datacenter_id: dc.provider_datacenter_id.clone(),
-					datacenter_name_id: dc.name_id.clone(),
-					client_id: input.server_id,
-				})
-				.await?;
+async fn lifecycle(
+	ctx: &mut WorkflowCtx,
+	input: &Input2,
+	dc: &GetDcOutput,
+	state: &mut State,
+) -> GlobalResult<Loop<bool>> {
+	match state.run(ctx).await? {
+		Main::DnsCreate(_) => {
+			ctx.workflow(dns_create::Input {
+				server_id: input.server_id,
+			})
+			.output()
+			.await?;
+		}
+		Main::DnsDelete(_) => {
+			ctx.workflow(dns_delete::Input {
+				server_id: input.server_id,
+			})
+			.output()
+			.await?;
+		}
+		Main::NomadRegistered(sig) => {
+			ctx.activity(SetNomadNodeIdInput {
+				server_id: input.server_id,
+				cluster_id: dc.cluster_id,
+				datacenter_id: dc.datacenter_id,
+				provider_datacenter_id: dc.provider_datacenter_id.clone(),
+				datacenter_name_id: dc.name_id.clone(),
+				node_id: sig.node_id,
+			})
+			.await?;
 
-				// Scale to get rid of tainted servers
-				ctx.signal(crate::workflows::datacenter::Scale {})
-					.tag("datacenter_id", input.datacenter_id)
-					.send()
-					.await?;
-			}
-			Main::Drain(_) => {
-				ctx.workflow(drain::Input {
-					datacenter_id: input.datacenter_id,
-					server_id: input.server_id,
-					pool_type: input.pool_type,
-				})
-				.output()
+			// Scale to get rid of tainted servers
+			ctx.signal(crate::workflows::datacenter::Scale {})
+				.tag("datacenter_id", input.datacenter_id)
+				.send()
 				.await?;
-			}
-			Main::Undrain(_) => {
-				ctx.workflow(undrain::Input {
-					datacenter_id: input.datacenter_id,
-					server_id: input.server_id,
-					pool_type: input.pool_type,
-				})
-				.output()
-				.await?;
-			}
-			Main::Taint(_) => {} // Only for state
-			Main::Destroy(_) => {
-				if let PoolType::Fdb = input.pool_type {
-					bail!("you cant kill fdb you stupid chud");
-				}
+		}
+		Main::PegboardRegistered(_) => {
+			ctx.activity(SetPegboardClientIdInput {
+				server_id: input.server_id,
+				cluster_id: dc.cluster_id,
+				datacenter_id: dc.datacenter_id,
+				provider_datacenter_id: dc.provider_datacenter_id.clone(),
+				datacenter_name_id: dc.name_id.clone(),
+				client_id: input.server_id,
+			})
+			.await?;
 
-				break;
+			// Scale to get rid of tainted servers
+			ctx.signal(crate::workflows::datacenter::Scale {})
+				.tag("datacenter_id", input.datacenter_id)
+				.send()
+				.await?;
+		}
+		Main::Drain(_) => {
+			ctx.workflow(drain::Input {
+				datacenter_id: input.datacenter_id,
+				server_id: input.server_id,
+				pool_type: input.pool_type,
+			})
+			.output()
+			.await?;
+		}
+		Main::Undrain(_) => {
+			ctx.workflow(undrain::Input {
+				datacenter_id: input.datacenter_id,
+				server_id: input.server_id,
+				pool_type: input.pool_type,
+			})
+			.output()
+			.await?;
+		}
+		Main::Taint(_) => {} // Only for state
+		Main::Destroy(_) => {
+			if let PoolType::Fdb = input.pool_type {
+				bail!("you cant kill fdb you stupid chud");
 			}
+
+			return Ok(Loop::Break(state.has_dns));
 		}
 	}
 
-	cleanup(
-		ctx,
-		input,
-		&dc.provider,
-		provider_server_workflow_id,
-		state.has_dns,
-	)
-	.await?;
-
-	Ok(())
+	Ok(Loop::Continue)
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
@@ -332,7 +402,7 @@ pub(crate) struct GetDcInput {
 	pub datacenter_id: Uuid,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct GetDcOutput {
 	pub datacenter_id: Uuid,
 	pub cluster_id: Uuid,
@@ -797,7 +867,7 @@ async fn set_drain_complete(ctx: &ActivityCtx, input: &SetDrainCompleteInput) ->
 
 async fn cleanup(
 	ctx: &mut WorkflowCtx,
-	input: &Input,
+	input: &Input2,
 	provider: &Provider,
 	provider_server_workflow_id: Uuid,
 	cleanup_dns: bool,
@@ -838,6 +908,7 @@ async fn cleanup(
 }
 
 /// Finite state machine for handling server updates.
+#[derive(Debug, Serialize, Deserialize)]
 struct State {
 	draining: bool,
 	has_dns: bool,

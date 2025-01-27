@@ -6,7 +6,7 @@ pub mod scale;
 pub mod tls_issue;
 
 use crate::types::{
-	BuildDeliveryMethod, GuardPublicHostname, Pool, PoolType, PoolUpdate, Provider, TlsState,
+	BuildDeliveryMethod, GuardPublicHostname, Pool, PoolUpdate, Provider, TlsState,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -103,17 +103,6 @@ pub(crate) async fn cluster_datacenter(ctx: &mut WorkflowCtx, input: &Input) -> 
 					ctx.workflow(scale::Input { datacenter_id })
 						.output()
 						.await?;
-				}
-				Main::ServerCreate(sig) => {
-					ctx.workflow(crate::workflows::server::Input {
-						datacenter_id,
-						server_id: sig.server_id,
-						pool_type: sig.pool_type,
-						tags: sig.tags,
-					})
-					.tag("server_id", sig.server_id)
-					.dispatch()
-					.await?;
 				}
 				Main::TlsRenew(_) => {
 					if ctx.config().server()?.is_tls_enabled() {
@@ -278,17 +267,9 @@ pub struct Scale {}
 #[signal("cluster_datacenter_tls_renew")]
 pub struct TlsRenew {}
 
-#[signal("cluster_datacenter_server_create")]
-pub struct ServerCreate {
-	pub server_id: Uuid,
-	pub pool_type: PoolType,
-	pub tags: Vec<String>,
-}
-
 join_signal!(Main {
 	Update,
 	Scale,
-	ServerCreate,
 	TlsRenew,
 });
 
