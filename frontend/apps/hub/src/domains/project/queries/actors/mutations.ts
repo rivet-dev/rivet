@@ -135,10 +135,14 @@ export function useCreateActorFromSdkMutation({
 			projectNameId,
 			environmentNameId,
 			buildId,
+			region,
+			parameters,
 		}: {
 			projectNameId: string;
 			environmentNameId: string;
 			buildId: string;
+			region: string;
+			parameters: unknown;
 		}) => {
 			const managerUrl = await queryClient.fetchQuery(
 				actorManagerUrlQueryOptions({
@@ -158,7 +162,8 @@ export function useCreateActorFromSdkMutation({
 			const cl = new Client(managerUrl);
 
 			await cl.create({
-				create: { tags: { name: build.tags.name || build.id } },
+				parameters,
+				create: { tags: { name: build.tags.name || build.id }, region },
 			});
 		},
 		onSuccess: async () => {

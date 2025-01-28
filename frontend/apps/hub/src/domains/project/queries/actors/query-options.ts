@@ -264,7 +264,7 @@ export const actorBuildsQueryOptions = ({
 			"actor-builds",
 			tags,
 		] as const,
-		refetchInterval: 5000,
+		refetchInterval: 2000,
 		queryFn: ({
 			queryKey: [
 				// eslint-disable-next-line @typescript-eslint/no-unused-vars

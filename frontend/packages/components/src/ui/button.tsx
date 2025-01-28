@@ -30,13 +30,13 @@ const buttonVariants = cva(
 				link: "text-primary underline-offset-4 hover:underline",
 			},
 			size: {
-				default: "h-10 px-4 py-2",
-				xs: "h-5 rounded-md px-2 text-xs",
-				sm: "h-7 rounded-md px-2 text-xs [&_svg]:size-3",
-				lg: "h-11 rounded-md px-8",
-				icon: "h-10 w-10",
-				"icon-sm": "h-7 w-7 text-xs [&_svg]:size-3",
-				"icon-xs": "h-5 w-5 text-xs [&_svg]:size-2",
+				default: "h-10 px-4 py-2 gap-1.5",
+				xs: "h-5 rounded-md px-2 text-xs gap-0.5",
+				sm: "h-7 rounded-md px-2 text-xs [&_svg]:size-3 gap-1.5",
+				lg: "h-11 rounded-md px-8 gap-2",
+				icon: "h-10 w-10 gap-1.5",
+				"icon-sm": "h-7 w-7 text-xs [&_svg]:size-3 gap-1.5",
+				"icon-xs": "h-5 w-5 text-xs [&_svg]:size-2 gap-0.5",
 			},
 		},
 		defaultVariants: {
@@ -88,31 +88,15 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 				{isLoading ? (
 					<Icon
 						icon={faSpinnerThird}
-						className={cn(
-							"h-4 w-4 animate-spin",
-							!size?.includes("icon") && "mr-2",
-						)}
+						className={cn("h-4 w-4 animate-spin")}
 					/>
 				) : startIcon ? (
-					React.cloneElement(startIcon, {
-						className: cn(
-							"mr-2",
-							{
-								"mr-1.5": size === "sm",
-							},
-							startIcon.props.className,
-						),
-					})
+					React.cloneElement(startIcon, startIcon.props)
 				) : null}
 				{!size?.includes("icon") && isLoading ? null : (
 					<Slottable>{children}</Slottable>
 				)}
-				{endIcon
-					? React.cloneElement(endIcon, {
-							...endIcon.props,
-							className: cn("ml-2", endIcon.props.className),
-						})
-					: null}
+				{endIcon ? React.cloneElement(endIcon, endIcon.props) : null}
 			</C>
 		);
 	},

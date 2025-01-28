@@ -31,9 +31,11 @@ export default function CreateActorDialog({
 						projectNameId,
 						environmentNameId,
 						buildId: values.buildId,
+						region: values.regionId,
+						parameters: values.parameters,
 					});
 				}}
-				defaultValues={{ buildId: "" }}
+				defaultValues={{ buildId: "", regionId: "" }}
 			>
 				<DialogHeader>
 					<DialogTitle>Create Actor</DialogTitle>
@@ -47,6 +49,15 @@ export default function CreateActorDialog({
 						projectNameId={projectNameId}
 						environmentNameId={environmentNameId}
 					/>
+					<ActorCreateForm.Region
+						projectNameId={projectNameId}
+						environmentNameId={environmentNameId}
+					/>
+					<ActorCreateForm.Tags
+						projectNameId={projectNameId}
+						environmentNameId={environmentNameId}
+					/>
+					<ActorCreateForm.Parameters />
 				</Flex>
 				<DialogFooter>
 					<ActorCreateForm.Submit type="submit">

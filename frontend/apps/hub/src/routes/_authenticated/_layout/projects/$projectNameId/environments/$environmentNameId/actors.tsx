@@ -22,7 +22,7 @@ function ProjectActorsRoute() {
 			projectNameId,
 			environmentNameId,
 			tags: tagsRecord,
-			includeDestroyed: showDestroyed,
+			includeDestroyed: showDestroyed ?? true,
 		}),
 	);
 

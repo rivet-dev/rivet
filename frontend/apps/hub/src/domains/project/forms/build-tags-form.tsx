@@ -6,7 +6,7 @@ import {
 	FormItem,
 	FormLabel,
 	FormMessage,
-	type Option,
+	type ComboboxOption as Option,
 	Text,
 	createSchemaForm,
 } from "@rivet-gg/components";
