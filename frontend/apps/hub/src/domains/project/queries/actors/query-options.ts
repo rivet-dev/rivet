@@ -151,6 +151,7 @@ export const actorQueryOptions = ({
 					(arg) => arg !== "",
 				),
 			},
+			endpoint: createActorEndpoint(data.actor.network),
 		}),
 	});
 };
@@ -442,7 +443,9 @@ export const actorRegionQueryOptions = ({
 	});
 };
 
-const createActorEndpoint = (network: Rivet.actor.Network) => {
+const createActorEndpoint = (
+	network: Rivet.actor.Network,
+): string | undefined => {
 	const http = Object.values(network.ports).find(
 		(port) => port.protocol === "http" || port.protocol === "https",
 	);

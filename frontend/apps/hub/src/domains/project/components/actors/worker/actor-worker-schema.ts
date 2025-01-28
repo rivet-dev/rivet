@@ -14,7 +14,7 @@ const CodeMessageSchema = z.object({
 });
 const InitMessageSchema = z.object({
 	type: z.literal("init"),
-	managerUrl: z.string(),
+	endpoint: z.string(),
 	actorId: z.string(),
 });
 

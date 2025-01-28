@@ -150,6 +150,12 @@ export class StateTooLarge extends ActorError {
 	}
 }
 
+export class Unsupported extends ActorError {
+	constructor(feature: string) {
+		super("unsupported", `Unsupported feature: ${feature}`);
+	}
+}
+
 /**
  * Options for the UserError class.
  */

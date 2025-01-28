@@ -1,11 +1,9 @@
 import { type Logger, setupLogging } from "@rivet-gg/actor-common/log";
 import { listObjectMethods } from "@rivet-gg/actor-common/reflect";
-import { assertUnreachable, safeStringify } from "@rivet-gg/actor-common/utils";
 import { isJsonSerializable } from "@rivet-gg/actor-common/utils";
 import type { ActorContext, Metadata } from "@rivet-gg/actor-core";
 import { ProtocolFormatSchema } from "@rivet-gg/actor-protocol/ws";
 import type * as wsToClient from "@rivet-gg/actor-protocol/ws/to_client";
-import * as wsToServer from "@rivet-gg/actor-protocol/ws/to_server";
 import { Hono, type Context as HonoContext } from "hono";
 import { upgradeWebSocket } from "hono/deno";
 import type { WSEvents } from "hono/ws";
@@ -14,14 +12,15 @@ import { type ActorConfig, mergeActorConfig } from "./config";
 import {
 	Connection,
 	type ConnectionId,
-	type IncomingWebSocketMessage,
 	type OutgoingWebSocketMessage,
 } from "./connection";
 import * as errors from "./errors";
+import { handleMessageEvent } from "./event";
+import { ActorInspection } from "./inspect";
 import type { Kv } from "./kv";
 import { instanceLogger, logger } from "./log";
-import { Rpc } from "./rpc";
-import { Lock, deadline, throttle } from "./utils";
+import type { Rpc } from "./rpc";
+import { Lock, deadline } from "./utils";
 
 const KEYS = {
 	SCHEDULE: {
@@ -92,6 +91,8 @@ export type ExtractActorConnState<A> = A extends Actor<
 	? ConnState
 	: never;
 
+export type ExtractActorState<A> = A extends Actor<infer State> ? State : never;
+
 /**
  * Abstract class representing a Rivet Actor. Extend this class to implement logic for your actor.
  *
@@ -142,21 +143,7 @@ export abstract class Actor<
 	#lastSaveTime = 0;
 	#pendingSaveTimeout?: number | NodeJS.Timeout;
 
-	#notifyStateInspectThrottle = throttle(async () => {
-		const inspectionResult = this.internal_inspect();
-		// TODO: Notify only inspector, not all clients
-		this._broadcast("_state-changed", inspectionResult.state);
-	}, 500);
-
-	#notifyConnectionsInspectThrottle = throttle(async () => {
-		const inspectionResult = this.internal_inspect();
-		// TODO: Notify only inspector, not all clients
-		this._broadcast("_connections-changed", inspectionResult.connections);
-	}, 500);
-
-	#notifyEventsInspectThrottle = throttle(async (name: string) => {
-		this._broadcast("_event-emitted", { name });
-	}, 100);
+	#inspection: ActorInspection<this>;
 
 	/**
 	 * This constructor should never be used directly.
@@ -167,6 +154,19 @@ export abstract class Actor<
 	 */
 	public constructor(config?: Partial<ActorConfig>) {
 		this.#config = mergeActorConfig(config);
+		this.#inspection = new ActorInspection(this.#config, {
+			state: () => ({
+				enabled: this.#stateEnabled,
+				state: this.#stateProxy,
+			}),
+			connections: () => this.#connections.values(),
+			rpcs: () => this.#rpcNames,
+			setState: (state) => {
+				this.#validateStateEnabled();
+				this.#setStateWithoutChange(state);
+			},
+			onRpcCall: (ctx, rpc, args) => this.#executeRpc(ctx, rpc, args),
+		});
 	}
 
 	/**
@@ -306,7 +306,7 @@ export abstract class Actor<
 					throw new errors.InvalidStateType({ path });
 				}
 				this.#stateChanged = true;
-				this.#notifyStateInspectThrottle();
+				this.#inspection.notifyStateChanged();
 
 				// Call onStateChange if it exists
 				if (this._onStateChange && this.#ready) {
@@ -383,6 +383,24 @@ export abstract class Actor<
 		//app.post("/rpc/:name", this.#pandleRpc.bind(this));
 
 		app.get("/connect", upgradeWebSocket(this.#handleWebSocket.bind(this)));
+		app.get(
+			"/__inspect/connect",
+			// cors({
+			// 	// TODO: Fetch configuration from config, manager, or env?
+			// 	origin: (origin, c) => {
+			// 		return [
+			// 			"http://localhost:5080",
+			// 			"https://hub.rivet.gg",
+			// 		].includes(origin) ||
+			// 			origin.endsWith(".rivet-hub-7jb.pages.dev")
+			// 			? origin
+			// 			: "https://hub.rivet.gg";
+			// 	},
+			// }),
+			upgradeWebSocket((c) =>
+				this.#inspection.handleWebsocketConnection(c),
+			),
+		);
 
 		app.all("*", (c) => {
 			return c.text("Not Found", 404);
@@ -451,7 +469,7 @@ export abstract class Actor<
 	// MARK: Events
 	#addSubscription(eventName: string, connection: Connection<this>) {
 		connection.subscriptions.add(eventName);
-		this.#notifyConnectionsInspectThrottle();
+		this.#inspection.notifyConnectionsChanged();
 
 		let subscribers = this.#eventSubscriptions.get(eventName);
 		if (!subscribers) {
@@ -463,7 +481,7 @@ export abstract class Actor<
 
 	#removeSubscription(eventName: string, connection: Connection<this>) {
 		connection.subscriptions.delete(eventName);
-		this.#notifyConnectionsInspectThrottle();
+		this.#inspection.notifyConnectionsChanged();
 
 		const subscribers = this.#eventSubscriptions.get(eventName);
 		if (subscribers) {
@@ -580,130 +598,23 @@ export abstract class Actor<
 					return;
 				}
 
-				let rpcRequestId: number | undefined;
-				try {
-					const value =
-						evt.data.valueOf() as IncomingWebSocketMessage;
-
-					// Validate value length
-					let length: number;
-					if (typeof value === "string") {
-						length = value.length;
-					} else if (value instanceof Blob) {
-						length = value.size;
-					} else if (
-						value instanceof ArrayBuffer ||
-						value instanceof SharedArrayBuffer
-					) {
-						length = value.byteLength;
-					} else {
-						assertUnreachable(value);
-					}
-					if (length > this.#config.protocol.maxIncomingMessageSize) {
-						throw new errors.MessageTooLong();
-					}
-
-					// Parse & validate message
-					const {
-						data: message,
-						success,
-						error,
-					} = wsToServer.ToServerSchema.safeParse(
-						await conn._parse(value),
-					);
-					if (!success) {
-						throw new errors.MalformedMessage(error);
-					}
-
-					if ("rr" in message.body) {
-						// RPC request
-
-						const {
-							i: id,
-							n: name,
-							a: args = [],
-						} = message.body.rr;
-
-						rpcRequestId = id;
-
-						const ctx = new Rpc<this>(conn);
-						const output = await this.#executeRpc(ctx, name, args);
-
-						conn._sendWebSocketMessage(
-							conn._serialize({
-								body: {
-									ro: {
-										i: id,
-										o: output,
-									},
-								},
-							} satisfies wsToClient.ToClient),
-						);
-					} else if ("sr" in message.body) {
-						// Subscription request
-
-						const { e: eventName, s: subscribe } = message.body.sr;
-
-						if (subscribe) {
-							this.#addSubscription(eventName, conn);
-						} else {
-							this.#removeSubscription(eventName, conn);
-						}
-					} else {
-						assertUnreachable(message.body);
-					}
-				} catch (error) {
-					// Build response error information. Only return errors if flagged as public in order to prevent leaking internal behavior.
-					let code: string;
-					let message: string;
-					let metadata: unknown = undefined;
-					if (error instanceof errors.ActorError && error.public) {
-						logger().info("connection public error", {
-							rpc: rpcRequestId,
-							error,
-						});
-
-						code = error.code;
-						message = String(error);
-						metadata = error.metadata;
-					} else {
+				await handleMessageEvent(evt, conn, this.#config, {
+					onExecuteRpc: async (ctx, name, args) => {
+						return await this.#executeRpc(ctx, name, args);
+					},
+					onSubscribe: async (eventName, conn) => {
+						this.#addSubscription(eventName, conn);
+					},
+					onUnsubscribe: async (eventName, conn) => {
+						this.#removeSubscription(eventName, conn);
+					},
+					onError: (error) => {
 						logger().warn("connection internal error", {
-							rpc: rpcRequestId,
+							rpc: error.rpcRequestId,
 							error,
 						});
-
-						code = errors.INTERNAL_ERROR_CODE;
-						message = errors.INTERNAL_ERROR_DESCRIPTION;
-					}
-
-					// Build response
-					if (rpcRequestId !== undefined) {
-						conn._sendWebSocketMessage(
-							conn._serialize({
-								body: {
-									re: {
-										i: rpcRequestId,
-										c: code,
-										m: message,
-										md: metadata,
-									},
-								},
-							} satisfies wsToClient.ToClient),
-						);
-					} else {
-						conn._sendWebSocketMessage(
-							conn._serialize({
-								body: {
-									er: {
-										c: code,
-										m: message,
-										md: metadata,
-									},
-								},
-							} satisfies wsToClient.ToClient),
-						);
-					}
-				}
+					},
+				});
 			},
 			onClose: () => {
 				if (!conn) {
@@ -788,17 +699,6 @@ export abstract class Actor<
 		);
 	}
 
-	/**
-	 * Safely transforms the actor state into a string for debugging purposes.
-	 */
-	#inspectState(): string {
-		try {
-			return safeStringify(this.#stateRaw, 128 * 1024 * 1024);
-		} catch (error) {
-			return JSON.stringify({ _error: new errors.StateTooLarge() });
-		}
-	}
-
 	// MARK: Lifecycle hooks
 	/**
 	 * Hook called when the actor is first created. This method should return the initial state of the actor. The state can be access with `this._state`.
@@ -872,7 +772,7 @@ export abstract class Actor<
 	 * @see {@link https://rivet.gg/docs/lifecycle|Lifecycle Documentation}
 	 */
 	protected _onConnect?(connection: Connection<this>): void | Promise<void> {
-		this.#notifyConnectionsInspectThrottle();
+		this.#inspection.notifyConnectionsChanged();
 	}
 
 	/**
@@ -884,7 +784,7 @@ export abstract class Actor<
 	protected _onDisconnect?(
 		connection: Connection<this>,
 	): void | Promise<void> {
-		this.#notifyConnectionsInspectThrottle();
+		this.#inspection.notifyConnectionsChanged();
 	}
 
 	// MARK: Exposed methods
@@ -1042,37 +942,6 @@ export abstract class Actor<
 				await this.#onStateSavedPromise.promise;
 			}
 		}
-	}
-
-	/**
-	 * Public RPC method that inspects the actor's state and connections.
-	 * @internal
-	 * @returns The actor's state and connections.
-	 */
-	internal_inspect(): wsToClient.InspectRpcResponse {
-		return {
-			// Filter out internal 'inspect' RPC
-			rpcs: this.#rpcNames.filter(
-				(name) => !name.startsWith("internal_"),
-			),
-			state: {
-				enabled: this.#stateEnabled,
-				native: this.#inspectState(),
-			},
-			connections: [...this.#connections.values()].map((con) =>
-				con._inspect(),
-			),
-		};
-	}
-
-	/**
-	 * Very insecure, but useful for debugging. This method allows you to set the actor's state directly.
-	 * @internal
-	 */
-	internal_setState(_: Rpc<this>, value: State) {
-		// FIXME: This should be only available to selected clients
-		this.#validateStateEnabled();
-		this.#setStateWithoutChange(value);
 	}
 
 	/**

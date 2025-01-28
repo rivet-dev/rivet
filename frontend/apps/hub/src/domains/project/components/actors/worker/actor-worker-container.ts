@@ -1,7 +1,4 @@
-import {
-	actorManagerUrlQueryOptions,
-	actorQueryOptions,
-} from "@/domains/project/queries";
+import { actorQueryOptions } from "@/domains/project/queries";
 import { queryClient } from "@/queries/global";
 import ActorWorker from "./actor-repl.worker?worker";
 import {
@@ -66,11 +63,13 @@ export class ActorWorkerContainer {
 		projectNameId,
 		environmentNameId,
 		actorId,
+		endpoint,
 		signal,
 	}: {
 		projectNameId: string;
 		environmentNameId: string;
 		actorId: string;
+		endpoint: string;
 		signal: AbortSignal;
 	}) {
 		this.terminate();
@@ -79,16 +78,6 @@ export class ActorWorkerContainer {
 		this.#state.status = { type: "pending" };
 		this.#update();
 		try {
-			// To check if the actor is supported, first we need to get the actor manager URL
-			// if there's no manager URL, we can't support the actor
-			const managerUrl = await queryClient.fetchQuery(
-				actorManagerUrlQueryOptions({
-					projectNameId,
-					environmentNameId,
-				}),
-			);
-			signal.throwIfAborted();
-
 			// If we have the manager URL, next we need to check actor's runtime
 			const { actor } = await queryClient.fetchQuery(
 				actorQueryOptions({
@@ -118,7 +107,7 @@ export class ActorWorkerContainer {
 			const worker = new ActorWorker({ name: `actor-${actorId}` });
 			signal.throwIfAborted();
 			// now worker needs to check if the actor is supported
-			this.#setupWorker(worker, { actorId, managerUrl });
+			this.#setupWorker(worker, { actorId, endpoint });
 			signal.throwIfAborted();
 			return worker;
 		} catch (e) {

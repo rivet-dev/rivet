@@ -75,6 +75,8 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 	) => {
 		const C = asChild ? Slot : "button";
 
+		const isIcon = size?.includes("icon");
+
 		return (
 			<C
 				className={cn(
@@ -93,9 +95,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 				) : startIcon ? (
 					React.cloneElement(startIcon, startIcon.props)
 				) : null}
-				{!size?.includes("icon") && isLoading ? null : (
-					<Slottable>{children}</Slottable>
-				)}
+				{isIcon && isLoading ? null : <Slottable>{children}</Slottable>}
 				{endIcon ? React.cloneElement(endIcon, endIcon.props) : null}
 			</C>
 		);

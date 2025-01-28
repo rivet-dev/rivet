@@ -1,4 +1,4 @@
-import { type ActorHandle, Client } from "@rivet-gg/actor-client";
+import { ActorHandleRaw } from "@rivet-gg/actor-client";
 import type { InspectRpcResponse } from "@rivet-gg/actor-protocol/ws/to_client";
 import { fromJs } from "esast-util-from-js";
 import { toJs } from "estree-util-to-js";
@@ -104,14 +104,7 @@ const createConsole = (id: string) => {
 	);
 };
 
-interface InspectableActor {
-	internal_setState(rpc: this, state: Record<string, unknown>): Promise<void>;
-	internal_inspect(): Promise<InspectRpcResponse>;
-}
-
-let init:
-	| null
-	| ({ handle: ActorHandle<InspectableActor> } & InspectRpcResponse);
+let init: null | ({ handle: ActorHandleRaw } & InspectRpcResponse);
 
 addEventListener("message", async (event) => {
 	const { success, data } = MessageSchema.safeParse(event.data);
@@ -130,11 +123,13 @@ addEventListener("message", async (event) => {
 		}
 
 		try {
-			const cl = new Client(data.managerUrl);
-			const handle = await Promise.race([
-				cl.getWithId<InspectableActor>(data.actorId, {}),
-				wait(5000).then(() => undefined),
-			]);
+			const handle = new ActorHandleRaw(
+				`${data.endpoint}/__inspect`,
+				undefined,
+				"cbor",
+			);
+
+			handle.connect();
 
 			if (!handle) {
 				respond({
@@ -146,7 +141,7 @@ addEventListener("message", async (event) => {
 			}
 
 			const inspect = await Promise.race([
-				handle.internal_inspect(),
+				handle.rpc<[], InspectRpcResponse>("inspect"),
 				wait(5000).then(() => undefined),
 			]);
 
@@ -208,21 +203,17 @@ addEventListener("message", async (event) => {
 				data: formatted,
 			});
 
-			const rpcs = Object.fromEntries(
-				actor.rpcs.map(
-					(rpc) =>
-						[
-							rpc,
-							actor.handle[rpc as keyof typeof actor.handle],
-						] as const,
-				),
+			const exposedActor = Object.fromEntries(
+				init?.rpcs.map((rpc) => [
+					rpc,
+					actor.handle.rpc.bind(actor.handle, rpc),
+				]) ?? [],
 			);
 
 			const evaluated = await evaluateCode(data.data, {
 				console: createConsole(data.id),
 				wait,
-				actor: actor.handle,
-				...rpcs,
+				actor: exposedActor,
 			});
 			return respond({
 				type: "result",
@@ -250,7 +241,7 @@ addEventListener("message", async (event) => {
 
 		try {
 			const state = JSON.parse(data.data);
-			await actor.handle.internal_setState(state);
+			await actor.handle.rpc("setState", state);
 			return respond({
 				type: "state-change",
 				data: {

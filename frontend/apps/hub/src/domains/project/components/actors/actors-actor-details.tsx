@@ -41,7 +41,11 @@ export function ActorsActorDetails({
 	const { data } = useSuspenseQuery(actorQueryOptions(props));
 	return (
 		<ActorDetailsSettingsProvider>
-			<ActorWorkerContextProvider enabled={!data.destroyedAt} {...props}>
+			<ActorWorkerContextProvider
+				enabled={!data.destroyedAt}
+				endpoint={data.endpoint}
+				{...props}
+			>
 				<div className="flex flex-col h-full flex-1 pt-2">
 					<Tabs
 						value={tab || "logs"}

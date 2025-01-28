@@ -24,6 +24,7 @@ interface ActorWorkerContextProviderProps {
 	actorId: string;
 	projectNameId: string;
 	environmentNameId: string;
+	endpoint?: string;
 	enabled?: boolean;
 	children: ReactNode;
 }
@@ -32,6 +33,7 @@ export const ActorWorkerContextProvider = ({
 	children,
 	actorId,
 	enabled,
+	endpoint,
 	projectNameId,
 	environmentNameId,
 }: ActorWorkerContextProviderProps) => {
@@ -43,11 +45,12 @@ export const ActorWorkerContextProvider = ({
 	useEffect(() => {
 		const ctrl = new AbortController();
 
-		if (enabled) {
+		if (enabled && endpoint) {
 			container.init({
 				projectNameId,
 				environmentNameId,
 				actorId,
+				endpoint,
 				signal: ctrl.signal,
 			});
 		}
@@ -56,7 +59,7 @@ export const ActorWorkerContextProvider = ({
 			ctrl.abort();
 			container.terminate();
 		};
-	}, [actorId, projectNameId, environmentNameId, enabled]);
+	}, [actorId, projectNameId, environmentNameId, endpoint, enabled]);
 
 	return (
 		<ActorWorkerContext.Provider value={container}>

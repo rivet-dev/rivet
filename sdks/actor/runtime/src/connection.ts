@@ -4,6 +4,7 @@ import * as cbor from "cbor-x";
 import type { WSContext } from "hono/ws";
 import type { AnyActor, ExtractActorConnState } from "./actor";
 import * as errors from "./errors";
+import { INSPECT_SYMBOL } from "./inspect";
 import { logger } from "./log";
 import { assertUnreachable } from "./utils";
 
@@ -196,7 +197,7 @@ export class Connection<A extends AnyActor> {
 	 * Inspects the connection for debugging purposes.
 	 * @internal
 	 */
-	public _inspect() {
+	[INSPECT_SYMBOL]() {
 		return {
 			id: this.id.toString(),
 			subscriptions: [...this.subscriptions.values()],
