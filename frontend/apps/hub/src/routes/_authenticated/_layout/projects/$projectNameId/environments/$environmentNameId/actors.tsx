@@ -1,9 +1,9 @@
 import { GetStarted } from "@/components/get-started";
 import { ActorsListPreview } from "@/domains/project/components/actors/actors-list-preview";
 import * as Layout from "@/domains/project/layouts/servers-layout";
-import { actorsCountQueryOptions } from "@/domains/project/queries";
+import { actorBuildsCountQueryOptions } from "@/domains/project/queries";
 import { Icon, faActors } from "@rivet-gg/icons";
-import { useSuspenseInfiniteQuery } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
 import { useMemo } from "react";
@@ -17,12 +17,10 @@ function ProjectActorsRoute() {
 	const { actorId, tags, showDestroyed } = Route.useSearch();
 	const tagsRecord = useMemo(() => Object.fromEntries(tags || []), [tags]);
 
-	const { data } = useSuspenseInfiniteQuery(
-		actorsCountQueryOptions({
+	const { data } = useSuspenseQuery(
+		actorBuildsCountQueryOptions({
 			projectNameId,
 			environmentNameId,
-			tags: tagsRecord,
-			includeDestroyed: showDestroyed ?? true,
 		}),
 	);
 

@@ -505,3 +505,17 @@ export const actorManagerUrlQueryOptions = ({
 		},
 	});
 };
+
+export const actorBuildsCountQueryOptions = ({
+	projectNameId,
+	environmentNameId,
+}: {
+	projectNameId: string;
+	environmentNameId: string;
+}) => {
+	return queryOptions({
+		...actorBuildsQueryOptions({ projectNameId, environmentNameId }),
+		select: (data) => data.builds.length,
+		notifyOnChangeProps: ["data"],
+	});
+};
