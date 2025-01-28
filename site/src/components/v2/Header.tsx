@@ -16,6 +16,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { type ReactNode, useState } from "react";
 import { HeaderPopupProductMenu } from "../HeaderPopupProductMenu";
+import { HeaderSearch } from "./HeaderSearch";
 
 interface HeaderProps {
 	active: "product" | "docs" | "blog" | "pricing" | "solutions";
@@ -49,6 +50,7 @@ export function Header({ active, subnav }: HeaderProps) {
 			}
 			links={
 				<>
+					<HeaderSearch />
 					<RivetHeader.NavItem asChild className="-m-2 p-2">
 						<Link href="/discord">
 							<Icon icon={faDiscord} />
