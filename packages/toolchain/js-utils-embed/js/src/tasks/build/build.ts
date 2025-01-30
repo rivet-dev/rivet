@@ -30,7 +30,7 @@ export async function build(input: Input): Promise<Output> {
 		minify: input.bundle.minify,
 
 		// Added new configurations
-		target: ["es2020"],
+		target: ["esnext"],
 		treeShaking: true,
 		resolveExtensions: [".js", ".jsx", ".ts", ".tsx", ".json"],
 		define: {
