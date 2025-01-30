@@ -43,7 +43,7 @@ function ProjectActorsRoute() {
 	}
 
 	return (
-		<div className="flex flex-col h-[calc(100vh-6.5rem)] bg-card -mx-4 -my-4">
+		<div className="flex flex-col w-screen h-[calc(100vh-6.5rem)] bg-card -mx-4 -my-4">
 			<ActorsListPreview
 				projectNameId={projectNameId}
 				environmentNameId={environmentNameId}
