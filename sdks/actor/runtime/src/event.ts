@@ -1,3 +1,4 @@
+import type { Metadata } from "@rivet-gg/actor-core";
 import type * as wsToClient from "@rivet-gg/actor-protocol/ws/to_client";
 import * as wsToServer from "@rivet-gg/actor-protocol/ws/to_server";
 import type { WSMessageReceive } from "hono/ws";
@@ -6,7 +7,6 @@ import type { Connection, IncomingWebSocketMessage } from "./connection";
 import * as errors from "./errors";
 import { Rpc } from "./rpc";
 import { assertUnreachable } from "./utils";
-import type { Metadata } from "@rivet-gg/actor-core";
 
 interface MessageEventConfig {
 	protocol: { maxIncomingMessageSize: number };
@@ -71,13 +71,13 @@ export async function handleMessageEvent<A extends AnyActor>(
 			code: string;
 			message: string;
 			metadata: unknown;
-			rpcRequestId?: number;
+			rpcId?: number;
 			rpcName?: string;
 			internal: boolean;
 		}) => void;
 	},
 ) {
-	let rpcRequestId: number | undefined;
+	let rpcId: number | undefined;
 	let rpcName: string | undefined;
 	const message = await validateMessageEvent(event, conn, config);
 
@@ -91,7 +91,7 @@ export async function handleMessageEvent<A extends AnyActor>(
 
 			const { i: id, n: name, a: args = [] } = message.body.rr;
 
-			rpcRequestId = id;
+			rpcId = id;
 			rpcName = name;
 
 			const ctx = new Rpc<A>(conn);
@@ -147,12 +147,12 @@ export async function handleMessageEvent<A extends AnyActor>(
 		}
 
 		// Build response
-		if (rpcRequestId !== undefined) {
+		if (rpcId !== undefined) {
 			conn._sendWebSocketMessage(
 				conn._serialize({
 					body: {
 						re: {
-							i: rpcRequestId,
+							i: rpcId,
 							c: code,
 							m: message,
 							md: metadata,
@@ -178,7 +178,7 @@ export async function handleMessageEvent<A extends AnyActor>(
 			code,
 			message,
 			metadata,
-			rpcRequestId,
+			rpcId: rpcId,
 			rpcName,
 			internal,
 		});

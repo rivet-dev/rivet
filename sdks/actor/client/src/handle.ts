@@ -9,6 +9,7 @@ import { logger } from "./log";
 import { type WebSocketMessage, messageLength } from "./utils";
 
 interface RpcInFlight {
+	name: string;
 	resolve: (response: wsToClient.RpcResponseOk) => void;
 	reject: (error: Error) => void;
 }
@@ -44,7 +45,7 @@ export class ActorHandleRaw {
 	// biome-ignore lint/suspicious/noExplicitAny: Unknown subscription type
 	#eventSubscriptions = new Map<string, Set<EventSubscriptions<any[]>>>();
 
-	#requestIdCounter = 0;
+	#rpcIdCounter = 0;
 
 	// TODO: ws message queue
 
@@ -83,20 +84,20 @@ export class ActorHandleRaw {
 
 		// TODO: Add to queue if socket is not open
 
-		const requestId = this.#requestIdCounter;
-		this.#requestIdCounter += 1;
+		const rpcId = this.#rpcIdCounter;
+		this.#rpcIdCounter += 1;
 
 		const {
 			promise: resolvePromise,
 			resolve,
 			reject,
 		} = Promise.withResolvers<wsToClient.RpcResponseOk>();
-		this.#websocketRpcInFlight.set(requestId, { resolve, reject });
+		this.#websocketRpcInFlight.set(rpcId, { name, resolve, reject });
 
 		this.#webSocketSend({
 			body: {
 				rr: {
-					i: requestId,
+					i: rpcId,
 					n: name,
 					a: args,
 				},
@@ -106,9 +107,9 @@ export class ActorHandleRaw {
 		// TODO: Throw error if disconnect is called
 
 		const { i: responseId, o: output } = await resolvePromise;
-		if (responseId !== requestId)
+		if (responseId !== rpcId)
 			throw new Error(
-				`Request ID ${requestId} does not match response ID ${responseId}`,
+				`Request ID ${rpcId} does not match response ID ${responseId}`,
 			);
 
 		return output as Response;
@@ -220,21 +221,23 @@ export class ActorHandleRaw {
 					md: metadata,
 				} = response.body.re;
 
-				logger().info("received error from actor", {
-					rpc: rpcId,
+				const inFlight = this.#takeRpcInFlight(rpcId);
+
+				logger().warn("actor error", {
+					rpcId,
+					rpcName: inFlight?.name,
 					code,
 					message,
 					metadata,
 				});
 
-				const inFlight = this.#takeRpcInFlight(rpcId);
 				inFlight.reject(new errors.RpcError(code, message, metadata));
 			} else if ("ev" in response.body) {
 				this.#dispatchEvent(response.body.ev);
 			} else if ("er" in response.body) {
 				const { c: code, m: message, md: metadata } = response.body.er;
 
-				logger().info("received error from actor", {
+				logger().warn("actor error", {
 					code,
 					message,
 					metadata,

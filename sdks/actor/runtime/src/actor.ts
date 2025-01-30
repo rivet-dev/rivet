@@ -741,7 +741,7 @@ export abstract class Actor<
 								: "user error";
 							logger().warn(message, {
 								connectionId: conn?.id,
-								rpcRequestId: error.rpcRequestId,
+								rpcId: error.rpcId,
 								rpcName: error.rpcName,
 								error,
 							});

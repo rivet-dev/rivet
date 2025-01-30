@@ -134,7 +134,7 @@ export class ActorInspection<A extends AnyActor> {
 						},
 						onError: (error) => {
 							this.#logger.warn("connection error", {
-								rpc: error.rpcRequestId,
+								rpc: error.rpcId,
 								error,
 							});
 						},
