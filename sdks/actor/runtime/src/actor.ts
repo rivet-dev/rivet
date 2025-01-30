@@ -76,7 +76,7 @@ export interface SaveStateOptions {
 // biome-ignore lint/suspicious/noExplicitAny: Needs to be used in `extends`
 export type AnyActor = Actor<any, any, any>;
 
-export type ExtractActorConnParams<A> = A extends Actor<
+export type ExtractActorConnParams<A extends AnyActor> = A extends Actor<
 	// biome-ignore lint/suspicious/noExplicitAny: Must be used for `extends`
 	any,
 	infer ConnParams,
@@ -86,7 +86,7 @@ export type ExtractActorConnParams<A> = A extends Actor<
 	? ConnParams
 	: never;
 
-export type ExtractActorConnState<A> = A extends Actor<
+export type ExtractActorConnState<A extends AnyActor> = A extends Actor<
 	// biome-ignore lint/suspicious/noExplicitAny: Must be used for `extends`
 	any,
 	// biome-ignore lint/suspicious/noExplicitAny: Must be used for `extends`
