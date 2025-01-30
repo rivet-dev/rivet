@@ -7,6 +7,11 @@
 			"outputs": ["dist/**"],
 			"dependsOn": ["@rivet-gg/actor-client#build"]
 		},
+		"build:embedded": {
+			"env": ["VITE_APP_*"],
+			"outputs": ["dist/**"],
+			"dependsOn": ["@rivet-gg/actor-client#build"]
+		},
 		"dev": {
 			"env": ["VITE_APP_*"],
 			"persistent": true,

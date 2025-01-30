@@ -61,7 +61,6 @@ tests/basic-game/.env
 # Added by cargo
 
 /target
-.env*
 .yarn/cache
 .yarn/install-state.gz
 .turbo

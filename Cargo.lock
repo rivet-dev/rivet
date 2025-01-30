@@ -11817,6 +11817,7 @@ dependencies = [
 name = "rivet-hub-embed"
 version = "25.1.0-rc.1"
 dependencies = [
+ "fs_extra",
  "include_dir",
  "reqwest 0.12.9",
  "zip 2.2.2",
