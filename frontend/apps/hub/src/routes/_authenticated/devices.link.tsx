@@ -104,7 +104,7 @@ function DeviceLinkTokenRoute() {
 							<Button asChild variant="secondary">
 								<Link to="/">Cancel</Link>
 							</Button>
-							<DeviceLinkForm.Submit>
+							<DeviceLinkForm.Submit allowPristine>
 								Continue
 							</DeviceLinkForm.Submit>
 						</Flex>

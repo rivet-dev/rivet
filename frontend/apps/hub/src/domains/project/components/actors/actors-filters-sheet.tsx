@@ -63,7 +63,7 @@ export function ActorsFiltersSheet({
 								/>
 								<ActorsFiltersForm.ShowDestroyed />
 								<div className="flex gap-2 mt-4 items-center justify-end">
-									<ActorsFiltersForm.Submit disablePristine>
+									<ActorsFiltersForm.Submit>
 										Apply
 									</ActorsFiltersForm.Submit>
 
