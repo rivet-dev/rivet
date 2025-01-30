@@ -71,16 +71,6 @@ export class RpcNotFound extends ActorError {
 	}
 }
 
-export class InvalidProtocolVersion extends ActorError {
-	constructor(version?: string) {
-		super(
-			"invalid_protocol_version",
-			`Invalid protocol version \`${version}\`.`,
-			{ public: true },
-		);
-	}
-}
-
 export class InvalidProtocolFormat extends ActorError {
 	constructor(format?: string) {
 		super(

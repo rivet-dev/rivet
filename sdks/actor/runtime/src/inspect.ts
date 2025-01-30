@@ -92,15 +92,6 @@ export class ActorInspection<A extends AnyActor> {
 	}, 500);
 
 	handleWebsocketConnection(c: Context): WSEvents<WebSocket> {
-		// TODO: Compare hub version with protocol version
-		const protocolVersion = c.req.query("version");
-		if (protocolVersion !== "1") {
-			this.#logger.warn("invalid protocol version", {
-				protocolVersion,
-			});
-			throw new errors.InvalidProtocolVersion(protocolVersion);
-		}
-
 		let connection: Connection<A> | undefined;
 		return {
 			onOpen: (evt, ws) => {
