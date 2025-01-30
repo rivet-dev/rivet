@@ -35,7 +35,7 @@ Obtain a Font Awesome Pro license and set the `FONTAWESOME_PACKAGE_TOKEN` enviro
 Some icons used in the open-source Rivet products are part of the premium Font Awesome icon set. We can't share those icons publicly, without violating FA's Terms Of Service. By default, after adding this package to any project, a post install script generates an icon set with all premium icons replaced with simple rectangles. So, you can reference premium icons, but you won't see them. To be able to see premium icons, make sure  an environment variable `FONTAWESOME_PACKAGE_TOKEN` is set when running `yarn install`. You can re-generate our icon set by running `yarn rebuild @rivet-gg/icons` if your dependencies are already installed.
 
 ### Can't start/build project
-The description of these kinds of errors may vary. This package heavily depends on [postinstall scripts](https://yarnpkg.com/advanced/lifecycle-scripts#postinstall) from  Yarn/npm. Make sure you didn't disable them accidentally. Turn on post-installation script support and run `yarn install` or `yarn rebuild @rivet-gg/cions` again. If there is still a problem, please contact us on [Discord](https://rivet.gg/discord").
+The description of these kinds of errors may vary. This package heavily depends on [postinstall scripts](https://yarnpkg.com/advanced/lifecycle-scripts#postinstall) from  Yarn/npm. Make sure you didn't disable them accidentally. Turn on post-installation script support and run `yarn install` or `yarn rebuild @rivet-gg/icons` again. If there is still a problem, please contact us on [Discord](https://rivet.gg/discord").
 
 
 ### `Could not find package @fortawesome/pro-solid-svg-icons` when generating manifest
