@@ -1,0 +1,13 @@
+{
+	"compilerOptions": {
+		"target": "ESNext",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"types": ["node"],
+		"allowSyntheticDefaultImports": true,
+		"esModuleInterop": true,
+		"noEmit": true,
+		"isolatedModules": true
+	},
+	"include": ["**/*.ts"]
+}

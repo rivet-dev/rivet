@@ -1,0 +1,12 @@
+{
+	"builds": {
+		"tictactoe": {
+			"script": "tictactoe.ts",
+			"access": "public",
+			"unstable": {
+				"dump_build": true,
+				"minify": false
+			}
+		}
+	}
+}

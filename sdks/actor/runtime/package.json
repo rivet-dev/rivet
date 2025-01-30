@@ -70,5 +70,8 @@
 			"jsxImportSource": "react",
 			"jsxImportSourceTypes": "@types/react@^19"
 		}
+	},
+	"optionalDependencies": {
+		"ws": "^8.18.0"
 	}
 }

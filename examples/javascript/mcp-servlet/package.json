@@ -1,0 +1,13 @@
+{
+	"name": "mcp-servlet",
+	"version": "1.0.0",
+	"private": true,
+	"dependencies": {
+		"@rivet-gg/actor": "workspace:*",
+		"hono": "^4.6.17"
+	},
+	"devDependencies": {
+		"@rivet-gg/actor-client": "workspace:*",
+		"@rivet-gg/api": "^24.6.2"
+	}
+}
