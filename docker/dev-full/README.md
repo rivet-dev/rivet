@@ -73,3 +73,36 @@ E: Sub-process /usr/bin/dpkg returned an error code (1)
 
 Try changing your Docker VM to _Docker VMM_. See [here](https://github.com/docker/for-mac/issues/7255#issuecomment-2567154899) for more information.
 
+### FoundationDB unhealthy on macOS
+
+If you see this output:
+
+```
+Configuring database...
+Starting FDB server on 172.19.0.10:4500
+ERROR: Disk i/o operation failed (1510)
+qemu: uncaught target signal 11 (Segmentation fault) - core dumped
+/var/fdb/scripts/fdb.bash: line 68:    38 Segmentation fault      fdbserver --listen-address 0.0.0.0:"$FDB_PORT" --public-address "$PUBLIC_IP:$FDB_PORT" --datadir /var/fdb/data --logdir /var/fdb/logs --locality-zoneid="$(hostname)" --locality-machineid="$(hostname)" --class "$FDB_PROCESS_CLASS"
+Database already configured.
+Starting FDB server on 172.19.0.10:4500
+qemu: uncaught target signal 11 (Segmentation fault) - core dumped
+/var/fdb/scripts/fdb.bash: line 68:    32 Segmentation fault      fdbserver --listen-address 0.0.0.0:"$FDB_PORT" --public-address "$PUBLIC_IP:$FDB_PORT" --datadir /var/fdb/data --logdir /var/fdb/logs --locality-zoneid="$(hostname)" --locality-machineid="$(hostname)" --class "$FDB_PROCESS_CLASS"
+Database already configured.
+Starting FDB server on 172.19.0.10:4500
+Error: Disk i/o operation failed
+Database already configured.
+Starting FDB server on 172.19.0.10:4500
+qemu: uncaught target signal 11 (Segmentation fault) - core dumped
+/var/fdb/scripts/fdb.bash: line 68:    32 Segmentation fault      fdbserver --listen-address 0.0.0.0:"$FDB_PORT" --public-address "$PUBLIC_IP:$FDB_PORT" --datadir /var/fdb/data --logdir /var/fdb/logs --locality-zoneid="$(hostname)" --locality-machineid="$(hostname)" --class "$FDB_PROCESS_CLASS"
+Database already configured.
+Starting FDB server on 172.19.0.10:4500
+qemu: uncaught target signal 11 (Segmentation fault) - core dumped
+/var/fdb/scripts/fdb.bash: line 68:    32 Segmentation fault      fdbserver --listen-address 0.0.0.0:"$FDB_PORT" --public-address "$PUBLIC_IP:$FDB_PORT" --datadir /var/fdb/data --logdir /var/fdb/logs --locality-zoneid="$(hostname)" --locality-machineid="$(hostname)" --class "$FDB_PROCESS_CLASS"
+Database already configured.
+Starting FDB server on 172.19.0.12:4500
+qemu: uncaught target signal 11 (Segmentation fault) - core dumped
+/var/fdb/scripts/fdb.bash: line 68:    32 Segmentation fault      fdbserver --listen-address 0.0.0.0:"$FDB_PORT" --public-address "$PUBLIC_IP:$FDB_PORT" --datadir /var/fdb/data --logdir /var/fdb/logs --locality-zoneid="$(hostname)" --locality-machineid="$(hostname)" --class "$FDB_PROCESS_CLASS"
+```
+
+Try changing you Docker VM to _Apple Virtualization framework_ with _Use Rosetta_ and _VirtioFS_ enabled.
+
