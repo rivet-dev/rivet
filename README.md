@@ -7,165 +7,146 @@
   </a>
 </p>
 
-
-<p align="center">
-  <p align="center"><b>Scalable. Stateful. Serverless.</b><br/>Rivet is the platform to build realtime, edge, or agent applications. No limitations of Redis or timeouts of Lambda.</p></p>
+<h3 align="center">Scalable. Stateful. Serverless.</h3>
 <h4 align="center">
-  <a href="https://hub.rivet.gg">Rivet Cloud</a> |
-  <a href="https://rivet.gg/docs/self-hosting">Self-Hosting</a> |
-  <a href="https://rivet.gg/docs">Docs</a> |
-  <a href="https://www.rivet.gg">Website</a>
+  Rivet is the platform to build realtime, edge, or agent applications.<br/>
+  No limitations of Redis or timeouts of Lambda.
 </h4>
 <p align="center">
-  <a href="/LICENSE"><img alt="License Apache-2.0" src="https://img.shields.io/github/license/rivet-gg/rivet?style=flat-square"></a>
-  <a href="https://github.com/rivet-gg/rivet/graphs/commit-activity"><img alt="GitHub commit activity" src="https://img.shields.io/github/commit-activity/m/rivet-gg/rivet?style=flat-square"/></a>
-  <img alt="GitHub Discussions" src="https://img.shields.io/github/discussions/rivet-gg/rivet?style=flat-square">
-  <a href="https://rivet.gg/discord"><img alt="Discord" src="https://img.shields.io/discord/822914074136018994?style=flat-square&label=discord"/></a>
-   <a href="https://twitter.com/rivet_gg">
-    <img src="https://img.shields.io/twitter/follow/rivet_gg?label=Follow" alt="Rivet Twitter" />
-  </a>
+  <!-- <a href="https://github.com/rivet-gg/rivet/graphs/commit-activity"><img alt="GitHub commit activity" src="https://img.shields.io/github/commit-activity/m/rivet-gg/rivet?style=flat-square"/></a> -->
+  <a href="https://github.com/orgs/rivet-gg/discussions"><img alt="GitHub Discussions" src="https://img.shields.io/github/discussions/rivet-gg/rivet?logo=github&logoColor=fff"></a>
+  <a href="https://rivet.gg/discord"><img alt="Discord" src="https://img.shields.io/discord/822914074136018994?color=7389D8&label&logo=discord&logoColor=ffffff"/></a>
+   <a href="https://twitter.com/rivet_gg"><img src="https://img.shields.io/twitter/follow/rivet_gg" alt="Rivet Twitter" /></a>
+   <a href="https://bsky.app/profile/rivet.gg"><img src="https://img.shields.io/badge/Follow%20%40rivet.gg-4C1?color=0285FF&logo=bluesky&logoColor=ffffff" alt="Rivet Bluesky" /></a>
+  <a href="/LICENSE"><img alt="License Apache-2.0" src="https://img.shields.io/github/license/rivet-gg/rivet?logo=open-source-initiative&logoColor=white"></a>
 </p>
 
 ![Code snippets](./.github/media/code.png)
 
+## Intro
+
 Rivet comes with simple primitives to build your backend. Leverage Rivet Actors to build complex functionality with ease.
 
-## Features
+### Features
 
-- [**State & Persistence**](https://rivet.gg/docs/state): State that feels like memory but works like storage. Ideal for dynamic, fast-moving apps.
-- [**Remote Procedure Calls**](https://rivet.gg/docs/rpc): Lightweight messaging built for speed. Complete client/server type safety included.
-- [**Runs Forever, Sleeps When Idle**](https://rivet.gg/docs/lifecycle): Always available, sleeps on network inactivity or timeouts, and wakes instantly on demand.
-- [**Edge Networking**](https://rivet.gg/docs/edge): Automatically distribute your applications near your users for ultra-low latency.
-- [**Fault Tolerance**](https://rivet.gg/docs/fault-tolerance): Ensure application & state resilience through crashes with zero downtime.
+-   [**State & Persistence**](https://rivet.gg/docs/state): State that feels like memory but works like storage. Ideal for dynamic, fast-moving apps.
+-   [**Remote Procedure Calls**](https://rivet.gg/docs/rpc): Lightweight messaging built for speed. Complete client/server type safety included.
+-   [**Runs Forever, Sleeps When Idle**](https://rivet.gg/docs/lifecycle): Always available, sleeps on network inactivity or timeouts, and wakes instantly on demand.
+-   [**Edge Networking**](https://rivet.gg/docs/edge): Automatically distribute your applications near your users for ultra-low latency.
+-   [**Fault Tolerance**](https://rivet.gg/docs/fault-tolerance): Ensure application & state resilience through crashes with zero downtime.
 
 ### Infrastructure
 
-- **Works with Your Runtime**: Supports v8 isolates, WebAssembly, and containers to work with your existing tools.
-- **Scales to Zero**: Handle millions of connections with low latency and high-throughput writes while saving costs through instant actor sleep/wake cycles.
-- **Built-in Monitoring**: Includes monitoring out of the box.
-- **No Servers & No Configuration**: Deploy with one command. Scale on demand without any configuration.
-- **Powered by V8 Isolates & Deno Runtime**: Faster, cheaper, and more lightweight than lambda functions & containers.
-- **Supports Both Isolates & Containers**: Run your code on V8 isolates or run things like Godot/Unity game servers or video encoding in containers.
-- **Simpler Than Lambda, No Timeouts Ever**: No execution time limits, no complexity — just better serverless.
-- **Built with Technologies You Can Trust**: Rust, FoundationDB, the [Rivet workflow engine](docs-internal/libraries/workflow/OVERVIEW.md), and [Rivet orchestrator](packages/services/pegboard/) make Rivet delightfully boring to use.
+-   **Works with Your Runtime**: Supports V8 isolates, WebAssembly, and containers to work with your existing tools.
+-   **Scales to Zero**: Handle millions of connections with low latency and high-throughput writes while saving costs through instant actor sleep/wake cycles.
+-   **No Servers & No Configuration**: Deploy with one command. Scale on demand without any configuration.
+-   **Simpler Than Lambda, No Timeouts Ever**: No execution time limits, no complexity — just better serverless.
+-   **Batteries Included Monitoring**: Includes monitoring out of the box, or bring your own monitoring.
+-   **Built with Technologies You Can Trust**: Rust, FoundationDB, the [Rivet workflow engine](docs-internal/libraries/workflow/OVERVIEW.md), and [Rivet orchestrator](packages/services/pegboard/) make Rivet delightfully boring to use.
 
 ### Use cases
 
-- AI agents
-- Game Servers
-- Collaborative applications
-- Local-first apps
-- Discord Activities
-- Chat Apps
-- Yjs Sync & Storage
-- Run Untrusted User Code
+-   AI agents
+-   Game Servers
+-   Collaborative applications
+-   Local-first apps
+-   Discord Activities
+-   Chat Apps
+-   Yjs Sync & Storage
+-   Sandboxed Code Execution
 
-## Quickstart
-Follow the [setup guide](https://rivet.gg/docs/setup).
+## Getting Started
 
-### Self-hosting & manual deployment
+### Quickstart
 
-Read our [self-hosting documentation](https://rivet.gg/docs/self-hosting).
+_See the [full quickstart guide](https://rivet.gg/docs/setup) for a comprehensive walkthrough._
 
-### Rivet Cloud
+**Step 1: Install CLI**
 
-Rivet Cloud is the fastest, most affordable, and most reliable way to deploy Rivet Actors with zero infrastructure maintenance. Get started at [hub.rivet.gg](https://hub.rivet.gg).
+```sh
+# macOS & Linux & WSL
+curl -fsSL https://releases.rivet.gg/rivet/latest/install.sh | sh
 
-### Rivet Enterprise
+# Windows (cmd)
+powershell -Command "iwr https://releases.rivet.gg/rivet/latest/install.ps1 -useb | iex"
 
-Get a demo, tailored pricing to fit your needs, or have your questions answered about Rivet. Contact us [here](https://rivet.gg/sales).
+# Windows (PowerShell)
+iwr https://releases.rivet.gg/rivet/latest/install.ps1 -useb | iex
+```
 
-## Documentation
+**Step 2: Create Project & Deploy**
 
-- **Overview**
-  - [Overview](https://rivet.gg/docs)
+```sh
+rivet init
+cd my-app
+rivet deploy
+```
 
-- **Getting Started**
-  - [Initial Setup](https://rivet.gg/docs/setup)
-  - [Actor SDK](https://jsr.io/@rivet-gg/actor/doc) (external)
-  - **Client SDKs**
-    - [JavaScript & TypeScript](https://jsr.io/@rivet-gg/actor-client)
+**Step 3: Monitor**
 
-- **Build with Rivet**
-  - [Remote Procedure Calls](https://rivet.gg/docs/rpc)
-  - [State](https://rivet.gg/docs/state)
-  - [Events](https://rivet.gg/docs/events)
-  - [Scaling & Concurrency](https://rivet.gg/docs/scaling)
-  - [Edge Networking](https://rivet.gg/docs/edge)
-  - **More**
-    - [Lifecycle](https://rivet.gg/docs/lifecycle)
-    - [Connections](https://rivet.gg/docs/connections)
-    - [Authentication](https://rivet.gg/docs/authentication)
-    - [Fault Tolerance](https://rivet.gg/docs/fault-tolerance)
-    - [Logging](https://rivet.gg/docs/logging)
+Visit the [Rivet Hub](https://hub.rivet.gg) to create & test your actors.
 
-- **Resources**
-  - [Configuration](https://rivet.gg/docs/config)
-  - [Troubleshooting](https://rivet.gg/docs/troubleshooting)
-  - **Self-Hosting**
-    - [Overview](https://rivet.gg/docs/self-hosting)
-    - [Docker Compose](https://rivet.gg/docs/self-hosting/docker-compose)
-    - [Manual Deployment](https://rivet.gg/docs/self-hosting/manual-deployment)
-    - [Server Config](https://rivet.gg/docs/self-hosting/server-config)
-    - [Client Config](https://rivet.gg/docs/self-hosting/client-config)
-  - **More**
-    - [Available Regions](https://rivet.gg/docs/regions)
-    - [Limitations](https://rivet.gg/docs/limitations)
-    - **Advanced**
-      - [Rescheduling](https://rivet.gg/docs/rescheduling)
-      - [Networking](https://rivet.gg/docs/networking)
-      - **Internals**
-        - [Design Decisions](https://rivet.gg/docs/internals/design-decisions)
-        - [Actor Runtime](https://rivet.gg/docs/internals/runtime)
-- [Platform API](https://rivet.gg/docs/api)
+### Documentation
+
+-   [**Documentation**](https://rivet.gg/docs): Read about how to use Rivet
+-   [**Examples**](./examples/): See existing Rivet projects
+-   [**Contributing**](./CONTRIBUTING.md): Learn to contribute to Rivet
+
+### Running Rivet
+
+-   **Self-Hosting**
+    -   [**Local Dev & Single Container**](https://rivet.gg/docs/self-hosting/single-container): Great for local development, fast single-node deployments, and testing Rivet
+    -   [**Docker Compose**](https://rivet.gg/docs/self-hosting/docker-compose): Great for hobbyist & single-node deployments
+    -   [**Manual**](https://rivet.gg/docs/self-hosting/manual-deployment): Run on your own VMs without Docker
+-   [**Rivet Cloud**](https://hub.rivet.gg): Fastest, most affordable, and most reliable way to deploy Rivet Actors with zero infrastructure maintenance
+-   [**Rivet Enterprise**](https://rivet.gg/sales): Get a demo or have your questions answered about Rivet
 
 ## Community & Support
 
-- Join our [Discord](https://rivet.gg/discord)
-- Follow us on [X](https://x.com/rivet_gg)
-- Follow us on [Bluesky](https://bsky.app/profile/rivet-gg.bsky.social)
-- File bug reports in [GitHub Issues](https://github.com/rivet-gg/rivet/issues)
-- Post questions & ideas in [GitHub Discussions](https://github.com/orgs/rivet-gg/discussions)
+-   Join our [**Discord**](https://rivet.gg/discord)
+-   Follow us on [**X**](https://x.com/rivet_gg)
+-   Follow us on [**Bluesky**](https://bsky.app/profile/rivet-gg.bsky.social)
+-   File bug reports in [**GitHub Issues**](https://github.com/rivet-gg/rivet/issues)
+-   Post questions & ideas in [**GitHub Discussions**](https://github.com/orgs/rivet-gg/discussions)
 
-## Architecture
+## Technologies
 
-### Core technologies
+-   **Rust**
+-   **V8 & Deno**: Actor isolate runtime
+-   **FoundationDB**: Actor state
+-   **CockroachDB**: OLTP
+-   **ClickHouse**: Developer-facing monitoring
+-   **Valkey**: Caching
+-   **NATS**: Pub/sub
+-   **Traefik**: Load balancers & tunnels
 
-- **Rust**
-- **V8 & Deno**: Actor isolate runtime
-- **FoundationDB**: Actor state
-- **CockroachDB**: OLTP
-- **ClickHouse**: Developer-facing monitoring
-- **Valkey**: Caching
-- **NATS**: Pub/sub
-- **Traefik**: Load balancers & tunnels
+<!-- ### Diagram
 
-### Diagram
-
-![Architecture](./.github/media/architecture.png)
+![Architecture](./.github/media/architecture.png) -->
 
 ## Project layout
 
 ```
 docker/                      Docker-related files
-    client/                  Client image
     dev-full/                Full development environment setup
     monolith/                Monolithic Docker setup
-    server/                  Server image
+    universal/               Universal multi-stage builder image
 docs/                        Documentation
 docs-internal/               Internal documentation
 examples/                    Example projects
+frontend/                    Rivet Hub & other frontend components
 packages/                    Project packages
     api/                     API package
     common/                  Common utilities
     infra/                   Infrastructure-related code
     services/                Service implementations
     toolchain/               Toolchain-related code
-resources/                   Resource files
+resources/                   Misc resources supporting Rivet
 scripts/                     Scripts for various tasks
 sdks/                        SDKs
     actor/                   Actor SDK
-    api/                     API SDK
+    api/                     Low-level SDK for calling API
+site/                        Website & documentation
 ```
 
 ## License
