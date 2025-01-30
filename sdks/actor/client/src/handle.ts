@@ -87,11 +87,8 @@ export class ActorHandleRaw {
 		const rpcId = this.#rpcIdCounter;
 		this.#rpcIdCounter += 1;
 
-		const {
-			promise: resolvePromise,
-			resolve,
-			reject,
-		} = Promise.withResolvers<wsToClient.RpcResponseOk>();
+		const { promise, resolve, reject } =
+			Promise.withResolvers<wsToClient.RpcResponseOk>();
 		this.#websocketRpcInFlight.set(rpcId, { name, resolve, reject });
 
 		this.#webSocketSend({
@@ -106,7 +103,7 @@ export class ActorHandleRaw {
 
 		// TODO: Throw error if disconnect is called
 
-		const { i: responseId, o: output } = await resolvePromise;
+		const { i: responseId, o: output } = await promise;
 		if (responseId !== rpcId)
 			throw new Error(
 				`Request ID ${rpcId} does not match response ID ${responseId}`,
