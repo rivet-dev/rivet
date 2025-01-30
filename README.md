@@ -9,7 +9,7 @@
 
 
 <p align="center">
-  <p align="center"><b>Scalable. Stateful. Serverless.</b><br/>Rivet is the platform to build realtime, edge, or agent applications.No limitations of Redis or timeouts of Lambda.</p></p>
+  <p align="center"><b>Scalable. Stateful. Serverless.</b><br/>Rivet is the platform to build realtime, edge, or agent applications. No limitations of Redis or timeouts of Lambda.</p></p>
 <h4 align="center">
   <a href="https://hub.rivet.gg">Rivet Cloud</a> |
   <a href="https://rivet.gg/docs/self-hosting">Self-Hosting</a> |
