@@ -132,12 +132,6 @@ export class ActorInspection<A extends AnyActor> {
 						onUnsubscribe: async () => {
 							// we do not support granular subscriptions
 						},
-						onError: (error) => {
-							this.#logger.warn("connection error", {
-								rpc: error.rpcId,
-								error,
-							});
-						},
 					},
 				);
 			},

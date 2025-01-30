@@ -5,6 +5,7 @@ import type { WSMessageReceive } from "hono/ws";
 import type { AnyActor } from "./actor";
 import type { Connection, IncomingWebSocketMessage } from "./connection";
 import * as errors from "./errors";
+import { logger } from "./log";
 import { Rpc } from "./rpc";
 import { assertUnreachable } from "./utils";
 
@@ -51,31 +52,22 @@ export async function validateMessageEvent<A extends AnyActor>(
 	return message;
 }
 
+export interface HandleMessageEventDelegate<A extends AnyActor> {
+	onExecuteRpc?: (
+		ctx: Rpc<A>,
+		name: string,
+		args: unknown[],
+	) => Promise<unknown>;
+	onSubscribe?: (eventName: string, conn: Connection<A>) => Promise<void>;
+	onUnsubscribe?: (eventName: string, conn: Connection<A>) => Promise<void>;
+}
+
 export async function handleMessageEvent<A extends AnyActor>(
 	event: MessageEvent<WSMessageReceive>,
 	actorMetadata: Metadata,
 	conn: Connection<A>,
 	config: MessageEventConfig,
-	handlers: {
-		onExecuteRpc?: (
-			ctx: Rpc<A>,
-			name: string,
-			args: unknown[],
-		) => Promise<unknown>;
-		onSubscribe?: (eventName: string, conn: Connection<A>) => Promise<void>;
-		onUnsubscribe?: (
-			eventName: string,
-			conn: Connection<A>,
-		) => Promise<void>;
-		onError: (error: {
-			code: string;
-			message: string;
-			metadata: unknown;
-			rpcId?: number;
-			rpcName?: string;
-			internal: boolean;
-		}) => void;
-	},
+	handlers: HandleMessageEventDelegate<A>,
 ) {
 	let rpcId: number | undefined;
 	let rpcName: string | undefined;
@@ -129,21 +121,36 @@ export async function handleMessageEvent<A extends AnyActor>(
 		}
 	} catch (error) {
 		// Build response error information. Only return errors if flagged as public in order to prevent leaking internal behavior.
+		//
+		// We log the error here instead of after generating the code & message becuase we need to log the original error, not the masked internal error.
 		let code: string;
 		let message: string;
 		let metadata: unknown = undefined;
-		let internal = false;
 		if (error instanceof errors.ActorError && error.public) {
 			code = error.code;
 			message = String(error);
 			metadata = error.metadata;
+
+			logger().info("public error", {
+				code,
+				message,
+				connectionId: conn.id,
+				rpcId,
+				rpcName,
+			});
 		} else {
 			code = errors.INTERNAL_ERROR_CODE;
 			message = errors.INTERNAL_ERROR_DESCRIPTION;
 			metadata = {
 				url: `https://hub.rivet.gg/projects/${actorMetadata.project.slug}/environments/${actorMetadata.environment.slug}/actors?actorId=${actorMetadata.actor.id}`,
 			} satisfies errors.InternalErrorMetadata;
-			internal = true;
+
+			logger().warn("internal error", {
+				error: String(error),
+				connectionId: conn.id,
+				rpcId,
+				rpcName,
+			});
 		}
 
 		// Build response
@@ -173,14 +180,5 @@ export async function handleMessageEvent<A extends AnyActor>(
 				} satisfies wsToClient.ToClient),
 			);
 		}
-
-		handlers.onError({
-			code,
-			message,
-			metadata,
-			rpcId: rpcId,
-			rpcName,
-			internal,
-		});
 	}
 }

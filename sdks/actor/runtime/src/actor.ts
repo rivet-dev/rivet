@@ -735,17 +735,6 @@ export abstract class Actor<
 						onUnsubscribe: async (eventName, conn) => {
 							this.#removeSubscription(eventName, conn);
 						},
-						onError: (error) => {
-							const message = error.internal
-								? "internal error"
-								: "user error";
-							logger().warn(message, {
-								connectionId: conn?.id,
-								rpcId: error.rpcId,
-								rpcName: error.rpcName,
-								error,
-							});
-						},
 					},
 				);
 			},

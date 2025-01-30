@@ -149,7 +149,7 @@ export class InvalidStateType extends ActorError {
 
 export class StateTooLarge extends ActorError {
 	constructor() {
-		super("state_too_large", "State too large.", { public: true });
+		super("state_too_large", "State too large.");
 	}
 }
 
@@ -174,7 +174,7 @@ export interface UserErrorOptions extends ErrorOptions {
 	metadata: unknown;
 }
 
-/** Error that can be safely returned to the user. Usually used to indicate a user error. */
+/** Error that can be safely returned to the user. */
 export class UserError extends ActorError {
 	/**
 	 * Constructs a new UserError instance.
@@ -184,6 +184,7 @@ export class UserError extends ActorError {
 	 */
 	constructor(message: string, opts?: UserErrorOptions) {
 		super(opts?.code ?? USER_ERROR_CODE, message, {
+			public: true,
 			metadata: opts?.metadata,
 		});
 	}
