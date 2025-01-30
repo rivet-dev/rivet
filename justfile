@@ -1,4 +1,5 @@
-docker_compose := "docker compose -f docker/dev-full/docker-compose.yml"
+# `--parallel 1` because apt has issues when pulling too many containers in parallel
+docker_compose := "docker compose -f docker/dev-full/docker-compose.yml --progress=plain --parallel 1"
 
 [group('rust')]
 watch:
@@ -11,7 +12,7 @@ cli *ARGS:
 
 [group('dev')]
 dev-compose *ARGS:
-	{{docker_compose}} up -d --build {{ARGS}}
+	{{docker_compose}} {{ARGS}}
 
 [group('dev')]
 dev-up-all:

@@ -26,10 +26,7 @@ export default function SecretDialogContent(props: ContentProps) {
 				<Text>
 					Rivet 2.0
 					<br />
-					<Code>{__APP_GIT_BRANCH__}</Code>@
-					<Code>{__APP_GIT_COMMIT__}</Code>
-					<br />
-					<Code>{__APP_RIVET_NAMESPACE__ || "unknown"}</Code>
+					<Code>{__APP_BUILD_ID__}</Code>
 				</Text>
 				<Text>
 					<Link

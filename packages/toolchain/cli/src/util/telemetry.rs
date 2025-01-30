@@ -89,8 +89,6 @@ where
 
 	// Helps us understand what version of the CLI is being used.
 	let version = json!({
-		"git_sha": env!("VERGEN_GIT_SHA"),
-		"git_branch": env!("VERGEN_GIT_BRANCH"),
 		"build_semver": env!("CARGO_PKG_VERSION"),
 		"build_timestamp": env!("VERGEN_BUILD_TIMESTAMP"),
 		"build_target": env!("VERGEN_CARGO_TARGET_TRIPLE"),

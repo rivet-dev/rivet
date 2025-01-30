@@ -246,9 +246,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.93"
+version = "1.0.95"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c95c10ba0b00a02636238b814946408b1322d5ac4760326e6fb8ec956d85775"
+checksum = "34ac096ce696dc2fcabef30516bb13c0a68a11d30131d3df6f04711467681b04"
 dependencies = [
  "backtrace",
 ]
@@ -1185,7 +1185,7 @@ dependencies = [
  "num-traits",
  "rusticata-macros",
  "thiserror 1.0.69",
- "time 0.3.36",
+ "time 0.3.37",
 ]
 
 [[package]]
@@ -1279,7 +1279,7 @@ dependencies = [
  "serde_nanos",
  "serde_repr",
  "thiserror 1.0.69",
- "time 0.3.36",
+ "time 0.3.37",
  "tokio",
  "tokio-retry",
  "tokio-rustls 0.24.1",
@@ -1476,7 +1476,7 @@ dependencies = [
  "ring 0.17.8",
  "sha2 0.10.8",
  "subtle",
- "time 0.3.36",
+ "time 0.3.37",
  "tracing",
  "zeroize",
 ]
@@ -1689,7 +1689,7 @@ dependencies = [
  "itoa 1.0.14",
  "num-integer",
  "ryu",
- "time 0.3.36",
+ "time 0.3.37",
 ]
 
 [[package]]
@@ -1713,7 +1713,7 @@ dependencies = [
  "pin-utils",
  "ryu",
  "serde",
- "time 0.3.36",
+ "time 0.3.37",
  "tokio",
  "tokio-util 0.7.12",
 ]
@@ -2431,16 +2431,16 @@ dependencies = [
 
 [[package]]
 name = "cargo_metadata"
-version = "0.19.0"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "afc309ed89476c8957c50fb818f56fe894db857866c3e163335faa91dc34eb85"
+checksum = "8769706aad5d996120af43197bf46ef6ad0fda35216b4505f926a365a232d924"
 dependencies = [
  "camino",
  "cargo-platform",
  "semver 1.0.23",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.3",
 ]
 
 [[package]]
@@ -6756,19 +6756,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f"
 
 [[package]]
-name = "git2"
-version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b903b73e45dc0c6c596f2d37eccece7c1c8bb6e4407b001096387c63d0d93724"
-dependencies = [
- "bitflags 2.6.0",
- "libc",
- "libgit2-sys",
- "log",
- "url",
-]
-
-[[package]]
 name = "gl_generator"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8206,18 +8193,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f36115160c57e8529781b4183c2bb51fdc1f6d6d1ed345591d84be7703befb3c"
 dependencies = [
  "cc",
-]
-
-[[package]]
-name = "libgit2-sys"
-version = "0.17.0+1.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10472326a8a6477c3c20a64547b0059e4b0d086869eee31e6d7da728a8eb7224"
-dependencies = [
- "cc",
- "libc",
- "libz-sys",
- "pkg-config",
 ]
 
 [[package]]
@@ -11667,7 +11642,7 @@ dependencies = [
  "tokio",
  "url",
  "uuid",
- "vergen-git2",
+ "vergen",
  "webbrowser",
 ]
 
@@ -11771,7 +11746,7 @@ dependencies = [
  "anyhow",
  "lazy_static",
  "uuid",
- "vergen-git2",
+ "vergen",
 ]
 
 [[package]]
@@ -12284,7 +12259,7 @@ dependencies = [
  "typed-path",
  "url",
  "uuid",
- "vergen-git2",
+ "vergen",
  "which 5.0.0",
  "windows 0.48.0",
  "zip 0.5.13",
@@ -12631,9 +12606,9 @@ dependencies = [
 
 [[package]]
 name = "rustversion"
-version = "1.0.18"
+version = "1.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e819f2bc632f285be6d7cd36e25940d45b2391dd6d9b939e79de557f7014248"
+checksum = "f7c45b9784283f1b2e7fb61b42047c2fd678ef0960d4f6f1eba131594cc369d4"
 
 [[package]]
 name = "rustyline"
@@ -13006,7 +12981,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 1.0.69",
- "time 0.3.36",
+ "time 0.3.37",
  "url",
  "uuid",
 ]
@@ -13160,7 +13135,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with_macros",
- "time 0.3.36",
+ "time 0.3.37",
 ]
 
 [[package]]
@@ -13380,7 +13355,7 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "thiserror 1.0.69",
- "time 0.3.36",
+ "time 0.3.37",
 ]
 
 [[package]]
@@ -14843,9 +14818,9 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.3.36"
+version = "0.3.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5dfd88e563464686c916c7e46e623e520ddc6d79fa6641390f2e3fa86e83e885"
+checksum = "35e7868883861bd0e56d9ac6efcaaca0d6d5d82a2a7ec8209ff492c07cf37b21"
 dependencies = [
  "deranged",
  "itoa 1.0.14",
@@ -14866,9 +14841,9 @@ checksum = "ef927ca75afb808a4d64dd374f00a2adf8d0fcff8e7b184af886c3c87ec4a3f3"
 
 [[package]]
 name = "time-macros"
-version = "0.2.18"
+version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f252a68540fde3a3877aeea552b832b40ab9a69e318efd078774a01ddee1ccf"
+checksum = "2834e6017e3e5e4b9834939793b282bc03b37a3336245fa820e35e233e2a85de"
 dependencies = [
  "num-conv",
  "time-core",
@@ -15404,7 +15379,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6b1f47d22deb79c3f59fcf2a1f00f60cbdc05462bf17d1cd356c1fefa3f444bd"
 dependencies = [
  "nu-ansi-term 0.50.1",
- "time 0.3.36",
+ "time 0.3.37",
  "tracing",
  "tracing-core",
  "tracing-subscriber",
@@ -16194,9 +16169,9 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "vergen"
-version = "9.0.2"
+version = "9.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31f25fc8f8f05df455c7941e87f093ad22522a9ff33d7a027774815acf6f0639"
+checksum = "e0d2f179f8075b805a43a2a21728a46f0cc2921b3c58695b28fa8817e103cd9a"
 dependencies = [
  "anyhow",
  "cargo_metadata",
@@ -16204,22 +16179,7 @@ dependencies = [
  "regex",
  "rustc_version 0.4.1",
  "rustversion",
- "time 0.3.36",
- "vergen-lib",
-]
-
-[[package]]
-name = "vergen-git2"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e63e069d8749fead1e3bab7a9d79e8fb90516b2ec66fc2243a798ecdc1a31d7"
-dependencies = [
- "anyhow",
- "derive_builder 0.20.2",
- "git2",
- "rustversion",
- "time 0.3.36",
- "vergen",
+ "time 0.3.37",
  "vergen-lib",
 ]
 
@@ -17100,7 +17060,7 @@ dependencies = [
  "oid-registry",
  "rusticata-macros",
  "thiserror 1.0.69",
- "time 0.3.36",
+ "time 0.3.37",
 ]
 
 [[package]]
@@ -17288,7 +17248,7 @@ dependencies = [
  "rand",
  "sha1",
  "thiserror 2.0.3",
- "time 0.3.36",
+ "time 0.3.37",
  "zeroize",
  "zopfli",
  "zstd",

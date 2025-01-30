@@ -1,10 +1,8 @@
 use anyhow::Result;
-use vergen_git2::{Emitter, Git2Builder};
+use vergen::Emitter;
 
 fn main() -> Result<()> {
-	Emitter::default()
-		.add_instructions(&Git2Builder::default().sha(true).build()?)?
-		.emit()?;
+	Emitter::default().emit()?;
 
 	Ok(())
 }

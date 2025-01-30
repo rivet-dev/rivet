@@ -29,7 +29,7 @@ export const selfProfileIdentityIdQueryOptions = () => {
 
 export const changelogQueryOptions = () => {
 	return queryOptions({
-		queryKey: ["changelog", __APP_GIT_COMMIT__],
+		queryKey: ["changelog", __APP_BUILD_ID__],
 		staleTime: timing.hours(1),
 		queryFn: async () => {
 			const response = await fetch("https://rivet.gg/changelog.json");

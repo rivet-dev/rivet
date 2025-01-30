@@ -38,8 +38,8 @@ nix = { version = "0.27", default-features = false, features = ["user", "signal"
 [build-dependencies]
 anyhow = "1.0"
 
-[build-dependencies.vergen-git2]
-version = "1.0.0"
+[build-dependencies.vergen]
+version = "9.0.4"
 features = [
   "build",
   "cargo",

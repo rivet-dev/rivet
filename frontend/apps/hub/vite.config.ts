@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import * as crypto from "node:crypto";
 import path from "node:path";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
 import { transformerNotationFocus } from "@shikijs/transformers";
@@ -8,13 +8,9 @@ import * as shiki from "shiki";
 import { type Plugin, defineConfig } from "vite";
 import vitePluginFaviconsInject from "vite-plugin-favicons-inject";
 
-const GIT_BRANCH =
-	process.env.CF_PAGES_BRANCH ||
-	execSync("git rev-parse --abbrev-ref HEAD").toString().trim();
-
-const GIT_SHA =
-	process.env.CF_PAGES_COMMIT_SHA ||
-	execSync("git rev-parse HEAD").toString().trim();
+// These are only needed in CI. They'll be undefined in dev.
+const GIT_BRANCH = process.env.CF_PAGES_BRANCH;
+const GIT_SHA = process.env.CF_PAGES_COMMIT_SHA;
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -44,9 +40,10 @@ export default defineConfig({
 		port: 5080,
 	},
 	define: {
-		__APP_GIT_BRANCH__: JSON.stringify(GIT_BRANCH),
-		__APP_GIT_COMMIT__: JSON.stringify(GIT_SHA),
-		__APP_RIVET_NAMESPACE__: JSON.stringify(process.env.CF_PAGES_BRANCH),
+		// Provide a unique build ID for cache busting
+		__APP_BUILD_ID__: JSON.stringify(
+			`${new Date().toISOString()}@${crypto.randomUUID()}`,
+		),
 	},
 	resolve: {
 		alias: {

@@ -15,11 +15,10 @@ const STYLES: styling::Styles = styling::Styles::styled()
 #[clap(
 	author = "Rivet Gaming, Inc. <developer@rivet.gg>",
 	about = "https://rivet.gg/",
-	version = concat!(env!("CARGO_PKG_VERSION"), " (", env!("VERGEN_GIT_SHA"), ")"),
+	version = env!("CARGO_PKG_VERSION"),
 	long_version = concat!(
 		"\n\n",
 		"version: ", env!("CARGO_PKG_VERSION"), "\n",
-		"git sha: ", env!("VERGEN_GIT_SHA"), "\n",
 		"build timestamp: ", env!("VERGEN_BUILD_TIMESTAMP"), "\n",
 		"build target: ", env!("VERGEN_CARGO_TARGET_TRIPLE"), "\n",
 		"build debug: ", env!("VERGEN_CARGO_DEBUG"), "\n",

@@ -3,10 +3,15 @@ set -euf -o pipefail
 
 TARGET_ARCH=$(uname -m | sed 's/aarch64/arm64/' | sed 's/x86_64/amd64/')
 
+apt-get update
+
+# Fixes "Failed to fetch" error
+apt-get install --reinstall -y apt-transport-https
+
 # Install required packages
 #
 # The FDB version should match `cluster::workflows::server::install::install_scripts::components::fdb::FDB_VERSION`
-apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+ apt-get install -y \
 	libclang-dev \
     ca-certificates \
     openssl \
@@ -18,12 +23,15 @@ apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
     apt-transport-https \
     dirmngr \
 	netcat-openbsd \
-	procps && \
-    (curl -L https://github.com/golang-migrate/migrate/releases/download/v4.18.1/migrate.linux-${TARGET_ARCH}.tar.gz | tar xvz) && \
-    mv migrate /usr/local/bin/migrate && \
-    curl -fsSL https://deno.land/x/install/install.sh | sh && \
-    ln -s /root/.deno/bin/deno /usr/local/bin/deno && \
-	curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.1.60/libfdb_c.x86_64.so"
+	procps 
+
+(curl -L https://github.com/golang-migrate/migrate/releases/download/v4.18.1/migrate.linux-${TARGET_ARCH}.tar.gz | tar xvz)
+mv migrate /usr/local/bin/migrate
+
+curl -fsSL https://deno.land/x/install/install.sh | sh
+ln -s /root/.deno/bin/deno /usr/local/bin/deno
+
+curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.1.60/libfdb_c.x86_64.so"
 
 # === Traefik ===
 curl -sSLf https://github.com/traefik/traefik/releases/download/v${TRAEFIK_VERSION}/traefik_v${TRAEFIK_VERSION}_linux_${TARGET_ARCH}.tar.gz | \
@@ -45,7 +53,7 @@ useradd -m -s /bin/bash clickhouse && \
     curl -fsSL 'https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml.key' | gpg --dearmor -o /usr/share/keyrings/clickhouse-keyring.gpg && \
     echo "deb [signed-by=/usr/share/keyrings/clickhouse-keyring.gpg] https://packages.clickhouse.com/deb stable main" | tee /etc/apt/sources.list.d/clickhouse.list && \
     apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y clickhouse-client clickhouse-server
+    apt-get install -y clickhouse-client clickhouse-server
 
 # === NATS ===
 useradd -m -s /bin/bash nats && \

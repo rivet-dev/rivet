@@ -10,8 +10,7 @@ pub const VERSION: &str = {
 	const MAJOR: u32 = pkg_version_major!();
 	const MINOR: u32 = pkg_version_minor!();
 	const PATCH: u32 = pkg_version_patch!();
-	const GIT_SHA: &str = env!("VERGEN_GIT_SHA");
-	const_format::formatcp!("{MAJOR}.{MINOR}.{PATCH} ({GIT_SHA})")
+	const_format::formatcp!("{MAJOR}.{MINOR}.{PATCH}")
 };
 
 pub fn user_agent() -> String {

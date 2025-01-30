@@ -52,5 +52,5 @@ assert_cmd = "2.0"
 
 [build-dependencies]
 anyhow = "1.0"
-vergen-git2 = "1.0.0"
+vergen = "9.0.4"
 

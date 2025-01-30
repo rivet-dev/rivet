@@ -1,66 +1,27 @@
+# Keep all .gitignore files in this file so we can easily keep it in sync with .dockerignore
+#
 # Make sure to update .dockerignore appropriately
 
 **/.DS_Store
-**/symbolCache.db
-
-# Terraform
-**/*.tfstate
-**/*.tfstate.*
-**/.terraform.*
-**/.terraform/
-infra/tf/*/_bolt.tf
-
-# Vagrant
-.vagrant-remote
-.vagrant-digitalocean-token
-**/.vagrant/
-
-# Bolt
-.bolt-cache.json
-.volumes/
-Bolt.local.toml
-
-/namespaces/*
-!/namespaces/.gitkeep
-!/namespaces/README.md
-
-/secrets/*
-!/secrets/.gitkeep
-!/secrets/README.md
-
-# Generated code
-gen/build_script.sh
-gen/test_build_script.sh
-gen/svc/
-gen/tf/
-gen/docker/
-gen/tests/
-gen/k8s/
-
-# K3s
-volumes/
 
 # Rust
-lib/**/Cargo.lock
-!lib/bolt/Cargo.lock
-!lib/job-runner/Cargo.lock
-# Allows symlinking target instead of being a directory
 **/target
-**/target/
-**/*.rustfmt
 
 # JavaScript
 **/.cache/
+**/.turbo
+**/.yarn
 **/dist/
 **/node_modules/
+**/target
 .turbo
 
-tests/basic-game/.env
+# Site
+site/public/rss/
+!site/public/rss/.gitkeep
 
+site/src/generated/
+!site/src/generated/errorPages.json
+!site/src/generated/apiPages.json
+!site/src/generated/meta.json
 
-# Added by cargo
-
-/target
-.yarn/cache
-.yarn/install-state.gz
-.turbo

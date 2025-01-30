@@ -37,22 +37,26 @@ async fn main() -> Result<()> {
 	}
 
     // Build manager dependencies (required for building the manager itself)
-	let status = tokio::process::Command::new("yarn")
+	let output = tokio::process::Command::new("yarn")
 		.arg("install")
         .arg("--immutable")
 		.current_dir(&manager_path)
-		.status()
+		.output()
 		.await?;
-	ensure!(status.success(), "yarn install failed");
+	println!("stdout:\n{}", String::from_utf8_lossy(&output.stdout));
+	println!("stderr:\n{}", String::from_utf8_lossy(&output.stderr));
+	ensure!(output.status.success(), "yarn install failed");
 
-	let status = tokio::process::Command::new("yarn")
+	let output = tokio::process::Command::new("yarn")
 		.arg("run")
 		.arg("build")
         .arg("--filter=@rivet-gg/actor-manager")
 		.current_dir(&project_root)
-		.status()
+		.output()
 		.await?;
-	ensure!(status.success(), "yarn build failed");
+	println!("stdout:\n{}", String::from_utf8_lossy(&output.stdout));
+	println!("stderr:\n{}", String::from_utf8_lossy(&output.stderr));
+	ensure!(output.status.success(), "yarn build failed");
 
 	// Build manager using Rivet build script (not using tsup/turbo because this includes custom
     // polyfill functionality)

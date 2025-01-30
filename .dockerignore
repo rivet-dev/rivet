@@ -1,12 +1,27 @@
-*
+# MARK: Docker-specific
+.git/
 
-!Cargo.lock
-!Cargo.toml
-!sdks/api/full/rust/Cargo.toml
-!sdks/api/full/rust/src
-!packages
-!resources/legacy/proto
+# MARK: Copied from .gitignore ===
+**/.DS_Store
 
-!docker/monolith
-docker/monolith/*.md
+# Rust
+**/target
+
+# JavaScript
+**/.cache/
+**/.turbo
+**/.yarn
+**/dist/
+**/node_modules/
+**/target
+.turbo
+
+# Site
+site/public/rss/
+!site/public/rss/.gitkeep
+
+site/src/generated/
+!site/src/generated/errorPages.json
+!site/src/generated/apiPages.json
+!site/src/generated/meta.json
 

@@ -8,8 +8,7 @@ edition.workspace = true
 [dependencies]
 lazy_static = "1.5.0"
 uuid = { version = "1.11.0", features = ["v4"] }
-vergen-git2 = "1.0.1"
 
 [build-dependencies]
 anyhow = "1.0.90"
-vergen-git2 = "1.0.1"
+vergen = "9.0.4"

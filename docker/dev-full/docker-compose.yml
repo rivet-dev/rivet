@@ -49,6 +49,7 @@ services:
     build:
       context: ../..
       dockerfile: docker/universal/Dockerfile
+      target: server-full
     restart: unless-stopped
     command: sleep infinity
     environment:

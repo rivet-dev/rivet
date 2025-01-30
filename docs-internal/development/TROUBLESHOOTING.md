@@ -27,5 +27,5 @@ The following indicates that the process was force killed (`signal 9`), which us
 55.35 error: could not compile `rivet-server` (bin "rivet-server") due to 1 previous error
 ```
 
-If you're using `docker-compose up --build`, try building one service at a time. Building multiple Rust binaries at the same time will eat a lot of memory.
+If you're using `docker compose up --build`, try building one service at a time. Building multiple Rust binaries at the same time will eat a lot of memory.
 

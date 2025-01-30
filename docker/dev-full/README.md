@@ -50,3 +50,26 @@ docker compose -f docker/dev-full/docker-compose.yml logs rivet-server | grep -B
 Logs for `rivet-server` and `rivet-client` can also be configured via the environment. See [here](/docs/self-hosting/client-config) for
 more information.
 
+## Troubleshooting
+
+### `Illegal instruction` during `apt-get install` on macOS
+
+If you see this output:
+
+```
+Updating certificates in /etc/ssl/certs...
+Illegal instruction
+Illegal instruction
+dpkg: error processing package ca-certificates (--configure):
+ installed ca-certificates package post-installation script subprocess returned error exit status 132
+Setting up libgssapi-krb5-2:amd64 (1.20.1-2+deb12u2) ...
+Setting up libcurl4:amd64 (7.88.1-10+deb12u8) ...
+Setting up curl (7.88.1-10+deb12u8) ...
+Processing triggers for libc-bin (2.36-9+deb12u9) ...
+Errors were encountered while processing:
+ ca-certificates
+E: Sub-process /usr/bin/dpkg returned an error code (1)
+```
+
+Try changing your Docker VM to _Docker VMM_. See [here](https://github.com/docker/for-mac/issues/7255#issuecomment-2567154899) for more information.
+

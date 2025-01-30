@@ -8,7 +8,7 @@ lazy_static! {
 	static ref SERVICE_INSTANCE: String =
 		env::var("RIVET_SERVICE_INSTANCE").unwrap_or_else(|_| Uuid::new_v4().to_string());
 	static ref SOURCE_HASH: String =
-		env::var("RIVET_SOURCE_HASH").unwrap_or_else(|_| env!("VERGEN_GIT_SHA").to_string());
+		env::var("RIVET_SOURCE_HASH").unwrap_or_else(|_| "unknown".to_string());
 }
 
 /// Generic name used to differentiate pools of servers.
