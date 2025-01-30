@@ -2,11 +2,16 @@ import { type Logger, setupLogging } from "@rivet-gg/actor-common/log";
 import { listObjectMethods } from "@rivet-gg/actor-common/reflect";
 import { isJsonSerializable } from "@rivet-gg/actor-common/utils";
 import type { ActorContext, Metadata } from "@rivet-gg/actor-core";
-import { ProtocolFormatSchema } from "@rivet-gg/actor-protocol/ws";
+import * as protoHttpRpc from "@rivet-gg/actor-protocol/http/rpc";
+import {
+	type ProtocolFormat,
+	ProtocolFormatSchema,
+} from "@rivet-gg/actor-protocol/ws";
 import type * as wsToClient from "@rivet-gg/actor-protocol/ws/to_client";
 import { Hono, type Context as HonoContext } from "hono";
 import { upgradeWebSocket } from "hono/deno";
-import type { WSEvents } from "hono/ws";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
+import type { WSContext, WSEvents } from "hono/ws";
 import onChange from "on-change";
 import { type ActorConfig, mergeActorConfig } from "./config";
 import {
@@ -380,7 +385,7 @@ export abstract class Actor<
 			);
 		});
 
-		//app.post("/rpc/:name", this.#pandleRpc.bind(this));
+		app.post("/rpc/:name", this.#handleHttpRpc.bind(this));
 
 		app.get("/connect", upgradeWebSocket(this.#handleWebSocket.bind(this)));
 		app.get(
@@ -419,6 +424,210 @@ export abstract class Actor<
 		);
 	}
 
+	/**
+	 * Removes a connection and cleans up its resources.
+	 */
+	#removeConnection(conn: Connection<this> | undefined) {
+		if (!conn) {
+			logger().warn("`conn` does not exist");
+			return;
+		}
+
+		this.#connections.delete(conn.id);
+
+		// Remove subscriptions
+		for (const eventName of [...conn.subscriptions.values()]) {
+			this.#removeSubscription(eventName, conn);
+		}
+
+		this._onDisconnect?.(conn);
+	}
+
+	async #handleHttpRpc(c: HonoContext) {
+		// Wait for init to finish
+		if (this.#initializedPromise) await this.#initializedPromise;
+
+		const rpcName = c.req.param("name");
+		let conn: Connection<this> | undefined;
+
+		try {
+			// Parse connection parameters and validate protocol
+			const { protocolFormat, connState } =
+				await this.#prepareConnectionFromRequest(c, {
+					defaultFormat: "json",
+				});
+
+			// Create connection with validated parameters
+			conn = await this.#createConnection(
+				protocolFormat,
+				connState,
+				undefined,
+			);
+
+			// Parse request body if present
+			const contentLength = Number(c.req.header("content-length") || "0");
+			if (contentLength > this.#config.protocol.maxIncomingMessageSize) {
+				throw new errors.MessageTooLong();
+			}
+
+			// Parse request body according to protocol format
+			const body = await c.req.json();
+			const { data: message, success } =
+				protoHttpRpc.RequestSchema.safeParse(body);
+			if (!success) {
+				throw new errors.MalformedMessage("Invalid request format");
+			}
+			const args = message.a;
+
+			// Create RPC context with the temporary connection
+			const ctx = new Rpc<this>(conn);
+			const output = await this.#executeRpc(ctx, rpcName, args);
+
+			// Format response according to protocol
+			return c.json({
+				o: output,
+			} satisfies protoHttpRpc.ResponseOk);
+		} catch (error) {
+			// Build response error information similar to WebSocket handling
+			let status: ContentfulStatusCode;
+			let code: string;
+			let message: string;
+			let metadata: unknown = undefined;
+
+			if (error instanceof errors.ActorError && error.public) {
+				logger().info("http rpc public error", {
+					rpc: rpcName,
+					error,
+				});
+
+				status = 400;
+				code = error.code;
+				message = String(error);
+				metadata = error.metadata;
+			} else {
+				logger().warn("http rpc internal error", {
+					rpc: rpcName,
+					error,
+				});
+
+				status = 500;
+				code = errors.INTERNAL_ERROR_CODE;
+				message = errors.INTERNAL_ERROR_DESCRIPTION;
+			}
+
+			return c.json(
+				{
+					c: code,
+					m: message,
+					md: metadata,
+				} satisfies protoHttpRpc.ResponseErr,
+				{ status },
+			);
+		} finally {
+			this.#removeConnection(conn);
+		}
+	}
+
+	/**
+	 * Called before accepting the socket. Any errors thrown here will cancel the request.
+	 */
+	async #prepareConnectionFromRequest(
+		c: HonoContext,
+		opts?: { defaultFormat?: string },
+	): Promise<{
+		protocolFormat: ProtocolFormat;
+		connState: ConnState | undefined;
+	}> {
+		const protocolFormatRaw = c.req.query("format") ?? opts?.defaultFormat;
+		const { data: protocolFormat, success } =
+			ProtocolFormatSchema.safeParse(protocolFormatRaw);
+		if (!success) {
+			logger().warn("invalid protocol format", {
+				protocolFormat: protocolFormatRaw,
+			});
+			throw new errors.InvalidProtocolFormat(protocolFormatRaw);
+		}
+
+		// Validate params size
+		const paramsStr = c.req.query("params");
+		if (
+			paramsStr &&
+			paramsStr.length > this.#config.protocol.maxConnectionParametersSize
+		) {
+			logger().warn("connection parameters too long");
+			throw new errors.ConnectionParametersTooLong();
+		}
+
+		// Parse and validate params
+		let params: ExtractActorConnParams<this>;
+		try {
+			params =
+				typeof paramsStr === "string"
+					? JSON.parse(paramsStr)
+					: undefined;
+		} catch (error) {
+			logger().warn("malformed connection parameters", { error });
+			throw new errors.MalformedConnectionParameters(error);
+		}
+
+		// Authenticate connection
+		let connState: ConnState | undefined = undefined;
+		const PREPARE_CONNECT_TIMEOUT = 5000; // 5 seconds
+		if (this._onBeforeConnect) {
+			const dataOrPromise = this._onBeforeConnect({
+				request: c.req.raw,
+				parameters: params,
+			});
+			if (dataOrPromise instanceof Promise) {
+				connState = await deadline(
+					dataOrPromise,
+					PREPARE_CONNECT_TIMEOUT,
+				);
+			} else {
+				connState = dataOrPromise;
+			}
+		}
+
+		return { protocolFormat, connState };
+	}
+
+	/**
+	 * Called after establishing a connection handshake.
+	 */
+	async #createConnection(
+		protocolFormat: ProtocolFormat,
+		state: ConnState | undefined,
+		websocket: WSContext<WebSocket> | undefined,
+	): Promise<Connection<this>> {
+		// Create connection
+		const connectionId = this.#connectionIdCounter;
+		this.#connectionIdCounter += 1;
+		const conn = new Connection<Actor<State, ConnParams, ConnState>>(
+			connectionId,
+			websocket,
+			protocolFormat,
+			state,
+			this.#connectionStateEnabled,
+		);
+		this.#connections.set(conn.id, conn);
+
+		// Handle connection
+		const CONNECT_TIMEOUT = 5000; // 5 seconds
+		if (this._onConnect) {
+			const voidOrPromise = this._onConnect(conn);
+			if (voidOrPromise instanceof Promise) {
+				deadline(voidOrPromise, CONNECT_TIMEOUT).catch((error) => {
+					logger().error("error in `_onConnect`, closing socket", {
+						error,
+					});
+					conn?.disconnect("`onConnect` failed");
+				});
+			}
+		}
+
+		return conn;
+	}
+
 	#getServerPort(): number {
 		const portStr = Deno.env.get("PORT_HTTP");
 		if (!portStr) {
@@ -433,23 +642,6 @@ export abstract class Actor<
 	}
 
 	// MARK: RPC
-	//async #handleRpc(c: HonoContext): Promise<Response> {
-	//  // TODO: Wait for initialize
-	//	try {
-	//		const rpcName = c.req.param("name");
-	//		const requestBody = await c.req.json<httpRpc.Request<unknown[]>>();
-	//		const ctx = new RpcContext<ConnState>();
-	//
-	//		const output = await this.#executeRpc(ctx, rpcName, requestBody.args);
-	//		return c.json({ output });
-	//	} catch (error) {
-	//		logger().error("RPC Error:", error);
-	//		return c.json({ error: String(error) }, 500);
-	//	} finally {
-	//		await this.forceSaveState();
-	//	}
-	//}
-
 	#isValidRpc(rpcName: string): boolean {
 		// Prevent calling private methods
 		if (rpcName.startsWith("#")) return false;
@@ -491,106 +683,23 @@ export abstract class Actor<
 			}
 		}
 	}
-
-	// MARK: WebSocket
 	async #handleWebSocket(c: HonoContext): Promise<WSEvents<WebSocket>> {
 		// Wait for init to finish
 		if (this.#initializedPromise) await this.#initializedPromise;
 
-		// TODO: Handle timeouts opening socket
-
-		// Validate protocol
-		const protocolVersion = c.req.query("version");
-		if (protocolVersion !== "1") {
-			logger().warn("invalid protocol version", { protocolVersion });
-			throw new errors.InvalidProtocolVersion(protocolVersion);
-		}
-
-		const protocolFormatRaw = c.req.query("format");
-		const { data: protocolFormat, success } =
-			ProtocolFormatSchema.safeParse(protocolFormatRaw);
-		if (!success) {
-			logger().warn("invalid protocol format", {
-				protocolFormat: protocolFormatRaw,
-			});
-			throw new errors.InvalidProtocolFormat(protocolFormatRaw);
-		}
-
-		// Validate params size (limiting to 4KB which is reasonable for query params)
-		const paramsStr = c.req.query("params");
-		if (
-			paramsStr &&
-			paramsStr.length > this.#config.protocol.maxConnectionParametersSize
-		) {
-			logger().warn("connection parameters too long");
-			throw new errors.ConnectionParametersTooLong();
-		}
-
-		// Parse and validate params
-		let params: ExtractActorConnParams<this>;
-		try {
-			params =
-				typeof paramsStr === "string"
-					? JSON.parse(paramsStr)
-					: undefined;
-		} catch (error) {
-			logger().warn("malformed connection parameters", { error });
-			throw new errors.MalformedConnectionParameters(error);
-		}
-
-		// Authenticate connection
-		let state: ConnState | undefined = undefined;
-		const PREPARE_CONNECT_TIMEOUT = 5000; // 5 seconds
-		if (this._onBeforeConnect) {
-			const dataOrPromise = this._onBeforeConnect({
-				request: c.req.raw,
-				parameters: params,
-			});
-			if (dataOrPromise instanceof Promise) {
-				state = await deadline(dataOrPromise, PREPARE_CONNECT_TIMEOUT);
-			} else {
-				state = dataOrPromise;
-			}
-		}
+		// Parse connection parameters and validate protocol
+		const { protocolFormat, connState } =
+			await this.#prepareConnectionFromRequest(c);
 
 		let conn: Connection<this> | undefined;
 		return {
-			onOpen: (_evt, ws) => {
-				// Create connection
-				//
-				// If `_onBeforeConnect` is not defined and `state` is
-				// undefined, there will be a runtime error when attempting to
-				// read it
-				const connectionId = this.#connectionIdCounter;
-				this.#connectionIdCounter += 1;
-				// TODO: As any
-				conn = new Connection<Actor<State, ConnParams, ConnState>>(
-					connectionId,
-					ws,
+			onOpen: async (_evt, ws) => {
+				// Create connection with validated parameters
+				conn = await this.#createConnection(
 					protocolFormat,
-					state,
-					this.#connectionStateEnabled,
+					connState,
+					ws,
 				);
-				this.#connections.set(conn.id, conn);
-
-				// Handle connection
-				const CONNECT_TIMEOUT = 5000; // 5 seconds
-				if (this._onConnect) {
-					const voidOrPromise = this._onConnect(conn);
-					if (voidOrPromise instanceof Promise) {
-						deadline(voidOrPromise, CONNECT_TIMEOUT).catch(
-							(error) => {
-								logger().error(
-									"error in `_onConnect`, closing socket",
-									{
-										error,
-									},
-								);
-								conn?.disconnect("`onConnect` failed");
-							},
-						);
-					}
-				}
 			},
 			onMessage: async (evt) => {
 				if (!conn) {
@@ -617,19 +726,7 @@ export abstract class Actor<
 				});
 			},
 			onClose: () => {
-				if (!conn) {
-					logger().warn("`conn` does not exist");
-					return;
-				}
-
-				this.#connections.delete(conn.id);
-
-				// Remove subscriptions
-				for (const eventName of [...conn.subscriptions.values()]) {
-					this.#removeSubscription(eventName, conn);
-				}
-
-				this._onDisconnect?.(conn);
+				this.#removeConnection(conn);
 			},
 			onError: (error) => {
 				// Actors don't need to know about this, since it's abstracted
@@ -956,20 +1053,25 @@ export abstract class Actor<
 		// Disconnect existing connections
 		const promises: Promise<unknown>[] = [];
 		for (const connection of this.#connections.values()) {
-			const raw = connection._websocket.raw;
-			if (!raw) continue;
+			if (connection._websocket) {
+				const raw = connection._websocket.raw;
+				if (!raw) continue;
 
-			// Create deferred promise
-			const { promise, resolve } = Promise.withResolvers();
-			if (!resolve) throw new Error("resolve should be defined by now");
+				// Create deferred promise
+				const { promise, resolve } = Promise.withResolvers();
+				if (!resolve)
+					throw new Error("resolve should be defined by now");
 
-			// Resolve promise when websocket closes
-			raw.addEventListener("close", resolve);
+				// Resolve promise when websocket closes
+				raw.addEventListener("close", resolve);
 
-			// Close connection
-			connection.disconnect();
+				// Close connection
+				connection.disconnect();
 
-			promises.push(promise);
+				promises.push(promise);
+			}
+
+			// TODO: Figure out how to abort HTTP requests on shutdown
 		}
 
 		// Await all `close` event listeners with 1.5 second timeout

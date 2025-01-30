@@ -27,6 +27,15 @@ export class Connection<A extends AnyActor> {
 	#stateEnabled: boolean;
 
 	/**
+	 * If this connection has a socket attached so it can send messages to the client.
+	 *
+	 * @protected
+	 */
+	public get _isBidirectional() {
+		return this._websocket !== undefined;
+	}
+
+	/**
 	 * Unique identifier for the connection.
 	 */
 	public readonly id: ConnectionId;
@@ -36,7 +45,7 @@ export class Connection<A extends AnyActor> {
 	 *
 	 * @protected
 	 */
-	public _websocket: WSContext<WebSocket>;
+	public _websocket: WSContext<WebSocket> | undefined;
 
 	/**
 	 * Protocol format used for message serialization and deserialization.
@@ -80,7 +89,7 @@ export class Connection<A extends AnyActor> {
 	 */
 	public constructor(
 		id: ConnectionId,
-		websocket: WSContext<WebSocket>,
+		websocket: WSContext<WebSocket> | undefined,
 		protocolFormat: ProtocolFormat,
 		state: ExtractActorConnState<A> | undefined,
 		stateEnabled: boolean,
@@ -157,8 +166,12 @@ export class Connection<A extends AnyActor> {
 	 * @protected
 	 */
 	public _sendWebSocketMessage(message: OutgoingWebSocketMessage) {
-		// TODO: Queue message
-		if (!this._websocket) return;
+		if (!this._websocket) {
+			logger().warn(
+				"attempting to send websocket message to connection without websocket",
+			);
+			return;
+		}
 
 		// TODO: Check WS state
 		this._websocket.send(message);
@@ -190,7 +203,7 @@ export class Connection<A extends AnyActor> {
 	 * @param reason - The reason for disconnection.
 	 */
 	disconnect(reason?: string) {
-		this._websocket.close(1000, reason);
+		this._websocket?.close(1000, reason);
 	}
 
 	/**

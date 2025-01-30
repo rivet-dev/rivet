@@ -142,7 +142,7 @@ export class ActorHandleRaw {
 	public connect() {
 		this.#disconnected = false;
 
-		let url = `${this.endpoint}/connect?version=1&format=${this.protocolFormat}`;
+		let url = `${this.endpoint}/v1/connect?format=${this.protocolFormat}`;
 
 		if (this.parameters !== undefined) {
 			const paramsStr = JSON.stringify(this.parameters);

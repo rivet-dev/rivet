@@ -22,6 +22,7 @@
 	"sideEffects": false,
 	"scripts": {
 		"build": "tsup src/mod.ts",
+		"dev": "yarn build --watch",
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {

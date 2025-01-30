@@ -64,6 +64,7 @@
 	"sideEffects": false,
 	"scripts": {
 		"build": "tsup src/http/rpc.ts src/http/inspect.ts src/ws/mod.ts src/ws/to_client.ts src/ws/to_server.ts",
+		"dev": "yarn build --watch",
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {

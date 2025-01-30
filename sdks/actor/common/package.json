@@ -64,6 +64,7 @@
 	"sideEffects": false,
 	"scripts": {
 		"build": "tsup src/log.ts src/logfmt.ts src/network.ts src/utils.ts src/reflect.ts",
+		"dev": "yarn build --watch",
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {
