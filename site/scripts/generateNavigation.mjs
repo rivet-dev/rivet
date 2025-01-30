@@ -1,8 +1,8 @@
 import { writeFile, readFile } from 'fs/promises';
 import { remark } from 'remark';
 import glob from 'fast-glob';
-import apiPages from '../src/generated/apiPages.json' assert { type: 'json' };
-import engineStyles from '../src/lib/engineStyles.json' assert { type: 'json' };
+// import apiPages from '../src/generated/apiPages.json' assert { type: 'json' };
+// import engineStyles from '../src/lib/engineStyles.json' assert { type: 'json' };
 import { slugifyWithCounter } from '@sindresorhus/slugify';
 import { visit } from 'unist-util-visit';
 import { toString } from 'mdast-util-to-string';
