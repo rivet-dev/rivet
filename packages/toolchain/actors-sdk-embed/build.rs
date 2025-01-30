@@ -9,10 +9,24 @@ use std::{
 
 #[tokio::main]
 async fn main() -> Result<()> {
+	// Check if yarn is installed
+	let yarn_check = tokio::process::Command::new("yarn")
+		.arg("--version")
+		.stdout(Stdio::null())
+		.stderr(Stdio::null())
+		.status()
+		.await;
+	ensure!(
+		yarn_check.is_ok() && yarn_check.unwrap().success(),
+		"yarn is not installed, please install yarn to build this project"
+	);
+
 	let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")?;
 	let out_dir = std::env::var("OUT_DIR")?;
 
-	let sdk_path = PathBuf::from(manifest_dir.clone()).join("../../../sdks/actor");
+	let project_root = PathBuf::from(manifest_dir.clone()).join("../../..");
+	let sdk_path = project_root.join("sdks/actor");
+	let manager_path = sdk_path.join("manager");
 
 	// Copy SDK directory to out_dir
 	let dist_path = Path::new(&out_dir).join("actor-sdk");
@@ -22,7 +36,26 @@ async fn main() -> Result<()> {
 		fs::remove_dir_all(&dist_path).context("fs::remove_dir_all")?;
 	}
 
-	// Build manager
+    // Build manager dependencies (required for building the manager itself)
+	let status = tokio::process::Command::new("yarn")
+		.arg("install")
+        .arg("--immutable")
+		.current_dir(&manager_path)
+		.status()
+		.await?;
+	ensure!(status.success(), "yarn install failed");
+
+	let status = tokio::process::Command::new("yarn")
+		.arg("run")
+		.arg("build")
+        .arg("--filter=@rivet-gg/actor-manager")
+		.current_dir(&project_root)
+		.status()
+		.await?;
+	ensure!(status.success(), "yarn build failed");
+
+	// Build manager using Rivet build script (not using tsup/turbo because this includes custom
+    // polyfill functionality)
 	build_backend_command_raw(CommandOpts {
 		task_path: "src/tasks/build/mod.ts",
 		input: json!({
@@ -38,7 +71,9 @@ async fn main() -> Result<()> {
 	})
 	.await?;
 
+	// Rebuild if SDK changes (in order to include manager dependencies)
 	println!("cargo:rerun-if-changed={}", sdk_path.display());
+
 	println!(
 		"cargo:rustc-env=ACTOR_SDK_DIST_PATH={}",
 		dist_path.display()
@@ -82,6 +117,8 @@ pub async fn build_backend_command_raw(opts: CommandOpts) -> Result<()> {
 
 	// Serialize command
 	let input_json = serde_json::to_string(&opts.input)?;
+
+	// Yarn install
 
 	// Run backend
 	let status = tokio::process::Command::new(deno.executable_path)

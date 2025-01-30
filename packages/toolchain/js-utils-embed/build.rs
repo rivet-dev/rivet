@@ -4,7 +4,6 @@ use merkle_hash::MerkleTree;
 use std::{
 	fs,
 	path::{Path, PathBuf},
-	process::Stdio,
 };
 
 #[tokio::main]
