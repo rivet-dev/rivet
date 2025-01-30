@@ -73,3 +73,14 @@ export class Lock<T> {
 		}
 	}
 }
+
+/**
+ * Like `Partial` but makes all sub-properties `Partial` too.
+ */
+export type RecursivePartial<T> = {
+	[P in keyof T]?: T[P] extends (infer U)[]
+		? RecursivePartial<U>[]
+		: T[P] extends object | undefined
+			? RecursivePartial<T[P]>
+			: T[P];
+};

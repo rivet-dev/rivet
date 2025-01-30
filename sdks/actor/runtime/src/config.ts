@@ -1,3 +1,5 @@
+import type { RecursivePartial } from "./utils";
+
 export interface ActorConfig {
 	protocol: {
 		maxConnectionParametersSize: number;
@@ -30,7 +32,7 @@ export const DEFAULT_ACTOR_CONFIG: ActorConfig = {
 };
 
 export function mergeActorConfig(
-	partialConfig?: Partial<ActorConfig>,
+	partialConfig?: RecursivePartial<ActorConfig>,
 ): ActorConfig {
 	return {
 		protocol: {
