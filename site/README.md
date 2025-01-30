@@ -25,6 +25,7 @@ _redirects        https://developers.cloudflare.com/pages/platform/redirects/
 ## Developing
 
 ```bash
+cd site
 yarn install
 yarn dev
 ```
