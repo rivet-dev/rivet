@@ -24,7 +24,7 @@ import { handleMessageEvent } from "./event";
 import { ActorInspection } from "./inspect";
 import type { Kv } from "./kv";
 import { instanceLogger, logger } from "./log";
-import type { Rpc } from "./rpc";
+import { Rpc } from "./rpc";
 import { Lock, deadline } from "./utils";
 
 const KEYS = {
@@ -148,7 +148,7 @@ export abstract class Actor<
 	#lastSaveTime = 0;
 	#pendingSaveTimeout?: number | NodeJS.Timeout;
 
-	#inspection: ActorInspection<this>;
+	#inspection!: ActorInspection<this>;
 
 	/**
 	 * This constructor should never be used directly.
@@ -159,19 +159,6 @@ export abstract class Actor<
 	 */
 	public constructor(config?: Partial<ActorConfig>) {
 		this.#config = mergeActorConfig(config);
-		this.#inspection = new ActorInspection(this.#config, {
-			state: () => ({
-				enabled: this.#stateEnabled,
-				state: this.#stateProxy,
-			}),
-			connections: () => this.#connections.values(),
-			rpcs: () => this.#rpcNames,
-			setState: (state) => {
-				this.#validateStateEnabled();
-				this.#setStateWithoutChange(state);
-			},
-			onRpcCall: (ctx, rpc, args) => this.#executeRpc(ctx, rpc, args),
-		});
 	}
 
 	/**
@@ -181,16 +168,35 @@ export abstract class Actor<
 	 *
 	 * @param ctx - The actor context.
 	 */
-	public static start(ctx: ActorContext): Promise<void> {
+	public static async start(ctx: ActorContext): Promise<void> {
 		setupLogging();
 
 		// biome-ignore lint/complexity/noThisInStatic lint/suspicious/noExplicitAny: Needs to construct self
 		const instance = new (this as any)() as Actor;
-		return instance.#run(ctx);
+		return await instance.#run(ctx);
 	}
 
 	async #run(ctx: ActorContext) {
 		this.#ctx = ctx;
+
+		// Create inspector after receiving `ActorContext`
+		this.#inspection = new ActorInspection(
+			this.#config,
+			this.#ctx.metadata,
+			{
+				state: () => ({
+					enabled: this.#stateEnabled,
+					state: this.#stateProxy,
+				}),
+				connections: () => this.#connections.values(),
+				rpcs: () => this.#rpcNames,
+				setState: (state) => {
+					this.#validateStateEnabled();
+					this.#setStateWithoutChange(state);
+				},
+				onRpcCall: (ctx, rpc, args) => this.#executeRpc(ctx, rpc, args),
+			},
+		);
 
 		// Run server immediately since init might take a few ms
 		this.#runServer();
@@ -318,7 +324,9 @@ export abstract class Actor<
 					try {
 						this._onStateChange(this.#stateRaw);
 					} catch (error) {
-						logger().error("error in `_onStateChange`", { error });
+						logger().error("error in `_onStateChange`", {
+							error: `${error}`,
+						});
 					}
 				}
 
@@ -513,6 +521,9 @@ export abstract class Actor<
 				status = 500;
 				code = errors.INTERNAL_ERROR_CODE;
 				message = errors.INTERNAL_ERROR_DESCRIPTION;
+				metadata = {
+					url: `https://hub.rivet.gg/projects/${this.#ctx.metadata.project.slug}/environments/${this.#ctx.metadata.environment.slug}/actors?actorId=${this.#ctx.metadata.actor.id}`,
+				} satisfies errors.InternalErrorMetadata;
 			}
 
 			return c.json(
@@ -566,7 +577,9 @@ export abstract class Actor<
 					? JSON.parse(paramsStr)
 					: undefined;
 		} catch (error) {
-			logger().warn("malformed connection parameters", { error });
+			logger().warn("malformed connection parameters", {
+				error: `${error}`,
+			});
 			throw new errors.MalformedConnectionParameters(error);
 		}
 
@@ -707,23 +720,34 @@ export abstract class Actor<
 					return;
 				}
 
-				await handleMessageEvent(evt, conn, this.#config, {
-					onExecuteRpc: async (ctx, name, args) => {
-						return await this.#executeRpc(ctx, name, args);
+				await handleMessageEvent(
+					evt,
+					this.#ctx.metadata,
+					conn,
+					this.#config,
+					{
+						onExecuteRpc: async (ctx, name, args) => {
+							return await this.#executeRpc(ctx, name, args);
+						},
+						onSubscribe: async (eventName, conn) => {
+							this.#addSubscription(eventName, conn);
+						},
+						onUnsubscribe: async (eventName, conn) => {
+							this.#removeSubscription(eventName, conn);
+						},
+						onError: (error) => {
+							const message = error.internal
+								? "internal error"
+								: "user error";
+							logger().warn(message, {
+								connectionId: conn?.id,
+								rpcRequestId: error.rpcRequestId,
+								rpcName: error.rpcName,
+								error,
+							});
+						},
 					},
-					onSubscribe: async (eventName, conn) => {
-						this.#addSubscription(eventName, conn);
-					},
-					onUnsubscribe: async (eventName, conn) => {
-						this.#removeSubscription(eventName, conn);
-					},
-					onError: (error) => {
-						logger().warn("connection internal error", {
-							rpc: error.rpcRequestId,
-							error,
-						});
-					},
-				});
+				);
 			},
 			onClose: () => {
 				this.#removeConnection(conn);
@@ -731,7 +755,7 @@ export abstract class Actor<
 			onError: (error) => {
 				// Actors don't need to know about this, since it's abstracted
 				// away
-				logger().warn("websocket error", { error });
+				logger().warn("websocket error", { error: `${error}` });
 			},
 		};
 	}
@@ -1005,7 +1029,9 @@ export abstract class Actor<
 				logger().debug("background promise complete");
 			})
 			.catch((error) => {
-				logger().error("background promise failed", { error });
+				logger().error("background promise failed", {
+					error: `${error}`,
+				});
 			});
 		this.#backgroundPromises.push(nonfailablePromise);
 	}

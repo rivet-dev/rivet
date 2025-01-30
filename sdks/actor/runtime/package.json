@@ -59,7 +59,8 @@
 		"@rivet-gg/actor-core": "workspace:*",
 		"@rivet-gg/actor-protocol": "workspace:*",
 		"@types/deno": "^2.0.0",
-		"tsup": "^8.3.5",
+		"@types/ws": "^8",
+		"tsup": "^8.3.6",
 		"typescript": "^5.7.3"
 	},
 	"deno": {

@@ -6,6 +6,7 @@ import type { Connection, IncomingWebSocketMessage } from "./connection";
 import * as errors from "./errors";
 import { Rpc } from "./rpc";
 import { assertUnreachable } from "./utils";
+import type { Metadata } from "@rivet-gg/actor-core";
 
 interface MessageEventConfig {
 	protocol: { maxIncomingMessageSize: number };
@@ -52,6 +53,7 @@ export async function validateMessageEvent<A extends AnyActor>(
 
 export async function handleMessageEvent<A extends AnyActor>(
 	event: MessageEvent<WSMessageReceive>,
+	actorMetadata: Metadata,
 	conn: Connection<A>,
 	config: MessageEventConfig,
 	handlers: {
@@ -70,11 +72,13 @@ export async function handleMessageEvent<A extends AnyActor>(
 			message: string;
 			metadata: unknown;
 			rpcRequestId?: number;
+			rpcName?: string;
 			internal: boolean;
 		}) => void;
 	},
 ) {
 	let rpcRequestId: number | undefined;
+	let rpcName: string | undefined;
 	const message = await validateMessageEvent(event, conn, config);
 
 	try {
@@ -88,6 +92,7 @@ export async function handleMessageEvent<A extends AnyActor>(
 			const { i: id, n: name, a: args = [] } = message.body.rr;
 
 			rpcRequestId = id;
+			rpcName = name;
 
 			const ctx = new Rpc<A>(conn);
 			const output = await handlers.onExecuteRpc(ctx, name, args);
@@ -135,6 +140,9 @@ export async function handleMessageEvent<A extends AnyActor>(
 		} else {
 			code = errors.INTERNAL_ERROR_CODE;
 			message = errors.INTERNAL_ERROR_DESCRIPTION;
+			metadata = {
+				url: `https://hub.rivet.gg/projects/${actorMetadata.project.slug}/environments/${actorMetadata.environment.slug}/actors?actorId=${actorMetadata.actor.id}`,
+			} satisfies errors.InternalErrorMetadata;
 			internal = true;
 		}
 
@@ -171,6 +179,7 @@ export async function handleMessageEvent<A extends AnyActor>(
 			message,
 			metadata,
 			rpcRequestId,
+			rpcName,
 			internal,
 		});
 	}

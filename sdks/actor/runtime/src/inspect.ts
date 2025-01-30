@@ -1,4 +1,5 @@
 import { safeStringify } from "@rivet-gg/actor-common/utils";
+import type { Metadata } from "@rivet-gg/actor-core";
 import type * as wsToClient from "@rivet-gg/actor-protocol/ws/to_client";
 import type { Context } from "hono";
 import type { WSEvents } from "hono/ws";
@@ -66,10 +67,17 @@ export class ActorInspection<A extends AnyActor> {
 
 	readonly #config: ActorConfig;
 
+	readonly #metadata: Metadata;
+
 	readonly #logger = inspectLogger();
 
-	constructor(config: ActorConfig, proxy: InspectionAccessProxy<A>) {
+	constructor(
+		config: ActorConfig,
+		metadata: Metadata,
+		proxy: InspectionAccessProxy<A>,
+	) {
 		this.#config = mergeActorConfig(config);
+		this.#metadata = metadata;
 		this.#proxy = proxy;
 	}
 
@@ -109,23 +117,29 @@ export class ActorInspection<A extends AnyActor> {
 					return;
 				}
 
-				await handleMessageEvent(evt, connection, this.#config, {
-					onExecuteRpc: async (ctx, name, args) => {
-						return await this.#executeRpc(ctx, name, args);
+				await handleMessageEvent(
+					evt,
+					this.#metadata,
+					connection,
+					this.#config,
+					{
+						onExecuteRpc: async (ctx, name, args) => {
+							return await this.#executeRpc(ctx, name, args);
+						},
+						onSubscribe: async () => {
+							// we do not support granular subscriptions
+						},
+						onUnsubscribe: async () => {
+							// we do not support granular subscriptions
+						},
+						onError: (error) => {
+							this.#logger.warn("connection error", {
+								rpc: error.rpcRequestId,
+								error,
+							});
+						},
 					},
-					onSubscribe: async () => {
-						// we do not support granular subscriptions
-					},
-					onUnsubscribe: async () => {
-						// we do not support granular subscriptions
-					},
-					onError: (error) => {
-						this.#logger.warn("connection error", {
-							rpc: error.rpcRequestId,
-							error,
-						});
-					},
-				});
+				);
 			},
 			onClose: () => {
 				if (!connection) {

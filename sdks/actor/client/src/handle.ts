@@ -142,7 +142,7 @@ export class ActorHandleRaw {
 	public connect() {
 		this.#disconnected = false;
 
-		let url = `${this.endpoint}/v1/connect?format=${this.protocolFormat}`;
+		let url = `${this.endpoint}/connect?format=${this.protocolFormat}`;
 
 		if (this.parameters !== undefined) {
 			const paramsStr = JSON.stringify(this.parameters);
@@ -196,7 +196,7 @@ export class ActorHandleRaw {
 		};
 		ws.onerror = (event) => {
 			if (this.#disconnected) return;
-			logger().debug("socket error", { event });
+			logger().warn("socket error", { event });
 		};
 		ws.onmessage = async (ev) => {
 			const response = (await this.#parse(
