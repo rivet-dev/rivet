@@ -1,5 +1,5 @@
 use anyhow::Result;
-use vergen_git2::Emitter;
+use vergen::Emitter;
 
 fn main() -> Result<()> {
 	Emitter::default().emit()?;
