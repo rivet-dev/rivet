@@ -1,20 +1,24 @@
 # MARK: Docker-specific
 .git/
 
-# MARK: Copied from .gitignore ===
+# MARK: Copied from .gitignore
 **/.DS_Store
+
+# Env
+.env*.local
 
 # Rust
 **/target
 
 # JavaScript
+**/*.log*
 **/.cache/
+**/.next/
 **/.turbo
 **/.yarn
 **/dist/
 **/node_modules/
 **/target
-.turbo
 
 # Site
 site/public/rss/
@@ -24,4 +28,8 @@ site/src/generated/
 !site/src/generated/errorPages.json
 !site/src/generated/apiPages.json
 !site/src/generated/meta.json
+
+# Icons
+frontend/packages/icons/src/*
+!frontend/packages/icons/src/package.json
 

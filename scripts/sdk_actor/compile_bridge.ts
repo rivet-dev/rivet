@@ -4,7 +4,8 @@ import $ from "dax";
 import { copy, walk } from "@std/fs";
 import { resolve } from "@std/path";
 
-const ACTOR_SDK_PATH = resolve(import.meta.dirname!, "../../sdks/actor");
+const PROJECT_ROOT = resolve(import.meta.dirname!, "../..");
+const ACTOR_SDK_PATH = resolve(PROJECT_ROOT, "sdks/actor");
 
 const ACTOR_BRIDGE_PATH = resolve(ACTOR_SDK_PATH, "bridge");
 const ACTOR_BRIDGE_TYPES_PATH = resolve(ACTOR_BRIDGE_PATH, "types");
@@ -59,15 +60,14 @@ await copy(
 );
 
 // Format types. Needs to run in ACTOR_SDK_PATH so it has access to the biome config.
-await $`npx -p @biomejs/biome@1.9.4 biome check --write bridge/types/`.cwd(
-	ACTOR_SDK_PATH,
+await $`npx -p @biomejs/biome@1.9.4 biome check --write sdks/actor/bridge/types/`.cwd(
+	PROJECT_ROOT,
 );
 
 for await (const entry of walk(ACTOR_BRIDGE_TYPES_PATH, {
 	exts: [".ts"],
 	includeDirs: false,
 })) {
-	console.log("checking", entry.path);
 	let content = await Deno.readTextFile(entry.path);
 
 	// Remove `#private` since it causes errors when coercing types with generated .d.ts.

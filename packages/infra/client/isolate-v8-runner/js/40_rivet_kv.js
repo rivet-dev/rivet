@@ -193,17 +193,13 @@ function serializeKey(key) {
     if (Array.isArray(key)) {
         return { jsInKey: key.map((x) => core.serialize(x)) };
     }
-    else {
-        return { jsInKey: [core.serialize(key)] };
-    }
+    return { jsInKey: [core.serialize(key)] };
 }
 function serializeListKey(key) {
     if (Array.isArray(key)) {
         return key.map((x) => core.serialize(x));
     }
-    else {
-        return [core.serialize(key)];
-    }
+    return [core.serialize(key)];
 }
 function deserializeKey(key) {
     if ("inKey" in key || "outKey" in key) {
@@ -211,12 +207,9 @@ function deserializeKey(key) {
         const tuple = jsKey.map((x) => core.deserialize(x));
         if (tuple.length === 1)
             return tuple[0];
-        else
-            return tuple;
+        return tuple;
     }
-    else {
-        throw new Error("unexpected key type from KV driver");
-    }
+    throw new Error("unexpected key type from KV driver");
 }
 function deserializeValue(key, value, format = "value") {
     if (value === undefined)
