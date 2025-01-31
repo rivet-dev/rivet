@@ -2,7 +2,10 @@
 	"name": "@rivet-gg/actor-common",
 	"private": true,
 	"version": "25.1.0-rc.1",
-	"files": ["dist", "package.json"],
+	"files": [
+		"dist",
+		"package.json"
+	],
 	"type": "module",
 	"exports": {
 		"./log": {

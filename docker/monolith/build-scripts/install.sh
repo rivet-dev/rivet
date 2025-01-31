@@ -5,9 +5,6 @@ TARGET_ARCH=$(uname -m | sed 's/aarch64/arm64/' | sed 's/x86_64/amd64/')
 
 apt-get update
 
-# Fixes "Failed to fetch" error
-apt-get install --reinstall -y apt-transport-https
-
 # Install required packages
 #
 # The FDB version should match `cluster::workflows::server::install::install_scripts::components::fdb::FDB_VERSION`
