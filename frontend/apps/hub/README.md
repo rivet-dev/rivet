@@ -7,7 +7,7 @@
 ```bash
 cd frontend/apps/hub
 yarn install
-yarn dev
+yarn dlx turbo dev
 ```
 
 Open [http://localhost:5080](http://localhost:5080) in your browser to view the website.
