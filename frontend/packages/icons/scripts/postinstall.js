@@ -13,9 +13,15 @@ const packageExistsOptions = {
 	],
 };
 
+const sourceDir = join(__dirname, "..", "src");
+
+if (!fs.existsSync(sourceDir)){
+    fs.mkdirSync(sourceDir, { recursive: true });
+}
+
 if (process.env.FONTAWESOME_PACKAGE_TOKEN) {
 	fs.writeFileSync(
-		"./src/.yarnrc.yml",
+		join(sourceDir, ".yarnrc.yml"),
 		dedent`
     nodeLinker: node-modules
 
@@ -33,20 +39,30 @@ if (process.env.FONTAWESOME_PACKAGE_TOKEN) {
       `,
 	);
 
-	fs.writeFileSync("./src/yarn.lock", "");
+	fs.writeFileSync(join(sourceDir, "./package.json"), JSON.stringify({
+		"name": "@rivet-gg/internal-icons",
+		"private": true,
+		"dependencies": {
+			"@awesome.me/kit-63db24046b": "^1.0.11",
+			"@fortawesome/pro-regular-svg-icons": "6.6.0",
+			"@fortawesome/pro-solid-svg-icons": "6.6.0"
+		}
+	}));
+
+	fs.writeFileSync(join(sourceDir, "yarn.lock"), "");
 
 	spawnSync(
 		"yarn",
 		["config", "set", "-H", "enableImmutableInstalls", "false"],
 		{
 			stdio: "inherit",
-			cwd: join(process.cwd(), "src"),
+			cwd: sourceDir,
 		},
 	);
 
 	spawnSync("yarn", [], {
 		stdio: "inherit",
-		cwd: join(process.cwd(), "src"),
+		cwd: sourceDir,
 		env: {
 			...process.env,
 			CI: 0,
@@ -77,8 +93,8 @@ let indexTsSource = dedent`
 `;
 
 for (const [pkg, { icons }] of Object.entries(manifest)) {
-	const pkgExists = pkg.includes("pro") ? isPro : true;
 	const isCustom = pkg.startsWith("@awesome.me/kit-");
+	const pkgExists = (pkg.includes("pro") || isCustom) ? isPro : true;
 
 	if (isCustom) {
 		if (!pkgExists) {
@@ -112,14 +128,14 @@ for (const [pkg, { icons }] of Object.entries(manifest)) {
 		}
 	}
 }
-fs.writeFileSync("src/index.gen.ts", `${indexTsSource}`);
+fs.writeFileSync(join(sourceDir, "index.gen.ts"), `${indexTsSource}`);
 
 let iconsPackTsSource = `${banner}\n
 import {type IconPack} from "@fortawesome/fontawesome-common-types";\n`;
 
 for (const [pkg, { icons }] of Object.entries(manifest)) {
-	const pkgExists = pkg.includes("pro") ? isPro : true;
 	const isCustom = pkg.startsWith("@awesome.me/kit-");
+	const pkgExists = (pkg.includes("pro")||isCustom) ? isPro : true;
 
 	if (isCustom) {
 		const iconNames = icons.map(({ icon }) => icon);
@@ -169,12 +185,12 @@ for (const [pkg, { icons }] of Object.entries(manifest)) {
 
 iconsPackTsSource += "} as IconPack;\n";
 
-fs.writeFileSync("src/icons-pack.gen.ts", `${iconsPackTsSource}`);
+fs.writeFileSync(join(__dirname, "../src/icons-pack.gen.ts"), `${iconsPackTsSource}`);
 
 async function build() {
 	await vite.build({
 		plugins: [],
-		root: resolve(__dirname, "./src"),
+		root: resolve(sourceDir),
 		build: {
 			outDir: resolve(__dirname, "../dist"),
 			emptyOutDir: true,
@@ -182,7 +198,7 @@ async function build() {
 			lib: {
 				name: "icons",
 				entry: {
-					index: resolve(__dirname, "../src/index.gen.ts"),
+					index: resolve(sourceDir, "index.gen.ts"),
 				},
 			},
 			rollupOptions: {

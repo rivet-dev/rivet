@@ -3211,9 +3211,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@rivet-gg/api-ee@file:vendor/rivet-gg-api-ee.tgz::locator=%40rivet-gg%2Fhub%40workspace%3Afrontend%2Fapps%2Fhub":
+"@rivet-gg/api-ee@file:./vendor/rivet-gg-api-ee.tgz::locator=%40rivet-gg%2Fhub%40workspace%3Afrontend%2Fapps%2Fhub":
   version: 0.0.1
-  resolution: "@rivet-gg/api-ee@file:vendor/rivet-gg-api-ee.tgz#vendor/rivet-gg-api-ee.tgz::hash=1f46df&locator=%40rivet-gg%2Fhub%40workspace%3Afrontend%2Fapps%2Fhub"
+  resolution: "@rivet-gg/api-ee@file:./vendor/rivet-gg-api-ee.tgz#./vendor/rivet-gg-api-ee.tgz::hash=1f46df&locator=%40rivet-gg%2Fhub%40workspace%3Afrontend%2Fapps%2Fhub"
   dependencies:
     form-data: "npm:^4.0.0"
     js-base64: "npm:^3.7.5"
@@ -3224,9 +3224,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@rivet-gg/api@file:vendor/rivet-gg-api.tgz::locator=%40rivet-gg%2Fhub%40workspace%3Afrontend%2Fapps%2Fhub":
+"@rivet-gg/api@file:./vendor/rivet-gg-api.tgz::locator=%40rivet-gg%2Fhub%40workspace%3Afrontend%2Fapps%2Fhub":
   version: 24.1.0
-  resolution: "@rivet-gg/api@file:vendor/rivet-gg-api.tgz#vendor/rivet-gg-api.tgz::hash=46b44b&locator=%40rivet-gg%2Fhub%40workspace%3Afrontend%2Fapps%2Fhub"
+  resolution: "@rivet-gg/api@file:./vendor/rivet-gg-api.tgz#./vendor/rivet-gg-api.tgz::hash=46b44b&locator=%40rivet-gg%2Fhub%40workspace%3Afrontend%2Fapps%2Fhub"
   dependencies:
     form-data: "npm:^4.0.0"
     js-base64: "npm:^3.7.5"
@@ -3351,8 +3351,8 @@ __metadata:
     "@rivet-gg/actor-client": "workspace:*"
     "@rivet-gg/actor-common": "workspace:^"
     "@rivet-gg/actor-protocol": "workspace:*"
-    "@rivet-gg/api": "file:vendor/rivet-gg-api.tgz"
-    "@rivet-gg/api-ee": "file:vendor/rivet-gg-api-ee.tgz"
+    "@rivet-gg/api": "file:./vendor/rivet-gg-api.tgz"
+    "@rivet-gg/api-ee": "file:./vendor/rivet-gg-api-ee.tgz"
     "@rivet-gg/components": "workspace:*"
     "@rivet-gg/icons": "workspace:*"
     "@sentry/react": "npm:^8.26.0"
