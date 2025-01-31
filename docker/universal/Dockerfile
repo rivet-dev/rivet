@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.2
+# syntax=docker/dockerfile:1.10.0
 
 # MARK: Builder
 # TODO(RVT-4168): Compile libfdb from scratch for ARM
@@ -42,6 +42,7 @@ COPY . .
 # included in the output because of cache mount)
 RUN \
 	--mount=type=secret,id=netrc,target=/root/.netrc,mode=0600 \
+    --mount=type=secret,id=fontawesome_package_token,env=FONTAWESOME_PACKAGE_TOKEN \
 	--mount=type=cache,target=/usr/local/cargo/git,id=univseral-cargo-git \
 	--mount=type=cache,target=/usr/local/cargo/registry,id=univseral-cargo-registry \
 	--mount=type=cache,target=/app/target,id=univseral-target \

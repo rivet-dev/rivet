@@ -53,5 +53,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	println!("cargo:rerun-if-changed={}", hub_path.display());
 
+	// Relevant package tokens
+	println!("cargo:rerun-if-env-changed=FONTAWESOME_PACKAGE_TOKEN");
+
 	Ok(())
 }

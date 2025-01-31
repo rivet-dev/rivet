@@ -4,6 +4,8 @@ services:
       context: ../..
       dockerfile: docker/universal/Dockerfile
       target: server-full
+      secrets:
+        - fontawesome_package_token
     platform: linux/amd64
     restart: unless-stopped
     command: /usr/bin/rivet-server start
@@ -50,6 +52,8 @@ services:
       context: ../..
       dockerfile: docker/universal/Dockerfile
       target: server-full
+      secrets:
+        - fontawesome_package_token
     platform: linux/amd64
     restart: unless-stopped
     command: sleep infinity
@@ -106,6 +110,8 @@ services:
       context: ../..
       dockerfile: docker/universal/Dockerfile
       target: client-full
+      secrets:
+        - fontawesome_package_token
     # TODO(RVT-4168): Compile libfdb from scratch for ARM
     platform: linux/amd64
     restart: unless-stopped
@@ -249,3 +255,7 @@ volumes:
   vector-server-data:
   foundationdb-data:
   foundationdb-storage-data:
+
+secrets:
+  fontawesome_package_token:
+    environment: FONTAWESOME_PACKAGE_TOKEN

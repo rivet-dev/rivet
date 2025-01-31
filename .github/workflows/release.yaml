@@ -234,6 +234,8 @@ jobs:
           file: docker/universal/Dockerfile
           target: server-full
           platforms: ${{ matrix.platform }}
+          secrets: |
+            fontawesome_package_token=${{ secrets.FONTAWESOME_PACKAGE_TOKEN }}
           secret-files: |
             netrc=${{ runner.temp }}/netrc
 
@@ -246,6 +248,8 @@ jobs:
           file: docker/universal/Dockerfile
           target: server-slim
           platforms: ${{ matrix.platform }}
+          secrets: |
+            fontawesome_package_token=${{ secrets.FONTAWESOME_PACKAGE_TOKEN }}
           secret-files: |
             netrc=${{ runner.temp }}/netrc
 
@@ -270,6 +274,8 @@ jobs:
           file: docker/universal/Dockerfile
           target: client-full
           platforms: ${{ matrix.platform }}
+          secrets: |
+            fontawesome_package_token=${{ secrets.FONTAWESOME_PACKAGE_TOKEN }}
           secret-files: |
             netrc=${{ runner.temp }}/netrc
 
@@ -282,6 +288,8 @@ jobs:
           file: docker/universal/Dockerfile
           target: isolate-v8-runner
           platforms: ${{ matrix.platform }}
+          secrets: |
+            fontawesome_package_token=${{ secrets.FONTAWESOME_PACKAGE_TOKEN }}
           secret-files: |
             netrc=${{ runner.temp }}/netrc
 
@@ -294,6 +302,8 @@ jobs:
           file: docker/universal/Dockerfile
           target: container-runner
           platforms: ${{ matrix.platform }}
+          secrets: |
+            fontawesome_package_token=${{ secrets.FONTAWESOME_PACKAGE_TOKEN }}
           secret-files: |
             netrc=${{ runner.temp }}/netrc
 
@@ -306,6 +316,8 @@ jobs:
           file: docker/universal/Dockerfile
           target: monolith
           platforms: ${{ matrix.platform }}
+          secrets: |
+            fontawesome_package_token=${{ secrets.FONTAWESOME_PACKAGE_TOKEN }}
           secret-files: |
             netrc=${{ runner.temp }}/netrc
 
