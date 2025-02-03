@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::{ctx::WorkflowCtx, db::DatabaseHandle, metrics, registry::RegistryHandle, utils};
 
-pub const TICK_INTERVAL: Duration = Duration::from_secs(10);
+pub const TICK_INTERVAL: Duration = Duration::from_secs(120);
 
 /// Used to spawn a new thread that indefinitely polls the database for new workflows. Only pulls workflows
 /// that are registered in its registry. After pulling, the workflows are ran and their state is written to
