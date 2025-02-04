@@ -1,5 +1,5 @@
 use chirp_workflow::prelude::*;
-use std::convert::TryInto;
+use std::{convert::TryInto, collections::HashMap};
 
 use crate::types;
 
@@ -43,7 +43,11 @@ impl TryInto<types::Build> for BuildRow {
 			compression: unwrap!(types::BuildCompression::from_repr(
 				self.compression.try_into()?
 			)),
-			tags: serde_json::from_str(self.tags.0.get())?,
+			// Filter out null values on tags
+			tags: serde_json::from_str::<HashMap<String, Option<String>>>(self.tags.0.get())?
+				.into_iter()
+				.filter_map(|(k, v)| v.map(|v| (k, v)))
+				.collect(),
 		})
 	}
 }
