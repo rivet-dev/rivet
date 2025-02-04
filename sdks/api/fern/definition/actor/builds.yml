@@ -91,7 +91,10 @@ types:
     properties:
       tags: unknown
       exclusive_tags:
-        docs: Removes the given tag keys from all other builds.
+        docs: >-
+          **Deprecated**
+
+          Removes the given tag keys from all other builds.
         type: optional<list<string>>
 
   PatchBuildTagsResponse:

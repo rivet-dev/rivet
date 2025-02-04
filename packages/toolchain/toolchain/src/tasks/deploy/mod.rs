@@ -1,6 +1,7 @@
 use anyhow::*;
 use rivet_api::{apis, models};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -211,10 +212,34 @@ async fn build_and_upload(
 		tags.extend(build_tags.clone());
 	}
 
-	let exclusive_tags = vec![
-		build::tags::VERSION.to_string(),
-		build::tags::CURRENT.to_string(),
-	];
+	// Find existing builds with current tag
+	let list_res = apis::actor_builds_api::actor_builds_list(
+		&ctx.openapi_config_cloud,
+		Some(&ctx.project.name_id),
+		Some(&env.slug),
+		Some(&serde_json::to_string(&json!({
+			build::tags::NAME: build_name,
+			build::tags::CURRENT: "true",
+		}))?),
+	)
+	.await?;
+
+	// Remove current tag if needed
+	for build in list_res.builds {
+		apis::actor_builds_api::actor_builds_patch_tags(
+			&ctx.openapi_config_cloud,
+			&build.id.to_string(),
+			models::ActorPatchBuildTagsRequest {
+				tags: Some(serde_json::to_value(&json!({
+					build::tags::CURRENT: null
+				}))?),
+				exclusive_tags: None,
+			},
+			Some(&ctx.project.name_id),
+			Some(&env.slug),
+		)
+		.await?;
+	}
 
 	// Tag build
 	let complete_res = apis::actor_builds_api::actor_builds_patch_tags(
@@ -222,7 +247,7 @@ async fn build_and_upload(
 		&build_id.to_string(),
 		models::ActorPatchBuildTagsRequest {
 			tags: Some(serde_json::to_value(&tags)?),
-			exclusive_tags: Some(exclusive_tags.clone()),
+			exclusive_tags: None,
 		},
 		Some(&ctx.project.name_id),
 		Some(&env.slug),

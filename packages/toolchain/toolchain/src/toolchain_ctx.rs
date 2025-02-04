@@ -1,7 +1,7 @@
 use anyhow::*;
 use pkg_version::{pkg_version_major, pkg_version_minor, pkg_version_patch};
 use rivet_api::{apis, models};
-use std::{env, sync::Arc};
+use std::sync::Arc;
 use tokio::sync::OnceCell;
 
 use crate::{meta, paths};
