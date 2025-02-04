@@ -31,7 +31,7 @@ export function ActorsList({
 		);
 	return (
 		<ScrollArea className="w-full">
-			<div className="grid grid-cols-[2rem_min-content_min-content_minmax(1.5rem,3fr)_minmax(min-content,1fr)_minmax(min-content,1fr)] items-center justify-center gap-x-4 w-full min-w-[450px]">
+			<div className="grid grid-cols-[2rem_min-content_min-content_minmax(min-content,1fr)_minmax(1.5rem,3fr)_minmax(min-content,1fr)_minmax(min-content,1fr)] items-center justify-center gap-x-4 w-full min-w-[450px]">
 				<div className="grid grid-cols-subgrid col-span-full sticky top-0 border-b z-[1] bg-card">
 					<div className="col-span-full border-b justify-between flex  p-1 py-2 gap-1">
 						<ActorsFiltersButton
@@ -44,6 +44,7 @@ export function ActorsList({
 						<div />
 						<div className="pb-3 pt-3">Region</div>
 						<div className="pb-3 pt-3">ID</div>
+						<div className="pb-3 pt-3">Name</div>
 						<div className="pb-3 pt-3">Tags</div>
 						<div className="pb-3 pt-3">Created</div>
 						<div className="pb-3 pt-3">Destroyed</div>

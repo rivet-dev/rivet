@@ -145,7 +145,10 @@ function ProjectBuildsRoute() {
 									{build.createdAt.toLocaleString()}
 								</TableCell>
 								<TableCell>
-									<ActorTags {...build} excludeBuiltIn />
+									<ActorTags
+										{...build}
+										excludeBuiltIn="builds"
+									/>
 								</TableCell>
 								<TableCell>
 									<ProjectBuildLatestButton
@@ -204,9 +207,11 @@ function ProjectBuildLatestButton({
 	projectNameId,
 	environmentNameId,
 }: ProjectBuildLatestButtonProps) {
-	const { mutateAsync } = usePatchActorBuildTagsMutation();
-	const { mutate, isPending } = useUpgradeAllActorsMutation();
-	const { data: latestBulds } = useSuspenseQuery(
+	const { mutateAsync: mutateBuildTagsAsync } =
+		usePatchActorBuildTagsMutation();
+	const { mutate: mutateUpgradeActors, isPending } =
+		useUpgradeAllActorsMutation();
+	const { data: latestBuilds } = useSuspenseQuery(
 		projectCurrentBuildsQueryOptions({ projectId, environmentId }),
 	);
 
@@ -217,19 +222,18 @@ function ProjectBuildLatestButton({
 				size="sm"
 				isLoading={isPending}
 				onClick={async () => {
-					await mutateAsync({
+					await mutateBuildTagsAsync({
 						projectNameId,
 						environmentNameId,
 						buildId: id,
 						tags: { current: "true" },
-						exclusiveTags: ["current"],
 					});
-					if (latestBulds.length > 0) {
-						mutate({
+					if (latestBuilds.length > 0) {
+						mutateUpgradeActors({
 							projectNameId,
 							environmentNameId,
 							buildTags: { current: "true" },
-							tags: { name: latestBulds[0].name },
+							tags: { name: latestBuilds[0].name },
 						});
 					}
 				}}

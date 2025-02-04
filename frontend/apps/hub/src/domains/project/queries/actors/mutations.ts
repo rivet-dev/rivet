@@ -45,7 +45,7 @@ export function usePatchActorBuildTagsMutation({
 	onSuccess,
 }: { onSuccess?: () => void } = {}) {
 	return useMutation({
-		mutationFn: ({
+		mutationFn: async ({
 			projectNameId,
 			environmentNameId,
 			buildId,
@@ -54,12 +54,51 @@ export function usePatchActorBuildTagsMutation({
 			projectNameId: string;
 			environmentNameId: string;
 			buildId: string;
-		} & Rivet.servers.PatchBuildTagsRequest) =>
-			rivetClient.actor.builds.patchTags(buildId, {
+		} & Rivet.servers.PatchBuildTagsRequest) => {
+			console.log("mutating", request.tags);
+
+			// TODO: Cache this
+			// Get original build
+			const ogBuild = await rivetClient.actor.builds.get(buildId, {
+				project: projectNameId,
+				environment: environmentNameId,
+			});
+
+			// If setting build to current, remove current tag from all other builds with the same name
+			if (
+				ogBuild.build.tags.name &&
+				(request.tags as Record<string, string> | undefined)
+					?.current === "true"
+			) {
+				const currentBuilds = await rivetClient.actor.builds.list({
+					project: projectNameId,
+					environment: environmentNameId,
+					tagsJson: JSON.stringify({
+						name: ogBuild.build.tags.name,
+						current: "true",
+					}),
+				});
+				console.log("updating builds", currentBuilds.builds);
+				for (const build of currentBuilds.builds) {
+					await rivetClient.actor.builds.patchTags(build.id, {
+						project: projectNameId,
+						environment: environmentNameId,
+						body: {
+							tags: {
+								current: null,
+							},
+						},
+					});
+				}
+			}
+
+			// Update tags
+			return await rivetClient.actor.builds.patchTags(buildId, {
 				project: projectNameId,
 				environment: environmentNameId,
 				body: request,
-			}),
+			});
+		},
 		onSuccess: async (_, { projectNameId, environmentNameId, buildId }) => {
 			await Promise.all([
 				queryClient.invalidateQueries(

@@ -12,6 +12,8 @@ import { ActorRegion } from "./actor-region";
 import { ActorStatusIndicator } from "./actor-status-indicator";
 import { ActorTags } from "./actor-tags";
 
+const BUILT_IN_TAGS = ["name"];
+
 interface ActorsListRowProps
 	extends Pick<
 		Rivet.actor.Actor,
@@ -71,6 +73,9 @@ export const ActorsListRow = memo(
 						/>
 					</SmallText>
 					<SmallText>{id.split("-")[0]}</SmallText>
+					<SmallText>
+						{(tags as Record<string, string>).name ?? "-"}
+					</SmallText>
 					<WithTooltip
 						trigger={
 							<div className="relative overflow-r-gradient">
@@ -78,6 +83,7 @@ export const ActorsListRow = memo(
 									className="flex-nowrap empty:block overflow-hidden"
 									truncate={false}
 									tags={tags}
+									excludeBuiltIn="builds"
 								/>
 							</div>
 						}

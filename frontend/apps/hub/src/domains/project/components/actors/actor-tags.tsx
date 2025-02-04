@@ -8,7 +8,10 @@ import {
 import { Icon, faTag } from "@rivet-gg/icons";
 import { type ReactNode, forwardRef } from "react";
 
-const BUILT_IN_TAGS = ["current", "rivet/latest", "enabled", "rivet/enabled"];
+const BUILT_IN_TAGS = {
+	actors: ["name"],
+	builds: ["name", "current"],
+};
 
 export const ActorTag = forwardRef<
 	HTMLSpanElement,
@@ -22,14 +25,14 @@ export const ActorTag = forwardRef<
 
 interface ActorTagsProps {
 	tags?: unknown;
-	excludeBuiltIn?: boolean;
+	excludeBuiltIn?: keyof typeof BUILT_IN_TAGS;
 	className?: string;
 	truncate?: boolean;
 }
 
 export function ActorTags({
 	tags = {},
-	excludeBuiltIn = false,
+	excludeBuiltIn = undefined,
 	truncate = true,
 	className,
 }: ActorTagsProps) {
@@ -44,7 +47,7 @@ export function ActorTags({
 				? Object.entries(tags)
 						.filter(([key]) =>
 							excludeBuiltIn
-								? !BUILT_IN_TAGS.includes(key)
+								? !BUILT_IN_TAGS[excludeBuiltIn].includes(key)
 								: true,
 						)
 						.sort(([a], [b]) => a.localeCompare(b))
