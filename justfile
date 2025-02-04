@@ -32,7 +32,7 @@ dev-up-nobuild CONTAINER:
 
 [group('dev')]
 dev-logs CONTAINER:
-	{{docker_compose}} logs -f {{CONTAINER}}
+	{{docker_compose}} logs -f -n 100 {{CONTAINER}}
 
 [group('dev')]
 dev-logs-client:
@@ -44,7 +44,7 @@ dev-logs-runner:
 
 [group('dev')]
 dev-logs-server:
-	{{docker_compose}} logs -f rivet-server
+	{{docker_compose}} logs -f -n 100 rivet-server
 
 [group('dev')]
 dev-exec CONTAINER:
