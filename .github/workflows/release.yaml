@@ -36,7 +36,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           lfs: 'true'
+
       - run: corepack enable
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -92,6 +94,18 @@ jobs:
       image: rust:1.82.0
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: 'true'
+
+      - run: corepack enable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "yarn"
+
+      - name: Install dependencies (TEMP)
+        run: yarn install && yarn build --filter @rivet-gg/hub
 
       - name: Build
         env:
@@ -214,6 +228,18 @@ jobs:
         uses: douglascamata/setup-docker-macos-action@v1-alpha
 
       - uses: actions/checkout@v4
+        with:
+          lfs: 'true'
+
+      - run: corepack enable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "yarn"
+
+      - name: Install dependencies (TEMP)
+        run: yarn install && yarn build --filter @rivet-gg/hub
 
       - name: Set outputs
         id: vars
@@ -327,6 +353,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: 'true'
 
       - uses: ./.github/actions/docker-setup
         with:
