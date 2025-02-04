@@ -34,6 +34,9 @@ RUN apt-get update -y && \
 # Disable interactive prompt
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
+# Pull via Git CLI to improve reliability in CI
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+
 WORKDIR /app
 
 COPY . .

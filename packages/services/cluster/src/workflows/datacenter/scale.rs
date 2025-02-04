@@ -157,15 +157,16 @@ impl Action {
 					.await?;
 				}
 				_ => {
-					ctx.v(2).workflow(crate::workflows::server::Input2 {
-						datacenter_id,
-						server_id,
-						pool_type,
-						tags: Vec::new(),
-					})
-					.tag("server_id", server_id)
-					.dispatch()
-					.await?;
+					ctx.v(2)
+						.workflow(crate::workflows::server::Input2 {
+							datacenter_id,
+							server_id,
+							pool_type,
+							tags: Vec::new(),
+						})
+						.tag("server_id", server_id)
+						.dispatch()
+						.await?;
 				}
 			},
 			Action::Drain { server_id } => {

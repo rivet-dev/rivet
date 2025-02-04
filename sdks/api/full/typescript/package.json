@@ -1,6 +1,6 @@
 {
   "name": "@rivet-gg/api-full",
-  "version": "25.1.0-rc.1",
+  "version": "25.1.0",
   "private": false,
   "repository": "https://github.com/rivet-gg/rivet/tree/main/sdks/typescript",
   "files": [

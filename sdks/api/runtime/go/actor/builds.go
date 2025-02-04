@@ -125,6 +125,7 @@ func (l *ListBuildsResponse) String() string {
 
 type PatchBuildTagsRequest struct {
 	Tags interface{} `json:"tags,omitempty"`
+	// **Deprecated**
 	// Removes the given tag keys from all other builds.
 	ExclusiveTags []string `json:"exclusive_tags,omitempty"`
 

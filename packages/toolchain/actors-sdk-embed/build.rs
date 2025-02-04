@@ -36,10 +36,10 @@ async fn main() -> Result<()> {
 		fs::remove_dir_all(&dist_path).context("fs::remove_dir_all")?;
 	}
 
-    // Build manager dependencies (required for building the manager itself)
+	// Build manager dependencies (required for building the manager itself)
 	let output = tokio::process::Command::new("yarn")
 		.arg("install")
-        .arg("--immutable")
+		.arg("--immutable")
 		.current_dir(&manager_path)
 		.output()
 		.await?;
@@ -50,7 +50,7 @@ async fn main() -> Result<()> {
 	let output = tokio::process::Command::new("yarn")
 		.arg("run")
 		.arg("build")
-        .arg("--filter=@rivet-gg/actor-manager")
+		.arg("--filter=@rivet-gg/actor-manager")
 		.current_dir(&project_root)
 		.output()
 		.await?;
@@ -59,7 +59,7 @@ async fn main() -> Result<()> {
 	ensure!(output.status.success(), "yarn build failed");
 
 	// Build manager using Rivet build script (not using tsup/turbo because this includes custom
-    // polyfill functionality)
+	// polyfill functionality)
 	build_backend_command_raw(CommandOpts {
 		task_path: "src/tasks/build/mod.ts",
 		input: json!({

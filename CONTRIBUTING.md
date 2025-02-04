@@ -56,3 +56,14 @@ Once installed, run `nix-shell` to build your development environment.
    - Once approved, it's up to you to merge your commit. If deploying the frontend, make sure to monitor the
      changes from Sentry before going offline.
    - Manually mark your issue as _Complete_ once finished.
+
+### Release
+
+```sh
+# Release latest
+just release-latest VERSION
+
+# Release no latest (including rc)
+just release-nolatest VERSION
+```
+

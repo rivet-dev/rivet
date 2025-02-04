@@ -10001,7 +10001,9 @@ components:
           type: array
           items:
             type: string
-          description: Removes the given tag keys from all other builds.
+          description: |-
+            **Deprecated**
+            Removes the given tag keys from all other builds.
       required:
         - tags
     ActorPatchBuildTagsResponse:

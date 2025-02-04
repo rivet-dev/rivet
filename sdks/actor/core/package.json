@@ -1,6 +1,6 @@
 {
 	"name": "@rivet-gg/actor-core",
-	"version": "25.1.0-rc.1",
+	"version": "25.1.0",
 	"files": ["dist", "src", "package.json"],
 	"type": "module",
 	"types": "dist/mod.d.ts",

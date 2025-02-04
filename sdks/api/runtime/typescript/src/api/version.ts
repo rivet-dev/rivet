@@ -3,4 +3,4 @@
  */
 
 /** The version of the API, sent as the X-API-Version header. */
-export type RivetVersion = "25.1.0-rc.1";
+export type RivetVersion = "25.1.0";

@@ -613,8 +613,8 @@ pub async fn upgrade_all(
 		count += list_res.server_ids.len();
 		cursor = list_res.server_ids.last().cloned();
 
-        // TODO: Add back once we figure out how to cleanly handle if a wf is already complete when
-        // upgrading
+		// TODO: Add back once we figure out how to cleanly handle if a wf is already complete when
+		// upgrading
 		// let subs = futures_util::stream::iter(list_res.server_ids.clone())
 		// 	.map(|server_id| {
 		// 		ctx.subscribe::<ds::workflows::server::UpgradeStarted>(("server_id", server_id))

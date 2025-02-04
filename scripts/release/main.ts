@@ -44,8 +44,9 @@ async function main() {
 			"mergeRelease",
 
 			// Batch steps
-			"setup",
-			"complete",
+			"setupLocal",  // Makes changes to repo & pushes it (we can't push commits from CI that can trigger Release Please & other CI actions)
+			"setupCi",  // Publishes packages (has access to NPM creds)
+			"completeCi",  // Tags binaries & Docker as latest (has access to Docker & S3 creds)
 		],
 		negatable: ["latest"],
 		string: ["version", "commit"],
@@ -85,40 +86,35 @@ async function main() {
 
 	assertEquals(opts.commit.length, 7, "must use 8 char short commit");
 
-	if (!args.noValidateGit) {
+	if (!args.noValidateGit && !args.setupCi) {
+		// HACK: Skip setupCi because for some reason there's changes in the setup step but only in GitHub Actions
 		await validateGit(opts);
 	}
 
-	if (args.updateVersion || args.setup) {
+	if (args.updateVersion || args.setupLocal) {
 		$.logStep("Updating Version", "");
 		await $.logGroup(async () => {
 			await updateVersion(opts);
 		});
 	}
 
-	if (args.generateFern || args.setup) {
+	if (args.generateFern || args.setupLocal) {
 		$.logStep("Generating Fern", "");
 		await $.logGroup(async () => {
 			await $`./scripts/fern/gen.sh`;
 		});
 	}
 
-	if (args.publishSdk || args.setup) {
-		$.logStep("Publishing SDKs", "");
-		await $.logGroup(async () => {
-			await publishSdk(opts);
-		});
-	}
-
-	if (args.gitCommit || args.setup) {
+	if (args.gitCommit || args.setupLocal) {
 		assert(!args.noValidateGit, "cannot commit without git validation");
 		$.logStep("Committing Changes", "");
 		await $.logGroup(async () => {
+			await $`git add .`;
 			await $`git commit --allow-empty -m ${`chore(release): update version to ${opts.version}`}`;
 		});
 	}
 
-	if (args.configureReleasePlease || args.setup) {
+	if (args.configureReleasePlease || args.setupLocal) {
 		assert(!args.noValidateGit, "cannot configure release please without git validation");
 		$.logStep("Configuring Release Please", "");
 		await $.logGroup(async () => {
@@ -126,32 +122,39 @@ async function main() {
 		});
 	}
 
-	if (args.gitPush || args.setup) {
+	if (args.gitPush || args.setupLocal) {
 		assert(!args.noValidateGit, "cannot push without git validation");
 		$.logStep("Pushing Commits", "");
 		await $.logGroup(async () => {
-			await $`git push`;
+			const branch = (await $`git rev-parse --abbrev-ref HEAD`.stdout("piped")).stdout.trim();
+			if (branch === "main") {
+				// Push on main
+				await $`git push`;
+			} else {
+				// Modify current branch
+				await $`gt submit --force --no-edit --publish`;
+			}
 		});
 	}
 
-	if (args.tagDocker || args.complete) {
+	if (args.publishSdk || args.setupCi) {
+		$.logStep("Publishing SDKs", "");
+		await $.logGroup(async () => {
+			await publishSdk(opts);
+		});
+	}
+
+	if (args.tagDocker || args.completeCi) {
 		$.logStep("Tagging Docker", "");
 		await $.logGroup(async () => {
 			await tagDocker(opts);
 		});
 	}
 
-	if (args.updateArtifacts || args.complete) {
+	if (args.updateArtifacts || args.completeCi) {
 		$.logStep("Updating Artifacts", "");
 		await $.logGroup(async () => {
 			await updateArtifacts(opts);
-		});
-	}
-
-	if (args.mergeRelease || args.complete) {
-		$.logStep("Merging Release", "");
-		await $.logGroup(async () => {
-			await $`gh pr merge release-please--branches--main --auto`;
 		});
 	}
 

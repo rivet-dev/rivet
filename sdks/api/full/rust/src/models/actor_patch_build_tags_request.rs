@@ -12,7 +12,7 @@
 pub struct ActorPatchBuildTagsRequest {
 	#[serde(rename = "tags", deserialize_with = "Option::deserialize")]
 	pub tags: Option<serde_json::Value>,
-	/// Removes the given tag keys from all other builds.
+	/// **Deprecated** Removes the given tag keys from all other builds.
 	#[serde(rename = "exclusive_tags", skip_serializing_if = "Option::is_none")]
 	pub exclusive_tags: Option<Vec<String>>,
 }

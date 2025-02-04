@@ -1,5 +1,5 @@
 use chirp_workflow::prelude::*;
-use std::{convert::TryInto, collections::HashMap};
+use std::{collections::HashMap, convert::TryInto};
 
 use crate::types;
 

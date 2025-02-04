@@ -37,15 +37,11 @@ jobs:
         with:
           lfs: 'true'
 
-      - run: corepack enable
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: "yarn"
 
-      - name: Install dependencies
-        run: yarn install
+      - run: corepack enable
 
       - name: Setup
         env:
@@ -60,14 +56,18 @@ jobs:
           curl -fsSL https://deno.land/x/install/install.sh | sh
           export PATH=$HOME/.deno/bin:$PATH
 
-          # Authenticate NPM
-          yarn config set 'npmRegistries["//registry.npmjs.org"].npmAuthToken' ${{ secrets.NPM_TOKEN }}
-          yarn config set 'npmScopes["@rivet-gg"].npmPublishRegistry' https://registry.npmjs.org/
+          # Authenticate with NPM
+          cat << EOF > ~/.yarnrc.yml
+          npmAuthToken: "${{ secrets.NPM_TOKEN }}"
+          EOF
+
+          # Install dependencies
+          yarn install --immutable
 
           if [ "${{ inputs.latest }}" = "true" ]; then
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --setup
+              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --setupCi
           else
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --setup
+              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --setupCi
           fi
 
 
@@ -94,18 +94,19 @@ jobs:
       image: rust:1.82.0
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: 'true'
 
-      - run: corepack enable
+      # Required for running in Docker
+      - name: Git LFS Pull
+        run: |
+          apt-get update
+          apt-get install git-lfs
+          git lfs pull
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: "yarn"
 
-      - name: Install dependencies (TEMP)
-        run: yarn install && yarn build --filter @rivet-gg/hub
+      - run: corepack enable
 
       - name: Build
         env:
@@ -124,6 +125,9 @@ jobs:
 
           # Expose token for pulling GH artifacts
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+          # Pull via Git CLI to improve reliability in CI
+          ENV CARGO_NET_GIT_FETCH_WITH_CLI: "true"
         run: |
           # Install required components for each platform
           apt-get update
@@ -228,18 +232,19 @@ jobs:
         uses: douglascamata/setup-docker-macos-action@v1-alpha
 
       - uses: actions/checkout@v4
-        with:
-          lfs: 'true'
 
-      - run: corepack enable
+      # Required for running in Docker
+      - name: Git LFS Pull
+        run: |
+          apt-get update
+          apt-get install git-lfs
+          git lfs pull
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: "yarn"
 
-      - name: Install dependencies (TEMP)
-        run: yarn install && yarn build --filter @rivet-gg/hub
+      - run: corepack enable
 
       - name: Set outputs
         id: vars
@@ -372,8 +377,8 @@ jobs:
           export PATH=$HOME/.deno/bin:$PATH
 
           if [ "${{ inputs.latest }}" = "true" ]; then
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --complete
+              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --completeCi
           else
-              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --complete
+              ./scripts/release/main.ts --version "${{ github.event.inputs.version }}" --no-latest --completeCi
           fi
 
