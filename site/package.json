@@ -7,7 +7,7 @@
 		"dev": "yarn run update-framer && next dev",
 		"lint": "next lint",
 		"format": "prettier --write .",
-		"create-article": "vite-node scripts/generateArticle.ts",
+		"create-article": "vite-node scripts/generateArticle.js",
 		"generate-favicon": "npx cli-real-favicon generate scripts/faviconConfig.json faviconData.json public/icons",
 		"update-framer": "unframer --outDir ./src/generated/framer"
 	},
