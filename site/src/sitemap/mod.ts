@@ -53,7 +53,7 @@ export const sitemap = [
 					// },
 					{
 						title: "Actor SDK",
-						href: "https://jsr.io/@rivet-gg/actor",
+						href: "https://www.npmjs.com/package/@rivet-gg/actor",
 						icon: faActorsBorderless,
 						external: true,
 					},
@@ -68,14 +68,8 @@ export const sitemap = [
 				title: "Client SDKs",
 				pages: [
 					{
-						title: "JavaScript",
-						href: "https://jsr.io/@rivet-gg/actor-client",
-						icon: "js",
-						external: true,
-					},
-					{
 						title: "TypeScript",
-						href: "https://jsr.io/@rivet-gg/actor-client",
+						href: "https://www.npmjs.com/package/@rivet-gg/actor-client",
 						icon: faTs,
 						external: true,
 					},

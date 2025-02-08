@@ -55,7 +55,7 @@ export default class Counter extends Actor<State> {
 
 ## Related Packages
 
-- [Actor Client SDK (@rivet-gg/actor-client)](https://jsr.io/@rivet-gg/actor-client)
+- [Actor Client SDK (@rivet-gg/actor-client)](https://www.npmjs.com/package/@rivet-gg/actor-client)
 
 ## Community & Support
 

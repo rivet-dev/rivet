@@ -33,7 +33,7 @@ See [setup guide](https://rivet.gg/docs/setup) for how to access `/* CONNECTION 
 
 ## Related Packages
 
-- [Actor SDK (@rivet-gg/actor)](https://jsr.io/@rivet-gg/actor)
+- [Actor SDK (@rivet-gg/actor)](https://www.npmjs.com/package/@rivet-gg/actor)
 
 ## Community & Support
 
