@@ -12,6 +12,7 @@ export async function build(input: Input): Promise<Output> {
 	console.log(`Building to output file: ${outfile}`);
 
 	const result = await esbuild.build({
+		absWorkingDir: input.projectRoot,
 		entryPoints: [input.entryPoint],
 		outfile,
 		format: "esm",
