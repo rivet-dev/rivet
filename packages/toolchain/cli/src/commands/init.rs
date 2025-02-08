@@ -126,6 +126,10 @@ impl Opts {
 				fs::write(project_path.join(script_name), script_body).await?;
 				fs::write(project_path.join(test_name), test_body).await?;
 
+				// Yarn P'n'P doesn't play nice with TSX and older Node versions (https://github.com/privatenumber/tsx/issues/166)
+				let yarnrc_body = "nodeLinker: node-modules\n";
+				fs::write(project_path.join(".yarnrc.yml"), yarnrc_body).await?;
+
 				let readme_body = readme_body.replace("__NAME__", &prompt.project_name);
 				fs::write(project_path.join("README.md"), readme_body).await?;
 
