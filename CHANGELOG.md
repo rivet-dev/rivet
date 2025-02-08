@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/).
 
+## [25.1.1](https://github.com/rivet-gg/rivet/compare/v25.1.0...v25.1.1) (2025-02-08)
+
+
+### Bug Fixes
+
+* **cli:** auto-generate .yarnrc.yml to disable pnp for tsx support ([#2003](https://github.com/rivet-gg/rivet/issues/2003)) ([f7d5c49](https://github.com/rivet-gg/rivet/commit/f7d5c49fc39ad643d026f83bd7804f181a4992ff))
+* **cli:** set abs path for esbuild to support yarn pnp ([#2001](https://github.com/rivet-gg/rivet/issues/2001)) ([995d761](https://github.com/rivet-gg/rivet/commit/995d76113dc37024e9bd16f32a11d3c118ba850d))
+
+
+### Documentation
+
+* simplify setup guide and modernize SDK instructions ([#2004](https://github.com/rivet-gg/rivet/issues/2004)) ([a65ccef](https://github.com/rivet-gg/rivet/commit/a65ccef3f489035c6c1337ae9c4109299a691859))
+
+
+### Chores
+
+* migrate from jsr.io to npm ([#2005](https://github.com/rivet-gg/rivet/issues/2005)) ([0a6d677](https://github.com/rivet-gg/rivet/commit/0a6d67741e073bf64930b48de4381099a4c48abc))
+* release 25.1.1 ([8a9c8e3](https://github.com/rivet-gg/rivet/commit/8a9c8e331953b0371a52773a2e8497ad5cb370f5))
+* **release:** update version to 25.1.1 ([6561ef5](https://github.com/rivet-gg/rivet/commit/6561ef53729e551d383cc66c7c5748cab964c0b0))
+
 ## [25.1.0](https://github.com/rivet-gg/rivet/compare/v24.6.2...v25.1.0) (2025-02-04)
 
 
