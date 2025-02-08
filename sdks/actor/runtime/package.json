@@ -1,6 +1,6 @@
 {
 	"name": "@rivet-gg/actor",
-	"version": "25.1.0",
+	"version": "25.1.1",
 	"license": "Apache-2.0",
 	"files": ["dist", "src", "deno.json", "package.json"],
 	"type": "module",
