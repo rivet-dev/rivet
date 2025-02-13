@@ -73,7 +73,11 @@ export async function loadArticleImage(slug: string) {
 	try {
 		return await import(`@/posts/${slug}/image.png`);
 	} catch {
-		return await import(`@/posts/${slug}/image.jpg`);
+		try {
+			return await import(`@/posts/${slug}/image.jpg`);
+		} catch {
+			return await import(`@/posts/${slug}/image.gif`);
+		}
 	}
 }
 
