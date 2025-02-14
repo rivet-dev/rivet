@@ -14,7 +14,7 @@
 </h4>
 <p align="center">
   <!-- <a href="https://github.com/rivet-gg/rivet/graphs/commit-activity"><img alt="GitHub commit activity" src="https://img.shields.io/github/commit-activity/m/rivet-gg/rivet?style=flat-square"/></a> -->
-  <a href="https://github.com/orgs/rivet-gg/discussions"><img alt="GitHub Discussions" src="https://img.shields.io/github/discussions/rivet-gg/rivet?logo=github&logoColor=fff"></a>
+  <a href="https://github.com/rivet-gg/rivet/discussions"><img alt="GitHub Discussions" src="https://img.shields.io/github/discussions/rivet-gg/rivet?logo=github&logoColor=fff"></a>
   <a href="https://rivet.gg/discord"><img alt="Discord" src="https://img.shields.io/discord/822914074136018994?color=7389D8&label&logo=discord&logoColor=ffffff"/></a>
    <a href="https://twitter.com/rivet_gg"><img src="https://img.shields.io/twitter/follow/rivet_gg" alt="Rivet Twitter" /></a>
    <a href="https://bsky.app/profile/rivet.gg"><img src="https://img.shields.io/badge/Follow%20%40rivet.gg-4C1?color=0285FF&logo=bluesky&logoColor=ffffff" alt="Rivet Bluesky" /></a>
@@ -107,7 +107,7 @@ Visit the [Rivet Hub](https://hub.rivet.gg) to create & test your actors.
 -   Follow us on [**X**](https://x.com/rivet_gg)
 -   Follow us on [**Bluesky**](https://bsky.app/profile/rivet-gg.bsky.social)
 -   File bug reports in [**GitHub Issues**](https://github.com/rivet-gg/rivet/issues)
--   Post questions & ideas in [**GitHub Discussions**](https://github.com/orgs/rivet-gg/discussions)
+-   Post questions & ideas in [**GitHub Discussions**](https://github.com/rivet-gg/rivet/discussions)
 
 ## Technologies
 

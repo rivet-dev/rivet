@@ -171,7 +171,7 @@ impl Opts {
 		//println!("  Examples:         https://rivet.gg/docs/examples");
 		println!("  Discord:            https://rivet.gg/discord");
 		println!("  Issues:             https://github.com/rivet-gg/rivet/issues");
-		println!("  Questions & Ideas:  https://github.com/orgs/rivet-gg/discussions");
+		println!("  Questions & Ideas:  https://github.com/rivet-gg/rivet/discussions");
 		//println!("  Enterprise:       https://rivet.gg/sales");
 		println!();
 		println!("Next steps:");
