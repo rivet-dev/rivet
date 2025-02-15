@@ -33,3 +33,4 @@ site/src/generated/
 frontend/packages/icons/src/*
 !frontend/packages/icons/src/package.json
 
+.aider*

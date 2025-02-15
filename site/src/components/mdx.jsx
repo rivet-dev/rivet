@@ -443,3 +443,7 @@ export const Tags = ({ tags }) => {
 		</div>
 	);
 };
+
+export const Lead = ({ children }) => {
+	return <p class="text-lg font-semibold leading-7 mb-10">{children}</p>;
+};
