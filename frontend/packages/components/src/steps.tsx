@@ -1,6 +1,11 @@
-import { cn } from "@rivet-gg/components";
+import { cn } from "./lib/utils";
 
-export function Steps({ className, children }) {
+interface StepsProps {
+	className?: string;
+	children: React.ReactNode;
+}
+
+export function Steps({ className, children }: StepsProps) {
 	return (
 		<div
 			className={cn(
@@ -13,7 +18,13 @@ export function Steps({ className, children }) {
 	);
 }
 
-export function Step({ children, className, title }) {
+interface StepProps {
+	children: React.ReactNode;
+	className?: string;
+	title: string;
+}
+
+export function Step({ children, className, title }: StepProps) {
 	return (
 		<>
 			<h3

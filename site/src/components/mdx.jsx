@@ -27,11 +27,9 @@ import {
 	WithTooltip,
 } from "@rivet-gg/components";
 
-export * from "@/components/Tabs";
-export { Steps, Step } from "@/components/Steps";
 import { SchemaPreview as Schema } from "@/components/SchemaPreview";
-export * from "@/components/v2/Code";
 
+export * from "@rivet-gg/components/mdx";
 export const a = Link;
 
 export const Image = (props) => <NextImage {...props} />;
@@ -445,5 +443,8 @@ export const Tags = ({ tags }) => {
 };
 
 export const Lead = ({ children }) => {
-	return <p class="text-lg font-semibold leading-7 mb-10">{children}</p>;
+	return <p class="mb-10 text-lg font-semibold leading-7">{children}</p>;
 };
+export { Step, Steps } from "@rivet-gg/components";
+
+export const HideOnHub = ({ children }) => children;

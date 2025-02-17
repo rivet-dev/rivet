@@ -84,9 +84,12 @@ rivet deploy
 
 _If [self-hosting](/docs/self-hosting), this will prompt you to input a custom API address._
 
+
+<HideOnHub>
 Once complete, visit the [Rivet Hub](https://hub.rivet.gg) to see the build you uploaded:
 
 <Image src={imgBuilds} alt="Build list" />
+</HideOnHub>
 
 </Step>
 
@@ -98,9 +101,11 @@ Now that you've uploaded a build to Rivet, we need to create an actor. To test t
 npx tsx counter_test.ts
 ```
 
+<HideOnHub>
 Once complete, visit the [Rivet Hub](https://hub.rivet.gg) to see the actor you created:
 
 <Image src={imgActors} alt="Actor list" />
+</HideOnHub>
 
 </Step>
 
@@ -145,12 +150,15 @@ const newCount = await counter.increment(5); // Call the method `increment` on t
 console.log('New count', newCount);
 ```
 
+<HideOnHub>
 Visit the [Rivet Hub](https://hub.rivet.gg) to see the actor you created.
+</HideOnHub>
 
 </Step>
 
 </Steps>
 
+<HideOnHub>
 ## Next steps
 
 <CardGroup>
@@ -159,3 +167,4 @@ Visit the [Rivet Hub](https://hub.rivet.gg) to see the actor you created.
   <Card title='State' href='/docs/events' />
   <Card title='Examples' href='/examples' />
 </CardGroup>
+</HideOnHub>

@@ -24,6 +24,7 @@ export * from "./relative-time";
 export * from "./code";
 export * from "./ping";
 export * from "./docs-sheet";
+export * from "./steps";
 export * from "./ui/typography";
 export * from "./ui/skeleton";
 export * from "./ui/sheet";

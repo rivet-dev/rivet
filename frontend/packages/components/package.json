@@ -16,7 +16,8 @@
 		"./theme.css": "./public/theme.css",
 		"./tailwind-base": "./src/tailwind-base.ts",
 		"./layout": "./src/layout/index.ts",
-		"./code-mirror": "./src/code-mirror/index.tsx"
+		"./code-mirror": "./src/code-mirror/index.tsx",
+		"./mdx": "./src/mdx/index.tsx"
 	},
 	"types": "./dist/index.d.ts",
 	"dependencies": {

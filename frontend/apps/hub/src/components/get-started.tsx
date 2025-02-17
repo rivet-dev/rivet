@@ -5,8 +5,6 @@ import {
 	CardDescription,
 	CardHeader,
 	CardTitle,
-	CodeFrame,
-	CodeSource,
 	DocsSheet,
 	cn,
 } from "@rivet-gg/components";
@@ -22,13 +20,9 @@ import {
 } from "@rivet-gg/icons";
 import { motion, useMotionValueEvent, useScroll } from "framer-motion";
 import { type ComponentProps, useState } from "react";
-import setupCli, {
-	source as setupCliSource,
-} from "./onboarding/initial-setup-setup-rivet-cli.sh?shiki&lang=bash";
-import testCli, {
-	source as testCliSource,
-} from "./onboarding/initial-setup-test-rivet-cli.sh?shiki&lang=bash";
-import { InstallCli } from "./onboarding/install-cli";
+
+import * as components from "@rivet-gg/components/mdx";
+import Setup from "../../../../../site/src/content/docs/setup.mdx";
 
 const containerVariants = {
 	hidden: {
@@ -68,39 +62,17 @@ export function GetStarted() {
 					See more
 				</Button>
 			</motion.div>
-			<Card className="max-w-xl mx-auto w-full my-6 ">
-				<CardHeader>
-					<div className="flex justify-between items-center">
-						<CardTitle>Initial setup</CardTitle>
-					</div>
-					<CardDescription>
-						Start building your next project with Rivet. Follow
-						these steps to get started.
-					</CardDescription>
-				</CardHeader>
+			<Card className="max-w-2xl mx-auto w-full my-6 ">
 				<CardContent>
-					<div>
-						<h3 className="font-semibold">1. Install</h3>
-						<InstallCli />
-					</div>
-					<div>
-						<h3 className="font-semibold">2. Setup</h3>
-						<CodeFrame code={setupCliSource} language="bash">
-							<CodeSource>{setupCli}</CodeSource>
-						</CodeFrame>
-					</div>
-					<div>
-						<h3 className="font-semibold">3. Test</h3>
-						<CodeFrame code={testCliSource} language="bash">
-							<CodeSource>{testCli}</CodeSource>
-						</CodeFrame>
+					<div className="prose-invert prose mt-8">
+						<Setup components={components} />
 					</div>
 				</CardContent>
 			</Card>
 			{/* <Card
 				id="examples"
 				asChild
-				className="max-w-xl w-full mx-auto my-6"
+				className="max-w-2xl w-full mx-auto my-6"
 			>
 				<motion.div>
 					<CardHeader>
@@ -154,7 +126,7 @@ export function GetStarted() {
 			</Card> */}
 			<Card
 				asChild
-				className="max-w-xl w-full mx-auto my-6"
+				className="max-w-2xl w-full mx-auto my-6"
 				id="build-with-rivet"
 			>
 				<motion.div>

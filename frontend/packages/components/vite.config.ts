@@ -24,6 +24,7 @@ export default defineConfig({
 					__dirname,
 					"src/tailwind-base.ts",
 				),
+				mdx: path.resolve(__dirname, "src/mdx/index.tsx"),
 			},
 		},
 		rollupOptions: {

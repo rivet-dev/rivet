@@ -54,12 +54,14 @@
 		"zod": "^3.24"
 	},
 	"devDependencies": {
+		"@mdx-js/rollup": "^3.1.0",
 		"@sentry/vite-plugin": "^2.22.2",
 		"@shikijs/transformers": "^1.24.2",
 		"@tanstack/router-vite-plugin": "^1.58.12",
 		"@types/file-saver": "^2",
 		"@types/filesize": "^5.0.2",
 		"@types/lodash": "^4.17.14",
+		"@types/mdx": "^2.0.13",
 		"@types/mime": "^4.0.0",
 		"@types/node": "^20.11.30",
 		"@types/react": "^18.2.66",
@@ -67,6 +69,7 @@
 		"@vitejs/plugin-react": "^4.2.1",
 		"autoprefixer": "^10.4.19",
 		"postcss": "^8.4.38",
+		"remark-gfm": "^4.0.1",
 		"shiki": "^1.24.2",
 		"tailwindcss": "^3.4.1",
 		"turnstile-types": "^1.2.1",

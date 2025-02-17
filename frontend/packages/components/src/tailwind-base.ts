@@ -1,4 +1,5 @@
 import twContainerQueries from "@tailwindcss/container-queries";
+import twTypography from "@tailwindcss/typography";
 import twAnmiate from "tailwindcss-animate";
 import type { Config } from "tailwindcss/types/config";
 import * as styleHelpers from "./ui/helpers/index";
@@ -144,9 +145,32 @@ const config = {
 				"caret-blink": "caret-blink 1.25s ease-out infinite",
 				"bounce-x": "bounce-x 5s ease infinite",
 			},
+
+			typography: {
+				DEFAULT: {
+					css: {
+						"--tw-prose-invert-body": "hsl(var(--foreground))",
+						"--tw-prose-invert-headings": "hsl(var(--foreground))",
+						"--tw-prose-invert-lead": "hsl(var(--foreground))",
+						"--tw-prose-invert-links": "hsl(var(--foreground))",
+						"--tw-prose-invert-bold": "hsl(var(--foreground))",
+						"--tw-prose-invert-counters": "hsl(var(--foreground))",
+						"--tw-prose-invert-bullets": "hsl(var(--foreground))",
+						"--tw-prose-invert-hr": "hsl(var(--border))",
+						"--tw-prose-invert-quotes": "hsl(var(--foreground))",
+						"--tw-prose-invert-quote-borders": "hsl(var(--border))",
+						"--tw-prose-invert-captions": "hsl(var(--foreground))",
+						"--tw-prose-invert-code": "hsl(var(--foreground))",
+						"--tw-prose-invert-pre-code": "hsl(var(--foreground))",
+						"--tw-prose-invert-pre-bg": "rgb(0 0 0 / 50%)",
+						"--tw-prose-invert-th-borders": "hsl(var(--border))",
+						"--tw-prose-invert-td-borders": "hsl(var(--border))",
+					},
+				},
+			},
 		},
 	},
-	plugins: [twAnmiate, twContainerQueries],
+	plugins: [twAnmiate, twContainerQueries, twTypography()],
 } satisfies Config;
 
 export default config;

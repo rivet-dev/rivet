@@ -1,6 +1,4 @@
 // Used by the new design
-
-console.log(require("@rivet-gg/components/tailwind-base"));
 /** @type {import('tailwindcss').Config} */
 module.exports = {
 	content: [
