@@ -34,7 +34,7 @@ export function BuildSelect({
 								{build.tags.name || build.id.split("-")[0]}
 							</div>
 							<div className="text-xs">
-								Created: {build.createdAt.toLocaleDateString()}
+								Created: {build.createdAt.toLocaleString()}
 							</div>
 						</div>
 					</div>
@@ -54,7 +54,7 @@ export function BuildSelect({
 				option.build.id.includes(search) ||
 				option.build.name.includes(search)
 			}
-			className="w-full"
+			className="w-full h-14"
 		/>
 	);
 }

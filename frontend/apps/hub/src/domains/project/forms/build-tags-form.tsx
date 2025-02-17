@@ -70,7 +70,9 @@ export const Tags = ({
 	return (
 		<>
 			{fields.length === 0 ? (
-				<Text mb="2">There's no tags added.</Text>
+				<Text mb="2" className="text-xs">
+					There's no tags added.
+				</Text>
 			) : null}
 			{fields.map((field, index) => (
 				<div
@@ -148,6 +150,7 @@ export const Tags = ({
 			<Button
 				className="justify-self-start"
 				variant="secondary"
+				size="sm"
 				type="button"
 				onClick={() => append({ value: "", key: "" })}
 			>
