@@ -319,10 +319,9 @@ export const actorBuildTagsQueryOptions = ({
 			);
 
 			return response.builds.flatMap((build) =>
-				Object.entries(build.tags).map(([key, value], index) => ({
+				Object.entries(build.tags).map(([key, value]) => ({
 					key,
 					value,
-					index: `${index}`,
 				})),
 			);
 		},
@@ -352,13 +351,11 @@ export const actorBuildTagsQueryOptions = ({
 				tags.get(key)?.add(value);
 			}
 
-			const allTags = [...tags.entries()].flatMap(
-				([key, values], keyIdx) =>
-					[...values.values()].map((value, valIdx) => ({
-						key,
-						value,
-						index: [keyIdx, valIdx].join(":"),
-					})),
+			const allTags = [...tags.entries()].flatMap(([key, values]) =>
+				[...values.values()].map((value) => ({
+					key,
+					value,
+				})),
 			);
 
 			return allTags;

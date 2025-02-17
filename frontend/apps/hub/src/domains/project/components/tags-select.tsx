@@ -22,7 +22,21 @@ export function TagsSelect({
 		actorBuildTagsQueryOptions({ projectId, environmentId }),
 	);
 
-	const tags = data.map((tag) => {
+	const valArray = Object.entries(value);
+
+	// upsert custom tags to the list of tags
+	const tags = [...data];
+	for (const [key, value] of valArray) {
+		const found = data.find(
+			(tag) => tag.key === key && tag.value === value,
+		);
+
+		if (!found) {
+			tags.push({ key, value });
+		}
+	}
+
+	const options = tags.map((tag) => {
 		return {
 			label: (
 				<ActorTag>
@@ -31,42 +45,57 @@ export function TagsSelect({
 					</span>
 				</ActorTag>
 			),
-			value: `${tag.index}`,
+			value: [tag.key, tag.value].join("="),
 			tag,
 		};
 	});
 
-	const valArray = Object.entries(value);
-
-	const val = valArray
-		.map(([key, value]) => {
-			const tag = data.find(
-				(tag) => tag.key === key && tag.value === value,
-			);
-			return tag ? `${tag.index}` : null;
-		})
-		.filter((tag) => tag !== null) as string[];
+	const val = valArray.map(([key, value]) => {
+		return [key, value].join("=");
+	});
 
 	const handleValueChange = (value: string[]) => {
-		const tags = data.filter((tag) => value.includes(tag.index));
-
 		onValueChange(
-			Object.fromEntries(tags.map((tag) => [tag.key, tag.value])),
+			Object.fromEntries(
+				value.map((v) => {
+					// its safe to split by "=" because the value is a tag
+					const [key, value] = v.split("=");
+					return [key.trim(), value.trim()];
+				}),
+			),
 		);
+	};
+
+	const handleCreateOption = (option: string) => {
+		const parts = option.split("=");
+		if (parts.length !== 2) return;
+
+		const [key, value] = parts.map((part) => part.trim());
+		if (!key || !value) return;
+
+		onValueChange(Object.fromEntries([...valArray, [key, value]]));
 	};
 
 	return (
 		<Combobox
 			multiple
 			placeholder="Filter by tags..."
-			options={tags}
+			allowCreate
+			onCreateOption={handleCreateOption}
+			options={options}
 			value={val}
 			onValueChange={handleValueChange}
 			showSelectedOptions={showSelectedOptions}
-			filter={(option, search) =>
-				option.tag.key.includes(search) ||
-				option.tag.value.includes(search)
-			}
+			filter={(option, search) => {
+				const tagKey = option.tag.key.toLowerCase();
+				const tagValue = option.tag.value.toLowerCase();
+
+				if (search.includes("=")) {
+					const [key, value] = search.split("=");
+					return tagKey.includes(key) && tagValue.includes(value);
+				}
+				return tagKey.includes(search) || tagValue.includes(search);
+			}}
 			className="w-full min-w-[20rem]"
 		/>
 	);
