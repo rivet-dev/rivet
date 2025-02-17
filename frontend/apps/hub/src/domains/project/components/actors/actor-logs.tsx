@@ -1,3 +1,4 @@
+import type { Rivet } from "@rivet-gg/api";
 import { VirtualScrollArea } from "@rivet-gg/components";
 import { useQueries } from "@tanstack/react-query";
 import type { Virtualizer } from "@tanstack/react-virtual";
@@ -5,6 +6,7 @@ import { memo, useCallback, useEffect, useRef } from "react";
 import { useResizeObserver } from "usehooks-ts";
 import { actorLogsQueryOptions } from "../../queries";
 import { useActorDetailsSettings } from "./actor-details-settings";
+import { getActorStatus } from "./actor-status-indicator";
 import { ActorConsoleMessage } from "./console/actor-console-message";
 
 export type LogsTypeFilter = "all" | "output" | "errors";
@@ -56,22 +58,10 @@ export function filterLogs({
 			new Date(a.timestamp).valueOf() - new Date(b.timestamp).valueOf(),
 	);
 
-	return [
-		...sorted,
-		...(sorted.length === 0
-			? ([
-					{
-						message:
-							"[SYSTEM]: No logs found. Logs are retained for 3 days.",
-						variant: "debug",
-						timestamp: "",
-					},
-				] as const)
-			: []),
-	];
+	return sorted;
 }
-
-interface ActorLogsProps {
+interface ActorLogsProps
+	extends Pick<Rivet.actor.Actor, "createdAt" | "startedAt" | "destroyedAt"> {
 	actorId: string;
 	projectNameId: string;
 	environmentNameId: string;
@@ -86,6 +76,10 @@ export const ActorLogs = memo(
 		environmentNameId,
 		typeFilter,
 		filter,
+
+		createdAt,
+		startedAt,
+		destroyedAt,
 	}: ActorLogsProps) => {
 		const [settings] = useActorDetailsSettings();
 		const follow = useRef(true);
@@ -193,6 +187,28 @@ export const ActorLogs = memo(
 				<div className="w-full flex-1 min-h-0">
 					<ActorConsoleMessage variant="warn">
 						Loading logs...
+					</ActorConsoleMessage>
+				</div>
+			);
+		}
+
+		const status = getActorStatus({ createdAt, startedAt, destroyedAt });
+
+		if (status === "starting" && combined.length === 0) {
+			return (
+				<div className="w-full flex-1 min-h-0">
+					<ActorConsoleMessage variant="debug">
+						[SYSTEM]: Actor is starting...
+					</ActorConsoleMessage>
+				</div>
+			);
+		}
+
+		if (combined.length === 0) {
+			return (
+				<div className="w-full flex-1 min-h-0">
+					<ActorConsoleMessage variant="debug">
+						[SYSTEM]: No logs found. Logs are retained for 3 days.
 					</ActorConsoleMessage>
 				</div>
 			);
