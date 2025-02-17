@@ -11,7 +11,12 @@ export function ActorObjectInspector(
 	props: ComponentProps<typeof ObjectInspector>,
 ) {
 	return (
-		<div className={cn("break-words break-all", props.className)}>
+		<div
+			className={cn(
+				"break-words break-all whitespace-pre-wrap",
+				props.className,
+			)}
+		>
 			<Inspector
 				{...props}
 				table={false}

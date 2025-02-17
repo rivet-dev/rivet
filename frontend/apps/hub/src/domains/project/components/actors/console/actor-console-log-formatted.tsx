@@ -16,7 +16,6 @@ export function ActorConsoleLogFormatted({ tokens }: FormattedCode) {
 							style={{
 								color: token.color,
 							}}
-							className="whitespace-pre"
 						>
 							{token.content}
 						</span>

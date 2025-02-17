@@ -1,5 +1,6 @@
 import { actorQueryOptions } from "@/domains/project/queries";
 import { queryClient } from "@/queries/global";
+import { CancelledError } from "@tanstack/react-query";
 import ActorWorker from "./actor-repl.worker?worker";
 import {
 	type State as ActorState,
@@ -116,6 +117,13 @@ export class ActorWorkerContainer {
 			if (e instanceof DOMException && e.name === "AbortError") {
 				return null;
 			}
+
+			if (e instanceof CancelledError) {
+				this.#worker?.terminate();
+				this.#worker = undefined;
+				return null;
+			}
+
 			this.#worker?.terminate();
 			this.#worker = undefined;
 			this.#state.status = { type: "unsupported", error: e };

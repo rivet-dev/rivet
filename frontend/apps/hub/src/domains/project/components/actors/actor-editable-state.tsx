@@ -6,7 +6,11 @@ import {
 	LiveBadge,
 	WithTooltip,
 } from "@rivet-gg/components";
-import { type CodeMirrorRef, JsonCode } from "@rivet-gg/components/code-mirror";
+import {
+	type CodeMirrorRef,
+	EditorView,
+	JsonCode,
+} from "@rivet-gg/components/code-mirror";
 import { Icon, faBooks, faRotateLeft, faSave } from "@rivet-gg/icons";
 import { AnimatePresence, motion } from "framer-motion";
 import { useMemo, useRef, useState } from "react";
@@ -117,6 +121,7 @@ export function ActorEditableState({ state }: ActorEditableStateProps) {
 				<JsonCode
 					ref={ref}
 					value={value || formatted}
+					extensions={[EditorView.lineWrapping]}
 					className="flex-1 flex w-full min-h-0 [&>div]:w-full"
 					onChange={(value) => {
 						setValue(value);

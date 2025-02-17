@@ -23,43 +23,46 @@ export function ActorConsoleInput() {
 						}}
 					/>
 				</ActorConsoleMessage>
-			</ScrollArea>
-			<div className="flex items-center  mt-1 pb-1">
-				<DocsSheet title="Console" path="docs/ui" showTooltip>
-					<Button
-						size="icon-xs"
-						variant="outline"
-						className="place-self-center ml-4 mr-3 "
-					>
-						<Icon icon={faBooks} />
-					</Button>
-				</DocsSheet>
-				<div className="flex flex-wrap gap-1">
-					{rpcs.map((rpc) => (
+				<div className="flex items-center mt-1 pb-1">
+					<DocsSheet title="Console" path="docs/ui" showTooltip>
 						<Button
+							size="icon-xs"
 							variant="outline"
-							size="xs"
-							key={rpc}
-							onClick={() => {
-								if (!ref.current?.view) {
-									return;
-								}
-								replaceCode(ref.current.view, `actor.${rpc}(`);
-							}}
-							className="rounded-full"
-							startIcon={
-								<span className="bg-secondary px-1 rounded-full">
-									RPC
-								</span>
-							}
+							className="place-self-start ml-4 mr-3 "
 						>
-							<span className="font-mono-console">
-								actor.{rpc}(...)
-							</span>
+							<Icon icon={faBooks} />
 						</Button>
-					))}
+					</DocsSheet>
+					<div className="flex flex-wrap gap-1">
+						{rpcs.map((rpc) => (
+							<Button
+								variant="outline"
+								size="xs"
+								key={rpc}
+								onClick={() => {
+									if (!ref.current?.view) {
+										return;
+									}
+									replaceCode(
+										ref.current.view,
+										`actor.${rpc}(`,
+									);
+								}}
+								className="rounded-full"
+								startIcon={
+									<span className="bg-secondary px-1 rounded-full">
+										RPC
+									</span>
+								}
+							>
+								<span className="font-mono-console">
+									actor.{rpc}(...)
+								</span>
+							</Button>
+						))}
+					</div>
 				</div>
-			</div>
+			</ScrollArea>
 		</div>
 	);
 }
