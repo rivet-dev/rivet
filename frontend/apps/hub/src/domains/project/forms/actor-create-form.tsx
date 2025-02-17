@@ -31,8 +31,8 @@ const jsonValid = z.custom<string>((value) => {
 });
 
 export const formSchema = z.object({
-	buildId: z.string().nonempty(),
-	regionId: z.string().nonempty(),
+	buildId: z.string().nonempty("Build is required"),
+	regionId: z.string(),
 	parameters: jsonValid.optional(),
 	tags: tagsFormSchema.shape.tags,
 });

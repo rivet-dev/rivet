@@ -23,20 +23,27 @@ export function RegionSelect({
 		}),
 	);
 
-	const regions = data.map((region) => {
-		return {
-			label: (
-				<ActorRegion
-					projectNameId={projectNameId}
-					environmentNameId={environmentNameId}
-					regionId={region.id}
-					showLabel
-				/>
-			),
-			value: region.id,
-			region,
-		};
-	});
+	const regions = [
+		{
+			label: "Automatic (Recommended)",
+			value: "",
+			region: { id: "", name: "Automatic (Recommended)" },
+		},
+		...data.map((region) => {
+			return {
+				label: (
+					<ActorRegion
+						projectNameId={projectNameId}
+						environmentNameId={environmentNameId}
+						regionId={region.id}
+						showLabel
+					/>
+				),
+				value: region.id,
+				region,
+			};
+		}),
+	];
 
 	return (
 		<Combobox
