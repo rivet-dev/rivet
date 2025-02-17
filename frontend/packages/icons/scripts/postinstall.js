@@ -3,7 +3,7 @@ const dedent = require("dedent");
 const { spawnSync } = require("node:child_process");
 const { join, resolve } = require("node:path");
 const manifest = require("./../manifest.json");
-const vite = require("vite");
+const esbuild = require("esbuild");
 
 let hasFaToken = !!process.env.FONTAWESOME_PACKAGE_TOKEN;
 
@@ -36,6 +36,7 @@ if (process.env.FONTAWESOME_PACKAGE_TOKEN) {
 	fs.writeFileSync(join(sourceDir, "./package.json"), JSON.stringify({
 		"name": "@rivet-gg/internal-icons",
 		"private": true,
+		"sideEffects": false,
 		"dependencies": {
 			"@awesome.me/kit-63db24046b": "^1.0.11",
 			"@fortawesome/pro-regular-svg-icons": "6.6.0",
@@ -72,14 +73,14 @@ const banner = dedent`
 
 `;
 
-let indexTsSource = dedent`
+let indexJsSource = dedent`
   ${banner}
-  export type IconProp = string | { prefix: string; iconName: string } | [string, string];
   import {FontAwesomeIcon } from "@fortawesome/react-fontawesome";
   import { createElement } from "react";
-  export function Icon(props: Omit<import("@fortawesome/react-fontawesome").FontAwesomeIconProps, "icon"> & {icon: IconProp}) { return createElement(FontAwesomeIcon, props as import("@fortawesome/react-fontawesome").FontAwesomeIconProps)}
-  export { default as iconPack } from "./icons-pack.gen";
+  export function Icon(props) { return createElement(FontAwesomeIcon, props)}
 `;
+
+
 
 for (const [pkg, { icons }] of Object.entries(manifest)) {
 	const isCustom = pkg.startsWith("@awesome.me/kit-");
@@ -87,115 +88,52 @@ for (const [pkg, { icons }] of Object.entries(manifest)) {
 
 	if (isCustom) {
 		if (hasFaToken) {
-			indexTsSource += `export * from "${pkg}";\n`;
+			indexJsSource += `export * from "${pkg}";\n`;
 		} else {
 			const iconNames = icons.map(({ icon }) => icon);
 			const exp = iconNames
 				.map((icon) => `definition as ${icon}`)
 				.join(", ");
-			indexTsSource += `export { ${exp} } from "@fortawesome/free-solid-svg-icons/faSquare";\n`;
+			indexJsSource += `export { ${exp} } from "@fortawesome/free-solid-svg-icons/faSquare";\n`;
 		}
 	} else {
 		for (const { icon, aliases } of icons) {
-			if (!indexTsSource.includes(`export { definition as ${icon} }`)) {
+			if (!indexJsSource.includes(`export { definition as ${icon} }`)) {
 				if (hasFaToken || !isPro) {
-					indexTsSource += `export { definition as ${icon} } from "${pkg}/${icon}";\n`;
+					indexJsSource += `export { definition as ${icon} } from "${pkg}/${icon}";\n`;
 				} else {
-					indexTsSource += `export { definition as ${icon} } from "@fortawesome/free-solid-svg-icons/faSquare";\n`;
+					indexJsSource += `export { definition as ${icon} } from "@fortawesome/free-solid-svg-icons/faSquare";\n`;
 				}
 			}
 			for (const alias of aliases) {
 				if (
 					alias === icon ||
-					indexTsSource.includes(`export { definition as ${icon} }`)
+					indexJsSource.includes(`export { definition as ${icon} }`)
 				) {
 					continue;
 				}
-				indexTsSource += `export { definition as ${alias} } from "${pkg}/${icon}";\n`;
+				indexJsSource += `export { definition as ${alias} } from "${pkg}/${icon}";\n`;
 			}
 		}
 	}
 }
+fs.writeFileSync(join(sourceDir, "index.gen.js"), `${indexJsSource}`);
+
+let indexTsSource = dedent`
+  ${indexJsSource}
+  export type IconProp = string | { prefix: string; iconName: string } | [string, string];
+`;
 fs.writeFileSync(join(sourceDir, "index.gen.ts"), `${indexTsSource}`);
 
-let iconsPackTsSource = `${banner}\n
-import {type IconPack} from "@fortawesome/fontawesome-common-types";\n`;
-
-for (const [pkg, { icons }] of Object.entries(manifest)) {
-	const isCustom = pkg.startsWith("@awesome.me/kit-");
-	const isPro = pkg.startsWith("@fortawesome/pro-");
-
-	if (isCustom) {
-		const iconNames = icons.map(({ icon }) => icon);
-		if (hasFaToken) {
-			iconsPackTsSource += `import {${iconNames.join(",")}} from "${pkg}";\n`;
-		} else {
-			const exp = iconNames
-				.map((icon) => `definition as ${icon}`)
-				.join(", ");
-			iconsPackTsSource += `import {${exp}} from "@fortawesome/free-solid-svg-icons/faSquare";\n`;
-		}
-	} else {
-		for (const { icon } of icons) {
-			if (iconsPackTsSource.includes(`import {definition as ${icon}}`)) {
-				continue;
-			}
-			if (hasFaToken || !isPro) {
-				iconsPackTsSource += `import {definition as ${icon}} from "${pkg}/${icon}";\n`;
-			} else {
-				iconsPackTsSource += `import {definition as ${icon}} from "@fortawesome/free-solid-svg-icons/faSquare";\n`;
-			}
-		}
-	}
-}
-
-iconsPackTsSource += "export default {\n";
-
-for (const [_pkg, { icons }] of Object.entries(manifest)) {
-	for (const { icon, aliases } of icons) {
-		if (!iconsPackTsSource.includes(`{...${icon},`)) {
-			iconsPackTsSource += `  ${icon}: {...${icon}, prefix: "fas"},\n`;
-		}
-		for (const alias of aliases) {
-			if (
-				alias === icon ||
-				iconsPackTsSource.includes(`${icon}: {...${icon}`)
-			) {
-				continue;
-			}
-			iconsPackTsSource += `  ${alias}: ${icon},\n`;
-		}
-	}
-}
-
-iconsPackTsSource += "} as IconPack;\n";
-
-fs.writeFileSync(join(__dirname, "../src/icons-pack.gen.ts"), `${iconsPackTsSource}`);
-
 async function build() {
-	await vite.build({
-		plugins: [],
-		root: resolve(sourceDir),
-		build: {
-			outDir: resolve(__dirname, "../dist"),
-			emptyOutDir: true,
-			minify: true,
-			lib: {
-				name: "icons",
-				entry: {
-					index: resolve(sourceDir, "index.gen.ts"),
-				},
-			},
-			rollupOptions: {
-				external: [
-					"@fortawesome/react-fontawesome",
-					/^@fortawesome\/free-solid-svg-icons/,
-					/^@fortawesome\/free-brands-svg-icons/,
-					"react",
-					"react-dom",
-				],
-			},
-		},
+	await esbuild.build({
+		entryPoints: [resolve(sourceDir, "index.gen.js")],
+		outfile: resolve(__dirname, "..", "dist", "index.js"),
+		external: ["react", "react-dom","@fortawesome/react-fontawesome", "@fortawesome/free-solid-svg-icons","@fortawesome/fontawesome-svg-core", "@fortawesome/free-brands-svg-icons"],
+		bundle: true,
+		platform: "browser",
+		format: "esm",
+		treeShaking: true,
 	});
 }
 

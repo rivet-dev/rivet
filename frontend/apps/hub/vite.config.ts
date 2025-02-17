@@ -2,11 +2,10 @@ import * as crypto from "node:crypto";
 import path from "node:path";
 import mdx from "@mdx-js/rollup";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
-import { transformerNotationFocus } from "@shikijs/transformers";
 import { TanStackRouterVite } from "@tanstack/router-vite-plugin";
 import react from "@vitejs/plugin-react";
-import * as shiki from "shiki";
-import { type Plugin, defineConfig } from "vite";
+import { visualizer } from "rollup-plugin-visualizer";
+import { defineConfig } from "vite";
 import vitePluginFaviconsInject from "vite-plugin-favicons-inject";
 // @ts-ignore
 import { config as mdxConfig } from "../../../site/src/mdx/mdx.mjs";
@@ -35,7 +34,6 @@ export default defineConfig({
 				theme_color: "#ff4f00",
 			},
 		),
-		shikiTransformer(),
 		process.env.SENTRY_AUTH_TOKEN
 			? sentryVitePlugin({
 					org: "rivet-gaming",
@@ -45,6 +43,7 @@ export default defineConfig({
 						GIT_BRANCH === "main" ? { name: GIT_SHA } : undefined,
 				})
 			: null,
+		process.env.DEBUG_BUNDLE ? visualizer() : null,
 	],
 	server: {
 		port: 5080,
@@ -70,54 +69,3 @@ export default defineConfig({
 		format: "es",
 	},
 });
-
-async function shikiTransformer(): Promise<Plugin> {
-	const cssVariableTheme = shiki.createCssVariablesTheme({
-		name: "css-variables",
-		variablePrefix: "--shiki-",
-		variableDefaults: {},
-		fontStyle: true,
-	});
-
-	let highlighter: shiki.Highlighter | undefined;
-
-	return {
-		name: "shiki",
-		async transform(code, id) {
-			if (id.includes("?shiki")) {
-				highlighter ??= await shiki.getSingletonHighlighter({
-					themes: [cssVariableTheme],
-					langs: [
-						"bash",
-						"batch",
-						"cpp",
-						"csharp",
-						"docker",
-						"gdscript",
-						"html",
-						"ini",
-						"js",
-						"json",
-						"json",
-						"powershell",
-						"ts",
-						"typescript",
-						"yaml",
-						"http",
-						"prisma",
-					],
-				});
-
-				const params = new URLSearchParams(id.split("?")[1]);
-				const output = highlighter.codeToHtml(code, {
-					lang: params.get("lang") ?? "bash",
-					theme: "css-variables",
-					transformers: [transformerNotationFocus()],
-				});
-				return `export default ${JSON.stringify(
-					output,
-				)};export const source = ${JSON.stringify(code)}`;
-			}
-		},
-	};
-}

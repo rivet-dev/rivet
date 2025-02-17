@@ -1,6 +1,30 @@
 import apiPages from "@/generated/apiPages.json" assert { type: "json" };
 import type { Sitemap } from "@/lib/sitemap";
-import { faActorsBorderless, faReact, faTs } from "@rivet-gg/icons";
+import {
+	faActorsBorderless,
+	faBlockQuestion,
+	faClipboardListCheck,
+	faCode,
+	faDatabase,
+	faExclamationTriangle,
+	faFingerprint,
+	faFloppyDisk,
+	faGlobe,
+	faHammer,
+	faHeartPulse,
+	faListUl,
+	faMaximize,
+	faNetworkWired,
+	faPlay,
+	faReact,
+	faSquareInfo,
+	faSquarePlus,
+	faSquareSliders,
+	faSync,
+	faTag,
+	faTowerBroadcast,
+	faTs,
+} from "@rivet-gg/icons";
 
 // Goals:
 // - Siebar links should advertise the product, collapse any advanced pages away
@@ -18,14 +42,14 @@ export const sitemap = [
 		title: "Documentation",
 		href: "/docs",
 		sidebar: [
-			{ title: "Overview", href: "/docs", icon: "square-info" },
+			{ title: "Overview", href: "/docs", icon: faSquareInfo },
 			{
 				title: "Getting Started",
 				pages: [
 					{
 						title: "Initial Setup",
 						href: "/docs/setup",
-						icon: "play",
+						icon: faPlay,
 					},
 					// {
 					//   title: 'Client SDKs',
@@ -124,32 +148,32 @@ export const sitemap = [
 					{
 						title: "Create & Manage Actors",
 						href: "/docs/manage",
-						icon: "square-plus",
+						icon: faSquarePlus,
 					},
 					{
 						title: "Remote Procedure Calls",
 						href: "/docs/rpc",
-						icon: "code",
+						icon: faCode,
 					},
 					{
 						title: "State",
 						href: "/docs/state",
-						icon: "floppy-disk",
+						icon: faFloppyDisk,
 					},
 					{
 						title: "Events",
 						href: "/docs/events",
-						icon: "tower-broadcast",
+						icon: faTowerBroadcast,
 					},
 					{
 						title: "Lifecycle",
 						href: "/docs/lifecycle",
-						icon: "sync",
+						icon: faSync,
 					},
 					{
 						title: "Edge Networking",
 						href: "/docs/edge",
-						icon: "globe",
+						icon: faGlobe,
 					},
 					{
 						title: "More",
@@ -158,42 +182,42 @@ export const sitemap = [
 							{
 								title: "Connections",
 								href: "/docs/connections",
-								icon: "network-wired",
+								icon: faNetworkWired,
 							},
 							{
 								title: "Authentication",
 								href: "/docs/authentication",
-								icon: "fingerprint",
+								icon: faFingerprint,
 							},
 							{
 								title: "Metadata",
 								href: "/docs/metadata",
-								icon: "tag",
+								icon: faTag,
 							},
 							{
 								title: "External SQL Databases",
 								href: "/docs/external-sql",
-								icon: "database",
+								icon: faDatabase,
 							},
 							{
 								title: "Logging",
 								href: "/docs/logging",
-								icon: "list-ul",
+								icon: faListUl,
 							},
 							{
 								title: "Builds",
 								href: "/docs/builds",
-								icon: "hammer",
+								icon: faHammer,
 							},
 							{
 								title: "Scaling & Concurrency",
 								href: "/docs/scaling",
-								icon: "maximize",
+								icon: faMaximize,
 							},
 							{
 								title: "Fault Tolerance",
 								href: "/docs/fault-tolerance",
-								icon: "heart-pulse",
+								icon: faHeartPulse,
 							},
 							// { title: 'DDoS & Botting Mitigation', href: '/docs', icon: 'shield-halved' },
 						],
@@ -208,17 +232,17 @@ export const sitemap = [
 					{
 						title: "Configuration",
 						href: "/docs/config",
-						icon: "square-sliders",
+						icon: faSquareSliders,
 					},
 					{
 						title: "Troubleshooting",
 						href: "/docs/troubleshooting",
-						icon: "clipboard-list-check",
+						icon: faClipboardListCheck,
 					},
 					{
 						title: "FAQ",
 						href: "/docs/faq",
-						icon: "block-question",
+						icon: faBlockQuestion,
 					},
 					// { title: 'CLI', href: '/docs/cli', icon: 'square-terminal' },
 					// { title: 'Hub', href: '/docs/hub', icon: 'browser' },
@@ -293,12 +317,12 @@ export const sitemap = [
 							{
 								title: "Available Regions",
 								href: "/docs/regions",
-								icon: "globe",
+								icon: faGlobe,
 							},
 							{
 								title: "Limitations",
 								href: "/docs/limitations",
-								icon: "exclamation-triangle",
+								icon: faExclamationTriangle,
 							},
 							{
 								title: "Advanced",

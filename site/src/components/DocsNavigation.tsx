@@ -2,12 +2,9 @@ import { ActiveLink } from "@/components/ActiveLink";
 import { CollapsibleSidebarItem } from "@/components/CollapsibleSidebarItem";
 import routes from "@/generated/routes.json";
 import type { SidebarItem } from "@/lib/sitemap";
-import { library } from "@fortawesome/fontawesome-svg-core";
 import { cn } from "@rivet-gg/components";
-import { Icon, faArrowUpRight, iconPack } from "@rivet-gg/icons";
+import { Icon, faArrowUpRight } from "@rivet-gg/icons";
 import type { PropsWithChildren, ReactNode } from "react";
-
-library.add(iconPack);
 
 interface TreeItemProps {
 	item: SidebarItem;

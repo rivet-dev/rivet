@@ -491,6 +491,7 @@
 			{ "icon": "faChartArea", "aliases": ["faAreaChart"] },
 			{ "icon": "faChartBar", "aliases": ["faBarChart"] },
 			{ "icon": "faChartColumn", "aliases": [] },
+			{ "icon": "faChartDiagram", "aliases": [] },
 			{ "icon": "faChartGantt", "aliases": [] },
 			{ "icon": "faChartLine", "aliases": ["faLineChart"] },
 			{ "icon": "faChartPie", "aliases": ["faPieChart"] },
@@ -654,6 +655,7 @@
 			{ "icon": "faCommentDollar", "aliases": [] },
 			{ "icon": "faCommentDots", "aliases": ["faCommenting"] },
 			{ "icon": "faCommentMedical", "aliases": [] },
+			{ "icon": "faCommentNodes", "aliases": [] },
 			{ "icon": "faCommentSlash", "aliases": [] },
 			{ "icon": "faCommentSms", "aliases": ["faSms"] },
 			{ "icon": "faCommenting", "aliases": ["faCommenting"] },
@@ -937,6 +939,8 @@
 			{ "icon": "faFileEdit", "aliases": ["faFileEdit"] },
 			{ "icon": "faFileExcel", "aliases": [] },
 			{ "icon": "faFileExport", "aliases": ["faArrowRightFromFile"] },
+			{ "icon": "faFileFragment", "aliases": [] },
+			{ "icon": "faFileHalfDashed", "aliases": [] },
 			{ "icon": "faFileImage", "aliases": [] },
 			{ "icon": "faFileImport", "aliases": ["faArrowRightToFile"] },
 			{ "icon": "faFileInvoice", "aliases": [] },
@@ -1221,6 +1225,8 @@
 			{ "icon": "faHelicopterSymbol", "aliases": [] },
 			{ "icon": "faHelmetSafety", "aliases": ["faHardHat", "faHatHard"] },
 			{ "icon": "faHelmetUn", "aliases": [] },
+			{ "icon": "faHexagonNodes", "aliases": [] },
+			{ "icon": "faHexagonNodesBolt", "aliases": [] },
 			{ "icon": "faHighlighter", "aliases": [] },
 			{ "icon": "faHiking", "aliases": ["faHiking"] },
 			{ "icon": "faHillAvalanche", "aliases": [] },
@@ -2142,6 +2148,7 @@
 				"icon": "faSquareArrowUpRight",
 				"aliases": ["faExternalLinkSquare"]
 			},
+			{ "icon": "faSquareBinary", "aliases": [] },
 			{ "icon": "faSquareCaretDown", "aliases": ["faCaretSquareDown"] },
 			{ "icon": "faSquareCaretLeft", "aliases": ["faCaretSquareLeft"] },
 			{ "icon": "faSquareCaretRight", "aliases": ["faCaretSquareRight"] },
@@ -2918,6 +2925,7 @@
 			{ "icon": "faCreativeCommonsShare", "aliases": [] },
 			{ "icon": "faCreativeCommonsZero", "aliases": [] },
 			{ "icon": "faCriticalRole", "aliases": [] },
+			{ "icon": "faCss", "aliases": [] },
 			{ "icon": "faCss3", "aliases": [] },
 			{ "icon": "faCss3Alt", "aliases": [] },
 			{ "icon": "faCuttlefish", "aliases": [] },
@@ -2969,6 +2977,7 @@
 			{ "icon": "faFedex", "aliases": [] },
 			{ "icon": "faFedora", "aliases": [] },
 			{ "icon": "faFigma", "aliases": [] },
+			{ "icon": "faFilesPinwheel", "aliases": [] },
 			{ "icon": "faFirefox", "aliases": [] },
 			{ "icon": "faFirefoxBrowser", "aliases": [] },
 			{ "icon": "faFirstOrder", "aliases": [] },
@@ -3224,6 +3233,7 @@
 			{ "icon": "faSpeakerDeck", "aliases": [] },
 			{ "icon": "faSpotify", "aliases": [] },
 			{ "icon": "faSquareBehance", "aliases": ["faBehanceSquare"] },
+			{ "icon": "faSquareBluesky", "aliases": [] },
 			{ "icon": "faSquareDribbble", "aliases": ["faDribbbleSquare"] },
 			{ "icon": "faSquareFacebook", "aliases": ["faFacebookSquare"] },
 			{ "icon": "faSquareFontAwesome", "aliases": [] },
@@ -9066,7 +9076,8 @@
 			{ "icon": "faGb", "aliases": [] },
 			{ "icon": "faProject", "aliases": [] },
 			{ "icon": "faRivet", "aliases": [] },
-			{ "icon": "faSelect", "aliases": [] }
+			{ "icon": "faSelect", "aliases": [] },
+			{ "icon": "faTs", "aliases": [] }
 		]
 	}
 }

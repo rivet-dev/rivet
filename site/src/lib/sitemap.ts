@@ -1,20 +1,25 @@
-import type { IconProp } from "@fortawesome/fontawesome-svg-core";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import type { Route } from "next";
 
-type Href = string | Route | URL;
-type Page = { title?: string; href: Href; external?: boolean; icon?: IconProp };
+type Href = string | Route;
+type Page = {
+	title?: string;
+	href: Href;
+	external?: boolean;
+	icon?: IconDefinition;
+};
 type PageWithTitle = {
 	title: string;
 	href: Href;
 	external?: boolean;
-	icon?: IconProp;
+	icon?: IconDefinition;
 };
 type PageWithPages = {
 	title: string;
 	pages: AnyPage[];
 	collapsible?: true;
 	initiallyOpen?: boolean;
-	icon?: IconProp;
+	icon?: IconDefinition;
 };
 export type AnyPage = Page | PageWithTitle | PageWithPages;
 
@@ -23,6 +28,7 @@ export type SidebarSection = {
 	title: string;
 	collapsible?: true;
 	pages: AnyPage[];
+	icon?: IconDefinition;
 };
 
 export type SidebarItem = SidebarTopLevelPage | SidebarSection;

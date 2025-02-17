@@ -22,28 +22,25 @@
 		"react": "^19",
 		"react-dom": "^19"
 	},
-	"main": "./dist/index.umd.js",
-	"module": "./dist/index.mjs",
-	"jsnext:main": "./dist/index.mjs",
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"jsnext:main": "./dist/index.js",
 	"types": "./src/index.gen.ts",
 	"exports": {
 		".": {
 			"types": "./src/index.gen.ts",
-			"import": "./dist/index.mjs",
-			"require": "./dist/index.umd.js",
-			"default": "./dist/index.umd.js"
+			"import": "./dist/index.js"
 		},
 		"./index": {
 			"types": "./src/index.gen.ts",
-			"import": "./dist/index.mjs",
-			"require": "./dist/index.umd.js",
-			"default": "./dist/index.umd.js"
+			"import": "./dist/index.js"
 		},
 		"./index.js": {
 			"types": "./src/index.gen.ts",
-			"import": "./dist/index.mjs",
-			"require": "./dist/index.umd.js",
-			"default": "./dist/index.umd.js"
+			"import": "./dist/index.js"
 		}
+	},
+	"devDependencies": {
+		"esbuild": "^0.25.0"
 	}
 }
