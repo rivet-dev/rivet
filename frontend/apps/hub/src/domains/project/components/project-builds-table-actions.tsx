@@ -3,7 +3,6 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
-	DropdownMenuLabel,
 	DropdownMenuTrigger,
 } from "@rivet-gg/components";
 import { Icon, faEllipsisH } from "@rivet-gg/icons";
@@ -26,7 +25,6 @@ export function ProjectBuildsTableActions({
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end">
-				<DropdownMenuLabel>Actions</DropdownMenuLabel>
 				<DropdownMenuItem
 					onSelect={() => {
 						navigate({

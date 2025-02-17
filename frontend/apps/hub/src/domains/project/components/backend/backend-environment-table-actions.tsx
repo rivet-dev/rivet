@@ -3,7 +3,6 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
-	DropdownMenuLabel,
 	DropdownMenuTrigger,
 } from "@rivet-gg/components";
 import { Icon, faEllipsisH } from "@rivet-gg/icons";
@@ -18,7 +17,6 @@ export function BackendEnvironmentTableActions() {
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end">
-				<DropdownMenuLabel>Actions</DropdownMenuLabel>
 				<DropdownMenuItem>Manage</DropdownMenuItem>
 			</DropdownMenuContent>
 		</DropdownMenu>
