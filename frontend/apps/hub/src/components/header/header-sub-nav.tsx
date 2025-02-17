@@ -73,9 +73,10 @@ export function HeaderSubNav() {
 			>
 				<div
 					className={cn({
-						"-mx-8 -mb-[9px] hidden md:flex min-h-10 items-center px-8 empty:hidden":
+						"-mx-8 -mb-[9px] hidden md:flex min-h-10 items-center px-8 empty:hidden relative":
 							!isMobile,
-						"flex flex-col text-left pl-4 gap-6 border-l": isMobile,
+						"flex flex-col text-left pl-0.5 gap-0.5 border-l":
+							isMobile,
 					})}
 				>
 					<Content />

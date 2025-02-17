@@ -13,10 +13,8 @@ import {
 	faHammer,
 	faKey,
 	faPuzzle,
-	faPuzzlePiece,
 } from "@rivet-gg/icons";
 import { useSuspenseQueries, useSuspenseQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { HeaderLink } from "../header-link";
 
 interface EnvironmentLinksProps {
@@ -52,81 +50,66 @@ export function HeaderEnvironmentLinks({
 
 	return (
 		<>
-			<HeaderLink icon={faActorsBorderless}>
-				<Link
-					to="/projects/$projectNameId/environments/$environmentNameId/actors"
-					params={{ projectNameId, environmentNameId }}
-				>
-					Actors
-				</Link>
+			<HeaderLink
+				icon={faActorsBorderless}
+				to="/projects/$projectNameId/environments/$environmentNameId/actors"
+				params={{ projectNameId, environmentNameId }}
+			>
+				Actors
 			</HeaderLink>
-			<HeaderLink icon={faHammer}>
-				<Link
-					to="/projects/$projectNameId/environments/$environmentNameId/builds"
-					params={{ projectNameId, environmentNameId }}
-				>
-					Builds
-				</Link>
+			<HeaderLink
+				icon={faHammer}
+				to="/projects/$projectNameId/environments/$environmentNameId/builds"
+				params={{ projectNameId, environmentNameId }}
+			>
+				Builds
 			</HeaderLink>
 			{backendModulesEnabled ? (
 				<GuardEnterprise>
-					<HeaderLink icon={faPuzzle}>
-						<Link
-							to="/projects/$projectNameId/environments/$environmentNameId/backend"
-							params={{ projectNameId, environmentNameId }}
-						>
-							Backend
-						</Link>
-					</HeaderLink>
-					<HeaderLink icon={faPuzzlePiece}>
-						<Link
-							to="/projects/$projectNameId/environments/$environmentNameId/modules"
-							params={{ projectNameId, environmentNameId }}
-						>
-							Modules
-						</Link>
+					<HeaderLink
+						icon={faPuzzle}
+						to="/projects/$projectNameId/environments/$environmentNameId/backend"
+						params={{ projectNameId, environmentNameId }}
+					>
+						Backend
 					</HeaderLink>
 				</GuardEnterprise>
 			) : null}
 			{legacyLobbiesEnabled ? (
 				<>
-					<HeaderLink icon={faCodeBranch}>
-						<Link
-							to="/projects/$projectNameId/environments/$environmentNameId/versions"
-							params={{ projectNameId, environmentNameId }}
-						>
-							Versions
-						</Link>
+					<HeaderLink
+						icon={faCodeBranch}
+						to="/projects/$projectNameId/environments/$environmentNameId/versions"
+						params={{ projectNameId, environmentNameId }}
+					>
+						Versions
 					</HeaderLink>
 					{data.namespace.config.matchmaker ? (
-						<HeaderLink icon={faChessKnight}>
-							<Link
-								to="/projects/$projectNameId/environments/$environmentNameId/lobbies"
-								params={{ projectNameId, environmentNameId }}
-							>
-								Lobbies
-							</Link>
+						<HeaderLink
+							icon={faChessKnight}
+							to="/projects/$projectNameId/environments/$environmentNameId/lobbies"
+							params={{ projectNameId, environmentNameId }}
+						>
+							Lobbies
 						</HeaderLink>
 					) : null}
 					{data.namespace.config.cdn ? (
-						<HeaderLink icon={faGlobe}>
-							<Link
-								to="/projects/$projectNameId/environments/$environmentNameId/cdn"
-								params={{ projectNameId, environmentNameId }}
-							>
-								CDN
-							</Link>
+						<HeaderLink
+							icon={faGlobe}
+							to="/projects/$projectNameId/environments/$environmentNameId/cdn"
+							params={{ projectNameId, environmentNameId }}
+						>
+							CDN
 						</HeaderLink>
 					) : null}
 				</>
 			) : null}
-			<HeaderLink icon={faKey}>
-				<Link
-					to="/projects/$projectNameId/environments/$environmentNameId/tokens"
-					params={{ projectNameId, environmentNameId }}
-				>
-					Tokens
-				</Link>
+			<HeaderLink
+				icon={faKey}
+				to="/projects/$projectNameId/environments/$environmentNameId/tokens"
+				params={{ projectNameId, environmentNameId }}
+			>
+				Tokens
 			</HeaderLink>
 		</>
 	);

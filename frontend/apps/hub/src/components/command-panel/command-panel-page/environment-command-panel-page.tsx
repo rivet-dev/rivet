@@ -237,18 +237,20 @@ export function EnvironmentCommandPanelPage({
 				</>
 			) : null}
 			<CommandGroup heading="Tokens">
-				<CommandItem
-					onSelect={() => {
-						navigate({
-							to: "/projects/$projectNameId/environments/$environmentNameId/tokens",
-							params: { projectNameId, environmentNameId },
-							search: { modal: "public-token" },
-						});
-					}}
-				>
-					<Icon icon={faKey} />
-					Generate a public token
-				</CommandItem>
+				{legacyLobbiesEnabled ? (
+					<CommandItem
+						onSelect={() => {
+							navigate({
+								to: "/projects/$projectNameId/environments/$environmentNameId/tokens",
+								params: { projectNameId, environmentNameId },
+								search: { modal: "public-token" },
+							});
+						}}
+					>
+						<Icon icon={faKey} />
+						Generate a public token
+					</CommandItem>
+				) : null}
 				<CommandItem
 					onSelect={() => {
 						navigate({
@@ -261,17 +263,19 @@ export function EnvironmentCommandPanelPage({
 					<Icon icon={faKey} />
 					Generate a service token
 				</CommandItem>
-				<CommandItem
-					onSelect={() => {
-						navigate({
-							to: "/projects/$projectNameId/environments/$environmentNameId/tokens",
-							params: { projectNameId, environmentNameId },
-						});
-					}}
-				>
-					<Icon icon={faKey} />
-					Generate a development token
-				</CommandItem>
+				{legacyLobbiesEnabled ? (
+					<CommandItem
+						onSelect={() => {
+							navigate({
+								to: "/projects/$projectNameId/environments/$environmentNameId/tokens",
+								params: { projectNameId, environmentNameId },
+							});
+						}}
+					>
+						<Icon icon={faKey} />
+						Generate a development token
+					</CommandItem>
+				) : null}
 			</CommandGroup>
 		</>
 	);

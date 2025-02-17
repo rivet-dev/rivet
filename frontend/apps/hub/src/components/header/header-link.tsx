@@ -1,20 +1,28 @@
-import { Button, type ButtonProps, cn } from "@rivet-gg/components";
+import { Button, cn } from "@rivet-gg/components";
 import { Icon, type IconProp } from "@rivet-gg/icons";
+import { Link, type LinkProps, useMatchRoute } from "@tanstack/react-router";
+import { motion } from "framer-motion";
 import { type ReactNode, useContext } from "react";
 import { MobileBreadcrumbsContext } from "../breadcrumbs/mobile-breadcrumbs";
 
-export interface HeaderLinkProps extends ButtonProps {
+export interface HeaderLinkProps extends LinkProps {
 	icon?: IconProp;
+	className?: string;
 	children?: ReactNode;
 }
 
 export function HeaderLink({
 	icon,
 	children,
-	startIcon,
+	className,
 	...props
 }: HeaderLinkProps) {
 	const isMobile = useContext(MobileBreadcrumbsContext);
+
+	const match = useMatchRoute();
+
+	// <Link/> does not support function children (bug?)
+	const isCurrent = match({ to: props.to, ...props });
 
 	return (
 		<Button
@@ -22,23 +30,32 @@ export function HeaderLink({
 			variant="ghost"
 			{...props}
 			className={cn(
+				"relative",
 				isMobile &&
-					"text-muted-foreground hover:text-foreground text-lg data-active:text-foreground justify-start p-0 h-auto",
+					"text-muted-foreground hover:text-foreground text-lg data-active:text-foreground justify-start h-auto",
 				!isMobile &&
-					"text-muted-foreground px-2 mx-2 aria-current-page:text-foreground after:content-[' '] aria-current-page:after:bg-primary relative mb-1 h-auto py-1 after:absolute after:inset-x-0 after:-bottom-2 after:z-[-1] after:h-[2px] after:rounded-sm",
-				props.className,
+					"text-muted-foreground px-2 mx-2 aria-current-page:text-foreground relative mb-1 h-auto py-1",
+				className,
 			)}
 			startIcon={
-				startIcon ||
-				(icon ? (
+				icon ? (
 					<Icon
 						className={cn("size-5", isMobile && "size-4")}
 						icon={icon}
 					/>
-				) : undefined)
+				) : undefined
 			}
 		>
-			{children}
+			<Link {...props}>
+				{children}
+				{isCurrent && !isMobile ? (
+					<motion.div
+						id="header-active-link"
+						layoutId="header-active-link"
+						className="absolute inset-x-0 -bottom-2 z-[1] h-[2px] rounded-sm bg-primary"
+					/>
+				) : null}
+			</Link>
 		</Button>
 	);
 }
