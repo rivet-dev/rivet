@@ -113,10 +113,7 @@ export const Route = createFileRoute(
 			throw notFound();
 		}
 
-		ls.set(
-			`rivet-lastteam-${auth.profile?.identity.identityId}`,
-			project.developer.groupId,
-		);
+		ls.recentTeam.set(auth, project.developer.groupId);
 
 		return { project };
 	},

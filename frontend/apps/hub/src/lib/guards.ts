@@ -76,9 +76,7 @@ export async function guardOssNewbie({
 		});
 	}
 
-	const lastTeam = ls.get(
-		`rivet-lastteam-${auth.profile?.identity.identityId}`,
-	);
+	const lastTeam = ls.recentTeam.get(auth);
 
 	if (lastTeam) {
 		throw redirect({

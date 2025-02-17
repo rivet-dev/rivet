@@ -12,7 +12,11 @@ export const ls = {
 	},
 	get: (key: LSKey) => {
 		const value = localStorage.getItem(key);
-		return value ? JSON.parse(value) : null;
+		try {
+			return value ? JSON.parse(value) : null;
+		} catch {
+			return null;
+		}
 	},
 	remove: (key: LSKey) => {
 		localStorage.removeItem(key);
@@ -22,16 +26,19 @@ export const ls = {
 	},
 
 	recentTeam: {
+		get: (auth: AuthContext) => {
+			return ls.get(
+				`rivet-lastteam-${auth.profile?.identity.identityId}`,
+			);
+		},
 		set: (auth: AuthContext, groupId: string) => {
-			localStorage.setItem(
+			ls.set(
 				`rivet-lastteam-${auth.profile?.identity.identityId}`,
 				groupId,
 			);
 		},
 		remove: (auth: AuthContext) => {
-			localStorage.removeItem(
-				`rivet-lastteam-${auth.profile?.identity.identityId}`,
-			);
+			ls.remove(`rivet-lastteam-${auth.profile?.identity.identityId}`);
 		},
 	},
 	actorsList: {
