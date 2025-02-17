@@ -24,6 +24,7 @@ async function watch(query: Query) {
 	}
 
 	while (true) {
+		await query.promise;
 		const watchOptsParseResult = watchResponseFragment.safeParse(
 			query.state.data,
 		);
