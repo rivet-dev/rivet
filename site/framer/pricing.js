@@ -5,7 +5,7 @@
 import { defaultEvents, NullState, useIconSelection, } from './chunk-3UM25V4K.js';
 import { className, className2, css, css2, fonts, fonts2, } from './chunk-RWWKO4MS.js';
 
-// https :https://framerusercontent.com/modules/EQc0WVLWSNg3MefFYC3W/iNJek3q0rL1MFbNQOpd3/kTXE7wUBN.js
+// https :https://framerusercontent.com/modules/EQc0WVLWSNg3MefFYC3W/aOrH1V5hz5RukP35MMZu/kTXE7wUBN.js
 import { jsx as _jsx4, jsxs as _jsxs3, } from 'react/jsx-runtime';
 import {
   addFonts as addFonts3,
@@ -26,7 +26,7 @@ import {
 import { LayoutGroup as LayoutGroup3, motion as motion3, MotionConfigContext as MotionConfigContext3, } from 'unframer';
 import * as React4 from 'react';
 
-// https :https://framerusercontent.com/modules/ulrfWVkeLiOUIa8T9Qrl/QR3nHFVUBnNCaHFeZi8X/A9K_XwDVs.js
+// https :https://framerusercontent.com/modules/ulrfWVkeLiOUIa8T9Qrl/fKZCIBtx5BUYh9PqkV5u/A9K_XwDVs.js
 import { jsx as _jsx2, jsxs as _jsxs, } from 'react/jsx-runtime';
 import {
   addFonts,
@@ -457,7 +457,7 @@ addPropertyControls(Icon, {
   ...defaultEvents,
 },);
 
-// https :https://framerusercontent.com/modules/ulrfWVkeLiOUIa8T9Qrl/QR3nHFVUBnNCaHFeZi8X/A9K_XwDVs.js
+// https :https://framerusercontent.com/modules/ulrfWVkeLiOUIa8T9Qrl/fKZCIBtx5BUYh9PqkV5u/A9K_XwDVs.js
 var FeatherFonts = getFonts(Icon,);
 var enabledGestures = {
   b2ZWblpCV: { hover: true, },
@@ -466,7 +466,7 @@ var enabledGestures = {
   oA_hhG2vS: { hover: true, },
 };
 var cycleOrder = ['b2ZWblpCV', 'Nqve_4w6Z', 'DipNaZiLt', 'oA_hhG2vS',];
-var serializationHash = 'framer-LQ2Gg';
+var serializationHash = 'framer-VonsF';
 var variantClassNames = {
   b2ZWblpCV: 'framer-v-1p1ic0k',
   DipNaZiLt: 'framer-v-1f4m9cf',
@@ -475,33 +475,20 @@ var variantClassNames = {
 };
 function addPropertyOverrides(overrides, ...variants) {
   const nextOverrides = {};
-  variants === null || variants === void 0
-    ? void 0
-    : variants.forEach((variant,) => variant && Object.assign(nextOverrides, overrides[variant],));
+  variants?.forEach((variant,) => variant && Object.assign(nextOverrides, overrides[variant],));
   return nextOverrides;
 }
 var transition1 = { bounce: 0.2, delay: 0, duration: 0.4, type: 'spring', };
 var Transition = ({ value, children, },) => {
   const config = React2.useContext(MotionConfigContext,);
-  const transition = value !== null && value !== void 0 ? value : config.transition;
+  const transition = value ?? config.transition;
   const contextValue = React2.useMemo(() => ({ ...config, transition, }), [JSON.stringify(transition,),],);
   return /* @__PURE__ */ _jsx2(MotionConfigContext.Provider, { value: contextValue, children, },);
 };
 var Variants = motion.create(React2.Fragment,);
 var humanReadableVariantMap = { 'Variant 1': 'b2ZWblpCV', 'Variant 2': 'Nqve_4w6Z', 'Variant 3': 'DipNaZiLt', 'Variant 4': 'oA_hhG2vS', };
 var getProps = ({ height, id, width, ...props },) => {
-  var _humanReadableVariantMap_props_variant, _ref;
-  return {
-    ...props,
-    variant:
-      (_ref =
-            (_humanReadableVariantMap_props_variant = humanReadableVariantMap[props.variant]) !== null &&
-              _humanReadableVariantMap_props_variant !== void 0
-              ? _humanReadableVariantMap_props_variant
-              : props.variant) !== null && _ref !== void 0
-        ? _ref
-        : 'b2ZWblpCV',
-  };
+  return { ...props, variant: humanReadableVariantMap[props.variant] ?? props.variant ?? 'b2ZWblpCV', };
 };
 var createLayoutDependency = (props, variants,) => {
   if (props.layoutDependency) return variants.join('-',) + props.layoutDependency;
@@ -522,6 +509,8 @@ var Component = /* @__PURE__ */ React2.forwardRef(function (props, ref,) {
     variants,
   } = useVariantState({ cycleOrder, defaultVariant: 'b2ZWblpCV', enabledGestures, variant, variantClassNames, },);
   const layoutDependency = createLayoutDependency(props, variants,);
+  const sharedStyleClassNames = [];
+  const scopingClassNames = cx(serializationHash, ...sharedStyleClassNames,);
   const ref1 = React2.useRef(null,);
   const isDisplayed = () => {
     if (gestureVariant === 'oA_hhG2vS-hover') return false;
@@ -549,10 +538,9 @@ var Component = /* @__PURE__ */ React2.forwardRef(function (props, ref,) {
     return false;
   };
   const defaultLayoutId = React2.useId();
-  const sharedStyleClassNames = [];
   const componentViewport = useComponentViewport();
   return /* @__PURE__ */ _jsx2(LayoutGroup, {
-    id: layoutId !== null && layoutId !== void 0 ? layoutId : defaultLayoutId,
+    id: layoutId ?? defaultLayoutId,
     children: /* @__PURE__ */ _jsx2(Variants, {
       animate: variants,
       initial: false,
@@ -561,12 +549,12 @@ var Component = /* @__PURE__ */ React2.forwardRef(function (props, ref,) {
         children: /* @__PURE__ */ _jsx2(motion.div, {
           ...restProps,
           ...gestureHandlers,
-          className: cx(serializationHash, ...sharedStyleClassNames, 'framer-1p1ic0k', className3, classNames,),
+          className: cx(scopingClassNames, 'framer-1p1ic0k', className3, classNames,),
           'data-border': true,
           'data-framer-name': 'Variant 1',
           layoutDependency,
           layoutId: 'b2ZWblpCV',
-          ref: ref !== null && ref !== void 0 ? ref : ref1,
+          ref: ref ?? ref1,
           style: {
             '--border-bottom-width': '1px',
             '--border-color': 'rgb(77, 77, 77)',
@@ -584,13 +572,15 @@ var Component = /* @__PURE__ */ React2.forwardRef(function (props, ref,) {
             ...style,
           },
           variants: {
-            'b2ZWblpCV-hover': { background: 'radial-gradient(150% 32% at 53.2% 4.8%, rgb(28, 28, 28) 0%, rgb(5, 5, 5) 100%)', },
+            'b2ZWblpCV-hover': { background: 'radial-gradient(150% 32% at 53.2% 4.8%, rgb(28, 28, 28) 0%, rgb(5, 5, 5) 100%)', rotate: 0, },
             'DipNaZiLt-hover': { background: 'radial-gradient(150% 25% at 53.2% 4.8%, rgb(28, 28, 28) 0%, rgb(5, 5, 5) 100%)', },
             'Nqve_4w6Z-hover': {
               background: 'radial-gradient(150% 28.999999999999996% at 53.2% 4.8%, rgb(28, 28, 28) 0%, rgb(5, 5, 5) 100%)',
             },
             'oA_hhG2vS-hover': { background: 'radial-gradient(150% 33% at 53.2% 4.8%, rgb(28, 28, 28) 0%, rgb(5, 5, 5) 100%)', },
+            DipNaZiLt: { rotate: 0, },
             Nqve_4w6Z: { rotate: TeEsS0mNM, },
+            oA_hhG2vS: { rotate: 0, },
           },
           ...addPropertyOverrides(
             {
@@ -891,7 +881,7 @@ var Component = /* @__PURE__ */ React2.forwardRef(function (props, ref,) {
                               '--framer-text-alignment': 'left',
                               '--framer-text-color': 'var(--extracted-r6o4lv, rgb(102, 102, 102))',
                             },
-                            children: '+Actor Usage',
+                            children: '+ Usage',
                           },),
                         },),
                         className: 'framer-l1ehww',
@@ -915,7 +905,7 @@ var Component = /* @__PURE__ */ React2.forwardRef(function (props, ref,) {
                               '--framer-text-alignment': 'left',
                               '--framer-text-color': 'var(--extracted-r6o4lv, rgb(102, 102, 102))',
                             },
-                            children: '+Actor Usage',
+                            children: '+ Usage',
                           },),
                         },),
                         className: 'framer-f8u6wb',
@@ -1106,7 +1096,7 @@ var Component = /* @__PURE__ */ React2.forwardRef(function (props, ref,) {
                                     children: [
                                       /* @__PURE__ */ _jsx2(motion.span, {
                                         style: { '--framer-font-size': '12px', },
-                                        children: '200,000 Free Actors ',
+                                        children: '$20 Free ',
                                       },),
                                       /* @__PURE__ */ _jsx2(motion.span, {
                                         style: { '--framer-text-color': 'var(--extracted-3sq8v0, rgb(102, 102, 102))', },
@@ -1146,7 +1136,7 @@ var Component = /* @__PURE__ */ React2.forwardRef(function (props, ref,) {
                                           children: [
                                             /* @__PURE__ */ _jsx2(motion.span, {
                                               style: { '--framer-font-size': '12px', },
-                                              children: '50,000 Free Actors ',
+                                              children: '$5.00 Free ',
                                             },),
                                             /* @__PURE__ */ _jsx2(motion.span, {
                                               style: { '--framer-text-color': 'var(--extracted-3sq8v0, rgb(102, 102, 102))', },
@@ -1888,6 +1878,7 @@ var Component = /* @__PURE__ */ React2.forwardRef(function (props, ref,) {
               },),
               /* @__PURE__ */ _jsx2(Link, {
                 href: 'https://hub.rivet.gg',
+                motionChild: true,
                 nodeId: 'KF3Ox7eNg',
                 openInNewTab: false,
                 ...addPropertyOverrides({ oA_hhG2vS: { href: '/sales', }, }, baseVariant, gestureVariant,),
@@ -1983,41 +1974,41 @@ var Component = /* @__PURE__ */ React2.forwardRef(function (props, ref,) {
 },);
 var css3 = [
   '@supports (aspect-ratio: 1) { body { --framer-aspect-ratio-supported: auto; } }',
-  '.framer-LQ2Gg.framer-1shghd8, .framer-LQ2Gg .framer-1shghd8 { display: block; }',
-  '.framer-LQ2Gg.framer-1p1ic0k { align-content: flex-start; align-items: flex-start; cursor: default; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 20px; height: 540px; justify-content: flex-start; min-width: 250px; overflow: hidden; padding: 30px 10px 30px 30px; position: relative; width: 250px; will-change: var(--framer-will-change-override, transform); }',
-  '.framer-LQ2Gg .framer-12hmgh9 { align-content: flex-start; align-items: flex-start; display: flex; flex: 1 0 0px; flex-direction: column; flex-wrap: nowrap; height: 1px; justify-content: space-between; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-LQ2Gg .framer-1bxjubs { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 23px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-LQ2Gg .framer-xjjc5h, .framer-LQ2Gg .framer-6s0ks6 { flex: none; height: auto; position: relative; white-space: pre-wrap; width: 100%; word-break: break-word; word-wrap: break-word; }',
-  '.framer-LQ2Gg .framer-dh9uh9 { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 6px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-LQ2Gg .framer-1px3qh0, .framer-LQ2Gg .framer-l1ehww, .framer-LQ2Gg .framer-f8u6wb, .framer-LQ2Gg .framer-1bx6ngs, .framer-LQ2Gg .framer-1as5o3i, .framer-LQ2Gg .framer-qm52ih, .framer-LQ2Gg .framer-pvnrfq, .framer-LQ2Gg .framer-1vpu043, .framer-LQ2Gg .framer-hqglil, .framer-LQ2Gg .framer-nfaqkg, .framer-LQ2Gg .framer-18yzvp3, .framer-LQ2Gg .framer-4gwjla, .framer-LQ2Gg .framer-teyu7v, .framer-LQ2Gg .framer-1055drt, .framer-LQ2Gg .framer-tpwg4v, .framer-LQ2Gg .framer-1b0pveu, .framer-LQ2Gg .framer-13j28qa { flex: none; height: auto; position: relative; white-space: pre; width: auto; }',
-  '.framer-LQ2Gg .framer-1iz4r8v { align-content: flex-end; align-items: flex-end; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 8px; height: min-content; justify-content: flex-start; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-LQ2Gg .framer-o06zrw { flex: none; height: 35px; position: relative; white-space: pre; width: auto; }',
-  '.framer-LQ2Gg .framer-sjplk6 { flex: none; height: 12px; position: relative; white-space: pre; width: auto; }',
-  '.framer-LQ2Gg .framer-8vhkpf { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 21px; height: min-content; justify-content: center; overflow: visible; padding: 11px 0px 11px 0px; position: relative; width: 100%; }',
-  '.framer-LQ2Gg .framer-15bmt5t { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: flex-start; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-LQ2Gg .framer-t4tdch, .framer-LQ2Gg .framer-1ffnc0e, .framer-LQ2Gg .framer-1f9prm3, .framer-LQ2Gg .framer-13a2jwf, .framer-LQ2Gg .framer-12s6214, .framer-LQ2Gg .framer-4r0ebh, .framer-LQ2Gg .framer-1oh2q5x, .framer-LQ2Gg .framer-1lx27ts, .framer-LQ2Gg .framer-z6xqtd, .framer-LQ2Gg .framer-1j2s007, .framer-LQ2Gg .framer-5l3o10, .framer-LQ2Gg .framer-1ax4luo, .framer-LQ2Gg .framer-v25534, .framer-LQ2Gg .framer-d3ku32 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: flex-start; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-LQ2Gg .framer-k5nwpo-container { flex: none; height: 15px; position: relative; width: 15px; }',
-  '.framer-LQ2Gg .framer-raum05, .framer-LQ2Gg .framer-1j3izuy, .framer-LQ2Gg .framer-1xq3r29, .framer-LQ2Gg .framer-1vb6x7e, .framer-LQ2Gg .framer-1crzj0e, .framer-LQ2Gg .framer-1x3ugah, .framer-LQ2Gg .framer-1a76g6y, .framer-LQ2Gg .framer-1irblgk, .framer-LQ2Gg .framer-jox7sp, .framer-LQ2Gg .framer-1t5myza, .framer-LQ2Gg .framer-5k5bb, .framer-LQ2Gg .framer-wdbu13, .framer-LQ2Gg .framer-1x6dcv0 { flex: none; height: 16px; position: relative; width: 16px; }',
-  '.framer-LQ2Gg .framer-1y81p1p { flex: 1 0 0px; height: auto; position: relative; white-space: pre-wrap; width: 1px; word-break: break-word; word-wrap: break-word; }',
-  '.framer-LQ2Gg .framer-qv3dny { align-content: center; align-items: center; cursor: pointer; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: 30px; justify-content: flex-start; overflow: visible; padding: 15px; position: relative; text-decoration: none; width: min-content; }',
-  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-LQ2Gg.framer-1p1ic0k, .framer-LQ2Gg .framer-1bxjubs, .framer-LQ2Gg .framer-dh9uh9, .framer-LQ2Gg .framer-1iz4r8v, .framer-LQ2Gg .framer-8vhkpf, .framer-LQ2Gg .framer-15bmt5t, .framer-LQ2Gg .framer-t4tdch, .framer-LQ2Gg .framer-1ffnc0e, .framer-LQ2Gg .framer-1f9prm3, .framer-LQ2Gg .framer-13a2jwf, .framer-LQ2Gg .framer-12s6214, .framer-LQ2Gg .framer-4r0ebh, .framer-LQ2Gg .framer-1oh2q5x, .framer-LQ2Gg .framer-1lx27ts, .framer-LQ2Gg .framer-z6xqtd, .framer-LQ2Gg .framer-1j2s007, .framer-LQ2Gg .framer-5l3o10, .framer-LQ2Gg .framer-1ax4luo, .framer-LQ2Gg .framer-v25534, .framer-LQ2Gg .framer-d3ku32, .framer-LQ2Gg .framer-qv3dny { gap: 0px; } .framer-LQ2Gg.framer-1p1ic0k > * { margin: 0px; margin-bottom: calc(20px / 2); margin-top: calc(20px / 2); } .framer-LQ2Gg.framer-1p1ic0k > :first-child, .framer-LQ2Gg .framer-1bxjubs > :first-child, .framer-LQ2Gg .framer-dh9uh9 > :first-child, .framer-LQ2Gg .framer-8vhkpf > :first-child, .framer-LQ2Gg .framer-15bmt5t > :first-child { margin-top: 0px; } .framer-LQ2Gg.framer-1p1ic0k > :last-child, .framer-LQ2Gg .framer-1bxjubs > :last-child, .framer-LQ2Gg .framer-dh9uh9 > :last-child, .framer-LQ2Gg .framer-8vhkpf > :last-child, .framer-LQ2Gg .framer-15bmt5t > :last-child { margin-bottom: 0px; } .framer-LQ2Gg .framer-1bxjubs > * { margin: 0px; margin-bottom: calc(23px / 2); margin-top: calc(23px / 2); } .framer-LQ2Gg .framer-dh9uh9 > * { margin: 0px; margin-bottom: calc(6px / 2); margin-top: calc(6px / 2); } .framer-LQ2Gg .framer-1iz4r8v > * { margin: 0px; margin-left: calc(8px / 2); margin-right: calc(8px / 2); } .framer-LQ2Gg .framer-1iz4r8v > :first-child, .framer-LQ2Gg .framer-t4tdch > :first-child, .framer-LQ2Gg .framer-1ffnc0e > :first-child, .framer-LQ2Gg .framer-1f9prm3 > :first-child, .framer-LQ2Gg .framer-13a2jwf > :first-child, .framer-LQ2Gg .framer-12s6214 > :first-child, .framer-LQ2Gg .framer-4r0ebh > :first-child, .framer-LQ2Gg .framer-1oh2q5x > :first-child, .framer-LQ2Gg .framer-1lx27ts > :first-child, .framer-LQ2Gg .framer-z6xqtd > :first-child, .framer-LQ2Gg .framer-1j2s007 > :first-child, .framer-LQ2Gg .framer-5l3o10 > :first-child, .framer-LQ2Gg .framer-1ax4luo > :first-child, .framer-LQ2Gg .framer-v25534 > :first-child, .framer-LQ2Gg .framer-d3ku32 > :first-child, .framer-LQ2Gg .framer-qv3dny > :first-child { margin-left: 0px; } .framer-LQ2Gg .framer-1iz4r8v > :last-child, .framer-LQ2Gg .framer-t4tdch > :last-child, .framer-LQ2Gg .framer-1ffnc0e > :last-child, .framer-LQ2Gg .framer-1f9prm3 > :last-child, .framer-LQ2Gg .framer-13a2jwf > :last-child, .framer-LQ2Gg .framer-12s6214 > :last-child, .framer-LQ2Gg .framer-4r0ebh > :last-child, .framer-LQ2Gg .framer-1oh2q5x > :last-child, .framer-LQ2Gg .framer-1lx27ts > :last-child, .framer-LQ2Gg .framer-z6xqtd > :last-child, .framer-LQ2Gg .framer-1j2s007 > :last-child, .framer-LQ2Gg .framer-5l3o10 > :last-child, .framer-LQ2Gg .framer-1ax4luo > :last-child, .framer-LQ2Gg .framer-v25534 > :last-child, .framer-LQ2Gg .framer-d3ku32 > :last-child, .framer-LQ2Gg .framer-qv3dny > :last-child { margin-right: 0px; } .framer-LQ2Gg .framer-8vhkpf > * { margin: 0px; margin-bottom: calc(21px / 2); margin-top: calc(21px / 2); } .framer-LQ2Gg .framer-15bmt5t > * { margin: 0px; margin-bottom: calc(10px / 2); margin-top: calc(10px / 2); } .framer-LQ2Gg .framer-t4tdch > *, .framer-LQ2Gg .framer-1ffnc0e > *, .framer-LQ2Gg .framer-1f9prm3 > *, .framer-LQ2Gg .framer-13a2jwf > *, .framer-LQ2Gg .framer-12s6214 > *, .framer-LQ2Gg .framer-4r0ebh > *, .framer-LQ2Gg .framer-1oh2q5x > *, .framer-LQ2Gg .framer-1lx27ts > *, .framer-LQ2Gg .framer-z6xqtd > *, .framer-LQ2Gg .framer-1j2s007 > *, .framer-LQ2Gg .framer-5l3o10 > *, .framer-LQ2Gg .framer-1ax4luo > *, .framer-LQ2Gg .framer-v25534 > *, .framer-LQ2Gg .framer-d3ku32 > *, .framer-LQ2Gg .framer-qv3dny > * { margin: 0px; margin-left: calc(10px / 2); margin-right: calc(10px / 2); } }',
-  '.framer-LQ2Gg.framer-v-15egof6 .framer-1bxjubs { gap: 33px; }',
-  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-LQ2Gg.framer-v-15egof6 .framer-1bxjubs { gap: 0px; } .framer-LQ2Gg.framer-v-15egof6 .framer-1bxjubs > * { margin: 0px; margin-bottom: calc(33px / 2); margin-top: calc(33px / 2); } .framer-LQ2Gg.framer-v-15egof6 .framer-1bxjubs > :first-child { margin-top: 0px; } .framer-LQ2Gg.framer-v-15egof6 .framer-1bxjubs > :last-child { margin-bottom: 0px; } }',
-  '.framer-LQ2Gg.framer-v-1f4m9cf .framer-t4tdch, .framer-LQ2Gg.framer-v-6vdm0u .framer-d3ku32 { order: 0; }',
-  '.framer-LQ2Gg.framer-v-1f4m9cf .framer-12s6214 { order: 7; }',
-  '.framer-LQ2Gg.framer-v-1f4m9cf .framer-4r0ebh, .framer-LQ2Gg.framer-v-6vdm0u .framer-1lx27ts { order: 6; }',
-  '.framer-LQ2Gg.framer-v-1f4m9cf .framer-1ax4luo, .framer-LQ2Gg.framer-v-6vdm0u .framer-1oh2q5x { order: 5; }',
-  '.framer-LQ2Gg.framer-v-1f4m9cf .framer-v25534, .framer-LQ2Gg.framer-v-6vdm0u .framer-12s6214 { order: 1; }',
-  '.framer-LQ2Gg.framer-v-6vdm0u .framer-1bxjubs { gap: 42px; }',
-  '.framer-LQ2Gg.framer-v-6vdm0u .framer-1f9prm3 { order: 4; }',
-  '.framer-LQ2Gg.framer-v-6vdm0u .framer-z6xqtd, .framer-LQ2Gg.framer-v-1f4m9cf.hover .framer-1ax4luo { order: 2; }',
-  '.framer-LQ2Gg.framer-v-6vdm0u .framer-1j2s007 { order: 10; }',
-  '.framer-LQ2Gg.framer-v-6vdm0u .framer-5l3o10 { order: 11; }',
-  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-LQ2Gg.framer-v-6vdm0u .framer-1bxjubs { gap: 0px; } .framer-LQ2Gg.framer-v-6vdm0u .framer-1bxjubs > * { margin: 0px; margin-bottom: calc(42px / 2); margin-top: calc(42px / 2); } .framer-LQ2Gg.framer-v-6vdm0u .framer-1bxjubs > :first-child { margin-top: 0px; } .framer-LQ2Gg.framer-v-6vdm0u .framer-1bxjubs > :last-child { margin-bottom: 0px; } }',
-  '.framer-LQ2Gg.framer-v-1f4m9cf.hover .framer-4r0ebh { order: 3; }',
-  '.framer-LQ2Gg[data-border="true"]::after, .framer-LQ2Gg [data-border="true"]::after { content: ""; border-width: var(--border-top-width, 0) var(--border-right-width, 0) var(--border-bottom-width, 0) var(--border-left-width, 0); border-color: var(--border-color, none); border-style: var(--border-style, none); width: 100%; height: 100%; position: absolute; box-sizing: border-box; left: 0; top: 0; border-radius: inherit; pointer-events: none; }',
+  '.framer-VonsF.framer-1shghd8, .framer-VonsF .framer-1shghd8 { display: block; }',
+  '.framer-VonsF.framer-1p1ic0k { align-content: flex-start; align-items: flex-start; cursor: default; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 20px; height: 540px; justify-content: flex-start; min-width: 250px; overflow: hidden; padding: 30px 10px 30px 30px; position: relative; width: 250px; will-change: var(--framer-will-change-override, transform); }',
+  '.framer-VonsF .framer-12hmgh9 { align-content: flex-start; align-items: flex-start; display: flex; flex: 1 0 0px; flex-direction: column; flex-wrap: nowrap; height: 1px; justify-content: space-between; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-VonsF .framer-1bxjubs { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 23px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-VonsF .framer-xjjc5h, .framer-VonsF .framer-6s0ks6 { flex: none; height: auto; position: relative; white-space: pre-wrap; width: 100%; word-break: break-word; word-wrap: break-word; }',
+  '.framer-VonsF .framer-dh9uh9 { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 6px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-VonsF .framer-1px3qh0, .framer-VonsF .framer-l1ehww, .framer-VonsF .framer-f8u6wb, .framer-VonsF .framer-1bx6ngs, .framer-VonsF .framer-1as5o3i, .framer-VonsF .framer-qm52ih, .framer-VonsF .framer-pvnrfq, .framer-VonsF .framer-1vpu043, .framer-VonsF .framer-hqglil, .framer-VonsF .framer-nfaqkg, .framer-VonsF .framer-18yzvp3, .framer-VonsF .framer-4gwjla, .framer-VonsF .framer-teyu7v, .framer-VonsF .framer-1055drt, .framer-VonsF .framer-tpwg4v, .framer-VonsF .framer-1b0pveu, .framer-VonsF .framer-13j28qa { flex: none; height: auto; position: relative; white-space: pre; width: auto; }',
+  '.framer-VonsF .framer-1iz4r8v { align-content: flex-end; align-items: flex-end; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 8px; height: min-content; justify-content: flex-start; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-VonsF .framer-o06zrw { flex: none; height: 35px; position: relative; white-space: pre; width: auto; }',
+  '.framer-VonsF .framer-sjplk6 { flex: none; height: 12px; position: relative; white-space: pre; width: auto; }',
+  '.framer-VonsF .framer-8vhkpf { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 21px; height: min-content; justify-content: center; overflow: visible; padding: 11px 0px 11px 0px; position: relative; width: 100%; }',
+  '.framer-VonsF .framer-15bmt5t { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: flex-start; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-VonsF .framer-t4tdch, .framer-VonsF .framer-1ffnc0e, .framer-VonsF .framer-1f9prm3, .framer-VonsF .framer-13a2jwf, .framer-VonsF .framer-12s6214, .framer-VonsF .framer-4r0ebh, .framer-VonsF .framer-1oh2q5x, .framer-VonsF .framer-1lx27ts, .framer-VonsF .framer-z6xqtd, .framer-VonsF .framer-1j2s007, .framer-VonsF .framer-5l3o10, .framer-VonsF .framer-1ax4luo, .framer-VonsF .framer-v25534, .framer-VonsF .framer-d3ku32 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: flex-start; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-VonsF .framer-k5nwpo-container { flex: none; height: 15px; position: relative; width: 15px; }',
+  '.framer-VonsF .framer-raum05, .framer-VonsF .framer-1j3izuy, .framer-VonsF .framer-1xq3r29, .framer-VonsF .framer-1vb6x7e, .framer-VonsF .framer-1crzj0e, .framer-VonsF .framer-1x3ugah, .framer-VonsF .framer-1a76g6y, .framer-VonsF .framer-1irblgk, .framer-VonsF .framer-jox7sp, .framer-VonsF .framer-1t5myza, .framer-VonsF .framer-5k5bb, .framer-VonsF .framer-wdbu13, .framer-VonsF .framer-1x6dcv0 { flex: none; height: 16px; position: relative; width: 16px; }',
+  '.framer-VonsF .framer-1y81p1p { flex: 1 0 0px; height: auto; position: relative; white-space: pre-wrap; width: 1px; word-break: break-word; word-wrap: break-word; }',
+  '.framer-VonsF .framer-qv3dny { align-content: center; align-items: center; cursor: pointer; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: 30px; justify-content: flex-start; overflow: visible; padding: 15px; position: relative; text-decoration: none; width: min-content; }',
+  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-VonsF.framer-1p1ic0k, .framer-VonsF .framer-1bxjubs, .framer-VonsF .framer-dh9uh9, .framer-VonsF .framer-1iz4r8v, .framer-VonsF .framer-8vhkpf, .framer-VonsF .framer-15bmt5t, .framer-VonsF .framer-t4tdch, .framer-VonsF .framer-1ffnc0e, .framer-VonsF .framer-1f9prm3, .framer-VonsF .framer-13a2jwf, .framer-VonsF .framer-12s6214, .framer-VonsF .framer-4r0ebh, .framer-VonsF .framer-1oh2q5x, .framer-VonsF .framer-1lx27ts, .framer-VonsF .framer-z6xqtd, .framer-VonsF .framer-1j2s007, .framer-VonsF .framer-5l3o10, .framer-VonsF .framer-1ax4luo, .framer-VonsF .framer-v25534, .framer-VonsF .framer-d3ku32, .framer-VonsF .framer-qv3dny { gap: 0px; } .framer-VonsF.framer-1p1ic0k > * { margin: 0px; margin-bottom: calc(20px / 2); margin-top: calc(20px / 2); } .framer-VonsF.framer-1p1ic0k > :first-child, .framer-VonsF .framer-1bxjubs > :first-child, .framer-VonsF .framer-dh9uh9 > :first-child, .framer-VonsF .framer-8vhkpf > :first-child, .framer-VonsF .framer-15bmt5t > :first-child { margin-top: 0px; } .framer-VonsF.framer-1p1ic0k > :last-child, .framer-VonsF .framer-1bxjubs > :last-child, .framer-VonsF .framer-dh9uh9 > :last-child, .framer-VonsF .framer-8vhkpf > :last-child, .framer-VonsF .framer-15bmt5t > :last-child { margin-bottom: 0px; } .framer-VonsF .framer-1bxjubs > * { margin: 0px; margin-bottom: calc(23px / 2); margin-top: calc(23px / 2); } .framer-VonsF .framer-dh9uh9 > * { margin: 0px; margin-bottom: calc(6px / 2); margin-top: calc(6px / 2); } .framer-VonsF .framer-1iz4r8v > * { margin: 0px; margin-left: calc(8px / 2); margin-right: calc(8px / 2); } .framer-VonsF .framer-1iz4r8v > :first-child, .framer-VonsF .framer-t4tdch > :first-child, .framer-VonsF .framer-1ffnc0e > :first-child, .framer-VonsF .framer-1f9prm3 > :first-child, .framer-VonsF .framer-13a2jwf > :first-child, .framer-VonsF .framer-12s6214 > :first-child, .framer-VonsF .framer-4r0ebh > :first-child, .framer-VonsF .framer-1oh2q5x > :first-child, .framer-VonsF .framer-1lx27ts > :first-child, .framer-VonsF .framer-z6xqtd > :first-child, .framer-VonsF .framer-1j2s007 > :first-child, .framer-VonsF .framer-5l3o10 > :first-child, .framer-VonsF .framer-1ax4luo > :first-child, .framer-VonsF .framer-v25534 > :first-child, .framer-VonsF .framer-d3ku32 > :first-child, .framer-VonsF .framer-qv3dny > :first-child { margin-left: 0px; } .framer-VonsF .framer-1iz4r8v > :last-child, .framer-VonsF .framer-t4tdch > :last-child, .framer-VonsF .framer-1ffnc0e > :last-child, .framer-VonsF .framer-1f9prm3 > :last-child, .framer-VonsF .framer-13a2jwf > :last-child, .framer-VonsF .framer-12s6214 > :last-child, .framer-VonsF .framer-4r0ebh > :last-child, .framer-VonsF .framer-1oh2q5x > :last-child, .framer-VonsF .framer-1lx27ts > :last-child, .framer-VonsF .framer-z6xqtd > :last-child, .framer-VonsF .framer-1j2s007 > :last-child, .framer-VonsF .framer-5l3o10 > :last-child, .framer-VonsF .framer-1ax4luo > :last-child, .framer-VonsF .framer-v25534 > :last-child, .framer-VonsF .framer-d3ku32 > :last-child, .framer-VonsF .framer-qv3dny > :last-child { margin-right: 0px; } .framer-VonsF .framer-8vhkpf > * { margin: 0px; margin-bottom: calc(21px / 2); margin-top: calc(21px / 2); } .framer-VonsF .framer-15bmt5t > * { margin: 0px; margin-bottom: calc(10px / 2); margin-top: calc(10px / 2); } .framer-VonsF .framer-t4tdch > *, .framer-VonsF .framer-1ffnc0e > *, .framer-VonsF .framer-1f9prm3 > *, .framer-VonsF .framer-13a2jwf > *, .framer-VonsF .framer-12s6214 > *, .framer-VonsF .framer-4r0ebh > *, .framer-VonsF .framer-1oh2q5x > *, .framer-VonsF .framer-1lx27ts > *, .framer-VonsF .framer-z6xqtd > *, .framer-VonsF .framer-1j2s007 > *, .framer-VonsF .framer-5l3o10 > *, .framer-VonsF .framer-1ax4luo > *, .framer-VonsF .framer-v25534 > *, .framer-VonsF .framer-d3ku32 > *, .framer-VonsF .framer-qv3dny > * { margin: 0px; margin-left: calc(10px / 2); margin-right: calc(10px / 2); } }',
+  '.framer-VonsF.framer-v-15egof6 .framer-1bxjubs { gap: 33px; }',
+  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-VonsF.framer-v-15egof6 .framer-1bxjubs { gap: 0px; } .framer-VonsF.framer-v-15egof6 .framer-1bxjubs > * { margin: 0px; margin-bottom: calc(33px / 2); margin-top: calc(33px / 2); } .framer-VonsF.framer-v-15egof6 .framer-1bxjubs > :first-child { margin-top: 0px; } .framer-VonsF.framer-v-15egof6 .framer-1bxjubs > :last-child { margin-bottom: 0px; } }',
+  '.framer-VonsF.framer-v-1f4m9cf .framer-t4tdch, .framer-VonsF.framer-v-6vdm0u .framer-d3ku32 { order: 0; }',
+  '.framer-VonsF.framer-v-1f4m9cf .framer-12s6214 { order: 7; }',
+  '.framer-VonsF.framer-v-1f4m9cf .framer-4r0ebh, .framer-VonsF.framer-v-6vdm0u .framer-1lx27ts { order: 6; }',
+  '.framer-VonsF.framer-v-1f4m9cf .framer-1ax4luo, .framer-VonsF.framer-v-6vdm0u .framer-1oh2q5x { order: 5; }',
+  '.framer-VonsF.framer-v-1f4m9cf .framer-v25534, .framer-VonsF.framer-v-6vdm0u .framer-12s6214 { order: 1; }',
+  '.framer-VonsF.framer-v-6vdm0u .framer-1bxjubs { gap: 42px; }',
+  '.framer-VonsF.framer-v-6vdm0u .framer-1f9prm3 { order: 4; }',
+  '.framer-VonsF.framer-v-6vdm0u .framer-z6xqtd, .framer-VonsF.framer-v-1f4m9cf.hover .framer-1ax4luo { order: 2; }',
+  '.framer-VonsF.framer-v-6vdm0u .framer-1j2s007 { order: 10; }',
+  '.framer-VonsF.framer-v-6vdm0u .framer-5l3o10 { order: 11; }',
+  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-VonsF.framer-v-6vdm0u .framer-1bxjubs { gap: 0px; } .framer-VonsF.framer-v-6vdm0u .framer-1bxjubs > * { margin: 0px; margin-bottom: calc(42px / 2); margin-top: calc(42px / 2); } .framer-VonsF.framer-v-6vdm0u .framer-1bxjubs > :first-child { margin-top: 0px; } .framer-VonsF.framer-v-6vdm0u .framer-1bxjubs > :last-child { margin-bottom: 0px; } }',
+  '.framer-VonsF.framer-v-1f4m9cf.hover .framer-4r0ebh { order: 3; }',
+  '.framer-VonsF[data-border="true"]::after, .framer-VonsF [data-border="true"]::after { content: ""; border-width: var(--border-top-width, 0) var(--border-right-width, 0) var(--border-bottom-width, 0) var(--border-left-width, 0); border-color: var(--border-color, none); border-style: var(--border-style, none); width: 100%; height: 100%; position: absolute; box-sizing: border-box; left: 0; top: 0; border-radius: inherit; pointer-events: none; }',
 ];
-var FramerA9K_XwDVs = withCSS(Component, css3, 'framer-LQ2Gg',);
+var FramerA9K_XwDVs = withCSS(Component, css3, 'framer-VonsF',);
 var stdin_default = FramerA9K_XwDVs;
 FramerA9K_XwDVs.displayName = 'price card';
 FramerA9K_XwDVs.defaultProps = { height: 540, width: 250, };
@@ -2960,41 +2951,28 @@ addFonts2(FramerX1cUiBHGB, [{
   },],
 },], { supportsExplicitInterCodegen: true, },);
 
-// https :https://framerusercontent.com/modules/EQc0WVLWSNg3MefFYC3W/iNJek3q0rL1MFbNQOpd3/kTXE7wUBN.js
+// https :https://framerusercontent.com/modules/EQc0WVLWSNg3MefFYC3W/aOrH1V5hz5RukP35MMZu/kTXE7wUBN.js
 var PriceCardFonts = getFonts2(stdin_default,);
 var MobilePlanFeaturesFonts = getFonts2(stdin_default2,);
 var cycleOrder3 = ['bAm7TcIeo', 'wm4kyLmlr', 'OlQQ934Vt',];
-var serializationHash3 = 'framer-s37KW';
+var serializationHash3 = 'framer-2snQS';
 var variantClassNames3 = { bAm7TcIeo: 'framer-v-7simsb', OlQQ934Vt: 'framer-v-14tpty9', wm4kyLmlr: 'framer-v-3f72b1', };
 function addPropertyOverrides3(overrides, ...variants) {
   const nextOverrides = {};
-  variants === null || variants === void 0
-    ? void 0
-    : variants.forEach((variant,) => variant && Object.assign(nextOverrides, overrides[variant],));
+  variants?.forEach((variant,) => variant && Object.assign(nextOverrides, overrides[variant],));
   return nextOverrides;
 }
 var transition13 = { bounce: 0.2, delay: 0, duration: 0.4, type: 'spring', };
 var Transition3 = ({ value, children, },) => {
   const config = React4.useContext(MotionConfigContext3,);
-  const transition = value !== null && value !== void 0 ? value : config.transition;
+  const transition = value ?? config.transition;
   const contextValue = React4.useMemo(() => ({ ...config, transition, }), [JSON.stringify(transition,),],);
   return /* @__PURE__ */ _jsx4(MotionConfigContext3.Provider, { value: contextValue, children, },);
 };
 var Variants3 = motion3.create(React4.Fragment,);
 var humanReadableVariantMap3 = { Desktop: 'bAm7TcIeo', Phone: 'OlQQ934Vt', Tablet: 'wm4kyLmlr', };
 var getProps3 = ({ height, id, width, ...props },) => {
-  var _humanReadableVariantMap_props_variant, _ref;
-  return {
-    ...props,
-    variant:
-      (_ref =
-            (_humanReadableVariantMap_props_variant = humanReadableVariantMap3[props.variant]) !== null &&
-              _humanReadableVariantMap_props_variant !== void 0
-              ? _humanReadableVariantMap_props_variant
-              : props.variant) !== null && _ref !== void 0
-        ? _ref
-        : 'bAm7TcIeo',
-  };
+  return { ...props, variant: humanReadableVariantMap3[props.variant] ?? props.variant ?? 'bAm7TcIeo', };
 };
 var createLayoutDependency3 = (props, variants,) => {
   if (props.layoutDependency) return variants.join('-',) + props.layoutDependency;
@@ -3019,6 +2997,8 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
   const onTap1mw9tg0 = activeVariantCallback(async (...args) => {
     setVariant('bAm7TcIeo',);
   },);
+  const sharedStyleClassNames = [className2, className,];
+  const scopingClassNames = cx3(serializationHash3, ...sharedStyleClassNames,);
   const ref1 = React4.useRef(null,);
   const isDisplayed = () => {
     if (baseVariant === 'OlQQ934Vt') return false;
@@ -3029,10 +3009,9 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
     return false;
   };
   const defaultLayoutId = React4.useId();
-  const sharedStyleClassNames = [className2, className,];
   const componentViewport = useComponentViewport3();
   return /* @__PURE__ */ _jsx4(LayoutGroup3, {
-    id: layoutId !== null && layoutId !== void 0 ? layoutId : defaultLayoutId,
+    id: layoutId ?? defaultLayoutId,
     children: /* @__PURE__ */ _jsx4(Variants3, {
       animate: variants,
       initial: false,
@@ -3041,11 +3020,11 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
         children: /* @__PURE__ */ _jsxs3(motion3.section, {
           ...restProps,
           ...gestureHandlers,
-          className: cx3(serializationHash3, ...sharedStyleClassNames, 'framer-7simsb', className3, classNames,),
+          className: cx3(scopingClassNames, 'framer-7simsb', className3, classNames,),
           'data-framer-name': 'Desktop',
           layoutDependency,
           layoutId: 'bAm7TcIeo',
-          ref: ref !== null && ref !== void 0 ? ref : ref1,
+          ref: ref ?? ref1,
           style: { backgroundColor: 'rgb(0, 0, 0)', ...style, },
           ...addPropertyOverrides3(
             { OlQQ934Vt: { 'data-framer-name': 'Phone', }, wm4kyLmlr: { 'data-framer-name': 'Tablet', }, },
@@ -3112,17 +3091,12 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
                 children: [
                   /* @__PURE__ */ _jsx4(ComponentViewportProvider2, {
                     height: 540,
-                    width: `min(max(${
-                      (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
-                    } - 80px, 1px), 1200px)`,
+                    width: `min(max(${componentViewport?.width || '100vw'} - 80px, 1px), 1200px)`,
                     ...addPropertyOverrides3(
                       {
                         wm4kyLmlr: {
-                          width: `max((min(max(${
-                            (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
-                          } - 80px, 1px), 1200px) - 6px) / 2, 50px)`,
-                          y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 144 +
-                            142 + 0 + 0 + 0,
+                          width: `max((min(max(${componentViewport?.width || '100vw'} - 80px, 1px), 1200px) - 6px) / 2, 50px)`,
+                          y: (componentViewport?.y || 0) + 144 + 142 + 0 + 0 + 0,
                         },
                       },
                       baseVariant,
@@ -3144,17 +3118,12 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
                   },),
                   /* @__PURE__ */ _jsx4(ComponentViewportProvider2, {
                     height: 540,
-                    width: `min(max(${
-                      (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
-                    } - 80px, 1px), 1200px)`,
+                    width: `min(max(${componentViewport?.width || '100vw'} - 80px, 1px), 1200px)`,
                     ...addPropertyOverrides3(
                       {
                         wm4kyLmlr: {
-                          width: `max((min(max(${
-                            (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
-                          } - 80px, 1px), 1200px) - 6px) / 2, 50px)`,
-                          y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 144 +
-                            142 + 0 + 0 + 0,
+                          width: `max((min(max(${componentViewport?.width || '100vw'} - 80px, 1px), 1200px) - 6px) / 2, 50px)`,
+                          y: (componentViewport?.y || 0) + 144 + 142 + 0 + 0 + 0,
                         },
                       },
                       baseVariant,
@@ -3176,17 +3145,12 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
                   },),
                   /* @__PURE__ */ _jsx4(ComponentViewportProvider2, {
                     height: 540,
-                    width: `min(max(${
-                      (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
-                    } - 80px, 1px), 1200px)`,
+                    width: `min(max(${componentViewport?.width || '100vw'} - 80px, 1px), 1200px)`,
                     ...addPropertyOverrides3(
                       {
                         wm4kyLmlr: {
-                          width: `max((min(max(${
-                            (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
-                          } - 80px, 1px), 1200px) - 6px) / 2, 50px)`,
-                          y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 144 +
-                            142 + 0 + 0 + 546,
+                          width: `max((min(max(${componentViewport?.width || '100vw'} - 80px, 1px), 1200px) - 6px) / 2, 50px)`,
+                          y: (componentViewport?.y || 0) + 144 + 142 + 0 + 0 + 546,
                         },
                       },
                       baseVariant,
@@ -3208,17 +3172,12 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
                   },),
                   /* @__PURE__ */ _jsx4(ComponentViewportProvider2, {
                     height: 540,
-                    width: `min(max(${
-                      (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
-                    } - 80px, 1px), 1200px)`,
+                    width: `min(max(${componentViewport?.width || '100vw'} - 80px, 1px), 1200px)`,
                     ...addPropertyOverrides3(
                       {
                         wm4kyLmlr: {
-                          width: `max((min(max(${
-                            (componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.width) || '100vw'
-                          } - 80px, 1px), 1200px) - 6px) / 2, 50px)`,
-                          y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 144 +
-                            142 + 0 + 0 + 546,
+                          width: `max((min(max(${componentViewport?.width || '100vw'} - 80px, 1px), 1200px) - 6px) / 2, 50px)`,
+                          y: (componentViewport?.y || 0) + 144 + 142 + 0 + 0 + 546,
                         },
                       },
                       baseVariant,
@@ -3750,7 +3709,7 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
                               '--framer-text-alignment': 'left',
                               '--framer-text-color': 'var(--extracted-r6o4lv, rgb(255, 255, 255))',
                             },
-                            children: 'Actors',
+                            children: 'Actor Runtime',
                           },),
                         },),
                         className: 'framer-1aye3mi',
@@ -3779,7 +3738,7 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
                                 '--framer-text-alignment': 'center',
                                 '--framer-text-color': 'var(--extracted-r6o4lv, rgb(136, 136, 136))',
                               },
-                              children: '50,000 Max',
+                              children: '$5.00 Runtime Credit',
                             },),
                           },),
                           className: 'framer-17rjj4b',
@@ -3804,7 +3763,7 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
                                 '--framer-text-alignment': 'center',
                                 '--framer-text-color': 'var(--extracted-r6o4lv, rgb(136, 136, 136))',
                               },
-                              children: '200,0000 Free',
+                              children: '$20.00 Runtime Credit',
                             },),
                           },),
                           className: 'framer-zwfi0m',
@@ -3829,7 +3788,7 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
                                 '--framer-text-alignment': 'center',
                                 '--framer-text-color': 'var(--extracted-r6o4lv, rgb(136, 136, 136))',
                               },
-                              children: '200,000 Free',
+                              children: '$20.00 Runtime Credit',
                             },),
                           },),
                           className: 'framer-1c5xlye',
@@ -4068,8 +4027,35 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
                           layoutDependency,
                           layoutId: 'AteyO99Hq',
                           style: { '--extracted-r6o4lv': 'rgb(136, 136, 136)', },
+                          variants: { wm4kyLmlr: { '--extracted-2gxw0f': 'rgb(136, 136, 136)', }, },
                           verticalAlignment: 'top',
                           withExternalLayout: true,
+                          ...addPropertyOverrides3(
+                            {
+                              wm4kyLmlr: {
+                                children: /* @__PURE__ */ _jsxs3(React4.Fragment, {
+                                  children: [
+                                    /* @__PURE__ */ _jsx4(motion3.p, {
+                                      style: {
+                                        '--framer-text-alignment': 'center',
+                                        '--framer-text-color': 'var(--extracted-r6o4lv, rgb(136, 136, 136))',
+                                      },
+                                      children: '1M + ',
+                                    },),
+                                    /* @__PURE__ */ _jsx4(motion3.p, {
+                                      style: {
+                                        '--framer-text-alignment': 'center',
+                                        '--framer-text-color': 'var(--extracted-2gxw0f, rgb(136, 136, 136))',
+                                      },
+                                      children: '$1.00/million',
+                                    },),
+                                  ],
+                                },),
+                              },
+                            },
+                            baseVariant,
+                            gestureVariant,
+                          ),
                         },),
                       },),
                       /* @__PURE__ */ _jsx4(motion3.div, {
@@ -4093,8 +4079,35 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
                           layoutDependency,
                           layoutId: 'OoinK7N7J',
                           style: { '--extracted-r6o4lv': 'rgb(136, 136, 136)', },
+                          variants: { wm4kyLmlr: { '--extracted-2gxw0f': 'rgb(136, 136, 136)', }, },
                           verticalAlignment: 'top',
                           withExternalLayout: true,
+                          ...addPropertyOverrides3(
+                            {
+                              wm4kyLmlr: {
+                                children: /* @__PURE__ */ _jsxs3(React4.Fragment, {
+                                  children: [
+                                    /* @__PURE__ */ _jsx4(motion3.p, {
+                                      style: {
+                                        '--framer-text-alignment': 'center',
+                                        '--framer-text-color': 'var(--extracted-r6o4lv, rgb(136, 136, 136))',
+                                      },
+                                      children: '1M + ',
+                                    },),
+                                    /* @__PURE__ */ _jsx4(motion3.p, {
+                                      style: {
+                                        '--framer-text-alignment': 'center',
+                                        '--framer-text-color': 'var(--extracted-2gxw0f, rgb(136, 136, 136))',
+                                      },
+                                      children: '$1.00/million',
+                                    },),
+                                  ],
+                                },),
+                              },
+                            },
+                            baseVariant,
+                            gestureVariant,
+                          ),
                         },),
                       },),
                       /* @__PURE__ */ _jsx4(motion3.div, {
@@ -4756,7 +4769,7 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
                               '--framer-text-alignment': 'center',
                               '--framer-text-color': 'var(--extracted-a0htzi, rgb(255, 255, 255))',
                             },
-                            children: 'Rivet Actors Billing Metrics',
+                            children: 'Rivet Actor Runtime Billing Metrics',
                           },),
                         },),
                         className: 'framer-1vvce17',
@@ -4788,66 +4801,22 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
                       },),
                     ],
                   },),
-                  /* @__PURE__ */ _jsxs3(motion3.div, {
+                  /* @__PURE__ */ _jsx4(motion3.div, {
                     className: 'framer-d35off',
                     layoutDependency,
                     layoutId: 'vkj9DaKFY',
-                    children: [
-                      /* @__PURE__ */ _jsxs3(motion3.div, {
-                        className: 'framer-179lrfp',
-                        layoutDependency,
-                        layoutId: 'AtdAI8SU9',
-                        children: [
-                          /* @__PURE__ */ _jsx4(motion3.div, {
-                            className: 'framer-i5tg5u',
-                            layoutDependency,
-                            layoutId: 'WZCJD2qjQ',
-                            style: { backgroundColor: 'rgba(204, 238, 255, 0)', },
-                            children: /* @__PURE__ */ _jsx4(RichText3, {
-                              __fromCanvasComponent: true,
-                              children: /* @__PURE__ */ _jsx4(React4.Fragment, {
-                                children: /* @__PURE__ */ _jsx4(motion3.p, {
-                                  style: {
-                                    '--font-selector': 'SW50ZXItQm9sZA==',
-                                    '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
-                                    '--framer-font-size': '18px',
-                                    '--framer-font-weight': '700',
-                                    '--framer-text-alignment': 'left',
-                                    '--framer-text-color': 'var(--extracted-r6o4lv, rgb(255, 255, 255))',
-                                  },
-                                  children: 'Paid Plans',
-                                },),
-                              },),
-                              className: 'framer-1uegmej',
-                              fonts: ['Inter-Bold',],
-                              layoutDependency,
-                              layoutId: 'RZcz9Wzzr',
-                              style: { '--extracted-r6o4lv': 'rgb(255, 255, 255)', },
-                              verticalAlignment: 'top',
-                              withExternalLayout: true,
-                            },),
-                          },),
-                          /* @__PURE__ */ _jsx4(motion3.div, {
-                            className: 'framer-1t509jr',
-                            layoutDependency,
-                            layoutId: 'YNxrIExCo',
-                            style: { backgroundColor: 'rgba(204, 238, 255, 0)', },
-                          },),
-                          /* @__PURE__ */ _jsx4(motion3.div, {
-                            className: 'framer-fe5q1x',
-                            'data-border': true,
-                            layoutDependency,
-                            layoutId: 'MHRtbgZhK',
-                            style: {
-                              '--border-bottom-width': '0px',
-                              '--border-color': 'var(--token-be2928fe-8496-42f6-9733-c37829997236, rgb(33, 33, 33))',
-                              '--border-left-width': '0px',
-                              '--border-right-width': '0px',
-                              '--border-style': 'solid',
-                              '--border-top-width': '2px',
-                              backgroundColor: 'rgba(111, 136, 161, 0)',
-                            },
-                            children: /* @__PURE__ */ _jsx4(RichText3, {
+                    children: /* @__PURE__ */ _jsxs3(motion3.div, {
+                      className: 'framer-179lrfp',
+                      layoutDependency,
+                      layoutId: 'AtdAI8SU9',
+                      children: [
+                        /* @__PURE__ */ _jsxs3(motion3.div, {
+                          className: 'framer-1y1tixs',
+                          layoutDependency,
+                          layoutId: 'SocyqxdWJ',
+                          style: { backgroundColor: 'rgba(111, 136, 161, 0)', },
+                          children: [
+                            /* @__PURE__ */ _jsx4(RichText3, {
                               __fromCanvasComponent: true,
                               children: /* @__PURE__ */ _jsx4(React4.Fragment, {
                                 children: /* @__PURE__ */ _jsx4(motion3.p, {
@@ -4859,13 +4828,13 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
                                     '--framer-text-alignment': 'left',
                                     '--framer-text-color': 'var(--extracted-r6o4lv, rgb(255, 255, 255))',
                                   },
-                                  children: 'Actors',
+                                  children: 'Runtime',
                                 },),
                               },),
-                              className: 'framer-118b4eh',
+                              className: 'framer-xkmou',
                               fonts: ['GF;Inter-700',],
                               layoutDependency,
-                              layoutId: 'YKuo5yqfp',
+                              layoutId: 'gkQpukKKE',
                               style: {
                                 '--extracted-r6o4lv': 'rgb(255, 255, 255)',
                                 '--framer-link-text-color': 'rgb(0, 153, 255)',
@@ -4875,241 +4844,92 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
                               verticalAlignment: 'center',
                               withExternalLayout: true,
                             },),
-                          },),
-                          /* @__PURE__ */ _jsxs3(motion3.div, {
-                            className: 'framer-1hfus6l',
-                            'data-border': true,
-                            layoutDependency,
-                            layoutId: 'xTz39RWP6',
-                            style: {
-                              '--border-bottom-width': '0px',
-                              '--border-color': 'var(--token-be2928fe-8496-42f6-9733-c37829997236, rgb(33, 33, 33))',
-                              '--border-left-width': '0px',
-                              '--border-right-width': '0px',
-                              '--border-style': 'solid',
-                              '--border-top-width': '2px',
-                              backgroundColor: 'rgba(204, 238, 255, 0)',
-                            },
-                            children: [
-                              /* @__PURE__ */ _jsx4(RichText3, {
-                                __fromCanvasComponent: true,
-                                children: /* @__PURE__ */ _jsxs3(React4.Fragment, {
-                                  children: [
-                                    /* @__PURE__ */ _jsx4(motion3.p, {
-                                      style: {
-                                        '--framer-text-alignment': 'center',
-                                        '--framer-text-color': 'var(--extracted-r6o4lv, rgb(136, 136, 136))',
-                                      },
-                                      children: 'Includes 200,000 Actors/month',
-                                    },),
-                                    /* @__PURE__ */ _jsx4(motion3.p, {
-                                      style: {
-                                        '--framer-text-alignment': 'center',
-                                        '--framer-text-color': 'var(--extracted-2gxw0f, rgb(136, 136, 136))',
-                                      },
-                                      children: ' + $0.0001 for each additional actor',
-                                    },),
-                                  ],
-                                },),
-                                className: 'framer-1d620ge',
-                                fonts: ['Inter',],
-                                layoutDependency,
-                                layoutId: 'omtApiNY_',
-                                style: { '--extracted-2gxw0f': 'rgb(136, 136, 136)', '--extracted-r6o4lv': 'rgb(136, 136, 136)', },
-                                verticalAlignment: 'top',
-                                withExternalLayout: true,
-                              },),
-                              /* @__PURE__ */ _jsx4(RichText3, {
-                                __fromCanvasComponent: true,
-                                children: /* @__PURE__ */ _jsx4(React4.Fragment, {
-                                  children: /* @__PURE__ */ _jsx4(motion3.p, {
-                                    style: {
-                                      '--framer-font-size': '14px',
-                                      '--framer-text-alignment': 'center',
-                                      '--framer-text-color': 'var(--extracted-r6o4lv, rgb(136, 136, 136))',
-                                    },
-                                    children: '(Billed by the actor existing in the month)',
-                                  },),
-                                },),
-                                className: 'framer-i7munm',
-                                fonts: ['Inter',],
-                                layoutDependency,
-                                layoutId: 'D74uX_Kuw',
-                                style: { '--extracted-r6o4lv': 'rgb(136, 136, 136)', },
-                                verticalAlignment: 'top',
-                                withExternalLayout: true,
-                              },),
-                            ],
-                          },),
-                          /* @__PURE__ */ _jsxs3(motion3.div, {
-                            className: 'framer-1y1tixs',
-                            layoutDependency,
-                            layoutId: 'SocyqxdWJ',
-                            style: { backgroundColor: 'rgba(111, 136, 161, 0)', },
-                            children: [
-                              /* @__PURE__ */ _jsx4(RichText3, {
-                                __fromCanvasComponent: true,
-                                children: /* @__PURE__ */ _jsx4(React4.Fragment, {
-                                  children: /* @__PURE__ */ _jsx4(motion3.p, {
-                                    style: {
-                                      '--font-selector': 'R0Y7SW50ZXItNzAw',
-                                      '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
-                                      '--framer-font-weight': '700',
-                                      '--framer-line-height': '1.5em',
-                                      '--framer-text-alignment': 'left',
-                                      '--framer-text-color': 'var(--extracted-r6o4lv, rgb(255, 255, 255))',
-                                    },
-                                    children: 'Runtime',
-                                  },),
-                                },),
-                                className: 'framer-xkmou',
-                                fonts: ['GF;Inter-700',],
-                                layoutDependency,
-                                layoutId: 'gkQpukKKE',
-                                style: {
-                                  '--extracted-r6o4lv': 'rgb(255, 255, 255)',
-                                  '--framer-link-text-color': 'rgb(0, 153, 255)',
-                                  '--framer-link-text-decoration': 'underline',
-                                  '--framer-paragraph-spacing': '0px',
-                                },
-                                verticalAlignment: 'center',
-                                withExternalLayout: true,
-                              },),
-                              /* @__PURE__ */ _jsx4(RichText3, {
-                                __fromCanvasComponent: true,
-                                children: /* @__PURE__ */ _jsx4(React4.Fragment, {
-                                  children: /* @__PURE__ */ _jsx4(motion3.p, {
+                            /* @__PURE__ */ _jsx4(RichText3, {
+                              __fromCanvasComponent: true,
+                              children: /* @__PURE__ */ _jsxs3(React4.Fragment, {
+                                children: [
+                                  /* @__PURE__ */ _jsx4(motion3.p, {
                                     style: {
                                       '--framer-font-size': '14px',
                                       '--framer-text-alignment': 'left',
                                       '--framer-text-color': 'var(--extracted-r6o4lv, rgb(136, 136, 136))',
                                     },
-                                    children: '(Actors scale to zero when not used)',
+                                    children: 'Actors scale to zero when not used and have ',
                                   },),
-                                },),
-                                className: 'framer-yc3eav',
-                                fonts: ['Inter',],
-                                layoutDependency,
-                                layoutId: 'NENMSKxWV',
-                                style: { '--extracted-r6o4lv': 'rgb(136, 136, 136)', },
-                                verticalAlignment: 'top',
-                                withExternalLayout: true,
-                              },),
-                            ],
-                          },),
-                          /* @__PURE__ */ _jsxs3(motion3.div, {
-                            className: 'framer-15osr4i',
-                            layoutDependency,
-                            layoutId: 'i8NSCOwh6',
-                            style: { backgroundColor: 'rgba(204, 238, 255, 0)', },
-                            children: [
-                              /* @__PURE__ */ _jsx4(RichText3, {
-                                __fromCanvasComponent: true,
-                                children: /* @__PURE__ */ _jsxs3(React4.Fragment, {
-                                  children: [
-                                    /* @__PURE__ */ _jsx4(motion3.p, {
-                                      style: {
-                                        '--framer-text-alignment': 'center',
-                                        '--framer-text-color': 'var(--extracted-r6o4lv, rgb(136, 136, 136))',
-                                      },
-                                      children: 'Includes 10 seconds runtime per actor/month',
-                                    },),
-                                    /* @__PURE__ */ _jsx4(motion3.p, {
-                                      style: {
-                                        '--framer-text-alignment': 'center',
-                                        '--framer-text-color': 'var(--extracted-2gxw0f, rgb(136, 136, 136))',
-                                      },
-                                      children: '+$1.25/ 100,000 secs',
-                                    },),
-                                  ],
-                                },),
-                                className: 'framer-g2f8a6',
-                                fonts: ['Inter',],
-                                layoutDependency,
-                                layoutId: 't9zG_VLnr',
-                                style: { '--extracted-2gxw0f': 'rgb(136, 136, 136)', '--extracted-r6o4lv': 'rgb(136, 136, 136)', },
-                                verticalAlignment: 'top',
-                                withExternalLayout: true,
-                              },),
-                              /* @__PURE__ */ _jsx4(RichText3, {
-                                __fromCanvasComponent: true,
-                                children: /* @__PURE__ */ _jsx4(React4.Fragment, {
-                                  children: /* @__PURE__ */ _jsx4(motion3.p, {
+                                  /* @__PURE__ */ _jsx4(motion3.p, {
                                     style: {
                                       '--framer-font-size': '14px',
-                                      '--framer-text-alignment': 'center',
-                                      '--framer-text-color': 'var(--extracted-r6o4lv, rgb(136, 136, 136))',
+                                      '--framer-text-alignment': 'left',
+                                      '--framer-text-color': 'var(--extracted-2gxw0f, rgb(136, 136, 136))',
                                     },
-                                    children: '(Billed by the millisecond)',
+                                    children: '128MB of RAM',
                                   },),
-                                },),
-                                className: 'framer-21lanx',
-                                fonts: ['Inter',],
-                                layoutDependency,
-                                layoutId: 'QHhN_5yOc',
-                                style: { '--extracted-r6o4lv': 'rgb(136, 136, 136)', },
-                                verticalAlignment: 'top',
-                                withExternalLayout: true,
+                                ],
                               },),
-                            ],
-                          },),
-                        ],
-                      },),
-                      /* @__PURE__ */ _jsxs3(motion3.div, {
-                        className: 'framer-18zhdhf',
-                        layoutDependency,
-                        layoutId: 'bLHMTaEHh',
-                        children: [
-                          /* @__PURE__ */ _jsx4(motion3.div, {
-                            className: 'framer-qvm75k',
-                            layoutDependency,
-                            layoutId: 'oQjqBXwwL',
-                            style: { backgroundColor: 'rgba(204, 238, 255, 0)', },
-                            children: /* @__PURE__ */ _jsx4(RichText3, {
+                              className: 'framer-yc3eav',
+                              fonts: ['Inter',],
+                              layoutDependency,
+                              layoutId: 'NENMSKxWV',
+                              style: { '--extracted-2gxw0f': 'rgb(136, 136, 136)', '--extracted-r6o4lv': 'rgb(136, 136, 136)', },
+                              verticalAlignment: 'top',
+                              withExternalLayout: true,
+                            },),
+                          ],
+                        },),
+                        /* @__PURE__ */ _jsxs3(motion3.div, {
+                          className: 'framer-15osr4i',
+                          layoutDependency,
+                          layoutId: 'i8NSCOwh6',
+                          style: { backgroundColor: 'rgba(204, 238, 255, 0)', },
+                          children: [
+                            /* @__PURE__ */ _jsx4(RichText3, {
                               __fromCanvasComponent: true,
                               children: /* @__PURE__ */ _jsx4(React4.Fragment, {
                                 children: /* @__PURE__ */ _jsx4(motion3.p, {
                                   style: {
-                                    '--font-selector': 'SW50ZXItQm9sZA==',
-                                    '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
-                                    '--framer-font-size': '18px',
-                                    '--framer-font-weight': '700',
                                     '--framer-text-alignment': 'center',
-                                    '--framer-text-color': 'var(--extracted-r6o4lv, rgb(255, 255, 255))',
+                                    '--framer-text-color': 'var(--extracted-r6o4lv, rgb(136, 136, 136))',
                                   },
-                                  children: 'Free Plan',
+                                  children: '$0.00000000163/millisecond or $4.29/month ',
                                 },),
                               },),
-                              className: 'framer-1jknldf',
-                              fonts: ['Inter-Bold',],
+                              className: 'framer-g2f8a6',
+                              fonts: ['Inter',],
                               layoutDependency,
-                              layoutId: 'A8Sv6gVH3',
-                              style: { '--extracted-r6o4lv': 'rgb(255, 255, 255)', },
+                              layoutId: 't9zG_VLnr',
+                              style: { '--extracted-r6o4lv': 'rgb(136, 136, 136)', },
                               verticalAlignment: 'top',
                               withExternalLayout: true,
                             },),
-                          },),
-                          /* @__PURE__ */ _jsx4(motion3.div, {
-                            className: 'framer-178pvff',
-                            layoutDependency,
-                            layoutId: 'vSSncCXTA',
-                            style: { backgroundColor: 'rgba(204, 238, 255, 0)', },
-                          },),
-                          /* @__PURE__ */ _jsx4(motion3.div, {
-                            className: 'framer-1299197',
-                            'data-border': true,
-                            layoutDependency,
-                            layoutId: 'snwz2jks_',
-                            style: {
-                              '--border-bottom-width': '0px',
-                              '--border-color': 'var(--token-be2928fe-8496-42f6-9733-c37829997236, rgb(33, 33, 33))',
-                              '--border-left-width': '0px',
-                              '--border-right-width': '0px',
-                              '--border-style': 'solid',
-                              '--border-top-width': '2px',
-                              backgroundColor: 'rgba(111, 136, 161, 0)',
-                            },
-                            children: /* @__PURE__ */ _jsx4(RichText3, {
+                            /* @__PURE__ */ _jsx4(RichText3, {
+                              __fromCanvasComponent: true,
+                              children: /* @__PURE__ */ _jsx4(React4.Fragment, {
+                                children: /* @__PURE__ */ _jsx4(motion3.p, {
+                                  style: {
+                                    '--framer-font-size': '14px',
+                                    '--framer-text-alignment': 'center',
+                                    '--framer-text-color': 'var(--extracted-r6o4lv, rgb(136, 136, 136))',
+                                  },
+                                  children: '(Billed by the millisecond)',
+                                },),
+                              },),
+                              className: 'framer-21lanx',
+                              fonts: ['Inter',],
+                              layoutDependency,
+                              layoutId: 'QHhN_5yOc',
+                              style: { '--extracted-r6o4lv': 'rgb(136, 136, 136)', },
+                              verticalAlignment: 'top',
+                              withExternalLayout: true,
+                            },),
+                          ],
+                        },),
+                        /* @__PURE__ */ _jsxs3(motion3.div, {
+                          className: 'framer-191jm3h',
+                          layoutDependency,
+                          layoutId: 'vkZTXKnju',
+                          style: { backgroundColor: 'rgba(111, 136, 161, 0)', },
+                          children: [
+                            /* @__PURE__ */ _jsx4(RichText3, {
                               __fromCanvasComponent: true,
                               children: /* @__PURE__ */ _jsx4(React4.Fragment, {
                                 children: /* @__PURE__ */ _jsx4(motion3.p, {
@@ -5121,13 +4941,13 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
                                     '--framer-text-alignment': 'left',
                                     '--framer-text-color': 'var(--extracted-r6o4lv, rgb(255, 255, 255))',
                                   },
-                                  children: 'Actors',
+                                  children: 'Bandwidth',
                                 },),
                               },),
-                              className: 'framer-evn3dt',
+                              className: 'framer-1v5k6gi',
                               fonts: ['GF;Inter-700',],
                               layoutDependency,
-                              layoutId: 'PilcPDdsy',
+                              layoutId: 'es_KkvJ0J',
                               style: {
                                 '--extracted-r6o4lv': 'rgb(255, 255, 255)',
                                 '--framer-link-text-color': 'rgb(0, 153, 255)',
@@ -5137,125 +4957,55 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
                               verticalAlignment: 'center',
                               withExternalLayout: true,
                             },),
-                          },),
-                          /* @__PURE__ */ _jsx4(motion3.div, {
-                            className: 'framer-s6kc5a',
-                            'data-border': true,
-                            layoutDependency,
-                            layoutId: 'f3RzH2lma',
-                            style: {
-                              '--border-bottom-width': '0px',
-                              '--border-color': 'var(--token-be2928fe-8496-42f6-9733-c37829997236, rgb(33, 33, 33))',
-                              '--border-left-width': '0px',
-                              '--border-right-width': '0px',
-                              '--border-style': 'solid',
-                              '--border-top-width': '2px',
-                              backgroundColor: 'rgba(204, 238, 255, 0)',
-                            },
-                            children: /* @__PURE__ */ _jsx4(RichText3, {
+                            /* @__PURE__ */ _jsx4(RichText3, {
                               __fromCanvasComponent: true,
                               children: /* @__PURE__ */ _jsx4(React4.Fragment, {
                                 children: /* @__PURE__ */ _jsx4(motion3.p, {
                                   style: {
-                                    '--framer-text-alignment': 'center',
+                                    '--framer-font-size': '14px',
+                                    '--framer-text-alignment': 'left',
                                     '--framer-text-color': 'var(--extracted-r6o4lv, rgb(136, 136, 136))',
                                   },
-                                  children: '50,000 Actors max',
+                                  children: 'Each Actor includes 10GB of Bandwidth pooled.',
                                 },),
                               },),
-                              className: 'framer-ahah18',
+                              className: 'framer-ykgvap',
                               fonts: ['Inter',],
                               layoutDependency,
-                              layoutId: 'Z5Hhkhtez',
+                              layoutId: 'sUJhnBZr1',
                               style: { '--extracted-r6o4lv': 'rgb(136, 136, 136)', },
                               verticalAlignment: 'top',
                               withExternalLayout: true,
                             },),
-                          },),
-                          /* @__PURE__ */ _jsxs3(motion3.div, {
-                            className: 'framer-qeruqp',
-                            layoutDependency,
-                            layoutId: 'TP0l4QnkT',
-                            style: { backgroundColor: 'rgba(111, 136, 161, 0)', },
-                            children: [
-                              /* @__PURE__ */ _jsx4(RichText3, {
-                                __fromCanvasComponent: true,
-                                children: /* @__PURE__ */ _jsx4(React4.Fragment, {
-                                  children: /* @__PURE__ */ _jsx4(motion3.p, {
-                                    style: {
-                                      '--font-selector': 'R0Y7SW50ZXItNzAw',
-                                      '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
-                                      '--framer-font-weight': '700',
-                                      '--framer-line-height': '1.5em',
-                                      '--framer-text-alignment': 'left',
-                                      '--framer-text-color': 'var(--extracted-r6o4lv, rgb(255, 255, 255))',
-                                    },
-                                    children: 'Runtime',
-                                  },),
-                                },),
-                                className: 'framer-cy0i0s',
-                                fonts: ['GF;Inter-700',],
-                                layoutDependency,
-                                layoutId: 'glE4YyYEV',
+                          ],
+                        },),
+                        /* @__PURE__ */ _jsx4(motion3.div, {
+                          className: 'framer-8ggffa',
+                          layoutDependency,
+                          layoutId: 'TVyFmW2VN',
+                          style: { backgroundColor: 'rgba(111, 136, 161, 0)', },
+                          children: /* @__PURE__ */ _jsx4(RichText3, {
+                            __fromCanvasComponent: true,
+                            children: /* @__PURE__ */ _jsx4(React4.Fragment, {
+                              children: /* @__PURE__ */ _jsx4(motion3.p, {
                                 style: {
-                                  '--extracted-r6o4lv': 'rgb(255, 255, 255)',
-                                  '--framer-link-text-color': 'rgb(0, 153, 255)',
-                                  '--framer-link-text-decoration': 'underline',
-                                  '--framer-paragraph-spacing': '0px',
+                                  '--framer-text-alignment': 'center',
+                                  '--framer-text-color': 'var(--extracted-r6o4lv, rgb(136, 136, 136))',
                                 },
-                                verticalAlignment: 'center',
-                                withExternalLayout: true,
+                                children: '$0.05/GB',
                               },),
-                              /* @__PURE__ */ _jsx4(RichText3, {
-                                __fromCanvasComponent: true,
-                                children: /* @__PURE__ */ _jsx4(React4.Fragment, {
-                                  children: /* @__PURE__ */ _jsx4(motion3.p, {
-                                    style: {
-                                      '--framer-font-size': '14px',
-                                      '--framer-text-alignment': 'left',
-                                      '--framer-text-color': 'var(--extracted-r6o4lv, rgb(136, 136, 136))',
-                                    },
-                                    children: '(Actors scale to zero when not used)',
-                                  },),
-                                },),
-                                className: 'framer-dybt7p',
-                                fonts: ['Inter',],
-                                layoutDependency,
-                                layoutId: 'Q22TxWWW_',
-                                style: { '--extracted-r6o4lv': 'rgb(136, 136, 136)', },
-                                verticalAlignment: 'top',
-                                withExternalLayout: true,
-                              },),
-                            ],
-                          },),
-                          /* @__PURE__ */ _jsx4(motion3.div, {
-                            className: 'framer-1wboe80',
-                            layoutDependency,
-                            layoutId: 'XY4thNzgb',
-                            style: { backgroundColor: 'rgba(204, 238, 255, 0)', },
-                            children: /* @__PURE__ */ _jsx4(RichText3, {
-                              __fromCanvasComponent: true,
-                              children: /* @__PURE__ */ _jsx4(React4.Fragment, {
-                                children: /* @__PURE__ */ _jsx4(motion3.p, {
-                                  style: {
-                                    '--framer-text-alignment': 'center',
-                                    '--framer-text-color': 'var(--extracted-r6o4lv, rgb(136, 136, 136))',
-                                  },
-                                  children: '500,000 seconds max',
-                                },),
-                              },),
-                              className: 'framer-n3q4x7',
-                              fonts: ['Inter',],
-                              layoutDependency,
-                              layoutId: 'AoTk434cQ',
-                              style: { '--extracted-r6o4lv': 'rgb(136, 136, 136)', },
-                              verticalAlignment: 'top',
-                              withExternalLayout: true,
                             },),
+                            className: 'framer-12ote4w',
+                            fonts: ['Inter',],
+                            layoutDependency,
+                            layoutId: 'FBGspxe2p',
+                            style: { '--extracted-r6o4lv': 'rgb(136, 136, 136)', },
+                            verticalAlignment: 'top',
+                            withExternalLayout: true,
                           },),
-                        ],
-                      },),
-                    ],
+                        },),
+                      ],
+                    },),
                   },),
                 ],
               },),
@@ -5323,12 +5073,7 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
                     /* @__PURE__ */ _jsx4(ComponentViewportProvider2, {
                       height: 420,
                       ...addPropertyOverrides3(
-                        {
-                          OlQQ934Vt: {
-                            y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 60 + 0 +
-                              0 + 142 + 0 + 0,
-                          },
-                        },
+                        { OlQQ934Vt: { y: (componentViewport?.y || 0) + 60 + 0 + 0 + 142 + 0 + 0, }, },
                         baseVariant,
                         gestureVariant,
                       ),
@@ -5349,12 +5094,7 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
                     /* @__PURE__ */ _jsx4(ComponentViewportProvider2, {
                       height: 420,
                       ...addPropertyOverrides3(
-                        {
-                          OlQQ934Vt: {
-                            y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 60 + 0 +
-                              0 + 142 + 0 + 440,
-                          },
-                        },
+                        { OlQQ934Vt: { y: (componentViewport?.y || 0) + 60 + 0 + 0 + 142 + 0 + 440, }, },
                         baseVariant,
                         gestureVariant,
                       ),
@@ -5375,12 +5115,7 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
                     /* @__PURE__ */ _jsx4(ComponentViewportProvider2, {
                       height: 450,
                       ...addPropertyOverrides3(
-                        {
-                          OlQQ934Vt: {
-                            y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 60 + 0 +
-                              0 + 142 + 0 + 880,
-                          },
-                        },
+                        { OlQQ934Vt: { y: (componentViewport?.y || 0) + 60 + 0 + 0 + 142 + 0 + 880, }, },
                         baseVariant,
                         gestureVariant,
                       ),
@@ -5401,12 +5136,7 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
                     /* @__PURE__ */ _jsx4(ComponentViewportProvider2, {
                       height: 540,
                       ...addPropertyOverrides3(
-                        {
-                          OlQQ934Vt: {
-                            y: ((componentViewport === null || componentViewport === void 0 ? void 0 : componentViewport.y) || 0) + 60 + 0 +
-                              0 + 142 + 0 + 1350,
-                          },
-                        },
+                        { OlQQ934Vt: { y: (componentViewport?.y || 0) + 60 + 0 + 0 + 142 + 0 + 1350, }, },
                         baseVariant,
                         gestureVariant,
                       ),
@@ -5525,136 +5255,6 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
                                   layoutDependency,
                                   layoutId: 'xZJlTktZH',
                                   children: [
-                                    /* @__PURE__ */ _jsx4(motion3.div, {
-                                      className: 'framer-53v6e1',
-                                      layoutDependency,
-                                      layoutId: 'kDmpjnUdP',
-                                      style: { backgroundColor: 'rgba(204, 238, 255, 0)', },
-                                      children: /* @__PURE__ */ _jsx4(RichText3, {
-                                        __fromCanvasComponent: true,
-                                        children: /* @__PURE__ */ _jsx4(React4.Fragment, {
-                                          children: /* @__PURE__ */ _jsx4(motion3.p, {
-                                            style: {
-                                              '--font-selector': 'SW50ZXItQm9sZA==',
-                                              '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
-                                              '--framer-font-size': '18px',
-                                              '--framer-font-weight': '700',
-                                              '--framer-text-alignment': 'left',
-                                              '--framer-text-color': 'var(--extracted-r6o4lv, rgb(255, 255, 255))',
-                                            },
-                                            children: 'Paid Plans',
-                                          },),
-                                        },),
-                                        className: 'framer-rvr3jr',
-                                        fonts: ['Inter-Bold',],
-                                        layoutDependency,
-                                        layoutId: 'kzdvno_UO',
-                                        style: { '--extracted-r6o4lv': 'rgb(255, 255, 255)', },
-                                        verticalAlignment: 'top',
-                                        withExternalLayout: true,
-                                      },),
-                                    },),
-                                    /* @__PURE__ */ _jsxs3(motion3.div, {
-                                      className: 'framer-rnk6dk',
-                                      layoutDependency,
-                                      layoutId: 'bkRDEICVl',
-                                      children: [
-                                        /* @__PURE__ */ _jsxs3(motion3.div, {
-                                          className: 'framer-17tky4e',
-                                          layoutDependency,
-                                          layoutId: 'SB2Wzp6ii',
-                                          style: { backgroundColor: 'rgba(204, 238, 255, 0)', },
-                                          children: [
-                                            /* @__PURE__ */ _jsx4(RichText3, {
-                                              __fromCanvasComponent: true,
-                                              children: /* @__PURE__ */ _jsxs3(React4.Fragment, {
-                                                children: [
-                                                  /* @__PURE__ */ _jsx4(motion3.p, {
-                                                    style: {
-                                                      '--framer-font-size': '14px',
-                                                      '--framer-text-alignment': 'left',
-                                                      '--framer-text-color': 'var(--extracted-r6o4lv, rgb(136, 136, 136))',
-                                                    },
-                                                    children: 'Includes 200,000 Actors/month',
-                                                  },),
-                                                  /* @__PURE__ */ _jsx4(motion3.p, {
-                                                    style: {
-                                                      '--framer-font-size': '14px',
-                                                      '--framer-text-alignment': 'left',
-                                                      '--framer-text-color': 'var(--extracted-2gxw0f, rgb(136, 136, 136))',
-                                                    },
-                                                    children: ' + $0.0001 for each additional actor.',
-                                                  },),
-                                                ],
-                                              },),
-                                              className: 'framer-1o8iis4',
-                                              fonts: ['Inter',],
-                                              layoutDependency,
-                                              layoutId: 'CPTbep1e1',
-                                              style: {
-                                                '--extracted-2gxw0f': 'rgb(136, 136, 136)',
-                                                '--extracted-r6o4lv': 'rgb(136, 136, 136)',
-                                              },
-                                              verticalAlignment: 'top',
-                                              withExternalLayout: true,
-                                            },),
-                                            /* @__PURE__ */ _jsx4(RichText3, {
-                                              __fromCanvasComponent: true,
-                                              children: /* @__PURE__ */ _jsx4(React4.Fragment, {
-                                                children: /* @__PURE__ */ _jsx4(motion3.p, {
-                                                  style: {
-                                                    '--framer-font-size': '12px',
-                                                    '--framer-text-alignment': 'left',
-                                                    '--framer-text-color': 'var(--extracted-r6o4lv, rgb(136, 136, 136))',
-                                                  },
-                                                  children: '(Billed by the actor existing in the month)',
-                                                },),
-                                              },),
-                                              className: 'framer-p4o2h6',
-                                              fonts: ['Inter',],
-                                              layoutDependency,
-                                              layoutId: 'qUWaZWg0B',
-                                              style: { '--extracted-r6o4lv': 'rgb(136, 136, 136)', },
-                                              verticalAlignment: 'top',
-                                              withExternalLayout: true,
-                                            },),
-                                          ],
-                                        },),
-                                        /* @__PURE__ */ _jsx4(motion3.div, {
-                                          className: 'framer-j7dcpe',
-                                          layoutDependency,
-                                          layoutId: 'ofsfjEuPu',
-                                          children: /* @__PURE__ */ _jsx4(RichText3, {
-                                            __fromCanvasComponent: true,
-                                            children: /* @__PURE__ */ _jsx4(React4.Fragment, {
-                                              children: /* @__PURE__ */ _jsx4(motion3.p, {
-                                                style: {
-                                                  '--font-selector': 'R0Y7SW50ZXItNzAw',
-                                                  '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
-                                                  '--framer-font-weight': '700',
-                                                  '--framer-line-height': '1.5em',
-                                                  '--framer-text-alignment': 'left',
-                                                  '--framer-text-color': 'var(--extracted-r6o4lv, rgb(255, 255, 255))',
-                                                },
-                                                children: 'Actors',
-                                              },),
-                                            },),
-                                            className: 'framer-rn7jxb',
-                                            fonts: ['GF;Inter-700',],
-                                            layoutDependency,
-                                            layoutId: 'zkESNovxC',
-                                            style: {
-                                              '--extracted-r6o4lv': 'rgb(255, 255, 255)',
-                                              '--framer-link-text-color': 'rgb(0, 153, 255)',
-                                              '--framer-link-text-decoration': 'underline',
-                                              '--framer-paragraph-spacing': '0px',
-                                            },
-                                            verticalAlignment: 'center',
-                                            withExternalLayout: true,
-                                          },),
-                                        },),
-                                      ],
-                                    },),
                                     /* @__PURE__ */ _jsxs3(motion3.div, {
                                       className: 'framer-18oqus6',
                                       layoutDependency,
@@ -5773,109 +5373,14 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
                                   ],
                                 },),
                                 /* @__PURE__ */ _jsxs3(motion3.div, {
-                                  className: 'framer-173yntk',
+                                  className: 'framer-1tqrrec',
                                   layoutDependency,
-                                  layoutId: 'cKISf3iwD',
+                                  layoutId: 'W4qEiEOec',
                                   children: [
-                                    /* @__PURE__ */ _jsx4(motion3.div, {
-                                      className: 'framer-f0g0bf',
-                                      layoutDependency,
-                                      layoutId: 'VbTDfRLmB',
-                                      style: { backgroundColor: 'rgba(204, 238, 255, 0)', },
-                                      children: /* @__PURE__ */ _jsx4(RichText3, {
-                                        __fromCanvasComponent: true,
-                                        children: /* @__PURE__ */ _jsx4(React4.Fragment, {
-                                          children: /* @__PURE__ */ _jsx4(motion3.p, {
-                                            style: {
-                                              '--font-selector': 'SW50ZXItQm9sZA==',
-                                              '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
-                                              '--framer-font-size': '18px',
-                                              '--framer-font-weight': '700',
-                                              '--framer-text-alignment': 'left',
-                                              '--framer-text-color': 'var(--extracted-r6o4lv, rgb(255, 255, 255))',
-                                            },
-                                            children: 'Free Plans',
-                                          },),
-                                        },),
-                                        className: 'framer-ibw364',
-                                        fonts: ['Inter-Bold',],
-                                        layoutDependency,
-                                        layoutId: 'k7BAWJNgN',
-                                        style: { '--extracted-r6o4lv': 'rgb(255, 255, 255)', },
-                                        verticalAlignment: 'top',
-                                        withExternalLayout: true,
-                                      },),
-                                    },),
                                     /* @__PURE__ */ _jsxs3(motion3.div, {
-                                      className: 'framer-v17bym',
+                                      className: 'framer-14889aa',
                                       layoutDependency,
-                                      layoutId: 'jX1B093yH',
-                                      children: [
-                                        /* @__PURE__ */ _jsx4(motion3.div, {
-                                          className: 'framer-1ope0y4',
-                                          layoutDependency,
-                                          layoutId: 'TjoqQIOgY',
-                                          style: { backgroundColor: 'rgba(204, 238, 255, 0)', },
-                                          children: /* @__PURE__ */ _jsx4(RichText3, {
-                                            __fromCanvasComponent: true,
-                                            children: /* @__PURE__ */ _jsx4(React4.Fragment, {
-                                              children: /* @__PURE__ */ _jsx4(motion3.p, {
-                                                style: {
-                                                  '--framer-font-size': '14px',
-                                                  '--framer-text-alignment': 'left',
-                                                  '--framer-text-color': 'var(--extracted-r6o4lv, rgb(136, 136, 136))',
-                                                },
-                                                children: '50,000 Actors max',
-                                              },),
-                                            },),
-                                            className: 'framer-1lhx9zb',
-                                            fonts: ['Inter',],
-                                            layoutDependency,
-                                            layoutId: 'sek7mxWSl',
-                                            style: { '--extracted-r6o4lv': 'rgb(136, 136, 136)', },
-                                            verticalAlignment: 'top',
-                                            withExternalLayout: true,
-                                          },),
-                                        },),
-                                        /* @__PURE__ */ _jsx4(motion3.div, {
-                                          className: 'framer-gktv5e',
-                                          layoutDependency,
-                                          layoutId: 'OAZ3nmt6B',
-                                          children: /* @__PURE__ */ _jsx4(RichText3, {
-                                            __fromCanvasComponent: true,
-                                            children: /* @__PURE__ */ _jsx4(React4.Fragment, {
-                                              children: /* @__PURE__ */ _jsx4(motion3.p, {
-                                                style: {
-                                                  '--font-selector': 'R0Y7SW50ZXItNzAw',
-                                                  '--framer-font-family': '"Inter", "Inter Placeholder", sans-serif',
-                                                  '--framer-font-weight': '700',
-                                                  '--framer-line-height': '1.5em',
-                                                  '--framer-text-alignment': 'left',
-                                                  '--framer-text-color': 'var(--extracted-r6o4lv, rgb(255, 255, 255))',
-                                                },
-                                                children: 'Actors',
-                                              },),
-                                            },),
-                                            className: 'framer-1d1eriu',
-                                            fonts: ['GF;Inter-700',],
-                                            layoutDependency,
-                                            layoutId: 'U5IASpaJ3',
-                                            style: {
-                                              '--extracted-r6o4lv': 'rgb(255, 255, 255)',
-                                              '--framer-link-text-color': 'rgb(0, 153, 255)',
-                                              '--framer-link-text-decoration': 'underline',
-                                              '--framer-paragraph-spacing': '0px',
-                                            },
-                                            verticalAlignment: 'center',
-                                            withExternalLayout: true,
-                                          },),
-                                        },),
-                                      ],
-                                    },),
-                                    /* @__PURE__ */ _jsxs3(motion3.div, {
-                                      className: 'framer-b989qq',
-                                      layoutDependency,
-                                      layoutId: 'BaMa4rttZ',
+                                      layoutId: 'lz3huYAP6',
                                       style: { backgroundColor: 'rgba(111, 136, 161, 0)', },
                                       children: [
                                         /* @__PURE__ */ _jsx4(RichText3, {
@@ -5890,13 +5395,13 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
                                                 '--framer-text-alignment': 'left',
                                                 '--framer-text-color': 'var(--extracted-r6o4lv, rgb(255, 255, 255))',
                                               },
-                                              children: 'Runtime',
+                                              children: 'Bandwidth',
                                             },),
                                           },),
-                                          className: 'framer-ti2xjq',
+                                          className: 'framer-dfzd7p',
                                           fonts: ['GF;Inter-700',],
                                           layoutDependency,
-                                          layoutId: 'Ve9612Eng',
+                                          layoutId: 'p0NaYgxPb',
                                           style: {
                                             '--extracted-r6o4lv': 'rgb(255, 255, 255)',
                                             '--framer-link-text-color': 'rgb(0, 153, 255)',
@@ -5913,42 +5418,41 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
                                               style: {
                                                 '--framer-font-size': '14px',
                                                 '--framer-text-alignment': 'left',
-                                                '--framer-text-color': 'var(--extracted-r6o4lv, rgb(209, 209, 209))',
+                                                '--framer-text-color': 'var(--extracted-r6o4lv, rgb(136, 136, 136))',
                                               },
-                                              children: 'Actors scale to zero when not used.',
+                                              children: 'Each Actor includes 10GB of Bandwidth pooled.',
                                             },),
                                           },),
-                                          className: 'framer-1l6dyl6',
+                                          className: 'framer-1xte04b',
                                           fonts: ['Inter',],
                                           layoutDependency,
-                                          layoutId: 'Pal7F14wJ',
-                                          style: { '--extracted-r6o4lv': 'rgb(209, 209, 209)', },
+                                          layoutId: 'KgjrYFmsk',
+                                          style: { '--extracted-r6o4lv': 'rgb(136, 136, 136)', },
                                           verticalAlignment: 'top',
                                           withExternalLayout: true,
                                         },),
                                       ],
                                     },),
                                     /* @__PURE__ */ _jsx4(motion3.div, {
-                                      className: 'framer-3au5ql',
+                                      className: 'framer-1ksn20x',
                                       layoutDependency,
-                                      layoutId: 'Oz9dQFZJj',
+                                      layoutId: 'T53ui93kU',
                                       style: { backgroundColor: 'rgba(111, 136, 161, 0)', },
                                       children: /* @__PURE__ */ _jsx4(RichText3, {
                                         __fromCanvasComponent: true,
                                         children: /* @__PURE__ */ _jsx4(React4.Fragment, {
                                           children: /* @__PURE__ */ _jsx4(motion3.p, {
                                             style: {
-                                              '--framer-font-size': '14px',
                                               '--framer-text-alignment': 'left',
                                               '--framer-text-color': 'var(--extracted-r6o4lv, rgb(136, 136, 136))',
                                             },
-                                            children: '500,000 seconds max',
+                                            children: '$0.05/GB',
                                           },),
                                         },),
-                                        className: 'framer-172fjbe',
+                                        className: 'framer-xwvhgt',
                                         fonts: ['Inter',],
                                         layoutDependency,
-                                        layoutId: 'dzogBggxj',
+                                        layoutId: 'w_Ukv7e41',
                                         style: { '--extracted-r6o4lv': 'rgb(136, 136, 136)', },
                                         verticalAlignment: 'top',
                                         withExternalLayout: true,
@@ -5974,84 +5478,72 @@ var Component3 = /* @__PURE__ */ React4.forwardRef(function (props, ref,) {
 },);
 var css5 = [
   '@supports (aspect-ratio: 1) { body { --framer-aspect-ratio-supported: auto; } }',
-  '.framer-s37KW.framer-194ejfq, .framer-s37KW .framer-194ejfq { display: block; }',
-  '.framer-s37KW.framer-7simsb { align-content: center; align-items: center; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 0px; height: min-content; justify-content: flex-start; overflow: visible; padding: 144px 40px 0px 40px; position: relative; width: 1200px; }',
-  '.framer-s37KW .framer-q4z8b, .framer-s37KW .framer-tlmrr2, .framer-s37KW .framer-cthohn { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
-  '.framer-s37KW .framer-yel58z, .framer-s37KW .framer-1hbajtu, .framer-s37KW .framer-nnbt0t { flex: none; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 100%; word-break: break-word; word-wrap: break-word; }',
-  '.framer-s37KW .framer-58hm9z { flex: none; height: 96px; overflow: visible; position: relative; white-space: pre-wrap; width: 445px; word-break: break-word; word-wrap: break-word; }',
-  '.framer-s37KW .framer-1voyydo { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; height: min-content; justify-content: space-evenly; overflow: hidden; padding: 0px 0px 100px 0px; position: relative; width: 100%; }',
-  '.framer-s37KW .framer-lbd5da { align-content: center; align-items: center; display: flex; flex: 1 0 0px; flex-direction: row; flex-wrap: wrap; gap: 6px; height: 540px; justify-content: center; max-width: 1200px; overflow: visible; padding: 0px; position: relative; width: 1px; }',
-  '.framer-s37KW .framer-po28yj-container, .framer-s37KW .framer-1hu24ph-container, .framer-s37KW .framer-16lhphz-container, .framer-s37KW .framer-ta11gu-container { flex: 1 0 0px; height: auto; position: relative; width: 1px; }',
-  '.framer-s37KW .framer-1s0vgn0 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: hidden; padding: 0px 0px 200px 0px; position: relative; width: 100%; }',
-  '.framer-s37KW .framer-1sksdhj { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 29px; height: min-content; justify-content: center; max-width: 1200px; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
-  '.framer-s37KW .framer-1hest51 { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 9px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
-  '.framer-s37KW .framer-1clngzw, .framer-s37KW .framer-1vvce17 { flex: none; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 1120px; word-break: break-word; word-wrap: break-word; }',
-  '.framer-s37KW .framer-1jxboe2, .framer-s37KW .framer-1gayotb, .framer-s37KW .framer-tjuho, .framer-s37KW .framer-7enftg, .framer-s37KW .framer-zioe9h, .framer-s37KW .framer-1ypvbg5, .framer-s37KW .framer-yelzwc, .framer-s37KW .framer-1y4hjz8, .framer-s37KW .framer-yvxhe4, .framer-s37KW .framer-trwkm1, .framer-s37KW .framer-l4r5u9, .framer-s37KW .framer-1uivg47, .framer-s37KW .framer-x597qf, .framer-s37KW .framer-17rjj4b, .framer-s37KW .framer-zwfi0m, .framer-s37KW .framer-1c5xlye, .framer-s37KW .framer-jzi76x, .framer-s37KW .framer-1n4vwsa, .framer-s37KW .framer-5xa6x7, .framer-s37KW .framer-gaxcb0, .framer-s37KW .framer-9mkqd, .framer-s37KW .framer-vksup8, .framer-s37KW .framer-1kuuvn9, .framer-s37KW .framer-15sdpcd, .framer-s37KW .framer-1o7yt0h, .framer-s37KW .framer-eq5oby, .framer-s37KW .framer-hctzff, .framer-s37KW .framer-1h8b1ho, .framer-s37KW .framer-pb8w9x, .framer-s37KW .framer-1wp3cwv, .framer-s37KW .framer-ga1nas, .framer-s37KW .framer-1qf0qsz, .framer-s37KW .framer-jx36a3, .framer-s37KW .framer-lptu3f, .framer-s37KW .framer-41oaoq, .framer-s37KW .framer-1ug7ax0, .framer-s37KW .framer-lp36ad, .framer-s37KW .framer-1uegmej, .framer-s37KW .framer-118b4eh, .framer-s37KW .framer-i7munm, .framer-s37KW .framer-xkmou, .framer-s37KW .framer-yc3eav, .framer-s37KW .framer-g2f8a6, .framer-s37KW .framer-21lanx, .framer-s37KW .framer-1jknldf, .framer-s37KW .framer-evn3dt, .framer-s37KW .framer-ahah18, .framer-s37KW .framer-cy0i0s, .framer-s37KW .framer-dybt7p, .framer-s37KW .framer-n3q4x7, .framer-s37KW .framer-rvr3jr, .framer-s37KW .framer-rn7jxb, .framer-s37KW .framer-1bq9uh, .framer-s37KW .framer-169msu4, .framer-s37KW .framer-ibw364, .framer-s37KW .framer-1d1eriu, .framer-s37KW .framer-ti2xjq, .framer-s37KW .framer-1l6dyl6 { flex: none; height: auto; position: relative; white-space: pre; width: auto; }',
-  '.framer-s37KW .framer-k3iqma { display: grid; flex: none; gap: 0px; grid-auto-rows: minmax(0, 1fr); grid-template-columns: repeat(5, minmax(50px, 1fr)); grid-template-rows: repeat(11, minmax(0, 1fr)); height: 800px; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
-  '.framer-s37KW .framer-99xr8r { align-content: flex-start; align-items: flex-start; align-self: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: 100%; justify-content: center; justify-self: center; padding: 0px; position: relative; width: 100%; z-index: 1; }',
-  '.framer-s37KW .framer-1qnnkps, .framer-s37KW .framer-1qczvql, .framer-s37KW .framer-8czh2, .framer-s37KW .framer-5ya5nz { align-content: center; align-items: center; align-self: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: 100%; justify-content: center; justify-self: center; padding: 0px; position: relative; width: 100%; z-index: 1; }',
-  '.framer-s37KW .framer-pc9xpx, .framer-s37KW .framer-dkecy8, .framer-s37KW .framer-1aye3mi, .framer-s37KW .framer-4elcif, .framer-s37KW .framer-123e4a6, .framer-s37KW .framer-1ten489, .framer-s37KW .framer-vo9xvw, .framer-s37KW .framer-1e4snbs, .framer-s37KW .framer-1cglrqh, .framer-s37KW .framer-rzvxd9 { align-self: start; flex: none; height: 100%; justify-self: start; position: relative; white-space: pre; width: 100%; }',
-  '.framer-s37KW .framer-t1t9y9, .framer-s37KW .framer-1rsdhpb, .framer-s37KW .framer-1i23qxm, .framer-s37KW .framer-11k1b7b, .framer-s37KW .framer-1y0qryh, .framer-s37KW .framer-1aboik7, .framer-s37KW .framer-a82jx1, .framer-s37KW .framer-1ytxh3g, .framer-s37KW .framer-yltrfj, .framer-s37KW .framer-c434bi, .framer-s37KW .framer-ucsdnr, .framer-s37KW .framer-1j5ijrx, .framer-s37KW .framer-svpkzw, .framer-s37KW .framer-ur9zar, .framer-s37KW .framer-yx1koq, .framer-s37KW .framer-1vk61ct, .framer-s37KW .framer-1nb7ibw, .framer-s37KW .framer-myhzr, .framer-s37KW .framer-1i23fb8, .framer-s37KW .framer-n9ho5u, .framer-s37KW .framer-xkf6e7, .framer-s37KW .framer-33iu67, .framer-s37KW .framer-omcw4a, .framer-s37KW .framer-pbaalc, .framer-s37KW .framer-1ennf6q, .framer-s37KW .framer-zmlvc7, .framer-s37KW .framer-dai0h3, .framer-s37KW .framer-1ma9u7i, .framer-s37KW .framer-d7gtis, .framer-s37KW .framer-9o9bst, .framer-s37KW .framer-9h05ub, .framer-s37KW .framer-13ukmo, .framer-s37KW .framer-16lf6td, .framer-s37KW .framer-qf3qsd, .framer-s37KW .framer-8l9nrc, .framer-s37KW .framer-1814yw4, .framer-s37KW .framer-1a46lt, .framer-s37KW .framer-bfavf3, .framer-s37KW .framer-13a7vax, .framer-s37KW .framer-154na2b, .framer-s37KW .framer-1t509jr, .framer-s37KW .framer-178pvff, .framer-s37KW .framer-s6kc5a, .framer-s37KW .framer-1wboe80 { align-content: center; align-items: center; align-self: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: 100%; justify-content: center; justify-self: center; padding: 0px; position: relative; width: 100%; }',
-  '.framer-s37KW .framer-2vw34m { cursor: pointer; flex: none; height: auto; position: relative; white-space: pre; width: auto; }',
-  '.framer-s37KW .framer-1hprg6q, .framer-s37KW .framer-1adq6dw, .framer-s37KW .framer-w5x29t, .framer-s37KW .framer-loiu6r, .framer-s37KW .framer-xw2zxv, .framer-s37KW .framer-1xlbry5, .framer-s37KW .framer-1slwvd6, .framer-s37KW .framer-r3l250 { flex: none; height: 24px; position: relative; width: 24px; }',
-  '.framer-s37KW .framer-1y0hcs0 { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; max-width: 1200px; overflow: hidden; padding: 0px 0px 200px 0px; position: relative; width: 100%; }',
-  '.framer-s37KW .framer-l9h4om { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 29px; height: min-content; justify-content: flex-start; max-width: 1200px; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
-  '.framer-s37KW .framer-1nficzg { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 9px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
-  '.framer-s37KW .framer-d35off { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 50px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-s37KW .framer-179lrfp, .framer-s37KW .framer-18zhdhf { display: grid; flex: none; gap: 0px; grid-auto-rows: minmax(0, 1fr); grid-template-columns: repeat(2, minmax(50px, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr)); height: 240px; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 792px; }',
-  '.framer-s37KW .framer-i5tg5u, .framer-s37KW .framer-fe5q1x, .framer-s37KW .framer-qvm75k, .framer-s37KW .framer-1299197 { align-content: center; align-items: center; align-self: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: 100%; justify-content: flex-start; justify-self: center; padding: 0px; position: relative; width: 100%; }',
-  '.framer-s37KW .framer-1hfus6l, .framer-s37KW .framer-15osr4i { align-content: center; align-items: center; align-self: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 3px; height: 100%; justify-content: center; justify-self: center; padding: 0px; position: relative; width: 100%; }',
-  '.framer-s37KW .framer-1d620ge, .framer-s37KW .framer-1o8iis4, .framer-s37KW .framer-1lhx9zb { cursor: pointer; flex: none; height: auto; position: relative; white-space: pre-wrap; width: 100%; word-break: break-word; word-wrap: break-word; }',
-  '.framer-s37KW .framer-1y1tixs, .framer-s37KW .framer-qeruqp { align-content: flex-start; align-items: flex-start; align-self: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: 100%; justify-content: flex-start; justify-self: center; padding: 0px; position: relative; width: 100%; }',
-  '.framer-s37KW .framer-8f6pe6 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 0px; height: min-content; justify-content: flex-start; overflow: visible; padding: 0px 40px 60px 40px; position: relative; width: 320px; }',
-  '.framer-s37KW .framer-9qs87f { flex: none; height: 96px; overflow: visible; position: relative; white-space: pre-wrap; width: 100%; word-break: break-word; word-wrap: break-word; }',
-  '.framer-s37KW .framer-15zqhyc { display: grid; flex: none; gap: 20px; grid-auto-rows: min-content; grid-template-columns: repeat(1, minmax(50px, 1fr)); grid-template-rows: repeat(4, min-content); height: min-content; justify-content: center; max-width: 100%; overflow: visible; padding: 0px 0px 100px 0px; position: relative; width: 100%; }',
-  '.framer-s37KW .framer-184bgn1-container, .framer-s37KW .framer-be8mws-container { align-self: start; flex: none; height: 420px; justify-self: start; position: relative; width: fit-content; }',
-  '.framer-s37KW .framer-yu6435-container { align-self: start; flex: none; height: 450px; justify-self: start; position: relative; width: fit-content; }',
-  '.framer-s37KW .framer-1cd9dvd-container { align-self: start; flex: none; height: auto; justify-self: start; position: relative; width: fit-content; }',
-  '.framer-s37KW .framer-lc5uts { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 150px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-s37KW .framer-n2pkst-container { flex: none; height: auto; position: relative; width: 100%; }',
-  '.framer-s37KW .framer-hmj0zf { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 49px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
-  '.framer-s37KW .framer-1z0upr0 { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 17px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
-  '.framer-s37KW .framer-3atbxe, .framer-s37KW .framer-p4o2h6, .framer-s37KW .framer-1tj2ndh, .framer-s37KW .framer-wjdwi0, .framer-s37KW .framer-172fjbe { flex: none; height: auto; position: relative; white-space: pre-wrap; width: 100%; word-break: break-word; word-wrap: break-word; }',
-  '.framer-s37KW .framer-16b9urj { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-s37KW .framer-1hhaorf { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 40px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 100%; }',
-  '.framer-s37KW .framer-1ukwq6t, .framer-s37KW .framer-173yntk { display: grid; flex: none; gap: 15px; grid-auto-rows: min-content; grid-template-columns: repeat(1, minmax(50px, 1fr)); grid-template-rows: repeat(3, min-content); height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
-  '.framer-s37KW .framer-53v6e1, .framer-s37KW .framer-f0g0bf { align-content: center; align-items: center; align-self: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: 25px; justify-content: flex-start; justify-self: center; padding: 0px; position: relative; width: 100%; }',
-  '.framer-s37KW .framer-rnk6dk { align-content: center; align-items: center; align-self: start; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 4px; height: min-content; justify-content: center; justify-self: start; overflow: visible; padding: 8px 0px 20px 0px; position: relative; width: 1fr; }',
-  '.framer-s37KW .framer-17tky4e { align-content: center; align-items: center; display: flex; flex: 1 0 0px; flex-direction: column; flex-wrap: nowrap; gap: 11px; height: min-content; justify-content: center; padding: 12px 0px 12px 0px; position: relative; width: 1px; }',
-  '.framer-s37KW .framer-j7dcpe { align-content: center; align-items: center; display: flex; flex: 1 0 0px; flex-direction: row; flex-wrap: nowrap; gap: 0px; height: 33px; justify-content: flex-start; padding: 0px; position: relative; width: 1px; }',
-  '.framer-s37KW .framer-18oqus6, .framer-s37KW .framer-b989qq { align-content: flex-start; align-items: flex-start; align-self: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: 55px; justify-content: flex-start; justify-self: center; padding: 0px; position: relative; width: 100%; }',
-  '.framer-s37KW .framer-iqctw6, .framer-s37KW .framer-3au5ql { align-content: center; align-items: center; align-self: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: 100px; justify-content: flex-start; justify-self: center; padding: 0px; position: relative; width: 100%; }',
-  '.framer-s37KW .framer-v17bym { align-content: center; align-items: center; align-self: start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 4px; height: min-content; justify-content: center; justify-self: start; overflow: visible; padding: 8px 0px 20px 0px; position: relative; width: 1fr; }',
-  '.framer-s37KW .framer-1ope0y4 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 11px; height: min-content; justify-content: center; padding: 12px 0px 12px 0px; position: relative; width: 100%; }',
-  '.framer-s37KW .framer-gktv5e { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 0px; height: 33px; justify-content: flex-start; padding: 0px; position: relative; width: 100%; }',
-  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-s37KW.framer-7simsb, .framer-s37KW .framer-q4z8b, .framer-s37KW .framer-lbd5da, .framer-s37KW .framer-1s0vgn0, .framer-s37KW .framer-1sksdhj, .framer-s37KW .framer-1hest51, .framer-s37KW .framer-99xr8r, .framer-s37KW .framer-1qnnkps, .framer-s37KW .framer-1qczvql, .framer-s37KW .framer-8czh2, .framer-s37KW .framer-5ya5nz, .framer-s37KW .framer-t1t9y9, .framer-s37KW .framer-1rsdhpb, .framer-s37KW .framer-1i23qxm, .framer-s37KW .framer-11k1b7b, .framer-s37KW .framer-1y0qryh, .framer-s37KW .framer-1aboik7, .framer-s37KW .framer-a82jx1, .framer-s37KW .framer-1ytxh3g, .framer-s37KW .framer-yltrfj, .framer-s37KW .framer-c434bi, .framer-s37KW .framer-ucsdnr, .framer-s37KW .framer-1j5ijrx, .framer-s37KW .framer-svpkzw, .framer-s37KW .framer-ur9zar, .framer-s37KW .framer-yx1koq, .framer-s37KW .framer-1vk61ct, .framer-s37KW .framer-1nb7ibw, .framer-s37KW .framer-myhzr, .framer-s37KW .framer-1i23fb8, .framer-s37KW .framer-n9ho5u, .framer-s37KW .framer-xkf6e7, .framer-s37KW .framer-33iu67, .framer-s37KW .framer-omcw4a, .framer-s37KW .framer-pbaalc, .framer-s37KW .framer-1ennf6q, .framer-s37KW .framer-zmlvc7, .framer-s37KW .framer-dai0h3, .framer-s37KW .framer-1ma9u7i, .framer-s37KW .framer-d7gtis, .framer-s37KW .framer-9o9bst, .framer-s37KW .framer-9h05ub, .framer-s37KW .framer-13ukmo, .framer-s37KW .framer-16lf6td, .framer-s37KW .framer-qf3qsd, .framer-s37KW .framer-8l9nrc, .framer-s37KW .framer-1814yw4, .framer-s37KW .framer-1a46lt, .framer-s37KW .framer-bfavf3, .framer-s37KW .framer-13a7vax, .framer-s37KW .framer-154na2b, .framer-s37KW .framer-1y0hcs0, .framer-s37KW .framer-l9h4om, .framer-s37KW .framer-1nficzg, .framer-s37KW .framer-d35off, .framer-s37KW .framer-i5tg5u, .framer-s37KW .framer-1t509jr, .framer-s37KW .framer-fe5q1x, .framer-s37KW .framer-1hfus6l, .framer-s37KW .framer-1y1tixs, .framer-s37KW .framer-15osr4i, .framer-s37KW .framer-qvm75k, .framer-s37KW .framer-178pvff, .framer-s37KW .framer-1299197, .framer-s37KW .framer-s6kc5a, .framer-s37KW .framer-qeruqp, .framer-s37KW .framer-1wboe80, .framer-s37KW .framer-8f6pe6, .framer-s37KW .framer-tlmrr2, .framer-s37KW .framer-lc5uts, .framer-s37KW .framer-cthohn, .framer-s37KW .framer-hmj0zf, .framer-s37KW .framer-1z0upr0, .framer-s37KW .framer-16b9urj, .framer-s37KW .framer-1hhaorf, .framer-s37KW .framer-53v6e1, .framer-s37KW .framer-rnk6dk, .framer-s37KW .framer-17tky4e, .framer-s37KW .framer-j7dcpe, .framer-s37KW .framer-18oqus6, .framer-s37KW .framer-iqctw6, .framer-s37KW .framer-f0g0bf, .framer-s37KW .framer-v17bym, .framer-s37KW .framer-1ope0y4, .framer-s37KW .framer-gktv5e, .framer-s37KW .framer-b989qq, .framer-s37KW .framer-3au5ql { gap: 0px; } .framer-s37KW.framer-7simsb > *, .framer-s37KW .framer-8f6pe6 > * { margin: 0px; margin-bottom: calc(0px / 2); margin-top: calc(0px / 2); } .framer-s37KW.framer-7simsb > :first-child, .framer-s37KW .framer-q4z8b > :first-child, .framer-s37KW .framer-1s0vgn0 > :first-child, .framer-s37KW .framer-1sksdhj > :first-child, .framer-s37KW .framer-1hest51 > :first-child, .framer-s37KW .framer-1y0hcs0 > :first-child, .framer-s37KW .framer-l9h4om > :first-child, .framer-s37KW .framer-1nficzg > :first-child, .framer-s37KW .framer-d35off > :first-child, .framer-s37KW .framer-1hfus6l > :first-child, .framer-s37KW .framer-1y1tixs > :first-child, .framer-s37KW .framer-15osr4i > :first-child, .framer-s37KW .framer-qeruqp > :first-child, .framer-s37KW .framer-8f6pe6 > :first-child, .framer-s37KW .framer-tlmrr2 > :first-child, .framer-s37KW .framer-lc5uts > :first-child, .framer-s37KW .framer-cthohn > :first-child, .framer-s37KW .framer-hmj0zf > :first-child, .framer-s37KW .framer-1z0upr0 > :first-child, .framer-s37KW .framer-16b9urj > :first-child, .framer-s37KW .framer-1hhaorf > :first-child, .framer-s37KW .framer-17tky4e > :first-child, .framer-s37KW .framer-18oqus6 > :first-child, .framer-s37KW .framer-iqctw6 > :first-child, .framer-s37KW .framer-v17bym > :first-child, .framer-s37KW .framer-1ope0y4 > :first-child, .framer-s37KW .framer-b989qq > :first-child, .framer-s37KW .framer-3au5ql > :first-child { margin-top: 0px; } .framer-s37KW.framer-7simsb > :last-child, .framer-s37KW .framer-q4z8b > :last-child, .framer-s37KW .framer-1s0vgn0 > :last-child, .framer-s37KW .framer-1sksdhj > :last-child, .framer-s37KW .framer-1hest51 > :last-child, .framer-s37KW .framer-1y0hcs0 > :last-child, .framer-s37KW .framer-l9h4om > :last-child, .framer-s37KW .framer-1nficzg > :last-child, .framer-s37KW .framer-d35off > :last-child, .framer-s37KW .framer-1hfus6l > :last-child, .framer-s37KW .framer-1y1tixs > :last-child, .framer-s37KW .framer-15osr4i > :last-child, .framer-s37KW .framer-qeruqp > :last-child, .framer-s37KW .framer-8f6pe6 > :last-child, .framer-s37KW .framer-tlmrr2 > :last-child, .framer-s37KW .framer-lc5uts > :last-child, .framer-s37KW .framer-cthohn > :last-child, .framer-s37KW .framer-hmj0zf > :last-child, .framer-s37KW .framer-1z0upr0 > :last-child, .framer-s37KW .framer-16b9urj > :last-child, .framer-s37KW .framer-1hhaorf > :last-child, .framer-s37KW .framer-17tky4e > :last-child, .framer-s37KW .framer-18oqus6 > :last-child, .framer-s37KW .framer-iqctw6 > :last-child, .framer-s37KW .framer-v17bym > :last-child, .framer-s37KW .framer-1ope0y4 > :last-child, .framer-s37KW .framer-b989qq > :last-child, .framer-s37KW .framer-3au5ql > :last-child { margin-bottom: 0px; } .framer-s37KW .framer-q4z8b > *, .framer-s37KW .framer-1s0vgn0 > *, .framer-s37KW .framer-1y0hcs0 > *, .framer-s37KW .framer-1y1tixs > *, .framer-s37KW .framer-qeruqp > *, .framer-s37KW .framer-tlmrr2 > *, .framer-s37KW .framer-cthohn > *, .framer-s37KW .framer-16b9urj > *, .framer-s37KW .framer-18oqus6 > *, .framer-s37KW .framer-iqctw6 > *, .framer-s37KW .framer-b989qq > *, .framer-s37KW .framer-3au5ql > * { margin: 0px; margin-bottom: calc(10px / 2); margin-top: calc(10px / 2); } .framer-s37KW .framer-lbd5da > * { margin: 0px; margin-left: calc(6px / 2); margin-right: calc(6px / 2); } .framer-s37KW .framer-lbd5da > :first-child, .framer-s37KW .framer-99xr8r > :first-child, .framer-s37KW .framer-1qnnkps > :first-child, .framer-s37KW .framer-1qczvql > :first-child, .framer-s37KW .framer-8czh2 > :first-child, .framer-s37KW .framer-5ya5nz > :first-child, .framer-s37KW .framer-t1t9y9 > :first-child, .framer-s37KW .framer-1rsdhpb > :first-child, .framer-s37KW .framer-1i23qxm > :first-child, .framer-s37KW .framer-11k1b7b > :first-child, .framer-s37KW .framer-1y0qryh > :first-child, .framer-s37KW .framer-1aboik7 > :first-child, .framer-s37KW .framer-a82jx1 > :first-child, .framer-s37KW .framer-1ytxh3g > :first-child, .framer-s37KW .framer-yltrfj > :first-child, .framer-s37KW .framer-c434bi > :first-child, .framer-s37KW .framer-ucsdnr > :first-child, .framer-s37KW .framer-1j5ijrx > :first-child, .framer-s37KW .framer-svpkzw > :first-child, .framer-s37KW .framer-ur9zar > :first-child, .framer-s37KW .framer-yx1koq > :first-child, .framer-s37KW .framer-1vk61ct > :first-child, .framer-s37KW .framer-1nb7ibw > :first-child, .framer-s37KW .framer-myhzr > :first-child, .framer-s37KW .framer-1i23fb8 > :first-child, .framer-s37KW .framer-n9ho5u > :first-child, .framer-s37KW .framer-xkf6e7 > :first-child, .framer-s37KW .framer-33iu67 > :first-child, .framer-s37KW .framer-omcw4a > :first-child, .framer-s37KW .framer-pbaalc > :first-child, .framer-s37KW .framer-1ennf6q > :first-child, .framer-s37KW .framer-zmlvc7 > :first-child, .framer-s37KW .framer-dai0h3 > :first-child, .framer-s37KW .framer-1ma9u7i > :first-child, .framer-s37KW .framer-d7gtis > :first-child, .framer-s37KW .framer-9o9bst > :first-child, .framer-s37KW .framer-9h05ub > :first-child, .framer-s37KW .framer-13ukmo > :first-child, .framer-s37KW .framer-16lf6td > :first-child, .framer-s37KW .framer-qf3qsd > :first-child, .framer-s37KW .framer-8l9nrc > :first-child, .framer-s37KW .framer-1814yw4 > :first-child, .framer-s37KW .framer-1a46lt > :first-child, .framer-s37KW .framer-bfavf3 > :first-child, .framer-s37KW .framer-13a7vax > :first-child, .framer-s37KW .framer-154na2b > :first-child, .framer-s37KW .framer-i5tg5u > :first-child, .framer-s37KW .framer-1t509jr > :first-child, .framer-s37KW .framer-fe5q1x > :first-child, .framer-s37KW .framer-qvm75k > :first-child, .framer-s37KW .framer-178pvff > :first-child, .framer-s37KW .framer-1299197 > :first-child, .framer-s37KW .framer-s6kc5a > :first-child, .framer-s37KW .framer-1wboe80 > :first-child, .framer-s37KW .framer-53v6e1 > :first-child, .framer-s37KW .framer-rnk6dk > :first-child, .framer-s37KW .framer-j7dcpe > :first-child, .framer-s37KW .framer-f0g0bf > :first-child, .framer-s37KW .framer-gktv5e > :first-child { margin-left: 0px; } .framer-s37KW .framer-lbd5da > :last-child, .framer-s37KW .framer-99xr8r > :last-child, .framer-s37KW .framer-1qnnkps > :last-child, .framer-s37KW .framer-1qczvql > :last-child, .framer-s37KW .framer-8czh2 > :last-child, .framer-s37KW .framer-5ya5nz > :last-child, .framer-s37KW .framer-t1t9y9 > :last-child, .framer-s37KW .framer-1rsdhpb > :last-child, .framer-s37KW .framer-1i23qxm > :last-child, .framer-s37KW .framer-11k1b7b > :last-child, .framer-s37KW .framer-1y0qryh > :last-child, .framer-s37KW .framer-1aboik7 > :last-child, .framer-s37KW .framer-a82jx1 > :last-child, .framer-s37KW .framer-1ytxh3g > :last-child, .framer-s37KW .framer-yltrfj > :last-child, .framer-s37KW .framer-c434bi > :last-child, .framer-s37KW .framer-ucsdnr > :last-child, .framer-s37KW .framer-1j5ijrx > :last-child, .framer-s37KW .framer-svpkzw > :last-child, .framer-s37KW .framer-ur9zar > :last-child, .framer-s37KW .framer-yx1koq > :last-child, .framer-s37KW .framer-1vk61ct > :last-child, .framer-s37KW .framer-1nb7ibw > :last-child, .framer-s37KW .framer-myhzr > :last-child, .framer-s37KW .framer-1i23fb8 > :last-child, .framer-s37KW .framer-n9ho5u > :last-child, .framer-s37KW .framer-xkf6e7 > :last-child, .framer-s37KW .framer-33iu67 > :last-child, .framer-s37KW .framer-omcw4a > :last-child, .framer-s37KW .framer-pbaalc > :last-child, .framer-s37KW .framer-1ennf6q > :last-child, .framer-s37KW .framer-zmlvc7 > :last-child, .framer-s37KW .framer-dai0h3 > :last-child, .framer-s37KW .framer-1ma9u7i > :last-child, .framer-s37KW .framer-d7gtis > :last-child, .framer-s37KW .framer-9o9bst > :last-child, .framer-s37KW .framer-9h05ub > :last-child, .framer-s37KW .framer-13ukmo > :last-child, .framer-s37KW .framer-16lf6td > :last-child, .framer-s37KW .framer-qf3qsd > :last-child, .framer-s37KW .framer-8l9nrc > :last-child, .framer-s37KW .framer-1814yw4 > :last-child, .framer-s37KW .framer-1a46lt > :last-child, .framer-s37KW .framer-bfavf3 > :last-child, .framer-s37KW .framer-13a7vax > :last-child, .framer-s37KW .framer-154na2b > :last-child, .framer-s37KW .framer-i5tg5u > :last-child, .framer-s37KW .framer-1t509jr > :last-child, .framer-s37KW .framer-fe5q1x > :last-child, .framer-s37KW .framer-qvm75k > :last-child, .framer-s37KW .framer-178pvff > :last-child, .framer-s37KW .framer-1299197 > :last-child, .framer-s37KW .framer-s6kc5a > :last-child, .framer-s37KW .framer-1wboe80 > :last-child, .framer-s37KW .framer-53v6e1 > :last-child, .framer-s37KW .framer-rnk6dk > :last-child, .framer-s37KW .framer-j7dcpe > :last-child, .framer-s37KW .framer-f0g0bf > :last-child, .framer-s37KW .framer-gktv5e > :last-child { margin-right: 0px; } .framer-s37KW .framer-1sksdhj > *, .framer-s37KW .framer-l9h4om > * { margin: 0px; margin-bottom: calc(29px / 2); margin-top: calc(29px / 2); } .framer-s37KW .framer-1hest51 > *, .framer-s37KW .framer-1nficzg > * { margin: 0px; margin-bottom: calc(9px / 2); margin-top: calc(9px / 2); } .framer-s37KW .framer-99xr8r > *, .framer-s37KW .framer-1qnnkps > *, .framer-s37KW .framer-1qczvql > *, .framer-s37KW .framer-8czh2 > *, .framer-s37KW .framer-5ya5nz > *, .framer-s37KW .framer-t1t9y9 > *, .framer-s37KW .framer-1rsdhpb > *, .framer-s37KW .framer-1i23qxm > *, .framer-s37KW .framer-11k1b7b > *, .framer-s37KW .framer-1y0qryh > *, .framer-s37KW .framer-1aboik7 > *, .framer-s37KW .framer-a82jx1 > *, .framer-s37KW .framer-1ytxh3g > *, .framer-s37KW .framer-yltrfj > *, .framer-s37KW .framer-c434bi > *, .framer-s37KW .framer-ucsdnr > *, .framer-s37KW .framer-1j5ijrx > *, .framer-s37KW .framer-svpkzw > *, .framer-s37KW .framer-ur9zar > *, .framer-s37KW .framer-yx1koq > *, .framer-s37KW .framer-1vk61ct > *, .framer-s37KW .framer-1nb7ibw > *, .framer-s37KW .framer-myhzr > *, .framer-s37KW .framer-1i23fb8 > *, .framer-s37KW .framer-n9ho5u > *, .framer-s37KW .framer-xkf6e7 > *, .framer-s37KW .framer-33iu67 > *, .framer-s37KW .framer-omcw4a > *, .framer-s37KW .framer-pbaalc > *, .framer-s37KW .framer-1ennf6q > *, .framer-s37KW .framer-zmlvc7 > *, .framer-s37KW .framer-dai0h3 > *, .framer-s37KW .framer-1ma9u7i > *, .framer-s37KW .framer-d7gtis > *, .framer-s37KW .framer-9o9bst > *, .framer-s37KW .framer-9h05ub > *, .framer-s37KW .framer-13ukmo > *, .framer-s37KW .framer-16lf6td > *, .framer-s37KW .framer-qf3qsd > *, .framer-s37KW .framer-8l9nrc > *, .framer-s37KW .framer-1814yw4 > *, .framer-s37KW .framer-1a46lt > *, .framer-s37KW .framer-bfavf3 > *, .framer-s37KW .framer-13a7vax > *, .framer-s37KW .framer-154na2b > *, .framer-s37KW .framer-i5tg5u > *, .framer-s37KW .framer-1t509jr > *, .framer-s37KW .framer-fe5q1x > *, .framer-s37KW .framer-qvm75k > *, .framer-s37KW .framer-178pvff > *, .framer-s37KW .framer-1299197 > *, .framer-s37KW .framer-s6kc5a > *, .framer-s37KW .framer-1wboe80 > *, .framer-s37KW .framer-53v6e1 > *, .framer-s37KW .framer-f0g0bf > * { margin: 0px; margin-left: calc(10px / 2); margin-right: calc(10px / 2); } .framer-s37KW .framer-d35off > * { margin: 0px; margin-bottom: calc(50px / 2); margin-top: calc(50px / 2); } .framer-s37KW .framer-1hfus6l > *, .framer-s37KW .framer-15osr4i > * { margin: 0px; margin-bottom: calc(3px / 2); margin-top: calc(3px / 2); } .framer-s37KW .framer-lc5uts > * { margin: 0px; margin-bottom: calc(150px / 2); margin-top: calc(150px / 2); } .framer-s37KW .framer-hmj0zf > * { margin: 0px; margin-bottom: calc(49px / 2); margin-top: calc(49px / 2); } .framer-s37KW .framer-1z0upr0 > * { margin: 0px; margin-bottom: calc(17px / 2); margin-top: calc(17px / 2); } .framer-s37KW .framer-1hhaorf > * { margin: 0px; margin-bottom: calc(40px / 2); margin-top: calc(40px / 2); } .framer-s37KW .framer-rnk6dk > * { margin: 0px; margin-left: calc(4px / 2); margin-right: calc(4px / 2); } .framer-s37KW .framer-17tky4e > *, .framer-s37KW .framer-1ope0y4 > * { margin: 0px; margin-bottom: calc(11px / 2); margin-top: calc(11px / 2); } .framer-s37KW .framer-j7dcpe > *, .framer-s37KW .framer-gktv5e > * { margin: 0px; margin-left: calc(0px / 2); margin-right: calc(0px / 2); } .framer-s37KW .framer-v17bym > * { margin: 0px; margin-bottom: calc(4px / 2); margin-top: calc(4px / 2); } }',
-  '.framer-s37KW.framer-v-3f72b1.framer-7simsb { width: 768px; }',
-  '.framer-s37KW.framer-v-3f72b1 .framer-1voyydo { padding: 0px 0px 158px 0px; }',
-  '.framer-s37KW.framer-v-3f72b1 .framer-lbd5da { align-content: unset; align-items: unset; display: grid; grid-auto-rows: minmax(0, 1fr); grid-template-columns: repeat(2, minmax(50px, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); height: min-content; }',
-  '.framer-s37KW.framer-v-3f72b1 .framer-po28yj-container, .framer-s37KW.framer-v-3f72b1 .framer-1hu24ph-container, .framer-s37KW.framer-v-3f72b1 .framer-16lhphz-container, .framer-s37KW.framer-v-3f72b1 .framer-ta11gu-container { align-self: start; flex: none; height: 100%; justify-self: start; width: 100%; }',
-  '.framer-s37KW.framer-v-3f72b1 .framer-1hest51 { justify-content: flex-start; width: min-content; }',
-  '.framer-s37KW.framer-v-3f72b1 .framer-1clngzw { align-self: stretch; width: auto; }',
-  '.framer-s37KW.framer-v-3f72b1 .framer-179lrfp, .framer-s37KW.framer-v-3f72b1 .framer-18zhdhf { width: 100%; }',
-  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-s37KW.framer-v-3f72b1 .framer-lbd5da { gap: 0px; } .framer-s37KW.framer-v-3f72b1 .framer-lbd5da > *, .framer-s37KW.framer-v-3f72b1 .framer-lbd5da > :first-child, .framer-s37KW.framer-v-3f72b1 .framer-lbd5da > :last-child { margin: 0px; } }',
-  '.framer-s37KW.framer-v-14tpty9.framer-7simsb { padding: 60px 40px 60px 40px; width: 320px; }',
-  '.framer-s37KW.framer-v-14tpty9 .framer-8f6pe6, .framer-s37KW.framer-v-14tpty9 .framer-53v6e1, .framer-s37KW.framer-v-14tpty9 .framer-gktv5e { order: 0; }',
-  '.framer-s37KW.framer-v-14tpty9 .framer-cthohn, .framer-s37KW.framer-v-14tpty9 .framer-1ope0y4 { order: 1; }',
-  '.framer-s37KW.framer-v-14tpty9 .framer-rnk6dk { flex-direction: column; order: 1; }',
-  '.framer-s37KW.framer-v-14tpty9 .framer-17tky4e { flex: none; order: 1; width: 100%; }',
-  '.framer-s37KW.framer-v-14tpty9 .framer-j7dcpe { flex: none; order: 0; width: 100%; }',
-  '.framer-s37KW.framer-v-14tpty9 .framer-18oqus6 { order: 2; }',
-  '.framer-s37KW.framer-v-14tpty9 .framer-iqctw6 { order: 3; }',
-  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-s37KW.framer-v-14tpty9 .framer-rnk6dk { gap: 0px; } .framer-s37KW.framer-v-14tpty9 .framer-rnk6dk > * { margin: 0px; margin-bottom: calc(4px / 2); margin-top: calc(4px / 2); } .framer-s37KW.framer-v-14tpty9 .framer-rnk6dk > :first-child { margin-top: 0px; } .framer-s37KW.framer-v-14tpty9 .framer-rnk6dk > :last-child { margin-bottom: 0px; } }',
+  '.framer-2snQS.framer-194ejfq, .framer-2snQS .framer-194ejfq { display: block; }',
+  '.framer-2snQS.framer-7simsb { align-content: center; align-items: center; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 0px; height: min-content; justify-content: flex-start; overflow: visible; padding: 144px 40px 0px 40px; position: relative; width: 1200px; }',
+  '.framer-2snQS .framer-q4z8b, .framer-2snQS .framer-tlmrr2, .framer-2snQS .framer-cthohn { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
+  '.framer-2snQS .framer-yel58z, .framer-2snQS .framer-1hbajtu, .framer-2snQS .framer-nnbt0t { flex: none; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 100%; word-break: break-word; word-wrap: break-word; }',
+  '.framer-2snQS .framer-58hm9z { flex: none; height: 96px; overflow: visible; position: relative; white-space: pre-wrap; width: 445px; word-break: break-word; word-wrap: break-word; }',
+  '.framer-2snQS .framer-1voyydo { align-content: center; align-items: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; height: min-content; justify-content: space-evenly; overflow: hidden; padding: 0px 0px 100px 0px; position: relative; width: 100%; }',
+  '.framer-2snQS .framer-lbd5da { align-content: center; align-items: center; display: flex; flex: 1 0 0px; flex-direction: row; flex-wrap: wrap; gap: 6px; height: 540px; justify-content: center; max-width: 1200px; overflow: visible; padding: 0px; position: relative; width: 1px; }',
+  '.framer-2snQS .framer-po28yj-container, .framer-2snQS .framer-1hu24ph-container, .framer-2snQS .framer-16lhphz-container, .framer-2snQS .framer-ta11gu-container { flex: 1 0 0px; height: auto; position: relative; width: 1px; }',
+  '.framer-2snQS .framer-1s0vgn0 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: hidden; padding: 0px 0px 58px 0px; position: relative; width: 100%; }',
+  '.framer-2snQS .framer-1sksdhj { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 29px; height: min-content; justify-content: center; max-width: 1200px; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
+  '.framer-2snQS .framer-1hest51 { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 9px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
+  '.framer-2snQS .framer-1clngzw, .framer-2snQS .framer-1vvce17 { flex: none; height: auto; overflow: visible; position: relative; white-space: pre-wrap; width: 1120px; word-break: break-word; word-wrap: break-word; }',
+  '.framer-2snQS .framer-1jxboe2, .framer-2snQS .framer-1gayotb, .framer-2snQS .framer-tjuho, .framer-2snQS .framer-7enftg, .framer-2snQS .framer-zioe9h, .framer-2snQS .framer-1ypvbg5, .framer-2snQS .framer-yelzwc, .framer-2snQS .framer-1y4hjz8, .framer-2snQS .framer-yvxhe4, .framer-2snQS .framer-trwkm1, .framer-2snQS .framer-l4r5u9, .framer-2snQS .framer-1uivg47, .framer-2snQS .framer-x597qf, .framer-2snQS .framer-17rjj4b, .framer-2snQS .framer-zwfi0m, .framer-2snQS .framer-1c5xlye, .framer-2snQS .framer-jzi76x, .framer-2snQS .framer-1n4vwsa, .framer-2snQS .framer-5xa6x7, .framer-2snQS .framer-gaxcb0, .framer-2snQS .framer-9mkqd, .framer-2snQS .framer-vksup8, .framer-2snQS .framer-1kuuvn9, .framer-2snQS .framer-15sdpcd, .framer-2snQS .framer-1o7yt0h, .framer-2snQS .framer-eq5oby, .framer-2snQS .framer-hctzff, .framer-2snQS .framer-1h8b1ho, .framer-2snQS .framer-pb8w9x, .framer-2snQS .framer-1wp3cwv, .framer-2snQS .framer-ga1nas, .framer-2snQS .framer-1qf0qsz, .framer-2snQS .framer-jx36a3, .framer-2snQS .framer-lptu3f, .framer-2snQS .framer-41oaoq, .framer-2snQS .framer-1ug7ax0, .framer-2snQS .framer-lp36ad, .framer-2snQS .framer-xkmou, .framer-2snQS .framer-yc3eav, .framer-2snQS .framer-21lanx, .framer-2snQS .framer-1v5k6gi, .framer-2snQS .framer-ykgvap, .framer-2snQS .framer-1bq9uh, .framer-2snQS .framer-169msu4, .framer-2snQS .framer-dfzd7p { flex: none; height: auto; position: relative; white-space: pre; width: auto; }',
+  '.framer-2snQS .framer-k3iqma { display: grid; flex: none; gap: 0px; grid-auto-rows: minmax(0, 1fr); grid-template-columns: repeat(5, minmax(50px, 1fr)); grid-template-rows: repeat(11, minmax(0, 1fr)); height: 800px; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
+  '.framer-2snQS .framer-99xr8r { align-content: flex-start; align-items: flex-start; align-self: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: 100%; justify-content: center; justify-self: center; padding: 0px; position: relative; width: 100%; z-index: 1; }',
+  '.framer-2snQS .framer-1qnnkps, .framer-2snQS .framer-1qczvql, .framer-2snQS .framer-8czh2, .framer-2snQS .framer-5ya5nz { align-content: center; align-items: center; align-self: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: 100%; justify-content: center; justify-self: center; padding: 0px; position: relative; width: 100%; z-index: 1; }',
+  '.framer-2snQS .framer-pc9xpx, .framer-2snQS .framer-dkecy8, .framer-2snQS .framer-1aye3mi, .framer-2snQS .framer-4elcif, .framer-2snQS .framer-123e4a6, .framer-2snQS .framer-1ten489, .framer-2snQS .framer-vo9xvw, .framer-2snQS .framer-1e4snbs, .framer-2snQS .framer-1cglrqh, .framer-2snQS .framer-rzvxd9 { align-self: start; flex: none; height: 100%; justify-self: start; position: relative; white-space: pre; width: 100%; }',
+  '.framer-2snQS .framer-t1t9y9, .framer-2snQS .framer-1rsdhpb, .framer-2snQS .framer-1i23qxm, .framer-2snQS .framer-11k1b7b, .framer-2snQS .framer-1y0qryh, .framer-2snQS .framer-1aboik7, .framer-2snQS .framer-a82jx1, .framer-2snQS .framer-1ytxh3g, .framer-2snQS .framer-yltrfj, .framer-2snQS .framer-c434bi, .framer-2snQS .framer-ucsdnr, .framer-2snQS .framer-1j5ijrx, .framer-2snQS .framer-svpkzw, .framer-2snQS .framer-ur9zar, .framer-2snQS .framer-yx1koq, .framer-2snQS .framer-1vk61ct, .framer-2snQS .framer-1nb7ibw, .framer-2snQS .framer-myhzr, .framer-2snQS .framer-1i23fb8, .framer-2snQS .framer-n9ho5u, .framer-2snQS .framer-xkf6e7, .framer-2snQS .framer-33iu67, .framer-2snQS .framer-omcw4a, .framer-2snQS .framer-pbaalc, .framer-2snQS .framer-1ennf6q, .framer-2snQS .framer-zmlvc7, .framer-2snQS .framer-dai0h3, .framer-2snQS .framer-1ma9u7i, .framer-2snQS .framer-d7gtis, .framer-2snQS .framer-9o9bst, .framer-2snQS .framer-9h05ub, .framer-2snQS .framer-13ukmo, .framer-2snQS .framer-16lf6td, .framer-2snQS .framer-qf3qsd, .framer-2snQS .framer-8l9nrc, .framer-2snQS .framer-1814yw4, .framer-2snQS .framer-1a46lt, .framer-2snQS .framer-bfavf3, .framer-2snQS .framer-13a7vax, .framer-2snQS .framer-154na2b { align-content: center; align-items: center; align-self: center; display: flex; flex: none; flex-direction: row; flex-wrap: nowrap; gap: 10px; height: 100%; justify-content: center; justify-self: center; padding: 0px; position: relative; width: 100%; }',
+  '.framer-2snQS .framer-2vw34m { cursor: pointer; flex: none; height: auto; position: relative; white-space: pre; width: auto; }',
+  '.framer-2snQS .framer-1hprg6q, .framer-2snQS .framer-1adq6dw, .framer-2snQS .framer-w5x29t, .framer-2snQS .framer-loiu6r, .framer-2snQS .framer-xw2zxv, .framer-2snQS .framer-1xlbry5, .framer-2snQS .framer-1slwvd6, .framer-2snQS .framer-r3l250 { flex: none; height: 24px; position: relative; width: 24px; }',
+  '.framer-2snQS .framer-1y0hcs0 { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; max-width: 1200px; overflow: hidden; padding: 0px 0px 200px 0px; position: relative; width: 100%; }',
+  '.framer-2snQS .framer-l9h4om { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 29px; height: min-content; justify-content: flex-start; max-width: 1200px; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
+  '.framer-2snQS .framer-1nficzg { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 9px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
+  '.framer-2snQS .framer-d35off { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 50px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-2snQS .framer-179lrfp { display: grid; flex: none; gap: 0px; grid-auto-rows: minmax(0, 1fr); grid-template-columns: repeat(2, minmax(50px, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr)); height: 240px; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 792px; }',
+  '.framer-2snQS .framer-1y1tixs, .framer-2snQS .framer-191jm3h, .framer-2snQS .framer-8ggffa { align-content: flex-start; align-items: flex-start; align-self: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: 100%; justify-content: flex-start; justify-self: center; padding: 0px; position: relative; width: 100%; }',
+  '.framer-2snQS .framer-15osr4i { align-content: center; align-items: center; align-self: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 3px; height: 100%; justify-content: center; justify-self: center; padding: 0px; position: relative; width: 100%; }',
+  '.framer-2snQS .framer-g2f8a6, .framer-2snQS .framer-12ote4w, .framer-2snQS .framer-3atbxe, .framer-2snQS .framer-1tj2ndh, .framer-2snQS .framer-wjdwi0, .framer-2snQS .framer-1xte04b, .framer-2snQS .framer-xwvhgt { flex: none; height: auto; position: relative; white-space: pre-wrap; width: 100%; word-break: break-word; word-wrap: break-word; }',
+  '.framer-2snQS .framer-8f6pe6 { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 0px; height: min-content; justify-content: flex-start; overflow: visible; padding: 0px 40px 60px 40px; position: relative; width: 320px; }',
+  '.framer-2snQS .framer-9qs87f { flex: none; height: 96px; overflow: visible; position: relative; white-space: pre-wrap; width: 100%; word-break: break-word; word-wrap: break-word; }',
+  '.framer-2snQS .framer-15zqhyc { display: grid; flex: none; gap: 20px; grid-auto-rows: min-content; grid-template-columns: repeat(1, minmax(50px, 1fr)); grid-template-rows: repeat(4, min-content); height: min-content; justify-content: center; max-width: 100%; overflow: visible; padding: 0px 0px 100px 0px; position: relative; width: 100%; }',
+  '.framer-2snQS .framer-184bgn1-container, .framer-2snQS .framer-be8mws-container { align-self: start; flex: none; height: 420px; justify-self: start; position: relative; width: fit-content; }',
+  '.framer-2snQS .framer-yu6435-container { align-self: start; flex: none; height: 450px; justify-self: start; position: relative; width: fit-content; }',
+  '.framer-2snQS .framer-1cd9dvd-container { align-self: start; flex: none; height: auto; justify-self: start; position: relative; width: fit-content; }',
+  '.framer-2snQS .framer-lc5uts { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 150px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-2snQS .framer-n2pkst-container { flex: none; height: auto; position: relative; width: 100%; }',
+  '.framer-2snQS .framer-hmj0zf { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 49px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
+  '.framer-2snQS .framer-1z0upr0 { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 17px; height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
+  '.framer-2snQS .framer-16b9urj { align-content: flex-start; align-items: flex-start; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-2snQS .framer-1hhaorf { align-content: center; align-items: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 18px; height: min-content; justify-content: center; overflow: visible; padding: 0px; position: relative; width: 100%; }',
+  '.framer-2snQS .framer-1ukwq6t, .framer-2snQS .framer-1tqrrec { display: grid; flex: none; gap: 15px; grid-auto-rows: min-content; grid-template-columns: repeat(1, minmax(50px, 1fr)); grid-template-rows: repeat(3, min-content); height: min-content; justify-content: center; overflow: hidden; padding: 0px; position: relative; width: 100%; }',
+  '.framer-2snQS .framer-18oqus6 { align-content: flex-start; align-items: flex-start; align-self: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: 55px; justify-content: flex-start; justify-self: center; padding: 0px; position: relative; width: 100%; }',
+  '.framer-2snQS .framer-iqctw6 { align-content: center; align-items: center; align-self: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 10px; height: 100px; justify-content: flex-start; justify-self: center; padding: 0px; position: relative; width: 100%; }',
+  '.framer-2snQS .framer-14889aa { align-content: flex-start; align-items: flex-start; align-self: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 0px; height: 55px; justify-content: flex-start; justify-self: center; padding: 0px; position: relative; width: 100%; }',
+  '.framer-2snQS .framer-1ksn20x { align-content: center; align-items: center; align-self: center; display: flex; flex: none; flex-direction: column; flex-wrap: nowrap; gap: 15px; height: min-content; justify-content: flex-start; justify-self: center; padding: 0px; position: relative; width: 100%; }',
+  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-2snQS.framer-7simsb, .framer-2snQS .framer-q4z8b, .framer-2snQS .framer-lbd5da, .framer-2snQS .framer-1s0vgn0, .framer-2snQS .framer-1sksdhj, .framer-2snQS .framer-1hest51, .framer-2snQS .framer-99xr8r, .framer-2snQS .framer-1qnnkps, .framer-2snQS .framer-1qczvql, .framer-2snQS .framer-8czh2, .framer-2snQS .framer-5ya5nz, .framer-2snQS .framer-t1t9y9, .framer-2snQS .framer-1rsdhpb, .framer-2snQS .framer-1i23qxm, .framer-2snQS .framer-11k1b7b, .framer-2snQS .framer-1y0qryh, .framer-2snQS .framer-1aboik7, .framer-2snQS .framer-a82jx1, .framer-2snQS .framer-1ytxh3g, .framer-2snQS .framer-yltrfj, .framer-2snQS .framer-c434bi, .framer-2snQS .framer-ucsdnr, .framer-2snQS .framer-1j5ijrx, .framer-2snQS .framer-svpkzw, .framer-2snQS .framer-ur9zar, .framer-2snQS .framer-yx1koq, .framer-2snQS .framer-1vk61ct, .framer-2snQS .framer-1nb7ibw, .framer-2snQS .framer-myhzr, .framer-2snQS .framer-1i23fb8, .framer-2snQS .framer-n9ho5u, .framer-2snQS .framer-xkf6e7, .framer-2snQS .framer-33iu67, .framer-2snQS .framer-omcw4a, .framer-2snQS .framer-pbaalc, .framer-2snQS .framer-1ennf6q, .framer-2snQS .framer-zmlvc7, .framer-2snQS .framer-dai0h3, .framer-2snQS .framer-1ma9u7i, .framer-2snQS .framer-d7gtis, .framer-2snQS .framer-9o9bst, .framer-2snQS .framer-9h05ub, .framer-2snQS .framer-13ukmo, .framer-2snQS .framer-16lf6td, .framer-2snQS .framer-qf3qsd, .framer-2snQS .framer-8l9nrc, .framer-2snQS .framer-1814yw4, .framer-2snQS .framer-1a46lt, .framer-2snQS .framer-bfavf3, .framer-2snQS .framer-13a7vax, .framer-2snQS .framer-154na2b, .framer-2snQS .framer-1y0hcs0, .framer-2snQS .framer-l9h4om, .framer-2snQS .framer-1nficzg, .framer-2snQS .framer-d35off, .framer-2snQS .framer-1y1tixs, .framer-2snQS .framer-15osr4i, .framer-2snQS .framer-191jm3h, .framer-2snQS .framer-8ggffa, .framer-2snQS .framer-8f6pe6, .framer-2snQS .framer-tlmrr2, .framer-2snQS .framer-lc5uts, .framer-2snQS .framer-cthohn, .framer-2snQS .framer-hmj0zf, .framer-2snQS .framer-1z0upr0, .framer-2snQS .framer-16b9urj, .framer-2snQS .framer-1hhaorf, .framer-2snQS .framer-18oqus6, .framer-2snQS .framer-iqctw6, .framer-2snQS .framer-14889aa, .framer-2snQS .framer-1ksn20x { gap: 0px; } .framer-2snQS.framer-7simsb > *, .framer-2snQS .framer-8f6pe6 > *, .framer-2snQS .framer-14889aa > * { margin: 0px; margin-bottom: calc(0px / 2); margin-top: calc(0px / 2); } .framer-2snQS.framer-7simsb > :first-child, .framer-2snQS .framer-q4z8b > :first-child, .framer-2snQS .framer-1s0vgn0 > :first-child, .framer-2snQS .framer-1sksdhj > :first-child, .framer-2snQS .framer-1hest51 > :first-child, .framer-2snQS .framer-1y0hcs0 > :first-child, .framer-2snQS .framer-l9h4om > :first-child, .framer-2snQS .framer-1nficzg > :first-child, .framer-2snQS .framer-d35off > :first-child, .framer-2snQS .framer-1y1tixs > :first-child, .framer-2snQS .framer-15osr4i > :first-child, .framer-2snQS .framer-191jm3h > :first-child, .framer-2snQS .framer-8ggffa > :first-child, .framer-2snQS .framer-8f6pe6 > :first-child, .framer-2snQS .framer-tlmrr2 > :first-child, .framer-2snQS .framer-lc5uts > :first-child, .framer-2snQS .framer-cthohn > :first-child, .framer-2snQS .framer-hmj0zf > :first-child, .framer-2snQS .framer-1z0upr0 > :first-child, .framer-2snQS .framer-16b9urj > :first-child, .framer-2snQS .framer-1hhaorf > :first-child, .framer-2snQS .framer-18oqus6 > :first-child, .framer-2snQS .framer-iqctw6 > :first-child, .framer-2snQS .framer-14889aa > :first-child, .framer-2snQS .framer-1ksn20x > :first-child { margin-top: 0px; } .framer-2snQS.framer-7simsb > :last-child, .framer-2snQS .framer-q4z8b > :last-child, .framer-2snQS .framer-1s0vgn0 > :last-child, .framer-2snQS .framer-1sksdhj > :last-child, .framer-2snQS .framer-1hest51 > :last-child, .framer-2snQS .framer-1y0hcs0 > :last-child, .framer-2snQS .framer-l9h4om > :last-child, .framer-2snQS .framer-1nficzg > :last-child, .framer-2snQS .framer-d35off > :last-child, .framer-2snQS .framer-1y1tixs > :last-child, .framer-2snQS .framer-15osr4i > :last-child, .framer-2snQS .framer-191jm3h > :last-child, .framer-2snQS .framer-8ggffa > :last-child, .framer-2snQS .framer-8f6pe6 > :last-child, .framer-2snQS .framer-tlmrr2 > :last-child, .framer-2snQS .framer-lc5uts > :last-child, .framer-2snQS .framer-cthohn > :last-child, .framer-2snQS .framer-hmj0zf > :last-child, .framer-2snQS .framer-1z0upr0 > :last-child, .framer-2snQS .framer-16b9urj > :last-child, .framer-2snQS .framer-1hhaorf > :last-child, .framer-2snQS .framer-18oqus6 > :last-child, .framer-2snQS .framer-iqctw6 > :last-child, .framer-2snQS .framer-14889aa > :last-child, .framer-2snQS .framer-1ksn20x > :last-child { margin-bottom: 0px; } .framer-2snQS .framer-q4z8b > *, .framer-2snQS .framer-1s0vgn0 > *, .framer-2snQS .framer-1y0hcs0 > *, .framer-2snQS .framer-1y1tixs > *, .framer-2snQS .framer-191jm3h > *, .framer-2snQS .framer-8ggffa > *, .framer-2snQS .framer-tlmrr2 > *, .framer-2snQS .framer-cthohn > *, .framer-2snQS .framer-16b9urj > *, .framer-2snQS .framer-18oqus6 > *, .framer-2snQS .framer-iqctw6 > * { margin: 0px; margin-bottom: calc(10px / 2); margin-top: calc(10px / 2); } .framer-2snQS .framer-lbd5da > * { margin: 0px; margin-left: calc(6px / 2); margin-right: calc(6px / 2); } .framer-2snQS .framer-lbd5da > :first-child, .framer-2snQS .framer-99xr8r > :first-child, .framer-2snQS .framer-1qnnkps > :first-child, .framer-2snQS .framer-1qczvql > :first-child, .framer-2snQS .framer-8czh2 > :first-child, .framer-2snQS .framer-5ya5nz > :first-child, .framer-2snQS .framer-t1t9y9 > :first-child, .framer-2snQS .framer-1rsdhpb > :first-child, .framer-2snQS .framer-1i23qxm > :first-child, .framer-2snQS .framer-11k1b7b > :first-child, .framer-2snQS .framer-1y0qryh > :first-child, .framer-2snQS .framer-1aboik7 > :first-child, .framer-2snQS .framer-a82jx1 > :first-child, .framer-2snQS .framer-1ytxh3g > :first-child, .framer-2snQS .framer-yltrfj > :first-child, .framer-2snQS .framer-c434bi > :first-child, .framer-2snQS .framer-ucsdnr > :first-child, .framer-2snQS .framer-1j5ijrx > :first-child, .framer-2snQS .framer-svpkzw > :first-child, .framer-2snQS .framer-ur9zar > :first-child, .framer-2snQS .framer-yx1koq > :first-child, .framer-2snQS .framer-1vk61ct > :first-child, .framer-2snQS .framer-1nb7ibw > :first-child, .framer-2snQS .framer-myhzr > :first-child, .framer-2snQS .framer-1i23fb8 > :first-child, .framer-2snQS .framer-n9ho5u > :first-child, .framer-2snQS .framer-xkf6e7 > :first-child, .framer-2snQS .framer-33iu67 > :first-child, .framer-2snQS .framer-omcw4a > :first-child, .framer-2snQS .framer-pbaalc > :first-child, .framer-2snQS .framer-1ennf6q > :first-child, .framer-2snQS .framer-zmlvc7 > :first-child, .framer-2snQS .framer-dai0h3 > :first-child, .framer-2snQS .framer-1ma9u7i > :first-child, .framer-2snQS .framer-d7gtis > :first-child, .framer-2snQS .framer-9o9bst > :first-child, .framer-2snQS .framer-9h05ub > :first-child, .framer-2snQS .framer-13ukmo > :first-child, .framer-2snQS .framer-16lf6td > :first-child, .framer-2snQS .framer-qf3qsd > :first-child, .framer-2snQS .framer-8l9nrc > :first-child, .framer-2snQS .framer-1814yw4 > :first-child, .framer-2snQS .framer-1a46lt > :first-child, .framer-2snQS .framer-bfavf3 > :first-child, .framer-2snQS .framer-13a7vax > :first-child, .framer-2snQS .framer-154na2b > :first-child { margin-left: 0px; } .framer-2snQS .framer-lbd5da > :last-child, .framer-2snQS .framer-99xr8r > :last-child, .framer-2snQS .framer-1qnnkps > :last-child, .framer-2snQS .framer-1qczvql > :last-child, .framer-2snQS .framer-8czh2 > :last-child, .framer-2snQS .framer-5ya5nz > :last-child, .framer-2snQS .framer-t1t9y9 > :last-child, .framer-2snQS .framer-1rsdhpb > :last-child, .framer-2snQS .framer-1i23qxm > :last-child, .framer-2snQS .framer-11k1b7b > :last-child, .framer-2snQS .framer-1y0qryh > :last-child, .framer-2snQS .framer-1aboik7 > :last-child, .framer-2snQS .framer-a82jx1 > :last-child, .framer-2snQS .framer-1ytxh3g > :last-child, .framer-2snQS .framer-yltrfj > :last-child, .framer-2snQS .framer-c434bi > :last-child, .framer-2snQS .framer-ucsdnr > :last-child, .framer-2snQS .framer-1j5ijrx > :last-child, .framer-2snQS .framer-svpkzw > :last-child, .framer-2snQS .framer-ur9zar > :last-child, .framer-2snQS .framer-yx1koq > :last-child, .framer-2snQS .framer-1vk61ct > :last-child, .framer-2snQS .framer-1nb7ibw > :last-child, .framer-2snQS .framer-myhzr > :last-child, .framer-2snQS .framer-1i23fb8 > :last-child, .framer-2snQS .framer-n9ho5u > :last-child, .framer-2snQS .framer-xkf6e7 > :last-child, .framer-2snQS .framer-33iu67 > :last-child, .framer-2snQS .framer-omcw4a > :last-child, .framer-2snQS .framer-pbaalc > :last-child, .framer-2snQS .framer-1ennf6q > :last-child, .framer-2snQS .framer-zmlvc7 > :last-child, .framer-2snQS .framer-dai0h3 > :last-child, .framer-2snQS .framer-1ma9u7i > :last-child, .framer-2snQS .framer-d7gtis > :last-child, .framer-2snQS .framer-9o9bst > :last-child, .framer-2snQS .framer-9h05ub > :last-child, .framer-2snQS .framer-13ukmo > :last-child, .framer-2snQS .framer-16lf6td > :last-child, .framer-2snQS .framer-qf3qsd > :last-child, .framer-2snQS .framer-8l9nrc > :last-child, .framer-2snQS .framer-1814yw4 > :last-child, .framer-2snQS .framer-1a46lt > :last-child, .framer-2snQS .framer-bfavf3 > :last-child, .framer-2snQS .framer-13a7vax > :last-child, .framer-2snQS .framer-154na2b > :last-child { margin-right: 0px; } .framer-2snQS .framer-1sksdhj > *, .framer-2snQS .framer-l9h4om > * { margin: 0px; margin-bottom: calc(29px / 2); margin-top: calc(29px / 2); } .framer-2snQS .framer-1hest51 > *, .framer-2snQS .framer-1nficzg > * { margin: 0px; margin-bottom: calc(9px / 2); margin-top: calc(9px / 2); } .framer-2snQS .framer-99xr8r > *, .framer-2snQS .framer-1qnnkps > *, .framer-2snQS .framer-1qczvql > *, .framer-2snQS .framer-8czh2 > *, .framer-2snQS .framer-5ya5nz > *, .framer-2snQS .framer-t1t9y9 > *, .framer-2snQS .framer-1rsdhpb > *, .framer-2snQS .framer-1i23qxm > *, .framer-2snQS .framer-11k1b7b > *, .framer-2snQS .framer-1y0qryh > *, .framer-2snQS .framer-1aboik7 > *, .framer-2snQS .framer-a82jx1 > *, .framer-2snQS .framer-1ytxh3g > *, .framer-2snQS .framer-yltrfj > *, .framer-2snQS .framer-c434bi > *, .framer-2snQS .framer-ucsdnr > *, .framer-2snQS .framer-1j5ijrx > *, .framer-2snQS .framer-svpkzw > *, .framer-2snQS .framer-ur9zar > *, .framer-2snQS .framer-yx1koq > *, .framer-2snQS .framer-1vk61ct > *, .framer-2snQS .framer-1nb7ibw > *, .framer-2snQS .framer-myhzr > *, .framer-2snQS .framer-1i23fb8 > *, .framer-2snQS .framer-n9ho5u > *, .framer-2snQS .framer-xkf6e7 > *, .framer-2snQS .framer-33iu67 > *, .framer-2snQS .framer-omcw4a > *, .framer-2snQS .framer-pbaalc > *, .framer-2snQS .framer-1ennf6q > *, .framer-2snQS .framer-zmlvc7 > *, .framer-2snQS .framer-dai0h3 > *, .framer-2snQS .framer-1ma9u7i > *, .framer-2snQS .framer-d7gtis > *, .framer-2snQS .framer-9o9bst > *, .framer-2snQS .framer-9h05ub > *, .framer-2snQS .framer-13ukmo > *, .framer-2snQS .framer-16lf6td > *, .framer-2snQS .framer-qf3qsd > *, .framer-2snQS .framer-8l9nrc > *, .framer-2snQS .framer-1814yw4 > *, .framer-2snQS .framer-1a46lt > *, .framer-2snQS .framer-bfavf3 > *, .framer-2snQS .framer-13a7vax > *, .framer-2snQS .framer-154na2b > * { margin: 0px; margin-left: calc(10px / 2); margin-right: calc(10px / 2); } .framer-2snQS .framer-d35off > * { margin: 0px; margin-bottom: calc(50px / 2); margin-top: calc(50px / 2); } .framer-2snQS .framer-15osr4i > * { margin: 0px; margin-bottom: calc(3px / 2); margin-top: calc(3px / 2); } .framer-2snQS .framer-lc5uts > * { margin: 0px; margin-bottom: calc(150px / 2); margin-top: calc(150px / 2); } .framer-2snQS .framer-hmj0zf > * { margin: 0px; margin-bottom: calc(49px / 2); margin-top: calc(49px / 2); } .framer-2snQS .framer-1z0upr0 > * { margin: 0px; margin-bottom: calc(17px / 2); margin-top: calc(17px / 2); } .framer-2snQS .framer-1hhaorf > * { margin: 0px; margin-bottom: calc(18px / 2); margin-top: calc(18px / 2); } .framer-2snQS .framer-1ksn20x > * { margin: 0px; margin-bottom: calc(15px / 2); margin-top: calc(15px / 2); } }',
+  '.framer-2snQS.framer-v-3f72b1.framer-7simsb { width: 768px; }',
+  '.framer-2snQS.framer-v-3f72b1 .framer-1voyydo { padding: 0px 0px 158px 0px; }',
+  '.framer-2snQS.framer-v-3f72b1 .framer-lbd5da { align-content: unset; align-items: unset; display: grid; grid-auto-rows: minmax(0, 1fr); grid-template-columns: repeat(2, minmax(50px, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); height: min-content; }',
+  '.framer-2snQS.framer-v-3f72b1 .framer-po28yj-container, .framer-2snQS.framer-v-3f72b1 .framer-1hu24ph-container, .framer-2snQS.framer-v-3f72b1 .framer-16lhphz-container, .framer-2snQS.framer-v-3f72b1 .framer-ta11gu-container { align-self: start; flex: none; height: 100%; justify-self: start; width: 100%; }',
+  '.framer-2snQS.framer-v-3f72b1 .framer-1hest51 { justify-content: flex-start; width: min-content; }',
+  '.framer-2snQS.framer-v-3f72b1 .framer-1clngzw { align-self: stretch; width: auto; }',
+  '.framer-2snQS.framer-v-3f72b1 .framer-17rjj4b, .framer-2snQS.framer-v-3f72b1 .framer-zwfi0m, .framer-2snQS.framer-v-3f72b1 .framer-1c5xlye, .framer-2snQS.framer-v-3f72b1 .framer-5xa6x7, .framer-2snQS.framer-v-3f72b1 .framer-gaxcb0, .framer-2snQS.framer-v-3f72b1 .framer-1kuuvn9, .framer-2snQS.framer-v-3f72b1 .framer-15sdpcd, .framer-2snQS.framer-v-3f72b1 .framer-eq5oby, .framer-2snQS.framer-v-3f72b1 .framer-hctzff { flex: 1 0 0px; white-space: pre-wrap; width: 1px; word-break: break-word; word-wrap: break-word; }',
+  '.framer-2snQS.framer-v-3f72b1 .framer-179lrfp { width: 100%; }',
+  '@supports (background: -webkit-named-image(i)) and (not (font-palette:dark)) { .framer-2snQS.framer-v-3f72b1 .framer-lbd5da { gap: 0px; } .framer-2snQS.framer-v-3f72b1 .framer-lbd5da > *, .framer-2snQS.framer-v-3f72b1 .framer-lbd5da > :first-child, .framer-2snQS.framer-v-3f72b1 .framer-lbd5da > :last-child { margin: 0px; } }',
+  '.framer-2snQS.framer-v-14tpty9.framer-7simsb { padding: 60px 40px 60px 40px; width: 320px; }',
+  '.framer-2snQS.framer-v-14tpty9 .framer-8f6pe6, .framer-2snQS.framer-v-14tpty9 .framer-18oqus6 { order: 0; }',
+  '.framer-2snQS.framer-v-14tpty9 .framer-cthohn, .framer-2snQS.framer-v-14tpty9 .framer-iqctw6 { order: 1; }',
   ...css2,
   ...css,
-  '.framer-s37KW[data-border="true"]::after, .framer-s37KW [data-border="true"]::after { content: ""; border-width: var(--border-top-width, 0) var(--border-right-width, 0) var(--border-bottom-width, 0) var(--border-left-width, 0); border-color: var(--border-color, none); border-style: var(--border-style, none); width: 100%; height: 100%; position: absolute; box-sizing: border-box; left: 0; top: 0; border-radius: inherit; pointer-events: none; }',
+  '.framer-2snQS[data-border="true"]::after, .framer-2snQS [data-border="true"]::after { content: ""; border-width: var(--border-top-width, 0) var(--border-right-width, 0) var(--border-bottom-width, 0) var(--border-left-width, 0); border-color: var(--border-color, none); border-style: var(--border-style, none); width: 100%; height: 100%; position: absolute; box-sizing: border-box; left: 0; top: 0; border-radius: inherit; pointer-events: none; }',
 ];
-var FramerkTXE7wUBN = withCSS3(Component3, css5, 'framer-s37KW',);
+var FramerkTXE7wUBN = withCSS3(Component3, css5, 'framer-2snQS',);
 var stdin_default3 = FramerkTXE7wUBN;
 FramerkTXE7wUBN.displayName = 'Pricing (Page)';
-FramerkTXE7wUBN.defaultProps = { height: 2828, width: 1200, };
+FramerkTXE7wUBN.defaultProps = { height: 2396, width: 1200, };
 addPropertyControls4(FramerkTXE7wUBN, {
   variant: {
     options: ['bAm7TcIeo', 'wm4kyLmlr', 'OlQQ934Vt',],
