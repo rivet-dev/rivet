@@ -1,20 +1,17 @@
 use anyhow::*;
-use rivet_api::{apis, models};
+use rivet_api::apis;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::{
-	build, paths,
-	project::environment::TEMPEnvironment,
-	ToolchainCtx,
-	{config, util::task},
+	paths,
+	util::task,
+	config,
+	tasks::build_publish,
 };
 
-mod docker;
-mod js;
-mod manager;
+pub mod manager;
 
 #[derive(Deserialize)]
 pub struct Input {
@@ -93,23 +90,24 @@ impl task::Task for Task {
 				example_build = Some((build_name, build));
 			}
 
-			// Build
-			let build_id = build_and_upload(
-				&ctx,
+			// Build using build publish task
+			let build_id = build_publish::Task::run(
 				task.clone(),
-				input.config.clone(),
-				&env,
-				&version_name,
-				build_name,
-				build,
+				build_publish::Input {
+					environment_id: env.id,
+					build_tags: input.build_tags.clone(),
+					version_name: version_name.clone(),
+					build_name: build_name.to_string(),
+					runtime: build.runtime.clone(),
+					access: build.access.clone(),
+				},
 			)
-			.await?;
+			.await?
+			.build_id;
 			build_ids.push(build_id);
 		}
 
 		ensure!(!build_ids.is_empty(), "No builds matched build tags");
-
-		task.log("[Deploy Finished]");
 
 		let hub_origin = &ctx.bootstrap.origins.hub;
 		let project_slug = &ctx.project.name_id;
@@ -149,131 +147,4 @@ impl task::Task for Task {
 
 		Ok(Output { build_ids })
 	}
-}
-
-/// Builds the required resources and uploads it to Rivet.
-///
-/// Returns the resulting build ID.
-async fn build_and_upload(
-	ctx: &ToolchainCtx,
-	task: task::TaskCtx,
-	config: config::Config,
-	env: &TEMPEnvironment,
-	version_name: &str,
-	build_name: &str,
-	build: &config::Build,
-) -> Result<Uuid> {
-	task.log("");
-
-	// Build & upload
-	let build_tags = build
-		.full_tags(build_name)
-		.into_iter()
-		.map(|(k, v)| (k.to_string(), v.to_string()))
-		.collect::<HashMap<_, _>>();
-	let build_id = match &build.runtime {
-		config::build::Runtime::Docker(docker) => {
-			docker::build_and_upload(
-				&ctx,
-				task.clone(),
-				docker::BuildAndUploadOpts {
-					env: env.clone(),
-					config: config.clone(),
-					tags: build_tags.clone(),
-					build_config: docker.clone(),
-				},
-			)
-			.await?
-		}
-		config::build::Runtime::JavaScript(js) => {
-			js::build_and_upload(
-				&ctx,
-				task.clone(),
-				js::BuildAndUploadOpts {
-					env: env.clone(),
-					tags: build_tags.clone(),
-					build_config: js.clone(),
-				},
-			)
-			.await?
-		}
-	};
-
-	let mut tags = HashMap::from([
-		(build::tags::NAME.to_string(), build_name.to_string()),
-		(
-			build::tags::ACCESS.to_string(),
-			build.access.as_ref().to_string(),
-		),
-		(build::tags::VERSION.to_string(), version_name.to_string()),
-		(build::tags::CURRENT.to_string(), "true".to_string()),
-	]);
-	if let Some(build_tags) = build.tags.clone() {
-		tags.extend(build_tags.clone());
-	}
-
-	// Find existing builds with current tag
-	let list_res = apis::actor_builds_api::actor_builds_list(
-		&ctx.openapi_config_cloud,
-		Some(&ctx.project.name_id),
-		Some(&env.slug),
-		Some(&serde_json::to_string(&json!({
-			build::tags::NAME: build_name,
-			build::tags::CURRENT: "true",
-		}))?),
-	)
-	.await?;
-
-	// Remove current tag if needed
-	for build in list_res.builds {
-		apis::actor_builds_api::actor_builds_patch_tags(
-			&ctx.openapi_config_cloud,
-			&build.id.to_string(),
-			models::ActorPatchBuildTagsRequest {
-				tags: Some(serde_json::to_value(&json!({
-					build::tags::CURRENT: null
-				}))?),
-				exclusive_tags: None,
-			},
-			Some(&ctx.project.name_id),
-			Some(&env.slug),
-		)
-		.await?;
-	}
-
-	// Tag build
-	let complete_res = apis::actor_builds_api::actor_builds_patch_tags(
-		&ctx.openapi_config_cloud,
-		&build_id.to_string(),
-		models::ActorPatchBuildTagsRequest {
-			tags: Some(serde_json::to_value(&tags)?),
-			exclusive_tags: None,
-		},
-		Some(&ctx.project.name_id),
-		Some(&env.slug),
-	)
-	.await;
-	if let Err(err) = complete_res.as_ref() {
-		task.log(format!("{err:?}"));
-	}
-	complete_res.context("complete_res")?;
-
-	// Upgrade actors
-	task.log(format!("[Upgrading Actors]"));
-	apis::actor_api::actor_upgrade_all(
-		&ctx.openapi_config_cloud,
-		models::ActorUpgradeAllActorsRequest {
-			tags: Some(serde_json::to_value(&build_tags)?),
-			build: Some(build_id),
-			build_tags: None,
-		},
-		Some(&ctx.project.name_id),
-		Some(&env.slug),
-	)
-	.await?;
-
-	task.log(format!("[Build Finished] {build_id}"));
-	task.log("");
-
-	Ok(build_id)
 }

@@ -9,6 +9,7 @@ edition.workspace = true
 [dependencies]
 anyhow = "1.0"
 async-stream = "0.3.3"
+clap = { version = "4.5", features = ["derive"] }
 console = "0.15"
 const_format = "0.2.32"
 deno-embed.workspace = true

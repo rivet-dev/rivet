@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 pub mod build;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Config(Arc<Root>);
+pub struct Config(pub Arc<Root>);
 
 impl Config {
 	pub async fn config_path(path: Option<&Path>) -> Result<PathBuf> {
@@ -68,7 +68,7 @@ impl Root {
 }
 
 // TODO: Add back `deny_unknown_fields` after https://github.com/serde-rs/serde/issues/1600
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct Build {
 	pub tags: Option<HashMap<String, String>>,
@@ -90,7 +90,7 @@ impl Build {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, JsonSchema, strum::AsRefStr)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, strum::AsRefStr, clap::ValueEnum)]
 #[serde(rename_all = "snake_case")]
 pub enum BuildAccess {
 	#[strum(serialize = "public")]

@@ -23,6 +23,8 @@ pub enum SubCommand {
 	Logout(logout::Opts),
 	#[clap(alias = "d")]
 	Deploy(deploy::Opts),
+	#[clap(alias = "p")]
+	Publish(build::publish::Opts),
 	#[clap(alias = "e", alias = "env")]
 	Environment {
 		#[clap(subcommand)]
@@ -72,6 +74,7 @@ impl SubCommand {
 			SubCommand::Login(opts) => opts.execute().await,
 			SubCommand::Logout(opts) => opts.execute().await,
 			SubCommand::Deploy(opts) => opts.execute().await,
+			SubCommand::Publish(opts) => opts.execute().await,
 			SubCommand::Environment { subcommand } => subcommand.execute().await,
 			SubCommand::Project { subcommand } => subcommand.execute().await,
 			SubCommand::Actor { subcommand } => subcommand.execute().await,

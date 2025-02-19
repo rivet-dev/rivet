@@ -14,7 +14,6 @@ use crate::{
 };
 
 pub struct PushOpts {
-	pub config: config::Config,
 	pub env: TEMPEnvironment,
 
 	/// Path to already created tar.

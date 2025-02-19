@@ -16,7 +16,6 @@ use crate::{
 
 pub struct BuildAndUploadOpts {
 	pub env: TEMPEnvironment,
-	pub config: config::Config,
 	pub tags: HashMap<String, String>,
 	pub build_config: config::build::docker::Build,
 }
@@ -44,7 +43,6 @@ pub async fn build_and_upload(
 			ctx,
 			task.clone(),
 			&DockerPushOpts {
-				config: opts.config.clone(),
 				env: opts.env,
 				docker_tag: image.clone(),
 				bundle,
@@ -75,7 +73,6 @@ pub async fn build_and_upload(
 			task.clone(),
 			&project_root.join(path),
 			&DockerBuildPushOpts {
-				config: opts.config.clone(),
 				env: opts.env.clone(),
 				dockerfile: dockerfile.clone(),
 				build_args: Some(
@@ -104,7 +101,6 @@ pub async fn build_and_upload(
 }
 
 pub struct DockerBuildPushOpts {
-	pub config: config::Config,
 	pub env: TEMPEnvironment,
 
 	/// Path to Dockerfile
@@ -149,7 +145,6 @@ pub async fn docker_build_and_push(
 		ctx,
 		task.clone(),
 		&docker::push::PushOpts {
-			config: push_opts.config.clone(),
 			env: push_opts.env.clone(),
 			path: build_output.path.to_owned(),
 			docker_tag: build_output.tag,
@@ -161,7 +156,6 @@ pub async fn docker_build_and_push(
 }
 
 pub struct DockerPushOpts {
-	pub config: config::Config,
 	pub env: TEMPEnvironment,
 
 	pub docker_tag: String,
@@ -201,7 +195,6 @@ pub async fn docker_push(
 		ctx,
 		task.clone(),
 		&docker::push::PushOpts {
-			config: push_opts.config.clone(),
 			env: push_opts.env.clone(),
 			path: archive_path.to_owned(),
 			docker_tag: unique_image_tag,

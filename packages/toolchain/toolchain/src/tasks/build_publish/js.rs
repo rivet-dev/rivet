@@ -27,7 +27,7 @@ pub async fn build_and_upload(
 	task: task::TaskCtx,
 	opts: BuildAndUploadOpts,
 ) -> Result<Uuid> {
-	task.log(format!("[Building] {}", kv_str::to_str(&opts.tags)?));
+	task.log(format!("[Building] {}", opts.build_config.script));
 
 	let project_root = paths::project_root()?;
 

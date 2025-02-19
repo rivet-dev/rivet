@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use crate::{
 	config, paths, project::environment::TEMPEnvironment, toolchain_ctx::ToolchainCtx, util::task,
+	util::task::Task as _,
 };
 
 pub struct DeployOpts {
@@ -30,22 +31,25 @@ pub async fn deploy(
 		.await?
 		.join("manager")
 		.join("index.js");
-	let build_id = super::js::build_and_upload(
-		ctx,
+	let build_id = crate::tasks::build_publish::Task::run(
 		task.clone(),
-		super::js::BuildAndUploadOpts {
-			env: opts.env.clone(),
-			tags: tags.clone(),
-			build_config: config::build::javascript::Build {
+		crate::tasks::build_publish::Input {
+			environment_id: opts.env.id,
+			build_tags: Some(tags.clone()),
+			version_name: "manager".to_string(),
+			build_name: "manager".to_string(),
+			runtime: config::build::Runtime::JavaScript(config::build::javascript::Build {
 				script: manager_script_path.display().to_string(),
 				unstable: config::build::javascript::Unstable {
 					no_bundler: Some(true),
 					..opts.manager_config.js_unstable.clone()
 				},
-			},
+			}),
+			access: config::BuildAccess::Private,
 		},
 	)
-	.await?;
+	.await?
+	.build_id;
 
 	// Check if manager exists
 	let res = apis::actor_api::actor_list(

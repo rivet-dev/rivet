@@ -8,15 +8,15 @@ use super::Compression;
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Build {
+	/// Directory to build the Docker image from.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub build_path: Option<String>,
 	/// Existing image tag to upload.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub image: Option<String>,
 	/// Dockerfile to build.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub dockerfile: Option<String>,
-	/// Directory to build the Docker image from.
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub build_path: Option<String>,
 	/// Build target to upload.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub build_target: Option<String>,
@@ -57,7 +57,7 @@ impl Unstable {
 	}
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, JsonSchema)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, JsonSchema, clap::ValueEnum)]
 #[serde(rename_all = "snake_case")]
 pub enum BuildMethod {
 	/// Use the native Docker build command. Only used if Buildx is not available.
@@ -67,7 +67,7 @@ pub enum BuildMethod {
 	Native,
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, strum::AsRefStr, JsonSchema)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, strum::AsRefStr, JsonSchema, clap::ValueEnum)]
 #[serde(rename_all = "snake_case")]
 pub enum BundleKind {
 	/// Legacy option. Docker image archive output from `docker save`. Slower lobby start

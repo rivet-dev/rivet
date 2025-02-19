@@ -12,7 +12,7 @@ pub enum Runtime {
 	JavaScript(javascript::Build),
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, strum::AsRefStr, JsonSchema)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, strum::AsRefStr, JsonSchema, clap::ValueEnum)]
 #[serde(rename_all = "snake_case")]
 pub enum Compression {
 	/// No compression.
