@@ -28,7 +28,7 @@ function handleNodeBuiltinModules(build: PluginBuild, nodeBuiltinModules: string
 	const NODE_BUILTIN_MODULES_PATTERN = new RegExp(`^(${nodeBuiltinModules.join("|")})$`);
 
 	build.onResolve({ filter: NODE_BUILTIN_MODULES_PATTERN }, (args) => {
-		if (args.kind === "require-call") {
+		if (args.kind === "import-statement" || args.kind === "require-call") {
 			return {
 				path: args.path,
 				namespace: NODE_BUILTIN_MODULES_NAMESPACE,
@@ -73,7 +73,7 @@ function handleUnenvModuleAliases(
 		// Convert `require()` calls for NPM packages to a virtual ES Module that can be imported avoiding the require calls.
 		// Note: Does not apply to Node.js packages that are handled in `handleRequireCallsToNodeJSBuiltins`
 		if (
-			args.kind === "require-call" &&
+			(args.kind === "import-statement" || args.kind === "require-call") &&
 			(aliasPath.startsWith("unenv/runtime/npm/") ||
 				aliasPath.startsWith("unenv/runtime/mock/"))
 		) {
