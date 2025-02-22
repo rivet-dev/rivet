@@ -4,6 +4,7 @@ import { env, nodeless } from "unenv";
 import type { Plugin, PluginBuild } from "esbuild";
 import { decodeGlobalName, encodeGlobalName } from "./utils.ts";
 import { Input } from "./mod.ts";
+import { existsSync } from "@std/fs";
 
 const NODE_BUILTIN_MODULES_NAMESPACE = "node-built-in-modules";
 const UNENV_ALIAS_NAMESPACE = "required-unenv-alias";
@@ -16,7 +17,7 @@ export function nodePolyfill(_input: Input): Plugin {
 
 	return {
 		name: "node-polyfill",
-		setup(build) {
+		async setup(build) {
 			handleNodeBuiltinModules(build, nodeBuiltinModules);
 			handleUnenvModuleAliases(build, alias, external);
 			handleGlobalPolyfills(build, inject);
@@ -28,7 +29,8 @@ function handleNodeBuiltinModules(build: PluginBuild, nodeBuiltinModules: string
 	const NODE_BUILTIN_MODULES_PATTERN = new RegExp(`^(${nodeBuiltinModules.join("|")})$`);
 
 	build.onResolve({ filter: NODE_BUILTIN_MODULES_PATTERN }, (args) => {
-		if (args.kind === "import-statement" || args.kind === "require-call") {
+		if (args.kind === "require-call") {
+			console.log("Resolving node builtin require", args.path);
 			return {
 				path: args.path,
 				namespace: NODE_BUILTIN_MODULES_NAMESPACE,
@@ -48,6 +50,12 @@ function handleNodeBuiltinModules(build: PluginBuild, nodeBuiltinModules: string
 	);
 }
 
+/**
+ * Handles injecting unenv polyfills.
+ * 
+ * - moduleAliases = node import -> path in unenv
+ * - externalModules = modules that should resolve to native imports (only relevant when targeting node, will be empty on web targets)
+ */
 function handleUnenvModuleAliases(
 	build: PluginBuild,
 	moduleAliases: Record<string, string>,
@@ -55,14 +63,19 @@ function handleUnenvModuleAliases(
 ) {
 	const resolvedAliases: Record<string, string> = {};
 	for (const [moduleName, aliasPath] of Object.entries(moduleAliases)) {
-		try {
-			resolvedAliases[moduleName] = require
-				.resolve(aliasPath)
-				.replace(/\.cjs$/, ".mjs");
-		} catch (e) {
-			// this is an alias for package that is not installed in the current app => ignore
+		const modifiedPath = `${aliasPath.replace(/-cjs$/, "")}.mjs`;
+		const resolvedPath = resolve(Deno.cwd(), "node_modules", modifiedPath);
+		if (existsSync(resolvedPath)) {
+			//console.log(`Resolved ${moduleName} -> ${aliasPath} -> ${resolvedPath}`);
+
+			// HACK: Unsure why it's giving us `-cjs` instead of `.cjs`
+			resolvedAliases[moduleName] = resolvedPath;
+		} else {
+			// This will fail to resolve buffer.mjs, consola, and mime
+			console.log(`Failed to resolve ${moduleName} -> ${aliasPath} -> ${resolvedPath}`);
 		}
 	}
+	console.log('Resolved aliases', resolvedAliases);
 
 	const ALIAS_MODULE_PATTERN = new RegExp(
 		`^(${Object.keys(resolvedAliases).join("|")})$`
@@ -83,9 +96,12 @@ function handleUnenvModuleAliases(
 			};
 		}
 
+		const resolvedPath = resolvedAliases[args.path];
+		console.log(`Resolving unenv module alias ${args.path} -> ${resolvedPath}`);
+
 		// Resolve the alias to its absolute path and potentially mark it as external
 		return {
-			path: resolvedAliases[args.path],
+			path: resolvedPath,
 			external: externalModules.includes(aliasPath),
 		};
 	});

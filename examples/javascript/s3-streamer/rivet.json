@@ -1,0 +1,17 @@
+{
+	"builds": {
+		"s3-streamer": {
+			"script": "actor.ts",
+			"access": "private",
+			"unstable": {
+				"minify": false,
+				"dump_build": true
+			}
+		}
+	},
+	"unstable": {
+		"manager": {
+			"enable": false
+		}
+	}
+}

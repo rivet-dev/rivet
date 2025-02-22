@@ -1,7 +1,10 @@
 {
     "imports": {
+        "@std/fs": "jsr:@std/fs@^1.0.13",
         "chalk": "npm:chalk@5.4.1",
         "dedent": "npm:dedent@1.5.3",
+        "consola": "npm:consola@^3.2.3",
+		"mime": "npm:mime@^3.0.0",
         "esbuild": "npm:esbuild@0.24.2",
         "glob": "npm:glob@11.0.0",
         "unenv": "npm:unenv@1.10.0",

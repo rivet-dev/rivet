@@ -18,6 +18,7 @@
 **/.yarn
 **/dist/
 **/node_modules/
+**/vendor/
 **/target
 
 # Site
