@@ -1,9 +1,10 @@
 import { resolve } from "node:path";
 import dedent from "dedent";
-import { env, nodeless } from "unenv";
+import { defineEnv, type Preset } from "unenv";
 import type { Plugin, PluginBuild } from "esbuild";
 import { decodeGlobalName, encodeGlobalName } from "./utils.ts";
 import { Input } from "./mod.ts";
+import { rivetPreset } from "./preset.ts";
 import { existsSync } from "@std/fs";
 
 const NODE_BUILTIN_MODULES_NAMESPACE = "node-built-in-modules";
@@ -12,7 +13,9 @@ const UNENV_ALIAS_NAMESPACE = "required-unenv-alias";
 // Based on https://github.com/unjs/unenv/issues/32#issuecomment-1125928455
 
 export function nodePolyfill(_input: Input): Plugin {
-	const { alias, inject, external } = env(nodeless);
+	const { env: { alias, inject, external } } = defineEnv({
+		presets: [rivetPreset]
+	});
 	const nodeBuiltinModules = Object.keys(alias);
 
 	return {
@@ -30,7 +33,7 @@ function handleNodeBuiltinModules(build: PluginBuild, nodeBuiltinModules: string
 
 	build.onResolve({ filter: NODE_BUILTIN_MODULES_PATTERN }, (args) => {
 		if (args.kind === "require-call") {
-			console.log("Resolving node builtin require", args.path);
+			//console.log("Resolving node builtin require", args.path);
 			return {
 				path: args.path,
 				namespace: NODE_BUILTIN_MODULES_NAMESPACE,
@@ -63,8 +66,8 @@ function handleUnenvModuleAliases(
 ) {
 	const resolvedAliases: Record<string, string> = {};
 	for (const [moduleName, aliasPath] of Object.entries(moduleAliases)) {
-		const modifiedPath = `${aliasPath.replace(/-cjs$/, "")}.mjs`;
-		const resolvedPath = resolve(Deno.cwd(), "node_modules", modifiedPath);
+		const modifiedPath = `${aliasPath.replace(/^unenv\//, "").replace(/-cjs$/, "")}.mjs`;
+		const resolvedPath = resolve(Deno.cwd(), "node_modules", "unenv", "dist", "runtime", modifiedPath);
 		if (existsSync(resolvedPath)) {
 			//console.log(`Resolved ${moduleName} -> ${aliasPath} -> ${resolvedPath}`);
 
@@ -72,10 +75,10 @@ function handleUnenvModuleAliases(
 			resolvedAliases[moduleName] = resolvedPath;
 		} else {
 			// This will fail to resolve buffer.mjs, consola, and mime
-			console.log(`Failed to resolve ${moduleName} -> ${aliasPath} -> ${resolvedPath}`);
+			//console.log(`Failed to resolve ${moduleName} -> ${aliasPath} -> ${resolvedPath}`);
 		}
 	}
-	console.log('Resolved aliases', resolvedAliases);
+	//console.log('Resolved aliases', resolvedAliases);
 
 	const ALIAS_MODULE_PATTERN = new RegExp(
 		`^(${Object.keys(resolvedAliases).join("|")})$`
@@ -97,7 +100,7 @@ function handleUnenvModuleAliases(
 		}
 
 		const resolvedPath = resolvedAliases[args.path];
-		console.log(`Resolving unenv module alias ${args.path} -> ${resolvedPath}`);
+		//console.log(`Resolving unenv module alias ${args.path} -> ${resolvedPath}`);
 
 		// Resolve the alias to its absolute path and potentially mark it as external
 		return {
