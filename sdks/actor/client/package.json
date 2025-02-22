@@ -1,6 +1,6 @@
 {
 	"name": "@rivet-gg/actor-client",
-	"version": "25.1.1",
+	"version": "5.1.2",
 	"files": ["src", "dist", "package.json"],
 	"type": "module",
 	"exports": {

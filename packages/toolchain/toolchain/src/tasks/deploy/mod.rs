@@ -4,12 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use crate::{
-	paths,
-	util::task,
-	config,
-	tasks::build_publish,
-};
+use crate::{config, paths, tasks::build_publish, util::task};
 
 pub mod manager;
 

@@ -67,7 +67,9 @@ pub enum BuildMethod {
 	Native,
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, strum::AsRefStr, JsonSchema, clap::ValueEnum)]
+#[derive(
+	Debug, Copy, Clone, Serialize, Deserialize, strum::AsRefStr, JsonSchema, clap::ValueEnum,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum BundleKind {
 	/// Legacy option. Docker image archive output from `docker save`. Slower lobby start

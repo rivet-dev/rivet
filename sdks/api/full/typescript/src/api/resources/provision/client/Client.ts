@@ -13,7 +13,7 @@ export declare namespace Provision {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
-        xApiVersion?: "25.1.1";
+        xApiVersion?: "5.1.2";
         fetcher?: core.FetchFunction;
     }
 
@@ -27,7 +27,7 @@ export declare namespace Provision {
         /** Additional headers to include in the request. */
         headers?: Record<string, string>;
         /** Override the X-API-Version header */
-        xApiVersion?: "25.1.1";
+        xApiVersion?: "5.1.2";
     }
 }
 
