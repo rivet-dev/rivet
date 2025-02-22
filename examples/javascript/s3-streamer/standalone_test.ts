@@ -1,6 +1,5 @@
+import { Readable } from "node:stream";
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
-//import { Readable } from "node:stream";
-import { Readable } from "/Users/nathan/rivet/ee/oss/packages/toolchain/js-utils-embed/js/node_modules/unenv/runtime/node/stream/index.mjs";
 
 // Helper to convert Node streams to Web streams
 function nodeStreamToWebStream(nodeStream: Readable) {
@@ -42,7 +41,7 @@ async function streamS3File(
 		// Convert S3 stream to Web stream
 		//console.log("Body type", response.Body?.constructor.name);
 		//const s3Stream = Readable.from(response.Body.transformToWebStream());
-		const webStream1 = response.Body.transformToWebStream();
+		const webStream1 = await response.Body.transformToByteArray();
 		console.log("Body type", webStream1.constructor.name);
 		const s3Stream = Readable.from(webStream1);
 		const webStream = nodeStreamToWebStream(s3Stream);
