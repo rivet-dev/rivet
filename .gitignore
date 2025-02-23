@@ -33,4 +33,8 @@ site/src/generated/
 # Icons
 frontend/packages/icons/src/*
 
+# HACK: Unsure why these artifacts are generated when running fern generate
+frontend/apps/hub/vite.config.ts.*
+
 .aider*
+

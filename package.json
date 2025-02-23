@@ -17,7 +17,6 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
-		"lefthook": "^1.6.12",
 		"turbo": "^2.0.1"
 	},
 	"resolutions": {
