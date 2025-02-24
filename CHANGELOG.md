@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/).
 
+## [5.1.2](https://github.com/rivet-gg/rivet/compare/v25.1.1...v5.1.2) (2025-02-24)
+
+
+### Features
+
+* **cli:** add `rivet push` command ([#2042](https://github.com/rivet-gg/rivet/issues/2042)) ([e9b6b3d](https://github.com/rivet-gg/rivet/commit/e9b6b3d2375cff723a402da770ee7e247c48b804))
+* **hub:** add automatic region to actor creation form ([#2018](https://github.com/rivet-gg/rivet/issues/2018)) ([18c3eee](https://github.com/rivet-gg/rivet/commit/18c3eee1508d436917d78734d81eb0c4a9c72776))
+* **hub:** add timestamp to builds list ([#2013](https://github.com/rivet-gg/rivet/issues/2013)) ([c0451c7](https://github.com/rivet-gg/rivet/commit/c0451c73d020f2a9935ad8e14687a85a750f432a))
+* **hub:** allow filtering by own tags ([#2016](https://github.com/rivet-gg/rivet/issues/2016)) ([4be65c2](https://github.com/rivet-gg/rivet/commit/4be65c24e0016c3c719385da6e3ad9357809381b))
+* **hub:** use same setup guide as main site ([#2029](https://github.com/rivet-gg/rivet/issues/2029)) ([4608305](https://github.com/rivet-gg/rivet/commit/4608305335502a701c7aa13260d59618df6551f6))
+* **hub:** when actor is starting and no logs are found display message ([#2017](https://github.com/rivet-gg/rivet/issues/2017)) ([6d96d60](https://github.com/rivet-gg/rivet/commit/6d96d609e3fbc2d7f0b935b595f320ec9f3bd313))
+
+
+### Bug Fixes
+
+* **hub:** invalid token when parsing recent team id ([#2011](https://github.com/rivet-gg/rivet/issues/2011)) ([9120786](https://github.com/rivet-gg/rivet/commit/91207861693134dd8cde00d4a79c3af147390b24))
+* **hub:** logs are not streamed when opening newly created actor ([#2015](https://github.com/rivet-gg/rivet/issues/2015)) ([2352677](https://github.com/rivet-gg/rivet/commit/23526779129f4dee92052ff116ac1aac5037c4e8))
+* **hub:** prevent long lines to break the layout ([#2014](https://github.com/rivet-gg/rivet/issues/2014)) ([a16e496](https://github.com/rivet-gg/rivet/commit/a16e4968ad3abb02439866c0ecc1af4a939baf5d))
+* **hub:** remove outline on avatars ([#2010](https://github.com/rivet-gg/rivet/issues/2010)) ([64e322a](https://github.com/rivet-gg/rivet/commit/64e322a0cce7998a64699cda7d5210cec2de2396))
+* **js-utils:** correctly handle esbuild with import-statement not matching node stdlib ([#2067](https://github.com/rivet-gg/rivet/issues/2067)) ([9b39c35](https://github.com/rivet-gg/rivet/commit/9b39c35a8a9830bf1a6655c967d3b6c352d548c0))
+
+
+### Code Refactoring
+
+* **hub:** improve bundle size ([#2030](https://github.com/rivet-gg/rivet/issues/2030)) ([398d9f8](https://github.com/rivet-gg/rivet/commit/398d9f858b59012d527a67dad656ff1a98597c52))
+* **hub:** remove "actions" label in context menus ([#2019](https://github.com/rivet-gg/rivet/issues/2019)) ([2ed27d9](https://github.com/rivet-gg/rivet/commit/2ed27d931f5fa7eefafc4b57f4b9c915109df677))
+* **hub:** remove public & dev tokens unless legacy mm ([#2012](https://github.com/rivet-gg/rivet/issues/2012)) ([e0f6ac5](https://github.com/rivet-gg/rivet/commit/e0f6ac5f95fbb421825c82f83c8595fb8e0d2a06))
+
+
+### Chores
+
+* add inspector and gif for changelog ([#2024](https://github.com/rivet-gg/rivet/issues/2024)) ([4e38407](https://github.com/rivet-gg/rivet/commit/4e38407e45c44cee66ba8d683ca5714c971587cc))
+* add s3 example ([#2068](https://github.com/rivet-gg/rivet/issues/2068)) ([fb604f6](https://github.com/rivet-gg/rivet/commit/fb604f628ac510df77f811c69d5e5a750c2eed1f))
+* added getting started prereq ([#2021](https://github.com/rivet-gg/rivet/issues/2021)) ([d13839e](https://github.com/rivet-gg/rivet/commit/d13839e90c55a74cb7d2d4f02803d8408bc02369))
+* **blog:** post sqlite article ([ab75fb4](https://github.com/rivet-gg/rivet/commit/ab75fb456461563acd4f199442f755ec98c9a55a))
+* Credits update ([#2053](https://github.com/rivet-gg/rivet/issues/2053)) ([6ccf25c](https://github.com/rivet-gg/rivet/commit/6ccf25c13013c8f70fdbf1bdf2751066bc5858ce))
+* **js-utils:** switch from unenv to node-stdlib-browser ([#2071](https://github.com/rivet-gg/rivet/issues/2071)) ([479bc55](https://github.com/rivet-gg/rivet/commit/479bc557294f1b6bc446a7dceab94ce0692e43ec))
+* **js-utils:** upgrade to unenv 2 ([#2070](https://github.com/rivet-gg/rivet/issues/2070)) ([83a6ca5](https://github.com/rivet-gg/rivet/commit/83a6ca5c91659518bc4b4c82d4c508cadb59ad10))
+* release 5.1.2 ([5237e0e](https://github.com/rivet-gg/rivet/commit/5237e0efcd0349fc625a1f860470427754bcc282))
+* release 5.1.2 ([c54ca06](https://github.com/rivet-gg/rivet/commit/c54ca065985a67ebcd23e0d138c7862457e7fb02))
+* **release:** generate yarn.lock on release ([c432d47](https://github.com/rivet-gg/rivet/commit/c432d4711944d570ff4baf0b26e14cf458e87f2f))
+* **release:** update version to 5.1.2 ([9d0bbe2](https://github.com/rivet-gg/rivet/commit/9d0bbe2e6c6c6171d3f0ed1452dd401fc4976aee))
+* **release:** update version to 5.1.2 ([7f92886](https://github.com/rivet-gg/rivet/commit/7f92886ce6256500a0f2dc16bc00a9e9c111952b))
+* remove lefthook git hooks ([#2073](https://github.com/rivet-gg/rivet/issues/2073)) ([86010d0](https://github.com/rivet-gg/rivet/commit/86010d09781f4283e5123e9d89db9ded6904ea66))
+* update discussions url ([b39c154](https://github.com/rivet-gg/rivet/commit/b39c154f3164ec5b00cc1d18bd0d3c4ccbc443b5))
+* update pricing blog ([#2050](https://github.com/rivet-gg/rivet/issues/2050)) ([295ba50](https://github.com/rivet-gg/rivet/commit/295ba504bfa645fec897b7906996adfc22a95cc0))
+* Updated Pricing ([#2044](https://github.com/rivet-gg/rivet/issues/2044)) ([50226fd](https://github.com/rivet-gg/rivet/commit/50226fd787b7676887aabe683ff9b20ba7f125fc))
+
 ## [25.1.1](https://github.com/rivet-gg/rivet/compare/v25.1.0...v25.1.1) (2025-02-08)
 
 
