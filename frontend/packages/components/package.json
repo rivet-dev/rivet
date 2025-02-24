@@ -3,7 +3,11 @@
 	"private": true,
 	"version": "1.0.0",
 	"type": "module",
-	"files": ["dist", "src", "public"],
+	"files": [
+		"dist",
+		"src",
+		"public"
+	],
 	"main": "./dist/index.cjs",
 	"module": "./dist/index.js",
 	"sideEffects": false,

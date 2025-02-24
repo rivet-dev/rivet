@@ -2,7 +2,12 @@
 	"name": "@rivet-gg/actor",
 	"version": "5.1.2",
 	"license": "Apache-2.0",
-	"files": ["dist", "src", "deno.json", "package.json"],
+	"files": [
+		"dist",
+		"src",
+		"deno.json",
+		"package.json"
+	],
 	"type": "module",
 	"exports": {
 		".": {
@@ -65,7 +70,9 @@
 	},
 	"deno": {
 		"compilerOptions": {
-			"lib": ["dom"],
+			"lib": [
+				"dom"
+			],
 			"jsx": "react-jsx",
 			"jsxImportSource": "react",
 			"jsxImportSourceTypes": "@types/react@^19"
