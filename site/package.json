@@ -4,7 +4,7 @@
 	"private": true,
 	"scripts": {
 		"build": "./scripts/buildcf.sh",
-		"dev": "yarn run update-framer && next dev",
+		"dev": " next dev",
 		"lint": "next lint",
 		"format": "prettier --write .",
 		"create-article": "vite-node scripts/generateArticle.js",

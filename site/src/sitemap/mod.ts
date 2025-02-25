@@ -288,6 +288,16 @@ export const sitemap = [
 							},
 						],
 					},
+					{
+						title: "Monitoring",
+						collapsible: true,
+						pages: [
+							{
+								title: "BetterStack",
+								href: "/docs/monitoring/betterstack",
+							},
+						],
+					},
 					// {
 					//   title: 'Comparison',
 					//   collapsible: true,

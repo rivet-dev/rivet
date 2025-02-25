@@ -1,0 +1,300 @@
+import betterStackExample from "./images/betterstack-example.png";
+
+# BetterStack Monitoring
+
+[BetterStack](https://betterstack.com/) provides comprehensive monitoring, logging, and uptime tracking for your applications. This guide will show you how to integrate BetterStack with your Rivet Actor to monitor performance and collect logs.
+
+<Image src={betterStackExample} />
+
+<Warning>
+	This guide only applies to Docker Actors.
+</Warning>
+
+## Prerequisites
+
+Before you begin, you'll need:
+
+- A [BetterStack](https://betterstack.com/) account
+- Your BetterStack API token
+- The Rivet CLI installed
+- Docker installed (for local testing)
+
+## How It Works
+
+The integration uses [Vector](https://vector.dev/) as a log collector and metrics shipper. Logs from your actor are piped to Vector, then forwarded to BetterStack. Vector also automatically collects system metrics to upload to BetterStack.
+
+## Setup Instructions
+
+### 1. Create a BetterStack Account
+
+If you don't already have one, sign up for a BetterStack account at [betterstack.com](https://betterstack.com/).
+
+### 2. Get Your BetterStack Credentials
+
+From your BetterStack dashboard:
+
+1. Navigate to the Logs section
+2. Create a new source by clicking _Connect source_
+3. Select _Logs + Metrics > Vector_ then click _Connect source_
+4. Note _Ingesting host_ and _Source token_ for later
+
+### 3. Configure Your Project
+
+#### Vector Configuration
+
+Create a `vector.yaml` file in your project with the following configuration:
+
+```yaml
+sources:
+  # Capture stdout/stderr from the child process
+  server_logs:
+    type: "stdin"
+
+  # Collect host metrics
+  host_metrics:
+    type: "host_metrics"
+    scrape_interval_secs: 30
+    collectors: [cpu, load, host, memory, network]
+
+transforms:
+  # Add lobby ID to logs
+  add_lobby_id:
+    type: "remap"
+    inputs: ["server_logs"]
+    source: |
+      .lobby_id = "${LOBBY_ID:unknown}"
+
+  # Add lobby ID to metrics
+  add_lobby_id_metrics:
+    type: "remap"
+    inputs: ["host_metrics"]
+    source: |
+      .lobby_id = "${LOBBY_ID:unknown}"
+
+sinks:
+  # Ship logs to BetterStack
+  logs_sink:
+    type: "http"
+    method: "post"
+    uri: "https://${BETTERSTACK_HOST}/"
+    encoding:
+      codec: "json"
+    compression: "gzip"
+    auth:
+      strategy: "bearer"
+      token: "${BETTERSTACK_TOKEN}"
+    inputs: ["add_lobby_id"]
+    request:
+      retry_attempts: 5
+      retry_initial_backoff_secs: 1
+      retry_max_duration_secs: 10
+
+  # Ship metrics to BetterStack
+  metrics_sink:
+    type: "http"
+    method: "post"
+    uri: "https://${BETTERSTACK_HOST}/metrics"
+    encoding:
+      codec: "json"
+    compression: "gzip"
+    auth:
+      strategy: "bearer"
+      token: "${BETTERSTACK_TOKEN}"
+    inputs: ["add_lobby_id_metrics"]
+    request:
+      retry_attempts: 5
+      retry_initial_backoff_secs: 1
+      retry_max_duration_secs: 10
+
+  # Print to console for debugging (optional)
+  console:
+    type: "console"
+    inputs: ["add_lobby_id"]
+    encoding:
+      codec: "text"
+```
+
+<Tip>
+	`lobby_id` is being used as an example to uniquely identify your actor. You can define your own custom identifier.
+</Tip>
+
+#### Dockerfile Configuration
+
+Update your Dockerfile to include the Vector config & Vector binary.
+
+Here is an example Dockerfile for a Node.js Actor:
+
+```dockerfile
+# syntax=docker/dockerfile:1
+# check=skip=SecretsUsedInArgOrEnv
+
+FROM node:22-bookworm-slim
+
+ENV CI=true
+ENV COREPACK_ENABLE_STRICT=0
+ENV VECTOR_LOG=ERROR
+RUN corepack enable
+
+# Install Vector
+RUN apt-get update -y && \
+    apt-get install -y curl && \
+    bash -c "$(curl -L https://setup.vector.dev)" && \
+    apt-get install -y vector
+
+# Configure Vector with BetterStack
+COPY ./vector.yaml /etc/vector/vector.yaml
+
+# Setup app
+RUN groupadd -r rivet && useradd -r -g rivet rivet && \
+    mkdir -p /home/rivet/.cache/node/corepack && \
+    chown -R rivet:rivet /home/rivet
+WORKDIR /app
+COPY --chown=rivet:rivet . .
+USER rivet
+RUN yarn install
+
+# Pipe logs to Vector
+CMD ["sh", "-c", "NODE_ENV=production node ./server.js 2>&1 | vector"]
+```
+
+#### Rivet Configuration
+
+If you don't already have a `rivet.json`, you can use this:
+
+```json
+{
+  "builds": {
+    "example": {
+      "dockerfile": "Dockerfile",
+      "access": "private"
+    }
+  },
+  "unstable": {
+    "manager": {
+      "enable": false
+    }
+  }
+}
+```
+
+### 4. Deploy Your Actor
+
+Deploy your Actor to Rivet:
+
+```bash
+rivet deploy
+```
+
+### 5. Pass BetterStack Credentials to Your Actor
+
+When creating Actors, pass your BetterStack credentials as environment variables:
+
+```javascript
+await client.actor.create({
+    project: PROJECT_ID,
+    environment: ENVIRONMENT_ID,
+    body: {
+        // ... other configuration ...
+        runtime: {
+            environment: {
+                LOBBY_ID: lobbyId,
+                BETTERSTACK_TOKEN: "your-betterstack-token",  // Copy from dashboard
+                BETTERSTACK_HOST: "logs.betterstack.com"  // Copy from dashboard
+            }
+        },
+        // ... other configuration ...
+    },
+});
+```
+
+## Viewing Logs and Metrics
+
+Once your Actor is running with the BetterStack integration:
+
+1. Log in to your BetterStack dashboard
+2. Navigate to the Logs section to view your application logs
+3. Check the Metrics section to view performance data
+4. Set up alerts based on log patterns or metric thresholds
+
+## Creating Custom Dashboards
+
+You can create custom dashboards to monitor your Actors by lobby ID:
+
+1. In your BetterStack dashboard, navigate to Dashboards
+2. Click _Create dashboard_
+3. Click _Create chart_
+4. Change the query type to _SQL expression_
+5. Write a custom SQL query using the lobby_id tag in the `GROUP BY` (see examples below)
+6. Save and configure your dashboard
+
+### Example: CPU Usage by Lobby ID
+
+Here's an example SQL query to chart CPU usage by lobby ID:
+
+```sql
+ -- CPU Usage by Lobby ID
+ SELECT
+   {{time}} AS time,
+   metricTag('lobby_id') AS series,
+   -- Calculate rate of CPU seconds consumption per second
+   avgMerge(rate_avg) AS "CPU Usage (cores)"
+ FROM {{source}}
+ WHERE
+   name = 'cpu_seconds_total'
+   AND time BETWEEN {{start_time}} AND {{end_time}}
+ GROUP BY time, series, series_id
+ ORDER BY time, series
+```
+### Example: Memory Usage by Lobby ID
+
+Here's an example SQL query to chart memory usage by lobby ID:
+
+```sql
+-- Memory usage comparison between lobbies
+WITH memory_data AS (
+  SELECT
+    {{time}} AS time,
+    metricTag('lobby_id') AS lobby_id,
+    avgMerge(value_avg) AS memory_bytes
+  FROM {{source}}
+  WHERE 
+    name = 'memory_total_bytes'
+    AND time BETWEEN {{start_time}} AND {{end_time}}
+  GROUP BY time, lobby_id, series_id
+),
+-- Calculate total memory across all lobbies for each time period
+total_per_time AS (
+  SELECT
+    time,
+    SUM(memory_bytes) AS total_memory
+  FROM memory_data
+  GROUP BY time
+)
+SELECT
+  m.time,
+  m.lobby_id AS series,
+  -- Show each lobby's percentage of total memory usage
+  (m.memory_bytes / t.total_memory) * 100 AS "% of Total Memory"
+FROM memory_data m
+JOIN total_per_time t ON m.time = t.time
+ORDER BY m.time, series
+```
+
+## Troubleshooting
+
+If you're not seeing logs or metrics in BetterStack:
+
+1. Verify your BetterStack token and host are correct
+2. Check that Vector is running properly by examining the Actor logs
+3. Ensure your application is writing to stdout/stderr
+4. Verify network connectivity from your Actor to BetterStack
+
+## Full Example Source Code
+
+Source code for a full example can be found [here](https://github.com/rivet-gg/rivet/tree/5e9f544bd644a5de0462085191713794017d3c00/examples/misc/monitor-betterstack).
+
+## Additional Resources
+
+- [BetterStack Documentation](https://betterstack.com/docs/logs/start/)
+- [Vector Documentation](https://vector.dev/docs/)
+

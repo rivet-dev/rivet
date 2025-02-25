@@ -1,0 +1,17 @@
+{
+  "name": "monitor-betterstack",
+  "packageManager": "yarn@4.6.0",
+  "dependencies": {
+    "@hono/node-server": "^1.8.2",
+    "hono": "^4.7.2"
+  },
+  "devDependencies": {
+    "@rivet-gg/api": "^24.6.2",
+    "readline": "^1.3.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node e2e_test.js"
+  },
+  "type": "module"
+}
