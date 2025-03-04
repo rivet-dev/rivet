@@ -147,7 +147,7 @@ export function CommandPanel() {
 				<span className="hidden lg:inline-flex">Search...</span>
 				<span className="inline-flex lg:hidden">Search...</span>
 				<Kbd className="absolute right-[0.3rem] top-[0.3rem] hidden sm:flex">
-					<Kbd.Cmd />K
+					<Kbd.Key />K
 				</Kbd>
 			</Button>
 			<CommandDialog
