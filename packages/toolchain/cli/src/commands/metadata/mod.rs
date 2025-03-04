@@ -5,6 +5,8 @@ use toolchain::paths;
 #[derive(Subcommand)]
 pub enum SubCommand {
 	Path,
+	ApiEndpoint,
+	AccessToken,
 }
 
 impl SubCommand {
@@ -17,6 +19,16 @@ impl SubCommand {
 						.expect("project_data_dir")
 						.display()
 				);
+				Ok(())
+			}
+			SubCommand::ApiEndpoint => {
+				let ctx = crate::util::login::load_or_login().await?;
+				println!("{}", ctx.api_endpoint);
+				Ok(())
+			}
+			SubCommand::AccessToken => {
+				let ctx = crate::util::login::load_or_login().await?;
+				println!("{}", ctx.access_token);
 				Ok(())
 			}
 		}
