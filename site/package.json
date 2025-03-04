@@ -24,7 +24,7 @@
 		"@mdx-js/react": "^3.1.0",
 		"@next/mdx": "^15.1.7",
 		"@next/third-parties": "latest",
-		"@orama/react-components": "^0.3.2",
+		"@orama/react-components": "^0.5.0",
 		"@rivet-gg/api": "^0.0.1-rc19",
 		"@rivet-gg/components": "workspace:*",
 		"@rivet-gg/icons": "workspace:*",

@@ -2780,15 +2780,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@orama/react-components@npm:^0.3.2":
-  version: 0.3.2
-  resolution: "@orama/react-components@npm:0.3.2"
+"@orama/react-components@npm:^0.5.0":
+  version: 0.5.0
+  resolution: "@orama/react-components@npm:0.5.0"
   dependencies:
-    "@orama/wc-components": "npm:0.3.2"
+    "@orama/wc-components": "npm:0.5.0"
   peerDependencies:
     react: ">=17.0.0 <20.0.0"
     react-dom: ">=17.0.0 <20.0.0"
-  checksum: 10c0/9326925b86d021eaa634a44205a08ba2dbd2669270fba1d9819b77b556836e51b12be94cb72b8ed147100dbf83e42ffe7e6308962f7c6cfd3735b72f60910743
+  checksum: 10c0/451c529df679fab80eeb2272d4d9d8b4e4344290f2fcb4a27e898eed1db11ed791c7cac9e124f9a7800a1a5450559a9d9d930932d6f89cf4c6bcf7de3ca5c109
   languageName: node
   linkType: hard
 
@@ -2802,9 +2802,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@orama/wc-components@npm:0.3.2":
-  version: 0.3.2
-  resolution: "@orama/wc-components@npm:0.3.2"
+"@orama/wc-components@npm:0.5.0":
+  version: 0.5.0
+  resolution: "@orama/wc-components@npm:0.5.0"
   dependencies:
     "@orama/highlight": "npm:^0.1.6"
     "@orama/orama": "npm:^3.0.0"
@@ -2820,7 +2820,7 @@ __metadata:
     marked-highlight: "npm:^2.1.3"
     shiki: "npm:^1.10.3"
     sse.js: "npm:^2.5.0"
-  checksum: 10c0/980912a7f6a22731f8ab3dfc028df6d4391a7b835b7ee0abd6c75ca10bd4abce53d62fc8dc21d6d4b7605e2d547b39d0bf9215a1323bdf91b4bb8a800bbdca2b
+  checksum: 10c0/ea8417433cbcada0bcf1156c5c1e35647da96f2c6480a5962b57c1140d6f737a9ff2380acd0e3fd91982db16e94709a016493d226e5e010f65720796e42b79fa
   languageName: node
   linkType: hard
 
@@ -13906,7 +13906,7 @@ __metadata:
     "@mdx-js/react": "npm:^3.1.0"
     "@next/mdx": "npm:^15.1.7"
     "@next/third-parties": "npm:latest"
-    "@orama/react-components": "npm:^0.3.2"
+    "@orama/react-components": "npm:^0.5.0"
     "@rivet-gg/api": "npm:^0.0.1-rc19"
     "@rivet-gg/components": "workspace:*"
     "@rivet-gg/icons": "workspace:*"

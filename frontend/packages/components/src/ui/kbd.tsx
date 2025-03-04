@@ -10,7 +10,7 @@ export function Kbd({ className, children }: KbdProps) {
 	return (
 		<kbd
 			className={cn(
-				"pointer-events-none  h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 inline-flex",
+				"pointer-events-none h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 inline-flex",
 				className,
 			)}
 		>
@@ -19,6 +19,14 @@ export function Kbd({ className, children }: KbdProps) {
 	);
 }
 
-Kbd.Cmd = function Cmd() {
-	return <span className="text-xs">⌘</span>;
+interface KbdKeyProps {
+	className?: string;
+}
+
+Kbd.Key = function Key({ className }: KbdKeyProps) {
+	return (
+		<span className={cn("text-xs", className)}>
+			{navigator?.userAgent?.includes("Mac") ? "⌘" : "Ctrl"}
+		</span>
+	);
 };
