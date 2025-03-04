@@ -1,6 +1,7 @@
 use anyhow::*;
 use clap::Subcommand;
 
+mod list;
 mod select;
 
 #[derive(Subcommand)]
@@ -12,11 +13,14 @@ pub enum SubCommand {
 		#[clap(long, alias = "env", short = 'e')]
 		environment: Option<String>,
 	},
+	#[clap(alias = "ls")]
+	List(list::Opts),
 }
 
 impl SubCommand {
 	pub async fn execute(&self) -> Result<()> {
 		match &self {
+			SubCommand::List(opts) => opts.execute().await,
 			SubCommand::Select(opts) => opts.execute().await,
 			SubCommand::View { environment } => {
 				let ctx = crate::util::login::load_or_login().await?;
