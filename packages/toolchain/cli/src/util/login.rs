@@ -30,10 +30,14 @@ pub fn inquire_self_hosting() -> Result<Option<String>> {
 	Ok(api_endpoint)
 }
 
+pub async fn is_logged_in() -> Result<bool> {
+	meta::read_project(&paths::data_dir()?, |x| x.cloud.is_some()).await
+}
+
 /// Loads the toolchain ctx if already signed in. Prompts to login if not signed in.
 pub async fn load_or_login_with_endpoint(api_endpoint: Option<String>) -> Result<ToolchainCtx> {
 	// Login if needed
-	let is_logged_in = meta::read_project(&paths::data_dir()?, |x| x.cloud.is_some()).await?;
+	let is_logged_in = is_logged_in().await?;
 	if !is_logged_in {
 		login(api_endpoint).await?;
 	}

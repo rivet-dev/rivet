@@ -7,6 +7,7 @@ pub enum SubCommand {
 	Path,
 	ApiEndpoint,
 	AccessToken,
+	AuthStatus,
 }
 
 impl SubCommand {
@@ -29,6 +30,11 @@ impl SubCommand {
 			SubCommand::AccessToken => {
 				let ctx = crate::util::login::load_or_login().await?;
 				println!("{}", ctx.access_token);
+				Ok(())
+			}
+			SubCommand::AuthStatus => {
+				let is_logged_in = crate::util::login::is_logged_in().await?;
+				println!("{}", is_logged_in);
 				Ok(())
 			}
 		}
