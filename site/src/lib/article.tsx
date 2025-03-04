@@ -10,13 +10,21 @@ export const AUTHORS = {
 		name: "Nathan Flurry",
 		role: "Co-founder & CTO",
 		avatar: nathanFlurry,
-		url: "https://twitter.com/nathanflurry",
+		socials: {
+			twitter: "https://x.com/NathanFlurry/",
+			github: "https://github.com/nathanflurry",
+			bluesky: "https://bsky.app/profile/nathanflurry.com",
+		},
 	},
 	"nicholas-kissel": {
 		name: "Nicholas Kissel",
 		role: "Co-founder & CEO",
 		avatar: nicholasKissel,
-		url: "https://twitter.com/nicholaskissel",
+		socials: {
+			twitter: "https://x.com/NicholasKissel",
+			github: "https://github.com/nicholaskissel",
+			bluesky: "https://bsky.app/profile/nicholaskissel.com",
+		},
 	},
 	"forest-anderson": {
 		name: "Forest Anderson",

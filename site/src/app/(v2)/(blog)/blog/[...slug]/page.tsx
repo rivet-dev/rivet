@@ -8,7 +8,14 @@ import {
 } from "@/lib/article";
 import { formatTimestamp } from "@/lib/formatDate";
 import { Avatar, AvatarFallback, AvatarImage } from "@rivet-gg/components";
-import { Icon, faCalendarDay, faChevronRight } from "@rivet-gg/icons";
+import {
+	Icon,
+	faBluesky,
+	faCalendarDay,
+	faChevronRight,
+	faGithub,
+	faXTwitter,
+} from "@rivet-gg/icons";
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -22,7 +29,12 @@ export async function generateMetadata({
 	return {
 		title,
 		description,
-		authors: [author],
+		authors: [
+			{
+				name: author.name,
+				url: author.socials?.twitter || "",
+			} satisfies Metadata["authors"],
+		],
 		keywords: tags,
 		openGraph: {
 			title,
@@ -81,7 +93,7 @@ export default async function BlogPage({ params: { slug } }) {
 					<div className="top-header sticky pt-2">
 						<p className="mb-2 text-sm font-semibold">Posted by</p>
 						<div className="mb-4 flex items-center gap-2">
-							<Avatar>
+							<Avatar className="mt-1 size-14">
 								<AvatarFallback>{author[0]}</AvatarFallback>
 								<AvatarImage {...author.avatar} alt={author} />
 							</Avatar>
@@ -89,6 +101,35 @@ export default async function BlogPage({ params: { slug } }) {
 								<h3 className="font-bold">{author.name}</h3>
 								<p className="text-muted-foreground text-sm">
 									{author.role}
+								</p>
+								<p className="flex gap-2 text-xs text-muted-foreground mt-1">
+									{author.socials.twitter ? (
+										<a
+											href={author.socials.twitter}
+											target="_blank"
+											rel="noopener noreferrer"
+										>
+											<Icon icon={faXTwitter} />
+										</a>
+									) : null}
+									{author.socials.bluesky ? (
+										<a
+											href={author.socials.bluesky}
+											target="_blank"
+											rel="noopener noreferrer"
+										>
+											<Icon icon={faBluesky} />
+										</a>
+									) : null}
+									{author.socials.github ? (
+										<a
+											href={author.socials.github}
+											target="_blank"
+											rel="noopener noreferrer"
+										>
+											<Icon icon={faGithub} />
+										</a>
+									) : null}
 								</p>
 							</div>
 						</div>

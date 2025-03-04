@@ -89,7 +89,7 @@ export default async function BlogPage() {
 		<>
 			<div className="mt-8 flex w-full items-center justify-between">
 				<h1 className="text-6xl font-bold">Blog</h1>
-				<Button startIcon={<Icon icon={faRss} />} passHref>
+				<Button asChild startIcon={<Icon icon={faRss} />}>
 					<Link href="/rss/feed.xml">RSS Feed</Link>
 				</Button>
 			</div>

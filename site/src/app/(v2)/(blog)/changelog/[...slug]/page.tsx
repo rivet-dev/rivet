@@ -76,7 +76,10 @@ export default async function BlogPage({ params: { slug } }) {
 						<div className="mb-4 flex items-center gap-2">
 							<Avatar>
 								<AvatarFallback>{author[0]}</AvatarFallback>
-								<AvatarImage {...author.avatar} alt={author} />
+								<AvatarImage
+									{...author.avatar}
+									alt={author.name}
+								/>
 							</Avatar>
 							<div className="flex flex-col">
 								<h3 className="font-bold">{author.name}</h3>
