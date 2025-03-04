@@ -103,16 +103,19 @@ export default async function BlogPage({ params: { slug } }) {
 									{author.role}
 								</p>
 								<p className="flex gap-2 text-xs text-muted-foreground mt-1">
-									{author.socials.twitter ? (
+									{author.socials?.twitter || author.url ? (
 										<a
-											href={author.socials.twitter}
+											href={
+												author.socials?.twitter ||
+												author.url
+											}
 											target="_blank"
 											rel="noopener noreferrer"
 										>
 											<Icon icon={faXTwitter} />
 										</a>
 									) : null}
-									{author.socials.bluesky ? (
+									{author.socials?.bluesky ? (
 										<a
 											href={author.socials.bluesky}
 											target="_blank"
@@ -121,7 +124,7 @@ export default async function BlogPage({ params: { slug } }) {
 											<Icon icon={faBluesky} />
 										</a>
 									) : null}
-									{author.socials.github ? (
+									{author.socials?.github ? (
 										<a
 											href={author.socials.github}
 											target="_blank"

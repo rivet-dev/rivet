@@ -1,3 +1,4 @@
+"use client";
 import type { ReactNode } from "react";
 import { cn } from "../lib/utils";
 
@@ -25,8 +26,12 @@ interface KbdKeyProps {
 
 Kbd.Key = function Key({ className }: KbdKeyProps) {
 	return (
-		<span className={cn("text-xs", className)}>
-			{navigator?.userAgent?.includes("Mac") ? "⌘" : "Ctrl"}
+		<span className={cn("text-xs", className)} suppressHydrationWarning>
+			{typeof window === "undefined"
+				? " "
+				: navigator?.userAgent?.includes("Mac")
+					? "⌘"
+					: "Ctrl"}
 		</span>
 	);
 };
