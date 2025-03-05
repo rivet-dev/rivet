@@ -1,6 +1,6 @@
 {
 	"name": "@rivet-gg/actor-client",
-	"version": "5.1.3",
+	"version": "25.1.3",
 	"files": [
 		"src",
 		"dist",

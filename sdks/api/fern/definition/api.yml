@@ -11,8 +11,8 @@ environments:
 default-environment: Production
 version:
   header: "X-API-Version"
-  default: "5.1.3"
-  values: ["5.1.3"]
+  default: "25.1.3"
+  values: ["25.1.3"]
 audiences:
   # If flagged with runtime, this will be included with the core
   # API library. All other API endpoints are not essential for

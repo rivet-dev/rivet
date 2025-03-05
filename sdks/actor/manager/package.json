@@ -1,6 +1,6 @@
 {
 	"name": "@rivet-gg/actor-manager",
-	"version": "5.1.3",
+	"version": "25.1.3",
 	"private": true,
 	"dependencies": {
 		"@rivet-gg/actor-common": "workspace:*",

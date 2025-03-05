@@ -14,7 +14,7 @@ export declare namespace Analytics {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
-        xApiVersion?: "5.1.3";
+        xApiVersion?: "25.1.3";
         fetcher?: core.FetchFunction;
     }
 
@@ -28,7 +28,7 @@ export declare namespace Analytics {
         /** Additional headers to include in the request. */
         headers?: Record<string, string>;
         /** Override the X-API-Version header */
-        xApiVersion?: "5.1.3";
+        xApiVersion?: "25.1.3";
     }
 }
 
@@ -68,7 +68,7 @@ export class Analytics {
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
-                "X-API-Version": requestOptions?.xApiVersion ?? this._options?.xApiVersion ?? "5.1.3",
+                "X-API-Version": requestOptions?.xApiVersion ?? this._options?.xApiVersion ?? "25.1.3",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
                 ...requestOptions?.headers,
