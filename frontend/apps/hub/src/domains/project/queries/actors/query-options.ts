@@ -443,22 +443,26 @@ export const actorRegionQueryOptions = ({
 const createActorEndpoint = (
 	network: Rivet.actor.Network,
 ): string | undefined => {
-	const http = Object.values(network.ports).find(
-		(port) => port.protocol === "http" || port.protocol === "https",
-	);
-	if (!http) {
-		return undefined;
-	}
-	// undocumented
-	// @ts-ignore
-	if (http.url) {
+	try {
+		const http = Object.values(network.ports).find(
+			(port) => port.protocol === "http" || port.protocol === "https",
+		);
+		if (!http) {
+			return undefined;
+		}
 		// undocumented
 		// @ts-ignore
-		return http.url;
+		if (http.url) {
+			// undocumented
+			// @ts-ignore
+			return http.url;
+		}
+		const url = new URL(`${http.protocol}://${http.hostname}:${http.port}`);
+		url.pathname = http.path || "/";
+		return url.href;
+	} catch {
+		return undefined;
 	}
-	const url = new URL(`${http.protocol}://${http.hostname}:${http.port}`);
-	url.pathname = http.path || "/";
-	return url.href;
 };
 
 export const actorManagerUrlQueryOptions = ({

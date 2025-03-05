@@ -7,6 +7,7 @@ pub enum SubCommand {
 	Path,
 	ApiEndpoint,
 	AccessToken,
+	ProjectNameId,
 	AuthStatus,
 }
 
@@ -35,6 +36,11 @@ impl SubCommand {
 			SubCommand::AuthStatus => {
 				let is_logged_in = crate::util::login::is_logged_in().await?;
 				println!("{}", is_logged_in);
+				Ok(())
+			}
+			SubCommand::ProjectNameId => {
+				let ctx = crate::util::login::load_or_login().await?;
+				println!("{}", ctx.project.name_id);
 				Ok(())
 			}
 		}
