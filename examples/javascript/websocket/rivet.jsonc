@@ -1,0 +1,13 @@
+{
+	"builds": {
+		"main": {
+			"script": "src/main.ts",
+			"access": "private"
+		}
+	},
+	"unstable": {
+		"manager": {
+			"enable": false
+		}
+	}
+}
