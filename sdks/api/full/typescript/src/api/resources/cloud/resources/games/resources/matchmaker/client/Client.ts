@@ -14,7 +14,7 @@ export declare namespace Matchmaker {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
-        xApiVersion?: "5.1.2";
+        xApiVersion?: "5.1.3";
         fetcher?: core.FetchFunction;
     }
 
@@ -28,7 +28,7 @@ export declare namespace Matchmaker {
         /** Additional headers to include in the request. */
         headers?: Record<string, string>;
         /** Override the X-API-Version header */
-        xApiVersion?: "5.1.2";
+        xApiVersion?: "5.1.3";
     }
 }
 
@@ -69,7 +69,7 @@ export class Matchmaker {
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
-                "X-API-Version": requestOptions?.xApiVersion ?? this._options?.xApiVersion ?? "5.1.2",
+                "X-API-Version": requestOptions?.xApiVersion ?? this._options?.xApiVersion ?? "5.1.3",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
                 ...requestOptions?.headers,
@@ -211,7 +211,7 @@ export class Matchmaker {
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
-                "X-API-Version": requestOptions?.xApiVersion ?? this._options?.xApiVersion ?? "5.1.2",
+                "X-API-Version": requestOptions?.xApiVersion ?? this._options?.xApiVersion ?? "5.1.3",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
                 ...requestOptions?.headers,
@@ -362,7 +362,7 @@ export class Matchmaker {
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
-                "X-API-Version": requestOptions?.xApiVersion ?? this._options?.xApiVersion ?? "5.1.2",
+                "X-API-Version": requestOptions?.xApiVersion ?? this._options?.xApiVersion ?? "5.1.3",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
                 ...requestOptions?.headers,
@@ -508,7 +508,7 @@ export class Matchmaker {
             headers: {
                 Authorization: await this._getAuthorizationHeader(),
                 "X-Fern-Language": "JavaScript",
-                "X-API-Version": requestOptions?.xApiVersion ?? this._options?.xApiVersion ?? "5.1.2",
+                "X-API-Version": requestOptions?.xApiVersion ?? this._options?.xApiVersion ?? "5.1.3",
                 "X-Fern-Runtime": core.RUNTIME.type,
                 "X-Fern-Runtime-Version": core.RUNTIME.version,
                 ...requestOptions?.headers,
