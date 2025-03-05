@@ -8994,6 +8994,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"example-system-test@workspace:examples/javascript/websocket":
+  version: 0.0.0-use.local
+  resolution: "example-system-test@workspace:examples/javascript/websocket"
+  dependencies:
+    "@rivet-gg/actor": "workspace:*"
+    "@rivet-gg/actor-client": "workspace:*"
+    hono: "npm:^4.6.17"
+  languageName: unknown
+  linkType: soft
+
 "expand-template@npm:^2.0.3":
   version: 2.0.3
   resolution: "expand-template@npm:2.0.3"

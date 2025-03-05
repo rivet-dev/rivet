@@ -1,6 +1,6 @@
-# System Test
+# WebSocket
 
-Actors for simple tests of E2E system functionality.
+Simple WebSocket implementation.
 
 ## Prerequisites
 
@@ -9,14 +9,13 @@ Actors for simple tests of E2E system functionality.
 ## Deploying
 
 ```sh
+rivet login
 rivet deploy
 ```
 
 ## Testing
 
 ```sh
-rivet shell -e "yarn test --isolate"
-# or
-rivet shell -e "yarn test --container"
+rivet deno --populate-env run -A ws_test.ts
 ```
 
