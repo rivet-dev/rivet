@@ -35,10 +35,13 @@ pub(crate) async fn cluster_datacenter_tls_issue(
 ) -> GlobalResult<()> {
 	ensure!(ctx.config().server()?.is_tls_enabled(), "dns not enabled");
 
-	let dc_res = ctx.v(2).activity(GetDcInput {
-		datacenter_id: input.datacenter_id,
-	}).await?;
-	
+	let dc_res = ctx
+		.v(2)
+		.activity(GetDcInput {
+			datacenter_id: input.datacenter_id,
+		})
+		.await?;
+
 	let main_zone_id = unwrap!(
 		ctx.config().server()?.cloudflare()?.zone.main.clone(),
 		"main cloudflare zone not configured"
@@ -66,9 +69,7 @@ pub(crate) async fn cluster_datacenter_tls_issue(
 				renew: input.renew,
 				zone_id: main_zone_id.to_string(),
 				common_name: domain_main.to_string(),
-				subject_alternative_names: vec![
-					format!("{}.api.{domain_main}", dc_res.name_id),
-				],
+				subject_alternative_names: vec![format!("api.{}.{domain_main}", dc_res.name_id)],
 			}),
 			// Old job certs
 			removed::<Activity<Order>>(),
@@ -193,7 +194,6 @@ async fn order(ctx: &ActivityCtx, input: &OrderInput) -> GlobalResult<OrderOutpu
 						cf::dns::DnsContent::TXT {
 							content: proof.to_string(),
 						},
-						false,
 					)
 					.await?;
 

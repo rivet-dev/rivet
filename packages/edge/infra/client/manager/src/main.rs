@@ -5,9 +5,12 @@ use std::{
 };
 
 use anyhow::*;
+use ctx::Ctx;
 use futures_util::StreamExt;
 use pegboard::system_info::SystemInfo;
 use pegboard_config::Config;
+use rand::seq::{IteratorRandom, SliceRandom};
+use service_discovery::ServiceDiscovery;
 use sqlx::sqlite::SqlitePool;
 use tokio::{
 	fs,
@@ -25,8 +28,6 @@ mod runner;
 mod system_info;
 mod utils;
 
-use ctx::Ctx;
-
 const PROTOCOL_VERSION: u16 = 2;
 
 #[derive(Clone)]
@@ -34,7 +35,6 @@ struct Init {
 	config: Config,
 	system: SystemInfo,
 	pool: SqlitePool,
-	url: Url,
 }
 
 fn main() -> Result<()> {
@@ -119,7 +119,7 @@ async fn init() -> Result<Init> {
 	};
 
 	if config.client.logs.redirect_logs() {
-		pegboard_logs::Logs::new(
+		rivet_logs::Logs::new(
 			config.client.data_dir().join("logs"),
 			config.client.logs.retention(),
 		)
@@ -142,22 +142,10 @@ async fn init() -> Result<Init> {
 	// Init sqlite db
 	let pool = utils::init_sqlite_db(&config).await?;
 
-	// Build WS connection URL
-	let mut url = config.client.cluster.pegboard_endpoint.clone();
-	url.set_path(&format!("/v{PROTOCOL_VERSION}"));
-	url.query_pairs_mut()
-		.append_pair("client_id", &config.client.cluster.client_id.to_string())
-		.append_pair(
-			"datacenter_id",
-			&config.client.cluster.datacenter_id.to_string(),
-		)
-		.append_pair("flavor", &config.client.runner.flavor.to_string());
-
 	Ok(Init {
 		config,
 		system,
 		pool,
-		url,
 	})
 }
 
@@ -165,7 +153,7 @@ async fn run(init: Init, first: bool) -> Result<()> {
 	// We have to redirect logs here as well because the entire tokio runtime gets destroyed after a runtime
 	// error
 	if !first && init.config.client.logs.redirect_logs() {
-		pegboard_logs::Logs::new(
+		rivet_logs::Logs::new(
 			init.config.client.data_dir().join("logs"),
 			init.config.client.logs.retention(),
 		)
@@ -176,13 +164,14 @@ async fn run(init: Init, first: bool) -> Result<()> {
 	// Start metrics server
 	let metrics_thread = tokio::spawn(metrics::run_standalone(init.config.client.metrics.port()));
 
-	tracing::info!("connecting to pegboard ws: {}", &init.url);
+	let url = build_ws_url(&init.config).await?;
+	tracing::info!("connecting to pegboard ws: {}", &url);
 
 	// Connect to WS
-	let (ws_stream, _) = tokio_tungstenite::connect_async(init.url.to_string())
+	let (ws_stream, _) = tokio_tungstenite::connect_async(url.to_string())
 		.await
 		.map_err(|source| ctx::RuntimeError::ConnectionFailed {
-			url: init.url.clone(),
+			url: url.clone(),
 			source,
 		})?;
 	let (tx, rx) = ws_stream.split();
@@ -197,6 +186,44 @@ async fn run(init: Init, first: bool) -> Result<()> {
 	)?;
 
 	Ok(())
+}
+
+async fn build_ws_url(config: &Config) -> Result<Url> {
+	let endpoint = match &config.client.cluster.ws_addresses {
+		pegboard_config::Addresses::Dynamic { fetch_endpoint } => {
+			let sd = ServiceDiscovery::new(fetch_endpoint.clone());
+
+			let servers = sd.fetch().await?;
+
+			// Choose random server
+			let mut rng = rand::thread_rng();
+			let lan_ip = servers
+				.into_iter()
+				.flat_map(|s| s.lan_ip)
+				.choose(&mut rng)
+				.context("No worker servers available from service discovery")?;
+
+			format!("ws://{lan_ip}:8082")
+		}
+		pegboard_config::Addresses::Static(addresses) => {
+			// Choose random server
+			let mut rng = rand::thread_rng();
+			let addr = addresses
+				.choose(&mut rng)
+				.context("No ws addresses provided")?;
+
+			format!("ws://{addr}")
+		}
+	};
+
+	// Build WS connection URL
+	let mut url = Url::parse(&endpoint)?;
+	url.set_path(&format!("/v{PROTOCOL_VERSION}"));
+	url.query_pairs_mut()
+		.append_pair("client_id", &config.client.cluster.client_id.to_string())
+		.append_pair("flavor", &config.client.runner.flavor.to_string());
+
+	Ok(url)
 }
 
 fn init_tracing() {

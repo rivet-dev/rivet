@@ -420,8 +420,7 @@ impl Ctx {
 
 			let config = IsolateRunnerConfig {
 				actors_path: self.actors_path(),
-				fdb_cluster_path: self.fdb_cluster_path(),
-				runner_addr: SocketAddr::from(([127, 0, 0, 1], self.config().runner.port())),
+				manager_ws_addr: SocketAddr::from(([127, 0, 0, 1], self.config().runner.port())),
 				foundationdb: self.config.client.foundationdb.clone(),
 			};
 
@@ -801,10 +800,6 @@ impl Ctx {
 impl Ctx {
 	pub fn config(&self) -> &Client {
 		&self.config.client
-	}
-
-	pub fn fdb_cluster_path(&self) -> PathBuf {
-		self.config().data_dir().join("fdb.cluster")
 	}
 
 	pub fn actors_path(&self) -> PathBuf {

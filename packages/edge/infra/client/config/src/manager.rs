@@ -76,9 +76,8 @@ impl Client {
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Cluster {
 	pub client_id: Uuid,
-	pub datacenter_id: Uuid,
 	pub api_endpoint: Url,
-	pub pegboard_endpoint: Url,
+	pub ws_addresses: Addresses,
 }
 
 #[derive(Clone, Deserialize, JsonSchema)]

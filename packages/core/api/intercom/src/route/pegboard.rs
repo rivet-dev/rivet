@@ -11,7 +11,7 @@ pub async fn client_registered(
 	client_id: Uuid,
 	_body: serde_json::Value,
 ) -> GlobalResult<serde_json::Value> {
-	ctx.auth().server(&ctx)?;
+	ctx.auth().bypass()?;
 
 	ctx.signal(pegboard::workflows::client::Registered {})
 		.tag("client_id", client_id)

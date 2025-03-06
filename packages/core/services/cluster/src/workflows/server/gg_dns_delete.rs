@@ -9,24 +9,32 @@ pub struct Input {
 }
 
 #[workflow]
-pub async fn cluster_server_gg_dns_delete(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
+pub async fn cluster_server_gg_dns_delete(
+	ctx: &mut WorkflowCtx,
+	input: &Input,
+) -> GlobalResult<()> {
+	ctx.removed::<Activity<GetDnsRecords>>().await?;
 	ctx.removed::<Activity<GetDnsRecords>>().await?;
 	let records_res = ctx
-		.v(2)
+		.v(3)
 		.activity(GetDnsRecordsInput {
 			server_id: input.server_id,
 		})
 		.await?;
 
-	let zone_id = unwrap!(
+	let job_zone_id = unwrap!(
 		ctx.config().server()?.cloudflare()?.zone.job.clone(),
+		"dns not configured"
+	);
+	let main_zone_id = unwrap!(
+		ctx.config().server()?.cloudflare()?.zone.main.clone(),
 		"dns not configured"
 	);
 
 	if let Some(dns_record_id) = records_res.dns_record_id {
 		ctx.activity(DeleteDnsRecordInput {
 			dns_record_id,
-			zone_id: zone_id.to_string(),
+			zone_id: job_zone_id.to_string(),
 		})
 		.await?;
 	} else {
@@ -36,7 +44,7 @@ pub async fn cluster_server_gg_dns_delete(ctx: &mut WorkflowCtx, input: &Input) 
 	if let Some(dns_record_id) = records_res.secondary_dns_record_id {
 		ctx.activity(DeleteDnsRecordInput {
 			dns_record_id,
-			zone_id: zone_id.to_string(),
+			zone_id: job_zone_id.to_string(),
 		})
 		.await?;
 	} else {
@@ -47,11 +55,22 @@ pub async fn cluster_server_gg_dns_delete(ctx: &mut WorkflowCtx, input: &Input) 
 		ctx.v(2)
 			.activity(DeleteDnsRecordInput {
 				dns_record_id,
-				zone_id: zone_id.to_string(),
+				zone_id: job_zone_id.to_string(),
 			})
 			.await?;
 	} else {
 		tracing::warn!("server has no actor wildcard dns record");
+	}
+
+	if let Some(dns_record_id) = records_res.api_dns_record_id {
+		ctx.v(3)
+			.activity(DeleteDnsRecordInput {
+				dns_record_id,
+				zone_id: main_zone_id.to_string(),
+			})
+			.await?;
+	} else {
+		tracing::warn!("server has no api dns record");
 	}
 
 	ctx.activity(UpdateDbInput {
@@ -72,6 +91,7 @@ struct GetDnsRecordsOutput {
 	dns_record_id: Option<String>,
 	secondary_dns_record_id: Option<String>,
 	actor_wildcard_dns_record_id: Option<String>,
+	api_dns_record_id: Option<String>,
 }
 
 #[activity(GetDnsRecords)]
@@ -82,7 +102,7 @@ async fn get_dns_records(
 	let row = sql_fetch_optional!(
 		[ctx, GetDnsRecordsOutput]
 		"
-		SELECT dns_record_id, secondary_dns_record_id, actor_wildcard_dns_record_id
+		SELECT dns_record_id, secondary_dns_record_id, actor_wildcard_dns_record_id, api_dns_record_id
 		FROM db_cluster.servers_cloudflare
 		WHERE
 			server_id = $1 AND

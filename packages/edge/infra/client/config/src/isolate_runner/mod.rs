@@ -7,8 +7,7 @@ pub mod actor;
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Config {
 	pub actors_path: PathBuf,
-	pub fdb_cluster_path: PathBuf,
-	pub runner_addr: SocketAddr,
+	pub manager_ws_addr: SocketAddr,
 
 	pub foundationdb: crate::manager::FoundationDb,
 }

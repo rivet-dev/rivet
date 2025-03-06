@@ -6,9 +6,12 @@ cat << 'EOF' > /etc/rivet-client/config.json
 	"client": {
 		"cluster": {
 			"client_id": "___SERVER_ID___",
-			"datacenter_id": "___DATACENTER_ID___",
 			"api_endpoint": "__ORIGIN_API__",
-			"pegboard_endpoint": "__PEGBOARD_ENDPOINT__"
+			"ws_addresses": {
+				"dynamic": {
+					"fetch_endpoint": "__TUNNEL_API_EDGE_API__/provision/datacenters/___DATACENTER_ID___/servers?pools=worker"
+				}
+			}
 		},
 		"runner": {
 			"flavor": "__FLAVOR__"

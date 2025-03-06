@@ -788,10 +788,18 @@ async fn insert_ports_fdb(ctx: &ActivityCtx, input: &InsertPortsFdbInput) -> Glo
 	let proxied_ports = input
 		.ports
 		.iter()
-		.map(|(port_name, port)| {
-			let (_, ingress_port_number, protocol) = unwrap!(ingress_ports
+		// Match to ingress ports for GG
+		.filter_map(|(port_name, port)| {
+			if let Some((_, ingress_port_number, protocol)) = ingress_ports
 				.iter()
-				.find(|(ingress_port_name, _, _)| port_name == ingress_port_name));
+				.find(|(ingress_port_name, _, _)| port_name == ingress_port_name)
+			{
+				Some((port_name, port, ingress_port_number, protocol))
+			} else {
+				None
+			}
+		})
+		.map(|(port_name, port, ingress_port_number, protocol)| {
 			let protocol = unwrap!(GameGuardProtocol::from_repr((*protocol).try_into()?));
 
 			Ok(keys::server::ProxiedPort {
@@ -805,7 +813,7 @@ async fn insert_ports_fdb(ctx: &ActivityCtx, input: &InsertPortsFdbInput) -> Glo
 		})
 		.collect::<GlobalResult<Vec<_>>>()?;
 
-	// Write proxied ports to fdb index
+	// Write proxied ingress ports to fdb index
 	ctx.fdb()
 		.await?
 		.run(|tx, _mc| {

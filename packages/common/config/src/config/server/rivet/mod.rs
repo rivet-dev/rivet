@@ -237,7 +237,7 @@ impl Rivet {
 			AccessKind::Public | AccessKind::Private => {
 				let domain_main = self.domain_main()?;
 
-				Url::parse(&format!("https://{dc_name_id}.api.{domain_main}")).map_err(Into::into)
+				Url::parse(&format!("https://api.{dc_name_id}.{domain_main}")).map_err(Into::into)
 			}
 		}
 	}
@@ -734,4 +734,6 @@ pub struct Edge {
 	pub cluster_id: Uuid,
 	pub datacenter_id: Uuid,
 	pub intercom_endpoint: Url,
+	#[serde(default)]
+	pub redirect_logs: Option<bool>,
 }

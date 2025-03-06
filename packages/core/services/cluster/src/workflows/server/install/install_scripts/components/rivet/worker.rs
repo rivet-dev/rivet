@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use chirp_workflow::prelude::*;
 use url::Url;
 
@@ -35,6 +37,20 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 			tls: server_config.tls.clone(),
 			rivet: Rivet {
 				namespace: server_config.rivet.namespace.clone(),
+				clusters: Some({
+					let mut clusters = HashMap::new();
+
+					clusters.insert(
+						"rivet".into(),
+						Cluster {
+							// NOTE: Gets replaced by a template later
+							id: Uuid::nil(),
+							bootstrap_datacenters: HashMap::new(),
+						},
+					);
+
+					clusters
+				}),
 				auth: server_config.rivet.auth.clone(),
 				api_public: ApiPublic {
 					public_origin: Some(server_config.rivet.edge_api_url("___DATACENTER_NAME_ID___")?),
@@ -45,10 +61,11 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 					..Default::default()
 				},
 				edge: Some(Edge {
-					// Gets replaced by a template later
+					// NOTE: Gets replaced by a template later
 					cluster_id: Uuid::nil(),
 					datacenter_id: Uuid::nil(),
 					intercom_endpoint: Url::parse(&format!("http://127.0.0.1:{TUNNEL_API_EDGE_PORT}"))?,
+					redirect_logs: Some(true),
 				}),
 				..Default::default()
 			},
@@ -111,13 +128,14 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 
 	// Add placeholders for templating
 	edge_config_json["server"]["rivet"]["default_cluster_id"] = "___CLUSTER_ID___".into();
+	edge_config_json["server"]["rivet"]["clusters"]["rivet"]["id"] = "___CLUSTER_ID___".into();
 	edge_config_json["server"]["rivet"]["edge"]["cluster_id"] = "___CLUSTER_ID___".into();
 	edge_config_json["server"]["rivet"]["edge"]["datacenter_id"] = "___DATACENTER_ID___".into();
 
 	Ok(
 		include_str!("../../files/rivet_worker_configure.sh").replace(
 			"__RIVET_EDGE_CONFIG__",
-			&serde_json::to_string(&edge_config_json)?,
+			&serde_json::to_string_pretty(&edge_config_json)?,
 		),
 	)
 }

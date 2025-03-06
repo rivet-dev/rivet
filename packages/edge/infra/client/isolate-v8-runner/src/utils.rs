@@ -1,4 +1,4 @@
-use std::{ops::Deref, sync::Arc};
+use std::{ops::Deref, path::Path, result::Result::Ok, sync::Arc};
 
 use ::tokio::fs;
 use anyhow::*;
@@ -34,6 +34,16 @@ pub async fn setup_fdb_pool(config: &Config) -> Result<FdbPool> {
 		pegboard_config::Addresses::Dynamic { fetch_endpoint } => {
 			let sd = ServiceDiscovery::new(fetch_endpoint.clone());
 
+			// Initial fetch
+			let servers = sd.fetch().await.context("failed to fetch services")?;
+			let joined = servers
+				.into_iter()
+				.filter_map(|server| server.lan_ip)
+				.map(|lan_ip| format!("{lan_ip}:4500"))
+				.collect::<Vec<_>>()
+				.join(",");
+			write_connection_file(&fdb_config, &temp_path, &joined).await?;
+
 			sd.start(move |servers| {
 				let temp_path = temp_path.clone();
 				let fdb_config = fdb_config.clone();
@@ -44,15 +54,10 @@ pub async fn setup_fdb_pool(config: &Config) -> Result<FdbPool> {
 						.map(|lan_ip| format!("{lan_ip}:4500"))
 						.collect::<Vec<_>>()
 						.join(",");
-					let connection = format!(
-						"{cluster_description}:{cluster_id}@{joined}",
-						cluster_description = fdb_config.cluster_description,
-						cluster_id = fdb_config.cluster_id,
-					);
 
-					fs::write(temp_path, connection.as_bytes()).await?;
+					write_connection_file(&fdb_config, &temp_path, &joined).await?;
 
-					Ok(())
+					anyhow::Ok(())
 				}
 			});
 
@@ -60,13 +65,7 @@ pub async fn setup_fdb_pool(config: &Config) -> Result<FdbPool> {
 		}
 		pegboard_config::Addresses::Static(addresses) => {
 			let joined = addresses.join(",");
-			let connection = format!(
-				"{cluster_description}:{cluster_id}@{joined}",
-				cluster_description = fdb_config.cluster_description,
-				cluster_id = fdb_config.cluster_id,
-			);
-
-			fs::write(temp_path, connection.as_bytes()).await?;
+			write_connection_file(&fdb_config, &temp_path, &joined).await?;
 
 			None
 		}
@@ -84,6 +83,22 @@ pub async fn setup_fdb_pool(config: &Config) -> Result<FdbPool> {
 		_sd: sd,
 		_connection_file: Arc::new(temp_file),
 	})
+}
+
+async fn write_connection_file(
+	fdb_config: &pegboard_config::FoundationDb,
+	temp_path: &Path,
+	joined: &str,
+) -> Result<(), std::io::Error> {
+	let connection = format!(
+		"{cluster_description}:{cluster_id}@{joined}",
+		cluster_description = fdb_config.cluster_description,
+		cluster_id = fdb_config.cluster_id,
+	);
+
+	fs::write(temp_path, connection.as_bytes()).await?;
+
+	Ok(())
 }
 
 pub mod tokio {

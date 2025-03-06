@@ -50,7 +50,7 @@ impl Auth {
 			.ok_or_else(|| err_code!(API_UNAUTHORIZED, reason = "No bearer token provided."))
 	}
 
-	pub fn bypass(&self, ctx: &ApiCtx) -> GlobalResult<()> {
+	pub fn bypass(&self) -> GlobalResult<()> {
 		self.claims()?.as_bypass()?;
 
 		Ok(())

@@ -1,5 +1,5 @@
 [package]
-name = "pegboard-logs"
+name = "rivet-logs"
 version = "0.0.1"
 edition = "2021"
 authors = ["Rivet Gaming, LLC <developer@rivet.gg>"]

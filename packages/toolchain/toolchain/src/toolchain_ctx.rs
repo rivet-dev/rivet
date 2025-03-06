@@ -82,8 +82,8 @@ pub async fn init(api_endpoint: String, cloud_token: String) -> Result<Toolchain
 
 	// Create OpenAPI config
 	let openapi_config_actor = apis::configuration::Configuration {
-		// TODO: Don't hardcode
-		base_path: "http://localhost:8083".to_string(),
+		// TODO: Hardcoded
+		base_path: "http://74.207.228.118:80".to_string(),
 		bearer_access_token: Some(cloud_token.clone()),
 		user_agent: Some(user_agent()),
 		client,

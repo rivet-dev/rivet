@@ -22,7 +22,7 @@ fn main() -> Result<()> {
 		.context("`actor_path` arg required")?;
 	let actor_path = Path::new(&actor_path);
 
-	pegboard_logs::Logs::new(actor_path.join("logs"), LOGS_RETENTION).start_sync()?;
+	rivet_logs::Logs::new(actor_path.join("logs"), LOGS_RETENTION).start_sync()?;
 
 	// Write PID to file
 	fs::write(

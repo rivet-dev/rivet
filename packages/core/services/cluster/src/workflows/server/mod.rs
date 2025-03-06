@@ -8,8 +8,6 @@ use std::{
 	net::{IpAddr, Ipv4Addr},
 };
 
-pub(crate) mod api_dns_create;
-pub(crate) mod api_dns_delete;
 pub(crate) mod drain;
 pub(crate) mod gg_dns_create;
 pub(crate) mod gg_dns_delete;
@@ -285,14 +283,6 @@ async fn provision_server(
 				})
 				.await?;
 			}
-			// Create DNS record after the server is installed
-			PoolType::Worker => {
-				ctx.workflow(api_dns_create::Input {
-					server_id: input.server_id,
-				})
-				.output()
-				.await?;
-			}
 			_ => {}
 		}
 
@@ -337,25 +327,11 @@ async fn lifecycle(
 				.output()
 				.await?;
 			}
-			PoolType::Worker => {
-				ctx.workflow(api_dns_create::Input {
-					server_id: input.server_id,
-				})
-				.output()
-				.await?;
-			}
 			_ => unreachable!(),
 		},
 		Main::DnsDelete(_) => match input.pool_type {
 			PoolType::Gg => {
 				ctx.workflow(gg_dns_delete::Input {
-					server_id: input.server_id,
-				})
-				.output()
-				.await?;
-			}
-			PoolType::Worker => {
-				ctx.workflow(api_dns_delete::Input {
 					server_id: input.server_id,
 				})
 				.output()
@@ -937,13 +913,6 @@ async fn cleanup(
 		match input.pool_type {
 			PoolType::Gg => {
 				ctx.workflow(gg_dns_delete::Input {
-					server_id: input.server_id,
-				})
-				.output()
-				.await?;
-			}
-			PoolType::Worker => {
-				ctx.workflow(api_dns_delete::Input {
 					server_id: input.server_id,
 				})
 				.output()

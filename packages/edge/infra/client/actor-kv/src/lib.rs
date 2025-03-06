@@ -1,5 +1,6 @@
 use std::{
 	collections::HashMap,
+	sync::Arc,
 	result::Result::{Err, Ok},
 };
 
@@ -34,13 +35,13 @@ const VALUE_CHUNK_SIZE: usize = 1000; // 1 KB, not KiB
 // Currently designed largely around the Deno runtime. More abstractions can be made later.
 pub struct ActorKv {
 	version: &'static str,
-	db: fdb::Database,
+	db: Arc<fdb::Database>,
 	owner: protocol::ActorOwner,
 	subspace: Option<Subspace>,
 }
 
 impl ActorKv {
-	pub fn new(db: fdb::Database, owner: protocol::ActorOwner) -> Self {
+	pub fn new(db: Arc<fdb::Database>, owner: protocol::ActorOwner) -> Self {
 		Self {
 			version: env!("CARGO_PKG_VERSION"),
 			db,

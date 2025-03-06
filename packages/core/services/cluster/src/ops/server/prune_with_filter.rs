@@ -41,55 +41,61 @@ async fn prune_cloudflare(
 	ctx: &OperationCtx,
 	servers_res: &crate::ops::server::lost_list::Output,
 ) -> GlobalResult<()> {
-	let zone_id = unwrap!(
+	let job_zone_id = unwrap!(
 		ctx.config().server()?.cloudflare()?.zone.job.clone(),
 		"job cloudflare zone not configured"
+	);
+	let main_zone_id = unwrap!(
+		ctx.config().server()?.cloudflare()?.zone.main.clone(),
+		"main cloudflare zone not configured"
 	);
 	let cf_token = ctx.config().server()?.cloudflare()?.auth_token.read();
 	let client = cf_client(ctx.config(), Some(cf_token)).await?;
 
-	for server in &servers_res.servers {
-		let Some(wan_ip) = &server.wan_ip else {
-			continue;
-		};
+	for zone_id in [job_zone_id, main_zone_id] {
+		for server in &servers_res.servers {
+			let Some(wan_ip) = &server.wan_ip else {
+				continue;
+			};
 
-		// Lookup DNS record
-		let list_records_res = reqwest::Client::new()
-			.get(format!(
-				"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records"
-			))
-			.bearer_auth(cf_token)
-			.query(&[("type", "A"), ("content.exact", &wan_ip.to_string())])
-			.send()
-			.await?;
-
-		let status = list_records_res.status();
-		let result = if status.is_success() {
-			match list_records_res
-				.json::<cf_framework::response::ApiSuccess<Vec<cf::dns::DnsRecord>>>()
-				.await
-			{
-				Ok(api_resp) => api_resp.result,
-				Err(e) => return Err(cf_framework::response::ApiFailure::Invalid(e).into()),
-			}
-		} else {
-			let parsed: Result<cf_framework::response::ApiErrors, reqwest::Error> =
-				list_records_res.json().await;
-			let errors = parsed.unwrap_or_default();
-			return Err(cf_framework::response::ApiFailure::Error(status, errors).into());
-		};
-
-		// Delete DNS record
-		// TODO: Do this for multiple records
-		for record in result {
-			tracing::info!(server_id = ?server.server_id, record_id = ?record.id, name = ?record.name, content = ?record.content, "pruning record");
-
-			client
-				.request(&cf::dns::DeleteDnsRecord {
-					zone_identifier: &zone_id,
-					identifier: &record.id,
-				})
+			// Lookup DNS record
+			let list_records_res = reqwest::Client::new()
+				.get(format!(
+					"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records"
+				))
+				.bearer_auth(cf_token)
+				.query(&[("type", "A"), ("content.exact", &wan_ip.to_string())])
+				.send()
 				.await?;
+
+			let status = list_records_res.status();
+			let result = if status.is_success() {
+				match list_records_res
+					.json::<cf_framework::response::ApiSuccess<Vec<cf::dns::DnsRecord>>>()
+					.await
+				{
+					Ok(api_resp) => api_resp.result,
+					Err(e) => return Err(cf_framework::response::ApiFailure::Invalid(e).into()),
+				}
+			} else {
+				let parsed: Result<cf_framework::response::ApiErrors, reqwest::Error> =
+					list_records_res.json().await;
+				let errors = parsed.unwrap_or_default();
+				return Err(cf_framework::response::ApiFailure::Error(status, errors).into());
+			};
+
+			// Delete DNS record
+			// TODO: Do this for multiple records
+			for record in result {
+				tracing::info!(server_id = ?server.server_id, record_id = ?record.id, name = ?record.name, content = ?record.content, "pruning record");
+
+				client
+					.request(&cf::dns::DeleteDnsRecord {
+						zone_identifier: &zone_id,
+						identifier: &record.id,
+					})
+					.await?;
+			}
 		}
 	}
 

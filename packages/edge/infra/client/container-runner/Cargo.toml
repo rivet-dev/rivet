@@ -12,11 +12,10 @@ path = "src/main.rs"
 [dependencies]
 anyhow.workspace = true
 nix.workspace = true
+rivet-logs.workspace = true
 serde = { version = "1.0.195", features = ["derive"] }
 serde_json = "1.0.111"
 signal-hook = "0.3.17"
-
-pegboard-logs.workspace = true
 
 [dev-dependencies]
 portpicker = "0.1.1"

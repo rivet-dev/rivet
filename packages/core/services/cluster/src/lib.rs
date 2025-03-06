@@ -15,8 +15,6 @@ pub fn registry() -> WorkflowResult<Registry> {
 	registry.register_workflow::<datacenter::tls_issue::Workflow>()?;
 	registry.register_workflow::<datacenter::Workflow>()?;
 	registry.register_workflow::<prebake::Workflow>()?;
-	registry.register_workflow::<server::api_dns_create::Workflow>()?;
-	registry.register_workflow::<server::api_dns_delete::Workflow>()?;
 	registry.register_workflow::<server::drain::Workflow>()?;
 	registry.register_workflow::<server::gg_dns_create::Workflow>()?;
 	registry.register_workflow::<server::gg_dns_delete::Workflow>()?;

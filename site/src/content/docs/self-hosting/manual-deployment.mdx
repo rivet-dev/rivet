@@ -111,7 +111,8 @@ Once running, you can visit the dashboard at <Link href='http://localhost:8080'>
        client_id: <unique uuid for each server>
        datacenter_id: 00000000-0000-0000-0000-000000000000
        api_endpoint: <core cluster url>:8080 # see "Core Cluster <-> Edge Server" below
-       pegboard_endpoint: <core cluster url>:8082 # see "Core Cluster <-> Edge Server" below
+       ws_addresses: !static
+        - <edge cluster url>:8082 # see "Core Cluster <-> Edge Server" below
      network:
        bind_ip: 127.0.0.1
        lan_ip: 127.0.0.1

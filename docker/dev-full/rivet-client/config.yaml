@@ -9,7 +9,8 @@ client:
     # This is hardcoded to match the value in rivet-edge-server/config.yaml
     datacenter_id: f288913c-735d-4188-bf9b-2fcf6eac7b9c
     api_endpoint: http://rivet-edge-server:8080
-    pegboard_endpoint: ws://rivet-edge-server:8082
+    ws_addresses: !static
+      - rivet-edge-server:8082
   network:
     bind_ip: 127.0.0.1
     # Point to DNS name inside Docker container

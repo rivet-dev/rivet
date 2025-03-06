@@ -337,6 +337,8 @@ pub async fn fetch_image_stream(
 		addresses.push(fallback_artifact_url.to_string());
 	}
 
+	ensure!(!addresses.is_empty(), "no artifact urls available (no pull addresses nor fallback)");
+
 	let mut iter = addresses.into_iter();
 	while let Some(artifact_url) = iter.next() {
 		match reqwest::get(&artifact_url)

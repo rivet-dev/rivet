@@ -50,16 +50,8 @@ impl Auth {
 			.ok_or_else(|| err_code!(API_UNAUTHORIZED, reason = "No bearer token provided."))
 	}
 
-	pub fn server(&self, ctx: &ApiCtx) -> GlobalResult<()> {
-		let is_development = ctx.config().server()?.rivet.auth.access_kind
-			== rivet_config::config::rivet::AccessKind::Development;
-
-		// Skip auth in development mode
-		if self.claims.is_none() && is_development {
-			return Ok(());
-		}
-
-		self.claims()?.as_provisioned_server()?;
+	pub fn bypass(&self) -> GlobalResult<()> {
+		self.claims()?.as_bypass()?;
 
 		Ok(())
 	}

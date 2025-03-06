@@ -28,12 +28,14 @@ use pegboard::protocol;
 use pegboard_actor_kv::ActorKv;
 use pegboard_config::isolate_runner as config;
 use tokio::{fs, sync::mpsc};
+use utils::FdbPool;
 use uuid::Uuid;
 
 use crate::{ext, log_shipper, metadata::JsMetadata, utils};
 
 pub fn run(
 	config: config::Config,
+	fdb_pool: FdbPool,
 	actor_id: Uuid,
 	owner_tx: mpsc::Sender<protocol::ActorOwner>,
 	terminate_tx: mpsc::Sender<MainWorkerTerminateHandle>,
@@ -78,7 +80,7 @@ pub fn run(
 
 	// Run the isolate
 	let exit_code = match utils::tokio::create_and_run_current_thread(run_inner(
-		config,
+		fdb_pool,
 		actor_path.clone(),
 		actor_id,
 		terminate_tx,
@@ -131,7 +133,7 @@ pub fn run(
 }
 
 pub async fn run_inner(
-	config: config::Config,
+	fdb_pool: FdbPool,
 	actor_path: PathBuf,
 	actor_id: Uuid,
 	terminate_tx: mpsc::Sender<MainWorkerTerminateHandle>,
@@ -141,10 +143,7 @@ pub async fn run_inner(
 	tracing::info!(?actor_id, "starting isolate");
 
 	// Init KV store (create or open)
-	let mut kv = ActorKv::new(
-		fdb_util::handle(&config.fdb_cluster_path)?,
-		actor_config.owner.clone(),
-	);
+	let mut kv = ActorKv::new((&*fdb_pool).clone(), actor_config.owner.clone());
 	kv.init().await?;
 
 	tracing::info!(?actor_id, "isolate kv initialized");
@@ -554,8 +553,7 @@ mod tests {
 		let config = config::Config {
 			// Not important
 			actors_path: Path::new("").to_path_buf(),
-			fdb_cluster_path: tmp_dir.path().join("fdb.cluster"),
-			runner_addr: SocketAddr::from(([0, 0, 0, 0], 0)),
+			manager_ws_addr: SocketAddr::from(([0, 0, 0, 0], 0)),
 		};
 
 		deno_core::v8_set_flags(vec![
@@ -566,7 +564,7 @@ mod tests {
 		]);
 
 		// Start FDB network thread
-		fdb_util::init(&config.fdb_cluster_path);
+		fdb_util::init(&tmp_dir.path().join("fdb.cluster"));
 
 		// For receiving the terminate handle
 		let (terminate_tx, _terminate_rx) =

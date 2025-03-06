@@ -31,7 +31,7 @@ pub(crate) async fn cluster_server_undrain(
 			})
 			.await?;
 		}
-		PoolType::Gg | PoolType::Worker => {
+		PoolType::Gg => {
 			ctx.signal(crate::workflows::server::DnsCreate {})
 				.tag("server_id", input.server_id)
 				.send()
@@ -43,7 +43,7 @@ pub(crate) async fn cluster_server_undrain(
 			})
 			.await?;
 		}
-		PoolType::Ats | PoolType::Fdb => {}
+		PoolType::Ats | PoolType::Fdb | PoolType::Worker => {}
 	}
 
 	Ok(())

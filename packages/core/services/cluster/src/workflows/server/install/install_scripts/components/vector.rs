@@ -147,6 +147,32 @@ pub fn configure(config: &Config, pool_type: PoolType) -> GlobalResult<String> {
 			inputs.push(json!("pegboard_isolate_v8_runner_add_meta"));
 			inputs.push(json!("pegboard_container_runner_add_meta"));
 		}
+		// Add worker logs
+		PoolType::Worker => {
+			config_json["sources"]["worker"] = json!({
+				"type": "file",
+				"include": ["/var/log/rivet-edge-server/*"]
+			});
+
+			config_json["transforms"]["worker_add_meta"] = json!({
+				"type": "remap",
+				"inputs": ["worker"],
+				"source": formatdoc!(
+					r#"
+					.source = "worker"
+
+					.server_id = "___SERVER_ID___"
+					.datacenter_id = "___DATACENTER_ID___"
+					.cluster_id = "___CLUSTER_ID___"
+					.pool_type = "{pool_type}"
+					.public_ip = "${{PUBLIC_IP}}"
+					"#
+				),
+			});
+
+			let inputs = unwrap!(config_json["sinks"]["vector_sink"]["inputs"].as_array_mut());
+			inputs.push(json!("worker_add_meta"));
+		}
 		_ => {}
 	}
 

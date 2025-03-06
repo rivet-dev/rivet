@@ -14,7 +14,7 @@ pub async fn prewarm_image(
 	image_id: Uuid,
 	body: models::EdgeIntercomPegboardPrewarmImageRequest,
 ) -> GlobalResult<serde_json::Value> {
-	ctx.auth().bypass(&ctx)?;
+	ctx.auth().bypass()?;
 
 	// TODO: If we replicate the algorithm for choosing the correct ATS node from the pb manager, we can
 	// remove prewarming from the pb protocol entirely and just prewarm the image here since this api service
@@ -69,7 +69,7 @@ pub async fn toggle_drain_client(
 	client_id: Uuid,
 	body: models::EdgeIntercomPegboardToggleClientDrainRequest,
 ) -> GlobalResult<serde_json::Value> {
-	ctx.auth().bypass(&ctx)?;
+	ctx.auth().bypass()?;
 
 	if body.draining {
 		ctx.signal(pegboard::workflows::client::Drain {

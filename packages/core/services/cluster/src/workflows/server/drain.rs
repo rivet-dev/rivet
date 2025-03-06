@@ -36,7 +36,7 @@ pub(crate) async fn cluster_server_drain(ctx: &mut WorkflowCtx, input: &Input) -
 			})
 			.await?;
 		}
-		PoolType::Gg | PoolType::Worker => {
+		PoolType::Gg => {
 			ctx.signal(crate::workflows::server::DnsDelete {})
 				.tag("server_id", input.server_id)
 				.send()
@@ -50,7 +50,7 @@ pub(crate) async fn cluster_server_drain(ctx: &mut WorkflowCtx, input: &Input) -
 			})
 			.await?;
 		}
-		PoolType::Ats | PoolType::Fdb => {}
+		PoolType::Ats | PoolType::Fdb | PoolType::Worker => {}
 	}
 
 	Ok(())

@@ -10427,8 +10427,8 @@ version = "5.1.2"
 dependencies = [
  "anyhow",
  "nix 0.27.1",
- "pegboard-logs",
  "portpicker",
+ "rivet-logs",
  "serde",
  "serde_json",
  "signal-hook",
@@ -10459,8 +10459,8 @@ dependencies = [
  "pegboard",
  "pegboard-actor-kv",
  "pegboard-config",
- "pegboard-logs",
  "portpicker",
+ "rivet-logs",
  "serde",
  "serde_json",
  "service-discovery",
@@ -10473,19 +10473,6 @@ dependencies = [
  "tracing-subscriber",
  "twox-hash",
  "uuid",
-]
-
-[[package]]
-name = "pegboard-logs"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "chrono",
- "nix 0.27.1",
- "tokio",
- "tracing",
- "tracing-logfmt",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -10502,12 +10489,12 @@ dependencies = [
  "notify",
  "pegboard",
  "pegboard-config",
- "pegboard-logs",
  "portpicker",
  "prometheus",
  "rand",
  "rand_chacha",
  "reqwest 0.12.12",
+ "rivet-logs",
  "rivet-util",
  "serde",
  "serde_json",
@@ -11284,9 +11271,9 @@ dependencies = [
 
 [[package]]
 name = "quinn-udp"
-version = "0.5.10"
+version = "0.5.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e46f3055866785f6b92bc6164b76be02ca8f2eb4b002c0354b28cf4c119e5944"
+checksum = "1c40286217b4ba3a71d644d752e6a0b71f13f1b6a2c5311acfcbe0c2418ed904"
 dependencies = [
  "cfg_aliases 0.2.1",
  "libc",
@@ -12038,6 +12025,7 @@ dependencies = [
  "rivet-cache",
  "rivet-config",
  "rivet-connection",
+ "rivet-logs",
  "rivet-migrate",
  "rivet-runtime",
  "rivet-server-cli",
@@ -12196,6 +12184,19 @@ dependencies = [
  "chrono",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "rivet-logs"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "nix 0.27.1",
+ "tokio",
+ "tracing",
+ "tracing-logfmt",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -12570,7 +12571,7 @@ dependencies = [
  "mime_guess",
  "pkg-version",
  "regex",
- "reqwest 0.12.12",
+ "reqwest 0.11.27",
  "rivet-actors-sdk-embed",
  "rivet-api",
  "rivet-js-utils-embed",
