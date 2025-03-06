@@ -38,14 +38,6 @@ fn build_tokio_runtime_builder() -> tokio::runtime::Builder {
 
 	if let Ok(worker_threads) = env::var("TOKIO_WORKER_THREADS") {
 		rt_builder.worker_threads(worker_threads.parse().unwrap());
-	} else {
-		// Default to 2 threads since this is likely running in a shared
-		// context. If we constrain this task to use 100 MHz an 8 core system,
-		// it will still spawn 8 threads needlessly.
-		//
-		// If a service is configured to use a dedicated core, Bolt will expose
-		// the correct thread count.
-		rt_builder.worker_threads(2);
 	}
 
 	if let Ok(max_blocking_threads) = env::var("TOKIO_MAX_BLOCKING_THREADS") {

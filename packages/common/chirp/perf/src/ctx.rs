@@ -202,7 +202,7 @@ impl PerfCtxInner {
 						.await
 						.push(PerfMark::new(base_ts, label, None, None));
 				}
-				.instrument(tracing::info_span!("perf_mark_async")),
+				.instrument(tracing::trace_span!("perf_mark_async")),
 			);
 		if let Err(err) = spawn_res {
 			tracing::error!(?err, "failed to spawn perf_mark_async task");
@@ -237,7 +237,7 @@ impl PerfCtxInner {
 						Some(req_id),
 					));
 				}
-				.instrument(tracing::info_span!("perf_mark_rpc_async")),
+				.instrument(tracing::trace_span!("perf_mark_rpc_async")),
 			);
 		if let Err(err) = spawn_res {
 			tracing::error!(?err, "failed to spawn perf_mark_rpc_async task");
