@@ -33,6 +33,7 @@ tracing-subscriber.workspace = true
 tracing-logfmt = "0.3"
 url = "2.4"
 uuid = { version = "1", features = ["v4"] }
+scc = "2.3.3"
 
 [dependencies.sqlx]
 workspace = true

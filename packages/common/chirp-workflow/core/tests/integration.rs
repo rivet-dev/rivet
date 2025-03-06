@@ -8,7 +8,6 @@ use common::*;
 #[tokio::test(flavor = "multi_thread")]
 async fn fdb_sqlite_nats_driver() {
 	setup_tracing();
-	setup_dependencies(true).await;
 
 	let ctx = chirp_workflow::prelude::TestCtx::from_env::<db::DatabaseFdbSqliteNats>(
 		"fdb_sqlite_nats_driver",

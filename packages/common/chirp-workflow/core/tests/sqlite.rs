@@ -23,7 +23,6 @@ impl SqlStub {
 #[tokio::test(flavor = "multi_thread")]
 async fn sqlite() {
 	setup_tracing();
-	setup_dependencies(true).await;
 
 	let ctx = chirp_workflow::prelude::TestCtx::from_env::<db::DatabaseFdbSqliteNats>(
 		"sqlite",
