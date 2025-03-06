@@ -49,7 +49,7 @@ pub async fn build_job(
 	// Process proxied ports
 	for run_proxied_ports in &job_runs_fetch {
 		let run_id = unwrap_ref!(run_proxied_ports.run_id);
-		tracing::info!(proxied_ports_len = ?run_proxied_ports.proxied_ports.len(), "adding job run");
+		tracing::debug!(proxied_ports_len = ?run_proxied_ports.proxied_ports.len(), "adding job run");
 		for proxied_port in &run_proxied_ports.proxied_ports {
 			let register_res = job_register_proxied_port(**run_id, proxied_port, config);
 			match register_res {

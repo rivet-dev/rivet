@@ -44,6 +44,14 @@ pub const PROXIED: usize = 42;
 pub const CLIENTS_BY_REMAINING_MEM: usize = 43;
 pub const SQLITE: usize = 44;
 pub const INTERNAL: usize = 45;
+pub const METADATA: usize = 46;
+
+// Directories with fdbrs must use string paths instead of tuples
+pub mod dir {
+	pub const PEGBOARD: &str = "p";
+	pub const ACTOR: &str = "a";
+	pub const KV: &str = "k";
+}
 
 pub fn key_from_str(key: &str) -> Option<usize> {
 	match key {
@@ -93,6 +101,7 @@ pub fn key_from_str(key: &str) -> Option<usize> {
 		"clients_by_remaining_mem" => Some(CLIENTS_BY_REMAINING_MEM),
 		"sqlite" => Some(SQLITE),
 		"internal" => Some(INTERNAL),
+		"metadata" => Some(METADATA),
 		_ => None,
 	}
 }

@@ -355,6 +355,7 @@ impl Default for CockroachDb {
 	fn default() -> Self {
 		Self {
 			url: Url::parse("postgresql://localhost:26257/defaultdb?sslmode=disable").unwrap(),
+			cluster_identifier: "default".into(),
 			username: "root".into(),
 			password: None,
 			provision_users: Default::default(),

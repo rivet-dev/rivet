@@ -8,6 +8,7 @@ license = "Apache-2.0"
 [dependencies]
 anyhow.workspace = true
 deno_core.workspace = true
+fdb-util.workspace = true
 foundationdb.workspace = true
 futures-util = { version = "0.3" }
 indexmap = { version = "2.0" }

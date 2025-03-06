@@ -8,16 +8,17 @@ use anyhow::*;
 use deno_core::JsBuffer;
 pub use entry::Entry;
 use entry::{EntryBuilder, SubKey};
+use fdb_util::keys::*;
 use foundationdb::{self as fdb, directory::Directory, tuple::Subspace};
 use futures_util::{StreamExt, TryStreamExt};
 use indexmap::IndexMap;
 use key::Key;
-use uuid::Uuid;
 use list_query::ListLimitReached;
 pub use list_query::ListQuery;
 pub use metadata::Metadata;
 use prost::Message;
 use utils::{validate_entries, validate_keys, TransactionExt};
+use uuid::Uuid;
 
 mod entry;
 pub mod key;
@@ -64,8 +65,8 @@ impl ActorKv {
 				&tx,
 				// Should match `destroy` fn
 				&[
-					"pegboard".into(),
-					"actor".into(),
+					dir::PEGBOARD.into(),
+					dir::ACTOR.into(),
 					self.actor_id.to_string(),
 				],
 				None,
@@ -74,12 +75,14 @@ impl ActorKv {
 			.await
 			.map_err(|err| anyhow!("{err:?}"))?;
 		let kv_dir = actor_dir
-			.create_or_open(&tx, &["kv".into()], None, None)
+			.create_or_open(&tx, &[dir::KV.into()], None, None)
 			.await
 			.map_err(|err| anyhow!("{err:?}"))?;
 		tx.commit().await.map_err(|err| anyhow!("{err:?}"))?;
 
-		self.subspace = Some(Subspace::from_bytes(kv_dir.bytes().map_err(|err| anyhow!("{err:?}"))?));
+		self.subspace = Some(Subspace::from_bytes(
+			kv_dir.bytes().map_err(|err| anyhow!("{err:?}"))?,
+		));
 
 		tracing::info!("successfully initialized KV");
 
@@ -130,9 +133,9 @@ impl ActorKv {
 										Ok(value) => {
 											// Parse key as string
 											if let Ok(sub_key) =
-												key_subspace.unpack::<String>(value.key())
+												key_subspace.unpack::<usize>(value.key())
 											{
-												if sub_key != "metadata" {
+												if sub_key != METADATA {
 													bail!("unexpected sub key: {sub_key:?}");
 												}
 
@@ -140,7 +143,7 @@ impl ActorKv {
 											} else {
 												// Parse sub key as idx
 												let (_, idx) = key_subspace
-													.unpack::<(String, usize)>(value.key())?;
+													.unpack::<(usize, usize)>(value.key())?;
 
 												Ok((key.clone(), SubKey::Chunk(idx, value)))
 											}
@@ -216,9 +219,9 @@ impl ActorKv {
 							Ok(value) => {
 								// Parse key as string
 								if let Ok((key, sub_key)) =
-									subspace.unpack::<(Key, String)>(value.key())
+									subspace.unpack::<(Key, usize)>(value.key())
 								{
-									if sub_key != "metadata" {
+									if sub_key != METADATA {
 										bail!("unexpected sub key: {sub_key:?}");
 									}
 
@@ -226,7 +229,7 @@ impl ActorKv {
 								} else {
 									// Parse sub key as idx
 									let (key, _, idx) =
-										subspace.unpack::<(Key, String, usize)>(value.key())?;
+										subspace.unpack::<(Key, usize, usize)>(value.key())?;
 
 									Ok((key, SubKey::Chunk(idx, value)))
 								}
@@ -335,7 +338,7 @@ impl ActorKv {
 									.map_err(|err| fdb::FdbBindingError::CustomError(err.into()))?;
 
 								// Set metadata
-								tx.set(&key_subspace.pack(&"metadata"), &buf);
+								tx.set(&key_subspace.pack(&METADATA), &buf);
 
 								// Set data
 								for start in (0..value.len()).step_by(VALUE_CHUNK_SIZE) {
@@ -343,7 +346,7 @@ impl ActorKv {
 									let end = (start + VALUE_CHUNK_SIZE).min(value.len());
 
 									tx.set(
-										&key_subspace.pack(&("data", idx)),
+										&key_subspace.pack(&(DATA, idx)),
 										&value.get(start..end).context("bad slice").map_err(
 											|err| fdb::FdbBindingError::CustomError(err.into()),
 										)?,
@@ -412,8 +415,8 @@ impl ActorKv {
 		root.remove_if_exists(
 			&tx,
 			&[
-				"pegboard".into(),
-				"actor".into(),
+				dir::PEGBOARD.into(),
+				dir::ACTOR.into(),
 				self.actor_id.to_string(),
 			],
 		)
