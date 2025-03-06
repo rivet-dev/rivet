@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, ops::Deref, sync::Arc, time::Duration};
 
 use sqlx::{
 	migrate::MigrateDatabase,
@@ -10,9 +10,43 @@ use sqlx::{
 };
 use tokio::sync::Mutex;
 
+use crate::db::atomic_instant::AtomicInstant;
+
 use crate::Error;
 
-pub type SqlitePool = sqlx::SqlitePool;
+const GC_INTERVAL: Duration = Duration::from_secs(1);
+const POOL_TTL: Duration = Duration::from_secs(15);
+
+/// Pool wrapper that tracks when it was dropped to automatically update the last used on
+/// `SqlitePoolEntry` in order to know when to GC the pool.
+pub struct SqlitePool {
+	pool: sqlx::SqlitePool,
+
+	// Holds a reference to the last access time
+	last_access: Arc<AtomicInstant>,
+}
+
+impl Deref for SqlitePool {
+	type Target = sqlx::SqlitePool;
+
+	fn deref(&self) -> &Self::Target {
+		&self.pool
+	}
+}
+
+impl Drop for SqlitePool {
+	fn drop(&mut self) {
+		// Update last access
+		self.last_access.store_now();
+	}
+}
+
+struct SqlitePoolEntry {
+	pool: sqlx::SqlitePool,
+
+	/// Last time this pool was accessed
+	last_access: Arc<AtomicInstant>,
+}
 
 #[derive(Debug, Hash, Eq, PartialEq)]
 struct Key {
@@ -22,14 +56,38 @@ struct Key {
 
 #[derive(Clone)]
 pub struct SqlitePoolManager {
-	// TODO: Somehow remove old pools
-	pools: Arc<Mutex<HashMap<Key, SqlitePool>>>,
+	pools: Arc<Mutex<HashMap<Key, SqlitePoolEntry>>>,
 }
 
 impl SqlitePoolManager {
 	pub fn new() -> Self {
-		SqlitePoolManager {
-			pools: Arc::new(Mutex::new(HashMap::new())),
+		let pools = Arc::new(Mutex::new(HashMap::new()));
+		tokio::task::spawn(Self::start(pools.clone()));
+		SqlitePoolManager { pools }
+	}
+
+	async fn start(pools: Arc<Mutex<HashMap<Key, SqlitePoolEntry>>>) {
+		let mut interval = tokio::time::interval(GC_INTERVAL);
+
+		loop {
+			interval.tick().awati;
+
+			// Anything last used before this instant will be removed
+			let expire_ts = Instant::now() - POOL_TTL;
+
+			// Remove pools
+			{
+				let pools_guard = pools.lock().await;
+				let mut removed = 0;
+				pools_guard.retain(|_k, v| {
+					if v.last_access.load() > expire_ts {
+						true
+					} else {
+						removed += 1;
+						false
+					}
+				});
+			}
 		}
 	}
 
@@ -42,8 +100,9 @@ impl SqlitePoolManager {
 			read_only,
 		};
 
-		let pool = if let Some(pool) = pools_guard.get(&key) {
-			pool.clone()
+		let pool = if let Some(entry) = pools_guard.get(&key) {
+			entry.last_access = Instant::now();
+			entry.pool.clone()
 		} else {
 			// TODO: Hardcoded for testing
 			let db_url = format!("sqlite:///var/lib/rivet-sqlite/{}.db", key.key);
@@ -84,7 +143,13 @@ impl SqlitePoolManager {
 
 			tracing::debug!(?key, "sqlite connected");
 
-			pools_guard.insert(key, pool.clone());
+			pools_guard.insert(
+				key,
+				SqlitePoolEntry {
+					pool: pool.clone(),
+					last_access: Arc::new(AtomicInstant::new()),
+				},
+			);
 
 			pool
 		};

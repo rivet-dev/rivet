@@ -9,6 +9,7 @@ use indoc::indoc;
 use rivet_pools::CrdbPool;
 use rivet_term::console::style;
 use uuid::Uuid;
+use rivet_term::console::Style;
 
 use crate::util::{
 	self,
@@ -55,169 +56,112 @@ pub enum WorkflowState {
 	Dead,
 }
 
-#[derive(Debug, sqlx::FromRow)]
-pub struct WorkflowRow {
-	workflow_id: Uuid,
-	workflow_name: String,
-	tags: serde_json::Value,
-	create_ts: i64,
-	input: serde_json::Value,
-	output: Option<serde_json::Value>,
-	error: Option<String>,
-
-	is_active: bool,
-	has_wake_condition: bool,
-}
-
-#[derive(Debug, sqlx::FromRow)]
-pub struct HistoryWorkflowRow {
-	workflow_name: String,
-	tags: serde_json::Value,
-	input: serde_json::Value,
-	output: Option<serde_json::Value>,
-	error: Option<String>,
-	is_active: bool,
-	has_wake_condition: bool,
-}
-
-#[derive(sqlx::FromRow)]
-struct ActivityErrorRow {
-	location: Vec<i64>,
-	location2: Option<Location>,
-	error: String,
-	count: i64,
-	latest_ts: i64,
-}
-
-struct ActivityError {
-	location: Location,
-	error: String,
-	count: i64,
-	latest_ts: i64,
-}
-
-pub async fn get_workflows(pool: CrdbPool, workflow_ids: Vec<Uuid>) -> Result<Vec<WorkflowRow>> {
-	let mut conn = pool.acquire().await?;
-
-	let workflows = sqlx::query_as::<_, WorkflowRow>(indoc!(
-		"
-		SELECT
-			workflow_id,
-			workflow_name,
-			COALESCE(tags, '{}'::JSONB) AS tags,
-			create_ts,
-			input,
-			output,
-			error,
-			worker_instance_id IS NOT NULL AS is_active,
-			(
-				wake_immediate OR
-				wake_deadline_ts IS NOT NULL OR
-				cardinality(wake_signals) > 0 OR
-				wake_sub_workflow_id IS NOT NULL
-			) AS has_wake_condition
-		FROM db_workflow.workflows
-		WHERE
-			workflow_id = ANY($1)
-		"
-	))
-	.bind(workflow_ids)
-	.fetch_all(&mut *conn)
-	.await?;
-
-	Ok(workflows)
-}
-
-pub async fn find_workflows(
-	pool: CrdbPool,
-	tags: Vec<KvPair>,
-	name: Option<String>,
-	state: Option<WorkflowState>,
-) -> Result<Vec<WorkflowRow>> {
-	let mut conn = pool.acquire().await?;
-
-	let mut query_str = indoc!(
-		"
-		SELECT
-			workflow_id,
-			workflow_name,
-			COALESCE(tags, '{}'::JSONB) AS tags,
-			create_ts,
-			input,
-			output,
-			error,
-			worker_instance_id IS NOT NULL AS is_active,
-			(
-				wake_immediate OR
-				wake_deadline_ts IS NOT NULL OR
-				cardinality(wake_signals) > 0 OR
-				wake_sub_workflow_id IS NOT NULL
-			) AS has_wake_condition
-		FROM db_workflow.workflows
-		WHERE
-			($1 IS NULL OR workflow_name = $1) AND
-			silence_ts IS NULL AND
-			-- Complete
-			(NOT $2 OR output IS NOT NULL) AND
-			-- Running
-			(NOT $3 OR (
-				output IS NULL AND
-				worker_instance_id IS NOT NULL
-			)) AND
-			-- Sleeping
-			(NOT $4 OR (
-				output IS NULL AND
-				worker_instance_id IS NULL AND
-				(
-					wake_immediate OR
-					wake_deadline_ts IS NOT NULL OR
-					cardinality(wake_signals) > 0 OR
-					wake_sub_workflow_id IS NOT NULL
-				)
-			)) AND
-			-- Dead
-			(NOT $5 OR (
-				output IS NULL AND
-				worker_instance_id IS NULL AND
-				wake_immediate = FALSE AND
-				wake_deadline_ts IS NULL AND
-				cardinality(wake_signals) = 0 AND
-				wake_sub_workflow_id IS NULL
-			))
-		"
-	)
-	.to_string();
-
-	// Procedurally add tags. We don't combine the tags into an object because we are comparing
-	// strings with `->>` whereas with @> and `serde_json::Map` we would have to know the type of the input
-	// given.
-	for i in 0..tags.len() {
-		let idx = i * 2 + 6;
-		let idx2 = idx + 1;
-
-		query_str.push_str(&format!(" AND tags->>${idx} = ${idx2}"));
+impl Event {
+	pub fn style(&self) -> Style {
+		match &self.data {
+			EventData::Activity(_) => Style::new().yellow(),
+			EventData::Signal(_) => Style::new().cyan(),
+			EventData::SignalSend(_) => Style::new().bright().blue(),
+			EventData::MessageSend(_) => Style::new().bright().blue(),
+			EventData::SubWorkflow(_) => Style::new().green(),
+			EventData::Loop(_) => Style::new().magenta(),
+			EventData::Sleep(_) => Style::new().magenta(),
+			EventData::Removed(_) => Style::new().red(),
+			EventData::VersionCheck => Style::new().red(),
+			EventData::Branch => Style::new(),
+			EventData::Empty => Style::new(),
+		}
 	}
 
-	query_str.push_str("LIMIT 100");
+	pub fn print_name(&self) {
+		let style = if self.forgotten {
+			Style::new().red().dim()
+		} else {
+			self.style()
+		};
 
-	let mut query = sqlx::query_as::<_, WorkflowRow>(&query_str)
-		.bind(name)
-		.bind(matches!(state, Some(WorkflowState::Complete)))
-		.bind(matches!(state, Some(WorkflowState::Running)))
-		.bind(matches!(state, Some(WorkflowState::Sleeping)))
-		.bind(matches!(state, Some(WorkflowState::Dead)));
-
-	for tag in tags {
-		query = query.bind(tag.key);
-		query = query.bind(tag.value);
+		match &self.data {
+			EventData::Activity(activity) => print!(
+				"{} {}",
+				style.apply_to("activity").bold(),
+				style.apply_to(&activity.name)
+			),
+			EventData::Signal(signal) => print!(
+				"{} {}",
+				style.apply_to("signal receive").bold(),
+				style.apply_to(&signal.name)
+			),
+			EventData::SignalSend(signal_send) => print!(
+				"{} {}",
+				style.apply_to("signal send").bold(),
+				style.apply_to(&signal_send.name)
+			),
+			EventData::MessageSend(message_send) => print!(
+				"{} {}",
+				style.apply_to("message send").bold(),
+				style.apply_to(&message_send.name)
+			),
+			EventData::SubWorkflow(sub_workflow) => print!(
+				"{} {}",
+				style.apply_to("sub workflow").bold(),
+				style.apply_to(&sub_workflow.name)
+			),
+			EventData::Loop(_) => print!("{}", style.apply_to("loop").bold()),
+			EventData::Sleep(_) => print!("{}", style.apply_to("sleep").bold()),
+			EventData::Removed(removed) => {
+				if let Some(name) = &removed.name {
+					print!(
+						"{} {}",
+						style
+							.apply_to(format!("removed {}", removed.event_type))
+							.bold(),
+						style.apply_to(name)
+					)
+				} else {
+					print!(
+						"{}",
+						style
+							.apply_to(format!("removed {}", removed.event_type))
+							.bold()
+					)
+				}
+			}
+			EventData::VersionCheck => print!("{}", style.apply_to("version check").bold()),
+			EventData::Branch => print!("{}", style.apply_to("branch").bold()),
+			EventData::Empty => print!("{}", style.apply_to("empty").bold()),
+		}
 	}
-
-	let workflows = query.fetch_all(&mut *conn).await?;
-
-	Ok(workflows)
 }
 
-pub async fn print_workflows(workflows: Vec<WorkflowRow>, pretty: bool) -> Result<()> {
+impl std::fmt::Display for EventData {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match &self {
+			EventData::Activity(activity) => write!(f, "activity {}", activity.name),
+			EventData::Signal(signal) => write!(f, "signal receive {}", signal.name),
+			EventData::SignalSend(signal_send) => write!(f, "signal send {}", signal_send.name),
+			EventData::MessageSend(message_send) => {
+				write!(f, "message send {}", message_send.name)
+			}
+			EventData::SubWorkflow(sub_workflow) => {
+				write!(f, "sub workflow {}", sub_workflow.name)
+			}
+			EventData::Loop(_) => write!(f, "loop"),
+			EventData::Sleep(_) => write!(f, "sleep"),
+			EventData::Removed(removed) => {
+				if let Some(name) = &removed.name {
+					write!(f, "removed {} {name}", removed.event_type)
+				} else {
+					write!(f, "removed {}", removed.event_type)
+				}
+			}
+			EventData::VersionCheck => write!(f, "version check"),
+			EventData::Branch => write!(f, "branch"),
+			EventData::Empty => write!(f, "empty"),
+		}
+	}
+}
+
+pub async fn print_workflows(workflows: Vec<chirp_workflow::db::debug::WorkflowData>, pretty: bool) -> Result<()> {
 	if workflows.is_empty() {
 		rivet_term::status::success("No workflows found", "");
 		return Ok(());
@@ -281,41 +225,6 @@ pub async fn print_workflows(workflows: Vec<WorkflowRow>, pretty: bool) -> Resul
 	} else {
 		table::workflows(workflows)?;
 	}
-
-	Ok(())
-}
-
-pub async fn silence_workflows(pool: CrdbPool, workflow_ids: Vec<Uuid>) -> Result<()> {
-	let mut conn = pool.acquire().await?;
-
-	sqlx::query(indoc!(
-		"
-		UPDATE db_workflow.workflows
-		SET silence_ts = $2
-		WHERE workflow_id = ANY($1)
-		"
-	))
-	.bind(workflow_ids)
-	.bind(util::now())
-	.execute(&mut *conn)
-	.await?;
-
-	Ok(())
-}
-
-pub async fn wake_workflows(pool: CrdbPool, workflow_ids: Vec<Uuid>) -> Result<()> {
-	let mut conn = pool.acquire().await?;
-
-	sqlx::query(indoc!(
-		"
-		UPDATE db_workflow.workflows
-		SET wake_immediate = TRUE
-		WHERE workflow_id = ANY($1)
-		"
-	))
-	.bind(workflow_ids)
-	.execute(&mut *conn)
-	.await?;
 
 	Ok(())
 }

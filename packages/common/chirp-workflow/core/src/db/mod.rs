@@ -12,6 +12,7 @@ use crate::{
 };
 
 mod crdb_nats;
+pub mod debug;
 pub use crdb_nats::DatabaseCrdbNats;
 mod fdb_sqlite_nats;
 pub use fdb_sqlite_nats::DatabaseFdbSqliteNats;

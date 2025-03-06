@@ -1,0 +1,159 @@
+use anyhow::*;
+use uuid::Uuid;
+
+use super::Database;
+use crate::history::{
+	event::{RemovedEvent, SleepEvent},
+	location::Location,
+};
+
+#[async_trait::async_trait]
+pub trait DatabaseDebug: Database {
+	async fn get_workflows(&self, workflow_ids: Vec<Uuid>) -> Result<Vec<WorkflowData>>;
+
+	async fn find_workflows(
+		&self,
+		tags: serde_json::Value,
+		name: Option<String>,
+		state: Option<WorkflowState>,
+	) -> Result<Vec<WorkflowData>>;
+
+	async fn silence_workflows(&self, workflow_ids: Vec<Uuid>) -> Result<()>;
+
+	async fn wake_workflows(&self, workflow_ids: Vec<Uuid>) -> Result<()>;
+
+	async fn get_workflow_history(
+		&self,
+		workflow_id: Uuid,
+		include_forgotten: bool,
+	) -> Result<Option<HistoryData>>;
+
+	async fn get_signals(&self, signal_ids: Vec<Uuid>) -> Result<Vec<SignalData>>;
+
+	async fn find_signals(&self, signal_ids: Vec<Uuid>) -> Result<Vec<SignalData>>;
+
+	async fn silence_signals(&self, signal_ids: Vec<Uuid>) -> Result<()>;
+}
+
+#[derive(Debug)]
+pub struct WorkflowData {
+	pub workflow_id: Uuid,
+	pub workflow_name: String,
+	pub tags: serde_json::Value,
+	pub create_ts: i64,
+	pub input: serde_json::Value,
+	pub output: Option<serde_json::Value>,
+	pub error: Option<String>,
+	pub state: WorkflowState,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum WorkflowState {
+	Complete,
+	Running,
+	Sleeping,
+	Dead,
+}
+
+#[derive(Debug)]
+pub struct HistoryData {
+	pub wf: WorkflowData,
+	pub events: Vec<Event>,
+}
+
+#[derive(Debug)]
+pub struct Event {
+	pub location: Location,
+	pub version: usize,
+	pub forgotten: bool,
+	pub data: EventData,
+}
+
+#[derive(Debug)]
+pub enum EventData {
+	Activity(ActivityEvent),
+	Signal(SignalEvent),
+	SignalSend(SignalSendEvent),
+	MessageSend(MessageSendEvent),
+	SubWorkflow(SubWorkflowEvent),
+	Loop(LoopEvent),
+	Sleep(SleepEvent),
+	Removed(RemovedEvent),
+	VersionCheck,
+	Branch,
+
+	/// NOTE: Strictly used as a placeholder for backfilling. When using this, the coordinate of the `Event`
+	/// must still be valid.
+	Empty,
+}
+
+#[derive(Debug)]
+pub struct ActivityEvent {
+	pub name: String,
+	pub input: serde_json::Value,
+	pub output: Option<serde_json::Value>,
+	pub errors: Vec<ActivityError>,
+}
+
+#[derive(Debug)]
+pub struct SignalEvent {
+	pub signal_id: Uuid,
+	pub name: String,
+	pub body: serde_json::Value,
+}
+
+#[derive(Debug)]
+pub struct SignalSendEvent {
+	pub signal_id: Uuid,
+	pub name: String,
+	pub tags: Option<serde_json::Value>,
+	pub body: serde_json::Value,
+}
+
+#[derive(Debug)]
+pub struct MessageSendEvent {
+	pub name: String,
+	pub tags: serde_json::Value,
+	pub body: serde_json::Value,
+}
+
+#[derive(Debug)]
+pub struct SubWorkflowEvent {
+	pub sub_workflow_id: Uuid,
+	pub name: String,
+	pub tags: serde_json::Value,
+	pub input: serde_json::Value,
+	// pub output: Option<serde_json::Value>,
+}
+
+#[derive(Debug)]
+pub struct LoopEvent {
+	pub state: serde_json::Value,
+	/// If the loop completes, this will be some.
+	pub output: Option<serde_json::Value>,
+	pub iteration: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct ActivityError {
+	pub error: String,
+	pub count: usize,
+	pub latest_ts: i64,
+}
+
+#[derive(Debug)]
+pub struct SignalData {
+	pub signal_id: Uuid,
+	pub signal_name: String,
+	pub tags: Option<serde_json::Value>,
+	pub workflow_id: Option<Uuid>,
+	pub create_ts: i64,
+	pub body: serde_json::Value,
+	pub state: SignalState,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum SignalState {
+	Acked,
+	Pending,
+}

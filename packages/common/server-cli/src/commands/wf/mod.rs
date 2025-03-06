@@ -54,7 +54,7 @@ impl SubCommand {
 		match self {
 			Self::Get { workflow_ids } => {
 				let pool = rivet_pools::db::crdb::setup(config.clone()).await?;
-				let workflows = util::wf::get_workflows(pool, workflow_ids).await?;
+				let workflows = db.get_workflows(workflow_ids).await?;
 				util::wf::print_workflows(workflows, true).await
 			}
 			Self::List {
@@ -64,16 +64,16 @@ impl SubCommand {
 				pretty,
 			} => {
 				let pool = rivet_pools::db::crdb::setup(config.clone()).await?;
-				let workflows = util::wf::find_workflows(pool, tags, name, state).await?;
+				let workflows = db.find_workflows(tags, name, state).await?;
 				util::wf::print_workflows(workflows, pretty).await
 			}
 			Self::Ack { workflow_ids } => {
 				let pool = rivet_pools::db::crdb::setup(config.clone()).await?;
-				util::wf::silence_workflows(pool, workflow_ids).await
+				db.silence_workflows(workflow_ids).await
 			}
 			Self::Wake { workflow_ids } => {
 				let pool = rivet_pools::db::crdb::setup(config.clone()).await?;
-				util::wf::wake_workflows(pool, workflow_ids).await
+				db.wake_workflows(workflow_ids).await
 			}
 			Self::History {
 				workflow_id,
@@ -82,11 +82,10 @@ impl SubCommand {
 				print_location,
 			} => {
 				let pool = rivet_pools::db::crdb::setup(config.clone()).await?;
+				let history = db.get_workflow_history(workflow_id, include_forgotten).await?;
 				util::wf::print_history(
-					pool,
-					workflow_id,
+					history,
 					exclude_json,
-					include_forgotten,
 					print_location,
 				)
 				.await

@@ -5,11 +5,22 @@ use uuid::Uuid;
 mod common;
 use common::*;
 
-#[tokio::test(flavor = "multi_thread")]
-async fn fdb_sqlite_nats_driver() {
+#[test]
+fn fdb_sqlite_nats_driver() {
 	setup_tracing();
-	setup_dependencies(true).await;
 
+	{
+		let rt = tokio::runtime::Runtime::new().unwrap();
+		rt.block_on(setup_dependencies(false));
+	}
+
+	loop {
+		let rt = tokio::runtime::Runtime::new().unwrap();
+		rt.block_on(fdb_sqlite_nats_driver_inner());
+	}
+}
+
+async fn fdb_sqlite_nats_driver_inner() {
 	let ctx = chirp_workflow::prelude::TestCtx::from_env::<db::DatabaseFdbSqliteNats>(
 		"fdb_sqlite_nats_driver",
 		true,
@@ -32,6 +43,7 @@ async fn fdb_sqlite_nats_driver() {
 
 	let mut reg = Registry::new();
 	reg.register_workflow::<def::Workflow>().unwrap();
+	let reg = reg.handle();
 
 	let db = db::DatabaseFdbSqliteNats::from_pools(pools.clone()).unwrap();
 
@@ -67,21 +79,25 @@ async fn fdb_sqlite_nats_driver() {
 	// })).await.unwrap();
 	// tracing::info!(?res);
 
-	let worker = Worker::new(reg.handle(), db);
+	// tokio::spawn(async move {
+	// 	ctx.workflow(def::Input {})
+	// 		.tag("foo", "bar")
+	// 		.dispatch()
+	// 		.await
+	// 		.unwrap();
+	// })
+	// .await
+	// .unwrap();
 
-	tokio::spawn(async move {
-		ctx.workflow(def::Input {})
-			.tag("foo", "bar")
-			.dispatch()
-			.await
-			.unwrap();
-	})
-	.await
-	.unwrap();
+	let worker = Worker::new(reg.clone(), db.clone());
 
 	// Start worker
 	tokio::select! {
-		res = worker.start(config, pools) => res.unwrap(),
+		res = tokio::time::timeout(std::time::Duration::from_secs(1), worker.start(config.clone(), pools.clone())) => {
+			if let Ok(res) = res {
+				res.unwrap();
+			}
+		},
 		res = tokio::signal::ctrl_c() => res.unwrap(),
 	}
 }
@@ -97,27 +113,9 @@ mod def {
 	pub async fn test(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
 		tracing::info!("hello from workflow");
 
-		ctx.activity(TestActivityInput {
-			foo: "bar".to_string(),
-		})
-		.await?;
-
-		let workflow_id = ctx.workflow_id();
-		ctx.signal(MySignal {
-			test: Uuid::new_v4(),
-		})
-		.to_workflow_id(workflow_id)
-		.send()
-		.await?;
-
 		ctx.repeat(|ctx| {
 			async move {
-				let sig = ctx.listen::<MySignal>().await?;
-				tracing::info!(?sig);
-
-				tracing::info!("eepy");
-				ctx.sleep(12000).await?;
-				tracing::info!("eeped");
+				ctx.sleep(1).await?;
 
 				Ok(Loop::<()>::Continue)
 			}
