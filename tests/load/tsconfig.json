@@ -1,0 +1,20 @@
+{
+	"compilerOptions": {
+		"target": "es2022",
+		"module": "es2022",
+		"allowImportingTsExtensions": true,
+		"noEmit": true,
+		"moduleResolution": "node",
+		"strict": true,
+		"noImplicitAny": true,
+		"noImplicitThis": true,
+		"alwaysStrict": true,
+		"baseUrl": ".",
+		"paths": {
+			"*": ["*"]
+		},
+		"types": ["k6"]
+	},
+	"include": ["./**/*.ts"],
+	"exclude": ["node_modules"]
+}

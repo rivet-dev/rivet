@@ -7,7 +7,8 @@
 		"frontend/packages/*",
 		"site",
 		"sdks/actor/*",
-		"examples/javascript/*"
+		"examples/javascript/*",
+		"tests/load"
 	],
 	"scripts": {
 		"start": "npx turbo dev",

@@ -4127,6 +4127,16 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@rivet/load-tests@workspace:tests/load":
+  version: 0.0.0-use.local
+  resolution: "@rivet/load-tests@workspace:tests/load"
+  dependencies:
+    "@biomejs/biome": "npm:^1.9.4"
+    "@types/k6": "npm:^0.47.3"
+    typescript: "npm:^5.3.3"
+  languageName: unknown
+  linkType: soft
+
 "@rollup/pluginutils@npm:^5.0.0, @rollup/pluginutils@npm:^5.1.0":
   version: 5.1.4
   resolution: "@rollup/pluginutils@npm:5.1.4"
@@ -5881,6 +5891,13 @@ __metadata:
   version: 0.0.29
   resolution: "@types/json5@npm:0.0.29"
   checksum: 10c0/6bf5337bc447b706bb5b4431d37686aa2ea6d07cfd6f79cc31de80170d6ff9b1c7384a9c0ccbc45b3f512bae9e9f75c2e12109806a15331dc94e8a8db6dbb4ac
+  languageName: node
+  linkType: hard
+
+"@types/k6@npm:^0.47.3":
+  version: 0.47.3
+  resolution: "@types/k6@npm:0.47.3"
+  checksum: 10c0/8b53c62fc8cbcedd6e9b5708c5cf8a8142c954accbf4f5b081192f8381afa847f2a7a7e97e3e296917b0c79b44fb50d210ef3cbaf0b425cc34361f252cecc5f8
   languageName: node
   linkType: hard
 

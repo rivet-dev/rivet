@@ -1,0 +1,15 @@
+{
+	"name": "@rivet/load-tests",
+	"private": true,
+	"scripts": {
+		"build": "tsc",
+		"check": "tsc --noEmit",
+		"test": "k6 run",
+		"fmt": "biome check --apply ."
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^1.9.4",
+		"@types/k6": "^0.47.3",
+		"typescript": "^5.3.3"
+	}
+}

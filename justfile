@@ -112,3 +112,11 @@ release-nolatest VERSION:
 	gh workflow run .github/workflows/release.yaml -f version={{ VERSION }} -f latest=false --ref $(git branch --show-current)
 	echo 'Once workflow is complete, manually merge Release Please'
 
+[group('k6')]
+k6-test TEST:
+	k6 run --include-system-env-vars --vus 1 --iterations 1 --verbose tests/load/{{ TEST }}/index.ts
+
+[group('k6')]
+k6-run TEST:
+	k6 run --include-system-env-vars tests/load/{{ TEST }}/index.ts
+
