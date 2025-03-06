@@ -81,8 +81,14 @@ in
 			source ${pkgs.bash-completion}/share/bash-completion/bash_completion
 			source ${pkgs.just}/share/bash-completion/completions/just.bash
 
-			export LD_LIBRARY_PATH="${pkgs.clang}/resource-root/lib"
-			export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.strings.makeLibraryPath [ pkgs.openssl ]}"
+			# Set library paths based on platform
+			${if pkgs.stdenv.isDarwin then ''
+				export DYLD_LIBRARY_PATH="$DYLD_LIBRARY_PATH:${pkgs.clang}/resource-root/lib"
+				export DYLD_LIBRARY_PATH="$DYLD_LIBRARY_PATH:${pkgs.lib.strings.makeLibraryPath [ pkgs.openssl ]}"
+			'' else ''
+				export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.clang}/resource-root/lib"
+				export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.strings.makeLibraryPath [ pkgs.openssl ]}"
+			''}
 
 			# tokio_unstable required to build Rivet, so force all cargo
 			# commands to use this flag.
@@ -91,7 +97,11 @@ in
 			export LIBCLANG_PATH="${pkgs.llvmPackages.libclang.lib}/lib"
 
 			${if isFdbSupported then ''
-				export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.strings.makeLibraryPath [ pkgs.fdbPackages.foundationdb71 ]}"
+				${if pkgs.stdenv.isDarwin then ''
+					export DYLD_LIBRARY_PATH="$DYLD_LIBRARY_PATH:${pkgs.lib.strings.makeLibraryPath [ pkgs.fdbPackages.foundationdb71 ]}"
+				'' else ''
+					export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:${pkgs.lib.strings.makeLibraryPath [ pkgs.fdbPackages.foundationdb71 ]}"
+				''}
 			'' else ''
 				# Manually check the FDB version
 				if [ -z "$(command -v fdbcli)" ]; then
@@ -99,6 +109,9 @@ in
 				elif ! fdbcli --version 2>/dev/null | grep -q "FoundationDB CLI 7.1"; then
 					echo "WARNING: FoundationDB CLI version is incorrect. Please install FoundationDB 7.1."
 				fi
+
+				# Give access to system libraries
+				export LIBRARY_PATH="/usr/local/lib:$LIBRARY_PATH"
 			''}
 		'';
 	}
