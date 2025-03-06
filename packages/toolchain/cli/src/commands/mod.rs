@@ -1,6 +1,7 @@
 pub mod actor;
 pub mod build;
 pub mod deno;
+pub mod shell;
 pub mod deploy;
 pub mod environment;
 pub mod init;
@@ -59,6 +60,8 @@ pub enum SubCommand {
 		subcommand: metadata::SubCommand,
 	},
 	Deno(deno::Opts),
+	#[clap(hide = true)]
+	Shell(shell::Opts),
 	#[clap(alias = "v")]
 	// Alias of `environment view`
 	View {
@@ -83,6 +86,7 @@ impl SubCommand {
 			SubCommand::Manager { subcommand } => subcommand.execute().await,
 			SubCommand::Metadata { subcommand } => subcommand.execute().await,
 			SubCommand::Deno(opts) => opts.execute().await,
+			SubCommand::Shell(opts) => opts.execute().await,
 			SubCommand::View { environment } => {
 				environment::SubCommand::View {
 					environment: environment.clone(),
