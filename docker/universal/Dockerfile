@@ -18,9 +18,9 @@ RUN apt-get update -y && \
     ca-certificates \
     gpg \
     openssl \
-    wget \
-    nodejs && \
+    wget && \
     curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y nodejs && \
     corepack enable && \
     curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.1.60/libfdb_c.x86_64.so"
 
