@@ -9,12 +9,6 @@ pub enum Action {
 	ClearIdx,
 	AddIdx,
 	UpdatePing,
-	ReleaseResources {
-		/// MiB.
-		memory: u64,
-		/// Millicores.
-		cpu: u64,
-	},
 }
 
 #[derive(Debug)]
@@ -35,15 +29,15 @@ pub async fn pegboard_client_update_allocation_idx(
 		.run(|tx, _mc| async move {
 			let remaining_mem_key = keys::client::RemainingMemoryKey::new(input.client_id);
 			let remaining_mem_key_buf = keys::subspace().pack(&remaining_mem_key);
-			let remaining_cpu_key = keys::client::RemainingCpuKey::new(input.client_id);
-			let remaining_cpu_key_buf = keys::subspace().pack(&remaining_cpu_key);
+			// let remaining_cpu_key = keys::client::RemainingCpuKey::new(input.client_id);
+			// let remaining_cpu_key_buf = keys::subspace().pack(&remaining_cpu_key);
 			let last_ping_ts_key = keys::client::LastPingTsKey::new(input.client_id);
 			let last_ping_ts_key_buf = keys::subspace().pack(&last_ping_ts_key);
 
 			// Read current allocated memory and last ping
-			let (remaining_mem_entry, remaining_cpu_entry, last_ping_ts_entry) = tokio::try_join!(
+			let (remaining_mem_entry, last_ping_ts_entry) = tokio::try_join!(
 				tx.get(&remaining_mem_key_buf, SERIALIZABLE),
-				tx.get(&remaining_cpu_key_buf, SERIALIZABLE),
+				// tx.get(&remaining_cpu_key_buf, SERIALIZABLE),
 				tx.get(&last_ping_ts_key_buf, SERIALIZABLE),
 			)?;
 			let remaining_mem = remaining_mem_key
@@ -53,13 +47,13 @@ pub async fn pegboard_client_update_allocation_idx(
 					))?,
 				)
 				.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
-			let remaining_cpu = remaining_cpu_key
-				.deserialize(
-					&remaining_cpu_entry.ok_or(fdb::FdbBindingError::CustomError(
-						format!("key should exist: {remaining_cpu_key:?}").into(),
-					))?,
-				)
-				.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+			// let remaining_cpu = remaining_cpu_key
+			// 	.deserialize(
+			// 		&remaining_cpu_entry.ok_or(fdb::FdbBindingError::CustomError(
+			// 			format!("key should exist: {remaining_cpu_key:?}").into(),
+			// 		))?,
+			// 	)
+			// 	.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 			let last_ping_ts = last_ping_ts_key
 				.deserialize(&last_ping_ts_entry.ok_or(fdb::FdbBindingError::CustomError(
 					format!("key should exist: {last_ping_ts_key:?}").into(),
@@ -117,50 +111,6 @@ pub async fn pegboard_client_update_allocation_idx(
 						let new_allocation_key = keys::datacenter::ClientsByRemainingMemKey::new(
 							input.flavor,
 							remaining_mem,
-							last_ping_ts,
-							input.client_id,
-						);
-						let new_allocation_key_buf = keys::subspace().pack(&new_allocation_key);
-
-						tx.set(
-							&new_allocation_key_buf,
-							&new_allocation_key
-								.serialize(input.client_workflow_id)
-								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-						);
-					}
-				}
-				Action::ReleaseResources { memory, cpu } => {
-					let new_memory = remaining_mem + memory;
-					let new_cpu = remaining_cpu + cpu;
-
-					// Write new memory
-					tx.set(
-						&remaining_mem_key_buf,
-						&remaining_mem_key
-							.serialize(new_memory)
-							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-					);
-					// Write new cpu
-					tx.set(
-						&remaining_cpu_key_buf,
-						&remaining_cpu_key
-							.serialize(new_cpu)
-							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-					);
-
-					// Only update allocation idx if it existed before
-					if tx
-						.get(&old_allocation_key_buf, SERIALIZABLE)
-						.await?
-						.is_some()
-					{
-						// Clear old key
-						tx.clear(&old_allocation_key_buf);
-
-						let new_allocation_key = keys::datacenter::ClientsByRemainingMemKey::new(
-							input.flavor,
-							new_memory,
 							last_ping_ts,
 							input.client_id,
 						);

@@ -190,6 +190,14 @@ async fn allocate_actor(
 				);
 				tx.set(&keys::subspace().pack(&new_allocation_key), entry.value());
 
+				tracing::debug!(
+					old_mem=%old_allocation_key.remaining_mem,
+					old_cpu=%old_remaining_cpu,
+					new_mem=%new_remaining_mem,
+					new_cpu=%new_remaining_cpu,
+					"allocating resources"
+				);
+
 				// Update client record
 				let remaining_mem_key =
 					keys::client::RemainingMemoryKey::new(old_allocation_key.client_id);
@@ -250,7 +258,9 @@ pub async fn update_fdb(ctx: &ActivityCtx, input: &UpdateFdbInput) -> GlobalResu
 			ctx.fdb()
 				.await?
 				.run(|tx, _mc| async move {
-					// Was inserted when the actor was allocated
+					// Was inserted when the actor was allocated. This is cleared when the state changes as
+					// well as when the actor is destroyed to ensure consistency during rescheduling and
+					// forced deletion.
 					let actor_key = keys::client::ActorKey::new(input.client_id, input.actor_id);
 					tx.clear(&keys::subspace().pack(&actor_key));
 

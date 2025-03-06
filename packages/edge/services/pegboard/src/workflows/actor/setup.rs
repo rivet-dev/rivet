@@ -280,9 +280,6 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<i64
 			tags,
 			resources_cpu_millicores,
 			resources_memory_mib,
-			client_id,
-			client_workflow_id,
-			client_wan_hostname,
 			lifecycle_kill_timeout_ms,
 			lifecycle_durable,
 			create_ts,
@@ -291,7 +288,7 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<i64
 			network_mode,
 			environment
 		)
-		VALUES (?, jsonb(?), ?, ?, NULL, NULL, NULL, ?, ?, ?, ?, jsonb(?), ?, jsonb(?))
+		VALUES (?, jsonb(?), ?, ?, ?, ?, ?, ?, jsonb(?), ?, jsonb(?))
 		",
 		input.env_id,
 		serde_json::to_string(&input.tags)?,
@@ -629,14 +626,34 @@ async fn select_resources(
 
 	// Find the first tier that has more CPU and memory than the requested
 	// resources
-	let tier = unwrap!(tiers.iter().find(|t| {
-		t.cpu_millicores >= input.resources.cpu_millicores && t.memory >= input.resources.memory_mib
-	}));
+	let tier = unwrap!(
+		tiers.iter().find(|t| {
+			t.cpu_millicores >= input.resources.cpu_millicores
+				&& t.memory >= input.resources.memory_mib
+		}),
+		"no suitable tier found"
+	);
 
 	// runc-compatible resources
 	let cpu = tier.rivet_cores_numerator as u64 * 1_000 / tier.rivet_cores_denominator as u64; // Millicore (1/1000 of a core)
 	let memory = tier.memory as u64 * (1024 * 1024);
 	let memory_max = tier.memory_max as u64 * (1024 * 1024);
+
+	let pool = ctx.sqlite().await?;
+
+	// Write to db
+	sql_execute!(
+		[ctx, pool]
+		"
+		UPDATE state
+		SET
+			selected_resources_cpu_millicores = ?,
+			selected_resources_memory_mib = ?
+		",
+		i64::try_from(cpu)?,
+		i64::try_from(tier.memory)?,
+	)
+	.await?;
 
 	Ok(protocol::Resources {
 		cpu,

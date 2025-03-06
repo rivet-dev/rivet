@@ -157,7 +157,7 @@ impl DatabaseFdbSqliteNats {
 		tokio::try_join!(
 			self.pools
 				.sqlite_manager()
-				.flush(sqlite_db_name_internal(workflow_id)),
+				.flush(sqlite::db_name_internal(workflow_id)),
 			self.pools
 				.sqlite_manager()
 				.flush(crate::db::sqlite_db_name_data(workflow_id)),

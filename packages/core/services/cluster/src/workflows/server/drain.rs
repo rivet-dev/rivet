@@ -178,7 +178,7 @@ async fn drain_pegboard_client(
 		[ctx, (Option<i64>, Option<Uuid>, String)]
 		"
 		SELECT drain_ts, pegboard_client_id, dc.name_id
-		FROM db_cluster.servers
+		FROM db_cluster.servers AS s
 		JOIN db_cluster.datacenters AS dc
 		ON s.datacenter_id = dc.datacenter_id
 		WHERE server_id = $1

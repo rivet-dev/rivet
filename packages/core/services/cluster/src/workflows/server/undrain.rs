@@ -125,7 +125,7 @@ async fn undrain_pegboard_client(
 		[ctx, (Option<Uuid>, String)]
 		"
 		SELECT pegboard_client_id, dc.name_id
-		FROM db_cluster.servers
+		FROM db_cluster.servers AS s
 		JOIN db_cluster.datacenters AS dc
 		ON s.datacenter_id = dc.datacenter_id
 		WHERE server_id = $1

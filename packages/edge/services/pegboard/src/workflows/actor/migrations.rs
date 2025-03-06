@@ -22,11 +22,16 @@ async fn migrate_init(ctx: &ActivityCtx, _input: &MigrateInitInput) -> GlobalRes
 		CREATE TABLE state (
 			env_id BLOB NOT NULL, -- UUID
 			tags BLOB NOT NULL, -- JSONB, map<string, string>
+			
 			resources_cpu_millicores INT NOT NULL,
 			resources_memory_mib INT NOT NULL,
 
-			client_id BLOB, -- UUID,
-			client_workflow_id BLOB, -- UUID,
+			-- Chosen based on tier
+			selected_resources_cpu_millicores INT,
+			selected_resources_memory_mib INT,
+
+			client_id BLOB, -- UUID
+			client_workflow_id BLOB, -- UUID
 			client_wan_hostname TEXT,
 
 			lifecycle_kill_timeout_ms INT NOT NULL,

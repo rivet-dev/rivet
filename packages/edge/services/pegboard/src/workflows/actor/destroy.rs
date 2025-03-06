@@ -1,11 +1,8 @@
-use std::collections::HashMap;
-
 use build::types::BuildKind;
 use chirp_workflow::prelude::*;
-use fdb_util::FormalKey;
+use fdb_util::{FormalKey, SERIALIZABLE};
 use foundationdb as fdb;
 use nix::sys::signal::Signal;
-use util::serde::AsHashableExt;
 
 use super::{DestroyComplete, DestroyStarted};
 use crate::{keys, protocol, types::GameGuardProtocol};
@@ -37,30 +34,16 @@ pub(crate) async fn pegboard_actor_destroy(
 	let actor = ctx.activity(UpdateDbInput {}).await?;
 
 	if let Some(actor) = actor {
-		ctx.join((
-			activity(UpdateFdbInput {
-				actor_id: input.actor_id,
-				env_id: actor.env_id,
-				tags: actor.tags.as_hashable(),
-				create_ts: actor.create_ts,
-			}),
-			if let (Some(build_kind), Some(client_id), Some(client_workflow_id)) =
-				(input.build_kind, actor.client_id, actor.client_workflow_id)
-			{
-				Some(activity(ReleaseResourcesInput {
-					client_id,
-					client_workflow_id,
-					build_kind,
-					memory: actor.resources_memory_mib.try_into()?,
-					cpu: actor.resources_cpu_millicores.try_into()?,
-				}))
-			} else {
-				None
-			},
-		))
+		let client_id = actor.client_id;
+
+		ctx.activity(UpdateFdbInput {
+			actor_id: input.actor_id,
+			build_kind: input.build_kind,
+			actor,
+		})
 		.await?;
 
-		if let (Some(client_id), Some(data)) = (actor.client_id, &input.kill) {
+		if let (Some(client_id), Some(data)) = (client_id, &input.kill) {
 			kill(ctx, input.actor_id, client_id, data.kill_timeout_ms, false).await?;
 		}
 	}
@@ -76,12 +59,12 @@ pub(crate) async fn pegboard_actor_destroy(
 #[derive(Debug, Serialize, Deserialize, Hash)]
 struct UpdateDbInput {}
 
-#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Serialize, Deserialize, Hash, sqlx::FromRow)]
 struct UpdateDbOutput {
 	env_id: Uuid,
-	resources_memory_mib: i64,
-	resources_cpu_millicores: i64,
-	tags: sqlx::types::Json<HashMap<String, String>>,
+	selected_resources_memory_mib: Option<i64>,
+	selected_resources_cpu_millicores: Option<i64>,
+	tags: sqlx::types::Json<util::serde::HashableMap<String, String>>,
 	create_ts: i64,
 	client_id: Option<Uuid>,
 	client_workflow_id: Option<Uuid>,
@@ -102,8 +85,8 @@ async fn update_db(
 		WHERE destroy_ts IS NULL
 		RETURNING
 			env_id,
-			resources_memory_mib,
-			resources_cpu_millicores,
+			selected_resources_memory_mib,
+			selected_resources_cpu_millicores,
 			json(tags) AS tags,
 			create_ts,
 			client_id,
@@ -117,9 +100,8 @@ async fn update_db(
 #[derive(Debug, Serialize, Deserialize, Hash)]
 struct UpdateFdbInput {
 	actor_id: Uuid,
-	env_id: Uuid,
-	tags: util::serde::HashableMap<String, String>,
-	create_ts: i64,
+	build_kind: Option<BuildKind>,
+	actor: UpdateDbOutput,
 }
 
 #[activity(UpdateFdb)]
@@ -141,11 +123,14 @@ async fn update_fdb(ctx: &ActivityCtx, input: &UpdateFdbInput) -> GlobalResult<(
 			let ingress_ports = ingress_ports.clone();
 			async move {
 				// Update actor key in env subspace
-				let actor_key =
-					keys::env::ActorKey::new(input.env_id, input.create_ts, input.actor_id);
+				let actor_key = keys::env::ActorKey::new(
+					input.actor.env_id,
+					input.actor.create_ts,
+					input.actor_id,
+				);
 				let data = keys::env::ActorKeyData {
 					is_destroyed: true,
-					tags: input.tags.clone().into_iter().collect(),
+					tags: input.actor.tags.0.clone().into_iter().collect(),
 				};
 				tx.set(
 					&keys::subspace().pack(&actor_key),
@@ -178,42 +163,139 @@ async fn update_fdb(ctx: &ActivityCtx, input: &UpdateFdbInput) -> GlobalResult<(
 				let proxied_ports_key = keys::actor::ProxiedPortsKey::new(input.actor_id);
 				tx.clear(&keys::subspace().pack(&proxied_ports_key));
 
+				if let Some(client_id) = input.actor.client_id {
+					// This is cleared when the state changes as well as when the actor is destroyed to ensure
+					// consistency during rescheduling and forced deletion.
+					let actor_key = keys::client::ActorKey::new(client_id, input.actor_id);
+					tx.clear(&keys::subspace().pack(&actor_key));
+				}
+
+				// Release client's resources and update allocation index
+				if let (
+					Some(build_kind),
+					Some(client_id),
+					Some(client_workflow_id),
+					Some(selected_resources_memory_mib),
+					Some(selected_resources_cpu_millicores),
+				) = (
+					input.build_kind,
+					input.actor.client_id,
+					input.actor.client_workflow_id,
+					input.actor.selected_resources_memory_mib,
+					input.actor.selected_resources_cpu_millicores,
+				) {
+					let client_flavor = match build_kind {
+						BuildKind::DockerImage | BuildKind::OciBundle => {
+							protocol::ClientFlavor::Container
+						}
+						BuildKind::JavaScript => protocol::ClientFlavor::Isolate,
+					};
+
+					let remaining_mem_key = keys::client::RemainingMemoryKey::new(client_id);
+					let remaining_mem_key_buf = keys::subspace().pack(&remaining_mem_key);
+					let remaining_cpu_key = keys::client::RemainingCpuKey::new(client_id);
+					let remaining_cpu_key_buf = keys::subspace().pack(&remaining_cpu_key);
+					let last_ping_ts_key = keys::client::LastPingTsKey::new(client_id);
+					let last_ping_ts_key_buf = keys::subspace().pack(&last_ping_ts_key);
+
+					let (remaining_mem_entry, remaining_cpu_entry, last_ping_ts_entry) = tokio::try_join!(
+						tx.get(&remaining_mem_key_buf, SERIALIZABLE),
+						tx.get(&remaining_cpu_key_buf, SERIALIZABLE),
+						tx.get(&last_ping_ts_key_buf, SERIALIZABLE),
+					)?;
+
+					let remaining_mem = remaining_mem_key
+						.deserialize(&remaining_mem_entry.ok_or(
+							fdb::FdbBindingError::CustomError(
+								format!("key should exist: {remaining_mem_key:?}").into(),
+							),
+						)?)
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+					let remaining_cpu = remaining_cpu_key
+						.deserialize(&remaining_cpu_entry.ok_or(
+							fdb::FdbBindingError::CustomError(
+								format!("key should exist: {remaining_cpu_key:?}").into(),
+							),
+						)?)
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+					let last_ping_ts = last_ping_ts_key
+						.deserialize(&last_ping_ts_entry.ok_or(
+							fdb::FdbBindingError::CustomError(
+								format!("key should exist: {last_ping_ts_key:?}").into(),
+							),
+						)?)
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+					let old_allocation_key = keys::datacenter::ClientsByRemainingMemKey::new(
+						client_flavor,
+						remaining_mem,
+						last_ping_ts,
+						client_id,
+					);
+					let old_allocation_key_buf = keys::subspace().pack(&old_allocation_key);
+
+					let new_mem = remaining_mem
+						+ u64::try_from(selected_resources_memory_mib)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+					let new_cpu = remaining_cpu
+						+ u64::try_from(selected_resources_cpu_millicores)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+					tracing::debug!(
+						old_mem=%remaining_mem,
+						old_cpu=%remaining_cpu,
+						%new_mem,
+						%new_cpu,
+						"releasing resources"
+					);
+
+					// Write new memory
+					tx.set(
+						&remaining_mem_key_buf,
+						&remaining_mem_key
+							.serialize(new_mem)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+					);
+					// Write new cpu
+					tx.set(
+						&remaining_cpu_key_buf,
+						&remaining_cpu_key
+							.serialize(new_cpu)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+					);
+
+					// Only update allocation idx if it existed before
+					if tx
+						.get(&old_allocation_key_buf, SERIALIZABLE)
+						.await?
+						.is_some()
+					{
+						// Clear old key
+						tx.clear(&old_allocation_key_buf);
+
+						let new_allocation_key = keys::datacenter::ClientsByRemainingMemKey::new(
+							client_flavor,
+							new_mem,
+							last_ping_ts,
+							client_id,
+						);
+						let new_allocation_key_buf = keys::subspace().pack(&new_allocation_key);
+
+						tx.set(
+							&new_allocation_key_buf,
+							&new_allocation_key
+								.serialize(client_workflow_id)
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+						);
+					}
+				}
+
 				Ok(())
 			}
 		})
 		.await?;
 
 	Ok(())
-}
-
-#[derive(Debug, Serialize, Deserialize, Hash)]
-struct ReleaseResourcesInput {
-	client_id: Uuid,
-	client_workflow_id: Uuid,
-	build_kind: BuildKind,
-	/// MiB.
-	memory: u64,
-	/// Millicores.
-	cpu: u64,
-}
-
-#[activity(ReleaseResources)]
-async fn release_resources(ctx: &ActivityCtx, input: &ReleaseResourcesInput) -> GlobalResult<()> {
-	let client_flavor = match input.build_kind {
-		BuildKind::DockerImage | BuildKind::OciBundle => protocol::ClientFlavor::Container,
-		BuildKind::JavaScript => protocol::ClientFlavor::Isolate,
-	};
-
-	ctx.op(crate::ops::client::update_allocation_idx::Input {
-		client_id: input.client_id,
-		client_workflow_id: input.client_workflow_id,
-		flavor: client_flavor,
-		action: crate::ops::client::update_allocation_idx::Action::ReleaseResources {
-			memory: input.memory,
-			cpu: input.cpu,
-		},
-	})
-	.await
 }
 
 pub(crate) async fn kill(

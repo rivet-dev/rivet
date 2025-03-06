@@ -193,6 +193,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 					workflow_id,
 					workflow_name,
 					COALESCE(tags, '{}'::JSONB) AS tags,
+					create_ts,
 					input,
 					output,
 					error,

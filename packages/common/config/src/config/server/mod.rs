@@ -339,6 +339,7 @@ pub struct IpInfo {
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct CockroachDb {
 	pub url: Url,
+	pub cluster_identifier: String,
 	pub username: String,
 	pub password: Option<Secret<String>>,
 	/// Automatically provisions new users when migrating the database.

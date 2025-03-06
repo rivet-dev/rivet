@@ -74,7 +74,8 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 			},
 			cockroachdb: CockroachDb {
 				url: Url::parse(&format!(
-					"postgres://127.0.0.1:{TUNNEL_CRDB_PORT}/postgres?sslmode=require"
+					"postgres://127.0.0.1:{TUNNEL_CRDB_PORT}/{}.postgres?sslmode=require",
+					server_config.cockroachdb.cluster_identifier,
 				))?,
 				..server_config.cockroachdb.clone()
 			},
