@@ -50,30 +50,26 @@ pub fn fetch_tunnel_tls(
 	Ok(script)
 }
 
-pub fn fetch_gg_tls(
-	initialize_immediately: bool,
-	server_token: &str,
-	traefik_instance_name: &str,
-	datacenter_id: Uuid,
-) -> GlobalResult<String> {
-	let mut script = include_str!("../../files/rivet_fetch_gg_tls.sh")
+pub fn fetch_gg_tls(server_token: &str, traefik_instance_name: &str) -> GlobalResult<String> {
+	let script = include_str!("../../files/rivet_fetch_gg_tls.sh")
 		.replace("__TRAEFIK_INSTANCE_NAME__", traefik_instance_name)
 		.replace("__SERVER_TOKEN__", server_token)
 		.replace(
 			"__TUNNEL_API_EDGE_API__",
 			&format!("http://127.0.0.1:{TUNNEL_API_EDGE_PORT}"),
-		)
-		.replace("__DATACENTER_ID__", &datacenter_id.to_string());
+		);
 
-	if initialize_immediately {
-		// Start timer & run script immediately
-		script.push_str(indoc!(
-			"
-			systemctl start rivet_fetch_gg_tls.timer
-			systemctl start --no-block rivet_fetch_gg_tls.service
-			"
-		));
-	}
+	Ok(script)
+}
+
+pub fn fetch_api_route(server_token: &str, traefik_instance_name: &str) -> GlobalResult<String> {
+	let script = include_str!("../../files/rivet_fetch_api_route.sh")
+		.replace("__TRAEFIK_INSTANCE_NAME__", traefik_instance_name)
+		.replace("__SERVER_TOKEN__", server_token)
+		.replace(
+			"__TUNNEL_API_EDGE_API__",
+			&format!("http://127.0.0.1:{TUNNEL_API_EDGE_PORT}"),
+		);
 
 	Ok(script)
 }

@@ -10,31 +10,34 @@ cat << 'EOF' > /usr/bin/rivet_fetch_gg_tls.sh
 #!/usr/bin/env bash
 set -eu -o pipefail
 
-CERT_ID="job"
-STUB="/etc/__TRAEFIK_INSTANCE_NAME__/tls/$CERT_ID"
-
-
 # Retry script every 5 seconds until success
 echo 'Fetching rivet tls'
 while true; do
   response=$(
     curl -f \
       -H "Authorization: Bearer __SERVER_TOKEN__" \
-      "__TUNNEL_API_EDGE_API__/provision/datacenters/__DATACENTER_ID__/tls"
+      "__TUNNEL_API_EDGE_API__/provision/datacenters/___DATACENTER_ID___/tls"
   ) && break || sleep 5
 done
 
 echo "TLS received"
 
 # Write tls certs
-echo $response | jq -r .job_cert_pem > "${STUB}_cert.pem"
-echo $response | jq -r .job_private_key_pem > "${STUB}_key.pem"
+echo $response | jq -r .job_cert_pem > "/etc/__TRAEFIK_INSTANCE_NAME__/tls/job_cert.pem"
+echo $response | jq -r .job_private_key_pem > "/etc/__TRAEFIK_INSTANCE_NAME__/tls/job_key.pem"
+echo $response | jq -r .api_cert_pem > "/etc/__TRAEFIK_INSTANCE_NAME__/tls/api_cert.pem"
+echo $response | jq -r .api_private_key_pem > "/etc/__TRAEFIK_INSTANCE_NAME__/tls/api_key.pem"
 
-# Write traefik config file
-cat << EOF2 > "/etc/__TRAEFIK_INSTANCE_NAME__/dynamic/tls/${CERT_ID}.toml"
+# Write traefik config files
+cat << EOF2 > "/etc/__TRAEFIK_INSTANCE_NAME__/dynamic/tls/job.toml"
 [[tls.certificates]]
-  certFile = "${STUB}_cert.pem"
-  keyFile = "${STUB}_key.pem"
+  certFile = "/etc/__TRAEFIK_INSTANCE_NAME__/tls/job_cert.pem"
+  keyFile = "/etc/__TRAEFIK_INSTANCE_NAME__/tls/job_key.pem"
+EOF2
+cat << EOF2 > "/etc/__TRAEFIK_INSTANCE_NAME__/dynamic/tls/api.toml"
+[[tls.certificates]]
+  certFile = "/etc/__TRAEFIK_INSTANCE_NAME__/tls/api_cert.pem"
+  keyFile = "/etc/__TRAEFIK_INSTANCE_NAME__/tls/api_key.pem"
 EOF2
 
 # Force config reload
@@ -87,7 +90,9 @@ Unit=rivet_fetch_gg_tls.service
 WantedBy=timers.target
 EOF
 
-# Enable tls fetch script to run on reboot
+# Enable tls fetch script
 systemctl daemon-reload
 systemctl enable rivet_fetch_gg_tls.timer
 systemctl enable rivet_fetch_gg_tls.service
+systemctl start rivet_fetch_gg_tls.timer
+systemctl start --no-block rivet_fetch_gg_tls.service

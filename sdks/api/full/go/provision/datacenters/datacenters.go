@@ -41,6 +41,8 @@ func (g *GetServersResponse) String() string {
 type GetTlsResponse struct {
 	JobCertPem       string `json:"job_cert_pem"`
 	JobPrivateKeyPem string `json:"job_private_key_pem"`
+	ApiCertPem       string `json:"api_cert_pem"`
+	ApiPrivateKeyPem string `json:"api_private_key_pem"`
 
 	_rawJSON json.RawMessage
 }

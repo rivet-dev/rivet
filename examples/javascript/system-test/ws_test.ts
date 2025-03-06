@@ -51,7 +51,6 @@ async function run() {
 		const port = actor.network.ports.http;
 		// assertExists(port, "missing port http");
 
-		port.protocol = "http";
 		const actorOrigin = `${port.protocol}://${port.hostname}:${port.port}${port.path ?? ""}`;
 		console.log("Created actor at", actorOrigin);
 
@@ -69,16 +68,25 @@ async function run() {
 		//	break;
 		//}
 
-		// Check HTTP health of service
-		const response = await fetch(`${actorOrigin}/health`);
-		if (!response.ok) {
-			//throw new Error(`Health check failed with status: ${response.status}`);
-			console.error(
-				`Health check failed with status: ${response.status}`,
-			);
-			Deno.exit(1);
+		// Retry loop for HTTP health check
+		console.time(`ready-${actorId}`);
+		while (true) {
+			try {
+				const response = await fetch(`${actorOrigin}/health`);
+				if (response.ok) {
+					console.log("Health check passed");
+					console.timeEnd(`ready-${actorId}`);
+					break;
+				} else {
+					console.error(
+						`Health check failed with status: ${response.status}, retrying...`,
+					);
+				}
+			} catch (error) {
+				console.error("Health check request error:", error);
+			}
+			await new Promise((resolve) => setTimeout(resolve, 100));
 		}
-		console.log("Health check passed");
 
 		await new Promise((resolve, reject) => {
 			// Open a WebSocket to that endpoint

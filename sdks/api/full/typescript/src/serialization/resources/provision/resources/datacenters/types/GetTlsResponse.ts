@@ -12,11 +12,15 @@ export const GetTlsResponse: core.serialization.ObjectSchema<
 > = core.serialization.object({
     jobCertPem: core.serialization.property("job_cert_pem", core.serialization.string()),
     jobPrivateKeyPem: core.serialization.property("job_private_key_pem", core.serialization.string()),
+    apiCertPem: core.serialization.property("api_cert_pem", core.serialization.string()),
+    apiPrivateKeyPem: core.serialization.property("api_private_key_pem", core.serialization.string()),
 });
 
 export declare namespace GetTlsResponse {
     interface Raw {
         job_cert_pem: string;
         job_private_key_pem: string;
+        api_cert_pem: string;
+        api_private_key_pem: string;
     }
 }

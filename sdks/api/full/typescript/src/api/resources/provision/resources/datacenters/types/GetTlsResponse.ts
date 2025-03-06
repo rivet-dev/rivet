@@ -5,4 +5,6 @@
 export interface GetTlsResponse {
     jobCertPem: string;
     jobPrivateKeyPem: string;
+    apiCertPem: string;
+    apiPrivateKeyPem: string;
 }

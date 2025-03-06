@@ -14,16 +14,24 @@ pub struct ProvisionDatacentersGetTlsResponse {
 	pub job_cert_pem: String,
 	#[serde(rename = "job_private_key_pem")]
 	pub job_private_key_pem: String,
+	#[serde(rename = "api_cert_pem")]
+	pub api_cert_pem: String,
+	#[serde(rename = "api_private_key_pem")]
+	pub api_private_key_pem: String,
 }
 
 impl ProvisionDatacentersGetTlsResponse {
 	pub fn new(
 		job_cert_pem: String,
 		job_private_key_pem: String,
+		api_cert_pem: String,
+		api_private_key_pem: String,
 	) -> ProvisionDatacentersGetTlsResponse {
 		ProvisionDatacentersGetTlsResponse {
 			job_cert_pem,
 			job_private_key_pem,
+			api_cert_pem,
+			api_private_key_pem,
 		}
 	}
 }

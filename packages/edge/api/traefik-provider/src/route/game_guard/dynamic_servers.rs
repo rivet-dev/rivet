@@ -16,7 +16,6 @@ use crate::auth::Auth;
 
 pub async fn build_ds(
 	ctx: &Ctx<Auth>,
-	server_id: Option<Uuid>,
 	config: &mut types::TraefikConfigResponse,
 ) -> GlobalResult<Option<i64>> {
 	let dc_id = ctx.config().server()?.rivet.edge()?.datacenter_id;
@@ -107,19 +106,6 @@ pub async fn build_ds(
 			tracing::error!(?err, "failed to register proxied port")
 		}
 	}
-
-	tracing::info!(
-		http_services = ?config.http.services.len(),
-		http_routers = ?config.http.routers.len(),
-		http_middlewares = ?config.http.middlewares.len(),
-		tcp_services = ?config.tcp.services.len(),
-		tcp_routers = ?config.tcp.routers.len(),
-		tcp_middlewares = ?config.tcp.middlewares.len(),
-		udp_services = ?config.udp.services.len(),
-		udp_routers = ?config.udp.routers.len(),
-		udp_middlewares = ?config.udp.middlewares.len(),
-		"dynamic servers traefik config"
-	);
 
 	Ok(latest_ds_create_ts)
 }
@@ -379,8 +365,4 @@ fn build_tls_domains(
 	domains.push(types::TraefikTlsDomain { main, sans });
 
 	Ok(domains)
-}
-
-fn escape_input(input: &str) -> String {
-	input.replace("`", "\\`")
 }

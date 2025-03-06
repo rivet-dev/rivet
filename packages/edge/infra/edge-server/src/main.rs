@@ -60,3 +60,5 @@ async fn main_inner() -> Result<()> {
 	// Execute command
 	cli.command.execute(config, run_config).await
 }
+
+

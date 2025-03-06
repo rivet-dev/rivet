@@ -174,7 +174,6 @@ async fn install_over_ssh_v2(ctx: &ActivityCtx, input: &InstallOverSshInputV2) -
 		input.pool_type,
 		input.initialize_immediately,
 		&input.server_token,
-		input.datacenter_id,
 		&input.root_ca_cert_pem,
 		&install_scripts::components::traefik::TlsCert {
 			cert_pem: input.tunnel_cert_cert_pem.clone(),
@@ -184,7 +183,7 @@ async fn install_over_ssh_v2(ctx: &ActivityCtx, input: &InstallOverSshInputV2) -
 	.await?;
 	let hook_script = install_scripts::gen_hook(&input.server_token).await?;
 	let initialize_script =
-		install_scripts::gen_initialize(ctx.config(), input.pool_type, input.datacenter_id).await?;
+		install_scripts::gen_initialize(ctx.config(), input.pool_type, &input.server_token).await?;
 
 	// Spawn blocking thread for ssh (no async support)
 	tokio::task::spawn_blocking(move || {

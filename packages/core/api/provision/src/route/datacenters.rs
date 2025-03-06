@@ -21,8 +21,17 @@ pub async fn tls(
 		.await?;
 	let datacenter = unwrap!(datacenter_res.datacenters.first());
 
-	let (Some(job_cert_pem), Some(job_private_key_pem)) =
-		(&datacenter.job_cert_pem, &datacenter.job_private_key_pem)
+	let (
+		Some(job_cert_pem),
+		Some(job_private_key_pem),
+		Some(api_cert_pem),
+		Some(api_private_key_pem),
+	) = (
+		&datacenter.job_cert_pem,
+		&datacenter.job_private_key_pem,
+		&datacenter.api_cert_pem,
+		&datacenter.api_private_key_pem,
+	)
 	else {
 		bail_with!(API_NOT_FOUND);
 	};
@@ -30,6 +39,8 @@ pub async fn tls(
 	Ok(models::ProvisionDatacentersGetTlsResponse {
 		job_cert_pem: job_cert_pem.clone(),
 		job_private_key_pem: job_private_key_pem.clone(),
+		api_cert_pem: api_cert_pem.clone(),
+		api_private_key_pem: api_private_key_pem.clone(),
 	})
 }
 

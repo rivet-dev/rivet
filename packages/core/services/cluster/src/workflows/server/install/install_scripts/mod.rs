@@ -16,7 +16,6 @@ pub async fn gen_install(
 	pool_type: PoolType,
 	initialize_immediately: bool,
 	server_token: &str,
-	datacenter_id: Uuid,
 	tunnel_root_ca: &str,
 	tunnel_cert: &components::traefik::TlsCert,
 ) -> GlobalResult<String> {
@@ -44,12 +43,6 @@ pub async fn gen_install(
 			script.push(components::nomad::install());
 		}
 		PoolType::Gg => {
-			script.push(components::rivet::fetch_gg_tls(
-				initialize_immediately,
-				server_token,
-				GG_TRAEFIK_INSTANCE_NAME,
-				datacenter_id,
-			)?);
 			script.push(components::ok_server::install(initialize_immediately));
 		}
 		PoolType::Ats => {
@@ -103,7 +96,7 @@ pub async fn gen_hook(server_token: &str) -> GlobalResult<String> {
 pub async fn gen_initialize(
 	config: &rivet_config::Config,
 	pool_type: PoolType,
-	datacenter_id: Uuid,
+	server_token: &str,
 ) -> GlobalResult<String> {
 	let mut script = Vec::new();
 
@@ -132,11 +125,19 @@ pub async fn gen_initialize(
 			);
 		}
 		PoolType::Gg => {
+			script.push(components::rivet::fetch_api_route(
+				server_token,
+				GG_TRAEFIK_INSTANCE_NAME,
+			)?);
+			script.push(components::rivet::fetch_gg_tls(
+				server_token,
+				GG_TRAEFIK_INSTANCE_NAME,
+			)?);
 			script.push(components::traefik::instance(
 				components::traefik::Instance {
 					name: GG_TRAEFIK_INSTANCE_NAME.to_string(),
 					static_config: components::traefik::gg_static_config(config).await?,
-					dynamic_config: components::traefik::gg_dynamic_config(config, datacenter_id)?,
+					dynamic_config: components::traefik::gg_dynamic_config(config)?,
 					tcp_server_transports: Default::default(),
 				},
 			)?);

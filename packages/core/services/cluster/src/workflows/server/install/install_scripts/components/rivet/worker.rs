@@ -54,12 +54,14 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 				auth: server_config.rivet.auth.clone(),
 				api_public: ApiPublic {
 					public_origin: Some(server_config.rivet.edge_api_url("___DATACENTER_NAME_ID___")?),
+					respect_forwarded_for: Some(true),
 					..server_config.rivet.api_public.clone()
 				},
 				ui: Ui {
 					enable: Some(false),
 					..Default::default()
 				},
+				dns: server_config.rivet.dns.clone(),
 				edge: Some(Edge {
 					// NOTE: Gets replaced by a template later
 					cluster_id: Uuid::nil(),

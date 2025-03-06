@@ -9,6 +9,8 @@ use super::{
 	vector::{TUNNEL_VECTOR_PORT, TUNNEL_VECTOR_TCP_JSON_PORT},
 };
 
+// Dynamically routed hostname via dnsmasq. See `rivet_fetch_api_route.sh` for more details.
+pub const API_HOSTNAME: &str = "rivet-api";
 pub const TUNNEL_CRDB_PORT: u16 = 5040;
 pub const TUNNEL_REDIS_EPHEMERAL_PORT: u16 = 5041;
 pub const TUNNEL_REDIS_PERSISTENT_PORT: u16 = 5042;
@@ -269,14 +271,14 @@ pub async fn gg_static_config(config: &rivet_config::Config) -> GlobalResult<Str
 		&config.server()?.rivet.api_edge.traefik_provider_token
 	{
 		format!(
-			"http://127.0.0.1:{port}/traefik-provider/config/game-guard?token={token}&datacenter=___DATACENTER_ID___&server=___SERVER_ID___",
-			port = TUNNEL_API_EDGE_PORT,
+			"http://{API_HOSTNAME}:{port}/traefik-provider/config/game-guard?token={token}?server=___SERVER_ID___",
+			port = rivet_config::config::default_ports::API_EDGE,
 			token = api_traefik_provider_token.read(),
 		)
 	} else {
 		format!(
-			"http://127.0.0.1:{port}/traefik-provider/config/game-guard?datacenter=___DATACENTER_ID___&server=___SERVER_ID___",
-			port = TUNNEL_API_EDGE_PORT,
+			"http://{API_HOSTNAME}:{port}/traefik-provider/config/game-guard?server=___SERVER_ID___",
+			port = rivet_config::config::default_ports::API_EDGE,
 		)
 	};
 
@@ -341,10 +343,7 @@ pub async fn gg_static_config(config: &rivet_config::Config) -> GlobalResult<Str
 	Ok(config)
 }
 
-pub fn gg_dynamic_config(
-	config: &rivet_config::Config,
-	datacenter_id: Uuid,
-) -> GlobalResult<String> {
+pub fn gg_dynamic_config(config: &rivet_config::Config) -> GlobalResult<String> {
 	let Some(domain_job) = config
 		.server()?
 		.rivet
@@ -356,7 +355,7 @@ pub fn gg_dynamic_config(
 		return Ok(String::new());
 	};
 
-	let main = format!("{datacenter_id}.{domain_job}");
+	let main = format!("___DATACENTER_ID___.{domain_job}");
 
 	Ok(formatdoc!(
 		r#"

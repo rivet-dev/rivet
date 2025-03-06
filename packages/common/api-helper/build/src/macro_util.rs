@@ -302,12 +302,13 @@ pub async fn __with_ctx<
 		//
 		// Otherwise, we use the cf-connecting-ip header since that's the recommended header to
 		// use by Cloudflare.
-		let remote_address_str = if config
-			.server()?
-			.rivet
-			.dns
-			.as_ref()
-			.map_or(false, |x| x.provider == DnsProvider::Cloudflare)
+		let remote_address_str = if config.server()?.rivet.edge.is_none()
+			&& config
+				.server()?
+				.rivet
+				.dns
+				.as_ref()
+				.map_or(false, |x| x.provider == DnsProvider::Cloudflare)
 		{
 			__deserialize_header::<String, _>(request, "cf-connecting-ip")?
 		} else if config.server()?.rivet.api_public.respect_forwarded_for() {

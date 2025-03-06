@@ -1,7 +1,7 @@
 use std::{
 	collections::HashMap,
-	sync::Arc,
 	result::Result::{Err, Ok},
+	sync::Arc,
 };
 
 use anyhow::*;

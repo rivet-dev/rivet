@@ -57,9 +57,7 @@ impl Opts {
 			.await?;
 
 			cmd
-				// .env("RIVET_ENDPOINT", &ctx.api_endpoint)
-				// TODO: Hardcoded
-				.env("RIVET_ENDPOINT", "http://74.207.228.118:80")
+				.env("RIVET_ENDPOINT", &ctx.api_endpoint)
 				.env("RIVET_SERVICE_TOKEN", service_token.token)
 				.env("RIVET_PROJECT", &ctx.project.name_id)
 				.env("RIVET_ENVIRONMENT", &env.slug);

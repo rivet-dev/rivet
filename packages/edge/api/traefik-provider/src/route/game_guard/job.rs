@@ -61,19 +61,6 @@ pub async fn build_job(
 		}
 	}
 
-	tracing::info!(
-		http_services = ?config.http.services.len(),
-		http_routers = ?config.http.routers.len(),
-		http_middlewares = ?config.http.middlewares.len(),
-		tcp_services = ?config.tcp.services.len(),
-		tcp_routers = ?config.tcp.routers.len(),
-		tcp_middlewares = ?config.tcp.middlewares.len(),
-		udp_services = ?config.udp.services.len(),
-		udp_routers = ?config.udp.routers.len(),
-		udp_middlewares = ?config.udp.middlewares.len(),
-		"job traefik config"
-	);
-
 	Ok(())
 }
 
@@ -97,7 +84,7 @@ async fn fetch_job_runs(
 		)
 		.collect::<Vec<_>>();
 	let proxied_port_len = runs.iter().fold(0, |acc, x| acc + x.proxied_ports.len());
-	tracing::info!(runs_len = ?runs.len(), ?proxied_port_len, "fetched job runs");
+	tracing::debug!(runs_len = ?runs.len(), ?proxied_port_len, "fetched job runs");
 	Ok(runs)
 }
 

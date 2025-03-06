@@ -6,7 +6,7 @@ use uuid::Uuid;
 use crate::{ctx::WorkflowCtx, db::DatabaseHandle, metrics, registry::RegistryHandle, utils};
 
 /// How often to pull workflows when polling.
-pub const TICK_INTERVAL: Duration = Duration::from_secs(5);
+pub const TICK_INTERVAL: Duration = Duration::from_secs(120);
 /// How often to run internal tasks like updating ping, gc, and publishing metrics.
 const INTERNAL_INTERVAL: Duration = Duration::from_secs(20);
 

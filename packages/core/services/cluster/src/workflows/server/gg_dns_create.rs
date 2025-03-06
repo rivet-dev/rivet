@@ -290,7 +290,7 @@ async fn insert_db_inner(ctx: &ActivityCtx, input: &InsertDbInputV3) -> GlobalRe
 		INSERT INTO db_cluster.servers_cloudflare (
 			server_id, dns_record_id, secondary_dns_record_id, actor_wildcard_dns_record_id, api_dns_record_id
 		)
-		VALUES ($1, $2, $3, $4)
+		VALUES ($1, $2, $3, $4, $5)
 		",
 		input.server_id,
 		&input.primary_dns_record_id,

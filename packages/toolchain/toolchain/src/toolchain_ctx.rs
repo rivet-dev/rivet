@@ -80,10 +80,9 @@ pub async fn init(api_endpoint: String, cloud_token: String) -> Result<Toolchain
 		..Default::default()
 	};
 
-	// Create OpenAPI config
+	// Create OpenAPI config for actor API
 	let openapi_config_actor = apis::configuration::Configuration {
-		// TODO: Hardcoded
-		base_path: "http://74.207.228.118:80".to_string(),
+		base_path: api_endpoint.clone(),
 		bearer_access_token: Some(cloud_token.clone()),
 		user_agent: Some(user_agent()),
 		client,

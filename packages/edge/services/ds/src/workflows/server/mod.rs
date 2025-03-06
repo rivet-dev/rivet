@@ -634,8 +634,10 @@ struct UpdateImageInput {
 
 #[activity(UpdateImage)]
 async fn update_image(ctx: &ActivityCtx, input: &UpdateImageInput) -> GlobalResult<()> {
+	let pool = ctx.sqlite().await?;
+	
 	sql_execute!(
-		[ctx]
+		[ctx, pool]
 		"
 		UPDATE state
 		SET image_id = ?

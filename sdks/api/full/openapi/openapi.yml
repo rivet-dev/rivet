@@ -10016,9 +10016,15 @@ components:
           type: string
         job_private_key_pem:
           type: string
+        api_cert_pem:
+          type: string
+        api_private_key_pem:
+          type: string
       required:
         - job_cert_pem
         - job_private_key_pem
+        - api_cert_pem
+        - api_private_key_pem
     ProvisionDatacentersGetServersResponse:
       type: object
       properties:

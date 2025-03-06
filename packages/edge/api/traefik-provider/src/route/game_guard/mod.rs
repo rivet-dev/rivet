@@ -1,3 +1,4 @@
+use api::build_api;
 use api_core_traefik_provider::types;
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use dynamic_servers::build_ds;
@@ -7,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::Auth;
 
+pub mod api;
 pub mod dynamic_servers;
 pub mod job;
 
@@ -28,7 +30,9 @@ pub async fn config(
 	// Fetch configs and catch any errors
 	let mut config = types::TraefikConfigResponse::default();
 	build_job(&ctx, &mut config).await?;
-	let latest_ds_create_ts = build_ds(&ctx, server, &mut config).await?;
+	let latest_ds_create_ts = build_ds(&ctx, &mut config).await?;
+
+	build_api(&ctx, &mut config).await?;
 
 	// Publish message when the request is complete
 	if let Some(latest_ds_create_ts) = latest_ds_create_ts {
