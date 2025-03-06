@@ -343,11 +343,6 @@ services:
         condition: service_healthy
     networks:
       - rivet-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:13133"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
 networks:
   rivet-network:
