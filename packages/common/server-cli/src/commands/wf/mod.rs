@@ -46,6 +46,9 @@ pub enum SubCommand {
 		/// Includes location numbers for events in graph.
 		#[clap(short = 'l', long)]
 		print_location: bool,
+		/// Includes create timestamps for events in graph.
+		#[clap(short = 't', long)]
+		print_ts: bool,
 	},
 	Signal {
 		#[clap(subcommand)]
@@ -100,11 +103,12 @@ impl SubCommand {
 				exclude_json,
 				include_forgotten,
 				print_location,
+				print_ts,
 			} => {
 				let history = db
 					.get_workflow_history(workflow_id, include_forgotten)
 					.await?;
-				util::wf::print_history(history, exclude_json, print_location).await
+				util::wf::print_history(history, exclude_json, print_location, print_ts).await
 			}
 			Self::Signal { command } => command.execute(db).await,
 		}

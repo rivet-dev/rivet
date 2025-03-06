@@ -25,6 +25,13 @@ lazy_static::lazy_static! {
 		&["worker_instance_id"],
 		*REGISTRY,
 	).unwrap();
+	pub static ref FIND_WORKFLOW_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"chirp_find_workflows_duration",
+		"Duration to find a workflow with a given name and tags.",
+		&["workflow_name"],
+		BUCKETS.to_vec(),
+		*REGISTRY,
+	).unwrap();
 
 	pub static ref WORKFLOW_TOTAL: IntGaugeVec = register_int_gauge_vec_with_registry!(
 		"chirp_workflow_total",

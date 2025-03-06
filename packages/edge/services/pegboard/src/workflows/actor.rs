@@ -80,10 +80,10 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 				Draining { .. } | Undrained => false,
 			};
 
+			state.ignore_future_state |= sig.ignore_future_state;
+
 			// Forward signal to owner
 			if !state.ignore_future_state {
-				state.ignore_future_state = sig.ignore_future_state;
-
 				match owner {
 					protocol::ActorOwner::DynamicServer { workflow_id, .. } => {
 						ctx.signal(sig).to_workflow_id(workflow_id).send().await?;

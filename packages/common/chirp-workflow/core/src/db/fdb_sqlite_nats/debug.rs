@@ -542,6 +542,7 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 					NULL AS tags,
 					0 AS event_type,
 					version,
+					create_ts,
 					activity_name AS name,
 					NULL AS auxiliary_id,
 					NULL AS auxiliary_id2,
@@ -561,6 +562,7 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 					NULL AS tags,
 					1 AS event_type,
 					version,
+					ack_ts AS create_ts,
 					signal_name AS name,
 					signal_id AS auxiliary_id,
 					NULL AS auxiliary_id2,
@@ -580,6 +582,7 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 					json(tags) AS tags,
 					2 AS event_type,
 					version,
+					create_ts,
 					signal_name AS name,
 					signal_id AS auxiliary_id,
 					workflow_id AS auxiliary_id2,
@@ -599,6 +602,7 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 					json(tags) AS tags,
 					3 AS event_type,
 					version,
+					create_ts,
 					message_name AS name,
 					NULL AS auxiliary_id,
 					NULL AS auxiliary_id2,
@@ -618,6 +622,7 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 					COALESCE(json(tags), '{}') AS tags,
 					4 AS event_type,
 					version,
+					create_ts,
 					sub_workflow_name AS name,
 					sub_workflow_id AS auxiliary_id,
 					NULL AS auxiliary_id2,
@@ -637,6 +642,7 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 					NULL AS tags,
 					5 AS event_type,
 					version,
+					create_ts,
 					NULL AS name,
 					NULL AS auxiliary_id,
 					NULL AS auxiliary_id2,
@@ -655,6 +661,7 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 					NULL AS tags,
 					6 AS event_type,
 					version,
+					create_ts,
 					NULL AS name,
 					NULL AS auxiliary_id,
 					NULL AS auxiliary_id2,
@@ -673,6 +680,7 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 					NULL AS tags,
 					7 AS event_type,
 					version,
+					create_ts,
 					NULL AS name,
 					NULL AS auxiliary_id,
 					NULL AS auxiliary_id2,
@@ -691,6 +699,7 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 					NULL AS tags,
 					8 AS event_type,
 					1 AS version,
+					create_ts,
 					NULL AS name,
 					NULL AS auxiliary_id,
 					NULL AS auxiliary_id2,
@@ -709,6 +718,7 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 					NULL AS tags,
 					9 AS event_type,
 					version,
+					create_ts,
 					NULL AS name,
 					NULL AS auxiliary_id,
 					NULL AS auxiliary_id2,
@@ -810,28 +820,28 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 							.unpack::<JustUuid>(entry.key())
 							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
-						if current_signal_id
-							.map(|x| signal_id != x)
-							.unwrap_or_default()
-						{
-							// Save if matches query
-							if matching_tags == tags.len()
-								&& name_matches && workflow_id_matches
-								&& state_matches
-							{
-								signal_ids.push(signal_id);
+						if let Some(curr) = current_signal_id {
+							if signal_id != curr {
+								// Save if matches query
+								if matching_tags == tags.len()
+									&& name_matches && workflow_id_matches
+									&& state_matches
+								{
+									signal_ids.push(curr);
 
-								if signal_ids.len() >= 100 {
-									current_signal_id = None;
-									break;
+									if signal_ids.len() >= 100 {
+										current_signal_id = None;
+										break;
+									}
 								}
-							}
 
-							// Reset state
-							matching_tags = 0;
-							name_matches = name.is_none();
-							workflow_id_matches = workflow_id.is_none();
-							state_matches = state.is_none() || state == Some(SignalState::Pending);
+								// Reset state
+								matching_tags = 0;
+								name_matches = name.is_none();
+								workflow_id_matches = workflow_id.is_none();
+								state_matches =
+									state.is_none() || state == Some(SignalState::Pending);
+							}
 						}
 
 						current_signal_id = Some(signal_id);
@@ -931,6 +941,7 @@ struct AmalgamEventRow {
 	location: Location,
 	tags: Option<serde_json::Value>,
 	version: i64,
+	create_ts: i64,
 	event_type: i64,
 	name: Option<String>,
 	auxiliary_id: Option<Uuid>,
@@ -955,6 +966,7 @@ impl TryFrom<AmalgamEventRow> for Event {
 		Ok(Event {
 			location: value.location.clone(),
 			version: value.version.try_into().context("integer conversion")?,
+			create_ts: value.create_ts,
 			forgotten: value.forgotten,
 			data: match event_type {
 				EventType::Activity => EventData::Activity(value.try_into()?),

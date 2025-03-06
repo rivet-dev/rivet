@@ -133,10 +133,10 @@ pub async fn create(
 			ds::types::ServerResources::default_isolate()
 		}
 	};
-
-	tracing::info!(?tags, "creating server with tags");
-
+	
 	let server_id = Uuid::new_v4();
+
+	tracing::info!(?server_id, ?tags, "creating server with tags");
 
 	let mut ready_sub = ctx
 		.subscribe::<ds::workflows::server::Ready>(("server_id", server_id))

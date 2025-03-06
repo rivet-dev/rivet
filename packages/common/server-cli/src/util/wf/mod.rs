@@ -107,6 +107,7 @@ pub async fn print_history(
 	history: Option<HistoryData>,
 	exclude_json: bool,
 	print_location: bool,
+	print_ts: bool,
 ) -> Result<()> {
 	let Some(history) = history else {
 		rivet_term::status::success("No workflow found", "");
@@ -175,7 +176,19 @@ pub async fn print_history(
 
 		println!();
 
-		// TODO: Color code each (make header white instead of yellow)
+		if print_ts {
+			// Indent
+			print!("{}{c} ", "  ".repeat(indent));
+
+			let datetime = Utc
+				.timestamp_millis_opt(event.create_ts)
+				.single()
+				.context("invalid ts")?;
+			let date = datetime.format("%Y-%m-%d %H:%M:%S");
+
+			println!("created {}", style(date).magenta());
+		}
+
 		match &event.data {
 			EventData::Activity(data) => {
 				if !exclude_json {

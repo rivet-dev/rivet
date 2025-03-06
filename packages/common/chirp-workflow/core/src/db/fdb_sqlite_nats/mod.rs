@@ -850,6 +850,8 @@ impl Database for DatabaseFdbSqliteNats {
 		let first_tag = tag_iter.next().transpose()?;
 		let rest_of_tags = tag_iter.collect::<WorkflowResult<Vec<_>>>()?;
 
+		let start_instant = Instant::now();
+
 		let workflow_id = self
 			.pools
 			.fdb()?
@@ -915,6 +917,11 @@ impl Database for DatabaseFdbSqliteNats {
 				}
 			})
 			.await?;
+
+		let dt = start_instant.elapsed().as_secs_f64();
+		metrics::FIND_WORKFLOW_DURATION
+			.with_label_values(&[workflow_name])
+			.observe(dt);
 
 		Ok(workflow_id)
 	}

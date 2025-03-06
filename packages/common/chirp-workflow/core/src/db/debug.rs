@@ -71,6 +71,7 @@ pub struct HistoryData {
 pub struct Event {
 	pub location: Location,
 	pub version: usize,
+	pub create_ts: i64,
 	pub forgotten: bool,
 	pub data: EventData,
 }

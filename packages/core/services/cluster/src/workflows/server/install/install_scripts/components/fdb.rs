@@ -6,7 +6,7 @@ pub fn install(initialize_immediately: bool) -> String {
 		.replace("__FDB_VERSION__", FDB_VERSION)
 		.replace(
 			"__PROMETHEUS_PROXY_SCRIPT__",
-			include_str!("../files/fdp_prometheus_proxy.py"),
+			include_str!("../files/fdb_prometheus_proxy.py"),
 		);
 
 	if initialize_immediately {

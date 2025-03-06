@@ -209,12 +209,12 @@ async fn handle_connection_inner(
 	}
 
 	// Only create the client after receiving the init packet to prevent a race condition
-	if let Some(msg) = rx.next().await {
+	let workflow_id = if let Some(msg) = rx.next().await {
 		match msg? {
 			Message::Binary(buf) => {
 				let packet = protocol::ToServer::deserialize(protocol_version, &buf)?;
 
-				if let protocol::ToServer::Init { .. } = &packet {
+				let workflow_id = if let protocol::ToServer::Init { .. } = &packet {
 					// Spawn a new client workflow if one doesn't already exist
 					let workflow_id = ctx
 						.workflow(pegboard::workflows::client::Input { client_id, flavor })
@@ -225,23 +225,28 @@ async fn handle_connection_inner(
 
 					*workflow_id_guard = Some(workflow_id);
 					drop(workflow_id_guard);
+
+					workflow_id
 				} else {
 					bail!("unexpected initial packet: {packet:?}");
-				}
+				};
 
 				// Forward to client wf
 				ctx.signal(packet)
-					.to_workflow::<pegboard::workflows::client::Workflow>()
-					.tag("client_id", client_id)
+					.to_workflow_id(workflow_id)
 					.send()
 					.await?;
+
+				workflow_id
 			}
 			Message::Close(_) => {
 				bail!("socket closed {client_id}");
 			}
 			msg => bail!("unexpected initial message: {msg:?}"),
 		}
-	}
+	} else {
+		bail!("stream closed {client_id}");
+	};
 
 	// Receive messages from socket
 	while let Some(msg) = rx.next().await {
@@ -251,8 +256,7 @@ async fn handle_connection_inner(
 
 				// Forward to client wf
 				ctx.signal(packet)
-					.to_workflow::<pegboard::workflows::client::Workflow>()
-					.tag("client_id", client_id)
+					.to_workflow_id(workflow_id)
 					.send()
 					.await?;
 			}
