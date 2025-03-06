@@ -56,7 +56,7 @@ dev-cmd *ARGS:
 
 [group('dev')]
 dev-down:
-	{{docker_compose}} down
+	{{docker_compose}} down -t 0
 
 [group('dev')]
 dev-nuke:
