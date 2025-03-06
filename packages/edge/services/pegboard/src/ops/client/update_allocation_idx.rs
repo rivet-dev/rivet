@@ -1,5 +1,5 @@
 use chirp_workflow::prelude::*;
-use fdb_util::{FormalKey, end_of_key_range, SERIALIZABLE};
+use fdb_util::{end_of_key_range, FormalKey, SERIALIZABLE};
 use foundationdb::{self as fdb, options::ConflictRangeType};
 
 use crate::{keys, protocol};

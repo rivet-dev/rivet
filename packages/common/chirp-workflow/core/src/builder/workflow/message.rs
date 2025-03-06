@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, time::Instant};
 
 use global_error::{GlobalError, GlobalResult};
 use serde::Serialize;
@@ -97,6 +97,8 @@ impl<'a, M: Message> MessageBuilder<'a, M> {
 		else {
 			tracing::debug!(name=%self.ctx.name(), id=%self.ctx.workflow_id(), msg_name=%M::NAME, tags=?self.tags, "dispatching message");
 
+			let start_instant = Instant::now();
+
 			// Serialize body
 			let body_val = serde_json::value::to_raw_value(&self.body)
 				.map_err(WorkflowError::SerializeMessageBody)
@@ -131,8 +133,12 @@ impl<'a, M: Message> MessageBuilder<'a, M> {
 			msg.map_err(GlobalError::raw)?;
 			write.map_err(GlobalError::raw)?;
 
+			let dt = start_instant.elapsed().as_secs_f64();
+			metrics::MESSAGE_SEND_DURATION
+				.with_label_values(&[self.ctx.name(), M::NAME])
+				.observe(dt);
 			metrics::MESSAGE_PUBLISHED
-				.with_label_values(&[M::NAME])
+				.with_label_values(&[self.ctx.name(), M::NAME])
 				.inc();
 		}
 

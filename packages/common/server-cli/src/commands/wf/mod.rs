@@ -46,9 +46,9 @@ pub enum SubCommand {
 		/// Includes location numbers for events in graph.
 		#[clap(short = 'l', long)]
 		print_location: bool,
-		/// Includes create timestamps for events in graph.
-		#[clap(short = 't', long)]
-		print_ts: bool,
+		/// Includes create timestamps for events in graph. Two of this flag enables millisecond display.
+		#[clap(short = 't', action = clap::ArgAction::Count, long)]
+		print_ts: u8,
 	},
 	Signal {
 		#[clap(subcommand)]

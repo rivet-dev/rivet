@@ -9,3 +9,9 @@ service:
       method: POST
       path-parameters:
         client_id: uuid
+      request: MarkClientRegisteredRequest
+
+types:
+  MarkClientRegisteredRequest:
+    properties:
+      server_id: uuid

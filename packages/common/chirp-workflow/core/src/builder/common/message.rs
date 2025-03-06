@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, time::Instant};
 
 use global_error::GlobalResult;
 use serde::Serialize;
@@ -71,6 +71,8 @@ impl<M: Message> MessageBuilder<M> {
 
 		tracing::debug!(msg_name=%M::NAME, tags=?self.tags, "dispatching message");
 
+		let start_instant = Instant::now();
+
 		let tags = serde_json::Value::Object(self.tags);
 
 		if self.wait {
@@ -79,8 +81,12 @@ impl<M: Message> MessageBuilder<M> {
 			self.msg_ctx.message(tags, self.body).await?;
 		}
 
+		let dt = start_instant.elapsed().as_secs_f64();
+		metrics::MESSAGE_SEND_DURATION
+			.with_label_values(&["", M::NAME])
+			.observe(dt);
 		metrics::MESSAGE_PUBLISHED
-			.with_label_values(&[M::NAME])
+			.with_label_values(&["", M::NAME])
 			.inc();
 
 		Ok(())

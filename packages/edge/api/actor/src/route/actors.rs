@@ -133,7 +133,7 @@ pub async fn create(
 			ds::types::ServerResources::default_isolate()
 		}
 	};
-	
+
 	let server_id = Uuid::new_v4();
 
 	tracing::info!(?server_id, ?tags, "creating server with tags");

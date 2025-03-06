@@ -1,8 +1,8 @@
-use std::fmt::{self, Debug};
-use fdb_util::prelude::*;
 use chirp_client::prelude::*;
+use fdb_util::prelude::*;
 use global_error::GlobalResult;
 use rivet_pools::prelude::*;
+use std::fmt::{self, Debug};
 
 #[derive(Clone)]
 pub struct Connection {

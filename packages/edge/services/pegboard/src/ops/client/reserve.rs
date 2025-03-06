@@ -1,5 +1,5 @@
 use chirp_workflow::prelude::*;
-use fdb_util::{FormalKey, SERIALIZABLE, end_of_key_range, SNAPSHOT};
+use fdb_util::{end_of_key_range, FormalKey, SERIALIZABLE, SNAPSHOT};
 use foundationdb::{
 	self as fdb,
 	options::{ConflictRangeType, StreamingMode},
@@ -84,7 +84,11 @@ pub async fn pegboard_client_reserve(
 					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
 				// Add read conflict only for this key
-				tx.add_conflict_range(entry.key(), &end_of_key_range(entry.key()), ConflictRangeType::Read)?;
+				tx.add_conflict_range(
+					entry.key(),
+					&end_of_key_range(entry.key()),
+					ConflictRangeType::Read,
+				)?;
 
 				// Clear old entry
 				tx.clear(entry.key());

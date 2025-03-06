@@ -1,10 +1,4 @@
-use std::{
-	path::PathBuf,
-	sync::Arc,
-};
-
-
-
+use std::{path::PathBuf, sync::Arc};
 
 use anyhow::*;
 use clap::Parser;

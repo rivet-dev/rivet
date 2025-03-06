@@ -1,16 +1,16 @@
-use rivet_metrics::{prometheus::*, BUCKETS, REGISTRY};
+use rivet_metrics::{prometheus::*, BUCKETS, REGISTRY, NANO_BUCKETS};
 
 lazy_static::lazy_static! {
 	// MARK: CRDB
 	pub static ref CRDB_POOL_SIZE: IntGauge = register_int_gauge_with_registry!(
 		"crdb_pool_conn_size",
-		"Number of SQL connections in the pool.",
+		"Number of CRDB connections in the pool.",
 		*REGISTRY,
 	)
 	.unwrap();
 	pub static ref CRDB_POOL_NUM_IDLE: IntGauge = register_int_gauge_with_registry!(
 		"crdb_pool_num_idle",
-		"Number of idle SQL connections in the pool.",
+		"Number of idle CRDB connections in the pool.",
 		*REGISTRY,
 	)
 	.unwrap();
@@ -46,6 +46,39 @@ lazy_static::lazy_static! {
 		"sql_acquire_tries",
 		"Amount of tries required to get a pool connection.",
 		&["action", "context_name", "location", "acquire_result"],
+		*REGISTRY,
+	).unwrap();
+
+	// MARK: Mutexes
+	pub static ref LOCK_ACQUIRE_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"lock_acquire_duration",
+		"Duration a lock in the sqlite manager was acquired in.",
+		&["label"],
+		NANO_BUCKETS.to_vec(),
+		*REGISTRY,
+	).unwrap();
+
+	pub static ref LOCK_HELD_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"lock_held_duration",
+		"Duration a lock in the sqlite manager was held for.",
+		&["label"],
+		NANO_BUCKETS.to_vec(),
+		*REGISTRY,
+	).unwrap();
+
+	// MARK: Sqlite
+	pub static ref SQLITE_POOL_SIZE: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		"sqlite_pool_conn_size",
+		"Number of Sqlite connections in the pool.",
+		&["conn_type"],
+		*REGISTRY,
+	)
+	.unwrap();
+	pub static ref SQLITE_GET_POOL_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"sqlite_get_pool_duration",
+		"Duration to fully connect to an Sqlite database.",
+		&["conn_type", "hex_key"],
+		BUCKETS.to_vec(),
 		*REGISTRY,
 	).unwrap();
 }

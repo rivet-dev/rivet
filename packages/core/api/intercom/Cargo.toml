@@ -33,4 +33,4 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["f
 url = "2.2.2"
 uuid = { version = "1", features = ["v4"] }
 
-pegboard.workspace = true
+cluster.workspace = true

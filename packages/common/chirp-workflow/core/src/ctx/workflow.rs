@@ -802,6 +802,8 @@ impl WorkflowCtx {
 					.map_err(WorkflowError::SerializeLoopOutput)
 					.map_err(GlobalError::raw)?;
 
+				let start_instant = Instant::now();
+
 				// Insert event before loop is run so the history is consistent
 				self.db
 					.upsert_workflow_loop_event(
@@ -814,6 +816,11 @@ impl WorkflowCtx {
 						self.loop_location(),
 					)
 					.await?;
+
+				let dt = start_instant.elapsed().as_secs_f64();
+				metrics::BRANCH_UPSERT_DURATION
+					.with_label_values(&[&self.name])
+					.observe(dt);
 
 				(0, state, None)
 			};
@@ -833,6 +840,8 @@ impl WorkflowCtx {
 			tracing::debug!(name=%self.name, id=%self.workflow_id, "running loop");
 
 			loop {
+				let start_instant = Instant::now();
+
 				// Create a new branch for each iteration of the loop at location {...loop location, iteration idx}
 				let mut iteration_branch = loop_branch.branch_inner(
 					self.input.clone(),
@@ -863,8 +872,10 @@ impl WorkflowCtx {
 				}
 
 				// Run loop
+				let start_instant2 = Instant::now();
 				match cb(&mut iteration_branch, &mut state).await? {
 					Loop::Continue => {
+						let dt2 = start_instant2.elapsed().as_secs_f64();
 						iteration += 1;
 
 						let state_val = serde_json::value::to_raw_value(&state)
@@ -888,8 +899,14 @@ impl WorkflowCtx {
 							.cursor
 							.check_clear()
 							.map_err(GlobalError::raw)?;
+
+						let dt = start_instant.elapsed().as_secs_f64();
+						metrics::BRANCH_UPSERT_DURATION
+							.with_label_values(&[&self.name])
+							.observe(dt - dt2);
 					}
 					Loop::Break(res) => {
+						let dt2 = start_instant2.elapsed().as_secs_f64();
 						iteration += 1;
 
 						let state_val = serde_json::value::to_raw_value(&state)
@@ -917,6 +934,11 @@ impl WorkflowCtx {
 							.check_clear()
 							.map_err(GlobalError::raw)?;
 
+						let dt = start_instant.elapsed().as_secs_f64();
+						metrics::BRANCH_UPSERT_DURATION
+							.with_label_values(&[&self.name])
+							.observe(dt - dt2);
+			
 						break res;
 					}
 				}
@@ -1020,6 +1042,7 @@ impl WorkflowCtx {
 			.map_err(GlobalError::raw)?;
 		let history_res2 = history_res.equivalent();
 		let sleep_location = self.cursor.current_location_for(&history_res);
+		let start_instant = Instant::now();
 
 		// Slept before
 		let (deadline_ts, state) = if let HistoryResult::Event(sleep) = history_res {
@@ -1130,6 +1153,11 @@ impl WorkflowCtx {
 				}
 			})
 			.await;
+
+			let dt = start_instant.elapsed().as_secs_f64();
+			metrics::LISTEN_WITH_TIMEOUT_DURATION
+				.with_label_values(&[&self.name])
+				.observe(dt);
 
 			match res {
 				Ok(res) => Some(res.map_err(GlobalError::raw)?),

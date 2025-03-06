@@ -1,7 +1,7 @@
-use std::{collections::HashMap, sync::Arc, time::Duration, fmt::Debug};
 use fdb_util::prelude::*;
 use global_error::{ensure_with, prelude::*, GlobalResult};
 use rivet_config::Config;
+use std::{collections::HashMap, fmt::Debug, sync::Arc, time::Duration};
 use tokio_util::sync::{CancellationToken, DropGuard};
 
 use crate::{
@@ -169,7 +169,11 @@ impl Pools {
 		self.0.fdb.clone().ok_or(Error::MissingFdbPool)
 	}
 
-	pub async fn sqlite(&self, key: impl TuplePack + Debug, read_only: bool) -> Result<SqlitePool, Error> {
+	pub async fn sqlite(
+		&self,
+		key: impl TuplePack + Debug,
+		read_only: bool,
+	) -> Result<SqlitePool, Error> {
 		self.sqlite_with_conn_type(
 			key,
 			if read_only {

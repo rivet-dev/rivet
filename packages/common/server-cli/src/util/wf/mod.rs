@@ -107,7 +107,7 @@ pub async fn print_history(
 	history: Option<HistoryData>,
 	exclude_json: bool,
 	print_location: bool,
-	print_ts: bool,
+	print_ts: u8,
 ) -> Result<()> {
 	let Some(history) = history else {
 		rivet_term::status::success("No workflow found", "");
@@ -176,7 +176,7 @@ pub async fn print_history(
 
 		println!();
 
-		if print_ts {
+		if print_ts != 0 {
 			// Indent
 			print!("{}{c} ", "  ".repeat(indent));
 
@@ -184,7 +184,11 @@ pub async fn print_history(
 				.timestamp_millis_opt(event.create_ts)
 				.single()
 				.context("invalid ts")?;
-			let date = datetime.format("%Y-%m-%d %H:%M:%S");
+			let date = if print_ts > 1 {
+				datetime.format("%Y-%m-%d %H:%M:%S%.3f")
+			} else {
+				datetime.format("%Y-%m-%d %H:%M:%S")
+			};
 
 			println!("created {}", style(date).magenta());
 		}
@@ -232,7 +236,11 @@ pub async fn print_history(
 							.timestamp_millis_opt(error.latest_ts)
 							.single()
 							.context("invalid ts")?;
-						let date = datetime.format("%Y-%m-%d %H:%M:%S");
+						let date = if print_ts > 1 {
+							datetime.format("%Y-%m-%d %H:%M:%S%.3f")
+						} else {
+							datetime.format("%Y-%m-%d %H:%M:%S")
+						};
 
 						println!(
 							"{} {} {}",
@@ -268,6 +276,12 @@ pub async fn print_history(
 				print!("{}{c} ", "  ".repeat(indent));
 
 				println!("id {}", style(data.signal_id).green());
+
+				if let Some(workflow_id) = data.workflow_id {
+					// Indent
+					print!("{}{c} ", "  ".repeat(indent));
+					println!("to workflow id {}", style(workflow_id).green());
+				}
 
 				if !exclude_json {
 					if let Some(tags) = &data.tags {
@@ -416,7 +430,11 @@ pub async fn print_history(
 					.timestamp_millis_opt(data.deadline_ts)
 					.single()
 					.context("invalid ts")?;
-				let date = datetime.format("%Y-%m-%d %H:%M:%S");
+				let date = if print_ts > 1 {
+					datetime.format("%Y-%m-%d %H:%M:%S%.3f")
+				} else {
+					datetime.format("%Y-%m-%d %H:%M:%S")
+				};
 
 				println!("deadline {}", style(date).magenta());
 

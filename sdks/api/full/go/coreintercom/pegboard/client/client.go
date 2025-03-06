@@ -13,6 +13,7 @@ import (
 	http "net/http"
 	sdk "sdk"
 	core "sdk/core"
+	pegboard "sdk/coreintercom/pegboard"
 )
 
 type Client struct {
@@ -33,7 +34,7 @@ func NewClient(opts ...core.ClientOption) *Client {
 	}
 }
 
-func (c *Client) MarkClientRegistered(ctx context.Context, clientId uuid.UUID) error {
+func (c *Client) MarkClientRegistered(ctx context.Context, clientId uuid.UUID, request *pegboard.MarkClientRegisteredRequest) error {
 	baseURL := "https://api.rivet.gg"
 	if c.baseURL != "" {
 		baseURL = c.baseURL
@@ -100,6 +101,7 @@ func (c *Client) MarkClientRegistered(ctx context.Context, clientId uuid.UUID) e
 			URL:          endpointURL,
 			Method:       http.MethodPost,
 			Headers:      c.header,
+			Request:      request,
 			ErrorDecoder: errorDecoder,
 		},
 	); err != nil {

@@ -1,6 +1,6 @@
 use api_core_traefik_provider::types;
 use api_helper::ctx::Ctx;
-use cluster::types::{PoolType, Filter};
+use cluster::types::{Filter, PoolType};
 use rivet_operation::prelude::*;
 
 use crate::auth::Auth;
@@ -54,7 +54,7 @@ pub async fn build_api(
 
 	config.http.middlewares.insert(
 		"api-compress".to_owned(),
-		types::TraefikMiddlewareHttp::Compress { },
+		types::TraefikMiddlewareHttp::Compress {},
 	);
 	middlewares.push("api-compress".to_string());
 

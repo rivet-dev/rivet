@@ -1,5 +1,5 @@
 use dirs;
-use fdb_util::{SERIALIZABLE, prelude::*};
+use fdb_util::{prelude::*, SERIALIZABLE};
 use foundationdb::{self as fdb, options::StreamingMode, tuple::Subspace, FdbBindingError};
 use uuid::Uuid;
 
@@ -87,26 +87,27 @@ pub struct SqlitePool {
 	_snapshot_task: Option<oneshot::Sender<()>>,
 }
 
-
 impl SqlitePool {
 	fn new(entry: SqliteEntryHandle) -> SqlitePool {
 		// Only spawn snapshot task if auto_snapshot is enabled
 		let snapshot_task = match entry.conn_type {
-			SqliteConnType::Writer { auto_snapshot: true } => {
+			SqliteConnType::Writer {
+				auto_snapshot: true,
+			} => {
 				let entry = entry.clone();
 				let (snapshot_tx, snapshot_rx) = oneshot::channel();
 				tokio::task::spawn(async move {
 					// Wait for drop signal
 					let _ = snapshot_rx.await;
 
-					tracing::debug!("sqlite writer dropped, auto-snapshotting");
-					match entry.snapshot().await {
-						Ok(_) => {}
-						Err(err) => tracing::error!(
-							?err,
-							"failed to snapshot on drop, will attempt snapshotting again when gc'd"
-						),
-					}
+					// tracing::debug!("sqlite writer dropped, auto-snapshotting");
+					// match entry.snapshot().await {
+					// 	Ok(_) => {}
+					// 	Err(err) => tracing::error!(
+					// 		?err,
+					// 		"failed to snapshot on drop, will attempt snapshotting again when gc'd"
+					// 	),
+					// }
 				});
 				Some(snapshot_tx)
 			}
@@ -169,7 +170,7 @@ pub struct SqliteEntry {
 	snapshotted_state: Mutex<SqliteState>,
 
 	manager: SqlitePoolManagerHandleWeak,
-	
+
 	/// Used to notify future when this is dropped to clean up the DB file
 	_cleanup_task: Option<oneshot::Sender<()>>,
 }
@@ -184,7 +185,9 @@ impl SqliteEntry {
 
 	/// Returns the size of the database file in bytes
 	async fn debug_db_size(self: &Arc<Self>) -> GlobalResult<u64> {
-		let metadata = tokio::fs::metadata(&self.db_path).await.map_err(Error::Io)?;
+		let metadata = tokio::fs::metadata(&self.db_path)
+			.await
+			.map_err(Error::Io)?;
 		Ok(metadata.len())
 	}
 }
@@ -344,10 +347,8 @@ impl SqlitePoolManager {
 			}
 			SqliteStorage::FoundationDb => {
 				// Generate temporary file location so multiple readers don't clobber each other
-				let db_path = std::env::temp_dir().join(format!(
-					"rivet-sqlite-{hex_key_str}-{}.db",
-					Uuid::new_v4()
-				));
+				let db_path = std::env::temp_dir()
+					.join(format!("rivet-sqlite-{hex_key_str}-{}.db", Uuid::new_v4()));
 
 				// If the database exists, write to the path
 				self.read_from_fdb(key_packed.clone(), &db_path)
@@ -380,8 +381,6 @@ impl SqlitePoolManager {
 			.parse::<SqliteConnectOptions>()
 			.map_err(Error::BuildSqlx)?
 			.read_only(conn_type.is_reader())
-			// Set synchronous mode to NORMAL for performance and data safety balance
-			.synchronous(SqliteSynchronous::Normal)
 			// Set busy timeout to 5 seconds to avoid "database is locked" errors
 			.busy_timeout(Duration::from_secs(5))
 			// Enable foreign key constraint enforcement
@@ -408,15 +407,19 @@ impl SqlitePoolManager {
 			SqliteStorage::FoundationDb => {
 				let db_path = db_path.clone();
 				let (cleanup_tx, cleanup_rx) = oneshot::channel();
-				
+
 				tokio::task::spawn(async move {
 					let _ = cleanup_rx.await;
-					
+
 					if let Err(err) = tokio::fs::remove_file(&db_path).await {
-						tracing::warn!(?err, ?db_path, "failed to remove temporary sqlite db file on drop");
+						tracing::warn!(
+							?err,
+							?db_path,
+							"failed to remove temporary sqlite db file on drop"
+						);
 					}
 				});
-				
+
 				Some(cleanup_tx)
 			}
 			SqliteStorage::Local { .. } => None,

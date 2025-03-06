@@ -10,10 +10,10 @@
 //! cargo bench -q -p rivet-pools --bench sqlite_lifecycle --profile dev
 //! ````
 
-use divan::{Bencher};
+use divan::Bencher;
 use rivet_pools::Pools;
-use uuid::Uuid;
 use sqlx::Connection;
+use uuid::Uuid;
 
 const ROW_COUNTS: &[usize] = &[1, 1_000, 100_000];
 const SAMPLE_SIZE: u32 = 1;
@@ -25,7 +25,10 @@ fn main() {
 
 // Helper to create a database of given size
 async fn setup_database(pools: &Pools, name: &str, row_count: usize) -> usize {
-	let db = pools.sqlite_with_auto_snapshot(name, false, false).await.unwrap();
+	let db = pools
+		.sqlite_with_auto_snapshot(name, false, false)
+		.await
+		.unwrap();
 
 	// Insert data
 	{
@@ -49,20 +52,20 @@ async fn setup_database(pools: &Pools, name: &str, row_count: usize) -> usize {
 		tx.commit().await.unwrap();
 	}
 
-    // Get size
-    let size = db.debug_db_size().await.unwrap();
+	// Get size
+	let size = db.debug_db_size().await.unwrap();
 
 	// Evict (will cause deadlock with conn if not dropped)
 	pools.sqlite_manager().evict(name, false).await.unwrap();
 
-    size as usize
+	size as usize
 }
 
 struct TestSetup {
 	rt: tokio::runtime::Runtime,
 	pools: Pools,
 	db_name: String,
-    db_size: usize,
+	db_size: usize,
 }
 
 // Helper to setup test environment
@@ -98,7 +101,7 @@ fn setup_test(row_count: usize) -> TestSetup {
 		rt,
 		pools,
 		db_name,
-        db_size,
+		db_size,
 	}
 }
 
@@ -118,8 +121,10 @@ fn snapshot_database(bencher: Bencher, row_count: usize) {
 	bencher
 		.with_inputs(|| {
 			let setup = setup_test(row_count);
-			let db = setup.rt.block_on(async { setup.pools.sqlite(&setup.db_name, false).await.unwrap() });
-            (setup, db)
+			let db = setup
+				.rt
+				.block_on(async { setup.pools.sqlite(&setup.db_name, false).await.unwrap() });
+			(setup, db)
 		})
 		.bench_values(|(setup, db)| {
 			setup.rt.block_on(async {
@@ -135,13 +140,20 @@ fn evict_database(bencher: Bencher, row_count: usize) {
 			let setup = setup_test(row_count);
 
 			// Load database in order to be evicted in bench
-			setup.rt.block_on(async { setup.pools.sqlite(&setup.db_name, false).await.unwrap() });
+			setup
+				.rt
+				.block_on(async { setup.pools.sqlite(&setup.db_name, false).await.unwrap() });
 
 			setup
 		})
 		.bench_values(|setup| {
 			setup.rt.block_on(async {
-				setup.pools.sqlite_manager().evict(&setup.db_name, false).await.unwrap();
+				setup
+					.pools
+					.sqlite_manager()
+					.evict(&setup.db_name, false)
+					.await
+					.unwrap();
 			})
 		});
 }
@@ -165,7 +177,12 @@ fn full_lifecycle(bencher: Bencher, row_count: usize) {
 				}
 
 				// Evict database (conn must be dropped)
-				setup.pools.sqlite_manager().evict(&setup.db_name, false).await.unwrap();
+				setup
+					.pools
+					.sqlite_manager()
+					.evict(&setup.db_name, false)
+					.await
+					.unwrap();
 			})
 		});
 }

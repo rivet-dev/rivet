@@ -28,7 +28,6 @@ impl SqlitePoolExt for SqlitePool {
 	}
 }
 
-
 /// Executes queries and explicitly handles retry errors.
 pub async fn query<'a, F, Fut, T>(mut cb: F) -> Result<T>
 where

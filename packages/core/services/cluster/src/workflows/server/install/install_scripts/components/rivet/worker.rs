@@ -66,6 +66,7 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 					// NOTE: Gets replaced by a template later
 					cluster_id: Uuid::nil(),
 					datacenter_id: Uuid::nil(),
+					server_id: Uuid::nil(),
 					intercom_endpoint: Url::parse(&format!("http://127.0.0.1:{TUNNEL_API_EDGE_PORT}"))?,
 					redirect_logs: Some(true),
 				}),
@@ -133,6 +134,7 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 	edge_config_json["server"]["rivet"]["clusters"]["rivet"]["id"] = "___CLUSTER_ID___".into();
 	edge_config_json["server"]["rivet"]["edge"]["cluster_id"] = "___CLUSTER_ID___".into();
 	edge_config_json["server"]["rivet"]["edge"]["datacenter_id"] = "___DATACENTER_ID___".into();
+	edge_config_json["server"]["rivet"]["edge"]["server_id"] = "___SERVER_ID___".into();
 
 	Ok(
 		include_str!("../../files/rivet_worker_configure.sh").replace(

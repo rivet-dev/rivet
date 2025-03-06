@@ -1,9 +1,9 @@
+use crate::Pools;
 use global_error::prelude::*;
 use sqlx::Row;
+use std::sync::Once;
 use tracing_subscriber::prelude::*;
 use uuid::Uuid;
-use std::sync::Once;
-use crate::Pools;
 
 static SETUP_TRACING: Once = Once::new();
 
@@ -22,21 +22,21 @@ fn setup_tracing() {
 async fn setup_test_db() -> GlobalResult<(Pools, String)> {
 	setup_tracing();
 
-    let mut root = rivet_config::config::Root::default();
-    root.server.as_mut().unwrap().foundationdb = Some(Default::default());
-    let config = rivet_config::Config::from_root(root);
+	let mut root = rivet_config::config::Root::default();
+	root.server.as_mut().unwrap().foundationdb = Some(Default::default());
+	let config = rivet_config::Config::from_root(root);
 
-    let pools = Pools::test(config).await?;
-    let db_name = format!("test_{}", Uuid::new_v4());
+	let pools = Pools::test(config).await?;
+	let db_name = format!("test_{}", Uuid::new_v4());
 
-    Ok((pools, db_name))
+	Ok((pools, db_name))
 }
 
 #[tokio::test]
 async fn sqlite_pool_lifecycle() -> GlobalResult<()> {
-    let (pools, db_name) = setup_test_db().await?;
+	let (pools, db_name) = setup_test_db().await?;
 
-    // Create and write to database
+	// Create and write to database
 	let db = pools.sqlite(&db_name, false).await?;
 	{
 		let mut conn = db.conn().await?;
@@ -78,9 +78,9 @@ async fn sqlite_pool_lifecycle() -> GlobalResult<()> {
 
 #[tokio::test]
 async fn sqlite_snapshot_idempotence() -> GlobalResult<()> {
-    let (pools, db_name) = setup_test_db().await?;
+	let (pools, db_name) = setup_test_db().await?;
 
-    // Create initial database
+	// Create initial database
 	let db = pools.sqlite(&db_name, false).await?;
 	{
 		let mut conn = db.conn().await?;

@@ -10,7 +10,7 @@ Method | HTTP request | Description
 
 ## core_intercom_pegboard_mark_client_registered
 
-> core_intercom_pegboard_mark_client_registered(client_id)
+> core_intercom_pegboard_mark_client_registered(client_id, core_intercom_pegboard_mark_client_registered_request)
 
 
 ### Parameters
@@ -19,6 +19,7 @@ Method | HTTP request | Description
 Name | Type | Description  | Required | Notes
 ------------- | ------------- | ------------- | ------------- | -------------
 **client_id** | **uuid::Uuid** |  | [required] |
+**core_intercom_pegboard_mark_client_registered_request** | [**CoreIntercomPegboardMarkClientRegisteredRequest**](CoreIntercomPegboardMarkClientRegisteredRequest.md) |  | [required] |
 
 ### Return type
 
@@ -30,7 +31,7 @@ Name | Type | Description  | Required | Notes
 
 ### HTTP request headers
 
-- **Content-Type**: Not defined
+- **Content-Type**: application/json
 - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)

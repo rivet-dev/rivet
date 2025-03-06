@@ -5,16 +5,16 @@ use serde_json::json;
 
 use crate::auth::Auth;
 
-// MARK: POST /pegboard/client/registered
+// MARK: POST /pegboard/client/{}/registered
 pub async fn client_registered(
 	ctx: Ctx<Auth>,
 	client_id: Uuid,
-	_body: serde_json::Value,
+	body: models::CoreIntercomPegboardMarkClientRegisteredRequest,
 ) -> GlobalResult<serde_json::Value> {
 	ctx.auth().bypass()?;
 
-	ctx.signal(pegboard::workflows::client::Registered {})
-		.tag("client_id", client_id)
+	ctx.signal(cluster::workflows::server::PegboardRegistered { client_id })
+		.tag("server_id", body.server_id)
 		.send()
 		.await?;
 

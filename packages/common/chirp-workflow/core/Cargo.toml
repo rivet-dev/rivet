@@ -57,3 +57,5 @@ features = [
 [dev-dependencies]
 anyhow = "1.0.82"
 rand = "0.8"
+statrs = "0.18"
+dirs = "5.0.1"

@@ -1218,10 +1218,14 @@ impl Database for DatabaseFdbSqliteNats {
 			})
 			.await?;
 
+		let worker_instance_id_str = worker_instance_id.to_string();
 		let dt = start_instant.elapsed().as_secs_f64();
-		metrics::PULL_WORKFLOWS_DURATION
-			.with_label_values(&[&worker_instance_id.to_string()])
+		metrics::LAST_PULL_WORKFLOWS_DURATION
+			.with_label_values(&[&worker_instance_id_str])
 			.set(dt);
+		metrics::PULL_WORKFLOWS_DURATION
+			.with_label_values(&[&worker_instance_id_str])
+			.observe(dt);
 
 		if partial_workflows.is_empty() {
 			return Ok(Vec::new());
@@ -1453,15 +1457,21 @@ impl Database for DatabaseFdbSqliteNats {
 			.buffer_unordered(512)
 			.try_collect()
 			.await?;
-
+	
 		let dt = start_instant2.elapsed().as_secs_f64();
+		metrics::LAST_PULL_WORKFLOWS_HISTORY_DURATION
+			.with_label_values(&[&worker_instance_id_str])
+			.set(dt);
 		metrics::PULL_WORKFLOWS_HISTORY_DURATION
-			.with_label_values(&[&worker_instance_id.to_string()])
-			.set(dt);
+			.with_label_values(&[&worker_instance_id_str])
+			.observe(dt);
 		let dt = start_instant.elapsed().as_secs_f64();
-		metrics::PULL_WORKFLOWS_FULL_DURATION
-			.with_label_values(&[&worker_instance_id.to_string()])
+		metrics::LAST_PULL_WORKFLOWS_FULL_DURATION
+			.with_label_values(&[&worker_instance_id_str])
 			.set(dt);
+		metrics::PULL_WORKFLOWS_FULL_DURATION
+			.with_label_values(&[&worker_instance_id_str])
+			.observe(dt);
 
 		Ok(pulled_workflows)
 	}

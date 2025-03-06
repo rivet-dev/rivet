@@ -1,5 +1,6 @@
 export * as actor from "./actor";
 export * as cloud from "./cloud";
+export * as coreIntercom from "./coreIntercom";
 export * as edgeIntercom from "./edgeIntercom";
 export * as group from "./group";
 export * as identity from "./identity";
@@ -16,5 +17,4 @@ export * as matchmaker from "./matchmaker";
 export * as portal from "./portal";
 export * as upload from "./upload";
 export * from "./common/errors";
-export * as coreIntercom from "./coreIntercom";
 export * as job from "./job";

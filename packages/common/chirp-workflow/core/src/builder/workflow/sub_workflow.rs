@@ -1,4 +1,4 @@
-use std::{fmt::Display, sync::Arc};
+use std::{fmt::Display, sync::Arc, time::Instant};
 
 use global_error::{GlobalError, GlobalResult};
 use serde::Serialize;
@@ -136,6 +136,7 @@ where
 		else {
 			let sub_workflow_name = I::Workflow::NAME;
 			let sub_workflow_id = Uuid::new_v4();
+			let start_instant = Instant::now();
 
 			if unique {
 				tracing::debug!(
@@ -201,8 +202,12 @@ where
 			}
 
 			if sub_workflow_id == actual_sub_workflow_id {
+				let dt = start_instant.elapsed().as_secs_f64();
+				metrics::WORKFLOW_DISPATCH_DURATION
+					.with_label_values(&[ctx.name(), sub_workflow_name])
+					.observe(dt);
 				metrics::WORKFLOW_DISPATCHED
-					.with_label_values(&[sub_workflow_name])
+					.with_label_values(&[ctx.name(), sub_workflow_name])
 					.inc();
 			}
 

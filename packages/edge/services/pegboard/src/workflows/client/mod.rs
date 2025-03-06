@@ -5,10 +5,10 @@ use fdb_util::{FormalKey, SERIALIZABLE, SNAPSHOT};
 use foundationdb::{self as fdb, options::StreamingMode};
 use futures_util::{FutureExt, StreamExt, TryStreamExt};
 use nix::sys::signal::Signal;
-use rivet_api::apis::{
+use rivet_api::{models, apis::{
 	configuration::Configuration,
 	core_intercom_pegboard_api::core_intercom_pegboard_mark_client_registered,
-};
+}};
 use rivet_operation::prelude::proto::{self, backend::pkg::*};
 use sqlx::Acquire;
 
@@ -425,7 +425,9 @@ async fn publish_registered(ctx: &ActivityCtx, input: &PublishRegisteredInput) -
 		..Default::default()
 	};
 
-	core_intercom_pegboard_mark_client_registered(&config, &input.client_id.to_string()).await?;
+	core_intercom_pegboard_mark_client_registered(&config, &input.client_id.to_string(), models::CoreIntercomPegboardMarkClientRegisteredRequest {
+		server_id: edge.server_id,
+	}).await?;
 
 	Ok(())
 }
@@ -655,9 +657,16 @@ struct InsertCommandsInput {
 
 #[activity(InsertCommands)]
 async fn insert_commands(ctx: &ActivityCtx, input: &InsertCommandsInput) -> GlobalResult<i64> {
+	let start_instant = std::time::Instant::now();
+
 	let pool = ctx.sqlite().await?;
 	let mut conn = pool.conn().await?;
 	let mut tx = conn.begin().await?;
+
+	let dt = start_instant.elapsed().as_secs_f64();
+	metrics::INSERT_COMMANDS_ACQUIRE_DURATION
+		.with_label_values(&[&ctx.workflow_id().to_string()])
+		.observe(dt);
 
 	let (last_command_index,) = sql_fetch_one!(
 		[ctx, (i64,), @tx &mut tx]
@@ -691,6 +700,11 @@ async fn insert_commands(ctx: &ActivityCtx, input: &InsertCommandsInput) -> Glob
 	}
 
 	tx.commit().await?;
+
+	let dt = start_instant.elapsed().as_secs_f64();
+	metrics::INSERT_COMMANDS_FULL_DURATION
+		.with_label_values(&[&ctx.workflow_id().to_string()])
+		.observe(dt);
 
 	Ok(last_command_index)
 }
@@ -872,9 +886,6 @@ async fn update_metrics(ctx: &ActivityCtx, input: &UpdateMetricsInput) -> Global
 
 	Ok(())
 }
-
-#[signal("pegboard_client_registered")]
-pub struct Registered {}
 
 #[message("pegboard_client_to_ws")]
 pub struct ToWs {

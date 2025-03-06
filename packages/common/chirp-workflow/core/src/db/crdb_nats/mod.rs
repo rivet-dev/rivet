@@ -640,10 +640,14 @@ impl Database for DatabaseCrdbNats {
 			})
 			.await?;
 
+		let worker_instance_id_str = worker_instance_id.to_string();
 		let dt = start_instant.elapsed().as_secs_f64();
-		metrics::PULL_WORKFLOWS_DURATION
-			.with_label_values(&[&worker_instance_id.to_string()])
+		metrics::LAST_PULL_WORKFLOWS_DURATION
+			.with_label_values(&[&worker_instance_id_str])
 			.set(dt);
+		metrics::PULL_WORKFLOWS_DURATION
+			.with_label_values(&[&worker_instance_id_str])
+			.observe(dt);
 
 		if workflow_rows.is_empty() {
 			return Ok(Vec::new());
@@ -895,15 +899,21 @@ impl Database for DatabaseCrdbNats {
 		.await?;
 
 		let workflows = build_histories(workflow_rows, events)?;
-
+		
 		let dt = start_instant2.elapsed().as_secs_f64();
+		metrics::LAST_PULL_WORKFLOWS_HISTORY_DURATION
+			.with_label_values(&[&worker_instance_id_str])
+			.set(dt);
 		metrics::PULL_WORKFLOWS_HISTORY_DURATION
-			.with_label_values(&[&worker_instance_id.to_string()])
-			.set(dt);
+			.with_label_values(&[&worker_instance_id_str])
+			.observe(dt);
 		let dt = start_instant.elapsed().as_secs_f64();
-		metrics::PULL_WORKFLOWS_FULL_DURATION
-			.with_label_values(&[&worker_instance_id.to_string()])
+		metrics::LAST_PULL_WORKFLOWS_FULL_DURATION
+			.with_label_values(&[&worker_instance_id_str])
 			.set(dt);
+		metrics::PULL_WORKFLOWS_FULL_DURATION
+			.with_label_values(&[&worker_instance_id_str])
+			.observe(dt);
 
 		Ok(workflows)
 	}

@@ -733,6 +733,7 @@ impl Default for Telemetry {
 pub struct Edge {
 	pub cluster_id: Uuid,
 	pub datacenter_id: Uuid,
+	pub server_id: Uuid,
 	pub intercom_endpoint: Url,
 	#[serde(default)]
 	pub redirect_logs: Option<bool>,

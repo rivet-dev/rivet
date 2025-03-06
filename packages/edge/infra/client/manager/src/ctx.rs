@@ -35,7 +35,11 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::{
-	actor::Actor, event_sender::EventSender, metrics, pull_addr_handler::PullAddrHandler, runner,
+	actor::Actor,
+	event_sender::EventSender,
+	metrics,
+	pull_addr_handler::PullAddrHandler,
+	runner,
 	utils::{self, sql::SqlitePoolExt},
 };
 

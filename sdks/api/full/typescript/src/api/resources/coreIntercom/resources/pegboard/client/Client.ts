@@ -5,9 +5,9 @@
 import * as environments from "../../../../../../environments";
 import * as core from "../../../../../../core";
 import * as Rivet from "../../../../../index";
+import * as serializers from "../../../../../../serialization/index";
 import urlJoin from "url-join";
 import * as errors from "../../../../../../errors/index";
-import * as serializers from "../../../../../../serialization/index";
 
 export declare namespace Pegboard {
     interface Options {
@@ -37,6 +37,7 @@ export class Pegboard {
 
     /**
      * @param {string} clientId
+     * @param {Rivet.coreIntercom.pegboard.MarkClientRegisteredRequest} request
      * @param {Pegboard.RequestOptions} requestOptions - Request-specific configuration.
      *
      * @throws {@link Rivet.InternalError}
@@ -47,9 +48,15 @@ export class Pegboard {
      * @throws {@link Rivet.BadRequestError}
      *
      * @example
-     *     await client.coreIntercom.pegboard.markClientRegistered("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32")
+     *     await client.coreIntercom.pegboard.markClientRegistered("d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32", {
+     *         serverId: "d5e9c84f-c2b2-4bf4-b4b0-7ffd7a9ffc32"
+     *     })
      */
-    public async markClientRegistered(clientId: string, requestOptions?: Pegboard.RequestOptions): Promise<void> {
+    public async markClientRegistered(
+        clientId: string,
+        request: Rivet.coreIntercom.pegboard.MarkClientRegisteredRequest,
+        requestOptions?: Pegboard.RequestOptions
+    ): Promise<void> {
         const _response = await (this._options.fetcher ?? core.fetcher)({
             url: urlJoin(
                 (await core.Supplier.get(this._options.environment)) ?? environments.RivetEnvironment.Production,
@@ -66,6 +73,9 @@ export class Pegboard {
             },
             contentType: "application/json",
             requestType: "json",
+            body: serializers.coreIntercom.pegboard.MarkClientRegisteredRequest.jsonOrThrow(request, {
+                unrecognizedObjectKeys: "strip",
+            }),
             timeoutMs: requestOptions?.timeoutInSeconds != null ? requestOptions.timeoutInSeconds * 1000 : 180000,
             maxRetries: requestOptions?.maxRetries,
             abortSignal: requestOptions?.abortSignal,

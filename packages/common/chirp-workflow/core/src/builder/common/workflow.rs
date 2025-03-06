@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, time::Instant};
 
 use global_error::{GlobalError, GlobalResult};
 use serde::Serialize;
@@ -86,6 +86,7 @@ where
 
 		let workflow_name = I::Workflow::NAME;
 		let workflow_id = Uuid::new_v4();
+		let start_instant = Instant::now();
 
 		let no_tags = self.tags.is_empty();
 		let tags = serde_json::Value::Object(self.tags);
@@ -145,8 +146,12 @@ where
 		}
 
 		if workflow_id == actual_workflow_id {
+			let dt = start_instant.elapsed().as_secs_f64();
+			metrics::WORKFLOW_DISPATCH_DURATION
+				.with_label_values(&["", workflow_name])
+				.observe(dt);
 			metrics::WORKFLOW_DISPATCHED
-				.with_label_values(&[workflow_name])
+				.with_label_values(&["", workflow_name])
 				.inc();
 		}
 

@@ -101,11 +101,14 @@ fn add_file_source<P: AsRef<Path>>(
 		Some("json") => config_loader::FileFormat::Json,
 		Some("json5") | Some("jsonc") => {
 			// Parse JSON5/JSONC and convert to regular JSON
-			let value: serde_json::Value = json5::from_str(&content)
-				.map_err(|e| global_error::GlobalError::new(e))?;
-			let json = serde_json::to_string(&value)
-				.map_err(|e| global_error::GlobalError::new(e))?;
-			return Ok(settings.add_source(config_loader::File::from_str(&json, config_loader::FileFormat::Json)))
+			let value: serde_json::Value =
+				json5::from_str(&content).map_err(|e| global_error::GlobalError::new(e))?;
+			let json =
+				serde_json::to_string(&value).map_err(|e| global_error::GlobalError::new(e))?;
+			return Ok(settings.add_source(config_loader::File::from_str(
+				&json,
+				config_loader::FileFormat::Json,
+			)));
 		}
 		Some("yaml") | Some("yml") => config_loader::FileFormat::Yaml,
 		_ => bail!("Unsupported file format: {}", path.display()),

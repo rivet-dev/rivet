@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, time::Instant};
 
 use global_error::{GlobalError, GlobalResult};
 use serde::Serialize;
@@ -88,6 +88,7 @@ impl<T: Signal + Serialize> SignalBuilder<T> {
 		}
 
 		let signal_id = Uuid::new_v4();
+		let start_instant = Instant::now();
 
 		// Serialize input
 		let input_val = serde_json::value::to_raw_value(&self.body)
@@ -162,8 +163,12 @@ impl<T: Signal + Serialize> SignalBuilder<T> {
 			}
 		}
 
+		let dt = start_instant.elapsed().as_secs_f64();
+		metrics::SIGNAL_SEND_DURATION
+			.with_label_values(&["", T::NAME])
+			.observe(dt);
 		metrics::SIGNAL_PUBLISHED
-			.with_label_values(&[T::NAME])
+			.with_label_values(&["", T::NAME])
 			.inc();
 
 		Ok(signal_id)

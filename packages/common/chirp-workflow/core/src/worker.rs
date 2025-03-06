@@ -24,8 +24,9 @@ pub struct Worker {
 impl Worker {
 	pub fn new(registry: RegistryHandle, db: DatabaseHandle) -> Self {
 		// Get rid of metrics that don't exist in the db anymore (declarative)
-		metrics::PULL_WORKFLOWS_DURATION.reset();
-		metrics::PULL_WORKFLOWS_HISTORY_DURATION.reset();
+		metrics::LAST_PULL_WORKFLOWS_DURATION.reset();
+		metrics::LAST_PULL_WORKFLOWS_HISTORY_DURATION.reset();
+		metrics::LAST_PULL_WORKFLOWS_FULL_DURATION.reset();
 
 		Worker {
 			worker_instance_id: Uuid::new_v4(),

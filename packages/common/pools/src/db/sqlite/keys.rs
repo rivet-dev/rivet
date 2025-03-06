@@ -2,7 +2,7 @@ use fdb_util::prelude::*;
 use std::{result::Result::Ok, sync::Arc};
 
 pub struct DbDataKey {
-	db_name_segment: Arc<Vec<u8>>
+	db_name_segment: Arc<Vec<u8>>,
 }
 
 impl DbDataKey {

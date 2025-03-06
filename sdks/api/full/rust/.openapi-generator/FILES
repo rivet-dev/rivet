@@ -219,6 +219,7 @@ docs/CloudVersionMatchmakerPortRange.md
 docs/CloudVersionMatchmakerProxyKind.md
 docs/CloudVersionSummary.md
 docs/CoreIntercomPegboardApi.md
+docs/CoreIntercomPegboardMarkClientRegisteredRequest.md
 docs/EdgeIntercomPegboardApi.md
 docs/EdgeIntercomPegboardPrewarmImageRequest.md
 docs/EdgeIntercomPegboardToggleClientDrainRequest.md
@@ -619,6 +620,7 @@ src/models/cloud_version_matchmaker_port_protocol.rs
 src/models/cloud_version_matchmaker_port_range.rs
 src/models/cloud_version_matchmaker_proxy_kind.rs
 src/models/cloud_version_summary.rs
+src/models/core_intercom_pegboard_mark_client_registered_request.rs
 src/models/edge_intercom_pegboard_prewarm_image_request.rs
 src/models/edge_intercom_pegboard_toggle_client_drain_request.rs
 src/models/error_body.rs
