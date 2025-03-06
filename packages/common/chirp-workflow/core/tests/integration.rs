@@ -8,7 +8,7 @@ use common::*;
 #[tokio::test(flavor = "multi_thread")]
 async fn fdb_sqlite_nats_driver() {
 	setup_tracing();
-	setup_dependencies(true).await;
+	setup_dependencies(false).await;
 
 	let ctx = chirp_workflow::prelude::TestCtx::from_env::<db::DatabaseFdbSqliteNats>(
 		"fdb_sqlite_nats_driver",
@@ -36,37 +36,54 @@ async fn fdb_sqlite_nats_driver() {
 
 	let db = db::DatabaseFdbSqliteNats::from_pools(pools.clone()).unwrap();
 
-	// let workflow_id = Uuid::new_v4();
-	// let input = serde_json::value::RawValue::from_string("null".to_string()).unwrap();
+	let workflow_id = Uuid::new_v4();
+	let input = serde_json::value::RawValue::from_string("null".to_string()).unwrap();
 
-	// db.dispatch_workflow(
-	// 	Uuid::new_v4(),
-	// 	workflow_id,
-	// 	"workflow_name",
-	// 	Some(&json!({ "bald": "eagle" })),
-	// 	&input,
-	// 	false,
-	// )
-	// .await.unwrap();
+	db.dispatch_workflow(
+		Uuid::new_v4(),
+		workflow_id,
+		"workflow_name",
+		Some(&json!({ "bald": "eagle" })),
+		&input,
+		false,
+	)
+	.await
+	.unwrap();
 
-	// let res = db.find_workflow("workflow_name", &json!({
-	// 	"bald": "eagle",
-	// 	"fat": "man"
-	// })).await.unwrap();
-	// tracing::info!(?res);
+	let res = db
+		.find_workflow(
+			"workflow_name",
+			&json!({
+				"bald": "eagle",
+				"fat": "man"
+			}),
+		)
+		.await
+		.unwrap();
+	tracing::info!(?res);
 
-	// db.update_workflow_tags(workflow_id, "workflow_name", &json!({
-	// 	"bald": "eagle",
-	// 	"fat": "man"
-	// }))
-	// .await
-	// .unwrap();
+	db.update_workflow_tags(
+		workflow_id,
+		"workflow_name",
+		&json!({
+			"bald": "eagle",
+			"fat": "man"
+		}),
+	)
+	.await
+	.unwrap();
 
-	// let res = db.find_workflow("workflow_name", &json!({
-	// 	"bald": "eagle",
-	// 	"fat": "man"
-	// })).await.unwrap();
-	// tracing::info!(?res);
+	let res = db
+		.find_workflow(
+			"workflow_name",
+			&json!({
+				"bald": "eagle",
+				"fat": "man"
+			}),
+		)
+		.await
+		.unwrap();
+	tracing::info!(?res);
 
 	tokio::spawn(async move {
 		ctx.workflow(def::Input {})
@@ -104,7 +121,7 @@ async fn fdb_sqlite_nats_driver() {
 	// 				}
 	// 			}
 	// 		};
-			
+
 	// 		tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 	// 	}
 	// });
@@ -147,7 +164,7 @@ mod def {
 				tracing::info!("eepy");
 				ctx.sleep(3000).await?;
 				tracing::info!("eeped");
-				
+
 				let sig = ctx.listen::<MySignal>().await?;
 				tracing::info!(?sig);
 

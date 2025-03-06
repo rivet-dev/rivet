@@ -296,3 +296,8 @@ pub struct SignalData {
 	pub body: Box<serde_json::value::RawValue>,
 	pub create_ts: i64,
 }
+
+/// Database name for the local SQLite database for a workflow.
+pub fn sqlite_db_name_data(workflow_id: Uuid) -> (&'static str, Uuid, &'static str) {
+	("workflow", workflow_id, "data")
+}

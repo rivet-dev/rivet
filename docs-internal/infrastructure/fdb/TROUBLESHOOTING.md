@@ -20,3 +20,9 @@ on an Apple Silicon chip, since Docker's x86 emulation does not support AVX.
 
 See [here](./AVX.md) for more information.
 
+## `FdbBindingError::BadCode`
+
+This usually indicates that `unpack` was not correct.
+
+If reading ranges, double check that the subspace that the `unpack` from is what you expect.
+

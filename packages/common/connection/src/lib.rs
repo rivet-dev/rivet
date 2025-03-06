@@ -1,5 +1,5 @@
 use std::fmt::{self, Debug};
-
+use fdb_util::prelude::*;
 use chirp_client::prelude::*;
 use global_error::GlobalResult;
 use rivet_pools::prelude::*;
@@ -100,7 +100,7 @@ impl Connection {
 
 	pub async fn sqlite(
 		&self,
-		key: impl AsRef<str>,
+		key: impl TuplePack + Debug,
 		read_only: bool,
 	) -> Result<SqlitePool, rivet_pools::Error> {
 		self.pools.sqlite(key, read_only).await

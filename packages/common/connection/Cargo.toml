@@ -13,3 +13,5 @@ rivet-cache.workspace = true
 rivet-pools.workspace = true
 rivet-util.workspace = true
 tracing = "0.1"
+fdb-util.workspace = true
+

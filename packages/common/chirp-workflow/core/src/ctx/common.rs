@@ -110,7 +110,7 @@ pub async fn sqlite_for_workflow(
 		.ok_or(WorkflowError::WorkflowNotFound)
 		.map_err(GlobalError::raw)?;
 
-	conn.sqlite(format!("{}-data", workflow_id), read_only)
+	conn.sqlite(crate::db::sqlite_db_name_data(workflow_id), read_only)
 		.await
 		.map_err(Into::into)
 }

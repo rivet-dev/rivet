@@ -30,7 +30,7 @@ const MAX_VALUE_SIZE: usize = 128 * 1024;
 const MAX_KEYS: usize = 128;
 const MAX_PUT_PAYLOAD_SIZE: usize = 976 * 1024;
 const MAX_STORAGE_SIZE: usize = 1024 * 1024 * 1024; // 1 GiB
-const VALUE_CHUNK_SIZE: usize = 1000; // 1 KB, not KiB
+const VALUE_CHUNK_SIZE: usize = 10_000; // 10 KB, not KiB, see https://apple.github.io/foundationdb/blob.html
 
 // Currently designed largely around the Deno runtime. More abstractions can be made later.
 pub struct ActorKv {

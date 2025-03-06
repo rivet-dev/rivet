@@ -231,7 +231,10 @@ impl ActivityCtx {
 	/// Access the SQLite database for this workflow. This cannot access any other database.
 	pub async fn sqlite(&self) -> Result<SqlitePool, rivet_pools::Error> {
 		self.conn
-			.sqlite(format!("{}-data", self.workflow_id), false)
+			.sqlite(
+				crate::db::sqlite_db_name_data(self.workflow_id),
+				false,
+			)
 			.await
 	}
 

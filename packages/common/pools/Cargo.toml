@@ -6,6 +6,7 @@ license.workspace = true
 edition.workspace = true
 
 [dependencies]
+dirs = { workspace = true }
 anyhow = "1.0"
 async-nats = "0.33"
 clickhouse = { version = "0.11.2" }
@@ -15,6 +16,7 @@ funty = "=1.1.0"  # Fixes issue with sqlx dependency, see https://github.com/bit
 futures-util = "0.3"
 global-error.workspace = true
 governor = "0.6"
+hex.workspace = true
 hyper = { version = "0.14" }
 hyper-tls = { version = "0.5.0" }
 lazy_static = "1.4"
@@ -28,6 +30,8 @@ thiserror = "1.0"
 tokio = { version = "1.40", features = ["tracing"] }
 tokio-util = "0.7"
 tracing = "0.1"
+tracing-subscriber.workspace = true
+tracing-logfmt = "0.3"
 url = "2.4"
 uuid = { version = "1", features = ["v4"] }
 
@@ -46,6 +50,9 @@ features = [
 	"uuid",
 ]
 
+[dev-dependencies]
+divan = "0.1.17"
+
 [dependencies.redis]
 # TODO: https://github.com/rivet-gg/rivet/issues/508
 workspace = true
@@ -58,3 +65,8 @@ features = [
 	"script",
 	"streams",
 ]
+
+[[bench]]
+name = "sqlite_lifecycle"
+harness = false
+

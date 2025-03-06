@@ -1,12 +1,12 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
-
+use std::{collections::HashMap, sync::Arc, time::Duration, fmt::Debug};
+use fdb_util::prelude::*;
 use global_error::{ensure_with, prelude::*, GlobalResult};
 use rivet_config::Config;
 use tokio_util::sync::{CancellationToken, DropGuard};
 
 use crate::{
-	db::sqlite::SqlitePoolManager, ClickHousePool, CrdbPool, Error, FdbPool, NatsPool, RedisPool,
-	SqlitePool,
+	db::sqlite::{SqliteConnType, SqlitePoolManager, SqlitePoolManagerHandle},
+	ClickHousePool, CrdbPool, Error, FdbPool, NatsPool, RedisPool, SqlitePool,
 };
 
 // TODO: Automatically shutdown all pools on drop
@@ -17,7 +17,7 @@ pub(crate) struct PoolsInner {
 	pub(crate) redis: HashMap<String, RedisPool>,
 	pub(crate) clickhouse: Option<clickhouse::Client>,
 	pub(crate) fdb: Option<FdbPool>,
-	pub(crate) sqlite: SqlitePoolManager,
+	pub(crate) sqlite: SqlitePoolManagerHandle,
 	clickhouse_enabled: bool,
 }
 
@@ -38,6 +38,7 @@ impl Pools {
 			crate::db::fdb::setup(config.clone()),
 		)?;
 		let clickhouse = crate::db::clickhouse::setup(config.clone())?;
+		let sqlite = SqlitePoolManager::new(fdb.clone()).await?;
 
 		let pool = Pools(Arc::new(PoolsInner {
 			_guard: token.clone().drop_guard(),
@@ -46,7 +47,7 @@ impl Pools {
 			redis,
 			clickhouse,
 			fdb,
-			sqlite: SqlitePoolManager::new(),
+			sqlite,
 			clickhouse_enabled: config
 				.server
 				.as_ref()
@@ -74,6 +75,7 @@ impl Pools {
 			crate::db::redis::setup(config.clone()),
 			crate::db::fdb::setup(config.clone()),
 		)?;
+		let sqlite = SqlitePoolManager::new(fdb.clone()).await?;
 
 		let pool = Pools(Arc::new(PoolsInner {
 			_guard: token.clone().drop_guard(),
@@ -82,7 +84,7 @@ impl Pools {
 			redis,
 			clickhouse: None,
 			fdb,
-			sqlite: SqlitePoolManager::new(),
+			sqlite,
 			clickhouse_enabled: config
 				.server
 				.as_ref()
@@ -167,8 +169,30 @@ impl Pools {
 		self.0.fdb.clone().ok_or(Error::MissingFdbPool)
 	}
 
-	pub async fn sqlite(&self, key: impl AsRef<str>, read_only: bool) -> Result<SqlitePool, Error> {
-		self.0.sqlite.get(key.as_ref(), read_only).await
+	pub async fn sqlite(&self, key: impl TuplePack + Debug, read_only: bool) -> Result<SqlitePool, Error> {
+		self.sqlite_with_conn_type(
+			key,
+			if read_only {
+				SqliteConnType::Reader
+			} else {
+				SqliteConnType::Writer {
+					auto_snapshot: true,
+				}
+			},
+		)
+		.await
+	}
+
+	pub async fn sqlite_with_conn_type(
+		&self,
+		key: impl TuplePack + Debug,
+		conn_type: SqliteConnType,
+	) -> Result<SqlitePool, Error> {
+		self.0.sqlite.get(key, conn_type).await
+	}
+
+	pub fn sqlite_manager(&self) -> &SqlitePoolManagerHandle {
+		&self.0.sqlite
 	}
 
 	#[tracing::instrument(skip_all)]
