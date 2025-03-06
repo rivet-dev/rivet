@@ -31,6 +31,7 @@ impl<'a> ListenCtx<'a> {
 
 	/// Checks for a signal to this workflow with any of the given signal names.
 	/// - Will error if called more than once.
+	#[tracing::instrument(skip_all)]
 	pub async fn listen_any(
 		&mut self,
 		signal_names: &[&'static str],

@@ -12,6 +12,19 @@ rivet-metrics.workspace = true
 thiserror = "1.0"
 tokio = { version = "1.40", features = ["full", "tracing"] }
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi"] }  # Used with attribute
+tracing-core = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "ansi", "registry", "env-filter"] }  # Used with attribute
 tracing-logfmt = { version = "0.3", features = ["ansi_logs"] }
+
+opentelemetry = { version = "0.28", features = ["trace", "metrics", "logs"] }
+opentelemetry-otlp = { version = "0.28", features = ["trace", "metrics", "logs", "grpc-tonic"] }
+opentelemetry-semantic-conventions = { version = "0.28", features = ["semconv_experimental"] }
+opentelemetry-stdout = { version = "0.28.0", features = ["trace", "metrics", "logs"] }
+opentelemetry_sdk = { version = "0.28", features = ["trace", "metrics", "logs"] }
+tracing-opentelemetry = "0.29"
+rivet-env.workspace = true
+opentelemetry-appender-tracing = "0.28.1"
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 

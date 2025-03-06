@@ -23,6 +23,7 @@ use tokio::{
 	sync::{broadcast, Mutex},
 	time::Instant,
 };
+use tracing::Instrument as _;
 
 use crate::{metrics, Error, FdbPool};
 
@@ -127,20 +128,25 @@ impl SqliteWriterEntry {
 		}
 	}
 
+	#[tracing::instrument(name = "sqlite_writer_conn", skip_all)]
 	async fn conn(&self) -> Result<&SqliteConnHandle, Error> {
 		self.conn_once
-			.get_or_try_init(|| async {
-				let manager = self.manager.upgrade().ok_or_else(|| {
-					Error::Global(
-						AssertionError::Panic {
-							message: "manager is dropped".into(),
-							location: global_error::location!(),
-						}
-						.into(),
-					)
-				})?;
+			.get_or_try_init(|| {
+				async {
+					let manager = self.manager.upgrade().ok_or_else(|| {
+						Error::Global(
+							AssertionError::Panic {
+								message: "manager is dropped".into(),
+								location: global_error::location!(),
+							}
+							.into(),
+						)
+					})?;
 
-				SqliteConn::connect(self.key_packed.clone(), self.conn_type.clone(), manager).await
+					SqliteConn::connect(self.key_packed.clone(), self.conn_type.clone(), manager)
+						.await
+				}
+				.instrument(tracing::info_span!("conn_connect"))
 			})
 			.await
 	}
@@ -171,6 +177,7 @@ pub struct SqlitePoolManager {
 
 // MARK: Public methods
 impl SqlitePoolManager {
+	#[tracing::instrument(name = "sqlite_pool_manager_new", skip_all)]
 	pub async fn new(fdb: Option<FdbPool>) -> Result<SqlitePoolManagerHandle, Error> {
 		let (shutdown, _) = broadcast::channel(1);
 		let shutdown_rx = shutdown.subscribe();
@@ -214,6 +221,7 @@ impl SqlitePoolManager {
 	///
 	/// IMPORTANT: Do not hold a reference to this value for an extended period of time. We use
 	/// this function call to determine when to GC a pool.
+	#[tracing::instrument(name = "sqlite_get", skip_all)]
 	pub async fn get(
 		self: &Arc<Self>,
 		key: impl TuplePack + Debug,
@@ -222,7 +230,11 @@ impl SqlitePoolManager {
 		let start_instant = Instant::now();
 
 		let key_packed = Arc::new(key.pack_to_vec());
-		let conn_type_str = if conn_type.is_writer() { "writer" } else { "reader" };
+		let conn_type_str = if conn_type.is_writer() {
+			"writer"
+		} else {
+			"reader"
+		};
 		let mut did_insert = false;
 
 		// Check if pool already exists
@@ -257,12 +269,15 @@ impl SqlitePoolManager {
 		};
 
 		let dt = start_instant.elapsed().as_secs_f64();
-		metrics::SQLITE_GET_POOL_DURATION.with_label_values(&[conn_type_str, &did_insert.to_string()]).observe(dt);
+		metrics::SQLITE_GET_POOL_DURATION
+			.with_label_values(&[conn_type_str, &did_insert.to_string()])
+			.observe(dt);
 
 		Ok(conn)
 	}
 
 	/// Evicts a database from the pool and snapshots it if needed
+	#[tracing::instrument(name = "sqlite_evict", skip_all)]
 	pub async fn evict(self: &Arc<Self>, key: impl TuplePack) -> Result<(), Error> {
 		let key_packed = Arc::new(key.pack_to_vec());
 
@@ -275,6 +290,7 @@ impl SqlitePoolManager {
 
 	/// If the database is loaded, then force a snapshot, or wait for existing snapshot to finish
 	/// writing.
+	#[tracing::instrument(name = "sqlite_flush", skip_all)]
 	pub async fn flush(self: &Arc<Self>, key: impl TuplePack) -> Result<(), Error> {
 		let key_packed = Arc::new(key.pack_to_vec());
 		self.snapshot_with_key(&key_packed)
@@ -288,6 +304,7 @@ impl SqlitePoolManager {
 // MARK: Private helpers
 impl SqlitePoolManager {
 	/// Inner implementation of database eviction that handles the actual removal from the pool
+	#[tracing::instrument(name = "sqlite_evict_with_key", skip_all)]
 	async fn evict_with_key(&self, key: &KeyPacked) -> GlobalResult<()> {
 		tracing::debug!("evicting sqlite database");
 
@@ -320,6 +337,7 @@ impl SqlitePoolManager {
 	/// overhead.
 	///
 	/// Returns `true` if wrote a snapshot.
+	#[tracing::instrument(name = "sqlite_snapshot_with_key", skip_all)]
 	async fn snapshot_with_key(&self, key_packed: &KeyPacked) -> GlobalResult<bool> {
 		// Only run if snapshotting required
 		let SqliteStorage::FoundationDb = self.storage else {
@@ -375,6 +393,7 @@ impl SqlitePoolManager {
 	/// all other queries.
 	///
 	/// Returns `true` if total_changes() if changed.
+	#[tracing::instrument(skip_all)]
 	async fn snapshot_sqlite_db_inner(
 		&self,
 		key_packed: &KeyPacked,
@@ -440,6 +459,7 @@ impl SqlitePoolManager {
 
 				Ok(())
 			}
+			.instrument(tracing::info_span!("snapshot_sqlite_write_tx"))
 		})
 		.await?;
 
@@ -464,6 +484,7 @@ impl SqlitePoolManager {
 	}
 
 	/// GC loop for SqlitePoolManager
+	#[tracing::instrument(skip_all)]
 	async fn manager_gc_loop(self: Arc<Self>, mut shutdown: broadcast::Receiver<()>) {
 		let mut interval = tokio::time::interval(GC_INTERVAL);
 
@@ -525,6 +546,7 @@ impl SqlitePoolManager {
 // MARK: FDB Helpers
 impl SqlitePoolManager {
 	/// Returns true if db exists, false if not.
+	#[tracing::instrument(name = "sqlite_read_from_fdb", skip_all)]
 	async fn read_from_fdb(&self, key_packed: KeyPacked, db_path: &Path) -> GlobalResult<bool> {
 		let db_data_subspace = self
 			.subspace
@@ -572,6 +594,7 @@ impl SqlitePoolManager {
 
 					Ok::<_, FdbBindingError>((buf, chunk_count))
 				}
+				.instrument(tracing::info_span!("read_from_fdb_tx"))
 			})
 			.await?;
 
@@ -608,6 +631,7 @@ pub struct SqliteConn {
 }
 
 impl SqliteConn {
+	#[tracing::instrument(name = "sqlite_conn_connect", skip_all)]
 	async fn connect(
 		key_packed: KeyPacked,
 		conn_type: SqliteConnType,
@@ -693,8 +717,14 @@ impl SqliteConn {
 
 		tracing::debug!(?db_url, "sqlite connected");
 
-		let conn_type_str = if conn_type.is_writer() { "writer" } else { "reader" };
-		metrics::SQLITE_POOL_SIZE.with_label_values(&[conn_type_str]).inc();		
+		let conn_type_str = if conn_type.is_writer() {
+			"writer"
+		} else {
+			"reader"
+		};
+		metrics::SQLITE_POOL_SIZE
+			.with_label_values(&[conn_type_str])
+			.inc();
 
 		// Create drop handle
 		let (drop_tx, drop_rx) = oneshot::channel();
@@ -739,8 +769,11 @@ impl SqliteConn {
 					}
 				}
 
-				metrics::SQLITE_POOL_SIZE.with_label_values(&[conn_type_str]).dec();		
+				metrics::SQLITE_POOL_SIZE
+					.with_label_values(&[conn_type_str])
+					.dec();
 			}
+			.instrument(tracing::info_span!("sqlite_conn_drop"))
 		});
 
 		Ok(Arc::new(SqliteConn {
@@ -754,6 +787,7 @@ impl SqliteConn {
 }
 
 impl SqliteConn {
+	#[tracing::instrument(name = "sqlite_conn_snapshot", skip_all)]
 	pub async fn snapshot(&self) -> GlobalResult<bool> {
 		match self.manager.snapshot_with_key(&self.key_packed).await {
 			Ok(x) => Ok(x),
@@ -775,12 +809,14 @@ impl SqliteConn {
 		self.conn.try_lock().ok()
 	}
 
+	#[tracing::instrument(name = "sqlite_acquire", skip_all)]
 	pub async fn acquire(
 		&self,
 	) -> Result<tokio::sync::MutexGuard<'_, sqlx::SqliteConnection>, sqlx::Error> {
 		Ok(self.conn.lock().await)
 	}
 
+	#[tracing::instrument(name = "sqlite_conn", skip_all)]
 	pub async fn conn(
 		&self,
 	) -> Result<tokio::sync::MutexGuard<'_, sqlx::SqliteConnection>, sqlx::Error> {

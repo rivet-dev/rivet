@@ -84,6 +84,7 @@ impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
 		self
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn send(self) -> GlobalResult<Uuid> {
 		if let Some(err) = self.error {
 			return Err(err.into());

@@ -23,6 +23,7 @@ type GlobalError = anyhow::Error;
 
 #[async_trait::async_trait]
 impl DatabaseDebug for DatabaseCrdbNats {
+	#[tracing::instrument(skip_all)]
 	async fn get_workflows(&self, workflow_ids: Vec<Uuid>) -> Result<Vec<WorkflowData>> {
 		let workflows = sql_fetch_all!(
 			[self, WorkflowRow]
@@ -53,6 +54,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 		Ok(workflows.into_iter().map(Into::into).collect())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn find_workflows(
 		&self,
 		tags: &[(String, String)],
@@ -142,6 +144,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 		Ok(workflows.into_iter().map(Into::into).collect())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn silence_workflows(&self, workflow_ids: Vec<Uuid>) -> Result<()> {
 		sql_execute!(
 			[self]
@@ -158,6 +161,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn wake_workflows(&self, workflow_ids: Vec<Uuid>) -> Result<()> {
 		sql_execute!(
 			[self]
@@ -175,6 +179,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn get_workflow_history(
 		&self,
 		workflow_id: Uuid,
@@ -454,6 +459,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 		}))
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn get_signals(&self, signal_ids: Vec<Uuid>) -> Result<Vec<SignalData>> {
 		let signals = sql_fetch_all!(
 			[self, SignalRow]
@@ -487,6 +493,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 		Ok(signals.into_iter().map(Into::into).collect())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn find_signals(
 		&self,
 		tags: &[(String, String)],
@@ -570,6 +577,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 		Ok(signals.into_iter().map(Into::into).collect())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn silence_signals(&self, signal_ids: Vec<Uuid>) -> Result<()> {
 		sql_execute!(
 			[self]

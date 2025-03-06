@@ -126,6 +126,7 @@ pub mod time {
 		}
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn sleep_until_ts(ts: u64) {
 		let target_time = UNIX_EPOCH + Duration::from_millis(ts);
 		if let Ok(sleep_duration) = target_time.duration_since(SystemTime::now()) {

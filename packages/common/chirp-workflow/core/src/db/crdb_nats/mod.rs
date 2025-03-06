@@ -55,6 +55,7 @@ pub struct DatabaseCrdbNats {
 }
 
 impl DatabaseCrdbNats {
+	#[tracing::instrument(skip_all)]
 	async fn conn(&self) -> WorkflowResult<PoolConnection<Postgres>> {
 		// Attempt to use an existing connection
 		if let Some(conn) = self.pool.try_acquire() {
@@ -66,6 +67,7 @@ impl DatabaseCrdbNats {
 	}
 
 	// Alias function for sql macro compatibility
+	#[tracing::instrument(skip_all)]
 	async fn crdb(&self) -> WorkflowResult<PgPool> {
 		Ok(self.pool.clone())
 	}
@@ -86,7 +88,7 @@ impl DatabaseCrdbNats {
 					tracing::warn!(?err, "failed to publish wake message");
 				}
 			}
-			.in_current_span(),
+			.instrument(tracing::info_span!("wake_worker_publish")),
 		);
 		if let Err(err) = spawn_res {
 			tracing::error!(?err, "failed to spawn wake task");
@@ -94,6 +96,7 @@ impl DatabaseCrdbNats {
 	}
 
 	/// Executes queries and explicitly handles retry errors.
+	#[tracing::instrument(skip_all)]
 	async fn query<'a, F, Fut, T>(&self, mut cb: F) -> WorkflowResult<T>
 	where
 		F: FnMut() -> Fut,
@@ -147,6 +150,7 @@ impl Database for DatabaseCrdbNats {
 		}))
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn wake_sub<'a, 'b>(&'a self) -> WorkflowResult<BoxStream<'b, ()>> {
 		let stream = self
 			.nats
@@ -158,6 +162,7 @@ impl Database for DatabaseCrdbNats {
 		Ok(stream.boxed())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn update_worker_ping(&self, worker_instance_id: Uuid) -> WorkflowResult<()> {
 		sql_execute!(
 			[self]
@@ -173,6 +178,7 @@ impl Database for DatabaseCrdbNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn clear_expired_leases(&self, worker_instance_id: Uuid) -> WorkflowResult<()> {
 		let acquired_lock = sql_fetch_optional!(
 			[self, (i64,)]
@@ -255,6 +261,7 @@ impl Database for DatabaseCrdbNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn publish_metrics(&self, worker_instance_id: Uuid) -> WorkflowResult<()> {
 		// Always update ping
 		metrics::WORKER_LAST_PING
@@ -417,6 +424,7 @@ impl Database for DatabaseCrdbNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn dispatch_workflow(
 		&self,
 		ray_id: Uuid,
@@ -489,6 +497,7 @@ impl Database for DatabaseCrdbNats {
 		Ok(actual_workflow_id)
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn get_workflow(&self, workflow_id: Uuid) -> WorkflowResult<Option<WorkflowData>> {
 		sql_fetch_optional!(
 			[self, WorkflowRow]
@@ -503,6 +512,7 @@ impl Database for DatabaseCrdbNats {
 		.map(|row| row.map(Into::into))
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn find_workflow(
 		&self,
 		_workflow_name: &str,
@@ -511,6 +521,7 @@ impl Database for DatabaseCrdbNats {
 		unimplemented!();
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn pull_workflows(
 		&self,
 		worker_instance_id: Uuid,
@@ -918,6 +929,7 @@ impl Database for DatabaseCrdbNats {
 		Ok(workflows)
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn complete_workflow(
 		&self,
 		workflow_id: Uuid,
@@ -952,6 +964,7 @@ impl Database for DatabaseCrdbNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn commit_workflow(
 		&self,
 		workflow_id: Uuid,
@@ -1007,6 +1020,7 @@ impl Database for DatabaseCrdbNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn pull_next_signal(
 		&self,
 		workflow_id: Uuid,
@@ -1108,6 +1122,7 @@ impl Database for DatabaseCrdbNats {
 		Ok(signal)
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn get_sub_workflow(
 		&self,
 		_workflow_id: Uuid,
@@ -1117,6 +1132,7 @@ impl Database for DatabaseCrdbNats {
 		self.get_workflow(sub_workflow_id).await
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn publish_signal(
 		&self,
 		ray_id: Uuid,
@@ -1150,6 +1166,7 @@ impl Database for DatabaseCrdbNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn publish_tagged_signal(
 		&self,
 		ray_id: Uuid,
@@ -1183,6 +1200,7 @@ impl Database for DatabaseCrdbNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn publish_signal_from_workflow(
 		&self,
 		from_workflow_id: Uuid,
@@ -1236,6 +1254,7 @@ impl Database for DatabaseCrdbNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn publish_tagged_signal_from_workflow(
 		&self,
 		from_workflow_id: Uuid,
@@ -1289,6 +1308,7 @@ impl Database for DatabaseCrdbNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn dispatch_sub_workflow(
 		&self,
 		ray_id: Uuid,
@@ -1387,6 +1407,7 @@ impl Database for DatabaseCrdbNats {
 		Ok(actual_sub_workflow_id)
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn update_workflow_tags(
 		&self,
 		workflow_id: Uuid,
@@ -1412,6 +1433,7 @@ impl Database for DatabaseCrdbNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn commit_workflow_activity_event(
 		&self,
 		workflow_id: Uuid,
@@ -1510,6 +1532,7 @@ impl Database for DatabaseCrdbNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn commit_workflow_message_send_event(
 		&self,
 		from_workflow_id: Uuid,
@@ -1546,6 +1569,7 @@ impl Database for DatabaseCrdbNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn upsert_workflow_loop_event(
 		&self,
 		workflow_id: Uuid,
@@ -1703,6 +1727,7 @@ impl Database for DatabaseCrdbNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn commit_workflow_sleep_event(
 		&self,
 		from_workflow_id: Uuid,
@@ -1736,6 +1761,7 @@ impl Database for DatabaseCrdbNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn update_workflow_sleep_event_state(
 		&self,
 		from_workflow_id: Uuid,
@@ -1762,6 +1788,7 @@ impl Database for DatabaseCrdbNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn commit_workflow_branch_event(
 		&self,
 		from_workflow_id: Uuid,
@@ -1792,6 +1819,7 @@ impl Database for DatabaseCrdbNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn commit_workflow_removed_event(
 		&self,
 		from_workflow_id: Uuid,
@@ -1824,6 +1852,7 @@ impl Database for DatabaseCrdbNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn commit_workflow_version_check_event(
 		&self,
 		from_workflow_id: Uuid,

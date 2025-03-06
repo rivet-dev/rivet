@@ -63,7 +63,7 @@ where
 
 			// Handle request
 			let ray_id = Uuid::new_v4();
-			let req_span = tracing::info_span!("http request", method = %req.method(), uri = %req.uri(), %ray_id);
+			let req_span = tracing::info_span!("http_request", method = %req.method(), uri = %req.uri(), %ray_id);
 			async move {
 				let method = req.method().clone();
 				let uri = req.uri().clone();

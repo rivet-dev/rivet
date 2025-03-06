@@ -4,9 +4,6 @@ use rivet_pools::prelude::*;
 /// Represents internal errors from the worker manager.
 #[derive(thiserror::Error, Debug)]
 pub enum ManagerError {
-	#[error("rivet runtime: {0}")]
-	RivetRuntime(#[from] rivet_runtime::Error),
-
 	#[error("join error: {0}")]
 	JoinError(#[from] tokio::task::JoinError),
 

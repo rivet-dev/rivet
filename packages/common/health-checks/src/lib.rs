@@ -32,7 +32,7 @@ pub async fn run_standalone(config: Config) -> GlobalResult<()> {
 			let config = config.clone();
 			Ok::<_, Infallible>(service_fn(move |req: Request<Body>| {
 				let config = config.clone();
-				async move { handle_infallible(&config, req).await }
+				async move { serve_req(&config, req).await }
 			}))
 		}
 	});
@@ -57,11 +57,11 @@ pub async fn run_standalone(config: Config) -> GlobalResult<()> {
 }
 
 #[tracing::instrument(skip_all)]
-async fn handle_infallible(
+async fn serve_req(
 	config: &Config,
 	req: Request<Body>,
 ) -> Result<Response<Body>, Infallible> {
-	match handle(config, req).await {
+	match serve_req_fallible(config, req).await {
 		Ok(res) => Ok(res),
 		Err(_) => Ok(Response::builder()
 			.status(404)
@@ -71,7 +71,7 @@ async fn handle_infallible(
 }
 
 #[tracing::instrument(skip_all)]
-pub async fn handle(config: &Config, req: Request<Body>) -> Result<Response<Body>, Request<Body>> {
+pub async fn serve_req_fallible(config: &Config, req: Request<Body>) -> Result<Response<Body>, Request<Body>> {
 	let res = if req.uri().path() == "/health/liveness" {
 		status::liveness::route().await
 	} else if let (Some(pools), "/health/essential") = (config.pools.clone(), req.uri().path()) {
@@ -168,6 +168,8 @@ mod status {
 	}
 
 	pub mod essential {
+		use tracing::Instrument as _;
+
 		use super::{Status, StatusResponse};
 
 		#[derive(serde::Serialize)]
@@ -186,14 +188,16 @@ mod status {
 					} else {
 						None
 					}
-				},
+				}
+				.instrument(tracing::trace_span!("crdb_check_status")),
 				async {
 					if let Ok(pool) = pools.redis("persistent") {
 						Some(super::redis::check_status(pool).await)
 					} else {
 						None
 					}
-				},
+				}
+				.instrument(tracing::trace_span!("redis_check_status")),
 				async {
 					if let Ok(pool) = pools.nats() {
 						Some(super::nats::check_status(pool).await)
@@ -201,6 +205,7 @@ mod status {
 						None
 					}
 				}
+				.instrument(tracing::trace_span!("nats_check_status")),
 			);
 
 			let crdb = match crdb {

@@ -21,6 +21,7 @@ use crate::{
 
 /// Polls the database for the workflow.
 /// 60 second timeout.
+	#[tracing::instrument(skip_all)]
 pub async fn wait_for_workflow<W: Workflow>(
 	db: &DatabaseHandle,
 	workflow_id: Uuid,
@@ -57,6 +58,7 @@ pub async fn wait_for_workflow<W: Workflow>(
 }
 
 /// Finds the first incomplete workflow with the given tags.
+	#[tracing::instrument(skip_all)]
 pub async fn find_workflow<W: Workflow>(
 	db: &DatabaseHandle,
 	tags: impl AsTags,
@@ -66,6 +68,7 @@ pub async fn find_workflow<W: Workflow>(
 		.map_err(GlobalError::raw)
 }
 
+	#[tracing::instrument(skip_all)]
 pub async fn op<I>(
 	db: &DatabaseHandle,
 	config: &rivet_config::Config,
@@ -104,6 +107,7 @@ where
 	res
 }
 
+	#[tracing::instrument(skip_all)]
 pub async fn sqlite_for_workflow(
 	db: &DatabaseHandle,
 	conn: &rivet_connection::Connection,

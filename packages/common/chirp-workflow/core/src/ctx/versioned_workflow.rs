@@ -82,6 +82,7 @@ impl<'a> VersionedWorkflowCtx<'a> {
 	}
 
 	/// Run activity. Will replay on failure.
+	#[tracing::instrument(skip_all)]
 	pub async fn activity<I>(
 		&mut self,
 		input: I,
@@ -95,6 +96,7 @@ impl<'a> VersionedWorkflowCtx<'a> {
 
 	/// Joins multiple executable actions (activities, closures) and awaits them simultaneously. This does not
 	/// short circuit in the event of an error to make sure activity side effects are recorded.
+	#[tracing::instrument(skip_all)]
 	pub async fn join<T: Executable>(&mut self, exec: T) -> GlobalResult<T::Output> {
 		wrap!(self, "join", { exec.execute(self.inner).await })
 	}
@@ -106,11 +108,13 @@ impl<'a> VersionedWorkflowCtx<'a> {
 
 	/// Listens for a signal for a short time before setting the workflow to sleep. Once the signal is
 	/// received, the workflow will be woken up and continue.
+	#[tracing::instrument(skip_all)]
 	pub async fn listen<T: Listen>(&mut self) -> GlobalResult<T> {
 		wrap!(self, "listen", { self.inner.listen::<T>().await })
 	}
 
 	/// Execute a custom listener.
+	#[tracing::instrument(skip_all)]
 	pub async fn custom_listener<T: CustomListener>(
 		&mut self,
 		listener: &T,
@@ -127,6 +131,7 @@ impl<'a> VersionedWorkflowCtx<'a> {
 
 	/// Runs workflow steps in a loop. **Ensure that there are no side effects caused by the code in this
 	/// callback**. If you need side causes or side effects, use a native rust loop.
+	#[tracing::instrument(skip_all)]
 	pub async fn repeat<F, T>(&mut self, cb: F) -> GlobalResult<T>
 	where
 		F: for<'b> FnMut(&'b mut WorkflowCtx) -> AsyncResult<'b, Loop<T>>,
@@ -135,14 +140,17 @@ impl<'a> VersionedWorkflowCtx<'a> {
 		wrap!(self, "loop", { self.inner.repeat(cb).await })
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn sleep(&mut self, duration: impl DurationToMillis) -> GlobalResult<()> {
 		wrap!(self, "sleep", { self.inner.sleep(duration).await })
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn sleep_until(&mut self, time: impl TsToMillis) -> GlobalResult<()> {
 		wrap!(self, "sleep", { self.inner.sleep_until(time).await })
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn listen_with_timeout<T: Listen>(
 		&mut self,
 		duration: impl DurationToMillis,

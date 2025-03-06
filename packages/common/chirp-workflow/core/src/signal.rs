@@ -56,6 +56,7 @@ macro_rules! join_signal {
 
     	#[async_trait::async_trait]
 		impl Listen for $join {
+			#[tracing::instrument(skip_all)]
 			async fn listen(ctx: &mut chirp_workflow::prelude::ListenCtx) -> chirp_workflow::prelude::WorkflowResult<Self> {
 				let row = ctx.listen_any(&[
 				    $(<$just_types as chirp_workflow::signal::Signal>::NAME),*

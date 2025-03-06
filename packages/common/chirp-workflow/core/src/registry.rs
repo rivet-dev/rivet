@@ -1,4 +1,5 @@
 use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
+use tracing::Instrument as _;
 
 use futures_util::FutureExt;
 use global_error::GlobalError;
@@ -90,6 +91,7 @@ impl Registry {
 
 						Ok(output_val)
 					}
+					.instrument(tracing::info_span!("serde_workflow"))
 					.boxed()
 				},
 			}),

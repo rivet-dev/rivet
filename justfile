@@ -47,6 +47,10 @@ dev-logs-server:
 	{{docker_compose}} logs -f -n 100 rivet-server
 
 [group('dev')]
+dev-shell:
+	{{docker_compose}} exec -it rivet-shell /bin/bash
+
+[group('dev')]
 dev-exec CONTAINER:
 	{{docker_compose}} exec -it {{CONTAINER}} /bin/bash
 

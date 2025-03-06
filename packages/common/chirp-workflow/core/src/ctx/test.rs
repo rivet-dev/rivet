@@ -40,6 +40,7 @@ pub struct TestCtx {
 }
 
 impl TestCtx {
+	#[tracing::instrument(skip_all)]
 	pub async fn from_env<DB: Database + Sync + 'static>(
 		test_name: &str,
 		no_config: bool,
@@ -124,6 +125,7 @@ impl TestCtx {
 }
 
 impl TestCtx {
+	#[tracing::instrument(skip_all)]
 	pub async fn wait_for_workflow<W: Workflow>(
 		&self,
 		workflow_id: Uuid,
@@ -170,6 +172,7 @@ impl TestCtx {
 		builder::message::MessageBuilder::new(self.msg_ctx.clone(), body)
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn subscribe<M>(&self, tags: impl AsTags) -> GlobalResult<SubscriptionHandle<M>>
 	where
 		M: Message,
@@ -180,6 +183,7 @@ impl TestCtx {
 			.map_err(GlobalError::raw)
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn tail_read<M, T>(&self, tags: impl AsTags) -> GlobalResult<Option<NatsMessage<M>>>
 	where
 		M: Message,
@@ -190,6 +194,7 @@ impl TestCtx {
 			.map_err(GlobalError::raw)
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn tail_anchor<M, T>(
 		&self,
 		tags: impl AsTags,
@@ -261,30 +266,37 @@ impl TestCtx {
 		self.conn.pools()
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn crdb(&self) -> Result<CrdbPool, rivet_pools::Error> {
 		self.conn.crdb().await
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn redis_cache(&self) -> Result<RedisPool, rivet_pools::Error> {
 		self.conn.redis_cache().await
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn redis_cdn(&self) -> Result<RedisPool, rivet_pools::Error> {
 		self.conn.redis_cdn().await
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn redis_job(&self) -> Result<RedisPool, rivet_pools::Error> {
 		self.conn.redis_job().await
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn redis_mm(&self) -> Result<RedisPool, rivet_pools::Error> {
 		self.conn.redis_mm().await
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn clickhouse(&self) -> GlobalResult<ClickHousePool> {
 		self.conn.clickhouse().await
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn sqlite_for_workflow(&self, workflow_id: Uuid) -> GlobalResult<SqlitePool> {
 		common::sqlite_for_workflow(&self.db, &self.conn, workflow_id, true).await
 	}

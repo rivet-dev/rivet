@@ -21,6 +21,7 @@ use crate::{
 
 /// Wait for a given workflow to complete.
 /// 60 second timeout.
+#[tracing::instrument(skip_all)]
 pub async fn wait_for_workflow<W: Workflow, B: Debug + Clone>(
 	ctx: &rivet_operation::OperationContext<B>,
 	workflow_id: Uuid,
@@ -31,6 +32,7 @@ pub async fn wait_for_workflow<W: Workflow, B: Debug + Clone>(
 }
 
 /// Dispatch a new workflow and wait for it to complete. Has a 60s timeout.
+#[tracing::instrument(skip_all)]
 pub async fn workflow<I, B>(
 	ctx: &rivet_operation::OperationContext<B>,
 	input: I,
@@ -51,6 +53,7 @@ where
 }
 
 /// Creates a signal builder.
+#[tracing::instrument(skip_all)]
 pub async fn signal<T: Signal + Serialize, B: Debug + Clone>(
 	ctx: &rivet_operation::OperationContext<B>,
 	body: T,
@@ -66,6 +69,7 @@ pub async fn signal<T: Signal + Serialize, B: Debug + Clone>(
 }
 
 /// Creates a message builder.
+#[tracing::instrument(skip_all)]
 pub async fn msg<M: Message, B: Debug + Clone>(
 	ctx: &rivet_operation::OperationContext<B>,
 	body: M,
@@ -98,6 +102,7 @@ where
 	.await
 }
 
+#[tracing::instrument(skip_all)]
 pub async fn subscribe<M, B>(
 	ctx: &rivet_operation::OperationContext<B>,
 	tags: impl AsTags,
@@ -113,6 +118,7 @@ where
 	msg_ctx.subscribe::<M>(tags).await.map_err(GlobalError::raw)
 }
 
+#[tracing::instrument(skip_all)]
 async fn db_from_ctx<B: Debug + Clone>(
 	ctx: &rivet_operation::OperationContext<B>,
 ) -> GlobalResult<DatabaseHandle> {

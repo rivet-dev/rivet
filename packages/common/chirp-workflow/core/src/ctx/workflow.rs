@@ -6,6 +6,7 @@ use std::{
 use futures_util::StreamExt;
 use global_error::{GlobalError, GlobalResult};
 use serde::{de::DeserializeOwned, Serialize};
+use tracing::Instrument as _;
 use uuid::Uuid;
 
 use crate::{
@@ -71,6 +72,7 @@ pub struct WorkflowCtx {
 }
 
 impl WorkflowCtx {
+	#[tracing::instrument(skip_all)]
 	pub async fn new(
 		registry: RegistryHandle,
 		db: DatabaseHandle,
@@ -129,6 +131,7 @@ impl WorkflowCtx {
 		}
 	}
 
+	#[tracing::instrument(name = "workflow_ctx_run", skip_all)]
 	pub(crate) async fn run(mut self) -> WorkflowResult<()> {
 		tracing::debug!(name=%self.name, id=%self.workflow_id, "running workflow");
 
@@ -238,6 +241,7 @@ impl WorkflowCtx {
 	}
 
 	/// Run then handle the result of an activity.
+	#[tracing::instrument(skip_all)]
 	async fn run_activity<A: Activity>(
 		&mut self,
 		input: &A::Input,
@@ -261,7 +265,7 @@ impl WorkflowCtx {
 
 		let start_instant = Instant::now();
 
-		let res = tokio::time::timeout(A::TIMEOUT, A::run(&ctx, input))
+		let res = tokio::time::timeout(A::TIMEOUT, A::run(&ctx, input).in_current_span())
 			.await
 			.map_err(|_| WorkflowError::ActivityTimeout(0));
 
@@ -362,10 +366,12 @@ impl WorkflowCtx {
 	/// Creates a new workflow run with one more depth in the location.
 	/// - **Not to be used directly by workflow users. For implementation uses only.**
 	/// - **Remember to validate history after this branch is used.**
+	#[tracing::instrument(skip_all)]
 	pub(crate) async fn branch(&mut self) -> WorkflowResult<Self> {
 		self.custom_branch(self.input.clone(), self.version).await
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub(crate) async fn custom_branch(
 		&mut self,
 		input: Arc<Box<serde_json::value::RawValue>>,
@@ -433,6 +439,7 @@ impl WorkflowCtx {
 impl WorkflowCtx {
 	/// Wait for another workflow's response. If no response was found after polling the database, this
 	/// workflow will go to sleep until the sub workflow completes.
+	#[tracing::instrument(skip_all)]
 	pub async fn wait_for_workflow<W: Workflow>(
 		&self,
 		sub_workflow_id: Uuid,
@@ -486,6 +493,7 @@ impl WorkflowCtx {
 	}
 
 	/// Run activity. Will replay on failure.
+	#[tracing::instrument(skip_all)]
 	pub async fn activity<I>(
 		&mut self,
 		input: I,
@@ -588,6 +596,7 @@ impl WorkflowCtx {
 
 	/// Joins multiple executable actions (activities, closures) and awaits them simultaneously. This does not
 	/// short circuit in the event of an error to make sure activity side effects are recorded.
+	#[tracing::instrument(skip_all)]
 	pub async fn join<T: Executable>(&mut self, exec: T) -> GlobalResult<T::Output> {
 		exec.execute(self).await
 	}
@@ -630,6 +639,7 @@ impl WorkflowCtx {
 
 	/// Listens for a signal for a short time before setting the workflow to sleep. Once the signal is
 	/// received, the workflow will be woken up and continue.
+	#[tracing::instrument(skip_all)]
 	pub async fn listen<T: Listen>(&mut self) -> GlobalResult<T> {
 		let history_res = self
 			.cursor
@@ -691,6 +701,7 @@ impl WorkflowCtx {
 	}
 
 	/// Execute a custom listener.
+	#[tracing::instrument(skip_all)]
 	pub async fn custom_listener<T: CustomListener>(
 		&mut self,
 		listener: &T,
@@ -760,6 +771,7 @@ impl WorkflowCtx {
 	}
 
 	/// Runs workflow steps in a loop. If you need side causes, use `WorkflowCtx::loope`.
+	#[tracing::instrument(skip_all)]
 	pub async fn repeat<F, T>(&mut self, mut cb: F) -> GlobalResult<T>
 	where
 		F: for<'a> FnMut(&'a mut WorkflowCtx) -> AsyncResult<'a, Loop<T>>,
@@ -769,6 +781,7 @@ impl WorkflowCtx {
 	}
 
 	/// Runs workflow steps in a loop with state.
+	#[tracing::instrument(skip_all)]
 	pub async fn loope<S, F, T>(&mut self, state: S, cb: F) -> GlobalResult<T>
 	where
 		S: Serialize + DeserializeOwned,
@@ -778,6 +791,7 @@ impl WorkflowCtx {
 		self.loop_inner(state, cb).await
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn loop_inner<S, F, T>(&mut self, state: S, mut cb: F) -> GlobalResult<T>
 	where
 		S: Serialize + DeserializeOwned,
@@ -951,12 +965,14 @@ impl WorkflowCtx {
 		Ok(output)
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn sleep(&mut self, duration: impl DurationToMillis) -> GlobalResult<()> {
 		let ts = rivet_util::timestamp::now() as u64 + duration.to_millis()?;
 
 		self.sleep_until(ts as i64).await
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn sleep_until(&mut self, time: impl TsToMillis) -> GlobalResult<()> {
 		let history_res = self
 			.cursor
@@ -1017,6 +1033,7 @@ impl WorkflowCtx {
 	/// Listens for a signal with a timeout. Returns `None` if the timeout is reached.
 	///
 	/// Internally this is a sleep event and a signal event.
+	#[tracing::instrument(skip_all)]
 	pub async fn listen_with_timeout<T: Listen>(
 		&mut self,
 		duration: impl DurationToMillis,
@@ -1032,6 +1049,7 @@ impl WorkflowCtx {
 	/// Listens for a signal until the given timestamp. Returns `None` if the timestamp is reached.
 	///
 	/// Internally this is a sleep event and a signal event.
+	#[tracing::instrument(skip_all)]
 	pub async fn listen_until<T: Listen>(
 		&mut self,
 		time: impl TsToMillis,
@@ -1123,7 +1141,7 @@ impl WorkflowCtx {
 		else if duration < self.db.worker_poll_interval().as_millis() as i64 + 1 {
 			tracing::debug!(name=%self.name, id=%self.workflow_id, %deadline_ts, "sleeping in memory");
 
-			let res = tokio::time::timeout(Duration::from_millis(duration.try_into()?), async {
+			let res = tokio::time::timeout(Duration::from_millis(duration.try_into()?), (async {
 				tracing::debug!(name=%self.name, id=%self.workflow_id, "listening for signal with timeout");
 
 				let mut wake_sub = self.db.wake_sub().await?;
@@ -1150,7 +1168,7 @@ impl WorkflowCtx {
 						_ = interval.tick() => {},
 					}
 				}
-			})
+			}).in_current_span())
 			.await;
 
 			match res {
@@ -1227,6 +1245,7 @@ impl WorkflowCtx {
 	}
 
 	/// Represents a removed workflow step.
+	#[tracing::instrument(skip_all)]
 	pub async fn removed<T: Removed>(&mut self) -> GlobalResult<()> {
 		// Existing event
 		if self
@@ -1263,6 +1282,7 @@ impl WorkflowCtx {
 
 	/// Returns the version of the current event in history. If no event exists, returns `current_version` and
 	/// inserts a version check event.
+	#[tracing::instrument(skip_all)]
 	pub async fn check_version(&mut self, current_version: usize) -> GlobalResult<usize> {
 		if current_version == 0 {
 			return Err(GlobalError::raw(WorkflowError::InvalidVersion(

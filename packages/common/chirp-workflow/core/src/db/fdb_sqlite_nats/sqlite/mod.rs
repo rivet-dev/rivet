@@ -62,6 +62,7 @@ impl SqlStub {
 }
 
 /// Runs migrations that have not been run yet.
+#[tracing::instrument(skip_all)]
 pub async fn init(workflow_id: Uuid, pool: &SqlitePool) -> WorkflowResult<()> {
 	// Create migrations table
 	sql_execute!(
@@ -170,6 +171,7 @@ pub async fn init(workflow_id: Uuid, pool: &SqlitePool) -> WorkflowResult<()> {
 	Ok(())
 }
 
+#[tracing::instrument(skip_all)]
 async fn run_migrations(pool: &SqlitePool, last_index: i64) -> WorkflowResult<()> {
 	let mut conn = pool.conn().await?;
 

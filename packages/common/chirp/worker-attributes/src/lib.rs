@@ -262,11 +262,7 @@ pub fn worker_test(_attr: TokenStream, item: TokenStream) -> TokenStream {
 			}
 
 			// Build runtime
-			let _ = ::chirp_worker::prelude::__rivet_runtime::RunConfig {
-				pretty_logs: true,
-				..Default::default()
-			}
-			.run(
+			::chirp_worker::prelude::__rivet_runtime::run(
 				::chirp_worker::prelude::tracing::Instrument::instrument(
 						async move {
 						// Build context

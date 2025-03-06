@@ -71,6 +71,7 @@ impl<'a, M: Message> MessageBuilder<'a, M> {
 		self
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn send(self) -> GlobalResult<()> {
 		if let Some(err) = self.error {
 			return Err(err.into());

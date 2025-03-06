@@ -81,6 +81,7 @@ where
 		self
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn dispatch(self) -> GlobalResult<Uuid> {
 		if let Some(err) = self.error {
 			return Err(err.into());
@@ -104,6 +105,7 @@ where
 	}
 
 	// This doesn't have a self parameter because self.tags was already moved (see above)
+	#[tracing::instrument(skip_all)]
 	async fn dispatch_workflow_inner(
 		ctx: &mut WorkflowCtx,
 		version: usize,
@@ -220,6 +222,7 @@ where
 		Ok(id)
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn output(
 		self,
 	) -> GlobalResult<<<I as WorkflowInput>::Workflow as Workflow>::Output> {

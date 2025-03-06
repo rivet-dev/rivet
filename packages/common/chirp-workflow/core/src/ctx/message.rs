@@ -34,6 +34,7 @@ pub struct MessageCtx {
 }
 
 impl MessageCtx {
+	#[tracing::instrument(skip_all)]
 	pub async fn new(conn: &rivet_connection::Connection, ray_id: Uuid) -> WorkflowResult<Self> {
 		Ok(MessageCtx {
 			nats: conn.nats().await?,
@@ -75,8 +76,7 @@ impl MessageCtx {
 							tracing::error!(?err, "failed to publish message");
 						}
 					}
-				}
-				.in_current_span(),
+				}.instrument(tracing::info_span!("message_bg")),
 			);
 		if let Err(err) = spawn_res {
 			tracing::error!(?err, "failed to spawn message_async task");
@@ -428,7 +428,7 @@ where
 	/// Waits for the next message in the subscription.
 	///
 	/// This future can be safely dropped.
-	#[tracing::instrument]
+	#[tracing::instrument(skip_all)]
 	pub async fn next(&mut self) -> WorkflowResult<NatsMessage<M>> {
 		tracing::debug!("waiting for message");
 
@@ -464,7 +464,7 @@ where
 		futures_util::stream::try_unfold(self, |mut sub| async move {
 			let message = sub.next().await?;
 			Ok(Some((message, sub)))
-		})
+		}.in_current_span())
 	}
 }
 

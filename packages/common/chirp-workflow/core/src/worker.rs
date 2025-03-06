@@ -36,6 +36,7 @@ impl Worker {
 	}
 
 	/// Polls the database periodically or wakes immediately when `Database::wake` finishes
+	#[tracing::instrument(skip_all)]
 	pub async fn start(
 		mut self,
 		config: rivet_config::Config,
@@ -79,6 +80,7 @@ impl Worker {
 	}
 
 	/// Query the database for new workflows and run them.
+	#[tracing::instrument(skip_all)]
 	async fn tick(
 		&mut self,
 		shared_client: &chirp_client::SharedClientHandle,
@@ -145,8 +147,7 @@ impl Worker {
 				if let Err(err) = db.clear_expired_leases(worker_instance_id).await {
 					tracing::error!(?err, "unhandled gc error");
 				}
-			}
-			.in_current_span(),
+			}.in_current_span(),
 		);
 	}
 

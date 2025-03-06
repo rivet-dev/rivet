@@ -33,6 +33,7 @@ pub struct ActivityCtx {
 }
 
 impl ActivityCtx {
+	#[tracing::instrument(skip_all)]
 	pub async fn new(
 		workflow_id: Uuid,
 		workflow_name: String,
@@ -100,6 +101,7 @@ impl ActivityCtx {
 
 	// TODO: Theres nothing preventing this from being able to be called from the workflow ctx also, but for
 	// now its only in the activity ctx so it isn't called again during workflow retries
+	#[tracing::instrument(skip_all)]
 	pub async fn update_workflow_tags(&self, tags: &serde_json::Value) -> GlobalResult<()> {
 		self.db
 			.update_workflow_tags(self.workflow_id, &self.workflow_name, tags)
@@ -109,6 +111,7 @@ impl ActivityCtx {
 
 	/// IMPORTANT: This is intended for ephemeral realtime events and should be used carefully. Use
 	/// signals if you need this to be durable.
+	#[tracing::instrument(skip_all)]
 	pub async fn subscribe<M>(&self, tags: impl AsTags) -> GlobalResult<SubscriptionHandle<M>>
 	where
 		M: Message,
@@ -121,6 +124,7 @@ impl ActivityCtx {
 
 	/// IMPORTANT: This is intended for ephemeral realtime events and should be used carefully. Use
 	/// signals if you need this to be durable.
+	#[tracing::instrument(skip_all)]
 	pub async fn tail_read<M>(&self, tags: impl AsTags) -> GlobalResult<Option<NatsMessage<M>>>
 	where
 		M: Message,
@@ -133,6 +137,7 @@ impl ActivityCtx {
 
 	/// IMPORTANT: This is intended for ephemeral realtime events and should be used carefully. Use
 	/// signals if you need this to be durable.
+	#[tracing::instrument(skip_all)]
 	pub async fn tail_anchor<M>(
 		&self,
 		tags: impl AsTags,
@@ -200,41 +205,50 @@ impl ActivityCtx {
 		self.conn.cache_handle()
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn crdb(&self) -> Result<CrdbPool, rivet_pools::Error> {
 		self.conn.crdb().await
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn redis_cache(&self) -> Result<RedisPool, rivet_pools::Error> {
 		self.conn.redis_cache().await
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn redis_cdn(&self) -> Result<RedisPool, rivet_pools::Error> {
 		self.conn.redis_cdn().await
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn redis_job(&self) -> Result<RedisPool, rivet_pools::Error> {
 		self.conn.redis_job().await
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn redis_mm(&self) -> Result<RedisPool, rivet_pools::Error> {
 		self.conn.redis_mm().await
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn clickhouse(&self) -> GlobalResult<ClickHousePool> {
 		self.conn.clickhouse().await
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn fdb(&self) -> Result<FdbPool, rivet_pools::Error> {
 		self.conn.fdb().await
 	}
 
 	/// Access the SQLite database for this workflow. This cannot access any other database.
+	#[tracing::instrument(skip_all)]
 	pub async fn sqlite(&self) -> Result<SqlitePool, rivet_pools::Error> {
 		self.conn
 			.sqlite(crate::db::sqlite_db_name_data(self.workflow_id), false)
 			.await
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn sqlite_for_workflow(&self, workflow_id: Uuid) -> GlobalResult<SqlitePool> {
 		common::sqlite_for_workflow(&self.db, &self.conn, workflow_id, true).await
 	}

@@ -28,6 +28,7 @@ where
 {
 	type Output = T;
 
+	#[tracing::instrument(skip_all)]
 	async fn execute(self, ctx: &mut WorkflowCtx) -> GlobalResult<Self::Output> {
 		let mut branch = ctx.branch().await.map_err(GlobalError::raw)?;
 
@@ -53,6 +54,7 @@ where
 impl<T: Executable> Executable for Option<T> {
 	type Output = Option<T::Output>;
 
+	#[tracing::instrument(skip_all)]
 	async fn execute(self, ctx: &mut WorkflowCtx) -> GlobalResult<Self::Output> {
 		if let Some(inner) = self {
 			let mut branch = ctx.clone();
@@ -81,6 +83,7 @@ macro_rules! impl_tuple {
 		impl<$($args : Executable),*> Executable for ($($args),*) {
 			type Output = ($(<$args as Executable>::Output),*);
 
+			#[tracing::instrument(skip_all)]
 			async fn execute(self, ctx: &mut WorkflowCtx) -> GlobalResult<Self::Output> {
 				#[allow(non_snake_case)]
 				let ($($args),*) = self;

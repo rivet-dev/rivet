@@ -40,6 +40,7 @@ impl BackfillCtx {
 		}
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn execute(self, tx: &mut sqlx::Transaction<'_, sqlx::Postgres>) -> GlobalResult<()> {
 		tracing::debug!(queries=%self.queries.len(), "executing backfill queries");
 

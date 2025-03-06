@@ -9,10 +9,10 @@ services:
     command: /usr/bin/rivet-server start
     environment:
       - RUST_BACKTRACE=1
-      # - RUST_LOG=debug,hyper=info
-      # - RUST_LOG_TARGET=1
-      # - RUST_LOG_SPAN_PATH=1
       - RUST_LOG_ANSI_COLOR=1
+      - RIVET_OTEL_ENABLED=1
+      - RIVET_OTEL_ENDPOINT=http://otel-collector:4317
+      - RUST_LOG=debug,hyper=info
     stop_grace_period: 0s
     ports:
       # API
@@ -55,10 +55,10 @@ services:
     environment:
       - _RIVET_POOL_SQLITE_FORCE_LOCAL=1
       - RUST_BACKTRACE=1
-      - RUST_LOG=debug,hyper=info
-      # - RUST_LOG_TARGET=1
-      # - RUST_LOG_SPAN_PATH=1
       - RUST_LOG_ANSI_COLOR=1
+      - RIVET_OTEL_ENABLED=1
+      - RIVET_OTEL_ENDPOINT=http://otel-collector:4317
+      - RUST_LOG=debug,hyper=info
     stop_grace_period: 0s
     ports:
       # API
@@ -157,6 +157,10 @@ services:
     command: -c /etc/rivet-client/config.jsonc
     environment:
       - RUST_BACKTRACE=1
+      - RUST_LOG_ANSI_COLOR=1
+      - RIVET_OTEL_ENABLED=1
+      - RIVET_OTEL_ENDPOINT=http://otel-collector:4317
+      - RUST_LOG=debug,hyper=info
     stop_grace_period: 0s
     depends_on:
       rivet-edge-server:
@@ -302,7 +306,7 @@ services:
       - rivet-network
 
   grafana:
-    image: grafana/grafana:10.0.0
+    image: grafana/grafana:11.5.2
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana/grafana.ini:/etc/grafana/grafana.ini
@@ -312,6 +316,31 @@ services:
       - "3000:3000"
     networks:
       - rivet-network
+    environment:
+      - GF_INSTALL_PLUGINS=grafana-clickhouse-datasource
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    restart: unless-stopped
+    command: --config=/etc/otel/config.yaml
+    volumes:
+      - ./otel-collector/config.yaml:/etc/otel/config.yaml:ro
+    environment:
+      - CLICKHOUSE_PASSWORD=default
+    ports:
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+      - "8888:8888" # Metrics
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    networks:
+      - rivet-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:13133"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 networks:
   rivet-network:

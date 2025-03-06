@@ -3,7 +3,6 @@ use std::{
 	ops::Deref,
 	result::Result::{Err, Ok},
 };
-
 use anyhow::*;
 use fdb_util::{FormalChunkedKey, FormalKey, SNAPSHOT};
 use foundationdb::{
@@ -15,6 +14,7 @@ use futures_util::{StreamExt, TryStreamExt};
 use indoc::indoc;
 use rivet_pools::prelude::*;
 use uuid::Uuid;
+use tracing::Instrument as _;
 
 use super::{keys, sqlite::SqlStub, sqlite_db_name_internal, DatabaseFdbSqliteNats};
 use crate::{
@@ -33,6 +33,7 @@ use crate::{
 type GlobalError = anyhow::Error;
 
 impl DatabaseFdbSqliteNats {
+	#[tracing::instrument(skip_all)]
 	async fn get_workflows_inner(
 		&self,
 		workflow_ids: Vec<Uuid>,
@@ -204,6 +205,7 @@ impl DatabaseFdbSqliteNats {
 		Ok(res)
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn get_signals_inner(
 		&self,
 		signal_ids: Vec<Uuid>,
@@ -333,17 +335,19 @@ impl DatabaseFdbSqliteNats {
 // Its just for debugging
 #[async_trait::async_trait]
 impl DatabaseDebug for DatabaseFdbSqliteNats {
+	#[tracing::instrument(skip_all)]
 	async fn get_workflows(&self, workflow_ids: Vec<Uuid>) -> Result<Vec<WorkflowData>> {
 		self.pools
 			.fdb()?
 			.run(|tx, _mc| {
 				let workflow_ids = workflow_ids.clone();
-				async move { self.get_workflows_inner(workflow_ids, &tx).await }
+				async move { self.get_workflows_inner(workflow_ids, &tx).await }.in_current_span()
 			})
 			.await
 			.map_err(Into::into)
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn find_workflows(
 		&self,
 		tags: &[(String, String)],
@@ -463,15 +467,18 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 
 					Ok(workflows)
 				}
+				.instrument(tracing::info_span!("find_workflows_tx"))
 			})
 			.await
 			.map_err(Into::into)
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn silence_workflows(&self, _workflow_ids: Vec<Uuid>) -> Result<()> {
 		todo!("silence wf is not implemented for fdb driver")
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn wake_workflows(&self, workflow_ids: Vec<Uuid>) -> Result<()> {
 		self.pools
 			.fdb()?
@@ -515,6 +522,7 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 
 					Ok(())
 				}
+				.instrument(tracing::info_span!("wake_workflows_tx"))
 			})
 			.await?;
 
@@ -523,6 +531,7 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn get_workflow_history(
 		&self,
 		workflow_id: Uuid,
@@ -771,17 +780,20 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 		}))
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn get_signals(&self, signal_ids: Vec<Uuid>) -> Result<Vec<SignalData>> {
 		self.pools
 			.fdb()?
 			.run(|tx, _mc| {
 				let signal_ids = signal_ids.clone();
 				async move { self.get_signals_inner(signal_ids, &tx).await }
+					.instrument(tracing::info_span!("get_signals_tx"))
 			})
 			.await
 			.map_err(Into::into)
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn find_signals(
 		&self,
 		tags: &[(String, String)],
@@ -899,12 +911,13 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 					let signals = self.get_signals_inner(signal_ids, &tx).await?;
 
 					Ok(signals)
-				}
+				}.instrument(tracing::info_span!("find_signals_tx"))
 			})
 			.await
 			.map_err(Into::into)
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn silence_signals(&self, _signal_ids: Vec<Uuid>) -> Result<()> {
 		todo!("silence signal is not implemented for fdb driver")
 	}

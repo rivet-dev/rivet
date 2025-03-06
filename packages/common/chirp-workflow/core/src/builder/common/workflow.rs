@@ -79,6 +79,7 @@ where
 		self
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn dispatch(self) -> GlobalResult<Uuid> {
 		if let Some(err) = self.error {
 			return Err(err.into());
@@ -158,6 +159,7 @@ where
 		Ok(actual_workflow_id)
 	}
 
+	#[tracing::instrument(skip_all)]
 	pub async fn output(
 		self,
 	) -> GlobalResult<<<I as WorkflowInput>::Workflow as Workflow>::Output> {

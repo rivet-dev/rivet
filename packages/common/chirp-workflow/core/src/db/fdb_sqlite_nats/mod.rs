@@ -21,7 +21,7 @@ use indoc::indoc;
 use rivet_pools::prelude::*;
 use serde_json::json;
 use sqlx::Acquire;
-use tracing::Instrument;
+use tracing::Instrument as _;
 use uuid::Uuid;
 
 use super::{Database, PulledWorkflow, SignalData, WorkflowData};
@@ -84,7 +84,7 @@ impl DatabaseFdbSqliteNats {
 					tracing::warn!(?err, "failed to publish wake message");
 				}
 			}
-			.in_current_span(),
+			.instrument(tracing::info_span!("wake_worker_publish")),
 		);
 		if let Err(err) = spawn_res {
 			tracing::error!(?err, "failed to spawn wake task");
@@ -95,6 +95,7 @@ impl DatabaseFdbSqliteNats {
 // MARK: Sqlite
 impl DatabaseFdbSqliteNats {
 	/// Executes SQL queries and explicitly handles retry errors.
+	#[tracing::instrument(skip_all)]
 	async fn query<'a, F, Fut, T>(&self, mut cb: F) -> WorkflowResult<T>
 	where
 		F: FnMut() -> Fut,
@@ -132,6 +133,7 @@ impl DatabaseFdbSqliteNats {
 	///
 	/// THis must be done before releasing the lease on the workflow in order to prevent a race
 	/// condition with other workflow workers picking it up.
+	#[tracing::instrument(skip_all)]
 	async fn evict_wf_sqlite(&self, workflow_id: Uuid) -> WorkflowResult<()> {
 		tokio::try_join!(
 			self.pools
@@ -153,6 +155,7 @@ impl DatabaseFdbSqliteNats {
 	///
 	/// This only flushes the data since other services never read the workflow SQLite directly;
 	/// only the WF data.
+	#[tracing::instrument(skip_all)]
 	async fn flush_wf_data_sqlite(&self, workflow_id: Uuid) -> WorkflowResult<()> {
 		self.pools
 			.sqlite_manager()
@@ -233,6 +236,7 @@ impl Database for DatabaseFdbSqliteNats {
 		}))
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn wake_sub<'a, 'b>(&'a self) -> WorkflowResult<BoxStream<'b, ()>> {
 		let stream = self
 			.pools
@@ -245,6 +249,7 @@ impl Database for DatabaseFdbSqliteNats {
 		Ok(stream.boxed())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn clear_expired_leases(&self, _worker_instance_id: Uuid) -> WorkflowResult<()> {
 		let (lost_worker_instance_ids, expired_workflow_count) = self
 			.pools
@@ -350,7 +355,7 @@ impl Database for DatabaseFdbSqliteNats {
 				}
 
 				Ok((lost_worker_instance_ids, expired_workflow_count))
-			})
+			}.instrument(tracing::info_span!("clear_expired_leases_tx")))
 			.await?;
 
 		if expired_workflow_count != 0 {
@@ -366,6 +371,7 @@ impl Database for DatabaseFdbSqliteNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn publish_metrics(&self, worker_instance_id: Uuid) -> WorkflowResult<()> {
 		// Always update ping
 		metrics::WORKER_LAST_PING
@@ -405,7 +411,7 @@ impl Database for DatabaseFdbSqliteNats {
 				}
 
 				Ok(lock_expired)
-			})
+			}.instrument(tracing::info_span!("acquire_lock_tx")))
 			.await?;
 
 		if acquired_lock {
@@ -603,7 +609,7 @@ impl Database for DatabaseFdbSqliteNats {
 						dead_workflow_count,
 						pending_signal_count,
 					))
-				})
+				}.instrument(tracing::info_span!("publish_metrics_tx")))
 				.await?;
 
 			for (workflow_name, counts) in other_workflow_counts {
@@ -638,13 +644,14 @@ impl Database for DatabaseFdbSqliteNats {
 					tx.clear(&self.subspace.pack(&metrics_lock_key));
 
 					Ok(())
-				})
+				}.instrument(tracing::info_span!("clear_lock_tx")))
 				.await?;
 		}
 
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn update_worker_ping(&self, worker_instance_id: Uuid) -> WorkflowResult<()> {
 		self.pools
 			.fdb()?
@@ -660,12 +667,13 @@ impl Database for DatabaseFdbSqliteNats {
 				);
 
 				Ok(())
-			})
+			}.instrument(tracing::info_span!("update_worker_ping_tx")))
 			.await?;
 
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn dispatch_workflow(
 		&self,
 		ray_id: Uuid,
@@ -814,7 +822,7 @@ impl Database for DatabaseFdbSqliteNats {
 				);
 
 				Ok(())
-			})
+			}.instrument(tracing::info_span!("dispatch_workflow_tx")))
 			.await?;
 
 		self.wake_worker();
@@ -822,6 +830,7 @@ impl Database for DatabaseFdbSqliteNats {
 		Ok(workflow_id)
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn get_workflow(&self, workflow_id: Uuid) -> WorkflowResult<Option<WorkflowData>> {
 		let data = self
 			.pools
@@ -871,7 +880,7 @@ impl Database for DatabaseFdbSqliteNats {
 
 					Ok(Some((input, output)))
 				}
-			})
+			}.instrument(tracing::info_span!("get_workflow_tx")))
 			.await?;
 
 		if let Some((input, output)) = data {
@@ -888,6 +897,7 @@ impl Database for DatabaseFdbSqliteNats {
 	/// Returns the first incomplete workflow with the given name and tags, first meaning the one with the
 	/// lowest uuid value (interpreted as u128) because its in a KV store. There is no way to get any other
 	/// workflow besides the first.
+	#[tracing::instrument(skip_all)]
 	async fn find_workflow(
 		&self,
 		workflow_name: &str,
@@ -966,7 +976,7 @@ impl Database for DatabaseFdbSqliteNats {
 							break Ok(Some(workflow_by_name_and_tag_key.workflow_id));
 						}
 					}
-				}
+				}.instrument(tracing::info_span!("find_workflow_tx"))
 			})
 			.await?;
 
@@ -978,6 +988,7 @@ impl Database for DatabaseFdbSqliteNats {
 		Ok(workflow_id)
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn pull_workflows(
 		&self,
 		worker_instance_id: Uuid,
@@ -1114,7 +1125,7 @@ impl Database for DatabaseFdbSqliteNats {
 
 									Ok(Some((workflow_id, workflow_name, wake_deadline_ts)))
 								}
-							}
+							}.instrument(tracing::trace_span!("map_to_leased_workflows"))
 						})
 						// TODO: How to get rid of this buffer?
 						.buffer_unordered(1024)
@@ -1260,13 +1271,13 @@ impl Database for DatabaseFdbSqliteNats {
 									input,
 									wake_deadline_ts,
 								})
-							}
+							}.instrument(tracing::trace_span!("map_to_partial_workflow"))
 						})
 						// TODO: How to get rid of this buffer?
 						.buffer_unordered(512)
 						.try_collect::<Vec<_>>()
 						.await
-				}
+				}.instrument(tracing::info_span!("pull_workflows_tx"))
 			})
 			.await?;
 
@@ -1505,7 +1516,7 @@ impl Database for DatabaseFdbSqliteNats {
 					wake_deadline_ts: partial.wake_deadline_ts,
 					events: sqlite::build_history(events)?,
 				})
-			})
+			}.instrument(tracing::trace_span!("map_to_pulled_workflows")))
 			.buffer_unordered(512)
 			.try_collect()
 			.await?;
@@ -1528,6 +1539,7 @@ impl Database for DatabaseFdbSqliteNats {
 		Ok(pulled_workflows)
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn complete_workflow(
 		&self,
 		workflow_id: Uuid,
@@ -1684,7 +1696,7 @@ impl Database for DatabaseFdbSqliteNats {
 				tx.clear(&self.subspace.pack(&worker_instance_id_key));
 
 				Ok(())
-			})
+			}.instrument(tracing::info_span!("complete_workflows_tx")))
 			.await?;
 
 		self.wake_worker();
@@ -1697,6 +1709,7 @@ impl Database for DatabaseFdbSqliteNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn commit_workflow(
 		&self,
 		workflow_id: Uuid,
@@ -1860,7 +1873,7 @@ impl Database for DatabaseFdbSqliteNats {
 				tx.clear(&self.subspace.pack(&worker_instance_id_key));
 
 				Ok(())
-			})
+			}.instrument(tracing::info_span!("commit_workflow_tx")))
 			.await?;
 
 		// Wake worker again if the deadline is before the next tick
@@ -1880,6 +1893,7 @@ impl Database for DatabaseFdbSqliteNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn pull_next_signal(
 		&self,
 		workflow_id: Uuid,
@@ -1952,7 +1966,7 @@ impl Database for DatabaseFdbSqliteNats {
 									} else {
 										Ok(None)
 									}
-								}),
+								}.instrument(tracing::trace_span!("map_signals"))),
 							)
 							.await?;
 
@@ -2053,7 +2067,7 @@ impl Database for DatabaseFdbSqliteNats {
 										} else {
 											Ok(None)
 										}
-									},
+									}.instrument(tracing::trace_span!("map_to_new_streams")),
 								))
 								.await?
 								.into_iter()
@@ -2223,13 +2237,14 @@ impl Database for DatabaseFdbSqliteNats {
 
 						Ok(None)
 					}
-				}
+				}.instrument(tracing::info_span!("pull_next_signal_tx"))
 			})
 			.await?;
 
 		Ok(signal)
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn get_sub_workflow(
 		&self,
 		workflow_id: Uuid,
@@ -2299,7 +2314,7 @@ impl Database for DatabaseFdbSqliteNats {
 
 					Ok(Some((input, output)))
 				}
-			})
+			}.instrument(tracing::info_span!("get_sub_workflow_tx")))
 			.await?;
 
 		if let Some((input, output)) = data {
@@ -2313,6 +2328,7 @@ impl Database for DatabaseFdbSqliteNats {
 		}
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn publish_signal(
 		&self,
 		ray_id: Uuid,
@@ -2430,7 +2446,7 @@ impl Database for DatabaseFdbSqliteNats {
 				}
 
 				Ok(())
-			})
+			}.instrument(tracing::info_span!("publish_singal_tx")))
 			.await?;
 
 		self.wake_worker();
@@ -2438,6 +2454,7 @@ impl Database for DatabaseFdbSqliteNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn publish_tagged_signal(
 		&self,
 		ray_id: Uuid,
@@ -2584,7 +2601,7 @@ impl Database for DatabaseFdbSqliteNats {
 						}
 
 						Ok(())
-					}
+					}.instrument(tracing::info_span!("publish_tagged_signal_tx"))
 				})
 				.await?;
 
@@ -2596,6 +2613,7 @@ impl Database for DatabaseFdbSqliteNats {
 		}
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn publish_signal_from_workflow(
 		&self,
 		from_workflow_id: Uuid,
@@ -2660,6 +2678,7 @@ impl Database for DatabaseFdbSqliteNats {
 		}
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn publish_tagged_signal_from_workflow(
 		&self,
 		from_workflow_id: Uuid,
@@ -2728,6 +2747,7 @@ impl Database for DatabaseFdbSqliteNats {
 		}
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn dispatch_sub_workflow(
 		&self,
 		ray_id: Uuid,
@@ -2808,6 +2828,7 @@ impl Database for DatabaseFdbSqliteNats {
 		}
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn update_workflow_tags(
 		&self,
 		workflow_id: Uuid,
@@ -2893,12 +2914,13 @@ impl Database for DatabaseFdbSqliteNats {
 				}
 
 				Ok(())
-			})
+			}.instrument(tracing::info_span!("update_workflow_tags_tx")))
 			.await?;
 
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn commit_workflow_activity_event(
 		&self,
 		workflow_id: Uuid,
@@ -3003,6 +3025,7 @@ impl Database for DatabaseFdbSqliteNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn commit_workflow_message_send_event(
 		&self,
 		from_workflow_id: Uuid,
@@ -3045,6 +3068,7 @@ impl Database for DatabaseFdbSqliteNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn upsert_workflow_loop_event(
 		&self,
 		workflow_id: Uuid,
@@ -3218,6 +3242,7 @@ impl Database for DatabaseFdbSqliteNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn commit_workflow_sleep_event(
 		&self,
 		from_workflow_id: Uuid,
@@ -3254,6 +3279,7 @@ impl Database for DatabaseFdbSqliteNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn update_workflow_sleep_event_state(
 		&self,
 		from_workflow_id: Uuid,
@@ -3283,6 +3309,7 @@ impl Database for DatabaseFdbSqliteNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn commit_workflow_branch_event(
 		&self,
 		from_workflow_id: Uuid,
@@ -3316,6 +3343,7 @@ impl Database for DatabaseFdbSqliteNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn commit_workflow_removed_event(
 		&self,
 		from_workflow_id: Uuid,
@@ -3351,6 +3379,7 @@ impl Database for DatabaseFdbSqliteNats {
 		Ok(())
 	}
 
+	#[tracing::instrument(skip_all)]
 	async fn commit_workflow_version_check_event(
 		&self,
 		from_workflow_id: Uuid,

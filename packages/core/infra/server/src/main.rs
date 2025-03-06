@@ -17,7 +17,7 @@ struct Cli {
 }
 
 fn main() -> Result<()> {
-	rivet_runtime::run(async { main_inner().await })??;
+	rivet_runtime::run(async { main_inner().await })?;
 	Ok(())
 }
 
