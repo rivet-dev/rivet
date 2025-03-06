@@ -1,10 +1,10 @@
 use rivet_metrics::{prometheus::*, BUCKETS, REGISTRY};
 
 lazy_static::lazy_static! {
-	pub static ref WORKER_ACTIVE: IntGaugeVec = register_int_gauge_vec_with_registry!(
-		"chirp_workflow_worker_active",
-		"Total active workers.",
-		&[],
+	pub static ref WORKER_LAST_PING: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		"chirp_workflow_worker_last_ping",
+		"Last ping of a worker instance as a unix ts.",
+		&["worker_instance_id"],
 		*REGISTRY,
 	).unwrap();
 	pub static ref PULL_WORKFLOWS_DURATION: GaugeVec = register_gauge_vec_with_registry!(

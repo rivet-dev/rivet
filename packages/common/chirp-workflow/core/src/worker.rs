@@ -6,6 +6,7 @@ use uuid::Uuid;
 use crate::{ctx::WorkflowCtx, db::DatabaseHandle, metrics, registry::RegistryHandle, utils};
 
 pub const TICK_INTERVAL: Duration = Duration::from_secs(120);
+const GC_INTERVAL: Duration = Duration::from_secs(20);
 
 /// Used to spawn a new thread that indefinitely polls the database for new workflows. Only pulls workflows
 /// that are registered in its registry. After pulling, the workflows are ran and their state is written to
@@ -29,33 +30,8 @@ impl Worker {
 		}
 	}
 
-	/// Polls the database periodically
-	pub async fn poll_start(
-		mut self,
-		config: rivet_config::Config,
-		pools: rivet_pools::Pools,
-	) -> GlobalResult<()> {
-		tracing::debug!(
-			worker_instance_id = ?self.worker_instance_id,
-			registered_workflows = ?self.registry.size(),
-			"started worker instance",
-		);
-
-		let shared_client = chirp_client::SharedClient::from_env(pools.clone())?;
-		let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
-
-		// Regular tick interval to poll the database
-		let mut interval = tokio::time::interval(TICK_INTERVAL);
-		interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-
-		loop {
-			interval.tick().await;
-			self.tick(&shared_client, &config, &pools, &cache).await?;
-		}
-	}
-
 	/// Polls the database periodically or wakes immediately when `Database::wake` finishes
-	pub async fn wake_start(
+	pub async fn start(
 		mut self,
 		config: rivet_config::Config,
 		pools: rivet_pools::Pools,
@@ -72,11 +48,23 @@ impl Worker {
 		// Regular tick interval to poll the database
 		let mut interval = tokio::time::interval(TICK_INTERVAL);
 		interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+		// Regular tick interval to clear expired leases
+		let mut gc_interval = tokio::time::interval(GC_INTERVAL);
+		gc_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
 		loop {
 			tokio::select! {
 				_ = interval.tick() => {},
-				res = self.db.wake() => res?,
+				_ = gc_interval.tick() => {
+					self.gc();
+					self.publish_metrics();
+					continue;
+				},
+				res = self.db.wake() => {
+					res?;
+					interval.reset();
+				},
 			}
 
 			self.tick(&shared_client, &config, &pools, &cache).await?;
@@ -135,5 +123,33 @@ impl Worker {
 		}
 
 		Ok(())
+	}
+
+	fn gc(&self) {
+		let db = self.db.clone();
+		let worker_instance_id = self.worker_instance_id;
+
+		tokio::task::spawn(
+			async move {
+				if let Err(err) = db.clear_expired_leases(worker_instance_id).await {
+					tracing::error!(?err, "unhandled gc error");
+				}
+			}
+			.in_current_span(),
+		);
+	}
+
+	fn publish_metrics(&self) {
+		let db = self.db.clone();
+		let worker_instance_id = self.worker_instance_id;
+
+		tokio::task::spawn(
+			async move {
+				if let Err(err) = db.publish_metrics(worker_instance_id).await {
+					tracing::error!(?err, "unhandled metrics error");
+				}
+			}
+			.in_current_span(),
+		);
 	}
 }

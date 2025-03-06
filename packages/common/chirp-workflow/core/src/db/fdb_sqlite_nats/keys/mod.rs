@@ -4,6 +4,7 @@ use foundationdb::future::FdbValue;
 
 pub mod signal;
 pub mod wake;
+pub mod worker_instance;
 pub mod workflow;
 
 pub trait FormalKey {

@@ -29,14 +29,6 @@ pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			ServiceKind::Standalone,
 			|config, pools| Box::pin(monolith_workflow_worker::start(config, pools)),
 		),
-		Service::new(
-			"workflow_metrics_publish",
-			ServiceKind::Singleton,
-			|config, pools| Box::pin(workflow_metrics_publish::start(config, pools)),
-		),
-		Service::new("workflow_gc", ServiceKind::Singleton, |config, pools| {
-			Box::pin(workflow_gc::start(config, pools))
-		}),
 		Service::new("mm_gc", ServiceKind::Singleton, |config, pools| {
 			Box::pin(mm_gc::start(config, pools))
 		}),

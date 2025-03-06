@@ -2,7 +2,7 @@
 // TODO: Move code to smaller functions for readability
 
 use std::{
-	collections::HashSet,
+	collections::HashMap,
 	sync::{
 		atomic::{AtomicBool, Ordering},
 		Arc,
@@ -44,6 +44,10 @@ type GlobalError = WorkflowError;
 const QUERY_RETRY_MS: usize = 500;
 /// Maximum times a query ran by this database adapter is retried.
 const MAX_QUERY_RETRIES: usize = 4;
+/// How long before considering the leases of a given worker instance "expired".
+const WORKER_INSTANCE_EXPIRED_THRESHOLD_MS: i64 = rivet_util::duration::seconds(30);
+/// How long before overwriting an existing metrics lock.
+const METRICS_LOCK_TIMEOUT_MS: i64 = rivet_util::duration::seconds(30);
 /// For SQL macros.
 const CONTEXT_NAME: &str = "chirp_workflow_fdb_sqlite_nats_engine";
 /// For NATS wake mechanism.
@@ -153,6 +157,225 @@ impl Database for DatabaseFdbSqliteNats {
 			Some(_) => Ok(()),
 			None => Err(WorkflowError::SubscriptionUnsubscribed),
 		}
+	}
+
+	async fn clear_expired_leases(&self, _worker_instance_id: Uuid) -> WorkflowResult<()> {
+		let (expired_worker_instance_ids, expired_workflow_count) = self
+			.pools
+			.fdb()?
+			.run(|tx, _mc| async move {
+				let now = rivet_util::timestamp::now();
+
+				let mut last_ping_cache: Vec<(Uuid, i64)> = Vec::new();
+				let mut expired_workflow_count = 0;
+				let mut expired_worker_instance_ids = Vec::new();
+
+				let lease_subspace = self
+					.subspace
+					.subspace(&keys::workflow::LeaseKey::subspace());
+
+				// List all active leases
+				let mut stream = tx.get_ranges_keyvalues(
+					fdb::RangeOption {
+						mode: StreamingMode::WantAll,
+						..(&lease_subspace).into()
+					},
+					// Not SERIALIZABLE because we don't want this to conflict with other queries which write
+					// leases
+					SNAPSHOT,
+				);
+
+				while let Some(lease_key_entry) = stream.try_next().await? {
+					let lease_key = self
+						.subspace
+						.unpack::<keys::workflow::LeaseKey>(lease_key_entry.key())
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+					let (workflow_name, worker_instance_id) = lease_key
+						.deserialize(lease_key_entry.value())
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+					let last_ping_key =
+						keys::worker_instance::LastPingTsKey::new(worker_instance_id);
+
+					// Get last ping of worker instance for this lease
+					let last_ping_ts = if let Some((_, last_ping_ts)) = last_ping_cache
+						.iter()
+						.find(|(k, _)| k == &worker_instance_id)
+					{
+						*last_ping_ts
+					} else if let Some(last_ping_entry) = tx
+						.get(
+							&self.subspace.pack(&last_ping_key),
+							// Not SERIALIZABLE because we don't want this to conflict
+							SNAPSHOT,
+						)
+						.await?
+					{
+						// Deserialize last ping value
+						let last_ping_ts = last_ping_key
+							.deserialize(&last_ping_entry)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+						// Update cache
+						last_ping_cache.push((worker_instance_id, last_ping_ts));
+
+						last_ping_ts
+					} else {
+						// Update cache
+						last_ping_cache.push((worker_instance_id, 0));
+
+						0
+					};
+
+					// Worker has not pinged within the threshold, meaning the lease is expired
+					if last_ping_ts < now - WORKER_INSTANCE_EXPIRED_THRESHOLD_MS {
+						// NOTE: We add a read conflict here so this query conflicts with any other
+						// `clear_expired_leases` queries running at the same time (will conflict with the
+						// following `tx.clear`).
+						tx.add_conflict_range(
+							lease_key_entry.key(),
+							lease_key_entry.key(),
+							ConflictRangeType::Read,
+						)?;
+
+						// Clear lease
+						tx.clear(lease_key_entry.key());
+
+						// Add immediate wake for workflow
+						let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
+							workflow_name.to_string(),
+							lease_key.workflow_id,
+							keys::wake::WakeCondition::Immediate,
+						);
+						tx.set(
+							&self.subspace.pack(&wake_condition_key),
+							&wake_condition_key
+								.serialize(())
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+						);
+
+						expired_workflow_count += 1;
+						expired_worker_instance_ids.push(worker_instance_id);
+					}
+				}
+
+				Ok((expired_worker_instance_ids, expired_workflow_count))
+			})
+			.await?;
+
+		if expired_workflow_count != 0 {
+			tracing::info!(
+				worker_instance_ids=?expired_worker_instance_ids,
+				total_workflows=%expired_workflow_count,
+				"handled failover",
+			);
+		}
+
+		Ok(())
+	}
+
+	async fn publish_metrics(&self, worker_instance_id: Uuid) -> WorkflowResult<()> {
+		// Always update ping
+		metrics::WORKER_LAST_PING
+			.with_label_values(&[&worker_instance_id.to_string()])
+			.set(rivet_util::timestamp::now());
+
+		// Attempt to be the only worker publishing metrics by writing to the lock key
+		let acquired_lock = self
+			.pools
+			.fdb()?
+			.run(|tx, _mc| async move {
+				let metrics_lock_key = keys::worker_instance::MetricsLockKey::new();
+
+				// Read existing lock
+				let lock_expired = if let Some(entry) = tx
+					.get(&self.subspace.pack(&metrics_lock_key), SERIALIZABLE)
+					.await?
+				{
+					let lock_ts = metrics_lock_key
+						.deserialize(&entry)
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+					lock_ts < rivet_util::timestamp::now() - METRICS_LOCK_TIMEOUT_MS
+				} else {
+					true
+				};
+
+				if lock_expired {
+					// Write to lock key. FDB transactions guarantee that if multiple workers are running this
+					// query at the same time only one will succeed which means only one will have the lock.
+					tx.set(
+						&self.subspace.pack(&metrics_lock_key),
+						&metrics_lock_key
+							.serialize(rivet_util::timestamp::now())
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+					);
+				}
+
+				Ok(lock_expired)
+			})
+			.await?;
+
+		if acquired_lock {
+			// TODO: Add FDB indexes for these metric queries and implement
+
+			// // Get rid of metrics that don't exist in the db anymore (declarative)
+			// metrics::WORKFLOW_TOTAL.reset();
+			// metrics::WORKFLOW_ACTIVE.reset();
+			// metrics::WORKFLOW_DEAD.reset();
+			// metrics::WORKFLOW_SLEEPING.reset();
+			// metrics::SIGNAL_PENDING.reset();
+
+			// let (
+			// 	total_workflow_count,
+			// 	active_workflow_count,
+			// 	dead_workflow_count,
+			// 	sleeping_workflow_count,
+			// 	pending_signal_count,
+			// ) = ;
+
+			// for (workflow_name, count) in total_workflow_count {
+			// 	metrics::WORKFLOW_TOTAL
+			// 		.with_label_values(&[&workflow_name])
+			// 		.set(count);
+			// }
+
+			// for (workflow_name, count) in active_workflow_count {
+			// 	metrics::WORKFLOW_ACTIVE
+			// 		.with_label_values(&[&workflow_name])
+			// 		.set(count);
+			// }
+
+			// for (workflow_name, error, count) in dead_workflow_count {
+			// 	metrics::WORKFLOW_DEAD
+			// 		.with_label_values(&[&workflow_name, &error])
+			// 		.set(count);
+			// }
+
+			// for (workflow_name, count) in sleeping_workflow_count {
+			// 	metrics::WORKFLOW_SLEEPING
+			// 		.with_label_values(&[&workflow_name])
+			// 		.set(count);
+			// }
+
+			// for (signal_name, count) in pending_signal_count {
+			// 	metrics::SIGNAL_PENDING
+			// 		.with_label_values(&[&signal_name])
+			// 		.set(count);
+			// }
+
+			// Clear lock
+			self.pools
+				.fdb()?
+				.run(|tx, _mc| async move {
+					let metrics_lock_key = keys::worker_instance::MetricsLockKey::new();
+					tx.clear(&self.subspace.pack(&metrics_lock_key));
+
+					Ok(())
+				})
+				.await?;
+		}
+
+		Ok(())
 	}
 
 	async fn dispatch_workflow(
@@ -473,8 +696,20 @@ impl Database for DatabaseFdbSqliteNats {
 				let owned_filter = owned_filter.clone();
 
 				async move {
+					let now = rivet_util::timestamp::now();
+
+					// Update worker instance ping
+					let last_ping_key =
+						keys::worker_instance::LastPingTsKey::new(worker_instance_id);
+					tx.set(
+						&self.subspace.pack(&last_ping_key),
+						&last_ping_key
+							.serialize(now)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+					);
+
 					// All wake conditions with a timestamp after this timestamp will be pulled
-					let pull_before = rivet_util::timestamp::now()
+					let pull_before = now
 						+ i64::try_from(worker::TICK_INTERVAL.as_millis())
 							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
@@ -527,15 +762,15 @@ impl Database for DatabaseFdbSqliteNats {
 						.await?;
 
 					// Check leases
-					let wf_ids = entries
+					let wf_name_by_id = entries
 						.iter()
-						.map(|(_, key)| key.workflow_id)
-						.collect::<HashSet<_>>();
-					let leased_wf_ids = futures_util::stream::iter(wf_ids)
-						.map(|wf_id| {
+						.map(|(_, key)| (key.workflow_id, key.workflow_name.clone()))
+						.collect::<HashMap<_, _>>();
+					let leased_wf_ids = futures_util::stream::iter(wf_name_by_id)
+						.map(|(workflow_id, workflow_name)| {
 							let tx = tx.clone();
 							async move {
-								let lease_key = keys::workflow::LeaseKey::new(wf_id);
+								let lease_key = keys::workflow::LeaseKey::new(workflow_id);
 								let lease_key_buf = self.subspace.pack(&lease_key);
 
 								// Check lease
@@ -544,11 +779,13 @@ impl Database for DatabaseFdbSqliteNats {
 								} else {
 									tx.set(
 										&lease_key_buf,
-										&lease_key.serialize(worker_instance_id).map_err(|x| {
+										&lease_key
+											.serialize((workflow_name, worker_instance_id))
+											.map_err(|x| {
 											fdb::FdbBindingError::CustomError(x.into())
 										})?,
 									);
-									Ok(Some(wf_id))
+									Ok(Some(workflow_id))
 								}
 							}
 						})

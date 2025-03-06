@@ -1,6 +1,7 @@
 //! Implementation of a workflow database driver with PostgreSQL (CockroachDB) and NATS.
 
 use std::{
+	collections::HashSet,
 	sync::Arc,
 	time::{Duration, Instant},
 };
@@ -34,6 +35,12 @@ const QUERY_RETRY_MS: usize = 500;
 const TXN_RETRY: Duration = Duration::from_millis(100);
 /// Maximum times a query ran by this database adapter is retried.
 const MAX_QUERY_RETRIES: usize = 16;
+/// How long before considering the leases of a given worker instance "expired".
+const WORKER_INSTANCE_EXPIRED_THRESHOLD_MS: i64 = rivet_util::duration::seconds(30);
+/// How long before overwriting an existing GC lock.
+const GC_LOCK_TIMEOUT_MS: i64 = rivet_util::duration::seconds(30);
+/// How long before overwriting an existing metrics lock.
+const METRICS_LOCK_TIMEOUT_MS: i64 = GC_LOCK_TIMEOUT_MS;
 /// For SQL macros.
 const CONTEXT_NAME: &str = "chirp_workflow_crdb_nats_engine";
 /// For NATS wake mechanism.
@@ -157,6 +164,248 @@ impl Database for DatabaseCrdbNats {
 			Some(_) => Ok(()),
 			None => Err(WorkflowError::SubscriptionUnsubscribed),
 		}
+	}
+
+	async fn clear_expired_leases(&self, worker_instance_id: Uuid) -> WorkflowResult<()> {
+		let acquired_lock = sql_fetch_optional!(
+			[self, (i64,)]
+			"
+			UPDATE db_workflow.workflow_gc
+			SET
+				worker_instance_id = $1,
+				lock_ts = $2
+			WHERE lock_ts IS NULL OR lock_ts < $2 - $3
+			RETURNING 1
+			",
+			worker_instance_id,
+			rivet_util::timestamp::now(),
+			GC_LOCK_TIMEOUT_MS,
+		)
+		.await?
+		.is_some();
+
+		if acquired_lock {
+			// Reset all workflows on worker instances that have not had a ping in the last 30 seconds
+			let rows = sql_fetch_all!(
+				[self, (Uuid, Uuid,)]
+				"
+				UPDATE db_workflow.workflows AS w
+				SET
+					worker_instance_id = NULL,
+					wake_immediate = true,
+					wake_deadline_ts = NULL,
+					wake_signals = ARRAY[],
+					wake_sub_workflow_id = NULL
+				FROM db_workflow.worker_instances AS wi
+				WHERE
+					wi.last_ping_ts < $1 AND
+					wi.worker_instance_id = w.worker_instance_id AND
+					w.output IS NULL AND
+					w.silence_ts IS NULL AND
+					-- Check for any wake condition so we don't restart a permanently dead workflow
+					(
+						w.wake_immediate OR
+						w.wake_deadline_ts IS NOT NULL OR
+						cardinality(w.wake_signals) > 0 OR
+						w.wake_sub_workflow_id IS NOT NULL
+					)
+				RETURNING w.workflow_id, wi.worker_instance_id
+				",
+				rivet_util::timestamp::now() - WORKER_INSTANCE_EXPIRED_THRESHOLD_MS,
+			)
+			.await?;
+
+			if !rows.is_empty() {
+				let unique_worker_instance_ids = rows
+					.iter()
+					.map(|(_, worker_instance_id)| worker_instance_id)
+					.collect::<HashSet<_>>();
+
+				tracing::info!(
+					worker_instance_ids=?unique_worker_instance_ids,
+					total_workflows=%rows.len(),
+					"handled failover",
+				);
+			}
+
+			// Clear lock
+			sql_execute!(
+				[self]
+				"
+				UPDATE db_workflow.workflow_gc
+				SET
+					worker_instance_id = NULL,
+					lock_ts = NULL
+				WHERE worker_instance_id = $1
+				",
+				worker_instance_id,
+			)
+			.await?;
+		}
+
+		Ok(())
+	}
+
+	async fn publish_metrics(&self, worker_instance_id: Uuid) -> WorkflowResult<()> {
+		// Always update ping
+		metrics::WORKER_LAST_PING
+			.with_label_values(&[&worker_instance_id.to_string()])
+			.set(rivet_util::timestamp::now());
+
+		let acquired_lock = sql_fetch_optional!(
+			[self, (i64,)]
+			"
+			UPDATE db_workflow.workflow_metrics
+			SET
+				worker_instance_id = $1,
+				lock_ts = $2
+			WHERE lock_ts IS NULL OR lock_ts < $2 - $3
+			RETURNING 1
+			",
+			worker_instance_id,
+			rivet_util::timestamp::now(),
+			METRICS_LOCK_TIMEOUT_MS,
+		)
+		.await?
+		.is_some();
+
+		if acquired_lock {
+			let (
+				total_workflow_count,
+				active_workflow_count,
+				dead_workflow_count,
+				sleeping_workflow_count,
+				pending_signal_count,
+			) = tokio::try_join!(
+				sql_fetch_all!(
+					[self, (String, i64)]
+					"
+					SELECT workflow_name, COUNT(*)
+					FROM db_workflow.workflows AS OF SYSTEM TIME '-1s'
+					GROUP BY workflow_name
+					",
+				),
+				sql_fetch_all!(
+					[self, (String, i64)]
+					"
+					SELECT workflow_name, COUNT(*)
+					FROM db_workflow.workflows AS OF SYSTEM TIME '-1s'
+					WHERE
+						output IS NULL AND
+						worker_instance_id IS NOT NULL AND
+						silence_ts IS NULL
+					GROUP BY workflow_name
+					",
+				),
+				sql_fetch_all!(
+					[self, (String, String, i64)]
+					"
+					SELECT workflow_name, error, COUNT(*)
+					FROM db_workflow.workflows AS OF SYSTEM TIME '-1s'
+					WHERE
+						error IS NOT NULL AND
+						output IS NULL AND
+						silence_ts IS NULL AND
+						wake_immediate = FALSE AND
+						wake_deadline_ts IS NULL AND
+						cardinality(wake_signals) = 0 AND
+						wake_sub_workflow_id IS NULL
+					GROUP BY workflow_name, error
+					",
+				),
+				sql_fetch_all!(
+					[self, (String, i64)]
+					"
+					SELECT workflow_name, COUNT(*)
+					FROM db_workflow.workflows AS OF SYSTEM TIME '-1s'
+					WHERE
+						worker_instance_id IS NULL AND
+						output IS NULL AND
+						silence_ts IS NULL AND
+						(
+							wake_immediate OR
+							wake_deadline_ts IS NOT NULL OR
+							cardinality(wake_signals) > 0 OR
+							wake_sub_workflow_id IS NOT NULL
+						)
+					GROUP BY workflow_name
+					",
+				),
+				sql_fetch_all!(
+					[self, (String, i64)]
+					"
+					SELECT signal_name, COUNT(*)
+					FROM (
+						SELECT signal_name
+						FROM db_workflow.signals
+						WHERE
+							ack_ts IS NULL AND
+							silence_ts IS NULL
+						UNION ALL
+						SELECT signal_name
+						FROM db_workflow.tagged_signals
+						WHERE
+							ack_ts IS NULL AND
+							silence_ts IS NULL
+					) AS OF SYSTEM TIME '-1s'
+					GROUP BY signal_name
+					",
+				),
+			)?;
+
+			// Get rid of metrics that don't exist in the db anymore (declarative)
+			metrics::WORKFLOW_TOTAL.reset();
+			metrics::WORKFLOW_ACTIVE.reset();
+			metrics::WORKFLOW_DEAD.reset();
+			metrics::WORKFLOW_SLEEPING.reset();
+			metrics::SIGNAL_PENDING.reset();
+
+			for (workflow_name, count) in total_workflow_count {
+				metrics::WORKFLOW_TOTAL
+					.with_label_values(&[&workflow_name])
+					.set(count);
+			}
+
+			for (workflow_name, count) in active_workflow_count {
+				metrics::WORKFLOW_ACTIVE
+					.with_label_values(&[&workflow_name])
+					.set(count);
+			}
+
+			for (workflow_name, error, count) in dead_workflow_count {
+				metrics::WORKFLOW_DEAD
+					.with_label_values(&[&workflow_name, &error])
+					.set(count);
+			}
+
+			for (workflow_name, count) in sleeping_workflow_count {
+				metrics::WORKFLOW_SLEEPING
+					.with_label_values(&[&workflow_name])
+					.set(count);
+			}
+
+			for (signal_name, count) in pending_signal_count {
+				metrics::SIGNAL_PENDING
+					.with_label_values(&[&signal_name])
+					.set(count);
+			}
+
+			// Clear lock
+			sql_execute!(
+				[self]
+				"
+				UPDATE db_workflow.workflow_metrics
+				SET
+					worker_instance_id = NULL,
+					lock_ts = NULL
+				WHERE worker_instance_id = $1
+				",
+				worker_instance_id,
+			)
+			.await?;
+		}
+
+		Ok(())
 	}
 
 	async fn dispatch_workflow(

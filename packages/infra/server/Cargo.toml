@@ -41,8 +41,6 @@ nomad-monitor.workspace = true
 pegboard-gc.workspace = true
 pegboard-metrics-publish.workspace = true
 pegboard-ws.workspace = true
-workflow-gc.workspace = true
-workflow-metrics-publish.workspace = true
 
 # Cron
 telemetry-beacon.workspace = true

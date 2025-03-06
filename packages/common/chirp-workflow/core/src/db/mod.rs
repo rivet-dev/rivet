@@ -29,11 +29,22 @@ pub trait Database: Send {
 	/// When using a wake worker instead of a polling worker, this function will return once the worker
 	/// should fetch the database again.
 	async fn wake(&self) -> WorkflowResult<()> {
-		unimplemented!(
+		tracing::debug!(
 			"{} does not implement Database::wake",
 			std::any::type_name::<Self>(),
 		);
+
+		std::future::pending::<()>().await;
+
+		Ok(())
 	}
+
+	/// Releases workflows that were leased by workers that have since expired (their last ping has passed
+	/// the expired threshold), making them eligible to be run again. Called periodically.
+	async fn clear_expired_leases(&self, worker_instance_id: Uuid) -> WorkflowResult<()>;
+
+	/// Function to publish metrics. Called periodically.
+	async fn publish_metrics(&self, worker_instance_id: Uuid) -> WorkflowResult<()>;
 
 	/// Writes a new workflow to the database. If unique is set, this should return the existing workflow ID
 	/// (if one exists) instead of the given workflow ID.
@@ -58,6 +69,7 @@ pub trait Database: Send {
 	) -> WorkflowResult<Option<Uuid>>;
 
 	/// Pulls workflows for processing by the worker. Will only pull workflows with names matching the filter.
+	/// Should also update the ping of this worker instance.
 	async fn pull_workflows(
 		&self,
 		worker_instance_id: Uuid,

@@ -11,24 +11,29 @@ use uuid::Uuid;
 use super::{FormalChunkedKey, FormalKey};
 
 pub struct LeaseKey {
-	workflow_id: Uuid,
+	pub workflow_id: Uuid,
 }
 
 impl LeaseKey {
 	pub fn new(workflow_id: Uuid) -> Self {
 		LeaseKey { workflow_id }
 	}
+
+	pub fn subspace() -> LeaseSubspaceKey {
+		LeaseSubspaceKey::new()
+	}
 }
 
 impl FormalKey for LeaseKey {
-	type Value = Uuid;
+	/// Workflow name, worker instance id.
+	type Value = (String, Uuid);
 
 	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
-		Ok(Uuid::from_slice(raw)?)
+		serde_json::from_slice(raw).map_err(Into::into)
 	}
 
 	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
-		Ok(value.as_bytes().to_vec())
+		serde_json::to_vec(&value).map_err(Into::into)
 	}
 }
 
@@ -50,6 +55,25 @@ impl<'de> TupleUnpack<'de> for LeaseKey {
 		let v = LeaseKey { workflow_id };
 
 		Ok((input, v))
+	}
+}
+
+pub struct LeaseSubspaceKey {}
+
+impl LeaseSubspaceKey {
+	pub fn new() -> Self {
+		LeaseSubspaceKey {}
+	}
+}
+
+impl TuplePack for LeaseSubspaceKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = ("workflow", "lease");
+		t.pack(w, tuple_depth)
 	}
 }
 
