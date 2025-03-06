@@ -36,44 +36,49 @@ async fn main() -> Result<()> {
 		fs::remove_dir_all(&dist_path).context("fs::remove_dir_all")?;
 	}
 
-	// Build manager dependencies (required for building the manager itself)
-	let output = tokio::process::Command::new("yarn")
-		.arg("install")
-		.arg("--immutable")
-		.current_dir(&manager_path)
-		.output()
-		.await?;
-	println!("stdout:\n{}", String::from_utf8_lossy(&output.stdout));
-	println!("stderr:\n{}", String::from_utf8_lossy(&output.stderr));
-	ensure!(output.status.success(), "yarn install failed");
 
-	let output = tokio::process::Command::new("yarn")
-		.arg("run")
-		.arg("build")
-		.arg("--filter=@rivet-gg/actor-manager")
-		.current_dir(&project_root)
-		.output()
-		.await?;
-	println!("stdout:\n{}", String::from_utf8_lossy(&output.stdout));
-	println!("stderr:\n{}", String::from_utf8_lossy(&output.stderr));
-	ensure!(output.status.success(), "yarn build failed");
+	if std::env::var("RIVET_SKIP_BUILD_HUB").is_err() {
+		// Build manager dependencies (required for building the manager itself)
+		let output = tokio::process::Command::new("yarn")
+			.arg("install")
+			.arg("--immutable")
+			.current_dir(&manager_path)
+			.output()
+			.await?;
+		println!("stdout:\n{}", String::from_utf8_lossy(&output.stdout));
+		println!("stderr:\n{}", String::from_utf8_lossy(&output.stderr));
+		ensure!(output.status.success(), "yarn install failed");
 
-	// Build manager using Rivet build script (not using tsup/turbo because this includes custom
-	// polyfill functionality)
-	build_backend_command_raw(CommandOpts {
-		task_path: "src/tasks/build/mod.ts",
-		input: json!({
-			"projectRoot": sdk_path.join("manager"),
-			"entryPoint": sdk_path.join("manager/src/mod.ts"),
-			"outDir": dist_path.join("manager"),
-			"bundle": {
-				"minify": true,
-				"analyzeResult": false,
-				"logLevel": "debug"
-			}
-		}),
-	})
-	.await?;
+		let output = tokio::process::Command::new("yarn")
+			.arg("run")
+			.arg("build")
+			.arg("--filter=@rivet-gg/actor-manager")
+			.current_dir(&project_root)
+			.output()
+			.await?;
+		println!("stdout:\n{}", String::from_utf8_lossy(&output.stdout));
+		println!("stderr:\n{}", String::from_utf8_lossy(&output.stderr));
+		ensure!(output.status.success(), "yarn build failed");
+
+		// Build manager using Rivet build script (not using tsup/turbo because this includes custom
+		// polyfill functionality)
+		build_backend_command_raw(CommandOpts {
+			task_path: "src/tasks/build/mod.ts",
+			input: json!({
+				"projectRoot": sdk_path.join("manager"),
+				"entryPoint": sdk_path.join("manager/src/mod.ts"),
+				"outDir": dist_path.join("manager"),
+				"bundle": {
+					"minify": true,
+					"analyzeResult": false,
+					"logLevel": "debug"
+				}
+			}),
+		})
+		.await?;
+	} else {
+		fs::create_dir_all(&dist_path).context("fs::create_dir_all");
+	}
 
 	// Rebuild if SDK changes (in order to include manager dependencies)
 	println!("cargo:rerun-if-changed={}", sdk_path.display());
