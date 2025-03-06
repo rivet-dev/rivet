@@ -14,6 +14,12 @@ export function createAndStartServer(
 		process.exit(1);
 	}, 60 * 1000);
 
+	let tickIndex = 0;
+	setInterval(() => {
+		tickIndex++;
+		console.log("Tick", tickIndex);
+	}, 1000);
+
 	// Get port from environment
 	const portEnv = typeof Deno !== 'undefined' ? Deno.env.get("PORT_HTTP") : process.env.PORT_HTTP;
 	if (!portEnv) {
