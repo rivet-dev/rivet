@@ -21,14 +21,6 @@ fn main() -> Result<()> {
 	Ok(())
 }
 
-
-
-
-
-
-
-
-
 async fn main_inner() -> Result<()> {
 	let cli = Cli::parse();
 

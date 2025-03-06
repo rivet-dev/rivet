@@ -822,13 +822,14 @@ impl SqliteConn {
 				match manager.storage {
 					SqliteStorage::Local { .. } => {}
 					SqliteStorage::FoundationDb => {
-						if let Err(err) = tokio::fs::remove_file(&db_path).await {
-							tracing::warn!(
-								?err,
-								db_path = ?db_path,
-								"failed to remove temporary sqlite db file on drop"
-							);
-						}
+						tracing::warn!(?db_path, "foo");
+						// if let Err(err) = tokio::fs::remove_file(&db_path).await {
+						// 	tracing::warn!(
+						// 		?err,
+						// 		db_path = ?db_path,
+						// 		"failed to remove temporary sqlite db file on drop"
+						// 	);
+						// }
 					}
 				}
 

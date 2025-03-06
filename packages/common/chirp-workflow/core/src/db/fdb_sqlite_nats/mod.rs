@@ -10,7 +10,7 @@ use std::{
 	time::Instant,
 };
 
-use fdb_util::{keys::*, end_of_key_range, FormalChunkedKey, FormalKey, SERIALIZABLE, SNAPSHOT};
+use fdb_util::{end_of_key_range, keys::*, FormalChunkedKey, FormalKey, SERIALIZABLE, SNAPSHOT};
 use foundationdb::{
 	self as fdb,
 	options::{ConflictRangeType, StreamingMode},
@@ -149,22 +149,19 @@ impl DatabaseFdbSqliteNats {
 		Ok(())
 	}
 
-	/// Waits for a full snapshot of the workflow database to finish.
-	///
-	/// This is used in scenarios where another service might need to read changes from this
-	/// workflow, such as before publishing a message. Flushing ensures that the latest data is
-	/// written to storage for the other services to read from.
-	///
-	/// This only flushes the data since other services never read the workflow SQLite directly;
-	/// only the WF data.
+	/// Only needed for events that have side effects: activities, signals, messages, and workflows.
 	#[tracing::instrument(skip_all)]
-	async fn flush_wf_data_sqlite(&self, workflow_id: Uuid) -> WorkflowResult<()> {
+	async fn flush_wf_sqlite(&self, workflow_id: Uuid) -> WorkflowResult<()> {
 		tracing::debug!(?workflow_id, "flushing workflow");
 
-		self.pools
-			.sqlite_manager()
-			.flush(crate::db::sqlite_db_name_data(workflow_id))
-			.await?;
+		tokio::try_join!(
+			self.pools
+				.sqlite_manager()
+				.flush(sqlite_db_name_internal(workflow_id)),
+			self.pools
+				.sqlite_manager()
+				.flush(crate::db::sqlite_db_name_data(workflow_id)),
+		)?;
 
 		Ok(())
 	}
@@ -258,108 +255,111 @@ impl Database for DatabaseFdbSqliteNats {
 		let (lost_worker_instance_ids, expired_workflow_count) = self
 			.pools
 			.fdb()?
-			.run(|tx, _mc| async move {
-				let now = rivet_util::timestamp::now();
+			.run(|tx, _mc| {
+				async move {
+					let now = rivet_util::timestamp::now();
 
-				let mut last_ping_cache: Vec<(Uuid, i64)> = Vec::new();
-				let mut lost_worker_instance_ids = HashSet::new();
-				let mut expired_workflow_count = 0;
+					let mut last_ping_cache: Vec<(Uuid, i64)> = Vec::new();
+					let mut lost_worker_instance_ids = HashSet::new();
+					let mut expired_workflow_count = 0;
 
-				let lease_subspace = self
-					.subspace
-					.subspace(&keys::workflow::LeaseKey::subspace());
-
-				// List all active leases
-				let mut stream = tx.get_ranges_keyvalues(
-					fdb::RangeOption {
-						mode: StreamingMode::WantAll,
-						..(&lease_subspace).into()
-					},
-					// Not SERIALIZABLE because we don't want this to conflict with other queries which write
-					// leases
-					SNAPSHOT,
-				);
-
-				while let Some(lease_key_entry) = stream.try_next().await? {
-					let lease_key = self
+					let lease_subspace = self
 						.subspace
-						.unpack::<keys::workflow::LeaseKey>(lease_key_entry.key())
-						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
-					let (workflow_name, worker_instance_id) = lease_key
-						.deserialize(lease_key_entry.value())
-						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
-					let last_ping_ts_key =
-						keys::worker_instance::LastPingTsKey::new(worker_instance_id);
+						.subspace(&keys::workflow::LeaseKey::subspace());
 
-					// Get last ping of worker instance for this lease
-					let last_ping_ts = if let Some((_, last_ping_ts)) = last_ping_cache
-						.iter()
-						.find(|(k, _)| k == &worker_instance_id)
-					{
-						*last_ping_ts
-					} else if let Some(last_ping_entry) = tx
-						.get(
-							&self.subspace.pack(&last_ping_ts_key),
-							// Not SERIALIZABLE because we don't want this to conflict
-							SNAPSHOT,
-						)
-						.await?
-					{
-						// Deserialize last ping value
-						let last_ping_ts = last_ping_ts_key
-							.deserialize(&last_ping_entry)
+					// List all active leases
+					let mut stream = tx.get_ranges_keyvalues(
+						fdb::RangeOption {
+							mode: StreamingMode::WantAll,
+							..(&lease_subspace).into()
+						},
+						// Not SERIALIZABLE because we don't want this to conflict with other queries which write
+						// leases
+						SNAPSHOT,
+					);
+
+					while let Some(lease_key_entry) = stream.try_next().await? {
+						let lease_key = self
+							.subspace
+							.unpack::<keys::workflow::LeaseKey>(lease_key_entry.key())
 							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+						let (workflow_name, worker_instance_id) = lease_key
+							.deserialize(lease_key_entry.value())
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+						let last_ping_ts_key =
+							keys::worker_instance::LastPingTsKey::new(worker_instance_id);
 
-						// Update cache
-						last_ping_cache.push((worker_instance_id, last_ping_ts));
+						// Get last ping of worker instance for this lease
+						let last_ping_ts = if let Some((_, last_ping_ts)) = last_ping_cache
+							.iter()
+							.find(|(k, _)| k == &worker_instance_id)
+						{
+							*last_ping_ts
+						} else if let Some(last_ping_entry) = tx
+							.get(
+								&self.subspace.pack(&last_ping_ts_key),
+								// Not SERIALIZABLE because we don't want this to conflict
+								SNAPSHOT,
+							)
+							.await?
+						{
+							// Deserialize last ping value
+							let last_ping_ts = last_ping_ts_key
+								.deserialize(&last_ping_entry)
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
-						last_ping_ts
-					} else {
-						// Update cache
-						last_ping_cache.push((worker_instance_id, 0));
+							// Update cache
+							last_ping_cache.push((worker_instance_id, last_ping_ts));
 
-						0
-					};
+							last_ping_ts
+						} else {
+							// Update cache
+							last_ping_cache.push((worker_instance_id, 0));
 
-					// Worker has not pinged within the threshold, meaning the lease is expired
-					if last_ping_ts < now - WORKER_INSTANCE_LOST_THRESHOLD_MS {
-						// NOTE: We add a read conflict here so this query conflicts with any other
-						// `clear_expired_leases` queries running at the same time (will conflict with the
-						// following `tx.clear`).
-						tx.add_conflict_range(
-							lease_key_entry.key(),
-							&end_of_key_range(lease_key_entry.key()),
-							ConflictRangeType::Read,
-						)?;
+							0
+						};
 
-						// Clear lease
-						tx.clear(lease_key_entry.key());
-						let worker_instance_id_key =
-							keys::workflow::WorkerInstanceIdKey::new(lease_key.workflow_id);
-						tx.clear(&self.subspace.pack(&worker_instance_id_key));
+						// Worker has not pinged within the threshold, meaning the lease is expired
+						if last_ping_ts < now - WORKER_INSTANCE_LOST_THRESHOLD_MS {
+							// NOTE: We add a read conflict here so this query conflicts with any other
+							// `clear_expired_leases` queries running at the same time (will conflict with the
+							// following `tx.clear`).
+							tx.add_conflict_range(
+								lease_key_entry.key(),
+								&end_of_key_range(lease_key_entry.key()),
+								ConflictRangeType::Read,
+							)?;
 
-						// Add immediate wake for workflow
-						let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
-							workflow_name.to_string(),
-							lease_key.workflow_id,
-							keys::wake::WakeCondition::Immediate,
-						);
-						tx.set(
-							&self.subspace.pack(&wake_condition_key),
-							&wake_condition_key
-								.serialize(())
-								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-						);
+							// Clear lease
+							tx.clear(lease_key_entry.key());
+							let worker_instance_id_key =
+								keys::workflow::WorkerInstanceIdKey::new(lease_key.workflow_id);
+							tx.clear(&self.subspace.pack(&worker_instance_id_key));
 
-						expired_workflow_count += 1;
-						lost_worker_instance_ids.insert(worker_instance_id);
+							// Add immediate wake for workflow
+							let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
+								workflow_name.to_string(),
+								lease_key.workflow_id,
+								keys::wake::WakeCondition::Immediate,
+							);
+							tx.set(
+								&self.subspace.pack(&wake_condition_key),
+								&wake_condition_key
+									.serialize(())
+									.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+							);
 
-						tracing::debug!(?lease_key.workflow_id, "failed over wf");
+							expired_workflow_count += 1;
+							lost_worker_instance_ids.insert(worker_instance_id);
+
+							tracing::debug!(?lease_key.workflow_id, "failed over wf");
+						}
 					}
-				}
 
-				Ok((lost_worker_instance_ids, expired_workflow_count))
-			}.instrument(tracing::info_span!("clear_expired_leases_tx")))
+					Ok((lost_worker_instance_ids, expired_workflow_count))
+				}
+				.instrument(tracing::info_span!("clear_expired_leases_tx"))
+			})
 			.await?;
 
 		if expired_workflow_count != 0 {
@@ -386,234 +386,244 @@ impl Database for DatabaseFdbSqliteNats {
 		let acquired_lock = self
 			.pools
 			.fdb()?
-			.run(|tx, _mc| async move {
-				let metrics_lock_key = keys::worker_instance::MetricsLockKey::new();
+			.run(|tx, _mc| {
+				async move {
+					let metrics_lock_key = keys::worker_instance::MetricsLockKey::new();
 
-				// Read existing lock
-				let lock_expired = if let Some(entry) = tx
-					.get(&self.subspace.pack(&metrics_lock_key), SERIALIZABLE)
-					.await?
-				{
-					let lock_ts = metrics_lock_key
-						.deserialize(&entry)
-						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+					// Read existing lock
+					let lock_expired = if let Some(entry) = tx
+						.get(&self.subspace.pack(&metrics_lock_key), SERIALIZABLE)
+						.await?
+					{
+						let lock_ts = metrics_lock_key
+							.deserialize(&entry)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
-					lock_ts < rivet_util::timestamp::now() - METRICS_LOCK_TIMEOUT_MS
-				} else {
-					true
-				};
+						lock_ts < rivet_util::timestamp::now() - METRICS_LOCK_TIMEOUT_MS
+					} else {
+						true
+					};
 
-				if lock_expired {
-					// Write to lock key. FDB transactions guarantee that if multiple workers are running this
-					// query at the same time only one will succeed which means only one will have the lock.
-					tx.set(
-						&self.subspace.pack(&metrics_lock_key),
-						&metrics_lock_key
-							.serialize(rivet_util::timestamp::now())
-							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-					);
+					if lock_expired {
+						// Write to lock key. FDB transactions guarantee that if multiple workers are running this
+						// query at the same time only one will succeed which means only one will have the lock.
+						tx.set(
+							&self.subspace.pack(&metrics_lock_key),
+							&metrics_lock_key
+								.serialize(rivet_util::timestamp::now())
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+						);
+					}
+
+					Ok(lock_expired)
 				}
-
-				Ok(lock_expired)
-			}.instrument(tracing::info_span!("acquire_lock_tx")))
+				.instrument(tracing::info_span!("acquire_lock_tx"))
+			})
 			.await?;
 
 		if acquired_lock {
 			let (other_workflow_counts, dead_workflow_count, pending_signal_count) = self
 				.pools
 				.fdb()?
-				.run(|tx, _mc| async move {
-					// Get rid of metrics that don't exist in the db anymore (declarative)
-					metrics::WORKFLOW_TOTAL.reset();
-					metrics::WORKFLOW_ACTIVE.reset();
-					metrics::WORKFLOW_DEAD.reset();
-					metrics::WORKFLOW_SLEEPING.reset();
-					metrics::SIGNAL_PENDING.reset();
+				.run(|tx, _mc| {
+					async move {
+						// Get rid of metrics that don't exist in the db anymore (declarative)
+						metrics::WORKFLOW_TOTAL.reset();
+						metrics::WORKFLOW_ACTIVE.reset();
+						metrics::WORKFLOW_DEAD.reset();
+						metrics::WORKFLOW_SLEEPING.reset();
+						metrics::SIGNAL_PENDING.reset();
 
-					let wf_data_subspace = self
-						.subspace
-						.subspace(&keys::workflow::DataSubspaceKey::new());
-					let pending_signal_subspace = self
-						.subspace
-						.subspace(&keys::workflow::EntirePendingSignalSubspaceKey::new());
-					let pending_tagged_signal_subspace = self
-						.subspace
-						.subspace(&keys::signal::EntireTaggedPendingSubspaceKey::new());
+						let wf_data_subspace = self
+							.subspace
+							.subspace(&keys::workflow::DataSubspaceKey::new());
+						let pending_signal_subspace = self
+							.subspace
+							.subspace(&keys::workflow::EntirePendingSignalSubspaceKey::new());
+						let pending_tagged_signal_subspace = self
+							.subspace
+							.subspace(&keys::signal::EntireTaggedPendingSubspaceKey::new());
 
-					// Not SERIALIZABLE because we don't want these to conflict with other queries, they're
-					// just for metrics
-					let mut wf_stream = tx.get_ranges_keyvalues(
-						fdb::RangeOption {
-							mode: StreamingMode::Iterator,
-							..(&wf_data_subspace).into()
-						},
-						SNAPSHOT,
-					);
-					let mut signal_stream = tx.get_ranges_keyvalues(
-						fdb::RangeOption {
-							mode: StreamingMode::Iterator,
-							..(&pending_signal_subspace).into()
-						},
-						SNAPSHOT,
-					);
-					let mut tagged_signal_stream = tx.get_ranges_keyvalues(
-						fdb::RangeOption {
-							mode: StreamingMode::Iterator,
-							..(&pending_tagged_signal_subspace).into()
-						},
-						SNAPSHOT,
-					);
+						// Not SERIALIZABLE because we don't want these to conflict with other queries, they're
+						// just for metrics
+						let mut wf_stream = tx.get_ranges_keyvalues(
+							fdb::RangeOption {
+								mode: StreamingMode::Iterator,
+								..(&wf_data_subspace).into()
+							},
+							SNAPSHOT,
+						);
+						let mut signal_stream = tx.get_ranges_keyvalues(
+							fdb::RangeOption {
+								mode: StreamingMode::Iterator,
+								..(&pending_signal_subspace).into()
+							},
+							SNAPSHOT,
+						);
+						let mut tagged_signal_stream = tx.get_ranges_keyvalues(
+							fdb::RangeOption {
+								mode: StreamingMode::Iterator,
+								..(&pending_tagged_signal_subspace).into()
+							},
+							SNAPSHOT,
+						);
 
-					let mut other_workflow_counts = HashMap::<String, WorkflowMetrics>::new();
-					let mut dead_workflow_count = HashMap::<(String, String), i64>::new();
-					let mut pending_signal_count = HashMap::<String, i64>::new();
+						let mut other_workflow_counts = HashMap::<String, WorkflowMetrics>::new();
+						let mut dead_workflow_count = HashMap::<(String, String), i64>::new();
+						let mut pending_signal_count = HashMap::<String, i64>::new();
 
-					tokio::try_join!(
-						async {
-							let mut current_workflow_id = None;
-							let mut current_workflow_name: Option<String> = None;
-							let mut current_error: Option<String> = None;
-							let mut current_state = WorkflowState::Dead;
+						tokio::try_join!(
+							async {
+								let mut current_workflow_id = None;
+								let mut current_workflow_name: Option<String> = None;
+								let mut current_error: Option<String> = None;
+								let mut current_state = WorkflowState::Dead;
 
-							while let Some(entry) = wf_stream.try_next().await? {
-								let workflow_id = *self
-									.subspace
-									.unpack::<debug::JustUuid>(entry.key())
-									.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+								while let Some(entry) = wf_stream.try_next().await? {
+									let workflow_id = *self
+										.subspace
+										.unpack::<debug::JustUuid>(entry.key())
+										.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
-								if let Some(curr) = current_workflow_id {
-									if workflow_id != curr {
-										if let Some(workflow_name) = &current_workflow_name {
-											let entry = other_workflow_counts
-												.entry(workflow_name.clone())
-												.or_default();
+									if let Some(curr) = current_workflow_id {
+										if workflow_id != curr {
+											if let Some(workflow_name) = &current_workflow_name {
+												let entry = other_workflow_counts
+													.entry(workflow_name.clone())
+													.or_default();
 
-											match current_state {
-												WorkflowState::Complete => entry.complete += 1,
-												WorkflowState::Running => entry.running += 1,
-												WorkflowState::Sleeping => entry.sleeping += 1,
-												WorkflowState::Dead => {
-													entry.dead += 1;
+												match current_state {
+													WorkflowState::Complete => entry.complete += 1,
+													WorkflowState::Running => entry.running += 1,
+													WorkflowState::Sleeping => entry.sleeping += 1,
+													WorkflowState::Dead => {
+														entry.dead += 1;
 
-													if let Some(error) = current_error {
-														let entry = dead_workflow_count
-															.entry((
-																workflow_name.clone(),
-																error.clone(),
-															))
-															.or_default();
+														if let Some(error) = current_error {
+															let entry = dead_workflow_count
+																.entry((
+																	workflow_name.clone(),
+																	error.clone(),
+																))
+																.or_default();
 
-														*entry += 1;
+															*entry += 1;
+														}
 													}
 												}
+
+												current_workflow_name = None;
+												current_error = None;
+												current_state = WorkflowState::Dead;
 											}
-
-											current_workflow_name = None;
-											current_error = None;
-											current_state = WorkflowState::Dead;
 										}
 									}
-								}
 
-								current_workflow_id = Some(workflow_id);
+									current_workflow_id = Some(workflow_id);
 
-								if let Ok(workflow_name_key) =
-									self.subspace.unpack::<keys::workflow::NameKey>(entry.key())
-								{
-									let workflow_name = workflow_name_key
-										.deserialize(entry.value())
-										.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
-
-									current_workflow_name = Some(workflow_name);
-								} else if let Ok(error_key) = self
-									.subspace
-									.unpack::<keys::workflow::ErrorKey>(entry.key())
-								{
-									let error = error_key
-										.deserialize(entry.value())
-										.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
-
-									current_error = Some(error);
-								} else if !matches!(current_state, WorkflowState::Complete) {
-									if let Ok(_) = self
-										.subspace
-										.unpack::<keys::workflow::OutputChunkKey>(entry.key())
+									if let Ok(workflow_name_key) =
+										self.subspace.unpack::<keys::workflow::NameKey>(entry.key())
 									{
-										current_state = WorkflowState::Complete;
-									} else if let Ok(_) =
-										self.subspace.unpack::<keys::workflow::HasWakeConditionKey>(
+										let workflow_name =
+											workflow_name_key.deserialize(entry.value()).map_err(
+												|x| fdb::FdbBindingError::CustomError(x.into()),
+											)?;
+
+										current_workflow_name = Some(workflow_name);
+									} else if let Ok(error_key) =
+										self.subspace
+											.unpack::<keys::workflow::ErrorKey>(entry.key())
+									{
+										let error =
+											error_key.deserialize(entry.value()).map_err(|x| {
+												fdb::FdbBindingError::CustomError(x.into())
+											})?;
+
+										current_error = Some(error);
+									} else if !matches!(current_state, WorkflowState::Complete) {
+										if let Ok(_) = self
+											.subspace
+											.unpack::<keys::workflow::OutputChunkKey>(entry.key())
+										{
+											current_state = WorkflowState::Complete;
+										} else if let Ok(_) = self
+											.subspace
+											.unpack::<keys::workflow::HasWakeConditionKey>(
 											entry.key(),
 										) {
-										current_state = WorkflowState::Sleeping;
-									} else if let Ok(_) =
-										self.subspace.unpack::<keys::workflow::WorkerInstanceIdKey>(
+											current_state = WorkflowState::Sleeping;
+										} else if let Ok(_) = self
+											.subspace
+											.unpack::<keys::workflow::WorkerInstanceIdKey>(
 											entry.key(),
 										) {
-										current_state = WorkflowState::Running;
-									}
-								}
-							}
-
-							if let Some(workflow_name) = current_workflow_name {
-								let entry = other_workflow_counts
-									.entry(workflow_name.clone())
-									.or_default();
-
-								match current_state {
-									WorkflowState::Complete => entry.complete += 1,
-									WorkflowState::Running => entry.running += 1,
-									WorkflowState::Sleeping => entry.sleeping += 1,
-									WorkflowState::Dead => {
-										entry.dead += 1;
-
-										if let Some(error) = current_error {
-											let entry = dead_workflow_count
-												.entry((workflow_name, error.clone()))
-												.or_default();
-
-											*entry += 1;
+											current_state = WorkflowState::Running;
 										}
 									}
 								}
-							}
 
-							Result::<_, fdb::FdbBindingError>::Ok(())
-						},
-						async {
-							while let Some(entry) = signal_stream.try_next().await? {
-								if let Ok(pending_signal_key) =
-									self.subspace
-										.unpack::<keys::workflow::PendingSignalKey>(entry.key())
-								{
-									let entry = pending_signal_count
-										.entry(pending_signal_key.signal_name)
+								if let Some(workflow_name) = current_workflow_name {
+									let entry = other_workflow_counts
+										.entry(workflow_name.clone())
 										.or_default();
-									*entry += 1;
+
+									match current_state {
+										WorkflowState::Complete => entry.complete += 1,
+										WorkflowState::Running => entry.running += 1,
+										WorkflowState::Sleeping => entry.sleeping += 1,
+										WorkflowState::Dead => {
+											entry.dead += 1;
+
+											if let Some(error) = current_error {
+												let entry = dead_workflow_count
+													.entry((workflow_name, error.clone()))
+													.or_default();
+
+												*entry += 1;
+											}
+										}
+									}
 								}
-							}
 
-							while let Some(entry) = tagged_signal_stream.try_next().await? {
-								if let Ok(tagged_pending_signal_key) =
-									self.subspace
-										.unpack::<keys::signal::TaggedPendingKey>(entry.key())
-								{
-									let entry = pending_signal_count
-										.entry(tagged_pending_signal_key.signal_name)
-										.or_default();
-									*entry += 1;
+								Result::<_, fdb::FdbBindingError>::Ok(())
+							},
+							async {
+								while let Some(entry) = signal_stream.try_next().await? {
+									if let Ok(pending_signal_key) =
+										self.subspace
+											.unpack::<keys::workflow::PendingSignalKey>(entry.key())
+									{
+										let entry = pending_signal_count
+											.entry(pending_signal_key.signal_name)
+											.or_default();
+										*entry += 1;
+									}
 								}
-							}
 
-							Ok(())
-						},
-					)?;
+								while let Some(entry) = tagged_signal_stream.try_next().await? {
+									if let Ok(tagged_pending_signal_key) =
+										self.subspace
+											.unpack::<keys::signal::TaggedPendingKey>(entry.key())
+									{
+										let entry = pending_signal_count
+											.entry(tagged_pending_signal_key.signal_name)
+											.or_default();
+										*entry += 1;
+									}
+								}
 
-					Ok((
-						other_workflow_counts,
-						dead_workflow_count,
-						pending_signal_count,
-					))
-				}.instrument(tracing::info_span!("publish_metrics_tx")))
+								Ok(())
+							},
+						)?;
+
+						Ok((
+							other_workflow_counts,
+							dead_workflow_count,
+							pending_signal_count,
+						))
+					}
+					.instrument(tracing::info_span!("publish_metrics_tx"))
+				})
 				.await?;
 
 			for (workflow_name, counts) in other_workflow_counts {
@@ -643,12 +653,15 @@ impl Database for DatabaseFdbSqliteNats {
 			// Clear lock
 			self.pools
 				.fdb()?
-				.run(|tx, _mc| async move {
-					let metrics_lock_key = keys::worker_instance::MetricsLockKey::new();
-					tx.clear(&self.subspace.pack(&metrics_lock_key));
+				.run(|tx, _mc| {
+					async move {
+						let metrics_lock_key = keys::worker_instance::MetricsLockKey::new();
+						tx.clear(&self.subspace.pack(&metrics_lock_key));
 
-					Ok(())
-				}.instrument(tracing::info_span!("clear_lock_tx")))
+						Ok(())
+					}
+					.instrument(tracing::info_span!("clear_lock_tx"))
+				})
 				.await?;
 		}
 
@@ -659,19 +672,22 @@ impl Database for DatabaseFdbSqliteNats {
 	async fn update_worker_ping(&self, worker_instance_id: Uuid) -> WorkflowResult<()> {
 		self.pools
 			.fdb()?
-			.run(|tx, _mc| async move {
-				// Update worker instance ping
-				let last_ping_ts_key =
-					keys::worker_instance::LastPingTsKey::new(worker_instance_id);
-				tx.set(
-					&self.subspace.pack(&last_ping_ts_key),
-					&last_ping_ts_key
-						.serialize(rivet_util::timestamp::now())
-						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-				);
+			.run(|tx, _mc| {
+				async move {
+					// Update worker instance ping
+					let last_ping_ts_key =
+						keys::worker_instance::LastPingTsKey::new(worker_instance_id);
+					tx.set(
+						&self.subspace.pack(&last_ping_ts_key),
+						&last_ping_ts_key
+							.serialize(rivet_util::timestamp::now())
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+					);
 
-				Ok(())
-			}.instrument(tracing::info_span!("update_worker_ping_tx")))
+					Ok(())
+				}
+				.instrument(tracing::info_span!("update_worker_ping_tx"))
+			})
 			.await?;
 
 		Ok(())
@@ -700,133 +716,138 @@ impl Database for DatabaseFdbSqliteNats {
 
 		self.pools
 			.fdb()?
-			.run(|tx, _mc| async move {
-				// Write create ts
-				let create_ts_key = keys::workflow::CreateTsKey::new(workflow_id);
-				tx.set(
-					&self.subspace.pack(&create_ts_key),
-					&create_ts_key
-						.serialize(rivet_util::timestamp::now())
-						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-				);
-
-				// Write name
-				let name_key = keys::workflow::NameKey::new(workflow_id);
-				tx.set(
-					&self.subspace.pack(&name_key),
-					&name_key
-						.serialize(workflow_name.to_string())
-						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-				);
-
-				// Write ray id
-				let ray_id_key = keys::workflow::RayIdKey::new(workflow_id);
-				tx.set(
-					&self.subspace.pack(&ray_id_key),
-					&ray_id_key
-						.serialize(ray_id)
-						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-				);
-
-				// Write tags
-				let tags = tags
-					.map(|x| {
-						x.as_object().ok_or_else(|| {
-							WorkflowError::InvalidTags("must be an object".to_string())
-						})
-					})
-					.transpose()
-					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?
-					.into_iter()
-					.flatten()
-					.map(|(k, v)| Ok((k.clone(), value_to_str(v)?)))
-					.collect::<WorkflowResult<Vec<_>>>()
-					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
-
-				for (k, v) in &tags {
-					// Write tag key
-					let tag_key = keys::workflow::TagKey::new(workflow_id, k.clone(), v.clone());
+			.run(|tx, _mc| {
+				async move {
+					// Write create ts
+					let create_ts_key = keys::workflow::CreateTsKey::new(workflow_id);
 					tx.set(
-						&self.subspace.pack(&tag_key),
-						&tag_key
+						&self.subspace.pack(&create_ts_key),
+						&create_ts_key
+							.serialize(rivet_util::timestamp::now())
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+					);
+
+					// Write name
+					let name_key = keys::workflow::NameKey::new(workflow_id);
+					tx.set(
+						&self.subspace.pack(&name_key),
+						&name_key
+							.serialize(workflow_name.to_string())
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+					);
+
+					// Write ray id
+					let ray_id_key = keys::workflow::RayIdKey::new(workflow_id);
+					tx.set(
+						&self.subspace.pack(&ray_id_key),
+						&ray_id_key
+							.serialize(ray_id)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+					);
+
+					// Write tags
+					let tags = tags
+						.map(|x| {
+							x.as_object().ok_or_else(|| {
+								WorkflowError::InvalidTags("must be an object".to_string())
+							})
+						})
+						.transpose()
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?
+						.into_iter()
+						.flatten()
+						.map(|(k, v)| Ok((k.clone(), value_to_str(v)?)))
+						.collect::<WorkflowResult<Vec<_>>>()
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+					for (k, v) in &tags {
+						// Write tag key
+						let tag_key =
+							keys::workflow::TagKey::new(workflow_id, k.clone(), v.clone());
+						tx.set(
+							&self.subspace.pack(&tag_key),
+							&tag_key
+								.serialize(())
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+						);
+
+						// Write "by name and first tag" secondary index
+						let by_name_and_tag_key = keys::workflow::ByNameAndTagKey::new(
+							workflow_name.to_string(),
+							k.clone(),
+							v.clone(),
+							workflow_id,
+						);
+						let rest_of_tags = tags
+							.iter()
+							.filter(|(k2, _)| k2 != k)
+							.map(|(k, v)| (k.clone(), v.clone()))
+							.collect();
+						tx.set(
+							&self.subspace.pack(&by_name_and_tag_key),
+							&by_name_and_tag_key
+								.serialize(rest_of_tags)
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+						);
+					}
+
+					// Write null key for the "by name and first tag" secondary index (all workflows have this)
+					{
+						// Write secondary index by name and first tag
+						let by_name_and_tag_key = keys::workflow::ByNameAndTagKey::null(
+							workflow_name.to_string(),
+							workflow_id,
+						);
+						tx.set(
+							&self.subspace.pack(&by_name_and_tag_key),
+							&by_name_and_tag_key
+								.serialize(tags)
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+						);
+					}
+
+					// Wrote "has wake condition"
+					let has_wake_condition_key =
+						keys::workflow::HasWakeConditionKey::new(workflow_id);
+					tx.set(
+						&self.subspace.pack(&has_wake_condition_key),
+						&has_wake_condition_key
 							.serialize(())
 							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
 					);
 
-					// Write "by name and first tag" secondary index
-					let by_name_and_tag_key = keys::workflow::ByNameAndTagKey::new(
-						workflow_name.to_string(),
-						k.clone(),
-						v.clone(),
-						workflow_id,
-					);
-					let rest_of_tags = tags
-						.iter()
-						.filter(|(k2, _)| k2 != k)
-						.map(|(k, v)| (k.clone(), v.clone()))
-						.collect();
-					tx.set(
-						&self.subspace.pack(&by_name_and_tag_key),
-						&by_name_and_tag_key
-							.serialize(rest_of_tags)
-							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-					);
-				}
+					// Write input
+					let input_key = keys::workflow::InputKey::new(workflow_id);
 
-				// Write null key for the "by name and first tag" secondary index (all workflows have this)
-				{
-					// Write secondary index by name and first tag
-					let by_name_and_tag_key = keys::workflow::ByNameAndTagKey::null(
+					for (i, chunk) in input_key
+						.split_ref(input)
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?
+						.into_iter()
+						.enumerate()
+					{
+						let chunk_key = input_key.chunk(i);
+
+						tx.set(&self.subspace.pack(&chunk_key), &chunk);
+					}
+
+					// Write immediate wake condition
+					let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
 						workflow_name.to_string(),
 						workflow_id,
+						keys::wake::WakeCondition::Immediate,
 					);
+
 					tx.set(
-						&self.subspace.pack(&by_name_and_tag_key),
-						&by_name_and_tag_key
-							.serialize(tags)
+						&self.subspace.pack(&wake_condition_key),
+						&wake_condition_key
+							.serialize(())
 							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
 					);
+
+					Ok(())
 				}
-
-				// Wrote "has wake condition"
-				let has_wake_condition_key = keys::workflow::HasWakeConditionKey::new(workflow_id);
-				tx.set(
-					&self.subspace.pack(&has_wake_condition_key),
-					&has_wake_condition_key
-						.serialize(())
-						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-				);
-
-				// Write input
-				let input_key = keys::workflow::InputKey::new(workflow_id);
-
-				for (i, chunk) in input_key
-					.split_ref(input)
-					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?
-					.into_iter()
-					.enumerate()
-				{
-					let chunk_key = input_key.chunk(i);
-
-					tx.set(&self.subspace.pack(&chunk_key), &chunk);
-				}
-
-				// Write immediate wake condition
-				let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
-					workflow_name.to_string(),
-					workflow_id,
-					keys::wake::WakeCondition::Immediate,
-				);
-
-				tx.set(
-					&self.subspace.pack(&wake_condition_key),
-					&wake_condition_key
-						.serialize(())
-						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-				);
-
-				Ok(())
-			}.instrument(tracing::info_span!("dispatch_workflow_tx")))
+				.instrument(tracing::info_span!("dispatch_workflow_tx"))
+			})
 			.await?;
 
 		self.wake_worker();
@@ -839,52 +860,55 @@ impl Database for DatabaseFdbSqliteNats {
 		let data = self
 			.pools
 			.fdb()?
-			.run(|tx, _mc| async move {
-				let input_key = keys::workflow::InputKey::new(workflow_id);
-				let input_subspace = self.subspace.subspace(&input_key);
-				let output_key = keys::workflow::OutputKey::new(workflow_id);
-				let output_subspace = self.subspace.subspace(&output_key);
+			.run(|tx, _mc| {
+				async move {
+					let input_key = keys::workflow::InputKey::new(workflow_id);
+					let input_subspace = self.subspace.subspace(&input_key);
+					let output_key = keys::workflow::OutputKey::new(workflow_id);
+					let output_subspace = self.subspace.subspace(&output_key);
 
-				// Read input and output
-				let (input_chunks, output_chunks) = tokio::try_join!(
-					tx.get_ranges_keyvalues(
-						fdb::RangeOption {
-							mode: StreamingMode::WantAll,
-							..(&input_subspace).into()
-						},
-						SERIALIZABLE,
-					)
-					.try_collect::<Vec<_>>(),
-					tx.get_ranges_keyvalues(
-						fdb::RangeOption {
-							mode: StreamingMode::WantAll,
-							..(&output_subspace).into()
-						},
-						SERIALIZABLE,
-					)
-					.try_collect::<Vec<_>>()
-				)?;
-
-				if input_chunks.is_empty() {
-					Ok(None)
-				} else {
-					let input = input_key
-						.combine(input_chunks)
-						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
-
-					let output = if output_chunks.is_empty() {
-						None
-					} else {
-						Some(
-							output_key
-								.combine(output_chunks)
-								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+					// Read input and output
+					let (input_chunks, output_chunks) = tokio::try_join!(
+						tx.get_ranges_keyvalues(
+							fdb::RangeOption {
+								mode: StreamingMode::WantAll,
+								..(&input_subspace).into()
+							},
+							SERIALIZABLE,
 						)
-					};
+						.try_collect::<Vec<_>>(),
+						tx.get_ranges_keyvalues(
+							fdb::RangeOption {
+								mode: StreamingMode::WantAll,
+								..(&output_subspace).into()
+							},
+							SERIALIZABLE,
+						)
+						.try_collect::<Vec<_>>()
+					)?;
 
-					Ok(Some((input, output)))
+					if input_chunks.is_empty() {
+						Ok(None)
+					} else {
+						let input = input_key
+							.combine(input_chunks)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+						let output = if output_chunks.is_empty() {
+							None
+						} else {
+							Some(
+								output_key
+									.combine(output_chunks)
+									.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+							)
+						};
+
+						Ok(Some((input, output)))
+					}
 				}
-			}.instrument(tracing::info_span!("get_workflow_tx")))
+				.instrument(tracing::info_span!("get_workflow_tx"))
+			})
 			.await?;
 
 		if let Some((input, output)) = data {
@@ -980,7 +1004,8 @@ impl Database for DatabaseFdbSqliteNats {
 							break Ok(Some(workflow_by_name_and_tag_key.workflow_id));
 						}
 					}
-				}.instrument(tracing::info_span!("find_workflow_tx"))
+				}
+				.instrument(tracing::info_span!("find_workflow_tx"))
 			})
 			.await?;
 
@@ -1129,7 +1154,8 @@ impl Database for DatabaseFdbSqliteNats {
 
 									Ok(Some((workflow_id, workflow_name, wake_deadline_ts)))
 								}
-							}.instrument(tracing::trace_span!("map_to_leased_workflows"))
+							}
+							.instrument(tracing::trace_span!("map_to_leased_workflows"))
 						})
 						// TODO: How to get rid of this buffer?
 						.buffer_unordered(1024)
@@ -1275,13 +1301,15 @@ impl Database for DatabaseFdbSqliteNats {
 									input,
 									wake_deadline_ts,
 								})
-							}.instrument(tracing::trace_span!("map_to_partial_workflow"))
+							}
+							.instrument(tracing::trace_span!("map_to_partial_workflow"))
 						})
 						// TODO: How to get rid of this buffer?
 						.buffer_unordered(512)
 						.try_collect::<Vec<_>>()
 						.await
-				}.instrument(tracing::info_span!("pull_workflows_tx"))
+				}
+				.instrument(tracing::info_span!("pull_workflows_tx"))
 			})
 			.await?;
 
@@ -1302,17 +1330,18 @@ impl Database for DatabaseFdbSqliteNats {
 
 		// Set up sqlite
 		let pulled_workflows = futures_util::stream::iter(partial_workflows)
-			.map(|partial| async move {
-				let pool = &self
-					.pools
-					.sqlite(sqlite_db_name_internal(partial.workflow_id), false)
-					.await?;
-				sqlite::init(partial.workflow_id, pool).await?;
+			.map(|partial| {
+				async move {
+					let pool = &self
+						.pools
+						.sqlite(sqlite_db_name_internal(partial.workflow_id), false)
+						.await?;
+					sqlite::init(partial.workflow_id, pool).await?;
 
-				// Fetch all events
-				let events = sql_fetch_all!(
-					[self, sqlite::AmalgamEventRow, pool]
-					"
+					// Fetch all events
+					let events = sql_fetch_all!(
+						[self, sqlite::AmalgamEventRow, pool]
+						"
 					-- Activity events
 					SELECT
 						json(location) AS location,
@@ -1508,19 +1537,21 @@ impl Database for DatabaseFdbSqliteNats {
 					FROM workflow_version_check_events
 					WHERE NOT forgotten
 					",
-				)
-				.await?;
+					)
+					.await?;
 
-				WorkflowResult::Ok(PulledWorkflow {
-					workflow_id: partial.workflow_id,
-					workflow_name: partial.workflow_name,
-					create_ts: partial.create_ts,
-					ray_id: partial.ray_id,
-					input: partial.input,
-					wake_deadline_ts: partial.wake_deadline_ts,
-					events: sqlite::build_history(events)?,
-				})
-			}.instrument(tracing::trace_span!("map_to_pulled_workflows")))
+					WorkflowResult::Ok(PulledWorkflow {
+						workflow_id: partial.workflow_id,
+						workflow_name: partial.workflow_name,
+						create_ts: partial.create_ts,
+						ray_id: partial.ray_id,
+						input: partial.input,
+						wake_deadline_ts: partial.wake_deadline_ts,
+						events: sqlite::build_history(events)?,
+					})
+				}
+				.instrument(tracing::trace_span!("map_to_pulled_workflows"))
+			})
 			.buffer_unordered(512)
 			.try_collect()
 			.await?;
@@ -1557,150 +1588,155 @@ impl Database for DatabaseFdbSqliteNats {
 
 		self.pools
 			.fdb()?
-			.run(|tx, _mc| async move {
-				let sub_workflow_wake_subspace = self
-					.subspace
-					.subspace(&keys::wake::SubWorkflowWakeKey::subspace(workflow_id));
-				let tags_subspace = self
-					.subspace
-					.subspace(&keys::workflow::TagKey::subspace(workflow_id));
-				let wake_deadline_key = keys::workflow::WakeDeadlineKey::new(workflow_id);
+			.run(|tx, _mc| {
+				async move {
+					let sub_workflow_wake_subspace = self
+						.subspace
+						.subspace(&keys::wake::SubWorkflowWakeKey::subspace(workflow_id));
+					let tags_subspace = self
+						.subspace
+						.subspace(&keys::workflow::TagKey::subspace(workflow_id));
+					let wake_deadline_key = keys::workflow::WakeDeadlineKey::new(workflow_id);
 
-				let mut stream = tx.get_ranges_keyvalues(
-					fdb::RangeOption {
-						mode: StreamingMode::WantAll,
-						..(&sub_workflow_wake_subspace).into()
-					},
-					// NOTE: Must be serializable to conflict with `get_sub_workflow`
-					SERIALIZABLE,
-				);
+					let mut stream = tx.get_ranges_keyvalues(
+						fdb::RangeOption {
+							mode: StreamingMode::WantAll,
+							..(&sub_workflow_wake_subspace).into()
+						},
+						// NOTE: Must be serializable to conflict with `get_sub_workflow`
+						SERIALIZABLE,
+					);
 
-				let (_, tag_keys, wake_deadline_entry) = tokio::try_join!(
-					// Check for other workflows waiting on this one, wake all
-					async {
-						while let Some(entry) = stream.try_next().await.unwrap() {
-							let sub_workflow_wake_key = self
-								.subspace
-								.unpack::<keys::wake::SubWorkflowWakeKey>(&entry.key())
-								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
-							let workflow_name = sub_workflow_wake_key
-								.deserialize(entry.value())
-								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+					let (_, tag_keys, wake_deadline_entry) = tokio::try_join!(
+						// Check for other workflows waiting on this one, wake all
+						async {
+							while let Some(entry) = stream.try_next().await.unwrap() {
+								let sub_workflow_wake_key = self
+									.subspace
+									.unpack::<keys::wake::SubWorkflowWakeKey>(&entry.key())
+									.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+								let workflow_name = sub_workflow_wake_key
+									.deserialize(entry.value())
+									.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
-							let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
-								workflow_name,
-								sub_workflow_wake_key.workflow_id,
-								keys::wake::WakeCondition::SubWorkflow {
-									sub_workflow_id: workflow_id,
+								let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
+									workflow_name,
+									sub_workflow_wake_key.workflow_id,
+									keys::wake::WakeCondition::SubWorkflow {
+										sub_workflow_id: workflow_id,
+									},
+								);
+
+								// Add wake condition for workflow
+								tx.set(
+									&self.subspace.pack(&wake_condition_key),
+									&wake_condition_key
+										.serialize(())
+										.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+								);
+
+								// Clear secondary index
+								tx.clear(entry.key());
+							}
+
+							Result::<_, fdb::FdbBindingError>::Ok(())
+						},
+						// Read tags
+						async {
+							tx.get_ranges_keyvalues(
+								fdb::RangeOption {
+									mode: StreamingMode::WantAll,
+									..(&tags_subspace).into()
 								},
-							);
-
-							// Add wake condition for workflow
-							tx.set(
-								&self.subspace.pack(&wake_condition_key),
-								&wake_condition_key
-									.serialize(())
-									.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-							);
-
-							// Clear secondary index
-							tx.clear(entry.key());
-						}
-
-						Result::<_, fdb::FdbBindingError>::Ok(())
-					},
-					// Read tags
-					async {
-						tx.get_ranges_keyvalues(
-							fdb::RangeOption {
-								mode: StreamingMode::WantAll,
-								..(&tags_subspace).into()
-							},
-							SERIALIZABLE,
-						)
-						.map(|res| match res {
-							Ok(entry) => self
-								.subspace
-								.unpack::<keys::workflow::TagKey>(entry.key())
-								.map_err(|x| fdb::FdbBindingError::CustomError(x.into())),
-							Err(err) => Err(Into::<fdb::FdbBindingError>::into(err)),
-						})
-						.try_collect::<Vec<_>>()
-						.await
-						.map_err(Into::into)
-					},
-					async {
-						tx.get(&self.subspace.pack(&wake_deadline_key), SERIALIZABLE)
+								SERIALIZABLE,
+							)
+							.map(|res| match res {
+								Ok(entry) => self
+									.subspace
+									.unpack::<keys::workflow::TagKey>(entry.key())
+									.map_err(|x| fdb::FdbBindingError::CustomError(x.into())),
+								Err(err) => Err(Into::<fdb::FdbBindingError>::into(err)),
+							})
+							.try_collect::<Vec<_>>()
 							.await
 							.map_err(Into::into)
-					},
-				)?;
+						},
+						async {
+							tx.get(&self.subspace.pack(&wake_deadline_key), SERIALIZABLE)
+								.await
+								.map_err(Into::into)
+						},
+					)?;
 
-				for key in tag_keys {
-					let by_name_and_tag_key = keys::workflow::ByNameAndTagKey::new(
-						workflow_name.to_string(),
-						key.k,
-						key.v,
-						workflow_id,
-					);
-					tx.clear(&self.subspace.pack(&by_name_and_tag_key));
+					for key in tag_keys {
+						let by_name_and_tag_key = keys::workflow::ByNameAndTagKey::new(
+							workflow_name.to_string(),
+							key.k,
+							key.v,
+							workflow_id,
+						);
+						tx.clear(&self.subspace.pack(&by_name_and_tag_key));
+					}
+
+					// Clear null key
+					{
+						let by_name_and_tag_key = keys::workflow::ByNameAndTagKey::null(
+							workflow_name.to_string(),
+							workflow_id,
+						);
+						tx.clear(&self.subspace.pack(&by_name_and_tag_key));
+					}
+
+					// Get and clear the pending deadline wake condition, if any. This could be put in the
+					// `pull_workflows` function (where we clear secondary indexes) but we chose to clear it
+					// here and in `commit_workflow` because its not a secondary index so theres no worry of
+					// it inserting more wake conditions. This reduces the load on `pull_workflows`. The
+					// reason this isn't immediately cleared in `pull_workflows` along with the rest of the
+					// wake conditions is because it might be in the future.
+					if let Some(raw) = wake_deadline_entry {
+						let deadline_ts = wake_deadline_key
+							.deserialize(&raw)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+						let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
+							workflow_name.to_string(),
+							workflow_id,
+							keys::wake::WakeCondition::Deadline { deadline_ts },
+						);
+
+						tx.clear(&self.subspace.pack(&wake_condition_key));
+					}
+
+					// Clear "has wake condition"
+					let has_wake_condition_key =
+						keys::workflow::HasWakeConditionKey::new(workflow_id);
+					tx.clear(&self.subspace.pack(&has_wake_condition_key));
+
+					// Write output
+					let output_key = keys::workflow::OutputKey::new(workflow_id);
+
+					for (i, chunk) in output_key
+						.split_ref(output)
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?
+						.into_iter()
+						.enumerate()
+					{
+						let chunk_key = output_key.chunk(i);
+
+						tx.set(&self.subspace.pack(&chunk_key), &chunk);
+					}
+
+					// Clear lease
+					let lease_key = keys::workflow::LeaseKey::new(workflow_id);
+					tx.clear(&self.subspace.pack(&lease_key));
+					let worker_instance_id_key =
+						keys::workflow::WorkerInstanceIdKey::new(workflow_id);
+					tx.clear(&self.subspace.pack(&worker_instance_id_key));
+
+					Ok(())
 				}
-
-				// Clear null key
-				{
-					let by_name_and_tag_key = keys::workflow::ByNameAndTagKey::null(
-						workflow_name.to_string(),
-						workflow_id,
-					);
-					tx.clear(&self.subspace.pack(&by_name_and_tag_key));
-				}
-
-				// Get and clear the pending deadline wake condition, if any. This could be put in the
-				// `pull_workflows` function (where we clear secondary indexes) but we chose to clear it
-				// here and in `commit_workflow` because its not a secondary index so theres no worry of
-				// it inserting more wake conditions. This reduces the load on `pull_workflows`. The
-				// reason this isn't immediately cleared in `pull_workflows` along with the rest of the
-				// wake conditions is because it might be in the future.
-				if let Some(raw) = wake_deadline_entry {
-					let deadline_ts = wake_deadline_key
-						.deserialize(&raw)
-						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
-
-					let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
-						workflow_name.to_string(),
-						workflow_id,
-						keys::wake::WakeCondition::Deadline { deadline_ts },
-					);
-
-					tx.clear(&self.subspace.pack(&wake_condition_key));
-				}
-
-				// Clear "has wake condition"
-				let has_wake_condition_key = keys::workflow::HasWakeConditionKey::new(workflow_id);
-				tx.clear(&self.subspace.pack(&has_wake_condition_key));
-
-				// Write output
-				let output_key = keys::workflow::OutputKey::new(workflow_id);
-
-				for (i, chunk) in output_key
-					.split_ref(output)
-					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?
-					.into_iter()
-					.enumerate()
-				{
-					let chunk_key = output_key.chunk(i);
-
-					tx.set(&self.subspace.pack(&chunk_key), &chunk);
-				}
-
-				// Clear lease
-				let lease_key = keys::workflow::LeaseKey::new(workflow_id);
-				tx.clear(&self.subspace.pack(&lease_key));
-				let worker_instance_id_key = keys::workflow::WorkerInstanceIdKey::new(workflow_id);
-				tx.clear(&self.subspace.pack(&worker_instance_id_key));
-
-				Ok(())
-			}.instrument(tracing::info_span!("complete_workflows_tx")))
+				.instrument(tracing::info_span!("complete_workflows_tx"))
+			})
 			.await?;
 
 		self.wake_worker();
@@ -1731,153 +1767,158 @@ impl Database for DatabaseFdbSqliteNats {
 
 		self.pools
 			.fdb()?
-			.run(|tx, _mc| async move {
-				let wf_tags_subspace = self
-					.subspace
-					.subspace(&keys::workflow::TagKey::subspace(workflow_id));
-				let wake_deadline_key = keys::workflow::WakeDeadlineKey::new(workflow_id);
+			.run(|tx, _mc| {
+				async move {
+					let wf_tags_subspace = self
+						.subspace
+						.subspace(&keys::workflow::TagKey::subspace(workflow_id));
+					let wake_deadline_key = keys::workflow::WakeDeadlineKey::new(workflow_id);
 
-				let (wf_tags, wake_deadline_entry) = tokio::try_join!(
-					// Collect all wf tags
-					tx.get_ranges_keyvalues(
-						fdb::RangeOption {
-							mode: StreamingMode::WantAll,
-							..(&wf_tags_subspace).into()
+					let (wf_tags, wake_deadline_entry) = tokio::try_join!(
+						// Collect all wf tags
+						tx.get_ranges_keyvalues(
+							fdb::RangeOption {
+								mode: StreamingMode::WantAll,
+								..(&wf_tags_subspace).into()
+							},
+							SERIALIZABLE,
+						)
+						.map(|res| match res {
+							Ok(entry) => {
+								let key = self
+									.subspace
+									.unpack::<keys::workflow::TagKey>(entry.key())
+									.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+								Ok((key.k, key.v))
+							}
+							Err(err) => Err(Into::<fdb::FdbBindingError>::into(err)),
+						})
+						.try_collect::<Vec<_>>(),
+						// Get previous deadline wake condition
+						async {
+							tx.get(&self.subspace.pack(&wake_deadline_key), SERIALIZABLE)
+								.await
+								.map_err(Into::into)
 						},
-						SERIALIZABLE,
-					)
-					.map(|res| match res {
-						Ok(entry) => {
-							let key = self
-								.subspace
-								.unpack::<keys::workflow::TagKey>(entry.key())
-								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+					)?;
 
-							Ok((key.k, key.v))
-						}
-						Err(err) => Err(Into::<fdb::FdbBindingError>::into(err)),
-					})
-					.try_collect::<Vec<_>>(),
-					// Get previous deadline wake condition
-					async {
-						tx.get(&self.subspace.pack(&wake_deadline_key), SERIALIZABLE)
-							.await
-							.map_err(Into::into)
-					},
-				)?;
+					// Add immediate wake for workflow
+					if wake_immediate {
+						let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
+							workflow_name.to_string(),
+							workflow_id,
+							keys::wake::WakeCondition::Immediate,
+						);
+						tx.set(
+							&self.subspace.pack(&wake_condition_key),
+							&wake_condition_key
+								.serialize(())
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+						);
+					}
 
-				// Add immediate wake for workflow
-				if wake_immediate {
-					let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
-						workflow_name.to_string(),
-						workflow_id,
-						keys::wake::WakeCondition::Immediate,
-					);
-					tx.set(
-						&self.subspace.pack(&wake_condition_key),
-						&wake_condition_key
-							.serialize(())
-							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-					);
-				}
+					// Get and clear the pending deadline wake condition, if any. This could be put in the
+					// `pull_workflows` function (where we clear secondary indexes) but we chose to clear it
+					// here and in `complete_workflow` because its not a secondary index so theres no worry of
+					// it inserting more wake conditions. This reduces the load on `pull_workflows`. The
+					// reason this isn't immediately cleared in `pull_workflows` along with the rest of the
+					// wake conditions is because it might be in the future.
+					if let Some(raw) = wake_deadline_entry {
+						let deadline_ts = wake_deadline_key
+							.deserialize(&raw)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
-				// Get and clear the pending deadline wake condition, if any. This could be put in the
-				// `pull_workflows` function (where we clear secondary indexes) but we chose to clear it
-				// here and in `complete_workflow` because its not a secondary index so theres no worry of
-				// it inserting more wake conditions. This reduces the load on `pull_workflows`. The
-				// reason this isn't immediately cleared in `pull_workflows` along with the rest of the
-				// wake conditions is because it might be in the future.
-				if let Some(raw) = wake_deadline_entry {
-					let deadline_ts = wake_deadline_key
-						.deserialize(&raw)
-						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+						let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
+							workflow_name.to_string(),
+							workflow_id,
+							keys::wake::WakeCondition::Deadline { deadline_ts },
+						);
 
-					let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
-						workflow_name.to_string(),
-						workflow_id,
-						keys::wake::WakeCondition::Deadline { deadline_ts },
-					);
+						tx.clear(&self.subspace.pack(&wake_condition_key));
+					}
 
-					tx.clear(&self.subspace.pack(&wake_condition_key));
-				}
+					// Write deadline wake index
+					if let Some(deadline_ts) = wake_deadline_ts {
+						let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
+							workflow_name.to_string(),
+							workflow_id,
+							keys::wake::WakeCondition::Deadline { deadline_ts },
+						);
 
-				// Write deadline wake index
-				if let Some(deadline_ts) = wake_deadline_ts {
-					let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
-						workflow_name.to_string(),
-						workflow_id,
-						keys::wake::WakeCondition::Deadline { deadline_ts },
-					);
+						// Add wake condition for workflow
+						tx.set(
+							&self.subspace.pack(&wake_condition_key),
+							&wake_condition_key
+								.serialize(())
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+						);
 
-					// Add wake condition for workflow
-					tx.set(
-						&self.subspace.pack(&wake_condition_key),
-						&wake_condition_key
-							.serialize(())
-							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-					);
+						// Write to wake deadline
+						tx.set(
+							&self.subspace.pack(&wake_deadline_key),
+							&wake_deadline_key
+								.serialize(deadline_ts)
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+						);
+					}
 
-					// Write to wake deadline
-					tx.set(
-						&self.subspace.pack(&wake_deadline_key),
-						&wake_deadline_key
-							.serialize(deadline_ts)
-							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-					);
-				}
-
-				self.write_signal_wake_idxs(
-					workflow_id,
-					workflow_name,
-					wake_signals,
-					&wf_tags,
-					&tx,
-				)?;
-
-				// Write sub workflow wake index
-				if let Some(sub_workflow_id) = wake_sub_workflow_id {
-					self.write_sub_workflow_wake_idx(
+					self.write_signal_wake_idxs(
 						workflow_id,
 						workflow_name,
-						sub_workflow_id,
+						wake_signals,
+						&wf_tags,
 						&tx,
 					)?;
-				}
 
-				// Update "has wake condition"
-				let has_wake_condition_key = keys::workflow::HasWakeConditionKey::new(workflow_id);
-				if wake_immediate
-					|| wake_deadline_ts.is_some()
-					|| !wake_signals.is_empty()
-					|| wake_sub_workflow_id.is_some()
-				{
+					// Write sub workflow wake index
+					if let Some(sub_workflow_id) = wake_sub_workflow_id {
+						self.write_sub_workflow_wake_idx(
+							workflow_id,
+							workflow_name,
+							sub_workflow_id,
+							&tx,
+						)?;
+					}
+
+					// Update "has wake condition"
+					let has_wake_condition_key =
+						keys::workflow::HasWakeConditionKey::new(workflow_id);
+					if wake_immediate
+						|| wake_deadline_ts.is_some()
+						|| !wake_signals.is_empty()
+						|| wake_sub_workflow_id.is_some()
+					{
+						tx.set(
+							&self.subspace.pack(&has_wake_condition_key),
+							&has_wake_condition_key
+								.serialize(())
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+						);
+					} else {
+						tx.clear(&self.subspace.pack(&has_wake_condition_key));
+					}
+
+					// Write error
+					let error_key = keys::workflow::ErrorKey::new(workflow_id);
 					tx.set(
-						&self.subspace.pack(&has_wake_condition_key),
-						&has_wake_condition_key
-							.serialize(())
+						&self.subspace.pack(&error_key),
+						&error_key
+							.serialize(error.to_string())
 							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
 					);
-				} else {
-					tx.clear(&self.subspace.pack(&has_wake_condition_key));
+
+					// Clear lease
+					let lease_key = keys::workflow::LeaseKey::new(workflow_id);
+					tx.clear(&self.subspace.pack(&lease_key));
+					let worker_instance_id_key =
+						keys::workflow::WorkerInstanceIdKey::new(workflow_id);
+					tx.clear(&self.subspace.pack(&worker_instance_id_key));
+
+					Ok(())
 				}
-
-				// Write error
-				let error_key = keys::workflow::ErrorKey::new(workflow_id);
-				tx.set(
-					&self.subspace.pack(&error_key),
-					&error_key
-						.serialize(error.to_string())
-						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-				);
-
-				// Clear lease
-				let lease_key = keys::workflow::LeaseKey::new(workflow_id);
-				tx.clear(&self.subspace.pack(&lease_key));
-				let worker_instance_id_key = keys::workflow::WorkerInstanceIdKey::new(workflow_id);
-				tx.clear(&self.subspace.pack(&worker_instance_id_key));
-
-				Ok(())
-			}.instrument(tracing::info_span!("commit_workflow_tx")))
+				.instrument(tracing::info_span!("commit_workflow_tx"))
+			})
 			.await?;
 
 		// Wake worker again if the deadline is before the next tick
@@ -1955,22 +1996,25 @@ impl Database for DatabaseFdbSqliteNats {
 
 							// Fetch the next entry from all streams at the same time
 							let mut results = futures_util::future::try_join_all(
-								streams.into_iter().map(|mut stream| async move {
-									if let Some(entry) = stream.try_next().await? {
-										Result::<_, fdb::FdbBindingError>::Ok(Some((
-											entry.key().to_vec(),
-											self.subspace
-												.unpack::<keys::workflow::PendingSignalKey>(
-													&entry.key(),
-												)
-												.map_err(|x| {
-													fdb::FdbBindingError::CustomError(x.into())
-												})?,
-										)))
-									} else {
-										Ok(None)
+								streams.into_iter().map(|mut stream| {
+									async move {
+										if let Some(entry) = stream.try_next().await? {
+											Result::<_, fdb::FdbBindingError>::Ok(Some((
+												entry.key().to_vec(),
+												self.subspace
+													.unpack::<keys::workflow::PendingSignalKey>(
+														&entry.key(),
+													)
+													.map_err(|x| {
+														fdb::FdbBindingError::CustomError(x.into())
+													})?,
+											)))
+										} else {
+											Ok(None)
+										}
 									}
-								}.instrument(tracing::trace_span!("map_signals"))),
+									.instrument(tracing::trace_span!("map_signals"))
+								}),
 							)
 							.await?;
 
@@ -2041,37 +2085,40 @@ impl Database for DatabaseFdbSqliteNats {
 							// Fetch the next entry from all streams at the same time
 							let (mut results, new_streams): (Vec<_>, Vec<_>) =
 								futures_util::future::try_join_all(taken_streams.into_iter().map(
-									|mut stream| async move {
-										if let Some(entry) = stream.try_next().await? {
-											// Unpack key
-											let pending_signal_key = self
-												.subspace
-												.unpack::<keys::signal::TaggedPendingKey>(
-													&entry.key(),
-												)
-												.map_err(|x| {
-													fdb::FdbBindingError::CustomError(x.into())
-												})?;
+									|mut stream| {
+										async move {
+											if let Some(entry) = stream.try_next().await? {
+												// Unpack key
+												let pending_signal_key = self
+													.subspace
+													.unpack::<keys::signal::TaggedPendingKey>(
+														&entry.key(),
+													)
+													.map_err(|x| {
+														fdb::FdbBindingError::CustomError(x.into())
+													})?;
 
-											// Deserialize value
-											let signal_tags = pending_signal_key
-												.deserialize(entry.value())
-												.map_err(|x| {
-													fdb::FdbBindingError::CustomError(x.into())
-												})?;
+												// Deserialize value
+												let signal_tags = pending_signal_key
+													.deserialize(entry.value())
+													.map_err(|x| {
+														fdb::FdbBindingError::CustomError(x.into())
+													})?;
 
-											Result::<_, fdb::FdbBindingError>::Ok(Some((
-												(
-													entry.key().to_vec(),
-													pending_signal_key,
-													signal_tags,
-												),
-												stream,
-											)))
-										} else {
-											Ok(None)
+												Result::<_, fdb::FdbBindingError>::Ok(Some((
+													(
+														entry.key().to_vec(),
+														pending_signal_key,
+														signal_tags,
+													),
+													stream,
+												)))
+											} else {
+												Ok(None)
+											}
 										}
-									}.instrument(tracing::trace_span!("map_to_new_streams")),
+										.instrument(tracing::trace_span!("map_to_new_streams"))
+									},
 								))
 								.await?
 								.into_iter()
@@ -2241,9 +2288,12 @@ impl Database for DatabaseFdbSqliteNats {
 
 						Ok(None)
 					}
-				}.instrument(tracing::info_span!("pull_next_signal_tx"))
+				}
+				.instrument(tracing::info_span!("pull_next_signal_tx"))
 			})
 			.await?;
+
+		self.flush_wf_sqlite(workflow_id).await?;
 
 		Ok(signal)
 	}
@@ -2258,67 +2308,70 @@ impl Database for DatabaseFdbSqliteNats {
 		let data = self
 			.pools
 			.fdb()?
-			.run(|tx, _mc| async move {
-				let input_key = keys::workflow::InputKey::new(sub_workflow_id);
-				let input_subspace = self.subspace.subspace(&input_key);
-				let output_key = keys::workflow::OutputKey::new(sub_workflow_id);
-				let output_subspace = self.subspace.subspace(&output_key);
+			.run(|tx, _mc| {
+				async move {
+					let input_key = keys::workflow::InputKey::new(sub_workflow_id);
+					let input_subspace = self.subspace.subspace(&input_key);
+					let output_key = keys::workflow::OutputKey::new(sub_workflow_id);
+					let output_subspace = self.subspace.subspace(&output_key);
 
-				// Read input and output
-				let (input_chunks, output_chunks) = tokio::try_join!(
-					tx.get_ranges_keyvalues(
-						fdb::RangeOption {
-							mode: StreamingMode::WantAll,
-							..(&input_subspace).into()
-						},
-						SERIALIZABLE,
-					)
-					.try_collect::<Vec<_>>(),
-					tx.get_ranges_keyvalues(
-						fdb::RangeOption {
-							mode: StreamingMode::WantAll,
-							..(&output_subspace).into()
-						},
-						SERIALIZABLE,
-					)
-					.try_collect::<Vec<_>>()
-				)?;
-
-				if input_chunks.is_empty() {
-					Ok(None)
-				} else {
-					let input = input_key
-						.combine(input_chunks)
-						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
-
-					let output = if output_chunks.is_empty() {
-						// Write sub workflow wake index if the sub workflow is not complete yet. Normally
-						// this is done in `commit_workflow` but without this code there would be a race
-						// condition if the sub workflow completes between after this transaction and
-						// before `commit_workflow`. There is a possibility of `commit_workflow` NOT writing a
-						// sub workflow secondary index after this in which case there might be an
-						// unnecessary wake condition inserted causing the workflow to wake up again, but this
-						// is not as big of an issue because workflow wakes should be idempotent if no events
-						// happen.
-						self.write_sub_workflow_wake_idx(
-							workflow_id,
-							workflow_name,
-							sub_workflow_id,
-							&tx,
-						)?;
-
-						None
-					} else {
-						Some(
-							output_key
-								.combine(output_chunks)
-								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+					// Read input and output
+					let (input_chunks, output_chunks) = tokio::try_join!(
+						tx.get_ranges_keyvalues(
+							fdb::RangeOption {
+								mode: StreamingMode::WantAll,
+								..(&input_subspace).into()
+							},
+							SERIALIZABLE,
 						)
-					};
+						.try_collect::<Vec<_>>(),
+						tx.get_ranges_keyvalues(
+							fdb::RangeOption {
+								mode: StreamingMode::WantAll,
+								..(&output_subspace).into()
+							},
+							SERIALIZABLE,
+						)
+						.try_collect::<Vec<_>>()
+					)?;
 
-					Ok(Some((input, output)))
+					if input_chunks.is_empty() {
+						Ok(None)
+					} else {
+						let input = input_key
+							.combine(input_chunks)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+						let output = if output_chunks.is_empty() {
+							// Write sub workflow wake index if the sub workflow is not complete yet. Normally
+							// this is done in `commit_workflow` but without this code there would be a race
+							// condition if the sub workflow completes between after this transaction and
+							// before `commit_workflow`. There is a possibility of `commit_workflow` NOT writing a
+							// sub workflow secondary index after this in which case there might be an
+							// unnecessary wake condition inserted causing the workflow to wake up again, but this
+							// is not as big of an issue because workflow wakes should be idempotent if no events
+							// happen.
+							self.write_sub_workflow_wake_idx(
+								workflow_id,
+								workflow_name,
+								sub_workflow_id,
+								&tx,
+							)?;
+
+							None
+						} else {
+							Some(
+								output_key
+									.combine(output_chunks)
+									.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+							)
+						};
+
+						Ok(Some((input, output)))
+					}
 				}
-			}.instrument(tracing::info_span!("get_sub_workflow_tx")))
+				.instrument(tracing::info_span!("get_sub_workflow_tx"))
+			})
 			.await?;
 
 		if let Some((input, output)) = data {
@@ -2343,114 +2396,117 @@ impl Database for DatabaseFdbSqliteNats {
 	) -> WorkflowResult<()> {
 		self.pools
 			.fdb()?
-			.run(|tx, _mc| async move {
-				let workflow_name_key = keys::workflow::NameKey::new(workflow_id);
+			.run(|tx, _mc| {
+				async move {
+					let workflow_name_key = keys::workflow::NameKey::new(workflow_id);
 
-				// NOTE: This does not have to be serializable because wf name doesn't change
-				// Check if the workflow exists
-				let Some(workflow_name_raw) = tx
-					.get(&self.subspace.pack(&workflow_name_key), SNAPSHOT)
-					.await?
-				else {
-					return Err(fdb::FdbBindingError::CustomError(
-						WorkflowError::WorkflowNotFound.into(),
-					));
-				};
+					// NOTE: This does not have to be serializable because wf name doesn't change
+					// Check if the workflow exists
+					let Some(workflow_name_raw) = tx
+						.get(&self.subspace.pack(&workflow_name_key), SNAPSHOT)
+						.await?
+					else {
+						return Err(fdb::FdbBindingError::CustomError(
+							WorkflowError::WorkflowNotFound.into(),
+						));
+					};
 
-				let workflow_name = workflow_name_key
-					.deserialize(&workflow_name_raw)
-					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+					let workflow_name = workflow_name_key
+						.deserialize(&workflow_name_raw)
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
-				// Write name
-				let name_key = keys::signal::NameKey::new(signal_id);
-				tx.set(
-					&self.subspace.pack(&name_key),
-					&name_key
-						.serialize(signal_name.to_string())
-						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-				);
-
-				let signal_body_key = keys::signal::BodyKey::new(signal_id);
-
-				// Write signal body
-				for (i, chunk) in signal_body_key
-					.split_ref(body)
-					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?
-					.into_iter()
-					.enumerate()
-				{
-					let chunk_key = signal_body_key.chunk(i);
-
-					tx.set(&self.subspace.pack(&chunk_key), &chunk);
-				}
-
-				// Write pending key
-				let pending_signal_key = keys::workflow::PendingSignalKey::new(
-					workflow_id,
-					signal_name.to_string(),
-					signal_id,
-				);
-
-				tx.set(
-					&self.subspace.pack(&pending_signal_key),
-					&pending_signal_key
-						.serialize(())
-						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-				);
-
-				// Write create ts
-				let create_ts_key = keys::signal::CreateTsKey::new(signal_id);
-				tx.set(
-					&self.subspace.pack(&create_ts_key),
-					&create_ts_key
-						.serialize(pending_signal_key.ts)
-						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-				);
-
-				// Write ray id ts
-				let ray_id_key = keys::signal::RayIdKey::new(signal_id);
-				tx.set(
-					&self.subspace.pack(&ray_id_key),
-					&ray_id_key
-						.serialize(ray_id)
-						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-				);
-
-				// Write workflow id
-				let workflow_id_key = keys::signal::WorkflowIdKey::new(signal_id);
-				tx.set(
-					&self.subspace.pack(&workflow_id_key),
-					&workflow_id_key
-						.serialize(workflow_id)
-						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-				);
-
-				let wake_signal_key =
-					keys::workflow::WakeSignalKey::new(workflow_id, signal_name.to_string());
-
-				// If the workflow is currently listening for this signal, wake it
-				if tx
-					.get(&self.subspace.pack(&wake_signal_key), SERIALIZABLE)
-					.await?
-					.is_some()
-				{
-					let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
-						workflow_name,
-						workflow_id,
-						keys::wake::WakeCondition::Signal { signal_id },
+					// Write name
+					let name_key = keys::signal::NameKey::new(signal_id);
+					tx.set(
+						&self.subspace.pack(&name_key),
+						&name_key
+							.serialize(signal_name.to_string())
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
 					);
 
-					// Add wake condition for workflow
+					let signal_body_key = keys::signal::BodyKey::new(signal_id);
+
+					// Write signal body
+					for (i, chunk) in signal_body_key
+						.split_ref(body)
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?
+						.into_iter()
+						.enumerate()
+					{
+						let chunk_key = signal_body_key.chunk(i);
+
+						tx.set(&self.subspace.pack(&chunk_key), &chunk);
+					}
+
+					// Write pending key
+					let pending_signal_key = keys::workflow::PendingSignalKey::new(
+						workflow_id,
+						signal_name.to_string(),
+						signal_id,
+					);
+
 					tx.set(
-						&self.subspace.pack(&wake_condition_key),
-						&wake_condition_key
+						&self.subspace.pack(&pending_signal_key),
+						&pending_signal_key
 							.serialize(())
 							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
 					);
-				}
 
-				Ok(())
-			}.instrument(tracing::info_span!("publish_singal_tx")))
+					// Write create ts
+					let create_ts_key = keys::signal::CreateTsKey::new(signal_id);
+					tx.set(
+						&self.subspace.pack(&create_ts_key),
+						&create_ts_key
+							.serialize(pending_signal_key.ts)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+					);
+
+					// Write ray id ts
+					let ray_id_key = keys::signal::RayIdKey::new(signal_id);
+					tx.set(
+						&self.subspace.pack(&ray_id_key),
+						&ray_id_key
+							.serialize(ray_id)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+					);
+
+					// Write workflow id
+					let workflow_id_key = keys::signal::WorkflowIdKey::new(signal_id);
+					tx.set(
+						&self.subspace.pack(&workflow_id_key),
+						&workflow_id_key
+							.serialize(workflow_id)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+					);
+
+					let wake_signal_key =
+						keys::workflow::WakeSignalKey::new(workflow_id, signal_name.to_string());
+
+					// If the workflow is currently listening for this signal, wake it
+					if tx
+						.get(&self.subspace.pack(&wake_signal_key), SERIALIZABLE)
+						.await?
+						.is_some()
+					{
+						let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
+							workflow_name,
+							workflow_id,
+							keys::wake::WakeCondition::Signal { signal_id },
+						);
+
+						// Add wake condition for workflow
+						tx.set(
+							&self.subspace.pack(&wake_condition_key),
+							&wake_condition_key
+								.serialize(())
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+						);
+					}
+
+					Ok(())
+				}
+				.instrument(tracing::info_span!("publish_singal_tx"))
+			})
 			.await?;
 
 		self.wake_worker();
@@ -2605,7 +2661,8 @@ impl Database for DatabaseFdbSqliteNats {
 						}
 
 						Ok(())
-					}.instrument(tracing::info_span!("publish_tagged_signal_tx"))
+					}
+					.instrument(tracing::info_span!("publish_tagged_signal_tx"))
 				})
 				.await?;
 
@@ -2658,6 +2715,8 @@ impl Database for DatabaseFdbSqliteNats {
 		})
 		.await?;
 
+		self.flush_wf_sqlite(from_workflow_id).await?;
+
 		if let Err(err) = self
 			.publish_signal(ray_id, to_workflow_id, signal_id, signal_name, body)
 			.await
@@ -2675,6 +2734,8 @@ impl Database for DatabaseFdbSqliteNats {
 				.await
 			})
 			.await?;
+
+			self.flush_wf_sqlite(from_workflow_id).await?;
 
 			Err(err)
 		} else {
@@ -2724,6 +2785,8 @@ impl Database for DatabaseFdbSqliteNats {
 			})
 			.await?;
 
+			self.flush_wf_sqlite(from_workflow_id).await?;
+
 			if let Err(err) = self
 				.publish_tagged_signal(ray_id, tags, signal_id, signal_name, body)
 				.await
@@ -2741,6 +2804,8 @@ impl Database for DatabaseFdbSqliteNats {
 					.await
 				})
 				.await?;
+
+				self.flush_wf_sqlite(from_workflow_id).await?;
 
 				Err(err)
 			} else {
@@ -2800,6 +2865,8 @@ impl Database for DatabaseFdbSqliteNats {
 		})
 		.await?;
 
+		self.flush_wf_sqlite(workflow_id).await?;
+
 		match self
 			.dispatch_workflow(
 				ray_id,
@@ -2827,6 +2894,8 @@ impl Database for DatabaseFdbSqliteNats {
 				})
 				.await?;
 
+				self.flush_wf_sqlite(workflow_id).await?;
+
 				Err(err)
 			}
 		}
@@ -2841,84 +2910,88 @@ impl Database for DatabaseFdbSqliteNats {
 	) -> WorkflowResult<()> {
 		self.pools
 			.fdb()?
-			.run(|tx, _mc| async move {
-				let tags_subspace = self
-					.subspace
-					.subspace(&keys::workflow::TagKey::subspace(workflow_id));
+			.run(|tx, _mc| {
+				async move {
+					let tags_subspace = self
+						.subspace
+						.subspace(&keys::workflow::TagKey::subspace(workflow_id));
 
-				// Read old tags
-				let tag_keys = tx
-					.get_ranges_keyvalues(
-						fdb::RangeOption {
-							mode: StreamingMode::WantAll,
-							..(&tags_subspace).into()
-						},
-						SERIALIZABLE,
-					)
-					.map(|res| match res {
-						Ok(entry) => self
-							.subspace
-							.unpack::<keys::workflow::TagKey>(entry.key())
-							.map_err(|x| fdb::FdbBindingError::CustomError(x.into())),
-						Err(err) => Err(Into::<fdb::FdbBindingError>::into(err)),
-					})
-					.try_collect::<Vec<_>>()
-					.await?;
+					// Read old tags
+					let tag_keys = tx
+						.get_ranges_keyvalues(
+							fdb::RangeOption {
+								mode: StreamingMode::WantAll,
+								..(&tags_subspace).into()
+							},
+							SERIALIZABLE,
+						)
+						.map(|res| match res {
+							Ok(entry) => self
+								.subspace
+								.unpack::<keys::workflow::TagKey>(entry.key())
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into())),
+							Err(err) => Err(Into::<fdb::FdbBindingError>::into(err)),
+						})
+						.try_collect::<Vec<_>>()
+						.await?;
 
-				// Clear old tags
-				tx.clear_subspace_range(&tags_subspace);
+					// Clear old tags
+					tx.clear_subspace_range(&tags_subspace);
 
-				// Clear old "by name and first tag" secondary index
-				for key in tag_keys {
-					keys::workflow::ByNameAndTagKey::new(
-						workflow_name.to_string(),
-						key.k,
-						key.v,
-						workflow_id,
-					);
+					// Clear old "by name and first tag" secondary index
+					for key in tag_keys {
+						keys::workflow::ByNameAndTagKey::new(
+							workflow_name.to_string(),
+							key.k,
+							key.v,
+							workflow_id,
+						);
+					}
+
+					// Write new tags
+					let tags = tags
+						.as_object()
+						.ok_or_else(|| WorkflowError::InvalidTags("must be an object".to_string()))
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?
+						.into_iter()
+						.map(|(k, v)| Ok((k.clone(), value_to_str(v)?)))
+						.collect::<WorkflowResult<Vec<_>>>()
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+					for (k, v) in &tags {
+						let tag_key =
+							keys::workflow::TagKey::new(workflow_id, k.clone(), v.clone());
+						tx.set(
+							&self.subspace.pack(&tag_key),
+							&tag_key
+								.serialize(())
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+						);
+
+						// Write new "by name and first tag" secondary index
+						let by_name_and_tag_key = keys::workflow::ByNameAndTagKey::new(
+							workflow_name.to_string(),
+							k.clone(),
+							v.clone(),
+							workflow_id,
+						);
+						let rest_of_tags = tags
+							.iter()
+							.filter(|(k2, _)| k2 != k)
+							.map(|(k, v)| (k.clone(), v.clone()))
+							.collect();
+						tx.set(
+							&self.subspace.pack(&by_name_and_tag_key),
+							&by_name_and_tag_key
+								.serialize(rest_of_tags)
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+						);
+					}
+
+					Ok(())
 				}
-
-				// Write new tags
-				let tags = tags
-					.as_object()
-					.ok_or_else(|| WorkflowError::InvalidTags("must be an object".to_string()))
-					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?
-					.into_iter()
-					.map(|(k, v)| Ok((k.clone(), value_to_str(v)?)))
-					.collect::<WorkflowResult<Vec<_>>>()
-					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
-
-				for (k, v) in &tags {
-					let tag_key = keys::workflow::TagKey::new(workflow_id, k.clone(), v.clone());
-					tx.set(
-						&self.subspace.pack(&tag_key),
-						&tag_key
-							.serialize(())
-							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-					);
-
-					// Write new "by name and first tag" secondary index
-					let by_name_and_tag_key = keys::workflow::ByNameAndTagKey::new(
-						workflow_name.to_string(),
-						k.clone(),
-						v.clone(),
-						workflow_id,
-					);
-					let rest_of_tags = tags
-						.iter()
-						.filter(|(k2, _)| k2 != k)
-						.map(|(k, v)| (k.clone(), v.clone()))
-						.collect();
-					tx.set(
-						&self.subspace.pack(&by_name_and_tag_key),
-						&by_name_and_tag_key
-							.serialize(rest_of_tags)
-							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-					);
-				}
-
-				Ok(())
-			}.instrument(tracing::info_span!("update_workflow_tags_tx")))
+				.instrument(tracing::info_span!("update_workflow_tags_tx"))
+			})
 			.await?;
 
 		Ok(())
@@ -3026,6 +3099,8 @@ impl Database for DatabaseFdbSqliteNats {
 			}
 		}
 
+		self.flush_wf_sqlite(workflow_id).await?;
+
 		Ok(())
 	}
 
@@ -3041,7 +3116,7 @@ impl Database for DatabaseFdbSqliteNats {
 		loop_location: Option<&Location>,
 	) -> WorkflowResult<()> {
 		// Flush database in order ensure subscribers to the snapshot will have the latest data
-		self.flush_wf_data_sqlite(from_workflow_id).await?;
+		self.flush_wf_sqlite(from_workflow_id).await?;
 
 		let pool = &self
 			.pools
@@ -3068,6 +3143,8 @@ impl Database for DatabaseFdbSqliteNats {
 			.await
 		})
 		.await?;
+
+		self.flush_wf_sqlite(from_workflow_id).await?;
 
 		Ok(())
 	}

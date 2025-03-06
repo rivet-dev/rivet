@@ -38,13 +38,13 @@ export default function () {
 		const port = actor.network.ports.http;
 		const actorOrigin = port.url;
 
-		// // Wait for health check
-		// const isHealthy = waitForHealth(`${actorOrigin}/health`);
-		// if (!isHealthy) fail("actor did not become healthy");
+		// Wait for health check
+		const isHealthy = waitForHealth(`${actorOrigin}/health`);
+		if (!isHealthy) fail("actor did not become healthy");
 
-		// // Test WebSocket
-		// const wsUrl = `${actorOrigin.replace("http:", "ws:").replace("https:", "wss:")}/ws`;
-		// testWebSocket(wsUrl);
+		// Test WebSocket
+		const wsUrl = `${actorOrigin.replace("http:", "ws:").replace("https:", "wss:")}/ws`;
+		testWebSocket(wsUrl);
 	} finally {
 		// Cleanup
 		if (actorId) {

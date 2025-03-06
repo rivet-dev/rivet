@@ -190,6 +190,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 				[self, WorkflowRow]
 				"
 				SELECT
+					workflow_id,
 					workflow_name,
 					COALESCE(tags, '{}'::JSONB) AS tags,
 					input,
