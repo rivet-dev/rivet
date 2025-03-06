@@ -209,7 +209,7 @@ impl SqlitePoolManager {
 			shutdown,
 			fdb: fdb.clone(),
 			storage,
-			subspace: Subspace::all().subspace(&("rivet", "sqlite")),
+			subspace: Subspace::all().subspace(&(RIVET, SQLITE)),
 		});
 
 		tokio::task::spawn(manager.clone().manager_gc_loop(shutdown_rx));

@@ -455,7 +455,7 @@ pub enum GuardPublicHostname {
 	///
 	/// If SSL certs are provided, this should also be the name of the TLS parent host.
 	///
-	/// This will default to hostname endpoint types (see `ds::type::EndpointType`).
+	/// This will default to hostname endpoint types (see `pegboard::types::EndpointType`).
 	DnsParent(String),
 	/// Rivet Guard is only accessible by IP or DNS address without a wildcard.
 	///
@@ -464,7 +464,7 @@ pub enum GuardPublicHostname {
 	/// If the developer cannot set up wildcard DNS addresses for whatever reason, this method can
 	/// be used.
 	///
-	/// This will default to path endpoint types (see `ds::type::EndpointType`).
+	/// This will default to path endpoint types (see `pegboard::types::EndpointType`).
 	Static(String),
 }
 

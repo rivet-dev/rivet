@@ -4,8 +4,6 @@ use anyhow::*;
 use serde::Serialize;
 use serde_json;
 
-use crate::utils::ActorOwner;
-
 #[derive(Copy, Clone, Debug)]
 #[repr(u8)]
 pub enum StreamType {
@@ -38,7 +36,7 @@ pub struct LogShipper {
 
 	pub vector_socket_addr: String,
 
-	pub owner: ActorOwner,
+	pub actor_id: String,
 }
 
 impl LogShipper {
@@ -91,14 +89,12 @@ impl LogShipper {
 		println!("Log shipper connected");
 
 		while let Result::Ok(message) = self.msg_rx.recv() {
-			let vector_message = match &self.owner {
-				ActorOwner::DynamicServer { server_id } => VectorMessage::DynamicServers {
-					server_id: server_id.as_str(),
-					task: "main", // Backwards compatibility with logs
-					stream_type: message.stream_type as u8,
-					ts: message.ts,
-					message: message.message.as_str(),
-				},
+			let vector_message = VectorMessage::Actors {
+				actor_id: self.actor_id.as_str(),
+				task: "main", // Backwards compatibility with logs
+				stream_type: message.stream_type as u8,
+				ts: message.ts,
+				message: message.message.as_str(),
 			};
 
 			serde_json::to_writer(&mut stream, &vector_message)?;
@@ -115,9 +111,9 @@ impl LogShipper {
 #[derive(Serialize)]
 #[serde(tag = "source")]
 enum VectorMessage<'a> {
-	#[serde(rename = "dynamic_servers")]
-	DynamicServers {
-		server_id: &'a str,
+	#[serde(rename = "actors")]
+	Actors {
+		actor_id: &'a str,
 		task: &'a str,
 		stream_type: u8,
 		ts: u64,

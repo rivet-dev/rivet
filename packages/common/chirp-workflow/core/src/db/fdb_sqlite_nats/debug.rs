@@ -1,5 +1,4 @@
 use std::{
-	borrow::Cow,
 	ops::Deref,
 	result::Result::{Err, Ok},
 };
@@ -573,7 +572,7 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 					NULL AS tags,
 					1 AS event_type,
 					version,
-					ack_ts AS create_ts,
+					create_ts,
 					signal_name AS name,
 					signal_id AS auxiliary_id,
 					NULL AS auxiliary_id2,
@@ -928,7 +927,7 @@ pub(crate) struct JustUuid(Uuid);
 
 impl<'de> TupleUnpack<'de> for JustUuid {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, _, id)) = <(Cow<str>, Cow<str>, Uuid)>::unpack(input, tuple_depth)?;
+		let (input, (_, _, id)) = <(usize, usize, Uuid)>::unpack(input, tuple_depth)?;
 		let v = JustUuid(id);
 
 		Ok((&input[0..0], v))

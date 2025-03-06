@@ -162,8 +162,6 @@ async fn handle_connection(
 				if guard.contains_key(&actor_id) {
 					tracing::warn!("Actor {actor_id} already exists, ignoring new start packet");
 				} else {
-					// For receiving the owner from the isolate thread
-					let (owner_tx, owner_rx) = mpsc::channel::<protocol::ActorOwner>(1);
 					// For receiving the terminate handle from the isolate thread
 					let (terminate_tx, terminate_rx) =
 						mpsc::channel::<MainWorkerTerminateHandle>(1);
@@ -178,16 +176,13 @@ async fn handle_connection(
 					let fdb_pool2 = fdb_pool.clone();
 					let handle = std::thread::Builder::new()
 						.name(actor_id.to_string())
-						.spawn(move || {
-							isolate::run(config2, fdb_pool2, actor_id, owner_tx, terminate_tx)
-						})?;
+						.spawn(move || isolate::run(config2, fdb_pool2, actor_id, terminate_tx))?;
 
 					tokio::task::spawn(watch_thread(
 						fdb_pool.clone(),
 						actors.clone(),
 						fatal_tx.clone(),
 						actor_id,
-						owner_rx,
 						terminate_rx,
 						signal_rx,
 						handle,
@@ -248,22 +243,10 @@ async fn watch_thread(
 	actors: Arc<RwLock<HashMap<Uuid, mpsc::Sender<(i32, bool)>>>>,
 	fatal_tx: watch::Sender<()>,
 	actor_id: Uuid,
-	mut owner_rx: mpsc::Receiver<protocol::ActorOwner>,
 	mut terminate_rx: mpsc::Receiver<MainWorkerTerminateHandle>,
 	mut signal_rx: mpsc::Receiver<(i32, bool)>,
 	handle: JoinHandle<Result<()>>,
 ) {
-	// Await actor owner
-	let Some(actor_owner) = owner_rx.recv().await else {
-		// If the transmitting end of the terminate handle was dropped (`recv` returned `None`), it must be
-		// that the thread stopped
-		tracing::error!(?actor_id, "failed to receive actor owner");
-		fatal_tx.send(()).expect("receiver cannot be dropped");
-		return;
-	};
-
-	drop(owner_rx);
-
 	// Await terminate handle. If the transmitting end of the terminate handle was dropped (`recv` returned
 	// `None`), either the worker failed to create or the thread stopped. The latter is handled later
 	let terminate_handle = terminate_rx.recv().await;
@@ -296,10 +279,7 @@ async fn watch_thread(
 
 	// Remove state
 	if !persist_storage {
-		if let Err(err) = ActorKv::new((&*fdb_pool).clone(), actor_owner)
-			.destroy()
-			.await
-		{
+		if let Err(err) = ActorKv::new((&*fdb_pool).clone(), actor_id).destroy().await {
 			tracing::error!(?err, ?actor_id, "failed to destroy actor kv");
 			fatal_tx.send(()).expect("receiver cannot be dropped");
 			return;

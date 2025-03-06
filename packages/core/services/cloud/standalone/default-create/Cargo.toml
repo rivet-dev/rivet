@@ -22,7 +22,7 @@ uuid = { version = "1", features = ["v4"] }
 cloud-game-config-create.workspace = true
 cloud-namespace-create.workspace = true
 cloud-version-publish.workspace = true
-ds.workspace = true
+pegboard.workspace = true
 game-create.workspace = true
 game-namespace-create.workspace = true
 game-namespace-resolve-name-id.workspace = true

@@ -338,7 +338,7 @@ pub fn signal(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 		#[async_trait::async_trait]
 		impl chirp_workflow::listen::Listen for #ident {
-			#[tracing::instrument(name = "workflow_listen", skip_all)]
+			#[tracing::instrument(skip_all)]
 			async fn listen(ctx: &mut chirp_workflow::prelude::ListenCtx) -> chirp_workflow::prelude::WorkflowResult<Self> {
 				let row = ctx.listen_any(&[<Self as chirp_workflow::signal::Signal>::NAME]).await?;
 				Self::parse(&row.signal_name, &row.body)

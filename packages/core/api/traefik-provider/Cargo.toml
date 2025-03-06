@@ -38,7 +38,7 @@ util-job.workspace = true
 uuid = { version = "1", features = ["v4"] }
 
 cluster.workspace = true
-ds.workspace = true
+pegboard.workspace = true
 rivet-config.workspace = true
 rivet-env.workspace = true
 

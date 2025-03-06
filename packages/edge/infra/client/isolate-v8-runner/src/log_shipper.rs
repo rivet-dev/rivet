@@ -57,8 +57,6 @@ pub struct LogShipper {
 	pub msg_rx: mpsc::Receiver<ReceivedMessage>,
 
 	pub vector_socket_addr: String,
-
-	pub owner: protocol::ActorOwner,
 }
 
 impl LogShipper {
@@ -108,16 +106,12 @@ impl LogShipper {
 		tracing::info!(actor_id=?self.actor_id, "Log shipper connected");
 
 		while let Result::Ok(message) = self.msg_rx.recv() {
-			let vector_message = match &self.owner {
-				protocol::ActorOwner::DynamicServer { server_id, .. } => {
-					VectorMessage::DynamicServers {
-						server_id: server_id.to_string(),
-						task: "main", // Backwards compatibility with logs
-						stream_type: message.stream_type as u8,
-						ts: message.ts,
-						message: message.message.as_str(),
-					}
-				}
+			let vector_message = VectorMessage::Actors {
+				actor_id: self.actor_id.to_string(),
+				task: "main", // Backwards compatibility with logs
+				stream_type: message.stream_type as u8,
+				ts: message.ts,
+				message: message.message.as_str(),
 			};
 
 			serde_json::to_writer(&mut stream, &vector_message)?;
@@ -134,9 +128,9 @@ impl LogShipper {
 #[derive(Serialize)]
 #[serde(tag = "source")]
 enum VectorMessage<'a> {
-	#[serde(rename = "dynamic_servers")]
-	DynamicServers {
-		server_id: String,
+	#[serde(rename = "actors")]
+	Actors {
+		actor_id: String,
 		task: &'a str,
 		stream_type: u8,
 		ts: u64,

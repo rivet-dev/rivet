@@ -2,9 +2,25 @@ use chirp_workflow::prelude::*;
 
 use super::{fdb::FDB_VERSION, rivet::TUNNEL_API_EDGE_PORT};
 
+// Cant import from pegboard::protocol because of circular dependencies
+#[derive(Debug, Clone, Copy)]
+pub enum ClientFlavor {
+	Container,
+	Isolate,
+}
+
+impl std::fmt::Display for ClientFlavor {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			ClientFlavor::Container => write!(f, "container"),
+			ClientFlavor::Isolate => write!(f, "isolate"),
+		}
+	}
+}
+
 pub async fn install(
 	config: &rivet_config::Config,
-	flavor: pegboard::protocol::ClientFlavor,
+	flavor: ClientFlavor,
 ) -> GlobalResult<String> {
 	let provision_config = &config.server()?.rivet.provision()?;
 
@@ -27,7 +43,7 @@ pub async fn install(
 
 pub fn configure(
 	config: &rivet_config::Config,
-	flavor: pegboard::protocol::ClientFlavor,
+	flavor: ClientFlavor,
 ) -> GlobalResult<String> {
 	let provision_config = config.server()?.rivet.provision()?;
 
@@ -35,10 +51,10 @@ pub fn configure(
 		util::url::to_string_without_slash(&config.server()?.rivet.api_public.public_origin());
 
 	let pb_reserved_memory = match flavor {
-		pegboard::protocol::ClientFlavor::Container => {
+		ClientFlavor::Container => {
 			server_spec::PEGBOARD_CONTAINER_RESERVE_MEMORY_MIB
 		}
-		pegboard::protocol::ClientFlavor::Isolate => {
+		ClientFlavor::Isolate => {
 			server_spec::PEGBOARD_ISOLATE_RESERVE_MEMORY_MIB
 		}
 	};

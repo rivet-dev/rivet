@@ -7,7 +7,7 @@ use uuid::Uuid;
 use chirp_workflow::prelude::*;
 
 // Reexport for ease of use in pegboard manager
-pub use ::util::serde::{HashableMap, Raw};
+pub use ::rivet_util::serde::{HashableMap, Raw};
 
 #[derive(thiserror::Error, Debug)]
 pub enum PegboardProtocolError {
@@ -90,8 +90,6 @@ pub enum Command {
 		signal: i32,
 		/// Whether or not to delete related data (KV store).
 		persist_storage: bool,
-		/// Whether or not to publish any state update signals after this command.
-		ignore_future_state: bool,
 	},
 }
 
@@ -103,7 +101,6 @@ pub struct ActorConfig {
 	pub env: HashableMap<String, String>,
 	pub ports: HashableMap<String, Port>,
 	pub network_mode: NetworkMode,
-	pub owner: ActorOwner,
 	pub metadata: Raw<ActorMetadata>,
 }
 
@@ -196,25 +193,6 @@ pub struct Resources {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Hash)]
-#[serde(rename_all = "snake_case")]
-pub enum ActorOwner {
-	DynamicServer { server_id: Uuid, workflow_id: Uuid },
-}
-
-impl ActorOwner {
-	pub fn env(&self) -> Vec<(&str, String)> {
-		match self {
-			ActorOwner::DynamicServer { server_id, .. } => {
-				vec![
-					("OWNER", "dynamic_server".to_string()),
-					("SERVER_ID", server_id.to_string()),
-				]
-			}
-		}
-	}
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Hash)]
 pub struct ActorMetadata {
 	pub actor: ActorMetadataActor,
 	pub project: ActorMetadataProject,
@@ -292,10 +270,6 @@ pub enum ActorState {
 		/// Unset if the exit code could not be read (usually from SIGKILL or lost process)
 		exit_code: Option<i32>,
 	},
-	/// The client running this actor started draining.
-	Draining { drain_timeout_ts: i64 },
-	/// The client running this actor stopped draining.
-	Undrained,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]

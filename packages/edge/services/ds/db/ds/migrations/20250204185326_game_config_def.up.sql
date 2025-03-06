@@ -1,2 +1,0 @@
-ALTER TABLE game_config
-ALTER COLUMN runtime SET DEFAULT 0;

@@ -5,10 +5,13 @@ use fdb_util::{FormalKey, SERIALIZABLE, SNAPSHOT};
 use foundationdb::{self as fdb, options::StreamingMode};
 use futures_util::{FutureExt, StreamExt, TryStreamExt};
 use nix::sys::signal::Signal;
-use rivet_api::{models, apis::{
-	configuration::Configuration,
-	core_intercom_pegboard_api::core_intercom_pegboard_mark_client_registered,
-}};
+use rivet_api::{
+	apis::{
+		configuration::Configuration,
+		core_intercom_pegboard_api::core_intercom_pegboard_mark_client_registered,
+	},
+	models,
+};
 use rivet_operation::prelude::proto::{self, backend::pkg::*};
 use sqlx::Acquire;
 
@@ -127,10 +130,7 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 									event.inner.deserialize()?
 								{
 									let res = ctx
-										.signal(crate::workflows::actor::StateUpdate {
-											state,
-											ignore_future_state: false,
-										})
+										.signal(crate::workflows::actor::StateUpdate { state })
 										.to_workflow::<crate::workflows::actor::Workflow>()
 										.tag("actor_id", actor_id)
 										.send()
@@ -191,6 +191,29 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 						draining: false,
 					})
 					.await?;
+
+					let actor_ids = ctx
+						.activity(FetchRemainingActorsInput { client_id })
+						.await?;
+
+					// Undrain all remaining actors
+					for actor_id in actor_ids {
+						let res = ctx
+							.signal(crate::workflows::actor::Undrain {})
+							.to_workflow::<crate::workflows::actor::Workflow>()
+							.tag("actor_id", actor_id)
+							.send()
+							.await;
+
+						if let Some(WorkflowError::WorkflowNotFound) = res.as_workflow_error() {
+							tracing::debug!(
+								?actor_id,
+								"actor workflow not found to undrain, likely already stopped"
+							);
+						} else {
+							res?;
+						}
+					}
 				}
 				None => {
 					if ctx.activity(CheckExpiredInput { client_id }).await? {
@@ -222,7 +245,6 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 		let res = ctx
 			.signal(crate::workflows::actor::StateUpdate {
 				state: protocol::ActorState::Lost,
-				ignore_future_state: false,
 			})
 			.to_workflow::<crate::workflows::actor::Workflow>()
 			.tag("actor_id", actor_id)
@@ -425,9 +447,14 @@ async fn publish_registered(ctx: &ActivityCtx, input: &PublishRegisteredInput) -
 		..Default::default()
 	};
 
-	core_intercom_pegboard_mark_client_registered(&config, &input.client_id.to_string(), models::CoreIntercomPegboardMarkClientRegisteredRequest {
-		server_id: edge.server_id,
-	}).await?;
+	core_intercom_pegboard_mark_client_registered(
+		&config,
+		&input.client_id.to_string(),
+		models::CoreIntercomPegboardMarkClientRegisteredRequest {
+			server_id: edge.server_id,
+		},
+	)
+	.await?;
 
 	Ok(())
 }
@@ -594,41 +621,24 @@ pub async fn handle_commands(
 	// Forward actor state based on commands
 	for command in commands {
 		match command {
-			protocol::Command::StartActor { actor_id, config } => {
-				let actor_workflow_id = ctx
-					.workflow(crate::workflows::actor::Input {
-						actor_id,
-						client_id,
-						client_workflow_id: ctx.workflow_id(),
-						config: *config,
-					})
-					.tag("actor_id", actor_id)
-					.dispatch()
-					.await?;
-
+			protocol::Command::StartActor { actor_id, .. } => {
 				// If this start actor command was received after the client started draining, immediately
 				// inform the actor wf that it is draining
 				if let Some(drain_timeout_ts) = drain_timeout_ts {
-					ctx.signal(crate::workflows::actor::StateUpdate {
-						state: protocol::ActorState::Draining { drain_timeout_ts },
-						ignore_future_state: false,
-					})
-					.to_workflow_id(actor_workflow_id)
-					.send()
-					.await?;
+					ctx.signal(crate::workflows::actor::Drain { drain_timeout_ts })
+						.to_workflow::<crate::workflows::actor::Workflow>()
+						.tag("actor_id", actor_id)
+						.send()
+						.await?;
 				}
 			}
 			protocol::Command::SignalActor {
-				actor_id,
-				signal,
-				ignore_future_state,
-				..
+				actor_id, signal, ..
 			} => {
 				if matches!(signal.try_into()?, Signal::SIGTERM | Signal::SIGKILL) {
 					let res = ctx
 						.signal(crate::workflows::actor::StateUpdate {
 							state: protocol::ActorState::Stopping,
-							ignore_future_state,
 						})
 						.to_workflow::<crate::workflows::actor::Workflow>()
 						.tag("actor_id", actor_id)

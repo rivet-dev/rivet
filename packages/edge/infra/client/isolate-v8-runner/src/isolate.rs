@@ -37,7 +37,6 @@ pub fn run(
 	config: config::Config,
 	fdb_pool: FdbPool,
 	actor_id: Uuid,
-	owner_tx: mpsc::Sender<protocol::ActorOwner>,
 	terminate_tx: mpsc::Sender<MainWorkerTerminateHandle>,
 ) -> Result<()> {
 	let actor_path = config.actors_path.join(actor_id.to_string());
@@ -54,8 +53,6 @@ pub fn run(
 	let actor_config = serde_json::from_str::<config::actor::Config>(&config_data)
 		.context("Failed to parse config file")?;
 
-	owner_tx.try_send(actor_config.owner.clone())?;
-
 	let (shutdown_tx, shutdown_rx) = smpsc::sync_channel(1);
 
 	// Start log shipper
@@ -69,7 +66,6 @@ pub fn run(
 				shutdown_rx,
 				msg_rx,
 				vector_socket_addr: vector_socket_addr.clone(),
-				owner: actor_config.owner.clone(),
 			};
 			let log_shipper_thread = log_shipper.spawn();
 
@@ -143,7 +139,7 @@ pub async fn run_inner(
 	tracing::info!(?actor_id, "starting isolate");
 
 	// Init KV store (create or open)
-	let mut kv = ActorKv::new((&*fdb_pool).clone(), actor_config.owner.clone());
+	let mut kv = ActorKv::new((&*fdb_pool).clone(), actor_id);
 	kv.init().await?;
 
 	tracing::info!(?actor_id, "isolate kv initialized");
@@ -608,10 +604,6 @@ mod tests {
 				},
 			})
 			.unwrap(),
-			owner: protocol::ActorOwner::DynamicServer {
-				server_id: actor_id,
-				workflow_id: Uuid::new_v4(),
-			},
 			vector_socket_addr: Default::default(),
 		};
 

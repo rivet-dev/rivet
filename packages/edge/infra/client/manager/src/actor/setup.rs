@@ -397,7 +397,6 @@ impl Actor {
 				.collect::<Vec<_>>(),
 			env: self.build_default_env(ctx, &ports),
 			metadata: self.config.metadata.clone(),
-			owner: self.config.owner.clone(),
 			vector_socket_addr: ctx.config().vector.clone().map(|x| x.address),
 		};
 

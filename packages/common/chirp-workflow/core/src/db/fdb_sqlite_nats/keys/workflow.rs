@@ -38,7 +38,7 @@ impl TuplePack for LeaseKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("workflow", "lease", self.workflow_id);
+		let t = (WORKFLOW, LEASE, self.workflow_id);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -46,8 +46,8 @@ impl TuplePack for LeaseKey {
 impl<'de> TupleUnpack<'de> for LeaseKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, workflow_id)) =
-			<(Cow<str>, Cow<str>, Uuid)>::unpack(input, tuple_depth)?;
-		let v = LeaseKey { workflow_id };
+			<(usize, usize, Uuid)>::unpack(input, tuple_depth)?;
+        let v = LeaseKey { workflow_id };
 
 		Ok((input, v))
 	}
@@ -67,7 +67,7 @@ impl TuplePack for LeaseSubspaceKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("workflow", "lease");
+		let t = (WORKFLOW, LEASE);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -107,10 +107,10 @@ impl TuplePack for TagKey {
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
 		let t = (
-			"workflow",
-			"data",
+			WORKFLOW,
+			DATA,
 			self.workflow_id,
-			"tag",
+			TAG,
 			&self.k,
 			&self.v,
 		);
@@ -121,9 +121,9 @@ impl TuplePack for TagKey {
 impl<'de> TupleUnpack<'de> for TagKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, workflow_id, data, k, v)) =
-			<(Cow<str>, Cow<str>, Uuid, Cow<str>, String, String)>::unpack(input, tuple_depth)?;
-		if data != "tag" {
-			return Err(PackError::Message("expected \"tag\" data".into()));
+			<(usize, usize, Uuid, usize, String, String)>::unpack(input, tuple_depth)?;
+		if data != TAG {
+			return Err(PackError::Message("expected TAG data".into()));
 		}
 
 		let v = TagKey { workflow_id, k, v };
@@ -148,7 +148,7 @@ impl TuplePack for TagSubspaceKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("workflow", "data", self.workflow_id, "tag");
+		let t = (WORKFLOW, DATA, self.workflow_id, TAG);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -201,7 +201,7 @@ impl TuplePack for InputKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("workflow", "data", self.workflow_id, "input");
+		let t = (WORKFLOW, DATA, self.workflow_id, INPUT);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -217,7 +217,7 @@ impl TuplePack for InputChunkKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("workflow", "data", self.workflow_id, "input", self.chunk);
+		let t = (WORKFLOW, DATA, self.workflow_id, INPUT, self.chunk);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -225,9 +225,9 @@ impl TuplePack for InputChunkKey {
 impl<'de> TupleUnpack<'de> for InputChunkKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, workflow_id, data, chunk)) =
-			<(Cow<str>, Cow<str>, Uuid, Cow<str>, usize)>::unpack(input, tuple_depth)?;
-		if data != "input" {
-			return Err(PackError::Message("expected \"input\" data".into()));
+			<(usize, usize, Uuid, usize, usize)>::unpack(input, tuple_depth)?;
+		if data != INPUT {
+			return Err(PackError::Message("expected INPUT data".into()));
 		}
 
 		let v = InputChunkKey { workflow_id, chunk };
@@ -284,7 +284,7 @@ impl TuplePack for OutputKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("workflow", "data", self.workflow_id, "output");
+		let t = (WORKFLOW, DATA, self.workflow_id, OUTPUT);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -300,7 +300,7 @@ impl TuplePack for OutputChunkKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("workflow", "data", self.workflow_id, "output", self.chunk);
+		let t = (WORKFLOW, DATA, self.workflow_id, OUTPUT, self.chunk);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -308,9 +308,9 @@ impl TuplePack for OutputChunkKey {
 impl<'de> TupleUnpack<'de> for OutputChunkKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, workflow_id, data, chunk)) =
-			<(Cow<str>, Cow<str>, Uuid, Cow<str>, usize)>::unpack(input, tuple_depth)?;
-		if data != "output" {
-			return Err(PackError::Message("expected \"output\" data".into()));
+			<(usize, usize, Uuid, usize, usize)>::unpack(input, tuple_depth)?;
+		if data != OUTPUT {
+			return Err(PackError::Message("expected OUTPUT data".into()));
 		}
 
 		let v = OutputChunkKey { workflow_id, chunk };
@@ -356,10 +356,10 @@ impl TuplePack for WakeSignalKey {
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
 		let t = (
-			"workflow",
-			"data",
+			WORKFLOW,
+			DATA,
 			self.workflow_id,
-			"wake_signal",
+			WAKE_SIGNAL,
 			&self.signal_name,
 		);
 		t.pack(w, tuple_depth)
@@ -369,9 +369,9 @@ impl TuplePack for WakeSignalKey {
 impl<'de> TupleUnpack<'de> for WakeSignalKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, workflow_id, data, signal_name)) =
-			<(Cow<str>, Cow<str>, Uuid, Cow<str>, String)>::unpack(input, tuple_depth)?;
-		if data != "wake_signal" {
-			return Err(PackError::Message("expected \"wake_signal\" data".into()));
+			<(usize, usize, Uuid, usize, String)>::unpack(input, tuple_depth)?;
+		if data != WAKE_SIGNAL {
+			return Err(PackError::Message("expected WAKE_SIGNAL data".into()));
 		}
 
 		let v = WakeSignalKey {
@@ -399,7 +399,7 @@ impl TuplePack for WakeSignalSubspaceKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("workflow", "data", self.workflow_id, "wake_signal");
+		let t = (WORKFLOW, DATA, self.workflow_id, WAKE_SIGNAL);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -433,7 +433,7 @@ impl TuplePack for WakeDeadlineKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("workflow", "data", self.workflow_id, "wake_deadline");
+		let t = (WORKFLOW, DATA, self.workflow_id, WAKE_DEADLINE);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -441,9 +441,9 @@ impl TuplePack for WakeDeadlineKey {
 impl<'de> TupleUnpack<'de> for WakeDeadlineKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, workflow_id, data)) =
-			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
-		if data != "wake_deadline" {
-			return Err(PackError::Message("expected \"wake_deadline\" data".into()));
+			<(usize, usize, Uuid, usize)>::unpack(input, tuple_depth)?;
+		if data != WAKE_DEADLINE {
+			return Err(PackError::Message("expected WAKE_DEADLINE data".into()));
 		}
 		let v = WakeDeadlineKey { workflow_id };
 
@@ -480,7 +480,7 @@ impl TuplePack for NameKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("workflow", "data", self.workflow_id, "name");
+		let t = (WORKFLOW, DATA, self.workflow_id, NAME);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -488,9 +488,9 @@ impl TuplePack for NameKey {
 impl<'de> TupleUnpack<'de> for NameKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, workflow_id, data)) =
-			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
-		if data != "name" {
-			return Err(PackError::Message("expected \"name\" data".into()));
+			<(usize, usize, Uuid, usize)>::unpack(input, tuple_depth)?;
+		if data != NAME {
+			return Err(PackError::Message("expected NAME data".into()));
 		}
 
 		let v = NameKey { workflow_id };
@@ -529,7 +529,7 @@ impl TuplePack for CreateTsKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("workflow", "data", self.workflow_id, "create_ts");
+		let t = (WORKFLOW, DATA, self.workflow_id, CREATE_TS);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -537,9 +537,9 @@ impl TuplePack for CreateTsKey {
 impl<'de> TupleUnpack<'de> for CreateTsKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, workflow_id, data)) =
-			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
-		if data != "create_ts" {
-			return Err(PackError::Message("expected \"create_ts\" data".into()));
+			<(usize, usize, Uuid, usize)>::unpack(input, tuple_depth)?;
+		if data != CREATE_TS {
+			return Err(PackError::Message("expected CREATE_TS data".into()));
 		}
 
 		let v = CreateTsKey { workflow_id };
@@ -577,7 +577,7 @@ impl TuplePack for RayIdKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("workflow", "data", self.workflow_id, "ray_id");
+		let t = (WORKFLOW, DATA, self.workflow_id, RAY_ID);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -585,9 +585,9 @@ impl TuplePack for RayIdKey {
 impl<'de> TupleUnpack<'de> for RayIdKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, workflow_id, data)) =
-			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
-		if data != "ray_id" {
-			return Err(PackError::Message("expected \"ray_id\" data".into()));
+			<(usize, usize, Uuid, usize)>::unpack(input, tuple_depth)?;
+		if data != RAY_ID {
+			return Err(PackError::Message("expected RAY_ID data".into()));
 		}
 
 		let v = RayIdKey { workflow_id };
@@ -625,7 +625,7 @@ impl TuplePack for ErrorKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("workflow", "data", self.workflow_id, "error");
+		let t = (WORKFLOW, DATA, self.workflow_id, ERROR);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -633,9 +633,9 @@ impl TuplePack for ErrorKey {
 impl<'de> TupleUnpack<'de> for ErrorKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, workflow_id, data)) =
-			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
-		if data != "error" {
-			return Err(PackError::Message("expected \"error\" data".into()));
+			<(usize, usize, Uuid, usize)>::unpack(input, tuple_depth)?;
+		if data != ERROR {
+			return Err(PackError::Message("expected ERROR data".into()));
 		}
 
 		let v = ErrorKey { workflow_id };
@@ -674,7 +674,7 @@ impl TuplePack for WakeSubWorkflowKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("workflow", "data", self.workflow_id, "wake_sub_workflow_id");
+		let t = (WORKFLOW, DATA, self.workflow_id, WAKE_SUB_WORKFLOW_ID);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -682,11 +682,11 @@ impl TuplePack for WakeSubWorkflowKey {
 impl<'de> TupleUnpack<'de> for WakeSubWorkflowKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, workflow_id, data)) =
-			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
-		if data != "wake_sub_workflow_id" {
+			<(usize, usize, Uuid, usize)>::unpack(input, tuple_depth)?;
+		if data != WAKE_SUB_WORKFLOW_ID {
 			return Err(PackError::Message(
-				"expected \"wake_sub_workflow_id\" data".into(),
-			));
+				"expected WAKE_SUB_WORKFLOW_ID data".into(),
+            ));
 		}
 
 		let v = WakeSubWorkflowKey { workflow_id };
@@ -737,10 +737,10 @@ impl TuplePack for PendingSignalKey {
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
 		let t = (
-			"workflow",
-			"signal",
+			WORKFLOW,
+			SIGNAL,
 			self.workflow_id,
-			"pending",
+			PENDING,
 			&self.signal_name,
 			self.ts,
 			self.signal_id,
@@ -752,7 +752,7 @@ impl TuplePack for PendingSignalKey {
 impl<'de> TupleUnpack<'de> for PendingSignalKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, workflow_id, _, signal_name, ts, signal_id)) =
-			<(Cow<str>, Cow<str>, Uuid, Cow<str>, String, i64, Uuid)>::unpack(input, tuple_depth)?;
+			<(usize, usize, Uuid, usize, String, i64, Uuid)>::unpack(input, tuple_depth)?;
 		let v = PendingSignalKey {
 			workflow_id,
 			signal_name,
@@ -785,10 +785,10 @@ impl TuplePack for PendingSignalSubspaceKey {
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
 		let t = (
-			"workflow",
-			"signal",
+			WORKFLOW,
+			SIGNAL,
 			self.workflow_id,
-			"pending",
+			PENDING,
 			&self.signal_name,
 		);
 		t.pack(w, tuple_depth)
@@ -809,7 +809,7 @@ impl TuplePack for EntirePendingSignalSubspaceKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("workflow", "signal");
+		let t = (WORKFLOW, SIGNAL);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -869,8 +869,8 @@ impl TuplePack for ByNameAndTagKey {
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
 		let t = (
-			"workflow",
-			"by_name_and_tag",
+			WORKFLOW,
+			BY_NAME_AND_TAG,
 			&self.workflow_name,
 			&self.k,
 			&self.v,
@@ -883,7 +883,7 @@ impl TuplePack for ByNameAndTagKey {
 impl<'de> TupleUnpack<'de> for ByNameAndTagKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, workflow_name, k, v, workflow_id)) =
-			<(Cow<str>, Cow<str>, String, String, String, Uuid)>::unpack(input, tuple_depth)?;
+			<(usize, usize, String, String, String, Uuid)>::unpack(input, tuple_depth)?;
 		let v = ByNameAndTagKey {
 			workflow_name,
 			k,
@@ -926,8 +926,8 @@ impl TuplePack for ByNameAndTagSubspaceKey {
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
 		let t = (
-			"workflow",
-			"by_name_and_tag",
+			WORKFLOW,
+			BY_NAME_AND_TAG,
 			&self.workflow_name,
 			&self.k,
 			&self.v,
@@ -965,7 +965,7 @@ impl TuplePack for HasWakeConditionKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("workflow", "data", self.workflow_id, "has_wake_condition");
+		let t = (WORKFLOW, DATA, self.workflow_id, HAS_WAKE_CONDITION);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -973,10 +973,10 @@ impl TuplePack for HasWakeConditionKey {
 impl<'de> TupleUnpack<'de> for HasWakeConditionKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, workflow_id, data)) =
-			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
-		if data != "has_wake_condition" {
+			<(usize, usize, Uuid, usize)>::unpack(input, tuple_depth)?;
+		if data != HAS_WAKE_CONDITION {
 			return Err(PackError::Message(
-				"expected \"has_wake_condition\" data".into(),
+				"expected HAS_WAKE_CONDITION data".into(),
 			));
 		}
 
@@ -1015,7 +1015,7 @@ impl TuplePack for WorkerInstanceIdKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("workflow", "data", self.workflow_id, "worker_instance_id");
+		let t = (WORKFLOW, DATA, self.workflow_id, WORKER_INSTANCE_ID);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -1023,10 +1023,10 @@ impl TuplePack for WorkerInstanceIdKey {
 impl<'de> TupleUnpack<'de> for WorkerInstanceIdKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, workflow_id, data)) =
-			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
-		if data != "worker_instance_id" {
+			<(usize, usize, Uuid, usize)>::unpack(input, tuple_depth)?;
+		if data != WORKER_INSTANCE_ID {
 			return Err(PackError::Message(
-				"expected \"worker_instance_id\" data".into(),
+				"expected WORKER_INSTANCE_ID data".into(),
 			));
 		}
 
@@ -1050,7 +1050,7 @@ impl TuplePack for DataSubspaceKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("workflow", "data");
+		let t = (WORKFLOW, DATA);
 		t.pack(w, tuple_depth)
 	}
 }

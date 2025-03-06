@@ -8,6 +8,8 @@ pub mod metrics;
 pub mod ops;
 pub mod protocol;
 pub mod system_info;
+pub mod types;
+pub mod util;
 #[cfg(feature = "workflows")]
 pub mod workflows;
 

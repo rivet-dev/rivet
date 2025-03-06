@@ -161,14 +161,16 @@ impl Actor {
 	) -> Result<()> {
 		tracing::info!(actor_id=?self.actor_id, "spawning");
 
-		let mut runner_env = vec![(
-			"ROOT_USER_ENABLED",
-			self.config.root_user_enabled.to_string(),
-		)];
+		let mut runner_env = vec![
+			(
+				"ROOT_USER_ENABLED",
+				self.config.root_user_enabled.to_string(),
+			),
+			("ACTOR_ID", self.actor_id.to_string()),
+		];
 		if let Some(vector) = &ctx.config().vector {
 			runner_env.push(("VECTOR_SOCKET_ADDR", vector.address.to_string()));
 		}
-		runner_env.extend(self.config.owner.env());
 
 		let runner = match self.config.image.kind {
 			// Spawn runner which spawns the container

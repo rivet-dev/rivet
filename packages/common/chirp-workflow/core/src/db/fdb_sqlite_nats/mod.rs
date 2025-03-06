@@ -10,7 +10,7 @@ use std::{
 	time::Instant,
 };
 
-use fdb_util::{end_of_key_range, FormalChunkedKey, FormalKey, SERIALIZABLE, SNAPSHOT};
+use fdb_util::{keys::*, end_of_key_range, FormalChunkedKey, FormalKey, SERIALIZABLE, SNAPSHOT};
 use foundationdb::{
 	self as fdb,
 	options::{ConflictRangeType, StreamingMode},
@@ -232,7 +232,7 @@ impl Database for DatabaseFdbSqliteNats {
 	fn from_pools(pools: rivet_pools::Pools) -> Result<Arc<Self>, rivet_pools::Error> {
 		Ok(Arc::new(DatabaseFdbSqliteNats {
 			pools,
-			subspace: Subspace::all().subspace(&("rivet", "chirp_workflow", "fdb_sqlite_nats")),
+			subspace: Subspace::all().subspace(&(RIVET, CHIRP_WORKFLOW, FDB_SQLITE_NATS)),
 		}))
 	}
 
@@ -2189,7 +2189,7 @@ impl Database for DatabaseFdbSqliteNats {
 									signal_id,
 									signal_name,
 									body,
-									ack_ts,
+									create_ts,
 									loop_location
 								)
 								VALUES (jsonb(?), ?, ?, ?, jsonb(?), ?, jsonb(?))

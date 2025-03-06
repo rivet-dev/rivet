@@ -36,7 +36,7 @@ CREATE TABLE workflow_signal_events (
   signal_id BLOB NOT NULL, -- UUID
   signal_name TEXT NOT NULL,
   body BLOB NOT NULL, -- JSONB
-  ack_ts INT NOT NULL,
+  create_ts INT NOT NULL,
   loop_location BLOB, -- JSONB
   forgotten INT NOT NULL DEFAULT false -- BOOLEAN
 ) STRICT;

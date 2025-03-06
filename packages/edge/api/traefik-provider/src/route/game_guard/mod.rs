@@ -1,7 +1,7 @@
 use api::build_api;
 use api_core_traefik_provider::types;
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
-use dynamic_servers::build_ds;
+use actor::build_actor;
 use job::build_job;
 use rivet_operation::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::auth::Auth;
 
 pub mod api;
-pub mod dynamic_servers;
+pub mod actor;
 pub mod job;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -30,16 +30,16 @@ pub async fn config(
 	// Fetch configs and catch any errors
 	let mut config = types::TraefikConfigResponse::default();
 	build_job(&ctx, &mut config).await?;
-	let latest_ds_create_ts = build_ds(&ctx, &mut config).await?;
+	let latest_actor_create_ts = build_actor(&ctx, &mut config).await?;
 
 	build_api(&ctx, &mut config).await?;
 
 	// Publish message when the request is complete
-	if let Some(latest_ds_create_ts) = latest_ds_create_ts {
+	if let Some(latest_actor_create_ts) = latest_actor_create_ts {
 		let dc_id = ctx.config().server()?.rivet.edge()?.datacenter_id;
-		ctx.msg(ds::workflows::server::pegboard::TraefikPoll {
+		ctx.msg(pegboard::workflows::actor::TraefikPoll {
 			server_id: server,
-			latest_ds_create_ts,
+			latest_actor_create_ts,
 		})
 		.tag("datacenter_id", dc_id)
 		.send()

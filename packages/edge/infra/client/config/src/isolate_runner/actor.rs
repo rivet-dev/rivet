@@ -10,7 +10,6 @@ pub struct Config {
 	pub ports: Vec<Port>,
 	pub env: HashMap<String, String>,
 	pub metadata: protocol::Raw<protocol::ActorMetadata>,
-	pub owner: protocol::ActorOwner,
 	pub vector_socket_addr: Option<String>,
 }
 

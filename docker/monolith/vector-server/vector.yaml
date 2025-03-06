@@ -80,7 +80,7 @@ sinks:
     inputs:
       - dynamic_servers
     compression: gzip
-    database: db_ds_log
+    database: db_pegboard_actor_log
     endpoint: http://clickhouse:9300
     table: server_logs
     auth:

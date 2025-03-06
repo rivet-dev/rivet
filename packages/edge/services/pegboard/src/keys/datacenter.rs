@@ -66,8 +66,8 @@ impl TuplePack for ClientsByRemainingMemKey {
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
 		let t = (
-			"datacenter",
-			"clients_by_remaining_mem",
+			DATACENTER,
+			CLIENTS_BY_REMAINING_MEM,
 			self.flavor as usize,
 			self.remaining_mem,
 			self.last_ping_ts,
@@ -80,7 +80,7 @@ impl TuplePack for ClientsByRemainingMemKey {
 impl<'de> TupleUnpack<'de> for ClientsByRemainingMemKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, flavor, remaining_mem, last_ping_ts, client_id)) =
-			<(Cow<str>, Cow<str>, usize, u64, i64, Uuid)>::unpack(input, tuple_depth)?;
+			<(usize, usize, usize, u64, i64, Uuid)>::unpack(input, tuple_depth)?;
 		let flavor = protocol::ClientFlavor::from_repr(flavor).ok_or_else(|| {
 			PackError::Message(format!("invalid flavor `{flavor}` in key").into())
 		})?;
@@ -132,7 +132,7 @@ impl TuplePack for ClientsByRemainingMemSubspaceKey {
 	) -> std::io::Result<VersionstampOffset> {
 		let mut offset = VersionstampOffset::None { size: 0 };
 
-		let t = ("datacenter", "clients_by_remaining_mem");
+		let t = (DATACENTER, CLIENTS_BY_REMAINING_MEM);
 		offset += t.pack(w, tuple_depth)?;
 
 		if let Some(flavor) = &self.flavor {

@@ -53,7 +53,7 @@ impl TuplePack for DbDataChunkKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("dbs", &*self.db_name_segment, "data", self.chunk);
+		let t = (DBS, &*self.db_name_segment, DATA, self.chunk);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -61,7 +61,7 @@ impl TuplePack for DbDataChunkKey {
 impl<'de> TupleUnpack<'de> for DbDataChunkKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, db_name_segment, _, chunk)) =
-			<(Cow<str>, Vec<u8>, Cow<str>, usize)>::unpack(input, tuple_depth)?;
+			<(usize, Vec<u8>, usize, usize)>::unpack(input, tuple_depth)?;
 		let v = DbDataChunkKey {
 			db_name_segment: Arc::new(db_name_segment),
 			chunk,

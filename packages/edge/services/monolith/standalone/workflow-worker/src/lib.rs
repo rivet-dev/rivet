@@ -11,7 +11,7 @@ pub async fn run_from_env(
 	config: rivet_config::Config,
 	pools: rivet_pools::Pools,
 ) -> GlobalResult<()> {
-	let reg = ds::registry()?.merge(pegboard::registry()?)?;
+	let reg = pegboard::registry()?;
 
 	let db = db::DatabaseFdbSqliteNats::from_pools(pools.clone())?;
 	let worker = Worker::new(reg.handle(), db);

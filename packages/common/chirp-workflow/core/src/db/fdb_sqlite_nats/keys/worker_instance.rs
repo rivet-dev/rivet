@@ -35,10 +35,10 @@ impl TuplePack for LastPingTsKey {
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
 		let t = (
-			"worker_instance",
-			"data",
+			WORKER_INSTANCE,
+			DATA,
 			self.worker_instance_id,
-			"last_ping_ts",
+			LAST_PING_TS,
 		);
 		t.pack(w, tuple_depth)
 	}
@@ -47,7 +47,7 @@ impl TuplePack for LastPingTsKey {
 impl<'de> TupleUnpack<'de> for LastPingTsKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, worker_instance_id, _)) =
-			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
+			<(usize, usize, Uuid, usize)>::unpack(input, tuple_depth)?;
 		let v = LastPingTsKey { worker_instance_id };
 
 		Ok((input, v))
@@ -82,14 +82,14 @@ impl TuplePack for MetricsLockKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("worker_instance", "metrics_lock");
+		let t = (WORKER_INSTANCE, METRICS_LOCK);
 		t.pack(w, tuple_depth)
 	}
 }
 
 impl<'de> TupleUnpack<'de> for MetricsLockKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, _)) = <(Cow<str>, Cow<str>)>::unpack(input, tuple_depth)?;
+		let (input, (_, _)) = <(usize, usize)>::unpack(input, tuple_depth)?;
 		let v = MetricsLockKey {};
 
 		Ok((input, v))

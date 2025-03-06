@@ -2,7 +2,6 @@ use api_helper::{
 	anchor::{WatchIndexQuery, WatchResponse},
 	ctx::Ctx,
 };
-use proto::backend::{self, pkg::*};
 use rivet_api::models;
 use rivet_operation::prelude::*;
 use serde::Deserialize;
@@ -26,7 +25,7 @@ pub struct GetActorLogsQuery {
 
 pub async fn get_logs(
 	ctx: Ctx<Auth>,
-	server_id: Uuid,
+	actor_id: Uuid,
 	watch_index: WatchIndexQuery,
 	query: GetActorLogsQuery,
 ) -> GlobalResult<models::ActorGetActorLogsResponse> {
@@ -42,13 +41,13 @@ pub async fn get_logs(
 		)
 		.await?;
 
-	// Validate server belongs to game
-	assert::server_for_env(&ctx, server_id, game_id, env_id, None).await?;
+	// Validate actor belongs to game
+	assert::actor_for_env(&ctx, actor_id, game_id, env_id, None).await?;
 
 	// Determine stream type
 	let stream_type = match query.stream {
-		models::CloudGamesLogStream::StdOut => backend::job::log::StreamType::StdOut,
-		models::CloudGamesLogStream::StdErr => backend::job::log::StreamType::StdErr,
+		models::CloudGamesLogStream::StdOut => pegboard::types::LogsStreamType::StdOut,
+		models::CloudGamesLogStream::StdErr => pegboard::types::LogsStreamType::StdErr,
 	};
 
 	// Timestamp to start the query at
@@ -68,15 +67,15 @@ pub async fn get_logs(
 			//
 			// We return fewer logs than the non-anchor request since this will be called
 			// frequently and should not return a significant amount of logs.
-			let logs_res = op!([ctx] @dont_log_body ds_log_read {
-				server_id: Some(server_id.into()),
-				stream_type: stream_type as i32,
-				count: 64,
-				order_asc: false,
-				query: Some(ds_log::read::request::Query::AfterNts(anchor))
-
-			})
-			.await?;
+			let logs_res = ctx
+				.op(pegboard::ops::actor::log::read::Input {
+					actor_id,
+					stream_type,
+					count: 64,
+					order_by: pegboard::ops::actor::log::read::Order::Desc,
+					query: pegboard::ops::actor::log::read::Query::AfterNts(anchor),
+				})
+				.await?;
 
 			// Return logs
 			if !logs_res.entries.is_empty() {
@@ -85,7 +84,7 @@ pub async fn get_logs(
 
 			// Timeout cleanly
 			if query_start.elapsed().as_millis() > util::watch::DEFAULT_TIMEOUT as u128 {
-				break ds_log::read::Response {
+				break pegboard::ops::actor::log::read::Output {
 					entries: Vec::new(),
 				};
 			}
@@ -106,12 +105,12 @@ pub async fn get_logs(
 	} else {
 		// Read most recent logs
 
-		op!([ctx] @dont_log_body ds_log_read {
-			server_id: Some(server_id.into()),
-			stream_type: stream_type as i32,
+		ctx.op(pegboard::ops::actor::log::read::Input {
+			actor_id,
+			stream_type,
 			count: 256,
-			order_asc: false,
-			query: Some(ds_log::read::request::Query::BeforeNts(before_nts)),
+			order_by: pegboard::ops::actor::log::read::Order::Desc,
+			query: pegboard::ops::actor::log::read::Query::BeforeNts(before_nts),
 		})
 		.await?
 	};
@@ -125,7 +124,8 @@ pub async fn get_logs(
 	let mut timestamps = logs_res
 		.entries
 		.iter()
-		.map(|x| x.nts / 1_000_000)
+		// Is nanoseconds
+		.map(|x| x.ts / 1_000_000)
 		.map(util::timestamp::to_string)
 		.collect::<Result<Vec<_>, _>>()?;
 
@@ -133,7 +133,7 @@ pub async fn get_logs(
 	lines.reverse();
 	timestamps.reverse();
 
-	let watch_nts = logs_res.entries.first().map_or(before_nts, |x| x.nts);
+	let watch_nts = logs_res.entries.first().map_or(before_nts, |x| x.ts);
 	Ok(models::ActorGetActorLogsResponse {
 		lines,
 		timestamps,

@@ -1,4 +1,4 @@
-use rivet_metrics::{prometheus::*, REGISTRY, MICRO_BUCKETS};
+use rivet_metrics::{prometheus::*, MICRO_BUCKETS, REGISTRY};
 
 lazy_static::lazy_static! {
 	pub static ref CLIENT_DUPLICATE_EVENT: IntCounterVec = register_int_counter_vec_with_registry!(
@@ -22,9 +22,9 @@ lazy_static::lazy_static! {
 		*REGISTRY
 	).unwrap();
 
-	pub static ref CLIENT_RESERVE_DURATION: HistogramVec = register_histogram_vec_with_registry!(
-		"pegboard_client_reserve_duration",
-		"Total duration to reserve resources for a client.",
+	pub static ref ACTOR_ALLOCATE_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"pegboard_actor_allocate_duration",
+		"Total duration to reserve resources for an actor.",
 		&["did_reserve"],
 		MICRO_BUCKETS.to_vec(),
 		*REGISTRY,

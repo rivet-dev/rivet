@@ -33,7 +33,6 @@ url = "2.4"
 ip-info.workspace = true
 linode.workspace = true
 server-spec.workspace = true
-pegboard.workspace = true
 token-create.workspace = true
 rivet-config.workspace = true
 ipnet = "2.10.1"

@@ -78,12 +78,6 @@ pub fn now() -> i64 {
 		.expect("now doesn't fit in i64")
 }
 
-pub fn owner_segment(owner: &protocol::ActorOwner) -> String {
-	match owner {
-		protocol::ActorOwner::DynamicServer { server_id, .. } => (*server_id).into(),
-	}
-}
-
 pub fn validate_keys(keys: &[Key]) -> Result<()> {
 	ensure!(keys.len() <= MAX_KEYS, "a maximum of 128 keys is allowed");
 

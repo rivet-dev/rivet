@@ -1,8 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap};
 
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use futures_util::{StreamExt, TryStreamExt};
-use proto::backend;
 use rivet_api::models;
 use rivet_convert::{ApiInto, ApiTryInto};
 use rivet_operation::prelude::*;
@@ -12,7 +11,6 @@ use serde_json::json;
 use crate::{
 	assert,
 	auth::{Auth, CheckOpts, CheckOutput},
-	utils::build_global_query_compat,
 };
 
 use super::GlobalQuery;
@@ -52,14 +50,14 @@ async fn get_inner(
 		)
 		.await?;
 
-	// Get the server
-	let servers_res = ctx
-		.op(ds::ops::server::get::Input {
-			server_ids: vec![actor_id],
+	// Get the actor
+	let actors_res = ctx
+		.op(pegboard::ops::actor::get::Input {
+			actor_ids: vec![actor_id],
 			endpoint_type: query.endpoint_type.map(ApiInto::api_into),
 		})
 		.await?;
-	let server = unwrap_with!(servers_res.servers.first(), ACTOR_NOT_FOUND);
+	let actor = unwrap_with!(actors_res.actors.first(), ACTOR_NOT_FOUND);
 
 	// Get the datacenter
 	let dc_id = ctx.config().server()?.rivet.edge()?.datacenter_id;
@@ -70,11 +68,11 @@ async fn get_inner(
 		.await?;
 	let dc = unwrap!(dc_res.datacenters.first());
 
-	// Validate token can access server
-	ensure_with!(server.env_id == env_id, ACTOR_NOT_FOUND);
+	// Validate token can access actor
+	ensure_with!(actor.env_id == env_id, ACTOR_NOT_FOUND);
 
 	Ok(models::ActorGetActorResponse {
-		actor: Box::new(ds::types::convert_actor_to_api(server.clone(), dc)?),
+		actor: Box::new(pegboard::types::convert_actor_to_api(actor.clone(), dc)?),
 	})
 }
 
@@ -96,11 +94,8 @@ pub async fn create(
 		)
 		.await?;
 
-	let (clusters_res, game_configs_res, build) = tokio::try_join!(
-		ctx.op(cluster::ops::get_for_game::Input {
-			game_ids: vec![game_id],
-		}),
-		ctx.op(ds::ops::game_config::get::Input {
+	let (game_configs_res, build) = tokio::try_join!(
+		ctx.op(pegboard::ops::game_config::get::Input {
 			game_ids: vec![game_id],
 		}),
 		resolve_build(&ctx, game_id, env_id, body.build, body.build_tags.flatten()),
@@ -130,33 +125,33 @@ pub async fn create(
 				error = "actors using JavaScript builds cannot set `resources`"
 			);
 
-			ds::types::ServerResources::default_isolate()
+			pegboard::types::ActorResources::default_isolate()
 		}
 	};
 
-	let server_id = Uuid::new_v4();
+	let actor_id = Uuid::new_v4();
 
-	tracing::info!(?server_id, ?tags, "creating server with tags");
+	tracing::info!(?actor_id, ?tags, "creating actor with tags");
 
 	let mut ready_sub = ctx
-		.subscribe::<ds::workflows::server::Ready>(("server_id", server_id))
+		.subscribe::<pegboard::workflows::actor::Ready>(("actor_id", actor_id))
 		.await?;
 	let mut fail_sub = ctx
-		.subscribe::<ds::workflows::server::Failed>(("server_id", server_id))
+		.subscribe::<pegboard::workflows::actor::Failed>(("actor_id", actor_id))
 		.await?;
 	let mut destroy_sub = ctx
-		.subscribe::<ds::workflows::server::DestroyStarted>(("server_id", server_id))
+		.subscribe::<pegboard::workflows::actor::DestroyStarted>(("actor_id", actor_id))
 		.await?;
 
 	let network = body.network.unwrap_or_default();
 
-	ctx.workflow(ds::workflows::server::Input {
-		server_id,
+	ctx.workflow(pegboard::workflows::actor::Input {
+		actor_id,
 		env_id,
 		tags,
 		resources,
 		lifecycle: body.lifecycle.map(|x| (*x).api_into()).unwrap_or_else(|| {
-			ds::types::ServerLifecycle {
+			pegboard::types::ActorLifecycle {
 				kill_timeout_ms: 0,
 				durable: false,
 			}
@@ -173,20 +168,20 @@ pub async fn create(
 			.into_iter()
 			.map(|(s, p)| GlobalResult::Ok((
 				s.clone(),
-				ds::workflows::server::Port {
+				pegboard::workflows::actor::Port {
 					internal_port: p.internal_port.map(TryInto::try_into).transpose()?,
 					routing: if let Some(routing) = p.routing {
 						match *routing {
 							models::ActorPortRouting {
 								guard: Some(_gg),
 								host: None,
-							} => ds::types::Routing::GameGuard {
+							} => pegboard::types::Routing::GameGuard {
 								protocol: p.protocol.api_into(),
 							},
 							models::ActorPortRouting {
 								guard: None,
 								host: Some(_),
-							} => ds::types::Routing::Host {
+							} => pegboard::types::Routing::Host {
 								protocol: match p.protocol.api_try_into() {
 									Err(err) if GlobalError::is(&err, formatted_error::code::ACTOR_FAILED_TO_CREATE) => {
 										// Add location
@@ -206,7 +201,7 @@ pub async fn create(
 							}
 						}
 					} else {
-						ds::types::Routing::GameGuard {
+						pegboard::types::Routing::GameGuard {
 							protocol: p.protocol.api_into(),
 						}
 					}
@@ -214,7 +209,7 @@ pub async fn create(
 			)))
 			.collect::<GlobalResult<HashMap<_, _>>>()),
 	})
-	.tag("server_id", server_id)
+	.tag("actor_id", actor_id)
 	.dispatch()
 	.await?;
 
@@ -231,13 +226,13 @@ pub async fn create(
 		}
 	}
 
-	let servers_res = ctx
-		.op(ds::ops::server::get::Input {
-			server_ids: vec![server_id],
+	let actors_res = ctx
+		.op(pegboard::ops::actor::get::Input {
+			actor_ids: vec![actor_id],
 			endpoint_type: query.endpoint_type.map(ApiInto::api_into),
 		})
 		.await?;
-	let server = unwrap_with!(servers_res.servers.first(), ACTOR_NOT_FOUND);
+	let actor = unwrap_with!(actors_res.actors.first(), ACTOR_NOT_FOUND);
 
 	let dc_id = ctx.config().server()?.rivet.edge()?.datacenter_id;
 	let dc_res = ctx
@@ -248,7 +243,7 @@ pub async fn create(
 	let dc = unwrap!(dc_res.datacenters.first());
 
 	Ok(models::ActorCreateActorResponse {
-		actor: Box::new(ds::types::convert_actor_to_api(server.clone(), dc)?),
+		actor: Box::new(pegboard::types::convert_actor_to_api(actor.clone(), dc)?),
 	})
 }
 
@@ -291,22 +286,22 @@ pub async fn destroy(
 	);
 
 	let mut sub = ctx
-		.subscribe::<ds::workflows::server::DestroyStarted>(("server_id", actor_id))
+		.subscribe::<pegboard::workflows::actor::DestroyStarted>(("actor_id", actor_id))
 		.await?;
 
-	// Get server after sub is created
-	let server = assert::server_for_env(&ctx, actor_id, game_id, env_id, None).await?;
+	// Get actor after sub is created
+	let actor = assert::actor_for_env(&ctx, actor_id, game_id, env_id, None).await?;
 
 	// Already destroyed
-	if server.destroy_ts.is_some() {
+	if actor.destroy_ts.is_some() {
 		return Ok(json!({}));
 	}
 
-	ctx.signal(ds::workflows::server::Destroy {
+	ctx.signal(pegboard::workflows::actor::Destroy {
 		override_kill_timeout_ms: query.override_kill_timeout,
 	})
-	.to_workflow::<ds::workflows::server::Workflow>()
-	.tag("server_id", actor_id)
+	.to_workflow::<pegboard::workflows::actor::Workflow>()
+	.tag("actor_id", actor_id)
 	.send()
 	.await?;
 
@@ -334,21 +329,21 @@ pub async fn upgrade(
 		)
 		.await?;
 
-	assert::server_for_env(&ctx, actor_id, game_id, env_id, None).await?;
+	assert::actor_for_env(&ctx, actor_id, game_id, env_id, None).await?;
 
 	let build = resolve_build(&ctx, game_id, env_id, body.build, body.build_tags.flatten()).await?;
 
 	// TODO: Add back once we figure out how to cleanly handle if a wf is already complete when
 	// upgrading
 	// let mut sub = ctx
-	// 	.subscribe::<ds::workflows::server::UpgradeStarted>(("server_id", actor_id))
+	// 	.subscribe::<pegboard::workflows::actor::UpgradeStarted>(("actor_id", actor_id))
 	// 	.await?;
 
-	ctx.signal(ds::workflows::server::Upgrade {
+	ctx.signal(pegboard::workflows::actor::Upgrade {
 		image_id: build.build_id,
 	})
-	.to_workflow::<ds::workflows::server::Workflow>()
-	.tag("server_id", actor_id)
+	.to_workflow::<pegboard::workflows::actor::Workflow>()
+	.tag("actor_id", actor_id)
 	.send()
 	.await?;
 
@@ -422,7 +417,7 @@ pub async fn upgrade_all(
 	let mut cursor = None;
 	loop {
 		let list_res = ctx
-			.op(ds::ops::server::list_for_env::Input {
+			.op(pegboard::ops::actor::list_for_env::Input {
 				env_id,
 				tags: tags.clone(),
 				include_destroyed: false,
@@ -431,26 +426,26 @@ pub async fn upgrade_all(
 			})
 			.await?;
 
-		count += list_res.server_ids.len();
-		cursor = list_res.server_ids.last().cloned();
+		count += list_res.actor_ids.len();
+		cursor = list_res.actor_ids.last().cloned();
 
 		// TODO: Add back once we figure out how to cleanly handle if a wf is already complete when
 		// upgrading
-		// let subs = futures_util::stream::iter(list_res.server_ids.clone())
-		// 	.map(|server_id| {
-		// 		ctx.subscribe::<ds::workflows::server::UpgradeStarted>(("server_id", server_id))
+		// let subs = futures_util::stream::iter(list_res.actor_ids.clone())
+		// 	.map(|actor_id| {
+		// 		ctx.subscribe::<pegboard::workflows::actor::UpgradeStarted>(("actor_id", actor_id))
 		// 	})
 		// 	.buffer_unordered(32)
 		// 	.try_collect::<Vec<_>>()
 		// 	.await?;
 
-		futures_util::stream::iter(list_res.server_ids)
-			.map(|server_id| {
-				ctx.signal(ds::workflows::server::Upgrade {
+		futures_util::stream::iter(list_res.actor_ids)
+			.map(|actor_id| {
+				ctx.signal(pegboard::workflows::actor::Upgrade {
 					image_id: build.build_id,
 				})
-				.to_workflow::<ds::workflows::server::Workflow>()
-				.tag("server_id", server_id)
+				.to_workflow::<pegboard::workflows::actor::Workflow>()
+				.tag("actor_id", actor_id)
 				.send()
 			})
 			.buffer_unordered(32)
@@ -522,7 +517,7 @@ async fn list_actors_inner(
 	);
 
 	let list_res = ctx
-		.op(ds::ops::server::list_for_env::Input {
+		.op(pegboard::ops::actor::list_for_env::Input {
 			env_id,
 			tags,
 			include_destroyed,
@@ -533,9 +528,9 @@ async fn list_actors_inner(
 		})
 		.await?;
 
-	let servers_res = ctx
-		.op(ds::ops::server::get::Input {
-			server_ids: list_res.server_ids.clone(),
+	let actors_res = ctx
+		.op(pegboard::ops::actor::get::Input {
+			actor_ids: list_res.actor_ids.clone(),
 			endpoint_type: query
 				.global_endpoint_type
 				.endpoint_type
@@ -551,13 +546,13 @@ async fn list_actors_inner(
 		.await?;
 	let dc = unwrap!(dc_res.datacenters.first());
 
-	let servers = servers_res
-		.servers
+	let actors = actors_res
+		.actors
 		.into_iter()
-		.map(|a| ds::types::convert_actor_to_api(a, &dc))
+		.map(|a| pegboard::types::convert_actor_to_api(a, &dc))
 		.collect::<GlobalResult<Vec<_>>>()?;
 
-	Ok(models::ActorListActorsResponse { actors: servers })
+	Ok(models::ActorListActorsResponse { actors: actors })
 }
 
 async fn resolve_build(

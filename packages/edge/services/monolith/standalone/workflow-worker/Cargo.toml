@@ -12,5 +12,4 @@ rivet-health-checks.workspace = true
 rivet-metrics.workspace = true
 rivet-runtime.workspace = true
 
-ds.workspace = true
 pegboard.workspace = true

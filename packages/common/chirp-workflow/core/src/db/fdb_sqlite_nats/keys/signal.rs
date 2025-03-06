@@ -52,7 +52,7 @@ impl TuplePack for BodyKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("signal", "data", self.signal_id, "body");
+		let t = (SIGNAL, DATA, self.signal_id, BODY);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -68,7 +68,7 @@ impl TuplePack for BodyChunkKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("signal", "data", self.signal_id, "body", self.chunk);
+		let t = (SIGNAL, DATA, self.signal_id, BODY, self.chunk);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -76,9 +76,9 @@ impl TuplePack for BodyChunkKey {
 impl<'de> TupleUnpack<'de> for BodyChunkKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, signal_id, data, chunk)) =
-			<(Cow<str>, Cow<str>, Uuid, Cow<str>, usize)>::unpack(input, tuple_depth)?;
-		if data != "body" {
-			return Err(PackError::Message("expected \"body\" data".into()));
+			<(usize, usize, Uuid, usize, usize)>::unpack(input, tuple_depth)?;
+		if data != BODY {
+			return Err(PackError::Message("expected BODY data".into()));
 		}
 
 		let v = BodyChunkKey { signal_id, chunk };
@@ -116,7 +116,7 @@ impl TuplePack for AckTsKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("signal", "data", self.signal_id, "ack_ts");
+		let t = (SIGNAL, DATA, self.signal_id, ACK_TS);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -124,9 +124,9 @@ impl TuplePack for AckTsKey {
 impl<'de> TupleUnpack<'de> for AckTsKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, signal_id, data)) =
-			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
-		if data != "ack_ts" {
-			return Err(PackError::Message("expected \"ack_ts\" data".into()));
+			<(usize, usize, Uuid, usize)>::unpack(input, tuple_depth)?;
+		if data != ACK_TS {
+			return Err(PackError::Message("expected ACK_TS data".into()));
 		}
 
 		let v = AckTsKey { signal_id };
@@ -165,7 +165,7 @@ impl TuplePack for CreateTsKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("signal", "data", self.signal_id, "create_ts");
+		let t = (SIGNAL, DATA, self.signal_id, CREATE_TS);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -173,9 +173,9 @@ impl TuplePack for CreateTsKey {
 impl<'de> TupleUnpack<'de> for CreateTsKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, signal_id, data)) =
-			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
-		if data != "create_ts" {
-			return Err(PackError::Message("expected \"create_ts\" data".into()));
+			<(usize, usize, Uuid, usize)>::unpack(input, tuple_depth)?;
+		if data != CREATE_TS {
+			return Err(PackError::Message("expected CREATE_TS data".into()));
 		}
 
 		let v = CreateTsKey { signal_id };
@@ -225,8 +225,8 @@ impl TuplePack for TaggedPendingKey {
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
 		let t = (
-			"tagged_signal",
-			"pending",
+			TAGGED_SIGNAL,
+			PENDING,
 			&self.signal_name,
 			self.ts,
 			self.signal_id,
@@ -238,7 +238,7 @@ impl TuplePack for TaggedPendingKey {
 impl<'de> TupleUnpack<'de> for TaggedPendingKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, signal_name, ts, signal_id)) =
-			<(Cow<str>, Cow<str>, String, i64, Uuid)>::unpack(input, tuple_depth)?;
+			<(usize, usize, String, i64, Uuid)>::unpack(input, tuple_depth)?;
 		let v = TaggedPendingKey {
 			signal_name,
 			ts,
@@ -265,7 +265,7 @@ impl TuplePack for TaggedPendingSubspaceKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("tagged_signal", "pending", &self.signal_name);
+		let t = (TAGGED_SIGNAL, PENDING, &self.signal_name);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -284,7 +284,7 @@ impl TuplePack for EntireTaggedPendingSubspaceKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("tagged_signal", "pending");
+		let t = (TAGGED_SIGNAL, PENDING);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -323,7 +323,7 @@ impl TuplePack for TagKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("signal", "data", self.signal_id, "tag", &self.k, &self.v);
+		let t = (SIGNAL, DATA, self.signal_id, TAG, &self.k, &self.v);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -331,9 +331,9 @@ impl TuplePack for TagKey {
 impl<'de> TupleUnpack<'de> for TagKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, signal_id, data, k, v)) =
-			<(Cow<str>, Cow<str>, Uuid, Cow<str>, String, String)>::unpack(input, tuple_depth)?;
-		if data != "tag" {
-			return Err(PackError::Message("expected \"tag\" data".into()));
+			<(usize, usize, Uuid, usize, String, String)>::unpack(input, tuple_depth)?;
+		if data != TAG {
+			return Err(PackError::Message("expected TAG data".into()));
 		}
 
 		let v = TagKey { signal_id, k, v };
@@ -358,7 +358,7 @@ impl TuplePack for TagSubspaceKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("signal", "data", self.signal_id, "tag");
+		let t = (SIGNAL, DATA, self.signal_id, TAG);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -392,7 +392,7 @@ impl TuplePack for RayIdKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("signal", "data", self.signal_id, "ray_id");
+		let t = (SIGNAL, DATA, self.signal_id, RAY_ID);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -400,9 +400,9 @@ impl TuplePack for RayIdKey {
 impl<'de> TupleUnpack<'de> for RayIdKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, signal_id, data)) =
-			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
-		if data != "ray_id" {
-			return Err(PackError::Message("expected \"ray_id\" data".into()));
+			<(usize, usize, Uuid, usize)>::unpack(input, tuple_depth)?;
+		if data != RAY_ID {
+			return Err(PackError::Message("expected RAY_ID data".into()));
 		}
 
 		let v = RayIdKey { signal_id };
@@ -440,7 +440,7 @@ impl TuplePack for NameKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("signal", "data", self.signal_id, "name");
+		let t = (SIGNAL, DATA, self.signal_id, NAME);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -448,9 +448,9 @@ impl TuplePack for NameKey {
 impl<'de> TupleUnpack<'de> for NameKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, signal_id, data)) =
-			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
-		if data != "name" {
-			return Err(PackError::Message("expected \"name\" data".into()));
+			<(usize, usize, Uuid, usize)>::unpack(input, tuple_depth)?;
+		if data != NAME {
+			return Err(PackError::Message("expected NAME data".into()));
 		}
 
 		let v = NameKey { signal_id };
@@ -488,7 +488,7 @@ impl TuplePack for WorkflowIdKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("signal", "data", self.signal_id, "workflow_id");
+		let t = (SIGNAL, DATA, self.signal_id, WORKFLOW_ID);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -496,9 +496,9 @@ impl TuplePack for WorkflowIdKey {
 impl<'de> TupleUnpack<'de> for WorkflowIdKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, signal_id, data)) =
-			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
-		if data != "workflow_id" {
-			return Err(PackError::Message("expected \"workflow_id\" data".into()));
+			<(usize, usize, Uuid, usize)>::unpack(input, tuple_depth)?;
+		if data != WORKFLOW_ID {
+			return Err(PackError::Message("expected WORKFLOW_ID data".into()));
 		}
 
 		let v = WorkflowIdKey { signal_id };
@@ -521,7 +521,7 @@ impl TuplePack for DataSubspaceKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("signal", "data");
+		let t = (SIGNAL, DATA);
 		t.pack(w, tuple_depth)
 	}
 }

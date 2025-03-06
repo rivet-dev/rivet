@@ -12,12 +12,13 @@ use foundationdb::{self as fdb, directory::Directory, tuple::Subspace};
 use futures_util::{StreamExt, TryStreamExt};
 use indexmap::IndexMap;
 use key::Key;
+use uuid::Uuid;
 use list_query::ListLimitReached;
 pub use list_query::ListQuery;
 pub use metadata::Metadata;
 use pegboard::protocol;
 use prost::Message;
-use utils::{owner_segment, validate_entries, validate_keys, TransactionExt};
+use utils::{validate_entries, validate_keys, TransactionExt};
 
 mod entry;
 pub mod key;
@@ -36,16 +37,16 @@ const VALUE_CHUNK_SIZE: usize = 10_000; // 10 KB, not KiB, see https://apple.git
 pub struct ActorKv {
 	version: &'static str,
 	db: Arc<fdb::Database>,
-	owner: protocol::ActorOwner,
+	actor_id: Uuid,
 	subspace: Option<Subspace>,
 }
 
 impl ActorKv {
-	pub fn new(db: Arc<fdb::Database>, owner: protocol::ActorOwner) -> Self {
+	pub fn new(db: Arc<fdb::Database>, actor_id: Uuid) -> Self {
 		Self {
 			version: env!("CARGO_PKG_VERSION"),
 			db,
-			owner,
+			actor_id,
 			subspace: None,
 		}
 	}
@@ -66,7 +67,7 @@ impl ActorKv {
 				&[
 					"pegboard".into(),
 					"actor".into(),
-					owner_segment(&self.owner),
+					self.actor_id.to_string(),
 				],
 				None,
 				Some(b"partition"),
@@ -79,7 +80,7 @@ impl ActorKv {
 			.map_err(|err| anyhow!("{err:?}"))?;
 		tx.commit().await.map_err(|err| anyhow!("{err:?}"))?;
 
-		self.subspace = Some(kv_dir.subspace(&()).map_err(|err| anyhow!("{err:?}"))?);
+		self.subspace = Some(Subspace::from_bytes(kv_dir.bytes().map_err(|err| anyhow!("{err:?}"))?));
 
 		tracing::info!("successfully initialized KV");
 
@@ -414,7 +415,7 @@ impl ActorKv {
 			&[
 				"pegboard".into(),
 				"actor".into(),
-				owner_segment(&self.owner),
+				self.actor_id.to_string(),
 			],
 		)
 		.await

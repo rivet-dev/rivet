@@ -34,7 +34,7 @@ impl TuplePack for RemainingMemoryKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("client", "data", self.client_id, "remaining_memory");
+		let t = (CLIENT, DATA, self.client_id, REMAINING_MEMORY);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -42,7 +42,7 @@ impl TuplePack for RemainingMemoryKey {
 impl<'de> TupleUnpack<'de> for RemainingMemoryKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, client_id, _)) =
-			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
+			<(usize, usize, Uuid, usize)>::unpack(input, tuple_depth)?;
 		let v = RemainingMemoryKey { client_id };
 
 		Ok((input, v))
@@ -79,7 +79,7 @@ impl TuplePack for RemainingCpuKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("client", "data", self.client_id, "remaining_cpu");
+		let t = (CLIENT, DATA, self.client_id, REMAINING_CPU);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -87,7 +87,7 @@ impl TuplePack for RemainingCpuKey {
 impl<'de> TupleUnpack<'de> for RemainingCpuKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, client_id, _)) =
-			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
+			<(usize, usize, Uuid, usize)>::unpack(input, tuple_depth)?;
 		let v = RemainingCpuKey { client_id };
 
 		Ok((input, v))
@@ -124,7 +124,7 @@ impl TuplePack for LastPingTsKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("client", "data", self.client_id, "last_ping_ts");
+		let t = (CLIENT, DATA, self.client_id, LAST_PING_TS);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -132,7 +132,7 @@ impl TuplePack for LastPingTsKey {
 impl<'de> TupleUnpack<'de> for LastPingTsKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, client_id, _)) =
-			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
+			<(usize, usize, Uuid, usize)>::unpack(input, tuple_depth)?;
 		let v = LastPingTsKey { client_id };
 
 		Ok((input, v))
@@ -169,7 +169,7 @@ impl TuplePack for TotalMemoryKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("client", "data", self.client_id, "total_memory");
+		let t = (CLIENT, DATA, self.client_id, TOTAL_MEMORY);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -177,7 +177,7 @@ impl TuplePack for TotalMemoryKey {
 impl<'de> TupleUnpack<'de> for TotalMemoryKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, client_id, _)) =
-			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
+			<(usize, usize, Uuid, usize)>::unpack(input, tuple_depth)?;
 		let v = TotalMemoryKey { client_id };
 
 		Ok((input, v))
@@ -214,7 +214,7 @@ impl TuplePack for TotalCpuKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("client", "data", self.client_id, "total_cpu");
+		let t = (CLIENT, DATA, self.client_id, TOTAL_CPU);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -222,7 +222,7 @@ impl TuplePack for TotalCpuKey {
 impl<'de> TupleUnpack<'de> for TotalCpuKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, client_id, _)) =
-			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
+			<(usize, usize, Uuid, usize)>::unpack(input, tuple_depth)?;
 		let v = TotalCpuKey { client_id };
 
 		Ok((input, v))
@@ -266,7 +266,7 @@ impl TuplePack for ActorKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("client", "actor", self.client_id, self.actor_id);
+		let t = (CLIENT, ACTOR, self.client_id, self.actor_id);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -274,7 +274,7 @@ impl TuplePack for ActorKey {
 impl<'de> TupleUnpack<'de> for ActorKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, client_id, actor_id)) =
-			<(Cow<str>, Cow<str>, Uuid, Uuid)>::unpack(input, tuple_depth)?;
+			<(usize, usize, Uuid, Uuid)>::unpack(input, tuple_depth)?;
 		let v = ActorKey {
 			client_id,
 			actor_id,
@@ -300,7 +300,7 @@ impl TuplePack for ActorSubspaceKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("client", "actor", self.client_id);
+		let t = (CLIENT, ACTOR, self.client_id);
 		t.pack(w, tuple_depth)
 	}
 }

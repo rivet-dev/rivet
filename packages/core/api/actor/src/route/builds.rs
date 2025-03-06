@@ -504,7 +504,7 @@ pub async fn complete_build(
 						&config,
 						&build_id.to_string(),
 						models::EdgeIntercomPegboardPrewarmImageRequest {
-							image_artifact_url_stub: ds::util::image_artifact_url_stub(
+							image_artifact_url_stub: pegboard::util::image_artifact_url_stub(
 								ctx.config(),
 								build.upload_id,
 								&build::utils::file_name(build.kind, build.compression),

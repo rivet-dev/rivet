@@ -12,7 +12,7 @@ services:
       - RUST_LOG_ANSI_COLOR=1
       - RIVET_OTEL_ENABLED=1
       - RIVET_OTEL_ENDPOINT=http://otel-collector:4317
-      - RUST_LOG=debug,hyper=info
+      # - RUST_LOG=debug,hyper=info
     stop_grace_period: 0s
     ports:
       # API
@@ -58,7 +58,7 @@ services:
       - RUST_LOG_ANSI_COLOR=1
       - RIVET_OTEL_ENABLED=1
       - RIVET_OTEL_ENDPOINT=http://otel-collector:4317
-      - RUST_LOG=debug,hyper=info
+      # - RUST_LOG=debug,hyper=info
     stop_grace_period: 0s
     ports:
       # API
@@ -160,7 +160,7 @@ services:
       - RUST_LOG_ANSI_COLOR=1
       - RIVET_OTEL_ENABLED=1
       - RIVET_OTEL_ENDPOINT=http://otel-collector:4317
-      - RUST_LOG=debug,hyper=info
+      # - RUST_LOG=debug,hyper=info
     stop_grace_period: 0s
     depends_on:
       rivet-edge-server:

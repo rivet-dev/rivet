@@ -154,11 +154,6 @@ pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../../edge/services/ds/db/ds"),
-			db_name: "db_ds",
-		},
-		SqlService {
-			kind: SqlServiceKind::CockroachDB,
 			migrations: include_dir!(
 				"$CARGO_MANIFEST_DIR/../../services/dynamic-config/db/dynamic-config"
 			),
@@ -208,6 +203,16 @@ pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
+			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../../edge/services/pegboard/db/pegboard"),
+			db_name: "db_pegboard",
+		},
+		SqlService {
+			kind: SqlServiceKind::ClickHouse,
+			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../../edge/services/pegboard/db/actor-log"),
+			db_name: "db_pegboard_actor_log",
+		},
+		SqlService {
+			kind: SqlServiceKind::CockroachDB,
 			migrations: include_dir!(
 				"$CARGO_MANIFEST_DIR/../../services/team-invite/db/team-invite"
 			),
@@ -247,11 +252,6 @@ pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 		},
 		SqlService {
 			kind: SqlServiceKind::ClickHouse,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/ds-log/db/log"),
-			db_name: "db_ds_log",
-		},
-		SqlService {
-			kind: SqlServiceKind::ClickHouse,
 			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/job-log/db/log"),
 			db_name: "db_job_log",
 		},
@@ -263,7 +263,7 @@ pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 		},
 		S3Bucket { name: "bucket-cdn" },
 		S3Bucket {
-			name: "bucket-export",
+			name: "bucket-job-log-export",
 		},
 		S3Bucket {
 			name: "bucket-banner",
@@ -275,7 +275,7 @@ pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			name: "bucket-artifacts",
 		},
 		S3Bucket {
-			name: "bucket-export",
+			name: "bucket-actor-log-export",
 		},
 		S3Bucket { name: "bucket-log" },
 		S3Bucket {

@@ -95,8 +95,8 @@ impl TuplePack for WorkflowWakeConditionKey {
 		match &self.condition {
 			WakeCondition::Immediate => {
 				let t = (
-					"wake",
-					"workflow",
+					WAKE,
+					WORKFLOW,
 					&self.workflow_name,
 					self.ts,
 					self.workflow_id,
@@ -106,8 +106,8 @@ impl TuplePack for WorkflowWakeConditionKey {
 			}
 			WakeCondition::Deadline { .. } => {
 				let t = (
-					"wake",
-					"workflow",
+					WAKE,
+					WORKFLOW,
 					&self.workflow_name,
 					// Already matches deadline ts, see `WorkflowWakeConditionKey::new`
 					self.ts,
@@ -118,8 +118,8 @@ impl TuplePack for WorkflowWakeConditionKey {
 			}
 			WakeCondition::SubWorkflow { sub_workflow_id } => {
 				let t = (
-					"wake",
-					"workflow",
+					WAKE,
+					WORKFLOW,
 					&self.workflow_name,
 					self.ts,
 					self.workflow_id,
@@ -130,8 +130,8 @@ impl TuplePack for WorkflowWakeConditionKey {
 			}
 			WakeCondition::Signal { signal_id } => {
 				let t = (
-					"wake",
-					"workflow",
+					WAKE,
+					WORKFLOW,
 					&self.workflow_name,
 					self.ts,
 					self.workflow_id,
@@ -142,8 +142,8 @@ impl TuplePack for WorkflowWakeConditionKey {
 			}
 			WakeCondition::TaggedSignal { signal_id } => {
 				let t = (
-					"wake",
-					"workflow",
+					WAKE,
+					WORKFLOW,
 					&self.workflow_name,
 					self.ts,
 					self.workflow_id,
@@ -159,7 +159,7 @@ impl TuplePack for WorkflowWakeConditionKey {
 impl<'de> TupleUnpack<'de> for WorkflowWakeConditionKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, workflow_name, ts, workflow_id, wake_condition_variant)) =
-			<(Cow<str>, Cow<str>, String, i64, Uuid, usize)>::unpack(input, tuple_depth)?;
+			<(usize, usize, String, i64, Uuid, usize)>::unpack(input, tuple_depth)?;
 		let wake_condition_variant = WakeConditionVariant::from_repr(wake_condition_variant)
 			.ok_or_else(|| {
 				PackError::Message(
@@ -265,7 +265,7 @@ impl TuplePack for WorkflowWakeConditionSubspaceKey {
 	) -> std::io::Result<VersionstampOffset> {
 		let mut offset = VersionstampOffset::None { size: 0 };
 
-		let t = ("wake", "workflow", &self.workflow_name);
+		let t = (WAKE, WORKFLOW, &self.workflow_name);
 		offset += t.pack(w, tuple_depth)?;
 
 		if let Some(ts) = &self.ts {
@@ -318,8 +318,8 @@ impl TuplePack for TaggedSignalWakeKey {
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
 		let t = (
-			"wake",
-			"tagged_signal",
+			WAKE,
+			TAGGED_SIGNAL,
 			&self.signal_name,
 			self.ts,
 			self.workflow_id,
@@ -331,7 +331,7 @@ impl TuplePack for TaggedSignalWakeKey {
 impl<'de> TupleUnpack<'de> for TaggedSignalWakeKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, signal_name, ts, workflow_id)) =
-			<(Cow<str>, Cow<str>, String, i64, Uuid)>::unpack(input, tuple_depth)?;
+			<(usize, usize, String, i64, Uuid)>::unpack(input, tuple_depth)?;
 		let v = TaggedSignalWakeKey {
 			signal_name,
 			ts,
@@ -365,7 +365,7 @@ impl TuplePack for TaggedSignalWakeSubspaceKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("wake", "tagged_signal", &self.signal_name);
+		let t = (WAKE, TAGGED_SIGNAL, &self.signal_name);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -412,8 +412,8 @@ impl TuplePack for SubWorkflowWakeKey {
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
 		let t = (
-			"wake",
-			"sub_workflow",
+			WAKE,
+			SUB_WORKFLOW,
 			&self.sub_workflow_id,
 			self.ts,
 			self.workflow_id,
@@ -425,7 +425,7 @@ impl TuplePack for SubWorkflowWakeKey {
 impl<'de> TupleUnpack<'de> for SubWorkflowWakeKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, _, sub_workflow_id, ts, workflow_id)) =
-			<(Cow<str>, Cow<str>, Uuid, i64, Uuid)>::unpack(input, tuple_depth)?;
+			<(usize, usize, Uuid, i64, Uuid)>::unpack(input, tuple_depth)?;
 		let v = SubWorkflowWakeKey {
 			sub_workflow_id,
 			ts,
@@ -453,7 +453,7 @@ impl TuplePack for SubWorkflowWakeSubspaceKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("wake", "sub_workflow", self.sub_workflow_id);
+		let t = (WAKE, SUB_WORKFLOW, self.sub_workflow_id);
 		t.pack(w, tuple_depth)
 	}
 }

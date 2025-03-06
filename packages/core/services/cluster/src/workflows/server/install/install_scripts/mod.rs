@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use chirp_workflow::prelude::*;
+use components::pegboard::ClientFlavor;
 
 use crate::types::PoolType;
 
@@ -58,8 +59,8 @@ pub async fn gen_install(
 			script.push(components::cni::plugins());
 
 			let flavor = match pool_type {
-				PoolType::Pegboard => pegboard::protocol::ClientFlavor::Container,
-				PoolType::PegboardIsolate => pegboard::protocol::ClientFlavor::Isolate,
+				PoolType::Pegboard => ClientFlavor::Container,
+				PoolType::PegboardIsolate => ClientFlavor::Isolate,
 				_ => unreachable!(),
 			};
 			script.push(components::pegboard::install(config, flavor).await?);
@@ -148,7 +149,7 @@ pub async fn gen_initialize(
 		PoolType::Pegboard => {
 			script.push(components::pegboard::configure(
 				config,
-				pegboard::protocol::ClientFlavor::Container,
+				ClientFlavor::Container,
 			)?);
 
 			prometheus_targets.insert(
@@ -163,7 +164,7 @@ pub async fn gen_initialize(
 		PoolType::PegboardIsolate => {
 			script.push(components::pegboard::configure(
 				config,
-				pegboard::protocol::ClientFlavor::Isolate,
+				ClientFlavor::Isolate,
 			)?);
 
 			prometheus_targets.insert(
