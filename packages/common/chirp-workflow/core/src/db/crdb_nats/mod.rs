@@ -202,14 +202,14 @@ impl Database for DatabaseCrdbNats {
 			let rows = sql_fetch_all!(
 				[self, (Uuid, Uuid,)]
 				"
-				UPDATE db_workflow.workflows AS w
+				UPDATE db_workflow.workflows@workflows_active_idx AS w
 				SET
 					worker_instance_id = NULL,
 					wake_immediate = true,
 					wake_deadline_ts = NULL,
 					wake_signals = ARRAY[],
 					wake_sub_workflow_id = NULL
-				FROM db_workflow.worker_instances AS wi
+				FROM db_workflow.worker_instances@worker_instances_ping_idx AS wi
 				WHERE
 					wi.last_ping_ts < $1 AND
 					wi.worker_instance_id = w.worker_instance_id AND
@@ -297,7 +297,8 @@ impl Database for DatabaseCrdbNats {
 					[self, (String, i64)]
 					"
 					SELECT workflow_name, COUNT(*)
-					FROM db_workflow.workflows AS OF SYSTEM TIME '-1s'
+					FROM db_workflow.workflows@workflows_total_count_idx
+					AS OF SYSTEM TIME '-1s'
 					GROUP BY workflow_name
 					",
 				),
@@ -305,7 +306,8 @@ impl Database for DatabaseCrdbNats {
 					[self, (String, i64)]
 					"
 					SELECT workflow_name, COUNT(*)
-					FROM db_workflow.workflows AS OF SYSTEM TIME '-1s'
+					FROM db_workflow.workflows@workflows_active_count_idx
+					AS OF SYSTEM TIME '-1s'
 					WHERE
 						output IS NULL AND
 						worker_instance_id IS NOT NULL AND
@@ -317,7 +319,8 @@ impl Database for DatabaseCrdbNats {
 					[self, (String, String, i64)]
 					"
 					SELECT workflow_name, error, COUNT(*)
-					FROM db_workflow.workflows AS OF SYSTEM TIME '-1s'
+					FROM db_workflow.workflows@workflows_dead_count_idx
+					AS OF SYSTEM TIME '-1s'
 					WHERE
 						error IS NOT NULL AND
 						output IS NULL AND
@@ -333,7 +336,8 @@ impl Database for DatabaseCrdbNats {
 					[self, (String, i64)]
 					"
 					SELECT workflow_name, COUNT(*)
-					FROM db_workflow.workflows AS OF SYSTEM TIME '-1s'
+					FROM db_workflow.workflows@workflows_sleeping_count_idx
+					AS OF SYSTEM TIME '-1s'
 					WHERE
 						worker_instance_id IS NULL AND
 						output IS NULL AND
@@ -353,17 +357,18 @@ impl Database for DatabaseCrdbNats {
 					SELECT signal_name, COUNT(*)
 					FROM (
 						SELECT signal_name
-						FROM db_workflow.signals
+						FROM db_workflow.signals@signals_unack_idx
 						WHERE
 							ack_ts IS NULL AND
 							silence_ts IS NULL
 						UNION ALL
 						SELECT signal_name
-						FROM db_workflow.tagged_signals
+						FROM db_workflow.tagged_signals@tagged_signals_unack_idx
 						WHERE
 							ack_ts IS NULL AND
 							silence_ts IS NULL
-					) AS OF SYSTEM TIME '-1s'
+					)
+					AS OF SYSTEM TIME '-1s'
 					GROUP BY signal_name
 					",
 				),
