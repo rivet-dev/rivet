@@ -1,10 +1,12 @@
 use chirp_workflow::prelude::*;
 
+pub mod worker;
+
 pub const TUNNEL_API_EDGE_PORT: u16 = 5010;
 
 pub fn create_hook(tunnel_name: &str, initialize_immediately: bool) -> GlobalResult<String> {
 	let mut script =
-		include_str!("../files/rivet_create_hook.sh").replace("__TUNNEL_NAME__", tunnel_name);
+		include_str!("../../files/rivet_create_hook.sh").replace("__TUNNEL_NAME__", tunnel_name);
 
 	if initialize_immediately {
 		script.push_str("systemctl start rivet_hook\n");
@@ -14,7 +16,7 @@ pub fn create_hook(tunnel_name: &str, initialize_immediately: bool) -> GlobalRes
 }
 
 pub fn fetch_info(server_token: &str) -> GlobalResult<String> {
-	Ok(include_str!("../files/rivet_fetch_info.sh")
+	Ok(include_str!("../../files/rivet_fetch_info.sh")
 		.replace("__SERVER_TOKEN__", server_token)
 		.replace(
 			"__TUNNEL_API_EDGE_API__",
@@ -27,7 +29,7 @@ pub fn fetch_tunnel_tls(
 	server_token: &str,
 	traefik_instance_name: &str,
 ) -> GlobalResult<String> {
-	let mut script = include_str!("../files/rivet_fetch_tunnel_tls.sh")
+	let mut script = include_str!("../../files/rivet_fetch_tunnel_tls.sh")
 		.replace("__TRAEFIK_INSTANCE_NAME__", traefik_instance_name)
 		.replace("__SERVER_TOKEN__", server_token)
 		.replace(
@@ -54,7 +56,7 @@ pub fn fetch_gg_tls(
 	traefik_instance_name: &str,
 	datacenter_id: Uuid,
 ) -> GlobalResult<String> {
-	let mut script = include_str!("../files/rivet_fetch_gg_tls.sh")
+	let mut script = include_str!("../../files/rivet_fetch_gg_tls.sh")
 		.replace("__TRAEFIK_INSTANCE_NAME__", traefik_instance_name)
 		.replace("__SERVER_TOKEN__", server_token)
 		.replace(

@@ -184,6 +184,7 @@ async fn provision_server(
 							PoolType::Gg => linode::types::FirewallPreset::Gg,
 							PoolType::Ats => linode::types::FirewallPreset::Ats,
 							PoolType::Fdb => linode::types::FirewallPreset::Fdb,
+							PoolType::Worker => linode::types::FirewallPreset::Worker,
 						},
 						vlan_ip: Some(vlan_ip.ip()),
 						vlan_ip_net: Some(vlan_ip.ip_net()),
@@ -283,15 +284,14 @@ async fn provision_server(
 				})
 				.await?;
 			}
-			// TODO:
-			// // Create DNS record after the server is installed
-			// PoolType::Api => {
-			// 	ctx.workflow(api_dns_create::Input {
-			// 		server_id: input.server_id,
-			// 	})
-			// 	.output()
-			// 	.await?;
-			// }
+			// Create DNS record after the server is installed
+			PoolType::Worker => {
+				ctx.workflow(api_dns_create::Input {
+					server_id: input.server_id,
+				})
+				.output()
+				.await?;
+			}
 			_ => {}
 		}
 
@@ -337,14 +337,13 @@ async fn lifecycle(
 					.output()
 					.await?;
 				}
-				// TODO:
-				// PoolType::Api => {
-				// 	ctx.workflow(api_dns_create::Input {
-				// 		server_id: input.server_id,
-				// 	})
-				// 	.output()
-				// 	.await?;
-				// }
+				PoolType::Worker => {
+					ctx.workflow(api_dns_create::Input {
+						server_id: input.server_id,
+					})
+					.output()
+					.await?;
+				}
 				_ => unreachable!(),
 			}
 		}
@@ -533,6 +532,7 @@ async fn get_vlan_ip(ctx: &ActivityCtx, input: &GetVlanIpInput) -> GlobalResult<
 		PoolType::Gg => provision_config.pools.gg.vlan_addr_range(),
 		PoolType::Ats => provision_config.pools.ats.vlan_addr_range(),
 		PoolType::Fdb => provision_config.pools.fdb.vlan_addr_range(),
+		PoolType::Worker => provision_config.pools.worker.vlan_addr_range(),
 	};
 	let max_idx = vlan_addr_range.count() as i64;
 
@@ -550,6 +550,7 @@ async fn get_vlan_ip(ctx: &ActivityCtx, input: &GetVlanIpInput) -> GlobalResult<
 		PoolType::Gg => vec![PoolType::Gg as i32],
 		PoolType::Ats => vec![PoolType::Ats as i32],
 		PoolType::Fdb => vec![PoolType::Fdb as i32],
+		PoolType::Worker => vec![PoolType::Worker as i32],
 	};
 
 	let (network_idx,) = sql_fetch_one!(
@@ -924,13 +925,15 @@ async fn cleanup(
 ) -> GlobalResult<()> {
 	if cleanup_dns {
 		// Cleanup DNS
-		// TODO: PoolType::Api
-		if let PoolType::Gg = input.pool_type {
-			ctx.workflow(dns_delete::Input {
-				server_id: input.server_id,
-			})
-			.output()
-			.await?;
+		match input.pool_type {
+			PoolType::Gg | PoolType::Worker => {
+				ctx.workflow(dns_delete::Input {
+					server_id: input.server_id,
+				})
+				.output()
+				.await?;
+			}
+			_ => {}
 		}
 	}
 

@@ -4,27 +4,24 @@ services:
       context: ../..
       dockerfile: docker/universal/Dockerfile
       target: server-full
-      secrets:
-        - fontawesome_package_token
     platform: linux/amd64
     restart: unless-stopped
     command: /usr/bin/rivet-server start
     environment:
       - RUST_BACKTRACE=1
-      - RUST_LOG=debug,hyper=info
-      - RUST_LOG_TARGET=1
-      - RUST_LOG_SPAN_PATH=1
+      # - RUST_LOG=debug,hyper=info
+      # - RUST_LOG_TARGET=1
+      # - RUST_LOG_SPAN_PATH=1
+      - RUST_LOG_ANSI_COLOR=1
     stop_grace_period: 0s
     ports:
       # API
       - "8080:8080"
-      # API internal
+      # API edge
       - "8081:8081"
       # Pegboard
       - "8082:8082"
     depends_on:
-      rivet-guard:
-        condition: service_started
       cockroachdb:
         condition: service_healthy
       redis:
@@ -47,13 +44,53 @@ services:
       timeout: 10s
       retries: 10
 
+  rivet-edge-server:
+    build:
+      context: ../..
+      dockerfile: docker/universal/Dockerfile
+      target: edge-server
+    platform: linux/amd64
+    restart: unless-stopped
+    command: /usr/bin/rivet-edge-server start
+    environment:
+      - RUST_BACKTRACE=1
+      # - RUST_LOG=debug,hyper=info
+      # - RUST_LOG_TARGET=1
+      # - RUST_LOG_SPAN_PATH=1
+      - RUST_LOG_ANSI_COLOR=1
+    stop_grace_period: 0s
+    ports:
+      # API
+      - "8083:8080"
+    depends_on:
+      rivet-server:
+        condition: service_healthy
+      cockroachdb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_healthy
+      vector-server:
+        condition: service_started
+    volumes:
+      - ./rivet-edge-server:/etc/rivet-server:ro
+      - sqlite-data:/var/lib/rivet-sqlite:rw
+    networks:
+      - rivet-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8090/health/liveness"]
+      interval: 2s
+      timeout: 10s
+      retries: 10
+
   rivet-shell:
     build:
       context: ../..
       dockerfile: docker/universal/Dockerfile
       target: server-full
-      secrets:
-        - fontawesome_package_token
     platform: linux/amd64
     restart: unless-stopped
     command: sleep infinity
@@ -88,6 +125,9 @@ services:
       # can cause unexpected side effects. This limits the number of actors
       # using host networking to 100.
       - "7500-7599:7500-7599"
+    depends_on:
+      rivet-edge-server:
+        condition: service_healthy
     networks:
       - rivet-network
 
@@ -110,8 +150,6 @@ services:
       context: ../..
       dockerfile: docker/universal/Dockerfile
       target: client-full
-      secrets:
-        - fontawesome_package_token
     # TODO(RVT-4168): Compile libfdb from scratch for ARM
     platform: linux/amd64
     restart: unless-stopped
@@ -120,6 +158,8 @@ services:
       - RUST_BACKTRACE=1
     stop_grace_period: 0s
     depends_on:
+      rivet-edge-server:
+        condition: service_healthy
       foundationdb:
         condition: service_healthy
     volumes:
@@ -255,7 +295,4 @@ volumes:
   vector-server-data:
   foundationdb-data:
   foundationdb-storage-data:
-
-secrets:
-  fontawesome_package_token:
-    environment: FONTAWESOME_PACKAGE_TOKEN
+  sqlite-data:

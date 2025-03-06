@@ -75,6 +75,9 @@ pub async fn gen_install(
 			script.push(components::python::install());
 			script.push(components::fdb::install(initialize_immediately));
 		}
+		PoolType::Worker => {
+			script.push(components::rivet::worker::install(config).await?);
+		},
 	}
 
 	// MARK: Common (post)
@@ -177,6 +180,17 @@ pub async fn gen_initialize(
 				"foundationdb".into(),
 				components::vector::PrometheusTarget {
 					endpoint: "http://127.0.0.1:9161".into(),
+					scrape_interval: 15,
+				},
+			);
+		}
+		PoolType::Worker => {
+			script.push(components::rivet::worker::configure(config)?);
+
+			prometheus_targets.insert(
+				"worker".into(),
+				components::vector::PrometheusTarget {
+					endpoint: "http://127.0.0.1:8091".into(),
 					scrape_interval: 15,
 				},
 			);

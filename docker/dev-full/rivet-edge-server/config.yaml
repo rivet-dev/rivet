@@ -3,8 +3,10 @@ server:
     auth:
       access_kind: development
 
-    ui:
-      public_origin_regex: .*
+    edge:
+      cluster_id: 11ca8960-acab-4963-909c-99d72af3e1cb
+      datacenter_id: f288913c-735d-4188-bf9b-2fcf6eac7b9c
+      intercom_endpoint: http://rivet-server:8081
 
     guard:
       # TLS not configured for local development
@@ -22,6 +24,8 @@ server:
       token: local
       system_test_isolate_project: default
       system_test_isolate_environment: default
+  foundationdb:
+    connection: docker:docker@foundationdb:4500
   cockroachdb:
     url: postgresql://cockroachdb:26257/defaultdb?sslmode=disable
     username: root

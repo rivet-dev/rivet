@@ -13,11 +13,11 @@ pub struct InstanceType {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub enum FirewallPreset {
-	// TODO: Rename to game
 	Job,
 	Gg,
 	Ats,
 	Fdb,
+	Worker,
 }
 
 impl FirewallPreset {
@@ -34,6 +34,7 @@ impl FirewallPreset {
 				.firewall_rules(&config.server()?.rivet.guard),
 			FirewallPreset::Ats => provision_config.pools.ats.firewall_rules(),
 			FirewallPreset::Fdb => provision_config.pools.fdb.firewall_rules(),
+			FirewallPreset::Worker => provision_config.pools.worker.firewall_rules(),
 		})
 	}
 }
@@ -45,6 +46,7 @@ impl std::fmt::Display for FirewallPreset {
 			FirewallPreset::Gg => write!(f, "gg"),
 			FirewallPreset::Ats => write!(f, "ats"),
 			FirewallPreset::Fdb => write!(f, "fdb"),
+			FirewallPreset::Worker => write!(f, "worker"),
 		}
 	}
 }

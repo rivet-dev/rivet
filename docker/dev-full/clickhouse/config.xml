@@ -2,10 +2,10 @@
 
 <!-- This config file is intended to make sure that migrations are compatible with ClickHouse Cloud. We don't use replication in development, but we have to be able to support the `RelpicatedMergeTree` engine. -->
 <clickhouse>
-    <logger>
+    <!-- <logger>
         <level>trace</level>
         <console>1</console>
-    </logger>
+    </logger> -->
 
     <!-- Enable embedded ZooKeeper -->
     <zookeeper>

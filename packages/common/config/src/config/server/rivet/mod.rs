@@ -242,6 +242,7 @@ impl Rivet {
 		}
 	}
 
+	// Does what `rivet_util::url::to_string_without_slash` does
 	pub fn edge_api_url_str(&self, dc_name_id: &str) -> GlobalResult<String> {
 		Ok(self.edge_api_url(dc_name_id)?.to_string().trim_end_matches('/').to_string())
 	}
@@ -728,6 +729,5 @@ impl Default for Telemetry {
 pub struct Edge {
 	pub cluster_id: Uuid,
 	pub datacenter_id: Uuid,
-	pub server_token: Option<Secret<String>>,
 	pub intercom_endpoint: String,
 }

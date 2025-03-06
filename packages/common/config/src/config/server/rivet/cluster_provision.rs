@@ -22,6 +22,9 @@ pub struct ClusterProvision {
 
 	/// The URL for the isolate runner binary.
 	pub isolate_runner_binary_url: Url,
+
+	// The URL for the rivet edge server binary.
+	pub edge_server_binary_url: Url,
 }
 
 impl ClusterProvision {
@@ -39,6 +42,7 @@ pub struct ClusterPools {
 	pub gg: ClusterPoolGg,
 	pub ats: ClusterPoolAts,
 	pub fdb: ClusterPoolFdb,
+	pub worker: ClusterPoolWorker,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
@@ -239,6 +243,31 @@ pub struct ClusterPoolFdb {
 impl ClusterPoolFdb {
 	pub fn vlan_ip_net(&self) -> Ipv4Net {
 		Ipv4Net::new(Ipv4Addr::new(10, 0, 2, 0), 26).unwrap()
+	}
+
+	pub fn vlan_addr_range(&self) -> Ipv4AddrRange {
+		self.vlan_ip_net().hosts()
+	}
+
+	pub fn firewall_rules(&self) -> Vec<FirewallRule> {
+		FirewallRule::base_rules()
+	}
+}
+
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct ClusterPoolWorker {
+	pub autoscale_margin: u32,
+
+	#[schemars(with = "Option<String>")]
+	pub vlan_ip_net: Option<Ipv4Net>,
+	pub firewall_rules: Option<Vec<FirewallRule>>,
+}
+
+impl ClusterPoolWorker {
+	pub fn vlan_ip_net(&self) -> Ipv4Net {
+		Ipv4Net::new(Ipv4Addr::new(10, 0, 3, 0), 26).unwrap()
 	}
 
 	pub fn vlan_addr_range(&self) -> Ipv4AddrRange {

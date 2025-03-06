@@ -83,6 +83,7 @@ pub enum PoolType {
 	Pegboard = 3,
 	PegboardIsolate = 4,
 	Fdb = 5,
+	Worker = 6,
 }
 
 impl std::fmt::Display for PoolType {
@@ -94,6 +95,7 @@ impl std::fmt::Display for PoolType {
 			PoolType::Pegboard => write!(f, "pegboard"),
 			PoolType::PegboardIsolate => write!(f, "pegboard-isolate"),
 			PoolType::Fdb => write!(f, "fdb"),
+			PoolType::Worker => write!(f, "worker"),
 		}
 	}
 }
