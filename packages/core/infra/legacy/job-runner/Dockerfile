@@ -7,7 +7,7 @@ RUN \
 	--mount=type=cache,target=/root/.cargo/git \
 	--mount=type=cache,target=/root/.cargo/registry \
 	--mount=type=cache,target=/app/target \
-	cd packages/infra/legacy/job-runner && \
+	cd packages/core/infra/legacy/job-runner && \
 	RUSTFLAGS="--cfg tokio_unstable" cargo build --release --bin rivet-job-runner && \
 	mkdir -p /app/dist && \
 	mv /app/target/x86_64-unknown-linux-musl/release/rivet-job-runner /app/dist/rivet-job-runner
