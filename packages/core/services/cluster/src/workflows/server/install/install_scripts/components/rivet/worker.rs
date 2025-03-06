@@ -9,7 +9,7 @@ use super::{
 		traefik::{
 			TUNNEL_CLICKHOUSE_NATIVE_PORT, TUNNEL_CLICKHOUSE_PORT, TUNNEL_CRDB_PORT,
 			TUNNEL_NATS_PORT, TUNNEL_PROMETHEUS_PORT, TUNNEL_REDIS_EPHEMERAL_PORT,
-			TUNNEL_REDIS_PERSISTENT_PORT, TUNNEL_S3_PORT,
+			TUNNEL_REDIS_PERSISTENT_PORT, TUNNEL_S3_PORT, TUNNEL_OTEL_PORT,
 		},
 	},
 	TUNNEL_API_EDGE_PORT,
@@ -99,6 +99,7 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 				native_url: Url::parse(&format!(
 					"clickhouse://127.0.0.1:{TUNNEL_CLICKHOUSE_NATIVE_PORT}",
 				))?,
+				secure: false,
 				..clickhouse.clone()
 			})).transpose()?,
 			prometheus: Some(Prometheus {
@@ -140,6 +141,6 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 		include_str!("../../files/rivet_worker_configure.sh").replace(
 			"__RIVET_EDGE_CONFIG__",
 			&serde_json::to_string_pretty(&edge_config_json)?,
-		),
+		).replace("__OTEL_PORT__", &TUNNEL_OTEL_PORT.to_string()),
 	)
 }

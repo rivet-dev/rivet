@@ -4,7 +4,6 @@ use anyhow::*;
 use deno_core::JsBuffer;
 use foundationdb as fdb;
 use futures_util::{FutureExt, TryStreamExt};
-use pegboard::protocol;
 
 use crate::{
 	key::Key, MAX_KEYS, MAX_KEY_SIZE, MAX_PUT_PAYLOAD_SIZE, MAX_STORAGE_SIZE, MAX_VALUE_SIZE,

@@ -16,7 +16,6 @@ use uuid::Uuid;
 use list_query::ListLimitReached;
 pub use list_query::ListQuery;
 pub use metadata::Metadata;
-use pegboard::protocol;
 use prost::Message;
 use utils::{validate_entries, validate_keys, TransactionExt};
 
