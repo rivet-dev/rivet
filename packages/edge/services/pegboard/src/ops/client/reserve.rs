@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use chirp_workflow::prelude::*;
 use fdb_util::{end_of_key_range, FormalKey, SERIALIZABLE, SNAPSHOT};
 use foundationdb::{
@@ -8,7 +10,7 @@ use futures_util::TryStreamExt;
 
 use crate::protocol;
 
-use crate::{keys, workflows::client::CLIENT_ELIGIBLE_THRESHOLD_MS};
+use crate::{metrics, keys, workflows::client::CLIENT_ELIGIBLE_THRESHOLD_MS};
 
 // TODO: Only uses memory for allocation atm, not cpu as well
 /// Chooses a client that can allocate the given resources and reserves those resources. For container actors
@@ -34,7 +36,9 @@ pub async fn pegboard_client_reserve(
 	ctx: &OperationCtx,
 	input: &Input,
 ) -> GlobalResult<Option<Output>> {
-	ctx.fdb()
+	let start_instant = Instant::now();
+
+	let res = ctx.fdb()
 		.await?
 		.run(|tx, _mc| async move {
 			let ping_threshold_ts = util::timestamp::now() - CLIENT_ELIGIBLE_THRESHOLD_MS;
@@ -140,6 +144,10 @@ pub async fn pegboard_client_reserve(
 				}));
 			}
 		})
-		.await
-		.map_err(Into::into)
+		.await?;
+	
+	let dt = start_instant.elapsed().as_secs_f64();
+	metrics::CLIENT_RESERVE_DURATION.with_label_values(&[&res.is_some().to_string()]).observe(dt);
+
+	Ok(res)
 }

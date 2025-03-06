@@ -55,7 +55,7 @@ services:
     environment:
       - _RIVET_POOL_SQLITE_FORCE_LOCAL=1
       - RUST_BACKTRACE=1
-      # - RUST_LOG=debug,hyper=info
+      - RUST_LOG=debug,hyper=info
       # - RUST_LOG_TARGET=1
       # - RUST_LOG_SPAN_PATH=1
       - RUST_LOG_ANSI_COLOR=1
@@ -78,7 +78,7 @@ services:
         condition: service_started
     volumes:
       - ./rivet-edge-server/config.jsonc:/etc/rivet-server/config.jsonc:ro
-      - sqlite-data:/var/lib/rivet-sqlite:rw
+      - sqlite-data:/root/.local/share/rivet-sqlite:rw
     networks:
       - rivet-network
     healthcheck:
@@ -261,6 +261,8 @@ services:
       - ./foundationdb/entrypoint.sh:/usr/local/bin/entrypoint.sh
       - foundationdb-data:/var/fdb:rw
       - foundationdb-storage-data:/var/fdb/data:rw
+    ports:
+      - "4500:4500"
     healthcheck:
       test: ["CMD", "fdbcli", "--exec", "status"]
       interval: 2s

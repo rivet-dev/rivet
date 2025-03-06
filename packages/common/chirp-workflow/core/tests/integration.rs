@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use chirp_workflow::prelude::*;
 // use serde_json::json;
 // use uuid::Uuid;
@@ -72,12 +74,26 @@ async fn fdb_sqlite_nats_driver() {
 	// 	.unwrap();
 	// tracing::info!(?res);
 
+	let ctx2 = ctx.clone();
 	tokio::spawn(async move {
-		ctx.workflow(def::Input {})
+		ctx2.workflow(def::Input {})
 			.tag("foo", "bar")
 			.dispatch()
 			.await
 			.unwrap();
+	});
+
+	let ctx2 = ctx.clone();
+	tokio::spawn(async move {
+		tokio::time::sleep(Duration::from_secs(2)).await;
+		ctx2.signal(def::MySignal {
+			test: Uuid::new_v4(),
+		})
+		.to_workflow::<def::Workflow>()
+		.tag("foo", "bar")
+		.send()
+		.await
+		.unwrap();
 	});
 
 	let worker = Worker::new(reg.clone(), db.clone());
@@ -105,22 +121,22 @@ mod def {
 		})
 		.await?;
 
-		let workflow_id = ctx.workflow_id();
-		ctx.signal(MySignal {
-			test: Uuid::new_v4(),
-		})
-		.to_workflow_id(workflow_id)
-		.send()
-		.await?;
+		// let workflow_id = ctx.workflow_id();
+		// ctx.signal(MySignal {
+		// 	test: Uuid::new_v4(),
+		// })
+		// .to_workflow_id(workflow_id)
+		// .send()
+		// .await?;
 
 		ctx.repeat(|ctx| {
 			async move {
-				tracing::info!("eepy");
-				ctx.sleep(35000).await?;
-				tracing::info!("eeped");
-
 				let sig = ctx.listen::<MySignal>().await?;
 				tracing::info!(?sig);
+
+				// tracing::info!("eepy");
+				// ctx.sleep(35000).await?;
+				// tracing::info!("eeped");
 
 				Ok(Loop::<()>::Continue)
 			}
@@ -145,7 +161,7 @@ mod def {
 
 	#[signal("my_signal")]
 	#[derive(Debug)]
-	struct MySignal {
-		test: Uuid,
+	pub struct MySignal {
+		pub test: Uuid,
 	}
 }

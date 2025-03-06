@@ -126,6 +126,7 @@ pub trait Database: Send {
 	async fn pull_next_signal(
 		&self,
 		workflow_id: Uuid,
+		workflow_name: &str,
 		filter: &[&str],
 		location: &Location,
 		version: usize,

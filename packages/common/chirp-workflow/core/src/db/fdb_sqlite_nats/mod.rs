@@ -7,7 +7,7 @@ use std::{
 		atomic::{AtomicBool, Ordering},
 		Arc,
 	},
-	time::{Duration, Instant},
+	time::Instant,
 };
 
 use fdb_util::{end_of_key_range, FormalChunkedKey, FormalKey, SERIALIZABLE, SNAPSHOT};
@@ -90,7 +90,10 @@ impl DatabaseFdbSqliteNats {
 			tracing::error!(?err, "failed to spawn wake task");
 		}
 	}
+}
 
+// MARK: Sqlite
+impl DatabaseFdbSqliteNats {
 	/// Executes SQL queries and explicitly handles retry errors.
 	async fn query<'a, F, Fut, T>(&self, mut cb: F) -> WorkflowResult<T>
 	where
@@ -160,6 +163,67 @@ impl DatabaseFdbSqliteNats {
 	}
 }
 
+// MARK: FDB
+impl DatabaseFdbSqliteNats {
+	fn write_signal_wake_idxs(
+		&self,
+		workflow_id: Uuid,
+		workflow_name: &str,
+		wake_signals: &[&str],
+		wf_tags: &[(String, String)],
+		tx: &fdb::RetryableTransaction,
+	) -> Result<(), fdb::FdbBindingError> {
+		for signal_name in wake_signals {
+			if TAGGED_SIGNALS_ENABLED {
+				let signal_wake_key =
+					keys::wake::TaggedSignalWakeKey::new(signal_name.to_string(), workflow_id);
+
+				tx.set(
+					&self.subspace.pack(&signal_wake_key),
+					&signal_wake_key
+						.serialize(keys::wake::TaggedSignalWakeData {
+							workflow_name: workflow_name.to_string(),
+							tags: wf_tags.to_vec(),
+						})
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+				);
+			}
+
+			// Write to wake signals list
+			let wake_signal_key =
+				keys::workflow::WakeSignalKey::new(workflow_id, signal_name.to_string());
+			tx.set(
+				&self.subspace.pack(&wake_signal_key),
+				&wake_signal_key
+					.serialize(())
+					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+			);
+		}
+
+		Ok(())
+	}
+
+	fn write_sub_workflow_wake_idx(
+		&self,
+		workflow_id: Uuid,
+		workflow_name: &str,
+		sub_workflow_id: Uuid,
+		tx: &fdb::RetryableTransaction,
+	) -> Result<(), fdb::FdbBindingError> {
+		let sub_workflow_wake_key =
+			keys::wake::SubWorkflowWakeKey::new(sub_workflow_id, workflow_id);
+
+		tx.set(
+			&self.subspace.pack(&sub_workflow_wake_key),
+			&sub_workflow_wake_key
+				.serialize(workflow_name.to_string())
+				.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+		);
+
+		Ok(())
+	}
+}
+
 #[async_trait::async_trait]
 impl Database for DatabaseFdbSqliteNats {
 	fn from_pools(pools: rivet_pools::Pools) -> Result<Arc<Self>, rivet_pools::Error> {
@@ -168,30 +232,6 @@ impl Database for DatabaseFdbSqliteNats {
 			subspace: Subspace::all().subspace(&("rivet", "chirp_workflow", "fdb_sqlite_nats")),
 		}))
 	}
-
-	// ===== CONST FNS =====
-
-	// We rely on a wake message instead of polling, this is set to never poll
-	fn signal_poll_interval(&self) -> Duration {
-		Duration::from_millis(3)
-	}
-
-	// First signal pull happens immediately, second and only retry waits for a wake message
-	fn max_signal_poll_retries(&self) -> usize {
-		1000
-	}
-
-	// We rely on a wake message instead of polling, this is set to never poll
-	fn sub_workflow_poll_interval(&self) -> Duration {
-		Duration::from_millis(3)
-	}
-
-	// First sub workflow check happens immediately, second and only retry waits for a wake message
-	fn max_sub_workflow_poll_retries(&self) -> usize {
-		1000
-	}
-
-	// ===========
 
 	async fn wake_sub<'a, 'b>(&'a self) -> WorkflowResult<BoxStream<'b, ()>> {
 		let stream = self
@@ -931,7 +971,7 @@ impl Database for DatabaseFdbSqliteNats {
 			.await?;
 
 		let dt = start_instant.elapsed().as_secs_f64();
-		metrics::FIND_WORKFLOW_DURATION
+		metrics::FIND_WORKFLOWS_DURATION
 			.with_label_values(&[workflow_name])
 			.observe(dt);
 
@@ -1494,6 +1534,8 @@ impl Database for DatabaseFdbSqliteNats {
 		workflow_name: &str,
 		output: &serde_json::value::RawValue,
 	) -> WorkflowResult<()> {
+		let start_instant = Instant::now();
+
 		// Evict databases before releasing lease
 		self.evict_wf_sqlite(workflow_id).await?;
 
@@ -1647,6 +1689,11 @@ impl Database for DatabaseFdbSqliteNats {
 
 		self.wake_worker();
 
+		let dt = start_instant.elapsed().as_secs_f64();
+		metrics::COMPLETE_WORKFLOW_DURATION
+			.with_label_values(&[workflow_name])
+			.observe(dt);
+
 		Ok(())
 	}
 
@@ -1660,6 +1707,8 @@ impl Database for DatabaseFdbSqliteNats {
 		wake_sub_workflow_id: Option<Uuid>,
 		error: &str,
 	) -> WorkflowResult<()> {
+		let start_instant = Instant::now();
+
 		// Evict databases before releasing lease
 		self.evict_wf_sqlite(workflow_id).await?;
 
@@ -1760,47 +1809,22 @@ impl Database for DatabaseFdbSqliteNats {
 					);
 				}
 
-				// Write signals wake index (only for tagged signals)
-				for signal_name in wake_signals {
-					if TAGGED_SIGNALS_ENABLED {
-						let signal_wake_key = keys::wake::TaggedSignalWakeKey::new(
-							signal_name.to_string(),
-							workflow_id,
-						);
-
-						tx.set(
-							&self.subspace.pack(&signal_wake_key),
-							&signal_wake_key
-								.serialize(keys::wake::TaggedSignalWakeData {
-									workflow_name: workflow_name.to_string(),
-									tags: wf_tags.clone(),
-								})
-								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-						);
-					}
-
-					// Write to wake signals list
-					let wake_signal_key =
-						keys::workflow::WakeSignalKey::new(workflow_id, signal_name.to_string());
-					tx.set(
-						&self.subspace.pack(&wake_signal_key),
-						&wake_signal_key
-							.serialize(())
-							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-					);
-				}
+				self.write_signal_wake_idxs(
+					workflow_id,
+					workflow_name,
+					wake_signals,
+					&wf_tags,
+					&tx,
+				)?;
 
 				// Write sub workflow wake index
 				if let Some(sub_workflow_id) = wake_sub_workflow_id {
-					let sub_workflow_wake_key =
-						keys::wake::SubWorkflowWakeKey::new(sub_workflow_id, workflow_id);
-
-					tx.set(
-						&self.subspace.pack(&sub_workflow_wake_key),
-						&sub_workflow_wake_key
-							.serialize(workflow_name.to_string())
-							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-					);
+					self.write_sub_workflow_wake_idx(
+						workflow_id,
+						workflow_name,
+						sub_workflow_id,
+						&tx,
+					)?;
 				}
 
 				// Update "has wake condition"
@@ -1848,12 +1872,18 @@ impl Database for DatabaseFdbSqliteNats {
 			}
 		}
 
+		let dt = start_instant.elapsed().as_secs_f64();
+		metrics::COMMIT_WORKFLOW_DURATION
+			.with_label_values(&[workflow_name])
+			.observe(dt);
+
 		Ok(())
 	}
 
 	async fn pull_next_signal(
 		&self,
 		workflow_id: Uuid,
+		workflow_name: &str,
 		filter: &[&str],
 		location: &Location,
 		version: usize,
@@ -1941,7 +1971,7 @@ impl Database for DatabaseFdbSqliteNats {
 							)
 						};
 
-					let tagged_signal = if TAGGED_SIGNALS_ENABLED {
+					let (wf_tags, tagged_signal) = if TAGGED_SIGNALS_ENABLED {
 						// Collect all wf tags
 						let wf_tags_subspace = self
 							.subspace
@@ -1987,7 +2017,7 @@ impl Database for DatabaseFdbSqliteNats {
 							})
 							.collect::<Vec<_>>();
 
-						'streams: loop {
+						let signal = 'streams: loop {
 							let taken_streams = std::mem::take(&mut streams);
 
 							// Fetch the next entry from all streams at the same time
@@ -2056,9 +2086,11 @@ impl Database for DatabaseFdbSqliteNats {
 
 							// Write non-empty streams for the next loop iteration
 							streams = new_streams;
-						}
+						};
+
+						(wf_tags, signal)
 					} else {
-						None
+						(Vec::new(), None)
 					};
 
 					// Choose between the two. This functionality is not combined with the above two blocks
@@ -2168,7 +2200,27 @@ impl Database for DatabaseFdbSqliteNats {
 							create_ts: ts,
 							body,
 						}))
-					} else {
+					}
+					// No signal found
+					else {
+						// Write signal wake index if no signal was received. Normally this is done in
+						// `commit_workflow` but without this code there would be a race condition if the
+						// signal is published between after this transaction and before `commit_workflow`.
+						// There is a possibility of `commit_workflow` NOT writing a signal secondary index
+						// after this in which case there might be an unnecessary wake condition inserted
+						// causing the workflow to wake up again, but this is not as big of an issue because
+						// workflow wakes should be idempotent if no events happen.
+						self.write_signal_wake_idxs(
+							workflow_id,
+							workflow_name,
+							&owned_filter.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
+							&wf_tags
+								.into_iter()
+								.map(|key| (key.k, key.v))
+								.collect::<Vec<_>>(),
+							&tx,
+						)?;
+
 						Ok(None)
 					}
 				}
@@ -2221,16 +2273,20 @@ impl Database for DatabaseFdbSqliteNats {
 						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
 					let output = if output_chunks.is_empty() {
-						// Write sub workflow wake index if the sub workflow is not complete yet
-						let sub_workflow_wake_key =
-							keys::wake::SubWorkflowWakeKey::new(sub_workflow_id, workflow_id);
-
-						tx.set(
-							&self.subspace.pack(&sub_workflow_wake_key),
-							&sub_workflow_wake_key
-								.serialize(workflow_name.to_string())
-								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-						);
+						// Write sub workflow wake index if the sub workflow is not complete yet. Normally
+						// this is done in `commit_workflow` but without this code there would be a race
+						// condition if the sub workflow completes between after this transaction and
+						// before `commit_workflow`. There is a possibility of `commit_workflow` NOT writing a
+						// sub workflow secondary index after this in which case there might be an
+						// unnecessary wake condition inserted causing the workflow to wake up again, but this
+						// is not as big of an issue because workflow wakes should be idempotent if no events
+						// happen.
+						self.write_sub_workflow_wake_idx(
+							workflow_id,
+							workflow_name,
+							sub_workflow_id,
+							&tx,
+						)?;
 
 						None
 					} else {

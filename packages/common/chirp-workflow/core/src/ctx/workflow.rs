@@ -1042,7 +1042,6 @@ impl WorkflowCtx {
 			.map_err(GlobalError::raw)?;
 		let history_res2 = history_res.equivalent();
 		let sleep_location = self.cursor.current_location_for(&history_res);
-		let start_instant = Instant::now();
 
 		// Slept before
 		let (deadline_ts, state) = if let HistoryResult::Event(sleep) = history_res {
@@ -1153,11 +1152,6 @@ impl WorkflowCtx {
 				}
 			})
 			.await;
-
-			let dt = start_instant.elapsed().as_secs_f64();
-			metrics::LISTEN_WITH_TIMEOUT_DURATION
-				.with_label_values(&[&self.name])
-				.observe(dt);
 
 			match res {
 				Ok(res) => Some(res.map_err(GlobalError::raw)?),

@@ -9,6 +9,7 @@ use sqlx::{
 	migrate::MigrateDatabase,
 	sqlite::{SqliteAutoVacuum, SqliteConnectOptions},
 	ConnectOptions, Sqlite,
+	Executor,
 };
 use std::io;
 use std::{
@@ -671,7 +672,7 @@ impl SqliteConn {
 		// Connect to database
 		//
 		// We don't need a connection pool since we only have one reader/writer at a time
-		let conn_raw = db_url
+		let mut conn_raw = db_url
 			.parse::<SqliteConnectOptions>()
 			.map_err(Error::BuildSqlx)?
 			.read_only(conn_type.is_reader())
@@ -681,17 +682,14 @@ impl SqliteConn {
 			.foreign_keys(true)
 			// Enable auto vacuuming and set it to incremental mode for gradual space reclaiming
 			.auto_vacuum(SqliteAutoVacuum::Incremental)
-			// Disable WAL for snapshotting
-			//
-			// Truncate is faster than Delete
-			.journal_mode(sqlx::sqlite::SqliteJournalMode::Truncate)
-			// Force all operations to be flushed to disk
-			//
-			// This impacts performance, but is required in order for snapshot to work
-			.synchronous(sqlx::sqlite::SqliteSynchronous::Full)
+			// Set synchronous mode to NORMAL for performance and data safety balance
+			.synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
 			.connect()
 			.await
 			.map_err(Error::BuildSqlx)?;
+
+		// Sqlx doesn't have a WAL2 option, enable it manually
+		conn_raw.execute("PRAGMA journal_mode = WAL2;").await.map_err(Error::BuildSqlx)?;
 
 		tracing::debug!(?db_url, "sqlite connected");
 

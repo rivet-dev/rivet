@@ -1,4 +1,4 @@
-use rivet_metrics::{prometheus::*, BUCKETS, REGISTRY, NANO_BUCKETS};
+use rivet_metrics::{prometheus::*, BUCKETS, REGISTRY, MICRO_BUCKETS};
 
 lazy_static::lazy_static! {
 	// MARK: CRDB
@@ -61,7 +61,7 @@ lazy_static::lazy_static! {
 		"sqlite_get_pool_duration",
 		"Duration to fully connect to an Sqlite database.",
 		&["conn_type", "did_insert"],
-		NANO_BUCKETS.to_vec(),
+		MICRO_BUCKETS.to_vec(),
 		*REGISTRY,
 	).unwrap();
 }

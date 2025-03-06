@@ -32,7 +32,6 @@
 						"mode": "palette-classic"
 					},
 					"custom": {
-						"axisBorderShow": false,
 						"axisCenteredZero": false,
 						"axisColorMode": "text",
 						"axisLabel": "",
@@ -47,7 +46,6 @@
 							"tooltip": false,
 							"viz": false
 						},
-						"insertNulls": false,
 						"lineInterpolation": "linear",
 						"lineWidth": 1,
 						"pointSize": 5,
@@ -133,7 +131,6 @@
 						"mode": "palette-classic"
 					},
 					"custom": {
-						"axisBorderShow": false,
 						"axisCenteredZero": false,
 						"axisColorMode": "text",
 						"axisLabel": "",
@@ -148,7 +145,6 @@
 							"tooltip": false,
 							"viz": false
 						},
-						"insertNulls": false,
 						"lineInterpolation": "linear",
 						"lineWidth": 1,
 						"pointSize": 5,
@@ -234,7 +230,6 @@
 						"mode": "palette-classic"
 					},
 					"custom": {
-						"axisBorderShow": false,
 						"axisCenteredZero": false,
 						"axisColorMode": "text",
 						"axisLabel": "",
@@ -249,7 +244,6 @@
 							"tooltip": false,
 							"viz": false
 						},
-						"insertNulls": false,
 						"lineInterpolation": "linear",
 						"lineWidth": 1,
 						"pointSize": 5,
@@ -336,7 +330,6 @@
 						"mode": "palette-classic"
 					},
 					"custom": {
-						"axisBorderShow": false,
 						"axisCenteredZero": false,
 						"axisColorMode": "text",
 						"axisLabel": "",
@@ -351,7 +344,6 @@
 							"tooltip": false,
 							"viz": false
 						},
-						"insertNulls": false,
 						"lineInterpolation": "linear",
 						"lineWidth": 1,
 						"pointSize": 5,
@@ -437,7 +429,6 @@
 						"mode": "palette-classic"
 					},
 					"custom": {
-						"axisBorderShow": false,
 						"axisCenteredZero": false,
 						"axisColorMode": "text",
 						"axisLabel": "",
@@ -452,7 +443,6 @@
 							"tooltip": false,
 							"viz": false
 						},
-						"insertNulls": false,
 						"lineInterpolation": "linear",
 						"lineWidth": 1,
 						"pointSize": 5,
@@ -538,7 +528,6 @@
 						"mode": "palette-classic"
 					},
 					"custom": {
-						"axisBorderShow": false,
 						"axisCenteredZero": false,
 						"axisColorMode": "text",
 						"axisLabel": "",
@@ -553,7 +542,6 @@
 							"tooltip": false,
 							"viz": false
 						},
-						"insertNulls": false,
 						"lineInterpolation": "linear",
 						"lineWidth": 1,
 						"pointSize": 5,
@@ -702,6 +690,7 @@
 				},
 				"tooltip": {
 					"mode": "single",
+					"show": true,
 					"showColorScale": false,
 					"yHistogram": true
 				},
@@ -713,7 +702,7 @@
 					"unit": "s"
 				}
 			},
-			"pluginVersion": "10.4.1",
+			"pluginVersion": "10.0.0",
 			"reverseYBuckets": false,
 			"targets": [
 				{
@@ -821,6 +810,7 @@
 				},
 				"tooltip": {
 					"mode": "single",
+					"show": true,
 					"showColorScale": false,
 					"yHistogram": true
 				},
@@ -832,7 +822,7 @@
 					"unit": "s"
 				}
 			},
-			"pluginVersion": "10.4.1",
+			"pluginVersion": "10.0.0",
 			"reverseYBuckets": false,
 			"targets": [
 				{
@@ -877,7 +867,6 @@
 						"mode": "palette-classic"
 					},
 					"custom": {
-						"axisBorderShow": false,
 						"axisCenteredZero": false,
 						"axisColorMode": "text",
 						"axisLabel": "",
@@ -893,7 +882,6 @@
 							"tooltip": false,
 							"viz": false
 						},
-						"insertNulls": false,
 						"lineInterpolation": "linear",
 						"lineWidth": 1,
 						"pointSize": 5,
@@ -980,7 +968,6 @@
 						"mode": "palette-classic"
 					},
 					"custom": {
-						"axisBorderShow": false,
 						"axisCenteredZero": false,
 						"axisColorMode": "text",
 						"axisLabel": "",
@@ -996,7 +983,6 @@
 							"tooltip": false,
 							"viz": false
 						},
-						"insertNulls": false,
 						"lineInterpolation": "linear",
 						"lineWidth": 1,
 						"pointSize": 5,
@@ -1146,6 +1132,7 @@
 				},
 				"tooltip": {
 					"mode": "single",
+					"show": true,
 					"showColorScale": false,
 					"yHistogram": true
 				},
@@ -1157,7 +1144,7 @@
 					"unit": "s"
 				}
 			},
-			"pluginVersion": "10.4.1",
+			"pluginVersion": "10.0.0",
 			"reverseYBuckets": false,
 			"targets": [
 				{
@@ -1265,6 +1252,7 @@
 				},
 				"tooltip": {
 					"mode": "single",
+					"show": true,
 					"showColorScale": false,
 					"yHistogram": true
 				},
@@ -1276,7 +1264,7 @@
 					"unit": "s"
 				}
 			},
-			"pluginVersion": "10.4.1",
+			"pluginVersion": "10.0.0",
 			"reverseYBuckets": false,
 			"targets": [
 				{
@@ -1397,6 +1385,7 @@
 				},
 				"tooltip": {
 					"mode": "single",
+					"show": true,
 					"showColorScale": false,
 					"yHistogram": true
 				},
@@ -1408,7 +1397,7 @@
 					"unit": "s"
 				}
 			},
-			"pluginVersion": "10.4.1",
+			"pluginVersion": "10.0.0",
 			"reverseYBuckets": false,
 			"targets": [
 				{
@@ -1453,7 +1442,6 @@
 						"mode": "palette-classic"
 					},
 					"custom": {
-						"axisBorderShow": false,
 						"axisCenteredZero": false,
 						"axisColorMode": "text",
 						"axisLabel": "",
@@ -1467,7 +1455,6 @@
 							"tooltip": false,
 							"viz": false
 						},
-						"insertNulls": false,
 						"lineInterpolation": "linear",
 						"lineWidth": 1,
 						"pointSize": 5,
@@ -1581,6 +1568,225 @@
 			"heatmap": {},
 			"hideZeroBuckets": true,
 			"highlightCards": true,
+			"id": 21,
+			"interval": "15s",
+			"legend": {
+				"show": false
+			},
+			"options": {
+				"calculate": false,
+				"calculation": {
+					"xBuckets": {
+						"mode": "size"
+					}
+				},
+				"cellGap": 0,
+				"color": {
+					"exponent": 0.5,
+					"fill": "dark-orange",
+					"mode": "scheme",
+					"reverse": false,
+					"scale": "exponential",
+					"scheme": "RdBu",
+					"steps": 64
+				},
+				"exemplars": {
+					"color": "rgba(255,0,255,0.7)"
+				},
+				"filterValues": {
+					"le": 1e-9
+				},
+				"legend": {
+					"show": true
+				},
+				"rowsFrame": {
+					"layout": "auto"
+				},
+				"tooltip": {
+					"mode": "single",
+					"show": true,
+					"showColorScale": false,
+					"yHistogram": true
+				},
+				"yAxis": {
+					"axisPlacement": "left",
+					"max": "60",
+					"min": 0,
+					"reverse": false,
+					"unit": "s"
+				}
+			},
+			"pluginVersion": "10.0.0",
+			"reverseYBuckets": false,
+			"targets": [
+				{
+					"datasource": {
+						"type": "prometheus",
+						"uid": "prometheus"
+					},
+					"editorMode": "code",
+					"expr": "sum(increase(rivet_chirp_workflow_branch_upsert_duration_bucket{workflow_name=~\"[[workflow_name]]\"} [$__rate_interval])) by (le)",
+					"format": "heatmap",
+					"legendFormat": "{{le}}",
+					"range": true,
+					"refId": "A"
+				}
+			],
+			"title": "Branch Upsert Duration",
+			"tooltip": {
+				"show": true,
+				"showHistogram": true
+			},
+			"type": "heatmap",
+			"xAxis": {
+				"show": true
+			},
+			"yAxis": {
+				"format": "s",
+				"logBase": 2,
+				"max": "60",
+				"min": "0",
+				"show": true
+			},
+			"yBucketBound": "auto"
+		},
+		{
+			"datasource": {
+				"type": "prometheus",
+				"uid": "prometheus"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"color": {
+						"mode": "palette-classic"
+					},
+					"custom": {
+						"axisCenteredZero": false,
+						"axisColorMode": "text",
+						"axisLabel": "",
+						"axisPlacement": "auto",
+						"barAlignment": 0,
+						"drawStyle": "line",
+						"fillOpacity": 0,
+						"gradientMode": "none",
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"lineInterpolation": "linear",
+						"lineWidth": 1,
+						"pointSize": 5,
+						"scaleDistribution": {
+							"type": "linear"
+						},
+						"showPoints": "auto",
+						"spanNulls": false,
+						"stacking": {
+							"group": "A",
+							"mode": "none"
+						},
+						"thresholdsStyle": {
+							"mode": "off"
+						}
+					},
+					"mappings": [],
+					"min": 0,
+					"thresholds": {
+						"mode": "absolute",
+						"steps": [
+							{
+								"color": "green",
+								"value": null
+							},
+							{
+								"color": "red",
+								"value": 80
+							}
+						]
+					},
+					"unit": "ev/s"
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 9,
+				"w": 12,
+				"x": 12,
+				"y": 58
+			},
+			"id": 25,
+			"interval": "15s",
+			"options": {
+				"legend": {
+					"calcs": [
+						"mean"
+					],
+					"displayMode": "table",
+					"placement": "bottom",
+					"showLegend": true,
+					"sortBy": "Mean",
+					"sortDesc": true
+				},
+				"tooltip": {
+					"mode": "single",
+					"sort": "none"
+				}
+			},
+			"targets": [
+				{
+					"datasource": {
+						"type": "prometheus",
+						"uid": "prometheus"
+					},
+					"editorMode": "code",
+					"expr": "sum(irate(rivet_chirp_workflow_branch_upsert_duration_count{workflow_name=~\"[[workflow_name]]\"} [$__rate_interval])) by (workflow_name)",
+					"legendFormat": "{{workflow_name}}",
+					"range": true,
+					"refId": "A"
+				}
+			],
+			"title": "Branch Events Per Second",
+			"type": "timeseries"
+		},
+		{
+			"cards": {},
+			"color": {
+				"cardColor": "#b4ff00",
+				"colorScale": "sqrt",
+				"colorScheme": "interpolateOranges",
+				"exponent": 0.5,
+				"mode": "spectrum"
+			},
+			"dataFormat": "tsbuckets",
+			"datasource": {
+				"type": "prometheus",
+				"uid": "prometheus"
+			},
+			"fieldConfig": {
+				"defaults": {
+					"custom": {
+						"hideFrom": {
+							"legend": false,
+							"tooltip": false,
+							"viz": false
+						},
+						"scaleDistribution": {
+							"type": "linear"
+						}
+					}
+				},
+				"overrides": []
+			},
+			"gridPos": {
+				"h": 9,
+				"w": 12,
+				"x": 0,
+				"y": 67
+			},
+			"heatmap": {},
+			"hideZeroBuckets": true,
+			"highlightCards": true,
 			"id": 17,
 			"interval": "15s",
 			"legend": {
@@ -1617,6 +1823,7 @@
 				},
 				"tooltip": {
 					"mode": "single",
+					"show": true,
 					"showColorScale": false,
 					"yHistogram": true
 				},
@@ -1628,7 +1835,7 @@
 					"unit": "s"
 				}
 			},
-			"pluginVersion": "10.4.1",
+			"pluginVersion": "10.0.0",
 			"reverseYBuckets": false,
 			"targets": [
 				{
@@ -1695,7 +1902,7 @@
 				"h": 9,
 				"w": 12,
 				"x": 12,
-				"y": 58
+				"y": 67
 			},
 			"heatmap": {},
 			"hideZeroBuckets": true,
@@ -1736,6 +1943,7 @@
 				},
 				"tooltip": {
 					"mode": "single",
+					"show": true,
 					"showColorScale": false,
 					"yHistogram": true
 				},
@@ -1747,7 +1955,7 @@
 					"unit": "s"
 				}
 			},
-			"pluginVersion": "10.4.1",
+			"pluginVersion": "10.0.0",
 			"reverseYBuckets": false,
 			"targets": [
 				{
@@ -1814,7 +2022,7 @@
 				"h": 9,
 				"w": 12,
 				"x": 0,
-				"y": 67
+				"y": 76
 			},
 			"heatmap": {},
 			"hideZeroBuckets": true,
@@ -1855,6 +2063,7 @@
 				},
 				"tooltip": {
 					"mode": "single",
+					"show": true,
 					"showColorScale": false,
 					"yHistogram": true
 				},
@@ -1866,7 +2075,7 @@
 					"unit": "s"
 				}
 			},
-			"pluginVersion": "10.4.1",
+			"pluginVersion": "10.0.0",
 			"reverseYBuckets": false,
 			"targets": [
 				{
@@ -1933,125 +2142,6 @@
 				"h": 9,
 				"w": 12,
 				"x": 12,
-				"y": 67
-			},
-			"heatmap": {},
-			"hideZeroBuckets": true,
-			"highlightCards": true,
-			"id": 21,
-			"interval": "15s",
-			"legend": {
-				"show": false
-			},
-			"options": {
-				"calculate": false,
-				"calculation": {
-					"xBuckets": {
-						"mode": "size"
-					}
-				},
-				"cellGap": 0,
-				"color": {
-					"exponent": 0.5,
-					"fill": "dark-orange",
-					"mode": "scheme",
-					"reverse": false,
-					"scale": "exponential",
-					"scheme": "RdBu",
-					"steps": 64
-				},
-				"exemplars": {
-					"color": "rgba(255,0,255,0.7)"
-				},
-				"filterValues": {
-					"le": 1e-9
-				},
-				"legend": {
-					"show": true
-				},
-				"rowsFrame": {
-					"layout": "auto"
-				},
-				"tooltip": {
-					"mode": "single",
-					"showColorScale": false,
-					"yHistogram": true
-				},
-				"yAxis": {
-					"axisPlacement": "left",
-					"max": "60",
-					"min": 0,
-					"reverse": false,
-					"unit": "s"
-				}
-			},
-			"pluginVersion": "10.4.1",
-			"reverseYBuckets": false,
-			"targets": [
-				{
-					"datasource": {
-						"type": "prometheus",
-						"uid": "prometheus"
-					},
-					"editorMode": "code",
-					"expr": "sum(increase(rivet_chirp_workflow_branch_upsert_duration_bucket{workflow_name=~\"[[workflow_name]]\"} [$__rate_interval])) by (le)",
-					"format": "heatmap",
-					"legendFormat": "{{le}}",
-					"range": true,
-					"refId": "A"
-				}
-			],
-			"title": "Branch Upsert Duration",
-			"tooltip": {
-				"show": true,
-				"showHistogram": true
-			},
-			"type": "heatmap",
-			"xAxis": {
-				"show": true
-			},
-			"yAxis": {
-				"format": "s",
-				"logBase": 2,
-				"max": "60",
-				"min": "0",
-				"show": true
-			},
-			"yBucketBound": "auto"
-		},
-		{
-			"cards": {},
-			"color": {
-				"cardColor": "#b4ff00",
-				"colorScale": "sqrt",
-				"colorScheme": "interpolateOranges",
-				"exponent": 0.5,
-				"mode": "spectrum"
-			},
-			"dataFormat": "tsbuckets",
-			"datasource": {
-				"type": "prometheus",
-				"uid": "prometheus"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"custom": {
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"scaleDistribution": {
-							"type": "linear"
-						}
-					}
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 9,
-				"w": 12,
-				"x": 0,
 				"y": 76
 			},
 			"heatmap": {},
@@ -2093,6 +2183,7 @@
 				},
 				"tooltip": {
 					"mode": "single",
+					"show": true,
 					"showColorScale": false,
 					"yHistogram": true
 				},
@@ -2104,7 +2195,7 @@
 					"unit": "s"
 				}
 			},
-			"pluginVersion": "10.4.1",
+			"pluginVersion": "10.0.0",
 			"reverseYBuckets": false,
 			"targets": [
 				{
@@ -2137,128 +2228,11 @@
 				"show": true
 			},
 			"yBucketBound": "auto"
-		},
-		{
-			"cards": {},
-			"color": {
-				"cardColor": "#b4ff00",
-				"colorScale": "sqrt",
-				"colorScheme": "interpolateOranges",
-				"exponent": 0.5,
-				"mode": "spectrum"
-			},
-			"dataFormat": "tsbuckets",
-			"datasource": {
-				"type": "prometheus",
-				"uid": "prometheus"
-			},
-			"fieldConfig": {
-				"defaults": {
-					"custom": {
-						"hideFrom": {
-							"legend": false,
-							"tooltip": false,
-							"viz": false
-						},
-						"scaleDistribution": {
-							"type": "linear"
-						}
-					}
-				},
-				"overrides": []
-			},
-			"gridPos": {
-				"h": 9,
-				"w": 12,
-				"x": 12,
-				"y": 76
-			},
-			"heatmap": {},
-			"hideZeroBuckets": true,
-			"highlightCards": true,
-			"id": 18,
-			"interval": "15s",
-			"legend": {
-				"show": false
-			},
-			"options": {
-				"calculate": false,
-				"calculation": {
-					"xBuckets": {
-						"mode": "size"
-					}
-				},
-				"cellGap": 0,
-				"color": {
-					"exponent": 0.5,
-					"fill": "dark-orange",
-					"mode": "scheme",
-					"reverse": false,
-					"scale": "exponential",
-					"scheme": "RdBu",
-					"steps": 64
-				},
-				"exemplars": {
-					"color": "rgba(255,0,255,0.7)"
-				},
-				"filterValues": {
-					"le": 1e-9
-				},
-				"legend": {
-					"show": true
-				},
-				"rowsFrame": {
-					"layout": "auto"
-				},
-				"tooltip": {
-					"mode": "single",
-					"showColorScale": false,
-					"yHistogram": true
-				},
-				"yAxis": {
-					"axisPlacement": "left",
-					"max": "60",
-					"min": 0,
-					"reverse": false,
-					"unit": "s"
-				}
-			},
-			"pluginVersion": "10.4.1",
-			"reverseYBuckets": false,
-			"targets": [
-				{
-					"datasource": {
-						"type": "prometheus",
-						"uid": "prometheus"
-					},
-					"editorMode": "code",
-					"expr": "sum(increase(rivet_chirp_workflow_listen_with_timeout_duration_bucket{workflow_name=~\"[[workflow_name]]\"} [$__rate_interval])) by (le)",
-					"format": "heatmap",
-					"legendFormat": "{{le}}",
-					"range": true,
-					"refId": "A"
-				}
-			],
-			"title": "Listen With TImeout Duration",
-			"tooltip": {
-				"show": true,
-				"showHistogram": true
-			},
-			"type": "heatmap",
-			"xAxis": {
-				"show": true
-			},
-			"yAxis": {
-				"format": "s",
-				"logBase": 2,
-				"max": "60",
-				"min": "0",
-				"show": true
-			},
-			"yBucketBound": "auto"
 		}
 	],
-	"schemaVersion": 39,
+	"refresh": "5s",
+	"schemaVersion": 38,
+	"style": "dark",
 	"tags": [
 		"chirp"
 	],
@@ -2306,6 +2280,6 @@
 	"timezone": "",
 	"title": "Chirp / Workflow",
 	"uid": "636d22f9-d18f-4086-8b45-7c50886a105c",
-	"version": 3,
+	"version": 1,
 	"weekStart": ""
 }

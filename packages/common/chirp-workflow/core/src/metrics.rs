@@ -47,7 +47,7 @@ lazy_static::lazy_static! {
 		*REGISTRY,
 	).unwrap();
 
-	pub static ref FIND_WORKFLOW_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+	pub static ref FIND_WORKFLOWS_DURATION: HistogramVec = register_histogram_vec_with_registry!(
 		"chirp_workflow_find_workflows_duration",
 		"Duration to find a workflow with a given name and tags.",
 		&["workflow_name"],
@@ -83,6 +83,21 @@ lazy_static::lazy_static! {
 		"chirp_workflow_workflow_errors",
 		"All errors made in a workflow.",
 		&["workflow_name", "error_code"],
+		*REGISTRY,
+	).unwrap();
+
+	pub static ref COMPLETE_WORKFLOW_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"chirp_workflow_complete_workflow_duration",
+		"Duration to complete a workflow with a given name.",
+		&["workflow_name"],
+		BUCKETS.to_vec(),
+		*REGISTRY,
+	).unwrap();
+	pub static ref COMMIT_WORKFLOW_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"chirp_workflow_commit_workflow_duration",
+		"Duration to commit a workflow with a given name.",
+		&["workflow_name"],
+		BUCKETS.to_vec(),
 		*REGISTRY,
 	).unwrap();
 
@@ -165,14 +180,6 @@ lazy_static::lazy_static! {
 	pub static ref BRANCH_UPSERT_DURATION: HistogramVec = register_histogram_vec_with_registry!(
 		"chirp_workflow_branch_upsert_duration",
 		"Total duration of an branch upsert.",
-		&["workflow_name"],
-		BUCKETS.to_vec(),
-		*REGISTRY,
-	).unwrap();
-
-	pub static ref LISTEN_WITH_TIMEOUT_DURATION: HistogramVec = register_histogram_vec_with_registry!(
-		"chirp_workflow_listen_with_timeout_duration",
-		"Total duration of a listen with timeout.",
 		&["workflow_name"],
 		BUCKETS.to_vec(),
 		*REGISTRY,

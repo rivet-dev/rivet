@@ -49,6 +49,7 @@ impl<'a> ListenCtx<'a> {
 			.db()
 			.pull_next_signal(
 				self.ctx.workflow_id(),
+				self.ctx.name(),
 				signal_names,
 				self.location,
 				self.ctx.version(),

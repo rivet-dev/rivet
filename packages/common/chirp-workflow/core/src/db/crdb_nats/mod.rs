@@ -921,9 +921,11 @@ impl Database for DatabaseCrdbNats {
 	async fn complete_workflow(
 		&self,
 		workflow_id: Uuid,
-		_workflow_name: &str,
+		workflow_name: &str,
 		output: &serde_json::value::RawValue,
 	) -> WorkflowResult<()> {
+		let start_instant = Instant::now();
+
 		self.query(|| async {
 			sqlx::query(indoc!(
 				"
@@ -942,19 +944,26 @@ impl Database for DatabaseCrdbNats {
 
 		self.wake_worker();
 
+		let dt = start_instant.elapsed().as_secs_f64();
+		metrics::COMPLETE_WORKFLOW_DURATION
+			.with_label_values(&[workflow_name])
+			.observe(dt);
+
 		Ok(())
 	}
 
 	async fn commit_workflow(
 		&self,
 		workflow_id: Uuid,
-		_workflow_name: &str,
+		workflow_name: &str,
 		immediate: bool,
 		wake_deadline_ts: Option<i64>,
 		wake_signals: &[&str],
 		wake_sub_workflow_id: Option<Uuid>,
 		error: &str,
 	) -> WorkflowResult<()> {
+		let start_instant = Instant::now();
+
 		self.query(|| async {
 			sqlx::query(indoc!(
 				"
@@ -990,12 +999,18 @@ impl Database for DatabaseCrdbNats {
 			}
 		}
 
+		let dt = start_instant.elapsed().as_secs_f64();
+		metrics::COMMIT_WORKFLOW_DURATION
+			.with_label_values(&[workflow_name])
+			.observe(dt);
+
 		Ok(())
 	}
 
 	async fn pull_next_signal(
 		&self,
 		workflow_id: Uuid,
+		_workflow_name: &str,
 		filter: &[&str],
 		location: &Location,
 		version: usize,

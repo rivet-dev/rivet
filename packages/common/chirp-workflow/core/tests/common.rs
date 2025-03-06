@@ -1,12 +1,5 @@
-use std::{
-	sync::{
-		atomic::{AtomicBool, Ordering},
-		Once,
-	},
-	time::Duration,
-};
+use std::sync::Once;
 
-use tokio::process::Command;
 use tracing_subscriber::prelude::*;
 
 static SETUP_TRACING: Once = Once::new();
@@ -16,7 +9,7 @@ pub fn setup_tracing() {
 			.with(
 				tracing_logfmt::builder()
 					.layer()
-					.with_filter(tracing_subscriber::filter::LevelFilter::INFO),
+					.with_filter(tracing_subscriber::filter::LevelFilter::DEBUG),
 			)
 			.init();
 	});

@@ -573,24 +573,25 @@ pub async fn handle_commands(
 		))
 		.await?;
 
-	// TODO: Send as a single message
-	for (i, raw_command) in raw_commands.into_iter().enumerate() {
-		let wrapped_command = protocol::CommandWrapper {
+	// Forward commands as a single message
+	let wrapped_commands = raw_commands
+		.into_iter()
+		.enumerate()
+		.map(|(i, raw_command)| protocol::CommandWrapper {
 			index: index + i as i64,
 			inner: raw_command,
-		};
-
-		// Forward signal to ws as message
-		ctx.msg(ToWs {
-			client_id,
-			inner: protocol::ToClient::Commands(vec![wrapped_command]),
 		})
-		.send()
-		.await?;
-	}
+		.collect::<Vec<_>>();
+
+	ctx.msg(ToWs {
+		client_id,
+		inner: protocol::ToClient::Commands(wrapped_commands),
+	})
+	.send()
+	.await?;
 
 	// NOTE: Cannot parallelize because these must be sent in order
-	// Update actor state based on commands
+	// Forward actor state based on commands
 	for command in commands {
 		match command {
 			protocol::Command::StartActor { actor_id, config } => {
@@ -673,7 +674,7 @@ async fn insert_commands(ctx: &ActivityCtx, input: &InsertCommandsInput) -> Glob
 	)
 	.await?;
 
-	// TODO: Parallelize
+	// TODO: Parallelize?
 	for (index, command) in input.commands.iter().enumerate() {
 		sql_execute!(
 			[ctx, @tx &mut tx]

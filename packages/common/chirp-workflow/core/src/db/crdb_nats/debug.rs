@@ -910,11 +910,6 @@ fn build_history(
 			};
 			let curr_coord_head = event.location.tail().expect("empty location").head();
 
-			// assert!(last_coord_head <= curr_coord_head, "invalid history");
-			if last_coord_head > curr_coord_head {
-				tracing::error!("============ THIS WORKFLOW HAS INVALID HISTORY ============");
-			}
-
 			let offset = if skip {
 				0
 			} else {

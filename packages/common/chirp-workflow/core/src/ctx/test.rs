@@ -1,6 +1,11 @@
 use global_error::{GlobalError, GlobalResult};
+use rivet_config::{
+	config::{Addresses, FoundationDb, Redis, RedisTypes, Root},
+	secret::Secret,
+};
 use rivet_pools::prelude::*;
 use serde::Serialize;
+use url::Url;
 use uuid::Uuid;
 
 use crate::{
@@ -18,6 +23,7 @@ use crate::{
 	workflow::{Workflow, WorkflowInput},
 };
 
+#[derive(Clone)]
 pub struct TestCtx {
 	name: String,
 	ray_id: Uuid,
@@ -42,8 +48,25 @@ impl TestCtx {
 
 		let ray_id = Uuid::new_v4();
 		let (config, pools) = if no_config {
-			let mut root = rivet_config::config::Root::default();
-			root.server.as_mut().unwrap().foundationdb = Some(Default::default());
+			let mut root = Root::default();
+			root.server.as_mut().unwrap().foundationdb = Some(FoundationDb {
+				cluster_description: "docker".to_string(),
+				cluster_id: "docker".to_string(),
+				addresses: Addresses::Static(vec!["127.0.0.1:4500".to_string()]),
+				port: None,
+			});
+			root.server.as_mut().unwrap().redis = RedisTypes {
+				ephemeral: Redis {
+					url: Url::parse("redis://127.0.0.1:6379").unwrap(),
+					username: None,
+					password: Some(Secret::new("password".to_string())),
+				},
+				persistent: Redis {
+					url: Url::parse("redis://127.0.0.1:6379").unwrap(),
+					username: None,
+					password: Some(Secret::new("password".to_string())),
+				},
+			};
 			let config = rivet_config::Config::from_root(root);
 			let pools = rivet_pools::Pools::test(config.clone())
 				.await

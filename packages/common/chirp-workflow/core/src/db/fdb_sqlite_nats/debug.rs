@@ -424,8 +424,10 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 							.unpack::<keys::workflow::OutputChunkKey>(entry.key())
 						{
 							// Has output
-							if let Some(WorkflowState::Complete) = state {
-								state_matches = true;
+							match state {
+								Some(WorkflowState::Complete) => state_matches = true,
+								Some(_) => state_matches = false,
+								None => {}
 							}
 						} else if let Ok(_) = self
 							.subspace
