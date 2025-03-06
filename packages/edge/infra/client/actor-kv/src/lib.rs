@@ -62,7 +62,8 @@ impl ActorKv {
 		let actor_dir = root
 			.create_or_open(
 				&tx,
-				&["pegboard".into(), owner_segment(&self.owner)],
+				// Should match `destroy` fn
+				&["pegboard".into(), "actor".into(), owner_segment(&self.owner)],
 				None,
 				Some(b"partition"),
 			)
@@ -404,7 +405,7 @@ impl ActorKv {
 		let root = fdb::directory::DirectoryLayer::default();
 
 		let tx = self.db.create_trx()?;
-		root.remove_if_exists(&tx, &["pegboard".into(), owner_segment(&self.owner)])
+		root.remove_if_exists(&tx, &["pegboard".into(), "actor".into(), owner_segment(&self.owner)])
 			.await
 			.map_err(|err| anyhow!("{err:?}"))?;
 		tx.commit().await.map_err(|err| anyhow!("{err:?}"))?;

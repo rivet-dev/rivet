@@ -1,20 +1,10 @@
 use anyhow::*;
-use chirp_workflow::history::{
-	event::SleepState,
-	location::{Coordinate, Location},
-};
+use chirp_workflow::db::debug::{Event, EventData, HistoryData, WorkflowState};
+use chirp_workflow::history::event::SleepState;
 use chrono::{TimeZone, Utc};
-use indoc::indoc;
-use rivet_pools::CrdbPool;
-use rivet_term::console::style;
-use uuid::Uuid;
-use rivet_term::console::Style;
-use chirp_workflow::db::debug::{WorkflowData, Event, HistoryData, WorkflowState, EventData};
+use rivet_term::console::{style, Style};
 
-use crate::util::{
-	self,
-	format::{chunk_string, colored_json, indent_string},
-};
+use crate::util::format::{chunk_string, colored_json, indent_string};
 
 pub mod signal;
 
@@ -45,7 +35,10 @@ impl std::str::FromStr for KvPair {
 	}
 }
 
-pub async fn print_workflows(workflows: Vec<chirp_workflow::db::debug::WorkflowData>, pretty: bool) -> Result<()> {
+pub async fn print_workflows(
+	workflows: Vec<chirp_workflow::db::debug::WorkflowData>,
+	pretty: bool,
+) -> Result<()> {
 	if workflows.is_empty() {
 		rivet_term::status::success("No workflows found", "");
 		return Ok(());
@@ -557,10 +550,10 @@ pub fn print_event_name(event: &Event) {
 
 mod table {
 	use anyhow::*;
+	use chirp_workflow::db::debug::{WorkflowData, WorkflowState};
 	use rivet_term::console::style;
 	use tabled::Tabled;
 	use uuid::Uuid;
-	use chirp_workflow::db::debug::{WorkflowData, WorkflowState};
 
 	use crate::util::format::colored_json_ugly;
 

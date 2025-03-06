@@ -11,10 +11,13 @@ chirp-workflow.workspace = true
 chrono = "0.4.38"
 clap = { version = "4.3", features = ["derive"] }
 colored_json = "5.0.0"
+futures-util = "0.3"
 global-error.workspace = true
+hex = "0.4"
 include_dir = "0.7.4"
 indoc = "2.0.5"
 reqwest = "0.12.9"
+foundationdb.workspace = true
 rivet-api.workspace = true
 rivet-config.workspace = true
 rivet-migrate.workspace = true
@@ -22,6 +25,7 @@ rivet-pools.workspace = true
 rivet-runtime.workspace = true
 rivet-service-manager.workspace = true
 rivet-term.workspace = true
+rustyline = "15.0.0"
 s3-util.workspace = true
 serde = { version = "1.0.210", features = ["derive"] }
 serde_json = "1.0.128"

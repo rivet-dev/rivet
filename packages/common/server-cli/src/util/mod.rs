@@ -1,4 +1,5 @@
 pub mod db;
+pub mod fdb;
 pub mod format;
 pub mod wf;
 

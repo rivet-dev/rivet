@@ -137,7 +137,7 @@ impl Database for DatabaseFdbSqliteNats {
 			pools,
 			// Lazy load the nats sub
 			sub: Mutex::new(None),
-			subspace: Subspace::all().subspace(&("chirp_workflow", "fdb_sqlite_nats")),
+			subspace: Subspace::all().subspace(&("rivet", "chirp_workflow", "fdb_sqlite_nats")),
 		}))
 	}
 

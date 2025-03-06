@@ -37,6 +37,8 @@ pub enum SubCommand {
 		#[clap(subcommand)]
 		command: config::SubCommand,
 	},
+	/// Allows inspection of FDB data
+	Fdb(fdb::Opts),
 }
 
 impl SubCommand {
@@ -48,6 +50,7 @@ impl SubCommand {
 			SubCommand::Storage { command } => command.execute(config, &run_config).await,
 			SubCommand::Workflow { command } => command.execute(config).await,
 			SubCommand::Config { command } => command.execute(config).await,
+			SubCommand::Fdb(opts) => opts.execute(config).await,
 		}
 	}
 }

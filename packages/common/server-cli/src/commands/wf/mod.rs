@@ -1,14 +1,15 @@
 use std::sync::Arc;
 
 use anyhow::*;
-use clap::{ValueEnum, Parser};
-use uuid::Uuid;
-use chirp_workflow::db::{self, Database, debug::{WorkflowState as DebugWorkflowState, DatabaseDebug}};
-
-use crate::util::{
+use chirp_workflow::db::{
 	self,
-	wf::KvPair,
+	debug::{DatabaseDebug, WorkflowState as DebugWorkflowState},
+	Database,
 };
+use clap::{Parser, ValueEnum};
+use uuid::Uuid;
+
+use crate::util::{self, wf::KvPair};
 
 mod signal;
 
@@ -55,7 +56,15 @@ pub enum SubCommand {
 impl SubCommand {
 	pub async fn execute(self, config: rivet_config::Config) -> Result<()> {
 		let pools = rivet_pools::Pools::new(config.clone()).await?;
-		let db = if config.server.as_ref().context("missing server")?.rivet.edge.is_none() {
+		// Choose db driver based on edge config
+		let db = if config
+			.server
+			.as_ref()
+			.context("missing server")?
+			.rivet
+			.edge
+			.is_none()
+		{
 			db::DatabaseCrdbNats::from_pools(pools)? as Arc<dyn DatabaseDebug>
 		} else {
 			db::DatabaseFdbSqliteNats::from_pools(pools)? as Arc<dyn DatabaseDebug>
@@ -72,32 +81,30 @@ impl SubCommand {
 				state,
 				pretty,
 			} => {
-				let pool = rivet_pools::db::crdb::setup(config.clone()).await?;
-				let workflows = db.find_workflows(tags.into_iter().map(|kv| (kv.key, kv.value)).collect(), name, state.map(Into::into)).await?;
+				let workflows = db
+					.find_workflows(
+						&tags
+							.into_iter()
+							.map(|kv| (kv.key, kv.value))
+							.collect::<Vec<_>>(),
+						name.as_deref(),
+						state.map(Into::into),
+					)
+					.await?;
 				util::wf::print_workflows(workflows, pretty).await
 			}
-			Self::Ack { workflow_ids } => {
-				let pool = rivet_pools::db::crdb::setup(config.clone()).await?;
-				db.silence_workflows(workflow_ids).await
-			}
-			Self::Wake { workflow_ids } => {
-				let pool = rivet_pools::db::crdb::setup(config.clone()).await?;
-				db.wake_workflows(workflow_ids).await
-			}
+			Self::Ack { workflow_ids } => db.silence_workflows(workflow_ids).await,
+			Self::Wake { workflow_ids } => db.wake_workflows(workflow_ids).await,
 			Self::History {
 				workflow_id,
 				exclude_json,
 				include_forgotten,
 				print_location,
 			} => {
-				let pool = rivet_pools::db::crdb::setup(config.clone()).await?;
-				let history = db.get_workflow_history(workflow_id, include_forgotten).await?;
-				util::wf::print_history(
-					history,
-					exclude_json,
-					print_location,
-				)
-				.await
+				let history = db
+					.get_workflow_history(workflow_id, include_forgotten)
+					.await?;
+				util::wf::print_history(history, exclude_json, print_location).await
 			}
 			Self::Signal { command } => command.execute(db).await,
 		}

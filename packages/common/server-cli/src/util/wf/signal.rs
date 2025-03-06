@@ -1,19 +1,10 @@
 use anyhow::*;
 use chrono::{Local, TimeZone};
-use clap::ValueEnum;
-use indoc::indoc;
-use rivet_pools::CrdbPool;
 use rivet_term::console::style;
-use uuid::Uuid;
 
-use chirp_workflow::db::debug::{SignalState, SignalData};
+use chirp_workflow::db::debug::{SignalData, SignalState};
 
-use super::KvPair;
-
-use crate::util::{
-	self,
-	format::{colored_json, indent_string},
-};
+use crate::util::format::{colored_json, indent_string};
 
 pub async fn print_signals(signals: Vec<SignalData>, pretty: bool) -> Result<()> {
 	if signals.is_empty() {
@@ -59,10 +50,10 @@ pub async fn print_signals(signals: Vec<SignalData>, pretty: bool) -> Result<()>
 
 mod table {
 	use anyhow::*;
+	use chirp_workflow::db::debug::{SignalData, SignalState};
 	use rivet_term::console::style;
 	use tabled::Tabled;
 	use uuid::Uuid;
-	use chirp_workflow::db::debug::{SignalData, SignalState};
 
 	use crate::util::format::colored_json_ugly;
 

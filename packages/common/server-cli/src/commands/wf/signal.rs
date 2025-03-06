@@ -1,14 +1,11 @@
 use std::sync::Arc;
 
 use anyhow::*;
-use clap::{ValueEnum, Parser};
+use chirp_workflow::db::debug::{DatabaseDebug, SignalState as OtherSignalState};
+use clap::{Parser, ValueEnum};
 use uuid::Uuid;
-use chirp_workflow::db::{self, Database, debug::{DatabaseDebug, SignalState as OtherSignalState}};
 
-use crate::util::{
-	self,
-	wf::KvPair,
-};
+use crate::util::{self, wf::KvPair};
 
 #[derive(Parser)]
 pub enum SubCommand {
@@ -33,7 +30,7 @@ pub enum SubCommand {
 }
 
 impl SubCommand {
-	pub async fn execute(self, db: Arc<dyn DatabaseDebug>) -> Result<()> {		
+	pub async fn execute(self, db: Arc<dyn DatabaseDebug>) -> Result<()> {
 		match self {
 			Self::Get { signal_ids } => {
 				let signals = db.get_signals(signal_ids).await?;
@@ -46,17 +43,23 @@ impl SubCommand {
 				state,
 				pretty,
 			} => {
-				let signals =
-					db.find_signals(tags.into_iter().map(|kv| (kv.key, kv.value)).collect(), workflow_id, name, state.map(Into::into)).await?;
+				let signals = db
+					.find_signals(
+						&tags
+							.into_iter()
+							.map(|kv| (kv.key, kv.value))
+							.collect::<Vec<_>>(),
+						workflow_id,
+						name.as_deref(),
+						state.map(Into::into),
+					)
+					.await?;
 				util::wf::signal::print_signals(signals, pretty).await
 			}
-			Self::Ack { signal_ids } => {
-				db.silence_signals(signal_ids).await
-			}
+			Self::Ack { signal_ids } => db.silence_signals(signal_ids).await,
 		}
 	}
 }
-
 
 #[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[clap(rename_all = "kebab_case")]
