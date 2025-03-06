@@ -6,34 +6,42 @@ license.workspace = true
 edition.workspace = true
 
 [dependencies]
+anyhow = "1.0"
 async-nats = "0.33"
 clickhouse = { version = "0.11.2" }
+fdb-util.workspace = true
+foundationdb.workspace = true
 funty = "=1.1.0"  # Fixes issue with sqlx dependency, see https://github.com/bitvecto-rs/bitvec/issues/105#issuecomment-778570981
+futures-util = "0.3"
 global-error.workspace = true
+governor = "0.6"
 hyper = { version = "0.14" }
 hyper-tls = { version = "0.5.0" }
 lazy_static = "1.4"
 rand = "0.8"
+rivet-config.workspace = true
 rivet-metrics.workspace = true
+tempfile = "3.13.0"
 thiserror = "1.0"
 tokio = { version = "1.40", features = ["tracing"] }
 tokio-util = "0.7"
 tracing = "0.1"
-governor = "0.6"
 url = "2.4"
-rivet-config.workspace = true
+uuid = { version = "1", features = ["v4"] }
 
 [dependencies.sqlx]
 workspace = true
 features = [
-	"runtime-tokio",
-	"runtime-tokio-native-tls",
-	"postgres",
-	"macros",
-	"uuid",
+	"bit-vec",
 	"ipnetwork",
 	"json",
-	"bit-vec",
+	"macros",
+	"migrate",
+	"postgres",
+	"runtime-tokio-native-tls",
+	"runtime-tokio",
+	"sqlite",
+	"uuid",
 ]
 
 [dependencies.redis]

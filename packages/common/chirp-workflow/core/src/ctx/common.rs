@@ -4,7 +4,7 @@ use global_error::{GlobalError, GlobalResult};
 use uuid::Uuid;
 
 /// Poll interval when polling for a sub workflow in-process
-pub const SUB_WORKFLOW_RETRY: Duration = Duration::from_millis(150);
+pub const SUB_WORKFLOW_RETRY: Duration = Duration::from_millis(500);
 /// Time to delay a workflow from retrying after an error
 pub const RETRY_TIMEOUT_MS: usize = 2000;
 pub const WORKFLOW_TIMEOUT: Duration = Duration::from_secs(60);

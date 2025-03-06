@@ -16,6 +16,7 @@ use crate::{
 #[derive(Clone)]
 pub struct ActivityCtx {
 	workflow_id: Uuid,
+	workflow_name: String,
 	ray_id: Uuid,
 	name: &'static str,
 	ts: i64,
@@ -33,6 +34,7 @@ pub struct ActivityCtx {
 impl ActivityCtx {
 	pub async fn new(
 		workflow_id: Uuid,
+		workflow_name: String,
 		db: DatabaseHandle,
 		config: &rivet_config::Config,
 		conn: &rivet_connection::Connection,
@@ -60,6 +62,7 @@ impl ActivityCtx {
 
 		Ok(ActivityCtx {
 			workflow_id,
+			workflow_name,
 			ray_id,
 			name,
 			ts,
@@ -94,9 +97,11 @@ impl ActivityCtx {
 		.await
 	}
 
+	// TODO: Theres nothing preventing this from being able to be called from the workflow ctx also, but for
+	// now its only in the activity ctx so it isn't called again during workflow retries
 	pub async fn update_workflow_tags(&self, tags: &serde_json::Value) -> GlobalResult<()> {
 		self.db
-			.update_workflow_tags(self.workflow_id, tags)
+			.update_workflow_tags(self.workflow_id, &self.workflow_name, tags)
 			.await
 			.map_err(GlobalError::raw)
 	}

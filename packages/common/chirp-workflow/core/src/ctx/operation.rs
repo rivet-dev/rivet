@@ -88,6 +88,7 @@ impl OperationCtx {
 
 	/// Creates a signal builder.
 	pub fn signal<T: Signal + Serialize>(&self, body: T) -> builder::signal::SignalBuilder<T> {
+		// TODO: Add check for from_workflow so you cant dispatch a signal
 		builder::signal::SignalBuilder::new(self.db.clone(), self.ray_id, body)
 	}
 }

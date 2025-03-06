@@ -12,6 +12,9 @@ pub enum Error {
 	#[error("missing clickhouse pool")]
 	MissingClickHousePool,
 
+	#[error("missing fdb pool")]
+	MissingFdbPool,
+
 	#[error("tokio join: {0}")]
 	TokioJoin(tokio::task::JoinError),
 
@@ -29,6 +32,12 @@ pub enum Error {
 
 	#[error("build redis url: {0}")]
 	BuildRedisUrl(url::ParseError),
+
+	#[error("build fdb: {0}")]
+	BuildFdb(anyhow::Error),
+
+	#[error("build fdb connection file: {0}")]
+	BuildFdbConnectionFile(std::io::Error),
 
 	#[error("modify redis url")]
 	ModifyRedisUrl,

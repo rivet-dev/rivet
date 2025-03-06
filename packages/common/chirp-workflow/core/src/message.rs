@@ -5,8 +5,6 @@ use uuid::Uuid;
 
 use crate::error::{WorkflowError, WorkflowResult};
 
-pub const WORKER_WAKE_SUBJECT: &str = "chirp.workflow.worker.wake";
-
 pub trait Message: Debug + Send + Sync + Serialize + DeserializeOwned + 'static {
 	const NAME: &'static str;
 	const TAIL_TTL: std::time::Duration;
@@ -42,7 +40,7 @@ impl AsTags for serde_json::Value {
 	fn as_tags(&self) -> WorkflowResult<serde_json::Value> {
 		match self {
 			serde_json::Value::Object(_) => Ok(self.clone()),
-			_ => Err(WorkflowError::InvalidTags),
+			_ => Err(WorkflowError::InvalidTags("must be an object".to_string())),
 		}
 	}
 
@@ -51,7 +49,7 @@ impl AsTags for serde_json::Value {
 			serde_json::Value::Object(_) => {
 				cjson::to_string(&self).map_err(WorkflowError::CjsonSerializeTags)
 			}
-			_ => Err(WorkflowError::InvalidTags),
+			_ => Err(WorkflowError::InvalidTags("must be an object".to_string())),
 		}
 	}
 }

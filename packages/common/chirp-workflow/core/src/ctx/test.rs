@@ -10,7 +10,7 @@ use crate::{
 		message::{SubscriptionHandle, TailAnchor, TailAnchorResponse},
 		MessageCtx,
 	},
-	db::{DatabaseCrdbNats, DatabaseHandle},
+	db::{Database, DatabaseHandle},
 	message::{AsTags, Message, NatsMessage},
 	operation::{Operation, OperationInput},
 	signal::Signal,
@@ -34,14 +34,28 @@ pub struct TestCtx {
 }
 
 impl TestCtx {
-	pub async fn from_env(test_name: &str) -> TestCtx {
+	pub async fn from_env<DB: Database + Sync + 'static>(
+		test_name: &str,
+		no_config: bool,
+	) -> TestCtx {
 		let service_name = format!("{}-test--{}", rivet_env::service_name(), test_name);
 
 		let ray_id = Uuid::new_v4();
-		let config = rivet_config::Config::load::<String>(&[]).await.unwrap();
-		let pools = rivet_pools::Pools::new(config.clone())
-			.await
-			.expect("failed to create pools");
+		let (config, pools) = if no_config {
+			let config = rivet_config::Config::from_root(rivet_config::config::Root::default());
+			let pools = rivet_pools::Pools::test(config.clone())
+				.await
+				.expect("failed to create pools");
+
+			(config, pools)
+		} else {
+			let config = rivet_config::Config::load::<String>(&[]).await.unwrap();
+			let pools = rivet_pools::Pools::new(config.clone())
+				.await
+				.expect("failed to create pools");
+
+			(config, pools)
+		};
 		let shared_client = chirp_client::SharedClient::from_env(pools.clone())
 			.expect("failed to create chirp client");
 		let cache =
@@ -68,10 +82,7 @@ impl TestCtx {
 			(),
 		);
 
-		let db = DatabaseCrdbNats::from_pools(
-			pools.crdb().unwrap(),
-			pools.nats_option().clone().unwrap(),
-		);
+		let db = DB::from_pools(pools).unwrap();
 		let msg_ctx = MessageCtx::new(&conn, ray_id).await.unwrap();
 
 		TestCtx {
@@ -222,6 +233,10 @@ impl TestCtx {
 
 	pub fn cache_handle(&self) -> rivet_cache::Cache {
 		self.conn.cache_handle()
+	}
+
+	pub fn pools(&self) -> &rivet_pools::Pools {
+		self.conn.pools()
 	}
 
 	pub async fn crdb(&self) -> Result<CrdbPool, rivet_pools::Error> {

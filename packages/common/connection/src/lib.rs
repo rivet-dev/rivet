@@ -58,6 +58,10 @@ impl Connection {
 		self.cache.clone()
 	}
 
+	pub fn pools(&self) -> &rivet_pools::Pools {
+		&self.pools
+	}
+
 	pub async fn nats(&self) -> Result<NatsPool, rivet_pools::Error> {
 		self.pools.nats()
 	}

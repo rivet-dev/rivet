@@ -34,6 +34,8 @@ pub struct Server {
 	pub clickhouse: Option<ClickHouse>,
 	#[serde(default)]
 	pub prometheus: Option<Prometheus>,
+	#[serde(default)]
+	pub fdb: Fdb,
 
 	// Services
 	#[serde(default)]
@@ -440,6 +442,20 @@ impl ClickHouseUserRole {
 			Admin => "admin",
 			Write => "write",
 			ReadOnly => "readonly",
+		}
+	}
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct Fdb {
+	pub connection: String,
+}
+
+impl Default for Fdb {
+	fn default() -> Self {
+		Self {
+			connection: "fdb:fdb@127.0.0.1:4500".to_string(),
 		}
 	}
 }

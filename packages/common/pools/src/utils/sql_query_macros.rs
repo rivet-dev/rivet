@@ -90,7 +90,7 @@ macro_rules! __sql_query_metrics_finish {
 ///	than make 4 RTT queries over 8 existing connections.
 #[macro_export]
 macro_rules! __sql_acquire {
-	($ctx:expr, $crdb:expr) => {{
+	($ctx:expr, $driver:expr) => {{
 		let location = concat!(file!(), ":", line!(), ":", column!());
 
 		let mut tries = 0;
@@ -98,7 +98,7 @@ macro_rules! __sql_acquire {
 			tries += 1;
 
 			// Attempt to use an existing connection
-			if let Some(conn) = $crdb.try_acquire() {
+			if let Some(conn) = $driver.try_acquire() {
 				break (conn, "try_acquire");
 			} else {
 				// Check if we can create a new connection
@@ -107,7 +107,7 @@ macro_rules! __sql_acquire {
 					.is_ok()
 				{
 					// Create a new connection
-					break ($crdb.acquire().await?, "acquire");
+					break ($driver.acquire().await?, "acquire");
 				} else {
 					// TODO: Backoff
 					tokio::time::sleep(std::time::Duration::from_millis(1)).await;
@@ -128,7 +128,7 @@ macro_rules! __sql_acquire {
 
 #[macro_export]
 macro_rules! __sql_query {
-	([$ctx:expr, $crdb:expr] $sql:expr, $($bind:expr),* $(,)?) => {
+	([$ctx:expr, $driver:expr] $sql:expr, $($bind:expr),* $(,)?) => {
 		async {
 			use sqlx::Acquire;
 
@@ -139,8 +139,8 @@ macro_rules! __sql_query {
 
 			// Acquire connection
 			$crate::__sql_query_metrics_acquire!(_acquire);
-			let crdb = $crdb;
-			let mut conn = $crate::__sql_acquire!($ctx, crdb);
+			let driver = $driver;
+			let mut conn = $crate::__sql_acquire!($ctx, driver);
 
 			// Execute query
 			$crate::__sql_query_metrics_start!($ctx, execute, _acquire, _start);
@@ -173,7 +173,7 @@ macro_rules! __sql_query {
 
 #[macro_export]
 macro_rules! __sql_query_as {
-	([$ctx:expr, $rv:ty, $action:ident, $crdb:expr] $sql:expr, $($bind:expr),* $(,)?) => {
+	([$ctx:expr, $rv:ty, $action:ident, $driver:expr] $sql:expr, $($bind:expr),* $(,)?) => {
 		async {
 			use sqlx::Acquire;
 
@@ -184,8 +184,8 @@ macro_rules! __sql_query_as {
 
 			// Acquire connection
 			$crate::__sql_query_metrics_acquire!(_acquire);
-			let crdb = $crdb;
-			let mut conn = $crate::__sql_acquire!($ctx, crdb);
+			let driver = $driver;
+			let mut conn = $crate::__sql_acquire!($ctx, driver);
 
 			// Execute query
 			$crate::__sql_query_metrics_start!($ctx, $action, _acquire, _start);
@@ -220,13 +220,13 @@ macro_rules! __sql_query_as {
 /// Used for the `fetch` function.
 #[macro_export]
 macro_rules! __sql_query_as_raw {
-	([$ctx:expr, $rv:ty, $action:ident, $crdb:expr] $sql:expr, $($bind:expr),* $(,)?) => {
+	([$ctx:expr, $rv:ty, $action:ident, $driver:expr] $sql:expr, $($bind:expr),* $(,)?) => {
 		// We can't record metrics for this because we can't move the `await` in to this macro
 		sqlx::query_as::<_, $rv>($crate::__opt_indoc!($sql))
 		$(
 			.bind($bind)
 		)*
-		.$action($crdb)
+		.$action($driver)
 	};
 	// TODO: This doesn't work with `fetch`
 	([$ctx:expr, $rv:ty, $action:ident] $sql:expr, $($bind:expr),* $(,)?) => {
@@ -244,18 +244,18 @@ macro_rules! sql_execute {
 
 #[macro_export]
 macro_rules! sql_fetch {
-	([$ctx:expr, $rv:ty, $crdb:expr] $sql:expr, $($bind:expr),* $(,)?) => {
-		__sql_query_as_raw!([$ctx, $rv, fetch, $crdb] $sql, $($bind),*)
+	([$ctx:expr, $rv:ty, $driver:expr] $sql:expr, $($bind:expr),* $(,)?) => {
+		__sql_query_as_raw!([$ctx, $rv, fetch, $driver] $sql, $($bind),*)
 	};
 }
 
 #[macro_export]
 macro_rules! sql_fetch_all {
-	([$ctx:expr, $rv:ty, $crdb:expr] $sql:expr, $($bind:expr),* $(,)?) => {
-		__sql_query_as!([$ctx, $rv, fetch_all, $crdb] $sql, $($bind),*)
+	([$ctx:expr, $rv:ty, $driver:expr] $sql:expr, $($bind:expr),* $(,)?) => {
+		__sql_query_as!([$ctx, $rv, fetch_all, $driver] $sql, $($bind),*)
 	};
-	([$ctx:expr, $rv:ty, @tx $crdb:expr] $sql:expr, $($bind:expr),* $(,)?) => {
-		__sql_query_as!([$ctx, $rv, fetch_all, @tx $crdb] $sql, $($bind),*)
+	([$ctx:expr, $rv:ty, @tx $driver:expr] $sql:expr, $($bind:expr),* $(,)?) => {
+		__sql_query_as!([$ctx, $rv, fetch_all, @tx $driver] $sql, $($bind),*)
 	};
 	([$ctx:expr, $rv:ty] $sql:expr, $($bind:expr),* $(,)?) => {
 		__sql_query_as!([$ctx, $rv, fetch_all] $sql, $($bind),*)
@@ -264,11 +264,11 @@ macro_rules! sql_fetch_all {
 
 #[macro_export]
 macro_rules! sql_fetch_many {
-	([$ctx:expr, $rv:ty, $crdb:expr] $sql:expr, $($bind:expr),* $(,)?) => {
-		__sql_query_as!([$ctx, $rv, fetch_many, $crdb] $sql, $($bind),*)
+	([$ctx:expr, $rv:ty, $driver:expr] $sql:expr, $($bind:expr),* $(,)?) => {
+		__sql_query_as!([$ctx, $rv, fetch_many, $driver] $sql, $($bind),*)
 	};
-	([$ctx:expr, $rv:ty, @tx $crdb:expr] $sql:expr, $($bind:expr),* $(,)?) => {
-		__sql_query_as!([$ctx, $rv, fetch_many, @tx $crdb] $sql, $($bind),*)
+	([$ctx:expr, $rv:ty, @tx $driver:expr] $sql:expr, $($bind:expr),* $(,)?) => {
+		__sql_query_as!([$ctx, $rv, fetch_many, @tx $driver] $sql, $($bind),*)
 	};
 	([$ctx:expr, $rv:ty] $sql:expr, $($bind:expr),* $(,)?) => {
 		__sql_query_as!([$ctx, $rv, fetch_many] $sql, $($bind),*)
@@ -277,11 +277,11 @@ macro_rules! sql_fetch_many {
 
 #[macro_export]
 macro_rules! sql_fetch_one {
-	([$ctx:expr, $rv:ty, $crdb:expr] $sql:expr, $($bind:expr),* $(,)?) => {
-		__sql_query_as!([$ctx, $rv, fetch_one, $crdb] $sql, $($bind),*)
+	([$ctx:expr, $rv:ty, $driver:expr] $sql:expr, $($bind:expr),* $(,)?) => {
+		__sql_query_as!([$ctx, $rv, fetch_one, $driver] $sql, $($bind),*)
 	};
-	([$ctx:expr, $rv:ty, @tx $crdb:expr] $sql:expr, $($bind:expr),* $(,)?) => {
-		__sql_query_as!([$ctx, $rv, fetch_one, @tx $crdb] $sql, $($bind),*)
+	([$ctx:expr, $rv:ty, @tx $driver:expr] $sql:expr, $($bind:expr),* $(,)?) => {
+		__sql_query_as!([$ctx, $rv, fetch_one, @tx $driver] $sql, $($bind),*)
 	};
 	([$ctx:expr, $rv:ty] $sql:expr, $($bind:expr),* $(,)?) => {
 		__sql_query_as!([$ctx, $rv, fetch_one] $sql, $($bind),*)
@@ -290,11 +290,11 @@ macro_rules! sql_fetch_one {
 
 #[macro_export]
 macro_rules! sql_fetch_optional {
-	([$ctx:expr, $rv:ty, $crdb:expr] $sql:expr, $($bind:expr),* $(,)?) => {
-		__sql_query_as!([$ctx, $rv, fetch_optional, $crdb] $sql, $($bind),*)
+	([$ctx:expr, $rv:ty, $driver:expr] $sql:expr, $($bind:expr),* $(,)?) => {
+		__sql_query_as!([$ctx, $rv, fetch_optional, $driver] $sql, $($bind),*)
 	};
-	([$ctx:expr, $rv:ty, @tx $crdb:expr] $sql:expr, $($bind:expr),* $(,)?) => {
-		__sql_query_as!([$ctx, $rv, fetch_optional, @tx $crdb] $sql, $($bind),*)
+	([$ctx:expr, $rv:ty, @tx $driver:expr] $sql:expr, $($bind:expr),* $(,)?) => {
+		__sql_query_as!([$ctx, $rv, fetch_optional, @tx $driver] $sql, $($bind),*)
 	};
 	([$ctx:expr, $rv:ty] $sql:expr, $($bind:expr),* $(,)?) => {
 		__sql_query_as!([$ctx, $rv, fetch_optional] $sql, $($bind),*)

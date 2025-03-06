@@ -162,7 +162,11 @@ impl WorkflowCtx {
 					interval.tick().await;
 
 					// Write output
-					if let Err(err) = self.db.commit_workflow(self.workflow_id, &output).await {
+					if let Err(err) = self
+						.db
+						.complete_workflow(self.workflow_id, &self.name, &output)
+						.await
+					{
 						if retries > MAX_DB_ACTION_RETRIES {
 							return Err(err);
 						}
@@ -213,8 +217,9 @@ impl WorkflowCtx {
 					// Write output
 					let res = self
 						.db
-						.fail_workflow(
+						.commit_workflow(
 							self.workflow_id,
+							&self.name,
 							false,
 							deadline_ts,
 							wake_signals,
@@ -250,6 +255,7 @@ impl WorkflowCtx {
 
 		let ctx = ActivityCtx::new(
 			self.workflow_id,
+			self.name.clone(),
 			self.db.clone(),
 			&self.config,
 			&self.conn,
@@ -446,10 +452,10 @@ impl WorkflowCtx {
 		loop {
 			interval.tick().await;
 
-			// Check if state finished
+			// Check if workflow completed
 			let workflow = self
 				.db
-				.get_workflow(sub_workflow_id)
+				.get_sub_workflow(self.workflow_id, &self.name, sub_workflow_id)
 				.await
 				.map_err(GlobalError::raw)?
 				.ok_or(WorkflowError::WorkflowNotFound)

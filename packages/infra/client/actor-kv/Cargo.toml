@@ -8,7 +8,7 @@ license = "Apache-2.0"
 [dependencies]
 anyhow.workspace = true
 deno_core.workspace = true
-foundationdb = {version = "0.9.1", features = [ "fdb-7_1", "embedded-fdb-include" ] }
+foundationdb.workspace = true
 futures-util = { version = "0.3" }
 indexmap = { version = "2.0" }
 prost = "0.13.3"

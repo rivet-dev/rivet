@@ -10,7 +10,6 @@ use std::{
 use anyhow::*;
 use deno_core::{v8_set_flags, JsRuntime};
 use deno_runtime::worker::MainWorkerTerminateHandle;
-use foundationdb as fdb;
 use futures_util::{stream::SplitStream, SinkExt, StreamExt};
 use pegboard::protocol;
 use pegboard_actor_kv::ActorKv;
@@ -61,8 +60,7 @@ async fn main() -> Result<()> {
 	let config = serde_json::from_str::<Config>(&config_data)?;
 
 	// Start FDB network thread
-	let _network = unsafe { fdb::boot() };
-	tokio::spawn(utils::fdb_health_check(config.clone()));
+	fdb_util::init(&config.fdb_cluster_path);
 
 	tracing::info!(pid=%std::process::id(), "starting");
 
@@ -292,7 +290,7 @@ async fn watch_thread(
 
 	// Remove state
 	if !persist_storage {
-		let db = match utils::fdb_handle(&config) {
+		let db = match fdb_util::handle(&config.fdb_cluster_path) {
 			Ok(db) => db,
 			Err(err) => {
 				tracing::error!(?err, ?actor_id, "failed to create fdb handle");

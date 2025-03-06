@@ -13,6 +13,8 @@ use crate::{
 
 mod crdb_nats;
 pub use crdb_nats::DatabaseCrdbNats;
+mod fdb_sqlite_nats;
+pub use fdb_sqlite_nats::DatabaseFdbSqliteNats;
 
 pub type DatabaseHandle = Arc<dyn Database + Sync>;
 
@@ -20,6 +22,10 @@ pub type DatabaseHandle = Arc<dyn Database + Sync>;
 // manually in the driver.
 #[async_trait::async_trait]
 pub trait Database: Send {
+	fn from_pools(pools: rivet_pools::Pools) -> Result<Arc<Self>, rivet_pools::Error>
+	where
+		Self: Sized;
+
 	/// When using a wake worker instead of a polling worker, this function will return once the worker
 	/// should fetch the database again.
 	async fn wake(&self) -> WorkflowResult<()> {
@@ -29,7 +35,8 @@ pub trait Database: Send {
 		);
 	}
 
-	/// Writes a new workflow to the database.
+	/// Writes a new workflow to the database. If unique is set, this should return the existing workflow ID
+	/// (if one exists) instead of the given workflow ID.
 	async fn dispatch_workflow(
 		&self,
 		ray_id: Uuid,
@@ -41,7 +48,14 @@ pub trait Database: Send {
 	) -> WorkflowResult<Uuid>;
 
 	/// Retrieves a workflow with the given ID.
-	async fn get_workflow(&self, id: Uuid) -> WorkflowResult<Option<WorkflowData>>;
+	async fn get_workflow(&self, workflow_id: Uuid) -> WorkflowResult<Option<WorkflowData>>;
+
+	/// Retrieves a workflow with the given name and tags.
+	async fn find_workflow(
+		&self,
+		workflow_name: &str,
+		tags: &serde_json::Value,
+	) -> WorkflowResult<Option<Uuid>>;
 
 	/// Pulls workflows for processing by the worker. Will only pull workflows with names matching the filter.
 	async fn pull_workflows(
@@ -51,41 +65,23 @@ pub trait Database: Send {
 	) -> WorkflowResult<Vec<PulledWorkflow>>;
 
 	/// Mark a workflow as completed.
-	async fn commit_workflow(
+	async fn complete_workflow(
 		&self,
 		workflow_id: Uuid,
+		workflow_name: &str,
 		output: &serde_json::value::RawValue,
 	) -> WorkflowResult<()>;
 
-	/// Write a workflow failure to the database.
-	async fn fail_workflow(
+	/// Write a workflow sleep/failure to the database.
+	async fn commit_workflow(
 		&self,
 		workflow_id: Uuid,
+		workflow_name: &str,
 		wake_immediate: bool,
 		wake_deadline_ts: Option<i64>,
 		wake_signals: &[&str],
 		wake_sub_workflow: Option<Uuid>,
 		error: &str,
-	) -> WorkflowResult<()>;
-
-	/// Updates workflow tags.
-	async fn update_workflow_tags(
-		&self,
-		workflow_id: Uuid,
-		tags: &serde_json::Value,
-	) -> WorkflowResult<()>;
-
-	/// Write a workflow activity event to history.
-	async fn commit_workflow_activity_event(
-		&self,
-		workflow_id: Uuid,
-		location: &Location,
-		version: usize,
-		event_id: &EventId,
-		create_ts: i64,
-		input: &serde_json::value::RawValue,
-		output: Result<&serde_json::value::RawValue, &str>,
-		loop_location: Option<&Location>,
 	) -> WorkflowResult<()>;
 
 	/// Pulls the oldest signal with the given filter. Pulls from regular and tagged signals.
@@ -97,6 +93,14 @@ pub trait Database: Send {
 		version: usize,
 		loop_location: Option<&Location>,
 	) -> WorkflowResult<Option<SignalData>>;
+
+	/// Retrieves a workflow with the given ID. Can only be called from a workflow context.
+	async fn get_sub_workflow(
+		&self,
+		workflow_id: Uuid,
+		workflow_name: &str,
+		sub_workflow_id: Uuid,
+	) -> WorkflowResult<Option<WorkflowData>>;
 
 	/// Write a new signal to the database.
 	async fn publish_signal(
@@ -160,6 +164,27 @@ pub trait Database: Send {
 		loop_location: Option<&Location>,
 		unique: bool,
 	) -> WorkflowResult<Uuid>;
+
+	/// Updates workflow tags.
+	async fn update_workflow_tags(
+		&self,
+		workflow_id: Uuid,
+		workflow_name: &str,
+		tags: &serde_json::Value,
+	) -> WorkflowResult<()>;
+
+	/// Write a workflow activity event to history.
+	async fn commit_workflow_activity_event(
+		&self,
+		workflow_id: Uuid,
+		location: &Location,
+		version: usize,
+		event_id: &EventId,
+		create_ts: i64,
+		input: &serde_json::value::RawValue,
+		output: Result<&serde_json::value::RawValue, &str>,
+		loop_location: Option<&Location>,
+	) -> WorkflowResult<()>;
 
 	/// Writes a message send event to history.
 	async fn commit_workflow_message_send_event(
@@ -253,7 +278,6 @@ pub struct PulledWorkflow {
 	pub create_ts: i64,
 	pub ray_id: Uuid,
 	pub input: Box<serde_json::value::RawValue>,
-	pub wake_deadline_ts: Option<i64>,
 
 	pub events: HashMap<Location, Vec<Event>>,
 }

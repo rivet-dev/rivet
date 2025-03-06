@@ -240,6 +240,10 @@ where
 		self.conn.cache_handle()
 	}
 
+	pub fn pools(&self) -> &rivet_pools::Pools {
+		self.conn.pools()
+	}
+
 	pub async fn crdb(&self) -> Result<CrdbPool, rivet_pools::Error> {
 		self.conn.crdb().await
 	}

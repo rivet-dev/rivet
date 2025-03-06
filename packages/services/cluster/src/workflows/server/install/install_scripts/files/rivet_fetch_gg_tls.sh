@@ -70,7 +70,7 @@ EOF
 # Create systemd timer file
 cat << 'EOF' > /etc/systemd/system/rivet_fetch_gg_tls.timer
 [Unit]
-Description=Runs TLS fetch every minute
+Description=Runs TLS fetch every hour
 Requires=network-online.target
 After=network-online.target
 

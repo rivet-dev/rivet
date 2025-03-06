@@ -156,3 +156,67 @@ impl Deref for Coordinate {
 		&self.0
 	}
 }
+
+// Implements sqlx types for `Location`
+mod sqlx {
+	use super::Location;
+
+	impl<DB> sqlx::Type<DB> for Location
+	where
+		DB: sqlx::Database,
+		serde_json::Value: sqlx::Type<DB>,
+	{
+		fn type_info() -> DB::TypeInfo {
+			<serde_json::Value as sqlx::Type<DB>>::type_info()
+		}
+
+		fn compatible(ty: &DB::TypeInfo) -> bool {
+			<serde_json::Value as sqlx::Type<DB>>::compatible(ty)
+		}
+	}
+
+	impl<'q, DB> sqlx::Encode<'q, DB> for Location
+	where
+		serde_json::Value: sqlx::Encode<'q, DB>,
+		DB: sqlx::Database,
+	{
+		fn encode_by_ref(
+			&self,
+			buf: &mut DB::ArgumentBuffer<'q>,
+		) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
+			<serde_json::Value as sqlx::Encode<'q, DB>>::encode(serialize_location(self), buf)
+		}
+	}
+
+	impl<'r, DB> sqlx::Decode<'r, DB> for Location
+	where
+		sqlx::types::Json<Box<[Box<[usize]>]>>: sqlx::Decode<'r, DB>,
+		DB: sqlx::Database,
+	{
+		fn decode(value: DB::ValueRef<'r>) -> Result<Self, sqlx::error::BoxDynError> {
+			let value =
+				<sqlx::types::Json<Box<[Box<[usize]>]>> as sqlx::Decode<'r, DB>>::decode(value)?;
+
+			Ok(IntoIterator::into_iter(value.0).collect())
+		}
+	}
+
+	// TODO: Implement serde serialize and deserialize for `Location`
+	/// Convert location to json as `number[][]`.
+	fn serialize_location(location: &Location) -> serde_json::Value {
+		serde_json::Value::Array(
+			location
+				.as_ref()
+				.iter()
+				.map(|coord| {
+					serde_json::Value::Array(
+						coord
+							.iter()
+							.map(|x| serde_json::Value::Number((*x).into()))
+							.collect(),
+					)
+				})
+				.collect(),
+		)
+	}
+}

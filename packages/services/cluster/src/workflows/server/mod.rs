@@ -892,7 +892,7 @@ async fn cleanup(
 			tracing::info!(server_id=?input.server_id, "destroying linode server");
 
 			ctx.signal(linode::workflows::server::Destroy {})
-				.to_workflow(provider_server_workflow_id)
+				.to_workflow_id(provider_server_workflow_id)
 				.send()
 				.await?;
 

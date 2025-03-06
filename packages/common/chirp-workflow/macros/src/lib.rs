@@ -395,21 +395,24 @@ pub fn message(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 #[proc_macro_attribute]
 pub fn workflow_test(_attr: TokenStream, item: TokenStream) -> TokenStream {
-	let input = syn::parse_macro_input!(item as syn::ItemFn);
+	let item_fn = syn::parse_macro_input!(item as syn::ItemFn);
 
-	let test_ident = &input.sig.ident;
-	let body = &input.block;
+	let test_ident = &item_fn.sig.ident;
+	let body = &item_fn.block;
 
 	// Check if is async
-	if input.sig.asyncness.is_none() {
+	if item_fn.sig.asyncness.is_none() {
 		return error(
-			input.sig.span(),
+			item_fn.sig.span(),
 			"the async keyword is missing from the function declaration",
 		);
 	}
 
 	// Parse args
-	let ctx_input = match input.sig.inputs.first().unwrap() {
+	let Some(first_arg) = item_fn.sig.inputs.first() else {
+		return error(item_fn.span(), "must have ctx argument");
+	};
+	let ctx_input = match first_arg {
 		syn::FnArg::Receiver(recv) => {
 			return error(recv.span(), "cannot have receiver argument");
 		}
@@ -479,7 +482,7 @@ fn parse_config(attrs: &[syn::Attribute]) -> syn::Result<Config> {
 				.base10_parse()?;
 		} else if ident != "doc" {
 			return Err(syn::Error::new(
-				ident.span(),
+				name_value.span(),
 				format!("Unknown config property `{ident}`"),
 			));
 		}
@@ -504,7 +507,7 @@ fn parse_msg_config(attrs: &[syn::Attribute]) -> syn::Result<MessageConfig> {
 				.base10_parse()?;
 		} else if ident != "doc" {
 			return Err(syn::Error::new(
-				ident.span(),
+				name_value.span(),
 				format!("Unknown config property `{ident}`"),
 			));
 		}
@@ -523,7 +526,7 @@ fn parse_empty_config(attrs: &[syn::Attribute]) -> syn::Result<()> {
 
 		if ident != "doc" {
 			return Err(syn::Error::new(
-				ident.span(),
+				name_value.span(),
 				format!("Unknown config property `{ident}`"),
 			));
 		}

@@ -37,6 +37,16 @@
         }
       ]
     },
+    "fdb": {
+      "default": {
+        "connection": "fdb:fdb@127.0.0.1:4500"
+      },
+      "allOf": [
+        {
+          "$ref": "#/definitions/Fdb"
+        }
+      ]
+    },
     "hcaptcha": {
       "default": null,
       "allOf": [
@@ -915,6 +925,18 @@
       "enum": [
         "cloudflare"
       ]
+    },
+    "Fdb": {
+      "type": "object",
+      "required": [
+        "connection"
+      ],
+      "properties": {
+        "connection": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
     },
     "FirewallRule": {
       "type": "object",

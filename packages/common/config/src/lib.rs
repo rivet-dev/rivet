@@ -42,6 +42,10 @@ impl Config {
 
 		Ok(Self(Arc::new(ConfigData { config })))
 	}
+
+	pub fn from_root(config: config::Root) -> Self {
+		Self(Arc::new(ConfigData { config }))
+	}
 }
 
 impl Deref for Config {

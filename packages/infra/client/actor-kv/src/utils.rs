@@ -11,7 +11,7 @@ use crate::{
 };
 
 pub trait TransactionExt {
-	/// Owned version of `Transaction.get_ranges`.
+	/// Owned version of `Transaction.get_ranges` (self is owned).
 	fn get_ranges_owned<'a>(
 		self,
 		opt: fdb::RangeOption<'a>,
@@ -22,7 +22,7 @@ pub trait TransactionExt {
 	       + Unpin
 	       + 'a;
 
-	/// Owned version of `Transaction.get_ranges_keyvalues`.
+	/// Owned version of `Transaction.get_ranges_keyvalues` (self is owned).
 	fn get_ranges_keyvalues_owned<'a>(
 		self,
 		opt: fdb::RangeOption<'a>,

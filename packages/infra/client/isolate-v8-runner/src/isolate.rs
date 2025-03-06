@@ -141,7 +141,10 @@ pub async fn run_inner(
 	tracing::info!(?actor_id, "starting isolate");
 
 	// Init KV store (create or open)
-	let mut kv = ActorKv::new(utils::fdb_handle(&config)?, actor_config.owner.clone());
+	let mut kv = ActorKv::new(
+		fdb_util::handle(&config.fdb_cluster_path)?,
+		actor_config.owner.clone(),
+	);
 	kv.init().await?;
 
 	tracing::info!(?actor_id, "isolate kv initialized");
@@ -563,8 +566,7 @@ mod tests {
 		]);
 
 		// Start FDB network thread
-		let _network = unsafe { fdb::boot() };
-		tokio::spawn(utils::fdb_health_check(config.clone()));
+		fdb_util::init(&config.fdb_cluster_path);
 
 		// For receiving the terminate handle
 		let (terminate_tx, _terminate_rx) =

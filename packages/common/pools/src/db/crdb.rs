@@ -10,8 +10,6 @@ pub async fn setup(config: Config) -> Result<CrdbPool, Error> {
 	let crdb = &config.server().map_err(Error::Global)?.cockroachdb;
 	tracing::debug!("crdb connecting");
 
-	// let client_name = client_name.clone();
-
 	let mut opts: sqlx::postgres::PgConnectOptions =
 		crdb.url.to_string().parse().map_err(Error::BuildSqlx)?;
 	opts = opts.username(&crdb.username);

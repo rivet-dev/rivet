@@ -18,6 +18,7 @@ use pegboard::{protocol, system_info::SystemInfo};
 use pegboard_config::{
 	isolate_runner::Config as IsolateRunnerConfig, runner_protocol, Client, Config,
 };
+use sqlite_util::SqliteConnectionExt;
 use sqlx::{pool::PoolConnection, Sqlite, SqlitePool};
 use tokio::{
 	fs,
@@ -35,12 +36,8 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::{
-	actor::Actor,
-	event_sender::EventSender,
-	metrics,
-	pull_addr_handler::PullAddrHandler,
-	runner,
-	utils::{self, sql::SqliteConnectionExt},
+	actor::Actor, event_sender::EventSender, metrics, pull_addr_handler::PullAddrHandler, runner,
+	utils,
 };
 
 const PING_INTERVAL: Duration = Duration::from_secs(1);
@@ -130,7 +127,7 @@ impl Ctx {
 		// Fetch next idx
 		let index = utils::sql::query(|| async {
 			let mut conn = self.sql().await?;
-			let mut txn = conn.begin_immediate().await?;
+			let mut tx = conn.begin_immediate().await?;
 
 			let (index,) = sqlx::query_as::<_, (i64,)>(indoc!(
 				"
@@ -139,7 +136,7 @@ impl Ctx {
 				RETURNING last_event_idx
 				",
 			))
-			.fetch_one(&mut *txn)
+			.fetch_one(&mut *tx)
 			.await?;
 
 			sqlx::query(indoc!(
@@ -155,10 +152,10 @@ impl Ctx {
 			.bind(index)
 			.bind(&event_json)
 			.bind(utils::now())
-			.execute(&mut *txn)
+			.execute(&mut *tx)
 			.await?;
 
-			txn.commit().await?;
+			tx.commit().await?;
 
 			Ok(index)
 		})

@@ -2890,14 +2890,18 @@ dependencies = [
  "chirp-client",
  "chirp-workflow-macros",
  "cjson",
+ "fdb-util",
  "formatted-error",
+ "foundationdb",
  "futures-util",
  "global-error",
+ "include_dir",
  "indoc 2.0.5",
  "lazy_static",
  "md5",
  "prost 0.12.6",
  "prost-types 0.12.6",
+ "rand",
  "rivet-cache",
  "rivet-config",
  "rivet-connection",
@@ -2915,6 +2919,7 @@ dependencies = [
  "tokio",
  "tokio-util 0.7.12",
  "tracing",
+ "tracing-logfmt",
  "tracing-subscriber",
  "uuid",
 ]
@@ -5969,6 +5974,17 @@ dependencies = [
  "cfg-if",
  "rustix",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "fdb-util"
+version = "24.6.2-rc.1"
+dependencies = [
+ "anyhow",
+ "foundationdb",
+ "lazy_static",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -12008,9 +12024,13 @@ dependencies = [
 name = "rivet-pools"
 version = "5.1.2"
 dependencies = [
+ "anyhow",
  "async-nats",
  "clickhouse",
+ "fdb-util",
+ "foundationdb",
  "funty 1.1.0",
+ "futures-util",
  "global-error",
  "governor",
  "hyper 0.14.31",
@@ -12021,11 +12041,13 @@ dependencies = [
  "rivet-config",
  "rivet-metrics",
  "sqlx",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "tokio-util 0.7.12",
  "tracing",
  "url",
+ "uuid",
 ]
 
 [[package]]

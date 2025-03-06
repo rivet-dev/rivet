@@ -1,18 +1,25 @@
+use std::{collections::HashMap, sync::Arc, time::Duration};
+
 use global_error::{ensure_with, prelude::*, GlobalResult};
 use rivet_config::Config;
-use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio_util::sync::{CancellationToken, DropGuard};
+use uuid::Uuid;
 
-use crate::{ClickHousePool, CrdbPool, Error, NatsPool, RedisPool};
+use crate::{
+	db::sqlite::SqlitePoolManager, ClickHousePool, CrdbPool, Error, FdbPool, NatsPool, RedisPool,
+	SqlitePool,
+};
 
 // TODO: Automatically shutdown all pools on drop
 pub(crate) struct PoolsInner {
 	pub(crate) _guard: DropGuard,
-	config: rivet_config::Config,
 	pub(crate) nats: Option<NatsPool>,
 	pub(crate) crdb: Option<CrdbPool>,
 	pub(crate) redis: HashMap<String, RedisPool>,
 	pub(crate) clickhouse: Option<clickhouse::Client>,
+	pub(crate) fdb: Option<FdbPool>,
+	pub(crate) sqlite: SqlitePoolManager,
+	clickhouse_enabled: bool,
 }
 
 #[derive(Clone)]
@@ -25,20 +32,26 @@ impl Pools {
 		let client_name = "rivet".to_string();
 		let token = CancellationToken::new();
 
-		let (nats, crdb, redis) = tokio::try_join!(
+		let (nats, crdb, redis, fdb) = tokio::try_join!(
 			crate::db::nats::setup(config.clone(), client_name.clone()),
 			crate::db::crdb::setup(config.clone()),
 			crate::db::redis::setup(config.clone()),
+			crate::db::fdb::setup(config.clone()),
 		)?;
 		let clickhouse = crate::db::clickhouse::setup(config.clone())?;
 
 		let pool = Pools(Arc::new(PoolsInner {
 			_guard: token.clone().drop_guard(),
-			config,
 			nats: Some(nats),
 			crdb: Some(crdb),
 			redis,
 			clickhouse,
+			fdb: Some(fdb),
+			sqlite: SqlitePoolManager::new(),
+			clickhouse_enabled: config
+				.server
+				.as_ref()
+				.map_or(false, |x| x.clickhouse.is_some()),
 		}));
 		pool.clone().start(token);
 
@@ -49,6 +62,43 @@ impl Pools {
 
 		Ok(pool)
 	}
+
+	// Only for tests
+	#[tracing::instrument(skip(config))]
+	pub async fn test(config: Config) -> Result<Pools, Error> {
+		// TODO: Choose client name for this service
+		let client_name = "rivet".to_string();
+		let token = CancellationToken::new();
+
+		let (nats, redis, fdb) = tokio::try_join!(
+			crate::db::nats::setup(config.clone(), client_name.clone()),
+			crate::db::redis::setup(config.clone()),
+			crate::db::fdb::setup(config.clone()),
+		)?;
+
+		let pool = Pools(Arc::new(PoolsInner {
+			_guard: token.clone().drop_guard(),
+			nats: Some(nats),
+			crdb: None,
+			redis,
+			clickhouse: None,
+			fdb: Some(fdb),
+			sqlite: SqlitePoolManager::new(),
+			clickhouse_enabled: config
+				.server
+				.as_ref()
+				.map_or(false, |x| x.clickhouse.is_some()),
+		}));
+		pool.clone().start(token);
+
+		tokio::task::Builder::new()
+			.name("rivet_pools::runtime")
+			.spawn(runtime(pool.clone(), client_name.clone()))
+			.map_err(Error::TokioSpawn)?;
+
+		Ok(pool)
+	}
+
 	/// Spawn background tasks required to operate the pool.
 	pub(crate) fn start(self, token: CancellationToken) {
 		let spawn_res = tokio::task::Builder::new()
@@ -100,11 +150,7 @@ impl Pools {
 	}
 
 	pub fn clickhouse_enabled(&self) -> bool {
-		self.0
-			.config
-			.server
-			.as_ref()
-			.map_or(false, |x| x.clickhouse.is_some())
+		self.0.clickhouse_enabled
 	}
 
 	pub fn clickhouse(&self) -> GlobalResult<ClickHousePool> {
@@ -116,6 +162,14 @@ impl Pools {
 
 		let ch = unwrap!(self.0.clickhouse.clone(), "missing clickhouse pool");
 		Ok(ch)
+	}
+
+	pub fn fdb(&self) -> Result<FdbPool, Error> {
+		self.0.fdb.clone().ok_or(Error::MissingFdbPool)
+	}
+
+	pub async fn sqlite(&self, key: Uuid) -> Result<SqlitePool, Error> {
+		self.0.sqlite.get(key).await
 	}
 
 	#[tracing::instrument(skip_all)]

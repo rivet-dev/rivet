@@ -1,0 +1,2596 @@
+//! Implementation of a workflow database driver with SQLite and FoundationDB.
+// TODO: Move code to smaller functions for readability
+
+use std::{
+	collections::HashSet,
+	sync::{
+		atomic::{AtomicBool, Ordering},
+		Arc,
+	},
+	time::Instant,
+};
+
+use foundationdb::{
+	self as fdb,
+	options::{ConflictRangeType, StreamingMode},
+	tuple::Subspace,
+};
+use futures_util::{StreamExt, TryStreamExt};
+use indoc::indoc;
+use rivet_pools::prelude::*;
+use sqlite_util::SqliteConnectionExt;
+use tokio::sync::Mutex;
+use tracing::Instrument;
+use uuid::Uuid;
+
+use super::{Database, PulledWorkflow, SignalData, WorkflowData};
+use crate::{
+	error::{WorkflowError, WorkflowResult},
+	history::{
+		event::{EventId, EventType, SleepState},
+		location::Location,
+	},
+	metrics, worker,
+};
+use keys::{FormalChunkedKey, FormalKey};
+
+mod keys;
+mod sqlite;
+
+// HACK: We alias global error here because its hardcoded into the sql macros
+type GlobalError = WorkflowError;
+
+/// Base retry for query retry backoff.
+const QUERY_RETRY_MS: usize = 500;
+/// Maximum times a query ran by this database adapter is retried.
+const MAX_QUERY_RETRIES: usize = 4;
+/// For SQL macros.
+const CONTEXT_NAME: &str = "chirp_workflow_fdb_sqlite_nats_engine";
+/// For NATS wake mechanism.
+const WORKER_WAKE_SUBJECT: &str = "chirp.workflow.fdb_sqlite_nats.worker.wake";
+/// Makes the code blatantly obvious if its using a snapshot read.
+const SNAPSHOT: bool = true;
+const SERIALIZABLE: bool = false;
+
+/// Once tagged signals get removed, this and all of their code can be as well. This allows us to gradually
+/// move off of tagged signals and makes it clear which code relates to tagged signals
+const TAGGED_SIGNALS_ENABLED: bool = true;
+
+pub struct DatabaseFdbSqliteNats {
+	pools: rivet_pools::Pools,
+	sub: Mutex<Option<rivet_pools::prelude::nats::Subscriber>>,
+	subspace: Subspace,
+}
+
+impl DatabaseFdbSqliteNats {
+	// For SQL macros
+	fn name(&self) -> &str {
+		CONTEXT_NAME
+	}
+
+	/// Spawns a new thread and publishes a worker wake message to nats.
+	fn wake_worker(&self) {
+		let Ok(nats) = self.pools.nats() else {
+			tracing::debug!("failed to acquire nats pool");
+			return;
+		};
+
+		let spawn_res = tokio::task::Builder::new().name("wake").spawn(
+			async move {
+				// Fail gracefully
+				if let Err(err) = nats.publish(WORKER_WAKE_SUBJECT, Vec::new().into()).await {
+					tracing::warn!(?err, "failed to publish wake message");
+				}
+			}
+			.in_current_span(),
+		);
+		if let Err(err) = spawn_res {
+			tracing::error!(?err, "failed to spawn wake task");
+		}
+	}
+
+	/// Executes SQL queries and explicitly handles retry errors.
+	async fn query<'a, F, Fut, T>(&self, mut cb: F) -> WorkflowResult<T>
+	where
+		F: FnMut() -> Fut,
+		Fut: std::future::Future<Output = WorkflowResult<T>> + 'a,
+		T: 'a,
+	{
+		let mut backoff = rivet_util::Backoff::new(4, None, QUERY_RETRY_MS, 50);
+		let mut i = 0;
+
+		loop {
+			match cb().await {
+				Err(WorkflowError::Sqlx(err)) => {
+					i += 1;
+					if i > MAX_QUERY_RETRIES {
+						return Err(WorkflowError::MaxSqlRetries(err));
+					}
+
+					use sqlx::Error::*;
+					match &err {
+						Database(_) | Io(_) | Tls(_) | Protocol(_) | PoolTimedOut | PoolClosed
+						| WorkerCrashed => {
+							tracing::warn!(?err, "query retry");
+							backoff.tick().await;
+						}
+						// Throw error
+						_ => return Err(WorkflowError::Sqlx(err)),
+					}
+				}
+				x => return x,
+			}
+		}
+	}
+}
+
+#[async_trait::async_trait]
+impl Database for DatabaseFdbSqliteNats {
+	fn from_pools(pools: rivet_pools::Pools) -> Result<Arc<Self>, rivet_pools::Error> {
+		Ok(Arc::new(DatabaseFdbSqliteNats {
+			pools,
+			// Lazy load the nats sub
+			sub: Mutex::new(None),
+			subspace: Subspace::all().subspace(&("chirp_workflow", "fdb_sqlite_nats")),
+		}))
+	}
+
+	async fn wake(&self) -> WorkflowResult<()> {
+		let mut sub = self.sub.try_lock().map_err(WorkflowError::WakeLock)?;
+
+		// Initialize sub
+		if sub.is_none() {
+			*sub = Some(
+				self.pools
+					.nats()?
+					.subscribe(WORKER_WAKE_SUBJECT)
+					.await
+					.map_err(|x| WorkflowError::CreateSubscription(x.into()))?,
+			);
+		}
+
+		match sub.as_mut().expect("unreachable").next().await {
+			Some(_) => Ok(()),
+			None => Err(WorkflowError::SubscriptionUnsubscribed),
+		}
+	}
+
+	async fn dispatch_workflow(
+		&self,
+		ray_id: Uuid,
+		workflow_id: Uuid,
+		workflow_name: &str,
+		tags: Option<&serde_json::Value>,
+		input: &serde_json::value::RawValue,
+		unique: bool,
+	) -> WorkflowResult<Uuid> {
+		assert!(
+			!unique,
+			"unique dispatch unimplemented for fdb_sqlite_nats driver"
+		);
+
+		self.pools
+			.fdb()?
+			.run(|tx, _mc| async move {
+				// Write create ts
+				let create_ts_key = keys::workflow::CreateTsKey::new(workflow_id);
+				tx.set(
+					&self.subspace.pack(&create_ts_key),
+					&create_ts_key
+						.serialize(rivet_util::timestamp::now())
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+				);
+
+				// Write name
+				let name_key = keys::workflow::NameKey::new(workflow_id);
+				tx.set(
+					&self.subspace.pack(&name_key),
+					&name_key
+						.serialize(workflow_name.to_string())
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+				);
+
+				// Write ray id
+				let ray_id_key = keys::workflow::RayIdKey::new(workflow_id);
+				tx.set(
+					&self.subspace.pack(&ray_id_key),
+					&ray_id_key
+						.serialize(ray_id)
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+				);
+
+				// Write tags
+				let tags = tags
+					.map(|x| {
+						x.as_object().ok_or_else(|| {
+							WorkflowError::InvalidTags("must be an object".to_string())
+						})
+					})
+					.transpose()
+					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?
+					.into_iter()
+					.flatten()
+					.map(|(k, v)| {
+						Ok((
+							k.clone(),
+							cjson::to_string(v).map_err(WorkflowError::CjsonSerializeTags)?,
+						))
+					})
+					.collect::<WorkflowResult<Vec<_>>>()
+					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+				for (k, v) in &tags {
+					// Write tag key
+					let tag_key = keys::workflow::TagKey::new(workflow_id, k.clone(), v.clone());
+					tx.set(
+						&self.subspace.pack(&tag_key),
+						&tag_key
+							.serialize(())
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+					);
+
+					// Write "by name and first tag" secondary index
+					let by_name_and_tag_key = keys::workflow::ByNameAndTagKey::new(
+						workflow_name.to_string(),
+						k.clone(),
+						v.clone(),
+						workflow_id,
+					);
+					let rest_of_tags = tags
+						.iter()
+						.filter(|(k2, _)| k2 != k)
+						.map(|(k, v)| (k.clone(), v.clone()))
+						.collect();
+					tx.set(
+						&self.subspace.pack(&by_name_and_tag_key),
+						&by_name_and_tag_key
+							.serialize(rest_of_tags)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+					);
+				}
+
+				// Write null key for the "by name and first tag" secondary index (all workflows have this)
+				{
+					// Write secondary index by name and first tag
+					let by_name_and_tag_key = keys::workflow::ByNameAndTagKey::null(
+						workflow_name.to_string(),
+						workflow_id,
+					);
+					tx.set(
+						&self.subspace.pack(&by_name_and_tag_key),
+						&by_name_and_tag_key
+							.serialize(tags)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+					);
+				}
+
+				// Write input
+				let input_key = keys::workflow::InputKey::new(workflow_id);
+
+				for (i, chunk) in input_key
+					.split_ref(input)
+					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?
+					.into_iter()
+					.enumerate()
+				{
+					let chunk_key = self.subspace.pack(&input_key.chunk(i));
+
+					tx.set(&chunk_key, &chunk);
+				}
+
+				// Write immediate wake condition
+				let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
+					workflow_name.to_string(),
+					workflow_id,
+					keys::wake::WakeCondition::Immediate,
+				);
+
+				tx.set(
+					&self.subspace.pack(&wake_condition_key),
+					&wake_condition_key
+						.serialize(())
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+				);
+
+				Ok(())
+			})
+			.await?;
+
+		self.wake_worker();
+
+		Ok(workflow_id)
+	}
+
+	async fn get_workflow(&self, workflow_id: Uuid) -> WorkflowResult<Option<WorkflowData>> {
+		let data = self
+			.pools
+			.fdb()?
+			.run(|tx, _mc| async move {
+				let input_key = keys::workflow::InputKey::new(workflow_id);
+				let input_subspace = self.subspace.subspace(&input_key);
+				let output_key = keys::workflow::OutputKey::new(workflow_id);
+				let output_subspace = self.subspace.subspace(&output_key);
+
+				// Read input and output
+				let (input_chunks, output_chunks) = tokio::try_join!(
+					tx.get_ranges_keyvalues(
+						fdb::RangeOption {
+							mode: StreamingMode::WantAll,
+							..(&input_subspace).into()
+						},
+						SERIALIZABLE,
+					)
+					.try_collect::<Vec<_>>(),
+					tx.get_ranges_keyvalues(
+						fdb::RangeOption {
+							mode: StreamingMode::WantAll,
+							..(&output_subspace).into()
+						},
+						SERIALIZABLE,
+					)
+					.try_collect::<Vec<_>>()
+				)?;
+
+				if input_chunks.is_empty() {
+					Ok(None)
+				} else {
+					let input = input_key
+						.combine(input_chunks)
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+					let output = if output_chunks.is_empty() {
+						None
+					} else {
+						Some(
+							output_key
+								.combine(output_chunks)
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+						)
+					};
+
+					Ok(Some((input, output)))
+				}
+			})
+			.await?;
+
+		if let Some((input, output)) = data {
+			Ok(Some(WorkflowData {
+				workflow_id,
+				input,
+				output,
+			}))
+		} else {
+			Ok(None)
+		}
+	}
+
+	/// Returns the first workflow with the given name and tags, first meaning the one with the lowest uuid
+	/// value (interpreted as u128) because its in a KV store. There is no way to get any other workflow
+	/// besides the first.
+	async fn find_workflow(
+		&self,
+		workflow_name: &str,
+		tags: &serde_json::Value,
+	) -> WorkflowResult<Option<Uuid>> {
+		// Convert to flat vec of strings
+		let mut tag_iter = tags
+			.as_object()
+			.ok_or_else(|| WorkflowError::InvalidTags("must be an object".to_string()))?
+			.iter()
+			.map(|(k, v)| {
+				Ok((
+					k.clone(),
+					serde_json::to_string(&v).map_err(WorkflowError::DeserializeTags)?,
+				))
+			});
+		let first_tag = tag_iter.next().transpose()?;
+		let rest_of_tags = tag_iter.collect::<WorkflowResult<Vec<_>>>()?;
+
+		let workflow_id = self
+			.pools
+			.fdb()?
+			.run(|tx, _mc| {
+				let first_tag = first_tag.clone();
+				let rest_of_tags = rest_of_tags.clone();
+				async move {
+					let workflow_by_name_and_tag_subspace =
+						if let Some((first_tag_key, first_tag_value)) = first_tag {
+							self.subspace
+								.subspace(&keys::workflow::ByNameAndTagKey::subspace(
+									workflow_name.to_string(),
+									first_tag_key,
+									first_tag_value,
+								))
+						} else {
+							// No tags provided, use null subspace. Every workflow has a null key for its tags
+							// under the `ByNameAndTagKey`
+							self.subspace
+								.subspace(&keys::workflow::ByNameAndTagKey::null_subspace(
+									workflow_name.to_string(),
+								))
+						};
+
+					let mut stream = tx.get_ranges_keyvalues(
+						fdb::RangeOption {
+							mode: StreamingMode::Iterator,
+							..(&workflow_by_name_and_tag_subspace).into()
+						},
+						// NOTE: This is not SERIALIZABLE because we don't want to conflict with
+						// `update_workflow_tags`
+						SNAPSHOT,
+					);
+
+					loop {
+						let Some(entry) = stream.try_next().await? else {
+							return Ok(None);
+						};
+
+						// Unpack key
+						let workflow_by_name_and_tag_key = self
+							.subspace
+							.unpack::<keys::workflow::ByNameAndTagKey>(&entry.key())
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+						// Deserialize value
+						let wf_rest_of_tags = workflow_by_name_and_tag_key
+							.deserialize(entry.value())
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+						// Compute intersection between wf tags and signal tags
+						let tags_match = rest_of_tags.iter().all(|(k, v)| {
+							wf_rest_of_tags
+								.iter()
+								.any(|(wf_k, wf_v)| k == wf_k && v == wf_v)
+						});
+
+						// Return first signal that matches the tags
+						if tags_match {
+							break Ok(Some(workflow_by_name_and_tag_key.workflow_id));
+						}
+					}
+				}
+			})
+			.await?;
+
+		Ok(workflow_id)
+	}
+
+	async fn pull_workflows(
+		&self,
+		worker_instance_id: Uuid,
+		filter: &[&str],
+	) -> WorkflowResult<Vec<PulledWorkflow>> {
+		let start_instant = Instant::now();
+		let owned_filter = filter
+			.into_iter()
+			.map(|x| x.to_string())
+			.collect::<Vec<_>>();
+
+		let partial_workflows = self
+			.pools
+			.fdb()?
+			.run(|tx, _mc| {
+				let owned_filter = owned_filter.clone();
+
+				async move {
+					// All wake conditions with a timestamp after this timestamp will be pulled
+					let pull_before = rivet_util::timestamp::now()
+						+ i64::try_from(worker::TICK_INTERVAL.as_millis())
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+					// Pull all available wake conditions from all registered wf names
+					let entries = futures_util::stream::iter(owned_filter)
+						.map(|wf_name| {
+							let wake_subspace_start = self
+								.subspace
+								.subspace(
+									&keys::wake::WorkflowWakeConditionKey::subspace_without_ts(
+										wf_name.clone(),
+									),
+								)
+								.bytes()
+								.iter()
+								.map(|x| *x)
+								// https://github.com/apple/foundationdb/blob/main/design/tuple.md
+								.chain(std::iter::once(0x00))
+								.collect::<Vec<_>>();
+							let wake_subspace_end = self
+								.subspace
+								.subspace(&keys::wake::WorkflowWakeConditionKey::subspace(
+									wf_name,
+									pull_before,
+								))
+								.bytes()
+								.to_vec();
+
+							tx.get_ranges_keyvalues(
+								fdb::RangeOption {
+									mode: StreamingMode::WantAll,
+									..(wake_subspace_start, wake_subspace_end).into()
+								},
+								// Must be a snapshot to not conflict with any new wake conditions being
+								// inserted
+								SNAPSHOT,
+							)
+						})
+						.flatten()
+						.map(|res| match res {
+							Ok(entry) => Ok((
+								entry.key().to_vec(),
+								self.subspace
+									.unpack::<keys::wake::WorkflowWakeConditionKey>(entry.key())
+									.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+							)),
+							Err(err) => Err(Into::<fdb::FdbBindingError>::into(err)),
+						})
+						.try_collect::<Vec<_>>()
+						.await?;
+
+					// Check leases
+					let wf_ids = entries
+						.iter()
+						.map(|(_, key)| key.workflow_id)
+						.collect::<HashSet<_>>();
+					let leased_wf_ids = futures_util::stream::iter(wf_ids)
+						.map(|wf_id| {
+							let tx = tx.clone();
+							async move {
+								let lease_key = keys::workflow::LeaseKey::new(wf_id);
+								let lease_key_buf = self.subspace.pack(&lease_key);
+
+								// Check lease
+								if tx.get(&lease_key_buf, SERIALIZABLE).await?.is_some() {
+									Result::<_, fdb::FdbBindingError>::Ok(None)
+								} else {
+									tx.set(
+										&lease_key_buf,
+										&lease_key.serialize(worker_instance_id).map_err(|x| {
+											fdb::FdbBindingError::CustomError(x.into())
+										})?,
+									);
+									Ok(Some(wf_id))
+								}
+							}
+						})
+						// TODO: How to get rid of this buffer?
+						.buffer_unordered(1024)
+						.try_filter_map(|x| async move { Ok(x) })
+						.try_collect::<Vec<_>>()
+						.await?;
+
+					// TODO: Split this txn into two after checking leases here?
+
+					for (raw_key, key) in &entries {
+						// Check if leased
+						if !leased_wf_ids.iter().any(|wf_id| wf_id == &key.workflow_id) {
+							continue;
+						}
+
+						// Clear fetched wake conditions
+						tx.clear(raw_key);
+
+						if TAGGED_SIGNALS_ENABLED {
+							// Clear secondary indexes of tagged signals
+							if let keys::wake::WakeCondition::TaggedSignal { .. } = key.condition {
+								let wake_signals_subspace = self.subspace.subspace(
+									&keys::workflow::WakeSignalKey::subspace(key.workflow_id),
+								);
+
+								// Read current signal names
+								let mut stream = tx.get_ranges_keyvalues(
+									fdb::RangeOption {
+										mode: StreamingMode::WantAll,
+										..(&wake_signals_subspace).into()
+									},
+									SERIALIZABLE,
+								);
+
+								// Clear each secondary index
+								while let Some(entry) = stream.try_next().await? {
+									let wake_signal_key = self
+										.subspace
+										.unpack::<keys::workflow::WakeSignalKey>(entry.key())
+										.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+									let tagged_signal_wake_key =
+										self.subspace.pack(&keys::wake::TaggedSignalWakeKey::new(
+											wake_signal_key.signal_name,
+											key.workflow_id,
+										));
+
+									tx.clear(&tagged_signal_wake_key);
+								}
+							}
+						}
+					}
+
+					// Read required data for each leased wf
+					futures_util::stream::iter(entries)
+						.map(|(_, key)| {
+							let tx = tx.clone();
+							async move {
+								let create_ts_key =
+									keys::workflow::CreateTsKey::new(key.workflow_id);
+								let ray_id_key = keys::workflow::RayIdKey::new(key.workflow_id);
+								let input_key = keys::workflow::InputKey::new(key.workflow_id);
+								let input_subspace = self.subspace.subspace(&input_key);
+
+								let (create_ts_entry, ray_id_entry, input_chunks) = tokio::try_join!(
+									tx.get(&self.subspace.pack(&create_ts_key), SERIALIZABLE),
+									tx.get(&self.subspace.pack(&ray_id_key), SERIALIZABLE),
+									tx.get_ranges_keyvalues(
+										fdb::RangeOption {
+											mode: StreamingMode::WantAll,
+											..(&input_subspace).into()
+										},
+										SERIALIZABLE,
+									)
+									.try_collect::<Vec<_>>(),
+								)?;
+
+								let create_ts = create_ts_key
+									.deserialize(&create_ts_entry.ok_or(
+										fdb::FdbBindingError::CustomError(
+											format!("key should exist: {create_ts_key:?}").into(),
+										),
+									)?)
+									.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+								let ray_id = ray_id_key
+									.deserialize(&ray_id_entry.ok_or(
+										fdb::FdbBindingError::CustomError(
+											format!("key should exist: {ray_id_key:?}").into(),
+										),
+									)?)
+									.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+								let input = input_key
+									.combine(input_chunks)
+									.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+								Ok(PartialWorkflow {
+									workflow_id: key.workflow_id,
+									workflow_name: key.workflow_name,
+									create_ts,
+									ray_id,
+									input,
+								})
+							}
+						})
+						// TODO: How to get rid of this buffer?
+						.buffer_unordered(512)
+						.try_collect::<Vec<_>>()
+						.await
+				}
+			})
+			.await?;
+
+		let dt = start_instant.elapsed().as_secs_f64();
+		metrics::PULL_WORKFLOWS_DURATION
+			.with_label_values(&[&worker_instance_id.to_string()])
+			.set(dt);
+
+		if partial_workflows.is_empty() {
+			return Ok(Vec::new());
+		}
+
+		let start_instant2 = Instant::now();
+
+		// Set up sqlite
+		let pulled_workflows = futures_util::stream::iter(partial_workflows)
+			.map(|partial| async move {
+				let pool = self.pools.sqlite(partial.workflow_id).await?;
+				sqlite::init(partial.workflow_id, &pool).await?;
+
+				// Fetch all events
+				let events = sql_fetch_all!(
+					[self, sqlite::AmalgamEventRow, &pool]
+					"
+					-- Activity events
+					SELECT
+						json(location) AS location,
+						version,
+						0 AS event_type, -- EventType
+						activity_name AS name,
+						NULL AS auxiliary_id,
+						input_hash AS hash,
+						NULL AS input,
+						json(output) AS output,
+						create_ts AS create_ts,
+						(
+							SELECT COUNT(*)
+							FROM workflow_activity_errors AS err
+							WHERE ev.location = err.location
+						) AS error_count,
+						NULL AS iteration,
+						NULL AS deadline_ts,
+						NULL AS state,
+						NULL AS inner_event_type
+					FROM workflow_activity_events AS ev
+					WHERE NOT forgotten
+					GROUP BY ev.location
+					UNION ALL
+					-- Signal listen events
+					SELECT
+						json(location) AS location,
+						version,
+						1 AS event_type, -- EventType
+						signal_name AS name,
+						NULL AS auxiliary_id,
+						NULL AS hash,
+						NULL AS input,
+						json(body) AS output,
+						NULL AS create_ts,
+						NULL AS error_count,
+						NULL AS iteration,
+						NULL AS deadline_ts,
+						NULL AS state,
+						NULL AS inner_event_type
+					FROM workflow_signal_events
+					WHERE NOT forgotten
+					UNION ALL
+					-- Signal send events
+					SELECT
+						json(location) AS location,
+						version,
+						2 AS event_type, -- EventType
+						signal_name AS name,
+						signal_id AS auxiliary_id,
+						NULL AS hash,
+						NULL AS input,
+						NULL AS output,
+						NULL AS create_ts,
+						NULL AS error_count,
+						NULL AS iteration,
+						NULL AS deadline_ts,
+						NULL AS state,
+						NULL AS inner_event_type
+					FROM workflow_signal_send_events
+					WHERE NOT forgotten
+					UNION ALL
+					-- Message send events
+					SELECT
+						json(location) AS location,
+						version,
+						3 AS event_type, -- EventType
+						message_name AS name,
+						NULL AS auxiliary_id,
+						NULL AS hash,
+						NULL AS input,
+						NULL AS output,
+						NULL AS create_ts,
+						NULL AS error_count,
+						NULL AS iteration,
+						NULL AS deadline_ts,
+						NULL AS state,
+						NULL AS inner_event_type
+					FROM workflow_message_send_events
+					WHERE NOT forgotten
+					UNION ALL
+					-- Sub workflow events
+					SELECT
+						json(location) AS location,
+						version,
+						4 AS event_type, -- crdb_nats::types::EventType
+						sub_workflow_name AS name,
+						sub_workflow_id AS auxiliary_id,
+						NULL AS hash,
+						NULL AS input,
+						NULL AS output,
+						NULL AS create_ts,
+						NULL AS error_count,
+						NULL AS iteration,
+						NULL AS deadline_ts,
+						NULL AS state,
+						NULL AS inner_event_type
+					FROM workflow_sub_workflow_events
+					WHERE NOT forgotten
+					UNION ALL
+					-- Loop events
+					SELECT
+						json(location) AS location,
+						version,
+						5 AS event_type, -- crdb_nats::types::EventType
+						NULL AS name,
+						NULL AS auxiliary_id,
+						NULL AS hash,
+						json(state) AS input,
+						output,
+						NULL AS create_ts,
+						NULL AS error_count,
+						iteration,
+						NULL AS deadline_ts,
+						NULL AS state,
+						NULL AS inner_event_type
+					FROM workflow_loop_events
+					WHERE NOT forgotten
+					UNION ALL
+					-- Sleep events
+					SELECT
+						json(location) AS location,
+						version,
+						6 AS event_type, -- crdb_nats::types::EventType
+						NULL AS name,
+						NULL AS auxiliary_id,
+						NULL AS hash,
+						NULL AS input,
+						NULL AS output,
+						NULL AS create_ts,
+						NULL AS error_count,
+						NULL AS iteration,
+						deadline_ts,
+						state,
+						NULL AS inner_event_type
+					FROM workflow_sleep_events
+					WHERE NOT forgotten
+					UNION ALL
+					-- Branch events
+					SELECT
+						json(location) AS location,
+						version,
+						7 AS event_type, -- crdb_nats::types::EventType
+						NULL AS name,
+						NULL AS auxiliary_id,
+						NULL AS hash,
+						NULL AS input,
+						NULL AS output,
+						NULL AS create_ts,
+						NULL AS error_count,
+						NULL AS iteration,
+						NULL AS deadline_ts,
+						NULL AS state,
+						NULL AS inner_event_type
+					FROM workflow_branch_events
+					WHERE NOT forgotten
+					UNION ALL
+					-- Removed events
+					SELECT
+						json(location) AS location,
+						1 AS version, -- Default
+						8 AS event_type, -- crdb_nats::types::EventType
+						event_name AS name,
+						NULL AS auxiliary_id,
+						NULL AS hash,
+						NULL AS input,
+						NULL AS output,
+						NULL AS create_ts,
+						NULL AS error_count,
+						NULL AS iteration,
+						NULL AS deadline_ts,
+						NULL AS state,
+						event_type AS inner_event_type
+					FROM workflow_removed_events
+					WHERE NOT forgotten
+					UNION ALL
+					-- Version check events
+					SELECT
+						json(location) AS location,
+						version,
+						9 AS event_type, -- crdb_nats::types::EventType
+						NULL AS name,
+						NULL AS auxiliary_id,
+						NULL AS hash,
+						NULL AS input,
+						NULL AS output,
+						NULL AS create_ts,
+						NULL AS error_count,
+						NULL AS iteration,
+						NULL AS deadline_ts,
+						NULL AS state,
+						NULL AS inner_event_type
+					FROM workflow_version_check_events
+					WHERE NOT forgotten
+					",
+				)
+				.await?;
+
+				WorkflowResult::Ok(PulledWorkflow {
+					workflow_id: partial.workflow_id,
+					workflow_name: partial.workflow_name,
+					create_ts: partial.create_ts,
+					ray_id: partial.ray_id,
+					input: partial.input,
+					events: sqlite::build_history(events)?,
+				})
+			})
+			.buffer_unordered(512)
+			.try_collect()
+			.await?;
+
+		let dt = start_instant2.elapsed().as_secs_f64();
+		metrics::PULL_WORKFLOWS_HISTORY_DURATION
+			.with_label_values(&[&worker_instance_id.to_string()])
+			.set(dt);
+		let dt = start_instant.elapsed().as_secs_f64();
+		metrics::PULL_WORKFLOWS_FULL_DURATION
+			.with_label_values(&[&worker_instance_id.to_string()])
+			.set(dt);
+
+		Ok(pulled_workflows)
+	}
+
+	async fn complete_workflow(
+		&self,
+		workflow_id: Uuid,
+		workflow_name: &str,
+		output: &serde_json::value::RawValue,
+	) -> WorkflowResult<()> {
+		self.pools
+			.fdb()?
+			.run(|tx, _mc| async move {
+				// Check for other workflows waiting on this one, wake all
+				let sub_workflow_wake_subspace = self
+					.subspace
+					.subspace(&keys::wake::SubWorkflowWakeKey::subspace(workflow_id));
+
+				let mut stream = tx.get_ranges_keyvalues(
+					fdb::RangeOption {
+						mode: StreamingMode::WantAll,
+						..(&sub_workflow_wake_subspace).into()
+					},
+					// Must be serializable to conflict with `get_sub_workflow`
+					SERIALIZABLE,
+				);
+
+				while let Some(entry) = stream.try_next().await.unwrap() {
+					let sub_workflow_wake_key = self
+						.subspace
+						.unpack::<keys::wake::SubWorkflowWakeKey>(&entry.key())
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+					let workflow_name = sub_workflow_wake_key
+						.deserialize(entry.value())
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+					let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
+						workflow_name,
+						sub_workflow_wake_key.workflow_id,
+						keys::wake::WakeCondition::SubWorkflow {
+							sub_workflow_id: workflow_id,
+						},
+					);
+
+					// Add wake condition for workflow
+					tx.set(
+						&self.subspace.pack(&wake_condition_key),
+						&wake_condition_key
+							.serialize(())
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+					);
+
+					// Clear secondary index
+					tx.clear(entry.key());
+				}
+
+				// Get and clear the pending deadline wake condition, if any. We have to clear here because
+				// the `pull_workflows` function might not have pulled the condition if its in the future.
+				let wake_deadline_key = keys::workflow::WakeDeadlineKey::new(workflow_id);
+				if let Some(raw) = tx
+					.get(&self.subspace.pack(&wake_deadline_key), SERIALIZABLE)
+					.await?
+				{
+					let deadline_ts = wake_deadline_key
+						.deserialize(&raw)
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+					let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
+						workflow_name.to_string(),
+						workflow_id,
+						keys::wake::WakeCondition::Deadline { deadline_ts },
+					);
+
+					tx.clear(&self.subspace.pack(&wake_condition_key));
+				}
+
+				// Write output
+				let output_key = keys::workflow::OutputKey::new(workflow_id);
+
+				for (i, chunk) in output_key
+					.split_ref(output)
+					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?
+					.into_iter()
+					.enumerate()
+				{
+					let chunk_key = self.subspace.pack(&output_key.chunk(i));
+
+					tx.set(&chunk_key, &chunk);
+				}
+
+				Ok(())
+			})
+			.await?;
+
+		self.wake_worker();
+
+		Ok(())
+	}
+
+	async fn commit_workflow(
+		&self,
+		workflow_id: Uuid,
+		workflow_name: &str,
+		_immediate: bool,
+		wake_deadline_ts: Option<i64>,
+		wake_signals: &[&str],
+		wake_sub_workflow_id: Option<Uuid>,
+		error: &str,
+	) -> WorkflowResult<()> {
+		self.pools
+			.fdb()?
+			.run(|tx, _mc| async move {
+				let wf_tags_subspace = self
+					.subspace
+					.subspace(&keys::workflow::TagKey::subspace(workflow_id));
+				let wake_deadline_key = keys::workflow::WakeDeadlineKey::new(workflow_id);
+
+				let (wf_tags, wake_deadline) = tokio::try_join!(
+					// Collect all wf tags
+					tx.get_ranges_keyvalues(
+						fdb::RangeOption {
+							mode: StreamingMode::WantAll,
+							..(&wf_tags_subspace).into()
+						},
+						SERIALIZABLE,
+					)
+					.map(|res| match res {
+						Ok(entry) => {
+							let key = self
+								.subspace
+								.unpack::<keys::workflow::TagKey>(entry.key())
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+							Ok((key.k, key.v))
+						}
+						Err(err) => Err(Into::<fdb::FdbBindingError>::into(err)),
+					})
+					.try_collect::<Vec<_>>(),
+					// Get previous deadline wake condition
+					async {
+						tx.get(&self.subspace.pack(&wake_deadline_key), SERIALIZABLE)
+							.await
+							.map_err(Into::into)
+					},
+				)?;
+
+				// Clear all previous wake signals in list
+				let wake_signals_subspace = self
+					.subspace
+					.subspace(&keys::workflow::WakeSignalKey::subspace(workflow_id));
+				tx.clear_subspace_range(&wake_signals_subspace);
+
+				// Write signals wake index (only for tagged signals)
+				for signal_name in wake_signals {
+					if TAGGED_SIGNALS_ENABLED {
+						let signal_wake_key = keys::wake::TaggedSignalWakeKey::new(
+							signal_name.to_string(),
+							workflow_id,
+						);
+
+						tx.set(
+							&self.subspace.pack(&signal_wake_key),
+							&signal_wake_key
+								.serialize(keys::wake::TaggedSignalWakeData {
+									workflow_name: workflow_name.to_string(),
+									tags: wf_tags.clone(),
+								})
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+						);
+					}
+
+					// Write to wake signals list
+					let wake_signal_key =
+						keys::workflow::WakeSignalKey::new(workflow_id, signal_name.to_string());
+					tx.set(
+						&self.subspace.pack(&wake_signal_key),
+						&wake_signal_key
+							.serialize(())
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+					);
+				}
+
+				// Clear previous deadline wake condition. It has to be cleared here because the
+				// pull_workflows function might not have pulled and cleared the condition if its in the
+				// future.
+				if let Some(raw) = wake_deadline {
+					let deadline_ts = wake_deadline_key
+						.deserialize(&raw)
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+					let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
+						workflow_name.to_string(),
+						workflow_id,
+						keys::wake::WakeCondition::Deadline { deadline_ts },
+					);
+
+					tx.clear(&self.subspace.pack(&wake_condition_key));
+				}
+
+				// Write deadline wake index
+				if let Some(deadline_ts) = wake_deadline_ts {
+					let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
+						workflow_name.to_string(),
+						workflow_id,
+						keys::wake::WakeCondition::Deadline { deadline_ts },
+					);
+
+					// Add wake condition for workflow
+					tx.set(
+						&self.subspace.pack(&wake_condition_key),
+						&wake_condition_key
+							.serialize(())
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+					);
+
+					// Write to wake deadline
+					tx.set(
+						&self.subspace.pack(&wake_deadline_key),
+						&wake_deadline_key
+							.serialize(deadline_ts)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+					);
+				}
+
+				// Write sub workflow wake index
+				if let Some(sub_workflow_id) = wake_sub_workflow_id {
+					let sub_workflow_wake_key =
+						keys::wake::SubWorkflowWakeKey::new(sub_workflow_id, workflow_id);
+
+					tx.set(
+						&self.subspace.pack(&sub_workflow_wake_key),
+						&sub_workflow_wake_key
+							.serialize(workflow_name.to_string())
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+					);
+				}
+
+				// Write error
+				let error_key = keys::workflow::ErrorKey::new(workflow_id);
+				tx.set(
+					&self.subspace.pack(&error_key),
+					&error_key
+						.serialize(error.to_string())
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+				);
+
+				// Clear lease
+				let lease_key = self
+					.subspace
+					.pack(&keys::workflow::LeaseKey::new(workflow_id));
+				tx.clear(&lease_key);
+
+				Ok(())
+			})
+			.await?;
+
+		Ok(())
+	}
+
+	async fn pull_next_signal(
+		&self,
+		workflow_id: Uuid,
+		filter: &[&str],
+		location: &Location,
+		version: usize,
+		loop_location: Option<&Location>,
+	) -> WorkflowResult<Option<SignalData>> {
+		let pool = self.pools.sqlite(workflow_id).await?;
+
+		let owned_filter = filter
+			.into_iter()
+			.map(|x| x.to_string())
+			.collect::<Vec<_>>();
+		let is_retrying = Arc::new(AtomicBool::new(false));
+
+		// Fetch signal from FDB
+		let signal = self
+			.pools
+			.fdb()?
+			.run(|tx, _mc| {
+				let pool = pool.clone();
+				let owned_filter = owned_filter.clone();
+				let is_retrying = is_retrying.clone();
+
+				async move {
+					let signal =
+						{
+							// Create a stream for each signal name subspace
+							let streams = owned_filter
+								.iter()
+								.map(|signal_name| {
+									let pending_signal_subspace = self.subspace.subspace(
+										&keys::workflow::PendingSignalKey::subspace(
+											workflow_id,
+											signal_name.to_string(),
+										),
+									);
+
+									tx.get_ranges_keyvalues(
+										fdb::RangeOption {
+											mode: StreamingMode::WantAll,
+											limit: Some(1),
+											..(&pending_signal_subspace).into()
+										},
+										// NOTE: This does not have to be SERIALIZABLE because the conflict occurs
+										// with acking which is a separate row. See below
+										SNAPSHOT,
+									)
+								})
+								.collect::<Vec<_>>();
+
+							// Fetch the next entry from all streams at the same time
+							let mut results = futures_util::future::try_join_all(
+								streams.into_iter().map(|mut stream| async move {
+									if let Some(entry) = stream.try_next().await? {
+										Result::<_, fdb::FdbBindingError>::Ok(Some((
+											entry.key().to_vec(),
+											self.subspace
+												.unpack::<keys::workflow::PendingSignalKey>(
+													&entry.key(),
+												)
+												.map_err(|x| {
+													fdb::FdbBindingError::CustomError(x.into())
+												})?,
+										)))
+									} else {
+										Ok(None)
+									}
+								}),
+							)
+							.await?;
+
+							// Sort by ts
+							results.sort_by_key(|res| res.as_ref().map(|(_, key)| key.ts));
+
+							results.into_iter().flatten().next().map(
+								|(raw_key, pending_signal_key)| {
+									(
+										raw_key,
+										pending_signal_key.signal_name,
+										pending_signal_key.ts,
+										pending_signal_key.signal_id,
+									)
+								},
+							)
+						};
+
+					let tagged_signal = if TAGGED_SIGNALS_ENABLED {
+						// Collect all wf tags
+						let wf_tags_subspace = self
+							.subspace
+							.subspace(&keys::workflow::TagKey::subspace(workflow_id));
+
+						let wf_tags = tx
+							.get_ranges_keyvalues(
+								fdb::RangeOption {
+									mode: StreamingMode::WantAll,
+									..(&wf_tags_subspace).into()
+								},
+								SERIALIZABLE,
+							)
+							.map(|res| match res {
+								Ok(entry) => Ok(self
+									.subspace
+									.unpack::<keys::workflow::TagKey>(entry.key())
+									.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?),
+								Err(err) => Err(Into::<fdb::FdbBindingError>::into(err)),
+							})
+							.try_collect::<Vec<_>>()
+							.await?;
+
+						// Create a stream for each signal name subspace
+						let mut streams = owned_filter
+							.iter()
+							.map(|signal_name| {
+								let pending_signal_subspace = self.subspace.subspace(
+									&keys::signal::TaggedPendingKey::subspace(
+										signal_name.to_string(),
+									),
+								);
+
+								tx.get_ranges_keyvalues(
+									fdb::RangeOption {
+										mode: StreamingMode::Iterator,
+										..(&pending_signal_subspace).into()
+									},
+									// NOTE: This does not have to be SERIALIZABLE because the conflict occurs
+									// with acking which is a separate row. See below
+									SNAPSHOT,
+								)
+							})
+							.collect::<Vec<_>>();
+
+						'streams: loop {
+							let taken_streams = std::mem::take(&mut streams);
+
+							// Fetch the next entry from all streams at the same time
+							let (mut results, new_streams): (Vec<_>, Vec<_>) =
+								futures_util::future::try_join_all(taken_streams.into_iter().map(
+									|mut stream| async move {
+										if let Some(entry) = stream.try_next().await? {
+											// Unpack key
+											let pending_signal_key = self
+												.subspace
+												.unpack::<keys::signal::TaggedPendingKey>(
+													&entry.key(),
+												)
+												.map_err(|x| {
+													fdb::FdbBindingError::CustomError(x.into())
+												})?;
+
+											// Deserialize value
+											let signal_tags = pending_signal_key
+												.deserialize(entry.value())
+												.map_err(|x| {
+													fdb::FdbBindingError::CustomError(x.into())
+												})?;
+
+											Result::<_, fdb::FdbBindingError>::Ok(Some((
+												(
+													entry.key().to_vec(),
+													pending_signal_key,
+													signal_tags,
+												),
+												stream,
+											)))
+										} else {
+											Ok(None)
+										}
+									},
+								))
+								.await?
+								.into_iter()
+								.flatten()
+								.unzip();
+
+							if results.is_empty() {
+								break None;
+							}
+
+							// Sort by ts
+							results.sort_by_key(|(_, key, _)| key.ts);
+
+							for (raw_key, pending_signal_key, signal_tags) in results {
+								// Compute intersection between wf tags and signal tags
+								let tags_match = signal_tags.iter().all(|(k, v)| {
+									wf_tags.iter().any(|key| k == &key.k && v == &key.v)
+								});
+
+								// Return first signal that matches the tags
+								if tags_match {
+									break 'streams Some((
+										raw_key,
+										pending_signal_key.signal_name,
+										pending_signal_key.ts,
+										pending_signal_key.signal_id,
+									));
+								}
+							}
+
+							// Write non-empty streams for the next loop iteration
+							streams = new_streams;
+						}
+					} else {
+						None
+					};
+
+					// Choose between the two. This functionality is not combined with the above two blocks
+					// because tagged signals may be removed in the future.
+					let earliest_signal = match (signal, tagged_signal) {
+						(Some(signal), Some(tagged_signal)) => {
+							if signal.2 < tagged_signal.2 {
+								Some(signal)
+							} else {
+								Some(tagged_signal)
+							}
+						}
+						(signal, None) => signal,
+						(None, tagged_signal) => tagged_signal,
+					};
+
+					// Signal found
+					if let Some((raw_key, signal_name, ts, signal_id)) = earliest_signal {
+						let ack_key = keys::signal::AckKey::new(signal_id);
+
+						// Ack signal
+						tx.add_conflict_range(&raw_key, &raw_key, ConflictRangeType::Read)?;
+						tx.set(
+							&self.subspace.pack(&ack_key),
+							&ack_key
+								.serialize(())
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+						);
+
+						// TODO: Split txn into two after acking here?
+
+						// Clear pending signal key
+						tx.clear(&raw_key);
+
+						// Read signal body
+						let body_key = keys::signal::BodyKey::new(signal_id);
+						let body_subspace = self.subspace.subspace(&body_key);
+
+						let chunks = tx
+							.get_ranges_keyvalues(
+								fdb::RangeOption {
+									mode: StreamingMode::WantAll,
+									..(&body_subspace).into()
+								},
+								SERIALIZABLE,
+							)
+							.try_collect::<Vec<_>>()
+							.await?;
+
+						let body = body_key
+							.combine(chunks)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+						// In the event of an FDB txn retry, we have to delete the previously inserted row
+						if is_retrying.load(Ordering::Relaxed) {
+							self.query(|| async {
+								sql_execute!(
+									[self, &pool]
+									"
+									DELETE FROM workflow_signal_events
+									WHERE location = ?
+									",
+								)
+								.await
+							})
+							.await
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+						}
+
+						// Insert history event
+						self.query(|| async {
+							sql_execute!(
+								[self, &pool]
+								"
+								INSERT INTO workflow_signal_events (
+									location,
+									version,
+									signal_id,
+									signal_name,
+									body,
+									ack_ts,
+									loop_location
+								)
+								VALUES (jsonb(?), ?, ?, ?, jsonb(?), ?, jsonb(?))
+								",
+								location,
+								version as i64,
+								signal_id,
+								&signal_name,
+								sqlx::types::Json(&body),
+								rivet_util::timestamp::now(),
+								loop_location,
+							)
+							.await
+						})
+						.await
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+						is_retrying.store(true, Ordering::Relaxed);
+
+						Ok(Some(SignalData {
+							signal_id,
+							signal_name,
+							create_ts: ts,
+							body,
+						}))
+					} else {
+						Ok(None)
+					}
+				}
+			})
+			.await?;
+
+		Ok(signal)
+	}
+
+	async fn get_sub_workflow(
+		&self,
+		workflow_id: Uuid,
+		workflow_name: &str,
+		sub_workflow_id: Uuid,
+	) -> WorkflowResult<Option<WorkflowData>> {
+		let data = self
+			.pools
+			.fdb()?
+			.run(|tx, _mc| async move {
+				let input_key = keys::workflow::InputKey::new(sub_workflow_id);
+				let input_subspace = self.subspace.subspace(&input_key);
+				let output_key = keys::workflow::OutputKey::new(sub_workflow_id);
+				let output_subspace = self.subspace.subspace(&output_key);
+
+				// Read input and output
+				let (input_chunks, output_chunks) = tokio::try_join!(
+					tx.get_ranges_keyvalues(
+						fdb::RangeOption {
+							mode: StreamingMode::WantAll,
+							..(&input_subspace).into()
+						},
+						SERIALIZABLE,
+					)
+					.try_collect::<Vec<_>>(),
+					tx.get_ranges_keyvalues(
+						fdb::RangeOption {
+							mode: StreamingMode::WantAll,
+							..(&output_subspace).into()
+						},
+						SERIALIZABLE,
+					)
+					.try_collect::<Vec<_>>()
+				)?;
+
+				if input_chunks.is_empty() {
+					Ok(None)
+				} else {
+					let input = input_key
+						.combine(input_chunks)
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+					let output = if output_chunks.is_empty() {
+						// Write sub workflow wake index
+						let sub_workflow_wake_key =
+							keys::wake::SubWorkflowWakeKey::new(sub_workflow_id, workflow_id);
+
+						tx.set(
+							&self.subspace.pack(&sub_workflow_wake_key),
+							&sub_workflow_wake_key
+								.serialize(workflow_name.to_string())
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+						);
+
+						None
+					} else {
+						Some(
+							output_key
+								.combine(output_chunks)
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+						)
+					};
+
+					Ok(Some((input, output)))
+				}
+			})
+			.await?;
+
+		if let Some((input, output)) = data {
+			Ok(Some(WorkflowData {
+				workflow_id: sub_workflow_id,
+				input,
+				output,
+			}))
+		} else {
+			Ok(None)
+		}
+	}
+
+	async fn publish_signal(
+		&self,
+		ray_id: Uuid,
+		workflow_id: Uuid,
+		signal_id: Uuid,
+		signal_name: &str,
+		body: &serde_json::value::RawValue,
+	) -> WorkflowResult<()> {
+		self.pools
+			.fdb()?
+			.run(|tx, _mc| async move {
+				let workflow_name_key = keys::workflow::NameKey::new(workflow_id);
+
+				// NOTE: This does not have to be serializable because create ts doesn't change, and
+				// should not conflict with dispatching a new workflow
+				// Check if the workflow exists
+				let Some(workflow_name_raw) = tx
+					.get(&self.subspace.pack(&workflow_name_key), SNAPSHOT)
+					.await?
+				else {
+					return Err(fdb::FdbBindingError::CustomError(
+						WorkflowError::WorkflowNotFound.into(),
+					));
+				};
+
+				let workflow_name = workflow_name_key
+					.deserialize(&workflow_name_raw)
+					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+				let signal_body_key = keys::signal::BodyKey::new(signal_id);
+
+				// Write signal body
+				for (i, chunk) in signal_body_key
+					.split_ref(body)
+					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?
+					.into_iter()
+					.enumerate()
+				{
+					let chunk_key = self.subspace.pack(&signal_body_key.chunk(i));
+
+					tx.set(&chunk_key, &chunk);
+				}
+
+				// Write pending key
+				let pending_signal_key = keys::workflow::PendingSignalKey::new(
+					workflow_id,
+					signal_name.to_string(),
+					signal_id,
+				);
+
+				tx.set(
+					&self.subspace.pack(&pending_signal_key),
+					&pending_signal_key
+						.serialize(())
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+				);
+
+				// Write create ts
+				let create_ts_key = keys::signal::CreateTsKey::new(signal_id);
+				tx.set(
+					&self.subspace.pack(&create_ts_key),
+					&create_ts_key
+						.serialize(pending_signal_key.ts)
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+				);
+
+				// Write ray id ts
+				let ray_id_key = keys::signal::RayIdKey::new(signal_id);
+				tx.set(
+					&self.subspace.pack(&ray_id_key),
+					&ray_id_key
+						.serialize(ray_id)
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+				);
+
+				let wake_signal_key =
+					keys::workflow::WakeSignalKey::new(workflow_id, signal_name.to_string());
+
+				// If the workflow is currently listening for this signal, wake it
+				if tx
+					.get(&self.subspace.pack(&wake_signal_key), SERIALIZABLE)
+					.await?
+					.is_some()
+				{
+					let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
+						workflow_name,
+						workflow_id,
+						keys::wake::WakeCondition::Signal { signal_id },
+					);
+
+					// Add wake condition for workflow
+					tx.set(
+						&self.subspace.pack(&wake_condition_key),
+						&wake_condition_key
+							.serialize(())
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+					);
+				}
+
+				Ok(())
+			})
+			.await?;
+
+		self.wake_worker();
+
+		Ok(())
+	}
+
+	async fn publish_tagged_signal(
+		&self,
+		ray_id: Uuid,
+		tags: &serde_json::Value,
+		signal_id: Uuid,
+		signal_name: &str,
+		body: &serde_json::value::RawValue,
+	) -> WorkflowResult<()> {
+		if TAGGED_SIGNALS_ENABLED {
+			// Convert to flat vec of strings
+			let signal_tags = tags
+				.as_object()
+				.ok_or_else(|| WorkflowError::InvalidTags("must be an object".to_string()))?
+				.iter()
+				.map(|(k, v)| {
+					Ok((
+						k.clone(),
+						serde_json::to_string(&v).map_err(WorkflowError::DeserializeTags)?,
+					))
+				})
+				.collect::<WorkflowResult<Vec<_>>>()?;
+
+			self.pools
+				.fdb()?
+				.run(|tx, _mc| {
+					let signal_tags = signal_tags.clone();
+					async move {
+						let signal_body_key = keys::signal::BodyKey::new(signal_id);
+
+						// Write signal body
+						for (i, chunk) in signal_body_key
+							.split_ref(body)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?
+							.into_iter()
+							.enumerate()
+						{
+							let chunk_key = self.subspace.pack(&signal_body_key.chunk(i));
+
+							tx.set(&chunk_key, &chunk);
+						}
+
+						// Write pending key
+						let pending_signal_key =
+							keys::signal::TaggedPendingKey::new(signal_name.to_string(), signal_id);
+
+						tx.set(
+							&self.subspace.pack(&pending_signal_key),
+							&pending_signal_key
+								.serialize(signal_tags.clone())
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+						);
+
+						// Write create ts
+						let create_ts_key = keys::signal::CreateTsKey::new(signal_id);
+						tx.set(
+							&self.subspace.pack(&create_ts_key),
+							&create_ts_key
+								.serialize(pending_signal_key.ts)
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+						);
+
+						// Write ray id ts
+						let ray_id_key = keys::signal::RayIdKey::new(signal_id);
+						tx.set(
+							&self.subspace.pack(&ray_id_key),
+							&ray_id_key
+								.serialize(ray_id)
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+						);
+
+						// Write tags
+						let tags = tags
+							.as_object()
+							.ok_or_else(|| {
+								WorkflowError::InvalidTags("must be an object".to_string())
+							})
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+						for (k, v) in tags {
+							let tag_key = keys::signal::TagKey::new(
+								signal_id,
+								k.clone(),
+								cjson::to_string(v).map_err(|x| {
+									fdb::FdbBindingError::CustomError(
+										WorkflowError::CjsonSerializeTags(x).into(),
+									)
+								})?,
+							);
+							tx.set(
+								&self.subspace.pack(&tag_key),
+								&tag_key
+									.serialize(())
+									.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+							);
+						}
+
+						// Read workflows waiting for the same signal name and tags
+						let signal_wake_subspace =
+							self.subspace
+								.subspace(&keys::wake::TaggedSignalWakeKey::subspace(
+									signal_name.to_string(),
+								));
+
+						let mut stream = tx.get_ranges_keyvalues(
+							fdb::RangeOption {
+								mode: StreamingMode::Iterator,
+								..(&signal_wake_subspace).into()
+							},
+							// Must be a snapshot to not conflict with the pull workflows query
+							SNAPSHOT,
+						);
+
+						// TODO: This is almost a full scan
+						while let Some(entry) = stream.try_next().await.unwrap() {
+							let signal_wake_key = self
+								.subspace
+								.unpack::<keys::wake::TaggedSignalWakeKey>(&entry.key())
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+							let wake_data = signal_wake_key
+								.deserialize(entry.value())
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+							// Compute intersection between wf tags and signal tags
+							let tags_match = signal_tags.iter().all(|(k, v)| {
+								wake_data.tags.iter().any(|(k2, v2)| k == k2 && v == v2)
+							});
+
+							if tags_match {
+								let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
+									wake_data.workflow_name,
+									signal_wake_key.workflow_id,
+									keys::wake::WakeCondition::TaggedSignal { signal_id },
+								);
+
+								// Add wake condition for workflow
+								tx.set(
+									&self.subspace.pack(&wake_condition_key),
+									&wake_condition_key
+										.serialize(())
+										.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+								);
+
+								break;
+							}
+						}
+
+						Ok(())
+					}
+				})
+				.await?;
+
+			self.wake_worker();
+
+			Ok(())
+		} else {
+			Err(WorkflowError::TaggedSignalsDisabled)
+		}
+	}
+
+	async fn publish_signal_from_workflow(
+		&self,
+		from_workflow_id: Uuid,
+		location: &Location,
+		version: usize,
+		ray_id: Uuid,
+		to_workflow_id: Uuid,
+		signal_id: Uuid,
+		signal_name: &str,
+		body: &serde_json::value::RawValue,
+		loop_location: Option<&Location>,
+	) -> WorkflowResult<()> {
+		let pool = self.pools.sqlite(from_workflow_id).await?;
+
+		// Insert history event
+		self.query(|| async {
+			sql_execute!(
+				[self, &pool]
+				"
+					INSERT INTO workflow_signal_send_events (
+						location, version, signal_id, signal_name, body, create_ts, loop_location
+					)
+					VALUES (jsonb(?), ?, ?, ?, jsonb(?), ?, jsonb(?))
+					",
+				location,
+				version as i64,
+				signal_id,
+				signal_name,
+				sqlx::types::Json(body),
+				rivet_util::timestamp::now(),
+				loop_location,
+			)
+			.await
+		})
+		.await?;
+
+		if let Err(err) = self
+			.publish_signal(ray_id, to_workflow_id, signal_id, signal_name, body)
+			.await
+		{
+			// Undo history if FDB failed
+			self.query(|| async {
+				sql_execute!(
+					[self, &pool]
+					"
+						DELETE FROM workflow_signal_send_events
+						WHERE location = ?
+						",
+					location,
+				)
+				.await
+			})
+			.await?;
+
+			Err(err)
+		} else {
+			Ok(())
+		}
+	}
+
+	async fn publish_tagged_signal_from_workflow(
+		&self,
+		from_workflow_id: Uuid,
+		location: &Location,
+		version: usize,
+		ray_id: Uuid,
+		tags: &serde_json::Value,
+		signal_id: Uuid,
+		signal_name: &str,
+		body: &serde_json::value::RawValue,
+		loop_location: Option<&Location>,
+	) -> WorkflowResult<()> {
+		if TAGGED_SIGNALS_ENABLED {
+			let pool = self.pools.sqlite(from_workflow_id).await?;
+
+			// Insert history event
+			self.query(|| async {
+				sql_execute!(
+					[self, &pool]
+					"
+					INSERT INTO workflow_signal_send_events (
+						location, version, signal_id, signal_name, body, create_ts, loop_location
+					)
+					VALUES (jsonb(?), ?, ?, ?, jsonb(?), ?, jsonb(?))
+					",
+					location,
+					version as i64,
+					signal_id,
+					signal_name,
+					sqlx::types::Json(body),
+					rivet_util::timestamp::now(),
+					loop_location,
+				)
+				.await
+			})
+			.await?;
+
+			if let Err(err) = self
+				.publish_tagged_signal(ray_id, tags, signal_id, signal_name, body)
+				.await
+			{
+				// Undo history if FDB failed
+				self.query(|| async {
+					sql_execute!(
+						[self, &pool]
+						"
+						DELETE FROM workflow_signal_send_events
+						WHERE location = ?
+						",
+						location,
+					)
+					.await
+				})
+				.await?;
+
+				Err(err)
+			} else {
+				Ok(())
+			}
+		} else {
+			Err(WorkflowError::TaggedSignalsDisabled)
+		}
+	}
+
+	async fn dispatch_sub_workflow(
+		&self,
+		ray_id: Uuid,
+		workflow_id: Uuid,
+		location: &Location,
+		version: usize,
+		sub_workflow_id: Uuid,
+		sub_workflow_name: &str,
+		tags: Option<&serde_json::Value>,
+		input: &serde_json::value::RawValue,
+		loop_location: Option<&Location>,
+		unique: bool,
+	) -> WorkflowResult<Uuid> {
+		let pool = self.pools.sqlite(workflow_id).await?;
+
+		// Insert history event
+		self.query(|| async {
+			sql_execute!(
+				[self, &pool]
+				"
+				INSERT INTO workflow_sub_workflow_events (
+					location, version, sub_workflow_id, sub_workflow_name, create_ts, loop_location
+				)
+				VALUES (jsonb(?), ?, ?, ?, ?, jsonb(?))				
+				",
+				location,
+				version as i64,
+				sub_workflow_id,
+				sub_workflow_name,
+				rivet_util::timestamp::now(),
+				loop_location,
+			)
+			.await
+		})
+		.await?;
+
+		match self
+			.dispatch_workflow(
+				ray_id,
+				sub_workflow_id,
+				sub_workflow_name,
+				tags,
+				input,
+				unique,
+			)
+			.await
+		{
+			Ok(workflow_id) => Ok(workflow_id),
+			Err(err) => {
+				// Undo history if FDB failed
+				self.query(|| async {
+					sql_execute!(
+						[self, &pool]
+						"
+						DELETE FROM workflow_sub_workflow_events
+						WHERE location = ?
+						",
+						location,
+					)
+					.await
+				})
+				.await?;
+
+				Err(err)
+			}
+		}
+	}
+
+	async fn update_workflow_tags(
+		&self,
+		workflow_id: Uuid,
+		workflow_name: &str,
+		tags: &serde_json::Value,
+	) -> WorkflowResult<()> {
+		self.pools
+			.fdb()?
+			.run(|tx, _mc| async move {
+				let tags_subspace = self
+					.subspace
+					.subspace(&keys::workflow::TagKey::subspace(workflow_id));
+
+				// Read old tags
+				let tag_keys = tx
+					.get_ranges_keyvalues(
+						fdb::RangeOption {
+							mode: StreamingMode::WantAll,
+							..(&tags_subspace).into()
+						},
+						SERIALIZABLE,
+					)
+					.map(|res| match res {
+						Ok(entry) => self
+							.subspace
+							.unpack::<keys::workflow::TagKey>(entry.key())
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into())),
+						Err(err) => Err(Into::<fdb::FdbBindingError>::into(err)),
+					})
+					.try_collect::<Vec<_>>()
+					.await?;
+
+				// Clear old tags
+				tx.clear_subspace_range(&tags_subspace);
+
+				// Clear old "by name and first tag" secondary index
+				for key in tag_keys {
+					keys::workflow::ByNameAndTagKey::new(
+						workflow_name.to_string(),
+						key.k,
+						key.v,
+						workflow_id,
+					);
+				}
+
+				// Write new tags
+				let tags = tags
+					.as_object()
+					.ok_or_else(|| WorkflowError::InvalidTags("must be an object".to_string()))
+					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?
+					.into_iter()
+					.map(|(k, v)| {
+						Ok((
+							k.clone(),
+							cjson::to_string(v).map_err(WorkflowError::CjsonSerializeTags)?,
+						))
+					})
+					.collect::<WorkflowResult<Vec<_>>>()
+					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+				for (k, v) in &tags {
+					let tag_key = keys::workflow::TagKey::new(workflow_id, k.clone(), v.clone());
+					tx.set(
+						&self.subspace.pack(&tag_key),
+						&tag_key
+							.serialize(())
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+					);
+
+					// Write new "by name and first tag" secondary index
+					let by_name_and_tag_key = keys::workflow::ByNameAndTagKey::new(
+						workflow_name.to_string(),
+						k.clone(),
+						v.clone(),
+						workflow_id,
+					);
+					let rest_of_tags = tags
+						.iter()
+						.filter(|(k2, _)| k2 != k)
+						.map(|(k, v)| (k.clone(), v.clone()))
+						.collect();
+					tx.set(
+						&self.subspace.pack(&by_name_and_tag_key),
+						&by_name_and_tag_key
+							.serialize(rest_of_tags)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+					);
+				}
+
+				Ok(())
+			})
+			.await?;
+
+		Ok(())
+	}
+
+	async fn commit_workflow_activity_event(
+		&self,
+		workflow_id: Uuid,
+		location: &Location,
+		version: usize,
+		event_id: &EventId,
+		create_ts: i64,
+		input: &serde_json::value::RawValue,
+		res: Result<&serde_json::value::RawValue, &str>,
+		loop_location: Option<&Location>,
+	) -> WorkflowResult<()> {
+		let pool = self.pools.sqlite(workflow_id).await?;
+		let input_hash = event_id.input_hash.to_be_bytes();
+
+		match res {
+			Ok(output) => {
+				self.query(|| async {
+					sql_execute!(
+						[self, &pool]
+						"
+						INSERT INTO workflow_activity_events (
+							location,
+							version,
+							activity_name,
+							input_hash,
+							input,
+							output,
+							create_ts,
+							loop_location
+						)
+						VALUES (jsonb(?), ?, ?, ?, jsonb(?), jsonb(?), ?, jsonb(?))
+						ON CONFLICT (location) DO UPDATE
+						SET output = EXCLUDED.output
+						",
+						location,
+						version as i64,
+						&event_id.name,
+						input_hash.as_slice(),
+						sqlx::types::Json(input),
+						sqlx::types::Json(output),
+						create_ts,
+						loop_location,
+					)
+					.await
+				})
+				.await?;
+			}
+			Err(err) => {
+				self.query(|| async {
+					// Attempt to use an existing connection
+					let mut conn = if let Some(conn) = pool.try_acquire() {
+						conn
+					} else {
+						// Create a new connection
+						pool.acquire().await?
+					};
+					let mut tx = conn.begin_immediate().await?;
+
+					sql_execute!(
+						[self, @tx &mut tx]
+						"
+						INSERT INTO workflow_activity_events (
+							location,
+							version,
+							activity_name,
+							input_hash,
+							input,
+							create_ts,
+							loop_location
+						)
+						VALUES (jsonb(?), ?, ?, ?, jsonb(?), ?, jsonb(?))
+						ON CONFLICT (location) DO NOTHING
+						",
+						location,
+						version as i64,
+						&event_id.name,
+						input_hash.as_slice(),
+						sqlx::types::Json(input),
+						create_ts,
+						loop_location,
+					)
+					.await?;
+
+					sql_execute!(
+						[self, @tx &mut tx]
+						"
+						INSERT INTO workflow_activity_errors (
+							location, activity_name, error, ts
+						)
+						VALUES (jsonb(?), ?, ?, ?)
+						",
+						location,
+						&event_id.name,
+						err,
+						rivet_util::timestamp::now(),
+					)
+					.await?;
+
+					tx.commit().await.map_err(Into::into)
+				})
+				.await?;
+			}
+		}
+
+		Ok(())
+	}
+
+	async fn commit_workflow_message_send_event(
+		&self,
+		from_workflow_id: Uuid,
+		location: &Location,
+		version: usize,
+		tags: &serde_json::Value,
+		message_name: &str,
+		body: &serde_json::value::RawValue,
+		loop_location: Option<&Location>,
+	) -> WorkflowResult<()> {
+		let pool = self.pools.sqlite(from_workflow_id).await?;
+
+		self.query(|| async {
+			sql_execute!(
+				[self, &pool]
+				"
+				INSERT INTO workflow_message_send_events (
+					location, version, tags, message_name, body, create_ts, loop_location
+				)
+				VALUES (jsonb(?), ?, jsonb(?), ?, jsonb(?), ?, jsonb(?))
+				",
+				location,
+				version as i64,
+				tags,
+				message_name,
+				sqlx::types::Json(body),
+				rivet_util::timestamp::now(),
+				loop_location,
+			)
+			.await
+		})
+		.await?;
+
+		Ok(())
+	}
+
+	async fn upsert_workflow_loop_event(
+		&self,
+		workflow_id: Uuid,
+		location: &Location,
+		version: usize,
+		iteration: usize,
+		state: &serde_json::value::RawValue,
+		output: Option<&serde_json::value::RawValue>,
+		loop_location: Option<&Location>,
+	) -> WorkflowResult<()> {
+		let pool = self.pools.sqlite(workflow_id).await?;
+
+		self.query(|| async {
+			// Attempt to use an existing connection
+			let mut conn = if let Some(conn) = pool.try_acquire() {
+				conn
+			} else {
+				// Create a new connection
+				pool.acquire().await?
+			};
+			let mut tx = conn.begin_immediate().await?;
+
+			sql_execute!(
+				[self, @tx &mut tx]
+				"
+				INSERT INTO workflow_loop_events (
+					location,
+					version,
+					iteration,
+					state,
+					output,
+					create_ts,
+					loop_location
+				)
+				VALUES (jsonb(?), ?, ?, jsonb(?), jsonb(?), ?, jsonb(?))
+				ON CONFLICT (location) DO UPDATE
+				SET
+					iteration = ?,
+					state = jsonb(?),
+					output = jsonb(?)
+				",
+				location,
+				version as i64,
+				iteration as i64,
+				sqlx::types::Json(state),
+				output.map(sqlx::types::Json),
+				rivet_util::timestamp::now(),
+				loop_location,
+				iteration as i64,
+				sqlx::types::Json(state),
+				output.map(sqlx::types::Json),
+			)
+			.await?;
+
+			// 0-th iteration is the initial insertion
+			if iteration != 0 {
+				sql_execute!(
+					[self, @tx &mut tx]
+					"
+					UPDATE workflow_activity_events
+					SET forgotten = TRUE
+					WHERE loop_location = jsonb(?) AND NOT forgotten
+					",
+					location,
+				)
+				.await?;
+
+				sql_execute!(
+					[self, @tx &mut tx]
+					"
+					UPDATE workflow_signal_events
+					SET forgotten = TRUE
+					WHERE loop_location = jsonb(?) AND NOT forgotten
+					",
+					location,
+				)
+				.await?;
+
+				sql_execute!(
+					[self, @tx &mut tx]
+					"
+					UPDATE workflow_sub_workflow_events
+					SET forgotten = TRUE
+					WHERE loop_location = jsonb(?) AND NOT forgotten
+					",
+					location,
+				)
+				.await?;
+
+				sql_execute!(
+					[self, @tx &mut tx]
+					"
+					UPDATE workflow_signal_send_events
+					SET forgotten = TRUE
+					WHERE loop_location = jsonb(?) AND NOT forgotten
+					",
+					location,
+				)
+				.await?;
+
+				sql_execute!(
+					[self, @tx &mut tx]
+					"
+					UPDATE workflow_message_send_events
+					SET forgotten = TRUE
+					WHERE loop_location = jsonb(?) AND NOT forgotten
+					",
+					location,
+				)
+				.await?;
+
+				sql_execute!(
+					[self, @tx &mut tx]
+					"
+					UPDATE workflow_loop_events
+					SET forgotten = TRUE
+					WHERE loop_location = jsonb(?) AND NOT forgotten
+					",
+					location,
+				)
+				.await?;
+
+				sql_execute!(
+					[self, @tx &mut tx]
+					"
+					UPDATE workflow_sleep_events
+					SET forgotten = TRUE
+					WHERE loop_location = jsonb(?) AND NOT forgotten
+					",
+					location,
+				)
+				.await?;
+
+				sql_execute!(
+					[self, @tx &mut tx]
+					"
+					UPDATE workflow_branch_events
+					SET forgotten = TRUE
+					WHERE loop_location = jsonb(?) AND NOT forgotten
+					",
+					location,
+				)
+				.await?;
+
+				sql_execute!(
+					[self, @tx &mut tx]
+					"
+					UPDATE workflow_removed_events
+					SET forgotten = TRUE
+					WHERE loop_location = jsonb(?) AND NOT forgotten
+					",
+					location,
+				)
+				.await?;
+
+				sql_execute!(
+					[self, @tx &mut tx]
+					"
+					UPDATE workflow_version_check_events
+					SET forgotten = TRUE
+					WHERE loop_location = jsonb(?) AND NOT forgotten
+					",
+					location,
+				)
+				.await?;
+			}
+
+			tx.commit().await.map_err(WorkflowError::Sqlx)?;
+
+			Ok(())
+		})
+		.await?;
+
+		Ok(())
+	}
+
+	async fn commit_workflow_sleep_event(
+		&self,
+		from_workflow_id: Uuid,
+		location: &Location,
+		version: usize,
+		deadline_ts: i64,
+		loop_location: Option<&Location>,
+	) -> WorkflowResult<()> {
+		let pool = self.pools.sqlite(from_workflow_id).await?;
+
+		self.query(|| async {
+			sql_execute!(
+				[self, &pool]
+				"
+				INSERT INTO workflow_sleep_events (
+					location, version, deadline_ts, create_ts, state, loop_location
+				)
+				VALUES (jsonb(?), ?, ?, ?, ?, jsonb(?))
+				",
+				location,
+				version as i64,
+				deadline_ts,
+				rivet_util::timestamp::now(),
+				SleepState::Normal as i64,
+				loop_location,
+			)
+			.await
+		})
+		.await?;
+
+		Ok(())
+	}
+
+	async fn update_workflow_sleep_event_state(
+		&self,
+		from_workflow_id: Uuid,
+		location: &Location,
+		state: SleepState,
+	) -> WorkflowResult<()> {
+		let pool = self.pools.sqlite(from_workflow_id).await?;
+
+		self.query(|| async {
+			sql_execute!(
+				[self, &pool]
+				"
+				UPDATE workflow_sleep_events
+				SET state = ?
+				WHERE location = ?
+				",
+				state as i64,
+				location,
+			)
+			.await
+		})
+		.await?;
+
+		Ok(())
+	}
+
+	async fn commit_workflow_branch_event(
+		&self,
+		from_workflow_id: Uuid,
+		location: &Location,
+		version: usize,
+		loop_location: Option<&Location>,
+	) -> WorkflowResult<()> {
+		let pool = self.pools.sqlite(from_workflow_id).await?;
+
+		self.query(|| async {
+			sql_execute!(
+				[self, &pool]
+				"
+				INSERT INTO workflow_branch_events (
+					location, version, create_ts, loop_location
+				)
+				VALUES (jsonb(?), ?, ?, jsonb(?))
+				",
+				location,
+				version as i64,
+				rivet_util::timestamp::now(),
+				loop_location,
+			)
+			.await
+		})
+		.await?;
+
+		Ok(())
+	}
+
+	async fn commit_workflow_removed_event(
+		&self,
+		from_workflow_id: Uuid,
+		location: &Location,
+		event_type: EventType,
+		event_name: Option<&str>,
+		loop_location: Option<&Location>,
+	) -> WorkflowResult<()> {
+		let pool = self.pools.sqlite(from_workflow_id).await?;
+
+		self.query(|| async {
+			sql_execute!(
+				[self, &pool]
+				"
+				INSERT INTO workflow_removed_events (
+					location, event_type, event_name, create_ts, loop_location
+				)
+				VALUES (jsonb(?), ?, ?, ?, jsonb(?))
+				",
+				location,
+				event_type as i64,
+				event_name,
+				rivet_util::timestamp::now(),
+				loop_location,
+			)
+			.await
+		})
+		.await?;
+
+		Ok(())
+	}
+
+	async fn commit_workflow_version_check_event(
+		&self,
+		from_workflow_id: Uuid,
+		location: &Location,
+		version: usize,
+		loop_location: Option<&Location>,
+	) -> WorkflowResult<()> {
+		let pool = self.pools.sqlite(from_workflow_id).await?;
+
+		self.query(|| async {
+			sql_execute!(
+				[self, &pool]
+				"
+				INSERT INTO workflow_version_check_events (
+					location, version, create_ts, loop_location
+				)
+				VALUES (jsonb(?), ?, ?, jsonb(?))
+				",
+				location,
+				version as i64,
+				rivet_util::timestamp::now(),
+				loop_location,
+			)
+			.await
+		})
+		.await?;
+
+		Ok(())
+	}
+}
+
+struct PartialWorkflow {
+	pub workflow_id: Uuid,
+	pub workflow_name: String,
+	pub create_ts: i64,
+	pub ray_id: Uuid,
+	pub input: Box<serde_json::value::RawValue>,
+}

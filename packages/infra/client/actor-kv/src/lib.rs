@@ -191,6 +191,8 @@ impl ActorKv {
 				let list_range = list_range.clone();
 
 				async move {
+					// TODO: Make this use `RangeOption.limit` instead of the weird custom limit impl with an
+					// error
 					// Get all sub keys in the key subspace
 					let stream = tx.get_ranges_keyvalues_owned(
 						fdb::RangeOption {

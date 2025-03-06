@@ -28,15 +28,16 @@ rand_chacha = "0.3.1"
 reqwest = { version = "0.11", default-features = false, features = ["stream", "rustls-tls", "json"] }
 serde = { version = "1.0.195", features = ["derive"] }
 serde_json = "1.0.111"
+sqlite-util.workspace = true
 sysinfo = "0.31.4" 
 tempfile = "3.2"
 thiserror = "1.0"
 tokio = { workspace = true, default-features = false, features = ["fs", "process", "macros", "rt", "rt-multi-thread"] }
 tokio-tungstenite = "0.23.1"
 tokio-util = { version = "0.7", default-features = false, features = ["io-util"] }
-tracing.workspace = true
 tracing-logfmt.workspace = true
 tracing-subscriber.workspace = true
+tracing.workspace = true
 url = "2.4"
 uuid = { version = "1.6.1", features = ["v4"] }
 

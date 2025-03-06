@@ -231,10 +231,21 @@ impl EventId {
 		}
 	}
 
-	pub fn from_bytes(name: String, input_hash: Vec<u8>) -> WorkflowResult<Self> {
+	pub fn from_le_bytes(name: String, input_hash: Vec<u8>) -> WorkflowResult<Self> {
 		Ok(EventId {
 			name,
 			input_hash: u64::from_le_bytes(
+				input_hash
+					.try_into()
+					.map_err(|_| WorkflowError::IntegerConversion)?,
+			),
+		})
+	}
+
+	pub fn from_be_bytes(name: String, input_hash: Vec<u8>) -> WorkflowResult<Self> {
+		Ok(EventId {
+			name,
+			input_hash: u64::from_be_bytes(
 				input_hash
 					.try_into()
 					.map_err(|_| WorkflowError::IntegerConversion)?,
