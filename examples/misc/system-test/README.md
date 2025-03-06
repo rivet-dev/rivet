@@ -9,13 +9,14 @@ Actors for simple tests of E2E system functionality.
 ## Deploying
 
 ```sh
-rivet login
 rivet deploy
 ```
 
 ## Testing
 
 ```sh
-rivet deno --populate-env run -A ws_test.ts
+rivet shell -e "yarn test --isolate"
+# or
+rivet shell -e "yarn test --container"
 ```
 

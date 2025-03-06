@@ -5,6 +5,7 @@ export const CONFIG: Config = {
 	rivetServiceToken: __ENV.RIVET_SERVICE_TOKEN || undefined,
 	rivetProject: __ENV.RIVET_PROJECT || "default",
 	rivetEnvironment: __ENV.RIVET_ENVIRONMENT || "default",
+	buildName: __ENV.BUILD || "ws-isolate",
 	region: __ENV.REGION || undefined,
 	// k6 specific settings
 	vus: Number(__ENV.VUS) || 10,

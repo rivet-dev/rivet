@@ -14972,16 +14972,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"system-test@workspace:examples/javascript/system-test":
-  version: 0.0.0-use.local
-  resolution: "system-test@workspace:examples/javascript/system-test"
-  dependencies:
-    "@rivet-gg/actor": "workspace:*"
-    "@rivet-gg/actor-client": "workspace:*"
-    hono: "npm:^4.6.17"
-  languageName: unknown
-  linkType: soft
-
 "tailwind-merge@npm:^2.2.2":
   version: 2.6.0
   resolution: "tailwind-merge@npm:2.6.0"

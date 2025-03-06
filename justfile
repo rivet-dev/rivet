@@ -83,12 +83,12 @@ actor-check: actor-compile-bridge
 	cd sdks/actor && deno check --all client/**/*.ts runtime/**/*.ts client/**/*.ts manager/**/*.ts && biome check --write
 
 [group('system')]
-system-test REGION="":
-	cd examples/system-test && REGION={{REGION}} rivet deno --populate-env run -A ws_test.ts
+system-test BUILD REGION="":
+	cd examples/misc/system-test && BUILD={{BUILD}} REGION={{REGION}} rivet shell --exec "yarn test"
 
 [group('system')]
-system-test-login:
-	cd examples/system-test && rivet login
+system-test-deploy:
+	cd examples/misc/system-test && yarn && rivet deploy
 
 alias gcs := graphite-create-submit
 

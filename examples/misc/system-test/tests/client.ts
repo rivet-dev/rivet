@@ -2,12 +2,18 @@ import { RivetClient } from "@rivet-gg/api";
 // import { assertExists } from "@std/assert";
 
 // Can be opt since they're not required for dev
-const RIVET_ENDPOINT = Deno.env.get("RIVET_ENDPOINT");
-const RIVET_SERVICE_TOKEN = Deno.env.get("RIVET_SERVICE_TOKEN");
-const RIVET_PROJECT = Deno.env.get("RIVET_PROJECT");
-const RIVET_ENVIRONMENT = Deno.env.get("RIVET_ENVIRONMENT");
+const RIVET_ENDPOINT = process.env.RIVET_ENDPOINT;
+const RIVET_SERVICE_TOKEN = process.env.RIVET_SERVICE_TOKEN;
+const RIVET_PROJECT = process.env.RIVET_PROJECT;
+const RIVET_ENVIRONMENT = process.env.RIVET_ENVIRONMENT;
 
-let region = Deno.env.get("REGION");
+// Determine test kind from environment variable
+const BUILD_NAME = process.env.BUILD;
+if (BUILD_NAME !== "ws-isolate" && BUILD_NAME !== "ws-container") {
+	throw new Error("Must specify BUILD environment variable as either 'ws-isolate' or 'ws-container'");
+}
+
+let region = process.env.REGION;
 if (!region || region.length === 0) {
 	region = undefined;
 }
@@ -27,9 +33,9 @@ async function run() {
 			body: {
 				region,
 				tags: {
-					name: "ws",
+					name: BUILD_NAME,
 				},
-				buildTags: { name: "ws", current: "true" },
+				buildTags: { name: BUILD_NAME, current: "true" },
 				network: {
 					ports: {
 						http: {
@@ -44,6 +50,12 @@ async function run() {
 				lifecycle: {
 					durable: false,
 				},
+				...(BUILD_NAME === "ws-container" ? {
+					resources: {
+						cpu: 250,
+						memory: 256,
+					}
+				} : {}),
 			},
 		});
 		actorId = actor.id;
@@ -141,7 +153,10 @@ async function runLoop() {
 	}
 }
 
-for (let i = 0; i < 2; i++) {
-	await new Promise((resolve) => setTimeout(resolve, 100));
-	runLoop();
-}
+// Run loop without top-level await
+(async function() {
+	for (let i = 0; i < 2; i++) {
+		await new Promise((resolve) => setTimeout(resolve, 100));
+		runLoop();
+	}
+})();

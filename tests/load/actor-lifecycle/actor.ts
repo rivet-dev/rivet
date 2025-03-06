@@ -7,8 +7,8 @@ import type { Config, CreateActorResponse } from "./types.ts";
 export function createActor(config: Config): CreateActorResponse {
 	return callRivetApi(config, "POST", "/actors", {
 		region: config.region,
-		tags: { name: "ws" },
-		build_tags: { name: "ws", current: "true" },
+		tags: { name: config.buildName },
+		build_tags: { name: config.buildName, current: "true" },
 		network: {
 			ports: {
 				http: {
@@ -17,6 +17,12 @@ export function createActor(config: Config): CreateActorResponse {
 				},
 			},
 		},
+		...(config.buildName === "ws-container" ? {
+			resources: {
+				cpu: 250,
+				memory: 256,
+			}
+		} : {}),
 		lifecycle: { durable: false },
 	});
 }

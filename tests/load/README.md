@@ -2,7 +2,7 @@
 
 ## Running
 
-To run a single iteration to test a lod test script, run:
+To run a single iteration to test a load test script, run:
 
 ```
 just k6-test <name>

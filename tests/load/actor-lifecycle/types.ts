@@ -3,6 +3,7 @@ export interface Config {
 	rivetServiceToken?: string;
 	rivetProject: string;
 	rivetEnvironment: string;
+	buildName: string;
 	region?: string;
 	vus: number;
 	duration: string;
