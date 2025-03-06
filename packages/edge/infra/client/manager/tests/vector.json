@@ -18,17 +18,17 @@
 		}
 	},
 	"transforms": {
-		"dynamic_servers": {
+		"actors": {
 			"type": "filter",
 			"inputs": ["vector", "tcp_json"],
 			"condition": {
 				"type": "vrl",
-				"source": ".source == \"dynamic_servers\""
+				"source": ".source == \"actors\""
 			}
 		},
 		"add_prefix": {
 			"type": "remap",
-			"inputs": ["dynamic_servers"],
+			"inputs": ["actors"],
 			"source": ".message, err = \"\u001b[2m\" + \"actor_id=\" + .server_id + \"\u001b[0m \" + .message"
 		}
 	},

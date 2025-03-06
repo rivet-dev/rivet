@@ -26,14 +26,14 @@ sources:
     type: internal_logs
 
 transforms:
-  dynamic_servers:
+  actors:
     type: filter
     inputs:
       - vector
       - tcp_json
     condition:
       type: vrl
-      source: .source == "dynamic_servers"
+      source: .source == "actors"
   
   job_run:
     type: filter
@@ -75,14 +75,14 @@ sinks:
     encoding:
       codec: text
   
-  clickhouse_ds_logs:
+  clickhouse_actor_logs:
     type: clickhouse
     inputs:
-      - dynamic_servers
+      - actors
     compression: gzip
     database: db_pegboard_actor_log
     endpoint: http://clickhouse:8123
-    table: server_logs
+    table: actor_logs
     auth:
       strategy: basic
       user: vector

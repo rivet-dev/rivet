@@ -104,7 +104,7 @@ async function run() {
 			const ws = new WebSocket(`${actorOrigin}/ws`);
 
 			ws.onmessage = (evt) => {
-				const [type, body] = JSON.parse(evt.data);
+				const [type, body] = JSON.parse(evt.data as any);
 				if (type === "init") {
 					console.log("Init event data:", body);
 				} else if (type === "pong") {
@@ -130,6 +130,9 @@ async function run() {
 				reject("ws error");
 			};
 		});
+
+		console.log("Sleeping forever so you can debug");
+		await new Promise(resolve => setTimeout(resolve, 100_000_000));
 	} catch (error) {
 		console.error("Error:", error);
 	} finally {

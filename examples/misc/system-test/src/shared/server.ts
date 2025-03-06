@@ -11,7 +11,7 @@ export function createAndStartServer(
 		console.error(
 			"Actor should've been destroyed by now. Automatically exiting.",
 		);
-		() => process.exit(1)
+		process.exit(1);
 	}, 60 * 1000);
 
 	// Get port from environment
