@@ -11,7 +11,6 @@ use anyhow::*;
 use deno_core::{v8_set_flags, JsRuntime};
 use deno_runtime::worker::MainWorkerTerminateHandle;
 use futures_util::{stream::SplitStream, SinkExt, StreamExt};
-use pegboard::protocol;
 use pegboard_actor_kv::ActorKv;
 use pegboard_config::{isolate_runner::Config, runner_protocol};
 use tokio::{

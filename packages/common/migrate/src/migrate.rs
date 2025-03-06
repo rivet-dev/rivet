@@ -75,22 +75,22 @@ pub async fn up(config: rivet_config::Config, services: &[SqlService]) -> Result
 						CockroachDbUserRole::Read => {
 							formatdoc!(
 								r#"
-								CREATE USER IF NOT EXISTS {username}
+								CREATE USER IF NOT EXISTS "{username}"
 								WITH PASSWORD '{password}';
 								GRANT SELECT
-								ON {db_name}.*
-								TO {username};
+								ON "{db_name}".*
+								TO "{username}";
 								"#
 							)
 						}
 						CockroachDbUserRole::ReadWrite => {
 							formatdoc!(
 								r#"
-								CREATE USER IF NOT EXISTS {username}
+								CREATE USER IF NOT EXISTS "{username}"
 								WITH PASSWORD '{password}';
 								GRANT SELECT, INSERT, UPDATE, DELETE
-								ON {db_name}.*
-								TO {username};
+								ON "{db_name}".*
+								TO "{username}";
 								"#
 							)
 						}
@@ -117,11 +117,11 @@ pub async fn up(config: rivet_config::Config, services: &[SqlService]) -> Result
 					"
 				));
 				clickhouse_pre_queries.push(formatdoc!(
-					"
+					r#"
 					GRANT
 						CREATE TABLE, DROP TABLE, INSERT, SELECT
-					ON {db_name}.* TO admin;
-					"
+					ON "{db_name}".* TO admin;
+					"#
 				));
 
 				clickhouse_pre_queries.push(formatdoc!(
@@ -130,11 +130,11 @@ pub async fn up(config: rivet_config::Config, services: &[SqlService]) -> Result
 					"
 				));
 				clickhouse_pre_queries.push(formatdoc!(
-					"
+					r#"
 					GRANT
 						INSERT, SELECT
-					ON {db_name}.* TO write;
-					"
+					ON "{db_name}".* TO write;
+					"#
 				));
 				clickhouse_pre_queries.push(formatdoc!(
 					"
@@ -142,11 +142,11 @@ pub async fn up(config: rivet_config::Config, services: &[SqlService]) -> Result
 					"
 				));
 				clickhouse_pre_queries.push(formatdoc!(
-					"
+					r#"
 					GRANT
 						SELECT
-					ON {db_name}.* TO readonly;
-					"
+					ON "{db_name}".* TO readonly;
+					"#
 				));
 
 				for user in clickhouse_config.provision_users.values() {
@@ -154,16 +154,16 @@ pub async fn up(config: rivet_config::Config, services: &[SqlService]) -> Result
 					let password = user.password.read();
 
 					clickhouse_pre_queries.push(formatdoc!(
-						"
+						r#"
 						CREATE USER
-						IF NOT EXISTS {username}
+						IF NOT EXISTS "{username}"
 						IDENTIFIED WITH sha256_password BY '{password}';
-						"
+						"#
 					));
 					clickhouse_pre_queries.push(formatdoc!(
-						"
-						GRANT {} TO {username};
-						",
+						r#"
+						GRANT {} TO "{username}";
+						"#,
 						user.role.to_clickhouse_role()
 					));
 				}

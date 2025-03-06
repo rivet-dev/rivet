@@ -7,7 +7,6 @@ use std::{
 };
 
 use anyhow::*;
-use pegboard::protocol;
 use serde::Serialize;
 use serde_json;
 use uuid::Uuid;

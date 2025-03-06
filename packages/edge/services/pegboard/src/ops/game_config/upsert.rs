@@ -12,7 +12,7 @@ pub async fn ds_game_config_upsert(ctx: &OperationCtx, input: &Input) -> GlobalR
 	sql_execute!(
 		[ctx]
 		"
-		INSERT INTO db_pegboard.game_config (game_id, host_networking_enabled, root_user_enabled)
+		INSERT INTO db_pegboard2.game_config (game_id, host_networking_enabled, root_user_enabled)
 		SELECT $1, COALESCE($2, false), COALESCE($3, false)
 		ON CONFLICT (game_id) DO UPDATE
 		SET

@@ -144,9 +144,6 @@ pub async fn run_inner(
 
 	tracing::info!(?actor_id, "isolate kv initialized");
 
-	tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-	return Ok(0);
-
 	// Should match the path from `Actor::make_fs` in manager/src/actor/setup.rs
 	let index = actor_path.join("fs").join("index.js");
 

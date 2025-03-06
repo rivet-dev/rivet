@@ -10524,7 +10524,6 @@ dependencies = [
  "foundationdb",
  "futures-util",
  "indexmap 2.7.0",
- "pegboard",
  "prost 0.13.4",
  "serde",
  "serde_json",

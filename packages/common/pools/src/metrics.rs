@@ -1,4 +1,4 @@
-use rivet_metrics::{prometheus::*, BUCKETS, REGISTRY, MICRO_BUCKETS};
+use rivet_metrics::{prometheus::*, BUCKETS, MICRO_BUCKETS, REGISTRY};
 
 lazy_static::lazy_static! {
 	// MARK: CRDB

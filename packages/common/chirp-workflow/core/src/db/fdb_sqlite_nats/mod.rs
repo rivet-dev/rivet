@@ -135,6 +135,8 @@ impl DatabaseFdbSqliteNats {
 	/// condition with other workflow workers picking it up.
 	#[tracing::instrument(skip_all)]
 	async fn evict_wf_sqlite(&self, workflow_id: Uuid) -> WorkflowResult<()> {
+		tracing::debug!(?workflow_id, "evicting workflow");
+
 		tokio::try_join!(
 			self.pools
 				.sqlite_manager()
@@ -157,6 +159,8 @@ impl DatabaseFdbSqliteNats {
 	/// only the WF data.
 	#[tracing::instrument(skip_all)]
 	async fn flush_wf_data_sqlite(&self, workflow_id: Uuid) -> WorkflowResult<()> {
+		tracing::debug!(?workflow_id, "flushing workflow");
+
 		self.pools
 			.sqlite_manager()
 			.flush(crate::db::sqlite_db_name_data(workflow_id))

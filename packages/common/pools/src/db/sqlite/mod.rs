@@ -4,12 +4,11 @@ use foundationdb::{self as fdb, options::StreamingMode, tuple::Subspace, FdbBind
 use uuid::Uuid;
 
 use futures_util::TryStreamExt;
-use global_error::{ensure, ext::AssertionError, unwrap, GlobalResult};
+use global_error::{bail, ensure, ext::AssertionError, unwrap, GlobalResult};
 use sqlx::{
 	migrate::MigrateDatabase,
-	sqlite::{SqliteAutoVacuum, SqliteConnectOptions},
+	sqlite::{SqliteAutoVacuum, SqliteConnectOptions, SqliteJournalMode, SqliteSynchronous},
 	ConnectOptions, Sqlite,
-	Executor,
 };
 use std::io;
 use std::{
@@ -46,7 +45,7 @@ struct SqliteSnapshottedState {
 /// define pool type in other modules.
 pub type SqlitePool = SqliteConnHandle;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum SqliteConnType {
 	/// There should only be one writer per DB.
 	///
@@ -293,7 +292,7 @@ impl SqlitePoolManager {
 	#[tracing::instrument(name = "sqlite_flush", skip_all)]
 	pub async fn flush(self: &Arc<Self>, key: impl TuplePack) -> Result<(), Error> {
 		let key_packed = Arc::new(key.pack_to_vec());
-		self.snapshot_with_key(&key_packed)
+		self.snapshot_with_key(&key_packed, false)
 			.await
 			.map_err(Error::Global)?;
 
@@ -305,19 +304,17 @@ impl SqlitePoolManager {
 impl SqlitePoolManager {
 	/// Inner implementation of database eviction that handles the actual removal from the pool
 	#[tracing::instrument(name = "sqlite_evict_with_key", skip_all)]
-	async fn evict_with_key(&self, key: &KeyPacked) -> GlobalResult<()> {
-		tracing::debug!("evicting sqlite database");
-
-		let key_packed = Arc::new(key.pack_to_vec());
+	async fn evict_with_key(&self, key_packed: &KeyPacked) -> GlobalResult<()> {
+		tracing::debug!(key=?hex::encode(&**key_packed), "evicting sqlite database");
 
 		// Attempt to snapshot before removing
-		self.snapshot_with_key(&key_packed).await?;
+		self.snapshot_with_key(&key_packed, false).await?;
 
 		// Remove from the pools map
 		//
 		// Do this after snapshotting since we don't want remove the db if the snapshot failed. If
 		// the snapshot failed, it will attempt to snapshot again on GC.
-		self.writer_pools.remove_async(key).await;
+		self.writer_pools.remove_async(key_packed).await;
 
 		// NOTE: The database file will be deleted when the SqliteEntry is dropped
 
@@ -338,7 +335,11 @@ impl SqlitePoolManager {
 	///
 	/// Returns `true` if wrote a snapshot.
 	#[tracing::instrument(name = "sqlite_snapshot_with_key", skip_all)]
-	async fn snapshot_with_key(&self, key_packed: &KeyPacked) -> GlobalResult<bool> {
+	async fn snapshot_with_key(
+		&self,
+		key_packed: &KeyPacked,
+		ensure_exists: bool,
+	) -> GlobalResult<bool> {
 		// Only run if snapshotting required
 		let SqliteStorage::FoundationDb = self.storage else {
 			return Ok(false);
@@ -349,39 +350,56 @@ impl SqlitePoolManager {
 		// We don't lock the entry because we can't hold an scc lock in a multithreaded context.
 		// However, we hold the lock to the `SqliteConn.conn` which prevents concurrent snapshots
 		// that would cause conflict or out-of-order writes.
-		let (conn, prev_snapshotted_state) = unwrap!(
-			self.writer_pools
-				.read_async(key_packed, |_, v| (
-					v.conn_once.get().cloned(),
-					v.snapshotted_state.clone()
-				))
-				.await
-		);
+		let (conn, prev_snapshotted_state) = if let Some(x) = self
+			.writer_pools
+			.read_async(key_packed, |_, v| {
+				(v.conn_once.get().cloned(), v.snapshotted_state.clone())
+			})
+			.await
+		{
+			x
+		} else {
+			if ensure_exists {
+				bail!("attempting to snapshot database that's not loaded");
+			} else {
+				tracing::debug!(key=?hex::encode(&**key_packed), "skipping snapshot, database is not loaded");
+				return Ok(false);
+			}
+		};
 		let conn = unwrap!(conn); // Conn will be None if has not been initiated yet
+
+		// Hold a lock to the connection so nobody else can modify the database while we snapshot
+		// it
+		// HACK: Bug in Rust thinks this doesn't need to be mutable
+		#[warn(unused_mut)]
 		let mut conn_raw = conn.conn.lock().await;
 
-		tracing::debug!("snapshotting sqlite database");
+		tracing::debug!(key=?hex::encode(&**key_packed), "snapshotting sqlite database");
 
-		// Start an IMMEDIATE transaction to prevent other write transactions
-		sqlx::query("BEGIN IMMEDIATE TRANSACTION;")
-			.execute(&mut *conn_raw)
-			.await?;
+		// NOTE: Incremental journaling mode flushes the journal after every transaction, so we
+		// never have to worry about flushing
+
+		// NOTE: Transactions are not required since we're using incremental journaling mode
+		//// Start an IMMEDIATE transaction to prevent other write transactions
+		//sqlx::query("BEGIN IMMEDIATE TRANSACTION;")
+		//	.execute(&mut *conn_raw)
+		//	.await?;
 
 		// Use a Result to track if we need to roll back
 		let snapshot_result = self
-			.snapshot_sqlite_db_inner(&key_packed, &*conn, &mut *conn_raw, prev_snapshotted_state)
+			.snapshot_sqlite_db_inner(&*key_packed, &*conn, &mut *conn_raw, prev_snapshotted_state)
 			.await;
 
-		// Always roll back the transaction since we only used it for consistent reading
-		let rollback_result = sqlx::query("ROLLBACK;")
-			.execute(&mut *conn_raw)
-			.await
-			.map_err(Error::BuildSqlx);
-		drop(conn_raw);
+		//// Always roll back the transaction since we only used it for consistent reading
+		//let rollback_result = sqlx::query("ROLLBACK;")
+		//	.execute(&mut *conn_raw)
+		//	.await
+		//	.map_err(Error::BuildSqlx);
+		//drop(conn_raw);
 
-		if let Err(rollback_err) = &rollback_result {
-			tracing::error!(?rollback_err, "Failed to rollback transaction");
-		}
+		//if let Err(rollback_err) = &rollback_result {
+		//	tracing::error!(?rollback_err, "Failed to rollback transaction");
+		//}
 
 		// Return the snapshot result, not the rollback result
 		let wrote_snapshot = snapshot_result?;
@@ -424,12 +442,13 @@ impl SqlitePoolManager {
 			prev_snapshotted_state.schema_version <= current_state.schema_version,
 			"schema_version() went down"
 		);
-		if prev_snapshotted_state == current_state {
-			tracing::debug!("no changes detected, skipping sqlite database snapshot");
-			return Ok(false);
-		}
+		// if prev_snapshotted_state == current_state {
+		// 	tracing::debug!(key=?hex::encode(&**key_packed), "no changes detected, skipping sqlite database snapshot");
+		// 	return Ok(false);
+		// }
 
 		tracing::debug!(
+			key=?hex::encode(&**key_packed),
 			?prev_snapshotted_state,
 			?current_state,
 			"detected changes in sqlite database"
@@ -454,6 +473,7 @@ impl SqlitePoolManager {
 						db_name_segment: key_packed.clone(),
 						chunk: idx,
 					};
+
 					tx.set(&subspace.pack(&chunk_key), chunk);
 				}
 
@@ -486,6 +506,8 @@ impl SqlitePoolManager {
 	/// GC loop for SqlitePoolManager
 	#[tracing::instrument(skip_all)]
 	async fn manager_gc_loop(self: Arc<Self>, mut shutdown: broadcast::Receiver<()>) {
+		return;
+
 		let mut interval = tokio::time::interval(GC_INTERVAL);
 
 		loop {
@@ -599,12 +621,12 @@ impl SqlitePoolManager {
 			.await?;
 
 		if chunks > 0 {
-			tracing::debug!(?chunks, data_len = ?data.len(), "loaded database from fdb");
+			tracing::debug!(key=?hex::encode(&*key_packed), ?chunks, data_len = ?data.len(), "loaded database from fdb");
 			tokio::fs::write(db_path, data).await.map_err(Error::Io)?;
 
 			Ok(true)
 		} else {
-			tracing::debug!("no sqlite db exists");
+			tracing::debug!(key=?hex::encode(&*key_packed), "db not found in fdb");
 
 			Ok(false)
 		}
@@ -647,9 +669,23 @@ impl SqliteConn {
 				(db_path, db_url)
 			}
 			SqliteStorage::FoundationDb => {
+				let sqlite_path = dirs::data_local_dir()
+					.ok_or_else(|| {
+						Error::Io(io::Error::new(
+							io::ErrorKind::NotFound,
+							"Could not determine local data directory",
+						))
+					})?
+					.join("rivet-sqlite");
+
+				// Ensure the directory exists
+				tokio::fs::create_dir_all(&sqlite_path)
+					.await
+					.map_err(Error::Io)?;
+
 				// Generate temporary file location so multiple readers don't clobber each other
-				let db_path = std::env::temp_dir()
-					.join(format!("rivet-sqlite-{hex_key_str}-{}.db", Uuid::new_v4()));
+				let db_path =
+					sqlite_path.join(format!("rivet-sqlite-{hex_key_str}-{}.db", Uuid::new_v4()));
 				let db_url = format!("sqlite://{}", db_path.display());
 				(db_path, db_url)
 			}
@@ -662,13 +698,19 @@ impl SqliteConn {
 					.await
 					.map_err(Error::BuildSqlx)?
 				{
-					tracing::debug!(db_url = ?db_url, "creating sqlite database");
-
-					Sqlite::create_database(&db_url)
-						.await
-						.map_err(Error::BuildSqlx)?;
+					tracing::debug!(?db_url, "sqlite database does not exist");
+					if conn_type.is_reader() {
+						return Err(Error::Global(
+							AssertionError::Panic {
+								message: "cannot open reader for database that doesn't exist"
+									.into(),
+								location: global_error::location!(),
+							}
+							.into(),
+						));
+					}
 				} else {
-					tracing::debug!(db_url = ?db_url, "sqlite database already exists");
+					tracing::debug!(?db_url, "sqlite database already exists");
 				}
 			}
 			SqliteStorage::FoundationDb => {
@@ -680,40 +722,80 @@ impl SqliteConn {
 
 				// Create database if needed
 				if !db_exists {
-					tracing::debug!(db_url = ?db_url, "creating sqlite database");
-
-					Sqlite::create_database(&db_url)
-						.await
-						.map_err(Error::BuildSqlx)?;
+					tracing::debug!(?db_url, "sqlite database does not exist");
+					if conn_type.is_reader() {
+						return Err(Error::Global(
+							AssertionError::Panic {
+								message: "cannot open reader for database that doesn't exist"
+									.into(),
+								location: global_error::location!(),
+							}
+							.into(),
+						));
+					}
 				} else {
-					tracing::debug!(db_url = ?db_url, "sqlite database already exists");
+					tracing::debug!(?db_url, "sqlite database already exists");
 				}
 			}
 		};
 
-		tracing::debug!(db_url = ?db_url, "sqlite connecting");
+		tracing::debug!(?db_url, "sqlite connecting");
 
 		// Connect to database
 		//
 		// We don't need a connection pool since we only have one reader/writer at a time
-		let mut conn_raw = db_url
-			.parse::<SqliteConnectOptions>()
-			.map_err(Error::BuildSqlx)?
-			.read_only(conn_type.is_reader())
-			// Set busy timeout to 5 seconds to avoid "database is locked" errors
-			.busy_timeout(Duration::from_secs(5))
-			// Enable foreign key constraint enforcement
-			.foreign_keys(true)
-			// Enable auto vacuuming and set it to incremental mode for gradual space reclaiming
-			.auto_vacuum(SqliteAutoVacuum::Incremental)
-			// Set synchronous mode to NORMAL for performance and data safety balance
-			.synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
-			.connect()
-			.await
-			.map_err(Error::BuildSqlx)?;
+		let res = if conn_type.is_writer() {
+			db_url
+				.parse::<SqliteConnectOptions>()
+				.map_err(Error::BuildSqlx)?
+				.create_if_missing(true)
+				// Set busy timeout to 5 seconds to avoid "database is locked" errors
+				.busy_timeout(Duration::from_secs(5))
+				// Enable foreign key constraint enforcement
+				.foreign_keys(true)
+				// Enable auto vacuuming and set it to incremental mode for gradual space reclaiming
+				.auto_vacuum(SqliteAutoVacuum::Incremental)
+				// TODO (RVT-4618):
+				// Set synchronous mode to NORMAL for performance and data safety balance
+				// .synchronous(SqliteSynchronous::Normal)
+				.synchronous(SqliteSynchronous::Full)
+				.journal_mode(SqliteJournalMode::Truncate)
+				.connect()
+				.await
+		} else {
+			db_url
+				.parse::<SqliteConnectOptions>()
+				.map_err(Error::BuildSqlx)?
+				.read_only(true)
+				// Set busy timeout to 5 seconds to avoid "database is locked" errors
+				.busy_timeout(Duration::from_secs(5))
+				// Enable foreign key constraint enforcement
+				.foreign_keys(true)
+				// TODO (RVT-4618):
+				// Set synchronous mode to NORMAL for performance and data safety balance
+				// .synchronous(SqliteSynchronous::Normal)
+				.synchronous(SqliteSynchronous::Full)
+				.journal_mode(SqliteJournalMode::Truncate)
+				.connect()
+				.await
+		};
 
-		// Sqlx doesn't have a WAL2 option, enable it manually
-		conn_raw.execute("PRAGMA journal_mode = WAL2;").await.map_err(Error::BuildSqlx)?;
+		let conn_raw = match res {
+			Ok(x) => x,
+			Err(err) => {
+				tracing::error!(
+					?conn_type,
+					?key_packed,
+					?db_url,
+					"failed to connect to sqlite"
+				);
+				return Err(Error::BuildSqlx(err));
+			}
+		};
+
+		// TODO (RVT-4618):
+		// // Sqlx doesn't have a WAL2 option, enable it manually
+		// conn_raw.execute("PRAGMA journal_mode = WAL2;").await.map_err(Error::BuildSqlx)?;
 
 		tracing::debug!(?db_url, "sqlite connected");
 
@@ -729,31 +811,12 @@ impl SqliteConn {
 		// Create drop handle
 		let (drop_tx, drop_rx) = oneshot::channel();
 		tokio::spawn({
-			let key_packed = key_packed.clone();
 			let manager = manager.clone();
 			let db_path = db_path.clone();
 
 			async move {
 				// Wait for drop signal
 				let _ = drop_rx.await;
-
-				// Snapshot
-				match conn_type {
-					SqliteConnType::Writer {
-						auto_snapshot: true,
-					} => {
-						tracing::debug!("sqlite writer dropped, auto-snapshotting");
-
-						match manager.snapshot_with_key(&key_packed).await {
-							Ok(_) => {}
-							Err(err) => tracing::error!(
-								?err,
-								"failed to snapshot on drop, will attempt snapshotting again when gc'd"
-							),
-						}
-					}
-					SqliteConnType::Writer { .. } | SqliteConnType::Reader => {}
-				}
 
 				// Remove file
 				match manager.storage {
@@ -789,12 +852,12 @@ impl SqliteConn {
 impl SqliteConn {
 	#[tracing::instrument(name = "sqlite_conn_snapshot", skip_all)]
 	pub async fn snapshot(&self) -> GlobalResult<bool> {
-		match self.manager.snapshot_with_key(&self.key_packed).await {
+		match self.manager.snapshot_with_key(&self.key_packed, true).await {
 			Ok(x) => Ok(x),
 			Err(err) => {
 				tracing::error!(
 					?err,
-					"failed to snapshot on drop, will attempt snapshotting again when gc'd"
+					"failed to snapshot, will attempt snapshotting again when gc'd"
 				);
 				Ok(false)
 			}

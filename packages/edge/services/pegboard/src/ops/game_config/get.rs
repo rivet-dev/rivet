@@ -39,7 +39,7 @@ pub async fn ds_game_config_get(ctx: &OperationCtx, input: &Input) -> GlobalResu
 		[ctx, GameConfigRow]
 		"
 		SELECT game_id, host_networking_enabled, root_user_enabled
-		FROM db_pegboard.game_config
+		FROM db_pegboard2.game_config
 		WHERE game_id = ANY($1)
 		",
 		&input.game_ids,

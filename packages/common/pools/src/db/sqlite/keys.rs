@@ -37,7 +37,7 @@ impl TuplePack for DbDataKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("dbs", &*self.db_name_segment, "data");
+		let t = (DBS, &*self.db_name_segment, DATA);
 		t.pack(w, tuple_depth)
 	}
 }

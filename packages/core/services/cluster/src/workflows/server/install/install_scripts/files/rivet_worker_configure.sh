@@ -15,8 +15,8 @@ After=network-online.target
 ConditionPathExists=/etc/rivet-server/
 
 [Service]
-Environment="RIVET_OTEL_ENABLED=1"
-Environment="RIVET_OTEL_ENDPOINT=http://127.0.0.1:__OTEL_PORT__"
+# Environment="RIVET_OTEL_ENABLED=1"
+# Environment="RIVET_OTEL_ENDPOINT=http://127.0.0.1:__OTEL_PORT__"
 ExecStart=/usr/local/bin/rivet-edge-server start --skip-provision
 Restart=always
 RestartSec=2
