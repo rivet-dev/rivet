@@ -33,7 +33,7 @@ pub enum Error {
 	#[error("build redis url: {0}")]
 	BuildRedisUrl(url::ParseError),
 
-	#[error("build fdb: {0}")]
+	#[error("build fdb: {0:?}")]
 	BuildFdb(anyhow::Error),
 
 	#[error("build fdb connection file: {0}")]

@@ -9,7 +9,7 @@ edition.workspace = true
 chirp-client.workspace = true
 chrono = "0.4"
 prost = "0.10"
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.12", features = ["json"] }
 rivet-operation.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

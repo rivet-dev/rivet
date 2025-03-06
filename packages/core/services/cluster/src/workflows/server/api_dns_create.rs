@@ -68,7 +68,7 @@ async fn get_server_info(
 	let (public_ip, dc_name_id) = sql_fetch_one!(
 		[ctx, (IpAddr, String)]
 		"
-		SELECT dc.name_id, s.public_ip
+		SELECT s.public_ip, dc.name_id
 		FROM db_cluster.servers AS s
 		JOIN db_cluster.datacenters AS dc
 		ON s.datacenter_id = dc.datacenter_id

@@ -4,7 +4,7 @@
 	"version": "0.0.0",
 	"type": "module",
 	"scripts": {
-		"dev": "vite",
+		"dev": "strace -o strace.log -f vite",
 		"build": "vite build --mode=production --base=/",
 		"build:embedded": "vite build --mode=production --base=/ui/",
 		"preview": "vite preview"

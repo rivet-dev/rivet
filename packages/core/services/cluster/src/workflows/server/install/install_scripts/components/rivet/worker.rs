@@ -87,12 +87,12 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 				))?,
 			}),
 
-			foundationdb: FoundationDb {
+			foundationdb: Some(FoundationDb {
 				addresses: Addresses::Dynamic {
 					fetch_endpoint: Url::parse(&format!("http://127.0.0.1:{TUNNEL_API_EDGE_PORT}/provision/datacenters/___DATACENTER_ID___/servers?pools=fdb"))?,
 				},
 				..Default::default()
-			},
+			}),
 			nats: Nats {
 				urls: vec![Url::parse(&format!("nats://127.0.0.1:{TUNNEL_NATS_PORT}"))?],
 				..server_config.nats.clone()

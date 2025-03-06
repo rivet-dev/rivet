@@ -40,7 +40,7 @@ pub struct Server {
 	#[serde(default)]
 	pub prometheus: Option<Prometheus>,
 	#[serde(default)]
-	pub foundationdb: FoundationDb,
+	pub foundationdb: Option<FoundationDb>,
 
 	// Services
 	#[serde(default)]

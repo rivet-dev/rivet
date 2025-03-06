@@ -21,7 +21,7 @@ ipnet = { version = "2.7", features = ["serde"] }
 lazy_static = "1.4"
 rand = "0.8"
 regex = "1.4"
-reqwest = { version = "0.11", default-features = false }
+reqwest = { version = "0.12", default-features = false }
 rivet-config.workspace = true
 rivet-util-macros.workspace = true
 serde = { version = "1.0", features = ["derive"] }

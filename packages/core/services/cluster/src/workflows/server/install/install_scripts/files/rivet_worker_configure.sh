@@ -15,7 +15,7 @@ After=network-online.target
 ConditionPathExists=/etc/rivet-server/
 
 [Service]
-ExecStart=/usr/local/bin/rivet-edge-server --skip-provision
+ExecStart=/usr/local/bin/rivet-edge-server start --skip-provision
 Restart=always
 RestartSec=2
 

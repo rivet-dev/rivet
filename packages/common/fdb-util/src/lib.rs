@@ -58,7 +58,7 @@ pub fn init(fdb_cluster_path: &Path) {
 	tokio::spawn(fdb_health_check(fdb_cluster_path.to_path_buf()));
 }
 
-pub async fn fdb_health_check(fdb_cluster_path: PathBuf) -> Result<()> {
+async fn fdb_health_check(fdb_cluster_path: PathBuf) -> Result<()> {
 	let db = handle(&fdb_cluster_path)?;
 
 	loop {

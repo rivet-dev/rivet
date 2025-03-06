@@ -981,7 +981,7 @@ dependencies = [
  "lazy_static",
  "prost 0.10.4",
  "regex",
- "reqwest 0.11.27",
+ "reqwest 0.12.12",
  "rivet-api",
  "rivet-cache",
  "rivet-claims",
@@ -2189,7 +2189,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "regex",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "shlex",
  "syn 2.0.90",
 ]
@@ -2387,7 +2387,7 @@ dependencies = [
  "nomad-client",
  "nomad-util",
  "rand",
- "reqwest 0.11.27",
+ "reqwest 0.12.12",
  "rivet-api",
  "rivet-convert",
  "rivet-metrics",
@@ -2590,7 +2590,7 @@ dependencies = [
  "chirp-client",
  "chirp-worker",
  "prost 0.10.4",
- "reqwest 0.11.27",
+ "reqwest 0.12.12",
  "rivet-operation",
  "serde",
 ]
@@ -2626,7 +2626,7 @@ dependencies = [
  "chirp-client",
  "chirp-worker",
  "prost 0.10.4",
- "reqwest 0.11.27",
+ "reqwest 0.12.12",
  "rivet-operation",
  "serde",
 ]
@@ -2643,7 +2643,7 @@ dependencies = [
  "chirp-worker",
  "chrono",
  "prost 0.10.4",
- "reqwest 0.11.27",
+ "reqwest 0.12.12",
  "rivet-operation",
  "rivet-util-captcha",
  "serde_json",
@@ -2975,7 +2975,7 @@ dependencies = [
  "game-list-for-team",
  "game-namespace-list",
  "game-resolve-namespace-id",
- "reqwest 0.11.27",
+ "reqwest 0.12.12",
  "rivet-config",
  "rivet-health-checks",
  "rivet-metrics",
@@ -3511,18 +3511,18 @@ dependencies = [
 
 [[package]]
 name = "cloudflare"
-version = "0.12.0"
-source = "git+https://github.com/cloudflare/cloudflare-rs?rev=f14720e#f14720e42184ee176a97676e85ef2d2d85bc3aae"
+version = "0.13.0"
+source = "git+https://github.com/LSilent/cloudflare-rs?rev=b2c6f366ee68a7956fb69dd4f39357b3c184bd15#b2c6f366ee68a7956fb69dd4f39357b3c184bd15"
 dependencies = [
  "chrono",
- "http 0.2.12",
+ "http 1.1.0",
  "percent-encoding",
- "reqwest 0.11.27",
+ "reqwest 0.12.12",
  "serde",
  "serde_json",
  "serde_urlencoded",
- "serde_with",
- "thiserror 1.0.69",
+ "serde_with 3.12.0",
+ "thiserror 2.0.3",
  "url",
  "uuid",
 ]
@@ -3537,7 +3537,7 @@ dependencies = [
  "chrono",
  "cloudflare",
  "hex",
- "http 0.2.12",
+ "http 1.1.0",
  "include_dir",
  "indoc 1.0.9",
  "ip-info",
@@ -3549,7 +3549,7 @@ dependencies = [
  "nomad_client",
  "pegboard",
  "rand",
- "reqwest 0.11.27",
+ "reqwest 0.12.12",
  "rivet-api",
  "rivet-config",
  "rivet-metrics",
@@ -3565,6 +3565,7 @@ dependencies = [
  "token-create",
  "tokio",
  "trust-dns-resolver",
+ "url",
 ]
 
 [[package]]
@@ -4282,7 +4283,7 @@ version = "5.1.2"
 dependencies = [
  "anyhow",
  "dirs",
- "reqwest 0.11.27",
+ "reqwest 0.12.12",
  "serde_json",
  "tempfile",
  "tokio",
@@ -4357,7 +4358,7 @@ dependencies = [
 [[package]]
 name = "deno_broadcast_channel"
 version = "0.174.0"
-source = "git+https://github.com/rivet-gg/deno?rev=9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a#9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
 dependencies = [
  "async-trait",
  "deno_core",
@@ -4369,7 +4370,7 @@ dependencies = [
 [[package]]
 name = "deno_cache"
 version = "0.112.0"
-source = "git+https://github.com/rivet-gg/deno?rev=9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a#9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
 dependencies = [
  "async-trait",
  "deno_core",
@@ -4383,7 +4384,7 @@ dependencies = [
 [[package]]
 name = "deno_canvas"
 version = "0.49.0"
-source = "git+https://github.com/rivet-gg/deno?rev=9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a#9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
 dependencies = [
  "deno_core",
  "deno_webgpu",
@@ -4395,7 +4396,7 @@ dependencies = [
 [[package]]
 name = "deno_console"
 version = "0.180.0"
-source = "git+https://github.com/rivet-gg/deno?rev=9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a#9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
 dependencies = [
  "deno_core",
 ]
@@ -4443,7 +4444,7 @@ checksum = "fe4dccb6147bb3f3ba0c7a48e993bfeb999d2c2e47a81badee80e2b370c8d695"
 [[package]]
 name = "deno_cron"
 version = "0.60.0"
-source = "git+https://github.com/rivet-gg/deno?rev=9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a#9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4457,7 +4458,7 @@ dependencies = [
 [[package]]
 name = "deno_crypto"
 version = "0.194.0"
-source = "git+https://github.com/rivet-gg/deno?rev=9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a#9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -4518,7 +4519,7 @@ dependencies = [
 [[package]]
 name = "deno_fetch"
 version = "0.204.0"
-source = "git+https://github.com/rivet-gg/deno?rev=9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a#9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
 dependencies = [
  "base64 0.21.7",
  "bytes",
@@ -4552,7 +4553,7 @@ dependencies = [
 [[package]]
 name = "deno_ffi"
 version = "0.167.0"
-source = "git+https://github.com/rivet-gg/deno?rev=9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a#9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
 dependencies = [
  "deno_core",
  "deno_permissions",
@@ -4573,7 +4574,7 @@ dependencies = [
 [[package]]
 name = "deno_fs"
 version = "0.90.0"
-source = "git+https://github.com/rivet-gg/deno?rev=9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a#9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
 dependencies = [
  "async-trait",
  "base32",
@@ -4597,7 +4598,7 @@ dependencies = [
 [[package]]
 name = "deno_http"
 version = "0.178.0"
-source = "git+https://github.com/rivet-gg/deno?rev=9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a#9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
 dependencies = [
  "async-compression",
  "async-trait",
@@ -4634,7 +4635,7 @@ dependencies = [
 [[package]]
 name = "deno_io"
 version = "0.90.0"
-source = "git+https://github.com/rivet-gg/deno?rev=9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a#9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
 dependencies = [
  "async-trait",
  "deno_core",
@@ -4656,7 +4657,7 @@ dependencies = [
 [[package]]
 name = "deno_kv"
 version = "0.88.0"
-source = "git+https://github.com/rivet-gg/deno?rev=9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a#9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4711,7 +4712,7 @@ dependencies = [
 [[package]]
 name = "deno_napi"
 version = "0.111.0"
-source = "git+https://github.com/rivet-gg/deno?rev=9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a#9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
 dependencies = [
  "deno_core",
  "deno_permissions",
@@ -4739,7 +4740,7 @@ dependencies = [
 [[package]]
 name = "deno_net"
 version = "0.172.0"
-source = "git+https://github.com/rivet-gg/deno?rev=9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a#9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
 dependencies = [
  "deno_core",
  "deno_permissions",
@@ -4757,7 +4758,7 @@ dependencies = [
 [[package]]
 name = "deno_node"
 version = "0.117.0"
-source = "git+https://github.com/rivet-gg/deno?rev=9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a#9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
 dependencies = [
  "aead-gcm-stream",
  "aes",
@@ -4892,7 +4893,7 @@ dependencies = [
 [[package]]
 name = "deno_permissions"
 version = "0.40.0"
-source = "git+https://github.com/rivet-gg/deno?rev=9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a#9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
 dependencies = [
  "deno_core",
  "deno_path_util",
@@ -4911,7 +4912,7 @@ dependencies = [
 [[package]]
 name = "deno_runtime"
 version = "0.189.0"
-source = "git+https://github.com/rivet-gg/deno?rev=9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a#9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
 dependencies = [
  "color-print",
  "deno_ast 0.44.0",
@@ -4994,7 +4995,7 @@ dependencies = [
 [[package]]
 name = "deno_telemetry"
 version = "0.2.0"
-source = "git+https://github.com/rivet-gg/deno?rev=9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a#9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
 dependencies = [
  "async-trait",
  "deno_core",
@@ -5036,7 +5037,7 @@ dependencies = [
 [[package]]
 name = "deno_tls"
 version = "0.167.0"
-source = "git+https://github.com/rivet-gg/deno?rev=9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a#9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
 dependencies = [
  "deno_core",
  "deno_native_certs",
@@ -5064,7 +5065,7 @@ dependencies = [
 [[package]]
 name = "deno_url"
 version = "0.180.0"
-source = "git+https://github.com/rivet-gg/deno?rev=9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a#9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
 dependencies = [
  "deno_core",
  "thiserror 1.0.69",
@@ -5074,7 +5075,7 @@ dependencies = [
 [[package]]
 name = "deno_web"
 version = "0.211.0"
-source = "git+https://github.com/rivet-gg/deno?rev=9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a#9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
 dependencies = [
  "async-trait",
  "base64-simd 0.8.0",
@@ -5093,7 +5094,7 @@ dependencies = [
 [[package]]
 name = "deno_webgpu"
 version = "0.147.0"
-source = "git+https://github.com/rivet-gg/deno?rev=9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a#9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
 dependencies = [
  "deno_core",
  "raw-window-handle",
@@ -5107,7 +5108,7 @@ dependencies = [
 [[package]]
 name = "deno_webidl"
 version = "0.180.0"
-source = "git+https://github.com/rivet-gg/deno?rev=9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a#9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
 dependencies = [
  "deno_core",
 ]
@@ -5115,7 +5116,7 @@ dependencies = [
 [[package]]
 name = "deno_websocket"
 version = "0.185.0"
-source = "git+https://github.com/rivet-gg/deno?rev=9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a#9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
 dependencies = [
  "bytes",
  "deno_core",
@@ -5138,7 +5139,7 @@ dependencies = [
 [[package]]
 name = "deno_webstorage"
 version = "0.175.0"
-source = "git+https://github.com/rivet-gg/deno?rev=9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a#9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
 dependencies = [
  "deno_core",
  "deno_web",
@@ -5474,7 +5475,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ba28c12892aadb751c2ba7001d8460faee4748a04b4edc51c7121cc67ee03db"
 dependencies = [
  "num-bigint",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "swc_atoms",
  "swc_common",
  "swc_ecma_ast",
@@ -5521,7 +5522,7 @@ dependencies = [
  "rand",
  "regex",
  "region-get",
- "reqwest 0.12.9",
+ "reqwest 0.12.12",
  "rivet-api",
  "rivet-config",
  "rivet-convert",
@@ -5794,7 +5795,7 @@ dependencies = [
  "chirp-worker",
  "lazy_static",
  "prost 0.10.4",
- "reqwest 0.11.27",
+ "reqwest 0.12.12",
  "rivet-operation",
  "serde",
  "serde_json",
@@ -5957,7 +5958,7 @@ dependencies = [
  "chrono",
  "http 0.2.12",
  "prost 0.10.4",
- "reqwest 0.11.27",
+ "reqwest 0.12.12",
  "rivet-operation",
  "serde",
  "serde_json",
@@ -5971,7 +5972,7 @@ dependencies = [
  "chirp-client",
  "chirp-worker",
  "chrono",
- "reqwest 0.11.27",
+ "reqwest 0.12.12",
  "rivet-config",
  "rivet-health-checks",
  "rivet-metrics",
@@ -7045,7 +7046,7 @@ dependencies = [
  "async-trait",
  "formatted-error",
  "http 0.2.12",
- "reqwest 0.11.27",
+ "reqwest 0.12.12",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -7477,7 +7478,7 @@ dependencies = [
  "new_debug_unreachable",
  "once_cell",
  "phf",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "triomphe",
 ]
 
@@ -7654,6 +7655,7 @@ dependencies = [
  "tokio",
  "tokio-rustls 0.26.0",
  "tower-service",
+ "webpki-roots 0.26.7",
 ]
 
 [[package]]
@@ -7712,9 +7714,9 @@ dependencies = [
 
 [[package]]
 name = "hyper-util"
-version = "0.1.7"
+version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cde7055719c54e36e95e8719f95883f22072a48ede39db7fc17a4e1d5281e9b9"
+checksum = "df2dcfbe0677734ab2f3ffa7fa7bfd4706bfdc1ef393f2ee30184aed67e631b4"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -7725,7 +7727,6 @@ dependencies = [
  "pin-project-lite",
  "socket2 0.5.8",
  "tokio",
- "tower 0.4.13",
  "tower-service",
  "tracing",
 ]
@@ -8073,7 +8074,7 @@ dependencies = [
  "chirp-worker",
  "chrono",
  "prost 0.10.4",
- "reqwest 0.11.27",
+ "reqwest 0.12.12",
  "rivet-operation",
  "serde",
  "serde_json",
@@ -8559,7 +8560,7 @@ dependencies = [
  "cluster",
  "ipnet",
  "rand",
- "reqwest 0.11.27",
+ "reqwest 0.12.12",
  "rivet-config",
  "serde",
  "serde_json",
@@ -8576,7 +8577,7 @@ dependencies = [
  "chrono",
  "cluster",
  "linode",
- "reqwest 0.11.27",
+ "reqwest 0.12.12",
  "rivet-config",
  "rivet-connection",
  "rivet-health-checks",
@@ -9522,7 +9523,7 @@ dependencies = [
  "indexmap 2.7.0",
  "log",
  "num-traits",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "serde",
  "spirv",
  "termcolor",
@@ -9533,7 +9534,7 @@ dependencies = [
 [[package]]
 name = "napi_sym"
 version = "0.110.0"
-source = "git+https://github.com/rivet-gg/deno?rev=9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a#9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
 dependencies = [
  "quote",
  "serde",
@@ -9655,7 +9656,7 @@ checksum = "b93853da6d84c2e3c7d730d6473e8817692dd89be387eb01b94d7f108ecb5b8c"
 [[package]]
 name = "node_resolver"
 version = "0.19.0"
-source = "git+https://github.com/rivet-gg/deno?rev=9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a#9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+source = "git+https://github.com/rivet-gg/deno?rev=d1017ec89c630637bf7312b6792262acc887e754#d1017ec89c630637bf7312b6792262acc887e754"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9748,7 +9749,7 @@ dependencies = [
  "global-error",
  "nomad-client",
  "nomad_client",
- "reqwest 0.11.27",
+ "reqwest 0.12.12",
  "rivet-config",
  "rivet-pools",
  "serde",
@@ -10369,10 +10370,11 @@ dependencies = [
  "foundationdb",
  "lazy_static",
  "nix 0.27.1",
- "reqwest 0.11.27",
+ "reqwest 0.12.12",
  "rivet-api",
  "rivet-config",
  "rivet-metrics",
+ "rivet-operation",
  "rivet-util",
  "schemars",
  "serde",
@@ -10383,6 +10385,7 @@ dependencies = [
  "sqlx",
  "strum 0.24.1",
  "thiserror 1.0.69",
+ "token-create",
  "uuid",
 ]
 
@@ -10460,6 +10463,7 @@ dependencies = [
  "portpicker",
  "serde",
  "serde_json",
+ "service-discovery",
  "signal-hook",
  "tempfile",
  "tokio",
@@ -10503,11 +10507,12 @@ dependencies = [
  "prometheus",
  "rand",
  "rand_chacha",
- "reqwest 0.11.27",
+ "reqwest 0.12.12",
  "rivet-util",
  "serde",
  "serde_json",
  "serde_yaml",
+ "service-discovery",
  "sqlite-util",
  "sqlx",
  "sysinfo 0.31.4",
@@ -11240,6 +11245,58 @@ dependencies = [
 ]
 
 [[package]]
+name = "quinn"
+version = "0.11.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62e96808277ec6f97351a2380e6c25114bc9e67037775464979f3037c92d05ef"
+dependencies = [
+ "bytes",
+ "pin-project-lite",
+ "quinn-proto",
+ "quinn-udp",
+ "rustc-hash 2.1.1",
+ "rustls 0.23.19",
+ "socket2 0.5.8",
+ "thiserror 2.0.3",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "quinn-proto"
+version = "0.11.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2fe5ef3495d7d2e377ff17b1a8ce2ee2ec2a18cde8b6ad6619d65d0701c135d"
+dependencies = [
+ "bytes",
+ "getrandom",
+ "rand",
+ "ring 0.17.8",
+ "rustc-hash 2.1.1",
+ "rustls 0.23.19",
+ "rustls-pki-types",
+ "slab",
+ "thiserror 2.0.3",
+ "tinyvec",
+ "tracing",
+ "web-time",
+]
+
+[[package]]
+name = "quinn-udp"
+version = "0.5.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e46f3055866785f6b92bc6164b76be02ca8f2eb4b002c0354b28cf4c119e5944"
+dependencies = [
+ "cfg_aliases 0.2.1",
+ "libc",
+ "once_cell",
+ "socket2 0.5.8",
+ "tracing",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11606,9 +11663,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.12.9"
+version = "0.12.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a77c62af46e79de0a562e1a9849205ffcb7fc1238876e9bd743357570e04046f"
+checksum = "43e734407157c3c2034e0258f5e4473ddb361b1e85f95a66690d67264d7cd1da"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -11632,7 +11689,10 @@ dependencies = [
  "once_cell",
  "percent-encoding",
  "pin-project-lite",
+ "quinn",
+ "rustls 0.23.19",
  "rustls-pemfile 2.2.0",
+ "rustls-pki-types",
  "serde",
  "serde_json",
  "serde_urlencoded",
@@ -11640,11 +11700,16 @@ dependencies = [
  "system-configuration 0.6.1",
  "tokio",
  "tokio-native-tls",
+ "tokio-rustls 0.26.0",
+ "tokio-util 0.7.12",
+ "tower 0.5.2",
  "tower-service",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "wasm-streams",
  "web-sys",
+ "webpki-roots 0.26.7",
  "windows-registry",
 ]
 
@@ -11743,7 +11808,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "serde_with",
+ "serde_with 2.3.3",
  "url",
  "uuid",
 ]
@@ -12035,7 +12100,7 @@ version = "5.1.2"
 dependencies = [
  "fs_extra",
  "include_dir",
- "reqwest 0.12.9",
+ "reqwest 0.12.12",
  "zip 2.2.2",
 ]
 
@@ -12265,6 +12330,7 @@ dependencies = [
  "redis",
  "rivet-config",
  "rivet-metrics",
+ "service-discovery",
  "sqlite-util",
  "sqlx",
  "tempfile",
@@ -12389,7 +12455,7 @@ dependencies = [
  "global-error",
  "include_dir",
  "indoc 2.0.5",
- "reqwest 0.12.9",
+ "reqwest 0.12.12",
  "rivet-api",
  "rivet-config",
  "rivet-migrate",
@@ -12504,7 +12570,7 @@ dependencies = [
  "mime_guess",
  "pkg-version",
  "regex",
- "reqwest 0.11.27",
+ "reqwest 0.12.12",
  "rivet-actors-sdk-embed",
  "rivet-api",
  "rivet-js-utils-embed",
@@ -12550,7 +12616,7 @@ dependencies = [
  "lazy_static",
  "rand",
  "regex",
- "reqwest 0.11.27",
+ "reqwest 0.12.12",
  "rivet-config",
  "rivet-util-macros",
  "serde",
@@ -12692,6 +12758,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
+name = "rustc-hash"
+version = "2.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "357703d41365b4b27c590e3ed91eabb1b663f07c4c084095e60cbed4362dff0d"
+
+[[package]]
 name = "rustc_version"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12831,6 +12903,9 @@ name = "rustls-pki-types"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "16f1201b3c9a7ee8039bcadc17b7e605e2945b27eee7631788c1bd2b0643674b"
+dependencies = [
+ "web-time",
+]
 
 [[package]]
 name = "rustls-tokio-stream"
@@ -13135,7 +13210,7 @@ checksum = "5484316556650182f03b43d4c746ce0e3e48074a21e2f51244b648b6542e1066"
 dependencies = [
  "httpdate",
  "native-tls",
- "reqwest 0.12.9",
+ "reqwest 0.12.12",
  "sentry-anyhow",
  "sentry-backtrace",
  "sentry-contexts",
@@ -13395,7 +13470,25 @@ dependencies = [
  "indexmap 1.9.3",
  "serde",
  "serde_json",
- "serde_with_macros",
+ "serde_with_macros 2.3.3",
+ "time 0.3.37",
+]
+
+[[package]]
+name = "serde_with"
+version = "3.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6b6f7f2fcb69f747921f79f3926bd1e203fce4fef62c268dd3abfb6d86029aa"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "hex",
+ "indexmap 1.9.3",
+ "indexmap 2.7.0",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "serde_with_macros 3.12.0",
  "time 0.3.37",
 ]
 
@@ -13404,6 +13497,18 @@ name = "serde_with_macros"
 version = "2.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "881b6f881b17d13214e5d494c939ebab463d01264ce1811e9d4ac3a882e7695f"
+dependencies = [
+ "darling 0.20.10",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.90",
+]
+
+[[package]]
+name = "serde_with_macros"
+version = "3.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d00caa5193a3c8362ac2b73be6b9e768aa5a4b2f721d8f4b339600c3cb51f8e"
 dependencies = [
  "darling 0.20.10",
  "proc-macro2",
@@ -13441,6 +13546,18 @@ dependencies = [
  "chirp-workflow",
  "linode",
  "rivet-config",
+]
+
+[[package]]
+name = "service-discovery"
+version = "25.1.1"
+dependencies = [
+ "rand",
+ "reqwest 0.12.12",
+ "serde",
+ "tokio",
+ "tracing",
+ "url",
 ]
 
 [[package]]
@@ -13703,7 +13820,7 @@ dependencies = [
  "data-encoding",
  "debugid",
  "if_chain",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "rustc_version 0.2.3",
  "serde",
  "serde_json",
@@ -13722,7 +13839,7 @@ dependencies = [
  "data-encoding",
  "debugid",
  "if_chain",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "rustc_version 0.2.3",
  "serde",
  "serde_json",
@@ -14181,7 +14298,7 @@ dependencies = [
  "bumpalo",
  "hashbrown 0.14.5",
  "ptr_meta",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "triomphe",
 ]
 
@@ -14193,7 +14310,7 @@ checksum = "bb6567e4e67485b3e7662b486f1565bdae54bd5b9d6b16b2ba1a9babb1e42125"
 dependencies = [
  "hstr",
  "once_cell",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "serde",
 ]
 
@@ -14225,7 +14342,7 @@ dependencies = [
  "new_debug_unreachable",
  "num-bigint",
  "once_cell",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "serde",
  "siphasher",
  "sourcemap 9.1.2",
@@ -14360,7 +14477,7 @@ dependencies = [
  "indexmap 2.7.0",
  "once_cell",
  "phf",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "serde",
  "smallvec",
  "swc_atoms",
@@ -14405,7 +14522,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "79938ff510fc647febd8c6c3ef4143d099fdad87a223680e632623d056dae2dd"
 dependencies = [
  "either",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "serde",
  "smallvec",
  "swc_atoms",
@@ -14469,7 +14586,7 @@ dependencies = [
  "indexmap 2.7.0",
  "num_cpus",
  "once_cell",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "ryu-js",
  "swc_atoms",
  "swc_common",
@@ -15551,6 +15668,7 @@ dependencies = [
  "futures-util",
  "pin-project-lite",
  "sync_wrapper 1.0.2",
+ "tokio",
  "tower-layer",
  "tower-service",
 ]
@@ -16743,7 +16861,7 @@ dependencies = [
  "profiling",
  "raw-window-handle",
  "ron",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "serde",
  "smallvec",
  "thiserror 1.0.69",
@@ -16785,7 +16903,7 @@ dependencies = [
  "profiling",
  "range-alloc",
  "raw-window-handle",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "smallvec",
  "thiserror 1.0.69",
  "wasm-bindgen",

@@ -54,9 +54,10 @@ package = "nomad_client"
 git = "https://github.com/rivet-gg/posthog-rs"
 rev = "ef4e80e"
 
+# TODO: Switch back to cloudflare repo once https://github.com/cloudflare/cloudflare-rs/pull/256 is merged
 [workspace.dependencies.cloudflare]
-git = "https://github.com/cloudflare/cloudflare-rs"
-rev = "f14720e"
+git = "https://github.com/LSilent/cloudflare-rs"
+rev = "b2c6f366ee68a7956fb69dd4f39357b3c184bd15"
 
 [workspace.dependencies.rivet-term]
 git = "https://github.com/rivet-gg/rivet-term"
@@ -77,7 +78,7 @@ rev = "8a313913fa73d58f4f9532565b0084e723bc34ad"
 
 [workspace.dependencies.deno_runtime]
 git = "https://github.com/rivet-gg/deno"
-rev = "9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
+rev = "d1017ec89c630637bf7312b6792262acc887e754"
 
 [workspace.dependencies.api-helper]
 path = "packages/common/api-helper/build"

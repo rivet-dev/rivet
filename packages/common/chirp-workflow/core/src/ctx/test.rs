@@ -42,7 +42,9 @@ impl TestCtx {
 
 		let ray_id = Uuid::new_v4();
 		let (config, pools) = if no_config {
-			let config = rivet_config::Config::from_root(rivet_config::config::Root::default());
+			let mut root = rivet_config::config::Root::default();
+			root.server.as_mut().unwrap().foundationdb = Some(Default::default());
+			let config = rivet_config::Config::from_root(root);
 			let pools = rivet_pools::Pools::test(config.clone())
 				.await
 				.expect("failed to create pools");

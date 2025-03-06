@@ -45,7 +45,7 @@ impl Pools {
 			crdb: Some(crdb),
 			redis,
 			clickhouse,
-			fdb: Some(fdb),
+			fdb,
 			sqlite: SqlitePoolManager::new(),
 			clickhouse_enabled: config
 				.server
@@ -81,7 +81,7 @@ impl Pools {
 			crdb: None,
 			redis,
 			clickhouse: None,
-			fdb: Some(fdb),
+			fdb,
 			sqlite: SqlitePoolManager::new(),
 			clickhouse_enabled: config
 				.server

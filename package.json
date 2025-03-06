@@ -1,6 +1,6 @@
 {
 	"private": true,
-	"packageManager": "yarn@4.2.2",
+	"packageManager": "yarn@4.6.0",
 	"name": "rivet",
 	"workspaces": [
 		"frontend/apps/*",

@@ -27,15 +27,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	println!("stderr:\n{}", String::from_utf8_lossy(&output.stderr));
 	assert!(output.status.success(), "yarn install failed");
 
-	println!("Running yarn build");
-	let output = Command::new("yarn")
-		.current_dir(&hub_path)
-		.args(["dlx", "turbo", "run", "build:embedded"])
-		.env("VITE_APP_API_URL", "__APP_API_URL__")
-		.output()?;
-	println!("stdout:\n{}", String::from_utf8_lossy(&output.stdout));
-	println!("stderr:\n{}", String::from_utf8_lossy(&output.stderr));
-	assert!(output.status.success(), "hub build failed");
+	// println!("Running yarn build");
+	// let output = Command::new("yarn")
+	// 	.current_dir(&hub_path)
+	// 	.args(["dlx", "turbo", "run", "build:embedded"])
+	// 	.env("VITE_APP_API_URL", "__APP_API_URL__")
+	// 	.output()?;
+	// println!("stdout:\n{}", String::from_utf8_lossy(&output.stdout));
+	// println!("stderr:\n{}", String::from_utf8_lossy(&output.stderr));
+	// assert!(output.status.success(), "hub build failed");
 
 	// Copy dist directory to out_dir
 	let dist_path = hub_path.join("dist");

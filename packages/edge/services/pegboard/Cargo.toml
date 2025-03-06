@@ -18,7 +18,7 @@ fdb-util = { workspace = true, optional = true }
 foundationdb = { workspace = true, optional = true }
 lazy_static = "1.4"
 nix = { version = "0.27", default-features = false, features = ["user", "signal"], optional = true }
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.12", features = ["json"] }
 rivet-api.workspace = true
 rivet-config.workspace = true
 rivet-metrics.workspace = true

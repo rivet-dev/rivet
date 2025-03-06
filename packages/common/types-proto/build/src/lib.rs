@@ -39,7 +39,16 @@ where
 
 	// Add protos from all services
 	for project_root in &project_roots {
-		for entry in fs::read_dir(project_root.join("packages").join("core").join("services"))? {
+		let dir = fs::read_dir(project_root.join("packages").join("core").join("services"))
+			.or_else(|err| {
+				if err.kind() == io::ErrorKind::NotFound {
+					fs::read_dir(project_root.join("packages").join("services"))
+				} else {
+					Err(err)
+				}
+			})?;
+
+		for entry in dir {
 			let entry = entry?;
 			let proto_path = entry.path().join("proto");
 

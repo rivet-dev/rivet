@@ -7,7 +7,7 @@ edition.workspace = true
 
 [dependencies]
 rand = "0.8"
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.12", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.40", features = ["full"] }
 tracing = "0.1"

@@ -7,7 +7,10 @@ COPY . .
 # Installs shared libs
 #
 # The FDB version should match `cluster::workflows::server::install::install_scripts::components::fdb::FDB_VERSION`
-RUN apt-get update && apt-get install -y libclang-dev protobuf-compiler && \
+RUN \
+	apt-get update -y && \
+	apt-get install -y \
+	libclang-dev protobuf-compiler && \
 	curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.1.60/libfdb_c.x86_64.so"
 
 RUN \
