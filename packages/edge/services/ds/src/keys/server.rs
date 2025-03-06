@@ -52,6 +52,51 @@ impl<'de> TupleUnpack<'de> for CreateTsKey {
 }
 
 #[derive(Debug)]
+pub struct WorkflowIdKey {
+	server_id: Uuid,
+}
+
+impl WorkflowIdKey {
+	pub fn new(server_id: Uuid) -> Self {
+		WorkflowIdKey { server_id }
+	}
+}
+
+impl FormalKey for WorkflowIdKey {
+	type Value = Uuid;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		Ok(Uuid::from_slice(raw)?)
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok(value.as_bytes().to_vec())
+	}
+}
+
+impl TuplePack for WorkflowIdKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = ("server", "data", self.server_id, "workflow_id");
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for WorkflowIdKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, server_id, _)) =
+			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
+
+		let v = WorkflowIdKey { server_id };
+
+		Ok((input, v))
+	}
+}
+
+#[derive(Debug)]
 pub struct ProxiedPortsKey {
 	pub server_id: Uuid,
 }

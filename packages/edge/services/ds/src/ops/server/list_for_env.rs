@@ -42,6 +42,7 @@ pub async fn ds_server_list_for_env(ctx: &OperationCtx, input: &Input) -> Global
 					let create_ts = create_ts_key
 						.deserialize(&entry)
 						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
 					keys::subspace().pack(&keys::env::ServerKey::new(
 						input.env_id,
 						create_ts,
@@ -75,10 +76,10 @@ pub async fn ds_server_list_for_env(ctx: &OperationCtx, input: &Input) -> Global
 
 				if input.include_destroyed || !data.is_destroyed {
 					// Compute intersection between ds tags and input tags
-					let tags_match = data
+					let tags_match = input
 						.tags
 						.iter()
-						.all(|(k, v)| input.tags.iter().any(|(k2, v2)| k == k2 && v == v2));
+						.all(|(k, v)| data.tags.iter().any(|(k2, v2)| k == k2 && v == v2));
 
 					if tags_match {
 						results.push(server_key.server_id);

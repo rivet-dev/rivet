@@ -492,8 +492,6 @@ impl Database for DatabaseFdbSqliteNats {
 								}
 							}
 
-							tracing::info!(?current_workflow_name, ?current_state, "-----");
-
 							if let Some(workflow_name) = current_workflow_name {
 								let entry = other_workflow_counts
 									.entry(workflow_name.clone())
@@ -516,8 +514,6 @@ impl Database for DatabaseFdbSqliteNats {
 									}
 								}
 							}
-
-							tracing::info!(?other_workflow_counts, "-----");
 
 							Result::<_, fdb::FdbBindingError>::Ok(())
 						},

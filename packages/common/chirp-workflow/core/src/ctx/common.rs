@@ -56,7 +56,7 @@ pub async fn wait_for_workflow<W: Workflow>(
 	.await?
 }
 
-/// Finds the first workflow with the given tags.
+/// Finds the first incomplete workflow with the given tags.
 pub async fn find_workflow<W: Workflow>(
 	db: &DatabaseHandle,
 	tags: impl AsTags,

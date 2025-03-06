@@ -1,14 +1,19 @@
 use std::{collections::HashMap, convert::TryInto};
 
 use chirp_workflow::prelude::*;
+use fdb_util::{FormalKey, SERIALIZABLE};
+use foundationdb as fdb;
 use futures_util::{StreamExt, TryStreamExt};
 
-use crate::types::{
-	EndpointType, GameGuardProtocol, HostProtocol, NetworkMode, Port, Routing, Server,
-	ServerLifecycle, ServerResources,
+use crate::{
+	keys,
+	types::{
+		EndpointType, GameGuardProtocol, HostProtocol, NetworkMode, Port, Routing, Server,
+		ServerLifecycle, ServerResources,
+	},
 };
 
-#[derive(sqlx::FromRow)]
+#[derive(Debug, sqlx::FromRow)]
 struct ServerRow {
 	env_id: Uuid,
 	tags: sqlx::types::Json<HashMap<String, String>>,
@@ -78,14 +83,38 @@ pub struct Output {
 
 #[operation]
 pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
-	let server_data = futures_util::stream::iter(input.server_ids.clone())
-		.map(|server_id| async move {
-			let Some(workflow_id) = ctx
-				.find_workflow::<crate::workflows::server::Workflow>(("server_id", server_id))
-				.await?
-			else {
-				return GlobalResult::Ok(None);
-			};
+	let servers_with_wf_ids = ctx
+		.fdb()
+		.await?
+		.run(|tx, _mc| async move {
+			futures_util::stream::iter(input.server_ids.clone())
+				.map(|server_id| {
+					let tx = tx.clone();
+					async move {
+						let workflow_id_key = keys::server::WorkflowIdKey::new(server_id);
+						let workflow_id_entry = tx
+							.get(&keys::subspace().pack(&workflow_id_key), SERIALIZABLE)
+							.await?;
+
+						let workflow_id = workflow_id_key
+							.deserialize(&workflow_id_entry.ok_or(
+								fdb::FdbBindingError::CustomError(
+									format!("key should exist: {workflow_id_key:?}").into(),
+								),
+							)?)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+						Ok((server_id, workflow_id))
+					}
+				})
+				.buffer_unordered(1024)
+				.try_collect::<Vec<_>>()
+				.await
+		})
+		.await?;
+
+	let server_data = futures_util::stream::iter(servers_with_wf_ids)
+		.map(|(server_id, workflow_id)| async move {
 			let pool = &ctx.sqlite_for_workflow(workflow_id).await?;
 
 			let (server_row, pb_row, port_ingress_rows, port_host_rows, proxied_port_rows) = tokio::try_join!(
@@ -144,7 +173,7 @@ pub async fn ds_server_get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Ou
 				),
 			)?;
 
-			Ok(Some(ServerData {
+			GlobalResult::Ok(Some(ServerData {
 				server_id,
 				row: server_row,
 				pb_row,

@@ -1,5 +1,5 @@
 use chirp_workflow::prelude::*;
-use fdb_util::{FormalKey, SNAPSHOT, end_of_key_range};
+use fdb_util::{end_of_key_range, FormalKey, SNAPSHOT};
 use foundationdb::{
 	self as fdb,
 	options::{ConflictRangeType, StreamingMode},

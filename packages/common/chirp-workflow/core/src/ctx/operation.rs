@@ -100,7 +100,7 @@ impl OperationCtx {
 		)
 	}
 
-	/// Finds the first workflow with the given tags.
+	/// Finds the first incomplete workflow with the given tags.
 	pub async fn find_workflow<W: Workflow>(
 		&self,
 		tags: impl AsTags,

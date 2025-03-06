@@ -69,7 +69,7 @@ impl<'de> TupleUnpack<'de> for ServerKey {
 	}
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ServerKeyData {
 	pub is_destroyed: bool,
 	pub tags: Vec<(String, String)>,

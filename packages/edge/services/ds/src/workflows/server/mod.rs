@@ -505,7 +505,6 @@ async fn populate_fdb_idx(ctx: &ActivityCtx, input: &PopulateFdbIdxInput) -> Glo
 		.await?
 		.run(|tx, _mc| async move {
 			let create_ts_key = keys::server::CreateTsKey::new(input.server_id);
-
 			tx.set(
 				&keys::subspace().pack(&create_ts_key),
 				&create_ts_key
@@ -513,6 +512,15 @@ async fn populate_fdb_idx(ctx: &ActivityCtx, input: &PopulateFdbIdxInput) -> Glo
 					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
 			);
 
+			let workflow_id_key = keys::server::WorkflowIdKey::new(input.server_id);
+			tx.set(
+				&keys::subspace().pack(&workflow_id_key),
+				&workflow_id_key
+					.serialize(ctx.workflow_id())
+					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+			);
+
+			// Add env index key
 			let server_key =
 				keys::env::ServerKey::new(input.env_id, input.create_ts, input.server_id);
 			let data = keys::env::ServerKeyData {
@@ -635,7 +643,7 @@ struct UpdateImageInput {
 #[activity(UpdateImage)]
 async fn update_image(ctx: &ActivityCtx, input: &UpdateImageInput) -> GlobalResult<()> {
 	let pool = ctx.sqlite().await?;
-	
+
 	sql_execute!(
 		[ctx, pool]
 		"

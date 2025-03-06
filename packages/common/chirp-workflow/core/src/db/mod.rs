@@ -87,7 +87,7 @@ pub trait Database: Send {
 	/// Retrieves a workflow with the given ID.
 	async fn get_workflow(&self, workflow_id: Uuid) -> WorkflowResult<Option<WorkflowData>>;
 
-	/// Retrieves a workflow with the given name and tags.
+	/// Retrieves the first incomplete workflow with the given name and tags.
 	async fn find_workflow(
 		&self,
 		workflow_name: &str,
