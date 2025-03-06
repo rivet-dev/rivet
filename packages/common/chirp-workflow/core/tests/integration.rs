@@ -1,6 +1,6 @@
 use chirp_workflow::prelude::*;
-use serde_json::json;
-use uuid::Uuid;
+// use serde_json::json;
+// use uuid::Uuid;
 
 mod common;
 use common::*;
@@ -8,7 +8,7 @@ use common::*;
 #[tokio::test(flavor = "multi_thread")]
 async fn fdb_sqlite_nats_driver() {
 	setup_tracing();
-	setup_dependencies(false).await;
+	setup_dependencies(true).await;
 
 	let ctx = chirp_workflow::prelude::TestCtx::from_env::<db::DatabaseFdbSqliteNats>(
 		"fdb_sqlite_nats_driver",
@@ -24,8 +24,8 @@ async fn fdb_sqlite_nats_driver() {
 
 	let db = db::DatabaseFdbSqliteNats::from_pools(pools.clone()).unwrap();
 
-	let workflow_id = Uuid::new_v4();
-	let input = serde_json::value::RawValue::from_string("null".to_string()).unwrap();
+	// let workflow_id = Uuid::new_v4();
+	// let input = serde_json::value::RawValue::from_string("null".to_string()).unwrap();
 
 	// db.dispatch_workflow(
 	// 	Uuid::new_v4(),
@@ -117,7 +117,7 @@ mod def {
 		ctx.repeat(|ctx| {
 			async move {
 				tracing::info!("eepy");
-				ctx.sleep(3000).await?;
+				ctx.sleep(35000).await?;
 				tracing::info!("eeped");
 
 				let sig = ctx.listen::<MySignal>().await?;

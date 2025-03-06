@@ -1,5 +1,5 @@
 use chirp_workflow::prelude::*;
-use fdb_util::{FormalKey, SERIALIZABLE};
+use fdb_util::{FormalKey, end_of_key_range, SERIALIZABLE};
 use foundationdb::{self as fdb, options::ConflictRangeType};
 
 use crate::{keys, protocol};
@@ -77,7 +77,7 @@ pub async fn pegboard_client_update_allocation_idx(
 			// Add read conflict
 			tx.add_conflict_range(
 				&old_allocation_key_buf,
-				&old_allocation_key_buf,
+				&end_of_key_range(&old_allocation_key_buf),
 				ConflictRangeType::Read,
 			)?;
 

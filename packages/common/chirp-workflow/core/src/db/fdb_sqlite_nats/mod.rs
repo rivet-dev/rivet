@@ -10,6 +10,7 @@ use std::{
 	time::Instant,
 };
 
+use fdb_util::{end_of_key_range, FormalChunkedKey, FormalKey, SERIALIZABLE, SNAPSHOT};
 use foundationdb::{
 	self as fdb,
 	options::{ConflictRangeType, StreamingMode},
@@ -20,7 +21,6 @@ use indoc::indoc;
 use rivet_pools::prelude::*;
 use serde_json::json;
 use sqlx::Acquire;
-use tokio::sync::Mutex;
 use tracing::Instrument;
 use uuid::Uuid;
 
@@ -31,9 +31,8 @@ use crate::{
 		event::{EventId, EventType, SleepState},
 		location::Location,
 	},
-	metrics, worker,
+	metrics,
 };
-use fdb_util::{FormalChunkedKey, FormalKey, SERIALIZABLE, SNAPSHOT};
 
 mod debug;
 mod keys;
@@ -154,7 +153,8 @@ impl DatabaseFdbSqliteNats {
 	async fn flush_wf_data_sqlite(&self, workflow_id: Uuid) -> WorkflowResult<()> {
 		self.pools
 			.sqlite_manager()
-			.flush(crate::db::sqlite_db_name_data(workflow_id)).await?;
+			.flush(crate::db::sqlite_db_name_data(workflow_id))
+			.await?;
 
 		Ok(())
 	}
@@ -182,7 +182,8 @@ impl Database for DatabaseFdbSqliteNats {
 	// ===========
 
 	async fn wake_sub<'a, 'b>(&'a self) -> WorkflowResult<BoxStream<'b, ()>> {
-		let stream = self.pools
+		let stream = self
+			.pools
 			.nats()?
 			.subscribe(WORKER_WAKE_SUBJECT)
 			.await
@@ -266,7 +267,7 @@ impl Database for DatabaseFdbSqliteNats {
 						// following `tx.clear`).
 						tx.add_conflict_range(
 							lease_key_entry.key(),
-							lease_key_entry.key(),
+							&end_of_key_range(lease_key_entry.key()),
 							ConflictRangeType::Read,
 						)?;
 
@@ -447,6 +448,7 @@ impl Database for DatabaseFdbSqliteNats {
 
 											current_workflow_name = None;
 											current_error = None;
+											current_state = WorkflowState::Dead;
 										}
 									}
 								}
@@ -461,35 +463,36 @@ impl Database for DatabaseFdbSqliteNats {
 										.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
 									current_workflow_name = Some(workflow_name);
-								} else if let WorkflowState::Dead = current_state {
-									if let Ok(error_key) = self
-										.subspace
-										.unpack::<keys::workflow::ErrorKey>(entry.key())
-									{
-										let error =
-											error_key.deserialize(entry.value()).map_err(|x| {
-												fdb::FdbBindingError::CustomError(x.into())
-											})?;
+								} else if let Ok(error_key) = self
+									.subspace
+									.unpack::<keys::workflow::ErrorKey>(entry.key())
+								{
+									let error = error_key
+										.deserialize(entry.value())
+										.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
-										current_error = Some(error);
-									} else if let Ok(_) =
-										self.subspace
-											.unpack::<keys::workflow::OutputChunkKey>(entry.key())
+									current_error = Some(error);
+								} else if !matches!(current_state, WorkflowState::Complete) {
+									if let Ok(_) = self
+										.subspace
+										.unpack::<keys::workflow::OutputChunkKey>(entry.key())
 									{
 										current_state = WorkflowState::Complete;
-									} else if let Ok(_) =
-										self.subspace.unpack::<keys::workflow::WorkerInstanceIdKey>(
-											entry.key(),
-										) {
-										current_state = WorkflowState::Running;
 									} else if let Ok(_) =
 										self.subspace.unpack::<keys::workflow::HasWakeConditionKey>(
 											entry.key(),
 										) {
 										current_state = WorkflowState::Sleeping;
+									} else if let Ok(_) =
+										self.subspace.unpack::<keys::workflow::WorkerInstanceIdKey>(
+											entry.key(),
+										) {
+										current_state = WorkflowState::Running;
 									}
 								}
 							}
+
+							tracing::info!(?current_workflow_name, ?current_state, "-----");
 
 							if let Some(workflow_name) = current_workflow_name {
 								let entry = other_workflow_counts
@@ -513,6 +516,8 @@ impl Database for DatabaseFdbSqliteNats {
 									}
 								}
 							}
+
+							tracing::info!(?other_workflow_counts, "-----");
 
 							Result::<_, fdb::FdbBindingError>::Ok(())
 						},
@@ -2050,7 +2055,11 @@ impl Database for DatabaseFdbSqliteNats {
 						let ack_ts_key = keys::signal::AckTsKey::new(signal_id);
 
 						// Ack signal
-						tx.add_conflict_range(&raw_key, &raw_key, ConflictRangeType::Read)?;
+						tx.add_conflict_range(
+							&raw_key,
+							&end_of_key_range(&raw_key),
+							ConflictRangeType::Read,
+						)?;
 						tx.set(
 							&self.subspace.pack(&ack_ts_key),
 							&ack_ts_key
@@ -3309,7 +3318,7 @@ pub fn sqlite_db_name_internal(workflow_id: Uuid) -> (&'static str, Uuid, &'stat
 	("workflow", workflow_id, "internal")
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct WorkflowMetrics {
 	complete: i64,
 	running: i64,
@@ -3317,6 +3326,7 @@ struct WorkflowMetrics {
 	dead: i64,
 }
 
+#[derive(Debug)]
 enum WorkflowState {
 	Complete,
 	Running,

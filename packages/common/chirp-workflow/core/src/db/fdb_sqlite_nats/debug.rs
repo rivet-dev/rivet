@@ -16,7 +16,7 @@ use indoc::indoc;
 use rivet_pools::prelude::*;
 use uuid::Uuid;
 
-use super::{sqlite_db_name_internal, keys, sqlite::SqlStub, DatabaseFdbSqliteNats};
+use super::{keys, sqlite::SqlStub, sqlite_db_name_internal, DatabaseFdbSqliteNats};
 use crate::{
 	db::debug::{
 		ActivityError, ActivityEvent, DatabaseDebug, Event, EventData, HistoryData, LoopEvent,
@@ -526,7 +526,10 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 		workflow_id: Uuid,
 		include_forgotten: bool,
 	) -> Result<Option<HistoryData>> {
-		let pool = &self.pools.sqlite(sqlite_db_name_internal(workflow_id), true).await?;
+		let pool = &self
+			.pools
+			.sqlite(sqlite_db_name_internal(workflow_id), true)
+			.await?;
 
 		let (wf_data, event_rows, error_rows) = tokio::try_join!(
 			self.get_workflows(vec![workflow_id]),

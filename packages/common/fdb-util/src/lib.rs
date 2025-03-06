@@ -78,6 +78,16 @@ async fn fdb_health_check(fdb_cluster_path: PathBuf) -> Result<()> {
 	}
 }
 
+/// When using `add_conflict_range` to add a conflict for a single key, you cannot set both the start and end
+/// keys to the same key. Instead, the end key must be the start key + a 0 byte.
+/// See Python bindings: https://github.com/apple/foundationdb/blob/ec714791df4a6e4dafb5a926130d5789ce0c497a/bindings/python/fdb/impl.py#L633-L635
+pub fn end_of_key_range(key: &[u8]) -> Vec<u8> {
+	let mut end_key = Vec::with_capacity(key.len() + 1);
+	end_key.extend_from_slice(key);
+	end_key.push(0);
+	end_key
+}
+
 pub mod prelude {
 	pub use std::{borrow::Cow, result::Result::Ok};
 

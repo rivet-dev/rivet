@@ -1,5 +1,5 @@
 use chirp_workflow::prelude::*;
-use fdb_util::{FormalKey, SNAPSHOT};
+use fdb_util::{FormalKey, SNAPSHOT, end_of_key_range};
 use foundationdb::{
 	self as fdb,
 	options::{ConflictRangeType, StreamingMode},
@@ -160,7 +160,7 @@ pub async fn ds_server_allocate_ingress_ports(
 					// Add read conflict only for this key
 					tx.add_conflict_range(
 						&ingress_port_key_buf,
-						&ingress_port_key_buf,
+						&end_of_key_range(&ingress_port_key_buf),
 						ConflictRangeType::Read,
 					)?;
 
