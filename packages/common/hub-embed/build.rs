@@ -13,21 +13,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let manifest_dir = env::var("CARGO_MANIFEST_DIR")?;
 	let out_dir = Path::new(&target_dir);
 
-	let project_root = PathBuf::from(manifest_dir.clone()).join("../../..");
-	let hub_path = project_root.join("frontend/apps/hub");
-
-	// Build hub
-	println!("Running yarn install");
-	let output = Command::new("yarn")
-		.arg("install")
-		.arg("--immutable")
-		.current_dir(&hub_path)
-		.output()?;
-	println!("stdout:\n{}", String::from_utf8_lossy(&output.stdout));
-	println!("stderr:\n{}", String::from_utf8_lossy(&output.stderr));
-	assert!(output.status.success(), "yarn install failed");
+	// Clear out dir
+	if out_dir.exists() {
+		fs::remove_dir_all(out_dir)?;
+	}
 
 	if std::env::var("RIVET_SKIP_BUILD_HUB").is_err() {
+		// Build hub
+		let project_root = PathBuf::from(manifest_dir.clone()).join("../../..");
+		let hub_path = project_root.join("frontend/apps/hub");
+
+		println!("Running yarn install");
+		let output = Command::new("yarn")
+			.arg("install")
+			.arg("--immutable")
+			.current_dir(&hub_path)
+			.output()?;
+		println!("stdout:\n{}", String::from_utf8_lossy(&output.stdout));
+		println!("stderr:\n{}", String::from_utf8_lossy(&output.stderr));
+		assert!(output.status.success(), "yarn install failed");
+
 		println!("Running yarn build");
 		let output = Command::new("yarn")
 			.current_dir(&hub_path)
@@ -37,26 +42,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		println!("stdout:\n{}", String::from_utf8_lossy(&output.stdout));
 		println!("stderr:\n{}", String::from_utf8_lossy(&output.stderr));
 		assert!(output.status.success(), "hub build failed");
-	}
 
-	// Copy dist directory to out_dir
-	let dist_path = hub_path.join("dist");
-	if out_dir.exists() {
-		fs::remove_dir_all(out_dir)?;
+		// Copy dist directory to out_dir
+		let dist_path = hub_path.join("dist");
+		fs_extra::dir::copy(
+			dist_path.clone(),
+			out_dir,
+			&fs_extra::dir::CopyOptions::new().content_only(true),
+		)?;
+
+		println!("cargo:rerun-if-changed={}", hub_path.display());
+		println!("cargo:rerun-if-env-changed=FONTAWESOME_PACKAGE_TOKEN");
+	} else {
+		// Create empty dist dir
+		std::fs::create_dir_all(out_dir)?;
 	}
-	fs_extra::dir::copy(
-		dist_path.clone(),
-		out_dir,
-		&fs_extra::dir::CopyOptions::new().content_only(true),
-	)?;
 
 	// Set the path in the env
 	println!("cargo:rustc-env=HUB_PATH={}", out_dir.display());
 
-	println!("cargo:rerun-if-changed={}", hub_path.display());
-
-	// Relevant package tokens
-	println!("cargo:rerun-if-env-changed=FONTAWESOME_PACKAGE_TOKEN");
 
 	Ok(())
 }

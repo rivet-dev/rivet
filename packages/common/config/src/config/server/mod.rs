@@ -232,7 +232,7 @@ pub struct Redis {
 pub struct Cloudflare {
 	pub account_id: String,
 	pub zone: CloudflareZone,
-	pub backend_dispatcher_namespace: String,
+	pub backend_dispatcher_namespace: Option<String>,
 	// TODO: Specify permissions required
 	pub auth_token: Secret<String>,
 }

@@ -319,29 +319,33 @@ async fn update_db(ctx: &ActivityCtx, input: &UpdateDbInput) -> GlobalResult<()>
 		} else {
 			tracing::info!(pool_type=?pool.pool_type, "creating new pool");
 
-			ensure!(
-				!pool.hardware.is_empty(),
-				"must have `hardware` when creating a new pool"
-			);
+			if pool.hardware.is_empty() {
+				tracing::warn!("must define hardware when creating new pool");
+				return Ok(());
+			}
 
-			let min_count = unwrap!(
-				pool.min_count,
-				"must have `min_count` when creating a new pool"
-			);
+			let Some(min_count) = pool.min_count else {
+				tracing::warn!("must have `min_count` when creating a new pool");
+				return Ok(());
+			};
+
+			let Some(max_count) = pool.max_count else {
+				tracing::warn!("must have `max_count` when creating a new pool");
+				return Ok(());
+			};
+
+			let Some(drain_timeout) = pool.drain_timeout else {
+				tracing::warn!("must have `max_count` when creating a new pool");
+				return Ok(());
+			};
 
 			pools.push(Pool {
 				pool_type: pool.pool_type,
 				hardware: pool.hardware.clone(),
 				desired_count: pool.desired_count.unwrap_or(min_count),
 				min_count,
-				max_count: unwrap!(
-					pool.max_count,
-					"must have `max_count` when creating a new pool"
-				),
-				drain_timeout: unwrap!(
-					pool.drain_timeout,
-					"must have `drain_timeout` when creating a new pool"
-				),
+				max_count,
+				drain_timeout,
 			});
 		};
 	}
