@@ -20,7 +20,7 @@ pub struct SignalBuilder<T: Signal + Serialize> {
 }
 
 impl<T: Signal + Serialize> SignalBuilder<T> {
-	pub(crate) fn new(db: DatabaseHandle, ray_id: Uuid, body: T) -> Self {
+	pub(crate) fn new(db: DatabaseHandle, ray_id: Uuid, body: T, from_workflow: bool) -> Self {
 		SignalBuilder {
 			db,
 			ray_id,
@@ -28,7 +28,7 @@ impl<T: Signal + Serialize> SignalBuilder<T> {
 			to_workflow_name: None,
 			to_workflow_id: None,
 			tags: serde_json::Map::new(),
-			error: None,
+			error: from_workflow.then_some(BuilderError::CannotDispatchFromOpInWorkflow),
 		}
 	}
 

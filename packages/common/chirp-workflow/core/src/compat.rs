@@ -7,7 +7,6 @@ use uuid::Uuid;
 
 use crate::{
 	builder::common as builder,
-	builder::BuilderError,
 	ctx::{
 		common,
 		message::{MessageCtx, SubscriptionHandle},
@@ -40,16 +39,13 @@ where
 	<I as WorkflowInput>::Workflow: Workflow<Input = I>,
 	B: Debug + Clone,
 {
-	if ctx.from_workflow {
-		return Err(BuilderError::CannotDispatchFromOpInWorkflow.into());
-	}
-
 	let db = db_from_ctx(ctx).await?;
 
 	Ok(builder::workflow::WorkflowBuilder::new(
 		db,
 		ctx.ray_id(),
 		input,
+		ctx.from_workflow,
 	))
 }
 
@@ -58,13 +54,24 @@ pub async fn signal<T: Signal + Serialize, B: Debug + Clone>(
 	ctx: &rivet_operation::OperationContext<B>,
 	body: T,
 ) -> GlobalResult<builder::signal::SignalBuilder<T>> {
-	if ctx.from_workflow {
-		return Err(BuilderError::CannotDispatchFromOpInWorkflow.into());
-	}
-
 	let db = db_from_ctx(ctx).await?;
 
-	Ok(builder::signal::SignalBuilder::new(db, ctx.ray_id(), body))
+	Ok(builder::signal::SignalBuilder::new(
+		db,
+		ctx.ray_id(),
+		body,
+		ctx.from_workflow,
+	))
+}
+
+/// Creates a message builder.
+pub async fn msg<M: Message, B: Debug + Clone>(
+	ctx: &rivet_operation::OperationContext<B>,
+	body: M,
+) -> GlobalResult<builder::message::MessageBuilder<M>> {
+	let msg_ctx = MessageCtx::new(ctx.conn(), ctx.ray_id()).await?;
+
+	Ok(builder::message::MessageBuilder::new(msg_ctx, body))
 }
 
 #[tracing::instrument(err, skip_all, fields(operation = I::Operation::NAME))]

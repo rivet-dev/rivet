@@ -69,7 +69,9 @@ where
 		req_ts,
 		from_workflow,
 		I::Operation::NAME,
-	);
+	)
+	.await
+	.map_err(GlobalError::raw)?;
 
 	let res = tokio::time::timeout(I::Operation::TIMEOUT, I::Operation::run(&ctx, &input))
 		.await

@@ -5,16 +5,16 @@ use serde::Serialize;
 
 use crate::{builder::BuilderError, ctx::MessageCtx, message::Message, metrics};
 
-pub struct MessageBuilder<'a, M: Message> {
-	msg_ctx: &'a MessageCtx,
+pub struct MessageBuilder<M: Message> {
+	msg_ctx: MessageCtx,
 	body: M,
 	tags: serde_json::Map<String, serde_json::Value>,
 	wait: bool,
 	error: Option<BuilderError>,
 }
 
-impl<'a, M: Message> MessageBuilder<'a, M> {
-	pub(crate) fn new(msg_ctx: &'a MessageCtx, body: M) -> Self {
+impl<M: Message> MessageBuilder<M> {
+	pub(crate) fn new(msg_ctx: MessageCtx, body: M) -> Self {
 		MessageBuilder {
 			msg_ctx,
 			body,

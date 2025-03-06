@@ -722,10 +722,7 @@ impl WorkflowCtx {
 	}
 
 	/// Creates a message builder.
-	pub fn msg<M>(&mut self, body: M) -> builder::message::MessageBuilder<M>
-	where
-		M: Message,
-	{
+	pub fn msg<M: Message>(&mut self, body: M) -> builder::message::MessageBuilder<M> {
 		builder::message::MessageBuilder::new(self, self.version, body)
 	}
 

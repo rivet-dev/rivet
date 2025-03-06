@@ -112,12 +112,12 @@ impl TestCtx {
 		I: WorkflowInput,
 		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
 	{
-		builder::workflow::WorkflowBuilder::new(self.db.clone(), self.ray_id, input)
+		builder::workflow::WorkflowBuilder::new(self.db.clone(), self.ray_id, input, false)
 	}
 
 	/// Creates a signal builder.
 	pub fn signal<T: Signal + Serialize>(&self, body: T) -> builder::signal::SignalBuilder<T> {
-		builder::signal::SignalBuilder::new(self.db.clone(), self.ray_id, body)
+		builder::signal::SignalBuilder::new(self.db.clone(), self.ray_id, body, false)
 	}
 
 	#[tracing::instrument(err, skip_all, fields(operation = I::Operation::NAME))]
@@ -141,11 +141,8 @@ impl TestCtx {
 		.await
 	}
 
-	pub fn msg<M>(&self, body: M) -> builder::message::MessageBuilder<M>
-	where
-		M: Message,
-	{
-		builder::message::MessageBuilder::new(&self.msg_ctx, body)
+	pub fn msg<M: Message>(&self, body: M) -> builder::message::MessageBuilder<M> {
+		builder::message::MessageBuilder::new(self.msg_ctx.clone(), body)
 	}
 
 	pub async fn subscribe<M>(&self, tags: impl AsTags) -> GlobalResult<SubscriptionHandle<M>>

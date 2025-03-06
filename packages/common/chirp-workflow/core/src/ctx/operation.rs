@@ -1,14 +1,21 @@
-use global_error::GlobalResult;
+use global_error::{GlobalError, GlobalResult};
 use rivet_pools::prelude::*;
 use serde::Serialize;
 use uuid::Uuid;
 
 use crate::{
 	builder::common as builder,
-	ctx::common,
+	ctx::{
+		common,
+		message::{SubscriptionHandle, TailAnchor, TailAnchorResponse},
+		MessageCtx,
+	},
 	db::DatabaseHandle,
+	error::WorkflowResult,
+	message::{AsTags, Message, NatsMessage},
 	operation::{Operation, OperationInput},
 	signal::Signal,
+	workflow::{Workflow, WorkflowInput},
 };
 
 #[derive(Clone)]
@@ -21,13 +28,14 @@ pub struct OperationCtx {
 
 	config: rivet_config::Config,
 	conn: rivet_connection::Connection,
+	msg_ctx: MessageCtx,
 
 	// Backwards compatibility
 	op_ctx: rivet_operation::OperationContext<()>,
 }
 
 impl OperationCtx {
-	pub fn new(
+	pub async fn new(
 		db: DatabaseHandle,
 		config: &rivet_config::Config,
 		conn: &rivet_connection::Connection,
@@ -35,7 +43,7 @@ impl OperationCtx {
 		req_ts: i64,
 		from_workflow: bool,
 		name: &'static str,
-	) -> Self {
+	) -> WorkflowResult<Self> {
 		let ts = rivet_util::timestamp::now();
 		let req_id = Uuid::new_v4();
 		let conn = conn.wrap(req_id, ray_id, name);
@@ -52,7 +60,9 @@ impl OperationCtx {
 		);
 		op_ctx.from_workflow = from_workflow;
 
-		OperationCtx {
+		let msg_ctx = MessageCtx::new(&conn, ray_id).await?;
+
+		Ok(OperationCtx {
 			ray_id,
 			name,
 			ts,
@@ -60,11 +70,46 @@ impl OperationCtx {
 			config: config.clone(),
 			conn,
 			op_ctx,
-		}
+			msg_ctx,
+		})
 	}
 }
 
 impl OperationCtx {
+	/// Wait for a given workflow to complete.
+	/// 60 second timeout.
+	pub async fn wait_for_workflow<W: Workflow>(
+		&self,
+		workflow_id: Uuid,
+	) -> GlobalResult<W::Output> {
+		common::wait_for_workflow::<W>(&self.db, workflow_id).await
+	}
+
+	/// Creates a workflow builder.
+	pub fn workflow<I>(&self, input: I) -> builder::workflow::WorkflowBuilder<I>
+	where
+		I: WorkflowInput,
+		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
+	{
+		builder::workflow::WorkflowBuilder::new(
+			self.db.clone(),
+			self.ray_id,
+			input,
+			self.op_ctx.from_workflow,
+		)
+	}
+
+	/// Creates a signal builder.
+	pub fn signal<T: Signal + Serialize>(&self, body: T) -> builder::signal::SignalBuilder<T> {
+		// TODO: Add check for from_workflow so you cant dispatch a signal
+		builder::signal::SignalBuilder::new(
+			self.db.clone(),
+			self.ray_id,
+			body,
+			self.op_ctx.from_workflow,
+		)
+	}
+
 	#[tracing::instrument(err, skip_all, fields(operation = I::Operation::NAME))]
 	pub async fn op<I>(
 		&self,
@@ -86,10 +131,43 @@ impl OperationCtx {
 		.await
 	}
 
-	/// Creates a signal builder.
-	pub fn signal<T: Signal + Serialize>(&self, body: T) -> builder::signal::SignalBuilder<T> {
-		// TODO: Add check for from_workflow so you cant dispatch a signal
-		builder::signal::SignalBuilder::new(self.db.clone(), self.ray_id, body)
+	/// Creates a message builder.
+	pub fn msg<M: Message>(&self, body: M) -> builder::message::MessageBuilder<M> {
+		builder::message::MessageBuilder::new(self.msg_ctx.clone(), body)
+	}
+
+	pub async fn subscribe<M>(&self, tags: impl AsTags) -> GlobalResult<SubscriptionHandle<M>>
+	where
+		M: Message,
+	{
+		self.msg_ctx
+			.subscribe::<M>(tags)
+			.await
+			.map_err(GlobalError::raw)
+	}
+
+	pub async fn tail_read<M>(&self, tags: impl AsTags) -> GlobalResult<Option<NatsMessage<M>>>
+	where
+		M: Message,
+	{
+		self.msg_ctx
+			.tail_read::<M>(tags)
+			.await
+			.map_err(GlobalError::raw)
+	}
+
+	pub async fn tail_anchor<M>(
+		&self,
+		tags: impl AsTags,
+		anchor: &TailAnchor,
+	) -> GlobalResult<TailAnchorResponse<M>>
+	where
+		M: Message,
+	{
+		self.msg_ctx
+			.tail_anchor::<M>(tags, anchor)
+			.await
+			.map_err(GlobalError::raw)
 	}
 }
 

@@ -120,11 +120,8 @@ impl<'a> VersionedWorkflowCtx<'a> {
 		})
 	}
 
-	/// Creates a signal builder.
-	pub fn msg<M>(&mut self, body: M) -> builder::message::MessageBuilder<M>
-	where
-		M: Message,
-	{
+	/// Creates a message builder.
+	pub fn msg<M: Message>(&mut self, body: M) -> builder::message::MessageBuilder<M> {
 		builder::message::MessageBuilder::new(self.inner, self.version(), body)
 	}
 

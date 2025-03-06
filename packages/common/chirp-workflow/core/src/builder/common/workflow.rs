@@ -26,14 +26,14 @@ impl<I: WorkflowInput> WorkflowBuilder<I>
 where
 	<I as WorkflowInput>::Workflow: Workflow<Input = I>,
 {
-	pub(crate) fn new(db: DatabaseHandle, ray_id: Uuid, input: I) -> Self {
+	pub(crate) fn new(db: DatabaseHandle, ray_id: Uuid, input: I, from_workflow: bool) -> Self {
 		WorkflowBuilder {
 			db,
 			ray_id,
 			input,
 			tags: serde_json::Map::new(),
 			unique: false,
-			error: None,
+			error: from_workflow.then_some(BuilderError::CannotDispatchFromOpInWorkflow),
 		}
 	}
 
