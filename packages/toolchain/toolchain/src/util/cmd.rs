@@ -93,38 +93,49 @@ pub fn error_for_output_failure(
 	Ok(())
 }
 
+// TODO: Remove this since we don't need the special stuff below anymore
 pub fn shell_cmd(cmd: &str) -> Command {
-	tokio::process::Command::from(shell_cmd_std(cmd))
+	Command::new(cmd)
 }
 
+// TODO: Remove this since we don't need the special stuff below anymore
 pub fn shell_cmd_std(cmd: &str) -> std::process::Command {
-	#[cfg(windows)]
-	{
-		use std::os::windows::process::CommandExt;
-		use windows::Win32::System::Threading::CREATE_NO_WINDOW;
-		let mut cmd = std::process::Command::new(cmd);
-		cmd.creation_flags(CREATE_NO_WINDOW.0);
-		cmd
-	}
-
-	#[cfg(not(windows))]
-	{
-		// Load the user's profile & shell on Linux in order to ensure we have the correct $PATH
-		let shell = std::env::var("SHELL").unwrap_or_else(|_| String::from("/bin/sh"));
-
-		let mut shell_cmd = std::process::Command::new(&shell);
-		shell_cmd
-			// Load profile
-			.arg("-l")
-			// Load rc file
-			.arg("-i")
-			.arg("-c")
-			// Will accept the cmd & all following args
-			.arg("\"$@\"")
-			// This arg is ignored
-			.arg("noop")
-			// Pass the actual command
-			.arg(cmd);
-		shell_cmd
-	}
+	std::process::Command::new(cmd)
 }
+
+// This allows for running shell commands inside of environments with a clean $PATH
+//pub fn shell_cmd(cmd: &str) -> Command {
+//	tokio::process::Command::from(shell_cmd_std(cmd))
+//}
+//
+//pub fn shell_cmd_std(cmd: &str) -> std::process::Command {
+//	#[cfg(windows)]
+//	{
+//		use std::os::windows::process::CommandExt;
+//		use windows::Win32::System::Threading::CREATE_NO_WINDOW;
+//		let mut cmd = std::process::Command::new(cmd);
+//		cmd.creation_flags(CREATE_NO_WINDOW.0);
+//		cmd
+//	}
+//
+//	#[cfg(not(windows))]
+//	{
+//		// Load the user's profile & shell on Linux in order to ensure we have the correct $PATH
+//		let shell = std::env::var("SHELL").unwrap_or_else(|_| String::from("/bin/sh"));
+//
+//		let mut shell_cmd = std::process::Command::new(&shell);
+//		shell_cmd
+//			// Load profile
+//			.arg("-l")
+//			// Load rc file
+//			.arg("-i")
+//			.arg("-c")
+//			// Will accept the cmd & all following args
+//			.arg("\"$@\"")
+//			// This arg is ignored
+//			.arg("noop")
+//			// Pass the actual command
+//			.arg(cmd);
+//		shell_cmd
+//	}
+//}
