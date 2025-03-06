@@ -938,7 +938,7 @@ impl WorkflowCtx {
 						metrics::BRANCH_UPSERT_DURATION
 							.with_label_values(&[&self.name])
 							.observe(dt - dt2);
-			
+
 						break res;
 					}
 				}

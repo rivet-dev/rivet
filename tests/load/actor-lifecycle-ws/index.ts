@@ -26,9 +26,13 @@ export const options = {
 export default function () {
 	let actorId: string | undefined;
 	try {
+		console.log("creating actor");
+
 		// Create actor
 		const { actor } = createActor(CONFIG);
 		actorId = actor.id;
+
+		console.log(`created actor ${actorId}`);
 
 		// Get endpoint info
 		const port = actor.network.ports.http;

@@ -1,7 +1,7 @@
+use statrs::statistics::{Data, Median, OrderStatistics, Statistics};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
-use statrs::statistics::{Median, Data, OrderStatistics, Statistics};
 use tokio::time::interval;
 
 use chirp_workflow::prelude::*;
@@ -24,11 +24,9 @@ impl SqlStub {
 async fn sqlite() {
 	setup_tracing();
 
-	let ctx = chirp_workflow::prelude::TestCtx::from_env::<db::DatabaseFdbSqliteNats>(
-		"sqlite",
-		true,
-	)
-	.await;
+	let ctx =
+		chirp_workflow::prelude::TestCtx::from_env::<db::DatabaseFdbSqliteNats>("sqlite", true)
+			.await;
 	let pools = ctx.pools().clone();
 
 	let timings = Arc::new(Mutex::new(Vec::new()));
@@ -36,7 +34,10 @@ async fn sqlite() {
 	// Spawn worker tasks
 	for i in 0..8 {
 		let timings = timings.clone();
-		let pool = pools.sqlite(format!("chirp-workflow-sqlite-test-{i}"), false).await.unwrap();
+		let pool = pools
+			.sqlite(format!("chirp-workflow-sqlite-test-{i}"), false)
+			.await
+			.unwrap();
 
 		tokio::spawn(async move {
 			if let Err(err) = init(timings, i, pool).await {
@@ -49,7 +50,6 @@ async fn sqlite() {
 	let timings2 = timings.clone();
 	let mut interval = interval(Duration::from_secs(5));
 	let handle = tokio::spawn(async move {
-
 		loop {
 			interval.tick().await;
 			print_statistics(&timings2).await;
@@ -62,7 +62,11 @@ async fn sqlite() {
 	}
 }
 
-async fn init(timings: Arc<Mutex<Vec<(String, Duration)>>>, i: usize, pool: SqlitePool) -> GlobalResult<()> {
+async fn init(
+	timings: Arc<Mutex<Vec<(String, Duration)>>>,
+	i: usize,
+	pool: SqlitePool,
+) -> GlobalResult<()> {
 	sql_execute!(
 		[SqlStub {}, &pool]
 		"
@@ -70,7 +74,8 @@ async fn init(timings: Arc<Mutex<Vec<(String, Duration)>>>, i: usize, pool: Sqli
 			test INT NOT NULL
 		) STRICT
 		",
-	).await?;
+	)
+	.await?;
 
 	for j in 0..1000 {
 		sql_execute!(
@@ -80,7 +85,8 @@ async fn init(timings: Arc<Mutex<Vec<(String, Duration)>>>, i: usize, pool: Sqli
 			VALUES (?)
 			",
 			4
-		).await?;
+		)
+		.await?;
 
 		if j % 100 == 0 {
 			tracing::info!(%i, %j);
@@ -92,7 +98,10 @@ async fn init(timings: Arc<Mutex<Vec<(String, Duration)>>>, i: usize, pool: Sqli
 	}
 }
 
-async fn inner(pool: &SqlitePool, timings: Arc<Mutex<Vec<(String, Duration)>>>) -> GlobalResult<()> {
+async fn inner(
+	pool: &SqlitePool,
+	timings: Arc<Mutex<Vec<(String, Duration)>>>,
+) -> GlobalResult<()> {
 	let start = Instant::now();
 	sql_execute!(
 		[SqlStub {}, pool]
@@ -101,7 +110,8 @@ async fn inner(pool: &SqlitePool, timings: Arc<Mutex<Vec<(String, Duration)>>>) 
 		VALUES (?)
 		",
 		5,
-	).await?;
+	)
+	.await?;
 
 	let dt = start.elapsed();
 	let timings2 = timings.clone();
@@ -115,7 +125,8 @@ async fn inner(pool: &SqlitePool, timings: Arc<Mutex<Vec<(String, Duration)>>>) 
 		"
 		SELECT * FROM foobar
 		",
-	).await?;
+	)
+	.await?;
 
 	let dt = start.elapsed();
 	let timings2 = timings.clone();
@@ -134,8 +145,9 @@ async fn inner(pool: &SqlitePool, timings: Arc<Mutex<Vec<(String, Duration)>>>) 
 			LIMIT 1
 		)
 		",
-	).await?;
-	
+	)
+	.await?;
+
 	let dt = start.elapsed();
 	let timings2 = timings.clone();
 	tokio::spawn(async move {

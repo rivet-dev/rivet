@@ -23,6 +23,9 @@
 				"token": "local",
 				"system_test_isolate_project": "default",
 				"system_test_isolate_environment": "default"
+			},
+			"metrics": {
+				"host": "0.0.0.0"
 			}
 		},
 		"foundationdb": {
@@ -60,6 +63,9 @@
 					"role": "write"
 				}
 			}
+		},
+		"prometheus": {
+			"url": "http://prometheus:9090"
 		},
 		"s3": {
 			"region": "us-east-1",

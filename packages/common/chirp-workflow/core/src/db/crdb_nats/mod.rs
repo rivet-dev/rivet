@@ -899,14 +899,8 @@ impl Database for DatabaseCrdbNats {
 		.await?;
 
 		let workflows = build_histories(workflow_rows, events)?;
-		
-		let dt = start_instant2.elapsed().as_secs_f64();
-		metrics::LAST_PULL_WORKFLOWS_HISTORY_DURATION
-			.with_label_values(&[&worker_instance_id_str])
-			.set(dt);
-		metrics::PULL_WORKFLOWS_HISTORY_DURATION
-			.with_label_values(&[&worker_instance_id_str])
-			.observe(dt);
+
+		let dt2 = start_instant2.elapsed().as_secs_f64();
 		let dt = start_instant.elapsed().as_secs_f64();
 		metrics::LAST_PULL_WORKFLOWS_FULL_DURATION
 			.with_label_values(&[&worker_instance_id_str])
@@ -914,6 +908,12 @@ impl Database for DatabaseCrdbNats {
 		metrics::PULL_WORKFLOWS_FULL_DURATION
 			.with_label_values(&[&worker_instance_id_str])
 			.observe(dt);
+		metrics::LAST_PULL_WORKFLOWS_HISTORY_DURATION
+			.with_label_values(&[&worker_instance_id_str])
+			.set(dt2);
+		metrics::PULL_WORKFLOWS_HISTORY_DURATION
+			.with_label_values(&[&worker_instance_id_str])
+			.observe(dt2);
 
 		Ok(workflows)
 	}

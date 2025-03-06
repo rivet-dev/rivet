@@ -7,7 +7,7 @@ use std::{
 		atomic::{AtomicBool, Ordering},
 		Arc,
 	},
-	time::Instant,
+	time::{Duration, Instant},
 };
 
 use fdb_util::{end_of_key_range, FormalChunkedKey, FormalKey, SERIALIZABLE, SNAPSHOT};
@@ -171,12 +171,24 @@ impl Database for DatabaseFdbSqliteNats {
 
 	// ===== CONST FNS =====
 
-	fn max_signal_poll_retries(&self) -> usize {
-		0
+	// We rely on a wake message instead of polling, this is set to never poll
+	fn signal_poll_interval(&self) -> Duration {
+		Duration::from_millis(3)
 	}
 
+	// First signal pull happens immediately, second and only retry waits for a wake message
+	fn max_signal_poll_retries(&self) -> usize {
+		1000
+	}
+
+	// We rely on a wake message instead of polling, this is set to never poll
+	fn sub_workflow_poll_interval(&self) -> Duration {
+		Duration::from_millis(3)
+	}
+
+	// First sub workflow check happens immediately, second and only retry waits for a wake message
 	fn max_sub_workflow_poll_retries(&self) -> usize {
-		0
+		1000
 	}
 
 	// ===========
@@ -1457,14 +1469,8 @@ impl Database for DatabaseFdbSqliteNats {
 			.buffer_unordered(512)
 			.try_collect()
 			.await?;
-	
-		let dt = start_instant2.elapsed().as_secs_f64();
-		metrics::LAST_PULL_WORKFLOWS_HISTORY_DURATION
-			.with_label_values(&[&worker_instance_id_str])
-			.set(dt);
-		metrics::PULL_WORKFLOWS_HISTORY_DURATION
-			.with_label_values(&[&worker_instance_id_str])
-			.observe(dt);
+
+		let dt2 = start_instant2.elapsed().as_secs_f64();
 		let dt = start_instant.elapsed().as_secs_f64();
 		metrics::LAST_PULL_WORKFLOWS_FULL_DURATION
 			.with_label_values(&[&worker_instance_id_str])
@@ -1472,6 +1478,12 @@ impl Database for DatabaseFdbSqliteNats {
 		metrics::PULL_WORKFLOWS_FULL_DURATION
 			.with_label_values(&[&worker_instance_id_str])
 			.observe(dt);
+		metrics::LAST_PULL_WORKFLOWS_HISTORY_DURATION
+			.with_label_values(&[&worker_instance_id_str])
+			.set(dt2);
+		metrics::PULL_WORKFLOWS_HISTORY_DURATION
+			.with_label_values(&[&worker_instance_id_str])
+			.observe(dt2);
 
 		Ok(pulled_workflows)
 	}

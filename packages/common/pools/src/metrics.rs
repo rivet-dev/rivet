@@ -49,23 +49,6 @@ lazy_static::lazy_static! {
 		*REGISTRY,
 	).unwrap();
 
-	// MARK: Mutexes
-	pub static ref LOCK_ACQUIRE_DURATION: HistogramVec = register_histogram_vec_with_registry!(
-		"lock_acquire_duration",
-		"Duration a lock in the sqlite manager was acquired in.",
-		&["label"],
-		NANO_BUCKETS.to_vec(),
-		*REGISTRY,
-	).unwrap();
-
-	pub static ref LOCK_HELD_DURATION: HistogramVec = register_histogram_vec_with_registry!(
-		"lock_held_duration",
-		"Duration a lock in the sqlite manager was held for.",
-		&["label"],
-		NANO_BUCKETS.to_vec(),
-		*REGISTRY,
-	).unwrap();
-
 	// MARK: Sqlite
 	pub static ref SQLITE_POOL_SIZE: IntGaugeVec = register_int_gauge_vec_with_registry!(
 		"sqlite_pool_conn_size",
@@ -77,8 +60,8 @@ lazy_static::lazy_static! {
 	pub static ref SQLITE_GET_POOL_DURATION: HistogramVec = register_histogram_vec_with_registry!(
 		"sqlite_get_pool_duration",
 		"Duration to fully connect to an Sqlite database.",
-		&["conn_type", "hex_key"],
-		BUCKETS.to_vec(),
+		&["conn_type", "did_insert"],
+		NANO_BUCKETS.to_vec(),
 		*REGISTRY,
 	).unwrap();
 }

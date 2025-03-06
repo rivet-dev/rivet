@@ -32,7 +32,7 @@ pub async fn pegboard_client_usage_get(ctx: &OperationCtx, input: &Input) -> Glo
 	};
 
 	let prom_res = handle_request(
-		&ctx.config().server()?.prometheus()?.url.to_string(),
+		&util::url::to_string_without_slash(&ctx.config().server()?.prometheus()?.url),
 		formatdoc!(
 			r#"
 			label_replace(

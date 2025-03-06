@@ -1,4 +1,4 @@
-use rivet_metrics::{prometheus::*, BUCKETS, REGISTRY};
+use rivet_metrics::{prometheus::*, REGISTRY};
 
 lazy_static::lazy_static! {
 	pub static ref CLIENT_DUPLICATE_EVENT: IntCounterVec = register_int_counter_vec_with_registry!(
@@ -20,21 +20,5 @@ lazy_static::lazy_static! {
 		"Total MiB of memory allocated on a client.",
 		&["client_id", "flavor"],
 		*REGISTRY
-	).unwrap();
-
-	pub static ref INSERT_COMMANDS_ACQUIRE_DURATION: HistogramVec = register_histogram_vec_with_registry!(
-		"pegboard_client_insert_commands_acquire_duration",
-		"TODO REMOVE",
-		&["workflow_id"],
-		BUCKETS.to_vec(),
-		*REGISTRY,
-	).unwrap();
-
-	pub static ref INSERT_COMMANDS_FULL_DURATION: HistogramVec = register_histogram_vec_with_registry!(
-		"pegboard_client_insert_commands_full_duration",
-		"TODO REMOVE",
-		&["workflow_id"],
-		BUCKETS.to_vec(),
-		*REGISTRY,
 	).unwrap();
 }

@@ -657,16 +657,9 @@ struct InsertCommandsInput {
 
 #[activity(InsertCommands)]
 async fn insert_commands(ctx: &ActivityCtx, input: &InsertCommandsInput) -> GlobalResult<i64> {
-	let start_instant = std::time::Instant::now();
-
 	let pool = ctx.sqlite().await?;
 	let mut conn = pool.conn().await?;
 	let mut tx = conn.begin().await?;
-
-	let dt = start_instant.elapsed().as_secs_f64();
-	metrics::INSERT_COMMANDS_ACQUIRE_DURATION
-		.with_label_values(&[&ctx.workflow_id().to_string()])
-		.observe(dt);
 
 	let (last_command_index,) = sql_fetch_one!(
 		[ctx, (i64,), @tx &mut tx]
@@ -700,11 +693,6 @@ async fn insert_commands(ctx: &ActivityCtx, input: &InsertCommandsInput) -> Glob
 	}
 
 	tx.commit().await?;
-
-	let dt = start_instant.elapsed().as_secs_f64();
-	metrics::INSERT_COMMANDS_FULL_DURATION
-		.with_label_values(&[&ctx.workflow_id().to_string()])
-		.observe(dt);
 
 	Ok(last_command_index)
 }

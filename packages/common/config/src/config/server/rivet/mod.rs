@@ -18,6 +18,7 @@ pub mod default_dev_cluster {
 	// These are intentionally hardcoded in order to simplify default dev configuration.
 	pub const CLUSTER_ID: Uuid = uuid!("11ca8960-acab-4963-909c-99d72af3e1cb");
 	pub const DATACENTER_ID: Uuid = uuid!("f288913c-735d-4188-bf9b-2fcf6eac7b9c");
+	pub const SERVER_ID: Uuid = uuid!("174aca2a-98b7-462c-9ad9-3835094a9a10");
 	pub const EDGE_API_URL: &str = "http://rivet-edge-server:8080";
 }
 

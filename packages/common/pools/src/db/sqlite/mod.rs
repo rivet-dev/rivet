@@ -23,7 +23,7 @@ use tokio::{
 	time::Instant,
 };
 
-use crate::{Error, FdbPool};
+use crate::{metrics, Error, FdbPool};
 
 mod keys;
 
@@ -168,7 +168,7 @@ pub struct SqlitePoolManager {
 	subspace: Subspace,
 }
 
-// MARK: Publi methods
+// MARK: Public methods
 impl SqlitePoolManager {
 	pub async fn new(fdb: Option<FdbPool>) -> Result<SqlitePoolManagerHandle, Error> {
 		let (shutdown, _) = broadcast::channel(1);
@@ -218,12 +218,15 @@ impl SqlitePoolManager {
 		key: impl TuplePack + Debug,
 		conn_type: SqliteConnType,
 	) -> Result<SqliteConnHandle, Error> {
+		let start_instant = Instant::now();
+
 		let key_packed = Arc::new(key.pack_to_vec());
+		let conn_type_str = if conn_type.is_writer() { "writer" } else { "reader" };
+		let mut did_insert = false;
 
 		// Check if pool already exists
 		let conn = if conn_type.is_writer() {
 			// Insert entry
-			let mut did_insert = false;
 			let mut entry = self
 				.writer_pools
 				.entry_async(key_packed.clone())
@@ -251,6 +254,9 @@ impl SqlitePoolManager {
 
 			conn
 		};
+
+		let dt = start_instant.elapsed().as_secs_f64();
+		metrics::SQLITE_GET_POOL_DURATION.with_label_values(&[conn_type_str, &did_insert.to_string()]).observe(dt);
 
 		Ok(conn)
 	}
@@ -689,6 +695,9 @@ impl SqliteConn {
 
 		tracing::debug!(?db_url, "sqlite connected");
 
+		let conn_type_str = if conn_type.is_writer() { "writer" } else { "reader" };
+		metrics::SQLITE_POOL_SIZE.with_label_values(&[conn_type_str]).inc();		
+
 		// Create drop handle
 		let (drop_tx, drop_rx) = oneshot::channel();
 		tokio::spawn({
@@ -731,6 +740,8 @@ impl SqliteConn {
 						}
 					}
 				}
+
+				metrics::SQLITE_POOL_SIZE.with_label_values(&[conn_type_str]).dec();		
 			}
 		});
 

@@ -7,6 +7,7 @@
 			"edge": {
 				"cluster_id": "11ca8960-acab-4963-909c-99d72af3e1cb",
 				"datacenter_id": "f288913c-735d-4188-bf9b-2fcf6eac7b9c",
+				"server_id": "174aca2a-98b7-462c-9ad9-3835094a9a10",
 				"intercom_endpoint": "http://rivet-server:8081"
 			},
 			"guard": {
@@ -25,6 +26,9 @@
 				"token": "local",
 				"system_test_isolate_project": "default",
 				"system_test_isolate_environment": "default"
+			},
+			"metrics": {
+				"host": "0.0.0.0"
 			}
 		},
 		"foundationdb": {
@@ -62,6 +66,9 @@
 					"role": "write"
 				}
 			}
+		},
+		"prometheus": {
+			"url": "http://prometheus:9090"
 		},
 		"s3": {
 			"region": "us-east-1",

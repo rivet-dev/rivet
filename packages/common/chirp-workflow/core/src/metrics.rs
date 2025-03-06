@@ -155,7 +155,7 @@ lazy_static::lazy_static! {
 		*REGISTRY,
 	).unwrap();
 	pub static ref WORKFLOW_DISPATCH_DURATION: HistogramVec = register_histogram_vec_with_registry!(
-		"chirp_workflow_dispatch_duration",
+		"chirp_workflow_workflow_dispatch_duration",
 		"Total duration of an branch upsert.",
 		&["workflow_name", "sub_workflow_name"],
 		BUCKETS.to_vec(),

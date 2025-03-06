@@ -462,7 +462,7 @@ async fn fetch_server_metrics(
 	};
 
 	let prom_res = handle_request(
-		&config.server()?.prometheus()?.url.to_string(),
+		&util::url::to_string_without_slash(&config.server()?.prometheus()?.url),
 		formatdoc!(
 			r#"
 			label_replace(
