@@ -1,7 +1,17 @@
 import { createAndStartServer } from "../shared/server.js";
+import { createNodeWebSocket } from "@hono/node-ws";
+import { serve } from "@hono/node-server";
 
-// Create and start server with default configuration
-createAndStartServer().catch(err => {
-  console.error("Failed to start server:", err);
-  process.exit(1);
-});
+let injectWebSocket: any;
+const { app, port } = createAndStartServer(
+	(app) => {
+		// Get Node.js WebSocket handler
+		const result = createNodeWebSocket({ app });
+		injectWebSocket = result.injectWebSocket;
+		return result.upgradeWebSocket;
+	}
+);
+
+const server = serve({ fetch: app.fetch, port });
+injectWebSocket(server);
+

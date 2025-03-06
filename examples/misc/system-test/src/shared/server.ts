@@ -1,22 +1,21 @@
 import { Hono, type Context } from "hono";
-import { serve } from "@hono/node-server";
-import { createNodeWebSocket } from "@hono/node-ws";
+import { UpgradeWebSocket } from "hono/ws";
 
-export async function createAndStartServer(
-	getForwardedFor: (c: Context) => string | null | undefined = (c) =>
-		c.req?.header("x-forwarded-for"),
-	exitFn: () => void = () => process.exit(1),
-) {
+type GetUpgradeWebSocketFn = (app: Hono) => UpgradeWebSocket;
+
+export function createAndStartServer(
+	getUpgradeWebSocket: GetUpgradeWebSocketFn
+): { app: Hono, port: number } {
 	// Setup auto-exit timer
 	setTimeout(() => {
 		console.error(
 			"Actor should've been destroyed by now. Automatically exiting.",
 		);
-		exitFn();
+		() => process.exit(1)
 	}, 60 * 1000);
 
 	// Get port from environment
-	const portEnv = process.env.PORT_HTTP;
+	const portEnv = typeof Deno !== 'undefined' ? Deno.env.get("PORT_HTTP") : process.env.PORT_HTTP;
 	if (!portEnv) {
 		throw new Error("missing PORT_HTTP");
 	}
@@ -24,12 +23,11 @@ export async function createAndStartServer(
 
 	// Create app with health endpoint
 	const app = new Hono();
+
 	app.get("/health", (c) => c.text("ok"));
 
-	// Create WebSocket handler
-	const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });
-
 	// Add WebSocket endpoint with handler
+	let upgradeWebSocket = getUpgradeWebSocket(app);
 	app.get(
 		"/ws",
 		upgradeWebSocket((c: Context) => {
@@ -39,7 +37,7 @@ export async function createAndStartServer(
 						JSON.stringify([
 							"init",
 							{
-								forwardedFor: getForwardedFor(c),
+								forwardedFor: c.req?.header("x-forwarded-for"),
 							},
 						]),
 					);
@@ -76,16 +74,8 @@ export async function createAndStartServer(
 		}),
 	);
 
-	// Start server
 	console.log(`Listening on port ${port}`);
-	const server = serve({
-		fetch: app.fetch,
-		port,
-	});
 
-	// Inject WebSocket handler
-	injectWebSocket(server);
-
-	return server;
+	return { app, port };
 }
 

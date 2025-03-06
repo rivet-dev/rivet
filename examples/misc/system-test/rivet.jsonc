@@ -1,7 +1,7 @@
 {
 	"builds": {
 		"ws-isolate": {
-			"script": "src/isolate/ws.ts",
+			"script": "src/isolate/main.ts",
 			"access": "private"
 		},
 		"ws-container": {

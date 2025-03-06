@@ -15,8 +15,8 @@ rivet deploy
 ## Testing
 
 ```sh
-rivet shell -e "yarn test --isolate"
+BUILD=ws-isolate rivet shell -e "yarn test"
 # or
-rivet shell -e "yarn test --container"
+BUILD=ws-container rivet shell -e "yarn test"
 ```
 

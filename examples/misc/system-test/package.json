@@ -11,11 +11,13 @@
 	"devDependencies": {
 		"@rivet-gg/actor-core": "^5.1.2",
 		"@rivet-gg/api": "^24.6.2",
+		"@types/deno": "^2.2.0",
+		"@types/node": "^22.13.9",
 		"@types/ws": "^8.18.0",
 		"node-fetch": "^3.3.2",
 		"tsx": "^4.7.0",
 		"typescript": "^5.3.3",
-		"ws": "^8.16.0"
+		"ws": "^8.18.1"
 	},
 	"scripts": {
 		"start": "tsx ws.ts",

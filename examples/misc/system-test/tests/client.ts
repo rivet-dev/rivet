@@ -1,5 +1,5 @@
 import { RivetClient } from "@rivet-gg/api";
-// import { assertExists } from "@std/assert";
+import WebSocket from "ws";
 
 // Can be opt since they're not required for dev
 const RIVET_ENDPOINT = process.env.RIVET_ENDPOINT;
@@ -52,8 +52,8 @@ async function run() {
 				},
 				...(BUILD_NAME === "ws-container" ? {
 					resources: {
-						cpu: 250,
-						memory: 256,
+						cpu: 100,
+						memory: 100,
 					}
 				} : {}),
 			},
@@ -61,7 +61,6 @@ async function run() {
 		actorId = actor.id;
 
 		const port = actor.network.ports.http;
-		// assertExists(port, "missing port http");
 
 		const actorOrigin = `${port.protocol}://${port.hostname}:${port.port}${port.path ?? ""}`;
 		console.log("Created actor at", actorOrigin);
@@ -155,7 +154,7 @@ async function runLoop() {
 
 // Run loop without top-level await
 (async function() {
-	for (let i = 0; i < 2; i++) {
+	for (let i = 0; i < 1; i++) {
 		await new Promise((resolve) => setTimeout(resolve, 100));
 		runLoop();
 	}
