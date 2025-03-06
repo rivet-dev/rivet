@@ -40,6 +40,7 @@ pub struct PulledWorkflowRow {
 	create_ts: i64,
 	ray_id: Uuid,
 	input: RawJson,
+	wake_deadline_ts: Option<i64>,
 }
 
 #[derive(sqlx::FromRow)]
@@ -401,6 +402,7 @@ pub fn build_histories(
 				ray_id: row.ray_id,
 				input: row.input.0,
 				events: events_by_location,
+				wake_deadline_ts: row.wake_deadline_ts,
 			}
 		})
 		.collect();

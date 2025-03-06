@@ -169,9 +169,6 @@ pub enum WorkflowError {
 	#[error("no signal found: {0:?}. sleeping until {1}")]
 	NoSignalFoundAndSleep(Box<[&'static str]>, i64),
 
-	#[error("cannot have multiple concurrent calls to Database::wake")]
-	WakeLock(tokio::sync::TryLockError),
-
 	#[error("`ListenCtx` has already been used once (`listen_any` called)")]
 	ListenCtxUsed,
 
@@ -236,7 +233,7 @@ impl WorkflowError {
 		}
 	}
 
-	/// Any error that the workflow can try again on.
+	/// Any error that the workflow can try again on. Only used for printing.
 	pub(crate) fn is_retryable(&self) -> bool {
 		match self {
 			WorkflowError::ActivityFailure(_, _)

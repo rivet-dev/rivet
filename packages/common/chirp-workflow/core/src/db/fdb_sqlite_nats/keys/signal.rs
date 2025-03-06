@@ -270,6 +270,25 @@ impl TuplePack for TaggedPendingSubspaceKey {
 	}
 }
 
+pub struct EntireTaggedPendingSubspaceKey {}
+
+impl EntireTaggedPendingSubspaceKey {
+	pub fn new() -> Self {
+		EntireTaggedPendingSubspaceKey {}
+	}
+}
+
+impl TuplePack for EntireTaggedPendingSubspaceKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = ("tagged_signal", "pending");
+		t.pack(w, tuple_depth)
+	}
+}
+
 pub struct TagKey {
 	signal_id: Uuid,
 	pub k: String,
@@ -485,5 +504,24 @@ impl<'de> TupleUnpack<'de> for WorkflowIdKey {
 		let v = WorkflowIdKey { signal_id };
 
 		Ok((input, v))
+	}
+}
+
+pub struct DataSubspaceKey {}
+
+impl DataSubspaceKey {
+	pub fn new() -> Self {
+		DataSubspaceKey {}
+	}
+}
+
+impl TuplePack for DataSubspaceKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = ("signal", "data");
+		t.pack(w, tuple_depth)
 	}
 }

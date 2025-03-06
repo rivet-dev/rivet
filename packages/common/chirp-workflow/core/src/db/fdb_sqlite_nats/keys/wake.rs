@@ -24,6 +24,13 @@ impl WakeCondition {
 			WakeCondition::TaggedSignal { .. } => WakeConditionVariant::TaggedSignal,
 		}
 	}
+
+	pub fn deadline_ts(&self) -> Option<i64> {
+		match self {
+			WakeCondition::Deadline { deadline_ts } => Some(*deadline_ts),
+			_ => None,
+		}
+	}
 }
 
 #[derive(strum::FromRepr)]

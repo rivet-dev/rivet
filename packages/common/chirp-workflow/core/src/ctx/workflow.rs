@@ -1,17 +1,17 @@
-use std::{sync::Arc, time::Instant};
+use std::{
+	sync::Arc,
+	time::{Duration, Instant},
+};
 
+use futures_util::StreamExt;
 use global_error::{GlobalError, GlobalResult};
 use serde::{de::DeserializeOwned, Serialize};
-use tokio::time::Duration;
 use uuid::Uuid;
 
 use crate::{
 	activity::{Activity, ActivityInput},
 	builder::workflow as builder,
-	ctx::{
-		common::{RETRY_TIMEOUT_MS, SUB_WORKFLOW_RETRY},
-		ActivityCtx, ListenCtx, MessageCtx, VersionedWorkflowCtx,
-	},
+	ctx::{ActivityCtx, ListenCtx, MessageCtx, VersionedWorkflowCtx},
 	db::{DatabaseHandle, PulledWorkflow},
 	error::{WorkflowError, WorkflowResult},
 	executable::{AsyncResult, Executable},
@@ -31,16 +31,9 @@ use crate::{
 		time::{DurationToMillis, TsToMillis},
 		GlobalErrorExt,
 	},
-	worker,
 	workflow::{Workflow, WorkflowInput},
 };
 
-/// Poll interval when polling for signals in-process
-const SIGNAL_RETRY: Duration = Duration::from_millis(100);
-/// Most in-process signal poll tries
-const MAX_SIGNAL_RETRIES: usize = 4;
-/// Most in-process sub workflow poll tries
-const MAX_SUB_WORKFLOW_RETRIES: usize = 4;
 /// Retry interval for failed db actions
 const DB_ACTION_RETRY: Duration = Duration::from_millis(150);
 /// Most db action retries
@@ -56,6 +49,8 @@ pub struct WorkflowCtx {
 	ts: i64,
 	ray_id: Uuid,
 	version: usize,
+	// Used for activity retry backoff
+	wake_deadline_ts: Option<i64>,
 
 	registry: RegistryHandle,
 	db: DatabaseHandle,
@@ -93,6 +88,7 @@ impl WorkflowCtx {
 			ts: rivet_util::timestamp::now(),
 			ray_id: workflow.ray_id,
 			version: 1,
+			wake_deadline_ts: workflow.wake_deadline_ts,
 
 			registry,
 			db,
@@ -180,8 +176,6 @@ impl WorkflowCtx {
 				// Retry the workflow if its recoverable
 				let deadline_ts = if let Some(deadline_ts) = err.deadline_ts() {
 					Some(deadline_ts)
-				} else if err.is_retryable() {
-					Some(rivet_util::timestamp::now() + RETRY_TIMEOUT_MS as i64)
 				} else {
 					None
 				};
@@ -408,6 +402,7 @@ impl WorkflowCtx {
 			ts: self.ts,
 			ray_id: self.ray_id,
 			version,
+			wake_deadline_ts: self.wake_deadline_ts,
 
 			registry: self.registry.clone(),
 			db: self.db.clone(),
@@ -444,13 +439,15 @@ impl WorkflowCtx {
 	) -> GlobalResult<W::Output> {
 		tracing::debug!(name=%self.name, id=%self.workflow_id, sub_workflow_name=%W::NAME, ?sub_workflow_id, "waiting for workflow");
 
-		let mut retries = 0;
-		let mut interval = tokio::time::interval(SUB_WORKFLOW_RETRY);
+		let mut wake_sub = self.db.wake_sub().await?;
+		let mut retries = self.db.max_sub_workflow_poll_retries();
+		let mut interval = tokio::time::interval(self.db.sub_workflow_poll_interval());
 		interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-		loop {
-			interval.tick().await;
+		// Skip first tick, we wait after the db call instead of before
+		interval.tick().await;
 
+		loop {
 			// Check if workflow completed
 			let workflow = self
 				.db
@@ -463,12 +460,18 @@ impl WorkflowCtx {
 			if let Some(output) = workflow.parse_output::<W>().map_err(GlobalError::raw)? {
 				return Ok(output);
 			} else {
-				if retries > MAX_SUB_WORKFLOW_RETRIES {
+				if retries == 0 {
 					return Err(GlobalError::raw(WorkflowError::SubWorkflowIncomplete(
 						sub_workflow_id,
 					)));
 				}
-				retries += 1;
+				retries -= 1;
+			}
+
+			// Poll and wait for a wake at the same time
+			tokio::select! {
+				_ = wake_sub.next() => {},
+				_ = interval.tick() => {},
 			}
 		}
 	}
@@ -510,6 +513,19 @@ impl WorkflowCtx {
 			// Activity failed, retry
 			else {
 				let error_count = activity.error_count;
+
+				// Backoff
+				if let Some(wake_deadline_ts) = self.wake_deadline_ts {
+					tracing::debug!(
+						name=%self.name,
+						id=%self.workflow_id,
+						activity_name=%I::Activity::NAME,
+						"sleeping for activity backoff"
+					);
+
+					let duration = wake_deadline_ts.saturating_sub(rivet_util::timestamp::now());
+					tokio::time::sleep(Duration::from_millis(duration.try_into()?)).await;
+				}
 
 				match self
 					.run_activity::<I::Activity>(&input, &event_id, &location, activity.create_ts)
@@ -636,25 +652,34 @@ impl WorkflowCtx {
 		else {
 			tracing::debug!(name=%self.name, id=%self.workflow_id, "listening for signal");
 
-			let mut retries = 0;
-			let mut interval = tokio::time::interval(SIGNAL_RETRY);
+			let mut wake_sub = self.db.wake_sub().await?;
+			let mut retries = self.db.max_signal_poll_retries();
+			let mut interval = tokio::time::interval(self.db.signal_poll_interval());
 			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+			// Skip first tick, we wait after the db call instead of before
+			interval.tick().await;
 
 			let mut ctx = ListenCtx::new(self, &location);
 
 			loop {
-				interval.tick().await;
 				ctx.reset();
 
 				match T::listen(&mut ctx).await {
 					Ok(res) => break res,
 					Err(err) if matches!(err, WorkflowError::NoSignalFound(_)) => {
-						if retries > MAX_SIGNAL_RETRIES {
+						if retries == 0 {
 							return Err(GlobalError::raw(err));
 						}
-						retries += 1;
+						retries -= 1;
 					}
 					Err(err) => return Err(GlobalError::raw(err)),
+				}
+
+				// Poll and wait for a wake at the same time
+				tokio::select! {
+					_ = wake_sub.next() => {},
+					_ = interval.tick() => {},
 				}
 			}
 		};
@@ -691,25 +716,34 @@ impl WorkflowCtx {
 		else {
 			tracing::debug!(name=%self.name, id=%self.workflow_id, "listening for signal");
 
-			let mut retries = 0;
-			let mut interval = tokio::time::interval(SIGNAL_RETRY);
+			let mut wake_sub = self.db.wake_sub().await?;
+			let mut retries = self.db.max_signal_poll_retries();
+			let mut interval = tokio::time::interval(self.db.signal_poll_interval());
 			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+			// Skip first tick, we wait after the db call instead of before
+			interval.tick().await;
 
 			let mut ctx = ListenCtx::new(self, &location);
 
 			loop {
-				interval.tick().await;
 				ctx.reset();
 
 				match listener.listen(&mut ctx).await {
 					Ok(res) => break res,
 					Err(err) if matches!(err, WorkflowError::NoSignalFound(_)) => {
-						if retries > MAX_SIGNAL_RETRIES {
+						if retries == 0 {
 							return Err(GlobalError::raw(err));
 						}
-						retries += 1;
+						retries -= 1;
 					}
 					Err(err) => return Err(GlobalError::raw(err)),
+				}
+
+				// Poll and wait for a wake at the same time
+				tokio::select! {
+					_ = wake_sub.next() => {},
+					_ = interval.tick() => {},
 				}
 			}
 		};
@@ -940,10 +974,10 @@ impl WorkflowCtx {
 			}
 		}
 		// Sleep in memory if duration is shorter than the worker tick
-		else if duration < worker::TICK_INTERVAL.as_millis() as i64 + 1 {
+		else if duration < self.db.worker_poll_interval().as_millis() as i64 + 1 {
 			tracing::debug!(name=%self.name, id=%self.workflow_id, %deadline_ts, "sleeping in memory");
 
-			tokio::time::sleep(std::time::Duration::from_millis(duration.try_into()?)).await;
+			tokio::time::sleep(Duration::from_millis(duration.try_into()?)).await;
 		}
 		// Workflow sleep
 		else {
@@ -1064,31 +1098,37 @@ impl WorkflowCtx {
 			}
 		}
 		// Sleep in memory if duration is shorter than the worker tick
-		else if duration < worker::TICK_INTERVAL.as_millis() as i64 + 1 {
+		else if duration < self.db.worker_poll_interval().as_millis() as i64 + 1 {
 			tracing::debug!(name=%self.name, id=%self.workflow_id, %deadline_ts, "sleeping in memory");
 
-			let res = tokio::time::timeout(
-				std::time::Duration::from_millis(duration.try_into()?),
-				async {
-					tracing::debug!(name=%self.name, id=%self.workflow_id, "listening for signal with timeout");
+			let res = tokio::time::timeout(Duration::from_millis(duration.try_into()?), async {
+				tracing::debug!(name=%self.name, id=%self.workflow_id, "listening for signal with timeout");
 
-					let mut interval = tokio::time::interval(SIGNAL_RETRY);
-					interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+				let mut wake_sub = self.db.wake_sub().await?;
+				let mut interval = tokio::time::interval(self.db.signal_poll_interval());
+				interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-					let mut ctx = ListenCtx::new(self, &signal_location);
+				// Skip first tick, we wait after the db call instead of before
+				interval.tick().await;
 
-					loop {
-						interval.tick().await;
-						ctx.reset();
+				let mut ctx = ListenCtx::new(self, &signal_location);
 
-						match T::listen(&mut ctx).await {
-							// Retry
-							Err(WorkflowError::NoSignalFound(_)) => {}
-							x => return x,
-						}
+				loop {
+					ctx.reset();
+
+					match T::listen(&mut ctx).await {
+						// Retry
+						Err(WorkflowError::NoSignalFound(_)) => {}
+						x => return x,
 					}
-				},
-			)
+
+					// Poll and wait for a wake at the same time
+					tokio::select! {
+						_ = wake_sub.next() => {},
+						_ = interval.tick() => {},
+					}
+				}
+			})
 			.await;
 
 			match res {
@@ -1104,28 +1144,37 @@ impl WorkflowCtx {
 		else {
 			tracing::debug!(name=%self.name, id=%self.workflow_id, "listening for signal with timeout");
 
-			let mut retries = 0;
-			let mut interval = tokio::time::interval(SIGNAL_RETRY);
+			let mut wake_sub = self.db.wake_sub().await?;
+			let mut retries = self.db.max_signal_poll_retries();
+			let mut interval = tokio::time::interval(self.db.signal_poll_interval());
 			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+			// Skip first tick, we wait after the db call instead of before
+			interval.tick().await;
 
 			let mut ctx = ListenCtx::new(self, &signal_location);
 
 			loop {
-				interval.tick().await;
 				ctx.reset();
 
 				match T::listen(&mut ctx).await {
 					Ok(res) => break Some(res),
 					Err(WorkflowError::NoSignalFound(signals)) => {
-						if retries > MAX_SIGNAL_RETRIES {
+						if retries == 0 {
 							return Err(GlobalError::raw(WorkflowError::NoSignalFoundAndSleep(
 								signals,
 								deadline_ts,
 							)));
 						}
-						retries += 1;
+						retries -= 1;
 					}
 					Err(err) => return Err(GlobalError::raw(err)),
+				}
+
+				// Poll and wait for a wake at the same time
+				tokio::select! {
+					_ = wake_sub.next() => {},
+					_ = interval.tick() => {},
 				}
 			}
 		};

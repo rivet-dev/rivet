@@ -1,5 +1,6 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
+use futures_util::stream::BoxStream;
 use uuid::Uuid;
 
 use crate::{
@@ -23,13 +24,43 @@ pub type DatabaseHandle = Arc<dyn Database + Sync>;
 // dont have to clone strings a bunch
 #[async_trait::async_trait]
 pub trait Database: Send {
+	/// Create a new DB instance.
 	fn from_pools(pools: rivet_pools::Pools) -> Result<Arc<Self>, rivet_pools::Error>
 	where
 		Self: Sized;
 
-	/// This function will return once the worker should fetch the database again. Works alongside a polling
-	/// timer.
-	async fn wake(&self) -> WorkflowResult<()>;
+	// ===== CONST FNS =====
+
+	/// How often to pull workflows when polling. This runs alongside a wake sub.
+	fn worker_poll_interval(&self) -> Duration {
+		Duration::from_secs(120)
+	}
+
+	/// Poll interval when polling for signals in-process. This runs alongside a wake sub.
+	fn signal_poll_interval(&self) -> Duration {
+		Duration::from_millis(500)
+	}
+
+	/// Most in-process signal poll tries.
+	fn max_signal_poll_retries(&self) -> usize {
+		4
+	}
+
+	/// Poll interval when polling for a sub workflow in-process. This runs alongside a wake sub.
+	fn sub_workflow_poll_interval(&self) -> Duration {
+		Duration::from_millis(500)
+	}
+
+	/// Most in-process sub workflow poll tries.
+	fn max_sub_workflow_poll_retries(&self) -> usize {
+		4
+	}
+
+	// ===========
+
+	/// This function returns a subscription which should resolve once the worker should fetch the database
+	/// again.
+	async fn wake_sub<'a, 'b>(&'a self) -> WorkflowResult<BoxStream<'b, ()>>;
 
 	/// Updates the last ping ts for this worker.
 	async fn update_worker_ping(&self, worker_instance_id: Uuid) -> WorkflowResult<()>;
@@ -286,6 +317,7 @@ pub struct PulledWorkflow {
 	pub create_ts: i64,
 	pub ray_id: Uuid,
 	pub input: Box<serde_json::value::RawValue>,
+	pub wake_deadline_ts: Option<i64>,
 
 	pub events: HashMap<Location, Vec<Event>>,
 }

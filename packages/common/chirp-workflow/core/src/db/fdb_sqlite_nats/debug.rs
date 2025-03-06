@@ -783,8 +783,9 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 				async move {
 					let mut signal_ids = Vec::new();
 
-					// TODO: Don't hardcode
-					let data_subspace = self.subspace.subspace(&("signal", "data"));
+					let data_subspace = self
+						.subspace
+						.subspace(&keys::signal::DataSubspaceKey::new());
 
 					let mut stream = tx.get_ranges_keyvalues(
 						fdb::RangeOption {

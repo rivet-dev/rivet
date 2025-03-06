@@ -18,18 +18,6 @@ async fn fdb_sqlite_nats_driver() {
 	let config = ctx.config().clone();
 	let pools = ctx.pools().clone();
 
-	// // CLEAR DB
-	// pools
-	// 	.fdb()
-	// 	.unwrap()
-	// 	.run(|tx, _mc| async move {
-	// 		tx.clear_range(&[0], &[255]);
-	// 		Ok(())
-	// 	})
-	// 	.await
-	// 	.unwrap();
-	// tokio::time::sleep(std::time::Duration::from_millis(250)).await;
-
 	let mut reg = Registry::new();
 	reg.register_workflow::<def::Workflow>().unwrap();
 	let reg = reg.handle();
@@ -39,51 +27,51 @@ async fn fdb_sqlite_nats_driver() {
 	let workflow_id = Uuid::new_v4();
 	let input = serde_json::value::RawValue::from_string("null".to_string()).unwrap();
 
-	db.dispatch_workflow(
-		Uuid::new_v4(),
-		workflow_id,
-		"workflow_name",
-		Some(&json!({ "bald": "eagle" })),
-		&input,
-		false,
-	)
-	.await
-	.unwrap();
+	// db.dispatch_workflow(
+	// 	Uuid::new_v4(),
+	// 	workflow_id,
+	// 	"workflow_name",
+	// 	Some(&json!({ "bald": "eagle" })),
+	// 	&input,
+	// 	false,
+	// )
+	// .await
+	// .unwrap();
 
-	let res = db
-		.find_workflow(
-			"workflow_name",
-			&json!({
-				"bald": "eagle",
-				"fat": "man"
-			}),
-		)
-		.await
-		.unwrap();
-	tracing::info!(?res);
+	// let res = db
+	// 	.find_workflow(
+	// 		"workflow_name",
+	// 		&json!({
+	// 			"bald": "eagle",
+	// 			"fat": "man"
+	// 		}),
+	// 	)
+	// 	.await
+	// 	.unwrap();
+	// tracing::info!(?res);
 
-	db.update_workflow_tags(
-		workflow_id,
-		"workflow_name",
-		&json!({
-			"bald": "eagle",
-			"fat": "man"
-		}),
-	)
-	.await
-	.unwrap();
+	// db.update_workflow_tags(
+	// 	workflow_id,
+	// 	"workflow_name",
+	// 	&json!({
+	// 		"bald": "eagle",
+	// 		"fat": "man"
+	// 	}),
+	// )
+	// .await
+	// .unwrap();
 
-	let res = db
-		.find_workflow(
-			"workflow_name",
-			&json!({
-				"bald": "eagle",
-				"fat": "man"
-			}),
-		)
-		.await
-		.unwrap();
-	tracing::info!(?res);
+	// let res = db
+	// 	.find_workflow(
+	// 		"workflow_name",
+	// 		&json!({
+	// 			"bald": "eagle",
+	// 			"fat": "man"
+	// 		}),
+	// 	)
+	// 	.await
+	// 	.unwrap();
+	// tracing::info!(?res);
 
 	tokio::spawn(async move {
 		ctx.workflow(def::Input {})
@@ -92,39 +80,6 @@ async fn fdb_sqlite_nats_driver() {
 			.await
 			.unwrap();
 	});
-
-	// let db2 = db.clone();
-	// tokio::spawn(async move {
-	// 	use chirp_workflow::db::debug::DatabaseDebug;
-
-	// 	loop {
-	// 		let wf = db2
-	// 			.find_workflows(
-	// 				&[],
-	// 				None,
-	// 				None,
-	// 			)
-	// 			.await.unwrap().into_iter().next();
-
-	// 		if let Some(wf) = wf {
-	// 			match db2
-	// 				.get_workflow_history(
-	// 					wf.workflow_id,
-	// 					true,
-	// 				)
-	// 				.await
-	// 			{
-	// 				Ok(res) => tracing::info!(?res, "-------------"),
-	// 				Err(err) => {
-	// 					tracing::error!(?err);
-	// 					break;
-	// 				}
-	// 			}
-	// 		};
-
-	// 		tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-	// 	}
-	// });
 
 	let worker = Worker::new(reg.clone(), db.clone());
 

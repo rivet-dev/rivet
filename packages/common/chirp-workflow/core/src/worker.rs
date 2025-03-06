@@ -1,12 +1,14 @@
+use futures_util::StreamExt;
 use global_error::GlobalResult;
 use tokio::time::Duration;
 use tracing::Instrument;
 use uuid::Uuid;
 
-use crate::{ctx::WorkflowCtx, db::DatabaseHandle, metrics, registry::RegistryHandle, utils};
+use crate::{
+	ctx::WorkflowCtx, db::DatabaseHandle, error::WorkflowError, metrics, registry::RegistryHandle,
+	utils,
+};
 
-/// How often to pull workflows when polling.
-pub const TICK_INTERVAL: Duration = Duration::from_secs(120);
 /// How often to run internal tasks like updating ping, gc, and publishing metrics.
 const INTERNAL_INTERVAL: Duration = Duration::from_secs(20);
 
@@ -47,7 +49,9 @@ impl Worker {
 		let shared_client = chirp_client::SharedClient::from_env(pools.clone())?;
 		let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
 
-		let mut tick_interval = tokio::time::interval(TICK_INTERVAL);
+		let mut wake_sub = { self.db.wake_sub().await? };
+
+		let mut tick_interval = tokio::time::interval(self.db.worker_poll_interval());
 		tick_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 		let mut internal_interval = tokio::time::interval(INTERNAL_INTERVAL);
 		internal_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -60,8 +64,11 @@ impl Worker {
 					self.publish_metrics();
 					continue;
 				},
-				res = self.db.wake() => {
-					res?;
+				res = wake_sub.next() => {
+					if res.is_none() {
+						return Err(WorkflowError::SubscriptionUnsubscribed.into());
+					}
+
 					tick_interval.reset();
 				},
 			}

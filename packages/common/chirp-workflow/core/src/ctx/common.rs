@@ -1,15 +1,14 @@
 use std::time::Duration;
 
+use futures_util::StreamExt;
 use global_error::{GlobalError, GlobalResult};
 use rivet_pools::prelude::*;
 use uuid::Uuid;
 
 use crate::utils::tags::AsTags;
 
-/// Poll interval when polling for a sub workflow in-process
-pub const SUB_WORKFLOW_RETRY: Duration = Duration::from_millis(350);
 /// Time to delay a workflow from retrying after an error
-pub const RETRY_TIMEOUT_MS: usize = 2000;
+pub const RETRY_TIMEOUT_MS: usize = 1000;
 pub const WORKFLOW_TIMEOUT: Duration = Duration::from_secs(60);
 
 use crate::{
@@ -28,12 +27,14 @@ pub async fn wait_for_workflow<W: Workflow>(
 ) -> GlobalResult<W::Output> {
 	tracing::debug!(workflow_name=%W::NAME, %workflow_id, "waiting for workflow");
 
-	let mut interval = tokio::time::interval(SUB_WORKFLOW_RETRY);
+	let mut wake_sub = db.wake_sub().await?;
+	let mut interval = tokio::time::interval(db.sub_workflow_poll_interval());
+
+	// Skip first tick, we wait after the db call instead of before
+	interval.tick().await;
 
 	tokio::time::timeout(WORKFLOW_TIMEOUT, async {
 		loop {
-			interval.tick().await;
-
 			// Check if state finished
 			let workflow = db
 				.get_workflow(workflow_id)
@@ -43,6 +44,12 @@ pub async fn wait_for_workflow<W: Workflow>(
 				.map_err(GlobalError::raw)?;
 			if let Some(output) = workflow.parse_output::<W>().map_err(GlobalError::raw)? {
 				return Ok(output);
+			}
+
+			// Poll and wait for a wake at the same time
+			tokio::select! {
+				_ = wake_sub.next() => {},
+				_ = interval.tick() => {},
 			}
 		}
 	})

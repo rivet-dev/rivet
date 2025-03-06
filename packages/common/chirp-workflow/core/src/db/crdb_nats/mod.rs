@@ -6,11 +6,10 @@ use std::{
 	time::{Duration, Instant},
 };
 
-use futures_util::StreamExt;
+use futures_util::{stream::BoxStream, StreamExt};
 use indoc::indoc;
 use rivet_pools::prelude::*;
 use sqlx::{pool::PoolConnection, Acquire, PgPool, Postgres};
-use tokio::sync::Mutex;
 use tracing::Instrument;
 use types::*;
 use uuid::Uuid;
@@ -22,7 +21,7 @@ use crate::{
 		event::{EventId, EventType, SleepState},
 		location::Location,
 	},
-	metrics, worker,
+	metrics,
 };
 
 mod debug;
@@ -53,7 +52,6 @@ const WORKER_WAKE_SUBJECT: &str = "chirp.workflow.crdb_nats.worker.wake";
 pub struct DatabaseCrdbNats {
 	pool: PgPool,
 	nats: NatsPool,
-	sub: Mutex<Option<rivet_pools::prelude::nats::Subscriber>>,
 }
 
 impl DatabaseCrdbNats {
@@ -146,28 +144,18 @@ impl Database for DatabaseCrdbNats {
 		Ok(Arc::new(DatabaseCrdbNats {
 			pool: pools.crdb()?,
 			nats: pools.nats()?,
-			// Lazy load the nats sub
-			sub: Mutex::new(None),
 		}))
 	}
 
-	async fn wake(&self) -> WorkflowResult<()> {
-		let mut sub = self.sub.try_lock().map_err(WorkflowError::WakeLock)?;
+	async fn wake_sub<'a, 'b>(&'a self) -> WorkflowResult<BoxStream<'b, ()>> {
+		let stream = self
+			.nats
+			.subscribe(WORKER_WAKE_SUBJECT)
+			.await
+			.map_err(|x| WorkflowError::CreateSubscription(x.into()))?
+			.map(|_| ());
 
-		// Initialize sub
-		if sub.is_none() {
-			*sub = Some(
-				self.nats
-					.subscribe(WORKER_WAKE_SUBJECT)
-					.await
-					.map_err(|x| WorkflowError::CreateSubscription(x.into()))?,
-			);
-		}
-
-		match sub.as_mut().expect("unreachable").next().await {
-			Some(_) => Ok(()),
-			None => Err(WorkflowError::SubscriptionUnsubscribed),
-		}
+		Ok(stream.boxed())
 	}
 
 	async fn update_worker_ping(&self, worker_instance_id: Uuid) -> WorkflowResult<()> {
@@ -638,14 +626,14 @@ impl Database for DatabaseCrdbNats {
 						last_pull_ts = $3
 					FROM select_pending_workflows AS pw
 					WHERE w.workflow_id = pw.workflow_id
-					RETURNING w.workflow_id, workflow_name, create_ts, ray_id, input
+					RETURNING w.workflow_id, workflow_name, create_ts, ray_id, input, wake_deadline_ts
 					",
 					worker_instance_id,
 					filter,
 					rivet_util::timestamp::now(),
 					// Add padding to the tick interval so that the workflow deadline is never passed before its pulled.
 					// The worker sleeps internally to handle this
-					worker::TICK_INTERVAL.as_millis() as i64 + 1,
+					self.worker_poll_interval().as_millis() as i64 + 1,
 					MAX_PULLED_WORKFLOWS,
 				)
 				.await
@@ -986,7 +974,7 @@ impl Database for DatabaseCrdbNats {
 		// Wake worker again if the deadline is before the next tick
 		if let Some(deadline_ts) = wake_deadline_ts {
 			if deadline_ts
-				<= rivet_util::timestamp::now() + worker::TICK_INTERVAL.as_millis() as i64
+				<= rivet_util::timestamp::now() + self.worker_poll_interval().as_millis() as i64
 			{
 				self.wake_worker();
 			}

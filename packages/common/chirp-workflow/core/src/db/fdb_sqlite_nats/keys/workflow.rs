@@ -795,6 +795,25 @@ impl TuplePack for PendingSignalSubspaceKey {
 	}
 }
 
+pub struct EntirePendingSignalSubspaceKey {}
+
+impl EntirePendingSignalSubspaceKey {
+	pub fn new() -> Self {
+		EntirePendingSignalSubspaceKey {}
+	}
+}
+
+impl TuplePack for EntirePendingSignalSubspaceKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = ("workflow", "signal");
+		t.pack(w, tuple_depth)
+	}
+}
+
 pub struct ByNameAndTagKey {
 	workflow_name: String,
 	k: String,
