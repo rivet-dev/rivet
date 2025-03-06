@@ -1,10 +1,13 @@
+use std::sync::Arc;
+
 use anyhow::*;
-use clap::Parser;
+use clap::{ValueEnum, Parser};
 use uuid::Uuid;
+use chirp_workflow::db::{self, Database, debug::{WorkflowState as DebugWorkflowState, DatabaseDebug}};
 
 use crate::util::{
 	self,
-	wf::{KvPair, WorkflowState},
+	wf::KvPair,
 };
 
 mod signal;
@@ -51,9 +54,15 @@ pub enum SubCommand {
 
 impl SubCommand {
 	pub async fn execute(self, config: rivet_config::Config) -> Result<()> {
+		let pools = rivet_pools::Pools::new(config.clone()).await?;
+		let db = if config.server.as_ref().context("missing server")?.rivet.edge.is_none() {
+			db::DatabaseCrdbNats::from_pools(pools)? as Arc<dyn DatabaseDebug>
+		} else {
+			db::DatabaseFdbSqliteNats::from_pools(pools)? as Arc<dyn DatabaseDebug>
+		};
+
 		match self {
 			Self::Get { workflow_ids } => {
-				let pool = rivet_pools::db::crdb::setup(config.clone()).await?;
 				let workflows = db.get_workflows(workflow_ids).await?;
 				util::wf::print_workflows(workflows, true).await
 			}
@@ -64,7 +73,7 @@ impl SubCommand {
 				pretty,
 			} => {
 				let pool = rivet_pools::db::crdb::setup(config.clone()).await?;
-				let workflows = db.find_workflows(tags, name, state).await?;
+				let workflows = db.find_workflows(tags.into_iter().map(|kv| (kv.key, kv.value)).collect(), name, state.map(Into::into)).await?;
 				util::wf::print_workflows(workflows, pretty).await
 			}
 			Self::Ack { workflow_ids } => {
@@ -90,7 +99,27 @@ impl SubCommand {
 				)
 				.await
 			}
-			Self::Signal { command } => command.execute(config).await,
+			Self::Signal { command } => command.execute(db).await,
+		}
+	}
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[clap(rename_all = "kebab_case")]
+pub enum WorkflowState {
+	Complete,
+	Running,
+	Sleeping,
+	Dead,
+}
+
+impl From<WorkflowState> for DebugWorkflowState {
+	fn from(state: WorkflowState) -> Self {
+		match state {
+			WorkflowState::Complete => DebugWorkflowState::Complete,
+			WorkflowState::Running => DebugWorkflowState::Running,
+			WorkflowState::Sleeping => DebugWorkflowState::Sleeping,
+			WorkflowState::Dead => DebugWorkflowState::Dead,
 		}
 	}
 }

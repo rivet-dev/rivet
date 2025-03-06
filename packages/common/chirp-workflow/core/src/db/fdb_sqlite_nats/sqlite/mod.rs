@@ -53,7 +53,7 @@ impl Migrations {
 }
 
 // TODO: Used to stub the sql macros, find better solution
-struct SqlStub {}
+pub(crate) struct SqlStub {}
 
 impl SqlStub {
 	// For sql macro

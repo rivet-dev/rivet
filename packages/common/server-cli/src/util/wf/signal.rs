@@ -6,6 +6,8 @@ use rivet_pools::CrdbPool;
 use rivet_term::console::style;
 use uuid::Uuid;
 
+use chirp_workflow::db::debug::{SignalState, SignalData};
+
 use super::KvPair;
 
 use crate::util::{
@@ -13,144 +15,7 @@ use crate::util::{
 	format::{colored_json, indent_string},
 };
 
-#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-#[clap(rename_all = "kebab_case")]
-pub enum SignalState {
-	Acked,
-	Pending,
-}
-
-#[derive(Debug, sqlx::FromRow)]
-pub struct SignalRow {
-	signal_id: Uuid,
-	signal_name: String,
-	tags: Option<serde_json::Value>,
-	workflow_id: Option<Uuid>,
-	create_ts: i64,
-	body: serde_json::Value,
-	ack_ts: Option<i64>,
-}
-
-pub async fn get_signals(pool: CrdbPool, signal_ids: Vec<Uuid>) -> Result<Vec<SignalRow>> {
-	let mut conn = pool.acquire().await?;
-
-	let signal = sqlx::query_as::<_, SignalRow>(indoc!(
-		"
-		SELECT
-			signal_id,
-			signal_name,
-			NULL AS tags,
-			workflow_id,
-			create_ts,
-			body,
-			ack_ts
-		FROM db_workflow.signals
-		WHERE signal_id = $1
-		UNION ALL
-		SELECT
-			signal_id,
-			signal_name,
-			tags,
-			NULL AS workflow_id,
-			create_ts,
-			body,
-			ack_ts
-		FROM db_workflow.tagged_signals
-		WHERE signal_id = ANY($1)
-		"
-	))
-	.bind(signal_ids)
-	.fetch_all(&mut *conn)
-	.await?;
-
-	Ok(signal)
-}
-
-pub async fn find_signals(
-	pool: CrdbPool,
-	tags: Vec<KvPair>,
-	workflow_id: Option<Uuid>,
-	name: Option<String>,
-	state: Option<SignalState>,
-) -> Result<Vec<SignalRow>> {
-	let mut conn = pool.acquire().await?;
-
-	let mut query_str = indoc!(
-		"
-		SELECT
-			signal_id,
-			signal_name,
-			NULL AS tags,
-			workflow_id,
-			create_ts,
-			body,
-			ack_ts
-		FROM db_workflow.signals
-		WHERE
-			($1 IS NULL OR signal_name = $1) AND
-			($2 IS NULL OR workflow_id = $2) AND
-			silence_ts IS NULL AND
-			-- Acked
-			(NOT $3 OR ack_ts IS NOT NULL) AND
-			-- Pending
-			(NOT $4 OR ack_ts IS NULL)
-		UNION ALL
-		SELECT
-			signal_id,
-			signal_name,
-			tags,
-			NULL AS workflow_id,
-			create_ts,
-			body,
-			ack_ts
-		FROM db_workflow.tagged_signals
-		WHERE
-			($1 IS NULL OR signal_name = $1) AND
-			silence_ts IS NULL AND
-			-- Acked
-			(NOT $3 OR ack_ts IS NOT NULL) AND
-			-- Pending
-			(NOT $4 OR ack_ts IS NULL)
-		"
-	)
-	.to_string();
-
-	// Procedurally add tags. We don't combine the tags into an object because we are comparing
-	// strings with `->>` whereas with @> and `serde_json::Map` we would have to know the type of the input
-	// given.
-	for i in 0..tags.len() {
-		let idx = i * 2 + 5;
-		let idx2 = idx + 1;
-
-		query_str.push_str(&format!(" AND tags->>${idx} = ${idx2}"));
-	}
-
-	query_str.push_str("LIMIT 100");
-
-	// eprintln!(
-	// 	"{query_str} {name:?} {workflow_id:?} {} {} {}",
-	// 	tags.is_empty(),
-	// 	matches!(state, Some(SignalState::Acked)),
-	// 	matches!(state, Some(SignalState::Pending))
-	// );
-
-	let mut query = sqlx::query_as::<_, SignalRow>(&query_str)
-		.bind(name)
-		.bind(workflow_id)
-		.bind(matches!(state, Some(SignalState::Acked)))
-		.bind(matches!(state, Some(SignalState::Pending)));
-
-	for tag in tags {
-		query = query.bind(tag.key);
-		query = query.bind(tag.value);
-	}
-
-	let signals = query.fetch_all(&mut *conn).await?;
-
-	Ok(signals)
-}
-
-pub async fn print_signals(signals: Vec<SignalRow>, pretty: bool) -> Result<()> {
+pub async fn print_signals(signals: Vec<SignalData>, pretty: bool) -> Result<()> {
 	if signals.is_empty() {
 		rivet_term::status::success("No signals found", "");
 		return Ok(());
@@ -175,10 +40,9 @@ pub async fn print_signals(signals: Vec<SignalRow>, pretty: bool) -> Result<()> 
 			println!("  {} {}", style("created at").bold(), style(date).magenta());
 
 			print!("  {} ", style("state").bold());
-			if signal.ack_ts.is_some() {
-				println!("{}", style("ack'd").bright().blue());
-			} else {
-				println!("{}", style("pending").yellow());
+			match signal.state {
+				SignalState::Acked => println!("{}", style("ack'd").bright().blue()),
+				SignalState::Pending => println!("{}", style("pending").yellow()),
 			}
 			println!(
 				"  {} {}",
@@ -193,42 +57,13 @@ pub async fn print_signals(signals: Vec<SignalRow>, pretty: bool) -> Result<()> 
 	Ok(())
 }
 
-pub async fn silence_signals(pool: CrdbPool, signal_ids: Vec<Uuid>) -> Result<()> {
-	let mut conn = pool.acquire().await?;
-
-	sqlx::query(indoc!(
-		"
-		WITH
-			update_signals AS (
-				UPDATE db_workflow.signals
-				SET silence_ts = $2
-				WHERE signal_id = ANY($1)
-				RETURNING 1
-			),
-			update_tagged_signals AS (
-				UPDATE db_workflow.tagged_signals
-				SET silence_ts = $2
-				WHERE signal_id = ANY($1)
-				RETURNING 1
-			)
-		SELECT 1
-		"
-	))
-	.bind(signal_ids)
-	.bind(util::now())
-	.execute(&mut *conn)
-	.await?;
-
-	Ok(())
-}
-
 mod table {
 	use anyhow::*;
 	use rivet_term::console::style;
 	use tabled::Tabled;
 	use uuid::Uuid;
+	use chirp_workflow::db::debug::{SignalData, SignalState};
 
-	use super::{SignalRow, SignalState};
 	use crate::util::format::colored_json_ugly;
 
 	#[derive(Tabled)]
@@ -241,30 +76,26 @@ mod table {
 		pub id: String,
 	}
 
-	pub fn signals(signals: Vec<SignalRow>) -> Result<()> {
+	pub fn signals(signals: Vec<SignalData>) -> Result<()> {
 		let mut rows = signals
 			.iter()
-			.map(|w| {
+			.map(|s| {
 				Ok(SignalTableRow {
-					signal_name: w.signal_name.clone(),
-					signal_id: w.signal_id,
-					state: if w.ack_ts.is_some() {
-						SignalState::Acked
-					} else {
-						SignalState::Pending
-					},
-					id: w
+					signal_name: s.signal_name.clone(),
+					signal_id: s.signal_id,
+					state: s.state,
+					id: s
 						.tags
 						.as_ref()
 						.map(colored_json_ugly)
 						.transpose()?
-						.or(w.workflow_id.map(|id| id.to_string()))
+						.or(s.workflow_id.map(|id| id.to_string()))
 						.unwrap(),
 				})
 			})
 			.collect::<Result<Vec<_>>>()?;
 
-		rows.sort_by_key(|w| w.state);
+		rows.sort_by_key(|s| s.state);
 
 		rivet_term::format::table(rows);
 

@@ -120,8 +120,12 @@ impl TuplePack for TagKey {
 
 impl<'de> TupleUnpack<'de> for TagKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, _, workflow_id, _, k, v)) =
+		let (input, (_, _, workflow_id, data, k, v)) =
 			<(Cow<str>, Cow<str>, Uuid, Cow<str>, String, String)>::unpack(input, tuple_depth)?;
+		if data != "tag" {
+			return Err(PackError::Message("expected \"tag\" data".into()));
+		}
+
 		let v = TagKey { workflow_id, k, v };
 
 		Ok((input, v))
@@ -220,8 +224,12 @@ impl TuplePack for InputChunkKey {
 
 impl<'de> TupleUnpack<'de> for InputChunkKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, workflow_id, _, chunk)) =
-			<(Cow<str>, Uuid, Cow<str>, usize)>::unpack(input, tuple_depth)?;
+		let (input, (_, _, workflow_id, data, chunk)) =
+			<(Cow<str>, Cow<str>, Uuid, Cow<str>, usize)>::unpack(input, tuple_depth)?;
+		if data != "input" {
+			return Err(PackError::Message("expected \"input\" data".into()));
+		}
+
 		let v = InputChunkKey { workflow_id, chunk };
 
 		Ok((input, v))
@@ -299,8 +307,12 @@ impl TuplePack for OutputChunkKey {
 
 impl<'de> TupleUnpack<'de> for OutputChunkKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, workflow_id, _, chunk)) =
-			<(Cow<str>, Uuid, Cow<str>, usize)>::unpack(input, tuple_depth)?;
+		let (input, (_, _, workflow_id, data, chunk)) =
+			<(Cow<str>, Cow<str>, Uuid, Cow<str>, usize)>::unpack(input, tuple_depth)?;
+		if data != "output" {
+			return Err(PackError::Message("expected \"output\" data".into()));
+		}
+
 		let v = OutputChunkKey { workflow_id, chunk };
 
 		Ok((input, v))
@@ -356,8 +368,12 @@ impl TuplePack for WakeSignalKey {
 
 impl<'de> TupleUnpack<'de> for WakeSignalKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, _, workflow_id, _, signal_name)) =
+		let (input, (_, _, workflow_id, data, signal_name)) =
 			<(Cow<str>, Cow<str>, Uuid, Cow<str>, String)>::unpack(input, tuple_depth)?;
+		if data != "wake_signal" {
+			return Err(PackError::Message("expected \"wake_signal\" data".into()));
+		}
+
 		let v = WakeSignalKey {
 			workflow_id,
 			signal_name,
@@ -424,8 +440,11 @@ impl TuplePack for WakeDeadlineKey {
 
 impl<'de> TupleUnpack<'de> for WakeDeadlineKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, _, workflow_id, _)) =
+		let (input, (_, _, workflow_id, data)) =
 			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
+		if data != "wake_deadline" {
+			return Err(PackError::Message("expected \"wake_deadline\" data".into()));
+		}
 		let v = WakeDeadlineKey { workflow_id };
 
 		Ok((input, v))
@@ -468,8 +487,12 @@ impl TuplePack for NameKey {
 
 impl<'de> TupleUnpack<'de> for NameKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, _, workflow_id, _)) =
+		let (input, (_, _, workflow_id, data)) =
 			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
+		if data != "name" {
+			return Err(PackError::Message("expected \"name\" data".into()));
+		}
+
 		let v = NameKey { workflow_id };
 
 		Ok((input, v))
@@ -513,8 +536,12 @@ impl TuplePack for CreateTsKey {
 
 impl<'de> TupleUnpack<'de> for CreateTsKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, _, workflow_id, _)) =
+		let (input, (_, _, workflow_id, data)) =
 			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
+		if data != "create_ts" {
+			return Err(PackError::Message("expected \"create_ts\" data".into()));
+		}
+
 		let v = CreateTsKey { workflow_id };
 
 		Ok((input, v))
@@ -557,8 +584,12 @@ impl TuplePack for RayIdKey {
 
 impl<'de> TupleUnpack<'de> for RayIdKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, _, workflow_id, _)) =
+		let (input, (_, _, workflow_id, data)) =
 			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
+		if data != "ray_id" {
+			return Err(PackError::Message("expected \"ray_id\" data".into()));
+		}
+
 		let v = RayIdKey { workflow_id };
 
 		Ok((input, v))
@@ -601,9 +632,64 @@ impl TuplePack for ErrorKey {
 
 impl<'de> TupleUnpack<'de> for ErrorKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, _, workflow_id, _)) =
+		let (input, (_, _, workflow_id, data)) =
 			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
+		if data != "error" {
+			return Err(PackError::Message("expected \"error\" data".into()));
+		}
+
 		let v = ErrorKey { workflow_id };
+
+		Ok((input, v))
+	}
+}
+
+#[derive(Debug)]
+pub struct WakeSubWorkflowKey {
+	workflow_id: Uuid,
+}
+
+impl WakeSubWorkflowKey {
+	pub fn new(workflow_id: Uuid) -> Self {
+		WakeSubWorkflowKey { workflow_id }
+	}
+}
+
+impl FormalKey for WakeSubWorkflowKey {
+	/// Sub workflow id.
+	type Value = Uuid;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		Ok(Uuid::from_slice(raw)?)
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok(value.as_bytes().to_vec())
+	}
+}
+
+impl TuplePack for WakeSubWorkflowKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = ("workflow", "data", self.workflow_id, "wake_sub_workflow_id");
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for WakeSubWorkflowKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, workflow_id, data)) =
+			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
+		if data != "wake_sub_workflow_id" {
+			return Err(PackError::Message(
+				"expected \"wake_sub_workflow_id\" data".into(),
+			));
+		}
+
+		let v = WakeSubWorkflowKey { workflow_id };
 
 		Ok((input, v))
 	}
@@ -828,5 +914,105 @@ impl TuplePack for ByNameAndTagSubspaceKey {
 			&self.v,
 		);
 		t.pack(w, tuple_depth)
+	}
+}
+
+#[derive(Debug)]
+pub struct HasWakeConditionKey {
+	pub workflow_id: Uuid,
+}
+
+impl HasWakeConditionKey {
+	pub fn new(workflow_id: Uuid) -> Self {
+		HasWakeConditionKey { workflow_id }
+	}
+}
+
+impl FormalKey for HasWakeConditionKey {
+	type Value = ();
+
+	fn deserialize(&self, _raw: &[u8]) -> Result<Self::Value> {
+		Ok(())
+	}
+
+	fn serialize(&self, _value: Self::Value) -> Result<Vec<u8>> {
+		Ok(Vec::new())
+	}
+}
+
+impl TuplePack for HasWakeConditionKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = ("workflow", "data", self.workflow_id, "has_wake_condition");
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for HasWakeConditionKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, workflow_id, data)) =
+			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
+		if data != "has_wake_condition" {
+			return Err(PackError::Message(
+				"expected \"has_wake_condition\" data".into(),
+			));
+		}
+
+		let v = HasWakeConditionKey { workflow_id };
+
+		Ok((input, v))
+	}
+}
+
+#[derive(Debug)]
+pub struct WorkerInstanceIdKey {
+	pub workflow_id: Uuid,
+}
+
+impl WorkerInstanceIdKey {
+	pub fn new(workflow_id: Uuid) -> Self {
+		WorkerInstanceIdKey { workflow_id }
+	}
+}
+
+impl FormalKey for WorkerInstanceIdKey {
+	type Value = Uuid;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		Ok(Uuid::from_slice(raw)?)
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok(value.as_bytes().to_vec())
+	}
+}
+
+impl TuplePack for WorkerInstanceIdKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = ("workflow", "data", self.workflow_id, "worker_instance_id");
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for WorkerInstanceIdKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, workflow_id, data)) =
+			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
+		if data != "worker_instance_id" {
+			return Err(PackError::Message(
+				"expected \"worker_instance_id\" data".into(),
+			));
+		}
+
+		let v = WorkerInstanceIdKey { workflow_id };
+
+		Ok((input, v))
 	}
 }

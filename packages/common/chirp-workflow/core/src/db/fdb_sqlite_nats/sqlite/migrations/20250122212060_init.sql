@@ -55,6 +55,8 @@ CREATE TABLE workflow_sub_workflow_events (
   version INT NOT NULL,
   sub_workflow_id BLOB NOT NULL, -- UUID
   sub_workflow_name TEXT NOT NULL,
+  tags BLOB, -- JSONB
+  input BLOB NOT NULL, -- JSONB
   create_ts INT NOT NULL,
   loop_location BLOB, -- JSONB
   forgotten INT NOT NULL DEFAULT false -- BOOLEAN
@@ -75,6 +77,11 @@ CREATE TABLE workflow_signal_send_events (
   signal_id BLOB NOT NULL, -- UUID
   signal_name TEXT NOT NULL,
   body BLOB NOT NULL, -- JSONB
+  
+  -- Either one
+  workflow_id BLOB, -- UUID
+  tags BLOB, -- JSONB
+
   create_ts INT NOT NULL,
   loop_location BLOB, -- JSONB
   forgotten INT NOT NULL DEFAULT false -- BOOLEAN

@@ -19,8 +19,8 @@ pub use fdb_sqlite_nats::DatabaseFdbSqliteNats;
 
 pub type DatabaseHandle = Arc<dyn Database + Sync>;
 
-// TODO: Make this use generics for input types instead of using serde_json values. Ser/de should be handled
-// manually in the driver.
+// TODO: Change tags type to &[(String, String)]. Requires a custom wrapper type for sqlx encoding so we
+// dont have to clone strings a bunch
 #[async_trait::async_trait]
 pub trait Database: Send {
 	fn from_pools(pools: rivet_pools::Pools) -> Result<Arc<Self>, rivet_pools::Error>

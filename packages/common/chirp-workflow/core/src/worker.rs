@@ -56,7 +56,6 @@ impl Worker {
 			tokio::select! {
 				_ = tick_interval.tick() => {},
 				_ = internal_interval.tick() => {
-					self.update_ping();
 					self.gc();
 					self.publish_metrics();
 					continue;
@@ -125,7 +124,7 @@ impl Worker {
 		Ok(())
 	}
 
-	fn update_ping(&self) {
+	fn gc(&self) {
 		let db = self.db.clone();
 		let worker_instance_id = self.worker_instance_id;
 
@@ -134,17 +133,7 @@ impl Worker {
 				if let Err(err) = db.update_worker_ping(worker_instance_id).await {
 					tracing::error!(?err, "unhandled update ping error");
 				}
-			}
-			.in_current_span(),
-		);
-	}
 
-	fn gc(&self) {
-		let db = self.db.clone();
-		let worker_instance_id = self.worker_instance_id;
-
-		tokio::task::spawn(
-			async move {
 				if let Err(err) = db.clear_expired_leases(worker_instance_id).await {
 					tracing::error!(?err, "unhandled gc error");
 				}

@@ -55,8 +55,8 @@ impl DatabaseDebug for DatabaseCrdbNats {
 
 	async fn find_workflows(
 		&self,
-		tags: serde_json::Value,
-		name: Option<String>,
+		tags: &[(String, String)],
+		name: Option<&str>,
 		state: Option<WorkflowState>,
 	) -> Result<Vec<WorkflowData>> {
 		let mut query_str = indoc!(
@@ -111,10 +111,10 @@ impl DatabaseDebug for DatabaseCrdbNats {
 		)
 		.to_string();
 
+		// TODO: This should use some jsonb agg function instead
 		// Procedurally add tags. We don't combine the tags into an object because we are comparing
 		// strings with `->>` whereas with @> and `serde_json::Map` we would have to know the type of the input
 		// given.
-		let tags = tags.as_object().context("tags not object")?;
 		for i in 0..tags.len() {
 			let idx = i * 2 + 6;
 			let idx2 = idx + 1;
@@ -200,7 +200,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 				FROM db_workflow.workflows
 				WHERE workflow_id = $1
 				",
-				workflow_id
+				workflow_id,
 			),
 			sql_fetch_all!(
 				[self, AmalgamEventRow]
@@ -214,6 +214,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 					version,
 					activity_name AS name,
 					NULL AS auxiliary_id,
+					NULL AS auxiliary_id2,
 					input,
 					output,
 					NULL AS iteration,
@@ -234,6 +235,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 					version,
 					signal_name AS name,
 					signal_id::UUID AS auxiliary_id,
+					NULL AS auxiliary_id2,
 					NULL AS input,
 					body AS output,
 					NULL AS iteration,
@@ -254,6 +256,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 					version,
 					se.signal_name AS name,
 					se.signal_id AS auxiliary_id,
+					s2.workflow_id AS auxiliary_id2,
 					se.body AS input,
 					NULL AS output,
 					NULL AS iteration,
@@ -264,6 +267,8 @@ impl DatabaseDebug for DatabaseCrdbNats {
 				FROM db_workflow.workflow_signal_send_events AS se
 				LEFT JOIN db_workflow.tagged_signals AS s
 				ON se.signal_id = s.signal_id
+				LEFT JOIN db_workflow.signals AS s2
+				ON se.signal_id = s2.signal_id
 				WHERE
 					se.workflow_id = $1 AND ($2 OR NOT forgotten)
 				UNION ALL
@@ -276,6 +281,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 					version,
 					message_name AS name,
 					NULL AS auxiliary_id,
+					NULL AS auxiliary_id2,
 					body AS input,
 					NULL AS output,
 					NULL AS iteration,
@@ -291,13 +297,14 @@ impl DatabaseDebug for DatabaseCrdbNats {
 				SELECT
 					location,
 					location2,
-					w.tags,
+					COALESCE(w.tags, '{}'::JSONB) AS tags,
 					4 AS event_type,
 					version,
 					w.workflow_name AS name,
 					sw.sub_workflow_id AS auxiliary_id,
+					NULL AS auxiliary_id2,
 					w.input,
-					w.output,
+					NULL AS output,
 					NULL AS iteration,
 					NULL AS deadline_ts,
 					NULL AS state,
@@ -318,6 +325,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 					version,
 					NULL AS name,
 					NULL AS auxiliary_id,
+					NULL AS auxiliary_id2,
 					state AS input,
 					NULL AS output,
 					iteration,
@@ -337,6 +345,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 					version,
 					NULL AS name,
 					NULL AS auxiliary_id,
+					NULL AS auxiliary_id2,
 					NULL AS input,
 					NULL AS output,
 					NULL AS iteration,
@@ -356,6 +365,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 					version,
 					NULL AS name,
 					NULL AS auxiliary_id,
+					NULL AS auxiliary_id2,
 					NULL AS input,
 					NULL AS output,
 					NULL AS iteration,
@@ -375,6 +385,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 					1 AS version,
 					NULL AS name,
 					NULL AS auxiliary_id,
+					NULL AS auxiliary_id2,
 					NULL AS input,
 					NULL AS output,
 					NULL AS iteration,
@@ -394,6 +405,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 					version,
 					NULL AS name,
 					NULL AS auxiliary_id,
+					NULL AS auxiliary_id2,
 					NULL AS input,
 					NULL AS output,
 					NULL AS iteration,
@@ -409,44 +421,17 @@ impl DatabaseDebug for DatabaseCrdbNats {
 				workflow_id,
 				include_forgotten,
 			),
-			async move {
-				sql_fetch_all!(
-					[self, ActivityErrorRow]
-					"
-					SELECT location, location2, error, COUNT(error), MAX(ts) AS latest_ts
-					FROM db_workflow.workflow_activity_errors
-					WHERE workflow_id = $1
-					GROUP BY location, location2, error
-					ORDER BY latest_ts
-					",
-					workflow_id
-				)
-				.await
-				.map(|rows| {
-					rows.into_iter()
-						.map(|value| {
-							// Backwards compatibility
-							// NOTE: Add 1 because we switched from 0-based to 1-based
-							let location = value.location2.clone().unwrap_or_else(|| {
-								value
-									.location
-									.iter()
-									.map(|x| Coordinate::simple(*x as usize + 1))
-									.collect()
-							});
-
-							(
-								location,
-								ActivityError {
-									error: value.error,
-									count: value.count as usize,
-									latest_ts: value.latest_ts,
-								},
-							)
-						})
-						.collect::<Vec<_>>()
-				})
-			},
+			sql_fetch_all!(
+				[self, ActivityErrorRow]
+				"
+				SELECT location, location2, error, COUNT(error), MAX(ts) AS latest_ts
+				FROM db_workflow.workflow_activity_errors
+				WHERE workflow_id = $1
+				GROUP BY location, location2, error
+				ORDER BY latest_ts
+				",
+				workflow_id,
+			),
 		)?;
 
 		let Some(wf_row) = wf_row else {
@@ -460,15 +445,146 @@ impl DatabaseDebug for DatabaseCrdbNats {
 	}
 
 	async fn get_signals(&self, signal_ids: Vec<Uuid>) -> Result<Vec<SignalData>> {
-		todo!();
+		let signals = sql_fetch_all!(
+			[self, SignalRow]
+			"
+			SELECT
+				signal_id,
+				signal_name,
+				NULL AS tags,
+				workflow_id,
+				create_ts,
+				body,
+				ack_ts
+			FROM db_workflow.signals
+			WHERE signal_id = $1
+			UNION ALL
+			SELECT
+				signal_id,
+				signal_name,
+				tags,
+				NULL AS workflow_id,
+				create_ts,
+				body,
+				ack_ts
+			FROM db_workflow.tagged_signals
+			WHERE signal_id = ANY($1)
+			",
+			signal_ids,
+		)
+		.await?;
+
+		Ok(signals.into_iter().map(Into::into).collect())
 	}
 
-	async fn find_signals(&self, signal_ids: Vec<Uuid>) -> Result<Vec<SignalData>> {
-		todo!();
+	async fn find_signals(
+		&self,
+		tags: &[(String, String)],
+		workflow_id: Option<Uuid>,
+		name: Option<&str>,
+		state: Option<SignalState>,
+	) -> Result<Vec<SignalData>> {
+		let mut query_str = indoc!(
+			"
+			SELECT
+				signal_id,
+				signal_name,
+				NULL AS tags,
+				workflow_id,
+				create_ts,
+				body,
+				ack_ts
+			FROM db_workflow.signals
+			WHERE
+				($1 IS NULL OR signal_name = $1) AND
+				($2 IS NULL OR workflow_id = $2) AND
+				silence_ts IS NULL AND
+				-- Acked
+				(NOT $3 OR ack_ts IS NOT NULL) AND
+				-- Pending
+				(NOT $4 OR ack_ts IS NULL)
+			UNION ALL
+			SELECT
+				signal_id,
+				signal_name,
+				tags,
+				NULL AS workflow_id,
+				create_ts,
+				body,
+				ack_ts
+			FROM db_workflow.tagged_signals
+			WHERE
+				($1 IS NULL OR signal_name = $1) AND
+				silence_ts IS NULL AND
+				-- Acked
+				(NOT $3 OR ack_ts IS NOT NULL) AND
+				-- Pending
+				(NOT $4 OR ack_ts IS NULL)
+			"
+		)
+		.to_string();
+
+		// Procedurally add tags. We don't combine the tags into an object because we are comparing
+		// strings with `->>` whereas with @> and `serde_json::Map` we would have to know the type of the input
+		// given.
+		for i in 0..tags.len() {
+			let idx = i * 2 + 5;
+			let idx2 = idx + 1;
+
+			query_str.push_str(&format!(" AND tags->>${idx} = ${idx2}"));
+		}
+
+		query_str.push_str("LIMIT 100");
+
+		// eprintln!(
+		// 	"{query_str} {name:?} {workflow_id:?} {} {} {}",
+		// 	tags.is_empty(),
+		// 	matches!(state, Some(SignalState::Acked)),
+		// 	matches!(state, Some(SignalState::Pending))
+		// );
+
+		let mut query = sqlx::query_as::<_, SignalRow>(&query_str)
+			.bind(name)
+			.bind(workflow_id)
+			.bind(matches!(state, Some(SignalState::Acked)))
+			.bind(matches!(state, Some(SignalState::Pending)));
+
+		for (key, value) in tags {
+			query = query.bind(key);
+			query = query.bind(value);
+		}
+
+		let mut conn = self.conn().await?;
+		let signals = query.fetch_all(&mut *conn).await?;
+
+		Ok(signals.into_iter().map(Into::into).collect())
 	}
 
 	async fn silence_signals(&self, signal_ids: Vec<Uuid>) -> Result<()> {
-		todo!();
+		sql_execute!(
+			[self]
+			"
+			WITH
+				update_signals AS (
+					UPDATE db_workflow.signals
+					SET silence_ts = $2
+					WHERE signal_id = ANY($1)
+					RETURNING 1
+				),
+				update_tagged_signals AS (
+					UPDATE db_workflow.tagged_signals
+					SET silence_ts = $2
+					WHERE signal_id = ANY($1)
+					RETURNING 1
+				)
+			SELECT 1
+			",
+			signal_ids,
+			rivet_util::timestamp::now(),
+		)
+		.await?;
+
+		Ok(())
 	}
 }
 
@@ -488,6 +604,16 @@ struct WorkflowRow {
 
 impl From<WorkflowRow> for WorkflowData {
 	fn from(row: WorkflowRow) -> Self {
+		let state = if row.output.is_some() {
+			WorkflowState::Complete
+		} else if row.is_active {
+			WorkflowState::Running
+		} else if row.has_wake_condition {
+			WorkflowState::Sleeping
+		} else {
+			WorkflowState::Dead
+		};
+
 		WorkflowData {
 			workflow_id: row.workflow_id,
 			workflow_name: row.workflow_name,
@@ -496,13 +622,7 @@ impl From<WorkflowRow> for WorkflowData {
 			input: row.input,
 			output: row.output,
 			error: row.error,
-			state: if row.is_active {
-				WorkflowState::Running
-			} else if row.has_wake_condition {
-				WorkflowState::Sleeping
-			} else {
-				WorkflowState::Complete
-			},
+			state,
 		}
 	}
 }
@@ -525,6 +645,7 @@ struct AmalgamEventRow {
 	event_type: i64,
 	name: Option<String>,
 	auxiliary_id: Option<Uuid>,
+	auxiliary_id2: Option<Uuid>,
 	input: Option<serde_json::Value>,
 	output: Option<serde_json::Value>,
 	iteration: Option<i64>,
@@ -605,6 +726,7 @@ impl TryFrom<AmalgamEventRow> for SignalSendEvent {
 		Ok(SignalSendEvent {
 			signal_id: value.auxiliary_id.context("missing event data")?,
 			name: value.name.context("missing event data")?,
+			workflow_id: value.auxiliary_id2,
 			tags: value.tags,
 			body: value.input.context("missing event data")?,
 		})
@@ -632,7 +754,6 @@ impl TryFrom<AmalgamEventRow> for SubWorkflowEvent {
 			name: value.name.context("missing event data")?,
 			tags: value.tags.context("missing event data")?,
 			input: value.input.context("missing event data")?,
-			// output: value.output,
 		})
 	}
 }
@@ -681,9 +802,40 @@ impl TryFrom<AmalgamEventRow> for RemovedEvent {
 	}
 }
 
+#[derive(Debug, sqlx::FromRow)]
+pub struct SignalRow {
+	signal_id: Uuid,
+	signal_name: String,
+	tags: Option<serde_json::Value>,
+	workflow_id: Option<Uuid>,
+	create_ts: i64,
+	body: serde_json::Value,
+	ack_ts: Option<i64>,
+}
+
+impl From<SignalRow> for SignalData {
+	fn from(row: SignalRow) -> Self {
+		let state = if row.ack_ts.is_some() {
+			SignalState::Acked
+		} else {
+			SignalState::Pending
+		};
+
+		SignalData {
+			signal_id: row.signal_id,
+			signal_name: row.signal_name,
+			tags: row.tags,
+			workflow_id: row.workflow_id,
+			create_ts: row.create_ts,
+			body: row.body,
+			state,
+		}
+	}
+}
+
 fn build_history(
 	event_rows: Vec<AmalgamEventRow>,
-	activity_errors: Vec<(Location, ActivityError)>,
+	error_rows: Vec<ActivityErrorRow>,
 ) -> Result<Vec<Event>> {
 	let mut events = event_rows
 		.into_iter()
@@ -692,10 +844,25 @@ fn build_history(
 
 			// Add errors to activity events
 			if let EventData::Activity(data) = &mut event.data {
-				data.errors = activity_errors
+				data.errors = error_rows
 					.iter()
-					.filter(|(location, _)| location == &event.location)
-					.map(|(_, err)| err.clone())
+					.filter(|row| {
+						// Backwards compatibility
+						// NOTE: Add 1 because we switched from 0-based to 1-based
+						let location = row.location2.clone().unwrap_or_else(|| {
+							row.location
+								.iter()
+								.map(|x| Coordinate::simple(*x as usize + 1))
+								.collect()
+						});
+
+						location == event.location
+					})
+					.map(|row| ActivityError {
+						error: row.error.clone(),
+						count: row.count as usize,
+						latest_ts: row.latest_ts,
+					})
 					.collect();
 			}
 

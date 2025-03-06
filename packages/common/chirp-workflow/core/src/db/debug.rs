@@ -13,8 +13,8 @@ pub trait DatabaseDebug: Database {
 
 	async fn find_workflows(
 		&self,
-		tags: serde_json::Value,
-		name: Option<String>,
+		tags: &[(String, String)],
+		name: Option<&str>,
 		state: Option<WorkflowState>,
 	) -> Result<Vec<WorkflowData>>;
 
@@ -30,7 +30,13 @@ pub trait DatabaseDebug: Database {
 
 	async fn get_signals(&self, signal_ids: Vec<Uuid>) -> Result<Vec<SignalData>>;
 
-	async fn find_signals(&self, signal_ids: Vec<Uuid>) -> Result<Vec<SignalData>>;
+	async fn find_signals(
+		&self,
+		tags: &[(String, String)],
+		workflow_id: Option<Uuid>,
+		name: Option<&str>,
+		state: Option<SignalState>,
+	) -> Result<Vec<SignalData>>;
 
 	async fn silence_signals(&self, signal_ids: Vec<Uuid>) -> Result<()>;
 }
@@ -87,6 +93,34 @@ pub enum EventData {
 	Empty,
 }
 
+impl std::fmt::Display for EventData {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match &self {
+			EventData::Activity(activity) => write!(f, "activity {}", activity.name),
+			EventData::Signal(signal) => write!(f, "signal receive {}", signal.name),
+			EventData::SignalSend(signal_send) => write!(f, "signal send {}", signal_send.name),
+			EventData::MessageSend(message_send) => {
+				write!(f, "message send {}", message_send.name)
+			}
+			EventData::SubWorkflow(sub_workflow) => {
+				write!(f, "sub workflow {}", sub_workflow.name)
+			}
+			EventData::Loop(_) => write!(f, "loop"),
+			EventData::Sleep(_) => write!(f, "sleep"),
+			EventData::Removed(removed) => {
+				if let Some(name) = &removed.name {
+					write!(f, "removed {} {name}", removed.event_type)
+				} else {
+					write!(f, "removed {}", removed.event_type)
+				}
+			}
+			EventData::VersionCheck => write!(f, "version check"),
+			EventData::Branch => write!(f, "branch"),
+			EventData::Empty => write!(f, "empty"),
+		}
+	}
+}
+
 #[derive(Debug)]
 pub struct ActivityEvent {
 	pub name: String,
@@ -106,6 +140,7 @@ pub struct SignalEvent {
 pub struct SignalSendEvent {
 	pub signal_id: Uuid,
 	pub name: String,
+	pub workflow_id: Option<Uuid>,
 	pub tags: Option<serde_json::Value>,
 	pub body: serde_json::Value,
 }
@@ -123,7 +158,6 @@ pub struct SubWorkflowEvent {
 	pub name: String,
 	pub tags: serde_json::Value,
 	pub input: serde_json::Value,
-	// pub output: Option<serde_json::Value>,
 }
 
 #[derive(Debug)]

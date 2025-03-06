@@ -130,7 +130,7 @@ pub fn setup_tracing() {
 			.with(
 				tracing_logfmt::builder()
 					.layer()
-					.with_filter(tracing_subscriber::filter::LevelFilter::DEBUG),
+					.with_filter(tracing_subscriber::filter::LevelFilter::INFO),
 			)
 			.init();
 	});

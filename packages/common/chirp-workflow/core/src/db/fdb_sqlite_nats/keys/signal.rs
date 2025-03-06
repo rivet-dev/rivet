@@ -75,52 +75,61 @@ impl TuplePack for BodyChunkKey {
 
 impl<'de> TupleUnpack<'de> for BodyChunkKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, _, signal_id, _, chunk)) =
+		let (input, (_, _, signal_id, data, chunk)) =
 			<(Cow<str>, Cow<str>, Uuid, Cow<str>, usize)>::unpack(input, tuple_depth)?;
+		if data != "body" {
+			return Err(PackError::Message("expected \"body\" data".into()));
+		}
+		
 		let v = BodyChunkKey { signal_id, chunk };
 
 		Ok((input, v))
 	}
 }
 
-pub struct AckKey {
+pub struct AckTsKey {
 	signal_id: Uuid,
 }
 
-impl AckKey {
+impl AckTsKey {
 	pub fn new(signal_id: Uuid) -> Self {
-		AckKey { signal_id }
+		AckTsKey { signal_id }
 	}
 }
 
-impl FormalKey for AckKey {
-	type Value = ();
+impl FormalKey for AckTsKey {
+	// Timestamp.
+	type Value = i64;
 
-	fn deserialize(&self, _raw: &[u8]) -> Result<Self::Value> {
-		Ok(())
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		Ok(i64::from_be_bytes(raw.try_into()?))
 	}
 
-	fn serialize(&self, _value: Self::Value) -> Result<Vec<u8>> {
-		Ok(Vec::new())
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok(value.to_be_bytes().to_vec())
 	}
 }
 
-impl TuplePack for AckKey {
+impl TuplePack for AckTsKey {
 	fn pack<W: std::io::Write>(
 		&self,
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = ("signal", "data", self.signal_id, "ack");
+		let t = ("signal", "data", self.signal_id, "ack_ts");
 		t.pack(w, tuple_depth)
 	}
 }
 
-impl<'de> TupleUnpack<'de> for AckKey {
+impl<'de> TupleUnpack<'de> for AckTsKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, _, signal_id, _)) =
+		let (input, (_, _, signal_id, data)) =
 			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
-		let v = AckKey { signal_id };
+		if data != "ack_ts" {
+			return Err(PackError::Message("expected \"ack_ts\" data".into()));
+		}
+		
+		let v = AckTsKey { signal_id };
 
 		Ok((input, v))
 	}
@@ -163,8 +172,12 @@ impl TuplePack for CreateTsKey {
 
 impl<'de> TupleUnpack<'de> for CreateTsKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, _, signal_id, _)) =
+		let (input, (_, _, signal_id, data)) =
 			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
+		if data != "create_ts" {
+			return Err(PackError::Message("expected \"create_ts\" data".into()));
+		}
+		
 		let v = CreateTsKey { signal_id };
 
 		Ok((input, v))
@@ -268,9 +281,9 @@ impl TagKey {
 		TagKey { signal_id, k, v }
 	}
 
-	// pub fn subspace(signal_id: Uuid) -> TagSubspaceKey {
-	// 	TagSubspaceKey::new(signal_id)
-	// }
+	pub fn subspace(signal_id: Uuid) -> TagSubspaceKey {
+		TagSubspaceKey::new(signal_id)
+	}
 }
 
 impl FormalKey for TagKey {
@@ -298,34 +311,38 @@ impl TuplePack for TagKey {
 
 impl<'de> TupleUnpack<'de> for TagKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, _, signal_id, _, k, v)) =
+		let (input, (_, _, signal_id, data, k, v)) =
 			<(Cow<str>, Cow<str>, Uuid, Cow<str>, String, String)>::unpack(input, tuple_depth)?;
+		if data != "tag" {
+			return Err(PackError::Message("expected \"tag\" data".into()));
+		}
+
 		let v = TagKey { signal_id, k, v };
 
 		Ok((input, v))
 	}
 }
 
-// pub struct TagSubspaceKey {
-// 	signal_id: Uuid,
-// }
+pub struct TagSubspaceKey {
+	signal_id: Uuid,
+}
 
-// impl TagSubspaceKey {
-// 	pub fn new(signal_id: Uuid) -> Self {
-// 		TagSubspaceKey { signal_id }
-// 	}
-// }
+impl TagSubspaceKey {
+	pub fn new(signal_id: Uuid) -> Self {
+		TagSubspaceKey { signal_id }
+	}
+}
 
-// impl TuplePack for TagSubspaceKey {
-// 	fn pack<W: std::io::Write>(
-// 		&self,
-// 		w: &mut W,
-// 		tuple_depth: TupleDepth,
-// 	) -> std::io::Result<VersionstampOffset> {
-// 		let t = ("signal", "data", self.signal_id, "tag");
-// 		t.pack(w, tuple_depth)
-// 	}
-// }
+impl TuplePack for TagSubspaceKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = ("signal", "data", self.signal_id, "tag");
+		t.pack(w, tuple_depth)
+	}
+}
 
 #[derive(Debug)]
 pub struct RayIdKey {
@@ -363,9 +380,109 @@ impl TuplePack for RayIdKey {
 
 impl<'de> TupleUnpack<'de> for RayIdKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, _, signal_id, _)) =
+		let (input, (_, _, signal_id, data)) =
 			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
+		if data != "ray_id" {
+			return Err(PackError::Message("expected \"ray_id\" data".into()));
+		}
+
 		let v = RayIdKey { signal_id };
+
+		Ok((input, v))
+	}
+}
+
+#[derive(Debug)]
+pub struct NameKey {
+	signal_id: Uuid,
+}
+
+impl NameKey {
+	pub fn new(signal_id: Uuid) -> Self {
+		NameKey { signal_id }
+	}
+}
+
+impl FormalKey for NameKey {
+	type Value = String;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		String::from_utf8(raw.to_vec()).map_err(Into::into)
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok(value.into_bytes())
+	}
+}
+
+impl TuplePack for NameKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = ("signal", "data", self.signal_id, "name");
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for NameKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, signal_id, data)) =
+			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
+		if data != "name" {
+			return Err(PackError::Message("expected \"name\" data".into()));
+		}
+
+		let v = NameKey { signal_id };
+
+		Ok((input, v))
+	}
+}
+
+#[derive(Debug)]
+pub struct WorkflowIdKey {
+	signal_id: Uuid,
+}
+
+impl WorkflowIdKey {
+	pub fn new(signal_id: Uuid) -> Self {
+		WorkflowIdKey { signal_id }
+	}
+}
+
+impl FormalKey for WorkflowIdKey {
+	type Value = Uuid;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		Ok(Uuid::from_slice(raw)?)
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok(value.as_bytes().to_vec())
+	}
+}
+
+impl TuplePack for WorkflowIdKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = ("signal", "data", self.signal_id, "workflow_id");
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for WorkflowIdKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, signal_id, data)) =
+			<(Cow<str>, Cow<str>, Uuid, Cow<str>)>::unpack(input, tuple_depth)?;
+		if data != "workflow_id" {
+			return Err(PackError::Message("expected \"workflow_id\" data".into()));
+		}
+
+		let v = WorkflowIdKey { signal_id };
 
 		Ok((input, v))
 	}

@@ -1,10 +1,13 @@
+use std::sync::Arc;
+
 use anyhow::*;
-use clap::Parser;
+use clap::{ValueEnum, Parser};
 use uuid::Uuid;
+use chirp_workflow::db::{self, Database, debug::{DatabaseDebug, SignalState as OtherSignalState}};
 
 use crate::util::{
 	self,
-	wf::{signal::SignalState, KvPair},
+	wf::KvPair,
 };
 
 #[derive(Parser)]
@@ -30,11 +33,10 @@ pub enum SubCommand {
 }
 
 impl SubCommand {
-	pub async fn execute(self, config: rivet_config::Config) -> Result<()> {
+	pub async fn execute(self, db: Arc<dyn DatabaseDebug>) -> Result<()> {		
 		match self {
 			Self::Get { signal_ids } => {
-				let pool = rivet_pools::db::crdb::setup(config.clone()).await?;
-				let signals = util::wf::signal::get_signals(pool, signal_ids).await?;
+				let signals = db.get_signals(signal_ids).await?;
 				util::wf::signal::print_signals(signals, true).await
 			}
 			Self::List {
@@ -44,15 +46,30 @@ impl SubCommand {
 				state,
 				pretty,
 			} => {
-				let pool = rivet_pools::db::crdb::setup(config.clone()).await?;
 				let signals =
-					util::wf::signal::find_signals(pool, tags, workflow_id, name, state).await?;
+					db.find_signals(tags.into_iter().map(|kv| (kv.key, kv.value)).collect(), workflow_id, name, state.map(Into::into)).await?;
 				util::wf::signal::print_signals(signals, pretty).await
 			}
 			Self::Ack { signal_ids } => {
-				let pool = rivet_pools::db::crdb::setup(config.clone()).await?;
-				util::wf::signal::silence_signals(pool, signal_ids).await
+				db.silence_signals(signal_ids).await
 			}
+		}
+	}
+}
+
+
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[clap(rename_all = "kebab_case")]
+pub enum SignalState {
+	Acked,
+	Pending,
+}
+
+impl From<SignalState> for OtherSignalState {
+	fn from(state: SignalState) -> Self {
+		match state {
+			SignalState::Acked => OtherSignalState::Acked,
+			SignalState::Pending => OtherSignalState::Pending,
 		}
 	}
 }
