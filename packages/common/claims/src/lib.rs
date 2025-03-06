@@ -568,7 +568,7 @@ impl ClaimsDecode for schema::Claims {
 			})
 			.ok_or(err_code!(
 				CLAIMS_MISSING_ENTITLEMENT,
-				entitlement = "ProvisionedServer"
+				entitlements = "ProvisionedServer"
 			))
 			.and_then(std::convert::identity)
 	}

@@ -6,6 +6,8 @@ import * as environments from "./environments";
 import * as core from "./core";
 import { Actor } from "./api/resources/actor/client/Client";
 import { Cloud } from "./api/resources/cloud/client/Client";
+import { CoreIntercom } from "./api/resources/coreIntercom/client/Client";
+import { EdgeIntercom } from "./api/resources/edgeIntercom/client/Client";
 import { Group } from "./api/resources/group/client/Client";
 import { Identity } from "./api/resources/identity/client/Client";
 import { Provision } from "./api/resources/provision/client/Client";
@@ -52,6 +54,18 @@ export class RivetClient {
 
     public get cloud(): Cloud {
         return (this._cloud ??= new Cloud(this._options));
+    }
+
+    protected _coreIntercom: CoreIntercom | undefined;
+
+    public get coreIntercom(): CoreIntercom {
+        return (this._coreIntercom ??= new CoreIntercom(this._options));
+    }
+
+    protected _edgeIntercom: EdgeIntercom | undefined;
+
+    public get edgeIntercom(): EdgeIntercom {
+        return (this._edgeIntercom ??= new EdgeIntercom(this._options));
     }
 
     protected _group: Group | undefined;

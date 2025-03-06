@@ -13,8 +13,8 @@ use uuid::Uuid;
 
 use crate::{
 	error::{WorkflowError, WorkflowResult},
-	message::{redis_keys, AsTags, Message, NatsMessage, NatsMessageWrapper},
-	utils,
+	message::{redis_keys, Message, NatsMessage, NatsMessageWrapper},
+	utils::{self, tags::AsTags},
 };
 
 /// Time (in ms) that we subtract from the anchor grace period in order to

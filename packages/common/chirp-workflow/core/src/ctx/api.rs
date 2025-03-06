@@ -11,9 +11,10 @@ use crate::{
 	},
 	db::DatabaseHandle,
 	error::WorkflowResult,
-	message::{AsTags, Message, NatsMessage},
+	message::{Message, NatsMessage},
 	operation::{Operation, OperationInput},
 	signal::Signal,
+	utils::tags::AsTags,
 	workflow::{Workflow, WorkflowInput},
 };
 
@@ -230,6 +231,14 @@ impl ApiCtx {
 
 	pub async fn clickhouse(&self) -> GlobalResult<ClickHousePool> {
 		self.conn.clickhouse().await
+	}
+
+	pub async fn fdb(&self) -> Result<FdbPool, rivet_pools::Error> {
+		self.conn.fdb().await
+	}
+
+	pub async fn sqlite_for_workflow(&self, workflow_id: Uuid) -> GlobalResult<SqlitePool> {
+		common::sqlite_for_workflow(&self.db, &self.conn, workflow_id, true).await
 	}
 
 	// Backwards compatibility

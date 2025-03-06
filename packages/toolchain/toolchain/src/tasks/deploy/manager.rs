@@ -53,7 +53,7 @@ pub async fn deploy(
 
 	// Check if manager exists
 	let res = apis::actor_api::actor_list(
-		&ctx.openapi_config_cloud,
+		&ctx.openapi_config_actor,
 		Some(&ctx.project.name_id),
 		Some(&opts.env.slug),
 		None,
@@ -70,7 +70,7 @@ pub async fn deploy(
 	let actor = if let Some(actor) = res.actors.into_iter().next() {
 		// Upgrade manager actor
 		apis::actor_api::actor_upgrade(
-			&ctx.openapi_config_cloud,
+			&ctx.openapi_config_actor,
 			&actor.id.to_string(),
 			models::ActorUpgradeActorRequest {
 				build: Some(build_id),
@@ -147,7 +147,7 @@ pub async fn deploy(
 			})),
 		};
 		let response = apis::actor_api::actor_create(
-			&ctx.openapi_config_cloud,
+			&ctx.openapi_config_actor,
 			request,
 			Some(&ctx.project.name_id),
 			Some(&opts.env.slug),

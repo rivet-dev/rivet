@@ -1,5 +1,6 @@
 export * as actor from "./actor";
 export * as cloud from "./cloud";
+export * as edgeIntercom from "./edgeIntercom";
 export * as group from "./group";
 export * as identity from "./identity";
 export * as provision from "./provision";

@@ -166,6 +166,21 @@ impl Database for DatabaseCrdbNats {
 		}
 	}
 
+	async fn update_worker_ping(&self, worker_instance_id: Uuid) -> WorkflowResult<()> {
+		sql_execute!(
+			[self]
+			"
+			UPSERT INTO db_workflow.worker_instances (worker_instance_id, last_ping_ts)
+			VALUES ($1, $2)
+			",
+			worker_instance_id,
+			rivet_util::timestamp::now(),
+		)
+		.await?;
+
+		Ok(())
+	}
+
 	async fn clear_expired_leases(&self, worker_instance_id: Uuid) -> WorkflowResult<()> {
 		let acquired_lock = sql_fetch_optional!(
 			[self, (i64,)]
@@ -226,6 +241,8 @@ impl Database for DatabaseCrdbNats {
 					total_workflows=%rows.len(),
 					"handled failover",
 				);
+
+				self.wake_worker();
 			}
 
 			// Clear lock
@@ -499,7 +516,7 @@ impl Database for DatabaseCrdbNats {
 		_workflow_name: &str,
 		_tags: &serde_json::Value,
 	) -> WorkflowResult<Option<Uuid>> {
-		todo!();
+		unimplemented!();
 	}
 
 	async fn pull_workflows(
@@ -515,119 +532,109 @@ impl Database for DatabaseCrdbNats {
 				sql_fetch_all!(
 					[self, PulledWorkflowRow]
 					"
-					WITH
-						pull_workflows AS (
-							WITH select_pending_workflows AS (
-								SELECT workflow_id
-								FROM db_workflow.workflows@workflows_pred_standard
-								WHERE
-									-- Filter
-									workflow_name = ANY($2) AND
-									-- Not already complete
-									output IS NULL AND
-									-- No assigned node (not running)
-									worker_instance_id IS NULL AND
-									-- Not silenced
-									silence_ts IS NULL AND
-									-- Check for wake condition
-									(
-										-- Immediate
-										wake_immediate OR
-										-- After deadline
-										(
-											wake_deadline_ts IS NOT NULL AND
-											$3 > wake_deadline_ts - $4
-										)
-									)
-								UNION
-								SELECT workflow_id
-								FROM db_workflow.workflows@workflows_pred_signals AS w
-								WHERE
-									-- Filter
-									workflow_name = ANY($2) AND
-									-- Not already complete
-									output IS NULL AND
-									-- No assigned node (not running)
-									worker_instance_id IS NULL AND
-									-- Not silenced
-									silence_ts IS NULL AND
-									-- Has signals to listen to
-									array_length(wake_signals, 1) != 0 AND
-									-- Signal exists
-									(
-										SELECT true
-										FROM db_workflow.signals@signals_partial AS s
-										WHERE
-											s.workflow_id = w.workflow_id AND
-											s.signal_name = ANY(w.wake_signals) AND
-											s.ack_ts IS NULL AND
-											s.silence_ts IS NULL
-										LIMIT 1
-									)
-								UNION
-								SELECT workflow_id
-								FROM db_workflow.workflows@workflows_pred_signals AS w
-								WHERE
-									-- Filter
-									workflow_name = ANY($2) AND
-									-- Not already complete
-									output IS NULL AND
-									-- No assigned node (not running)
-									worker_instance_id IS NULL AND
-									-- Not silenced
-									silence_ts IS NULL AND
-									-- Has signals to listen to
-									array_length(wake_signals, 1) != 0 AND
-									-- Tagged signal exists
-									(
-										SELECT true
-										FROM db_workflow.tagged_signals@tagged_signals_partial AS s
-										WHERE
-											s.signal_name = ANY(w.wake_signals) AND
-											s.tags <@ w.tags AND
-											s.ack_ts IS NULL AND
-											s.silence_ts IS NULL
-										LIMIT 1
-									)
-								UNION
-								SELECT workflow_id
-								FROM db_workflow.workflows@workflows_pred_sub_workflow AS w
-								WHERE
-									-- Filter
-									workflow_name = ANY($2) AND
-									-- Not already complete
-									output IS NULL AND
-									-- No assigned node (not running)
-									worker_instance_id IS NULL AND
-									-- Not silenced
-									silence_ts IS NULL AND
-									wake_sub_workflow_id IS NOT NULL AND
-									-- Sub workflow completed
-									(
-										SELECT true
-										FROM db_workflow.workflows@workflows_pred_sub_workflow_internal AS w2
-										WHERE
-											w2.workflow_id = w.wake_sub_workflow_id AND
-											output IS NOT NULL
-									)
-								LIMIT $5
+					WITH select_pending_workflows AS (
+						SELECT workflow_id
+						FROM db_workflow.workflows@workflows_pred_standard
+						WHERE
+							-- Filter
+							workflow_name = ANY($2) AND
+							-- Not already complete
+							output IS NULL AND
+							-- No assigned node (not running)
+							worker_instance_id IS NULL AND
+							-- Not silenced
+							silence_ts IS NULL AND
+							-- Check for wake condition
+							(
+								-- Immediate
+								wake_immediate OR
+								-- After deadline
+								(
+									wake_deadline_ts IS NOT NULL AND
+									$3 > wake_deadline_ts - $4
+								)
 							)
-							UPDATE db_workflow.workflows@workflows_pkey AS w
-							-- Assign current node to this workflow
-							SET
-								worker_instance_id = $1,
-								last_pull_ts = $3
-							FROM select_pending_workflows AS pw
-							WHERE w.workflow_id = pw.workflow_id
-							RETURNING w.workflow_id, workflow_name, create_ts, ray_id, input
-						),
-						-- Update last ping
-						worker_instance_update AS (
-							UPSERT INTO db_workflow.worker_instances (worker_instance_id, last_ping_ts)
-							VALUES ($1, $3)
-							RETURNING 1
-						)
-					SELECT * FROM pull_workflows
+						UNION
+						SELECT workflow_id
+						FROM db_workflow.workflows@workflows_pred_signals AS w
+						WHERE
+							-- Filter
+							workflow_name = ANY($2) AND
+							-- Not already complete
+							output IS NULL AND
+							-- No assigned node (not running)
+							worker_instance_id IS NULL AND
+							-- Not silenced
+							silence_ts IS NULL AND
+							-- Has signals to listen to
+							array_length(wake_signals, 1) != 0 AND
+							-- Signal exists
+							(
+								SELECT true
+								FROM db_workflow.signals@signals_partial AS s
+								WHERE
+									s.workflow_id = w.workflow_id AND
+									s.signal_name = ANY(w.wake_signals) AND
+									s.ack_ts IS NULL AND
+									s.silence_ts IS NULL
+								LIMIT 1
+							)
+						UNION
+						SELECT workflow_id
+						FROM db_workflow.workflows@workflows_pred_signals AS w
+						WHERE
+							-- Filter
+							workflow_name = ANY($2) AND
+							-- Not already complete
+							output IS NULL AND
+							-- No assigned node (not running)
+							worker_instance_id IS NULL AND
+							-- Not silenced
+							silence_ts IS NULL AND
+							-- Has signals to listen to
+							array_length(wake_signals, 1) != 0 AND
+							-- Tagged signal exists
+							(
+								SELECT true
+								FROM db_workflow.tagged_signals@tagged_signals_partial AS s
+								WHERE
+									s.signal_name = ANY(w.wake_signals) AND
+									s.tags <@ w.tags AND
+									s.ack_ts IS NULL AND
+									s.silence_ts IS NULL
+								LIMIT 1
+							)
+						UNION
+						SELECT workflow_id
+						FROM db_workflow.workflows@workflows_pred_sub_workflow AS w
+						WHERE
+							-- Filter
+							workflow_name = ANY($2) AND
+							-- Not already complete
+							output IS NULL AND
+							-- No assigned node (not running)
+							worker_instance_id IS NULL AND
+							-- Not silenced
+							silence_ts IS NULL AND
+							wake_sub_workflow_id IS NOT NULL AND
+							-- Sub workflow completed
+							(
+								SELECT true
+								FROM db_workflow.workflows@workflows_pred_sub_workflow_internal AS w2
+								WHERE
+									w2.workflow_id = w.wake_sub_workflow_id AND
+									output IS NOT NULL
+							)
+						LIMIT $5
+					)
+					UPDATE db_workflow.workflows@workflows_pkey AS w
+					-- Assign current node to this workflow
+					SET
+						worker_instance_id = $1,
+						last_pull_ts = $3
+					FROM select_pending_workflows AS pw
+					WHERE w.workflow_id = pw.workflow_id
+					RETURNING w.workflow_id, workflow_name, create_ts, ray_id, input
 					",
 					worker_instance_id,
 					filter,
@@ -971,6 +978,15 @@ impl Database for DatabaseCrdbNats {
 			.map_err(WorkflowError::Sqlx)
 		})
 		.await?;
+
+		// Wake worker again if the deadline is before the next tick
+		if let Some(deadline_ts) = wake_deadline_ts {
+			if deadline_ts
+				<= rivet_util::timestamp::now() + worker::TICK_INTERVAL.as_millis() as i64
+			{
+				self.wake_worker();
+			}
+		}
 
 		Ok(())
 	}

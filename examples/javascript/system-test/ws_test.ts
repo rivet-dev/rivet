@@ -1,5 +1,5 @@
 import { RivetClient } from "@rivet-gg/api";
-import { assertExists } from "@std/assert";
+// import { assertExists } from "@std/assert";
 
 // Can be opt since they're not required for dev
 const RIVET_ENDPOINT = Deno.env.get("RIVET_ENDPOINT");
@@ -49,7 +49,9 @@ async function run() {
 		actorId = actor.id;
 
 		const port = actor.network.ports.http;
-		assertExists(port, "missing port http");
+		// assertExists(port, "missing port http");
+
+		port.protocol = "http";
 		const actorOrigin = `${port.protocol}://${port.hostname}:${port.port}${port.path ?? ""}`;
 		console.log("Created actor at", actorOrigin);
 

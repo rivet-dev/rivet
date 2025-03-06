@@ -240,6 +240,7 @@ where
 		self.conn.cache_handle()
 	}
 
+	/// Used by compat layer for chirp workflow.
 	pub fn pools(&self) -> &rivet_pools::Pools {
 		self.conn.pools()
 	}

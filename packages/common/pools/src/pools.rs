@@ -167,8 +167,8 @@ impl Pools {
 		self.0.fdb.clone().ok_or(Error::MissingFdbPool)
 	}
 
-	pub async fn sqlite(&self, key: impl AsRef<str>) -> Result<SqlitePool, Error> {
-		self.0.sqlite.get(key.as_ref()).await
+	pub async fn sqlite(&self, key: impl AsRef<str>, read_only: bool) -> Result<SqlitePool, Error> {
+		self.0.sqlite.get(key.as_ref(), read_only).await
 	}
 
 	#[tracing::instrument(skip_all)]

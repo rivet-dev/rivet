@@ -1,0 +1,40 @@
+[package]
+name = "pegboard"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[features]
+default = ["workflows", "ops"]
+workflows = ["chirp", "foundationdb", "fdb-util"]
+ops = ["chirp"]
+chirp = ["chirp-workflow", "sqlx", "nix", "server-spec"]
+
+[dependencies]
+anyhow = "1.0"
+chirp-workflow = { workspace = true, optional = true }
+fdb-util = { workspace = true, optional = true }
+foundationdb = { workspace = true, optional = true }
+lazy_static = "1.4"
+nix = { version = "0.27", default-features = false, features = ["user", "signal"], optional = true }
+reqwest = { version = "0.11", features = ["json"] }
+rivet-api.workspace = true
+rivet-config.workspace = true
+rivet-metrics.workspace = true
+schemars = { version = "0.8.21", features = ["url", "uuid1"] }
+serde = { version = "1.0.198", features = ["derive"] }
+serde_json = "1.0.132"
+serde_urlencoded = "0.7.0"
+sqlite-util.workspace = true
+strum = { version = "0.24", features = ["derive"] }
+thiserror = "1.0"
+util.workspace = true
+uuid = "1.11.0"
+
+server-spec = { workspace = true, optional = true }
+
+[dependencies.sqlx]
+optional = true
+workspace = true
+features = [ "json", "ipnetwork" ]

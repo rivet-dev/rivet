@@ -26,18 +26,12 @@ pub trait Database: Send {
 	where
 		Self: Sized;
 
-	/// When using a wake worker instead of a polling worker, this function will return once the worker
-	/// should fetch the database again.
-	async fn wake(&self) -> WorkflowResult<()> {
-		tracing::debug!(
-			"{} does not implement Database::wake",
-			std::any::type_name::<Self>(),
-		);
+	/// This function will return once the worker should fetch the database again. Works alongside a polling
+	/// timer.
+	async fn wake(&self) -> WorkflowResult<()>;
 
-		std::future::pending::<()>().await;
-
-		Ok(())
-	}
+	/// Updates the last ping ts for this worker.
+	async fn update_worker_ping(&self, worker_instance_id: Uuid) -> WorkflowResult<()>;
 
 	/// Releases workflows that were leased by workers that have since expired (their last ping has passed
 	/// the expired threshold), making them eligible to be run again. Called periodically.
@@ -284,6 +278,7 @@ impl WorkflowData {
 	}
 }
 
+#[derive(Debug)]
 pub struct PulledWorkflow {
 	pub workflow_id: Uuid,
 	pub workflow_name: String,

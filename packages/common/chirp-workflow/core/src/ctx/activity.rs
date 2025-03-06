@@ -9,8 +9,9 @@ use crate::{
 	},
 	db::DatabaseHandle,
 	error::WorkflowResult,
-	message::{AsTags, Message, NatsMessage},
+	message::{Message, NatsMessage},
 	operation::{Operation, OperationInput},
+	utils::tags::AsTags,
 };
 
 #[derive(Clone)]
@@ -221,6 +222,21 @@ impl ActivityCtx {
 
 	pub async fn clickhouse(&self) -> GlobalResult<ClickHousePool> {
 		self.conn.clickhouse().await
+	}
+
+	pub async fn fdb(&self) -> Result<FdbPool, rivet_pools::Error> {
+		self.conn.fdb().await
+	}
+
+	/// Access the SQLite database for this workflow. This cannot access any other database.
+	pub async fn sqlite(&self) -> Result<SqlitePool, rivet_pools::Error> {
+		self.conn
+			.sqlite(format!("{}-data", self.workflow_id), false)
+			.await
+	}
+
+	pub async fn sqlite_for_workflow(&self, workflow_id: Uuid) -> GlobalResult<SqlitePool> {
+		common::sqlite_for_workflow(&self.db, &self.conn, workflow_id, false).await
 	}
 
 	// Backwards compatibility

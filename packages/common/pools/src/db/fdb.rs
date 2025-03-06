@@ -23,7 +23,11 @@ impl Deref for FdbPool {
 
 #[tracing::instrument(skip(config))]
 pub async fn setup(config: Config) -> Result<FdbPool, Error> {
-	let connection = &config.server().map_err(Error::Global)?.fdb.connection;
+	let connection = &config
+		.server()
+		.map_err(Error::Global)?
+		.foundationdb
+		.connection;
 
 	let temp_file = tempfile::NamedTempFile::new().map_err(Error::BuildFdbConnectionFile)?;
 	fs::write(temp_file.path(), connection.as_bytes())

@@ -1,11 +1,8 @@
-use std::{borrow::Cow, result::Result::Ok};
+use std::result::Result::Ok;
 
-// TODO: Use concrete error types
 use anyhow::*;
-use foundationdb::tuple::{PackResult, TupleDepth, TuplePack, TupleUnpack, VersionstampOffset};
+use fdb_util::prelude::*;
 use uuid::Uuid;
-
-use super::FormalKey;
 
 #[derive(Debug)]
 pub struct LastPingTsKey {

@@ -218,6 +218,10 @@ docs/CloudVersionMatchmakerPortProtocol.md
 docs/CloudVersionMatchmakerPortRange.md
 docs/CloudVersionMatchmakerProxyKind.md
 docs/CloudVersionSummary.md
+docs/CoreIntercomPegboardApi.md
+docs/EdgeIntercomPegboardApi.md
+docs/EdgeIntercomPegboardPrewarmImageRequest.md
+docs/EdgeIntercomPegboardToggleClientDrainRequest.md
 docs/ErrorBody.md
 docs/GameGameSummary.md
 docs/GameHandle.md
@@ -400,6 +404,8 @@ src/apis/cloud_logs_api.rs
 src/apis/cloud_tiers_api.rs
 src/apis/cloud_uploads_api.rs
 src/apis/configuration.rs
+src/apis/core_intercom_pegboard_api.rs
+src/apis/edge_intercom_pegboard_api.rs
 src/apis/games_environments_tokens_api.rs
 src/apis/group_api.rs
 src/apis/group_invites_api.rs
@@ -613,6 +619,8 @@ src/models/cloud_version_matchmaker_port_protocol.rs
 src/models/cloud_version_matchmaker_port_range.rs
 src/models/cloud_version_matchmaker_proxy_kind.rs
 src/models/cloud_version_summary.rs
+src/models/edge_intercom_pegboard_prewarm_image_request.rs
+src/models/edge_intercom_pegboard_toggle_client_drain_request.rs
 src/models/error_body.rs
 src/models/game_game_summary.rs
 src/models/game_handle.rs

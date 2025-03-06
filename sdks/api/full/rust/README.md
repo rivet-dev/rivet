@@ -94,6 +94,9 @@ Class | Method | HTTP request | Description
 *CloudLogsApi* | [**cloud_logs_get_ray_perf_logs**](docs/CloudLogsApi.md#cloud_logs_get_ray_perf_logs) | **GET** /cloud/rays/{ray_id}/perf | 
 *CloudTiersApi* | [**cloud_tiers_get_region_tiers**](docs/CloudTiersApi.md#cloud_tiers_get_region_tiers) | **GET** /cloud/region-tiers | 
 *CloudUploadsApi* | [**cloud_uploads_complete_upload**](docs/CloudUploadsApi.md#cloud_uploads_complete_upload) | **POST** /cloud/uploads/{upload_id}/complete | 
+*CoreIntercomPegboardApi* | [**core_intercom_pegboard_mark_client_registered**](docs/CoreIntercomPegboardApi.md#core_intercom_pegboard_mark_client_registered) | **POST** /pegboard/client/{client_id}/registered | 
+*EdgeIntercomPegboardApi* | [**edge_intercom_pegboard_prewarm_image**](docs/EdgeIntercomPegboardApi.md#edge_intercom_pegboard_prewarm_image) | **POST** /pegboard/image/{image_id}/prewarm | 
+*EdgeIntercomPegboardApi* | [**edge_intercom_pegboard_toggle_client_drain**](docs/EdgeIntercomPegboardApi.md#edge_intercom_pegboard_toggle_client_drain) | **POST** /pegboard/client/{client_id}/toggle-drain | 
 *GamesEnvironmentsTokensApi* | [**games_environments_tokens_create_service_token**](docs/GamesEnvironmentsTokensApi.md#games_environments_tokens_create_service_token) | **POST** /games/{game_id}/environments/{environment_id}/tokens/service | 
 *GroupApi* | [**group_ban_identity**](docs/GroupApi.md#group_ban_identity) | **POST** /group/groups/{group_id}/bans/{identity_id} | 
 *GroupApi* | [**group_complete_avatar_upload**](docs/GroupApi.md#group_complete_avatar_upload) | **POST** /group/groups/{group_id}/avatar-upload/{upload_id}/complete | 
@@ -358,6 +361,8 @@ Class | Method | HTTP request | Description
  - [CloudVersionMatchmakerPortRange](docs/CloudVersionMatchmakerPortRange.md)
  - [CloudVersionMatchmakerProxyKind](docs/CloudVersionMatchmakerProxyKind.md)
  - [CloudVersionSummary](docs/CloudVersionSummary.md)
+ - [EdgeIntercomPegboardPrewarmImageRequest](docs/EdgeIntercomPegboardPrewarmImageRequest.md)
+ - [EdgeIntercomPegboardToggleClientDrainRequest](docs/EdgeIntercomPegboardToggleClientDrainRequest.md)
  - [ErrorBody](docs/ErrorBody.md)
  - [GameGameSummary](docs/GameGameSummary.md)
  - [GameHandle](docs/GameHandle.md)

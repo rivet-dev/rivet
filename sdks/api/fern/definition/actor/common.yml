@@ -86,20 +86,7 @@ types:
       host: optional<HostRouting>
 
   GuardRouting:
-    properties:
-      {}
-      # Temporarily disabled
-      # authorization: optional<PortAuthorization>
-
-  # PortAuthorization:
-  #   properties:
-  #     bearer: optional<string>
-  #     query: optional<PortQueryAuthorization>
-
-  # PortQueryAuthorization:
-  #   properties:
-  #     key: string
-  #     value: string
+    properties: {}
 
   HostRouting:
     properties: {}

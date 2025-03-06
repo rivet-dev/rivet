@@ -1,10 +1,13 @@
 use std::time::Duration;
 
 use global_error::{GlobalError, GlobalResult};
+use rivet_pools::prelude::*;
 use uuid::Uuid;
 
+use crate::utils::tags::AsTags;
+
 /// Poll interval when polling for a sub workflow in-process
-pub const SUB_WORKFLOW_RETRY: Duration = Duration::from_millis(500);
+pub const SUB_WORKFLOW_RETRY: Duration = Duration::from_millis(350);
 /// Time to delay a workflow from retrying after an error
 pub const RETRY_TIMEOUT_MS: usize = 2000;
 pub const WORKFLOW_TIMEOUT: Duration = Duration::from_secs(60);
@@ -46,6 +49,16 @@ pub async fn wait_for_workflow<W: Workflow>(
 	.await?
 }
 
+/// Finds the first workflow with the given tags.
+pub async fn find_workflow<W: Workflow>(
+	db: &DatabaseHandle,
+	tags: impl AsTags,
+) -> GlobalResult<Option<Uuid>> {
+	db.find_workflow(W::NAME, &tags.as_tags()?)
+		.await
+		.map_err(GlobalError::raw)
+}
+
 pub async fn op<I>(
 	db: &DatabaseHandle,
 	config: &rivet_config::Config,
@@ -82,4 +95,22 @@ where
 	tracing::debug!(?res, "operation response");
 
 	res
+}
+
+pub async fn sqlite_for_workflow(
+	db: &DatabaseHandle,
+	conn: &rivet_connection::Connection,
+	workflow_id: Uuid,
+	read_only: bool,
+) -> GlobalResult<SqlitePool> {
+	// Validate workflow exists
+	db.get_workflow(workflow_id)
+		.await
+		.map_err(GlobalError::raw)?
+		.ok_or(WorkflowError::WorkflowNotFound)
+		.map_err(GlobalError::raw)?;
+
+	conn.sqlite(format!("{}-data", workflow_id), read_only)
+		.await
+		.map_err(Into::into)
 }

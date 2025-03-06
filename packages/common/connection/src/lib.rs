@@ -94,6 +94,18 @@ impl Connection {
 		self.pools.redis("ephemeral")
 	}
 
+	pub async fn fdb(&self) -> Result<FdbPool, rivet_pools::Error> {
+		self.pools.fdb()
+	}
+
+	pub async fn sqlite(
+		&self,
+		key: impl AsRef<str>,
+		read_only: bool,
+	) -> Result<SqlitePool, rivet_pools::Error> {
+		self.pools.sqlite(key, read_only).await
+	}
+
 	pub fn perf(&self) -> &chirp_perf::PerfCtx {
 		self.client.perf()
 	}

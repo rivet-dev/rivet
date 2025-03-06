@@ -21,10 +21,11 @@ ON workflow_activity_events (loop_location)
 WHERE NOT forgotten;
 
 CREATE TABLE workflow_activity_errors (
-  location BLOB PRIMARY KEY, -- JSONB
+  location BLOB NOT NULL, -- JSONB
   activity_name TEXT NOT NULL,
   error TEXT NOT NULL,
   ts INT NOT NULL,
+
   FOREIGN KEY (location) REFERENCES workflow_activity_events (location)
 ) STRICT;
 

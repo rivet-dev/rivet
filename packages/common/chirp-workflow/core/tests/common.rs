@@ -109,12 +109,17 @@ pub async fn create_fdb_db() {
 
 static SETUP_DEPENDENCIES: AtomicBool = AtomicBool::new(false);
 
-pub async fn setup_dependencies() {
+pub async fn setup_dependencies(fdb: bool) {
 	if !SETUP_DEPENDENCIES.swap(true, Ordering::SeqCst) {
 		tokio::spawn(start_nats());
 		tokio::spawn(start_redis());
-		tokio::spawn(start_fdb());
-		create_fdb_db().await;
+
+		if fdb {
+			tokio::spawn(start_fdb());
+			create_fdb_db().await;
+		} else {
+			tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+		}
 	}
 }
 
@@ -125,7 +130,7 @@ pub fn setup_tracing() {
 			.with(
 				tracing_logfmt::builder()
 					.layer()
-					.with_filter(tracing_subscriber::filter::LevelFilter::INFO),
+					.with_filter(tracing_subscriber::filter::LevelFilter::DEBUG),
 			)
 			.init();
 	});

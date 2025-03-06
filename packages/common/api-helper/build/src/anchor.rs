@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 /// This is used to block a request until a new event has occurred.
 #[derive(Debug, Clone, Deserialize)]
 pub struct WatchIndexQuery {
-	watch_index: Option<String>,
+	pub watch_index: Option<String>,
 }
 
 impl WatchIndexQuery {

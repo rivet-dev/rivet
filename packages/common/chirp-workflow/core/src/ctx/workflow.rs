@@ -633,7 +633,7 @@ impl WorkflowCtx {
 
 			T::parse(&signal.name, &signal.body).map_err(GlobalError::raw)?
 		}
-		// Listen for new messages
+		// Listen for new signal
 		else {
 			tracing::debug!(name=%self.name, id=%self.workflow_id, "listening for signal");
 
@@ -688,7 +688,7 @@ impl WorkflowCtx {
 
 			T::parse(&signal.name, &signal.body).map_err(GlobalError::raw)?
 		}
-		// Listen for new messages
+		// Listen for new signal
 		else {
 			tracing::debug!(name=%self.name, id=%self.workflow_id, "listening for signal");
 
@@ -959,8 +959,7 @@ impl WorkflowCtx {
 		Ok(())
 	}
 
-	/// Listens for a signal for a short time with a timeout before setting the workflow to sleep. Once the
-	/// signal is received, the workflow will be woken up and continue.
+	/// Listens for a signal with a timeout. Returns `None` if the timeout is reached.
 	///
 	/// Internally this is a sleep event and a signal event.
 	pub async fn listen_with_timeout<T: Listen>(
@@ -968,6 +967,20 @@ impl WorkflowCtx {
 		duration: impl DurationToMillis,
 	) -> GlobalResult<Option<T>> {
 		let time = (rivet_util::timestamp::now() as u64 + duration.to_millis()?) as i64;
+
+		self.listen_until(time).await
+	}
+
+	// TODO: Potential bad transaction: if the signal gets pulled and saved in history but an error occurs
+	// before the sleep event state is set to "interrupted", the next time this workflow is run it will error
+	// because it tries to pull a signal again
+	/// Listens for a signal until the given timestamp. Returns `None` if the timestamp is reached.
+	///
+	/// Internally this is a sleep event and a signal event.
+	pub async fn listen_until<T: Listen>(
+		&mut self,
+		time: impl TsToMillis,
+	) -> GlobalResult<Option<T>> {
 		let history_res = self
 			.cursor
 			.compare_sleep(self.version)

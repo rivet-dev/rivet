@@ -135,6 +135,8 @@ pub mod cloud_groups_api;
 pub mod cloud_logs_api;
 pub mod cloud_tiers_api;
 pub mod cloud_uploads_api;
+pub mod core_intercom_pegboard_api;
+pub mod edge_intercom_pegboard_api;
 pub mod games_environments_tokens_api;
 pub mod group_api;
 pub mod group_invites_api;

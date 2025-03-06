@@ -32,6 +32,9 @@ pub enum GlobalError {
 		code: String,
 		context: HashMap<String, String>,
 		metadata: Option<String>, // JSON string
+
+		override_http_status: Option<StatusCode>,
+		override_message: Option<String>,
 	},
 	/// Any kind of error, but stored dynamically. This is used to downcast the error back into its original
 	/// type if needed.
@@ -87,6 +90,9 @@ impl GlobalError {
 			code: code.to_string(),
 			context: HashMap::new(),
 			metadata: None,
+
+			override_http_status: None,
+			override_message: None,
 		}
 	}
 
@@ -94,7 +100,7 @@ impl GlobalError {
 		GlobalError::Raw(Box::new(err))
 	}
 
-	pub fn bad_request_builder(code: &'static str) -> BadRequestBuilder {
+	pub fn bad_request_builder<'a>(code: &'a str) -> BadRequestBuilder<'a> {
 		BadRequestBuilder::new(code)
 	}
 
@@ -109,7 +115,9 @@ impl GlobalError {
 	pub fn http_status(&self) -> StatusCode {
 		match self {
 			GlobalError::Internal { .. } | GlobalError::Raw(_) => StatusCode::INTERNAL_SERVER_ERROR,
-			GlobalError::BadRequest { code, .. } => formatted_error::parse(code).http_status(),
+			GlobalError::BadRequest { code, override_http_status, .. } => {
+				override_http_status.unwrap_or_else(|| formatted_error::parse(code).http_status())
+			}
 		}
 	}
 
@@ -123,8 +131,10 @@ impl GlobalError {
 	pub fn message(&self) -> String {
 		match self {
 			GlobalError::Internal { .. } => format!("{}", self),
-			GlobalError::BadRequest { code, context, .. } => {
-				if context.is_empty() {
+			GlobalError::BadRequest { code, context, override_message, .. } => {
+				if let Some(override_message) = override_message {
+					override_message.clone()
+				} else if context.is_empty() {
 					formatted_error::parse(code).description()
 				} else {
 					formatted_error::parse(code).format_description(context)
@@ -183,6 +193,7 @@ impl From<GlobalError> for chirp::response::Err {
 				code,
 				context,
 				metadata,
+				..
 			} => chirp::response::Err {
 				kind: Some(chirp::response::err::Kind::BadRequest(
 					chirp::response::err::BadRequest {
@@ -226,30 +237,46 @@ impl From<GlobalError> for chirp::response::Err {
 }
 
 #[derive(Default)]
-pub struct BadRequestBuilder {
-	code: &'static str,
+pub struct BadRequestBuilder<'a> {
+	code: &'a str,
 	context: Option<HashMap<String, String>>,
 	metadata: Option<serde_json::Value>,
+	http_status: Option<StatusCode>,
+	message: Option<String>,
 }
 
-impl BadRequestBuilder {
-	pub fn new(code: &'static str) -> BadRequestBuilder {
+impl<'a> BadRequestBuilder<'a> {
+	pub fn new(code: &'a str) -> BadRequestBuilder<'a> {
 		BadRequestBuilder {
 			code,
 			..Default::default()
 		}
 	}
 
-	pub fn context(mut self, context: HashMap<String, String>) -> BadRequestBuilder {
+	pub fn context(mut self, context: HashMap<String, String>) -> BadRequestBuilder<'a> {
 		self.context = Some(context);
 
 		self
 	}
 
-	pub fn metadata<T: Serialize>(mut self, metadata: T) -> GlobalResult<BadRequestBuilder> {
+	pub fn metadata<T: Serialize>(mut self, metadata: T) -> GlobalResult<BadRequestBuilder<'a>> {
 		self.metadata = Some(serde_json::to_value(metadata)?);
 
 		Ok(self)
+	}
+
+	/// Override the default http status of the error.
+	pub fn http_status(mut self, http_status: StatusCode) -> BadRequestBuilder<'a> {
+		self.http_status = Some(http_status);
+
+		self
+	}
+
+	/// Override the default message of the error.
+	pub fn message(mut self, message: String) -> BadRequestBuilder<'a> {
+		self.message = Some(message);
+
+		self
 	}
 
 	pub fn build(self) -> GlobalError {
@@ -257,6 +284,8 @@ impl BadRequestBuilder {
 			code: self.code.to_string(),
 			context: self.context.unwrap_or_default(),
 			metadata: self.metadata.map(|m| m.to_string()),
+			override_http_status: self.http_status,
+			override_message: self.message,
 		}
 	}
 }

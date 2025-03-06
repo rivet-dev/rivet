@@ -2063,6 +2063,175 @@ paths:
             schema:
               $ref: >-
                 #/components/schemas/CloudGamesNamespacesUpdateGameNamespaceVersionRequest
+  /pegboard/client/{client_id}/registered:
+    post:
+      operationId: coreIntercom_pegboard_markClientRegistered
+      tags:
+        - CoreIntercomPegboard
+      parameters:
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: ''
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+  /pegboard/image/{image_id}/prewarm:
+    post:
+      operationId: edgeIntercom_pegboard_prewarmImage
+      tags:
+        - EdgeIntercomPegboard
+      parameters:
+        - name: image_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: ''
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EdgeIntercomPegboardPrewarmImageRequest'
+  /pegboard/client/{client_id}/toggle-drain:
+    post:
+      operationId: edgeIntercom_pegboard_toggleClientDrain
+      tags:
+        - EdgeIntercomPegboard
+      parameters:
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: ''
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: >-
+                #/components/schemas/EdgeIntercomPegboardToggleClientDrainRequest
   /group/groups:
     get:
       description: Returns a list of suggested groups.
@@ -9572,6 +9741,22 @@ components:
           description: |-
             **Deprecated: use `game_modes` instead**
             A list of game modes.
+    EdgeIntercomPegboardPrewarmImageRequest:
+      type: object
+      properties:
+        image_artifact_url_stub:
+          type: string
+      required:
+        - image_artifact_url_stub
+    EdgeIntercomPegboardToggleClientDrainRequest:
+      type: object
+      properties:
+        draining:
+          type: boolean
+        drain_complete_ts:
+          $ref: '#/components/schemas/Timestamp'
+      required:
+        - draining
     GroupListSuggestedResponse:
       type: object
       properties:

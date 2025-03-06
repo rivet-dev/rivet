@@ -448,6 +448,8 @@ impl Client {
 							code: err.code,
 							context: err.context,
 							metadata: err.metadata,
+							override_http_status: None,
+							override_message: None,
 						}))
 					}
 					None => {

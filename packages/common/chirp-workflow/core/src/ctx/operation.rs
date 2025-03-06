@@ -12,9 +12,10 @@ use crate::{
 	},
 	db::DatabaseHandle,
 	error::WorkflowResult,
-	message::{AsTags, Message, NatsMessage},
+	message::{Message, NatsMessage},
 	operation::{Operation, OperationInput},
 	signal::Signal,
+	utils::tags::AsTags,
 	workflow::{Workflow, WorkflowInput},
 };
 
@@ -99,6 +100,14 @@ impl OperationCtx {
 		)
 	}
 
+	/// Finds the first workflow with the given tags.
+	pub async fn find_workflow<W: Workflow>(
+		&self,
+		tags: impl AsTags,
+	) -> GlobalResult<Option<Uuid>> {
+		common::find_workflow::<W>(&self.db, tags).await
+	}
+
 	/// Creates a signal builder.
 	pub fn signal<T: Signal + Serialize>(&self, body: T) -> builder::signal::SignalBuilder<T> {
 		// TODO: Add check for from_workflow so you cant dispatch a signal
@@ -125,7 +134,7 @@ impl OperationCtx {
 			&self.conn,
 			self.ray_id,
 			self.op_ctx.req_ts(),
-			self.op_ctx.from_workflow(),
+			self.op_ctx.from_workflow,
 			input,
 		)
 		.await
@@ -241,6 +250,20 @@ impl OperationCtx {
 
 	pub async fn clickhouse(&self) -> GlobalResult<ClickHousePool> {
 		self.conn.clickhouse().await
+	}
+
+	pub async fn fdb(&self) -> Result<FdbPool, rivet_pools::Error> {
+		self.conn.fdb().await
+	}
+
+	pub async fn sqlite_for_workflow(&self, workflow_id: Uuid) -> GlobalResult<SqlitePool> {
+		common::sqlite_for_workflow(
+			&self.db,
+			&self.conn,
+			workflow_id,
+			!self.op_ctx.from_workflow,
+		)
+		.await
 	}
 
 	// Backwards compatibility

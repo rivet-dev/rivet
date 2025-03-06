@@ -18,6 +18,8 @@ use crate::{
 	ctx::Ctx,
 };
 
+pub type DefaultDbDriver = chirp_workflow::db::DatabaseCrdbNats;
+
 pub mod __metrics {
 	pub use crate::metrics::*;
 }
@@ -235,7 +237,10 @@ pub fn __deserialize_query<T: DeserializeOwned + Send>(route: &Url) -> GlobalRes
 }
 
 #[doc(hidden)]
-pub async fn __with_ctx<A: auth::ApiAuth + Send>(
+pub async fn __with_ctx<
+	A: auth::ApiAuth + Send,
+	DB: chirp_workflow::db::Database + Sync + 'static,
+>(
 	shared_client: chirp_client::SharedClientHandle,
 	config: rivet_config::Config,
 	pools: rivet_pools::Pools,
@@ -342,7 +347,7 @@ pub async fn __with_ctx<A: auth::ApiAuth + Send>(
 		}],
 	);
 	let conn = rivet_connection::Connection::new(client, pools.clone(), cache.clone());
-	let db = chirp_workflow::compat::db_from_pools(&pools).await?;
+	let db = DB::from_pools(pools.clone())?;
 	let internal_ctx = ApiCtx::new(
 		db,
 		config.clone(),

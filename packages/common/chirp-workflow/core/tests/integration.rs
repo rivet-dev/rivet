@@ -8,7 +8,7 @@ use common::*;
 #[tokio::test(flavor = "multi_thread")]
 async fn fdb_sqlite_nats_driver() {
 	setup_tracing();
-	setup_dependencies().await;
+	setup_dependencies(true).await;
 
 	let ctx = chirp_workflow::prelude::TestCtx::from_env::<db::DatabaseFdbSqliteNats>(
 		"fdb_sqlite_nats_driver",
@@ -81,7 +81,7 @@ async fn fdb_sqlite_nats_driver() {
 
 	// Start worker
 	tokio::select! {
-		res = worker.poll_start(config, pools) => res.unwrap(),
+		res = worker.start(config, pools) => res.unwrap(),
 		res = tokio::signal::ctrl_c() => res.unwrap(),
 	}
 }

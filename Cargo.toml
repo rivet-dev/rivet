@@ -1,7 +1,7 @@
 
 [workspace]
 resolver = "2"
-members = ["packages/api/actor","packages/api/auth","packages/api/cf-verification","packages/api/cloud","packages/api/games","packages/api/group","packages/api/identity","packages/api/job","packages/api/matchmaker","packages/api/monolith-edge","packages/api/monolith-public","packages/api/portal","packages/api/provision","packages/api/status","packages/api/traefik-provider","packages/api/ui","packages/common/api-helper/build","packages/common/api-helper/macros","packages/common/cache/build","packages/common/cache/result","packages/common/chirp-workflow/core","packages/common/chirp-workflow/macros","packages/common/chirp/client","packages/common/chirp/metrics","packages/common/chirp/perf","packages/common/chirp/types","packages/common/chirp/worker","packages/common/chirp/worker-attributes","packages/common/claims","packages/common/config","packages/common/connection","packages/common/convert","packages/common/deno-embed","packages/common/env","packages/common/fdb-util","packages/common/formatted-error","packages/common/global-error","packages/common/health-checks","packages/common/hub-embed","packages/common/kv-str","packages/common/metrics","packages/common/migrate","packages/common/nomad-util","packages/common/operation/core","packages/common/operation/macros","packages/common/pools","packages/common/redis-util","packages/common/runtime","packages/common/s3-util","packages/common/schemac","packages/common/server-cli","packages/common/service-manager","packages/common/smithy-output/api-auth/rust","packages/common/smithy-output/api-auth/rust-server","packages/common/smithy-output/api-cf-verification/rust","packages/common/smithy-output/api-cf-verification/rust-server","packages/common/smithy-output/api-cloud/rust","packages/common/smithy-output/api-cloud/rust-server","packages/common/smithy-output/api-group/rust","packages/common/smithy-output/api-group/rust-server","packages/common/smithy-output/api-identity/rust","packages/common/smithy-output/api-identity/rust-server","packages/common/smithy-output/api-job/rust","packages/common/smithy-output/api-job/rust-server","packages/common/smithy-output/api-kv/rust","packages/common/smithy-output/api-kv/rust-server","packages/common/smithy-output/api-matchmaker/rust","packages/common/smithy-output/api-matchmaker/rust-server","packages/common/smithy-output/api-party/rust","packages/common/smithy-output/api-party/rust-server","packages/common/smithy-output/api-portal/rust","packages/common/smithy-output/api-portal/rust-server","packages/common/smithy-output/api-status/rust","packages/common/smithy-output/api-status/rust-server","packages/common/smithy-output/api-traefik-provider/rust","packages/common/smithy-output/api-traefik-provider/rust-server","packages/common/sqlite-util","packages/common/test","packages/common/test-images","packages/common/types-proto/build","packages/common/types-proto/core","packages/common/util/core","packages/common/util/macros","packages/common/util/search","packages/infra/client/actor-kv","packages/infra/client/config","packages/infra/client/container-runner","packages/infra/client/echo","packages/infra/client/isolate-v8-runner","packages/infra/client/logs","packages/infra/client/manager","packages/infra/edge-server","packages/infra/legacy/job-runner","packages/infra/schema-generator","packages/infra/server","packages/services/build","packages/services/build/ops/create","packages/services/build/ops/get","packages/services/build/ops/list-for-env","packages/services/build/ops/list-for-game","packages/services/build/standalone/default-create","packages/services/build/util","packages/services/captcha/ops/hcaptcha-config-get","packages/services/captcha/ops/hcaptcha-verify","packages/services/captcha/ops/request","packages/services/captcha/ops/turnstile-config-get","packages/services/captcha/ops/turnstile-verify","packages/services/captcha/ops/verify","packages/services/captcha/util","packages/services/cdn/ops/namespace-auth-user-remove","packages/services/cdn/ops/namespace-auth-user-update","packages/services/cdn/ops/namespace-create","packages/services/cdn/ops/namespace-domain-create","packages/services/cdn/ops/namespace-domain-remove","packages/services/cdn/ops/namespace-get","packages/services/cdn/ops/namespace-resolve-domain","packages/services/cdn/ops/ns-auth-type-set","packages/services/cdn/ops/ns-enable-domain-public-auth-set","packages/services/cdn/ops/site-create","packages/services/cdn/ops/site-get","packages/services/cdn/ops/site-list-for-game","packages/services/cdn/ops/version-get","packages/services/cdn/ops/version-prepare","packages/services/cdn/ops/version-publish","packages/services/cdn/util","packages/services/cdn/worker","packages/services/cf-custom-hostname/ops/get","packages/services/cf-custom-hostname/ops/list-for-namespace-id","packages/services/cf-custom-hostname/ops/resolve-hostname","packages/services/cf-custom-hostname/worker","packages/services/cloud/ops/device-link-create","packages/services/cloud/ops/game-config-create","packages/services/cloud/ops/game-config-get","packages/services/cloud/ops/game-token-create","packages/services/cloud/ops/namespace-create","packages/services/cloud/ops/namespace-get","packages/services/cloud/ops/namespace-token-development-create","packages/services/cloud/ops/namespace-token-public-create","packages/services/cloud/ops/version-get","packages/services/cloud/ops/version-publish","packages/services/cloud/standalone/default-create","packages/services/cloud/worker","packages/services/cluster","packages/services/cluster/standalone/datacenter-tls-renew","packages/services/cluster/standalone/default-update","packages/services/cluster/standalone/gc","packages/services/cluster/standalone/metrics-publish","packages/services/custom-user-avatar/ops/list-for-game","packages/services/custom-user-avatar/ops/upload-complete","packages/services/debug/ops/email-res","packages/services/ds","packages/services/ds-log/ops/export","packages/services/ds-log/ops/read","packages/services/dynamic-config","packages/services/edge/monolith/standalone/workflow-worker","packages/services/edge/pegboard","packages/services/email-verification/ops/complete","packages/services/email-verification/ops/create","packages/services/email/ops/send","packages/services/external/ops/request-validate","packages/services/external/worker","packages/services/faker/ops/build","packages/services/faker/ops/cdn-site","packages/services/faker/ops/game","packages/services/faker/ops/game-namespace","packages/services/faker/ops/game-version","packages/services/faker/ops/job-run","packages/services/faker/ops/job-template","packages/services/faker/ops/mm-lobby","packages/services/faker/ops/mm-lobby-row","packages/services/faker/ops/mm-player","packages/services/faker/ops/region","packages/services/faker/ops/team","packages/services/faker/ops/user","packages/services/game/ops/banner-upload-complete","packages/services/game/ops/create","packages/services/game/ops/get","packages/services/game/ops/list-all","packages/services/game/ops/list-for-team","packages/services/game/ops/logo-upload-complete","packages/services/game/ops/namespace-create","packages/services/game/ops/namespace-get","packages/services/game/ops/namespace-list","packages/services/game/ops/namespace-resolve-name-id","packages/services/game/ops/namespace-resolve-url","packages/services/game/ops/namespace-validate","packages/services/game/ops/namespace-version-history-list","packages/services/game/ops/namespace-version-set","packages/services/game/ops/recommend","packages/services/game/ops/resolve-name-id","packages/services/game/ops/resolve-namespace-id","packages/services/game/ops/token-development-validate","packages/services/game/ops/validate","packages/services/game/ops/version-create","packages/services/game/ops/version-get","packages/services/game/ops/version-list","packages/services/game/ops/version-validate","packages/services/ip/ops/info","packages/services/job-log/ops/read","packages/services/job-log/worker","packages/services/job-run","packages/services/job/standalone/gc","packages/services/job/util","packages/services/linode","packages/services/linode/standalone/gc","packages/services/load-test/standalone/api-cloud","packages/services/load-test/standalone/mm","packages/services/load-test/standalone/mm-sustain","packages/services/load-test/standalone/sqlx","packages/services/load-test/standalone/watch-requests","packages/services/mm-config/ops/game-get","packages/services/mm-config/ops/game-upsert","packages/services/mm-config/ops/lobby-group-get","packages/services/mm-config/ops/lobby-group-resolve-name-id","packages/services/mm-config/ops/lobby-group-resolve-version","packages/services/mm-config/ops/namespace-config-set","packages/services/mm-config/ops/namespace-config-validate","packages/services/mm-config/ops/namespace-create","packages/services/mm-config/ops/namespace-get","packages/services/mm-config/ops/version-get","packages/services/mm-config/ops/version-prepare","packages/services/mm-config/ops/version-publish","packages/services/mm/ops/dev-player-token-create","packages/services/mm/ops/lobby-find-fail","packages/services/mm/ops/lobby-find-lobby-query-list","packages/services/mm/ops/lobby-find-try-complete","packages/services/mm/ops/lobby-for-run-id","packages/services/mm/ops/lobby-get","packages/services/mm/ops/lobby-history","packages/services/mm/ops/lobby-idle-update","packages/services/mm/ops/lobby-list-for-namespace","packages/services/mm/ops/lobby-list-for-user-id","packages/services/mm/ops/lobby-player-count","packages/services/mm/ops/lobby-runtime-aggregate","packages/services/mm/ops/lobby-state-get","packages/services/mm/ops/player-count-for-namespace","packages/services/mm/ops/player-get","packages/services/mm/standalone/gc","packages/services/mm/util","packages/services/mm/worker","packages/services/monolith/standalone/worker","packages/services/monolith/standalone/workflow-worker","packages/services/nomad/standalone/monitor","packages/services/pegboard","packages/services/pegboard/standalone/dc-init","packages/services/pegboard/standalone/gc","packages/services/pegboard/standalone/metrics-publish","packages/services/pegboard/standalone/ws","packages/services/region/ops/get","packages/services/region/ops/list","packages/services/region/ops/list-for-game","packages/services/region/ops/recommend","packages/services/region/ops/resolve","packages/services/region/ops/resolve-for-game","packages/services/server-spec","packages/services/team-invite/ops/get","packages/services/team-invite/worker","packages/services/team/ops/avatar-upload-complete","packages/services/team/ops/get","packages/services/team/ops/join-request-list","packages/services/team/ops/member-count","packages/services/team/ops/member-get","packages/services/team/ops/member-list","packages/services/team/ops/member-relationship-get","packages/services/team/ops/profile-validate","packages/services/team/ops/recommend","packages/services/team/ops/resolve-display-name","packages/services/team/ops/user-ban-get","packages/services/team/ops/user-ban-list","packages/services/team/ops/validate","packages/services/team/util","packages/services/team/worker","packages/services/telemetry/standalone/beacon","packages/services/tier","packages/services/token/ops/create","packages/services/token/ops/exchange","packages/services/token/ops/get","packages/services/token/ops/revoke","packages/services/upload/ops/complete","packages/services/upload/ops/file-list","packages/services/upload/ops/get","packages/services/upload/ops/list-for-user","packages/services/upload/ops/prepare","packages/services/upload/worker","packages/services/user","packages/services/user-identity/ops/create","packages/services/user-identity/ops/delete","packages/services/user-identity/ops/get","packages/services/user/ops/avatar-upload-complete","packages/services/user/ops/get","packages/services/user/ops/pending-delete-toggle","packages/services/user/ops/profile-validate","packages/services/user/ops/resolve-email","packages/services/user/ops/team-list","packages/services/user/ops/token-create","packages/services/user/standalone/delete-pending","packages/services/user/worker","packages/toolchain/actors-sdk-embed","packages/toolchain/cli","packages/toolchain/js-utils-embed","packages/toolchain/toolchain","sdks/api/full/rust"]
+members = ["packages/common/api-helper/build","packages/common/api-helper/macros","packages/common/cache/build","packages/common/cache/result","packages/common/chirp-workflow/core","packages/common/chirp-workflow/macros","packages/common/chirp/client","packages/common/chirp/metrics","packages/common/chirp/perf","packages/common/chirp/types","packages/common/chirp/worker","packages/common/chirp/worker-attributes","packages/common/claims","packages/common/config","packages/common/connection","packages/common/convert","packages/common/deno-embed","packages/common/env","packages/common/fdb-util","packages/common/formatted-error","packages/common/global-error","packages/common/health-checks","packages/common/hub-embed","packages/common/kv-str","packages/common/metrics","packages/common/migrate","packages/common/nomad-util","packages/common/operation/core","packages/common/operation/macros","packages/common/pools","packages/common/redis-util","packages/common/runtime","packages/common/s3-util","packages/common/schemac","packages/common/server-cli","packages/common/service-manager","packages/common/smithy-output/api-auth/rust","packages/common/smithy-output/api-auth/rust-server","packages/common/smithy-output/api-cf-verification/rust","packages/common/smithy-output/api-cf-verification/rust-server","packages/common/smithy-output/api-cloud/rust","packages/common/smithy-output/api-cloud/rust-server","packages/common/smithy-output/api-group/rust","packages/common/smithy-output/api-group/rust-server","packages/common/smithy-output/api-identity/rust","packages/common/smithy-output/api-identity/rust-server","packages/common/smithy-output/api-job/rust","packages/common/smithy-output/api-job/rust-server","packages/common/smithy-output/api-kv/rust","packages/common/smithy-output/api-kv/rust-server","packages/common/smithy-output/api-matchmaker/rust","packages/common/smithy-output/api-matchmaker/rust-server","packages/common/smithy-output/api-party/rust","packages/common/smithy-output/api-party/rust-server","packages/common/smithy-output/api-portal/rust","packages/common/smithy-output/api-portal/rust-server","packages/common/smithy-output/api-status/rust","packages/common/smithy-output/api-status/rust-server","packages/common/smithy-output/api-traefik-provider/rust","packages/common/smithy-output/api-traefik-provider/rust-server","packages/common/sqlite-util","packages/common/test","packages/common/test-images","packages/common/types-proto/build","packages/common/types-proto/core","packages/common/util/core","packages/common/util/macros","packages/common/util/search","packages/core/api/actor","packages/core/api/auth","packages/core/api/cf-verification","packages/core/api/cloud","packages/core/api/games","packages/core/api/group","packages/core/api/identity","packages/core/api/intercom","packages/core/api/job","packages/core/api/matchmaker","packages/core/api/monolith-edge","packages/core/api/monolith-public","packages/core/api/portal","packages/core/api/provision","packages/core/api/status","packages/core/api/traefik-provider","packages/core/api/ui","packages/core/infra/client/actor-kv","packages/core/infra/client/config","packages/core/infra/client/container-runner","packages/core/infra/client/echo","packages/core/infra/client/isolate-v8-runner","packages/core/infra/client/logs","packages/core/infra/client/manager","packages/core/infra/legacy/job-runner","packages/core/infra/schema-generator","packages/core/infra/server","packages/core/services/build","packages/core/services/build/ops/create","packages/core/services/build/ops/get","packages/core/services/build/ops/list-for-env","packages/core/services/build/ops/list-for-game","packages/core/services/build/standalone/default-create","packages/core/services/build/util","packages/core/services/captcha/ops/hcaptcha-config-get","packages/core/services/captcha/ops/hcaptcha-verify","packages/core/services/captcha/ops/request","packages/core/services/captcha/ops/turnstile-config-get","packages/core/services/captcha/ops/turnstile-verify","packages/core/services/captcha/ops/verify","packages/core/services/captcha/util","packages/core/services/cdn/ops/namespace-auth-user-remove","packages/core/services/cdn/ops/namespace-auth-user-update","packages/core/services/cdn/ops/namespace-create","packages/core/services/cdn/ops/namespace-domain-create","packages/core/services/cdn/ops/namespace-domain-remove","packages/core/services/cdn/ops/namespace-get","packages/core/services/cdn/ops/namespace-resolve-domain","packages/core/services/cdn/ops/ns-auth-type-set","packages/core/services/cdn/ops/ns-enable-domain-public-auth-set","packages/core/services/cdn/ops/site-create","packages/core/services/cdn/ops/site-get","packages/core/services/cdn/ops/site-list-for-game","packages/core/services/cdn/ops/version-get","packages/core/services/cdn/ops/version-prepare","packages/core/services/cdn/ops/version-publish","packages/core/services/cdn/util","packages/core/services/cdn/worker","packages/core/services/cf-custom-hostname/ops/get","packages/core/services/cf-custom-hostname/ops/list-for-namespace-id","packages/core/services/cf-custom-hostname/ops/resolve-hostname","packages/core/services/cf-custom-hostname/worker","packages/core/services/cloud/ops/device-link-create","packages/core/services/cloud/ops/game-config-create","packages/core/services/cloud/ops/game-config-get","packages/core/services/cloud/ops/game-token-create","packages/core/services/cloud/ops/namespace-create","packages/core/services/cloud/ops/namespace-get","packages/core/services/cloud/ops/namespace-token-development-create","packages/core/services/cloud/ops/namespace-token-public-create","packages/core/services/cloud/ops/version-get","packages/core/services/cloud/ops/version-publish","packages/core/services/cloud/standalone/default-create","packages/core/services/cloud/worker","packages/core/services/cluster","packages/core/services/cluster/standalone/datacenter-tls-renew","packages/core/services/cluster/standalone/default-update","packages/core/services/cluster/standalone/gc","packages/core/services/cluster/standalone/metrics-publish","packages/core/services/custom-user-avatar/ops/list-for-game","packages/core/services/custom-user-avatar/ops/upload-complete","packages/core/services/debug/ops/email-res","packages/core/services/ds-log/ops/export","packages/core/services/ds-log/ops/read","packages/core/services/dynamic-config","packages/core/services/email-verification/ops/complete","packages/core/services/email-verification/ops/create","packages/core/services/email/ops/send","packages/core/services/external/ops/request-validate","packages/core/services/external/worker","packages/core/services/faker/ops/build","packages/core/services/faker/ops/cdn-site","packages/core/services/faker/ops/game","packages/core/services/faker/ops/game-namespace","packages/core/services/faker/ops/game-version","packages/core/services/faker/ops/job-run","packages/core/services/faker/ops/job-template","packages/core/services/faker/ops/mm-lobby","packages/core/services/faker/ops/mm-lobby-row","packages/core/services/faker/ops/mm-player","packages/core/services/faker/ops/region","packages/core/services/faker/ops/team","packages/core/services/faker/ops/user","packages/core/services/game/ops/banner-upload-complete","packages/core/services/game/ops/create","packages/core/services/game/ops/get","packages/core/services/game/ops/list-all","packages/core/services/game/ops/list-for-team","packages/core/services/game/ops/logo-upload-complete","packages/core/services/game/ops/namespace-create","packages/core/services/game/ops/namespace-get","packages/core/services/game/ops/namespace-list","packages/core/services/game/ops/namespace-resolve-name-id","packages/core/services/game/ops/namespace-resolve-url","packages/core/services/game/ops/namespace-validate","packages/core/services/game/ops/namespace-version-history-list","packages/core/services/game/ops/namespace-version-set","packages/core/services/game/ops/recommend","packages/core/services/game/ops/resolve-name-id","packages/core/services/game/ops/resolve-namespace-id","packages/core/services/game/ops/token-development-validate","packages/core/services/game/ops/validate","packages/core/services/game/ops/version-create","packages/core/services/game/ops/version-get","packages/core/services/game/ops/version-list","packages/core/services/game/ops/version-validate","packages/core/services/ip/ops/info","packages/core/services/job-log/ops/read","packages/core/services/job-log/worker","packages/core/services/job-run","packages/core/services/job/standalone/gc","packages/core/services/job/util","packages/core/services/linode","packages/core/services/linode/standalone/gc","packages/core/services/load-test/standalone/api-cloud","packages/core/services/load-test/standalone/mm","packages/core/services/load-test/standalone/mm-sustain","packages/core/services/load-test/standalone/sqlx","packages/core/services/load-test/standalone/watch-requests","packages/core/services/mm-config/ops/game-get","packages/core/services/mm-config/ops/game-upsert","packages/core/services/mm-config/ops/lobby-group-get","packages/core/services/mm-config/ops/lobby-group-resolve-name-id","packages/core/services/mm-config/ops/lobby-group-resolve-version","packages/core/services/mm-config/ops/namespace-config-set","packages/core/services/mm-config/ops/namespace-config-validate","packages/core/services/mm-config/ops/namespace-create","packages/core/services/mm-config/ops/namespace-get","packages/core/services/mm-config/ops/version-get","packages/core/services/mm-config/ops/version-prepare","packages/core/services/mm-config/ops/version-publish","packages/core/services/mm/ops/dev-player-token-create","packages/core/services/mm/ops/lobby-find-fail","packages/core/services/mm/ops/lobby-find-lobby-query-list","packages/core/services/mm/ops/lobby-find-try-complete","packages/core/services/mm/ops/lobby-for-run-id","packages/core/services/mm/ops/lobby-get","packages/core/services/mm/ops/lobby-history","packages/core/services/mm/ops/lobby-idle-update","packages/core/services/mm/ops/lobby-list-for-namespace","packages/core/services/mm/ops/lobby-list-for-user-id","packages/core/services/mm/ops/lobby-player-count","packages/core/services/mm/ops/lobby-runtime-aggregate","packages/core/services/mm/ops/lobby-state-get","packages/core/services/mm/ops/player-count-for-namespace","packages/core/services/mm/ops/player-get","packages/core/services/mm/standalone/gc","packages/core/services/mm/util","packages/core/services/mm/worker","packages/core/services/monolith/standalone/worker","packages/core/services/monolith/standalone/workflow-worker","packages/core/services/nomad/standalone/monitor","packages/core/services/region/ops/get","packages/core/services/region/ops/list","packages/core/services/region/ops/list-for-game","packages/core/services/region/ops/recommend","packages/core/services/region/ops/resolve","packages/core/services/region/ops/resolve-for-game","packages/core/services/server-spec","packages/core/services/team-invite/ops/get","packages/core/services/team-invite/worker","packages/core/services/team/ops/avatar-upload-complete","packages/core/services/team/ops/get","packages/core/services/team/ops/join-request-list","packages/core/services/team/ops/member-count","packages/core/services/team/ops/member-get","packages/core/services/team/ops/member-list","packages/core/services/team/ops/member-relationship-get","packages/core/services/team/ops/profile-validate","packages/core/services/team/ops/recommend","packages/core/services/team/ops/resolve-display-name","packages/core/services/team/ops/user-ban-get","packages/core/services/team/ops/user-ban-list","packages/core/services/team/ops/validate","packages/core/services/team/util","packages/core/services/team/worker","packages/core/services/telemetry/standalone/beacon","packages/core/services/tier","packages/core/services/token/ops/create","packages/core/services/token/ops/exchange","packages/core/services/token/ops/get","packages/core/services/token/ops/revoke","packages/core/services/upload/ops/complete","packages/core/services/upload/ops/file-list","packages/core/services/upload/ops/get","packages/core/services/upload/ops/list-for-user","packages/core/services/upload/ops/prepare","packages/core/services/upload/worker","packages/core/services/user","packages/core/services/user-identity/ops/create","packages/core/services/user-identity/ops/delete","packages/core/services/user-identity/ops/get","packages/core/services/user/ops/avatar-upload-complete","packages/core/services/user/ops/get","packages/core/services/user/ops/pending-delete-toggle","packages/core/services/user/ops/profile-validate","packages/core/services/user/ops/resolve-email","packages/core/services/user/ops/team-list","packages/core/services/user/ops/token-create","packages/core/services/user/standalone/delete-pending","packages/core/services/user/worker","packages/edge/api/actor","packages/edge/api/intercom","packages/edge/api/monolith-edge","packages/edge/api/monolith-public","packages/edge/api/traefik-provider","packages/edge/infra/edge-server","packages/edge/services/ds","packages/edge/services/monolith/standalone/workflow-worker","packages/edge/services/pegboard","packages/edge/services/pegboard/standalone/ws","packages/toolchain/actors-sdk-embed","packages/toolchain/cli","packages/toolchain/js-utils-embed","packages/toolchain/toolchain","sdks/api/full/rust"]
 
 [workspace.package]
 version = "25.1.3"
@@ -34,7 +34,7 @@ features = ["ansi","fmt","json"]
 
 [workspace.dependencies.sqlx]
 git = "https://github.com/rivet-gg/sqlx"
-rev = "e7120f59"
+rev = "aeeae14fe7a05aa05e72a4dad59998b8bd72ad3a"
 default-features = false
 
 [workspace.dependencies.foundationdb]
@@ -78,54 +78,6 @@ rev = "8a313913fa73d58f4f9532565b0084e723bc34ad"
 [workspace.dependencies.deno_runtime]
 git = "https://github.com/rivet-gg/deno"
 rev = "9b1fbddb34c5e8cca115bc17a77c36f4c498eb4a"
-
-[workspace.dependencies.api-actor]
-path = "packages/api/actor"
-
-[workspace.dependencies.api-auth]
-path = "packages/api/auth"
-
-[workspace.dependencies.api-cf-verification]
-path = "packages/api/cf-verification"
-
-[workspace.dependencies.api-cloud]
-path = "packages/api/cloud"
-
-[workspace.dependencies.api-games]
-path = "packages/api/games"
-
-[workspace.dependencies.api-group]
-path = "packages/api/group"
-
-[workspace.dependencies.api-identity]
-path = "packages/api/identity"
-
-[workspace.dependencies.api-job]
-path = "packages/api/job"
-
-[workspace.dependencies.api-matchmaker]
-path = "packages/api/matchmaker"
-
-[workspace.dependencies.api-monolith-edge]
-path = "packages/api/monolith-edge"
-
-[workspace.dependencies.api-monolith-public]
-path = "packages/api/monolith-public"
-
-[workspace.dependencies.api-portal]
-path = "packages/api/portal"
-
-[workspace.dependencies.api-provision]
-path = "packages/api/provision"
-
-[workspace.dependencies.api-status]
-path = "packages/api/status"
-
-[workspace.dependencies.api-traefik-provider]
-path = "packages/api/traefik-provider"
-
-[workspace.dependencies.api-ui]
-path = "packages/api/ui"
 
 [workspace.dependencies.api-helper]
 path = "packages/common/api-helper/build"
@@ -339,668 +291,722 @@ path = "packages/common/util/search"
 package = "rivet-util-search"
 path = "packages/common/util/search"
 
+[workspace.dependencies.api-core-actor]
+path = "packages/core/api/actor"
+
+[workspace.dependencies.api-auth]
+path = "packages/core/api/auth"
+
+[workspace.dependencies.api-cf-verification]
+path = "packages/core/api/cf-verification"
+
+[workspace.dependencies.api-cloud]
+path = "packages/core/api/cloud"
+
+[workspace.dependencies.api-games]
+path = "packages/core/api/games"
+
+[workspace.dependencies.api-group]
+path = "packages/core/api/group"
+
+[workspace.dependencies.api-identity]
+path = "packages/core/api/identity"
+
+[workspace.dependencies.api-core-intercom]
+path = "packages/core/api/intercom"
+
+[workspace.dependencies.api-job]
+path = "packages/core/api/job"
+
+[workspace.dependencies.api-matchmaker]
+path = "packages/core/api/matchmaker"
+
+[workspace.dependencies.api-core-monolith-edge]
+path = "packages/core/api/monolith-edge"
+
+[workspace.dependencies.api-core-monolith-public]
+path = "packages/core/api/monolith-public"
+
+[workspace.dependencies.api-portal]
+path = "packages/core/api/portal"
+
+[workspace.dependencies.api-provision]
+path = "packages/core/api/provision"
+
+[workspace.dependencies.api-status]
+path = "packages/core/api/status"
+
+[workspace.dependencies.api-core-traefik-provider]
+path = "packages/core/api/traefik-provider"
+
+[workspace.dependencies.api-ui]
+path = "packages/core/api/ui"
+
 [workspace.dependencies.pegboard-actor-kv]
-path = "packages/infra/client/actor-kv"
+path = "packages/core/infra/client/actor-kv"
 
 [workspace.dependencies.pegboard-config]
-path = "packages/infra/client/config"
+path = "packages/core/infra/client/config"
 
 [workspace.dependencies.pegboard-container-runner]
-path = "packages/infra/client/container-runner"
+path = "packages/core/infra/client/container-runner"
 
 [workspace.dependencies.pegboard-echo-server]
-path = "packages/infra/client/echo"
+path = "packages/core/infra/client/echo"
 
 [workspace.dependencies.pegboard-isolate-v8-runner]
-path = "packages/infra/client/isolate-v8-runner"
+path = "packages/core/infra/client/isolate-v8-runner"
 
 [workspace.dependencies.pegboard-logs]
-path = "packages/infra/client/logs"
+path = "packages/core/infra/client/logs"
 
 [workspace.dependencies.pegboard-manager]
-path = "packages/infra/client/manager"
-
-[workspace.dependencies.rivet-edge-server]
-path = "packages/infra/edge-server"
+path = "packages/core/infra/client/manager"
 
 [workspace.dependencies.rivet-job-runner]
-path = "packages/infra/legacy/job-runner"
+path = "packages/core/infra/legacy/job-runner"
 
 [workspace.dependencies.rivet-schema-generator]
-path = "packages/infra/schema-generator"
+path = "packages/core/infra/schema-generator"
 
 [workspace.dependencies.rivet-server]
-path = "packages/infra/server"
+path = "packages/core/infra/server"
 
 [workspace.dependencies.build]
-path = "packages/services/build"
+path = "packages/core/services/build"
 
 [workspace.dependencies.build-create]
-path = "packages/services/build/ops/create"
+path = "packages/core/services/build/ops/create"
 
 [workspace.dependencies.build-get]
-path = "packages/services/build/ops/get"
+path = "packages/core/services/build/ops/get"
 
 [workspace.dependencies.build-list-for-env]
-path = "packages/services/build/ops/list-for-env"
+path = "packages/core/services/build/ops/list-for-env"
 
 [workspace.dependencies.build-list-for-game]
-path = "packages/services/build/ops/list-for-game"
+path = "packages/core/services/build/ops/list-for-game"
 
 [workspace.dependencies.build-default-create]
-path = "packages/services/build/standalone/default-create"
+path = "packages/core/services/build/standalone/default-create"
 
 [workspace.dependencies.rivet-util-build]
-path = "packages/services/build/util"
+path = "packages/core/services/build/util"
 
 [workspace.dependencies.util-build]
 package = "rivet-util-build"
-path = "packages/services/build/util"
+path = "packages/core/services/build/util"
 
 [workspace.dependencies.captcha-hcaptcha-config-get]
-path = "packages/services/captcha/ops/hcaptcha-config-get"
+path = "packages/core/services/captcha/ops/hcaptcha-config-get"
 
 [workspace.dependencies.captcha-hcaptcha-verify]
-path = "packages/services/captcha/ops/hcaptcha-verify"
+path = "packages/core/services/captcha/ops/hcaptcha-verify"
 
 [workspace.dependencies.captcha-request]
-path = "packages/services/captcha/ops/request"
+path = "packages/core/services/captcha/ops/request"
 
 [workspace.dependencies.captcha-turnstile-config-get]
-path = "packages/services/captcha/ops/turnstile-config-get"
+path = "packages/core/services/captcha/ops/turnstile-config-get"
 
 [workspace.dependencies.captcha-turnstile-verify]
-path = "packages/services/captcha/ops/turnstile-verify"
+path = "packages/core/services/captcha/ops/turnstile-verify"
 
 [workspace.dependencies.captcha-verify]
-path = "packages/services/captcha/ops/verify"
+path = "packages/core/services/captcha/ops/verify"
 
 [workspace.dependencies.rivet-util-captcha]
-path = "packages/services/captcha/util"
+path = "packages/core/services/captcha/util"
 
 [workspace.dependencies.util-captcha]
 package = "rivet-util-captcha"
-path = "packages/services/captcha/util"
+path = "packages/core/services/captcha/util"
 
 [workspace.dependencies.cdn-namespace-auth-user-remove]
-path = "packages/services/cdn/ops/namespace-auth-user-remove"
+path = "packages/core/services/cdn/ops/namespace-auth-user-remove"
 
 [workspace.dependencies.cdn-namespace-auth-user-update]
-path = "packages/services/cdn/ops/namespace-auth-user-update"
+path = "packages/core/services/cdn/ops/namespace-auth-user-update"
 
 [workspace.dependencies.cdn-namespace-create]
-path = "packages/services/cdn/ops/namespace-create"
+path = "packages/core/services/cdn/ops/namespace-create"
 
 [workspace.dependencies.cdn-namespace-domain-create]
-path = "packages/services/cdn/ops/namespace-domain-create"
+path = "packages/core/services/cdn/ops/namespace-domain-create"
 
 [workspace.dependencies.cdn-namespace-domain-remove]
-path = "packages/services/cdn/ops/namespace-domain-remove"
+path = "packages/core/services/cdn/ops/namespace-domain-remove"
 
 [workspace.dependencies.cdn-namespace-get]
-path = "packages/services/cdn/ops/namespace-get"
+path = "packages/core/services/cdn/ops/namespace-get"
 
 [workspace.dependencies.cdn-namespace-resolve-domain]
-path = "packages/services/cdn/ops/namespace-resolve-domain"
+path = "packages/core/services/cdn/ops/namespace-resolve-domain"
 
 [workspace.dependencies.cdn-ns-auth-type-set]
-path = "packages/services/cdn/ops/ns-auth-type-set"
+path = "packages/core/services/cdn/ops/ns-auth-type-set"
 
 [workspace.dependencies.cdn-ns-enable-domain-public-auth-set]
-path = "packages/services/cdn/ops/ns-enable-domain-public-auth-set"
+path = "packages/core/services/cdn/ops/ns-enable-domain-public-auth-set"
 
 [workspace.dependencies.cdn-site-create]
-path = "packages/services/cdn/ops/site-create"
+path = "packages/core/services/cdn/ops/site-create"
 
 [workspace.dependencies.cdn-site-get]
-path = "packages/services/cdn/ops/site-get"
+path = "packages/core/services/cdn/ops/site-get"
 
 [workspace.dependencies.cdn-site-list-for-game]
-path = "packages/services/cdn/ops/site-list-for-game"
+path = "packages/core/services/cdn/ops/site-list-for-game"
 
 [workspace.dependencies.cdn-version-get]
-path = "packages/services/cdn/ops/version-get"
+path = "packages/core/services/cdn/ops/version-get"
 
 [workspace.dependencies.cdn-version-prepare]
-path = "packages/services/cdn/ops/version-prepare"
+path = "packages/core/services/cdn/ops/version-prepare"
 
 [workspace.dependencies.cdn-version-publish]
-path = "packages/services/cdn/ops/version-publish"
+path = "packages/core/services/cdn/ops/version-publish"
 
 [workspace.dependencies.rivet-util-cdn]
-path = "packages/services/cdn/util"
+path = "packages/core/services/cdn/util"
 
 [workspace.dependencies.util-cdn]
 package = "rivet-util-cdn"
-path = "packages/services/cdn/util"
+path = "packages/core/services/cdn/util"
 
 [workspace.dependencies.cdn-worker]
-path = "packages/services/cdn/worker"
+path = "packages/core/services/cdn/worker"
 
 [workspace.dependencies.cf-custom-hostname-get]
-path = "packages/services/cf-custom-hostname/ops/get"
+path = "packages/core/services/cf-custom-hostname/ops/get"
 
 [workspace.dependencies.cf-custom-hostname-list-for-namespace-id]
-path = "packages/services/cf-custom-hostname/ops/list-for-namespace-id"
+path = "packages/core/services/cf-custom-hostname/ops/list-for-namespace-id"
 
 [workspace.dependencies.cf-custom-hostname-resolve-hostname]
-path = "packages/services/cf-custom-hostname/ops/resolve-hostname"
+path = "packages/core/services/cf-custom-hostname/ops/resolve-hostname"
 
 [workspace.dependencies.cf-custom-hostname-worker]
-path = "packages/services/cf-custom-hostname/worker"
+path = "packages/core/services/cf-custom-hostname/worker"
 
 [workspace.dependencies.cloud-device-link-create]
-path = "packages/services/cloud/ops/device-link-create"
+path = "packages/core/services/cloud/ops/device-link-create"
 
 [workspace.dependencies.cloud-game-config-create]
-path = "packages/services/cloud/ops/game-config-create"
+path = "packages/core/services/cloud/ops/game-config-create"
 
 [workspace.dependencies.cloud-game-config-get]
-path = "packages/services/cloud/ops/game-config-get"
+path = "packages/core/services/cloud/ops/game-config-get"
 
 [workspace.dependencies.cloud-game-token-create]
-path = "packages/services/cloud/ops/game-token-create"
+path = "packages/core/services/cloud/ops/game-token-create"
 
 [workspace.dependencies.cloud-namespace-create]
-path = "packages/services/cloud/ops/namespace-create"
+path = "packages/core/services/cloud/ops/namespace-create"
 
 [workspace.dependencies.cloud-namespace-get]
-path = "packages/services/cloud/ops/namespace-get"
+path = "packages/core/services/cloud/ops/namespace-get"
 
 [workspace.dependencies.cloud-namespace-token-development-create]
-path = "packages/services/cloud/ops/namespace-token-development-create"
+path = "packages/core/services/cloud/ops/namespace-token-development-create"
 
 [workspace.dependencies.cloud-namespace-token-public-create]
-path = "packages/services/cloud/ops/namespace-token-public-create"
+path = "packages/core/services/cloud/ops/namespace-token-public-create"
 
 [workspace.dependencies.cloud-version-get]
-path = "packages/services/cloud/ops/version-get"
+path = "packages/core/services/cloud/ops/version-get"
 
 [workspace.dependencies.cloud-version-publish]
-path = "packages/services/cloud/ops/version-publish"
+path = "packages/core/services/cloud/ops/version-publish"
 
 [workspace.dependencies.cloud-default-create]
-path = "packages/services/cloud/standalone/default-create"
+path = "packages/core/services/cloud/standalone/default-create"
 
 [workspace.dependencies.cloud-worker]
-path = "packages/services/cloud/worker"
+path = "packages/core/services/cloud/worker"
 
 [workspace.dependencies.cluster]
-path = "packages/services/cluster"
+path = "packages/core/services/cluster"
 
 [workspace.dependencies.cluster-datacenter-tls-renew]
-path = "packages/services/cluster/standalone/datacenter-tls-renew"
+path = "packages/core/services/cluster/standalone/datacenter-tls-renew"
 
 [workspace.dependencies.cluster-default-update]
-path = "packages/services/cluster/standalone/default-update"
+path = "packages/core/services/cluster/standalone/default-update"
 
 [workspace.dependencies.cluster-gc]
-path = "packages/services/cluster/standalone/gc"
+path = "packages/core/services/cluster/standalone/gc"
 
 [workspace.dependencies.cluster-metrics-publish]
-path = "packages/services/cluster/standalone/metrics-publish"
+path = "packages/core/services/cluster/standalone/metrics-publish"
 
 [workspace.dependencies.custom-user-avatar-list-for-game]
-path = "packages/services/custom-user-avatar/ops/list-for-game"
+path = "packages/core/services/custom-user-avatar/ops/list-for-game"
 
 [workspace.dependencies.custom-user-avatar-upload-complete]
-path = "packages/services/custom-user-avatar/ops/upload-complete"
+path = "packages/core/services/custom-user-avatar/ops/upload-complete"
 
 [workspace.dependencies.debug-email-res]
-path = "packages/services/debug/ops/email-res"
-
-[workspace.dependencies.ds]
-path = "packages/services/ds"
+path = "packages/core/services/debug/ops/email-res"
 
 [workspace.dependencies.ds-log-export]
-path = "packages/services/ds-log/ops/export"
+path = "packages/core/services/ds-log/ops/export"
 
 [workspace.dependencies.ds-log-read]
-path = "packages/services/ds-log/ops/read"
+path = "packages/core/services/ds-log/ops/read"
 
 [workspace.dependencies.dynamic-config]
-path = "packages/services/dynamic-config"
-
-[workspace.dependencies.edge-monolith-workflow-worker]
-path = "packages/services/edge/monolith/standalone/workflow-worker"
-
-[workspace.dependencies.edge-pegboard]
-path = "packages/services/edge/pegboard"
+path = "packages/core/services/dynamic-config"
 
 [workspace.dependencies.email-verification-complete]
-path = "packages/services/email-verification/ops/complete"
+path = "packages/core/services/email-verification/ops/complete"
 
 [workspace.dependencies.email-verification-create]
-path = "packages/services/email-verification/ops/create"
+path = "packages/core/services/email-verification/ops/create"
 
 [workspace.dependencies.email-send]
-path = "packages/services/email/ops/send"
+path = "packages/core/services/email/ops/send"
 
 [workspace.dependencies.external-request-validate]
-path = "packages/services/external/ops/request-validate"
+path = "packages/core/services/external/ops/request-validate"
 
 [workspace.dependencies.external-worker]
-path = "packages/services/external/worker"
+path = "packages/core/services/external/worker"
 
 [workspace.dependencies.faker-build]
-path = "packages/services/faker/ops/build"
+path = "packages/core/services/faker/ops/build"
 
 [workspace.dependencies.faker-cdn-site]
-path = "packages/services/faker/ops/cdn-site"
+path = "packages/core/services/faker/ops/cdn-site"
 
 [workspace.dependencies.faker-game]
-path = "packages/services/faker/ops/game"
+path = "packages/core/services/faker/ops/game"
 
 [workspace.dependencies.faker-game-namespace]
-path = "packages/services/faker/ops/game-namespace"
+path = "packages/core/services/faker/ops/game-namespace"
 
 [workspace.dependencies.faker-game-version]
-path = "packages/services/faker/ops/game-version"
+path = "packages/core/services/faker/ops/game-version"
 
 [workspace.dependencies.faker-job-run]
-path = "packages/services/faker/ops/job-run"
+path = "packages/core/services/faker/ops/job-run"
 
 [workspace.dependencies.faker-job-template]
-path = "packages/services/faker/ops/job-template"
+path = "packages/core/services/faker/ops/job-template"
 
 [workspace.dependencies.faker-mm-lobby]
-path = "packages/services/faker/ops/mm-lobby"
+path = "packages/core/services/faker/ops/mm-lobby"
 
 [workspace.dependencies.faker-mm-lobby-row]
-path = "packages/services/faker/ops/mm-lobby-row"
+path = "packages/core/services/faker/ops/mm-lobby-row"
 
 [workspace.dependencies.faker-mm-player]
-path = "packages/services/faker/ops/mm-player"
+path = "packages/core/services/faker/ops/mm-player"
 
 [workspace.dependencies.faker-region]
-path = "packages/services/faker/ops/region"
+path = "packages/core/services/faker/ops/region"
 
 [workspace.dependencies.faker-team]
-path = "packages/services/faker/ops/team"
+path = "packages/core/services/faker/ops/team"
 
 [workspace.dependencies.faker-user]
-path = "packages/services/faker/ops/user"
+path = "packages/core/services/faker/ops/user"
 
 [workspace.dependencies.game-banner-upload-complete]
-path = "packages/services/game/ops/banner-upload-complete"
+path = "packages/core/services/game/ops/banner-upload-complete"
 
 [workspace.dependencies.game-create]
-path = "packages/services/game/ops/create"
+path = "packages/core/services/game/ops/create"
 
 [workspace.dependencies.game-get]
-path = "packages/services/game/ops/get"
+path = "packages/core/services/game/ops/get"
 
 [workspace.dependencies.game-list-all]
-path = "packages/services/game/ops/list-all"
+path = "packages/core/services/game/ops/list-all"
 
 [workspace.dependencies.game-list-for-team]
-path = "packages/services/game/ops/list-for-team"
+path = "packages/core/services/game/ops/list-for-team"
 
 [workspace.dependencies.game-logo-upload-complete]
-path = "packages/services/game/ops/logo-upload-complete"
+path = "packages/core/services/game/ops/logo-upload-complete"
 
 [workspace.dependencies.game-namespace-create]
-path = "packages/services/game/ops/namespace-create"
+path = "packages/core/services/game/ops/namespace-create"
 
 [workspace.dependencies.game-namespace-get]
-path = "packages/services/game/ops/namespace-get"
+path = "packages/core/services/game/ops/namespace-get"
 
 [workspace.dependencies.game-namespace-list]
-path = "packages/services/game/ops/namespace-list"
+path = "packages/core/services/game/ops/namespace-list"
 
 [workspace.dependencies.game-namespace-resolve-name-id]
-path = "packages/services/game/ops/namespace-resolve-name-id"
+path = "packages/core/services/game/ops/namespace-resolve-name-id"
 
 [workspace.dependencies.game-namespace-resolve-url]
-path = "packages/services/game/ops/namespace-resolve-url"
+path = "packages/core/services/game/ops/namespace-resolve-url"
 
 [workspace.dependencies.game-namespace-validate]
-path = "packages/services/game/ops/namespace-validate"
+path = "packages/core/services/game/ops/namespace-validate"
 
 [workspace.dependencies.game-namespace-version-history-list]
-path = "packages/services/game/ops/namespace-version-history-list"
+path = "packages/core/services/game/ops/namespace-version-history-list"
 
 [workspace.dependencies.game-namespace-version-set]
-path = "packages/services/game/ops/namespace-version-set"
+path = "packages/core/services/game/ops/namespace-version-set"
 
 [workspace.dependencies.game-recommend]
-path = "packages/services/game/ops/recommend"
+path = "packages/core/services/game/ops/recommend"
 
 [workspace.dependencies.game-resolve-name-id]
-path = "packages/services/game/ops/resolve-name-id"
+path = "packages/core/services/game/ops/resolve-name-id"
 
 [workspace.dependencies.game-resolve-namespace-id]
-path = "packages/services/game/ops/resolve-namespace-id"
+path = "packages/core/services/game/ops/resolve-namespace-id"
 
 [workspace.dependencies.game-token-development-validate]
-path = "packages/services/game/ops/token-development-validate"
+path = "packages/core/services/game/ops/token-development-validate"
 
 [workspace.dependencies.game-validate]
-path = "packages/services/game/ops/validate"
+path = "packages/core/services/game/ops/validate"
 
 [workspace.dependencies.game-version-create]
-path = "packages/services/game/ops/version-create"
+path = "packages/core/services/game/ops/version-create"
 
 [workspace.dependencies.game-version-get]
-path = "packages/services/game/ops/version-get"
+path = "packages/core/services/game/ops/version-get"
 
 [workspace.dependencies.game-version-list]
-path = "packages/services/game/ops/version-list"
+path = "packages/core/services/game/ops/version-list"
 
 [workspace.dependencies.game-version-validate]
-path = "packages/services/game/ops/version-validate"
+path = "packages/core/services/game/ops/version-validate"
 
 [workspace.dependencies.ip-info]
-path = "packages/services/ip/ops/info"
+path = "packages/core/services/ip/ops/info"
 
 [workspace.dependencies.job-log-read]
-path = "packages/services/job-log/ops/read"
+path = "packages/core/services/job-log/ops/read"
 
 [workspace.dependencies.job-log-worker]
-path = "packages/services/job-log/worker"
+path = "packages/core/services/job-log/worker"
 
 [workspace.dependencies.job-run]
-path = "packages/services/job-run"
+path = "packages/core/services/job-run"
 
 [workspace.dependencies.job-gc]
-path = "packages/services/job/standalone/gc"
+path = "packages/core/services/job/standalone/gc"
 
 [workspace.dependencies.rivet-util-job]
-path = "packages/services/job/util"
+path = "packages/core/services/job/util"
 
 [workspace.dependencies.util-job]
 package = "rivet-util-job"
-path = "packages/services/job/util"
+path = "packages/core/services/job/util"
 
 [workspace.dependencies.linode]
-path = "packages/services/linode"
+path = "packages/core/services/linode"
 
 [workspace.dependencies.linode-gc]
-path = "packages/services/linode/standalone/gc"
+path = "packages/core/services/linode/standalone/gc"
 
 [workspace.dependencies.load-test-api-cloud]
-path = "packages/services/load-test/standalone/api-cloud"
+path = "packages/core/services/load-test/standalone/api-cloud"
 
 [workspace.dependencies.load-test-mm]
-path = "packages/services/load-test/standalone/mm"
+path = "packages/core/services/load-test/standalone/mm"
 
 [workspace.dependencies.load-test-mm-sustain]
-path = "packages/services/load-test/standalone/mm-sustain"
+path = "packages/core/services/load-test/standalone/mm-sustain"
 
 [workspace.dependencies.load-test-sqlx]
-path = "packages/services/load-test/standalone/sqlx"
+path = "packages/core/services/load-test/standalone/sqlx"
 
 [workspace.dependencies.load-test-watch-requests]
-path = "packages/services/load-test/standalone/watch-requests"
+path = "packages/core/services/load-test/standalone/watch-requests"
 
 [workspace.dependencies.mm-config-game-get]
-path = "packages/services/mm-config/ops/game-get"
+path = "packages/core/services/mm-config/ops/game-get"
 
 [workspace.dependencies.mm-config-game-upsert]
-path = "packages/services/mm-config/ops/game-upsert"
+path = "packages/core/services/mm-config/ops/game-upsert"
 
 [workspace.dependencies.mm-config-lobby-group-get]
-path = "packages/services/mm-config/ops/lobby-group-get"
+path = "packages/core/services/mm-config/ops/lobby-group-get"
 
 [workspace.dependencies.mm-config-lobby-group-resolve-name-id]
-path = "packages/services/mm-config/ops/lobby-group-resolve-name-id"
+path = "packages/core/services/mm-config/ops/lobby-group-resolve-name-id"
 
 [workspace.dependencies.mm-config-lobby-group-resolve-version]
-path = "packages/services/mm-config/ops/lobby-group-resolve-version"
+path = "packages/core/services/mm-config/ops/lobby-group-resolve-version"
 
 [workspace.dependencies.mm-config-namespace-config-set]
-path = "packages/services/mm-config/ops/namespace-config-set"
+path = "packages/core/services/mm-config/ops/namespace-config-set"
 
 [workspace.dependencies.mm-config-namespace-config-validate]
-path = "packages/services/mm-config/ops/namespace-config-validate"
+path = "packages/core/services/mm-config/ops/namespace-config-validate"
 
 [workspace.dependencies.mm-config-namespace-create]
-path = "packages/services/mm-config/ops/namespace-create"
+path = "packages/core/services/mm-config/ops/namespace-create"
 
 [workspace.dependencies.mm-config-namespace-get]
-path = "packages/services/mm-config/ops/namespace-get"
+path = "packages/core/services/mm-config/ops/namespace-get"
 
 [workspace.dependencies.mm-config-version-get]
-path = "packages/services/mm-config/ops/version-get"
+path = "packages/core/services/mm-config/ops/version-get"
 
 [workspace.dependencies.mm-config-version-prepare]
-path = "packages/services/mm-config/ops/version-prepare"
+path = "packages/core/services/mm-config/ops/version-prepare"
 
 [workspace.dependencies.mm-config-version-publish]
-path = "packages/services/mm-config/ops/version-publish"
+path = "packages/core/services/mm-config/ops/version-publish"
 
 [workspace.dependencies.mm-dev-player-token-create]
-path = "packages/services/mm/ops/dev-player-token-create"
+path = "packages/core/services/mm/ops/dev-player-token-create"
 
 [workspace.dependencies.mm-lobby-find-fail]
-path = "packages/services/mm/ops/lobby-find-fail"
+path = "packages/core/services/mm/ops/lobby-find-fail"
 
 [workspace.dependencies.mm-lobby-find-lobby-query-list]
-path = "packages/services/mm/ops/lobby-find-lobby-query-list"
+path = "packages/core/services/mm/ops/lobby-find-lobby-query-list"
 
 [workspace.dependencies.mm-lobby-find-try-complete]
-path = "packages/services/mm/ops/lobby-find-try-complete"
+path = "packages/core/services/mm/ops/lobby-find-try-complete"
 
 [workspace.dependencies.mm-lobby-for-run-id]
-path = "packages/services/mm/ops/lobby-for-run-id"
+path = "packages/core/services/mm/ops/lobby-for-run-id"
 
 [workspace.dependencies.mm-lobby-get]
-path = "packages/services/mm/ops/lobby-get"
+path = "packages/core/services/mm/ops/lobby-get"
 
 [workspace.dependencies.mm-lobby-history]
-path = "packages/services/mm/ops/lobby-history"
+path = "packages/core/services/mm/ops/lobby-history"
 
 [workspace.dependencies.mm-lobby-idle-update]
-path = "packages/services/mm/ops/lobby-idle-update"
+path = "packages/core/services/mm/ops/lobby-idle-update"
 
 [workspace.dependencies.mm-lobby-list-for-namespace]
-path = "packages/services/mm/ops/lobby-list-for-namespace"
+path = "packages/core/services/mm/ops/lobby-list-for-namespace"
 
 [workspace.dependencies.mm-lobby-list-for-user-id]
-path = "packages/services/mm/ops/lobby-list-for-user-id"
+path = "packages/core/services/mm/ops/lobby-list-for-user-id"
 
 [workspace.dependencies.mm-lobby-player-count]
-path = "packages/services/mm/ops/lobby-player-count"
+path = "packages/core/services/mm/ops/lobby-player-count"
 
 [workspace.dependencies.mm-lobby-runtime-aggregate]
-path = "packages/services/mm/ops/lobby-runtime-aggregate"
+path = "packages/core/services/mm/ops/lobby-runtime-aggregate"
 
 [workspace.dependencies.mm-lobby-state-get]
-path = "packages/services/mm/ops/lobby-state-get"
+path = "packages/core/services/mm/ops/lobby-state-get"
 
 [workspace.dependencies.mm-player-count-for-namespace]
-path = "packages/services/mm/ops/player-count-for-namespace"
+path = "packages/core/services/mm/ops/player-count-for-namespace"
 
 [workspace.dependencies.mm-player-get]
-path = "packages/services/mm/ops/player-get"
+path = "packages/core/services/mm/ops/player-get"
 
 [workspace.dependencies.mm-gc]
-path = "packages/services/mm/standalone/gc"
+path = "packages/core/services/mm/standalone/gc"
 
 [workspace.dependencies.rivet-util-mm]
-path = "packages/services/mm/util"
+path = "packages/core/services/mm/util"
 
 [workspace.dependencies.util-mm]
 package = "rivet-util-mm"
-path = "packages/services/mm/util"
+path = "packages/core/services/mm/util"
 
 [workspace.dependencies.mm-worker]
-path = "packages/services/mm/worker"
+path = "packages/core/services/mm/worker"
 
 [workspace.dependencies.monolith-worker]
-path = "packages/services/monolith/standalone/worker"
+path = "packages/core/services/monolith/standalone/worker"
 
 [workspace.dependencies.monolith-workflow-worker]
-path = "packages/services/monolith/standalone/workflow-worker"
+path = "packages/core/services/monolith/standalone/workflow-worker"
 
 [workspace.dependencies.nomad-monitor]
-path = "packages/services/nomad/standalone/monitor"
-
-[workspace.dependencies.pegboard]
-path = "packages/services/pegboard"
-
-[workspace.dependencies.pegboard-dc-init]
-path = "packages/services/pegboard/standalone/dc-init"
-
-[workspace.dependencies.pegboard-gc]
-path = "packages/services/pegboard/standalone/gc"
-
-[workspace.dependencies.pegboard-metrics-publish]
-path = "packages/services/pegboard/standalone/metrics-publish"
-
-[workspace.dependencies.pegboard-ws]
-path = "packages/services/pegboard/standalone/ws"
+path = "packages/core/services/nomad/standalone/monitor"
 
 [workspace.dependencies.region-get]
-path = "packages/services/region/ops/get"
+path = "packages/core/services/region/ops/get"
 
 [workspace.dependencies.region-list]
-path = "packages/services/region/ops/list"
+path = "packages/core/services/region/ops/list"
 
 [workspace.dependencies.region-list-for-game]
-path = "packages/services/region/ops/list-for-game"
+path = "packages/core/services/region/ops/list-for-game"
 
 [workspace.dependencies.region-recommend]
-path = "packages/services/region/ops/recommend"
+path = "packages/core/services/region/ops/recommend"
 
 [workspace.dependencies.region-resolve]
-path = "packages/services/region/ops/resolve"
+path = "packages/core/services/region/ops/resolve"
 
 [workspace.dependencies.region-resolve-for-game]
-path = "packages/services/region/ops/resolve-for-game"
+path = "packages/core/services/region/ops/resolve-for-game"
 
 [workspace.dependencies.server-spec]
-path = "packages/services/server-spec"
+path = "packages/core/services/server-spec"
 
 [workspace.dependencies.team-invite-get]
-path = "packages/services/team-invite/ops/get"
+path = "packages/core/services/team-invite/ops/get"
 
 [workspace.dependencies.team-invite-worker]
-path = "packages/services/team-invite/worker"
+path = "packages/core/services/team-invite/worker"
 
 [workspace.dependencies.team-avatar-upload-complete]
-path = "packages/services/team/ops/avatar-upload-complete"
+path = "packages/core/services/team/ops/avatar-upload-complete"
 
 [workspace.dependencies.team-get]
-path = "packages/services/team/ops/get"
+path = "packages/core/services/team/ops/get"
 
 [workspace.dependencies.team-join-request-list]
-path = "packages/services/team/ops/join-request-list"
+path = "packages/core/services/team/ops/join-request-list"
 
 [workspace.dependencies.team-member-count]
-path = "packages/services/team/ops/member-count"
+path = "packages/core/services/team/ops/member-count"
 
 [workspace.dependencies.team-member-get]
-path = "packages/services/team/ops/member-get"
+path = "packages/core/services/team/ops/member-get"
 
 [workspace.dependencies.team-member-list]
-path = "packages/services/team/ops/member-list"
+path = "packages/core/services/team/ops/member-list"
 
 [workspace.dependencies.team-member-relationship-get]
-path = "packages/services/team/ops/member-relationship-get"
+path = "packages/core/services/team/ops/member-relationship-get"
 
 [workspace.dependencies.team-profile-validate]
-path = "packages/services/team/ops/profile-validate"
+path = "packages/core/services/team/ops/profile-validate"
 
 [workspace.dependencies.team-recommend]
-path = "packages/services/team/ops/recommend"
+path = "packages/core/services/team/ops/recommend"
 
 [workspace.dependencies.team-resolve-display-name]
-path = "packages/services/team/ops/resolve-display-name"
+path = "packages/core/services/team/ops/resolve-display-name"
 
 [workspace.dependencies.team-user-ban-get]
-path = "packages/services/team/ops/user-ban-get"
+path = "packages/core/services/team/ops/user-ban-get"
 
 [workspace.dependencies.team-user-ban-list]
-path = "packages/services/team/ops/user-ban-list"
+path = "packages/core/services/team/ops/user-ban-list"
 
 [workspace.dependencies.team-validate]
-path = "packages/services/team/ops/validate"
+path = "packages/core/services/team/ops/validate"
 
 [workspace.dependencies.rivet-util-team]
-path = "packages/services/team/util"
+path = "packages/core/services/team/util"
 
 [workspace.dependencies.util-team]
 package = "rivet-util-team"
-path = "packages/services/team/util"
+path = "packages/core/services/team/util"
 
 [workspace.dependencies.team-worker]
-path = "packages/services/team/worker"
+path = "packages/core/services/team/worker"
 
 [workspace.dependencies.telemetry-beacon]
-path = "packages/services/telemetry/standalone/beacon"
+path = "packages/core/services/telemetry/standalone/beacon"
 
 [workspace.dependencies.tier]
-path = "packages/services/tier"
+path = "packages/core/services/tier"
 
 [workspace.dependencies.token-create]
-path = "packages/services/token/ops/create"
+path = "packages/core/services/token/ops/create"
 
 [workspace.dependencies.token-exchange]
-path = "packages/services/token/ops/exchange"
+path = "packages/core/services/token/ops/exchange"
 
 [workspace.dependencies.token-get]
-path = "packages/services/token/ops/get"
+path = "packages/core/services/token/ops/get"
 
 [workspace.dependencies.token-revoke]
-path = "packages/services/token/ops/revoke"
+path = "packages/core/services/token/ops/revoke"
 
 [workspace.dependencies.upload-complete]
-path = "packages/services/upload/ops/complete"
+path = "packages/core/services/upload/ops/complete"
 
 [workspace.dependencies.upload-file-list]
-path = "packages/services/upload/ops/file-list"
+path = "packages/core/services/upload/ops/file-list"
 
 [workspace.dependencies.upload-get]
-path = "packages/services/upload/ops/get"
+path = "packages/core/services/upload/ops/get"
 
 [workspace.dependencies.upload-list-for-user]
-path = "packages/services/upload/ops/list-for-user"
+path = "packages/core/services/upload/ops/list-for-user"
 
 [workspace.dependencies.upload-prepare]
-path = "packages/services/upload/ops/prepare"
+path = "packages/core/services/upload/ops/prepare"
 
 [workspace.dependencies.upload-worker]
-path = "packages/services/upload/worker"
+path = "packages/core/services/upload/worker"
 
 [workspace.dependencies.user]
-path = "packages/services/user"
+path = "packages/core/services/user"
 
 [workspace.dependencies.user-identity-create]
-path = "packages/services/user-identity/ops/create"
+path = "packages/core/services/user-identity/ops/create"
 
 [workspace.dependencies.user-identity-delete]
-path = "packages/services/user-identity/ops/delete"
+path = "packages/core/services/user-identity/ops/delete"
 
 [workspace.dependencies.user-identity-get]
-path = "packages/services/user-identity/ops/get"
+path = "packages/core/services/user-identity/ops/get"
 
 [workspace.dependencies.user-avatar-upload-complete]
-path = "packages/services/user/ops/avatar-upload-complete"
+path = "packages/core/services/user/ops/avatar-upload-complete"
 
 [workspace.dependencies.user-get]
-path = "packages/services/user/ops/get"
+path = "packages/core/services/user/ops/get"
 
 [workspace.dependencies.user-pending-delete-toggle]
-path = "packages/services/user/ops/pending-delete-toggle"
+path = "packages/core/services/user/ops/pending-delete-toggle"
 
 [workspace.dependencies.user-profile-validate]
-path = "packages/services/user/ops/profile-validate"
+path = "packages/core/services/user/ops/profile-validate"
 
 [workspace.dependencies.user-resolve-email]
-path = "packages/services/user/ops/resolve-email"
+path = "packages/core/services/user/ops/resolve-email"
 
 [workspace.dependencies.user-team-list]
-path = "packages/services/user/ops/team-list"
+path = "packages/core/services/user/ops/team-list"
 
 [workspace.dependencies.user-token-create]
-path = "packages/services/user/ops/token-create"
+path = "packages/core/services/user/ops/token-create"
 
 [workspace.dependencies.user-delete-pending]
-path = "packages/services/user/standalone/delete-pending"
+path = "packages/core/services/user/standalone/delete-pending"
 
 [workspace.dependencies.user-worker]
-path = "packages/services/user/worker"
+path = "packages/core/services/user/worker"
+
+[workspace.dependencies.api-edge-actor]
+path = "packages/edge/api/actor"
+
+[workspace.dependencies.api-edge-intercom]
+path = "packages/edge/api/intercom"
+
+[workspace.dependencies.api-edge-monolith-edge]
+path = "packages/edge/api/monolith-edge"
+
+[workspace.dependencies.api-edge-monolith-public]
+path = "packages/edge/api/monolith-public"
+
+[workspace.dependencies.api-edge-traefik-provider]
+path = "packages/edge/api/traefik-provider"
+
+[workspace.dependencies.rivet-edge-server]
+path = "packages/edge/infra/edge-server"
+
+[workspace.dependencies.ds]
+path = "packages/edge/services/ds"
+
+[workspace.dependencies.edge-monolith-workflow-worker]
+path = "packages/edge/services/monolith/standalone/workflow-worker"
+
+[workspace.dependencies.pegboard]
+path = "packages/edge/services/pegboard"
+
+[workspace.dependencies.pegboard-ws]
+path = "packages/edge/services/pegboard/standalone/ws"
 
 [workspace.dependencies.rivet-actors-sdk-embed]
 path = "packages/toolchain/actors-sdk-embed"

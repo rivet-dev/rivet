@@ -29,7 +29,7 @@ impl task::Task for Task {
 
 		// Check if manager exists
 		let res = apis::actor_api::actor_list(
-			&ctx.openapi_config_cloud,
+			&ctx.openapi_config_actor,
 			Some(&ctx.project.name_id),
 			Some(&input.env_slug),
 			None,

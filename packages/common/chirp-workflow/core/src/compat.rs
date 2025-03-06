@@ -12,9 +12,10 @@ use crate::{
 		message::{MessageCtx, SubscriptionHandle},
 	},
 	db::{Database, DatabaseCrdbNats, DatabaseHandle},
-	message::{AsTags, Message},
+	message::Message,
 	operation::{Operation, OperationInput},
 	signal::Signal,
+	utils::tags::AsTags,
 	workflow::{Workflow, WorkflowInput},
 };
 
@@ -116,12 +117,6 @@ async fn db_from_ctx<B: Debug + Clone>(
 	ctx: &rivet_operation::OperationContext<B>,
 ) -> GlobalResult<DatabaseHandle> {
 	DatabaseCrdbNats::from_pools(ctx.pools().clone())
-		.map(|db| db as DatabaseHandle)
-		.map_err(Into::into)
-}
-
-pub async fn db_from_pools(pools: &rivet_pools::Pools) -> GlobalResult<DatabaseHandle> {
-	DatabaseCrdbNats::from_pools(pools.clone())
 		.map(|db| db as DatabaseHandle)
 		.map_err(Into::into)
 }

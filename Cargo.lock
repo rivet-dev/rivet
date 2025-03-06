@@ -254,72 +254,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "api-actor"
-version = "5.1.2"
-dependencies = [
- "api-helper",
- "base64 0.13.1",
- "build",
- "build-create",
- "build-get",
- "build-list-for-env",
- "cdn-namespace-domain-create",
- "chirp-client",
- "chrono",
- "cloud-namespace-token-development-create",
- "cloud-namespace-token-public-create",
- "cluster",
- "ds",
- "ds-log-export",
- "ds-log-read",
- "faker-build",
- "faker-game",
- "faker-game-namespace",
- "faker-game-version",
- "faker-region",
- "game-get",
- "game-namespace-get",
- "game-namespace-resolve-name-id",
- "game-resolve-name-id",
- "game-version-get",
- "http 0.2.12",
- "hyper 0.14.31",
- "lazy_static",
- "pegboard",
- "region-get",
- "region-recommend",
- "reqwest 0.11.27",
- "rivet-api",
- "rivet-cache",
- "rivet-claims",
- "rivet-config",
- "rivet-connection",
- "rivet-convert",
- "rivet-env",
- "rivet-health-checks",
- "rivet-operation",
- "rivet-pools",
- "rivet-util-team",
- "s3-util",
- "serde",
- "serde_json",
- "team-get",
- "token-create",
- "token-revoke",
- "tokio",
- "tracing",
- "tracing-futures",
- "tracing-subscriber",
- "upload-complete",
- "upload-get",
- "url",
- "user-get",
- "user-identity-get",
- "user-team-list",
- "uuid",
-]
-
-[[package]]
 name = "api-auth"
 version = "5.1.2"
 dependencies = [
@@ -515,6 +449,401 @@ dependencies = [
  "user-identity-create",
  "user-identity-get",
  "user-team-list",
+ "uuid",
+]
+
+[[package]]
+name = "api-core-actor"
+version = "25.1.1"
+dependencies = [
+ "api-helper",
+ "base64 0.13.1",
+ "build",
+ "build-create",
+ "build-get",
+ "build-list-for-env",
+ "cdn-namespace-domain-create",
+ "chirp-client",
+ "chrono",
+ "cloud-namespace-token-development-create",
+ "cloud-namespace-token-public-create",
+ "cluster",
+ "ds",
+ "ds-log-export",
+ "ds-log-read",
+ "faker-build",
+ "faker-game",
+ "faker-game-namespace",
+ "faker-game-version",
+ "faker-region",
+ "game-get",
+ "game-namespace-get",
+ "game-namespace-resolve-name-id",
+ "game-resolve-name-id",
+ "game-version-get",
+ "http 0.2.12",
+ "hyper 0.14.31",
+ "lazy_static",
+ "pegboard",
+ "region-get",
+ "region-recommend",
+ "reqwest 0.11.27",
+ "rivet-api",
+ "rivet-cache",
+ "rivet-claims",
+ "rivet-config",
+ "rivet-connection",
+ "rivet-convert",
+ "rivet-env",
+ "rivet-health-checks",
+ "rivet-operation",
+ "rivet-pools",
+ "rivet-util-team",
+ "s3-util",
+ "serde",
+ "serde_json",
+ "team-get",
+ "token-create",
+ "token-revoke",
+ "tokio",
+ "tracing",
+ "tracing-futures",
+ "tracing-subscriber",
+ "upload-complete",
+ "upload-get",
+ "url",
+ "user-get",
+ "user-identity-get",
+ "user-team-list",
+ "uuid",
+]
+
+[[package]]
+name = "api-core-intercom"
+version = "25.1.1"
+dependencies = [
+ "api-helper",
+ "async-trait",
+ "chirp-client",
+ "chirp-workflow",
+ "chrono",
+ "http 0.2.12",
+ "hyper 0.14.31",
+ "lazy_static",
+ "pegboard",
+ "prost 0.10.4",
+ "rivet-api",
+ "rivet-cache",
+ "rivet-claims",
+ "rivet-config",
+ "rivet-convert",
+ "rivet-env",
+ "rivet-health-checks",
+ "rivet-operation",
+ "rivet-pools",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "api-core-monolith-edge"
+version = "25.1.1"
+dependencies = [
+ "api-core-intercom",
+ "api-core-traefik-provider",
+ "api-helper",
+ "api-provision",
+ "async-trait",
+ "chirp-client",
+ "http 0.2.12",
+ "hyper 0.14.31",
+ "rivet-config",
+ "rivet-env",
+ "rivet-operation",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
+name = "api-core-monolith-public"
+version = "25.1.1"
+dependencies = [
+ "api-auth",
+ "api-cf-verification",
+ "api-cloud",
+ "api-core-actor",
+ "api-games",
+ "api-group",
+ "api-helper",
+ "api-identity",
+ "api-job",
+ "api-matchmaker",
+ "api-portal",
+ "api-status",
+ "api-ui",
+ "async-trait",
+ "chirp-client",
+ "http 0.2.12",
+ "hyper 0.14.31",
+ "rivet-config",
+ "rivet-env",
+ "rivet-operation",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
+name = "api-core-traefik-provider"
+version = "25.1.1"
+dependencies = [
+ "api-helper",
+ "async-trait",
+ "async_once",
+ "base64 0.13.1",
+ "cdn-namespace-auth-user-update",
+ "cdn-namespace-domain-create",
+ "chirp-client",
+ "chrono",
+ "cluster",
+ "ds",
+ "faker-cdn-site",
+ "faker-game",
+ "faker-game-namespace",
+ "faker-game-version",
+ "faker-job-run",
+ "faker-region",
+ "game-get",
+ "http 0.2.12",
+ "hyper 0.14.31",
+ "lazy_static",
+ "prost 0.10.4",
+ "reqwest 0.11.27",
+ "rivet-cache",
+ "rivet-claims",
+ "rivet-config",
+ "rivet-connection",
+ "rivet-convert",
+ "rivet-env",
+ "rivet-health-checks",
+ "rivet-operation",
+ "rivet-pools",
+ "rivet-route",
+ "rivet-util-cdn",
+ "rivet-util-job",
+ "s3-util",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "api-edge-actor"
+version = "25.1.1"
+dependencies = [
+ "api-helper",
+ "base64 0.13.1",
+ "build",
+ "build-create",
+ "build-get",
+ "build-list-for-env",
+ "cdn-namespace-domain-create",
+ "chirp-client",
+ "chirp-workflow",
+ "chrono",
+ "cloud-namespace-token-development-create",
+ "cloud-namespace-token-public-create",
+ "cluster",
+ "ds",
+ "ds-log-export",
+ "ds-log-read",
+ "faker-build",
+ "faker-game",
+ "faker-game-namespace",
+ "faker-game-version",
+ "faker-region",
+ "game-get",
+ "game-namespace-get",
+ "game-namespace-resolve-name-id",
+ "game-resolve-name-id",
+ "game-version-get",
+ "http 0.2.12",
+ "hyper 0.14.31",
+ "lazy_static",
+ "pegboard",
+ "region-get",
+ "region-recommend",
+ "reqwest 0.11.27",
+ "rivet-api",
+ "rivet-cache",
+ "rivet-claims",
+ "rivet-config",
+ "rivet-connection",
+ "rivet-convert",
+ "rivet-env",
+ "rivet-health-checks",
+ "rivet-operation",
+ "rivet-pools",
+ "rivet-util-team",
+ "s3-util",
+ "serde",
+ "serde_json",
+ "team-get",
+ "token-create",
+ "token-revoke",
+ "tokio",
+ "tracing",
+ "tracing-futures",
+ "tracing-subscriber",
+ "upload-complete",
+ "upload-get",
+ "url",
+ "user-get",
+ "user-identity-get",
+ "user-team-list",
+ "uuid",
+]
+
+[[package]]
+name = "api-edge-intercom"
+version = "25.1.1"
+dependencies = [
+ "api-helper",
+ "async-trait",
+ "chirp-client",
+ "chirp-workflow",
+ "chrono",
+ "fdb-util",
+ "foundationdb",
+ "http 0.2.12",
+ "hyper 0.14.31",
+ "lazy_static",
+ "pegboard",
+ "prost 0.10.4",
+ "rivet-api",
+ "rivet-cache",
+ "rivet-claims",
+ "rivet-config",
+ "rivet-convert",
+ "rivet-env",
+ "rivet-health-checks",
+ "rivet-operation",
+ "rivet-pools",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "api-edge-monolith-edge"
+version = "25.1.1"
+dependencies = [
+ "api-edge-traefik-provider",
+ "api-helper",
+ "async-trait",
+ "chirp-client",
+ "http 0.2.12",
+ "hyper 0.14.31",
+ "rivet-config",
+ "rivet-env",
+ "rivet-operation",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
+name = "api-edge-monolith-public"
+version = "25.1.1"
+dependencies = [
+ "api-edge-actor",
+ "api-edge-intercom",
+ "api-helper",
+ "async-trait",
+ "chirp-client",
+ "http 0.2.12",
+ "hyper 0.14.31",
+ "rivet-config",
+ "rivet-env",
+ "rivet-operation",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
+name = "api-edge-traefik-provider"
+version = "25.1.1"
+dependencies = [
+ "api-core-traefik-provider",
+ "api-helper",
+ "async-trait",
+ "async_once",
+ "base64 0.13.1",
+ "cdn-namespace-auth-user-update",
+ "cdn-namespace-domain-create",
+ "chirp-client",
+ "chirp-workflow",
+ "chrono",
+ "cluster",
+ "ds",
+ "faker-cdn-site",
+ "faker-game",
+ "faker-game-namespace",
+ "faker-game-version",
+ "faker-job-run",
+ "faker-region",
+ "fdb-util",
+ "foundationdb",
+ "game-get",
+ "http 0.2.12",
+ "hyper 0.14.31",
+ "lazy_static",
+ "prost 0.10.4",
+ "reqwest 0.11.27",
+ "rivet-cache",
+ "rivet-claims",
+ "rivet-config",
+ "rivet-connection",
+ "rivet-convert",
+ "rivet-env",
+ "rivet-health-checks",
+ "rivet-operation",
+ "rivet-pools",
+ "rivet-route",
+ "rivet-util-cdn",
+ "rivet-util-job",
+ "s3-util",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
  "uuid",
 ]
 
@@ -858,56 +1187,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "api-monolith-edge"
-version = "5.1.2"
-dependencies = [
- "api-helper",
- "api-provision",
- "api-traefik-provider",
- "async-trait",
- "chirp-client",
- "http 0.2.12",
- "hyper 0.14.31",
- "rivet-config",
- "rivet-env",
- "rivet-operation",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "url",
-]
-
-[[package]]
-name = "api-monolith-public"
-version = "5.1.2"
-dependencies = [
- "api-actor",
- "api-auth",
- "api-cf-verification",
- "api-cloud",
- "api-games",
- "api-group",
- "api-helper",
- "api-identity",
- "api-job",
- "api-matchmaker",
- "api-portal",
- "api-status",
- "api-ui",
- "async-trait",
- "chirp-client",
- "http 0.2.12",
- "hyper 0.14.31",
- "rivet-config",
- "rivet-env",
- "rivet-operation",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "url",
-]
-
-[[package]]
 name = "api-portal"
 version = "5.1.2"
 dependencies = [
@@ -1028,56 +1307,6 @@ dependencies = [
  "trust-dns-resolver",
  "url",
  "urlencoding",
- "uuid",
-]
-
-[[package]]
-name = "api-traefik-provider"
-version = "5.1.2"
-dependencies = [
- "api-helper",
- "async-trait",
- "async_once",
- "base64 0.13.1",
- "cdn-namespace-auth-user-update",
- "cdn-namespace-domain-create",
- "chirp-client",
- "chrono",
- "cluster",
- "ds",
- "faker-cdn-site",
- "faker-game",
- "faker-game-namespace",
- "faker-game-version",
- "faker-job-run",
- "faker-region",
- "game-get",
- "http 0.2.12",
- "hyper 0.14.31",
- "lazy_static",
- "prost 0.10.4",
- "reqwest 0.11.27",
- "rivet-cache",
- "rivet-claims",
- "rivet-config",
- "rivet-connection",
- "rivet-convert",
- "rivet-env",
- "rivet-health-checks",
- "rivet-operation",
- "rivet-pools",
- "rivet-route",
- "rivet-util-cdn",
- "rivet-util-job",
- "s3-util",
- "serde",
- "serde_json",
- "sqlx",
- "thiserror 1.0.69",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "url",
  "uuid",
 ]
 
@@ -2897,6 +3126,7 @@ dependencies = [
  "global-error",
  "include_dir",
  "indoc 2.0.5",
+ "itertools 0.14.0",
  "lazy_static",
  "md5",
  "prost 0.12.6",
@@ -3320,6 +3550,7 @@ dependencies = [
  "pegboard",
  "rand",
  "reqwest 0.11.27",
+ "rivet-api",
  "rivet-config",
  "rivet-metrics",
  "rivet-operation",
@@ -5255,6 +5486,7 @@ dependencies = [
 name = "ds"
 version = "5.1.2"
 dependencies = [
+ "anyhow",
  "bit-vec",
  "build",
  "build-get",
@@ -5268,6 +5500,8 @@ dependencies = [
  "faker-game",
  "faker-region",
  "faker-user",
+ "fdb-util",
+ "foundationdb",
  "game-get",
  "game-namespace-get",
  "game-resolve-namespace-id",
@@ -5302,6 +5536,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.8",
+ "sqlite-util",
  "sqlx",
  "strum 0.24.1",
  "tier",
@@ -5473,7 +5708,7 @@ dependencies = [
 
 [[package]]
 name = "edge-monolith-workflow-worker"
-version = "25.1.0-rc.1"
+version = "25.1.1"
 dependencies = [
  "chirp-workflow",
  "ds",
@@ -5482,27 +5717,6 @@ dependencies = [
  "rivet-health-checks",
  "rivet-metrics",
  "rivet-runtime",
-]
-
-[[package]]
-name = "edge-pegboard"
-version = "25.1.0-rc.1"
-dependencies = [
- "chirp-workflow",
- "lazy_static",
- "nix 0.27.1",
- "pegboard",
- "rivet-config",
- "rivet-metrics",
- "rivet-util",
- "schemars",
- "serde",
- "serde_json",
- "server-spec",
- "sqlx",
- "strum 0.24.1",
- "thiserror 1.0.69",
- "uuid",
 ]
 
 [[package]]
@@ -6013,10 +6227,11 @@ dependencies = [
 
 [[package]]
 name = "fdb-util"
-version = "25.1.0-rc.1"
+version = "25.1.1"
 dependencies = [
  "anyhow",
  "foundationdb",
+ "global-error",
  "lazy_static",
  "tokio",
  "tracing",
@@ -7932,6 +8147,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9245,7 +9469,6 @@ dependencies = [
  "cf-custom-hostname-worker",
  "chirp-client",
  "cloud-worker",
- "ds",
  "external-worker",
  "job-log-worker",
  "job-run",
@@ -9271,10 +9494,8 @@ version = "5.1.2"
 dependencies = [
  "chirp-workflow",
  "cluster",
- "ds",
  "job-run",
  "linode",
- "pegboard",
  "rivet-config",
  "rivet-health-checks",
  "rivet-metrics",
@@ -9495,7 +9716,6 @@ dependencies = [
  "chirp-workflow",
  "chrono",
  "cluster",
- "ds",
  "futures-util",
  "indoc 1.0.9",
  "lazy_static",
@@ -10143,16 +10363,23 @@ dependencies = [
 name = "pegboard"
 version = "5.1.2"
 dependencies = [
+ "anyhow",
  "chirp-workflow",
+ "fdb-util",
+ "foundationdb",
  "lazy_static",
  "nix 0.27.1",
+ "reqwest 0.11.27",
+ "rivet-api",
  "rivet-config",
  "rivet-metrics",
  "rivet-util",
  "schemars",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "server-spec",
+ "sqlite-util",
  "sqlx",
  "strum 0.24.1",
  "thiserror 1.0.69",
@@ -10207,52 +10434,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "pegboard-dc-init"
-version = "5.1.2"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "chirp-workflow",
- "cluster",
- "pegboard",
- "reqwest 0.11.27",
- "rivet-config",
- "rivet-connection",
- "rivet-pools",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-logfmt",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
 name = "pegboard-echo-server"
 version = "0.0.1"
 dependencies = [
  "tiny_http",
-]
-
-[[package]]
-name = "pegboard-gc"
-version = "5.1.2"
-dependencies = [
- "chirp-client",
- "chirp-workflow",
- "nix 0.27.1",
- "pegboard",
- "rivet-config",
- "rivet-connection",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-runtime",
- "sqlx",
- "tokio",
- "tracing",
- "tracing-logfmt",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -10336,24 +10521,6 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "uuid",
-]
-
-[[package]]
-name = "pegboard-metrics-publish"
-version = "5.1.2"
-dependencies = [
- "chirp-client",
- "chirp-workflow",
- "pegboard",
- "rivet-config",
- "rivet-connection",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-runtime",
- "sqlx",
- "tokio",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -11793,6 +11960,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "rivet-edge-server"
+version = "25.1.1"
+dependencies = [
+ "anyhow",
+ "api-edge-monolith-edge",
+ "api-edge-monolith-public",
+ "chirp-workflow",
+ "clap",
+ "edge-monolith-workflow-worker",
+ "pegboard-ws",
+ "rivet-cache",
+ "rivet-config",
+ "rivet-connection",
+ "rivet-migrate",
+ "rivet-runtime",
+ "rivet-server-cli",
+ "rivet-service-manager",
+ "s3-util",
+]
+
+[[package]]
 name = "rivet-env"
 version = "5.1.2"
 dependencies = [
@@ -12077,6 +12265,7 @@ dependencies = [
  "redis",
  "rivet-config",
  "rivet-metrics",
+ "sqlite-util",
  "sqlx",
  "tempfile",
  "thiserror 1.0.69",
@@ -12153,8 +12342,8 @@ name = "rivet-server"
 version = "5.1.2"
 dependencies = [
  "anyhow",
- "api-monolith-edge",
- "api-monolith-public",
+ "api-core-monolith-edge",
+ "api-core-monolith-public",
  "build-default-create",
  "chirp-client",
  "chirp-workflow",
@@ -12176,10 +12365,6 @@ dependencies = [
  "monolith-worker",
  "monolith-workflow-worker",
  "nomad-monitor",
- "pegboard-dc-init",
- "pegboard-gc",
- "pegboard-metrics-publish",
- "pegboard-ws",
  "rivet-cache",
  "rivet-config",
  "rivet-connection",
@@ -12190,13 +12375,11 @@ dependencies = [
  "s3-util",
  "telemetry-beacon",
  "user-delete-pending",
- "workflow-gc",
- "workflow-metrics-publish",
 ]
 
 [[package]]
 name = "rivet-server-cli"
-version = "25.1.0-rc.1"
+version = "25.1.1"
 dependencies = [
  "anyhow",
  "chirp-workflow",
@@ -13602,7 +13785,7 @@ dependencies = [
 
 [[package]]
 name = "sqlite-util"
-version = "25.1.0-rc.1"
+version = "25.1.1"
 dependencies = [
  "sqlx",
  "tokio",
@@ -13611,7 +13794,7 @@ dependencies = [
 [[package]]
 name = "sqlx"
 version = "0.8.2"
-source = "git+https://github.com/rivet-gg/sqlx?rev=e7120f59#e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
+source = "git+https://github.com/rivet-gg/sqlx?rev=aeeae14fe7a05aa05e72a4dad59998b8bd72ad3a#aeeae14fe7a05aa05e72a4dad59998b8bd72ad3a"
 dependencies = [
  "sqlx-core",
  "sqlx-macros",
@@ -13623,7 +13806,7 @@ dependencies = [
 [[package]]
 name = "sqlx-core"
 version = "0.8.2"
-source = "git+https://github.com/rivet-gg/sqlx?rev=e7120f59#e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
+source = "git+https://github.com/rivet-gg/sqlx?rev=aeeae14fe7a05aa05e72a4dad59998b8bd72ad3a#aeeae14fe7a05aa05e72a4dad59998b8bd72ad3a"
 dependencies = [
  "bit-vec",
  "bytes",
@@ -13660,7 +13843,7 @@ dependencies = [
 [[package]]
 name = "sqlx-macros"
 version = "0.8.2"
-source = "git+https://github.com/rivet-gg/sqlx?rev=e7120f59#e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
+source = "git+https://github.com/rivet-gg/sqlx?rev=aeeae14fe7a05aa05e72a4dad59998b8bd72ad3a#aeeae14fe7a05aa05e72a4dad59998b8bd72ad3a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -13672,7 +13855,7 @@ dependencies = [
 [[package]]
 name = "sqlx-macros-core"
 version = "0.8.2"
-source = "git+https://github.com/rivet-gg/sqlx?rev=e7120f59#e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
+source = "git+https://github.com/rivet-gg/sqlx?rev=aeeae14fe7a05aa05e72a4dad59998b8bd72ad3a#aeeae14fe7a05aa05e72a4dad59998b8bd72ad3a"
 dependencies = [
  "dotenvy",
  "either",
@@ -13697,7 +13880,7 @@ dependencies = [
 [[package]]
 name = "sqlx-mysql"
 version = "0.8.2"
-source = "git+https://github.com/rivet-gg/sqlx?rev=e7120f59#e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
+source = "git+https://github.com/rivet-gg/sqlx?rev=aeeae14fe7a05aa05e72a4dad59998b8bd72ad3a#aeeae14fe7a05aa05e72a4dad59998b8bd72ad3a"
 dependencies = [
  "atoi",
  "base64 0.22.1",
@@ -13739,7 +13922,7 @@ dependencies = [
 [[package]]
 name = "sqlx-postgres"
 version = "0.8.2"
-source = "git+https://github.com/rivet-gg/sqlx?rev=e7120f59#e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
+source = "git+https://github.com/rivet-gg/sqlx?rev=aeeae14fe7a05aa05e72a4dad59998b8bd72ad3a#aeeae14fe7a05aa05e72a4dad59998b8bd72ad3a"
 dependencies = [
  "atoi",
  "base64 0.22.1",
@@ -13778,7 +13961,7 @@ dependencies = [
 [[package]]
 name = "sqlx-sqlite"
 version = "0.8.2"
-source = "git+https://github.com/rivet-gg/sqlx?rev=e7120f59#e7120f59b74fb6d83ac9b1d899b166bab31ba1d6"
+source = "git+https://github.com/rivet-gg/sqlx?rev=aeeae14fe7a05aa05e72a4dad59998b8bd72ad3a#aeeae14fe7a05aa05e72a4dad59998b8bd72ad3a"
 dependencies = [
  "atoi",
  "flume",
@@ -17057,41 +17240,6 @@ name = "winsafe"
 version = "0.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d135d17ab770252ad95e9a872d365cf3090e3be864a34ab46f48555993efc904"
-
-[[package]]
-name = "workflow-gc"
-version = "5.1.2"
-dependencies = [
- "chirp-client",
- "chirp-worker",
- "rivet-config",
- "rivet-connection",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-operation",
- "rivet-runtime",
- "tokio",
- "tracing",
- "tracing-logfmt",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "workflow-metrics-publish"
-version = "5.1.2"
-dependencies = [
- "chirp-client",
- "chirp-workflow",
- "rivet-config",
- "rivet-connection",
- "rivet-health-checks",
- "rivet-metrics",
- "rivet-runtime",
- "sqlx",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
 
 [[package]]
 name = "write16"

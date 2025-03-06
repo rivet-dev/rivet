@@ -5,8 +5,10 @@ use uuid::Uuid;
 
 use crate::{ctx::WorkflowCtx, db::DatabaseHandle, metrics, registry::RegistryHandle, utils};
 
+/// How often to pull workflows when polling.
 pub const TICK_INTERVAL: Duration = Duration::from_secs(120);
-const GC_INTERVAL: Duration = Duration::from_secs(20);
+/// How often to run internal tasks like updating ping, gc, and publishing metrics.
+const INTERNAL_INTERVAL: Duration = Duration::from_secs(20);
 
 /// Used to spawn a new thread that indefinitely polls the database for new workflows. Only pulls workflows
 /// that are registered in its registry. After pulling, the workflows are ran and their state is written to
@@ -45,25 +47,23 @@ impl Worker {
 		let shared_client = chirp_client::SharedClient::from_env(pools.clone())?;
 		let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
 
-		// Regular tick interval to poll the database
-		let mut interval = tokio::time::interval(TICK_INTERVAL);
-		interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-
-		// Regular tick interval to clear expired leases
-		let mut gc_interval = tokio::time::interval(GC_INTERVAL);
-		gc_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+		let mut tick_interval = tokio::time::interval(TICK_INTERVAL);
+		tick_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+		let mut internal_interval = tokio::time::interval(INTERNAL_INTERVAL);
+		internal_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
 		loop {
 			tokio::select! {
-				_ = interval.tick() => {},
-				_ = gc_interval.tick() => {
+				_ = tick_interval.tick() => {},
+				_ = internal_interval.tick() => {
+					self.update_ping();
 					self.gc();
 					self.publish_metrics();
 					continue;
 				},
 				res = self.db.wake() => {
 					res?;
-					interval.reset();
+					tick_interval.reset();
 				},
 			}
 
@@ -123,6 +123,20 @@ impl Worker {
 		}
 
 		Ok(())
+	}
+
+	fn update_ping(&self) {
+		let db = self.db.clone();
+		let worker_instance_id = self.worker_instance_id;
+
+		tokio::task::spawn(
+			async move {
+				if let Err(err) = db.update_worker_ping(worker_instance_id).await {
+					tracing::error!(?err, "unhandled update ping error");
+				}
+			}
+			.in_current_span(),
+		);
 	}
 
 	fn gc(&self) {

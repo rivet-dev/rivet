@@ -191,9 +191,9 @@ pub struct SleepEvent {
 
 #[derive(Debug, Clone, Hash, Copy, PartialEq, Eq, FromRepr)]
 pub enum SleepState {
-	Normal,
-	Uninterrupted,
-	Interrupted,
+	Normal = 0,
+	Uninterrupted = 1,
+	Interrupted = 2,
 }
 
 impl std::fmt::Display for SleepState {

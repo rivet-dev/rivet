@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use include_dir::{include_dir, Dir, File};
 use indoc::indoc;
 use rivet_pools::prelude::*;
+use sqlite_util::SqlitePoolExt;
 use uuid::Uuid;
+use sqlx::Acquire;
 
 use crate::{
 	error::{WorkflowError, WorkflowResult},
@@ -170,18 +172,24 @@ pub async fn init(workflow_id: Uuid, pool: &SqlitePool) -> WorkflowResult<()> {
 }
 
 async fn run_migrations(pool: &SqlitePool, last_index: i64) -> WorkflowResult<()> {
+	let mut conn = pool.conn().await?;
+
 	for (idx, file) in &*MIGRATIONS.files {
 		// Skip already applied migrations
 		if *idx <= last_index {
 			continue;
 		}
 
+		let mut tx = conn.begin().await?;
+
 		sql_execute!(
-			[SqlStub {}, pool]
+			[SqlStub {}, @tx &mut tx]
 			file.contents_utf8().unwrap(),
 		)
 		.await
 		.map_err(WorkflowError::into_migration_err)?;
+
+		tx.commit().await?;
 	}
 
 	Ok(())

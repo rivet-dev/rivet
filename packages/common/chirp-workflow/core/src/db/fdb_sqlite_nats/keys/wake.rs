@@ -1,14 +1,9 @@
-use std::{borrow::Cow, result::Result::Ok};
+use std::result::Result::Ok;
 
-// TODO: Use concrete error types
 use anyhow::*;
-use foundationdb::tuple::{
-	PackError, PackResult, TupleDepth, TuplePack, TupleUnpack, VersionstampOffset,
-};
+use fdb_util::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-
-use super::FormalKey;
 
 #[derive(Debug)]
 pub enum WakeCondition {
@@ -17,6 +12,27 @@ pub enum WakeCondition {
 	SubWorkflow { sub_workflow_id: Uuid },
 	Signal { signal_id: Uuid },
 	TaggedSignal { signal_id: Uuid },
+}
+
+impl WakeCondition {
+	fn variant(&self) -> WakeConditionVariant {
+		match self {
+			WakeCondition::Immediate => WakeConditionVariant::Immediate,
+			WakeCondition::Deadline { .. } => WakeConditionVariant::Deadline,
+			WakeCondition::SubWorkflow { .. } => WakeConditionVariant::SubWorkflow,
+			WakeCondition::Signal { .. } => WakeConditionVariant::Signal,
+			WakeCondition::TaggedSignal { .. } => WakeConditionVariant::TaggedSignal,
+		}
+	}
+}
+
+#[derive(strum::FromRepr)]
+enum WakeConditionVariant {
+	Immediate = 0,
+	Deadline = 1,
+	SubWorkflow = 2,
+	Signal = 3,
+	TaggedSignal = 4,
 }
 
 #[derive(Debug)]
@@ -77,7 +93,7 @@ impl TuplePack for WorkflowWakeConditionKey {
 					&self.workflow_name,
 					self.ts,
 					self.workflow_id,
-					"immediate",
+					self.condition.variant() as usize,
 				);
 				t.pack(w, tuple_depth)
 			}
@@ -89,7 +105,7 @@ impl TuplePack for WorkflowWakeConditionKey {
 					// Already matches deadline ts, see `WorkflowWakeConditionKey::new`
 					self.ts,
 					self.workflow_id,
-					"deadline",
+					self.condition.variant() as usize,
 				);
 				t.pack(w, tuple_depth)
 			}
@@ -100,7 +116,7 @@ impl TuplePack for WorkflowWakeConditionKey {
 					&self.workflow_name,
 					self.ts,
 					self.workflow_id,
-					"sub_workflow",
+					self.condition.variant() as usize,
 					sub_workflow_id,
 				);
 				t.pack(w, tuple_depth)
@@ -112,7 +128,7 @@ impl TuplePack for WorkflowWakeConditionKey {
 					&self.workflow_name,
 					self.ts,
 					self.workflow_id,
-					"signal",
+					self.condition.variant() as usize,
 					signal_id,
 				);
 				t.pack(w, tuple_depth)
@@ -124,7 +140,7 @@ impl TuplePack for WorkflowWakeConditionKey {
 					&self.workflow_name,
 					self.ts,
 					self.workflow_id,
-					"tagged_signal",
+					self.condition.variant() as usize,
 					signal_id,
 				);
 				t.pack(w, tuple_depth)
@@ -135,11 +151,18 @@ impl TuplePack for WorkflowWakeConditionKey {
 
 impl<'de> TupleUnpack<'de> for WorkflowWakeConditionKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, _, workflow_name, ts, workflow_id, condition_name)) =
-			<(Cow<str>, Cow<str>, String, i64, Uuid, String)>::unpack(input, tuple_depth)?;
+		let (input, (_, _, workflow_name, ts, workflow_id, wake_condition_variant)) =
+			<(Cow<str>, Cow<str>, String, i64, Uuid, usize)>::unpack(input, tuple_depth)?;
+		let wake_condition_variant = WakeConditionVariant::from_repr(wake_condition_variant)
+			.ok_or_else(|| {
+				PackError::Message(
+					format!("invalid wake condition variant `{wake_condition_variant}` in key")
+						.into(),
+				)
+			})?;
 
-		let (input, v) = match &*condition_name {
-			"immediate" => (
+		let (input, v) = match wake_condition_variant {
+			WakeConditionVariant::Immediate => (
 				input,
 				WorkflowWakeConditionKey {
 					workflow_name,
@@ -148,7 +171,7 @@ impl<'de> TupleUnpack<'de> for WorkflowWakeConditionKey {
 					condition: WakeCondition::Immediate,
 				},
 			),
-			"deadline" => (
+			WakeConditionVariant::Deadline => (
 				input,
 				WorkflowWakeConditionKey {
 					workflow_name,
@@ -160,7 +183,7 @@ impl<'de> TupleUnpack<'de> for WorkflowWakeConditionKey {
 					},
 				},
 			),
-			"sub_workflow" => {
+			WakeConditionVariant::SubWorkflow => {
 				let (input, sub_workflow_id) = Uuid::unpack(input, tuple_depth)?;
 
 				(
@@ -173,7 +196,7 @@ impl<'de> TupleUnpack<'de> for WorkflowWakeConditionKey {
 					},
 				)
 			}
-			"signal" => {
+			WakeConditionVariant::Signal => {
 				let (input, signal_id) = Uuid::unpack(input, tuple_depth)?;
 
 				(
@@ -186,7 +209,7 @@ impl<'de> TupleUnpack<'de> for WorkflowWakeConditionKey {
 					},
 				)
 			}
-			"tagged_signal" => {
+			WakeConditionVariant::TaggedSignal => {
 				let (input, signal_id) = Uuid::unpack(input, tuple_depth)?;
 
 				(
@@ -198,11 +221,6 @@ impl<'de> TupleUnpack<'de> for WorkflowWakeConditionKey {
 						condition: WakeCondition::TaggedSignal { signal_id },
 					},
 				)
-			}
-			_ => {
-				return Err(PackError::Message(
-					format!("invalid wake condition type {condition_name:?} in key").into(),
-				))
 			}
 		};
 

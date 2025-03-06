@@ -16,9 +16,9 @@ pub mod default_dev_cluster {
 	use uuid::{uuid, Uuid};
 
 	// These are intentionally hardcoded in order to simplify default dev configuration.
-
 	pub const CLUSTER_ID: Uuid = uuid!("11ca8960-acab-4963-909c-99d72af3e1cb");
 	pub const DATACENTER_ID: Uuid = uuid!("f288913c-735d-4188-bf9b-2fcf6eac7b9c");
+	pub const EDGE_API_URL: &str = "http://rivet-edge-server:8080";
 }
 
 pub mod default_hosts {
@@ -119,6 +119,10 @@ pub struct Rivet {
 
 	#[serde(default)]
 	pub cdn: Option<Cdn>,
+
+	/// Configuration for edge clusters. Should be null on the core cluster.
+	#[serde(default)]
+	pub edge: Option<Edge>,
 }
 
 impl Default for Rivet {
@@ -145,6 +149,7 @@ impl Default for Rivet {
 			billing: None,
 			backend: None,
 			test_builds: Default::default(),
+			edge: None,
 		}
 	}
 }
@@ -215,6 +220,32 @@ impl Rivet {
 		Ok(domain_job)
 	}
 
+	pub fn domain_main(&self) -> GlobalResult<&str> {
+		let domain_main = unwrap!(
+			self.dns().ok().and_then(|dns| dns.domain_main.as_ref()),
+			"unable to get dns.domain_main"
+		);
+
+		Ok(domain_main)
+	}
+
+	pub fn edge_api_url(&self, dc_name_id: &str) -> GlobalResult<Url> {
+		match self.auth.access_kind {
+			AccessKind::Development => {
+				Url::parse(default_dev_cluster::EDGE_API_URL).map_err(Into::into)
+			}
+			AccessKind::Public | AccessKind::Private => {
+				let domain_main = self.domain_main()?;
+
+				Url::parse(&format!("https://{dc_name_id}.api.{domain_main}")).map_err(Into::into)
+			}
+		}
+	}
+
+	pub fn edge_api_url_str(&self, dc_name_id: &str) -> GlobalResult<String> {
+		Ok(self.edge_api_url(dc_name_id)?.to_string().trim_end_matches('/').to_string())
+	}
+
 	pub fn billing(&self) -> GlobalResult<&Billing> {
 		Ok(unwrap_ref!(self.billing, "billing disabled"))
 	}
@@ -227,6 +258,10 @@ impl Rivet {
 
 	pub fn status(&self) -> GlobalResult<&Status> {
 		Ok(unwrap_ref!(self.status, "status api disabled"))
+	}
+
+	pub fn edge(&self) -> GlobalResult<&Edge> {
+		Ok(unwrap_ref!(self.edge, "edge disabled"))
 	}
 }
 
@@ -395,7 +430,6 @@ impl Cluster {
 					build_delivery_method: BuildDeliveryMethod::S3Direct,
 					guard: DatacenterGuard {
 						public_hostname: Some(GuardPublicHostname::Static("127.0.0.1".into())),
-
 					},
 					// Placeholder values for the dev node
 					hardware: Some(DatacenterHardware { cpu_cores: 4, cpu: 3_000 * 4, memory: 8_192, disk: 32_768, bandwidth: 1_000_000 }),
@@ -686,4 +720,14 @@ impl Default for Telemetry {
 	fn default() -> Self {
 		Telemetry { enable: true }
 	}
+}
+
+/// Configuration for edge clusters.
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct Edge {
+	pub cluster_id: Uuid,
+	pub datacenter_id: Uuid,
+	pub server_token: Option<Secret<String>>,
+	pub intercom_endpoint: String,
 }

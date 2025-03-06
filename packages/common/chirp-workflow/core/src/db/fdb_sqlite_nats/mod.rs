@@ -2,7 +2,7 @@
 // TODO: Move code to smaller functions for readability
 
 use std::{
-	collections::HashMap,
+	collections::HashSet,
 	sync::{
 		atomic::{AtomicBool, Ordering},
 		Arc,
@@ -17,9 +17,12 @@ use foundationdb::{
 };
 use futures_util::{StreamExt, TryStreamExt};
 use indoc::indoc;
+use itertools::Itertools;
 use rivet_pools::prelude::*;
-use sqlite_util::SqliteConnectionExt;
+use serde_json::json;
+use sqlite_util::SqlitePoolExt;
 use tokio::sync::Mutex;
+use sqlx::Acquire;
 use tracing::Instrument;
 use uuid::Uuid;
 
@@ -32,7 +35,7 @@ use crate::{
 	},
 	metrics, worker,
 };
-use keys::{FormalChunkedKey, FormalKey};
+use fdb_util::{FormalChunkedKey, FormalKey, SERIALIZABLE, SNAPSHOT};
 
 mod keys;
 mod sqlite;
@@ -44,17 +47,15 @@ type GlobalError = WorkflowError;
 const QUERY_RETRY_MS: usize = 500;
 /// Maximum times a query ran by this database adapter is retried.
 const MAX_QUERY_RETRIES: usize = 4;
-/// How long before considering the leases of a given worker instance "expired".
-const WORKER_INSTANCE_EXPIRED_THRESHOLD_MS: i64 = rivet_util::duration::seconds(30);
+/// How long before considering the leases of a given worker instance expired.
+/// IMPORTANT: Must always be greater than worker::INTERNAL_INTERVAL or else all workers will end up lost.
+const WORKER_INSTANCE_LOST_THRESHOLD_MS: i64 = rivet_util::duration::seconds(30);
 /// How long before overwriting an existing metrics lock.
 const METRICS_LOCK_TIMEOUT_MS: i64 = rivet_util::duration::seconds(30);
 /// For SQL macros.
 const CONTEXT_NAME: &str = "chirp_workflow_fdb_sqlite_nats_engine";
 /// For NATS wake mechanism.
 const WORKER_WAKE_SUBJECT: &str = "chirp.workflow.fdb_sqlite_nats.worker.wake";
-/// Makes the code blatantly obvious if its using a snapshot read.
-const SNAPSHOT: bool = true;
-const SERIALIZABLE: bool = false;
 
 /// Once tagged signals get removed, this and all of their code can be as well. This allows us to gradually
 /// move off of tagged signals and makes it clear which code relates to tagged signals
@@ -160,15 +161,15 @@ impl Database for DatabaseFdbSqliteNats {
 	}
 
 	async fn clear_expired_leases(&self, _worker_instance_id: Uuid) -> WorkflowResult<()> {
-		let (expired_worker_instance_ids, expired_workflow_count) = self
+		let (lost_worker_instance_ids, expired_workflow_count) = self
 			.pools
 			.fdb()?
 			.run(|tx, _mc| async move {
 				let now = rivet_util::timestamp::now();
 
 				let mut last_ping_cache: Vec<(Uuid, i64)> = Vec::new();
+				let mut lost_worker_instance_ids = HashSet::new();
 				let mut expired_workflow_count = 0;
-				let mut expired_worker_instance_ids = Vec::new();
 
 				let lease_subspace = self
 					.subspace
@@ -193,7 +194,7 @@ impl Database for DatabaseFdbSqliteNats {
 					let (workflow_name, worker_instance_id) = lease_key
 						.deserialize(lease_key_entry.value())
 						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
-					let last_ping_key =
+					let last_ping_ts_key =
 						keys::worker_instance::LastPingTsKey::new(worker_instance_id);
 
 					// Get last ping of worker instance for this lease
@@ -204,14 +205,14 @@ impl Database for DatabaseFdbSqliteNats {
 						*last_ping_ts
 					} else if let Some(last_ping_entry) = tx
 						.get(
-							&self.subspace.pack(&last_ping_key),
+							&self.subspace.pack(&last_ping_ts_key),
 							// Not SERIALIZABLE because we don't want this to conflict
 							SNAPSHOT,
 						)
 						.await?
 					{
 						// Deserialize last ping value
-						let last_ping_ts = last_ping_key
+						let last_ping_ts = last_ping_ts_key
 							.deserialize(&last_ping_entry)
 							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
@@ -227,7 +228,7 @@ impl Database for DatabaseFdbSqliteNats {
 					};
 
 					// Worker has not pinged within the threshold, meaning the lease is expired
-					if last_ping_ts < now - WORKER_INSTANCE_EXPIRED_THRESHOLD_MS {
+					if last_ping_ts < now - WORKER_INSTANCE_LOST_THRESHOLD_MS {
 						// NOTE: We add a read conflict here so this query conflicts with any other
 						// `clear_expired_leases` queries running at the same time (will conflict with the
 						// following `tx.clear`).
@@ -254,20 +255,24 @@ impl Database for DatabaseFdbSqliteNats {
 						);
 
 						expired_workflow_count += 1;
-						expired_worker_instance_ids.push(worker_instance_id);
+						lost_worker_instance_ids.insert(worker_instance_id);
+
+						tracing::debug!(?lease_key.workflow_id, "failed over wf");
 					}
 				}
 
-				Ok((expired_worker_instance_ids, expired_workflow_count))
+				Ok((lost_worker_instance_ids, expired_workflow_count))
 			})
 			.await?;
 
 		if expired_workflow_count != 0 {
 			tracing::info!(
-				worker_instance_ids=?expired_worker_instance_ids,
+				worker_instance_ids=?lost_worker_instance_ids,
 				total_workflows=%expired_workflow_count,
 				"handled failover",
 			);
+
+			self.wake_worker();
 		}
 
 		Ok(())
@@ -378,6 +383,26 @@ impl Database for DatabaseFdbSqliteNats {
 		Ok(())
 	}
 
+	async fn update_worker_ping(&self, worker_instance_id: Uuid) -> WorkflowResult<()> {
+		self.pools
+			.fdb()?
+			.run(|tx, _mc| async move {
+				// Update worker instance ping
+				let last_ping_ts_key = keys::worker_instance::LastPingTsKey::new(worker_instance_id);
+				tx.set(
+					&self.subspace.pack(&last_ping_ts_key),
+					&last_ping_ts_key
+						.serialize(rivet_util::timestamp::now())
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+				);
+
+				Ok(())
+			})
+			.await?;
+
+		Ok(())
+	}
+
 	async fn dispatch_workflow(
 		&self,
 		ray_id: Uuid,
@@ -387,10 +412,16 @@ impl Database for DatabaseFdbSqliteNats {
 		input: &serde_json::value::RawValue,
 		unique: bool,
 	) -> WorkflowResult<Uuid> {
-		assert!(
-			!unique,
-			"unique dispatch unimplemented for fdb_sqlite_nats driver"
-		);
+		if unique {
+			let empty_tags = json!({});
+
+			if let Some(existing_workflow_id) = self
+				.find_workflow(workflow_name, tags.unwrap_or(&empty_tags))
+				.await?
+			{
+				return Ok(existing_workflow_id);
+			}
+		}
 
 		self.pools
 			.fdb()?
@@ -587,9 +618,9 @@ impl Database for DatabaseFdbSqliteNats {
 		}
 	}
 
-	/// Returns the first workflow with the given name and tags, first meaning the one with the lowest uuid
-	/// value (interpreted as u128) because its in a KV store. There is no way to get any other workflow
-	/// besides the first.
+	/// Returns the first incomplete workflow with the given name and tags, first meaning the one with the
+	/// lowest uuid value (interpreted as u128) because its in a KV store. There is no way to get any other
+	/// workflow besides the first.
 	async fn find_workflow(
 		&self,
 		workflow_name: &str,
@@ -626,7 +657,7 @@ impl Database for DatabaseFdbSqliteNats {
 								))
 						} else {
 							// No tags provided, use null subspace. Every workflow has a null key for its tags
-							// under the `ByNameAndTagKey`
+							// under the `ByNameAndTagKey` subspace
 							self.subspace
 								.subspace(&keys::workflow::ByNameAndTagKey::null_subspace(
 									workflow_name.to_string(),
@@ -659,7 +690,7 @@ impl Database for DatabaseFdbSqliteNats {
 							.deserialize(entry.value())
 							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
-						// Compute intersection between wf tags and signal tags
+						// Compute intersection between wf tags and input
 						let tags_match = rest_of_tags.iter().all(|(k, v)| {
 							wf_rest_of_tags
 								.iter()
@@ -697,16 +728,6 @@ impl Database for DatabaseFdbSqliteNats {
 
 				async move {
 					let now = rivet_util::timestamp::now();
-
-					// Update worker instance ping
-					let last_ping_key =
-						keys::worker_instance::LastPingTsKey::new(worker_instance_id);
-					tx.set(
-						&self.subspace.pack(&last_ping_key),
-						&last_ping_key
-							.serialize(now)
-							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-					);
 
 					// All wake conditions with a timestamp after this timestamp will be pulled
 					let pull_before = now
@@ -761,12 +782,16 @@ impl Database for DatabaseFdbSqliteNats {
 						.try_collect::<Vec<_>>()
 						.await?;
 
-					// Check leases
-					let wf_name_by_id = entries
+					// Dedup by workflow id
+					let wf_id_and_names = entries
 						.iter()
 						.map(|(_, key)| (key.workflow_id, key.workflow_name.clone()))
-						.collect::<HashMap<_, _>>();
-					let leased_wf_ids = futures_util::stream::iter(wf_name_by_id)
+						// NOTE: the entries list is already sorted because they're from a kv range read
+						.dedup_by(|(wf_id1, _), (wf_id2, _)| wf_id1 == wf_id2)
+						.collect::<Vec<_>>();
+
+					// Check leases
+					let leased_workflows = futures_util::stream::iter(wf_id_and_names)
 						.map(|(workflow_id, workflow_name)| {
 							let tx = tx.clone();
 							async move {
@@ -780,26 +805,29 @@ impl Database for DatabaseFdbSqliteNats {
 									tx.set(
 										&lease_key_buf,
 										&lease_key
-											.serialize((workflow_name, worker_instance_id))
+											.serialize((workflow_name.clone(), worker_instance_id))
 											.map_err(|x| {
-											fdb::FdbBindingError::CustomError(x.into())
-										})?,
+												fdb::FdbBindingError::CustomError(x.into())
+											})?,
 									);
-									Ok(Some(workflow_id))
+									Ok(Some((workflow_id, workflow_name)))
 								}
 							}
 						})
 						// TODO: How to get rid of this buffer?
 						.buffer_unordered(1024)
-						.try_filter_map(|x| async move { Ok(x) })
+						.try_filter_map(|x| std::future::ready(Ok(x)))
 						.try_collect::<Vec<_>>()
 						.await?;
 
 					// TODO: Split this txn into two after checking leases here?
 
 					for (raw_key, key) in &entries {
-						// Check if leased
-						if !leased_wf_ids.iter().any(|wf_id| wf_id == &key.workflow_id) {
+						// Filter unleased entries
+						if !leased_workflows
+							.iter()
+							.any(|(wf_id, _)| wf_id == &key.workflow_id)
+						{
 							continue;
 						}
 
@@ -842,14 +870,13 @@ impl Database for DatabaseFdbSqliteNats {
 					}
 
 					// Read required data for each leased wf
-					futures_util::stream::iter(entries)
-						.map(|(_, key)| {
+					futures_util::stream::iter(leased_workflows)
+						.map(|(workflow_id, workflow_name)| {
 							let tx = tx.clone();
 							async move {
-								let create_ts_key =
-									keys::workflow::CreateTsKey::new(key.workflow_id);
-								let ray_id_key = keys::workflow::RayIdKey::new(key.workflow_id);
-								let input_key = keys::workflow::InputKey::new(key.workflow_id);
+								let create_ts_key = keys::workflow::CreateTsKey::new(workflow_id);
+								let ray_id_key = keys::workflow::RayIdKey::new(workflow_id);
+								let input_key = keys::workflow::InputKey::new(workflow_id);
 								let input_subspace = self.subspace.subspace(&input_key);
 
 								let (create_ts_entry, ray_id_entry, input_chunks) = tokio::try_join!(
@@ -884,8 +911,8 @@ impl Database for DatabaseFdbSqliteNats {
 									.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
 								Ok(PartialWorkflow {
-									workflow_id: key.workflow_id,
-									workflow_name: key.workflow_name,
+									workflow_id,
+									workflow_name,
 									create_ts,
 									ray_id,
 									input,
@@ -914,12 +941,15 @@ impl Database for DatabaseFdbSqliteNats {
 		// Set up sqlite
 		let pulled_workflows = futures_util::stream::iter(partial_workflows)
 			.map(|partial| async move {
-				let pool = self.pools.sqlite(db_name(partial.workflow_id)).await?;
-				sqlite::init(partial.workflow_id, &pool).await?;
+				let pool = &self
+					.pools
+					.sqlite(db_name(partial.workflow_id), false)
+					.await?;
+				sqlite::init(partial.workflow_id, pool).await?;
 
 				// Fetch all events
 				let events = sql_fetch_all!(
-					[self, sqlite::AmalgamEventRow, &pool]
+					[self, sqlite::AmalgamEventRow, pool]
 					"
 					-- Activity events
 					SELECT
@@ -1030,7 +1060,7 @@ impl Database for DatabaseFdbSqliteNats {
 						NULL AS auxiliary_id,
 						NULL AS hash,
 						json(state) AS input,
-						output,
+						json(output) AS output,
 						NULL AS create_ts,
 						NULL AS error_count,
 						iteration,
@@ -1196,6 +1226,56 @@ impl Database for DatabaseFdbSqliteNats {
 					tx.clear(entry.key());
 				}
 
+				let tags_subspace = self
+					.subspace
+					.subspace(&keys::workflow::TagKey::subspace(workflow_id));
+
+				// Read tags
+				let tag_keys = tx
+					.get_ranges_keyvalues(
+						fdb::RangeOption {
+							mode: StreamingMode::WantAll,
+							..(&tags_subspace).into()
+						},
+						SERIALIZABLE,
+					)
+					.map(|res| match res {
+						Ok(entry) => self
+							.subspace
+							.unpack::<keys::workflow::TagKey>(entry.key())
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into())),
+						Err(err) => Err(Into::<fdb::FdbBindingError>::into(err)),
+					})
+					.try_collect::<Vec<_>>()
+					.await?;
+
+				// TODO: Waking a workflow that already completed will result in it not having this index
+				// Clear "by name and first tag" secondary index
+				for key in tag_keys {
+					let by_name_and_tag_key = keys::workflow::ByNameAndTagKey::new(
+						workflow_name.to_string(),
+						key.k,
+						key.v,
+						workflow_id,
+					);
+					tx.clear(&self.subspace.pack(&by_name_and_tag_key));
+				}
+
+				// Clear null key
+				{
+					let by_name_and_tag_key = keys::workflow::ByNameAndTagKey::null(
+						workflow_name.to_string(),
+						workflow_id,
+					);
+					tx.clear(&self.subspace.pack(&by_name_and_tag_key));
+				}
+
+				// Clear all previous wake signals in list
+				let wake_signals_subspace = self
+					.subspace
+					.subspace(&keys::workflow::WakeSignalKey::subspace(workflow_id));
+				tx.clear_subspace_range(&wake_signals_subspace);
+
 				// Get and clear the pending deadline wake condition, if any. We have to clear here because
 				// the `pull_workflows` function might not have pulled the condition if its in the future.
 				let wake_deadline_key = keys::workflow::WakeDeadlineKey::new(workflow_id);
@@ -1229,6 +1309,12 @@ impl Database for DatabaseFdbSqliteNats {
 
 					tx.set(&chunk_key, &chunk);
 				}
+
+				// Clear lease
+				let lease_key = self
+					.subspace
+					.pack(&keys::workflow::LeaseKey::new(workflow_id));
+				tx.clear(&lease_key);
 
 				Ok(())
 			})
@@ -1396,6 +1482,15 @@ impl Database for DatabaseFdbSqliteNats {
 			})
 			.await?;
 
+		// Wake worker again if the deadline is before the next tick
+		if let Some(deadline_ts) = wake_deadline_ts {
+			if deadline_ts
+				<= rivet_util::timestamp::now() + worker::TICK_INTERVAL.as_millis() as i64
+			{
+				self.wake_worker();
+			}
+		}
+
 		Ok(())
 	}
 
@@ -1407,7 +1502,7 @@ impl Database for DatabaseFdbSqliteNats {
 		version: usize,
 		loop_location: Option<&Location>,
 	) -> WorkflowResult<Option<SignalData>> {
-		let pool = self.pools.sqlite(db_name(workflow_id)).await?;
+		let pool = &self.pools.sqlite(db_name(workflow_id), false).await?;
 
 		let owned_filter = filter
 			.into_iter()
@@ -2018,7 +2113,6 @@ impl Database for DatabaseFdbSqliteNats {
 							SNAPSHOT,
 						);
 
-						// TODO: This is almost a full scan
 						while let Some(entry) = stream.try_next().await.unwrap() {
 							let signal_wake_key = self
 								.subspace
@@ -2077,12 +2171,12 @@ impl Database for DatabaseFdbSqliteNats {
 		body: &serde_json::value::RawValue,
 		loop_location: Option<&Location>,
 	) -> WorkflowResult<()> {
-		let pool = self.pools.sqlite(db_name(from_workflow_id)).await?;
+		let pool = &self.pools.sqlite(db_name(from_workflow_id), false).await?;
 
 		// Insert history event
 		self.query(|| async {
 			sql_execute!(
-				[self, &pool]
+				[self, pool]
 				"
 					INSERT INTO workflow_signal_send_events (
 						location, version, signal_id, signal_name, body, create_ts, loop_location
@@ -2108,7 +2202,7 @@ impl Database for DatabaseFdbSqliteNats {
 			// Undo history if FDB failed
 			self.query(|| async {
 				sql_execute!(
-					[self, &pool]
+					[self, pool]
 					"
 						DELETE FROM workflow_signal_send_events
 						WHERE location = ?
@@ -2138,12 +2232,12 @@ impl Database for DatabaseFdbSqliteNats {
 		loop_location: Option<&Location>,
 	) -> WorkflowResult<()> {
 		if TAGGED_SIGNALS_ENABLED {
-			let pool = self.pools.sqlite(db_name(from_workflow_id)).await?;
+			let pool = &self.pools.sqlite(db_name(from_workflow_id), false).await?;
 
 			// Insert history event
 			self.query(|| async {
 				sql_execute!(
-					[self, &pool]
+					[self, pool]
 					"
 					INSERT INTO workflow_signal_send_events (
 						location, version, signal_id, signal_name, body, create_ts, loop_location
@@ -2169,7 +2263,7 @@ impl Database for DatabaseFdbSqliteNats {
 				// Undo history if FDB failed
 				self.query(|| async {
 					sql_execute!(
-						[self, &pool]
+						[self, pool]
 						"
 						DELETE FROM workflow_signal_send_events
 						WHERE location = ?
@@ -2202,12 +2296,12 @@ impl Database for DatabaseFdbSqliteNats {
 		loop_location: Option<&Location>,
 		unique: bool,
 	) -> WorkflowResult<Uuid> {
-		let pool = self.pools.sqlite(db_name(workflow_id)).await?;
+		let pool = &self.pools.sqlite(db_name(workflow_id), false).await?;
 
 		// Insert history event
 		self.query(|| async {
 			sql_execute!(
-				[self, &pool]
+				[self, pool]
 				"
 				INSERT INTO workflow_sub_workflow_events (
 					location, version, sub_workflow_id, sub_workflow_name, create_ts, loop_location
@@ -2241,7 +2335,7 @@ impl Database for DatabaseFdbSqliteNats {
 				// Undo history if FDB failed
 				self.query(|| async {
 					sql_execute!(
-						[self, &pool]
+						[self, pool]
 						"
 						DELETE FROM workflow_sub_workflow_events
 						WHERE location = ?
@@ -2364,14 +2458,14 @@ impl Database for DatabaseFdbSqliteNats {
 		res: Result<&serde_json::value::RawValue, &str>,
 		loop_location: Option<&Location>,
 	) -> WorkflowResult<()> {
-		let pool = self.pools.sqlite(db_name(workflow_id)).await?;
+		let pool = &self.pools.sqlite(db_name(workflow_id), false).await?;
 		let input_hash = event_id.input_hash.to_be_bytes();
 
 		match res {
 			Ok(output) => {
 				self.query(|| async {
 					sql_execute!(
-						[self, &pool]
+						[self, pool]
 						"
 						INSERT INTO workflow_activity_events (
 							location,
@@ -2402,14 +2496,8 @@ impl Database for DatabaseFdbSqliteNats {
 			}
 			Err(err) => {
 				self.query(|| async {
-					// Attempt to use an existing connection
-					let mut conn = if let Some(conn) = pool.try_acquire() {
-						conn
-					} else {
-						// Create a new connection
-						pool.acquire().await?
-					};
-					let mut tx = conn.begin_immediate().await?;
+					let mut conn = pool.conn().await?;
+					let mut tx = conn.begin().await?;
 
 					sql_execute!(
 						[self, @tx &mut tx]
@@ -2470,11 +2558,11 @@ impl Database for DatabaseFdbSqliteNats {
 		body: &serde_json::value::RawValue,
 		loop_location: Option<&Location>,
 	) -> WorkflowResult<()> {
-		let pool = self.pools.sqlite(db_name(from_workflow_id)).await?;
+		let pool = &self.pools.sqlite(db_name(from_workflow_id), false).await?;
 
 		self.query(|| async {
 			sql_execute!(
-				[self, &pool]
+				[self, pool]
 				"
 				INSERT INTO workflow_message_send_events (
 					location, version, tags, message_name, body, create_ts, loop_location
@@ -2506,17 +2594,11 @@ impl Database for DatabaseFdbSqliteNats {
 		output: Option<&serde_json::value::RawValue>,
 		loop_location: Option<&Location>,
 	) -> WorkflowResult<()> {
-		let pool = self.pools.sqlite(db_name(workflow_id)).await?;
+		let pool = &self.pools.sqlite(db_name(workflow_id), false).await?;
 
 		self.query(|| async {
-			// Attempt to use an existing connection
-			let mut conn = if let Some(conn) = pool.try_acquire() {
-				conn
-			} else {
-				// Create a new connection
-				pool.acquire().await?
-			};
-			let mut tx = conn.begin_immediate().await?;
+			let mut conn = pool.conn().await?;
+			let mut tx = conn.begin().await?;
 
 			sql_execute!(
 				[self, @tx &mut tx]
@@ -2680,11 +2762,11 @@ impl Database for DatabaseFdbSqliteNats {
 		deadline_ts: i64,
 		loop_location: Option<&Location>,
 	) -> WorkflowResult<()> {
-		let pool = self.pools.sqlite(db_name(from_workflow_id)).await?;
+		let pool = &self.pools.sqlite(db_name(from_workflow_id), false).await?;
 
 		self.query(|| async {
 			sql_execute!(
-				[self, &pool]
+				[self, pool]
 				"
 				INSERT INTO workflow_sleep_events (
 					location, version, deadline_ts, create_ts, state, loop_location
@@ -2711,15 +2793,15 @@ impl Database for DatabaseFdbSqliteNats {
 		location: &Location,
 		state: SleepState,
 	) -> WorkflowResult<()> {
-		let pool = self.pools.sqlite(db_name(from_workflow_id)).await?;
+		let pool = &self.pools.sqlite(db_name(from_workflow_id), false).await?;
 
 		self.query(|| async {
 			sql_execute!(
-				[self, &pool]
+				[self, pool]
 				"
 				UPDATE workflow_sleep_events
 				SET state = ?
-				WHERE location = ?
+				WHERE location = jsonb(?)
 				",
 				state as i64,
 				location,
@@ -2738,11 +2820,11 @@ impl Database for DatabaseFdbSqliteNats {
 		version: usize,
 		loop_location: Option<&Location>,
 	) -> WorkflowResult<()> {
-		let pool = self.pools.sqlite(db_name(from_workflow_id)).await?;
+		let pool = &self.pools.sqlite(db_name(from_workflow_id), false).await?;
 
 		self.query(|| async {
 			sql_execute!(
-				[self, &pool]
+				[self, pool]
 				"
 				INSERT INTO workflow_branch_events (
 					location, version, create_ts, loop_location
@@ -2769,11 +2851,11 @@ impl Database for DatabaseFdbSqliteNats {
 		event_name: Option<&str>,
 		loop_location: Option<&Location>,
 	) -> WorkflowResult<()> {
-		let pool = self.pools.sqlite(db_name(from_workflow_id)).await?;
+		let pool = &self.pools.sqlite(db_name(from_workflow_id), false).await?;
 
 		self.query(|| async {
 			sql_execute!(
-				[self, &pool]
+				[self, pool]
 				"
 				INSERT INTO workflow_removed_events (
 					location, event_type, event_name, create_ts, loop_location
@@ -2800,11 +2882,11 @@ impl Database for DatabaseFdbSqliteNats {
 		version: usize,
 		loop_location: Option<&Location>,
 	) -> WorkflowResult<()> {
-		let pool = self.pools.sqlite(db_name(from_workflow_id)).await?;
+		let pool = &self.pools.sqlite(db_name(from_workflow_id), false).await?;
 
 		self.query(|| async {
 			sql_execute!(
-				[self, &pool]
+				[self, pool]
 				"
 				INSERT INTO workflow_version_check_events (
 					location, version, create_ts, loop_location

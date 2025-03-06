@@ -39,6 +39,7 @@ struct EndpointRouter {
 	routes: Punctuated<Endpoint, Token![,]>,
 	cors_config: Option<syn::Expr>,
 	mounts: Punctuated<Mount, Token![,]>,
+	db_driver: Option<syn::Type>,
 }
 
 impl Parse for EndpointRouter {
@@ -46,6 +47,7 @@ impl Parse for EndpointRouter {
 		let mut routes = None;
 		let mut cors_config = None;
 		let mut mounts = None;
+		let mut db_driver = None;
 
 		// Loop through all keys in the object
 		loop {
@@ -92,11 +94,21 @@ impl Parse for EndpointRouter {
 						));
 					}
 				}
+				"db_driver" => {
+					if db_driver.is_none() {
+						db_driver = Some(input.parse()?);
+					} else {
+						return Err(syn::Error::new(
+							key.span(),
+							format!("Duplicate key `{}`.", key),
+						));
+					}
+				}
 				_ => {
 					return Err(syn::Error::new(
 						key.span(),
 						format!(
-							"Unexpected key `{}`. Try `routes`, `cors`, or `mounts`.",
+							"Unexpected key `{}`. Try `routes`, `cors`, `mounts`, or `db_driver`.",
 							key
 						),
 					));
@@ -125,6 +137,7 @@ impl Parse for EndpointRouter {
 			routes,
 			cors_config,
 			mounts,
+			db_driver,
 		})
 	}
 }
@@ -134,7 +147,7 @@ impl EndpointRouter {
 		let endpoints = self
 			.routes
 			.into_iter()
-			.map(|endpoint| endpoint.render(self.cors_config.clone()))
+			.map(|endpoint| endpoint.render(self.cors_config.clone(), self.db_driver.clone()))
 			.collect::<syn::Result<Vec<_>>>()?;
 
 		let mounts = self
@@ -466,7 +479,11 @@ impl Parse for Endpoint {
 }
 
 impl Endpoint {
-	fn render(self, cors_config: Option<syn::Expr>) -> syn::Result<TokenStream2> {
+	fn render(
+		self,
+		cors_config: Option<syn::Expr>,
+		db_driver: Option<syn::Type>,
+	) -> syn::Result<TokenStream2> {
 		// Check cors at the endpoint level
 		let cors = if let Some(cors_config) = cors_config {
 			quote! {
@@ -530,7 +547,7 @@ impl Endpoint {
 		let arms = self
 			.functions
 			.into_iter()
-			.map(|func| func.render(arg_list.clone(), metrics_path.clone()))
+			.map(|func| func.render(db_driver.clone(), arg_list.clone(), metrics_path.clone()))
 			.collect::<syn::Result<Vec<_>>>()?;
 
 		Ok(quote! {
@@ -651,6 +668,7 @@ impl Parse for EndpointFunction {
 impl EndpointFunction {
 	fn render(
 		self,
+		db_driver: Option<syn::Type>,
 		mut arg_list: Vec<TokenStream2>,
 		metrics_path: Literal,
 	) -> syn::Result<TokenStream2> {
@@ -849,7 +867,7 @@ impl EndpointFunction {
 					arg_list.push(arg_name.to_token_stream());
 
 					Ok(quote! {
-						let #arg_name = macro_util::__deserialize_query::<#value>(
+						let #arg_name = api_helper::macro_util::__deserialize_query::<#value>(
 							&router_config.route
 						)?;
 					})
@@ -858,7 +876,7 @@ impl EndpointFunction {
 					arg_list.push(arg_name.to_token_stream());
 
 					Ok(quote! {
-						let #arg_name = macro_util::__deserialize_cookies(&request);
+						let #arg_name = api_helper::macro_util::__deserialize_cookies(&request);
 					})
 				} else if arg.label == "header" {
 					let value = arg.value.expect_expr()?;
@@ -872,7 +890,7 @@ impl EndpointFunction {
 						.unwrap_or_else(|| quote! { _ });
 
 					Ok(quote! {
-						let #arg_name = macro_util::__deserialize_header::<#associated_type, _>(&request, #value)?;
+						let #arg_name = api_helper::macro_util::__deserialize_header::<#associated_type, _>(&request, #value)?;
 					})
 				} else {
 					// NOTE: This scope is not unreachable, certain arguments such as body or rate limit are
@@ -882,12 +900,18 @@ impl EndpointFunction {
 			})
 			.collect::<syn::Result<Vec<_>>>()?;
 
+		let db_driver = if let Some(db_driver) = db_driver {
+			quote! { #db_driver }
+		} else {
+			quote! { api_helper::macro_util::DefaultDbDriver }
+		};
+
 		// Format single endpoint
 		Ok(quote! {
 			&http::Method::#req_type => {
 				#(#args)*
 
-				let ctx = macro_util::__with_ctx(
+				let ctx = macro_util::__with_ctx::<_, #db_driver>(
 					shared_client.clone(),
 					config.clone(),
 					pools.clone(),
