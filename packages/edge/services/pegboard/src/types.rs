@@ -34,8 +34,10 @@ pub struct ActorResources {
 impl ActorResources {
 	pub fn default_isolate() -> Self {
 		ActorResources {
-			cpu_millicores: 125,
-			memory_mib: 128,
+			// cpu_millicores: 125,
+			// memory_mib: 128,
+			cpu_millicores: 250,
+			memory_mib: 256,
 		}
 	}
 }

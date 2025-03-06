@@ -147,7 +147,8 @@ impl Worker {
 				if let Err(err) = db.clear_expired_leases(worker_instance_id).await {
 					tracing::error!(?err, "unhandled gc error");
 				}
-			}.in_current_span(),
+			}
+			.in_current_span(),
 		);
 	}
 

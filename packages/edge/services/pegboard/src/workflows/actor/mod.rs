@@ -266,6 +266,18 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 									})
 									.await?;
 
+									// Kill old actor immediately if lost
+									if let protocol::ActorState::Lost = sig.state {
+										destroy::kill(
+											ctx,
+											input.actor_id,
+											state.client_id,
+											0,
+											true,
+										)
+										.await?;
+									}
+
 									if runtime::reschedule_actor(
 										ctx,
 										&input,
@@ -286,7 +298,11 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 								} else {
 									ctx.activity(runtime::SetFinishedInput {}).await?;
 
-									return Ok(Loop::Break(runtime::StateRes { kill: None }));
+									return Ok(Loop::Break(runtime::StateRes {
+										// No need to kill if already exited
+										kill: matches!(sig.state, protocol::ActorState::Lost)
+											.then_some(KillCtx { kill_timeout_ms: 0 }),
+									}));
 								}
 							}
 						}

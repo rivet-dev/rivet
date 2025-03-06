@@ -43,6 +43,7 @@ pub const INGRESS: usize = 41;
 pub const PROXIED: usize = 42;
 pub const CLIENTS_BY_REMAINING_MEM: usize = 43;
 pub const SQLITE: usize = 44;
+pub const INTERNAL: usize = 45;
 
 pub fn key_from_str(key: &str) -> Option<usize> {
 	match key {
@@ -91,6 +92,7 @@ pub fn key_from_str(key: &str) -> Option<usize> {
 		"proxied" => Some(PROXIED),
 		"clients_by_remaining_mem" => Some(CLIENTS_BY_REMAINING_MEM),
 		"sqlite" => Some(SQLITE),
+		"internal" => Some(INTERNAL),
 		_ => None,
 	}
 }

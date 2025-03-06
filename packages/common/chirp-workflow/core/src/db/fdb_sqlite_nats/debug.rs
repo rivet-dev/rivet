@@ -1,7 +1,3 @@
-use std::{
-	ops::Deref,
-	result::Result::{Err, Ok},
-};
 use anyhow::*;
 use fdb_util::{FormalChunkedKey, FormalKey, SNAPSHOT};
 use foundationdb::{
@@ -12,10 +8,18 @@ use foundationdb::{
 use futures_util::{StreamExt, TryStreamExt};
 use indoc::indoc;
 use rivet_pools::prelude::*;
-use uuid::Uuid;
+use std::{
+	ops::Deref,
+	result::Result::{Err, Ok},
+};
 use tracing::Instrument as _;
+use uuid::Uuid;
 
-use super::{keys, sqlite::SqlStub, sqlite_db_name_internal, DatabaseFdbSqliteNats};
+use super::{
+	keys,
+	sqlite::{db_name_internal, SqlStub},
+	DatabaseFdbSqliteNats,
+};
 use crate::{
 	db::debug::{
 		ActivityError, ActivityEvent, DatabaseDebug, Event, EventData, HistoryData, LoopEvent,
@@ -538,7 +542,7 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 	) -> Result<Option<HistoryData>> {
 		let pool = &self
 			.pools
-			.sqlite(sqlite_db_name_internal(workflow_id), true)
+			.sqlite(db_name_internal(workflow_id), true)
 			.await?;
 
 		let (wf_data, event_rows, error_rows) = tokio::try_join!(
@@ -910,7 +914,8 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 					let signals = self.get_signals_inner(signal_ids, &tx).await?;
 
 					Ok(signals)
-				}.instrument(tracing::info_span!("find_signals_tx"))
+				}
+				.instrument(tracing::info_span!("find_signals_tx"))
 			})
 			.await
 			.map_err(Into::into)

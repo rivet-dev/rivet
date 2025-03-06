@@ -100,6 +100,7 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 					"clickhouse://127.0.0.1:{TUNNEL_CLICKHOUSE_NATIVE_PORT}",
 				))?,
 				secure: false,
+				provision_users: HashMap::new(),
 				..clickhouse.clone()
 			})).transpose()?,
 			prometheus: Some(Prometheus {

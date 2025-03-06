@@ -45,9 +45,8 @@ impl TuplePack for LeaseKey {
 
 impl<'de> TupleUnpack<'de> for LeaseKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, _, workflow_id)) =
-			<(usize, usize, Uuid)>::unpack(input, tuple_depth)?;
-        let v = LeaseKey { workflow_id };
+		let (input, (_, _, workflow_id)) = <(usize, usize, Uuid)>::unpack(input, tuple_depth)?;
+		let v = LeaseKey { workflow_id };
 
 		Ok((input, v))
 	}
@@ -106,14 +105,7 @@ impl TuplePack for TagKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = (
-			WORKFLOW,
-			DATA,
-			self.workflow_id,
-			TAG,
-			&self.k,
-			&self.v,
-		);
+		let t = (WORKFLOW, DATA, self.workflow_id, TAG, &self.k, &self.v);
 		t.pack(w, tuple_depth)
 	}
 }
@@ -686,7 +678,7 @@ impl<'de> TupleUnpack<'de> for WakeSubWorkflowKey {
 		if data != WAKE_SUB_WORKFLOW_ID {
 			return Err(PackError::Message(
 				"expected WAKE_SUB_WORKFLOW_ID data".into(),
-            ));
+			));
 		}
 
 		let v = WakeSubWorkflowKey { workflow_id };

@@ -34,12 +34,7 @@ impl TuplePack for LastPingTsKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = (
-			WORKER_INSTANCE,
-			DATA,
-			self.worker_instance_id,
-			LAST_PING_TS,
-		);
+		let t = (WORKER_INSTANCE, DATA, self.worker_instance_id, LAST_PING_TS);
 		t.pack(w, tuple_depth)
 	}
 }

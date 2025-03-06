@@ -1141,34 +1141,38 @@ impl WorkflowCtx {
 		else if duration < self.db.worker_poll_interval().as_millis() as i64 + 1 {
 			tracing::debug!(name=%self.name, id=%self.workflow_id, %deadline_ts, "sleeping in memory");
 
-			let res = tokio::time::timeout(Duration::from_millis(duration.try_into()?), (async {
-				tracing::debug!(name=%self.name, id=%self.workflow_id, "listening for signal with timeout");
+			let res = tokio::time::timeout(
+				Duration::from_millis(duration.try_into()?),
+				(async {
+					tracing::debug!(name=%self.name, id=%self.workflow_id, "listening for signal with timeout");
 
-				let mut wake_sub = self.db.wake_sub().await?;
-				let mut interval = tokio::time::interval(self.db.signal_poll_interval());
-				interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+					let mut wake_sub = self.db.wake_sub().await?;
+					let mut interval = tokio::time::interval(self.db.signal_poll_interval());
+					interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-				// Skip first tick, we wait after the db call instead of before
-				interval.tick().await;
+					// Skip first tick, we wait after the db call instead of before
+					interval.tick().await;
 
-				let mut ctx = ListenCtx::new(self, &signal_location);
+					let mut ctx = ListenCtx::new(self, &signal_location);
 
-				loop {
-					ctx.reset();
+					loop {
+						ctx.reset();
 
-					match T::listen(&mut ctx).await {
-						// Retry
-						Err(WorkflowError::NoSignalFound(_)) => {}
-						x => return x,
+						match T::listen(&mut ctx).await {
+							// Retry
+							Err(WorkflowError::NoSignalFound(_)) => {}
+							x => return x,
+						}
+
+						// Poll and wait for a wake at the same time
+						tokio::select! {
+							_ = wake_sub.next() => {},
+							_ = interval.tick() => {},
+						}
 					}
-
-					// Poll and wait for a wake at the same time
-					tokio::select! {
-						_ = wake_sub.next() => {},
-						_ = interval.tick() => {},
-					}
-				}
-			}).in_current_span())
+				})
+				.in_current_span(),
+			)
 			.await;
 
 			match res {

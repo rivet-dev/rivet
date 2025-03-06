@@ -76,7 +76,8 @@ impl MessageCtx {
 							tracing::error!(?err, "failed to publish message");
 						}
 					}
-				}.instrument(tracing::info_span!("message_bg")),
+				}
+				.instrument(tracing::info_span!("message_bg")),
 			);
 		if let Err(err) = spawn_res {
 			tracing::error!(?err, "failed to spawn message_async task");
@@ -461,10 +462,13 @@ where
 
 	/// Converts the subscription in to a stream.
 	pub fn into_stream(self) -> impl futures_util::Stream<Item = WorkflowResult<NatsMessage<M>>> {
-		futures_util::stream::try_unfold(self, |mut sub| async move {
-			let message = sub.next().await?;
-			Ok(Some((message, sub)))
-		}.in_current_span())
+		futures_util::stream::try_unfold(self, |mut sub| {
+			async move {
+				let message = sub.next().await?;
+				Ok(Some((message, sub)))
+			}
+			.in_current_span()
+		})
 	}
 }
 

@@ -131,7 +131,7 @@ impl DatabaseFdbSqliteNats {
 
 	/// Evicts all SQLite databases related to this workflow from this node.
 	///
-	/// THis must be done before releasing the lease on the workflow in order to prevent a race
+	/// This must be done before releasing the lease on the workflow in order to prevent a race
 	/// condition with other workflow workers picking it up.
 	#[tracing::instrument(skip_all)]
 	async fn evict_wf_sqlite(&self, workflow_id: Uuid) -> WorkflowResult<()> {
@@ -140,7 +140,7 @@ impl DatabaseFdbSqliteNats {
 		tokio::try_join!(
 			self.pools
 				.sqlite_manager()
-				.evict(sqlite_db_name_internal(workflow_id)),
+				.evict(sqlite::db_name_internal(workflow_id)),
 			self.pools
 				.sqlite_manager()
 				.evict(crate::db::sqlite_db_name_data(workflow_id)),
@@ -1334,7 +1334,7 @@ impl Database for DatabaseFdbSqliteNats {
 				async move {
 					let pool = &self
 						.pools
-						.sqlite(sqlite_db_name_internal(partial.workflow_id), false)
+						.sqlite(sqlite::db_name_internal(partial.workflow_id), false)
 						.await?;
 					sqlite::init(partial.workflow_id, pool).await?;
 
@@ -1950,7 +1950,7 @@ impl Database for DatabaseFdbSqliteNats {
 	) -> WorkflowResult<Option<SignalData>> {
 		let pool = &self
 			.pools
-			.sqlite(sqlite_db_name_internal(workflow_id), false)
+			.sqlite(sqlite::db_name_internal(workflow_id), false)
 			.await?;
 
 		let owned_filter = filter
@@ -2689,7 +2689,7 @@ impl Database for DatabaseFdbSqliteNats {
 	) -> WorkflowResult<()> {
 		let pool = &self
 			.pools
-			.sqlite(sqlite_db_name_internal(from_workflow_id), false)
+			.sqlite(sqlite::db_name_internal(from_workflow_id), false)
 			.await?;
 
 		// Insert history event
@@ -2759,7 +2759,7 @@ impl Database for DatabaseFdbSqliteNats {
 		if TAGGED_SIGNALS_ENABLED {
 			let pool = &self
 				.pools
-				.sqlite(sqlite_db_name_internal(from_workflow_id), false)
+				.sqlite(sqlite::db_name_internal(from_workflow_id), false)
 				.await?;
 
 			// Insert history event
@@ -2832,7 +2832,7 @@ impl Database for DatabaseFdbSqliteNats {
 	) -> WorkflowResult<Uuid> {
 		let pool = &self
 			.pools
-			.sqlite(sqlite_db_name_internal(workflow_id), false)
+			.sqlite(sqlite::db_name_internal(workflow_id), false)
 			.await?;
 
 		// Insert history event
@@ -3011,7 +3011,7 @@ impl Database for DatabaseFdbSqliteNats {
 	) -> WorkflowResult<()> {
 		let pool = &self
 			.pools
-			.sqlite(sqlite_db_name_internal(workflow_id), false)
+			.sqlite(sqlite::db_name_internal(workflow_id), false)
 			.await?;
 		let input_hash = event_id.input_hash.to_be_bytes();
 
@@ -3120,7 +3120,7 @@ impl Database for DatabaseFdbSqliteNats {
 
 		let pool = &self
 			.pools
-			.sqlite(sqlite_db_name_internal(from_workflow_id), false)
+			.sqlite(sqlite::db_name_internal(from_workflow_id), false)
 			.await?;
 
 		self.query(|| async {
@@ -3162,7 +3162,7 @@ impl Database for DatabaseFdbSqliteNats {
 	) -> WorkflowResult<()> {
 		let pool = &self
 			.pools
-			.sqlite(sqlite_db_name_internal(workflow_id), false)
+			.sqlite(sqlite::db_name_internal(workflow_id), false)
 			.await?;
 
 		self.query(|| async {
@@ -3334,7 +3334,7 @@ impl Database for DatabaseFdbSqliteNats {
 	) -> WorkflowResult<()> {
 		let pool = &self
 			.pools
-			.sqlite(sqlite_db_name_internal(from_workflow_id), false)
+			.sqlite(sqlite::db_name_internal(from_workflow_id), false)
 			.await?;
 
 		self.query(|| async {
@@ -3369,7 +3369,7 @@ impl Database for DatabaseFdbSqliteNats {
 	) -> WorkflowResult<()> {
 		let pool = &self
 			.pools
-			.sqlite(sqlite_db_name_internal(from_workflow_id), false)
+			.sqlite(sqlite::db_name_internal(from_workflow_id), false)
 			.await?;
 
 		self.query(|| async {
@@ -3400,7 +3400,7 @@ impl Database for DatabaseFdbSqliteNats {
 	) -> WorkflowResult<()> {
 		let pool = &self
 			.pools
-			.sqlite(sqlite_db_name_internal(from_workflow_id), false)
+			.sqlite(sqlite::db_name_internal(from_workflow_id), false)
 			.await?;
 
 		self.query(|| async {
@@ -3435,7 +3435,7 @@ impl Database for DatabaseFdbSqliteNats {
 	) -> WorkflowResult<()> {
 		let pool = &self
 			.pools
-			.sqlite(sqlite_db_name_internal(from_workflow_id), false)
+			.sqlite(sqlite::db_name_internal(from_workflow_id), false)
 			.await?;
 
 		self.query(|| async {
@@ -3470,7 +3470,7 @@ impl Database for DatabaseFdbSqliteNats {
 	) -> WorkflowResult<()> {
 		let pool = &self
 			.pools
-			.sqlite(sqlite_db_name_internal(from_workflow_id), false)
+			.sqlite(sqlite::db_name_internal(from_workflow_id), false)
 			.await?;
 
 		self.query(|| async {
@@ -3502,11 +3502,6 @@ struct PartialWorkflow {
 	pub ray_id: Uuid,
 	pub input: Box<serde_json::value::RawValue>,
 	pub wake_deadline_ts: Option<i64>,
-}
-
-/// Database name for the workflow internal state.
-pub fn sqlite_db_name_internal(workflow_id: Uuid) -> (&'static str, Uuid, &'static str) {
-	("workflow", workflow_id, "internal")
 }
 
 #[derive(Debug, Default)]

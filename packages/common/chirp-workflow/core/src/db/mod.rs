@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
+use fdb_util::keys::*;
 use futures_util::stream::BoxStream;
 use uuid::Uuid;
 
@@ -331,6 +332,6 @@ pub struct SignalData {
 }
 
 /// Database name for the local SQLite database for a workflow.
-pub fn sqlite_db_name_data(workflow_id: Uuid) -> (&'static str, Uuid, &'static str) {
-	("workflow", workflow_id, "data")
+pub fn sqlite_db_name_data(workflow_id: Uuid) -> (usize, Uuid, usize) {
+	(WORKFLOW, workflow_id, DATA)
 }
