@@ -69,6 +69,7 @@ pub async fn start_fdb() {
 	let status = Command::new("docker")
 		.arg("run")
 		.arg("--rm")
+		.arg("--platform=linux/amd64")
 		.arg("-p")
 		.arg("4500:4500")
 		.arg("--name")
