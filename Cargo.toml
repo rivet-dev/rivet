@@ -13,6 +13,7 @@ license = "Apache-2.0"
 anyhow = "1.0.79"
 dirs = "5.0"
 hex = "0.4"
+json5 = "0.4.1"
 tracing = "0.1"
 
 [workspace.dependencies.tokio]

@@ -94,7 +94,7 @@ const services: Service[] = [
 
 	{
 		name: "rivet-client",
-		command: "rivet-client -c /etc/rivet-client/config.yaml",
+		command: "rivet-client -c /etc/rivet-client/config.jsonc",
 		dependencies: [
 			"rivet-server",
 			"foundationdb",

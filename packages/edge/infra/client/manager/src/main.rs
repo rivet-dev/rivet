@@ -104,6 +104,12 @@ async fn init() -> Result<Init> {
 				config_path.display()
 			)
 		})?,
+		Some("json5") | Some("jsonc") => json5::from_str::<Config>(&config_data).with_context(|| {
+			format!(
+				"Failed to parse JSON5 config file at {}",
+				config_path.display()
+			)
+		})?,
 		Some("yaml") | Some("yml") => {
 			serde_yaml::from_str::<Config>(&config_data).with_context(|| {
 				format!(

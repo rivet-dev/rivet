@@ -35,7 +35,7 @@ services:
       vector-server:
         condition: service_started
     volumes:
-      - ./rivet-server:/etc/rivet-server:ro
+      - ./rivet-server/config.jsonc:/etc/rivet-server/config.jsonc:ro
     networks:
       - rivet-network
     healthcheck:
@@ -76,7 +76,7 @@ services:
       vector-server:
         condition: service_started
     volumes:
-      - ./rivet-edge-server:/etc/rivet-server:ro
+      - ./rivet-edge-server/config.jsonc:/etc/rivet-server/config.jsonc:ro
       - sqlite-data:/var/lib/rivet-sqlite:rw
     networks:
       - rivet-network
@@ -118,7 +118,7 @@ services:
       # Enable TCP & UDP port ranges.
       #
       # Corresponds to `server.rivet.guard.min_ingress_port_tcp` and
-      # `actor.network.wan_port_range_max` in `rivet-server/config.yaml`.
+      # `actor.network.wan_port_range_max` in `rivet-server/config.jsonc`.
       #
       # We only reserve 100 ports instead of the default 22,000 since each
       # individual port converts to an iptable rule when using Docker, which
@@ -153,7 +153,7 @@ services:
     # TODO(RVT-4168): Compile libfdb from scratch for ARM
     platform: linux/amd64
     restart: unless-stopped
-    command: -c /etc/rivet-client/config.yaml
+    command: -c /etc/rivet-client/config.jsonc
     environment:
       - RUST_BACKTRACE=1
     stop_grace_period: 0s
@@ -163,13 +163,13 @@ services:
       foundationdb:
         condition: service_healthy
     volumes:
-      - ./rivet-client:/etc/rivet-client:ro
+      - ./rivet-client/config.jsonc:/etc/rivet-client/config.jsonc:ro
       - client-data:/var/lib/rivet-client
     ports:
       # Enable host networking for actors
       #
       # Corresponds to `actor.network.wan_port_range_min` and
-      # `actor.network.wan_port_range_max` in `rivet-client/config.yaml`.
+      # `actor.network.wan_port_range_max` in `rivet-client/config.jsonc`.
       #
       # We only reserve 100 ports instead of the default 22,000. See
       # rivet-guard for explanation.

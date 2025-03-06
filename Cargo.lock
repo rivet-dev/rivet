@@ -8343,6 +8343,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "json5"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96b0db21af676c1ce64250b5f40f3ce2cf27e4e47cb91ed91eb6fe9350b430c1"
+dependencies = [
+ "pest",
+ "pest_derive",
+ "serde",
+]
+
+[[package]]
 name = "jsonc-parser"
 version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10513,6 +10524,7 @@ dependencies = [
  "futures-util",
  "hyper 0.14.31",
  "indoc 2.0.5",
+ "json5",
  "lazy_static",
  "nix 0.27.1",
  "notify",
@@ -11977,6 +11989,7 @@ dependencies = [
  "glob",
  "global-error",
  "ipnet",
+ "json5",
  "maplit",
  "schemars",
  "serde",
