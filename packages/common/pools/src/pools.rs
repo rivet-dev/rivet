@@ -3,7 +3,6 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use global_error::{ensure_with, prelude::*, GlobalResult};
 use rivet_config::Config;
 use tokio_util::sync::{CancellationToken, DropGuard};
-use uuid::Uuid;
 
 use crate::{
 	db::sqlite::SqlitePoolManager, ClickHousePool, CrdbPool, Error, FdbPool, NatsPool, RedisPool,
@@ -168,8 +167,8 @@ impl Pools {
 		self.0.fdb.clone().ok_or(Error::MissingFdbPool)
 	}
 
-	pub async fn sqlite(&self, key: Uuid) -> Result<SqlitePool, Error> {
-		self.0.sqlite.get(key).await
+	pub async fn sqlite(&self, key: impl AsRef<str>) -> Result<SqlitePool, Error> {
+		self.0.sqlite.get(key.as_ref()).await
 	}
 
 	#[tracing::instrument(skip_all)]

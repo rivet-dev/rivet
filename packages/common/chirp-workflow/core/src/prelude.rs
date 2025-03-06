@@ -17,7 +17,7 @@ pub use crate::{
 	activity::Activity as ActivityTrait,
 	ctx::workflow::Loop,
 	ctx::*,
-	db,
+	db::{self, Database},
 	error::{WorkflowError, WorkflowResult},
 	executable::Executable,
 	history::removed::*,

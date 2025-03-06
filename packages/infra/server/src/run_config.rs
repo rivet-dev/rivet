@@ -1,32 +1,8 @@
 use anyhow::*;
 use include_dir::include_dir;
 use rivet_migrate::{SqlService, SqlServiceKind};
-use rivet_service_manager::{CronConfig, Service, ServiceKind};
+use rivet_service_manager::{CronConfig, RunConfigData, Service, ServiceKind};
 use s3_util::S3Bucket;
-use std::sync::Arc;
-
-pub type RunConfig = Arc<RunConfigData>;
-
-pub struct RunConfigData {
-	pub services: Vec<Service>,
-	pub sql_services: Vec<SqlService>,
-	pub s3_buckets: Vec<S3Bucket>,
-}
-
-impl RunConfigData {
-	/// Replaces an existing service. Throws an error if cannot find service.
-	pub fn replace_service(&mut self, service: Service) -> Result<()> {
-		let old_len = self.services.len();
-		self.services.retain(|x| x.name != service.name);
-		ensure!(
-			self.services.len() < old_len,
-			"could not find instance of service {} to replace",
-			service.name
-		);
-		self.services.push(service);
-		Ok(())
-	}
-}
 
 pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 	let server_config = rivet_config.server().map_err(|err| anyhow!("{err:?}"))?;
@@ -43,9 +19,6 @@ pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			ServiceKind::ApiEdge,
 			|config, pools| Box::pin(api_monolith_edge::start(config, pools)),
 		),
-		Service::new("pegboard_ws", ServiceKind::ApiEdge, |config, pools| {
-			Box::pin(pegboard_ws::start(config, pools))
-		}),
 		Service::new(
 			"monolith_worker",
 			ServiceKind::Standalone,
@@ -56,12 +29,6 @@ pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			ServiceKind::Standalone,
 			|config, pools| Box::pin(monolith_workflow_worker::start(config, pools)),
 		),
-		// Service::new("pegboard_gc", ServiceKind::Singleton, |config, pools| {
-		// 	Box::pin(pegboard_gc::start(config, pools))
-		// }),
-		Service::new("pegboard_dc_init", ServiceKind::Oneshot, |config, pools| {
-			Box::pin(pegboard_dc_init::start(config, pools))
-		}),
 		Service::new(
 			"workflow_metrics_publish",
 			ServiceKind::Singleton,
@@ -200,11 +167,6 @@ pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/ds/db/servers"),
-			db_name: "db_ds",
-		},
-		SqlService {
-			kind: SqlServiceKind::CockroachDB,
 			migrations: include_dir!(
 				"$CARGO_MANIFEST_DIR/../../services/dynamic-config/db/dynamic-config"
 			),
@@ -251,11 +213,6 @@ pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			kind: SqlServiceKind::CockroachDB,
 			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/mm/db/state"),
 			db_name: "db_mm_state",
-		},
-		SqlService {
-			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../services/pegboard/db/pegboard"),
-			db_name: "db_pegboard",
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,

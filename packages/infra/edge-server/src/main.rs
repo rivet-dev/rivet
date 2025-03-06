@@ -2,7 +2,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use anyhow::*;
 use clap::Parser;
-use rivet_server::run_config;
+use rivet_edge_server::run_config;
 use rivet_server_cli::SubCommand;
 
 #[derive(Parser)]

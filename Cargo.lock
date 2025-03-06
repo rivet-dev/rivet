@@ -2913,6 +2913,7 @@ dependencies = [
  "rivet-util",
  "serde",
  "serde_json",
+ "sqlite-util",
  "sqlx",
  "strum 0.26.3",
  "thiserror 1.0.69",
@@ -5471,6 +5472,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "edge-monolith-workflow-worker"
+version = "25.1.0-rc.1"
+dependencies = [
+ "chirp-workflow",
+ "ds",
+ "pegboard",
+ "rivet-config",
+ "rivet-health-checks",
+ "rivet-metrics",
+ "rivet-runtime",
+]
+
+[[package]]
+name = "edge-pegboard"
+version = "25.1.0-rc.1"
+dependencies = [
+ "chirp-workflow",
+ "lazy_static",
+ "nix 0.27.1",
+ "pegboard",
+ "rivet-config",
+ "rivet-metrics",
+ "rivet-util",
+ "schemars",
+ "serde",
+ "serde_json",
+ "server-spec",
+ "sqlx",
+ "strum 0.24.1",
+ "thiserror 1.0.69",
+ "uuid",
+]
+
+[[package]]
 name = "either"
 version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5978,7 +6013,7 @@ dependencies = [
 
 [[package]]
 name = "fdb-util"
-version = "24.6.2-rc.1"
+version = "25.1.0-rc.1"
 dependencies = [
  "anyhow",
  "foundationdb",
@@ -10228,6 +10263,7 @@ dependencies = [
  "deno_ast 0.42.2",
  "deno_core",
  "deno_runtime",
+ "fdb-util",
  "foundationdb",
  "futures-util",
  "netif",
@@ -10287,6 +10323,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "sqlite-util",
  "sqlx",
  "sysinfo 0.31.4",
  "tempfile",
@@ -12121,17 +12158,13 @@ dependencies = [
  "build-default-create",
  "chirp-client",
  "chirp-workflow",
- "chrono",
  "clap",
  "cloud-default-create",
  "cluster-datacenter-tls-renew",
  "cluster-default-update",
  "cluster-gc",
  "cluster-metrics-publish",
- "colored_json",
- "global-error",
  "include_dir",
- "indoc 2.0.5",
  "job-gc",
  "linode-gc",
  "load-test-api-cloud",
@@ -12147,11 +12180,35 @@ dependencies = [
  "pegboard-gc",
  "pegboard-metrics-publish",
  "pegboard-ws",
- "reqwest 0.12.9",
- "rivet-api",
  "rivet-cache",
  "rivet-config",
  "rivet-connection",
+ "rivet-migrate",
+ "rivet-runtime",
+ "rivet-server-cli",
+ "rivet-service-manager",
+ "s3-util",
+ "telemetry-beacon",
+ "user-delete-pending",
+ "workflow-gc",
+ "workflow-metrics-publish",
+]
+
+[[package]]
+name = "rivet-server-cli"
+version = "25.1.0-rc.1"
+dependencies = [
+ "anyhow",
+ "chirp-workflow",
+ "chrono",
+ "clap",
+ "colored_json",
+ "global-error",
+ "include_dir",
+ "indoc 2.0.5",
+ "reqwest 0.12.9",
+ "rivet-api",
+ "rivet-config",
  "rivet-migrate",
  "rivet-pools",
  "rivet-runtime",
@@ -12164,16 +12221,12 @@ dependencies = [
  "sqlx",
  "strum 0.26.3",
  "tabled",
- "telemetry-beacon",
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "tracing",
  "url",
- "user-delete-pending",
  "uuid",
- "workflow-gc",
- "workflow-metrics-publish",
 ]
 
 [[package]]
@@ -12187,7 +12240,9 @@ dependencies = [
  "rivet-config",
  "rivet-health-checks",
  "rivet-metrics",
+ "rivet-migrate",
  "rivet-pools",
+ "s3-util",
  "tokio",
  "tokio-cron-scheduler",
  "tracing",
@@ -13543,6 +13598,14 @@ checksum = "d91ed6c858b01f942cd56b37a94b3e0a1798290327d1236e4d9cf4eaca44d29d"
 dependencies = [
  "base64ct",
  "der 0.7.9",
+]
+
+[[package]]
+name = "sqlite-util"
+version = "25.1.0-rc.1"
+dependencies = [
+ "sqlx",
+ "tokio",
 ]
 
 [[package]]

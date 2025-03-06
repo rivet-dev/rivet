@@ -11,31 +11,17 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0"
-chrono = "0.4.38"
+chirp-workflow.workspace = true
 clap = { version = "4.3", features = ["derive"] }
-colored_json = "5.0.0"
-global-error.workspace = true
 include_dir = "0.7.4"
-indoc = "2.0.5"
-reqwest = "0.12.9"
-rivet-api.workspace = true
+rivet-cache.workspace = true
+rivet-config.workspace = true
+rivet-connection.workspace = true
 rivet-migrate.workspace = true
-rivet-pools.workspace = true
 rivet-runtime.workspace = true
+rivet-server-cli.workspace = true
 rivet-service-manager.workspace = true
-rivet-term.workspace = true
 s3-util.workspace = true
-serde = { version = "1.0.210", features = ["derive"] }
-serde_json = "1.0.128"
-serde_yaml = "0.9.34"
-strum = "0.26.3"
-tabled = "0.17.0"
-tempfile = "3.13.0"
-thiserror = "1.0.64"
-tokio = { version = "1.40", features = ["full", "tracing"] }
-tracing = "0.1"
-url = "2.4"
-uuid = "1.10.0"
 
 # Standalone
 cluster-datacenter-tls-renew.workspace = true
@@ -69,15 +55,6 @@ api-monolith-public.workspace = true
 # Oneshot
 build-default-create.workspace = true
 chirp-client.workspace = true
-chirp-workflow.workspace = true
 cloud-default-create.workspace = true
 cluster-default-update.workspace = true
 pegboard-dc-init.workspace = true
-rivet-cache.workspace = true
-rivet-config.workspace = true
-rivet-connection.workspace = true
-
-[dependencies.sqlx]
-workspace = true
-features = ["runtime-tokio", "postgres"]
-

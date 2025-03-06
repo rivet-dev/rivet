@@ -7,7 +7,6 @@ use sqlx::{
 	Sqlite,
 };
 use tokio::sync::Mutex;
-use uuid::Uuid;
 
 use crate::Error;
 
@@ -16,7 +15,7 @@ pub type SqlitePool = sqlx::SqlitePool;
 #[derive(Clone)]
 pub struct SqlitePoolManager {
 	// TODO: Somehow remove old pools
-	pools: Arc<Mutex<HashMap<Uuid, SqlitePool>>>,
+	pools: Arc<Mutex<HashMap<String, SqlitePool>>>,
 }
 
 impl SqlitePoolManager {
@@ -27,10 +26,10 @@ impl SqlitePoolManager {
 	}
 
 	/// Get or creates an sqlite pool for the given key
-	pub async fn get(&self, key: Uuid) -> Result<SqlitePool, Error> {
+	pub async fn get(&self, key: &str) -> Result<SqlitePool, Error> {
 		let mut pools_guard = self.pools.lock().await;
 
-		let pool = if let Some(pool) = pools_guard.get(&key) {
+		let pool = if let Some(pool) = pools_guard.get(key) {
 			pool.clone()
 		} else {
 			// TODO: Hardcoded for testing
@@ -61,7 +60,7 @@ impl SqlitePoolManager {
 			// Run at the start of every connection
 			setup_pragma(&pool).await.map_err(Error::BuildSqlx)?;
 
-			pools_guard.insert(key, pool.clone());
+			pools_guard.insert(key.to_string(), pool.clone());
 
 			tracing::debug!(?key, "sqlite connected");
 

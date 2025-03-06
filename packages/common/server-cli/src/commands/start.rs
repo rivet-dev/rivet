@@ -1,8 +1,6 @@
 use anyhow::*;
 use clap::Parser;
-use rivet_service_manager::CronConfig;
-
-use crate::run_config::RunConfig;
+use rivet_service_manager::{CronConfig, RunConfig};
 
 #[derive(Parser)]
 pub struct Opts {

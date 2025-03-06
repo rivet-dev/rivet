@@ -1,6 +1,9 @@
+use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
+
 use anyhow::*;
 use global_error::GlobalResult;
-use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
+use rivet_migrate::SqlService;
+use s3_util::S3Bucket;
 
 #[derive(Clone)]
 pub struct Service {
@@ -93,6 +96,29 @@ enum ServiceBehavior {
 pub struct CronConfig {
 	pub run_immediately: bool,
 	pub schedule: String,
+}
+
+pub type RunConfig = Arc<RunConfigData>;
+
+pub struct RunConfigData {
+	pub services: Vec<Service>,
+	pub sql_services: Vec<SqlService>,
+	pub s3_buckets: Vec<S3Bucket>,
+}
+
+impl RunConfigData {
+	/// Replaces an existing service. Throws an error if cannot find service.
+	pub fn replace_service(&mut self, service: Service) -> Result<()> {
+		let old_len = self.services.len();
+		self.services.retain(|x| x.name != service.name);
+		ensure!(
+			self.services.len() < old_len,
+			"could not find instance of service {} to replace",
+			service.name
+		);
+		self.services.push(service);
+		Ok(())
+	}
 }
 
 /// Runs services & waits for completion.

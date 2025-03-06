@@ -22,8 +22,8 @@ pub async fn up(config: rivet_config::Config, services: &[SqlService]) -> Result
 	tracing::info!(sql_services = ?services.len(), "running sql migrations");
 
 	let server_config = config.server.as_ref().context("missing server")?;
-	let is_development = server_config.rivet.auth.access_kind
-		== rivet_config::config::rivet::AccessKind::Development;
+	// let is_development = server_config.rivet.auth.access_kind
+	// 	== rivet_config::config::rivet::AccessKind::Development;
 
 	let crdb = rivet_pools::db::crdb::setup(config.clone())
 		.await

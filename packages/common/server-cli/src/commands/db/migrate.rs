@@ -1,7 +1,7 @@
 use anyhow::*;
 use clap::Parser;
 
-use crate::run_config::RunConfig;
+use rivet_service_manager::RunConfig;
 
 #[derive(Parser)]
 pub enum SubCommand {

@@ -1,7 +1,7 @@
 use anyhow::*;
 use clap::{Parser, ValueEnum};
 
-use crate::run_config::RunConfig;
+use rivet_service_manager::RunConfig;
 
 mod migrate;
 

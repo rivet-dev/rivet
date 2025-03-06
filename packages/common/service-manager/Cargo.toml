@@ -7,14 +7,15 @@ edition.workspace = true
 
 [dependencies]
 anyhow = "1.0.89"
+chrono = "0.4.38"
 global-error.workspace = true
-tokio = { version = "1.40", features = ["full", "tracing"] }
-rivet-health-checks.workspace = true
-rivet-metrics.workspace = true
-rivet-pools.workspace = true
-tracing = "0.1.40"
 include_dir = "0.7.4"
 rivet-config.workspace = true
+rivet-health-checks.workspace = true
+rivet-metrics.workspace = true
+rivet-migrate.workspace = true
+rivet-pools.workspace = true
+s3-util.workspace = true
+tokio = { version = "1.40", features = ["full", "tracing"] }
 tokio-cron-scheduler = "0.13.0"
-chrono = "0.4.38"
-
+tracing = "0.1.40"
