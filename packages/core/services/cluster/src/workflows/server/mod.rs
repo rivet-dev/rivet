@@ -9,9 +9,10 @@ use std::{
 };
 
 pub(crate) mod api_dns_create;
-pub(crate) mod dns_delete;
+pub(crate) mod api_dns_delete;
 pub(crate) mod drain;
 pub(crate) mod gg_dns_create;
+pub(crate) mod gg_dns_delete;
 pub(crate) mod install;
 pub(crate) mod undrain;
 
@@ -345,13 +346,23 @@ async fn lifecycle(
 			}
 			_ => unreachable!(),
 		},
-		Main::DnsDelete(_) => {
-			ctx.workflow(dns_delete::Input {
-				server_id: input.server_id,
-			})
-			.output()
-			.await?;
-		}
+		Main::DnsDelete(_) => match input.pool_type {
+			PoolType::Gg => {
+				ctx.workflow(gg_dns_delete::Input {
+					server_id: input.server_id,
+				})
+				.output()
+				.await?;
+			}
+			PoolType::Worker => {
+				ctx.workflow(api_dns_delete::Input {
+					server_id: input.server_id,
+				})
+				.output()
+				.await?;
+			}
+			_ => unreachable!(),
+		},
 		Main::NomadRegistered(sig) => {
 			ctx.activity(SetNomadNodeIdInput {
 				server_id: input.server_id,
@@ -924,8 +935,15 @@ async fn cleanup(
 	if cleanup_dns {
 		// Cleanup DNS
 		match input.pool_type {
-			PoolType::Gg | PoolType::Worker => {
-				ctx.workflow(dns_delete::Input {
+			PoolType::Gg => {
+				ctx.workflow(gg_dns_delete::Input {
+					server_id: input.server_id,
+				})
+				.output()
+				.await?;
+			}
+			PoolType::Worker => {
+				ctx.workflow(api_dns_delete::Input {
 					server_id: input.server_id,
 				})
 				.output()

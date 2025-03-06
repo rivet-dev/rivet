@@ -426,7 +426,6 @@ impl WorkflowCtx {
 	}
 
 	/// Like `branch` but it does not add another layer of depth.
-	/// - **Not to be used directly by workflow users. For implementation uses only.**
 	pub fn step(&mut self) -> Self {
 		let branch = self.clone();
 
@@ -494,11 +493,14 @@ impl WorkflowCtx {
 	{
 		let event_id = EventId::new(I::Activity::NAME, &input);
 
+		tracing::info!(l=?self.cursor.current_location(), "----------------------2");
+
 		let history_res = self
 			.cursor
 			.compare_activity(self.version, &event_id)
 			.map_err(GlobalError::raw)?;
 		let location = self.cursor.current_location_for(&history_res);
+		tracing::info!(?location, "----------------------");
 
 		// Activity was ran before
 		let output = if let HistoryResult::Event(activity) = history_res {
@@ -567,6 +569,8 @@ impl WorkflowCtx {
 
 		// Move to next event
 		self.cursor.update(&location);
+
+		tracing::info!(c=?self.cursor.current_coord(), l=?self.cursor.current_location(), "----------------------3");
 
 		Ok(output)
 	}
@@ -1158,6 +1162,7 @@ impl WorkflowCtx {
 
 	/// Represents a removed workflow step.
 	pub async fn removed<T: Removed>(&mut self) -> GlobalResult<()> {
+		tracing::info!(l=?self.cursor.current_location(), ?self.event_history, "----------------------");
 		// Existing event
 		if self
 			.cursor

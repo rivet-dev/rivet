@@ -51,6 +51,7 @@ pub(crate) async fn create_dns_record(
 	zone_id: &str,
 	record_name: &str,
 	content: cf::dns::DnsContent,
+	proxied: bool,
 ) -> GlobalResult<String> {
 	tracing::info!(%record_name, "creating dns record");
 
@@ -60,7 +61,7 @@ pub(crate) async fn create_dns_record(
 			params: cf::dns::CreateDnsRecordParams {
 				name: record_name,
 				content: content.clone(),
-				proxied: Some(false),
+				proxied: Some(proxied),
 				ttl: Some(60),
 				priority: None,
 			},

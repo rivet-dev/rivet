@@ -54,20 +54,20 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 			},
 			cockroachdb: CockroachDb {
 				url: Url::parse(&format!(
-					"postgres://127.0.0.1:{TUNNEL_CRDB_PORT}/postgres?sslmode=verify-ca"
+					"postgres://127.0.0.1:{TUNNEL_CRDB_PORT}/postgres?sslmode=require"
 				))?,
 				..server_config.cockroachdb.clone()
 			},
 			redis: RedisTypes {
 				ephemeral: Redis {
 					url: Url::parse(&format!(
-						"rediss://127.0.0.1:{TUNNEL_REDIS_EPHEMERAL_PORT}",
+						"rediss://127.0.0.1:{TUNNEL_REDIS_EPHEMERAL_PORT}/#insecure",
 					))?,
 					..server_config.redis.ephemeral.clone()
 				},
 				persistent: Redis {
 					url: Url::parse(&format!(
-						"rediss://127.0.0.1:{TUNNEL_REDIS_PERSISTENT_PORT}",
+						"rediss://127.0.0.1:{TUNNEL_REDIS_PERSISTENT_PORT}/#insecure",
 					))?,
 					..server_config.redis.persistent.clone()
 				},

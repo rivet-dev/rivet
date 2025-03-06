@@ -35,8 +35,10 @@ pub(crate) async fn cluster_datacenter_tls_issue(
 ) -> GlobalResult<()> {
 	ensure!(ctx.config().server()?.is_tls_enabled(), "dns not enabled");
 
-	let datacenter_id = input.datacenter_id;
-
+	let dc_res = ctx.v(2).activity(GetDcInput {
+		datacenter_id: input.datacenter_id,
+	}).await?;
+	
 	let main_zone_id = unwrap!(
 		ctx.config().server()?.cloudflare()?.zone.main.clone(),
 		"main cloudflare zone not configured"
@@ -53,14 +55,20 @@ pub(crate) async fn cluster_datacenter_tls_issue(
 		ctx.config().server()?.rivet.dns()?.domain_job.clone(),
 		"job domain not enabled"
 	);
+	let datacenter_id = input.datacenter_id;
 
-	let (gg_cert, _, job_cert) = ctx
+	let (_, api_cert, _, job_cert) = ctx
 		.join((
-			activity(OrderInput {
+			// Old gg certs
+			removed::<Activity<Order>>(),
+			// New api certs
+			v(2).activity(OrderInput {
 				renew: input.renew,
 				zone_id: main_zone_id.to_string(),
 				common_name: domain_main.to_string(),
-				subject_alternative_names: vec![format!("*.{datacenter_id}.{domain_main}")],
+				subject_alternative_names: vec![
+					format!("{}.api.{domain_main}", dc_res.name_id),
+				],
 			}),
 			// Old job certs
 			removed::<Activity<Order>>(),
@@ -80,11 +88,12 @@ pub(crate) async fn cluster_datacenter_tls_issue(
 
 	// Insert with old job certs
 	ctx.removed::<Activity<InsertDb>>().await?;
-	// Insert with new job certs
+	// Insert with old gg certs certs
+	ctx.removed::<Activity<InsertDb>>().await?;
 	ctx.activity(InsertDbInput {
 		datacenter_id: input.datacenter_id,
-		gg_cert: gg_cert.cert,
-		gg_private_key: gg_cert.private_key,
+		api_cert: api_cert.cert,
+		api_private_key: api_cert.private_key,
 		job_cert: job_cert.cert,
 		job_private_key: job_cert.private_key,
 		expire_ts: job_cert.expire_ts,
@@ -92,6 +101,30 @@ pub(crate) async fn cluster_datacenter_tls_issue(
 	.await?;
 
 	Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+pub(crate) struct GetDcInput {
+	pub datacenter_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct GetDcOutput {
+	pub name_id: String,
+}
+
+#[activity(GetDc)]
+pub(crate) async fn get_dc(ctx: &ActivityCtx, input: &GetDcInput) -> GlobalResult<GetDcOutput> {
+	let dcs_res = ctx
+		.op(crate::ops::datacenter::get::Input {
+			datacenter_ids: vec![input.datacenter_id],
+		})
+		.await?;
+	let dc = unwrap!(dcs_res.datacenters.into_iter().next());
+
+	Ok(GetDcOutput {
+		name_id: dc.name_id,
+	})
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
@@ -160,6 +193,7 @@ async fn order(ctx: &ActivityCtx, input: &OrderInput) -> GlobalResult<OrderOutpu
 						cf::dns::DnsContent::TXT {
 							content: proof.to_string(),
 						},
+						false,
 					)
 					.await?;
 
@@ -281,8 +315,8 @@ async fn poll_txt_dns(hostname: &str, content: &str) -> GlobalResult<()> {
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 struct InsertDbInput {
 	datacenter_id: Uuid,
-	gg_cert: String,
-	gg_private_key: String,
+	api_cert: String,
+	api_private_key: String,
 	job_cert: String,
 	job_private_key: String,
 	expire_ts: i64,
@@ -295,8 +329,8 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<()>
 		"
 		UPDATE db_cluster.datacenter_tls
 		SET
-			gg_cert_pem = $2,
-			gg_private_key_pem = $3,
+			api_cert_pem = $2,
+			api_private_key_pem = $3,
 			job_cert_pem = $4,
 			job_private_key_pem = $5,
 			state = $6,
@@ -304,8 +338,8 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<()>
 		WHERE datacenter_id = $1
 		",
 		input.datacenter_id,
-		&input.gg_cert,
-		&input.gg_private_key,
+		&input.api_cert,
+		&input.api_private_key,
 		&input.job_cert,
 		&input.job_private_key,
 		TlsState::Active as i32,

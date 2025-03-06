@@ -3,15 +3,18 @@ use std::{future::Future, pin::Pin};
 use async_trait::async_trait;
 use global_error::{GlobalError, GlobalResult};
 
-use crate::ctx::WorkflowCtx;
+use crate::{ctx::WorkflowCtx, error::WorkflowResult};
 
 /// Signifies a retryable executable entity in a workflow. For example: activity, tuple of activities (join),
 /// closure.
 #[async_trait]
-pub trait Executable: Send + Sized {
+pub trait Executable: Send + Sized + Sync {
 	type Output: Send;
 
 	async fn execute(self, ctx: &mut WorkflowCtx) -> GlobalResult<Self::Output>;
+
+	/// Move the context's cursor to where it should be after this executable is executed.
+	fn shift_cursor(&self, ctx: &mut WorkflowCtx) -> WorkflowResult<()>;
 }
 
 pub type AsyncResult<'a, T> = Pin<Box<dyn Future<Output = GlobalResult<T>> + Send + 'a>>;
@@ -20,7 +23,7 @@ pub type AsyncResult<'a, T> = Pin<Box<dyn Future<Output = GlobalResult<T>> + Sen
 #[async_trait]
 impl<F, T> Executable for F
 where
-	F: for<'a> FnOnce(&'a mut WorkflowCtx) -> AsyncResult<'a, T> + Send,
+	F: for<'a> FnOnce(&'a mut WorkflowCtx) -> AsyncResult<'a, T> + Send + Sync,
 	T: Send,
 {
 	type Output = T;
@@ -28,15 +31,20 @@ where
 	async fn execute(self, ctx: &mut WorkflowCtx) -> GlobalResult<Self::Output> {
 		let mut branch = ctx.branch().await.map_err(GlobalError::raw)?;
 
+		// Move to next event
+		self.shift_cursor(ctx).map_err(GlobalError::raw)?;
+
 		let res = (self)(&mut branch).await?;
 
 		// Validate no leftover events
 		branch.cursor().check_clear().map_err(GlobalError::raw)?;
 
-		// Move to next event
-		ctx.cursor_mut().update(branch.cursor().root());
-
 		Ok(res)
+	}
+
+	fn shift_cursor(&self, ctx: &mut WorkflowCtx) -> WorkflowResult<()> {
+		ctx.cursor_mut().inc();
+		Ok(())
 	}
 }
 
@@ -46,13 +54,23 @@ impl<T: Executable> Executable for Option<T> {
 	type Output = Option<T::Output>;
 
 	async fn execute(self, ctx: &mut WorkflowCtx) -> GlobalResult<Self::Output> {
-		let mut branch = ctx.step();
-
 		if let Some(inner) = self {
-			inner.execute(&mut branch).await.map(Some)
+			let mut branch = ctx.clone();
+
+			// Move to next event
+			inner.shift_cursor(ctx).map_err(GlobalError::raw)?;
+
+			let res = inner.execute(&mut branch).await?;
+
+			Ok(Some(res))
 		} else {
 			Ok(None)
 		}
+	}
+
+	fn shift_cursor(&self, ctx: &mut WorkflowCtx) -> WorkflowResult<()> {
+		ctx.cursor_mut().inc();
+		Ok(())
 	}
 }
 
@@ -70,7 +88,12 @@ macro_rules! impl_tuple {
 				#[allow(non_snake_case)]
 				let ($(mut $args),*) = ($(
 					TupleHelper {
-						branch: ctx.step(),
+						branch: {
+							let branch = ctx.clone();
+							$args.shift_cursor(ctx).map_err(GlobalError::raw)?;
+
+							branch
+						},
 						exec: $args,
 					}
 				),*);
@@ -83,6 +106,17 @@ macro_rules! impl_tuple {
 
 				// Handle errors here instead
 				Ok(($($args?),*))
+			}
+
+			fn shift_cursor(&self, ctx: &mut WorkflowCtx) -> WorkflowResult<()> {
+				#[allow(non_snake_case)]
+				let ($($args),*) = self;
+
+				$(
+					$args.shift_cursor(ctx)?;
+				)*
+
+				Ok(())
 			}
 		}
 	}

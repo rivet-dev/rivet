@@ -154,6 +154,7 @@ async fn create_dns_record(
 		cf::dns::DnsContent::A {
 			content: input.public_ip,
 		},
+		false,
 	)
 	.await?;
 

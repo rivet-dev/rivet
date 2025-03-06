@@ -7,8 +7,8 @@ use crate::types::TlsState;
 #[derive(sqlx::FromRow)]
 struct DatacenterTlsRow {
 	datacenter_id: Uuid,
-	gg_cert_pem: Option<String>,
-	gg_private_key_pem: Option<String>,
+	api_cert_pem: Option<String>,
+	api_private_key_pem: Option<String>,
 	job_cert_pem: Option<String>,
 	job_private_key_pem: Option<String>,
 	state: i64,
@@ -21,8 +21,8 @@ impl TryFrom<DatacenterTlsRow> for DatacenterTls {
 	fn try_from(value: DatacenterTlsRow) -> GlobalResult<Self> {
 		Ok(DatacenterTls {
 			datacenter_id: value.datacenter_id,
-			gg_cert_pem: value.gg_cert_pem,
-			gg_private_key_pem: value.gg_private_key_pem,
+			api_cert_pem: value.api_cert_pem,
+			api_private_key_pem: value.api_private_key_pem,
 			job_cert_pem: value.job_cert_pem,
 			job_private_key_pem: value.job_private_key_pem,
 			state: unwrap!(TlsState::from_repr(value.state.try_into()?)),
@@ -44,8 +44,8 @@ pub struct Output {
 #[derive(Debug)]
 pub struct DatacenterTls {
 	pub datacenter_id: Uuid,
-	pub gg_cert_pem: Option<String>,
-	pub gg_private_key_pem: Option<String>,
+	pub api_cert_pem: Option<String>,
+	pub api_private_key_pem: Option<String>,
 	pub job_cert_pem: Option<String>,
 	pub job_private_key_pem: Option<String>,
 	pub state: TlsState,
@@ -61,8 +61,8 @@ pub async fn cluster_datacenter_tls_get(ctx: &OperationCtx, input: &Input) -> Gl
 		"
 		SELECT
 			datacenter_id,
-			gg_cert_pem,
-			gg_private_key_pem,
+			api_cert_pem,
+			api_private_key_pem,
 			job_cert_pem,
 			job_private_key_pem,
 			state,

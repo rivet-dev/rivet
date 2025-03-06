@@ -110,6 +110,7 @@ async fn create_dns_record(
 		cf::dns::DnsContent::A {
 			content: input.public_ip,
 		},
+		true,
 	)
 	.await?;
 
@@ -132,7 +133,7 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<()>
 		INSERT INTO db_cluster.servers_cloudflare (
 			server_id, dns_record_id
 		)
-		VALUES ($1, $2, $3, $4)
+		VALUES ($1, $2)
 		",
 		input.server_id,
 		&input.dns_record_id,

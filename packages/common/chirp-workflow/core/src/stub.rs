@@ -11,8 +11,9 @@ use global_error::GlobalResult;
 use crate::{
 	activity::{Activity, ActivityInput},
 	ctx::WorkflowCtx,
+	error::WorkflowResult,
 	executable::{AsyncResult, Executable},
-	history::removed::Removed,
+	history::{event::EventId, removed::Removed},
 };
 
 // Must wrap all closures being used as executables in this function due to
@@ -47,6 +48,18 @@ where
 		} else {
 			ctx.activity(self.inner).await
 		}
+	}
+
+	fn shift_cursor(&self, ctx: &mut WorkflowCtx) -> WorkflowResult<()> {
+		let event_id = EventId::new(I::Activity::NAME, &self.inner);
+		let history_res = ctx
+			.cursor()
+			.compare_activity(self.version.unwrap_or(ctx.version()), &event_id)?;
+		let location = ctx.cursor().current_location_for(&history_res);
+
+		ctx.cursor_mut().update(&location);
+
+		Ok(())
 	}
 }
 
@@ -86,11 +99,16 @@ pub fn v(version: usize) -> VersionStub {
 pub struct RemovedStub<T: Removed>(PhantomData<T>);
 
 #[async_trait]
-impl<T: Removed + Send> Executable for RemovedStub<T> {
+impl<T: Removed + Send + Sync> Executable for RemovedStub<T> {
 	type Output = ();
 
 	async fn execute(self, ctx: &mut WorkflowCtx) -> GlobalResult<Self::Output> {
 		ctx.removed::<T>().await
+	}
+
+	fn shift_cursor(&self, ctx: &mut WorkflowCtx) -> WorkflowResult<()> {
+		ctx.cursor_mut().inc();
+		Ok(())
 	}
 }
 

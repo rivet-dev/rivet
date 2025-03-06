@@ -9,7 +9,7 @@ pub struct Input {
 }
 
 #[workflow]
-pub async fn cluster_server_dns_delete(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
+pub async fn cluster_server_gg_dns_delete(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
 	ctx.removed::<Activity<GetDnsRecords>>().await?;
 	let records_res = ctx
 		.v(2)
