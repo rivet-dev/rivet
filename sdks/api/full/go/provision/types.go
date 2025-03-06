@@ -18,6 +18,7 @@ const (
 	PoolTypePegboard        PoolType = "pegboard"
 	PoolTypePegboardIsolate PoolType = "pegboard_isolate"
 	PoolTypeFdb             PoolType = "fdb"
+	PoolTypeWorker          PoolType = "worker"
 )
 
 func NewPoolTypeFromString(s string) (PoolType, error) {
@@ -34,6 +35,8 @@ func NewPoolTypeFromString(s string) (PoolType, error) {
 		return PoolTypePegboardIsolate, nil
 	case "fdb":
 		return PoolTypeFdb, nil
+	case "worker":
+		return PoolTypeWorker, nil
 	}
 	var t PoolType
 	return "", fmt.Errorf("%s is not a valid %T", s, t)

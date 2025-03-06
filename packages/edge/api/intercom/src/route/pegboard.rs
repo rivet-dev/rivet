@@ -23,9 +23,8 @@ pub async fn prewarm_image(
 		.fdb()
 		.await?
 		.run(|tx, _mc| async move {
-			let alloc_idx_subspace = pegboard::keys::subspace().subspace(
-				&pegboard::keys::datacenter::ClientsByRemainingMemKey::entire_subspace(),
-			);
+			let alloc_idx_subspace = pegboard::keys::subspace()
+				.subspace(&pegboard::keys::datacenter::ClientsByRemainingMemKey::entire_subspace());
 
 			let mut stream = tx.get_ranges_keyvalues(
 				fdb::RangeOption {
@@ -37,9 +36,7 @@ pub async fn prewarm_image(
 
 			if let Some(entry) = stream.try_next().await? {
 				let key = pegboard::keys::subspace()
-					.unpack::<pegboard::keys::datacenter::ClientsByRemainingMemKey>(
-						entry.key(),
-					)
+					.unpack::<pegboard::keys::datacenter::ClientsByRemainingMemKey>(entry.key())
 					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
 				Ok(Some(key.client_id))

@@ -422,6 +422,7 @@ impl Ctx {
 				actors_path: self.actors_path(),
 				fdb_cluster_path: self.fdb_cluster_path(),
 				runner_addr: SocketAddr::from(([127, 0, 0, 1], self.config().runner.port())),
+				foundationdb: self.config.client.foundationdb.clone(),
 			};
 
 			// Delete existing exit code

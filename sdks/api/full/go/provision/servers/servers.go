@@ -10,12 +10,13 @@ import (
 )
 
 type GetInfoResponse struct {
-	Name         string    `json:"name"`
-	ServerId     uuid.UUID `json:"server_id"`
-	DatacenterId uuid.UUID `json:"datacenter_id"`
-	ClusterId    uuid.UUID `json:"cluster_id"`
-	LanIp        string    `json:"lan_ip"`
-	WanIp        string    `json:"wan_ip"`
+	Name             string    `json:"name"`
+	ServerId         uuid.UUID `json:"server_id"`
+	DatacenterId     uuid.UUID `json:"datacenter_id"`
+	DatacenterNameId string    `json:"datacenter_name_id"`
+	ClusterId        uuid.UUID `json:"cluster_id"`
+	LanIp            string    `json:"lan_ip"`
+	WanIp            string    `json:"wan_ip"`
 	// **Deprecated**: Use lan_ip
 	VlanIp string `json:"vlan_ip"`
 	// **Deprecated**: Use wan_ip

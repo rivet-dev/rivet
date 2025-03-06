@@ -23,6 +23,8 @@ pub enum ProvisionPoolType {
 	PegboardIsolate,
 	#[serde(rename = "fdb")]
 	Fdb,
+	#[serde(rename = "worker")]
+	Worker,
 }
 
 impl ToString for ProvisionPoolType {
@@ -34,6 +36,7 @@ impl ToString for ProvisionPoolType {
 			Self::Pegboard => String::from("pegboard"),
 			Self::PegboardIsolate => String::from("pegboard_isolate"),
 			Self::Fdb => String::from("fdb"),
+			Self::Worker => String::from("worker"),
 		}
 	}
 }

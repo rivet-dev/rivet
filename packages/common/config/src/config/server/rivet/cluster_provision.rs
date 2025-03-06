@@ -254,7 +254,6 @@ impl ClusterPoolFdb {
 	}
 }
 
-
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ClusterPoolWorker {

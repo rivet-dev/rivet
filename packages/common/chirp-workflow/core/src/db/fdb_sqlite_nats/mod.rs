@@ -21,8 +21,8 @@ use itertools::Itertools;
 use rivet_pools::prelude::*;
 use serde_json::json;
 use sqlite_util::SqlitePoolExt;
-use tokio::sync::Mutex;
 use sqlx::Acquire;
+use tokio::sync::Mutex;
 use tracing::Instrument;
 use uuid::Uuid;
 
@@ -388,7 +388,8 @@ impl Database for DatabaseFdbSqliteNats {
 			.fdb()?
 			.run(|tx, _mc| async move {
 				// Update worker instance ping
-				let last_ping_ts_key = keys::worker_instance::LastPingTsKey::new(worker_instance_id);
+				let last_ping_ts_key =
+					keys::worker_instance::LastPingTsKey::new(worker_instance_id);
 				tx.set(
 					&self.subspace.pack(&last_ping_ts_key),
 					&last_ping_ts_key

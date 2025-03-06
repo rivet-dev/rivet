@@ -323,9 +323,6 @@ pub async fn start_client(
 
 	let pool = utils::init_sqlite_db(&config).await.unwrap();
 
-	// Init FDB config files
-	utils::init_fdb_config(&config).await.unwrap();
-
 	// Build WS connection URL
 	let mut url = Url::parse("ws://127.0.0.1").unwrap();
 	url.set_port(Some(port)).unwrap();

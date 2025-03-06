@@ -115,9 +115,11 @@ impl GlobalError {
 	pub fn http_status(&self) -> StatusCode {
 		match self {
 			GlobalError::Internal { .. } | GlobalError::Raw(_) => StatusCode::INTERNAL_SERVER_ERROR,
-			GlobalError::BadRequest { code, override_http_status, .. } => {
-				override_http_status.unwrap_or_else(|| formatted_error::parse(code).http_status())
-			}
+			GlobalError::BadRequest {
+				code,
+				override_http_status,
+				..
+			} => override_http_status.unwrap_or_else(|| formatted_error::parse(code).http_status()),
 		}
 	}
 
@@ -131,7 +133,12 @@ impl GlobalError {
 	pub fn message(&self) -> String {
 		match self {
 			GlobalError::Internal { .. } => format!("{}", self),
-			GlobalError::BadRequest { code, context, override_message, .. } => {
+			GlobalError::BadRequest {
+				code,
+				context,
+				override_message,
+				..
+			} => {
 				if let Some(override_message) = override_message {
 					override_message.clone()
 				} else if context.is_empty() {

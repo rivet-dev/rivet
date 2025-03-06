@@ -9,4 +9,6 @@ pub struct Config {
 	pub actors_path: PathBuf,
 	pub fdb_cluster_path: PathBuf,
 	pub runner_addr: SocketAddr,
+
+	pub foundationdb: crate::manager::FoundationDb,
 }

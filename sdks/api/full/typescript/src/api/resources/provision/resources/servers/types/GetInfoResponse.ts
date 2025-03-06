@@ -6,6 +6,7 @@ export interface GetInfoResponse {
     name: string;
     serverId: string;
     datacenterId: string;
+    datacenterNameId: string;
     clusterId: string;
     lanIp: string;
     wanIp: string;

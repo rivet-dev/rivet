@@ -7,29 +7,22 @@ FROM --platform=linux/amd64 rust:1.82.0-bookworm AS builder
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -y && \
     apt-get install -y \
-	curl \
-	g++ \
-	git \
-	libclang-dev \
-	libpq-dev \
-	libssl-dev \
-	pkg-config \
-	protobuf-compiler \
-	wget \
-    ca-certificates \
+    curl \
     g++ \
     git \
-    gpg \
+    libclang-dev \
     libpq-dev \
     libssl-dev \
-    openssl \
     pkg-config \
     protobuf-compiler \
-    wget && \
+    ca-certificates \
+    gpg \
+    openssl \
+    wget \
+    nodejs && \
     curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
-    apt-get install -y nodejs && \
-	corepack enable && \
-	curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.1.60/libfdb_c.x86_64.so"
+    corepack enable && \
+    curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.1.60/libfdb_c.x86_64.so"
 
 # Disable interactive prompt
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
@@ -44,19 +37,19 @@ COPY . .
 # Build and copy all binaries from target directory into an empty image (it is not
 # included in the output because of cache mount)
 RUN \
-	--mount=type=secret,id=netrc,target=/root/.netrc,mode=0600 \
+    --mount=type=secret,id=netrc,target=/root/.netrc,mode=0600 \
     --mount=type=secret,id=fontawesome_package_token,env=FONTAWESOME_PACKAGE_TOKEN \
-	--mount=type=cache,target=/usr/local/cargo/git,id=univseral-cargo-git \
-	--mount=type=cache,target=/usr/local/cargo/registry,id=univseral-cargo-registry \
-	--mount=type=cache,target=/app/target,id=univseral-target \
-	--mount=type=cache,target=/app/node_modules,id=universal-node-modules \
-	--mount=type=cache,target=/app/.turbo,id=universal-turbo \
-	--mount=type=cache,target=/root/.cache,id=universal-user-cache \
-	--mount=type=cache,target=/root/.npm,id=universal-user-npm \
-	--mount=type=cache,target=/root/.yarn,id=universal-user-yarn \
-	RUSTFLAGS="--cfg tokio_unstable" cargo build --bin rivet-server --bin rivet-edge-server --bin rivet-client --bin rivet-isolate-v8-runner --bin rivet-container-runner && \
-	mkdir /app/dist/ && \
-	cp target/debug/rivet-server target/debug/rivet-edge-server target/debug/rivet-client target/debug/rivet-isolate-v8-runner target/debug/rivet-container-runner /app/dist/
+    --mount=type=cache,target=/usr/local/cargo/git,id=univseral-cargo-git \
+    --mount=type=cache,target=/usr/local/cargo/registry,id=univseral-cargo-registry \
+    --mount=type=cache,target=/app/target,id=univseral-target \
+    --mount=type=cache,target=/app/node_modules,id=universal-node-modules \
+    --mount=type=cache,target=/app/.turbo,id=universal-turbo \
+    --mount=type=cache,target=/root/.cache,id=universal-user-cache \
+    --mount=type=cache,target=/root/.npm,id=universal-user-npm \
+    --mount=type=cache,target=/root/.yarn,id=universal-user-yarn \
+    RUSTFLAGS="--cfg tokio_unstable" cargo build --bin rivet-server --bin rivet-edge-server --bin rivet-client --bin rivet-isolate-v8-runner --bin rivet-container-runner && \
+    mkdir /app/dist/ && \
+    cp target/debug/rivet-server target/debug/rivet-edge-server target/debug/rivet-client target/debug/rivet-isolate-v8-runner target/debug/rivet-container-runner /app/dist/
 
 # MARK: Server (Full)
 FROM debian:12.9-slim AS server-full
@@ -73,7 +66,7 @@ RUN apt-get update -y && \
     redis-tools  \
     postgresql-client \
     gpg \
-	dirmngr && \
+    dirmngr && \
     curl -fsSL 'https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml.key' | gpg --dearmor -o /usr/share/keyrings/clickhouse-keyring.gpg && \
     echo "deb [signed-by=/usr/share/keyrings/clickhouse-keyring.gpg] https://packages.clickhouse.com/deb stable main" | tee /etc/apt/sources.list.d/clickhouse.list && \
     apt-get update -y && \
@@ -93,7 +86,7 @@ FROM debian:12.9-slim AS server-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -y && \
-	apt-get install -y ca-certificates openssl && \
+    apt-get install -y ca-certificates openssl && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
     curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.1.60/libfdb_c.x86_64.so"
@@ -117,7 +110,7 @@ RUN apt-get update -y && \
     redis-tools  \
     postgresql-client \
     gpg \
-	dirmngr && \
+    dirmngr && \
     curl -fsSL 'https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml.key' | gpg --dearmor -o /usr/share/keyrings/clickhouse-keyring.gpg && \
     echo "deb [signed-by=/usr/share/keyrings/clickhouse-keyring.gpg] https://packages.clickhouse.com/deb stable main" | tee /etc/apt/sources.list.d/clickhouse.list && \
     apt-get update -y && \
@@ -136,8 +129,8 @@ CMD ["/usr/bin/rivet-edge-server"]
 FROM --platform=linux/amd64 debian:12.9-slim AS base-runner
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -y && \
-	apt-get install -y ca-certificates openssl curl && \
-	curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.1.60/libfdb_c.x86_64.so"
+    apt-get install -y ca-certificates openssl curl && \
+    curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.1.60/libfdb_c.x86_64.so"
 
 # MARK: Runner (Full)
 FROM --platform=linux/amd64 base-runner AS client-full

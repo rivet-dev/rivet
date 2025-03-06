@@ -18,6 +18,7 @@ types:
       name: string
       server_id: uuid
       datacenter_id: uuid
+      datacenter_name_id: string
       cluster_id: uuid
       lan_ip: string
       wan_ip: string

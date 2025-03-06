@@ -1,8 +1,8 @@
 use std::time::{Duration, Instant};
 
-use crate::utils::ApiResponse;
 use anyhow::*;
 use pegboard_config::{Addresses, Client};
+use service_discovery::ApiResponse;
 use tokio::sync::RwLock;
 
 /// Duration between pulling addresses again.

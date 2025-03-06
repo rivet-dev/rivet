@@ -9,6 +9,7 @@ use rivet_api::apis::{
 	configuration::Configuration,
 	core_intercom_pegboard_api::core_intercom_pegboard_mark_client_registered,
 };
+use rivet_operation::prelude::proto::{self, backend::pkg::*};
 use sqlite_util::SqlitePoolExt;
 use sqlx::Acquire;
 
@@ -358,9 +359,30 @@ struct PublishRegisteredInput {
 async fn publish_registered(ctx: &ActivityCtx, input: &PublishRegisteredInput) -> GlobalResult<()> {
 	let edge = ctx.config().server()?.rivet.edge()?;
 
+	// Create ephemeral token to authenticate with core
+	let token_res = op!([ctx] token_create {
+		token_config: Some(token::create::request::TokenConfig {
+			ttl: util::duration::minutes(5),
+		}),
+		refresh_token_config: None,
+		issuer: "pegboard_client".to_owned(),
+		client: None,
+		kind: Some(token::create::request::Kind::New(
+			token::create::request::KindNew { entitlements: vec![proto::claims::Entitlement {
+				kind: Some(proto::claims::entitlement::Kind::Bypass(
+					proto::claims::entitlement::Bypass { }
+				)),
+			}]},
+		)),
+		label: Some("byp".to_owned()),
+		ephemeral: true,
+	})
+	.await?;
+	let token = unwrap!(token_res.token).token;
+
 	let config = Configuration {
-		base_path: edge.intercom_endpoint.clone(),
-		bearer_access_token: edge.server_token.as_ref().map(|x| x.read().clone()),
+		base_path: util::url::to_string_without_slash(&edge.intercom_endpoint),
+		bearer_access_token: Some(token),
 		..Default::default()
 	};
 

@@ -22,6 +22,7 @@ reqwest = { version = "0.11", features = ["json"] }
 rivet-api.workspace = true
 rivet-config.workspace = true
 rivet-metrics.workspace = true
+rivet-operation.workspace = true
 schemars = { version = "0.8.21", features = ["url", "uuid1"] }
 serde = { version = "1.0.198", features = ["derive"] }
 serde_json = "1.0.132"
@@ -33,6 +34,7 @@ util.workspace = true
 uuid = "1.11.0"
 
 server-spec = { workspace = true, optional = true }
+token-create.workspace = true
 
 [dependencies.sqlx]
 optional = true

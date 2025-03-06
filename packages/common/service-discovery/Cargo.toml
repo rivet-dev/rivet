@@ -1,0 +1,14 @@
+[package]
+name = "service-discovery"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+rand = "0.8"
+reqwest = { version = "0.11", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1.40", features = ["full"] }
+tracing = "0.1"
+url = "2.4"

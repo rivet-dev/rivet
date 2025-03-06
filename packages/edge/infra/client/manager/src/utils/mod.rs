@@ -1,6 +1,5 @@
 use std::{
 	hash::{DefaultHasher, Hasher},
-	net::Ipv4Addr,
 	path::Path,
 	result::Result::{Err, Ok},
 	time::{self, Duration},
@@ -14,9 +13,8 @@ use notify::{
 	Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
 };
 use pegboard::protocol;
-use pegboard_config::{Addresses, Config};
+use pegboard_config::Config;
 use rand::{prelude::SliceRandom, SeedableRng};
-use serde::Deserialize;
 use sqlite_util::SqlitePoolExt;
 use sqlx::{
 	migrate::MigrateDatabase,
@@ -243,52 +241,6 @@ async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 		",
 	))
 	.execute(&mut *conn)
-	.await?;
-
-	Ok(())
-}
-
-#[derive(Deserialize)]
-pub struct ApiResponse {
-	pub servers: Vec<ApiServer>,
-}
-
-#[derive(Deserialize)]
-pub struct ApiServer {
-	pub lan_ip: Option<Ipv4Addr>,
-}
-
-pub async fn init_fdb_config(config: &Config) -> Result<()> {
-	let ips = match &config.client.foundationdb.addresses {
-		Addresses::Dynamic { fetch_endpoint } => reqwest::get(fetch_endpoint.clone())
-			.await?
-			.error_for_status()?
-			.json::<ApiResponse>()
-			.await?
-			.servers
-			.into_iter()
-			.filter_map(|server| server.lan_ip)
-			.map(|lan_ip| format!("{lan_ip}:4500"))
-			.collect::<Vec<_>>(),
-		Addresses::Static(addresses) => addresses.clone(),
-	};
-
-	ensure!(!ips.is_empty(), "no fdb clusters found");
-
-	let joined = ips
-		.into_iter()
-		.map(|x| x.to_string())
-		.collect::<Vec<_>>()
-		.join(",");
-
-	fs::write(
-		config.client.data_dir().join("fdb.cluster"),
-		format!(
-			"{cluster_description}:{cluster_id}@{joined}",
-			cluster_description = config.client.foundationdb.cluster_description,
-			cluster_id = config.client.foundationdb.cluster_id,
-		),
-	)
 	.await?;
 
 	Ok(())

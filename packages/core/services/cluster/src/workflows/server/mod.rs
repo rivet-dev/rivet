@@ -328,25 +328,23 @@ async fn lifecycle(
 	state: &mut State,
 ) -> GlobalResult<Loop<bool>> {
 	match state.run(ctx).await? {
-		Main::DnsCreate(_) => {
-			match input.pool_type {
-				PoolType::Gg => {
-					ctx.workflow(gg_dns_create::Input {
-						server_id: input.server_id,
-					})
-					.output()
-					.await?;
-				}
-				PoolType::Worker => {
-					ctx.workflow(api_dns_create::Input {
-						server_id: input.server_id,
-					})
-					.output()
-					.await?;
-				}
-				_ => unreachable!(),
+		Main::DnsCreate(_) => match input.pool_type {
+			PoolType::Gg => {
+				ctx.workflow(gg_dns_create::Input {
+					server_id: input.server_id,
+				})
+				.output()
+				.await?;
 			}
-		}
+			PoolType::Worker => {
+				ctx.workflow(api_dns_create::Input {
+					server_id: input.server_id,
+				})
+				.output()
+				.await?;
+			}
+			_ => unreachable!(),
+		},
 		Main::DnsDelete(_) => {
 			ctx.workflow(dns_delete::Input {
 				server_id: input.server_id,

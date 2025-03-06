@@ -10,6 +10,15 @@ use super::{
 	vector::{TUNNEL_VECTOR_PORT, TUNNEL_VECTOR_TCP_JSON_PORT},
 };
 
+pub const TUNNEL_CRDB_PORT: u16 = 5040;
+pub const TUNNEL_REDIS_EPHEMERAL_PORT: u16 = 5041;
+pub const TUNNEL_REDIS_PERSISTENT_PORT: u16 = 5042;
+pub const TUNNEL_CLICKHOUSE_PORT: u16 = 5043;
+pub const TUNNEL_CLICKHOUSE_NATIVE_PORT: u16 = 5044;
+pub const TUNNEL_S3_PORT: u16 = 5045;
+pub const TUNNEL_NATS_PORT: u16 = 5046;
+pub const TUNNEL_PROMETHEUS_PORT: u16 = 5047;
+
 pub const TUNNEL_SERVICES: &[TunnelService] = &[
 	TunnelService {
 		name: "nomad-server-0",
@@ -38,6 +47,38 @@ pub const TUNNEL_SERVICES: &[TunnelService] = &[
 	TunnelService {
 		name: "pegboard-server",
 		port: TUNNEL_PEGBOARD_WS_PORT,
+	},
+	TunnelService {
+		name: "crdb",
+		port: TUNNEL_CRDB_PORT,
+	},
+	TunnelService {
+		name: "redis-ephemeral",
+		port: TUNNEL_REDIS_EPHEMERAL_PORT,
+	},
+	TunnelService {
+		name: "redis-persistent",
+		port: TUNNEL_REDIS_PERSISTENT_PORT,
+	},
+	TunnelService {
+		name: "clickhouse",
+		port: TUNNEL_CLICKHOUSE_PORT,
+	},
+	TunnelService {
+		name: "clickhouse-native",
+		port: TUNNEL_CLICKHOUSE_NATIVE_PORT,
+	},
+	TunnelService {
+		name: "s3",
+		port: TUNNEL_S3_PORT,
+	},
+	TunnelService {
+		name: "nats",
+		port: TUNNEL_NATS_PORT,
+	},
+	TunnelService {
+		name: "prometheus",
+		port: TUNNEL_PROMETHEUS_PORT,
 	},
 ];
 

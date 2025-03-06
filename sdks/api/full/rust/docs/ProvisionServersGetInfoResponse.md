@@ -7,6 +7,7 @@ Name | Type | Description | Notes
 **name** | **String** |  | 
 **server_id** | [**uuid::Uuid**](uuid::Uuid.md) |  | 
 **datacenter_id** | [**uuid::Uuid**](uuid::Uuid.md) |  | 
+**datacenter_name_id** | **String** |  | 
 **cluster_id** | [**uuid::Uuid**](uuid::Uuid.md) |  | 
 **lan_ip** | **String** |  | 
 **wan_ip** | **String** |  | 

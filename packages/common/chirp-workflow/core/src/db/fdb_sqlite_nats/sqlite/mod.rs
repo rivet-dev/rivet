@@ -4,8 +4,8 @@ use include_dir::{include_dir, Dir, File};
 use indoc::indoc;
 use rivet_pools::prelude::*;
 use sqlite_util::SqlitePoolExt;
-use uuid::Uuid;
 use sqlx::Acquire;
+use uuid::Uuid;
 
 use crate::{
 	error::{WorkflowError, WorkflowResult},

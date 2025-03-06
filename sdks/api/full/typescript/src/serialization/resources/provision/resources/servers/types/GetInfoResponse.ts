@@ -13,6 +13,7 @@ export const GetInfoResponse: core.serialization.ObjectSchema<
     name: core.serialization.string(),
     serverId: core.serialization.property("server_id", core.serialization.string()),
     datacenterId: core.serialization.property("datacenter_id", core.serialization.string()),
+    datacenterNameId: core.serialization.property("datacenter_name_id", core.serialization.string()),
     clusterId: core.serialization.property("cluster_id", core.serialization.string()),
     lanIp: core.serialization.property("lan_ip", core.serialization.string()),
     wanIp: core.serialization.property("wan_ip", core.serialization.string()),
@@ -25,6 +26,7 @@ export declare namespace GetInfoResponse {
         name: string;
         server_id: string;
         datacenter_id: string;
+        datacenter_name_id: string;
         cluster_id: string;
         lan_ip: string;
         wan_ip: string;

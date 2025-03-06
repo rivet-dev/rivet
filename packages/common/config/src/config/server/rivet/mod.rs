@@ -35,7 +35,7 @@ pub mod default_hosts {
 	pub const METRICS: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
 }
 
-pub mod default_ports {
+pub(crate) mod default_ports {
 	pub const API_PUBLIC: u16 = 8080;
 	pub const API_EDGE: u16 = 8081;
 	pub const PEGBOARD: u16 = 8082;
@@ -244,7 +244,11 @@ impl Rivet {
 
 	// Does what `rivet_util::url::to_string_without_slash` does
 	pub fn edge_api_url_str(&self, dc_name_id: &str) -> GlobalResult<String> {
-		Ok(self.edge_api_url(dc_name_id)?.to_string().trim_end_matches('/').to_string())
+		Ok(self
+			.edge_api_url(dc_name_id)?
+			.to_string()
+			.trim_end_matches('/')
+			.to_string())
 	}
 
 	pub fn billing(&self) -> GlobalResult<&Billing> {
@@ -729,5 +733,5 @@ impl Default for Telemetry {
 pub struct Edge {
 	pub cluster_id: Uuid,
 	pub datacenter_id: Uuid,
-	pub intercom_endpoint: String,
+	pub intercom_endpoint: Url,
 }

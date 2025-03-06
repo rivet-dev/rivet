@@ -1,7 +1,13 @@
 FROM clux/muslrust:1.81.0-stable AS rust
 
-RUN ln -s /bin/g++ /bin/musl-g++ && \
-	ln -s /bin/gcc-ar /bin/musl-ar
+RUN apt-get update -y && apt-get install -y \
+	libclang-dev \
+	libpq-dev \
+	libssl-dev \
+	pkg-config && \
+	ln -s /bin/g++ /bin/musl-g++ && \
+	ln -s /bin/gcc-ar /bin/musl-ar && \
+	curl -Lf -o /lib/libfdb_c.so "https://github.com/apple/foundationdb/releases/download/7.1.60/libfdb_c.x86_64.so"
 
 WORKDIR /app
 COPY . .

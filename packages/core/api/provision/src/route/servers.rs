@@ -56,6 +56,7 @@ pub async fn info(
 		name,
 		server_id: server.server_id,
 		datacenter_id: server.datacenter_id,
+		datacenter_name_id: datacenter.name_id.clone(),
 		cluster_id: datacenter.cluster_id,
 		lan_ip: lan_ip.clone(),
 		wan_ip: wan_ip.clone(),

@@ -19,13 +19,15 @@ foundationdb.workspace = true
 futures-util = { version = "0.3" }
 netif = "0.1.6"
 nix.workspace = true
-pegboard.workspace = true
 pegboard-actor-kv = { workspace = true }
 pegboard-config.workspace = true
 pegboard-logs.workspace = true
+pegboard.workspace = true
 serde = { version = "1.0.195", features = ["derive"] }
 serde_json = "1.0.111"
+service-discovery.workspace = true
 signal-hook = "0.3.17"
+tempfile = "3.13.0"
 tokio-tungstenite = "0.23.1"
 tokio.workspace = true
 tracing-logfmt.workspace = true

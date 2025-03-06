@@ -77,7 +77,7 @@ pub async fn gen_install(
 		}
 		PoolType::Worker => {
 			script.push(components::rivet::worker::install(config).await?);
-		},
+		}
 	}
 
 	// MARK: Common (post)

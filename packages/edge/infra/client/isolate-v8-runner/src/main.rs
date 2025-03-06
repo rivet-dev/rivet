@@ -59,8 +59,7 @@ async fn main() -> Result<()> {
 	let config_data = fs::read_to_string(working_path.join("config.json")).await?;
 	let config = serde_json::from_str::<Config>(&config_data)?;
 
-	// Start FDB network thread
-	fdb_util::init(&config.fdb_cluster_path);
+	let _ = utils::setup_fdb_pool(&config).await?;
 
 	tracing::info!(pid=%std::process::id(), "starting");
 

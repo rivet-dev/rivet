@@ -7,7 +7,7 @@ use std::{
 
 use pegboard::protocol;
 use schemars::JsonSchema;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use url::Url;
 use uuid::Uuid;
 
@@ -253,7 +253,7 @@ impl Metrics {
 	}
 }
 
-#[derive(Clone, Deserialize, JsonSchema)]
+#[derive(Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct FoundationDb {
 	pub cluster_description: String,
@@ -261,7 +261,7 @@ pub struct FoundationDb {
 	pub addresses: Addresses,
 }
 
-#[derive(Clone, Deserialize, JsonSchema)]
+#[derive(Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub enum Addresses {
 	Dynamic { fetch_endpoint: Url },

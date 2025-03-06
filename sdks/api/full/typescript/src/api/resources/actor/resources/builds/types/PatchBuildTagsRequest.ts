@@ -4,6 +4,9 @@
 
 export interface PatchBuildTagsRequest {
     tags?: unknown;
-    /** Removes the given tag keys from all other builds. */
+    /**
+     * **Deprecated**
+     * Removes the given tag keys from all other builds.
+     */
     exclusiveTags?: string[];
 }

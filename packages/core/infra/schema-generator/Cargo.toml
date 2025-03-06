@@ -7,7 +7,7 @@ edition.workspace = true
 
 [build-dependencies]
 anyhow = "1.0"
-pegboard-config = { path = "../client/config" }
+pegboard-config.workspace = true
 rivet-config.workspace = true
 rivet-toolchain.workspace = true
 schemars = "0.8.21"

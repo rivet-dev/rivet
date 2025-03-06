@@ -8,8 +8,13 @@ use url::Url;
 use crate::secret::Secret;
 
 pub mod rivet;
-
 pub use rivet::*;
+
+pub mod default_ports {
+	pub use super::rivet::default_ports::*;
+
+	pub const FDB: u16 = 4500;
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
@@ -449,13 +454,32 @@ impl ClickHouseUserRole {
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct FoundationDb {
-	pub connection: String,
+	pub cluster_description: String,
+	pub cluster_id: String,
+	pub addresses: Addresses,
+	pub port: Option<u16>,
 }
 
 impl Default for FoundationDb {
 	fn default() -> Self {
 		Self {
-			connection: "fdb:fdb@127.0.0.1:4500".to_string(),
+			cluster_description: "fdb".to_string(),
+			cluster_id: "fdb".to_string(),
+			addresses: Addresses::Static(vec!["127.0.0.1:4500".to_string()]),
+			port: None,
 		}
 	}
+}
+
+impl FoundationDb {
+	pub fn port(&self) -> u16 {
+		self.port.unwrap_or(self::default_ports::FDB)
+	}
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum Addresses {
+	Dynamic { fetch_endpoint: Url },
+	Static(Vec<String>),
 }

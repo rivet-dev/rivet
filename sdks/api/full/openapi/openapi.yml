@@ -10039,6 +10039,8 @@ components:
         datacenter_id:
           type: string
           format: uuid
+        datacenter_name_id:
+          type: string
         cluster_id:
           type: string
           format: uuid
@@ -10056,6 +10058,7 @@ components:
         - name
         - server_id
         - datacenter_id
+        - datacenter_name_id
         - cluster_id
         - lan_ip
         - wan_ip
@@ -13518,6 +13521,7 @@ components:
         - pegboard
         - pegboard_isolate
         - fdb
+        - worker
     ProvisionServer:
       type: object
       properties:

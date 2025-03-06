@@ -13,9 +13,9 @@ use futures_util::FutureExt;
 use pegboard::protocol as pp;
 use serde_json::json;
 use sqlite_util::SqlitePoolExt;
+use sqlx::Acquire;
 use tokio::time::Instant;
 use util::serde::AsHashableExt;
-use sqlx::Acquire;
 
 use super::{
 	CreateComplete, Destroy, Failed, GetServerMetaInput, GetServerMetaOutput, InsertDbInput,

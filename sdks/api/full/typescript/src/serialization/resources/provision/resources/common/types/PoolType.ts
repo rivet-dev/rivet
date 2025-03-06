@@ -7,8 +7,8 @@ import * as Rivet from "../../../../../../api/index";
 import * as core from "../../../../../../core";
 
 export const PoolType: core.serialization.Schema<serializers.provision.PoolType.Raw, Rivet.provision.PoolType> =
-    core.serialization.enum_(["job", "gg", "ats", "pegboard", "pegboard_isolate", "fdb"]);
+    core.serialization.enum_(["job", "gg", "ats", "pegboard", "pegboard_isolate", "fdb", "worker"]);
 
 export declare namespace PoolType {
-    type Raw = "job" | "gg" | "ats" | "pegboard" | "pegboard_isolate" | "fdb";
+    type Raw = "job" | "gg" | "ats" | "pegboard" | "pegboard_isolate" | "fdb" | "worker";
 }

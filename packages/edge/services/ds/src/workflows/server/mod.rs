@@ -6,8 +6,8 @@ use cluster::types::BuildDeliveryMethod;
 use fdb_util::FormalKey;
 use foundationdb as fdb;
 use sqlite_util::SqlitePoolExt;
-use util::serde::AsHashableExt;
 use sqlx::Acquire;
+use util::serde::AsHashableExt;
 
 use crate::{
 	keys,
