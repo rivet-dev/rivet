@@ -16,7 +16,7 @@ cjson = "0.1"
 fdb-util.workspace = true
 foundationdb.workspace = true
 heck = "0.3"
-hex = "0.4"
+hex.workspace = true
 http = "0.2"
 lazy_static = "1.4.0"
 nix = { version = "0.27", default-features = false, features = ["signal"] }
@@ -37,7 +37,6 @@ s3-util.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["preserve_order"] }
 sha2 = "0.10"
-sqlite-util.workspace = true
 strum = { version = "0.24", features = ["derive"] }
 tracing-subscriber = { version = "0.3", default-features = false, features = [
     "ansi",

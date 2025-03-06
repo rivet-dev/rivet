@@ -3,13 +3,13 @@ use std::net::IpAddr;
 use serde::{Deserialize, Serialize};
 
 /// See corresponding documentation in `pegboard_manager::config::Config`
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Clone, Debug, Serialize, Deserialize, Hash)]
 pub struct ClientConfig {
 	pub network: Network,
 	pub reserved_resources: ReservedResources,
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Clone, Debug, Serialize, Deserialize, Hash)]
 pub struct Network {
 	pub bind_ip: IpAddr,
 	pub lan_hostname: String,
@@ -20,7 +20,7 @@ pub struct Network {
 	pub wan_port_range_max: u16,
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Clone, Debug, Serialize, Deserialize, Hash)]
 pub struct ReservedResources {
 	// Millicores
 	pub cpu: u64,

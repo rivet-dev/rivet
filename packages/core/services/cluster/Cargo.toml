@@ -47,5 +47,5 @@ features = [ "json", "ipnetwork" ]
 
 [build-dependencies]
 merkle_hash = "3.6"
-hex = "0.4"
+hex.workspace = true
 tokio = { version = "1.40", features = ["full"] }

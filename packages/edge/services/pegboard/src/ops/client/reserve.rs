@@ -1,5 +1,5 @@
 use chirp_workflow::prelude::*;
-use fdb_util::{FormalKey, SNAPSHOT};
+use fdb_util::{FormalKey, SERIALIZABLE, SNAPSHOT};
 use foundationdb::{
 	self as fdb,
 	options::{ConflictRangeType, StreamingMode},
@@ -19,6 +19,8 @@ pub struct Input {
 	pub flavor: protocol::ClientFlavor,
 	/// MiB.
 	pub memory: u64,
+	/// Millicores.
+	pub cpu: u64,
 }
 
 #[derive(Debug)]
@@ -87,23 +89,44 @@ pub async fn pegboard_client_reserve(
 				// Clear old entry
 				tx.clear(entry.key());
 
+				// Read old cpu
+				let remaining_cpu_key =
+					keys::client::RemainingCpuKey::new(old_allocation_key.client_id);
+				let remaining_cpu_key_buf = keys::subspace().pack(&remaining_cpu_key);
+				let remaining_cpu_entry = tx.get(&remaining_cpu_key_buf, SERIALIZABLE).await?;
+				let old_remaining_cpu = remaining_cpu_key
+					.deserialize(
+						&remaining_cpu_entry.ok_or(fdb::FdbBindingError::CustomError(
+							format!("key should exist: {remaining_cpu_key:?}").into(),
+						))?,
+					)
+					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
 				// Update allocated amount
-				let remaining_mem = old_allocation_key.remaining_mem - input.memory;
+				let new_remaining_mem = old_allocation_key.remaining_mem - input.memory;
+				let new_remaining_cpu = old_remaining_cpu - input.cpu;
 				let new_allocation_key = keys::datacenter::ClientsByRemainingMemKey::new(
 					input.flavor,
-					remaining_mem,
+					new_remaining_mem,
 					old_allocation_key.last_ping_ts,
 					old_allocation_key.client_id,
 				);
 				tx.set(&keys::subspace().pack(&new_allocation_key), entry.value());
 
 				// Update client record
-				let client_allocation_key =
-					keys::client::RemainingMemKey::new(old_allocation_key.client_id);
+				let remaining_mem_key =
+					keys::client::RemainingMemoryKey::new(old_allocation_key.client_id);
 				tx.set(
-					&keys::subspace().pack(&client_allocation_key),
-					&client_allocation_key
-						.serialize(remaining_mem)
+					&keys::subspace().pack(&remaining_mem_key),
+					&remaining_mem_key
+						.serialize(new_remaining_mem)
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+				);
+
+				tx.set(
+					&remaining_cpu_key_buf,
+					&remaining_cpu_key
+						.serialize(new_remaining_cpu)
 						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
 				);
 

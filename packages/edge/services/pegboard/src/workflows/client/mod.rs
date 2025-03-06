@@ -1,16 +1,15 @@
 use std::convert::TryInto;
 
 use chirp_workflow::prelude::*;
-use fdb_util::{FormalKey, SERIALIZABLE};
-use foundationdb as fdb;
-use futures_util::FutureExt;
+use fdb_util::{FormalKey, SERIALIZABLE, SNAPSHOT};
+use foundationdb::{self as fdb, options::StreamingMode};
+use futures_util::{FutureExt, StreamExt, TryStreamExt};
 use nix::sys::signal::Signal;
 use rivet_api::apis::{
 	configuration::Configuration,
 	core_intercom_pegboard_api::core_intercom_pegboard_mark_client_registered,
 };
 use rivet_operation::prelude::proto::{self, backend::pkg::*};
-use sqlite_util::SqlitePoolExt;
 use sqlx::Acquire;
 
 use crate::{client_config, keys, metrics, protocol, protocol::ClientFlavor, system_info};
@@ -60,13 +59,10 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 							config,
 							system,
 						} => {
-							let allocable_memory = system.memory.total_memory / 1024 / 1024
-								- config.reserved_resources.memory;
-
 							let init_data = ctx
 								.activity(ProcessInitInput {
-									config,
-									system,
+									config: config.clone(),
+									system: system.clone(),
 									// Ignore init packet if workflow id doesn't match. Manager will reset
 									last_command_idx: if last_workflow_id
 										.map(|id| id != ctx.workflow_id())
@@ -104,7 +100,8 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 								activity(InsertFdbInput {
 									client_id,
 									flavor,
-									allocable_memory,
+									config,
+									system,
 								}),
 								activity(UpdateMetricsInput { client_id, flavor }),
 							))
@@ -214,7 +211,11 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 	})
 	.await?;
 
-	let actor_ids = ctx.activity(FetchAllActorsInput {}).await?;
+	let actor_ids = ctx
+		.activity(FetchRemainingActorsInput {
+			client_id: input.client_id,
+		})
+		.await?;
 
 	// Set all remaining actors as lost
 	for actor_id in actor_ids {
@@ -280,8 +281,8 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<()>
 struct InsertFdbInput {
 	client_id: Uuid,
 	flavor: ClientFlavor,
-	/// MiB.
-	allocable_memory: u64,
+	config: client_config::ClientConfig,
+	system: system_info::SystemInfo,
 }
 
 #[activity(InsertFdb)]
@@ -289,7 +290,8 @@ async fn insert_fdb(ctx: &ActivityCtx, input: &InsertFdbInput) -> GlobalResult<(
 	ctx.fdb()
 		.await?
 		.run(|tx, _mc| async move {
-			let remaining_mem_key = keys::client::RemainingMemKey::new(input.client_id);
+			let remaining_mem_key = keys::client::RemainingMemoryKey::new(input.client_id);
+			let remaining_cpu_key = keys::client::RemainingCpuKey::new(input.client_id);
 			let last_ping_ts_key = keys::client::LastPingTsKey::new(input.client_id);
 
 			let (remaining_mem, last_ping_ts) = tokio::try_join!(
@@ -308,17 +310,54 @@ async fn insert_fdb(ctx: &ActivityCtx, input: &InsertFdbInput) -> GlobalResult<(
 						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
 					(remaining_mem, last_ping_ts)
-				} else {
+				}
+				// Initial insert
+				else {
+					// MiB
+					let allocable_memory = input.system.memory.total_memory / 1024 / 1024
+						- input.config.reserved_resources.memory;
+
 					// Set remaining memory
 					tx.set(
 						&keys::subspace().pack(&remaining_mem_key),
 						&remaining_mem_key
-							.serialize(input.allocable_memory)
+							.serialize(allocable_memory)
 							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
 					);
 
-					// Set last ping
+					// Set total memory
+					let total_mem_key = keys::client::TotalMemoryKey::new(input.client_id);
+					tx.set(
+						&keys::subspace().pack(&total_mem_key),
+						&total_mem_key
+							.serialize(allocable_memory)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+					);
+
+					// Millicores
+					let allocable_cpu = input.system.cpu.physical_core_count * 1000;
+
+					// Set remaining cpu
+					tx.set(
+						&keys::subspace().pack(&remaining_cpu_key),
+						// Millicores
+						&remaining_cpu_key
+							.serialize(allocable_cpu)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+					);
+
+					// Set total cpu
+					let total_cpu_key = keys::client::TotalCpuKey::new(input.client_id);
+					tx.set(
+						&keys::subspace().pack(&total_cpu_key),
+						&total_cpu_key
+							.serialize(allocable_cpu)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+					);
+
 					let last_ping_ts = util::timestamp::now();
+
+					// Set last ping
 					tx.set(
 						&keys::subspace().pack(&last_ping_ts_key),
 						&last_ping_ts_key
@@ -326,7 +365,7 @@ async fn insert_fdb(ctx: &ActivityCtx, input: &InsertFdbInput) -> GlobalResult<(
 							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
 					);
 
-					(input.allocable_memory, last_ping_ts)
+					(allocable_memory, last_ping_ts)
 				};
 
 			// Insert into index (same as the `update_allocation_idx` op with `AddIdx`)
@@ -462,7 +501,8 @@ async fn insert_events(ctx: &ActivityCtx, input: &InsertEventsInput) -> GlobalRe
 		return Ok(());
 	};
 
-	let mut conn = ctx.sqlite().await?.conn().await?;
+	let pool = ctx.sqlite().await?;
+	let mut conn = pool.conn().await?;
 	let mut tx = conn.begin().await?;
 
 	// TODO(RVT-4450): `last_event_idx < $2` and `ON CONFLICT DO NOTHING` is a workaround
@@ -615,7 +655,8 @@ struct InsertCommandsInput {
 
 #[activity(InsertCommands)]
 async fn insert_commands(ctx: &ActivityCtx, input: &InsertCommandsInput) -> GlobalResult<i64> {
-	let mut conn = ctx.sqlite().await?.conn().await?;
+	let pool = ctx.sqlite().await?;
+	let mut conn = pool.conn().await?;
 	let mut tx = conn.begin().await?;
 
 	let (last_command_index,) = sql_fetch_one!(
@@ -699,30 +740,40 @@ async fn clear_fdb(ctx: &ActivityCtx, input: &ClearFdbInput) -> GlobalResult<()>
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-struct FetchAllActorsInput {}
+struct FetchRemainingActorsInput {
+	client_id: Uuid,
+}
 
-#[activity(FetchAllActors)]
-async fn fetch_all_actors(
+#[activity(FetchRemainingActors)]
+async fn fetch_remaining_actors(
 	ctx: &ActivityCtx,
-	input: &FetchAllActorsInput,
+	input: &FetchRemainingActorsInput,
 ) -> GlobalResult<Vec<Uuid>> {
-	let pool = ctx.sqlite().await?;
+	let actor_ids = ctx
+		.fdb()
+		.await?
+		.run(|tx, _mc| async move {
+			let actor_subspace =
+				keys::subspace().subspace(&keys::client::ActorKey::subspace(input.client_id));
 
-	let actor_ids = sql_fetch_all!(
-		[ctx, (Uuid,), pool]
-		"
-		SELECT actor_id
-		FROM actors
-		WHERE
-			stopping_ts IS NULL AND
-			stop_ts IS NULL AND
-			exit_ts IS NULL
-		",
-	)
-	.await?
-	.into_iter()
-	.map(|(id,)| id)
-	.collect();
+			tx.get_ranges_keyvalues(
+				fdb::RangeOption {
+					mode: StreamingMode::WantAll,
+					..(&actor_subspace).into()
+				},
+				SERIALIZABLE,
+			)
+			.map(|res| match res {
+				Ok(entry) => Ok(keys::subspace()
+					.unpack::<keys::client::ActorKey>(entry.key())
+					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?
+					.actor_id),
+				Err(err) => Err(Into::<fdb::FdbBindingError>::into(err)),
+			})
+			.try_collect::<Vec<_>>()
+			.await
+		})
+		.await?;
 
 	Ok(actor_ids)
 }
@@ -765,23 +816,51 @@ struct UpdateMetricsInput {
 
 #[activity(UpdateMetrics)]
 async fn update_metrics(ctx: &ActivityCtx, input: &UpdateMetricsInput) -> GlobalResult<()> {
-	let pool = ctx.sqlite().await?;
+	let (memory, cpu) =
+		ctx.fdb()
+			.await?
+			.run(|tx, _mc| async move {
+				let total_mem_key = keys::client::TotalMemoryKey::new(input.client_id);
+				let remaining_mem_key = keys::client::RemainingMemoryKey::new(input.client_id);
+				let total_cpu_key = keys::client::TotalCpuKey::new(input.client_id);
+				let remaining_cpu_key = keys::client::RemainingCpuKey::new(input.client_id);
 
-	let (cpu, memory) = sql_fetch_one!(
-		[ctx, (i64, i64), pool]
-		"
-		SELECT
-			-- Millicores
-			COALESCE(SUM(CAST((config->'resources'->'cpu') AS INT)), 0) AS allocated_cpu,
-			-- MiB
-			COALESCE(SUM(CAST((config->'resources'->'memory') AS INT) / 1048576), 0) AS allocated_memory
-		FROM actors
-		WHERE
-			stop_ts IS NULL AND
-			exit_ts IS NULL
-		",
-	)
-	.await?;
+				let (total_mem_entry, remaining_mem_entry, total_cpu_entry, remaining_cpu_entry) =
+					tokio::try_join!(
+						tx.get(&keys::subspace().pack(&total_mem_key), SNAPSHOT),
+						tx.get(&keys::subspace().pack(&remaining_mem_key), SNAPSHOT),
+						tx.get(&keys::subspace().pack(&total_cpu_key), SNAPSHOT),
+						tx.get(&keys::subspace().pack(&remaining_cpu_key), SNAPSHOT),
+					)?;
+
+				let total_mem = total_mem_key
+					.deserialize(&total_mem_entry.ok_or(fdb::FdbBindingError::CustomError(
+						format!("key should exist: {total_mem_key:?}").into(),
+					))?)
+					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+				let remaining_mem = remaining_mem_key
+					.deserialize(
+						&remaining_mem_entry.ok_or(fdb::FdbBindingError::CustomError(
+							format!("key should exist: {remaining_mem_key:?}").into(),
+						))?,
+					)
+					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+				let total_cpu = total_cpu_key
+					.deserialize(&total_cpu_entry.ok_or(fdb::FdbBindingError::CustomError(
+						format!("key should exist: {total_cpu_key:?}").into(),
+					))?)
+					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+				let remaining_cpu = remaining_cpu_key
+					.deserialize(
+						&remaining_cpu_entry.ok_or(fdb::FdbBindingError::CustomError(
+							format!("key should exist: {remaining_cpu_key:?}").into(),
+						))?,
+					)
+					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+				Ok((total_mem - remaining_mem, total_cpu - remaining_cpu))
+			})
+			.await?;
 
 	metrics::CLIENT_CPU_ALLOCATED
 		.with_label_values(&[&input.client_id.to_string(), &input.flavor.to_string()])

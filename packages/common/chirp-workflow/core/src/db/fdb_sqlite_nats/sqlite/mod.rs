@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use include_dir::{include_dir, Dir, File};
 use indoc::indoc;
 use rivet_pools::prelude::*;
-use sqlite_util::SqlitePoolExt;
 use sqlx::Acquire;
 use uuid::Uuid;
 

@@ -12,7 +12,6 @@ use foundationdb as fdb;
 use futures_util::FutureExt;
 use pegboard::protocol as pp;
 use serde_json::json;
-use sqlite_util::SqlitePoolExt;
 use sqlx::Acquire;
 use tokio::time::Instant;
 use util::serde::AsHashableExt;
@@ -436,6 +435,7 @@ async fn allocate_actor(
 		.op(pegboard::ops::client::reserve::Input {
 			flavor: client_flavor,
 			memory: memory_mib,
+			cpu: input.resources.cpu,
 		})
 		.await?;
 
@@ -732,7 +732,8 @@ struct InsertPortsInput {
 
 #[activity(InsertPorts)]
 async fn insert_ports(ctx: &ActivityCtx, input: &InsertPortsInput) -> GlobalResult<()> {
-	let mut conn = ctx.sqlite().await?.conn().await?;
+	let pool = ctx.sqlite().await?;
+	let mut conn = pool.conn().await?;
 	let mut tx = conn.begin().await?;
 
 	for (port_name, port) in &input.ports {

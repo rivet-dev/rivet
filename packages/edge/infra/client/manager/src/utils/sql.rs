@@ -5,11 +5,29 @@ use std::{
 };
 
 use anyhow::*;
+use sqlx::{pool::PoolConnection, Sqlite, SqlitePool};
 
 use crate::metrics;
 
 const MAX_QUERY_RETRIES: usize = 16;
 const QUERY_RETRY: Duration = Duration::from_millis(500);
+
+pub trait SqlitePoolExt {
+	fn conn(&self) -> impl Future<Output = sqlx::Result<PoolConnection<Sqlite>>>;
+}
+
+impl SqlitePoolExt for SqlitePool {
+	async fn conn(&self) -> sqlx::Result<PoolConnection<Sqlite>> {
+		// Attempt to use an existing connection
+		if let Some(conn) = self.try_acquire() {
+			Ok(conn)
+		} else {
+			// Create a new connection
+			self.acquire().await
+		}
+	}
+}
+
 
 /// Executes queries and explicitly handles retry errors.
 pub async fn query<'a, F, Fut, T>(mut cb: F) -> Result<T>

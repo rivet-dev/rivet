@@ -380,24 +380,23 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 							.unpack::<JustUuid>(entry.key())
 							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
-						if current_workflow_id
-							.map(|x| workflow_id != x)
-							.unwrap_or_default()
-						{
-							// Save if matches query
-							if matching_tags == tags.len() && name_matches && state_matches {
-								workflow_ids.push(workflow_id);
-
-								if workflow_ids.len() >= 100 {
-									current_workflow_id = None;
-									break;
+						if let Some(curr) = current_workflow_id {
+							if workflow_id != curr {
+								// Save if matches query
+								if matching_tags == tags.len() && name_matches && state_matches {
+									workflow_ids.push(curr);
+	
+									if workflow_ids.len() >= 100 {
+										current_workflow_id = None;
+										break;
+									}
 								}
+	
+								// Reset state
+								matching_tags = 0;
+								name_matches = name.is_none();
+								state_matches = state.is_none() || state == Some(WorkflowState::Dead);
 							}
-
-							// Reset state
-							matching_tags = 0;
-							name_matches = name.is_none();
-							state_matches = state.is_none() || state == Some(WorkflowState::Dead);
 						}
 
 						current_workflow_id = Some(workflow_id);
@@ -499,13 +498,24 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 								.serialize(())
 								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
 						);
+
+						let has_wake_condition_key = keys::workflow::HasWakeConditionKey::new(workflow_id);
+						tx.set(
+							&self.subspace.pack(&has_wake_condition_key),
+							&has_wake_condition_key
+								.serialize(())
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+						);
 					}
 
 					Ok(())
 				}
 			})
-			.await
-			.map_err(Into::into)
+			.await?;
+
+		self.wake_worker();
+
+		Ok(())
 	}
 
 	async fn get_workflow_history(
@@ -721,7 +731,11 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 			sql_fetch_all!(
 				[SqlStub {}, ActivityErrorRow, pool]
 				"
-				SELECT json(location) AS location, error, COUNT(error), MAX(ts) AS latest_ts
+				SELECT
+					json(location) AS location,
+					error,
+					COUNT(error) AS count,
+					MAX(ts) AS latest_ts
 				FROM workflow_activity_errors
 				GROUP BY location, error
 				ORDER BY latest_ts

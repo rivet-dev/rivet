@@ -13,13 +13,14 @@ clap = { version = "4.3", features = ["derive"] }
 colored_json = "5.0.0"
 futures-util = "0.3"
 global-error.workspace = true
-hex = "0.4"
+hex.workspace = true
 include_dir = "0.7.4"
 indoc = "2.0.5"
 reqwest = "0.12.9"
 foundationdb.workspace = true
 rivet-api.workspace = true
 rivet-config.workspace = true
+rivet-logs.workspace = true
 rivet-migrate.workspace = true
 rivet-pools.workspace = true
 rivet-runtime.workspace = true

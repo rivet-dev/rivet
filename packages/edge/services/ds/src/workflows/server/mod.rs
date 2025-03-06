@@ -5,7 +5,6 @@ use chirp_workflow::prelude::*;
 use cluster::types::BuildDeliveryMethod;
 use fdb_util::FormalKey;
 use foundationdb as fdb;
-use sqlite_util::SqlitePoolExt;
 use sqlx::Acquire;
 use util::serde::AsHashableExt;
 
@@ -350,7 +349,8 @@ struct InsertDbInput {
 
 #[activity(InsertDb)]
 async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> GlobalResult<i64> {
-	let mut conn = ctx.sqlite().await?.conn().await?;
+	let pool = ctx.sqlite().await?;
+	let mut conn = pool.conn().await?;
 	let mut tx = conn.begin().await?;
 	let create_ts = ctx.ts();
 

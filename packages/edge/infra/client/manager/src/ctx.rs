@@ -18,7 +18,6 @@ use pegboard::{protocol, system_info::SystemInfo};
 use pegboard_config::{
 	isolate_runner::Config as IsolateRunnerConfig, runner_protocol, Client, Config,
 };
-use sqlite_util::SqlitePoolExt;
 use sqlx::{pool::PoolConnection, Acquire, Sqlite, SqlitePool};
 use tokio::{
 	fs,
@@ -37,7 +36,7 @@ use uuid::Uuid;
 
 use crate::{
 	actor::Actor, event_sender::EventSender, metrics, pull_addr_handler::PullAddrHandler, runner,
-	utils,
+	utils::{self, sql::SqlitePoolExt},
 };
 
 const PING_INTERVAL: Duration = Duration::from_secs(1);

@@ -26,10 +26,10 @@ pub enum SimpleTupleValue {
 
 impl SimpleTupleValue {
 	fn parse(value: &str) -> Self {
-		if let Ok(v) = value.parse::<u64>() {
-			SimpleTupleValue::U64(v)
-		} else if let Ok(v) = value.parse::<i64>() {
+		if let Ok(v) = value.parse::<i64>() {
 			SimpleTupleValue::I64(v)
+		} else if let Ok(v) = value.parse::<u64>() {
+			SimpleTupleValue::U64(v)
 		} else if let Ok(v) = value.parse::<f64>() {
 			SimpleTupleValue::F64(v)
 		} else if let Ok(v) = Uuid::from_str(value) {
@@ -54,7 +54,24 @@ impl fmt::Display for SimpleTupleValue {
 					write!(f, "{}", style(v).green())
 				}
 			}
-			SimpleTupleValue::Bytes(v) => write!(f, "{:?}", style(v).italic()),
+			SimpleTupleValue::Bytes(v) => {
+				let hex_string = if v.len() > 512 { &v[..512] } else { v }
+					.iter()
+					.map(|byte| format!("{:02x}", byte))
+					.collect::<String>();
+				write!(f, "{}", style(hex_string).italic())?;
+
+				if v.len() > 512 {
+					write!(
+						f,
+						"{} {}",
+						style("...").italic(),
+						style(format!("({} bytes)", v.len())).dim()
+					)?;
+				}
+
+				Ok(())
+			}
 		}
 	}
 }
@@ -218,7 +235,7 @@ impl SimpleValue {
 			Some("str") => SimpleValue::String(value.to_string()),
 			Some("bytes") | Some("b") => {
 				let bytes = hex::decode(value.as_bytes())
-					.with_context(|| format!("Could not parse `{value:?}` as hex encoded bytes"))?;
+					.with_context(|| format!("Could not parse `{value}` as hex encoded bytes"))?;
 				SimpleValue::Bytes(bytes)
 			}
 			Some(type_hint) => bail!("unknown type: `{type_hint}`"),
@@ -258,7 +275,24 @@ impl fmt::Display for SimpleValue {
 				}
 			}
 			SimpleValue::String(v) => write!(f, "{}", style(v).green()),
-			SimpleValue::Bytes(v) => write!(f, "{:?}", style(v).italic()),
+			SimpleValue::Bytes(v) => {
+				let hex_string = if v.len() > 512 { &v[..512] } else { v }
+					.iter()
+					.map(|byte| format!("{:02x}", byte))
+					.collect::<String>();
+				write!(f, "{}", style(hex_string).italic())?;
+
+				if v.len() > 512 {
+					write!(
+						f,
+						"{} {}",
+						style("...").italic(),
+						style(format!("({} bytes)", v.len())).dim()
+					)?;
+				}
+
+				Ok(())
+			}
 		}
 	}
 }
@@ -299,6 +333,11 @@ impl SimpleTupleSegment {
 			Some("uuid") => Uuid::from_str(value)
 				.map(SimpleTupleValue::Uuid)
 				.with_context(|| format!("Could not parse `{value}` as UUID"))?,
+			Some("bytes") | Some("b") => {
+				let bytes = hex::decode(value.as_bytes())
+					.with_context(|| format!("Could not parse `{value}` as hex encoded bytes"))?;
+				SimpleTupleValue::Bytes(bytes)
+			}
 			Some("str") => SimpleTupleValue::String(value.to_string()),
 			Some(prefix) => bail!("unknown type: `{prefix}`"),
 			_ => SimpleTupleValue::parse(value),

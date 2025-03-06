@@ -1,4 +1,7 @@
-use std::result::Result::{Err, Ok};
+use std::{
+	path::Path,
+	result::Result::{Err, Ok},
+};
 
 use anyhow::*;
 use clap::Parser;
@@ -29,7 +32,10 @@ impl Opts {
 			run_commands(&pool, &mut current_tuple, query).await;
 		} else {
 			let mut rl = DefaultEditor::new()?;
-			rl.load_history("/tmp/history.txt")?;
+			let history_location = Path::new("/tmp/rivet-server-fdb-history");
+			if history_location.exists() {
+				rl.load_history(&history_location)?;
+			}
 
 			println!("FDB Viewer\n");
 
@@ -53,7 +59,7 @@ impl Opts {
 				}
 			}
 
-			rl.save_history("/tmp/history.txt")?;
+			rl.save_history(&history_location)?;
 		}
 
 		Ok(())

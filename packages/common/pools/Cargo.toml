@@ -24,7 +24,6 @@ rand = "0.8"
 rivet-config.workspace = true
 rivet-metrics.workspace = true
 service-discovery.workspace = true
-sqlite-util.workspace = true
 tempfile = "3.13.0"
 thiserror = "1.0"
 tokio = { version = "1.40", features = ["tracing"] }

@@ -239,7 +239,7 @@ impl ActivityCtx {
 	}
 
 	pub async fn sqlite_for_workflow(&self, workflow_id: Uuid) -> GlobalResult<SqlitePool> {
-		common::sqlite_for_workflow(&self.db, &self.conn, workflow_id, false).await
+		common::sqlite_for_workflow(&self.db, &self.conn, workflow_id, true).await
 	}
 
 	// Backwards compatibility

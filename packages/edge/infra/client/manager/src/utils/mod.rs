@@ -15,7 +15,6 @@ use notify::{
 use pegboard::protocol;
 use pegboard_config::Config;
 use rand::{prelude::SliceRandom, SeedableRng};
-use sqlite_util::SqlitePoolExt;
 use sqlx::{
 	migrate::MigrateDatabase,
 	sqlite::{SqliteAutoVacuum, SqliteConnectOptions, SqlitePoolOptions, SqliteSynchronous},
@@ -26,6 +25,7 @@ use tokio::{
 	sync::mpsc::{channel, Receiver},
 };
 use url::Url;
+use sql::SqlitePoolExt;
 use uuid::Uuid;
 
 use crate::ctx::Ctx;

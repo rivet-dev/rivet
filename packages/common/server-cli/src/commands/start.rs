@@ -1,6 +1,11 @@
+use std::{path::Path, time::Duration};
+
 use anyhow::*;
 use clap::Parser;
 use rivet_service_manager::{CronConfig, RunConfig};
+
+// 7 day logs retention
+const LOGS_RETENTION: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
 #[derive(Parser)]
 pub struct Opts {
@@ -42,6 +47,21 @@ impl Opts {
 		config: rivet_config::Config,
 		run_config: &RunConfig,
 	) -> Result<()> {
+		// Redirect logs if enabled on the edge
+		if config
+			.server()
+			.ok()
+			.and_then(|x| x.rivet.edge.as_ref())
+			.and_then(|x| x.redirect_logs)
+			.unwrap_or_default()
+		{
+			let logs_path = Path::new("/var/log/rivet-edge-server");
+			std::fs::create_dir_all(logs_path)?;
+			rivet_logs::Logs::new(logs_path.to_path_buf(), LOGS_RETENTION)
+				.start()
+				.await?;
+		}
+
 		// Provision services before starting server
 		if !self.skip_provision {
 			s3_util::provision(config.clone(), &run_config.s3_buckets).await?;

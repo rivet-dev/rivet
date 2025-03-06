@@ -1,5 +1,5 @@
 use dirs;
-use fdb_util::prelude::*;
+use fdb_util::{SERIALIZABLE, prelude::*};
 use foundationdb::{self as fdb, options::StreamingMode, tuple::Subspace, FdbBindingError};
 use uuid::Uuid;
 
@@ -268,7 +268,7 @@ impl SqlitePoolManager {
 							mode: StreamingMode::WantAll,
 							..(&db_data_subspace).into()
 						},
-						false,
+						SERIALIZABLE,
 					);
 
 					// Aggregate data

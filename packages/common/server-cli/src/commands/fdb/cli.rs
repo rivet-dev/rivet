@@ -14,13 +14,7 @@ use crate::util::{
 	format::indent_string,
 };
 
-// #[derive(Parser)]
-// #[command(name = "")]
-// struct Command {
-// 	#[command(subcommand)]
-// 	command: Commands,
-// }
-
+// TODO: Tab completion
 #[derive(Parser)]
 #[command(name = "")]
 pub enum SubCommand {
@@ -72,6 +66,9 @@ pub enum SubCommand {
 		/// In what manner to clear the current key. Range clears the entire subspace.
 		#[arg(value_enum)]
 		clear_type: Option<ClearType>,
+		/// Disable confirmation prompt.
+		#[arg(short = 'y', long, default_value_t = false)]
+		yes: bool,
 	},
 
 	#[command(name = "exit")]
@@ -95,7 +92,10 @@ impl SubCommand {
 				Err(err) => println!("{err:#}"),
 			},
 			// TODO: chunks
-			SubCommand::Get { type_hint, chunks: _chunks } => {
+			SubCommand::Get {
+				type_hint,
+				chunks: _chunks,
+			} => {
 				let fut = pool.run(|tx, _mc| {
 					let current_tuple = current_tuple.clone();
 					async move {
@@ -206,6 +206,7 @@ impl SubCommand {
 											);
 
 											last_key = curr.clone();
+											current_hidden_subspace = None;
 											hidden_count = 0;
 										}
 
@@ -323,7 +324,21 @@ impl SubCommand {
 					Err(_) => println!("txn timed out"),
 				}
 			}
-			SubCommand::Clear { clear_type } => {
+			SubCommand::Clear { clear_type, yes } => {
+				if !yes {
+					let term = rivet_term::terminal();
+					let response = rivet_term::prompt::PromptBuilder::default()
+						.message("Are you sure?")
+						.build()
+						.expect("failed to build prompt")
+						.bool(&term)
+						.await
+						.expect("failed to show prompt");
+					if !response {
+						return CommandResult::Error;
+					}
+				}
+
 				let fut = pool.run(|tx, _mc| {
 					let current_tuple = current_tuple.clone();
 					async move {

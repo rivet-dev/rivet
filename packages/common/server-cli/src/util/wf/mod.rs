@@ -160,11 +160,7 @@ pub async fn print_history(
 		);
 
 		// Structure char
-		let c = if event.forgotten {
-			style("|").red().dim()
-		} else {
-			event_style.apply_to("|").dim()
-		};
+		let c = event_style.apply_to("|").dim();
 
 		print_event_name(&event);
 
@@ -490,12 +486,11 @@ pub fn event_style(event: &Event) -> Style {
 }
 
 pub fn print_event_name(event: &Event) {
-	let style = if event.forgotten {
-		Style::new().red().dim()
-	} else {
-		event_style(event)
-	};
+	if event.forgotten {
+		print!("{}", style("forgotten ").red().dim())
+	}
 
+	let style = event_style(event);
 	match &event.data {
 		EventData::Activity(activity) => print!(
 			"{} {}",
@@ -525,21 +520,15 @@ pub fn print_event_name(event: &Event) {
 		EventData::Loop(_) => print!("{}", style.apply_to("loop").bold()),
 		EventData::Sleep(_) => print!("{}", style.apply_to("sleep").bold()),
 		EventData::Removed(removed) => {
+			print!(
+				"{}",
+				style
+					.apply_to(format!("removed {}", removed.event_type))
+					.bold(),
+			);
+
 			if let Some(name) = &removed.name {
-				print!(
-					"{} {}",
-					style
-						.apply_to(format!("removed {}", removed.event_type))
-						.bold(),
-					style.apply_to(name)
-				)
-			} else {
-				print!(
-					"{}",
-					style
-						.apply_to(format!("removed {}", removed.event_type))
-						.bold()
-				)
+				print!(" {}", style.apply_to(name))
 			}
 		}
 		EventData::VersionCheck => print!("{}", style.apply_to("version check").bold()),
