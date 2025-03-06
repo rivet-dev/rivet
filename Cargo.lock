@@ -3143,7 +3143,6 @@ dependencies = [
  "rivet-util",
  "serde",
  "serde_json",
- "sqlite-util",
  "sqlx",
  "strum 0.26.3",
  "thiserror 1.0.69",
@@ -5569,7 +5568,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.8",
- "sqlite-util",
  "sqlx",
  "strum 0.24.1",
  "tier",
@@ -10413,7 +10411,6 @@ dependencies = [
  "serde_json",
  "serde_urlencoded",
  "server-spec",
- "sqlite-util",
  "sqlx",
  "strum 0.24.1",
  "thiserror 1.0.69",
@@ -10532,7 +10529,6 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "service-discovery",
- "sqlite-util",
  "sqlx",
  "sysinfo 0.31.4",
  "tempfile",
@@ -12058,7 +12054,6 @@ dependencies = [
  "rivet-cache",
  "rivet-config",
  "rivet-connection",
- "rivet-logs",
  "rivet-migrate",
  "rivet-runtime",
  "rivet-server-cli",
@@ -12368,7 +12363,6 @@ dependencies = [
  "rivet-config",
  "rivet-metrics",
  "service-discovery",
- "sqlite-util",
  "sqlx",
  "tempfile",
  "thiserror 1.0.69",
@@ -12500,6 +12494,7 @@ dependencies = [
  "reqwest 0.12.12",
  "rivet-api",
  "rivet-config",
+ "rivet-logs",
  "rivet-migrate",
  "rivet-pools",
  "rivet-runtime",
@@ -13963,14 +13958,6 @@ checksum = "d91ed6c858b01f942cd56b37a94b3e0a1798290327d1236e4d9cf4eaca44d29d"
 dependencies = [
  "base64ct",
  "der 0.7.9",
-]
-
-[[package]]
-name = "sqlite-util"
-version = "25.1.1"
-dependencies = [
- "sqlx",
- "tokio",
 ]
 
 [[package]]

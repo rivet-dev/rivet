@@ -770,7 +770,7 @@ pub struct PendingSignalSubspaceKey {
 }
 
 impl PendingSignalSubspaceKey {
-	fn new(workflow_id: Uuid, signal_name: String) -> Self {
+	pub fn new(workflow_id: Uuid, signal_name: String) -> Self {
 		PendingSignalSubspaceKey {
 			workflow_id,
 			signal_name,
@@ -1014,5 +1014,24 @@ impl<'de> TupleUnpack<'de> for WorkerInstanceIdKey {
 		let v = WorkerInstanceIdKey { workflow_id };
 
 		Ok((input, v))
+	}
+}
+
+pub struct DataSubspaceKey {}
+
+impl DataSubspaceKey {
+	pub fn new() -> Self {
+		DataSubspaceKey {}
+	}
+}
+
+impl TuplePack for DataSubspaceKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = ("workflow", "data");
+		t.pack(w, tuple_depth)
 	}
 }

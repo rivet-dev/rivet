@@ -80,7 +80,7 @@ impl<'de> TupleUnpack<'de> for BodyChunkKey {
 		if data != "body" {
 			return Err(PackError::Message("expected \"body\" data".into()));
 		}
-		
+
 		let v = BodyChunkKey { signal_id, chunk };
 
 		Ok((input, v))
@@ -128,7 +128,7 @@ impl<'de> TupleUnpack<'de> for AckTsKey {
 		if data != "ack_ts" {
 			return Err(PackError::Message("expected \"ack_ts\" data".into()));
 		}
-		
+
 		let v = AckTsKey { signal_id };
 
 		Ok((input, v))
@@ -177,7 +177,7 @@ impl<'de> TupleUnpack<'de> for CreateTsKey {
 		if data != "create_ts" {
 			return Err(PackError::Message("expected \"create_ts\" data".into()));
 		}
-		
+
 		let v = CreateTsKey { signal_id };
 
 		Ok((input, v))

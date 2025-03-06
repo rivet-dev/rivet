@@ -2,7 +2,7 @@
 // TODO: Move code to smaller functions for readability
 
 use std::{
-	collections::HashSet,
+	collections::{HashMap, HashSet},
 	sync::{
 		atomic::{AtomicBool, Ordering},
 		Arc,
@@ -357,52 +357,129 @@ impl Database for DatabaseFdbSqliteNats {
 			.await?;
 
 		if acquired_lock {
-			// TODO: Add FDB indexes for these metric queries and implement
+			// Get rid of metrics that don't exist in the db anymore (declarative)
+			metrics::WORKFLOW_TOTAL.reset();
+			metrics::WORKFLOW_ACTIVE.reset();
+			metrics::WORKFLOW_DEAD.reset();
+			metrics::WORKFLOW_SLEEPING.reset();
+			metrics::SIGNAL_PENDING.reset();
 
-			// // Get rid of metrics that don't exist in the db anymore (declarative)
-			// metrics::WORKFLOW_TOTAL.reset();
-			// metrics::WORKFLOW_ACTIVE.reset();
-			// metrics::WORKFLOW_DEAD.reset();
-			// metrics::WORKFLOW_SLEEPING.reset();
-			// metrics::SIGNAL_PENDING.reset();
+			let (workflow_counts, pending_signals_count) = self
+				.pools
+				.fdb()?
+				.run(|tx, _mc| async move {
+					let data_subspace = self
+						.subspace
+						.subspace(&keys::workflow::DataSubspaceKey::new());
 
-			// let (
-			// 	total_workflow_count,
-			// 	active_workflow_count,
-			// 	dead_workflow_count,
-			// 	sleeping_workflow_count,
-			// 	pending_signal_count,
-			// ) = ;
+					let mut stream = tx.get_ranges_keyvalues(
+						fdb::RangeOption {
+							mode: StreamingMode::Iterator,
+							..(&data_subspace).into()
+						},
+						// Not SERIALIZABLE because we don't want this to conflict with other queries, its just
+						// for metrics
+						SNAPSHOT,
+					);
 
-			// for (workflow_name, count) in total_workflow_count {
-			// 	metrics::WORKFLOW_TOTAL
-			// 		.with_label_values(&[&workflow_name])
-			// 		.set(count);
-			// }
+					let mut workflow_counts = HashMap::<String, WorkflowMetrics>::new();
+					let mut current_workflow_id = None;
+					let mut current_workflow_name: Option<String> = None;
+					let mut current_state = WorkflowState::Dead;
 
-			// for (workflow_name, count) in active_workflow_count {
-			// 	metrics::WORKFLOW_ACTIVE
-			// 		.with_label_values(&[&workflow_name])
-			// 		.set(count);
-			// }
+					while let Some(entry) = stream.try_next().await? {
+						let workflow_id = *self
+							.subspace
+							.unpack::<debug::JustUuid>(entry.key())
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
-			// for (workflow_name, error, count) in dead_workflow_count {
-			// 	metrics::WORKFLOW_DEAD
-			// 		.with_label_values(&[&workflow_name, &error])
-			// 		.set(count);
-			// }
+						if let Some(curr) = current_workflow_id {
+							if workflow_id != curr {
+								if let Some(workflow_name) = &current_workflow_name {
+									let entry =
+										workflow_counts.entry(workflow_name.clone()).or_default();
 
-			// for (workflow_name, count) in sleeping_workflow_count {
-			// 	metrics::WORKFLOW_SLEEPING
-			// 		.with_label_values(&[&workflow_name])
-			// 		.set(count);
-			// }
+									match current_state {
+										WorkflowState::Complete => entry.complete += 1,
+										WorkflowState::Running => entry.running += 1,
+										WorkflowState::Sleeping => entry.sleeping += 1,
+										WorkflowState::Dead => entry.dead += 1,
+									}
 
-			// for (signal_name, count) in pending_signal_count {
-			// 	metrics::SIGNAL_PENDING
-			// 		.with_label_values(&[&signal_name])
-			// 		.set(count);
-			// }
+									current_workflow_name = None;
+								}
+							}
+						}
+
+						current_workflow_id = Some(workflow_id);
+
+						if let Ok(workflow_name_key) =
+							self.subspace.unpack::<keys::workflow::NameKey>(entry.key())
+						{
+							let workflow_name = workflow_name_key
+								.deserialize(entry.value())
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+							current_workflow_name = Some(workflow_name.clone());
+						} else if let WorkflowState::Dead = current_state {
+							if let Ok(_) = self
+								.subspace
+								.unpack::<keys::workflow::OutputChunkKey>(entry.key())
+							{
+								current_state = WorkflowState::Complete;
+							} else if let Ok(_) = self
+								.subspace
+								.unpack::<keys::workflow::WorkerInstanceIdKey>(entry.key())
+							{
+								current_state = WorkflowState::Running;
+							} else if let Ok(_) = self
+								.subspace
+								.unpack::<keys::workflow::HasWakeConditionKey>(entry.key())
+							{
+								current_state = WorkflowState::Sleeping;
+							}
+						}
+					}
+
+					if let Some(workflow_name) = current_workflow_name {
+						let entry = workflow_counts.entry(workflow_name).or_default();
+
+						match current_state {
+							WorkflowState::Complete => entry.complete += 1,
+							WorkflowState::Running => entry.running += 1,
+							WorkflowState::Sleeping => entry.sleeping += 1,
+							WorkflowState::Dead => entry.dead += 1,
+						}
+					}
+
+					// TODO:
+					let pending_signals_count = HashMap::<String, i64>::new();
+
+					Ok((workflow_counts, pending_signals_count))
+				})
+				.await?;
+
+			for (workflow_name, counts) in workflow_counts {
+				metrics::WORKFLOW_TOTAL
+					.with_label_values(&[&workflow_name])
+					.set(counts.complete + counts.running + counts.sleeping + counts.dead);
+				metrics::WORKFLOW_ACTIVE
+					.with_label_values(&[&workflow_name])
+					.set(counts.running);
+				// TODO:
+				// metrics::WORKFLOW_DEAD
+				// 	.with_label_values(&[&workflow_name, &error])
+				// 	.set(counts.dead);
+				metrics::WORKFLOW_SLEEPING
+					.with_label_values(&[&workflow_name])
+					.set(counts.sleeping);
+			}
+
+			for (signal_name, count) in pending_signals_count {
+				metrics::SIGNAL_PENDING
+					.with_label_values(&[&signal_name])
+					.set(count);
+			}
 
 			// Clear lock
 			self.pools
@@ -3113,6 +3190,21 @@ struct PartialWorkflow {
 /// Database name for the workflow internal state.
 pub fn sqlite_db_name_internal(workflow_id: Uuid) -> (&'static str, Uuid, &'static str) {
 	("workflow", workflow_id, "internal")
+}
+
+#[derive(Default)]
+struct WorkflowMetrics {
+	complete: i64,
+	running: i64,
+	sleeping: i64,
+	dead: i64,
+}
+
+enum WorkflowState {
+	Complete,
+	Running,
+	Sleeping,
+	Dead,
 }
 
 fn value_to_str(v: &serde_json::Value) -> WorkflowResult<String> {

@@ -358,8 +358,9 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 				async move {
 					let mut workflow_ids = Vec::new();
 
-					// TODO: Don't hardcode
-					let data_subspace = self.subspace.subspace(&("workflow", "data"));
+					let data_subspace = self
+						.subspace
+						.subspace(&keys::workflow::DataSubspaceKey::new());
 
 					let mut stream = tx.get_ranges_keyvalues(
 						fdb::RangeOption {
@@ -385,17 +386,18 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 								// Save if matches query
 								if matching_tags == tags.len() && name_matches && state_matches {
 									workflow_ids.push(curr);
-	
+
 									if workflow_ids.len() >= 100 {
 										current_workflow_id = None;
 										break;
 									}
 								}
-	
+
 								// Reset state
 								matching_tags = 0;
 								name_matches = name.is_none();
-								state_matches = state.is_none() || state == Some(WorkflowState::Dead);
+								state_matches =
+									state.is_none() || state == Some(WorkflowState::Dead);
 							}
 						}
 
@@ -499,7 +501,8 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
 						);
 
-						let has_wake_condition_key = keys::workflow::HasWakeConditionKey::new(workflow_id);
+						let has_wake_condition_key =
+							keys::workflow::HasWakeConditionKey::new(workflow_id);
 						tx.set(
 							&self.subspace.pack(&has_wake_condition_key),
 							&has_wake_condition_key
@@ -870,7 +873,9 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 
 					if let (Some(signal_id), true) = (
 						current_signal_id,
-						matching_tags == tags.len() && name_matches && workflow_id_matches && state_matches,
+						matching_tags == tags.len()
+							&& name_matches && workflow_id_matches
+							&& state_matches,
 					) {
 						signal_ids.push(signal_id);
 					}
@@ -890,7 +895,7 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 }
 
 // Parses UUID in third position, ignores the rest
-struct JustUuid(Uuid);
+pub(crate) struct JustUuid(Uuid);
 
 impl<'de> TupleUnpack<'de> for JustUuid {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
