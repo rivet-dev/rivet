@@ -202,11 +202,18 @@ services:
 
   clickhouse:
     restart: unless-stopped
-    image: clickhouse/clickhouse-server:23.10.1
+    image: clickhouse/clickhouse-server:25.1.5
     volumes:
       - clickhouse-data:/var/lib/clickhouse
       - ./clickhouse/config.xml:/etc/clickhouse-server/config.d/config.xml
       - ./clickhouse/users.xml:/etc/clickhouse-server/users.d/users.xml
+      - ./clickhouse/init:/docker-entrypoint-initdb.d
+    environment:
+      # Run migrations on startup
+      - CLICKHOUSE_ALWAYS_RUN_INITDB_SCRIPTS=true
+      # Configured in users.xml
+      - CLICKHOUSE_USER=system
+      - CLICKHOUSE_PASSWORD=default
     networks:
       - rivet-network
     ports:
