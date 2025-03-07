@@ -89,7 +89,7 @@ impl LogShipper {
 
 		while let Result::Ok(message) = self.msg_rx.recv() {
 			let vector_message = match &self.manager {
-				crate::Manager::DynamicServers { server_id } => VectorMessage::Actor {
+				crate::Manager::DynamicServers { server_id } => VectorMessage::Actors {
 					server_id: server_id.as_str(),
 					task: self.nomad_task_name.as_str(),
 					stream_type: message.stream_type as u8,
@@ -119,8 +119,8 @@ impl LogShipper {
 #[derive(Serialize)]
 #[serde(tag = "source")]
 enum VectorMessage<'a> {
-	#[serde(rename = "actor")]
-	Actor {
+	#[serde(rename = "actors")]
+	Actors {
 		server_id: &'a str,
 		task: &'a str,
 		stream_type: u8,
