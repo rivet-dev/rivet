@@ -502,13 +502,13 @@ pub struct DatacenterGuard {
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct DatacenterHardware {
 	pub cpu_cores: u32,
-	/// Mhz
+	/// Mhz.
 	pub cpu: u32,
-	/// MiB
+	/// MiB.
 	pub memory: u32,
-	/// MiB
+	/// MiB.
 	pub disk: u32,
-	/// Kibps
+	/// Kibps.
 	pub bandwidth: u32,
 }
 

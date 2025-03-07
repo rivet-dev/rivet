@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
-use futures_util::{StreamExt, TryStreamExt};
+use futures_util::StreamExt;
 use proto::backend::pkg::token;
 use rivet_api::{
 	apis::{
@@ -489,7 +489,7 @@ pub async fn complete_build(
 		)?;
 		let token = unwrap!(token_res.token).token;
 
-		futures_util::stream::iter(datacenters_res.datacenters)
+		let mut results = futures_util::stream::iter(datacenters_res.datacenters)
 			.map(|dc| {
 				let ctx = ctx.clone();
 				let token = token.clone();
@@ -516,8 +516,19 @@ pub async fn complete_build(
 				}
 			})
 			.buffer_unordered(16)
-			.try_collect::<Vec<_>>()
-			.await?;
+			.collect::<Vec<_>>()
+			.await;
+
+		for res in &mut results {
+			if let Err(err) = res {
+				tracing::error!(?err, "failed to prewarm edge dc");
+			}
+		}
+
+		// Error only if all prewarm requests failed
+		if results.iter().all(|res| res.is_err()) {
+			return Err(unwrap!(unwrap!(results.into_iter().next()).err()));
+		}
 	}
 
 	Ok(json!({}))

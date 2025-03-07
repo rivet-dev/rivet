@@ -95,13 +95,13 @@ pub struct Server {
 
 #[derive(Clone, Debug, Default)]
 pub struct Stats {
-	/// MHz
+	/// Millicores.
 	pub cpu: u32,
-	/// MiB
+	/// MiB.
 	pub memory: u32,
-	/// MiB
+	/// MiB.
 	pub disk: u32,
-	/// Kibps
+	/// Kibps.
 	pub bandwidth: u32,
 }
 
@@ -197,7 +197,7 @@ pub async fn cluster_datacenter_topology_get(
 				.filter(|server| {
 					matches!(
 						server.pool_type,
-						PoolType::Gg | PoolType::Ats | PoolType::PegboardIsolate | PoolType::Fdb
+						PoolType::Gg | PoolType::Ats | PoolType::PegboardIsolate | PoolType::Fdb | PoolType::Worker
 					)
 				})
 				.collect::<Vec<_>>();
@@ -302,6 +302,12 @@ pub async fn cluster_datacenter_topology_get(
 						.as_ref()
 						.map_or(false, |node_id| node_id == nomad_node_id)
 				}) {
+					// Get node resource limits
+					let resources = unwrap_ref!(node.node_resources);
+					let total_cpu_millicores =
+						unwrap!(unwrap_ref!(resources.cpu).total_cpu_cores) * 1000;
+					let total_cpu_shares = unwrap!(unwrap_ref!(resources.cpu).cpu_shares);
+
 					// TODO: Bandwidth usage
 					let mut usage = Stats::default();
 
@@ -331,7 +337,10 @@ pub async fn cluster_datacenter_topology_get(
 									let cpu = unwrap_ref!(task.cpu);
 									let memory = unwrap_ref!(task.memory);
 
-									usage.cpu += unwrap!(cpu.cpu_shares) as u32;
+									// MHz to Millicores
+									usage.cpu += (unwrap!(cpu.cpu_shares)
+										* total_cpu_millicores as i64 / total_cpu_shares)
+										as u32;
 									// MB to MiB
 									usage.memory += unwrap!(memory.memory_mb) as u32 * 1000 / 1024
 										* 1000 / 1024;
@@ -344,10 +353,9 @@ pub async fn cluster_datacenter_topology_get(
 						}
 					}
 
-					// Get node resource limits
-					let resources = unwrap_ref!(node.node_resources);
 					let limits = Stats {
-						cpu: unwrap!(unwrap_ref!(resources.cpu).cpu_shares) as u32,
+						// Millicores
+						cpu: total_cpu_millicores as u32,
 						// MB to MiB
 						memory: unwrap!(unwrap_ref!(resources.memory).memory_mb) as u32 * 1000
 							/ 1024 * 1000 / 1024,
@@ -445,7 +453,7 @@ fn get_hardware_specs_or_default(
 		.or(hardware_specs.get(default_provider_hardware)));
 
 	Ok(Stats {
-		cpu: hardware_specs.cpu,
+		cpu: hardware_specs.cpu_cores * 1000,
 		memory: hardware_specs.memory,
 		disk: hardware_specs.disk,
 		bandwidth: hardware_specs.bandwidth,
@@ -468,25 +476,23 @@ async fn fetch_server_metrics(
 		formatdoc!(
 			r#"
 			label_replace(
-				# Selects average CPU across all cores of a server
-				avg by (datacenter_id, pool_type, server_id) (
-					max by (datacenter_id, pool_type, server_id, cpu) (
-						sum by (datacenter_id, pool_type, server_id, cpu) (
-							last_over_time(
-								irate(
-									node_cpu_seconds_total{{
-										server_id=~"({server_ids})",
+				# Add up all millicores from all cpus
+				sum by (datacenter_id, pool_type, server_id) (
+					last_over_time(
+						irate(
+							node_cpu_seconds_total{{
+								server_id=~"({server_ids})",
 
-										mode!="idle",
-										mode!="iowait",
-										mode!="steal"
-									}}
-									[5m]
-								)
-								[15m:15s]
-							) * 100
+								mode!="idle",
+								mode!="iowait",
+								mode!="steal"
+							}}
+							[5m]
 						)
+						[15m:15s]
 					)
+					# Millicores
+					* 1000
 				),
 				"metric", "cpu", "", ""
 			)
@@ -497,11 +503,8 @@ async fn fetch_server_metrics(
 					node_memory_Active_bytes{{
 						server_id=~"({server_ids})",
 					}}
-					/
-					node_memory_MemTotal_bytes{{
-						server_id=~"({server_ids})",
-					}} *
-					100
+					# MiB
+					/ 1024 / 1024
 				),
 				"metric", "mem", "", ""
 			)

@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+	collections::{HashMap, HashSet},
+	time::Duration,
+};
 
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use futures_util::{StreamExt, TryStreamExt};
@@ -793,44 +796,66 @@ async fn list_actors_inner(
 			};
 
 			// Pass the request to the edge api
-			use actor_api::ActorListError::*;
-			match actor_api::actor_list(
-				&config,
-				query.global_endpoint_type.global.project.as_deref(),
-				query.global_endpoint_type.global.environment.as_deref(),
-				query.global_endpoint_type.endpoint_type,
-				query.tags_json.as_deref(),
-				query.include_destroyed,
-				query.cursor.as_deref(),
+			let timeout_res = tokio::time::timeout(
+				Duration::from_secs(30),
+				actor_api::actor_list(
+					&config,
+					query.global_endpoint_type.global.project.as_deref(),
+					query.global_endpoint_type.global.environment.as_deref(),
+					query.global_endpoint_type.endpoint_type,
+					query.tags_json.as_deref(),
+					query.include_destroyed,
+					query.cursor.as_deref(),
+				),
 			)
-			.await
-			{
-				Ok(res) => Ok(res),
-				Err(rivet_api::apis::Error::ResponseError(content)) => match content.entity {
-					Some(Status400(body))
-					| Some(Status403(body))
-					| Some(Status404(body))
-					| Some(Status408(body))
-					| Some(Status429(body))
-					| Some(Status500(body)) => Err(GlobalError::bad_request_builder(&body.code)
-						.http_status(content.status)
-						.message(body.message)
-						.build()),
-					_ => bail!("unknown error"),
+			.await;
+
+			use actor_api::ActorListError::*;
+			match timeout_res {
+				Ok(timeout_res) => match timeout_res {
+					Ok(res) => Ok(res),
+					Err(rivet_api::apis::Error::ResponseError(content)) => match content.entity {
+						Some(Status400(body))
+						| Some(Status403(body))
+						| Some(Status404(body))
+						| Some(Status408(body))
+						| Some(Status429(body))
+						| Some(Status500(body)) => {
+							return Err(GlobalError::bad_request_builder(&body.code)
+								.http_status(content.status)
+								.message(body.message)
+								.build())
+						}
+						_ => bail!("unknown error"),
+					},
+					Err(err) => bail!("request error: {err:?}"),
 				},
-				Err(err) => bail!("request error: {err:?}"),
+				Err(_) => {
+					tracing::error!(dc=?dc.name_id, "timed out requesting dc");
+					bail_with!(API_REQUEST_TIMEOUT);
+				}
 			}
 		})
 		.collect::<Vec<_>>();
 
-	// Aggregate list
-	let mut actors = futures_util::stream::iter(futures)
+	let mut results = futures_util::stream::iter(futures)
 		.buffer_unordered(16)
-		.try_fold(Vec::new(), |mut a, res| {
-			a.extend(res.actors);
-			std::future::ready(Ok(a))
-		})
-		.await?;
+		.collect::<Vec<_>>()
+		.await;
+
+	// Aggregate results
+	let mut actors = Vec::new();
+	for res in &mut results {
+		match res {
+			Ok(res) => actors.extend(std::mem::take(&mut res.actors)),
+			Err(err) => tracing::error!(?err, "failed to request edge dc"),
+		}
+	}
+
+	// Error only if all requests failed
+	if results.iter().all(|res| res.is_err()) {
+		return Err(unwrap!(unwrap!(results.into_iter().next()).err()));
+	}
 
 	// Shorten array since returning all actors from all regions could end up returning `regions *
 	// 32` results, which is a lot.

@@ -442,10 +442,10 @@ impl SqlitePoolManager {
 			prev_snapshotted_state.schema_version <= current_state.schema_version,
 			"schema_version() went down"
 		);
-		// if prev_snapshotted_state == current_state {
-		// 	tracing::debug!(key=?hex::encode(&**key_packed), "no changes detected, skipping sqlite database snapshot");
-		// 	return Ok(false);
-		// }
+		if prev_snapshotted_state == current_state {
+			tracing::debug!(key=?hex::encode(&**key_packed), "no changes detected, skipping sqlite database snapshot");
+			return Ok(false);
+		}
 
 		tracing::debug!(
 			key=?hex::encode(&**key_packed),
@@ -506,8 +506,6 @@ impl SqlitePoolManager {
 	/// GC loop for SqlitePoolManager
 	#[tracing::instrument(skip_all)]
 	async fn manager_gc_loop(self: Arc<Self>, mut shutdown: broadcast::Receiver<()>) {
-		return;
-
 		let mut interval = tokio::time::interval(GC_INTERVAL);
 
 		loop {
@@ -825,7 +823,7 @@ impl SqliteConn {
 						if let Err(err) = tokio::fs::remove_file(&db_path).await {
 							tracing::warn!(
 								?err,
-								db_path = ?db_path,
+								?db_path,
 								"failed to remove temporary sqlite db file on drop"
 							);
 						}
@@ -833,9 +831,9 @@ impl SqliteConn {
 						if let Err(err) =
 							tokio::fs::remove_file(format!("{}-journal", db_path.display())).await
 						{
-							tracing::warn!(
+							tracing::debug!(
 								?err,
-								db_path = ?db_path,
+								?db_path,
 								"failed to remove temporary sqlite db journal file on drop"
 							);
 						}

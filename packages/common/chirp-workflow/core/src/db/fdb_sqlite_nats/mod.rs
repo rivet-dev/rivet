@@ -57,7 +57,7 @@ const WORKER_WAKE_SUBJECT: &str = "chirp.workflow.fdb_sqlite_nats.worker.wake";
 
 /// Once tagged signals get removed, this and all of their code can be as well. This allows us to gradually
 /// move off of tagged signals and makes it clear which code relates to tagged signals
-const TAGGED_SIGNALS_ENABLED: bool = true;
+const TAGGED_SIGNALS_ENABLED: bool = false;
 
 pub struct DatabaseFdbSqliteNats {
 	pools: rivet_pools::Pools,
@@ -1183,6 +1183,8 @@ impl Database for DatabaseFdbSqliteNats {
 					// the workflow is running
 					for (workflow_id, _, _) in &leased_workflows {
 						tokio::try_join!(
+							// TODO: This doesnt work correctly because TaggedSignalWakeKey has a timestamp.
+							// Just remove tagged signals altogether
 							// Clear tagged signals secondary index
 							async {
 								if TAGGED_SIGNALS_ENABLED {
