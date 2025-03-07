@@ -152,7 +152,11 @@ async fn allocate_actor(
 					.unpack::<keys::datacenter::ClientsByRemainingMemKey>(entry.key())
 					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
-				tracing::info!(?old_allocation_key, ?ping_threshold_ts, "--------------------");
+				tracing::info!(
+					?old_allocation_key,
+					?ping_threshold_ts,
+					"--------------------"
+				);
 
 				// Scan by last ping
 				if old_allocation_key.last_ping_ts < ping_threshold_ts {

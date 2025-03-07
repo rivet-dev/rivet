@@ -309,86 +309,111 @@ struct InsertFdbInput {
 
 #[activity(InsertFdb)]
 async fn insert_fdb(ctx: &ActivityCtx, input: &InsertFdbInput) -> GlobalResult<()> {
+	// MiB
+	let allocable_memory =
+		input.system.memory.total_memory / 1024 / 1024 - input.config.reserved_resources.memory;
+	// Millicores
+	let allocable_cpu = input.system.cpu.physical_core_count * 1000;
+
 	ctx.fdb()
 		.await?
 		.run(|tx, _mc| async move {
 			let remaining_mem_key = keys::client::RemainingMemoryKey::new(input.client_id);
 			let remaining_cpu_key = keys::client::RemainingCpuKey::new(input.client_id);
 			let last_ping_ts_key = keys::client::LastPingTsKey::new(input.client_id);
+			let workflow_id_key = keys::client::WorkflowIdKey::new(input.client_id);
 
-			let (remaining_mem, last_ping_ts) = tokio::try_join!(
+			let (remaining_mem_entry, last_ping_ts_entry, workflow_id_entry) = tokio::try_join!(
 				tx.get(&keys::subspace().pack(&remaining_mem_key), SERIALIZABLE),
 				tx.get(&keys::subspace().pack(&last_ping_ts_key), SERIALIZABLE),
+				tx.get(&keys::subspace().pack(&workflow_id_key), SERIALIZABLE),
 			)?;
 
 			// See if key already exists
-			let (remaining_mem, last_ping_ts) =
-				if let (Some(remaining_mem), Some(last_ping_ts)) = (remaining_mem, last_ping_ts) {
-					let remaining_mem = remaining_mem_key
-						.deserialize(&remaining_mem)
-						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
-					let last_ping_ts = last_ping_ts_key
-						.deserialize(&last_ping_ts)
-						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+			let existing = if let (
+				Some(remaining_mem_entry),
+				Some(last_ping_ts_entry),
+				Some(workflow_id_entry),
+			) = (remaining_mem_entry, last_ping_ts_entry, workflow_id_entry)
+			{
+				let remaining_mem = remaining_mem_key
+					.deserialize(&remaining_mem_entry)
+					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+				let last_ping_ts = last_ping_ts_key
+					.deserialize(&last_ping_ts_entry)
+					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+				let workflow_id = workflow_id_key
+					.deserialize(&workflow_id_entry)
+					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
-					(remaining_mem, last_ping_ts)
+				if workflow_id == ctx.workflow_id() {
+					Some((remaining_mem, last_ping_ts))
+				} else {
+					// Workflow id changed, reset state
+					None
 				}
+			} else {
 				// Initial insert
-				else {
-					// MiB
-					let allocable_memory = input.system.memory.total_memory / 1024 / 1024
-						- input.config.reserved_resources.memory;
+				None
+			};
 
-					// Set remaining memory
-					tx.set(
-						&keys::subspace().pack(&remaining_mem_key),
-						&remaining_mem_key
-							.serialize(allocable_memory)
-							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-					);
+			let (remaining_mem, last_ping_ts) = if let Some(existing) = existing {
+				existing
+			} else {
+				// Set workflow id
+				tx.set(
+					&keys::subspace().pack(&workflow_id_key),
+					&workflow_id_key
+						.serialize(ctx.workflow_id())
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+				);
 
-					// Set total memory
-					let total_mem_key = keys::client::TotalMemoryKey::new(input.client_id);
-					tx.set(
-						&keys::subspace().pack(&total_mem_key),
-						&total_mem_key
-							.serialize(allocable_memory)
-							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-					);
+				// Set remaining memory
+				tx.set(
+					&keys::subspace().pack(&remaining_mem_key),
+					&remaining_mem_key
+						.serialize(allocable_memory)
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+				);
 
+				// Set total memory
+				let total_mem_key = keys::client::TotalMemoryKey::new(input.client_id);
+				tx.set(
+					&keys::subspace().pack(&total_mem_key),
+					&total_mem_key
+						.serialize(allocable_memory)
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+				);
+
+				// Set remaining cpu
+				tx.set(
+					&keys::subspace().pack(&remaining_cpu_key),
 					// Millicores
-					let allocable_cpu = input.system.cpu.physical_core_count * 1000;
+					&remaining_cpu_key
+						.serialize(allocable_cpu)
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+				);
 
-					// Set remaining cpu
-					tx.set(
-						&keys::subspace().pack(&remaining_cpu_key),
-						// Millicores
-						&remaining_cpu_key
-							.serialize(allocable_cpu)
-							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-					);
+				// Set total cpu
+				let total_cpu_key = keys::client::TotalCpuKey::new(input.client_id);
+				tx.set(
+					&keys::subspace().pack(&total_cpu_key),
+					&total_cpu_key
+						.serialize(allocable_cpu)
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+				);
 
-					// Set total cpu
-					let total_cpu_key = keys::client::TotalCpuKey::new(input.client_id);
-					tx.set(
-						&keys::subspace().pack(&total_cpu_key),
-						&total_cpu_key
-							.serialize(allocable_cpu)
-							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-					);
+				// Set last ping
+				let last_ping_ts = util::timestamp::now();
+				tx.set(
+					&keys::subspace().pack(&last_ping_ts_key),
+					&last_ping_ts_key
+						.serialize(last_ping_ts)
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+				);
 
-					let last_ping_ts = util::timestamp::now();
-
-					// Set last ping
-					tx.set(
-						&keys::subspace().pack(&last_ping_ts_key),
-						&last_ping_ts_key
-							.serialize(last_ping_ts)
-							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-					);
-
-					(allocable_memory, last_ping_ts)
-				};
+				(allocable_memory, last_ping_ts)
+			};
 
 			// Insert into index (same as the `update_allocation_idx` op with `AddIdx`)
 			let allocation_key = keys::datacenter::ClientsByRemainingMemKey::new(
