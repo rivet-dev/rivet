@@ -32,20 +32,24 @@ pub struct CorsConfigBuilder {
 
 impl CorsConfigBuilder {
 	/// CORS config for services intended to be exposed publicly.
+    ///
+    /// X-API-Version is for Fern.
 	pub fn public() -> Self {
 		Self::default()
 			.any_origin()
 			.methods(&["GET", "POST", "PUT", "PATCH", "DELETE"])
-			.headers(&["Content-Type", "Authorization"])
+			.headers(&["Content-Type", "Authorization", "X-API-Version"])
 			.credentials()
 	}
 
 	/// CORS config for services intended to be exposed to the Hub.
+    ///
+    /// X-API-Version is for Fern.
 	pub fn hub(config: &rivet_config::Config) -> Self {
 		Self::default()
 			.origin_regex(hub_origin_regex(config))
 			.methods(&["GET", "POST", "PUT", "PATCH", "DELETE"])
-			.headers(&["Content-Type", "Authorization"])
+			.headers(&["Content-Type", "Authorization", "X-API-Version"])
 			.credentials()
 	}
 }
