@@ -824,13 +824,18 @@ async fn list_actors_inner(
 		.collect::<Vec<_>>();
 
 	// Aggregate list
-	let actors = futures_util::stream::iter(futures)
+	let mut actors = futures_util::stream::iter(futures)
 		.buffer_unordered(16)
 		.try_fold(Vec::new(), |mut a, res| {
 			a.extend(res.actors);
 			std::future::ready(Ok(a))
 		})
 		.await?;
+
+	// Sort by create ts desc
+	//
+	// This is an ISO 8601 string and is safely sortable
+	actors.sort_by_cached_key(|x| std::cmp::Reverse(x.created_at.clone()));
 
 	Ok(models::ActorListActorsResponse { actors })
 }

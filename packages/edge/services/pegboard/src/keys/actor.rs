@@ -154,6 +154,8 @@ impl<'de> TupleUnpack<'de> for ProxiedPortsKey {
 	}
 }
 
+/// ALl proxied ports are stored under a subspace separately from the actor data subspace because
+/// we need to be able to efficiently list it for Rivet Guard.
 pub struct ProxiedPortsSubspaceKey {}
 
 impl ProxiedPortsSubspaceKey {
