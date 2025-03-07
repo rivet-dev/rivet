@@ -105,14 +105,14 @@ async fn update_db(
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-struct UpdateFdbInput {
+pub struct UpdateFdbInput {
 	actor_id: Uuid,
 	build_kind: Option<BuildKind>,
 	actor: UpdateDbOutput,
 }
 
 #[activity(UpdateFdb)]
-async fn update_fdb(ctx: &ActivityCtx, input: &UpdateFdbInput) -> GlobalResult<()> {
+pub async fn update_fdb(ctx: &ActivityCtx, input: &UpdateFdbInput) -> GlobalResult<()> {
 	let pool = ctx.sqlite().await?;
 
 	let ingress_ports = sql_fetch_all!(
@@ -129,7 +129,7 @@ async fn update_fdb(ctx: &ActivityCtx, input: &UpdateFdbInput) -> GlobalResult<(
 		.run(|tx, _mc| {
 			let ingress_ports = ingress_ports.clone();
 			async move {
-				// Update actor key in env subspace
+				// Update actor key index in env subspace
 				let actor_key = keys::env::ActorKey::new(
 					input.actor.env_id,
 					input.actor.create_ts,
@@ -146,161 +146,181 @@ async fn update_fdb(ctx: &ActivityCtx, input: &UpdateFdbInput) -> GlobalResult<(
 						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
 				);
 
-				// Remove all allocated ingress ports
-				for (protocol, port) in ingress_ports {
-					let ingress_port_key = keys::port::IngressKey::new(
-						GameGuardProtocol::from_repr(
-							usize::try_from(protocol)
-								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-						)
-						.ok_or_else(|| {
-							fdb::FdbBindingError::CustomError(
-								format!("invalid protocol variant: {protocol}").into(),
-							)
-						})?,
-						u16::try_from(port)
-							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-						input.actor_id,
-					);
-
-					tx.clear(&keys::subspace().pack(&ingress_port_key));
-				}
-
-				// Remove proxied ports
-				let proxied_ports_key = keys::actor::ProxiedPortsKey::new(input.actor_id);
-				tx.clear(&keys::subspace().pack(&proxied_ports_key));
-
-				if let Some(client_id) = input.actor.client_id {
-					// This is cleared when the state changes as well as when the actor is destroyed to ensure
-					// consistency during rescheduling and forced deletion.
-					let actor_key = keys::client::ActorKey::new(client_id, input.actor_id);
-					tx.clear(&keys::subspace().pack(&actor_key));
-				}
-
-				// Release client's resources and update allocation index
-				if let (
-					Some(build_kind),
-					Some(client_id),
-					Some(client_workflow_id),
-					Some(selected_resources_memory_mib),
-					Some(selected_resources_cpu_millicores),
-				) = (
+				clear_ports_and_resources(
+					input.actor_id,
 					input.build_kind,
+					ingress_ports,
 					input.actor.client_id,
 					input.actor.client_workflow_id,
 					input.actor.selected_resources_memory_mib,
 					input.actor.selected_resources_cpu_millicores,
-				) {
-					let client_flavor = match build_kind {
-						BuildKind::DockerImage | BuildKind::OciBundle => {
-							protocol::ClientFlavor::Container
-						}
-						BuildKind::JavaScript => protocol::ClientFlavor::Isolate,
-					};
-
-					let remaining_mem_key = keys::client::RemainingMemoryKey::new(client_id);
-					let remaining_mem_key_buf = keys::subspace().pack(&remaining_mem_key);
-					let remaining_cpu_key = keys::client::RemainingCpuKey::new(client_id);
-					let remaining_cpu_key_buf = keys::subspace().pack(&remaining_cpu_key);
-					let last_ping_ts_key = keys::client::LastPingTsKey::new(client_id);
-					let last_ping_ts_key_buf = keys::subspace().pack(&last_ping_ts_key);
-
-					let (remaining_mem_entry, remaining_cpu_entry, last_ping_ts_entry) = tokio::try_join!(
-						tx.get(&remaining_mem_key_buf, SERIALIZABLE),
-						tx.get(&remaining_cpu_key_buf, SERIALIZABLE),
-						tx.get(&last_ping_ts_key_buf, SERIALIZABLE),
-					)?;
-
-					let remaining_mem = remaining_mem_key
-						.deserialize(&remaining_mem_entry.ok_or(
-							fdb::FdbBindingError::CustomError(
-								format!("key should exist: {remaining_mem_key:?}").into(),
-							),
-						)?)
-						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
-					let remaining_cpu = remaining_cpu_key
-						.deserialize(&remaining_cpu_entry.ok_or(
-							fdb::FdbBindingError::CustomError(
-								format!("key should exist: {remaining_cpu_key:?}").into(),
-							),
-						)?)
-						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
-					let last_ping_ts = last_ping_ts_key
-						.deserialize(&last_ping_ts_entry.ok_or(
-							fdb::FdbBindingError::CustomError(
-								format!("key should exist: {last_ping_ts_key:?}").into(),
-							),
-						)?)
-						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
-
-					let old_allocation_key = keys::datacenter::ClientsByRemainingMemKey::new(
-						client_flavor,
-						remaining_mem,
-						last_ping_ts,
-						client_id,
-					);
-					let old_allocation_key_buf = keys::subspace().pack(&old_allocation_key);
-
-					let new_mem = remaining_mem
-						+ u64::try_from(selected_resources_memory_mib)
-							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
-					let new_cpu = remaining_cpu
-						+ u64::try_from(selected_resources_cpu_millicores)
-							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
-
-					tracing::debug!(
-						old_mem=%remaining_mem,
-						old_cpu=%remaining_cpu,
-						%new_mem,
-						%new_cpu,
-						"releasing resources"
-					);
-
-					// Write new memory
-					tx.set(
-						&remaining_mem_key_buf,
-						&remaining_mem_key
-							.serialize(new_mem)
-							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-					);
-					// Write new cpu
-					tx.set(
-						&remaining_cpu_key_buf,
-						&remaining_cpu_key
-							.serialize(new_cpu)
-							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-					);
-
-					// Only update allocation idx if it existed before
-					if tx
-						.get(&old_allocation_key_buf, SERIALIZABLE)
-						.await?
-						.is_some()
-					{
-						// Clear old key
-						tx.clear(&old_allocation_key_buf);
-
-						let new_allocation_key = keys::datacenter::ClientsByRemainingMemKey::new(
-							client_flavor,
-							new_mem,
-							last_ping_ts,
-							client_id,
-						);
-						let new_allocation_key_buf = keys::subspace().pack(&new_allocation_key);
-
-						tx.set(
-							&new_allocation_key_buf,
-							&new_allocation_key
-								.serialize(client_workflow_id)
-								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
-						);
-					}
-				}
-
-				Ok(())
+					&tx,
+				)
+				.await
 			}
 		})
 		.await?;
+
+	Ok(())
+}
+
+// TODO: Clean up args
+/// Clears allocated ports and resources (if they were allocated).
+pub(crate) async fn clear_ports_and_resources(
+	actor_id: Uuid,
+	build_kind: Option<BuildKind>,
+	ingress_ports: Vec<(i64, i64)>,
+	client_id: Option<Uuid>,
+	client_workflow_id: Option<Uuid>,
+	selected_resources_memory_mib: Option<i64>,
+	selected_resources_cpu_millicores: Option<i64>,
+	tx: &fdb::RetryableTransaction,
+) -> Result<(), fdb::FdbBindingError> {
+	// Remove all allocated ingress ports
+	for (protocol, port) in ingress_ports {
+		let ingress_port_key = keys::port::IngressKey::new(
+			GameGuardProtocol::from_repr(
+				usize::try_from(protocol)
+					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+			)
+			.ok_or_else(|| {
+				fdb::FdbBindingError::CustomError(
+					format!("invalid protocol variant: {protocol}").into(),
+				)
+			})?,
+			u16::try_from(port).map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+			actor_id,
+		);
+
+		tx.clear(&keys::subspace().pack(&ingress_port_key));
+	}
+
+	// Remove proxied ports
+	let proxied_ports_key = keys::actor::ProxiedPortsKey::new(actor_id);
+	tx.clear(&keys::subspace().pack(&proxied_ports_key));
+
+	if let Some(client_id) = client_id {
+		// This is cleared when the state changes as well as when the actor is destroyed to ensure
+		// consistency during rescheduling and forced deletion.
+		let actor_key = keys::client::ActorKey::new(client_id, actor_id);
+		tx.clear(&keys::subspace().pack(&actor_key));
+	}
+
+	// Release client's resources and update allocation index
+	if let (
+		Some(build_kind),
+		Some(client_id),
+		Some(client_workflow_id),
+		Some(selected_resources_memory_mib),
+		Some(selected_resources_cpu_millicores),
+	) = (
+		build_kind,
+		client_id,
+		client_workflow_id,
+		selected_resources_memory_mib,
+		selected_resources_cpu_millicores,
+	) {
+		let client_flavor = match build_kind {
+			BuildKind::DockerImage | BuildKind::OciBundle => protocol::ClientFlavor::Container,
+			BuildKind::JavaScript => protocol::ClientFlavor::Isolate,
+		};
+
+		let remaining_mem_key = keys::client::RemainingMemoryKey::new(client_id);
+		let remaining_mem_key_buf = keys::subspace().pack(&remaining_mem_key);
+		let remaining_cpu_key = keys::client::RemainingCpuKey::new(client_id);
+		let remaining_cpu_key_buf = keys::subspace().pack(&remaining_cpu_key);
+		let last_ping_ts_key = keys::client::LastPingTsKey::new(client_id);
+		let last_ping_ts_key_buf = keys::subspace().pack(&last_ping_ts_key);
+
+		let (remaining_mem_entry, remaining_cpu_entry, last_ping_ts_entry) = tokio::try_join!(
+			tx.get(&remaining_mem_key_buf, SERIALIZABLE),
+			tx.get(&remaining_cpu_key_buf, SERIALIZABLE),
+			tx.get(&last_ping_ts_key_buf, SERIALIZABLE),
+		)?;
+
+		let remaining_mem = remaining_mem_key
+			.deserialize(
+				&remaining_mem_entry.ok_or(fdb::FdbBindingError::CustomError(
+					format!("key should exist: {remaining_mem_key:?}").into(),
+				))?,
+			)
+			.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+		let remaining_cpu = remaining_cpu_key
+			.deserialize(
+				&remaining_cpu_entry.ok_or(fdb::FdbBindingError::CustomError(
+					format!("key should exist: {remaining_cpu_key:?}").into(),
+				))?,
+			)
+			.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+		let last_ping_ts = last_ping_ts_key
+			.deserialize(&last_ping_ts_entry.ok_or(fdb::FdbBindingError::CustomError(
+				format!("key should exist: {last_ping_ts_key:?}").into(),
+			))?)
+			.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+		let old_allocation_key = keys::datacenter::ClientsByRemainingMemKey::new(
+			client_flavor,
+			remaining_mem,
+			last_ping_ts,
+			client_id,
+		);
+		let old_allocation_key_buf = keys::subspace().pack(&old_allocation_key);
+
+		let new_mem = remaining_mem
+			+ u64::try_from(selected_resources_memory_mib)
+				.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+		let new_cpu = remaining_cpu
+			+ u64::try_from(selected_resources_cpu_millicores)
+				.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+		tracing::debug!(
+			old_mem=%remaining_mem,
+			old_cpu=%remaining_cpu,
+			%new_mem,
+			%new_cpu,
+			"releasing resources"
+		);
+
+		// Write new memory
+		tx.set(
+			&remaining_mem_key_buf,
+			&remaining_mem_key
+				.serialize(new_mem)
+				.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+		);
+		// Write new cpu
+		tx.set(
+			&remaining_cpu_key_buf,
+			&remaining_cpu_key
+				.serialize(new_cpu)
+				.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+		);
+
+		// Only update allocation idx if it existed before
+		if tx
+			.get(&old_allocation_key_buf, SERIALIZABLE)
+			.await?
+			.is_some()
+		{
+			// Clear old key
+			tx.clear(&old_allocation_key_buf);
+
+			let new_allocation_key = keys::datacenter::ClientsByRemainingMemKey::new(
+				client_flavor,
+				new_mem,
+				last_ping_ts,
+				client_id,
+			);
+			let new_allocation_key_buf = keys::subspace().pack(&new_allocation_key);
+
+			tx.set(
+				&new_allocation_key_buf,
+				&new_allocation_key
+					.serialize(client_workflow_id)
+					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+			);
+		}
+	}
 
 	Ok(())
 }

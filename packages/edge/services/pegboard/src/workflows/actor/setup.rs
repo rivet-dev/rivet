@@ -6,7 +6,7 @@ use foundationdb as fdb;
 use sqlx::Acquire;
 use util::serde::AsHashableExt;
 
-use super::{migrations, runtime, Input, Port};
+use super::{runtime, Input, Port};
 use crate::{
 	keys, protocol,
 	types::{ActorLifecycle, ActorResources, GameGuardProtocol, NetworkMode, Routing},
@@ -531,8 +531,6 @@ pub async fn setup(
 	network_ports: &util::serde::HashableMap<String, Port>,
 	setup: SetupCtx,
 ) -> GlobalResult<ActorSetupCtx> {
-	migrations::run(ctx).await?;
-
 	let image_id = match &setup {
 		SetupCtx::Init => {
 			let tags = input.tags.as_hashable();

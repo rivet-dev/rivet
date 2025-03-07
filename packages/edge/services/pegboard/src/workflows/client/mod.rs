@@ -898,7 +898,7 @@ async fn update_metrics(ctx: &ActivityCtx, input: &UpdateMetricsInput) -> Global
 					)
 					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
-				Ok((total_mem - remaining_mem, total_cpu - remaining_cpu))
+				Ok((total_mem.saturating_sub(remaining_mem), total_cpu.saturating_sub(remaining_cpu)))
 			})
 			.await?;
 

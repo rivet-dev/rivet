@@ -158,6 +158,7 @@ WHERE NOT forgotten;
 CREATE TABLE workflow_branch_events (
   location BLOB PRIMARY KEY, -- JSONB
   version INT NOT NULL,
+  name TEXT,
   create_ts INT NOT NULL,
   loop_location BLOB, -- JSONB
   forgotten INT NOT NULL DEFAULT false -- BOOLEAN

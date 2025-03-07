@@ -53,6 +53,8 @@ pub struct Port {
 
 #[workflow]
 pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResult<()> {
+	migrations::run(ctx).await?;
+
 	let validation_res = ctx
 		.activity(setup::ValidateInput {
 			env_id: input.env_id,
@@ -138,237 +140,245 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 	};
 
 	let state_res = ctx
-		.loope(runtime::State::new(client_workflow_id), |ctx, state| {
-			let input = input.clone();
-			let network_ports = network_ports.clone();
+		.loope(
+			runtime::State::new(client_id, client_workflow_id),
+			|ctx, state| {
+				let input = input.clone();
+				let network_ports = network_ports.clone();
 
-			async move {
-				let sig = if let Some(drain_timeout_ts) = state.drain_timeout_ts {
-					// Listen for signal with drain timeout
-					if let Some(sig) = ctx.listen_until::<Main>(drain_timeout_ts).await? {
-						sig
-					}
-					// Reschedule durable actor on drain end
-					else if input.lifecycle.durable {
-						ctx.activity(runtime::SetConnectableInput { connectable: false })
-							.await?;
+				async move {
+					let sig = if let Some(drain_timeout_ts) = state.drain_timeout_ts {
+						// Listen for signal with drain timeout
+						if let Some(sig) = ctx.listen_until::<Main>(drain_timeout_ts).await? {
+							sig
+						}
+						// Reschedule durable actor on drain end
+						else if input.lifecycle.durable {
+							ctx.activity(runtime::SetConnectableInput { connectable: false })
+								.await?;
 
-						// Kill old actor immediately
-						destroy::kill(ctx, input.actor_id, state.client_workflow_id, 0, true)
-							.await?;
+							// Kill old actor immediately
+							destroy::kill(ctx, input.actor_id, state.client_workflow_id, 0, true)
+								.await?;
 
-						if let Some(sig) =
-							runtime::reschedule_actor(ctx, &input, &network_ports, state, None)
-								.await?
-						{
-							// Destroyed early
+							if let Some(sig) =
+								runtime::reschedule_actor(ctx, &input, &network_ports, state, None)
+									.await?
+							{
+								// Destroyed early
+								return Ok(Loop::Break(runtime::StateRes {
+									kill: Some(KillCtx {
+										kill_timeout_ms: sig
+											.override_kill_timeout_ms
+											.unwrap_or(input.lifecycle.kill_timeout_ms),
+									}),
+								}));
+							} else {
+								state.drain_timeout_ts = None;
+								return Ok(Loop::Continue);
+							}
+						} else {
 							return Ok(Loop::Break(runtime::StateRes {
 								kill: Some(KillCtx {
-									kill_timeout_ms: sig
-										.override_kill_timeout_ms
-										.unwrap_or(input.lifecycle.kill_timeout_ms),
+									kill_timeout_ms: input.lifecycle.kill_timeout_ms,
 								}),
 							}));
+						}
+					} else if let Some(gc_timeout_ts) = state.gc_timeout_ts {
+						// Listen for signal with gc timeout. if a timeout happens, it means this actor is lost
+						if let Some(sig) = ctx.listen_until::<Main>(gc_timeout_ts).await? {
+							sig
 						} else {
-							state.drain_timeout_ts = None;
-							return Ok(Loop::Continue);
+							// Fake signal
+							Main::StateUpdate(StateUpdate {
+								state: protocol::ActorState::Lost,
+							})
 						}
 					} else {
-						return Ok(Loop::Break(runtime::StateRes {
-							kill: Some(KillCtx {
-								kill_timeout_ms: input.lifecycle.kill_timeout_ms,
-							}),
-						}));
-					}
-				} else if let Some(gc_timeout_ts) = state.gc_timeout_ts {
-					// Listen for signal with gc timeout. if a timeout happens, it means this actor is lost
-					if let Some(sig) = ctx.listen_until::<Main>(gc_timeout_ts).await? {
-						sig
-					} else {
-						// Fake signal
-						Main::StateUpdate(StateUpdate {
-							state: protocol::ActorState::Lost,
-						})
-					}
-				} else {
-					// Listen for signal normally
-					ctx.listen::<Main>().await?
-				};
+						// Listen for signal normally
+						ctx.listen::<Main>().await?
+					};
 
-				match sig {
-					Main::StateUpdate(sig) => {
-						ctx.activity(runtime::UpdateFdbInput {
-							actor_id: input.actor_id,
-							client_id,
-							state: sig.state.clone(),
-						})
-						.await?;
+					match sig {
+						Main::StateUpdate(sig) => {
+							ctx.activity(runtime::UpdateFdbInput {
+								actor_id: input.actor_id,
+								client_id,
+								state: sig.state.clone(),
+							})
+							.await?;
 
-						match sig.state {
-							protocol::ActorState::Starting => {
-								state.gc_timeout_ts = None;
+							match sig.state {
+								protocol::ActorState::Starting => {
+									state.gc_timeout_ts = None;
 
-								ctx.activity(runtime::SetStartedInput {}).await?;
-							}
-							protocol::ActorState::Running { ports, .. } => {
-								ctx.join((
-									activity(runtime::InsertPortsInput {
-										ports: ports.clone(),
-									}),
-									activity(runtime::InsertPortsFdbInput {
-										actor_id: input.actor_id,
-										ports,
-									}),
-								))
-								.await?;
-
-								// Wait for Traefik to poll ports and update GG
-								ctx.activity(traefik::WaitForTraefikPollInput {
-									create_ts: ctx.ts(),
-								})
-								.await?;
-
-								let updated = ctx
-									.activity(runtime::SetConnectableInput { connectable: true })
+									ctx.activity(runtime::SetStartedInput {}).await?;
+								}
+								protocol::ActorState::Running { ports, .. } => {
+									ctx.join((
+										activity(runtime::InsertPortsInput {
+											ports: ports.clone(),
+										}),
+										activity(runtime::InsertPortsFdbInput {
+											actor_id: input.actor_id,
+											ports,
+										}),
+									))
 									.await?;
 
-								if updated {
-									ctx.msg(Ready {})
-										.tag("actor_id", input.actor_id)
-										.send()
-										.await?;
-								}
-							}
-							protocol::ActorState::Stopping => {
-								state.gc_timeout_ts =
-									Some(util::timestamp::now() + ACTOR_STOP_THRESHOLD_MS);
-							}
-							protocol::ActorState::Stopped => {
-								state.gc_timeout_ts =
-									Some(util::timestamp::now() + ACTOR_EXIT_THRESHOLD_MS);
-							}
-							protocol::ActorState::Exited { .. } | protocol::ActorState::Lost => {
-								let exit_code =
-									if let protocol::ActorState::Exited { exit_code } = sig.state {
-										exit_code
-									} else {
-										None
-									};
-
-								tracing::debug!(?exit_code, "actor stopped");
-
-								let failed =
-									exit_code.map(|exit_code| exit_code != 0).unwrap_or(true);
-
-								// Reschedule durable actor if it errored
-								if input.lifecycle.durable && failed {
-									ctx.activity(runtime::SetConnectableInput {
-										connectable: false,
+									// Wait for Traefik to poll ports and update GG
+									ctx.activity(traefik::WaitForTraefikPollInput {
+										create_ts: ctx.ts(),
 									})
 									.await?;
 
-									// Kill old actor immediately if lost
-									if let protocol::ActorState::Lost = sig.state {
-										destroy::kill(
-											ctx,
-											input.actor_id,
-											state.client_workflow_id,
-											0,
-											true,
-										)
+									let updated = ctx
+										.activity(runtime::SetConnectableInput {
+											connectable: true,
+										})
 										.await?;
-									}
 
-									if runtime::reschedule_actor(
-										ctx,
-										&input,
-										&network_ports,
-										state,
-										None,
-									)
-									.await?
-									.is_some()
-									{
-										// Destroyed early
+									if updated {
+										ctx.msg(Ready {})
+											.tag("actor_id", input.actor_id)
+											.send()
+											.await?;
+									}
+								}
+								protocol::ActorState::Stopping => {
+									state.gc_timeout_ts =
+										Some(util::timestamp::now() + ACTOR_STOP_THRESHOLD_MS);
+								}
+								protocol::ActorState::Stopped => {
+									state.gc_timeout_ts =
+										Some(util::timestamp::now() + ACTOR_EXIT_THRESHOLD_MS);
+								}
+								protocol::ActorState::Exited { .. }
+								| protocol::ActorState::Lost => {
+									let exit_code =
+										if let protocol::ActorState::Exited { exit_code } =
+											sig.state
+										{
+											exit_code
+										} else {
+											None
+										};
+
+									tracing::debug!(?exit_code, "actor stopped");
+
+									let failed =
+										exit_code.map(|exit_code| exit_code != 0).unwrap_or(true);
+
+									// Reschedule durable actor if it errored
+									if input.lifecycle.durable && failed {
+										ctx.activity(runtime::SetConnectableInput {
+											connectable: false,
+										})
+										.await?;
+
+										// Kill old actor immediately if lost
+										if let protocol::ActorState::Lost = sig.state {
+											destroy::kill(
+												ctx,
+												input.actor_id,
+												state.client_workflow_id,
+												0,
+												true,
+											)
+											.await?;
+										}
+
+										if runtime::reschedule_actor(
+											ctx,
+											&input,
+											&network_ports,
+											state,
+											None,
+										)
+										.await?
+										.is_some()
+										{
+											// Destroyed early
+											return Ok(Loop::Break(runtime::StateRes {
+												// Destroy actor is none here because if we received the destroy
+												// signal, it is guaranteed that we did not allocate another actor.
+												kill: None,
+											}));
+										}
+									} else {
+										ctx.activity(runtime::SetFinishedInput {}).await?;
+
 										return Ok(Loop::Break(runtime::StateRes {
-											// Destroy actor is none here because if we received the destroy
-											// signal, it is guaranteed that we did not allocate another actor.
-											kill: None,
+											// No need to kill if already exited
+											kill: matches!(sig.state, protocol::ActorState::Lost)
+												.then_some(KillCtx { kill_timeout_ms: 0 }),
 										}));
 									}
-								} else {
-									ctx.activity(runtime::SetFinishedInput {}).await?;
-
-									return Ok(Loop::Break(runtime::StateRes {
-										// No need to kill if already exited
-										kill: matches!(sig.state, protocol::ActorState::Lost)
-											.then_some(KillCtx { kill_timeout_ms: 0 }),
-									}));
 								}
 							}
 						}
-					}
-					Main::Upgrade(sig) => {
-						ctx.msg(UpgradeStarted {})
-							.tag("actor_id", input.actor_id)
-							.send()
-							.await?;
+						Main::Upgrade(sig) => {
+							ctx.msg(UpgradeStarted {})
+								.tag("actor_id", input.actor_id)
+								.send()
+								.await?;
 
-						ctx.activity(runtime::SetConnectableInput { connectable: false })
-							.await?;
+							ctx.activity(runtime::SetConnectableInput { connectable: false })
+								.await?;
 
-						// Kill old actor immediately
-						destroy::kill(ctx, input.actor_id, state.client_workflow_id, 0, true)
-							.await?;
+							// Kill old actor immediately
+							destroy::kill(ctx, input.actor_id, state.client_workflow_id, 0, true)
+								.await?;
 
-						if let Some(sig) = runtime::reschedule_actor(
-							ctx,
-							&input,
-							&network_ports,
-							state,
-							Some(sig.image_id),
-						)
-						.await?
-						{
-							// Destroyed early
+							if let Some(sig) = runtime::reschedule_actor(
+								ctx,
+								&input,
+								&network_ports,
+								state,
+								Some(sig.image_id),
+							)
+							.await?
+							{
+								// Destroyed early
+								return Ok(Loop::Break(runtime::StateRes {
+									kill: Some(KillCtx {
+										kill_timeout_ms: sig
+											.override_kill_timeout_ms
+											.unwrap_or(input.lifecycle.kill_timeout_ms),
+									}),
+								}));
+							}
+
+							ctx.msg(UpgradeComplete {})
+								.tag("actor_id", input.actor_id)
+								.send()
+								.await?;
+						}
+						Main::Drain(sig) => {
+							state.drain_timeout_ts = Some(
+								sig.drain_timeout_ts
+									- DRAIN_PADDING_MS - input.lifecycle.kill_timeout_ms,
+							);
+						}
+						Main::Undrain(_) => {
+							state.drain_timeout_ts = None;
+						}
+						Main::Destroy(sig) => {
 							return Ok(Loop::Break(runtime::StateRes {
 								kill: Some(KillCtx {
 									kill_timeout_ms: sig
 										.override_kill_timeout_ms
 										.unwrap_or(input.lifecycle.kill_timeout_ms),
 								}),
-							}));
+							}))
 						}
+					}
 
-						ctx.msg(UpgradeComplete {})
-							.tag("actor_id", input.actor_id)
-							.send()
-							.await?;
-					}
-					Main::Drain(sig) => {
-						state.drain_timeout_ts = Some(
-							sig.drain_timeout_ts
-								- DRAIN_PADDING_MS - input.lifecycle.kill_timeout_ms,
-						);
-					}
-					Main::Undrain(_) => {
-						state.drain_timeout_ts = None;
-					}
-					Main::Destroy(sig) => {
-						return Ok(Loop::Break(runtime::StateRes {
-							kill: Some(KillCtx {
-								kill_timeout_ms: sig
-									.override_kill_timeout_ms
-									.unwrap_or(input.lifecycle.kill_timeout_ms),
-							}),
-						}))
-					}
+					Ok(Loop::Continue)
 				}
-
-				Ok(Loop::Continue)
-			}
-			.boxed()
-		})
+				.boxed()
+			},
+		)
 		.await?;
 
 	ctx.workflow(destroy::Input {

@@ -12,7 +12,8 @@ use sqlx::Acquire;
 use util::serde::AsHashableExt;
 
 use super::{
-	destroy::KillCtx, setup, Destroy, Input, Port, ACTOR_START_THRESHOLD_MS, BASE_RETRY_TIMEOUT_MS,
+	destroy::{self, KillCtx},
+	setup, Destroy, Input, Port, ACTOR_START_THRESHOLD_MS, BASE_RETRY_TIMEOUT_MS,
 };
 use crate::{
 	keys, metrics, protocol,
@@ -22,14 +23,16 @@ use crate::{
 
 #[derive(Deserialize, Serialize)]
 pub struct State {
+	pub client_id: Uuid,
 	pub client_workflow_id: Uuid,
 	pub drain_timeout_ts: Option<i64>,
 	pub gc_timeout_ts: Option<i64>,
 }
 
 impl State {
-	pub fn new(client_workflow_id: Uuid) -> Self {
+	pub fn new(client_id: Uuid, client_workflow_id: Uuid) -> Self {
 		State {
+			client_id,
 			client_workflow_id,
 			drain_timeout_ts: None,
 			gc_timeout_ts: Some(util::timestamp::now() + ACTOR_START_THRESHOLD_MS),
@@ -575,11 +578,13 @@ pub async fn reschedule_actor(
 	state: &mut State,
 	new_image_id: Option<Uuid>,
 ) -> GlobalResult<Option<Destroy>> {
-	tracing::info!("rescheduling actor");
+	tracing::debug!(actor_id=?input.actor_id, "rescheduling actor");
 
-	// Remove old proxied ports
-	ctx.activity(ClearPortsInput {
+	ctx.activity(ClearPortsAndResourcesInput {
 		actor_id: input.actor_id,
+		image_id: new_image_id.unwrap_or(input.image_id),
+		client_id: state.client_id,
+		client_workflow_id: state.client_workflow_id,
 	})
 	.await?;
 
@@ -607,9 +612,9 @@ pub async fn reschedule_actor(
 				let now = util::timestamp::now();
 				state.retry_count =
 					if state.last_retry_ts < now - i64::try_from(2 * backoff.current_duration())? {
-						state.retry_count + 1
-					} else {
 						0
+					} else {
+						state.retry_count + 1
 					};
 				state.last_retry_ts = now;
 
@@ -628,11 +633,11 @@ pub async fn reschedule_actor(
 					}
 				}
 
-				if let Some((_, client_workflow_id)) =
-					spawn_actor(ctx, &input, &network_ports, &actor_setup).await?
-				{
-					Ok(Loop::Break(Ok(client_workflow_id)))
+				if let Some(res) = spawn_actor(ctx, &input, &network_ports, &actor_setup).await? {
+					Ok(Loop::Break(Ok(res)))
 				} else {
+					tracing::debug!(actor_id=?input.actor_id, "failed to reschedule actor, retrying");
+
 					Ok(Loop::Continue)
 				}
 			}
@@ -642,7 +647,8 @@ pub async fn reschedule_actor(
 
 	// Update loop state
 	match res {
-		Ok(client_workflow_id) => {
+		Ok((client_id, client_workflow_id)) => {
+			state.client_id = client_id;
 			state.client_workflow_id = client_workflow_id;
 			Ok(None)
 		}
@@ -657,31 +663,70 @@ struct RescheduleState {
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-struct ClearPortsInput {
+struct ClearPortsAndResourcesInput {
 	actor_id: Uuid,
+	image_id: Uuid,
+	client_id: Uuid,
+	client_workflow_id: Uuid,
 }
 
-#[activity(ClearPorts)]
-async fn clear_ports(ctx: &ActivityCtx, input: &ClearPortsInput) -> GlobalResult<()> {
-	let pool = ctx.sqlite().await?;
+#[activity(ClearPortsAndResources)]
+async fn clear_ports_and_resources(
+	ctx: &ActivityCtx,
+	input: &ClearPortsAndResourcesInput,
+) -> GlobalResult<()> {
+	let pool = &ctx.sqlite().await?;
 
-	sql_execute!(
-		[ctx, pool]
-		"
-		DELETE FROM ports_proxied
-		",
-	)
-	.await?;
+	let (
+		build_res,
+		ingress_ports,
+		(selected_resources_cpu_millicores, selected_resources_memory_mib),
+		_,
+	) = tokio::try_join!(
+		ctx.op(build::ops::get::Input {
+			build_ids: vec![input.image_id],
+		}),
+		sql_fetch_all!(
+			[ctx, (i64, i64), pool]
+			"
+			SELECT protocol, ingress_port_number
+			FROM ports_ingress
+			",
+		),
+		sql_fetch_one!(
+			[ctx, (Option<i64>, Option<i64>), pool]
+			"
+			SELECT selected_resources_cpu_millicores, selected_resources_memory_mib
+			FROM state
+			",
+		),
+		// Idempotent
+		sql_execute!(
+			[ctx, pool]
+			"
+			DELETE FROM ports_proxied
+			",
+		),
+	)?;
+	let build = unwrap_with!(build_res.builds.first(), BUILD_NOT_FOUND);
 
-	// It is ok for both of these to be in the same activity because they are idempotent. There cannot be any
-	// ports inserted if this activity is running because the insertion of ports happens in the same workflow.
 	ctx.fdb()
 		.await?
-		.run(|tx, _mc| async move {
-			let proxied_ports_key = keys::actor::ProxiedPortsKey::new(input.actor_id);
-			tx.clear(&keys::subspace().pack(&proxied_ports_key));
-
-			Ok(())
+		.run(|tx, _mc| {
+			let ingress_ports = ingress_ports.clone();
+			async move {
+				destroy::clear_ports_and_resources(
+					input.actor_id,
+					Some(build.kind),
+					ingress_ports,
+					Some(input.client_id),
+					Some(input.client_workflow_id),
+					selected_resources_memory_mib,
+					selected_resources_cpu_millicores,
+					&tx,
+				)
+				.await
+			}
 		})
 		.await?;
 

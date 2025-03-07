@@ -79,7 +79,5 @@ fn generate_tier(
 		bandwidth: c.bandwidth_per_core() * numerator / denominator,
 	};
 
-	tracing::info!(?c, ?t, ?name, ?memory_per_core, cpu_per_core=?c.cpu_per_core(), ?numerator, ?denominator, "----------------");
-
 	t
 }
