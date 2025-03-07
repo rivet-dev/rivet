@@ -62,7 +62,7 @@ fn generate_tier(
 		c.memory_per_core_nomad()
 	};
 
-	Tier {
+	let t = Tier {
 		tier_name_id: name.into(),
 		rivet_cores_numerator: numerator,
 		rivet_cores_denominator: denominator,
@@ -77,5 +77,9 @@ fn generate_tier(
 		),
 		disk: c.disk_per_core() * numerator / denominator,
 		bandwidth: c.bandwidth_per_core() * numerator / denominator,
-	}
+	};
+
+	tracing::info!(?c, ?t, ?name, ?memory_per_core, cpu_per_core=?c.cpu_per_core(), ?numerator, ?denominator, "----------------");
+
+	t
 }

@@ -104,6 +104,8 @@ async fn allocate_actor(
 	};
 	let memory_mib = input.resources.memory / 1024 / 1024;
 
+	tracing::info!(?client_flavor, ?memory_mib, "--------------------");
+
 	let start_instant = Instant::now();
 
 	let res = ctx
@@ -139,13 +141,18 @@ async fn allocate_actor(
 			);
 
 			loop {
+				tracing::info!("loop --------------------");
 				let Some(entry) = stream.try_next().await? else {
+					tracing::info!("none --------------------");
+
 					return Ok(None);
 				};
 
 				let old_allocation_key = keys::subspace()
 					.unpack::<keys::datacenter::ClientsByRemainingMemKey>(entry.key())
 					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+				tracing::info!(?old_allocation_key, ?ping_threshold_ts, "--------------------");
 
 				// Scan by last ping
 				if old_allocation_key.last_ping_ts < ping_threshold_ts {
