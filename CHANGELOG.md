@@ -5,6 +5,116 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/).
 
+## [25.2.0](https://github.com/rivet-gg/rivet/compare/v5.1.2...v25.2.0) (2025-03-07)
+
+
+### Features
+
+* add api-endpoint and access-token metadata commands ([#2090](https://github.com/rivet-gg/rivet/issues/2090)) ([af7cc8c](https://github.com/rivet-gg/rivet/commit/af7cc8cb0b5cd14da7699eefd6c7970595188da4))
+* add auth status metadata command ([#2091](https://github.com/rivet-gg/rivet/issues/2091)) ([569adf9](https://github.com/rivet-gg/rivet/commit/569adf9e601aff6963045d6c919450b8f4166cb7))
+* add env ls cmd ([#2109](https://github.com/rivet-gg/rivet/issues/2109)) ([c2ae14b](https://github.com/rivet-gg/rivet/commit/c2ae14b0236256aa345ec446a28ff1b57eab1cd3))
+* add fdb cli ([#2051](https://github.com/rivet-gg/rivet/issues/2051)) ([5675b72](https://github.com/rivet-gg/rivet/commit/5675b722f5ad14dd9181b3bb8129bf81df44453b))
+* add grafana to docker compose ([#2083](https://github.com/rivet-gg/rivet/issues/2083)) ([efb191d](https://github.com/rivet-gg/rivet/commit/efb191da1de1a5856f198e86e2efb8755967a301))
+* add support for JSON5/JSONC config files ([#2059](https://github.com/rivet-gg/rivet/issues/2059)) ([850d25e](https://github.com/rivet-gg/rivet/commit/850d25e40eed032c462837bbccf8bdee6ec5262d))
+* add X-API-Version header to CORS config ([#2143](https://github.com/rivet-gg/rivet/issues/2143)) ([84934c6](https://github.com/rivet-gg/rivet/commit/84934c6965d66ac29fa7b03fbc9560f9621bdeed))
+* **cli:** add experimental `rivet shell` command ([#2113](https://github.com/rivet-gg/rivet/issues/2113)) ([d5fe5d8](https://github.com/rivet-gg/rivet/commit/d5fe5d8764acc0f577aa388e35c92a7578ed1773))
+* **cli:** add project name id to metadata ([#2114](https://github.com/rivet-gg/rivet/issues/2114)) ([58e00e3](https://github.com/rivet-gg/rivet/commit/58e00e3e78b329077403fabf31898beb553fcb52))
+* **clusters:** add worker pool type ([#2008](https://github.com/rivet-gg/rivet/issues/2008)) ([4b62182](https://github.com/rivet-gg/rivet/commit/4b621827f3b98185cf5e19aa6a694bd798bc64ce))
+* fdb sqlite workflows driver ([#1850](https://github.com/rivet-gg/rivet/issues/1850)) ([fa40493](https://github.com/rivet-gg/rivet/commit/fa40493880c3a96547be00ce268a13bd9352fe2f))
+* **pb, ds:** move to edge ([#1942](https://github.com/rivet-gg/rivet/issues/1942)) ([45d0d4c](https://github.com/rivet-gg/rivet/commit/45d0d4cb39707f850b28b2b3c2fc628e5a747ce4))
+* **site:** add social links ([#2102](https://github.com/rivet-gg/rivet/issues/2102)) ([ba4fc46](https://github.com/rivet-gg/rivet/commit/ba4fc466d850aa68e24be728e0a30162836beeaa))
+* **workflows:** abstract debug trait ([#2033](https://github.com/rivet-gg/rivet/issues/2033)) ([a8e9ea7](https://github.com/rivet-gg/rivet/commit/a8e9ea709a032e79f187a8805f878275cd698e19))
+* **workflows:** impl db debug for fdb driver ([#2040](https://github.com/rivet-gg/rivet/issues/2040)) ([8366e9b](https://github.com/rivet-gg/rivet/commit/8366e9bcd7d8060a935b10a49590a8ab48007e90))
+* **workflows:** implement metrics for fdb driver ([#2057](https://github.com/rivet-gg/rivet/issues/2057)) ([18448bc](https://github.com/rivet-gg/rivet/commit/18448bc4757bd8586b0fa8660f45b8a6fd4be244))
+
+
+### Bug Fixes
+
+* add exit to system test ([#2142](https://github.com/rivet-gg/rivet/issues/2142)) ([9d175a4](https://github.com/rivet-gg/rivet/commit/9d175a48863bb7b266f362ed5ca5d343b6d554b7))
+* add metrics for wf engine ([#2076](https://github.com/rivet-gg/rivet/issues/2076)) ([1ea2b9c](https://github.com/rivet-gg/rivet/commit/1ea2b9c4a1e166847e20c6a4f86ccfa11e871ac1))
+* add otel to install scripts ([#2092](https://github.com/rivet-gg/rivet/issues/2092)) ([2254745](https://github.com/rivet-gg/rivet/commit/2254745082046e9109d1174f9a18d7a0b898e7d5))
+* **api-actor:** fix sorting of actors at the core ([#2139](https://github.com/rivet-gg/rivet/issues/2139)) ([834da81](https://github.com/rivet-gg/rivet/commit/834da819bb0f0430bee3875fd306f1ea66fdfa27))
+* **api-actor:** make actor list cursor work correctly using new pagination api ([#2140](https://github.com/rivet-gg/rivet/issues/2140)) ([77bccb4](https://github.com/rivet-gg/rivet/commit/77bccb4499277ea629c7a2c3dbd3c2591fb925ea))
+* **cluster:** write install script for worker pool ([#2009](https://github.com/rivet-gg/rivet/issues/2009)) ([cecd3fc](https://github.com/rivet-gg/rivet/commit/cecd3fcfef8d44c2cb0536d1551a29a409d85c67))
+* **docker-compose:** remove invalid health check from otel-collector ([#2127](https://github.com/rivet-gg/rivet/issues/2127)) ([b645483](https://github.com/rivet-gg/rivet/commit/b6454830626da897db051368cb1190cacf878d0d))
+* **docker:** auto-create otel database ([#2088](https://github.com/rivet-gg/rivet/issues/2088)) ([545fd10](https://github.com/rivet-gg/rivet/commit/545fd103a3cb510236eb89a438a83b8a46d789b9))
+* **docker:** fix corepack not enabled error ([#2058](https://github.com/rivet-gg/rivet/issues/2058)) ([3dce130](https://github.com/rivet-gg/rivet/commit/3dce130b2ab5449bddd44323c5d48eb05146cf4a))
+* **ds:** ds list ([#2066](https://github.com/rivet-gg/rivet/issues/2066)) ([3636d2e](https://github.com/rivet-gg/rivet/commit/3636d2e58dcf5526d64d68de7e0e930edb47661f))
+* fdb tuples, actor lost kill ([#2118](https://github.com/rivet-gg/rivet/issues/2118)) ([af18f50](https://github.com/rivet-gg/rivet/commit/af18f50cc9718219c08e179125e7882d58ea1298))
+* **fdb:** conflict ranges ([#2063](https://github.com/rivet-gg/rivet/issues/2063)) ([9ef4a32](https://github.com/rivet-gg/rivet/commit/9ef4a32b2f03310816a554d2b2e36788446f5328))
+* fix connecting to clickhouse from edge servers ([#2128](https://github.com/rivet-gg/rivet/issues/2128)) ([955e41b](https://github.com/rivet-gg/rivet/commit/955e41bda71a062ef91bb4499a7a79d62c926dd6))
+* fix pb draining ([#2136](https://github.com/rivet-gg/rivet/issues/2136)) ([209e3e9](https://github.com/rivet-gg/rivet/commit/209e3e9fe75b6c6e9be473f241b8cfd1eff5661e))
+* fix system test ([#2121](https://github.com/rivet-gg/rivet/issues/2121)) ([6a5f7a4](https://github.com/rivet-gg/rivet/commit/6a5f7a4b93e0d41016541e2dd9848f6eae96625a))
+* fix topology units, core actor endpoints ([#2135](https://github.com/rivet-gg/rivet/issues/2135)) ([81bdce8](https://github.com/rivet-gg/rivet/commit/81bdce80cf73ad0d5927e181f70f94cb1ba60152))
+* fix wf change bug with client wf ([#2134](https://github.com/rivet-gg/rivet/issues/2134)) ([68388ad](https://github.com/rivet-gg/rivet/commit/68388ad02219fceabc20024d0393aec0cc240363))
+* force amd64 platform for FDB tests ([#2049](https://github.com/rivet-gg/rivet/issues/2049)) ([bad88ad](https://github.com/rivet-gg/rivet/commit/bad88ad466ca766dbfb0e332c1ba85bc386136bd))
+* get actors running e2e on edge ([#2027](https://github.com/rivet-gg/rivet/issues/2027)) ([bc2650d](https://github.com/rivet-gg/rivet/commit/bc2650d3a3c40bab03c7bad4e589a8e41310e01e))
+* get edge api access over gg ([#2032](https://github.com/rivet-gg/rivet/issues/2032)) ([898d493](https://github.com/rivet-gg/rivet/commit/898d493d1b851db9f48b854ed07c8b282fe2a6d3))
+* get sqlite working on edge ([#2097](https://github.com/rivet-gg/rivet/issues/2097)) ([26fdb96](https://github.com/rivet-gg/rivet/commit/26fdb962819b3e66cd9b9d90d635d06dc4b2018b))
+* get sqlite working on edge ([#2099](https://github.com/rivet-gg/rivet/issues/2099)) ([0305b02](https://github.com/rivet-gg/rivet/commit/0305b02108da0837bc8ecedbe2d0f5a06e79459b))
+* get stuff building ([#2020](https://github.com/rivet-gg/rivet/issues/2020)) ([6a4c3aa](https://github.com/rivet-gg/rivet/commit/6a4c3aa1b88ff47b629360ac5e3c4415593b21c4))
+* get tunnels working, fix tls, wf bug fix ([#2025](https://github.com/rivet-gg/rivet/issues/2025)) ([a54e50b](https://github.com/rivet-gg/rivet/commit/a54e50b8f7254a809daffac4c80c658380479ca2))
+* invalid component ([#2104](https://github.com/rivet-gg/rivet/issues/2104)) ([53cdd83](https://github.com/rivet-gg/rivet/commit/53cdd8324387114df4e2cbba871398fc23fea49a))
+* **job-runner:** fix build pack in job-runner Dockerfile ([#2064](https://github.com/rivet-gg/rivet/issues/2064)) ([c427c40](https://github.com/rivet-gg/rivet/commit/c427c4088253daec3a1990ad1567d7f8e3fb2eeb))
+* move actor state to fdb ([#2056](https://github.com/rivet-gg/rivet/issues/2056)) ([6900cf1](https://github.com/rivet-gg/rivet/commit/6900cf1f8385f42289c0df7ac011cc5d473efe59))
+* navigator on ssr pages ([#2106](https://github.com/rivet-gg/rivet/issues/2106)) ([91d9405](https://github.com/rivet-gg/rivet/commit/91d9405fb6e9c131b2e2a373ca816578008602bd))
+* **pb:** fix actor wf ([#2119](https://github.com/rivet-gg/rivet/issues/2119)) ([64085e7](https://github.com/rivet-gg/rivet/commit/64085e70faf2c2730eaefa5889f260f2502f0f66))
+* **pb:** rescheduling ([#2146](https://github.com/rivet-gg/rivet/issues/2146)) ([001653d](https://github.com/rivet-gg/rivet/commit/001653da11a0b5566bb5c901eac292c80081e029))
+* **runtime:** remove forcing tokio core count to 2 ([#2087](https://github.com/rivet-gg/rivet/issues/2087)) ([fd38a16](https://github.com/rivet-gg/rivet/commit/fd38a16d4c4f97ed32e7af17ca862efbf1fa83b3))
+* ship actor logs to correct clickhouse database & table ([#2126](https://github.com/rivet-gg/rivet/issues/2126)) ([2f3b4be](https://github.com/rivet-gg/rivet/commit/2f3b4beb797acd4e0dac40ee9c7dba645b10451c))
+* **system-test:** fix exiting after timeout in isolates ([#2138](https://github.com/rivet-gg/rivet/issues/2138)) ([b7ce0dd](https://github.com/rivet-gg/rivet/commit/b7ce0dd1fdb79a2de06aba46c5d8f2a57a474164))
+* **system-test:** fix isolates use of hono ([#2124](https://github.com/rivet-gg/rivet/issues/2124)) ([0033f49](https://github.com/rivet-gg/rivet/commit/0033f49f143acd57562efe0ed3dfa636884b0072))
+* update actor kv keys ([#2120](https://github.com/rivet-gg/rivet/issues/2120)) ([3824f89](https://github.com/rivet-gg/rivet/commit/3824f895d54f67b8b8c932d38a354e62561bfc7d))
+* use direct clickhouse urls instead of tunneled urls ([#2150](https://github.com/rivet-gg/rivet/issues/2150)) ([02a3ef3](https://github.com/rivet-gg/rivet/commit/02a3ef303f0c82f0926e089b809b8129fd2999fe))
+* various bug fixes ([#2069](https://github.com/rivet-gg/rivet/issues/2069)) ([c90e883](https://github.com/rivet-gg/rivet/commit/c90e883f4504cbe2b15e85642c59f091ae8faaac))
+* **workflows:** allow op ctx to do all the things ([#1938](https://github.com/rivet-gg/rivet/issues/1938)) ([39365d4](https://github.com/rivet-gg/rivet/commit/39365d4a08c6c6e3dfa824f1862a508cbe3e714e))
+* **workflows:** fix activity error backoff, in memory polling ([#2062](https://github.com/rivet-gg/rivet/issues/2062)) ([d29c11b](https://github.com/rivet-gg/rivet/commit/d29c11b199405d45a35d9e76cde7834f1bbfb181))
+* **workflows:** remove tagged signals from fdb driver ([#2137](https://github.com/rivet-gg/rivet/issues/2137)) ([2119e4a](https://github.com/rivet-gg/rivet/commit/2119e4aa87d5b811ab0d1fe74e1f54d6a5f9a8c4))
+
+
+### Documentation
+
+* add helm rollback troubleshooting guide ([#2123](https://github.com/rivet-gg/rivet/issues/2123)) ([ca7898f](https://github.com/rivet-gg/rivet/commit/ca7898f37ced2aa90bc3d53c47ddc14fc1003532))
+
+
+### Chores
+
+* add basic load test ([#2060](https://github.com/rivet-gg/rivet/issues/2060)) ([85d01fa](https://github.com/rivet-gg/rivet/commit/85d01fa96aed74508c4481b5458b90e2ce25fc7f))
+* add cockroachdb cluster identifier ([#2132](https://github.com/rivet-gg/rivet/issues/2132)) ([79ba98a](https://github.com/rivet-gg/rivet/commit/79ba98a58911feb2027718f8fc9ec2aacb690a21))
+* add fdb-backed sqlite driver ([#2046](https://github.com/rivet-gg/rivet/issues/2046)) ([6d3a2ee](https://github.com/rivet-gg/rivet/commit/6d3a2ee409eba723b1486bcd02637975582e38e6))
+* add load test for actor lifecycle containers ([#2110](https://github.com/rivet-gg/rivet/issues/2110)) ([e8ee5bd](https://github.com/rivet-gg/rivet/commit/e8ee5bde2bbeb1ddee5c1b67a67bb9b2cc6757bb))
+* add native fdb library to path ([#2045](https://github.com/rivet-gg/rivet/issues/2045)) ([faa7e3d](https://github.com/rivet-gg/rivet/commit/faa7e3d3eaca89e18f3200b28de4147ea92552d4))
+* add some logs ([#2133](https://github.com/rivet-gg/rivet/issues/2133)) ([c65c7ae](https://github.com/rivet-gg/rivet/commit/c65c7aeaa5503ab17dcf21600522ba6f0b2a8a69))
+* add timeout flag to docker-compose down ([#2048](https://github.com/rivet-gg/rivet/issues/2048)) ([f9efe0e](https://github.com/rivet-gg/rivet/commit/f9efe0ebdc2024c72cb9d9fbe0e0b10a48f41121))
+* add websocket example ([a5d021e](https://github.com/rivet-gg/rivet/commit/a5d021e9bc383c428f32b80864937253451a41c8))
+* ai docs blog ([#2093](https://github.com/rivet-gg/rivet/issues/2093)) ([bf17bcd](https://github.com/rivet-gg/rivet/commit/bf17bcd449e41418bc1a93a1622522518c175c5b))
+* auto-generate vendored hub when generating fern ([#2144](https://github.com/rivet-gg/rivet/issues/2144)) ([f5d99c2](https://github.com/rivet-gg/rivet/commit/f5d99c2dc0b53e4e136f7b26cdfb07a367b64ec8))
+* better stack changelog ([#2080](https://github.com/rivet-gg/rivet/issues/2080)) ([b6bfa06](https://github.com/rivet-gg/rivet/commit/b6bfa06faa15c71280fec89ca27755d2b5406d6a))
+* bump version from 5.1.2 to 25.1.3 ([#2122](https://github.com/rivet-gg/rivet/issues/2122)) ([e54c7ec](https://github.com/rivet-gg/rivet/commit/e54c7eca778f83bfb151be8246621504a5725f54))
+* change grafana port from 3000 to 3100 ([#2131](https://github.com/rivet-gg/rivet/issues/2131)) ([6e337d9](https://github.com/rivet-gg/rivet/commit/6e337d94a575cefcefa525eed6fbb4d6f706b2a6))
+* **cli:** disable shell cmd for adapter in clean envs ([#2112](https://github.com/rivet-gg/rivet/issues/2112)) ([781301d](https://github.com/rivet-gg/rivet/commit/781301d6af1295c8bd34b2fe3e794bb94d5c2323))
+* combine ds into pb ([#2089](https://github.com/rivet-gg/rivet/issues/2089)) ([cceb5f9](https://github.com/rivet-gg/rivet/commit/cceb5f997015ded02e17ab32d15f3c12863cd392))
+* edit ai docs blog ([#2095](https://github.com/rivet-gg/rivet/issues/2095)) ([5bfbe61](https://github.com/rivet-gg/rivet/commit/5bfbe61532b47b2aa8df7eec60b7492b4baebaf8))
+* **examples:** add Better Stack monitoring example ([#2077](https://github.com/rivet-gg/rivet/issues/2077)) ([2d495e4](https://github.com/rivet-gg/rivet/commit/2d495e465970af1dad31329c305011a2a24268b4))
+* **examples:** websocket example ([#2116](https://github.com/rivet-gg/rivet/issues/2116)) ([a06370e](https://github.com/rivet-gg/rivet/commit/a06370e3a13c54264ee8bea0b78da75f34655f22))
+* **hub-embed:** disable all node-related code if hub building is disabled ([#2084](https://github.com/rivet-gg/rivet/issues/2084)) ([1230f3b](https://github.com/rivet-gg/rivet/commit/1230f3bcb4a15941ff0c3d8142f76e0e4d5f5d76))
+* optimizations and such ([#2086](https://github.com/rivet-gg/rivet/issues/2086)) ([e085624](https://github.com/rivet-gg/rivet/commit/e0856241a69b744fa22e290e8220fa1d500a1cfc))
+* **pools:** remove cert hack for clickhouse ([#2148](https://github.com/rivet-gg/rivet/issues/2148)) ([a2cbf1b](https://github.com/rivet-gg/rivet/commit/a2cbf1bf4f92686b3bd2a19628ee2a997e6b680d))
+* **pools:** rewrite sqlite manager to run without locks using scc ([#2082](https://github.com/rivet-gg/rivet/issues/2082)) ([176ad21](https://github.com/rivet-gg/rivet/commit/176ad21cf22275e8322e6f1903d757a06f45f846))
+* release 25.1.3 ([ca021eb](https://github.com/rivet-gg/rivet/commit/ca021eb2ad3d367d4f96860390d46d521465ee5a))
+* release 25.2.0 ([4c5857a](https://github.com/rivet-gg/rivet/commit/4c5857a257872093b3ee7bfd6fdd10af1bee18e3))
+* release 5.1.3 ([a37b6a4](https://github.com/rivet-gg/rivet/commit/a37b6a41f73dd2d12f5c3b51ea92e4eb24c6975d))
+* **release:** update version to 25.1.3 ([7b49d63](https://github.com/rivet-gg/rivet/commit/7b49d63174623cde273266857764fae1912f1add))
+* **release:** update version to 25.2.0 ([77e28ed](https://github.com/rivet-gg/rivet/commit/77e28ed198dd1ad2b72a1c504d27d5e65338a3de))
+* **release:** update version to 5.1.3 ([6171e7f](https://github.com/rivet-gg/rivet/commit/6171e7f96d04cefaa5588af07c7b384013186c33))
+* restructure server binaries ([#1941](https://github.com/rivet-gg/rivet/issues/1941)) ([7942152](https://github.com/rivet-gg/rivet/commit/79421526f4cb66eafeb63b1cd0dd6e5753a487c8))
+* **runtime:** add otel support to runtime ([#2085](https://github.com/rivet-gg/rivet/issues/2085)) ([56a2a5e](https://github.com/rivet-gg/rivet/commit/56a2a5e7de7d3273cae3e7016c679ba22c73ac52))
+* **site:** improve orama searchbox ([#2034](https://github.com/rivet-gg/rivet/issues/2034)) ([#2100](https://github.com/rivet-gg/rivet/issues/2100)) ([d99af82](https://github.com/rivet-gg/rivet/commit/d99af825eea57403e93b82cdfca4f7bffd73db75))
+* **system-test:** add tick log every second ([#2129](https://github.com/rivet-gg/rivet/issues/2129)) ([3e07944](https://github.com/rivet-gg/rivet/commit/3e079444a43eb2d0d7b24d18c0132b5750828814))
+* update traefik port to 9000 ([#2149](https://github.com/rivet-gg/rivet/issues/2149)) ([4c41e02](https://github.com/rivet-gg/rivet/commit/4c41e02c4c2a694ccbc4bee5c886a5028c136f5e))
+* **workflows:** add gc and metrics indexes ([#1998](https://github.com/rivet-gg/rivet/issues/1998)) ([1dfdc88](https://github.com/rivet-gg/rivet/commit/1dfdc882b12b54ba33fe538b0e54ce6ed0acb6e5))
+* **workflows:** move wf gc and metrics publish into worker ([#1943](https://github.com/rivet-gg/rivet/issues/1943)) ([fe6659b](https://github.com/rivet-gg/rivet/commit/fe6659b8066e739830395a3e735ee722b3121225))
+
 ## [5.1.2](https://github.com/rivet-gg/rivet/compare/v25.1.1...v5.1.2) (2025-02-24)
 
 
