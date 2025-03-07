@@ -116,7 +116,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 		.send()
 		.await?;
 
-	let Some(client_id) =
+	let Some((client_id, client_workflow_id)) =
 		runtime::spawn_actor(ctx, input, &network_ports, &initial_actor_setup).await?
 	else {
 		ctx.msg(Failed {
@@ -138,7 +138,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 	};
 
 	let state_res = ctx
-		.loope(runtime::State::new(client_id), |ctx, state| {
+		.loope(runtime::State::new(client_workflow_id), |ctx, state| {
 			let input = input.clone();
 			let network_ports = network_ports.clone();
 
@@ -154,7 +154,8 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 							.await?;
 
 						// Kill old actor immediately
-						destroy::kill(ctx, input.actor_id, state.client_id, 0, true).await?;
+						destroy::kill(ctx, input.actor_id, state.client_workflow_id, 0, true)
+							.await?;
 
 						if let Some(sig) =
 							runtime::reschedule_actor(ctx, &input, &network_ports, state, None)
@@ -271,7 +272,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 										destroy::kill(
 											ctx,
 											input.actor_id,
-											state.client_id,
+											state.client_workflow_id,
 											0,
 											true,
 										)
@@ -317,7 +318,8 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 							.await?;
 
 						// Kill old actor immediately
-						destroy::kill(ctx, input.actor_id, state.client_id, 0, true).await?;
+						destroy::kill(ctx, input.actor_id, state.client_workflow_id, 0, true)
+							.await?;
 
 						if let Some(sig) = runtime::reschedule_actor(
 							ctx,

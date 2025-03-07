@@ -22,15 +22,15 @@ use crate::{
 
 #[derive(Deserialize, Serialize)]
 pub struct State {
-	pub client_id: Uuid,
+	pub client_workflow_id: Uuid,
 	pub drain_timeout_ts: Option<i64>,
 	pub gc_timeout_ts: Option<i64>,
 }
 
 impl State {
-	pub fn new(client_id: Uuid) -> Self {
+	pub fn new(client_workflow_id: Uuid) -> Self {
 		State {
-			client_id,
+			client_workflow_id,
 			drain_timeout_ts: None,
 			gc_timeout_ts: Some(util::timestamp::now() + ACTOR_START_THRESHOLD_MS),
 		}
@@ -140,7 +140,6 @@ async fn allocate_actor(
 
 			loop {
 				let Some(entry) = stream.try_next().await? else {
-
 					return Ok(None);
 				};
 
@@ -463,7 +462,7 @@ pub async fn spawn_actor(
 	input: &Input,
 	network_ports: &util::serde::HashableMap<String, Port>,
 	actor_setup: &setup::ActorSetupCtx,
-) -> GlobalResult<Option<Uuid>> {
+) -> GlobalResult<Option<(Uuid, Uuid)>> {
 	let Some(res) = ctx
 		.activity(AllocateActorInput {
 			actor_id: input.actor_id,
@@ -566,7 +565,7 @@ pub async fn spawn_actor(
 	.send()
 	.await?;
 
-	Ok(Some(res.client_id))
+	Ok(Some((res.client_id, res.client_workflow_id)))
 }
 
 pub async fn reschedule_actor(
@@ -629,10 +628,10 @@ pub async fn reschedule_actor(
 					}
 				}
 
-				if let Some(client_id) =
+				if let Some((_, client_workflow_id)) =
 					spawn_actor(ctx, &input, &network_ports, &actor_setup).await?
 				{
-					Ok(Loop::Break(Ok(client_id)))
+					Ok(Loop::Break(Ok(client_workflow_id)))
 				} else {
 					Ok(Loop::Continue)
 				}
@@ -641,9 +640,10 @@ pub async fn reschedule_actor(
 		})
 		.await?;
 
+	// Update loop state
 	match res {
-		Ok(client_id) => {
-			state.client_id = client_id;
+		Ok(client_workflow_id) => {
+			state.client_workflow_id = client_workflow_id;
 			Ok(None)
 		}
 		Err(sig) => Ok(Some(sig)),

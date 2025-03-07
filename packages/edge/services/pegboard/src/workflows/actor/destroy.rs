@@ -34,7 +34,7 @@ pub(crate) async fn pegboard_actor_destroy(
 	let actor = ctx.activity(UpdateDbInput {}).await?;
 
 	if let Some(actor) = actor {
-		let client_id = actor.client_id;
+		let client_workflow_id = actor.client_workflow_id;
 
 		ctx.activity(UpdateFdbInput {
 			actor_id: input.actor_id,
@@ -43,8 +43,15 @@ pub(crate) async fn pegboard_actor_destroy(
 		})
 		.await?;
 
-		if let (Some(client_id), Some(data)) = (client_id, &input.kill) {
-			kill(ctx, input.actor_id, client_id, data.kill_timeout_ms, false).await?;
+		if let (Some(client_workflow_id), Some(data)) = (client_workflow_id, &input.kill) {
+			kill(
+				ctx,
+				input.actor_id,
+				client_workflow_id,
+				data.kill_timeout_ms,
+				false,
+			)
+			.await?;
 		}
 	}
 
@@ -301,7 +308,7 @@ async fn update_fdb(ctx: &ActivityCtx, input: &UpdateFdbInput) -> GlobalResult<(
 pub(crate) async fn kill(
 	ctx: &mut WorkflowCtx,
 	actor_id: Uuid,
-	client_id: Uuid,
+	client_workflow_id: Uuid,
 	kill_timeout_ms: i64,
 	persist_storage: bool,
 ) -> GlobalResult<()> {
@@ -311,7 +318,7 @@ pub(crate) async fn kill(
 			signal: Signal::SIGTERM as i32,
 			persist_storage,
 		})
-		.tag("client_id", client_id)
+		.to_workflow_id(client_workflow_id)
 		.send()
 		.await?;
 
@@ -324,7 +331,7 @@ pub(crate) async fn kill(
 		signal: Signal::SIGKILL as i32,
 		persist_storage,
 	})
-	.tag("client_id", client_id)
+	.to_workflow_id(client_workflow_id)
 	.send()
 	.await?;
 

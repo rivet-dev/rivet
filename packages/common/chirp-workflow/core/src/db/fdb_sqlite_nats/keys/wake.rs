@@ -2,7 +2,6 @@ use std::result::Result::Ok;
 
 use anyhow::*;
 use fdb_util::prelude::*;
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -11,7 +10,6 @@ pub enum WakeCondition {
 	Deadline { deadline_ts: i64 },
 	SubWorkflow { sub_workflow_id: Uuid },
 	Signal { signal_id: Uuid },
-	TaggedSignal { signal_id: Uuid },
 }
 
 impl WakeCondition {
@@ -21,7 +19,6 @@ impl WakeCondition {
 			WakeCondition::Deadline { .. } => WakeConditionVariant::Deadline,
 			WakeCondition::SubWorkflow { .. } => WakeConditionVariant::SubWorkflow,
 			WakeCondition::Signal { .. } => WakeConditionVariant::Signal,
-			WakeCondition::TaggedSignal { .. } => WakeConditionVariant::TaggedSignal,
 		}
 	}
 
@@ -39,7 +36,6 @@ enum WakeConditionVariant {
 	Deadline = 1,
 	SubWorkflow = 2,
 	Signal = 3,
-	TaggedSignal = 4,
 }
 
 #[derive(Debug)]
@@ -140,18 +136,6 @@ impl TuplePack for WorkflowWakeConditionKey {
 				);
 				t.pack(w, tuple_depth)
 			}
-			WakeCondition::TaggedSignal { signal_id } => {
-				let t = (
-					WAKE,
-					WORKFLOW,
-					&self.workflow_name,
-					self.ts,
-					self.workflow_id,
-					self.condition.variant() as usize,
-					signal_id,
-				);
-				t.pack(w, tuple_depth)
-			}
 		}
 	}
 }
@@ -216,19 +200,6 @@ impl<'de> TupleUnpack<'de> for WorkflowWakeConditionKey {
 					},
 				)
 			}
-			WakeConditionVariant::TaggedSignal => {
-				let (input, signal_id) = Uuid::unpack(input, tuple_depth)?;
-
-				(
-					input,
-					WorkflowWakeConditionKey {
-						workflow_name,
-						ts,
-						workflow_id,
-						condition: WakeCondition::TaggedSignal { signal_id },
-					},
-				)
-			}
 		};
 
 		Ok((input, v))
@@ -273,100 +244,6 @@ impl TuplePack for WorkflowWakeConditionSubspaceKey {
 		}
 
 		Ok(offset)
-	}
-}
-
-#[derive(Debug)]
-pub struct TaggedSignalWakeKey {
-	pub signal_name: String,
-	/// For ordering.
-	pub ts: i64,
-	pub workflow_id: Uuid,
-}
-
-impl TaggedSignalWakeKey {
-	pub fn new(signal_name: String, workflow_id: Uuid) -> Self {
-		TaggedSignalWakeKey {
-			signal_name,
-			ts: rivet_util::timestamp::now(),
-			workflow_id,
-		}
-	}
-
-	pub fn subspace(signal_name: String) -> TaggedSignalWakeSubspaceKey {
-		TaggedSignalWakeSubspaceKey::new(signal_name)
-	}
-}
-
-impl FormalKey for TaggedSignalWakeKey {
-	/// Workflow name and tags.
-	type Value = TaggedSignalWakeData;
-
-	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
-		serde_json::from_slice(raw).map_err(Into::into)
-	}
-
-	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
-		serde_json::to_vec(&value).map_err(Into::into)
-	}
-}
-
-impl TuplePack for TaggedSignalWakeKey {
-	fn pack<W: std::io::Write>(
-		&self,
-		w: &mut W,
-		tuple_depth: TupleDepth,
-	) -> std::io::Result<VersionstampOffset> {
-		let t = (
-			WAKE,
-			TAGGED_SIGNAL,
-			&self.signal_name,
-			self.ts,
-			self.workflow_id,
-		);
-		t.pack(w, tuple_depth)
-	}
-}
-
-impl<'de> TupleUnpack<'de> for TaggedSignalWakeKey {
-	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, _, signal_name, ts, workflow_id)) =
-			<(usize, usize, String, i64, Uuid)>::unpack(input, tuple_depth)?;
-		let v = TaggedSignalWakeKey {
-			signal_name,
-			ts,
-			workflow_id,
-		};
-
-		Ok((input, v))
-	}
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct TaggedSignalWakeData {
-	pub workflow_name: String,
-	pub tags: Vec<(String, String)>,
-}
-
-#[derive(Debug)]
-pub struct TaggedSignalWakeSubspaceKey {
-	signal_name: String,
-}
-
-impl TaggedSignalWakeSubspaceKey {
-	pub fn new(signal_name: String) -> Self {
-		TaggedSignalWakeSubspaceKey { signal_name }
-	}
-}
-
-impl TuplePack for TaggedSignalWakeSubspaceKey {
-	fn pack<W: std::io::Write>(
-		&self,
-		w: &mut W,
-		tuple_depth: TupleDepth,
-	) -> std::io::Result<VersionstampOffset> {
-		let t = (WAKE, TAGGED_SIGNAL, &self.signal_name);
-		t.pack(w, tuple_depth)
 	}
 }
 

@@ -219,69 +219,29 @@ impl DatabaseFdbSqliteNats {
 		for signal_id in signal_ids {
 			// NOTE: Do a single range read instead
 			let name_key = keys::signal::NameKey::new(signal_id);
-			let tags_subspace_key = keys::signal::TagKey::subspace(signal_id);
-			let tags_subspace = self.subspace.subspace(&tags_subspace_key);
 			let create_ts_key = keys::signal::CreateTsKey::new(signal_id);
 			let body_key = keys::signal::BodyKey::new(signal_id);
 			let body_subspace = self.subspace.subspace(&body_key);
 			let ack_ts_key = keys::signal::AckTsKey::new(signal_id);
 			let workflow_id_key = keys::signal::WorkflowIdKey::new(signal_id);
 
-			let (name_entry, tags, workflow_id_entry, create_ts_entry, body_chunks, ack_ts_entry) =
-				tokio::try_join!(
-					async {
-						tx.get(&self.subspace.pack(&name_key), SNAPSHOT)
-							.await
-							.map_err(Into::into)
-					},
+			let (name_entry, workflow_id_entry, create_ts_entry, body_chunks, ack_ts_entry) = tokio::try_join!(
+				tx.get(&self.subspace.pack(&name_key), SNAPSHOT),
+				tx.get(&self.subspace.pack(&workflow_id_key), SNAPSHOT),
+				tx.get(&self.subspace.pack(&create_ts_key), SNAPSHOT),
+				async {
 					tx.get_ranges_keyvalues(
 						fdb::RangeOption {
 							mode: StreamingMode::WantAll,
-							..(&tags_subspace).into()
+							..(&body_subspace).into()
 						},
 						SNAPSHOT,
 					)
-					.map(|res| match res {
-						Ok(entry) => {
-							let key = self
-								.subspace
-								.unpack::<keys::signal::TagKey>(entry.key())
-								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
-							let v = serde_json::Value::String(key.v.clone());
-
-							Ok((key.k, v))
-						}
-						Err(err) => Err(Into::<fdb::FdbBindingError>::into(err)),
-					})
-					.try_collect::<serde_json::Map<_, _>>(),
-					async {
-						tx.get(&self.subspace.pack(&workflow_id_key), SNAPSHOT)
-							.await
-							.map_err(Into::into)
-					},
-					async {
-						tx.get(&self.subspace.pack(&create_ts_key), SNAPSHOT)
-							.await
-							.map_err(Into::into)
-					},
-					async {
-						tx.get_ranges_keyvalues(
-							fdb::RangeOption {
-								mode: StreamingMode::WantAll,
-								..(&body_subspace).into()
-							},
-							SNAPSHOT,
-						)
-						.try_collect::<Vec<_>>()
-						.await
-						.map_err(Into::into)
-					},
-					async {
-						tx.get(&self.subspace.pack(&ack_ts_key), SNAPSHOT)
-							.await
-							.map_err(Into::into)
-					},
-				)?;
+					.try_collect::<Vec<_>>()
+					.await
+				},
+				tx.get(&self.subspace.pack(&ack_ts_key), SNAPSHOT),
+			)?;
 
 			let Some(create_ts_entry) = &create_ts_entry else {
 				tracing::warn!(?signal_id, "signal not found");
@@ -321,7 +281,7 @@ impl DatabaseFdbSqliteNats {
 			res.push(SignalData {
 				signal_id,
 				signal_name,
-				tags: Some(serde_json::Value::Object(tags)),
+				tags: None,
 				workflow_id,
 				create_ts,
 				body: serde_json::from_str(body.get())
@@ -799,7 +759,7 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 	#[tracing::instrument(skip_all)]
 	async fn find_signals(
 		&self,
-		tags: &[(String, String)],
+		_tags: &[(String, String)],
 		workflow_id: Option<Uuid>,
 		name: Option<&str>,
 		state: Option<SignalState>,
@@ -826,7 +786,6 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 					);
 
 					let mut current_signal_id = None;
-					let mut matching_tags = 0;
 					let mut name_matches = name.is_none();
 					let mut workflow_id_matches = workflow_id.is_none();
 					let mut state_matches = state.is_none() || state == Some(SignalState::Pending);
@@ -840,10 +799,7 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 						if let Some(curr) = current_signal_id {
 							if signal_id != curr {
 								// Save if matches query
-								if matching_tags == tags.len()
-									&& name_matches && workflow_id_matches
-									&& state_matches
-								{
+								if name_matches && workflow_id_matches && state_matches {
 									signal_ids.push(curr);
 
 									if signal_ids.len() >= 100 {
@@ -853,7 +809,6 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 								}
 
 								// Reset state
-								matching_tags = 0;
 								name_matches = name.is_none();
 								workflow_id_matches = workflow_id.is_none();
 								state_matches =
@@ -863,13 +818,7 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 
 						current_signal_id = Some(signal_id);
 
-						if let Ok(tag_key) =
-							self.subspace.unpack::<keys::signal::TagKey>(entry.key())
-						{
-							if tags.iter().any(|(k, v)| &tag_key.k == k && &tag_key.v == v) {
-								matching_tags += 1;
-							}
-						} else if let Ok(name_key) =
+						if let Ok(name_key) =
 							self.subspace.unpack::<keys::signal::NameKey>(entry.key())
 						{
 							if let Some(name) = &name {
@@ -904,9 +853,7 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 
 					if let (Some(signal_id), true) = (
 						current_signal_id,
-						matching_tags == tags.len()
-							&& name_matches && workflow_id_matches
-							&& state_matches,
+						name_matches && workflow_id_matches && state_matches,
 					) {
 						signal_ids.push(signal_id);
 					}
