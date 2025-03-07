@@ -578,6 +578,8 @@ pub mod matchmaker_region_info;
 pub use self::matchmaker_region_info::MatchmakerRegionInfo;
 pub mod matchmaker_region_statistics;
 pub use self::matchmaker_region_statistics::MatchmakerRegionStatistics;
+pub mod pagination;
+pub use self::pagination::Pagination;
 pub mod portal_get_game_profile_response;
 pub use self::portal_get_game_profile_response::PortalGetGameProfileResponse;
 pub mod portal_get_suggested_games_response;

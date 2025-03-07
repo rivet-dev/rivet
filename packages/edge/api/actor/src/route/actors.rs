@@ -1,4 +1,4 @@
-use std::collections::{HashMap};
+use std::collections::HashMap;
 
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use futures_util::{StreamExt, TryStreamExt};
@@ -414,20 +414,23 @@ pub async fn upgrade_all(
 
 	// Work in batches
 	let mut count = 0;
-	let mut cursor = None;
+	let mut created_before = None;
 	loop {
 		let list_res = ctx
 			.op(pegboard::ops::actor::list_for_env::Input {
 				env_id,
 				tags: tags.clone(),
 				include_destroyed: false,
-				cursor,
+				created_before,
 				limit: 10_000,
 			})
 			.await?;
 
-		count += list_res.actor_ids.len();
-		cursor = list_res.actor_ids.last().cloned();
+		count += list_res.actors.len();
+
+		// TODO: Subtracting a ms might skip an actor in a rare edge case, need to build compound
+		// cursor of [created_at, actor_id] that we pass to the fdb range
+		created_before = list_res.actors.last().map(|x| x.create_ts - 1);
 
 		// TODO: Add back once we figure out how to cleanly handle if a wf is already complete when
 		// upgrading
@@ -439,13 +442,13 @@ pub async fn upgrade_all(
 		// 	.try_collect::<Vec<_>>()
 		// 	.await?;
 
-		futures_util::stream::iter(list_res.actor_ids)
-			.map(|actor_id| {
+		futures_util::stream::iter(list_res.actors)
+			.map(|actor| {
 				ctx.signal(pegboard::workflows::actor::Upgrade {
 					image_id: build.build_id,
 				})
 				.to_workflow::<pegboard::workflows::actor::Workflow>()
-				.tag("actor_id", actor_id)
+				.tag("actor_id", actor.actor_id)
 				.send()
 			})
 			.buffer_unordered(32)
@@ -475,7 +478,8 @@ pub struct ListQuery {
 	global_endpoint_type: GlobalEndpointTypeQuery,
 	tags_json: Option<String>,
 	include_destroyed: Option<bool>,
-	cursor: Option<Uuid>,
+	/// Before create timestamp
+	cursor: Option<String>,
 }
 
 pub async fn list_actors(
@@ -503,6 +507,8 @@ async fn list_actors_inner(
 		)
 		.await?;
 
+	let created_before = query.cursor.map(|x| x.parse::<i64>()).transpose()?;
+
 	let include_destroyed = query.include_destroyed.unwrap_or(false);
 
 	let tags = unwrap_with!(
@@ -521,22 +527,21 @@ async fn list_actors_inner(
 			env_id,
 			tags,
 			include_destroyed,
-			cursor: query.cursor,
-			// HACK: Until we have webhooks, there needs to be a good way to get all of the most
-			// recent crashed actors. 10k is a high limit intentionally.
-			limit: if include_destroyed { 64 } else { 10_000 },
+			created_before,
+			limit: 32
 		})
 		.await?;
 
-	let actors_res = ctx
+	let mut actors_res = ctx
 		.op(pegboard::ops::actor::get::Input {
-			actor_ids: list_res.actor_ids.clone(),
+			actor_ids: list_res.actors.iter().map(|x| x.actor_id).collect(),
 			endpoint_type: query
 				.global_endpoint_type
 				.endpoint_type
 				.map(ApiInto::api_into),
 		})
 		.await?;
+	actors_res.actors.sort_by_key(|x| -x.create_ts);
 
 	let dc_id = ctx.config().server()?.rivet.edge()?.datacenter_id;
 	let dc_res = ctx
@@ -546,13 +551,23 @@ async fn list_actors_inner(
 		.await?;
 	let dc = unwrap!(dc_res.datacenters.first());
 
+	// TODO: Subtracting a ms might skip an actor in a rare edge case, need to build compound
+	// cursor of [created_at, actor_id] that we pass to the fdb range
+	let cursor = actors_res
+		.actors
+		.last()
+		.map(|x| (x.create_ts - 1).to_string());
+
 	let actors = actors_res
 		.actors
 		.into_iter()
 		.map(|a| pegboard::types::convert_actor_to_api(a, &dc))
 		.collect::<GlobalResult<Vec<_>>>()?;
 
-	Ok(models::ActorListActorsResponse { actors: actors })
+	Ok(models::ActorListActorsResponse {
+		actors: actors,
+		pagination: Box::new(models::Pagination { cursor }),
+	})
 }
 
 async fn resolve_build(

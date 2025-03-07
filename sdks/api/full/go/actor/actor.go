@@ -6,6 +6,7 @@ import (
 	json "encoding/json"
 	fmt "fmt"
 	uuid "github.com/google/uuid"
+	sdk "sdk"
 	core "sdk/core"
 )
 
@@ -133,7 +134,8 @@ func (g *GetActorResponse) String() string {
 
 type ListActorsResponse struct {
 	// A list of actors for the project associated with the token.
-	Actors []*Actor `json:"actors,omitempty"`
+	Actors     []*Actor        `json:"actors,omitempty"`
+	Pagination *sdk.Pagination `json:"pagination,omitempty"`
 
 	_rawJSON json.RawMessage
 }

@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug)]
 pub struct ActorKey {
 	environment_id: Uuid,
-	create_ts: i64,
+	pub create_ts: i64,
 	pub actor_id: Uuid,
 }
 

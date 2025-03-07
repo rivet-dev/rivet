@@ -24,7 +24,8 @@ pub fn setup(config: Config) -> Result<Option<ClickHousePool>, Error> {
 			.unwrap();
 
 		// Build HTTPs connector
-		let https_connector = hyper_tls::HttpsConnector::from((http_connector, tls_connector.into()));
+		let https_connector =
+			hyper_tls::HttpsConnector::from((http_connector, tls_connector.into()));
 
 		let http_client = hyper::Client::builder()
 			.pool_idle_timeout(Duration::from_secs(2))

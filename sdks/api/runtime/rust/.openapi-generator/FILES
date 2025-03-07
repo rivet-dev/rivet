@@ -41,6 +41,7 @@ docs/ActorUpgradeActorRequest.md
 docs/ActorUpgradeAllActorsRequest.md
 docs/ActorUpgradeAllActorsResponse.md
 docs/ErrorBody.md
+docs/Pagination.md
 docs/UploadPrepareFile.md
 docs/UploadPresignedRequest.md
 docs/WatchResponse.md
@@ -87,6 +88,7 @@ src/models/actor_upgrade_all_actors_request.rs
 src/models/actor_upgrade_all_actors_response.rs
 src/models/error_body.rs
 src/models/mod.rs
+src/models/pagination.rs
 src/models/upload_prepare_file.rs
 src/models/upload_presigned_request.rs
 src/models/watch_response.rs

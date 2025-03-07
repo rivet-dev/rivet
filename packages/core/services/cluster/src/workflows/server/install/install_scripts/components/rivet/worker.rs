@@ -8,8 +8,8 @@ use super::{
 		fdb::FDB_VERSION,
 		traefik::{
 			TUNNEL_CLICKHOUSE_NATIVE_PORT, TUNNEL_CLICKHOUSE_PORT, TUNNEL_CRDB_PORT,
-			TUNNEL_NATS_PORT, TUNNEL_PROMETHEUS_PORT, TUNNEL_REDIS_EPHEMERAL_PORT,
-			TUNNEL_REDIS_PERSISTENT_PORT, TUNNEL_S3_PORT, TUNNEL_OTEL_PORT,
+			TUNNEL_NATS_PORT, TUNNEL_OTEL_PORT, TUNNEL_PROMETHEUS_PORT,
+			TUNNEL_REDIS_EPHEMERAL_PORT, TUNNEL_REDIS_PERSISTENT_PORT, TUNNEL_S3_PORT,
 		},
 	},
 	TUNNEL_API_EDGE_PORT,
@@ -139,10 +139,10 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 	edge_config_json["server"]["rivet"]["edge"]["datacenter_id"] = "___DATACENTER_ID___".into();
 	edge_config_json["server"]["rivet"]["edge"]["server_id"] = "___SERVER_ID___".into();
 
-	Ok(
-		include_str!("../../files/rivet_worker_configure.sh").replace(
+	Ok(include_str!("../../files/rivet_worker_configure.sh")
+		.replace(
 			"__RIVET_EDGE_CONFIG__",
 			&serde_json::to_string_pretty(&edge_config_json)?,
-		).replace("__OTEL_PORT__", &TUNNEL_OTEL_PORT.to_string()),
-	)
+		)
+		.replace("__OTEL_PORT__", &TUNNEL_OTEL_PORT.to_string()))
 }

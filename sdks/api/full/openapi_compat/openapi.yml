@@ -193,7 +193,6 @@ paths:
           required: false
           schema:
             type: string
-            format: uuid
       responses:
         '200':
           description: ''
@@ -9098,8 +9097,11 @@ components:
           items:
             $ref: '#/components/schemas/ActorActor'
           description: A list of actors for the project associated with the token.
+        pagination:
+          $ref: '#/components/schemas/Pagination'
       required:
         - actors
+        - pagination
     CloudBootstrapResponse:
       type: object
       properties:
@@ -12408,6 +12410,11 @@ components:
         - code
         - message
         - ray_id
+    Pagination:
+      type: object
+      properties:
+        cursor:
+          type: string
     GameHandle:
       type: object
       properties:

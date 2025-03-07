@@ -57,10 +57,7 @@ pub async fn run_standalone(config: Config) -> GlobalResult<()> {
 }
 
 #[tracing::instrument(skip_all)]
-async fn serve_req(
-	config: &Config,
-	req: Request<Body>,
-) -> Result<Response<Body>, Infallible> {
+async fn serve_req(config: &Config, req: Request<Body>) -> Result<Response<Body>, Infallible> {
 	match serve_req_fallible(config, req).await {
 		Ok(res) => Ok(res),
 		Err(_) => Ok(Response::builder()
@@ -71,7 +68,10 @@ async fn serve_req(
 }
 
 #[tracing::instrument(skip_all)]
-pub async fn serve_req_fallible(config: &Config, req: Request<Body>) -> Result<Response<Body>, Request<Body>> {
+pub async fn serve_req_fallible(
+	config: &Config,
+	req: Request<Body>,
+) -> Result<Response<Body>, Request<Body>> {
 	let res = if req.uri().path() == "/health/liveness" {
 		status::liveness::route().await
 	} else if let (Some(pools), "/health/essential") = (config.pools.clone(), req.uri().path()) {

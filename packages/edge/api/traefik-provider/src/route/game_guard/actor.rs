@@ -1,10 +1,10 @@
 use api_core_traefik_provider::types;
 use api_helper::ctx::Ctx;
 use cluster::types::GuardPublicHostname;
-use pegboard::types::{EndpointType, GameGuardProtocol};
 use fdb_util::{FormalKey, SNAPSHOT};
 use foundationdb::{self as fdb, options::StreamingMode};
 use futures_util::{StreamExt, TryStreamExt};
+use pegboard::types::{EndpointType, GameGuardProtocol};
 use rivet_operation::prelude::*;
 use std::{
 	collections::hash_map::DefaultHasher,

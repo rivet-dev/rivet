@@ -61,6 +61,5 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	// Set the path in the env
 	println!("cargo:rustc-env=HUB_PATH={}", out_dir.display());
 
-
 	Ok(())
 }

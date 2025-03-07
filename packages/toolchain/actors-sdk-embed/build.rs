@@ -36,7 +36,6 @@ async fn main() -> Result<()> {
 		fs::remove_dir_all(&dist_path).context("fs::remove_dir_all")?;
 	}
 
-
 	if std::env::var("RIVET_SKIP_BUILD_HUB").is_err() {
 		// Build manager dependencies (required for building the manager itself)
 		let output = tokio::process::Command::new("yarn")

@@ -685,7 +685,7 @@ pub struct ListQuery {
 	global_endpoint_type: GlobalEndpointTypeQuery,
 	tags_json: Option<String>,
 	include_destroyed: Option<bool>,
-	cursor: Option<Uuid>,
+	cursor: Option<String>,
 }
 
 pub async fn list_actors(
@@ -801,7 +801,7 @@ async fn list_actors_inner(
 				query.global_endpoint_type.endpoint_type,
 				query.tags_json.as_deref(),
 				query.include_destroyed,
-				query.cursor.map(|x| x.to_string()).as_deref(),
+				query.cursor.as_deref(),
 			)
 			.await
 			{
@@ -832,12 +832,30 @@ async fn list_actors_inner(
 		})
 		.await?;
 
+	// Shorten array since returning all actors from all regions could end up returning `regions *
+	// 32` results, which is a lot.
+	actors.truncate(32);
+
 	// Sort by create ts desc
 	//
 	// This is an ISO 8601 string and is safely sortable
 	actors.sort_by_cached_key(|x| std::cmp::Reverse(x.created_at.clone()));
 
-	Ok(models::ActorListActorsResponse { actors })
+	// TODO: Subtracting a ms might skip an actor in a rare edge case, need to build compound
+	// cursor of [created_at, actor_id] that we pass to the fdb range
+	let cursor = actors.last().map(|x| {
+		let datetime = x
+			.created_at
+			.parse::<chrono::DateTime<chrono::Utc>>()
+			.unwrap_or_default();
+		let unix_ts = datetime.timestamp_millis() - 1;
+		unix_ts.to_string()
+	});
+
+	Ok(models::ActorListActorsResponse {
+		actors,
+		pagination: Box::new(models::Pagination { cursor }),
+	})
 }
 
 pub async fn list_servers_deprecated(

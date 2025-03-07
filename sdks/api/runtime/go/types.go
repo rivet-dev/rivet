@@ -45,6 +45,35 @@ func (e *ErrorBody) String() string {
 // Unstructured metadata relating to an error. Must be manually parsed.
 type ErrorMetadata = interface{}
 
+type Pagination struct {
+	Cursor *string `json:"cursor,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (p *Pagination) UnmarshalJSON(data []byte) error {
+	type unmarshaler Pagination
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*p = Pagination(value)
+	p._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (p *Pagination) String() string {
+	if len(p._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(p._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(p); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", p)
+}
+
 // RFC3339 timestamp
 type Timestamp = time.Time
 

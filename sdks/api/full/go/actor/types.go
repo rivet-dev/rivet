@@ -49,7 +49,7 @@ type GetActorsRequestQuery struct {
 	EndpointType     *EndpointType `json:"-"`
 	TagsJson         *string       `json:"-"`
 	IncludeDestroyed *bool         `json:"-"`
-	Cursor           *uuid.UUID    `json:"-"`
+	Cursor           *string       `json:"-"`
 }
 
 type BuildCompression string

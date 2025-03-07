@@ -329,6 +329,7 @@ docs/MatchmakerPlayersConnectedRequest.md
 docs/MatchmakerRegionInfo.md
 docs/MatchmakerRegionStatistics.md
 docs/MatchmakerRegionsApi.md
+docs/Pagination.md
 docs/PortalGamesApi.md
 docs/PortalGetGameProfileResponse.md
 docs/PortalGetSuggestedGamesResponse.md
@@ -719,6 +720,7 @@ src/models/matchmaker_players_connected_request.rs
 src/models/matchmaker_region_info.rs
 src/models/matchmaker_region_statistics.rs
 src/models/mod.rs
+src/models/pagination.rs
 src/models/portal_get_game_profile_response.rs
 src/models/portal_get_suggested_games_response.rs
 src/models/portal_notification_register_firebase_service.rs

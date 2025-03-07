@@ -12,3 +12,4 @@ export * from "./ValidationError";
 export * from "./EmptyObject";
 export * from "./ErrorMetadata";
 export * from "./ErrorBody";
+export * from "./Pagination";

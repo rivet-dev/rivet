@@ -1,7 +1,6 @@
 pub mod actor;
 pub mod build;
 pub mod deno;
-pub mod shell;
 pub mod deploy;
 pub mod environment;
 pub mod init;
@@ -11,6 +10,7 @@ pub mod manager;
 pub mod metadata;
 pub mod project;
 pub mod region;
+pub mod shell;
 
 use anyhow::*;
 use clap::Parser;

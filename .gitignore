@@ -3,6 +3,7 @@
 # Make sure to update .dockerignore appropriately
 
 **/.DS_Store
+**/*.tmp
 
 # Env
 .env*.local

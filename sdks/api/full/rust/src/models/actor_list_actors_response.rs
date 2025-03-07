@@ -13,10 +13,18 @@ pub struct ActorListActorsResponse {
 	/// A list of actors for the project associated with the token.
 	#[serde(rename = "actors")]
 	pub actors: Vec<crate::models::ActorActor>,
+	#[serde(rename = "pagination")]
+	pub pagination: Box<crate::models::Pagination>,
 }
 
 impl ActorListActorsResponse {
-	pub fn new(actors: Vec<crate::models::ActorActor>) -> ActorListActorsResponse {
-		ActorListActorsResponse { actors }
+	pub fn new(
+		actors: Vec<crate::models::ActorActor>,
+		pagination: crate::models::Pagination,
+	) -> ActorListActorsResponse {
+		ActorListActorsResponse {
+			actors,
+			pagination: Box::new(pagination),
+		}
 	}
 }

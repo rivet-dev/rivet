@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use chirp_workflow::prelude::*;
-use fdb_util::{FormalKey, SERIALIZABLE, SNAPSHOT};
+use fdb_util::{FormalKey, SNAPSHOT};
 use foundationdb::{self as fdb, options::StreamingMode};
 use futures_util::TryStreamExt;
 
@@ -12,13 +12,19 @@ pub struct Input {
 	pub env_id: Uuid,
 	pub tags: HashMap<String, String>,
 	pub include_destroyed: bool,
-	pub cursor: Option<Uuid>,
+	pub created_before: Option<i64>,
 	pub limit: usize,
 }
 
 #[derive(Debug)]
 pub struct Output {
-	pub actor_ids: Vec<Uuid>,
+	pub actors: Vec<ActorEntry>,
+}
+
+#[derive(Debug)]
+pub struct ActorEntry {
+	pub actor_id: Uuid,
+	pub create_ts: i64,
 }
 
 #[operation]
@@ -26,7 +32,7 @@ pub async fn pegboard_actor_list_for_env(
 	ctx: &OperationCtx,
 	input: &Input,
 ) -> GlobalResult<Output> {
-	let actor_ids = ctx
+	let actors = ctx
 		.fdb()
 		.await?
 		.run(|tx, _mc| async move {
@@ -34,26 +40,12 @@ pub async fn pegboard_actor_list_for_env(
 				keys::subspace().subspace(&keys::env::ActorKey::subspace(input.env_id));
 			let (start, end) = actor_subspace.range();
 
-			let end = if let Some(actor_id) = input.cursor {
-				let create_ts_key = keys::actor::CreateTsKey::new(actor_id);
-
-				// Get create ts of cursor
-				if let Some(entry) = tx
-					.get(&keys::subspace().pack(&create_ts_key), SERIALIZABLE)
-					.await?
-				{
-					let create_ts = create_ts_key
-						.deserialize(&entry)
-						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
-
-					keys::subspace().pack(&keys::env::ActorKey::new(
-						input.env_id,
-						create_ts,
-						actor_id,
-					))
-				} else {
-					end
-				}
+			let end = if let Some(created_before) = input.created_before {
+				keys::subspace().pack(&keys::env::ActorKey::new(
+					input.env_id,
+					created_before,
+					Uuid::nil(),
+				))
 			} else {
 				end
 			};
@@ -85,7 +77,10 @@ pub async fn pegboard_actor_list_for_env(
 						.all(|(k, v)| data.tags.iter().any(|(k2, v2)| k == k2 && v == v2));
 
 					if tags_match {
-						results.push(actor_key.actor_id);
+						results.push(ActorEntry {
+							actor_id: actor_key.actor_id,
+							create_ts: actor_key.create_ts,
+						});
 
 						if results.len() == input.limit {
 							break;
@@ -98,5 +93,5 @@ pub async fn pegboard_actor_list_for_env(
 		})
 		.await?;
 
-	Ok(Output { actor_ids })
+	Ok(Output { actors })
 }

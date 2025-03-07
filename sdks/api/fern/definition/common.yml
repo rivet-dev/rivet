@@ -108,3 +108,8 @@ types:
       ray_id: string
       documentation: optional<string>
       metadata: optional<ErrorMetadata>
+  
+  Pagination:
+    properties:
+      cursor: optional<string>
+

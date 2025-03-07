@@ -129,7 +129,7 @@ Name | Type | Description  | Required | Notes
 **endpoint_type** | Option<[**ActorEndpointType**](.md)> |  |  |
 **tags_json** | Option<**String**> |  |  |
 **include_destroyed** | Option<**bool**> |  |  |
-**cursor** | Option<**uuid::Uuid**> |  |  |
+**cursor** | Option<**String**> |  |  |
 
 ### Return type
 

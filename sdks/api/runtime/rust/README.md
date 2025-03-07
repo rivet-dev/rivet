@@ -77,6 +77,7 @@ Class | Method | HTTP request | Description
  - [ActorUpgradeAllActorsRequest](docs/ActorUpgradeAllActorsRequest.md)
  - [ActorUpgradeAllActorsResponse](docs/ActorUpgradeAllActorsResponse.md)
  - [ErrorBody](docs/ErrorBody.md)
+ - [Pagination](docs/Pagination.md)
  - [UploadPrepareFile](docs/UploadPrepareFile.md)
  - [UploadPresignedRequest](docs/UploadPresignedRequest.md)
  - [WatchResponse](docs/WatchResponse.md)

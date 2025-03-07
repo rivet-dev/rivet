@@ -18,10 +18,7 @@ impl std::fmt::Display for ClientFlavor {
 	}
 }
 
-pub async fn install(
-	config: &rivet_config::Config,
-	flavor: ClientFlavor,
-) -> GlobalResult<String> {
+pub async fn install(config: &rivet_config::Config, flavor: ClientFlavor) -> GlobalResult<String> {
 	let provision_config = &config.server()?.rivet.provision()?;
 
 	Ok(include_str!("../files/pegboard_install.sh")
@@ -41,22 +38,15 @@ pub async fn install(
 		.replace("__FDB_VERSION__", FDB_VERSION))
 }
 
-pub fn configure(
-	config: &rivet_config::Config,
-	flavor: ClientFlavor,
-) -> GlobalResult<String> {
+pub fn configure(config: &rivet_config::Config, flavor: ClientFlavor) -> GlobalResult<String> {
 	let provision_config = config.server()?.rivet.provision()?;
 
 	let origin_api =
 		util::url::to_string_without_slash(&config.server()?.rivet.api_public.public_origin());
 
 	let pb_reserved_memory = match flavor {
-		ClientFlavor::Container => {
-			server_spec::PEGBOARD_CONTAINER_RESERVE_MEMORY_MIB
-		}
-		ClientFlavor::Isolate => {
-			server_spec::PEGBOARD_ISOLATE_RESERVE_MEMORY_MIB
-		}
+		ClientFlavor::Container => server_spec::PEGBOARD_CONTAINER_RESERVE_MEMORY_MIB,
+		ClientFlavor::Isolate => server_spec::PEGBOARD_ISOLATE_RESERVE_MEMORY_MIB,
 	};
 
 	Ok(include_str!("../files/pegboard_configure.sh")

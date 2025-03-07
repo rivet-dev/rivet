@@ -6,16 +6,19 @@ import * as serializers from "../../../index";
 import * as Rivet from "../../../../api/index";
 import * as core from "../../../../core";
 import { Actor } from "../resources/common/types/Actor";
+import { Pagination } from "../../common/types/Pagination";
 
 export const ListActorsResponse: core.serialization.ObjectSchema<
     serializers.actor.ListActorsResponse.Raw,
     Rivet.actor.ListActorsResponse
 > = core.serialization.object({
     actors: core.serialization.list(Actor),
+    pagination: Pagination,
 });
 
 export declare namespace ListActorsResponse {
     interface Raw {
         actors: Actor.Raw[];
+        pagination: Pagination.Raw;
     }
 }

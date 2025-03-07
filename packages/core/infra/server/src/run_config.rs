@@ -203,12 +203,16 @@ pub fn config(rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 		},
 		SqlService {
 			kind: SqlServiceKind::CockroachDB,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../../edge/services/pegboard/db/pegboard2"),
+			migrations: include_dir!(
+				"$CARGO_MANIFEST_DIR/../../../edge/services/pegboard/db/pegboard2"
+			),
 			db_name: "db_pegboard2",
 		},
 		SqlService {
 			kind: SqlServiceKind::ClickHouse,
-			migrations: include_dir!("$CARGO_MANIFEST_DIR/../../../edge/services/pegboard/db/actor-log"),
+			migrations: include_dir!(
+				"$CARGO_MANIFEST_DIR/../../../edge/services/pegboard/db/actor-log"
+			),
 			db_name: "db_pegboard_actor_log",
 		},
 		SqlService {

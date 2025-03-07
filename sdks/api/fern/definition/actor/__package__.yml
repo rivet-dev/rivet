@@ -1,7 +1,8 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/fern-api/fern/main/fern.schema.json
 
 imports:
-  commons: common.yml
+  commons: ../common.yml
+  localCommons: common.yml
 
 service:
   auth: true
@@ -22,7 +23,7 @@ service:
         query-parameters:
           project: optional<string>
           environment: optional<string>
-          endpoint_type: optional<commons.EndpointType>
+          endpoint_type: optional<localCommons.EndpointType>
       response: GetActorResponse
 
     list:
@@ -36,10 +37,10 @@ service:
         query-parameters:
           project: optional<string>
           environment: optional<string>
-          endpoint_type: optional<commons.EndpointType>
+          endpoint_type: optional<localCommons.EndpointType>
           tags_json: optional<string>
           include_destroyed: optional<boolean>
-          cursor: optional<uuid>
+          cursor: optional<string>
       response: ListActorsResponse
 
     create:
@@ -52,7 +53,7 @@ service:
         query-parameters:
           project: optional<string>
           environment: optional<string>
-          endpoint_type: optional<commons.EndpointType>
+          endpoint_type: optional<localCommons.EndpointType>
       response: CreateActorResponse
 
     destroy:
@@ -107,7 +108,7 @@ service:
 types:
   GetActorResponse:
     properties:
-      actor: commons.Actor
+      actor: localCommons.Actor
 
   CreateActorRequest:
     properties:
@@ -117,8 +118,8 @@ types:
       build_tags: optional<unknown>
       runtime: optional<CreateActorRuntimeRequest>
       network: optional<CreateActorNetworkRequest>
-      resources: optional<commons.Resources>
-      lifecycle: optional<commons.Lifecycle>
+      resources: optional<localCommons.Resources>
+      lifecycle: optional<localCommons.Lifecycle>
 
   CreateActorRuntimeRequest:
     properties:
@@ -127,20 +128,20 @@ types:
 
   CreateActorNetworkRequest:
     properties:
-      mode: optional<commons.NetworkMode>
+      mode: optional<localCommons.NetworkMode>
       ports: optional<map<string, CreateActorPortRequest>>
 
   CreateActorPortRequest:
     properties:
-      protocol: commons.PortProtocol
+      protocol: localCommons.PortProtocol
       internal_port: optional<integer>
-      routing: optional<commons.PortRouting>
+      routing: optional<localCommons.PortRouting>
 
   CreateActorResponse:
     properties:
       actor:
         docs: The actor that was created
-        type: commons.Actor
+        type: localCommons.Actor
 
   DestroyActorResponse:
     properties: {}
@@ -167,4 +168,6 @@ types:
     properties:
       actors:
         docs: A list of actors for the project associated with the token.
-        type: list<commons.Actor>
+        type: list<localCommons.Actor>
+      pagination: commons.Pagination
+

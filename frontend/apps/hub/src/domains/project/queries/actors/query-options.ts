@@ -48,8 +48,7 @@ export const projectActorsQueryOptions = ({
 			),
 		select: (data) => data.pages.flatMap((page) => page.actors || []),
 		getNextPageParam: (lastPage) => {
-			if (!lastPage.actors) return null;
-			return lastPage.actors[lastPage.actors?.length - 1]?.id;
+			return lastPage.pagination.cursor;
 		},
 		meta: {
 			updateCache: (

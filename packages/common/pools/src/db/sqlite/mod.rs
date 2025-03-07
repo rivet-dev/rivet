@@ -830,7 +830,9 @@ impl SqliteConn {
 							);
 						}
 
-						if let Err(err) = tokio::fs::remove_file(format!("{}-journal", db_path.display())).await {
+						if let Err(err) =
+							tokio::fs::remove_file(format!("{}-journal", db_path.display())).await
+						{
 							tracing::warn!(
 								?err,
 								db_path = ?db_path,

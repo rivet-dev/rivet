@@ -459,6 +459,7 @@ Class | Method | HTTP request | Description
  - [MatchmakerPlayersConnectedRequest](docs/MatchmakerPlayersConnectedRequest.md)
  - [MatchmakerRegionInfo](docs/MatchmakerRegionInfo.md)
  - [MatchmakerRegionStatistics](docs/MatchmakerRegionStatistics.md)
+ - [Pagination](docs/Pagination.md)
  - [PortalGetGameProfileResponse](docs/PortalGetGameProfileResponse.md)
  - [PortalGetSuggestedGamesResponse](docs/PortalGetSuggestedGamesResponse.md)
  - [PortalNotificationRegisterFirebaseService](docs/PortalNotificationRegisterFirebaseService.md)

@@ -4,7 +4,6 @@ mod metrics;
 mod otel;
 
 pub fn run<F: Future>(f: F) -> F::Output {
-
 	// Build runtime
 	let mut rt_builder = build_tokio_runtime_builder();
 	let rt = rt_builder.build().expect("failed to build tokio runtime");

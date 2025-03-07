@@ -1,0 +1,27 @@
+{
+    "compilerOptions": {
+        "extendedDiagnostics": true,
+        "strict": true,
+        "target": "esnext",
+        "module": "esnext",
+        "moduleResolution": "node",
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "declaration": true,
+        "emitDeclarationOnly": true,
+        "sourceMap": true,
+        "noUnusedParameters": true,
+        "outDir": "types",
+        "rootDir": "src",
+        "baseUrl": "src",
+        "paths": {
+            "@rivet-gg/api": [
+                "."
+            ]
+        }
+    },
+    "include": [
+        "src"
+    ],
+    "exclude": []
+}
