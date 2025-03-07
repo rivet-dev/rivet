@@ -39,6 +39,7 @@
 		},
 		"cockroachdb": {
 			"url": "postgresql://cockroachdb:26257/defaultdb?sslmode=disable",
+			"cluster_identifier": "default",
 			"username": "root"
 		},
 		"redis": {
