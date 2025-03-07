@@ -188,6 +188,7 @@ async fn drain_pegboard_client(
 	.await?;
 
 	let Some(pegboard_client_id) = pegboard_client_id else {
+		tracing::warn!("no pegboard client id to drain");
 		return Ok(());
 	};
 

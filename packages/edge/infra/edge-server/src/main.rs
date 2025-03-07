@@ -23,6 +23,7 @@ fn main() -> Result<()> {
 
 async fn main_inner() -> Result<()> {
 	let cli = Cli::parse();
+	
 
 	// Load config
 	let config = rivet_config::Config::load(&cli.config)

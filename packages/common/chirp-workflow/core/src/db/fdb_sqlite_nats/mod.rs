@@ -1344,201 +1344,201 @@ impl Database for DatabaseFdbSqliteNats {
 					let events = sql_fetch_all!(
 						[self, sqlite::AmalgamEventRow, pool]
 						"
-					-- Activity events
-					SELECT
-						json(location) AS location,
-						version,
-						0 AS event_type, -- EventType
-						activity_name AS name,
-						NULL AS auxiliary_id,
-						input_hash AS hash,
-						NULL AS input,
-						json(output) AS output,
-						create_ts AS create_ts,
-						(
-							SELECT COUNT(*)
-							FROM workflow_activity_errors AS err
-							WHERE ev.location = err.location
-						) AS error_count,
-						NULL AS iteration,
-						NULL AS deadline_ts,
-						NULL AS state,
-						NULL AS inner_event_type
-					FROM workflow_activity_events AS ev
-					WHERE NOT forgotten
-					GROUP BY ev.location
-					UNION ALL
-					-- Signal listen events
-					SELECT
-						json(location) AS location,
-						version,
-						1 AS event_type, -- EventType
-						signal_name AS name,
-						NULL AS auxiliary_id,
-						NULL AS hash,
-						NULL AS input,
-						json(body) AS output,
-						NULL AS create_ts,
-						NULL AS error_count,
-						NULL AS iteration,
-						NULL AS deadline_ts,
-						NULL AS state,
-						NULL AS inner_event_type
-					FROM workflow_signal_events
-					WHERE NOT forgotten
-					UNION ALL
-					-- Signal send events
-					SELECT
-						json(location) AS location,
-						version,
-						2 AS event_type, -- EventType
-						signal_name AS name,
-						signal_id AS auxiliary_id,
-						NULL AS hash,
-						NULL AS input,
-						NULL AS output,
-						NULL AS create_ts,
-						NULL AS error_count,
-						NULL AS iteration,
-						NULL AS deadline_ts,
-						NULL AS state,
-						NULL AS inner_event_type
-					FROM workflow_signal_send_events
-					WHERE NOT forgotten
-					UNION ALL
-					-- Message send events
-					SELECT
-						json(location) AS location,
-						version,
-						3 AS event_type, -- EventType
-						message_name AS name,
-						NULL AS auxiliary_id,
-						NULL AS hash,
-						NULL AS input,
-						NULL AS output,
-						NULL AS create_ts,
-						NULL AS error_count,
-						NULL AS iteration,
-						NULL AS deadline_ts,
-						NULL AS state,
-						NULL AS inner_event_type
-					FROM workflow_message_send_events
-					WHERE NOT forgotten
-					UNION ALL
-					-- Sub workflow events
-					SELECT
-						json(location) AS location,
-						version,
-						4 AS event_type, -- crdb_nats::types::EventType
-						sub_workflow_name AS name,
-						sub_workflow_id AS auxiliary_id,
-						NULL AS hash,
-						NULL AS input,
-						NULL AS output,
-						NULL AS create_ts,
-						NULL AS error_count,
-						NULL AS iteration,
-						NULL AS deadline_ts,
-						NULL AS state,
-						NULL AS inner_event_type
-					FROM workflow_sub_workflow_events
-					WHERE NOT forgotten
-					UNION ALL
-					-- Loop events
-					SELECT
-						json(location) AS location,
-						version,
-						5 AS event_type, -- crdb_nats::types::EventType
-						NULL AS name,
-						NULL AS auxiliary_id,
-						NULL AS hash,
-						json(state) AS input,
-						json(output) AS output,
-						NULL AS create_ts,
-						NULL AS error_count,
-						iteration,
-						NULL AS deadline_ts,
-						NULL AS state,
-						NULL AS inner_event_type
-					FROM workflow_loop_events
-					WHERE NOT forgotten
-					UNION ALL
-					-- Sleep events
-					SELECT
-						json(location) AS location,
-						version,
-						6 AS event_type, -- crdb_nats::types::EventType
-						NULL AS name,
-						NULL AS auxiliary_id,
-						NULL AS hash,
-						NULL AS input,
-						NULL AS output,
-						NULL AS create_ts,
-						NULL AS error_count,
-						NULL AS iteration,
-						deadline_ts,
-						state,
-						NULL AS inner_event_type
-					FROM workflow_sleep_events
-					WHERE NOT forgotten
-					UNION ALL
-					-- Branch events
-					SELECT
-						json(location) AS location,
-						version,
-						7 AS event_type, -- crdb_nats::types::EventType
-						NULL AS name,
-						NULL AS auxiliary_id,
-						NULL AS hash,
-						NULL AS input,
-						NULL AS output,
-						NULL AS create_ts,
-						NULL AS error_count,
-						NULL AS iteration,
-						NULL AS deadline_ts,
-						NULL AS state,
-						NULL AS inner_event_type
-					FROM workflow_branch_events
-					WHERE NOT forgotten
-					UNION ALL
-					-- Removed events
-					SELECT
-						json(location) AS location,
-						1 AS version, -- Default
-						8 AS event_type, -- crdb_nats::types::EventType
-						event_name AS name,
-						NULL AS auxiliary_id,
-						NULL AS hash,
-						NULL AS input,
-						NULL AS output,
-						NULL AS create_ts,
-						NULL AS error_count,
-						NULL AS iteration,
-						NULL AS deadline_ts,
-						NULL AS state,
-						event_type AS inner_event_type
-					FROM workflow_removed_events
-					WHERE NOT forgotten
-					UNION ALL
-					-- Version check events
-					SELECT
-						json(location) AS location,
-						version,
-						9 AS event_type, -- crdb_nats::types::EventType
-						NULL AS name,
-						NULL AS auxiliary_id,
-						NULL AS hash,
-						NULL AS input,
-						NULL AS output,
-						NULL AS create_ts,
-						NULL AS error_count,
-						NULL AS iteration,
-						NULL AS deadline_ts,
-						NULL AS state,
-						NULL AS inner_event_type
-					FROM workflow_version_check_events
-					WHERE NOT forgotten
-					",
+						-- Activity events
+						SELECT
+							json(location) AS location,
+							version,
+							0 AS event_type, -- EventType
+							activity_name AS name,
+							NULL AS auxiliary_id,
+							input_hash AS hash,
+							NULL AS input,
+							json(output) AS output,
+							create_ts AS create_ts,
+							(
+								SELECT COUNT(*)
+								FROM workflow_activity_errors AS err
+								WHERE ev.location = err.location
+							) AS error_count,
+							NULL AS iteration,
+							NULL AS deadline_ts,
+							NULL AS state,
+							NULL AS inner_event_type
+						FROM workflow_activity_events AS ev
+						WHERE NOT forgotten
+						GROUP BY ev.location
+						UNION ALL
+						-- Signal listen events
+						SELECT
+							json(location) AS location,
+							version,
+							1 AS event_type, -- EventType
+							signal_name AS name,
+							NULL AS auxiliary_id,
+							NULL AS hash,
+							NULL AS input,
+							json(body) AS output,
+							NULL AS create_ts,
+							NULL AS error_count,
+							NULL AS iteration,
+							NULL AS deadline_ts,
+							NULL AS state,
+							NULL AS inner_event_type
+						FROM workflow_signal_events
+						WHERE NOT forgotten
+						UNION ALL
+						-- Signal send events
+						SELECT
+							json(location) AS location,
+							version,
+							2 AS event_type, -- EventType
+							signal_name AS name,
+							signal_id AS auxiliary_id,
+							NULL AS hash,
+							NULL AS input,
+							NULL AS output,
+							NULL AS create_ts,
+							NULL AS error_count,
+							NULL AS iteration,
+							NULL AS deadline_ts,
+							NULL AS state,
+							NULL AS inner_event_type
+						FROM workflow_signal_send_events
+						WHERE NOT forgotten
+						UNION ALL
+						-- Message send events
+						SELECT
+							json(location) AS location,
+							version,
+							3 AS event_type, -- EventType
+							message_name AS name,
+							NULL AS auxiliary_id,
+							NULL AS hash,
+							NULL AS input,
+							NULL AS output,
+							NULL AS create_ts,
+							NULL AS error_count,
+							NULL AS iteration,
+							NULL AS deadline_ts,
+							NULL AS state,
+							NULL AS inner_event_type
+						FROM workflow_message_send_events
+						WHERE NOT forgotten
+						UNION ALL
+						-- Sub workflow events
+						SELECT
+							json(location) AS location,
+							version,
+							4 AS event_type, -- crdb_nats::types::EventType
+							sub_workflow_name AS name,
+							sub_workflow_id AS auxiliary_id,
+							NULL AS hash,
+							NULL AS input,
+							NULL AS output,
+							NULL AS create_ts,
+							NULL AS error_count,
+							NULL AS iteration,
+							NULL AS deadline_ts,
+							NULL AS state,
+							NULL AS inner_event_type
+						FROM workflow_sub_workflow_events
+						WHERE NOT forgotten
+						UNION ALL
+						-- Loop events
+						SELECT
+							json(location) AS location,
+							version,
+							5 AS event_type, -- crdb_nats::types::EventType
+							NULL AS name,
+							NULL AS auxiliary_id,
+							NULL AS hash,
+							json(state) AS input,
+							json(output) AS output,
+							NULL AS create_ts,
+							NULL AS error_count,
+							iteration,
+							NULL AS deadline_ts,
+							NULL AS state,
+							NULL AS inner_event_type
+						FROM workflow_loop_events
+						WHERE NOT forgotten
+						UNION ALL
+						-- Sleep events
+						SELECT
+							json(location) AS location,
+							version,
+							6 AS event_type, -- crdb_nats::types::EventType
+							NULL AS name,
+							NULL AS auxiliary_id,
+							NULL AS hash,
+							NULL AS input,
+							NULL AS output,
+							NULL AS create_ts,
+							NULL AS error_count,
+							NULL AS iteration,
+							deadline_ts,
+							state,
+							NULL AS inner_event_type
+						FROM workflow_sleep_events
+						WHERE NOT forgotten
+						UNION ALL
+						-- Branch events
+						SELECT
+							json(location) AS location,
+							version,
+							7 AS event_type, -- crdb_nats::types::EventType
+							NULL AS name,
+							NULL AS auxiliary_id,
+							NULL AS hash,
+							NULL AS input,
+							NULL AS output,
+							NULL AS create_ts,
+							NULL AS error_count,
+							NULL AS iteration,
+							NULL AS deadline_ts,
+							NULL AS state,
+							NULL AS inner_event_type
+						FROM workflow_branch_events
+						WHERE NOT forgotten
+						UNION ALL
+						-- Removed events
+						SELECT
+							json(location) AS location,
+							1 AS version, -- Default
+							8 AS event_type, -- crdb_nats::types::EventType
+							event_name AS name,
+							NULL AS auxiliary_id,
+							NULL AS hash,
+							NULL AS input,
+							NULL AS output,
+							NULL AS create_ts,
+							NULL AS error_count,
+							NULL AS iteration,
+							NULL AS deadline_ts,
+							NULL AS state,
+							event_type AS inner_event_type
+						FROM workflow_removed_events
+						WHERE NOT forgotten
+						UNION ALL
+						-- Version check events
+						SELECT
+							json(location) AS location,
+							version,
+							9 AS event_type, -- crdb_nats::types::EventType
+							NULL AS name,
+							NULL AS auxiliary_id,
+							NULL AS hash,
+							NULL AS input,
+							NULL AS output,
+							NULL AS create_ts,
+							NULL AS error_count,
+							NULL AS iteration,
+							NULL AS deadline_ts,
+							NULL AS state,
+							NULL AS inner_event_type
+						FROM workflow_version_check_events
+						WHERE NOT forgotten
+						",
 					)
 					.await?;
 
@@ -1612,7 +1612,7 @@ impl Database for DatabaseFdbSqliteNats {
 					let (_, tag_keys, wake_deadline_entry) = tokio::try_join!(
 						// Check for other workflows waiting on this one, wake all
 						async {
-							while let Some(entry) = stream.try_next().await.unwrap() {
+							while let Some(entry) = stream.try_next().await? {
 								let sub_workflow_wake_key = self
 									.subspace
 									.unpack::<keys::wake::SubWorkflowWakeKey>(&entry.key())
@@ -2629,7 +2629,7 @@ impl Database for DatabaseFdbSqliteNats {
 							SNAPSHOT,
 						);
 
-						while let Some(entry) = stream.try_next().await.unwrap() {
+						while let Some(entry) = stream.try_next().await? {
 							let signal_wake_key = self
 								.subspace
 								.unpack::<keys::wake::TaggedSignalWakeKey>(&entry.key())

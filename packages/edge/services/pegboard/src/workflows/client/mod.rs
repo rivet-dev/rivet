@@ -476,7 +476,9 @@ async fn publish_registered(ctx: &ActivityCtx, input: &PublishRegisteredInput) -
 		&config,
 		&input.client_id.to_string(),
 		models::CoreIntercomPegboardMarkClientRegisteredRequest {
-			server_id: edge.server_id,
+			// TODO: Get server id from init packet. For now because the pb client id is the same as the
+			// server id it doesn't matter
+			server_id: input.client_id,
 		},
 	)
 	.await?;

@@ -273,7 +273,7 @@ impl WorkflowCtx {
 
 		match res {
 			Ok(Ok(output)) => {
-				tracing::debug!("activity success");
+				tracing::debug!(name=%self.name, id=%self.workflow_id, activity_name=%A::NAME, "activity success");
 
 				// Write output
 				let input_val = serde_json::value::to_raw_value(input)
@@ -300,7 +300,7 @@ impl WorkflowCtx {
 				Ok(output)
 			}
 			Ok(Err(err)) => {
-				tracing::debug!(?err, "activity error");
+				tracing::debug!(name=%self.name, id=%self.workflow_id, activity_name=%A::NAME, ?err, "activity error");
 
 				let err_str = err.to_string();
 				let input_val = serde_json::value::to_raw_value(input)
@@ -332,7 +332,7 @@ impl WorkflowCtx {
 				Err(WorkflowError::ActivityFailure(err, 0))
 			}
 			Err(err) => {
-				tracing::debug!("activity timeout");
+				tracing::debug!(name=%self.name, id=%self.workflow_id, activity_name=%A::NAME, "activity timeout");
 
 				let err_str = err.to_string();
 				let input_val = serde_json::value::to_raw_value(input)
