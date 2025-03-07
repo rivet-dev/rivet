@@ -1,7 +1,6 @@
 {
   "name": "@rivet-gg/api-full",
   "version": "25.1.3",
-  "private": false,
   "repository": "https://github.com/rivet-gg/rivet/tree/main/sdks/typescript",
   "files": [
     "dist",
@@ -58,5 +57,5 @@
     "prettier": "2.7.1",
     "typescript": "4.6.4"
   },
-  "packageManager": "yarn@1.22.22+sha1.ac34549e6aa8e7ead463a7407e1c7390f61a6610"
+  "packageManager": "yarn@4.6.0"
 }
