@@ -5,6 +5,14 @@ import { upgradeWebSocket } from "hono/deno";
 // Start server
 export default {
 	async start(ctx: ActorContext) {
+		// Automatically exit after 1 minute in order to prevent accidental spam
+		setTimeout(() => {
+			console.error(
+				"Actor should've been destroyed by now. Automatically exiting.",
+			);
+			Deno.exit(1);
+		}, 60 * 1000);
+
 		console.log("Isolate starting");
 
 		// Test KV functionality
