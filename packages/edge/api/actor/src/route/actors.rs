@@ -528,7 +528,7 @@ async fn list_actors_inner(
 			tags,
 			include_destroyed,
 			created_before,
-			limit: 32
+			limit: 32,
 		})
 		.await?;
 

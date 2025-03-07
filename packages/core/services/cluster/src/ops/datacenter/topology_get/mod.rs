@@ -197,7 +197,9 @@ pub async fn cluster_datacenter_topology_get(
 				.filter(|server| {
 					matches!(
 						server.pool_type,
-						PoolType::Gg | PoolType::Ats | PoolType::PegboardIsolate | PoolType::Fdb | PoolType::Worker
+						PoolType::Gg
+							| PoolType::Ats | PoolType::PegboardIsolate
+							| PoolType::Fdb | PoolType::Worker
 					)
 				})
 				.collect::<Vec<_>>();

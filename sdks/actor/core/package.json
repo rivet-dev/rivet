@@ -1,6 +1,6 @@
 {
 	"name": "@rivet-gg/actor-core",
-	"version": "25.1.0-rc.1",
+	"version": "25.2.0",
 	"files": [
 		"dist",
 		"src",

@@ -11,7 +11,7 @@ export declare namespace Games {
         environment?: core.Supplier<environments.RivetEnvironment | string>;
         token?: core.Supplier<core.BearerToken | undefined>;
         /** Override the X-API-Version header */
-        xApiVersion?: "25.1.3";
+        xApiVersion?: "25.2.0";
         fetcher?: core.FetchFunction;
     }
 
@@ -25,7 +25,7 @@ export declare namespace Games {
         /** Additional headers to include in the request. */
         headers?: Record<string, string>;
         /** Override the X-API-Version header */
-        xApiVersion?: "25.1.3";
+        xApiVersion?: "25.2.0";
     }
 }
 
