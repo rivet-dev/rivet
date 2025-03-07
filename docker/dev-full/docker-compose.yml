@@ -320,7 +320,8 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning
       - ./grafana/dashboards:/var/lib/grafana/dashboards
     ports:
-      - "3000:3000"
+      # 3000 is a common port, so we use 3100 instead
+      - "3100:3000"
     networks:
       - rivet-network
     environment:
