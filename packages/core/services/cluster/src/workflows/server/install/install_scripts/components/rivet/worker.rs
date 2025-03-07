@@ -94,13 +94,17 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 				},
 			},
 			clickhouse: server_config.clickhouse.as_ref().map(|clickhouse| GlobalResult::Ok(ClickHouse {
-				http_url: Url::parse(&format!(
-					"https://127.0.0.1:{TUNNEL_CLICKHOUSE_PORT}",
-				))?,
-				native_url: Url::parse(&format!(
-					"clickhouse://127.0.0.1:{TUNNEL_CLICKHOUSE_NATIVE_PORT}",
-				))?,
-				secure: false,
+				// TODO: This doesn't work over Traefik since the client needs to specify the same
+				// hostname as ClickHouse
+				// http_url: Url::parse(&format!(
+				// 	"https://127.0.0.1:{TUNNEL_CLICKHOUSE_PORT}",
+				// ))?,
+				// native_url: Url::parse(&format!(
+				// 	"clickhouse://127.0.0.1:{TUNNEL_CLICKHOUSE_NATIVE_PORT}",
+				// ))?,
+				http_url: clickhouse.http_url.clone(),
+				native_url: clickhouse.native_url.clone(),
+				secure: clickhouse.secure,
 				provision_users: HashMap::new(),
 				..clickhouse.clone()
 			})).transpose()?,
