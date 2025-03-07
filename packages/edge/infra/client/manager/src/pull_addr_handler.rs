@@ -46,6 +46,10 @@ impl PullAddrHandler {
 					// Always sort the addresses so the list is deterministic
 					addresses.sort();
 
+					if addresses.is_empty() {
+						tracing::warn!("empty list of pull addresses");
+					}
+
 					*addr_guard = addresses.clone();
 					*last_pull_guard = Some(Instant::now());
 

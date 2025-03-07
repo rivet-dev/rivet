@@ -11,11 +11,9 @@ export function createAndStartServer(
 		console.error(
 			"Actor should've been destroyed by now. Automatically exiting.",
 		);
-		if (typeof Deno !== "undefined") {
-			Deno.exit(1);
-		} else {
-			process.exit(1);
-		}
+
+		if (typeof Deno !== "undefined") Deno.exit(1);
+		else process.exit(1);
 	}, 60 * 1000);
 
 	let tickIndex = 0;
@@ -35,6 +33,16 @@ export function createAndStartServer(
 	const app = new Hono();
 
 	app.get("/health", (c) => c.text("ok"));
+
+	app.get("/exit", (c) => {
+		const query = c.req.query("code");
+		const exitCode = query ? Number(query) : 0;
+
+		if (typeof Deno != "undefined") Deno.exit(exitCode);
+		else process.exit(exitCode);
+
+		return c.text("unreachable");
+	});
 
 	// Add WebSocket endpoint with handler
 	let upgradeWebSocket = getUpgradeWebSocket(app);

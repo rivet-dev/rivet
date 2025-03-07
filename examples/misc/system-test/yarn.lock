@@ -1533,7 +1533,7 @@ __metadata:
     node-fetch: "npm:^3.3.2"
     tsx: "npm:^4.7.0"
     typescript: "npm:^5.3.3"
-    ws: "npm:^8.16.0"
+    ws: "npm:^8.18.1"
   languageName: unknown
   linkType: soft
 
@@ -1694,7 +1694,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ws@npm:^8.16.0, ws@npm:^8.17.0":
+"ws@npm:^8.17.0, ws@npm:^8.18.1":
   version: 8.18.1
   resolution: "ws@npm:8.18.1"
   peerDependencies:

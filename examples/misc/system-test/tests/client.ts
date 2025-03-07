@@ -48,7 +48,7 @@ async function run() {
 					},
 				},
 				lifecycle: {
-					durable: false,
+					durable: true,
 				},
 				...(BUILD_NAME === "ws-container" ? {
 					resources: {
@@ -156,7 +156,7 @@ async function runLoop() {
 }
 
 // Run loop without top-level await
-(async function() {
+(async function () {
 	for (let i = 0; i < 1; i++) {
 		await new Promise((resolve) => setTimeout(resolve, 100));
 		runLoop();

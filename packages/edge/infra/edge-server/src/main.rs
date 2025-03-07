@@ -17,19 +17,12 @@ struct Cli {
 }
 
 fn main() -> Result<()> {
-
-
-
-
-
-	
 	rivet_runtime::run(async { main_inner().await })?;
 	Ok(())
 }
 
 async fn main_inner() -> Result<()> {
 	let cli = Cli::parse();
-	
 
 	// Load config
 	let config = rivet_config::Config::load(&cli.config)
