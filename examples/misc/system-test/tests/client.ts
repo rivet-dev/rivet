@@ -48,7 +48,7 @@ async function run() {
 					},
 				},
 				lifecycle: {
-					durable: true,
+					durable: false,
 				},
 				...(BUILD_NAME === "ws-container" ? {
 					resources: {
