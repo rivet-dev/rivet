@@ -1575,10 +1575,10 @@
         "token"
       ],
       "properties": {
-        "system_test_isolate_environment": {
+        "system_test_environment": {
           "type": "string"
         },
-        "system_test_isolate_project": {
+        "system_test_project": {
           "type": "string"
         },
         "token": {

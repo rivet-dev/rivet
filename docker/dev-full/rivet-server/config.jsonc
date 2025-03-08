@@ -21,8 +21,8 @@
 			// Enable status checks if testing status check project
 			"status": {
 				"token": "local",
-				"system_test_isolate_project": "default",
-				"system_test_isolate_environment": "default"
+				"system_test_project": "default",
+				"system_test_environment": "default"
 			},
 			"metrics": {
 				"host": "0.0.0.0"

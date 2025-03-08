@@ -692,8 +692,8 @@ impl Health {
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Status {
 	pub token: Secret<String>,
-	pub system_test_isolate_project: Option<String>,
-	pub system_test_isolate_environment: Option<String>,
+	pub system_test_project: Option<String>,
+	pub system_test_environment: Option<String>,
 }
 
 /// Configuration for the metrics service.

@@ -21,6 +21,24 @@ use crate::auth::Auth;
 #[serde(rename_all = "camelCase")]
 pub struct StatusQuery {
 	region: Uuid,
+	build: StatusQueryBuild,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+enum StatusQueryBuild {
+	#[serde(rename = "ws-isolate")]
+	WsIsoalte,
+	#[serde(rename = "ws-container")]
+	WsContainer,
+}
+
+impl StatusQueryBuild {
+	fn build_name(&self) -> &str {
+		match self {
+			StatusQueryBuild::WsIsoalte => "ws-isolate",
+			StatusQueryBuild::WsContainer => "ws-container",
+		}
+	}
 }
 
 pub async fn status(
@@ -29,28 +47,28 @@ pub async fn status(
 	query: StatusQuery,
 ) -> GlobalResult<serde_json::Value> {
 	let status_config = ctx.config().server()?.rivet.status()?;
-	let system_test_isolate_project = unwrap_ref!(
-		status_config.system_test_isolate_project,
-		"system test isolate project not configured"
+	let system_test_project = unwrap_ref!(
+		status_config.system_test_project,
+		"system test project not configured"
 	);
-	let system_test_isolate_env = status_config
-		.system_test_isolate_environment
+	let system_test_env = status_config
+		.system_test_environment
 		.clone()
 		.unwrap_or_else(|| "prod".to_string());
 
 	// Find namespace ID
 	let game_res = op!([ctx] game_resolve_name_id {
-		name_ids: vec![system_test_isolate_project.clone()],
+		name_ids: vec![system_test_project.clone()],
 	})
 	.await?;
 	let game_id = unwrap_with!(
 		game_res.games.first().and_then(|x| x.game_id),
 		INTERNAL_STATUS_CHECK_FAILED,
-		error = "missing {system_test_isolate_project} game"
+		error = "missing {system_test_project} game"
 	);
 	let ns_resolve = op!([ctx] game_namespace_resolve_name_id {
 		game_id: Some(game_id),
-		name_ids: vec![system_test_isolate_env.clone()],
+		name_ids: vec![system_test_env.clone()],
 	})
 	.await?;
 	let ns_id = unwrap_with!(
@@ -144,10 +162,10 @@ pub async fn status(
 		&config,
 		models::ActorCreateActorRequest {
 			tags: Some(serde_json::json!({
-				"name": "ws"
+				"name": query.build.build_name(),
 			})),
 			build_tags: Some(Some(serde_json::json!({
-				"name": "ws",
+				"name": query.build.build_name(),
 				"current": "true",
 			}))),
 			region: Some(dc.name_id.clone()),
@@ -170,10 +188,17 @@ pub async fn status(
 				durable: Some(false),
 				..Default::default()
 			})),
+			resources: match &query.build {
+				StatusQueryBuild::WsIsoalte => None,
+				StatusQueryBuild::WsContainer => Some(Box::new(models::ActorResources {
+					cpu: 100,
+					memory: 128,
+				})),
+			},
 			..Default::default()
 		},
-		Some(&system_test_isolate_project),
-		Some(&system_test_isolate_env),
+		Some(&system_test_project),
+		Some(&system_test_env),
 		None,
 	)
 	.await?;
@@ -200,8 +225,8 @@ pub async fn status(
 	actor_api::actor_destroy(
 		&config,
 		&actor_id.to_string(),
-		Some(&system_test_isolate_project),
-		Some(&system_test_isolate_env),
+		Some(&system_test_project),
+		Some(&system_test_env),
 		None,
 	)
 	.await?;

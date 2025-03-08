@@ -1,7 +1,7 @@
 use api_helper::define_router;
 use hyper::{Body, Request, Response};
 
-pub mod actor_isolate;
+pub mod actor;
 pub mod matchmaker;
 
 define_router! {
@@ -11,9 +11,9 @@ define_router! {
 				query: matchmaker::StatusQuery,
 			),
 		},
-		"actor" / "isolate": {
-			GET: actor_isolate::status(
-				query: actor_isolate::StatusQuery,
+		"actor": {
+			GET: actor::status(
+				query: actor::StatusQuery,
 			),
 		},
 	},
