@@ -531,8 +531,9 @@ impl WorkflowCtx {
 						"sleeping for activity backoff"
 					);
 
-					let duration = wake_deadline_ts.saturating_sub(rivet_util::timestamp::now());
-					tokio::time::sleep(Duration::from_millis(duration.try_into()?)).await;
+					let duration = (u64::try_from(wake_deadline_ts)?)
+						.saturating_sub(u64::try_from(rivet_util::timestamp::now())?);
+					tokio::time::sleep(Duration::from_millis(duration)).await;
 				}
 
 				match self
@@ -822,6 +823,7 @@ impl WorkflowCtx {
 				self.db
 					.upsert_workflow_loop_event(
 						self.workflow_id,
+						&self.name,
 						&loop_location,
 						self.version,
 						0,
@@ -899,6 +901,7 @@ impl WorkflowCtx {
 						self.db
 							.upsert_workflow_loop_event(
 								self.workflow_id,
+								&self.name,
 								&loop_location,
 								self.version,
 								iteration,
@@ -933,6 +936,7 @@ impl WorkflowCtx {
 						self.db
 							.upsert_workflow_loop_event(
 								self.workflow_id,
+								&self.name,
 								&loop_location,
 								self.version,
 								iteration,

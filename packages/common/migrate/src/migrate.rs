@@ -247,7 +247,7 @@ pub async fn up(config: rivet_config::Config, services: &[SqlService]) -> Result
 	tracing::debug!("shutting down pools");
 	crdb.close().await;
 
-	tracing::debug!("migrated");
+	tracing::info!("migrated");
 
 	Ok(())
 }

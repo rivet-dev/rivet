@@ -103,6 +103,22 @@ services:
     networks:
       - rivet-network
 
+  rivet-edge-shell:
+    build:
+      context: ../..
+      dockerfile: docker/universal/Dockerfile
+      target: edge-server
+    platform: linux/amd64
+    restart: unless-stopped
+    command: sleep infinity
+    environment:
+      - RUST_BACKTRACE=1
+    stop_grace_period: 0s
+    volumes:
+      - ./rivet-edge-server:/etc/rivet-server:ro
+    networks:
+      - rivet-network
+
   rivet-guard:
     restart: unless-stopped
     image: traefik:v3.2.1

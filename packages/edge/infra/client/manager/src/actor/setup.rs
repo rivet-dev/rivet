@@ -97,7 +97,7 @@ impl Actor {
 						}
 					}
 					protocol::ImageCompression::Lz4 => {
-						tracing::info!(actor_id=?self.actor_id, "decompressing artifact");
+						tracing::info!(actor_id=?self.actor_id, "downloading and decompressing artifact");
 
 						// Spawn the lz4 process
 						let mut lz4_child = Command::new("lz4")
@@ -139,7 +139,7 @@ impl Actor {
 			protocol::ImageKind::OciBundle | protocol::ImageKind::JavaScript => {
 				match self.config.image.compression {
 					protocol::ImageCompression::None => {
-						tracing::info!(actor_id=?self.actor_id, "unarchiving artifact");
+						tracing::info!(actor_id=?self.actor_id, "downloading and unarchiving artifact");
 
 						// Spawn the tar process
 						let mut tar_child = Command::new("tar")
@@ -177,7 +177,7 @@ impl Actor {
 						)?;
 					}
 					protocol::ImageCompression::Lz4 => {
-						tracing::info!(actor_id=?self.actor_id, "decompressing and unarchiving artifact");
+						tracing::info!(actor_id=?self.actor_id, "downloading, decompressing, and unarchiving artifact");
 
 						// Spawn the lz4 process
 						let mut lz4_child = Command::new("lz4")

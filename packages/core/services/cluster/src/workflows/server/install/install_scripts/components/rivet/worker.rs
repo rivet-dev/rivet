@@ -102,9 +102,6 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 				// native_url: Url::parse(&format!(
 				// 	"clickhouse://127.0.0.1:{TUNNEL_CLICKHOUSE_NATIVE_PORT}",
 				// ))?,
-				http_url: clickhouse.http_url.clone(),
-				native_url: clickhouse.native_url.clone(),
-				secure: clickhouse.secure,
 				provision_users: HashMap::new(),
 				..clickhouse.clone()
 			})).transpose()?,

@@ -1,4 +1,4 @@
-import { fail } from "k6";
+import { fail, sleep } from "k6";
 import {
 	createActor,
 	destroyActor,
@@ -45,6 +45,9 @@ export default function () {
 		// Test WebSocket
 		const wsUrl = `${actorOrigin.replace("http:", "ws:").replace("https:", "wss:")}/ws`;
 		testWebSocket(wsUrl);
+
+		console.log(`sleeping`);
+		sleep(60);
 	} finally {
 		// Cleanup
 		if (actorId) {

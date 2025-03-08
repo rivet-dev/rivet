@@ -2680,6 +2680,7 @@ impl Database for DatabaseFdbSqliteNats {
 	async fn upsert_workflow_loop_event(
 		&self,
 		workflow_id: Uuid,
+		workflow_name: &str,
 		location: &Location,
 		version: usize,
 		iteration: usize,
@@ -2730,115 +2731,235 @@ impl Database for DatabaseFdbSqliteNats {
 
 			// 0-th iteration is the initial insertion
 			if iteration != 0 {
-				sql_execute!(
-					[self, @tx &mut tx]
-					"
-					UPDATE workflow_activity_events
-					SET forgotten = TRUE
-					WHERE loop_location = jsonb(?) AND NOT forgotten
-					",
-					location,
-				)
-				.await?;
+				// TODO: Add config parameter in either fdb or sqlite to toggle this per wf
+				let delete_instead_of_forget =
+					workflow_name == "pegboard_client" || workflow_name == "pegboard_actor";
 
-				sql_execute!(
-					[self, @tx &mut tx]
-					"
-					UPDATE workflow_signal_events
-					SET forgotten = TRUE
-					WHERE loop_location = jsonb(?) AND NOT forgotten
-					",
-					location,
-				)
-				.await?;
+				if delete_instead_of_forget {
+					sql_execute!(
+						[self, @tx &mut tx]
+						"
+						DELETE FROM workflow_activity_errors
+						WHERE location IN (
+							SELECT location
+							FROM workflow_activity_events
+							WHERE loop_location = jsonb(?)
+						)
+						",
+						location,
+					)
+					.await?;
 
-				sql_execute!(
-					[self, @tx &mut tx]
-					"
-					UPDATE workflow_sub_workflow_events
-					SET forgotten = TRUE
-					WHERE loop_location = jsonb(?) AND NOT forgotten
-					",
-					location,
-				)
-				.await?;
+					sql_execute!(
+						[self, @tx &mut tx]
+						"
+						DELETE FROM workflow_activity_events
+						WHERE loop_location = jsonb(?) AND NOT forgotten
+						",
+						location,
+					)
+					.await?;
 
-				sql_execute!(
-					[self, @tx &mut tx]
-					"
-					UPDATE workflow_signal_send_events
-					SET forgotten = TRUE
-					WHERE loop_location = jsonb(?) AND NOT forgotten
-					",
-					location,
-				)
-				.await?;
+					sql_execute!(
+						[self, @tx &mut tx]
+						"
+						DELETE FROM workflow_signal_events
+						WHERE loop_location = jsonb(?) AND NOT forgotten
+						",
+						location,
+					)
+					.await?;
 
-				sql_execute!(
-					[self, @tx &mut tx]
-					"
-					UPDATE workflow_message_send_events
-					SET forgotten = TRUE
-					WHERE loop_location = jsonb(?) AND NOT forgotten
-					",
-					location,
-				)
-				.await?;
+					sql_execute!(
+						[self, @tx &mut tx]
+						"
+						DELETE FROM workflow_sub_workflow_events
+						WHERE loop_location = jsonb(?) AND NOT forgotten
+						",
+						location,
+					)
+					.await?;
 
-				sql_execute!(
-					[self, @tx &mut tx]
-					"
-					UPDATE workflow_loop_events
-					SET forgotten = TRUE
-					WHERE loop_location = jsonb(?) AND NOT forgotten
-					",
-					location,
-				)
-				.await?;
+					sql_execute!(
+						[self, @tx &mut tx]
+						"
+						DELETE FROM workflow_signal_send_events
+						WHERE loop_location = jsonb(?) AND NOT forgotten
+						",
+						location,
+					)
+					.await?;
 
-				sql_execute!(
-					[self, @tx &mut tx]
-					"
-					UPDATE workflow_sleep_events
-					SET forgotten = TRUE
-					WHERE loop_location = jsonb(?) AND NOT forgotten
-					",
-					location,
-				)
-				.await?;
+					sql_execute!(
+						[self, @tx &mut tx]
+						"
+						DELETE FROM workflow_message_send_events
+						WHERE loop_location = jsonb(?) AND NOT forgotten
+						",
+						location,
+					)
+					.await?;
 
-				sql_execute!(
-					[self, @tx &mut tx]
-					"
-					UPDATE workflow_branch_events
-					SET forgotten = TRUE
-					WHERE loop_location = jsonb(?) AND NOT forgotten
-					",
-					location,
-				)
-				.await?;
+					sql_execute!(
+						[self, @tx &mut tx]
+						"
+						DELETE FROM workflow_loop_events
+						WHERE loop_location = jsonb(?) AND NOT forgotten
+						",
+						location,
+					)
+					.await?;
 
-				sql_execute!(
-					[self, @tx &mut tx]
-					"
-					UPDATE workflow_removed_events
-					SET forgotten = TRUE
-					WHERE loop_location = jsonb(?) AND NOT forgotten
-					",
-					location,
-				)
-				.await?;
+					sql_execute!(
+						[self, @tx &mut tx]
+						"
+						DELETE FROM workflow_sleep_events
+						WHERE loop_location = jsonb(?) AND NOT forgotten
+						",
+						location,
+					)
+					.await?;
 
-				sql_execute!(
-					[self, @tx &mut tx]
-					"
-					UPDATE workflow_version_check_events
-					SET forgotten = TRUE
-					WHERE loop_location = jsonb(?) AND NOT forgotten
-					",
-					location,
-				)
-				.await?;
+					sql_execute!(
+						[self, @tx &mut tx]
+						"
+						DELETE FROM workflow_branch_events
+						WHERE loop_location = jsonb(?) AND NOT forgotten
+						",
+						location,
+					)
+					.await?;
+
+					sql_execute!(
+						[self, @tx &mut tx]
+						"
+						DELETE FROM workflow_removed_events
+						WHERE loop_location = jsonb(?) AND NOT forgotten
+						",
+						location,
+					)
+					.await?;
+
+					sql_execute!(
+						[self, @tx &mut tx]
+						"
+						DELETE FROM workflow_version_check_events
+						WHERE loop_location = jsonb(?) AND NOT forgotten
+						",
+						location,
+					)
+					.await?;
+				} else {
+					sql_execute!(
+						[self, @tx &mut tx]
+						"
+						UPDATE workflow_activity_events
+						SET forgotten = TRUE
+						WHERE loop_location = jsonb(?) AND NOT forgotten
+						",
+						location,
+					)
+					.await?;
+
+					sql_execute!(
+						[self, @tx &mut tx]
+						"
+						UPDATE workflow_signal_events
+						SET forgotten = TRUE
+						WHERE loop_location = jsonb(?) AND NOT forgotten
+						",
+						location,
+					)
+					.await?;
+
+					sql_execute!(
+						[self, @tx &mut tx]
+						"
+						UPDATE workflow_sub_workflow_events
+						SET forgotten = TRUE
+						WHERE loop_location = jsonb(?) AND NOT forgotten
+						",
+						location,
+					)
+					.await?;
+
+					sql_execute!(
+						[self, @tx &mut tx]
+						"
+						UPDATE workflow_signal_send_events
+						SET forgotten = TRUE
+						WHERE loop_location = jsonb(?) AND NOT forgotten
+						",
+						location,
+					)
+					.await?;
+
+					sql_execute!(
+						[self, @tx &mut tx]
+						"
+						UPDATE workflow_message_send_events
+						SET forgotten = TRUE
+						WHERE loop_location = jsonb(?) AND NOT forgotten
+						",
+						location,
+					)
+					.await?;
+
+					sql_execute!(
+						[self, @tx &mut tx]
+						"
+						UPDATE workflow_loop_events
+						SET forgotten = TRUE
+						WHERE loop_location = jsonb(?) AND NOT forgotten
+						",
+						location,
+					)
+					.await?;
+
+					sql_execute!(
+						[self, @tx &mut tx]
+						"
+						UPDATE workflow_sleep_events
+						SET forgotten = TRUE
+						WHERE loop_location = jsonb(?) AND NOT forgotten
+						",
+						location,
+					)
+					.await?;
+
+					sql_execute!(
+						[self, @tx &mut tx]
+						"
+						UPDATE workflow_branch_events
+						SET forgotten = TRUE
+						WHERE loop_location = jsonb(?) AND NOT forgotten
+						",
+						location,
+					)
+					.await?;
+
+					sql_execute!(
+						[self, @tx &mut tx]
+						"
+						UPDATE workflow_removed_events
+						SET forgotten = TRUE
+						WHERE loop_location = jsonb(?) AND NOT forgotten
+						",
+						location,
+					)
+					.await?;
+
+					sql_execute!(
+						[self, @tx &mut tx]
+						"
+						UPDATE workflow_version_check_events
+						SET forgotten = TRUE
+						WHERE loop_location = jsonb(?) AND NOT forgotten
+						",
+						location,
+					)
+					.await?;
+				}
 			}
 
 			tx.commit().await.map_err(WorkflowError::Sqlx)?;

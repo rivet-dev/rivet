@@ -64,4 +64,11 @@ lazy_static::lazy_static! {
 		MICRO_BUCKETS.to_vec(),
 		*REGISTRY,
 	).unwrap();
+	pub static ref SQLITE_LARGE_DB: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		"sqlite_large_db",
+		"Sqlite databases stored in FDB that are larger than 3 MiB.",
+		&["key"],
+		*REGISTRY,
+	)
+	.unwrap();
 }

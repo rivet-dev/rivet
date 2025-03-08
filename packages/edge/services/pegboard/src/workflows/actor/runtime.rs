@@ -304,17 +304,27 @@ pub struct SetStartedInput {}
 #[activity(SetStarted)]
 pub async fn set_started(ctx: &ActivityCtx, input: &SetStartedInput) -> GlobalResult<()> {
 	let pool = ctx.sqlite().await?;
+	let start_ts = util::timestamp::now();
 
-	sql_execute!(
-		[ctx, pool]
+	let row = sql_fetch_optional!(
+		[ctx, (i64,), pool]
 		"
 		UPDATE state
 		SET start_ts = ?
 		WHERE start_ts IS NULL
+		RETURNING create_ts
 		",
-		util::timestamp::now(),
+		start_ts,
 	)
 	.await?;
+
+	// Add start duration if this is the first start
+	if let Some((create_ts,)) = row {
+		let dt = (start_ts - create_ts) as f64 / 1000.0;
+		metrics::ACTOR_START_DURATION
+			.with_label_values(&[])
+			.observe(dt);
+	}
 
 	Ok(())
 }

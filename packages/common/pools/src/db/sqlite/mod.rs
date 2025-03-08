@@ -612,14 +612,23 @@ impl SqlitePoolManager {
 						buf.extend(entry.value());
 					}
 
-					Ok::<_, FdbBindingError>((buf, chunk_count))
+					Ok((buf, chunk_count))
 				}
 				.instrument(tracing::info_span!("read_from_fdb_tx"))
 			})
 			.await?;
 
 		if chunks > 0 {
-			tracing::debug!(key=?hex::encode(&*key_packed), ?chunks, data_len = ?data.len(), "loaded database from fdb");
+			let hex_key = hex::encode(&*key_packed);
+			tracing::debug!(key=?hex_key, ?chunks, data_len = ?data.len(), "loaded database from fdb");
+
+			// 3 MiB
+			if data.len() > 3 * 1024 * 1024 * 1024 {
+				metrics::SQLITE_LARGE_DB
+					.with_label_values(&[&hex_key])
+					.set(data.len().try_into().unwrap_or(i64::MAX));
+			}
+
 			tokio::fs::write(db_path, data).await.map_err(Error::Io)?;
 
 			Ok(true)

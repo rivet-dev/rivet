@@ -1578,6 +1578,7 @@ impl Database for DatabaseCrdbNats {
 	async fn upsert_workflow_loop_event(
 		&self,
 		workflow_id: Uuid,
+		_workflow_name: &str,
 		location: &Location,
 		version: usize,
 		iteration: usize,

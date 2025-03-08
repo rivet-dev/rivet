@@ -189,6 +189,8 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 						if let Some(sig) = ctx.listen_until::<Main>(gc_timeout_ts).await? {
 							sig
 						} else {
+							tracing::warn!(actor_id=?input.actor_id, "actor lost");
+
 							// Fake signal
 							Main::StateUpdate(StateUpdate {
 								state: protocol::ActorState::Lost,

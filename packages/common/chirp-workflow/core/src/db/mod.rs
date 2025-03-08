@@ -242,6 +242,7 @@ pub trait Database: Send {
 	async fn upsert_workflow_loop_event(
 		&self,
 		workflow_id: Uuid,
+		workflow_name: &str,
 		location: &Location,
 		version: usize,
 		iteration: usize,
