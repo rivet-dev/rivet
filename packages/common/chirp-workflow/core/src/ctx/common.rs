@@ -22,7 +22,7 @@ use crate::{
 /// Polls the database for the workflow.
 /// 60 second timeout.
 #[tracing::instrument(skip_all)]
-pub async fn wait_for_workflow<W: Workflow>(
+pub async fn wait_for_workflow_output<W: Workflow>(
 	db: &DatabaseHandle,
 	workflow_id: Uuid,
 ) -> GlobalResult<W::Output> {

@@ -11,9 +11,9 @@ use uuid::Uuid;
 
 use crate::{
 	activity::{Activity, ActivityInput},
-	builder::workflow as builder,
+	builder::{workflow as builder, WorkflowRepr},
 	ctx::{ActivityCtx, ListenCtx, MessageCtx, VersionedWorkflowCtx},
-	db::{DatabaseHandle, PulledWorkflow},
+	db::{DatabaseHandle, PulledWorkflowData},
 	error::{WorkflowError, WorkflowResult},
 	executable::{AsyncResult, Executable},
 	history::{
@@ -78,19 +78,19 @@ impl WorkflowCtx {
 		db: DatabaseHandle,
 		config: rivet_config::Config,
 		conn: rivet_connection::Connection,
-		workflow: PulledWorkflow,
+		data: PulledWorkflowData,
 	) -> GlobalResult<Self> {
-		let msg_ctx = MessageCtx::new(&conn, workflow.ray_id).await?;
-		let event_history = Arc::new(workflow.events);
+		let msg_ctx = MessageCtx::new(&conn, data.ray_id).await?;
+		let event_history = Arc::new(data.events);
 
 		Ok(WorkflowCtx {
-			workflow_id: workflow.workflow_id,
-			name: workflow.workflow_name,
-			create_ts: workflow.create_ts,
+			workflow_id: data.workflow_id,
+			name: data.workflow_name,
+			create_ts: data.create_ts,
 			ts: rivet_util::timestamp::now(),
-			ray_id: workflow.ray_id,
+			ray_id: data.ray_id,
 			version: 1,
-			wake_deadline_ts: workflow.wake_deadline_ts,
+			wake_deadline_ts: data.wake_deadline_ts,
 
 			registry,
 			db,
@@ -98,7 +98,7 @@ impl WorkflowCtx {
 			config,
 			conn,
 
-			input: Arc::new(workflow.input),
+			input: Arc::new(data.input),
 
 			event_history: event_history.clone(),
 			cursor: Cursor::new(event_history, Location::empty()),
@@ -437,54 +437,11 @@ impl WorkflowCtx {
 }
 
 impl WorkflowCtx {
-	/// Wait for another workflow's response. If no response was found after polling the database, this
-	/// workflow will go to sleep until the sub workflow completes.
-	#[tracing::instrument(skip_all)]
-	pub async fn wait_for_workflow<W: Workflow>(
-		&self,
-		sub_workflow_id: Uuid,
-	) -> GlobalResult<W::Output> {
-		tracing::debug!(name=%self.name, id=%self.workflow_id, sub_workflow_name=%W::NAME, ?sub_workflow_id, "waiting for workflow");
-
-		let mut wake_sub = self.db.wake_sub().await?;
-		let mut retries = self.db.max_sub_workflow_poll_retries();
-		let mut interval = tokio::time::interval(self.db.sub_workflow_poll_interval());
-		interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-
-		// Skip first tick, we wait after the db call instead of before
-		interval.tick().await;
-
-		loop {
-			// Check if workflow completed
-			let workflow = self
-				.db
-				.get_sub_workflow(self.workflow_id, &self.name, sub_workflow_id)
-				.await
-				.map_err(GlobalError::raw)?
-				.ok_or(WorkflowError::WorkflowNotFound)
-				.map_err(GlobalError::raw)?;
-
-			if let Some(output) = workflow.parse_output::<W>().map_err(GlobalError::raw)? {
-				return Ok(output);
-			} else {
-				if retries == 0 {
-					return Err(GlobalError::raw(WorkflowError::SubWorkflowIncomplete(
-						sub_workflow_id,
-					)));
-				}
-				retries -= 1;
-			}
-
-			// Poll and wait for a wake at the same time
-			tokio::select! {
-				_ = wake_sub.next() => {},
-				_ = interval.tick() => {},
-			}
-		}
-	}
-
 	/// Creates a sub workflow builder.
-	pub fn workflow<I>(&mut self, input: I) -> builder::sub_workflow::SubWorkflowBuilder<I>
+	pub fn workflow<I>(
+		&mut self,
+		input: impl WorkflowRepr<I>,
+	) -> builder::sub_workflow::SubWorkflowBuilder<impl WorkflowRepr<I>, I>
 	where
 		I: WorkflowInput,
 		<I as WorkflowInput>::Workflow: Workflow<Input = I>,
@@ -674,7 +631,7 @@ impl WorkflowCtx {
 			let mut ctx = ListenCtx::new(self, &location);
 
 			loop {
-				ctx.reset();
+				ctx.reset(retries == 0);
 
 				match T::listen(&mut ctx).await {
 					Ok(res) => break res,
@@ -739,7 +696,7 @@ impl WorkflowCtx {
 			let mut ctx = ListenCtx::new(self, &location);
 
 			loop {
-				ctx.reset();
+				ctx.reset(retries == 0);
 
 				match listener.listen(&mut ctx).await {
 					Ok(res) => break res,
@@ -1160,7 +1117,7 @@ impl WorkflowCtx {
 					let mut ctx = ListenCtx::new(self, &signal_location);
 
 					loop {
-						ctx.reset();
+						ctx.reset(false);
 
 						match T::listen(&mut ctx).await {
 							// Retry
@@ -1203,7 +1160,7 @@ impl WorkflowCtx {
 			let mut ctx = ListenCtx::new(self, &signal_location);
 
 			loop {
-				ctx.reset();
+				ctx.reset(retries == 0);
 
 				match T::listen(&mut ctx).await {
 					Ok(res) => break Some(res),

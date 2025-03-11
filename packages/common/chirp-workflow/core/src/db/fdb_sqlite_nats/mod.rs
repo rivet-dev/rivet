@@ -24,7 +24,7 @@ use sqlx::Acquire;
 use tracing::Instrument as _;
 use uuid::Uuid;
 
-use super::{Database, PulledWorkflow, SignalData, WorkflowData};
+use super::{Database, PulledWorkflowData, SignalData, WorkflowData};
 use crate::{
 	error::{WorkflowError, WorkflowResult},
 	history::{
@@ -814,8 +814,7 @@ impl Database for DatabaseFdbSqliteNats {
 
 	#[tracing::instrument(skip_all)]
 	async fn get_workflow(&self, workflow_id: Uuid) -> WorkflowResult<Option<WorkflowData>> {
-		let data = self
-			.pools
+		self.pools
 			.fdb()?
 			.run(|tx, _mc| {
 				async move {
@@ -823,9 +822,11 @@ impl Database for DatabaseFdbSqliteNats {
 					let input_subspace = self.subspace.subspace(&input_key);
 					let output_key = keys::workflow::OutputKey::new(workflow_id);
 					let output_subspace = self.subspace.subspace(&output_key);
+					let has_wake_condition_key =
+						keys::workflow::HasWakeConditionKey::new(workflow_id);
 
 					// Read input and output
-					let (input_chunks, output_chunks) = tokio::try_join!(
+					let (input_chunks, output_chunks, has_wake_condition_entry) = tokio::try_join!(
 						tx.get_ranges_keyvalues(
 							fdb::RangeOption {
 								mode: StreamingMode::WantAll,
@@ -841,7 +842,8 @@ impl Database for DatabaseFdbSqliteNats {
 							},
 							SERIALIZABLE,
 						)
-						.try_collect::<Vec<_>>()
+						.try_collect::<Vec<_>>(),
+						tx.get(&self.subspace.pack(&has_wake_condition_key), SERIALIZABLE),
 					)?;
 
 					if input_chunks.is_empty() {
@@ -861,22 +863,18 @@ impl Database for DatabaseFdbSqliteNats {
 							)
 						};
 
-						Ok(Some((input, output)))
+						Ok(Some(WorkflowData {
+							workflow_id,
+							input,
+							output,
+							has_wake_condition: has_wake_condition_entry.is_some(),
+						}))
 					}
 				}
 				.instrument(tracing::info_span!("get_workflow_tx"))
 			})
-			.await?;
-
-		if let Some((input, output)) = data {
-			Ok(Some(WorkflowData {
-				workflow_id,
-				input,
-				output,
-			}))
-		} else {
-			Ok(None)
-		}
+			.await
+			.map_err(Into::into)
 	}
 
 	/// Returns the first incomplete workflow with the given name and tags, first meaning the one with the
@@ -979,7 +977,7 @@ impl Database for DatabaseFdbSqliteNats {
 		&self,
 		worker_instance_id: Uuid,
 		filter: &[&str],
-	) -> WorkflowResult<Vec<PulledWorkflow>> {
+	) -> WorkflowResult<Vec<PulledWorkflowData>> {
 		let start_instant = Instant::now();
 		let owned_filter = filter
 			.into_iter()
@@ -1051,21 +1049,20 @@ impl Database for DatabaseFdbSqliteNats {
 					// Collect name and deadline ts for each wf id
 					let mut dedup_workflows: Vec<(Uuid, String, Option<i64>)> = Vec::new();
 					for (_, key) in &entries {
-						if let Some((last_wf_id, _, last_wake_deadline_ts)) =
-							dedup_workflows.last_mut()
+						if let Some((_, _, last_wake_deadline_ts)) = dedup_workflows
+							.iter_mut()
+							.find(|(wf_id, _, _)| wf_id == &key.workflow_id)
 						{
-							if last_wf_id == &key.workflow_id {
-								let wake_deadline_ts = key.condition.deadline_ts();
+							let wake_deadline_ts = key.condition.deadline_ts();
 
-								// Update wake deadline ts
-								if last_wake_deadline_ts.is_none()
-									|| wake_deadline_ts < *last_wake_deadline_ts
-								{
-									*last_wake_deadline_ts = wake_deadline_ts;
-								}
-
-								continue;
+							// Update wake deadline ts
+							if last_wake_deadline_ts.is_none()
+								|| wake_deadline_ts < *last_wake_deadline_ts
+							{
+								*last_wake_deadline_ts = wake_deadline_ts;
 							}
+
+							continue;
 						}
 
 						dedup_workflows.push((
@@ -1451,7 +1448,7 @@ impl Database for DatabaseFdbSqliteNats {
 					)
 					.await?;
 
-					WorkflowResult::Ok(PulledWorkflow {
+					WorkflowResult::Ok(PulledWorkflowData {
 						workflow_id: partial.workflow_id,
 						workflow_name: partial.workflow_name,
 						create_ts: partial.create_ts,
@@ -1824,6 +1821,7 @@ impl Database for DatabaseFdbSqliteNats {
 		location: &Location,
 		version: usize,
 		loop_location: Option<&Location>,
+		last_try: bool,
 	) -> WorkflowResult<Option<SignalData>> {
 		let pool = &self
 			.pools
@@ -1957,7 +1955,7 @@ impl Database for DatabaseFdbSqliteNats {
 										[self, &pool]
 										"
 									DELETE FROM workflow_signal_events
-									WHERE location = ?
+									WHERE location = jsonb(?)
 									",
 									)
 									.await
@@ -2012,11 +2010,17 @@ impl Database for DatabaseFdbSqliteNats {
 							// after this in which case there might be an unnecessary wake condition inserted
 							// causing the workflow to wake up again, but this is not as big of an issue because
 							// workflow wakes should be idempotent if no events happen.
-							self.write_signal_wake_idxs(
-								workflow_id,
-								&owned_filter.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
-								&tx,
-							)?;
+							// It is important that this is only written on the last try to pull workflows
+							// (the workflow engine internally retries a few times) because it should only
+							// write signal wake indexes before going to sleep (with err `NoSignalFound`) and
+							// not during a retry.
+							if last_try {
+								self.write_signal_wake_idxs(
+									workflow_id,
+									&owned_filter.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
+									&tx,
+								)?;
+							}
 
 							Ok(None)
 						}
@@ -2037,8 +2041,7 @@ impl Database for DatabaseFdbSqliteNats {
 		workflow_name: &str,
 		sub_workflow_id: Uuid,
 	) -> WorkflowResult<Option<WorkflowData>> {
-		let data = self
-			.pools
+		self.pools
 			.fdb()?
 			.run(|tx, _mc| {
 				async move {
@@ -2046,9 +2049,11 @@ impl Database for DatabaseFdbSqliteNats {
 					let input_subspace = self.subspace.subspace(&input_key);
 					let output_key = keys::workflow::OutputKey::new(sub_workflow_id);
 					let output_subspace = self.subspace.subspace(&output_key);
+					let has_wake_condition_key =
+						keys::workflow::HasWakeConditionKey::new(sub_workflow_id);
 
 					// Read input and output
-					let (input_chunks, output_chunks) = tokio::try_join!(
+					let (input_chunks, output_chunks, has_wake_condition_entry) = tokio::try_join!(
 						tx.get_ranges_keyvalues(
 							fdb::RangeOption {
 								mode: StreamingMode::WantAll,
@@ -2064,7 +2069,8 @@ impl Database for DatabaseFdbSqliteNats {
 							},
 							SERIALIZABLE,
 						)
-						.try_collect::<Vec<_>>()
+						.try_collect::<Vec<_>>(),
+						tx.get(&self.subspace.pack(&has_wake_condition_key), SERIALIZABLE),
 					)?;
 
 					if input_chunks.is_empty() {
@@ -2099,22 +2105,18 @@ impl Database for DatabaseFdbSqliteNats {
 							)
 						};
 
-						Ok(Some((input, output)))
+						Ok(Some(WorkflowData {
+							workflow_id: sub_workflow_id,
+							input,
+							output,
+							has_wake_condition: has_wake_condition_entry.is_some(),
+						}))
 					}
 				}
 				.instrument(tracing::info_span!("get_sub_workflow_tx"))
 			})
-			.await?;
-
-		if let Some((input, output)) = data {
-			Ok(Some(WorkflowData {
-				workflow_id: sub_workflow_id,
-				input,
-				output,
-			}))
-		} else {
-			Ok(None)
-		}
+			.await
+			.map_err(Into::into)
 	}
 
 	#[tracing::instrument(skip_all)]
@@ -2311,7 +2313,7 @@ impl Database for DatabaseFdbSqliteNats {
 					[self, pool]
 					"
 					DELETE FROM workflow_signal_send_events
-					WHERE location = ?
+					WHERE location = jsonb(?)
 					",
 					location,
 				)
@@ -2413,7 +2415,7 @@ impl Database for DatabaseFdbSqliteNats {
 						[self, pool]
 						"
 						DELETE FROM workflow_sub_workflow_events
-						WHERE location = ?
+						WHERE location = jsonb(?)
 						",
 						location,
 					)

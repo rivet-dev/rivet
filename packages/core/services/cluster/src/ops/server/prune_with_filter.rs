@@ -19,6 +19,7 @@ pub struct Input {
 pub struct Output {}
 
 #[operation]
+#[timeout = 240]
 pub async fn cluster_server_prune_with_filter(
 	ctx: &OperationCtx,
 	input: &Input,

@@ -9,7 +9,7 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::{
-	builder::common as builder,
+	builder::{common as builder, WorkflowRepr},
 	ctx::{
 		common,
 		message::{SubscriptionHandle, TailAnchor, TailAnchorResponse},
@@ -125,16 +125,11 @@ impl TestCtx {
 }
 
 impl TestCtx {
-	#[tracing::instrument(skip_all)]
-	pub async fn wait_for_workflow<W: Workflow>(
-		&self,
-		workflow_id: Uuid,
-	) -> GlobalResult<W::Output> {
-		common::wait_for_workflow::<W>(&self.db, workflow_id).await
-	}
-
 	/// Creates a workflow builder.
-	pub fn workflow<I>(&self, input: I) -> builder::workflow::WorkflowBuilder<I>
+	pub fn workflow<I>(
+		&self,
+		input: impl WorkflowRepr<I>,
+	) -> builder::workflow::WorkflowBuilder<impl WorkflowRepr<I>, I>
 	where
 		I: WorkflowInput,
 		<I as WorkflowInput>::Workflow: Workflow<Input = I>,

@@ -101,7 +101,7 @@ pub trait Database: Send {
 		&self,
 		worker_instance_id: Uuid,
 		filter: &[&str],
-	) -> WorkflowResult<Vec<PulledWorkflow>>;
+	) -> WorkflowResult<Vec<PulledWorkflowData>>;
 
 	/// Mark a workflow as completed.
 	async fn complete_workflow(
@@ -132,6 +132,7 @@ pub trait Database: Send {
 		location: &Location,
 		version: usize,
 		loop_location: Option<&Location>,
+		last_try: bool,
 	) -> WorkflowResult<Option<SignalData>>;
 
 	/// Retrieves a workflow with the given ID. Can only be called from a workflow context.
@@ -300,11 +301,16 @@ pub trait Database: Send {
 
 pub struct WorkflowData {
 	pub workflow_id: Uuid,
-	pub input: Box<serde_json::value::RawValue>,
-	pub output: Option<Box<serde_json::value::RawValue>>,
+	input: Box<serde_json::value::RawValue>,
+	output: Option<Box<serde_json::value::RawValue>>,
+	pub has_wake_condition: bool,
 }
 
 impl WorkflowData {
+	pub fn parse_input<W: Workflow>(self) -> WorkflowResult<W::Input> {
+		serde_json::from_str(self.input.get()).map_err(WorkflowError::DeserializeWorkflowInput)
+	}
+
 	pub fn parse_output<W: Workflow>(self) -> WorkflowResult<Option<W::Output>> {
 		self.output
 			.map(|x| serde_json::from_str(x.get()))
@@ -314,7 +320,7 @@ impl WorkflowData {
 }
 
 #[derive(Debug)]
-pub struct PulledWorkflow {
+pub struct PulledWorkflowData {
 	pub workflow_id: Uuid,
 	pub workflow_name: String,
 	pub create_ts: i64,

@@ -1,3 +1,7 @@
+use uuid::Uuid;
+
+use crate::workflow::WorkflowInput;
+
 pub mod common;
 pub mod workflow;
 
@@ -7,6 +11,8 @@ pub(crate) enum BuilderError {
 	TagsNotMap,
 	#[error("invalid signal send: {0}")]
 	InvalidSignalSend(&'static str),
+	#[error("invalid workflow dispatch: {0}")]
+	InvalidWorkflowDispatch(&'static str),
 	#[error("cannot dispatch a workflow/signal from an operation within a workflow execution. trigger it from the workflow's body")]
 	CannotDispatchFromOpInWorkflow,
 	#[error("using tags on a sub workflow ({0}) with `.output()` is not supported")]
@@ -14,4 +20,39 @@ pub(crate) enum BuilderError {
 
 	#[error("serde: {0}")]
 	Serde(#[from] serde_json::Error),
+}
+
+pub trait WorkflowRepr<I: WorkflowInput> {
+	#[allow(private_interfaces)]
+	fn as_input(&self) -> Result<&I, BuilderError>;
+	#[allow(private_interfaces)]
+	fn as_workflow_id(&self) -> Result<Uuid, BuilderError>;
+}
+
+impl<I: WorkflowInput> WorkflowRepr<I> for I {
+	#[allow(private_interfaces)]
+	fn as_input(&self) -> Result<&I, BuilderError> {
+		Ok(self)
+	}
+
+	#[allow(private_interfaces)]
+	fn as_workflow_id(&self) -> Result<Uuid, BuilderError> {
+		Err(BuilderError::InvalidWorkflowDispatch(
+			"workflow inputs are not retrievable",
+		))
+	}
+}
+
+impl<I: WorkflowInput> WorkflowRepr<I> for Uuid {
+	#[allow(private_interfaces)]
+	fn as_input(&self) -> Result<&I, BuilderError> {
+		Err(BuilderError::InvalidWorkflowDispatch(
+			"uuid's are not instantiable",
+		))
+	}
+
+	#[allow(private_interfaces)]
+	fn as_workflow_id(&self) -> Result<Uuid, BuilderError> {
+		Ok(*self)
+	}
 }

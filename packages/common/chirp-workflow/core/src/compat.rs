@@ -3,10 +3,9 @@ use std::fmt::Debug;
 
 use global_error::prelude::*;
 use serde::Serialize;
-use uuid::Uuid;
 
 use crate::{
-	builder::common as builder,
+	builder::{common as builder, WorkflowRepr},
 	ctx::{
 		common,
 		message::{MessageCtx, SubscriptionHandle},
@@ -19,25 +18,14 @@ use crate::{
 	workflow::{Workflow, WorkflowInput},
 };
 
-/// Wait for a given workflow to complete.
-/// 60 second timeout.
-#[tracing::instrument(skip_all)]
-pub async fn wait_for_workflow<W: Workflow, B: Debug + Clone>(
-	ctx: &rivet_operation::OperationContext<B>,
-	workflow_id: Uuid,
-) -> GlobalResult<W::Output> {
-	let db = db_from_ctx(ctx).await?;
-
-	common::wait_for_workflow::<W>(&db, workflow_id).await
-}
-
 /// Dispatch a new workflow and wait for it to complete. Has a 60s timeout.
 #[tracing::instrument(skip_all)]
-pub async fn workflow<I, B>(
+pub async fn workflow<T, I, B>(
 	ctx: &rivet_operation::OperationContext<B>,
-	input: I,
-) -> GlobalResult<builder::workflow::WorkflowBuilder<I>>
+	input: T,
+) -> GlobalResult<builder::workflow::WorkflowBuilder<T, I>>
 where
+	T: WorkflowRepr<I>,
 	I: WorkflowInput,
 	<I as WorkflowInput>::Workflow: Workflow<Input = I>,
 	B: Debug + Clone,

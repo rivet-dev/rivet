@@ -74,27 +74,33 @@ async fn fdb_sqlite_nats_driver() {
 	// 	.unwrap();
 	// tracing::info!(?res);
 
-	let ctx2 = ctx.clone();
-	tokio::spawn(async move {
-		ctx2.workflow(def::Input {})
-			.tag("foo", "bar")
-			.dispatch()
-			.await
-			.unwrap();
-	});
+	if std::env::var("SPAWN_WF").unwrap_or_default() == "1" {
+		for _ in 0..1 {
+			let ctx2 = ctx.clone();
+			tokio::spawn(async move {
+				ctx2.workflow(def::Input {})
+					.tag("foo", "bar")
+					.dispatch()
+					.await
+					.unwrap();
+			});
+		}
+	}
 
-	let ctx2 = ctx.clone();
-	tokio::spawn(async move {
-		tokio::time::sleep(Duration::from_secs(2)).await;
-		ctx2.signal(def::MySignal {
-			test: Uuid::new_v4(),
-		})
-		.to_workflow::<def::Workflow>()
-		.tag("foo", "bar")
-		.send()
-		.await
-		.unwrap();
-	});
+	// let ctx2 = ctx.clone();
+	// tokio::spawn(async move {
+	// 	for _ in 0..10 {
+	// 		tokio::time::sleep(Duration::from_secs(2)).await;
+	// 		ctx2.signal(def::MySignal {
+	// 			test: Uuid::new_v4(),
+	// 		})
+	// 		.to_workflow::<def::Workflow>()
+	// 		.tag("foo", "bar")
+	// 		.send()
+	// 		.await
+	// 		.unwrap();
+	// 	}
+	// });
 
 	let worker = Worker::new(reg.clone(), db.clone());
 
@@ -108,6 +114,7 @@ async fn fdb_sqlite_nats_driver() {
 mod def {
 	use chirp_workflow::prelude::*;
 	use futures_util::FutureExt;
+	use sqlx::Acquire;
 
 	#[derive(Debug, Serialize, Deserialize)]
 	pub struct Input {}
@@ -131,12 +138,8 @@ mod def {
 
 		ctx.repeat(|ctx| {
 			async move {
-				let sig = ctx.listen::<MySignal>().await?;
+				let sig = ctx.listen_with_timeout::<MySignal>(5 * 1000).await?;
 				tracing::info!(?sig);
-
-				// tracing::info!("eepy");
-				// ctx.sleep(35000).await?;
-				// tracing::info!("eeped");
 
 				Ok(Loop::<()>::Continue)
 			}

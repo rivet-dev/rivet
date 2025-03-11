@@ -104,7 +104,8 @@ pub async fn cluster_prebake(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 						.await?;
 
 					// Wait for image workflow to get cleaned up by linode-gc after the image expires
-					ctx.wait_for_workflow::<linode::workflows::server::Workflow>(workflow_id)
+					ctx.workflow::<linode::workflows::server::Input>(workflow_id)
+						.output()
 						.await?;
 				}
 				Linode::ProvisionFailed(_) => {

@@ -12,6 +12,8 @@ use crate::{
 pub struct ListenCtx<'a> {
 	ctx: &'a mut WorkflowCtx,
 	location: &'a Location,
+	// Used by certain db drivers to know when to update internal indexes for signal wake conditions
+	last_try: bool,
 	// HACK: Prevent `ListenCtx::listen_any` from being called more than once
 	used: bool,
 }
@@ -21,12 +23,14 @@ impl<'a> ListenCtx<'a> {
 		ListenCtx {
 			ctx,
 			location,
+			last_try: false,
 			used: false,
 		}
 	}
 
-	pub(crate) fn reset(&mut self) {
+	pub(crate) fn reset(&mut self, last_try: bool) {
 		self.used = false;
+		self.last_try = last_try;
 	}
 
 	/// Checks for a signal to this workflow with any of the given signal names.
@@ -55,6 +59,7 @@ impl<'a> ListenCtx<'a> {
 				self.location,
 				self.ctx.version(),
 				self.ctx.loop_location(),
+				self.last_try,
 			)
 			.await?;
 

@@ -1,11 +1,12 @@
-use std::{fmt::Display, sync::Arc, time::Instant};
+use std::{fmt::Display, marker::PhantomData, sync::Arc, time::Instant};
 
+use futures_util::StreamExt;
 use global_error::{GlobalError, GlobalResult};
 use serde::Serialize;
 use uuid::Uuid;
 
 use crate::{
-	builder::BuilderError,
+	builder::{BuilderError, WorkflowRepr},
 	ctx::WorkflowCtx,
 	error::{WorkflowError, WorkflowResult},
 	history::cursor::HistoryResult,
@@ -13,29 +14,33 @@ use crate::{
 	workflow::{Workflow, WorkflowInput},
 };
 
-pub struct SubWorkflowBuilder<'a, I: WorkflowInput> {
+pub struct SubWorkflowBuilder<'a, T, I: WorkflowInput> {
 	ctx: &'a mut WorkflowCtx,
 	version: usize,
 
-	input: I,
+	repr: T,
 	tags: serde_json::Map<String, serde_json::Value>,
 	unique: bool,
 	error: Option<BuilderError>,
+	_marker: PhantomData<I>,
 }
 
-impl<'a, I: WorkflowInput> SubWorkflowBuilder<'a, I>
+impl<'a, T, I> SubWorkflowBuilder<'a, T, I>
 where
+	T: WorkflowRepr<I>,
+	I: WorkflowInput,
 	<I as WorkflowInput>::Workflow: Workflow<Input = I>,
 {
-	pub(crate) fn new(ctx: &'a mut WorkflowCtx, version: usize, input: I) -> Self {
+	pub(crate) fn new(ctx: &'a mut WorkflowCtx, version: usize, repr: T) -> Self {
 		SubWorkflowBuilder {
 			ctx,
 			version,
 
-			input,
+			repr,
 			tags: serde_json::Map::new(),
 			unique: false,
 			error: None,
+			_marker: PhantomData,
 		}
 	}
 
@@ -99,9 +104,15 @@ where
 			.compare_version("sub workflow", self.version)
 			.map_err(GlobalError::raw)?;
 
-		Self::dispatch_workflow_inner(self.ctx, self.version, self.input, tags, self.unique)
-			.await
-			.map_err(GlobalError::raw)
+		Self::dispatch_workflow_inner(
+			self.ctx,
+			self.version,
+			self.repr.as_input()?,
+			tags,
+			self.unique,
+		)
+		.await
+		.map_err(GlobalError::raw)
 	}
 
 	// This doesn't have a self parameter because self.tags was already moved (see above)
@@ -109,7 +120,7 @@ where
 	async fn dispatch_workflow_inner(
 		ctx: &mut WorkflowCtx,
 		version: usize,
-		input: I,
+		input: &I,
 		tags: Option<serde_json::Value>,
 		unique: bool,
 	) -> WorkflowResult<Uuid>
@@ -162,7 +173,7 @@ where
 			}
 
 			// Serialize input
-			let input_val = serde_json::value::to_raw_value(&input)
+			let input_val = serde_json::value::to_raw_value(input)
 				.map_err(WorkflowError::SerializeWorkflowOutput)?;
 
 			let actual_sub_workflow_id = ctx
@@ -236,12 +247,20 @@ where
 			);
 		}
 
+		if let Ok(workflow_id) = self.repr.as_workflow_id() {
+			return self.wait_for_workflow(workflow_id).await;
+		}
+
+		let input = self.repr.as_input()?;
+
+		tracing::debug!(name=%self.ctx.name(), id=%self.ctx.workflow_id(), sub_workflow_name=%I::Workflow::NAME, "running sub workflow");
+
 		// Err for version mismatch
 		self.ctx
 			.compare_version("sub workflow", self.version)
 			.map_err(GlobalError::raw)?;
 
-		let input_val = serde_json::value::to_raw_value(&self.input)
+		let input_val = serde_json::value::to_raw_value(&input)
 			.map_err(WorkflowError::SerializeWorkflowInput)
 			.map_err(GlobalError::raw)?;
 		let mut branch = self
@@ -250,10 +269,8 @@ where
 			.await
 			.map_err(GlobalError::raw)?;
 
-		tracing::debug!(name=%self.ctx.name(), id=%self.ctx.workflow_id(), sub_workflow_name=%I::Workflow::NAME, "running sub workflow");
 		// Run workflow
-		let output =
-			<<I as WorkflowInput>::Workflow as Workflow>::run(&mut branch, &self.input).await?;
+		let output = <<I as WorkflowInput>::Workflow as Workflow>::run(&mut branch, &input).await?;
 
 		// Validate no leftover events
 		branch.cursor().check_clear().map_err(GlobalError::raw)?;
@@ -263,4 +280,63 @@ where
 
 		Ok(output)
 	}
+
+	/// Wait for another workflow's response. If no response was found after polling the database, this
+	/// workflow will go to sleep until the sub workflow completes.
+	#[tracing::instrument(skip_all)]
+	async fn wait_for_workflow(
+		&self,
+		sub_workflow_id: Uuid,
+	) -> GlobalResult<<<I as WorkflowInput>::Workflow as Workflow>::Output> {
+		tracing::debug!(name=%self.ctx.name(), id=%self.ctx.workflow_id(), sub_workflow_name=%I::Workflow::NAME, ?sub_workflow_id, "waiting for sub workflow");
+
+		let mut wake_sub = self.ctx.db().wake_sub().await?;
+		let mut retries = self.ctx.db().max_sub_workflow_poll_retries();
+		let mut interval = tokio::time::interval(self.ctx.db().sub_workflow_poll_interval());
+		interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+		// Skip first tick, we wait after the db call instead of before
+		interval.tick().await;
+
+		loop {
+			// Check if workflow completed
+			let workflow = self
+				.ctx
+				.db()
+				.get_sub_workflow(self.ctx.workflow_id(), &self.ctx.name(), sub_workflow_id)
+				.await
+				.map_err(GlobalError::raw)?
+				.ok_or(WorkflowError::WorkflowNotFound)
+				.map_err(GlobalError::raw)?;
+
+			if let Some(output) = workflow
+				.parse_output::<<I as WorkflowInput>::Workflow>()
+				.map_err(GlobalError::raw)?
+			{
+				return Ok(output);
+			} else {
+				if retries == 0 {
+					return Err(GlobalError::raw(WorkflowError::SubWorkflowIncomplete(
+						sub_workflow_id,
+					)));
+				}
+				retries -= 1;
+			}
+
+			// Poll and wait for a wake at the same time
+			tokio::select! {
+				_ = wake_sub.next() => {},
+				_ = interval.tick() => {},
+			}
+		}
+	}
+
+	// TODO: Currently not supported in workflows because it is not idempotent. Requires a history step
+	// #[tracing::instrument(skip_all)]
+	// pub async fn get(self) -> GlobalResult<Option<WorkflowData>> {
+	// 	let db = self.db.clone();
+	// 	let workflow_id = self.repr.as_workflow_id()?;
+
+	// 	db.get_workflow(workflow_id).await.map_err(GlobalError::raw)
+	// }
 }

@@ -420,6 +420,7 @@ impl SqlitePoolManager {
 		prev_snapshotted_state: SqliteSnapshottedState,
 	) -> GlobalResult<bool> {
 		let fdb = unwrap!(self.fdb.as_ref());
+		let hex_key = hex::encode(&**key_packed);
 
 		// Get current state
 		let current_state = SqliteSnapshottedState {
@@ -443,19 +444,27 @@ impl SqlitePoolManager {
 			"schema_version() went down"
 		);
 		if prev_snapshotted_state == current_state {
-			tracing::debug!(key=?hex::encode(&**key_packed), "no changes detected, skipping sqlite database snapshot");
+			tracing::debug!(key=?hex_key, "no changes detected, skipping sqlite database snapshot");
 			return Ok(false);
 		}
 
 		tracing::debug!(
-			key=?hex::encode(&**key_packed),
+			key=?hex_key,
 			?prev_snapshotted_state,
 			?current_state,
 			"detected changes in sqlite database"
 		);
 
+		// TODO: Use a stream so as to not load entire DB into memory
 		// Read the database file
 		let data = tokio::fs::read(&conn.db_path).await.map_err(Error::Io)?;
+
+		// 3 MiB
+		if data.len() > 3 * 1024 * 1024 * 1024 {
+			metrics::SQLITE_LARGE_DB
+				.with_label_values(&[&hex_key])
+				.set(data.len().try_into().unwrap_or(i64::MAX));
+		}
 
 		// Write to FDB
 		fdb.run(|tx, _mc| {
@@ -619,15 +628,7 @@ impl SqlitePoolManager {
 			.await?;
 
 		if chunks > 0 {
-			let hex_key = hex::encode(&*key_packed);
-			tracing::debug!(key=?hex_key, ?chunks, data_len = ?data.len(), "loaded database from fdb");
-
-			// 3 MiB
-			if data.len() > 3 * 1024 * 1024 * 1024 {
-				metrics::SQLITE_LARGE_DB
-					.with_label_values(&[&hex_key])
-					.set(data.len().try_into().unwrap_or(i64::MAX));
-			}
+			tracing::debug!(key=?hex::encode(&*key_packed), ?chunks, data_len = ?data.len(), "loaded database from fdb");
 
 			tokio::fs::write(db_path, data).await.map_err(Error::Io)?;
 

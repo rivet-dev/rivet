@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use futures_util::StreamExt;
 use global_error::GlobalResult;
-use tokio::time::Duration;
+use tokio::{task::JoinHandle, time::Duration};
 use tracing::Instrument;
 use uuid::Uuid;
 
@@ -19,6 +21,7 @@ pub struct Worker {
 	worker_instance_id: Uuid,
 	registry: RegistryHandle,
 	db: DatabaseHandle,
+	running_workflows: HashMap<Uuid, JoinHandle<()>>,
 }
 
 impl Worker {
@@ -32,6 +35,7 @@ impl Worker {
 			worker_instance_id: Uuid::new_v4(),
 			registry,
 			db,
+			running_workflows: HashMap::new(),
 		}
 	}
 
@@ -103,7 +107,20 @@ impl Worker {
 			.db
 			.pull_workflows(self.worker_instance_id, &filter)
 			.await?;
+
+		// Remove join handles for completed workflows. This must happen after we pull workflows to ensure an
+		// accurate state of the current workflows
+		self.running_workflows
+			.retain(|_, handle| !handle.is_finished());
+
 		for workflow in workflows {
+			let workflow_id = workflow.workflow_id;
+
+			if self.running_workflows.contains_key(&workflow_id) {
+				tracing::error!(?workflow_id, "workflow already running");
+				continue;
+			}
+
 			let conn = utils::new_conn(
 				shared_client,
 				pools,
@@ -121,7 +138,7 @@ impl Worker {
 			)
 			.await?;
 
-			tokio::task::spawn(
+			let handle = tokio::task::spawn(
 				async move {
 					if let Err(err) = ctx.run().await {
 						tracing::error!(?err, "unhandled error");
@@ -129,6 +146,8 @@ impl Worker {
 				}
 				.in_current_span(),
 			);
+
+			self.running_workflows.insert(workflow_id, handle);
 		}
 
 		Ok(())

@@ -328,19 +328,32 @@ async fn update_ping_thread_inner(
 			continue;
 		}
 
+		// TODO: Parallelize
 		// Update ping in fdb idx for each client
 		for (client_id, flavor, workflow_id) in clients {
 			let Some(workflow_id) = workflow_id else {
 				continue;
 			};
 
-			ctx.op(pegboard::ops::client::update_allocation_idx::Input {
-				client_id,
-				client_workflow_id: workflow_id,
-				flavor,
-				action: pegboard::ops::client::update_allocation_idx::Action::UpdatePing,
-			})
-			.await?;
+			let Some(wf) = ctx
+				.workflow::<pegboard::workflows::client::Input>(workflow_id)
+				.get()
+				.await?
+			else {
+				tracing::error!(?client_id, ?workflow_id, "workflow does not exist");
+				continue;
+			};
+
+			// Only update ping if the workflow is not dead
+			if wf.has_wake_condition {
+				ctx.op(pegboard::ops::client::update_allocation_idx::Input {
+					client_id,
+					client_workflow_id: workflow_id,
+					flavor,
+					action: pegboard::ops::client::update_allocation_idx::Action::UpdatePing,
+				})
+				.await?;
+			}
 		}
 	}
 }

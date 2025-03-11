@@ -1,39 +1,43 @@
-use std::{fmt::Display, time::Instant};
+use std::{fmt::Display, marker::PhantomData, time::Instant};
 
 use global_error::{GlobalError, GlobalResult};
 use serde::Serialize;
 use uuid::Uuid;
 
 use crate::{
-	builder::BuilderError,
+	builder::{BuilderError, WorkflowRepr},
 	ctx::common,
-	db::DatabaseHandle,
+	db::{DatabaseHandle, WorkflowData},
 	error::WorkflowError,
 	metrics,
 	workflow::{Workflow, WorkflowInput},
 };
 
-pub struct WorkflowBuilder<I: WorkflowInput> {
+pub struct WorkflowBuilder<T, I: WorkflowInput> {
 	db: DatabaseHandle,
 	ray_id: Uuid,
-	input: I,
+	repr: T,
 	tags: serde_json::Map<String, serde_json::Value>,
 	unique: bool,
 	error: Option<BuilderError>,
+	_marker: PhantomData<I>,
 }
 
-impl<I: WorkflowInput> WorkflowBuilder<I>
+impl<T, I> WorkflowBuilder<T, I>
 where
+	T: WorkflowRepr<I>,
+	I: WorkflowInput,
 	<I as WorkflowInput>::Workflow: Workflow<Input = I>,
 {
-	pub(crate) fn new(db: DatabaseHandle, ray_id: Uuid, input: I, from_workflow: bool) -> Self {
+	pub(crate) fn new(db: DatabaseHandle, ray_id: Uuid, repr: T, from_workflow: bool) -> Self {
 		WorkflowBuilder {
 			db,
 			ray_id,
-			input,
+			repr,
 			tags: serde_json::Map::new(),
 			unique: false,
 			error: from_workflow.then_some(BuilderError::CannotDispatchFromOpInWorkflow),
+			_marker: PhantomData,
 		}
 	}
 
@@ -88,6 +92,7 @@ where
 		let workflow_name = I::Workflow::NAME;
 		let workflow_id = Uuid::new_v4();
 		let start_instant = Instant::now();
+		let input = self.repr.as_input()?;
 
 		let no_tags = self.tags.is_empty();
 		let tags = serde_json::Value::Object(self.tags);
@@ -97,7 +102,7 @@ where
 			tracing::debug!(
 				%workflow_name,
 				?tags,
-				input=?self.input,
+				?input,
 				"dispatching unique workflow"
 			);
 		} else {
@@ -105,14 +110,14 @@ where
 				%workflow_name,
 				%workflow_id,
 				?tags,
-				input=?self.input,
+				?input,
 				"dispatching workflow"
 			);
 		}
 
 		// Serialize input
-		let input_val = serde_json::value::to_raw_value(&self.input)
-			.map_err(WorkflowError::SerializeWorkflowOutput)
+		let input_val = serde_json::value::to_raw_value(&input)
+			.map_err(WorkflowError::SerializeWorkflowInput)
 			.map_err(GlobalError::raw)?;
 
 		let actual_workflow_id = self
@@ -163,9 +168,28 @@ where
 	pub async fn output(
 		self,
 	) -> GlobalResult<<<I as WorkflowInput>::Workflow as Workflow>::Output> {
+		if !self.tags.is_empty() {
+			return Err(
+				BuilderError::TagsOnSubWorkflowOutputNotSupported(I::Workflow::NAME).into(),
+			);
+		}
+
 		let db = self.db.clone();
 
-		let workflow_id = self.dispatch().await?;
-		common::wait_for_workflow::<I::Workflow>(&db, workflow_id).await
+		let workflow_id = if let Ok(workflow_id) = self.repr.as_workflow_id() {
+			workflow_id
+		} else {
+			self.dispatch().await?
+		};
+
+		common::wait_for_workflow_output::<I::Workflow>(&db, workflow_id).await
+	}
+
+	#[tracing::instrument(skip_all)]
+	pub async fn get(self) -> GlobalResult<Option<WorkflowData>> {
+		let db = self.db.clone();
+		let workflow_id = self.repr.as_workflow_id()?;
+
+		db.get_workflow(workflow_id).await.map_err(GlobalError::raw)
 	}
 }

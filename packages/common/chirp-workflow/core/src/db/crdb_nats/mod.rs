@@ -14,7 +14,7 @@ use tracing::Instrument;
 use types::*;
 use uuid::Uuid;
 
-use super::{Database, PulledWorkflow, SignalData, WorkflowData};
+use super::{Database, PulledWorkflowData, SignalData, WorkflowData};
 use crate::{
 	error::{WorkflowError, WorkflowResult},
 	history::{
@@ -507,7 +507,16 @@ impl Database for DatabaseCrdbNats {
 		sql_fetch_optional!(
 			[self, WorkflowRow]
 			"
-			SELECT workflow_id, input, output
+			SELECT
+				workflow_id,
+				input,
+				output,
+				(
+					wake_immediate OR
+					wake_deadline_ts IS NOT NULL OR
+					cardinality(wake_signals) > 0 OR
+					wake_sub_workflow_id IS NOT NULL
+				) AS has_wake_condition
 			FROM db_workflow.workflows
 			WHERE workflow_id = $1
 			",
@@ -531,7 +540,7 @@ impl Database for DatabaseCrdbNats {
 		&self,
 		worker_instance_id: Uuid,
 		filter: &[&str],
-	) -> WorkflowResult<Vec<PulledWorkflow>> {
+	) -> WorkflowResult<Vec<PulledWorkflowData>> {
 		let start_instant = Instant::now();
 
 		// Select all workflows that have a wake condition
@@ -1034,6 +1043,7 @@ impl Database for DatabaseCrdbNats {
 		location: &Location,
 		version: usize,
 		loop_location: Option<&Location>,
+		_last_try: bool,
 	) -> WorkflowResult<Option<SignalData>> {
 		let signal = self
 			.query(|| async {

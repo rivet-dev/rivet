@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::{
-	db::{PulledWorkflow, SignalData, WorkflowData},
+	db::{PulledWorkflowData, SignalData, WorkflowData},
 	error::{WorkflowError, WorkflowResult},
 	history::{
 		event::{
@@ -21,6 +21,7 @@ pub struct WorkflowRow {
 	workflow_id: Uuid,
 	input: RawJson,
 	output: Option<RawJson>,
+	has_wake_condition: bool,
 }
 
 impl From<WorkflowRow> for WorkflowData {
@@ -29,6 +30,7 @@ impl From<WorkflowRow> for WorkflowData {
 			workflow_id: value.workflow_id,
 			input: value.input.0,
 			output: value.output.map(|x| x.0),
+			has_wake_condition: value.has_wake_condition,
 		}
 	}
 }
@@ -316,7 +318,7 @@ pub fn hash_location(location: &Location) -> Vec<u8> {
 pub fn build_histories(
 	workflow_rows: Vec<PulledWorkflowRow>,
 	event_rows: Vec<AmalgamEventRow>,
-) -> WorkflowResult<Vec<PulledWorkflow>> {
+) -> WorkflowResult<Vec<PulledWorkflowData>> {
 	// Map workflow rows by workflow id
 	let mut workflows_by_id = workflow_rows
 		.into_iter()
@@ -395,7 +397,7 @@ pub fn build_histories(
 				}
 			}
 
-			PulledWorkflow {
+			PulledWorkflowData {
 				workflow_id: row.workflow_id,
 				workflow_name: row.workflow_name,
 				create_ts: row.create_ts,

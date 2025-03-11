@@ -3,7 +3,7 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
 	activity::{Activity, ActivityInput},
-	builder::workflow as builder,
+	builder::{workflow as builder, WorkflowRepr},
 	ctx::{workflow::Loop, WorkflowCtx},
 	executable::{AsyncResult, Executable},
 	listen::{CustomListener, Listen},
@@ -73,7 +73,10 @@ impl<'a> VersionedWorkflowCtx<'a> {
 	}
 
 	/// Creates a sub workflow builder.
-	pub fn workflow<I>(&mut self, input: I) -> builder::sub_workflow::SubWorkflowBuilder<I>
+	pub fn workflow<I>(
+		&mut self,
+		input: impl WorkflowRepr<I>,
+	) -> builder::sub_workflow::SubWorkflowBuilder<impl WorkflowRepr<I>, I>
 	where
 		I: WorkflowInput,
 		<I as WorkflowInput>::Workflow: Workflow<Input = I>,

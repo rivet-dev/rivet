@@ -91,18 +91,19 @@ pub async fn pegboard_actor_get(ctx: &OperationCtx, input: &Input) -> GlobalResu
 							.get(&keys::subspace().pack(&workflow_id_key), SERIALIZABLE)
 							.await?;
 
+						let Some(workflow_id_entry) = workflow_id_entry else {
+							return Ok(None);
+						};
+
 						let workflow_id = workflow_id_key
-							.deserialize(&workflow_id_entry.ok_or(
-								fdb::FdbBindingError::CustomError(
-									format!("key should exist: {workflow_id_key:?}").into(),
-								),
-							)?)
+							.deserialize(&workflow_id_entry)
 							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
-						Ok((actor_id, workflow_id))
+						Ok(Some((actor_id, workflow_id)))
 					}
 				})
 				.buffer_unordered(1024)
+				.try_filter_map(|x| std::future::ready(Ok(x)))
 				.try_collect::<Vec<_>>()
 				.await
 		})
