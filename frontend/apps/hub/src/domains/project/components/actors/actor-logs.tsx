@@ -171,17 +171,6 @@ export const ActorLogs = memo(
 			[],
 		);
 
-		if (!isStdOutSuccess || !isStdErrSuccess) {
-			return (
-				<div className="w-full flex-1 min-h-0">
-					<ActorConsoleMessage variant="error">
-						[SYSTEM]: Couldn't find the logs. Please try again
-						later.
-					</ActorConsoleMessage>
-				</div>
-			);
-		}
-
 		if (isStdOutLoading || isStdErrLoading) {
 			return (
 				<div className="w-full flex-1 min-h-0">
@@ -205,6 +194,16 @@ export const ActorLogs = memo(
 		}
 
 		if (combined.length === 0) {
+			if (!isStdOutSuccess || !isStdErrSuccess) {
+				return (
+					<div className="w-full flex-1 min-h-0">
+						<ActorConsoleMessage variant="error">
+							[SYSTEM]: Couldn't find the logs. Please try again
+							later.
+						</ActorConsoleMessage>
+					</div>
+				);
+			}
 			return (
 				<div className="w-full flex-1 min-h-0">
 					<ActorConsoleMessage variant="debug">
