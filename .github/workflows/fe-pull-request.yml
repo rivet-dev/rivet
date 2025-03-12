@@ -1,4 +1,4 @@
-name: "Frontend: Code quality"
+name: javascript
 
 on:
   pull_request:

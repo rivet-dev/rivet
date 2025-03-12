@@ -1,0 +1,30 @@
+{
+	"name": "rivet-cli",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/rivet-gg/rivet.git",
+		"directory": "frontend/packages/cli"
+	},
+	"version": "25.1.1",
+	"bin": {
+		"rivet": "dist/bin/rivet"
+	},
+	"license": "Apache-2.0",
+	"files": [
+		"dist/postinstall.js",
+		"postinstall.ts",
+		"package.json"
+	],
+	"preferGlobal": true,
+	"preferUnplugged": true,
+	"scripts": {
+		"preinstall": "tsup postinstall.ts --minify --format cjs --out-dir dist",
+		"prepack": "jq 'del(.scripts.preinstall)' package.json > temp.json && mv temp.json package.json",
+		"build": "tsup postinstall.ts --minify --format cjs --out-dir dist",
+		"postinstall": "node ./dist/postinstall.js"
+	},
+	"devDependencies": {
+		"@types/node": "^22.13.4",
+		"tsup": "^8.3.6"
+	}
+}

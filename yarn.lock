@@ -5976,6 +5976,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/node@npm:^22.13.4":
+  version: 22.13.4
+  resolution: "@types/node@npm:22.13.4"
+  dependencies:
+    undici-types: "npm:~6.20.0"
+  checksum: 10c0/3a234fa7766a3efc382cf81f66f474c26cdab2f54f43f757634c81c0444eb2160c2dabbde9741e4983078a318a88515b65416b5f1ab5478548579d7b3ead1d95
+  languageName: node
+  linkType: hard
+
 "@types/prop-types@npm:*":
   version: 15.7.14
   resolution: "@types/prop-types@npm:15.7.14"
@@ -13917,6 +13926,17 @@ __metadata:
   checksum: 10c0/7da4fd0e15118ee05b918359462cfa1e7fe4b1228c7765195a45b55576e8c15b95db513b8466ec89129666f4af45ad978a3057a02139afba1a63512a2d9644cc
   languageName: node
   linkType: hard
+
+"rivet-cli@workspace:frontend/packages/cli":
+  version: 0.0.0-use.local
+  resolution: "rivet-cli@workspace:frontend/packages/cli"
+  dependencies:
+    "@types/node": "npm:^22.13.4"
+    tsup: "npm:^8.3.6"
+  bin:
+    rivet: dist/bin/rivet
+  languageName: unknown
+  linkType: soft
 
 "rivet-site@workspace:site":
   version: 0.0.0-use.local
