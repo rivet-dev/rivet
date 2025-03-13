@@ -27,7 +27,13 @@ import {
 	Text,
 	WithTooltip,
 } from "@rivet-gg/components";
-import { Icon, faCheckCircle, faInfoCircle, faRefresh } from "@rivet-gg/icons";
+import {
+	Icon,
+	faCheckCircle,
+	faCopy,
+	faInfoCircle,
+	faRefresh,
+} from "@rivet-gg/icons";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
@@ -89,8 +95,8 @@ function ProjectBuildsRoute() {
 				<Table>
 					<TableHeader>
 						<TableRow>
-							<TableHead>Id</TableHead>
-							<TableHead>Created at</TableHead>
+							<TableHead>ID</TableHead>
+							<TableHead>Name</TableHead>
 							<TableHead>Tags</TableHead>
 							<TableHead>
 								<WithTooltip
@@ -102,6 +108,7 @@ function ProjectBuildsRoute() {
 									}
 								/>
 							</TableHead>
+							<TableHead>Created</TableHead>
 							<TableHead />
 						</TableRow>
 					</TableHeader>
@@ -134,15 +141,37 @@ function ProjectBuildsRoute() {
 										content={build.id}
 										trigger={
 											<CopyButton value={build.id}>
-												<button type="button">
+												<Button
+													type="button"
+													variant="ghost"
+													endIcon={
+														<Icon
+															className="group-hover:opacity-100 opacity-0 transition-opacity"
+															icon={faCopy}
+														/>
+													}
+												>
 													{build.id.split("-")[0]}
-												</button>
+												</Button>
 											</CopyButton>
 										}
 									/>
 								</TableCell>
 								<TableCell>
-									{build.createdAt.toLocaleString()}
+									<CopyButton value={build.tags.name}>
+										<Button
+											type="button"
+											variant="ghost"
+											endIcon={
+												<Icon
+													className="group-hover:opacity-100 opacity-0 transition-opacity"
+													icon={faCopy}
+												/>
+											}
+										>
+											{build.tags.name}
+										</Button>
+									</CopyButton>
 								</TableCell>
 								<TableCell>
 									<ActorTags
@@ -158,6 +187,9 @@ function ProjectBuildsRoute() {
 										environmentId={environmentId}
 										{...build}
 									/>
+								</TableCell>
+								<TableCell>
+									{build.createdAt.toLocaleString()}
 								</TableCell>
 								<TableCell>
 									<ProjectBuildsTableActions
@@ -176,6 +208,12 @@ function ProjectBuildsRoute() {
 function RowSkeleton() {
 	return (
 		<TableRow>
+			<TableCell>
+				<Skeleton className="w-full h-4" />
+			</TableCell>
+			<TableCell>
+				<Skeleton className="w-full h-4" />
+			</TableCell>
 			<TableCell>
 				<Skeleton className="w-full h-4" />
 			</TableCell>
