@@ -19,6 +19,7 @@ import {
 	type Response,
 	ResponseSchema,
 } from "./actor-worker-schema";
+import { endWithSlash } from "@/lib/utils";
 
 class ReplError extends Error {
 	constructor(
@@ -127,7 +128,7 @@ addEventListener("message", async (event) => {
 		}
 
 		try {
-			const url = new URL("inspect", `${data.endpoint}/`);
+			const url = new URL("inspect", endWithSlash(data.endpoint));
 			const ws = new WebSocket(url);
 
 			await waitForOpen(ws);
@@ -200,7 +201,10 @@ addEventListener("message", async (event) => {
 			const createRpc =
 				(rpc: string) =>
 				async (...args: unknown[]) => {
-					const url = new URL(`rpc/${rpc}`, `${actor.url}/`);
+					const url = new URL(
+						`rpc/${rpc}`,
+						endWithSlash(actor.url.href),
+					);
 					const response = await fetch(url, {
 						method: "POST",
 						body: JSON.stringify({

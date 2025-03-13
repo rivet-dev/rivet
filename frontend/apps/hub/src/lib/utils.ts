@@ -103,3 +103,7 @@ export function assertNonNullable<V>(v: V): asserts v is Exclude<V, null> {
 		throw new Error(`${v} is null`);
 	}
 }
+
+export function endWithSlash(url: string) {
+	return url.endsWith("/") ? url : `${url}/`;
+}
