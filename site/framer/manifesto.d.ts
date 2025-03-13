@@ -11,14 +11,14 @@ export interface Props {
     width?: any
     height?: any
     layoutId?: string
-
+    "variant"?: 'Desktop' | 'Tablet' | 'Phone'
 }
 
-const SalesFramerComponent = (props: Props) => any
+const ManifestoFramerComponent = (props: Props) => any
 
 type VariantsMap = Partial<Record<UnframerBreakpoint, Props['variant']>> & { base: Props['variant'] }
 
-SalesFramerComponent.Responsive = (props: Omit<Props, 'variant'> & {variants: VariantsMap}) => any
+ManifestoFramerComponent.Responsive = (props: Omit<Props, 'variant'> & {variants: VariantsMap}) => any
 
-export default SalesFramerComponent
+export default ManifestoFramerComponent
 

@@ -2,9 +2,10 @@
 	"$schema": "https://unframer-schema.vercel.app/schema.json",
 	"outDir": "./src/generated/framer",
 	"components": {
-		"index": "https://framer.com/m/Main-Page-hPg2.js@4ID57bZyMQiDoFwoLKW4",
-		"pricing": "https://framer.com/m/Pricing-Page-VfNq.js@Cm2ghSmMzqbn4Y3XDe1A",
-		"sales": "https://framer.com/m/Sales-Page-serf.js@bZPytf0REs7q4bOEwvxc"
+		"index": "https://framer.com/m/Main-Page-hPg2.js@HMsJoWuGmbXVerrMhHTH",
+		"pricing": "https://framer.com/m/Pricing-Page-VfNq.js@UOVOnhY3J6QNBPfh6JEt",
+		"sales": "https://framer.com/m/Sales-Page-serf.js@sbXwCxhxf87iUS1o9Qk2",
+		"manifesto": "https://framer.com/m/manifesto-page-TOLa.js@ZX5T9QsoQXlcazLVgbNc"
 	},
 	"breakpoints": {
 		"xl": 1200,

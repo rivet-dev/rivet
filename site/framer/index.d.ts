@@ -11,7 +11,7 @@ export interface Props {
     width?: any
     height?: any
     layoutId?: string
-    "variant"?: 'Desktop' | 'Tablet' | 'Phone'
+
 }
 
 const IndexFramerComponent = (props: Props) => any
