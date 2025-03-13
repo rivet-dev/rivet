@@ -1,4 +1,4 @@
-import { InspectRpcResponseSchema } from "@rivet-gg/actor-protocol/ws/to_client";
+import { InspectDataSchema } from "actor-core/protocol/inspector";
 import { z } from "zod";
 
 export type ReplErrorCode =
@@ -49,17 +49,6 @@ export const LogSchema = z.object({
 	timestamp: z.string().optional(),
 });
 
-export const StateSchema = z.object({
-	...InspectRpcResponseSchema.shape.state.shape,
-	native: InspectRpcResponseSchema.shape.state.shape.native.optional(),
-});
-
-export const ConnectionSchema = z.object({
-	id: z.string(),
-	subscriptions: z.array(z.string()),
-	state: StateSchema.optional(),
-});
-
 export const ResponseSchema = z.discriminatedUnion("type", [
 	z.object({
 		type: z.literal("error"),
@@ -83,15 +72,11 @@ export const ResponseSchema = z.discriminatedUnion("type", [
 	}),
 	z.object({
 		type: z.literal("ready"),
-		data: InspectRpcResponseSchema,
+		data: InspectDataSchema,
 	}),
 	z.object({
-		type: z.literal("state-change"),
-		data: StateSchema,
-	}),
-	z.object({
-		type: z.literal("connections-change"),
-		data: z.array(ConnectionSchema),
+		type: z.literal("inspect"),
+		data: InspectDataSchema,
 	}),
 ]);
 
@@ -101,6 +86,5 @@ export type FormattedCode = z.infer<typeof FormattedCodeSchema>;
 export type Log = z.infer<typeof LogSchema>;
 export type InitMessage = z.infer<typeof InitMessageSchema>;
 export type CodeMessage = z.infer<typeof CodeMessageSchema>;
-export type Connection = z.infer<typeof ConnectionSchema>;
-export type State = z.infer<typeof StateSchema>;
+export type InspectData = z.infer<typeof InspectDataSchema>;
 export type SetStateMessage = z.infer<typeof SetStateMessageSchema>;

@@ -34,6 +34,7 @@
 		"@tanstack/router-devtools": "^1.97.3",
 		"@tanstack/zod-adapter": "^1.97.3",
 		"@types/bcryptjs": "^2.4.6",
+		"actor-core": "^0.6.2",
 		"bcryptjs": "^2.4.3",
 		"esast-util-from-js": "^2.0.1",
 		"file-saver": "^2.0.5",

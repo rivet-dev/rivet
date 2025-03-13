@@ -1,19 +1,23 @@
-import { ActorHandleRaw } from "@rivet-gg/actor-client";
-import type { InspectRpcResponse } from "@rivet-gg/actor-protocol/ws/to_client";
 import { fromJs } from "esast-util-from-js";
 import { toJs } from "estree-util-to-js";
+import {
+	type ToClient,
+	ToClientSchema,
+	type InspectData,
+	type ToServer,
+} from "actor-core/protocol/inspector";
+
+import type { ResponseOk, Request } from "actor-core/protocol/http";
 import {
 	type HighlighterCore,
 	createHighlighterCore,
 	createOnigurumaEngine,
 } from "shiki";
 import {
-	type Connection,
 	MessageSchema,
 	type ReplErrorCode,
 	type Response,
 	ResponseSchema,
-	type State,
 } from "./actor-worker-schema";
 
 class ReplError extends Error {
@@ -104,7 +108,7 @@ const createConsole = (id: string) => {
 	);
 };
 
-let init: null | ({ handle: ActorHandleRaw } & InspectRpcResponse);
+let init: null | ({ ws: WebSocket; url: URL } & InspectData) = null;
 
 addEventListener("message", async (event) => {
 	const { success, data } = MessageSchema.safeParse(event.data);
@@ -123,58 +127,48 @@ addEventListener("message", async (event) => {
 		}
 
 		try {
-			const handle = new ActorHandleRaw(
-				`${data.endpoint}/__inspect`,
-				undefined,
-				"cbor",
+			const url = new URL("inspect", `${data.endpoint}/`);
+			const ws = new WebSocket(url);
+
+			await waitForOpen(ws);
+
+			ws.send(
+				JSON.stringify({
+					type: "info",
+				} satisfies ToServer),
 			);
 
-			handle.connect();
+			const { type: _, ...info } = await waitForMessage(ws, "info");
+			init = { ...info, ws, url: new URL(data.endpoint) };
 
-			if (!handle) {
-				respond({
-					type: "error",
-					data: new Error("Could not connect to actor"),
-				});
+			ws.addEventListener("message", (event) => {
+				try {
+					const data = ToClientSchema.parse(JSON.parse(event.data));
 
-				throw new Error("Could not connect to actor, bailing out");
-			}
-
-			const inspect = await Promise.race([
-				handle.rpc<[], InspectRpcResponse>("inspect"),
-				wait(5000).then(() => undefined),
-			]);
-
-			if (!inspect) {
-				respond({
-					type: "error",
-					data: ReplError.unsupported(),
-				});
-
-				throw ReplError.unsupported();
-			}
-
-			if (inspect.state.enabled) {
-				handle.on("_state-changed", (state: State) => {
-					respond({
-						type: "state-change",
-						data: state,
-					});
-				});
-			}
-
-			handle.on("_connections-changed", (connections: Connection[]) => {
-				respond({
-					type: "connections-change",
-					data: connections,
-				});
+					if (data.type === "info") {
+						return respond({
+							type: "inspect",
+							data: {
+								...data,
+							},
+						});
+					}
+					if (data.type === "error") {
+						return respond({
+							type: "error",
+							data: data.message,
+						});
+					}
+				} catch (error) {
+					console.warn("Malformed message", event.data, error);
+					return;
+				}
 			});
 
-			init = { handle, ...inspect };
 			return respond({
 				type: "ready",
 				data: {
-					...inspect,
+					...info,
 				},
 			});
 		} catch (e) {
@@ -203,11 +197,27 @@ addEventListener("message", async (event) => {
 				data: formatted,
 			});
 
+			const createRpc =
+				(rpc: string) =>
+				async (...args: unknown[]) => {
+					const url = new URL(`rpc/${rpc}`, `${actor.url}/`);
+					const response = await fetch(url, {
+						method: "POST",
+						body: JSON.stringify({
+							a: args,
+						} satisfies Request),
+					});
+
+					if (!response.ok) {
+						throw new Error("RPC failed");
+					}
+
+					const data = (await response.json()) as ResponseOk;
+					return data.o;
+				};
+
 			const exposedActor = Object.fromEntries(
-				init?.rpcs.map((rpc) => [
-					rpc,
-					actor.handle.rpc.bind(actor.handle, rpc),
-				]) ?? [],
+				init?.rpcs.map((rpc) => [rpc, createRpc(rpc)]) ?? [],
 			);
 
 			const evaluated = await evaluateCode(data.data, {
@@ -241,14 +251,12 @@ addEventListener("message", async (event) => {
 
 		try {
 			const state = JSON.parse(data.data);
-			await actor.handle.rpc("setState", state);
-			return respond({
-				type: "state-change",
-				data: {
-					enabled: true,
-					native: data.data,
-				},
-			});
+			actor.ws.send(
+				JSON.stringify({
+					type: "setState",
+					state,
+				} satisfies ToServer),
+			);
 		} catch (e) {
 			return respond({
 				type: "error",
@@ -260,4 +268,58 @@ addEventListener("message", async (event) => {
 
 function respond(msg: Response) {
 	return postMessage(ResponseSchema.parse(msg));
+}
+
+function waitForOpen(ws: WebSocket) {
+	const { promise, resolve, reject } = Promise.withResolvers();
+	ws.addEventListener("open", () => {
+		resolve(undefined);
+	});
+	ws.addEventListener("error", (event) => {
+		reject();
+	});
+	ws.addEventListener("close", (event) => {
+		reject();
+	});
+
+	return Promise.race([
+		promise,
+		wait(5000).then(() => {
+			throw new Error("Timeout");
+		}),
+	]);
+}
+
+function waitForMessage<T extends ToClient["type"]>(
+	ws: WebSocket,
+	type: T,
+): Promise<Extract<ToClient, { type: T }>> {
+	const { promise, resolve, reject } =
+		Promise.withResolvers<Extract<ToClient, { type: T }>>();
+
+	function onMessage(event: MessageEvent) {
+		try {
+			const data = ToClientSchema.parse(JSON.parse(event.data));
+
+			if (data.type === type) {
+				resolve(data as Extract<ToClient, { type: T }>);
+				ws.removeEventListener("message", onMessage);
+			}
+		} catch (e) {
+			console.error(e);
+		}
+	}
+
+	ws.addEventListener("message", onMessage);
+	ws.addEventListener("error", (event) => {
+		ws.removeEventListener("message", onMessage);
+		reject();
+	});
+
+	return Promise.race([
+		promise,
+		wait(5000).then(() => {
+			throw new Error("Timeout");
+		}),
+	]);
 }

@@ -40,8 +40,8 @@ export function ActorEditableState({ state }: ActorEditableStateProps) {
 	const ref = useRef<CodeMirrorRef>(null);
 
 	const formatted = useMemo(() => {
-		return JSON.stringify(JSON.parse(state.native || ""), null, 2);
-	}, [state.native]);
+		return JSON.stringify(state.value || "{}", null, 2);
+	}, [state.value]);
 
 	const isValid = isValidJson(value)
 		? isJsonSerializable(JSON.parse(value))
@@ -53,7 +53,7 @@ export function ActorEditableState({ state }: ActorEditableStateProps) {
 				<div className="flex items-center justify-start gap-1">
 					<LiveBadge />
 
-					<ActorStateChangeIndicator state={state.native} />
+					<ActorStateChangeIndicator state={state.value} />
 				</div>
 				<div className="flex gap-2">
 					<AnimatePresence>

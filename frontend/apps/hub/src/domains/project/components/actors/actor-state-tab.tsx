@@ -66,31 +66,6 @@ export function ActorStateTab({ disabled }: ActorStateTabProps) {
 			</div>
 		);
 	}
-
-	if (
-		state.json &&
-		typeof state.json === "object" &&
-		"_error" in state.json
-	) {
-		if (
-			state.json._error &&
-			typeof state.json._error === "object" &&
-			"code" in state.json._error &&
-			state.json._error.code === "state_too_large"
-		) {
-			return (
-				<div className="flex-1 flex items-center justify-center h-full text-xs text-center flex-col gap-1">
-					<Icon icon={faWarning} className="text-xl" />
-					<DocsSheet title="State" path="docs/state">
-						<span className="hover:underline cursor-pointer">
-							State is too large to preview.
-							<br /> Maximum size is 128 MB.
-						</span>
-					</DocsSheet>
-				</div>
-			);
-		}
-	}
 	return (
 		<div className="flex-1 w-full min-h-0 h-full flex flex-col">
 			<ActorEditableState state={state} />

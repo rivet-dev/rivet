@@ -3,12 +3,11 @@ import { queryClient } from "@/queries/global";
 import { CancelledError } from "@tanstack/react-query";
 import ActorWorker from "./actor-repl.worker?worker";
 import {
-	type State as ActorState,
 	type CodeMessage,
-	type Connection,
 	type FormattedCode,
 	type InitMessage,
 	type Log,
+	type InspectData,
 	ResponseSchema,
 	type SetStateMessage,
 } from "./actor-worker-schema";
@@ -35,18 +34,15 @@ export type ContainerStatus =
 
 export type ContainerState = {
 	status: ContainerStatus;
-	rpcs: string[];
 	commands: ReplCommand[];
-	state: ActorState & { json: unknown };
-	connections: Connection[];
-};
+} & InspectData;
 
 export class ActorWorkerContainer {
 	#state: ContainerState = {
 		status: { type: "unknown" },
 		commands: [],
 		rpcs: [],
-		state: { enabled: false, native: undefined, json: undefined },
+		state: { enabled: false, value: undefined },
 		connections: [],
 	};
 
@@ -90,9 +86,9 @@ export class ActorWorkerContainer {
 			signal.throwIfAborted();
 
 			// FIXME(RVT-4553)
-			if (actor.resources.cpu !== 125 || actor.resources.memory !== 128) {
-				throw new Error("Unsupported actor resources");
-			}
+			// if (actor.resources.cpu !== 125 || actor.resources.memory !== 128) {
+			// 	throw new Error("Unsupported actor resources");
+			// }
 
 			// If we reached this point, the actor is supported
 			// check if we still operate on the same actor
@@ -140,8 +136,7 @@ export class ActorWorkerContainer {
 		this.#state.rpcs = [];
 		this.#state.state = {
 			enabled: false,
-			native: undefined,
-			json: undefined,
+			value: undefined,
 		};
 		this.#meta = null;
 		this.#state.connections = [];
@@ -192,8 +187,7 @@ export class ActorWorkerContainer {
 		} satisfies SetStateMessage);
 		this.#state.state = {
 			...this.#state.state,
-			native: data,
-			json: JSON.parse(data || "{}"),
+			value: JSON.parse(data || "{}"),
 		};
 		this.#update();
 	}
@@ -309,26 +303,15 @@ export class ActorWorkerContainer {
 
 		if (msg.type === "ready") {
 			this.#state.status = { type: "ready" };
-			this.#state.rpcs = msg.data.rpcs;
+		}
+
+		if (msg.type === "inspect" || msg.type === "ready") {
+			this.#state.rpcs = [...msg.data.rpcs];
 			this.#state.state = {
 				...msg.data.state,
-				json: JSON.parse(msg.data.state.native),
+				value: msg.data.state.value || {},
 			};
-			this.#state.connections = msg.data.connections;
-			this.#update();
-		}
-
-		if (msg.type === "state-change") {
-			this.#state.state = {
-				...msg.data,
-				native: msg.data.native,
-				json: JSON.parse(msg.data.native || "{}"),
-			};
-			this.#update();
-		}
-
-		if (msg.type === "connections-change") {
-			this.#state.connections = [...msg.data];
+			this.#state.connections = [...msg.data.connections];
 			this.#update();
 		}
 	}
