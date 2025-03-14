@@ -11,6 +11,7 @@ pub struct Input {
 	pub config: config::Config,
 	pub environment_id: Uuid,
 	pub build_tags: Option<HashMap<String, String>>,
+	pub version_name: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -39,14 +40,19 @@ impl task::Task for Task {
 
 		let env = crate::project::environment::get_env(&ctx, input.environment_id).await?;
 
-		// Reserve version name
-		let reserve_res =
-			apis::cloud_games_versions_api::cloud_games_versions_reserve_version_name(
-				&ctx.openapi_config_cloud,
-				&ctx.project.game_id.to_string(),
-			)
-			.await?;
-		let version_name = reserve_res.version_display_name;
+		// Get version name (provided or reserved)
+		let version_name = if let Some(version) = input.version_name {
+			version
+		} else {
+			// Reserve version name if not provided
+			let reserve_res =
+				apis::cloud_games_versions_api::cloud_games_versions_reserve_version_name(
+					&ctx.openapi_config_cloud,
+					&ctx.project.game_id.to_string(),
+				)
+				.await?;
+			reserve_res.version_display_name
+		};
 
 		// Build
 		let mut build_ids = Vec::new();

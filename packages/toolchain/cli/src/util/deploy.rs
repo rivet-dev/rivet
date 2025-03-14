@@ -11,6 +11,7 @@ use crate::util::task::{run_task, TaskOutputStyle};
 pub struct DeployOpts<'a> {
 	pub environment: &'a str,
 	pub build_tags: Option<HashMap<String, String>>,
+	pub version: Option<String>,
 }
 
 pub async fn deploy(opts: DeployOpts<'_>) -> Result<Vec<Uuid>> {
@@ -49,6 +50,7 @@ pub async fn deploy(opts: DeployOpts<'_>) -> Result<Vec<Uuid>> {
 			config,
 			environment_id: environment.id,
 			build_tags: opts.build_tags,
+			version_name: opts.version,
 		},
 	)
 	.await?;

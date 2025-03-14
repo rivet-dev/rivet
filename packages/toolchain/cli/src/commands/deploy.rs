@@ -9,6 +9,9 @@ pub struct Opts {
 
 	#[clap(long, short = 't')]
 	tags: Option<String>,
+
+	#[clap(long, help = "Override the automatically generated version name")]
+	version: Option<String>,
 }
 
 impl Opts {
@@ -27,6 +30,7 @@ impl Opts {
 		crate::util::deploy::deploy(crate::util::deploy::DeployOpts {
 			environment: &env,
 			build_tags,
+			version: self.version.clone(),
 		})
 		.await?;
 

@@ -27,6 +27,9 @@ pub struct Opts {
 	#[clap(long = "tags", short = 't')]
 	tags: Option<String>,
 
+	#[clap(long, short = 'v', help = "Override the automatically generated version name")]
+	version: Option<String>,
+
 	#[clap(long)]
 	access: Option<config::BuildAccess>,
 
@@ -124,14 +127,19 @@ impl Opts {
 			return Err(errors::UserError::new(error).into());
 		};
 
-		// Reserve version name
-		let reserve_res =
-			apis::cloud_games_versions_api::cloud_games_versions_reserve_version_name(
-				&ctx.openapi_config_cloud,
-				&ctx.project.game_id.to_string(),
-			)
-			.await?;
-		let version_name = reserve_res.version_display_name;
+		// Get version name (provided or reserved)
+		let version_name = if let Some(version) = &self.version {
+			version.clone()
+		} else {
+			// Reserve version name if not provided
+			let reserve_res =
+				apis::cloud_games_versions_api::cloud_games_versions_reserve_version_name(
+					&ctx.openapi_config_cloud,
+					&ctx.project.game_id.to_string(),
+				)
+				.await?;
+			reserve_res.version_display_name
+		};
 
 		// Build and upload
 		run_task::<build_publish::Task>(

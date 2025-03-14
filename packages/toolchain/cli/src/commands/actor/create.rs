@@ -51,6 +51,9 @@ pub struct Opts {
 
 	#[clap(long, short = 'b')]
 	build_tags: Option<String>,
+	
+	#[clap(long, short = 'v', help = "Override the automatically generated version name")]
+	version: Option<String>,
 
 	#[clap(long = "env-var")]
 	env_vars: Option<Vec<String>>,
@@ -170,10 +173,11 @@ impl Opts {
 				.take()
 				.context("must define build tags when using deploy flag")?;
 
-			// Deploys erver
+			// Deploy server
 			let deploy_build_ids = crate::util::deploy::deploy(crate::util::deploy::DeployOpts {
 				environment: &env,
 				build_tags: Some(build_tags),
+				version: self.version.clone(),
 			})
 			.await?;
 
