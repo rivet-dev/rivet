@@ -6,6 +6,7 @@ import {
 	faClipboardListCheck,
 	faCode,
 	faDatabase,
+	faDownload,
 	faExclamationTriangle,
 	faFingerprint,
 	faFloppyDisk,
@@ -17,6 +18,7 @@ import {
 	faNetworkWired,
 	faPlay,
 	faReact,
+	faRocket,
 	faSquareInfo,
 	faSquarePlus,
 	faSquareSliders,
@@ -42,222 +44,94 @@ export const sitemap = [
 		title: "Documentation",
 		href: "/docs",
 		sidebar: [
-			{ title: "Overview", href: "/docs", icon: faSquareInfo },
 			{
-				title: "Getting Started",
-				pages: [
-					{
-						title: "Initial Setup",
-						href: "/docs/setup",
-						icon: faPlay,
-					},
-					// {
-					//   title: 'Client SDKs',
-					//   href: '/docs/client/javascript',
-					//   icon: 'toolbox'
-					// },
-					// {
-					//   title: 'JavaScript SDK',
-					//   href: '/docs/client/javascript',
-					//   icon: 'js'
-					// },
-					// {
-					//   title: 'Client SDKs',
-					//   collapsible: true,
-					//   pages: [
-					//     {
-					//       title: 'JavaScript & TypeScript',
-					//       href: '/docs/client/javascript'
-					//     }
-					//     // TODO:
-					//     // { title: 'Godot', href: '/docs/godot' },
-					//     // { title: 'Unity', href: '/docs/unity' },
-					//     // { title: 'Unreal', href: '/docs/unreal' },
-					//   ]
-					// },
-					{
-						title: "Actor SDK",
-						href: "https://www.npmjs.com/package/@rivet-gg/actor",
-						icon: faActorsBorderless,
-						external: true,
-					},
-					// {
-					//   title: 'JavaScript SDK',
-					//   href: 'https://jsr.io/@rivet-gg/actor-client',
-					//   icon: 'js'
-					// },
-				],
+				title: "Overview",
+				href: "/docs",
+				icon: faSquareInfo,
 			},
 			{
-				title: "Client SDKs",
+				title: "Install CLI",
+				href: "/docs/install",
+				icon: faDownload
+			},
+			{
+				title: "Getting Started", // See https://supabase.com/docs/guides/auth/quickstarts/nextjs
 				pages: [
 					{
 						title: "TypeScript",
-						href: "https://www.npmjs.com/package/@rivet-gg/actor-client",
+						href: "/docs/quickstart/typescript",
 						icon: faTs,
-						external: true,
-					},
-					{
-						title: "React",
-						href: "/docs/client/react",
-						icon: faReact,
-					},
-				],
-			},
-			//{
-			//  title: 'Use Cases',
-			//  pages: [
-			//    {
-			//      title: 'Collaborative Application',
-			//      href: '/use-cases/multiplayer',
-			//      icon: 'rotate'
-			//    },
-			//    {
-			//      title: 'Local-First Sync',
-			//      href: '/use-cases/local-first',
-			//      icon: 'mobile'
-			//    },
-			//    {
-			//      title: 'AI Agents',
-			//      href: '/use-cases/ai-agents',
-			//      icon: 'robot'
-			//    },
-			//    {
-			//      title: 'Discord Activities',
-			//      href: '/use-cases/user-code',
-			//      icon: 'alien-8bit'
-			//    },
-			//    {
-			//      title: 'Dedicated Game Servers',
-			//      href: '/use-cases/game-servers',
-			//      icon: 'gamepad'
-			//    },
-			//    {
-			//      title: 'Run User Code',
-			//      href: '/use-cases/user-code',
-			//      icon: 'alien-8bit'
-			//    },
-			//    // { title: 'Batch Jobs', href: '/docs', icon: 'forklift' },
-			//    // { title: 'Live Events', href: '/docs', icon: 'calendar' },
-			//    { title: 'More', href: '/use-cases', icon: 'ellipsis' }
-			//  ]
-			//},
-			{
-				title: "Build with Actors",
-				pages: [
-					{
-						title: "Create & Manage Actors",
-						href: "/docs/manage",
-						icon: faSquarePlus,
-					},
-					{
-						title: "Remote Procedure Calls",
-						href: "/docs/rpc",
-						icon: faCode,
-					},
-					{
-						title: "State",
-						href: "/docs/state",
-						icon: faFloppyDisk,
-					},
-					{
-						title: "Events",
-						href: "/docs/events",
-						icon: faTowerBroadcast,
-					},
-					{
-						title: "Lifecycle",
-						href: "/docs/lifecycle",
-						icon: faSync,
-					},
-					{
-						title: "Edge Networking",
-						href: "/docs/edge",
-						icon: faGlobe,
-					},
-					{
-						title: "More",
-						collapsible: true,
-						pages: [
-							{
-								title: "Connections",
-								href: "/docs/connections",
-								icon: faNetworkWired,
-							},
-							{
-								title: "Authentication",
-								href: "/docs/authentication",
-								icon: faFingerprint,
-							},
-							{
-								title: "Metadata",
-								href: "/docs/metadata",
-								icon: faTag,
-							},
-							{
-								title: "External SQL Databases",
-								href: "/docs/external-sql",
-								icon: faDatabase,
-							},
-							{
-								title: "Logging",
-								href: "/docs/logging",
-								icon: faListUl,
-							},
-							{
-								title: "Builds",
-								href: "/docs/builds",
-								icon: faHammer,
-							},
-							{
-								title: "Scaling & Concurrency",
-								href: "/docs/scaling",
-								icon: faMaximize,
-							},
-							{
-								title: "Fault Tolerance",
-								href: "/docs/fault-tolerance",
-								icon: faHeartPulse,
-							},
-							// { title: 'DDoS & Botting Mitigation', href: '/docs', icon: 'shield-halved' },
-						],
 					},
 				],
 			},
 			{
-				title: "Resources",
+				title: "Guides",
 				pages: [
-					// { title: 'Cheatsheet', href: '/docs/cheatsheet', icon: 'file-code' },
-					// { title: 'Integrating Exiting Projects', href: '/docs/integrate', icon: 'plug' },
+					{
+						title: "Realtime Chat App",
+						href: "/guides/chat",
+					},
+					//{
+					//	title: "Collaborative App with Y.js",
+					//	href: "/guides/yjs-nextjs",
+					//},
+					//{
+					//	title: "AI Agent with AI SDK",
+					//	href: "/guides/ai-agent-ai-sdk",
+					//},
+					//{
+					//	title: "Multiplayer Game with Three.js",
+					//	href: "/guides/multiplayer-threejs",
+					//},
+					//{
+					//	title: "Durable Execution",
+					//	href: "/guides/durable-execution",
+					//},
+					//{
+					//	title: "Stateful Stream Processing with Kafka",
+					//	href: "/guides/stream-processing-kafka",
+					//},
+					//{
+					//	title: "Local-First Sync with TinyBase",
+					//	href: "/guides/local-first-sync-tinybase",
+					//},
+					//{
+					//	title: "Sandboxed Code Execution for Python",
+					//	href: "/guides/sandboxed-code-python",
+					//},
+					//{
+					//	title: "Sandboxed Code Execution for TypeScript",
+					//	href: "/guides/sandboxed-code-typescript",
+					//},
+					//{
+					//	title: "Authenticating using Supabase Auth",
+					//	href: "/guides/authenticate-supabase-auth",
+					//},
+				],
+			},
+			{
+				title: "Reference",
+				pages: [
 					{
 						title: "Configuration",
 						href: "/docs/config",
-						icon: faSquareSliders,
+						//icon: faSquareSliders,
+					},
+					{
+						title: "Local Development",
+						href: "/docs/local-development",
+						//icon: faCode
 					},
 					{
 						title: "Troubleshooting",
 						href: "/docs/troubleshooting",
-						icon: faClipboardListCheck,
+						//icon: faClipboardListCheck,
 					},
 					{
 						title: "FAQ",
 						href: "/docs/faq",
-						icon: faBlockQuestion,
+						//icon: faBlockQuestion,
 					},
-					// { title: 'CLI', href: '/docs/cli', icon: 'square-terminal' },
-					// { title: 'Hub', href: '/docs/hub', icon: 'browser' },
-					// { title: 'Local Development', href: '/docs/local-development', icon: 'display' },
-					// { title: 'Billing', href: '/docs', icon: 'credit-card' },
-					// {
-					// 	title: 'Low-Level API',
-					// 	collapsible: true,
-					// 	pages: [
-					// 		{ title: 'Containers vs Isolates', href: '/docs', icon: 'box' },
-					// 		{ title: 'Tokens', href: '/docs', icon: 'box' },
-					// 		{ title: 'Durability', href: '/docs', icon: 'box' },
-					// 		{ title: 'Advanced Networking', href: '/docs', icon: 'box' },
-					// 	]
-					// },
 					{
 						title: "Self-Hosting",
 						collapsible: true,
@@ -267,7 +141,7 @@ export const sitemap = [
 								href: "/docs/self-hosting",
 							},
 							{
-								title: "Local Dev & Single Container",
+								title: "Single Container",
 								href: "/docs/self-hosting/single-container",
 							},
 							{
@@ -289,44 +163,12 @@ export const sitemap = [
 						],
 					},
 					{
-						title: "Monitoring",
-						collapsible: true,
-						pages: [
-							{
-								title: "BetterStack",
-								href: "/docs/monitoring/betterstack",
-							},
-						],
-					},
-					// {
-					//   title: 'Comparison',
-					//   collapsible: true,
-					//   pages: [
-					//     {
-					//       title: 'Kubernetes Jobs',
-					//       href: '/compare/kubernetes'
-					//     },
-					//     {
-					//       title: 'Cloudflare Durable Objects',
-					//       href: '/compare/cloudflare'
-					//     },
-					//     { title: 'Firebase', href: '/compare/firebase' },
-					//     { title: 'Socket.io', href: '/compare/socket-io' },
-					//     { title: 'Redis', href: '/compare/redis' },
-					//     {
-					//       title: 'Erlang/OTP & Elixir',
-					//       href: '/docs/erlang'
-					//     }
-					//     // { title: 'Supabase Realtime', href: '/docs' },
-					//   ]
-					// },
-					{
 						title: "More",
 						collapsible: true,
 						pages: [
 							{
-								title: "Available Regions",
-								href: "/docs/regions",
+								title: "Edge Regions",
+								href: "/docs/edge",
 								icon: faGlobe,
 							},
 							{
@@ -339,26 +181,16 @@ export const sitemap = [
 								collapsible: true,
 								pages: [
 									{
-										title: "Rescheduling",
-										href: "/docs/rescheduling",
+										title: "Runtime",
+										href: "/docs/runtime",
 									},
 									{
 										title: "Networking",
 										href: "/docs/networking",
 									},
 									{
-										title: "Internals",
-										collapsible: true,
-										pages: [
-											{
-												title: "Design Decisions",
-												href: "/docs/internals/design-decisions",
-											},
-											{
-												title: "Actor Runtime",
-												href: "/docs/internals/runtime",
-											},
-										],
+										title: "Rescheduling",
+										href: "/docs/rescheduling",
 									},
 								],
 							},
@@ -366,17 +198,61 @@ export const sitemap = [
 					},
 				],
 			},
+			//{
+			//	title: "Integrations",
+			//	pages: [
+			//		{
+			//			title: "AI Agents",
+			//			collapsible: true,
+			//			pages: [
+			//				{ title: "LangGraph", href: "/docs/integrations/tinybase" },
+			//			]
+			//		},
+			//		{
+			//			title: "Local-First Sync",
+			//			collapsible: true,
+			//			pages: [
+			//				{ title: "TinyBase", href: "/docs/integrations/tinybase" },
+			//			]
+			//		},
+			//	],
+			//},
 		],
 	},
-	// {
-	//   title: 'Examples',
-	//   href: '/examples',
-	//   sidebar: [
-	//     // TODO: Group by type in sidebar
-	//   ]
-	// },
 	{
-		title: "Platform API",
+		title: "Integrations",
+		href: "/integrations",
+		sidebar: [
+			{
+				title: "Introduction",
+				href: "/integrations",
+				icon: faSquareInfo,
+			},
+			//{
+			//	title: "AI Agents",
+			//	pages: [
+			//		{ title: "LangGraph", href: "/integrations/tinybase" },
+			//	],
+			//},
+			//{
+			//	title: "Local-First Sync",
+			//	pages: [
+			//		{ title: "TinyBase", href: "/integrations/tinybase" },
+			//	],
+			//},
+			{
+				title: "Monitoring",
+				pages: [
+					{
+						title: "Better Stack",
+						href: "/integrations/better-stack",
+					},
+				],
+			},
+		],
+	},
+	{
+		title: "API",
 		href: "/docs/api",
 		sidebar: apiPages.pages,
 	},

@@ -1,58 +1,52 @@
-import { Card as MyCard } from '@/components/Card';
-
 # Welcome to Rivet
 
-Rivet is the platform to build realtime, edge, or agent applications that is scalable, stateful, and serverless. Build without the limitations of Redis or timeouts of Lambda. At its core, Rivet provides a primitive -- Actors. Rivet Actors are built with built-in support for remote procedure calls, state, events, and edge networking.
+Actors combine compute and storage into unified entities for simplified architecture. Actors seamlessly integrate with your existing infrastructure or can serve as a complete standalone solution.
 
-## Why use Rivet Actors?
+Whether you're building collaborative applications, multiplayer games, AI agents, or realtime systems, Rivet provides the tools and infrastructure to make your development process smooth and efficient.
 
-Rivet Actors offer several compelling advantages for building applications that require realtime, stateful, or agent functionality:
-
-- **Enhanced Performance**: By integrating compute (i.e., "RPC") with data (i.e., "state"), performance is significantly improved.
-- **Simplified Architecture**: Replace complex infrastructure (e.g., caches, queues, pub/sub) with actors for a more straightforward architecture.
-- **Built-in Fault Tolerance**: Actors provide natural fault tolerance as state is durable and failures do not cascade.
-- **Reduced Latency**: Achieve lower latency for users by running at the edge and combining compute with data.
-
-## Core Features
-
-- [**Remote Procedure Call**](/docs/rpc) (RPC) is how clients communicate with actors and how actors communicate with each other.
-- [**State**](/docs/state) is the data belonging to each actor. State cannot be shared between actors. State is stored in memory (unless it's too large) for fast reads and writes. State is durable and will always survive a crash or upgrade. You can update state without having to do anything special.
-- [**Events**](/docs/events) are used for real-time communication between clients and actors. Clients can subscribe to events with `actor.on("myEvent")`, and actors can publish events with `this._broadcast("myEvent")` or `connection.send("myEvent")`.
-- [**Connections**](/docs/connections) represent a client that's currently connected to the actor. Connections have their own state, e.g., `userId`. You can use `onConnect` to authenticate connections before they can communicate with the actor.
-- [**Edge Networking**](/docs/edge): Automatically distribute your applications near your users for ultra-low latency.
-- [**Fault Tolerance**](/docs/fault-tolerance): Ensure application & state resilience through crashes with zero downtime.
-- [**Runs Forever, Sleeps When Idle**](/docs/lifecycle): Always available, sleeps on network inactivity or timeouts, and wakes instantly on demand.
-
-## Get Started
+## What are actors good for?
 
 <CardGroup>
-  <Card title='Initial Setup' href='/docs/setup' />
-  <Card title='Actor SDK' href='https://www.npmjs.com/package/@rivet-gg/actor' target='_blank' />
+  <Card title="Stateful Services" icon="database" href="#">
+    Applications where maintaining state across interactions is critical. For example, **Collaborative Apps** with shared editing and automatic persistence.
+  </Card>
+  <Card title="Realtime Systems" icon="bolt" href="#">
+    Applications requiring fast, in-memory state modifications or push updates to connected clients. For example, **Multiplayer Games** with game rooms and player state.
+  </Card>
+  <Card title="Long-Running Processes" icon="clock" href="#">
+    Tasks that execute over extended periods or in multiple steps. For example, **AI Agents** with ongoing conversations and stateful tool calls.
+  </Card>
+  <Card title="Durability" icon="shield" href="#">
+    Processes that must survive crashes and restarts without data loss. For example, **Durable Execution** workflows that continue after system restarts.
+  </Card>
+  <Card title="Horizontal Scalability" icon="arrows-left-right" href="#">
+    Systems that need to scale by distributing load across many instances. For example, **Realtime Stream Processing** for stateful event handling.
+  </Card>
+  <Card title="Local-First Architecture" icon="devices" href="#">
+    Systems that synchronize state between offline clients. For example, **Local-First Sync** between devices.
+  </Card>
 </CardGroup>
 
-## Client SDKs
+## Features
 
-<CardGroup>
-  <Card title='JavaScript' href='https://www.npmjs.com/package/@rivet-gg/actor-client' target='_blank' />
-  <Card title='TypeScript' href='https://www.npmjs.com/package/@rivet-gg/actor-client' target='_blank' />
-</CardGroup>
+TODO: Cardgroup from landing page
 
-## Build with Rivet
+## Dashboard
 
-<CardGroup>
-  <Card title='Create & Manage Actors' href='/docs/manage' />
-  <Card title='Remote Procedure Calls' href='/docs/rpc' />
-  <Card title='State' href='/docs/state' />
-  <Card title='Events' href='/docs/events' />
-  <Card title='Scaling & Concurrency' href='/docs/scaling' />
-  <Card title='Edge Networking' href='/docs/edge' />
-</CardGroup>
+### Actor Inspector
 
-## Resources
+TODO
 
-<CardGroup>
-  <Card title='Configuration' href='/docs/config' />
-  <Card title='Troubleshooting' href='/docs/troubleshooting' />
-  <Card title='FAQ' href='/docs/faq' />
-  <Card title='Self-Hosting' href='/docs/self-hosting' />
-</CardGroup>
+### Build history
+
+TODO
+
+### Team management
+
+TODO
+
+## Next steps
+
+- Read the [quickstart](/docs/quickstart/typescript)
+- Sign in to the [Rivet dashboard](https://hub.rivet.gg)
+

@@ -2,6 +2,23 @@
 
 Actors run near your users on Rivet's global network by default.
 
+## Available regions
+
+| Region | Location                     |
+| ------ | ---------------------------- |
+| `atl`  | Atlanta, Georgia, USA        |
+| `bom`  | Mumbai, India                |
+| `fra`  | Frankfurt, Germany           |
+| `gru`  | São Paulo, Brazil            |
+| `lax`  | Los Angeles, California, USA |
+| `osa`  | Osaka, Japan                 |
+| `sin`  | Singapore                    |
+| `syd`  | Sydney, Australia            |
+
+<Tip title="Don't hardcode regions">
+	Dynamically fetching the region list allows you to support more region & develop locally. See [Fetching region list](#fetching-region-list) for more information.
+</Tip>
+
 ## Region selection
 
 ### Automatic region selection
@@ -13,31 +30,35 @@ By default, actors will choose the optimal region based on the client's location
 	the best location for the client to connect to without relying on slow & expensive manual pinging process.
 </Note>
 
-### Manual region selection
+### Manually querying the optimal region
+
+You can query the best regions for your actors using:
+
+```typescript
+// Find the best region for your actor
+const { region } = await client.actor.regions.resolve({ project, environment });
+```
+
+### Configuring the actor's region
 
 The region an actor is created in can be overridden by defining `create.region`:
 
 ```typescript {{ "title": "client.ts" }}
-const actor = client.get(
-	{ name: "example" },
-	{
-		create: {
-			region: "atl",
-		},
-	}
-);
+const { actor } = await client.actor.create({
+  project,
+  environment,
+  body: {
+    tags: { name: "app" },
+    buildTags: { name: "app" },
+    region: region.id, // Specify the region ID here
+    // Other configuration...
+  }
+});
 ```
 
-See [Create & Manage Actors](/docs/manage) for more information.
-
-## Available regions
-
-See available regions [here](/docs/regions).
-
-### Fetching region list
+## Fetching region list
 
 It's common to need to display a list of available regions in your application.
 
-To fetch a full list of regions, you can use the `GET https://api.rivet.gg/regions` HTTP endpoint. See API documentation [here](/docs/api/actor/regions/list).
+To fetch a full list of regions, see [`actor.regions.list`](/docs/api/actor/regions/list). This list is returned in order of best to worst for the client.
 
-We don't recommend hard-coding the region list. This allows you to develop your application with a local development cluster.

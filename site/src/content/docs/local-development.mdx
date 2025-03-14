@@ -1,0 +1,38 @@
+# Local Development
+
+<Steps>
+	<Step title="Start Rivet locally">
+		<Tabs>
+		<Tab title="Recommended">
+
+		Run Rivet with:
+
+		```sh
+		docker run --name rivet -v "$(pwd)/rivet-data:/data" -p 8080:8080 -p 9000:9000 -p 7080:7080 -p 7443:7443 -p 7500-7599:7500-7599 -p 7600-7699:7600-7699 --platform linux/amd64 rivetgg/rivet
+		```
+
+		</Tab>
+		<Tab title="Limited Networking">
+
+		If you have port conflicts for the TCP or UDP port ranges, you can run Rivet with only HTTP support:
+
+		```sh
+		docker run --name rivet -v "$(pwd)/rivet-data:/data" -p 8080:8080 -p 9000:9000 -p 7080:7080 -p 7443:7443 --platform linux/amd64 rivetgg/rivet
+		```
+
+		</Tab>
+		</Tabs>
+	</Step>
+	<Step title="Open dashboard">
+		Open the Rivet dashboard at [127.0.0.1:8080](http://127.0.0.1:8080).
+	</Step>
+</Steps>
+
+<Warning title="Running container Actors not supported">
+	Containers require dedicated servers and cannot be ran from within Docker at the moment.
+</Warning>
+
+## Configuration
+
+For more information on configuring the container, see the [single container self-hosting documentation](/docs/self-hosting/single-container).
+

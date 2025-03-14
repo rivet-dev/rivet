@@ -1,0 +1,54 @@
+import imgBuilds from "./images/install/builds.png";
+import imgActors from "./images/install/actors.png";
+
+# Install Rivet CLI
+
+Run this command to install Rivet on your system:
+
+<Tabs>
+
+<Tab title="macOS & Linux & WSL">
+
+```sh
+curl -fsSL https://releases.rivet.gg/rivet/latest/install.sh | sh
+```
+
+</Tab>
+
+<Tab title="Windows (cmd)">
+
+```ps1
+powershell -Command "iwr https://releases.rivet.gg/rivet/latest/install.ps1 -useb | iex"
+```
+
+</Tab>
+
+<Tab title="Windows (PowerShell)">
+
+```ps1
+iwr https://releases.rivet.gg/rivet/latest/install.ps1 -useb | iex
+```
+
+</Tab>
+
+<Tab title="Build from source">
+
+```sh
+git clone https://github.com/rivet-gg/rivet
+cargo build --bin rivet
+```
+
+The executable will be available at _target/debug/rivet_.
+
+</Tab>
+
+</Tabs>
+
+<HideOnHub>
+## Next steps
+
+<CardGroup>
+  <Card title='TypeScript Quickstart' href='/docs/quickstart/typescript' />
+</CardGroup>
+</HideOnHub>
+

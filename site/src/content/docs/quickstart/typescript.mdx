@@ -1,0 +1,95 @@
+import imgDash from "./images/dash.png";
+
+# TypeScript Quick Start Guide
+
+In this guide, you'll learn how to set up a TypeScript actor project powered by the <a href="https://actorcore.org" target="_blank">ActorCore framework</a>, deploy it to Rivet, and connect to it from a client.
+
+<Steps>
+  <Step title="Create and explore your project">
+    Use the command below to create a new actor project:
+
+    <CodeGroup>
+    ```sh {{ "title": "npx" }}
+    npx create-actor@latest -p rivet -t counter
+    ```
+
+    ```sh {{ "title": "npm" }}
+    npm create actor@latest -p rivet -t counter
+    ```
+
+    ```sh {{ "title": "pnpm" }}
+    pnpm create actor@latest -p rivet -t counter
+    ```
+
+    ```sh {{ "title": "yarn" }}
+    yarn create actor@latest -p rivet -t counter
+    ```
+
+    ```sh {{ "title": "bun" }}
+    bun create actor@latest -p rivet -t counter
+    ```
+    </CodeGroup>
+
+    During setup, you'll be prompted to specify a project directory.
+
+    Once setup completes, you'll have a project with:
+
+    - `actor.config.ts`: Actor configuration 
+    - `src/index.ts`: Main actor implementation
+    - `tests/client.ts`: Client test script
+    
+    The counter template provides a simple actor that maintains a numeric state and exposes methods to increment it.
+  </Step>
+
+  <Step title="Deploy to Rivet">
+    Deploy your actor with:
+
+    ```sh
+    cd your-project
+    npm run deploy
+    ```
+
+    You'll be guided through:
+    1. Logging in to your Rivet account (or creating one)
+    2. Creating a new project (if needed)
+    3. Selecting an environment 
+
+    After deployment completes, you'll receive:
+    - **Actor Manager URL**: Your endpoint for client connections
+    - Links to the Rivet Hub for monitoring and management
+  </Step>
+
+  <Step title="Connect to your actor">
+    Update the `tests/client.ts` file with your deployment URL:
+
+    ```typescript
+    // Replace with your Actor Manager URL from the deployment output
+    const client = new Client("https://your-actor-manager-url.rivet.run:443");
+    ```
+
+    Run the test client:
+
+    ```sh
+    npx tsx tests/client.ts
+    ```
+
+    You should see output similar to:
+
+    ```text
+    Event: 1
+    RPC: 1
+    ```
+
+    Run it again to see the actor state increment as it persists between calls.
+  </Step>
+
+  <Step title="Monitor your deployment">
+    Visit the [Rivet Hub](https://hub.rivet.gg) to:
+    
+    - Monitor your actors in real-time
+    - Check logs and debug issues
+
+	<Image src={imgDash} alt="Rivet Dashboard" />
+  </Step>
+</Steps>
+
