@@ -4,10 +4,5 @@
 			"dockerfile": "Dockerfile",
 			"access": "private"
 		}
-	},
-	"unstable": {
-		"manager": {
-			"enable": false
-		}
 	}
 }

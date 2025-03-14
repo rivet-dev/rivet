@@ -4,10 +4,5 @@
 			"script": "ws.ts",
 			"access": "private"
 		}
-	},
-	"unstable": {
-		"manager": {
-			"enable": false
-		}
 	}
 }

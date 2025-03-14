@@ -8,10 +8,5 @@
 				"dump_build": true
 			}
 		}
-	},
-	"unstable": {
-		"manager": {
-			"enable": false
-		}
 	}
 }

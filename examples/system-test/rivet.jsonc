@@ -4,14 +4,5 @@
 			"script": "src/isolate/main.ts",
 			"access": "private"
 		},
-		"ws-container": {
-			"dockerfile": "Dockerfile",
-			"access": "private"
-		}
-	},
-	"unstable": {
-		"manager": {
-			"enable": false
-		}
 	}
 }
