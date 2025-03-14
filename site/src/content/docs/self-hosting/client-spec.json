@@ -98,8 +98,7 @@
       "required": [
         "api_endpoint",
         "client_id",
-        "datacenter_id",
-        "pegboard_endpoint"
+        "ws_addresses"
       ],
       "properties": {
         "api_endpoint": {
@@ -110,13 +109,8 @@
           "type": "string",
           "format": "uuid"
         },
-        "datacenter_id": {
-          "type": "string",
-          "format": "uuid"
-        },
-        "pegboard_endpoint": {
-          "type": "string",
-          "format": "uri"
+        "ws_addresses": {
+          "$ref": "#/definitions/Addresses"
         }
       },
       "additionalProperties": false

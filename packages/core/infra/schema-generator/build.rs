@@ -1,4 +1,4 @@
-use std::{fs::File, io::Write, path::PathBuf};
+use std::path::PathBuf;
 
 use anyhow::*;
 use schemars::{
@@ -8,15 +8,7 @@ use schemars::{
 
 fn main() -> Result<()> {
 	let cwd = std::env::current_dir()?;
-	let docs_output_path = cwd.join("../../../site/src/content/docs/");
-
-	if !std::fs::metadata(&docs_output_path).is_ok() {
-		eprintln!(
-			"output path does not exist: {:?}",
-			docs_output_path.display()
-		);
-		return Ok(());
-	}
+	let docs_output_path = cwd.join("../../../../site/src/content/docs/");
 
 	let settings = SchemaSettings::draft07().with(|s| {
 		s.option_add_null_type = false;
@@ -43,8 +35,7 @@ fn generate_spec<T: JsonSchema>(generator: SchemaGenerator, path: PathBuf) -> Re
 	let schema = generator.into_root_schema_for::<T>();
 	let schema_text = serde_json::to_string_pretty(&schema)?;
 
-	let mut file = File::create(path)?;
-	file.write_all(schema_text.as_bytes())?;
+	std::fs::write(path, schema_text)?;
 
 	Ok(())
 }

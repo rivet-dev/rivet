@@ -11,9 +11,6 @@
       "additionalProperties": {
         "$ref": "#/definitions/Build"
       }
-    },
-    "unstable": {
-      "$ref": "#/definitions/Unstable3"
     }
   },
   "additionalProperties": false,
@@ -28,13 +25,7 @@
           "$ref": "#/definitions/Build3"
         }
       ],
-      "required": [
-        "access"
-      ],
       "properties": {
-        "access": {
-          "$ref": "#/definitions/BuildAccess"
-        },
         "tags": {
           "type": "object",
           "additionalProperties": {
@@ -91,11 +82,11 @@
         },
         "unstable": {
           "default": {
-            "minify": null,
             "analyze_result": null,
-            "esbuild_log_level": null,
             "compression": null,
             "dump_build": null,
+            "esbuild_log_level": null,
+            "minify": null,
             "no_bundler": null
           },
           "allOf": [
@@ -105,13 +96,6 @@
           ]
         }
       }
-    },
-    "BuildAccess": {
-      "type": "string",
-      "enum": [
-        "public",
-        "private"
-      ]
     },
     "BuildMethod": {
       "oneOf": [
@@ -167,33 +151,6 @@
         }
       ]
     },
-    "ManagerUnstable": {
-      "type": "object",
-      "properties": {
-        "analyze_result": {
-          "type": "boolean"
-        },
-        "compression": {
-          "$ref": "#/definitions/Compression"
-        },
-        "dump_build": {
-          "type": "boolean"
-        },
-        "enable": {
-          "type": "boolean"
-        },
-        "esbuild_log_level": {
-          "type": "string"
-        },
-        "minify": {
-          "type": "boolean"
-        },
-        "no_bundler": {
-          "type": "boolean"
-        }
-      },
-      "additionalProperties": false
-    },
     "Unstable": {
       "type": "object",
       "properties": {
@@ -232,28 +189,6 @@
         },
         "no_bundler": {
           "type": "boolean"
-        }
-      },
-      "additionalProperties": false
-    },
-    "Unstable3": {
-      "type": "object",
-      "properties": {
-        "manager": {
-          "default": {
-            "enable": null,
-            "minify": null,
-            "analyze_result": null,
-            "esbuild_log_level": null,
-            "compression": null,
-            "dump_build": null,
-            "no_bundler": null
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/ManagerUnstable"
-            }
-          ]
         }
       },
       "additionalProperties": false

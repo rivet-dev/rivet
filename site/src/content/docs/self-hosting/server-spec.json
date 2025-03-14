@@ -24,12 +24,13 @@
     },
     "cockroachdb": {
       "default": {
-        "url": "postgresql://localhost:26257/defaultdb?sslmode=disable",
-        "username": "root",
+        "cluster_identifier": "default",
+        "max_connections": 4096,
+        "min_connections": 4,
         "password": null,
         "provision_users": {},
-        "min_connections": 4,
-        "max_connections": 4096
+        "url": "postgresql://localhost:26257/defaultdb?sslmode=disable",
+        "username": "root"
       },
       "allOf": [
         {
@@ -37,13 +38,11 @@
         }
       ]
     },
-    "fdb": {
-      "default": {
-        "connection": "fdb:fdb@127.0.0.1:4500"
-      },
+    "foundationdb": {
+      "default": null,
       "allOf": [
         {
-          "$ref": "#/definitions/Fdb"
+          "$ref": "#/definitions/FoundationDb"
         }
       ]
     },
@@ -84,11 +83,11 @@
     },
     "nats": {
       "default": {
+        "password": null,
         "urls": [
           "nats://localhost:4222"
         ],
-        "username": null,
-        "password": null
+        "username": null
       },
       "allOf": [
         {
@@ -124,14 +123,14 @@
     "redis": {
       "default": {
         "ephemeral": {
+          "password": null,
           "url": "redis://127.0.0.1:6379",
-          "username": null,
-          "password": null
+          "username": null
         },
         "persistent": {
+          "password": null,
           "url": "redis://127.0.0.1:6379",
-          "username": null,
-          "password": null
+          "username": null
         }
       },
       "allOf": [
@@ -142,47 +141,57 @@
     },
     "rivet": {
       "default": {
-        "namespace": "rivet",
-        "default_cluster_id": null,
-        "clusters": null,
-        "provision": null,
-        "orchestrator": {
-          "host": null,
-          "port": null
-        },
-        "guard": {
-          "tls_enabled": null,
-          "http_port": null,
-          "https_port": null,
-          "min_ingress_port_tcp": null,
-          "max_ingress_port_tcp": null,
-          "min_ingress_port_udp": null,
-          "max_ingress_port_udp": null
-        },
-        "auth": {
-          "access_kind": "private"
-        },
-        "api_public": {
-          "public_origin": null,
-          "host": null,
-          "port": null,
-          "verbose_errors": null,
-          "respect_forwarded_for": null
-        },
         "api_edge": {
           "host": null,
           "port": null,
           "traefik_provider_token": null
         },
-        "metrics": {
+        "api_public": {
           "host": null,
-          "port": null
+          "port": null,
+          "public_origin": null,
+          "respect_forwarded_for": null,
+          "verbose_errors": null
+        },
+        "auth": {
+          "access_kind": "private"
+        },
+        "backend": null,
+        "billing": null,
+        "cdn": null,
+        "clusters": null,
+        "default_cluster_id": null,
+        "dns": null,
+        "edge": null,
+        "guard": {
+          "http_port": null,
+          "https_port": null,
+          "max_ingress_port_tcp": null,
+          "max_ingress_port_udp": null,
+          "min_ingress_port_tcp": null,
+          "min_ingress_port_udp": null,
+          "tls_enabled": null
         },
         "health": {
           "host": null,
           "port": null
         },
+        "job_run": null,
+        "metrics": {
+          "host": null,
+          "port": null
+        },
+        "namespace": "rivet",
+        "orchestrator": {
+          "host": null,
+          "port": null
+        },
+        "provision": null,
         "status": null,
+        "telemetry": {
+          "enable": true
+        },
+        "test_builds": {},
         "tunnel": {
           "public_host": "127.0.0.1:8003"
         },
@@ -190,16 +199,7 @@
           "enable": null,
           "public_origin": null,
           "public_origin_regex": null
-        },
-        "dns": null,
-        "telemetry": {
-          "enable": true
-        },
-        "billing": null,
-        "backend": null,
-        "test_builds": {},
-        "job_run": null,
-        "cdn": null
+        }
       },
       "allOf": [
         {
@@ -209,11 +209,11 @@
     },
     "s3": {
       "default": {
-        "region": "us-east-1",
-        "endpoint_internal": "http://127.0.0.1:9000/",
+        "access_key_id": "root",
         "endpoint_edge_internal": null,
         "endpoint_external": "http://127.0.0.1:9000/",
-        "access_key_id": "root",
+        "endpoint_internal": "http://127.0.0.1:9000/",
+        "region": "us-east-1",
         "secret_access_key": "root"
       },
       "allOf": [
@@ -287,6 +287,47 @@
           "enum": [
             "development"
           ]
+        }
+      ]
+    },
+    "Addresses": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "dynamic"
+          ],
+          "properties": {
+            "dynamic": {
+              "type": "object",
+              "required": [
+                "fetch_endpoint"
+              ],
+              "properties": {
+                "fetch_endpoint": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "static"
+          ],
+          "properties": {
+            "static": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
         }
       ]
     },
@@ -479,7 +520,6 @@
       "required": [
         "account_id",
         "auth_token",
-        "backend_dispatcher_namespace",
         "zone"
       ],
       "properties": {
@@ -660,6 +700,29 @@
       },
       "additionalProperties": false
     },
+    "ClusterPoolWorker": {
+      "type": "object",
+      "required": [
+        "autoscale_margin"
+      ],
+      "properties": {
+        "autoscale_margin": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "firewall_rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FirewallRule"
+          }
+        },
+        "vlan_ip_net": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
     "ClusterPools": {
       "type": "object",
       "required": [
@@ -667,7 +730,8 @@
         "fdb",
         "gg",
         "job",
-        "pegboard"
+        "pegboard",
+        "worker"
       ],
       "properties": {
         "ats": {
@@ -684,6 +748,9 @@
         },
         "pegboard": {
           "$ref": "#/definitions/ClusterPoolPegboard"
+        },
+        "worker": {
+          "$ref": "#/definitions/ClusterPoolWorker"
         }
       },
       "additionalProperties": false
@@ -692,6 +759,7 @@
       "type": "object",
       "required": [
         "container_runner_binary_url",
+        "edge_server_binary_url",
         "isolate_runner_binary_url",
         "manager_binary_url",
         "pools"
@@ -699,6 +767,10 @@
       "properties": {
         "container_runner_binary_url": {
           "description": "The URL for the container runner binary.",
+          "type": "string",
+          "format": "uri"
+        },
+        "edge_server_binary_url": {
           "type": "string",
           "format": "uri"
         },
@@ -729,10 +801,14 @@
     "CockroachDb": {
       "type": "object",
       "required": [
+        "cluster_identifier",
         "url",
         "username"
       ],
       "properties": {
+        "cluster_identifier": {
+          "type": "string"
+        },
         "max_connections": {
           "default": 4096,
           "type": "integer",
@@ -859,13 +935,13 @@
       ],
       "properties": {
         "bandwidth": {
-          "description": "Kibps",
+          "description": "Kibps.",
           "type": "integer",
           "format": "uint32",
           "minimum": 0.0
         },
         "cpu": {
-          "description": "Mhz",
+          "description": "Mhz.",
           "type": "integer",
           "format": "uint32",
           "minimum": 0.0
@@ -876,13 +952,13 @@
           "minimum": 0.0
         },
         "disk": {
-          "description": "MiB",
+          "description": "MiB.",
           "type": "integer",
           "format": "uint32",
           "minimum": 0.0
         },
         "memory": {
-          "description": "MiB",
+          "description": "MiB.",
           "type": "integer",
           "format": "uint32",
           "minimum": 0.0
@@ -926,14 +1002,35 @@
         "cloudflare"
       ]
     },
-    "Fdb": {
+    "Edge": {
+      "description": "Configuration for edge clusters.",
       "type": "object",
       "required": [
-        "connection"
+        "cluster_id",
+        "datacenter_id",
+        "intercom_endpoint",
+        "server_id"
       ],
       "properties": {
-        "connection": {
-          "type": "string"
+        "cluster_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "datacenter_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "intercom_endpoint": {
+          "type": "string",
+          "format": "uri"
+        },
+        "redirect_logs": {
+          "default": null,
+          "type": "boolean"
+        },
+        "server_id": {
+          "type": "string",
+          "format": "uuid"
         }
       },
       "additionalProperties": false
@@ -970,6 +1067,31 @@
           "type": "string"
         }
       }
+    },
+    "FoundationDb": {
+      "type": "object",
+      "required": [
+        "addresses",
+        "cluster_description",
+        "cluster_id"
+      ],
+      "properties": {
+        "addresses": {
+          "$ref": "#/definitions/Addresses"
+        },
+        "cluster_description": {
+          "type": "string"
+        },
+        "cluster_id": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0.0
+        }
+      },
+      "additionalProperties": false
     },
     "Guard": {
       "description": "The port ranges define what ports Guard will allocate ports on. If using cluster provisioning, these are also used for firewall rules.",
@@ -1014,7 +1136,7 @@
     "GuardPublicHostname": {
       "oneOf": [
         {
-          "description": "Rivet Guard has the appropriate wildcard DNS addresses set up for host-based routing. This is the preferred option.\n\nThis is the parent address that all subdomains will be build from.\n\nIf SSL certs are provided, this should also be the name of the TLS parent host.\n\nThis will default to hostname endpoint types (see `ds::type::EndpointType`).",
+          "description": "Rivet Guard has the appropriate wildcard DNS addresses set up for host-based routing. This is the preferred option.\n\nThis is the parent address that all subdomains will be build from.\n\nIf SSL certs are provided, this should also be the name of the TLS parent host.\n\nThis will default to hostname endpoint types (see `pegboard::types::EndpointType`).",
           "type": "object",
           "required": [
             "dns_parent"
@@ -1027,7 +1149,7 @@
           "additionalProperties": false
         },
         {
-          "description": "Rivet Guard is only accessible by IP or DNS address without a wildcard.\n\nThis is usually used for routing to a static IP address on simple architectures.\n\nIf the developer cannot set up wildcard DNS addresses for whatever reason, this method can be used.\n\nThis will default to path endpoint types (see `ds::type::EndpointType`).",
+          "description": "Rivet Guard is only accessible by IP or DNS address without a wildcard.\n\nThis is usually used for routing to a static IP address on simple architectures.\n\nIf the developer cannot set up wildcard DNS addresses for whatever reason, this method can be used.\n\nThis will default to path endpoint types (see `pegboard::types::EndpointType`).",
           "type": "object",
           "required": [
             "static"
@@ -1305,11 +1427,11 @@
         },
         "api_public": {
           "default": {
-            "public_origin": null,
             "host": null,
             "port": null,
-            "verbose_errors": null,
-            "respect_forwarded_for": null
+            "public_origin": null,
+            "respect_forwarded_for": null,
+            "verbose_errors": null
           },
           "allOf": [
             {
@@ -1372,15 +1494,24 @@
             }
           ]
         },
+        "edge": {
+          "description": "Configuration for edge clusters. Should be null on the core cluster.",
+          "default": null,
+          "allOf": [
+            {
+              "$ref": "#/definitions/Edge"
+            }
+          ]
+        },
         "guard": {
           "default": {
-            "tls_enabled": null,
             "http_port": null,
             "https_port": null,
-            "min_ingress_port_tcp": null,
             "max_ingress_port_tcp": null,
+            "max_ingress_port_udp": null,
+            "min_ingress_port_tcp": null,
             "min_ingress_port_udp": null,
-            "max_ingress_port_udp": null
+            "tls_enabled": null
           },
           "allOf": [
             {

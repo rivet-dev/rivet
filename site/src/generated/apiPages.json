@@ -34,6 +34,41 @@
       "title": "actors.upgrade",
       "href": "/docs/api/actors/upgrade",
       "sortingKey": "/actors/{actor}/upgrade post"
+    },
+    {
+      "title": "builds.list",
+      "href": "/docs/api/builds/list",
+      "sortingKey": "/builds get"
+    },
+    {
+      "title": "builds.prepare",
+      "href": "/docs/api/builds/prepare",
+      "sortingKey": "/builds/prepare post"
+    },
+    {
+      "title": "builds.get",
+      "href": "/docs/api/builds/get",
+      "sortingKey": "/builds/{build} get"
+    },
+    {
+      "title": "builds.complete",
+      "href": "/docs/api/builds/complete",
+      "sortingKey": "/builds/{build}/complete post"
+    },
+    {
+      "title": "builds.patchTags",
+      "href": "/docs/api/builds/patch-tags",
+      "sortingKey": "/builds/{build}/tags patch"
+    },
+    {
+      "title": "regions.list",
+      "href": "/docs/api/regions/list",
+      "sortingKey": "/regions get"
+    },
+    {
+      "title": "regions.recommend",
+      "href": "/docs/api/regions/recommend",
+      "sortingKey": "/regions/recommend get"
     }
   ]
 }
