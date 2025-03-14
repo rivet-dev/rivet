@@ -20,22 +20,24 @@ service:
           project: optional<string>
           environment: optional<string>
       response: ListRegionsResponse
-    resolve:
-      path: /resolve
+    recommend:
+      path: /recommend
       method: GET
       request:
-        name: ResolveRegionsRequestQuery
+        name: RecommendRegionsRequestQuery
         query-parameters:
+          project: optional<string>
+          environment: optional<string>
           lat: optional<double>
           long: optional<double>
-      response: ResolveRegionResponse
+      response: RecommendRegionResponse
 
 types:
   ListRegionsResponse:
     properties:
       regions:
         type: list<localCommons.Region>
-  ResolveRegionResponse:
+  RecommendRegionResponse:
     properties:
       region:
         type: localCommons.Region
