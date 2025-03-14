@@ -6,6 +6,11 @@ use tokio::sync::OnceCell;
 
 use crate::{meta, paths};
 
+pub mod env {
+	pub const RIVET_ENDPOINT: &'static str = "RIVET_ENDPOINT";
+	pub const RIVET_CLOUD_TOKEN: &'static str = "RIVET_CLOUD_TOKEN";
+}
+
 pub const VERSION: &str = {
 	const MAJOR: u32 = pkg_version_major!();
 	const MINOR: u32 = pkg_version_minor!();
@@ -33,13 +38,37 @@ pub struct CtxInner {
 
 static TOOLCHAIN_CTX: OnceCell<ToolchainCtx> = OnceCell::const_new();
 
+/// If the toolchain is loaded from the env.
+pub fn cloud_config_from_env() -> Option<(String, String)> {
+	if let Result::Ok(token) = std::env::var(env::RIVET_CLOUD_TOKEN) {
+		let api_endpoint = std::env::var(env::RIVET_ENDPOINT)
+			.unwrap_or_else(|_| "https://api.rivet.gg".to_string());
+		Some((api_endpoint, token))
+	} else {
+		None
+	}
+}
+
+/// If the credentials already exist or loading credentials from env.
+pub async fn has_cloud_config() -> Result<bool> {
+	if cloud_config_from_env().is_some() {
+		Ok(true)
+	} else {
+		meta::read_project(&paths::data_dir()?, |x| x.cloud.is_some()).await
+	}
+}
+
 pub async fn try_load() -> Result<Option<ToolchainCtx>> {
-	let data = meta::read_project(&paths::data_dir()?, |x| {
-		x.cloud
-			.as_ref()
-			.map(|cloud| (cloud.api_endpoint.clone(), cloud.cloud_token.clone()))
-	})
-	.await?;
+	let data = if let Some(data) = cloud_config_from_env() {
+		Some(data)
+	} else {
+		meta::read_project(&paths::data_dir()?, |x| {
+			x.cloud
+				.as_ref()
+				.map(|cloud| (cloud.api_endpoint.clone(), cloud.cloud_token.clone()))
+		})
+		.await?
+	};
 	if let Some((api_endpoint, token)) = data {
 		let ctx = TOOLCHAIN_CTX
 			.get_or_try_init(|| async { init(api_endpoint, token).await })
@@ -51,11 +80,15 @@ pub async fn try_load() -> Result<Option<ToolchainCtx>> {
 }
 
 pub async fn load() -> Result<ToolchainCtx> {
-	let (api_endpoint, token) = meta::try_read_project(&paths::data_dir()?, |x| {
-		let cloud = x.cloud()?;
-		Ok((cloud.api_endpoint.clone(), cloud.cloud_token.clone()))
-	})
-	.await?;
+	let (api_endpoint, token) = if let Some(x) = cloud_config_from_env() {
+		x
+	} else {
+		meta::try_read_project(&paths::data_dir()?, |x| {
+			let cloud = x.cloud()?;
+			Ok((cloud.api_endpoint.clone(), cloud.cloud_token.clone()))
+		})
+		.await?
+	};
 	let ctx = TOOLCHAIN_CTX
 		.get_or_try_init(|| async { init(api_endpoint, token).await })
 		.await?;

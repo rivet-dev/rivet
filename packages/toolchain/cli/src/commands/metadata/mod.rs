@@ -34,7 +34,7 @@ impl SubCommand {
 				Ok(())
 			}
 			SubCommand::AuthStatus => {
-				let is_logged_in = crate::util::login::is_logged_in().await?;
+				let is_logged_in = toolchain::toolchain_ctx::has_cloud_config().await?;
 				println!("{}", is_logged_in);
 				Ok(())
 			}

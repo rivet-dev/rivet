@@ -27,7 +27,11 @@ pub struct Opts {
 	#[clap(long = "tags", short = 't')]
 	tags: Option<String>,
 
-	#[clap(long, short = 'v', help = "Override the automatically generated version name")]
+	#[clap(
+		long,
+		short = 'v',
+		help = "Override the automatically generated version name"
+	)]
 	version: Option<String>,
 
 	#[clap(long)]

@@ -51,8 +51,12 @@ pub struct Opts {
 
 	#[clap(long, short = 'b')]
 	build_tags: Option<String>,
-	
-	#[clap(long, short = 'v', help = "Override the automatically generated version name")]
+
+	#[clap(
+		long,
+		short = 'v',
+		help = "Override the automatically generated version name"
+	)]
 	version: Option<String>,
 
 	#[clap(long = "env-var")]
