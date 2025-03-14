@@ -90,35 +90,35 @@ impl Opts {
 					match prompt.lang {
 						Language::TypeScript => {
 							let tsconfig = include_str!(
-								"../../../../../examples/javascript/bare-template-ts/tsconfig.json"
+								"../../../../../examples/bare-template-ts/tsconfig.json"
 							);
 							fs::write(project_path.join("tsconfig.json"), tsconfig).await?;
 
 							(
-                                include_str!("../../../../../examples/javascript/bare-template-ts/rivet.json"),
-                                include_str!("../../../../../examples/javascript/bare-template-ts/README.md"),
+                                include_str!("../../../../../examples/bare-template-ts/rivet.json"),
+                                include_str!("../../../../../examples/bare-template-ts/README.md"),
                                 "counter.ts",
-                                include_str!("../../../../../examples/javascript/bare-template-ts/counter.ts"),
+                                include_str!("../../../../../examples/bare-template-ts/counter.ts"),
                                 "counter_test.ts",
                                 include_str!(
-                                    "../../../../../examples/javascript/bare-template-ts/counter_test.ts"
+                                    "../../../../../examples/bare-template-ts/counter_test.ts"
                                 ),
                             )
 						}
 						Language::JavaScript => (
 							include_str!(
-								"../../../../../examples/javascript/bare-template-js/rivet.json"
+								"../../../../../examples/bare-template-js/rivet.json"
 							),
 							include_str!(
-								"../../../../../examples/javascript/bare-template-js/README.md"
+								"../../../../../examples/bare-template-js/README.md"
 							),
 							"counter.js",
 							include_str!(
-								"../../../../../examples/javascript/bare-template-js/counter.js"
+								"../../../../../examples/bare-template-js/counter.js"
 							),
 							"counter_test.js",
 							include_str!(
-								"../../../../../examples/javascript/bare-template-js/counter_test.js"
+								"../../../../../examples/bare-template-js/counter_test.js"
 							),
 						),
 						_ => unreachable!(),
@@ -137,16 +137,16 @@ impl Opts {
 			}
 			Language::Docker => {
 				let readme_body =
-					include_str!("../../../../../examples/misc/bare-template-docker/README.md");
+					include_str!("../../../../../examples/bare-template-docker/README.md");
 				let readme_body = readme_body.replace("__NAME__", &prompt.project_name);
 				fs::write(project_path.join("README.md"), readme_body).await?;
 
 				let dockerfile_body =
-					include_str!("../../../../../examples/misc/bare-template-docker/Dockerfile");
+					include_str!("../../../../../examples/bare-template-docker/Dockerfile");
 				fs::write(project_path.join("Dockerfile"), dockerfile_body).await?;
 
 				let config_body =
-					include_str!("../../../../../examples/misc/bare-template-docker/rivet.json");
+					include_str!("../../../../../examples/bare-template-docker/rivet.json");
 
 				config_body.to_string()
 			}
