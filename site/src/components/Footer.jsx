@@ -24,6 +24,7 @@ const footer = {
 		{ name: "Support", href: "/support" },
 		{ name: "Pricing", href: "/pricing" },
 		{ name: "Sales", href: "/sales" },
+		{ name: "Manifesto", href: "/manifesto" },
 		{ name: "Status Page", href: "https://rivet.betteruptime.com/" },
 		{ name: "OSS Friends", href: "/oss-friends" },
 		{ name: "Press Kit", href: "https://releases.rivet.gg/press-kit.zip" },
