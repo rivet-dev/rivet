@@ -4,15 +4,20 @@ use clap::Subcommand;
 mod list;
 mod select;
 
+/// Commands for managing environments
 #[derive(Subcommand)]
 pub enum SubCommand {
+	/// Select and set the default environment
 	#[clap(alias = "s")]
 	Select(select::Opts),
+	/// Open the environment dashboard in a browser
 	#[clap(alias = "v")]
 	View {
+		/// Specify the environment to view (will prompt if not specified)
 		#[clap(long, alias = "env", short = 'e')]
 		environment: Option<String>,
 	},
+	/// List all available environments
 	#[clap(alias = "ls")]
 	List(list::Opts),
 }

@@ -1,9 +1,12 @@
 use anyhow::*;
 use clap::Subcommand;
 
+/// Commands for managing Rivet configuration
 #[derive(Subcommand)]
 pub enum SubCommand {
+	/// Validate the current configuration file
 	Validate {
+		/// Output the validated configuration as JSON
 		#[clap(long)]
 		json: bool,
 	},

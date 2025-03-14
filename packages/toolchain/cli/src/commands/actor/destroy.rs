@@ -3,14 +3,18 @@ use clap::Parser;
 use toolchain::{errors, rivet_api::apis};
 use uuid::Uuid;
 
+/// Destroy an existing actor
 #[derive(Parser)]
 pub struct Opts {
+	/// The ID of the actor to destroy
 	#[clap(index = 1)]
 	id: String,
 
+	/// Specify the environment the actor is in (will prompt if not specified)
 	#[clap(long, alias = "env", short = 'e')]
 	environment: Option<String>,
 
+	/// Override the kill timeout for the actor (in seconds)
 	#[clap(long)]
 	override_kill_timeout: Option<i64>,
 }

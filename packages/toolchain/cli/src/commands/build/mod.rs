@@ -6,6 +6,7 @@ mod list;
 mod patch_tags;
 pub mod publish;
 
+/// Commands for managing builds
 #[derive(Subcommand)]
 pub enum SubCommand {
 	Publish(publish::Opts),

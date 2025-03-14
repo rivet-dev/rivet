@@ -3,20 +3,26 @@ use clap::Parser;
 use toolchain::errors;
 use uuid::Uuid;
 
+/// Stream logs from a specific actor
 #[derive(Parser)]
 pub struct Opts {
+	/// The ID of the actor to stream logs from
 	#[clap(index = 1)]
 	id: String,
 
+	/// Specify the environment the actor is in (will prompt if not specified)
 	#[clap(long, alias = "env", short = 'e')]
 	environment: Option<String>,
 
+	/// Specify which log stream to display (stdout, stderr, or all)
 	#[clap(long, short = 's')]
 	stream: Option<crate::util::actor::logs::LogStream>,
 
+	/// Disable timestamp display in logs
 	#[clap(long)]
 	no_timestamps: bool,
 
+	/// Display logs and exit (do not continue following new logs)
 	#[clap(long)]
 	no_follow: bool,
 }

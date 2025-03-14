@@ -3,11 +3,14 @@ use clap::Parser;
 use std::collections::HashMap;
 use toolchain::rivet_api::apis;
 
+/// List all builds in the current project
 #[derive(Parser)]
 pub struct Opts {
+	/// Specify the environment to list builds from (will prompt if not specified)
 	#[clap(long, alias = "env", short = 'e')]
 	environment: Option<String>,
 
+	/// Filter builds by tags (key=value format)
 	#[clap(long)]
 	tags: Option<String>,
 }

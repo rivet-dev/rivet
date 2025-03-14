@@ -12,21 +12,27 @@ use toolchain::{
 
 use crate::util::task::{run_task, TaskOutputStyle};
 
+/// Publish a new build from local files or a Docker image
 #[derive(Parser)]
 pub struct Opts {
+	/// Name of the build to publish
 	#[clap(index = 1)]
 	name: String,
 
+	/// Path to the files or directory to publish (must be a valid JS/TS file or directory with Dockerfile)
 	#[clap(index = 2)]
 	path: String,
 
+	/// Specify the environment to publish to (will prompt if not specified)
 	#[clap(long, alias = "env", short = 'e')]
 	environment: Option<String>,
 
 	// Common options
+	/// Tags to apply to the build (key=value format)
 	#[clap(long = "tags", short = 't')]
 	tags: Option<String>,
 
+	/// Override the automatically generated version name
 	#[clap(
 		long,
 		short = 'v',
@@ -34,47 +40,61 @@ pub struct Opts {
 	)]
 	version: Option<String>,
 
+	/// Control the access level for the build (public or private)
 	#[clap(long)]
 	access: Option<config::BuildAccess>,
 
+	/// Allow running container as root (unstable, Docker builds only)
 	#[clap(long)]
 	unstable_allow_root: bool,
 
+	/// Specify the build method for Docker builds (unstable)
 	#[clap(long)]
 	unstable_build_method: Option<config::build::docker::BuildMethod>,
 
+	/// Specify the bundle kind for the build output (unstable)
 	#[clap(long)]
 	unstable_bundle: Option<config::build::docker::BundleKind>,
 
+	/// Specify the compression algorithm for the build output (unstable)
 	#[clap(long)]
 	unstable_compression: Option<config::build::Compression>,
 
 	// Docker options
+	/// Specify a pre-built Docker image instead of building from a Dockerfile
 	#[clap(long)]
 	docker_image: Option<String>,
 
+	/// Specify a custom Dockerfile path (relative to path)
 	#[clap(long)]
 	dockerfile: Option<String>,
 
+	/// Specify a Docker build target for multi-stage builds
 	#[clap(long)]
 	build_target: Option<String>,
 
+	/// Pass build arguments to Docker (key=value format)
 	#[clap(long)]
 	build_arg: Option<Vec<String>>,
 
 	// JS options
+	/// Enable minification of JavaScript code (unstable)
 	#[clap(long)]
 	unstable_minify: Option<bool>,
 
+	/// Enable result analysis for JavaScript builds (unstable)
 	#[clap(long)]
 	unstable_analyze_result: Option<bool>,
 
+	/// Set the log level for esbuild (unstable)
 	#[clap(long)]
 	unstable_esbuild_log_level: Option<String>,
 
+	/// Dump the build output for debugging (unstable)
 	#[clap(long)]
 	unstable_dump_build: Option<bool>,
 
+	/// Skip bundling for JavaScript builds (unstable)
 	#[clap(long)]
 	unstable_no_bundler: Option<bool>,
 }

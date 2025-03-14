@@ -2,12 +2,18 @@ use anyhow::*;
 use clap::Subcommand;
 use toolchain::paths;
 
+/// Commands for retrieving metadata about Rivet configuration
 #[derive(Subcommand)]
 pub enum SubCommand {
+	/// Get the path to the project data directory
 	Path,
+	/// Get the current API endpoint
 	ApiEndpoint,
+	/// Get the current access token
 	AccessToken,
+	/// Get the current project name ID
 	ProjectNameId,
+	/// Check if the user is currently logged in
 	AuthStatus,
 }
 

@@ -3,11 +3,14 @@ use clap::Parser;
 use toolchain::rivet_api::apis;
 use uuid::Uuid;
 
+/// Get details of a specific actor
 #[derive(Parser)]
 pub struct Opts {
+	/// The ID of the actor to retrieve
 	#[clap(index = 1)]
 	id: String,
 
+	/// Specify the environment the actor is in (will prompt if not specified)
 	#[clap(long, alias = "env", short = 'e')]
 	environment: Option<String>,
 }

@@ -2,8 +2,10 @@ use anyhow::*;
 use clap::Parser;
 use toolchain::rivet_api::apis;
 
+/// List all available regions for the current project
 #[derive(Parser)]
 pub struct Opts {
+	/// Specify the environment to list regions for (will prompt if not specified)
 	#[clap(long, alias = "env", short = 'e')]
 	environment: Option<String>,
 }

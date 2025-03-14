@@ -5,12 +5,15 @@ use toolchain::{errors, rivet_api::apis, tasks::get_bootstrap_data};
 
 use crate::util::task::{run_task, TaskOutputStyle};
 
+/// Execute Deno commands with Rivet environment variables
 #[derive(Parser, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Opts {
+	/// Populate Rivet-specific environment variables (service token, endpoint, etc.)
 	#[clap(long)]
 	populate_env: bool,
 
+	/// Arguments to pass directly to Deno
 	#[clap(trailing_var_arg = true)]
 	#[clap(allow_hyphen_values = true)]
 	#[clap(value_parser)]

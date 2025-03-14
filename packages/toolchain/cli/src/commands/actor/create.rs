@@ -29,11 +29,14 @@ struct Port {
 	host: bool,
 }
 
+/// Create a new actor
 #[derive(Parser)]
 pub struct Opts {
+	/// Specify the environment to create the actor in (will prompt if not specified)
 	#[clap(long, alias = "env", short = 'e')]
 	environment: Option<String>,
 
+	/// Specify the region to create the actor in (will auto-select if not specified)
 	#[clap(long, short = 'r')]
 	region: Option<String>,
 
@@ -42,16 +45,19 @@ pub struct Opts {
 	#[clap(long = "tags", short = 't')]
 	universal_tags: Option<String>,
 
+	/// Tags specific to the actor (key=value format)
 	#[clap(long, short = 'a')]
 	actor_tags: Option<String>,
 
-	/// Build ID.
+	/// Specific build ID to use for this actor
 	#[clap(long)]
 	build: Option<String>,
 
+	/// Tags to identify the build to use (key=value format)
 	#[clap(long, short = 'b')]
 	build_tags: Option<String>,
 
+	/// Override the automatically generated version name
 	#[clap(
 		long,
 		short = 'v',
@@ -59,37 +65,47 @@ pub struct Opts {
 	)]
 	version: Option<String>,
 
+	/// Environment variables to pass to the actor (key=value format)
 	#[clap(long = "env-var")]
 	env_vars: Option<Vec<String>>,
 
+	/// Network mode for the actor: bridge (default, isolated network) or host (shares host network stack)
 	#[clap(long, value_enum)]
 	network_mode: Option<NetworkMode>,
 
+	/// Ports to expose from the actor (name=protocol:port format)
 	#[clap(long = "port", short = 'p')]
 	ports: Option<Vec<String>>,
 
+	/// CPU resource limit for the actor (in mCPU)
 	#[clap(long)]
 	cpu: Option<i32>,
 
+	/// Memory resource limit for the actor (in MiB)
 	#[clap(long)]
 	memory: Option<i32>,
 
+	/// Time in seconds to wait before forcefully killing the actor
 	#[clap(long)]
 	kill_timeout: Option<i64>,
 
+	/// Create a durable actor that persists until explicitly destroyed
 	#[clap(long)]
 	durable: bool,
 
-	/// If included, the `current` tag will not be automatically inserted to the build tag.
+	/// If included, the `current` tag will not be automatically inserted to the build tag
 	#[clap(long)]
 	no_build_current_tag: bool,
 
+	/// Stream logs after the actor is created
 	#[clap(long)]
 	logs: bool,
 
+	/// Specify which log stream to display
 	#[clap(long)]
 	log_stream: Option<crate::util::actor::logs::LogStream>,
 
+	/// Deploy the build before creating the actor
 	#[clap(long)]
 	deploy: bool,
 }

@@ -14,55 +14,70 @@ pub mod shell;
 use anyhow::*;
 use clap::Parser;
 
+/// Main Rivet CLI commands
 #[derive(Parser)]
 pub enum SubCommand {
+	/// Login to a project
 	#[clap(alias = "signin")]
 	Login(login::Opts),
+	/// Logout from a project
 	#[clap(alias = "signout")]
 	Logout(logout::Opts),
+	/// Deploy a build to a specific environment
 	#[clap(alias = "d")]
 	Deploy(deploy::Opts),
+	/// Publish a new build from local files or a Docker image
 	#[clap(alias = "p")]
 	Publish(build::publish::Opts),
+	/// Commands for managing environments
 	#[clap(alias = "e", alias = "env")]
 	Environment {
 		#[clap(subcommand)]
 		subcommand: environment::SubCommand,
 	},
+	/// Commands for managing projects
 	#[clap(alias = "proj")]
 	Project {
 		#[clap(subcommand)]
 		subcommand: project::SubCommand,
 	},
+	/// Commands for managing actors
 	#[clap(alias = "a")]
 	Actor {
 		#[clap(subcommand)]
 		subcommand: actor::SubCommand,
 	},
+	/// Commands for managing builds
 	#[clap(alias = "b")]
 	Build {
 		#[clap(subcommand)]
 		subcommand: build::SubCommand,
 	},
+	/// Commands for managing regions
 	Region {
 		#[clap(subcommand)]
 		subcommand: region::SubCommand,
 	},
+	/// Commands for managing Rivet configuration
 	Config {
 		#[clap(subcommand)]
 		subcommand: config::SubCommand,
 	},
+	/// Commands for retrieving metadata about Rivet configuration
 	#[clap(alias = "meta")]
 	Metadata {
 		#[clap(subcommand)]
 		subcommand: metadata::SubCommand,
 	},
+	/// Execute Deno commands with Rivet environment variables
 	Deno(deno::Opts),
+	/// Launch an interactive shell with Rivet environment variables
 	#[clap(hide = true)]
 	Shell(shell::Opts),
+	/// Open the environment dashboard in a browser (alias of `environment view`)
 	#[clap(alias = "v")]
-	// Alias of `environment view`
 	View {
+		/// Specify the environment to view (will prompt if not specified)
 		#[clap(long, alias = "env", short = 'e')]
 		environment: Option<String>,
 	},

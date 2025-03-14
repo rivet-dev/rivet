@@ -3,17 +3,22 @@ use clap::Parser;
 use std::collections::HashMap;
 use toolchain::rivet_api::{apis, models};
 
+/// Update tags for a specific build
 #[derive(Parser)]
 pub struct Opts {
+	/// The ID of the build to update tags for
 	#[clap(index = 1)]
 	build: String,
 
+	/// Specify the environment the build is in (will prompt if not specified)
 	#[clap(long, alias = "env", short = 'e')]
 	environment: Option<String>,
 
+	/// Tags to set on the build (key=value format)
 	#[clap(short = 't', long = "tag")]
 	tags: Option<String>,
 
+	/// Comma-separated list of tag keys to make exclusive (will remove these tags from other builds)
 	#[clap(short = 'e', long = "exclusive-tags")]
 	exclusive_tags: Option<String>,
 }

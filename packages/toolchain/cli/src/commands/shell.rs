@@ -7,6 +7,7 @@ use toolchain::{errors, rivet_api::apis, tasks::get_bootstrap_data};
 
 use crate::util::task::{run_task, TaskOutputStyle};
 
+/// Launch an interactive shell with Rivet environment variables
 #[derive(Parser, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Opts {

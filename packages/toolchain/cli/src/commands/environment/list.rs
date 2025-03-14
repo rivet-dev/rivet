@@ -1,6 +1,7 @@
 use anyhow::Result;
 use clap::Parser;
 
+/// List all available environments
 #[derive(Parser)]
 pub struct Opts {
 	#[clap(long, short)]

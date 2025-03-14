@@ -1,8 +1,10 @@
 use anyhow::*;
 use clap::Subcommand;
 
+/// Commands for managing projects
 #[derive(Subcommand)]
 pub enum SubCommand {
+	/// Open the project dashboard in a browser
 	#[clap(alias = "v")]
 	View,
 }

@@ -1,6 +1,7 @@
 use anyhow::*;
 use clap::Parser;
 
+/// Select the default environment to use
 #[derive(Parser)]
 pub struct Opts {}
 

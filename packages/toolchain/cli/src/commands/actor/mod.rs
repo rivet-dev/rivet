@@ -7,6 +7,7 @@ pub mod logs;
 use anyhow::*;
 use clap::Subcommand;
 
+/// Commands for managing actors
 #[derive(Subcommand)]
 pub enum SubCommand {
 	Create(create::Opts),

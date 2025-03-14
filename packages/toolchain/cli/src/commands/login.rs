@@ -4,6 +4,7 @@ use clap::Parser;
 /// Login to a project
 #[derive(Parser)]
 pub struct Opts {
+	/// Specify a custom API endpoint (defaults to production API)
 	#[clap(long)]
 	api_endpoint: Option<String>,
 }

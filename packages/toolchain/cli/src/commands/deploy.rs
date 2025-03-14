@@ -2,11 +2,14 @@ use anyhow::*;
 use clap::Parser;
 use std::collections::HashMap;
 
+/// Deploy a build to a specific environment
 #[derive(Parser)]
 pub struct Opts {
+	/// Specify the environment to deploy to (will prompt if not specified)
 	#[clap(long, alias = "env", short = 'e')]
 	environment: Option<String>,
 
+	/// Tags to identify the build to deploy (key=value format)
 	#[clap(long, short = 't')]
 	tags: Option<String>,
 
