@@ -2,7 +2,7 @@
 	"$schema": "https://unframer-schema.vercel.app/schema.json",
 	"outDir": "./src/generated/framer",
 	"components": {
-		"index": "https://framer.com/m/Main-Page-hPg2.js@HMsJoWuGmbXVerrMhHTH",
+		"index": "https://framer.com/m/Main-Page-hPg2.js@3Svh3kve8jiMwbb1D8hK",
 		"pricing": "https://framer.com/m/Pricing-Page-VfNq.js@UOVOnhY3J6QNBPfh6JEt",
 		"sales": "https://framer.com/m/Sales-Page-serf.js@sbXwCxhxf87iUS1o9Qk2",
 		"manifesto": "https://framer.com/m/manifesto-page-TOLa.js@ZX5T9QsoQXlcazLVgbNc"
