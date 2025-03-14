@@ -95,27 +95,21 @@ impl Opts {
 							fs::write(project_path.join("tsconfig.json"), tsconfig).await?;
 
 							(
-                                include_str!("../../../../../examples/bare-template-ts/rivet.json"),
-                                include_str!("../../../../../examples/bare-template-ts/README.md"),
-                                "counter.ts",
-                                include_str!("../../../../../examples/bare-template-ts/counter.ts"),
-                                "counter_test.ts",
-                                include_str!(
-                                    "../../../../../examples/bare-template-ts/counter_test.ts"
-                                ),
-                            )
+								include_str!("../../../../../examples/bare-template-ts/rivet.json"),
+								include_str!("../../../../../examples/bare-template-ts/README.md"),
+								"counter.ts",
+								include_str!("../../../../../examples/bare-template-ts/counter.ts"),
+								"counter_test.ts",
+								include_str!(
+									"../../../../../examples/bare-template-ts/counter_test.ts"
+								),
+							)
 						}
 						Language::JavaScript => (
-							include_str!(
-								"../../../../../examples/bare-template-js/rivet.json"
-							),
-							include_str!(
-								"../../../../../examples/bare-template-js/README.md"
-							),
+							include_str!("../../../../../examples/bare-template-js/rivet.json"),
+							include_str!("../../../../../examples/bare-template-js/README.md"),
 							"counter.js",
-							include_str!(
-								"../../../../../examples/bare-template-js/counter.js"
-							),
+							include_str!("../../../../../examples/bare-template-js/counter.js"),
 							"counter_test.js",
 							include_str!(
 								"../../../../../examples/bare-template-js/counter_test.js"

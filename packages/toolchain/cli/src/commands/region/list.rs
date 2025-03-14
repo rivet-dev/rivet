@@ -14,7 +14,7 @@ impl Opts {
 
 		let env = crate::util::env::get_or_select(&ctx, self.environment.as_ref()).await?;
 
-		let res = apis::actor_regions_api::actor_regions_list(
+		let res = apis::regions_api::regions_list(
 			&ctx.openapi_config_cloud,
 			Some(&ctx.project.name_id),
 			Some(&env),

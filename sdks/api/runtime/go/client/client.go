@@ -4,8 +4,10 @@ package client
 
 import (
 	http "net/http"
-	actorclient "sdk/actor/client"
+	actorsclient "sdk/actors/client"
+	buildsclient "sdk/builds/client"
 	core "sdk/core"
+	regionsclient "sdk/regions/client"
 )
 
 type Client struct {
@@ -13,7 +15,9 @@ type Client struct {
 	caller  *core.Caller
 	header  http.Header
 
-	Actor *actorclient.Client
+	Actors  *actorsclient.Client
+	Builds  *buildsclient.Client
+	Regions *regionsclient.Client
 }
 
 func NewClient(opts ...core.ClientOption) *Client {
@@ -25,6 +29,8 @@ func NewClient(opts ...core.ClientOption) *Client {
 		baseURL: options.BaseURL,
 		caller:  core.NewCaller(options.HTTPClient),
 		header:  options.ToHeader(),
-		Actor:   actorclient.NewClient(opts...),
+		Actors:  actorsclient.NewClient(opts...),
+		Builds:  buildsclient.NewClient(opts...),
+		Regions: regionsclient.NewClient(opts...),
 	}
 }

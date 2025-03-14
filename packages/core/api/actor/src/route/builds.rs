@@ -29,7 +29,7 @@ pub async fn get(
 	build_id: Uuid,
 	_watch_index: WatchIndexQuery,
 	query: GlobalQuery,
-) -> GlobalResult<models::ActorGetBuildResponse> {
+) -> GlobalResult<models::BuildsGetBuildResponse> {
 	let CheckOutput { env_id, .. } = ctx
 		.auth()
 		.check(
@@ -59,7 +59,7 @@ pub async fn get(
 	.await?;
 	let upload = unwrap!(uploads_res.uploads.first());
 
-	let build = models::ActorBuild {
+	let build = models::BuildsBuild {
 		id: build.build_id,
 		name: build.display_name.clone(),
 		created_at: timestamp::to_string(build.create_ts)?,
@@ -67,7 +67,7 @@ pub async fn get(
 		tags: build.tags.clone(),
 	};
 
-	Ok(models::ActorGetBuildResponse {
+	Ok(models::BuildsGetBuildResponse {
 		build: Box::new(build),
 	})
 }
@@ -104,7 +104,7 @@ pub async fn list(
 	ctx: Ctx<Auth>,
 	_watch_index: WatchIndexQuery,
 	query: ListQuery,
-) -> GlobalResult<models::ActorListBuildsResponse> {
+) -> GlobalResult<models::BuildsListBuildsResponse> {
 	let CheckOutput { env_id, .. } = ctx
 		.auth()
 		.check(
@@ -151,7 +151,7 @@ pub async fn list(
 		.map(|(build, upload)| {
 			GlobalResult::Ok((
 				build.create_ts,
-				models::ActorBuild {
+				models::BuildsBuild {
 					id: unwrap!(build.build_id).as_uuid(),
 					name: build.display_name.clone(),
 					created_at: timestamp::to_string(build.create_ts)?,
@@ -166,7 +166,7 @@ pub async fn list(
 	builds.sort_by_key(|(create_ts, _)| *create_ts);
 	builds.reverse();
 
-	Ok(models::ActorListBuildsResponse {
+	Ok(models::BuildsListBuildsResponse {
 		builds: builds.into_iter().map(|(_, x)| x).collect::<Vec<_>>(),
 	})
 }
@@ -208,7 +208,7 @@ pub async fn list_deprecated(
 pub async fn patch_tags(
 	ctx: Ctx<Auth>,
 	build_id: Uuid,
-	body: models::ActorPatchBuildTagsRequest,
+	body: models::BuildsPatchBuildTagsRequest,
 	query: GlobalQuery,
 ) -> GlobalResult<serde_json::Value> {
 	let CheckOutput { env_id, .. } = ctx
@@ -294,7 +294,7 @@ pub async fn patch_tags_deprecated(
 	patch_tags(
 		ctx,
 		build_id,
-		models::ActorPatchBuildTagsRequest {
+		models::BuildsPatchBuildTagsRequest {
 			exclusive_tags: body.exclusive_tags,
 			tags: body.tags,
 		},
@@ -306,9 +306,9 @@ pub async fn patch_tags_deprecated(
 // MARK: POST /builds/prepare
 pub async fn create_build(
 	ctx: Ctx<Auth>,
-	body: models::ActorPrepareBuildRequest,
+	body: models::BuildsPrepareBuildRequest,
 	query: GlobalQuery,
-) -> GlobalResult<models::ActorPrepareBuildResponse> {
+) -> GlobalResult<models::BuildsPrepareBuildResponse> {
 	let CheckOutput { env_id, .. } = ctx
 		.auth()
 		.check(
@@ -322,7 +322,7 @@ pub async fn create_build(
 		.await?;
 
 	let (kind, image_tag) = match body.kind {
-		Option::None | Some(models::ActorBuildKind::DockerImage) => (
+		Option::None | Some(models::BuildsBuildKind::DockerImage) => (
 			build::types::BuildKind::DockerImage,
 			unwrap_with!(
 				body.image_tag,
@@ -330,13 +330,13 @@ pub async fn create_build(
 				error = "field `image_tag` is required for the given build kind"
 			),
 		),
-		Some(models::ActorBuildKind::OciBundle) => (
+		Some(models::BuildsBuildKind::OciBundle) => (
 			build::types::BuildKind::OciBundle,
 			// HACK(RVT-4125): Generate nonexistent image tag
 			body.image_tag
 				.unwrap_or_else(|| format!("nonexistent:{}", Uuid::new_v4())),
 		),
-		Some(models::ActorBuildKind::Javascript) => (
+		Some(models::BuildsBuildKind::Javascript) => (
 			build::types::BuildKind::JavaScript,
 			// HACK(RVT-4125): Generate nonexistent image tag
 			body.image_tag
@@ -360,7 +360,7 @@ pub async fn create_build(
 		})
 		.await?;
 
-	Ok(models::ActorPrepareBuildResponse {
+	Ok(models::BuildsPrepareBuildResponse {
 		build: create_res.build_id,
 		presigned_requests: create_res
 			.presigned_requests
@@ -379,16 +379,16 @@ pub async fn create_build_deprecated(
 	let global = build_global_query_compat(&ctx, game_id, env_id).await?;
 	let builds_res = create_build(
 		ctx,
-		models::ActorPrepareBuildRequest {
+		models::BuildsPrepareBuildRequest {
 			compression: body.compression.map(|c| match c {
-				models::ServersBuildCompression::None => models::ActorBuildCompression::None,
-				models::ServersBuildCompression::Lz4 => models::ActorBuildCompression::Lz4,
+				models::ServersBuildCompression::None => models::BuildsBuildCompression::None,
+				models::ServersBuildCompression::Lz4 => models::BuildsBuildCompression::Lz4,
 			}),
 			image_file: body.image_file,
 			image_tag: Some(body.image_tag),
 			kind: body.kind.map(|k| match k {
-				models::ServersBuildKind::DockerImage => models::ActorBuildKind::DockerImage,
-				models::ServersBuildKind::OciBundle => models::ActorBuildKind::OciBundle,
+				models::ServersBuildKind::DockerImage => models::BuildsBuildKind::DockerImage,
+				models::ServersBuildKind::OciBundle => models::BuildsBuildKind::OciBundle,
 			}),
 		},
 		global,

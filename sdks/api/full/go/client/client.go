@@ -4,8 +4,9 @@ package client
 
 import (
 	http "net/http"
-	actorclient "sdk/actor/client"
+	actorsclient "sdk/actors/client"
 	authclient "sdk/auth/client"
+	buildsclient "sdk/builds/client"
 	cloudclient "sdk/cloud/client"
 	core "sdk/core"
 	coreintercomclient "sdk/coreintercom/client"
@@ -17,6 +18,7 @@ import (
 	matchmakerclient "sdk/matchmaker/client"
 	portalclient "sdk/portal/client"
 	provisionclient "sdk/provision/client"
+	regionsclient "sdk/regions/client"
 	serversclient "sdk/servers/client"
 )
 
@@ -25,13 +27,15 @@ type Client struct {
 	caller  *core.Caller
 	header  http.Header
 
-	Actor        *actorclient.Client
+	Actors       *actorsclient.Client
+	Builds       *buildsclient.Client
 	Cloud        *cloudclient.Client
 	CoreIntercom *coreintercomclient.Client
 	EdgeIntercom *edgeintercomclient.Client
 	Group        *groupclient.Client
 	Identity     *identityclient.Client
 	Provision    *provisionclient.Client
+	Regions      *regionsclient.Client
 	Servers      *serversclient.Client
 	Auth         *authclient.Client
 	Games        *gamesclient.Client
@@ -49,13 +53,15 @@ func NewClient(opts ...core.ClientOption) *Client {
 		baseURL:      options.BaseURL,
 		caller:       core.NewCaller(options.HTTPClient),
 		header:       options.ToHeader(),
-		Actor:        actorclient.NewClient(opts...),
+		Actors:       actorsclient.NewClient(opts...),
+		Builds:       buildsclient.NewClient(opts...),
 		Cloud:        cloudclient.NewClient(opts...),
 		CoreIntercom: coreintercomclient.NewClient(opts...),
 		EdgeIntercom: edgeintercomclient.NewClient(opts...),
 		Group:        groupclient.NewClient(opts...),
 		Identity:     identityclient.NewClient(opts...),
 		Provision:    provisionclient.NewClient(opts...),
+		Regions:      regionsclient.NewClient(opts...),
 		Servers:      serversclient.NewClient(opts...),
 		Auth:         authclient.NewClient(opts...),
 		Games:        gamesclient.NewClient(opts...),

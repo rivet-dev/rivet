@@ -1,74 +1,39 @@
 {
   "pages": [
     {
-      "title": "actor.list",
-      "href": "/docs/api/actor/list",
+      "title": "actors.list",
+      "href": "/docs/api/actors/list",
       "sortingKey": "/actors get"
     },
     {
-      "title": "actor.create",
-      "href": "/docs/api/actor/create",
+      "title": "actors.create",
+      "href": "/docs/api/actors/create",
       "sortingKey": "/actors post"
     },
     {
-      "title": "actor.upgradeAll",
-      "href": "/docs/api/actor/upgrade-all",
+      "title": "actors.upgradeAll",
+      "href": "/docs/api/actors/upgrade-all",
       "sortingKey": "/actors/upgrade post"
     },
     {
-      "title": "actor.destroy",
-      "href": "/docs/api/actor/destroy",
+      "title": "actors.destroy",
+      "href": "/docs/api/actors/destroy",
       "sortingKey": "/actors/{actor} delete"
     },
     {
-      "title": "actor.get",
-      "href": "/docs/api/actor/get",
+      "title": "actors.get",
+      "href": "/docs/api/actors/get",
       "sortingKey": "/actors/{actor} get"
     },
     {
-      "title": "actor.logs.get",
-      "href": "/docs/api/actor/logs/get",
+      "title": "actors.logs.get",
+      "href": "/docs/api/actors/logs/get",
       "sortingKey": "/actors/{actor}/logs get"
     },
     {
-      "title": "actor.upgrade",
-      "href": "/docs/api/actor/upgrade",
+      "title": "actors.upgrade",
+      "href": "/docs/api/actors/upgrade",
       "sortingKey": "/actors/{actor}/upgrade post"
-    },
-    {
-      "title": "actor.builds.list",
-      "href": "/docs/api/actor/builds/list",
-      "sortingKey": "/builds get"
-    },
-    {
-      "title": "actor.builds.prepare",
-      "href": "/docs/api/actor/builds/prepare",
-      "sortingKey": "/builds/prepare post"
-    },
-    {
-      "title": "actor.builds.get",
-      "href": "/docs/api/actor/builds/get",
-      "sortingKey": "/builds/{build} get"
-    },
-    {
-      "title": "actor.builds.complete",
-      "href": "/docs/api/actor/builds/complete",
-      "sortingKey": "/builds/{build}/complete post"
-    },
-    {
-      "title": "actor.builds.patchTags",
-      "href": "/docs/api/actor/builds/patch-tags",
-      "sortingKey": "/builds/{build}/tags patch"
-    },
-    {
-      "title": "actor.regions.list",
-      "href": "/docs/api/actor/regions/list",
-      "sortingKey": "/regions get"
-    },
-    {
-      "title": "actor.regions.resolve",
-      "href": "/docs/api/actor/regions/resolve",
-      "sortingKey": "/regions/resolve get"
     }
   ]
 }

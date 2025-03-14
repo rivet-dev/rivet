@@ -158,9 +158,9 @@ pub async fn status(
 	};
 
 	tracing::info!("creating actor");
-	let res = actor_api::actor_create(
+	let res = actors_api::actors_create(
 		&config,
-		models::ActorCreateActorRequest {
+		models::ActorsCreateActorRequest {
 			tags: Some(serde_json::json!({
 				"name": query.build.build_name(),
 			})),
@@ -169,12 +169,12 @@ pub async fn status(
 				"current": "true",
 			}))),
 			region: Some(dc.name_id.clone()),
-			network: Some(Box::new(models::ActorCreateActorNetworkRequest {
+			network: Some(Box::new(models::ActorsCreateActorNetworkRequest {
 				ports: Some(HashMap::from([(
 					"http".to_string(),
-					models::ActorCreateActorPortRequest {
-						protocol: models::ActorPortProtocol::Https,
-						routing: Some(Box::new(models::ActorPortRouting {
+					models::ActorsCreateActorPortRequest {
+						protocol: models::ActorsPortProtocol::Https,
+						routing: Some(Box::new(models::ActorsPortRouting {
 							guard: Some(serde_json::json!({})),
 							host: None,
 						})),
@@ -183,7 +183,7 @@ pub async fn status(
 				)])),
 				..Default::default()
 			})),
-			lifecycle: Some(Box::new(models::ActorLifecycle {
+			lifecycle: Some(Box::new(models::ActorsLifecycle {
 				// Don't reboot on failure
 				durable: Some(false),
 				..Default::default()
@@ -206,8 +206,8 @@ pub async fn status(
 	let port = unwrap!(res.actor.network.ports.get("http"), "missing http protocol");
 
 	let protocol = match port.protocol {
-		models::ActorPortProtocol::Http | models::ActorPortProtocol::Tcp => "http",
-		models::ActorPortProtocol::Https => "https",
+		models::ActorsPortProtocol::Http | models::ActorsPortProtocol::Tcp => "http",
+		models::ActorsPortProtocol::Https => "https",
 		_ => bail!("unsupported protocol"),
 	};
 	let hostname = unwrap_ref!(port.hostname);
@@ -222,7 +222,7 @@ pub async fn status(
 	.await;
 
 	// Destroy actor regardless of connection status
-	actor_api::actor_destroy(
+	actors_api::actors_destroy(
 		&config,
 		&actor_id.to_string(),
 		Some(&system_test_project),

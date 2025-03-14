@@ -28,7 +28,7 @@ impl task::Task for Task {
 		let ctx = crate::toolchain_ctx::load().await?;
 
 		// Check if manager exists
-		let res = apis::actor_api::actor_list(
+		let res = apis::actors_api::actors_list(
 			&ctx.openapi_config_actor,
 			Some(&ctx.project.name_id),
 			Some(&input.env_slug),

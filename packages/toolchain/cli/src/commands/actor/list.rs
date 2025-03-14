@@ -32,7 +32,7 @@ impl Opts {
 			.transpose()?;
 		let tags_json = tags.map(|t| serde_json::to_string(&t)).transpose()?;
 
-		let res = apis::actor_api::actor_list(
+		let res = apis::actors_api::actors_list(
 			&ctx.openapi_config_cloud,
 			Some(&ctx.project.name_id),
 			Some(&env),

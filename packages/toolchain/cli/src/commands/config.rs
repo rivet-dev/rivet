@@ -5,7 +5,7 @@ use clap::Subcommand;
 pub enum SubCommand {
 	Validate {
 		#[clap(long)]
-		json: bool
+		json: bool,
 	},
 }
 

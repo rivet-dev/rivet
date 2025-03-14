@@ -24,7 +24,7 @@ impl Opts {
 		let actor_id =
 			Uuid::parse_str(&self.id).map_err(|_| errors::UserError::new("invalid id uuid"))?;
 
-		apis::actor_api::actor_destroy(
+		apis::actors_api::actors_destroy(
 			&ctx.openapi_config_cloud,
 			&actor_id.to_string(),
 			Some(&ctx.project.name_id),

@@ -153,8 +153,8 @@ pub enum LogsStreamType {
 pub fn convert_actor_to_api(
 	value: Actor,
 	datacenter: &cluster::types::Datacenter,
-) -> GlobalResult<models::ActorActor> {
-	Ok(models::ActorActor {
+) -> GlobalResult<models::ActorsActor> {
+	Ok(models::ActorsActor {
 		id: value.actor_id,
 		region: datacenter.name_id.clone(),
 		created_at: util::timestamp::to_string(value.create_ts)?,
@@ -170,12 +170,12 @@ pub fn convert_actor_to_api(
 			.map(util::timestamp::to_string)
 			.transpose()?,
 		tags: Some(serde_json::to_value(value.tags)?),
-		runtime: Box::new(models::ActorRuntime {
+		runtime: Box::new(models::ActorsRuntime {
 			build: value.image_id,
 			arguments: Some(value.args),
 			environment: Some(value.environment),
 		}),
-		network: Box::new(models::ActorNetwork {
+		network: Box::new(models::ActorsNetwork {
 			mode: value.network_mode.api_into(),
 			ports: value
 				.network_ports
@@ -188,8 +188,8 @@ pub fn convert_actor_to_api(
 	})
 }
 
-impl ApiFrom<models::ActorResources> for ActorResources {
-	fn api_from(value: models::ActorResources) -> ActorResources {
+impl ApiFrom<models::ActorsResources> for ActorResources {
+	fn api_from(value: models::ActorsResources) -> ActorResources {
 		ActorResources {
 			cpu_millicores: value.cpu as u32,
 			memory_mib: value.memory as u32,
@@ -197,17 +197,17 @@ impl ApiFrom<models::ActorResources> for ActorResources {
 	}
 }
 
-impl ApiFrom<ActorResources> for models::ActorResources {
-	fn api_from(value: ActorResources) -> models::ActorResources {
-		models::ActorResources {
+impl ApiFrom<ActorResources> for models::ActorsResources {
+	fn api_from(value: ActorResources) -> models::ActorsResources {
+		models::ActorsResources {
 			cpu: value.cpu_millicores as i32,
 			memory: value.memory_mib as i32,
 		}
 	}
 }
 
-impl ApiFrom<models::ActorLifecycle> for ActorLifecycle {
-	fn api_from(value: models::ActorLifecycle) -> ActorLifecycle {
+impl ApiFrom<models::ActorsLifecycle> for ActorLifecycle {
+	fn api_from(value: models::ActorsLifecycle) -> ActorLifecycle {
 		ActorLifecycle {
 			kill_timeout_ms: value.kill_timeout.unwrap_or_default(),
 			durable: value.durable.unwrap_or_default(),
@@ -215,35 +215,35 @@ impl ApiFrom<models::ActorLifecycle> for ActorLifecycle {
 	}
 }
 
-impl ApiFrom<ActorLifecycle> for models::ActorLifecycle {
-	fn api_from(value: ActorLifecycle) -> models::ActorLifecycle {
-		models::ActorLifecycle {
+impl ApiFrom<ActorLifecycle> for models::ActorsLifecycle {
+	fn api_from(value: ActorLifecycle) -> models::ActorsLifecycle {
+		models::ActorsLifecycle {
 			kill_timeout: Some(value.kill_timeout_ms),
 			durable: Some(value.durable),
 		}
 	}
 }
 
-impl ApiFrom<models::ActorNetworkMode> for NetworkMode {
-	fn api_from(value: models::ActorNetworkMode) -> NetworkMode {
+impl ApiFrom<models::ActorsNetworkMode> for NetworkMode {
+	fn api_from(value: models::ActorsNetworkMode) -> NetworkMode {
 		match value {
-			models::ActorNetworkMode::Bridge => NetworkMode::Bridge,
-			models::ActorNetworkMode::Host => NetworkMode::Host,
+			models::ActorsNetworkMode::Bridge => NetworkMode::Bridge,
+			models::ActorsNetworkMode::Host => NetworkMode::Host,
 		}
 	}
 }
 
-impl ApiFrom<NetworkMode> for models::ActorNetworkMode {
-	fn api_from(value: NetworkMode) -> models::ActorNetworkMode {
+impl ApiFrom<NetworkMode> for models::ActorsNetworkMode {
+	fn api_from(value: NetworkMode) -> models::ActorsNetworkMode {
 		match value {
-			NetworkMode::Bridge => models::ActorNetworkMode::Bridge,
-			NetworkMode::Host => models::ActorNetworkMode::Host,
+			NetworkMode::Bridge => models::ActorsNetworkMode::Bridge,
+			NetworkMode::Host => models::ActorsNetworkMode::Host,
 		}
 	}
 }
 
-impl ApiFrom<Port> for models::ActorPort {
-	fn api_from(value: Port) -> models::ActorPort {
+impl ApiFrom<Port> for models::ActorsPort {
+	fn api_from(value: Port) -> models::ActorsPort {
 		let (protocol, routing, url) = match &value.routing {
 			Routing::GameGuard { protocol } => {
 				let url = match (
@@ -275,7 +275,7 @@ impl ApiFrom<Port> for models::ActorPort {
 
 				(
 					(*protocol).api_into(),
-					models::ActorPortRouting {
+					models::ActorsPortRouting {
 						guard: Some(json!({})),
 						..Default::default()
 					},
@@ -284,7 +284,7 @@ impl ApiFrom<Port> for models::ActorPort {
 			}
 			Routing::Host { protocol } => (
 				(*protocol).api_into(),
-				models::ActorPortRouting {
+				models::ActorsPortRouting {
 					host: Some(json!({})),
 					..Default::default()
 				},
@@ -292,7 +292,7 @@ impl ApiFrom<Port> for models::ActorPort {
 			),
 		};
 
-		models::ActorPort {
+		models::ActorsPort {
 			protocol,
 			internal_port: value.internal_port,
 			hostname: value.public_hostname,
@@ -304,36 +304,36 @@ impl ApiFrom<Port> for models::ActorPort {
 	}
 }
 
-impl ApiFrom<models::ActorPortProtocol> for GameGuardProtocol {
-	fn api_from(value: models::ActorPortProtocol) -> GameGuardProtocol {
+impl ApiFrom<models::ActorsPortProtocol> for GameGuardProtocol {
+	fn api_from(value: models::ActorsPortProtocol) -> GameGuardProtocol {
 		match value {
-			models::ActorPortProtocol::Udp => GameGuardProtocol::Udp,
-			models::ActorPortProtocol::Tcp => GameGuardProtocol::Tcp,
-			models::ActorPortProtocol::Http => GameGuardProtocol::Http,
-			models::ActorPortProtocol::Https => GameGuardProtocol::Https,
-			models::ActorPortProtocol::TcpTls => GameGuardProtocol::TcpTls,
+			models::ActorsPortProtocol::Udp => GameGuardProtocol::Udp,
+			models::ActorsPortProtocol::Tcp => GameGuardProtocol::Tcp,
+			models::ActorsPortProtocol::Http => GameGuardProtocol::Http,
+			models::ActorsPortProtocol::Https => GameGuardProtocol::Https,
+			models::ActorsPortProtocol::TcpTls => GameGuardProtocol::TcpTls,
 		}
 	}
 }
 
-impl ApiFrom<GameGuardProtocol> for models::ActorPortProtocol {
-	fn api_from(value: GameGuardProtocol) -> models::ActorPortProtocol {
+impl ApiFrom<GameGuardProtocol> for models::ActorsPortProtocol {
+	fn api_from(value: GameGuardProtocol) -> models::ActorsPortProtocol {
 		match value {
-			GameGuardProtocol::Udp => models::ActorPortProtocol::Udp,
-			GameGuardProtocol::Tcp => models::ActorPortProtocol::Tcp,
-			GameGuardProtocol::Http => models::ActorPortProtocol::Http,
-			GameGuardProtocol::Https => models::ActorPortProtocol::Https,
-			GameGuardProtocol::TcpTls => models::ActorPortProtocol::TcpTls,
+			GameGuardProtocol::Udp => models::ActorsPortProtocol::Udp,
+			GameGuardProtocol::Tcp => models::ActorsPortProtocol::Tcp,
+			GameGuardProtocol::Http => models::ActorsPortProtocol::Http,
+			GameGuardProtocol::Https => models::ActorsPortProtocol::Https,
+			GameGuardProtocol::TcpTls => models::ActorsPortProtocol::TcpTls,
 		}
 	}
 }
 
-impl ApiTryFrom<models::ActorPortProtocol> for HostProtocol {
+impl ApiTryFrom<models::ActorsPortProtocol> for HostProtocol {
 	type Error = GlobalError;
-	fn api_try_from(value: models::ActorPortProtocol) -> GlobalResult<HostProtocol> {
+	fn api_try_from(value: models::ActorsPortProtocol) -> GlobalResult<HostProtocol> {
 		Ok(match value {
-			models::ActorPortProtocol::Udp => HostProtocol::Udp,
-			models::ActorPortProtocol::Tcp => HostProtocol::Tcp,
+			models::ActorsPortProtocol::Udp => HostProtocol::Udp,
+			models::ActorsPortProtocol::Tcp => HostProtocol::Tcp,
 			_ => {
 				bail_with!(
 					ACTOR_FAILED_TO_CREATE,
@@ -344,29 +344,29 @@ impl ApiTryFrom<models::ActorPortProtocol> for HostProtocol {
 	}
 }
 
-impl ApiFrom<HostProtocol> for models::ActorPortProtocol {
-	fn api_from(value: HostProtocol) -> models::ActorPortProtocol {
+impl ApiFrom<HostProtocol> for models::ActorsPortProtocol {
+	fn api_from(value: HostProtocol) -> models::ActorsPortProtocol {
 		match value {
-			HostProtocol::Udp => models::ActorPortProtocol::Udp,
-			HostProtocol::Tcp => models::ActorPortProtocol::Tcp,
+			HostProtocol::Udp => models::ActorsPortProtocol::Udp,
+			HostProtocol::Tcp => models::ActorsPortProtocol::Tcp,
 		}
 	}
 }
 
-impl ApiFrom<models::ActorEndpointType> for EndpointType {
-	fn api_from(value: models::ActorEndpointType) -> EndpointType {
+impl ApiFrom<models::ActorsEndpointType> for EndpointType {
+	fn api_from(value: models::ActorsEndpointType) -> EndpointType {
 		match value {
-			models::ActorEndpointType::Hostname => EndpointType::Hostname,
-			models::ActorEndpointType::Path => EndpointType::Path,
+			models::ActorsEndpointType::Hostname => EndpointType::Hostname,
+			models::ActorsEndpointType::Path => EndpointType::Path,
 		}
 	}
 }
 
-impl ApiFrom<EndpointType> for models::ActorEndpointType {
-	fn api_from(value: EndpointType) -> models::ActorEndpointType {
+impl ApiFrom<EndpointType> for models::ActorsEndpointType {
+	fn api_from(value: EndpointType) -> models::ActorsEndpointType {
 		match value {
-			EndpointType::Hostname => models::ActorEndpointType::Hostname,
-			EndpointType::Path => models::ActorEndpointType::Path,
+			EndpointType::Hostname => models::ActorsEndpointType::Hostname,
+			EndpointType::Path => models::ActorsEndpointType::Path,
 		}
 	}
 }

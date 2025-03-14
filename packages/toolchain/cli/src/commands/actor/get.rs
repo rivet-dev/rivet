@@ -20,7 +20,7 @@ impl Opts {
 
 		let actor_id = Uuid::parse_str(&self.id).context("invalid id uuid")?;
 
-		let res = apis::actor_api::actor_get(
+		let res = apis::actors_api::actors_get(
 			&ctx.openapi_config_cloud,
 			&actor_id.to_string(),
 			Some(&ctx.project.name_id),

@@ -57,7 +57,7 @@ define_router! {
 			),
 			POST: actors::create(
 				query: actors::GlobalEndpointTypeQuery,
-				body: models::ActorCreateActorRequest,
+				body: models::ActorsCreateActorRequest,
 				opt_auth: true,
 				rate_limit: {
 					buckets: [
@@ -70,7 +70,7 @@ define_router! {
 		"actors" / "upgrade": {
 			POST: actors::upgrade_all(
 				query: GlobalQuery,
-				body: models::ActorUpgradeAllActorsRequest,
+				body: models::ActorsUpgradeAllActorsRequest,
 				opt_auth: true,
 				rate_limit: {
 					buckets: [
@@ -105,7 +105,7 @@ define_router! {
 		"actors" / Uuid / "upgrade": {
 			POST: actors::upgrade(
 				query: GlobalQuery,
-				body: models::ActorUpgradeActorRequest,
+				body: models::ActorsUpgradeActorRequest,
 				opt_auth: true,
 				rate_limit: {
 					buckets: [

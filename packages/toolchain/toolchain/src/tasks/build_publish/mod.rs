@@ -134,7 +134,7 @@ async fn build_and_upload(
 	}
 
 	// Find existing builds with current tag
-	let list_res = apis::actor_builds_api::actor_builds_list(
+	let list_res = apis::builds_api::builds_list(
 		&ctx.openapi_config_cloud,
 		Some(&ctx.project.name_id),
 		Some(&env.slug),
@@ -147,10 +147,10 @@ async fn build_and_upload(
 
 	// Remove current tag if needed
 	for build in list_res.builds {
-		apis::actor_builds_api::actor_builds_patch_tags(
+		apis::builds_api::builds_patch_tags(
 			&ctx.openapi_config_cloud,
 			&build.id.to_string(),
-			models::ActorPatchBuildTagsRequest {
+			models::BuildsPatchBuildTagsRequest {
 				tags: Some(serde_json::to_value(&json!({
 					build::tags::CURRENT: null
 				}))?),
@@ -163,10 +163,10 @@ async fn build_and_upload(
 	}
 
 	// Tag build
-	let complete_res = apis::actor_builds_api::actor_builds_patch_tags(
+	let complete_res = apis::builds_api::builds_patch_tags(
 		&ctx.openapi_config_cloud,
 		&build_id.to_string(),
-		models::ActorPatchBuildTagsRequest {
+		models::BuildsPatchBuildTagsRequest {
 			tags: Some(serde_json::to_value(&tags)?),
 			exclusive_tags: None,
 		},
@@ -181,9 +181,9 @@ async fn build_and_upload(
 
 	// Upgrade actors
 	task.log(format!("[Upgrading Actors]"));
-	apis::actor_api::actor_upgrade_all(
+	apis::actors_api::actors_upgrade_all(
 		&ctx.openapi_config_cloud,
-		models::ActorUpgradeAllActorsRequest {
+		models::ActorsUpgradeAllActorsRequest {
 			tags: Some(serde_json::to_value(&build_tags)?),
 			build: Some(build_id),
 			build_tags: None,

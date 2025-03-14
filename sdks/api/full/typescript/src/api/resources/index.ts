@@ -1,10 +1,12 @@
-export * as actor from "./actor";
+export * as actors from "./actors";
+export * as builds from "./builds";
 export * as cloud from "./cloud";
 export * as coreIntercom from "./coreIntercom";
 export * as edgeIntercom from "./edgeIntercom";
 export * as group from "./group";
 export * as identity from "./identity";
 export * as provision from "./provision";
+export * as regions from "./regions";
 export * as servers from "./servers";
 export * as auth from "./auth";
 export * as captcha from "./captcha";

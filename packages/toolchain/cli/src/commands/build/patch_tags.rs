@@ -36,10 +36,10 @@ impl Opts {
 				.collect::<Vec<String>>()
 		});
 
-		apis::actor_builds_api::actor_builds_patch_tags(
+		apis::builds_api::builds_patch_tags(
 			&ctx.openapi_config_cloud,
 			&self.build,
-			models::ActorPatchBuildTagsRequest {
+			models::BuildsPatchBuildTagsRequest {
 				tags: tags.map(|x| serde_json::json!(x)),
 				exclusive_tags,
 			},

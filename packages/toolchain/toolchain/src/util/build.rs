@@ -1,20 +1,20 @@
 use anyhow::*;
-use rivet_api::models::{ActorBuildCompression, ActorBuildKind};
+use rivet_api::models::{BuildsBuildCompression, BuildsBuildKind};
 use std::path::Path;
 
 use crate::{config, util::lz4};
 
 /// Generates the file name that holds the build tar.
-pub fn file_name(kind: ActorBuildKind, compression: ActorBuildCompression) -> String {
+pub fn file_name(kind: BuildsBuildKind, compression: BuildsBuildCompression) -> String {
 	let file_name = match kind {
-		ActorBuildKind::DockerImage => "image",
-		ActorBuildKind::OciBundle => "oci-bundle",
-		ActorBuildKind::Javascript => "js-bundle",
+		BuildsBuildKind::DockerImage => "image",
+		BuildsBuildKind::OciBundle => "oci-bundle",
+		BuildsBuildKind::Javascript => "js-bundle",
 	};
 	let file_ext = "tar";
 	let file_ext_compression = match compression {
-		ActorBuildCompression::None => "",
-		ActorBuildCompression::Lz4 => ".lz4",
+		BuildsBuildCompression::None => "",
+		BuildsBuildCompression::Lz4 => ".lz4",
 	};
 	format!("{file_name}.{file_ext}{file_ext_compression}")
 }

@@ -19,10 +19,10 @@ enum NetworkMode {
 #[derive(Deserialize)]
 struct Port {
 	name: String,
-	protocol: models::ActorPortProtocol,
+	protocol: models::ActorsPortProtocol,
 	internal_port: Option<i32>,
 	// Temporarily disabled
-	// guard: Option<models::ActorGuardRouting>,
+	// guard: Option<models::ActorsGuardRouting>,
 	#[serde(default)]
 	guard: bool,
 	#[serde(default)]
@@ -131,10 +131,10 @@ impl Opts {
 						let port = kv_str::from_str::<Port>(port_str)?;
 						Ok((
 							port.name,
-							models::ActorCreateActorPortRequest {
+							models::ActorsCreateActorPortRequest {
 								internal_port: port.internal_port,
 								protocol: port.protocol,
-								routing: Some(Box::new(models::ActorPortRouting {
+								routing: Some(Box::new(models::ActorsPortRouting {
 									// Temporarily disabled
 									// guard: port.guard.map(Box::new),
 									guard: port.guard.then_some(serde_json::json!({})),
@@ -143,7 +143,7 @@ impl Opts {
 							},
 						))
 					})
-					.collect::<Result<HashMap<String, models::ActorCreateActorPortRequest>>>()
+					.collect::<Result<HashMap<String, models::ActorsCreateActorPortRequest>>>()
 			})
 			.transpose()?;
 
@@ -202,7 +202,7 @@ impl Opts {
 		let region = if let Some(region) = &self.region {
 			region.clone()
 		} else {
-			let regions = apis::actor_regions_api::actor_regions_list(
+			let regions = apis::regions_api::regions_list(
 				&ctx.openapi_config_cloud,
 				Some(&ctx.project.name_id.to_string()),
 				Some(&env),
@@ -227,36 +227,36 @@ impl Opts {
 		};
 
 		let resources = match (self.cpu, self.memory) {
-			(Some(cpu), Some(memory)) => Some(Box::new(models::ActorResources { cpu, memory })),
+			(Some(cpu), Some(memory)) => Some(Box::new(models::ActorsResources { cpu, memory })),
 			(Some(_), None) | (None, Some(_)) => {
 				return Err(errors::UserError::new("Must define both --cpu and --memory").into())
 			}
 			(None, None) => None,
 		};
 
-		let request = models::ActorCreateActorRequest {
+		let request = models::ActorsCreateActorRequest {
 			region: Some(region),
 			tags: Some(serde_json::json!(actor_tags)),
 			build: build_id,
 			build_tags: build_tags.map(|bt| Some(serde_json::json!(bt))),
-			runtime: Some(Box::new(models::ActorCreateActorRuntimeRequest {
+			runtime: Some(Box::new(models::ActorsCreateActorRuntimeRequest {
 				environment: env_vars,
 			})),
-			network: Some(Box::new(models::ActorCreateActorNetworkRequest {
+			network: Some(Box::new(models::ActorsCreateActorNetworkRequest {
 				mode: self.network_mode.as_ref().map(|mode| match mode {
-					NetworkMode::Bridge => models::ActorNetworkMode::Bridge,
-					NetworkMode::Host => models::ActorNetworkMode::Host,
+					NetworkMode::Bridge => models::ActorsNetworkMode::Bridge,
+					NetworkMode::Host => models::ActorsNetworkMode::Host,
 				}),
 				ports,
 			})),
 			resources,
-			lifecycle: Some(Box::new(models::ActorLifecycle {
+			lifecycle: Some(Box::new(models::ActorsLifecycle {
 				durable: Some(self.durable),
 				kill_timeout: self.kill_timeout,
 			})),
 		};
 
-		let response = apis::actor_api::actor_create(
+		let response = apis::actors_api::actors_create(
 			&ctx.openapi_config_cloud,
 			request,
 			Some(&ctx.project.name_id),

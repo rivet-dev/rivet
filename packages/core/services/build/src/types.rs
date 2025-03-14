@@ -11,12 +11,12 @@ pub enum BuildKind {
 	JavaScript = 2,
 }
 
-impl ApiFrom<models::ActorBuildKind> for BuildKind {
-	fn api_from(value: models::ActorBuildKind) -> BuildKind {
+impl ApiFrom<models::BuildsBuildKind> for BuildKind {
+	fn api_from(value: models::BuildsBuildKind) -> BuildKind {
 		match value {
-			models::ActorBuildKind::DockerImage => BuildKind::DockerImage,
-			models::ActorBuildKind::OciBundle => BuildKind::OciBundle,
-			models::ActorBuildKind::Javascript => BuildKind::JavaScript,
+			models::BuildsBuildKind::DockerImage => BuildKind::DockerImage,
+			models::BuildsBuildKind::OciBundle => BuildKind::OciBundle,
+			models::BuildsBuildKind::Javascript => BuildKind::JavaScript,
 		}
 	}
 }
@@ -27,11 +27,11 @@ pub enum BuildCompression {
 	Lz4 = 1,
 }
 
-impl ApiFrom<models::ActorBuildCompression> for BuildCompression {
-	fn api_from(value: models::ActorBuildCompression) -> BuildCompression {
+impl ApiFrom<models::BuildsBuildCompression> for BuildCompression {
+	fn api_from(value: models::BuildsBuildCompression) -> BuildCompression {
 		match value {
-			models::ActorBuildCompression::None => BuildCompression::None,
-			models::ActorBuildCompression::Lz4 => BuildCompression::Lz4,
+			models::BuildsBuildCompression::None => BuildCompression::None,
+			models::BuildsBuildCompression::Lz4 => BuildCompression::Lz4,
 		}
 	}
 }

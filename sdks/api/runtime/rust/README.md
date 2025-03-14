@@ -25,59 +25,59 @@ All URIs are relative to *https://api.rivet.gg*
 
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
-*ActorApi* | [**actor_create**](docs/ActorApi.md#actor_create) | **POST** /actors | 
-*ActorApi* | [**actor_destroy**](docs/ActorApi.md#actor_destroy) | **DELETE** /actors/{actor} | 
-*ActorApi* | [**actor_get**](docs/ActorApi.md#actor_get) | **GET** /actors/{actor} | 
-*ActorApi* | [**actor_list**](docs/ActorApi.md#actor_list) | **GET** /actors | 
-*ActorApi* | [**actor_upgrade**](docs/ActorApi.md#actor_upgrade) | **POST** /actors/{actor}/upgrade | 
-*ActorApi* | [**actor_upgrade_all**](docs/ActorApi.md#actor_upgrade_all) | **POST** /actors/upgrade | 
-*ActorBuildsApi* | [**actor_builds_complete**](docs/ActorBuildsApi.md#actor_builds_complete) | **POST** /builds/{build}/complete | 
-*ActorBuildsApi* | [**actor_builds_get**](docs/ActorBuildsApi.md#actor_builds_get) | **GET** /builds/{build} | 
-*ActorBuildsApi* | [**actor_builds_list**](docs/ActorBuildsApi.md#actor_builds_list) | **GET** /builds | 
-*ActorBuildsApi* | [**actor_builds_patch_tags**](docs/ActorBuildsApi.md#actor_builds_patch_tags) | **PATCH** /builds/{build}/tags | 
-*ActorBuildsApi* | [**actor_builds_prepare**](docs/ActorBuildsApi.md#actor_builds_prepare) | **POST** /builds/prepare | 
-*ActorLogsApi* | [**actor_logs_get**](docs/ActorLogsApi.md#actor_logs_get) | **GET** /actors/{actor}/logs | 
-*ActorRegionsApi* | [**actor_regions_list**](docs/ActorRegionsApi.md#actor_regions_list) | **GET** /regions | 
-*ActorRegionsApi* | [**actor_regions_resolve**](docs/ActorRegionsApi.md#actor_regions_resolve) | **GET** /regions/resolve | 
+*ActorsApi* | [**actors_create**](docs/ActorsApi.md#actors_create) | **POST** /actors | 
+*ActorsApi* | [**actors_destroy**](docs/ActorsApi.md#actors_destroy) | **DELETE** /actors/{actor} | 
+*ActorsApi* | [**actors_get**](docs/ActorsApi.md#actors_get) | **GET** /actors/{actor} | 
+*ActorsApi* | [**actors_list**](docs/ActorsApi.md#actors_list) | **GET** /actors | 
+*ActorsApi* | [**actors_upgrade**](docs/ActorsApi.md#actors_upgrade) | **POST** /actors/{actor}/upgrade | 
+*ActorsApi* | [**actors_upgrade_all**](docs/ActorsApi.md#actors_upgrade_all) | **POST** /actors/upgrade | 
+*ActorsLogsApi* | [**actors_logs_get**](docs/ActorsLogsApi.md#actors_logs_get) | **GET** /actors/{actor}/logs | 
+*BuildsApi* | [**builds_complete**](docs/BuildsApi.md#builds_complete) | **POST** /builds/{build}/complete | 
+*BuildsApi* | [**builds_get**](docs/BuildsApi.md#builds_get) | **GET** /builds/{build} | 
+*BuildsApi* | [**builds_list**](docs/BuildsApi.md#builds_list) | **GET** /builds | 
+*BuildsApi* | [**builds_patch_tags**](docs/BuildsApi.md#builds_patch_tags) | **PATCH** /builds/{build}/tags | 
+*BuildsApi* | [**builds_prepare**](docs/BuildsApi.md#builds_prepare) | **POST** /builds/prepare | 
+*RegionsApi* | [**regions_list**](docs/RegionsApi.md#regions_list) | **GET** /regions | 
+*RegionsApi* | [**regions_recommend**](docs/RegionsApi.md#regions_recommend) | **GET** /regions/recommend | 
 
 
 ## Documentation For Models
 
- - [ActorActor](docs/ActorActor.md)
- - [ActorBuild](docs/ActorBuild.md)
- - [ActorBuildCompression](docs/ActorBuildCompression.md)
- - [ActorBuildKind](docs/ActorBuildKind.md)
- - [ActorCreateActorNetworkRequest](docs/ActorCreateActorNetworkRequest.md)
- - [ActorCreateActorPortRequest](docs/ActorCreateActorPortRequest.md)
- - [ActorCreateActorRequest](docs/ActorCreateActorRequest.md)
- - [ActorCreateActorResponse](docs/ActorCreateActorResponse.md)
- - [ActorCreateActorRuntimeRequest](docs/ActorCreateActorRuntimeRequest.md)
- - [ActorEndpointType](docs/ActorEndpointType.md)
- - [ActorGetActorLogsResponse](docs/ActorGetActorLogsResponse.md)
- - [ActorGetActorResponse](docs/ActorGetActorResponse.md)
- - [ActorGetBuildResponse](docs/ActorGetBuildResponse.md)
- - [ActorLifecycle](docs/ActorLifecycle.md)
- - [ActorListActorsResponse](docs/ActorListActorsResponse.md)
- - [ActorListBuildsResponse](docs/ActorListBuildsResponse.md)
- - [ActorListRegionsResponse](docs/ActorListRegionsResponse.md)
- - [ActorLogStream](docs/ActorLogStream.md)
- - [ActorNetwork](docs/ActorNetwork.md)
- - [ActorNetworkMode](docs/ActorNetworkMode.md)
- - [ActorPatchBuildTagsRequest](docs/ActorPatchBuildTagsRequest.md)
- - [ActorPort](docs/ActorPort.md)
- - [ActorPortProtocol](docs/ActorPortProtocol.md)
- - [ActorPortRouting](docs/ActorPortRouting.md)
- - [ActorPrepareBuildRequest](docs/ActorPrepareBuildRequest.md)
- - [ActorPrepareBuildResponse](docs/ActorPrepareBuildResponse.md)
- - [ActorRegion](docs/ActorRegion.md)
- - [ActorResolveRegionResponse](docs/ActorResolveRegionResponse.md)
- - [ActorResources](docs/ActorResources.md)
- - [ActorRuntime](docs/ActorRuntime.md)
- - [ActorUpgradeActorRequest](docs/ActorUpgradeActorRequest.md)
- - [ActorUpgradeAllActorsRequest](docs/ActorUpgradeAllActorsRequest.md)
- - [ActorUpgradeAllActorsResponse](docs/ActorUpgradeAllActorsResponse.md)
+ - [ActorsActor](docs/ActorsActor.md)
+ - [ActorsCreateActorNetworkRequest](docs/ActorsCreateActorNetworkRequest.md)
+ - [ActorsCreateActorPortRequest](docs/ActorsCreateActorPortRequest.md)
+ - [ActorsCreateActorRequest](docs/ActorsCreateActorRequest.md)
+ - [ActorsCreateActorResponse](docs/ActorsCreateActorResponse.md)
+ - [ActorsCreateActorRuntimeRequest](docs/ActorsCreateActorRuntimeRequest.md)
+ - [ActorsEndpointType](docs/ActorsEndpointType.md)
+ - [ActorsGetActorLogsResponse](docs/ActorsGetActorLogsResponse.md)
+ - [ActorsGetActorResponse](docs/ActorsGetActorResponse.md)
+ - [ActorsLifecycle](docs/ActorsLifecycle.md)
+ - [ActorsListActorsResponse](docs/ActorsListActorsResponse.md)
+ - [ActorsLogStream](docs/ActorsLogStream.md)
+ - [ActorsNetwork](docs/ActorsNetwork.md)
+ - [ActorsNetworkMode](docs/ActorsNetworkMode.md)
+ - [ActorsPort](docs/ActorsPort.md)
+ - [ActorsPortProtocol](docs/ActorsPortProtocol.md)
+ - [ActorsPortRouting](docs/ActorsPortRouting.md)
+ - [ActorsResources](docs/ActorsResources.md)
+ - [ActorsRuntime](docs/ActorsRuntime.md)
+ - [ActorsUpgradeActorRequest](docs/ActorsUpgradeActorRequest.md)
+ - [ActorsUpgradeAllActorsRequest](docs/ActorsUpgradeAllActorsRequest.md)
+ - [ActorsUpgradeAllActorsResponse](docs/ActorsUpgradeAllActorsResponse.md)
+ - [BuildsBuild](docs/BuildsBuild.md)
+ - [BuildsBuildCompression](docs/BuildsBuildCompression.md)
+ - [BuildsBuildKind](docs/BuildsBuildKind.md)
+ - [BuildsGetBuildResponse](docs/BuildsGetBuildResponse.md)
+ - [BuildsListBuildsResponse](docs/BuildsListBuildsResponse.md)
+ - [BuildsPatchBuildTagsRequest](docs/BuildsPatchBuildTagsRequest.md)
+ - [BuildsPrepareBuildRequest](docs/BuildsPrepareBuildRequest.md)
+ - [BuildsPrepareBuildResponse](docs/BuildsPrepareBuildResponse.md)
  - [ErrorBody](docs/ErrorBody.md)
  - [Pagination](docs/Pagination.md)
+ - [RegionsListRegionsResponse](docs/RegionsListRegionsResponse.md)
+ - [RegionsRecommendRegionResponse](docs/RegionsRecommendRegionResponse.md)
+ - [RegionsRegion](docs/RegionsRegion.md)
  - [UploadPrepareFile](docs/UploadPrepareFile.md)
  - [UploadPresignedRequest](docs/UploadPresignedRequest.md)
  - [WatchResponse](docs/WatchResponse.md)

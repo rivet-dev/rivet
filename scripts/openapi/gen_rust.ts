@@ -67,11 +67,11 @@ async function fixOpenApiBugs() {
 		"cloud_games_matchmaker_api.rs": [
 			[/CloudGamesLogStream/g, "crate::models::CloudGamesLogStream"],
 		],
-		"actor_api.rs": [
-			[/ActorEndpointType/g, "crate::models::ActorEndpointType"],
+		"actors_api.rs": [
+			[/ActorsEndpointType/g, "crate::models::ActorsEndpointType"],
 		],
-		"actor_logs_api.rs": [
-			[/ActorLogStream/g, "crate::models::ActorLogStream"],
+		"actors_logs_api.rs": [
+			[/ActorsLogStream/g, "crate::models::ActorsLogStream"],
 		],
 		"servers_logs_api.rs": [
 			[/ServersLogStream/g, "crate::models::ServersLogStream"],

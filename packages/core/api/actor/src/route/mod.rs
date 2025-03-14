@@ -58,7 +58,7 @@ define_router! {
 			),
 			POST: actors::create(
 				query: actors::GlobalEndpointTypeQuery,
-				body: models::ActorCreateActorRequest,
+				body: models::ActorsCreateActorRequest,
 				opt_auth: true,
 				rate_limit: {
 					buckets: [
@@ -71,7 +71,7 @@ define_router! {
 		"actors" / "upgrade": {
 			POST: actors::upgrade_all(
 				query: GlobalQuery,
-				body: models::ActorUpgradeAllActorsRequest,
+				body: models::ActorsUpgradeAllActorsRequest,
 				opt_auth: true,
 				rate_limit: {
 					buckets: [
@@ -106,7 +106,7 @@ define_router! {
 		"actors" / Uuid / "upgrade": {
 			POST: actors::upgrade(
 				query: GlobalQuery,
-				body: models::ActorUpgradeActorRequest,
+				body: models::ActorsUpgradeActorRequest,
 				opt_auth: true,
 				rate_limit: {
 					buckets: [
@@ -151,7 +151,7 @@ define_router! {
 		"builds" / Uuid / "tags": {
 			PATCH: builds::patch_tags(
 				query: GlobalQuery,
-				body: models::ActorPatchBuildTagsRequest,
+				body: models::BuildsPatchBuildTagsRequest,
 				opt_auth: true,
 			),
 		},
@@ -159,7 +159,7 @@ define_router! {
 		"builds" / "prepare": {
 			POST: builds::create_build(
 				query: GlobalQuery,
-				body: models::ActorPrepareBuildRequest,
+				body: models::BuildsPrepareBuildRequest,
 				opt_auth: true,
 			),
 		},
@@ -184,14 +184,21 @@ define_router! {
 				},
 			),
 		},
-		"regions" / "resolve": {
-			GET: regions::resolve(
-				query: regions::ResolveQuery,
+		"regions" / "recommend": {
+			GET: regions::recommend(
+				query: regions::RecommendQuery,
 				opt_auth: true,
 			),
 		},
 
 		// MARK: Deprecated
+		"regions" / "resolve": {
+			GET: regions::recommend(
+				query: regions::RecommendQuery,
+				opt_auth: true,
+			),
+		},
+
 		"games" / Uuid / "environments" / Uuid / "servers": {
 			GET: actors::list_servers_deprecated(
 				query: actors::ListQuery,

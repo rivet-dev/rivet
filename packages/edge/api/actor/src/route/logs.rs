@@ -28,7 +28,7 @@ pub async fn get_logs(
 	actor_id: Uuid,
 	watch_index: WatchIndexQuery,
 	query: GetActorLogsQuery,
-) -> GlobalResult<models::ActorGetActorLogsResponse> {
+) -> GlobalResult<models::ActorsGetActorLogsResponse> {
 	let CheckOutput { game_id, env_id } = ctx
 		.auth()
 		.check(
@@ -134,7 +134,7 @@ pub async fn get_logs(
 	timestamps.reverse();
 
 	let watch_nts = logs_res.entries.first().map_or(before_nts, |x| x.ts);
-	Ok(models::ActorGetActorLogsResponse {
+	Ok(models::ActorsGetActorLogsResponse {
 		lines,
 		timestamps,
 		watch: WatchResponse::new_as_model(watch_nts),

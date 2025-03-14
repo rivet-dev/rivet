@@ -1,6 +1,6 @@
 pub mod actor;
-pub mod config;
 pub mod build;
+pub mod config;
 pub mod deno;
 pub mod deploy;
 pub mod environment;

@@ -16,7 +16,7 @@ pub async fn list(
 	ctx: Ctx<Auth>,
 	_watch_index: WatchIndexQuery,
 	query: GlobalQuery,
-) -> GlobalResult<models::ActorListRegionsResponse> {
+) -> GlobalResult<models::RegionsListRegionsResponse> {
 	let CheckOutput { game_id, .. } = ctx
 		.auth()
 		.check(
@@ -55,13 +55,13 @@ pub async fn list(
 	let regions = dcs_res
 		.datacenters
 		.into_iter()
-		.map(|dc| models::ActorRegion {
+		.map(|dc| models::RegionsRegion {
 			id: dc.name_id,
 			name: dc.display_name,
 		})
 		.collect::<Vec<_>>();
 
-	Ok(models::ActorListRegionsResponse { regions })
+	Ok(models::RegionsListRegionsResponse { regions })
 }
 
 pub async fn list_deprecated(
@@ -119,20 +119,20 @@ pub async fn list_deprecated(
 	Ok(models::ServersListDatacentersResponse { datacenters })
 }
 
-// MARK: GET /regions/resolve
+// MARK: GET /regions/recommend
 #[derive(Debug, Clone, Deserialize)]
-pub struct ResolveQuery {
+pub struct RecommendQuery {
 	#[serde(flatten)]
 	global: GlobalQuery,
 	lat: Option<f64>,
 	long: Option<f64>,
 }
 
-pub async fn resolve(
+pub async fn recommend(
 	ctx: Ctx<Auth>,
 	_watch_index: WatchIndexQuery,
-	query: ResolveQuery,
-) -> GlobalResult<models::ActorResolveRegionResponse> {
+	query: RecommendQuery,
+) -> GlobalResult<models::RegionsRecommendRegionResponse> {
 	let CheckOutput { game_id, .. } = ctx
 		.auth()
 		.check(
@@ -198,8 +198,8 @@ pub async fn resolve(
 		.await?;
 	let dc = unwrap!(dcs_res.datacenters.into_iter().next());
 
-	Ok(models::ActorResolveRegionResponse {
-		region: Box::new(models::ActorRegion {
+	Ok(models::RegionsRecommendRegionResponse {
+		region: Box::new(models::RegionsRegion {
 			id: dc.name_id,
 			name: dc.display_name,
 		}),

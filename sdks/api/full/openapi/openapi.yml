@@ -6,9 +6,9 @@ paths:
   /actors/{actor}:
     get:
       description: Gets a dynamic actor.
-      operationId: actor_get
+      operationId: actors_get
       tags:
-        - Actor
+        - Actors
       parameters:
         - name: actor
           in: path
@@ -31,14 +31,14 @@ paths:
           in: query
           required: false
           schema:
-            $ref: '#/components/schemas/ActorEndpointType'
+            $ref: '#/components/schemas/ActorsEndpointType'
       responses:
         '200':
           description: ''
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ActorGetActorResponse'
+                $ref: '#/components/schemas/ActorsGetActorResponse'
         '400':
           description: ''
           content:
@@ -79,9 +79,9 @@ paths:
         - BearerAuth: []
     delete:
       description: Destroy a dynamic actor.
-      operationId: actor_destroy
+      operationId: actors_destroy
       tags:
-        - Actor
+        - Actors
       parameters:
         - name: actor
           in: path
@@ -116,7 +116,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ActorDestroyActorResponse'
+                $ref: '#/components/schemas/ActorsDestroyActorResponse'
         '400':
           description: ''
           content:
@@ -159,9 +159,9 @@ paths:
       description: >-
         Lists all actors associated with the token used. Can be filtered by tags
         in the query string.
-      operationId: actor_list
+      operationId: actors_list
       tags:
-        - Actor
+        - Actors
       parameters:
         - name: project
           in: query
@@ -177,7 +177,7 @@ paths:
           in: query
           required: false
           schema:
-            $ref: '#/components/schemas/ActorEndpointType'
+            $ref: '#/components/schemas/ActorsEndpointType'
         - name: tags_json
           in: query
           required: false
@@ -199,7 +199,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ActorListActorsResponse'
+                $ref: '#/components/schemas/ActorsListActorsResponse'
         '400':
           description: ''
           content:
@@ -239,9 +239,9 @@ paths:
       security: *ref_0
     post:
       description: Create a new dynamic actor.
-      operationId: actor_create
+      operationId: actors_create
       tags:
-        - Actor
+        - Actors
       parameters:
         - name: project
           in: query
@@ -257,14 +257,14 @@ paths:
           in: query
           required: false
           schema:
-            $ref: '#/components/schemas/ActorEndpointType'
+            $ref: '#/components/schemas/ActorsEndpointType'
       responses:
         '200':
           description: ''
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ActorCreateActorResponse'
+                $ref: '#/components/schemas/ActorsCreateActorResponse'
         '400':
           description: ''
           content:
@@ -307,13 +307,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ActorCreateActorRequest'
+              $ref: '#/components/schemas/ActorsCreateActorRequest'
   /actors/{actor}/upgrade:
     post:
       description: Upgrades a dynamic actor.
-      operationId: actor_upgrade
+      operationId: actors_upgrade
       tags:
-        - Actor
+        - Actors
       parameters:
         - name: actor
           in: path
@@ -338,7 +338,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ActorUpgradeActorResponse'
+                $ref: '#/components/schemas/ActorsUpgradeActorResponse'
         '400':
           description: ''
           content:
@@ -381,13 +381,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ActorUpgradeActorRequest'
+              $ref: '#/components/schemas/ActorsUpgradeActorRequest'
   /actors/upgrade:
     post:
       description: Upgrades a dynamic actor.
-      operationId: actor_upgradeAll
+      operationId: actors_upgradeAll
       tags:
-        - Actor
+        - Actors
       parameters:
         - name: project
           in: query
@@ -405,7 +405,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ActorUpgradeAllActorsResponse'
+                $ref: '#/components/schemas/ActorsUpgradeAllActorsResponse'
         '400':
           description: ''
           content:
@@ -448,7 +448,344 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ActorUpgradeAllActorsRequest'
+              $ref: '#/components/schemas/ActorsUpgradeAllActorsRequest'
+  /builds/{build}:
+    get:
+      description: Get a build.
+      operationId: builds_get
+      tags:
+        - Builds
+      parameters:
+        - name: build
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: project
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: environment
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuildsGetBuildResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+  /builds:
+    get:
+      description: >-
+        Lists all builds of the project associated with the token used. Can be
+        filtered by tags in the query string.
+      operationId: builds_list
+      tags:
+        - Builds
+      parameters:
+        - name: project
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: environment
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: tags_json
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuildsListBuildsResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+  /builds/{build}/tags:
+    patch:
+      operationId: builds_patchTags
+      tags:
+        - Builds
+      parameters:
+        - name: build
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: project
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: environment
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuildsPatchBuildTagsResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BuildsPatchBuildTagsRequest'
+  /builds/prepare:
+    post:
+      description: Creates a new project build for the given project.
+      operationId: builds_prepare
+      tags:
+        - Builds
+      parameters:
+        - name: project
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: environment
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuildsPrepareBuildResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BuildsPrepareBuildRequest'
+  /builds/{build}/complete:
+    post:
+      description: Marks an upload as complete.
+      operationId: builds_complete
+      tags:
+        - Builds
+      parameters:
+        - name: build
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: project
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: environment
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '204':
+          description: ''
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+      security: *ref_0
   /cloud/bootstrap:
     get:
       description: Returns the basic information required to use the cloud APIs.
@@ -4339,6 +4676,136 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
       security: *ref_0
+  /regions:
+    get:
+      operationId: regions_list
+      tags:
+        - Regions
+      parameters:
+        - name: project
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: environment
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegionsListRegionsResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+  /regions/recommend:
+    get:
+      operationId: regions_recommend
+      tags:
+        - Regions
+      parameters:
+        - name: project
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: environment
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: lat
+          in: query
+          required: false
+          schema:
+            type: number
+            format: double
+        - name: long
+          in: query
+          required: false
+          schema:
+            type: number
+            format: double
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegionsRecommendRegionResponse'
+        '400':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '403':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '404':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '408':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '429':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
+        '500':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorBody'
   /games/{game_id}/environments/{environment_id}/servers/{server_id}:
     get:
       description: Gets a dynamic server.
@@ -4637,349 +5104,12 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ServersCreateServerRequest'
-  /builds/{build}:
-    get:
-      description: Get a build.
-      operationId: actor_builds_get
-      tags:
-        - ActorBuilds
-      parameters:
-        - name: build
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: project
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: environment
-          in: query
-          required: false
-          schema:
-            type: string
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ActorGetBuildResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
-  /builds:
-    get:
-      description: >-
-        Lists all builds of the project associated with the token used. Can be
-        filtered by tags in the query string.
-      operationId: actor_builds_list
-      tags:
-        - ActorBuilds
-      parameters:
-        - name: project
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: environment
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: tags_json
-          in: query
-          required: false
-          schema:
-            type: string
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ActorListBuildsResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
-  /builds/{build}/tags:
-    patch:
-      operationId: actor_builds_patchTags
-      tags:
-        - ActorBuilds
-      parameters:
-        - name: build
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: project
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: environment
-          in: query
-          required: false
-          schema:
-            type: string
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ActorPatchBuildTagsResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ActorPatchBuildTagsRequest'
-  /builds/prepare:
-    post:
-      description: Creates a new project build for the given project.
-      operationId: actor_builds_prepare
-      tags:
-        - ActorBuilds
-      parameters:
-        - name: project
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: environment
-          in: query
-          required: false
-          schema:
-            type: string
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ActorPrepareBuildResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ActorPrepareBuildRequest'
-  /builds/{build}/complete:
-    post:
-      description: Marks an upload as complete.
-      operationId: actor_builds_complete
-      tags:
-        - ActorBuilds
-      parameters:
-        - name: build
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: project
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: environment
-          in: query
-          required: false
-          schema:
-            type: string
-      responses:
-        '204':
-          description: ''
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-      security: *ref_0
   /actors/{actor}/logs:
     get:
       description: Returns the logs for a given actor.
-      operationId: actor_logs_get
+      operationId: actors_logs_get
       tags:
-        - ActorLogs
+        - ActorsLogs
       parameters:
         - name: actor
           in: path
@@ -5001,7 +5131,7 @@ paths:
           in: query
           required: true
           schema:
-            $ref: '#/components/schemas/ActorLogStream'
+            $ref: '#/components/schemas/ActorsLogStream'
         - name: watch_index
           in: query
           description: A query parameter denoting the requests watch index.
@@ -5014,7 +5144,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ActorGetActorLogsResponse'
+                $ref: '#/components/schemas/ActorsGetActorLogsResponse'
         '400':
           description: ''
           content:
@@ -5052,126 +5182,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
       security: *ref_0
-  /regions:
-    get:
-      operationId: actor_regions_list
-      tags:
-        - ActorRegions
-      parameters:
-        - name: project
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: environment
-          in: query
-          required: false
-          schema:
-            type: string
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ActorListRegionsResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-  /regions/resolve:
-    get:
-      operationId: actor_regions_resolve
-      tags:
-        - ActorRegions
-      parameters:
-        - name: lat
-          in: query
-          required: false
-          schema:
-            type: number
-            format: double
-        - name: long
-          in: query
-          required: false
-          schema:
-            type: number
-            format: double
-      responses:
-        '200':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ActorResolveRegionResponse'
-        '400':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '403':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '404':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '408':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '429':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
-        '500':
-          description: ''
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorBody'
   /auth/identity/email/start-verification:
     post:
       description: Starts the verification process for linking an email to your identity.
@@ -8996,14 +9006,14 @@ paths:
       security: *ref_0
 components:
   schemas:
-    ActorGetActorResponse:
+    ActorsGetActorResponse:
       type: object
       properties:
         actor:
-          $ref: '#/components/schemas/ActorActor'
+          $ref: '#/components/schemas/ActorsActor'
       required:
         - actor
-    ActorCreateActorRequest:
+    ActorsCreateActorRequest:
       type: object
       properties:
         region:
@@ -9014,64 +9024,64 @@ components:
           format: uuid
         build_tags: {}
         runtime:
-          $ref: '#/components/schemas/ActorCreateActorRuntimeRequest'
+          $ref: '#/components/schemas/ActorsCreateActorRuntimeRequest'
         network:
-          $ref: '#/components/schemas/ActorCreateActorNetworkRequest'
+          $ref: '#/components/schemas/ActorsCreateActorNetworkRequest'
         resources:
-          $ref: '#/components/schemas/ActorResources'
+          $ref: '#/components/schemas/ActorsResources'
         lifecycle:
-          $ref: '#/components/schemas/ActorLifecycle'
+          $ref: '#/components/schemas/ActorsLifecycle'
       required:
         - tags
-    ActorCreateActorRuntimeRequest:
+    ActorsCreateActorRuntimeRequest:
       type: object
       properties:
         environment:
           type: object
           additionalProperties:
             type: string
-    ActorCreateActorNetworkRequest:
+    ActorsCreateActorNetworkRequest:
       type: object
       properties:
         mode:
-          $ref: '#/components/schemas/ActorNetworkMode'
+          $ref: '#/components/schemas/ActorsNetworkMode'
         ports:
           type: object
           additionalProperties:
-            $ref: '#/components/schemas/ActorCreateActorPortRequest'
-    ActorCreateActorPortRequest:
+            $ref: '#/components/schemas/ActorsCreateActorPortRequest'
+    ActorsCreateActorPortRequest:
       type: object
       properties:
         protocol:
-          $ref: '#/components/schemas/ActorPortProtocol'
+          $ref: '#/components/schemas/ActorsPortProtocol'
         internal_port:
           type: integer
         routing:
-          $ref: '#/components/schemas/ActorPortRouting'
+          $ref: '#/components/schemas/ActorsPortRouting'
       required:
         - protocol
-    ActorCreateActorResponse:
+    ActorsCreateActorResponse:
       type: object
       properties:
         actor:
-          $ref: '#/components/schemas/ActorActor'
+          $ref: '#/components/schemas/ActorsActor'
           description: The actor that was created
       required:
         - actor
-    ActorDestroyActorResponse:
+    ActorsDestroyActorResponse:
       type: object
       properties: {}
-    ActorUpgradeActorRequest:
+    ActorsUpgradeActorRequest:
       type: object
       properties:
         build:
           type: string
           format: uuid
         build_tags: {}
-    ActorUpgradeActorResponse:
+    ActorsUpgradeActorResponse:
       type: object
       properties: {}
-    ActorUpgradeAllActorsRequest:
+    ActorsUpgradeAllActorsRequest:
       type: object
       properties:
         tags: {}
@@ -9081,7 +9091,7 @@ components:
         build_tags: {}
       required:
         - tags
-    ActorUpgradeAllActorsResponse:
+    ActorsUpgradeAllActorsResponse:
       type: object
       properties:
         count:
@@ -9089,19 +9099,90 @@ components:
           format: int64
       required:
         - count
-    ActorListActorsResponse:
+    ActorsListActorsResponse:
       type: object
       properties:
         actors:
           type: array
           items:
-            $ref: '#/components/schemas/ActorActor'
+            $ref: '#/components/schemas/ActorsActor'
           description: A list of actors for the project associated with the token.
         pagination:
           $ref: '#/components/schemas/Pagination'
       required:
         - actors
         - pagination
+    BuildsGetBuildResponse:
+      type: object
+      properties:
+        build:
+          $ref: '#/components/schemas/BuildsBuild'
+      required:
+        - build
+    BuildsListBuildsResponse:
+      type: object
+      properties:
+        builds:
+          type: array
+          items:
+            $ref: '#/components/schemas/BuildsBuild'
+          description: A list of builds for the project associated with the token.
+      required:
+        - builds
+    BuildsPatchBuildTagsRequest:
+      type: object
+      properties:
+        tags: {}
+        exclusive_tags:
+          type: array
+          items:
+            type: string
+          description: |-
+            **Deprecated**
+            Removes the given tag keys from all other builds.
+      required:
+        - tags
+    BuildsPatchBuildTagsResponse:
+      type: object
+      properties: {}
+    BuildsPrepareBuildRequest:
+      type: object
+      properties:
+        image_tag:
+          type: string
+          description: A tag given to the project build.
+        image_file:
+          $ref: '#/components/schemas/UploadPrepareFile'
+        kind:
+          $ref: '#/components/schemas/BuildsBuildKind'
+        compression:
+          $ref: '#/components/schemas/BuildsBuildCompression'
+      required:
+        - image_file
+    BuildsPrepareBuildResponse:
+      type: object
+      properties:
+        build:
+          type: string
+          format: uuid
+        presigned_requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/UploadPresignedRequest'
+      required:
+        - build
+        - presigned_requests
+    BuildsBuildKind:
+      type: string
+      enum:
+        - docker_image
+        - oci_bundle
+        - javascript
+    BuildsBuildCompression:
+      type: string
+      enum:
+        - none
+        - lz4
     CloudBootstrapResponse:
       type: object
       properties:
@@ -10100,6 +10181,22 @@ components:
         - cert_pem
         - root_ca_cert_pem
         - private_key_pem
+    RegionsListRegionsResponse:
+      type: object
+      properties:
+        regions:
+          type: array
+          items:
+            $ref: '#/components/schemas/RegionsRegion'
+      required:
+        - regions
+    RegionsRecommendRegionResponse:
+      type: object
+      properties:
+        region:
+          $ref: '#/components/schemas/RegionsRegion'
+      required:
+        - region
     ServersGetServerResponse:
       type: object
       properties:
@@ -10187,78 +10284,7 @@ components:
           description: A list of servers for the game associated with the token.
       required:
         - servers
-    ActorGetBuildResponse:
-      type: object
-      properties:
-        build:
-          $ref: '#/components/schemas/ActorBuild'
-      required:
-        - build
-    ActorListBuildsResponse:
-      type: object
-      properties:
-        builds:
-          type: array
-          items:
-            $ref: '#/components/schemas/ActorBuild'
-          description: A list of builds for the project associated with the token.
-      required:
-        - builds
-    ActorPatchBuildTagsRequest:
-      type: object
-      properties:
-        tags: {}
-        exclusive_tags:
-          type: array
-          items:
-            type: string
-          description: |-
-            **Deprecated**
-            Removes the given tag keys from all other builds.
-      required:
-        - tags
-    ActorPatchBuildTagsResponse:
-      type: object
-      properties: {}
-    ActorPrepareBuildRequest:
-      type: object
-      properties:
-        image_tag:
-          type: string
-          description: A tag given to the project build.
-        image_file:
-          $ref: '#/components/schemas/UploadPrepareFile'
-        kind:
-          $ref: '#/components/schemas/ActorBuildKind'
-        compression:
-          $ref: '#/components/schemas/ActorBuildCompression'
-      required:
-        - image_file
-    ActorPrepareBuildResponse:
-      type: object
-      properties:
-        build:
-          type: string
-          format: uuid
-        presigned_requests:
-          type: array
-          items:
-            $ref: '#/components/schemas/UploadPresignedRequest'
-      required:
-        - build
-        - presigned_requests
-    ActorBuildKind:
-      type: string
-      enum:
-        - docker_image
-        - oci_bundle
-        - javascript
-    ActorBuildCompression:
-      type: string
-      enum:
-        - none
-        - lz4
-    ActorActor:
+    ActorsActor:
       type: object
       properties:
         id:
@@ -10268,13 +10294,13 @@ components:
           type: string
         tags: {}
         runtime:
-          $ref: '#/components/schemas/ActorRuntime'
+          $ref: '#/components/schemas/ActorsRuntime'
         network:
-          $ref: '#/components/schemas/ActorNetwork'
+          $ref: '#/components/schemas/ActorsNetwork'
         resources:
-          $ref: '#/components/schemas/ActorResources'
+          $ref: '#/components/schemas/ActorsResources'
         lifecycle:
-          $ref: '#/components/schemas/ActorLifecycle'
+          $ref: '#/components/schemas/ActorsLifecycle'
         created_at:
           $ref: '#/components/schemas/Timestamp'
         started_at:
@@ -10290,7 +10316,7 @@ components:
         - resources
         - lifecycle
         - created_at
-    ActorRuntime:
+    ActorsRuntime:
       type: object
       properties:
         build:
@@ -10306,7 +10332,7 @@ components:
             type: string
       required:
         - build
-    ActorLifecycle:
+    ActorsLifecycle:
       type: object
       properties:
         kill_timeout:
@@ -10322,7 +10348,7 @@ components:
             If true, the actor will try to reschedule itself automatically in
             the event of a crash or a datacenter failover. The actor will not
             reschedule if it exits successfully.
-    ActorResources:
+    ActorsResources:
       type: object
       properties:
         cpu:
@@ -10340,28 +10366,28 @@ components:
       required:
         - cpu
         - memory
-    ActorNetwork:
+    ActorsNetwork:
       type: object
       properties:
         mode:
-          $ref: '#/components/schemas/ActorNetworkMode'
+          $ref: '#/components/schemas/ActorsNetworkMode'
         ports:
           type: object
           additionalProperties:
-            $ref: '#/components/schemas/ActorPort'
+            $ref: '#/components/schemas/ActorsPort'
       required:
         - mode
         - ports
-    ActorNetworkMode:
+    ActorsNetworkMode:
       type: string
       enum:
         - bridge
         - host
-    ActorPort:
+    ActorsPort:
       type: object
       properties:
         protocol:
-          $ref: '#/components/schemas/ActorPortProtocol'
+          $ref: '#/components/schemas/ActorsPortProtocol'
         internal_port:
           type: integer
         hostname:
@@ -10376,11 +10402,11 @@ components:
             Fully formed connection URL including protocol, hostname, port, and
             path, if applicable.
         routing:
-          $ref: '#/components/schemas/ActorPortRouting'
+          $ref: '#/components/schemas/ActorsPortRouting'
       required:
         - protocol
         - routing
-    ActorPortProtocol:
+    ActorsPortProtocol:
       type: string
       enum:
         - http
@@ -10388,60 +10414,25 @@ components:
         - tcp
         - tcp_tls
         - udp
-    ActorPortRouting:
+    ActorsPortRouting:
       type: object
       properties:
         guard:
-          $ref: '#/components/schemas/ActorGuardRouting'
+          $ref: '#/components/schemas/ActorsGuardRouting'
         host:
-          $ref: '#/components/schemas/ActorHostRouting'
-    ActorGuardRouting:
+          $ref: '#/components/schemas/ActorsHostRouting'
+    ActorsGuardRouting:
       type: object
       properties: {}
-    ActorHostRouting:
+    ActorsHostRouting:
       type: object
       properties: {}
-    ActorEndpointType:
+    ActorsEndpointType:
       type: string
       enum:
         - hostname
         - path
-    ActorBuild:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        name:
-          type: string
-        created_at:
-          $ref: '#/components/schemas/Timestamp'
-        content_length:
-          type: integer
-          format: int64
-          description: Unsigned 64 bit integer.
-        tags:
-          type: object
-          additionalProperties:
-            type: string
-          description: Tags of this build
-      required:
-        - id
-        - name
-        - created_at
-        - content_length
-        - tags
-    ActorRegion:
-      type: object
-      properties:
-        id:
-          type: string
-        name:
-          type: string
-      required:
-        - id
-        - name
-    ActorGetActorLogsResponse:
+    ActorsGetActorLogsResponse:
       type: object
       properties:
         lines:
@@ -10460,27 +10451,11 @@ components:
         - lines
         - timestamps
         - watch
-    ActorLogStream:
+    ActorsLogStream:
       type: string
       enum:
         - std_out
         - std_err
-    ActorListRegionsResponse:
-      type: object
-      properties:
-        regions:
-          type: array
-          items:
-            $ref: '#/components/schemas/ActorRegion'
-      required:
-        - regions
-    ActorResolveRegionResponse:
-      type: object
-      properties:
-        region:
-          $ref: '#/components/schemas/ActorRegion'
-      required:
-        - region
     AuthCompleteStatus:
       type: string
       enum:
@@ -10560,6 +10535,31 @@ components:
         - token
         - exp
         - identity_id
+    BuildsBuild:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        content_length:
+          type: integer
+          format: int64
+          description: Unsigned 64 bit integer.
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+          description: Tags of this build
+      required:
+        - id
+        - name
+        - created_at
+        - content_length
+        - tags
     CaptchaConfig:
       type: object
       description: Methods to verify a captcha
@@ -13569,6 +13569,16 @@ components:
         - server_id
         - datacenter_id
         - pool_type
+    RegionsRegion:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+      required:
+        - id
+        - name
     ServersGetBuildResponse:
       type: object
       properties:

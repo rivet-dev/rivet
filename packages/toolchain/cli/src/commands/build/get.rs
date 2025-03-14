@@ -21,7 +21,7 @@ impl Opts {
 		let build_id =
 			Uuid::parse_str(&self.id).map_err(|_| errors::UserError::new("invalid id uuid"))?;
 
-		let res = apis::actor_builds_api::actor_builds_get(
+		let res = apis::builds_api::builds_get(
 			&ctx.openapi_config_cloud,
 			&build_id.to_string(),
 			Some(&ctx.project.name_id),

@@ -53,18 +53,18 @@ pub async fn push_tar(
 	));
 
 	let build_kind = match push_opts.bundle {
-		config::build::docker::BundleKind::DockerImage => models::ActorBuildKind::DockerImage,
-		config::build::docker::BundleKind::OciBundle => models::ActorBuildKind::OciBundle,
+		config::build::docker::BundleKind::DockerImage => models::BuildsBuildKind::DockerImage,
+		config::build::docker::BundleKind::OciBundle => models::BuildsBuildKind::OciBundle,
 	};
 
 	let build_compression = match push_opts.compression {
-		config::build::Compression::None => models::ActorBuildCompression::None,
-		config::build::Compression::Lz4 => models::ActorBuildCompression::Lz4,
+		config::build::Compression::None => models::BuildsBuildCompression::None,
+		config::build::Compression::Lz4 => models::BuildsBuildCompression::Lz4,
 	};
 
-	let build_res = apis::actor_builds_api::actor_builds_prepare(
+	let build_res = apis::builds_api::builds_prepare(
 		&ctx.openapi_config_cloud,
-		models::ActorPrepareBuildRequest {
+		models::BuildsPrepareBuildRequest {
 			image_tag: Some(push_opts.docker_tag.clone()),
 			image_file: Box::new(models::UploadPrepareFile {
 				path: crate::util::build::file_name(build_kind, build_compression),
@@ -108,7 +108,7 @@ pub async fn push_tar(
 		.try_collect::<Vec<_>>()
 		.await?;
 
-	let complete_res = apis::actor_builds_api::actor_builds_complete(
+	let complete_res = apis::builds_api::builds_complete(
 		&ctx.openapi_config_cloud,
 		&build_res.build.to_string(),
 		Some(&ctx.project.name_id),

@@ -4,13 +4,15 @@
 
 import * as environments from "./environments";
 import * as core from "./core";
-import { Actor } from "./api/resources/actor/client/Client";
+import { Actors } from "./api/resources/actors/client/Client";
+import { Builds } from "./api/resources/builds/client/Client";
 import { Cloud } from "./api/resources/cloud/client/Client";
 import { CoreIntercom } from "./api/resources/coreIntercom/client/Client";
 import { EdgeIntercom } from "./api/resources/edgeIntercom/client/Client";
 import { Group } from "./api/resources/group/client/Client";
 import { Identity } from "./api/resources/identity/client/Client";
 import { Provision } from "./api/resources/provision/client/Client";
+import { Regions } from "./api/resources/regions/client/Client";
 import { Servers } from "./api/resources/servers/client/Client";
 import { Auth } from "./api/resources/auth/client/Client";
 import { Games } from "./api/resources/games/client/Client";
@@ -44,10 +46,16 @@ export declare namespace RivetClient {
 export class RivetClient {
     constructor(protected readonly _options: RivetClient.Options = {}) {}
 
-    protected _actor: Actor | undefined;
+    protected _actors: Actors | undefined;
 
-    public get actor(): Actor {
-        return (this._actor ??= new Actor(this._options));
+    public get actors(): Actors {
+        return (this._actors ??= new Actors(this._options));
+    }
+
+    protected _builds: Builds | undefined;
+
+    public get builds(): Builds {
+        return (this._builds ??= new Builds(this._options));
     }
 
     protected _cloud: Cloud | undefined;
@@ -84,6 +92,12 @@ export class RivetClient {
 
     public get provision(): Provision {
         return (this._provision ??= new Provision(this._options));
+    }
+
+    protected _regions: Regions | undefined;
+
+    public get regions(): Regions {
+        return (this._regions ??= new Regions(this._options));
     }
 
     protected _servers: Servers | undefined;

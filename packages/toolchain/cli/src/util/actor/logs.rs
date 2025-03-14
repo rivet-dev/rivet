@@ -50,13 +50,13 @@ async fn tail_streams(
 		tail_stream(
 			ctx,
 			&opts,
-			models::ActorLogStream::StdOut,
+			models::ActorsLogStream::StdOut,
 			stdout_fetched_tx
 		),
 		tail_stream(
 			ctx,
 			&opts,
-			models::ActorLogStream::StdErr,
+			models::ActorsLogStream::StdErr,
 			stderr_fetched_tx
 		),
 	)
@@ -67,7 +67,7 @@ async fn tail_streams(
 async fn tail_stream(
 	ctx: &toolchain::ToolchainCtx,
 	opts: &TailOpts<'_>,
-	stream: models::ActorLogStream,
+	stream: models::ActorsLogStream,
 	log_fetched_tx: watch::Sender<bool>,
 ) -> Result<()> {
 	let mut watch_index: Option<String> = None;
@@ -77,8 +77,8 @@ async fn tail_stream(
 	// future doesn't exit.
 	match (&opts.stream, stream) {
 		(LogStream::All, _) => {}
-		(LogStream::StdOut, models::ActorLogStream::StdOut) => {}
-		(LogStream::StdErr, models::ActorLogStream::StdErr) => {}
+		(LogStream::StdOut, models::ActorsLogStream::StdOut) => {}
+		(LogStream::StdErr, models::ActorsLogStream::StdErr) => {}
 		_ => {
 			// Notify poll_actor_state
 			log_fetched_tx.send(true).ok();
@@ -89,7 +89,7 @@ async fn tail_stream(
 	}
 
 	loop {
-		let res = apis::actor_logs_api::actor_logs_get(
+		let res = apis::actors_logs_api::actors_logs_get(
 			&ctx.openapi_config_cloud,
 			&opts.actor_id.to_string(),
 			stream,
@@ -156,7 +156,7 @@ async fn poll_actor_state(
 	loop {
 		interval.tick().await;
 
-		let res = apis::actor_api::actor_get(
+		let res = apis::actors_api::actors_get(
 			&ctx.openapi_config_cloud,
 			&opts.actor_id.to_string(),
 			Some(&ctx.project.name_id),

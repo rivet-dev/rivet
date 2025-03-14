@@ -1,7 +1,7 @@
 use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use futures_util::StreamExt;
 use rivet_api::{
-	apis::{actor_logs_api, configuration::Configuration},
+	apis::{actors_logs_api, configuration::Configuration},
 	models,
 };
 use rivet_operation::prelude::*;
@@ -19,7 +19,7 @@ use super::GlobalQuery;
 pub struct GetActorLogsQuery {
 	#[serde(flatten)]
 	pub global: GlobalQuery,
-	pub stream: models::ActorLogStream,
+	pub stream: models::ActorsLogStream,
 }
 
 pub async fn get_logs(
@@ -27,7 +27,7 @@ pub async fn get_logs(
 	server_id: Uuid,
 	watch_index: WatchIndexQuery,
 	query: GetActorLogsQuery,
-) -> GlobalResult<models::ActorGetActorLogsResponse> {
+) -> GlobalResult<models::ActorsGetActorLogsResponse> {
 	let CheckOutput { game_id, .. } = ctx
 		.auth()
 		.check(
@@ -73,8 +73,8 @@ pub async fn get_logs(
 			};
 
 			// Pass the request to the edge api
-			use actor_logs_api::ActorLogsGetError::*;
-			match actor_logs_api::actor_logs_get(
+			use actors_logs_api::ActorsLogsGetError::*;
+			match actors_logs_api::actors_logs_get(
 				&config,
 				&server_id.to_string(),
 				query.stream,

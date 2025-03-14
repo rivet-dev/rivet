@@ -3,7 +3,7 @@ use rivet_api::models;
 
 pub const HTTP_PORT: &str = "http";
 
-pub fn extract_endpoint(actor: &models::ActorActor) -> Result<String> {
+pub fn extract_endpoint(actor: &models::ActorsActor) -> Result<String> {
 	ensure!(
 		actor.started_at.is_some(),
 		"actor manager not started, may be in a crash loop"
@@ -16,9 +16,9 @@ pub fn extract_endpoint(actor: &models::ActorActor) -> Result<String> {
 		.get(crate::util::actor_manager::HTTP_PORT)
 		.context("missing http port")?;
 	let protocol = match http_port.protocol {
-		models::ActorPortProtocol::Http | models::ActorPortProtocol::Tcp => "http",
-		models::ActorPortProtocol::Https => "https",
-		models::ActorPortProtocol::TcpTls | models::ActorPortProtocol::Udp => {
+		models::ActorsPortProtocol::Http | models::ActorsPortProtocol::Tcp => "http",
+		models::ActorsPortProtocol::Https => "https",
+		models::ActorsPortProtocol::TcpTls | models::ActorsPortProtocol::Udp => {
 			bail!("unsupported protocol")
 		}
 	};

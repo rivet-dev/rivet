@@ -204,10 +204,10 @@ async fn upload_bundle(
 	build_archive.append_dir_all(".", &push_opts.build_path)?;
 	let build_tar_file = build_archive.into_inner()?;
 
-	let build_kind = models::ActorBuildKind::Javascript;
+	let build_kind = models::BuildsBuildKind::Javascript;
 	let build_compression = match push_opts.compression {
-		config::build::Compression::None => models::ActorBuildCompression::None,
-		config::build::Compression::Lz4 => models::ActorBuildCompression::Lz4,
+		config::build::Compression::None => models::BuildsBuildCompression::None,
+		config::build::Compression::Lz4 => models::BuildsBuildCompression::Lz4,
 	};
 
 	// Compress build
@@ -230,9 +230,9 @@ async fn upload_bundle(
 		size = upload::format_file_size(total_len as u64)?,
 	));
 
-	let prepare_res = apis::actor_builds_api::actor_builds_prepare(
+	let prepare_res = apis::builds_api::builds_prepare(
 		&ctx.openapi_config_cloud,
-		models::ActorPrepareBuildRequest {
+		models::BuildsPrepareBuildRequest {
 			image_tag: None,
 			image_file: Box::new(image_file.prepared),
 			kind: Some(build_kind),
@@ -278,7 +278,7 @@ async fn upload_bundle(
 		})
 		.await?;
 
-	let complete_res = apis::actor_builds_api::actor_builds_complete(
+	let complete_res = apis::builds_api::builds_complete(
 		&ctx.openapi_config_cloud,
 		&prepare_res.build.to_string(),
 		Some(&ctx.project.name_id),

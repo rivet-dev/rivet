@@ -19,7 +19,7 @@ use super::GlobalQuery;
 pub struct GlobalEndpointTypeQuery {
 	#[serde(flatten)]
 	global: GlobalQuery,
-	endpoint_type: Option<models::ActorEndpointType>,
+	endpoint_type: Option<models::ActorsEndpointType>,
 }
 
 // MARK: GET /actors/{}
@@ -28,7 +28,7 @@ pub async fn get(
 	actor_id: Uuid,
 	watch_index: WatchIndexQuery,
 	query: GlobalEndpointTypeQuery,
-) -> GlobalResult<models::ActorGetActorResponse> {
+) -> GlobalResult<models::ActorsGetActorResponse> {
 	get_inner(&ctx, actor_id, watch_index, query).await
 }
 
@@ -37,7 +37,7 @@ async fn get_inner(
 	actor_id: Uuid,
 	_watch_index: WatchIndexQuery,
 	query: GlobalEndpointTypeQuery,
-) -> GlobalResult<models::ActorGetActorResponse> {
+) -> GlobalResult<models::ActorsGetActorResponse> {
 	let CheckOutput { env_id, .. } = ctx
 		.auth()
 		.check(
@@ -71,7 +71,7 @@ async fn get_inner(
 	// Validate token can access actor
 	ensure_with!(actor.env_id == env_id, ACTOR_NOT_FOUND);
 
-	Ok(models::ActorGetActorResponse {
+	Ok(models::ActorsGetActorResponse {
 		actor: Box::new(pegboard::types::convert_actor_to_api(actor.clone(), dc)?),
 	})
 }
@@ -79,9 +79,9 @@ async fn get_inner(
 // MARK: POST /actors
 pub async fn create(
 	ctx: Ctx<Auth>,
-	body: models::ActorCreateActorRequest,
+	body: models::ActorsCreateActorRequest,
 	query: GlobalEndpointTypeQuery,
-) -> GlobalResult<models::ActorCreateActorResponse> {
+) -> GlobalResult<models::ActorsCreateActorResponse> {
 	let CheckOutput { game_id, env_id } = ctx
 		.auth()
 		.check(
@@ -172,13 +172,13 @@ pub async fn create(
 					internal_port: p.internal_port.map(TryInto::try_into).transpose()?,
 					routing: if let Some(routing) = p.routing {
 						match *routing {
-							models::ActorPortRouting {
+							models::ActorsPortRouting {
 								guard: Some(_gg),
 								host: None,
 							} => pegboard::types::Routing::GameGuard {
 								protocol: p.protocol.api_into(),
 							},
-							models::ActorPortRouting {
+							models::ActorsPortRouting {
 								guard: None,
 								host: Some(_),
 							} => pegboard::types::Routing::Host {
@@ -193,7 +193,7 @@ pub async fn create(
 									x => x?,
 								},
 							},
-							models::ActorPortRouting { .. } => {
+							models::ActorsPortRouting { .. } => {
 								bail_with!(
 									ACTOR_FAILED_TO_CREATE,
 									error = format!("network.ports[{s:?}].routing: Must specify either `guard` or `host` routing type.")
@@ -242,7 +242,7 @@ pub async fn create(
 		.await?;
 	let dc = unwrap!(dc_res.datacenters.first());
 
-	Ok(models::ActorCreateActorResponse {
+	Ok(models::ActorsCreateActorResponse {
 		actor: Box::new(pegboard::types::convert_actor_to_api(actor.clone(), dc)?),
 	})
 }
@@ -314,7 +314,7 @@ pub async fn destroy(
 pub async fn upgrade(
 	ctx: Ctx<Auth>,
 	actor_id: Uuid,
-	body: models::ActorUpgradeActorRequest,
+	body: models::ActorsUpgradeActorRequest,
 	query: GlobalQuery,
 ) -> GlobalResult<serde_json::Value> {
 	let CheckOutput { game_id, env_id } = ctx
@@ -355,9 +355,9 @@ pub async fn upgrade(
 // MARK: POST /actors/upgrade
 pub async fn upgrade_all(
 	ctx: Ctx<Auth>,
-	body: models::ActorUpgradeAllActorsRequest,
+	body: models::ActorsUpgradeAllActorsRequest,
 	query: GlobalQuery,
-) -> GlobalResult<models::ActorUpgradeAllActorsResponse> {
+) -> GlobalResult<models::ActorsUpgradeAllActorsResponse> {
 	let CheckOutput { game_id, env_id } = ctx
 		.auth()
 		.check(
@@ -466,7 +466,7 @@ pub async fn upgrade_all(
 		}
 	}
 
-	Ok(models::ActorUpgradeAllActorsResponse {
+	Ok(models::ActorsUpgradeAllActorsResponse {
 		count: count.try_into()?,
 	})
 }
@@ -486,7 +486,7 @@ pub async fn list_actors(
 	ctx: Ctx<Auth>,
 	watch_index: WatchIndexQuery,
 	query: ListQuery,
-) -> GlobalResult<models::ActorListActorsResponse> {
+) -> GlobalResult<models::ActorsListActorsResponse> {
 	list_actors_inner(&ctx, watch_index, query).await
 }
 
@@ -494,7 +494,7 @@ async fn list_actors_inner(
 	ctx: &Ctx<Auth>,
 	_watch_index: WatchIndexQuery,
 	query: ListQuery,
-) -> GlobalResult<models::ActorListActorsResponse> {
+) -> GlobalResult<models::ActorsListActorsResponse> {
 	let CheckOutput { env_id, .. } = ctx
 		.auth()
 		.check(
@@ -564,7 +564,7 @@ async fn list_actors_inner(
 		.map(|a| pegboard::types::convert_actor_to_api(a, &dc))
 		.collect::<GlobalResult<Vec<_>>>()?;
 
-	Ok(models::ActorListActorsResponse {
+	Ok(models::ActorsListActorsResponse {
 		actors: actors,
 		pagination: Box::new(models::Pagination { cursor }),
 	})

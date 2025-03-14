@@ -52,7 +52,7 @@ pub async fn deploy(
 	.build_id;
 
 	// Check if manager exists
-	let res = apis::actor_api::actor_list(
+	let res = apis::actors_api::actors_list(
 		&ctx.openapi_config_actor,
 		Some(&ctx.project.name_id),
 		Some(&opts.env.slug),
@@ -69,10 +69,10 @@ pub async fn deploy(
 	}
 	let actor = if let Some(actor) = res.actors.into_iter().next() {
 		// Upgrade manager actor
-		apis::actor_api::actor_upgrade(
+		apis::actors_api::actors_upgrade(
 			&ctx.openapi_config_actor,
 			&actor.id.to_string(),
-			models::ActorUpgradeActorRequest {
+			models::ActorsUpgradeActorRequest {
 				build: Some(build_id),
 				build_tags: None,
 			},
@@ -87,7 +87,7 @@ pub async fn deploy(
 
 		// Choose a region that's closest to the core Rivet datacenter. This actor makes a lot of API
 		// requests to Rivet, so we want to reduce that RTT.
-		let regions = apis::actor_regions_api::actor_regions_list(
+		let regions = apis::regions_api::regions_list(
 			&ctx.openapi_config_cloud,
 			Some(&ctx.project.name_id),
 			Some(&opts.env.slug),
@@ -115,25 +115,25 @@ pub async fn deploy(
 
 		// TODO(RVT-4263): Auto-determine TCP or HTTP networking
 		// Get or create actor
-		let request = models::ActorCreateActorRequest {
+		let request = models::ActorsCreateActorRequest {
 			region: Some(region),
 			tags: Some(serde_json::json!(tags)),
 			build: Some(build_id),
 			build_tags: None,
-			runtime: Some(Box::new(models::ActorCreateActorRuntimeRequest {
+			runtime: Some(Box::new(models::ActorsCreateActorRuntimeRequest {
 				environment: Some(HashMap::from([(
 					"RIVET_SERVICE_TOKEN".to_string(),
 					service_token.token,
 				)])),
 			})),
-			network: Some(Box::new(models::ActorCreateActorNetworkRequest {
-				mode: Some(models::ActorNetworkMode::Bridge),
+			network: Some(Box::new(models::ActorsCreateActorNetworkRequest {
+				mode: Some(models::ActorsNetworkMode::Bridge),
 				ports: Some(HashMap::from([(
 					crate::util::actor_manager::HTTP_PORT.to_string(),
-					models::ActorCreateActorPortRequest {
-						protocol: models::ActorPortProtocol::Https,
+					models::ActorsCreateActorPortRequest {
+						protocol: models::ActorsPortProtocol::Https,
 						internal_port: None,
-						routing: Some(Box::new(models::ActorPortRouting {
+						routing: Some(Box::new(models::ActorsPortRouting {
 							host: None,
 							guard: Some(serde_json::json!({})),
 						})),
@@ -141,12 +141,12 @@ pub async fn deploy(
 				)])),
 			})),
 			resources: None,
-			lifecycle: Some(Box::new(models::ActorLifecycle {
+			lifecycle: Some(Box::new(models::ActorsLifecycle {
 				durable: Some(true),
 				kill_timeout: None,
 			})),
 		};
-		let response = apis::actor_api::actor_create(
+		let response = apis::actors_api::actors_create(
 			&ctx.openapi_config_actor,
 			request,
 			Some(&ctx.project.name_id),

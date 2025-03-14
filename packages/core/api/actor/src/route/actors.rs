@@ -7,7 +7,7 @@ use api_helper::{anchor::WatchIndexQuery, ctx::Ctx};
 use futures_util::{StreamExt, TryStreamExt};
 use proto::backend;
 use rivet_api::{
-	apis::{actor_api, configuration::Configuration},
+	apis::{actors_api, configuration::Configuration},
 	models,
 };
 use rivet_operation::prelude::*;
@@ -25,7 +25,7 @@ use super::GlobalQuery;
 pub struct GlobalEndpointTypeQuery {
 	#[serde(flatten)]
 	global: GlobalQuery,
-	endpoint_type: Option<models::ActorEndpointType>,
+	endpoint_type: Option<models::ActorsEndpointType>,
 }
 
 // MARK: GET /actors/{}
@@ -34,7 +34,7 @@ pub async fn get(
 	actor_id: Uuid,
 	watch_index: WatchIndexQuery,
 	query: GlobalEndpointTypeQuery,
-) -> GlobalResult<models::ActorGetActorResponse> {
+) -> GlobalResult<models::ActorsGetActorResponse> {
 	get_inner(&ctx, actor_id, watch_index, query).await
 }
 
@@ -43,7 +43,7 @@ async fn get_inner(
 	actor_id: Uuid,
 	_watch_index: WatchIndexQuery,
 	query: GlobalEndpointTypeQuery,
-) -> GlobalResult<models::ActorGetActorResponse> {
+) -> GlobalResult<models::ActorsGetActorResponse> {
 	let CheckOutput { game_id, .. } = ctx
 		.auth()
 		.check(
@@ -89,8 +89,8 @@ async fn get_inner(
 			};
 
 			// Pass the request to the edge api
-			use actor_api::ActorGetError::*;
-			match actor_api::actor_get(
+			use actors_api::ActorsGetError::*;
+			match actors_api::actors_get(
 				&config,
 				&actor_id.to_string(),
 				query.global.project.as_deref(),
@@ -183,9 +183,9 @@ pub async fn get_deprecated(
 // MARK: POST /actors
 pub async fn create(
 	ctx: Ctx<Auth>,
-	body: models::ActorCreateActorRequest,
+	body: models::ActorsCreateActorRequest,
 	query: GlobalEndpointTypeQuery,
-) -> GlobalResult<models::ActorCreateActorResponse> {
+) -> GlobalResult<models::ActorsCreateActorResponse> {
 	let CheckOutput { game_id, .. } = ctx
 		.auth()
 		.check(
@@ -213,8 +213,8 @@ pub async fn create(
 	};
 
 	// Pass the request to the edge api
-	use actor_api::ActorCreateError::*;
-	match actor_api::actor_create(
+	use actors_api::ActorsCreateError::*;
+	match actors_api::actors_create(
 		&config,
 		body,
 		query.global.project.as_deref(),
@@ -257,18 +257,18 @@ pub async fn create_deprecated(
 	let global = build_global_query_compat(&ctx, game_id, env_id).await?;
 	let create_res = create(
 		ctx,
-		models::ActorCreateActorRequest {
+		models::ActorsCreateActorRequest {
 			region: Some(dc.name_id.clone()),
 			lifecycle: body.lifecycle.map(|l| {
-				Box::new(models::ActorLifecycle {
+				Box::new(models::ActorsLifecycle {
 					kill_timeout: l.kill_timeout,
 					durable: Some(false),
 				})
 			}),
-			network: Some(Box::new(models::ActorCreateActorNetworkRequest {
+			network: Some(Box::new(models::ActorsCreateActorNetworkRequest {
 				mode: body.network.mode.map(|n| match n {
-					models::ServersNetworkMode::Host => models::ActorNetworkMode::Host,
-					models::ServersNetworkMode::Bridge => models::ActorNetworkMode::Bridge,
+					models::ServersNetworkMode::Host => models::ActorsNetworkMode::Host,
+					models::ServersNetworkMode::Bridge => models::ActorsNetworkMode::Bridge,
 				}),
 				ports: Some(
 					body.network
@@ -277,30 +277,30 @@ pub async fn create_deprecated(
 						.map(|(k, p)| {
 							(
 								k,
-								models::ActorCreateActorPortRequest {
+								models::ActorsCreateActorPortRequest {
 									internal_port: p.internal_port,
 									protocol: match p.protocol {
 										models::ServersPortProtocol::Http => {
-											models::ActorPortProtocol::Http
+											models::ActorsPortProtocol::Http
 										}
 										models::ServersPortProtocol::Https => {
-											models::ActorPortProtocol::Https
+											models::ActorsPortProtocol::Https
 										}
 										models::ServersPortProtocol::Tcp => {
-											models::ActorPortProtocol::Tcp
+											models::ActorsPortProtocol::Tcp
 										}
 										models::ServersPortProtocol::TcpTls => {
-											models::ActorPortProtocol::TcpTls
+											models::ActorsPortProtocol::TcpTls
 										}
 										models::ServersPortProtocol::Udp => {
-											models::ActorPortProtocol::Udp
+											models::ActorsPortProtocol::Udp
 										}
 									},
 									routing: p.routing.map(|r| {
-										Box::new(models::ActorPortRouting {
+										Box::new(models::ActorsPortRouting {
 											// Temporarily disabled
 											// guard: r.game_guard.map(|_| {
-											// 	Box::new(models::ActorGuardRouting::default())
+											// 	Box::new(models::ActorsGuardRouting::default())
 											// }),
 											guard: r.game_guard.map(|_| json!({})),
 											host: r.host.map(|_| json!({})),
@@ -312,11 +312,11 @@ pub async fn create_deprecated(
 						.collect(),
 				),
 			})),
-			resources: Some(Box::new(models::ActorResources {
+			resources: Some(Box::new(models::ActorsResources {
 				cpu: body.resources.cpu,
 				memory: body.resources.memory,
 			})),
-			runtime: Some(Box::new(models::ActorCreateActorRuntimeRequest {
+			runtime: Some(Box::new(models::ActorsCreateActorRuntimeRequest {
 				environment: body.runtime.environment,
 			})),
 			build: Some(body.runtime.build),
@@ -393,8 +393,8 @@ pub async fn destroy(
 			};
 
 			// Pass the request to the edge api
-			use actor_api::ActorDestroyError::*;
-			match actor_api::actor_destroy(
+			use actors_api::ActorsDestroyError::*;
+			match actors_api::actors_destroy(
 				&config,
 				&actor_id.to_string(),
 				query.global.project.as_deref(),
@@ -461,7 +461,7 @@ pub async fn destroy_deprecated(
 pub async fn upgrade(
 	ctx: Ctx<Auth>,
 	actor_id: Uuid,
-	body: models::ActorUpgradeActorRequest,
+	body: models::ActorsUpgradeActorRequest,
 	query: GlobalQuery,
 ) -> GlobalResult<serde_json::Value> {
 	let CheckOutput { game_id, .. } = ctx
@@ -509,8 +509,8 @@ pub async fn upgrade(
 			};
 
 			// Pass the request to the edge api
-			use actor_api::ActorUpgradeError::*;
-			match actor_api::actor_upgrade(
+			use actors_api::ActorsUpgradeError::*;
+			match actors_api::actors_upgrade(
 				&config,
 				&actor_id.to_string(),
 				body.clone(),
@@ -557,9 +557,9 @@ pub async fn upgrade(
 // MARK: POST /actors/upgrade
 pub async fn upgrade_all(
 	ctx: Ctx<Auth>,
-	body: models::ActorUpgradeAllActorsRequest,
+	body: models::ActorsUpgradeAllActorsRequest,
 	query: GlobalQuery,
-) -> GlobalResult<models::ActorUpgradeAllActorsResponse> {
+) -> GlobalResult<models::ActorsUpgradeAllActorsResponse> {
 	let CheckOutput { game_id, .. } = ctx
 		.auth()
 		.check(
@@ -645,8 +645,8 @@ pub async fn upgrade_all(
 			};
 
 			// Pass the request to the edge api
-			use actor_api::ActorUpgradeAllError::*;
-			match actor_api::actor_upgrade_all(
+			use actors_api::ActorsUpgradeAllError::*;
+			match actors_api::actors_upgrade_all(
 				&config,
 				body.clone(),
 				query.project.as_deref(),
@@ -678,7 +678,7 @@ pub async fn upgrade_all(
 		.try_fold(0, |a, res| std::future::ready(Ok(a + res.count)))
 		.await?;
 
-	Ok(models::ActorUpgradeAllActorsResponse { count })
+	Ok(models::ActorsUpgradeAllActorsResponse { count })
 }
 
 // MARK: GET /actors
@@ -695,7 +695,7 @@ pub async fn list_actors(
 	ctx: Ctx<Auth>,
 	watch_index: WatchIndexQuery,
 	query: ListQuery,
-) -> GlobalResult<models::ActorListActorsResponse> {
+) -> GlobalResult<models::ActorsListActorsResponse> {
 	list_actors_inner(&ctx, watch_index, query).await
 }
 
@@ -703,7 +703,7 @@ async fn list_actors_inner(
 	ctx: &Ctx<Auth>,
 	_watch_index: WatchIndexQuery,
 	query: ListQuery,
-) -> GlobalResult<models::ActorListActorsResponse> {
+) -> GlobalResult<models::ActorsListActorsResponse> {
 	let CheckOutput { game_id, .. } = ctx
 		.auth()
 		.check(
@@ -798,7 +798,7 @@ async fn list_actors_inner(
 			// Pass the request to the edge api
 			let timeout_res = tokio::time::timeout(
 				Duration::from_secs(30),
-				actor_api::actor_list(
+				actors_api::actors_list(
 					&config,
 					query.global_endpoint_type.global.project.as_deref(),
 					query.global_endpoint_type.global.environment.as_deref(),
@@ -810,7 +810,7 @@ async fn list_actors_inner(
 			)
 			.await;
 
-			use actor_api::ActorListError::*;
+			use actors_api::ActorsListError::*;
 			match timeout_res {
 				Ok(timeout_res) => match timeout_res {
 					Ok(res) => Ok(res),
@@ -877,7 +877,7 @@ async fn list_actors_inner(
 		unix_ts.to_string()
 	});
 
-	Ok(models::ActorListActorsResponse {
+	Ok(models::ActorsListActorsResponse {
 		actors,
 		pagination: Box::new(models::Pagination { cursor }),
 	})
@@ -948,7 +948,7 @@ pub async fn list_servers_deprecated(
 }
 
 fn legacy_convert_actor_to_server(
-	a: models::ActorActor,
+	a: models::ActorsActor,
 	datacenter: &cluster::types::Datacenter,
 ) -> GlobalResult<models::ServersServer> {
 	Ok(models::ServersServer {
@@ -973,8 +973,8 @@ fn legacy_convert_actor_to_server(
 		}),
 		network: Box::new(models::ServersNetwork {
 			mode: Some(match a.network.mode {
-				models::ActorNetworkMode::Host => models::ServersNetworkMode::Host,
-				models::ActorNetworkMode::Bridge => models::ServersNetworkMode::Bridge,
+				models::ActorsNetworkMode::Host => models::ServersNetworkMode::Host,
+				models::ActorsNetworkMode::Bridge => models::ServersNetworkMode::Bridge,
 			}),
 			ports: a
 				.network
@@ -986,17 +986,17 @@ fn legacy_convert_actor_to_server(
 						models::ServersPort {
 							internal_port: p.internal_port,
 							protocol: match p.protocol {
-								models::ActorPortProtocol::Http => {
+								models::ActorsPortProtocol::Http => {
 									models::ServersPortProtocol::Http
 								}
-								models::ActorPortProtocol::Https => {
+								models::ActorsPortProtocol::Https => {
 									models::ServersPortProtocol::Https
 								}
-								models::ActorPortProtocol::Tcp => models::ServersPortProtocol::Tcp,
-								models::ActorPortProtocol::TcpTls => {
+								models::ActorsPortProtocol::Tcp => models::ServersPortProtocol::Tcp,
+								models::ActorsPortProtocol::TcpTls => {
 									models::ServersPortProtocol::TcpTls
 								}
-								models::ActorPortProtocol::Udp => models::ServersPortProtocol::Udp,
+								models::ActorsPortProtocol::Udp => models::ServersPortProtocol::Udp,
 							},
 							public_hostname: p.hostname,
 							public_port: p.port,
