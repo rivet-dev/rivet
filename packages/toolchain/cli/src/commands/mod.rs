@@ -4,7 +4,6 @@ pub mod config;
 pub mod deno;
 pub mod deploy;
 pub mod environment;
-pub mod init;
 pub mod login;
 pub mod logout;
 pub mod manager;
@@ -18,7 +17,6 @@ use clap::Parser;
 
 #[derive(Parser)]
 pub enum SubCommand {
-	Init(init::Opts),
 	#[clap(alias = "signin")]
 	Login(login::Opts),
 	#[clap(alias = "signout")]
@@ -78,7 +76,6 @@ pub enum SubCommand {
 impl SubCommand {
 	pub async fn execute(&self) -> Result<()> {
 		match self {
-			SubCommand::Init(opts) => opts.execute().await,
 			SubCommand::Login(opts) => opts.execute().await,
 			SubCommand::Logout(opts) => opts.execute().await,
 			SubCommand::Deploy(opts) => opts.execute().await,
