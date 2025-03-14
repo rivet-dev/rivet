@@ -32,7 +32,6 @@ pub struct Input {
 	pub version_name: String,
 	pub build_name: String,
 	pub runtime: config::build::Runtime,
-	pub access: config::BuildAccess,
 }
 
 #[derive(Serialize)]
@@ -69,7 +68,6 @@ impl task::Task for Task {
 			input.version_name.clone(),
 			input.build_name.clone(),
 			&input.runtime,
-			&input.access,
 		)
 		.await?;
 
@@ -87,7 +85,6 @@ async fn build_and_upload(
 	version_name: String,
 	build_name: String,
 	runtime: &Runtime,
-	access: &config::BuildAccess,
 ) -> Result<Uuid> {
 	task.log("");
 
@@ -125,7 +122,6 @@ async fn build_and_upload(
 
 	let mut tags = HashMap::from([
 		(build::tags::NAME.to_string(), build_name.to_string()),
-		(build::tags::ACCESS.to_string(), access.as_ref().to_string()),
 		(build::tags::VERSION.to_string(), version_name.to_string()),
 		(build::tags::CURRENT.to_string(), "true".to_string()),
 	]);

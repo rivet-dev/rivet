@@ -65,7 +65,6 @@ pub struct Root {
 #[serde(rename_all = "snake_case")]
 pub struct Build {
 	pub tags: Option<HashMap<String, String>>,
-	pub access: BuildAccess,
 	#[serde(flatten)]
 	pub runtime: build::Runtime,
 }
@@ -83,11 +82,3 @@ impl Build {
 	}
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, strum::AsRefStr, clap::ValueEnum)]
-#[serde(rename_all = "snake_case")]
-pub enum BuildAccess {
-	#[strum(serialize = "public")]
-	Public,
-	#[strum(serialize = "private")]
-	Private,
-}

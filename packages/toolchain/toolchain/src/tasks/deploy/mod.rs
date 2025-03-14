@@ -81,7 +81,6 @@ impl task::Task for Task {
 					version_name: version_name.clone(),
 					build_name: build_name.to_string(),
 					runtime: build.runtime.clone(),
-					access: build.access.clone(),
 				},
 			)
 			.await?

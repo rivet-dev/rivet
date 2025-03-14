@@ -40,10 +40,6 @@ pub struct Opts {
 	)]
 	version: Option<String>,
 
-	/// Control the access level for the build (public or private)
-	#[clap(long)]
-	access: Option<config::BuildAccess>,
-
 	/// Allow running container as root (unstable, Docker builds only)
 	#[clap(long)]
 	unstable_allow_root: bool,
@@ -174,7 +170,6 @@ impl Opts {
 				version_name,
 				build_name: self.name.clone(),
 				runtime,
-				access: self.access.clone().unwrap_or(config::BuildAccess::Private),
 			},
 		)
 		.await?;
