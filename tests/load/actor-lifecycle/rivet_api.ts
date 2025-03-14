@@ -67,7 +67,12 @@ export function callRivetApi(
 	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 	let response: any;
 	try {
-		if (method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE") {
+		if (
+			method === "POST" ||
+			method === "PUT" ||
+			method === "PATCH" ||
+			method === "DELETE"
+		) {
 			const methodFn = {
 				POST: http.post,
 				PUT: http.put,

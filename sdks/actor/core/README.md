@@ -2,8 +2,8 @@
 
 Core low-level types for working with the Rivet Actor runtime.
 
-**This package is for advanced low-level usage of Rivet. If getting started, please use the
-[Actor SDK](https://www.npmjs.com/package/@rivet-gg/actor).**
+**This package is for advanced low-level usage of Rivet. If getting started, please use
+[ActorCore](https://actorcore.org).**
 
 ## Getting Started
 
@@ -44,10 +44,6 @@ export default {
 	},
 };
 ```
-
-## Related Packages
-
-- [Actor SDK (@rivet-gg/actor)](https://www.npmjs.com/package/@rivet-gg/actor)
 
 ## Community & Support
 

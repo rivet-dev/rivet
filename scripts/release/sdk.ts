@@ -54,22 +54,8 @@ export async function publishSdk(opts: ReleaseOpts) {
 		//	npm: true,
 		//},
 		{
-			path: `${opts.root}/sdks/actor/runtime`,
-			name: "@rivet-gg/actor",
-			//jsr: true,
-			npm: true,
-			turbo: true,
-		},
-		{
-			path: `${opts.root}/sdks/actor/client`,
-			name: "@rivet-gg/actor-client",
-			//jsr: true,
-			npm: true,
-			turbo: true,
-		},
-		{
 			path: `${opts.root}/sdks/actor/core`,
-			name: "@rivet-gg/actor-core",
+			name: "@rivet-gg/actor",
 			//jsr: true,
 			npm: true,
 			turbo: true

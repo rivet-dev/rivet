@@ -1,6 +1,6 @@
 import type { ActorContext } from "@rivet-gg/actor-core";
-import { createAndStartServer } from "../shared/server.js";
 import { upgradeWebSocket } from "hono/deno";
+import { createAndStartServer } from "../shared/server.js";
 
 // Start server
 export default {
@@ -49,7 +49,9 @@ export default {
 				[["batch", "b"], 3],
 			])
 		) {
-			throw new Error("kv list failed - results don't match expected values");
+			throw new Error(
+				"kv list failed - results don't match expected values",
+			);
 		}
 
 		console.log("Testing deleteBatch operations");
@@ -66,13 +68,14 @@ export default {
 
 		// Create and start server with Deno WebSocket upgrader
 		console.log("Starting HTTP/WebSocket server");
-		const { app, port } = createAndStartServer(
-			() => upgradeWebSocket,
-		);
+		const { app, port } = createAndStartServer(() => upgradeWebSocket);
 
-		const server = Deno.serve({
-			port
-		}, app.fetch);
+		const server = Deno.serve(
+			{
+				port,
+			},
+			app.fetch,
+		);
 		await server.finished;
 	},
 };

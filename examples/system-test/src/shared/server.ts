@@ -1,11 +1,11 @@
-import { Hono, type Context } from "hono";
-import { UpgradeWebSocket } from "hono/ws";
+import { type Context, Hono } from "hono";
+import type { UpgradeWebSocket } from "hono/ws";
 
 type GetUpgradeWebSocketFn = (app: Hono) => UpgradeWebSocket;
 
 export function createAndStartServer(
-	getUpgradeWebSocket: GetUpgradeWebSocketFn
-): { app: Hono, port: number } {
+	getUpgradeWebSocket: GetUpgradeWebSocketFn,
+): { app: Hono; port: number } {
 	// Setup auto-exit timer
 	setTimeout(() => {
 		console.error(
@@ -23,7 +23,10 @@ export function createAndStartServer(
 	}, 1000);
 
 	// Get port from environment
-	const portEnv = typeof Deno !== 'undefined' ? Deno.env.get("PORT_HTTP") : process.env.PORT_HTTP;
+	const portEnv =
+		typeof Deno !== "undefined"
+			? Deno.env.get("PORT_HTTP")
+			: process.env.PORT_HTTP;
 	if (!portEnv) {
 		throw new Error("missing PORT_HTTP");
 	}
@@ -45,7 +48,7 @@ export function createAndStartServer(
 	});
 
 	// Add WebSocket endpoint with handler
-	let upgradeWebSocket = getUpgradeWebSocket(app);
+	const upgradeWebSocket = getUpgradeWebSocket(app);
 	app.get(
 		"/ws",
 		upgradeWebSocket((c: Context) => {
@@ -96,4 +99,3 @@ export function createAndStartServer(
 
 	return { app, port };
 }
-

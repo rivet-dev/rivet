@@ -52,7 +52,6 @@ export default {
 		}
 		const port = Number.parseInt(portEnv);
 
-
 		// Start server
 		console.log(`Listening on port ${port}`);
 		const server = Deno.serve({ port }, app.fetch);

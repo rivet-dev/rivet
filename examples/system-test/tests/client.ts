@@ -10,7 +10,9 @@ const RIVET_ENVIRONMENT = process.env.RIVET_ENVIRONMENT;
 // Determine test kind from environment variable
 const BUILD_NAME = process.env.BUILD;
 if (BUILD_NAME !== "ws-isolate" && BUILD_NAME !== "ws-container") {
-	throw new Error("Must specify BUILD environment variable as either 'ws-isolate' or 'ws-container'");
+	throw new Error(
+		"Must specify BUILD environment variable as either 'ws-isolate' or 'ws-container'",
+	);
 }
 
 let region = process.env.REGION;
@@ -50,12 +52,14 @@ async function run() {
 				lifecycle: {
 					durable: false,
 				},
-				...(BUILD_NAME === "ws-container" ? {
-					resources: {
-						cpu: 100,
-						memory: 100,
-					}
-				} : {}),
+				...(BUILD_NAME === "ws-container"
+					? {
+							resources: {
+								cpu: 100,
+								memory: 100,
+							},
+						}
+					: {}),
 			},
 		});
 		actorId = actor.id;
@@ -132,7 +136,7 @@ async function run() {
 		});
 
 		console.log("Sleeping forever so you can debug");
-		await new Promise(resolve => setTimeout(resolve, 100_000_000));
+		await new Promise((resolve) => setTimeout(resolve, 100_000_000));
 	} catch (error) {
 		console.error("Error:", error);
 	} finally {
@@ -156,7 +160,7 @@ async function runLoop() {
 }
 
 // Run loop without top-level await
-(async function () {
+(async () => {
 	for (let i = 0; i < 1; i++) {
 		await new Promise((resolve) => setTimeout(resolve, 100));
 		runLoop();

@@ -1,5 +1,5 @@
 {
-	"name": "@rivet-gg/actor-core",
+	"name": "@rivet-gg/actor",
 	"version": "25.2.0",
 	"files": [
 		"dist",

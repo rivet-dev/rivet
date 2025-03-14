@@ -109,6 +109,7 @@ export declare function deleteBatch<K extends Array<unknown>>(
  */
 export declare function deleteAll(): Promise<void>;
 declare class HashMap<K, V> {
+	
 	constructor(internal: [K, V][]);
 	get(key: K): V | undefined;
 	/**

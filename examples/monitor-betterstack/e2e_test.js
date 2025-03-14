@@ -1,5 +1,5 @@
-import { RivetClient } from "@rivet-gg/api";
 import readline from "readline";
+import { RivetClient } from "@rivet-gg/api";
 
 // Read environment variables
 const RIVET_ENDPOINT = process.env.RIVET_ENDPOINT;
@@ -51,7 +51,7 @@ async function cleanupActor() {
 }
 
 // Handle Ctrl+C
-process.on('SIGINT', async () => {
+process.on("SIGINT", async () => {
 	console.log("\nCtrl+C detected, cleaning up...");
 	await cleanupActor();
 });
@@ -60,10 +60,10 @@ process.on('SIGINT', async () => {
 function generatelobbyUrl(lobbyId) {
 	const encodedProjectId = encodeURIComponent(RIVET_PROJECT);
 	const encodedEnvironmentId = encodeURIComponent(RIVET_ENVIRONMENT);
-	
+
 	// Encode the tags parameter properly - this is a JSON structure that needs to be encoded
 	const tagsParam = encodeURIComponent(JSON.stringify([["lobby", lobbyId]]));
-	
+
 	return `https://hub.rivet.gg/projects/${encodedProjectId}/environments/${encodedEnvironmentId}/actors?tab=logs&showDestroyed=true&tags=${tagsParam}`;
 }
 
@@ -100,7 +100,7 @@ async function run() {
 					LOBBY_ID: lobbyId,
 					LOBBY_URL: lobbyUrl,
 					BETTERSTACK_TOKEN,
-					BETTERSTACK_HOST
+					BETTERSTACK_HOST,
 				},
 				lifecycle: {
 					durable: false,
@@ -112,7 +112,7 @@ async function run() {
 		const port = actor.network.ports.http;
 		if (!port) throw new Error("missing port http");
 		console.log("Created actor at", port.url);
-		
+
 		// Generate and display the lobby URL for viewing logs
 		console.log("\nView logs at:", lobbyUrl);
 

@@ -58,13 +58,6 @@ impl Deref for Config {
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Root {
 	pub builds: HashMap<String, Build>,
-	pub unstable: Option<Unstable>,
-}
-
-impl Root {
-	pub fn unstable(&self) -> Unstable {
-		self.unstable.clone().unwrap_or_default()
-	}
 }
 
 // TODO: Add back `deny_unknown_fields` after https://github.com/serde-rs/serde/issues/1600
@@ -97,25 +90,4 @@ pub enum BuildAccess {
 	Public,
 	#[strum(serialize = "private")]
 	Private,
-}
-
-#[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct Unstable {
-	#[serde(default)]
-	pub manager: ManagerUnstable,
-}
-
-#[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case", deny_unknown_fields)]
-pub struct ManagerUnstable {
-	pub enable: Option<bool>,
-	#[serde(flatten)]
-	pub js_unstable: build::javascript::Unstable,
-}
-
-impl ManagerUnstable {
-	pub fn enable(&self) -> bool {
-		self.enable.unwrap_or(true)
-	}
 }

@@ -1,30 +1,10 @@
 import apiPages from "@/generated/apiPages.json" assert { type: "json" };
 import type { Sitemap } from "@/lib/sitemap";
 import {
-	faActorsBorderless,
-	faBlockQuestion,
-	faClipboardListCheck,
-	faCode,
-	faDatabase,
 	faDownload,
 	faExclamationTriangle,
-	faFingerprint,
-	faFloppyDisk,
 	faGlobe,
-	faHammer,
-	faHeartPulse,
-	faListUl,
-	faMaximize,
-	faNetworkWired,
-	faPlay,
-	faReact,
-	faRocket,
 	faSquareInfo,
-	faSquarePlus,
-	faSquareSliders,
-	faSync,
-	faTag,
-	faTowerBroadcast,
 	faTs,
 } from "@rivet-gg/icons";
 
@@ -52,7 +32,7 @@ export const sitemap = [
 			{
 				title: "Install CLI",
 				href: "/docs/install",
-				icon: faDownload
+				icon: faDownload,
 			},
 			{
 				title: "Getting Started", // See https://supabase.com/docs/guides/auth/quickstarts/nextjs

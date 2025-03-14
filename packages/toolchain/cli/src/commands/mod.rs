@@ -6,7 +6,6 @@ pub mod deploy;
 pub mod environment;
 pub mod login;
 pub mod logout;
-pub mod manager;
 pub mod metadata;
 pub mod project;
 pub mod region;
@@ -49,10 +48,6 @@ pub enum SubCommand {
 		#[clap(subcommand)]
 		subcommand: region::SubCommand,
 	},
-	Manager {
-		#[clap(subcommand)]
-		subcommand: manager::SubCommand,
-	},
 	Config {
 		#[clap(subcommand)]
 		subcommand: config::SubCommand,
@@ -85,7 +80,6 @@ impl SubCommand {
 			SubCommand::Actor { subcommand } => subcommand.execute().await,
 			SubCommand::Build { subcommand } => subcommand.execute().await,
 			SubCommand::Region { subcommand } => subcommand.execute().await,
-			SubCommand::Manager { subcommand } => subcommand.execute().await,
 			SubCommand::Config { subcommand } => subcommand.execute().await,
 			SubCommand::Metadata { subcommand } => subcommand.execute().await,
 			SubCommand::Deno(opts) => opts.execute().await,

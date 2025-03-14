@@ -12,7 +12,7 @@ const ACTOR_BRIDGE_TYPES_PATH = resolve(ACTOR_BRIDGE_PATH, "types");
 
 const ISOLATE_RUNNER_JS_PATH = resolve(
 	import.meta.dirname!,
-	"../../packages/infra/client/isolate-v8-runner/js/",
+	"../../packages/edge/infra/client/isolate-v8-runner/js/",
 );
 
 const ACTOR_CORE_BRIDGE_TYPES_PATH = resolve(

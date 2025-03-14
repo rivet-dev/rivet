@@ -4,11 +4,9 @@
 	"private": true,
 	"dependencies": {
 		"@aws-sdk/client-s3": "^3.511.0",
-		"@rivet-gg/actor": "workspace:*",
 		"hono": "^4.6.17"
 	},
 	"devDependencies": {
-		"@rivet-gg/actor-client": "workspace:*",
 		"ts-node": "^10.9.2",
 		"typescript": "^5.3.3"
 	}

@@ -17,12 +17,14 @@ export function createActor(config: Config): CreateActorResponse {
 				},
 			},
 		},
-		...(config.buildName === "ws-container" ? {
-			resources: {
-				cpu: 250,
-				memory: 256,
-			}
-		} : {}),
+		...(config.buildName === "ws-container"
+			? {
+					resources: {
+						cpu: 250,
+						memory: 256,
+					},
+				}
+			: {}),
 		lifecycle: { durable: false },
 	});
 }

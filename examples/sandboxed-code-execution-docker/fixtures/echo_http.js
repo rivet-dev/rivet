@@ -2,9 +2,9 @@ console.log(Deno.env.toObject());
 
 export default {
 	async start() {
-		let server = Deno.serve({
+		const server = Deno.serve({
 			handler,
-			port: parseInt(Deno.env.get("PORT_HTTP")),
+			port: Number.parseInt(Deno.env.get("PORT_HTTP")),
 			hostname: "0.0.0.0",
 		});
 
@@ -20,4 +20,3 @@ function handler(req) {
 		headers: { "Content-Type": "application/json" },
 	});
 }
-

@@ -3,7 +3,6 @@ pub mod build_publish;
 pub mod deploy;
 pub mod env;
 pub mod get_bootstrap_data;
-pub mod manager;
 
 crate::task_registry!(
 	auth::check_state::Task,

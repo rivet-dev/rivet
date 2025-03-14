@@ -4,18 +4,15 @@
 	"tasks": {
 		"build": {
 			"env": ["VITE_APP_*"],
-			"outputs": ["dist/**"],
-			"dependsOn": ["@rivet-gg/actor-client#build"]
+			"outputs": ["dist/**"]
 		},
 		"build:embedded": {
 			"env": ["VITE_APP_*"],
-			"outputs": ["dist/**"],
-			"dependsOn": ["@rivet-gg/actor-client#build"]
+			"outputs": ["dist/**"]
 		},
 		"dev": {
 			"env": ["VITE_APP_*"],
-			"persistent": true,
-			"dependsOn": ["@rivet-gg/actor-client#build"]
+			"persistent": true
 		}
 	}
 }

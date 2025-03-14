@@ -51,7 +51,6 @@ async function run() {
 		const actorOrigin = `${port.protocol}://${port.hostname}:${port.port}${port.path ?? ""}`;
 		console.log("Created actor at", actorOrigin);
 
-
 		await new Promise((resolve, reject) => {
 			// Open a WebSocket to that endpoint
 			const ws = new WebSocket(`${actorOrigin}/ws`);

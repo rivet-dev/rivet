@@ -6,8 +6,6 @@ use uuid::Uuid;
 
 use crate::{config, paths, tasks::build_publish, util::task};
 
-pub mod manager;
-
 #[derive(Deserialize)]
 pub struct Input {
 	pub config: config::Config,
@@ -50,23 +48,6 @@ impl task::Task for Task {
 			.await?;
 		let version_name = reserve_res.version_display_name;
 
-		// Manager
-		let manager_res = if input.config.unstable().manager.enable() {
-			Some(
-				manager::deploy(
-					&ctx,
-					task.clone(),
-					manager::DeployOpts {
-						env: env.clone(),
-						manager_config: input.config.unstable().manager,
-					},
-				)
-				.await?,
-			)
-		} else {
-			None
-		};
-
 		// Build
 		let mut build_ids = Vec::new();
 		let mut example_build = None; // Build to use for the example code
@@ -108,37 +89,12 @@ impl task::Task for Task {
 		let project_slug = &ctx.project.name_id;
 		let env_slug = &env.slug;
 
-		if let Some(manager_res) = &manager_res {
-			// Build to use as an example
-			let (example_build_name, _example_build) = example_build.context("no example build")?;
-
-			task.log("");
-			task.log("Deployed:");
-			task.log("");
-			task.log(format!("  Actors:          {hub_origin}/projects/{project_slug}/environments/{env_slug}/actors"));
-			task.log(format!("  Builds:          {hub_origin}/projects/{project_slug}/environments/{env_slug}/builds"));
-			task.log(format!("  Endpoint:        {}", manager_res.endpoint));
-			task.log("");
-			task.log("Connect to your actor:");
-			task.log("");
-			task.log(r#"  import ActorClient from "@rivet-gg/actor-client";"#);
-			task.log(format!(
-				r#"  const actorClient = new ActorClient("{}");"#,
-				manager_res.endpoint
-			));
-			task.log(format!(
-				r#"  const actor = await actorClient.get({{ name: "{example_build_name}" }})"#,
-			));
-			task.log(r#"  actor.myRpc("Hello, world!");"#);
-			task.log("");
-		} else {
-			task.log("");
-			task.log("Deployed:");
-			task.log("");
-			task.log(format!("  Actors:          {hub_origin}/projects/{project_slug}/environments/{env_slug}/actors"));
-			task.log(format!("  Builds:          {hub_origin}/projects/{project_slug}/environments/{env_slug}/builds"));
-			task.log("");
-		}
+		task.log("");
+		task.log("Deployed:");
+		task.log("");
+		task.log(format!("  Actors:          {hub_origin}/projects/{project_slug}/environments/{env_slug}/actors"));
+		task.log(format!("  Builds:          {hub_origin}/projects/{project_slug}/environments/{env_slug}/builds"));
+		task.log("");
 
 		Ok(Output { build_ids })
 	}

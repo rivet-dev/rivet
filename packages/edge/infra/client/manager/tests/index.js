@@ -4,9 +4,9 @@ export default {
 
 		console.log(ctx.metadata);
 
-		let server = Deno.serve({
+		const server = Deno.serve({
 			handler,
-			port: parseInt(Deno.env.get("PORT_MAIN")),
+			port: Number.parseInt(Deno.env.get("PORT_MAIN")),
 		});
 
 		await server.finished;

@@ -66,9 +66,6 @@ pub struct Opts {
 	unstable_esbuild_log_level: Option<String>,
 
 	#[clap(long)]
-	manager_enable: Option<bool>,
-
-	#[clap(long)]
 	unstable_dump_build: Option<bool>,
 
 	#[clap(long)]

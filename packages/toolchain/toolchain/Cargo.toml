@@ -27,7 +27,6 @@ mime_guess = "2.0"
 pkg-version = "1.0.0"
 regex = "1.10"
 reqwest = { version = "0.11", default-features = false, features = ["stream", "blocking", "rustls-tls"] }
-rivet-actors-sdk-embed.workspace = true
 rivet-api.workspace = true
 rivet-js-utils-embed.workspace = true
 schemars = "0.8.21"
