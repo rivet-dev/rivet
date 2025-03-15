@@ -1,5 +1,5 @@
 {
-	"name": "rivet-cli",
+	"name": "@rivet-gg/cli",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/rivet-gg/rivet.git",

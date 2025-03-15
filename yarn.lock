@@ -3096,6 +3096,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@rivet-gg/cli@workspace:frontend/packages/cli":
+  version: 0.0.0-use.local
+  resolution: "@rivet-gg/cli@workspace:frontend/packages/cli"
+  dependencies:
+    "@types/node": "npm:^22.13.4"
+    tsup: "npm:^8.3.6"
+  bin:
+    rivet: dist/bin/rivet
+  languageName: unknown
+  linkType: soft
+
 "@rivet-gg/components@workspace:*, @rivet-gg/components@workspace:frontend/packages/components":
   version: 0.0.0-use.local
   resolution: "@rivet-gg/components@workspace:frontend/packages/components"
@@ -12335,17 +12346,6 @@ __metadata:
   checksum: 10c0/7da4fd0e15118ee05b918359462cfa1e7fe4b1228c7765195a45b55576e8c15b95db513b8466ec89129666f4af45ad978a3057a02139afba1a63512a2d9644cc
   languageName: node
   linkType: hard
-
-"rivet-cli@workspace:frontend/packages/cli":
-  version: 0.0.0-use.local
-  resolution: "rivet-cli@workspace:frontend/packages/cli"
-  dependencies:
-    "@types/node": "npm:^22.13.4"
-    tsup: "npm:^8.3.6"
-  bin:
-    rivet: dist/bin/rivet
-  languageName: unknown
-  linkType: soft
 
 "rivet-site@workspace:site":
   version: 0.0.0-use.local
