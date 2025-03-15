@@ -3103,17 +3103,6 @@ __metadata:
     "@types/node": "npm:^22.13.4"
     tsup: "npm:^8.3.6"
   bin:
-    rivet: dist/bin/rivet
-  languageName: unknown
-  linkType: soft
-
-"@rivet-gg/cli@workspace:frontend/packages/cli":
-  version: 0.0.0-use.local
-  resolution: "@rivet-gg/cli@workspace:frontend/packages/cli"
-  dependencies:
-    "@types/node": "npm:^22.13.4"
-    tsup: "npm:^8.3.6"
-  bin:
     rivet: dist/cli.js
     rivet-cli: dist/cli.js
   languageName: unknown

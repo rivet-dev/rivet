@@ -43,16 +43,16 @@ async function jsrVersionExists(
 
 export async function publishSdk(opts: ReleaseOpts) {
 	const packages = [
-		//{
-		//	path: `${opts.root}/sdks/api/runtime/typescript`,
-		//	name: "@rivet-gg/api",
-		//	npm: true,
-		//},
-		//{
-		//	path: `${opts.root}/sdks/api/full/typescript`,
-		//	name: "@rivet-gg/api-full",
-		//	npm: true,
-		//},
+		{
+			path: `${opts.root}/sdks/api/runtime/typescript`,
+			name: "@rivet-gg/api",
+			npm: true,
+		},
+		{
+			path: `${opts.root}/sdks/api/full/typescript`,
+			name: "@rivet-gg/api-full",
+			npm: true,
+		},
 		{
 			path: `${opts.root}/sdks/actor/core`,
 			name: "@rivet-gg/actor",
@@ -60,14 +60,14 @@ export async function publishSdk(opts: ReleaseOpts) {
 			npm: true,
 			turbo: true
 		},
-		/*{
+		{
 	
 			path: `${opts.root}/frontend/packages/cli`,
 			name: "@rivet-gg/cli",
 			//jsr: true,
 			npm: true,
 			turbo: true
-		}*/
+		}
 	];
 
 	for (const pkg of packages) {
