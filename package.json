@@ -7,8 +7,6 @@
 		"frontend/packages/*",
 		"site",
 		"sdks/actor/*",
-		"sdks/api/runtime/typescript/",
-		"sdks/api/full/typescript/",
 		"examples/javascript/*",
 		"tests/load"
 	],
