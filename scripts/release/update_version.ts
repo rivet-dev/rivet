@@ -17,6 +17,11 @@ export async function updateVersion(opts: ReleaseOpts) {
 			replace: `"version": "${opts.version}"`,
 		},
 		{
+			path: "frontend/packages/*/package.json",
+			find: /"version": ".*"/,
+			replace: `"version": "${opts.version}"`,
+		},
+		{
 			path: "sdks/api/*/typescript/package.json",
 			find: /"version": ".*"/,
 			replace: `"version": "${opts.version}"`,
