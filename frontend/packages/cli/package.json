@@ -21,8 +21,7 @@
 	"preferUnplugged": true,
 	"scripts": {
 		"build": "tsup postinstall.ts cli.ts --minify --format cjs --out-dir dist",
-		"prepare": "yarn build",
-		"postinstall": "node ./dist/postinstall.js"
+		"postinstall": "node -e \"if (process.env.NODE_ENV !== 'production' && !require('fs').existsSync('./dist/postinstall.js')) { console.log('Skipping postinstall in dev environment'); } else { require('./dist/postinstall.js'); }\""
 	},
 	"devDependencies": {
 		"@types/node": "^22.13.4",
