@@ -93,6 +93,7 @@ export async function publishSdk(opts: ReleaseOpts) {
 		// Publish
 		if (pkg.npm) {
 			$.logStep("Publishing to NPM", `${pkg.name}@${opts.version}`);
+			await $`yarn install`.cwd(pkg.path);
 			await $`yarn npm publish --access public --tolerate-republish`.cwd(pkg.path);
 		}
 
