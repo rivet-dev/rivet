@@ -1,120 +1,182 @@
 import Link from 'next/link';
-import imgActorNetworking from '@/images/actors/networking.jpg';
 
 # Networking
 
-Actor networking is configured with two properties:
+Rivet provides a simple yet powerful networking system for your actors. When you create an actor, you define the ports it will use, and Rivet handles the networking infrastructure, including URL generation, port mapping, and traffic routing.
 
-1. Network mode (Bridge or Host)
-2. Port routing (Rivet Guard or Host)
+## Configuring Networking
 
-## Network Modes
+When creating an actor, you specify the ports that your application needs to expose. This is done through the `network.ports` parameter when creating your actor with the [actor.create](/docs/api/actors/create) API:
 
-### Bridge
+```javascript
+// Simple example defining an HTTP port
+const actor = await rivet.actors.create({
+  // ...other configuration
+  network: {
+    ports: {
+      http: { protocol: "https" }
+    }
+  }
+});
+```
 
-Bridge networking maps a random port on the host to the chosen port number for
-your actor. Ports can only be access over the LAN. All inbound traffic to actors
-using bridge networking must be routed through Rivet Guard (see below).
+Once your actor is running with properly configured ports, you can access it through the URLs provided by Rivet. These URLs are available:
 
-Actors in bridge networking have isolated network namespaces and cannot
-interfere with other actor's networking.
+- Via the API in the actor creation response under `actor.network.ports.http.url`
+- In the Rivet Hub dashboard for your actor
 
-For containers, Rivet uses <Link href='https://www.cni.dev/'>CNI</Link> on our
-actor servers to provide bridged port access to any ports chosen by the user. It
-maps a randomly chosen port number on the host machine to the chosen port number
-by you.
+## Listening For Requests On The Actor
 
-Bridge networking is currently not implemented for isolates.
+Once your actor is running, Rivet injects environment variables containing information about the assigned ports. Your application should use these variables to determine what port to listen on.
 
-### Host
+For example:
 
-_Requires enterprise or self-hosted cluster._
+```javascript
+// Simple example starting an HTTP server
+const express = require('express');
+const app = express();
+const port = process.env.PORT_HTTP;
 
-Host networking allows direct access to host ports on our actor servers with the drawback that you cannot
-choose a specific port number. Port numbers will be randomly chosen for you for each port. To read the
-port number in your application, there are environment variables provided with the port name and number
-(ex. `PORT_MY_PORT=24020`).
+app.get('/', (req, res) => {
+  res.send('Hello World!');
+});
 
-Containers with host networking have no restriction on what ports they can listen on
-and connect to. This is less secure than using bridge networking.
+app.listen(port, () => {
+  console.log(`Server listening on port ${port}`);
+});
+```
 
-For isolates, Rivet restricts what ports an isolate can listen on.
+### Environment Variable Naming
 
-Host networking is sometimes required for edge cases where actors need an
-unrestricted amount of ports. It's up to the developer to ensure that multiple
-actors on the same machine do not interfere with each others' networking.
+For each port defined in your actor configuration under `network.ports`, Rivet sets a single environment variable `PORT_{NAME}` where `{NAME}` is the uppercase version of the key you used in the `network.ports` object.
 
-## Port Routing
+Your application should read these environment variables to know which ports to bind to.
 
-### Rivet Guard (RG)
+For example:
 
-Rivet Guard provides DDoS mitigation, automatic SSL management, monitoring, and
-more out of the box with negligible added latency. Use Rivet Guard for your
-application whenever possible for production applications.
+- `network.ports.http` becomes the `PORT_HTTP` environment variable
+- `network.ports.game` becomes the `PORT_GAME` environment variable
+- `network.ports["hello-world"]` becomes the `PORT_HELLO_WORLD` environment variable
 
-Rivet Guard is a system of servers that proxies end-user connections through itself before connecting to the
-actor servers running your application over LAN. This provides DDoS protection with little to no added latency.
+## Examples
 
-Rivet Guard ports cannot be accessed from requests made directly to the actor server over WAN, only through a Rivet
-Guard server over LAN.
+Here are complete examples demonstrating how to set up networking for both the client and server.
 
-Rivet Guard routing can be used with either host or bridge network modes.
+### HTTP Server Example
 
-### Host
+#### Client (Creating the Actor)
 
-_Requires enterprise or self-hosted cluster._
+```javascript
+// Creating an actor with an HTTP port
+const actor = await rivet.actors.create({
+  tags: { name: "my-http-server" },
+  buildTags: { name: "my-http-server", current: "true" },
+  network: {
+    ports: {
+      // "http" is the port name (becomes PORT_HTTP env var)
+      http: { protocol: "https" }
+    }
+  },
+});
 
-Host ports do not provide any proxying between the end-user and your application and **is not enabled on
-production Rivet servers**. This is primarily an option for <Link href='/docs/self-hosting'>self hosting</Link> Rivet.
+console.log(actor.network.ports.http); // Information about HTTP port
+console.log(actor.network.ports.http.url); // URL to connect to
+```
 
-It recommended to use Rivet Guard whenever possible for production applications
-to better protect from DDoS attacks & improve monitoring of your application.
+#### Actor (Starting the Server)
 
-If using host ports, read about differences in behavior with [actor rescheduling](/docs/rescheduling).
+```javascript
+const express = require('express');
+const app = express();
 
-## Endpoint Type
+// Get the port from the environment variable
+const port = process.env.PORT_HTTP;
 
-### Host
+app.get('/', (req, res) => {
+  res.send('Hello from Rivet!');
+});
 
-<Note>"Host endpoint type" has no association with "host networking" or "host routing" above.</Note>
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+});
+```
 
-The host endpoint type uses the `Host` header to route the request to the correct actor. This is the default & recommended method to use for production Rivet clusters.
+### TCP Game Server Example
 
-For example, the URL `c03fc1cf-66dc-4946-9663-eae42a399060-http.actor.45a33878-e0e5-4f6b-8e72-7e9f6c0a306c.rivet.run` would route to the:
+#### Client (Creating the Actor)
 
-- Actor with ID `c03fc1cf-66dc-4946-9663-eae42a399060`
-- Port labelled `http`
-- Region with ID `45a33878-e0e5-4f6b-8e72-7e9f6c0a306c`
+```javascript
+// Creating an actor with a TCP port for a game server
+const actor = await rivet.actors.create({
+  tags: { name: "my-game-server" },
+  buildTags: { name: "my-game-server", current: "true" },
+  network: {
+    ports: {
+      // "game" is the port name (becomes PORT_GAME env var)
+      game: { protocol: "tcp" }
+    }
+  },
+});
 
-If self-hosting, host endpoints requires [wildcard DNS records](https://en.wikipedia.org/wiki/Wildcard_DNS_record#:~:text=A%20wildcard%20DNS%20record%20is,example.com%20.) & [wildcard SSL certificates](https://letsencrypt.org/docs/faq/#does-let-s-encrypt-issue-wildcard-certificates).
+let port = actor.network.ports.game;
+console.log(`${port.hostname}:${port.port}`); // Connection address for port
+```
 
-### Path
+#### Server (Starting the Server)
 
-The path endpoint type uses the beginning of the request path to route to the correct actor. This should only be used if:
+```javascript
+const net = require('net');
 
-- Self hosting or developing Rivet without a wildcard DNS record (e.g. Rivet Guard running on `127.0.0.1:7080`)
-- Rare cases where explicit hostnames need to be whitelisted (e.g. Discord Activities [URL mappings](https://discord.com/developers/docs/activities/development-guides#url-mapping))
+// Get the port from the environment variable
+// This corresponds to the "game" key in the network.ports object
+const port = process.env.PORT_GAME;
 
-<Warning>
-  Directing your users to an HTML page with path endpoint type may be a security
-  risk. The origin for path endpoint types (`route.actor.{region}.rivet.run`) is
-  shared with other actors. This means that all cookies, local/session storage,
-  web workers, etc are shared with any other actor running in the same region.
+const server = net.createServer((socket) => {
+  socket.write('Hello from Rivet Game Server!\r\n');
+});
 
-  Use the host endpoint type instead if serving HTML content.
-</Warning>
+server.listen(port, () => {
+  console.log(`TCP game server running on port ${port}`);
+});
+```
 
-## Routing Diagram
+## Supported Protocols
 
-This diagram shows how requests are routed from the end-user to the application running on Rivet based on the
-network mode and port routing.
+Rivet supports the following protocols for actor ports:
 
-{/* TODO(kacper): Make this image click to enlarge */}
+| Protocol | Description | Recommendation |
+| -------- | ----------- | -------------- |
+| `https` | HTTPS and secure WebSocket traffic | Recommended for web applications |
+| `http` | Insecure HTTP or WebSocket traffic | Not recommended (use https instead) |
+| `tcp_tls` | Secure TCP sockets | Recommended for TCP connections |
+| `tcp` | TCP sockets | Not recommended (use tcp_tls instead) |
+| `udp` | UDP sockets | Use for real-time applications requiring UDP |
 
-<Image
-  src={imgActorNetworking}
-  alt='Actor networking diagram'
-  className='max-h-full w-auto rounded object-contain'
-  width={500}
-  height={300}
-/>
+
+## SSL and TLS
+
+When you use the `https` or `tcp_tls` protocols, Rivet automatically handles all SSL/TLS encryption for you.
+
+Your server should listen for regular unencrypted HTTP or TCP traffic on the assigned port.
+
+## Troubleshooting
+
+### Bad Gateway (502)
+
+If you receive a "Bad Gateway" (502) error when accessing your actor, it typically means:
+
+- Your actor is listening on the wrong port (check the environment variables)
+- Your actor has crashed during request handling
+
+**Resolution:** Check the actor logs in the Rivet Hub dashboard to see if your server started correctly. Verify that your application is listening on the port specified by the `PORT_{NAME}` environment variable, not a hardcoded port.
+
+### Not Found (404)
+
+A "Not Found" (404) error usually indicates:
+
+- Your actor has crashed before receiving the request
+- The URL you're using is incorrect
+- There's a bug in your application's routing
+
+**Resolution:** Manually validate the URL shown for the actor in the Rivet Hub dashboard. Check the actor logs to ensure your application started successfully and is handling requests properly.
+

@@ -1,0 +1,151 @@
+# CLI
+
+The Rivet Command Line Interface (CLI) provides a set of tools for deploying, managing, and monitoring your Rivet applications.
+
+## Installation
+
+For installation instructions, see [Install](/docs/install).
+
+## Overview
+
+```text
+$ rivet --help
+Usage: rivet <COMMAND>
+
+Commands:
+  login        Login to a project
+  logout       Logout from a project
+  deploy       Deploy a build to a specific environment
+  publish      Publish a new build from local files or a Docker image
+  environment  Commands for managing environments
+  project      Commands for managing projects
+  actor        Commands for managing actors
+  build        Commands for managing builds
+  region       Commands for managing regions
+  config       Commands for managing Rivet configuration
+  metadata     Commands for retrieving metadata about Rivet configuration
+  shell        Launch an interactive shell with Rivet environment variables
+  view         Open the environment dashboard in a browser (alias of `environment view`)
+  help         Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
+```
+
+## Common Commands
+
+### Deploy & Publish
+
+```bash
+# Deploy your configuration to development environment
+rivet deploy
+
+# Deploy to a specific environment
+rivet deploy --environment prod
+
+# Publish a JavaScript actor build
+rivet build publish my-build-name ./path/to/script.js
+
+# Publish a Docker image
+rivet build publish my-build-name ./Dockerfile
+```
+
+### Actor Management
+
+```bash
+# List all actors
+rivet actor list
+
+# Get details about a specific actor
+rivet actor get my-actor-id
+
+# View actor logs
+rivet actor logs my-actor-id
+
+# View actor logs (no follow)
+rivet actor logs --no-follow my-actor-id
+
+# Destroy an actor
+rivet actor destroy my-actor-id
+```
+
+### Environment Management
+
+```bash
+# List environments
+rivet environment list
+
+# Select default environment (interactive)
+rivet environment select
+
+# Select default environment
+rivet environment select prod
+
+# Open dashboard in browser
+rivet environment view
+```
+
+## Configuration with Environment Variables
+
+Rivet CLI can be configured using the following environment variables:
+
+- `RIVET_CLOUD_TOKEN` - See [tokens documentation](/docs/tokens) on instructions on how to create a cloud token
+- `RIVET_ENDPOINT` - Custom API endpoint (for self-hosted or enterprise instances)
+
+## CI/CD Integration
+
+Rivet CLI is designed to work seamlessly in CI/CD pipelines:
+
+```bash
+export RIVET_CLOUD_TOKEN="your-cloud-token"
+
+# Example: Deploy rivet.json
+rivet deploy --environment prod
+
+# Example: deploy a JavaScript script to production
+rivet build publish --environment prod my-build ./src/actor.js
+
+# Example: deploy a Dockerfile to production
+rivet build publish --environment prod my-build docker://my-image:latest
+```
+
+## Advanced Usage
+
+### Shell
+
+Rivet offers a convenient shell utility to simplify token management. The `rivet shell` command automatically generates a token and populates common environment variables for you.
+
+For example:
+
+```bash
+# Open an interactive shell with populated environment variables
+rivet shell
+
+# Run a specific command with populated environment variables
+rivet shell -e 'node my-script.js'
+
+# Example: check environment variables
+rivet shell -e 'env | grep RIVET'
+```
+
+The Rivet shell automatically populates the following environment variables:
+
+- `RIVET_ENDPOINT` - The API endpoint URL for your Rivet instance
+- `RIVET_SERVICE_TOKEN` - Authentication token for accessing Rivet services
+- `RIVET_PROJECT` - The current project identifier
+- `RIVET_ENVIRONMENT` - The current environment name (e.g., dev, prod)
+
+This is especially helpful for running tests or development tools that interact with Rivet.
+
+<Warning title="Shell is experimental">
+	The command is subject to change.
+</Warning>
+
+### Working with Metadata
+
+```bash
+# Get information about the current configuration
+rivet metadata api-endpoint
+rivet metadata access-token
+```

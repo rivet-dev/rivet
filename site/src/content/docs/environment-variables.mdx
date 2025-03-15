@@ -1,0 +1,56 @@
+# Environment Variables
+
+Environment variables allow you to configure your actors without changing code, enabling more flexible deployments.
+
+## Configuring Actor Behavior
+
+Environment variables can be provided when creating an actor:
+
+```typescript
+const actor = await client.actors.create({
+  // ...
+  network: {
+    ports: {
+      http: { protocol: "https" }
+    }
+  },
+  runtime: {
+    environment: { 
+      GREETING: "Hello, world!" 
+    }
+  }
+});
+```
+
+### Example: Dynamic HTTP Server
+
+Here's how you can use environment variables in your actor's code:
+
+```javascript
+const express = require('express');
+const app = express();
+
+// Get the port from the environment variable
+const port = process.env.PORT_HTTP;
+
+// Get custom environment variable with fallback
+const greeting = process.env.GREETING || "Hello, visitor!";
+
+app.get('/', (req, res) => {
+  res.send(greeting);
+});
+
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+});
+```
+
+By changing the `GREETING` environment variable, you can modify the server's response without changing code.
+
+## Default Environment Variables
+
+Rivet provides the following default environment variables:
+
+- `PORT_{NAME}`: The port number assigned to a named port (e.g., `PORT_HTTP` for a port named "http")
+
+For more details about networking and ports, see [Networking](/docs/networking).

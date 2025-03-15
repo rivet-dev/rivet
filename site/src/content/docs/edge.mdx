@@ -36,7 +36,7 @@ You can query the best regions for your actors using:
 
 ```typescript
 // Find the best region for your actor
-const { region } = await client.actor.regions.resolve({ project, environment });
+const { region } = await client.regions.recommend({ project, environment });
 ```
 
 ### Configuring the actor's region
@@ -44,7 +44,7 @@ const { region } = await client.actor.regions.resolve({ project, environment });
 The region an actor is created in can be overridden by defining `create.region`:
 
 ```typescript {{ "title": "client.ts" }}
-const { actor } = await client.actor.create({
+const { actor } = await client.actors.create({
   project,
   environment,
   body: {
@@ -60,5 +60,5 @@ const { actor } = await client.actor.create({
 
 It's common to need to display a list of available regions in your application.
 
-To fetch a full list of regions, see [`actor.regions.list`](/docs/api/actor/regions/list). This list is returned in order of best to worst for the client.
+To fetch a full list of regions, see [`regions.list`](/docs/api/regions/list). This list is returned in order of best to worst for the client.
 

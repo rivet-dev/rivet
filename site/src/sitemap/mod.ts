@@ -6,6 +6,22 @@ import {
 	faGlobe,
 	faSquareInfo,
 	faTs,
+	faSquareSliders,
+	faCode,
+	faClipboardListCheck,
+	faBlockQuestion,
+	faServer,
+	faGaugeHigh,
+	faRecycle,
+	faNetworkWired,
+	faRuler,
+	faTerminal,
+	faSquareTerminal,
+    faJs,
+    faDocker,
+    faCircleNodes,
+    faKey,
+    faLeaf,
 } from "@rivet-gg/icons";
 
 // Goals:
@@ -95,25 +111,83 @@ export const sitemap = [
 					{
 						title: "Configuration",
 						href: "/docs/config",
-						//icon: faSquareSliders,
+						icon: faSquareSliders,
+					},
+					{
+						title: "CLI",
+						href: "/docs/cli",
+						icon: faSquareTerminal,
+					},
+					{
+						title: "Tokens",
+						href: "/docs/tokens",
+						icon: faKey,
 					},
 					{
 						title: "Local Development",
 						href: "/docs/local-development",
-						//icon: faCode
+						icon: faCode,
+					},
+					{
+						title: "Edge Regions",
+						href: "/docs/edge",
+						icon: faGlobe,
 					},
 					{
 						title: "Troubleshooting",
 						href: "/docs/troubleshooting",
-						//icon: faClipboardListCheck,
+						icon: faClipboardListCheck,
 					},
 					{
 						title: "FAQ",
 						href: "/docs/faq",
-						//icon: faBlockQuestion,
+						icon: faBlockQuestion,
+					},
+				],
+			},
+			{
+				title: "Advanced",
+				pages: [
+					{
+						title: "Runtime",
+						icon: faSquareTerminal,
+						collapsible: true,
+						pages: [
+							{
+								title: "JavaScript Runtime",
+								href: "/docs/javascript-runtime",
+								icon: faJs,
+							},
+							{
+								title: "Container Runtime",
+								href: "/docs/container-runtime",
+								icon: faDocker,
+							},
+							{
+								title: "Networking",
+								href: "/docs/networking",
+								icon: faNetworkWired,
+							},
+							{
+								title: "Environment Variables",
+								href: "/docs/environment-variables",
+								icon: faLeaf,
+							},
+							{
+								title: "Durability & Rescheduling",
+								href: "/docs/durability",
+								icon: faRecycle,
+							},
+							{
+								title: "Limitations",
+								href: "/docs/limitations",
+								icon: faRuler,
+							},
+						],
 					},
 					{
 						title: "Self-Hosting",
+						icon: faServer,
 						collapsible: true,
 						pages: [
 							{
@@ -129,6 +203,10 @@ export const sitemap = [
 								href: "/docs/self-hosting/docker-compose",
 							},
 							{
+								title: "Network Modes",
+								href: "/docs/self-hosting/network-modes",
+							},
+							{
 								title: "Manual Deployment",
 								href: "/docs/self-hosting/manual-deployment",
 							},
@@ -139,40 +217,6 @@ export const sitemap = [
 							{
 								title: "Client Config",
 								href: "/docs/self-hosting/client-config",
-							},
-						],
-					},
-					{
-						title: "More",
-						collapsible: true,
-						pages: [
-							{
-								title: "Edge Regions",
-								href: "/docs/edge",
-								icon: faGlobe,
-							},
-							{
-								title: "Limitations",
-								href: "/docs/limitations",
-								icon: faExclamationTriangle,
-							},
-							{
-								title: "Advanced",
-								collapsible: true,
-								pages: [
-									{
-										title: "Runtime",
-										href: "/docs/runtime",
-									},
-									{
-										title: "Networking",
-										href: "/docs/networking",
-									},
-									{
-										title: "Rescheduling",
-										href: "/docs/rescheduling",
-									},
-								],
 							},
 						],
 					},

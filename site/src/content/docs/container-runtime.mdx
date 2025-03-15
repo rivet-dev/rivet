@@ -1,0 +1,238 @@
+# Container Runtime
+
+Rivet supports deploying containerized applications using Docker. Your application can be packaged in a standard Dockerfile, giving you complete flexibility for your runtime environment.
+
+<Warning title="This guide is for advanced usage of Rivet">
+  For getting started quickly, we recommend using [ActorCore](https://actorcore.org).
+</Warning>
+
+## Basic Setup
+
+### Step 1: Writing a Dockerfile
+
+Create a simple HTTP server in your project:
+
+```javascript {{"file": "server.js"}}
+const http = require('http');
+
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end("Hello from Rivet Container Actor!");
+});
+
+const port = process.env.PORT_HTTP;
+server.listen(port, () => {
+  console.log(`HTTP server running on port ${port}`);
+});
+```
+
+Create a Dockerfile in your project directory:
+
+```dockerfile {{ "title": "Dockerfile" }}
+FROM node:22-alpine
+
+WORKDIR /app
+
+COPY package.json ./
+RUN npm install
+
+COPY . .
+
+# Create rivet user and set proper permissions
+RUN addgroup -S rivet && \
+    adduser -S -G rivet rivet && \
+    chown -R rivet:rivet /app
+
+# Switch to non-root user
+USER rivet
+
+CMD ["node", "server.js"]
+```
+
+### Step 2: Deploying a container
+
+Specify the Dockerfile in your `rivet.json`:
+
+```json {{ "title": "rivet.json" }}
+{
+  "builds": {
+    "my-actor": {
+      "dockerfile": "Dockerfile"
+    }
+  }
+}
+```
+
+Now deploy your container with:
+
+```sh
+rivet deploy
+```
+
+### Step 3: Starting an actor
+
+In this step, you're requesting Rivet to launch your containerized application in the cloud:
+
+```typescript
+import { RivetClient } from "@rivet-gg/api";
+
+// Initialize the Rivet client with your API token
+// You can get this from the Rivet dashboard
+const client = new RivetClient({
+  token: process.env.RIVET_TOKEN
+});
+
+// Create an actor - this launches your container on Rivet's infrastructure
+const { actor } = await client.actors.create({
+  // Your project and environment IDs from the Rivet dashboard
+  project: "your-project-id",
+  environment: "your-environment-id",
+  body: {
+    // Tags help identify this specific actor instance
+    // You can query actors by these tags later
+    tags: { name: "my-actor" },
+    
+    // buildTags determine which actor code to run
+    // This should match tags in your rivet.json build configuration
+    // The current tag is automatically assigned on deploy
+    buildTags: { name: "my-actor", current: "true" },
+    
+    // Network configuration for your actor
+    network: {
+      ports: {
+        http: {
+          // The protocol used for communication
+          protocol: "https",
+        }
+      }
+    },
+    
+    // Optional: Specify a region for lower latency to specific users
+    // If not specified, Rivet will choose the optimal region
+    // region: "atl",
+    
+    // Container resources specification
+    resources: {
+      cpu: 1000,       // Number of CPU thousanths of a core
+      memory: 1024,    // Memory in MB
+    }
+  }
+});
+
+// The actor.id is a unique identifier for this actor instance
+console.log("Created actor:", actor.id);
+```
+
+What happens during creation:
+- Rivet finds the latest build matching your `buildTags`
+- It provisions resources in the specified region (or chooses the best one)
+- It starts your container with the provided environment variables
+- The container starts running based on your Dockerfile's CMD or ENTRYPOINT
+
+See [actors.create](/docs/api/actors/create) for more options.
+
+### Step 4: Connecting to an actor
+
+Once your container is running, you can access its URL directly from the actor object:
+
+```typescript
+// The actor response includes the URL information
+// You can access it for any port you configured
+const httpUrl = actor.network.ports.http.url;
+
+// The URL is a public endpoint to your actor
+console.log("Actor HTTP URL:", httpUrl);
+
+// Use the URL to communicate with your actor
+// In this example, we're calling our HTTP server
+const response = await fetch(httpUrl);
+const text = await response.text();
+console.log("Response from actor:", text);
+```
+
+What happens during connection:
+- Each port configured for your actor gets a unique URL
+- These URLs are accessible based on your actor's security settings
+- The URL routes to your actor regardless of which region it's in
+- For additional security, you can use `getConnection` to generate temporary, authenticated URLs
+
+See [actors.get](/docs/api/actors/get) for more details.
+
+### Step 5: Destroying an actor
+
+When you're finished using the actor, it's important to destroy it to free up resources:
+
+```typescript
+// Destroy the actor to free up resources and stop billing
+await client.actors.destroy(actor.id, {
+  project: "your-project-id",
+  environment: "your-environment-id",
+});
+
+console.log("Actor destroyed");
+```
+
+What happens during destruction:
+- Rivet sends a termination signal to your container
+- Your container gets a short grace period to clean up resources
+- All compute resources associated with the actor are freed
+- You stop being billed for the actor's runtime
+
+See [actors.destroy](/docs/api/actors/destroy) for more details.
+
+<Note>
+  Always destroy actors when you're done with them to avoid unnecessary costs.
+  Actors will continue running and billing will continue until explicitly destroyed.
+</Note>
+
+## Configuration Options
+
+When configuring your Docker-based build in `rivet.json`, you have access to the following options under `builds`:
+
+| Option | Description | Example |
+|--------|-------------|---------|
+| `dockerfile` | Path to the Dockerfile relative to your project | `"Dockerfile"`, `"docker/prod.Dockerfile"` |
+| `image` | Use an existing image instead of building | `"node:22-alpine"` |
+| `build_path` | Directory containing your build context | `"."`, `"./backend"` |
+| `build_target` | Target stage in multi-stage builds | `"production"`, `"development"` |
+| `build_args` | Key-value pairs passed as build arguments | `{ "NODE_ENV": "production" }` |
+
+See the [configuration documentation](/docs/config) for all available options.
+
+## Non-Root User Requirement
+
+For security reasons, Rivet containers **cannot run as root**. You must explicitly set a non-root user in your Dockerfile.
+
+Different base images require different commands to create non-root users:
+
+<CodeGroup>
+
+```dockerfile {{ "title": "Alpine Linux" }}
+RUN addgroup -S rivet && \
+    adduser -S -G rivet rivet && \
+    chown -R rivet:rivet /app
+USER rivet
+```
+
+```dockerfile {{ "title": "Ubuntu/Debian" }}
+RUN groupadd -r rivet && \
+    useradd --no-log-init -r -g rivet rivet && \
+    chown -R rivet:rivet /app
+USER rivet
+```
+
+```dockerfile {{ "title": "RHEL/CentOS/Fedora" }}
+RUN groupadd -r rivet && \
+    useradd -r -g rivet -s /sbin/nologin rivet && \
+    chown -R rivet:rivet /app
+USER rivet
+```
+
+```dockerfile {{ "title": "Arch Linux" }}
+RUN groupadd rivet && \
+    useradd -m -g rivet -s /bin/bash rivet && \
+    chown -R rivet:rivet /app
+USER rivet
+```
+
+</CodeGroup>

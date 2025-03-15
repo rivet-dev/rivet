@@ -22,11 +22,16 @@ export function CollapsibleSidebarItem({
 		<div>
 			<button
 				type="button"
-				className="flex w-full appearance-none items-center gap-4 px-2 py-1 text-sm text-muted-foreground transition-colors data-[active]:text-foreground"
+				className="flex w-full appearance-none items-center px-2 py-1 text-sm text-muted-foreground transition-colors data-[active]:text-foreground"
 				data-active={isCurrent ? true : undefined}
 				onClick={() => setIsOpen((open) => !open)}
 			>
-				{item.title}
+				{item.icon ? (
+					<Icon icon={item.icon} className="mr-2 size-3.5" />
+				) : null}
+				<span className="truncate">
+					{item.title}
+				</span>
 				<motion.span
 					variants={{
 						open: { rotateZ: 0 },
@@ -34,7 +39,7 @@ export function CollapsibleSidebarItem({
 					}}
 					initial={isCurrent ? "open" : "closed"}
 					animate={isOpen ? "open" : "closed"}
-					className="-ml-2 mr-2 inline-block w-2.5"
+					className="ml-2 mr-2 inline-block w-2.5"
 				>
 					<Icon icon={faChevronDown} className="size-auto" />
 				</motion.span>
@@ -48,9 +53,9 @@ export function CollapsibleSidebarItem({
 				}}
 				animate={isOpen ? "open" : "closed"}
 				transition={{
-					opacity: isOpen ? { delay: 0.3 } : {},
-					height: !isOpen ? { delay: 0.3 } : {},
-					duration: 0.3,
+					opacity: isOpen ? { delay: 0.1 } : {},
+					height: !isOpen ? { delay: 0.1 } : {},
+					duration: 0.2,
 				}}
 			>
 				{children}

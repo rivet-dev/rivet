@@ -1,0 +1,56 @@
+# Tokens
+
+Rivet uses tokens for authentication and authorization when interacting with Rivet APIs. This guide explains the different types of tokens, how to generate them, and how to use them securely.
+
+## Types of Tokens
+
+Rivet offers two types of tokens with different permission levels:
+
+### Service Token
+- **Purpose**: Runtime API interactions (actors, game services)
+- **Scope**: Limited to specific environment (`dev`/`prod`)
+
+#### How to Generate a Service Token
+1. Go to your Rivet Dashboard
+2. Navigate to Project > Environment > Tokens
+3. Under the "Service Token" section, click "Generate"
+4. Copy and securely store your token
+
+### Cloud Token
+- **Purpose**: Administrative operations (environments, builds, projects)
+- **Permissions**: Elevated
+
+#### How to Generate a Cloud Token
+1. Go to your Rivet Dashboard
+2. Navigate to Project > Settings
+3. Under the "Cloud Token" section, click "Generate"
+4. Copy and securely store your token
+
+## Using Tokens
+
+Tokens can be used in various ways depending on your development environment and preferred tools.
+
+### JavaScript SDK
+
+To use tokens with the JavaScript SDK:
+
+```javascript
+import { RivetClient } from "@rivet-gg/api";
+
+const client = new RivetClient({ token: "your_service_token" });
+```
+
+### REST API with `curl`
+
+To use tokens with `curl` or other HTTP clients:
+
+```bash
+curl -H "Authorization: Bearer $RIVET_SERVICE_TOKEN" 'https://api.rivet.gg/actors?project=my-project&environment=prod'
+```
+
+## Rivet Shell
+
+Rivet offers a `rivet shell` command that will auto-create a service token & populate common environment variables for executing commands that depend on tokens.
+
+See the [`rivet shell` documentation](/docs/cli#shell) for more information.
+

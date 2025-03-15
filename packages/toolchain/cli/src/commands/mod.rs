@@ -69,11 +69,11 @@ pub enum SubCommand {
 		#[clap(subcommand)]
 		subcommand: metadata::SubCommand,
 	},
-	/// Execute Deno commands with Rivet environment variables
-	Deno(deno::Opts),
 	/// Launch an interactive shell with Rivet environment variables
-	#[clap(hide = true)]
 	Shell(shell::Opts),
+	/// Execute Deno commands with Rivet environment variables
+	#[clap(hide = true)]
+	Deno(deno::Opts),
 	/// Open the environment dashboard in a browser (alias of `environment view`)
 	#[clap(alias = "v")]
 	View {

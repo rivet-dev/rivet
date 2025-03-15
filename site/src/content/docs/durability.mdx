@@ -1,12 +1,40 @@
 import Link from 'next/link';
 
-# Rescheduling
+# Durability & Rescheduling
 
 Through rescheduling, durable actors can be shut down and brought up again while
 automatically persisting state.
 
-No work is needed from the developer to handle rescheduling; actor rescheduling
-is often completely transparent through [state persistence](/docs/state) & [automatic client offline queues + reconnections](/docs/connections).
+<Info title="Durability is disabled by default">
+	Durability has to be manually enabled with `lifecycle.durable`.
+</Info>
+
+## Enabling Durability
+
+Rescheduling can be enabled by setting the `lifecycle.durable` property:
+
+```typescript
+const actor = await rivet.actors.create({
+  // ...
+  lifecycle: { durable: true }
+});
+```
+
+## Graceful Shutdowns & Kill Timeout
+
+A custom kill timeout can be configured with:
+
+```typescript
+const actor = await rivet.actors.create({
+  // ...
+  lifecycle: {
+    durable: true,
+    killTimeout: 60_000,  // 60 seconds
+  }
+});
+```
+
+Before your actor exits, it will receive a `SIGTERM` signal. Your actor should manually exit when cleanup is complete. If it does not exit within that time period, the actor will be forcibly shut down.
 
 ## Rescheduling Behavior
 
@@ -26,7 +54,7 @@ Only actors that are marked as "durable" are automatically rescheduled.
 
 Manual rescheduling occurs when the user upgrades an actor with a new build, causing the actor to restart.
 
-## Networking reschedule behavior
+## Networking Reschedule Behavior
 
 ### Rivet Guard port routing
 
