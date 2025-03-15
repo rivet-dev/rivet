@@ -5,6 +5,89 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Calendar Versioning](https://calver.org/).
 
+## [25.2.1](https://github.com/rivet-gg/rivet/compare/v25.2.0...v25.2.1) (2025-03-15)
+
+
+### Features
+
+* **cli:** add --version flag to `deploy`, `build publish`, and `actor create` ([#2202](https://github.com/rivet-gg/rivet/issues/2202)) ([a0f0b66](https://github.com/rivet-gg/rivet/commit/a0f0b66b03d57e2ce4dc6bcf69b2b4298e73d8f0))
+* **cli:** add `RIVET_ENDPOINT` and `RIVET_CLOUD_TOKEN` env vars for auth ([#2203](https://github.com/rivet-gg/rivet/issues/2203)) ([6ae4dc1](https://github.com/rivet-gg/rivet/commit/6ae4dc1a8fa7fe2551f6504971b5b54cddaf3dc3))
+* **cli:** publish to npm ([#2039](https://github.com/rivet-gg/rivet/issues/2039)) ([9ccee01](https://github.com/rivet-gg/rivet/commit/9ccee01607f2e46a453076c77df3e0e712638dab))
+* **hub:** add actor-core inspector ([#2171](https://github.com/rivet-gg/rivet/issues/2171)) ([e6177fc](https://github.com/rivet-gg/rivet/commit/e6177fc1291cc28a9dc1b609c4b7551bc69e5b88))
+* **hub:** add name column to actor builds ([#2172](https://github.com/rivet-gg/rivet/issues/2172)) ([e83ba5b](https://github.com/rivet-gg/rivet/commit/e83ba5bad78a022c750a9053064ce3fb47090df7))
+
+
+### Bug Fixes
+
+* add prepare script to @rivet-gg/cli so it builds before postinstall ([1020e3a](https://github.com/rivet-gg/rivet/commit/1020e3aff9cb6b752b7854289d263e6bb2e5ba8c))
+* **cli:** adjust @rivet-gg/cli for npm ([#2174](https://github.com/rivet-gg/rivet/issues/2174)) ([3d49081](https://github.com/rivet-gg/rivet/commit/3d49081974004f9744df8f947ea62741a34436fd))
+* container runner logs not working ([#2152](https://github.com/rivet-gg/rivet/issues/2152)) ([bf69be0](https://github.com/rivet-gg/rivet/commit/bf69be0a9b975ddbccff2a0bab398a65bc8d634b))
+* core features alignment ([#2186](https://github.com/rivet-gg/rivet/issues/2186)) ([34b52da](https://github.com/rivet-gg/rivet/commit/34b52da94a85274a150b53a05128497e0d700f18))
+* delete history for select wf, add actor start metric ([#2155](https://github.com/rivet-gg/rivet/issues/2155)) ([560bd20](https://github.com/rivet-gg/rivet/commit/560bd20a65ff64b84d2bebed1b03f542a45d7b22))
+* fallback if @rivet-gg/cli doesn't work ([0897635](https://github.com/rivet-gg/rivet/commit/0897635965e5672c2084d94cebef0da720ec9873))
+* fix building api packages ([7735744](https://github.com/rivet-gg/rivet/commit/77357446e715dea13e707f273b5972f65e9988f1))
+* fix release update versions ([f10bfca](https://github.com/rivet-gg/rivet/commit/f10bfcaece4e6163581d28c8a5bf5437ca64a450))
+* **hub:** add trailing slashes to urls when missing ([#2179](https://github.com/rivet-gg/rivet/issues/2179)) ([3cbbbfe](https://github.com/rivet-gg/rivet/commit/3cbbbfef02433b87dde0ef61ab04876d7d16cfbb))
+* **hub:** display error message only if there's nothing to show ([#2166](https://github.com/rivet-gg/rivet/issues/2166)) ([745fb32](https://github.com/rivet-gg/rivet/commit/745fb32010c3320ce696df0e43b26a45616e00cc))
+* **hub:** force context creation on lobbies page ([#2161](https://github.com/rivet-gg/rivet/issues/2161)) ([391708d](https://github.com/rivet-gg/rivet/commit/391708da0ffd16349f0ac3f3d1414757677e4d40))
+* remove landing animation ([#2189](https://github.com/rivet-gg/rivet/issues/2189)) ([51946bb](https://github.com/rivet-gg/rivet/commit/51946bbcc419e7eda53f2465a4f14e4e2c1fb508))
+* remove node_modules hack in favor of yarn pnp ([816046e](https://github.com/rivet-gg/rivet/commit/816046ebb1388cf86f3b7ea2ecb725bb32d7ac42))
+* update cli image and wording ([#2193](https://github.com/rivet-gg/rivet/issues/2193)) ([a3ca882](https://github.com/rivet-gg/rivet/commit/a3ca8826dfcafdacf187fb0b0aeb0f39edbb3946))
+* **workflows:** fix dupe wf run bug, signal idx bug, add wake condition property to get wf ([#2163](https://github.com/rivet-gg/rivet/issues/2163)) ([c42cc71](https://github.com/rivet-gg/rivet/commit/c42cc718750d3f97b1beadcd7b4b1b31870efdd2))
+
+
+### Documentation
+
+* **cli:** add docs for all remaining commands ([#2207](https://github.com/rivet-gg/rivet/issues/2207)) ([76b2fb5](https://github.com/rivet-gg/rivet/commit/76b2fb5ebe61ac92c9db1cf92fc592de92febbf6))
+* document runtime ([#2211](https://github.com/rivet-gg/rivet/issues/2211)) ([6ae3443](https://github.com/rivet-gg/rivet/commit/6ae344361498392c2d416109199f422d8542e97d))
+* revamp docs ([#2164](https://github.com/rivet-gg/rivet/issues/2164)) ([6cf3bcf](https://github.com/rivet-gg/rivet/commit/6cf3bcf0343dffa48d44249339b66188e54efb38))
+
+
+### Chores
+
+* add config validation command ([#2195](https://github.com/rivet-gg/rivet/issues/2195)) ([6bd1a60](https://github.com/rivet-gg/rivet/commit/6bd1a60cedbd629bd8c985be1a3417e51394c6c8))
+* add pnp for esbuild ([00f87b9](https://github.com/rivet-gg/rivet/commit/00f87b985d8a6de0701bad42dac8c7ee9f9d208c))
+* add sandboxed-code-execution demo for js & container ([#2165](https://github.com/rivet-gg/rivet/issues/2165)) ([9d90db3](https://github.com/rivet-gg/rivet/commit/9d90db3a7d71e96c5bcc2a7beac77a8f976c59c5))
+* **api-status:** add container status check ([#2159](https://github.com/rivet-gg/rivet/issues/2159)) ([d1f57f4](https://github.com/rivet-gg/rivet/commit/d1f57f4a43f34e72065713c41f70a5f8b6aa8838))
+* changelog cli ([#2191](https://github.com/rivet-gg/rivet/issues/2191)) ([ef51dc2](https://github.com/rivet-gg/rivet/commit/ef51dc218fda20f6c9ad8ff5b190dd607d7fb40e))
+* **cli:** remove `BuildAccess` config ([#2208](https://github.com/rivet-gg/rivet/issues/2208)) ([81c62b5](https://github.com/rivet-gg/rivet/commit/81c62b5824929faee6f97513f1f3020aa3559cb3))
+* disable durable lifecycle in system test ([#2157](https://github.com/rivet-gg/rivet/issues/2157)) ([aa1ecc9](https://github.com/rivet-gg/rivet/commit/aa1ecc9496b255a79a204354b890e5f806a76ee5))
+* disable publishing cli since it's broken ([46bfeff](https://github.com/rivet-gg/rivet/commit/46bfeffbdec6a9aaa8dd797ad5abd9fb520fa702))
+* **examples:** remove old configs ([#2206](https://github.com/rivet-gg/rivet/issues/2206)) ([f2a0bb4](https://github.com/rivet-gg/rivet/commit/f2a0bb48b237522e4284191ff025f9b5c85d4a4d))
+* fix api docs ([#2209](https://github.com/rivet-gg/rivet/issues/2209)) ([7363327](https://github.com/rivet-gg/rivet/commit/73633276170a43ea5f67c21907ba416dff1feeac))
+* flatten examples ([#2181](https://github.com/rivet-gg/rivet/issues/2181)) ([76a3602](https://github.com/rivet-gg/rivet/commit/76a3602fc118627c7717468da62ce8c6caff953a))
+* install before publishing ([6762d8c](https://github.com/rivet-gg/rivet/commit/6762d8c315aee896bf44322e67c9ca6baf51c7c0))
+* manifesto and changelog update ([#2200](https://github.com/rivet-gg/rivet/issues/2200)) ([688eed1](https://github.com/rivet-gg/rivet/commit/688eed1a21e073784452b44ea9a7f6ad758b1dcf))
+* move apis to workspace ([3b304c3](https://github.com/rivet-gg/rivet/commit/3b304c34a1a8e36e1d21f0dea630d57f7499943d))
+* release 25.2.1 ([7a41802](https://github.com/rivet-gg/rivet/commit/7a4180205598624c66b48089530763e12abeadf4))
+* release 25.2.1 ([344ed3c](https://github.com/rivet-gg/rivet/commit/344ed3c20242e708700d7f097111fd665b31e26d))
+* release 25.2.1 ([306f48d](https://github.com/rivet-gg/rivet/commit/306f48dc0abe2d4171e97b520ebfff91dc9aa7f5))
+* release 25.2.1 ([3b3a112](https://github.com/rivet-gg/rivet/commit/3b3a112d235468136ed42243e29a6d04219b5a42))
+* release 25.2.1 ([d233338](https://github.com/rivet-gg/rivet/commit/d233338596455542bc736a697de95953afe73739))
+* release 25.2.1 ([d1e4eb4](https://github.com/rivet-gg/rivet/commit/d1e4eb4c87375878f1c568a42ad09bf05cb847f4))
+* release 25.2.1 ([3768a7d](https://github.com/rivet-gg/rivet/commit/3768a7dad048ab9e0a0a8beb63efd192361478a5))
+* release 25.2.1 ([ab5dc69](https://github.com/rivet-gg/rivet/commit/ab5dc69058601bdc6eb64c578f3be61dec328675))
+* release 25.2.1 ([5efe76b](https://github.com/rivet-gg/rivet/commit/5efe76b8e67694fdaed97741812c7f37d886d90e))
+* **release:** update version to 25.2.1 ([0989257](https://github.com/rivet-gg/rivet/commit/09892576c497fe265eec897790b79c465b258b9c))
+* **release:** update version to 25.2.1 ([875c7ad](https://github.com/rivet-gg/rivet/commit/875c7ad800aeac352d3c90da9daf34aad1deda27))
+* **release:** update version to 25.2.1 ([e598b6d](https://github.com/rivet-gg/rivet/commit/e598b6ddbf60c912ea1d94a04c2950e09dc46cbd))
+* **release:** update version to 25.2.1 ([b901253](https://github.com/rivet-gg/rivet/commit/b901253b0f99f75545a2960f962bd4186f98f9d8))
+* **release:** update version to 25.2.1 ([62afbfe](https://github.com/rivet-gg/rivet/commit/62afbfe0acd1c07001d749c0b4fb841dfbbe7e41))
+* **release:** update version to 25.2.1 ([5dc75ce](https://github.com/rivet-gg/rivet/commit/5dc75ce6753cd21a0efcd01df1ebc176eeff9a74))
+* **release:** update version to 25.2.1 ([4eb83de](https://github.com/rivet-gg/rivet/commit/4eb83de01ab13e9409975a4dddb45a14ea3c4803))
+* **release:** update version to 25.2.1 ([24cdfc5](https://github.com/rivet-gg/rivet/commit/24cdfc5339dee2e4a81f407193c62d8876c998c9))
+* **release:** update version to 25.2.1 ([916df87](https://github.com/rivet-gg/rivet/commit/916df8758958f179e4ff787549ee47eac4361330))
+* remove @rivet-gg/cli from release temporarily ([08f5934](https://github.com/rivet-gg/rivet/commit/08f5934028e6c54c04b52b34258c8a3d5aa4016f))
+* remove actors sdk in favor of actorcore ([#2199](https://github.com/rivet-gg/rivet/issues/2199)) ([ee7693b](https://github.com/rivet-gg/rivet/commit/ee7693ba7fb93b6a648f7e9e71586ad83eb6f786))
+* remove init command ([#2198](https://github.com/rivet-gg/rivet/issues/2198)) ([b215811](https://github.com/rivet-gg/rivet/commit/b21581181f35f86f1ef8a1a0cd14c13f89038da6))
+* rename actor -&gt; actors in sdk for consistency ([#2197](https://github.com/rivet-gg/rivet/issues/2197)) ([479ac9a](https://github.com/rivet-gg/rivet/commit/479ac9a5be2b4fb77ac7a3a889fd97185e4a1cb1))
+* rename actor.regions.resolve to actor.regions.recommend ([#2196](https://github.com/rivet-gg/rivet/issues/2196)) ([b28003d](https://github.com/rivet-gg/rivet/commit/b28003dca4f7a7701414ee7920e07fa133512fd1))
+* update package name to @rivet-gg/cli ([999431d](https://github.com/rivet-gg/rivet/commit/999431d3634cc1163674e17ca6f08c7d7527e071))
+* updated oss friends ([#2212](https://github.com/rivet-gg/rivet/issues/2212)) ([c04db5c](https://github.com/rivet-gg/rivet/commit/c04db5c02be6d19787ee29fc57ea3068f6c779e1))
+* updated site font ([#2204](https://github.com/rivet-gg/rivet/issues/2204)) ([37cce55](https://github.com/rivet-gg/rivet/commit/37cce55f9605638ca51e5060b2aa171b971db0b3))
+* website redesign ([#2170](https://github.com/rivet-gg/rivet/issues/2170)) ([fd7fdf2](https://github.com/rivet-gg/rivet/commit/fd7fdf2d8946999c6b953820c868c348ddf1f9ee))
+* workspace typo ([15db225](https://github.com/rivet-gg/rivet/commit/15db225f4f6a613626feb9c11132bef9a38dbea2))
+
 ## [25.2.0](https://github.com/rivet-gg/rivet/compare/v5.1.2...v25.2.0) (2025-03-07)
 
 
