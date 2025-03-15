@@ -9,8 +9,8 @@ import * as pkgJson from "./package.json";
 // dist
 const BASE_PATH = join(__dirname);
 
-const RIVET_CLI_BINARY_PATH = join(__dirname, "bin", computeTargetFilename());
-const RIVET_CLI_NODE_PATH = join(__dirname, "..", pkgJson.bin.rivet);
+const RIVET_CLI_BINARY_PATH = join(BASE_PATH, computeTargetFilename());
+const RIVET_CLI_NODE_PATH = join(BASE_PATH, "..", pkgJson.bin.rivet);
 
 const artifactUrl = (version: string, name: string) =>
 	`https://releases.rivet.gg/rivet/${version}/${name}`;
@@ -82,14 +82,6 @@ async function download(version: string) {
 		throw new Error("response body is not readable stream");
 	}
 
-	try {
-		await fs.promises.mkdir(join(BASE_PATH, "bin"), {
-			recursive: true,
-		});
-	} catch (e) {
-		// Ignore errors here since the directory might already exist
-	}
-
 	let resolve: (value?: unknown) => void;
 	let reject: (error: unknown) => void;
 	const promise = new Promise((res, rej) => {
@@ -115,26 +107,19 @@ async function download(version: string) {
 async function main() {
 	try {
 		await fs.promises.rm(RIVET_CLI_BINARY_PATH);
-		await fs.promises.rm(RIVET_CLI_NODE_PATH);
 	} catch {}
 
 	await download(pkgJson.version);
 
-	await fs.promises.writeFile(
-		RIVET_CLI_NODE_PATH,
-		`#!/usr/bin/env node
-require('node:child_process').execFileSync(${JSON.stringify(RIVET_CLI_BINARY_PATH)}, process.argv.slice(2), { stdio: 'inherit' });
-`,
-	);
-
 	maybeOptimizePackage(RIVET_CLI_BINARY_PATH, RIVET_CLI_NODE_PATH);
 
 	fs.chmodSync(RIVET_CLI_NODE_PATH, 0o755);
+	fs.chmodSync(RIVET_CLI_BINARY_PATH, 0o755);
 }
 
 main()
 	.then(() => {
-		console.debug("Rivet CLI prepared successfully");
+		console.log("Rivet CLI prepared successfully");
 	})
 	.catch((error) => {
 		console.error("Failed to download and prepare Rivet CLI", error);

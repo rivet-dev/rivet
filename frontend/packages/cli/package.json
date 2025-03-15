@@ -7,20 +7,20 @@
 	},
 	"version": "25.2.1",
 	"bin": {
-		"rivet": "dist/bin/rivet"
+		"rivet": "dist/cli.js",
+		"rivet-cli": "dist/cli.js"
 	},
 	"license": "Apache-2.0",
 	"files": [
+		"dist/cli.js",
 		"dist/postinstall.js",
-		"postinstall.ts",
 		"package.json"
 	],
+	"sideEffects": false,
 	"preferGlobal": true,
 	"preferUnplugged": true,
 	"scripts": {
-		"preinstall": "tsup postinstall.ts --minify --format cjs --out-dir dist",
-		"prepack": "jq 'del(.scripts.preinstall)' package.json > temp.json && mv temp.json package.json",
-		"build": "tsup postinstall.ts --minify --format cjs --out-dir dist",
+		"build": "tsup postinstall.ts cli.ts --minify --format cjs --out-dir dist",
 		"postinstall": "node ./dist/postinstall.js"
 	},
 	"devDependencies": {
