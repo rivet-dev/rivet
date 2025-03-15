@@ -279,32 +279,6 @@ export function CrashCourseUnrealWidget() {
 	);
 }
 
-export function WhatDoesRivetDo() {
-	return (
-		<Accordion title="What did this do?">
-			<ul>
-				<li>Linked your project to Rivet</li>
-				<li>
-					If no <code>rivet.yaml</code> was present, it created a{" "}
-					<code>rivet.yaml</code> file that configures how to run your
-					game. Read more about the Rivet version config{" "}
-					<a href="/docs/general/concepts/version-config">here</a>.
-				</li>
-				<li>
-					Added a development token to your <code>.env</code> that
-					lets you develop with Rivet on your local machine. Read more
-					about dev tokens{" "}
-					<a href="/docs/general/concepts/dev-tokens">here</a>.
-				</li>
-			</ul>
-			<p>
-				You can also run <code>rivet init</code> without any flags to go
-				through the interactive setup process.
-			</p>
-		</Accordion>
-	);
-}
-
 export function UnfamiliarWithDockerfiles() {
 	return (
 		<Accordion title="Unfamiliar with Dockerfiles?">

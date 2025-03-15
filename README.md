@@ -55,13 +55,7 @@ Rivet comes with simple primitives to build your backend. Leverage Rivet Actors 
 -   Yjs Sync & Storage
 -   Sandboxed Code Execution
 
-## Getting Started
-
-### Quickstart
-
-_See the [full quickstart guide](https://rivet.gg/docs/setup) for a comprehensive walkthrough._
-
-**Step 1: Install CLI**
+## Install CLI
 
 ```sh
 # macOS & Linux & WSL
@@ -74,12 +68,24 @@ powershell -Command "iwr https://releases.rivet.gg/rivet/latest/install.ps1 -use
 iwr https://releases.rivet.gg/rivet/latest/install.ps1 -useb | iex
 ```
 
-**Step 2: Create Project & Deploy**
+## Getting Started
+
+### Quickstart (TypeScript)
+
+_See the [full quickstart guide](https://rivet.gg/docs/quickstart/typescript) for a comprehensive walkthrough._
+
+**Step 1: Create Actor**
 
 ```sh
-rivet init
-cd my-app
-rivet deploy
+npx create-actor@latest -p rivet -t counter
+```
+
+**Step 2: Deploy Actor**
+
+```sh
+cd your-project
+npm run deploy
+
 ```
 
 **Step 3: Monitor**
