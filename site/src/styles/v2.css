@@ -29,6 +29,17 @@
 	--shiki-token-punctuation: theme("colors.zinc.200");
 }
 
+/* Text selection styles */
+::selection {
+	background-color: #FF4F00;
+	color: black;
+}
+
+::-moz-selection {
+	background-color: #FF4F00;
+	color: black;
+}
+
 .shiki .line {
 	@apply break-all;
 }
