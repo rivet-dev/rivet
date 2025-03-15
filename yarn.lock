@@ -3068,8 +3068,8 @@ __metadata:
   linkType: hard
 
 "@rivet-gg/api@file:./vendor/rivet-gg-api.tgz::locator=%40rivet-gg%2Fhub%40workspace%3Afrontend%2Fapps%2Fhub":
-  version: 25.2.0
-  resolution: "@rivet-gg/api@file:./vendor/rivet-gg-api.tgz#./vendor/rivet-gg-api.tgz::hash=fe65ac&locator=%40rivet-gg%2Fhub%40workspace%3Afrontend%2Fapps%2Fhub"
+  version: 25.2.1
+  resolution: "@rivet-gg/api@file:./vendor/rivet-gg-api.tgz#./vendor/rivet-gg-api.tgz::hash=1f00a9&locator=%40rivet-gg%2Fhub%40workspace%3Afrontend%2Fapps%2Fhub"
   dependencies:
     form-data: "npm:^4.0.0"
     js-base64: "npm:^3.7.5"
@@ -3077,7 +3077,7 @@ __metadata:
     qs: "npm:^6.11.2"
     readable-stream: "npm:^4.5.2"
     url-join: "npm:^5.0.0"
-  checksum: 10c0/df8623111a4656aeca29e4440207012b28876b9edbc404cdbf47aefee13404405f0fa6c6157d385d697b69498d541236b78af3541f342d32acabee9f567d0ebd
+  checksum: 10c0/e9696b513170a5faf00b6b74df97de6895f7e1679ee9fd38a6cbca96088fb235eeb192173d509eede4b2360163301a241703a4a8a739a48f122b90ae407896d1
   languageName: node
   linkType: hard
 

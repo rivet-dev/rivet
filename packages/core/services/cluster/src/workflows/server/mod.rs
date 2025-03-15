@@ -936,11 +936,9 @@ async fn cleanup(
 				.await?;
 
 			// Wait for workflow to complete
-			ctx.workflow::<linode::workflows::server::Input>(
-				provider_server_workflow_id,
-			)
-			.output()
-			.await?;
+			ctx.workflow::<linode::workflows::server::Input>(provider_server_workflow_id)
+				.output()
+				.await?;
 		}
 	}
 
