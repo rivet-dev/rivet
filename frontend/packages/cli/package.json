@@ -21,6 +21,7 @@
 	"preferUnplugged": true,
 	"scripts": {
 		"build": "tsup postinstall.ts cli.ts --minify --format cjs --out-dir dist",
+		"prepare": "yarn build",
 		"postinstall": "node ./dist/postinstall.js"
 	},
 	"devDependencies": {
