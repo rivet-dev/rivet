@@ -514,13 +514,14 @@ pub async fn spawn_actor(
 			.await?
 		}
 		_ => {
-			ctx.v(2).activity(AllocateActorInputV2 {
-				actor_id: input.actor_id,
-				generation,
-				build_kind: actor_setup.meta.build_kind,
-				resources: actor_setup.resources.clone(),
-			})
-			.await?
+			ctx.v(2)
+				.activity(AllocateActorInputV2 {
+					actor_id: input.actor_id,
+					generation,
+					build_kind: actor_setup.meta.build_kind,
+					resources: actor_setup.resources.clone(),
+				})
+				.await?
 		}
 	};
 

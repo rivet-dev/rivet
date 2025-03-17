@@ -39,7 +39,7 @@ where
 {
 	let shared_client = chirp_client::SharedClient::from_env(pools.clone())?;
 
-	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
+	let cache = rivet_cache::CacheInner::from_env(&config, pools.clone())?;
 
 	// A `MakeService` that produces a `Service` to handle each connection
 	let make_service = make_service_fn(move |conn: &AddrStream| {

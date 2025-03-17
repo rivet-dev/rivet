@@ -15,7 +15,7 @@ pub struct Output {
 
 #[derive(sqlx::FromRow)]
 pub(crate) struct BuildRow {
-	build_id: Uuid,
+	pub(crate) build_id: Uuid,
 	game_id: Option<Uuid>,
 	env_id: Option<Uuid>,
 	upload_id: Uuid,
@@ -54,29 +54,43 @@ impl TryInto<types::Build> for BuildRow {
 
 #[operation]
 pub async fn get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
-	let builds = sql_fetch_all!(
-		[ctx, BuildRow]
-		"
-		SELECT
-			build_id,
-			game_id,
-			env_id,
-			upload_id,
-			display_name,
-			image_tag,
-			create_ts,
-			kind,
-			compression,
-			tags
-		FROM db_build.builds
-		WHERE build_id = ANY($1)
-		",
-		&input.build_ids,
-	)
-	.await?
-	.into_iter()
-	.map(|build| build.try_into())
-	.collect::<GlobalResult<Vec<_>>>()?;
+	let builds = ctx
+		.cache()
+		.fetch_all_json("build", input.build_ids.clone(), {
+			let ctx = ctx.clone();
+			move |mut cache, build_ids| {
+				let ctx = ctx.clone();
+				async move {
+					let rows = sql_fetch_all!(
+						[ctx, BuildRow]
+						"
+						SELECT
+							build_id,
+							game_id,
+							env_id,
+							upload_id,
+							display_name,
+							image_tag,
+							create_ts,
+							kind,
+							compression,
+							tags
+						FROM db_build.builds
+						WHERE build_id = ANY($1)
+						",
+						&build_ids,
+					)
+					.await?;
+
+					for row in rows {
+						cache.resolve(&row.build_id.clone(), row.try_into()?);
+					}
+
+					Ok(cache)
+				}
+			}
+		})
+		.await?;
 
 	Ok(Output { builds })
 }

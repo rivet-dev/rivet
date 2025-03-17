@@ -97,7 +97,7 @@ pub enum HostProtocol {
 	Udp = 1,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameConfig {
 	pub game_id: Uuid,
 	pub host_networking_enabled: bool,

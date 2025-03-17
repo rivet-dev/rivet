@@ -36,7 +36,6 @@ async fn handle(
 
 	let namespaces = ctx
 		.cache()
-		.immutable()
 		.fetch_all_proto("namespace", namespace_ids, |mut cache, namespace_ids| {
 			let ctx = ctx.base();
 			async move {

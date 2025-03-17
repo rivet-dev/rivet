@@ -27,36 +27,46 @@ impl CacheInner {
 		let remote_address = remote_address.as_ref();
 
 		// NOTE: Impossible for bucket list to be empty, validated at compile time
+		// Count the number of buckets
+		let buckets_count = rate_limit_config.buckets.len();
+
 		let results = rate_limit_config
 			.buckets
 			.into_iter()
 			.map(|bucket| RateLimitResult::new(bucket.count, bucket.bucket_duration_ms));
-		let original_len = results.len();
 
 		// Increment the bucket hit count
 		let results = futures_util::stream::iter(results)
 			.map(|result| {
-				let mut conn = self.redis_conn.clone();
-				let key = self.build_redis_rate_limit_key(
+				// Create a clone for the async move
+				let result_clone = result.clone();
+
+				// Get rate limit key with driver-specific formatting
+				let rate_limit_key = self.driver.process_rate_limit_key(
 					key,
 					remote_address,
 					result.bucket_index(),
 					result.ttl_ms(),
 				);
-				let mut pipe = redis::pipe();
-				pipe.atomic();
-				pipe.incr(&key, 1);
-				pipe.pexpire(&key, result.ttl_ms() as usize).ignore();
 
-				async move {
-					match pipe.query_async::<_, (i64,)>(&mut conn).await {
-						Ok((incr,)) => (result, Some(incr)),
+				// Execute rate limit increment using the appropriate driver
+				Box::pin(async move {
+					match self
+						.driver
+						.rate_limit_increment(&rate_limit_key, result_clone.ttl_ms())
+						.await
+					{
+						Ok(incr) => (result_clone, Some(incr)),
 						Err(err) => {
-							tracing::error!(?err, ?key, "failed to increment rate limit key");
-							(result, None)
+							tracing::error!(
+								?err,
+								key=?rate_limit_key,
+								"failed to increment rate limit key"
+							);
+							(result_clone, None)
 						}
 					}
-				}
+				}) as futures_util::future::BoxFuture<'_, (RateLimitResult, Option<i64>)>
 			})
 			.buffer_unordered(16)
 			.collect::<Vec<_>>()
@@ -69,7 +79,7 @@ impl CacheInner {
 			.collect::<Vec<_>>();
 
 		// Gracefully return when any of the above futures error
-		if results.len() != original_len {
+		if results.len() != buckets_count {
 			return results
 				.into_iter()
 				.map(|(result, _)| result)
@@ -78,7 +88,7 @@ impl CacheInner {
 
 		// Check all results' validity
 		for (result, incr) in &mut results {
-			result.is_valid = *incr <= result.max_hits_per_bucket()
+			result.is_valid = *incr <= result.max_hits_per_bucket();
 		}
 
 		let formatted_results = results
@@ -86,8 +96,6 @@ impl CacheInner {
 			.map(|(result, incr)| format!("(incr = {}, result = {})", incr, result))
 			.collect::<Vec<_>>();
 		tracing::trace!(
-			?key,
-			?remote_address,
 			results=?formatted_results,
 			"registered rate limit hit"
 		);

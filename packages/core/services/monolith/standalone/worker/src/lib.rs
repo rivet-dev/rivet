@@ -17,7 +17,7 @@ macro_rules! spawn_workers {
 #[tracing::instrument(skip_all)]
 pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> GlobalResult<()> {
 	let shared_client = chirp_client::SharedClient::from_env(pools.clone())?;
-	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
+	let cache = rivet_cache::CacheInner::from_env(&config, pools.clone())?;
 
 	// Start workers
 	let mut join_set = tokio::task::JoinSet::new();

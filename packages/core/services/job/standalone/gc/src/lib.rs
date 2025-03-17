@@ -42,7 +42,7 @@ pub async fn run_from_env(
 	let check_orphaned_ts = ts - CHECK_ORPHANED_JOB_THRESHOLD;
 
 	let client = chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("job-gc");
-	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
+	let cache = rivet_cache::CacheInner::from_env(&config, pools.clone())?;
 	let ctx = OperationContext::new(
 		"job-gc".into(),
 		std::time::Duration::from_secs(60),

@@ -28,7 +28,6 @@ async fn handle(
 
 	let versions = ctx
 		.cache()
-		.immutable()
 		.fetch_all_proto(
 			"lobby_groups",
 			lobby_group_ids,
@@ -50,12 +49,11 @@ async fn handle(
 
 					for version in versions {
 						let lobby_group_id = version.lobby_group_id;
-						cache.resolve_with_topic(
+						cache.resolve(
 							&lobby_group_id,
 							Into::<mm_config::lobby_group_resolve_version::response::Version>::into(
 								version,
 							),
-							("lobby_groups", &lobby_group_id),
 						);
 					}
 

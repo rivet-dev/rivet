@@ -580,15 +580,27 @@ impl Database for DatabaseFdbSqliteNats {
 								Result::<_, fdb::FdbBindingError>::Ok(())
 							},
 							async {
+								// TODO: Parallelize
 								while let Some(entry) = signal_stream.try_next().await? {
 									if let Ok(pending_signal_key) =
 										self.subspace
 											.unpack::<keys::workflow::PendingSignalKey>(entry.key())
 									{
-										let entry = pending_signal_count
-											.entry(pending_signal_key.signal_name)
-											.or_default();
-										*entry += 1;
+										let silence_ts_key = keys::signal::SilenceTsKey::new(
+											pending_signal_key.signal_id,
+										);
+
+										// Not silenced
+										if tx
+											.get(&self.subspace.pack(&silence_ts_key), SNAPSHOT)
+											.await?
+											.is_none()
+										{
+											let entry = pending_signal_count
+												.entry(pending_signal_key.signal_name)
+												.or_default();
+											*entry += 1;
+										}
 									}
 								}
 

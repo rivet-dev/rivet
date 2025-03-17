@@ -9,6 +9,7 @@ use crate::types;
 pub struct Input {
 	pub env_id: Uuid,
 	pub tags: HashMap<String, String>,
+	pub bypass_cache: bool,
 }
 
 #[derive(Debug)]
@@ -18,7 +19,42 @@ pub struct Output {
 
 #[operation]
 pub async fn get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
-	let builds = sql_fetch_all!(
+	let tags_str = serde_json::to_string(&input.tags)?;
+
+	let builds = if input.bypass_cache {
+		get_builds(&ctx, input.env_id, &tags_str).await?
+	} else {
+		unwrap!(
+			ctx.cache()
+				.ttl(util::duration::seconds(15))
+				.fetch_one_json("build", tags_str.as_str(), {
+					let ctx = ctx.clone();
+					let tags_str = tags_str.clone();
+					move |mut cache, key| {
+						let ctx = ctx.clone();
+						let tags_str = tags_str.clone();
+						async move {
+							let builds = get_builds(&ctx, input.env_id, &tags_str).await?;
+
+							cache.resolve(&key, builds);
+
+							Ok(cache)
+						}
+					}
+				})
+				.await?
+		)
+	};
+
+	Ok(Output { builds })
+}
+
+async fn get_builds(
+	ctx: &OperationCtx,
+	env_id: Uuid,
+	tags_str: &str,
+) -> GlobalResult<Vec<types::Build>> {
+	sql_fetch_all!(
 		[ctx, BuildRow]
 		"
 		SELECT
@@ -35,13 +71,11 @@ pub async fn get(ctx: &OperationCtx, input: &Input) -> GlobalResult<Output> {
 		FROM db_build.builds
 		WHERE env_id = $1 AND tags @> $2
 		",
-		input.env_id,
-		serde_json::to_string(&input.tags)?,
+		env_id,
+		tags_str,
 	)
 	.await?
 	.into_iter()
-	.map(|build| build.try_into())
-	.collect::<GlobalResult<Vec<_>>>()?;
-
-	Ok(Output { builds })
+	.map(TryInto::try_into)
+	.collect::<GlobalResult<Vec<_>>>()
 }

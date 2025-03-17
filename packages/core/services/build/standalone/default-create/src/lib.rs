@@ -8,7 +8,7 @@ use uuid::Uuid;
 pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> GlobalResult<()> {
 	let client =
 		chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("build-default-create");
-	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
+	let cache = rivet_cache::CacheInner::from_env(&config, pools.clone())?;
 	let ctx = OperationContext::new(
 		"build-default-create".into(),
 		std::time::Duration::from_secs(60),

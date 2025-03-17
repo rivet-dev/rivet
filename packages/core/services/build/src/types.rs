@@ -1,9 +1,11 @@
+use std::collections::HashMap;
+
 use chirp_workflow::prelude::*;
 use rivet_api::models;
 use rivet_convert::ApiFrom;
-use std::collections::HashMap;
 use strum::FromRepr;
 
+// NOTE: Do not change the serde case of this or else it will break workflow hashes
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Hash, PartialEq, Eq, FromRepr)]
 pub enum BuildKind {
 	DockerImage = 0,
@@ -21,6 +23,7 @@ impl ApiFrom<models::BuildsBuildKind> for BuildKind {
 	}
 }
 
+// NOTE: Do not change the serde case of this or else it will break workflow hashes
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Hash, PartialEq, Eq, FromRepr)]
 pub enum BuildCompression {
 	None = 0,
@@ -36,7 +39,7 @@ impl ApiFrom<models::BuildsBuildCompression> for BuildCompression {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Build {
 	pub build_id: Uuid,
 	pub game_id: Option<Uuid>,

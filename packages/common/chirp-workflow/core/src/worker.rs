@@ -53,7 +53,7 @@ impl Worker {
 		);
 
 		let shared_client = chirp_client::SharedClient::from_env(pools.clone())?;
-		let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
+		let cache = rivet_cache::CacheInner::from_env(&config, pools.clone())?;
 
 		let mut wake_sub = { self.db.wake_sub().await? };
 

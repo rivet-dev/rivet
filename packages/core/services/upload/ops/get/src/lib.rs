@@ -65,7 +65,10 @@ async fn handle(
 					.await?;
 
 					for row in uploads {
-						cache.resolve(&row.upload_id.clone(), row.into());
+						// Don't resolve if incomplete
+						if row.complete_ts.is_some() {
+							cache.resolve(&row.upload_id.clone(), row.into());
+						}
 					}
 
 					Ok(cache)

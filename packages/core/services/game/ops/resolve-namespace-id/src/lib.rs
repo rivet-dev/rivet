@@ -21,7 +21,6 @@ async fn handle(
 
 	let caches = ctx
 		.cache()
-		.immutable()
 		.fetch_all_proto(
 			"game_ids_from_namespace_ids",
 			namespace_ids,

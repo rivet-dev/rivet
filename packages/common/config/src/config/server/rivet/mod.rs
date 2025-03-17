@@ -94,6 +94,9 @@ pub struct Rivet {
 	pub status: Option<Status>,
 
 	#[serde(default)]
+	pub cache: Cache,
+
+	#[serde(default)]
 	pub tunnel: Tunnel,
 
 	#[serde(default)]
@@ -133,8 +136,9 @@ impl Default for Rivet {
 			default_cluster_id: None,
 			clusters: None,
 			provision: None,
-			tunnel: Default::default(),
-			ui: Default::default(),
+			tunnel: Tunnel::default(),
+			cache: Cache::default(),
+			ui: Ui::default(),
 			pegboard: Pegboard::default(),
 			guard: Guard::default(),
 			job_run: None,
@@ -625,6 +629,28 @@ impl Default for Tunnel {
 			public_host: format!("127.0.0.1:{}", default_ports::TUNNEL),
 		}
 	}
+}
+
+/// Configuration for the cache layer.
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct Cache {
+	pub driver: CacheDriver,
+}
+
+impl Default for Cache {
+	fn default() -> Cache {
+		Self {
+			driver: CacheDriver::Redis,
+		}
+	}
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum CacheDriver {
+	Redis,
+	InMemory,
 }
 
 /// Configuration for the UI service.

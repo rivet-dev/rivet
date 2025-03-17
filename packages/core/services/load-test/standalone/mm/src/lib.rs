@@ -73,7 +73,7 @@ pub async fn run_from_env(
 	_ts: i64,
 ) -> GlobalResult<()> {
 	let client = chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("load-test-mm");
-	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
+	let cache = rivet_cache::CacheInner::from_env(&config, pools.clone())?;
 	let ctx = OperationContext::new(
 		"load-test-mm".into(),
 		std::time::Duration::from_secs(60),

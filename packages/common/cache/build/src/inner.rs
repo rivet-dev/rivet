@@ -3,13 +3,14 @@ use std::{fmt::Debug, sync::Arc};
 use rivet_pools::prelude::*;
 
 use super::*;
+use crate::driver::{Driver, InMemoryDriver, RedisDriver};
 
 pub type Cache = Arc<CacheInner>;
 
 /// Utility type used to hold information relating to caching.
 pub struct CacheInner {
 	service_name: String,
-	pub(crate) redis_conn: RedisPool,
+	pub(crate) driver: Driver,
 }
 
 impl Debug for CacheInner {
@@ -21,51 +22,41 @@ impl Debug for CacheInner {
 }
 
 impl CacheInner {
-	#[tracing::instrument(skip(pools))]
-	pub fn from_env(pools: rivet_pools::Pools) -> Result<Cache, Error> {
+	#[tracing::instrument(skip_all)]
+	pub fn from_env(
+		config: &rivet_config::Config,
+		pools: rivet_pools::Pools,
+	) -> Result<Cache, Error> {
 		let service_name = rivet_env::service_name();
-		let redis_cache = pools.redis_cache().map_err(Error::Pools)?;
 
-		Ok(Self::new(service_name.to_string(), redis_cache))
+		match config.server().map_err(Error::Config)?.rivet.cache.driver {
+			rivet_config::config::CacheDriver::Redis => {
+				let redis_cache = pools.redis_cache().map_err(Error::Pools)?;
+
+				Ok(Self::new_redis(service_name.to_string(), redis_cache))
+			}
+			rivet_config::config::CacheDriver::InMemory => {
+				Ok(Self::new_in_memory(service_name.to_string(), 1000))
+			}
+		}
 	}
 
 	#[tracing::instrument(skip(redis_conn))]
-	pub fn new(service_name: String, redis_conn: RedisPool) -> Cache {
+	pub fn new_redis(service_name: String, redis_conn: RedisPool) -> Cache {
+		let driver = Driver::Redis(RedisDriver::new(service_name.clone(), redis_conn));
 		Arc::new(CacheInner {
 			service_name,
-			redis_conn,
+			driver,
 		})
 	}
 
-	pub fn redis(&self) -> RedisPool {
-		self.redis_conn.clone()
-	}
-
-	pub(crate) fn build_redis_cache_key<K>(&self, base_key: &str, key: &K) -> String
-	where
-		K: CacheKey,
-	{
-		format!("{{key:{}}}:{}", base_key, key.simple_cache_key())
-	}
-
-	// pub(crate) fn build_redis_topic_key(&self, base_key: &str, key: &impl CacheKey) -> String {
-	// 	format!("{{topic:{}}}:{}:keys", base_key, key.simple_cache_key())
-	// }
-
-	pub(crate) fn build_redis_rate_limit_key(
-		&self,
-		key: &impl CacheKey,
-		remote_address: impl AsRef<str>,
-		bucket: i64,
-		bucket_duration_ms: i64,
-	) -> String {
-		format!(
-			"{{global}}:cache:rate_limit:{}:{}:{}:{}",
-			key.simple_cache_key(),
-			remote_address.as_ref(),
-			bucket_duration_ms,
-			bucket,
-		)
+	#[tracing::instrument]
+	pub fn new_in_memory(service_name: String, max_capacity: u64) -> Cache {
+		let driver = Driver::InMemory(InMemoryDriver::new(service_name.clone(), max_capacity));
+		Arc::new(CacheInner {
+			service_name,
+			driver,
+		})
 	}
 }
 

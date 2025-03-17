@@ -25,5 +25,7 @@ pub async fn ds_game_config_upsert(ctx: &OperationCtx, input: &Input) -> GlobalR
 	)
 	.await?;
 
+	ctx.cache().purge("pegboard.game_config", [input.game_id]).await?;
+
 	Ok(())
 }

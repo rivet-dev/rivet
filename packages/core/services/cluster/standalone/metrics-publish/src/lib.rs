@@ -64,7 +64,7 @@ pub async fn run_from_env(
 ) -> GlobalResult<()> {
 	let client =
 		chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("cluster-metrics-publish");
-	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
+	let cache = rivet_cache::CacheInner::from_env(&config, pools.clone())?;
 	let ctx = StandaloneCtx::new(
 		db::DatabaseCrdbNats::from_pools(pools.clone())?,
 		config,

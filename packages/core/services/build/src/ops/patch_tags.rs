@@ -157,5 +157,7 @@ pub async fn patch_tags(ctx: &OperationCtx, input: &Input) -> GlobalResult<Outpu
 	})
 	.await?;
 
+	ctx.cache().purge("build", [input.build_id]).await?;
+
 	Ok(Output {})
 }

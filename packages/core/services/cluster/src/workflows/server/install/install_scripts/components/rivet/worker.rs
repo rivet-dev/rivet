@@ -7,7 +7,7 @@ use super::{
 	super::{
 		fdb::FDB_VERSION,
 		traefik::{
-			TUNNEL_CLICKHOUSE_NATIVE_PORT, TUNNEL_CLICKHOUSE_PORT, TUNNEL_CRDB_PORT,
+			TUNNEL_CRDB_PORT,
 			TUNNEL_NATS_PORT, TUNNEL_OTEL_PORT, TUNNEL_PROMETHEUS_PORT,
 			TUNNEL_REDIS_EPHEMERAL_PORT, TUNNEL_REDIS_PERSISTENT_PORT, TUNNEL_S3_PORT,
 		},
@@ -56,6 +56,9 @@ pub fn configure(config: &rivet_config::Config) -> GlobalResult<String> {
 					public_origin: Some(server_config.rivet.edge_api_url("___DATACENTER_NAME_ID___")?),
 					respect_forwarded_for: Some(true),
 					..server_config.rivet.api_public.clone()
+				},
+				cache: Cache {
+					driver: CacheDriver::InMemory,
 				},
 				ui: Ui {
 					enable: Some(false),

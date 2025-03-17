@@ -21,7 +21,6 @@ async fn handle(
 
 	let regions = ctx
 		.cache()
-		.immutable()
 		.fetch_all_proto(
 			"mm.lobby_runtime",
 			namespace_ids,

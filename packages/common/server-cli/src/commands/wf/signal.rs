@@ -66,6 +66,7 @@ impl SubCommand {
 pub enum SignalState {
 	Acked,
 	Pending,
+	Silenced,
 }
 
 impl From<SignalState> for OtherSignalState {
@@ -73,6 +74,7 @@ impl From<SignalState> for OtherSignalState {
 		match state {
 			SignalState::Acked => OtherSignalState::Acked,
 			SignalState::Pending => OtherSignalState::Pending,
+			SignalState::Silenced => OtherSignalState::Silenced,
 		}
 	}
 }

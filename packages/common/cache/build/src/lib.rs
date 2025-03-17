@@ -1,3 +1,4 @@
+mod driver;
 mod error;
 mod getter_ctx;
 mod inner;
@@ -6,6 +7,8 @@ mod metrics;
 mod rate_limit;
 mod req_config;
 
+// Re-export public API
+pub use driver::*;
 pub use error::*;
 pub use getter_ctx::*;
 pub use inner::*;

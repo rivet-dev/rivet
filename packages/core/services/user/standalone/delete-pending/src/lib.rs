@@ -15,7 +15,7 @@ pub async fn run_from_env(
 ) -> GlobalResult<()> {
 	let client =
 		chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("user-delete-pending");
-	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
+	let cache = rivet_cache::CacheInner::from_env(&config, pools.clone())?;
 	let ctx = OperationContext::new(
 		"user-delete-pending".into(),
 		std::time::Duration::from_secs(60),

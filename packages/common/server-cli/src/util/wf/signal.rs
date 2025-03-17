@@ -53,7 +53,7 @@ fn display_state(state: &SignalState) -> String {
 	match state {
 		SignalState::Acked => style("ack'd").bright().blue().to_string(),
 		SignalState::Pending => style("pending").yellow().to_string(),
-		SignalState::Silenced => style("silenced").magenta().to_string(),
+		SignalState::Silenced => style("silenced").bright().magenta().to_string(),
 	}
 }
 

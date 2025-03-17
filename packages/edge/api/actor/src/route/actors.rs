@@ -98,7 +98,14 @@ pub async fn create(
 		ctx.op(pegboard::ops::game_config::get::Input {
 			game_ids: vec![game_id],
 		}),
-		resolve_build(&ctx, game_id, env_id, body.build, body.build_tags.flatten()),
+		resolve_build(
+			&ctx,
+			game_id,
+			env_id,
+			body.build,
+			body.build_tags.flatten(),
+			false
+		),
 	)?;
 	let game_config = unwrap!(game_configs_res.game_configs.first());
 
@@ -331,7 +338,15 @@ pub async fn upgrade(
 
 	assert::actor_for_env(&ctx, actor_id, game_id, env_id, None).await?;
 
-	let build = resolve_build(&ctx, game_id, env_id, body.build, body.build_tags.flatten()).await?;
+	let build = resolve_build(
+		&ctx,
+		game_id,
+		env_id,
+		body.build,
+		body.build_tags.flatten(),
+		true,
+	)
+	.await?;
 
 	// TODO: Add back once we figure out how to cleanly handle if a wf is already complete when
 	// upgrading
@@ -410,7 +425,15 @@ pub async fn upgrade_all(
 		);
 	}
 
-	let build = resolve_build(&ctx, game_id, env_id, body.build, body.build_tags.flatten()).await?;
+	let build = resolve_build(
+		&ctx,
+		game_id,
+		env_id,
+		body.build,
+		body.build_tags.flatten(),
+		true,
+	)
+	.await?;
 
 	// Work in batches
 	let mut count = 0;
@@ -576,6 +599,7 @@ async fn resolve_build(
 	env_id: Uuid,
 	build_id: Option<Uuid>,
 	build_tags: Option<serde_json::Value>,
+	bypass_cache: bool,
 ) -> GlobalResult<build::types::Build> {
 	match (build_id, build_tags) {
 		(Some(build_id), None) => {
@@ -640,6 +664,7 @@ async fn resolve_build(
 				.op(build::ops::resolve_for_tags::Input {
 					env_id,
 					tags: build_tags,
+					bypass_cache,
 				})
 				.await?;
 

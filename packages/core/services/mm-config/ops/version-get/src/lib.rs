@@ -57,7 +57,6 @@ async fn handle(
 	// version, can't figure this out
 	let versions = ctx
 		.cache()
-		.immutable()
 		.fetch_all_proto("versions", req_version_ids, |mut cache, req_version_ids| {
 			let ctx = ctx.base();
 

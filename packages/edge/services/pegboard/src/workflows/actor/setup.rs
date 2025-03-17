@@ -92,6 +92,7 @@ pub async fn validate(ctx: &ActivityCtx, input: &ValidateInput) -> GlobalResult<
 		return Ok(Some("Too many resources allocated.".into()));
 	}
 
+	// TODO: Validate build belongs to env/game
 	let Some((build, upload_complete)) = upload_res else {
 		return Ok(Some("Build not found.".into()));
 	};
@@ -474,7 +475,6 @@ pub struct GetMetaOutput {
 async fn get_meta(ctx: &ActivityCtx, input: &GetMetaInput) -> GlobalResult<GetMetaOutput> {
 	let dc_id = ctx.config().server()?.rivet.edge()?.datacenter_id;
 
-	// Validate build exists and belongs to this game
 	let (env_res, build_res, dc_res) = tokio::try_join!(
 		op!([ctx] game_namespace_get {
 			namespace_ids: vec![input.env_id.into()],

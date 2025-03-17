@@ -32,7 +32,6 @@ async fn handle(
 
 	let versions = ctx
 		.cache()
-		.immutable()
 		.fetch_all_proto("version_id", version_ids, |mut cache, version_ids| {
 			let ctx = ctx.base();
 			async move {
@@ -50,10 +49,9 @@ async fn handle(
 
 				for row in versions {
 					let version_id = row.version_id;
-					cache.resolve_with_topic(
+					cache.resolve(
 						&version_id,
 						Into::<backend::game::Version>::into(row),
-						("game_versions", &version_id),
 					);
 				}
 

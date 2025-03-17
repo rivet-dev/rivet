@@ -13,7 +13,7 @@ pub async fn run_from_env(
 	pools: rivet_pools::Pools,
 ) -> GlobalResult<()> {
 	let client = chirp_client::SharedClient::from_env(pools.clone())?.wrap_new("nomad-monitor");
-	let cache = rivet_cache::CacheInner::from_env(pools.clone())?;
+	let cache = rivet_cache::CacheInner::from_env(&config, pools.clone())?;
 	let redis_job = pools.redis("persistent")?;
 	let ctx = StandaloneCtx::new(
 		db::DatabaseCrdbNats::from_pools(pools.clone())?,
