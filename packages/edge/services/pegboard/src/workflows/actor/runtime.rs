@@ -660,6 +660,10 @@ pub async fn reschedule_actor(
 		Ok((client_id, client_workflow_id)) => {
 			state.client_id = client_id;
 			state.client_workflow_id = client_workflow_id;
+
+			// Reset gc timeout once allocated
+			state.gc_timeout_ts = Some(util::timestamp::now() + ACTOR_START_THRESHOLD_MS);
+
 			Ok(None)
 		}
 		Err(sig) => Ok(Some(sig)),

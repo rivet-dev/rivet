@@ -310,6 +310,17 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 									} else {
 										ctx.activity(runtime::SetFinishedInput {}).await?;
 
+										if let protocol::ActorState::Lost = sig.state {
+											ctx.msg(Failed {
+												message:
+													"Actor timed out trying to reach a ready state."
+														.into(),
+											})
+											.tag("actor_id", input.actor_id)
+											.send()
+											.await?;
+										}
+
 										return Ok(Loop::Break(runtime::StateRes {
 											// No need to kill if already exited
 											kill: matches!(sig.state, protocol::ActorState::Lost)
