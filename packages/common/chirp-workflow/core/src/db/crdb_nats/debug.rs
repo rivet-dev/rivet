@@ -33,6 +33,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 				workflow_name,
 				COALESCE(tags, '{}'::JSONB) AS tags,
 				create_ts,
+				silence_ts,
 				input,
 				output,
 				error,
@@ -81,7 +82,6 @@ impl DatabaseDebug for DatabaseCrdbNats {
 			FROM db_workflow.workflows
 			WHERE
 				($1 IS NULL OR workflow_name = $1) AND
-				silence_ts IS NULL AND
 				-- Complete
 				(NOT $2 OR output IS NOT NULL) AND
 				-- Running
@@ -108,7 +108,8 @@ impl DatabaseDebug for DatabaseCrdbNats {
 					wake_deadline_ts IS NULL AND
 					cardinality(wake_signals) = 0 AND
 					wake_sub_workflow_id IS NULL
-				))
+				)) AND
+				(CASE WHEN $6 THEN silence_ts IS NULL ELSE silence_ts IS NOT NULL END)
 			"
 		)
 		.to_string();
@@ -118,7 +119,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 		// strings with `->>` whereas with @> and `serde_json::Map` we would have to know the type of the input
 		// given.
 		for i in 0..tags.len() {
-			let idx = i * 2 + 6;
+			let idx = i * 2 + 7;
 			let idx2 = idx + 1;
 
 			query_str.push_str(&format!(" AND tags->>${idx} = ${idx2}"));
@@ -131,7 +132,8 @@ impl DatabaseDebug for DatabaseCrdbNats {
 			.bind(matches!(state, Some(WorkflowState::Complete)))
 			.bind(matches!(state, Some(WorkflowState::Running)))
 			.bind(matches!(state, Some(WorkflowState::Sleeping)))
-			.bind(matches!(state, Some(WorkflowState::Dead)));
+			.bind(matches!(state, Some(WorkflowState::Dead)))
+			.bind(matches!(state, Some(WorkflowState::Silenced)));
 
 		for (key, value) in tags {
 			query = query.bind(key);
@@ -340,7 +342,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 					NULL AS auxiliary_id,
 					NULL AS auxiliary_id2,
 					state AS input,
-					NULL AS output,
+					output,
 					iteration,
 					NULL AS deadline_ts,
 					NULL AS state,
@@ -511,6 +513,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 				NULL AS tags,
 				workflow_id,
 				create_ts,
+				silence_ts,
 				body,
 				ack_ts
 			FROM db_workflow.signals
@@ -534,11 +537,11 @@ impl DatabaseDebug for DatabaseCrdbNats {
 			FROM db_workflow.tagged_signals
 			WHERE
 				($1 IS NULL OR signal_name = $1) AND
-				silence_ts IS NULL AND
 				-- Acked
 				(NOT $3 OR ack_ts IS NOT NULL) AND
 				-- Pending
-				(NOT $4 OR ack_ts IS NULL)
+				(NOT $4 OR ack_ts IS NULL) AND
+				(CASE WHEN $5 THEN silence_ts IS NULL ELSE silence_ts IS NOT NULL END)
 			"
 		)
 		.to_string();
@@ -547,7 +550,7 @@ impl DatabaseDebug for DatabaseCrdbNats {
 		// strings with `->>` whereas with @> and `serde_json::Map` we would have to know the type of the input
 		// given.
 		for i in 0..tags.len() {
-			let idx = i * 2 + 5;
+			let idx = i * 2 + 6;
 			let idx2 = idx + 1;
 
 			query_str.push_str(&format!(" AND tags->>${idx} = ${idx2}"));
@@ -555,18 +558,12 @@ impl DatabaseDebug for DatabaseCrdbNats {
 
 		query_str.push_str("LIMIT 100");
 
-		// eprintln!(
-		// 	"{query_str} {name:?} {workflow_id:?} {} {} {}",
-		// 	tags.is_empty(),
-		// 	matches!(state, Some(SignalState::Acked)),
-		// 	matches!(state, Some(SignalState::Pending))
-		// );
-
 		let mut query = sqlx::query_as::<_, SignalRow>(&query_str)
 			.bind(name)
 			.bind(workflow_id)
 			.bind(matches!(state, Some(SignalState::Acked)))
-			.bind(matches!(state, Some(SignalState::Pending)));
+			.bind(matches!(state, Some(SignalState::Pending)))
+			.bind(matches!(state, Some(SignalState::Silenced)));
 
 		for (key, value) in tags {
 			query = query.bind(key);
@@ -614,6 +611,7 @@ struct WorkflowRow {
 	workflow_name: String,
 	tags: serde_json::Value,
 	create_ts: i64,
+	silence_ts: Option<i64>,
 	input: serde_json::Value,
 	output: Option<serde_json::Value>,
 	error: Option<String>,
@@ -624,7 +622,9 @@ struct WorkflowRow {
 
 impl From<WorkflowRow> for WorkflowData {
 	fn from(row: WorkflowRow) -> Self {
-		let state = if row.output.is_some() {
+		let state = if row.silence_ts.is_some() {
+			WorkflowState::Silenced
+		} else if row.output.is_some() {
 			WorkflowState::Complete
 		} else if row.is_active {
 			WorkflowState::Running
@@ -831,13 +831,16 @@ pub struct SignalRow {
 	tags: Option<serde_json::Value>,
 	workflow_id: Option<Uuid>,
 	create_ts: i64,
+	silence_ts: Option<i64>,
 	body: serde_json::Value,
 	ack_ts: Option<i64>,
 }
 
 impl From<SignalRow> for SignalData {
 	fn from(row: SignalRow) -> Self {
-		let state = if row.ack_ts.is_some() {
+		let state = if row.silence_ts.is_some() {
+			SignalState::Silenced
+		} else if row.ack_ts.is_some() {
 			SignalState::Acked
 		} else {
 			SignalState::Pending

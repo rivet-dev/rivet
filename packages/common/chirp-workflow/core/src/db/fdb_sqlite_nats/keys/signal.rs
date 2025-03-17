@@ -346,3 +346,52 @@ impl TuplePack for DataSubspaceKey {
 		t.pack(w, tuple_depth)
 	}
 }
+
+#[derive(Debug)]
+pub struct SilenceTsKey {
+	signal_id: Uuid,
+}
+
+impl SilenceTsKey {
+	pub fn new(signal_id: Uuid) -> Self {
+		SilenceTsKey { signal_id }
+	}
+}
+
+impl FormalKey for SilenceTsKey {
+	// Timestamp.
+	type Value = i64;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		Ok(i64::from_be_bytes(raw.try_into()?))
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok(value.to_be_bytes().to_vec())
+	}
+}
+
+impl TuplePack for SilenceTsKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (SIGNAL, DATA, self.signal_id, SILENCE_TS);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for SilenceTsKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, signal_id, data)) =
+			<(usize, usize, Uuid, usize)>::unpack(input, tuple_depth)?;
+		if data != SILENCE_TS {
+			return Err(PackError::Message("expected SILENCE_TS data".into()));
+		}
+
+		let v = SilenceTsKey { signal_id };
+
+		Ok((input, v))
+	}
+}

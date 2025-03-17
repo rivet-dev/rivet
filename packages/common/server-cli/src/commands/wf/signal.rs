@@ -26,7 +26,7 @@ pub enum SubCommand {
 		pretty: bool,
 	},
 	/// Silences a signal from showing up as dead or running again.
-	Ack { signal_ids: Vec<Uuid> },
+	Silence { signal_ids: Vec<Uuid> },
 }
 
 impl SubCommand {
@@ -56,7 +56,7 @@ impl SubCommand {
 					.await?;
 				util::wf::signal::print_signals(signals, pretty).await
 			}
-			Self::Ack { signal_ids } => db.silence_signals(signal_ids).await,
+			Self::Silence { signal_ids } => db.silence_signals(signal_ids).await,
 		}
 	}
 }

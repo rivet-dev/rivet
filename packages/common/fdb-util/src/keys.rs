@@ -14,7 +14,7 @@ pub const WAKE_SIGNAL: usize = 12;
 pub const WAKE_DEADLINE: usize = 13;
 pub const ACK_TS: usize = 14;
 pub const CREATE_TS: usize = 15;
-
+pub const SILENCE_TS: usize = 16;
 pub const PENDING: usize = 17;
 pub const RAY_ID: usize = 18;
 pub const NAME: usize = 19;
@@ -71,6 +71,7 @@ pub fn key_from_str(key: &str) -> Option<usize> {
 		"wake_deadline" => Some(WAKE_DEADLINE),
 		"ack_ts" => Some(ACK_TS),
 		"create_ts" => Some(CREATE_TS),
+		"silence_ts" => Some(SILENCE_TS),
 		"pending" => Some(PENDING),
 		"ray_id" => Some(RAY_ID),
 		"name" => Some(NAME),

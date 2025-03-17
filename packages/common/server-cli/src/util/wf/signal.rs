@@ -30,11 +30,12 @@ pub async fn print_signals(signals: Vec<SignalData>, pretty: bool) -> Result<()>
 
 			println!("  {} {}", style("created at").bold(), style(date).magenta());
 
-			print!("  {} ", style("state").bold());
-			match signal.state {
-				SignalState::Acked => println!("{}", style("ack'd").bright().blue()),
-				SignalState::Pending => println!("{}", style("pending").yellow()),
-			}
+			println!(
+				"  {} {}",
+				style("state").bold(),
+				display_state(&signal.state)
+			);
+
 			println!(
 				"  {} {}",
 				style("body").bold(),
@@ -48,13 +49,21 @@ pub async fn print_signals(signals: Vec<SignalData>, pretty: bool) -> Result<()>
 	Ok(())
 }
 
+fn display_state(state: &SignalState) -> String {
+	match state {
+		SignalState::Acked => style("ack'd").bright().blue().to_string(),
+		SignalState::Pending => style("pending").yellow().to_string(),
+		SignalState::Silenced => style("silenced").magenta().to_string(),
+	}
+}
+
 mod table {
 	use anyhow::*;
 	use chirp_workflow::db::debug::{SignalData, SignalState};
-	use rivet_term::console::style;
 	use tabled::Tabled;
 	use uuid::Uuid;
 
+	use super::display_state;
 	use crate::util::format::colored_json_ugly;
 
 	#[derive(Tabled)]
@@ -91,12 +100,5 @@ mod table {
 		rivet_term::format::table(rows);
 
 		Ok(())
-	}
-
-	fn display_state(state: &SignalState) -> String {
-		match state {
-			SignalState::Acked => style("ack'd").bright().blue().to_string(),
-			SignalState::Pending => style("pending").yellow().to_string(),
-		}
 	}
 }

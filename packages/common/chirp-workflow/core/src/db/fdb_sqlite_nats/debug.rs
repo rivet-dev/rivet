@@ -1,8 +1,8 @@
 use anyhow::*;
-use fdb_util::{FormalChunkedKey, FormalKey, SNAPSHOT};
+use fdb_util::{end_of_key_range, FormalChunkedKey, FormalKey, SERIALIZABLE, SNAPSHOT};
 use foundationdb::{
 	self as fdb,
-	options::StreamingMode,
+	options::{ConflictRangeType, StreamingMode},
 	tuple::{PackResult, TupleDepth, TupleUnpack},
 };
 use futures_util::{StreamExt, TryStreamExt};
@@ -57,7 +57,8 @@ impl DatabaseFdbSqliteNats {
 			let output_subspace = self.subspace.subspace(&output_key);
 			let error_key = keys::workflow::ErrorKey::new(workflow_id);
 			let has_wake_condition_key = keys::workflow::HasWakeConditionKey::new(workflow_id);
-			let lease_key = keys::workflow::LeaseKey::new(workflow_id);
+			let worker_instance_id_key = keys::workflow::WorkerInstanceIdKey::new(workflow_id);
+			let silence_ts_key = keys::workflow::SilenceTsKey::new(workflow_id);
 
 			let (
 				tags,
@@ -67,7 +68,8 @@ impl DatabaseFdbSqliteNats {
 				output_chunks,
 				error_entry,
 				has_wake_condition_entry,
-				lease_entry,
+				worker_instance_id_entry,
+				silence_ts_entry,
 			) = tokio::try_join!(
 				tx.get_ranges_keyvalues(
 					fdb::RangeOption {
@@ -134,7 +136,12 @@ impl DatabaseFdbSqliteNats {
 						.map_err(Into::into)
 				},
 				async {
-					tx.get(&self.subspace.pack(&lease_key), SNAPSHOT)
+					tx.get(&self.subspace.pack(&worker_instance_id_key), SNAPSHOT)
+						.await
+						.map_err(Into::into)
+				},
+				async {
+					tx.get(&self.subspace.pack(&silence_ts_key), SNAPSHOT)
 						.await
 						.map_err(Into::into)
 				},
@@ -179,9 +186,11 @@ impl DatabaseFdbSqliteNats {
 				None
 			};
 
-			let state = if output.is_some() {
+			let state = if silence_ts_entry.is_some() {
+				WorkflowState::Silenced
+			} else if output.is_some() {
 				WorkflowState::Complete
-			} else if lease_entry.is_some() {
+			} else if worker_instance_id_entry.is_some() {
 				WorkflowState::Running
 			} else if has_wake_condition_entry.is_some() {
 				WorkflowState::Sleeping
@@ -216,16 +225,24 @@ impl DatabaseFdbSqliteNats {
 	) -> std::result::Result<Vec<SignalData>, fdb::FdbBindingError> {
 		let mut res = Vec::new();
 
+		// TODO: Parallelize
 		for signal_id in signal_ids {
-			// NOTE: Do a single range read instead
 			let name_key = keys::signal::NameKey::new(signal_id);
 			let create_ts_key = keys::signal::CreateTsKey::new(signal_id);
 			let body_key = keys::signal::BodyKey::new(signal_id);
 			let body_subspace = self.subspace.subspace(&body_key);
 			let ack_ts_key = keys::signal::AckTsKey::new(signal_id);
+			let silence_ts_key = keys::signal::SilenceTsKey::new(signal_id);
 			let workflow_id_key = keys::signal::WorkflowIdKey::new(signal_id);
 
-			let (name_entry, workflow_id_entry, create_ts_entry, body_chunks, ack_ts_entry) = tokio::try_join!(
+			let (
+				name_entry,
+				workflow_id_entry,
+				create_ts_entry,
+				body_chunks,
+				ack_ts_entry,
+				silence_ts_entry,
+			) = tokio::try_join!(
 				tx.get(&self.subspace.pack(&name_key), SNAPSHOT),
 				tx.get(&self.subspace.pack(&workflow_id_key), SNAPSHOT),
 				tx.get(&self.subspace.pack(&create_ts_key), SNAPSHOT),
@@ -241,6 +258,7 @@ impl DatabaseFdbSqliteNats {
 					.await
 				},
 				tx.get(&self.subspace.pack(&ack_ts_key), SNAPSHOT),
+				tx.get(&self.subspace.pack(&silence_ts_key), SNAPSHOT),
 			)?;
 
 			let Some(create_ts_entry) = &create_ts_entry else {
@@ -272,7 +290,9 @@ impl DatabaseFdbSqliteNats {
 				None
 			};
 
-			let state = if ack_ts_entry.is_some() {
+			let state = if silence_ts_entry.is_some() {
+				SignalState::Silenced
+			} else if ack_ts_entry.is_some() {
 				SignalState::Acked
 			} else {
 				SignalState::Pending
@@ -416,6 +436,14 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 								Some(WorkflowState::Dead) => state_matches = false,
 								_ => {}
 							}
+						} else if let Ok(_) = self
+							.subspace
+							.unpack::<keys::workflow::SilenceTsKey>(entry.key())
+						{
+							match state {
+								Some(WorkflowState::Silenced) => state_matches = true,
+								_ => state_matches = false,
+							}
 						}
 					}
 
@@ -437,8 +465,208 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 	}
 
 	#[tracing::instrument(skip_all)]
-	async fn silence_workflows(&self, _workflow_ids: Vec<Uuid>) -> Result<()> {
-		todo!("silence wf is not implemented for fdb driver")
+	async fn silence_workflows(&self, workflow_ids: Vec<Uuid>) -> Result<()> {
+		self.pools
+			.fdb()?
+			.run(|tx, _mc| {
+				let workflow_ids = workflow_ids.clone();
+
+				async move {
+					// TODO: Parallelize
+					for workflow_id in workflow_ids {
+						let sub_workflow_wake_subspace = self
+							.subspace
+							.subspace(&keys::wake::SubWorkflowWakeKey::subspace(workflow_id));
+						let tags_subspace = self
+							.subspace
+							.subspace(&keys::workflow::TagKey::subspace(workflow_id));
+						let name_key = keys::workflow::NameKey::new(workflow_id);
+						let worker_instance_id_key =
+							keys::workflow::WorkerInstanceIdKey::new(workflow_id);
+						let silence_ts_key = keys::workflow::SilenceTsKey::new(workflow_id);
+						let wake_sub_workflow_key =
+							keys::workflow::WakeSubWorkflowKey::new(workflow_id);
+
+						let Some(name_entry) =
+							tx.get(&self.subspace.pack(&name_key), SERIALIZABLE).await?
+						else {
+							tracing::warn!(?workflow_id, "workflow not found");
+							continue;
+						};
+
+						let workflow_name = name_key
+							.deserialize(&name_entry)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+						let wake_conditions_subspace = self.subspace.subspace(
+							&keys::wake::WorkflowWakeConditionKey::subspace_without_ts(
+								workflow_name.clone(),
+							),
+						);
+
+						let (
+							sub_workflow_wake_keys,
+							tag_keys,
+							wake_condition_keys,
+							worker_instance_id_entry,
+							silence_ts_entry,
+							wake_sub_workflow_entry,
+						) = tokio::try_join!(
+							// Read sub workflow wake conditions
+							tx.get_ranges_keyvalues(
+								fdb::RangeOption {
+									mode: StreamingMode::WantAll,
+									..(&sub_workflow_wake_subspace).into()
+								},
+								SERIALIZABLE,
+							)
+							.map(|res| match res {
+								Ok(entry) => self
+									.subspace
+									.unpack::<keys::wake::SubWorkflowWakeKey>(entry.key())
+									.map_err(|x| fdb::FdbBindingError::CustomError(x.into())),
+								Err(err) => Err(Into::<fdb::FdbBindingError>::into(err)),
+							})
+							.try_collect::<Vec<_>>(),
+							// Read tags
+							tx.get_ranges_keyvalues(
+								fdb::RangeOption {
+									mode: StreamingMode::WantAll,
+									..(&tags_subspace).into()
+								},
+								SERIALIZABLE,
+							)
+							.map(|res| match res {
+								Ok(entry) => self
+									.subspace
+									.unpack::<keys::workflow::TagKey>(entry.key())
+									.map_err(|x| fdb::FdbBindingError::CustomError(x.into())),
+								Err(err) => Err(Into::<fdb::FdbBindingError>::into(err)),
+							})
+							.try_collect::<Vec<_>>(),
+							// Read wake conditions
+							tx.get_ranges_keyvalues(
+								fdb::RangeOption {
+									mode: StreamingMode::WantAll,
+									..(&wake_conditions_subspace).into()
+								},
+								SNAPSHOT,
+							)
+							.map(|res| match res {
+								Ok(entry) => Ok((
+									entry.key().to_vec(),
+									self.subspace
+										.unpack::<keys::wake::WorkflowWakeConditionKey>(entry.key())
+										.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+								)),
+								Err(err) => Err(Into::<fdb::FdbBindingError>::into(err)),
+							})
+							.try_collect::<Vec<_>>(),
+							async {
+								tx.get(&self.subspace.pack(&worker_instance_id_key), SERIALIZABLE)
+									.await
+									.map_err(Into::into)
+							},
+							async {
+								tx.get(&self.subspace.pack(&silence_ts_key), SERIALIZABLE)
+									.await
+									.map_err(Into::into)
+							},
+							async {
+								tx.get(&self.subspace.pack(&wake_sub_workflow_key), SERIALIZABLE)
+									.await
+									.map_err(Into::into)
+							},
+						)?;
+
+						if silence_ts_entry.is_some() {
+							continue;
+						}
+
+						if worker_instance_id_entry.is_some() {
+							return Err(fdb::FdbBindingError::CustomError(
+								"cannot silence a running workflow with the fdb driver".into(),
+							));
+						}
+
+						for key in sub_workflow_wake_keys {
+							tracing::warn!(
+							"workflow {} is being waited on by sub workflow {}, silencing anyway",
+							key.workflow_id,
+							key.sub_workflow_id
+						);
+						}
+
+						for key in tag_keys {
+							let by_name_and_tag_key = keys::workflow::ByNameAndTagKey::new(
+								workflow_name.clone(),
+								key.k,
+								key.v,
+								workflow_id,
+							);
+							tx.clear(&self.subspace.pack(&by_name_and_tag_key));
+						}
+
+						// Clear null key
+						{
+							let by_name_and_tag_key = keys::workflow::ByNameAndTagKey::null(
+								workflow_name.clone(),
+								workflow_id,
+							);
+							tx.clear(&self.subspace.pack(&by_name_and_tag_key));
+						}
+
+						// Clear wake conditions
+						for (raw_key, key) in wake_condition_keys {
+							if key.workflow_id != workflow_id {
+								continue;
+							}
+
+							tx.add_conflict_range(
+								&raw_key,
+								&end_of_key_range(&raw_key),
+								ConflictRangeType::Read,
+							)?;
+
+							tx.clear(&raw_key);
+						}
+
+						// Clear sub workflow secondary idx
+						if let Some(entry) = wake_sub_workflow_entry {
+							let sub_workflow_id = wake_sub_workflow_key
+								.deserialize(&entry)
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+							let sub_workflow_wake_key =
+								keys::wake::SubWorkflowWakeKey::new(sub_workflow_id, workflow_id);
+
+							tx.clear(&self.subspace.pack(&sub_workflow_wake_key));
+						}
+
+						// Clear signals secondary index
+						let wake_signals_subspace = self
+							.subspace
+							.subspace(&keys::workflow::WakeSignalKey::subspace(workflow_id));
+						tx.clear_subspace_range(&wake_signals_subspace);
+
+						// Clear "has wake condition"
+						let has_wake_condition_key =
+							keys::workflow::HasWakeConditionKey::new(workflow_id);
+						tx.clear(&self.subspace.pack(&has_wake_condition_key));
+
+						tx.set(
+							&self.subspace.pack(&silence_ts_key),
+							&silence_ts_key
+								.serialize(rivet_util::timestamp::now())
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+						);
+					}
+
+					Ok(())
+				}
+			})
+			.await
+			.map_err(Into::into)
 	}
 
 	#[tracing::instrument(skip_all)]
@@ -621,7 +849,7 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 					NULL AS auxiliary_id,
 					NULL AS auxiliary_id2,
 					json(state) AS input,
-					NULL AS output,
+					json(output) AS output,
 					iteration,
 					NULL AS deadline_ts,
 					NULL AS state,
@@ -848,6 +1076,14 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 								Some(SignalState::Pending) => state_matches = false,
 								_ => {}
 							}
+						} else if let Ok(_) = self
+							.subspace
+							.unpack::<keys::signal::SilenceTsKey>(entry.key())
+						{
+							match state {
+								Some(SignalState::Silenced) => state_matches = true,
+								_ => state_matches = false,
+							}
 						}
 					}
 
@@ -869,8 +1105,106 @@ impl DatabaseDebug for DatabaseFdbSqliteNats {
 	}
 
 	#[tracing::instrument(skip_all)]
-	async fn silence_signals(&self, _signal_ids: Vec<Uuid>) -> Result<()> {
-		todo!("silence signal is not implemented for fdb driver")
+	async fn silence_signals(&self, signal_ids: Vec<Uuid>) -> Result<()> {
+		self.pools
+			.fdb()?
+			.run(|tx, _mc| {
+				let signal_ids = signal_ids.clone();
+
+				async move {
+					// TODO: Parallelize
+					for signal_id in signal_ids {
+						let signal_name_key = keys::signal::NameKey::new(signal_id);
+						let create_ts_key = keys::signal::CreateTsKey::new(signal_id);
+						let workflow_id_key = keys::signal::WorkflowIdKey::new(signal_id);
+						let silence_ts_key = keys::signal::SilenceTsKey::new(signal_id);
+
+						let (
+							signal_name_entry,
+							create_ts_entry,
+							workflow_id_entry,
+							silence_ts_entry,
+						) = tokio::try_join!(
+							tx.get(&self.subspace.pack(&signal_name_key), SNAPSHOT),
+							tx.get(&self.subspace.pack(&create_ts_key), SNAPSHOT),
+							tx.get(&self.subspace.pack(&workflow_id_key), SNAPSHOT),
+							tx.get(&self.subspace.pack(&silence_ts_key), SERIALIZABLE),
+						)?;
+
+						if silence_ts_entry.is_some() {
+							continue;
+						}
+
+						let Some(signal_name_entry) = signal_name_entry else {
+							tracing::warn!(?signal_id, "signal not found");
+							continue;
+						};
+
+						let signal_name = signal_name_key
+							.deserialize(&signal_name_entry)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+						let create_ts = create_ts_key
+							.deserialize(&create_ts_entry.ok_or(
+								fdb::FdbBindingError::CustomError(
+									format!("key should exist: {create_ts_key:?}").into(),
+								),
+							)?)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+						let workflow_id = workflow_id_key
+							.deserialize(&workflow_id_entry.ok_or(
+								fdb::FdbBindingError::CustomError(
+									format!("key should exist: {workflow_id_key:?}").into(),
+								),
+							)?)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+						let workflow_name_key = keys::workflow::NameKey::new(workflow_id);
+
+						let workflow_name_entry = tx
+							.get(&self.subspace.pack(&workflow_name_key), SNAPSHOT)
+							.await?;
+
+						let workflow_name = workflow_name_key
+							.deserialize(&workflow_name_entry.ok_or(
+								fdb::FdbBindingError::CustomError(
+									format!("key should exist: {workflow_name_key:?}").into(),
+								),
+							)?)
+							.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+						// Clear pending key
+						let mut pending_signal_key = keys::workflow::PendingSignalKey::new(
+							workflow_id,
+							signal_name.clone(),
+							signal_id,
+						);
+						pending_signal_key.ts = create_ts;
+						tx.clear(&self.subspace.pack(&pending_signal_key));
+
+						// Clear wake condition
+						let mut wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
+							workflow_name,
+							workflow_id,
+							keys::wake::WakeCondition::Signal { signal_id },
+						);
+						wake_condition_key.ts = create_ts;
+						tx.clear(&self.subspace.pack(&wake_condition_key));
+
+						tx.set(
+							&self.subspace.pack(&silence_ts_key),
+							&silence_ts_key
+								.serialize(rivet_util::timestamp::now())
+								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
+						);
+					}
+
+					Ok(())
+				}
+			})
+			.await
+			.map_err(Into::into)
 	}
 }
 

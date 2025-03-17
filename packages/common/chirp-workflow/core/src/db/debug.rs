@@ -59,6 +59,7 @@ pub enum WorkflowState {
 	Running,
 	Sleeping,
 	Dead,
+	Silenced,
 }
 
 #[derive(Debug)]
@@ -191,4 +192,5 @@ pub struct SignalData {
 pub enum SignalState {
 	Acked,
 	Pending,
+	Silenced,
 }

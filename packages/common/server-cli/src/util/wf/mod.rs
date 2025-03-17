@@ -62,13 +62,11 @@ pub async fn print_workflows(
 
 			println!("  {} {}", style("created at").bold(), style(date).magenta());
 
-			print!("  {} ", style("state").bold());
-			match workflow.state {
-				WorkflowState::Complete => println!("{}", style("complete").bright().blue()),
-				WorkflowState::Running => println!("{}", style("running").green()),
-				WorkflowState::Sleeping => println!("{}", style("sleeping").yellow()),
-				WorkflowState::Dead => println!("{}", style("dead").red()),
-			}
+			println!(
+				"  {} {}",
+				style("state").bold(),
+				display_state(&workflow.state)
+			);
 
 			if let Some(error) = workflow.error {
 				println!(
@@ -473,25 +471,37 @@ pub async fn print_history(
 		println!();
 
 		println!("{}", style("Workflow running").green().bold());
+	} else if let WorkflowState::Sleeping = history.wf.state {
+		println!();
+
+		println!("{}", style("Workflow sleeping").yellow().bold());
+
+		if let Some(error) = history.wf.error {
+			println!(
+				"{} reason {}",
+				style("|").yellow().dim(),
+				style(error).green(),
+			);
+		}
+	} else if let WorkflowState::Silenced = history.wf.state {
+		println!();
+
+		println!("{}", style("Workflow silenced").magenta().bold());
+
+		if let Some(error) = history.wf.error {
+			println!(
+				"{} error {}",
+				style("|").magenta().dim(),
+				style(error).green(),
+			);
+		}
 	} else {
 		println!();
 
-		if let WorkflowState::Sleeping = history.wf.state {
-			println!("{}", style("Workflow sleeping").yellow().bold());
+		println!("{}", style("Workflow dead").red().bold());
 
-			if let Some(error) = history.wf.error {
-				println!(
-					"{} reason {}",
-					style("|").yellow().dim(),
-					style(error).green(),
-				);
-			}
-		} else {
-			println!("{}", style("Workflow dead").red().bold());
-
-			if let Some(error) = history.wf.error {
-				println!("{} error {}", style("|").red().dim(), style(error).green(),);
-			}
+		if let Some(error) = history.wf.error {
+			println!("{} error {}", style("|").red().dim(), style(error).green(),);
 		}
 	}
 
@@ -568,13 +578,23 @@ pub fn print_event_name(event: &Event) {
 	}
 }
 
+fn display_state(state: &WorkflowState) -> String {
+	match state {
+		WorkflowState::Complete => style("complete").bright().blue().to_string(),
+		WorkflowState::Running => style("running").green().to_string(),
+		WorkflowState::Sleeping => style("sleeping").yellow().to_string(),
+		WorkflowState::Dead => style("dead").red().to_string(),
+		WorkflowState::Silenced => style("silenced").bright().magenta().to_string(),
+	}
+}
+
 mod table {
 	use anyhow::*;
 	use chirp_workflow::db::debug::{WorkflowData, WorkflowState};
-	use rivet_term::console::style;
 	use tabled::Tabled;
 	use uuid::Uuid;
 
+	use super::display_state;
 	use crate::util::format::colored_json_ugly;
 
 	#[derive(Tabled)]
@@ -604,14 +624,5 @@ mod table {
 		rivet_term::format::table(rows);
 
 		Ok(())
-	}
-
-	fn display_state(state: &WorkflowState) -> String {
-		match state {
-			WorkflowState::Complete => style("complete").bright().blue().to_string(),
-			WorkflowState::Running => style("running").green().to_string(),
-			WorkflowState::Sleeping => style("sleeping").yellow().to_string(),
-			WorkflowState::Dead => style("dead").red().to_string(),
-		}
 	}
 }

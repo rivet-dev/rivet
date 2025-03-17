@@ -300,6 +300,17 @@ impl Database for DatabaseFdbSqliteNats {
 
 						// Worker has not pinged within the threshold, meaning the lease is expired
 						if last_ping_ts < now - WORKER_INSTANCE_LOST_THRESHOLD_MS {
+							// Check if the workflow is silenced and ignore
+							let silence_ts_key =
+								keys::workflow::SilenceTsKey::new(lease_key.workflow_id);
+							if tx
+								.get(&self.subspace.pack(&silence_ts_key), SERIALIZABLE)
+								.await?
+								.is_some()
+							{
+								continue;
+							}
+
 							// NOTE: We add a read conflict here so this query conflicts with any other
 							// `clear_expired_leases` queries running at the same time (will conflict with the
 							// following `tx.clear`).
@@ -479,6 +490,8 @@ impl Database for DatabaseFdbSqliteNats {
 															*entry += 1;
 														}
 													}
+													// Ignore
+													WorkflowState::Silenced => {}
 												}
 
 												current_workflow_name = None;
@@ -509,7 +522,10 @@ impl Database for DatabaseFdbSqliteNats {
 											})?;
 
 										current_error = Some(error);
-									} else if !matches!(current_state, WorkflowState::Complete) {
+									} else if !matches!(
+										current_state,
+										WorkflowState::Silenced | WorkflowState::Complete
+									) {
 										if let Ok(_) = self
 											.subspace
 											.unpack::<keys::workflow::OutputChunkKey>(entry.key())
@@ -528,6 +544,11 @@ impl Database for DatabaseFdbSqliteNats {
 										) {
 											current_state = WorkflowState::Running;
 										}
+									} else if let Ok(_) = self
+										.subspace
+										.unpack::<keys::workflow::SilenceTsKey>(entry.key())
+									{
+										current_state = WorkflowState::Silenced;
 									}
 								}
 
@@ -551,6 +572,8 @@ impl Database for DatabaseFdbSqliteNats {
 												*entry += 1;
 											}
 										}
+										// Ignore
+										WorkflowState::Silenced => {}
 									}
 								}
 
@@ -1139,12 +1162,12 @@ impl Database for DatabaseFdbSqliteNats {
 						// Clear sub workflow secondary idx
 						let wake_sub_workflow_key =
 							keys::workflow::WakeSubWorkflowKey::new(*workflow_id);
-						if let Some(raw) = tx
+						if let Some(entry) = tx
 							.get(&self.subspace.pack(&wake_sub_workflow_key), SERIALIZABLE)
 							.await?
 						{
 							let sub_workflow_id = wake_sub_workflow_key
-								.deserialize(&raw)
+								.deserialize(&entry)
 								.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
 							let sub_workflow_wake_key =
@@ -2136,7 +2159,7 @@ impl Database for DatabaseFdbSqliteNats {
 
 					// NOTE: This does not have to be serializable because wf name doesn't change
 					// Check if the workflow exists
-					let Some(workflow_name_raw) = tx
+					let Some(workflow_name_entry) = tx
 						.get(&self.subspace.pack(&workflow_name_key), SNAPSHOT)
 						.await?
 					else {
@@ -2146,7 +2169,7 @@ impl Database for DatabaseFdbSqliteNats {
 					};
 
 					let workflow_name = workflow_name_key
-						.deserialize(&workflow_name_raw)
+						.deserialize(&workflow_name_entry)
 						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
 
 					// Write name
@@ -2222,11 +2245,12 @@ impl Database for DatabaseFdbSqliteNats {
 						.await?
 						.is_some()
 					{
-						let wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
+						let mut wake_condition_key = keys::wake::WorkflowWakeConditionKey::new(
 							workflow_name,
 							workflow_id,
 							keys::wake::WakeCondition::Signal { signal_id },
 						);
+						wake_condition_key.ts = pending_signal_key.ts;
 
 						// Add wake condition for workflow
 						tx.set(
@@ -2239,7 +2263,7 @@ impl Database for DatabaseFdbSqliteNats {
 
 					Ok(())
 				}
-				.instrument(tracing::info_span!("publish_singal_tx"))
+				.instrument(tracing::info_span!("publish_signal_tx"))
 			})
 			.await?;
 
@@ -3168,6 +3192,7 @@ enum WorkflowState {
 	Running,
 	Sleeping,
 	Dead,
+	Silenced,
 }
 
 fn value_to_str(v: &serde_json::Value) -> WorkflowResult<String> {

@@ -28,17 +28,20 @@ pub enum SubCommand {
 	/// Get value at current key.
 	#[command(name = "get")]
 	Get {
-		/// Reads the current key as a subspace of chunk keys. Combines all chunks together then deserializes.
-		#[arg(short = 'c', long)]
-		chunks: bool,
+		/// Key path to get. Supports relative key paths.
+		key: Option<String>,
 
 		/// Optional type hint for value parsing.
+		#[arg(short = 't', long = "type")]
 		type_hint: Option<String>,
 	},
 
 	/// List all keys under the current key.
 	#[command(name = "ls")]
 	List {
+		/// Key path to list. Supports relative key paths.
+		key: Option<String>,
+
 		/// Max depth of keys shown.
 		#[arg(short = 'd', long, default_value_t = 1)]
 		max_depth: usize,
@@ -53,6 +56,9 @@ pub enum SubCommand {
 	/// Set value at current path.
 	#[command(name = "set")]
 	Set {
+		/// Key path to list. Supports relative key paths.
+		key: Option<String>,
+
 		/// Value to set, with optional type prefix (e.g. "u64:123", overrides type hint).
 		value: String,
 		/// Optional type hint.
@@ -63,9 +69,12 @@ pub enum SubCommand {
 	/// Clear value or range at current path.
 	#[command(name = "clear")]
 	Clear {
-		/// In what manner to clear the current key. Range clears the entire subspace.
-		#[arg(value_enum)]
-		clear_type: Option<ClearType>,
+		/// Key path to clear. Supports relative key paths.
+		key: Option<String>,
+
+		/// Clears the entire subspace range instead of just the key.
+		#[arg(short = 'r', long = "range", default_value_t = false)]
+		clear_range: bool,
 		/// Disable confirmation prompt.
 		#[arg(short = 'y', long, default_value_t = false)]
 		yes: bool,
@@ -78,24 +87,15 @@ pub enum SubCommand {
 impl SubCommand {
 	pub async fn execute(self, pool: &FdbPool, current_tuple: &mut SimpleTuple) -> CommandResult {
 		match self {
-			SubCommand::ChangeKey { key } => match SimpleTuple::parse(&key) {
-				Ok((parsed, relative, back_count)) => {
-					if relative {
-						for _ in 0..back_count {
-							current_tuple.segments.pop();
-						}
-						current_tuple.segments.extend(parsed.segments);
-					} else {
-						*current_tuple = parsed;
-					}
+			SubCommand::ChangeKey { key } => {
+				update_current_tuple(current_tuple, Some(key));
+			}
+			SubCommand::Get { key, type_hint } => {
+				let mut current_tuple = current_tuple.clone();
+				if !update_current_tuple(&mut current_tuple, key) {
+					return CommandResult::Error;
 				}
-				Err(err) => println!("{err:#}"),
-			},
-			// TODO: chunks
-			SubCommand::Get {
-				type_hint,
-				chunks: _chunks,
-			} => {
+
 				let fut = pool.run(|tx, _mc| {
 					let current_tuple = current_tuple.clone();
 					async move {
@@ -121,11 +121,17 @@ impl SubCommand {
 				}
 			}
 			SubCommand::List {
+				key,
 				max_depth,
 				hide_subspaces,
 				style: list_style,
 			} => {
-				let subspace = fdb::tuple::Subspace::all().subspace(current_tuple);
+				let mut current_tuple = current_tuple.clone();
+				if !update_current_tuple(&mut current_tuple, key) {
+					return CommandResult::Error;
+				}
+
+				let subspace = fdb::tuple::Subspace::all().subspace(&current_tuple);
 
 				let fut = pool.run(|tx, _mc| {
 					let subspace = subspace.clone();
@@ -295,7 +301,16 @@ impl SubCommand {
 					Err(_) => println!("txn timed out"),
 				}
 			}
-			SubCommand::Set { value, type_hint } => {
+			SubCommand::Set {
+				key,
+				value,
+				type_hint,
+			} => {
+				let mut current_tuple = current_tuple.clone();
+				if !update_current_tuple(&mut current_tuple, key) {
+					return CommandResult::Error;
+				}
+
 				let parsed_value = match SimpleValue::parse_str(type_hint.as_deref(), &value) {
 					Ok(parsed) => parsed,
 					Err(err) => {
@@ -324,7 +339,16 @@ impl SubCommand {
 					Err(_) => println!("txn timed out"),
 				}
 			}
-			SubCommand::Clear { clear_type, yes } => {
+			SubCommand::Clear {
+				key,
+				clear_range,
+				yes,
+			} => {
+				let mut current_tuple = current_tuple.clone();
+				if !update_current_tuple(&mut current_tuple, key) {
+					return CommandResult::Error;
+				}
+
 				if !yes {
 					let term = rivet_term::terminal();
 					let response = rivet_term::prompt::PromptBuilder::default()
@@ -342,15 +366,12 @@ impl SubCommand {
 				let fut = pool.run(|tx, _mc| {
 					let current_tuple = current_tuple.clone();
 					async move {
-						match clear_type {
-							Some(ClearType::Range) => {
-								let subspace = fdb::tuple::Subspace::all().subspace(&current_tuple);
-								tx.clear_subspace_range(&subspace);
-							}
-							None => {
-								let key = fdb::tuple::pack(&current_tuple);
-								tx.clear(&key);
-							}
+						if clear_range {
+							let subspace = fdb::tuple::Subspace::all().subspace(&current_tuple);
+							tx.clear_subspace_range(&subspace);
+						} else {
+							let key = fdb::tuple::pack(&current_tuple);
+							tx.clear(&key);
 						}
 
 						Ok(())
@@ -379,4 +400,30 @@ pub enum CommandResult {
 	Ok,
 	Error,
 	Exit,
+}
+
+fn update_current_tuple(current_tuple: &mut SimpleTuple, key: Option<String>) -> bool {
+	let Some(key) = key.as_deref() else {
+		return true;
+	};
+
+	match SimpleTuple::parse(key) {
+		Ok((parsed, relative, back_count)) => {
+			if relative {
+				for _ in 0..back_count {
+					current_tuple.segments.pop();
+				}
+				current_tuple.segments.extend(parsed.segments);
+			} else {
+				*current_tuple = parsed;
+			}
+
+			true
+		}
+		Err(err) => {
+			println!("{err:#}");
+
+			false
+		}
+	}
 }
