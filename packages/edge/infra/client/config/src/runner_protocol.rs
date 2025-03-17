@@ -5,9 +5,11 @@ use uuid::Uuid;
 pub enum ToRunner {
 	Start {
 		actor_id: Uuid,
+		generation: u32,
 	},
 	Signal {
 		actor_id: Uuid,
+		generation: u32,
 		signal: i32,
 		persist_storage: bool,
 	},

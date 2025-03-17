@@ -24,17 +24,21 @@ use crate::{ctx::Ctx, utils};
 
 impl Actor {
 	pub async fn make_fs(&self, ctx: &Ctx) -> Result<()> {
-		let actor_path = ctx.actor_path(self.actor_id);
+		let actor_path = ctx.actor_path(self.actor_id, self.generation);
 		let fs_img_path = actor_path.join("fs.img");
 		let fs_path = actor_path.join("fs");
 
-		tracing::info!(actor_id=?self.actor_id, "creating fs");
+		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "creating fs");
 
-		fs::create_dir(&fs_path).await?;
+		fs::create_dir(&fs_path)
+			.await
+			.context("failed to create actor fs dir")?;
 
 		if ctx.config().runner.use_mounts() {
 			// Create a zero-filled file
-			let fs_img = File::create(&fs_img_path).await?;
+			let fs_img = File::create(&fs_img_path)
+				.await
+				.context("failed to create disk image")?;
 			fs_img
 				.set_len(self.config.resources.disk as u64 * 1024 * 1024)
 				.await?;
@@ -68,9 +72,9 @@ impl Actor {
 	}
 
 	pub async fn download_image(&self, ctx: &Ctx) -> Result<()> {
-		tracing::info!(actor_id=?self.actor_id, "downloading artifact");
+		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "downloading artifact");
 
-		let actor_path = ctx.actor_path(self.actor_id);
+		let actor_path = ctx.actor_path(self.actor_id, self.generation);
 		let fs_path = actor_path.join("fs");
 
 		let mut stream = utils::fetch_image_stream(
@@ -87,7 +91,11 @@ impl Actor {
 
 				match self.config.image.compression {
 					protocol::ImageCompression::None => {
-						tracing::info!(actor_id=?self.actor_id, "saving artifact to file");
+						tracing::info!(
+							actor_id=?self.actor_id,
+							generation=?self.generation,
+							"saving artifact to file",
+						);
 
 						let mut output_file = File::create(&docker_image_path).await?;
 
@@ -97,7 +105,11 @@ impl Actor {
 						}
 					}
 					protocol::ImageCompression::Lz4 => {
-						tracing::info!(actor_id=?self.actor_id, "downloading and decompressing artifact");
+						tracing::info!(
+							actor_id=?self.actor_id,
+							generation=?self.generation,
+							"downloading and decompressing artifact",
+						);
 
 						// Spawn the lz4 process
 						let mut lz4_child = Command::new("lz4")
@@ -139,7 +151,11 @@ impl Actor {
 			protocol::ImageKind::OciBundle | protocol::ImageKind::JavaScript => {
 				match self.config.image.compression {
 					protocol::ImageCompression::None => {
-						tracing::info!(actor_id=?self.actor_id, "downloading and unarchiving artifact");
+						tracing::info!(
+							actor_id=?self.actor_id,
+							generation=?self.generation,
+							"downloading and unarchiving artifact",
+						);
 
 						// Spawn the tar process
 						let mut tar_child = Command::new("tar")
@@ -177,7 +193,11 @@ impl Actor {
 						)?;
 					}
 					protocol::ImageCompression::Lz4 => {
-						tracing::info!(actor_id=?self.actor_id, "downloading, decompressing, and unarchiving artifact");
+						tracing::info!(
+							actor_id=?self.actor_id,
+							generation=?self.generation,
+							"downloading, decompressing, and unarchiving artifact",
+						);
 
 						// Spawn the lz4 process
 						let mut lz4_child = Command::new("lz4")
@@ -259,9 +279,9 @@ impl Actor {
 		ctx: &Ctx,
 		ports: &protocol::HashableMap<String, protocol::ProxiedPort>,
 	) -> Result<()> {
-		tracing::info!(actor_id=?self.actor_id, "setting up oci bundle");
+		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "setting up oci bundle");
 
-		let actor_path = ctx.actor_path(self.actor_id);
+		let actor_path = ctx.actor_path(self.actor_id, self.generation);
 		let fs_path = actor_path.join("fs");
 		let netns_path = self.netns_path();
 
@@ -271,7 +291,11 @@ impl Actor {
 			let docker_image_path = fs_path.join("docker-image.tar");
 			let oci_image_path = fs_path.join("oci-image");
 
-			tracing::info!(actor_id=?self.actor_id, "converting Docker image -> OCI image");
+			tracing::info!(
+				actor_id=?self.actor_id,
+				generation=?self.generation,
+				"converting Docker image -> OCI image",
+			);
 			let cmd_out = Command::new("skopeo")
 				.arg("copy")
 				.arg(format!("docker-archive:{}", docker_image_path.display()))
@@ -285,7 +309,11 @@ impl Actor {
 			);
 
 			// Allows us to run the bundle natively with runc
-			tracing::info!(actor_id=?self.actor_id, "converting OCI image -> OCI bundle");
+			tracing::info!(
+				actor_id=?self.actor_id,
+				generation=?self.generation,
+				"converting OCI image -> OCI bundle",
+			);
 
 			let cmd_out = Command::new("umoci")
 				.arg("unpack")
@@ -380,7 +408,7 @@ impl Actor {
 		ctx: &Ctx,
 		ports: &protocol::HashableMap<String, protocol::ProxiedPort>,
 	) -> Result<()> {
-		let actor_path = ctx.actor_path(self.actor_id);
+		let actor_path = ctx.actor_path(self.actor_id, self.generation);
 
 		let config = actor_config::Config {
 			resources: actor_config::Resources {
@@ -415,12 +443,12 @@ impl Actor {
 		ctx: &Ctx,
 		ports: &protocol::HashableMap<String, protocol::ProxiedPort>,
 	) -> Result<()> {
-		tracing::info!(actor_id=?self.actor_id, "setting up cni network");
+		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "setting up cni network");
 
-		let actor_path = ctx.actor_path(self.actor_id);
+		let actor_path = ctx.actor_path(self.actor_id, self.generation);
 		let netns_path = self.netns_path();
 
-		tracing::info!(actor_id=?self.actor_id, "writing cni params");
+		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "writing cni params");
 
 		let cni_port_mappings = ports
 			.iter()
@@ -458,7 +486,7 @@ impl Actor {
 		// https://github.com/hashicorp/nomad/blob/a8f0f2612ef9d283ed903721f8453a0c0c3f51c5/client/allocrunner/network_manager_linux.go#L119
 
 		// Name of the network in /opt/cni/config/$NETWORK_NAME.conflist
-		tracing::info!(actor_id=?self.actor_id, "creating network");
+		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "creating network");
 
 		let cni_network_name = &ctx.config().cni.network_name();
 		let cmd_out = Command::new("ip")
@@ -473,7 +501,12 @@ impl Actor {
 			std::str::from_utf8(&cmd_out.stderr)?
 		);
 
-		tracing::info!(actor_id=?self.actor_id, "adding network {cni_network_name} to namespace {}", netns_path.display());
+		tracing::info!(
+			actor_id=?self.actor_id,
+			generation=?self.generation,
+			"adding network {cni_network_name} to namespace {}",
+			netns_path.display(),
+		);
 		tracing::debug!(
 			"Adding network {} to namespace {}",
 			cni_network_name,
@@ -513,6 +546,7 @@ impl Actor {
 			bind_ports_inner(
 				ctx,
 				self.actor_id,
+				self.generation,
 				&gg_ports,
 				ctx.config().network.lan_port_range_min()
 					..=ctx.config().network.lan_port_range_max()
@@ -520,6 +554,7 @@ impl Actor {
 			bind_ports_inner(
 				ctx,
 				self.actor_id,
+				self.generation,
 				&host_ports,
 				ctx.config().network.wan_port_range_min()
 					..=ctx.config().network.wan_port_range_max()
@@ -578,7 +613,7 @@ impl Actor {
 	// process
 	#[tracing::instrument(skip_all)]
 	pub async fn cleanup_setup(&self, ctx: &Ctx) {
-		let actor_path = ctx.actor_path(self.actor_id);
+		let actor_path = ctx.actor_path(self.actor_id, self.generation);
 		let netns_path = self.netns_path();
 
 		// Clean up fs mount
@@ -593,6 +628,7 @@ impl Actor {
 					if !cmd_out.status.success() {
 						tracing::error!(
 							actor_id=?self.actor_id,
+							generation=?self.generation,
 							stdout=%std::str::from_utf8(&cmd_out.stdout).unwrap_or("<failed to parse stdout>"),
 							stderr=%std::str::from_utf8(&cmd_out.stderr).unwrap_or("<failed to parse stderr>"),
 							"failed `umount` command",
@@ -600,7 +636,12 @@ impl Actor {
 					}
 				}
 				Err(err) => {
-					tracing::error!(actor_id=?self.actor_id, ?err, "failed to run `umount` command")
+					tracing::error!(
+						actor_id=?self.actor_id,
+						generation=?self.generation,
+						?err,
+						"failed to run `umount` command",
+					);
 				}
 			}
 		}
@@ -619,6 +660,7 @@ impl Actor {
 						if !cmd_out.status.success() {
 							tracing::error!(
 								actor_id=?self.actor_id,
+								generation=?self.generation,
 								stdout=%std::str::from_utf8(&cmd_out.stdout).unwrap_or("<failed to parse stdout>"),
 								stderr=%std::str::from_utf8(&cmd_out.stderr).unwrap_or("<failed to parse stderr>"),
 								"failed `runc` delete command",
@@ -626,7 +668,12 @@ impl Actor {
 						}
 					}
 					Err(err) => {
-						tracing::error!(actor_id=?self.actor_id, ?err, "failed to run `runc` command")
+						tracing::error!(
+							actor_id=?self.actor_id,
+							generation=?self.generation,
+							?err,
+							"failed to run `runc` command",
+						);
 					}
 				}
 
@@ -648,6 +695,7 @@ impl Actor {
 									if !cmd_out.status.success() {
 										tracing::error!(
 											actor_id=?self.actor_id,
+											generation=?self.generation,
 											stdout=%std::str::from_utf8(&cmd_out.stdout).unwrap_or("<failed to parse stdout>"),
 											stderr=%std::str::from_utf8(&cmd_out.stderr).unwrap_or("<failed to parse stderr>"),
 											"failed `cnitool del` command",
@@ -655,12 +703,22 @@ impl Actor {
 									}
 								}
 								Err(err) => {
-									tracing::error!(actor_id=?self.actor_id, ?err, "failed to run `cnitool` command")
+									tracing::error!(
+										actor_id=?self.actor_id,
+										generation=?self.generation,
+										?err,
+										"failed to run `cnitool` command",
+									);
 								}
 							}
 						}
 						Err(err) => {
-							tracing::error!(actor_id=?self.actor_id, ?err, "failed to read `cni-cap-args.json`")
+							tracing::error!(
+								actor_id=?self.actor_id,
+								generation=?self.generation,
+								?err,
+								"failed to read `cni-cap-args.json`",
+							);
 						}
 					}
 
@@ -676,6 +734,7 @@ impl Actor {
 							if !cmd_out.status.success() {
 								tracing::error!(
 									actor_id=?self.actor_id,
+									generation=?self.generation,
 									stdout=%std::str::from_utf8(&cmd_out.stdout).unwrap_or("<failed to parse stdout>"),
 									stderr=%std::str::from_utf8(&cmd_out.stderr).unwrap_or("<failed to parse stderr>"),
 									"failed `ip netns` command",
@@ -683,7 +742,12 @@ impl Actor {
 							}
 						}
 						Err(err) => {
-							tracing::error!(actor_id=?self.actor_id, ?err, "failed to run `ip` command")
+							tracing::error!(
+								actor_id=?self.actor_id,
+								generation=?self.generation,
+								?err,
+								"failed to run `ip` command",
+							);
 						}
 					}
 				}
@@ -694,7 +758,12 @@ impl Actor {
 		// Delete entire actor dir. Note that for actors using KV storage, it is persisted elsewhere and will
 		// not be deleted by this (see `persist_storage` in the runner protocol).
 		if let Err(err) = tokio::fs::remove_dir_all(&actor_path).await {
-			tracing::error!(actor_id=?self.actor_id, ?err, "failed to delete actor dir");
+			tracing::error!(
+				actor_id=?self.actor_id,
+				generation=?self.generation,
+				?err,
+				"failed to delete actor dir",
+			);
 		}
 	}
 
@@ -736,6 +805,7 @@ impl Actor {
 async fn bind_ports_inner(
 	ctx: &Ctx,
 	actor_id: Uuid,
+	generation: u32,
 	ports: &[(&String, &protocol::Port)],
 	range: std::ops::RangeInclusive<u16>,
 ) -> Result<Vec<(i64, i64)>> {
@@ -763,57 +833,57 @@ async fn bind_ports_inner(
 	let rows = utils::sql::query(|| async {
 		sqlx::query_as::<_, (i64, i64)>(indoc!(
 			"
-			INSERT INTO actor_ports (actor_id, port, protocol)
+			INSERT INTO actor_ports (actor_id, generation, port, protocol)
 			-- Select TCP ports
-			SELECT ?1, port, protocol
-			FROM (
-				WITH RECURSIVE
-					nums(n, i) AS (
-						SELECT ?4, ?4
-						UNION ALL
-						SELECT (n + 1) % (?7 + 1), i + 1
-						FROM nums
-						WHERE i < ?7 + ?4
-					),
-					available_ports(port) AS (
-						SELECT nums.n + ?6
-						FROM nums
-						LEFT JOIN actor_ports AS p
-						ON
-							nums.n + ?6 = p.port AND
-							p.protocol = 0 AND
-							delete_ts IS NULL
-						WHERE
-							p.port IS NULL OR
-							delete_ts IS NOT NULL
-						LIMIT ?2
-					)
-				SELECT port, 0 AS protocol FROM available_ports
-			)
-			UNION ALL
-			-- Select UDP ports
-			SELECT ?1, port, protocol
+			SELECT ?1, ?2, port, protocol
 			FROM (
 				WITH RECURSIVE
 					nums(n, i) AS (
 						SELECT ?5, ?5
 						UNION ALL
-						SELECT (n + 1) % (?7 + 1), i + 1
+						SELECT (n + 1) % (?8 + 1), i + 1
 						FROM nums
-						WHERE i < ?7 + ?5
+						WHERE i < ?8 + ?5
 					),
 					available_ports(port) AS (
-						SELECT nums.n + ?6
+						SELECT nums.n + ?7
 						FROM nums
 						LEFT JOIN actor_ports AS p
 						ON
-							nums.n + ?6 = p.port AND
-							p.protocol = 1 AND
+							nums.n + ?7 = p.port AND
+							p.protocol = 0 AND
 							delete_ts IS NULL
 						WHERE
 							p.port IS NULL OR
 							delete_ts IS NOT NULL
 						LIMIT ?3
+					)
+				SELECT port, 0 AS protocol FROM available_ports
+			)
+			UNION ALL
+			-- Select UDP ports
+			SELECT ?1, ?2, port, protocol
+			FROM (
+				WITH RECURSIVE
+					nums(n, i) AS (
+						SELECT ?6, ?6
+						UNION ALL
+						SELECT (n + 1) % (?8 + 1), i + 1
+						FROM nums
+						WHERE i < ?8 + ?6
+					),
+					available_ports(port) AS (
+						SELECT nums.n + ?7
+						FROM nums
+						LEFT JOIN actor_ports AS p
+						ON
+							nums.n + ?7 = p.port AND
+							p.protocol = 1 AND
+							delete_ts IS NULL
+						WHERE
+							p.port IS NULL OR
+							delete_ts IS NOT NULL
+						LIMIT ?4
 					)
 				SELECT port, 1 AS protocol FROM available_ports
 			)
@@ -821,12 +891,13 @@ async fn bind_ports_inner(
 			",
 		))
 		.bind(actor_id)
-		.bind(tcp_count as i64) // ?2
-		.bind(udp_count as i64) // ?3
-		.bind(tcp_offset as i64) // ?4
-		.bind(udp_offset as i64) // ?5
-		.bind(*range.start() as i64) // ?6
-		.bind(truncated_max as i64) // ?7
+		.bind(generation as i64)
+		.bind(tcp_count as i64) // ?3
+		.bind(udp_count as i64) // ?4
+		.bind(tcp_offset as i64) // ?5
+		.bind(udp_offset as i64) // ?6
+		.bind(*range.start() as i64) // ?7
+		.bind(truncated_max as i64) // ?8
 		.fetch_all(&mut *ctx.sql().await?)
 		.await
 	})

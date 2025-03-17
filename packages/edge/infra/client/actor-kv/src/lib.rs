@@ -73,12 +73,12 @@ impl ActorKv {
 				Some(b"partition"),
 			)
 			.await
-			.map_err(|err| anyhow!("{err:?}"))?;
+			.map_err(|err| anyhow!("failed to create/open fdb actor dir: {err:?}"))?;
 		let kv_dir = actor_dir
 			.create_or_open(&tx, &[dir::KV.into()], None, None)
 			.await
-			.map_err(|err| anyhow!("{err:?}"))?;
-		tx.commit().await.map_err(|err| anyhow!("{err:?}"))?;
+			.map_err(|err| anyhow!("failed to create/open fdb actor kv dir: {err:?}"))?;
+		tx.commit().await.map_err(|err| anyhow!("failed to commit actor kv txn: {err:?}"))?;
 
 		self.subspace = Some(Subspace::from_bytes(
 			kv_dir.bytes().map_err(|err| anyhow!("{err:?}"))?,

@@ -99,38 +99,62 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 								.await?;
 							}
 
-							ctx.join((
-								activity(InsertFdbInput {
-									client_id,
-									flavor,
-									config,
-									system,
-								}),
-								activity(UpdateMetricsInput { client_id, flavor }),
-							))
+							// ctx.join((
+							// 	activity(InsertFdbInput {
+							// 		client_id,
+							// 		flavor,
+							// 		config,
+							// 		system,
+							// 	}),
+							// 	activity(UpdateMetricsInput { client_id, flavor }),
+							// ))
+							// .await?;
+							// TODO: some weird deadlock happens with ctx.join, will investigate later
+							ctx.activity(InsertFdbInput {
+								client_id,
+								flavor,
+								config,
+								system,
+							})
 							.await?;
+							ctx.activity(UpdateMetricsInput { client_id, flavor })
+								.await?;
 						}
 						// Events are in order by index
 						protocol::ToServer::Events(events) => {
 							// Write to db
-							ctx.join((
-								activity(InsertEventsInput {
-									client_id,
-									events: events.clone(),
-								}),
-								activity(UpdateMetricsInput { client_id, flavor }),
-							))
+							// ctx.join((
+							// 	activity(InsertEventsInput {
+							// 		client_id,
+							// 		events: events.clone(),
+							// 	}),
+							// 	activity(UpdateMetricsInput { client_id, flavor }),
+							// ))
+							// .await?;
+							// TODO: some weird deadlock happens with ctx.join, will investigate later
+							ctx.activity(InsertEventsInput {
+								client_id,
+								events: events.clone(),
+							})
 							.await?;
+							ctx.activity(UpdateMetricsInput { client_id, flavor })
+								.await?;
 
 							// NOTE: This should not be parallelized because signals should be sent in order
 							// Forward to actor workflows
 							for event in events {
 								#[allow(irrefutable_let_patterns)]
-								if let protocol::Event::ActorStateUpdate { actor_id, state } =
-									event.inner.deserialize()?
+								if let protocol::Event::ActorStateUpdate {
+									actor_id,
+									generation,
+									state,
+								} = event.inner.deserialize()?
 								{
 									let res = ctx
-										.signal(crate::workflows::actor::StateUpdate { state })
+										.signal(crate::workflows::actor::StateUpdate {
+											generation,
+											state,
+										})
 										.to_workflow::<crate::workflows::actor::Workflow>()
 										.tag("actor_id", actor_id)
 										.send()
@@ -234,16 +258,17 @@ pub async fn pegboard_client(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResu
 	})
 	.await?;
 
-	let actor_ids = ctx
+	let actors = ctx
 		.activity(FetchRemainingActorsInput {
 			client_id: input.client_id,
 		})
 		.await?;
 
 	// Set all remaining actors as lost
-	for actor_id in actor_ids {
+	for (actor_id, generation) in actors {
 		let res = ctx
 			.signal(crate::workflows::actor::StateUpdate {
+				generation,
 				state: protocol::ActorState::Lost,
 			})
 			.to_workflow::<crate::workflows::actor::Workflow>()
@@ -618,13 +643,21 @@ pub async fn handle_commands(
 		.collect::<Result<Vec<_>, _>>()?;
 
 	// Write to db
-	let (index, _) = ctx
-		.join((
-			activity(InsertCommandsInput {
-				commands: raw_commands.clone(),
-			}),
-			activity(UpdateMetricsInput { client_id, flavor }),
-		))
+	// let (index, _) = ctx
+	// 	.join((
+	// 		activity(InsertCommandsInput {
+	// 			commands: raw_commands.clone(),
+	// 		}),
+	// 		activity(UpdateMetricsInput { client_id, flavor }),
+	// 	))
+	// 	.await?;
+	// TODO: some weird deadlock happens with ctx.join, will investigate later
+	let index = ctx
+		.activity(InsertCommandsInput {
+			commands: raw_commands.clone(),
+		})
+		.await?;
+	ctx.activity(UpdateMetricsInput { client_id, flavor })
 		.await?;
 
 	// Forward commands as a single message
@@ -660,11 +693,15 @@ pub async fn handle_commands(
 				}
 			}
 			protocol::Command::SignalActor {
-				actor_id, signal, ..
+				actor_id,
+				generation,
+				signal,
+				..
 			} => {
 				if matches!(signal.try_into()?, Signal::SIGTERM | Signal::SIGKILL) {
 					let res = ctx
 						.signal(crate::workflows::actor::StateUpdate {
+							generation,
 							state: protocol::ActorState::Stopping,
 						})
 						.to_workflow::<crate::workflows::actor::Workflow>()
@@ -788,7 +825,7 @@ struct FetchRemainingActorsInput {
 async fn fetch_remaining_actors(
 	ctx: &ActivityCtx,
 	input: &FetchRemainingActorsInput,
-) -> GlobalResult<Vec<Uuid>> {
+) -> GlobalResult<Vec<(Uuid, u32)>> {
 	let actor_ids = ctx
 		.fdb()
 		.await?
@@ -804,10 +841,16 @@ async fn fetch_remaining_actors(
 				SERIALIZABLE,
 			)
 			.map(|res| match res {
-				Ok(entry) => Ok(keys::subspace()
-					.unpack::<keys::client::ActorKey>(entry.key())
-					.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?
-					.actor_id),
+				Ok(entry) => {
+					let key = keys::subspace()
+						.unpack::<keys::client::ActorKey>(entry.key())
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+					let generation = key
+						.deserialize(entry.value())
+						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?;
+
+					Ok((key.actor_id, generation))
+				}
 				Err(err) => Err(Into::<fdb::FdbBindingError>::into(err)),
 			})
 			.try_collect::<Vec<_>>()

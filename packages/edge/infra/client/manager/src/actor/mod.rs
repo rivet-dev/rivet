@@ -26,6 +26,7 @@ const STOP_PID_RETRIES: usize = 32;
 
 pub struct Actor {
 	actor_id: Uuid,
+	generation: u32,
 	config: protocol::ActorConfig,
 
 	runner: Mutex<Option<runner::Handle>>,
@@ -33,9 +34,10 @@ pub struct Actor {
 }
 
 impl Actor {
-	pub fn new(actor_id: Uuid, config: protocol::ActorConfig) -> Arc<Self> {
+	pub fn new(actor_id: Uuid, generation: u32, config: protocol::ActorConfig) -> Arc<Self> {
 		Arc::new(Actor {
 			actor_id,
+			generation,
 			config,
 
 			runner: Mutex::new(None),
@@ -45,11 +47,13 @@ impl Actor {
 
 	pub fn with_runner(
 		actor_id: Uuid,
+		generation: u32,
 		config: protocol::ActorConfig,
 		runner: runner::Handle,
 	) -> Arc<Self> {
 		Arc::new(Actor {
 			actor_id,
+			generation,
 			config,
 
 			runner: Mutex::new(Some(runner)),
@@ -58,7 +62,7 @@ impl Actor {
 	}
 
 	pub async fn start(self: &Arc<Self>, ctx: &Arc<Ctx>) -> Result<()> {
-		tracing::info!(actor_id=?self.actor_id, "starting");
+		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "starting");
 
 		// Write actor to DB
 		let config_json = serde_json::to_vec(&self.config)?;
@@ -69,14 +73,16 @@ impl Actor {
 				"
 				INSERT INTO actors (
 					actor_id,
+					generation,
 					config,
 					start_ts
 				)
-				VALUES (?1, ?2, ?3)
-				ON CONFLICT (actor_id) DO NOTHING
+				VALUES (?1, ?2, ?3, ?4)
+				ON CONFLICT (actor_id, generation) DO NOTHING
 				",
 			))
 			.bind(self.actor_id)
+			.bind(self.generation as i64)
 			.bind(&config_json)
 			.bind(utils::now())
 			.execute(&mut *ctx.sql().await?)
@@ -84,10 +90,11 @@ impl Actor {
 		})
 		.await?;
 
-		tracing::debug!(actor_id=?self.actor_id, "start query ran");
+		tracing::debug!(actor_id=?self.actor_id, generation=?self.generation, "start query ran");
 
 		ctx.event(protocol::Event::ActorStateUpdate {
 			actor_id: self.actor_id,
+			generation: self.generation,
 			state: protocol::ActorState::Starting,
 		})
 		.await?;
@@ -123,12 +130,14 @@ impl Actor {
 		self: &Arc<Self>,
 		ctx: &Arc<Ctx>,
 	) -> Result<protocol::HashableMap<String, protocol::ProxiedPort>> {
-		tracing::info!(actor_id=?self.actor_id, "setting up");
+		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "setting up");
 
-		let actor_path = ctx.actor_path(self.actor_id);
+		let actor_path = ctx.actor_path(self.actor_id, self.generation);
 
 		// Create actor working dir
-		fs::create_dir(&actor_path).await?;
+		fs::create_dir(&actor_path)
+			.await
+			.context("failed to create actor dir")?;
 
 		// Create fs mount
 		self.make_fs(&ctx).await?;
@@ -159,7 +168,7 @@ impl Actor {
 		ctx: &Arc<Ctx>,
 		ports: protocol::HashableMap<String, protocol::ProxiedPort>,
 	) -> Result<()> {
-		tracing::info!(actor_id=?self.actor_id, "spawning");
+		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "spawning");
 
 		let mut runner_env = vec![
 			(
@@ -178,7 +187,7 @@ impl Actor {
 				runner::Handle::spawn_orphaned(
 					runner::Comms::Basic,
 					&ctx.config().runner.container_runner_binary_path(),
-					ctx.actor_path(self.actor_id),
+					ctx.actor_path(self.actor_id, self.generation),
 					&runner_env,
 				)?
 			}
@@ -189,6 +198,7 @@ impl Actor {
 				runner
 					.send(&runner_protocol::ToRunner::Start {
 						actor_id: self.actor_id,
+						generation: self.generation,
 					})
 					.await?;
 
@@ -197,7 +207,7 @@ impl Actor {
 		};
 		let pid = runner.pid().clone();
 
-		tracing::info!(actor_id=?self.actor_id, ?pid, "pid received");
+		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, ?pid, "pid received");
 
 		// Store runner
 		{
@@ -210,12 +220,15 @@ impl Actor {
 				"
 				UPDATE actors
 				SET
-					running_ts = ?2,
-					pid = ?3
-				WHERE actor_id = ?1
+					running_ts = ?3,
+					pid = ?4
+				WHERE
+					actor_id = ?1 AND
+					generation = ?2
 				",
 			))
 			.bind(self.actor_id)
+			.bind(self.generation as i64)
 			.bind(utils::now())
 			.bind(pid.as_raw())
 			.execute(&mut *ctx.sql().await?)
@@ -225,6 +238,7 @@ impl Actor {
 
 		ctx.event(protocol::Event::ActorStateUpdate {
 			actor_id: self.actor_id,
+			generation: self.generation,
 			state: protocol::ActorState::Running {
 				pid: pid.as_raw().try_into()?,
 				ports,
@@ -237,7 +251,7 @@ impl Actor {
 
 	// Watch actor for updates
 	pub(crate) async fn observe(&self, ctx: &Arc<Ctx>) -> Result<()> {
-		tracing::info!(actor_id=?self.actor_id, "observing");
+		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "observing");
 
 		let Some(runner) = ({ (*self.runner.lock().await).clone() }) else {
 			bail!("actor does not have a runner to observe yet");
@@ -250,7 +264,7 @@ impl Actor {
 			// With isolates we have to check if the shared isolate runner exited and if the isolate itself
 			// exited
 			protocol::ImageKind::JavaScript => {
-				let actor_path = ctx.actor_path(self.actor_id);
+				let actor_path = ctx.actor_path(self.actor_id, self.generation);
 				let exit_code_path = actor_path.join("exit-code");
 
 				tokio::select! {
@@ -259,16 +273,31 @@ impl Actor {
 						res?;
 
 						let exit_code = match fs::read_to_string(&exit_code_path).await {
-							Ok(contents) => match contents.trim().parse::<i32>() {
-								Ok(x) => Some(x),
-								Err(err) => {
-									tracing::error!(actor_id=?self.actor_id, ?err, "failed to parse exit code file");
+							Ok(contents) => if contents.trim().is_empty() {
+								// File exists but is empty. This is explicit
+								None
+							} else {
+								match contents.trim().parse::<i32>() {
+									Ok(x) => Some(x),
+									Err(err) => {
+										tracing::error!(
+											actor_id=?self.actor_id,
+											generation=?self.generation,
+											?err,
+											"failed to parse exit code file",
+										);
 
-									None
+										None
+									}
 								}
 							},
 							Err(err) => {
-								tracing::error!(actor_id=?self.actor_id, ?err, "failed to read exit code file");
+								tracing::error!(
+									actor_id=?self.actor_id,
+									generation=?self.generation,
+									?err,
+									"failed to read exit code file",
+								);
 
 								None
 							}
@@ -282,7 +311,7 @@ impl Actor {
 
 		self.set_exit_code(ctx, exit_code).await?;
 
-		tracing::info!(actor_id=?self.actor_id, "complete");
+		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "complete");
 
 		Ok(())
 	}
@@ -293,7 +322,7 @@ impl Actor {
 		signal: Signal,
 		persist_storage: bool,
 	) -> Result<()> {
-		tracing::info!(actor_id=?self.actor_id, ?signal, "sending signal");
+		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, ?signal, "sending signal");
 
 		let self2 = self.clone();
 		let ctx2 = ctx.clone();
@@ -321,7 +350,11 @@ impl Actor {
 				break Some(runner_guard);
 			}
 
-			tracing::warn!(actor_id=?self.actor_id, "waiting for pid to signal actor");
+			tracing::warn!(
+				actor_id=?self.actor_id,
+				generation=?self.generation,
+				"waiting for pid to signal actor",
+			);
 
 			if i > STOP_PID_RETRIES {
 				tracing::error!(
@@ -347,6 +380,7 @@ impl Actor {
 				runner
 					.send(&runner_protocol::ToRunner::Signal {
 						actor_id: self.actor_id,
+						generation: self.generation,
 						signal: signal as i32,
 						persist_storage,
 					})
@@ -364,14 +398,16 @@ impl Actor {
 				sqlx::query_as::<_, (bool,)>(indoc!(
 					"
 					UPDATE actors
-					SET stop_ts = ?2
+					SET stop_ts = ?3
 					WHERE
 						actor_id = ?1 AND
+						generation = ?2 AND
 						stop_ts IS NULL
 					RETURNING 1
 					",
 				))
 				.bind(self.actor_id)
+				.bind(self.generation as i64)
 				.bind(utils::now())
 				.fetch_optional(&mut *ctx.sql().await?)
 				.await
@@ -383,6 +419,7 @@ impl Actor {
 			if stop_ts_set {
 				ctx.event(protocol::Event::ActorStateUpdate {
 					actor_id: self.actor_id,
+					generation: self.generation,
 					state: protocol::ActorState::Stopped,
 				})
 				.await?;
@@ -407,12 +444,15 @@ impl Actor {
 				"
 				UPDATE actors
 				SET
-					exit_ts = ?2,
-					exit_code = ?3
-				WHERE actor_id = ?1
+					exit_ts = ?3,
+					exit_code = ?4
+				WHERE
+					actor_id = ?1 AND
+					generation = ?2
 				",
 			))
 			.bind(self.actor_id)
+			.bind(self.generation as i64)
 			.bind(utils::now())
 			.bind(exit_code)
 			.execute(&mut *ctx.sql().await?)
@@ -425,11 +465,14 @@ impl Actor {
 			sqlx::query(indoc!(
 				"
 				UPDATE actor_ports
-				SET delete_ts = ?2
-				WHERE actor_id = ?1
+				SET delete_ts = ?3
+				WHERE
+					actor_id = ?1 AND
+					generation = ?2
 				",
 			))
 			.bind(self.actor_id)
+			.bind(self.generation as i64)
 			.bind(utils::now())
 			.execute(&mut *ctx.sql().await?)
 			.await
@@ -438,6 +481,7 @@ impl Actor {
 
 		ctx.event(protocol::Event::ActorStateUpdate {
 			actor_id: self.actor_id,
+			generation: self.generation,
 			state: protocol::ActorState::Exited { exit_code },
 		})
 		.await?;
@@ -449,19 +493,19 @@ impl Actor {
 
 	#[tracing::instrument(skip_all)]
 	pub async fn cleanup(&self, ctx: &Ctx) -> Result<()> {
-		tracing::info!(actor_id=?self.actor_id, "cleaning up");
-
-		{
-			// Cleanup ctx
-			let mut actors = ctx.actors.write().await;
-			actors.remove(&self.actor_id);
-		}
+		tracing::info!(actor_id=?self.actor_id, generation=?self.generation, "cleaning up");
 
 		// Set exit code if it hasn't already been set
 		self.set_exit_code(ctx, None).await?;
 
 		// Cleanup setup. Should only be called after the exit code is set successfully for consistent state
 		self.cleanup_setup(ctx).await;
+
+		// It is important that we remove from the actors list last so that we prevent duplicates
+		{
+			let mut actors = ctx.actors.write().await;
+			actors.remove(&(self.actor_id, self.generation));
+		}
 
 		Ok(())
 	}

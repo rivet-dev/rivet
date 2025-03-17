@@ -37,9 +37,10 @@ pub fn run(
 	config: config::Config,
 	fdb_pool: FdbPool,
 	actor_id: Uuid,
+	generation: u32,
 	terminate_tx: mpsc::Sender<MainWorkerTerminateHandle>,
 ) -> Result<()> {
-	let actor_path = config.actors_path.join(actor_id.to_string());
+	let actor_path = config.actors_path.join(format!("{actor_id}-{generation}"));
 
 	// Write PID to file
 	std::fs::write(
@@ -79,13 +80,14 @@ pub fn run(
 		fdb_pool,
 		actor_path.clone(),
 		actor_id,
+		generation,
 		terminate_tx,
 		msg_tx.clone(),
 		actor_config,
 	))? {
 		Result::Ok(exit_code) => exit_code,
 		Err(err) => {
-			tracing::error!(?actor_id, "Run isolate failed: {err:?}");
+			tracing::error!(?actor_id, ?generation, "Run isolate failed: {err:?}");
 			log_shipper::send_message(
 				actor_id,
 				&msg_tx,
@@ -94,17 +96,21 @@ pub fn run(
 				"Fatal error. Aborting.".into(),
 			);
 
-			1
+			Some(1)
 		}
 	};
 
 	// Shutdown all threads
 	match shutdown_tx.send(()) {
 		Result::Ok(_) => {
-			tracing::info!(?actor_id, "Sent shutdown signal");
+			tracing::info!(?actor_id, ?generation, "Sent shutdown signal");
 		}
 		Err(err) => {
-			tracing::error!(?actor_id, "Failed to send shutdown signal: {err:?}");
+			tracing::error!(
+				?actor_id,
+				?generation,
+				"Failed to send shutdown signal: {err:?}"
+			);
 		}
 	}
 
@@ -114,16 +120,17 @@ pub fn run(
 		match log_shipper_thread.join() {
 			Result::Ok(_) => {}
 			Err(err) => {
-				tracing::error!(?actor_id, "Log shipper failed: {err:?}")
+				tracing::error!(?actor_id, ?generation, "Log shipper failed: {err:?}")
 			}
 		}
 	}
 
-	// Write exit code
-	std::fs::write(
-		actor_path.join("exit-code"),
-		exit_code.to_string().as_bytes(),
-	)?;
+	// Write exit code. None is written as no bytes
+	if let Some(code) = exit_code {
+		std::fs::write(actor_path.join("exit-code"), code.to_string().as_bytes())?;
+	} else {
+		std::fs::write(actor_path.join("exit-code"), &[])?;
+	}
 
 	Ok(())
 }
@@ -132,17 +139,18 @@ pub async fn run_inner(
 	fdb_pool: FdbPool,
 	actor_path: PathBuf,
 	actor_id: Uuid,
+	generation: u32,
 	terminate_tx: mpsc::Sender<MainWorkerTerminateHandle>,
 	msg_tx: Option<smpsc::SyncSender<log_shipper::ReceivedMessage>>,
 	actor_config: config::actor::Config,
-) -> Result<i32> {
-	tracing::info!(?actor_id, "starting isolate");
+) -> Result<Option<i32>> {
+	tracing::info!(?actor_id, ?generation, "starting isolate");
 
 	// Init KV store (create or open)
 	let mut kv = ActorKv::new((&*fdb_pool).clone(), actor_id);
 	kv.init().await?;
 
-	tracing::info!(?actor_id, "isolate kv initialized");
+	tracing::info!(?actor_id, ?generation, "isolate kv initialized");
 
 	// Should match the path from `Actor::make_fs` in manager/src/actor/setup.rs
 	let index = actor_path.join("fs").join("index.js");
@@ -161,7 +169,7 @@ pub async fn run_inner(
 				"Failed to load /index.js".into(),
 			);
 
-			return Ok(1);
+			return Ok(Some(1));
 		}
 	};
 
@@ -286,16 +294,16 @@ pub async fn run_inner(
 	// First step preloads the module. This can throw a JS error from certain syntax.
 	match worker.preload_main_module(&index_module).await {
 		Ok(module_id) => {
-			tracing::info!(?actor_id, "Isolate ready");
+			tracing::info!(?actor_id, ?generation, "Isolate ready");
 
 			// Second step evaluates the module but does not run it (because its sync).
 			let res = worker.evaluate_module_sync(module_id);
 
 			if worker.is_terminated() {
-				tracing::info!(?actor_id, "Isolate terminated");
+				tracing::info!(?actor_id, ?generation, "Isolate terminated");
 			} else {
 				if let Err(err) = res {
-					tracing::info!(?actor_id, "Isolate evaluation failed");
+					tracing::info!(?actor_id, ?generation, "Isolate evaluation failed");
 
 					runtime_error(&mut stderr_writer2, &mut worker, err)?;
 				} else {
@@ -312,12 +320,16 @@ pub async fn run_inner(
 								let res = worker.run_event_loop(Default::default()).await;
 
 								if worker.is_terminated() {
-									tracing::info!(?actor_id, "Isolate terminated");
+									tracing::info!(?actor_id, ?generation, "Isolate terminated");
 									break;
 								}
 
 								if let Err(err) = res {
-									tracing::info!(?actor_id, "Isolate execution failed");
+									tracing::info!(
+										?actor_id,
+										?generation,
+										"Isolate execution failed"
+									);
 
 									runtime_error(&mut stderr_writer2, &mut worker, err)?;
 								}
@@ -332,6 +344,7 @@ pub async fn run_inner(
 									Err(err) => {
 										tracing::info!(
 											?actor_id,
+											?generation,
 											"Dispatch beforeunload event failed"
 										);
 
@@ -348,7 +361,7 @@ pub async fn run_inner(
 			}
 		}
 		Err(err) => {
-			tracing::info!(?actor_id, "Isolate preload failed");
+			tracing::info!(?actor_id, ?generation, "Isolate preload failed");
 
 			match err.downcast::<JsError>() {
 				// JS error
@@ -370,14 +383,24 @@ pub async fn run_inner(
 	// For good measure
 	worker.v8_isolate().terminate_execution();
 
-	tracing::info!(?actor_id, "Isolate complete");
+	tracing::info!(?actor_id, ?generation, "Isolate complete");
 
-	let exit_code = worker.exit_code();
+	let exit_code = if worker.is_terminated() {
+		None
+	} else {
+		Some(worker.exit_code())
+	};
 
 	// Drop worker and writer so the stdout and stderr pipes close
 	drop(worker);
 
-	wait_logs_complete(actor_id, stderr_writer2, stdout_handle, stderr_handle)?;
+	wait_logs_complete(
+		actor_id,
+		generation,
+		stderr_writer2,
+		stdout_handle,
+		stderr_handle,
+	)?;
 
 	Ok(exit_code)
 }
@@ -482,6 +505,7 @@ fn runtime_error(stderr_writer: &mut File, worker: &mut MainWorker, err: Error) 
 /// Waits for logs to be written and log shipper threads to complete.
 fn wait_logs_complete(
 	actor_id: Uuid,
+	generation: u32,
 	mut stderr_writer2: File,
 	stdout_handle: JoinHandle<()>,
 	stderr_handle: JoinHandle<()>,
@@ -493,13 +517,13 @@ fn wait_logs_complete(
 	match stdout_handle.join() {
 		Result::Ok(_) => {}
 		Err(err) => {
-			tracing::error!(?actor_id, "stdout thread panicked: {err:?}");
+			tracing::error!(?actor_id, ?generation, "stdout thread panicked: {err:?}");
 		}
 	}
 	match stderr_handle.join() {
 		Result::Ok(_) => {}
 		Err(err) => {
-			tracing::error!(?actor_id, "stderr thread panicked: {err:?}");
+			tracing::error!(?actor_id, ?generation, "stderr thread panicked: {err:?}");
 		}
 	}
 
@@ -536,8 +560,11 @@ mod tests {
 		let tmp_dir = tempfile::TempDir::new().unwrap();
 		let actors_path = tmp_dir.path().join("actors");
 		let actor_id = Uuid::nil();
+		let generation = 0;
 
-		let fs_path = actors_path.join(actor_id.to_string()).join("fs");
+		let fs_path = actors_path
+			.join(format!("{actor_id}-{generation}"))
+			.join("fs");
 		std::fs::create_dir_all(&fs_path)?;
 
 		std::fs::copy(
@@ -608,6 +635,7 @@ mod tests {
 			config,
 			actors_path.join(actor_id.to_string()).to_path_buf(),
 			actor_id,
+			generation,
 			terminate_tx,
 			None,
 			actor_config,

@@ -119,7 +119,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 		.await?;
 
 	let Some((client_id, client_workflow_id)) =
-		runtime::spawn_actor(ctx, input, &network_ports, &initial_actor_setup).await?
+		runtime::spawn_actor(ctx, input, &network_ports, &initial_actor_setup, 0).await?
 	else {
 		ctx.msg(Failed {
 			message: "Failed to allocate (no availability).".into(),
@@ -158,8 +158,15 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 								.await?;
 
 							// Kill old actor immediately
-							destroy::kill(ctx, input.actor_id, state.client_workflow_id, 0, true)
-								.await?;
+							destroy::kill(
+								ctx,
+								input.actor_id,
+								state.generation,
+								state.client_workflow_id,
+								0,
+								true,
+							)
+							.await?;
 
 							if let Some(sig) =
 								runtime::reschedule_actor(ctx, &input, &network_ports, state, None)
@@ -168,6 +175,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 								// Destroyed early
 								return Ok(Loop::Break(runtime::StateRes {
 									kill: Some(KillCtx {
+										generation: state.generation,
 										kill_timeout_ms: sig
 											.override_kill_timeout_ms
 											.unwrap_or(input.lifecycle.kill_timeout_ms),
@@ -180,6 +188,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 						} else {
 							return Ok(Loop::Break(runtime::StateRes {
 								kill: Some(KillCtx {
+									generation: state.generation,
 									kill_timeout_ms: input.lifecycle.kill_timeout_ms,
 								}),
 							}));
@@ -193,6 +202,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 
 							// Fake signal
 							Main::StateUpdate(StateUpdate {
+								generation: state.generation,
 								state: protocol::ActorState::Lost,
 							})
 						}
@@ -203,6 +213,11 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 
 					match sig {
 						Main::StateUpdate(sig) => {
+							// Ignore state updates for previous generations
+							if sig.generation != state.generation {
+								return Ok(Loop::Continue);
+							}
+
 							ctx.activity(runtime::UpdateFdbInput {
 								actor_id: input.actor_id,
 								client_id,
@@ -283,6 +298,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 											destroy::kill(
 												ctx,
 												input.actor_id,
+												state.generation,
 												state.client_workflow_id,
 												0,
 												true,
@@ -324,7 +340,10 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 										return Ok(Loop::Break(runtime::StateRes {
 											// No need to kill if already exited
 											kill: matches!(sig.state, protocol::ActorState::Lost)
-												.then_some(KillCtx { kill_timeout_ms: 0 }),
+												.then_some(KillCtx {
+													generation: state.generation,
+													kill_timeout_ms: 0,
+												}),
 										}));
 									}
 								}
@@ -340,8 +359,15 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 								.await?;
 
 							// Kill old actor immediately
-							destroy::kill(ctx, input.actor_id, state.client_workflow_id, 0, true)
-								.await?;
+							destroy::kill(
+								ctx,
+								input.actor_id,
+								state.generation,
+								state.client_workflow_id,
+								0,
+								true,
+							)
+							.await?;
 
 							if let Some(sig) = runtime::reschedule_actor(
 								ctx,
@@ -355,6 +381,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 								// Destroyed early
 								return Ok(Loop::Break(runtime::StateRes {
 									kill: Some(KillCtx {
+										generation: state.generation,
 										kill_timeout_ms: sig
 											.override_kill_timeout_ms
 											.unwrap_or(input.lifecycle.kill_timeout_ms),
@@ -379,6 +406,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> GlobalResul
 						Main::Destroy(sig) => {
 							return Ok(Loop::Break(runtime::StateRes {
 								kill: Some(KillCtx {
+									generation: state.generation,
 									kill_timeout_ms: sig
 										.override_kill_timeout_ms
 										.unwrap_or(input.lifecycle.kill_timeout_ms),
@@ -442,6 +470,8 @@ pub struct Upgrade {
 
 #[signal("pegboard_actor_state_update")]
 pub struct StateUpdate {
+	#[serde(default)]
+	pub generation: u32,
 	pub state: protocol::ActorState,
 }
 

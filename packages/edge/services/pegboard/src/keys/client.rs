@@ -249,14 +249,19 @@ impl ActorKey {
 }
 
 impl FormalKey for ActorKey {
-	type Value = ();
+	/// Generation.
+	type Value = u32;
 
-	fn deserialize(&self, _raw: &[u8]) -> Result<Self::Value> {
-		Ok(())
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		if raw.is_empty() {
+			Ok(0)
+		} else {
+			Ok(u32::from_be_bytes(raw.try_into()?))
+		}
 	}
 
-	fn serialize(&self, _value: Self::Value) -> Result<Vec<u8>> {
-		Ok(Vec::new())
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok(value.to_be_bytes().to_vec())
 	}
 }
 

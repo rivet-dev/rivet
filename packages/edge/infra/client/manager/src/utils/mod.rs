@@ -194,7 +194,8 @@ async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 	sqlx::query(indoc!(
 		"
 		CREATE TABLE IF NOT EXISTS actors (
-			actor_id BLOB PRIMARY KEY, -- UUID
+			actor_id BLOB NOT NULL, -- UUID
+			generation INTEGER NOT NULL,
 			config BLOB NOT NULL,
 
 			start_ts INTEGER NOT NULL,
@@ -203,7 +204,9 @@ async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 			exit_ts INTEGER,
 
 			pid INTEGER,
-			exit_code INTEGER
+			exit_code INTEGER,
+
+			PRIMARY KEY (actor_id, generation)
 		) STRICT
 		",
 	))
@@ -214,6 +217,7 @@ async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 		"
 		CREATE TABLE IF NOT EXISTS actor_ports (
 			actor_id BLOB NOT NULL, -- UUID
+			generation INT NOT NULL,
 			port INT NOT NULL,
 			protocol INT NOT NULL, -- protocol::TransportProtocol
 
@@ -227,7 +231,7 @@ async fn init_sqlite_schema(pool: &SqlitePool) -> Result<()> {
 	sqlx::query(indoc!(
 		"
 		CREATE INDEX IF NOT EXISTS actor_ports_id_idx
-		ON actor_ports(actor_id)
+		ON actor_ports(actor_id, generation)
 		",
 	))
 	.execute(&mut *conn)

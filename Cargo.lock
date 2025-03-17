@@ -6176,6 +6176,7 @@ dependencies = [
  "anyhow",
  "foundationdb",
  "lazy_static",
+ "rivet-metrics",
  "tokio",
  "tracing",
 ]

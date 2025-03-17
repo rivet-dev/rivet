@@ -82,10 +82,14 @@ pub struct CommandWrapper {
 pub enum Command {
 	StartActor {
 		actor_id: Uuid,
+		#[serde(default)]
+		generation: u32,
 		config: Box<ActorConfig>,
 	},
 	SignalActor {
 		actor_id: Uuid,
+		#[serde(default)]
+		generation: u32,
 		// See nix::sys::signal::Signal
 		signal: i32,
 		/// Whether or not to delete related data (KV store).
@@ -246,7 +250,12 @@ pub struct EventWrapper {
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum Event {
-	ActorStateUpdate { actor_id: Uuid, state: ActorState },
+	ActorStateUpdate {
+		actor_id: Uuid,
+		#[serde(default)]
+		generation: u32,
+		state: ActorState,
+	},
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]

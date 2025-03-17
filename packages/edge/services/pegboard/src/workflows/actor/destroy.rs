@@ -9,6 +9,7 @@ use crate::{keys, protocol, types::GameGuardProtocol};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct KillCtx {
+	pub generation: u32,
 	pub kill_timeout_ms: i64,
 }
 
@@ -43,12 +44,13 @@ pub(crate) async fn pegboard_actor_destroy(
 		})
 		.await?;
 
-		if let (Some(client_workflow_id), Some(data)) = (client_workflow_id, &input.kill) {
+		if let (Some(client_workflow_id), Some(kill_data)) = (client_workflow_id, &input.kill) {
 			kill(
 				ctx,
 				input.actor_id,
+				kill_data.generation,
 				client_workflow_id,
-				data.kill_timeout_ms,
+				kill_data.kill_timeout_ms,
 				false,
 			)
 			.await?;
@@ -328,6 +330,7 @@ pub(crate) async fn clear_ports_and_resources(
 pub(crate) async fn kill(
 	ctx: &mut WorkflowCtx,
 	actor_id: Uuid,
+	generation: u32,
 	client_workflow_id: Uuid,
 	kill_timeout_ms: i64,
 	persist_storage: bool,
@@ -335,6 +338,7 @@ pub(crate) async fn kill(
 	if kill_timeout_ms != 0 {
 		ctx.signal(protocol::Command::SignalActor {
 			actor_id,
+			generation,
 			signal: Signal::SIGTERM as i32,
 			persist_storage,
 		})
@@ -348,6 +352,7 @@ pub(crate) async fn kill(
 
 	ctx.signal(protocol::Command::SignalActor {
 		actor_id,
+		generation,
 		signal: Signal::SIGKILL as i32,
 		persist_storage,
 	})

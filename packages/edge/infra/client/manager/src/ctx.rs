@@ -65,6 +65,7 @@ pub enum RuntimeError {
 #[derive(sqlx::FromRow)]
 struct ActorRow {
 	actor_id: Uuid,
+	generation: i64,
 	config: Vec<u8>,
 	pid: Option<i32>,
 	stop_ts: Option<i64>,
@@ -81,7 +82,7 @@ pub struct Ctx {
 	event_sender: EventSender,
 	pub(crate) pull_addr_handler: PullAddrHandler,
 
-	pub(crate) actors: RwLock<HashMap<Uuid, Arc<Actor>>>,
+	pub(crate) actors: RwLock<HashMap<(Uuid, u32), Arc<Actor>>>,
 	isolate_runner: RwLock<Option<runner::Handle>>,
 }
 
@@ -343,28 +344,45 @@ impl Ctx {
 
 	async fn process_command(self: &Arc<Self>, command: protocol::CommandWrapper) -> Result<()> {
 		match command.inner.deserialize()? {
-			protocol::Command::StartActor { actor_id, config } => {
-				// Insert actor
+			protocol::Command::StartActor {
+				actor_id,
+				generation,
+				config,
+			} => {
 				let mut actors = self.actors.write().await;
-				let actor = actors
-					.entry(actor_id)
-					.or_insert_with(|| Actor::new(actor_id, *config));
 
-				// Spawn actor
-				actor.start(&self).await?;
+				if actors.contains_key(&(actor_id, generation)) {
+					tracing::error!(
+						?actor_id,
+						?generation,
+						"actor with this actor id + generation already exists, ignoring start command",
+					);
+				} else {
+					let actor = Actor::new(actor_id, generation, *config);
+
+					// Insert actor
+					actors.insert((actor_id, generation), actor);
+
+					let actor = actors.get(&(actor_id, generation)).context("unreachable")?;
+
+					// Spawn actor
+					actor.start(&self).await?;
+				}
 			}
 			protocol::Command::SignalActor {
 				actor_id,
+				generation,
 				signal,
 				persist_storage,
 			} => {
-				if let Some(actor) = self.actors.read().await.get(&actor_id) {
+				if let Some(actor) = self.actors.read().await.get(&(actor_id, generation)) {
 					actor
 						.signal(&self, signal.try_into()?, persist_storage)
 						.await?;
 				} else {
 					tracing::warn!(
 						?actor_id,
+						?generation,
 						"received stop actor command for actor that doesn't exist (likely already stopped)"
 					);
 				}
@@ -565,7 +583,7 @@ impl Ctx {
 			utils::sql::query(|| async {
 				sqlx::query_as::<_, ActorRow>(indoc!(
 					"
-					SELECT actor_id, config, pid, stop_ts
+					SELECT actor_id, generation, config, pid, stop_ts
 					FROM actors
 					WHERE exit_ts IS NULL
 					",
@@ -602,6 +620,7 @@ impl Ctx {
 			};
 
 			let config = serde_json::from_slice::<protocol::ActorConfig>(&row.config)?;
+			let generation = row.generation.try_into()?;
 
 			match &isolate_runner {
 				Some(isolate_runner) if pid == isolate_runner.pid().as_raw() => {}
@@ -611,7 +630,7 @@ impl Ctx {
 					let runner = runner::Handle::from_pid(
 						runner::Comms::Basic,
 						Pid::from_raw(pid),
-						self.actor_path(row.actor_id),
+						self.actor_path(row.actor_id, generation),
 					);
 
 					// Kill runner
@@ -620,7 +639,7 @@ impl Ctx {
 			}
 
 			// Clean up actor. We run `cleanup_setup` instead of `cleanup` because `cleanup` publishes events.
-			let actor = Actor::new(row.actor_id, config);
+			let actor = Actor::new(row.actor_id, generation, config);
 			actor.cleanup_setup(self).await;
 		}
 
@@ -692,7 +711,7 @@ impl Ctx {
 				sqlx::query_as::<_, (i64,)>(indoc!(
 					"
 					UPDATE state
-					SET	last_workflow_id = ?
+					SET	last_workflow_id = ?1
 					RETURNING last_event_idx
 					",
 				))
@@ -703,7 +722,7 @@ impl Ctx {
 			utils::sql::query(|| async {
 				sqlx::query_as::<_, ActorRow>(indoc!(
 					"
-					SELECT actor_id, config, pid, stop_ts
+					SELECT actor_id, generation, config, pid, stop_ts
 					FROM actors
 					WHERE exit_ts IS NULL
 					",
@@ -727,11 +746,14 @@ impl Ctx {
 					sqlx::query(indoc!(
 						"
 						UPDATE actors
-						SET stop_ts = ?2
-						WHERE actor_id = ?1
+						SET stop_ts = ?3
+						WHERE
+							actor_id = ?1 AND
+							generation = ?2
 						",
 					))
 					.bind(row.actor_id)
+					.bind(row.generation)
 					.bind(utils::now())
 					.execute(&mut *self.sql().await?)
 					.await
@@ -740,6 +762,7 @@ impl Ctx {
 
 				self.event(protocol::Event::ActorStateUpdate {
 					actor_id: row.actor_id,
+					generation: row.generation.try_into()?,
 					state: protocol::ActorState::Lost,
 				})
 				.await?;
@@ -754,6 +777,7 @@ impl Ctx {
 			};
 
 			let config = serde_json::from_slice::<protocol::ActorConfig>(&row.config)?;
+			let generation = row.generation.try_into()?;
 
 			let runner = match &isolate_runner {
 				// We have to clone the existing isolate runner handle instead of creating a new one so it
@@ -766,19 +790,21 @@ impl Ctx {
 						runner::Handle::from_pid(
 							runner::Comms::Basic,
 							Pid::from_raw(pid),
-							self.actor_path(row.actor_id),
+							self.actor_path(row.actor_id, generation),
 						)
 					}
 					protocol::ImageKind::JavaScript => runner::Handle::from_pid(
 						runner::Comms::socket(),
 						Pid::from_raw(pid),
-						self.actor_path(row.actor_id),
+						self.actor_path(row.actor_id, generation),
 					),
 				},
 			};
 
-			let actor = Actor::with_runner(row.actor_id, config, runner);
-			let actor = actors_guard.entry(row.actor_id).or_insert(actor);
+			let actor = Actor::with_runner(row.actor_id, generation, config, runner);
+			let actor = actors_guard
+				.entry((row.actor_id, generation))
+				.or_insert(actor);
 
 			let actor = actor.clone();
 			let self2 = self.clone();
@@ -808,8 +834,8 @@ impl Ctx {
 		self.config().data_dir().join("actors")
 	}
 
-	pub fn actor_path(&self, actor_id: Uuid) -> PathBuf {
-		self.actors_path().join(actor_id.to_string())
+	pub fn actor_path(&self, actor_id: Uuid, generation: u32) -> PathBuf {
+		self.actors_path().join(format!("{actor_id}-{generation}"))
 	}
 
 	pub fn isolate_runner_path(&self) -> PathBuf {

@@ -98,7 +98,7 @@ pub async fn init(workflow_id: Uuid, pool: &SqlitePool) -> WorkflowResult<()> {
 		UPDATE _migrations
 		SET locked = TRUE
 		WHERE
-			last_index < ? AND
+			last_index < ?1 AND
 			NOT locked AND
 			NOT tainted
 		RETURNING last_index
@@ -161,7 +161,7 @@ pub async fn init(workflow_id: Uuid, pool: &SqlitePool) -> WorkflowResult<()> {
 			UPDATE _migrations
 			SET
 				locked = FALSE,
-				last_index = ?
+				last_index = ?1
 			",
 			MIGRATIONS.last_migration_index,
 		)

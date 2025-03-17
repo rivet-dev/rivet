@@ -1977,9 +1977,10 @@ impl Database for DatabaseFdbSqliteNats {
 									sql_execute!(
 										[self, &pool]
 										"
-									DELETE FROM workflow_signal_events
-									WHERE location = jsonb(?)
-									",
+										DELETE FROM workflow_signal_events
+										WHERE location = jsonb(?1)
+										",
+										location,
 									)
 									.await
 								})
@@ -1992,17 +1993,17 @@ impl Database for DatabaseFdbSqliteNats {
 								sql_execute!(
 									[self, &pool]
 									"
-								INSERT INTO workflow_signal_events (
-									location,
-									version,
-									signal_id,
-									signal_name,
-									body,
-									create_ts,
-									loop_location
-								)
-								VALUES (jsonb(?), ?, ?, ?, jsonb(?), ?, jsonb(?))
-								",
+									INSERT INTO workflow_signal_events (
+										location,
+										version,
+										signal_id,
+										signal_name,
+										body,
+										create_ts,
+										loop_location
+									)
+									VALUES (jsonb(?1), ?2, ?3, ?4, jsonb(?5), ?6, jsonb(?7))
+									",
 									location,
 									version as i64,
 									signal_id,
@@ -2310,7 +2311,7 @@ impl Database for DatabaseFdbSqliteNats {
 				INSERT INTO workflow_signal_send_events (
 					location, version, signal_id, signal_name, body, workflow_id, create_ts, loop_location
 				)
-				VALUES (jsonb(?), ?, ?, ?, jsonb(?), ?, ?, jsonb(?))
+				VALUES (jsonb(?1), ?2, ?3, ?4, jsonb(?5), ?6, ?7, jsonb(?8))
 				",
 				location,
 				version as i64,
@@ -2337,7 +2338,7 @@ impl Database for DatabaseFdbSqliteNats {
 					[self, pool]
 					"
 					DELETE FROM workflow_signal_send_events
-					WHERE location = jsonb(?)
+					WHERE location = jsonb(?1)
 					",
 					location,
 				)
@@ -2403,7 +2404,7 @@ impl Database for DatabaseFdbSqliteNats {
 					create_ts,
 					loop_location
 				)
-				VALUES (jsonb(?), ?, ?, ?, jsonb(?), jsonb(?), ?, jsonb(?))				
+				VALUES (jsonb(?1), ?2, ?3, ?4, jsonb(?5), jsonb(?6), ?7, jsonb(?8))				
 				",
 				location,
 				version as i64,
@@ -2439,7 +2440,7 @@ impl Database for DatabaseFdbSqliteNats {
 						[self, pool]
 						"
 						DELETE FROM workflow_sub_workflow_events
-						WHERE location = jsonb(?)
+						WHERE location = jsonb(?1)
 						",
 						location,
 					)
@@ -2584,7 +2585,7 @@ impl Database for DatabaseFdbSqliteNats {
 							create_ts,
 							loop_location
 						)
-						VALUES (jsonb(?), ?, ?, ?, jsonb(?), jsonb(?), ?, jsonb(?))
+						VALUES (jsonb(?1), ?2, ?3, ?4, jsonb(?5), jsonb(?6), ?7, jsonb(?8))
 						ON CONFLICT (location) DO UPDATE
 						SET output = EXCLUDED.output
 						",
@@ -2618,7 +2619,7 @@ impl Database for DatabaseFdbSqliteNats {
 							create_ts,
 							loop_location
 						)
-						VALUES (jsonb(?), ?, ?, ?, jsonb(?), ?, jsonb(?))
+						VALUES (jsonb(?1), ?2, ?3, ?4, jsonb(?5), ?6, jsonb(?7))
 						ON CONFLICT (location) DO NOTHING
 						",
 						location,
@@ -2637,7 +2638,7 @@ impl Database for DatabaseFdbSqliteNats {
 						INSERT INTO workflow_activity_errors (
 							location, activity_name, error, ts
 						)
-						VALUES (jsonb(?), ?, ?, ?)
+						VALUES (jsonb(?1), ?2, ?3, ?4)
 						",
 						location,
 						&event_id.name,
@@ -2683,7 +2684,7 @@ impl Database for DatabaseFdbSqliteNats {
 				INSERT INTO workflow_message_send_events (
 					location, version, tags, message_name, body, create_ts, loop_location
 				)
-				VALUES (jsonb(?), ?, jsonb(?), ?, jsonb(?), ?, jsonb(?))
+				VALUES (jsonb(?1), ?2, jsonb(?3), ?4, jsonb(?5), ?6, jsonb(?7))
 				",
 				location,
 				version as i64,
@@ -2735,12 +2736,12 @@ impl Database for DatabaseFdbSqliteNats {
 					create_ts,
 					loop_location
 				)
-				VALUES (jsonb(?), ?, ?, jsonb(?), jsonb(?), ?, jsonb(?))
+				VALUES (jsonb(?1), ?2, ?3, jsonb(?4), jsonb(?5), ?6, jsonb(?7))
 				ON CONFLICT (location) DO UPDATE
 				SET
-					iteration = ?,
-					state = jsonb(?),
-					output = jsonb(?)
+					iteration = ?3,
+					state = jsonb(?4),
+					output = jsonb(?5)
 				",
 				location,
 				version as i64,
@@ -2749,9 +2750,6 @@ impl Database for DatabaseFdbSqliteNats {
 				output.map(sqlx::types::Json),
 				rivet_util::timestamp::now(),
 				loop_location,
-				iteration as i64,
-				sqlx::types::Json(state),
-				output.map(sqlx::types::Json),
 			)
 			.await?;
 
@@ -2769,7 +2767,7 @@ impl Database for DatabaseFdbSqliteNats {
 						WHERE location IN (
 							SELECT location
 							FROM workflow_activity_events
-							WHERE loop_location = jsonb(?)
+							WHERE loop_location = jsonb(?1)
 						)
 						",
 						location,
@@ -2780,7 +2778,7 @@ impl Database for DatabaseFdbSqliteNats {
 						[self, @tx &mut tx]
 						"
 						DELETE FROM workflow_activity_events
-						WHERE loop_location = jsonb(?) AND NOT forgotten
+						WHERE loop_location = jsonb(?1) AND NOT forgotten
 						",
 						location,
 					)
@@ -2790,7 +2788,7 @@ impl Database for DatabaseFdbSqliteNats {
 						[self, @tx &mut tx]
 						"
 						DELETE FROM workflow_signal_events
-						WHERE loop_location = jsonb(?) AND NOT forgotten
+						WHERE loop_location = jsonb(?1) AND NOT forgotten
 						",
 						location,
 					)
@@ -2800,7 +2798,7 @@ impl Database for DatabaseFdbSqliteNats {
 						[self, @tx &mut tx]
 						"
 						DELETE FROM workflow_sub_workflow_events
-						WHERE loop_location = jsonb(?) AND NOT forgotten
+						WHERE loop_location = jsonb(?1) AND NOT forgotten
 						",
 						location,
 					)
@@ -2810,7 +2808,7 @@ impl Database for DatabaseFdbSqliteNats {
 						[self, @tx &mut tx]
 						"
 						DELETE FROM workflow_signal_send_events
-						WHERE loop_location = jsonb(?) AND NOT forgotten
+						WHERE loop_location = jsonb(?1) AND NOT forgotten
 						",
 						location,
 					)
@@ -2820,7 +2818,7 @@ impl Database for DatabaseFdbSqliteNats {
 						[self, @tx &mut tx]
 						"
 						DELETE FROM workflow_message_send_events
-						WHERE loop_location = jsonb(?) AND NOT forgotten
+						WHERE loop_location = jsonb(?1) AND NOT forgotten
 						",
 						location,
 					)
@@ -2830,7 +2828,7 @@ impl Database for DatabaseFdbSqliteNats {
 						[self, @tx &mut tx]
 						"
 						DELETE FROM workflow_loop_events
-						WHERE loop_location = jsonb(?) AND NOT forgotten
+						WHERE loop_location = jsonb(?1) AND NOT forgotten
 						",
 						location,
 					)
@@ -2840,7 +2838,7 @@ impl Database for DatabaseFdbSqliteNats {
 						[self, @tx &mut tx]
 						"
 						DELETE FROM workflow_sleep_events
-						WHERE loop_location = jsonb(?) AND NOT forgotten
+						WHERE loop_location = jsonb(?1) AND NOT forgotten
 						",
 						location,
 					)
@@ -2850,7 +2848,7 @@ impl Database for DatabaseFdbSqliteNats {
 						[self, @tx &mut tx]
 						"
 						DELETE FROM workflow_branch_events
-						WHERE loop_location = jsonb(?) AND NOT forgotten
+						WHERE loop_location = jsonb(?1) AND NOT forgotten
 						",
 						location,
 					)
@@ -2860,7 +2858,7 @@ impl Database for DatabaseFdbSqliteNats {
 						[self, @tx &mut tx]
 						"
 						DELETE FROM workflow_removed_events
-						WHERE loop_location = jsonb(?) AND NOT forgotten
+						WHERE loop_location = jsonb(?1) AND NOT forgotten
 						",
 						location,
 					)
@@ -2870,7 +2868,7 @@ impl Database for DatabaseFdbSqliteNats {
 						[self, @tx &mut tx]
 						"
 						DELETE FROM workflow_version_check_events
-						WHERE loop_location = jsonb(?) AND NOT forgotten
+						WHERE loop_location = jsonb(?1) AND NOT forgotten
 						",
 						location,
 					)
@@ -2881,7 +2879,7 @@ impl Database for DatabaseFdbSqliteNats {
 						"
 						UPDATE workflow_activity_events
 						SET forgotten = TRUE
-						WHERE loop_location = jsonb(?) AND NOT forgotten
+						WHERE loop_location = jsonb(?1) AND NOT forgotten
 						",
 						location,
 					)
@@ -2892,7 +2890,7 @@ impl Database for DatabaseFdbSqliteNats {
 						"
 						UPDATE workflow_signal_events
 						SET forgotten = TRUE
-						WHERE loop_location = jsonb(?) AND NOT forgotten
+						WHERE loop_location = jsonb(?1) AND NOT forgotten
 						",
 						location,
 					)
@@ -2903,7 +2901,7 @@ impl Database for DatabaseFdbSqliteNats {
 						"
 						UPDATE workflow_sub_workflow_events
 						SET forgotten = TRUE
-						WHERE loop_location = jsonb(?) AND NOT forgotten
+						WHERE loop_location = jsonb(?1) AND NOT forgotten
 						",
 						location,
 					)
@@ -2914,7 +2912,7 @@ impl Database for DatabaseFdbSqliteNats {
 						"
 						UPDATE workflow_signal_send_events
 						SET forgotten = TRUE
-						WHERE loop_location = jsonb(?) AND NOT forgotten
+						WHERE loop_location = jsonb(?1) AND NOT forgotten
 						",
 						location,
 					)
@@ -2925,7 +2923,7 @@ impl Database for DatabaseFdbSqliteNats {
 						"
 						UPDATE workflow_message_send_events
 						SET forgotten = TRUE
-						WHERE loop_location = jsonb(?) AND NOT forgotten
+						WHERE loop_location = jsonb(?1) AND NOT forgotten
 						",
 						location,
 					)
@@ -2936,7 +2934,7 @@ impl Database for DatabaseFdbSqliteNats {
 						"
 						UPDATE workflow_loop_events
 						SET forgotten = TRUE
-						WHERE loop_location = jsonb(?) AND NOT forgotten
+						WHERE loop_location = jsonb(?1) AND NOT forgotten
 						",
 						location,
 					)
@@ -2947,7 +2945,7 @@ impl Database for DatabaseFdbSqliteNats {
 						"
 						UPDATE workflow_sleep_events
 						SET forgotten = TRUE
-						WHERE loop_location = jsonb(?) AND NOT forgotten
+						WHERE loop_location = jsonb(?1) AND NOT forgotten
 						",
 						location,
 					)
@@ -2958,7 +2956,7 @@ impl Database for DatabaseFdbSqliteNats {
 						"
 						UPDATE workflow_branch_events
 						SET forgotten = TRUE
-						WHERE loop_location = jsonb(?) AND NOT forgotten
+						WHERE loop_location = jsonb(?1) AND NOT forgotten
 						",
 						location,
 					)
@@ -2969,7 +2967,7 @@ impl Database for DatabaseFdbSqliteNats {
 						"
 						UPDATE workflow_removed_events
 						SET forgotten = TRUE
-						WHERE loop_location = jsonb(?) AND NOT forgotten
+						WHERE loop_location = jsonb(?1) AND NOT forgotten
 						",
 						location,
 					)
@@ -2980,7 +2978,7 @@ impl Database for DatabaseFdbSqliteNats {
 						"
 						UPDATE workflow_version_check_events
 						SET forgotten = TRUE
-						WHERE loop_location = jsonb(?) AND NOT forgotten
+						WHERE loop_location = jsonb(?1) AND NOT forgotten
 						",
 						location,
 					)
@@ -3018,7 +3016,7 @@ impl Database for DatabaseFdbSqliteNats {
 				INSERT INTO workflow_sleep_events (
 					location, version, deadline_ts, create_ts, state, loop_location
 				)
-				VALUES (jsonb(?), ?, ?, ?, ?, jsonb(?))
+				VALUES (jsonb(?1), ?2, ?3, ?4, ?5, jsonb(?6))
 				",
 				location,
 				version as i64,
@@ -3051,8 +3049,8 @@ impl Database for DatabaseFdbSqliteNats {
 				[self, pool]
 				"
 				UPDATE workflow_sleep_events
-				SET state = ?
-				WHERE location = jsonb(?)
+				SET state = ?1
+				WHERE location = jsonb(?2)
 				",
 				state as i64,
 				location,
@@ -3084,7 +3082,7 @@ impl Database for DatabaseFdbSqliteNats {
 				INSERT INTO workflow_branch_events (
 					location, version, create_ts, loop_location
 				)
-				VALUES (jsonb(?), ?, ?, jsonb(?))
+				VALUES (jsonb(?1), ?2, ?3, jsonb(?4))
 				",
 				location,
 				version as i64,
@@ -3119,7 +3117,7 @@ impl Database for DatabaseFdbSqliteNats {
 				INSERT INTO workflow_removed_events (
 					location, event_type, event_name, create_ts, loop_location
 				)
-				VALUES (jsonb(?), ?, ?, ?, jsonb(?))
+				VALUES (jsonb(?1), ?2, ?3, ?4, jsonb(?5))
 				",
 				location,
 				event_type as i64,
@@ -3154,7 +3152,7 @@ impl Database for DatabaseFdbSqliteNats {
 				INSERT INTO workflow_version_check_events (
 					location, version, create_ts, loop_location
 				)
-				VALUES (jsonb(?), ?, ?, jsonb(?))
+				VALUES (jsonb(?1), ?2, ?3, jsonb(?4))
 				",
 				location,
 				version as i64,

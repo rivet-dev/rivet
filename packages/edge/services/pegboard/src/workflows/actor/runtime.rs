@@ -23,6 +23,7 @@ use crate::{
 
 #[derive(Deserialize, Serialize)]
 pub struct State {
+	pub generation: u32,
 	pub client_id: Uuid,
 	pub client_workflow_id: Uuid,
 	pub drain_timeout_ts: Option<i64>,
@@ -32,6 +33,7 @@ pub struct State {
 impl State {
 	pub fn new(client_id: Uuid, client_workflow_id: Uuid) -> Self {
 		State {
+			generation: 0,
 			client_id,
 			client_workflow_id,
 			drain_timeout_ts: None,
@@ -84,23 +86,48 @@ async fn update_client(ctx: &ActivityCtx, input: &UpdateClientInput) -> GlobalRe
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-struct AllocateActorInput {
+struct AllocateActorInputV1 {
 	actor_id: Uuid,
 	build_kind: BuildKind,
 	resources: protocol::Resources,
 }
 
+#[activity(AllocateActorV1)]
+async fn allocate_actor(
+	ctx: &ActivityCtx,
+	input: &AllocateActorInputV1,
+) -> GlobalResult<Option<AllocateActorOutputV2>> {
+	AllocateActorV2::run(
+		ctx,
+		&AllocateActorInputV2 {
+			actor_id: input.actor_id,
+			generation: 0,
+			build_kind: input.build_kind,
+			resources: input.resources.clone(),
+		},
+	)
+	.await
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash)]
+struct AllocateActorInputV2 {
+	actor_id: Uuid,
+	generation: u32,
+	build_kind: BuildKind,
+	resources: protocol::Resources,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
-struct AllocateActorOutput {
+struct AllocateActorOutputV2 {
 	client_id: Uuid,
 	client_workflow_id: Uuid,
 }
 
-#[activity(AllocateActor)]
-async fn allocate_actor(
+#[activity(AllocateActorV2)]
+async fn allocate_actor_v2(
 	ctx: &ActivityCtx,
-	input: &AllocateActorInput,
-) -> GlobalResult<Option<AllocateActorOutput>> {
+	input: &AllocateActorInputV2,
+) -> GlobalResult<Option<AllocateActorOutputV2>> {
 	let client_flavor = match input.build_kind {
 		BuildKind::DockerImage | BuildKind::OciBundle => protocol::ClientFlavor::Container,
 		BuildKind::JavaScript => protocol::ClientFlavor::Isolate,
@@ -224,11 +251,11 @@ async fn allocate_actor(
 				tx.set(
 					&keys::subspace().pack(&client_actor_key),
 					&client_actor_key
-						.serialize(())
+						.serialize(input.generation)
 						.map_err(|x| fdb::FdbBindingError::CustomError(x.into()))?,
 				);
 
-				return Ok(Some(AllocateActorOutput {
+				return Ok(Some(AllocateActorOutputV2 {
 					client_id: old_allocation_key.client_id,
 					client_workflow_id,
 				}));
@@ -475,15 +502,29 @@ pub async fn spawn_actor(
 	input: &Input,
 	network_ports: &util::serde::HashableMap<String, Port>,
 	actor_setup: &setup::ActorSetupCtx,
+	generation: u32,
 ) -> GlobalResult<Option<(Uuid, Uuid)>> {
-	let Some(res) = ctx
-		.activity(AllocateActorInput {
-			actor_id: input.actor_id,
-			build_kind: actor_setup.meta.build_kind,
-			resources: actor_setup.resources.clone(),
-		})
-		.await?
-	else {
+	let res = match ctx.check_version(2).await? {
+		1 => {
+			ctx.activity(AllocateActorInputV1 {
+				actor_id: input.actor_id,
+				build_kind: actor_setup.meta.build_kind,
+				resources: actor_setup.resources.clone(),
+			})
+			.await?
+		}
+		_ => {
+			ctx.v(2).activity(AllocateActorInputV2 {
+				actor_id: input.actor_id,
+				generation,
+				build_kind: actor_setup.meta.build_kind,
+				resources: actor_setup.resources.clone(),
+			})
+			.await?
+		}
+	};
+
+	let Some(res) = res else {
 		return Ok(None);
 	};
 
@@ -497,6 +538,7 @@ pub async fn spawn_actor(
 
 	ctx.signal(protocol::Command::StartActor {
 		actor_id: input.actor_id,
+		generation,
 		config: Box::new(protocol::ActorConfig {
 			image: protocol::Image {
 				id: input.image_id,
@@ -606,6 +648,8 @@ pub async fn reschedule_actor(
 	)
 	.await?;
 
+	let next_generation = state.generation + 1;
+
 	// Waits for the actor to be ready (or destroyed) and automatically retries if failed to allocate.
 	let res = ctx
 		.loope(RescheduleState::default(), |ctx, state| {
@@ -643,7 +687,9 @@ pub async fn reschedule_actor(
 					}
 				}
 
-				if let Some(res) = spawn_actor(ctx, &input, &network_ports, &actor_setup).await? {
+				if let Some(res) =
+					spawn_actor(ctx, &input, &network_ports, &actor_setup, next_generation).await?
+				{
 					Ok(Loop::Break(Ok(res)))
 				} else {
 					tracing::debug!(actor_id=?input.actor_id, "failed to reschedule actor, retrying");
@@ -658,6 +704,7 @@ pub async fn reschedule_actor(
 	// Update loop state
 	match res {
 		Ok((client_id, client_workflow_id)) => {
+			state.generation = next_generation;
 			state.client_id = client_id;
 			state.client_workflow_id = client_workflow_id;
 
