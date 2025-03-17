@@ -8,7 +8,7 @@
 		"cluster": {
 			// This is safe to hardcode
 			"client_id": "fc67e54e-5d6a-4726-ab23-77b0e54f068f",
-			"api_endpoint": "http://rivet-edge-server:8080",
+			"api_endpoint": "http://rivet-server:8080",
 			"ws_addresses": {
 				"static": [
 					"rivet-edge-server:8082"

@@ -32,6 +32,7 @@
 						"mode": "palette-classic"
 					},
 					"custom": {
+						"axisBorderShow": false,
 						"axisCenteredZero": false,
 						"axisColorMode": "text",
 						"axisLabel": "",
@@ -46,6 +47,7 @@
 							"tooltip": false,
 							"viz": false
 						},
+						"insertNulls": false,
 						"lineInterpolation": "linear",
 						"lineWidth": 1,
 						"pointSize": 5,
@@ -110,7 +112,7 @@
 						"uid": "prometheus"
 					},
 					"editorMode": "code",
-					"expr": "max by (workflow_name) (rivet_chirp_workflow_workflow_active{workflow_name=~\"[[workflow_name]]\"})",
+					"expr": "sum by (workflow_name) (rivet_chirp_workflow_workflow_active{workflow_name=~\"[[workflow_name]]\"})",
 					"instant": false,
 					"legendFormat": "{{workflow_name}}",
 					"range": true,
@@ -131,6 +133,7 @@
 						"mode": "palette-classic"
 					},
 					"custom": {
+						"axisBorderShow": false,
 						"axisCenteredZero": false,
 						"axisColorMode": "text",
 						"axisLabel": "",
@@ -145,6 +148,7 @@
 							"tooltip": false,
 							"viz": false
 						},
+						"insertNulls": false,
 						"lineInterpolation": "linear",
 						"lineWidth": 1,
 						"pointSize": 5,
@@ -230,6 +234,7 @@
 						"mode": "palette-classic"
 					},
 					"custom": {
+						"axisBorderShow": false,
 						"axisCenteredZero": false,
 						"axisColorMode": "text",
 						"axisLabel": "",
@@ -244,6 +249,7 @@
 							"tooltip": false,
 							"viz": false
 						},
+						"insertNulls": false,
 						"lineInterpolation": "linear",
 						"lineWidth": 1,
 						"pointSize": 5,
@@ -330,6 +336,7 @@
 						"mode": "palette-classic"
 					},
 					"custom": {
+						"axisBorderShow": false,
 						"axisCenteredZero": false,
 						"axisColorMode": "text",
 						"axisLabel": "",
@@ -344,6 +351,7 @@
 							"tooltip": false,
 							"viz": false
 						},
+						"insertNulls": false,
 						"lineInterpolation": "linear",
 						"lineWidth": 1,
 						"pointSize": 5,
@@ -429,6 +437,7 @@
 						"mode": "palette-classic"
 					},
 					"custom": {
+						"axisBorderShow": false,
 						"axisCenteredZero": false,
 						"axisColorMode": "text",
 						"axisLabel": "",
@@ -443,6 +452,7 @@
 							"tooltip": false,
 							"viz": false
 						},
+						"insertNulls": false,
 						"lineInterpolation": "linear",
 						"lineWidth": 1,
 						"pointSize": 5,
@@ -528,6 +538,7 @@
 						"mode": "palette-classic"
 					},
 					"custom": {
+						"axisBorderShow": false,
 						"axisCenteredZero": false,
 						"axisColorMode": "text",
 						"axisLabel": "",
@@ -542,6 +553,7 @@
 							"tooltip": false,
 							"viz": false
 						},
+						"insertNulls": false,
 						"lineInterpolation": "linear",
 						"lineWidth": 1,
 						"pointSize": 5,
@@ -574,7 +586,32 @@
 						]
 					}
 				},
-				"overrides": []
+				"overrides": [
+					{
+						"__systemRef": "hideSeriesFrom",
+						"matcher": {
+							"id": "byNames",
+							"options": {
+								"mode": "exclude",
+								"names": [
+									"pegboard_forward_to_server"
+								],
+								"prefix": "All except:",
+								"readOnly": true
+							}
+						},
+						"properties": [
+							{
+								"id": "custom.hideFrom",
+								"value": {
+									"legend": false,
+									"tooltip": false,
+									"viz": true
+								}
+							}
+						]
+					}
+				]
 			},
 			"gridPos": {
 				"h": 8,
@@ -606,7 +643,7 @@
 						"uid": "prometheus"
 					},
 					"editorMode": "code",
-					"expr": "max by (signal_name) (rivet_chirp_workflow_signal_pending)",
+					"expr": "sum by (signal_name) (rivet_chirp_workflow_signal_pending)",
 					"instant": false,
 					"legendFormat": "{{signal_name}}",
 					"range": true,
@@ -690,7 +727,6 @@
 				},
 				"tooltip": {
 					"mode": "single",
-					"show": true,
 					"showColorScale": false,
 					"yHistogram": true
 				},
@@ -702,7 +738,7 @@
 					"unit": "s"
 				}
 			},
-			"pluginVersion": "10.0.0",
+			"pluginVersion": "10.4.1",
 			"reverseYBuckets": false,
 			"targets": [
 				{
@@ -810,7 +846,6 @@
 				},
 				"tooltip": {
 					"mode": "single",
-					"show": true,
 					"showColorScale": false,
 					"yHistogram": true
 				},
@@ -822,7 +857,7 @@
 					"unit": "s"
 				}
 			},
-			"pluginVersion": "10.0.0",
+			"pluginVersion": "10.4.1",
 			"reverseYBuckets": false,
 			"targets": [
 				{
@@ -867,6 +902,7 @@
 						"mode": "palette-classic"
 					},
 					"custom": {
+						"axisBorderShow": false,
 						"axisCenteredZero": false,
 						"axisColorMode": "text",
 						"axisLabel": "",
@@ -882,6 +918,7 @@
 							"tooltip": false,
 							"viz": false
 						},
+						"insertNulls": false,
 						"lineInterpolation": "linear",
 						"lineWidth": 1,
 						"pointSize": 5,
@@ -968,6 +1005,7 @@
 						"mode": "palette-classic"
 					},
 					"custom": {
+						"axisBorderShow": false,
 						"axisCenteredZero": false,
 						"axisColorMode": "text",
 						"axisLabel": "",
@@ -983,6 +1021,7 @@
 							"tooltip": false,
 							"viz": false
 						},
+						"insertNulls": false,
 						"lineInterpolation": "linear",
 						"lineWidth": 1,
 						"pointSize": 5,
@@ -1132,7 +1171,6 @@
 				},
 				"tooltip": {
 					"mode": "single",
-					"show": true,
 					"showColorScale": false,
 					"yHistogram": true
 				},
@@ -1144,7 +1182,7 @@
 					"unit": "s"
 				}
 			},
-			"pluginVersion": "10.0.0",
+			"pluginVersion": "10.4.1",
 			"reverseYBuckets": false,
 			"targets": [
 				{
@@ -1252,7 +1290,6 @@
 				},
 				"tooltip": {
 					"mode": "single",
-					"show": true,
 					"showColorScale": false,
 					"yHistogram": true
 				},
@@ -1264,7 +1301,7 @@
 					"unit": "s"
 				}
 			},
-			"pluginVersion": "10.0.0",
+			"pluginVersion": "10.4.1",
 			"reverseYBuckets": false,
 			"targets": [
 				{
@@ -1385,7 +1422,6 @@
 				},
 				"tooltip": {
 					"mode": "single",
-					"show": true,
 					"showColorScale": false,
 					"yHistogram": true
 				},
@@ -1397,7 +1433,7 @@
 					"unit": "s"
 				}
 			},
-			"pluginVersion": "10.0.0",
+			"pluginVersion": "10.4.1",
 			"reverseYBuckets": false,
 			"targets": [
 				{
@@ -1442,6 +1478,7 @@
 						"mode": "palette-classic"
 					},
 					"custom": {
+						"axisBorderShow": false,
 						"axisCenteredZero": false,
 						"axisColorMode": "text",
 						"axisLabel": "",
@@ -1455,6 +1492,7 @@
 							"tooltip": false,
 							"viz": false
 						},
+						"insertNulls": false,
 						"lineInterpolation": "linear",
 						"lineWidth": 1,
 						"pointSize": 5,
@@ -1604,7 +1642,6 @@
 				},
 				"tooltip": {
 					"mode": "single",
-					"show": true,
 					"showColorScale": false,
 					"yHistogram": true
 				},
@@ -1616,7 +1653,7 @@
 					"unit": "s"
 				}
 			},
-			"pluginVersion": "10.0.0",
+			"pluginVersion": "10.4.1",
 			"reverseYBuckets": false,
 			"targets": [
 				{
@@ -1661,6 +1698,7 @@
 						"mode": "palette-classic"
 					},
 					"custom": {
+						"axisBorderShow": false,
 						"axisCenteredZero": false,
 						"axisColorMode": "text",
 						"axisLabel": "",
@@ -1674,6 +1712,7 @@
 							"tooltip": false,
 							"viz": false
 						},
+						"insertNulls": false,
 						"lineInterpolation": "linear",
 						"lineWidth": 1,
 						"pointSize": 5,
@@ -1823,7 +1862,6 @@
 				},
 				"tooltip": {
 					"mode": "single",
-					"show": true,
 					"showColorScale": false,
 					"yHistogram": true
 				},
@@ -1835,7 +1873,7 @@
 					"unit": "s"
 				}
 			},
-			"pluginVersion": "10.0.0",
+			"pluginVersion": "10.4.1",
 			"reverseYBuckets": false,
 			"targets": [
 				{
@@ -1943,7 +1981,6 @@
 				},
 				"tooltip": {
 					"mode": "single",
-					"show": true,
 					"showColorScale": false,
 					"yHistogram": true
 				},
@@ -1955,7 +1992,7 @@
 					"unit": "s"
 				}
 			},
-			"pluginVersion": "10.0.0",
+			"pluginVersion": "10.4.1",
 			"reverseYBuckets": false,
 			"targets": [
 				{
@@ -2063,7 +2100,6 @@
 				},
 				"tooltip": {
 					"mode": "single",
-					"show": true,
 					"showColorScale": false,
 					"yHistogram": true
 				},
@@ -2075,7 +2111,7 @@
 					"unit": "s"
 				}
 			},
-			"pluginVersion": "10.0.0",
+			"pluginVersion": "10.4.1",
 			"reverseYBuckets": false,
 			"targets": [
 				{
@@ -2183,7 +2219,6 @@
 				},
 				"tooltip": {
 					"mode": "single",
-					"show": true,
 					"showColorScale": false,
 					"yHistogram": true
 				},
@@ -2195,7 +2230,7 @@
 					"unit": "s"
 				}
 			},
-			"pluginVersion": "10.0.0",
+			"pluginVersion": "10.4.1",
 			"reverseYBuckets": false,
 			"targets": [
 				{
@@ -2231,8 +2266,7 @@
 		}
 	],
 	"refresh": "5s",
-	"schemaVersion": 38,
-	"style": "dark",
+	"schemaVersion": 39,
 	"tags": [
 		"chirp"
 	],

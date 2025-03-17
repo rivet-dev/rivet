@@ -9,5 +9,6 @@ edition.workspace = true
 anyhow = "1.0"
 foundationdb.workspace = true
 lazy_static = "1.4"
+rivet-metrics.workspace = true
 tokio = { version = "1.40.0", features = ["full"] }
 tracing = "0.1.40"

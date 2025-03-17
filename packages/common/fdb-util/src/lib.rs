@@ -1,13 +1,14 @@
 use std::{
 	path::{Path, PathBuf},
 	result::Result::Ok,
-	time::Duration,
+	time::{Duration, Instant},
 };
 
 use anyhow::*;
 use foundationdb::{self as fdb, future::FdbValue, options::DatabaseOption};
 
 pub mod keys;
+mod metrics;
 
 /// Makes the code blatantly obvious if its using a snapshot read.
 pub const SNAPSHOT: bool = true;
@@ -64,6 +65,8 @@ async fn fdb_health_check(fdb_cluster_path: PathBuf) -> Result<()> {
 	let db = handle(&fdb_cluster_path)?;
 
 	loop {
+		let start_instant = Instant::now();
+
 		match tokio::time::timeout(
 			Duration::from_secs(3),
 			db.run(|trx, _maybe_committed| async move { Ok(trx.get(b"", true).await?) }),
@@ -71,9 +74,19 @@ async fn fdb_health_check(fdb_cluster_path: PathBuf) -> Result<()> {
 		.await
 		{
 			Ok(res) => {
+				let dt = start_instant.elapsed().as_secs_f64();
+				metrics::FDB_PING_DURATION
+					.with_label_values(&[])
+					.observe(dt);
+				metrics::FDB_MISSED_PING.with_label_values(&[]).set(0);
+
 				res?;
 			}
-			Err(_) => tracing::error!("fdb missed ping"),
+			Err(_) => {
+				metrics::FDB_MISSED_PING.with_label_values(&[]).set(1);
+
+				tracing::error!("fdb missed ping")
+			}
 		}
 
 		tokio::time::sleep(Duration::from_secs(3)).await;
