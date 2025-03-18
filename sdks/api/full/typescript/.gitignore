@@ -1,8 +1,8 @@
 node_modules
 .DS_Store
 *.d.ts
-dist/
-types/
+/dist/
+/types/
 
 # yarn berry
 .pnp.*
