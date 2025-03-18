@@ -49,10 +49,7 @@ async fn handle(
 
 				for row in versions {
 					let version_id = row.version_id;
-					cache.resolve(
-						&version_id,
-						Into::<backend::game::Version>::into(row),
-					);
+					cache.resolve(&version_id, Into::<backend::game::Version>::into(row));
 				}
 
 				Ok(cache)

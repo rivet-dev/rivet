@@ -4712,10 +4712,10 @@ const RAW_RUNTIME_STATE =
       }]\
     ]],\
     ["@rivet-gg/api", [\
-      ["file:./vendor/rivet-gg-api.tgz#./vendor/rivet-gg-api.tgz::hash=c2d050&locator=%40rivet-gg%2Fhub%40workspace%3Afrontend%2Fapps%2Fhub", {\
-        "packageLocation": "../../../.yarn/berry/cache/@rivet-gg-api-file-e62e64eef1-10c0.zip/node_modules/@rivet-gg/api/",\
+      ["file:./vendor/rivet-gg-api.tgz#./vendor/rivet-gg-api.tgz::hash=85c7da&locator=%40rivet-gg%2Fhub%40workspace%3Afrontend%2Fapps%2Fhub", {\
+        "packageLocation": "../../../.yarn/berry/cache/@rivet-gg-api-file-c9d164b10d-10c0.zip/node_modules/@rivet-gg/api/",\
         "packageDependencies": [\
-          ["@rivet-gg/api", "file:./vendor/rivet-gg-api.tgz#./vendor/rivet-gg-api.tgz::hash=c2d050&locator=%40rivet-gg%2Fhub%40workspace%3Afrontend%2Fapps%2Fhub"],\
+          ["@rivet-gg/api", "file:./vendor/rivet-gg-api.tgz#./vendor/rivet-gg-api.tgz::hash=85c7da&locator=%40rivet-gg%2Fhub%40workspace%3Afrontend%2Fapps%2Fhub"],\
           ["form-data", "npm:4.0.2"],\
           ["js-base64", "npm:3.7.7"],\
           ["node-fetch", "virtual:4c11a05278ff14d1e40d40585dd9773c356a39b963082bb71d96cb8e95aeaf4ad061fb30b5629a78b778d0def733c17ee11e2123d8ac536b1870e12d353c4e92#npm:2.7.0"],\
@@ -4863,7 +4863,7 @@ const RAW_RUNTIME_STATE =
           ["@fortawesome/react-fontawesome", "virtual:e6bcb056ce93bf9997b1b74f1dde6c7a6dab36768c0f1fd111556ce6eb837233eaa7b3860914f1a67deaf4c34ff9be35cc2d5ff5837aa468d4d5f27d5d03afe3#npm:0.2.2"],\
           ["@hookform/resolvers", "virtual:e6bcb056ce93bf9997b1b74f1dde6c7a6dab36768c0f1fd111556ce6eb837233eaa7b3860914f1a67deaf4c34ff9be35cc2d5ff5837aa468d4d5f27d5d03afe3#npm:3.10.0"],\
           ["@mdx-js/rollup", "virtual:a2de222d17059df7133fe4c56068b50fd510c010bf07b9cebd1d919992e7f8f85ca7951d28766eeb1232951a57193a87752d8dfb73fe9826cff8c2fb1e59030a#npm:3.1.0"],\
-          ["@rivet-gg/api", "file:./vendor/rivet-gg-api.tgz#./vendor/rivet-gg-api.tgz::hash=c2d050&locator=%40rivet-gg%2Fhub%40workspace%3Afrontend%2Fapps%2Fhub"],\
+          ["@rivet-gg/api", "file:./vendor/rivet-gg-api.tgz#./vendor/rivet-gg-api.tgz::hash=85c7da&locator=%40rivet-gg%2Fhub%40workspace%3Afrontend%2Fapps%2Fhub"],\
           ["@rivet-gg/api-ee", "file:./vendor/rivet-gg-api-ee.tgz#./vendor/rivet-gg-api-ee.tgz::hash=1f46df&locator=%40rivet-gg%2Fhub%40workspace%3Afrontend%2Fapps%2Fhub"],\
           ["@rivet-gg/components", "workspace:frontend/packages/components"],\
           ["@rivet-gg/icons", "virtual:e6bcb056ce93bf9997b1b74f1dde6c7a6dab36768c0f1fd111556ce6eb837233eaa7b3860914f1a67deaf4c34ff9be35cc2d5ff5837aa468d4d5f27d5d03afe3#workspace:frontend/packages/icons"],\
