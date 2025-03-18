@@ -10,6 +10,7 @@ use crate::{config, paths, tasks::build_publish, util::task};
 pub struct Input {
 	pub config: config::Config,
 	pub environment_id: Uuid,
+	pub filter_tags: Option<HashMap<String, String>>,
 	pub build_tags: Option<HashMap<String, String>>,
 	pub version_name: Option<String>,
 }
@@ -59,7 +60,7 @@ impl task::Task for Task {
 		let mut example_build = None; // Build to use for the example code
 		for (build_name, build) in &input.config.builds {
 			// Filter out builds that match the tags
-			if let Some(filter) = &input.build_tags {
+			if let Some(filter) = &input.filter_tags {
 				if !filter
 					.iter()
 					.all(|(k, v)| build.full_tags(build_name).get(k.as_str()) == Some(&v.as_str()))
@@ -72,12 +73,21 @@ impl task::Task for Task {
 				example_build = Some((build_name, build));
 			}
 
+			// Merge build tags & input tags. Input tags overwrite config tags.
+			let build_tags = build
+				.tags
+				.iter()
+				.flatten()
+				.chain(input.build_tags.iter().flatten())
+				.map(|(k, v)| (k.clone(), v.clone()))
+				.collect();
+
 			// Build using build publish task
 			let build_id = build_publish::Task::run(
 				task.clone(),
 				build_publish::Input {
 					environment_id: env.id,
-					build_tags: input.build_tags.clone(),
+					build_tags: Some(build_tags),
 					version_name: version_name.clone(),
 					build_name: build_name.to_string(),
 					runtime: build.runtime.clone(),

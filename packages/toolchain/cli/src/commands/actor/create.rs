@@ -196,6 +196,7 @@ impl Opts {
 			// Deploy server
 			let deploy_build_ids = crate::util::deploy::deploy(crate::util::deploy::DeployOpts {
 				environment: &env,
+				filter_tags: None,
 				build_tags: Some(build_tags),
 				version: self.version.clone(),
 			})

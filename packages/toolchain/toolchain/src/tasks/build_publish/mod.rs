@@ -18,13 +18,6 @@ use crate::{
 pub mod docker;
 pub mod js;
 
-/// Returns the tags including the name tag.
-///
-/// This does not include the current, version, and access tags.
-fn full_tags<'a>(name: &'a str) -> HashMap<&'a str, &'a str> {
-	HashMap::from([(crate::build::tags::NAME, name)])
-}
-
 #[derive(Deserialize)]
 pub struct Input {
 	pub environment_id: Uuid,
@@ -67,6 +60,7 @@ impl task::Task for Task {
 			&env,
 			input.version_name.clone(),
 			input.build_name.clone(),
+			input.build_tags.clone(),
 			&input.runtime,
 		)
 		.await?;
@@ -84,15 +78,22 @@ async fn build_and_upload(
 	env: &TEMPEnvironment,
 	version_name: String,
 	build_name: String,
+	extra_build_tags: Option<HashMap<String, String>>,
 	runtime: &Runtime,
 ) -> Result<Uuid> {
 	task.log("");
 
+	// Build tags
+	let mut build_tags = HashMap::from([
+		(build::tags::NAME.to_string(), build_name.to_string()),
+		(build::tags::VERSION.to_string(), version_name.to_string()),
+		(build::tags::CURRENT.to_string(), "true".to_string()),
+	]);
+	if let Some(extra_build_tags) = extra_build_tags {
+		build_tags.extend(extra_build_tags.clone());
+	}
+
 	// Build & upload
-	let build_tags = full_tags(&build_name)
-		.into_iter()
-		.map(|(k, v)| (k.to_string(), v.to_string()))
-		.collect::<HashMap<_, _>>();
 	let build_id = match &runtime {
 		config::build::Runtime::Docker(docker) => {
 			docker::build_and_upload(
@@ -119,15 +120,6 @@ async fn build_and_upload(
 			.await?
 		}
 	};
-
-	let mut tags = HashMap::from([
-		(build::tags::NAME.to_string(), build_name.to_string()),
-		(build::tags::VERSION.to_string(), version_name.to_string()),
-		(build::tags::CURRENT.to_string(), "true".to_string()),
-	]);
-	if !build_tags.is_empty() {
-		tags.extend(build_tags.clone());
-	}
 
 	// Find existing builds with current tag
 	let list_res = apis::builds_api::builds_list(
@@ -163,7 +155,7 @@ async fn build_and_upload(
 		&ctx.openapi_config_cloud,
 		&build_id.to_string(),
 		models::BuildsPatchBuildTagsRequest {
-			tags: Some(serde_json::to_value(&tags)?),
+			tags: Some(serde_json::to_value(&build_tags)?),
 			exclusive_tags: None,
 		},
 		Some(&ctx.project.name_id),

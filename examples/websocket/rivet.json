@@ -2,7 +2,9 @@
 	"builds": {
 		"ws": {
 			"script": "ws.ts",
-			"access": "private"
+			"tags": {
+				"foo": "bar"
+			}
 		}
 	}
 }

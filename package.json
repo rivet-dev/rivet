@@ -7,7 +7,7 @@
 		"frontend/packages/*",
 		"site",
 		"sdks/actor/*",
-		"examples/javascript/*",
+		"examples/*",
 		"tests/load"
 	],
 	"scripts": {

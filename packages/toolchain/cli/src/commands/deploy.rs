@@ -9,9 +9,13 @@ pub struct Opts {
 	#[clap(long, alias = "env", short = 'e')]
 	environment: Option<String>,
 
-	/// Tags to identify the build to deploy (key=value format)
-	#[clap(long, short = 't')]
-	tags: Option<String>,
+	/// Filter which builds to deploy by tags (key=value comma-separated format)
+	#[clap(long)]
+	filter_tags: Option<String>,
+
+	/// Extra tags to add to the build (key=value comma-separated format)
+	#[clap(long)]
+	extra_tags: Option<String>,
 
 	#[clap(long, help = "Override the automatically generated version name")]
 	version: Option<String>,
@@ -23,16 +27,24 @@ impl Opts {
 
 		let env = crate::util::env::get_or_select(&ctx, self.environment.as_ref()).await?;
 
-		let build_tags = self
-			.tags
+		let filter_tags = self
+			.filter_tags
 			.as_ref()
 			.map(|b| kv_str::from_str::<HashMap<String, String>>(b))
 			.transpose()
-			.context("Failed to parse build tags")?;
+			.context("Failed to parse filter tags")?;
+
+		let build_tags = self
+			.extra_tags
+			.as_ref()
+			.map(|b| kv_str::from_str::<HashMap<String, String>>(b))
+			.transpose()
+			.context("Failed to parse extra tags")?;
 
 		crate::util::deploy::deploy(crate::util::deploy::DeployOpts {
 			environment: &env,
-			build_tags,
+			filter_tags: filter_tags,
+			build_tags: build_tags,
 			version: self.version.clone(),
 		})
 		.await?;
