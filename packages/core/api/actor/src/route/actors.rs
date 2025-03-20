@@ -857,14 +857,14 @@ async fn list_actors_inner(
 		return Err(unwrap!(unwrap!(results.into_iter().next()).err()));
 	}
 
-	// Shorten array since returning all actors from all regions could end up returning `regions *
-	// 32` results, which is a lot.
-	actors.truncate(32);
-
 	// Sort by create ts desc
 	//
 	// This is an ISO 8601 string and is safely sortable
 	actors.sort_by_cached_key(|x| std::cmp::Reverse(x.created_at.clone()));
+
+	// Shorten array since returning all actors from all regions could end up returning `regions *
+	// 32` results, which is a lot.
+	actors.truncate(32);
 
 	// TODO: Subtracting a ms might skip an actor in a rare edge case, need to build compound
 	// cursor of [created_at, actor_id] that we pass to the fdb range
