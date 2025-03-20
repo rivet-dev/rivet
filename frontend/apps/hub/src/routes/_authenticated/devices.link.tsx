@@ -27,7 +27,8 @@ function DeviceLinkTokenRoute() {
 	const navigate = Route.useNavigate();
 	const { token, newbie } = Route.useSearch();
 
-	const { mutateAsync, isSuccess } = useCompleteDeviceLinkMutation();
+	const { mutateAsync, isSuccess, variables } =
+		useCompleteDeviceLinkMutation();
 	const { data: groups, refetch } = useSuspenseQuery(
 		projectsByGroupQueryOptions(),
 	);
@@ -63,7 +64,21 @@ function DeviceLinkTokenRoute() {
 					</CardContent>
 					<CardFooter>
 						<Button asChild variant="secondary">
-							<Link to="/">Home</Link>
+							<Link
+								to="/projects/$projectNameId"
+								params={{
+									projectNameId:
+										groups
+											.flatMap((group) => group.projects)
+											.find(
+												(project) =>
+													project.gameId ===
+													variables.gameId,
+											)?.nameId || variables.gameId,
+								}}
+							>
+								Go to project
+							</Link>
 						</Button>
 					</CardFooter>
 				</Card>
