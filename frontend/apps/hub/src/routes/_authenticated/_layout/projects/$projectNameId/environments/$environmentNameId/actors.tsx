@@ -33,8 +33,8 @@ function ProjectActorsRoute() {
 						Deploy your first Actor
 					</h3>
 					<p className="text-center text-muted-foreground max-w-sm mx-auto">
-						Install Rivet to get started or use an existing template
-						to get started.
+						Use a quick start guide to start deploying Actors to
+						your environment.
 					</p>
 				</div>
 				<GetStarted />

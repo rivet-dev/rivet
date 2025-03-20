@@ -55,7 +55,7 @@ In this guide, you'll learn how to set up a TypeScript actor project powered by 
     3. Selecting an environment 
 
     After deployment completes, you'll receive:
-    - **Actor Manager URL**: Your endpoint for client connections
+    - **Actor Core**: Your endpoint for client connections
     - Links to the Rivet Hub for monitoring and management
   </Step>
 
@@ -63,7 +63,7 @@ In this guide, you'll learn how to set up a TypeScript actor project powered by 
     Update the `tests/client.ts` file with your deployment URL:
 
     ```typescript
-    // Replace with your Actor Manager URL from the deployment output
+    // Replace with your Actor Core URL from the deployment output
     const client = new Client("https://your-actor-manager-url.rivet.run:443");
     ```
 
