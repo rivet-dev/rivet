@@ -70,9 +70,9 @@ pub async fn build_actor(
 	config.http.middlewares.insert(
 		"actor-rate-limit".to_owned(),
 		types::TraefikMiddlewareHttp::RateLimit {
-			average: 100,
-			period: "5m".into(),
-			burst: 256,
+			average: 600,
+			period: "1m".into(),
+			burst: 1000,
 			source_criterion: types::InFlightReqSourceCriterion::IpStrategy(types::IpStrategy {
 				depth: 0,
 				exclude_ips: None,
@@ -83,7 +83,7 @@ pub async fn build_actor(
 		"actor-in-flight".to_owned(),
 		types::TraefikMiddlewareHttp::InFlightReq {
 			// This number needs to be high to allow for parallel requests
-			amount: 4,
+			amount: 50,
 			source_criterion: types::InFlightReqSourceCriterion::IpStrategy(types::IpStrategy {
 				depth: 0,
 				exclude_ips: None,
