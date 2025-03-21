@@ -1,19 +1,20 @@
 import { useAuth } from "@/domains/auth/contexts/auth";
 import { useDialog } from "@/hooks/use-dialog";
 import { FullscreenLoading } from "@rivet-gg/components";
+import * as Layout from "@/layouts/page-centered";
 import {
-	Navigate,
 	Outlet,
 	createFileRoute,
 	retainSearchParams,
-	useLocation,
+	useNavigate,
 } from "@tanstack/react-router";
 import { zodValidator } from "@tanstack/zod-adapter";
 import { z } from "zod";
+import { LoginView } from "@/domains/auth/views/login-view/login-view";
 
 function Authenticated() {
 	const auth = useAuth();
-	const location = useLocation();
+	const navigate = useNavigate();
 
 	if (auth.isProfileLoading) {
 		return <FullscreenLoading />;
@@ -21,7 +22,16 @@ function Authenticated() {
 
 	if (!auth.profile?.identity.isRegistered) {
 		return (
-			<Navigate to="/login" search={{ redirect: location.pathname }} />
+			<Layout.Root>
+				<LoginView
+					onSuccess={async () => {
+						await auth.refreshToken();
+						await navigate({
+							to: "/",
+						});
+					}}
+				/>
+			</Layout.Root>
 		);
 	}
 	return (

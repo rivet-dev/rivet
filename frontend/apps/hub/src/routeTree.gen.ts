@@ -11,7 +11,6 @@
 // Import Routes
 
 import { Route as rootRoute } from './routes/__root'
-import { Route as LoginImport } from './routes/login'
 import { Route as AuthenticatedImport } from './routes/_authenticated'
 import { Route as AuthenticatedBillingImport } from './routes/_authenticated/billing'
 import { Route as AuthenticatedLayoutImport } from './routes/_authenticated/_layout'
@@ -56,12 +55,6 @@ import { Route as AuthenticatedLayoutProjectsProjectNameIdEnvironmentsEnvironmen
 import { Route as AuthenticatedLayoutProjectsProjectNameIdEnvironmentsEnvironmentNameIdBackendLogsImport } from './routes/_authenticated/_layout/projects/$projectNameId/environments/$environmentNameId/backend/logs'
 
 // Create/Update Routes
-
-const LoginRoute = LoginImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRoute,
-} as any)
 
 const AuthenticatedRoute = AuthenticatedImport.update({
   id: '/_authenticated',
@@ -412,13 +405,6 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: ''
       preLoaderRoute: typeof AuthenticatedImport
-      parentRoute: typeof rootRoute
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginImport
       parentRoute: typeof rootRoute
     }
     '/_authenticated/_layout': {
@@ -958,7 +944,6 @@ const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
 
 export interface FileRoutesByFullPath {
   '': typeof AuthenticatedLayoutRouteWithChildren
-  '/login': typeof LoginRoute
   '/billing': typeof AuthenticatedBillingRoute
   '/my-profile': typeof AuthenticatedLayoutMyProfileRouteWithChildren
   '/devices/link': typeof AuthenticatedDevicesLinkRoute
@@ -1003,7 +988,6 @@ export interface FileRoutesByFullPath {
 
 export interface FileRoutesByTo {
   '': typeof AuthenticatedRouteWithChildren
-  '/login': typeof LoginRoute
   '/billing': typeof AuthenticatedBillingRoute
   '/devices/link': typeof AuthenticatedDevicesLinkRoute
   '/invite/$inviteCode': typeof AuthenticatedInviteInviteCodeRoute
@@ -1041,7 +1025,6 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
-  '/login': typeof LoginRoute
   '/_authenticated/_layout': typeof AuthenticatedLayoutRouteWithChildren
   '/_authenticated/billing': typeof AuthenticatedBillingRoute
   '/_authenticated/_layout/my-profile': typeof AuthenticatedLayoutMyProfileRouteWithChildren
@@ -1089,7 +1072,6 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | ''
-    | '/login'
     | '/billing'
     | '/my-profile'
     | '/devices/link'
@@ -1133,7 +1115,6 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | ''
-    | '/login'
     | '/billing'
     | '/devices/link'
     | '/invite/$inviteCode'
@@ -1169,7 +1150,6 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_authenticated'
-    | '/login'
     | '/_authenticated/_layout'
     | '/_authenticated/billing'
     | '/_authenticated/_layout/my-profile'
@@ -1216,12 +1196,10 @@ export interface FileRouteTypes {
 
 export interface RootRouteChildren {
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
-  LoginRoute: typeof LoginRoute
 }
 
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
-  LoginRoute: LoginRoute,
 }
 
 export const routeTree = rootRoute
@@ -1234,8 +1212,7 @@ export const routeTree = rootRoute
     "__root__": {
       "filePath": "__root.tsx",
       "children": [
-        "/_authenticated",
-        "/login"
+        "/_authenticated"
       ]
     },
     "/_authenticated": {
@@ -1247,9 +1224,6 @@ export const routeTree = rootRoute
         "/_authenticated/invite/$inviteCode",
         "/_authenticated/devices/link_/$token"
       ]
-    },
-    "/login": {
-      "filePath": "login.tsx"
     },
     "/_authenticated/_layout": {
       "filePath": "_authenticated/_layout.tsx",
