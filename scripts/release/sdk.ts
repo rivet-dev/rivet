@@ -53,21 +53,21 @@ export async function publishSdk(opts: ReleaseOpts) {
 			name: "@rivet-gg/api-full",
 			npm: true,
 		},
+		// {
+		// 	path: `${opts.root}/sdks/actor/core`,
+		// 	name: "@rivet-gg/actor",
+		// 	//jsr: true,
+		// 	npm: true,
+		// 	turbo: true
+		// },
 		{
-			path: `${opts.root}/sdks/actor/core`,
-			name: "@rivet-gg/actor",
-			//jsr: true,
-			npm: true,
-			turbo: true
-		},
-		/*{
 	
 			path: `${opts.root}/frontend/packages/cli`,
 			name: "@rivet-gg/cli",
 			//jsr: true,
 			npm: true,
 			turbo: true
-		}*/
+		}
 	];
 
 	for (const pkg of packages) {

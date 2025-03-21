@@ -1,5 +1,4 @@
 import { queryClient, rivetClient } from "@/queries/global";
-import { Client } from "@rivet-gg/actor-client";
 import type { Rivet } from "@rivet-gg/api";
 import { toast } from "@rivet-gg/components";
 import { useMutation } from "@tanstack/react-query";

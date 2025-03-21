@@ -1,8 +1,0 @@
-{
-	"extends": "./tsconfig.json",
-	"compilerOptions": {
-		"rootDir": "./src/bridge",
-		"outDir": "../../../packages/edge/infra/client/isolate-v8-runner/js",
-		"declaration": false
-	}
-}

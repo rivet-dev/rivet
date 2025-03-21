@@ -1,4 +1,3 @@
-import { isJsonSerializable } from "@rivet-gg/actor-common/utils";
 import {
 	Badge,
 	Button,
@@ -44,7 +43,7 @@ export function ActorEditableState({ state }: ActorEditableStateProps) {
 	}, [state.value]);
 
 	const isValid = isValidJson(value)
-		? isJsonSerializable(JSON.parse(value))
+		? JSON.parse(value)
 		: false;
 
 	return (

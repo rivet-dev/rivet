@@ -3,7 +3,7 @@
 	"version": "1.0.0",
 	"private": true,
 	"dependencies": {
-		"@rivet-gg/actor": "workspace:*",
+		"@rivet-gg/actor": "^5.1.2",
 		"hono": "^4.6.17"
 	}
 }
