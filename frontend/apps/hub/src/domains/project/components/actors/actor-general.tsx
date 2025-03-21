@@ -5,7 +5,7 @@ import { ActorRegion } from "./actor-region";
 import { ActorTags } from "./actor-tags";
 
 export interface ActorGeneralProps
-	extends Omit<Rivet.actor.Actor, "createTs" | "startTs" | "destroyTs"> {
+	extends Omit<Rivet.actors.Actor, "createTs" | "startTs" | "destroyTs"> {
 	createTs: Date | undefined;
 	startTs: Date | undefined;
 	destroyTs: Date | undefined;

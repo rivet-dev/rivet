@@ -12,7 +12,7 @@ import { ActorBuild } from "./actor-build";
 import { ActorObjectInspector } from "./console/actor-inspector";
 
 export interface ActorRuntimeProps
-	extends Omit<Rivet.actor.Actor, "createTs" | "startTs" | "destroyTs"> {
+	extends Omit<Rivet.actors.Actor, "createTs" | "startTs" | "destroyTs"> {
 	createTs: Date | undefined;
 	startTs: Date | undefined;
 	destroyTs: Date | undefined;

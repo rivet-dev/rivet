@@ -3,16 +3,17 @@ import { Button, DocsSheet } from "@rivet-gg/components";
 import { Icon, faBooks } from "@rivet-gg/icons";
 import { ActorObjectInspector } from "./console/actor-inspector";
 
-export interface ActorNetworkProps extends Pick<Rivet.actor.Actor, "network"> {}
+export interface ActorNetworkProps
+	extends Pick<Rivet.actors.Actor, "network"> {}
 
-const NETWORK_MODE_LABELS: Record<Rivet.actor.NetworkMode, string> = {
+const NETWORK_MODE_LABELS: Record<Rivet.actors.NetworkMode, string> = {
 	bridge: "Bridge",
 	host: "Host",
 };
 
-const WEB_ACCESIBLE_PROTOCOLS: Rivet.actor.PortProtocol[] = [
-	Rivet.actor.PortProtocol.Http,
-	Rivet.actor.PortProtocol.Https,
+const WEB_ACCESIBLE_PROTOCOLS: Rivet.actors.PortProtocol[] = [
+	Rivet.actors.PortProtocol.Http,
+	Rivet.actors.PortProtocol.Https,
 ];
 
 export function ActorNetwork({ network }: ActorNetworkProps) {

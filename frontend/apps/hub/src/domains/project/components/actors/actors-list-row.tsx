@@ -16,7 +16,7 @@ const BUILT_IN_TAGS = ["name"];
 
 interface ActorsListRowProps
 	extends Pick<
-		Rivet.actor.Actor,
+		Rivet.actors.Actor,
 		"createdAt" | "destroyedAt" | "startedAt" | "tags" | "id" | "region"
 	> {
 	isCurrent?: boolean;

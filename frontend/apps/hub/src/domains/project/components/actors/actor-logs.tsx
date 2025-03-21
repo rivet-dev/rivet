@@ -61,7 +61,10 @@ export function filterLogs({
 	return sorted;
 }
 interface ActorLogsProps
-	extends Pick<Rivet.actor.Actor, "createdAt" | "startedAt" | "destroyedAt"> {
+	extends Pick<
+		Rivet.actors.Actor,
+		"createdAt" | "startedAt" | "destroyedAt"
+	> {
 	actorId: string;
 	projectNameId: string;
 	environmentNameId: string;

@@ -1,6 +1,6 @@
 import type { Rivet } from "@rivet-gg/api";
 
-interface ActorStatusLabelProps extends Rivet.actor.Actor {}
+interface ActorStatusLabelProps extends Rivet.actors.Actor {}
 
 export const ActorStatusLabel = ({
 	createdAt,

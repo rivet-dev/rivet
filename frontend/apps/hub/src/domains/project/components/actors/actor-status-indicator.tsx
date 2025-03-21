@@ -2,7 +2,7 @@ import type { Rivet } from "@rivet-gg/api";
 import { Ping, cn } from "@rivet-gg/components";
 
 export function getActorStatus(
-	actor: Pick<Rivet.actor.Actor, "createdAt" | "startedAt" | "destroyedAt">,
+	actor: Pick<Rivet.actors.Actor, "createdAt" | "startedAt" | "destroyedAt">,
 ) {
 	const { createdAt, startedAt, destroyedAt } = actor;
 
@@ -27,7 +27,7 @@ export function getActorStatus(
 
 interface ActorStatusIndicatorProps
 	extends Pick<
-		Rivet.actor.Actor,
+		Rivet.actors.Actor,
 		"createdAt" | "startedAt" | "destroyedAt"
 	> {}
 

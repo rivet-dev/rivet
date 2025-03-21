@@ -3,7 +3,7 @@ import { cn } from "@rivet-gg/components";
 import { ActorStatusIndicator } from "./actor-status-indicator";
 import { ActorStatusLabel } from "./actor-status-label";
 
-interface ActorStatusProps extends Rivet.actor.Actor {
+interface ActorStatusProps extends Rivet.actors.Actor {
 	className?: string;
 }
 

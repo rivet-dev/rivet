@@ -17,7 +17,7 @@ export function useDestroyActorMutation() {
 			environmentNameId: string;
 			actorId: string;
 		}) =>
-			rivetClient.actor.destroy(opts.actorId, {
+			rivetClient.actors.destroy(opts.actorId, {
 				environment: opts.environmentNameId,
 				project: opts.projectNameId,
 			}),
@@ -58,7 +58,7 @@ export function usePatchActorBuildTagsMutation({
 
 			// TODO: Cache this
 			// Get original build
-			const ogBuild = await rivetClient.actor.builds.get(buildId, {
+			const ogBuild = await rivetClient.actors.builds.get(buildId, {
 				project: projectNameId,
 				environment: environmentNameId,
 			});
@@ -69,7 +69,7 @@ export function usePatchActorBuildTagsMutation({
 				(request.tags as Record<string, string> | undefined)
 					?.current === "true"
 			) {
-				const currentBuilds = await rivetClient.actor.builds.list({
+				const currentBuilds = await rivetClient.actors.builds.list({
 					project: projectNameId,
 					environment: environmentNameId,
 					tagsJson: JSON.stringify({
@@ -79,7 +79,7 @@ export function usePatchActorBuildTagsMutation({
 				});
 				console.log("updating builds", currentBuilds.builds);
 				for (const build of currentBuilds.builds) {
-					await rivetClient.actor.builds.patchTags(build.id, {
+					await rivetClient.actors.builds.patchTags(build.id, {
 						project: projectNameId,
 						environment: environmentNameId,
 						body: {
@@ -92,7 +92,7 @@ export function usePatchActorBuildTagsMutation({
 			}
 
 			// Update tags
-			return await rivetClient.actor.builds.patchTags(buildId, {
+			return await rivetClient.actors.builds.patchTags(buildId, {
 				project: projectNameId,
 				environment: environmentNameId,
 				body: request,
@@ -133,8 +133,8 @@ export function useUpgradeAllActorsMutation({
 		}: {
 			projectNameId: string;
 			environmentNameId: string;
-		} & Rivet.actor.UpgradeAllActorsRequest) =>
-			rivetClient.actor.upgradeAll({
+		} & Rivet.actors.UpgradeAllActorsRequest) =>
+			rivetClient.actors.upgradeAll({
 				project: projectNameId,
 				environment: environmentNameId,
 				body: request,

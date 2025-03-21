@@ -36,7 +36,7 @@ export const projectActorsQueryOptions = ({
 			pageParam,
 			queryKey: [, project, , environment, , { includeDestroyed, tags }],
 		}) =>
-			rivetClient.actor.list(
+			rivetClient.actors.list(
 				{
 					project,
 					environment,
@@ -52,7 +52,7 @@ export const projectActorsQueryOptions = ({
 		},
 		meta: {
 			updateCache: (
-				data: InfiniteData<Rivet.actor.ListActorsResponse>,
+				data: InfiniteData<Rivet.actors.ListActorsResponse>,
 				client,
 			) => {
 				for (const page of data.pages) {
@@ -126,7 +126,7 @@ export const actorQueryOptions = ({
 			signal: abortSignal,
 			queryKey: [_, project, __, environment, ___, actorId],
 		}) =>
-			rivetClient.actor.get(
+			rivetClient.actors.get(
 				actorId,
 				{ project, environment },
 				{
@@ -182,7 +182,7 @@ export const actorLogsQueryOptions = (
 		projectNameId: string;
 		environmentNameId: string;
 		actorId: string;
-		stream: Rivet.actor.LogStream;
+		stream: Rivet.actors.LogStream;
 	},
 	opts: { refetchInterval?: number } = {},
 ) => {
@@ -203,12 +203,12 @@ export const actorLogsQueryOptions = (
 			meta,
 			queryKey: [, project, , environment, , actorId, , stream],
 		}) => {
-			const response = await rivetClient.actor.logs.get(
+			const response = await rivetClient.actors.logs.get(
 				actorId,
 				{
 					project,
 					environment,
-					stream: stream as Rivet.actor.LogStream,
+					stream: stream as Rivet.actors.LogStream,
 					watchIndex: getMetaWatchIndex(meta),
 				},
 				{ abortSignal },
@@ -240,7 +240,7 @@ export const actorErrorsQueryOptions = ({
 			projectNameId,
 			environmentNameId,
 			actorId,
-			stream: Rivet.actor.LogStream.StdErr,
+			stream: Rivet.actors.LogStream.StdErr,
 		}),
 		select: (data) => data.lines.length > 0,
 	});
@@ -277,7 +277,7 @@ export const actorBuildsQueryOptions = ({
 			],
 			signal: abortSignal,
 		}) =>
-			rivetClient.actor.builds.list(
+			rivetClient.actors.builds.list(
 				{ project, environment, tagsJson: JSON.stringify(tagsJson) },
 				{
 					abortSignal,
@@ -384,7 +384,7 @@ export const actorBuildQueryOptions = ({
 			signal: abortSignal,
 			queryKey: [_, project, __, environment, ___, build],
 		}) =>
-			rivetClient.actor.builds.get(
+			rivetClient.actors.builds.get(
 				build,
 				{ project, environment },
 				{
@@ -411,7 +411,7 @@ export const actorRegionsQueryOptions = ({
 			signal: abortSignal,
 			queryKey: [_, project, __, environment],
 		}) =>
-			rivetClient.actor.regions.list(
+			rivetClient.actors.regions.list(
 				{ project, environment },
 				{
 					abortSignal,
@@ -440,7 +440,7 @@ export const actorRegionQueryOptions = ({
 };
 
 const createActorEndpoint = (
-	network: Rivet.actor.Network,
+	network: Rivet.actors.Network,
 ): string | undefined => {
 	try {
 		const http = Object.values(network.ports).find(
@@ -483,7 +483,7 @@ export const actorManagerUrlQueryOptions = ({
 			signal: abortSignal,
 			queryKey: [_, project, __, environment],
 		}) => {
-			const response = await rivetClient.actor.list(
+			const response = await rivetClient.actors.list(
 				{
 					project,
 					environment,
