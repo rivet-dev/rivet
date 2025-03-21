@@ -20,7 +20,9 @@ function Authenticated() {
 	}
 
 	if (!auth.profile?.identity.isRegistered) {
-		return <Navigate to="/login" search={{ redirect: location.href }} />;
+		return (
+			<Navigate to="/login" search={{ redirect: location.pathname }} />
+		);
 	}
 	return (
 		<>
