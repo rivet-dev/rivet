@@ -29,10 +29,6 @@ function Modals() {
 
 	useKonami(() => navigate({ search: { modal: "secret" } }));
 
-	if (!search || !("modal" in search)) {
-		return;
-	}
-
 	const { modal, utm_source } = search;
 
 	const handleonOpenChange = (value: boolean) => {
@@ -114,10 +110,7 @@ export interface RouterContext {
 }
 
 const searchSchema = z.object({
-	modal: z
-		.enum(["secret", "feedback"])
-		.optional()
-		.catch(({ input }) => input),
+	modal: z.enum(["secret", "feedback"]).or(z.string()).optional(),
 	utm_source: z.string().optional(),
 });
 

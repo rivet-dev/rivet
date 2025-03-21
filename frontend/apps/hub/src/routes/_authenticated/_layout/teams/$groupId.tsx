@@ -82,8 +82,7 @@ const searchSchema = z.object({
 	modal: z
 		.enum(["invite", "create-group-project", "leave"])
 		.or(z.string())
-		.optional()
-		.catch(undefined),
+		.optional(),
 });
 
 export const Route = createFileRoute("/_authenticated/_layout/teams/$groupId")({

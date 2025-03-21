@@ -80,8 +80,7 @@ const searchSchema = z.object({
 	modal: z
 		.enum(["database", "edit-tags", "create-actor"])
 		.or(z.string())
-		.optional()
-		.catch(undefined),
+		.optional(),
 	buildId: z.string().optional().catch(undefined),
 });
 export const Route = createFileRoute(

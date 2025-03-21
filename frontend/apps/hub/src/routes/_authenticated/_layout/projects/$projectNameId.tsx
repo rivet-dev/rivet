@@ -80,8 +80,7 @@ const searchSchema = z.object({
 	modal: z
 		.enum(["cloud-token", "service-token", "create-environment"])
 		.or(z.string())
-		.optional()
-		.catch(undefined),
+		.optional(),
 });
 
 export const Route = createFileRoute(

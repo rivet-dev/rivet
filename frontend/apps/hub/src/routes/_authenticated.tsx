@@ -50,10 +50,6 @@ function Modals() {
 	const CreateGroupProjectDialog = useDialog.CreateProject.Dialog;
 	const CreateGroupDialog = useDialog.CreateGroup.Dialog;
 
-	if (!search || !("modal" in search)) {
-		return;
-	}
-
 	const { groupId, modal } = search;
 
 	const handleonOpenChange = (value: boolean) => {

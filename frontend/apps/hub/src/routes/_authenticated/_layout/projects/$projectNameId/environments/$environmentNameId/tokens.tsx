@@ -146,10 +146,7 @@ function Modals({ publicTokenEnabled }: { publicTokenEnabled: boolean }) {
 }
 
 const searchSchema = z.object({
-	modal: z
-		.enum(["public-token", "service-token"])
-		.optional()
-		.catch(undefined),
+	modal: z.enum(["public-token", "service-token"]).or(z.string()).optional(),
 });
 
 export const Route = createFileRoute(
